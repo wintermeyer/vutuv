@@ -177,6 +177,31 @@ defmodule VutuvWeb.ControllerHelpers do
   def with_query(path, query) when is_binary(query), do: path <> "?" <> query
 
   @doc """
+  The bearer token on this request, or `nil` — the **one** reading of an
+  `Authorization: Bearer …` header in this app.
+
+  HTTP auth scheme names are case-insensitive (RFC 7235) and real clients do
+  send a lowercase `bearer`, so the comparison is on the downcased scheme and
+  the token is trimmed. It lives here because it had grown three spellings:
+  two identical private copies in the Mastodon and `/api/2.0` auth plugs, and a
+  stricter third in the bounce webhook that pattern-matched `"Bearer " <> rest`
+  — which accepted only a capital B and exactly one space, so an operator whose
+  sender wrote `bearer ` got a 401 that reads as a wrong secret.
+
+  Callers that compare the result against a shared secret must still do it with
+  `Plug.Crypto.secure_compare/2`; this only reads the header.
+  """
+  def bearer_token(%Conn{} = conn) do
+    with [header] <- Conn.get_req_header(conn, "authorization"),
+         [scheme, token] <- String.split(header, " ", parts: 2, trim: true),
+         "bearer" <- String.downcase(scheme) do
+      String.trim(token)
+    else
+      _other -> nil
+    end
+  end
+
+  @doc """
   Answers an `avatar.jpg` request with the derived bytes, or with the plain
   404 every failure shares.
 

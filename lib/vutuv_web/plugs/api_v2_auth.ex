@@ -22,6 +22,7 @@ defmodule VutuvWeb.Plug.ApiV2Auth do
   alias Vutuv.ApiAuth.Scopes
   alias Vutuv.RateLimiter
   alias VutuvWeb.ApiV2.Problem
+  alias VutuvWeb.ControllerHelpers
 
   @default_rate_limit {5_000, :timer.hours(1)}
 
@@ -79,15 +80,7 @@ defmodule VutuvWeb.Plug.ApiV2Auth do
     end
   end
 
-  defp bearer_token(conn) do
-    with [header] <- get_req_header(conn, "authorization"),
-         [scheme, token] <- String.split(header, " ", parts: 2, trim: true),
-         "bearer" <- String.downcase(scheme) do
-      String.trim(token)
-    else
-      _other -> nil
-    end
-  end
+  defp bearer_token(conn), do: ControllerHelpers.bearer_token(conn)
 
   defp rate_check(token) do
     {limit, window_ms} = Application.get_env(:vutuv, :api_v2_rate_limit, @default_rate_limit)

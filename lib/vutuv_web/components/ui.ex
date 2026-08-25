@@ -921,13 +921,24 @@ defmodule VutuvWeb.UI do
     """
   end
 
-  @doc "Uppercase muted section heading used inside cards."
+  @doc """
+  Uppercase muted section heading used inside cards.
+
+  `dark:text-slate-400` is not decoration: bare `slate-500` on a dark card is
+  about 3.8:1, under the AA floor, and `text-sm font-semibold` at 14px does not
+  qualify as large text. The component was the one place still missing it while
+  six hand-rolled copies of the same heading had each added it for themselves —
+  which is the drift a component exists to prevent.
+  """
   attr(:class, :string, default: nil)
   slot(:inner_block, required: true)
 
   def section_title(assigns) do
     ~H"""
-    <h2 class={["text-sm font-semibold uppercase tracking-wide text-slate-500", @class]}>
+    <h2 class={[
+      "text-sm font-semibold uppercase tracking-wide text-slate-500 dark:text-slate-400",
+      @class
+    ]}>
       {render_slot(@inner_block)}
     </h2>
     """
@@ -3538,7 +3549,9 @@ defmodule VutuvWeb.UI do
       ]}>
         {delimited_count(@value)}
       </div>
-      <div class="text-xs font-semibold uppercase tracking-wide text-slate-500">{@label}</div>
+      <div class="text-xs font-semibold uppercase tracking-wide text-slate-500 dark:text-slate-400">
+        {@label}
+      </div>
     </div>
     """
   end

@@ -15,6 +15,7 @@ defmodule VutuvWeb.WebhookController do
   use VutuvWeb, :controller
 
   alias Vutuv.Notifications.Bounces
+  alias VutuvWeb.ControllerHelpers
 
   # Generous cap; a DSN is small, but it embeds the bounced original.
   @max_body 1_000_000
@@ -41,8 +42,11 @@ defmodule VutuvWeb.WebhookController do
     end
   end
 
+  # Through `ControllerHelpers.bearer_token/1`, which reads the scheme name
+  # case-insensitively as RFC 7235 requires. This matched `"Bearer " <> rest`,
+  # so a sender writing `bearer ` got a 401 that reads as a wrong secret.
   defp authorize(conn, token) do
-    with ["Bearer " <> presented] <- get_req_header(conn, "authorization"),
+    with presented when is_binary(presented) <- ControllerHelpers.bearer_token(conn),
          true <- Plug.Crypto.secure_compare(presented, token) do
       :ok
     else

@@ -45,6 +45,25 @@ defmodule VutuvWeb.WebhookControllerTest do
     assert Repo.get_by!(Email, value: "dead@example.com").undeliverable_at
   end
 
+  # HTTP auth scheme names are case-insensitive (RFC 7235) and senders really do
+  # write `bearer `. This endpoint pattern-matched `"Bearer " <> rest`, so a
+  # lowercase scheme — or a stray extra space — came back 401, which an operator
+  # reads as a wrong secret rather than as a header they spelled differently.
+  # Calibrated against the un-fixed code: both spellings below were 401.
+  test "the scheme name is read case-insensitively, and the token is trimmed", %{conn: conn} do
+    user = insert(:activated_user)
+    insert(:email, user: user, value: "dead@example.com")
+
+    conn =
+      conn
+      |> put_req_header("authorization", "bearer  #{@token} ")
+      |> put_req_header("content-type", "message/rfc822")
+      |> post(~p"/webhooks/bounces", @failed_dsn)
+
+    assert response(conn, 200)
+    assert Repo.get_by!(Email, value: "dead@example.com").undeliverable_at
+  end
+
   test "a wrong token is rejected and nothing is recorded", %{conn: conn} do
     user = insert(:activated_user)
     insert(:email, user: user, value: "dead@example.com")
