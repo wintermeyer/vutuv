@@ -21,6 +21,7 @@ defmodule VutuvWeb.WellKnownController do
 
   use VutuvWeb, :controller
 
+  alias Vutuv.Languages
   alias Vutuv.NodeInfo
   alias VutuvWeb.AgentDocs
 
@@ -104,7 +105,7 @@ defmodule VutuvWeb.WellKnownController do
     body = """
     Contact: mailto:#{operator_email}
     Expires: #{DateTime.to_iso8601(expires)}
-    Preferred-Languages: en, de
+    Preferred-Languages: #{Enum.join(Languages.site_locales(), ", ")}
     Canonical: #{AgentDocs.abs_url("/.well-known/security.txt")}
     """
 

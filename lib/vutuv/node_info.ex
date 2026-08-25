@@ -91,6 +91,7 @@ defmodule Vutuv.NodeInfo do
 
   alias Vutuv.Accounts
   alias Vutuv.Accounts.User
+  alias Vutuv.Languages
   alias Vutuv.Legal
   alias Vutuv.Legal.LegalPage
   alias Vutuv.Moderation.Query, as: ModerationQuery
@@ -198,10 +199,7 @@ defmodule Vutuv.NodeInfo do
     end
   end
 
-  defp locales do
-    {:ok, config} = Application.fetch_env(:vutuv, Endpoint)
-    config[:locales]
-  end
+  defp locales, do: Languages.site_locales()
 
   defp put_legal_url(metadata, key, slug) do
     case Legal.get_page(slug) do

@@ -18,10 +18,10 @@ defmodule Vutuv.Newsletters.NewsletterGroup do
 
   import Vutuv.ChangesetHelpers, only: [trim_fields: 2]
 
+  alias Vutuv.Languages
   alias Vutuv.Newsletters.NewsletterGroupMember
   alias Vutuv.Tags.Tag
 
-  @locales ~w(en de it)
   @max_name 255
 
   schema "newsletter_groups" do
@@ -50,7 +50,13 @@ defmodule Vutuv.Newsletters.NewsletterGroup do
     timestamps()
   end
 
-  def locales, do: @locales
+  @doc """
+  The locales a group can be narrowed to — the installation's own list, read at
+  runtime rather than frozen into a module attribute. A compile-time copy of it
+  goes stale the moment a fourth locale is configured, and on somebody else's
+  installation it was never right to begin with.
+  """
+  def locales, do: Languages.site_locales()
 
   def changeset(group, params \\ %{}) do
     group
@@ -94,7 +100,7 @@ defmodule Vutuv.Newsletters.NewsletterGroup do
   # sends so unchecking all clears the list).
   defp clean_locales(changeset) do
     case fetch_change(changeset, :locales) do
-      {:ok, locales} -> put_change(changeset, :locales, Enum.filter(locales, &(&1 in @locales)))
+      {:ok, locales} -> put_change(changeset, :locales, Enum.filter(locales, &(&1 in locales())))
       :error -> changeset
     end
   end

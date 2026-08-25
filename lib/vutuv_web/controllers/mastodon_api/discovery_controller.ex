@@ -8,6 +8,7 @@ defmodule VutuvWeb.MastodonApi.DiscoveryController do
 
   alias Vutuv.Accounts
   alias Vutuv.Accounts.User
+  alias Vutuv.Languages
   alias Vutuv.MastodonApi
   alias Vutuv.MastodonApi.Presenter
   alias Vutuv.MastodonApi.Scopes
@@ -212,8 +213,5 @@ defmodule VutuvWeb.MastodonApi.DiscoveryController do
   defp node_name, do: Application.fetch_env!(:vutuv, :node_name)
   defp node_description, do: Application.fetch_env!(:vutuv, :node_description)
 
-  defp locales do
-    {:ok, config} = Application.fetch_env(:vutuv, VutuvWeb.Endpoint)
-    config[:locales]
-  end
+  defp locales, do: Languages.site_locales()
 end

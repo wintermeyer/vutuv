@@ -43,6 +43,7 @@ defmodule VutuvWeb.JobPostingLive.Form do
   alias Vutuv.Geo
   alias Vutuv.Jobs
   alias Vutuv.Jobs.JobPosting
+  alias Vutuv.Languages
   alias Vutuv.Organizations
   alias Vutuv.Salary
 
@@ -503,9 +504,18 @@ defmodule VutuvWeb.JobPostingLive.Form do
             <label class="mb-1 block text-sm font-medium" for="job_posting_language">
               {gettext("Posting language")}
             </label>
+            <%!-- Built from the installation's own locale list, not two hardcoded
+            options: the changeset validates against `Languages.site_locales/0`,
+            so a third configured locale was accepted on save and impossible to
+            pick here. --%>
             <select name="job_posting[language]" id="job_posting_language" class={input_class()}>
-              <option value="de" selected={current(@changeset, :language) == "de"}>Deutsch</option>
-              <option value="en" selected={current(@changeset, :language) == "en"}>English</option>
+              <option
+                :for={code <- Languages.site_locales()}
+                value={code}
+                selected={current(@changeset, :language) == code}
+              >
+                {Languages.name(code)}
+              </option>
             </select>
           </div>
         </.card>

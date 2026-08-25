@@ -669,9 +669,7 @@ defmodule Vutuv.Translations do
   # default's only entry) and English posts into nothing at all, with a green
   # suite and no log line. `Vutuv.NodeInfo` reads it the same way.
   defp target_languages do
-    {:ok, config} = Application.fetch_env(:vutuv, VutuvWeb.Endpoint)
-
-    config[:locales]
+    Languages.site_locales()
     |> List.wrap()
     |> Enum.map(&cast_language/1)
     |> Enum.reject(&is_nil/1)

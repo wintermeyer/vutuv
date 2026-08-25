@@ -13,6 +13,7 @@ defmodule VutuvWeb.Plug.Locale do
 
   alias Vutuv.Accounts.User
   alias Vutuv.DateRegions
+  alias Vutuv.Languages
   alias Vutuv.ViewerClock
 
   def init(default), do: default
@@ -121,9 +122,5 @@ defmodule VutuvWeb.Plug.Locale do
   # emailer) pass arbitrary strings, and a 3-letter subtag that is a superstring
   # of a supported 2-letter code ("deu" contains "de", "eng" contains "en")
   # would false-match under `String.contains?/2`.
-  def locale_supported?(locale) do
-    {:ok, config} = Application.fetch_env(:vutuv, VutuvWeb.Endpoint)
-    supported_locales = config[:locales]
-    locale in supported_locales
-  end
+  def locale_supported?(locale), do: locale in Languages.site_locales()
 end
