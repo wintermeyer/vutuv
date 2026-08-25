@@ -15,8 +15,6 @@ defmodule VutuvWeb.OrganizationController do
 
   use VutuvWeb, :controller
 
-  import Phoenix.LiveView.Controller, only: [live_render: 3]
-
   alias Vutuv.Fediverse
   alias Vutuv.Organizations
   alias Vutuv.Pages
@@ -33,15 +31,12 @@ defmodule VutuvWeb.OrganizationController do
   def index(conn, _params) do
     case AgentDocs.negotiate(conn) do
       :html ->
-        session =
-          ControllerHelpers.live_render_session(conn)
-          |> Map.put("q", conn.params["q"])
-          |> Map.put("page", conn.params["page"])
-
         conn
         |> AgentDocs.put_html_alternates()
-        |> put_layout(html: false)
-        |> live_render(VutuvWeb.OrganizationLive.Index, session: session)
+        |> ControllerHelpers.render_live(VutuvWeb.OrganizationLive.Index, %{
+          "q" => conn.params["q"],
+          "page" => conn.params["page"]
+        })
 
       format ->
         # Honor ?page= and ?q= like the HTML branch, so agent/crawler consumers
@@ -102,15 +97,9 @@ defmodule VutuvWeb.OrganizationController do
         conn
         |> put_organization_canonical(organization)
         |> AgentDocs.put_html_alternates()
-        |> put_layout(html: false)
-        |> live_render(VutuvWeb.OrganizationLive.Show,
-          session:
-            Map.put(
-              ControllerHelpers.live_render_session(conn),
-              "organization_id",
-              organization.id
-            )
-        )
+        |> ControllerHelpers.render_live(VutuvWeb.OrganizationLive.Show, %{
+          "organization_id" => organization.id
+        })
 
       format ->
         send_organization_doc(conn, format, organization)
@@ -130,10 +119,7 @@ defmodule VutuvWeb.OrganizationController do
     case conn.assigns[:current_user] do
       %{email_confirmed?: true} ->
         conn
-        |> put_layout(html: false)
-        |> live_render(VutuvWeb.OrganizationLive.New,
-          session: ControllerHelpers.live_render_session(conn)
-        )
+        |> ControllerHelpers.render_live(VutuvWeb.OrganizationLive.New)
 
       %{} ->
         conn
@@ -264,20 +250,16 @@ defmodule VutuvWeb.OrganizationController do
       :html ->
         conn
         |> AgentDocs.put_html_alternates()
-        |> put_layout(html: false)
-        |> live_render(VutuvWeb.OrganizationLive.Post,
-          session:
-            conn
-            |> ControllerHelpers.live_render_session()
-            |> Map.put("organization_id", organization.id)
-            |> Map.put("post_id", id)
-            # Threaded down to the nested `PostLive.Thread` exactly as the
-            # member permalink does it (issue #1033): the conversation scrolls
-            # itself to the permalinked post on arrival, and the link-preview
-            # capture renders from the top, so the jump would store a blank
-            # image of this page.
-            |> Map.put("auto_scroll", not ControllerHelpers.page_capture?(conn))
-        )
+        |> ControllerHelpers.render_live(VutuvWeb.OrganizationLive.Post, %{
+          "organization_id" => organization.id,
+          "post_id" => id,
+          # Threaded down to the nested `PostLive.Thread` exactly as the member
+          # permalink does it (issue #1033): the conversation scrolls itself to
+          # the permalinked post on arrival, and the link-preview capture
+          # renders from the top, so the jump would store a blank image of this
+          # page.
+          "auto_scroll" => not ControllerHelpers.page_capture?(conn)
+        })
 
       format ->
         send_organization_post_doc(conn, format, organization, post)
@@ -310,15 +292,9 @@ defmodule VutuvWeb.OrganizationController do
 
       organization && can?.(organization, viewer) ->
         conn
-        |> put_layout(html: false)
-        |> live_render(live_view,
-          session:
-            Map.put(
-              ControllerHelpers.live_render_session(conn),
-              "organization_id",
-              organization.id
-            )
-        )
+        |> ControllerHelpers.render_live(live_view, %{
+          "organization_id" => organization.id
+        })
 
       true ->
         ControllerHelpers.render_error(conn, 404)

@@ -13,8 +13,6 @@ defmodule VutuvWeb.JobPostingController do
 
   use VutuvWeb, :controller
 
-  import Phoenix.LiveView.Controller, only: [live_render: 3]
-
   alias Vutuv.Jobs
   alias VutuvWeb.AgentDocs
   alias VutuvWeb.AgentDocs.JobBoardDoc
@@ -32,10 +30,7 @@ defmodule VutuvWeb.JobPostingController do
       :html ->
         conn
         |> AgentDocs.put_html_alternates()
-        |> put_layout(html: false)
-        |> live_render(VutuvWeb.JobBoardLive,
-          session: Map.put(ControllerHelpers.live_render_session(conn), "params", conn.params)
-        )
+        |> ControllerHelpers.render_live(VutuvWeb.JobBoardLive, %{"params" => conn.params})
 
       format ->
         send_board_doc(conn, format)
@@ -62,10 +57,9 @@ defmodule VutuvWeb.JobPostingController do
       :html ->
         conn
         |> AgentDocs.put_html_alternates()
-        |> put_layout(html: false)
-        |> live_render(VutuvWeb.JobPostingLive.Show,
-          session: Map.put(ControllerHelpers.live_render_session(conn), "slug", posting.slug)
-        )
+        |> ControllerHelpers.render_live(VutuvWeb.JobPostingLive.Show, %{
+          "slug" => posting.slug
+        })
 
       format ->
         send_job_doc(conn, format, posting)

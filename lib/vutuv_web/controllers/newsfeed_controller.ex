@@ -17,8 +17,6 @@ defmodule VutuvWeb.NewsfeedController do
 
   use VutuvWeb, :controller
 
-  import Phoenix.LiveView.Controller, only: [live_render: 3]
-
   alias Vutuv.Posts
   alias VutuvWeb.AgentDocs
   alias VutuvWeb.AgentDocs.FeedDoc
@@ -45,8 +43,7 @@ defmodule VutuvWeb.NewsfeedController do
   defp show_html(conn) do
     conn
     |> AgentDocs.put_html_alternates()
-    |> put_layout(html: false)
-    |> live_render(Feed, session: ControllerHelpers.live_render_session(conn))
+    |> ControllerHelpers.render_live(Feed)
   end
 
   defp send_feed_doc(conn, format, params) do

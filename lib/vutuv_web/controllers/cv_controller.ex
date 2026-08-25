@@ -22,8 +22,6 @@ defmodule VutuvWeb.CVController do
 
   use VutuvWeb, :controller
 
-  import Phoenix.LiveView.Controller, only: [live_render: 3]
-
   alias VutuvWeb.ContentPolicy
   alias VutuvWeb.ControllerHelpers
   alias VutuvWeb.CV
@@ -42,10 +40,7 @@ defmodule VutuvWeb.CVController do
     user = conn.assigns[:user]
 
     conn
-    |> put_layout(html: false)
-    |> live_render(VutuvWeb.CVLive,
-      session: Map.put(ControllerHelpers.live_render_session(conn), "profile_user_id", user.id)
-    )
+    |> ControllerHelpers.render_live(VutuvWeb.CVLive, %{"profile_user_id" => user.id})
   end
 
   def print(conn, params) do

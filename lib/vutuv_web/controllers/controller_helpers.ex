@@ -152,6 +152,29 @@ defmodule VutuvWeb.ControllerHelpers do
   end
 
   @doc """
+  Renders `live_view` as the whole page: the app layout dropped, the curated
+  `live_render_session/1` map (merged with `extra`) handed over as its mount
+  session.
+
+  The `put_layout(html: false)` is the half worth having in one place.
+  `use VutuvWeb, :live_view` already sets `layout: {VutuvWeb.LayoutHTML, :app}`,
+  so the LiveView brings the chrome itself; leaving the controller's layout on
+  renders `app.html.heex` twice around one page. Nine controllers spelled the
+  pair out by hand, which is nine places to remember it at the tenth.
+
+  Note this is the *page is a LiveView* shape, not the embedded-child shape
+  (`ShellLive` in the layout, `PostLive.Actions` in a card): those keep their
+  surrounding chrome and pass their own session.
+  """
+  def render_live(%Conn{} = conn, live_view, extra \\ %{}) do
+    conn
+    |> Phoenix.Controller.put_layout(html: false)
+    |> Phoenix.LiveView.Controller.live_render(live_view,
+      session: Map.merge(live_render_session(conn), extra)
+    )
+  end
+
+  @doc """
   Whether the link-preview screenshot browser is reading this page rather than a
   person (`Vutuv.PageScreenshot`, which sends vutuv's own user agent).
 

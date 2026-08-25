@@ -6,7 +6,6 @@ defmodule VutuvWeb.UserController do
   plug(VutuvWeb.Plug.EnsureActivated when action not in [:delete, :confirm_delete])
   plug(VutuvWeb.Plug.AgentExportOptOut when action in [:show])
   import VutuvWeb.UserHelpers
-  import Phoenix.LiveView.Controller, only: [live_render: 3]
 
   alias Vutuv.AccountEvents
   alias Vutuv.Accounts
@@ -96,10 +95,9 @@ defmodule VutuvWeb.UserController do
     # to the layout's robots meta tag (the post pages and the agent-format
     # documents already answer with it).
     |> VutuvWeb.ContentPolicy.put_robots_header(user.noindex?, user.noai?)
-    |> put_layout(html: false)
-    |> live_render(VutuvWeb.UserProfileLive,
-      session: Map.put(ControllerHelpers.live_render_session(conn), "profile_user_id", user.id)
-    )
+    |> ControllerHelpers.render_live(VutuvWeb.UserProfileLive, %{
+      "profile_user_id" => user.id
+    })
   end
 
   defp maybe_assign_actor_alternate(conn, user) do
