@@ -10,13 +10,17 @@ defmodule VutuvWeb.Admin.DeliverabilityController do
 
   use VutuvWeb, :controller
 
-  alias Vutuv.Accounts.{Email, User}
+  alias Vutuv.Accounts.Email
   alias Vutuv.Deliverability
   alias Vutuv.Repo
   alias VutuvWeb.ControllerHelpers
 
+  # Through the helper, whose whole point is that a malformed id is a miss: these
+  # ids come off an admin URL, and a `Repo.get` with a non-UUID raises an
+  # `Ecto.CastError` — a 500 where the `nil ->` branch below already spells out
+  # the right answer.
   def thaw(conn, %{"id" => id}) do
-    case Repo.get(User, id) do
+    case ControllerHelpers.get_user(id) do
       nil ->
         ControllerHelpers.render_error(conn, 404)
 
@@ -32,7 +36,7 @@ defmodule VutuvWeb.Admin.DeliverabilityController do
   end
 
   def clear_address(conn, %{"id" => id}) do
-    case Repo.get(Email, id) do
+    case Vutuv.UUIDv7.with_cast(id, &Repo.get(Email, &1)) do
       nil ->
         ControllerHelpers.render_error(conn, 404)
 

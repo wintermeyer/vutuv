@@ -131,7 +131,7 @@ defmodule VutuvWeb.CodeHighlightTest do
     end
 
     # A diff fence is labelled here and rendered as real added / removed rows by
-    # `VutuvWeb.Markdown.highlight_diff_blocks/1` (issue #1108), which runs
+    # `VutuvWeb.CodeHighlight.Diff.render/1` (issue #1108), which runs
     # after us and needs to find its `<pre><code class="language-diff">` intact.
     test "a diff fence is labelled but its body is left for the diff renderer" do
       code = ~s[@@ -1 +1 @@\n-old\n+new\n ctx]

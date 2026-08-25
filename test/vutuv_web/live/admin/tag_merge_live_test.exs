@@ -302,6 +302,29 @@ defmodule VutuvWeb.Admin.TagMergeLiveTest do
       assert html =~ "Merge it instead"
       assert is_nil(Repo.get!(Tag, existing.id).merged_into_id)
     end
+
+    # An open admin page outlives the rows it is showing: two admins on the same
+    # queue, or one leaving a tab open while the alias is removed elsewhere. Every
+    # other handler in this module answers a stale id with a flash; this one fed
+    # the `Repo.get` miss straight to `Merge.remove_alias/1`, which has no nil
+    # clause — so the socket went down with a FunctionClauseError and the page
+    # simply vanished. Calibrated against the un-fixed code, where it crashes.
+    test "removing an alias that is already gone says so instead of crashing", ctx do
+      {:ok, lv, _html} = live(ctx.conn, ~p"/admin/tag_merges")
+
+      html = render_click(lv, "remove-alias", %{"id" => Vutuv.UUIDv7.generate()})
+
+      assert html =~ "no longer" or html =~ "not"
+      assert render(lv) =~ "tag"
+    end
+
+    test "and neither does a malformed one", ctx do
+      {:ok, lv, _html} = live(ctx.conn, ~p"/admin/tag_merges")
+
+      render_click(lv, "remove-alias", %{"id" => "not-a-uuid"})
+
+      assert render(lv) =~ "tag"
+    end
   end
 
   # Search for a tag and add it to the list, the way an admin collects one.

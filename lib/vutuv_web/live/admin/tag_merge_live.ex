@@ -270,12 +270,21 @@ defmodule VutuvWeb.Admin.TagMergeLive do
     end
   end
 
+  # A stale id is ordinary here, not exotic: two admins share this queue and a
+  # tab stays open. `Merge.remove_alias/1` has no nil clause, so feeding it a
+  # `Repo.get` miss took the socket down with a FunctionClauseError and the page
+  # simply vanished — every other handler in this module answers with a flash.
+  # `cast_or_nil/1` covers the malformed id too, which would have been an
+  # `Ecto.CastError` a step earlier.
   def handle_event("remove-alias", %{"id" => id}, socket) do
-    case id |> then(&Repo.get(Tag, &1)) |> Merge.remove_alias() do
+    case id |> Vutuv.UUIDv7.with_cast(&Repo.get(Tag, &1)) |> remove_alias() do
       {:ok, _} -> {:noreply, socket |> put_flash(:info, gettext("Removed.")) |> load_preview()}
       {:error, reason} -> {:noreply, put_flash(socket, :error, refusal(reason))}
     end
   end
+
+  defp remove_alias(nil), do: {:error, :gone}
+  defp remove_alias(%Tag{} = tag), do: Merge.remove_alias(tag)
 
   # Each result carries the number of profiles carrying it, batched into one
   # query for the whole list: with three spellings of one topic on screen, that
@@ -356,6 +365,8 @@ defmodule VutuvWeb.Admin.TagMergeLive do
   end
 
   # Why a merge is refused, in the reviewer's words rather than the code's.
+  defp refusal(:gone), do: gettext("That alternative name is no longer on record.")
+
   defp refusal(:same_tag), do: gettext("A tag cannot absorb itself.")
 
   defp refusal(:honor_tag),

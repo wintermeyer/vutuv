@@ -50,6 +50,14 @@ defmodule VutuvWeb.CodeHighlight do
   @class ~r{class="([^"]*)"}
   @max_bytes 20_000
 
+  @doc """
+  The byte ceiling above which a block is left uncoloured. Public because
+  `VutuvWeb.CodeHighlight.Diff` applies the same ceiling to a whole diff, and a
+  second copy of the number with a comment saying the two must be equal is not
+  the same thing as one number.
+  """
+  def max_bytes, do: @max_bytes
+
   @css %{
     comment: "com",
     string: "str",
@@ -113,7 +121,7 @@ defmodule VutuvWeb.CodeHighlight do
   defp title_attr(title), do: ~s( data-title="#{attr(title)}")
 
   # A diff block carries both languages: `language-diff` is what
-  # `VutuvWeb.Markdown.highlight_diff_blocks/1` keys on, `language-<sub>` what
+  # `VutuvWeb.CodeHighlight.Diff.render/1` keys on, `language-<sub>` what
   # it colours the rows with (issue #1138).
   defp code_class(word, nil), do: "language-" <> attr(Languages.slug(word))
 
@@ -136,7 +144,7 @@ defmodule VutuvWeb.CodeHighlight do
   Colour one already-escaped run of code the way `render/1` colours a block
   body: decode, tokenize, escape each token again.
 
-  Public for `VutuvWeb.Markdown.highlight_diff_blocks/1`, which colours a diff
+  Public for `VutuvWeb.CodeHighlight.Diff.render/1`, which colours a diff
   **row by row** — the marker has to come off first, and a row is the unit that
   gets its own added / removed tint. A construct that spans several lines (a
   block comment, a triple-quoted string) is therefore not carried from one row
@@ -148,7 +156,7 @@ defmodule VutuvWeb.CodeHighlight do
 
   defp highlight(body, nil), do: body
   # `family: :none` means "labelled, body not ours" — the `diff` fence, whose
-  # rows `VutuvWeb.Markdown.highlight_diff_blocks/1` builds after us.
+  # rows `VutuvWeb.CodeHighlight.Diff.render/1` builds after us.
   defp highlight(body, %{family: :none}), do: body
 
   defp highlight(body, config) do

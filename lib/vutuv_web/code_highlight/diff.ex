@@ -38,8 +38,9 @@ defmodule VutuvWeb.CodeHighlight.Diff do
   @block ~r{<pre>\s*<code class="([^"]*)">([\s\S]*?)</code>\s*</pre>}
 
   # The same ceiling `VutuvWeb.CodeHighlight` puts on a block it colours, but
-  # measured once for the whole diff rather than per row.
-  @highlight_max 20_000
+  # measured once for the whole diff rather than per row — and taken from there
+  # rather than written out again beside a comment claiming they are equal.
+  @highlight_max VutuvWeb.CodeHighlight.max_bytes()
 
   # Diff lines that carry no +/- of their own: the file headers a `git diff`
   # emits above the first hunk, and the "no newline" note below the last one.

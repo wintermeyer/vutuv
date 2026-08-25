@@ -18,7 +18,7 @@ defmodule VutuvWeb.CodeHighlight.Lexer do
 
   Two lexers, picked by the language's `:family`: `code/2` (the general
   scanner) and `markup/1` (tag and attribute names, for HTML/XML). A `diff`
-  fence never reaches here — `VutuvWeb.Markdown.highlight_diff_blocks/1` owns
+  fence never reaches here — `VutuvWeb.CodeHighlight.Diff.render/1` owns
   that one and renders it as real diff rows (issue #1108).
   """
 

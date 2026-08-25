@@ -13,13 +13,13 @@ defmodule VutuvWeb.CodeHighlight.Languages do
   Three `:family` values: `:code` (the default scanner), `:markup` (tags and
   attributes, for HTML/XML and friends) — see `VutuvWeb.CodeHighlight.Lexer` —
   and `:none`, "label it but leave the body alone", which is how a `diff` fence
-  stays the property of `VutuvWeb.Markdown.highlight_diff_blocks/1`.
+  stays the property of `VutuvWeb.CodeHighlight.Diff.render/1`.
 
   Fields, all optional:
 
     * `:label` — the display name shown in the corner of the block
     * `:aliases` — further fence words that mean this language
-    * `:family` — `:code` (default), `:markup` or `:diff`
+    * `:family` — `:code` (default), `:markup` or `:none`
     * `:line` — line-comment openers, e.g. `["//", "#"]`
     * `:block` — `{opener, closer}` for a block comment
     * `:quotes` — string delimiters that end at their own character or, for
@@ -546,7 +546,7 @@ defmodule VutuvWeb.CodeHighlight.Languages do
       family: :markup
     },
     # Labelled here so the corner reads "Diff", but the body is not tokenized:
-    # `VutuvWeb.Markdown.highlight_diff_blocks/1` runs after us and renders it
+    # `VutuvWeb.CodeHighlight.Diff.render/1` runs after us and renders it
     # as real added / removed rows (issue #1108).
     "diff" => %{
       label: "Diff",
