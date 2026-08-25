@@ -7,7 +7,7 @@ defmodule VutuvWeb.FeedTabTickerTest do
   the rules that keep it from becoming a nuisance: one quote per window, a
   count instead of a second quote, a window that ends on its own (and not by a
   later patch putting it back), a silence afterwards — and no quote at all into
-  a browser still running the previous release's stylesheet and hooks.
+  a browser whose bundle predates the ticker's own stylesheet and hook.
 
   Not async: one test sets `:feed_ticker_cooldown_ms`, which is application env
   — process state the SQL sandbox does not roll back, and every open feed reads
@@ -116,23 +116,30 @@ defmodule VutuvWeb.FeedTabTickerTest do
 
   # The reader on one named tab, with the other one populated so the tab bar
   # exists at all (`Posts.fediverse_feed_available?/1` asks the sources).
-  # `connect_params` is what the browser sends on join — the stale-assets test
-  # below puts a `_track_static` in there.
-  defp reader_on(conn, tab, connect_params \\ %{}) do
+  # `connect_params` is what the browser sends on join, and the default is a
+  # current bundle: `feed_ticker` is the capability the quote asks for, so a
+  # browser that omits it is exactly what an old bundle looks like (the
+  # describe below).
+  defp reader_on(conn, tab, connect_params \\ %{"feed_ticker" => true}) do
     {conn, user} = create_and_login_user(conn)
     {_author, _post} = followed_post(user, "an older post")
     account = remote_account(user, "them")
     cached_post(account, "written out there")
 
-    # `get/2` recycles a conn that has already been sent, and recycling drops
-    # `private` — connect params included. Recycling here, before they are put,
-    # is what gets them as far as the join.
-    {:ok, view, _html} =
-      conn |> recycle() |> put_connect_params(connect_params) |> live(~p"/feed")
-
+    view = live_feed(conn, connect_params)
     render_click(view, "filter-source", %{"type" => tab})
 
     %{view: view, user: user, account: account}
+  end
+
+  # `get/2` recycles a conn that has already been sent, and recycling drops
+  # `private` — connect params included. Recycling here, before they are put,
+  # is what gets them as far as the join.
+  defp live_feed(conn, connect_params \\ %{"feed_ticker" => true}) do
+    {:ok, view, _html} =
+      conn |> recycle() |> put_connect_params(connect_params) |> live(~p"/feed")
+
+    view
   end
 
   # The quote's own markup, or nil when no window is open. Floki is not a
@@ -287,7 +294,7 @@ defmodule VutuvWeb.FeedTabTickerTest do
       account = remote_account(user, "them")
       cached_post(account, "written out there")
 
-      {:ok, view, _html} = live(conn, ~p"/feed")
+      view = live_feed(conn)
       render_click(view, "filter-source", %{"type" => "fediverse"})
 
       {:ok, _post} = Posts.create_post(author, %{body: "etwas Neues"})
@@ -304,7 +311,7 @@ defmodule VutuvWeb.FeedTabTickerTest do
       account = remote_account(user, "them")
       cached_post(account, "written out there")
 
-      {:ok, view, _html} = live(conn, ~p"/feed")
+      view = live_feed(conn)
       render_click(view, "filter-source", %{"type" => "fediverse"})
       {:ok, _post} = Posts.create_post(author, %{body: "etwas Neues"})
 
@@ -327,7 +334,7 @@ defmodule VutuvWeb.FeedTabTickerTest do
       account = remote_account(user, "them")
       cached_post(account, "written out there")
 
-      {:ok, view, _html} = live(conn, ~p"/feed")
+      view = live_feed(conn)
       render_click(view, "filter-source", %{"type" => "fediverse"})
 
       {:ok, _post} = Posts.create_post(author, %{body: "Alles über Krypto und so"})
@@ -338,7 +345,7 @@ defmodule VutuvWeb.FeedTabTickerTest do
     end
   end
 
-  describe "a browser left over from the previous release" do
+  describe "a browser whose bundle predates the ticker" do
     # What v7.347.0 looked like on a feed that had been open since before the
     # deploy: the socket reconnects to the new release and patches the quote
     # into a document whose stylesheet has never heard of `.filter-tab-ticker`
@@ -346,24 +353,10 @@ defmodule VutuvWeb.FeedTabTickerTest do
     # unstyled 200-character paragraph across the tab bar, and no clock ever
     # took it away. Everything else on that page is older than the browser's
     # copy and survives the patch; the ticker is the half that cannot.
-    setup do
-      # `static_changed?/1` compares what the client reports against the
-      # digest manifest, which only exists in a release. Two entries that
-      # cannot match, so the comparison has something to answer with.
-      Phoenix.Config.put(VutuvWeb.Endpoint, :cache_static_manifest_latest, %{
-        "assets/app.css" => "assets/app-nowdeployed.css"
-      })
-
-      on_exit(fn ->
-        Phoenix.Config.put(VutuvWeb.Endpoint, :cache_static_manifest_latest, nil)
-      end)
-    end
-
     test "gets the dot and no quote", %{conn: conn} do
-      %{view: view, user: user} =
-        reader_on(conn, "fediverse", %{
-          "_track_static" => ["http://localhost/assets/app-fromthelastrelease.css"]
-        })
+      # No `feed_ticker` key at all: a bundle built before the hook existed
+      # cannot send one, which is precisely what makes the claim trustworthy.
+      %{view: view, user: user} = reader_on(conn, "fediverse", %{})
 
       author = followed_author(user)
       {:ok, _post} = Posts.create_post(author, %{body: "etwas Neues"})
@@ -372,14 +365,10 @@ defmodule VutuvWeb.FeedTabTickerTest do
       assert dotted?(view, "vutuv")
     end
 
-    test "while the browser on this release still gets both", %{conn: conn} do
-      # The other half of the gate: with assets the server recognises, the
-      # window opens as before. Without this the test above would pass on a
-      # ticker that is simply broken.
-      %{view: view, user: user} =
-        reader_on(conn, "fediverse", %{
-          "_track_static" => ["http://localhost/assets/app-nowdeployed.css"]
-        })
+    test "while a bundle that carries it still gets both", %{conn: conn} do
+      # The other half of the gate. Without this the test above would pass on
+      # a ticker that is simply broken.
+      %{view: view, user: user} = reader_on(conn, "fediverse", %{"feed_ticker" => true})
 
       author = followed_author(user)
       {:ok, _post} = Posts.create_post(author, %{body: "etwas Neues"})
@@ -387,13 +376,57 @@ defmodule VutuvWeb.FeedTabTickerTest do
       assert ticker(view)
       assert dotted?(view, "vutuv")
     end
+
+    test "however many asset deploys old that bundle is", %{conn: conn} do
+      # The regression that made this file worth changing (v7.348.0). The gate
+      # used to ask `static_changed?/1`, i.e. "is any asset in this document
+      # older than the running release?" — true after *every* asset deploy, so
+      # from the second one on it refused browsers that had been carrying the
+      # ticker all along, and the feature read as broken until a page reload.
+      # This client reports a stylesheet the manifest does not know AND the
+      # capability: it is behind, and it can still draw the quote.
+      Phoenix.Config.put(VutuvWeb.Endpoint, :cache_static_manifest_latest, %{
+        "assets/app.css" => "assets/app-nowdeployed.css"
+      })
+
+      on_exit(fn ->
+        Phoenix.Config.put(VutuvWeb.Endpoint, :cache_static_manifest_latest, nil)
+      end)
+
+      %{view: view, user: user} =
+        reader_on(conn, "fediverse", %{
+          "feed_ticker" => true,
+          "_track_static" => ["http://localhost/assets/app-fromthelastrelease.css"]
+        })
+
+      author = followed_author(user)
+      {:ok, _post} = Posts.create_post(author, %{body: "etwas Neues"})
+
+      assert ticker(view)
+    end
   end
 
-  describe "the layout the gate reads" do
-    test "marks both assets, or the client reports nothing to compare", %{conn: conn} do
-      # `phx-track-static` is the whole input to `static_changed?/1`: without
-      # it the client sends no manifest, the comparison answers "unchanged"
-      # for every browser, and the gate above is dead code.
+  describe "the capability the gate reads" do
+    test "is declared by the bundle that carries the hook" do
+      # The one half a LiveView test cannot reach: `put_connect_params/2` hands
+      # the server whatever this file says, so every test above would keep
+      # passing if `app.js` never sent the key and the ticker were dead in the
+      # browser. Assert the source, the way `mobile_tab_bar_css_test.exs` does.
+      app_js = File.read!("assets/js/app.js")
+
+      assert app_js =~ ~r/params:\s*\{[^}]*feed_ticker:\s*true/,
+             "the LiveSocket params in assets/js/app.js must send `feed_ticker: true`"
+
+      assert app_js =~ "FeedTicker:",
+             "retire the `feed_ticker` param together with the FeedTicker hook"
+    end
+
+    test "and the layout still marks both assets", %{conn: conn} do
+      # `phx-track-static` no longer feeds the ticker, but it is the standing
+      # seam for the next component that ships its own CSS and hook: the deploy
+      # that *introduces* one still has to keep it away from an old document,
+      # and without the annotation `static_changed?/1` answers "unchanged" for
+      # every browser.
       html = conn |> get(~p"/login") |> html_response(200)
 
       assert html =~ ~r/<link[^>]+phx-track-static[^>]*href="[^"]*app[^"]*\.css/

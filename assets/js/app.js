@@ -1085,7 +1085,13 @@ const NAV_PRESSING = "data-nav-pressing"
 const KEEP_OPEN = "data-keep-open"
 
 const liveSocket = new LiveSocket("/live", Socket, {
-  params: { _csrf_token: csrfToken() },
+  // `feed_ticker` is a capability, not a setting: the feed's tab ticker brings
+  // its own stylesheet and its own hook, and a document loaded before v7.347.0
+  // has neither — a deploy reloads no open tab, it only reconnects the socket
+  // into hours-old markup. Only a bundle that ships the hook can send this key,
+  // so the claim proves itself, and it stays true however many deploys behind
+  // the document is. Retire it together with the FeedTicker hook.
+  params: { _csrf_token: csrfToken(), feed_ticker: true },
   hooks: Hooks,
   dom: {
     // Both navs live inside ShellLive, so a patch that has nothing to do with

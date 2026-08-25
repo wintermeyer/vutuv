@@ -94,12 +94,14 @@ defmodule VutuvWeb.PostLive.Feed do
   end
 
   defp mount_feed(socket, user) do
-    # Is this browser still running the previous release's CSS and JS? A deploy
-    # does not reload an open feed — the socket reconnects to the new release
-    # and patches into a document downloaded hours ago — and `static_changed?/1`
-    # is the only way to know (`phx-track-static` in the root layout feeds it).
+    # Can this browser draw the tab ticker at all? A deploy does not reload an
+    # open feed — the socket reconnects to the new release and patches into a
+    # document downloaded hours ago — so the question is not which release that
+    # document came from but what it is able to render. The bundle answers it
+    # itself: `feed_ticker` is a LiveSocket param (assets/js/app.js), so only a
+    # bundle carrying the stylesheet and the hook can claim the capability.
     # Read here because connect params exist only during mount.
-    socket = assign(socket, :stale_client?, static_changed?(socket))
+    socket = assign(socket, :ticker_capable?, ticker_capable?(socket))
 
     # The tab they left on (issue #1499). It opens the page *and* keys the
     # handoff below: the stash holds one entry per member, so two devices
@@ -1170,17 +1172,33 @@ defmodule VutuvWeb.PostLive.Feed do
   # browser can render a quote at all.
   #
   # That last one is the deploy case, and it is the one thing on this page that
-  # a stale browser cannot survive. Everything else the feed patches in is
+  # an old document cannot survive. Everything else the feed patches in is
   # markup whose CSS that browser already has; the ticker is new markup with a
   # stylesheet and a hook of its own, so on a feed left open across the v7.347.0
   # deploy the quote drew as an unstyled 200-character paragraph across the tab
   # bar that no clock ever took away (the `FeedTicker` hook was not in that
-  # bundle either). A stale client keeps the dot, which is markup from #1503 and
+  # bundle either). Such a browser keeps the dot, which is markup from #1503 and
   # renders fine, and skips the quote until the next full page load.
   defp ticker_due?(socket) do
     socket.assigns.source_tabs? and is_nil(socket.assigns.tab_ticker) and
-      not socket.assigns.stale_client? and
+      socket.assigns.ticker_capable? and
       Prefs.get(socket.assigns.current_user, :feed_tab_ticker?) and not quiet?(socket)
+  end
+
+  # v7.347.1 asked `static_changed?/1` here, which answers the wider question
+  # "is anything in this document older than the running release?" — true after
+  # *every* asset deploy, so from the second one on it refused browsers that had
+  # been carrying the ticker all along. v7.348.0 was that second deploy, and the
+  # feature read as broken until a reload. A capability the bundle asserts about
+  # itself cannot go stale that way: it travels with the hook, and a bundle old
+  # enough to lack the hook has no way to send it.
+  #
+  # Retire this param together with the `FeedTicker` hook.
+  defp ticker_capable?(socket) do
+    case get_connect_params(socket) do
+      %{"feed_ticker" => true} -> true
+      _ -> false
+    end
   end
 
   defp quiet?(socket) do

@@ -86,9 +86,15 @@
     its markup into a document whose stylesheet and hooks are whatever the
     browser downloaded hours ago. The client reports these two hrefs on join
     and `static_changed?/1` compares them against the digest manifest, which is
-    what lets a page skip markup that would arrive unstyled and unhooked (see
-    the feed's tab ticker). Without the annotation the client sends nothing and
-    every such check answers "unchanged". --%>
+    what lets the deploy that INTRODUCES a component skip markup that would
+    arrive unstyled and unhooked. Without the annotation the client sends
+    nothing and every such check answers "unchanged".
+
+    It is the right question for exactly one deploy. Afterwards every bundle
+    carries the component, while this check keeps answering "changed" after any
+    asset deploy at all — so a component that outlives its first release asks
+    the browser for the capability by name instead (`feed_ticker` in the
+    LiveSocket params, see the feed's tab ticker). --%>
     <link phx-track-static rel="stylesheet" href={~p"/assets/app.css"} />
     <script defer phx-track-static src={~p"/assets/app.js"}></script>
   </head>

@@ -491,16 +491,28 @@ Five rules keep it from becoming a nuisance, and each one has a test:
   the branch for the tab the reader *is* on, so the teaser asks
   `filtered_pattern/3` itself and falls back to the bare dot. The bar is the
   one place a member cannot scroll past it.
-* **Not into a browser left over from the previous release.** A deploy does
-  not reload an open feed: the socket reconnects to the new release and
-  patches into a document downloaded hours ago. Everything else the feed
-  streams is markup whose CSS that browser already has — the ticker is new
-  markup with a stylesheet and a hook of its own, so on the v7.347.0 deploy
-  the quote drew as an unstyled 200-character paragraph across the tab bar
-  that no clock ever took away. `mount_feed/2` reads `static_changed?/1` once
-  (connect params exist only during mount, and it answers only because
-  `root.html.heex` marks both assets `phx-track-static`); a stale client keeps
-  the dot and skips the quote until the next full page load.
+* **Not into a browser whose bundle predates the ticker.** A deploy does not
+  reload an open feed: the socket reconnects to the new release and patches
+  into a document downloaded hours ago. Everything else the feed streams is
+  markup whose CSS that browser already has — the ticker is new markup with a
+  stylesheet and a hook of its own, so on the v7.347.0 deploy the quote drew
+  as an unstyled 200-character paragraph across the tab bar that no clock ever
+  took away. Such a browser keeps the dot and skips the quote.
+
+  **The bundle answers for itself.** `app.js` sends `feed_ticker: true` in the
+  LiveSocket params and `mount_feed/2` reads it once (connect params exist only
+  during mount) into `ticker_capable?`. Only a bundle carrying the hook can
+  send the key, so the claim proves itself — and it stays true however far
+  behind the running release that bundle is.
+
+  v7.347.1 asked `static_changed?/1` instead, which answers the wider question
+  "is anything in this document older than the running release?". That is the
+  right question for the deploy that *introduces* a component and the wrong one
+  ever after: it is true following every asset deploy, so from the second one
+  on it refused browsers that had been carrying the ticker all along. v7.348.0
+  was that second deploy, and the ticker read as broken in every open feed
+  until a reload (fixed in v7.351.1). `phx-track-static` stays in
+  `root.html.heex` as the seam for the next component's first release.
 
 Only ever one tab at a time: `other_source/1` is nil on "All" and the two named
 tabs partition the feed, so a third source would be the first thing to need a
