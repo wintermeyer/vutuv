@@ -27,6 +27,7 @@ defmodule VutuvWeb.OpenGraph do
   alias Vutuv.Accounts.User
   alias Vutuv.Posts.Post
   alias Vutuv.Posts.PostImage
+  alias Vutuv.SiteName
   alias VutuvWeb.OgCard
   alias VutuvWeb.PostTeaser
   alias VutuvWeb.UI
@@ -37,9 +38,9 @@ defmodule VutuvWeb.OpenGraph do
     ca = conn_assigns(assigns)
 
     [
-      {"og:site_name", "vutuv"},
+      {"og:site_name", SiteName.get()},
       {"og:type", type(ca)},
-      {"og:title", VutuvWeb.LayoutHTML.page_title(assigns) || "vutuv"},
+      {"og:title", VutuvWeb.LayoutHTML.page_title(assigns) || SiteName.get()},
       {"og:description", description(assigns)},
       {"og:locale", og_locale(assigns)}
     ] ++ url_tags(assigns) ++ article_tags(ca) ++ profile_tags(ca) ++ image_tags(image(ca))
@@ -337,7 +338,7 @@ defmodule VutuvWeb.OpenGraph do
 
   defp image_alt(%{alt: alt}, _ca) when alt not in [nil, ""], do: alt
   defp image_alt(_post_image, %{user: %User{} = user}), do: UserHelpers.full_name(user)
-  defp image_alt(_post_image, _ca), do: "vutuv"
+  defp image_alt(_post_image, _ca), do: SiteName.get()
 
   defp member_image(%{user: %User{avatar: avatar} = user}) when not is_nil(avatar) do
     size = Vutuv.Avatar.og_size()
@@ -362,7 +363,7 @@ defmodule VutuvWeb.OpenGraph do
           width: OgCard.width(),
           height: OgCard.height(),
           type: "image/png",
-          alt: "vutuv",
+          alt: SiteName.get(),
           card: "summary_large_image"
         }
 

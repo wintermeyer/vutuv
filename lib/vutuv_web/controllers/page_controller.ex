@@ -5,6 +5,7 @@ defmodule VutuvWeb.PageController do
   alias Vutuv.Accounts.Email
   alias Vutuv.Accounts.User
   alias Vutuv.Fediverse
+  alias Vutuv.Languages
   alias Vutuv.SourceRepo
   alias VutuvWeb.AgentDocs
   alias VutuvWeb.AgentDocs.ListDocs
@@ -353,7 +354,8 @@ defmodule VutuvWeb.PageController do
   - `<page>.json` — flat JSON document (or `Accept: application/json`)
   - `<page>.xml`  — flat XML document (or `Accept: application/xml`)
 
-  Labels default to English; add `?lang=de` for a German rendering. The
+  Labels default to English; `?lang=` renders any locale this installation
+  serves ({{locales}}). The
   member-written content keeps its original language either way.
 
   Documents carry `schema_version` (currently #{AgentDocs.schema_version()};
@@ -380,10 +382,10 @@ defmodule VutuvWeb.PageController do
   - `/system/members` — the member directory: everyone open to search engines,
     filed by last-name initial at `/system/members/<a-z|other>`
   - `/system/markdown` — what members may write in a post: the Markdown
-    reference, also raw at `/system/markdown.md` (`?lang=de` for German)
+    reference, also raw at `/system/markdown.md` (`?lang=` for {{locales}})
   - `/system/mastodon` — how to reach this installation from a Mastodon-compatible
     app: the address to enter, what such an app can do here and what it cannot,
-    also raw at `/system/mastodon.md` (`?lang=de` for German)
+    also raw at `/system/mastodon.md` (`?lang=` for {{locales}})
   - `/organizations` — the verified organization directory; one organization at `/organizations/<slug>`
   - `/organizations/<slug>/posts/<id>` — a post published in an organization's own
     name; the organization is the author, so there is no member behind it to look up
@@ -458,6 +460,7 @@ defmodule VutuvWeb.PageController do
     @llms_txt
     |> String.replace("{{ads}}\n", ads_entry())
     |> String.replace("{{source}}", SourceRepo.url())
+    |> String.replace("{{locales}}", Enum.join(Languages.site_locales(), ", "))
   end
 
   defp ads_entry do

@@ -12,6 +12,7 @@ defmodule VutuvWeb.Feeds do
 
   alias Vutuv.Organizations
   alias Vutuv.Posts
+  alias Vutuv.SiteName
   alias VutuvWeb.AgentDocs
   alias VutuvWeb.PostComponents
   alias VutuvWeb.PostTeaser
@@ -46,10 +47,10 @@ defmodule VutuvWeb.Feeds do
     name = UserHelpers.full_name(author)
 
     render_feed(
-      title: "#{name} · vutuv",
+      title: "#{name} · #{SiteName.get()}",
       link: AgentDocs.abs_url("/" <> author.username),
       self: AgentDocs.abs_url(user_feed_path(author)),
-      description: "Posts by #{name} on vutuv",
+      description: "Posts by #{name} on #{SiteName.get()}",
       posts: posts
     )
   end
@@ -61,20 +62,20 @@ defmodule VutuvWeb.Feeds do
   """
   def render_organization_feed(organization, posts) do
     render_feed(
-      title: "#{organization.name} · vutuv",
+      title: "#{organization.name} · #{SiteName.get()}",
       link: AgentDocs.abs_url(Organizations.canonical_path(organization)),
       self: AgentDocs.abs_url(organization_feed_path(organization)),
-      description: "Posts by #{organization.name} on vutuv",
+      description: "Posts by #{organization.name} on #{SiteName.get()}",
       posts: posts
     )
   end
 
   def render_site_feed(posts) do
     render_feed(
-      title: "vutuv · latest posts",
+      title: "#{SiteName.get()} · latest posts",
       link: AgentDocs.abs_url("/"),
       self: AgentDocs.abs_url(site_feed_path()),
-      description: "The latest public posts on vutuv",
+      description: "The latest public posts on #{SiteName.get()}",
       posts: posts
     )
   end
