@@ -22,6 +22,7 @@ defmodule VutuvWeb.MastodonApi.StreamingSocketTest do
   import Vutuv.MastodonHelpers
   import Vutuv.OrganizationsHelpers
 
+  alias Vutuv.MastodonApi.Presenter
   alias Vutuv.Organizations
   alias Vutuv.Organizations.OrganizationRole
   alias Vutuv.Posts
@@ -336,7 +337,7 @@ defmodule VutuvWeb.MastodonApi.StreamingSocketTest do
       # outright on that and falls back to "now". Calibrated against the
       # un-fixed socket, which did exactly that and made this line red.
       assert decoded["payload"]["created_at"] ==
-               Vutuv.MastodonApi.Presenter.timestamp(notification.at)
+               Presenter.timestamp(notification.at)
 
       assert decoded["payload"]["created_at"] == "2026-08-17T10:00:00.000Z"
     end

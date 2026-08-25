@@ -3,6 +3,7 @@ defmodule Vutuv.WebhooksTest do
 
   alias Vutuv.ApiAuth
   alias Vutuv.ApiAuth.OAuth
+  alias Vutuv.SocialFeed.Http
   alias Vutuv.Webhooks
   alias Vutuv.Webhooks.{Delivery, Subscription}
 
@@ -267,7 +268,7 @@ defmodule Vutuv.WebhooksTest do
       # vutuv called them — and `own_agent?/1` recognises our own traffic, which
       # "vutuv-webhooks/1.0" did not.
       assert headers["user-agent"] =~ ~r{^vutuv/\S+ \(\+https?://}
-      assert Vutuv.SocialFeed.Http.own_agent?(headers["user-agent"])
+      assert Http.own_agent?(headers["user-agent"])
 
       assert [%Delivery{delivered_at: %DateTime{}, last_status: 200}] = Repo.all(Delivery)
       # Nothing left to do.
