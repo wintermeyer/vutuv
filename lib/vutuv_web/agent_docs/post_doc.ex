@@ -28,6 +28,7 @@ defmodule VutuvWeb.AgentDocs.PostDoc do
   alias Vutuv.Profiles.VerifiedLinks
   alias VutuvWeb.AgentDocs
   alias VutuvWeb.Markdown
+  alias VutuvWeb.PostTeaser
   alias VutuvWeb.UserHelpers
 
   @doc """
@@ -65,7 +66,7 @@ defmodule VutuvWeb.AgentDocs.PostDoc do
     |> Map.merge(%{
       id: post.id,
       title: "#{UserHelpers.full_name(author)} · #{Date.to_iso8601(post.published_on)}",
-      description: AgentDocs.excerpt(post.body),
+      description: PostTeaser.line(post),
       author: Vutuv.Identity.ref(author),
       published_on: post.published_on,
       body_markdown: post.body,
@@ -171,7 +172,7 @@ defmodule VutuvWeb.AgentDocs.PostDoc do
     |> Map.merge(%{
       id: post.id,
       title: "#{organization.name} · #{Date.to_iso8601(post.published_on)}",
-      description: AgentDocs.excerpt(post.body),
+      description: PostTeaser.line(post),
       author: Vutuv.Identity.ref(organization),
       published_on: post.published_on,
       body_markdown: post.body,
@@ -270,7 +271,7 @@ defmodule VutuvWeb.AgentDocs.PostDoc do
       url: RemotePost.origin(remote),
       author: RemoteAccount.label(account),
       published_on: DateTime.to_date(remote.published_at),
-      excerpt: AgentDocs.excerpt(remote.content_text),
+      excerpt: PostTeaser.line(remote),
       # How many pictures the entry carries (issue #1163). A post from another
       # network can be a photograph and nothing else, and its stored body is
       # then genuinely empty — so without this an agent would read a wordless
@@ -298,7 +299,7 @@ defmodule VutuvWeb.AgentDocs.PostDoc do
       # internal, exactly as on the HTML card. Reposters can be pages too.
       author: UserHelpers.author_name(post),
       published_on: post.published_on,
-      excerpt: AgentDocs.excerpt(post.body),
+      excerpt: PostTeaser.line(post),
       reposted_by: entry[:reposted_by] && UserHelpers.author_name(entry[:reposted_by]),
       reposters: Enum.map(reposters, &UserHelpers.author_name/1)
     }

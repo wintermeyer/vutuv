@@ -310,14 +310,6 @@ defmodule VutuvWeb.AgentDocs do
   """
   def person_ref(identity), do: Vutuv.Identity.ref(identity)
 
-  @doc "The one-line excerpt the list-like docs show of a post body."
-  def excerpt(body) do
-    body
-    |> String.split("\n", parts: 2)
-    |> hd()
-    |> String.slice(0, 200)
-  end
-
   defp format_name(:md), do: :markdown
   defp format_name(:txt), do: :text
   defp format_name(:json), do: :json

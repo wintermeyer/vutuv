@@ -28,6 +28,7 @@ defmodule VutuvWeb.OpenGraph do
   alias Vutuv.Posts.Post
   alias Vutuv.Posts.PostImage
   alias VutuvWeb.OgCard
+  alias VutuvWeb.PostTeaser
   alias VutuvWeb.UI
   alias VutuvWeb.UserHelpers
 
@@ -233,7 +234,7 @@ defmodule VutuvWeb.OpenGraph do
   # a restricted post must not surface in a tag (the teaser page doesn't
   # assign :post at all, so it falls through to the author's info).
   defp post_excerpt(%{post: %Post{} = post, restricted?: false}),
-    do: VutuvWeb.AgentDocs.excerpt(post.body)
+    do: PostTeaser.line(post)
 
   defp post_excerpt(_ca), do: nil
 

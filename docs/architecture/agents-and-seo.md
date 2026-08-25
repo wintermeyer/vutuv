@@ -267,14 +267,29 @@ scraper-friendly square JPEG at `/:slug/avatar.jpg`
 (`VutuvWeb.AvatarController`; preview scrapers don't decode the site's AVIF),
 derived on the fly from the kept original, metadata-stripped.
 
-Public posts preview as articles with their first line, date and first image
+Public posts preview as articles with their teaser line, date and first image
 (`/post_images/<token>/og.jpg`, derived on the fly by the authorizing proxy, so
 audience changes keep guarding it); restricted posts and teasers never leak the
 body or an image.
 
+**One module decides which line that is.** `VutuvWeb.PostTeaser.line/2` — and
+its flattened twin `plain_line/2` — is the single owner of the app's one-line
+post teaser, read by the Open Graph description below, the RSS
+`<description>`, every doc builder that lists posts rather than rendering one,
+a search result, an organization's activity list, the /notifications
+breadcrumb, the daily report and the feed's tab ticker. It is the post's first
+line, minus the openers a reader learns nothing from: a quote post's
+`RE: <url>` reference to the status it quotes (Mastodon writes one, and it
+names that status by id), and a line with no words in it (a `---` rule, a lone
+code fence, a line of nothing but inline images). Both functions pick the
+**same** line, so no two of those surfaces can quote one post differently. The
+next exception goes in that module's `@skippable`, never at a call site. Which
+column a post keeps its text in is `Vutuv.Posts.text/1`, beside `author/1` and
+`path/1`.
+
 The **description** falls through a chain (`OpenGraph.description/1`): a page's
 own `:meta_description` assign (a controller render assign or a LiveView socket
-assign — the CV builder and the tag page set one), else a public post's first
+assign — the CV builder and the tag page set one), else a public post's teaser
 line, else a member's work info, else a **per-page description** keyed on the
 request path (`page_copy/1`: the settings sections, the `/system` directory, and
 the public info pages — login, community, legal, developers, the tags and

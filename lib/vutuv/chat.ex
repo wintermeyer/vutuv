@@ -671,7 +671,7 @@ defmodule Vutuv.Chat do
         distinct: m.conversation_id,
         order_by: [asc: m.conversation_id, desc: m.inserted_at, desc: m.id],
         # Only a short prefix leaves Postgres: the sidebar CSS-truncates to one
-        # line and AgentDocs.excerpt/1 caps at the first line + 200 chars, so the
+        # line and Markdown.to_preview_line/1 caps at 200 chars, so the
         # full 10k-char body never needs to travel just to be truncated.
         select: {m.conversation_id, {fragment("left(?, 500)", m.body), m.inserted_at}}
       )

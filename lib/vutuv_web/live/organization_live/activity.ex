@@ -33,6 +33,7 @@ defmodule VutuvWeb.OrganizationLive.Activity do
   alias Vutuv.Organizations
   alias Vutuv.Posts
   alias VutuvWeb.Live.InitAssigns
+  alias VutuvWeb.PostTeaser
 
   @impl true
   def mount(_params, session, socket) do
@@ -133,7 +134,7 @@ defmodule VutuvWeb.OrganizationLive.Activity do
                 navigate={Posts.path(entry.post)}
                 class="mt-0.5 line-clamp-1 block text-sm text-slate-600 hover:text-brand-700 dark:text-slate-400 dark:hover:text-brand-300"
               >
-                {VutuvWeb.Markdown.to_plain_text(entry.post.body)}
+                {PostTeaser.plain_line(entry.post)}
               </.link>
 
               <.local_time

@@ -32,6 +32,7 @@ defmodule VutuvWeb.AgentDocs.ProfileDoc do
   alias VutuvWeb.AgentDocs
   alias VutuvWeb.AgentDocs.SectionDocs
   alias VutuvWeb.Fediverse.Docs
+  alias VutuvWeb.PostTeaser
   alias VutuvWeb.UserHelpers
 
   @doc """
@@ -341,7 +342,7 @@ defmodule VutuvWeb.AgentDocs.ProfileDoc do
     %{
       url: RemotePost.origin(remote),
       published_on: DateTime.to_date(remote.published_at),
-      excerpt: AgentDocs.excerpt(remote.content_text),
+      excerpt: PostTeaser.line(remote),
       reposted_by: entry.reposted_by && UserHelpers.full_name(entry.reposted_by),
       pinned: false,
       network: "fediverse",
@@ -353,7 +354,7 @@ defmodule VutuvWeb.AgentDocs.ProfileDoc do
     %{
       url: AgentDocs.abs_url(Vutuv.Posts.path(entry.post)),
       published_on: entry.post.published_on,
-      excerpt: AgentDocs.excerpt(entry.post.body),
+      excerpt: PostTeaser.line(entry.post),
       reposted_by: entry.reposted_by && UserHelpers.full_name(entry.reposted_by),
       pinned: false
     }

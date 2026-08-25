@@ -934,6 +934,21 @@ defmodule Vutuv.Posts do
 
   def author(%Post{} = post), do: post.organization
 
+  @doc """
+  The text a post carries, whichever kind of post it is: a member's Markdown
+  `body`, a cached remote post's or a remote reply's plain `content_text`.
+  Nil where nothing was written (a photograph and no words).
+
+  The companion of `author/1` and `path/1`, and here for the same reason: the
+  three kinds keep their text in two differently named columns, so every caller
+  that reached for one of them by hand was a place the next kind would have to
+  be remembered again. `Vutuv.Translations.source_text/1` and
+  `VutuvWeb.PostTeaser` both read it from here.
+  """
+  def text(%Post{body: body}), do: body
+  def text(%RemotePost{content_text: text}), do: text
+  def text(%Note{content_text: text}), do: text
+
   @doc "The author's id, whichever kind of author it is."
   def author_id(%Post{organization_id: nil, user_id: user_id}), do: user_id
   def author_id(%Post{organization_id: organization_id}), do: organization_id

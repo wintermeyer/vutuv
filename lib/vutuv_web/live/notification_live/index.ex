@@ -36,8 +36,9 @@ defmodule VutuvWeb.NotificationLive.Index do
       lines, and visually by the `.notif-clamp` CSS clamp fed through the
       inline `--notif-clamp` custom property. The compact one-line contexts (a
       reply's "Your post:" breadcrumb, the handle-change list) sit inside the
-      row's own link, so they cannot carry links of their own: those are
-      flattened to plain text by `VutuvWeb.Markdown.to_plain_text/1` instead.
+      row's own link, so they cannot carry links of their own: those come from
+      `VutuvWeb.PostTeaser`, the app's shared one-line teaser, which flattens
+      the line and skips the openers no reader learns anything from.
 
   The page is **numbered** (`?page=`), not an endless list: both the page and
   the filter live in the URL, so a page can be linked to and the back button
@@ -84,6 +85,7 @@ defmodule VutuvWeb.NotificationLive.Index do
   alias VutuvWeb.Live.MountHandoff
   alias VutuvWeb.Markdown
   alias VutuvWeb.NotificationLive.Groups
+  alias VutuvWeb.PostTeaser
   alias VutuvWeb.UserHelpers
 
   @page_size 50
@@ -1214,7 +1216,7 @@ defmodule VutuvWeb.NotificationLive.Index do
   defp put_change_previews(entry, _posts, _lines), do: entry
 
   defp change_preview(post, lines) do
-    case preview_excerpt(post.body, lines, :text) do
+    case quoted_excerpt(post, lines, :text) do
       %{} = excerpt -> Map.put(excerpt, :post, post)
       _ -> %{post: post, text: ""}
     end
@@ -1229,12 +1231,26 @@ defmodule VutuvWeb.NotificationLive.Index do
   defp put_preview(entry, key, post_id, posts, lines, form) do
     with true <- is_binary(post_id),
          %Post{} = post <- Map.get(posts, post_id),
-         %{} = excerpt <- preview_excerpt(post.body, lines, form) do
+         %{} = excerpt <- quoted_excerpt(post, lines, form) do
       Map.put(entry, key, Map.put(excerpt, :post, post))
     else
       _ -> entry
     end
   end
+
+  # The one-line form is the app's shared post teaser, so this page skips a
+  # quote post's `RE: <url>` opener and an image-only first line exactly as the
+  # feed's ticker and the RSS description do; the reader's line budget only
+  # decides how many characters may ride the row. The formatted multi-line
+  # quote below it is this page's own, and stays here.
+  defp quoted_excerpt(post, lines, :text) do
+    case PostTeaser.plain_line(post, length: char_budget(lines)) do
+      "" -> nil
+      text -> %{text: text}
+    end
+  end
+
+  defp quoted_excerpt(post, lines, :html), do: preview_excerpt(post.body, lines)
 
   # How many characters one kept line may contribute. A source line wraps to
   # several rendered ones, so the character budget scales with the reader's
@@ -1252,7 +1268,7 @@ defmodule VutuvWeb.NotificationLive.Index do
   # non-empty lines (the reader's `:notification_post_lines` preference), cut
   # server-side (not only by the CSS clamp) so the rest of a quoted body never
   # reaches the DOM. Returns nil for a body with no text left to show.
-  defp preview_excerpt(body, lines, form) do
+  defp preview_excerpt(body, lines) do
     source =
       @inline_image
       |> Regex.replace(body, "")
@@ -1261,7 +1277,7 @@ defmodule VutuvWeb.NotificationLive.Index do
 
     case String.trim(source) do
       "" -> nil
-      trimmed -> render_excerpt(trimmed, lines, form)
+      trimmed -> render_excerpt(trimmed, lines)
     end
   end
 
@@ -1280,28 +1296,17 @@ defmodule VutuvWeb.NotificationLive.Index do
     |> then(fn {kept, _left} -> kept |> Enum.reverse() |> Enum.join("\n") end)
   end
 
-  # The two shapes a quoted post is shown in.
-  #
-  # `:html` is the formatted rendering /feed gives a post, block-cut at the
-  # character budget so one essay-long line still ships a small DOM. Images are
-  # deliberately not passed: a quote is text.
-  #
-  # `:text` is the flattened one-line form the compact contexts use (the "Your
-  # post:" breadcrumb above a reply, the handle-change list), where real HTML
-  # would nest a link inside the row's own link - but the Markdown markers must
-  # not show either, so it goes through the renderer as well.
-  defp render_excerpt(source, lines, :html) do
+  # The formatted rendering /feed gives a post, block-cut at the character
+  # budget so one essay-long line still ships a small DOM. Images are
+  # deliberately not passed: a quote is text. The compact one-line contexts (the
+  # "Your post:" breadcrumb above a reply, the handle-change list) do not come
+  # through here at all — see `quoted_excerpt/3`.
+  defp render_excerpt(source, lines) do
     {html, _truncated?} = Markdown.render_preview(source, [], limit: char_budget(lines))
     %{html: html}
   end
 
-  defp render_excerpt(source, lines, :text) do
-    %{text: source |> Markdown.to_plain_text() |> clamp(char_budget(lines))}
-  end
-
   defp char_budget(lines), do: lines * @preview_chars_per_line
-
-  defp clamp(text, limit), do: text |> String.slice(0, limit) |> String.trim_trailing()
 
   # The reader's line budget as an inline CSS custom property for `.notif-clamp`
   # — splatted, so a reader on the shipped default (what the stylesheet's own

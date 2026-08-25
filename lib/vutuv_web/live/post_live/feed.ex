@@ -288,13 +288,25 @@ defmodule VutuvWeb.PostLive.Feed do
     end
   end
 
+  # The record a feed entry is about: a remote reply, a cached remote post, or
+  # the vutuv post itself. Spelled once, because every question this module asks
+  # of an entry that is really a question about the post behind it — its id, the
+  # line the ticker quotes, what could be translated — used to re-derive it, and
+  # a fourth entry shape would have had to be remembered in each.
+  defp entry_record(entry) do
+    cond do
+      Posts.remote_reply_entry?(entry) -> entry.note
+      Posts.remote_feed_entry?(entry) -> entry.remote_post
+      true -> entry.post
+    end
+  end
+
   # What a feed entry shows that could be translated: its own post (plus the
   # nested ancestors of a reply), a cached remote post, or a remote reply.
   defp entry_subjects(entry) do
-    cond do
-      Posts.remote_reply_entry?(entry) -> [entry.note]
-      Posts.remote_feed_entry?(entry) -> [entry.remote_post]
-      true -> [entry.post | entry[:ancestors] || []]
+    case entry_record(entry) do
+      %Post{} = post -> [post | entry[:ancestors] || []]
+      remote -> [remote]
     end
   end
 
@@ -1357,13 +1369,7 @@ defmodule VutuvWeb.PostLive.Feed do
   # same post stays revealed when it is restreamed), a cached post from another
   # network (issue #1161) by its row id — it is not a `%Post{}` and has no post
   # id to key on.
-  defp filter_key(entry) do
-    cond do
-      Posts.remote_reply_entry?(entry) -> entry.note.id
-      Posts.remote_feed_entry?(entry) -> entry.remote_post.id
-      true -> entry.post.id
-    end
-  end
+  defp filter_key(entry), do: entry_record(entry).id
 
   # Whether the reader's filters currently hide this entry: it matched one, and
   # they have not opened it. The single expression the row's three renderings

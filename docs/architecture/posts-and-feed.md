@@ -487,8 +487,10 @@ knows about the reader:
   elsewhere — and a member with no tab bar pays no query.
 
 **And for a few seconds it says what landed** (issue #1668). The dot is the
-standing mark; beside it the bar quotes the arrival — author and first words —
-and then goes. `post_filter_tabs/1` takes a `ticker` map for it and the tab it
+standing mark; beside it the bar quotes the arrival — author and the teaser
+line `VutuvWeb.PostTeaser.plain_line/2` picks (see `agents-and-seo.md`, so the
+bar and the RSS description never quote one post differently) — and then goes.
+`post_filter_tabs/1` takes a `ticker` map for it and the tab it
 names shares its warm tint for the length of the window, which is the whole
 mechanism for "which tab is this about" with a tab in between. On a narrow bar
 the other tabs fold their labels to zero width and the quote takes the room

@@ -31,7 +31,7 @@ defmodule VutuvWeb.ReportDetails do
   alias Vutuv.Organizations
   alias Vutuv.Organizations.Organization
   alias Vutuv.Tags.Tag
-  alias VutuvWeb.AgentDocs
+  alias VutuvWeb.PostTeaser
 
   # Section order + German headings for the email; the admin page keys its own
   # gettext heading off `:key` and ignores `label`.
@@ -145,7 +145,7 @@ defmodule VutuvWeb.ReportDetails do
   defp post_entry(post, actor) do
     path = Vutuv.Posts.path(post)
 
-    case AgentDocs.excerpt(post.body) do
+    case PostTeaser.line(post) do
       "" -> %{primary: actor_label(actor), secondary: nil, path: path}
       line -> %{primary: line, secondary: actor_label(actor), path: path}
     end

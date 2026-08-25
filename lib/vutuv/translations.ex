@@ -37,6 +37,7 @@ defmodule Vutuv.Translations do
   alias Vutuv.Fediverse.RemotePost
   alias Vutuv.Languages
   alias Vutuv.Ollama
+  alias Vutuv.Posts
   alias Vutuv.Posts.Post
   alias Vutuv.Repo
   alias Vutuv.Translations.Detector
@@ -362,9 +363,9 @@ defmodule Vutuv.Translations do
   The text a translation of this subject translates: a local post's Markdown
   body, a remote subject's plain `content_text`.
   """
-  def source_text(%Post{body: body}), do: body
-  def source_text(%RemotePost{content_text: text}), do: text || ""
-  def source_text(%Note{content_text: text}), do: text || ""
+  def source_text(%Post{} = post), do: Posts.text(post)
+  def source_text(%RemotePost{} = post), do: Posts.text(post) || ""
+  def source_text(%Note{} = note), do: Posts.text(note) || ""
 
   @doc "The subject's content warning, when it carries one (remote content only)."
   def source_summary(%Post{}), do: nil

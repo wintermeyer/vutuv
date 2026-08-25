@@ -36,6 +36,7 @@ defmodule VutuvWeb.SearchLive do
   alias Vutuv.Fediverse.RemoteFollow
   alias Vutuv.Posts
   alias Vutuv.Search
+  alias VutuvWeb.PostTeaser
   alias VutuvWeb.UserHelpers
   alias VutuvWeb.UserHTML
 
@@ -761,7 +762,7 @@ defmodule VutuvWeb.SearchLive do
                   href={Posts.path(post)}
                   class="mt-1 block truncate text-sm text-slate-700 hover:text-brand-700 dark:text-slate-300"
                 >
-                  {highlight(VutuvWeb.AgentDocs.excerpt(post.body), @post_needles)}
+                  {highlight(PostTeaser.line(post), @post_needles)}
                 </.link>
               </div>
             </li>

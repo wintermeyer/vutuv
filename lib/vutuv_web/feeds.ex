@@ -14,6 +14,7 @@ defmodule VutuvWeb.Feeds do
   alias Vutuv.Posts
   alias VutuvWeb.AgentDocs
   alias VutuvWeb.PostComponents
+  alias VutuvWeb.PostTeaser
   alias VutuvWeb.UserHelpers
   alias VutuvWeb.Xml
 
@@ -117,7 +118,7 @@ defmodule VutuvWeb.Feeds do
       "    <pubDate>#{rfc1123(post.inserted_at)}</pubDate>\n",
       "    <dc:creator>#{Xml.escape(author)}</dc:creator>\n",
       Enum.map(post.tags, &"    <category>#{Xml.escape(&1.name)}</category>\n"),
-      "    <description>#{html_text(AgentDocs.excerpt(post.body))}</description>\n",
+      "    <description>#{html_text(PostTeaser.line(post))}</description>\n",
       "    <content:encoded><![CDATA[#{cdata_safe(rendered_body(post))}]]></content:encoded>\n",
       "  </item>\n"
     ]

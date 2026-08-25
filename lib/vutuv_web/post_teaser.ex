@@ -1,7 +1,47 @@
 defmodule VutuvWeb.PostTeaser do
   @moduledoc """
-  What an arrival says in one line: who wrote it, how it opens, and whether this
-  reader may be shown it at all.
+  What a post says in one line: which line that is, who wrote it, and whether
+  this reader may be shown it at all.
+
+  ## Which line
+
+  `line/2` — and its flattened twin `plain_line/2` — is the single owner of the
+  app's one-line post teaser, read by the RSS `<description>`, the Open Graph
+  description, a `/search` result, every agent-format doc that lists posts
+  rather than rendering one, an organization's activity list, the
+  /notifications breadcrumb, the operator's daily report, and `text/1` below.
+
+  Every one of those used to pick that line for itself, which is why this half
+  exists: a teaser rule is a **product** decision — what does a reader learn
+  about this post in one line? — and it has to be made once, not nine times.
+  Add the next exception to `@skippable` and every surface gets it.
+
+  A body's first line is usually the right teaser. Where it is not, it is
+  because the line was written for a machine rather than for a reader:
+
+    * **`RE: <url>`** — how Mastodon and its kin spell the status a quote post
+      quotes. It names that status by id, so a reader who sees only that line
+      learns nothing whatsoever about what was said. The rendered card still
+      shows it (it is the link to the quoted post); the teaser skips it and the
+      line the author actually wrote takes its place.
+    * **A line with no words in it** — a `---` rule, a lone code fence, a line
+      that is nothing but inline images. Teasing a post with `![](…)` says less
+      than nothing.
+
+  A post that is *nothing but* skippable lines keeps its first line: a URL
+  makes a poor teaser, an empty one is worse.
+
+  Both functions pick the **same** line — the choice is made on the source — so
+  no two surfaces can quote one post differently. They differ only in how they
+  present it. `line/2` keeps the post's own source form (Markdown for a
+  member's post, plain text for a post or reply from another network), which is
+  what a `.md` doc, an RSS description and a search result want. `plain_line/2`
+  flattens it (`VutuvWeb.Markdown.to_plain_text/1`) for the surfaces that
+  render no markup at all, so `**fett**` reads as `fett` rather than showing
+  its markers. Only the picked line goes through the renderer, never the whole
+  body.
+
+  ## Who, and whether
 
   Two surfaces quote a post the reader is not looking at, and neither may drift
   from the other. The feed's source-tab ticker quotes it beside the tab it
@@ -19,7 +59,24 @@ defmodule VutuvWeb.PostTeaser do
   alias Vutuv.Fediverse.RemoteAccount
   alias Vutuv.Identity
   alias Vutuv.Posts
+  alias Vutuv.Posts.Post
   alias VutuvWeb.Markdown
+
+  # Long enough that no surface has to ask for more, short enough that a 10k
+  # body never travels just to be truncated by CSS at the far end.
+  @length 200
+
+  # Lines a teaser passes over, in the order the moduledoc explains them. Each
+  # matches a **whole** trimmed line: "RE: what Daniel said" is prose the author
+  # wrote and stays, and so does a paragraph that merely contains a picture.
+  # The angle brackets are there because a server may write the quoted URL as
+  # `<https://…>`.
+  @skippable [
+    ~r{\ARE:\s*<?https?://\S+>?\z}i,
+    ~r/\A(?:-{3,}|\*{3,}|_{3,})\z/,
+    ~r/\A(?:```|~~~)/,
+    ~r/\A(?:!\[[^\]]*\]\([^)]*\)\s*)+\z/
+  ]
 
   # How wide one browser-tab frame is written. A tab in a window holding a
   # handful of others shows roughly twenty characters of its title, and the
@@ -39,6 +96,32 @@ defmodule VutuvWeb.PostTeaser do
   @max_frames 3
 
   @doc """
+  The teaser line of `post`, in its own source form, at most `:length`
+  characters (200 by default).
+
+  Takes a `%Vutuv.Posts.Post{}`, a `%Vutuv.Fediverse.RemotePost{}` or a
+  `%Vutuv.Fediverse.Note{}` — the record, not its body, so no caller has to
+  know which column each kind keeps its text in (`Vutuv.Posts.text/1` owns
+  that). A post with nothing written on it — a photograph and no words —
+  answers `""`; anything else raises rather than teasing quietly.
+  """
+  def line(post, opts \\ []), do: teaser(post, &fold/1, opts)
+
+  @doc """
+  `line/2` flattened to plain text: Markdown markers gone, whitespace folded to
+  single spaces. For a surface that renders no markup of its own.
+  """
+  def plain_line(post, opts \\ [])
+
+  def plain_line(%Post{} = post, opts), do: teaser(post, &flatten/1, opts)
+
+  # A remote body is plain text already (`Vutuv.RemoteHtml.to_text/3` reduced it
+  # at the inbox), so it must never go through the Markdown renderer: that would
+  # shorten a URL the author never wrote as a link and eat a leading `1.` into a
+  # list marker. Folding its whitespace is all it needs.
+  def plain_line(post, opts), do: teaser(post, &fold/1, opts)
+
+  @doc """
   The quote for one feed entry — `%{who: …, text: …}` — or nil where this
   reader has muted it.
 
@@ -55,6 +138,23 @@ defmodule VutuvWeb.PostTeaser do
   end
 
   @doc """
+  The record a feed entry is about: a remote reply, a cached remote post, or the
+  vutuv post itself.
+
+  Spelled once, because every question asked of an entry that is really a
+  question about the post behind it — its id, the line to quote, what could be
+  translated — used to re-derive it, and a fourth entry shape would then have to
+  be remembered in each.
+  """
+  def record(entry) do
+    cond do
+      Posts.remote_reply_entry?(entry) -> entry.note
+      Posts.remote_feed_entry?(entry) -> entry.remote_post
+      true -> entry.post
+    end
+  end
+
+  @doc """
   Which of this reader's content filters hides `entry`, or nil.
 
   A cached post from another network (issue #1161) is filtered on its plain
@@ -65,7 +165,7 @@ defmodule VutuvWeb.PostTeaser do
   def filtered_pattern(entry, compiled, viewer_id) do
     cond do
       Posts.remote_feed_entry?(entry) ->
-        ContentFilters.filtered_text(remote_text(entry), compiled)
+        entry |> record() |> Posts.text() |> ContentFilters.filtered_text(compiled)
 
       entry.post.user_id == viewer_id ->
         nil
@@ -99,14 +199,14 @@ defmodule VutuvWeb.PostTeaser do
   end
 
   @doc """
-  How it opens: one line, whatever the body did — or nil for a post with no
-  text to quote (a photo without a caption).
+  How it opens: the entry's teaser line, flattened — or nil for a post with no
+  text to quote (a photo without a caption), which is what lets both quoting
+  surfaces fall back to the bare dot.
   """
   def text(entry) do
-    cond do
-      Posts.remote_reply_entry?(entry) -> one_line(entry.note.content_text)
-      Posts.remote_feed_entry?(entry) -> one_line(entry.remote_post.content_text)
-      true -> one_line(Markdown.to_preview_line(entry.post.body))
+    case entry |> record() |> plain_line() do
+      "" -> nil
+      line -> line
     end
   end
 
@@ -130,29 +230,58 @@ defmodule VutuvWeb.PostTeaser do
     end
   end
 
+  defp teaser(post, present, opts) do
+    limit = Keyword.get(opts, :length, @length)
+
+    case Posts.text(post) do
+      body when is_binary(body) ->
+        body
+        |> lines()
+        |> pick()
+        # Presenting is the expensive half (a Markdown render, a Unicode
+        # regex), so the line is cut to a generous multiple of the cap first:
+        # neither `fold/1` nor `flatten/1` can grow a line, so nothing that
+        # would have survived the final cut is lost. Without it a 10k body
+        # written as one long line paid for all 10k to yield 200 characters.
+        |> String.slice(0, limit * 4)
+        |> present.()
+        |> String.slice(0, limit)
+
+      _no_text ->
+        ""
+    end
+  end
+
+  # Lazy on purpose: almost every post is teased by its first line, and this
+  # walks a 10k body only as far as it has to. `String.splitter/2` is
+  # re-enumerable, so `pick/1` may read it twice.
+  defp lines(body) do
+    body
+    |> String.splitter("\n")
+    |> Stream.map(&String.trim/1)
+    |> Stream.reject(&(&1 == ""))
+  end
+
+  defp pick(lines) do
+    case Enum.find(lines, &(not skippable?(&1))) do
+      nil -> Enum.at(lines, 0) || ""
+      line -> line
+    end
+  end
+
+  defp skippable?(line), do: Enum.any?(@skippable, &Regex.match?(&1, line))
+
+  defp flatten(line), do: line |> Markdown.to_plain_text() |> fold()
+
+  defp fold(line), do: line |> String.replace(~r/\s+/u, " ") |> String.trim()
+
+  # A page that never claimed a root handle has none to show, so it is named.
   defp local_who(author) do
     case Identity.handle(author) do
       handle when is_binary(handle) -> "@" <> handle
       _ -> Identity.display_name(author)
     end
   end
-
-  defp remote_text(entry) do
-    if Posts.remote_reply_entry?(entry),
-      do: entry.note.content_text,
-      else: entry.remote_post.content_text
-  end
-
-  # A quote is one line whatever the body did. The cap keeps a long post out of
-  # the payload; where the line is actually cut is the surface's own business.
-  defp one_line(text) when is_binary(text) do
-    case text |> String.replace(~r/\s+/u, " ") |> String.trim() |> String.slice(0, 200) do
-      "" -> nil
-      line -> line
-    end
-  end
-
-  defp one_line(_text), do: nil
 
   defp join(who, text) when is_binary(who) and is_binary(text), do: who <> ": " <> text
   defp join(who, nil) when is_binary(who), do: who

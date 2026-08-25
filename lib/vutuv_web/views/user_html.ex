@@ -142,7 +142,7 @@ defmodule VutuvWeb.UserHTML do
                 class="markdown markdown--post teaser-clamp text-slate-700 dark:text-slate-200 [&_a]:relative [&_a]:z-20"
                 style="--post-hyphens-desktop:auto;--post-hyphens-mobile:auto"
               >
-                {post_teaser(post.body)}
+                {rail_body(post.body)}
               </div>
               <p class="mb-0 mt-1 flex items-center gap-2 text-xs text-slate-500 dark:text-slate-400">
                 <.post_time at={post.inserted_at} />
@@ -176,7 +176,11 @@ defmodule VutuvWeb.UserHTML do
   # to show its opening two lines.
   @teaser_source_chars 400
 
-  # The teaser body, rendered through the exact same Markdown pipeline as any
+  # The rail tile's body — three rendered lines of a post, not a teaser line:
+  # `VutuvWeb.PostTeaser` owns that, and this used to be called `post_teaser/1`,
+  # which read as if the two were the same thing.
+  #
+  # Rendered through the exact same Markdown pipeline as any
   # other post preview (`VutuvWeb.Markdown.render_preview/3` → `render_post/2`),
   # so bold, links, @mentions and #hashtags read here the way they do in the
   # feed — a fully-qualified `@user@host` is a link to that remote account
@@ -184,7 +188,7 @@ defmodule VutuvWeb.UserHTML do
   # and the post's lead photo rides beside it as the thumbnail. The visible cut
   # is the three-line `.teaser-clamp` height clamp on the wrapper, so the
   # truncation flag is dropped here.
-  defp post_teaser(body) do
+  defp rail_body(body) do
     {html, _truncated?} = Markdown.render_preview(body, [], limit: @teaser_source_chars)
     html
   end
