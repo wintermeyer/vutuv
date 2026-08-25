@@ -123,12 +123,23 @@ defmodule VutuvWeb.PostTeaserTest do
       assert PostTeaser.line(%Post{body: "## Zwischentitel\n\nDer Rest"}) == "## Zwischentitel"
     end
 
-    test "keeps a hashtag line the canonical grammar does not cover, rather than guessing" do
-      # `Vutuv.Mentions` reads `#[A-Za-z0-9_]+`, so `#Grüne` is not one token to
-      # it. Skipping a line the reader wanted is the expensive mistake.
+    test "keeps a hashtag line this module's narrower grammar does not cover" do
+      # Not because `Vutuv.Mentions` cannot read `#Grüne` — it can, its token
+      # spans Unicode letters (\p{L}), which is what makes `#Thüringen` name its
+      # own tag rather than `#Th`. This module's `@hashtags_only` is deliberately
+      # narrower: it decides what to **drop**, and dropping a line the reader
+      # wanted is the expensive mistake, so anything it cannot prove is a pure
+      # hashtag line stays.
+      #
+      # The cost is that on a German site the "a hashtag line does not tease"
+      # rule (v7.360.2) stops firing as soon as one tag carries an umlaut. That
+      # is a product call, not an oversight.
       post = %Post{body: "#Grüne #Klima\n\nDer Rest"}
 
       assert PostTeaser.line(post) == "#Grüne #Klima"
+
+      # The same line in ASCII is skipped, which is that rule working.
+      assert PostTeaser.line(%Post{body: "#Gruene #Klima\n\nDer Rest"}) == "Der Rest"
     end
 
     test "reads a remote post and a remote reply off their own text column" do

@@ -31,6 +31,7 @@ defmodule VutuvWeb.ApiV2.SectionController do
   }
 
   alias Vutuv.CodeStats
+  alias Vutuv.Ordering
   alias Vutuv.Profiles.CvUpdates
   alias Vutuv.QualificationDocument
   alias Vutuv.Tags.UserTag
@@ -61,11 +62,29 @@ defmodule VutuvWeb.ApiV2.SectionController do
     end)
   end
 
+  # The seven HTML controllers each seed `position` with
+  # `Ordering.next_position/2`; this one `create/2` serves all eight writable
+  # sections and did not, so an entry added through the API came out with
+  # `position` NULL — sorting last for ever, behind entries the member added
+  # afterwards through a form, and invisible to the reorder tool, which orders
+  # by that column. Only six of the eight sections carry the field, so this asks
+  # the schema rather than assuming.
+  defp seed_position(record, schema, user) do
+    if :position in schema.__schema__(:fields),
+      do: %{record | position: Ordering.next_position(schema, user.id)},
+      else: record
+  end
+
   def create(conn, params) do
     %{assoc: assoc, schema: schema} = Map.fetch!(@writable, conn.assigns.section)
     user = conn.assigns.current_user
 
-    changeset = user |> build_assoc(assoc) |> schema.changeset(params) |> before_write()
+    changeset =
+      user
+      |> build_assoc(assoc)
+      |> seed_position(schema, user)
+      |> schema.changeset(params)
+      |> before_write()
 
     case Repo.insert(changeset) do
       {:ok, record} ->

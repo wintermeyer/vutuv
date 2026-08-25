@@ -182,6 +182,32 @@ defmodule VutuvWeb.ApiV2.ProfileApiTest do
       assert length(Repo.all(Ecto.assoc(user, :phone_numbers))) == 1
     end
 
+    # Seven HTML controllers seed `position` with `Ordering.next_position/2`; the
+    # API's one `create/2` serves all eight writable sections and did not, so a
+    # link, phone number, address, messenger, language or social account added
+    # through the API came out with `position` NULL and sorted last for ever —
+    # behind entries the member added later through the form, and unreachable by
+    # the reorder tool, which orders by that column.
+    test "an entry created through the API takes its place in the order",
+         %{user: user, write_token: token} do
+      for n <- 1..2 do
+        json_post(build_conn(), token, "/api/2.0/me/links", %{
+          value: "https://example.org/#{n}",
+          description: "Link #{n}"
+        })
+      end
+
+      positions =
+        user
+        |> Ecto.assoc(:urls)
+        |> Repo.all()
+        |> Enum.map(& &1.position)
+
+      refute nil in positions, "an API-created entry got no position at all"
+      assert Enum.sort(positions) == Enum.uniq(Enum.sort(positions))
+      assert length(positions) == 2
+    end
+
     test "cannot touch someone else's entries", %{conn: conn, write_token: token} do
       other = insert_activated_user()
       work = insert(:work_experience, user: other)
