@@ -89,6 +89,60 @@ defmodule Vutuv.DashboardTest do
     assert NaiveDateTime.compare(snapshot.last_message_at, ctx.today_start) == :eq
   end
 
+  describe "online_members/2" do
+    # `ShellLive` tracks on every page's socket, so a presence diff fires at
+    # site-wide socket churn — and the dashboard re-read this list on every one
+    # of them, sending the whole online id set to Postgres so it could hand back
+    # the ten largest. Ids are UUID v7 and the ordering is on `id` alone, so the
+    # same ten can be picked before the query for nothing.
+    test "asks the database about a bounded slice, however many are online" do
+      members = for _ <- 1..40, do: insert(:activated_user)
+      online = MapSet.new(members, & &1.id)
+
+      # Measured on the **parameters**, not on the query count: the count was
+      # always one, and what used to grow without bound was the id list inside
+      # it. A query-count assertion here would pass with or without the fix.
+      {result, params} = with_query_params(fn -> Dashboard.online_members(online) end)
+
+      assert length(result) == 10
+
+      # Ecto sends the `IN` list as ONE array parameter, so it is that array
+      # that has to be measured — `length(params)` is 2 whatever happens, which
+      # is how the first version of this assertion passed with the fix reverted.
+      assert [sent_ids | _rest] = params
+      assert is_list(sent_ids), "the telemetry probe did not see the id list"
+
+      assert length(sent_ids) <= 20,
+             "sent #{length(sent_ids)} ids to Postgres for a list of ten; " <>
+               "the whole online set is going over the wire on every presence diff"
+
+      # And it is still the ten newest, which is what the page shows.
+      newest = members |> Enum.map(& &1.id) |> Enum.sort(:desc) |> Enum.take(10)
+      assert Enum.map(result, & &1.id) |> Enum.sort(:desc) == newest
+    end
+
+    test "an id presence still holds for a member who is gone does not shrink the list" do
+      members = for _ <- 1..15, do: insert(:activated_user)
+
+      # A socket outlived its member. The id sorts above every real one, so a
+      # slice of exactly ten would come back nine short of what it promises.
+      stale = "01ffffff-ffff-7fff-bfff-ffffffffffff"
+      online = MapSet.new([stale | Enum.map(members, & &1.id)])
+
+      assert length(Dashboard.online_members(online)) == 10
+    end
+
+    test "nobody online is no query at all" do
+      {result, queries} =
+        Vutuv.QueryCounter.count_queries(fn -> Dashboard.online_members(MapSet.new()) end,
+          matching: ~r/FROM "users"/
+        )
+
+      assert result == []
+      assert queries == 0
+    end
+  end
+
   describe "registrations_today/0" do
     test "counts only today's confirmed sign-ups", ctx do
       insert(:activated_user, at(ctx.today_start))
@@ -144,6 +198,41 @@ defmodule Vutuv.DashboardTest do
       members = Dashboard.online_members(MapSet.new([older.id, newer.id]))
 
       assert Enum.map(members, & &1.id) == [newer.id, older.id]
+    end
+  end
+
+  # The parameters of the one `users` query `fun` runs. `QueryCounter` matches on
+  # SQL text and counts; what changed here is the size of the payload, so this
+  # reads it off the same telemetry event.
+  defp with_query_params(fun) do
+    parent = self()
+    ref = make_ref()
+    handler = {__MODULE__, ref}
+
+    :telemetry.attach(
+      handler,
+      [:vutuv, :repo, :query],
+      fn _event, _measure, metadata, _config ->
+        if self() == parent and metadata.query =~ ~s(FROM "users") do
+          send(parent, {ref, metadata.params})
+        end
+      end,
+      nil
+    )
+
+    try do
+      result = fun.()
+
+      params =
+        receive do
+          {^ref, params} -> params
+        after
+          0 -> []
+        end
+
+      {result, params}
+    after
+      :telemetry.detach(handler)
     end
   end
 end

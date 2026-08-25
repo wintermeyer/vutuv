@@ -138,7 +138,7 @@ defmodule Vutuv.Dashboard do
   `User.listing_fields/0`, like `newest_members/1`.
   """
   def online_members(online_ids, limit \\ @people_list_limit) do
-    case MapSet.to_list(online_ids) do
+    case newest_online_ids(online_ids, limit) do
       [] ->
         []
 
@@ -146,6 +146,22 @@ defmodule Vutuv.Dashboard do
         from(u in User, where: u.id in ^ids)
         |> recent_listing(limit)
     end
+  end
+
+  # The whole online set used to go to Postgres so it could hand back the ten
+  # largest ids — on **every** presence diff, which is site-wide socket churn,
+  # because `ShellLive` tracks on every page. Ids are UUID v7 and this list is
+  # ordered by id alone, so the same ten can be picked here for nothing.
+  #
+  # Twice the limit is sent, not exactly the limit: presence can hold an id
+  # whose row is gone (a member deleted while a socket of theirs was still
+  # open), and trimming to exactly ten would then return nine. The query still
+  # applies the real limit.
+  defp newest_online_ids(online_ids, limit) do
+    online_ids
+    |> MapSet.to_list()
+    |> Enum.sort(:desc)
+    |> Enum.take(limit * 2)
   end
 
   # Newest-first page of listing-field rows over an already-filtered user query.
