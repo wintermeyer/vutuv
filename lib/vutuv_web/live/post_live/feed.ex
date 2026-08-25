@@ -920,7 +920,9 @@ defmodule VutuvWeb.PostLive.Feed do
   # The worker finished a translation this reader asked for (issue #1462):
   # swap it into the one card, or clear the pending line on a failure.
   def handle_info({:translation_ready, translation}, socket) do
-    case PostTranslations.apply_ready(socket.assigns.post_translations, translation) do
+    viewer = socket.assigns.current_user
+
+    case PostTranslations.apply_ready(socket.assigns.post_translations, translation, viewer) do
       :ignore ->
         {:noreply, socket}
 
@@ -930,7 +932,9 @@ defmodule VutuvWeb.PostLive.Feed do
   end
 
   def handle_info({:translation_failed, key, target}, socket) do
-    case PostTranslations.apply_failed(socket.assigns.post_translations, key, target) do
+    viewer = socket.assigns.current_user
+
+    case PostTranslations.apply_failed(socket.assigns.post_translations, key, target, viewer) do
       :ignore ->
         {:noreply, socket}
 

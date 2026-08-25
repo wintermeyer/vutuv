@@ -37,8 +37,26 @@ defmodule VutuvWeb.Live.PostTranslations do
   """
   def available?(viewer), do: Translations.enabled?() and match?(%User{}, viewer)
 
-  @doc "The reader's translation target: their UI locale."
-  def target_language, do: Gettext.get_locale(VutuvWeb.Gettext)
+  @doc """
+  The reader's translation target: the **first** language on their ranked
+  feed-language list (`/settings/feed_languages`, issue #1672), falling back to
+  their UI locale when they named none.
+
+  The ranking is what makes "I read German and English, translate the rest into
+  German" sayable. While the target was the UI locale alone, a member reading
+  vutuv in English got English translations however their list was ordered, and
+  the two settings quietly contradicted each other.
+
+  Takes the viewer rather than reading the process locale, so every caller has
+  to have decided *whose* target it is asking for — the same discipline the
+  chosen-languages list already imposes.
+  """
+  def target_language(%User{} = viewer),
+    do: List.first(Posts.chosen_feed_languages(viewer)) || interface_language()
+
+  def target_language(_viewer), do: interface_language()
+
+  defp interface_language, do: Gettext.get_locale(VutuvWeb.Gettext)
 
   @doc """
   Whether a card in `language` is worth offering a Translate action for: the
@@ -58,8 +76,8 @@ defmodule VutuvWeb.Live.PostTranslations do
   ticked a language to see it in the original may still want one particular
   card translated, and that tap is theirs to make.
   """
-  def offer_translation?(language),
-    do: is_binary(language) and language != target_language()
+  def offer_translation?(language, viewer),
+    do: is_binary(language) and language != target_language(viewer)
 
   @doc """
   The translations map a host mounts with: an empty map when this viewer gets
@@ -77,7 +95,7 @@ defmodule VutuvWeb.Live.PostTranslations do
   def request(viewer, kind, id) do
     with true <- available?(viewer),
          {:ok, subject} <- fetch_subject(kind, id, viewer),
-         {:ok, state} <- track(subject) do
+         {:ok, state} <- track(subject, viewer) do
       {:ok, subject_key(subject), state}
     else
       _denied -> :denied
@@ -87,8 +105,8 @@ defmodule VutuvWeb.Live.PostTranslations do
   # The one mapping from `Translations.request/2` to a card's state — a cache
   # hit shows at once, a queued job subscribes this host for the swap-in.
   # Shared by the click path above and the translate mode below.
-  defp track(subject) do
-    case Translations.request(subject, target_language()) do
+  defp track(subject, viewer) do
+    case Translations.request(subject, target_language(viewer)) do
       {:cached, translation} ->
         {:ok, translation}
 
@@ -107,10 +125,10 @@ defmodule VutuvWeb.Live.PostTranslations do
   (the key is pending) and the translation is into this reader's language.
   Returns `{key, map}` or `:ignore`.
   """
-  def apply_ready(map, %Translation{} = translation) do
+  def apply_ready(map, %Translation{} = translation, viewer) do
     key = Translations.subject(translation)
 
-    if map[key] == :pending and translation.target_language == target_language() do
+    if map[key] == :pending and translation.target_language == target_language(viewer) do
       {key, Map.put(map, key, translation)}
     else
       :ignore
@@ -122,8 +140,8 @@ defmodule VutuvWeb.Live.PostTranslations do
   the pending line simply disappears and the card keeps the original.
   Returns `{key, map}` or `:ignore`.
   """
-  def apply_failed(map, subject_key, target) do
-    if map[subject_key] == :pending and target == target_language() do
+  def apply_failed(map, subject_key, target, viewer) do
+    if map[subject_key] == :pending and target == target_language(viewer) do
       {subject_key, Map.delete(map, subject_key)}
     else
       :ignore
@@ -167,7 +185,7 @@ defmodule VutuvWeb.Live.PostTranslations do
   reader's "Show the original" survives a load-more.
   """
   def auto_translate(map, subjects, viewer) do
-    target = target_language()
+    target = target_language(viewer)
     chosen = Posts.chosen_feed_languages(viewer)
 
     wanted =
@@ -179,7 +197,7 @@ defmodule VutuvWeb.Live.PostTranslations do
 
     {map, queued?} =
       Enum.reduce(wanted, {map, false}, fn subject, {acc, queued?} ->
-        case resolve_auto(acc, subject, cached[subject_key(subject)]) do
+        case resolve_auto(acc, subject, cached[subject_key(subject)], target) do
           {acc, true} -> {acc, true}
           {acc, false} -> {acc, queued?}
         end
@@ -198,14 +216,14 @@ defmodule VutuvWeb.Live.PostTranslations do
   end
 
   # `{map, queued_a_job?}` — the caller nudges the worker once for the page.
-  defp resolve_auto(map, subject, %Translation{} = cached),
+  defp resolve_auto(map, subject, %Translation{} = cached, _target),
     do: {Map.put(map, subject_key(subject), cached), false}
 
   # `queue/2` rather than `Translations.request/2`: the batch above already
   # answered "is there a fresh translation for this subject", and `request/2`
   # would ask again, once per card.
-  defp resolve_auto(map, subject, nil) do
-    case Translations.queue(subject, target_language()) do
+  defp resolve_auto(map, subject, nil, target) do
+    case Translations.queue(subject, target) do
       {:queued, _job} ->
         Phoenix.PubSub.subscribe(Vutuv.PubSub, Translations.topic(subject))
         {Map.put(map, subject_key(subject), :pending), true}

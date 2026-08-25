@@ -26,8 +26,6 @@ defmodule VutuvWeb.SettingsHTML do
   import Phoenix.HTML.Form, only: [input_id: 2]
 
   alias Vutuv.Accounts.User
-  alias Vutuv.Languages
-  alias Vutuv.Posts
   alias Vutuv.SavedSearches
 
   embed_templates("../templates/settings/*")
@@ -125,109 +123,6 @@ defmodule VutuvWeb.SettingsHTML do
   def feed_ticker_second_options do
     pref = Vutuv.Prefs.pref!(:feed_tab_ticker_seconds)
     Enum.filter([4, 6, 8, 12, 20], &(&1 >= pref.min and &1 <= pref.max))
-  end
-
-  @doc """
-  The Feed-languages card's chips (issue #1537): the languages this member is
-  likely to want first, then the whole curated list behind a disclosure.
-
-  It replaced a checkbox per curated language with all sixty-odd ticked (nil
-  means "all languages"), where naming two languages meant unticking the rest —
-  and nobody did it. What is ticked here is only ever the member's **stored**
-  choice, read from the changeset so a failed save keeps what they just picked.
-
-  The suggestion — interface language plus the language skills on their profile
-  (`Vutuv.Posts.suggested_feed_languages/1`) — decides which chips sit in the
-  open, and deliberately **does not tick them**. A pre-ticked suggestion is a
-  choice nobody made, and this card shares one form with the "posts in other
-  languages" select: a member who opened it to switch that dropdown to "hide"
-  would have submitted the suggestion with it and left with a feed that silently
-  hides every other language. Preselecting the *visible set* costs them one tap
-  and claims nothing.
-  """
-  attr(:user, :any, required: true)
-  attr(:changeset, :any, required: true)
-
-  def feed_language_chips(assigns) do
-    chosen = Ecto.Changeset.get_field(assigns.changeset, :feed_languages) || []
-    likely = chosen ++ Posts.suggested_feed_languages(assigns.user)
-
-    {own, other} =
-      Enum.split_with(Languages.options(), fn {_label, code} -> code in likely end)
-
-    assigns = assign(assigns, chosen: chosen, own: own, other: other)
-
-    ~H"""
-    <div class="flex flex-wrap gap-2">
-      <.language_chip
-        :for={{label, code} <- @own}
-        code={code}
-        label={label}
-        checked={code in @chosen}
-      />
-    </div>
-
-    <details class="group" data-language-more>
-      <summary class="inline-flex min-h-10 cursor-pointer list-none items-center gap-1.5 text-sm font-semibold text-brand-600 hover:text-brand-700 [&::-webkit-details-marker]:hidden dark:text-brand-400 dark:hover:text-brand-300">
-        <span aria-hidden="true" class="transition-transform group-open:rotate-90">›</span>
-        {gettext("Add another language")}
-      </summary>
-      <div class="mt-3 flex flex-wrap gap-2">
-        <.language_chip
-          :for={{label, code} <- @other}
-          code={code}
-          label={label}
-          checked={code in @chosen}
-        />
-      </div>
-    </details>
-    """
-  end
-
-  @doc """
-  One language on the Feed-languages card (issue #1537): a chip that is an
-  ordinary checkbox.
-
-  The box itself is `sr-only` rather than hidden, so it keeps its place in the
-  tab order and its label, and the chip carries the focus ring for it. Checked
-  reads as the brand-filled chip with a ✓; unchecked as the quiet outline. No
-  JavaScript takes part — with the box invisible but real, the form submits the
-  same `user[feed_languages][]` list it always did.
-
-  The ✓ is not decoration: a filled chip and an outlined chip differ by colour
-  alone otherwise, and colour may not be the only carrier of state (WCAG 1.4.1).
-  It rides a `before:` pseudo-element on the chip, for two reasons — a
-  `peer-checked:` utility only reaches the peer's **siblings**, never a span
-  nested inside one, and a mark toggled with `hidden` beside a second display
-  utility is the issue #880 trap (whichever Tailwind emits later wins, so the
-  hide silently does nothing). Generated content does land in the accessible
-  name, so a ticked chip announces its state twice ("check mark Deutsch,
-  checkbox, checked"); that verbosity is the accepted price for not carrying
-  state in colour alone.
-
-  The focus ring is a **solid** brand ring, not the `/40` wash the text inputs
-  use: those keep a border change beside it, while here the real control is
-  invisible, so the ring is the whole indicator and has to clear 3:1 on its own.
-  """
-  attr(:code, :string, required: true)
-  attr(:label, :string, required: true)
-  attr(:checked, :boolean, default: false)
-
-  def language_chip(assigns) do
-    ~H"""
-    <label class="cursor-pointer">
-      <input
-        type="checkbox"
-        name="user[feed_languages][]"
-        value={@code}
-        checked={@checked}
-        class="peer sr-only"
-      />
-      <span class="inline-flex min-h-10 items-center rounded-full border border-slate-300 px-3 text-sm font-medium text-slate-700 peer-checked:border-brand-600 peer-checked:bg-brand-600 peer-checked:text-white peer-checked:before:mr-1.5 peer-checked:before:content-['✓'] peer-focus-visible:ring-3 peer-focus-visible:ring-brand-500 dark:border-slate-700 dark:text-slate-200 dark:peer-checked:border-brand-500 dark:peer-checked:bg-brand-600">
-        {@label}
-      </span>
-    </label>
-    """
   end
 
   @doc """

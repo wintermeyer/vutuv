@@ -4126,6 +4126,21 @@ defmodule VutuvWeb.PostComponents do
       >
         {gettext("Show the original")}
       </button>
+      <span aria-hidden="true">·</span>
+      <%!-- The way back to the settings, from the one place a reader ever
+      wonders about them (issue #1672). A translated card is the whole
+      feature made visible, and until now nothing on it said where the
+      behaviour is decided — a member would have had to guess that "feed
+      languages" lives under Settings at all. Named after the page it opens
+      rather than a bare cog, because the point is to be findable; it is one
+      short word on a line that already wraps. --%>
+      <.link
+        navigate={~p"/settings/feed_languages"}
+        data-translation-settings
+        class="font-semibold text-brand-600 hover:text-brand-700 dark:text-brand-400 dark:hover:text-brand-300"
+      >
+        {gettext("Feed languages")}
+      </.link>
     </p>
     <p
       :if={@state == :pending}
@@ -4181,7 +4196,7 @@ defmodule VutuvWeb.PostComponents do
       lang: if(shown, do: shown.target_language, else: original_language),
       offer?:
         is_map(assigns.translations) and
-          PostTranslations.offer_translation?(original_language)
+          PostTranslations.offer_translation?(original_language, assigns.viewer)
     }
   end
 

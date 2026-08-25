@@ -22537,3 +22537,134 @@ msgstr "Neues auf dem anderen Reiter anreißen"
 #, elixir-autogen, elixir-format
 msgid "When off, a tab holding something new wears its dot and says nothing more."
 msgstr "Ausgeschaltet trägt ein Reiter mit Neuem nur seinen Punkt und sagt sonst nichts."
+
+#: lib/vutuv_web/live/feed_languages_live.ex
+#, elixir-autogen, elixir-format
+msgid "Rank the languages you read. Posts in them reach your feed as they were written; you decide below what happens to the rest."
+msgstr ""
+"Ordnen Sie die Sprachen, die Sie lesen. Beiträge in diesen Sprachen "
+"erreichen Ihren Feed so, wie sie geschrieben wurden; was mit dem Rest "
+"geschieht, legen Sie unten fest."
+
+#: lib/vutuv_web/live/feed_languages_live.ex:202
+#, elixir-autogen, elixir-format
+msgid "Languages you read"
+msgstr "Sprachen, die Sie lesen"
+
+#: lib/vutuv_web/live/feed_languages_live.ex
+#, elixir-autogen, elixir-format
+msgid "No language chosen, so your feed shows all of them."
+msgstr "Keine Sprache gewählt, Ihr Feed zeigt also alle."
+
+#: lib/vutuv_web/live/feed_languages_live.ex
+#, elixir-autogen, elixir-format
+msgid "First: translations go into this language"
+msgstr "Zuerst: In diese Sprache wird übersetzt"
+
+#: lib/vutuv_web/live/feed_languages_live.ex:265
+#, elixir-autogen, elixir-format
+msgid "Remove %{language}"
+msgstr "%{language} entfernen"
+
+#: lib/vutuv_web/live/feed_languages_live.ex:277
+#, elixir-autogen, elixir-format
+msgid "Suggested:"
+msgstr "Vorschläge:"
+
+#: lib/vutuv_web/live/feed_languages_live.ex:312
+#, elixir-autogen, elixir-format
+msgid "Choose a language"
+msgstr "Sprache auswählen"
+
+#: lib/vutuv_web/live/feed_languages_live.ex
+#, elixir-autogen, elixir-format
+msgid "This installation has translations switched off, so posts in other languages show as written until an administrator turns them on."
+msgstr ""
+"Auf dieser Installation sind Übersetzungen abgeschaltet. Beiträge in "
+"anderen Sprachen erscheinen daher so, wie sie geschrieben wurden, bis eine "
+"Administratorin oder ein Administrator sie einschaltet."
+
+#: lib/vutuv_web/live/feed_languages_live.ex:347
+#, elixir-autogen, elixir-format
+msgid "What your feed does"
+msgstr "Was Ihr Feed macht"
+
+#: lib/vutuv_web/live/feed_languages_live.ex:387
+#, elixir-autogen, elixir-format
+msgid "Shown as written"
+msgstr "Wird so gezeigt, wie geschrieben"
+
+#: lib/vutuv_web/live/feed_languages_live.ex:395
+#, elixir-autogen, elixir-format
+msgid "Every language"
+msgstr "Alle Sprachen"
+
+#: lib/vutuv_web/live/feed_languages_live.ex:395
+#, elixir-autogen, elixir-format
+msgid "Every other language"
+msgstr "Alle anderen Sprachen"
+
+#: lib/vutuv_web/live/feed_languages_live.ex
+#, elixir-autogen, elixir-format
+msgid "Nothing is hidden: hiding needs at least one language above."
+msgstr ""
+"Es wird nichts ausgeblendet: Dafür brauchen Sie oben mindestens eine "
+"Sprache."
+
+#: lib/vutuv_web/live/feed_languages_live.ex:411
+#, elixir-autogen, elixir-format
+msgid "Hidden from your feed."
+msgstr "Wird in Ihrem Feed ausgeblendet."
+
+#: lib/vutuv_web/live/feed_languages_live.ex:421
+#, elixir-autogen, elixir-format
+msgid "Shown in the language it was written in."
+msgstr "Wird in der Sprache gezeigt, in der es geschrieben wurde."
+
+#: lib/vutuv_web/components/ui.ex
+#, elixir-autogen, elixir-format
+msgid "Which languages reach you, and what happens to the rest"
+msgstr "Welche Sprachen Sie erreichen und was mit dem Rest geschieht"
+
+#: lib/vutuv_web/components/ui.ex
+#, elixir-autogen, elixir-format
+msgid "language translate translation german english original hide foreign rank order sprache übersetzen fremdsprache reihenfolge"
+msgstr ""
+"sprache übersetzen übersetzung deutsch englisch original ausblenden "
+"fremdsprache reihenfolge rang feed language translate"
+
+#: lib/vutuv_web/components/ui.ex
+#, elixir-autogen, elixir-format
+msgid "Interface language, date format and time zone, maps, how posts are shortened"
+msgstr ""
+"Anzeigesprache, Datumsformat und Zeitzone, Karten, wie Beiträge gekürzt "
+"werden"
+
+#: lib/vutuv_web/components/ui.ex
+#, elixir-autogen, elixir-format
+msgid "german english locale map font length hyphenation übersetzen sprache zeitzone timezone time zone utc datum date uhrzeit clock 24 hour datumsformat"
+msgstr ""
+"deutsch englisch sprache karte schrift länge silbentrennung übersetzen "
+"zeitzone timezone utc datum uhrzeit 24 stunden datumsformat"
+
+#: lib/vutuv_web/templates/settings/preferences.html.heex:190
+#, elixir-autogen, elixir-format
+msgid "Languages your feed shows"
+msgstr "Sprachen, die Ihr Feed zeigt"
+
+#: lib/vutuv_web/templates/settings/preferences.html.heex
+#, elixir-autogen, elixir-format
+msgid "Rank the languages you read, and say what happens to posts in the others."
+msgstr ""
+"Ordnen Sie die Sprachen, die Sie lesen, und legen Sie fest, was mit "
+"Beiträgen in anderen Sprachen geschieht."
+
+#: lib/vutuv_web/live/feed_languages_live.ex
+#, elixir-autogen, elixir-format
+msgid "Translate into %{language}"
+msgstr "In %{language} übersetzen"
+
+#: lib/vutuv_web/live/feed_languages_live.ex
+#, elixir-autogen, elixir-format
+msgid "Translated into %{language}."
+msgstr "Wird in %{language} übersetzt."

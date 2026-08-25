@@ -50,7 +50,12 @@ defmodule VutuvWeb.GermanCatalogTest do
     # …", and both `#%{tag}` sentences with the `@%{handle}` ones, i.e. a
     # translation interpolating a binding its own msgid does not carry.
     "lib/vutuv_web/live/fediverse_following_live.ex",
-    "lib/vutuv_web/controllers/remote_follow_controller.ex"
+    "lib/vutuv_web/controllers/remote_follow_controller.ex",
+    # The feed-language settings page (issue #1672). It belongs here on the
+    # general principle, and doubly so for its short labels: "Every language",
+    # "Shown as written" and "Suggested:" are exactly the shape the fuzzy
+    # matcher fills with something unrelated and nobody notices.
+    "lib/vutuv_web/live/feed_languages_live.ex"
   ]
 
   # `gettext("…")` / `ngettext("…", …)` with a plain literal. A string built at

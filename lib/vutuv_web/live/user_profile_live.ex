@@ -352,14 +352,18 @@ defmodule VutuvWeb.UserProfileLive do
 
   @impl true
   def handle_info({:translation_ready, %Vutuv.Translations.Translation{} = translation}, socket) do
-    case PostTranslations.apply_ready(socket.assigns.post_translations, translation) do
+    viewer = socket.assigns.current_user
+
+    case PostTranslations.apply_ready(socket.assigns.post_translations, translation, viewer) do
       :ignore -> {:noreply, socket}
       {_key, map} -> {:noreply, assign(socket, :post_translations, map)}
     end
   end
 
   def handle_info({:translation_failed, key, target}, socket) do
-    case PostTranslations.apply_failed(socket.assigns.post_translations, key, target) do
+    viewer = socket.assigns.current_user
+
+    case PostTranslations.apply_failed(socket.assigns.post_translations, key, target, viewer) do
       :ignore -> {:noreply, socket}
       {_key, map} -> {:noreply, assign(socket, :post_translations, map)}
     end

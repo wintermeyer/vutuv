@@ -61,11 +61,43 @@ defmodule VutuvWeb.FeedTranslateModeTest do
     refute html =~ "Noch nicht übersetzt."
   end
 
+  test "a translated card points at the settings that decided it", %{conn: conn} do
+    {conn, user} = create_and_login_user(conn)
+    translate_mode!(user)
+
+    {:ok, post} = Posts.create_post(user, %{body: "Guten Morgen.", language: "de"})
+
+    {:ok, _} =
+      Translations.store_translation(post, "en", %{
+        source_language: "de",
+        body: "Good morning.",
+        model: "stub"
+      })
+
+    {:ok, live, _html} = live(conn, ~p"/feed")
+
+    # Issue #1672: the card is where a reader wonders how this was decided, and
+    # it used to say nothing about where to change it.
+    assert has_element?(live, ~s|[data-translation-settings][href="/settings/feed_languages"]|)
+  end
+
+  test "an untranslated card carries no settings link", %{conn: conn} do
+    {conn, user} = create_and_login_user(conn)
+    {:ok, _} = Posts.create_post(user, %{body: "Guten Morgen.", language: "de"})
+
+    {:ok, live, _html} = live(conn, ~p"/feed")
+
+    refute has_element?(live, "[data-translation-settings]")
+  end
+
   test "a post in a chosen language is not auto-translated", %{conn: conn} do
     {conn, user} = create_and_login_user(conn)
 
+    # Ranked English-first (issue #1672), so English is the translation target
+    # and German is a chosen language that is *not* the target — the case the
+    # manual button exists for.
     user
-    |> Ecto.Changeset.change(%{feed_foreign_posts: "translate", feed_languages: ["de", "en"]})
+    |> Ecto.Changeset.change(%{feed_foreign_posts: "translate", feed_languages: ["en", "de"]})
     |> Repo.update!()
 
     {:ok, _} = Posts.create_post(user, %{body: "Gewählte Sprache.", language: "de"})
@@ -78,39 +110,44 @@ defmodule VutuvWeb.FeedTranslateModeTest do
     assert has_element?(live, "[data-translate-button]")
   end
 
-  describe "the settings form" do
-    test "stores the mode and the chosen languages, and resets to inherit", %{conn: conn} do
-      {conn, user} = create_and_login_user(conn)
+  test "a post already in the reader's target language offers no Translate button", %{conn: conn} do
+    {conn, user} = create_and_login_user(conn)
 
-      conn =
-        put(conn, ~p"/settings/feed_languages", %{
-          "user" => %{"feed_foreign_posts" => "hide", "feed_languages" => ["de", "en"]}
-        })
+    # The reader browses in English but ranked German first, so German is where
+    # translations land — and a German card has nowhere left to go. Before
+    # issue #1672 the target was the UI locale, so this card was offered a
+    # translation into a language the reader had just ranked second.
+    user
+    |> Ecto.Changeset.change(%{locale: "en", feed_languages: ["de", "en"]})
+    |> Repo.update!()
 
-      assert redirected_to(conn) == ~p"/settings/preferences"
-      reloaded = Repo.reload!(user)
-      assert reloaded.feed_foreign_posts == "hide"
-      assert Enum.sort(reloaded.feed_languages) == ["de", "en"]
+    {:ok, _} = Posts.create_post(user, %{body: "Schon in der Zielsprache.", language: "de"})
 
-      conn = post(conn, ~p"/settings/feed_languages/reset", %{})
-      assert redirected_to(conn) == ~p"/settings/preferences"
-      reset = Repo.reload!(user)
-      assert reset.feed_foreign_posts == nil
-      assert reset.feed_languages == nil
-    end
+    {:ok, live, _html} = live(conn, ~p"/feed")
 
-    test "renders the card with German strings for a German member", %{conn: conn} do
-      {conn, user} = create_and_login_user(conn)
-      user |> Ecto.Changeset.change(%{locale: "de"}) |> Repo.update!()
+    assert render(live) =~ "Schon in der Zielsprache."
+    refute has_element?(live, "[data-translate-button]")
+  end
+
+  describe "the settings page" do
+    # The controls themselves live on /settings/feed_languages now (issue
+    # #1672) and `feed_languages_live_test.exs` covers them. What is asserted
+    # here is the bridge: "Language & display" is where members looked for
+    # this for two releases, so it must still point at it.
+    test "Language & display points at the page the controls moved to", %{conn: conn} do
+      {conn, _user} = create_and_login_user(conn)
 
       html = conn |> get(~p"/settings/preferences") |> html_response(200)
 
-      assert html =~ "Beiträge in anderen Sprachen"
-      assert html =~ "In meine Sprache übersetzen"
-      assert html =~ "Ausblenden"
-      # The chips' own heading (issue #1537 replaced the checkbox grid);
-      # feed_language_chips_test.exs covers the card's behaviour.
-      assert html =~ "Diese Sprachen lese ich"
+      assert html =~ ~s|href="/settings/feed_languages"|
+    end
+
+    test "the hub lists the page under its own row", %{conn: conn} do
+      {conn, _user} = create_and_login_user(conn)
+
+      html = conn |> get(~p"/settings") |> html_response(200)
+
+      assert html =~ ~s|href="/settings/feed_languages"|
     end
   end
 end

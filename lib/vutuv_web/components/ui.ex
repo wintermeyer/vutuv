@@ -4369,6 +4369,17 @@ defmodule VutuvWeb.UI do
            hint: gettext("Keep posts out of your feed"),
            terms: gettext("mute block hide filter keyword word tag feed")
          ),
+         # Its own row rather than a card on "Language & display" (issue
+         # #1672): that page is where the *interface* language is changed, a
+         # different question sharing a word, and somebody whose feed is full
+         # of a language they cannot read looks here.
+         row(:feed_languages, gettext("Feed languages"), ~p"/settings/feed_languages",
+           hint: gettext("Which languages reach you, and what happens to the rest"),
+           terms:
+             gettext(
+               "language translate translation german english original hide foreign rank order sprache übersetzen fremdsprache reihenfolge"
+             )
+         ),
          row(:followed_tags, gettext("Tags you follow"), ~p"/settings/followed_tags",
            hint: gettext("Topics whose posts reach your feed"),
            terms: gettext("tag topic subscribe follow feed")
@@ -4431,11 +4442,11 @@ defmodule VutuvWeb.UI do
          row(:preferences, gettext("Language & display"), ~p"/settings/preferences",
            hint:
              gettext(
-               "Interface language, date format and time zone, feed languages, maps, how posts are shortened"
+               "Interface language, date format and time zone, maps, how posts are shortened"
              ),
            terms:
              gettext(
-               "german english locale translation translate map font length hyphenation feed languages hide foreign übersetzen sprache zeitzone timezone time zone utc datum date uhrzeit clock 24 hour datumsformat"
+               "german english locale map font length hyphenation übersetzen sprache zeitzone timezone time zone utc datum date uhrzeit clock 24 hour datumsformat"
              )
          ),
          row(:import, gettext("Import"), ~p"/settings/import/linkedin",

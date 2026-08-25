@@ -232,25 +232,43 @@ negations). On success the worker broadcasts `{:translation_ready, row}` on
 
 ## The reader's controls
 
-Every card whose language is **known** and differs from the UI locale carries
-a quiet **Translate** action on the LiveView surfaces (feed, permalink thread,
-profile — issue #1462): tap → pending line → the worker's
-broadcast swaps the translated body in, labelled "Translated from X" with
-the original one tap away. A shown translation renders through the normal
-Markdown pipeline (local posts) or as plain text (remote content), and the
-card's `lang` attribute follows what is shown. The host-side half is
+Every card whose language is **known** and differs from the reader's
+**translation target** carries a quiet **Translate** action on the LiveView
+surfaces (feed, permalink thread, profile — issue #1462): tap → pending line →
+the worker's broadcast swaps the translated body in, labelled "Translated
+from X" with the original one tap away. A shown translation renders through
+the normal Markdown pipeline (local posts) or as plain text (remote content),
+and the card's `lang` attribute follows what is shown. The host-side half is
 `VutuvWeb.Live.PostTranslations`; the card-side half is the single
 `translations` attr on `VutuvWeb.PostComponents` — a map means the viewer
 gets the controls, nil (every non-LiveView surface) means they do not.
 
-The **feed language preference** (issue #1461, on /settings/preferences)
-adds Mastodon's chosen-languages filter: `users.feed_languages` (nil = all)
-plus the `:feed_foreign_posts` pref — original (shipped default) /
-translate / hide. Hide is `Posts.language_scope/2` (`is_nil or in` — NULL
-never hides) applied inside every feed source query; translate mode
-auto-requests translations for rendered foreign cards (one batched
-`fresh_translations/2` query per page, `PostTranslations.auto_translate/3`).
-Feed only; profiles, permalinks, search and public surfaces are untouched.
+The **feed language preference** (issue #1461, own page since #1672 at
+`/settings/feed_languages`) adds Mastodon's chosen-languages filter, ranked:
+`users.feed_languages` (nil = all, **order significant**) plus the
+`:feed_foreign_posts` pref — original (shipped default) / translate / hide.
+Hide is `Posts.language_scope/2` (`is_nil or in` — NULL never hides) applied
+inside every feed source query; translate mode auto-requests translations for
+rendered foreign cards (one batched `fresh_translations/2` query per page,
+`PostTranslations.auto_translate/3`). Feed only; profiles, permalinks, search
+and public surfaces are untouched.
+
+**The translation target is `List.first(feed_languages)`**, falling back to
+the UI locale when the member ranked none — `PostTranslations.target_language/1`
+is the one reader of that rule, and it serves the automatic mode and the manual
+button alike. That is what ranking buys: while the target was the UI locale
+alone, "I read German and English, translate the rest into German" was
+unsayable for anyone browsing in English, and the two settings contradicted
+each other in silence. Note that `Translations.precompute/1` still warms only
+the installation's own `:locales`, so a member who ranks a language outside
+them gets correct translations on demand, just no warm cache.
+
+`VutuvWeb.FeedLanguagesLive` owns the page: the ranked list reuses the
+`.reorder*` classes and the `Reorder` hook (arrows on touch, drag on a mouse),
+every change persists on the spot through `Accounts.update_user/2`, and an
+outcome panel states what the two controls do together — including the one
+combination that reads as broken, "hide" with no language chosen, which hides
+nothing because the filter has no list to keep.
 
 ## What deliberately does not exist
 

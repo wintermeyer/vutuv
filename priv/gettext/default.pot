@@ -21744,3 +21744,118 @@ msgstr ""
 #, elixir-autogen, elixir-format
 msgid "When off, a tab holding something new wears its dot and says nothing more."
 msgstr ""
+
+#: lib/vutuv_web/live/feed_languages_live.ex
+#, elixir-autogen, elixir-format
+msgid "Rank the languages you read. Posts in them reach your feed as they were written; you decide below what happens to the rest."
+msgstr ""
+
+#: lib/vutuv_web/live/feed_languages_live.ex:202
+#, elixir-autogen, elixir-format
+msgid "Languages you read"
+msgstr ""
+
+#: lib/vutuv_web/live/feed_languages_live.ex
+#, elixir-autogen, elixir-format
+msgid "No language chosen, so your feed shows all of them."
+msgstr ""
+
+#: lib/vutuv_web/live/feed_languages_live.ex
+#, elixir-autogen, elixir-format
+msgid "First: translations go into this language"
+msgstr ""
+
+#: lib/vutuv_web/live/feed_languages_live.ex:265
+#, elixir-autogen, elixir-format
+msgid "Remove %{language}"
+msgstr ""
+
+#: lib/vutuv_web/live/feed_languages_live.ex:277
+#, elixir-autogen, elixir-format
+msgid "Suggested:"
+msgstr ""
+
+#: lib/vutuv_web/live/feed_languages_live.ex:312
+#, elixir-autogen, elixir-format
+msgid "Choose a language"
+msgstr ""
+
+#: lib/vutuv_web/live/feed_languages_live.ex
+#, elixir-autogen, elixir-format
+msgid "This installation has translations switched off, so posts in other languages show as written until an administrator turns them on."
+msgstr ""
+
+#: lib/vutuv_web/live/feed_languages_live.ex:347
+#, elixir-autogen, elixir-format
+msgid "What your feed does"
+msgstr ""
+
+#: lib/vutuv_web/live/feed_languages_live.ex:387
+#, elixir-autogen, elixir-format
+msgid "Shown as written"
+msgstr ""
+
+#: lib/vutuv_web/live/feed_languages_live.ex:395
+#, elixir-autogen, elixir-format
+msgid "Every language"
+msgstr ""
+
+#: lib/vutuv_web/live/feed_languages_live.ex:395
+#, elixir-autogen, elixir-format
+msgid "Every other language"
+msgstr ""
+
+#: lib/vutuv_web/live/feed_languages_live.ex
+#, elixir-autogen, elixir-format
+msgid "Nothing is hidden: hiding needs at least one language above."
+msgstr ""
+
+#: lib/vutuv_web/live/feed_languages_live.ex:411
+#, elixir-autogen, elixir-format
+msgid "Hidden from your feed."
+msgstr ""
+
+#: lib/vutuv_web/live/feed_languages_live.ex:421
+#, elixir-autogen, elixir-format
+msgid "Shown in the language it was written in."
+msgstr ""
+
+#: lib/vutuv_web/components/ui.ex
+#, elixir-autogen, elixir-format
+msgid "Which languages reach you, and what happens to the rest"
+msgstr ""
+
+#: lib/vutuv_web/components/ui.ex
+#, elixir-autogen, elixir-format
+msgid "language translate translation german english original hide foreign rank order sprache übersetzen fremdsprache reihenfolge"
+msgstr ""
+
+#: lib/vutuv_web/components/ui.ex
+#, elixir-autogen, elixir-format
+msgid "Interface language, date format and time zone, maps, how posts are shortened"
+msgstr ""
+
+#: lib/vutuv_web/components/ui.ex
+#, elixir-autogen, elixir-format
+msgid "german english locale map font length hyphenation übersetzen sprache zeitzone timezone time zone utc datum date uhrzeit clock 24 hour datumsformat"
+msgstr ""
+
+#: lib/vutuv_web/templates/settings/preferences.html.heex:190
+#, elixir-autogen, elixir-format
+msgid "Languages your feed shows"
+msgstr ""
+
+#: lib/vutuv_web/templates/settings/preferences.html.heex
+#, elixir-autogen, elixir-format
+msgid "Rank the languages you read, and say what happens to posts in the others."
+msgstr ""
+
+#: lib/vutuv_web/live/feed_languages_live.ex
+#, elixir-autogen, elixir-format
+msgid "Translate into %{language}"
+msgstr ""
+
+#: lib/vutuv_web/live/feed_languages_live.ex
+#, elixir-autogen, elixir-format
+msgid "Translated into %{language}."
+msgstr ""

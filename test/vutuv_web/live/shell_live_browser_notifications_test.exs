@@ -14,6 +14,14 @@ defmodule VutuvWeb.ShellLiveBrowserNotificationsTest do
 
   import Phoenix.LiveViewTest
 
+  # `assert_push_event/4` waits 100 ms by default, and what is being waited
+  # for here is a PubSub broadcast crossing into the shell process and back
+  # out as a push — two hops, on a box running twenty cases at once. That
+  # default made the suite flake (a red `mix precommit` on 2026-08-25 that
+  # passed on re-run). The wait is not what any of these tests are about, so
+  # it is generous.
+  @push_timeout 2_000
+
   alias Vutuv.Activity
   alias Vutuv.Sessions
 
@@ -52,12 +60,17 @@ defmodule VutuvWeb.ShellLiveBrowserNotificationsTest do
 
       # The actor's name is the popup's title and their verb phrase its body —
       # the same two halves the row under the bell reads as.
-      assert_push_event(view, "notify:show", %{
-        tag: "activity",
-        title: "Anna Klein",
-        body: "liked your post.",
-        icon: "/avatars/anna/thumb.jpg"
-      })
+      assert_push_event(
+        view,
+        "notify:show",
+        %{
+          tag: "activity",
+          title: "Anna Klein",
+          body: "liked your post.",
+          icon: "/avatars/anna/thumb.jpg"
+        },
+        @push_timeout
+      )
     end
 
     test "a member who left it off is pushed nothing at all", %{conn: conn} do
@@ -69,7 +82,7 @@ defmodule VutuvWeb.ShellLiveBrowserNotificationsTest do
       Activity.broadcast(user.id, {:new_notification, like_notification("Anna Klein")})
 
       # The badge still moves; only the popup is withheld.
-      assert_push_event(view, "tab:badge", %{})
+      assert_push_event(view, "tab:badge", %{}, @push_timeout)
       refute_push_event(view, "notify:show", %{})
     end
 
@@ -80,7 +93,7 @@ defmodule VutuvWeb.ShellLiveBrowserNotificationsTest do
 
       Activity.broadcast(user.id, {:new_message, %{conversation_id: Vutuv.UUIDv7.generate()}})
 
-      assert_push_event(view, "notify:show", %{tag: "messages", url: "/messages"})
+      assert_push_event(view, "notify:show", %{tag: "messages", url: "/messages"}, @push_timeout)
     end
 
     test "a new message reaches nobody who left the switch off", %{conn: conn} do
@@ -106,7 +119,7 @@ defmodule VutuvWeb.ShellLiveBrowserNotificationsTest do
 
       # No name to head the popup with, so the sentence is the title and there
       # is no body — a placeholder name over one line would say less.
-      assert_push_event(view, "notify:show", %{title: title, body: nil})
+      assert_push_event(view, "notify:show", %{title: title, body: nil}, @push_timeout)
       assert title == "A report about your content was confirmed."
     end
 
@@ -120,7 +133,7 @@ defmodule VutuvWeb.ShellLiveBrowserNotificationsTest do
 
       Activity.broadcast(user.id, {:new_notification, like_notification("Anna Klein")})
 
-      assert_push_event(view, "notify:show", %{body: body})
+      assert_push_event(view, "notify:show", %{body: body}, @push_timeout)
       assert body == "gefällt Ihr Beitrag."
     end
   end
@@ -139,7 +152,7 @@ defmodule VutuvWeb.ShellLiveBrowserNotificationsTest do
       # A popup is raised precisely when the member is NOT looking at vutuv, so
       # this is the surface where landing on a list to hunt costs most. The
       # destination comes from the same function the row under the bell uses.
-      assert_push_event(view, "notify:show", %{url: url})
+      assert_push_event(view, "notify:show", %{url: url}, @push_timeout)
       assert url == "/#{user.username}/posts/#{post.id}"
     end
 
@@ -153,7 +166,7 @@ defmodule VutuvWeb.ShellLiveBrowserNotificationsTest do
         {:new_notification, %{kind: "moderation", status: "upheld", at: DateTime.utc_now()}}
       )
 
-      assert_push_event(view, "notify:show", %{url: "/notifications"})
+      assert_push_event(view, "notify:show", %{url: "/notifications"}, @push_timeout)
     end
   end
 
@@ -167,7 +180,13 @@ defmodule VutuvWeb.ShellLiveBrowserNotificationsTest do
       # `test: true` is what lets the hook show it although the member is
       # plainly looking at the settings page; without it the away-gate would
       # swallow every press and the button would do nothing at all.
-      assert_push_event(view, "notify:show", %{tag: "test", test: true, title: title})
+      assert_push_event(
+        view,
+        "notify:show",
+        %{tag: "test", test: true, title: title},
+        @push_timeout
+      )
+
       assert title == "Test notification"
     end
 
@@ -182,7 +201,7 @@ defmodule VutuvWeb.ShellLiveBrowserNotificationsTest do
       view = mount_shell(conn, user)
       render_hook(view, "notify:test", %{})
 
-      assert_push_event(view, "notify:show", %{tag: "test"})
+      assert_push_event(view, "notify:show", %{tag: "test"}, @push_timeout)
     end
 
     test "reaches nobody who is not logged in", %{conn: conn} do

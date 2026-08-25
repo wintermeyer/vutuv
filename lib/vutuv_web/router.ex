@@ -1126,6 +1126,13 @@ defmodule VutuvWeb.Router do
       # LiveView because it is a searchable, sortable, paged table.
       live("/activity", AccountActivityLive, :index)
 
+      # The feed's language settings (issue #1672): the ranked list of
+      # languages this member reads — position 1 is the translation target —
+      # plus what the feed does with everything else. A LiveView because
+      # ranking is the page's job and a reload per move is absurd; the arrows
+      # are the reorder path on a phone, drag layers on top.
+      live("/feed_languages", FeedLanguagesLive, :index)
+
       # "Which of my LinkedIn contacts are already here?" (issue #1476). Its own
       # upload, separate from the profile importer above: that one fills your
       # profile, this one fills your feed, and each is worth doing without the
@@ -1578,9 +1585,6 @@ defmodule VutuvWeb.Router do
     patch("/maps", SettingsController, :update_maps)
     put("/post_display", SettingsController, :update_post_display)
     patch("/post_display", SettingsController, :update_post_display)
-    put("/feed_languages", SettingsController, :update_feed_languages)
-    patch("/feed_languages", SettingsController, :update_feed_languages)
-    post("/feed_languages/reset", SettingsController, :reset_feed_languages)
     put("/feed_ticker", SettingsController, :update_feed_ticker)
     patch("/feed_ticker", SettingsController, :update_feed_ticker)
     post("/feed_ticker/reset", SettingsController, :reset_feed_ticker)

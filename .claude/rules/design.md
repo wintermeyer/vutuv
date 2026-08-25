@@ -35,14 +35,17 @@ LiveView can sit on either style.
    listing sorted by last name, and a natural-order column under a heading of
    "M" makes the reader hunt for the word the order is built on),
    `ol.tags`/`.upvote`, `ul.thumbs` (flex rows: capped
-   thumbnail + truncating URL), `.reorder*` (the owner's drag-and-drop ordering
+   thumbnail + truncating URL), `.reorder*` (the member's drag-and-drop ordering
    tool shared by every orderable section page — links, phone numbers, addresses,
-   social media accounts, emails: `.reorder__item` draggable tile =
+   social media accounts, emails — and by the ranked language list on
+   `/settings/feed_languages`, where the "rows" are codes in an array column
+   rather than records with a `position`: `.reorder__item` draggable tile =
    `.reorder__handle` grip + `.reorder__body` (section-specific, with a
    `.reorder__thumb` for links) + `.reorder__move` up/down `.reorder__btn` arrows
-   (sized as touch targets) + `<.row_actions>`. It is **not** a classic page: it is
-   the embedded `VutuvWeb.SectionReorderLive` (`live_render`, owner-only, like the
-   shell), so both drag and arrows persist over the socket with no reload — the
+   (sized as touch targets) + `<.row_actions>`. It is **not** a classic page: on the
+   section pages it is the embedded `VutuvWeb.SectionReorderLive` (`live_render`,
+   owner-only, like the shell) and on the language page a plain routed
+   `VutuvWeb.FeedLanguagesLive`, so both drag and arrows persist over the socket with no reload — the
    `Reorder` hook in `app.js` does the drag, the arrows are `phx-click`. The hook
    also FLIP-animates the arrow reorders (snapshot row tops in `beforeUpdate`,
    glide them from old to new spot in `updated`, ~180ms; honors

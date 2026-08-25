@@ -82,6 +82,21 @@ read back by `Vutuv.Accounts.User.notification_post_lines/1`, see
 [realtime.md](realtime.md)); that one has no 0 mode — a quote is always cut —
 so an empty field means "inherit the site default" rather than "never shorten".
 
+### Feed languages (`/settings/feed_languages`)
+
+A **ranked** list of the languages the member reads, plus what the feed does
+with everything else — original / translate / hide (`:feed_foreign_posts`).
+Position 1 is the **translation target**, which is the reason the list is
+ordered at all: it is what makes "German and English as written, everything
+else translated into German" sayable regardless of the interface language.
+`VutuvWeb.FeedLanguagesLive` owns it; each change persists on the spot, with no
+Save button. See [translations.md](translations.md) for what the reader-side
+half then does.
+
+Its own page since issue #1672 — it used to be a card on Language & display,
+which is where the *interface* language is changed, a different question that
+merely shares a word. The old page keeps a row pointing here.
+
 ### Notifications (`/settings/notifications`)
 
 **Email notifications**: one positive flag per type (unread messages plus its
