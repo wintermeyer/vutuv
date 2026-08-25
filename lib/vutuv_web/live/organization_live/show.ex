@@ -64,10 +64,18 @@ defmodule VutuvWeb.OrganizationLive.Show do
 
     socket
     |> assign(:posts, page.entries)
+    |> assign(:posts_engagement, engagement_map(page.entries, socket.assigns.current_user))
     |> assign(:posts_total, page.total)
     |> assign(:posts_more?, page.more?)
     |> assign(:posts_offset, page.next_offset)
   end
+
+  # One engagement read for the whole list instead of one per card. Without it
+  # every `<.post_card>` mounts an action bar that falls back to its own
+  # `Posts.post_engagement/2` — ten extra round trips on a page anonymous
+  # visitors reach. Same fix the profile's Beiträge card got in v7.201.
+  defp engagement_map(posts, viewer),
+    do: posts |> Enum.map(& &1.id) |> Posts.post_engagement_map(viewer)
 
   # The organization page's "Offene Stellen" section (#933): the organization's
   # own live public postings, newest first, paginated (its own "Load more" event
@@ -249,6 +257,13 @@ defmodule VutuvWeb.OrganizationLive.Show do
     {:noreply,
      socket
      |> assign(:posts, socket.assigns.posts ++ page.entries)
+     |> assign(
+       :posts_engagement,
+       Map.merge(
+         socket.assigns.posts_engagement,
+         engagement_map(page.entries, socket.assigns.current_user)
+       )
+     )
      |> assign(:posts_more?, page.more?)
      |> assign(:posts_offset, page.next_offset)}
   end
@@ -630,6 +645,7 @@ defmodule VutuvWeb.OrganizationLive.Show do
               <div :for={post <- @posts} class="py-4 first:pt-0 last:pb-0">
                 <.post_card
                   post={post}
+                  engagement={@posts_engagement[post.id]}
                   viewer={@current_user}
                   conn_or_socket={@socket}
                   mode={:preview}

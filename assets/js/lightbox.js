@@ -13,7 +13,7 @@
 // links are plain hrefs to the full-size image, which is what they were before
 // the lightbox existed.
 
-import { onReady } from "./util"
+import { onReady, once } from "./util"
 
 let overlay = null
 let photos = []
@@ -167,6 +167,12 @@ function step(delta) {
 }
 
 onReady(() => {
+  // `onReady` re-runs after every LiveView navigation, so these two *document*
+  // listeners have to be guarded or they stack up: after k patches a single
+  // ArrowLeft stepped k photos at once, and every copy stayed for the life of
+  // the tab. This is the pairing `onReady`'s own doc asks for.
+  if (!once(document.documentElement, "lightbox")) return
+
   document.addEventListener("click", (e) => {
     const link = e.target.closest("[data-lightbox-photo]")
     if (!link) return

@@ -57,11 +57,27 @@ defmodule VutuvWeb.OrganizationLive.Feed do
       )
 
     existing = if cursor, do: socket.assigns.entries, else: []
+    seen = if cursor, do: socket.assigns.engagement, else: %{}
 
     socket
     |> assign(:entries, existing ++ page.entries)
+    |> assign(
+      :engagement,
+      Map.merge(seen, engagement_map(page.entries, socket.assigns.current_user))
+    )
     |> assign(:more?, page.more?)
     |> assign(:cursor, page.next_cursor)
+  end
+
+  # One engagement read for the whole page instead of one per card: without a
+  # handed-in map every `<.post_card>`'s action bar falls back to its own
+  # `Posts.post_engagement/2`, which is twenty extra round trips at the default
+  # feed limit. Remote entries carry no vutuv post, so they are skipped.
+  defp engagement_map(entries, viewer) do
+    entries
+    |> Enum.reject(&Posts.remote_feed_entry?/1)
+    |> Enum.map(& &1.post.id)
+    |> Posts.post_engagement_map(viewer)
   end
 
   @impl true
@@ -129,6 +145,7 @@ defmodule VutuvWeb.OrganizationLive.Feed do
             <.post_card
               entry_id={entry.id}
               post={entry.post}
+              engagement={@engagement[entry.post.id]}
               viewer={@current_user}
               conn_or_socket={@socket}
               mode={:preview}
