@@ -105,9 +105,9 @@ finger-sized target instead of a word in a paragraph. --%>
         <h2 class={footer_heading_class}>{gettext("Developers")}</h2>
         <ul class="mt-2">
           <li><.link href={~p"/developers"} class={footer_link_class}>{gettext("API documentation")}</.link></li>
-          <li><a href="https://github.com/wintermeyer/vutuv" class={footer_link_class}>{gettext("Source")}</a></li>
+          <li><a href={SourceRepo.url()} class={footer_link_class}>{gettext("Source")}</a></li>
           <li>
-            <a href="https://github.com/wintermeyer/vutuv/issues/new" class={footer_link_class}>
+            <a href={SourceRepo.new_issue_url()} class={footer_link_class}>
               {gettext("Submit a bug report or feature request")}
             </a>
           </li>

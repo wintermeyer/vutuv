@@ -13,6 +13,7 @@ defmodule VutuvWeb.AgentDocs.MediaKitDoc do
   `VutuvWeb.CompanyController`).
   """
 
+  alias Vutuv.SourceRepo
   alias VutuvWeb.AgentDocs
   alias VutuvWeb.AgentDocs.InvestorsDoc
   alias VutuvWeb.Endpoint
@@ -95,7 +96,7 @@ defmodule VutuvWeb.AgentDocs.MediaKitDoc do
       {"Protocol", "ActivityPub (Mastodon-compatible)"},
       {"Stack", "Elixir, Phoenix, PostgreSQL"},
       {"Self-hostable", "Yes, on the internet or on an intranet"},
-      {"Source", "https://github.com/wintermeyer/vutuv"},
+      {"Source", SourceRepo.url()},
       # The oldest account on vutuv.de was created on 2016-11-20, and 2,615
       # members had joined before 2017. 2019 was wrong.
       {"Founded", "2016"}

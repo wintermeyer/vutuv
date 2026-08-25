@@ -2,6 +2,8 @@ defmodule VutuvWeb.DevDocHTML do
   @moduledoc false
   use VutuvWeb, :html
 
+  alias Vutuv.SourceRepo
+
   embed_templates("../templates/dev_doc/*")
 
   def nav_class(true = _active),

@@ -5,6 +5,7 @@ defmodule VutuvWeb.PageController do
   alias Vutuv.Accounts.Email
   alias Vutuv.Accounts.User
   alias Vutuv.Fediverse
+  alias Vutuv.SourceRepo
   alias VutuvWeb.AgentDocs
   alias VutuvWeb.AgentDocs.ListDocs
   alias VutuvWeb.ControllerHelpers
@@ -431,7 +432,7 @@ defmodule VutuvWeb.PageController do
   `/developers/reference.md`, `/developers/jobs.md` (job postings and
   organizations) and `/developers/webhooks.md`.
 
-  vutuv is open source: https://github.com/wintermeyer/vutuv — bug reports
+  vutuv is open source: {{source}} — bug reports
   and feature requests via GitHub issues.
   """
 
@@ -449,7 +450,15 @@ defmodule VutuvWeb.PageController do
   # every installation's agents at a dead URL, vutuv.de included. A discovery
   # file that names a page which is not there is worse than one that stays quiet
   # about a feature.
-  defp llms_txt, do: String.replace(@llms_txt, "{{ads}}\n", ads_entry())
+  # Both placeholders are substituted at REQUEST time, not interpolated into the
+  # heredoc: `@llms_txt` is a module attribute, so `#{…}` in it would freeze the
+  # value at compile time — before `config/runtime.exs` reads `SOURCE_URL`, which
+  # is the whole point of the setting.
+  defp llms_txt do
+    @llms_txt
+    |> String.replace("{{ads}}\n", ads_entry())
+    |> String.replace("{{source}}", SourceRepo.url())
+  end
 
   defp ads_entry do
     if Vutuv.Ads.enabled?() do

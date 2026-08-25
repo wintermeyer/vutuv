@@ -2,6 +2,7 @@ defmodule VutuvWeb.LayoutHTML do
   @moduledoc false
   use VutuvWeb, :html
   import VutuvWeb.UserHelpers
+  alias Vutuv.SourceRepo
   alias VutuvWeb.OpenGraph
 
   embed_templates("../templates/layout/*")

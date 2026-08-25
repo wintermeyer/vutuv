@@ -4,6 +4,7 @@ defmodule VutuvWeb.SocialMediaAccountController do
   alias Vutuv.CodeStats
   alias Vutuv.Profiles.SocialAccountVerification, as: Verification
   alias Vutuv.Profiles.SocialMediaAccount
+  alias Vutuv.SourceRepo
   alias VutuvWeb.AgentDocs
   alias VutuvWeb.AgentDocs.SectionDocs
   alias VutuvWeb.ControllerHelpers
@@ -76,7 +77,8 @@ defmodule VutuvWeb.SocialMediaAccountController do
           case social_media_account.provider do
             "GitHub" ->
               gettext(
-                "Profile created successfully. BTW: Did you know that the vutuv repo is hosted on GitHub? https://github.com/wintermeyer/vutuv"
+                "Profile created successfully. BTW: Did you know that the vutuv repo is hosted on GitHub? %{url}",
+                url: SourceRepo.url()
               )
 
             _ ->

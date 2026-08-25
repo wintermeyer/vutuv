@@ -16,9 +16,9 @@ defmodule VutuvWeb.MastodonApi.DiscoveryController do
   alias Vutuv.NodeInfo
   alias Vutuv.Posts
   alias Vutuv.Posts.Post
+  alias Vutuv.SourceRepo
   alias Vutuv.Uploads.Spec
 
-  @source_url "https://github.com/wintermeyer/vutuv"
   def instance_v2(conn, _params) do
     usage = NodeInfo.usage()
 
@@ -26,7 +26,7 @@ defmodule VutuvWeb.MastodonApi.DiscoveryController do
       domain: MastodonApi.local_domain(),
       title: node_name(),
       version: MastodonApi.compatibility_version(),
-      source_url: @source_url,
+      source_url: SourceRepo.url(),
       description: node_description(),
       usage: %{users: %{active_month: usage.users.active_month}},
       thumbnail: %{

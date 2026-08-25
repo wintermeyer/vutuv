@@ -99,6 +99,7 @@ defmodule Vutuv.NodeInfo do
   alias Vutuv.Posts.Post
   alias Vutuv.Repo
   alias Vutuv.Sessions.UserSession
+  alias Vutuv.SourceRepo
   alias VutuvWeb.Endpoint
   alias VutuvWeb.PageHTML
 
@@ -114,9 +115,10 @@ defmodule Vutuv.NodeInfo do
   # Pleroma and Misskey all serve it somewhere different.
   @path_prefix "/system/nodeinfo/"
 
-  # Properties of the software, identical on every installation.
+  # Properties of the software. The name is identical on every installation;
+  # the repository is not — a fork owes its users its own source, so it comes
+  # from `Vutuv.SourceRepo`.
   @software_name "vutuv"
-  @repository "https://github.com/wintermeyer/vutuv"
   # The apex, not the `www.` alias: production 301s `www.` here, so the alias
   # would send every directory through a redirect to reach the same page.
   @homepage "https://vutuv.de"
@@ -231,7 +233,7 @@ defmodule Vutuv.NodeInfo do
 
   # 2.1 adds the two pointers at the source; 2.0 has no place for them.
   defp software("2.1") do
-    Map.merge(software("2.0"), %{"repository" => @repository, "homepage" => @homepage})
+    Map.merge(software("2.0"), %{"repository" => SourceRepo.url(), "homepage" => @homepage})
   end
 
   defp software(_version) do

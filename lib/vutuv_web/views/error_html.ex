@@ -23,6 +23,7 @@ defmodule VutuvWeb.ErrorHTML do
   use Phoenix.Component
   use Gettext, backend: VutuvWeb.Gettext
 
+  alias Vutuv.SourceRepo
   alias VutuvWeb.PageHTML
 
   # A request the server could not read (issue #1227): a mangled multipart
@@ -45,7 +46,7 @@ defmodule VutuvWeb.ErrorHTML do
       </p>
       <p class="error-page__hint">
         {gettext("If this keeps happening, please tell us with a bug report at")}
-        <a href="https://github.com/wintermeyer/vutuv/issues">github.com/wintermeyer/vutuv/issues</a>.
+        <a href={SourceRepo.issues_url()}>{SourceRepo.issues_label()}</a>.
       </p>
       <%!-- The stamp is rendered, not just asked for: the member is the only
       one who knows when it happened, and the operator's logs are the only
@@ -210,7 +211,7 @@ defmodule VutuvWeb.ErrorHTML do
       <h1 class="error-page__title">{@message}</h1>
       <p :if={@code == 500} class="error-page__hint">
         {gettext("If you think this is a bug, please")}
-        <a href="https://github.com/wintermeyer/vutuv/issues/new">{gettext("submit a bug report")}</a>.
+        <a href={SourceRepo.new_issue_url()}>{gettext("submit a bug report")}</a>.
       </p>
       <p class="error-page__actions">
         <a href="/" class="button">{gettext("Back to the start page")}</a>

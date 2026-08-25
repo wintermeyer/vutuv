@@ -140,6 +140,32 @@ defmodule VutuvWeb.LandingConfigurationTest do
       assert html =~ ~s(href="/llms.txt")
     end
 
+    # The founder signature in the hero linked to `https://vutuv.de/wintermeyer`
+    # written out in the markup, past the very key whose config comment names
+    # this page. So a third-party installation's start page pointed at a profile
+    # on vutuv.de, and an operator who had cleared the key kept the link here
+    # while the 404 page correctly dropped its own. The *name* stays written in
+    # the template — that is an attribution, not a setting.
+    test "the founder signature links to the configured profile", %{conn: conn} do
+      example("https://vutuv.example/ada")
+
+      html = conn |> get(~p"/") |> html_response(200)
+
+      assert html =~ ~s(href="https://vutuv.example/ada")
+      refute html =~ "vutuv.de/wintermeyer"
+      assert html =~ "Stefan Wintermeyer"
+    end
+
+    test "and renders the name unlinked where the installation cleared the URL", %{conn: conn} do
+      example("")
+
+      html = conn |> get(~p"/") |> html_response(200)
+
+      # The attribution survives; only the link into somebody else's site goes.
+      assert html =~ "Stefan Wintermeyer"
+      refute html =~ "vutuv.de/wintermeyer"
+    end
+
     # The /username helper page offers the same example and had spelled the
     # vutuv.de founder profile out in its markup, so an installation that
     # configured its own — or cleared it — still sent people to vutuv.de.

@@ -726,6 +726,14 @@ config :vutuv, :operator_name, "Wintermeyer Consulting"
 config :vutuv, :operator_url, "https://wintermeyer-consulting.de"
 config :vutuv, :operator_address, "Johannes-Müller-Str. 10 - 56068 Koblenz - Germany"
 
+# Where the source of the software running here can be read. vutuv is AGPL, so
+# a fork that changes the code owes its users the changed source — which the
+# default, our repository, is no longer an honest answer for. It was written out
+# at thirteen call sites (the footer, both API discovery documents, the media
+# kit, the error pages, the developer docs), so a fork could not correct the
+# claim without editing source in nine files. (SOURCE_URL)
+config :vutuv, :source_url, "https://github.com/wintermeyer/vutuv"
+
 # The @handle of the person a journalist should reach on THIS installation; the
 # media kit's press contact links their profile for the rest of the contact
 # details. Kept as a handle rather than a URL so it can only ever point at a

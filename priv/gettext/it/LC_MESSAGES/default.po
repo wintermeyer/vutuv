@@ -711,10 +711,10 @@ msgstr "Profili di %{name}"
 
 #: lib/vutuv_web/controllers/social_media_account_controller.ex:78
 #, elixir-autogen, elixir-format
-msgid "Profile created successfully. BTW: Did you know that the vutuv repo is hosted on GitHub? https://github.com/wintermeyer/vutuv"
+msgid "Profile created successfully. BTW: Did you know that the vutuv repo is hosted on GitHub? %{url}"
 msgstr ""
 "Profilo creato. A proposito: sapeva che il codice di vutuv è su GitHub? "
-"https://github.com/wintermeyer/vutuv"
+"%{url}"
 
 #: lib/vutuv_web/controllers/social_media_account_controller.ex:83
 #, elixir-autogen, elixir-format

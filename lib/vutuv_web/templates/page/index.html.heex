@@ -13,13 +13,23 @@
         {founder_quote}
       </h1>
       <div class="mt-6 text-right">
+        <%!-- The link comes from `:landing_example_profile_url`, the key whose own
+              comment names this page — hardcoding it sent a third-party
+              installation's start page to a profile on vutuv.de, and left the
+              line standing for an operator who had cleared the key (the 404
+              page already honoured it). An installation that cleared it gets
+              the name as plain text rather than a link into somebody else's
+              site. The *name* stays written here: it is an attribution, not a
+              setting. --%>
         <p class="font-serif text-2xl leading-none text-white">
           <a
-            href="https://vutuv.de/wintermeyer"
+            :if={example_profile_url()}
+            href={example_profile_url()}
             class="text-white underline decoration-brand-200 underline-offset-4 hover:decoration-white"
           >
             {founder_name}
           </a>
+          <span :if={is_nil(example_profile_url())}>{founder_name}</span>
         </p>
         <p class="-mt-2 text-sm text-brand-100">{founder_role}</p>
       </div>
@@ -459,7 +469,7 @@
         </p>
         <p class="mt-4 flex flex-wrap gap-x-4 gap-y-2 text-sm font-semibold">
           <a
-            href="https://github.com/wintermeyer/vutuv"
+            href={SourceRepo.url()}
             class="text-brand-600 hover:text-brand-700 dark:text-brand-400 dark:hover:text-brand-300"
           >
             {gettext("Source code")} <span aria-hidden="true">↗</span>
@@ -546,7 +556,7 @@
         </p>
         <p class="mt-4 text-sm font-semibold">
           <a
-            href="https://github.com/wintermeyer/vutuv"
+            href={SourceRepo.url()}
             class="text-brand-600 hover:text-brand-700 dark:text-brand-400 dark:hover:text-brand-300"
           >
             {gettext("Source code")} <span aria-hidden="true">↗</span>

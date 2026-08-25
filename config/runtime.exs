@@ -160,6 +160,10 @@ if config_env() == :prod do
     config :vutuv, :operator_name, operator_name
   end
 
+  if source_url = System.get_env("SOURCE_URL") do
+    config :vutuv, :source_url, source_url
+  end
+
   if operator_url = System.get_env("OPERATOR_URL") do
     config :vutuv, :operator_url, operator_url
   end

@@ -12,6 +12,7 @@ defmodule VutuvWeb.PageHTML do
   alias Vutuv.Accounts.Email
   alias Vutuv.Fediverse
   alias Vutuv.References.Checks
+  alias Vutuv.SourceRepo
   alias VutuvWeb.Feeds
   alias VutuvWeb.JobReferenceHTML
 
