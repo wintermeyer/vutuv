@@ -463,5 +463,37 @@ defmodule VutuvWeb.MarkdownTest do
       # a bare @name in remote content stays plain text (it is ambiguous)
       refute html =~ ~s(href="/localguy")
     end
+
+    test "links an address glued to a preceding slash" do
+      # German prose writes the party as "Bündnis 90/Die Grünen", so a boosted
+      # Mastodon post named the fraction as `Bündnis 90/@gruenebundestag@…`.
+      # Mastodon's own regex refuses a `/` in front of a handle and left it as
+      # dead text; here the full address still names the account.
+      html =
+        Markdown.render_remote(
+          "MdBs von Bündnis 90/@gruenebundestag@gruene.social schaffen ein Büro"
+        )
+
+      assert html =~ ~s(href="https://gruene.social/@gruenebundestag")
+      assert html =~ ">@gruenebundestag@gruene.social</a>"
+    end
+
+    test "an address inside a URL stays part of that URL's own link" do
+      # `https://<host>/@user@host` is how Mastodon addresses a remote profile.
+      # The autolink pass turns it into an `<a>` before entities are linked,
+      # and that pass skips anchors — so the tail is never split off.
+      html = render("profile: https://mastodon.social/@hostsharing@geno.social here")
+
+      assert html =~ ~s(href="https://mastodon.social/@hostsharing@geno.social")
+      refute html =~ ~s(href="https://geno.social/@hostsharing")
+      assert length(String.split(html, "<a ")) == 2
+    end
+
+    test "a bare handle after a slash is still read as a URL path" do
+      html = render("mastodon.social/@hostsharing is the page")
+
+      refute html =~ "<a"
+      assert html =~ "mastodon.social/@hostsharing"
+    end
   end
 end

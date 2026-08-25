@@ -76,7 +76,16 @@ defmodule Vutuv.Mentions do
   # the **host** then decides whose it is. Captures: 1 = fediverse
   # user, 2 = fediverse host, 3 = local handle, 4 = hashtag (exactly one kind is
   # set per hit).
-  @entity ~r{(?<![\w@/])@([A-Za-z0-9_]+)@([A-Za-z0-9](?:[A-Za-z0-9-]*[A-Za-z0-9])?(?:\.[A-Za-z0-9](?:[A-Za-z0-9-]*[A-Za-z0-9])?)+)|(?<![\w@/])@([A-Za-z0-9_]+)|(?<![\w#/&])#([A-Za-z0-9_]+)}
+  #
+  # A preceding `/` blocks the **bare** and `#` forms only. `/@user` is the
+  # Mastodon-web path to a profile, so a lone handle glued to a slash is far
+  # more often a URL than a mention. A full `@user@host` after one is not: it is
+  # the address itself, sitting where German prose puts a slash — `Bündnis
+  # 90/@gruenebundestag@gruene.social` names that account, and Mastodon's own
+  # regex (which excludes `/` for both forms) misses it. Inside a real URL the
+  # renderer never reaches it, because an autolinked address is an `<a>` by the
+  # time the entity pass runs and that pass skips anchors.
+  @entity ~r{(?<![\w@])@([A-Za-z0-9_]+)@([A-Za-z0-9](?:[A-Za-z0-9-]*[A-Za-z0-9])?(?:\.[A-Za-z0-9](?:[A-Za-z0-9-]*[A-Za-z0-9])?)+)|(?<![\w@/])@([A-Za-z0-9_]+)|(?<![\w#/&])#([A-Za-z0-9_]+)}
 
   # Code spans/blocks are skipped everywhere: a handle inside them is sample
   # text, never a link (the same call the renderer makes for `<code>`/`<pre>`).

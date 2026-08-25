@@ -57,6 +57,10 @@ defmodule Vutuv.MentionsLocalAddressTest do
       assert Mentions.local_handles("@php@tags.vutuv.test") == []
     end
 
+    test "a slash in front of the address does not hide the member" do
+      assert Mentions.local_handles("Bündnis 90/@ada@vutuv.test") == ["ada"]
+    end
+
     test "an address inside a code span is sample text" do
       assert Mentions.local_handles("type `@ada@vutuv.test` to mention") == []
     end
