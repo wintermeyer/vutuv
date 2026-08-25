@@ -152,12 +152,8 @@ msgstr "Contiene un paese non valido"
 msgid "is already used in a post, so it can't be claimed"
 msgstr "È già usato in un post e quindi non è più rivendicabile"
 
-msgid ""
-"The handle %{handles} does not exist. Remove the mention or check the "
-"spelling."
-msgid_plural ""
-"The handle %{handles} does not exist. Remove the mention or check the "
-"spelling."
+msgid "The handle %{handles} does not exist. Remove the mention or check the spelling."
+msgid_plural "The handle %{handles} does not exist. Remove the mention or check the spelling."
 msgstr[0] ""
 "L'handle %{handles} non esiste. Rimuova la menzione o controlli "
 "l'ortografia."
@@ -176,17 +172,13 @@ msgstr "Alla recensione manca il titolo dell'opera"
 
 #: lib/vutuv_web/views/error_helpers.ex:99
 #, elixir-autogen, elixir-format
-msgid ""
-"PDF uploads are not available on this installation. Please upload an image "
-"instead."
+msgid "PDF uploads are not available on this installation. Please upload an image instead."
 msgstr ""
 "Su questa installazione non si possono caricare PDF. Carichi un'immagine."
 
 #: lib/vutuv_web/views/error_helpers.ex:94
 #, elixir-autogen, elixir-format
-msgid ""
-"Please confirm that the file may be shown publicly. Without your consent "
-"nothing is uploaded."
+msgid "Please confirm that the file may be shown publicly. Without your consent nothing is uploaded."
 msgstr ""
 "Confermi che il file può essere mostrato pubblicamente. Senza il Suo "
 "consenso non viene caricato nulla."
@@ -213,8 +205,7 @@ msgstr "Non può essere solo un link. Si descriva in poche parole."
 
 #: lib/vutuv_web/views/error_helpers.ex:111
 #, elixir-autogen, elixir-format
-msgid ""
-"\"%{tag}\" is a web address, not a tag. Please describe yourself with words."
+msgid "\"%{tag}\" is a web address, not a tag. Please describe yourself with words."
 msgstr "\"%{tag}\" è un indirizzo web, non un tag. Si descriva a parole."
 
 #: lib/vutuv_web/views/error_helpers.ex:118
@@ -254,8 +245,7 @@ msgstr "Inserisca il Suo link Signal: inizia con https://signal.me/#"
 
 #: lib/vutuv_web/views/error_helpers.ex:123
 #, elixir-autogen, elixir-format
-msgid ""
-"We allow at most %{max} accounts per post. Please remove some mentions."
+msgid "We allow at most %{max} accounts per post. Please remove some mentions."
 msgstr ""
 "Sono ammessi al massimo %{max} account per post. Rimuova qualche menzione."
 
@@ -280,8 +270,7 @@ msgstr ""
 
 #: lib/vutuv_web/views/error_helpers.ex:139
 #, elixir-autogen, elixir-format
-msgid ""
-"Enter your GitLab username, e.g. gitlab.com/username (not a /-/u/ ID link)"
+msgid "Enter your GitLab username, e.g. gitlab.com/username (not a /-/u/ ID link)"
 msgstr ""
 "Inserisca il Suo nome utente GitLab, ad esempio gitlab.com/nomeutente (non "
 "un link ID /-/u/)"
@@ -321,7 +310,6 @@ msgstr "Per ora troppi controlli. Riprovi più tardi."
 
 #: lib/vutuv_web/views/error_helpers.ex:155
 #, elixir-autogen, elixir-format
-msgid ""
-"We could not find this account on that instance. Please check the address."
+msgid "We could not find this account on that instance. Please check the address."
 msgstr ""
 "Non abbiamo trovato questo account su quell'istanza. Controlli l'indirizzo."
