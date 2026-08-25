@@ -17865,10 +17865,10 @@ msgid_plural "(%{count} pictures)"
 msgstr[0] "(ein Bild)"
 msgstr[1] "(%{count} Bilder)"
 
-#: lib/vutuv_web/components/post_components.ex:2062
+#: lib/vutuv_web/components/post_components.ex:2075
 #, elixir-autogen, elixir-format
-msgid "A picture is on its way."
-msgstr "Ein Bild ist unterwegs."
+msgid "Picture is being checked"
+msgstr "Bild wird geprüft"
 
 #: lib/vutuv_web/components/post_components.ex:2091
 #, elixir-autogen, elixir-format

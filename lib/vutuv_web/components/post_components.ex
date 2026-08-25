@@ -2063,15 +2063,18 @@ defmodule VutuvWeb.PostComponents do
         <%= if !RemoteImage.released?(image) do %>
           <%!-- Recorded, not shown: still downloading from its own server, or
           still with the AI gate. The tile is what keeps a wordless photo post
-          from rendering as an empty card — a reader must be able to tell "a
-          picture is coming" from "this post is broken". The hourglass is the
-          same glyph a member's own held post wears. --%>
+          from rendering as an empty card, so it has to say which of the two is
+          happening. It says what a member's own held photo says ("Foto wird
+          geprüft"), under the same hourglass, because it is the same wait: the
+          picture is here and we are looking at it before showing it. The older
+          "a picture is on its way" named the download instead, which is over
+          in a second and is never what the reader is waiting for. --%>
           <div
             data-remote-image-pending
             class="flex min-h-24 items-center justify-center gap-2 rounded-lg bg-slate-100 px-3 py-6 text-center text-xs text-slate-600 dark:bg-slate-800 dark:text-slate-400"
           >
             <.hourglass />
-            <span>{gettext("A picture is on its way.")}</span>
+            <span>{gettext("Picture is being checked")}</span>
           </div>
         <% else %>
           <%= if RemoteImage.blurred?(image) do %>
