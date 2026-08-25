@@ -651,23 +651,35 @@ defmodule Vutuv.Organizations do
          fetch_n,
          _cursor
        ) do
+    # LEFT joins on both actor sides (issue #1336). An inner join to `users` was
+    # right while only a member could like or repost, and became a silent filter
+    # the day a page could: the row never reached the list, so the team was never
+    # told another page had engaged with their post. Same shape
+    # `Activity.like_items/3` carries, and the same one that emptied search and
+    # the tag pages when `posts.user_id` went nullable.
+    #
+    # The member gate stays on the member branch alone — a page has its own
+    # standing, and `is_nil(u.id)` is what lets a page's row past a predicate
+    # written about accounts.
     from(e in schema,
       join: p in Post,
       on: p.id == e.post_id,
-      join: u in User,
+      left_join: u in User,
       on: u.id == e.user_id,
+      left_join: o in Organization,
+      on: o.id == e.organization_id,
       where: p.organization_id == ^id,
-      where: account_confirmed_row(u) and not account_hidden_row(u),
+      where: is_nil(u.id) or (account_confirmed_row(u) and not account_hidden_row(u)),
       order_by: [desc: e.inserted_at, desc: e.id],
       limit: ^fetch_n,
-      select: {e.id, e.inserted_at, u, p}
+      select: {e.id, e.inserted_at, u, o, p}
     )
     |> Repo.all()
-    |> Enum.map(fn {row_id, at, actor, post} ->
+    |> Enum.map(fn {row_id, at, member, page, post} ->
       # Same reason as above, without the query: these are the page's OWN
       # posts, and the caller is holding the page.
       post = %{post | organization: organization}
-      %{id: "#{kind}-#{row_id}", kind: kind, at: at, actor: actor, post: post}
+      %{id: "#{kind}-#{row_id}", kind: kind, at: at, actor: member || page, post: post}
     end)
   end
 

@@ -62,6 +62,45 @@ defmodule Vutuv.OrganizationActivityTest do
     assert Enum.find(entries, &(&1.kind == "follow")).post == nil
   end
 
+  # A page likes and reposts too (issue #1336), and its row carries
+  # `organization_id` with `user_id` NULL. The join to `users` was an inner one,
+  # so such a row never reached the list at all: the team was simply never told
+  # another page had engaged with their post, and nothing anywhere logged it.
+  # Same shape `Activity.like_items/3` fixed with LEFT joins on both actor sides.
+  # Calibrated against the un-fixed code, where both assertions below fail.
+  test "a page's like and repost reach the activity list, named as the page" do
+    {organization, owner} = publishing_organization()
+    {:ok, post} = Posts.create_organization_post(organization, owner, %{body: "Unser Beitrag."})
+
+    other_owner = insert(:activated_user)
+
+    other =
+      active_organization_for(other_owner, %{
+        "name" => "Zweite AG",
+        "website_url" => "https://zweite.example"
+      })
+
+    {:ok, _} = Organizations.add_role(other, other_owner, "publisher", other_owner)
+
+    :ok = Posts.like_post(other, other_owner, post)
+    :ok = Posts.repost_post(other, other_owner, post)
+
+    %{entries: entries} = Organizations.activity_page(organization)
+
+    like = Enum.find(entries, &(&1.kind == "post_like"))
+    repost = Enum.find(entries, &(&1.kind == "post_repost"))
+
+    assert like, "a page's like never reached the list"
+    assert repost, "a page's repost never reached the list"
+
+    assert like.actor.id == other.id
+    assert repost.actor.id == other.id
+
+    # The badge reads the same query, so one fix covers both — but a team that
+    # is never told is exactly what the missing rows looked like.
+    assert Organizations.unread_activity_count(organization) >= 2
+  end
+
   test "a post naming the page by its handle reaches its activity, and an edit undoes it" do
     {organization, owner} = active_organization()
     {:ok, organization} = Organizations.claim_handle(organization, %{"username" => "genanntag"})
