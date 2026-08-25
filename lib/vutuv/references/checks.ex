@@ -14,8 +14,11 @@ defmodule Vutuv.References.Checks do
   Errors are two-class, exactly as in the image-moderation queue:
 
     * `{:service, reason}` — the model is unreachable or timed out. Nothing is
-      wrong with this Zeugnis; retried on a backoff ladder, and the attempt is
-      not counted against the cap.
+      wrong with this Zeugnis; retried at a flat pace for ever (the same 300s
+      the image-moderation and translation queues use), and the attempt is
+      deliberately not counted against the cap. That last part is why the pace
+      is flat and not a ladder: nothing on this path writes `attempts`, so
+      indexing a ladder by it stayed on the first rung whatever happened.
     * `{:analysis, reason}` — this run cannot be trusted (truncated prompt,
       misconfigured window, empty answer). Counted, and at the cap the check
       fails visibly rather than looping forever on an unchanged
@@ -58,8 +61,21 @@ defmodule Vutuv.References.Checks do
   # Analysis-class failures tolerated before a check is given up on.
   @max_attempts 3
 
-  # The service-failure backoff ladder, in seconds.
-  @backoff [60, 300, 900, 3_600]
+  # Service failures (Ollama down/unreachable) retry forever at this flat pace,
+  # exactly like the two sibling queues — `Moderation.ImageScans` and
+  # `Translations` both use 300s for the same case.
+  #
+  # This used to be a four-rung "backoff ladder" indexed by `check.attempts`,
+  # and it never climbed: a service failure is deliberately not counted against
+  # the cap, so nothing on that path ever wrote `attempts` and the delay was 60s
+  # for ever — five times the pace of the queues beside it, for as long as the
+  # model stayed down. The analysis path caps at three attempts, so it only ever
+  # read the first two rungs; the last two were unreachable from either caller.
+  @service_retry_seconds 300
+
+  # The analysis-failure backoff, in seconds — one rung per counted attempt, and
+  # `@max_attempts` is 3, so these are all of them.
+  @analysis_backoff [60, 300]
 
   # Everyone waiting shares one queue, so "two ahead of you" goes stale the
   # moment somebody *else's* check finishes — and those transitions never touch
@@ -621,7 +637,7 @@ defmodule Vutuv.References.Checks do
   # The model is down. Not this Zeugnis's fault, so the attempt is not counted
   # against the cap — only delayed.
   defp service_retry(check, reason) do
-    delay = Enum.at(@backoff, min(check.attempts, length(@backoff) - 1))
+    delay = @service_retry_seconds
 
     Logger.info("reference check service error (#{inspect(reason)}); retrying in #{delay}s")
 
@@ -649,7 +665,7 @@ defmodule Vutuv.References.Checks do
       )
       |> broadcast_result()
     else
-      delay = Enum.at(@backoff, min(check.attempts, length(@backoff) - 1))
+      delay = Enum.at(@analysis_backoff, min(check.attempts, length(@analysis_backoff) - 1))
 
       check
       |> claim("running", "pending",

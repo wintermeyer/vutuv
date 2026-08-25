@@ -577,6 +577,29 @@ defmodule Vutuv.References.ChecksTest do
       assert check.last_error =~ "econnrefused"
     end
 
+    # The pace, not just the state. A service failure is deliberately not counted
+    # against the cap, so nothing on that path writes `attempts` — which is why
+    # indexing a four-rung "backoff ladder" by `attempts` sat on its first rung
+    # for ever: while the model was down, every queued Zeugnis re-attempted once
+    # a minute, five times the pace of the two sibling queues, and the moduledoc
+    # promised a ladder that did not exist. Flat 300s now, like they use.
+    test "a service error waits the same flat pace the sibling queues use", %{
+      reference: reference
+    } do
+      {:ok, _check} = Checks.enqueue(reference)
+
+      before = DateTime.utc_now(:second)
+      Checks.deliver_due(analyze: fn _body -> {:error, {:service, :econnrefused}} end)
+      later = DateTime.utc_now(:second)
+
+      check = Checks.latest_for(reference)
+
+      # Bracketed between two clock reads: a one-sided bound flakes whenever the
+      # wall clock crosses a second inside the call.
+      assert DateTime.diff(check.next_attempt_at, before) <= 300
+      assert DateTime.diff(check.next_attempt_at, later) >= 299
+    end
+
     test "an analysis error counts an attempt", %{reference: reference} do
       {:ok, _check} = Checks.enqueue(reference)
       Checks.deliver_due(analyze: fn _body -> {:error, {:analysis, :prompt_truncated}} end)
