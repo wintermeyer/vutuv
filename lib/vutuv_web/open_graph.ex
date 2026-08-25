@@ -258,12 +258,13 @@ defmodule VutuvWeb.OpenGraph do
 
   defp follower_detail(_count), do: ""
 
-  defp og_locale(assigns) do
-    case assigns[:locale] do
-      "de" -> "de_DE"
-      _ -> "en_US"
-    end
-  end
+  # Every locale this installation serves, not just German: `:locale` is already
+  # one of `Languages.site_locales/0` by the time it reaches here, and the same
+  # page renders `<html lang="it">` — so an Italian page telling Facebook and
+  # LinkedIn it was American English contradicted its own `<head>`.
+  @og_locales %{"de" => "de_DE", "it" => "it_IT", "en" => "en_US"}
+
+  defp og_locale(assigns), do: Map.get(@og_locales, assigns[:locale], "en_US")
 
   @doc """
   The canonical absolute URL for this page — the single value shared by

@@ -286,5 +286,30 @@ defmodule VutuvWeb.AccountEventHooksTest do
       assert event.details["from"] == "unwanted-name"
       assert event.details["to"] != "unwanted-name"
     end
+
+    # Handles are stored downcased and the site shows every one of them with a
+    # leading `@`, so the two spellings an admin actually has in hand — pasted
+    # from a page, or typed with a capital — hit a raw `Repo.get_by` and came
+    # back "No member uses this username", which reads as "that account is
+    # gone". A wrong answer on a moderation tool. Calibrated against the
+    # un-fixed code, where both of these leave the handle untouched.
+    test "the form takes the handle as the site spells it", %{conn: conn} do
+      {conn, _admin} = create_and_login_admin(conn)
+
+      pasted = insert(:user, username: "pasted-name")
+      shouted = insert(:user, username: "shouted-name")
+
+      # The same conn for both: ConnTest recycles a sent conn and carries the
+      # admin session with it. A fresh `build_conn()` here would be logged out.
+      conn =
+        post(conn, ~p"/admin/usernames", %{"username_disable" => %{"value" => "@pasted-name"}})
+
+      post(conn, ~p"/admin/usernames", %{
+        "username_disable" => %{"value" => "  Shouted-Name "}
+      })
+
+      assert [_] = events(pasted, "username_changed")
+      assert [_] = events(shouted, "username_changed")
+    end
   end
 end

@@ -7976,9 +7976,9 @@ msgstr "Resonanz"
 
 #: lib/vutuv_web/templates/admin/newsletter/show.html.heex:48
 #, elixir-autogen, elixir-format
-msgid "How members engaged with the vutuv.de links in this newsletter. Counts the HTML email's links; the plain-text version is not tracked."
+msgid "How members engaged with the %{host} links in this newsletter. Counts the HTML email's links; the plain-text version is not tracked."
 msgstr ""
-"Wie Mitglieder mit den vutuv.de-Links in diesem Newsletter umgegangen sind. "
+"Wie Mitglieder mit den %{host}-Links in diesem Newsletter umgegangen sind. "
 "Gezählt werden die Links der HTML-E-Mail; die reine Text-Fassung wird nicht "
 "ausgewertet."
 
@@ -8033,9 +8033,9 @@ msgstr "Link-Klicks"
 
 #: lib/vutuv_web/templates/admin/newsletter/clicks.html.heex:18
 #, elixir-autogen, elixir-format
-msgid "Every recorded click on a vutuv.de link in this newsletter, newest first: who clicked which link, and when."
+msgid "Every recorded click on a %{host} link in this newsletter, newest first: who clicked which link, and when."
 msgstr ""
-"Jeder erfasste Klick auf einen vutuv.de-Link in diesem Newsletter, neueste "
+"Jeder erfasste Klick auf einen %{host}-Link in diesem Newsletter, neueste "
 "zuerst: wer wann welchen Link angeklickt hat."
 
 #: lib/vutuv_web/templates/admin/newsletter/clicks.html.heex:21

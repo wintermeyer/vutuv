@@ -7644,7 +7644,7 @@ msgstr ""
 
 #: lib/vutuv_web/templates/admin/newsletter/show.html.heex:48
 #, elixir-autogen, elixir-format
-msgid "How members engaged with the vutuv.de links in this newsletter. Counts the HTML email's links; the plain-text version is not tracked."
+msgid "How members engaged with the %{host} links in this newsletter. Counts the HTML email's links; the plain-text version is not tracked."
 msgstr ""
 
 #: lib/vutuv_web/templates/admin/newsletter/show.html.heex:62
@@ -7696,7 +7696,7 @@ msgstr ""
 
 #: lib/vutuv_web/templates/admin/newsletter/clicks.html.heex:18
 #, elixir-autogen, elixir-format
-msgid "Every recorded click on a vutuv.de link in this newsletter, newest first: who clicked which link, and when."
+msgid "Every recorded click on a %{host} link in this newsletter, newest first: who clicked which link, and when."
 msgstr ""
 
 #: lib/vutuv_web/templates/admin/newsletter/clicks.html.heex:21

@@ -26,6 +26,34 @@ defmodule VutuvWeb.OpenGraphTest do
     text
   end
 
+  # `og:locale` branched on German alone and answered `en_US` for everything
+  # else, so an Italian page told Facebook and LinkedIn it was American English
+  # while the same `<head>` rendered `<html lang="it">`. Every locale this
+  # installation serves gets its own tag now — driven off `site_locales/0`, so a
+  # fourth one fails here rather than silently reading as English.
+  describe "og:locale follows the page's own language" do
+    test "every served locale gets its own tag, and none of them says en_US by accident",
+         %{conn: conn} do
+      expected = %{"en" => "en_US", "de" => "de_DE", "it" => "it_IT"}
+
+      for locale <- Vutuv.Languages.site_locales() do
+        html =
+          build_conn()
+          |> put_req_header("accept-language", "#{locale}-#{String.upcase(locale)},#{locale}")
+          |> get(~p"/")
+          |> html_response(200)
+
+        assert og(html, "og:locale") == Map.fetch!(expected, locale),
+               "og:locale is wrong for #{locale}"
+
+        assert html =~ ~s(<html lang="#{locale}"),
+               "the page did not actually render in #{locale}"
+      end
+
+      assert conn
+    end
+  end
+
   describe "generic pages" do
     test "the landing page carries a full preview card", %{conn: conn} do
       html = conn |> get(~p"/") |> html_response(200)

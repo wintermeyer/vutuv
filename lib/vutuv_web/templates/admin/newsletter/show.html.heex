@@ -45,7 +45,7 @@
   <section :if={@newsletter.status == "sent"} class="card">
     <h1>{gettext("Resonance")}</h1>
     <p class="mt-1 text-sm text-slate-600 dark:text-slate-400">
-      {gettext("How members engaged with the vutuv.de links in this newsletter. Counts the HTML email's links; the plain-text version is not tracked.")}
+      {gettext("How members engaged with the %{host} links in this newsletter. Counts the HTML email's links; the plain-text version is not tracked.", host: VutuvWeb.Endpoint.host())}
     </p>
 
     <div class="mt-4 grid gap-4 sm:grid-cols-3">

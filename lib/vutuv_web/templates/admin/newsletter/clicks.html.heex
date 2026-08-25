@@ -15,7 +15,7 @@
       <.count_badge count={@click_total} />
     </h1>
     <p class="mt-1 text-sm text-slate-600 dark:text-slate-400">
-      {gettext("Every recorded click on a vutuv.de link in this newsletter, newest first: who clicked which link, and when.")}
+      {gettext("Every recorded click on a %{host} link in this newsletter, newest first: who clicked which link, and when.", host: VutuvWeb.Endpoint.host())}
     </p>
 
     <p :if={@click_total == 0} class="card__empty">{gettext("No clicks recorded yet.")}</p>

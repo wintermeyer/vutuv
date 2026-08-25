@@ -2,6 +2,7 @@ defmodule VutuvWeb.Admin.UsernameController do
   use VutuvWeb, :controller
 
   alias Vutuv.AccountEvents
+  alias Vutuv.Accounts
   alias Vutuv.Accounts.ReservedSlugs
   alias Vutuv.Accounts.User
 
@@ -14,7 +15,13 @@ defmodule VutuvWeb.Admin.UsernameController do
   # are neither reserved nor redirected anymore); a name bad enough to ban
   # globally belongs in the moderation tooling, not here.
   def update(conn, %{"username_disable" => %{"value" => value}}) do
-    case Repo.get_by(User, username: value) do
+    # Through the handle chokepoint, not a raw `get_by`: handles are stored
+    # downcased and the site shows every one of them with a leading `@`, so an
+    # admin pasting `@handle` — or typing a capital — got a flat "No member uses
+    # this username", which reads as "that account is gone". A wrong answer on a
+    # moderation tool. It takes an email address too, which is usually what an
+    # admin has in hand from a report.
+    case value |> String.trim() |> Accounts.get_user_by_handle_or_email() do
       nil ->
         conn
         |> put_flash(:error, gettext("No member uses this username."))
