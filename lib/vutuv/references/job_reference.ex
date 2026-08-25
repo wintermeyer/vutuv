@@ -80,18 +80,33 @@ defmodule Vutuv.References.JobReference do
   @cast_fields ~w(title employer kind issued_on country body body_source public?)a
 
   @doc """
-  The query scope for what a visitor may see: published, and with any attached
-  document cleared by moderation, newest issue date first.
+  The visibility rule alone — published, and with any attached document cleared
+  by moderation — applied to a query a caller is still building.
+
+  Split out from `public_scope/0` because two other reads needed the rule but
+  not the ordering or the bare source: the public show page filters by id, and
+  `public_references_for/2` joins the links table first. Both had hand-copied
+  the two `where`s, so the rule that decides whether somebody else's employment
+  reference may be shown at all lived in three places — while the two web-layer
+  call sites' comments named `public_scope()` as *the* guarantee, which was true
+  of only one of them.
+  """
+  def visible(query) do
+    from(r in query,
+      where: r.public? == true,
+      where: is_nil(r.document) or r.document_moderation == "approved"
+    )
+  end
+
+  @doc """
+  The query scope for what a visitor may see: `visible/1` plus the display
+  order, newest issue date first.
 
   Shared by `Vutuv.References.public_job_references/1` and the profile card's
   preload, so a Zeugnis can never appear on one and not the other.
   """
   def public_scope do
-    from(r in __MODULE__,
-      where: r.public? == true,
-      where: is_nil(r.document) or r.document_moderation == "approved",
-      order_by: [desc_nulls_last: r.issued_on, desc: r.id]
-    )
+    from(r in visible(__MODULE__), order_by: [desc_nulls_last: r.issued_on, desc: r.id])
   end
 
   @doc "The Zeugnis kinds a member may pick."

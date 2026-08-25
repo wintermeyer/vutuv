@@ -82,8 +82,8 @@ defmodule Vutuv.References do
   """
   def get_public_job_reference(id) when is_binary(id) do
     JobReference
-    |> where([r], r.id == ^id and r.public? == true)
-    |> where([r], is_nil(r.document) or r.document_moderation == "approved")
+    |> JobReference.visible()
+    |> where([r], r.id == ^id)
     |> preload([:links, :user])
     |> Repo.one()
   end
@@ -191,10 +191,9 @@ defmodule Vutuv.References do
     field = field_for(kind)
 
     JobReference
+    |> JobReference.visible()
     |> join(:inner, [r], l in Link, on: l.job_reference_id == r.id)
     |> where([r, l], field(l, ^field) == ^subject_id)
-    |> where([r], r.public? == true)
-    |> where([r], is_nil(r.document) or r.document_moderation == "approved")
     |> order_by([r], desc_nulls_last: r.issued_on, desc: r.id)
     |> Repo.all()
   end
