@@ -542,7 +542,7 @@ defmodule VutuvWeb.FediverseController do
       send_activity_json(
         conn,
         Docs.count_collection(
-          Docs.actor_url(organization) <> "/followers",
+          Docs.followers_url(organization),
           Fediverse.follower_count(organization)
         )
       )
@@ -570,7 +570,7 @@ defmodule VutuvWeb.FediverseController do
       send_activity_json(
         conn,
         Docs.count_collection(
-          Docs.actor_url(tag) <> "/followers",
+          Docs.followers_url(tag),
           Fediverse.tag_remote_follower_count(tag)
         )
       )
@@ -586,7 +586,7 @@ defmodule VutuvWeb.FediverseController do
   """
   def tag_outbox(conn, %{"slug" => slug}) do
     with_federated_tag(conn, slug, fn tag ->
-      send_activity_json(conn, Docs.count_collection(Docs.actor_url(tag) <> "/outbox", 0))
+      send_activity_json(conn, Docs.count_collection(Docs.outbox_url(tag), 0))
     end)
   end
 
@@ -643,7 +643,7 @@ defmodule VutuvWeb.FediverseController do
   # A topic signs with its own key, the same shape the page's fetch uses.
   defp tag_signer(tag) do
     case Fediverse.ensure_tag_actor(tag) do
-      {:ok, actor} -> {Docs.actor_url(tag) <> "#main-key", actor.private_key_pem}
+      {:ok, actor} -> {Docs.key_id(tag), actor.private_key_pem}
       _ -> nil
     end
   end
@@ -692,7 +692,7 @@ defmodule VutuvWeb.FediverseController do
     # caching it has to key on the Accept header rather than on the URL alone.
     |> put_resp_header("vary", "accept")
     |> put_status(status)
-    |> redirect(external: String.trim_trailing(VutuvWeb.Endpoint.url(), "/") <> path)
+    |> redirect(external: Docs.site_url() <> path)
   end
 
   @doc """
@@ -834,7 +834,7 @@ defmodule VutuvWeb.FediverseController do
       send_activity_json(
         conn,
         Docs.count_collection(
-          Docs.actor_url(organization) <> "/outbox",
+          Docs.outbox_url(organization),
           Fediverse.organization_public_post_count(organization)
         )
       )
@@ -954,7 +954,7 @@ defmodule VutuvWeb.FediverseController do
     # root handle is served at that handle everywhere else, and this document is
     # what remote servers are told to show a human.
     page_url =
-      String.trim_trailing(VutuvWeb.Endpoint.url(), "/") <>
+      Docs.site_url() <>
         Organizations.canonical_path(organization)
 
     %{
@@ -974,7 +974,7 @@ defmodule VutuvWeb.FediverseController do
   defp jrd(%Tag{} = tag) do
     # The `self` link is the actor on the tag host; the human link is the tag
     # page on the main host, which is where a reader wants to land.
-    page_url = String.trim_trailing(VutuvWeb.Endpoint.url(), "/") <> "/tags/#{tag.slug}"
+    page_url = Docs.site_url() <> "/tags/#{tag.slug}"
 
     %{
       "subject" => "acct:" <> Docs.acct(tag),
@@ -991,7 +991,7 @@ defmodule VutuvWeb.FediverseController do
   end
 
   defp jrd(user) do
-    base = String.trim_trailing(VutuvWeb.Endpoint.url(), "/")
+    base = Docs.site_url()
     profile_url = "#{base}/#{user.username}"
 
     %{

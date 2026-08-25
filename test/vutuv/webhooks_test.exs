@@ -262,6 +262,13 @@ defmodule Vutuv.WebhooksTest do
       assert headers["x-vutuv-event"] == "follower.created"
       assert headers["x-vutuv-signature"] == "sha256=" <> Webhooks.sign(body, secret)
 
+      # The shared outbound agent, not a hand-written one: it carries the
+      # version and the installation's URL, so a subscriber's log can tell which
+      # vutuv called them — and `own_agent?/1` recognises our own traffic, which
+      # "vutuv-webhooks/1.0" did not.
+      assert headers["user-agent"] =~ ~r{^vutuv/\S+ \(\+https?://}
+      assert Vutuv.SocialFeed.Http.own_agent?(headers["user-agent"])
+
       assert [%Delivery{delivered_at: %DateTime{}, last_status: 200}] = Repo.all(Delivery)
       # Nothing left to do.
       assert Webhooks.deliver_due() == 0

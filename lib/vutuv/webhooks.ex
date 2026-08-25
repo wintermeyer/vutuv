@@ -27,6 +27,7 @@ defmodule Vutuv.Webhooks do
   alias Vutuv.ApiAuth
   alias Vutuv.ApiAuth.{App, Grant}
   alias Vutuv.Repo
+  alias Vutuv.SocialFeed.Http
   alias Vutuv.Webhooks.{Deliverer, Delivery, Subscription}
 
   @secret_prefix "vutuv_whsec_"
@@ -268,7 +269,12 @@ defmodule Vutuv.Webhooks do
 
     headers = [
       {"content-type", "application/json"},
-      {"user-agent", "vutuv-webhooks/1.0"},
+      # `Http.user_agent/0` like every other outbound request, with the webhook
+      # marker appended. The hand-written "vutuv-webhooks/1.0" carried neither
+      # the version nor the installation's URL, so a subscriber's log could not
+      # tell which vutuv had called them — and `Http.own_agent?/1`, which
+      # matches `"vutuv/" <> _`, answered false for our own traffic.
+      {"user-agent", Http.user_agent() <> " webhooks"},
       {"x-vutuv-event", delivery.event},
       {"x-vutuv-delivery", delivery.id},
       {"x-vutuv-signature", "sha256=" <> sign(body, subscription.secret)}

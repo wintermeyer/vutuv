@@ -32,7 +32,7 @@ defmodule VutuvWeb.Plug.TagHost do
   alias Vutuv.Fediverse
   alias VutuvWeb.ContentPolicy
   alias VutuvWeb.ControllerHelpers
-  alias VutuvWeb.Endpoint
+  alias VutuvWeb.Fediverse.Docs
 
   def init(opts), do: opts
 
@@ -53,7 +53,7 @@ defmodule VutuvWeb.Plug.TagHost do
     end
   end
 
-  defp site_url, do: String.trim_trailing(Endpoint.url(), "/")
+  defp site_url, do: Docs.site_url()
 
   defp path_with_query(conn),
     do: ControllerHelpers.with_query(conn.request_path, conn.query_string)

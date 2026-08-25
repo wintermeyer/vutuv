@@ -66,6 +66,44 @@ defmodule VutuvWeb.Fediverse.DocsTest do
     end
   end
 
+  # A Note's id is what every server that ever saw the post keys it by, forever,
+  # so the AP spelling and the website's permalink must be the same string. They
+  # were written out separately, with a comment above the copy saying they must
+  # not drift — which is the arrangement that lets them.
+  describe "note_url/2 against the permalink it must match" do
+    test "a member's Note id is the site URL plus Posts.path/2" do
+      user = insert(:activated_user)
+      {:ok, post} = Vutuv.Posts.create_post(user, %{body: "Ein Beitrag."})
+
+      assert Docs.note_url(user, post.id) == Docs.site_url() <> Vutuv.Posts.path(post)
+    end
+
+    test "a page's Note id is too, under the slug path" do
+      organization = insert(:organization)
+      post = insert(:post, user: nil, organization: organization, body: "Neu.")
+
+      url = Docs.note_url(organization, post.id)
+
+      assert url == Docs.site_url() <> Vutuv.Posts.path(post)
+      assert url =~ "/organizations/#{organization.slug}/posts/#{post.id}"
+    end
+  end
+
+  describe "collection URLs hang off the actor" do
+    test "followers, outbox and the key id are built from one actor URL" do
+      user = insert(:activated_user)
+
+      assert Docs.followers_url(user) == Docs.actor_url(user) <> "/followers"
+      assert Docs.outbox_url(user) == Docs.actor_url(user) <> "/outbox"
+      assert Docs.key_id(user) == Docs.actor_url(user) <> "#main-key"
+    end
+
+    test "site_url/0 carries no trailing slash" do
+      refute String.ends_with?(Docs.site_url(), "/")
+      assert String.starts_with?(Docs.actor_url(insert(:activated_user)), Docs.site_url())
+    end
+  end
+
   describe "move_activity/2 (#986 half 2)" do
     test "the Move names the member as actor and object, the target as target" do
       user = insert(:activated_user)

@@ -69,13 +69,11 @@ defmodule VutuvWeb.Fediverse.Docs do
   def actor_url(%Organization{slug: slug}), do: "#{base()}/organizations/#{slug}/actor"
   def actor_url(user), do: "#{base()}/#{user.username}/actor"
   def key_id(user), do: actor_url(user) <> "#main-key"
-  # A page's post lives under its slug, matching `Vutuv.Posts.path/1` — the
-  # permalink is what a federated Note is identified BY, so the two spellings
-  # must not drift.
-  def note_url(%Organization{slug: slug}, post_id),
-    do: "#{base()}/organizations/#{slug}/posts/#{post_id}"
-
-  def note_url(user, post_id), do: "#{base()}/#{user.username}/posts/#{post_id}"
+  # Through `Posts.path/2` rather than spelled out again: the permalink is what
+  # a federated Note is identified BY — permanently, on every server that ever
+  # saw it — so the two spellings must not drift. They were identical and the
+  # comment saying so sat above the copy that could drift.
+  def note_url(subject, post_id), do: base() <> Posts.path(subject, post_id)
 
   @doc """
   The one inbox the whole installation offers (issue #1073), advertised as
@@ -664,7 +662,7 @@ defmodule VutuvWeb.Fediverse.Docs do
   # So the unlisted shape is mirrored exactly: followers in `to`, the public
   # collection demoted to `cc`.
   defp match_audience(activity, user, "unlisted") do
-    followers = actor_url(user) <> "/followers"
+    followers = followers_url(user)
 
     activity
     |> Map.put("to", [followers])
@@ -744,10 +742,10 @@ defmodule VutuvWeb.Fediverse.Docs do
   # answers. Naming them in `cc` (rather than `to`) is what Mastodon does for a
   # public reply: the post stays public, and the mentioned actor is delivered to
   # directly so it lands in their notifications.
-  defp cc(user, nil), do: [actor_url(user) <> "/followers"]
+  defp cc(user, nil), do: [followers_url(user)]
 
   defp cc(user, %PostRemoteReply{actor_uri: actor_uri}),
-    do: [actor_url(user) <> "/followers", actor_uri]
+    do: [followers_url(user), actor_uri]
 
   # The `Mention` tag is what makes the remote server notify the person answered
   # and thread the reply under theirs.
@@ -876,7 +874,7 @@ defmodule VutuvWeb.Fediverse.Docs do
       "type" => type,
       "actor" => actor_url(user),
       "to" => [@public],
-      "cc" => [actor_url(user) <> "/followers"],
+      "cc" => [followers_url(user)],
       "object" => object
     }
   end
@@ -1053,7 +1051,17 @@ defmodule VutuvWeb.Fediverse.Docs do
   defp iso8601(%NaiveDateTime{} = at),
     do: at |> NaiveDateTime.truncate(:second) |> NaiveDateTime.to_iso8601() |> Kernel.<>("Z")
 
-  defp base, do: String.trim_trailing(VutuvWeb.Endpoint.url(), "/")
+  @doc """
+  This installation's own origin with no trailing slash — the base every
+  absolute URL in this module hangs off, and the one place that decides it.
+
+  Public because it was written out six times: here, in the tag-host redirect
+  and four times in the fediverse controller, each one minting a site URL by
+  hand next to a module whose whole job is minting them.
+  """
+  def site_url, do: String.trim_trailing(VutuvWeb.Endpoint.url(), "/")
+
+  defp base, do: site_url()
 
   # The same scheme and port as the main host, with the tag host in place of it,
   # so a dev server on :4000 and production both build a reachable URL.
