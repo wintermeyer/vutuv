@@ -17,6 +17,7 @@ defmodule Vutuv.Tags do
   alias Vutuv.Posts
   alias Vutuv.Repo
   alias Vutuv.SearchText
+  alias Vutuv.SlugHelpers
   require Vutuv.Tags.MatchKey
 
   alias Vutuv.Tags.MatchKey
@@ -24,7 +25,6 @@ defmodule Vutuv.Tags do
   alias Vutuv.Tags.TagFollow
   alias Vutuv.Tags.UserTag
   alias Vutuv.Tags.UserTagEndorsement
-  alias Vutuv.WebAddress
 
   # The endorsers list: which columns it can be sorted by, and a denser page
   # size than the site-wide default so a popular tag's list actually paginates.
@@ -36,6 +36,14 @@ defmodule Vutuv.Tags do
   # ceiling on the pathological case: a body listing two hundred hashtags is
   # reaching for two hundred tag pages, not writing about two hundred topics.
   @max_hashtags_per_body 20
+
+  # How many of those may be **minted** — tags the body is the first thing here
+  # to name. Filing under a tag that already exists costs a join row; minting
+  # creates a public page, so the two get different ceilings. Five is what the
+  # composer's own tag field allows a post to declare (`Vutuv.Posts.max_tags_per_post/0`),
+  # and a post introducing more than five topics nobody here has ever written
+  # about is padding its reach, not naming its subject.
+  @max_minted_hashtags_per_body 5
 
   # The most tags one profile may carry. A handful of members overdid it, so a
   # profile is capped here. The cap bites only when tags *change*: a profile
@@ -123,8 +131,8 @@ defmodule Vutuv.Tags do
       # The same folded key the single lookup uses (`Vutuv.Tags.MatchKey`), or a
       # batch goes on counting spellings where one lookup counts topics — which
       # is what sign-up's three-tag minimum and the composer's cap of five are
-      # counting. A name with nothing to key on stands for itself.
-      key = MatchKey.normalize(name) || String.downcase(name)
+      # counting.
+      key = match_key(name)
       Map.get(resolved, key, {{:new, key}, name})
     end)
     |> Enum.uniq_by(&elem(&1, 0))
@@ -146,12 +154,30 @@ defmodule Vutuv.Tags do
          coalesce(c.name, t.name)}
     )
     |> Repo.all()
-    |> Enum.flat_map(fn {name_key, slug_key, id, name} ->
-      entry = {{:tag, id}, name}
-      for key <- Enum.uniq([name_key, slug_key]), is_binary(key), do: {key, entry}
+    |> Enum.map(fn {name_key, slug_key, id, name} ->
+      {name_key, slug_key, {{:tag, id}, name}}
+    end)
+    |> index_by_match_keys()
+  end
+
+  @doc false
+  # A tag is reachable under both of its folded keys, and both point at the same
+  # payload — the rule `resolution_by_key/1` and `linkable_slugs/1` share, so it
+  # is written once. `Map.new/1` collapses the two when they are equal.
+  def index_by_match_keys(rows) do
+    rows
+    |> Enum.flat_map(fn {name_key, slug_key, payload} ->
+      [name_key, slug_key] |> Enum.filter(&is_binary/1) |> Enum.map(&{&1, payload})
     end)
     |> Map.new()
   end
+
+  # The batch key for a typed value: the folded `MatchKey`, or the downcased
+  # value when there is nothing to fold (`"-"`, `"."`), so such a name stands
+  # for itself instead of bucketing with every other keyless one. Every batch
+  # lookup against `resolution_by_key/1` must ask with this, or it asks a
+  # different question than the index answers.
+  defp match_key(name), do: MatchKey.normalize(name) || String.downcase(name)
 
   @doc """
   The **topic** a slug names, or nil.
@@ -207,7 +233,7 @@ defmodule Vutuv.Tags do
   def preview_tag_names(value) do
     value
     |> parse_tag_names()
-    |> Enum.reject(&(WebAddress.link_only?(&1) or Tag.punctuation_only?(&1)))
+    |> Enum.filter(&Tag.names_a_topic?/1)
     |> canonical_tag_names()
   end
 
@@ -562,20 +588,31 @@ defmodule Vutuv.Tags do
   end
 
   @doc """
-  Given candidate tag slugs (the `#hashtags` in a Markdown body), returns a map
-  from each written slug to the slug its link should point at — for those whose
-  `/tags/:slug` page actually shows something: a real tag with **at least one
-  visible member** (a confirmed, non-hidden user carries it, the same gate the
-  tag page lists by) **or at least one publicly visible post** filed under it
+  Given the `#hashtags` written in a Markdown body, returns a map from each
+  written name (lowercased) to the slug its link should point at — for those
+  whose `/tags/:slug` page actually shows something: a real tag with **at least
+  one visible member** (a confirmed, non-hidden user carries it, the same gate
+  the tag page lists by) **or at least one publicly visible post** filed under it
   (`Posts.visible_tagged_posts_query/0`, the tag page's own posts gate). Powers
   the hashtag links `VutuvWeb.Markdown` writes; an unknown or empty tag is
   absent from the map, so it stays plain text.
 
-  The two slugs differ exactly when the written one names an **alternative name**
-  for a topic (issue #1338): `#rubyonrails` links straight to `/tags/ruby_on_rails`
-  rather than to a URL that redirects there, and the gate is applied to the
-  canonical tag, which is where the members and posts of an absorbed tag now sit.
-  That is also why the answer is a map and not a set.
+  Written name and target slug differ in two ways, which is why the answer is a
+  map and not a set. The written one may be an **alternative name** for a topic
+  (issue #1338): `#rubyonrails` links straight to `/tags/ruby_on_rails` rather
+  than to a URL that redirects there, and the gate is applied to the canonical
+  tag, which is where the members and posts of an absorbed tag now sit. Or it
+  may simply not be spelled the way a URL can be: `#Thüringen` names the tag
+  whose slug is `thueringen`, because a slug is transliterated down to
+  `[a-z0-9_]` and a German tag rarely survives that unchanged.
+
+  That second case is why the match runs on `MatchKey` — the folded key
+  `Tag.find_by_value/1` and `tag_ids_for_hashtags/2` use — over the tag's **name
+  as well as its slug**, rather than on the slug alone. Filing has always
+  matched the name too, so slug-only linking meant a body could be filed under a
+  topic whose page its own hashtag refused to link to: `#München` sat as plain
+  text in a post the München page listed. Every source of `#hashtags` now asks
+  one question, so what is linked and what is filed cannot drift.
 
   The post arm is what keeps the link and the listing honest in both directions:
   a post is filed under the tag its own `#hashtag` names, so a tag nobody has on
@@ -588,87 +625,227 @@ defmodule Vutuv.Tags do
   One query per body (two arms of a union); an empty input skips the DB so the
   renderer's no-hashtag path stays query-free.
   """
-  def linkable_slugs(slugs) when is_list(slugs) do
+  def linkable_slugs(written) when is_list(written) do
     import Vutuv.Moderation.Query, only: [account_hidden_row: 1, account_confirmed_row: 1]
 
-    case slugs |> Enum.map(&String.downcase/1) |> Enum.uniq() do
-      [] ->
-        %{}
+    keys = written |> Enum.map(&MatchKey.normalize/1) |> Enum.reject(&is_nil/1) |> Enum.uniq()
 
-      normalized ->
-        held =
-          from(t in Tag,
-            left_join: c in assoc(t, :merged_into),
-            join: ut in UserTag,
-            on: ut.tag_id == coalesce(c.id, t.id),
-            join: u in assoc(ut, :user),
-            where: t.slug in ^normalized,
-            where: account_confirmed_row(u) and not account_hidden_row(u),
-            select: %{slug: t.slug, target: coalesce(c.slug, t.slug)}
-          )
-
-        posted =
-          from([post_tag: pt] in Posts.visible_tagged_posts_query(),
-            join: t in Tag,
-            on: pt.tag_id == coalesce(t.merged_into_id, t.id),
-            left_join: c in assoc(t, :merged_into),
-            where: t.slug in ^normalized,
-            select: %{slug: t.slug, target: coalesce(c.slug, t.slug)}
-          )
-
-        from(row in subquery(union_all(held, ^posted)),
-          distinct: true,
-          select: {row.slug, row.target}
+    if keys == [] do
+      %{}
+    else
+      held =
+        from(t in Tag,
+          as: :tag,
+          left_join: c in assoc(t, :merged_into),
+          as: :canonical,
+          join: ut in UserTag,
+          on: ut.tag_id == coalesce(c.id, t.id),
+          join: u in assoc(ut, :user),
+          where: account_confirmed_row(u) and not account_hidden_row(u)
         )
-        |> Repo.all()
-        |> Map.new()
+        |> keyed_target(keys)
+
+      posted =
+        from([post_tag: pt] in Posts.visible_tagged_posts_query(),
+          join: t in Tag,
+          as: :tag,
+          on: pt.tag_id == coalesce(t.merged_into_id, t.id),
+          left_join: c in assoc(t, :merged_into),
+          as: :canonical
+        )
+        |> keyed_target(keys)
+
+      from(row in subquery(union_all(held, ^posted)),
+        distinct: true,
+        select: {row.name, row.slug, row.target}
+      )
+      |> Repo.all()
+      |> Enum.map(fn {name, slug, target} ->
+        {MatchKey.normalize(name), MatchKey.normalize(slug), target}
+      end)
+      |> index_by_match_keys()
+      |> targets_for(written)
     end
   end
 
-  @doc """
-  The ids of the tags `hashtags` names here — **existing tags only**, matched on
-  the slug, which is exactly what `VutuvWeb.Markdown` links a `#hashtag` to.
-
-  Feeds both hashtag filing paths: a member's post body
-  (`Vutuv.Posts.create_post/2`) and a cached remote post
-  (`Vutuv.Fediverse.Hashtags`). Neither mints a tag. For a member post that is
-  merely conservative — the composer's own tag field is where a member deliberately
-  names a new tag, and a typo in a body should not leave a page behind. For a
-  remote post it is a rule: a table a stranger's server can extend is a table a
-  stranger's server can flood with pages on our own domain.
-
-  Matched case-insensitively on **name or slug**, the predicate
-  `Tag.find_by_value/1` uses, so `#PostgreSQL` reaches the `postgresql` tag and a
-  remote `#München` reaches the tag a member spelled that way (whose slug is
-  transliterated and would never match on its own). Capped at
-  `max_hashtags_per_body/0` so one hostile body cannot file itself under every
-  tag on the site; an empty input skips the DB.
-  """
-  def tag_ids_for_hashtags([]), do: []
-
-  def tag_ids_for_hashtags(hashtags) when is_list(hashtags) do
-    names =
-      hashtags
-      |> Enum.map(&String.downcase/1)
-      |> Enum.uniq()
-      |> Enum.take(@max_hashtags_per_body)
-
-    Repo.all(
-      from(t in Tag,
-        # A body that writes an alternative name files the post under the topic
-        # (issue #1338), so `#rubyonrails` and `#RubyOnRails` land in the same
-        # timeline. `distinct` because two written spellings can now resolve to
-        # one tag, and `post_tags` has a unique index on (post_id, tag_id).
-        left_join: c in assoc(t, :merged_into),
-        where: fragment("lower(?)", t.name) in ^names or t.slug in ^names,
-        distinct: true,
-        select: coalesce(c.id, t.id)
-      )
+  # The half both arms of the union share. Written once because the two
+  # `select:` maps must stay column-for-column identical or the union fails at
+  # runtime, and nothing local would say so.
+  #
+  # The `where:` folds in SQL (that is what the two expression indexes are for);
+  # the `select:` deliberately does **not**, and hands back the raw columns for
+  # `MatchKey.normalize/1` to fold in Elixir. A fold in the select is evaluated
+  # once per **joined** row — every `user_tags` and `post_tags` row the arms
+  # produce — to feed a `distinct` that then collapses them to a handful, so its
+  # cost tracks how popular the named tags are rather than how many were named.
+  # Measured on the dev catalog: a body naming five popular tags fans out to
+  # ~1,900 rows and paid 4.0 ms against 2.3 ms folding in Elixir, on a path that
+  # runs once per rendered body and therefore once per card on a feed page.
+  defp keyed_target(query, keys) do
+    from([tag: t, canonical: c] in query,
+      where: MatchKey.sql(t.name) in ^keys or MatchKey.sql(t.slug) in ^keys,
+      select: %{name: t.name, slug: t.slug, target: coalesce(c.slug, t.slug)}
     )
   end
 
-  @doc "How many `#hashtags` of one body are resolved to tags (see `tag_ids_for_hashtags/1`)."
+  defp targets_for(by_key, written) do
+    written
+    |> Enum.flat_map(fn name ->
+      case Map.get(by_key, match_key(name)) do
+        nil -> []
+        target -> [{String.downcase(name), target}]
+      end
+    end)
+    |> Map.new()
+  end
+
+  @doc """
+  The ids of the tags `hashtags` names here, optionally **minting** the ones
+  nothing here names yet (`create: true`).
+
+  Feeds both hashtag filing paths: a member's post body
+  (`Vutuv.Posts.create_post/2`) and a cached remote post
+  (`Vutuv.Fediverse.Hashtags`). Both now mint. A hashtag *is* how the rest of
+  the network declares a tag — a post arriving with `#Eisenach` and `#Thüringen`
+  has named two topics as plainly as the composer's tag field does — and
+  resolving it against existing tags only meant vutuv could file a post under a
+  topic but never learn one, so the catalog grew only from the tag field and
+  every hashtag naming something new fell on the floor.
+
+  What that gives up is deliberate, and worth writing down because it reverses
+  the rule this function shipped with. A hashtag can now leave a page behind:
+  a member's typo, or a topic only somebody else's server cares about. Three
+  things bound it. `mintable_hashtag?/1` refuses anything whose slug would not
+  name it. `max_minted_hashtags_per_body/0` caps one body at five new tags,
+  against `max_hashtags_per_body/0` filings. And nothing reaches the remote path
+  unless a member here follows the account that sent it
+  (`Vutuv.Fediverse.record_remote_post/2` requires an accepted follow), so this
+  is not a table a stranger can write to — it is the topics the accounts our
+  members chose to read are writing about. A minted tag also stays out of the
+  sitemap and carries `noindex` until a *local* member holds it or a *local*
+  public post carries it (`indexable_tags_query/0`), so what a remote post can
+  create is a page, never a crawled one.
+
+  Names are matched through `MatchKey`, the same folded key `Tag.find_by_value/1`
+  uses, so `#PostgreSQL` reaches the `postgresql` tag, `#München` reaches the tag
+  a member spelled that way (its slug is transliterated and would never match on
+  its own), `#ruby_on_rails` reaches `Ruby on Rails`, and an alternative name
+  reaches its topic (issue #1338). Matching this well is what makes minting safe:
+  every spelling a lookup misses is a duplicate page it would otherwise create.
+
+  Hand it the hashtags **as written** (`Vutuv.Mentions.written_hashtags/1`) when
+  minting — the name is stored as typed, and a lowercased `#thüringen` would
+  name the topic for everyone after. Capped at `max_hashtags_per_body/0`; an
+  empty input skips the DB.
+  """
+  def tag_ids_for_hashtags(hashtags, opts \\ [])
+
+  def tag_ids_for_hashtags([], _opts), do: []
+
+  def tag_ids_for_hashtags(hashtags, opts) when is_list(hashtags) do
+    written =
+      hashtags
+      |> Enum.uniq_by(&String.downcase/1)
+      |> Enum.take(@max_hashtags_per_body)
+
+    resolved = resolution_by_key(written)
+
+    {found, missing} =
+      written
+      |> Enum.map(&{&1, Map.get(resolved, match_key(&1))})
+      |> Enum.split_with(fn {_name, hit} -> hit end)
+
+    minted =
+      if Keyword.get(opts, :create, false),
+        do: missing |> Enum.map(&elem(&1, 0)) |> mint_hashtag_tags(),
+        else: []
+
+    # `uniq` because two written spellings can resolve to one tag (an alias and
+    # its topic in one body), and both filing tables carry a unique index on
+    # (post, tag).
+    Enum.uniq(Enum.map(found, fn {_name, hit} -> tag_id(hit) end) ++ minted)
+  end
+
+  defp tag_id({{:tag, id}, _display_name}), do: id
+
+  # The hashtags no tag here answers to yet. `find_or_create_tag_id/1` looks each
+  # one up again before inserting, which the batch above has already answered —
+  # the cost is at most five queries on the one path that is about to write
+  # anyway, and it buys the mint a single owner rather than a second insert
+  # spelled slightly differently. A racer is caught by the insert itself
+  # (`Tag.insert_new/1`'s `ON CONFLICT`), not by that lookup.
+  defp mint_hashtag_tags(names) do
+    names
+    |> Enum.map(&Tag.normalize_value/1)
+    |> Enum.filter(&mintable_hashtag?/1)
+    |> Enum.take(@max_minted_hashtags_per_body)
+    |> Enum.map(&find_or_create_tag_id/1)
+    |> Enum.reject(&is_nil/1)
+  end
+
+  @doc """
+  Whether a `#hashtag` may become a tag of its own.
+
+  `Tag.names_a_topic?/1` first, the same early filter the composer's tag field
+  and the add-tag preview apply, so the hashtag path mints exactly what they
+  would. The grammar keeps most of those out anyway.
+
+  On top of that a minted tag has to produce a **slug that names it**. The slug
+  is the tag's URL and its fediverse actor (#1330), it is transliterated down to
+  `[a-z0-9_]`, and `Vutuv.SlugHelpers.gen_tag_slug_unique/3` hands anything left
+  empty a random hex string. So `#2026` would file a page at `/tags/2026` and
+  `#日本語` one at `/tags/9f3c1a20` — neither says what it is about, and neither
+  is what a reader clicking that hashtag expects to land on. A member who
+  genuinely wants such a tag can still create it by hand on the tags page; a
+  hashtag in passing does not.
+  """
+  def mintable_hashtag?(name) when is_binary(name) do
+    Tag.names_a_topic?(name) and name |> SlugHelpers.tagify() |> String.match?(~r/[a-z]/)
+  end
+
+  def mintable_hashtag?(_), do: false
+
+  @doc """
+  The id of the tag `value` names, creating it when nothing here answers to it.
+
+  The one find-or-create for a typed tag name: the composer's tag field
+  (`Vutuv.Posts`) and the hashtag paths above both come through here, so a tag
+  minted from a chip and one minted from a `#hashtag` are made the same way and
+  race the same way — through `Tag.insert_new/1`, whose `ON CONFLICT` is what
+  keeps a request minting several tags at once off the 40P01 its doc describes.
+  `nil` when the value cannot be a tag at all (a name whose slug overruns the
+  column, say) — a caller must not fail a post over one odd value.
+  """
+  def find_or_create_tag_id(value) when is_binary(value) do
+    case Tag.find_by_value(value) do
+      %Tag{id: id} -> id
+      nil -> insert_tag_for_value(value)
+    end
+  end
+
+  defp insert_tag_for_value(value) do
+    tag =
+      %Tag{}
+      |> Tag.changeset(%{"value" => value})
+      |> Tag.insert_new()
+
+    case tag do
+      %Tag{id: id} ->
+        id
+
+      # Invalid name, or a racer whose row `insert_new/1` could not read back by
+      # slug because `gen_tag_slug_unique/3` gave ours a collision suffix. One
+      # more lookup by value, then give up.
+      nil ->
+        with(%Tag{id: id} <- Tag.find_by_value(value), do: id)
+    end
+  end
+
+  @doc "How many `#hashtags` of one body are resolved to tags (see `tag_ids_for_hashtags/2`)."
   def max_hashtags_per_body, do: @max_hashtags_per_body
+
+  @doc "How many tags one body may mint (see `tag_ids_for_hashtags/2`)."
+  def max_minted_hashtags_per_body, do: @max_minted_hashtags_per_body
 
   # --- Tag follows (issue #872) --------------------------------------------
   #

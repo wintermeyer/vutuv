@@ -237,6 +237,24 @@ defmodule Vutuv.Tags.Tag do
     end
   end
 
+  @doc """
+  Whether `name` names a topic at all — the two refusals every tag path applies
+  before it looks anything up: a value that is nothing but a web or email
+  address, and one that is only punctuation.
+
+  One predicate because four places ask it and they must not drift: this
+  module's `create_or_link_tag/2` (which refuses with a *reason*, so it keeps
+  its own `cond`), `Vutuv.Tags.preview_tag_names/1`, `Vutuv.Posts`' composer tag
+  field and `Vutuv.Tags.mintable_hashtag?/1` — the last three quietly drop such
+  a value rather than failing the save. `changeset/2` refuses them again at the
+  insert, so this is the early filter, never the only one.
+  """
+  def names_a_topic?(name) when is_binary(name) do
+    not (punctuation_only?(name) or WebAddress.link_only?(name))
+  end
+
+  def names_a_topic?(_), do: false
+
   # Every `#` the value opens with, plus the whitespace between them: the class
   # is greedy up to the last `#` it can still reach, so `"## # Elixir"` loses
   # all three while `"#fitness#stuff"` loses only the first (`f` ends the run).
@@ -397,47 +415,57 @@ defmodule Vutuv.Tags.Tag do
   end
 
   # No committed tag matches the typed value, so mint one and link its id.
-  #
-  # The tag is INSERTed here in its own `ON CONFLICT DO NOTHING` statement rather
-  # than deferred into the caller's `user_tag` insert as a nested `put_assoc`.
-  # That is the deadlock fix: two concurrent sign-ups sharing a tag both reach
-  # here with `find_by_value/1 == nil` (neither row is committed yet). The old
-  # put_assoc path had each transaction INSERT the same `tags.slug`, and with
-  # several tags per registration those unique-index waits chained into a cycle —
-  # Postgres 40P01, the intermittent async-suite flake from register_user. With
-  # ON CONFLICT the loser no-ops and re-reads the winner's row, and because the
-  # tag insert is its own autocommit statement no transaction ever holds two
-  # contended tag rows at once, so no cycle can form.
-  #
-  # That autocommit premise holds only in production. Under the test SQL
-  # sandbox nothing commits: each test is one transaction that keeps the
-  # unique-index lock on every slug it inserts until rollback, so two async
-  # test modules minting the SAME tag name still convoy on it — and deadlock
-  # when two contended slugs are acquired in opposite orders (the historical
-  # 40P01 flake in register_user). The test-side rule is therefore that async
-  # test modules never share literal tag names (see test/support/conn_case.ex
-  # and the test guidelines in .claude/rules/elixir.md).
+  # `insert_new/1` owns the insert (and the deadlock fix its doc explains);
+  # this head only decides what to do with the changeset either way.
   defp put_created_tag(changeset, params) do
     tag_changeset = __MODULE__.changeset(%__MODULE__{}, params)
 
+    case insert_new(tag_changeset) do
+      %__MODULE__{} = tag ->
+        put_change(changeset, :tag_id, tag.id)
+
+      # Invalid name (blank, too long, stray control char), or a racer whose row
+      # we could not read back: keep the nested-assoc path so the user_tag
+      # changeset carries the tag's validation errors out.
+      nil ->
+        put_assoc(changeset, :tag, tag_changeset)
+    end
+  end
+
+  @doc """
+  Inserts the tag `tag_changeset` builds and returns it, or `nil` when the
+  changeset is invalid.
+
+  **The one place a tag row is created**, because the `ON CONFLICT` above is not
+  an optimisation but the fix for a Postgres 40P01: two concurrent callers
+  minting the same tag both reach here with `find_by_value/1 == nil` (neither
+  row is committed yet), and with several tags per request the unique-index
+  waits chained into a cycle — the intermittent async-suite flake from
+  `register_user`. With `ON CONFLICT` the loser no-ops and re-reads the winner's
+  row, and because the insert is its own autocommit statement no transaction
+  ever holds two contended tag rows at once, so no cycle can form.
+
+  That matters more since a `#hashtag` mints too (`Vutuv.Tags.tag_ids_for_hashtags/2`):
+  one post can now create the composer's five chips *and* five tags its body
+  names, in one request — exactly the shape the deadlock needs. So both mints
+  come through here rather than each spelling its own insert.
+
+  That autocommit premise holds only in production. Under the test SQL sandbox
+  nothing commits: each test is one transaction that keeps the unique-index lock
+  on every slug it inserts until rollback, so two async test modules minting the
+  SAME tag name still convoy on it. The test-side rule is therefore that async
+  test modules never share literal tag names (see `test/support/conn_case.ex`
+  and the test guidelines in `.claude/rules/elixir.md`).
+  """
+  def insert_new(%Ecto.Changeset{} = tag_changeset) do
     if tag_changeset.valid? do
       slug = get_field(tag_changeset, :slug)
 
-      tag =
-        case Repo.insert(tag_changeset, on_conflict: :nothing, conflict_target: :slug) do
-          {:ok, %__MODULE__{id: id} = tag} when not is_nil(id) -> tag
-          # ON CONFLICT no-op'd (a racer committed this slug first): read its row.
-          _ -> Repo.get_by(__MODULE__, slug: slug)
-        end
-
-      case tag do
-        %__MODULE__{} = tag -> put_change(changeset, :tag_id, tag.id)
-        nil -> put_assoc(changeset, :tag, tag_changeset)
+      case Repo.insert(tag_changeset, on_conflict: :nothing, conflict_target: :slug) do
+        {:ok, %__MODULE__{id: id} = tag} when not is_nil(id) -> tag
+        # ON CONFLICT no-op'd (a racer committed this slug first): read its row.
+        _ -> Repo.get_by(__MODULE__, slug: slug)
       end
-    else
-      # Invalid name (blank, too long, stray control char): keep the nested-assoc
-      # path so the user_tag changeset carries the tag's validation errors out.
-      put_assoc(changeset, :tag, tag_changeset)
     end
   end
 

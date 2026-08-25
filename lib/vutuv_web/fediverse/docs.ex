@@ -33,6 +33,7 @@ defmodule VutuvWeb.Fediverse.Docs do
   alias Vutuv.Posts.PostReply
   alias Vutuv.Posts.PostReview
   alias Vutuv.ReviewCover
+  alias Vutuv.Tags.MatchKey
   alias Vutuv.Tags.Tag
   alias VutuvWeb.PostComponents
   alias VutuvWeb.UserHelpers
@@ -786,7 +787,7 @@ defmodule VutuvWeb.Fediverse.Docs do
   # composer's chips are not. Deduplicated by tag with the in-body spelling
   # winning, so a tag that is both is announced once and printed once.
   defp hashtags(%Post{} = post) do
-    written = written_hashtags(post)
+    written = body_hashtag_keys(post)
 
     in_body = for %{tag: %Tag{} = tag} <- loaded(post.post_hashtags), do: {tag, true}
     chips = for %Tag{} = tag <- loaded(post.tags), do: {tag, written?(tag, written)}
@@ -800,16 +801,27 @@ defmodule VutuvWeb.Fediverse.Docs do
   # `post_hashtags` rows alone cannot answer: `Vutuv.Posts.put_body_hashtags/2`
   # deliberately skips a hashtag the composer's field already filed, so a tag
   # that is *both* a chip and written in the sentence has a `post_tags` row and
-  # no `post_hashtags` row at all. Reading the body settles it, and both of the
-  # keys a hashtag resolves by (`Tag.find_by_value/1`: the name and the slug)
-  # are checked, so a `#elixir` in the text covers the chip named `Elixir`.
-  defp written_hashtags(%Post{body: body}) do
-    body |> to_string() |> Mentions.hashtags() |> Enum.map(&String.downcase/1) |> MapSet.new()
+  # no `post_hashtags` row at all. Reading the body settles it.
+  #
+  # Both sides fold through `Vutuv.Tags.MatchKey`, the key every other "does
+  # this hashtag name this tag" now asks with (`Tag.find_by_value/1`,
+  # `Tags.linkable_slugs/1`, `Tags.tag_ids_for_hashtags/2`), so a `#elixir` in
+  # the text covers the chip named `Elixir` and a `#ruby_on_rails` covers
+  # `Ruby on Rails` — which the old raw downcase did not. Named for the keys,
+  # not for "as written": `Vutuv.Mentions.written_hashtags/1` is the opposite
+  # question (the spelling, which the mint path needs).
+  defp body_hashtag_keys(%Post{body: body}) do
+    body
+    |> to_string()
+    |> Mentions.hashtags()
+    |> Enum.flat_map(&List.wrap(MatchKey.normalize(&1)))
+    |> MapSet.new()
   end
 
   defp written?(%Tag{name: name, slug: slug}, written) do
-    MapSet.member?(written, String.downcase(to_string(name))) or
-      MapSet.member?(written, String.downcase(to_string(slug)))
+    [name, slug]
+    |> Enum.flat_map(&List.wrap(MatchKey.normalize(to_string(&1))))
+    |> Enum.any?(&MapSet.member?(written, &1))
   end
 
   defp hashtag({%Tag{} = tag, in_body?}) do

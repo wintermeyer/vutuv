@@ -30,6 +30,7 @@ defmodule VutuvWeb.Markdown do
 
   alias Vutuv.Accounts
   alias Vutuv.Fediverse
+  alias Vutuv.Mentions
   alias Vutuv.Organizations
   alias Vutuv.Organizations.Organization
   alias Vutuv.Posts.PostImage
@@ -369,9 +370,12 @@ defmodule VutuvWeb.Markdown do
   `render_remote/1`. Hashtags come back in reading order, in the case the
   author typed, with repeats dropped case-insensitively.
 
-  The grammar is deliberately wider than the `@entity` regex's ASCII
-  `[A-Za-z0-9_]`: `#München` is an ordinary German hashtag and a line holding
-  one must split like any other. Whether a pill then *links* is a separate
+  The grammar is `Vutuv.Mentions.hashtag_token_regex/0`, so a line splits on
+  exactly what the body's own `#hashtag` linking reads — `#München` is an
+  ordinary German hashtag and a line holding one must split like any other.
+  (It used to carry its own wider class, because the shared grammar was
+  ASCII-only; that is no longer true, and two Unicode classes had already
+  drifted apart on `\\p{N}` against `\\p{Nd}`.) Whether a pill then *links* is a separate
   question the caller asks `Vutuv.Tags.linkable_slugs/1` — the same gate the
   body's `#hashtag` linking uses, so a pill links exactly where the inline
   hashtag would have.
@@ -405,11 +409,11 @@ defmodule VutuvWeb.Markdown do
     end
   end
 
-  # A `#` followed by at least one word character, the Unicode reading of
-  # "word" (see `split_trailing_hashtags/1`). Punctuation is not part of a
-  # hashtag, so a line like "Mehr dazu: #Berlin." keeps its full stop and is
-  # therefore not a hashtag line — which is right, it is a sentence.
-  @hashtag_token ~r/^#([\p{L}\p{N}_]+)$/u
+  # `Vutuv.Mentions` owns what a hashtag is; this asks it of a whole token.
+  # Punctuation is not part of a hashtag, so a line like "Mehr dazu: #Berlin."
+  # keeps its full stop and is therefore not a hashtag line — which is right,
+  # it is a sentence.
+  @hashtag_token Mentions.hashtag_token_regex()
 
   defp hashtag_line?(line) do
     case String.split(line, ~r/\s+/u, trim: true) do

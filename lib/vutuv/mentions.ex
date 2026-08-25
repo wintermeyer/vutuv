@@ -85,7 +85,20 @@ defmodule Vutuv.Mentions do
   # regex (which excludes `/` for both forms) misses it. Inside a real URL the
   # renderer never reaches it, because an autolinked address is an `<a>` by the
   # time the entity pass runs and that pass skips anchors.
-  @entity ~r{(?<![\w@])@([A-Za-z0-9_]+)@([A-Za-z0-9](?:[A-Za-z0-9-]*[A-Za-z0-9])?(?:\.[A-Za-z0-9](?:[A-Za-z0-9-]*[A-Za-z0-9])?)+)|(?<![\w@/])@([A-Za-z0-9_]+)|(?<![\w#/&])#([A-Za-z0-9_]+)}
+  #
+  # A **hashtag** spans Unicode letters, marks and digits, a handle does not.
+  # The two are not the same alphabet: a handle is an address and lives in the
+  # narrowest local part every server accepts, while a hashtag is a word of the
+  # language the post is written in. ASCII-only, `#Thüringen` ended at the `ü`
+  # and named the tag `th` — on a German site, where `#München`, `#ÖPNV` and
+  # `#Grüne` are ordinary tags, that is most of them. The class is the one
+  # Mastodon uses, so a tag written over there is read the same here.
+  #
+  # The `u` modifier is what makes `\p{…}` see characters rather than bytes. It
+  # also turns the `\w` in the two lookbehinds Unicode-aware, which is the
+  # intended reading of "not mid-token": `Grüße@ada` is as much one word as
+  # `Gruesse@ada`, and neither is a mention.
+  @entity ~r"(?<![\w@])@([A-Za-z0-9_]+)@([A-Za-z0-9](?:[A-Za-z0-9-]*[A-Za-z0-9])?(?:\.[A-Za-z0-9](?:[A-Za-z0-9-]*[A-Za-z0-9])?)+)|(?<![\w@/])@([A-Za-z0-9_]+)|(?<![\w#/&])#([\p{L}\p{M}\p{Nd}_]+)"u
 
   # Code spans/blocks are skipped everywhere: a handle inside them is sample
   # text, never a link (the same call the renderer makes for `<code>`/`<pre>`).
@@ -119,6 +132,21 @@ defmodule Vutuv.Mentions do
   @doc "The canonical entity regex, so the renderer shares this module's grammar."
   def entity_regex, do: @entity
 
+  # One whole `#hashtag` and nothing else, in the same alphabet `@entity` reads.
+  # Split out so `VutuvWeb.Markdown.split_trailing_hashtags/1` — which asks of a
+  # *token* what `@entity` asks of a body — cannot answer it with a second,
+  # slightly different class. The two had already drifted (`\p{N}` against
+  # `\p{Nd}\p{M}`), which decided differently on a decomposed `#Thüringen`.
+  @hashtag_token ~r"\A#([\p{L}\p{M}\p{Nd}_]+)\z"u
+
+  @doc """
+  Matches a single token that is one whole hashtag, capturing the name.
+
+  The token twin of `entity_regex/0`, for a caller deciding whether a *line*
+  is nothing but hashtags rather than finding them inside prose.
+  """
+  def hashtag_token_regex, do: @hashtag_token
+
   @doc "How many distinct local accounts one post may mention."
   def max_post_mentions, do: @max_post_mentions
 
@@ -150,34 +178,54 @@ defmodule Vutuv.Mentions do
   def local_handles(_), do: []
 
   @doc """
-  The unique, lowercased `#hashtags` in `text` — the tag **slugs** they name.
+  The unique, lowercased `#hashtags` in `text` — the tag **names** they write.
 
   The `@handle` twin of `local_handles/1`, reading the same grammar and skipping
   code spans/blocks for the same reason, so what this returns is exactly what
   `VutuvWeb.Markdown` would turn into a `/tags/:slug` link. That equality is the
   point: it is what lets a post be *filed* under the tag its own hashtag points
-  at (`Vutuv.Tags.tag_ids_for_hashtags/1`), instead of a reader clicking
+  at (`Vutuv.Tags.tag_ids_for_hashtags/2`), instead of a reader clicking
   `#berlin` and not finding the post they clicked it in.
 
-  Lowercased because the slug is: `#Berlin`, `#berlin` and `#BERLIN` are one
+  A written name is not always a slug — `#Thüringen` names the tag whose slug is
+  `thueringen` — so both sides resolve it through the folded key
+  `Vutuv.Tags.MatchKey` rather than by string equality.
+
+  Lowercased because the match is: `#Berlin`, `#berlin` and `#BERLIN` are one
   tag, which is also how the renderer resolves them. A topic's Fediverse address
   `@berlin@<our tag host>` (issue #1330) names the same tag and is counted with
   them, for the same reason: that is what the renderer links.
   """
-  def hashtags(text) when is_binary(text) do
+  # `written_hashtags/1` is already unique by `String.downcase/1`, so downcasing
+  # its answer cannot produce a repeat.
+  def hashtags(text), do: text |> written_hashtags() |> Enum.map(&String.downcase/1)
+
+  @doc """
+  The `#hashtags` in `text` **as they were written**, deduplicated
+  case-insensitively with the first spelling kept.
+
+  `hashtags/1` reads the same hits and lowercases them, which is all a *lookup*
+  needs. Minting needs the other half: vutuv keeps a tag's name exactly as its
+  first writer typed it (`Vutuv.Tags.Tag.find_by_value/1`), so a post that
+  introduces `#Thüringen` has to hand that spelling to
+  `Vutuv.Tags.tag_ids_for_hashtags/2` — otherwise the topic arrives on the site
+  named `thüringen`, in a language that capitalises its nouns, and no later
+  writer can correct it.
+  """
+  def written_hashtags(text) when is_binary(text) do
     # `@` as well as `#`, because a tag can be named by its address — a body
     # carrying `@berlin@tags.<our host>` and no `#` at all still names one.
     if String.contains?(text, "#") or String.contains?(text, "@") do
       text
       |> text_chunks()
       |> Enum.flat_map(&scan_hashtags/1)
-      |> Enum.uniq()
+      |> Enum.uniq_by(&String.downcase/1)
     else
       []
     end
   end
 
-  def hashtags(_), do: []
+  def written_hashtags(_), do: []
 
   @doc "Whether `text` mentions `handle` (case-insensitive; a leading `@` is optional)."
   def mentions?(text, handle) when is_binary(text) do
@@ -515,11 +563,14 @@ defmodule Vutuv.Mentions do
   # which the renderer links to `/tags/:slug` exactly like the `#php` that means
   # the same thing. So it names a tag here too, and a post writing it is filed
   # under that tag instead of pointing readers at a page it is not on.
+  #
+  # Both heads answer with the spelling the body used; `hashtags/1` lowercases
+  # for the lookups and `written_hashtags/1` keeps it for the mint.
   defp hashtag_of([user, host | _]) when user != "" and host != "" do
-    if Fediverse.tag_host?(host), do: [String.downcase(user)], else: []
+    if Fediverse.tag_host?(host), do: [user], else: []
   end
 
-  defp hashtag_of([_, _, _, hashtag]) when hashtag != "", do: [String.downcase(hashtag)]
+  defp hashtag_of([_, _, _, hashtag]) when hashtag != "", do: [hashtag]
   defp hashtag_of(_), do: []
 
   defp rewrite_chunk(chunk, old_n, new_n, acc) do

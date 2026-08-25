@@ -10,11 +10,23 @@ defmodule Vutuv.Fediverse.Hashtags do
   objects at all, and the plain-text bodies we store). Neither source is
   authoritative on its own, and both are cheap to read.
 
-  Only tags that **already exist here** are filed
-  (`Vutuv.Tags.tag_ids_for_hashtags/1`): ingestion mints nothing. A table a
-  stranger's server can extend is a table a stranger's server can flood with
-  pages on our own domain, and a tag namespace assembled from whatever the
-  fediverse trends on is not the one members chose.
+  A hashtag naming a topic nobody here has written about yet **mints** it
+  (`Vutuv.Tags.tag_ids_for_hashtags/2`, `create: true`). This used to be the one
+  hard no in the whole tag catalog, on the grounds that a table a stranger's
+  server can extend is a table a stranger's server can flood. What changed is
+  the reading of "a stranger": nothing reaches this module unless a member here
+  follows the account that sent it — `Vutuv.Fediverse.record_remote_post/2`
+  requires an accepted follow before a post is stored at all — so the hashtags
+  arriving are the topics our own members chose to read about, not an open
+  write. The cost of the old rule was silent and daily: a post about
+  `#Eisenach` and `#Thüringen` could be shown but never filed, so vutuv learned
+  a topic only when a member typed it into the composer's tag field.
+
+  What still holds the line is in `Vutuv.Tags.tag_ids_for_hashtags/2`: five
+  minted tags per post, a slug that has to name the tag, and a page that stays
+  `noindex` and out of the sitemap until a **local** member or a **local**
+  public post carries it. A remote post can leave a tag page behind; it cannot
+  put one in front of a crawler.
 
   `sync/2` runs on the two paths that can change a post's hashtags — the
   original `Create` and an upstream `Update` — and is idempotent: it inserts
@@ -39,7 +51,9 @@ defmodule Vutuv.Fediverse.Hashtags do
   `content_text` supplies the rest.
   """
   def sync(%RemotePost{} = post, object) do
-    wanted = post |> names(object) |> Tags.tag_ids_for_hashtags() |> MapSet.new()
+    wanted =
+      post |> names(object) |> Tags.tag_ids_for_hashtags(create: true) |> MapSet.new()
+
     held = post |> held_tag_ids() |> MapSet.new()
 
     insert(post, MapSet.difference(wanted, held))
@@ -50,14 +64,19 @@ defmodule Vutuv.Fediverse.Hashtags do
 
   @doc """
   The hashtag names a post carries: the AP `tag` array's `Hashtag` objects plus
-  the `#hashtags` in its stored text, lowercased and deduplicated.
+  the `#hashtags` in its stored text, **as written** and deduplicated
+  case-insensitively (the first spelling wins).
+
+  The casing survives because these names can now mint a tag, and a tag is
+  stored the way whoever names it first wrote it. A remote `#Thüringen` is how
+  that topic should read on its own page here; `thüringen` is not.
 
   Public so a backfill can read the text side of an already-stored post without
   the delivery that brought it.
   """
   def names(%RemotePost{} = post, object \\ %{}) do
-    (object_hashtags(object) ++ Mentions.hashtags(post.content_text || ""))
-    |> Enum.uniq()
+    (object_hashtags(object) ++ Mentions.written_hashtags(post.content_text || ""))
+    |> Enum.uniq_by(&String.downcase/1)
   end
 
   # A `Hashtag` in the AP `tag` array carries its name with the `#` still on it
@@ -71,7 +90,7 @@ defmodule Vutuv.Fediverse.Hashtags do
   end
 
   defp hashtag_name(%{"type" => "Hashtag", "name" => name}) when is_binary(name) do
-    case name |> String.trim() |> String.trim_leading("#") |> String.downcase() do
+    case name |> String.trim() |> String.trim_leading("#") do
       "" -> []
       tag -> [tag]
     end

@@ -98,10 +98,19 @@ The timeline is `Vutuv.Tags.Timeline`, a SQL union of two sources:
   the post off its discovery surfaces, and a topic page crawlers read is exactly
   such a surface — and a followers-only post is not ours to publish at all.
 
-Neither ingestion path **mints** a tag: a hashtag files a post only under a tag
-that already exists here. A table a stranger's server can extend is a table a
-stranger's server can flood with pages on our own domain, and the tag namespace
-is what members chose to call things.
+Both ingestion paths **mint** a tag the site does not have yet: writing
+`#Eisenach` declares a topic as plainly as typing it into the composer's tag
+field, and resolving hashtags against existing tags only meant the catalog grew
+from that field alone. Three bounds keep it from becoming an open write. A body
+may mint at most `Vutuv.Tags.max_minted_hashtags_per_body/0` (five) tags against
+`max_hashtags_per_body/0` (twenty) filings. `Vutuv.Tags.mintable_hashtag?/1`
+refuses a name whose slug would not name it — `#2026` and a CJK hashtag both
+produce a URL that says nothing about the page. And the fediverse side never
+sees a stranger: `Vutuv.Fediverse.record_remote_post/2` stores a post only from
+an account somebody here already follows, so what arrives is what our own
+members chose to read. A minted page also stays `noindex` and out of the sitemap
+until a **local** member or a **local** public post carries it, so a remote post
+can leave a tag page behind but never a crawled one.
 
 The reader's controls are the embedded `VutuvWeb.TagLive.Timeline` LiveView
 (`live_render` from `VutuvWeb.TagController.show/2`, the profile's and the post

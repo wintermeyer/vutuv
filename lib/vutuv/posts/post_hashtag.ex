@@ -12,8 +12,9 @@ defmodule Vutuv.Posts.PostHashtag do
   neither surface changes.
 
   There is deliberately no changeset: the tag ids come from
-  `Vutuv.Tags.tag_ids_for_hashtags/1` (existing tags only, never minted), and
-  the rows are re-derived from the body on every save.
+  `Vutuv.Tags.tag_ids_for_hashtags/2`, which mints the topics the body is the
+  first thing here to name, and the rows are re-derived from the body on every
+  save.
   """
 
   use VutuvWeb, :model

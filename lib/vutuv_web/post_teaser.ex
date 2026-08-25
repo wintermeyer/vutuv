@@ -89,12 +89,14 @@ defmodule VutuvWeb.PostTeaser do
   # wins the fallback in `pick/1`, because a reader gets *something* out of
   # "#Solarpunk #klimakrise" and nothing at all out of a status URL.
   #
-  # The token is `Vutuv.Mentions`' canonical `#[A-Za-z0-9_]+`, so this and the
-  # renderer cannot disagree about what a hashtag is. Being ASCII-only, a line
-  # carrying `#Grüne` does not match and is kept — the safe direction, since
-  # skipping a line the reader wanted is the expensive mistake. A Markdown
-  # heading cannot match either: `# Titel` has a space after the `#`, and this
-  # demands a word character.
+  # The token is deliberately **narrower** than `Vutuv.Mentions`' canonical one,
+  # which spans Unicode letters so that `#Thüringen` names a tag rather than
+  # `#Th`. Here ASCII-only is the safe direction and stays: this regex decides
+  # what to *drop*, and skipping a line the reader wanted is the expensive
+  # mistake, so a line carrying `#Grüne` does not match and is kept. Widen it
+  # only together with a test that says what a German hashtag line should do.
+  # A Markdown heading cannot match either: `# Titel` has a space after the `#`,
+  # and this demands a word character.
   @hashtags_only ~r/\A(?:#[A-Za-z0-9_]+[\s,]*)+\z/
 
   # How wide one browser-tab frame is written. A tab in a window holding a

@@ -100,7 +100,6 @@ defmodule Vutuv.Posts do
   alias Vutuv.Translations
   alias Vutuv.Uploads.Crop
   alias Vutuv.UUIDv7
-  alias Vutuv.WebAddress
 
   @default_feed_limit 20
   @default_profile_limit 3
@@ -559,15 +558,17 @@ defmodule Vutuv.Posts do
   defp build_changeset(post_or_struct, attrs, denials, image_ids) do
     tag_values = attrs |> fetch(:tags) |> parse_tag_values()
     # Over the cap the post does not save at all, so nothing is minted for it
-    # either: find-or-create runs only on a set that can be kept.
-    tag_ids = if too_many_tags?(tag_values), do: [], else: tag_ids_for(tag_values)
+    # either — by the chip row **or** by the body's hashtags: find-or-create runs
+    # only on a set that can be kept, and `put_body_hashtags/3` is told the same.
+    keepable? = not too_many_tags?(tag_values)
+    tag_ids = if keepable?, do: tag_ids_for(tag_values), else: []
 
     changeset =
       post_or_struct
       |> Post.changeset(post_params(attrs))
       |> Ecto.Changeset.put_assoc(:denials, Enum.map(denials, &struct(PostDenial, &1)))
       |> Ecto.Changeset.put_assoc(:post_tags, Enum.map(tag_ids, &%PostTag{tag_id: &1}))
-      |> put_body_hashtags(tag_ids)
+      |> put_body_hashtags(tag_ids, keepable?)
       |> put_review(post_or_struct, fetch(attrs, :review))
       |> require_content(image_ids)
       |> validate_tag_count(tag_values)
@@ -606,17 +607,25 @@ defmodule Vutuv.Posts do
   # on the page it took them to.
   #
   # Re-derived from the body on every save (so an edit that drops a hashtag
-  # drops the filing), existing tags only (`Tags.tag_ids_for_hashtags/1` mints
-  # nothing — a typo must not leave a tag page behind), and never a tag the
-  # composer's field already filed: that one is a chip on the card, and one
-  # filing per (post, tag) is all the tag page can use.
-  defp put_body_hashtags(changeset, field_tag_ids) do
+  # drops the filing), and never a tag the composer's field already filed: that
+  # one is a chip on the card, and one filing per (post, tag) is all the tag
+  # page can use.
+  #
+  # `mint?` (true unless the post is already doomed by its tag count, see
+  # `build_changeset/4`) lets a hashtag naming a topic nobody here has written
+  # about yet mint it — writing `#Eisenach` in a sentence declares the tag as plainly
+  # as typing it into the tag field does, and the chip row is capped at five
+  # while a body is not. The hashtags go in **as written**
+  # (`Mentions.written_hashtags/1`, not `hashtags/1`): a minted tag keeps the
+  # spelling of whoever names it first, and lowercasing here would name it for
+  # everybody after.
+  defp put_body_hashtags(changeset, field_tag_ids, mint?) do
     hashtag_ids =
       changeset
       |> Ecto.Changeset.get_field(:body)
       |> to_string()
-      |> Mentions.hashtags()
-      |> Tags.tag_ids_for_hashtags()
+      |> Mentions.written_hashtags()
+      |> Tags.tag_ids_for_hashtags(create: mint?)
       |> Enum.reject(&(&1 in field_tag_ids))
 
     Ecto.Changeset.put_assoc(
@@ -5751,33 +5760,20 @@ defmodule Vutuv.Posts do
   defp parse_tag_values(values) when is_list(values) do
     values
     |> Enum.map(&Tag.normalize_value/1)
-    |> Enum.reject(&(Tag.punctuation_only?(&1) or WebAddress.link_only?(&1)))
+    |> Enum.filter(&Tag.names_a_topic?/1)
     |> Tags.canonical_tag_names()
   end
 
   # Find-or-create by name/slug (case-insensitive), racing gracefully.
   # Unresolvable values (e.g. names whose slug exceeds the limit) are skipped:
-  # a post must not fail because one tag was odd.
+  # a post must not fail because one tag was odd. `Tags.find_or_create_tag_id/1`
+  # owns the find-or-create, so a tag minted from a chip and one minted from a
+  # `#hashtag` in the body are made — and raced — the same way.
   defp tag_ids_for(values) do
     values
-    |> Enum.map(&tag_for_value/1)
+    |> Enum.map(&Tags.find_or_create_tag_id/1)
     |> Enum.reject(&is_nil/1)
     |> Enum.uniq()
-  end
-
-  defp tag_for_value(value) do
-    case Tag.find_by_value(value) do
-      %Tag{id: id} -> id
-      nil -> insert_tag_for_value(value)
-    end
-  end
-
-  defp insert_tag_for_value(value) do
-    case Repo.insert(Tag.changeset(%Tag{}, %{"value" => value})) do
-      {:ok, tag} -> tag.id
-      # Lost a race or invalid value — one more lookup, then give up.
-      {:error, _} -> with(%Tag{id: id} <- Tag.find_by_value(value), do: id)
-    end
   end
 
   ## Broadcasts

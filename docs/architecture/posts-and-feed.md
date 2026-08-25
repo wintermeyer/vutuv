@@ -13,14 +13,20 @@ member's name as a hover tooltip, and a **`#hashtag` is auto-linked** to that
 tag's `/tags/:slug` page **only when that page has something to show** — the tag
 exists here and carries either at least one visible member or at least one
 visible post (`Vutuv.Tags.linkable_slugs/1`), so a link never lands on an empty
-tag page. This runs everywhere the Markdown renderer does (`VutuvWeb.Markdown`:
+tag page. Written hashtag and target slug need not match: the lookup runs on the
+folded key (`Vutuv.Tags.MatchKey`) over the tag's name as well as its slug, so
+`#Thüringen` links to `/tags/thueringen` and `#ruby_on_rails` to the spaced tag
+— the same question filing asks, so a post can never be listed on a page its own
+hashtag refuses to link to. This runs everywhere the Markdown renderer does (`VutuvWeb.Markdown`:
 posts, chat messages, ads, the RSS/JSON renderings), skipping entities typed
 inside code spans/blocks or existing links and resolving all of a body's
 mentions and hashtags in one batched query each.
 
 A hashtag also **files the post under that tag**, so the link points both ways:
 `Vutuv.Posts.PostHashtag` (table `post_hashtags`, re-derived from the body on
-every save, existing tags only — a typo never leaves a tag page behind). It is a
+every save), **minting the tag** when the body is the first thing here to name
+it (`Vutuv.Tags.tag_ids_for_hashtags/2` — five new tags per body, and only names
+whose slug names them; see [social-graph.md](social-graph.md)). It is a
 separate table from `post_tags` on purpose: `post_tags` is what the card renders
 as tag chips, and a hashtag is already visible in the sentence it was written
 in, so filing it there would print it twice.
@@ -35,8 +41,9 @@ they typed to a post that publishes anyway. The count is taken after the dedupe,
 so repeating a tag never trips it, and the composer's pill box refuses the sixth
 pill client-side (`<.tag_input max={…}>`) so it rarely gets that far. Everything
 else the parser drops is still dropped silently — punctuation, a bare link, a
-repeat — because none of those can become a tag at all. Filing by hashtag is
-uncapped: a body may name as many tags as it mentions.
+repeat — because none of those can become a tag at all. Filing by hashtag has
+its own, looser ceilings: twenty tags resolved per body, five of them newly
+minted.
 
 A **bare `http(s)://` URL is auto-linked too**, with its display text shortened
 to host + first path directory — but only *outside* code. Inside a fenced block
