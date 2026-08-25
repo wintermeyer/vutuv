@@ -321,7 +321,7 @@ defmodule VutuvWeb.Admin.JobLive do
             </.link>
           </p>
         </div>
-        <button type="button" phx-click="close-drawer" class="shrink-0 text-sm font-semibold text-slate-500 hover:text-slate-700 dark:hover:text-slate-300">
+        <button type="button" phx-click="close-drawer" class="shrink-0 text-sm font-semibold text-slate-500 hover:text-slate-700 dark:text-slate-400 dark:hover:text-slate-200">
           {gettext("Close")}
         </button>
       </div>
@@ -479,7 +479,7 @@ defmodule VutuvWeb.Admin.JobLive do
           phx-click="close-posting"
           phx-value-id={@detail.posting.id}
           data-confirm={gettext("Close this posting? It ends the listing (a regular ending, not a deletion).")}
-          class="rounded-lg bg-slate-100 px-3 py-1.5 text-sm font-semibold text-slate-700 hover:bg-slate-200 dark:bg-slate-800 dark:text-slate-200"
+          class="rounded-lg bg-slate-100 px-3 py-1.5 text-sm font-semibold text-slate-700 hover:bg-slate-200 dark:bg-slate-800 dark:text-slate-200 dark:hover:bg-slate-700"
         >
           {gettext("Close")}
         </button>

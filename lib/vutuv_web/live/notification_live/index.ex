@@ -407,7 +407,7 @@ defmodule VutuvWeb.NotificationLive.Index do
           <div data-filter-list>
             <section :for={section <- @sections} data-day-section>
               <h2
-                class="mb-0 mt-6 text-sm font-semibold uppercase tracking-wide text-slate-500"
+                class="mb-0 mt-6 text-sm font-semibold uppercase tracking-wide text-slate-500 dark:text-slate-400"
                 data-day-heading
               >
                 {day_label(section.day, @today)}

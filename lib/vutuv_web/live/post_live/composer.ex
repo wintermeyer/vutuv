@@ -1488,7 +1488,7 @@ defmodule VutuvWeb.PostLive.Composer do
           choice and stays the default. --%>
           <div :if={@bento} class="mt-4" data-bento-editor>
             <div class="flex flex-wrap items-baseline justify-between gap-x-3 gap-y-1">
-              <span class="text-sm font-semibold uppercase tracking-wide text-slate-500">
+              <span class="text-sm font-semibold uppercase tracking-wide text-slate-500 dark:text-slate-400">
                 {gettext("Gallery preview")}
               </span>
               <span class="text-xs text-slate-600 dark:text-slate-400">
@@ -1878,7 +1878,7 @@ defmodule VutuvWeb.PostLive.Composer do
             id={"#{@id}-audience-sheet"}
             class="mt-4 rounded-xl bg-slate-50 p-4 ring-1 ring-slate-200 dark:bg-slate-800/50 dark:ring-slate-700"
           >
-            <h3 class="text-sm font-semibold uppercase tracking-wide text-slate-500">
+            <h3 class="text-sm font-semibold uppercase tracking-wide text-slate-500 dark:text-slate-400">
               {gettext("Hide this post from…")}
             </h3>
 

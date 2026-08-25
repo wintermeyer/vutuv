@@ -659,7 +659,7 @@ defmodule VutuvWeb.MessageLive.Index do
         </ul>
 
         <div :if={@requests != []} id="requests" class="border-b border-slate-200 dark:border-slate-800">
-          <h2 class="px-4 pt-3 text-sm font-semibold uppercase tracking-wide text-slate-500">
+          <h2 class="px-4 pt-3 text-sm font-semibold uppercase tracking-wide text-slate-500 dark:text-slate-400">
             {gettext("Requests")}
           </h2>
           <ul>

@@ -45,6 +45,27 @@ defmodule VutuvWeb.MutedHeadingDarkModeTest do
     |> Enum.any?(&String.contains?(&1, "dark:text-slate"))
   end
 
+  # The component was fixed first, and eighteen hand-rolled copies of the same
+  # heading across nine files still carried the light half alone. Keyed on the
+  # recipe's own three utilities, so an unrelated `text-slate-500` (a footer
+  # line, a caption) is not dragged in.
+  test "no hand-rolled section heading is missing its dark half" do
+    recipe = "uppercase tracking-wide text-slate-500"
+
+    offenders =
+      for path <- Path.wildcard("lib/**/*.ex") ++ Path.wildcard("lib/**/*.heex"),
+          lines = String.split(File.read!(path), "\n"),
+          {line, n} <- Enum.with_index(lines, 1),
+          String.contains?(line, recipe),
+          not dark_half_nearby?(lines, n),
+          do: "#{path}:#{n}: #{String.trim(line)}"
+
+    assert offenders == [],
+           "a muted heading on a dark card is ~3.8:1 without its dark half, " <>
+             "under AA — append dark:text-slate-400 or use <.section_title>:\n" <>
+             Enum.join(offenders, "\n")
+  end
+
   test "the section-title recipe in the design rule carries the dark half" do
     rule =
       @design_rule

@@ -27,21 +27,21 @@ defmodule VutuvWeb.Admin.AdHTML do
       <.local_time at={@ad.inserted_at} />
     </p>
 
-    <p class="mt-3 text-xs font-semibold uppercase tracking-wide text-slate-500">
+    <p class="mt-3 text-xs font-semibold uppercase tracking-wide text-slate-500 dark:text-slate-400">
       {gettext("Preview (as visitors see it)")}
     </p>
     <div class="markdown mt-1 rounded-lg bg-slate-50 p-3 text-sm text-slate-700 dark:bg-slate-800/60 dark:text-slate-300">
       {VutuvWeb.Markdown.render(@ad.content)}
     </div>
 
-    <p class="mt-3 text-xs font-semibold uppercase tracking-wide text-slate-500">
+    <p class="mt-3 text-xs font-semibold uppercase tracking-wide text-slate-500 dark:text-slate-400">
       {gettext("Markdown source")}
     </p>
     <pre class="mt-1 overflow-x-auto whitespace-pre-wrap rounded-lg bg-slate-50 p-3 font-mono text-xs text-slate-700 dark:bg-slate-800/60 dark:text-slate-300">{@ad.content}</pre>
 
     <dl class="mt-3 grid gap-x-6 gap-y-1 text-sm sm:grid-cols-2">
       <div>
-        <dt class="text-xs font-semibold uppercase tracking-wide text-slate-500">
+        <dt class="text-xs font-semibold uppercase tracking-wide text-slate-500 dark:text-slate-400">
           {gettext("Billing address")}
         </dt>
         <dd class="mt-1 whitespace-pre-line text-slate-700 dark:text-slate-300">{[
@@ -55,7 +55,7 @@ defmodule VutuvWeb.Admin.AdHTML do
         |> Enum.join("\n")}</dd>
       </div>
       <div>
-        <dt class="text-xs font-semibold uppercase tracking-wide text-slate-500">
+        <dt class="text-xs font-semibold uppercase tracking-wide text-slate-500 dark:text-slate-400">
           {gettext("Price")}
         </dt>
         <dd class="mt-1 text-slate-700 dark:text-slate-300">

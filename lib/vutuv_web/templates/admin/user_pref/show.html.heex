@@ -40,7 +40,7 @@ so the member can change or reset it themselves afterwards. --%>
     >
       <%= for group <- Vutuv.Prefs.groups() do %>
         <fieldset class="space-y-6">
-          <legend class="text-sm font-semibold uppercase tracking-wide text-slate-500">
+          <legend class="text-sm font-semibold uppercase tracking-wide text-slate-500 dark:text-slate-400">
             {Vutuv.Prefs.group_label(group)}
           </legend>
 
