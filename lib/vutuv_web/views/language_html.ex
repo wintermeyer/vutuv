@@ -31,6 +31,41 @@ defmodule VutuvWeb.LanguageHTML do
   def proficiency_badge("native"), do: gettext("Native")
   def proficiency_badge(level) when level in ~w(c2 c1 b2 b1 a2 a1), do: String.upcase(level)
 
+  @doc """
+  The proficiency badge as it is actually rendered: the brand-tint pill around
+  `proficiency_badge/1`, with the full `proficiency_label/1` as its hover title
+  (which is what the `cursor-help` announces).
+
+  Three call sites wrote this span out by hand and had already drifted — the
+  profile's compact language pill carried `rounded` + `px-1.5` against the
+  other two's `rounded-lg` + `px-2`. That difference is real and wanted, so it
+  is a `size` here rather than a class override at the call site: a padding
+  utility passed in `class` does not reliably beat the base one (same layer,
+  CSS source order decides, not attribute order) — the same reason `<.chip>`
+  takes a size.
+  """
+  attr(:proficiency, :string, required: true)
+  attr(:size, :string, values: ~w(md sm), default: "md")
+  attr(:class, :string, default: nil)
+
+  def proficiency_pill(assigns) do
+    ~H"""
+    <span
+      class={[
+        "inline-flex cursor-help items-center bg-brand-50 text-xs font-medium text-brand-700 dark:bg-brand-900/40 dark:text-brand-100",
+        proficiency_pill_size(@size),
+        @class
+      ]}
+      title={proficiency_label(@proficiency)}
+    >
+      {proficiency_badge(@proficiency)}
+    </span>
+    """
+  end
+
+  defp proficiency_pill_size("sm"), do: "rounded px-1.5 py-0.5"
+  defp proficiency_pill_size(_md), do: "rounded-lg px-2 py-0.5"
+
   @doc "The `{label, value}` options for the form's proficiency select."
   def proficiency_options do
     for level <- Language.proficiencies(), do: {proficiency_label(level), level}

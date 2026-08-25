@@ -450,25 +450,14 @@ defmodule VutuvWeb.JsonLd do
   defp crumb_url("http" <> _ = url), do: url
   defp crumb_url(path), do: AgentDocs.abs_url(path)
 
+  @doc """
+  The profile's own trail: the site root, then this member. It is
+  `breadcrumb_trail/1` with a single linked crumb — it was written out a second
+  time, down to the same site-root item, and a second copy of the site root is
+  a second place to remember an installation's own name.
+  """
   def breadcrumbs(user) do
-    profile_url = AgentDocs.abs_url("/" <> user.username)
-
-    %{
-      "@context" => "https://schema.org",
-      "@type" => "BreadcrumbList",
-      "itemListElement" => [
-        %{
-          "@type" => "ListItem",
-          "position" => 1,
-          "item" => %{"@id" => VutuvWeb.Endpoint.url(), "name" => SiteName.get()}
-        },
-        %{
-          "@type" => "ListItem",
-          "position" => 2,
-          "item" => %{"@id" => profile_url, "name" => UserHelpers.full_name(user)}
-        }
-      ]
-    }
+    breadcrumb_trail([{UserHelpers.full_name(user), "/" <> user.username}])
   end
 
   defp works_for(nil), do: nil
