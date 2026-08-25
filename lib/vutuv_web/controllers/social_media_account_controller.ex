@@ -1,6 +1,5 @@
 defmodule VutuvWeb.SocialMediaAccountController do
   use VutuvWeb, :controller
-  alias Ecto.Changeset
   alias Vutuv.CodeStats
   alias Vutuv.Profiles.SocialAccountVerification, as: Verification
   alias Vutuv.Profiles.SocialMediaAccount
@@ -8,7 +7,6 @@ defmodule VutuvWeb.SocialMediaAccountController do
   alias VutuvWeb.AgentDocs
   alias VutuvWeb.AgentDocs.SectionDocs
   alias VutuvWeb.ControllerHelpers
-  alias VutuvWeb.RateLimit
 
   plug(VutuvWeb.Plug.AuthUser when action not in [:index, :show])
 
@@ -220,24 +218,8 @@ defmodule VutuvWeb.SocialMediaAccountController do
   # passes straight through, so no other provider pays for a network round trip
   # on save. The rate limit is asked first, and only when a probe would really
   # be sent, so a slot is never spent on a save that asks nobody anything.
-  defp check_instance(changeset, conn) do
-    cond do
-      not CodeStats.instance_probe_needed?(changeset) ->
-        changeset
-
-      RateLimit.check_instance_probe(conn, conn.assigns[:user]) == :ok ->
-        CodeStats.verify_instance(changeset)
-
-      true ->
-        # A plain string, like every other add_error message: it is translated
-        # at render time out of the "errors" domain (VutuvWeb.ErrorHelpers).
-        Changeset.add_error(
-          changeset,
-          :value,
-          "Too many checks for now. Please try again later."
-        )
-    end
-  end
+  defp check_instance(changeset, conn),
+    do: ControllerHelpers.verify_forge_instance(changeset, conn, conn.assigns[:user])
 
   defp user_with_social_media_accounts(conn),
     do:

@@ -11,8 +11,10 @@ defmodule VutuvWeb.ControllerHelpers do
   alias Plug.Conn
   alias Vutuv.Accounts.User
   alias Vutuv.ApiAuth.App
+  alias Vutuv.CodeStats
   alias Vutuv.Repo
   alias Vutuv.SocialFeed.Http
+  alias VutuvWeb.RateLimit
 
   @doc """
   Renders the PIN-entry screen belonging to the flow the pending identity is in,
@@ -175,6 +177,41 @@ defmodule VutuvWeb.ControllerHelpers do
   """
   def with_query(path, ""), do: path
   def with_query(path, query) when is_binary(query), do: path <> "?" <> query
+
+  @doc """
+  Runs the self-hosted-forge admission probe (issue #1504) **through the
+  outbound-probe budget**, and is the one place that pairs the two.
+
+  Saving a Gitea/Forgejo address makes this server send a request to a host the
+  member typed, which is why `VutuvWeb.RateLimit` budgets it at 20/hour: a form
+  anybody can re-submit in a loop is a form anybody can point at a stranger. The
+  HTML form asked that budget and `/api/2.0` did not, so the same outbound probe
+  was bounded there only by the generic 5,000/hour token budget — 250× the
+  deliberate one, on the one request an authenticated caller can aim anywhere.
+
+  The budget is asked **only when a probe would really be sent**, so a slot is
+  never spent on a save that asks nobody anything. It lives here rather than in
+  `Vutuv.CodeStats` because the limiter is keyed on the conn, and the context
+  layer does not reach into the web layer.
+  """
+  def verify_forge_instance(%Ecto.Changeset{} = changeset, %Conn{} = conn, user) do
+    cond do
+      not CodeStats.instance_probe_needed?(changeset) ->
+        changeset
+
+      RateLimit.check_instance_probe(conn, user) == :ok ->
+        CodeStats.verify_instance(changeset)
+
+      true ->
+        # A plain string, like every other add_error message: it is translated
+        # at render time out of the "errors" domain (VutuvWeb.ErrorHelpers).
+        Ecto.Changeset.add_error(
+          changeset,
+          :value,
+          "Too many checks for now. Please try again later."
+        )
+    end
+  end
 
   @doc """
   The bearer token on this request, or `nil` — the **one** reading of an

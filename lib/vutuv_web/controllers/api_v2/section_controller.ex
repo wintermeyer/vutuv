@@ -84,7 +84,7 @@ defmodule VutuvWeb.ApiV2.SectionController do
       |> build_assoc(assoc)
       |> seed_position(schema, user)
       |> schema.changeset(params)
-      |> before_write()
+      |> before_write(conn)
 
     case Repo.insert(changeset) do
       {:ok, record} ->
@@ -106,7 +106,8 @@ defmodule VutuvWeb.ApiV2.SectionController do
     user = conn.assigns.current_user
 
     with %{} = record <- ControllerHelpers.get_owned(user, assoc, id),
-         {:ok, record} <- record |> schema.changeset(params) |> before_write() |> Repo.update() do
+         {:ok, record} <-
+           record |> schema.changeset(params) |> before_write(conn) |> Repo.update() do
       after_write(conn.assigns.section, record)
       record = preload_for_doc(record, conn.assigns.section)
       ApiV2.send_json(conn, SectionDocs.build_show(user, conn.assigns.section, record))
@@ -183,7 +184,13 @@ defmodule VutuvWeb.ApiV2.SectionController do
   # address is only accepted once that instance confirms the username (issue
   # #1504). It belongs here and not in the changeset because a changeset must
   # never touch the network; every other section passes straight through.
-  defp before_write(changeset), do: CodeStats.verify_instance(changeset)
+  # Through `ControllerHelpers.verify_forge_instance/3`, so this pays the same
+  # 20/hour outbound-probe budget the HTML form does. It called
+  # `CodeStats.verify_instance/1` straight, which left the one request an
+  # authenticated caller can aim at any host bounded only by the generic
+  # 5,000/hour token budget.
+  defp before_write(changeset, conn),
+    do: ControllerHelpers.verify_forge_instance(changeset, conn, conn.assigns.current_user)
 
   # The associations a section's doc map renders (SectionDocs.work_entry/1
   # falls back to nil on an unloaded association, which would silently drop
