@@ -18,6 +18,7 @@ defmodule VutuvWeb.AgentDocs.PostDoc do
   alias Vutuv.Fediverse.RemoteAccount
   alias Vutuv.Fediverse.RemoteImage
   alias Vutuv.Fediverse.RemotePost
+  alias Vutuv.Moderation.ImageScans
   alias Vutuv.Organizations.Organization
   alias Vutuv.Posts
   alias Vutuv.Posts.PhotoLicense
@@ -315,10 +316,24 @@ defmodule VutuvWeb.AgentDocs.PostDoc do
       author: UserHelpers.author_name(post),
       published_on: post.published_on,
       excerpt: PostTeaser.line(post),
+      # Same reason as the remote clause above (issue #1163), pointed the other
+      # way: a vutuv post can be a photograph and nothing else, its body is then
+      # genuinely empty and `PostTeaser.line/1` answers "" — so the HTML archive
+      # rendered the photos and every agent format showed an entry with no
+      # content at all. Only released images count, exactly as on the page.
+      pictures: picture_count(post),
       reposted_by: entry[:reposted_by] && UserHelpers.author_name(entry[:reposted_by]),
       reposters: Enum.map(reposters, &UserHelpers.author_name/1)
     }
   end
+
+  # An unloaded association answers 0 rather than raising: not every caller of
+  # `timeline_entry/1` preloads images, and a missing count is a smaller wrong
+  # answer than a 500.
+  defp picture_count(%Post{images: images}) when is_list(images),
+    do: Enum.count(images, &ImageScans.released?(&1.moderation))
+
+  defp picture_count(_post), do: 0
 
   # The conversation entries, in `Posts.list_thread/3` reading order.
   # `in_reply_to_author` resolves only inside the thread (a deleted or

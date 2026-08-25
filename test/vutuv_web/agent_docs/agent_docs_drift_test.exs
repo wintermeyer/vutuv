@@ -216,6 +216,26 @@ defmodule VutuvWeb.AgentDocsDriftTest do
     end
   end
 
+  # A vutuv post can be a photograph and nothing else (`posts/post.ex` allows an
+  # empty body), and `PostTeaser.line/1` answers "" for it — so the archive
+  # entry was blank. The clause for a post from another network solved exactly
+  # this and wrote down why (issue #1163); the vutuv clause beside it did not,
+  # so the same asymmetry pointed the other way: the HTML archive rendered the
+  # photos and every agent format read an entry with no content at all.
+  test "archive: a wordless photo post says it carries a picture", %{user: user} do
+    # Straight through the factory: `create_post/2` refuses an empty body unless
+    # it is handed the images in the same call, and what is under test here is
+    # the *rendering* of a post that already exists in that shape.
+    post = insert(:post, user: user, body: "")
+
+    insert(:post_image, post: post)
+
+    for {format, body} <- formats_for("/drift_tester/posts"), format in [:md, :txt] do
+      assert body =~ "picture",
+             "the #{format} archive renders a wordless photo post as an empty line"
+    end
+  end
+
   test "profile: every public fact appears in HTML, Markdown, text and JSON",
        %{user: user, tag: tag} do
     rendered = formats_for("/drift_tester")
