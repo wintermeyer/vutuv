@@ -29,6 +29,40 @@ does not serve. So the one clickable thing in a sentence naming a member 404ed
 on our own domain, being named that way notified nobody, and a rename left the
 address behind pointing at a handle its owner had given up.
 
+## Which form is shown where
+
+Both spellings mean the same account, and each is right exactly where it was
+written. On a vutuv page the reader is already on the host the address names, so
+writing it out says nothing; on mastodon.social a bare `@ada` names *their*
+member of that name, who is somebody else entirely. So neither spelling is
+stored — the form is chosen at render time, per surface:
+
+| Surface | `@ada` becomes | `@ada@vutuv.de` becomes |
+|---|---|---|
+| a vutuv page, a plain-text quote, the tab teaser | `@ada` | `@ada` |
+| the Note that federates the post | `@ada@vutuv.de` | `@ada@vutuv.de` |
+
+`VutuvWeb.Markdown` shortens by default (`mention_form: :local`) and spells out
+for `VutuvWeb.Fediverse.Docs`, which passes `mention_form: :address`; the
+surfaces that flatten a body to text instead of rendering it go through
+`Mentions.to_local_form/1`. Only resolved accounts are expanded, because only
+they are accounts — a stray `@word` is left as written, and an address nobody
+holds is shortened without becoming a link.
+
+The stored body keeps whatever was typed, so the same row reads correctly in
+both places and a member who wrote one form never finds the other saved over it.
+It is still shown verbatim in one place, deliberately: `body_markdown` in the
+agent-format siblings is the post's Markdown source, not a rendering of it.
+
+The outgoing Note also carries a `Mention` **tag** per account of ours the body
+names — actor URI plus `@handle@host` — which is what makes the receiving server
+resolve the account and draw a mention rather than a bare link. Minting one from
+typed text is safe *here only*, because every handle is resolved against our own
+tables; an address on somebody else's server is nobody we have checked, so it is
+left to the reader's own server (see [fediverse.md](fediverse.md)). An account
+that keeps out of the Fediverse serves no actor document, so it is named in the
+text and left out of the tags.
+
 ## The mention surfaces
 
 Every field whose stored `@handle` linkifies is one `{schema, field}` entry in
@@ -207,7 +241,8 @@ posts (the newest five, plus an "and N more" count).
 - `lib/vutuv_web/live/notification_live/index.ex` — the `mention` and
   `handle_change` renderings.
 - `test/vutuv/mentions_test.exs`, `mentions_local_address_test.exs`,
-  `vutuv_web/markdown_local_address_test.exs`, `mention_existence_test.exs`,
+  `vutuv_web/markdown_local_address_test.exs`, `vutuv_web/mention_form_test.exs`,
+  `mention_existence_test.exs`,
   `mention_limit_test.exs`,
   `mention_notifications_test.exs`, `handle_availability_test.exs`,
   `accounts/handle_change_propagation_test.exs`,

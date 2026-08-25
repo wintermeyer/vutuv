@@ -85,7 +85,7 @@ defmodule VutuvWeb.Markdown do
   # points; handles/tags match permissively and are validated against the
   # DB by `linkify_entities/1`. Captures: 1 = fediverse user, 2 = fediverse
   # host, 3 = local handle, 4 = hashtag (exactly one kind is set per hit).
-  @entity Vutuv.Mentions.entity_regex()
+  @entity Mentions.entity_regex()
 
   # Inside these elements an entity is left as plain text (a handle/hashtag in a
   # code span/block is sample text, and we never nest a link inside a link).
@@ -127,6 +127,12 @@ defmodule VutuvWeb.Markdown do
   also what an installation with `:verify_user_links` off gets: no member
   has a verified link there, so the list is always empty.
 
+  `:mention_form` (opts) picks how a mention of one of our own accounts is
+  **written**: `:local` (the default) shortens an address on our host to the
+  bare handle, `:address` spells a bare handle out in full. Neither touches the
+  stored body — see `Vutuv.Mentions.to_local_form/1` for why each environment
+  wants the other one.
+
   `:image_query` (opts) is a `(image -> query | nil)` appended to each inline
   picture's URL, for a caller serving this HTML where the reader brings no
   session: the Mastodon adapter passes the same `VutuvWeb.RemoteMediaToken`
@@ -146,7 +152,7 @@ defmodule VutuvWeb.Markdown do
     |> render_pipeline(breaks: false)
     |> open_links_in_new_tab()
     |> mark_verified_author_links(Keyword.get(opts, :verified_links, []))
-    |> linkify_entities()
+    |> linkify_entities(:all, Keyword.get(opts, :mention_form, :local))
     |> inject_inline_images(replacements)
     |> Phoenix.HTML.raw()
   end
@@ -439,10 +445,14 @@ defmodule VutuvWeb.Markdown do
   markers disappear instead of being shown (`**bold**` reads as `bold`), a
   link keeps its label, and blocks become plain line breaks.
 
-  Entities are **not** linkified, so this costs no DB query.
+  Entities are **not** linkified, so this costs no DB query. An address on our
+  own host is still shortened to the bare handle
+  (`Vutuv.Mentions.to_local_form/1`), the same as in the rendered body: these
+  are the surfaces that quote a post *inside* vutuv, and a tab title has less
+  room for a host than anything else on the site.
   """
   def to_plain_text(text) when is_binary(text) do
-    text |> render_pipeline() |> html_to_plain_text()
+    text |> Mentions.to_local_form() |> render_pipeline() |> html_to_plain_text()
   end
 
   def to_plain_text(_), do: ""
@@ -974,17 +984,17 @@ defmodule VutuvWeb.Markdown do
   # Each body resolves its handles and its hashtags in **one** DB query each;
   # a body with no `@`/`#` at all does no work (so the pure, DB-free unit tests
   # in `markdown_test.exs` keep working without a sandbox).
-  defp linkify_entities(html, mode \\ :all) do
+  defp linkify_entities(html, mode \\ :all, form \\ :local) do
     # Cheap bail-out for the common case: no `@`/`#` means no entity to link,
     # so the feed hot path skips tokenizing and scanning entirely.
     if String.contains?(html, "@") or String.contains?(html, "#") do
-      linkify_present_entities(html, mode)
+      linkify_present_entities(html, mode, form)
     else
       html
     end
   end
 
-  defp linkify_present_entities(html, mode) do
+  defp linkify_present_entities(html, mode, form) do
     tokens = tokenize_html(html)
 
     case entity_candidates(tokens) do
@@ -1007,7 +1017,7 @@ defmodule VutuvWeb.Markdown do
         tags = Tags.linkable_slugs(hashtags)
 
         tokens
-        |> map_linkable_text(&link_entities_in_text(&1, bare_users, targets, tags))
+        |> map_linkable_text(&link_entities_in_text(&1, bare_users, targets, tags, form))
         |> IO.iodata_to_binary()
     end
   end
@@ -1102,10 +1112,10 @@ defmodule VutuvWeb.Markdown do
 
   defp skip_tag?(name), do: String.downcase(name) in @entity_skip_tags
 
-  defp link_entities_in_text(text, bare_users, address_users, tags) do
+  defp link_entities_in_text(text, bare_users, address_users, tags, form) do
     Regex.replace(@entity, text, fn
-      whole, user, host, "", "" -> fediverse_link(whole, user, host, address_users, tags)
-      whole, "", "", handle, "" -> mention_link(whole, handle, bare_users)
+      whole, user, host, "", "" -> fediverse_link(whole, user, host, address_users, tags, form)
+      whole, "", "", handle, "" -> mention_link(whole, handle, bare_users, form)
       whole, "", "", "", hashtag -> hashtag_link(whole, hashtag, tags)
     end)
   end
@@ -1114,10 +1124,10 @@ defmodule VutuvWeb.Markdown do
   # account — but two of our own hosts wear the same shape, and for both the
   # reader wants a page here rather than a trip to another server: our tag host
   # names a topic, and our main host names a member or a page of ours.
-  defp fediverse_link(whole, user, host, users, tags) do
+  defp fediverse_link(whole, user, host, users, tags, form) do
     cond do
       Fediverse.tag_host?(host) -> tag_actor_link(whole, user, tags)
-      Fediverse.local_host?(host) -> local_address_link(whole, user, host, users)
+      Fediverse.local_host?(host) -> local_address_link(whole, user, host, users, form)
       true -> remote_actor_link(user, host)
     end
   end
@@ -1129,13 +1139,21 @@ defmodule VutuvWeb.Markdown do
   # that is not Mastodon: that path is not a page vutuv serves, so the one
   # clickable thing in a sentence naming a member 404ed on our own domain.
   #
-  # The **address stays the visible text**: the author wrote it in full so a
-  # reader on another network can copy it, and shortening it to `@ada` would
-  # take that away. An unresolved handle stays plain text, like a bare mention.
-  defp local_address_link(whole, user, host, users) do
-    case Map.get(users, String.downcase(user)) do
-      nil -> whole
-      target -> mention_anchor(target, "#{user}@#{host}")
+  # On the site the address is **shortened to the handle**: the reader is
+  # already on the host it names, so `@ada@vutuv.de` and `@ada` are the same
+  # person written long and short, and the long one only pushes the sentence
+  # around. The stored body keeps whatever was typed — a post arriving from
+  # another server names us in full, and this is what makes it read like one of
+  # ours. `mention_form: :address` (the outgoing Note) keeps it whole instead,
+  # because over there the short form names somebody else. An unresolved handle
+  # stays plain text, like a bare mention, and is shortened the same way: a
+  # handle nobody holds reads no better for being spelled out.
+  defp local_address_link(whole, user, host, users, form) do
+    case {Map.get(users, String.downcase(user)), form} do
+      {nil, :local} -> "@" <> user
+      {nil, :address} -> whole
+      {target, :local} -> mention_anchor(target, user)
+      {target, :address} -> mention_anchor(target, "#{user}@#{host}")
     end
   end
 
@@ -1174,12 +1192,21 @@ defmodule VutuvWeb.Markdown do
     ~s(<a href="#{href}" target="_blank" rel="noopener noreferrer" class="mention">@#{user}@#{host}</a>)
   end
 
-  defp mention_link(whole, handle, users) do
+  # A bare `@ada` is the everyday spelling here and the wrong one everywhere
+  # else: on the server this post is federated to, `@ada` names *their* member
+  # of that name. So `mention_form: :address` writes it out as `@ada@vutuv.de`,
+  # which is the same account under a name that means the same thing on every
+  # server. Only a handle that resolves is expanded — a stray `@word` is not an
+  # account here, and inventing an address for it would name one.
+  defp mention_link(whole, handle, users, form) do
     case Map.get(users, String.downcase(handle)) do
       nil -> whole
-      target -> mention_anchor(target, handle)
+      target -> mention_anchor(target, mention_label(handle, form))
     end
   end
+
+  defp mention_label(handle, :local), do: handle
+  defp mention_label(handle, :address), do: handle <> "@" <> VutuvWeb.Endpoint.host()
 
   # Members and organizations share one handle namespace (the `handles`
   # registry, issue #941), so a handle belongs to at most one of them and the

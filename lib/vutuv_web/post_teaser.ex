@@ -65,6 +65,7 @@ defmodule VutuvWeb.PostTeaser do
   alias Vutuv.Fediverse.Handle
   alias Vutuv.Fediverse.RemoteAccount
   alias Vutuv.Identity
+  alias Vutuv.Mentions
   alias Vutuv.Posts
   alias Vutuv.Posts.Post
   alias VutuvWeb.Markdown
@@ -300,7 +301,18 @@ defmodule VutuvWeb.PostTeaser do
 
   defp flatten(line), do: line |> Markdown.to_plain_text() |> fold()
 
-  defp fold(line), do: line |> String.replace(~r/\s+/u, " ") |> String.trim()
+  # A mention of one of our accounts reads short here, as it does in the post
+  # itself: `to_local_form/1` turns `@ada@vutuv.de` back into `@ada`. Every
+  # teaser passes through this step, which is what makes a body from another
+  # network — where naming us in full is the only spelling there is — read like
+  # one of ours. A local body arrives already shortened through
+  # `to_plain_text/1` and has nothing left to change.
+  defp fold(line) do
+    line
+    |> Mentions.to_local_form()
+    |> String.replace(~r/\s+/u, " ")
+    |> String.trim()
+  end
 
   # A page that never claimed a root handle has none to show, so it is named.
   defp local_who(author) do

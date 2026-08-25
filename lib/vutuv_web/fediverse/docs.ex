@@ -25,6 +25,7 @@ defmodule VutuvWeb.Fediverse.Docs do
   alias Vutuv.Accounts.User
   alias Vutuv.Fediverse.Actor
   alias Vutuv.Mentions
+  alias Vutuv.Organizations
   alias Vutuv.Organizations.Organization
   alias Vutuv.Posts
   alias Vutuv.Posts.Post
@@ -718,7 +719,7 @@ defmodule VutuvWeb.Fediverse.Docs do
     }
     |> put_content_map(post)
     |> put_in_reply_to(post, remote)
-    |> put_tag(remote, hashtags)
+    |> put_tag(post, remote, hashtags)
     |> put_attachments(post)
   end
 
@@ -757,11 +758,47 @@ defmodule VutuvWeb.Fediverse.Docs do
   #
   # It shares the array with the post's hashtags (issue #1421), so both are
   # written here rather than each overwriting the other's key.
-  defp put_tag(note, remote, hashtags) do
-    case mention_tag(remote) ++ Enum.map(hashtags, &hashtag_tag/1) do
+  defp put_tag(note, post, remote, hashtags) do
+    case mention_tag(remote) ++ local_mention_tags(post) ++ Enum.map(hashtags, &hashtag_tag/1) do
       [] -> note
       tags -> Map.put(note, "tag", tags)
     end
+  end
+
+  # The accounts of **ours** the body names. The other half of writing the
+  # mention out in full: the text tells a reader who is meant, this tells their
+  # server, which resolves the `href` and only then draws the name as a mention
+  # and links it to the account rather than to a bare URL.
+  #
+  # Parsing the body is safe **here and only here**, which is what separates it
+  # from the rule above: every handle is resolved against our own tables, so the
+  # actor it points at is one this installation serves and vouching for it costs
+  # nothing. A `@someone@anywhere` in the same sentence is left to the reader's
+  # server, exactly as before.
+  #
+  # Gated on `federated?/1`: an account that keeps out of the Fediverse serves no
+  # actor document, and naming one would send every receiving server after a
+  # 404. The **text** still spells it out — the address is who is meant whether
+  # or not they federate, and it links to the profile page either way.
+  defp local_mention_tags(%Post{body: body}) when is_binary(body) do
+    (Mentions.mentioned_users(body) ++ mentioned_pages(body))
+    |> Enum.filter(&Vutuv.Fediverse.federated?/1)
+    |> Enum.map(&%{"type" => "Mention", "href" => actor_url(&1), "name" => handle(&1)})
+  end
+
+  defp local_mention_tags(_post), do: []
+
+  # `mentioned_organizations/1` answers with the four columns the *renderer*
+  # needs (id, name, slug, username), and `federated?/1` asks about two it does
+  # not carry — a partial struct answers from the schema default, which reads as
+  # "this page keeps out of the Fediverse" for every page there is, silently and
+  # for good. So the ids are read back in full, in one more query on a path that
+  # runs once per published post.
+  defp mentioned_pages(body) do
+    body
+    |> Mentions.mentioned_organizations()
+    |> Enum.map(& &1.id)
+    |> Organizations.list_organizations_by_ids()
   end
 
   defp mention_tag(nil), do: []
@@ -880,14 +917,18 @@ defmodule VutuvWeb.Fediverse.Docs do
   end
 
   # The same rendering members see, with every relative link/image made
-  # absolute (remote servers render this HTML on their own domain). A review
+  # absolute (remote servers render this HTML on their own domain) and every
+  # mention of one of our accounts written out in full: on vutuv a member writes
+  # `@ada`, but on the server this lands on that names *their* @ada, so the wire
+  # spells it `@ada@vutuv.de` (`mention_form: :address`). Nothing about the
+  # stored body changes — the same post reads `@ada` again on the page. A review
   # sidecar is rendered INTO the content: the Note is one more rendering of
   # the post (like the agent docs), so a Mastodon reader gets the reviewed
   # work's facts even though remote software knows nothing of review cards.
   defp content_html(post, remote, hashtags) do
     body_html =
       post.body
-      |> VutuvWeb.Markdown.render_post(images(post))
+      |> VutuvWeb.Markdown.render_post(images(post), mention_form: :address)
       |> Phoenix.HTML.safe_to_string()
 
     (mention_html(remote) <>

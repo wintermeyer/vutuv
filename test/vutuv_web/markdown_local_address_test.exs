@@ -4,10 +4,14 @@ defmodule VutuvWeb.MarkdownLocalAddressTest do
 
   `@ada@vutuv.de` is the member `@ada` written out in full — the spelling every
   other server uses to name one of us — so it links to the profile, in the same
-  tab, keeping the address as its visible text. It used to be sent through the
+  tab, and reads there as the short `@ada` a member would have typed: the reader
+  is already on the host the address names. It used to be sent through the
   Mastodon-web convention `https://<host>/@<user>`, a path vutuv does not serve,
   so the one clickable thing in a sentence naming a member 404ed on our own
   domain and opened in a second tab to do it.
+
+  The mirror image — an outgoing Note spelling `@ada` out in full — lives in
+  `mention_form_test.exs`.
 
   `async: false` and its own file because `with_endpoint_host/1` changes global
   endpoint config the SQL sandbox does not roll back; the test endpoint's
@@ -33,13 +37,14 @@ defmodule VutuvWeb.MarkdownLocalAddressTest do
     handle
   end
 
-  test "an address on our host links to the profile, same tab, address intact" do
+  test "an address on our host links to the profile, same tab, short label" do
     handle = ada()
     html = render("Thanks @#{handle}@vutuv.test for the help!")
 
     assert html =~ ~s(href="/#{handle}")
     assert html =~ ~s(title="Ada Lovelace")
-    assert html =~ ">@#{handle}@vutuv.test</a>"
+    assert html =~ ">@#{handle}</a>"
+    refute html =~ "vutuv.test</a>"
     refute html =~ "target=\"_blank\""
     refute html =~ "vutuv.test/@"
   end
@@ -49,7 +54,7 @@ defmodule VutuvWeb.MarkdownLocalAddressTest do
     html = render("cc @#{handle}@www.vutuv.test")
 
     assert html =~ ~s(href="/#{handle}")
-    assert html =~ ">@#{handle}@www.vutuv.test</a>"
+    assert html =~ ">@#{handle}</a>"
   end
 
   test "an organization on our host links to its page" do
@@ -61,11 +66,14 @@ defmodule VutuvWeb.MarkdownLocalAddressTest do
     assert html =~ ~s(title="Acme GmbH")
   end
 
+  # Not linked, because nobody holds it — but still shortened: a handle of ours
+  # that leads nowhere reads no better for being spelled out.
   test "an address of a handle nobody holds stays plain text" do
     html = render("hi @nobody_here@vutuv.test")
 
     refute html =~ "<a"
-    assert html =~ "@nobody_here@vutuv.test"
+    assert html =~ "@nobody_here"
+    refute html =~ "vutuv.test"
   end
 
   test "an address on another server still leaves the site" do
@@ -89,9 +97,11 @@ defmodule VutuvWeb.MarkdownLocalAddressTest do
     handle = ada()
     html = Markdown.render_remote("hallo @#{handle}@vutuv.test und @#{handle}")
 
-    assert html =~ ~s(href="/#{handle}")
-    assert html =~ ">@#{handle}@vutuv.test</a>"
-    refute html =~ ">@#{handle}</a>"
+    # One anchor: the address. The bare handle beside it stays plain text, and
+    # the address reads short, the way the same person is named in a vutuv post.
+    assert [_one] = Regex.scan(~r/<a /, html)
+    assert html =~ ~s(<a href="/#{handle}" title="Ada Lovelace" class="mention">@#{handle}</a>)
+    assert String.ends_with?(html, "und @#{handle}</p>\n")
   end
 
   test "our own profile link in remote content is not nofollowed" do

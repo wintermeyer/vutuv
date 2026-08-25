@@ -4,7 +4,7 @@ defmodule Vutuv.Mentions do
 
   A mention is plain text `@handle` inside a Markdown body — nothing structured
   is stored, it becomes a profile link only at render time
-  (`VutuvWeb.Markdown`). Four concerns therefore have to agree on *what counts
+  (`VutuvWeb.Markdown`). Five concerns therefore have to agree on *what counts
   as a mention*, so they share one definition here:
 
     * **Rendering** — `VutuvWeb.Markdown` links each local `@handle` and calls
@@ -23,6 +23,11 @@ defmodule Vutuv.Mentions do
       (`validate_mention_limit/2`), because every one of them is a
       notification: an advert followed by a list of handles is spam delivered
       through our own notification feed.
+    * **Display** — the same account is `@ada` here and `@ada@vutuv.de` on every
+      other server, so which spelling is shown is decided per surface at render
+      time and never stored: `to_local_form/1` (and `VutuvWeb.Markdown`'s
+      default) shortens for vutuv, `mention_form: :address` spells out for the
+      Note that federates the post.
     * **Propagation** — when a member renames, every stored `@old` is rewritten
       to `@new` across all mention surfaces (`rewrite_everywhere/3`), and the
       new handle is only claimable when it is used in no content
@@ -271,6 +276,48 @@ defmodule Vutuv.Mentions do
       handles -> handles |> Organizations.get_organizations_by_usernames() |> Map.values()
     end
   end
+
+  ## Display form ----------------------------------------------------------
+
+  @doc """
+  `text` with every address on **our own** host shortened to the bare handle:
+  `@ada@vutuv.de` reads `@ada`.
+
+  Each environment gets the spelling that is right for it, and nothing is
+  stored either way. Here the reader is already on the host the address names,
+  so writing it out says nothing and only pushes the sentence around — a member
+  writes `@ada` and a remote server writes `@ada@vutuv.de` for the same person,
+  and both should read as `@ada` on this page. The Fediverse is the mirror
+  image: `VutuvWeb.Fediverse.Docs` renders an outgoing Note with
+  `mention_form: :address`, because over there a bare `@ada` names an account on
+  the *reader's* server — somebody else entirely.
+
+  This is the plain-text half, for the surfaces that flatten a body instead of
+  rendering it (`VutuvWeb.Markdown.to_plain_text/1`: the tab teaser, the
+  notification quote lines). The HTML renderer does the same shortening
+  structurally, so there the link survives and only its label changes.
+
+  Another server's address is somebody else's account and stays whole, our tag
+  host names a topic (`@php@tags.vutuv.de`) and stays whole too, and a code span
+  or block is sample text — the same three exceptions the rest of this module
+  makes. Free of queries by design: whether the handle exists is not asked, so a
+  body naming a departed member reads `@ada` here exactly as a bare mention of
+  them would.
+  """
+  def to_local_form(text) when is_binary(text) do
+    if String.contains?(text, "@") do
+      text
+      |> chunks()
+      |> Enum.map_join(fn
+        {:code, chunk} -> chunk
+        {:text, chunk} -> shorten_addresses(chunk)
+      end)
+    else
+      text
+    end
+  end
+
+  def to_local_form(text), do: text
 
   ## Rewrite ----------------------------------------------------------------
 
@@ -572,6 +619,18 @@ defmodule Vutuv.Mentions do
 
   defp hashtag_of([_, _, _, hashtag]) when hashtag != "", do: [hashtag]
   defp hashtag_of(_), do: []
+
+  # Only the fediverse form on our own host has anything to shorten; a bare
+  # handle, a hashtag and every other host fall through as written.
+  defp shorten_addresses(chunk) do
+    Regex.replace(@entity, chunk, fn
+      whole, user, host, "", "" ->
+        if user != "" and Fediverse.local_host?(host), do: "@" <> user, else: whole
+
+      whole, _user, _host, _handle, _hashtag ->
+        whole
+    end)
+  end
 
   defp rewrite_chunk(chunk, old_n, new_n, acc) do
     hits =
