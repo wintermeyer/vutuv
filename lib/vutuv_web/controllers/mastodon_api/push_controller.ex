@@ -13,6 +13,8 @@ defmodule VutuvWeb.MastodonApi.PushController do
 
   use VutuvWeb, :controller
 
+  import VutuvWeb.MastodonApi.Errors
+
   import Ecto.Query, only: [where: 3]
 
   alias Vutuv.MastodonApi.PushSubscription
@@ -105,19 +107,5 @@ defmodule VutuvWeb.MastodonApi.PushController do
       server_key: WebPush.public_key(),
       policy: "all"
     }
-  end
-
-  defp validation_error(conn, changeset) do
-    detail =
-      changeset
-      |> Ecto.Changeset.traverse_errors(fn {message, _opts} -> message end)
-      |> Enum.flat_map(fn {field, messages} -> Enum.map(messages, &"#{field} #{&1}") end)
-      |> Enum.join(", ")
-
-    error(conn, 422, "Validation failed: " <> detail)
-  end
-
-  defp error(conn, status, message) do
-    conn |> put_status(status) |> json(%{error: message})
   end
 end

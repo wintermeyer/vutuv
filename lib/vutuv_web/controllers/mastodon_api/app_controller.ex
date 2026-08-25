@@ -3,7 +3,8 @@ defmodule VutuvWeb.MastodonApi.AppController do
 
   use VutuvWeb, :controller
 
-  alias Ecto.Changeset
+  import VutuvWeb.MastodonApi.Errors
+
   alias Vutuv.ApiAuth
   alias Vutuv.ApiAuth.App
   alias Vutuv.ApiAuth.OAuth
@@ -23,7 +24,7 @@ defmodule VutuvWeb.MastodonApi.AppController do
       json(conn, credential_application(app, secret))
     else
       {:error, :rate_limited} ->
-        conn |> put_status(429) |> json(%{error: "Too many application registrations"})
+        error(conn, 429, "Too many application registrations")
 
       {:error, :invalid_scope} ->
         validation_error(conn, "Scopes are invalid.")
@@ -56,7 +57,7 @@ defmodule VutuvWeb.MastodonApi.AppController do
   def verify_credentials(conn, _params) do
     case resolve_app(MastodonApiAuth.bearer_token(conn)) do
       %App{} = app -> json(conn, application(app))
-      nil -> conn |> put_status(401) |> json(%{error: "The access token is invalid"})
+      nil -> error(conn, 401, "The access token is invalid")
     end
   end
 
@@ -131,16 +132,5 @@ defmodule VutuvWeb.MastodonApi.AppController do
       client_secret: secret,
       client_secret_expires_at: 0
     }
-  end
-
-  defp validation_error(conn, message) do
-    conn |> put_status(422) |> json(%{error: "Validation failed: " <> message})
-  end
-
-  defp changeset_error(changeset) do
-    changeset
-    |> Changeset.traverse_errors(fn {message, _opts} -> message end)
-    |> Enum.flat_map(fn {field, messages} -> Enum.map(messages, &"#{field} #{&1}") end)
-    |> Enum.join(", ")
   end
 end

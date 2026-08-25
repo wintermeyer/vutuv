@@ -20,6 +20,8 @@ defmodule VutuvWeb.MastodonApi.TagController do
 
   use VutuvWeb, :controller
 
+  import VutuvWeb.MastodonApi.Errors
+
   alias Vutuv.MastodonApi.Presenter
   alias Vutuv.Organizations.Organization
   alias Vutuv.Tags
@@ -120,9 +122,4 @@ defmodule VutuvWeb.MastodonApi.TagController do
   # says whether this member already follows the topic.
   defp following?(%{assigns: %{current_organization: %Organization{}}}, _tag), do: false
   defp following?(conn, tag), do: Tags.tag_followed?(conn.assigns.current_user, tag)
-
-  defp not_found(conn), do: conn |> put_status(404) |> json(%{error: "Record not found"})
-
-  defp unsupported(conn),
-    do: conn |> put_status(422) |> json(%{error: "This identity cannot perform that action"})
 end

@@ -3,6 +3,8 @@ defmodule VutuvWeb.MastodonApi.AccountController do
 
   use VutuvWeb, :controller
 
+  import VutuvWeb.MastodonApi.Errors
+
   alias Vutuv.Accounts
   alias Vutuv.Accounts.User
   alias Vutuv.Fediverse
@@ -496,15 +498,13 @@ defmodule VutuvWeb.MastodonApi.AccountController do
   defp organization_viewer(_conn, _organization), do: nil
 
   defp action_error(conn, :not_following),
-    do: conn |> put_status(422) |> json(%{error: "The account is not followed"})
+    do: error(conn, 422, "The account is not followed")
 
   defp action_error(conn, :unsupported),
-    do: conn |> put_status(422) |> json(%{error: "This identity cannot perform that action"})
+    do: unsupported(conn)
 
   defp action_error(conn, _reason),
-    do: conn |> put_status(422) |> json(%{error: "The relationship could not be changed"})
-
-  defp not_found(conn), do: conn |> put_status(404) |> json(%{error: "Record not found"})
+    do: error(conn, 422, "The relationship could not be changed")
 
   # Accounts and statuses from another network are rendered with a prefixed id
   # (`remote-<uuid>`); the uuid underneath is what carries the ordering, so it

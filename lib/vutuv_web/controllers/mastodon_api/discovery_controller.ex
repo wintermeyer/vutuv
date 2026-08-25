@@ -18,6 +18,7 @@ defmodule VutuvWeb.MastodonApi.DiscoveryController do
   alias Vutuv.Posts.Post
   alias Vutuv.SourceRepo
   alias Vutuv.Uploads.Spec
+  alias VutuvWeb.MastodonApi.Errors
 
   def instance_v2(conn, _params) do
     usage = NodeInfo.usage()
@@ -120,9 +121,7 @@ defmodule VutuvWeb.MastodonApi.DiscoveryController do
   `POST /api/v1/markers`) handed the client a page of markup where it expected
   an object. That is not a missing feature to a client, it is a broken server.
   """
-  def not_found(conn, _params) do
-    conn |> put_status(404) |> json(%{error: "Record not found"})
-  end
+  def not_found(conn, _params), do: Errors.not_found(conn)
 
   # The MIME types the post-image uploader really accepts, from its own
   # extension whitelist, so this cannot drift from what an upload does.

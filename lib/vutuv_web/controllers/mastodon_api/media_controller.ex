@@ -25,6 +25,8 @@ defmodule VutuvWeb.MastodonApi.MediaController do
 
   use VutuvWeb, :controller
 
+  import VutuvWeb.MastodonApi.Errors
+
   import Ecto.Query, only: [where: 3]
 
   alias Vutuv.MastodonApi.Presenter
@@ -107,12 +109,10 @@ defmodule VutuvWeb.MastodonApi.MediaController do
       |> json(Presenter.media_attachment(image, conn.assigns.current_user))
     else
       {:error, :rate_limited} ->
-        conn |> put_status(429) |> json(%{error: "Too many uploads"})
+        error(conn, 429, "Too many uploads")
 
       {:error, :too_large} ->
-        conn
-        |> put_status(413)
-        |> json(%{error: "File exceeds #{Posts.max_image_filesize()} bytes"})
+        error(conn, 413, "File exceeds #{Posts.max_image_filesize()} bytes")
 
       {:error, _invalid} ->
         validation_error(conn, "Send #{accepted_types()} in the \"file\" field.")
@@ -172,10 +172,4 @@ defmodule VutuvWeb.MastodonApi.MediaController do
       :rate_limited -> {:error, :rate_limited}
     end
   end
-
-  defp validation_error(conn, message) do
-    conn |> put_status(422) |> json(%{error: "Validation failed: " <> message})
-  end
-
-  defp not_found(conn), do: conn |> put_status(404) |> json(%{error: "Record not found"})
 end

@@ -17,6 +17,8 @@ defmodule VutuvWeb.MastodonApi.ListController do
 
   use VutuvWeb, :controller
 
+  import VutuvWeb.MastodonApi.Errors
+
   import Ecto.Query, only: [from: 2]
 
   alias Vutuv.Accounts
@@ -93,7 +95,7 @@ defmodule VutuvWeb.MastodonApi.ListController do
 
     case Statuses.visible(conn, id) do
       nil ->
-        conn |> put_status(404) |> json(%{error: "Record not found"})
+        not_found(conn)
 
       %Post{} = post ->
         accounts =

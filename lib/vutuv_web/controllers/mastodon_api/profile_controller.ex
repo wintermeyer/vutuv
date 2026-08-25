@@ -18,6 +18,8 @@ defmodule VutuvWeb.MastodonApi.ProfileController do
 
   use VutuvWeb, :controller
 
+  import VutuvWeb.MastodonApi.Errors
+
   alias Vutuv.Accounts
   alias Vutuv.Accounts.User
   alias Vutuv.MastodonApi.Presenter
@@ -35,9 +37,7 @@ defmodule VutuvWeb.MastodonApi.ProfileController do
         json(conn, Presenter.account(updated))
 
       {:error, changeset} ->
-        conn
-        |> put_status(422)
-        |> json(%{error: "Validation failed: " <> changeset_error(changeset)})
+        validation_error(conn, changeset)
     end
   end
 
@@ -68,11 +68,8 @@ defmodule VutuvWeb.MastodonApi.ProfileController do
       {:error, :already_reported} ->
         error(conn, 422, "You have already reported this.")
 
-      {:error, :not_allowed} ->
-        error(conn, 404, "Record not found")
-
-      {:error, :not_found} ->
-        error(conn, 404, "Record not found")
+      {:error, reason} when reason in [:not_allowed, :not_found] ->
+        not_found(conn)
 
       {:error, _changeset} ->
         error(conn, 422, "The report could not be filed.")
@@ -144,15 +141,4 @@ defmodule VutuvWeb.MastodonApi.ProfileController do
 
   defp put_headline(attrs, value) when is_binary(value), do: Map.put(attrs, "headline", value)
   defp put_headline(attrs, _absent), do: attrs
-
-  defp error(conn, status, message) do
-    conn |> put_status(status) |> json(%{error: message})
-  end
-
-  defp changeset_error(changeset) do
-    changeset
-    |> Ecto.Changeset.traverse_errors(fn {message, _opts} -> message end)
-    |> Enum.flat_map(fn {field, messages} -> Enum.map(messages, &"#{field} #{&1}") end)
-    |> Enum.join(", ")
-  end
 end

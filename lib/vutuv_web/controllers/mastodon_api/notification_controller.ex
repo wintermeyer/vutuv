@@ -24,6 +24,8 @@ defmodule VutuvWeb.MastodonApi.NotificationController do
 
   use VutuvWeb, :controller
 
+  import VutuvWeb.MastodonApi.Errors
+
   alias Vutuv.Activity
   alias Vutuv.MastodonApi.Notifications
   alias Vutuv.MastodonApi.Presenter
@@ -233,8 +235,6 @@ defmodule VutuvWeb.MastodonApi.NotificationController do
   # Derived items cannot be deleted one at a time; answering 200 keeps a client
   # that swipes a row from treating it as a failure.
   def dismiss(conn, _params), do: json(conn, %{})
-
-  defp not_found(conn), do: conn |> put_status(404) |> json(%{error: "Record not found"})
 
   defp load(conn, page) do
     conn.assigns.current_user.id

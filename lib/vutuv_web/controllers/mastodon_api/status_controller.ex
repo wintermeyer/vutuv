@@ -3,6 +3,8 @@ defmodule VutuvWeb.MastodonApi.StatusController do
 
   use VutuvWeb, :controller
 
+  import VutuvWeb.MastodonApi.Errors
+
   alias Ecto.Changeset
   alias Vutuv.Fediverse
   alias Vutuv.Fediverse.Note
@@ -410,7 +412,7 @@ defmodule VutuvWeb.MastodonApi.StatusController do
 
   defp action_error(:self), do: "You cannot favourite your own status."
   defp action_error(:restricted), do: "This status cannot be reblogged."
-  defp action_error(:unsupported), do: "This identity cannot perform that action."
+  defp action_error(:unsupported), do: unsupported_identity()
   defp action_error(:not_found), do: "The referenced status no longer exists."
 
   # **A refusal a member can act on has to say what to do**, and every reason a
@@ -638,18 +640,4 @@ defmodule VutuvWeb.MastodonApi.StatusController do
     do: Enum.map(media_ids, &to_string/1)
 
   defp edited_image_ids(media_id, post), do: edited_image_ids([media_id], post)
-
-  defp validation_error(conn, message) do
-    conn |> put_status(422) |> json(%{error: "Validation failed: " <> message})
-  end
-
-  defp changeset_error(%Changeset{} = changeset) do
-    changeset
-    |> Changeset.traverse_errors(fn {message, _opts} -> message end)
-    |> Enum.flat_map(fn {field, messages} -> Enum.map(messages, &"#{field} #{&1}") end)
-    |> Enum.join(", ")
-  end
-
-  defp changeset_error(_other), do: "The status is invalid."
-  defp not_found(conn), do: conn |> put_status(404) |> json(%{error: "Record not found"})
 end
