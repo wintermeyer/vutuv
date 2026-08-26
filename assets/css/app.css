@@ -58,10 +58,22 @@ html {
    sign-up form. Measured when it was first written that way: only the tag box
    moved. Here, after `@theme` and outside every layer, it beats a utility.
 
-   `pointer: coarse` rather than a width breakpoint, because the behaviour
-   belongs to the input device: an iPad in landscape is wide and still zooms,
-   while a narrow desktop window never did and keeps its 14px. That is what
-   leaves the desktop design untouched.
+   A pointer query rather than a width breakpoint, because the behaviour belongs
+   to the input device: an iPad in landscape is wide and still zooms, while a
+   narrow desktop window never did and keeps its 14px.
+
+   And `any-pointer`, not `pointer`. `pointer` reports only the PRIMARY device,
+   so an iPad with a Magic Keyboard or any paired trackpad answers `fine` — and
+   the finger that taps the field still zooms the page. `any-pointer: coarse`
+   asks whether ANY available input mechanism is coarse, which is the real
+   condition. It is true on a touchscreen laptop too, where the fields grow
+   without needing to; that is the cheaper mistake, and the 44px touch targets
+   in `components.css` are already unconditional for the same reason.
+
+   `[contenteditable]` is not decoration: the Milkdown composer's writing
+   surface is a contenteditable div, not a textarea, and iOS zooms for any
+   focused editable under 16px. Leaving it out left the bug standing on the
+   surface members actually write on.
 
    Checkboxes and radios are excluded because some engines size the control
    itself from its font-size; every other field takes text and wants the floor.
@@ -69,10 +81,11 @@ html {
    `user-scalable=no` in the viewport meta would also stop the zoom, and is the
    usual first reflex. It is not an option: it takes deliberate zoom away from
    everyone (WCAG 1.4.4) to fix what is one CSS value. */
-@media (pointer: coarse) {
+@media (any-pointer: coarse) {
   input:not([type="checkbox"], [type="radio"]),
   select,
-  textarea {
+  textarea,
+  [contenteditable]:not([contenteditable="false"]) {
     font-size: 16px;
   }
 }

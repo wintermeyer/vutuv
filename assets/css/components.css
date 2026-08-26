@@ -3469,7 +3469,8 @@ html.lightbox-open { overflow: hidden; }
    zoom completely alone — the targeted alternative to `user-scalable=no`
    (issue #1726).
 
-   Gated on `pointer: coarse` like the 16px floor in `app.css`, because the
+   Gated on `any-pointer: coarse` like the 16px floor in `app.css` (see there
+   for why `any-pointer` and not `pointer`), because the
    gesture it suppresses is touch-only: declaring it on a mouse-only page still
    makes the engine record a hit-test rect per element and union it into the
    layer's touch-action region, which is bookkeeping nothing will ever consult.
@@ -3479,7 +3480,7 @@ html.lightbox-open { overflow: hidden; }
    `[type="submit"]` would only re-match the `<button>` already covered. The
    `.reorder__handle` drag grip keeps its own `touch-action: none` above: class
    specificity wins over these element selectors regardless of order. */
-@media (pointer: coarse) {
+@media (any-pointer: coarse) {
   a,
   button,
   label,

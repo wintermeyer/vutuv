@@ -296,12 +296,20 @@ section:
    It is the one deliberate exception to the data-attribute rule: the set it
    governs is "things that take text focus", which is exactly the set the
    browser behaviour keys on, so it names elements (`input:not([type="checkbox"],
-   [type="radio"])`, `select`, `textarea`). A marker on every field in the app
+   [type="radio"])`, `select`, `textarea`, and `[contenteditable]` — the
+   Milkdown composer's writing surface is a contenteditable div, and iOS zooms
+   for any focused editable under 16px). A marker on every field in the app
    would be a worse answer to the same question.
 
-**Touch rules key on `pointer: coarse`, never on a width breakpoint.** An iPad
-in landscape is wide and still zooms; a narrow desktop window never did. That
-axis arrived with #1726 and now has two members — the 16px floor here and
+**Touch rules key on `any-pointer: coarse`, never on a width breakpoint and
+never on plain `pointer`.** An iPad in landscape is wide and still zooms, so a
+width breakpoint is the wrong axis; and `pointer` reports only the *primary*
+device, so that same iPad answers `fine` the moment a Magic Keyboard is
+attached while the finger still zooms the page. `any-pointer` asks whether ANY
+input mechanism is coarse. It is true on a touchscreen laptop too — the fields
+grow there without needing to, which is the cheaper mistake and consistent with
+the 44px touch targets, which are already unconditional. That axis arrived with
+#1726 and now has two members — the 16px floor here and
 `touch-action: manipulation` in `components.css` (which needs no unlayered
 placement, having no utility to beat, but is gated on the same query so a
 mouse-only page records no touch-action regions). Note the consequence for

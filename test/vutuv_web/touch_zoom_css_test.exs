@@ -27,12 +27,13 @@ defmodule VutuvWeb.TouchZoomCssTest do
   test "the 16px floor is in app.css, keyed on the pointer and not on a width" do
     css = File.read!(@app_css)
 
-    assert css =~ ~r/@media \(pointer: coarse\) \{[^}]*?font-size: 16px;.*?\n\}/s,
+    assert css =~ ~r/@media \(any-pointer: coarse\) \{[^}]*?font-size: 16px;.*?\n\}/s,
            """
            The touch font-size floor belongs in app.css, outside every cascade
-           layer, keyed on `pointer: coarse` with no width condition: an iPad in
-           landscape is wide and still zooms, a narrow desktop window never did
-           (issue #1726).
+           layer, keyed on `any-pointer: coarse` with no width condition: an
+           iPad in landscape is wide and still zooms, a narrow desktop window
+           never did — and `pointer` alone would answer `fine` on that iPad the
+           moment a keyboard is attached (issue #1726).
            """
   end
 
@@ -46,7 +47,7 @@ defmodule VutuvWeb.TouchZoomCssTest do
   # blocks rather than to the whole file — `.reorder__btn` legitimately sets a
   # 16px of its own.
   defp coarse_blocks(path) do
-    ~r/@media \(pointer: coarse\) \{.*?\n\}/s
+    ~r/@media \(any-pointer: coarse\) \{.*?\n\}/s
     |> Regex.scan(File.read!(path))
     |> List.flatten()
   end
