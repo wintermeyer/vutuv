@@ -829,7 +829,12 @@ defmodule VutuvWeb.ShellLive do
   @impl true
   def render(assigns) do
     ~H"""
-    <div id="app-shell">
+    <%!-- `contents`: the second half of the sticky fix in the `app` layout
+    (issue #1727). This div and the `live_render` container around it are the
+    two boxes between the sticky top bar and `<body>`; removing only one still
+    leaves the bar trapped in a 65px-tall parent. The layout comment carries the
+    full reasoning and the measurements. --%>
+    <div id="app-shell" class="contents">
       <%!-- Drives the green "online" dot on every avatar in the page. Receives
       this viewer's online-id set from ShellLive (push_event "presence:set") and
       writes a generated stylesheet that reveals each online member's

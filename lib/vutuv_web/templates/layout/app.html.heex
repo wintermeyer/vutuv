@@ -3,10 +3,28 @@ classic controller pages and LiveViews. The shell (top bar + mobile bottom tab
 bar, with the live unread badges) is an embedded `ShellLive` so the badges stay
 live even on classic pages. `assigns[:conn]` is present on dead requests;
 LiveViews fall through to `@socket`. --%>
+<%!-- `container: {:div, class: "contents"}` is what makes the top bar's
+`sticky top-0` mean anything (issue #1727), and it has to be said here because
+the wrapper is LiveView's, not ours.
+
+A sticky element can only slide inside its own parent's box, and `<main>` — the
+entire page — is a SIBLING of this embed, not a descendant. So the shell's box
+is the top bar and nothing else: the tab bar below is `fixed` and out of flow,
+the hook divs are hidden. Measured before the fix: document 5342px, wrapper
+65px, top bar 65px, i.e. **zero pixels of travel** — at `scrollY 1200` the bar
+sat at `top: -1200`, moving one-to-one with the page. `position: sticky` was
+doing literally nothing, on every platform and since the class was written.
+
+`display: contents` drops the wrapper's box without touching the node, so the
+containing block becomes `<body>` and the bar holds at `top: 0`. `#app-shell`
+inside carries the same class for the same reason — one box removed is not
+enough, both wrappers sit between the bar and the body. The fixed tab bar is
+unaffected either way: a fixed element's containing block is the viewport, not
+the parent box. --%>
 <%= if assigns[:conn] do %>
-  {live_render(@conn, VutuvWeb.ShellLive, id: "app-shell-lv", session: shell_session(assigns))}
+  {live_render(@conn, VutuvWeb.ShellLive, id: "app-shell-lv", container: {:div, class: "contents"}, session: shell_session(assigns))}
 <% else %>
-  {live_render(@socket, VutuvWeb.ShellLive, id: "app-shell-lv", sticky: true, session: shell_session(assigns))}
+  {live_render(@socket, VutuvWeb.ShellLive, id: "app-shell-lv", sticky: true, container: {:div, class: "contents"}, session: shell_session(assigns))}
 <% end %>
 
 <%!-- Flash as top-right toasts. Every toast auto-dismisses after a few seconds
