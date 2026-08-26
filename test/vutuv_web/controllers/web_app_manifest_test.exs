@@ -113,5 +113,16 @@ defmodule VutuvWeb.WebAppManifestTest do
              so the tab bar cannot reserve the home indicator's strip.
              """
     end
+
+    test "never takes deliberate zoom away", %{html: html} do
+      assert [_, viewport] = Regex.run(~r/name="viewport" content="([^"]+)"/, html)
+
+      # Both spellings stop iOS zooming in on a focused field, and both are the
+      # usual first reflex for it. Neither is an option: they take zoom away
+      # from everyone (WCAG 1.4.4) to fix what is one CSS value — the 16px floor
+      # in `app.css` (issue #1726, `touch_zoom_css_test.exs`).
+      refute viewport =~ "user-scalable"
+      refute viewport =~ "maximum-scale"
+    end
   end
 end

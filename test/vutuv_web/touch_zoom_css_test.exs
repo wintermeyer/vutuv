@@ -3,72 +3,66 @@ defmodule VutuvWeb.TouchZoomCssTest do
 
   # iOS zooms the page in when a focused form field is under 16px and never
   # zooms back out (issue #1726). The fix is one declaration, and everything
-  # that can go wrong with it is about WHERE it lives.
+  # that can go wrong with it is about WHERE it lives — the block's own comment
+  # in `assets/css/app.css` carries the full reasoning.
   #
-  # The 14px arrives from three directions: `input_class/0` carries `text-sm`
-  # (a Tailwind utility, ~40 kit forms including sign-up), `.editform` fields
-  # are `0.875rem`, and the base `select` rule is 15px. Only the first decides
-  # where the fix can go — `components.css` sits in the `components` layer,
-  # which loses to the utilities layer WHATEVER its specificity, so the same
-  # rule written down there is in the stylesheet, reads as if it applies, and
-  # does nothing at all to the sign-up form. That is not a hypothetical: it is
-  # how this fix was first written, and only a computed-style check in a
-  # browser caught it (measured: the tag box moved to 16px, every kit input
-  # stayed at 14px).
+  # That is not a hypothetical: the fix was first written in `components.css`,
+  # which sits in the `components` layer and therefore loses to the `text-sm`
+  # utility that `input_class/0` puts on every kit input. The rule was in the
+  # stylesheet, read as if it applied, and moved only the tag box; every kit
+  # input stayed at 14px until a computed-style check in a browser caught it.
   #
-  # So this is a static check in the spirit of `press_paint_css_test`. It
-  # cannot measure a browser, but it holds the one thing a reader cannot see by
-  # looking at the rule: that it is outside every cascade layer.
+  # So this is a static check in the spirit of `press_paint_css_test`. It cannot
+  # measure a browser, but it holds the one thing a reader cannot see by looking
+  # at the rule: that it is outside every cascade layer.
+  #
+  # The viewport half of the contract — that no `user-scalable=no` ever appears
+  # — lives with the rest of the viewport assertions in
+  # `web_app_manifest_test.exs`, which reads the rendered `content="…"` value
+  # rather than the layout's source text.
 
   @app_css Path.expand("../../assets/css/app.css", __DIR__)
   @components_css Path.expand("../../assets/css/components.css", __DIR__)
-  @root_layout Path.expand(
-                 "../../lib/vutuv_web/templates/layout/root.html.heex",
-                 __DIR__
-               )
 
-  test "the 16px floor is in app.css, outside every cascade layer" do
+  test "the 16px floor is in app.css, keyed on the pointer and not on a width" do
     css = File.read!(@app_css)
 
-    assert css =~ ~r/@media \(pointer: coarse\)/,
-           "the touch font-size floor belongs in app.css (issue #1726)"
-
-    assert css =~ ~r/@media \(pointer: coarse\) \{.*?font-size: 16px;.*?\}/s,
-           "the floor must actually set 16px"
-  end
-
-  test "it is NOT in components.css, where it would lose to the utilities layer" do
-    css = File.read!(@components_css)
-
-    refute css =~ ~r/@media \(pointer: coarse\)/,
+    assert css =~ ~r/@media \(pointer: coarse\) \{[^}]*?font-size: 16px;.*?\n\}/s,
            """
-           A `pointer: coarse` font-size rule in components.css cannot beat the
-           `text-sm` utility that `input_class/0` puts on every kit input, so it
-           silently does nothing to the sign-up form. It belongs in app.css,
-           after @theme and outside every layer.
+           The touch font-size floor belongs in app.css, outside every cascade
+           layer, keyed on `pointer: coarse` with no width condition: an iPad in
+           landscape is wide and still zooms, a narrow desktop window never did
+           (issue #1726).
            """
   end
 
-  test "the floor keys on the pointer, not on the viewport width" do
-    css = File.read!(@app_css)
-
-    [block] = Regex.run(~r/@media \(pointer: coarse\) \{.*?\n\}/s, css)
-
-    refute block =~ ~r/(max|min)-width/,
-           """
-           A width breakpoint is the wrong axis: an iPad in landscape is wide and
-           still zooms, and a narrow desktop window never did. Keep it on
-           `pointer: coarse`.
-           """
+  # components.css has one coarse-pointer block of its own, for `touch-action`
+  # (which needs no unlayered placement — it has no utility to beat). These two
+  # assertions pin what may and may not be in it.
+  #
+  # Both read EVERY such block, not the first: a stray second one further down
+  # the file is exactly how the font-size floor would come back, and matching
+  # only the first would never see it. Likewise the refute is scoped to those
+  # blocks rather than to the whole file — `.reorder__btn` legitimately sets a
+  # 16px of its own.
+  defp coarse_blocks(path) do
+    ~r/@media \(pointer: coarse\) \{.*?\n\}/s
+    |> Regex.scan(File.read!(path))
+    |> List.flatten()
   end
 
-  test "deliberate zoom is never taken away" do
-    layout = File.read!(@root_layout)
+  test "the coarse-pointer block in components.css carries the touch-action opt-out" do
+    assert Enum.any?(coarse_blocks(@components_css), &(&1 =~ "touch-action: manipulation;")),
+           "the double-tap-zoom opt-out belongs inside a coarse-pointer query"
+  end
 
-    refute layout =~ "user-scalable",
-           "user-scalable=no would stop the zoom and fail WCAG 1.4.4 (issue #1726)"
-
-    refute layout =~ ~r/maximum-scale\s*=/,
-           "maximum-scale is the same WCAG 1.4.4 failure by another spelling"
+  test "the font-size floor is NOT there, where it would lose to the utilities layer" do
+    refute Enum.any?(coarse_blocks(@components_css), &(&1 =~ "font-size")),
+           """
+           A font-size rule in components.css cannot beat the `text-sm` utility
+           that `input_class/0` puts on every kit input, so it silently does
+           nothing to the sign-up form. It belongs in app.css, after @theme and
+           outside every layer.
+           """
   end
 end

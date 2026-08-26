@@ -3466,15 +3466,26 @@ html.lightbox-open { overflow: hidden; }
 /* Double-tap-to-zoom makes a browser hold every tap for ~300ms to see whether a
    second one follows, which is the delay that reads as "the web feels slow".
    `manipulation` opts each control out of that one gesture while leaving pinch
-   zoom completely alone — the targeted alternative to `user-scalable=no`. */
-a,
-button,
-label,
-summary,
-[role="button"],
-[type="button"],
-[type="submit"] {
-  touch-action: manipulation;
+   zoom completely alone — the targeted alternative to `user-scalable=no`
+   (issue #1726).
+
+   Gated on `pointer: coarse` like the 16px floor in `app.css`, because the
+   gesture it suppresses is touch-only: declaring it on a mouse-only page still
+   makes the engine record a hit-test rect per element and union it into the
+   layer's touch-action region, which is bookkeeping nothing will ever consult.
+
+   `a, button, label, summary` is this app's whole control set — there is no
+   `<input type="submit">` and no `role="button"` anywhere, and a bare
+   `[type="submit"]` would only re-match the `<button>` already covered. The
+   `.reorder__handle` drag grip keeps its own `touch-action: none` above: class
+   specificity wins over these element selectors regardless of order. */
+@media (pointer: coarse) {
+  a,
+  button,
+  label,
+  summary {
+    touch-action: manipulation;
+  }
 }
 
 /* Changing this file (or app.css @theme / lib/vutuv_web/components/ui.ex) is a

@@ -282,11 +282,32 @@ that layer loses to the utilities layer whatever its specificity, so the rule is
 in the stylesheet, reads as if it applies, and quietly does nothing (only
 DevTools striking the declaration through gives it away). Such a rule goes in
 `app.css` **after** the `@theme` block, outside every layer, where it beats them
-all. Keep those few and anchor every selector on a data attribute: the press
-paint is the whole set today, shared by the /feed and /notifications filter
-bars and by both navs, with its timing on `:root` as
-`--press-pending-delay` and its four palettes named through `--press-on-bg` /
-`--press-on-fg` / `--press-off-fg`.
+all. Keep those few. There are **two** groups today, each its own titled
+section:
+
+1. **The press paint**, shared by the /feed and /notifications filter bars and
+   by both navs, with its timing on `:root` as `--press-pending-delay` and its
+   four palettes named through `--press-on-bg` / `--press-on-fg` /
+   `--press-off-fg`. Every selector here is anchored on a data attribute, which
+   is the rule for anything that paints a *state*.
+2. **The 16px touch floor** on form fields (issue #1726). It is unlayered
+   because `input_class/0` carries `text-sm`, a utility — the same rule in
+   `components.css` moved only the tag box and left every kit input at 14px.
+   It is the one deliberate exception to the data-attribute rule: the set it
+   governs is "things that take text focus", which is exactly the set the
+   browser behaviour keys on, so it names elements (`input:not([type="checkbox"],
+   [type="radio"])`, `select`, `textarea`). A marker on every field in the app
+   would be a worse answer to the same question.
+
+**Touch rules key on `pointer: coarse`, never on a width breakpoint.** An iPad
+in landscape is wide and still zooms; a narrow desktop window never did. That
+axis arrived with #1726 and now has two members — the 16px floor here and
+`touch-action: manipulation` in `components.css` (which needs no unlayered
+placement, having no utility to beat, but is gated on the same query so a
+mouse-only page records no touch-action regions). Note the consequence for
+`input_class/0`: its `text-sm` is now the **desktop** size, and a field that
+composes `text-base` onto it is stating the desktop size deliberately, not
+redundantly.
 
 **A new rule for an element `.markdown` also styles (`ol`, `li`, `a`, `td`, `p`)
 needs a tag qualifier, or it has to sit after the `.markdown` block.** `.footnotes
