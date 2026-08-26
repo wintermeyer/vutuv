@@ -61,6 +61,27 @@ defmodule VutuvWeb.MastodonApi.StatusParentTest do
     assert status["in_reply_to_account_id"] == "remote-" <> account.id
   end
 
+  test "a followers-only parent stays hidden while the follow is only requested",
+       %{conn: conn} do
+    viewer = insert(:activated_user)
+    account = remote_account(handle: "dora")
+    parent = cached_post(account, audience: "followers")
+    reply = cached_post(account, in_reply_to_uri: parent.object_uri)
+
+    Repo.insert!(%Follow{
+      user_id: viewer.id,
+      remote_account_id: account.id,
+      state: "requested",
+      follow_activity_id: "https://vutuv.test/#{viewer.id}/actor#f/#{account.id}"
+    })
+
+    token = mastodon_token(viewer, ["read"])
+    status = show(conn, token, "remote-" <> reply.id)
+
+    assert status["in_reply_to_id"] == nil
+    assert status["in_reply_to_account_id"] == nil
+  end
+
   test "a cached reply whose parent we never held stays orphaned", %{conn: conn} do
     account = remote_account(handle: "bob")
     reply = cached_post(account, in_reply_to_uri: "https://social.example/p/never-held")

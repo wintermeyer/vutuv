@@ -1457,6 +1457,35 @@ defmodule Vutuv.Fediverse do
   end
 
   @doc """
+  The same set as `followed_remote_account_ids/2`, narrowed to follows in the
+  `"accepted"` state — the one a **visibility gate** may trust, unlike the
+  menu-branch use above (Mute/Unfollow apply to a still-`"requested"` follow
+  too, so that one deliberately does not filter on state). Mirrors the
+  single-row gate `remote_post_readable?/2`'s own `f.state == "accepted"`
+  condition (`VutuvWeb.MastodonApi.StatusController`).
+
+  Without this, `Vutuv.MastodonApi.Presenter` naming a followers-only cached
+  post's `in_reply_to_id` (issue #1622) would trust a follow request that was
+  never accepted — a followers-only account can leave one `"requested"`
+  indefinitely (see `Vutuv.Fediverse.Follow`'s moduledoc) — and leak that the
+  post exists to a reader who is not actually a follower.
+  """
+  def accepted_remote_account_ids(party, account_ids) do
+    case account_ids |> Enum.filter(&is_binary/1) |> Enum.uniq() do
+      [] ->
+        MapSet.new()
+
+      ids ->
+        from(f in Follow,
+          where: party_is(f, party) and f.remote_account_id in ^ids and f.state == "accepted",
+          select: f.remote_account_id
+        )
+        |> Repo.all()
+        |> MapSet.new()
+    end
+  end
+
+  @doc """
   Mutes (or unmutes) the member's follow of one remote account.
 
   The same meaning a local follow's mute has: the subscription stays, its posts

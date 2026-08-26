@@ -172,15 +172,22 @@ defmodule Vutuv.MastodonApi.Presenter do
     }
   end
 
-  # `viewer` is never a party `Fediverse.followed_remote_account_ids/2` can
+  # `viewer` is never a party `Fediverse.accepted_remote_account_ids/2` can
   # take when nobody is signed in — `Vutuv.Identity.Query.party_is/2` has no
   # `nil` clause and raises — and an anonymous reader follows nothing anyway,
   # so every restricted parent is simply unreadable for them.
+  #
+  # **`accepted_remote_account_ids/2`, not `followed_remote_account_ids/2`.**
+  # This set gates whether a followers-only parent's id may be named at all
+  # (`readable_remote_parent?/2` below), so a follow merely `"requested"` — one
+  # a slow-to-accept account can leave pending indefinitely — must not count;
+  # the plain "followed" set is right for the card menu's Mute/Unfollow offer,
+  # which applies to a pending request too, but wrong here.
   defp followed_remote_ids([], _viewer), do: MapSet.new()
   defp followed_remote_ids(_account_ids, nil), do: MapSet.new()
 
   defp followed_remote_ids(account_ids, viewer),
-    do: Fediverse.followed_remote_account_ids(viewer, account_ids)
+    do: Fediverse.accepted_remote_account_ids(viewer, account_ids)
 
   # What a single status rendered outside `statuses/2` gets. Built by the same
   # function rather than spelled out again, so a sixth batch cannot be added to
@@ -896,8 +903,8 @@ defmodule Vutuv.MastodonApi.Presenter do
        ) do
     if readable_remote_parent?(parent, context) do
       %{
-        in_reply_to_id: "remote-" <> parent.id,
-        in_reply_to_account_id: "remote-" <> parent.remote_account_id
+        in_reply_to_id: status_id(parent),
+        in_reply_to_account_id: account_id(parent.remote_account)
       }
     else
       %{}
@@ -937,7 +944,12 @@ defmodule Vutuv.MastodonApi.Presenter do
       %RemotePost{} = parent ->
         if readable_remote_parent?(parent, context) do
           %{
-            in_reply_to_id: "remote-" <> parent.id,
+            in_reply_to_id: status_id(parent),
+            # Not `account_id(parent.remote_account)`: `remote_parent_posts/1`
+            # deliberately does not preload it (this map is batched for a whole
+            # page), and the raw column already is the id `account_id/1` would
+            # build from the struct — so this stays hand-built rather than
+            # paying an extra query per page just to call the shared minter.
             in_reply_to_account_id: "remote-" <> account_id
           }
         else

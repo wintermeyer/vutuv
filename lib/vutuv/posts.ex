@@ -1139,9 +1139,7 @@ defmodule Vutuv.Posts do
   `visible_to?/2`. Composable: `from(p in Post) |> scope_visible(viewer)`.
   """
   def scope_visible(query, nil) do
-    from(p in query,
-      where: fragment("NOT EXISTS (SELECT 1 FROM post_denials d WHERE d.post_id = ?)", p.id)
-    )
+    from(p in query, where: ^no_denials())
     |> scope_unfrozen(nil)
   end
 
@@ -1150,11 +1148,7 @@ defmodule Vutuv.Posts do
   # sees exactly what an anonymous reader sees, plus its own posts while
   # moderation holds them — the way an author sees theirs.
   def scope_visible(query, %Organization{id: organization_id} = viewer) do
-    from(p in query,
-      where:
-        p.organization_id == ^organization_id or
-          fragment("NOT EXISTS (SELECT 1 FROM post_denials d WHERE d.post_id = ?)", p.id)
-    )
+    from(p in query, where: p.organization_id == ^organization_id or ^no_denials())
     |> scope_unfrozen(viewer)
   end
 
@@ -1198,6 +1192,17 @@ defmodule Vutuv.Posts do
     )
     |> scope_unfrozen(viewer)
   end
+
+  # "This post carries no audience restriction at all" — the anonymous-reader
+  # rule (any denial, of any wildcard, hides the post) and the organization
+  # viewer's own rule (a page cannot be named by a denial either, so it reduces
+  # to the same test). One fragment so the two clauses cannot drift apart.
+  defp no_denials,
+    do:
+      dynamic(
+        [p],
+        fragment("NOT EXISTS (SELECT 1 FROM post_denials d WHERE d.post_id = ?)", p.id)
+      )
 
   # The moderation arm of scope_visible/2: frozen posts and posts whose author's
   # account is hidden (frozen / suspended / deactivated) vanish from every list,
