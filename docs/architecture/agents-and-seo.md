@@ -29,8 +29,11 @@ These variants render the **anonymous public view** from one doc map per page
 a page's HTML and its docs diverge).
 
 The **newsfeed** is the one exception: `/feed.md/.txt/.json/.xml`
-(`VutuvWeb.AgentDocs.FeedDoc`, negotiated by `VutuvWeb.NewsfeedController` — the
-controller in front of the `/feed` LiveView) render the signed-in viewer's own
+(`VutuvWeb.AgentDocs.FeedDoc`, sent by `VutuvWeb.NewsfeedController.send_doc/2`
+— which has no route of its own since issue #1731: `/feed`'s HTML is a `live`
+route, and the `:feed_agent_docs` pipeline calls that function through
+`VutuvWeb.Plug.AgentDocRoute` for an extension or `Accept` request) render the
+signed-in viewer's own
 timeline, so they are login-only and sent `private, no-store` + `noindex/noai`
 (an agent-format request without a session 404s, and a feed has no `.vcf`).
 

@@ -31,6 +31,11 @@ defmodule VutuvWeb.PostLive.Feed do
 
   use VutuvWeb, :live_view
 
+  # The page is login-only: the live_session's `:default` stage resolves the
+  # viewer, this one turns an anonymous visitor away (issue #1731 moved the
+  # gate here from a hand-rolled branch in `mount/3`).
+  on_mount({VutuvWeb.Live.InitAssigns, :require_login})
+
   import VutuvWeb.PostComponents
 
   alias Phoenix.LiveView.JS
@@ -42,7 +47,6 @@ defmodule VutuvWeb.PostLive.Feed do
   alias Vutuv.Social
   alias Vutuv.Tags.UserTag
   alias VutuvWeb.Live.DayClockRestream
-  alias VutuvWeb.Live.InitAssigns
   alias VutuvWeb.Live.MountHandoff
   alias VutuvWeb.Live.PostTranslations
   alias VutuvWeb.Live.RemotePostActions
@@ -73,23 +77,24 @@ defmodule VutuvWeb.PostLive.Feed do
   @discover_posts 5
 
   @impl true
-  # Rendered by VutuvWeb.NewsfeedController via `live_render` (off-router, so it
-  # can negotiate the agent-format siblings), exactly like UserProfileLive. An
-  # off-router LiveView can't use `InitAssigns` as an `on_mount` — that hook
-  # attaches a `:handle_params` hook, which it rejects — so mount mirrors it:
-  # load the viewer + locale from the session the controller passes, and gate on
-  # login here instead of the `:require_login` stage.
+  # A router LiveView in `live_session :default` since issue #1731. It used to
+  # be embedded by VutuvWeb.NewsfeedController via `live_render`, purely so a
+  # controller could negotiate the agent-format siblings — and that put the
+  # busiest page in the app outside the live_session, where `<.link navigate>`
+  # cannot patch and every tab press rebuilt the whole document. The
+  # negotiation moved to the `:feed_agent_docs` pipeline
+  # (`VutuvWeb.Plug.AgentDocRoute`), which serves /feed.md/.txt/.json/.xml at
+  # the same URL and lets an ordinary browser request fall through to here.
+  #
+  # So the session preamble is the live_session's own now: `InitAssigns`
+  # `:default` assigns the viewer and attaches the `:shell_path` hook,
+  # `:require_login` (declared above) is the login gate. Only `:locale` is
+  # still read from the session by hand — the "Other formats" card writes it
+  # into its `?lang=` suffix, and `VutuvWeb.Plug.Locale` is what put it there.
   def mount(_params, session, socket) do
-    socket = InitAssigns.assign_embedded(socket, session)
+    socket = assign(socket, :locale, session["locale"])
 
-    if user = socket.assigns.current_user do
-      {:ok, mount_feed(socket, user)}
-    else
-      {:ok,
-       socket
-       |> put_flash(:error, gettext("You must be logged in to access that page"))
-       |> redirect(to: ~p"/login")}
-    end
+    {:ok, mount_feed(socket, socket.assigns.current_user)}
   end
 
   defp mount_feed(socket, user) do

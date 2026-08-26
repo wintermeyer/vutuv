@@ -53,6 +53,21 @@ defmodule VutuvWeb.Router do
     plug(Plugs.NoIndex)
   end
 
+  # `/feed`'s agent-format siblings (issue #1731). The HTML half of that URL is
+  # a `live` route in `live_session :default`, so there is no controller in
+  # front of it to negotiate the format any more — this plug does it in the
+  # pipeline instead, after the session and auth plugs have decided who the
+  # viewer is: an extension or `Accept` request is answered and halted here, an
+  # ordinary browser request falls through to the LiveView with its
+  # `<link rel="alternate">` list already assigned. That is what lets the tab
+  # bar reach the feed with `navigate` rather than a whole new document.
+  pipeline :feed_agent_docs do
+    plug(Plugs.AgentDocRoute,
+      doc: {VutuvWeb.NewsfeedController, :send_doc},
+      allowed: [:md, :txt, :json, :xml]
+    )
+  end
+
   # The machine-facing documents (robots.txt, llms.txt, the sitemaps, the RSS
   # feeds, the .well-known files, the ActivityPub endpoints) run without the
   # :browser pipeline on purpose, so `accepts ["html"]` cannot turn away a
@@ -721,12 +736,10 @@ defmodule VutuvWeb.Router do
     # profile catch-all further down.
     get("/system/permalinks/users/:user_id", PermalinkController, :user)
 
-    # The signed-in member's newsfeed. A controller (not a bare `live`) so it
-    # can negotiate the agent-format siblings (/feed.md/.txt/.json/.xml,
-    # VutuvWeb.AgentDocs) and live_render the LiveView for HTML. A literal route
-    # before the /:slug catch-all ("feed" is a ReservedSlug). Named
-    # NewsfeedController so it doesn't collide with FeedController (the RSS one).
-    get("/feed", NewsfeedController, :index)
+    # The signed-in member's newsfeed used to be a controller route here, so it
+    # could negotiate its agent-format siblings and live_render the LiveView for
+    # HTML. It is a `live` route in the live_session below now (issue #1731) —
+    # see the :feed_agent_docs pipeline for where the negotiation went.
 
     # Verified organization pages (issue #929). Controllers (not bare `live`) so
     # /organizations and /organizations/:slug negotiate their agent-format siblings
@@ -1035,6 +1048,18 @@ defmodule VutuvWeb.Router do
         live("/search", SearchLive, :index)
       end
 
+      # The signed-in member's newsfeed (issue #1731). In the session so that
+      # switching to it from Messages, Notifications or Search patches the
+      # content instead of rebuilding the document — the feed is where members
+      # spend their time, so it was the tab that most needed to stop reloading.
+      # A literal route before the /:slug catch-all further down ("feed" is a
+      # ReservedSlug); the :feed_agent_docs pipeline keeps /feed.md/.txt/.json/
+      # .xml answering at the same URL.
+      scope "/" do
+        pipe_through(:feed_agent_docs)
+        live("/feed", PostLive.Feed, :index)
+      end
+
       live("/messages", MessageLive.Index, :index)
       # The profile "Message" button: open my conversation with that member
       # (find-or-create), then land in the thread.
@@ -1046,9 +1071,7 @@ defmodule VutuvWeb.Router do
       live("/messages/:id", MessageLive.Index, :show)
 
       # The post editor ("posts" is a ReservedSlug). Auth is checked in the
-      # mounts. The newsfeed itself is NOT here: it serves agent-format
-      # siblings (/feed.md/.txt/.json/.xml) too, which need a controller in
-      # front to negotiate the format, so it lives under FeedController below.
+      # mounts.
       live("/posts/:id/edit", PostLive.Edit, :edit)
       live("/posts/:id/reply", PostLive.Reply, :new)
 

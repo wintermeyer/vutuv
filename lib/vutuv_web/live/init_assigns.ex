@@ -84,6 +84,11 @@ defmodule VutuvWeb.Live.InitAssigns do
     |> Phoenix.LiveView.redirect(to: to)
   end
 
+  # The path for the page's OWN LiveView, on every `handle_params`. It is not
+  # how the shell learns where a live navigation went (issue #1731): the shell
+  # is a `sticky` child, so it is never remounted and this hook never runs for
+  # it — the `ShellPath` hook in app.js reports that from the browser instead.
+  # Reaching for this assign to "fix" a stale tab marker would not work.
   defp assign_shell_path(_params, uri, socket) do
     {:cont, assign(socket, :shell_path, URI.parse(uri).path)}
   end

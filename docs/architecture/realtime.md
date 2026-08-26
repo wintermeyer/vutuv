@@ -10,6 +10,85 @@ The app shell `VutuvWeb.ShellLive` (sticky top bar + mobile bottom tab bar, with
 live unread badges) is embedded in the shared `app` layout via `live_render`, so
 the chrome and badges are live on every page.
 
+### Patching between tabs (issue #1731)
+
+Pressing a bottom tab used to rebuild the whole page — document, stylesheet,
+socket, shell — where a native app replaces only the content between the bars.
+Nothing about that was an oversight; every step was a reasonable local decision
+and together they closed the door:
+
+1. A public page needs its agent-format siblings, and `AgentDocs.respond/2` is
+   driven from a **controller**.
+2. So `/feed` was `get("/feed", NewsfeedController, :index)`, embedding its
+   LiveView with `live_render`.
+3. A route that is not a `live` route cannot be in a `live_session`.
+4. `<.link navigate>` patches only **within one** `live_session`; across the
+   boundary it degrades to a full navigation, silently.
+5. So the navs used `href`, and even the three pages that *could* have patched
+   between themselves could not reach the feed, which is where members spend
+   their time.
+
+**What changed: the format was separated from the page.** The reason for the
+controller wrapper was negotiation, not rendering, and
+`VutuvWeb.Plug.AgentFormat` in the endpoint has already decided the format
+before the router runs. `VutuvWeb.Plug.AgentDocRoute` reads that answer from
+inside a pipeline — after the session and auth plugs, so the viewer is resolved
+exactly as before — and either answers the document and halts, or assigns the
+`<link rel="alternate">` list and lets the request fall through. `/feed` is
+therefore `live("/feed", PostLive.Feed, :index)` in `live_session :default`,
+behind the `:feed_agent_docs` pipeline, and `/feed.md/.txt/.json/.xml` still
+answer at the same URL from `VutuvWeb.NewsfeedController.send_doc/2` — which now
+has no route of its own.
+
+**The shell had to learn where the reader went.** `ShellLive` is embedded
+`sticky`, which is what makes patching worth having (counters, PubSub
+subscriptions and presence all survive), and exactly why it does not find out
+on its own: a sticky child is never remounted and has no `handle_params`. Its
+`@path` decides the active tab, the logo's deep link and the Feed tab's
+back-to-top face, so a frozen path marks the wrong tab for the rest of the
+visit. The `ShellPath` hook reports every `phx:navigate` as `shell:path`, and
+its first message — sent on mount — doubles as this document's claim that it
+can: until it arrives the navs hand out ordinary `href`s, so a document from
+before that deploy keeps doing full loads and stays right. (The connect-param
+seam the feed's tab ticker uses is closed here: `get_connect_params/1` is
+root-and-mount-only, and this shell is a nested LiveView.)
+
+**Both ends are asked before a link patches** (`ShellLive.nav_to/3`). A patch
+needs a live page to leave as much as one to arrive at, so a nav item is
+`navigate` only when the current path *and* the destination are in
+`@live_paths` — `/feed`, `/search`, `/messages`, `/notifications`. Everything
+else (the profile, Network, Jobs, Bookmarks, the login page) stays a plain
+link, and that is a statement about the routes rather than a preference. The
+"leave" half is answered once per path change and carried as `@live_page?`,
+not asked again per nav item: this bar renders on every page of the site.
+That list is a literal because it is read per render, and the cost of a
+literal is silent drift — a path on it that has left the session degrades to
+a full load without an error — so `ShellLive.live_paths/0` is exposed and
+`live_tab_navigation_test.exs` checks it against the router's own
+`live_session` metadata. A fifth tab needs no new test.
+
+Deliberately still to do: the **profile** is the hard case #1731 names — five
+sibling formats plus `rel="me"`, the ActivityPub alternate and the agent-doc
+alternates in `<head>` — and it keeps its controller for now, so the Profile
+tab is still a full load. **Scroll position per tab** is not restored either;
+whatever that grows into has to agree with `scroll_top_tab.js`, which already
+gives the Feed tab a second job once the page is a screen down.
+
+The **reset**, though, was not optional and is done. A full page load always
+started at the top and a patch does not: LiveView stores the *outgoing* scroll
+position in the history entry so a later Back can restore it, and leaves the
+incoming page exactly where the old one stood (`history.scrollRestoration` is
+"manual" — measured in Chrome against phoenix_live_view 1.1.30). Without it,
+pressing Messages from a screen down the feed lands a screen down the messages
+page, which is its footer. So the `ShellPath` hook scrolls a forward
+navigation to the top itself, skipping a `patch` (the same page changing its
+own URL — the notifications filter tabs and pager, where the jump would throw
+the reader's place away) and a `pop` (where LiveView is already restoring).
+
+`test/vutuv_web/live/live_tab_navigation_test.exs` covers both halves,
+including that the feed's agent siblings and its `<head>` alternates survived
+the move.
+
 ### Installed on a phone (issue #1464)
 
 The site is installable: `/site.webmanifest` (`VutuvWeb.PageController`)
@@ -41,10 +120,10 @@ embedded by its controller via `live_render` (so the
 `.md`/`.txt`/`.json`/`.xml`/`.vcf` agent siblings keep flowing through the
 controller).
 
-The **feed** (`/feed`, `VutuvWeb.PostLive.Feed`) is fronted the same way by
-`VutuvWeb.NewsfeedController` so its own agent siblings can be negotiated (see
-[agents-and-seo.md](agents-and-seo.md)), so it is the one LiveView no longer in
-the `live_session`.
+The **feed** (`/feed`, `VutuvWeb.PostLive.Feed`) was fronted the same way until
+issue #1731. It is a plain `live` route in `live_session :default` now — see
+[Patching between tabs](#patching-between-tabs-issue-1731) below for what that
+bought and what it cost.
 
 The **add-tag form** (`/settings/tags/new`, `VutuvWeb.TagNewLive`) is the first
 live `/settings` page: it previews the parsed tags while the member types and

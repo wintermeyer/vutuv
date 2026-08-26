@@ -490,6 +490,55 @@ document.addEventListener("click", (event) => {
 const Hooks = {
   MarkdownEditor,
   TagInput,
+  // Tells the app shell where a live navigation ended up (issue #1731).
+  //
+  // The shell is embedded `sticky`, which is exactly what makes patching
+  // between tabs worth having — counters, PubSub subscriptions and presence
+  // all survive the trip — and exactly why it never learns the new path on its
+  // own: a sticky child is not remounted and has no `handle_params`. Without
+  // this it would keep marking the tab of whatever page the document was built
+  // on, and the Feed tab would keep or lose its back-to-top face on the wrong
+  // page.
+  //
+  // `phx:navigate` is dispatched by LiveView for every live navigation,
+  // including the browser's Back button, so one listener covers both
+  // directions. Only the pathname is sent: that is all `on_route?/2` reads,
+  // and a query string would make two visits to one tab look like two pages.
+  ShellPath: {
+    mounted() {
+      // The first report is also the claim: the shell hands out `navigate`
+      // links only to a document that has said it can tell the shell where
+      // they landed, and only a bundle carrying this hook can say so.
+      this.report(window.location.pathname)
+      this.onNavigate = (e) => {
+        const detail = e.detail || {}
+        if (!detail.href) return
+        this.report(new URL(detail.href, window.location.origin).pathname)
+
+        // A forward navigation has to start at the top, and LiveView does not
+        // do it: `historyRedirect` stores the OUTGOING scroll position in the
+        // history entry (so a later Back can restore it) and leaves the new
+        // page wherever the old one stood — `history.scrollRestoration` is
+        // "manual". A full page load always started at the top, so without
+        // this, pressing Messages from a screen down the feed lands a screen
+        // down the messages page, which is its footer. Measured in Chrome
+        // against phoenix_live_view 1.1.30.
+        //
+        // Only a real navigation: a `patch` is the same page changing its own
+        // URL (the notifications filter tabs, the pager), where jumping to the
+        // top would throw the reader's place away — and on a `pop` LiveView is
+        // already restoring the position the reader left.
+        if (!detail.patch && !detail.pop) window.scrollTo(0, 0)
+      }
+      window.addEventListener("phx:navigate", this.onNavigate)
+    },
+    report(path) {
+      this.pushEvent("shell:path", { path: path })
+    },
+    destroyed() {
+      window.removeEventListener("phx:navigate", this.onNavigate)
+    },
+  },
   // The feed's tab ticker (issue #1668): the quote beside the tab a post just
   // landed on, which stands for a few seconds and then goes.
   //

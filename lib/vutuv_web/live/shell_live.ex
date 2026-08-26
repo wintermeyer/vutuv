@@ -79,6 +79,19 @@ defmodule VutuvWeb.ShellLive do
     # fan-out costs one message per connected tab per second of actual change.
     if connected?(socket), do: PeopleCounter.subscribe()
 
+    # Can this document patch between tabs at all (issue #1731)? It says so
+    # itself: the `ShellPath` hook reports on mount, and only a bundle that
+    # carries the hook can report. Until then the navs hand out ordinary
+    # `href`s, which is both the safe default and the honest one — there is
+    # nothing to patch into before the socket is up, and a document from before
+    # that deploy has no hook and keeps full loads for good.
+    #
+    # This shell is a NESTED LiveView (embedded via live_render from the
+    # layout), so the connect-param seam the feed's tab ticker uses is closed
+    # here: `get_connect_params/1` is root-and-mount-only and raises for a
+    # child. Hence the hook's own first message as the claim.
+    socket = assign(socket, :live_nav?, false)
+
     socket =
       if connected?(socket) do
         # The live socket authenticates from the cookie's `session_token` — the
@@ -216,12 +229,8 @@ defmodule VutuvWeb.ShellLive do
     |> assign(:presence_hidden_ids, MapSet.new())
     |> assign(:messages_count, 0)
     |> assign(:notifications_count, 0)
-    |> assign(:brand_path, brand_path(socket.assigns.user_param, path))
-    # The current path also drives the active-nav highlight (which top/bottom
-    # nav item is the page being viewed). Like brand_path it is the path at
-    # mount; every nav destination is reached by a full-reload `href`, so the
-    # shell remounts with a fresh path on each of those.
-    |> assign(:path, path)
+    # Everything the current path decides — see `assign_path/2`.
+    |> assign_path(path)
     # Admins get one more figure: how many sign-ups confirmed so far today.
     # Zero renders nothing, so it is also the starting value for everyone else.
     |> assign(:new_members_today, 0)
@@ -331,6 +340,86 @@ defmodule VutuvWeb.ShellLive do
   # Drives both the unread-badge zeroing at mount and the active-nav highlight.
   defp on_route?(nil, _route), do: false
   defp on_route?(path, route), do: path == route or String.starts_with?(path, route <> "/")
+
+  # The three things the current path decides, set together so they cannot
+  # disagree: which nav item reads as the page being viewed (`@path`, matched
+  # per destination by `on_route?/2`), where the logo goes, and whether this
+  # page can be left by a patch at all.
+  #
+  # That last one is an assign rather than a question `nav_to/3` asks, because
+  # the answer is the same for all nine nav items and this bar renders on every
+  # page of the site: asked per item it is up to nine route-boundary walks per
+  # render, asked here it is one per path change.
+  #
+  # Since issue #1731 the path is no longer only the path at mount — the
+  # `ShellPath` hook reports each live navigation, and this is where that
+  # report lands too.
+  defp assign_path(socket, path) do
+    socket
+    |> assign(:path, path)
+    |> assign(:live_page?, live_route?(path))
+    |> assign(:brand_path, brand_path(socket.assigns.user_param, path))
+  end
+
+  # The tab destinations that live in `live_session :default` (issue #1731).
+  # Everything else the navs point at — the profile, Network, Jobs, Bookmarks,
+  # the login page — is still a controller route, and a controller route cannot
+  # be in a live_session at all.
+  #
+  # A literal list rather than a question put to the router, because it is
+  # consulted per render on every page of the site and `Phoenix.Router.route_info/4`
+  # is a route walk. The cost of the literal is that it can drift, and the
+  # drift is silent in the dangerous direction — a path listed here but no
+  # longer in the session degrades `navigate` to a full load without a word.
+  # So it is exposed and `live_tab_navigation_test.exs` checks THIS list
+  # against the router's own `live_session` metadata; adding a fifth tab needs
+  # no new test.
+  @live_paths ~w(/feed /search /messages /notifications)
+
+  @doc false
+  def live_paths, do: @live_paths
+
+  # `on_route?/2` already answers false for a nil path, so this needs no clause
+  # of its own for one.
+  defp live_route?(path), do: Enum.any?(@live_paths, &on_route?(path, &1))
+
+  # One nav destination's link attribute, splatted into `<.link>`.
+  #
+  # `navigate` replaces the content between the bars and leaves the document,
+  # the stylesheet, the socket and this shell standing; `href` rebuilds all of
+  # it. Which one an item gets is not a taste question and not a per-item
+  # decision either: a patch is only possible **between two routes in the same
+  # `live_session`**, and across that boundary `navigate` degrades silently to
+  # a full navigation — it looks like it works, which is the trap. So both ends
+  # are asked, the page we are on (`@live_page?`) and the page we are going to.
+  #
+  # The bundle is asked as well. This shell is `sticky`, so a patch does not
+  # remount it and `@path` — which decides the active tab, the Feed tab's
+  # back-to-top face and the logo's deep link — would freeze at whatever page
+  # the document was built on. The `ShellPath` hook is what tells it where the
+  # reader ended up, and a document from before that deploy does not have it,
+  # so it keeps doing full loads and stays right.
+  defp nav_to(live_nav?, live_page?, to) do
+    if live_nav? and live_page? and live_route?(to), do: %{navigate: to}, else: %{href: to}
+  end
+
+  # Landing on a list zeroes its badge, the same rule `initial_count/4` applies
+  # at mount — and through `push_badge/1`, because every other write to these
+  # two counts ends there: that is the one place the installed app's own icon
+  # badge is pushed from, so an assign that skips it leaves the home screen
+  # claiming unread mail the page in front of the member is showing.
+  defp zero_arrived_badge(socket, path) do
+    cond do
+      on_route?(path, "/messages") ->
+        socket |> assign(:messages_count, 0) |> push_badge()
+
+      on_route?(path, "/notifications") ->
+        socket |> assign(:notifications_count, 0) |> push_badge()
+
+      true ->
+        socket
+    end
+  end
 
   # The active nav item (the page being viewed) reads as the current location,
   # not a normal clickable link: brand-tinted, medium weight and no hover
@@ -654,6 +743,40 @@ defmodule VutuvWeb.ShellLive do
     {:noreply, assign(socket, :tab_hidden?, hidden == true)}
   end
 
+  # Where the reader is, reported by the `ShellPath` hook in app.js — once when
+  # it mounts and again on every `phx:navigate` (issue #1731).
+  #
+  # Two jobs in one message. The first is the **claim**: a bundle old enough to
+  # lack the hook never sends it, so `live_nav?` stays false there and its navs
+  # keep rebuilding the document, which is the only thing that can be right for
+  # a browser that cannot report where a patch left it. (The connect-param seam
+  # the feed's ticker uses is closed here — `get_connect_params/1` is
+  # root-and-mount-only and this shell is a nested LiveView.)
+  #
+  # The second is the path itself. This shell is embedded `sticky` — which is
+  # what makes patching worth having, since the counters, the PubSub
+  # subscriptions and presence all survive the trip — and that is exactly why
+  # it never learns the new path on its own: a sticky child is not remounted
+  # and has no `handle_params`. Without this the path the document was built
+  # with would stand for the whole visit, and everything derived from it (the
+  # active tab, the logo's deep link, the Feed tab's back-to-top face) would
+  # describe the page the member has left.
+  #
+  # The mount-time report carries the path the shell already has, so only the
+  # claim is taken from it: re-deriving `brand_path` and the badges for a path
+  # that has not moved is work on every page load site-wide.
+  def handle_event("shell:path", %{"path" => path}, socket) when is_binary(path) do
+    socket = assign(socket, :live_nav?, true)
+
+    if path == socket.assigns.path do
+      {:noreply, socket}
+    else
+      {:noreply, socket |> assign_path(path) |> zero_arrived_badge(path)}
+    end
+  end
+
+  def handle_event("shell:path", _params, socket), do: {:noreply, socket}
+
   ## ── The browser tab's teaser (issue #1681) ──
   #
   # The dot in the tab title says *that* a post arrived. For a few seconds the
@@ -825,7 +948,10 @@ defmodule VutuvWeb.ShellLive do
   @impl true
   def render(assigns) do
     ~H"""
-    <div id="app-shell">
+    <%!-- `ShellPath` reports where a live navigation ended up, and its first
+    message doubles as this document's claim that it can (issue #1731) — see
+    `handle_event("shell:path", …)`. --%>
+    <div id="app-shell" phx-hook="ShellPath">
       <%!-- Drives the green "online" dot on every avatar in the page. Receives
       this viewer's online-id set from ShellLive (push_event "presence:set") and
       writes a generated stylesheet that reveals each online member's
@@ -954,10 +1080,12 @@ defmodule VutuvWeb.ShellLive do
               vutuv
             </.link>
 
-            <%!-- `data-nav-bar` + `data-nav-item`: these are plain links, so a
-            press here is a full page load that nothing in THIS document ever
-            answers. The paint in `app.css` moves the pill on the spot; see the
-            press block there. --%>
+            <%!-- `data-nav-bar` + `data-nav-item`: the paint in `app.css`
+            moves the pill on the spot, because a press here is answered by the
+            next render and not by this document. Since issue #1731 that is no
+            longer true of every item — Feed patches within the live_session —
+            but the paint is right either way: a patch has a round trip to wait
+            through too, and it is a shorter one. --%>
             <nav
               aria-label={gettext("Main navigation")}
               data-nav-bar
@@ -965,7 +1093,7 @@ defmodule VutuvWeb.ShellLive do
             >
               <.link
                 :if={@user_id}
-                href={~p"/feed"}
+                {nav_to(@live_nav?, @live_page?, ~p"/feed")}
                 data-nav-item
                 aria-current={on_route?(@path, "/feed") && "page"}
                 class={nav_link_class(on_route?(@path, "/feed"))}
@@ -1088,7 +1216,7 @@ defmodule VutuvWeb.ShellLive do
             </.link>
 
             <.link
-              href={~p"/search"}
+              {nav_to(@live_nav?, @live_page?, ~p"/search")}
               data-nav-item
               title={gettext("Search")}
               class="hidden h-10 w-10 items-center justify-center rounded-full text-slate-500 hover:bg-slate-100 sm:flex dark:text-slate-400 dark:hover:bg-slate-800"
@@ -1106,7 +1234,7 @@ defmodule VutuvWeb.ShellLive do
                 <.icon_bookmark class="h-6 w-6" />
               </.link>
               <.link
-                href={~p"/messages"}
+                {nav_to(@live_nav?, @live_page?, ~p"/messages")}
                 data-nav-item
                 title={gettext("Messages")}
                 class="relative hidden h-10 w-10 items-center justify-center rounded-full text-slate-500 hover:bg-slate-100 md:flex dark:text-slate-400 dark:hover:bg-slate-800"
@@ -1118,7 +1246,7 @@ defmodule VutuvWeb.ShellLive do
                 />
               </.link>
               <.link
-                href={~p"/notifications"}
+                {nav_to(@live_nav?, @live_page?, ~p"/notifications")}
                 data-nav-item
                 title={gettext("Notifications")}
                 class="relative hidden h-10 w-10 items-center justify-center rounded-full text-slate-500 hover:bg-slate-100 md:flex dark:text-slate-400 dark:hover:bg-slate-800"
@@ -1269,19 +1397,24 @@ defmodule VutuvWeb.ShellLive do
           press). The arrow is the promise that it will: a control that behaves
           differently has to look different first, or the press reads as a
           reload. --%>
-          <.tab href={~p"/feed"} label={gettext("Feed")} active={on_route?(@path, "/feed")} scroll_top>
+          <.tab to={nav_to(@live_nav?, @live_page?, ~p"/feed")} label={gettext("Feed")} active={on_route?(@path, "/feed")} scroll_top>
             <.icon_feed data-tab-icon="feed" />
             <.icon_scroll_top />
           </.tab>
         <% end %>
-        <.tab href={~p"/search"} label={gettext("Search")} active={on_route?(@path, "/search")}><.icon_search /></.tab>
+        <.tab to={nav_to(@live_nav?, @live_page?, ~p"/search")} label={gettext("Search")} active={on_route?(@path, "/search")}><.icon_search /></.tab>
         <%= if @user_id do %>
-          <.tab href={~p"/messages"} label={gettext("Messages")} count={@messages_count} active={on_route?(@path, "/messages")}><.icon_envelope /></.tab>
-          <.tab href={~p"/notifications"} label={gettext("Alerts")} count={@notifications_count} active={on_route?(@path, "/notifications")}><.icon_bell /></.tab>
+          <.tab to={nav_to(@live_nav?, @live_page?, ~p"/messages")} label={gettext("Messages")} count={@messages_count} active={on_route?(@path, "/messages")}><.icon_envelope /></.tab>
+          <.tab to={nav_to(@live_nav?, @live_page?, ~p"/notifications")} label={gettext("Alerts")} count={@notifications_count} active={on_route?(@path, "/notifications")}><.icon_bell /></.tab>
           <%!-- The member's own avatar is the Profile tab — the universal mobile
           convention for "you", so the profile is reachable on phones too, not
           just via the desktop nav or the logo's /feed deep-link. --%>
-          <.tab href={~p"/#{@user_param}"} label={gettext("Profile")} data-mobile-profile active={on_route?(@path, "/#{@user_param}")}>
+          <%!-- The profile is still a controller route (it live_renders
+          UserProfileLive for its five sibling formats), so this one is a full
+          load whatever the other tabs do — `nav_to/3` says so by asking both
+          ends. Issue #1731 lists it as the hard case, deliberately after the
+          feed. --%>
+          <.tab to={nav_to(@live_nav?, @live_page?, ~p"/#{@user_param}")} label={gettext("Profile")} data-mobile-profile active={on_route?(@path, "/#{@user_param}")}>
             <%= if @user_avatar do %>
               <img src={@user_avatar} alt="" class="h-6 w-6 rounded-full object-cover" />
             <% else %>
@@ -1291,7 +1424,7 @@ defmodule VutuvWeb.ShellLive do
             <% end %>
           </.tab>
         <% else %>
-          <.tab href={~p"/login"} label={gettext("Log in")}><.icon_login /></.tab>
+          <.tab to={nav_to(@live_nav?, @live_page?, ~p"/login")} label={gettext("Log in")}><.icon_login /></.tab>
         <% end %>
       </nav>
     </div>
@@ -1300,7 +1433,10 @@ defmodule VutuvWeb.ShellLive do
 
   ## Components
 
-  attr(:href, :string, required: true)
+  # `%{navigate: path}` or `%{href: path}` — see `nav_to/3`. A map rather than a
+  # string because those are two different presses: one patches the content
+  # between the bars, the other rebuilds the document.
+  attr(:to, :map, required: true)
   attr(:label, :string, required: true)
   attr(:count, :integer, default: 0)
   attr(:active, :boolean, default: false)
@@ -1314,7 +1450,7 @@ defmodule VutuvWeb.ShellLive do
     in `app.css` has one element to work on, and the label inherits it. Two
     owners of the same property is what leaves a half-repainted control. --%>
     <.link
-      href={@href}
+      {@to}
       data-nav-item
       data-scroll-top={(@active && @scroll_top) || nil}
       aria-current={@active && "page"}
