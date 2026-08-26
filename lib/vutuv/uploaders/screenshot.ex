@@ -235,7 +235,7 @@ defmodule Vutuv.Screenshot do
   # the generic placeholder and a reader could not tell a page being checked
   # from one that failed to capture. The preview goes into the **served**
   # directory instead: it is the one thing about this capture that may be
-  # published before the verdict, being 32 cells of averaged colour rather than
+  # published before the verdict, being 64 cells of averaged colour rather than
   # the page.
   #
   # `Pixelation.write_if_enabled/3` decides whether there is a wait to stand in

@@ -812,6 +812,30 @@ defmodule Vutuv.PostsTest do
       assert entry.reposted_by.id == stranger.id
     end
 
+    test "a wildly reshared post loads a capped roster and an honest total" do
+      # The banner draws five faces and a "+N", so the query has no business
+      # loading two thousand `%User{}` rows to answer it. What it must not do is
+      # shrink the number: the total comes from the same statement, counted in
+      # SQL over every row the cap left out.
+      viewer = user()
+      post = create_post!(viewer, %{body: "reshared a lot"})
+      backdate_post!(post, 600)
+
+      resharers = for _ <- 1..8, do: user()
+
+      for {resharer, i} <- Enum.with_index(resharers) do
+        :ok = Posts.repost_post(resharer, post)
+        backdate_repost!(resharer, post, 500 - i * 10)
+      end
+
+      assert %{entries: [entry]} = Posts.feed_page(viewer)
+
+      assert length(entry.reposters) == Posts.reposter_roster_cap()
+      assert entry.reposters_total == 8
+      # Newest first, so the banner names the most recent resharer.
+      assert entry.reposted_by.id == List.last(resharers).id
+    end
+
     test "plain post entries carry an empty roster" do
       viewer = user()
       create_post!(viewer, %{body: "no reposts"})

@@ -1,7 +1,7 @@
 defmodule Vutuv.Moderation.Pixelation do
   @moduledoc """
   What a reader sees while the AI scan is still looking at a picture
-  (issue #1720): the picture itself, reduced to 32 cells on its long edge and
+  (issue #1720): the picture itself, reduced to 64 cells on its long edge and
   blown back up into flat blocks.
 
   Before this, an unreleased picture rendered as a grey hourglass tile for
@@ -17,13 +17,13 @@ defmodule Vutuv.Moderation.Pixelation do
   devtools click undoes that, and any client that ignores our stylesheet never
   applied it in the first place. Here the pixels are thrown away before
   anything is served: `Vutuv.Uploads.Spec.write_pixelated/2` averages them into
-  32 cells and that file is all a reader can fetch. What the scan has not
+  64 cells and that file is all a reader can fetch. What the scan has not
   cleared cannot leave, which is the same promise the grey tile made.
 
   It is still a **derivative of an unvetted picture**, which is the trade this
   makes: colours and rough composition of something nobody has looked at yet
-  do reach readers. That is why the window below is short and why the coarse
-  end of the recipe was chosen.
+  do reach readers. That is why the window below is short, and why the cell
+  count in `Vutuv.Uploads.Spec` is argued there rather than tuned by feel.
 
   ## The window
 
@@ -41,7 +41,7 @@ defmodule Vutuv.Moderation.Pixelation do
   ## The file
 
   One file per picture, written beside the served versions by the storing
-  context (it costs one shrink and one AVIF encode of a 32-cell image, i.e.
+  context (it costs one shrink and one AVIF encode of a 64-cell image, i.e.
   next to nothing) and deleted the moment the scan settles — approved or
   rejected, both are answers, and neither needs a stand-in any more.
 

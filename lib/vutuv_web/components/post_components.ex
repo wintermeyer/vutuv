@@ -64,7 +64,11 @@ defmodule VutuvWeb.PostComponents do
   # How many reposter faces the "Reposted by" avatar stack shows before the
   # rest collapse into a `+N` chip. Five keeps the strip to one tidy line even
   # on a phone (5 × 20px avatars, overlapped, plus the chip and the sentence).
-  @repost_stack_cap 5
+  #
+  # It comes from `Vutuv.Posts` because the roster query loads exactly this many
+  # rows (`reposter_roster_cap/0`): a larger number here would ask the stack to
+  # draw faces the query never fetched.
+  @repost_stack_cap Posts.reposter_roster_cap()
 
   # A single preview image counts as "roughly square" when its aspect ratio sits
   # inside a 5:4 / 4:5 envelope (a factor of 1.25 either side of 1:1). Such an
@@ -140,6 +144,13 @@ defmodule VutuvWeb.PostComponents do
       "every reposter behind the entry (newest first, from Posts.feed_page/2) — " <>
         "renders the banner's avatar stack. nil falls back to [reposted_by], so " <>
         "single-reposter callers (profile, dead lists) need not pass it"
+  )
+
+  attr(:reposters_total, :integer,
+    default: nil,
+    doc:
+      "how many resharers the roster stands for when it was capped " <>
+        "(`Vutuv.Posts.reposter_roster_cap/0`); nil means the list is the total"
   )
 
   attr(:entry_id, :string,
@@ -811,6 +822,7 @@ defmodule VutuvWeb.PostComponents do
 
   attr(:reposted_by, :any, default: nil)
   attr(:reposters, :any, default: nil)
+  attr(:reposters_total, :integer, default: nil)
   attr(:entry_id, :string, default: nil)
   attr(:surface, :atom, default: :flat, values: [:card, :flat])
   attr(:conn_or_socket, :any, required: true)
@@ -844,6 +856,7 @@ defmodule VutuvWeb.PostComponents do
         engagement={@engagement}
         reposted_by={@reposted_by}
         reposters={@reposters}
+        reposters_total={@reposters_total}
         entry_id={@entry_id}
         surface={@surface}
         conn_or_socket={@conn_or_socket}
@@ -884,6 +897,7 @@ defmodule VutuvWeb.PostComponents do
           viewer_follow: nil,
           reposted_by: nil,
           reposters: nil,
+          reposters_total: nil,
           entry_id: "#{leaf_key}-parent-#{post.id}"
         }
       end)
@@ -894,6 +908,7 @@ defmodule VutuvWeb.PostComponents do
       viewer_follow: assigns.viewer_follow,
       reposted_by: assigns.reposted_by,
       reposters: assigns.reposters,
+      reposters_total: assigns.reposters_total,
       entry_id: assigns.entry_id
     }
 
@@ -1089,6 +1104,7 @@ defmodule VutuvWeb.PostComponents do
               engagement={node.engagement}
               reposted_by={node.reposted_by}
               reposters={node.reposters}
+              reposters_total={node[:reposters_total]}
               entry_id={node.entry_id}
               surface={@surface}
               conn_or_socket={@conn_or_socket}
@@ -2109,6 +2125,9 @@ defmodule VutuvWeb.PostComponents do
   unlabelled image is honest, a made-up label is not.
   """
   def remote_post_images(assigns) do
+    assigns =
+      assign(assigns, :held_count, Enum.count(assigns.images, &(not RemoteImage.released?(&1))))
+
     ~H"""
     <div
       :if={@images != []}
@@ -2185,6 +2204,23 @@ defmodule VutuvWeb.PostComponents do
         <% end %>
       </div>
     </div>
+    <%!-- The badge on a tile marks WHICH picture is waiting; this line says
+    WHAT the wait is, and it is the half a reader actually reads. A member's
+    own held photos have had it from the start (the placecard grid) — a
+    fediverse card had only the corner pills, and two pixelated tiles under a
+    post with no explanation read as a broken image rather than as a check in
+    progress. Same words as the member's own, because it is the same wait. --%>
+    <p
+      :if={@held_count > 0}
+      data-remote-images-checking={@held_count}
+      class="mt-2 text-xs text-slate-600 dark:text-slate-400"
+    >
+      {ngettext(
+        "Our AI is looking at it. It appears here by itself once it is through.",
+        "Our AI is looking at them. They appear here by themselves once they are through.",
+        @held_count
+      )}
+    </p>
     """
   end
 
@@ -3002,7 +3038,7 @@ defmodule VutuvWeb.PostComponents do
         {gettext("Pinned post")}
       </p>
 
-      <.reposted_banner reposters={@reposters} />
+      <.reposted_banner reposters={@reposters} reposters_total={@reposters_total} />
 
       <%!-- The reply banner: the live parent links its permalink; a deleted
       parent degrades to the author's profile, a deleted account to a
@@ -3926,7 +3962,7 @@ defmodule VutuvWeb.PostComponents do
   # (issue #1720). Two shapes, and which one a reader gets depends on nothing
   # they can see:
   #
-  #   * the photo's own pixelated preview — a separately stored file, 32 cells
+  #   * the photo's own pixelated preview — a separately stored file, 64 cells
   #     across, never a CSS filter over the real picture
   #     (`Vutuv.Moderation.Pixelation` explains why that distinction is the whole
   #     point). The card keeps its shape and its colours, and the live broadcast
@@ -4075,6 +4111,11 @@ defmodule VutuvWeb.PostComponents do
   # "Reposted by NAME" — byte-compatible with the old single-name banner.
   attr(:reposters, :list, required: true)
 
+  attr(:reposters_total, :integer,
+    default: nil,
+    doc: "the uncapped count behind the roster; nil means the list is all of them"
+  )
+
   # The banner's avatar stack: single-reposter callers (the profile, the dead
   # archive/permalink lists) pass only `reposted_by`, which folds into a
   # one-avatar roster; the feed passes the whole `reposters` list.
@@ -4119,12 +4160,20 @@ defmodule VutuvWeb.PostComponents do
   defp reposted_banner(assigns) do
     reposters = assigns.reposters
 
+    # The roster is capped (`Vutuv.Posts.reposter_roster_cap/0`), so the tail is
+    # counted from the total the query reported and never from the list's own
+    # length — otherwise a post reshared two thousand times would say "and 4
+    # others". A caller that passes no total (the profile, the dead archive and
+    # permalink lists, each with a single resharer) has the list as its total.
+    total = assigns.reposters_total || length(reposters)
+
     assigns =
       assigns
       |> assign(:primary, hd(reposters))
       |> assign(:cap, @repost_stack_cap)
+      |> assign(:total, total)
       # Everyone besides the named (newest) reposter — the "and N others" tail.
-      |> assign(:others, length(reposters) - 1)
+      |> assign(:others, total - 1)
 
     ~H"""
     <div
@@ -4134,7 +4183,7 @@ defmodule VutuvWeb.PostComponents do
       <.icon_repost class="h-4 w-4 shrink-0" />
       <%!-- The stack's avatars link to each reposter; the sentence beside it
       names them, so the stack itself is decorative for assistive tech. --%>
-      <.avatar_stack users={@reposters} cap={@cap} />
+      <.avatar_stack users={@reposters} cap={@cap} total={@total} />
       <span class="min-w-0 truncate">
         <%!-- `author_name/1` / `author_path/1`, not `full_name/1` / `~p`: a
         reposter can be a page (`Posts.reposter_rosters/2`), which crashed the

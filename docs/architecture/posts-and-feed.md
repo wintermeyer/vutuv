@@ -358,6 +358,27 @@ fan-out never reached the person whose post it was, and the feed only caught up
 on the next load. Whoever the fan-out already told is subtracted rather than told
 twice — a second copy counts twice behind the "N new posts" pill.
 
+**The roster is capped, its tail counted in SQL.** The banner draws
+`Posts.reposter_roster_cap/0` faces (5) and then a `+N` chip, so the query loads
+exactly that many rows per post and carries `reposters_total` from a
+`count(*) over (partition by post_id)` in the same statement — over the *gated*
+set, so the figure counts only what this reader may be shown. Both numbers ride
+the entry, and the banner reads the **total** for its "and N others" and the list
+only for the faces; letting the list grow while the total stood still is how a
+live restack once answered `-1` and took the page down inside `ngettext`. Until
+the cap the roster was bounded by the reader's follow set — widening it to a post
+of their own made "load every resharer to draw five" a real cost.
+
+**A post arriving live passes the same gates as one fetched by a query.** The
+feed decides who sees a post twice: in SQL for a page, and in memory for a
+PubSub arrival. `Posts.reaches_feed?/2` is the in-memory twin — blocks either
+way, the post's audience, a mute the reader placed, and their language filter,
+in the order the query asks them. While the two disagreed, the pill counted
+posts the next read then dropped, so pressing it showed fewer than it promised.
+The **tab** filter is a different question and stays with the caller: it decides
+which list a post belongs in, not whether it reaches the reader, and an arrival
+for the other tab lights that tab's dot instead of being dropped (issue #1503).
+
 **What keeps that first source cheap.** The local posts source ("mine plus the
 people I follow", newest first) has to stay a *page*-sized read as the posts
 table grows, and two things make it one. `posts_recency_index` covers its sort
@@ -379,36 +400,42 @@ segmented control the profile's post-type tabs use
 (`PostComponents.post_filter_tabs/1`, here with `feed_filter_options/0` and the
 `filter-source` event). The split is `feed_page/2`'s `filter:` option, which
 picks the sources rather than filtering their rows: **vutuv** runs the four
-local sources, the boosts of a *local* post and the reader's **own** reshares of
-remote content; **Fediverse** the cached posts, everybody else's reshares of one
-and the boosts of a *remote* post.
+local sources, every reshare of remote content (`feed_remote_reposts/3`,
+`feed_remote_reply_reposts/3`) and the boosts of a *local* post; **Fediverse**
+the cached posts and the boosts of a *remote* post.
 
-The rule is who an entry belongs to, which is two questions in order. What kind
-of post it carries decides most of it (`Posts.remote_feed_entry?/1`, the same
-question the renderer asks to pick a card), and **a vutuv act on remote content
-beats that**: pressing Reshare happened here, so what the reader passed on is on
-the vutuv tab, where they go to look for what they did — the reported gap, since
-their own reshare showing only under "Fediverse" reads as vutuv having had no
-part in it. Somebody else's reshare is not theirs and stays on the Fediverse
-tab. Either way every entry lands on exactly one tab and the two together are
-"All" — a member's post that an account out there boosted is a vutuv post,
+**The rule is whether somebody here did something.** "Fediverse" is what arrives
+from another network with nobody on this site lifting a finger — the posts of
+accounts the reader follows out there, and what those accounts boosted.
+Everything a member here did is "vutuv": their posts, their replies, and every
+**reshare**, whoever pressed the button and whatever they passed on. Every entry
+lands on exactly one tab and the two together are "All".
+
+The reshare is the whole point of that split, and it took two goes to get right.
+Filing it by the *content* — a Mastodon post is a Mastodon post — put a friend's
+reshare under "Fediverse", so a reader looking for their own network's activity
+had to find it under the other network's name, and their **own** reshare read as
+vutuv having had no part in it. Filing it by *who pressed the button* is the
+answer, and it also fixes a case #1166 had to work around: a member with no
+fediverse follows of their own now has a genuinely empty Fediverse tab, so the
+bar disappears (issue #1267) instead of offering three names for one timeline.
+
+One source produces both kinds and is narrowed by `only:` **inside its query**,
+not by dropping rows afterwards, so a narrowed page is as full as an unnarrowed
+one and `more?` stays honest: `Fediverse.feed_remote_boosts/4` (issue #1167)
+carries a cached post when the boost came from out there and a vutuv post when a
+followed account passed a member's post on — the latter being a vutuv post
 however it arrived.
-
-Three sources produce both kinds and are narrowed by `only:` **inside their
-query**, not by dropping rows afterwards, so a narrowed page is as full as an
-unnarrowed one and `more?` stays honest: `Fediverse.feed_remote_boosts/4`
-(issue #1167) on what the boosted thing is, and the two reshare sources
-(`feed_remote_reposts/4` and `feed_remote_reply_reposts/4`, issues #1166 and
-#1275) on who did the resharing — `:mine` against `:others`, one `scope_resharer`
-clause each.
 
 Switching a tab reloads the timeline from the top (`stream reset: true`) — the
 tab decides what the query pulls, so it cannot be applied to what is already on
 screen — and drops the pending batch with it, since the fresh page already
 carries whatever waited behind the pill. Live arrivals are gated by the
-in-memory twin `Posts.feed_filter_accepts?/3` — which takes the viewer, because
-"did *you* reshare this" is half the rule: a followed member's post neither
-appears nor counts toward the pill while the Fediverse tab is open. The one
+in-memory twin `Posts.feed_filter_accepts?/2`, which asks the same question the
+sources do — is there a `reposted_by`, i.e. did a member here put this in front
+of the reader: a followed member's post neither appears nor counts toward the
+pill while the Fediverse tab is open. (`boosted_by` deliberately does not count;
+that is an account out there passing something on.) The one
 exception is the **viewer's own** post, which must be visible after they press
 Post — there the feed switches back to "All" rather than swallowing it. The
 choice has no URL behind it (this LiveView is off-router and cannot patch), and
@@ -1357,7 +1384,7 @@ minimise the letterboxing exactly where they used to minimise the crop.
 
 A post carrying a picture that has not finished the AI image scan publishes
 straight away. The **picture** is what waits: for anyone but the author and
-admins it renders as its own **pixelated preview** — the photo reduced to 32 cells and
+admins it renders as its own **pixelated preview** — the photo reduced to 64 cells and
 blown back up into flat blocks, a separately stored file rather than a filter
 over the real one (issue #1720, `Vutuv.Moderation.Pixelation`, and
 `docs/architecture/images.md` for the recipe) — with a "wird geprüft" badge on

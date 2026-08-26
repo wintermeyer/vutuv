@@ -338,7 +338,7 @@ from the audit row). Organization logos differ deliberately: the
 logo keeps showing while the new one is scanned.
 
 **The pixelated preview (issue #1720).** A reader who may not see the picture
-yet is shown *the picture itself*, shrunk to 32 cells on its long edge and blown
+yet is shown *the picture itself*, shrunk to 64 cells on its long edge and blown
 back up into flat blocks (`Vutuv.Uploads.Spec.write_pixelated/2`, using
 `Vix.Vips.Operation.zoom/3` so every block is exactly one source cell).
 `Vutuv.Moderation.Pixelation` owns the whole idea — the two filename shapes, the

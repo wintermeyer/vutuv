@@ -38,13 +38,21 @@ defmodule Vutuv.Uploads.Spec do
 
   @effort 4
 
-  # The pixelated preview (issue #1720): how many cells the long edge is reduced to before
-  # it is blown back up, and how big the blown-up file is. 32 cells is coarse
-  # enough that a face, a body or a line of text is gone and fine enough that
-  # the tile reads as a photo rather than as a colour swatch. The quality is
-  # lower than any served version because flat blocks compress to nothing.
-  @pixelated_cells 32
-  @pixelated_width 640
+  # The pixelated preview (issue #1720): how many cells the long edge is reduced
+  # to before it is blown back up, and how big the blown-up file is.
+  #
+  # 64 cells is the second setting this had. At 32 the tile read as a colour
+  # field rather than as the photo somebody is waiting for, which is the whole
+  # job it has; 64 keeps the composition legible — a person is a person, a
+  # screenshot is a screenshot — while a face is still a handful of flat
+  # squares and a line of text is gone entirely. Past this it stops being a
+  # placeholder: what stands here is a picture nobody has looked at yet.
+  #
+  # The blow-up width scales with the cells so a block stays ~15px in the file
+  # and the tile never softens on a wide card. Quality is lower than any served
+  # version because flat blocks compress to nothing.
+  @pixelated_cells 64
+  @pixelated_width 960
   @pixelated_quality 50
 
   # `fit` shapes: {:crop, w, h, gravity} crops to exactly w×h;
@@ -279,7 +287,8 @@ defmodule Vutuv.Uploads.Spec do
   every block is exactly the same size and the result cannot pick up the
   half-pixel interpolation seams a scaled resample leaves along cell edges.
   The factor is chosen so the long edge lands near #{@pixelated_width}px — a
-  32-cell AVIF blown up to that size is a couple of kilobytes, and blowing it
+  #{@pixelated_cells}-cell AVIF blown up to that size is a couple of kilobytes,
+  and blowing it
   up here rather than in the browser means the tile looks the same whatever
   `image-rendering` the reader's browser defaults to.
   """

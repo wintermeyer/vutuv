@@ -165,12 +165,16 @@ defmodule VutuvWeb.FeedSourceTabsTest do
       refute has_element?(view, "#feed-source-tabs")
     end
 
-    test "somebody here resharing a remote post is enough, with no fediverse account of one's own",
-         %{conn: conn} do
-      # The case a member-level flag would get wrong (issue #1166): this viewer
-      # follows nobody out there and has no actor, but a member they follow
-      # *here* reshared a remote post, so remote posts really are in their feed
-      # and the tabs have work to do.
+    test "a friend's reshare alone is vutuv content, so there are no tabs", %{conn: conn} do
+      # This viewer follows nobody out there and has no actor: everything from
+      # another network reaches them because a member they follow *here* passed
+      # it on — and pressing that button is a vutuv act. So "Fediverse" holds
+      # nothing, "vutuv" is the same list as "All", and three tabs over one
+      # timeline is exactly what issue #1267 took away.
+      #
+      # Until the reshare sources moved to the vutuv tab, this was the case that
+      # proved the bar had work to do (issue #1166). The bar is gone; the
+      # content is not.
       {conn, user} = create_and_login_user(conn)
       sharer = insert(:user, email_confirmed?: true)
       Social.follow(user, sharer.id)
@@ -184,7 +188,7 @@ defmodule VutuvWeb.FeedSourceTabsTest do
 
       {:ok, view, _html} = live(conn, ~p"/feed")
 
-      assert has_element?(view, "#feed-source-tabs")
+      refute has_element?(view, "#feed-source-tabs")
       assert timeline(view) =~ "passed on by a friend"
     end
   end
@@ -410,10 +414,17 @@ defmodule VutuvWeb.FeedSourceTabsTest do
       refute timeline(view) =~ "I passed this on"
     end
 
-    test "somebody else's reshare stays on the Fediverse tab", %{conn: conn} do
+    test "somebody else's reshare is a vutuv act too", %{conn: conn} do
+      # The reader did not press the button, but a member here did — and that is
+      # what the tab is about. "Fediverse" is what arrives without anybody here
+      # doing anything; filing a friend's reshare there sent the reader looking
+      # for their own network's activity under the other network's name.
       {conn, user} = create_and_login_user(conn)
       sharer = insert(:user, email_confirmed?: true)
       Social.follow(user, sharer.id)
+
+      # Something the reader follows out there, so the bar has both halves.
+      cached_post(remote_account(user, "them"), "written out there")
 
       post = cached_post(remote_account("stranger"), "passed on by a friend")
       Repo.insert!(%PostRepost{user_id: sharer.id, remote_post_id: post.id})
@@ -421,10 +432,11 @@ defmodule VutuvWeb.FeedSourceTabsTest do
       {:ok, view, _html} = live(conn, ~p"/feed")
 
       render_click(view, "filter-source", %{"type" => "vutuv"})
-      refute timeline(view) =~ "passed on by a friend"
+      assert timeline(view) =~ "passed on by a friend"
 
       render_click(view, "filter-source", %{"type" => "fediverse"})
-      assert timeline(view) =~ "passed on by a friend"
+      refute timeline(view) =~ "passed on by a friend"
+      assert timeline(view) =~ "written out there"
     end
 
     test "the same holds for a reply the viewer passed on", %{conn: conn} do
