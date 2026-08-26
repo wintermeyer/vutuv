@@ -2633,16 +2633,11 @@ defmodule Vutuv.Fediverse do
   to any follow of the author. Stamped with the repost time, like a local
   repost: what is new is the sharing, not the post.
 
-  `only:` keeps just one of the two resharers this source carries — `:mine`
-  for the viewer's own reshares, `:others` for everybody else's — which is how
-  the feed's source tabs split it (`Vutuv.Posts.feed_page/2`): pressing that
-  button is a vutuv act, so what the reader themselves passed on belongs on the
-  vutuv tab. It narrows the **query**, not the rows it returns, so a narrowed
-  page is as full as an unnarrowed one and `more?` stays honest.
+  It feeds the **vutuv** tab, the reader's own reshares and everybody else's
+  alike: pressing that button is something that happened here, whoever pressed
+  it (`Vutuv.Posts.feed_sources/2`).
   """
-  def feed_remote_reposts(viewer, fetch_n, cursor, opts \\ [])
-
-  def feed_remote_reposts(%User{id: viewer_id} = viewer, fetch_n, cursor, opts) do
+  def feed_remote_reposts(%User{id: viewer_id} = viewer, fetch_n, cursor) do
     if enabled?() do
       from(r in PostRepost,
         join: p in RemotePost,
@@ -2660,7 +2655,7 @@ defmodule Vutuv.Fediverse do
         limit: ^fetch_n,
         preload: [remote_post: {p, [:screenshot, remote_account: a]}, user: reposter]
       )
-      |> scope_resharer(viewer_id, Keyword.get(opts, :only))
+      |> scope_resharer(viewer_id)
       |> Vutuv.Posts.named_language_scope(Vutuv.Posts.feed_language_filter(viewer))
       |> remote_reposts_at_or_before(cursor)
       |> Repo.all()
@@ -2678,18 +2673,7 @@ defmodule Vutuv.Fediverse do
   # source applies: that one only asks about a confirmed address, and passing a
   # stranger's post into other people's feeds is exactly what a frozen or
   # suspended account must not be able to keep doing while its case is open.
-  defp scope_resharer(query, viewer_id, :mine), do: where(query, [r], r.user_id == ^viewer_id)
-
-  defp scope_resharer(query, viewer_id, :others) do
-    where(
-      query,
-      [r, resharer: resharer],
-      r.user_id != ^viewer_id and r.user_id in subquery(unmuted_followees(viewer_id)) and
-        account_confirmed_row(resharer) and not account_hidden_row(resharer)
-    )
-  end
-
-  defp scope_resharer(query, viewer_id, _both) do
+  defp scope_resharer(query, viewer_id) do
     where(
       query,
       [r, resharer: resharer],
@@ -7264,15 +7248,13 @@ defmodule Vutuv.Fediverse do
   The seventh feed source (issue #1275): **replies** from another network that
   people the viewer follows **here** have passed on.
 
-  The exact twin of `feed_remote_reposts/4` one table over, and scoped the same
+  The exact twin of `feed_remote_reposts/3` one table over, and scoped the same
   way — to the resharer, never to any follow of the author, because being
   vouched for by somebody here is the whole reason this row reaches a member who
   follows nobody out there. Stamped with the reshare time: what is new is the
-  sharing. `only:` splits it between the source tabs exactly as it does there.
+  sharing, and it lands on the vutuv tab for the same reason.
   """
-  def feed_remote_reply_reposts(viewer, fetch_n, cursor, opts \\ [])
-
-  def feed_remote_reply_reposts(%User{id: viewer_id} = viewer, fetch_n, cursor, opts) do
+  def feed_remote_reply_reposts(%User{id: viewer_id} = viewer, fetch_n, cursor) do
     if enabled?() do
       from(r in NoteRepost,
         join: n in Note,
@@ -7288,7 +7270,7 @@ defmodule Vutuv.Fediverse do
         order_by: [desc: r.inserted_at, desc: r.id],
         preload: [note: n, user: resharer]
       )
-      |> scope_resharer(viewer_id, Keyword.get(opts, :only))
+      |> scope_resharer(viewer_id)
       |> Vutuv.Posts.named_language_scope(Vutuv.Posts.feed_language_filter(viewer))
       |> limit(^fetch_n)
       |> note_reposts_at_or_before(cursor)

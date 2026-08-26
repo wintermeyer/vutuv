@@ -2698,23 +2698,26 @@ defmodule Vutuv.Posts do
 
   # The six sources the merged feed pulls from, narrowed to the reader's tab.
   #
-  # The two tabs partition the feed by **who the entry belongs to**, which is
-  # two questions in order. What kind of post it carries decides most of it
-  # (`remote_feed_entry?/1` — the same question the renderer asks to pick a
-  # card), and a **vutuv act on remote content beats that**: pressing Reshare
-  # is something that happened here, so the reader's own reshare of a post from
-  # another network is on the vutuv tab, where they go to see what they did.
-  # Somebody else's reshare is not theirs and stays on the Fediverse tab.
-  # Either way every entry lands on exactly one tab and the two together are
-  # "All".
+  # The two tabs partition the feed by **whether somebody here did something**.
+  # "Fediverse" is what arrives from another network without anybody on this
+  # site lifting a finger: the posts of accounts the reader follows out there,
+  # and what those accounts boosted. Everything a member here did is "vutuv" —
+  # their posts, their replies, and every **reshare**, whoever pressed the
+  # button and whatever they passed on.
   #
-  # Two sources produce both kinds, and both are narrowed by `:only` **inside
-  # their own query** rather than by dropping rows afterwards, so a page is
-  # never short of what the paginator fetched for it (which is what decides
-  # `more?`). `feed_remote_boosts/4` (issue #1167) carries a cached remote post
-  # when the boosted thing lives out there and a plain vutuv post when a
-  # followed account passed a member's post on — the latter *is* a vutuv post.
-  # The two reshare sources (issues #1166 and #1275) split on the resharer.
+  # The reshare is the whole point of the split. Filing a friend's reshare under
+  # "Fediverse" because the *content* came from there sent the reader looking
+  # for their own network's activity under the other network's name — and left
+  # a member with no fediverse follows of their own with a permanently empty
+  # Fediverse tab beside a vutuv tab that was simply "All" again.
+  #
+  # One source produces both kinds and is narrowed by `:only` **inside its own
+  # query** rather than by dropping rows afterwards, so a page is never short of
+  # what the paginator fetched for it (which is what decides `more?`):
+  # `feed_remote_boosts/4` (issue #1167) carries a cached remote post when the
+  # boosted thing lives out there — nobody here did that — and a plain vutuv
+  # post when a followed account passed a member's post on, which *is* a vutuv
+  # post however it arrived.
   defp feed_sources(viewer, :vutuv) do
     [
       &feed_post_items(viewer, &1, &2),
@@ -2724,16 +2727,14 @@ defmodule Vutuv.Posts do
       &feed_reply_to_me_items(viewer, &1, &2),
       &feed_repost_of_mine_items(viewer, &1, &2),
       &Vutuv.Fediverse.feed_remote_boosts(viewer, &1, &2, only: :local),
-      &Vutuv.Fediverse.feed_remote_reposts(viewer, &1, &2, only: :mine),
-      &Vutuv.Fediverse.feed_remote_reply_reposts(viewer, &1, &2, only: :mine)
+      &Vutuv.Fediverse.feed_remote_reposts(viewer, &1, &2),
+      &Vutuv.Fediverse.feed_remote_reply_reposts(viewer, &1, &2)
     ]
   end
 
   defp feed_sources(viewer, :fediverse) do
     [
       &Vutuv.Fediverse.feed_remote_posts(viewer, &1, &2),
-      &Vutuv.Fediverse.feed_remote_reposts(viewer, &1, &2, only: :others),
-      &Vutuv.Fediverse.feed_remote_reply_reposts(viewer, &1, &2, only: :others),
       &Vutuv.Fediverse.feed_remote_boosts(viewer, &1, &2, only: :remote)
     ]
   end
@@ -2823,28 +2824,26 @@ defmodule Vutuv.Posts do
   end
 
   @doc """
-  Whether the feed tab `filter` shows `entry` for `viewer` — the in-memory twin
-  of the source split in `feed_sources/2`, for the entries that arrive live over
-  PubSub rather than through a query.
+  Whether the feed tab `filter` shows `entry` — the in-memory twin of the source
+  split in `feed_sources/2`, for the entries that arrive live over PubSub rather
+  than through a query.
 
-  `viewer` is what makes it a twin rather than a near-miss: the split is not
-  "which kind of post" alone, it is that a reshare the reader pressed
-  themselves counts as a vutuv act (see `feed_sources/2`), and only the reader
-  can say whether they pressed it.
+  The split is not "which kind of post" alone: an entry carrying remote content
+  is a **vutuv** entry as soon as a member here passed it on (`reposted_by`),
+  whoever that was. See `feed_sources/2` for why.
   """
-  def feed_filter_accepts?(:vutuv, entry, viewer),
-    do: not remote_feed_entry?(entry) or own_reshare?(entry, viewer)
+  def feed_filter_accepts?(:vutuv, entry),
+    do: not remote_feed_entry?(entry) or reshared_here?(entry)
 
-  def feed_filter_accepts?(:fediverse, entry, viewer),
-    do: remote_feed_entry?(entry) and not own_reshare?(entry, viewer)
+  def feed_filter_accepts?(:fediverse, entry),
+    do: remote_feed_entry?(entry) and not reshared_here?(entry)
 
-  def feed_filter_accepts?(_all, _entry, _viewer), do: true
+  def feed_filter_accepts?(_all, _entry), do: true
 
-  # Whether this entry is here because the reader passed it on.
-  defp own_reshare?(entry, %User{id: viewer_id}),
-    do: entry[:reposted_by] != nil and entry.reposted_by.id == viewer_id
-
-  defp own_reshare?(_entry, _viewer), do: false
+  # Whether a member here put this entry in front of the reader. `boosted_by` is
+  # deliberately not it: that is an account out there passing something on, and
+  # nobody here did anything.
+  defp reshared_here?(entry), do: entry[:reposted_by] != nil
 
   @doc """
   Whether `viewer`'s feed can show anything from another network at all — the

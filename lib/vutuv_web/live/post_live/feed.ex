@@ -1072,7 +1072,7 @@ defmodule VutuvWeb.PostLive.Feed do
       # feed switches back to All and reloads rather than swallowing the post,
       # which from the composer reads as the post having been lost.
       actor_id == user.id and
-          not Posts.feed_filter_accepts?(socket.assigns.feed_filter, entry, user) ->
+          not Posts.feed_filter_accepts?(socket.assigns.feed_filter, entry) ->
         {:noreply,
          socket
          |> assign(:composer_open?, false)
@@ -1104,7 +1104,7 @@ defmodule VutuvWeb.PostLive.Feed do
       # A post nobody on this tab asked for must not be counted by the pill
       # either: the pill's whole promise is that clicking it shows those posts
       # right here.
-      Posts.feed_filter_accepts?(socket.assigns.feed_filter, entry, user) ->
+      Posts.feed_filter_accepts?(socket.assigns.feed_filter, entry) ->
         {:noreply, update(socket, :pending_posts, &[decorate(entry, user, socket) | &1])}
 
       # It belongs on a tab the reader is not looking at, so say so there
