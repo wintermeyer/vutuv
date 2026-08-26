@@ -81,6 +81,52 @@ html {
   --press-pending-opacity: 0.55;
 }
 
+/* THE 16PX FLOOR FOR TOUCH — and the reason it lives out here rather than in
+   `components.css` (issue #1726).
+
+   iOS zooms the whole page in when a focused form field is smaller than 16px,
+   and it never zooms back out: the page stays magnified with its right edge off
+   screen until the reader pinches out by hand. Measured on an iPhone 17 Pro /
+   iOS 27, tapping the sign-up form's first field scaled the page by exactly
+   1.14, which is 16 / 14.
+
+   The 14px comes from THREE different places, and only one of them can be
+   answered from the components layer:
+
+     - `input_class/0` (the kit recipe, ~40 forms incl. sign-up) carries
+       `text-sm`, a Tailwind UTILITY
+     - `.editform` fields (the classic pages) are `0.875rem`
+     - the base `select` rule and `.tag-input__box` are 15px / 0.875rem
+
+   The first is why this block is unlayered. `components.css` sits in the
+   `components` layer, which loses to the utilities layer WHATEVER its
+   specificity — so the same rule written down there is in the stylesheet, reads
+   as if it applies, and quietly does nothing to the sign-up form (measured:
+   still 14px, only the tag box moved). This file, after `@theme` and outside
+   every layer, is the one place that beats a utility. Same reasoning as the
+   press paint below it.
+
+   `pointer: coarse` rather than a width breakpoint, because the behaviour
+   belongs to touch input and not to a narrow screen: an iPad in landscape is
+   wide and still zooms, while a narrow desktop window never did and keeps its
+   14px fields. That is what leaves the desktop design untouched.
+
+   These selectors name elements rather than a data attribute, which the rest of
+   this file deliberately avoids. The alternative is a marker on every input in
+   the app, and the set here is exactly "things that take text focus" — the same
+   set the browser behaviour is keyed on.
+
+   `user-scalable=no` in the viewport meta would also stop the zoom, and is the
+   usual first reflex. It is not an option: it takes deliberate zoom away from
+   everyone (WCAG 1.4.4) to fix what is one CSS value. */
+@media (pointer: coarse) {
+  input:not([type="checkbox"]):not([type="radio"]):not([type="range"]):not([type="color"]),
+  select,
+  textarea {
+    font-size: 16px;
+  }
+}
+
 /* One paint, four looks. A bar names its own colours through these three
    properties and the rules below read them, so a pressed control always turns
    into THAT bar's own current item rather than into some third thing. The

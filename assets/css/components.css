@@ -3463,6 +3463,20 @@ html.lightbox-open { overflow: hidden; }
   }
 }
 
+/* Double-tap-to-zoom makes a browser hold every tap for ~300ms to see whether a
+   second one follows, which is the delay that reads as "the web feels slow".
+   `manipulation` opts each control out of that one gesture while leaving pinch
+   zoom completely alone — the targeted alternative to `user-scalable=no`. */
+a,
+button,
+label,
+summary,
+[role="button"],
+[type="button"],
+[type="submit"] {
+  touch-action: manipulation;
+}
+
 /* Changing this file (or app.css @theme / lib/vutuv_web/components/ui.ex) is a
    design-language change — a PostToolUse hook reminds you to update
    .claude/rules/design.md so the design rule stays in sync. */
