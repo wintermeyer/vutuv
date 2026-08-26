@@ -324,18 +324,39 @@ whom being seen decides whether they come back. Following somebody here
 the click read as if it had undone something — and only a fresh draw retires
 them.
 
-`Posts.feed_page/2` merges **six** sources through `Vutuv.FeedPage` (a shared
+`Posts.feed_page/2` merges its sources through `Vutuv.FeedPage` (a shared
 cursor over independent fetchers). Three are local: own + followed authors'
 posts, their reposts, and — since issue #872 — posts carrying a **tag you follow**
 (`feed_tag_items/3`), from authors you do *not* already follow (so following a
 tag widens the feed with new voices without duplicating the follow path; muted
 and blocked authors stay out exactly as elsewhere). Following a tag lives in
 `Vutuv.Tags` — see [social-graph.md](social-graph.md). The feed also carries the
-reload-free **"Tags you follow"** rail (chips + a `phx-click` ✕ unfollow). The
-other three come from `Vutuv.Fediverse` — cached posts of accounts you follow
-out there (#1161), what people you follow *here* reshared from another network
-(#1166), and what those accounts boosted (#1167) — see
-[fediverse.md](fediverse.md).
+reload-free **"Tags you follow"** rail (chips + a `phx-click` ✕ unfollow). Three
+come from `Vutuv.Fediverse` — cached posts of accounts you follow out there
+(#1161), what people you follow *here* reshared from another network (#1166),
+and what those accounts boosted (#1167) — see [fediverse.md](fediverse.md).
+
+**And two that are not about a follow at all**: what somebody did to the
+reader's **own** posts (`feed_reply_to_me_items/3`, `feed_repost_of_mine_items/3`).
+A follow feed answers "what have the people I follow said", which leaves a hole
+around the reader themselves — a member they do not follow answers one of their
+posts and the feed says nothing, so the conversation under their own words
+happens somewhere they never look. `collapse_threads/1` then folds the answer in
+with the post it answers, so what they see is their own post with the new answer
+under it rather than a stranger's card out of nowhere. "Their own" covers **what
+they reshared** too (`reshared_by/1`): passing something on is taking part in it.
+Every gate the follow sources apply is asked here of somebody the reader has no
+follow edge to — the author's standing, blocks either way, a mute they placed,
+the post's audience, their language filter.
+
+Two things travel with that. The **roster** behind the "Reposted by" banner
+holds a stranger on such a post (`roster_holds/1`); with it still limited to
+followees, a reader's own reshare was named instead of the reshare that actually
+put the post back on the page. And the **push side matches the pull side**
+(`broadcast_about_post/3`): a stranger is nobody's follower, so the ordinary
+fan-out never reached the person whose post it was, and the feed only caught up
+on the next load. Whoever the fan-out already told is subtracted rather than told
+twice — a second copy counts twice behind the "N new posts" pill.
 
 **What keeps that first source cheap.** The local posts source ("mine plus the
 people I follow", newest first) has to stay a *page*-sized read as the posts

@@ -30,17 +30,6 @@ defmodule Vutuv.PostsTest do
     author |> create_post!(attrs) |> liked!(likers)
   end
 
-  # Repost order ties at second precision too; shift `reposter`'s repost of
-  # `post` into the past so "newest reposter" assertions stay deterministic.
-  defp backdate_repost!(reposter, post, seconds) do
-    at = NaiveDateTime.add(NaiveDateTime.utc_now(:second), -seconds)
-
-    Repo.update_all(
-      from(r in PostRepost, where: r.user_id == ^reposter.id and r.post_id == ^post.id),
-      set: [inserted_at: at]
-    )
-  end
-
   describe "create_post/2" do
     test "creates a public post stamped with today's Berlin date" do
       author = user()
@@ -793,15 +782,34 @@ defmodule Vutuv.PostsTest do
       :ok = Posts.repost_post(stranger, post)
       backdate_repost!(stranger, post, 300)
       :ok = Posts.repost_post(friend, post)
-      backdate_repost!(friend, post, 120)
-      :ok = Posts.repost_post(viewer, post)
 
       assert %{entries: [entry]} = Posts.feed_page(viewer)
-      # The stranger reposted most recently of the three but is invisible here:
+      # The stranger reposted most recently of the two but is invisible here:
       # the roster explains why the post is in *this* feed, so it holds only
       # followed reposters and the viewer, newest first.
-      assert Enum.map(entry.reposters, & &1.id) == [viewer.id, friend.id]
-      assert entry.reposted_by.id == viewer.id
+      assert Enum.map(entry.reposters, & &1.id) == [friend.id]
+      assert entry.reposted_by.id == friend.id
+    end
+
+    test "on a post of my own the roster holds a stranger too" do
+      # The one widening of the rule above: what happens to the reader's own
+      # posts — and to what they passed on — reaches them whoever did it, so the
+      # banner has to be able to name a stranger. With the roster still limited
+      # to followees, the reader's own reshare was named instead of the reshare
+      # that actually put the post back on the page.
+      viewer = user()
+      author = user()
+      stranger = user()
+
+      post = create_post!(author, %{body: "mine to watch"})
+      backdate_post!(post, 600)
+      :ok = Posts.repost_post(viewer, post)
+      backdate_repost!(viewer, post, 300)
+      :ok = Posts.repost_post(stranger, post)
+
+      assert %{entries: [entry]} = Posts.feed_page(viewer)
+      assert Enum.map(entry.reposters, & &1.id) == [stranger.id, viewer.id]
+      assert entry.reposted_by.id == stranger.id
     end
 
     test "plain post entries carry an empty roster" do

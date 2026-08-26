@@ -6,6 +6,7 @@ defmodule Vutuv.PostsHelpers do
   alias Vutuv.Posts
   alias Vutuv.Posts.Post
   alias Vutuv.Posts.PostLike
+  alias Vutuv.Posts.PostRepost
   alias Vutuv.Repo
 
   @doc """
@@ -29,6 +30,20 @@ defmodule Vutuv.PostsHelpers do
     at = NaiveDateTime.add(NaiveDateTime.utc_now(:second), -seconds)
     Repo.update_all(from(p in Post, where: p.id == ^post.id), set: [inserted_at: at])
     %{post | inserted_at: at}
+  end
+
+  @doc """
+  The same for a reshare: `reposter`'s repost of `post`, moved `seconds` into
+  the past. Repost order ties at second precision like everything else here, so
+  any "newest resharer" assertion has to place its rows by hand.
+  """
+  def backdate_repost!(reposter, post, seconds) do
+    at = NaiveDateTime.add(NaiveDateTime.utc_now(:second), -seconds)
+
+    Repo.update_all(
+      from(r in PostRepost, where: r.user_id == ^reposter.id and r.post_id == ^post.id),
+      set: [inserted_at: at]
+    )
   end
 
   @doc """

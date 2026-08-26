@@ -119,6 +119,22 @@ defmodule Vutuv.OrganizationEngagementTest do
     assert Posts.post_engagement(post.id, page).likes == 0
   end
 
+  test "the page's reshare reaches the post's author without raising" do
+    # A page's repost row leaves `user_id` NULL, so anything deriving a
+    # recipient set from "the actor's id" puts that nil into
+    # `where: followee_id == ^nil`, which Ecto raises on rather than answering
+    # nothing — the trap this milestone has paid for repeatedly, here on the
+    # path that tells an author their post was passed on.
+    {page, owner} = page_with_publisher()
+    {post, author} = a_post()
+    Vutuv.Activity.subscribe(author.id)
+
+    assert :ok = Posts.repost_post(page, owner, post)
+
+    assert_receive {:new_repost, %{post_id: post_id}}
+    assert post_id == post.id
+  end
+
   test "the page unlikes, unbookmarks and unreposts" do
     {page, owner} = page_with_publisher()
     {post, _author} = a_post()

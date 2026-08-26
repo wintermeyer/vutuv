@@ -341,8 +341,8 @@ defmodule Vutuv.Posts do
           # Answering a post is the clearest possible proof of having read it,
           # so any notification about the parent stops counting as unread.
           Vutuv.Activity.mark_post_seen(author.id, parent.id)
-          broadcast_new_post(post)
-          broadcast_reply(parent, post)
+          told = broadcast_new_post(post)
+          broadcast_reply(parent, post, told)
           sync_mentions(post)
           Vutuv.Fediverse.federate_new_post(post)
           reconcile_screenshot(post)
@@ -1414,7 +1414,7 @@ defmodule Vutuv.Posts do
         case engage(PostRepost, :repost, user, post) do
           {:ok, %PostRepost{} = repost} ->
             Vutuv.Fediverse.federate_repost(post, user)
-            broadcast_new_repost(repost)
+            broadcast_new_repost(repost, post)
 
           {:ok, :noop} ->
             :ok
@@ -1445,7 +1445,7 @@ defmodule Vutuv.Posts do
     case engage(PostRepost, :repost, page, post, acting_user) do
       {:ok, %PostRepost{} = repost} ->
         Vutuv.Fediverse.federate_repost(post, page)
-        broadcast_new_repost(repost)
+        broadcast_new_repost(repost, post)
 
       {:ok, :noop} ->
         :ok
@@ -2639,6 +2639,8 @@ defmodule Vutuv.Posts do
       &feed_organization_post_items(viewer, &1, &2),
       &feed_repost_items(viewer, &1, &2),
       &feed_tag_items(viewer, &1, &2),
+      &feed_reply_to_me_items(viewer, &1, &2),
+      &feed_repost_of_mine_items(viewer, &1, &2),
       &Vutuv.Fediverse.feed_remote_boosts(viewer, &1, &2, only: :local),
       &Vutuv.Fediverse.feed_remote_reposts(viewer, &1, &2, only: :mine),
       &Vutuv.Fediverse.feed_remote_reply_reposts(viewer, &1, &2, only: :mine)
@@ -2661,6 +2663,10 @@ defmodule Vutuv.Posts do
       &feed_organization_post_items(viewer, &1, &2),
       &feed_repost_items(viewer, &1, &2),
       &feed_tag_items(viewer, &1, &2),
+      # What happened to the reader's **own** posts, whoever did it — the two
+      # sources that are not about a follow at all.
+      &feed_reply_to_me_items(viewer, &1, &2),
+      &feed_repost_of_mine_items(viewer, &1, &2),
       &Vutuv.Fediverse.feed_remote_posts(viewer, &1, &2),
       # Fifth: what people the viewer follows *here* have reshared from
       # another network (issue #1166) — the one way a member who follows
@@ -3184,8 +3190,22 @@ defmodule Vutuv.Posts do
   # stamped with the repost time. Both the reposter and the original author
   # must be activated (a repost must not amplify a hidden author), and the
   # post itself passes the viewer's visibility scope as usual.
-  defp feed_repost_items(%User{id: viewer_id} = viewer, fetch_n, cursor) do
+  defp feed_repost_items(viewer, fetch_n, cursor),
+    do: feed_repost_source(viewer, fetch_n, cursor, :followed)
+
+  # And the same rows for the other reason they can reach a reader: the post is
+  # **theirs**, or one they passed on, so whoever reshared it is news to them
+  # whether or not they follow that person.
+  defp feed_repost_of_mine_items(viewer, fetch_n, cursor),
+    do: feed_repost_source(viewer, fetch_n, cursor, :about_me)
+
+  # One query for both, because everything except the gate is the same — the
+  # join graph, the cursor's `as: :repost` binding, the order, and how a row
+  # becomes an entry. Written twice, the copies drifted the same afternoon they
+  # were written.
+  defp feed_repost_source(%User{id: viewer_id} = viewer, fetch_n, cursor, reach) do
     from(p in Post,
+      as: :owned_post,
       join: r in PostRepost,
       as: :repost,
       on: r.post_id == p.id,
@@ -3204,8 +3224,7 @@ defmodule Vutuv.Posts do
       as: :author,
       left_join: o in assoc(p, :organization),
       as: :repost_organization,
-      where: ^repost_reaches_me(viewer_id),
-      where: ^resharer_is_shown(viewer_id),
+      where: ^repost_reach(reach, viewer_id),
       # A repost must not amplify an author the site hides. For a member that is
       # their account standing; for a page it is the page's own
       # (`organization_public_row/1`), so a frozen page stops being passed on.
@@ -3230,6 +3249,122 @@ defmodule Vutuv.Posts do
     |> Enum.map(fn {id, at, post, reposter, page} ->
       %{id: "repost-#{id}", post: post, reposted_by: reposter || page, at: at}
     end)
+  end
+
+  # What somebody **answered under one of the reader's own posts**, whoever they
+  # are — the first of the two sources that is not about a follow at all.
+  #
+  # The feed asks "what have the people I follow said", which leaves a hole
+  # around the reader themselves: a member they do not follow answers one of
+  # their posts and the feed says nothing, so the conversation under their own
+  # words happens somewhere they never look. `collapse_threads/1` then folds the
+  # answer together with the post it answers, so what they see is their own post
+  # with the new answer under it rather than a stranger's card out of nowhere.
+  #
+  # "Their own" covers **what they reshared** too: passing something on is
+  # taking part in it, so what is said under it is theirs to see as well.
+  #
+  # Every gate the follow sources apply is asked here of somebody the reader has
+  # no follow edge to — the author's standing, blocks either way, a mute they
+  # placed, the post's own audience and their language filter. Their **own**
+  # answers are excluded rather than deduplicated later: `feed_post_items/3`
+  # already carries them, and the paginator's `more?` counts rows, not cards.
+  defp feed_reply_to_me_items(%User{id: viewer_id} = viewer, fetch_n, cursor) do
+    from(p in Post,
+      as: :post,
+      join: u in assoc(p, :user),
+      as: :author,
+      join: r in PostReply,
+      as: :reply,
+      on: r.post_id == p.id,
+      # `post_replies` answers both halves by itself: it carries the denormalized
+      # `parent_author_id` (with `(parent_author_id, inserted_at)` behind it,
+      # which is how `Vutuv.Activity` already asks "replies to me") and the
+      # parent's id. A second join to `posts` for the same two columns is a join
+      # of the largest table on the hottest read path.
+      where: ^reply_to_a_post_of_mine(viewer_id),
+      # Their own replies arrive through `feed_post_items/3`, and a followee's
+      # through the same source — excluded in the **query**, because the
+      # paginator counts rows for `more?` and pages by them, so a duplicate
+      # would shorten the page and be dropped only much later, by
+      # `collapse_threads/1`.
+      where: p.user_id != ^viewer_id,
+      where: p.user_id not in subquery(followees_of(viewer_id)),
+      # `not account_hidden_row(u)` is deliberately absent: naming `as: :author`
+      # is what makes `scope_visible/2` add exactly that (`and_author_shown/2`).
+      where: account_confirmed_row(u),
+      where: p.user_id not in subquery(silenced_by(viewer_id)),
+      order_by: [desc: p.inserted_at, desc: p.id],
+      limit: ^fetch_n
+    )
+    |> scope_visible(viewer)
+    |> language_scope(feed_language_filter(viewer))
+    |> posts_at_or_before(cursor)
+    |> Repo.all()
+    |> Enum.map(&%{id: "post-#{&1.id}", post: &1, reposted_by: nil, at: &1.inserted_at})
+  end
+
+  # The posts the reader passed on.
+  defp reshared_by(viewer_id) do
+    from(r in PostRepost, where: r.user_id == ^viewer_id, select: r.post_id)
+  end
+
+  # **"This act is about a post of mine"** — one the reader wrote, or one they
+  # passed on. Two spellings of one rule, because the two sides read it off
+  # different tables, and both are mirrored on the write side by
+  # `stakeholder_ids/1`; `reshared_by/1` is what keeps the three in step.
+  #
+  # On `post_replies`, which carries the answered post's author and id itself —
+  # so the reply source needs no second join to `posts` for them.
+  defp reply_to_a_post_of_mine(viewer_id) do
+    dynamic(
+      [reply: r],
+      r.parent_author_id == ^viewer_id or r.parent_post_id in subquery(reshared_by(viewer_id))
+    )
+  end
+
+  # And on the post itself, for the sources that already hold it.
+  defp about_a_post_of_mine(viewer_id) do
+    dynamic(
+      [owned_post: op],
+      op.user_id == ^viewer_id or op.id in subquery(reshared_by(viewer_id))
+    )
+  end
+
+  # The blocked and the muted in one list, so a caller asks once. Both halves
+  # exclude NULLs at the source, which `NOT IN` needs.
+  defp silenced_by(viewer_id) do
+    union_all(blocked_either_way(viewer_id), ^muted_followees_of(viewer_id))
+  end
+
+  # Why a reshare reaches this reader — the one thing that differs between the
+  # two sources `feed_repost_source/4` serves.
+  #
+  # `:followed` is the original: somebody they follow passed it on, and the
+  # resharer has to be in good standing. `:about_me` is the post being **theirs**
+  # (or one they reshared), where the resharer can be a stranger — so this arm
+  # asks the standing question *and* the two the follow set used to answer
+  # implicitly, since a blocked or muted member has no follow edge left to
+  # filter on.
+  defp repost_reach(:followed, viewer_id) do
+    dynamic(^repost_reaches_me(viewer_id) and ^resharer_is_shown(viewer_id))
+  end
+
+  defp repost_reach(:about_me, viewer_id) do
+    dynamic(
+      [_p, r],
+      ^about_a_post_of_mine(viewer_id) and (is_nil(r.user_id) or r.user_id != ^viewer_id) and
+        ^resharer_is_shown(viewer_id) and ^resharer_not_silenced(viewer_id)
+    )
+  end
+
+  # A stranger's reshare is refused for the two reasons a follow would otherwise
+  # have carried. A page's reshare has no member to silence, hence the nil arm.
+  defp resharer_not_silenced(viewer_id) do
+    dynamic(
+      [_p, r],
+      is_nil(r.user_id) or r.user_id not in subquery(silenced_by(viewer_id))
+    )
   end
 
   # Reshared by me, by somebody I follow, or by a page I follow (issue #1336).
@@ -3583,7 +3718,16 @@ defmodule Vutuv.Posts do
     # dropped those entries back to an empty roster — the banner then named
     # nobody on a post that was in the feed precisely because a page reshared it.
     post_ids = for %{reposted_by: by} = entry <- entries, not is_nil(by), do: entry.post.id
-    rosters = reposter_rosters(post_ids, viewer)
+
+    # Which of them are the reader's own, answered here rather than by a join
+    # back to `posts` in the roster query: every post is already in memory.
+    own_ids =
+      for %{reposted_by: by, post: post} <- entries,
+          not is_nil(by),
+          post.user_id == viewer.id,
+          do: post.id
+
+    rosters = reposter_rosters(post_ids, own_ids, viewer)
 
     Enum.map(entries, fn
       %{reposted_by: nil} = entry ->
@@ -3595,19 +3739,25 @@ defmodule Vutuv.Posts do
     end)
   end
 
-  defp reposter_rosters([], _viewer), do: %{}
+  defp reposter_rosters([], _own_ids, _viewer), do: %{}
 
-  defp reposter_rosters(post_ids, %User{id: viewer_id}) do
+  defp reposter_rosters(post_ids, own_ids, %User{id: viewer_id}) do
     # Same widening as `feed_repost_items/3` above, and for the same reason: the
     # banner names who reshared, and a page is now one of the answers.
+    #
+    # The last clause is the roster's half of `feed_repost_of_mine_items/3`: on
+    # the reader's own post (or one they reshared) a **stranger's** reshare is
+    # why the entry is here at all, so the roster has to hold them or the banner
+    # names somebody else. It bit exactly that way — with the reader's own
+    # reshare in the roster and the stranger's missing, the newest name was
+    # replaced by the reader's own. Blocked and muted resharers stay out, the
+    # same gate that source applies.
     from(r in PostRepost,
       left_join: u in User,
       on: u.id == r.user_id,
       left_join: rp in assoc(r, :organization),
       where: r.post_id in ^post_ids,
-      where:
-        r.user_id == ^viewer_id or r.user_id in subquery(followees_of(viewer_id)) or
-          r.organization_id in subquery(followed_organizations_of(viewer_id)),
+      where: ^roster_holds(viewer_id, own_ids),
       # Scoped per actor kind — see the note in `feed_repost_items/3`: a bare
       # `account_confirmed_row(u)` is TRUE on a left-joined missing row.
       where:
@@ -3619,6 +3769,20 @@ defmodule Vutuv.Posts do
     )
     |> Repo.all()
     |> Enum.group_by(&elem(&1, 0), fn {_post_id, user, page} -> user || page end)
+  end
+
+  # Whose reshare of these posts the banner may name: the reader's own, a
+  # followed member's or a followed page's — plus, on a post of the reader's
+  # own, anybody's (`feed_repost_of_mine_items/3`'s half), minus the people they
+  # blocked or muted.
+  defp roster_holds(viewer_id, own_ids) do
+    dynamic(
+      [r, _u, _rp],
+      r.user_id == ^viewer_id or r.user_id in subquery(followees_of(viewer_id)) or
+        r.organization_id in subquery(followed_organizations_of(viewer_id)) or
+        ((r.post_id in ^own_ids or r.post_id in subquery(reshared_by(viewer_id))) and
+           (is_nil(r.user_id) or r.user_id not in subquery(silenced_by(viewer_id))))
+    )
   end
 
   # The posts `post` answers, oldest first. Walk up the reply chain, preferring
@@ -5979,10 +6143,52 @@ defmodule Vutuv.Posts do
   # #1336 gives it a reading side. It is not merely a no-op either — with a nil
   # author `follower_ids/1` would build `where: c.followee_id == ^nil`, which
   # Ecto **raises** on rather than silently matching nothing.
-  defp broadcast_new_post(%Post{user_id: nil}), do: :ok
+  # `[]`, not `:ok`: the return value is the recipient list a second fan-out
+  # about the same event subtracts (`broadcast_about_post/3`).
+  defp broadcast_new_post(%Post{user_id: nil}), do: []
 
   defp broadcast_new_post(%Post{} = post) do
     broadcast_to_followers(post.user_id, new_post_event(post))
+  end
+
+  # The push half of `feed_reply_to_me_items/3` and `feed_repost_of_mine_items/3`:
+  # the people this act is *about* are not the actor's followers, so the ordinary
+  # fan-out never reaches them and their feed would only catch up on the next
+  # load.
+  #
+  # `told` is what the fan-out beside it just returned, rather than recomputed
+  # here: asking again is a second identical `Follow` scan per write, and
+  # rebuilding it from an actor id cannot express who a **page's** reshare
+  # reached — `broadcast_to_followers/2` dispatches on the actor's kind and a
+  # page's reposter id is NULL, so `follower_ids(nil)` would raise the
+  # `where: x == ^nil` trap this milestone has paid for repeatedly.
+  defp broadcast_about_post(%Post{} = post, told, event) do
+    told = MapSet.new(told)
+
+    post
+    |> stakeholder_ids()
+    |> Enum.reject(&MapSet.member?(told, &1))
+    |> Enum.each(&Vutuv.Activity.broadcast(&1, event))
+  end
+
+  # Who a post is *about*: its author and everyone who passed it on. The pull
+  # side asks the same question as a query (`about_a_post_of_mine/1`), so the two
+  # have to mean the same thing — `feed_about_me_test.exs` asserts they do.
+  defp stakeholder_ids(%Post{} = post) do
+    post.id
+    |> resharer_ids()
+    |> List.insert_at(0, post.user_id)
+    |> Enum.reject(&is_nil/1)
+    |> Enum.uniq()
+  end
+
+  defp resharer_ids(post_id) do
+    Repo.all(
+      from(r in PostRepost,
+        where: r.post_id == ^post_id and not is_nil(r.user_id),
+        select: r.user_id
+      )
+    )
   end
 
   # `at` is the stamp this post will carry in the merged feed, the way the
@@ -6074,13 +6280,19 @@ defmodule Vutuv.Posts do
 
   # A fresh repost distributes like a fresh post — to the reposter's own
   # sessions and their followers' feeds.
-  defp broadcast_new_repost(%PostRepost{} = repost) do
+  defp broadcast_new_repost(%PostRepost{} = repost, %Post{} = post) do
     reposter_id = repost.user_id || repost.organization_id
 
     event =
       {:new_repost, %{repost_id: repost.id, post_id: repost.post_id, reposter_id: reposter_id}}
 
-    broadcast_to_followers(repost, event)
+    told = broadcast_to_followers(repost, event)
+
+    # And the people it is about (see `broadcast_about_post/3`): being passed on
+    # is news to the author whether or not they follow whoever did it. The post
+    # comes from the caller, which already holds it — `get_post/1` would preload
+    # its twenty associations to read one id.
+    broadcast_about_post(post, told, event)
   end
 
   # A new reply ticks the parent's open action bars, notifies its author
@@ -6095,8 +6307,9 @@ defmodule Vutuv.Posts do
   # to `notify_reply/4`'s own nil tolerance: reading `nil != reply.user_id` as
   # "somebody to tell" is exactly the half-read pair that has cost this
   # milestone sixteen silent failures.
-  defp broadcast_reply(%Post{} = parent, %Post{} = reply) do
+  defp broadcast_reply(%Post{} = parent, %Post{} = reply, told) do
     broadcast_reply_count(parent.id)
+    broadcast_about_post(parent, told, new_post_event(reply))
 
     if is_binary(parent.user_id) and parent.user_id != reply.user_id do
       Vutuv.Activity.notify_reply(
@@ -6382,20 +6595,27 @@ defmodule Vutuv.Posts do
     %{post_ids: post_ids, follower_ids: follower_ids(user_id), reply_parent_ids: reply_parent_ids}
   end
 
+  # Each clause **returns the ids it told**, so a second fan-out about the same
+  # event (`broadcast_about_post/3`) can subtract them instead of re-deriving
+  # them from an actor id — which no caller can do for a page anyway.
   defp broadcast_to_followers(%PostRepost{organization_id: page_id}, event)
        when is_binary(page_id) do
     # The people to tell are the PAGE's followers, and they hang off
     # `followee_organization_id`. Handing the page's id to the member query
     # would have compared `followee_id` with a nil reposter and RAISED - the
     # `where: x == ^nil` trap this milestone has paid for more than once.
-    Enum.each(organization_follower_ids(page_id), &Vutuv.Activity.broadcast(&1, event))
+    broadcast_each(organization_follower_ids(page_id), event)
   end
 
   defp broadcast_to_followers(%PostRepost{user_id: user_id}, event),
     do: broadcast_to_followers(user_id, event)
 
-  defp broadcast_to_followers(user_id, event) do
-    Enum.each([user_id | follower_ids(user_id)], &Vutuv.Activity.broadcast(&1, event))
+  defp broadcast_to_followers(user_id, event),
+    do: broadcast_each([user_id | follower_ids(user_id)], event)
+
+  defp broadcast_each(ids, event) do
+    Enum.each(ids, &Vutuv.Activity.broadcast(&1, event))
+    ids
   end
 
   defp follower_ids(user_id) do
