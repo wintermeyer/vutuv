@@ -205,6 +205,27 @@ defmodule VutuvWeb.FeedRemoteThreadTest do
                :binary.match(html, "meine Antwort darauf")
     end
 
+    test "a reader who does not federate may read it but not pass it on", %{conn: conn} do
+      # These cards now reach members who have nothing to do with the
+      # fediverse, since the thread they sit in is an ordinary vutuv thread. The
+      # bar still offers both acts, and the refusal is what teaches: a heart or
+      # a reshare travels back out, so it names the switch and links to it
+      # (issue #1349) instead of failing silently.
+      {conn, user} = reader(conn)
+      refute Fediverse.federated?(user), "the reader must not federate, or this proves nothing"
+
+      {:ok, post} = Posts.create_post(user, %{body: "eine Frage in die Runde"})
+      note_under(post, "die Antwort von draussen")
+
+      {:ok, view, _html} = live(conn, ~p"/feed")
+
+      html = view |> element("[data-remote-act='repost']") |> render_click()
+
+      assert html =~ "does not take part in the Fediverse"
+      assert html =~ ~p"/settings/fediverse"
+      assert Repo.aggregate(Vutuv.Fediverse.NoteRepost, :count) == 0
+    end
+
     test "a post that got many keeps the newest few, not all of them", %{conn: conn} do
       # A post that goes round out there can collect dozens of answers, and the
       # feed is not the place to read them: the permalink is.
