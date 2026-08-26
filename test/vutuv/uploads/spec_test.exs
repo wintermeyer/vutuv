@@ -254,8 +254,8 @@ defmodule Vutuv.Uploads.SpecTest do
       dest = Path.join(tmp, "wide.avif")
 
       assert :ok = Spec.write_pixelated(wide, dest)
-      # 32 cells on the long edge, each blown up 20x: 640x320.
-      assert dims(dest) == {640, 320}
+      # 64 cells on the long edge, each blown up 15x: 960x480.
+      assert dims(dest) == {960, 480}
     end
 
     test "carries no metadata out of the original" do

@@ -1357,7 +1357,7 @@ minimise the letterboxing exactly where they used to minimise the crop.
 
 A post carrying a picture that has not finished the AI image scan publishes
 straight away. The **picture** is what waits: for anyone but the author and
-admins it renders as its own **pixelated preview** — the photo reduced to 32 cells and
+admins it renders as its own **pixelated preview** — the photo reduced to 64 cells and
 blown back up into flat blocks, a separately stored file rather than a filter
 over the real one (issue #1720, `Vutuv.Moderation.Pixelation`, and
 `docs/architecture/images.md` for the recipe) — with a "wird geprüft" badge on

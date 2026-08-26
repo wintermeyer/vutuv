@@ -2109,6 +2109,9 @@ defmodule VutuvWeb.PostComponents do
   unlabelled image is honest, a made-up label is not.
   """
   def remote_post_images(assigns) do
+    assigns =
+      assign(assigns, :held_count, Enum.count(assigns.images, &(not RemoteImage.released?(&1))))
+
     ~H"""
     <div
       :if={@images != []}
@@ -2185,6 +2188,23 @@ defmodule VutuvWeb.PostComponents do
         <% end %>
       </div>
     </div>
+    <%!-- The badge on a tile marks WHICH picture is waiting; this line says
+    WHAT the wait is, and it is the half a reader actually reads. A member's
+    own held photos have had it from the start (the placecard grid) — a
+    fediverse card had only the corner pills, and two pixelated tiles under a
+    post with no explanation read as a broken image rather than as a check in
+    progress. Same words as the member's own, because it is the same wait. --%>
+    <p
+      :if={@held_count > 0}
+      data-remote-images-checking={@held_count}
+      class="mt-2 text-xs text-slate-600 dark:text-slate-400"
+    >
+      {ngettext(
+        "Our AI is looking at it. It appears here by itself once it is through.",
+        "Our AI is looking at them. They appear here by themselves once they are through.",
+        @held_count
+      )}
+    </p>
     """
   end
 
@@ -3926,7 +3946,7 @@ defmodule VutuvWeb.PostComponents do
   # (issue #1720). Two shapes, and which one a reader gets depends on nothing
   # they can see:
   #
-  #   * the photo's own pixelated preview — a separately stored file, 32 cells
+  #   * the photo's own pixelated preview — a separately stored file, 64 cells
   #     across, never a CSS filter over the real picture
   #     (`Vutuv.Moderation.Pixelation` explains why that distinction is the whole
   #     point). The card keeps its shape and its colours, and the live broadcast

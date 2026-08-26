@@ -125,7 +125,7 @@ defmodule VutuvWeb.RemoteMediaController do
   # this picture's preview can have (`resolve_post_version/2`), so the path is
   # resolved from the row alone here. The robots header is this proxy's own —
   # somebody else's photograph must never be indexed as ours, and that holds
-  # for 32 cells of it too.
+  # for 64 cells of it too.
   defp serve_post_image(conn, :pixelated, _version, image) do
     conn
     |> put_resp_header("x-robots-tag", "noindex, noimageindex")

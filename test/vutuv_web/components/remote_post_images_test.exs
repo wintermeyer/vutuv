@@ -8,6 +8,11 @@ defmodule VutuvWeb.RemotePostImagesTest do
   wait the reader is not actually waiting for. The wording is asserted by name
   and in German, because a short string is exactly the kind a `gettext.extract
   --merge` fuzzy-fills with somebody else's translation.
+
+  The line **under** the grid is asserted here too. A pixelated preview carries
+  a corner badge, and two blocky tiles under a stranger's post with nothing but
+  that read as a broken image rather than as a check in progress — reported on
+  a fediverse card the day this shipped.
   """
   use ExUnit.Case, async: true
 
@@ -35,5 +40,29 @@ defmodule VutuvWeb.RemotePostImagesTest do
     Gettext.put_locale(VutuvWeb.Gettext, "de")
 
     assert render_tile([held_picture()]) =~ "Bild wird geprüft"
+  end
+
+  describe "the line under the grid" do
+    test "says what the wait is, and counts the pictures it covers" do
+      one = render_tile([held_picture()])
+      assert one =~ ~s(data-remote-images-checking="1")
+      assert one =~ "Our AI is looking at it."
+
+      two = render_tile([held_picture(), held_picture()])
+      assert two =~ ~s(data-remote-images-checking="2")
+      assert two =~ "Our AI is looking at them."
+    end
+
+    test "stays away once every picture is released" do
+      released = %RemoteImage{file: "img-abc.avif", moderation: "approved"}
+
+      refute render_tile([released]) =~ "data-remote-images-checking"
+    end
+
+    test "is the same sentence a member's own held photo gets, in German" do
+      Gettext.put_locale(VutuvWeb.Gettext, "de")
+
+      assert render_tile([held_picture()]) =~ "Unsere KI sieht es sich an."
+    end
   end
 end

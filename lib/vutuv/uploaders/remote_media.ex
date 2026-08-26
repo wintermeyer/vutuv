@@ -143,7 +143,7 @@ defmodule Vutuv.RemoteMedia do
 
   # A fetched picture waits for the AI gate like a member's own upload, and
   # until the verdict the card showed a grey "picture is being checked" tile.
-  # Its preview stands there instead: 32 cells of averaged colour, a file of
+  # Its preview stands there instead: 64 cells of averaged colour, a file of
   # its own, so what reaches a reader is never the unjudged picture.
   #
   # Post pictures only. An unreleased *avatar* falls back to the account's

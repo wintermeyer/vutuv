@@ -1038,7 +1038,7 @@ defmodule VutuvWeb.UI do
 
     * a stored capture renders as the thumbnail (`Vutuv.Screenshot.url/2`);
     * a capture the AI scan has not judged yet renders as its **pixelated preview**
-      (issue #1720) with a badge saying so — the capture exists, and 32 cells
+      (issue #1720) with a badge saying so — the capture exists, and 64 cells
       of averaged colour is what may be shown of it before the verdict;
     * a link this installation never captures (`Vutuv.ScreenshotBlocklist` — a
       consent-banner or login-walled site) renders a calm tile naming the site,
