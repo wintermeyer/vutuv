@@ -12,7 +12,25 @@ defmodule VutuvWeb.ShellLive do
   read marker), messages via `Vutuv.Chat.unread_conversations_count/1`
   (conversations holding unread messages).
   """
-  use Phoenix.LiveView
+  # `container:` is what makes the top bar's `sticky top-0` mean anything
+  # (issue #1727), and it is declared here rather than at the embeddings because
+  # "my wrapper must not be a box" is a property of this shell, not of who
+  # renders it.
+  #
+  # A sticky element can only slide inside its own parent's box, and `<main>` —
+  # the entire page — is a SIBLING of this shell, not a descendant (see the
+  # moduledoc above: it has to be, because a `live_render`ed LiveView cannot
+  # take the layout's `@inner_content` as its own). So the shell's box is the
+  # top bar and nothing else: the tab bar below it is `fixed` and out of flow,
+  # the hook divs are hidden. Measured before the fix: document 5342px, wrapper
+  # 65px, top bar 65px — zero pixels of travel, and at `scrollY 1200` the bar
+  # sat at `top: -1200`, moving one-to-one with the page.
+  #
+  # `display: contents` drops the wrapper's box without touching the node, so
+  # the containing block becomes `<body>`. `#app-shell` in `render/1` carries
+  # the same class for the same reason: both boxes sit between the bar and the
+  # body, and removing only one still leaves it trapped.
+  use Phoenix.LiveView, container: {:div, class: "contents"}
 
   use Phoenix.VerifiedRoutes,
     endpoint: VutuvWeb.Endpoint,
@@ -829,11 +847,9 @@ defmodule VutuvWeb.ShellLive do
   @impl true
   def render(assigns) do
     ~H"""
-    <%!-- `contents`: the second half of the sticky fix in the `app` layout
-    (issue #1727). This div and the `live_render` container around it are the
-    two boxes between the sticky top bar and `<body>`; removing only one still
-    leaves the bar trapped in a 65px-tall parent. The layout comment carries the
-    full reasoning and the measurements. --%>
+    <%!-- `contents`: the inner half of the sticky fix, whose reasoning and
+    measurements sit with the `container:` option at the top of this module
+    (issue #1727). --%>
     <div id="app-shell" class="contents">
       <%!-- Drives the green "online" dot on every avatar in the page. Receives
       this viewer's online-id set from ShellLive (push_event "presence:set") and
