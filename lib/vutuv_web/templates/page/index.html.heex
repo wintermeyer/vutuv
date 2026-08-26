@@ -7,7 +7,7 @@
     <% founder_role = gettext("Founder of vutuv") %>
     <%!-- Founder hero: the whole quote in one heading at a single size, then a
           right-aligned signature with the name above the role, set snug. The
-          member-count pill below is shared from the :hero slot. --%>
+          three claims below come from the :hero slot. --%>
     <div>
       <h1 class="text-2xl font-bold leading-tight md:text-3xl">
         {founder_quote}
@@ -35,6 +35,13 @@
       </div>
     </div>
   </:headline>
+  <:hero>
+    <%!-- What the quote provokes, answered in three lines: somebody who agrees
+          that LinkedIn is annoying wants to know what they lose by leaving, what
+          they have to retype, and what it will cost them later. The strings and
+          the reason they are split in two live in `hero_points/1`. --%>
+    <.hero_points />
+  </:hero>
   <h2 class="text-xl font-bold text-slate-900 dark:text-white">
     {gettext("Create your free account")}
   </h2>

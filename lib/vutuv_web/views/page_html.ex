@@ -50,6 +50,43 @@ defmodule VutuvWeb.PageHTML do
   end
 
   @doc """
+  The three claims under the founder quote, inside the hero panel.
+
+  Each is a short claim plus the reason it is not filler, and each half is its
+  own `gettext` call: the claim is set in white and the reason in `brand-100`,
+  and a translator gets two whole sentences rather than one sentence cut in
+  half. Two of the three are properties of the software and hold on every
+  installation; the import is a feature of this codebase, so all three survive
+  a third-party install without the operator having to promise anything.
+
+  Deliberately not links. `/import/linkedin` needs an account, so a logged-out
+  click would trade the sign-up form beside them for a login screen.
+  """
+  def hero_points(assigns) do
+    assigns = assign(assigns, :points, hero_point_list())
+
+    ~H"""
+    <ul data-hero-points class="mt-8 space-y-2.5">
+      <li :for={{claim, reason} <- @points} class="flex gap-2.5 text-sm leading-snug">
+        <span aria-hidden="true" class="shrink-0 font-bold text-brand-200">✓</span>
+        <span>
+          <span class="font-semibold text-white">{claim}</span>
+          <span class="text-brand-100">{reason}</span>
+        </span>
+      </li>
+    </ul>
+    """
+  end
+
+  defp hero_point_list do
+    [
+      {gettext("Easy profile import."), gettext("Your LinkedIn profile can come along.")},
+      {gettext("Fast."), gettext("vutuv is ridiculously fast.")},
+      {gettext("No paid premium accounts."), gettext("Nobody wants those anyway.")}
+    ]
+  end
+
+  @doc """
   The heading block every example section under the sign-up form wears: a small
   uppercase eyebrow, the heading itself and one lead sentence.
 

@@ -1,8 +1,9 @@
 defmodule VutuvWeb.LandingPageTest do
   @moduledoc """
-  The examples block under the logged-out landing page's sign-up form: static
-  screenshots of a profile, of the CV builder and of the Arbeitszeugnis review,
-  the feature list, and the data-protection promises.
+  The logged-out landing page's marketing copy: the hero's import pill, and the
+  examples block under the sign-up form with its static screenshots of a
+  profile, of the CV builder and of the Arbeitszeugnis review, the feature list,
+  and the data-protection promises.
 
   Every example on the page is a picture, which is why this file is all render
   assertions and holds no fixtures. A wall of real, current posts used to sit
@@ -41,6 +42,27 @@ defmodule VutuvWeb.LandingPageTest do
   end
 
   describe "the landing page" do
+    # The three claims beside the quote, both halves of each: whoever agrees that
+    # LinkedIn is annoying wants to know what they have to retype, how it feels,
+    # and what it will cost them later. Asserted as the rendered German literals
+    # for the reason the whole file renders in German — an untranslated or
+    # fuzzy-filled msgstr shows up perfectly in an English render, and the
+    # short ones ("Schnell.") are the likeliest to be fuzzy-matched.
+    test "the hero lists what a LinkedIn refugee gets", %{conn: conn} do
+      html = landing_de(conn)
+
+      assert html =~ "Einfacher Profilimport."
+      assert html =~ "Ihr LinkedIn-Profil kann mitkommen."
+      assert html =~ "Schnell."
+      assert html =~ "vutuv ist einfach rattenschnell."
+      assert html =~ "Keine bezahlten Premium-Accounts."
+      assert html =~ "Das will doch eh keiner."
+
+      # Deliberately statements, not links: /import/linkedin needs an account,
+      # so a logged-out click would trade the sign-up form for the login page.
+      refute html =~ ~s(href="/import/linkedin")
+    end
+
     # Static pictures, not live rows: nobody has to agree to being on the front
     # page, and there is no member whose rename or departure could break it.
     test "shows the profile screenshots", %{conn: conn} do

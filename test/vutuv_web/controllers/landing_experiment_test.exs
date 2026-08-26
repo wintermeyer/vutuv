@@ -68,7 +68,9 @@ defmodule VutuvWeb.LandingExperimentTest do
       warm = conn |> init_test_session(landing_variant: @stube) |> german() |> get(~p"/")
       dry = fresh_conn() |> init_test_session(landing_variant: @knapp) |> german() |> get(~p"/")
 
-      assert html_response(warm, 200) =~ "Genervt von LinkedIn? Dann herein in die gute Stube."
+      assert html_response(warm, 200) =~
+               "Genervt von LinkedIn? Dann mal herein in die gute Stube."
+
       assert html_response(dry, 200) =~ "LinkedIn nervt. vutuv nicht."
     end
 
