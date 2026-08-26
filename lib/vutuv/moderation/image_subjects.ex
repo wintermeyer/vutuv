@@ -56,7 +56,18 @@ defmodule Vutuv.Moderation.ImageSubjects do
   }
 
   @gallery_images %{
-    "post_image" => %{schema: PostImage, store: Vutuv.PostImageStore, prefix: "post_images"},
+    # `pixelated: true` marks the one gallery kind a stranger meets while the
+    # scan is running, so it is the one that gets a pixelated preview to stand
+    # in (issue #1720): an organization's logo pointer keeps naming its released
+    # predecessor until the verdict, and job-posting images are shown to their
+    # own author. A kind that grows a reader-facing gallery adds the flag here
+    # and a `delete_pixelated/1` to its store.
+    "post_image" => %{
+      schema: PostImage,
+      store: Vutuv.PostImageStore,
+      prefix: "post_images",
+      pixelated: true
+    },
     "job_posting_image" => %{
       schema: JobPostingImage,
       store: Vutuv.JobPostingImageStore,
@@ -312,6 +323,14 @@ defmodule Vutuv.Moderation.ImageSubjects do
   def apply_approved(%ImageScan{kind: kind} = scan) when is_map_key(@gallery_images, kind) do
     config = @gallery_images[kind]
 
+    # Before the flip, not after (issue #1720). Both orders can be interrupted
+    # between the two statements, and this is the one whose leftover is
+    # harmless: a picture that loses its pixelated preview a moment early falls back to
+    # the grey tile for the rest of a wait that is about to end anyway, while
+    # the other order leaves an orphan file on disk that nothing ever looks at
+    # again.
+    drop_pixelated(config, scan.subject_id)
+
     flipped =
       from(i in config.schema, where: i.id == ^scan.subject_id and i.moderation == "pending")
       |> Repo.update_all(set: [moderation: "approved"])
@@ -424,6 +443,9 @@ defmodule Vutuv.Moderation.ImageSubjects do
   # through the authorizing proxy, which reads this column per request, so
   # there is no quarantine tree to move it out of.
   def apply_approved(%ImageScan{kind: "remote_post_image"} = scan) do
+    # Before the flip, for the reason the gallery clause above gives. The
+    # rejection path needs no such line: it wipes the directory.
+    RemoteMedia.delete_post_image_pixelated(scan.subject_id)
     verdict_applied(flip_remote(RemoteImage, scan, :file, :moderation, "approved"))
   end
 
@@ -908,6 +930,18 @@ defmodule Vutuv.Moderation.ImageSubjects do
 
   # Live pages re-render the affected image (or drop the limbo pill) with no
   # reload; dead pages catch up on the next request.
+  # The preview stood in for the wait; a verdict ends it, so it goes. Read by id
+  # because the flip is an `update_all` with no row in hand — one narrow query
+  # on a path that runs once per picture. A rejection needs none of this: it
+  # deletes the whole directory.
+  defp drop_pixelated(%{pixelated: true} = config, subject_id) do
+    token = Repo.one(from(i in config.schema, where: i.id == ^subject_id, select: i.token))
+
+    if token, do: config.store.delete_pixelated(token), else: :ok
+  end
+
+  defp drop_pixelated(_config, _subject_id), do: :ok
+
   defp broadcast(%ImageScan{} = scan, verdict) do
     Vutuv.Activity.broadcast(
       scan.owner_user_id,

@@ -62,6 +62,7 @@ defmodule VutuvWeb.RemoteMediaController do
   alias Vutuv.Fediverse
   alias Vutuv.Fediverse.RemoteAccount
   alias Vutuv.Fediverse.RemoteImage
+  alias Vutuv.Moderation.Pixelation
   alias Vutuv.RemoteMedia
   alias VutuvWeb.ImageProxy
   alias VutuvWeb.RemoteMediaToken
@@ -77,17 +78,58 @@ defmodule VutuvWeb.RemoteMediaController do
     with true <- Fediverse.enabled?(),
          true <- member? or RemoteMediaToken.authentic?(token),
          %RemoteImage{} = image <- Fediverse.get_remote_image(id),
-         true <- RemoteImage.released?(image),
-         version when not is_nil(version) <- parse_version(version_file, image.file),
+         {shape, version} <- resolve_post_version(image, version_file),
          %User{} = viewer <- reader(conn, token, image),
          true <- Fediverse.remote_image_visible?(image, viewer) do
-      serve(conn, version,
-        accel: &RemoteMedia.post_image_accel_path(image.id, &1),
-        path: &RemoteMedia.post_image_path(image.id, &1, image.file)
-      )
+      serve_post_image(conn, shape, version, image)
     else
       _ -> ImageProxy.not_found(conn)
     end
+  end
+
+  # Which file this URL may resolve to — and it is always exactly one (issue
+  # #1720):
+  #
+  #   * a **released** picture answers at its own fingerprinted name, as it
+  #     always has;
+  #   * an **unreleased** one answers only at its pixelated preview's name, and only while
+  #     the pixelated preview stands in.
+  #
+  # The two states are mutually exclusive, so no URL can serve a picture the
+  # gate has not cleared, and a released picture's URL never quietly degrades
+  # to a pixelated preview.
+  defp resolve_post_version(%RemoteImage{} = image, version_file) do
+    cond do
+      RemoteImage.released?(image) ->
+        versioned(:picture, parse_version(version_file, image.file))
+
+      Pixelation.within_window?(image.inserted_at) ->
+        versioned(:pixelated, parse_version(version_file, RemoteMedia.pixelated_name(image.file)))
+
+      true ->
+        nil
+    end
+  end
+
+  defp versioned(_shape, nil), do: nil
+  defp versioned(shape, version), do: {shape, version}
+
+  defp serve_post_image(conn, :picture, version, image) do
+    serve(conn, version,
+      accel: &RemoteMedia.post_image_accel_path(image.id, &1),
+      path: &RemoteMedia.post_image_path(image.id, &1, image.file)
+    )
+  end
+
+  # The version segment was already checked against the one fingerprinted name
+  # this picture's preview can have (`resolve_post_version/2`), so the path is
+  # resolved from the row alone here. The robots header is this proxy's own —
+  # somebody else's photograph must never be indexed as ours, and that holds
+  # for 32 cells of it too.
+  defp serve_post_image(conn, :pixelated, _version, image) do
+    conn
+    |> put_resp_header("x-robots-tag", "noindex, noimageindex")
+    |> ImageProxy.serve_pixelated(RemoteMedia.post_image_pixelated_path(image.id, image.file))
   end
 
   defp reader(conn, token, %RemoteImage{} = image) do

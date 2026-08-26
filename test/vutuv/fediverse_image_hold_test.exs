@@ -5,9 +5,10 @@ defmodule Vutuv.FediverseImageHoldTest do
   all.
 
   The two things worth pinning down: the hold is released the moment the scan
-  settles (which is the normal case, a few seconds), and the ceiling is only what
-  happens when the scanner never answers — then the post federates without the
-  picture rather than not at all.
+  settles (which is the normal case, a few seconds), and a slow verdict costs
+  the post nothing but time — a delivery that comes due while the scan is still
+  out goes back in the queue rather than travelling without the picture (issue
+  #1720; until then this mark was a ceiling, and the post left without it).
 
   async: false — flips the global `:fediverse_image_hold_seconds`.
   """
@@ -18,6 +19,7 @@ defmodule Vutuv.FediverseImageHoldTest do
   alias Vutuv.Fediverse.PostDelivery
   alias Vutuv.Moderation.ImageScans
   alias Vutuv.Posts
+  alias Vutuv.Posts.PostDenial
   alias Vutuv.Posts.PostImage
   alias Vutuv.ReviewCover
 
@@ -232,5 +234,85 @@ defmodule Vutuv.FediverseImageHoldTest do
     test "defaults to 90 seconds" do
       assert Fediverse.image_hold_seconds() == 90
     end
+  end
+
+  describe "a held delivery that comes due while the scan is still out" do
+    # Issue #1720: this used to be where a slow verdict lost the picture — the
+    # ceiling ran out, the post went to the followers with no attachment, and
+    # only an "edited" Update could bring the picture afterwards. It goes back
+    # in the queue instead now, for as long as it takes.
+    test "goes back in the queue rather than out without the picture", %{user: user} do
+      Application.put_env(:vutuv, :fediverse_image_hold_seconds, 5)
+      on_exit(fn -> Application.delete_env(:vutuv, :fediverse_image_hold_seconds) end)
+
+      post = insert(:post, user: user, body: "Mit Bild")
+      pending_image!(post)
+      assert :ok == Fediverse.federate_new_post(post)
+
+      due_now!()
+      before = DateTime.utc_now(:second)
+      assert Fediverse.deliver_due() == 1
+      after_the_call = DateTime.utc_now(:second)
+
+      # The row surviving the drain IS the proof that nothing went out: a
+      # delivered activity deletes its row.
+      assert [%Delivery{} = reparked] = Repo.all(Delivery)
+      # A wait is not a failure: eight of these would retire the row at the
+      # attempt cap and lose the post for good.
+      assert reparked.attempts == 0
+      assert reparked.last_error == nil
+      # And it is not due any more — a row that stayed due would be picked up
+      # by every drain and hold the front of the queue (the #1316 shape).
+      assert DateTime.diff(reparked.next_attempt_at, before) >= 5
+      assert DateTime.diff(reparked.next_attempt_at, after_the_call) <= 5
+    end
+
+    # A post whose audience closed while it waited must never travel. The trap:
+    # two boolean steps in one `with` chain both fail with `true`, so an
+    # else-clause reading `true -> :hold` catches the closed audience as well
+    # and keeps a delivery alive that should have been dropped. Calibrated —
+    # with the picture question inside that chain, the row is still there.
+    test "drops a delivery whose post was closed during the wait", %{user: user} do
+      post = insert(:post, user: user, body: "Mit Bild")
+      image = pending_image!(post)
+      assert :ok == Fediverse.federate_new_post(post)
+
+      # A denial is what makes a post `Posts.restricted?/1`.
+      Repo.insert!(%PostDenial{post_id: post.id, wildcard: "everyone"})
+      release!(image)
+      due_now!()
+
+      assert Fediverse.deliver_due() == 1
+      assert Repo.all(Delivery) == []
+    end
+
+    test "travels with the picture once the verdict finally lands", %{user: user} do
+      post = insert(:post, user: user, body: "Mit Bild")
+      image = pending_image!(post)
+      assert :ok == Fediverse.federate_new_post(post)
+
+      due_now!()
+      assert Fediverse.deliver_due() == 1
+      assert [%Delivery{}] = Repo.all(Delivery)
+
+      release!(image)
+      assert :ok == Fediverse.images_settled(post.id)
+
+      # Due again on the spot, unspent and still carrying its marker: the
+      # release is what ends the wait, the re-park only kept the row alive
+      # until it came, and the marker is what re-renders the Note WITH the
+      # picture at send time.
+      assert [%Delivery{next_attempt_at: due, attempts: 0, rebuild_from: marker}] =
+               Repo.all(Delivery)
+
+      assert marker == "post_create:#{post.id}"
+      assert DateTime.compare(due, DateTime.utc_now()) != :gt
+    end
+  end
+
+  # Backdates the queued row so the next drain picks it up, the way the clock
+  # would have by itself.
+  defp due_now! do
+    Repo.update_all(Delivery, set: [next_attempt_at: DateTime.add(DateTime.utc_now(:second), -1)])
   end
 end

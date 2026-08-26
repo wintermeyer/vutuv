@@ -26,6 +26,8 @@ defmodule Vutuv.RemoteMedia do
   picture never leaves the proxy and there is no quarantine tree here.
   """
 
+  alias Vutuv.Fediverse.RemoteImage
+  alias Vutuv.Moderation.Pixelation
   alias Vutuv.Uploads
   alias Vutuv.Uploads.Spec
 
@@ -36,7 +38,7 @@ defmodule Vutuv.RemoteMedia do
   the bytes do not decode as an image.
   """
   def store_post_image(bytes, image_id) when is_binary(bytes) and is_binary(image_id) do
-    store(bytes, post_dir(image_id), "img", :remote_media)
+    store(bytes, post_dir(image_id), "img", :remote_media, pixelated?: true)
   end
 
   @doc """
@@ -45,10 +47,10 @@ defmodule Vutuv.RemoteMedia do
   it is ever shown at.
   """
   def store_avatar(bytes, account_id) when is_binary(bytes) and is_binary(account_id) do
-    store(bytes, avatar_dir(account_id), "avatar", :remote_avatar)
+    store(bytes, avatar_dir(account_id), "avatar", :remote_avatar, pixelated?: false)
   end
 
-  defp store(bytes, dir, prefix, spec_name) do
+  defp store(bytes, dir, prefix, spec_name, opts) do
     with {:ok, rotated} <- Spec.open_rotated_binary(bytes) do
       hash = :sha256 |> :crypto.hash(bytes) |> Base.encode16(case: :lower) |> binary_part(0, 12)
 
@@ -59,6 +61,7 @@ defmodule Vutuv.RemoteMedia do
       file = "#{prefix}-#{hash}#{Spec.served_ext()}"
 
       with :ok <- Spec.write_derived(spec, rotated, Path.join(Uploads.disk_dir(dir), file)) do
+        write_pixelated(opts[:pixelated?], rotated, dir, hash)
         {:ok, %{file: file, width: Image.width(rotated), height: Image.height(rotated)}}
       end
     end
@@ -135,4 +138,60 @@ defmodule Vutuv.RemoteMedia do
     for file <- Path.wildcard(Path.join(Uploads.disk_dir(dir), "#{prefix}-*")), do: File.rm(file)
     :ok
   end
+
+  ## The pixelated preview (issue #1720)
+
+  # A fetched picture waits for the AI gate like a member's own upload, and
+  # until the verdict the card showed a grey "picture is being checked" tile.
+  # Its preview stands there instead: 32 cells of averaged colour, a file of
+  # its own, so what reaches a reader is never the unjudged picture.
+  #
+  # Post pictures only. An unreleased *avatar* falls back to the account's
+  # initials, which is a better placeholder than a colour smear at 36 pixels.
+  defp write_pixelated(false, _rotated, _dir, _hash), do: :ok
+
+  defp write_pixelated(true, rotated, dir, hash),
+    do: Pixelation.write_if_enabled(rotated, Uploads.disk_dir(dir), hash)
+
+  @doc """
+  The preview's stored filename for a picture whose row carries `file`, or
+  `nil` when there is no file to derive it from. This is the name that appears
+  in the URL, so it is fingerprinted exactly like the picture's own.
+  """
+  def pixelated_name(file) when is_binary(file) and file != "" do
+    file |> Path.rootname() |> String.replace_prefix("img-", "") |> Pixelation.filename()
+  end
+
+  def pixelated_name(_file), do: nil
+
+  @doc """
+  Root-relative URL of a post picture's preview while it stands in, or `nil`
+  when it does not: nothing has been fetched yet, the wait has run past the
+  window, or the file is gone.
+
+  The one reader every renderer asks, so "may I show a preview" has a single
+  answer — the shape `Vutuv.Screenshot.pixelated_url/1` has for a capture.
+  `%RemoteImage{}` keeps only an `inserted_at`, and that is close enough to
+  when the wait began: the row is written when the picture is first seen,
+  moments before it is fetched.
+  """
+  def post_image_pixelated_url(%RemoteImage{} = image) do
+    if Pixelation.stands_in?(post_image_pixelated_path(image.id, image.file), image.inserted_at),
+      do: post_image_url(image.id, pixelated_name(image.file))
+  end
+
+  @doc """
+  The preview's path for a picture, or `nil` when it is not on disk. The
+  three-argument form additionally demands the exact fingerprinted name — the
+  same "only the stored name resolves" rule the picture itself follows, which
+  is what makes these URLs unguessable rather than merely private.
+  """
+  def post_image_pixelated_path(image_id, file),
+    do: resolve(post_dir(image_id), rootname_of(pixelated_name(file)), pixelated_name(file))
+
+  @doc "Removes the preview of one post picture; a no-op when there is none."
+  def delete_post_image_pixelated(image_id), do: clear(post_dir(image_id), "pixelated")
+
+  defp rootname_of(nil), do: nil
+  defp rootname_of(name), do: Path.rootname(name)
 end

@@ -13,6 +13,7 @@ defmodule Vutuv.Uploads.SpecTest do
 
   alias Vix.Vips.Image, as: VipsImage
   alias Vix.Vips.MutableImage
+  alias Vix.Vips.Operation
   alias Vutuv.Uploads.Spec
 
   defp tmp! do
@@ -202,6 +203,75 @@ defmodule Vutuv.Uploads.SpecTest do
       missing_dir = Path.join(tmp, "nope/out.avif")
 
       assert {:error, _} = Spec.write_derived(Spec.version(:avatar, :thumb), rotated, missing_dir)
+    end
+  end
+
+  describe "write_pixelated/2" do
+    # A 2px checkerboard: the finest detail an image can carry, and a source
+    # whose "is the detail still there" question has one number for an answer
+    # (its standard deviation, 127.5 — half the pixels black, half white).
+    defp checkerboard!(side) do
+      {:ok, tile} =
+        VipsImage.new_from_binary(
+          <<0, 0, 0, 255, 255, 255, 255, 255, 255, 0, 0, 0>>,
+          2,
+          2,
+          3,
+          :VIPS_FORMAT_UCHAR
+        )
+
+      {:ok, checker} = Operation.replicate(tile, div(side, 2), div(side, 2))
+      checker
+    end
+
+    defp stddev(path) do
+      {:ok, image} = Image.open(path)
+      {:ok, deviation} = Operation.deviate(image)
+      deviation
+    end
+
+    test "throws the detail away rather than covering it up" do
+      tmp = tmp!()
+      checker = checkerboard!(320)
+      pixelated = Path.join(tmp, "pixelated.avif")
+      feed = Path.join(tmp, "feed.avif")
+
+      assert :ok = Spec.write_pixelated(checker, pixelated)
+      assert :ok = Spec.write_derived(Spec.version(:post_image, :feed), checker, feed)
+
+      # The calibration that makes the pixelated preview number mean something: the very
+      # same pixels through the very same AVIF encoder keep every bit of their
+      # detail in a served version (127.5, the source's own figure), so a
+      # near-zero reading on the pixelated preview is the shrink having averaged the
+      # detail away and not the codec quietly smoothing everything.
+      assert stddev(feed) > 100
+      assert stddev(pixelated) < 5
+    end
+
+    test "keeps the aspect ratio and blows the cells up to a fixed long edge" do
+      tmp = tmp!()
+      {:ok, wide} = Image.new(1200, 600, color: [10, 120, 200])
+      dest = Path.join(tmp, "wide.avif")
+
+      assert :ok = Spec.write_pixelated(wide, dest)
+      # 32 cells on the long edge, each blown up 20x: 640x320.
+      assert dims(dest) == {640, 320}
+    end
+
+    test "carries no metadata out of the original" do
+      tmp = tmp!()
+      {:ok, rotated} = Spec.open_rotated(exif_jpeg!(tmp))
+      dest = Path.join(tmp, "stripped.avif")
+
+      assert :ok = Spec.write_pixelated(rotated, dest)
+      assert exif_fields(dest) == []
+    end
+
+    test "propagates encode errors instead of raising" do
+      tmp = tmp!()
+      {:ok, rotated} = Spec.open_rotated(exif_jpeg!(tmp))
+
+      assert {:error, _} = Spec.write_pixelated(rotated, Path.join(tmp, "nope/out.avif"))
     end
   end
 

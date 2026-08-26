@@ -451,6 +451,14 @@ if config_env() == :prod do
     config :vutuv, :ollama_concurrency, String.to_integer(concurrency)
   end
 
+  # How long the pixelated preview stands in for a picture the scan has not judged yet.
+  # `0` turns it off, and readers get the grey "being checked" tile the whole
+  # way through — the strictest posture, for an installation that wants nothing
+  # derived from an unvetted picture on a page.
+  if window = System.get_env("IMAGE_PIXELATION_WINDOW_SECONDS") do
+    config :vutuv, :image_pixelation_window_seconds, String.to_integer(String.trim(window))
+  end
+
   # On-demand post translations (milestone 13). Default off; TRANSLATE_POSTS=true
   # opts the installation in. Fail-open: with Ollama unreachable, readers keep
   # seeing originals. OLLAMA_TRANSLATION_MODEL swaps the text model.

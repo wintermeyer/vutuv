@@ -193,10 +193,11 @@ defmodule VutuvWeb.PostComponents do
 
     # AI-moderation limbo (Vutuv.Moderation.ImageScans): the author and admins
     # see a pending image themselves (plus the progress panel below); every
-    # other viewer gets a neutral placecard tile instead. The post struct is
-    # patched once, so every branch below (gallery, inline refs, square layout)
-    # works on the filtered set.
-    {shown_images, held_count} = split_gallery(assigns.post, viewer)
+    # other viewer gets the photo's mosaic, or a neutral tile where there is
+    # none (`held_photo/1`). The post struct is patched once, so every branch
+    # below (gallery, inline refs, square layout) works on the filtered set.
+    {shown_images, held_images} = split_gallery(assigns.post, viewer)
+
     post = %{assigns.post | images: shown_images}
 
     # The whole body is always shipped to the DOM. In :preview the CSS clamp
@@ -238,7 +239,7 @@ defmodule VutuvWeb.PostComponents do
     assigns =
       assigns
       |> assign(:post, post)
-      |> assign(:held_count, held_count)
+      |> assign(:held_images, held_images)
       |> assign(:limbo_pill?, author_photo_check?(post, author?))
       # How far the AI scan has got, for the author's progress line. Counted
       # from the post's own (unfiltered) image list, so "2 of 5" means the
@@ -265,11 +266,7 @@ defmodule VutuvWeb.PostComponents do
         :square_layout?,
         not inline_media? and square_layout?(post, gallery, assigns.mode)
       )
-      # The auto link screenshot (a ready %PostScreenshot{} for an image-less
-      # single-URL post, else nil) and whether the preview lays it beside the
-      # text (3/4 body, 1/4 screenshot).
-      |> assign(:link_screenshot, link_screenshot(post))
-      |> assign(:link_screenshot_layout?, link_screenshot_layout?(post, assigns.mode))
+      |> assign_link_screenshot(post, assigns.mode)
       # The book/film review sidecar; nil for ordinary posts (and for nested
       # renderings whose preload chain didn't carry it).
       |> assign(:review, review_of(post))
@@ -2124,14 +2121,26 @@ defmodule VutuvWeb.PostComponents do
       <div :for={image <- @images} class="overflow-hidden rounded-lg">
         <%= if !RemoteImage.released?(image) do %>
           <%!-- Recorded, not shown: still downloading from its own server, or
-          still with the AI gate. The tile is what keeps a wordless photo post
-          from rendering as an empty card, so it has to say which of the two is
-          happening. It says what a member's own held photo says ("Foto wird
-          geprüft"), under the same hourglass, because it is the same wait: the
+          still with the AI gate. Once the bytes are here the tile is the
+          picture's own mosaic (issue #1720) with the badge on it; before that,
+          and after the pixelated preview's window has run out, it is the wordless tile
+          that keeps a photo post from rendering as an empty card. Both say the
+          same thing, under the same hourglass, because it is the same wait: the
           picture is here and we are looking at it before showing it. The older
           "a picture is on its way" named the download instead, which is over
           in a second and is never what the reader is waiting for. --%>
+          <% pixelated_url = RemoteMedia.post_image_pixelated_url(image) %>
+          <div :if={pixelated_url} class="relative" data-remote-image-pixelated>
+            <img
+              src={pixelated_url}
+              alt=""
+              loading="lazy"
+              class="block max-h-96 w-full rounded-lg object-cover"
+            />
+            <.checking_badge />
+          </div>
           <div
+            :if={!pixelated_url}
             data-remote-image-pending
             class="flex min-h-24 items-center justify-center gap-2 rounded-lg bg-slate-100 px-3 py-6 text-center text-xs text-slate-600 dark:bg-slate-800 dark:text-slate-400"
           >
@@ -2289,7 +2298,7 @@ defmodule VutuvWeb.PostComponents do
       |> assign(:translation, translation)
       |> assign(:account, account)
       |> assign(:initials, name_initials(RemoteAccount.display_name(account) || account.handle))
-      |> assign(:link_screenshot, remote_link_screenshot(post, assigns.images))
+      |> assign_remote_link_screenshot(post, assigns.images)
       |> assign(:permalink, remote_post_permalink(post, assigns.viewer))
       |> assign(:origin, RemotePost.origin(post))
 
@@ -2409,6 +2418,7 @@ defmodule VutuvWeb.PostComponents do
             <.link_screenshot_image
               :if={@link_screenshot}
               screenshot={@link_screenshot}
+              pixelated_url={@screenshot_pixelated}
               class="float-right mb-1 ml-4 mt-1.5 w-2/5 sm:w-1/3"
             />
             <.remote_body
@@ -3180,6 +3190,7 @@ defmodule VutuvWeb.PostComponents do
                 <.link_screenshot_image
                   :if={@link_screenshot}
                   screenshot={@link_screenshot}
+                  pixelated_url={@screenshot_pixelated}
                   class="float-right mb-1 ml-4 w-2/5 sm:w-1/3"
                 />
                 {@body_html}
@@ -3236,6 +3247,7 @@ defmodule VutuvWeb.PostComponents do
                 <:float>
                   <.link_screenshot_image
                     screenshot={@link_screenshot}
+                    pixelated_url={@screenshot_pixelated}
                     class="float-right mb-1 ml-4 w-2/5 sm:w-1/3"
                   />
                 </:float>
@@ -3305,23 +3317,15 @@ defmodule VutuvWeb.PostComponents do
 
           <%!-- AI-moderation limbo. The post itself is published from the
           moment it is written; only the picture waits. For every viewer but
-          the author/admin a pending image therefore renders as a placecard
-          tile — which together with the line under the grid has to say enough
-          that a reader knows nothing is broken and nothing is being withheld
-          from them: the check is running, and the photo turns up here by
-          itself. The author instead sees the image (filtered in above) plus
+          the author/admin a pending photo therefore renders as its own mosaic
+          (issue #1720) — or, once the wait has run past the pixelated preview's window,
+          as the grey tile that came before it. Either way the line under the
+          grid says the rest: the check is running, and the photo turns up here
+          by itself. The author instead sees the image (filtered in above) plus
           the amber progress panel below. --%>
-          <div :if={@held_count > 0} class="mt-3" data-image-placecards>
-            <div class={["grid gap-2", @held_count > 1 && "grid-cols-2"]}>
-              <div
-                :for={_placecard <- 1..@held_count//1}
-                class="flex aspect-[4/3] w-full flex-col items-center justify-center gap-2 rounded-lg bg-slate-100 px-3 text-center ring-1 ring-slate-200 dark:bg-slate-800 dark:ring-slate-700"
-              >
-                <.hourglass class="h-7 w-7 text-slate-500 dark:text-slate-400" />
-                <span class="text-xs font-semibold text-slate-700 dark:text-slate-200">
-                  {gettext("Photo is being checked")}
-                </span>
-              </div>
+          <div :if={@held_images != []} class="mt-3" data-image-placecards>
+            <div class={["grid gap-2", length(@held_images) > 1 && "grid-cols-2"]}>
+              <.held_photo :for={image <- @held_images} image={image} />
             </div>
             <%!-- The sentence sits under the grid and not inside every tile:
             six tiles repeating one paragraph is noise, and in the two-column
@@ -3331,7 +3335,7 @@ defmodule VutuvWeb.PostComponents do
               {ngettext(
                 "Our AI is looking at it. It appears here by itself once it is through.",
                 "Our AI is looking at them. They appear here by themselves once they are through.",
-                @held_count
+                length(@held_images)
               )}
             </p>
           </div>
@@ -3646,7 +3650,7 @@ defmodule VutuvWeb.PostComponents do
       tile-size editor.
 
     * **The layout follows the shapes.** A portrait hero gets a tall
-      left-hand tile and the mosaic a portrait-ish frame; a landscape hero
+      left-hand tile and the pixelated preview a portrait-ish frame; a landscape hero
       gets a wide top tile and a landscape frame
       (`VutuvWeb.PostComponents.mosaic_layout/1`). By default every photo
       shows **whole**, letterboxed inside its tile (`fill={false}`); the
@@ -3713,7 +3717,7 @@ defmodule VutuvWeb.PostComponents do
     """
   end
 
-  # How many tiles a mosaic draws before the rest collapse into the `+N`.
+  # How many tiles a pixelated preview draws before the rest collapse into the `+N`.
   # Five is what the layouts below are drawn for, and the point past which
   # tiles get too small to be worth loading.
   @mosaic_tiles 5
@@ -3726,7 +3730,7 @@ defmodule VutuvWeb.PostComponents do
 
   `layout` names a `Vutuv.Posts.GalleryLayout` variant the author chose in the
   composer; `nil` (and any name unavailable at this count) keeps the automatic
-  orientation-driven choice the mosaic always made.
+  orientation-driven choice the pixelated preview always made.
 
   Public so `mosaic_layout_test.exs` can check the geometry directly — the
   arrangement is the feature, and it is much easier to get wrong than to see
@@ -3918,34 +3922,47 @@ defmodule VutuvWeb.PostComponents do
     """
   end
 
-  @doc """
-  The turning hourglass shown while a photo waits for the AI image scan
-  (issue #1104).
+  # One tile standing where a photo will be once the AI scan has released it
+  # (issue #1720). Two shapes, and which one a reader gets depends on nothing
+  # they can see:
+  #
+  #   * the photo's own pixelated preview — a separately stored file, 32 cells
+  #     across, never a CSS filter over the real picture
+  #     (`Vutuv.Moderation.Pixelation` explains why that distinction is the whole
+  #     point). The card keeps its shape and its colours, and the live broadcast
+  #     swaps the picture in.
+  #   * the grey hourglass tile, when there is no preview to serve: an
+  #     installation that switched it off, a wait that has run past its window,
+  #     a picture stored before this existed.
+  #
+  # The tile is not a link and opens no lightbox: there is nothing behind it to
+  # enlarge yet. The image carries an empty `alt` because it is decorative in
+  # the literal sense — the badge beside it is the information, and inventing a
+  # description of a picture nobody has looked at yet would be a lie in the one
+  # place a reader cannot check it.
+  attr(:image, :map, required: true, doc: "the held %Vutuv.Posts.PostImage{}")
 
-  An hourglass rather than a spinner on purpose: a spinner says "loading", and
-  what is happening here is not a load but a wait for something being *judged*
-  — with a duration the reader cannot control and should not expect to be
-  instant. The rotation is CSS (`.hourglass`, `components.css`) and stops
-  under `prefers-reduced-motion`; the glyph reads the same either way.
-  """
-  attr(:class, :string, default: "h-5 w-5")
+  defp held_photo(assigns) do
+    assigns = assign(assigns, :pixelated_url, Posts.image_pixelated_url(assigns.image))
 
-  def hourglass(assigns) do
     ~H"""
-    <svg
-      viewBox="0 0 24 24"
-      fill="none"
-      stroke="currentColor"
-      stroke-width="1.5"
-      class={["hourglass shrink-0", @class]}
-      aria-hidden="true"
+    <div
+      :if={@pixelated_url}
+      class="relative overflow-hidden rounded-lg ring-1 ring-slate-200 dark:ring-slate-700"
+      data-image-pixelated
     >
-      <path
-        stroke-linecap="round"
-        stroke-linejoin="round"
-        d="M6.75 2.25h10.5M6.75 21.75h10.5M7.5 2.25v3.336c0 .58.226 1.136.63 1.55L12 11l3.87-3.864c.404-.414.63-.97.63-1.55V2.25M7.5 21.75v-3.336c0-.58.226-1.136.63-1.55L12 13l3.87 3.864c.404.414.63.97.63 1.55v3.336"
-      />
-    </svg>
+      <img src={@pixelated_url} alt="" loading="lazy" class="block aspect-[4/3] w-full object-cover" />
+      <.checking_badge />
+    </div>
+    <div
+      :if={!@pixelated_url}
+      class="flex aspect-[4/3] w-full flex-col items-center justify-center gap-2 rounded-lg bg-slate-100 px-3 text-center ring-1 ring-slate-200 dark:bg-slate-800 dark:ring-slate-700"
+    >
+      <.hourglass class="h-7 w-7 text-slate-500 dark:text-slate-400" />
+      <span class="text-xs font-semibold text-slate-700 dark:text-slate-200">
+        {gettext("Photo is being checked")}
+      </span>
+    </div>
     """
   end
 
@@ -4397,16 +4414,16 @@ defmodule VutuvWeb.PostComponents do
   defp author_photo_check?(post, author?), do: author? and Posts.held_for_image_check?(post)
 
   # AI-moderation limbo: the author and admins keep seeing a pending image
-  # (the proxy serves it to them); everyone else gets `held_count` placecard
-  # tiles instead of the image (Vutuv.Moderation.ImageScans).
+  # (the proxy serves it to them); everyone else gets a stand-in tile per held
+  # photo instead of the image (Vutuv.Moderation.ImageScans). The held photos
+  # travel as rows, not as a count, because each one names its own mosaic.
   defp split_gallery(post, viewer) do
     images = if is_list(post.images), do: post.images, else: []
 
     if Posts.author?(post, viewer) or match?(%User{admin?: true}, viewer) do
-      {images, 0}
+      {images, []}
     else
-      {released, held} = Enum.split_with(images, &ImageScans.released?(&1.moderation))
-      {released, length(held)}
+      Enum.split_with(images, &ImageScans.released?(&1.moderation))
     end
   end
 
@@ -4425,29 +4442,57 @@ defmodule VutuvWeb.PostComponents do
   # %PostScreenshot{} when the post has no image attachments, else nil. The plain
   # map patterns guard un-preloaded associations — a bare has_one/has_many is an
   # %Ecto.Association.NotLoaded{}, which matches neither `[]` nor `%PostScreenshot{}`.
-  defp link_screenshot(%{images: [], screenshot: %PostScreenshot{} = ps}) do
-    if PostScreenshot.ready?(ps), do: ps
+  # The auto link screenshot (a ready %PostScreenshot{} for an image-less
+  # single-URL post, else nil), the pixelated preview standing in for it while
+  # the AI scan is out, and whether the preview lays it beside the text (3/4
+  # body, 1/4 screenshot). One helper because it is one question asked once —
+  # it used to be asked three times per card, each answer costing a clock read
+  # and a `File.exists?`.
+  defp assign_link_screenshot(card_assigns, post, mode) do
+    {screenshot, pixelated} = link_screenshot(post)
+
+    card_assigns
+    |> assign(:link_screenshot, screenshot)
+    |> assign(:screenshot_pixelated, pixelated)
+    |> assign(:link_screenshot_layout?, screenshot != nil and mode == :preview)
   end
 
-  defp link_screenshot(_post), do: nil
+  # `{screenshot_or_nil, pixelated_url_or_nil}` — the capture this card shows and,
+  # while the AI scan is still out on it, the preview standing in its place
+  # (issue #1720). A held capture with no preview keeps the old behaviour: no
+  # slot at all, which on a link card reads as "no preview" rather than as a
+  # hole.
+  defp link_screenshot(%{images: [], screenshot: %PostScreenshot{} = ps}),
+    do: screenshot_slot(ps)
+
+  defp link_screenshot(_post), do: {nil, nil}
+
+  defp screenshot_slot(%PostScreenshot{} = ps) do
+    cond do
+      PostScreenshot.ready?(ps) -> {ps, nil}
+      url = Vutuv.Screenshot.pixelated_url(ps) -> {ps, url}
+      true -> {nil, nil}
+    end
+  end
 
   # The remote twin of `link_screenshot/1`, for a cached fediverse post: its
   # ready screenshot when the card shows no pictures and the author raised no
   # content warning. The reconcile enforces those on the queue side; this
   # re-check guards a row from before an edit and, via the struct pattern, a
   # caller that did not preload `:screenshot` (NotLoaded matches nothing).
-  defp remote_link_screenshot(%{screenshot: %PostScreenshot{} = ps} = post, []) do
-    if not RemotePost.warned?(post) and PostScreenshot.ready?(ps), do: ps
+  defp assign_remote_link_screenshot(card_assigns, post, images) do
+    {screenshot, pixelated} = remote_link_screenshot(post, images)
+
+    card_assigns
+    |> assign(:link_screenshot, screenshot)
+    |> assign(:screenshot_pixelated, pixelated)
   end
 
-  defp remote_link_screenshot(_post, _images), do: nil
+  defp remote_link_screenshot(%{screenshot: %PostScreenshot{} = ps} = post, []) do
+    if RemotePost.warned?(post), do: {nil, nil}, else: screenshot_slot(ps)
+  end
 
-  # Whether the PREVIEW needs the float-wrap body layout for the link screenshot
-  # (a height clamp instead of a line clamp, since `-webkit-line-clamp` cannot
-  # wrap text around a float). Full mode floats the screenshot too, but its body
-  # is unclamped, so it just renders it inside the body div — no flag needed.
-  defp link_screenshot_layout?(post, :preview), do: link_screenshot(post) != nil
-  defp link_screenshot_layout?(_post, _mode), do: false
+  defp remote_link_screenshot(_post, _images), do: {nil, nil}
 
   # The post's review sidecar, nil when absent — and nil for a nested parent
   # card whose preload chain didn't carry it (NotLoaded must not crash).
@@ -4847,6 +4892,7 @@ defmodule VutuvWeb.PostComponents do
   # the one link in the prose — opening the page in a new tab. `class` positions
   # it and sets the width.
   attr(:screenshot, :any, required: true)
+  attr(:pixelated_url, :any, default: nil, doc: "set while the AI scan holds the capture")
   attr(:class, :string, default: nil)
 
   defp link_screenshot_image(assigns) do
@@ -4860,7 +4906,19 @@ defmodule VutuvWeb.PostComponents do
       data-link-screenshot
       class={@class}
     >
+      <span :if={@pixelated_url} class="relative block" data-screenshot-pixelated>
+        <img
+          src={@pixelated_url}
+          width="400"
+          height="264"
+          loading="lazy"
+          alt=""
+          class="aspect-[400/264] w-full rounded-lg object-cover ring-1 ring-slate-200 dark:ring-slate-800"
+        />
+        <.checking_badge />
+      </span>
       <img
+        :if={!@pixelated_url}
         src={Vutuv.Screenshot.url({@screenshot.screenshot, @screenshot}, :thumb)}
         width="400"
         height="264"

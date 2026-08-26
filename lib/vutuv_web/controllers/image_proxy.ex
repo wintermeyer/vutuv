@@ -78,6 +78,26 @@ defmodule VutuvWeb.ImageProxy do
   @doc "The immutable private cache header every proxied image response carries."
   def put_cache_control(conn), do: put_resp_header(conn, "cache-control", @cache_control)
 
+  @doc """
+  Sends a **pixelated preview** (issue #1720) — the stand-in served while the
+  AI image scan is still looking at a picture.
+
+  It is the one response here that must not carry the immutable header above:
+  the real picture takes this URL's place within seconds, so the file must not
+  outlive the wait in any cache. It is also never X-Accel'd — the traffic
+  exists only during an open scan, and `send_file` keeps nginx out of a path
+  that has to answer differently once the verdict lands. A missing file is the
+  proxy's usual 404, so a swept preview reads like any other unknown URL.
+  """
+  def serve_pixelated(conn, nil), do: not_found(conn)
+
+  def serve_pixelated(conn, path) do
+    conn
+    |> put_resp_header("cache-control", "private, no-store")
+    |> put_resp_content_type(MIME.from_path(path), nil)
+    |> send_file(200, path)
+  end
+
   @doc "The uniform 404 — denied and unknown tokens are indistinguishable by design."
   def not_found(conn), do: VutuvWeb.ControllerHelpers.render_error(conn, 404)
 end

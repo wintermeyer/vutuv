@@ -125,6 +125,16 @@ config :vutuv, :moderate_images, true
 config :vutuv, :ollama_url, "http://localhost:11434"
 config :vutuv, :ollama_vision_model, "qwen3-vl:8b"
 
+# How long a picture waiting for that verdict shows readers its **pixelated preview** —
+# a separately stored file, 32 cells across, never the picture behind a filter
+# (issue #1720, `Vutuv.Moderation.Pixelation`). A verdict normally lands in
+# seconds; this is the ceiling for when it does not, after which the card falls
+# back to the grey "being checked" tile rather than leaving a derivative of an
+# unvetted picture on a public page indefinitely. `0` switches the pixelated preview off
+# for the whole installation. Runtime override:
+# IMAGE_PIXELATION_WINDOW_SECONDS (config/runtime.exs).
+config :vutuv, :image_pixelation_window_seconds, 3600
+
 # On-demand post translations (Vutuv.Translations, milestone 13): a reader
 # asks, a job queues, an Ollama text model translates, the result is cached
 # per post + target language. Default OFF — an installation opts in once it

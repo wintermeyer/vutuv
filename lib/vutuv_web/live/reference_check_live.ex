@@ -36,7 +36,6 @@ defmodule VutuvWeb.ReferenceCheckLive do
   # spinner says "loading", while this is a wait for something being *judged*,
   # over a duration the member cannot shorten. It pauses at each half-turn like
   # a real one and stops entirely under prefers-reduced-motion.
-  import VutuvWeb.PostComponents, only: [hourglass: 1]
 
   # The grade label, shared with the result page so the two cannot state the
   # verdict differently. Its module embeds the templates that render *this*

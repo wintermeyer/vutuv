@@ -85,7 +85,12 @@ defmodule Vutuv.Moderation.StrandedQuarantineTest do
 
   defp quarantined?(tmp, url), do: Path.wildcard(quarantine_glob(tmp, url)) != []
   defp quarantine_glob(tmp, url), do: Path.join(tmp, "quarantine/screenshots/#{url.id}/*")
-  defp served?(tmp, url), do: Path.wildcard(Path.join(tmp, "screenshots/#{url.id}/*")) != []
+  # The THUMB specifically, not "any file in the served directory": a capture
+  # waiting for the AI verdict also has its pixelated preview there (issue #1720), and a
+  # pixelated preview is not the capture — the question here is whether the bytes this row
+  # names can be served, which is the thumb and only the thumb.
+  defp served?(tmp, url),
+    do: Path.wildcard(Path.join(tmp, "screenshots/#{url.id}/thumb*")) != []
 
   describe "serving a screenshot whose file is not on disk" do
     test "answers the placeholder rather than a URL that 404s", %{tmp: tmp, user: user} do

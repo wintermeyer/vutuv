@@ -24,6 +24,7 @@ defmodule Vutuv.Screenshot do
   """
 
   alias Vutuv.Moderation.ImageScans
+  alias Vutuv.Moderation.Pixelation
   alias Vutuv.Uploads.Originals
   alias Vutuv.Uploads.Spec
 
@@ -55,6 +56,7 @@ defmodule Vutuv.Screenshot do
            :ok <- clear_versions(target_dir),
            :ok <- write_thumb(rotated, target_dir, hash),
            :ok <- clear_displaced_versions(target_dir, dir) do
+        Pixelation.write_if_enabled(rotated, dir, hash)
         :ok = Originals.store(storage_dir(scope), upload.path, ext)
         {:ok, "#{hash}#{ext}"}
       else
@@ -87,6 +89,7 @@ defmodule Vutuv.Screenshot do
         dir = disk_dir(scope)
         File.mkdir_p!(dir)
         clear_versions(dir)
+        Pixelation.clear(dir)
         for file <- files, do: File.rename!(file, Path.join(dir, Path.basename(file)))
     end
 
@@ -159,7 +162,7 @@ defmodule Vutuv.Screenshot do
         placeholder_url()
 
       filename = served_filename(scope, screenshot) ->
-        "/" |> Path.join(Path.join(storage_dir(scope), filename)) |> URI.encode()
+        served_url(scope, filename)
 
       true ->
         placeholder_url()
@@ -225,6 +228,40 @@ defmodule Vutuv.Screenshot do
     :ok
   end
 
+  ## The pixelated preview (issue #1720)
+
+  # A capture waiting for the AI verdict has nothing in the served directory —
+  # its thumb is in quarantine, which nginx cannot reach — so the page showed
+  # the generic placeholder and a reader could not tell a page being checked
+  # from one that failed to capture. The preview goes into the **served**
+  # directory instead: it is the one thing about this capture that may be
+  # published before the verdict, being 32 cells of averaged colour rather than
+  # the page.
+  #
+  # `Pixelation.write_if_enabled/3` decides whether there is a wait to stand in
+  # for at all, and it is the same question the quarantine choice in `store/1`
+  # asks — so the two cannot answer it differently.
+
+  @doc """
+  Root-relative URL of the preview standing in for a capture the AI scan has
+  not released, or `nil` when there is nothing to stand in with: the capture is
+  released (the thumb itself is served), the wait has run past
+  `Vutuv.Moderation.Pixelation.window_seconds/0`, or no preview was written.
+
+  Both screenshot scopes carry an `updated_at`, and that is when the wait
+  started: the row is touched by the capture that is now being judged.
+  """
+  def pixelated_url(scope) do
+    with true <- held_in_limbo?(scope),
+         hash when hash != "" <- rootname(scope.screenshot),
+         filename = Pixelation.filename(hash),
+         true <- Pixelation.stands_in?(Path.join(disk_dir(scope), filename), scope.updated_at) do
+      served_url(scope, filename)
+    else
+      _ -> nil
+    end
+  end
+
   defp write_thumb(rotated, dir, hash) do
     spec = Spec.version(:screenshot, :thumb)
     Spec.write_derived(spec, rotated, Path.join(dir, thumb_filename(hash, Spec.served_ext())))
@@ -250,6 +287,10 @@ defmodule Vutuv.Screenshot do
   end
 
   defp thumb_filename(hash, ext), do: "thumb-#{hash}#{ext}"
+
+  # The one place a served screenshot file becomes a URL.
+  defp served_url(scope, filename),
+    do: "/" |> Path.join(Path.join(storage_dir(scope), filename)) |> URI.encode()
 
   defp storage_dir(scope), do: "screenshots/#{scope.id}"
 

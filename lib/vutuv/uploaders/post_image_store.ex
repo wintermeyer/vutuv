@@ -12,6 +12,7 @@ defmodule Vutuv.PostImageStore do
                                               /feed.avif
                                               /large.avif
                                               /xl.avif
+                                              /pixelated.avif   (while unreleased)
       <uploads_dir_prefix>/originals/post_images/<token>/original.<ext>
                                                        /cleaned.<ext>
 
@@ -50,6 +51,8 @@ defmodule Vutuv.PostImageStore do
 
   alias Vix.Vips.Image, as: VipsImage
   alias Vix.Vips.Operation
+  alias Vutuv.Moderation.ImageScans
+  alias Vutuv.Moderation.Pixelation
   alias Vutuv.Posts.PostImage
   alias Vutuv.Uploads.Crop
   alias Vutuv.Uploads.Exif
@@ -127,6 +130,7 @@ defmodule Vutuv.PostImageStore do
          camera = Exif.read_image(opened),
          {:ok, rotated} <- Spec.open_rotated(path),
          :ok <- write_derived_versions(rotated, dir) do
+      Pixelation.write_if_enabled(rotated, dir)
       :ok = Originals.store(storage_dir(token), path, ext)
       # A re-store under the same token must not leave the previous upload's
       # cached derivatives behind for the routes to serve: the cleaned copy,
@@ -148,6 +152,34 @@ defmodule Vutuv.PostImageStore do
     end)
   end
 
+  # The stand-in shown while the AI scan is looking at this photo (issue
+  # #1720) is written deliberately *outside* `write_derived_versions/2`, which
+  # the regenerator also drives: a pixelated preview is not a version of the photo, it is
+  # the temporary absence of one, and the regenerator's stale sweep is right to
+  # take any leftover with it.
+  #
+  # A photo cropped while the scan is still running gets its pixelated preview re-cut from
+  # the new frame, so the blocks stand where the picture will. A released photo
+  # has no mosaic to keep in step.
+  defp recut_pixelated(%PostImage{moderation: moderation}, cropped, dir) do
+    if ImageScans.released?(moderation), do: :ok, else: Pixelation.write_if_enabled(cropped, dir)
+  end
+
+  @doc """
+  Where this photo's mosaic lives (`Vutuv.Moderation.Pixelation`). The path is
+  built whether or not the file is there — `Pixelation.stands_in?/2` is what asks
+  that, because a missing mosaic is an ordinary state (settled scan, swept
+  leftover, moderation switched on after the upload).
+  """
+  def pixelated_path(token) when is_binary(token), do: Pixelation.path(dir(token))
+
+  @doc """
+  Drops the preview once the scan has settled. Approval and rejection both end
+  the wait it stood in for; a rejection takes the whole directory anyway, which
+  makes this the approval's job.
+  """
+  def delete_pixelated(token) when is_binary(token), do: Pixelation.clear(dir(token))
+
   @doc """
   Applies (or, with `nil`, removes) the author's crop: re-derives every served
   version from the kept original with `Vutuv.Uploads.Crop` applied, exactly the
@@ -159,7 +191,7 @@ defmodule Vutuv.PostImageStore do
   re-crop) starts from. The cached cropped download is dropped, since it
   described the previous crop; the uncropped `source` workbench stays valid.
   """
-  def apply_crop(%PostImage{token: token}, crop_string) do
+  def apply_crop(%PostImage{token: token} = image, crop_string) do
     case Originals.path(storage_dir(token)) do
       nil ->
         {:error, :missing_original}
@@ -171,6 +203,7 @@ defmodule Vutuv.PostImageStore do
         with {:ok, rotated} <- Spec.open_rotated(original),
              {:ok, cropped} <- Crop.apply_to(rotated, Crop.parse(crop_string)),
              :ok <- write_derived_versions(cropped, dir) do
+          recut_pixelated(image, cropped, dir)
           clear_cropped_download(token)
           {:ok, %{width: Image.width(cropped), height: Image.height(cropped)}}
         end

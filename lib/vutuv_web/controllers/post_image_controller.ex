@@ -32,6 +32,7 @@ defmodule VutuvWeb.PostImageController do
   use VutuvWeb, :controller
 
   alias Vutuv.Accounts.User
+  alias Vutuv.Moderation.ImageScans
   alias Vutuv.Posts
   alias Vutuv.Posts.PostImage
   alias VutuvWeb.ImageProxy
@@ -42,7 +43,7 @@ defmodule VutuvWeb.PostImageController do
          image when not is_nil(image) <- Posts.get_image_by_token(token),
          {source, viewer} <- reader(conn, params, token),
          true <- source != :capability or served_version?(version),
-         true <- Posts.image_visible_to?(image, viewer) do
+         true <- allowed?(image, viewer, version) do
       serve(conn, image, version)
     else
       _ -> ImageProxy.not_found(conn)
@@ -67,6 +68,18 @@ defmodule VutuvWeb.PostImageController do
     end
   end
 
+  # Who may fetch what. Every version but the pixelated preview asks the one audience +
+  # moderation question; the pixelated preview asks the mirror image of it, because it
+  # exists *only* while the picture does not (`Posts.pixelated_visible_to?/2`).
+  # Both are allowed here so that a URL rendered before the verdict still
+  # resolves after it — `serve/3` then sends the reader to the real picture
+  # rather than answering a page that is already on screen with a 404.
+  defp allowed?(image, viewer, :pixelated) do
+    Posts.pixelated_visible_to?(image, viewer) or Posts.image_visible_to?(image, viewer)
+  end
+
+  defp allowed?(image, viewer, _version), do: Posts.image_visible_to?(image, viewer)
+
   # **A capability opens the sizes a client renders, and only those.** The
   # version segment is not in the signed subject — one capability opens the
   # photo, not one file of it — so without this rule the three *derived* routes
@@ -79,6 +92,11 @@ defmodule VutuvWeb.PostImageController do
   # arrive anonymously and must go on being served a public post's preview.
   defp served_version?(version), do: version in PostImage.versions()
 
+  # "pixelated.avif" is the blocky stand-in served while the AI scan is still
+  # looking at the photo (issue #1720) — its own name rather than a member of
+  # the version whitelist, because it is not a size of the picture and nothing
+  # that enumerates versions should offer it.
+  #
   # "og.jpg" is the link-preview JPEG (og:image), derived on the fly rather
   # than stored; "original.orig" is the author-enabled full-resolution
   # download (issue #1104), which `serve/3` gates on that photo's own
@@ -86,12 +104,32 @@ defmodule VutuvWeb.PostImageController do
   # workbench the composer's crop dialog loads. Everything else resolves
   # through the shared whitelist parser, which never resolves a stored
   # filename.
+  defp parse_version("pixelated.avif"), do: :pixelated
   defp parse_version("og.jpg"), do: :og
   defp parse_version("original.orig"), do: :download
   defp parse_version("source.avif"), do: :source
 
   defp parse_version(version_file),
     do: ImageProxy.parse_version(version_file, PostImage.versions())
+
+  # The pixelated preview (issue #1720). Two answers, and which one depends on where the
+  # scan got to since the page was rendered:
+  #
+  #   * still waiting — the file, under `no-store`. It is replaced by the real
+  #     picture within seconds and must not outlive that in any cache, which is
+  #     the one place this proxy's year-long immutable header would be wrong.
+  #   * released — a redirect to the picture itself. The pixelated preview is deleted on
+  #     the verdict, so without this a dead page that lazy-loads a tile after
+  #     the swap would show a broken image where the photo now is.
+  defp serve(conn, image, :pixelated) do
+    if ImageScans.released?(image.moderation) do
+      conn
+      |> put_resp_header("cache-control", "private, no-store")
+      |> redirect(to: PostImage.url(image, "feed"))
+    else
+      ImageProxy.serve_pixelated(conn, existing(Vutuv.PostImageStore.pixelated_path(image.token)))
+    end
+  end
 
   # The og.jpg bytes are generated in the app (Vutuv.PostImageStore.og_jpeg/1),
   # so they are sent directly in both serving modes — there is no file for
@@ -169,6 +207,11 @@ defmodule VutuvWeb.PostImageController do
       decorate: &put_download_name(&1, image, version, &2)
     )
   end
+
+  # `nil` for a preview that is not on disk — a settled scan, a swept file, an
+  # installation that turned the preview on after the picture was stored — which
+  # `ImageProxy.serve_pixelated/2` answers with the proxy's usual 404.
+  defp existing(path), do: if(File.exists?(path), do: path)
 
   # The downloaded file is named after the owner and the day the photo was
   # taken (falling back to when it was uploaded), e.g. `ada_king-2026-07-25.jpg`

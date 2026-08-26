@@ -40,6 +40,7 @@ defmodule Vutuv.Posts.PostImage do
 
   use VutuvWeb, :model
 
+  alias Vutuv.Moderation.Pixelation
   alias Vutuv.Uploads.Exif
   alias Vutuv.Uploads.Spec
 
@@ -204,6 +205,21 @@ defmodule Vutuv.Posts.PostImage do
   def og_url(%__MODULE__{token: token} = image),
     do: "#{token_prefix(token)}og.jpg#{crop_buster(image)}"
 
+  @doc """
+  Root-relative proxy URL of this photo's **pixelated preview** — the blocky stand-in
+  served while the AI scan is still looking at it (issue #1720,
+  `Vutuv.Moderation.Pixelation`).
+
+  Deliberately not one of `versions/0`: it is not a size of the picture, it is
+  what stands where the picture is not yet allowed to be, and every place that
+  enumerates versions (the proxy whitelist, the API's media list, the URL forms
+  a stored body may carry) must go on knowing nothing about it. The proxy
+  resolves this one name on its own and refuses it the moment the scan
+  releases the photo.
+  """
+  def pixelated_url(%__MODULE__{token: token}),
+    do: "#{token_prefix(token)}#{Pixelation.filename()}"
+
   @doc "URLs for every served version as a `%{version => url}` map."
   def urls(%__MODULE__{} = image) do
     Map.new(@versions, fn version -> {String.to_atom(version), url(image, version)} end)
@@ -245,7 +261,7 @@ defmodule Vutuv.Posts.PostImage do
   def aspect(%__MODULE__{}), do: 1.0
 
   @doc """
-  `:portrait`, `:landscape` or `:square` — the coarse shape the mosaic picks
+  `:portrait`, `:landscape` or `:square` — the coarse shape the pixelated preview picks
   its layout from. The 5:4 / 4:5 envelope matches the post card's existing
   "roughly square" rule, so one photo is called the same shape by both.
   """

@@ -2754,7 +2754,7 @@ body.mde-fullscreen-lock { overflow: hidden; }
 }
 
 /* The turning hourglass shown while a photo waits for the AI image scan
-   (issue #1104, VutuvWeb.PostComponents.hourglass/1). It turns slowly and
+   (issue #1104, VutuvWeb.UI.hourglass/1). It turns slowly and
    pauses at each half-turn, the way a real one is flipped — a steady spin
    would read as a loading spinner, and this is a wait for a verdict, not a
    download. Motion is the whole point of it, so it is the one thing that

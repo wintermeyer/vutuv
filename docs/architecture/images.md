@@ -326,8 +326,8 @@ The moving parts (all under `Vutuv.Moderation`):
 **Limbo.** A fresh image starts `pending`: the owner sees it (avatar/cover
 through the authenticated `/settings/pending_image/...` quarantine preview,
 gallery images through the authorizing proxies) with an amber "wird geprüft"
-pill; everyone else gets a placeholder (initials tile / gradient / gallery
-placecard). For the nginx-served kinds (avatars, covers, screenshots) the
+pill; everyone else gets a stand-in — the pixelated preview below where there is one, an
+initials tile / gradient otherwise. For the nginx-served kinds (avatars, covers, screenshots) the
 derived files wait in `<UPLOADS_DIR_PREFIX>/quarantine/...`, a tree nginx has
 no location for, so an unreleased byte is unreachable by URL no matter what a
 template renders. Approval moves the files into the served tree; rejection
@@ -336,6 +336,44 @@ the asset's reference and notifies the owner (in-app + email, both derived
 from the audit row). Organization logos differ deliberately: the
 `organizations.logo` pointer only ever names a released image, so the old
 logo keeps showing while the new one is scanned.
+
+**The pixelated preview (issue #1720).** A reader who may not see the picture
+yet is shown *the picture itself*, shrunk to 32 cells on its long edge and blown
+back up into flat blocks (`Vutuv.Uploads.Spec.write_pixelated/2`, using
+`Vix.Vips.Operation.zoom/3` so every block is exactly one source cell).
+`Vutuv.Moderation.Pixelation` owns the whole idea — the two filename shapes, the
+window, and the "may I show one" question its three kinds all ask. Three things
+about it are deliberate:
+
+- **A file, not a filter.** A CSS blur ships the whole picture and asks the
+  browser not to show it, which is one devtools click and any non-obeying
+  client away from the picture. Here the detail is averaged away before
+  anything is stored, so the bytes a reader can fetch carry none of it. The
+  test that pins this is a calibrated pair: a 2px checkerboard keeps its
+  standard deviation of 127.5 through a served version and comes out at ~0.35
+  through the pixelated preview.
+- **A short window.** `Pixelation.within_window?/1` stops offering it after
+  `IMAGE_PIXELATION_WINDOW_SECONDS` (default an hour, `0` disables previews for
+  the whole installation), so a derivative of an unvetted picture never sits on
+  a public page indefinitely; the card falls back to the grey tile and the
+  release still swaps the picture in whenever it comes.
+- **Deleted before the flip.** `apply_approved/1` drops the preview and *then*
+  flips the state, because an interruption between the two should cost a reader
+  the last seconds of a preview (the grey tile instead) rather than leave an
+  orphan file nothing will ever look at again. A rejection wipes the directory.
+
+Where it exists: post photos (`post_images/<token>/pixelated.avif`, served by
+the proxy at `pixelated.avif` — which redirects to the real picture once
+released, so a page rendered before the verdict never draws a broken image),
+link screenshots (`screenshots/<id>/pixelated-<hash>.avif`, in the *served* tree
+while the thumb itself waits in quarantine) and pictures cached from other
+networks (`remote_media/posts/<id>/pixelated-<hash>.avif` — the fingerprinted
+name shape, for the two kinds whose directory outlives the picture in it). Not
+avatars and covers, whose initials tile is the better placeholder at 36 pixels,
+and not organization or job-posting images, which no page shows to a stranger
+while they wait. The response is `ImageProxy.serve_pixelated/2`, the deliberate
+counter-rule to that module's immutable cache header: never X-Accel'd, always
+`no-store`, since the real picture takes the URL within seconds.
 
 **The two drifts, and why the second one hurt (issue #1443).** Approval is two
 writes in one order: `apply_approved/1` flips the row with `update_all`, then

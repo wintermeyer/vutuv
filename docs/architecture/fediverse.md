@@ -516,8 +516,17 @@ every activity of a member it finds no key for, silently.
   federates without it, which is what vetting first means), pulls the row forward
   the moment the last picture on the post has a verdict, which is the normal case
   and usually a few seconds. `:fediverse_image_hold_seconds` (90) is the
-  **ceiling**, not the usual wait: it is what happens when the scanner is down, and
-  then the post goes out without the unvetted picture rather than not at all.
+  **re-check interval**, not a ceiling (issue #1720): a delivery that comes due
+  while the scan is still out re-parks itself for another interval instead of
+  travelling, and does so without counting an attempt (a wait is not a failure,
+  and eight of them would retire the row) and without leaving `next_attempt_at`
+  in the past (a permanently due row would hold the front of every batch — the
+  #1316 shape). So a post never federates with a picture the gate has not
+  cleared, however long that takes, and the queue entry is a database row, so a
+  deploy or a restart does not lose the wait. Until this, the mark was a ceiling
+  and a slow verdict sent the post without its picture, to be followed by an
+  "edited" `Update`; the pixelated preview is what made that trade unnecessary, because
+  readers here no longer stare at a hole while the scan runs.
   `activity_json` still holds a complete, valid activity for a held row, so a
   release that knows nothing of `rebuild_from` delivers that instead of choking —
   the worst a deploy window can do is federate one post without its picture. The

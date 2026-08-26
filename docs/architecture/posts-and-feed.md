@@ -1357,9 +1357,13 @@ minimise the letterboxing exactly where they used to minimise the crop.
 
 A post carrying a picture that has not finished the AI image scan publishes
 straight away. The **picture** is what waits: for anyone but the author and
-admins it renders as a placecard tile with a turning hourglass, saying the check
-is running and the photo will appear there by itself, and it does — over PubSub,
-with no reload.
+admins it renders as its own **pixelated preview** — the photo reduced to 32 cells and
+blown back up into flat blocks, a separately stored file rather than a filter
+over the real one (issue #1720, `Vutuv.Moderation.Pixelation`, and
+`docs/architecture/images.md` for the recipe) — with a "wird geprüft" badge on
+it. Past `IMAGE_PIXELATION_WINDOW_SECONDS` it falls back to the grey hourglass tile
+that came before. Either way the photo appears there by itself when the verdict
+lands — over PubSub, with no reload.
 
 It shipped the other way round, holding the post back whole (out of every feed
 and profile, off its own permalink) on the argument that publishing the text

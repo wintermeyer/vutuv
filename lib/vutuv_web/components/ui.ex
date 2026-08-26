@@ -974,11 +974,72 @@ defmodule VutuvWeb.UI do
   end
 
   @doc """
+  The turning hourglass shown while a photo waits for the AI image scan
+  (issue #1104).
+
+  An hourglass rather than a spinner on purpose: a spinner says "loading", and
+  what is happening here is not a load but a wait for something being *judged*
+  — with a duration the reader cannot control and should not expect to be
+  instant. The rotation is CSS (`.hourglass`, `components.css`) and stops
+  under `prefers-reduced-motion`; the glyph reads the same either way.
+  """
+  attr(:class, :string, default: "h-5 w-5")
+
+  def hourglass(assigns) do
+    ~H"""
+    <svg
+      viewBox="0 0 24 24"
+      fill="none"
+      stroke="currentColor"
+      stroke-width="1.5"
+      class={["hourglass shrink-0", @class]}
+      aria-hidden="true"
+    >
+      <path
+        stroke-linecap="round"
+        stroke-linejoin="round"
+        d="M6.75 2.25h10.5M6.75 21.75h10.5M7.5 2.25v3.336c0 .58.226 1.136.63 1.55L12 11l3.87-3.864c.404-.414.63-.97.63-1.55V2.25M7.5 21.75v-3.336c0-.58.226-1.136.63-1.55L12 13l3.87 3.864c.404.414.63.97.63 1.55v3.336"
+      />
+    </svg>
+    """
+  end
+
+  @doc """
+  The badge on a picture the AI image scan has not released yet: the turning
+  hourglass and the two words that say what the reader is looking at.
+
+  It sits in `VutuvWeb.UI` rather than beside the post card because four
+  surfaces carry it — a held post photo, a held link screenshot, a held picture
+  from another network, and the profile Links tile — and the fourth is in this
+  module, which cannot import `VutuvWeb.PostComponents` (that module imports
+  this one). While the markup was copied per surface the four drifted on the
+  first commit: the one here had no glyph at all.
+
+  Positioned by the caller (`absolute` in a `relative` tile, or in the flow),
+  so a surface keeps its own geometry.
+  """
+  attr(:class, :any, default: "absolute bottom-2 left-2")
+
+  def checking_badge(assigns) do
+    ~H"""
+    <span class={[
+      "inline-flex items-center gap-1 rounded-full bg-slate-900/75 px-2 py-1 text-xs font-semibold text-white",
+      @class
+    ]}>
+      <.hourglass class="h-3.5 w-3.5" />{gettext("Being checked")}
+    </span>
+    """
+  end
+
+  @doc """
   The 400×264 preview tile of a profile link, in whichever of its three states
   the link is in — the one place that decides what a link looks like when there
   is no screenshot.
 
     * a stored capture renders as the thumbnail (`Vutuv.Screenshot.url/2`);
+    * a capture the AI scan has not judged yet renders as its **pixelated preview**
+      (issue #1720) with a badge saying so — the capture exists, and 32 cells
+      of averaged colour is what may be shown of it before the verdict;
     * a link this installation never captures (`Vutuv.ScreenshotBlocklist` — a
       consent-banner or login-walled site) renders a calm tile naming the site,
       because "a screenshot has not been created yet" would be a promise that
@@ -986,8 +1047,8 @@ defmodule VutuvWeb.UI do
     * anything else is a capture still on its way and keeps the bundled
       placeholder image.
 
-  Carries `data-link-thumb` with that state (`shot` / `site` / `pending`) for
-  tests. Sizing lives in the component, so both the profile Links card (kit
+  Carries `data-link-thumb` with that state (`shot` / `mosaic` / `site` /
+  `pending`) for tests. Sizing lives in the component, so both the profile Links card (kit
   page) and the `/:slug/links` list (classic page) render one tile.
   """
   attr(:url, :map, required: true, doc: "a %Vutuv.Profiles.Url{}")
@@ -995,20 +1056,28 @@ defmodule VutuvWeb.UI do
 
   def link_thumb(assigns) do
     src = Vutuv.Screenshot.url({assigns.url.screenshot, assigns.url}, :thumb)
+    pixelated_url = Vutuv.Screenshot.pixelated_url(assigns.url)
 
     assigns =
       assigns
       |> assign(:src, src)
-      # A row can name a capture whose file is not on disk, and `url/2` then
-      # answers the placeholder (issue #1443) — so the state is read off the
-      # resolved src, not off the column. Calling that tile "shot" while the
-      # placeholder renders would be a state nobody could act on.
-      |> assign(:stored?, src != Vutuv.Screenshot.placeholder_url())
-      |> assign(:blocklisted?, Vutuv.ScreenshotBlocklist.blocked?(assigns.url.value))
+      |> assign(:pixelated_url, pixelated_url)
+      |> assign(:state, link_thumb_state(assigns.url, src, pixelated_url))
 
     ~H"""
+    <span :if={@state == "pixelated"} class={["relative block", @class]} data-link-thumb="pixelated">
+      <img
+        src={@pixelated_url}
+        alt=""
+        width="400"
+        height="264"
+        loading="lazy"
+        class="aspect-[400/264] w-full object-cover"
+      />
+      <.checking_badge />
+    </span>
     <div
-      :if={is_nil(@url.screenshot) and @blocklisted?}
+      :if={@state == "site"}
       data-link-thumb="site"
       class={[
         "flex aspect-[400/264] w-full items-center justify-center bg-slate-50 px-3 dark:bg-slate-800",
@@ -1020,8 +1089,8 @@ defmodule VutuvWeb.UI do
       </span>
     </div>
     <img
-      :if={not (is_nil(@url.screenshot) and @blocklisted?)}
-      data-link-thumb={if @stored?, do: "shot", else: "pending"}
+      :if={@state in ["shot", "pending"]}
+      data-link-thumb={@state}
       src={@src}
       alt={@url.description || VutuvWeb.UrlHTML.display_url(@url.value)}
       width="400"
@@ -1030,6 +1099,22 @@ defmodule VutuvWeb.UI do
       class={["aspect-[400/264] w-full object-cover", @class]}
     />
     """
+  end
+
+  # Which of the four tiles this link gets, decided once so the three branches
+  # above read as one choice rather than as three conditions that must agree.
+  #
+  # "shot" is read off the **resolved src**, not off the column: a row can name
+  # a capture whose file is not on disk, and `Screenshot.url/2` then answers the
+  # placeholder (issue #1443) — calling that tile "shot" would be a state
+  # nobody could act on.
+  defp link_thumb_state(url, src, pixelated_url) do
+    cond do
+      pixelated_url -> "pixelated"
+      is_nil(url.screenshot) and Vutuv.ScreenshotBlocklist.blocked?(url.value) -> "site"
+      src != Vutuv.Screenshot.placeholder_url() -> "shot"
+      true -> "pending"
+    end
   end
 
   @doc """

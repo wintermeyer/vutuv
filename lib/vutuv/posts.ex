@@ -66,6 +66,7 @@ defmodule Vutuv.Posts do
   alias Vutuv.Keyset
   alias Vutuv.Mentions
   alias Vutuv.Moderation.ImageScans
+  alias Vutuv.Moderation.Pixelation
   alias Vutuv.Organizations
   alias Vutuv.Organizations.Organization
   alias Vutuv.Pages
@@ -5717,7 +5718,7 @@ defmodule Vutuv.Posts do
   full-frame) — re-deriving every served version from the kept original
   (`Vutuv.PostImageStore.apply_crop/2`) and persisting the fractions so the
   Regenerator re-applies them. `width`/`height` become the served (cropped)
-  dimensions, which is what the mosaic and the `<img>` attributes describe.
+  dimensions, which is what the pixelated preview and the `<img>` attributes describe.
 
   The exact-file download drops with the crop: the upload still shows what
   the author just cut out of the frame, so it must no longer leave the
@@ -5861,17 +5862,47 @@ defmodule Vutuv.Posts do
   end
 
   def image_visible_to?(%PostImage{} = image, viewer) do
-    post =
-      case image.post do
-        %Post{} = post -> post
-        # Not preloaded (NotLoaded is truthy — don't `||` this).
-        _ -> Repo.get(Post, image.post_id)
-      end
-
     # AI-moderation limbo: until released, the bytes are owner/admin-only
-    # (everyone else gets the gallery placecard, and this proxy 404s).
-    visible_to?(post, viewer) and
+    # (everyone else gets the pixelated preview or the placecard, and this proxy 404s).
+    visible_to?(post_of(image), viewer) and
       (ImageScans.released?(image.moderation) or ImageScans.privileged_viewer?(image, viewer))
+  end
+
+  @doc """
+  Whether `viewer` may fetch this image's **pixelated preview** — the blocky stand-in the
+  AI scan's wait renders (issue #1720, `Vutuv.Moderation.Pixelation`).
+
+  The mirror image of `image_visible_to?/2` on the moderation half: the post's
+  audience decides as it always does, but the pixelated preview exists precisely *because*
+  the picture is not released, so a released picture has no mosaic to serve and
+  the proxy sends the reader to the real thing instead. A photo that is still
+  in the composer (no post yet) has no audience but its uploader, who sees the
+  picture itself.
+  """
+  def pixelated_visible_to?(%PostImage{post_id: nil}, _viewer), do: false
+
+  def pixelated_visible_to?(%PostImage{} = image, viewer) do
+    not ImageScans.released?(image.moderation) and visible_to?(post_of(image), viewer)
+  end
+
+  @doc """
+  The pixelated preview URL to render in place of this photo, or `nil` when the card
+  should fall back to the grey placecard: the picture is released, the wait has
+  run past `Vutuv.Moderation.Pixelation.window_seconds/0`, or no mosaic was written.
+  """
+  def image_pixelated_url(%PostImage{} = image) do
+    if not ImageScans.released?(image.moderation) and
+         Pixelation.stands_in?(PostImageStore.pixelated_path(image.token), image.inserted_at),
+       do: PostImage.pixelated_url(image)
+  end
+
+  # The post an image hangs on, preloaded or fetched. NotLoaded is truthy, so
+  # this can never be written as an `||`.
+  defp post_of(%PostImage{} = image) do
+    case image.post do
+      %Post{} = post -> post
+      _not_preloaded -> Repo.get(Post, image.post_id)
+    end
   end
 
   @doc """

@@ -38,6 +38,15 @@ defmodule Vutuv.Uploads.Spec do
 
   @effort 4
 
+  # The pixelated preview (issue #1720): how many cells the long edge is reduced to before
+  # it is blown back up, and how big the blown-up file is. 32 cells is coarse
+  # enough that a face, a body or a line of text is gone and fine enough that
+  # the tile reads as a photo rather than as a colour swatch. The quality is
+  # lower than any served version because flat blocks compress to nothing.
+  @pixelated_cells 32
+  @pixelated_width 640
+  @pixelated_quality 50
+
   # `fit` shapes: {:crop, w, h, gravity} crops to exactly w×h;
   # {:crop_down, s, gravity} crops to a square of at most s×s;
   # {:box_down, s} fits within s×s; {:width_down, w} caps the width —
@@ -251,6 +260,41 @@ defmodule Vutuv.Uploads.Spec do
     with {:ok, resized} <- resize(image, fit) do
       save(resized, dest, quality)
     end
+  end
+
+  @doc """
+  Writes the **pixelated preview** of an already-rotated `image` to `dest`: the picture
+  reduced to #{@pixelated_cells} cells on its longest edge and blown back up with
+  each cell as a flat block (issue #1720).
+
+  This is what stands in for a photo while the AI scan is still looking at it
+  (`Vutuv.Moderation.Pixelation`), and the reason it is a **file** and not a CSS
+  filter is that a filter is one devtools click away from the picture
+  underneath. Here the discarded pixels are gone before anything is served:
+  the shrink averages them away, and no amount of client-side work gets them
+  back.
+
+  `Vix.Vips.Operation.zoom/3` does the blowing up rather than a resize with a
+  nearest-neighbour kernel: it replicates each pixel by an integer factor, so
+  every block is exactly the same size and the result cannot pick up the
+  half-pixel interpolation seams a scaled resample leaves along cell edges.
+  The factor is chosen so the long edge lands near #{@pixelated_width}px — a
+  32-cell AVIF blown up to that size is a couple of kilobytes, and blowing it
+  up here rather than in the browser means the tile looks the same whatever
+  `image-rendering` the reader's browser defaults to.
+  """
+  def write_pixelated(image, dest) do
+    with {:ok, small} <-
+           Image.thumbnail(image, "#{@pixelated_cells}x#{@pixelated_cells}", resize: :down),
+         {:ok, blocky} <- blow_up(small) do
+      save(blocky, dest, @pixelated_quality)
+    end
+  end
+
+  defp blow_up(small) do
+    factor = max(1, div(@pixelated_width, max(Image.width(small), Image.height(small))))
+
+    if factor == 1, do: {:ok, small}, else: Operation.zoom(small, factor, factor)
   end
 
   @doc """

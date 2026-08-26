@@ -8537,18 +8537,22 @@ defmodule Vutuv.Fediverse do
   ## Holding a post back until its pictures are vetted (issue #1070)
 
   @doc """
-  How long a post with an unvetted picture waits before it federates anyway.
+  How long a post with an unvetted picture waits before it looks again.
 
   A post's images are invisible until the AI scan releases them
   (`Vutuv.Moderation.ImageScans`), so a Note built the instant the post commits
   carries no attachment for them and nothing would ever send the picture. The
-  post is therefore held, and released the moment the scan settles — usually a few
-  seconds later, through `images_settled/1`.
+  post is therefore held, and released the moment the scan settles — usually a
+  few seconds later, through `images_settled/1`.
 
-  This is the **ceiling**, not the normal wait: it is what happens when the
-  scanner is down, and then the post goes out without the picture rather than not
-  at all. Configurable (`:fediverse_image_hold_seconds`) so tests do not sit on a
-  real clock.
+  This is the **re-check interval**, not a ceiling (issue #1720): a post never
+  federates with a picture the scan has not cleared, so when the verdict is slow
+  the row simply goes back in the queue for another interval. It used to give up
+  at this mark and send the post without its picture, which put the wait's outcome
+  in the hands of whichever came first — that is what the mosaic made
+  unnecessary, since readers *here* are no longer staring at a hole while the
+  scan runs. Configurable (`:fediverse_image_hold_seconds`) so tests do not sit on
+  a real clock.
   """
   def image_hold_seconds,
     do: Application.get_env(:vutuv, :fediverse_image_hold_seconds, @image_hold_seconds)
@@ -9020,31 +9024,81 @@ defmodule Vutuv.Fediverse do
          {:ok, delivery} <- rebuilt(delivery, user) do
       post_activity(delivery, user, actor)
     else
+      # Still waiting on a picture: put the row back rather than send the post
+      # without it (issue #1720).
+      :hold ->
+        repark(delivery)
+
       # No key, a non-https inbox, an internal target, a blocked server, or a
       # post that is gone or no longer public: undeliverable for good, so the row
       # goes instead of clogging the queue.
-      _ -> Repo.delete(delivery)
+      _ ->
+        Repo.delete(delivery)
     end
   end
 
   defp attempt(%Delivery{} = delivery, _actor), do: Repo.delete(delivery)
 
   # A held row re-renders its activity now, so a picture the AI scan released
-  # while it waited rides along (issue #1070). The gates are re-checked at the
-  # same time: the post may have been deleted or had its audience closed during
-  # the hold, and then this delivery must not go out at all.
+  # while it waited rides along (issue #1070) — or reparks itself, when the
+  # scan is still out (issue #1720).
   defp rebuilt(%Delivery{rebuild_from: nil} = delivery, _user), do: {:ok, delivery}
 
   defp rebuilt(%Delivery{rebuild_from: marker} = delivery, user) do
     with [kind, post_id] <- String.split(marker, ":", parts: 2),
-         builder when is_function(builder) <- rebuild_builder(kind),
-         %Post{} = post <- Posts.get_post(post_id),
+         builder when is_function(builder) <- rebuild_builder(kind) do
+      # The cheap question first, and outside the `with`. Cheap, because a
+      # reparked row asks it again every interval for as long as the scan is
+      # out, and `Posts.get_post/1` below is some twenty preloads: reading the
+      # post plus its images and review is three. Outside, because two boolean
+      # steps in one chain both fail with `true` — an else-clause reading
+      # `true -> :hold` would catch the closed-audience case as well and repark
+      # a delivery that must never go out, for ever, which is precisely the
+      # immortal row `repark/1` exists to avoid.
+      if Posts.awaiting_image_release?(post_id) do
+        :hold
+      else
+        rebuild_now(delivery, builder, post_id, user)
+      end
+    else
+      _ -> :drop
+    end
+  end
+
+  # The gates are re-checked here rather than when the row was queued: the post
+  # may have been deleted or had its audience closed during the hold, and then
+  # this delivery must not go out at all.
+  defp rebuild_now(delivery, builder, post_id, user) do
+    with %Post{} = post <- Posts.get_post(post_id),
          false <- Posts.restricted?(post) do
       post = Repo.preload(post, Docs.note_preloads())
       {:ok, %{delivery | activity_json: Jason.encode!(builder.(post, user))}}
     else
       _ -> :drop
     end
+  end
+
+  # A post whose picture the AI scan has not judged yet goes back in the queue
+  # for another `image_hold_seconds/0` instead of travelling without it (issue
+  # #1720). Two things this must not do, and both are the reason it exists at
+  # all rather than a longer initial delay:
+  #
+  #   * **not count an attempt.** These are not failures — nothing was sent —
+  #     and eight of them would retire the row at `@max_attempts` and lose the
+  #     post for good.
+  #   * **not leave `next_attempt_at` where it is.** A due row that stays due
+  #     is picked up by every drain, holds the front of the queue and spends
+  #     the batch on work that cannot complete (the sweeper deadlock of #1316).
+  #
+  # `images_settled/1` is what normally ends the wait, within seconds; this is
+  # the fallback that makes the wait survive a lost broadcast, a crash between
+  # verdict and release, and a scanner that is down for hours.
+  defp repark(%Delivery{} = delivery) do
+    delivery
+    |> Ecto.Changeset.change(
+      next_attempt_at: DateTime.add(DateTime.utc_now(:second), image_hold_seconds())
+    )
+    |> Repo.update()
   end
 
   defp rebuild_builder("post_create"), do: &Docs.create_activity/2
