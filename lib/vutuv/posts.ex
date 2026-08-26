@@ -2611,37 +2611,45 @@ defmodule Vutuv.Posts do
 
     page = Vutuv.FeedPage.paginate(feed_sources(viewer, filter), limit, cursor)
 
-    %{page | entries: decorate_feed_entries(page.entries, viewer)}
+    %{page | entries: decorate_feed_entries(page.entries, viewer, threads: true)}
   end
 
   # The six sources the merged feed pulls from, narrowed to the reader's tab.
   #
-  # The two tabs partition the feed by **what kind of post an entry carries**
-  # (`remote_feed_entry?/1`) — the same question the renderer asks to pick a
-  # card, so every entry lands on exactly one tab and the two together are
-  # "All". That rule decides the one source that produces both kinds:
-  # `feed_remote_boosts/4` (issue #1167) carries a cached remote post when the
-  # boosted thing lives out there, and a plain vutuv post when a followed
-  # account passed a member's post on — the latter *is* a vutuv post, so it
-  # belongs on the vutuv tab even though it arrived through the fediverse.
-  # `:only` narrows that source inside its own query rather than by filtering
-  # rows afterwards, so a page is never short of what the paginator fetched
-  # for it (which is what decides `more?`).
+  # The two tabs partition the feed by **who the entry belongs to**, which is
+  # two questions in order. What kind of post it carries decides most of it
+  # (`remote_feed_entry?/1` — the same question the renderer asks to pick a
+  # card), and a **vutuv act on remote content beats that**: pressing Reshare
+  # is something that happened here, so the reader's own reshare of a post from
+  # another network is on the vutuv tab, where they go to see what they did.
+  # Somebody else's reshare is not theirs and stays on the Fediverse tab.
+  # Either way every entry lands on exactly one tab and the two together are
+  # "All".
+  #
+  # Two sources produce both kinds, and both are narrowed by `:only` **inside
+  # their own query** rather than by dropping rows afterwards, so a page is
+  # never short of what the paginator fetched for it (which is what decides
+  # `more?`). `feed_remote_boosts/4` (issue #1167) carries a cached remote post
+  # when the boosted thing lives out there and a plain vutuv post when a
+  # followed account passed a member's post on — the latter *is* a vutuv post.
+  # The two reshare sources (issues #1166 and #1275) split on the resharer.
   defp feed_sources(viewer, :vutuv) do
     [
       &feed_post_items(viewer, &1, &2),
       &feed_organization_post_items(viewer, &1, &2),
       &feed_repost_items(viewer, &1, &2),
       &feed_tag_items(viewer, &1, &2),
-      &Vutuv.Fediverse.feed_remote_boosts(viewer, &1, &2, only: :local)
+      &Vutuv.Fediverse.feed_remote_boosts(viewer, &1, &2, only: :local),
+      &Vutuv.Fediverse.feed_remote_reposts(viewer, &1, &2, only: :mine),
+      &Vutuv.Fediverse.feed_remote_reply_reposts(viewer, &1, &2, only: :mine)
     ]
   end
 
   defp feed_sources(viewer, :fediverse) do
     [
       &Vutuv.Fediverse.feed_remote_posts(viewer, &1, &2),
-      &Vutuv.Fediverse.feed_remote_reposts(viewer, &1, &2),
-      &Vutuv.Fediverse.feed_remote_reply_reposts(viewer, &1, &2),
+      &Vutuv.Fediverse.feed_remote_reposts(viewer, &1, &2, only: :others),
+      &Vutuv.Fediverse.feed_remote_reply_reposts(viewer, &1, &2, only: :others),
       &Vutuv.Fediverse.feed_remote_boosts(viewer, &1, &2, only: :remote)
     ]
   end
@@ -2727,13 +2735,28 @@ defmodule Vutuv.Posts do
   end
 
   @doc """
-  Whether the feed tab `filter` shows `entry` — the in-memory twin of the
-  source split in `feed_sources/2`, for the entries that arrive live over
+  Whether the feed tab `filter` shows `entry` for `viewer` — the in-memory twin
+  of the source split in `feed_sources/2`, for the entries that arrive live over
   PubSub rather than through a query.
+
+  `viewer` is what makes it a twin rather than a near-miss: the split is not
+  "which kind of post" alone, it is that a reshare the reader pressed
+  themselves counts as a vutuv act (see `feed_sources/2`), and only the reader
+  can say whether they pressed it.
   """
-  def feed_filter_accepts?(:vutuv, entry), do: not remote_feed_entry?(entry)
-  def feed_filter_accepts?(:fediverse, entry), do: remote_feed_entry?(entry)
-  def feed_filter_accepts?(_all, _entry), do: true
+  def feed_filter_accepts?(:vutuv, entry, viewer),
+    do: not remote_feed_entry?(entry) or own_reshare?(entry, viewer)
+
+  def feed_filter_accepts?(:fediverse, entry, viewer),
+    do: remote_feed_entry?(entry) and not own_reshare?(entry, viewer)
+
+  def feed_filter_accepts?(_all, _entry, _viewer), do: true
+
+  # Whether this entry is here because the reader passed it on.
+  defp own_reshare?(entry, %User{id: viewer_id}),
+    do: entry[:reposted_by] != nil and entry.reposted_by.id == viewer_id
+
+  defp own_reshare?(_entry, _viewer), do: false
 
   @doc """
   Whether `viewer`'s feed can show anything from another network at all — the
@@ -2845,7 +2868,12 @@ defmodule Vutuv.Posts do
   # below free of "unless this is a remote entry" branches, and the merge is
   # needed (rather than a guarded map) because `collapse_threads/1` and
   # `collapse_reposts/1` drop and fold entries, so the local half is not 1:1.
-  defp decorate_feed_entries(entries, viewer) do
+  # `threads: true` adds the two reads only a surface that draws the nested
+  # conversation can use (`<.post_thread_entry>`): the replies from other
+  # networks under this page's posts, and the cached posts they answer. The
+  # organization feed renders flat `<.post_card>`s and the tab ticker quotes a
+  # single row, so both would pay for something they cannot show.
+  defp decorate_feed_entries(entries, viewer, opts \\ []) do
     {remote, local} = Enum.split_with(entries, &remote_feed_entry?/1)
 
     local =
@@ -2854,9 +2882,145 @@ defmodule Vutuv.Posts do
       |> collapse_threads()
       |> collapse_reposts()
       |> attach_reposters(viewer)
+      |> attach_remote_thread(viewer, remote, Keyword.get(opts, :threads, false))
 
     Vutuv.FeedPage.sort_entries(local ++ decorate_remote(remote, viewer))
   end
+
+  defp attach_remote_thread(local, _viewer, _remote, false), do: local
+
+  defp attach_remote_thread(local, viewer, remote, true) do
+    local
+    |> attach_thread_notes(viewer, standalone_note_ids(remote))
+    |> attach_remote_parents(viewer, standalone_remote_post_ids(remote))
+  end
+
+  # The cached post a member's answer answers (issue #1165), so the feed can
+  # draw it above them instead of the bare "Replying to @user@host" line an
+  # answer with nothing to read above it used to be.
+  #
+  # It rides `remote_reply_ref`, already preloaded with its account
+  # (`post_preloads/0`), so this costs no lookup — only the same three batch
+  # reads a remote card needs anywhere (its pictures, the reader's marks, the
+  # reader's follow), run once for the page. `taken` keeps a post that already
+  # has a card of its own from getting a second one, exactly as for a reply.
+  defp attach_remote_parents(entries, viewer, taken) do
+    taken = MapSet.new(taken)
+
+    parents =
+      for entry <- entries,
+          post <- thread_posts(entry),
+          %RemotePost{} = parent <- [remote_parent(post)],
+          parent.id not in taken,
+          do: %{post_id: post.id, remote_post: parent}
+
+    case Enum.uniq_by(parents, & &1.remote_post.id) do
+      [] ->
+        entries
+
+      unique ->
+        decorated =
+          unique
+          |> attach_remote_images()
+          |> attach_remote_follows(viewer)
+          |> attach_remote_likes(viewer)
+          |> Map.new(&{&1.remote_post.id, &1})
+
+        # Back onto every post that answers one — `unique` dropped the repeats
+        # the batch reads must not pay for, not the places they render.
+        by_post = Map.new(parents, &{&1.post_id, decorated[&1.remote_post.id]})
+
+        Enum.map(entries, &claim_remote_parents(&1, by_post))
+    end
+  end
+
+  defp claim_remote_parents(entry, by_post) do
+    case Map.take(by_post, Enum.map(thread_posts(entry), & &1.id)) do
+      mine when mine == %{} -> entry
+      mine -> Map.put(entry, :remote_parents, mine)
+    end
+  end
+
+  defp remote_parent(%Post{remote_reply_ref: %PostRemoteReply{remote_post: %RemotePost{} = p}}),
+    do: p
+
+  defp remote_parent(_post), do: nil
+
+  # The cached posts that already have a card of their own on this page.
+  defp standalone_remote_post_ids(remote),
+    do: for(entry <- remote, entry[:remote_post], do: entry.remote_post.id)
+
+  # The replies from other networks (issues #1069/#1071) that belong inside the
+  # threads on this page, read once for the whole page and hung on the entries
+  # that carry them.
+  #
+  # A conversation does not stop at the site's edge: somebody answers a member's
+  # post from their own server, a member here answers *that*, and until this the
+  # feed drew the two vutuv posts as one thread with the middle missing — which
+  # reads as a member talking to themselves. The permalink has woven these in
+  # since #1069; this is the same weave one surface over, and the renderer's
+  # `weave_remote_replies/4` does the nesting for both.
+  #
+  # Capped per post (`Fediverse.list_feed_notes/3`), except for the ones a post
+  # on the page answers: those are load-bearing, not decoration.
+  #
+  # **One card per reply per page**, the rule `dedupe_remote/1` and
+  # `collapse_reposts/1` already hold for the other two kinds. A reply can reach
+  # one page twice — as a row of its own because somebody here reshared it
+  # (issue #1275), and inside the thread under the post it answers — and a
+  # second card is not merely repetition: its action bar is a LiveComponent
+  # keyed by the note, so the duplicate id takes the render down. The standalone
+  # row wins, since it carries the reshare that put it there; within the threads
+  # the first claim wins, because a post nested as an ancestor under one entry
+  # can be the carrier of another.
+  defp attach_thread_notes(entries, viewer, taken) do
+    posts = for entry <- entries, post <- thread_posts(entry), do: post
+
+    case Vutuv.Fediverse.list_feed_notes(Enum.map(posts, & &1.id), viewer,
+           keep: Enum.flat_map(posts, &answered_note_ids/1)
+         ) do
+      empty when empty == %{} ->
+        entries
+
+      notes ->
+        marks = notes |> Map.values() |> List.flatten() |> Vutuv.Fediverse.mark_lookup(viewer)
+
+        {entries, _seen} =
+          Enum.map_reduce(entries, MapSet.new(taken), &claim_thread_notes(&1, &2, notes, marks))
+
+        entries
+    end
+  end
+
+  defp claim_thread_notes(entry, seen, notes, marks) do
+    mine =
+      entry
+      |> thread_posts()
+      |> Map.new(fn post -> {post.id, Enum.reject(notes[post.id] || [], &(&1.id in seen))} end)
+      |> Map.reject(fn {_post_id, notes} -> notes == [] end)
+
+    if mine == %{} do
+      {entry, seen}
+    else
+      claimed = for {_post_id, notes} <- mine, note <- notes, into: seen, do: note.id
+
+      {entry |> Map.put(:remote_replies, mine) |> Map.put(:note_marks, marks), claimed}
+    end
+  end
+
+  # The notes that already have a row of their own on this page (issue #1275).
+  defp standalone_note_ids(remote), do: for(entry <- remote, entry[:note], do: entry.note.id)
+
+  # Every vutuv post an entry draws: the carrier and the thread nested under it.
+  defp thread_posts(%{post: %Post{} = post} = entry), do: [post | entry[:ancestors] || []]
+  defp thread_posts(_entry), do: []
+
+  # The remote reply this post answers (issue #1070), if it answers one at all.
+  defp answered_note_ids(%Post{remote_reply_ref: %PostRemoteReply{note_id: id}})
+       when is_binary(id),
+       do: [id]
+
+  defp answered_note_ids(_post), do: []
 
   defp decorate_remote([], _viewer), do: []
 

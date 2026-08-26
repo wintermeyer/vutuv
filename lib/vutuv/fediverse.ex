@@ -2619,8 +2619,17 @@ defmodule Vutuv.Fediverse do
   through somebody here vouching for it — so it is scoped to the reposter, not
   to any follow of the author. Stamped with the repost time, like a local
   repost: what is new is the sharing, not the post.
+
+  `only:` keeps just one of the two resharers this source carries — `:mine`
+  for the viewer's own reshares, `:others` for everybody else's — which is how
+  the feed's source tabs split it (`Vutuv.Posts.feed_page/2`): pressing that
+  button is a vutuv act, so what the reader themselves passed on belongs on the
+  vutuv tab. It narrows the **query**, not the rows it returns, so a narrowed
+  page is as full as an unnarrowed one and `more?` stays honest.
   """
-  def feed_remote_reposts(%User{id: viewer_id} = viewer, fetch_n, cursor) do
+  def feed_remote_reposts(viewer, fetch_n, cursor, opts \\ [])
+
+  def feed_remote_reposts(%User{id: viewer_id} = viewer, fetch_n, cursor, opts) do
     if enabled?() do
       from(r in PostRepost,
         join: p in RemotePost,
@@ -2629,16 +2638,8 @@ defmodule Vutuv.Fediverse do
         join: a in RemoteAccount,
         on: a.id == p.remote_account_id,
         join: reposter in User,
+        as: :resharer,
         on: reposter.id == r.user_id,
-        where: r.user_id == ^viewer_id or r.user_id in subquery(unmuted_followees(viewer_id)),
-        # A resharer who is not in good standing amplifies nothing. Stricter
-        # than the local repost source, deliberately: that one only asks about
-        # a confirmed address, and carrying a *third party's* post into other
-        # people's feeds is exactly what a frozen or suspended account must not
-        # be able to keep doing while its case is open.
-        where:
-          r.user_id == ^viewer_id or
-            (account_confirmed_row(reposter) and not account_hidden_row(reposter)),
         # Only ever what the reposter could have shared: the audience gate is
         # the same one that let them press the button.
         where: p.audience in ^RemotePost.open_audiences(),
@@ -2646,6 +2647,7 @@ defmodule Vutuv.Fediverse do
         limit: ^fetch_n,
         preload: [remote_post: {p, [:screenshot, remote_account: a]}, user: reposter]
       )
+      |> scope_resharer(viewer_id, Keyword.get(opts, :only))
       |> Vutuv.Posts.named_language_scope(Vutuv.Posts.feed_language_filter(viewer))
       |> remote_reposts_at_or_before(cursor)
       |> Repo.all()
@@ -2653,6 +2655,35 @@ defmodule Vutuv.Fediverse do
     else
       []
     end
+  end
+
+  # Who may have carried a third party's words into this feed, for both reshare
+  # sources (a cached post and a reply are the same act one table over).
+  #
+  # The viewer's own row needs no standing check — they are reading their own
+  # act — while somebody else's is held to a stricter rule than the local repost
+  # source applies: that one only asks about a confirmed address, and passing a
+  # stranger's post into other people's feeds is exactly what a frozen or
+  # suspended account must not be able to keep doing while its case is open.
+  defp scope_resharer(query, viewer_id, :mine), do: where(query, [r], r.user_id == ^viewer_id)
+
+  defp scope_resharer(query, viewer_id, :others) do
+    where(
+      query,
+      [r, resharer: resharer],
+      r.user_id != ^viewer_id and r.user_id in subquery(unmuted_followees(viewer_id)) and
+        account_confirmed_row(resharer) and not account_hidden_row(resharer)
+    )
+  end
+
+  defp scope_resharer(query, viewer_id, _both) do
+    where(
+      query,
+      [r, resharer: resharer],
+      r.user_id == ^viewer_id or
+        (r.user_id in subquery(unmuted_followees(viewer_id)) and
+           account_confirmed_row(resharer) and not account_hidden_row(resharer))
+    )
   end
 
   # The same rule the local feed uses: a muted follow keeps the relationship and
@@ -4710,6 +4741,57 @@ defmodule Vutuv.Fediverse do
     )
     |> Repo.all()
     |> Enum.group_by(& &1.post_id)
+  end
+
+  @doc """
+  The same replies as `list_notes/2`, capped at the newest `:per_post` of each
+  post — what the **feed** weaves into its threads, where the permalink shows
+  every one.
+
+  The cap is what keeps a post that went round out there from taking over a
+  timeline: a conversation with forty answers is a page to open, not a row to
+  scroll past. `:keep` names ids the cap must not drop — a note that one of the
+  page's own posts answers, which would otherwise leave that answer hanging
+  under nothing — and it is applied **inside** the visibility scope, so a
+  private note stays private even when its answer is on the page.
+  """
+  def list_feed_notes(post_ids, viewer, opts \\ [])
+
+  def list_feed_notes([], _viewer, _opts), do: %{}
+
+  def list_feed_notes(post_ids, viewer, opts) do
+    if enabled?() do
+      per_post = Keyword.get(opts, :per_post, 3)
+      keep = Keyword.get(opts, :keep, [])
+
+      ranked =
+        from(n in Note,
+          join: p in Post,
+          on: p.id == n.post_id,
+          where: n.post_id in ^post_ids,
+          where: n.audience == "public" or p.user_id == ^note_viewer_id(viewer),
+          select: %{
+            id: n.id,
+            rank:
+              over(row_number(),
+                partition_by: n.post_id,
+                order_by: [desc: n.received_at, desc: n.id]
+              )
+          }
+        )
+
+      wanted =
+        from(r in subquery(ranked), where: r.rank <= ^per_post or r.id in ^keep, select: r.id)
+
+      from(n in notes_with_account(),
+        where: n.id in subquery(wanted),
+        order_by: [asc: n.received_at, asc: n.id]
+      )
+      |> Repo.all()
+      |> Enum.group_by(& &1.post_id)
+    else
+      %{}
+    end
   end
 
   # Notes carrying `account_id`: whether we hold a row for the actor who wrote
@@ -7113,28 +7195,23 @@ defmodule Vutuv.Fediverse do
   The seventh feed source (issue #1275): **replies** from another network that
   people the viewer follows **here** have passed on.
 
-  The exact twin of `feed_remote_reposts/3` one table over, and scoped the same
+  The exact twin of `feed_remote_reposts/4` one table over, and scoped the same
   way — to the resharer, never to any follow of the author, because being
   vouched for by somebody here is the whole reason this row reaches a member who
   follows nobody out there. Stamped with the reshare time: what is new is the
-  sharing.
+  sharing. `only:` splits it between the source tabs exactly as it does there.
   """
-  def feed_remote_reply_reposts(%User{id: viewer_id} = viewer, fetch_n, cursor) do
+  def feed_remote_reply_reposts(viewer, fetch_n, cursor, opts \\ [])
+
+  def feed_remote_reply_reposts(%User{id: viewer_id} = viewer, fetch_n, cursor, opts) do
     if enabled?() do
       from(r in NoteRepost,
         join: n in Note,
         as: :language_source,
         on: n.id == r.note_id,
         join: resharer in User,
+        as: :resharer,
         on: resharer.id == r.user_id,
-        where: r.user_id == ^viewer_id or r.user_id in subquery(unmuted_followees(viewer_id)),
-        # A resharer who is not in good standing amplifies nothing — the same
-        # stricter rule the cached-post reshare source applies, and for the same
-        # reason: carrying a third party's words into other people's feeds is
-        # exactly what a frozen or suspended account must not keep doing.
-        where:
-          r.user_id == ^viewer_id or
-            (account_confirmed_row(resharer) and not account_hidden_row(resharer)),
         # Only ever what the resharer could have shared: the audience gate is the
         # same one that let them press the button, re-asked here because a note's
         # audience can be narrowed by an upstream `Update` after the fact.
@@ -7142,6 +7219,7 @@ defmodule Vutuv.Fediverse do
         order_by: [desc: r.inserted_at, desc: r.id],
         preload: [note: n, user: resharer]
       )
+      |> scope_resharer(viewer_id, Keyword.get(opts, :only))
       |> Vutuv.Posts.named_language_scope(Vutuv.Posts.feed_language_filter(viewer))
       |> limit(^fetch_n)
       |> note_reposts_at_or_before(cursor)

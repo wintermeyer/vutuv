@@ -19,6 +19,8 @@ defmodule VutuvWeb.FeedSourceTabsTest do
   alias Vutuv.Accounts.User
   alias Vutuv.Fediverse
   alias Vutuv.Fediverse.Follow
+  alias Vutuv.Fediverse.Note
+  alias Vutuv.Fediverse.NoteRepost
   alias Vutuv.Fediverse.PostBoost
   alias Vutuv.Fediverse.PostRepost
   alias Vutuv.Fediverse.RemoteAccount
@@ -66,6 +68,27 @@ defmodule VutuvWeb.FeedSourceTabsTest do
       kind: "note",
       published_at: now,
       received_at: now,
+      expires_at: DateTime.add(now, 86_400)
+    })
+  end
+
+  # A reply written out there under some member's post (issues #1069/#1071).
+  defp remote_reply(body) do
+    now = DateTime.utc_now(:second)
+    unique = System.unique_integer([:positive])
+
+    Repo.insert!(%Note{
+      post_id: insert(:post, user: insert(:user, email_confirmed?: true)).id,
+      object_uri: "https://social.example/n/#{unique}",
+      actor_uri: "https://social.example/users/them",
+      origin_url: "https://social.example/@them/#{unique}",
+      handle: "them",
+      display_name: "Thea Remote",
+      content_text: body,
+      audience: "public",
+      inbox_uri: "https://social.example/users/them/inbox",
+      received_at: now,
+      checked_at: now,
       expires_at: DateTime.add(now, 86_400)
     })
   end
@@ -358,6 +381,81 @@ defmodule VutuvWeb.FeedSourceTabsTest do
 
       assert timeline(view) =~ "written out there"
       refute timeline(view) =~ "written here on vutuv"
+    end
+  end
+
+  describe "what a member here did with remote content is theirs" do
+    # The reported bug: a member reshares a post from another network and it
+    # shows up only under "Fediverse", which reads as vutuv having had no part
+    # in it — but pressing that button *is* a vutuv act, and the reader looking
+    # for what happened here looks on the vutuv tab.
+    test "the viewer's own reshare of a remote post sits on the vutuv tab", %{conn: conn} do
+      {conn, user} = create_and_login_user(conn)
+
+      # Something out there they follow, so the bar has both halves to show.
+      cached_post(remote_account(user, "them"), "written out there")
+
+      mine = cached_post(remote_account("stranger"), "I passed this on")
+      Repo.insert!(%PostRepost{user_id: user.id, remote_post_id: mine.id})
+
+      {:ok, view, _html} = live(conn, ~p"/feed")
+
+      render_click(view, "filter-source", %{"type" => "vutuv"})
+      assert timeline(view) =~ "I passed this on"
+      refute timeline(view) =~ "written out there"
+
+      # And it is on that tab *instead of*, not as well as, the other one.
+      render_click(view, "filter-source", %{"type" => "fediverse"})
+      assert timeline(view) =~ "written out there"
+      refute timeline(view) =~ "I passed this on"
+    end
+
+    test "somebody else's reshare stays on the Fediverse tab", %{conn: conn} do
+      {conn, user} = create_and_login_user(conn)
+      sharer = insert(:user, email_confirmed?: true)
+      Social.follow(user, sharer.id)
+
+      post = cached_post(remote_account("stranger"), "passed on by a friend")
+      Repo.insert!(%PostRepost{user_id: sharer.id, remote_post_id: post.id})
+
+      {:ok, view, _html} = live(conn, ~p"/feed")
+
+      render_click(view, "filter-source", %{"type" => "vutuv"})
+      refute timeline(view) =~ "passed on by a friend"
+
+      render_click(view, "filter-source", %{"type" => "fediverse"})
+      assert timeline(view) =~ "passed on by a friend"
+    end
+
+    test "the same holds for a reply the viewer passed on", %{conn: conn} do
+      {conn, user} = create_and_login_user(conn)
+      cached_post(remote_account(user, "them"), "written out there")
+
+      note = remote_reply("I passed this reply on")
+      Repo.insert!(%NoteRepost{user_id: user.id, note_id: note.id})
+
+      {:ok, view, _html} = live(conn, ~p"/feed")
+
+      render_click(view, "filter-source", %{"type" => "vutuv"})
+      assert timeline(view) =~ "I passed this reply on"
+
+      render_click(view, "filter-source", %{"type" => "fediverse"})
+      refute timeline(view) =~ "I passed this reply on"
+    end
+
+    test "an own reshare alone leaves the Fediverse tab empty, so no bar", %{conn: conn} do
+      # Nothing reaches this member from out there except what they carried in
+      # themselves — so "Fediverse" can never fill, and three tabs over one
+      # timeline is exactly what issue #1267 took away.
+      {conn, user} = create_and_login_user(conn)
+
+      mine = cached_post(remote_account("stranger"), "I passed this on")
+      Repo.insert!(%PostRepost{user_id: user.id, remote_post_id: mine.id})
+
+      {:ok, view, _html} = live(conn, ~p"/feed")
+
+      refute has_element?(view, "#feed-source-tabs")
+      assert timeline(view) =~ "I passed this on"
     end
   end
 

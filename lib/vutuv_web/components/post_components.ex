@@ -793,6 +793,25 @@ defmodule VutuvWeb.PostComponents do
     doc: "%{post_id => engagement} for the ancestor cards' action bars; missing = self-load"
   )
 
+  attr(:remote_replies, :map,
+    default: %{},
+    doc:
+      "`%{post_id => [%Note{}]}` for the thread's posts (`Vutuv.Posts.attach_thread_notes/2`), " <>
+        "woven in among the vutuv replies; empty on a surface that does not host their events"
+  )
+
+  attr(:note_marks, :any,
+    default: nil,
+    doc: "the viewer's like/repost/bookmark flags per note (`Vutuv.Fediverse.mark_lookup/2`)"
+  )
+
+  attr(:remote_parents, :map,
+    default: %{},
+    doc:
+      "`%{post_id => decorated cached post}` (`Vutuv.Posts.attach_remote_parents/3`) for the " <>
+        "posts here that answer one out there (issue #1165) — drawn above them as a card"
+  )
+
   attr(:reposted_by, :any, default: nil)
   attr(:reposters, :any, default: nil)
   attr(:entry_id, :string, default: nil)
@@ -816,7 +835,10 @@ defmodule VutuvWeb.PostComponents do
     assigns = assign(assigns, :roots, thread_entry_roots(assigns))
 
     ~H"""
-    <%= if @ancestors == [] do %>
+    <%!-- Content from another network makes a lone post a conversation too —
+    replies under it (issue #1069), or the post it answers out there (issue
+    #1165) — so the flat card is only for a post that has none of the three. --%>
+    <%= if @ancestors == [] and @remote_replies == %{} and @remote_parents == %{} do %>
       <.post_card
         post={@post}
         viewer={@viewer}
@@ -878,7 +900,31 @@ defmodule VutuvWeb.PostComponents do
       entry_id: assigns.entry_id
     }
 
-    (ancestors ++ [leaf]) |> Posts.thread_forest() |> banner_on_roots()
+    (ancestors ++ [leaf])
+    |> Posts.thread_forest()
+    |> banner_on_roots()
+    |> weave_remote_replies(
+      assigns.remote_replies,
+      assigns.viewer,
+      assigns.note_marks || fn _note -> nil end
+    )
+    |> nest_remote_parents(assigns.remote_parents)
+  end
+
+  # Puts the cached post an answer answers above it, as the root of that branch
+  # (issue #1165). Only a root can have one: a post that answers something out
+  # there has no parent *here*, so `thread_forest/1` never nests it under
+  # anything. The answer keeps its own card and loses its "Replying to" line,
+  # the card above now being what that line was pointing at.
+  defp nest_remote_parents(roots, parents) when parents == %{}, do: roots
+
+  defp nest_remote_parents(roots, parents) do
+    Enum.map(roots, fn root ->
+      case parents[root.post.id] do
+        nil -> root
+        parent -> Map.put(parent, :children, [%{root | show_reply_banner: false}])
+      end
+    end)
   end
 
   # A card that hangs under the post it answers needs no "Replying to @handle"
@@ -1004,40 +1050,56 @@ defmodule VutuvWeb.PostComponents do
           aria-hidden="true"
         >
         </span>
-        <%!-- A node is either a vutuv post or a reply from another network
-        (issue #1069), which sits among them as an ordinary sibling in time
-        order and wears its own skin. --%>
-        <%= if Map.has_key?(node, :note) do %>
-          <%!-- `acts?` unconditionally: the conversation is only ever rendered
-          by `VutuvWeb.PostLive.Thread`, which handles the heart's events — and
-          on its throwaway dead render the buttons are as live as every other
-          `phx-click` on the page, which is to say the moment the socket
-          connects. --%>
-          <.remote_reply_card
-            note={node.note}
-            owner?={node.owner?}
-            viewer={@viewer}
-            marks={node.marks}
-            translations={@translations}
-            live?
-          />
-        <% else %>
-          <.post_card
-            post={node.post}
-            viewer={@viewer}
-            acting_as={@acting_as}
-            viewer_follow={node.viewer_follow}
-            engagement={node.engagement}
-            reposted_by={node.reposted_by}
-            reposters={node.reposters}
-            entry_id={node.entry_id}
-            surface={@surface}
-            conn_or_socket={@conn_or_socket}
-            mode={Map.get(node, :mode, :preview)}
-            likers={Map.get(node, :likers)}
-            translations={@translations}
-            show_reply_banner={reply_banner?(node, @connected?, @indent?)}
-          />
+        <%!-- A node is a vutuv post, a reply from another network (issue #1069)
+        sitting among them as an ordinary sibling in time order, or the cached
+        post an answer answers (issue #1165) at the head of its branch. The last
+        two wear their own skin. --%>
+        <%= cond do %>
+          <% Map.has_key?(node, :remote_post) -> %>
+            <%!-- The head of the branch, so no reshare line and no ⋯ owner
+            item: what it says is "this is what is being answered". Its own
+            menu's three events are the cached card's everywhere
+            (`VutuvWeb.Live.RemotePostActions`), which every host of this
+            chain already handles. --%>
+            <.remote_post_card
+              live?
+              remote_post={node.remote_post}
+              images={node[:images] || []}
+              marks={node[:marks]}
+              following?={node[:following?] == true}
+              viewer={@viewer}
+              translations={@translations}
+            />
+          <% Map.has_key?(node, :note) -> %>
+            <%!-- `acts?` unconditionally: the conversation is only ever rendered
+            by a LiveView that handles the heart's events — and on a throwaway
+            dead render the buttons are as live as every other `phx-click` on
+            the page, which is to say the moment the socket connects. --%>
+            <.remote_reply_card
+              note={node.note}
+              owner?={node.owner?}
+              viewer={@viewer}
+              marks={node.marks}
+              translations={@translations}
+              live?
+            />
+          <% true -> %>
+            <.post_card
+              post={node.post}
+              viewer={@viewer}
+              acting_as={@acting_as}
+              viewer_follow={node.viewer_follow}
+              engagement={node.engagement}
+              reposted_by={node.reposted_by}
+              reposters={node.reposters}
+              entry_id={node.entry_id}
+              surface={@surface}
+              conn_or_socket={@conn_or_socket}
+              mode={Map.get(node, :mode, :preview)}
+              likers={Map.get(node, :likers)}
+              translations={@translations}
+              show_reply_banner={reply_banner?(node, @connected?, @indent?)}
+            />
         <% end %>
       </div>
       <.thread_chain

@@ -54,6 +54,7 @@ defmodule VutuvWeb.PostLive.Thread do
   alias VutuvWeb.Live.InitAssigns
   alias VutuvWeb.Live.MountHandoff
   alias VutuvWeb.Live.PostTranslations
+  alias VutuvWeb.Live.RemoteReplyActions
   alias VutuvWeb.PostLive.ActionsComponent
 
   # The origin's like/repost figures on a card from another network tick
@@ -148,17 +149,11 @@ defmodule VutuvWeb.PostLive.Thread do
   # freezer, because unlike a member's own post this is a cache of something
   # that still exists at its origin.
   def handle_event("remove-remote-reply", %{"id" => id}, socket) do
-    {:noreply, take_down(socket, id, &Fediverse.remove_note/2, gettext("Reply removed."))}
+    {:noreply, take_down(socket, id, &RemoteReplyActions.remove/2)}
   end
 
   def handle_event("report-remote-reply", %{"id" => id}, socket) do
-    {:noreply,
-     take_down(
-       socket,
-       id,
-       &Fediverse.report_note/2,
-       gettext("Thank you. The reply was deleted right away.")
-     )}
+    {:noreply, take_down(socket, id, &RemoteReplyActions.report/2)}
   end
 
   @impl true
@@ -339,26 +334,14 @@ defmodule VutuvWeb.PostLive.Thread do
   #
   # A successful takedown says so by the card vanishing, which is why it clears
   # the notice rather than setting one.
-  defp take_down(socket, id, fun, _message) do
-    case socket.assigns.current_user do
-      nil ->
-        socket
-
-      viewer ->
-        case fun.(id, viewer) do
-          :ok ->
-            socket |> assign(:notice, nil) |> load_window()
-
-          {:error, :rate_limited} ->
-            assign(
-              socket,
-              :notice,
-              gettext("You have reported a lot today. Please try again tomorrow.")
-            )
-
-          _ ->
-            assign(socket, :notice, gettext("That reply is not yours to remove."))
-        end
+  # The page says nothing on success — the reply is gone from the conversation,
+  # which is the answer — and shows the refusal in its own `:notice` assign
+  # rather than a flash, this being a `live_render`ed child.
+  defp take_down(socket, id, fun) do
+    case fun.(id, socket.assigns.current_user) do
+      {:ok, _done} -> socket |> assign(:notice, nil) |> load_window()
+      {:error, nil} -> socket
+      {:error, message} -> assign(socket, :notice, message)
     end
   end
 

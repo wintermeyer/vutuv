@@ -46,6 +46,7 @@ defmodule VutuvWeb.PostLive.Feed do
   alias VutuvWeb.Live.MountHandoff
   alias VutuvWeb.Live.PostTranslations
   alias VutuvWeb.Live.RemotePostActions
+  alias VutuvWeb.Live.RemoteReplyActions
   alias VutuvWeb.Markdown
   alias VutuvWeb.PostTeaser
   alias VutuvWeb.UserHelpers
@@ -669,6 +670,18 @@ defmodule VutuvWeb.PostLive.Feed do
     RemotePostActions.unfollow(socket, account_id, &drop_remote_entries_of(&1, account_id))
   end
 
+  # The same two acts on a reply from another network, which the feed now draws
+  # both as a row of its own (a reshare, issue #1275) and inside a thread. Its
+  # menu is rendered here, so its events are owed here — see
+  # `VutuvWeb.Live.RemoteReplyActions`.
+  def handle_event("remove-remote-reply", %{"id" => id}, socket) do
+    take_down_note(socket, id, &RemoteReplyActions.remove/2)
+  end
+
+  def handle_event("report-remote-reply", %{"id" => id}, socket) do
+    take_down_note(socket, id, &RemoteReplyActions.report/2)
+  end
+
   # The "New here" card's Follow button: welcome the newcomer with no reload.
   #
   # The row deliberately **stays** afterwards, flipped to its "Following" state,
@@ -1058,7 +1071,8 @@ defmodule VutuvWeb.PostLive.Feed do
       # vutuv post, so on the Fediverse tab there is no row to put it in — the
       # feed switches back to All and reloads rather than swallowing the post,
       # which from the composer reads as the post having been lost.
-      actor_id == user.id and not Posts.feed_filter_accepts?(socket.assigns.feed_filter, entry) ->
+      actor_id == user.id and
+          not Posts.feed_filter_accepts?(socket.assigns.feed_filter, entry, user) ->
         {:noreply,
          socket
          |> assign(:composer_open?, false)
@@ -1092,7 +1106,7 @@ defmodule VutuvWeb.PostLive.Feed do
       # A post nobody on this tab asked for must not be counted by the pill
       # either: the pill's whole promise is that clicking it shows those posts
       # right here.
-      Posts.feed_filter_accepts?(socket.assigns.feed_filter, entry) ->
+      Posts.feed_filter_accepts?(socket.assigns.feed_filter, entry, user) ->
         {:noreply, update(socket, :pending_posts, &[decorate(entry, user, socket) | &1])}
 
       # It belongs on a tab the reader is not looking at, so say so there
@@ -1416,6 +1430,51 @@ defmodule VutuvWeb.PostLive.Feed do
     |> then(&assign(&1, :empty?, &1.assigns.entries == [] and &1.assigns.pending_posts == []))
   end
 
+  # A reply that is gone leaves the page in the same round trip, wherever it was
+  # showing: its own row goes, and a thread that nested it re-renders without
+  # it. Both, not either — the same reply can be on the page as a reshared row
+  # while a *different* entry's thread holds another one under the post it
+  # answers.
+  defp take_down_note(socket, note_id, fun) do
+    case fun.(note_id, socket.assigns.current_user) do
+      {:ok, done} -> {:noreply, socket |> put_flash(:info, done) |> drop_note(note_id)}
+      {:error, nil} -> {:noreply, socket}
+      {:error, message} -> {:noreply, put_flash(socket, :error, message)}
+    end
+  end
+
+  defp drop_note(socket, note_id) do
+    {going, rest} = Enum.split_with(socket.assigns.entries, &note_entry?(&1, note_id))
+    kept = Enum.map(rest, &without_note(&1, note_id))
+    changed = for {before, now} <- Enum.zip(rest, kept), before != now, do: now
+
+    socket
+    |> assign(:entries, kept)
+    |> then(fn socket ->
+      Enum.reduce(going, socket, &stream_delete_by_dom_id(&2, :posts, "feed-#{&1.id}"))
+    end)
+    |> then(fn socket ->
+      Enum.reduce(changed, socket, &stream_insert(&2, :posts, &1, update_only: true))
+    end)
+    |> then(&assign(&1, :empty?, &1.assigns.entries == [] and &1.assigns.pending_posts == []))
+  end
+
+  defp note_entry?(entry, note_id),
+    do: Posts.remote_reply_entry?(entry) and entry.note.id == note_id
+
+  defp without_note(%{remote_replies: replies} = entry, note_id) do
+    kept =
+      replies
+      |> Map.new(fn {post_id, notes} -> {post_id, Enum.reject(notes, &(&1.id == note_id))} end)
+      |> Map.reject(fn {_post_id, notes} -> notes == [] end)
+
+    # An entry with none left goes back to being a plain card, so the key goes
+    # rather than holding an empty map: `post_thread_entry/1` reads its presence.
+    if kept == %{}, do: Map.delete(entry, :remote_replies), else: %{entry | remote_replies: kept}
+  end
+
+  defp without_note(entry, _note_id), do: entry
+
   # Both toggles on a remote card, one shape: the heart (issue #1164) and the
   # reshare (issue #1166). The entry is re-inserted into the stream rather than
   # an assign being flipped: a stream item redraws only when its own entry is
@@ -1711,6 +1770,9 @@ defmodule VutuvWeb.PostLive.Feed do
                     viewer_follow={entry[:viewer_follow]}
                     ancestors={entry[:ancestors]}
                     ancestor_engagement={entry[:ancestor_engagement] || %{}}
+                    remote_replies={entry[:remote_replies] || %{}}
+                    note_marks={entry[:note_marks]}
+                    remote_parents={entry[:remote_parents] || %{}}
                     reposted_by={entry.reposted_by}
                     reposters={entry[:reposters]}
                     entry_id={entry.id}

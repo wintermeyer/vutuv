@@ -357,22 +357,36 @@ that source from 76.7 ms to 0.53 ms.
 segmented control the profile's post-type tabs use
 (`PostComponents.post_filter_tabs/1`, here with `feed_filter_options/0` and the
 `filter-source` event). The split is `feed_page/2`'s `filter:` option, which
-picks the sources rather than filtering their rows: **vutuv** runs the three
-local sources plus the boosts of a *local* post, **Fediverse** the cached posts,
-the local reshares of one and the boosts of a *remote* post. The rule is what
-kind of post an entry carries (`Posts.remote_feed_entry?/1`, the same question
-the renderer asks to pick a card), so every entry lands on exactly one tab and
-the two together are "All" — a member's post that an account out there boosted
-is a vutuv post, however it arrived. The one source producing both kinds
-(`Fediverse.feed_remote_boosts/4`, issue #1167) is narrowed by `only:` **inside
-its query**, not by dropping rows afterwards, so a narrowed page is as full as
-an unnarrowed one and `more?` stays honest.
+picks the sources rather than filtering their rows: **vutuv** runs the four
+local sources, the boosts of a *local* post and the reader's **own** reshares of
+remote content; **Fediverse** the cached posts, everybody else's reshares of one
+and the boosts of a *remote* post.
+
+The rule is who an entry belongs to, which is two questions in order. What kind
+of post it carries decides most of it (`Posts.remote_feed_entry?/1`, the same
+question the renderer asks to pick a card), and **a vutuv act on remote content
+beats that**: pressing Reshare happened here, so what the reader passed on is on
+the vutuv tab, where they go to look for what they did — the reported gap, since
+their own reshare showing only under "Fediverse" reads as vutuv having had no
+part in it. Somebody else's reshare is not theirs and stays on the Fediverse
+tab. Either way every entry lands on exactly one tab and the two together are
+"All" — a member's post that an account out there boosted is a vutuv post,
+however it arrived.
+
+Three sources produce both kinds and are narrowed by `only:` **inside their
+query**, not by dropping rows afterwards, so a narrowed page is as full as an
+unnarrowed one and `more?` stays honest: `Fediverse.feed_remote_boosts/4`
+(issue #1167) on what the boosted thing is, and the two reshare sources
+(`feed_remote_reposts/4` and `feed_remote_reply_reposts/4`, issues #1166 and
+#1275) on who did the resharing — `:mine` against `:others`, one `scope_resharer`
+clause each.
 
 Switching a tab reloads the timeline from the top (`stream reset: true`) — the
 tab decides what the query pulls, so it cannot be applied to what is already on
 screen — and drops the pending batch with it, since the fresh page already
 carries whatever waited behind the pill. Live arrivals are gated by the
-in-memory twin `Posts.feed_filter_accepts?/2`: a followed member's post neither
+in-memory twin `Posts.feed_filter_accepts?/3` — which takes the viewer, because
+"did *you* reshare this" is half the rule: a followed member's post neither
 appears nor counts toward the pill while the Fediverse tab is open. The one
 exception is the **viewer's own** post, which must be visible after they press
 Post — there the feed switches back to "All" rather than swallowing it. The
@@ -1058,6 +1072,37 @@ posts, authors or branches a thread spans it renders once; the archive and saved
 lists fall back to nesting the single direct parent.
 
 All read the same (each a single card of flat `divide-y` rows).
+
+**A conversation does not stop at the site's edge.** The permalink has woven the
+replies written on other networks in among the vutuv ones since issue #1069; the
+feed walked local `reply_ref` links alone, so a thread that ran through another
+network reached the reader with its middle missing — and a member answering such
+a reply looked like they were talking to themselves. `feed_page/2` now decorates
+its entries with both remote halves (`decorate_feed_entries/3`'s `threads: true`,
+which the flat-card surfaces leave off), and `post_thread_entry/1` takes them:
+
+* **`remote_replies`** — the notes under the thread's posts, hung under the post
+  each answers by the same `weave_remote_replies/4` the permalink uses, which
+  also moves a member's answer to a note under that note rather than beside it.
+  Capped at the newest 3 per post (`Fediverse.list_feed_notes/3`), since a post
+  that went round out there is a page to open, not a row to scroll past;
+  exempt from the cap are the notes a post on the page answers, which are
+  load-bearing.
+* **`remote_parents`** — the cached post an answer answers (issue #1165), drawn
+  as the head of that branch in place of its "Replying to @user@host" line.
+
+**One card per thing per page** is the rule both obey, the one `dedupe_remote/1`
+and `collapse_reposts/1` already hold: a reply that is on the page as a reshared
+row of its own is not drawn a second time inside a thread (nor a cached post
+that has its own card), and within the threads the first claim wins. A second
+card is not merely repetition — the action bar is a LiveComponent keyed by the
+subject, so a duplicate id takes the render down.
+
+A surface that draws these cards **owes their events**: the ⋯ menu's
+`remove-remote-reply` / `report-remote-reply` (`VutuvWeb.Live.RemoteReplyActions`,
+the sibling of `RemotePostActions`) and the cached card's three. An unhandled
+`phx-click` kills the LiveView, and the feed had been drawing the reply card for
+a reshared reply (issue #1275) without either handler.
 
 The notification page reuses the compact `post_preview/1` for the post a
 like/reply quotes.
