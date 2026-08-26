@@ -126,6 +126,71 @@ defmodule VutuvWeb.MentionFormTest do
 
       assert PostTeaser.text(%{remote_post: remote}) == "Hallo @patrick, willkommen!"
     end
+
+    # The card a reply from another network is read in — the surface that shows
+    # our members named in full more often than any other, because over there
+    # the full address is the only way to name us. It renders through
+    # `render_remote/1` rather than `render_post/2`, a second pipeline with its
+    # own linkify call, so it needs its own test: everything else here could be
+    # green while the one card a member actually reads a mention of themselves
+    # in still spelled out the host.
+    test "reads short in the body of a reply from another network" do
+      ada = member()
+
+      html = Markdown.render_remote("@#{ada.username}@vutuv.test Ggf. reicht es aus.")
+
+      assert html =~ ~s(class="mention">@#{ada.username}</a>)
+      refute html =~ "vutuv.test"
+    end
+
+    # A handle nobody here holds — the member has left, or the remote server
+    # named a page of ours that never existed. Shortened too: a dead handle
+    # reads no better for carrying our host, and the alternative is one
+    # sentence spelling two mentions two different ways.
+    test "of a handle nobody holds still reads short in remote content" do
+      html = Markdown.render_remote("@departed@vutuv.test war hier.")
+
+      assert html =~ "@departed"
+      refute html =~ "vutuv.test"
+    end
+
+    # Somebody else's account, in the same sentence. The rule is about *our*
+    # host and nothing else: shortening this one would name a vutuv member of
+    # that name, who is a different person.
+    test "on another server is left whole" do
+      html = Markdown.render_remote("@feb@social.example und @patrick@vutuv.test")
+
+      assert html =~ "@feb@social.example"
+      assert html =~ "@patrick"
+      refute html =~ "@patrick@vutuv.test"
+    end
+
+    # `https://mastodon.social/@ada@vutuv.test` is Mastodon's web path to a
+    # remote profile, not a mention — and shortened it names *their* @ada, who
+    # is somebody else. The rendered body is safe by accident (the autolinker
+    # has made it an anchor and the entity pass skips those), so the plain-text
+    # route is where this has to be tested.
+    test "inside a URL is left alone, address and prose in the same line" do
+      ada = member()
+
+      # The URL's own display drops the scheme (the autolinker's doing), so the
+      # path is what this asserts on: it still names the account it did.
+      text =
+        Markdown.to_plain_text(
+          "Siehe https://mastodon.social/@#{ada.username}@vutuv.test — oder @#{ada.username}@vutuv.test fragen."
+        )
+
+      assert text =~ "mastodon.social/@#{ada.username}@vutuv.test"
+      assert text =~ "oder @#{ada.username} fragen"
+    end
+
+    # The slash that is not a URL. German prose writes an account name straight
+    # after one, and there the short form is right — the same account, spelled
+    # the way this site spells it.
+    test "after a slash in prose still reads short" do
+      assert Markdown.to_plain_text("Bündnis 90/@gruene@vutuv.test dazu") ==
+               "Bündnis 90/@gruene dazu"
+    end
   end
 
   describe "the Mention tags on an outgoing Note" do

@@ -49,6 +49,16 @@ surfaces that flatten a body to text instead of rendering it go through
 they are accounts — a stray `@word` is left as written, and an address nobody
 holds is shortened without becoming a link.
 
+One thing the shortening steps over: a **URL**. The entity grammar reads a full
+address after a slash on purpose (German prose writes
+`Bündnis 90/@gruenebundestag@gruene.social` and means that account), and
+`https://mastodon.social/@ada@vutuv.de` wears the same shape without being a
+mention — it is Mastodon's web path to a remote profile, and shortened it would
+read `https://mastodon.social/@ada`, naming *their* member of that name. The
+renderer is safe without a guard, because the autolinker has made the URL an
+`<a>` before the entity pass runs and that pass skips anchors; the plain-text
+route has no anchor to skip, so `to_local_form/1` splits URLs out first.
+
 The stored body keeps whatever was typed, so the same row reads correctly in
 both places and a member who wrote one form never finds the other saved over it.
 It is still shown verbatim in one place, deliberately: `body_markdown` in the

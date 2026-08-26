@@ -113,6 +113,10 @@ defmodule Vutuv.Mentions do
   # original — so `rewrite/3` can never corrupt a body.
   @code ~r/```[\s\S]*?```|~~~[\s\S]*?~~~|`[^`\n]*`/
 
+  # A bare URL, the shape `VutuvWeb.Markdown` autolinks. Only the display form
+  # steps over one (`to_local_form/1`); see `shorten_addresses/1` for why.
+  @url ~r{https?://[^\s<>]+}
+
   # Every Markdown surface whose stored `@handle` becomes a link — the single
   # list the existence validation, the content scan and the rename rewrite all
   # read, kept in step with the `VutuvWeb.Markdown` render call sites.
@@ -622,8 +626,29 @@ defmodule Vutuv.Mentions do
 
   # Only the fediverse form on our own host has anything to shorten; a bare
   # handle, a hashtag and every other host fall through as written.
+  #
+  # A bare URL is stepped over first, because `@entity` reads a full address
+  # after a slash on purpose — German prose writes
+  # `Bündnis 90/@gruenebundestag@gruene.social` and means that account — and
+  # `https://mastodon.social/@ada@vutuv.de` is the same shape without being a
+  # mention: it is Mastodon's web path to a *remote* profile. Shortened, it
+  # would read `https://mastodon.social/@ada`, which over there names their own
+  # member of that name — a different person, and a link that goes to them. The
+  # renderer needs no such guard: by the time its entity pass runs the
+  # autolinker has made the URL an `<a>`, and that pass skips anchors. This is
+  # the plain-text route, where there is no anchor to skip.
   defp shorten_addresses(chunk) do
-    Regex.replace(@entity, chunk, fn
+    @url
+    |> Regex.split(chunk, include_captures: true)
+    |> Enum.with_index()
+    |> Enum.map_join(fn
+      {url, index} when rem(index, 2) == 1 -> url
+      {text, _index} -> shorten_addresses_in_text(text)
+    end)
+  end
+
+  defp shorten_addresses_in_text(text) do
+    Regex.replace(@entity, text, fn
       whole, user, host, "", "" ->
         if user != "" and Fediverse.local_host?(host), do: "@" <> user, else: whole
 
