@@ -103,6 +103,21 @@ defmodule Vutuv.Posts do
   alias Vutuv.UUIDv7
 
   @default_feed_limit 20
+
+  # How many resharers a feed entry carries. The "Reposted by" banner draws this
+  # many faces and then a `+N` chip, so loading more would be rows fetched to be
+  # thrown away — and on a post of the reader's own, where the roster is no
+  # longer bounded by their follow set, a widely reshared post would fetch
+  # thousands of them to draw five. The tail is counted in SQL instead
+  # (`reposters_total`), so the chip's figure stays honest.
+  @roster_cap 5
+
+  @doc """
+  How many resharers a feed entry's roster holds — the cap the banner's avatar
+  stack draws up to (`VutuvWeb.PostComponents`). One number, or the query would
+  fetch fewer faces than the stack wants to show.
+  """
+  def reposter_roster_cap, do: @roster_cap
   @default_profile_limit 3
   @default_thread_limit 100
   # The permalink conversation's cap (issue #1006): strictly above the
@@ -1059,6 +1074,53 @@ defmodule Vutuv.Posts do
   end
 
   defp organization_author?(_post, _viewer), do: false
+
+  @doc """
+  Whether a post **arriving live** reaches `viewer`'s feed — the in-memory twin
+  of what a feed source's query would have decided about it.
+
+  The feed answers that question twice: in SQL when a page is fetched, and here
+  when a post arrives over PubSub. While the two disagreed, the pill counted
+  posts the next read then dropped — a muted member's, or one in a language the
+  reader filters out — so pressing it showed fewer posts than it promised, or
+  none. Four gates, in the order the query asks them:
+
+    * the author is not blocked, either way (`scope_visible/2` never checks
+      blocks, which is why the caller used to ask this one separately),
+    * the post's own audience lets this reader in (`visible_to?/2`),
+    * the reader has not muted the author (`followees_of/1`'s `muted == false`),
+    * and it is in a language they chose (`language_scope/2`).
+
+  The tab filter is a **different** question and stays with the caller: it
+  decides which of two lists a post belongs in, not whether it reaches the
+  reader at all, and an arrival for the other tab lights that tab's dot rather
+  than being dropped (issue #1503).
+  """
+  def reaches_feed?(%Post{} = post, %User{} = viewer) do
+    not Vutuv.Social.blocked_between?(viewer.id, post.user_id) and
+      visible_to?(post, viewer) and not muted_author?(post, viewer) and
+      language_allowed?(post, viewer)
+  end
+
+  defp muted_author?(%Post{user_id: author_id}, %User{id: viewer_id})
+       when is_binary(author_id) do
+    Repo.exists?(
+      from(f in Follow,
+        where: f.follower_id == ^viewer_id and f.followee_id == ^author_id and f.muted
+      )
+    )
+  end
+
+  defp muted_author?(_post, _viewer), do: false
+
+  # The `language_scope/2` clause, asked of one post: an undeclared language
+  # never hides (the same NOT-IN/NULL lesson), and no filter means no question.
+  defp language_allowed?(%Post{language: language}, %User{} = viewer) do
+    case feed_language_filter(viewer) do
+      nil -> true
+      chosen -> is_nil(language) or language in chosen
+    end
+  end
 
   @doc """
   Whether `viewer` (a `%User{}` or `nil` for anonymous) may see `post`.
@@ -3730,7 +3792,8 @@ defmodule Vutuv.Posts do
   # A page reading its OWN feed carries no reposts (it does not read the
   # members' repost source), so there is no roster to attach and no viewer whose
   # follow graph would scope one. Nil is a real case here, not a slip.
-  defp attach_reposters(entries, nil), do: Enum.map(entries, &Map.put(&1, :reposters, []))
+  defp attach_reposters(entries, nil),
+    do: Enum.map(entries, &(&1 |> Map.put(:reposters, []) |> Map.put(:reposters_total, 0)))
 
   defp attach_reposters(entries, %User{} = viewer) do
     # Keyed on "there is a resharer", not on "the resharer is a member": since
@@ -3751,11 +3814,16 @@ defmodule Vutuv.Posts do
 
     Enum.map(entries, fn
       %{reposted_by: nil} = entry ->
-        Map.put(entry, :reposters, [])
+        entry |> Map.put(:reposters, []) |> Map.put(:reposters_total, 0)
 
       entry ->
-        reposters = Map.get(rosters, entry.post.id, [entry.reposted_by])
-        entry |> Map.put(:reposters, reposters) |> Map.put(:reposted_by, hd(reposters))
+        %{names: names, total: total} =
+          Map.get(rosters, entry.post.id, %{names: [entry.reposted_by], total: 1})
+
+        entry
+        |> Map.put(:reposters, names)
+        |> Map.put(:reposters_total, total)
+        |> Map.put(:reposted_by, hd(names))
     end)
   end
 
@@ -3772,23 +3840,52 @@ defmodule Vutuv.Posts do
     # reshare in the roster and the stranger's missing, the newest name was
     # replaced by the reader's own. Blocked and muted resharers stay out, the
     # same gate that source applies.
-    from(r in PostRepost,
+    ranked =
+      from(r in PostRepost,
+        left_join: u in User,
+        on: u.id == r.user_id,
+        left_join: rp in assoc(r, :organization),
+        where: r.post_id in ^post_ids,
+        where: ^roster_holds(viewer_id, own_ids),
+        # Scoped per actor kind — see the note in `feed_repost_items/3`: a bare
+        # `account_confirmed_row(u)` is TRUE on a left-joined missing row.
+        where:
+          r.user_id == ^viewer_id or
+            (not is_nil(r.user_id) and account_confirmed_row(u)) or
+            (not is_nil(r.organization_id) and organization_public_row(rp)),
+        # Ids and the two window figures only: Ecto refuses a struct as a map
+        # value inside a subquery, and the rows are hydrated by the outer query
+        # below. The windows are computed over the **gated** set, so the total
+        # counts what this reader may be shown and nothing else.
+        select: %{
+          id: r.id,
+          post_id: r.post_id,
+          rank:
+            over(row_number(),
+              partition_by: r.post_id,
+              order_by: [desc: r.inserted_at, desc: r.id]
+            ),
+          total: over(count(r.id), partition_by: r.post_id)
+        }
+      )
+
+    from(row in subquery(ranked),
+      join: r in PostRepost,
+      on: r.id == row.id,
       left_join: u in User,
       on: u.id == r.user_id,
       left_join: rp in assoc(r, :organization),
-      where: r.post_id in ^post_ids,
-      where: ^roster_holds(viewer_id, own_ids),
-      # Scoped per actor kind — see the note in `feed_repost_items/3`: a bare
-      # `account_confirmed_row(u)` is TRUE on a left-joined missing row.
-      where:
-        r.user_id == ^viewer_id or
-          (not is_nil(r.user_id) and account_confirmed_row(u)) or
-          (not is_nil(r.organization_id) and organization_public_row(rp)),
-      order_by: [desc: r.inserted_at, desc: r.id],
-      select: {r.post_id, u, rp}
+      where: row.rank <= ^@roster_cap,
+      order_by: [asc: row.post_id, asc: row.rank],
+      select: {row.post_id, row.total, u, rp}
     )
     |> Repo.all()
-    |> Enum.group_by(&elem(&1, 0), fn {_post_id, user, page} -> user || page end)
+    |> Enum.group_by(&elem(&1, 0))
+    |> Map.new(fn {post_id, rows} ->
+      names = for {_post_id, _total, user, page} <- rows, do: user || page
+      {_post_id, total, _user, _page} = hd(rows)
+      {post_id, %{names: names, total: total}}
+    end)
   end
 
   # Whose reshare of these posts the banner may name: the reader's own, a

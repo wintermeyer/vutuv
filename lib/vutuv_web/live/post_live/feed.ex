@@ -1090,17 +1090,15 @@ defmodule VutuvWeb.PostLive.Feed do
          |> stream_insert(:posts, decorated, at: 0)
          |> prune_threaded_parent(entry)}
 
-      # Mirror the pull path's blocked-author filter: a third party's repost
-      # must not carry a blocked author's post into the feed (blocking already
-      # severed the direct follow). visible_to?/2 alone never checks blocks.
-      Social.blocked_between?(user.id, entry.post.user_id) ->
-        {:noreply, socket}
-
-      # Visibility is asked FIRST, and the order is the whole correctness of
-      # the dot below (issue #1503): the tab check used to come first and drop
-      # the arrival, which cost nothing while the answer was "do nothing" and
-      # would now light a tab for a post this reader is not allowed to read.
-      not Posts.visible_to?(entry.post, user) ->
+      # Does this post reach the reader at all — blocks, audience, mute and
+      # their language filter, the in-memory twin of what the query decides
+      # (`Posts.reaches_feed?/2`).
+      #
+      # It is asked FIRST, and the order is the whole correctness of the dot
+      # below (issue #1503): the tab check used to come first and drop the
+      # arrival, which cost nothing while the answer was "do nothing" and would
+      # now light a tab for a post this reader is not allowed to read.
+      not Posts.reaches_feed?(entry.post, user) ->
         {:noreply, socket}
 
       # A post nobody on this tab asked for must not be counted by the pill
@@ -1555,9 +1553,18 @@ defmodule VutuvWeb.PostLive.Feed do
 
   # nil when this reposter is already counted (idempotent re-broadcast), else the
   # entry with the reposter folded into its roster and named as the newest.
+  #
+  # The **total** grows with it and the list stays capped
+  # (`Posts.reposter_roster_cap/0`): the banner reads the total for its "and N
+  # others" and the list only for the faces, so letting the list grow while the
+  # total stood still made the tail count backwards — a post with no roster yet
+  # answered `-1` and took the page down on `ngettext`.
   defp restacked_entry(entry, reposter) do
     unless Enum.any?(entry.reposters, &(&1.id == reposter.id)) do
-      %{entry | reposters: [reposter | entry.reposters], reposted_by: reposter}
+      roster = Enum.take([reposter | entry.reposters], Posts.reposter_roster_cap())
+
+      %{entry | reposters: roster, reposted_by: reposter}
+      |> Map.put(:reposters_total, (entry[:reposters_total] || length(entry.reposters)) + 1)
     end
   end
 
@@ -1775,6 +1782,7 @@ defmodule VutuvWeb.PostLive.Feed do
                     remote_parents={entry[:remote_parents] || %{}}
                     reposted_by={entry.reposted_by}
                     reposters={entry[:reposters]}
+                    reposters_total={entry[:reposters_total]}
                     entry_id={entry.id}
                     conn_or_socket={@socket}
                     engagement={entry.engagement}

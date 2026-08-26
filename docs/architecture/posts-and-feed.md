@@ -358,6 +358,27 @@ fan-out never reached the person whose post it was, and the feed only caught up
 on the next load. Whoever the fan-out already told is subtracted rather than told
 twice — a second copy counts twice behind the "N new posts" pill.
 
+**The roster is capped, its tail counted in SQL.** The banner draws
+`Posts.reposter_roster_cap/0` faces (5) and then a `+N` chip, so the query loads
+exactly that many rows per post and carries `reposters_total` from a
+`count(*) over (partition by post_id)` in the same statement — over the *gated*
+set, so the figure counts only what this reader may be shown. Both numbers ride
+the entry, and the banner reads the **total** for its "and N others" and the list
+only for the faces; letting the list grow while the total stood still is how a
+live restack once answered `-1` and took the page down inside `ngettext`. Until
+the cap the roster was bounded by the reader's follow set — widening it to a post
+of their own made "load every resharer to draw five" a real cost.
+
+**A post arriving live passes the same gates as one fetched by a query.** The
+feed decides who sees a post twice: in SQL for a page, and in memory for a
+PubSub arrival. `Posts.reaches_feed?/2` is the in-memory twin — blocks either
+way, the post's audience, a mute the reader placed, and their language filter,
+in the order the query asks them. While the two disagreed, the pill counted
+posts the next read then dropped, so pressing it showed fewer than it promised.
+The **tab** filter is a different question and stays with the caller: it decides
+which list a post belongs in, not whether it reaches the reader, and an arrival
+for the other tab lights that tab's dot instead of being dropped (issue #1503).
+
 **What keeps that first source cheap.** The local posts source ("mine plus the
 people I follow", newest first) has to stay a *page*-sized read as the posts
 table grows, and two things make it one. `posts_recency_index` covers its sort
