@@ -19,7 +19,6 @@ defmodule Vutuv.MastodonApi.Presenter do
   alias Vutuv.Posts
   alias Vutuv.Posts.Post
   alias Vutuv.Posts.PostImage
-  alias Vutuv.Posts.PostRemoteReply
   alias Vutuv.Profiles.Url
   alias Vutuv.Profiles.VerifiedLinks
   alias Vutuv.RemoteMedia
@@ -138,51 +137,48 @@ defmodule Vutuv.MastodonApi.Presenter do
     remote_ids = items |> Enum.map(&remote_post_id/1) |> Enum.reject(&is_nil/1)
     note_parent_ids = items |> Enum.map(&note_parent_post_id/1) |> Enum.reject(&is_nil/1)
     self_reply_pairs = items |> Enum.map(&self_reply_pair/1) |> Enum.reject(&is_nil/1)
-    reply_ref_parents = items |> Enum.map(&reply_ref_parent/1) |> Enum.reject(&is_nil/1)
 
+    # Both halves of the sidecar, in one map (issue #1622): the cached reply a
+    # post answers (#1641) and the cached **post** it answers (#1165). Read from
+    # the sidecar table rather than off the `:remote_reply_ref` preload, which
+    # is what `answered_notes/1`'s own doc asks for — a parent that silently
+    # depends on whether somebody remembered a preload is a shape that has
+    # bitten this codebase before.
+    answered = Fediverse.answered_objects(post_ids)
     remote_parents = Fediverse.remote_parent_posts(self_reply_pairs)
-
-    followed_remote_ids =
-      (Map.values(remote_parents) ++ reply_ref_parents)
-      |> Enum.map(& &1.remote_account_id)
-      |> Enum.uniq()
-      |> followed_remote_ids(viewer)
 
     %{
       viewer: viewer,
       engagements: Posts.post_engagement_map(post_ids, viewer),
       mentions: Posts.mention_map(post_ids),
-      # Which cached fediverse reply each post answers, if any (issue #1641).
-      answered: Fediverse.answered_notes(post_ids),
+      answered: answered,
       # The photographs on the cached posts this page shows (issue #1626).
       # `:images` is never preloaded on a `%RemotePost{}` — every surface in this
       # codebase batches them by id, and so does this one.
       remote_images: Fediverse.list_remote_images(remote_ids),
       # The local post each cached reply answers (issue #1622), batched and
-      # already scoped to what `viewer` may see (`Posts.note_parent_posts/2`).
-      note_parents: Posts.note_parent_posts(note_parent_ids, viewer),
+      # already scoped to what `viewer` may see.
+      note_parents: Posts.visible_posts_by_ids(viewer, note_parent_ids),
       # The cached parent of a followed account's self-reply, batched the same
-      # way (`Fediverse.remote_parent_posts/1`) — visibility is checked at
-      # render time against `followed_remote_ids` below, since two different
-      # callers here (a self-reply's own parent, a vutuv answer's
-      # `remote_reply_ref`) both read this same audience gate.
+      # way (`Fediverse.remote_parent_posts/1`).
       remote_parents: remote_parents,
-      followed_remote_ids: followed_remote_ids
+      # Which of those cached parents `viewer` may actually read — the half
+      # `answered_objects/1` hands over ungated on purpose, because only the
+      # renderer knows the reader. One `Fediverse.remote_post_readable?/2` for
+      # the whole page, and no query at all when every parent is public.
+      readable_parents:
+        Fediverse.readable_remote_post_ids(
+          Map.values(remote_parents) ++ answered_remote_posts(answered),
+          viewer
+        )
     }
   end
 
-  # `viewer` is never a party `Fediverse.followed_remote_account_ids/2` can
-  # take when nobody is signed in — `Vutuv.Identity.Query.party_is/2` has no
-  # `nil` clause and raises — and an anonymous reader follows nothing anyway,
-  # so every restricted parent is simply unreadable for them.
-  defp followed_remote_ids([], _viewer), do: MapSet.new()
-  defp followed_remote_ids(_account_ids, nil), do: MapSet.new()
-
-  defp followed_remote_ids(account_ids, viewer),
-    do: Fediverse.followed_remote_account_ids(viewer, account_ids)
+  defp answered_remote_posts(answered),
+    do: for({_post_id, %RemotePost{} = post} <- answered, do: post)
 
   # What a single status rendered outside `statuses/2` gets. Built by the same
-  # function rather than spelled out again, so a sixth batch cannot be added to
+  # function rather than spelled out again, so the next batch cannot be added to
   # one shape and forgotten in the other; every batch short-circuits on an empty
   # id list, so it costs no query.
   defp no_page, do: page_context([], nil)
@@ -287,27 +283,6 @@ defmodule Vutuv.MastodonApi.Presenter do
        do: {uri, account_id}
 
   defp self_reply_pair(_other), do: nil
-
-  # The cached post a vutuv reply's `remote_reply_ref` continues (issue #1165),
-  # read off the preload rather than queried — `Posts.render_preloads/0`
-  # already carries it on every `%Post{}` this adapter renders, so collecting
-  # it here costs no query; only its audience needs a batch (`followed_remote_ids`).
-  defp reply_ref_parent(%Post{
-         remote_reply_ref: %PostRemoteReply{remote_post: %RemotePost{} = parent}
-       }),
-       do: parent
-
-  defp reply_ref_parent(
-         %{
-           post: %Post{
-             remote_reply_ref: %PostRemoteReply{remote_post: %RemotePost{} = parent}
-           }
-         } = entry
-       )
-       when not is_struct(entry),
-       do: parent
-
-  defp reply_ref_parent(_other), do: nil
 
   defp rendered_status(%Post{} = post, context), do: status(post, context)
 
@@ -883,7 +858,14 @@ defmodule Vutuv.MastodonApi.Presenter do
   defp reply_fields(_post, %Note{} = note, _context),
     do: %{in_reply_to_id: status_id(note), in_reply_to_account_id: note_account_id(note)}
 
-  defp reply_fields(post, _no_cached_reply, context) do
+  # The other half of the sidecar (issue #1165): a top-level vutuv post that
+  # answers a followed account's post out there threads under the cached copy of
+  # it, a status the same client can fetch. There is no local parent to prefer
+  # here — the shape exists precisely because nothing of ours sits underneath.
+  defp reply_fields(_post, %RemotePost{} = parent, context),
+    do: remote_parent_fields(parent, context)
+
+  defp reply_fields(post, _no_cached_parent, _context) do
     case Posts.reply_ref_state(post) do
       {:parent, %Post{} = parent} ->
         %{
@@ -892,50 +874,24 @@ defmodule Vutuv.MastodonApi.Presenter do
         }
 
       _not_a_live_local_parent ->
-        # Not a local reply — but it may answer a followed account's post on
-        # another network (issue #1165), which threads under the cached copy of
-        # that post, a status the same client can fetch (`remote-<id>`). The
-        # #1070 shape (an answer that is *also* a local reply) already resolved
-        # to its local parent above, so only the top-level case reaches here;
-        # `remote_reply_ref` is preloaded with its `remote_post` and account.
-        remote_reply_fields(post, context)
+        %{}
     end
   end
-
-  # **Gated the same way `StatusController.status_visible?/2` gates the
-  # single-status case** — a followers-only cached post named here must be one
-  # `context.followed_remote_ids` actually holds, or a client would be handed
-  # an id that answers 404 (or worse, silently confirms a restricted post
-  # exists) to every reader but the ones this installation itself follows that
-  # account for. `open?/1` covers the common case with no set membership check
-  # at all.
-  defp remote_reply_fields(
-         %Post{remote_reply_ref: %PostRemoteReply{remote_post: %RemotePost{} = parent}},
-         context
-       ) do
-    if readable_remote_parent?(parent, context) do
-      %{
-        in_reply_to_id: "remote-" <> parent.id,
-        in_reply_to_account_id: "remote-" <> parent.remote_account_id
-      }
-    else
-      %{}
-    end
-  end
-
-  defp remote_reply_fields(_post, _context), do: %{}
 
   # Names the local post a cached reply answers, read off `context.note_parents`
-  # (`Posts.note_parent_posts/2` — batched for the whole page and already
+  # (`Posts.visible_posts_by_ids/2` — batched for the whole page and already
   # scoped to what `context.viewer` may see, the note's own visibility being no
-  # proof that its narrower parent still is). The account id is the post
-  # author's, which `author_id/1` already is (a member or a page), so no
-  # account struct is built; `%{}` (both nil) when the post is gone or not
-  # visible to this viewer.
+  # proof that its narrower parent still is). Both author kinds ride that
+  # preload, so the two ids are minted by the same pair the local-reply branch
+  # above uses rather than read off the columns; `%{}` (both nil) when the post
+  # is gone or not visible to this viewer.
   defp note_reply_fields(note, context) do
     case Map.get(context.note_parents, note.post_id) do
       %Post{} = parent ->
-        %{in_reply_to_id: parent.id, in_reply_to_account_id: Posts.author_id(parent)}
+        %{
+          in_reply_to_id: status_id(parent),
+          in_reply_to_account_id: account_id(Posts.author(parent))
+        }
 
       nil ->
         %{}
@@ -944,34 +900,41 @@ defmodule Vutuv.MastodonApi.Presenter do
 
   # Names the cached parent post a stored reply continues, read off
   # `context.remote_parents` (`Fediverse.remote_parent_posts/1` — batched for
-  # the whole page rather than a query per row) and gated on audience the same
-  # way `remote_reply_fields/2` above is. `%{}` when the parent is not (or no
-  # longer) held, or is one `context.viewer` may not read: an id no client can
-  # resolve or is refused for is worse than none (the issue's own rule).
+  # the whole page rather than a query per row).
   defp remote_post_reply_fields(
          %RemotePost{in_reply_to_uri: uri, remote_account_id: account_id},
          context
-       ) do
-    case Map.get(context.remote_parents, {uri, account_id}) do
-      %RemotePost{} = parent ->
-        if readable_remote_parent?(parent, context) do
-          %{
-            in_reply_to_id: "remote-" <> parent.id,
-            in_reply_to_account_id: "remote-" <> account_id
-          }
-        else
-          %{}
-        end
+       ),
+       do: remote_parent_fields(Map.get(context.remote_parents, {uri, account_id}), context)
 
-      nil ->
-        %{}
+  # The one place a cached parent becomes the two fields, for both callers
+  # above. **Gated the same way `VutuvWeb.MastodonApi.Statuses.visible?/2` gates
+  # the single-status read** (`context.readable_parents`): naming a
+  # followers-only post hands a client an id that answers 404 — or worse,
+  # silently confirms a restricted post exists — to every reader but the ones
+  # this installation follows that account for. `%{}`, i.e. both nil, when the
+  # parent is not (or no longer) held or may not be read: an id no client can
+  # resolve or is refused for is worse than none, which is the issue's own rule.
+  defp remote_parent_fields(%RemotePost{} = parent, context) do
+    if MapSet.member?(context.readable_parents, parent.id) do
+      %{
+        in_reply_to_id: status_id(parent),
+        in_reply_to_account_id: remote_account_id(parent)
+      }
+    else
+      %{}
     end
   end
 
-  defp readable_remote_parent?(%RemotePost{} = parent, context),
-    do:
-      RemotePost.open?(parent) or
-        MapSet.member?(context.followed_remote_ids, parent.remote_account_id)
+  defp remote_parent_fields(nil, _context), do: %{}
+
+  # `account_id/1` where the account itself is loaded (`answered_objects/1`
+  # selects it in), and the same spelling from the bare column where it is not
+  # (`remote_parent_posts/1` reads ids, not accounts).
+  defp remote_account_id(%RemotePost{remote_account: %RemoteAccount{} = account}),
+    do: account_id(account)
+
+  defp remote_account_id(%RemotePost{remote_account_id: id}), do: "remote-" <> id
 
   @doc """
   One freshly uploaded picture, for the media endpoints.

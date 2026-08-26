@@ -4,11 +4,11 @@ defmodule VutuvWeb.MastodonApi.ThreadParentsTest do
   network border — issues #1640 and #1641.
 
   Two surfaces carry that relation and a client threads from whichever it has:
-  `in_reply_to_id` on the single status, and `ancestors` in its `/context`. For
-  a cached *reply* both are asserted here and they name the same thing. For a
-  cached *post* only `/context` names it: filling `in_reply_to_id` there is
-  issue #1622, in flight as a separate change, so this file pins the half that
-  is done rather than pretending both are.
+  `in_reply_to_id` on the single status, and `ancestors` in its `/context`. Both
+  name the same thing on every shape now — filling `in_reply_to_id` where a
+  network border is crossed was issue #1622, and the cases that turn on **who
+  is reading** (a parent narrowed since, a followers-only cached post, a page as
+  the reader) are pinned next door in `status_parent_test.exs`.
 
   Calibrated against the un-fixed adapter: drop the answered-object lookup out
   of `Vutuv.MastodonApi.Presenter` or out of
@@ -209,8 +209,10 @@ defmodule VutuvWeb.MastodonApi.ThreadParentsTest do
   describe "an answer written here to a cached post" do
     # Issue #1640: the answer is a top-level vutuv post (there is nothing local
     # underneath it), so without the fix its context was empty although the post
-    # it addresses is one we serve.
-    test "carries that cached post as its ancestor", %{conn: conn} do
+    # it addresses is one we serve. Issue #1622 is the other surface of the same
+    # relation — for a while `/context` named the parent and the status itself
+    # still said `null`, which is worse for a client than both being empty.
+    test "carries that cached post as its ancestor, and says so on the status too", %{conn: conn} do
       remote = cached_post(remote_account())
 
       {:ok, answer} =
@@ -221,6 +223,14 @@ defmodule VutuvWeb.MastodonApi.ThreadParentsTest do
       context = conn |> get("/api/v1/statuses/#{answer.id}/context") |> json_response(200)
 
       assert Enum.map(context["ancestors"], & &1["id"]) == ["remote-" <> remote.id]
+
+      status =
+        conn
+        |> recycle_mastodon()
+        |> get("/api/v1/statuses/#{answer.id}")
+        |> json_response(200)
+
+      assert status["in_reply_to_id"] == "remote-" <> remote.id
     end
   end
 end

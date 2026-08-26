@@ -1440,8 +1440,17 @@ defmodule Vutuv.Fediverse do
   feed carries posts by accounts nobody here follows (a boost by a followed
   account, a member's reshare). Offering either one there is a control that does
   nothing and a flash that says otherwise.
+
+  A follow that has only been **asked** for counts here, because both those
+  controls still act on a pending row — which is exactly why this is not a read
+  gate. `readable_remote_post_ids/2` is the one that answers what may be read.
   """
-  def followed_remote_account_ids(party, account_ids) do
+  def followed_remote_account_ids(party, account_ids),
+    do: remote_follow_account_ids(party, account_ids, :any)
+
+  # The shared body of the two questions above and below: which of `account_ids`
+  # this party holds a follow of, either any follow at all or an accepted one.
+  defp remote_follow_account_ids(party, account_ids, state) do
     case account_ids |> Enum.filter(&is_binary/1) |> Enum.uniq() do
       [] ->
         MapSet.new()
@@ -1451,10 +1460,14 @@ defmodule Vutuv.Fediverse do
           where: party_is(f, party) and f.remote_account_id in ^ids,
           select: f.remote_account_id
         )
+        |> scope_follow_state(state)
         |> Repo.all()
         |> MapSet.new()
     end
   end
+
+  defp scope_follow_state(query, :accepted), do: where(query, [f], f.state == "accepted")
+  defp scope_follow_state(query, :any), do: query
 
   @doc """
   Mutes (or unmutes) the member's follow of one remote account.
@@ -3037,14 +3050,17 @@ defmodule Vutuv.Fediverse do
   end
 
   @doc """
-  The same lookup as `remote_parent_post/1`, batched for a whole page of
-  `%RemotePost{}` items (issue #1622's Mastodon-adapter case, which — unlike
-  `/context`'s one-post-at-a-time walk — renders many self-replies at once and
-  cannot afford a query per row).
+  `remote_parent_post/1`'s lookup batched for a whole page of `%RemotePost{}`
+  items (issue #1622's Mastodon-adapter case, which — unlike `/context`'s
+  one-post-at-a-time walk — renders many self-replies at once and cannot afford
+  a query per row). The **same rows**, without the singular's `remote_account`:
+  the callers here name an id and never render the account.
 
   `pairs` is a list of `{in_reply_to_uri, remote_account_id}`, exactly what
   `own_thread?/2` gates a stored reply's parent by — so the result keys the
-  same way, and a caller with no candidate pairs pays no query.
+  same way, and a caller with no candidate pairs pays no query. `object_uri`
+  carries a unique index, so the two `IN` lists can only narrow each other; the
+  same-account rule is the map key, which is what a caller looks a pair up by.
   """
   def remote_parent_posts([]), do: %{}
 
@@ -6357,7 +6373,9 @@ defmodule Vutuv.Fediverse do
   a cached post — the feed's own source, a boost, a member's repost, the account
   page — is a subset of this one, so a gate built from the feed question denies
   the other three; that is what broke the pictures on boosted posts. Keep new
-  read-side callers on this function.
+  read-side callers on this function — `readable_remote_post_ids/2` below is the
+  same rule for a caller holding a whole page, so needing a batch is not a
+  reason to spell the two arms again somewhere else.
   """
   def remote_post_readable?(%RemotePost{} = post, %User{id: viewer_id}) do
     RemotePost.open?(post) or
@@ -6371,6 +6389,36 @@ defmodule Vutuv.Fediverse do
   end
 
   def remote_post_readable?(_post, _viewer), do: false
+
+  @doc """
+  Which of these cached posts `party` may read, as a `MapSet` of post ids —
+  `remote_post_readable?/2` asked once for a whole page rather than once per
+  row, and the answer to that function's own "keep new read-side callers on
+  this function" for a caller holding a page of them
+  (`Vutuv.MastodonApi.Presenter`, naming each reply's parent).
+
+  Same rule, same two arms, composed here so the audience question keeps one
+  owner: an open audience is readable outright, a followers-only one needs this
+  party's own **accepted** follow — a pending one reads nothing yet, so it would
+  name an id the reader's very next request is refused for. Only the closed
+  posts put the follow question at all, so a page of public parents pays no
+  query. Party-shaped rather than member-only, because a page reads cached posts
+  too (`VutuvWeb.MastodonApi.Statuses.visible?/2`), and — faithful to the
+  singular — nobody signed in reads nothing.
+  """
+  def readable_remote_post_ids(_posts, nil), do: MapSet.new()
+
+  def readable_remote_post_ids(posts, party) do
+    closed_account_ids =
+      posts |> Enum.reject(&RemotePost.open?/1) |> Enum.map(& &1.remote_account_id)
+
+    accepted = remote_follow_account_ids(party, closed_account_ids, :accepted)
+
+    for post <- posts,
+        RemotePost.open?(post) or MapSet.member?(accepted, post.remote_account_id),
+        into: MapSet.new(),
+        do: post.id
+  end
 
   # Claims one slot from the member's hourly like budget. `:ok`, or
   # `{:error, :like_capped}`.

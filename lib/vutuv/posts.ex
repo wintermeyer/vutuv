@@ -5445,6 +5445,13 @@ defmodule Vutuv.Posts do
   that a reply/like is about is always quotable), while another member's post (a
   reply quoted alongside it) passes only when the deny-based visibility rules
   would show it, so a restricted reply never leaks through the notification.
+
+  The Mastodon adapter reads it for a second reason (issue #1622): the local
+  post a cached fediverse reply answers, to name as that reply's
+  `in_reply_to_id`. The gate is the point there too — the note's own visibility
+  (a public reply) says nothing about the post it answers, which its author can
+  since have narrowed, and an id the reader's next request is refused for is
+  worse than none.
   """
   def visible_posts_by_ids(viewer, ids) do
     ids = ids |> Enum.filter(&is_binary/1) |> Enum.uniq()
@@ -5483,27 +5490,6 @@ defmodule Vutuv.Posts do
   end
 
   def reply_ref_state(_post), do: nil
-
-  @doc """
-  The local post each of `post_ids` (`Note.post_id`) names, scoped to what
-  `viewer` may see — one query for a whole page rather than a `Repo.get` per
-  cached reply, and gated the same way `StatusController.context_payload/2`
-  gates the single-note case (`status_visible?/2`): a note's own visibility
-  (a public reply) says nothing about the local post it answers, which its
-  author can since have narrowed. The Mastodon adapter reads this to name a
-  cached reply's `in_reply_to_id` — a parent `viewer` may not see is left out
-  of the map entirely, because an id no client can resolve or is refused for
-  is worse than none. A bare primary-key scan, no preload — the caller reads
-  only `id` and `author_id/1` (both plain columns).
-  """
-  def note_parent_posts([], _viewer), do: %{}
-
-  def note_parent_posts(post_ids, viewer) when is_list(post_ids) do
-    from(p in Post, where: p.id in ^post_ids)
-    |> scope_visible(viewer)
-    |> Repo.all()
-    |> Map.new(&{&1.id, &1})
-  end
 
   defp preload_post(nil), do: nil
   defp preload_post(%Post{} = post), do: Repo.preload(post, post_preloads(), force: true)
