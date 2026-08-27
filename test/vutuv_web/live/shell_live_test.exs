@@ -8,16 +8,6 @@ defmodule VutuvWeb.ShellLiveTest do
   @bell_badge ~s(a[title="Notifications"] span.bg-accent)
   @mail_badge ~s(a[title="Messages"] span.bg-accent)
 
-  # The shell authenticates the live socket from the cookie's session_token
-  # (issue #1036), so a test drives it with a real active session and reads the
-  # chrome back from the resolved user, not a curated map. `extra` still carries
-  # the non-identity keys the shell reads straight from the session (`path`,
-  # `locale`); any leftover curated identity key is simply ignored now.
-  defp session_for(user, extra \\ %{}) do
-    {token, _session} = Sessions.start_session(user, build_conn(), alert: false)
-    Map.merge(%{"session_token" => token}, extra)
-  end
-
   # The member whose name/handle the chrome assertions below expect. This module
   # is synchronous, so the fixed "stefan" handle is safe (no async file mints it
   # at the same time).
@@ -44,7 +34,7 @@ defmodule VutuvWeb.ShellLiveTest do
 
   test "renders the shell nav with the real unread notification count", %{conn: conn} do
     user = user_with_unread_notification()
-    {:ok, view, html} = live_isolated(conn, VutuvWeb.ShellLive, session: session_for(user))
+    {:ok, view, html} = live_isolated(conn, VutuvWeb.ShellLive, session: shell_session(user))
 
     assert html =~ "vutuv"
     assert has_element?(view, "#app-shell")
@@ -55,7 +45,7 @@ defmodule VutuvWeb.ShellLiveTest do
 
   test "renders the real unread conversation count", %{conn: conn} do
     user = with_unread_message(insert(:user))
-    {:ok, view, _html} = live_isolated(conn, VutuvWeb.ShellLive, session: session_for(user))
+    {:ok, view, _html} = live_isolated(conn, VutuvWeb.ShellLive, session: shell_session(user))
 
     assert has_element?(view, @mail_badge, "1")
   end
@@ -66,7 +56,7 @@ defmodule VutuvWeb.ShellLiveTest do
     # On the messages page itself the badge deliberately starts at zero.
     {:ok, on_page, _} =
       live_isolated(conn, VutuvWeb.ShellLive,
-        session: session_for(user, %{"path" => "/messages"})
+        session: shell_session(user, %{"path" => "/messages"})
       )
 
     refute has_element?(on_page, @mail_badge)
@@ -75,7 +65,7 @@ defmodule VutuvWeb.ShellLiveTest do
     # so the real unread count must still show.
     {:ok, on_profile, _} =
       live_isolated(conn, VutuvWeb.ShellLive,
-        session: session_for(user, %{"path" => "/messagesanna"})
+        session: shell_session(user, %{"path" => "/messagesanna"})
       )
 
     assert has_element?(on_profile, @mail_badge, "1")
@@ -83,7 +73,7 @@ defmodule VutuvWeb.ShellLiveTest do
 
   test "the messages badge counts unread conversations, not message events", %{conn: conn} do
     user = with_unread_message(insert(:user))
-    {:ok, view, _html} = live_isolated(conn, VutuvWeb.ShellLive, session: session_for(user))
+    {:ok, view, _html} = live_isolated(conn, VutuvWeb.ShellLive, session: shell_session(user))
 
     assert has_element?(view, @mail_badge, "1")
 
@@ -105,7 +95,7 @@ defmodule VutuvWeb.ShellLiveTest do
     {:ok, _} = Vutuv.Chat.send_message(other, conversation.id, "unread ping")
     with_unread_message(user)
 
-    {:ok, view, _html} = live_isolated(conn, VutuvWeb.ShellLive, session: session_for(user))
+    {:ok, view, _html} = live_isolated(conn, VutuvWeb.ShellLive, session: shell_session(user))
     assert has_element?(view, @mail_badge, "2")
 
     # The member opens conversation one: MessageLive marks it read and
@@ -123,7 +113,7 @@ defmodule VutuvWeb.ShellLiveTest do
     conversation = insert_conversation_between(other, user)
     {:ok, _} = Vutuv.Chat.send_message(other, conversation.id, "unread ping")
 
-    {:ok, view, _html} = live_isolated(conn, VutuvWeb.ShellLive, session: session_for(user))
+    {:ok, view, _html} = live_isolated(conn, VutuvWeb.ShellLive, session: shell_session(user))
     assert has_element?(view, @mail_badge, "1")
 
     Vutuv.Chat.mark_read(user, conversation.id)
@@ -136,7 +126,7 @@ defmodule VutuvWeb.ShellLiveTest do
     user = user_with_unread_notification()
     Vutuv.Activity.mark_notifications_read(user.id)
 
-    {:ok, view, _html} = live_isolated(conn, VutuvWeb.ShellLive, session: session_for(user))
+    {:ok, view, _html} = live_isolated(conn, VutuvWeb.ShellLive, session: shell_session(user))
 
     refute has_element?(view, @bell_badge)
   end
@@ -146,7 +136,7 @@ defmodule VutuvWeb.ShellLiveTest do
       # On /feed the logo would only round-trip through "/" back to the feed,
       # so there it deep-links to the member's own profile instead.
       user = stefan()
-      session = session_for(user, %{"path" => "/feed"})
+      session = shell_session(user, %{"path" => "/feed"})
       {:ok, view, _html} = live_isolated(conn, VutuvWeb.ShellLive, session: session)
 
       assert has_element?(view, ~s(header a[data-brand][href="/stefan"]), "vutuv")
@@ -154,7 +144,7 @@ defmodule VutuvWeb.ShellLiveTest do
 
     test "stays the home link on every other page", %{conn: conn} do
       user = insert(:user)
-      session = session_for(user, %{"path" => "/search"})
+      session = shell_session(user, %{"path" => "/search"})
       {:ok, view, _html} = live_isolated(conn, VutuvWeb.ShellLive, session: session)
 
       assert has_element?(view, ~s(header a[data-brand][href="/"]), "vutuv")
@@ -186,7 +176,7 @@ defmodule VutuvWeb.ShellLiveTest do
 
   test "shows the user's avatar in the top bar when they have one", %{conn: conn} do
     user = stefan(avatar: "me.jpg")
-    {:ok, view, _html} = live_isolated(conn, VutuvWeb.ShellLive, session: session_for(user))
+    {:ok, view, _html} = live_isolated(conn, VutuvWeb.ShellLive, session: shell_session(user))
 
     assert has_element?(view, ~s(summary[title="Stefan Wintermeyer"] img))
     refute has_element?(view, ~s(summary[title="Stefan Wintermeyer"]), "SW")
@@ -194,7 +184,7 @@ defmodule VutuvWeb.ShellLiveTest do
 
   test "falls back to initials when the user has no avatar", %{conn: conn} do
     user = stefan()
-    {:ok, view, _html} = live_isolated(conn, VutuvWeb.ShellLive, session: session_for(user))
+    {:ok, view, _html} = live_isolated(conn, VutuvWeb.ShellLive, session: shell_session(user))
 
     assert has_element?(view, ~s(summary[title="Stefan Wintermeyer"]), "SW")
     refute has_element?(view, ~s(summary[title="Stefan Wintermeyer"] img))
@@ -210,7 +200,7 @@ defmodule VutuvWeb.ShellLiveTest do
         username: "anna-schmidt"
       )
 
-    {:ok, view, _html} = live_isolated(conn, VutuvWeb.ShellLive, session: session_for(user))
+    {:ok, view, _html} = live_isolated(conn, VutuvWeb.ShellLive, session: shell_session(user))
 
     assert has_element?(view, ~s(summary[title="Dr. Anna Schmidt"]), "AS")
     refute has_element?(view, ~s(summary[title="Dr. Anna Schmidt"]), "DA")
@@ -218,7 +208,7 @@ defmodule VutuvWeb.ShellLiveTest do
 
   test "the avatar opens an account menu linking to every account area", %{conn: conn} do
     user = stefan()
-    {:ok, view, _html} = live_isolated(conn, VutuvWeb.ShellLive, session: session_for(user))
+    {:ok, view, _html} = live_isolated(conn, VutuvWeb.ShellLive, session: shell_session(user))
 
     menu = "details[data-account-menu]"
     assert has_element?(view, menu)
@@ -292,7 +282,7 @@ defmodule VutuvWeb.ShellLiveTest do
       # obvious; a named "Profile" nav item makes the member's own profile a
       # first-class, discoverable destination.
       user = stefan()
-      {:ok, view, _html} = live_isolated(conn, VutuvWeb.ShellLive, session: session_for(user))
+      {:ok, view, _html} = live_isolated(conn, VutuvWeb.ShellLive, session: shell_session(user))
 
       assert has_element?(view, ~s(nav a[data-nav-profile][href="/stefan"]), "Profile")
     end
@@ -301,7 +291,7 @@ defmodule VutuvWeb.ShellLiveTest do
       # Desktop is not the only surface: the bottom tab bar gets a Profile tab
       # too, so phone visitors can reach their profile without hunting for it.
       user = stefan()
-      {:ok, view, _html} = live_isolated(conn, VutuvWeb.ShellLive, session: session_for(user))
+      {:ok, view, _html} = live_isolated(conn, VutuvWeb.ShellLive, session: shell_session(user))
 
       assert has_element?(view, ~s(nav a[data-mobile-profile][href="/stefan"]), "Profile")
       # Five tabs now (Feed, Search, Messages, Alerts, Profile), so the grid grows.
@@ -325,7 +315,9 @@ defmodule VutuvWeb.ShellLiveTest do
       user = insert(:user)
 
       {:ok, view, _html} =
-        live_isolated(conn, VutuvWeb.ShellLive, session: session_for(user, %{"path" => "/feed"}))
+        live_isolated(conn, VutuvWeb.ShellLive,
+          session: shell_session(user, %{"path" => "/feed"})
+        )
 
       assert has_element?(view, ~s(nav a[href="/feed"][aria-current="page"]), "Feed")
       # No other nav item claims to be the current page.
@@ -340,7 +332,7 @@ defmodule VutuvWeb.ShellLiveTest do
 
       for path <- ["/stefan", "/stefan/tags"] do
         {:ok, view, _html} =
-          live_isolated(conn, VutuvWeb.ShellLive, session: session_for(user, %{"path" => path}))
+          live_isolated(conn, VutuvWeb.ShellLive, session: shell_session(user, %{"path" => path}))
 
         assert has_element?(view, ~s(a[data-nav-profile][aria-current="page"]))
         assert has_element?(view, ~s(a[data-mobile-profile][aria-current="page"]))
@@ -353,7 +345,9 @@ defmodule VutuvWeb.ShellLiveTest do
       user = insert(:user)
 
       {:ok, view, _html} =
-        live_isolated(conn, VutuvWeb.ShellLive, session: session_for(user, %{"path" => "/anna"}))
+        live_isolated(conn, VutuvWeb.ShellLive,
+          session: shell_session(user, %{"path" => "/anna"})
+        )
 
       refute has_element?(view, ~s(a[data-nav-profile][aria-current="page"]))
       refute has_element?(view, ~s(a[data-mobile-profile][aria-current="page"]))
@@ -364,7 +358,7 @@ defmodule VutuvWeb.ShellLiveTest do
 
       for path <- ["/jobs", "/jobs/some-posting-slug"] do
         {:ok, view, _html} =
-          live_isolated(conn, VutuvWeb.ShellLive, session: session_for(user, %{"path" => path}))
+          live_isolated(conn, VutuvWeb.ShellLive, session: shell_session(user, %{"path" => path}))
 
         assert has_element?(view, ~s(nav a[href="/jobs"][aria-current="page"]), "Jobs")
       end
@@ -375,7 +369,7 @@ defmodule VutuvWeb.ShellLiveTest do
 
       {:ok, view, _html} =
         live_isolated(conn, VutuvWeb.ShellLive,
-          session: session_for(user, %{"path" => "/messages"})
+          session: shell_session(user, %{"path" => "/messages"})
         )
 
       assert has_element?(view, ~s(nav a[href="/messages"][aria-current="page"]))
@@ -387,14 +381,16 @@ defmodule VutuvWeb.ShellLiveTest do
 
       # /jobsy merely BEGINS with "/jobs"; it is not the jobs section.
       {:ok, view, _html} =
-        live_isolated(conn, VutuvWeb.ShellLive, session: session_for(user, %{"path" => "/jobsy"}))
+        live_isolated(conn, VutuvWeb.ShellLive,
+          session: shell_session(user, %{"path" => "/jobsy"})
+        )
 
       refute has_element?(view, ~s(nav a[aria-current="page"]))
     end
 
     test "with no known path nothing is marked active", %{conn: conn} do
       user = insert(:user)
-      {:ok, view, _html} = live_isolated(conn, VutuvWeb.ShellLive, session: session_for(user))
+      {:ok, view, _html} = live_isolated(conn, VutuvWeb.ShellLive, session: shell_session(user))
 
       refute has_element?(view, ~s(nav a[aria-current="page"]))
     end
@@ -433,7 +429,9 @@ defmodule VutuvWeb.ShellLiveTest do
       user = insert(:user)
 
       {:ok, view, _html} =
-        live_isolated(conn, VutuvWeb.ShellLive, session: session_for(user, %{"path" => "/feed"}))
+        live_isolated(conn, VutuvWeb.ShellLive,
+          session: shell_session(user, %{"path" => "/feed"})
+        )
 
       assert has_element?(view, ~s(nav[data-nav-bar="tabs"] a[href="/feed"][data-scroll-top]))
       assert has_element?(view, ~s(a[data-scroll-top] svg[data-tab-icon="feed"]))
@@ -458,7 +456,9 @@ defmodule VutuvWeb.ShellLiveTest do
       user = insert(:user)
 
       {:ok, view, _html} =
-        live_isolated(conn, VutuvWeb.ShellLive, session: session_for(user, %{"path" => "/feed"}))
+        live_isolated(conn, VutuvWeb.ShellLive,
+          session: shell_session(user, %{"path" => "/feed"})
+        )
 
       doc = view |> render() |> LazyHTML.from_fragment()
 
@@ -483,7 +483,7 @@ defmodule VutuvWeb.ShellLiveTest do
 
       {:ok, view, _html} =
         live_isolated(conn, VutuvWeb.ShellLive,
-          session: session_for(user, %{"path" => "/search"})
+          session: shell_session(user, %{"path" => "/search"})
         )
 
       refute has_element?(view, ~s(a[data-scroll-top]))
@@ -497,7 +497,9 @@ defmodule VutuvWeb.ShellLiveTest do
       user = insert(:user)
 
       {:ok, view, _html} =
-        live_isolated(conn, VutuvWeb.ShellLive, session: session_for(user, %{"path" => "/feed"}))
+        live_isolated(conn, VutuvWeb.ShellLive,
+          session: shell_session(user, %{"path" => "/feed"})
+        )
 
       marked =
         view
@@ -556,7 +558,7 @@ defmodule VutuvWeb.ShellLiveTest do
         set: [suspended_until: NaiveDateTime.add(NaiveDateTime.utc_now(:second), 86_400)]
       )
 
-      {:ok, view, _html} = live_isolated(conn, VutuvWeb.ShellLive, session: session_for(user))
+      {:ok, view, _html} = live_isolated(conn, VutuvWeb.ShellLive, session: shell_session(user))
 
       assert has_element?(view, "a", "Log in")
       refute has_element?(view, @bell_badge)
@@ -587,7 +589,7 @@ defmodule VutuvWeb.ShellLiveTest do
     conn: conn
   } do
     user = user_with_unread_notification()
-    {:ok, view, _html} = live_isolated(conn, VutuvWeb.ShellLive, session: session_for(user))
+    {:ok, view, _html} = live_isolated(conn, VutuvWeb.ShellLive, session: shell_session(user))
     assert has_element?(view, @bell_badge, "1")
 
     # A second real unread event lands, then the push notification announces it.
@@ -609,7 +611,7 @@ defmodule VutuvWeb.ShellLiveTest do
     connect!(recipient, other)
 
     {:ok, view, _html} =
-      live_isolated(conn, VutuvWeb.ShellLive, session: session_for(recipient))
+      live_isolated(conn, VutuvWeb.ShellLive, session: shell_session(recipient))
 
     # Seeded from the DB: a new follower plus the derived connection event.
     assert has_element?(view, @bell_badge)
@@ -628,7 +630,7 @@ defmodule VutuvWeb.ShellLiveTest do
     conn: conn
   } do
     user = with_unread_message(user_with_unread_notification())
-    session = session_for(user, %{"path" => "/notifications"})
+    session = shell_session(user, %{"path" => "/notifications"})
     {:ok, view, _html} = live_isolated(conn, VutuvWeb.ShellLive, session: session)
 
     refute has_element?(view, @bell_badge)
@@ -638,7 +640,7 @@ defmodule VutuvWeb.ShellLiveTest do
 
   test "marking notifications read clears the notification badge", %{conn: conn} do
     user = with_unread_message(user_with_unread_notification())
-    {:ok, view, _html} = live_isolated(conn, VutuvWeb.ShellLive, session: session_for(user))
+    {:ok, view, _html} = live_isolated(conn, VutuvWeb.ShellLive, session: shell_session(user))
 
     send(view.pid, :notifications_read)
 
@@ -654,7 +656,7 @@ defmodule VutuvWeb.ShellLiveTest do
   describe "browser-tab title badge" do
     test "carries the tab-badge hook only for a logged-in member", %{conn: conn} do
       user = insert(:user)
-      {:ok, view, _html} = live_isolated(conn, VutuvWeb.ShellLive, session: session_for(user))
+      {:ok, view, _html} = live_isolated(conn, VutuvWeb.ShellLive, session: shell_session(user))
       assert has_element?(view, "#tab-badge[phx-hook='TabBadge']")
 
       {:ok, anon, _html} = live_isolated(conn, VutuvWeb.ShellLive, session: %{})
@@ -663,7 +665,7 @@ defmodule VutuvWeb.ShellLiveTest do
 
     test "pushes the unread total to the hook on connect", %{conn: conn} do
       user = with_unread_message(user_with_unread_notification())
-      {:ok, view, _html} = live_isolated(conn, VutuvWeb.ShellLive, session: session_for(user))
+      {:ok, view, _html} = live_isolated(conn, VutuvWeb.ShellLive, session: shell_session(user))
 
       # one unread notification + one unread conversation
       assert_push_event(view, "tab:badge", %{unread: 2})
@@ -671,7 +673,7 @@ defmodule VutuvWeb.ShellLiveTest do
 
     test "re-pushes a raised total when a message arrives", %{conn: conn} do
       user = user_with_unread_notification()
-      {:ok, view, _html} = live_isolated(conn, VutuvWeb.ShellLive, session: session_for(user))
+      {:ok, view, _html} = live_isolated(conn, VutuvWeb.ShellLive, session: shell_session(user))
       assert_push_event(view, "tab:badge", %{unread: 1})
 
       with_unread_message(user)
@@ -681,7 +683,7 @@ defmodule VutuvWeb.ShellLiveTest do
 
     test "re-pushes a lowered total when notifications are read", %{conn: conn} do
       user = with_unread_message(user_with_unread_notification())
-      {:ok, view, _html} = live_isolated(conn, VutuvWeb.ShellLive, session: session_for(user))
+      {:ok, view, _html} = live_isolated(conn, VutuvWeb.ShellLive, session: shell_session(user))
       assert_push_event(view, "tab:badge", %{unread: 2})
 
       send(view.pid, :notifications_read)
@@ -691,7 +693,7 @@ defmodule VutuvWeb.ShellLiveTest do
 
     test "a new feed post from someone else nudges the tab title", %{conn: conn} do
       user = insert(:user)
-      {:ok, view, _html} = live_isolated(conn, VutuvWeb.ShellLive, session: session_for(user))
+      {:ok, view, _html} = live_isolated(conn, VutuvWeb.ShellLive, session: shell_session(user))
 
       send(
         view.pid,
@@ -705,7 +707,7 @@ defmodule VutuvWeb.ShellLiveTest do
       # broadcast_to_followers/2 also delivers {:new_post} to the author, so the
       # shell must ignore a post it wrote itself.
       user = insert(:user)
-      {:ok, view, _html} = live_isolated(conn, VutuvWeb.ShellLive, session: session_for(user))
+      {:ok, view, _html} = live_isolated(conn, VutuvWeb.ShellLive, session: shell_session(user))
 
       send(view.pid, {:new_post, %{post_id: Vutuv.UUIDv7.generate(), author_id: user.id}})
       refute_push_event(view, "tab:new_post", %{})
@@ -720,8 +722,6 @@ defmodule VutuvWeb.ShellLiveTest do
 
     # The admin pill is now gated on the resolved user's own admin flag (issue
     # #1036), not a curated session key, so the socket must resolve a real admin.
-    defp admin_session(user), do: session_for(user)
-
     defp admin, do: insert(:user, admin?: true)
 
     defp joined_today(count) do
@@ -735,7 +735,7 @@ defmodule VutuvWeb.ShellLiveTest do
       joined_today(2)
 
       {:ok, view, _html} =
-        live_isolated(conn, VutuvWeb.ShellLive, session: admin_session(admin()))
+        live_isolated(conn, VutuvWeb.ShellLive, session: shell_session(admin()))
 
       assert has_element?(view, @pill, "2")
     end
@@ -744,7 +744,7 @@ defmodule VutuvWeb.ShellLiveTest do
       joined_today(2)
 
       {:ok, view, _html} =
-        live_isolated(conn, VutuvWeb.ShellLive, session: session_for(insert(:user)))
+        live_isolated(conn, VutuvWeb.ShellLive, session: shell_session(insert(:user)))
 
       refute has_element?(view, @pill)
     end
@@ -754,7 +754,7 @@ defmodule VutuvWeb.ShellLiveTest do
       insert(:activated_user, inserted_at: day_start, updated_at: day_start)
 
       {:ok, view, _html} =
-        live_isolated(conn, VutuvWeb.ShellLive, session: admin_session(admin()))
+        live_isolated(conn, VutuvWeb.ShellLive, session: shell_session(admin()))
 
       refute has_element?(view, @pill)
     end
@@ -771,7 +771,7 @@ defmodule VutuvWeb.ShellLiveTest do
       mounted = Vutuv.PeopleCounter.counts()
 
       {:ok, view, _html} =
-        live_isolated(conn, VutuvWeb.ShellLive, session: admin_session(admin()))
+        live_isolated(conn, VutuvWeb.ShellLive, session: shell_session(admin()))
 
       refute has_element?(view, @pill)
 
@@ -792,7 +792,7 @@ defmodule VutuvWeb.ShellLiveTest do
 
     test "names the exact figure in the viewer's language", %{conn: conn} do
       joined_today(1)
-      session = admin_session(admin())
+      session = shell_session(admin())
 
       {:ok, view, _html} = live_isolated(conn, VutuvWeb.ShellLive, session: session)
       assert has_element?(view, ~s(#{@pill}[title="1 new member today"]))
@@ -809,7 +809,7 @@ defmodule VutuvWeb.ShellLiveTest do
       joined_today(1)
 
       {:ok, view, _html} =
-        live_isolated(conn, VutuvWeb.ShellLive, session: admin_session(admin()))
+        live_isolated(conn, VutuvWeb.ShellLive, session: shell_session(admin()))
 
       assert has_element?(view, "#{@pill}.text-sm")
       refute has_element?(view, "#{@pill}.text-xs")
@@ -819,7 +819,7 @@ defmodule VutuvWeb.ShellLiveTest do
       joined_today(1)
 
       {:ok, view, _html} =
-        live_isolated(conn, VutuvWeb.ShellLive, session: admin_session(admin()))
+        live_isolated(conn, VutuvWeb.ShellLive, session: shell_session(admin()))
 
       assert has_element?(view, @pill, "1")
 
@@ -849,7 +849,7 @@ defmodule VutuvWeb.ShellLiveTest do
 
     test "ticks the exact total up when the counter broadcasts a new value", %{conn: conn} do
       {:ok, view, _html} =
-        live_isolated(conn, VutuvWeb.ShellLive, session: session_for(insert(:user)))
+        live_isolated(conn, VutuvWeb.ShellLive, session: shell_session(insert(:user)))
 
       broadcast_total(60_123)
 
@@ -966,7 +966,7 @@ defmodule VutuvWeb.ShellLiveTest do
 
     test "holds the word back until lg once a member's controls are in the bar", %{conn: conn} do
       {:ok, view, _html} =
-        live_isolated(conn, VutuvWeb.ShellLive, session: session_for(insert(:user)))
+        live_isolated(conn, VutuvWeb.ShellLive, session: shell_session(insert(:user)))
 
       broadcast_total(60_123)
 

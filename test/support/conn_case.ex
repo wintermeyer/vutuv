@@ -15,6 +15,7 @@ defmodule VutuvWeb.ConnCase do
       import Ecto.Query
       import Vutuv.Factory
       import Vutuv.MailboxHelpers
+      import VutuvWeb.ConnCase
       import VutuvWeb.HTMLHelpers
 
       use Phoenix.VerifiedRoutes,
@@ -121,19 +122,6 @@ defmodule VutuvWeb.ConnCase do
         token
       end
 
-      # True when the <input type="checkbox" name=name> in `html` is rendered
-      # checked, regardless of attribute order. The assertion a form's default
-      # state needs: a box that submits "true" only because it is pre-ticked is
-      # a different product decision from one the member has to find and click.
-      defp checkbox_checked?(html, name) do
-        regex = ~r/<input(?=[^>]*\btype="checkbox")(?=[^>]*\bname="#{Regex.escape(name)}")[^>]*>/
-
-        case Regex.run(regex, html) do
-          [tag] -> tag =~ "checked"
-          _ -> false
-        end
-      end
-
       # ── /api/2.0 helpers (shared by every API test file) ──
 
       defp authed(conn, token) do
@@ -156,6 +144,48 @@ defmodule VutuvWeb.ConnCase do
         assert content_type =~ "application/problem+json"
         Jason.decode!(conn.resp_body)
       end
+    end
+  end
+
+  # ── Helpers imported into every case ──
+  #
+  # Plain functions rather than `defp`s in the quote above, because that quote
+  # is inlined into all ~330 ConnCase modules and credo's LongQuoteBlocks caps
+  # it at 150 lines — it sat at exactly 150 before this pair moved out.
+
+  @doc """
+  The mount session a browser hands `VutuvWeb.ShellLive`.
+
+  A real, active session's raw token under `"session_token"` — the only
+  identity key the shell trusts (issue #1036), so a test drives it the way a
+  request does instead of curating a map (the curated map is the *production*
+  path, `VutuvWeb.LayoutHTML.shell_session/1`). `alert: false` keeps the
+  new-device security notice out of the test's mailbox.
+
+  `extra` carries the non-identity keys the shell reads straight from the
+  session — `"path"`, `"locale"`, `"acting_as_organization_id"`.
+  """
+  def shell_session(user, extra \\ %{}) do
+    {token, _session} =
+      Vutuv.Sessions.start_session(user, Phoenix.ConnTest.build_conn(), alert: false)
+
+    Map.merge(%{"session_token" => token}, extra)
+  end
+
+  @doc """
+  True when the `<input type="checkbox" name=name>` in `html` is rendered
+  checked, regardless of attribute order.
+
+  The assertion a form's default state needs: a box that submits "true" only
+  because it is pre-ticked is a different product decision from one the member
+  has to find and click.
+  """
+  def checkbox_checked?(html, name) do
+    regex = ~r/<input(?=[^>]*\btype="checkbox")(?=[^>]*\bname="#{Regex.escape(name)}")[^>]*>/
+
+    case Regex.run(regex, html) do
+      [tag] -> tag =~ "checked"
+      _ -> false
     end
   end
 

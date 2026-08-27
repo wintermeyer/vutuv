@@ -13,22 +13,12 @@ defmodule VutuvWeb.ShellLivePresenceTest do
 
   import Phoenix.LiveViewTest
 
-  alias Vutuv.Sessions
   alias VutuvWeb.Presence
-
-  # The shell authenticates the live socket from the cookie's session_token
-  # (issue #1036) and reads "Show when I'm online" off the resolved user, not a
-  # curated key — so a test drives it with a real active session and sets the
-  # member's `show_online_status?` field to control tracking.
-  defp session_for(user, extra \\ %{}) do
-    {token, _session} = Sessions.start_session(user, build_conn(), alert: false)
-    Map.merge(%{"session_token" => token}, extra)
-  end
 
   test "tracks the member online and pushes them in the online set", %{conn: conn} do
     user = insert(:user)
 
-    {:ok, view, _html} = live_isolated(conn, VutuvWeb.ShellLive, session: session_for(user))
+    {:ok, view, _html} = live_isolated(conn, VutuvWeb.ShellLive, session: shell_session(user))
 
     assert Presence.online?(Presence.online_ids(), user.id)
 
@@ -45,7 +35,7 @@ defmodule VutuvWeb.ShellLivePresenceTest do
     user = insert(:user, show_online_status?: false)
 
     {:ok, view, _html} =
-      live_isolated(conn, VutuvWeb.ShellLive, session: session_for(user))
+      live_isolated(conn, VutuvWeb.ShellLive, session: shell_session(user))
 
     refute Presence.online?(Presence.online_ids(), user.id)
     # No dot on their own avatar either.
@@ -62,7 +52,7 @@ defmodule VutuvWeb.ShellLivePresenceTest do
     agent = start_supervised!({Agent, fn -> :ok end})
     {:ok, _ref} = Presence.track_user(agent, blocked.id)
 
-    {:ok, view, _html} = live_isolated(conn, VutuvWeb.ShellLive, session: session_for(viewer))
+    {:ok, view, _html} = live_isolated(conn, VutuvWeb.ShellLive, session: shell_session(viewer))
 
     assert Presence.online?(Presence.online_ids(), blocked.id)
 
@@ -73,7 +63,7 @@ defmodule VutuvWeb.ShellLivePresenceTest do
 
   test "a presence join re-pushes the viewer's online set live", %{conn: conn} do
     viewer = insert(:user)
-    {:ok, view, _html} = live_isolated(conn, VutuvWeb.ShellLive, session: session_for(viewer))
+    {:ok, view, _html} = live_isolated(conn, VutuvWeb.ShellLive, session: shell_session(viewer))
     assert_push_event(view, "presence:set", %{online: _first})
 
     # Another member comes online; the shell re-pushes the (now larger) set.
@@ -108,7 +98,7 @@ defmodule VutuvWeb.ShellLivePresenceTest do
 
   test "a live opt-out untracks the member and drops their own dot", %{conn: conn} do
     user = insert(:user)
-    {:ok, view, _html} = live_isolated(conn, VutuvWeb.ShellLive, session: session_for(user))
+    {:ok, view, _html} = live_isolated(conn, VutuvWeb.ShellLive, session: shell_session(user))
     assert Presence.online?(Presence.online_ids(), user.id)
 
     # The member flips "Show when I'm online" off (broadcast from another tab).
@@ -123,7 +113,7 @@ defmodule VutuvWeb.ShellLivePresenceTest do
     user = insert(:user, show_online_status?: false)
 
     {:ok, view, _html} =
-      live_isolated(conn, VutuvWeb.ShellLive, session: session_for(user))
+      live_isolated(conn, VutuvWeb.ShellLive, session: shell_session(user))
 
     refute Presence.online?(Presence.online_ids(), user.id)
 
@@ -141,7 +131,7 @@ defmodule VutuvWeb.ShellLivePresenceTest do
     agent = start_supervised!({Agent, fn -> :ok end})
     {:ok, _ref} = Presence.track_user(agent, other.id)
 
-    {:ok, view, _html} = live_isolated(conn, VutuvWeb.ShellLive, session: session_for(viewer))
+    {:ok, view, _html} = live_isolated(conn, VutuvWeb.ShellLive, session: shell_session(viewer))
     assert_push_event(view, "presence:set", %{online: before_ids})
     assert to_string(other.id) in before_ids
 

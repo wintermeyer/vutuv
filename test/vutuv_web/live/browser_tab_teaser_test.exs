@@ -23,7 +23,6 @@ defmodule VutuvWeb.BrowserTabTeaserTest do
   alias Vutuv.Fediverse.Follow
   alias Vutuv.Fediverse.RemoteAccount
   alias Vutuv.Posts
-  alias Vutuv.Sessions
   alias Vutuv.Social
 
   @app_js "assets/js/app.js"
@@ -51,10 +50,8 @@ defmodule VutuvWeb.BrowserTabTeaserTest do
   # TabBadge hook reports on connect: the server refuses to spend a lookup
   # until it hears that the member is looking somewhere else.
   defp tab(conn, user, hidden? \\ true) do
-    {token, _session} = Sessions.start_session(user, build_conn(), alert: false)
-
     {:ok, view, _html} =
-      live_isolated(conn, VutuvWeb.ShellLive, session: %{"session_token" => token})
+      live_isolated(conn, VutuvWeb.ShellLive, session: shell_session(user))
 
     render_hook(view, "tab:visibility", %{"hidden" => hidden?})
     view
@@ -267,10 +264,8 @@ defmodule VutuvWeb.BrowserTabTeaserTest do
 
       # No `tab:visibility` at all — the state a reconnected tab is in until it
       # reports again, and the reason the hook must report on `reconnected()`.
-      {token, _session} = Sessions.start_session(user, build_conn(), alert: false)
-
       {:ok, view, _html} =
-        live_isolated(conn, VutuvWeb.ShellLive, session: %{"session_token" => token})
+        live_isolated(conn, VutuvWeb.ShellLive, session: shell_session(user))
 
       {:ok, _post} = Posts.create_post(author, %{body: "nach dem Reconnect"})
 

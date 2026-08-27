@@ -23,16 +23,10 @@ defmodule VutuvWeb.ShellLiveBrowserNotificationsTest do
   @push_timeout 2_000
 
   alias Vutuv.Activity
-  alias Vutuv.Sessions
-
-  defp session_for(user, extra) do
-    {token, _session} = Sessions.start_session(user, build_conn(), alert: false)
-    Map.merge(%{"session_token" => token}, extra)
-  end
 
   defp mount_shell(conn, user, session_extra \\ %{}) do
     {:ok, view, _html} =
-      live_isolated(conn, VutuvWeb.ShellLive, session: session_for(user, session_extra))
+      live_isolated(conn, VutuvWeb.ShellLive, session: shell_session(user, session_extra))
 
     view
   end

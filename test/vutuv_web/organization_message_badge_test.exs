@@ -11,6 +11,12 @@ defmodule VutuvWeb.OrganizationMessageBadgeTest do
   a badge that is right on load and then frozen looks *worse* than one that is
   always zero, because it invites you to trust it.
 
+  Every test mounts the shell with `live_isolated/3`: it is a nested
+  `live_render` inside the page layout, so a `live/2` on any route would hand
+  back the PAGE's LiveView and `send(view.pid, …)` would reach the wrong
+  process. It is also the honest unit — what is under test is the shell's own
+  count, not the feed's markup.
+
   `async: false` because the organization helpers flip the global
   `:verify_organization_domains` flag, and because the shell writes to the
   global `VutuvWeb.Presence` topic.
@@ -22,7 +28,6 @@ defmodule VutuvWeb.OrganizationMessageBadgeTest do
 
   alias Vutuv.Chat
   alias Vutuv.Organizations
-  alias Vutuv.Sessions
 
   # The same selector the member-side shell tests use.
   @mail_badge ~s(a[title="Messages"] span.bg-accent)
@@ -38,14 +43,8 @@ defmodule VutuvWeb.OrganizationMessageBadgeTest do
     :ok
   end
 
-  # The shell is a nested `live_render` inside the page layout, so a `live/2` on
-  # any route hands back the PAGE's LiveView, not this one - `send(view.pid, …)`
-  # would reach the wrong process. Mounting it isolated is also the honest unit:
-  # what is under test is the shell's own count, not the feed's markup.
-  defp session_for(user, extra \\ %{}) do
-    {token, _session} = Sessions.start_session(user, build_conn(), alert: false)
-    Map.merge(%{"session_token" => token, "path" => "/feed"}, extra)
-  end
+  # The page every mount below is drawn on, as the browser would report it.
+  @on_feed %{"path" => "/feed"}
 
   defp page_with_publisher do
     owner = insert_activated_user()
@@ -56,7 +55,7 @@ defmodule VutuvWeb.OrganizationMessageBadgeTest do
 
   # The session a publisher's browser carries while switched into the page.
   defp speaking_as(user, page),
-    do: session_for(user, %{"acting_as_organization_id" => page.id})
+    do: shell_session(user, Map.put(@on_feed, "acting_as_organization_id", page.id))
 
   test "the count is the page's inbox, not the publisher's own", %{conn: conn} do
     {page, owner} = page_with_publisher()
@@ -80,7 +79,7 @@ defmodule VutuvWeb.OrganizationMessageBadgeTest do
 
     # Themselves: their own two.
     {:ok, own_shell, _html} =
-      live_isolated(conn, VutuvWeb.ShellLive, session: session_for(owner))
+      live_isolated(conn, VutuvWeb.ShellLive, session: shell_session(owner, @on_feed))
 
     assert has_element?(own_shell, @mail_badge, "2")
 
@@ -139,7 +138,9 @@ defmodule VutuvWeb.OrganizationMessageBadgeTest do
     {:ok, conversation} = Chat.find_or_create_conversation(other, me)
     {:ok, _} = Chat.send_message(other, conversation.id, "Hallo.")
 
-    {:ok, shell, _html} = live_isolated(conn, VutuvWeb.ShellLive, session: session_for(me))
+    {:ok, shell, _html} =
+      live_isolated(conn, VutuvWeb.ShellLive, session: shell_session(me, @on_feed))
+
     assert has_element?(shell, @mail_badge, "1")
   end
 
