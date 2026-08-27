@@ -178,8 +178,20 @@ toplevel=$(git -C "$dir" rev-parse --show-toplevel 2>/dev/null)
 [ -n "$toplevel" ] ||
   block "cannot tell which git worktree this push comes from (looked in: ${dir:-<empty>}). Refusing to guess."
 
-[ -f "$toplevel/mix.exs" ] ||
+# A GitHub wiki lives in a repository of its own (`<repo>.wiki.git`) and can
+# never hold a mix.exs: no suite, no CI, no deploy, so precommit has nothing to
+# vouch for here and the gate would only make a wiki page unpublishable. Scoped
+# to that one shape, the remote URL ENDING in `.wiki.git`, and a remote that
+# cannot be read is not an exemption but an unanswered question, so it falls
+# through to the block below.
+if [ ! -f "$toplevel/mix.exs" ]; then
+  origin=$(git -C "$toplevel" remote get-url origin 2>/dev/null)
+  case "$origin" in
+    *.wiki.git) allow ;;
+  esac
+
   block "$toplevel is not the vutuv project root (no mix.exs), so the precommit gate cannot vouch for this push."
+fi
 
 if [ "$explain" -eq 1 ]; then
   echo "PUSH $toplevel"

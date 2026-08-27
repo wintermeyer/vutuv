@@ -90,14 +90,10 @@ defmodule Vutuv.PrecommitHookTest do
 
     test "a push from a tree that is not the project blocks", ctx do
       # Resolvable as a git repo is not enough — it must be the vutuv checkout,
-      # or precommit would vouch for the wrong thing.
-      tmp =
-        System.tmp_dir!()
-        |> Path.join("precommit-hook-test-#{System.unique_integer([:positive])}")
-
-      File.mkdir_p!(tmp)
-      on_exit(fn -> File.rm_rf!(tmp) end)
-      {_, 0} = System.cmd("git", ["init", "--quiet", tmp])
+      # or precommit would vouch for the wrong thing. This repository has no
+      # remote, so it is also the degraded path of the wiki exemption below:
+      # an unreadable remote is an unanswered question, not an exemption.
+      tmp = tmp_repo()
 
       decision = decide(ctx, "git -C #{tmp} push")
 
@@ -115,6 +111,34 @@ defmodule Vutuv.PrecommitHookTest do
       # A harmless command still gets through, so a missing jq does not brick
       # every Bash call in the session.
       assert decide(ctx, "echo hello", path: path) == "ALLOW"
+    end
+  end
+
+  describe "the wiki exemption" do
+    # A GitHub wiki lives in a repository of its own (`<repo>.wiki.git`): no
+    # mix.exs, no suite, no deploy, so precommit has nothing to vouch for and
+    # the gate would make a wiki page unpublishable. The exemption is scoped to
+    # that one shape, and every other reading of it still blocks.
+    test "a push from a wiki clone is allowed, ssh or https", ctx do
+      ssh = tmp_repo(remote: "git@github.com:wintermeyer/vutuv.wiki.git")
+      https = tmp_repo(remote: "https://github.com/wintermeyer/vutuv.wiki.git")
+
+      assert decide(ctx, "git -C #{ssh} push origin master") == "ALLOW"
+      assert decide(ctx, "git -C #{https} push") == "ALLOW"
+    end
+
+    test "a remote that only looks like one still blocks", ctx do
+      # Calibration against a false positive: the URL has to *end* in
+      # `.wiki.git`, not merely mention it. The repository with no remote at
+      # all is the test above this describe block.
+      backup = tmp_repo(remote: "git@github.com:wintermeyer/vutuv.wiki.git.backup")
+      foreign = tmp_repo(remote: "git@github.com:someone/something.git")
+
+      decision = decide(ctx, "git -C #{backup} push")
+
+      assert decision =~ "BLOCK", "expected a block, got: #{decision}"
+      assert decision =~ "not the vutuv project root"
+      assert decide(ctx, "git -C #{foreign} push") =~ "BLOCK"
     end
   end
 
@@ -146,6 +170,27 @@ defmodule Vutuv.PrecommitHookTest do
       System.cmd("sh", ["-c", script], cd: ctx.root, env: env, stderr_to_stdout: true)
 
     String.trim(out)
+  end
+
+  # A throwaway git repository, optionally carrying an `origin` remote.
+  defp tmp_repo(opts \\ []) do
+    tmp =
+      System.tmp_dir!()
+      |> Path.join("precommit-hook-test-#{System.unique_integer([:positive])}")
+
+    File.mkdir_p!(tmp)
+    on_exit(fn -> File.rm_rf!(tmp) end)
+    {_, 0} = System.cmd("git", ["init", "--quiet", tmp])
+
+    case Keyword.fetch(opts, :remote) do
+      {:ok, url} ->
+        {_, 0} = System.cmd("git", ["-C", tmp, "remote", "add", "origin", url])
+
+      :error ->
+        :ok
+    end
+
+    tmp
   end
 
   defp shell_quote(value), do: "'" <> String.replace(value, "'", ~S('\'')) <> "'"
