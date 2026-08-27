@@ -902,18 +902,48 @@ defmodule Vutuv.Fediverse do
   plain lowercase hosts for a SQL comparison — the list `own_host?/1` answers
   for one URI at a time.
 
-  `main_host` exists for callers that run without a started endpoint: the
-  `people_snapshots` backfill reconstructs `distinct_follower_count/0` for past
-  days in raw SQL and must exclude the same hosts rather than spell the rule a
-  second time, but a migration runs before `VutuvWeb.Endpoint.host/0` can
-  answer.
+  `main_host` is for the `people_snapshots` backfill, which reconstructs
+  `distinct_follower_count/0` for past days in raw SQL and has to exclude the
+  same hosts rather than spell the rule a second time — but runs in a migration,
+  where `VutuvWeb.Endpoint.host/0` raises because the endpoint is not started.
+  It reads the config itself and hands the answer in. Nothing in `lib/` passes
+  it, and nothing new should: `site_host/0` below answers pre-boot too. The
+  parameter stays because that migration has shipped and its meaning is frozen.
   """
   def own_hosts(main_host \\ nil) do
-    host = String.downcase(main_host || VutuvWeb.Endpoint.host())
+    host = String.downcase(main_host || site_host())
 
     [host, tag_host(host)]
     |> Enum.flat_map(&[&1, "www." <> &1, String.replace_prefix(&1, "www.", "")])
     |> Enum.uniq()
+  end
+
+  # This installation's main host, for the three "is this us" rules below — the
+  # endpoint's answer, or its configuration when the endpoint cannot answer yet.
+  #
+  # `Endpoint.host/0` reads a `:persistent_term` the endpoint writes when it
+  # starts and **raises** until then, and the endpoint is the last child in
+  # `Vutuv.Application`. So anything running earlier gets an exception instead of
+  # a host: `Vutuv.PeopleCounter` starts near the top of that list and seeds its
+  # Fediverse slot with a zero-delay message, whose first
+  # `distinct_follower_count/0` reached `own_hosts/0` and took the process down
+  # on every cold boot (issue #1777). Boot order is the supervisor's business,
+  # so the host rule learned to answer early rather than the child list being
+  # reshuffled around it.
+  #
+  # The endpoint stays the fast path deliberately. Its `host/0` is a
+  # `:persistent_term` read that copies nothing (measured 0.038us); the config
+  # fallback copies the whole 427-word endpoint keyword list out of ETS
+  # (0.804us, 21x). That gap would be charged per link and per mention, because
+  # `local_host?/1` is what `VutuvWeb.Markdown` and `Vutuv.Mentions` ask about
+  # every address in every rendered post. An unraised `rescue` costs 0.004us.
+  #
+  # Same value either way: Phoenix derives `host/0` from `url: [host: …]` with
+  # `"localhost"` as the default, which is exactly what the fallback spells.
+  defp site_host do
+    VutuvWeb.Endpoint.host()
+  rescue
+    RuntimeError -> Application.get_env(:vutuv, VutuvWeb.Endpoint, [])[:url][:host] || "localhost"
   end
 
   # Members in good standing who opted in — the SQL mirror of `federated?/1`.
@@ -2102,7 +2132,7 @@ defmodule Vutuv.Fediverse do
   def local_host?(uri) do
     case BlockedInstance.normalize_host(uri) do
       nil -> false
-      host -> same_site?(host, String.downcase(VutuvWeb.Endpoint.host()))
+      host -> same_site?(host, String.downcase(site_host()))
     end
   end
 
@@ -2120,11 +2150,12 @@ defmodule Vutuv.Fediverse do
   elsewhere. What an installation does owe is the DNS record, the certificate
   and an nginx server name — see `docs/ADMINS.md`.
 
-  `main_host` is for callers without a started endpoint (see `own_hosts/1`).
+  `main_host` is for the frozen migration that reaches this through
+  `own_hosts/1` (see there); nothing in `lib/` passes it.
   """
   def tag_host(main_host \\ nil) do
     Application.get_env(:vutuv, :fediverse_tag_host) ||
-      "tags." <> String.downcase(main_host || VutuvWeb.Endpoint.host())
+      "tags." <> String.downcase(main_host || site_host())
   end
 
   @doc "Whether `uri` names this installation's tag host."
