@@ -34,6 +34,7 @@ defmodule Vutuv.FediverseHandleTest do
       assert Handle.display_name("Alice (Live 10:30:45)") == "Alice (Live 10:30:45)"
       assert Handle.display_name("daniel:// stenberg://") == "daniel:// stenberg://"
       assert Handle.display_name("Spar|fin|dig :: Jan") == "Spar|fin|dig :: Jan"
+      assert Handle.display_name("Jan std::vector::size") == "Jan std::vector::size"
     end
   end
 

@@ -13,7 +13,9 @@ defmodule Vutuv.RemoteHtml do
     * `<br>` and `</p>` become the line breaks that carried the meaning,
     * every remaining tag is stripped (`HtmlSanitizeEx.strip_tags/1`), so there
       is no allowlist to get wrong and nothing to render `raw`,
-    * the base entities are decoded exactly **once**, and
+    * the base entities are decoded exactly **once**,
+    * the sending server's own **custom-emoji shortcodes** go out with it
+      (`strip_shortcodes/1`), and
     * the result is clamped, so one hostile delivery cannot park a novel.
 
   The script/style pass matters because `strip_tags/1` removes the *tags* and
@@ -55,6 +57,16 @@ defmodule Vutuv.RemoteHtml do
   # nothing real mentions more than a handful.
   @max_mention_tags 50
 
+  # A run of custom-emoji shortcodes as these networks spell them:
+  # `[a-zA-Z0-9_]{2,}` between colons, one or more in a row because two adjacent
+  # emoji are written `:blobcat::heart:` with no space between them.
+  #
+  # The delimiters are the whole point — they are what keeps a time ("10:30:45")
+  # and a scheme ("daniel:// stenberg://") out of it. A **colon** is not one of
+  # them, or `std::vector::size` would read as a `:vector:` emoji between two
+  # colons and come out `std::size`.
+  @shortcode ~r/(?<![\w:])(?::[a-zA-Z0-9_]{2,}:)+(?![\w:])/
+
   @doc """
   Reduces a remote server's HTML to clamped plain text, at most `max`
   characters (the shared social-feed clamp by default).
@@ -77,11 +89,54 @@ defmodule Vutuv.RemoteHtml do
     |> HtmlSanitizeEx.strip_tags()
     |> decode_entities()
     |> String.trim()
+    |> strip_shortcodes()
     |> expand_mentions(tags)
     |> clamp(max)
   end
 
   def to_text(_html, _max, _tags), do: ""
+
+  @doc """
+  `text` — already plain, not HTML — with its custom-emoji shortcodes taken out
+  and the gap each one leaves closed.
+
+  Those networks let an account put its **own server's** emoji in a post and
+  send it as a shortcode (`":tux:"`), with the picture it stands for in the
+  object's `tag` array. That picture is that server's, and vutuv shows no remote
+  picture it has not cached and put past the AI gate, so the token has nothing
+  to render as and reads on the card as a literal `":tux:"`.
+
+  `to_text/3` applies it to everything that arrives as HTML. It is public for
+  the two plain-text paths that never see any: a poll's option names
+  (`Vutuv.Fediverse`) and a Mastodon status' content warning (`Vutuv.Mastodon`),
+  which the REST API sends as text. Everything a remote server wrote and vutuv
+  stores goes through one of those three.
+
+  Cleaned on the way **in**, unlike a display name (`Handle.display_name/1`,
+  which calls this too) — the name is re-derived from its column on every
+  render, while this text *is* the column, and every reader of it would
+  otherwise need the same repair. Text carrying no shortcode comes back
+  untouched rather than merely unchanged: `translations.source_sha256` keys a
+  cached translation to the exact string, so a cosmetic byte would re-run the
+  whole stored corpus past Ollama.
+  """
+  def strip_shortcodes(text) when is_binary(text) do
+    # One whole-text `match?` before the line pass, and `match?` rather than a
+    # replace whose result is thrown away: nearly every post carries no
+    # shortcode at all, and for those this is the only work done (measured: 16
+    # reductions against 235 for splitting into lines and letting each line
+    # answer for itself, which grows with the post).
+    if Regex.match?(@shortcode, text) do
+      text
+      |> String.split("\n")
+      |> Enum.flat_map(&strip_line/1)
+      |> Enum.join("\n")
+      |> String.replace(~r/\n{3,}/, "\n\n")
+      |> String.trim()
+    else
+      text
+    end
+  end
 
   defp clamp(text, nil), do: Post.truncate(text)
   defp clamp(text, max), do: Post.truncate(text, max)
@@ -183,5 +238,30 @@ defmodule Vutuv.RemoteHtml do
       [^handle, u, h | _] -> u != "" and h != ""
       _ -> false
     end
+  end
+
+  # A line with no shortcode in it is left byte for byte alone, so the repair
+  # can only ever touch the lines it emptied out.
+  defp strip_line(line) do
+    case String.replace(line, @shortcode, "") do
+      ^line -> [line]
+      stripped -> close_gap(stripped)
+    end
+  end
+
+  # What the removed token leaves behind: a doubled space mid-sentence, a space
+  # in front of the comma that followed it, an indent at the start of the line
+  # it opened. A line that was **nothing but** emoji goes with them — the author
+  # gave it a line of its own, so an empty one in its place is not what they
+  # wrote either. (`strip_line/1` only calls this for a line that carried one,
+  # so an empty result here always means "emoji and nothing else".)
+  defp close_gap(stripped) do
+    repaired =
+      stripped
+      |> String.replace(~r/\s+/u, " ")
+      |> String.replace(~r/ +(?=[,.)\]])/u, "")
+      |> String.trim()
+
+    if repaired == "", do: [], else: [repaired]
   end
 end

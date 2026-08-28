@@ -121,6 +121,34 @@ defmodule Vutuv.FediverseRemotePostsTest do
       assert post.content_text == "Starker Track von @herrkaschke@social.cologne."
     end
 
+    test "a custom-emoji shortcode is not stored, and a post of nothing else is dropped" do
+      user = member()
+      acc = account()
+      follow(user, acc)
+
+      # The picture it stands for lives on that server, and we render no remote
+      # picture we have not cached and put past the AI gate — so the token has
+      # nothing to render as and read on the card as a literal ":tux:".
+      emoji =
+        create_activity(%{
+          object: %{"content" => "<p>Linux im Park :tux: :piraten:</p>"}
+        })
+
+      assert :ok = Fediverse.record_remote_post(emoji, @actor)
+      assert [post] = Repo.all(RemotePost)
+      assert post.content_text == "Linux im Park"
+
+      # A post that was nothing but one is a post with no text, and with no
+      # picture either it has nothing to show: dropped like any empty one.
+      only_emoji =
+        create_activity(%{
+          object: %{"id" => "https://social.example/posts/2", "content" => "<p>:blobcatcool:</p>"}
+        })
+
+      assert :skip = Fediverse.record_remote_post(only_emoji, @actor)
+      assert Repo.aggregate(RemotePost, :count) == 1
+    end
+
     test "a redelivery stores no second row, and is a skip" do
       user = member()
       acc = account()
@@ -252,6 +280,29 @@ defmodule Vutuv.FediverseRemotePostsTest do
       assert Repo.aggregate(RemotePost, :count) == 2
     end
 
+    test "a poll's options lose their shortcodes too, so an edit cannot write them back" do
+      user = member()
+      acc = account()
+      follow(user, acc)
+
+      # An option's `name` is plain text, so it is the one path into
+      # `content_text` that never reaches `RemoteHtml.to_text/3`.
+      poll = %{
+        "id" => "https://social.example/posts/poll",
+        "type" => "Question",
+        "content" => "<p>:tux: Welches System?</p>",
+        "oneOf" => [
+          %{"type" => "Note", "name" => ":tux: Linux"},
+          %{"type" => "Note", "name" => "BSD"}
+        ]
+      }
+
+      assert :ok = Fediverse.record_remote_post(create_activity(%{object: poll}), @actor)
+
+      post = Repo.get_by!(RemotePost, object_uri: "https://social.example/posts/poll")
+      assert post.content_text == "Welches System?\n\n• Linux\n• BSD"
+    end
+
     test "a poll keeps its options and is marked as one" do
       user = member()
       acc = account()
@@ -315,6 +366,44 @@ defmodule Vutuv.FediverseRemotePostsTest do
       assert post.summary == "Politics"
       assert post.sensitive
       assert RemotePost.warned?(post)
+    end
+  end
+
+  describe "strip_stored_shortcodes/0 (the backfill the migration runs)" do
+    test "cleans every column remote_text/3 writes, and leaves the rest alone" do
+      acc = account(name: "Droid Boy :coolified:")
+
+      # Written the way rows already in the database were: past the changeset,
+      # with the shortcodes still in them.
+      {1, _} =
+        Repo.update_all(RemoteAccount |> where([a], a.id == ^acc.id),
+          set: [summary: "Bastelt Buttons :blobcatcool: hier."]
+        )
+
+      follow(member(), acc)
+      assert :ok = Fediverse.record_remote_post(create_activity(), @actor)
+      post = Repo.get_by!(RemotePost, object_uri: "https://social.example/posts/1")
+
+      {1, _} =
+        Repo.update_all(RemotePost |> where([p], p.id == ^post.id),
+          set: [content_text: "Linux im Park :tux:", summary: ":cw_food: Essen"]
+        )
+
+      # Two values on the post, one on the account. The account's `name` is
+      # cleaned on the way out by `Handle.display_name/1`, so it is deliberately
+      # not counted and deliberately not rewritten.
+      assert Fediverse.strip_stored_shortcodes() == 3
+
+      post = Repo.reload!(post)
+      assert post.content_text == "Linux im Park"
+      assert post.summary == "Essen"
+
+      acc = Repo.reload!(acc)
+      assert acc.summary == "Bastelt Buttons hier."
+      assert acc.name == "Droid Boy :coolified:"
+
+      # Idempotent: a second pass has nothing left to do.
+      assert Fediverse.strip_stored_shortcodes() == 0
     end
   end
 
