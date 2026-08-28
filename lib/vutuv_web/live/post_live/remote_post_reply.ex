@@ -110,7 +110,10 @@ defmodule VutuvWeb.PostLive.RemotePostReply do
         original, but not Mute and Unfollow. Unfollowing drops the cached posts
         of an account nobody here follows any more — including the very one this
         page is an answer to, with the answer half written. --%>
+        <%!-- Whole, not clamped: nobody should have to open a "Read more" to
+        see what they are answering. --%>
         <.remote_post_card
+          mode={:full}
           remote_post={@remote_post}
           following?={false}
           viewer={@current_user}

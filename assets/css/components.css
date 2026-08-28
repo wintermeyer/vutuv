@@ -1865,7 +1865,15 @@ div.footnotes li:target {
    "15 lines" setting shows nearer 17. Both facts end in the same place, a cut
    through the middle of a line, which is why the fade above is not decoration
    here. Aligning the box with the text it holds would change how much of every
-   post the feed shows, so it is a product decision, not a tidy-up. */
+   post the feed shows, so it is a product decision, not a tidy-up.
+
+   Keeping `lh` at all rests on one precondition: this block declares no type of
+   its own, so its computed line-height and the inherited one are the same
+   number and Chrome's reading of `lh` and WebKit's agree. That is load-bearing
+   for two callers now. A post from another network reads a size down from a
+   member's, and that `text-sm` sits on the `.post-preview` WRAPPER for exactly
+   this reason — moving it onto the clamp body would cut the same post at two
+   different places in two browsers. */
 .post-clamp--wrap {
   display: flow-root;
   overflow: hidden;

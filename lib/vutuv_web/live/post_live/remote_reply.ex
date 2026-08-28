@@ -91,7 +91,9 @@ defmodule VutuvWeb.PostLive.RemoteReply do
       back_label={gettext("Back to the conversation")}
     >
       <:target>
-        <.remote_reply_card note={@note} viewer={@current_user} />
+        <%!-- Whole, not clamped: nobody should have to open a "Read more" to
+        see what they are answering. --%>
+        <.remote_reply_card mode={:full} note={@note} viewer={@current_user} />
       </:target>
       <:composer>
         <.live_component

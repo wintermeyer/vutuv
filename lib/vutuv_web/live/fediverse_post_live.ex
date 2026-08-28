@@ -125,8 +125,11 @@ defmodule VutuvWeb.FediversePostLive do
         </p>
 
         <div class="mt-4">
+          <%!-- `mode={:full}`: this page is nothing but the one post, so there
+          is nothing below it to protect from a wall of text. --%>
           <.remote_post_card
             live?
+            mode={:full}
             remote_post={@remote_post}
             images={@images}
             viewer={@current_user}

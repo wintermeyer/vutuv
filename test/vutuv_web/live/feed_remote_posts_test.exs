@@ -155,6 +155,62 @@ defmodule VutuvWeb.FeedRemotePostsTest do
     refute has_element?(view, "[data-remote-post='#{post.id}'] .border-dashed")
   end
 
+  describe "the body is cut to the reader's line budget, like a member's post" do
+    @long String.duplicate("Ein langer Absatz ueber nichts Bestimmtes. ", 200)
+
+    test "the feed card clamps and offers the same in-place Read more", %{conn: conn} do
+      {conn, user} = create_and_login_user(conn)
+      post = cached_post(user, %{content_text: @long})
+
+      {:ok, view, _html} = live(conn, ~p"/feed")
+
+      # The same three parts a member's post gets, so one hook measures both
+      # kinds of card and one delegated listener expands them: the measured
+      # wrapper, the clamped body inside it, and the toggle.
+      card = "[data-remote-post='#{post.id}']"
+      assert has_element?(view, "#{card} [data-post-preview][phx-hook='PostPreviewClamp']")
+      assert has_element?(view, "#{card} [data-clamp-body].post-clamp")
+      assert has_element?(view, "#{card} [data-post-expand]")
+
+      # The remote skin's smaller type rides the WRAPPER and is inherited: the
+      # `--wrap` clamp variant measures its budget in `lh`, and Chrome reads
+      # that against the element's own line-height while WebKit reads the
+      # INHERITED one — so a size on the clamp body would cut this post at two
+      # different places in two browsers.
+      assert [body] =
+               Regex.run(~r/class="([^"]*post-clamp[^"]*)"/, render(view),
+                 capture: :all_but_first
+               )
+
+      refute body =~ ~r/\btext-(xs|sm|base|lg|xl|\d)|\bleading-/,
+             "the clamp body must inherit its type, not declare it (`#{body}`)"
+    end
+
+    test "the reader's own line budget rides along", %{conn: conn} do
+      {conn, user} = create_and_login_user(conn)
+      {:ok, _user} = Vutuv.Prefs.admin_update_user(user, %{"post_lines_desktop" => "3"})
+      post = cached_post(user, %{content_text: @long})
+
+      {:ok, view, _html} = live(conn, ~p"/feed")
+
+      assert view
+             |> element("[data-remote-post='#{post.id}'] [data-clamp-body]")
+             |> render() =~ "--post-clamp-desktop:3"
+    end
+
+    test "the post's own page shows the whole text", %{conn: conn} do
+      {conn, user} = create_and_login_user(conn)
+      post = cached_post(user, %{content_text: @long})
+
+      {:ok, view, _html} = live(conn, ~p"/system/fediverse/post/#{post.id}")
+
+      # A page whose whole job is this one post must not cut it: there is
+      # nothing below it to protect from a wall of text.
+      refute has_element?(view, "[data-remote-post='#{post.id}'] [data-post-preview]")
+      refute has_element?(view, "[data-remote-post='#{post.id}'] [data-post-expand]")
+    end
+  end
+
   test "the body is formatted: links are clickable, hashtags reach our tag pages", %{conn: conn} do
     {conn, user} = create_and_login_user(conn)
     # The hashtag grammar is `[A-Za-z0-9_]+`, so the factory's hyphenated name
