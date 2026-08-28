@@ -3006,16 +3006,31 @@ defmodule Vutuv.Posts do
         entries
 
       unique ->
-        decorated =
+        # **One card per cached post per page**, the rule `dedupe_remote/1`,
+        # `collapse_reposts/1` and `attach_thread_notes/3` already hold for the
+        # other kinds — and here it is not about repetition. The card's action
+        # bar is a LiveComponent keyed by the cached post
+        # (`RemoteActionsComponent.dom_id(:remote_post, id)`), so a second card
+        # emits a duplicate LiveView id, which raises inside
+        # `render_pending_components/6` during the **static** render: the page
+        # 500s rather than degrading. Two members answering the same post out
+        # there is ordinary behaviour, and the first such pair in the database
+        # took /feed down for every reader who had both answers on one page
+        # (2026-08-28).
+        #
+        # `unique` therefore decides where the card renders as well as which
+        # batch reads run, and the placement is built from the decorated list
+        # itself — the older version kept a second list to re-expand from, and
+        # a comment saying the repeats "must not pay for the batch reads, not
+        # the places they render" is exactly how the trap was rationalised.
+        # The answers that do not claim it keep their "Replying to …" line,
+        # which is what this feature replaced and still beats an error page.
+        by_post =
           unique
           |> attach_remote_images()
           |> attach_remote_follows(viewer)
           |> attach_remote_likes(viewer)
-          |> Map.new(&{&1.remote_post.id, &1})
-
-        # Back onto every post that answers one — `unique` dropped the repeats
-        # the batch reads must not pay for, not the places they render.
-        by_post = Map.new(parents, &{&1.post_id, decorated[&1.remote_post.id]})
+          |> Map.new(&{&1.post_id, &1})
 
         Enum.map(entries, &claim_remote_parents(&1, by_post))
     end
