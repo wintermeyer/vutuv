@@ -516,7 +516,11 @@ defmodule Vutuv.Accounts.User do
     # :profile_work_experience_id is loaded so a listing row's work line reflects
     # a member's pinned profile job title (issue #833) via work_information_map/2,
     # not just the automatic heuristic.
-    ~w(id first_name last_name honorific_prefix honorific_suffix username avatar avatar_fingerprint updated_at profile_work_experience_id)a
+    # :noindex? is loaded because a listing row links the profile
+    # `rel="nofollow"` for a member who opted out of search engines
+    # (VutuvWeb.UserHelpers.profile_rel/1). Left out, the struct would carry the
+    # schema default `false` and the link would silently fail open.
+    ~w(id first_name last_name honorific_prefix honorific_suffix username avatar avatar_fingerprint updated_at profile_work_experience_id noindex?)a
   end
 
   # :username is deliberately NOT here: the username is unique, rate-limited

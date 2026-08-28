@@ -19,8 +19,12 @@ shows the name the way its owner writes it. --%>
 <ul class={["button-list profiles", tags_by_id && "profiles--tags"]}>
   <%= for user <- @users do %>
     <li>
+      <%!-- rel="nofollow" for a member who asked search engines to leave their
+      profile alone: the directory lists them for people, and both links in
+      the row tell a crawler not to walk through (UserHelpers.profile_rel/1). --%>
+      <% rel = profile_rel(user) %>
       <div class="profile-image">
-        <%= link to: ~p"/#{user}" do %>
+        <%= link to: ~p"/#{user}", rel: rel do %>
           <%!-- src is passed for users with a picture so the row keeps the
                 small :thumb version; without one, <.avatar> renders the
                 initials tile instead of the light-grey default image (a
@@ -35,7 +39,7 @@ shows the name the way its owner writes it. --%>
         <% end %>
       </div>
       <% tag_summary = tags_by_id && Map.get(tags_by_id, user.id) %>
-      <p><strong><%= link (if filed_names?, do: filed_name(user), else: full_name(user)), to: ~p"/#{user}" %></strong>
+      <p><strong><%= link (if filed_names?, do: filed_name(user), else: full_name(user)), to: ~p"/#{user}", rel: rel %></strong>
       <%= Map.get_lazy(work_info_by_id, user.id, fn -> work_information_string(user, @work_string_length) end) %>
       <span :if={tag_summary} class="profile-tags">
         <.link :for={user_tag <- tag_summary.top} href={~p"/tags/#{user_tag.tag.slug}"}>
