@@ -153,6 +153,17 @@ defmodule VutuvWeb.MarkdownTest do
                "#{host}/wintermeyer/tags/…"
     end
 
+    # A New York Times article path is `/:year/:month/:day/:desk/<headline>`, so
+    # one directory leaves a bare `/2026` that names nothing.
+    test "keeps four path directories for nytimes.com, eliding the headline" do
+      assert link_text(
+               "see https://www.nytimes.com/2026/08/26/technology/bill-gates-ai-risks.html now"
+             ) == "nytimes.com/2026/08/26/technology/…"
+
+      assert link_text("see https://nytimes.com/2026/08/26/technology now") ==
+               "nytimes.com/2026/08/26/technology"
+    end
+
     test "still elides after the first directory for other hosts" do
       assert link_text("see https://en.wikipedia.org/wiki/Elixir/foo now") ==
                "en.wikipedia.org/wiki/…"
