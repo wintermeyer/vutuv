@@ -32,10 +32,14 @@
           </tr>
         </thead>
         <tbody>
+          <%!-- rel="nofollow" for a member who asked search engines to leave
+          their profile alone. This table builds its own rows rather than using
+          `card_list`, so it does not inherit that rule and has to ask for it. --%>
           <tr :for={user <- @endorsers}>
+            <% rel = profile_rel(user) %>
             <td>
               <div class="flex items-center gap-2">
-                <.link href={~p"/#{user}"}>
+                <.link href={~p"/#{user}"} rel={rel}>
                   <.avatar
                     user={user}
                     src={user.avatar && Vutuv.Avatar.display_url(user, :thumb)}
@@ -44,14 +48,14 @@
                     presence
                   />
                 </.link>
-                <.link href={~p"/#{user}"}>{full_name(user)}</.link>
+                <.link href={~p"/#{user}"} rel={rel}>{full_name(user)}</.link>
                 <% work = Map.get(@work_info_by_id, user.id) %>
                 <span :if={work not in [nil, ""]} class="breakwrap text-slate-600 dark:text-slate-400">
                   · {work}
                 </span>
               </div>
             </td>
-            <td><.link href={~p"/#{user}"}>@{user.username}</.link></td>
+            <td><.link href={~p"/#{user}"} rel={rel}>@{user.username}</.link></td>
             <td>
               <% at = Map.get(@endorsed_at_by_id, user.id) %>
               <.local_time :if={at} at={at} />

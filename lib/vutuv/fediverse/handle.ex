@@ -22,17 +22,12 @@ defmodule Vutuv.Fediverse.Handle do
   host is shown instead, because the host is always true.
   """
 
+  alias Vutuv.RemoteHtml
   alias Vutuv.SearchText
 
   # Shaped like a name at all: one path segment, no whitespace, no separators,
   # and short enough not to be a wall of text in a chip.
   @username ~r/^[A-Za-z0-9_.-]{1,64}$/
-
-  # A custom-emoji shortcode as Mastodon spells one: `[a-zA-Z0-9_]{2,}` between
-  # colons, delimited by non-word characters. The delimiters are the whole
-  # point — they are what keeps a time ("10:30:45"), a scheme
-  # ("daniel:// stenberg://") and a doubled colon out of it.
-  @shortcode ~r/(?<=^|\W):[a-zA-Z0-9_]{2,}:(?=\W|$)/
 
   @doc """
   What a remote account is called on screen, from the display name its server
@@ -46,16 +41,17 @@ defmodule Vutuv.Fediverse.Handle do
   (`Vutuv.RemoteMedia`) — a name is not worth that pipeline. So the token has
   nothing to render as, and left in it reads as a literal `":coolified:"` on
   the card. Drop it; the Mastodon inline feed has made the same call since it
-  shipped, and this is the one implementation both use.
+  shipped. The grammar lives in `Vutuv.RemoteHtml.strip_shortcodes/1`, which a
+  remote post's *text* reads too — one owner, or the same server's `:blobcat:`
+  would vanish from the card's name and stay in its text.
 
-  Cleaned on the way **out**, not on the way in: the stored value stays what
-  the server said, so a row written before this can never be the odd one out
-  and a later decision to render the pictures still has the name to put them
-  back into.
+  A **name** is cleaned on the way **out**, unlike that text: it is re-derived
+  from its column on every render, so the stored value stays what the server
+  said and a row written before this can never be the odd one out.
   """
   def display_name(name) when is_binary(name) do
     name
-    |> String.replace(@shortcode, "")
+    |> RemoteHtml.strip_shortcodes()
     |> String.replace(~r/\s+/u, " ")
     |> SearchText.normalize_search()
   end

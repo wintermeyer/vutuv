@@ -61,6 +61,20 @@ defmodule VutuvWeb.PostLive.RemoteActionsComponent do
   def dom_id(:note, id), do: "remote-actions-note-#{id}"
   def dom_id(:remote_post, id), do: "remote-actions-post-#{id}"
 
+  @doc """
+  The same id, from the subject itself — and the reason
+  `Vutuv.Fediverse.subject_key/1` exists.
+
+  A page must dedupe its cards by exactly what this id is built from, or it
+  renders one LiveView id twice and 500s in the static render (see that
+  function). Taking the subject rather than a hand-picked field is what keeps
+  the dedup key and the id key from drifting apart.
+  """
+  def dom_id(subject) do
+    {kind, id} = Vutuv.Fediverse.subject_key(subject)
+    dom_id(kind, id)
+  end
+
   # The origin's figures moved while this page was open. Its own clause, because
   # such an update carries nothing else — no subject, no viewer — and must not
   # go looking for them.

@@ -20,10 +20,15 @@
         :for={%{user: u, follow_id: follow_id} <- @connections}
         class="flex items-center gap-3 py-3 first:pt-0 last:pb-0"
       >
-        <.link href={~p"/#{u}"} class="shrink-0"><.avatar user={u} size="sm" presence /></.link>
+        <%!-- rel="nofollow" for a member who asked search engines to leave their
+        profile alone. This list builds its own rows rather than using
+        `card_list`, so it does not inherit that rule and has to ask for it. --%>
+        <% rel = profile_rel(u) %>
+        <.link href={~p"/#{u}"} rel={rel} class="shrink-0"><.avatar user={u} size="sm" presence /></.link>
         <div class="min-w-0 flex-1">
           <.link
             href={~p"/#{u}"}
+            rel={rel}
             class="block truncate font-medium text-slate-800 hover:text-brand-700 dark:hover:text-brand-300 dark:text-slate-100"
           >
             {full_name(u)}

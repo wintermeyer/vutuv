@@ -268,8 +268,11 @@ defmodule VutuvWeb.FediverseLookupLive do
       that does not exist is a control that does nothing under a flash that says
       it did. --%>
       <.card :if={@post} id="lookup-result">
+        <%!-- Whole, not clamped: somebody who pasted this address came to read
+        this post, and it is the only thing on the page. --%>
         <.remote_post_card
-            live?
+          live?
+          mode={:full}
           remote_post={@post}
           images={@images}
           following?={@follow != nil}

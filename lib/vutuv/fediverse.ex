@@ -2431,6 +2431,66 @@ defmodule Vutuv.Fediverse do
   def remote_post_retention_days,
     do: Application.get_env(:vutuv, :fediverse_post_retention_days, @remote_post_retention_days)
 
+  # Every column `remote_text/3` writes, which is the same list
+  # `strip_stored_shortcodes/0` has to clean.
+  @remote_text_columns [
+    {RemotePost, [:content_text, :summary]},
+    {Note, [:content_text, :summary]},
+    {RemoteAccount, [:summary]}
+  ]
+
+  @doc """
+  Takes the custom-emoji shortcodes out of the remote text already stored, and
+  reports how many values it rewrote.
+
+  Run once, from the migration that introduced the strip.
+  `Vutuv.RemoteHtml.strip_shortcodes/1` does it on the way in from that release
+  on, but a cached post is written once and never re-read from its origin, so
+  everything stored before it would go on showing a literal `":tux:"` until it
+  aged out of its six-month retention. An account's bio would heal itself on
+  the 30-day recheck; it is in here anyway, because 30 days is a long time to
+  read `":tux:"` beside posts that no longer do.
+
+  The one repair, not a second one written in SQL: the migration calls this the
+  way the legacy tag and username cleanups call theirs, so a backfilled row and
+  a row written tomorrow cannot come out differently.
+
+  A cached **translation** of a rewritten value falls out on its own —
+  `translations.source_sha256` keys it to the exact source string, so it stops
+  matching and the post is translated again from the cleaned text.
+  """
+  def strip_stored_shortcodes do
+    for {schema, fields} <- @remote_text_columns, field <- fields, reduce: 0 do
+      total -> total + strip_stored_shortcodes(schema, field)
+    end
+  end
+
+  defp strip_stored_shortcodes(schema, field) do
+    # Every shortcode contains a colon, so this narrows the read to a cheap
+    # superset of the grammar rather than restating it — the grammar itself
+    # runs in Elixir below and decides. Reading the matches at once is bounded
+    # by what these tables are: a cache the six-month retention keeps small.
+    schema
+    |> where([r], like(field(r, ^field), "%:%"))
+    |> select([r], {r.id, field(r, ^field)})
+    |> Repo.all()
+    |> Enum.count(fn {id, text} -> strip_stored_value(schema, field, id, text) end)
+  end
+
+  defp strip_stored_value(schema, field, id, text) do
+    case RemoteHtml.strip_shortcodes(text) do
+      ^text ->
+        false
+
+      stripped ->
+        schema
+        |> where([r], r.id == ^id)
+        |> Repo.update_all(set: [{field, stripped}])
+
+        true
+    end
+  end
+
   @doc """
   Stores a post a followed account published (`Create(Note)` / `Create(Question)`).
 
@@ -3651,11 +3711,21 @@ defmodule Vutuv.Fediverse do
     options =
       for option <- List.wrap(object["oneOf"]) ++ List.wrap(object["anyOf"]),
           is_map(option),
-          name = SearchText.normalize_search(option["name"]),
+          # A `name` is plain text, so this is the one path into `content_text`
+          # that never reaches `RemoteHtml.to_text/3` and has to take the emoji
+          # strip itself — otherwise the next edit writes `• :tux: Linux` back
+          # over the cleaned row.
+          text = strip_option_shortcodes(option["name"]),
+          name = SearchText.normalize_search(text),
           do: name
 
     Enum.take(options, 20)
   end
+
+  defp strip_option_shortcodes(name) when is_binary(name),
+    do: RemoteHtml.strip_shortcodes(name)
+
+  defp strip_option_shortcodes(_name), do: nil
 
   # The author's own stamp, which is what orders the feed — clamped against the
   # future, so a server cannot pin itself to the top of somebody's feed forever
@@ -5896,6 +5966,32 @@ defmodule Vutuv.Fediverse do
   """
   def subject_kind(%RemotePost{}), do: :remote_post
   def subject_kind(%Note{}), do: :note
+
+  @doc """
+  What makes two cards **the same card**: `{kind, id}` for a thing from another
+  network.
+
+  This is the identity `VutuvWeb.PostLive.RemoteActionsComponent.dom_id/2` is
+  built from, and therefore the only key a page may dedupe its cards by. The two
+  have to be the same question, because the bar is a LiveComponent keyed by it:
+  a page that renders two cards for one subject emits one LiveView id twice,
+  which raises inside `render_pending_components/6` during the **static** render
+  — the page 500s rather than degrading.
+
+  That is not hypothetical. `/feed` went down on 2026-08-28 (v7.422.1) because
+  `Vutuv.Posts.attach_remote_parents/3` deduped its batch reads by
+  `remote_post.id` and then placed the cards from a list keyed by `post_id`, so
+  two member posts answering one cached post each drew the parent. The rule was
+  written in prose beside three sibling implementations and broken by the fourth
+  in the very commit that wrote it down. Prose beside an implementation is not
+  an invariant; one function every site keys on is.
+
+  So: whenever a page decides how many cards a subject gets — `dedupe_remote/1`,
+  `attach_thread_notes/3`, `attach_remote_parents/3`, and whatever comes next —
+  dedupe on this, not on a field picked by hand. A `grep` for it finds every
+  site that owes the rule.
+  """
+  def subject_key(subject), do: {subject_kind(subject), subject.id}
 
   defp subject_schema(%RemotePost{}), do: RemotePost
   defp subject_schema(%Note{}), do: Note

@@ -1830,9 +1830,18 @@ defmodule Vutuv.Organizations do
   end
 
   @doc """
-  The number of members whose linked work experience is at `organization` and who are
-  publicly listable (`Vutuv.Directory.indexable_users` semantics: confirmed, not
-  search-opted-out, not moderation-hidden). The count the People section shows.
+  The number of members whose linked work experience is at `organization` and who
+  are publicly listable: confirmed and not moderation-hidden, the same gate
+  `Vutuv.Directory.listed_users/0` holds. The count the People section shows.
+
+  It also excluded members who opted out of **search engines** until v7.433.0,
+  citing the member directory as its authority — which stopped being true in
+  v7.407.0, when the directory started listing them with a `rel="nofollow"` row
+  instead of hiding them. Left as it was, one switch in `/settings/privacy`
+  would mean "keep me out of Google" on the directory, search and every follower
+  list, and "hide me from humans" here: a member vanished from their own
+  employer's page, from colleagues and from themselves. The opt-out is about
+  search results, so it buys the `rel` on the row and nothing else.
   """
   def organization_people_count(%Organization{id: id}) do
     people_base(id)
@@ -1848,9 +1857,10 @@ defmodule Vutuv.Organizations do
 
   Each entry is `%{user:, title:, current?:}` where `title` is the linked role's
   title **exactly as the member wrote it** (their most recent role at the
-  organization). Privacy is the member-directory gate (`indexable_users` semantics),
-  so a member who opted out of public listing or is moderation-hidden never
-  appears — the same set the agent-format people list carries. Returns
+  organization). Privacy is `people_base/1`'s gate (see
+  `organization_people_count/1`): an unconfirmed or moderation-hidden member
+  never appears, a member who opted out of search engines does — the same set
+  the agent-format people list carries. Returns
   `%{entries:, more?:, next_offset:}`.
   """
   def organization_people_page(%Organization{id: organization_id}, opts \\ []) do
@@ -1897,7 +1907,7 @@ defmodule Vutuv.Organizations do
       on: u.id == w.user_id,
       where:
         w.organization_id == ^organization_id and account_confirmed_row(u) and
-          not u.noindex? and not account_hidden_row(u),
+          not account_hidden_row(u),
       group_by: u.id
     )
   end

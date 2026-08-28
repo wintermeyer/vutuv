@@ -74,6 +74,27 @@ defmodule VutuvWeb.UserHelpers do
   end
 
   @doc """
+  The `rel` for a link that points at a member's profile from a public listing:
+  `"nofollow"` for a member who asked search engines to leave their profile out
+  (`noindex?`), `nil` for everyone else.
+
+  The profile itself already answers a crawler with `X-Robots-Tag: noindex`
+  (`VutuvWeb.ContentPolicy`), but only once the crawler has fetched it. The
+  `rel` says it a step earlier, at the link, so a listing that shows an
+  opted-out member to people — the member directory since it stopped hiding
+  them, and the most-followed / follower listings, which never did — does not
+  hand a crawler a path to walk.
+
+  One definition rather than the flag re-read per template: it is the same
+  question at every listing row, and the answer must not depend on which
+  template remembered to ask. `noindex?` rides in `User.listing_fields/0` for
+  exactly this reason — a row selected without it would default to `false` and
+  fail *open*.
+  """
+  def profile_rel(%User{noindex?: true}), do: "nofollow"
+  def profile_rel(%User{}), do: nil
+
+  @doc """
   The `{label, value}` options for the Basics form's employment-status select
   (issue #870): the two real statuses derived from the schema's single source
   (`User.employment_statuses/0` mapped through `User.employment_status_label/1`,

@@ -218,6 +218,15 @@ defmodule Vutuv.MastodonTest do
       assert three.id == "3"
     end
 
+    test "a content warning loses its custom-emoji shortcodes like a body does" do
+      # The REST API sends a CW as plain text, so it is the one branch that
+      # never reaches `RemoteHtml.to_text/3` and used to keep the token.
+      serve([status(%{"id" => "1", "sensitive" => true, "spoiler_text" => ":cw_food: Essen"})])
+
+      assert {:ok, %Feed{posts: [one]}} = Mastodon.fetch_posts(@handle)
+      assert one.text == "Essen"
+    end
+
     test "skips media-only posts and unparseable timestamps" do
       serve([
         status(%{"id" => "1", "content" => ""}),
