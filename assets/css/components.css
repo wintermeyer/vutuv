@@ -1373,6 +1373,13 @@ ul.thumbs li .text .url a {
   background: #f8fafc;
 }
 .reorder__item.is-dragging { opacity: 0.5; }
+/* The feed rail's arrangeable cards wear the same two states as the reorder
+   tool's tiles: half-transparent while they are being carried, and a grip that
+   says it can be grabbed. The rail card is a kit surface built from utilities,
+   so only these two live here — everything else about it is at the call site. */
+[data-rail-block].is-dragging { opacity: 0.5; }
+.rail-handle { cursor: grab; }
+.rail-handle:active { cursor: grabbing; }
 .reorder__handle {
   flex: 0 0 auto;
   cursor: grab;
@@ -2923,6 +2930,49 @@ html.lightbox-open { overflow: hidden; }
   user-select: none;
 }
 
+/* A per-row shortcut that only shows while the pointer is on the row, so a
+   list of twenty rows is not also a list of twenty of these. The filter band's
+   "Only" is the one user: it sits right after the name, where the reader is
+   already looking, instead of at the far edge past the count.
+
+   The whole hiding lives inside `@media (hover: hover)`, and that is the load
+   -bearing part rather than a nicety: a phone reaches this same card through
+   the filter sheet, has no hover to reveal anything with, and would be left
+   with a control it can see no trace of. So the resting state is VISIBLE and
+   the desktop rule takes it away — never the other way round, which is the
+   shape that strands touch.
+
+   It hides with `opacity`, not `display`: the row must not reflow under the
+   cursor when the word appears, and the count beside it must not jump. That
+   also means the button is still hit-testable while invisible, hence the
+   `pointer-events`, and still in the accessibility tree, which is what we want
+   — a screen reader should hear the shortcut without having to hover for it.
+   Keyboard reaches it two ways: focus anywhere in the row reveals it, and the
+   button's own :focus-visible does as well, for the tab that lands on it. */
+.row-reveal-host .row-reveal {
+  transition: opacity 120ms ease;
+}
+
+@media (hover: hover) {
+  .row-reveal-host .row-reveal {
+    opacity: 0;
+    pointer-events: none;
+  }
+
+  .row-reveal-host:hover .row-reveal,
+  .row-reveal-host:focus-within .row-reveal,
+  .row-reveal-host .row-reveal:focus-visible {
+    opacity: 1;
+    pointer-events: auto;
+  }
+}
+
+@media (prefers-reduced-motion: reduce) {
+  .row-reveal-host .row-reveal {
+    transition: none;
+  }
+}
+
 /* The shape of something that has not arrived yet. A page whose data loads
    only once the socket has joined paints its own outline first, so the wait
    reads as "this is filling in" rather than as "you have nothing here" — the
@@ -3302,172 +3352,6 @@ html.lightbox-open { overflow: hidden; }
 @media (prefers-reduced-motion: reduce) {
   .people-total__figure--tick {
     animation: none;
-  }
-}
-
-/* ── The feed's tab ticker (issue #1668) ─────────────────────────────────
-   Something lands on the source tab you are not looking at, and for a few
-   seconds the bar quotes it beside that tab instead of only growing a dot.
-
-   The tint is the whole mechanism for "which tab is this about": the tab and
-   the quote wear the same warm surface for the length of the window, so the
-   pair reads as a pair even with a tab between them. It belongs to the
-   MESSAGE, not to the tab — outside a window every tab is as grey as the
-   others, which is why every rule here hangs off `.filter-tabs--ticking`.
-
-   On a narrow screen the other tabs fold away to give the quote the width.
-   Folded over their WIDTH, not hidden: a hidden tab leaves a hole and the
-   rest jump into it, while a width that runs to zero lets the remaining tab
-   slide across and the quote grow into the space. Measured on a 356 px bar,
-   the quote goes from nothing at all (there is no room for it beside three
-   tabs) to about twenty characters.
-
-   The clock lives in the browser (`FeedTicker` in app.js), so nothing here
-   times anything: these rules only describe the two states. */
-.filter-tabs {
-  /* The fold-away below asks how wide the BAR is, not how wide the window is.
-     Same answer on a phone, a better one everywhere else: the settings page
-     shows this control in a narrow example box on a wide screen, and a
-     viewport query would have it behave like the desktop it is standing on. */
-  container-type: inline-size;
-}
-
-/* A native button gets the arrow cursor, not the hand, so nothing about this
-   bar says "press me" except the hover tint — and the quote had no hover tint
-   at all. Only the real controls: the settings page's example is a row of
-   inert spans wearing the same class names. */
-.filter-tabs a[data-filter-tab],
-.filter-tabs button[data-filter-tab],
-.filter-tab-ticker {
-  cursor: pointer;
-}
-
-.filter-tab__label {
-  display: inline-block;
-  vertical-align: bottom;
-  overflow: hidden;
-  /* Two characters of slack over the label's own length, so a word of wide
-     capitals is never clipped while it is simply standing there. A cap that
-     is the same for every tab would spend most of the fold above the width
-     the word ever had, which reads as a late start. */
-  max-width: calc(var(--n, 12) * 1ch + 2ch);
-  transition: max-width 400ms cubic-bezier(0.4, 0, 0.2, 1), opacity 250ms ease;
-}
-
-.filter-tab-ticker {
-  display: flex;
-  align-items: center;
-  gap: 0.375rem;
-  min-width: 0;
-  flex: 0 1 auto;
-  margin-left: auto;
-  padding: 0.625rem 0.75rem;
-  border-radius: 0.5rem;
-  font-size: 0.875rem;
-  line-height: 1.25rem;
-  text-align: left;
-  white-space: nowrap;
-  overflow: hidden;
-  color: #64748b;
-  background: #ffe6e0;
-  animation: filter-tab-ticker-in 280ms ease-out;
-  transition: background-color 150ms ease;
-}
-
-.filter-tab--ticking {
-  background: #ffe6e0;
-  transition: background-color 150ms ease;
-}
-
-/* The quote goes to the tab it names — that is what it is for, and it has
-   always done it. Nobody could tell: a quote that only sits there is read as
-   a caption, so the reader aims at the tab instead. Pointing at it deepens
-   the pair TOGETHER, so the answer to "where does this take me" is the tab
-   that lights up with it. `:has()` is what lets the quote speak for a
-   sibling; where it is missing only the quote deepens, which is still the
-   affordance. */
-.filter-tab-ticker:is(:hover, :focus-visible),
-.filter-tabs--ticking:has(.filter-tab-ticker:is(:hover, :focus-visible)) .filter-tab--ticking {
-  background: #ffd3c8;
-}
-
-/* The author never gives way — only the quote does. An author that shrinks
-   with it ends up as "@." and the whole line stops meaning anything, so the
-   cap here is a fixed width and the text below is what the ellipsis eats. */
-.filter-tab-ticker__who {
-  flex: none;
-  max-width: 11ch;
-  overflow: hidden;
-  text-overflow: ellipsis;
-  font-weight: 500;
-  color: #0f172a;
-}
-
-.filter-tab-ticker__count {
-  flex: none;
-  font-weight: 500;
-  color: #0f172a;
-}
-
-.filter-tab-ticker__text {
-  flex: 1 1 auto;
-  min-width: 0;
-  overflow: hidden;
-  text-overflow: ellipsis;
-}
-
-/* Leaving: the hook fades the quote out before it tells the server, so the
-   bar never blinks between the two. */
-.filter-tab-ticker--leaving {
-  opacity: 0;
-  transition: opacity 400ms ease;
-  pointer-events: none;
-}
-
-@keyframes filter-tab-ticker-in {
-  from {
-    opacity: 0;
-    transform: translateY(-3px);
-  }
-  to {
-    opacity: 1;
-    transform: none;
-  }
-}
-
-@media (prefers-reduced-motion: reduce) {
-  .filter-tab__label,
-  .filter-tab-ticker--leaving {
-    transition: none;
-  }
-
-  .filter-tab-ticker {
-    animation: none;
-  }
-}
-
-@media (prefers-color-scheme: dark) {
-  /* The same warm surface a shade the other way, so the pair reads as a pair
-     on the dark canvas too. It sits AFTER the light rules on purpose: same
-     specificity, so source order is what decides, and the shared dark block
-     further up this file comes earlier than the ticker's own section. */
-  .filter-tab-ticker,
-  .filter-tab--ticking {
-    background: #3a211d;
-  }
-
-  .filter-tab-ticker:is(:hover, :focus-visible),
-  .filter-tabs--ticking:has(.filter-tab-ticker:is(:hover, :focus-visible)) .filter-tab--ticking {
-    background: #4e2c26;
-  }
-
-  .filter-tab-ticker {
-    color: #94a3b8;
-  }
-
-  .filter-tab-ticker__who,
-  .filter-tab-ticker__count {
-    color: #f1f5f9;
   }
 }
 

@@ -89,24 +89,6 @@ defmodule Vutuv.Prefs do
       values: ~w(original translate hide),
       group: :feed
     },
-    # The feed's tab ticker: something landing on the source tab a member is
-    # not looking at quotes its first words beside that tab for a few seconds,
-    # instead of only growing a dot. The switch turns the quote off again (the
-    # dot is unaffected either way), the seconds say how long it stands.
-    #
-    # A fixed range rather than a free field: the window interrupts, and a
-    # mistyped 600 would park the bar open for ten minutes. The settings
-    # select offers five values inside it; the bounds are what any GUI, the
-    # admin form included, is allowed to store.
-    %Pref{key: :feed_tab_ticker?, type: :boolean, default: true, group: :feed_tabs},
-    %Pref{
-      key: :feed_tab_ticker_seconds,
-      type: :integer,
-      default: 8,
-      min: 4,
-      max: 20,
-      group: :feed_tabs
-    },
     # The same idea one surface further out (issue #1681): while the vutuv tab
     # sits in the background, a new post pages its first line through the
     # browser tab's title instead of only putting a dot there. Off leaves the
@@ -192,12 +174,6 @@ defmodule Vutuv.Prefs do
   def label(:feed_foreign_posts),
     do: Gettext.gettext(VutuvWeb.Gettext, "Posts in other languages")
 
-  def label(:feed_tab_ticker?),
-    do: Gettext.gettext(VutuvWeb.Gettext, "Quote what arrives on the other tab")
-
-  def label(:feed_tab_ticker_seconds),
-    do: Gettext.gettext(VutuvWeb.Gettext, "How long the quote stands")
-
   def label(:browser_tab_teaser?),
     do: Gettext.gettext(VutuvWeb.Gettext, "Tease new posts in the browser tab")
 
@@ -217,22 +193,12 @@ defmodule Vutuv.Prefs do
         "What your feed does with posts outside your chosen languages: show them as they are, translate them for you, or hide them. Posts that declare no language always show."
       )
 
-  def hint(:feed_tab_ticker?),
-    do:
-      Gettext.gettext(
-        VutuvWeb.Gettext,
-        "When off, a tab holding something new wears its dot and says nothing more."
-      )
-
   def hint(:browser_tab_teaser?),
     do:
       Gettext.gettext(
         VutuvWeb.Gettext,
         "Only while you are looking at another tab, and only for a few seconds. The tab title also shows up in screenshots, in your window switcher and in a screen share."
       )
-
-  def hint(:feed_tab_ticker_seconds),
-    do: Gettext.gettext(VutuvWeb.Gettext, "Between 4 and 20 seconds.")
 
   def hint(key) when key in [:post_lines_desktop, :post_lines_mobile],
     do: Gettext.gettext(VutuvWeb.Gettext, "0 means posts are never shortened.")
@@ -282,7 +248,6 @@ defmodule Vutuv.Prefs do
   @doc "The human label of a pref group."
   def group_label(:post_display), do: Gettext.gettext(VutuvWeb.Gettext, "Posts")
   def group_label(:feed), do: Gettext.gettext(VutuvWeb.Gettext, "Feed")
-  def group_label(:feed_tabs), do: Gettext.gettext(VutuvWeb.Gettext, "Feed tabs")
   def group_label(:browser_tab), do: Gettext.gettext(VutuvWeb.Gettext, "Browser tab")
   def group_label(:privacy), do: Gettext.gettext(VutuvWeb.Gettext, "Privacy")
   def group_label(:region), do: Gettext.gettext(VutuvWeb.Gettext, "Date & time")

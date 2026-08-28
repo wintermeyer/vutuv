@@ -808,24 +808,6 @@ defmodule VutuvWeb.SettingsController do
     reset_prefs(conn, :maps, gettext("Map preferences reset to the site defaults."))
   end
 
-  # The feed's tab ticker (issue #1668): whether a post landing on the tab the
-  # member is not looking at is quoted beside it, and for how long. A reading
-  # preference like the two above, so it shares their page.
-  def update_feed_ticker(conn, %{"user" => params}) do
-    save(
-      conn,
-      params,
-      "preferences.html",
-      ~p"/settings/preferences",
-      gettext("Feed tab settings saved."),
-      event: "preferences_changed"
-    )
-  end
-
-  def reset_feed_ticker(conn, _params) do
-    reset_prefs(conn, :feed_tabs, gettext("Feed tab settings reset to the site defaults."))
-  end
-
   # The browser tab's teaser (issue #1681): whether a post arriving while this
   # member is looking somewhere else pages its first line through the tab
   # title. The sibling of the setting above, and on the same page for that

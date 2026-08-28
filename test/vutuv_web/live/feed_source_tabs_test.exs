@@ -1,12 +1,17 @@
 defmodule VutuvWeb.FeedSourceTabsTest do
   @moduledoc """
-  The /feed source tabs: All / vutuv / Fediverse.
+  The /feed source split: vutuv and Fediverse.
 
-  The two named tabs partition the timeline by what kind of post an entry
-  carries, so the tests here are mostly about that split holding at its edges —
-  the one source that produces both kinds (a boost, issue #1167), the live
-  arrivals that never went through a query, and an installation with no
-  fediverse at all.
+  The two halves partition the timeline by what kind of post an entry carries,
+  so the tests here are mostly about that split holding at its edges — the one
+  source that produces both kinds (a boost, issue #1167), the live arrivals
+  that never went through a query, and an installation with no fediverse at
+  all.
+
+  The tabs that used to drive it are gone; the filter band's two source
+  checkboxes write the same `users.feed_source` column and hand the member back
+  to the feed, which is what `switch/3` below does — the real path, without
+  depending on which checkbox happens to need flipping.
 
   Not async: one test flips `:fediverse_enabled`, which is application env —
   process/node state the SQL sandbox does not roll back.
@@ -109,88 +114,45 @@ defmodule VutuvWeb.FeedSourceTabsTest do
     if has_element?(view, "#feed-posts"), do: render(element(view, "#feed-posts")), else: ""
   end
 
-  # The tab as it is stored on the member, read fresh — the socket's own
+  # Which halves the band is showing. vutuv has a row of its own; the fediverse
+  # half has no single row any more (the flattened list makes every server a
+  # peer of vutuv), so it is on when any server is — which is what the reader
+  # sees and what the feed queried with.
+  defp showing(view) do
+    unfold(view, "sources")
+    vutuv? = has_element?(view, "#filter-band-source-vutuv[checked]")
+    fediverse? = has_element?(view, ~s([id^="filter-band-host-"][checked]))
+
+    case {vutuv?, fediverse?} do
+      {true, true} -> :all
+      {true, false} -> :vutuv
+      {false, true} -> :fediverse
+      {false, false} -> :none
+    end
+  end
+
+  # Switch the reader's sources the way the filter band does: write the column,
+  # then hand the feed the member it was written to.
+  defp switch(view, user, filter) do
+    :ok = Posts.remember_feed_filter(user, filter, Repo.get!(User, user.id).feed_source)
+    send(view.pid, {:filter_band, :changed, Repo.get!(User, user.id)})
+    render(view)
+  end
+
+  # The stored sources, read fresh — the socket's own
   # `%User{}` was loaded at mount and knows nothing of what was written since.
   defp stored_tab(user), do: Repo.get!(User, user.id).feed_source
 
-  describe "the tab bar shows only where it means something (issue #1267)" do
-    test "renders the three source tabs above the timeline", %{conn: conn} do
-      {conn, user} = create_and_login_user(conn)
-      {_author, _post} = followed_post(user, "a vutuv post")
-      cached_post(remote_account(user, "them"), "written out there")
-
-      {:ok, view, html} = live(conn, ~p"/feed")
-
-      assert has_element?(view, "#feed-source-tabs [data-filter-tab='all']")
-      assert has_element?(view, "#feed-source-tabs [data-filter-tab='vutuv']")
-      assert has_element?(view, "#feed-source-tabs [data-filter-tab='fediverse']")
-      assert html =~ "Fediverse"
-
-      # "All" is where a mount opens; the tab reads as selected.
-      assert has_element?(view, "[data-filter-tab='all'][aria-pressed='true']")
+  # Two rail cards ship folded to their heading ("Sources" and "Hide
+  # tags"), so their bodies are not in the DOM until somebody opens them — which
+  # is what a reader does before touching a switch, and what these tests have to
+  # do too.
+  defp unfold(live, key) do
+    if has_element?(live, ~s(#rail-#{key} button[aria-expanded="false"])) do
+      live |> element(~s(#rail-#{key} button[phx-click="rail-collapse"])) |> render_click()
     end
 
-    test "a member the fediverse never reaches gets no tabs at all", %{conn: conn} do
-      # The reported bug: with nothing out there, "Fediverse" can never fill
-      # and "vutuv" is just "All" again — one timeline under three names.
-      {conn, user} = create_and_login_user(conn)
-      {_author, _post} = followed_post(user, "a vutuv post")
-
-      {:ok, view, html} = live(conn, ~p"/feed")
-
-      refute has_element?(view, "#feed-source-tabs")
-      refute html =~ "Fediverse"
-      # The timeline itself is untouched — this hides a control, not content.
-      assert timeline(view) =~ "a vutuv post"
-    end
-
-    test "a completely empty feed shows the invitation instead of tabs", %{conn: conn} do
-      {conn, _user} = create_and_login_user(conn)
-
-      {:ok, view, _html} = live(conn, ~p"/feed")
-
-      refute has_element?(view, "#feed-source-tabs")
-    end
-
-    test "an installation with no fediverse gets no tabs", %{conn: conn} do
-      Application.put_env(:vutuv, :fediverse_enabled, false)
-      on_exit(fn -> Application.put_env(:vutuv, :fediverse_enabled, true) end)
-
-      {conn, user} = create_and_login_user(conn)
-      {_author, _post} = followed_post(user, "a vutuv post")
-      cached_post(remote_account(user, "them"), "written out there")
-
-      {:ok, view, _html} = live(conn, ~p"/feed")
-
-      refute has_element?(view, "#feed-source-tabs")
-    end
-
-    test "a friend's reshare alone is vutuv content, so there are no tabs", %{conn: conn} do
-      # This viewer follows nobody out there and has no actor: everything from
-      # another network reaches them because a member they follow *here* passed
-      # it on — and pressing that button is a vutuv act. So "Fediverse" holds
-      # nothing, "vutuv" is the same list as "All", and three tabs over one
-      # timeline is exactly what issue #1267 took away.
-      #
-      # Until the reshare sources moved to the vutuv tab, this was the case that
-      # proved the bar had work to do (issue #1166). The bar is gone; the
-      # content is not.
-      {conn, user} = create_and_login_user(conn)
-      sharer = insert(:user, email_confirmed?: true)
-      Social.follow(user, sharer.id)
-
-      # A cached post nobody here follows the author of.
-      post = cached_post(remote_account("stranger"), "passed on by a friend")
-      Repo.insert!(%PostRepost{user_id: sharer.id, remote_post_id: post.id})
-
-      refute Fediverse.federated?(user),
-             "the viewer must not be federated, or this proves nothing"
-
-      {:ok, view, _html} = live(conn, ~p"/feed")
-
-      refute has_element?(view, "#feed-source-tabs")
-      assert timeline(view) =~ "passed on by a friend"
-    end
+    live
   end
 
   describe "switching tabs" do
@@ -206,17 +168,17 @@ defmodule VutuvWeb.FeedSourceTabsTest do
       assert timeline(view) =~ "written here on vutuv"
       assert timeline(view) =~ "written out there"
 
-      render_click(view, "filter-source", %{"type" => "vutuv"})
+      switch(view, user, :vutuv)
       assert timeline(view) =~ "written here on vutuv"
       refute timeline(view) =~ "written out there"
-      assert has_element?(view, "[data-filter-tab='vutuv'][aria-pressed='true']")
+      assert showing(view) == :vutuv
 
-      render_click(view, "filter-source", %{"type" => "fediverse"})
+      switch(view, user, :fediverse)
       assert timeline(view) =~ "written out there"
       refute timeline(view) =~ "written here on vutuv"
 
       # And back again, so a tab is never a one-way door.
-      render_click(view, "filter-source", %{"type" => "all"})
+      switch(view, user, :all)
       assert timeline(view) =~ "written here on vutuv"
       assert timeline(view) =~ "written out there"
     end
@@ -228,23 +190,28 @@ defmodule VutuvWeb.FeedSourceTabsTest do
 
       {:ok, view, _html} = live(conn, ~p"/feed")
 
-      render_click(view, "filter-source", %{"type" => "nonsense"})
+      switch(view, user, :nonsense)
 
       assert timeline(view) =~ "still here"
-      assert has_element?(view, "[data-filter-tab='all'][aria-pressed='true']")
+      assert showing(view) == :all
     end
 
-    test "the German render names the tabs in German", %{conn: conn} do
+    test "the German render names the two halves", %{conn: conn} do
       {conn, user} = create_and_login_user(conn)
       {_author, _post} = followed_post(user, "the only post")
       cached_post(remote_account(user, "them"), "written out there")
       conn = conn |> recycle() |> put_req_header("accept-language", "de-DE,de;q=0.9")
 
-      {:ok, _view, html} = live(conn, ~p"/feed")
+      {:ok, view, _html} = live(conn, ~p"/feed")
+      html = view |> unfold("sources") |> render()
 
-      # The two proper names stay as they are; only "All" is a word.
-      assert html =~ "Alle"
-      assert html =~ "Fediverse"
+      # vutuv is one server among the others now, so what the German render has
+      # to name is vutuv and the server the other half arrives from.
+      assert html =~ "vutuv"
+      assert html =~ "social.example"
+      assert html =~ "QUELLEN" or html =~ "Quellen"
+      # The promise the card has to make before anybody touches a switch.
+      assert html =~ "stumm schalten, nicht entfolgen"
     end
 
     test "an empty vutuv tab says so in German too", %{conn: conn} do
@@ -255,7 +222,7 @@ defmodule VutuvWeb.FeedSourceTabsTest do
 
       {:ok, view, _html} = live(conn, ~p"/feed")
 
-      assert render_click(view, "filter-source", %{"type" => "vutuv"}) =~
+      assert switch(view, user, :vutuv) =~
                "Noch nichts von vutuv"
     end
 
@@ -267,11 +234,11 @@ defmodule VutuvWeb.FeedSourceTabsTest do
 
       {:ok, view, _html} = live(conn, ~p"/feed")
 
-      html = render_click(view, "filter-source", %{"type" => "vutuv"})
+      html = switch(view, user, :vutuv)
 
       assert html =~ "Nothing from vutuv yet"
       # Without the tabs an empty tab would be a dead end.
-      assert has_element?(view, "#feed-source-tabs")
+      assert view |> unfold("sources") |> has_element?(~s([id^="filter-band-host-"]))
     end
 
     test "the tabs survive their fediverse content going away mid-session", %{conn: conn} do
@@ -285,13 +252,13 @@ defmodule VutuvWeb.FeedSourceTabsTest do
       cached_post(account, "written out there")
 
       {:ok, view, _html} = live(conn, ~p"/feed")
-      render_click(view, "filter-source", %{"type" => "fediverse"})
+      switch(view, user, :fediverse)
       assert timeline(view) =~ "written out there"
 
       html = render_click(view, "mute-remote-account", %{"id" => account.id})
 
       assert html =~ "Nothing from the fediverse yet"
-      assert has_element?(view, "#feed-source-tabs")
+      assert view |> unfold("sources") |> has_element?(~s([id^="filter-band-host-"]))
     end
   end
 
@@ -302,13 +269,13 @@ defmodule VutuvWeb.FeedSourceTabsTest do
       cached_post(remote_account(user, "them"), "written out there")
 
       {:ok, view, _html} = live(conn, ~p"/feed")
-      render_click(view, "filter-source", %{"type" => "fediverse"})
+      switch(view, user, :fediverse)
       assert stored_tab(user) == "fediverse"
 
       # A second visit: a new socket, nothing carried over but the column.
       {:ok, again, _html} = live(conn, ~p"/feed")
 
-      assert has_element?(again, "[data-filter-tab='fediverse'][aria-pressed='true']")
+      assert showing(again) == :fediverse
       assert timeline(again) =~ "written out there"
       refute timeline(again) =~ "written here on vutuv"
     end
@@ -319,13 +286,13 @@ defmodule VutuvWeb.FeedSourceTabsTest do
       cached_post(remote_account(user, "them"), "written out there")
 
       {:ok, view, _html} = live(conn, ~p"/feed")
-      render_click(view, "filter-source", %{"type" => "vutuv"})
-      render_click(view, "filter-source", %{"type" => "all"})
+      switch(view, user, :vutuv)
+      switch(view, user, :all)
 
       assert stored_tab(user) == nil
 
       {:ok, again, _html} = live(conn, ~p"/feed")
-      assert has_element?(again, "[data-filter-tab='all'][aria-pressed='true']")
+      assert showing(again) == :all
       assert timeline(again) =~ "written out there"
     end
 
@@ -341,7 +308,7 @@ defmodule VutuvWeb.FeedSourceTabsTest do
 
       {:ok, view, _html} = live(conn, ~p"/feed")
 
-      refute has_element?(view, "#feed-source-tabs")
+      refute view |> unfold("sources") |> has_element?(~s([id^="filter-band-host-"]))
       assert timeline(view) =~ "written here on vutuv"
       # Kept, so the tab comes back with the content rather than silently
       # costing them the choice.
@@ -356,11 +323,11 @@ defmodule VutuvWeb.FeedSourceTabsTest do
       cached_post(remote_account(user, "them"), "written out there")
 
       {:ok, view, _html} = live(conn, ~p"/feed")
-      render_click(view, "filter-source", %{"type" => "fediverse"})
+      switch(view, user, :fediverse)
 
       {:ok, _own} = Posts.create_post(user, %{body: "my own words"})
 
-      assert has_element?(view, "[data-filter-tab='all'][aria-pressed='true']")
+      assert showing(view) == :all
       assert stored_tab(user) == "fediverse"
     end
 
@@ -404,14 +371,41 @@ defmodule VutuvWeb.FeedSourceTabsTest do
 
       {:ok, view, _html} = live(conn, ~p"/feed")
 
-      render_click(view, "filter-source", %{"type" => "vutuv"})
+      switch(view, user, :vutuv)
       assert timeline(view) =~ "I passed this on"
       refute timeline(view) =~ "written out there"
 
       # And it is on that tab *instead of*, not as well as, the other one.
-      render_click(view, "filter-source", %{"type" => "fediverse"})
+      switch(view, user, :fediverse)
       assert timeline(view) =~ "written out there"
       refute timeline(view) =~ "I passed this on"
+    end
+
+    test "an unfederated viewer still gets a friend's reshare", %{conn: conn} do
+      # Rescued from a test the rebase dropped (issue #1267, main). Its own
+      # point was that a viewer the fediverse never reaches should not be shown
+      # a three-tab bar over one timeline — a claim the filter band retires by
+      # having no bar to hide, so `refute has_element?("#feed-source-tabs")`
+      # would now pass whatever the feed did.
+      #
+      # What does not retire with it is the content claim underneath, and it is
+      # the sharper of the two: this reader follows nobody out there and has no
+      # actor, so everything from another network reaches them only because a
+      # member they follow *here* passed it on. The federation guard is what
+      # makes that true rather than assumed.
+      {conn, user} = create_and_login_user(conn)
+      sharer = insert(:user, email_confirmed?: true)
+      Social.follow(user, sharer.id)
+
+      post = cached_post(remote_account("stranger"), "passed on by a friend")
+      Repo.insert!(%PostRepost{user_id: sharer.id, remote_post_id: post.id})
+
+      refute Fediverse.federated?(user),
+             "the viewer must not be federated, or this proves nothing"
+
+      {:ok, view, _html} = live(conn, ~p"/feed")
+
+      assert timeline(view) =~ "passed on by a friend"
     end
 
     test "somebody else's reshare is a vutuv act too", %{conn: conn} do
@@ -431,10 +425,10 @@ defmodule VutuvWeb.FeedSourceTabsTest do
 
       {:ok, view, _html} = live(conn, ~p"/feed")
 
-      render_click(view, "filter-source", %{"type" => "vutuv"})
+      switch(view, user, :vutuv)
       assert timeline(view) =~ "passed on by a friend"
 
-      render_click(view, "filter-source", %{"type" => "fediverse"})
+      switch(view, user, :fediverse)
       refute timeline(view) =~ "passed on by a friend"
       assert timeline(view) =~ "written out there"
     end
@@ -448,10 +442,10 @@ defmodule VutuvWeb.FeedSourceTabsTest do
 
       {:ok, view, _html} = live(conn, ~p"/feed")
 
-      render_click(view, "filter-source", %{"type" => "vutuv"})
+      switch(view, user, :vutuv)
       assert timeline(view) =~ "I passed this reply on"
 
-      render_click(view, "filter-source", %{"type" => "fediverse"})
+      switch(view, user, :fediverse)
       refute timeline(view) =~ "I passed this reply on"
     end
 
@@ -466,7 +460,7 @@ defmodule VutuvWeb.FeedSourceTabsTest do
 
       {:ok, view, _html} = live(conn, ~p"/feed")
 
-      refute has_element?(view, "#feed-source-tabs")
+      refute view |> unfold("sources") |> has_element?(~s([id^="filter-band-host-"]))
       assert timeline(view) =~ "I passed this on"
     end
   end
@@ -505,11 +499,11 @@ defmodule VutuvWeb.FeedSourceTabsTest do
       assert timeline(view) =~ "a member post, boosted"
       assert timeline(view) =~ "a remote post, boosted"
 
-      render_click(view, "filter-source", %{"type" => "vutuv"})
+      switch(view, user, :vutuv)
       assert timeline(view) =~ "a member post, boosted"
       refute timeline(view) =~ "a remote post, boosted"
 
-      render_click(view, "filter-source", %{"type" => "fediverse"})
+      switch(view, user, :fediverse)
       assert timeline(view) =~ "a remote post, boosted"
       refute timeline(view) =~ "a member post, boosted"
     end
@@ -523,7 +517,7 @@ defmodule VutuvWeb.FeedSourceTabsTest do
       cached_post(account, "written out there")
 
       {:ok, view, _html} = live(conn, ~p"/feed")
-      render_click(view, "filter-source", %{"type" => "fediverse"})
+      switch(view, user, :fediverse)
 
       {:ok, _fresh} = Posts.create_post(author, %{body: "arriving live"})
 
@@ -536,7 +530,7 @@ defmodule VutuvWeb.FeedSourceTabsTest do
       {author, _post} = followed_post(user, "an older post")
 
       {:ok, view, _html} = live(conn, ~p"/feed")
-      render_click(view, "filter-source", %{"type" => "vutuv"})
+      switch(view, user, :vutuv)
 
       {:ok, _fresh} = Posts.create_post(author, %{body: "arriving live"})
 
@@ -551,357 +545,23 @@ defmodule VutuvWeb.FeedSourceTabsTest do
       cached_post(account, "written out there")
 
       {:ok, view, _html} = live(conn, ~p"/feed")
-      render_click(view, "filter-source", %{"type" => "fediverse"})
+      switch(view, user, :fediverse)
 
       {:ok, _own} = Posts.create_post(user, %{body: "my own words"})
 
       assert timeline(view) =~ "my own words"
-      assert has_element?(view, "[data-filter-tab='all'][aria-pressed='true']")
+      assert showing(view) == :all
     end
   end
 
-  describe "the tab you are not on says something landed there (issue #1503)" do
-    setup do
-      # `record_remote_post/2` claims the shared inbound cap, which lives in the
-      # RateLimiter's ETS table and outlives a test.
-      Vutuv.RateLimiter.reset()
-      :ok
-    end
-
-    defp dotted?(view, tab) do
-      has_element?(
-        view,
-        "#feed-source-tabs [data-filter-tab='#{tab}'] [data-post-filter-unseen]"
-      )
-    end
-
-    # A Create as the servers out there send one, from an account this member
-    # already follows.
-    defp remote_note(account, published \\ DateTime.utc_now(:second)) do
-      unique = System.unique_integer([:positive])
-
-      %{
-        "type" => "Create",
-        "actor" => account.actor_uri,
-        "object" => %{
-          "id" => "https://social.example/posts/#{unique}",
-          "type" => "Note",
-          "attributedTo" => account.actor_uri,
-          "content" => "<p>frisch von drüben</p>",
-          "url" => "https://social.example/@#{account.handle}/#{unique}",
-          "published" => DateTime.to_iso8601(published),
-          "to" => ["https://www.w3.org/ns/activitystreams#Public"]
-        }
-      }
-    end
-
-    test "a vutuv post arriving on the Fediverse tab dots vutuv, never All", %{conn: conn} do
-      {conn, user} = create_and_login_user(conn)
-      {author, _post} = followed_post(user, "an older post")
-      cached_post(remote_account(user, "them"), "written out there")
-
-      {:ok, view, _html} = live(conn, ~p"/feed")
-      render_click(view, "filter-source", %{"type" => "fediverse"})
-
-      {:ok, _fresh} = Posts.create_post(author, %{body: "arriving live"})
-
-      assert dotted?(view, "vutuv")
-      # "All" never carries a dot, true as one would be.
-      refute dotted?(view, "all")
-      # You are looking at this one, so nothing on it can be unseen.
-      refute dotted?(view, "fediverse")
-    end
-
-    test "landing on the tab clears its dot", %{conn: conn} do
-      {conn, user} = create_and_login_user(conn)
-      {author, _post} = followed_post(user, "an older post")
-      cached_post(remote_account(user, "them"), "written out there")
-
-      {:ok, view, _html} = live(conn, ~p"/feed")
-      render_click(view, "filter-source", %{"type" => "fediverse"})
-      {:ok, _fresh} = Posts.create_post(author, %{body: "arriving live"})
-      assert dotted?(view, "vutuv")
-
-      render_click(view, "filter-source", %{"type" => "vutuv"})
-
-      assert timeline(view) =~ "arriving live"
-
-      render_click(view, "filter-source", %{"type" => "fediverse"})
-      refute dotted?(view, "vutuv")
-    end
-
-    test "a post the reader may not see dots nothing", %{conn: conn} do
-      # Calibrated against the un-fixed order: `insert_entry/3` used to drop an
-      # arrival on the wrong tab BEFORE asking `visible_to?/2`, which cost
-      # nothing while the answer was "do nothing" and would now light a tab for
-      # a post this member is turned away from.
-      {conn, user} = create_and_login_user(conn)
-      {author, _post} = followed_post(user, "an older post")
-      cached_post(remote_account(user, "them"), "written out there")
-
-      {:ok, view, _html} = live(conn, ~p"/feed")
-      render_click(view, "filter-source", %{"type" => "fediverse"})
-
-      # Only people the author follows — and they do not follow this reader.
-      {:ok, _denied} =
-        Posts.create_post(author, %{
-          body: "not for you",
-          denials: [%{"wildcard" => "non_followees"}]
-        })
-
-      refute dotted?(view, "vutuv")
-      refute dotted?(view, "all")
-    end
-
-    test "a post from another network dots the Fediverse tab", %{conn: conn} do
-      {conn, user} = create_and_login_user(conn)
-      {_author, _post} = followed_post(user, "written here on vutuv")
-      account = remote_account(user, "them")
-      cached_post(account, "written out there")
-
-      {:ok, view, _html} = live(conn, ~p"/feed")
-      render_click(view, "filter-source", %{"type" => "vutuv"})
-
-      assert :ok = Fediverse.record_remote_post(remote_note(account), account.actor_uri)
-
-      assert dotted?(view, "fediverse")
-      refute dotted?(view, "all")
-      refute dotted?(view, "vutuv")
-
-      render_click(view, "filter-source", %{"type" => "fediverse"})
-      assert timeline(view) =~ "frisch von drüben"
-      refute dotted?(view, "fediverse")
-    end
-
-    test "a post the reader's own follow does not open dots nothing", %{conn: conn} do
-      # The calibration for the probe: the nudge reaches this member (their
-      # follow is not muted, so the fan-out has nothing to go on), and only
-      # their own sources know that a follow nobody has answered yet does not
-      # open that account's followers-only posts. Skip the probe and the dot
-      # lights up here.
-      {conn, user} = create_and_login_user(conn)
-      {_author, _post} = followed_post(user, "written here on vutuv")
-
-      # An account they asked to follow and that has not answered. Its older
-      # public post is readable, so the tab bar shows and the probe has a real
-      # row to answer with.
-      account = remote_account("private")
-
-      Repo.insert!(%Follow{
-        user_id: user.id,
-        remote_account_id: account.id,
-        state: "requested",
-        follow_activity_id: "https://vutuv.test/#{user.id}/actor#follows/private"
-      })
-
-      old = cached_post(account, "an earlier public post")
-      two_hours_ago = DateTime.add(DateTime.utc_now(:second), -7200)
-      Repo.update!(Ecto.Changeset.change(old, published_at: two_hours_ago))
-
-      # Somebody else's accepted follow is what gets the delivery recorded.
-      Repo.insert!(%Follow{
-        user_id: insert(:user, email_confirmed?: true).id,
-        remote_account_id: account.id,
-        state: "accepted",
-        follow_activity_id: "https://vutuv.test/other/actor#follows/private"
-      })
-
-      {:ok, view, _html} = live(conn, ~p"/feed")
-      render_click(view, "filter-source", %{"type" => "vutuv"})
-
-      followers_only =
-        put_in(remote_note(account), ["object", "to"], [account.actor_uri <> "/followers"])
-
-      assert :ok = Fediverse.record_remote_post(followers_only, account.actor_uri)
-
-      refute dotted?(view, "fediverse")
-      refute dotted?(view, "all")
-    end
-
-    test "a muted account's post dots nothing", %{conn: conn} do
-      # The reader's mute is the one per-member gate the fan-out can answer
-      # itself, so this one never even leaves the write.
-      {conn, user} = create_and_login_user(conn)
-      {_author, _post} = followed_post(user, "written here on vutuv")
-
-      # One account whose old post keeps the tab bar on screen…
-      old = cached_post(remote_account(user, "seen"), "read long ago")
-      two_hours_ago = DateTime.add(DateTime.utc_now(:second), -7200)
-      Repo.update!(Ecto.Changeset.change(old, published_at: two_hours_ago))
-
-      # …and one this member muted.
-      muted = remote_account(user, "muted")
-
-      Repo.get_by!(Follow, remote_account_id: muted.id)
-      |> Ecto.Changeset.change(muted: true)
-      |> Repo.update!()
-
-      {:ok, view, _html} = live(conn, ~p"/feed")
-      render_click(view, "filter-source", %{"type" => "vutuv"})
-
-      assert :ok = Fediverse.record_remote_post(remote_note(muted), muted.actor_uri)
-
-      refute dotted?(view, "fediverse")
-      refute dotted?(view, "all")
-    end
-
-    # ── Across a page load (the dot that vanished on the way back) ──
-    #
-    # The dot is not state a mount inherits — every mount derives it from the
-    # last moment the reader had the other tab on screen (`users.feed_source_at`,
-    # `unseen_at_mount/3`). So it comes back on the next visit to /feed, and a
-    # rejoin — a mount with no page load at all — takes the same path.
-
-    # A reader whose feed has both halves, a member they follow here, and that
-    # member's post — the arrival that belongs on the tab they are not on.
-    defp unseen_fixture(conn) do
-      {conn, user} = create_and_login_user(conn)
-      {author, older} = followed_post(user, "an older post")
-      # Well behind everything else: it is the tab's existing content, and a
-      # test asking "is anything newer than the reader's last look" has to be
-      # able to answer no.
-      backdate_post!(older, 300)
-      cached_post(remote_account(user, "them"), "written out there")
-      {:ok, post} = Posts.create_post(author, %{body: "arriving live"})
-
-      # Placed half a minute back: at second precision, a test whose post and
-      # tab press happen inside one second decides ties rather than rules.
-      {conn, user, backdate_post!(post, 30)}
-    end
-
-    # The tab this member moved to, and when.
-    defp opened_on(user, filter, at) do
-      Repo.update!(
-        Ecto.Changeset.change(user, feed_source: to_string(filter), feed_source_at: at)
-      )
-    end
-
-    defp load_feed(conn) do
-      {:ok, view, _html} = live(conn, ~p"/feed")
-      view
-    end
-
-    test "the next page load brings back a dot the reader never cleared", %{conn: conn} do
-      {conn, user, post} = unseen_fixture(conn)
-
-      # They moved to the Fediverse tab a second before that vutuv post landed,
-      # so they have not been to the vutuv tab since it did — and a trip to
-      # another page and back does not make it read.
-      opened_on(user, :fediverse, NaiveDateTime.add(post.inserted_at, -1))
-
-      assert dotted?(load_feed(conn), "vutuv")
-    end
-
-    test "the Fediverse tab is dotted the same way", %{conn: conn} do
-      # The dot is not a fediverse feature and its clock is not a local one:
-      # the same question is asked of whichever tab the reader is not on, so
-      # this is the mirror of the test above, reader and arrival swapped.
-      {conn, user} = create_and_login_user(conn)
-      {_author, older} = followed_post(user, "an older post")
-      backdate_post!(older, 300)
-
-      landed = DateTime.add(DateTime.utc_now(:second), -30)
-
-      remote =
-        user
-        |> remote_account("them")
-        |> cached_post("written out there")
-        |> Ecto.Changeset.change(published_at: landed)
-        |> Repo.update!()
-
-      at = DateTime.to_naive(remote.published_at)
-
-      # They moved to the vutuv tab a second before that post landed out there.
-      opened_on(user, :vutuv, NaiveDateTime.add(at, -1))
-      assert dotted?(load_feed(conn), "fediverse")
-
-      # And would not be dotted had they been back since.
-      opened_on(user, :vutuv, NaiveDateTime.add(at, 1))
-      refute dotted?(load_feed(conn), "fediverse")
-    end
-
-    test "a tab the reader has been to since stays clean", %{conn: conn} do
-      {conn, user, post} = unseen_fixture(conn)
-
-      # Moving TO the Fediverse tab after the post landed means they were
-      # sitting on the vutuv one until then, so they have seen it.
-      opened_on(user, :fediverse, NaiveDateTime.add(post.inserted_at, 1))
-
-      refute dotted?(load_feed(conn), "vutuv")
-    end
-
-    test "a member whose tab clock was never stamped gets no dot", %{conn: conn} do
-      # A row last written by a release that had no `feed_source_at` column:
-      # nothing dates their last look, so nothing can be called unseen. It
-      # heals on their first tab press.
-      {conn, user, _post} = unseen_fixture(conn)
-      opened_on(user, :fediverse, nil)
-
-      refute dotted?(load_feed(conn), "vutuv")
-    end
-
-    test "pressing the tab already open does not swallow the other tab's dot", %{conn: conn} do
-      {conn, user, post} = unseen_fixture(conn)
-      opened_on(user, :fediverse, NaiveDateTime.add(post.inserted_at, -1))
-
-      view = load_feed(conn)
-      assert dotted?(view, "vutuv")
-
-      # A press on the tab that is already open moves nobody: the reader has
-      # still not been to the vutuv tab, so the dot must survive the press — and
-      # the page load after it, which is where a clock stamped on that press
-      # would quietly have swallowed it.
-      render_click(view, "filter-source", %{"type" => "fediverse"})
-      assert dotted?(view, "vutuv")
-
-      assert dotted?(load_feed(conn), "vutuv")
-    end
-
-    test "the All tab is never dotted while it is the open one", %{conn: conn} do
-      {conn, user} = create_and_login_user(conn)
-      {author, _post} = followed_post(user, "an older post")
-      account = remote_account(user, "them")
-      cached_post(account, "written out there")
-
-      {:ok, view, _html} = live(conn, ~p"/feed")
-
-      {:ok, _fresh} = Posts.create_post(author, %{body: "arriving live"})
-      assert :ok = Fediverse.record_remote_post(remote_note(account), account.actor_uri)
-
-      # "All" holds both halves, so nothing landed somewhere else.
-      refute dotted?(view, "all")
-      refute dotted?(view, "vutuv")
-      refute dotted?(view, "fediverse")
-    end
-  end
-
-  describe "a press on a slow line" do
-    # Switching tabs is one round trip, and until it lands the page shows
-    # exactly what it showed before: the pill only travels with the answer, so
-    # on a slow connection the control reads as broken. The fix is two-part —
-    # the press paints itself (CSS on LiveView's own `phx-click-loading`, see
-    # `assets/css/app.css`) and the page carries less over the wire. The paint
-    # is CSS and cannot be asserted here; what these tests pin is the two
-    # things it silently depends on.
+  describe "a source switch on a slow line" do
+    # Switching sources is one round trip, and until it lands the page shows
+    # exactly what it showed before. The page carries less over the wire for
+    # that reason, which is what this pins.
 
     # How many vutuv posts the timeline is showing (`stream_configure` ids
     # every row `feed-<entry id>`, and a member's post entry is `post-<uuid>`).
     defp rows(view), do: length(String.split(timeline(view), ~s(id="feed-post-))) - 1
-
-    test "the tabs and the timeline sit inside one scope", %{conn: conn} do
-      {conn, user} = create_and_login_user(conn)
-      {_author, _post} = followed_post(user, "written here on vutuv")
-      cached_post(remote_account(user, "them"), "written out there")
-
-      {:ok, view, _html} = live(conn, ~p"/feed")
-
-      # The dimming rule is
-      # `[data-filter-scope]:has([data-filter-tab].phx-click-loading)
-      # [data-filter-list]`, so a refactor that moves either marker out of that
-      # container kills the feedback with every other test still green.
-      assert has_element?(view, "[data-filter-scope] [data-filter-tab='fediverse']")
-      assert has_element?(view, "[data-filter-scope] [data-filter-list]")
-    end
 
     test "a tab switch sends half a page, and the rest stays reachable", %{conn: conn} do
       {conn, user} = create_and_login_user(conn)
@@ -916,9 +576,9 @@ defmodule VutuvWeb.FeedSourceTabsTest do
       assert rows(view) == 12
       assert timeline(view) =~ "written out there"
 
-      # A tab switch is not. Twenty cards of rendered HTML is the bulk of the
+      # A source switch is not. Twenty cards of rendered HTML is the bulk of the
       # second the member waits, and a screen holds three or four.
-      render_click(view, "filter-source", %{"type" => "vutuv"})
+      switch(view, user, :vutuv)
       assert rows(view) == 10
 
       # Which only works because the shorter page still knows there is more —

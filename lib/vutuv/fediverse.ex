@@ -1470,6 +1470,81 @@ defmodule Vutuv.Fediverse do
   defp scope_follow_state(query, :any), do: query
 
   @doc """
+  The remote-account ids whose follow this party has muted.
+
+  The small half of the picture, like `Vutuv.Social.muted_follow_ids/1`, and for
+  the same reason: it is what an undo of a bulk mute has to put back.
+  """
+  def muted_remote_follow_ids(party) do
+    Repo.all(
+      from(f in Follow, where: party_is(f, party) and f.muted, select: f.remote_account_id)
+    )
+  end
+
+  @doc """
+  Mutes this party's follows of every account on `host` except `keep_id`, which
+  is unmuted — the feed band's "only this account", scoped to the one server the
+  account sits on.
+
+  Scoped rather than global on purpose. Accounts on the *other* servers are
+  switched off by muting those hosts, one array entry each, and a mute written
+  onto them here as well would outlive that: the reader would tick a server back
+  on and it would deliver nothing, with no row in the card admitting why.
+
+  Writes over mutes the member made deliberately, so the caller captures
+  `muted_remote_follow_ids/1` first and offers an undo.
+  """
+  def mute_remote_follows_except(party, host, keep_id) when is_binary(host) do
+    UUIDv7.with_cast(keep_id, fn account_id ->
+      stamp = NaiveDateTime.truncate(NaiveDateTime.utc_now(), :second)
+
+      on_host =
+        from(f in Follow,
+          join: a in RemoteAccount,
+          on: a.id == f.remote_account_id,
+          where: party_is(f, party) and a.host == ^host
+        )
+
+      Repo.update_all(
+        from([f, _a] in on_host, where: not f.muted and f.remote_account_id != ^account_id),
+        set: [muted: true, updated_at: stamp]
+      )
+
+      Repo.update_all(
+        from([f, _a] in on_host, where: f.muted and f.remote_account_id == ^account_id),
+        set: [muted: false, updated_at: stamp]
+      )
+    end)
+
+    :ok
+  end
+
+  @doc """
+  Puts this party's remote-follow mutes back to exactly `ids` — every other
+  follow unmuted. The undo of `mute_remote_follows_except/3`, and what the
+  band's "Select all" runs with an empty list.
+  """
+  def restore_remote_follow_mutes(party, ids) when is_list(ids) do
+    stamp = NaiveDateTime.truncate(NaiveDateTime.utc_now(), :second)
+
+    Repo.update_all(
+      from(f in Follow,
+        where: party_is(f, party) and f.muted and f.remote_account_id not in ^ids
+      ),
+      set: [muted: false, updated_at: stamp]
+    )
+
+    Repo.update_all(
+      from(f in Follow,
+        where: party_is(f, party) and not f.muted and f.remote_account_id in ^ids
+      ),
+      set: [muted: true, updated_at: stamp]
+    )
+
+    :ok
+  end
+
+  @doc """
   Mutes (or unmutes) the member's follow of one remote account.
 
   The same meaning a local follow's mute has: the subscription stays, its posts
@@ -2662,10 +2737,96 @@ defmodule Vutuv.Fediverse do
     end
   end
 
+  @doc """
+  The fediverse servers this member switched off in the feed's filter band —
+  the instance-level twin of `fediverse_follows.muted`.
+
+  Muting an account hides that one account; muting a server hides everything
+  that comes from it, including accounts followed later, and including a post
+  another server's account boosted into the feed. Both halves are read by the
+  four fediverse feed sources; neither unfollows anything, so switching a
+  server back on restores exactly what was there.
+
+  Stored as a short array on the member (`users.feed_muted_hosts`): the list is
+  a handful of hostnames, it is read beside the member row the feed already has
+  in hand, and it never needs an identity of its own.
+  """
+  def muted_hosts(%User{feed_muted_hosts: hosts}) when is_list(hosts), do: hosts
+  def muted_hosts(_viewer), do: []
+
+  @doc """
+  Switch one server off (`true`) or back on (`false`) for `user`, and answer
+  with the new list.
+
+  The host is normalised the way `RemoteAccount.host` stores it (lower case,
+  trimmed), so a member typing a shouted hostname mutes the same server the
+  panel lists. Idempotent in both directions.
+  """
+  def set_host_mute(%User{} = user, host, muted?) when is_binary(host) do
+    host = host |> String.trim() |> String.downcase()
+    current = muted_hosts(user)
+
+    next =
+      if muted?,
+        do: Enum.uniq([host | current]),
+        else: Enum.reject(current, &(&1 == host))
+
+    set_muted_hosts(user, next)
+  end
+
+  @doc """
+  Replace the whole muted-server list in one write — what the band's "select
+  all" and "clear all" do. One statement rather than one per host, so the two
+  bulk buttons cannot half-apply.
+  """
+  def set_muted_hosts(%User{} = user, hosts) when is_list(hosts) do
+    next = hosts |> Enum.map(&(&1 |> String.trim() |> String.downcase())) |> Enum.uniq()
+
+    {1, nil} =
+      Repo.update_all(from(u in User, where: u.id == ^user.id), set: [feed_muted_hosts: next])
+
+    {:ok, next}
+  end
+
+  # The three shapes the muted-server list has to be applied in. `is_nil(...) or
+  # ... not in` is not belt and braces: `x NOT IN (…)` is never true when `x` is
+  # NULL, so a row without a host would drop out of the feed entirely — the
+  # silent half of the nullable-column trap.
+  defp reject_muted_hosts(query, viewer),
+    do: reject_hosts(query, :remote_account, muted_hosts(viewer))
+
+  defp reject_muted_boosted_hosts(query, viewer),
+    do: reject_hosts(query, :boosted_author, muted_hosts(viewer))
+
+  defp reject_hosts(query, _binding, []), do: query
+
+  defp reject_hosts(query, :remote_account, hosts),
+    do: from([remote_account: a] in query, where: is_nil(a.host) or a.host not in ^hosts)
+
+  defp reject_hosts(query, :boosted_author, hosts),
+    do: from([boosted_author: a] in query, where: is_nil(a.host) or a.host not in ^hosts)
+
+  # A reshared reply hangs off a `Note`, which stores the author as the whole
+  # `@user@host` handle rather than a host column of its own — so the server is
+  # read out of the handle in SQL rather than by dropping rows afterwards, which
+  # would leave the paginator's `more?` lying about a short page.
+  defp reject_muted_note_hosts(query, viewer) do
+    case muted_hosts(viewer) do
+      [] ->
+        query
+
+      hosts ->
+        from([language_source: n] in query,
+          where: is_nil(n.handle) or fragment("split_part(?, '@', 3)", n.handle) not in ^hosts
+        )
+    end
+  end
+
   def feed_remote_posts(%User{id: viewer_id} = viewer, fetch_n, cursor) do
     if enabled?() do
       from(p in RemotePost,
         join: a in RemoteAccount,
+        as: :remote_account,
         on: a.id == p.remote_account_id,
         join: f in Follow,
         on: f.remote_account_id == a.id,
@@ -2675,6 +2836,7 @@ defmodule Vutuv.Fediverse do
         limit: ^fetch_n,
         preload: [:screenshot, remote_account: a]
       )
+      |> reject_muted_hosts(viewer)
       |> Vutuv.Posts.language_scope(Vutuv.Posts.feed_language_filter(viewer))
       |> utc_at_or_before(cursor, :published_at)
       |> Repo.all()
@@ -2697,13 +2859,16 @@ defmodule Vutuv.Fediverse do
   alike: pressing that button is something that happened here, whoever pressed
   it (`Vutuv.Posts.feed_sources/2`).
   """
-  def feed_remote_reposts(%User{id: viewer_id} = viewer, fetch_n, cursor) do
+  def feed_remote_reposts(viewer, fetch_n, cursor, opts \\ [])
+
+  def feed_remote_reposts(%User{id: viewer_id} = viewer, fetch_n, cursor, opts) do
     if enabled?() do
       from(r in PostRepost,
         join: p in RemotePost,
         as: :language_source,
         on: p.id == r.remote_post_id,
         join: a in RemoteAccount,
+        as: :remote_account,
         on: a.id == p.remote_account_id,
         join: reposter in User,
         as: :resharer,
@@ -2715,7 +2880,8 @@ defmodule Vutuv.Fediverse do
         limit: ^fetch_n,
         preload: [remote_post: {p, [:screenshot, remote_account: a]}, user: reposter]
       )
-      |> scope_resharer(viewer_id)
+      |> scope_resharer(viewer_id, Keyword.get(opts, :only))
+      |> reject_muted_hosts(viewer)
       |> Vutuv.Posts.named_language_scope(Vutuv.Posts.feed_language_filter(viewer))
       |> remote_reposts_at_or_before(cursor)
       |> Repo.all()
@@ -2733,7 +2899,18 @@ defmodule Vutuv.Fediverse do
   # source applies: that one only asks about a confirmed address, and passing a
   # stranger's post into other people's feeds is exactly what a frozen or
   # suspended account must not be able to keep doing while its case is open.
-  defp scope_resharer(query, viewer_id) do
+  defp scope_resharer(query, viewer_id, :mine), do: where(query, [r], r.user_id == ^viewer_id)
+
+  defp scope_resharer(query, viewer_id, :others) do
+    where(
+      query,
+      [r, resharer: resharer],
+      r.user_id != ^viewer_id and r.user_id in subquery(unmuted_followees(viewer_id)) and
+        account_confirmed_row(resharer) and not account_hidden_row(resharer)
+    )
+  end
+
+  defp scope_resharer(query, viewer_id, _both) do
     where(
       query,
       [r, resharer: resharer],
@@ -2807,12 +2984,19 @@ defmodule Vutuv.Fediverse do
 
       from(b in PostBoost,
         join: a in RemoteAccount,
+        as: :remote_account,
         on: a.id == b.remote_account_id,
         join: f in Follow,
         on: f.remote_account_id == a.id,
         left_join: rp in RemotePost,
         as: :language_source,
         on: rp.id == b.remote_post_id,
+        # The boosted post's own author, for the muted-server check below: a
+        # switched-off instance must not come back in through somebody else's
+        # boost, the same back door the muted-author subquery closes.
+        left_join: author in RemoteAccount,
+        as: :boosted_author,
+        on: author.id == rp.remote_account_id,
         where: f.user_id == ^viewer_id and f.muted == false and f.state == "accepted",
         where: is_nil(rp.id) or rp.remote_account_id not in subquery(muted_authors),
         order_by: [desc: b.announced_at, desc: b.id],
@@ -2828,6 +3012,8 @@ defmodule Vutuv.Fediverse do
         ]
       )
       |> boosts_of_kind(opts[:only])
+      |> reject_muted_hosts(viewer)
+      |> reject_muted_boosted_hosts(viewer)
       |> Vutuv.Posts.named_language_scope(Vutuv.Posts.feed_language_filter(viewer))
       |> utc_at_or_before(cursor, :announced_at)
       |> Repo.all()
@@ -7350,7 +7536,9 @@ defmodule Vutuv.Fediverse do
   follows nobody out there. Stamped with the reshare time: what is new is the
   sharing, and it lands on the vutuv tab for the same reason.
   """
-  def feed_remote_reply_reposts(%User{id: viewer_id} = viewer, fetch_n, cursor) do
+  def feed_remote_reply_reposts(viewer, fetch_n, cursor, opts \\ [])
+
+  def feed_remote_reply_reposts(%User{id: viewer_id} = viewer, fetch_n, cursor, opts) do
     if enabled?() do
       from(r in NoteRepost,
         join: n in Note,
@@ -7366,7 +7554,8 @@ defmodule Vutuv.Fediverse do
         order_by: [desc: r.inserted_at, desc: r.id],
         preload: [note: n, user: resharer]
       )
-      |> scope_resharer(viewer_id)
+      |> scope_resharer(viewer_id, Keyword.get(opts, :only))
+      |> reject_muted_note_hosts(viewer)
       |> Vutuv.Posts.named_language_scope(Vutuv.Posts.feed_language_filter(viewer))
       |> limit(^fetch_n)
       |> note_reposts_at_or_before(cursor)

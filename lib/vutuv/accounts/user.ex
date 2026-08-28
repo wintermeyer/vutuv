@@ -331,6 +331,16 @@ defmodule Vutuv.Accounts.User do
     # what "unseen" is measured against — the socket it used to live in is
     # gone the moment they open another page.
     field(:feed_source_at, :naive_datetime)
+    # The feed's filter band. `feed_muted_hosts` switches whole fediverse
+    # servers off — the instance-level twin of `fediverse_follows.muted`, which
+    # keeps doing the per-account half; the two are read together in
+    # `Vutuv.Fediverse`'s feed sources. `feed_rail` is how the member arranged
+    # the band itself: `%{"order" => [...], "collapsed" => [...], "removed" =>
+    # [...]}`. Neither is a form field: the panel writes both through
+    # `Vutuv.Posts`/`Vutuv.Fediverse` chokepoints, so the vocabulary stays
+    # closed there rather than in a changeset.
+    field(:feed_muted_hosts, {:array, :string})
+    field(:feed_rail, :map)
     # The reader's post-display preferences (same settings page, applied to
     # every post this member reads: feed, profile Beiträge, permalink). The
     # line counts drive the CSS line-clamp on the preview body, desktop and

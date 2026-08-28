@@ -85,9 +85,6 @@ defmodule Vutuv.Application do
         # Snapshots the "who to follow" recent-poster pool the profile rail
         # draws from — same deal as PopularUsers. Starts after the Repo.
         Vutuv.Posts.TopPosters,
-        # Snapshots the candidate pool the feed's "Vorschläge" rail draws from,
-        # per locale — same deal again. Starts after the Repo.
-        Vutuv.Posts.PopularPosts,
         # Fans a :day_changed broadcast out at Berlin midnight so open pages
         # re-render "today"/"Gestern" post timestamps. Needs PubSub only.
         Vutuv.DayClock,
