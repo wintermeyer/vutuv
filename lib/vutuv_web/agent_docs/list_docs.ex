@@ -19,7 +19,6 @@ defmodule VutuvWeb.AgentDocs.ListDocs do
   alias VutuvWeb.AgentDocs
   alias VutuvWeb.AgentDocs.JobPostingDoc
   alias VutuvWeb.AgentDocs.PostDoc
-  alias VutuvWeb.UI
   alias VutuvWeb.UserHelpers
 
   alias Vutuv.Tags.Tag
@@ -180,16 +179,19 @@ defmodule VutuvWeb.AgentDocs.ListDocs do
   with its member count and letter-page URL. Zero-count letters ride along
   so the doc mirrors the HTML page's full A-Z strip.
 
-  `total` is what the directory lists — the one figure the page itself states.
-  It carried the whole membership and the Fediverse head count beside it until
-  2026-08-13; those belong to the top bar's people pill, and a page whose job
-  is an A-Z index should not open with three numbers.
+  `total` is what the directory lists, and since 2026-08-28 it is **structured
+  data for machine readers only**: the HTML page states no figure at all, having
+  shed the whole membership and the Fediverse head count in 2026-08-13 and its
+  own listed count on the later date (Stefan, both times — a page whose job is
+  an A-Z index reads as a statistics page the moment it opens with numbers).
+  They stay here because a reader of the JSON has no A-Z strip in front of them,
+  and a count is exactly the sort of thing they came for.
   """
   def build_directory_index(entries, total) do
     AgentDocs.doc_meta("directory", "/system/members")
     |> Map.merge(%{
       title: gettext("Member directory"),
-      description: directory_description(total),
+      description: directory_description(),
       total: total,
       letters:
         Enum.map(entries, fn %{letter: letter, count: count} ->
@@ -198,14 +200,12 @@ defmodule VutuvWeb.AgentDocs.ListDocs do
     })
   end
 
-  # The Markdown and text renderings carry no counts of their own, so the
-  # listed figure has to live in the description — the same sentence the HTML
-  # page prints under its heading.
-  defp directory_description(total) do
-    gettext(
-      "%{listed} vutuv members are listed here, grouped by the first letter of their last name.",
-      listed: UI.delimited_count(total)
-    )
+  # The one sentence the HTML page prints under its heading, in the words a
+  # machine reader needs (no A-Z strip to look at, so the grouping is spelled
+  # out). It carried the listed figure until 2026-08-28; the number lives in the
+  # `total` field now, where it is data rather than prose.
+  defp directory_description do
+    gettext("Every vutuv member, grouped by the first letter of their last name.")
   end
 
   @doc """

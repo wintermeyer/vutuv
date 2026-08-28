@@ -1105,7 +1105,7 @@ msgstr "User mit den meisten Followern"
 msgid "The 1,000 Users with the most Followers"
 msgstr "Die 1.000 User mit den meisten Followern"
 
-#: lib/vutuv_web/agent_docs/list_docs.ex:171
+#: lib/vutuv_web/agent_docs/list_docs.ex:170
 #: lib/vutuv_web/templates/page/most_followed_users.html.heex:12
 #, elixir-autogen
 msgid "We haven't yet figured out the best way to help everyone discover other interesting vutuv users. So for now, this page simply lists the 1,000 users with the most followers."
@@ -3980,7 +3980,7 @@ msgstr "%{count} Beiträge von %{name}"
 msgid "%{count} total"
 msgstr "%{count} insgesamt"
 
-#: lib/vutuv_web/agent_docs/list_docs.ex:48
+#: lib/vutuv_web/agent_docs/list_docs.ex:47
 #, elixir-autogen, elixir-format
 msgid "Followers of %{name}"
 msgstr "Follower von %{name}"
@@ -4026,12 +4026,12 @@ msgstr "Mitglied seit"
 msgid "Most endorsed members"
 msgstr "Am häufigsten empfohlene Mitglieder"
 
-#: lib/vutuv_web/agent_docs/list_docs.ex:169
+#: lib/vutuv_web/agent_docs/list_docs.ex:168
 #, elixir-autogen, elixir-format
 msgid "Most followed members"
 msgstr "Mitglieder mit den meisten Followern"
 
-#: lib/vutuv_web/agent_docs/list_docs.ex:49
+#: lib/vutuv_web/agent_docs/list_docs.ex:48
 #, elixir-autogen, elixir-format
 msgid "People %{name} follows"
 msgstr "Wem %{name} folgt"
@@ -4084,7 +4084,7 @@ msgstr "bis %{date}"
 msgid "This page in %{language}: %{url}"
 msgstr "Diese Seite auf %{language}: %{url}"
 
-#: lib/vutuv_web/agent_docs/list_docs.ex:50
+#: lib/vutuv_web/agent_docs/list_docs.ex:49
 #, elixir-autogen, elixir-format
 msgid "Connections of %{name}"
 msgstr "Vernetzungen von %{name}"
@@ -6553,7 +6553,7 @@ msgstr ""
 msgid "Endorsed"
 msgstr "Empfohlen am"
 
-#: lib/vutuv_web/agent_docs/list_docs.ex:142
+#: lib/vutuv_web/agent_docs/list_docs.ex:141
 #: lib/vutuv_web/templates/user_tag/endorsers.html.heex:11
 #, elixir-autogen, elixir-format
 msgid "Members who endorsed %{name} for %{tag}"
@@ -8903,8 +8903,8 @@ msgstr "Ungültig"
 msgid "Invalid address (skipped)"
 msgstr "Ungültige Adresse (übersprungen)"
 
-#: lib/vutuv_web/agent_docs/list_docs.ex:191
-#: lib/vutuv_web/controllers/directory_controller.ex:53
+#: lib/vutuv_web/agent_docs/list_docs.ex:193
+#: lib/vutuv_web/controllers/directory_controller.ex:54
 #: lib/vutuv_web/templates/directory/index.html.heex:2
 #: lib/vutuv_web/templates/directory/index.html.heex:3
 #: lib/vutuv_web/templates/directory/show.html.heex:5
@@ -8913,7 +8913,7 @@ msgstr "Ungültige Adresse (übersprungen)"
 msgid "Member directory"
 msgstr "Mitgliederverzeichnis"
 
-#: lib/vutuv_web/templates/directory/index.html.heex:32
+#: lib/vutuv_web/templates/directory/index.html.heex:31
 #: lib/vutuv_web/templates/directory/show.html.heex:14
 #, elixir-autogen, elixir-format
 msgid "Members by initial"
@@ -22723,16 +22723,6 @@ msgstr "Ihr LinkedIn-Profil kann mitkommen."
 msgid "Being checked"
 msgstr "Wird geprüft"
 
-#: lib/vutuv_web/templates/directory/index.html.heex:23
-#, elixir-autogen, elixir-format
-msgid "%{count} vutuv members, filed alphabetically by last name."
-msgstr "%{count} vutuv Mitglieder, alphabetisch nach Nachname sortiert."
-
-#: lib/vutuv_web/agent_docs/list_docs.ex:205
-#, elixir-autogen, elixir-format
-msgid "%{listed} vutuv members are listed here, grouped by the first letter of their last name."
-msgstr "Hier sind %{listed} vutuv Mitglieder aufgeführt, gruppiert nach dem Anfangsbuchstaben des Nachnamens."
-
 #: lib/vutuv_web/live/directory_search_live.ex:141
 #, elixir-autogen, elixir-format
 msgid "Find a member"
@@ -22780,3 +22770,14 @@ msgstr "Weiter geht diese Liste nicht. Tippen Sie mehr vom Namen, um sie einzugr
 #, elixir-autogen, elixir-format
 msgid "Which names to search"
 msgstr "Welche Namen durchsucht werden"
+
+#: lib/vutuv_web/templates/directory/index.html.heex:23
+#, elixir-autogen, elixir-format
+msgid "All vutuv members, filed alphabetically by last name."
+msgstr "Alle vutuv Mitglieder, alphabetisch nach Nachname sortiert."
+
+#: lib/vutuv_web/agent_docs/list_docs.ex:208
+#, elixir-autogen, elixir-format
+msgid "Every vutuv member, grouped by the first letter of their last name."
+
+msgstr "Alle vutuv Mitglieder, gruppiert nach dem Anfangsbuchstaben des Nachnamens."

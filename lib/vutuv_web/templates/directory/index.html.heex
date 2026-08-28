@@ -14,21 +14,21 @@ takes `q` from the URL so a submitted search reloads and shares as itself. --%>
 
 <div class="card-list">
   <section class="card">
-    <%!-- One line, and it says what the page is. The membership total and the
-    Fediverse head count used to follow it in two more paragraphs; they are the
-    top bar's business (`#people-total`, on this page like every other), and
-    three figures above an A-Z strip read as a statistics page rather than as a
-    directory (Stefan, 2026-08-13). --%>
-    <p>
-      {gettext("%{count} vutuv members, filed alphabetically by last name.",
-        count: delimited_count(@total)
-      )}
-    </p>
+    <%!-- One line, and it says what the page is and how it is filed — which the
+    rows need, since they read "Özil, Mesut". It carries **no figure**: this page
+    lost the membership total and the Fediverse head count in 2026-08-13 for
+    reading as a statistics page, and the listed count went the same way on
+    2026-08-28 (Stefan). The counts still ride the agent formats, where a machine
+    reader has no A-Z strip to look at. --%>
+    <p>{gettext("All vutuv members, filed alphabetically by last name.")}</p>
 
     <%!-- The A-Z strip: letters with members link to their page, empty ones
-    render as muted tiles so the strip always shows the whole alphabet. Plain
-    <a>/<span> tags keep the attribute order stable for the tests. --%>
+    render as muted tiles so the strip always shows the whole alphabet. The
+    count stays in `data-count` — invisible, and what the tests read — because
+    the tile says everything a browsing reader needs by being a link or not.
+    Plain <a>/<span> tags keep the attribute order stable for those tests. --%>
     <nav
+      id="directory-letters"
       aria-label={gettext("Members by initial")}
       class="mt-6 grid grid-cols-5 gap-2 sm:grid-cols-9"
     >
@@ -38,25 +38,17 @@ takes `q` from the URL so a submitted search reloads and shares as itself. --%>
             href={~p"/system/members/#{entry.letter}"}
             data-letter={entry.letter}
             data-count={entry.count}
-            class="flex flex-col items-center rounded-lg px-2 py-3 ring-1 ring-slate-200 hover:bg-brand-50 dark:ring-slate-800 dark:hover:bg-brand-900/40"
+            class="flex items-center justify-center rounded-lg px-2 py-3 text-lg font-semibold text-brand-700 ring-1 ring-slate-200 hover:bg-brand-50 dark:text-brand-100 dark:ring-slate-800 dark:hover:bg-brand-900/40"
           >
-            <span class="text-lg font-semibold text-brand-700 dark:text-brand-100">
-              {display_letter(entry.letter)}
-            </span>
-            <span class="text-xs text-slate-600 dark:text-slate-400">
-              {compact_count(entry.count)}
-            </span>
+            {display_letter(entry.letter)}
           </a>
         <% else %>
           <span
             data-letter={entry.letter}
             data-count="0"
-            class="flex flex-col items-center rounded-lg px-2 py-3 opacity-40 ring-1 ring-slate-200 dark:ring-slate-800"
+            class="flex items-center justify-center rounded-lg px-2 py-3 text-lg font-semibold text-slate-600 opacity-40 ring-1 ring-slate-200 dark:text-slate-400 dark:ring-slate-800"
           >
-            <span class="text-lg font-semibold text-slate-600 dark:text-slate-400">
-              {display_letter(entry.letter)}
-            </span>
-            <span class="text-xs text-slate-600 dark:text-slate-400">0</span>
+            {display_letter(entry.letter)}
           </span>
         <% end %>
       <% end %>

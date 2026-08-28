@@ -1106,7 +1106,7 @@ msgstr "Utenti più seguiti"
 msgid "The 1,000 Users with the most Followers"
 msgstr "I 1.000 utenti con più follower"
 
-#: lib/vutuv_web/agent_docs/list_docs.ex:171
+#: lib/vutuv_web/agent_docs/list_docs.ex:170
 #: lib/vutuv_web/templates/page/most_followed_users.html.heex:12
 #, elixir-autogen
 msgid "We haven't yet figured out the best way to help everyone discover other interesting vutuv users. So for now, this page simply lists the 1,000 users with the most followers."
@@ -3990,7 +3990,7 @@ msgstr "%{count} post di %{name}"
 msgid "%{count} total"
 msgstr "%{count} in totale"
 
-#: lib/vutuv_web/agent_docs/list_docs.ex:48
+#: lib/vutuv_web/agent_docs/list_docs.ex:47
 #, elixir-autogen, elixir-format
 msgid "Followers of %{name}"
 msgstr "Follower di %{name}"
@@ -4036,12 +4036,12 @@ msgstr "Membro da"
 msgid "Most endorsed members"
 msgstr "Membri più confermati"
 
-#: lib/vutuv_web/agent_docs/list_docs.ex:169
+#: lib/vutuv_web/agent_docs/list_docs.ex:168
 #, elixir-autogen, elixir-format
 msgid "Most followed members"
 msgstr "Membri più seguiti"
 
-#: lib/vutuv_web/agent_docs/list_docs.ex:49
+#: lib/vutuv_web/agent_docs/list_docs.ex:48
 #, elixir-autogen, elixir-format
 msgid "People %{name} follows"
 msgstr "Persone seguite da %{name}"
@@ -4094,7 +4094,7 @@ msgstr "fino al %{date}"
 msgid "This page in %{language}: %{url}"
 msgstr "Questa pagina in %{language}: %{url}"
 
-#: lib/vutuv_web/agent_docs/list_docs.ex:50
+#: lib/vutuv_web/agent_docs/list_docs.ex:49
 #, elixir-autogen, elixir-format
 msgid "Connections of %{name}"
 msgstr "Collegamenti di %{name}"
@@ -6543,7 +6543,7 @@ msgstr ""
 msgid "Endorsed"
 msgstr "Confermato"
 
-#: lib/vutuv_web/agent_docs/list_docs.ex:142
+#: lib/vutuv_web/agent_docs/list_docs.ex:141
 #: lib/vutuv_web/templates/user_tag/endorsers.html.heex:11
 #, elixir-autogen, elixir-format
 msgid "Members who endorsed %{name} for %{tag}"
@@ -8881,8 +8881,8 @@ msgstr "Non valido"
 msgid "Invalid address (skipped)"
 msgstr "Indirizzo non valido (saltato)"
 
-#: lib/vutuv_web/agent_docs/list_docs.ex:191
-#: lib/vutuv_web/controllers/directory_controller.ex:53
+#: lib/vutuv_web/agent_docs/list_docs.ex:193
+#: lib/vutuv_web/controllers/directory_controller.ex:54
 #: lib/vutuv_web/templates/directory/index.html.heex:2
 #: lib/vutuv_web/templates/directory/index.html.heex:3
 #: lib/vutuv_web/templates/directory/show.html.heex:5
@@ -8891,7 +8891,7 @@ msgstr "Indirizzo non valido (saltato)"
 msgid "Member directory"
 msgstr "Elenco dei membri"
 
-#: lib/vutuv_web/templates/directory/index.html.heex:32
+#: lib/vutuv_web/templates/directory/index.html.heex:31
 #: lib/vutuv_web/templates/directory/show.html.heex:14
 #, elixir-autogen, elixir-format
 msgid "Members by initial"
@@ -23527,16 +23527,6 @@ msgstr "Il suo profilo LinkedIn può venire con lei."
 msgid "Being checked"
 msgstr "In verifica"
 
-#: lib/vutuv_web/templates/directory/index.html.heex:23
-#, elixir-autogen, elixir-format
-msgid "%{count} vutuv members, filed alphabetically by last name."
-msgstr "%{count} membri vutuv, in ordine alfabetico per cognome."
-
-#: lib/vutuv_web/agent_docs/list_docs.ex:205
-#, elixir-autogen, elixir-format
-msgid "%{listed} vutuv members are listed here, grouped by the first letter of their last name."
-msgstr "Qui sono elencati %{listed} membri vutuv, raggruppati per la prima lettera del cognome."
-
 #: lib/vutuv_web/live/directory_search_live.ex:141
 #, elixir-autogen, elixir-format
 msgid "Find a member"
@@ -23584,3 +23574,14 @@ msgstr "Questo elenco non va oltre. Digiti altre lettere del nome per restringer
 #, elixir-autogen, elixir-format
 msgid "Which names to search"
 msgstr "Quali nomi cercare"
+
+#: lib/vutuv_web/templates/directory/index.html.heex:23
+#, elixir-autogen, elixir-format
+msgid "All vutuv members, filed alphabetically by last name."
+msgstr "Tutti i membri vutuv, in ordine alfabetico per cognome."
+
+#: lib/vutuv_web/agent_docs/list_docs.ex:208
+#, elixir-autogen, elixir-format
+msgid "Every vutuv member, grouped by the first letter of their last name."
+
+msgstr "Tutti i membri vutuv, raggruppati per la prima lettera del cognome."

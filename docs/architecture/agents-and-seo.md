@@ -293,13 +293,22 @@ Nachname" under a heading of "M" leaves the reader scanning for the word the
 order is built on. The avatar's alt text and the agent docs keep the canonical
 name, so only the visible listing changes.
 
-The overview prints **one** figure, the count it lists. It briefly printed three — the listed
-count, the whole membership and the Fediverse head count — and that was one
-number too many for a page whose job is an A-Z index: those two belong to the
-top bar's people pill, which is on this page like on every other (Stefan,
-2026-08-13). The agent formats carry the listed figure as `total` and repeat
-the sentence in the doc description, for the Markdown and text renderings,
-which print no counts of their own. Those siblings answer for the directory
+The overview prints **no figure at all** — not the total, and not a count under
+any letter tile. It went in two steps, both Stefan's: it briefly printed three
+(the listed count, the whole membership and the Fediverse head count), lost the
+last two on 2026-08-13 because they belong to the top bar's people pill which is
+on this page like every other, and lost the listed count and the per-letter
+counts on 2026-08-28. A page whose job is an A-Z index reads as a statistics
+page the moment it opens with numbers. A tile still says what a browsing reader
+needs by being a link or a muted square; the figure survives as `data-count`,
+which is invisible and what the tests read.
+
+The counts stay in the **agent formats** — `total` plus a per-letter `count`,
+and the `.md`/`.txt` renderings print `a (226)` per line — because a machine
+reader has no A-Z strip in front of them and a count is what they came for.
+That asymmetry is the point of having two renderings, not drift between them,
+so the drift test asserts the numberless sentence appears everywhere *and* that
+the structured counts are present. Those siblings answer for the directory
 itself and never for a `?q=`: a doc that changed under a query would make the
 canonical URL name a different document every time.
 
