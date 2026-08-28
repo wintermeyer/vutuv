@@ -2,9 +2,12 @@ defmodule Vutuv.OrganizationsLinkingTest do
   @moduledoc """
   Linking a work experience to a verified organization page (issue #931): the
   editor's suggestion match, the canonical link path, the changeset guard that
-  only ever links to a **verified** organization, and the organization page's People
-  section (which member appears, in which order, under the directory privacy
-  gate).
+  only ever links to a **verified** organization, and the organization page's
+  People section (which member appears, and in which order).
+
+  That last gate is confirmed-and-not-moderation-hidden, and deliberately
+  **not** the search-engine opt-out: a switch about Google must not hide
+  somebody from their own employer's page (v7.433.0).
   """
   use Vutuv.DataCase, async: true
 
@@ -163,22 +166,49 @@ defmodule Vutuv.OrganizationsLinkingTest do
       refute second.current?
     end
 
-    test "respects the directory privacy gate", %{organization: organization} do
-      hidden = insert(:activated_user, noindex?: true)
+    test "lists a member who opted out of search engines", %{organization: organization} do
+      # The search-engine switch is about Google, not about colleagues. Until
+      # v7.433.0 it hid a member from their own employer's People list — from
+      # everyone, including other members and including themselves — while
+      # `/system/members`, `/search` and every follower list showed them. One
+      # switch cannot mean "keep me out of search results" on six pages and
+      # "hide me from humans" on the seventh; what it buys here is the same
+      # `rel="nofollow"` the directory row carries.
+      opted_out =
+        insert(:activated_user, first_name: "Nina", last_name: "Noindex", noindex?: true)
 
       insert(:work_experience,
-        user: hidden,
+        user: opted_out,
         organization_page: organization,
-        title: "Hidden",
+        title: "Quiet Engineer",
         end_year: nil
       )
 
+      assert Organizations.organization_people_count(organization) == 1
+
+      assert %{entries: [entry]} = Organizations.organization_people_page(organization)
+      assert entry.user.id == opted_out.id
+      assert entry.title == "Quiet Engineer"
+    end
+
+    test "still hides unconfirmed and moderation-hidden members", %{organization: organization} do
+      # The half of the old gate that stays: an account nobody has activated,
+      # and one moderation has withheld, belong on no public list at all.
       unconfirmed = insert(:user, email_confirmed?: false)
 
       insert(:work_experience,
         user: unconfirmed,
         organization_page: organization,
         title: "Unconfirmed",
+        end_year: nil
+      )
+
+      frozen = insert(:activated_user, frozen_at: ~N[2026-01-01 00:00:00])
+
+      insert(:work_experience,
+        user: frozen,
+        organization_page: organization,
+        title: "Frozen",
         end_year: nil
       )
 
