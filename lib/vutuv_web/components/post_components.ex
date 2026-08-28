@@ -1309,7 +1309,7 @@ defmodule VutuvWeb.PostComponents do
           <.live_component
             :if={@live? and @viewer}
             module={RemoteActionsComponent}
-            id={RemoteActionsComponent.dom_id(:note, @note.id)}
+            id={RemoteActionsComponent.dom_id(@note)}
             subject={@note}
             viewer={@viewer}
             marks={@marks}
@@ -2483,7 +2483,7 @@ defmodule VutuvWeb.PostComponents do
           <.live_component
             :if={@live? and @viewer}
             module={RemoteActionsComponent}
-            id={RemoteActionsComponent.dom_id(:remote_post, @remote_post.id)}
+            id={RemoteActionsComponent.dom_id(@remote_post)}
             subject={@remote_post}
             viewer={@viewer}
             marks={@marks}

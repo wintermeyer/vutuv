@@ -2998,10 +2998,10 @@ defmodule Vutuv.Posts do
       for entry <- entries,
           post <- thread_posts(entry),
           %RemotePost{} = parent <- [remote_parent(post)],
-          parent.id not in taken,
+          Vutuv.Fediverse.subject_key(parent) not in taken,
           do: %{post_id: post.id, remote_post: parent}
 
-    case Enum.uniq_by(parents, & &1.remote_post.id) do
+    case Enum.uniq_by(parents, &Vutuv.Fediverse.subject_key(&1.remote_post)) do
       [] ->
         entries
 
@@ -3050,7 +3050,12 @@ defmodule Vutuv.Posts do
 
   # The cached posts that already have a card of their own on this page.
   defp standalone_remote_post_ids(remote),
-    do: for(entry <- remote, entry[:remote_post], do: entry.remote_post.id)
+    do:
+      for(
+        entry <- remote,
+        entry[:remote_post],
+        do: Vutuv.Fediverse.subject_key(entry.remote_post)
+      )
 
   # The replies from other networks (issues #1069/#1071) that belong inside the
   # threads on this page, read once for the whole page and hung on the entries
@@ -3098,20 +3103,27 @@ defmodule Vutuv.Posts do
     mine =
       entry
       |> thread_posts()
-      |> Map.new(fn post -> {post.id, Enum.reject(notes[post.id] || [], &(&1.id in seen))} end)
+      |> Map.new(fn post ->
+        {post.id, Enum.reject(notes[post.id] || [], &(Vutuv.Fediverse.subject_key(&1) in seen))}
+      end)
       |> Map.reject(fn {_post_id, notes} -> notes == [] end)
 
     if mine == %{} do
       {entry, seen}
     else
-      claimed = for {_post_id, notes} <- mine, note <- notes, into: seen, do: note.id
+      claimed =
+        for {_post_id, notes} <- mine,
+            note <- notes,
+            into: seen,
+            do: Vutuv.Fediverse.subject_key(note)
 
       {entry |> Map.put(:remote_replies, mine) |> Map.put(:note_marks, marks), claimed}
     end
   end
 
   # The notes that already have a row of their own on this page (issue #1275).
-  defp standalone_note_ids(remote), do: for(entry <- remote, entry[:note], do: entry.note.id)
+  defp standalone_note_ids(remote),
+    do: for(entry <- remote, entry[:note], do: Vutuv.Fediverse.subject_key(entry.note))
 
   # Every vutuv post an entry draws: the carrier and the thread nested under it.
   defp thread_posts(%{post: %Post{} = post} = entry), do: [post | entry[:ancestors] || []]
@@ -3161,7 +3173,7 @@ defmodule Vutuv.Posts do
     # direct entry — so a reader following an author out there saw their posts
     # relabelled "Reposted by <whoever boosted them>" the moment anybody did.
     |> Enum.sort_by(&(&1[:reposted_by] != nil or &1[:boosted_by] != nil))
-    |> Enum.uniq_by(& &1.remote_post.id)
+    |> Enum.uniq_by(&Vutuv.Fediverse.subject_key(&1.remote_post))
   end
 
   # What the reader has already done with each of the page's remote posts

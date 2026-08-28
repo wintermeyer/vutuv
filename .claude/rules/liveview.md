@@ -86,6 +86,27 @@ pages — both render `PostComponents.post_actions/1` and share `PostLive.Action
   no `<.input>`; style raw inputs with `class={input_class()}`
   (`VutuvWeb.UI.input_class/0`) / `checkbox_class/0`, and nest with `<.inputs_for>`.
 
+- **A LiveComponent id derived from a record id obliges a test with two of that
+  record on one page — the obligation is the rule, not the reminder.** LiveView
+  raises `found duplicate ID` in `Phoenix.LiveView.Diff.render_pending_components/6`,
+  and that is the **static** render: the page 500s rather than degrading, so
+  "can this appear twice?" is a crash condition and not a cosmetic question.
+  The answer usually lives in a different file from the code that decides how
+  many times it renders, which is what makes it invisible. Two shapes exist here
+  and only one is safe by construction: the vutuv post bar keys on the **place**
+  (`"post-actions-#{entry_key}"`, so original + repost cannot collide), while the
+  remote card's bar keys on the **thing** (`RemoteActionsComponent.dom_id/1`)
+  because one bar's like has to update the other — which buys correct live state
+  at the price of an invariant every placement site must hold.
+  Prose does not hold it: `/feed` went down on 2026-08-28 (v7.422.1) because
+  `Posts.attach_remote_parents/3` deduped its batch reads and then re-expanded
+  the placement, in the same commit (#1708) whose sibling function wrote the
+  rule down in a comment. So (a) dedupe on `Vutuv.Fediverse.subject_key/1`, the
+  identity the id itself is built from, never on a field picked by hand, and
+  (b) add the pair to `test/vutuv_web/live/feed_duplicate_cards_test.exs`, which
+  builds the page a careless dedup chokes on and lets LiveView do the asserting
+  — that catches code paths nobody has written yet, which a rule cannot.
+
 ## Phoenix LiveView guidelines
 
 - **Never** use the deprecated `live_redirect` and `live_patch` functions, instead **always** use the `<.link navigate={href}>` and  `<.link patch={href}>` in templates, and `push_navigate` and `push_patch` functions LiveViews
