@@ -165,4 +165,65 @@ defmodule Vutuv.RemoteHtmlTest do
       assert String.ends_with?(out, "…")
     end
   end
+
+  describe "a custom-emoji shortcode is taken out of the text" do
+    test "an inline one goes, and the gap it leaves closes" do
+      html = ~s(<p>Linux im Park mit den Piraten :tux: :piraten:</p>)
+
+      assert RemoteHtml.to_text(html) == "Linux im Park mit den Piraten"
+    end
+
+    test "one used as a bullet at the start of a line goes with its space" do
+      html =
+        "<p>:picklerick: Füg nicht die KI ein.</p><p>:cannabis: Wenn dir jemand schreibt.</p>"
+
+      assert RemoteHtml.to_text(html) ==
+               "Füg nicht die KI ein.\n\nWenn dir jemand schreibt."
+    end
+
+    test "a line that was nothing but one does not leave a blank line behind" do
+      html = "<p>Wir suchen jemanden.<br>:BoostOK:<br>Danke!</p>"
+
+      assert RemoteHtml.to_text(html) == "Wir suchen jemanden.\nDanke!"
+    end
+
+    test "the gap never turns into a stray space before punctuation" do
+      html = "<p>Hey Wesen des Fediversums :fediverse: , bis Sonntag.</p>"
+
+      assert RemoteHtml.to_text(html) == "Hey Wesen des Fediversums, bis Sonntag."
+    end
+
+    test "a post that was nothing but one reduces to nothing" do
+      assert RemoteHtml.to_text("<p>:blobcatcool:</p>") == ""
+    end
+
+    test "Unicode emoji are not shortcodes and stay exactly where they are" do
+      assert RemoteHtml.to_text("<p>Ever wanted to have fun? \u{1F911} Yes!</p>") ==
+               "Ever wanted to have fun? \u{1F911} Yes!"
+    end
+
+    test "two adjacent ones go together, the way those servers write them" do
+      assert RemoteHtml.to_text("<p>Cem :blobcat::verified: hier</p>") == "Cem hier"
+    end
+
+    test "a time, a URL and a scope operator are left alone" do
+      assert RemoteHtml.to_text("<p>Um 10:30:45 Uhr</p>") == "Um 10:30:45 Uhr"
+      assert RemoteHtml.to_text("<p>https://example.org/a</p>") == "https://example.org/a"
+      # A colon is not a delimiter, or this would read as a `:vector:` emoji
+      # between two colons and come out `std::size`.
+      assert RemoteHtml.to_text("<p>std::vector::size</p>") == "std::vector::size"
+    end
+
+    test "text carrying no shortcode comes out byte for byte as before" do
+      html = "<p>Zeile  eins</p><p>  Zeile zwei  </p>"
+
+      assert RemoteHtml.to_text(html) == "Zeile  eins\n\n  Zeile zwei"
+    end
+
+    test "the strip runs before the clamp, so the cap bounds real text" do
+      html = "<p>:tux: " <> String.duplicate("a", 40) <> "</p>"
+
+      assert RemoteHtml.to_text(html, 20) == String.duplicate("a", 19) <> "\u{2026}"
+    end
+  end
 end

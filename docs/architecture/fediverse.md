@@ -274,6 +274,39 @@ every activity of a member it finds no key for, silently.
     installation), which the renderer below then links like any typed fediverse
     handle. The Mastodon profile feed normalizes its REST `mentions` to the same
     shape.
+  - **Custom-emoji shortcodes go out with the markup**
+    (`Vutuv.RemoteHtml.strip_shortcodes/1`, v7.449.1). Those networks let an
+    account put its **own server's** emoji in a post and send it as a shortcode
+    (`":tux:"`), with the picture it stands for in the object's `tag` array.
+    That picture is that server's, and vutuv shows no remote picture it has not
+    cached and put past the AI gate, so the token has nothing to render as and
+    read on the card as a literal `":tux:"`. It is taken out along with the gap
+    it leaves (the doubled space, the space in front of the comma that followed
+    it, a line that was nothing but emoji). A post that was nothing *but* one is
+    then a post with no text, and is kept only if it carries a picture, like any
+    other wordless post. **One grammar** for the whole app: `Handle.display_name/1`
+    reads it from here too, or the same server's `:blobcat:` would vanish from a
+    card's name and stay in its text.
+  - **Two plain-text paths call it themselves**, because they never reach
+    `to_text/3` and are easy to forget: a poll's option names (`oneOf`/`anyOf`,
+    whose `name` is text, not HTML — and `remote_post_text/1` re-derives
+    `content_text` on every upstream edit, so missing this wrote `• :tux: Linux`
+    back over a cleaned row) and a Mastodon status' content warning
+    (`Vutuv.Mastodon.post_text/1`, which the REST API sends as text). Together
+    with `to_text/3` those three are every path from a remote server's words
+    into a column here.
+  - **Cleaned on the way in, unlike a display name.** A name is re-derived from
+    its column on every render; this text *is* the column, and every reader of
+    it (the card, the agent formats, the Mastodon adapter, the teaser, the
+    translation prompt, the muted-word filter) would otherwise need the same
+    repair. Text carrying no shortcode comes back untouched rather than merely
+    unchanged — `translations.source_sha256` keys a cached translation to the
+    exact source string, so a cosmetic byte would re-run the whole stored corpus
+    past Ollama. Rows written earlier were cleaned once by
+    `Vutuv.Fediverse.strip_stored_shortcodes/0`, run from a migration: it covers
+    every column `remote_text/3` writes (both `content_text`s, all three
+    `summary`s), and it is the same function, not a second repair written in
+    SQL, so a backfilled row and a row written tomorrow cannot differ.
   - **Shown through `VutuvWeb.Markdown.render_remote/1`** — the same renderer
     the Mastodon profile feed uses, so remote text reads one way across the app.
     A post from those networks is largely links, and as raw strings they sat on

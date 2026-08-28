@@ -169,7 +169,10 @@ defmodule Vutuv.Mastodon do
     spoiler = String.trim(to_string(status["spoiler_text"] || ""))
 
     cond do
-      spoiler != "" -> Post.truncate(spoiler)
+      # The REST API sends a content warning as plain text, so it is the one
+      # branch here that never reaches `RemoteHtml.to_text/3` — and a CW carries
+      # this server's custom emoji as readily as a body does.
+      spoiler != "" -> spoiler |> RemoteHtml.strip_shortcodes() |> Post.truncate()
       status["sensitive"] == true -> ""
       true -> RemoteHtml.to_text(to_string(status["content"] || ""), nil, mention_tags(status))
     end
