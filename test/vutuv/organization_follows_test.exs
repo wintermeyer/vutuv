@@ -5,10 +5,10 @@ defmodule Vutuv.OrganizationFollowsTest do
   feed.
 
   It also pins down the NULL trap the nullable-pair model creates. The member id
-  lists behind the feed and the who-to-follow tiers feed `IN` and, worse,
-  `NOT IN` subqueries, and `x NOT IN (…, NULL)` is **never true** in SQL — so a
-  single organization follow leaking a NULL into one of those lists would
-  silently empty a whole discovery tier. Two tests here exist only to catch that.
+  lists behind the feed's sources feed `IN` and, worse, `NOT IN` subqueries, and
+  `x NOT IN (…, NULL)` is **never true** in SQL — so a single organization follow
+  leaking a NULL into one of those lists would silently empty a whole source.
+  Two tests here exist only to catch that.
 
   `async: false` because the helpers flip the global
   `:verify_organization_domains` flag.
@@ -156,20 +156,29 @@ defmodule Vutuv.OrganizationFollowsTest do
   end
 
   describe "the SQL NULL trap the nullable pair creates" do
-    test "the discovery rail still finds strangers once an organization is followed" do
+    # `all_followees_of/1` is the list that carries the trap, and the feed's
+    # **tag source** is what asks it: a post carrying a tag you follow reaches
+    # you only when its author is somebody you do not already follow. The probe
+    # used to be the feed's suggestion rail, which is gone.
+    test "a followed tag still finds strangers once an organization is followed" do
       {organization, _owner} = publishing_organization()
       member = insert(:activated_user)
       stranger = insert(:activated_user)
-      {:ok, post} = Posts.create_post(stranger, %{body: "Hallo Welt."})
 
-      assert post.id in discovered_ids(member)
+      name = Vutuv.Factory.unique_tag_name("Elixir")
+      tag = insert(:tag, name: name, slug: Vutuv.SlugHelpers.tagify(name))
+      Vutuv.Tags.follow_tag(member, tag)
+
+      {:ok, post} = Posts.create_post(stranger, %{body: "Hallo Welt.", tags: name})
+
+      assert post.id in feed_post_ids(member)
 
       {:ok, _} = Social.follow_organization(member, organization)
 
       # `p.user_id NOT IN (…, NULL)` is never true, so an organization follow
       # leaking a NULL into the "people I already follow" list would empty this
-      # rail completely — silently, and for every reader who follows a page.
-      assert post.id in discovered_ids(member)
+      # source completely — silently, and for every reader who follows a page.
+      assert post.id in feed_post_ids(member)
     end
 
     test "the member following-count includes organizations" do
@@ -189,10 +198,6 @@ defmodule Vutuv.OrganizationFollowsTest do
       assert Social.followee_count(member) == 2
       assert Social.followed_organization_count(member) == 1
     end
-  end
-
-  defp discovered_ids(member) do
-    member |> Posts.discover_posts() |> Enum.map(& &1.id)
   end
 
   defp feed_post_ids(member) do

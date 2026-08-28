@@ -286,8 +286,7 @@ defmodule VutuvWeb.PostActionsLiveTest do
       post = create_post!(other_user(), %{body: "carried far"})
 
       {:ok, feed, _html} = live(conn, ~p"/feed")
-      # The stranger's post stays out of the timeline (it may still surface in
-      # the rail's "Suggested posts" discovery card — that is the card's job).
+      # The stranger's post stays out of the timeline: nobody here follows them.
       refute has_element?(feed, "#feed-posts", "carried far")
 
       :ok = Posts.repost_post(friend, post)
@@ -360,8 +359,8 @@ defmodule VutuvWeb.PostActionsLiveTest do
       :ok = Posts.repost_post(bruno, post)
       _ = :sys.get_state(feed.pid)
 
-      # Exactly one card in the timeline for the post (the stranger's post also
-      # shows in the discover rail, so scope the count to the feed list).
+      # Exactly one card in the timeline for the post, however many people
+      # reshared it (scoped to the feed list, not the whole page).
       feed_html = feed |> element("#feed-posts") |> render()
       assert length(String.split(feed_html, "widely shared")) - 1 == 1
       # Both reposters' avatars are in the stack (linked to their profiles).

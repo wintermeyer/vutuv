@@ -14,8 +14,8 @@ defmodule VutuvWeb.PostFeedLiveTest do
 
   defp other_user(attrs \\ []), do: insert(:user, Keyword.merge([email_confirmed?: true], attrs))
 
-  # The discovery rail renders with the page again (the v7.200.3 laziness was
-  # undone — see FeedRailsTest); the helper name survives at the call sites.
+  # The rail renders with the page again (the v7.200.3 laziness was undone —
+  # see FeedRailsTest); the helper name survives at the call sites.
   defp live_feed_with_rails(conn) do
     {:ok, view, html} = live(conn, ~p"/feed")
     {:ok, view, html}
@@ -117,7 +117,15 @@ defmodule VutuvWeb.PostFeedLiveTest do
 
       assert miss_html =~ "a handoff post from my friend"
 
-      assert hit <= 15, "handoff-hit feed connect ran #{hit} queries; the handoff was not used"
+      # The absolute bound is a smoke alarm, not the proof — it counts every
+      # query the connect runs, so a new sidebar raises it without saying
+      # anything about the handoff. The filter band added a fixed handful (its
+      # account rows, the muted ones, the servers, the follow count, the two
+      # source totals and the member's word/tag rules), which is why this reads
+      # 20 rather than the 15 it did before v7.371. What actually proves the
+      # stash was used is the comparison below: the same page, with and without
+      # it, is immune to whatever else the rail costs.
+      assert hit <= 20, "handoff-hit feed connect ran #{hit} queries; the handoff was not used"
 
       assert miss >= hit + 10,
              "consumed-stash feed connect ran #{miss} vs hit #{hit}; full-load fallback missing?"
@@ -142,8 +150,7 @@ defmodule VutuvWeb.PostFeedLiveTest do
 
       assert html =~ "my words"
       assert html =~ "friend words"
-      # The stranger's post stays out of the timeline (it may still surface in
-      # the rail's "Suggested posts" discovery card — that is the card's job).
+      # The stranger's post stays out of the timeline: nobody here follows them.
       refute has_element?(live, "#feed-posts", "stranger words")
     end
 
@@ -821,173 +828,6 @@ defmodule VutuvWeb.PostFeedLiveTest do
     end
   end
 
-  describe "suggested posts rail" do
-    test "shows a same-language stranger's post with author link, permalink and reload", %{
-      conn: conn
-    } do
-      {conn, _user} = create_and_login_user(conn)
-      author = other_user(first_name: "New", last_name: "Voice")
-      {:ok, post} = Posts.create_post(author, %{body: "something worth discovering"})
-
-      {:ok, live, _html} = live_feed_with_rails(conn)
-
-      assert has_element?(live, ~s(#discover-posts a[href="/#{author.username}"]))
-
-      assert has_element?(
-               live,
-               ~s(#discover-posts a[href="/#{author.username}/posts/#{post.id}"])
-             )
-
-      assert has_element?(live, ~s(#discover-reshuffle[phx-click="reshuffle-discover"]))
-    end
-
-    test "skips followed authors and other-language members", %{conn: conn} do
-      {conn, user} = create_and_login_user(conn)
-      followed = other_user(first_name: "Al", last_name: "Ready")
-      german = other_user(first_name: "Deutsch", last_name: "Sprecher", locale: "de")
-      fresh = other_user(first_name: "Fresh", last_name: "Face")
-      insert(:follow, follower: user, followee: followed)
-
-      {:ok, followed_post} = Posts.create_post(followed, %{body: "followed words"})
-      {:ok, german_post} = Posts.create_post(german, %{body: "deutsche Worte"})
-      {:ok, fresh_post} = Posts.create_post(fresh, %{body: "fresh words"})
-
-      {:ok, live, _html} = live_feed_with_rails(conn)
-
-      assert has_element?(
-               live,
-               ~s(#discover-posts a[href="/#{fresh.username}/posts/#{fresh_post.id}"])
-             )
-
-      refute has_element?(
-               live,
-               ~s(#discover-posts a[href="/#{followed.username}/posts/#{followed_post.id}"])
-             )
-
-      refute has_element?(
-               live,
-               ~s(#discover-posts a[href="/#{german.username}/posts/#{german_post.id}"])
-             )
-    end
-
-    test "hides the card when nothing is eligible", %{conn: conn} do
-      {conn, _user} = create_and_login_user(conn)
-
-      {:ok, live, _html} = live_feed_with_rails(conn)
-
-      refute has_element?(live, "#discover-posts")
-    end
-
-    test "renders the body as formatted Markdown, clamped at six lines", %{conn: conn} do
-      {conn, _user} = create_and_login_user(conn)
-      author = other_user(first_name: "Long", last_name: "Winded")
-
-      {:ok, post} =
-        Posts.create_post(author, %{
-          body: "# **Zwischenüberschrift**\n\nA second paragraph that must stay visible."
-        })
-
-      {:ok, live, _html} = live_feed_with_rails(conn)
-      html = render(live)
-
-      body = ~s(#discover-posts .markdown--post)
-
-      # The body runs through the same Markdown formatter as a normal post, so the
-      # raw Markdown source (the leading `#`, the `**`) never reaches the DOM …
-      assert has_element?(live, body)
-      refute html =~ "# **Zwischenüberschrift**"
-      # … the heading flattens to bold text, later paragraphs stay visible …
-      assert has_element?(live, "#{body} strong", "Zwischenüberschrift")
-      assert has_element?(live, body, "A second paragraph that must stay visible.")
-      # … the visible cut is the six-line CSS clamp, not the old four-line/one-line …
-      assert has_element?(live, "#{body}.line-clamp-6")
-      refute has_element?(live, "#discover-posts .line-clamp-4")
-      refute has_element?(live, "#discover-posts .truncate")
-
-      # … and the permalink to the post is still reachable (the stretched link).
-      assert has_element?(
-               live,
-               ~s(#discover-posts a[href="/#{author.username}/posts/#{post.id}"])
-             )
-    end
-
-    test "the rail hyphenates and a click on the body opens the post", %{conn: conn} do
-      {conn, _user} = create_and_login_user(conn)
-      author = other_user(first_name: "Lang", last_name: "Wort")
-
-      {:ok, post} =
-        Posts.create_post(author, %{
-          body: "Eine Digitalisierungsstrategie für unternehmenseigene Softwareentwicklung."
-        })
-
-      {:ok, live, _html} = live_feed_with_rails(conn)
-
-      # Browser hyphenation is switched on for the narrow rail column via the
-      # `.markdown--post` seam (auto on desktop too, not just the phone default),
-      # so long German compounds wrap at syllables instead of leaving big gaps.
-      assert has_element?(
-               live,
-               ~s(#discover-posts .markdown--post[style*="--post-hyphens-desktop:auto"])
-             )
-
-      # The whole row is a stretched link to the post, so a click on the body
-      # text (not only the timestamp) opens the corresponding posting.
-      assert has_element?(
-               live,
-               ~s(#discover-posts a.absolute.inset-0[href="/#{author.username}/posts/#{post.id}"])
-             )
-    end
-
-    test "the reload control draws a fresh random handful without a reload", %{conn: conn} do
-      {conn, _user} = create_and_login_user(conn)
-      # More eligible authors than the 5 shown, so each draw picks a subset.
-      pool =
-        for n <- 1..10 do
-          author = other_user(first_name: "Voice", last_name: "No#{n}")
-          {:ok, post} = Posts.create_post(author, %{body: "discover me #{n}"})
-          {author, post}
-        end
-
-      {:ok, live, _html} = live_feed_with_rails(conn)
-
-      # Over several reshuffles the union of shown permalinks must exceed the 5
-      # shown at once — a fixed pick never would.
-      shown =
-        Enum.reduce(1..12, MapSet.new(), fn _i, acc ->
-          live |> element("#discover-reshuffle") |> render_click()
-
-          pool
-          |> Enum.filter(fn {author, post} ->
-            has_element?(live, ~s(#discover-posts a[href="/#{author.username}/posts/#{post.id}"]))
-          end)
-          |> Enum.reduce(acc, fn {_author, post}, acc -> MapSet.put(acc, post.id) end)
-        end)
-
-      assert MapSet.size(shown) > 5
-    end
-
-    test "the periodic suggestions refresh redraws the posts rail too", %{conn: conn} do
-      {conn, _user} = create_and_login_user(conn)
-      author = other_user(first_name: "New", last_name: "Voice")
-      {:ok, post} = Posts.create_post(author, %{body: "still discoverable"})
-
-      {:ok, live, _html} = live_feed_with_rails(conn)
-
-      assert has_element?(
-               live,
-               ~s(#discover-posts a[href="/#{author.username}/posts/#{post.id}"])
-             )
-
-      send(live.pid, :refresh_suggestions)
-      _ = render(live)
-
-      assert has_element?(
-               live,
-               ~s(#discover-posts a[href="/#{author.username}/posts/#{post.id}"])
-             )
-    end
-  end
-
   describe "other formats card" do
     test "links to the feed's own agent siblings on desktop and mobile", %{conn: conn} do
       {conn, _user} = create_and_login_user(conn)
@@ -1099,13 +939,20 @@ defmodule VutuvWeb.PostFeedLiveTest do
 
       {:ok, live, _html} = live(conn, ~p"/feed")
 
-      {:ok, _post} = Posts.create_post(friend, %{body: "breaking news"})
+      {:ok, post} = Posts.create_post(friend, %{body: "breaking news"})
 
       html = render(live)
       assert html =~ "Show 1 new post"
-      refute html =~ "breaking news"
+
+      # The promise is that the timeline does not move under the reader — not
+      # that the words are nowhere on the page. Since the filter band shipped,
+      # the pill quotes the newest waiting post and the rail card lists what is
+      # waiting, both out of this same queue, which is visibility-checked before
+      # anything is even counted. So the claim to hold is about the stream.
+      refute has_element?(live, "#feed-posts [id*='#{post.id}']")
 
       live |> element("#show-new-posts") |> render_click()
+      assert has_element?(live, "#feed-posts [id*='#{post.id}']")
       assert render(live) =~ "breaking news"
     end
 

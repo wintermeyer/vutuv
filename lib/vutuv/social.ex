@@ -477,6 +477,76 @@ defmodule Vutuv.Social do
     end
   end
 
+  @doc """
+  The ids of the member's own follows that are currently muted.
+
+  The companion to `restore_follow_mutes/2`, and deliberately the *muted* set
+  rather than the whole one: a member follows thousands of people and silences a
+  handful, so this is the small half of the picture and the only half a restore
+  needs.
+  """
+  def muted_follow_ids(%User{id: follower_id}) do
+    Repo.all(from(f in Follow, where: f.follower_id == ^follower_id and f.muted, select: f.id))
+  end
+
+  @doc """
+  Mutes every follow the member owns except the one pointing at `followee`,
+  which is unmuted — the feed band's "only this account" in one statement.
+
+  Two `update_all`s rather than a row per follow: the member may follow
+  thousands of people, and this is a shortcut for a switch they would otherwise
+  flip by hand. Pass `nil` to mute the lot.
+
+  It writes over whatever the member had silenced deliberately, which no other
+  control in that card does; the band captures `muted_follow_ids/1` first and
+  offers an undo, and that is the only thing making the bulk write safe. Keep
+  the pair together if you reuse this.
+  """
+  def mute_follows_except(%User{id: follower_id}, followee) do
+    stamp = NaiveDateTime.truncate(NaiveDateTime.utc_now(), :second)
+
+    Repo.update_all(
+      from(f in Follow, where: f.follower_id == ^follower_id and not f.muted),
+      set: [muted: true, updated_at: stamp]
+    )
+
+    case followee && followee_column(followee) do
+      {column, followee_id} ->
+        Repo.update_all(
+          from(f in Follow,
+            where: f.follower_id == ^follower_id and field(f, ^column) == ^followee_id
+          ),
+          set: [muted: false, updated_at: stamp]
+        )
+
+      nil ->
+        {0, nil}
+    end
+
+    :ok
+  end
+
+  @doc """
+  Puts the member's follow mutes back to exactly `ids` — everything else
+  unmuted. Both the undo of `mute_follows_except/2` and what the band's "Select
+  all" runs with an empty list.
+  """
+  def restore_follow_mutes(%User{id: follower_id}, ids) when is_list(ids) do
+    stamp = NaiveDateTime.truncate(NaiveDateTime.utc_now(), :second)
+
+    Repo.update_all(
+      from(f in Follow, where: f.follower_id == ^follower_id and f.muted and f.id not in ^ids),
+      set: [muted: false, updated_at: stamp]
+    )
+
+    Repo.update_all(
+      from(f in Follow, where: f.follower_id == ^follower_id and not f.muted and f.id in ^ids),
+      set: [muted: true, updated_at: stamp]
+    )
+
+    :ok
+  end
+
   defp set_follow_mute(filters, muted?) do
     case Repo.get_by(Follow, filters) do
       %Follow{} = follow -> follow |> Follow.mute_changeset(%{muted: muted?}) |> Repo.update()

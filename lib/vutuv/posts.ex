@@ -60,7 +60,6 @@ defmodule Vutuv.Posts do
   alias Vutuv.Accounts.User
   alias Vutuv.Fediverse.Note
   alias Vutuv.Fediverse.PostRepost, as: FediversePostRepost
-  alias Vutuv.Fediverse.Reaction
   alias Vutuv.Fediverse.RemoteAccount
   alias Vutuv.Fediverse.RemotePost
   alias Vutuv.Keyset
@@ -72,7 +71,6 @@ defmodule Vutuv.Posts do
   alias Vutuv.Pages
   alias Vutuv.PostImageStore
   alias Vutuv.Posts.PhotoLicense
-  alias Vutuv.Posts.PopularPosts
   alias Vutuv.Posts.Post
   alias Vutuv.Posts.PostBookmark
   alias Vutuv.Posts.PostDenial
@@ -999,6 +997,20 @@ defmodule Vutuv.Posts do
   def text(%Post{body: body}), do: body
   def text(%RemotePost{content_text: text}), do: text
   def text(%Note{content_text: text}), do: text
+
+  @doc """
+  When a post was written, whichever kind of post it is.
+
+  The third of the same family as `text/1` and `path/1`: three kinds, three
+  differently named columns, and every caller that reached for one by hand was a
+  place the next kind would have to be remembered again. A member's post is
+  dated by `inserted_at`, a cached remote post by the `published_at` its origin
+  claims, a remote reply by when it reached us — the last because a reply's own
+  origin timestamp is not something this installation saw.
+  """
+  def written_at(%Post{inserted_at: at}), do: at
+  def written_at(%RemotePost{published_at: at}), do: at
+  def written_at(%Note{received_at: at}), do: at
 
   @doc "The author's id, whichever kind of author it is."
   def author_id(%Post{organization_id: nil, user_id: user_id}), do: user_id
@@ -2791,6 +2803,90 @@ defmodule Vutuv.Posts do
   def remembered_feed_filter(%User{feed_source: source}), do: normalize_feed_filter(source)
 
   @doc """
+  How the member arranged the feed's filter band: which blocks in which order,
+  which are collapsed to their heading, which they removed altogether.
+
+  One map on the member rather than three columns, because it is one decision —
+  "my sidebar looks like this" — that the panel writes as a whole. Unknown block
+  names are dropped on read and unlisted ones appended, so a block that ships
+  later simply turns up at the end for everybody who arranged the band before it
+  existed, and a retired one leaves no orphan behind.
+
+  `collapsed` is the shipped default: which cards a member who has never touched
+  the rail starts with folded to their heading. It applies **only** in the
+  absence of a stored arrangement — a member who has one keeps it whole,
+  including the cards they deliberately left open, and a block that ships later
+  joins their rail unfolded, because a new card nobody can see is a new card
+  nobody will find.
+  """
+  def feed_rail(user, blocks, collapsed \\ [])
+
+  def feed_rail(%User{feed_rail: rail}, blocks, _collapsed) when is_map(rail) do
+    known = Enum.map(blocks, &to_string/1)
+    listed = rail |> Map.get("order", []) |> Enum.filter(&(&1 in known))
+
+    %{
+      order: listed ++ Enum.reject(known, &(&1 in listed)),
+      collapsed: rail |> Map.get("collapsed", []) |> Enum.filter(&(&1 in known)),
+      removed: rail |> Map.get("removed", []) |> Enum.filter(&(&1 in known))
+    }
+  end
+
+  def feed_rail(%User{}, blocks, collapsed) do
+    known = Enum.map(blocks, &to_string/1)
+
+    %{
+      order: known,
+      collapsed: collapsed |> Enum.map(&to_string/1) |> Enum.filter(&(&1 in known)),
+      removed: []
+    }
+  end
+
+  @doc """
+  Apply a drag to the arrangement: `moved` is the order the reader dropped the
+  blocks into, and it lists only the ones that were on screen.
+
+  That is the whole reason this is not `%{rail | order: moved}`. Half the rail
+  is conditional — the "not read yet" card is there only while something is
+  waiting, "Tags you follow" only once a tag is followed — so a block that is
+  simply not showing today would be dropped from the stored order by a plain
+  overwrite and re-appended at the end tomorrow, silently rearranging the rail
+  from a drag that never touched it. So the stored order keeps its shape and
+  only the positions that were visible take the new sequence.
+  """
+  def rearrange_feed_rail(%{order: order} = rail, moved) when is_list(moved) do
+    # The sequence arrives from the browser, so it is filtered and de-duplicated
+    # rather than trusted: a repeated name would otherwise consume two slots and
+    # run the list short.
+    moved = moved |> Enum.filter(&(&1 in order)) |> Enum.uniq()
+
+    {next, _rest} =
+      Enum.map_reduce(order, moved, fn key, rest ->
+        case {key in moved, rest} do
+          {true, [head | tail]} -> {head, tail}
+          _ -> {key, rest}
+        end
+      end)
+
+    %{rail | order: next}
+  end
+
+  @doc """
+  Store the band's arrangement — takes what `feed_rail/2` answers.
+
+  A narrow `update_all` for the same reason `remember_feed_filter/3` uses one:
+  the socket's `%User{}` was loaded at mount and writing the whole struct back
+  would undo whatever else changed meanwhile.
+  """
+  def save_feed_rail(%User{} = user, %{order: order, collapsed: collapsed, removed: removed}) do
+    rail = %{"order" => order, "collapsed" => collapsed, "removed" => removed}
+
+    {1, nil} = Repo.update_all(from(u in User, where: u.id == ^user.id), set: [feed_rail: rail])
+
+    {:ok, rail}
+  end
+
+  @doc """
   Remembers `filter` as `user`'s feed tab for the next visit, `leaving` being
   the tab they are coming from.
 
@@ -3125,9 +3221,17 @@ defmodule Vutuv.Posts do
   defp standalone_note_ids(remote),
     do: for(entry <- remote, entry[:note], do: Vutuv.Fediverse.subject_key(entry.note))
 
-  # Every vutuv post an entry draws: the carrier and the thread nested under it.
-  defp thread_posts(%{post: %Post{} = post} = entry), do: [post | entry[:ancestors] || []]
-  defp thread_posts(_entry), do: []
+  @doc """
+  Every vutuv post a feed entry draws: the carrier and the thread nested under
+  it.
+
+  Public because it is also what decides whether the reader's content filters
+  hide the row. A feed entry is a *conversation*, not a post — an answer arrives
+  with the posts it answers — so anything asking "what is on this row" has to
+  ask here rather than reading `entry.post` and missing the rest.
+  """
+  def thread_posts(%{post: %Post{} = post} = entry), do: [post | entry[:ancestors] || []]
+  def thread_posts(_entry), do: []
 
   # The remote reply this post answers (issue #1070), if it answers one at all.
   defp answered_note_ids(%Post{remote_reply_ref: %PostRemoteReply{note_id: id}})
@@ -3550,8 +3654,8 @@ defmodule Vutuv.Posts do
     # `not is_nil(followee_id)` keeps the organization follows (issue #1336) out
     # of a **member** id list. It is not tidiness: these lists feed `IN` and —
     # worse — `NOT IN` subqueries, and `x NOT IN (…, NULL)` is never true in
-    # SQL, so one organization follow would silently empty every discovery tier
-    # that excludes who you already follow.
+    # SQL, so one organization follow would silently empty any source that
+    # excludes who you already follow.
     from(c in Follow,
       where: c.follower_id == ^viewer_id and c.muted == false and not is_nil(c.followee_id),
       select: c.followee_id
@@ -4259,331 +4363,6 @@ defmodule Vutuv.Posts do
     |> Repo.preload(post_preloads())
   end
 
-  @discover_limit 5
-  @discover_pool 100
-  # The rail's quality bar: how many members other than the author must have
-  # liked a post before it is worth suggesting, and how far back the draw
-  # looks for those posts first.
-  @discover_min_likes 2
-  @discover_window_days 14
-
-  @doc """
-  A random handful of well-received public posts for the feed's rail: posts
-  in `viewer`'s language that other members liked, from someone other than
-  the viewer.
-
-  Suggestions are picked for **reception**, not just recency: a post needs
-  likes from at least `#{@discover_min_likes}` members other than its author
-  (liking your own post is not a recommendation). Each author contributes one
-  post, their best-liked eligible one, and the handful is drawn at random
-  from the `@discover_pool` best-liked of those, so the card varies between
-  reloads while everything in it cleared the bar.
-
-  The draw walks three tiers and stops as soon as it has a full card, so a
-  quiet fortnight or a viewer who already follows everyone active still gets
-  a full one:
-
-    1. strangers (nobody `viewer` follows) from the last
-       #{@discover_window_days} days — the post-shaped sibling of the "Who to
-       follow" suggestions, and the tier that normally fills the card;
-    2. strangers of any age — the installation's lasting favourites;
-    3. anyone (bar the viewer themselves) from the last
-       #{@discover_window_days} days — the fortnight's best posts, even from
-       an author `viewer` already follows.
-
-  A *muted* follow is never suggested, in any tier: muting means "keep this
-  person's posts away from me". Only when no tier turned up anything at all
-  — a brand-new installation where nobody has liked yet, or a language
-  nobody has liked in yet — does the rail fall back to the newest eligible
-  posts, so it is never permanently empty.
-
-  Language matches on `users.locale` with the empty value counting as
-  English, mirroring `VutuvWeb.LiveLocale`'s fallback. Replies (confusing
-  without their thread) and image-only posts (nothing to excerpt in a
-  compact row) are skipped. Preloaded like every rendered post.
-  """
-  def discover_posts(%User{} = viewer, opts \\ []) do
-    limit = Keyword.get(opts, :limit, @discover_limit)
-    table = Keyword.get(opts, :pool_table, PopularPosts.default_table())
-
-    case PopularPosts.top(locale_or_english(viewer.locale), table) do
-      {:ok, candidates} -> discover_from_pool(viewer, candidates, limit)
-      :miss -> discover_by_ladder(viewer, limit)
-    end
-  end
-
-  # The cheap path: the shared ranking already happened (see
-  # `Vutuv.Posts.PopularPosts`), so all that is left is to ask the database
-  # which of those candidates this reader may see, and to pick a handful.
-  #
-  # The ladder's three tiers become one ordering over one candidate set, which
-  # is what they always were. It also fixes which way round they run: tiers 1
-  # and 2 exclude everyone the viewer follows, so a well-connected member used
-  # to pay for two draws that could not fill the card before the third one did
-  # the work.
-  defp discover_from_pool(%User{} = viewer, candidates, limit) do
-    rank = candidates |> Enum.map(& &1.id) |> Enum.with_index() |> Map.new()
-
-    drawn =
-      rank
-      |> Map.keys()
-      |> discover_eligible(viewer)
-      |> Enum.group_by(& &1.tier)
-      |> Enum.sort_by(fn {tier, _rows} -> tier end)
-      # Each tier keeps its own draw — the best-liked @discover_pool of it, in
-      # random order — and a lower tier only fills what the ones above left
-      # over. The shuffle has to happen inside the tier, not across the whole
-      # set: shuffling the lot would throw away the preference the tiers exist
-      # to express and suggest someone the reader already follows while a
-      # stranger was available.
-      |> Enum.flat_map(fn {_tier, rows} ->
-        rows
-        |> Enum.sort_by(&Map.fetch!(rank, &1.id))
-        |> Enum.take(@discover_pool)
-        |> Enum.shuffle()
-      end)
-      |> Enum.uniq_by(& &1.user_id)
-      |> Enum.take(limit)
-
-    # Nothing drawn is not the same as nothing to show, and it happens two
-    # ways: a brand-new installation where nobody has liked anything yet (so
-    # the pool is legitimately empty), or a reader who filtered away every
-    # candidate in it. Both land on the same last resort the ladder has always
-    # had — the newest eligible posts — so the rail is never permanently blank.
-    if drawn == [] do
-      discover_recent_draw(discover_candidates(viewer, :strangers), limit)
-      |> Enum.map(& &1.id)
-      |> load_discover_posts()
-    else
-      drawn |> Enum.map(& &1.id) |> load_discover_posts()
-    end
-  end
-
-  # Which of `ids` this viewer may be shown, and in which tier each one lands.
-  # Bounded to the pool's ids, so every gate in here is a primary-key lookup
-  # rather than a scan — that is what makes re-checking visibility on a
-  # minutes-old snapshot affordable.
-  defp discover_eligible([], _viewer), do: []
-
-  defp discover_eligible(ids, %User{id: viewer_id}) do
-    window = discover_window_start()
-
-    from(p in Post,
-      as: :post,
-      # An INNER join, so the rail is members only — and that is the intent, not
-      # an oversight of #1334: every tier here is about people (strangers you do
-      # not follow, one post per author), and `Enum.uniq_by(& &1.user_id)` in the
-      # caller would collapse every page's post into one. Widening it to pages
-      # means giving them their own tier and their own uniqueness key; until
-      # then, keep the join inner — the rail's template reads `post.user`.
-      join: u in assoc(p, :user),
-      as: :author,
-      left_join: f in Follow,
-      on: f.follower_id == ^viewer_id and f.followee_id == p.user_id,
-      as: :edge,
-      where: p.id in ^ids,
-      where: p.user_id != ^viewer_id,
-      # Muting means "keep this person's posts away from me", in every tier.
-      where: is_nil(f.id) or f.muted == false,
-      # A post by someone the viewer already reads is only a discovery while
-      # it is this fortnight's news; a stranger's may be any age.
-      where: is_nil(f.id) or p.inserted_at >= ^window,
-      where: p.user_id not in subquery(blocked_either_way(viewer_id)),
-      where: account_confirmed_row(u),
-      select: %{
-        id: p.id,
-        user_id: p.user_id,
-        tier:
-          fragment(
-            "CASE WHEN ? IS NULL AND ? >= ? THEN 0 WHEN ? IS NULL THEN 1 ELSE 2 END",
-            f.id,
-            p.inserted_at,
-            ^window,
-            f.id
-          )
-      }
-    )
-    |> scope_visible(nil)
-    |> Repo.all()
-  end
-
-  # The uncached path, unchanged: three tiers, each its own ranking scan. Still
-  # the answer at boot, for a locale the snapshot does not carry, and in tests.
-  defp discover_by_ladder(%User{} = viewer, limit) do
-    window = discover_window_start()
-
-    rows =
-      Enum.reduce_while(
-        [{:strangers, window}, {:strangers, nil}, {:everyone, window}],
-        [],
-        fn {audience, since}, rows ->
-          drawn = discover_liked_draw(discover_candidates(viewer, audience), since, limit)
-          # Tiers overlap, and one author must not fill two rows of the card.
-          rows = Enum.uniq_by(rows ++ drawn, & &1.user_id)
-          if length(rows) >= limit, do: {:halt, rows}, else: {:cont, rows}
-        end
-      )
-
-    rows =
-      if rows == [],
-        do: discover_recent_draw(discover_candidates(viewer, :strangers), limit),
-        else: rows
-
-    rows
-    |> Enum.take(limit)
-    |> Enum.map(& &1.id)
-    |> load_discover_posts()
-  end
-
-  # Everything the rail requires of a post regardless of how well it did: a
-  # same-language member's own readable, publicly visible top-level post,
-  # from someone the viewer has neither blocked nor muted. `:strangers`
-  # additionally drops everyone the viewer already follows.
-  defp discover_candidates(%User{} = viewer, audience) do
-    locale = locale_or_english(viewer.locale)
-
-    excluded =
-      case audience do
-        :strangers -> all_followees_of(viewer.id)
-        :everyone -> muted_followees_of(viewer.id)
-      end
-
-    from(p in Post,
-      as: :post,
-      join: u in assoc(p, :user),
-      as: :author,
-      left_join: r in assoc(p, :reply_ref),
-      where: is_nil(r.id),
-      where: fragment("COALESCE(NULLIF(?, ''), 'en')", u.locale) == ^locale,
-      where: p.user_id != ^viewer.id,
-      where: p.user_id not in subquery(excluded),
-      where: p.user_id not in subquery(blocked_either_way(viewer.id)),
-      where: account_confirmed_row(u),
-      where: p.body != ""
-    )
-    |> scope_visible(nil)
-  end
-
-  @doc false
-  # The viewer-independent half of the rail, ranked once for the whole
-  # installation by `Vutuv.Posts.PopularPosts` (which is the only caller):
-  # this locale's best-liked eligible posts, one per author, best first.
-  #
-  # Deliberately no viewer in it. Every gate that depends on who is reading —
-  # own posts, follows, mutes, blocks — belongs to the draw, and so does the
-  # visibility gate, which is re-applied there because this list ages.
-  def compute_discover_pool(locale, pool_size) do
-    from(p in Post,
-      as: :post,
-      join: u in assoc(p, :user),
-      as: :author,
-      left_join: r in assoc(p, :reply_ref),
-      join: lc in subquery(discover_like_counts()),
-      on: lc.post_id == p.id,
-      as: :like_count,
-      where: is_nil(r.id),
-      where: fragment("COALESCE(NULLIF(?, ''), 'en')", u.locale) == ^locale,
-      where: account_confirmed_row(u),
-      where: p.body != "",
-      where: lc.likes >= @discover_min_likes,
-      distinct: p.user_id,
-      order_by: [asc: p.user_id, desc: lc.likes, desc: p.id],
-      select: %{id: p.id, user_id: p.user_id, likes: lc.likes, inserted_at: p.inserted_at}
-    )
-    |> scope_visible(nil)
-    |> subquery()
-    |> order_by([s], desc: s.likes, desc: s.id)
-    |> limit(^pool_size)
-    |> select([s], %{id: s.id, user_id: s.user_id, inserted_at: s.inserted_at})
-    |> Repo.all()
-  end
-
-  # The like counts the rail ranks on, rolled up once for the whole table
-  # (likes are far rarer than posts, so this beats a correlated count per
-  # candidate row). One figure per post: vutuv's own likes plus the favourites
-  # other networks sent (issue #1068) — the same folding `shown_counts/1` and
-  # `fetch_recent_posts/4` do, so the rail's bar can never mean something else
-  # than the heart the reader sees beside the post. No self-like filter is
-  # needed: a member cannot like their own post (enforced in `like_post/2`,
-  # issue #1030), so every like is by someone other than the author.
-  defp discover_like_counts do
-    local = from(l in PostLike, select: %{post_id: l.post_id})
-    remote = from(r in Reaction, where: r.kind == "like", select: %{post_id: r.post_id})
-
-    from(x in subquery(union_all(local, ^remote)),
-      group_by: x.post_id,
-      select: %{post_id: x.post_id, likes: count(x.post_id)}
-    )
-  end
-
-  # The main draw: each author's best-liked post that cleared the bar, from
-  # `since` onwards (or from all time when `since` is nil).
-  defp discover_liked_draw(candidates, since, limit) do
-    best_per_author =
-      candidates
-      |> join(:inner, [post: p], lc in subquery(discover_like_counts()),
-        on: lc.post_id == p.id,
-        as: :like_count
-      )
-      |> where([like_count: lc], lc.likes >= @discover_min_likes)
-      |> discover_since(since)
-      |> distinct([post: p], p.user_id)
-      |> order_by([post: p, like_count: lc], asc: p.user_id, desc: lc.likes, desc: p.id)
-      |> select([post: p, like_count: lc], %{id: p.id, user_id: p.user_id, likes: lc.likes})
-
-    discover_draw(best_per_author, [desc: :likes, desc: :id], limit)
-  end
-
-  # The empty-installation fallback: the old recency draw, one newest post per
-  # author. Only reached while nothing at all has been liked.
-  defp discover_recent_draw(candidates, limit) do
-    newest_per_author =
-      candidates
-      |> distinct([post: p], p.user_id)
-      |> order_by([post: p], asc: p.user_id, desc: p.id)
-      |> select([post: p], %{id: p.id, user_id: p.user_id})
-
-    discover_draw(newest_per_author, [desc: :id], limit)
-  end
-
-  defp discover_since(query, nil), do: query
-  defp discover_since(query, since), do: where(query, [post: p], p.inserted_at >= ^since)
-
-  defp discover_window_start do
-    NaiveDateTime.utc_now(:second) |> NaiveDateTime.add(-@discover_window_days, :day)
-  end
-
-  # Rank the one-post-per-author set, keep the best `@discover_pool` of them
-  # and pick the handful at random, so the card stays varied between reloads.
-  defp discover_draw(per_author, pool_order, limit) do
-    pool =
-      from(s in subquery(per_author),
-        order_by: ^pool_order,
-        limit: @discover_pool,
-        select: %{id: s.id, user_id: s.user_id}
-      )
-
-    from(s in subquery(pool),
-      order_by: fragment("random()"),
-      limit: ^limit,
-      select: %{id: s.id, user_id: s.user_id}
-    )
-    |> Repo.all()
-  end
-
-  defp load_discover_posts([]), do: []
-
-  defp load_discover_posts(ids) do
-    from(p in Post, where: p.id in ^ids)
-    |> Repo.all()
-    |> Repo.preload(post_preloads())
-    # An `id IN` fetch loses the random draw order.
-    |> Enum.shuffle()
-  end
-
-  defp locale_or_english(locale) when is_binary(locale) and locale != "", do: locale
-  defp locale_or_english(_locale), do: "en"
-
   # Unlike the feed's `followees_of/1`, muted follows count here: muting only
   # silences a followee's posts, it does not turn them back into a stranger
   # worth suggesting.
@@ -4594,8 +4373,7 @@ defmodule Vutuv.Posts do
     )
   end
 
-  # The people the viewer told us to keep quiet — excluded from every
-  # discovery tier, including the one that may otherwise suggest a followee.
+  # The people the viewer told us to keep quiet.
   defp muted_followees_of(viewer_id) do
     from(c in Follow,
       where: c.follower_id == ^viewer_id and c.muted and not is_nil(c.followee_id),

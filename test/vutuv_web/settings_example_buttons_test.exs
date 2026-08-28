@@ -28,9 +28,7 @@ defmodule VutuvWeb.SettingsExampleButtonsTest do
 
       # `name*=` on a checkbox, so the hidden false-companion beside it (same
       # name, type="hidden") must not be what the handler finds.
-      assert html =~ ~s(name="user[feed_tab_ticker?]" type="checkbox")
       assert html =~ ~s(name="user[browser_tab_teaser?]" type="checkbox")
-      assert html =~ "data-ticker-preview-play"
       assert html =~ "data-tab-teaser-play"
     end
 
@@ -44,9 +42,6 @@ defmodule VutuvWeb.SettingsExampleButtonsTest do
              lookup returns null and whatever depends on it silently does \
              nothing. Query the document for the control's own name instead.\
              """
-
-      assert app_js =~
-               ~s|document.querySelector('input[type="checkbox"][name*="feed_tab_ticker"]')|
 
       assert app_js =~
                ~s|document.querySelector('input[type="checkbox"][name*="browser_tab_teaser"]')|

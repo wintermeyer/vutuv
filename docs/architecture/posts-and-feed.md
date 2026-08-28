@@ -395,274 +395,260 @@ on the four columns that hide an account) keeps the EXISTS off a full scan.
 Measured on a copy of production seeded to 200,000 posts, the two indexes took
 that source from 76.7 ms to 0.53 ms.
 
-**Source tabs: All / vutuv / Fediverse.** Above the timeline sits the same
-segmented control the profile's post-type tabs use
-(`PostComponents.post_filter_tabs/1`, here with `feed_filter_options/0` and the
-`filter-source` event). The split is `feed_page/2`'s `filter:` option, which
-picks the sources rather than filtering their rows: **vutuv** runs the four
-local sources, every reshare of remote content (`feed_remote_reposts/3`,
-`feed_remote_reply_reposts/3`) and the boosts of a *local* post; **Fediverse**
-the cached posts and the boosts of a *remote* post.
+**Which source a reshare lands in: whoever pressed the button.** The band
+switches sources, and an entry still belongs to exactly one of them
+(`feed_page/2`'s `filter:` option, `Fediverse.scope_resharer/3`). *Fediverse* is
+what arrives from another network with nobody on this site lifting a finger, the
+posts of accounts the reader follows out there and what those accounts boosted.
+Everything a member here did is *vutuv*: their posts, their replies, and every
+**reshare**, whoever pressed the button and whatever they passed on.
 
-**The rule is whether somebody here did something.** "Fediverse" is what arrives
-from another network with nobody on this site lifting a finger — the posts of
-accounts the reader follows out there, and what those accounts boosted.
-Everything a member here did is "vutuv": their posts, their replies, and every
-**reshare**, whoever pressed the button and whatever they passed on. Every entry
-lands on exactly one tab and the two together are "All".
+That took two goes. Filing a reshare by its *content* — a Mastodon post is a
+Mastodon post — put a friend's reshare under Fediverse, so a reader looking for
+their own network's activity had to find it under the other network's name, and
+their own reshare read as vutuv having had no part in it. One source produces
+both kinds and is narrowed by `only:` **inside its query**, never by dropping
+rows afterwards, so a narrowed page is as full as an unnarrowed one and `more?`
+stays honest: `Fediverse.feed_remote_boosts/4` (issue #1167) carries a cached
+post when the boost came from out there and a vutuv post when a followed account
+passed a member's post on, the latter being a vutuv post however it arrived.
 
-The reshare is the whole point of that split, and it took two goes to get right.
-Filing it by the *content* — a Mastodon post is a Mastodon post — put a friend's
-reshare under "Fediverse", so a reader looking for their own network's activity
-had to find it under the other network's name, and their **own** reshare read as
-vutuv having had no part in it. Filing it by *who pressed the button* is the
-answer, and it also fixes a case #1166 had to work around: a member with no
-fediverse follows of their own now has a genuinely empty Fediverse tab, so the
-bar disappears (issue #1267) instead of offering three names for one timeline.
+**The filter band, which replaced the source tabs.** The feed used to carry a
+segmented All / vutuv / Fediverse control above the timeline, with a coral dot on
+the tab you were not on and, for a few seconds, a quote of what had landed there.
+It went because of what it did to the reader rather than anything wrong with it:
+choosing a tab hid the other half and the dot kept saying what was being missed,
+so the honest response was to hop back and forth. Stefan reported exactly that.
 
-One source produces both kinds and is narrowed by `only:` **inside its query**,
-not by dropping rows afterwards, so a narrowed page is as full as an unnarrowed
-one and `more?` stays honest: `Fediverse.feed_remote_boosts/4` (issue #1167)
-carries a cached post when the boost came from out there and a vutuv post when a
-followed account passed a member's post on — the latter being a vutuv post
-however it arrived.
+What stands there now is one timeline that shows everything, and a **band** in
+the desktop rail (`VutuvWeb.PostLive.FilterBand`, three cards) that switches
+sources off:
 
-Switching a tab reloads the timeline from the top (`stream reset: true`) — the
-tab decides what the query pulls, so it cannot be applied to what is already on
-screen — and drops the pending batch with it, since the fresh page already
-carries whatever waited behind the pill. Live arrivals are gated by the
-in-memory twin `Posts.feed_filter_accepts?/2`, which asks the same question the
-sources do — is there a `reposted_by`, i.e. did a member here put this in front
-of the reader: a followed member's post neither appears nor counts toward the
-pill while the Fediverse tab is open. (`boosted_by` deliberately does not count;
-that is an account out there passing something on.) The one
-exception is the **viewer's own** post, which must be visible after they press
-Post — there the feed switches back to "All" rather than swallowing it. The
-choice has no URL behind it (this LiveView is off-router and cannot patch), and
-the agent-format siblings (`/feed.md|txt|json|xml`) always serve the whole feed,
-exactly as the archive's siblings ignore `?type=`.
+* **What gets through** — a checkbox per source, per followed account and per
+  fediverse server, the servers expanding to their accounts.
+* **Hide words** and **Hide tags** — the member's own deny list (issue #940),
+  which had been complete since it shipped and invisible ever since, because
+  nobody finds `/settings/filters`.
 
-**The tab outlives the visit** (issue #1499). A click stores it on the member —
-`Posts.remember_feed_filter/2`, a narrow `update_all` on `users.feed_source`
-(NULL = All) — and `Posts.remembered_feed_filter/1` reads it back at mount off
-the struct the session already loaded, so the opening filter costs no query and
-the **dead render** already draws the right tab with the right entries. Four
-things it must get right, each of which the tests cover:
+**Nothing in the band is a new mechanism.** A member checkbox writes
+`follows.muted`, a remote one `fediverse_follows.muted`, a word or tag writes a
+`Vutuv.ContentFilters` row, and the two source rows write the very
+`users.feed_source` column the tabs wrote — which is why the tabs could be
+deleted without their state going with them. The one genuinely new switch is a
+whole server: `users.feed_muted_hosts`, a text array, applied by
+`Vutuv.Fediverse.set_host_mute/3` and read back into every remote source
+(`reject_muted_hosts/2` and its boost and note twins). Those clauses are written
+`is_nil(x) or x not in ^hosts` rather than the bare `NOT IN`, because
+`x NOT IN (…)` is never true when `x` is NULL — the silent half of the
+nullable-column trap this milestone hit five times.
 
-* The **gate runs first**. A remembered "Fediverse" whose content has since gone
-  away shows no tab bar, and opening behind it would strand the reader on a
-  timeline with no way out — so the mount folds the filter back to `:all` while
-  leaving the stored value alone, and the tab returns with the content.
-* The write happens in the **event handler**, not in `load_source_filter/2`: the
-  same helper runs when the member's own post lands on a tab that cannot hold
-  it, and that fallback is the code's doing, not a choice to remember.
-* It goes through `update_all` rather than a changeset, because a socket's
-  `%User{}` was loaded at mount and can be hours old — writing the whole struct
-  back would undo whatever changed meanwhile, from another device or another
-  tab. Nothing asks first whether the value differs; that question cannot be
-  answered from a possibly-stale struct, and the write is one row by primary key.
-* The **`MountHandoff` subject carries the filter** (`{:feed, filter}`). The
-  stash holds one entry per member, not per socket, so with a bare `:feed` a
-  second device — or the same device after the tab changed between its HTML and
-  its socket connecting — would take a page computed for another tab. Keyed by
-  the filter a mismatch is simply a miss, and that mount loads its own page.
+Because every switch writes through, **every switch is permanent and shared
+across the member's devices**, and the card says so in its own subtitle. That is
+also why a muted account keeps its row: `Vutuv.FeedBand.accounts/2` adds a muted
+account back past the cap, since a list that hides what you silenced offers no
+way back — **bounded**, at as many extra rows as the cap itself, which is what
+lets the card survive the bulk switch below. That rule was written when a muted
+account was one of a handful of considered choices; "only this account" makes it
+every follow the member has, and the unbounded tail drew 2,678 rows into a rail
+card the width of a phone. Past the bound the way back is not a row anyway: it is
+the search field, "Select all", or the undo, all of which sit above the list.
 
-It is deliberately **not** broadcast to the member's other devices. A live tab
-switch there would reload a timeline somebody is reading from the top, taking
-its pending batch, its loaded pages and its scroll position with it — and
-reading vutuv on the desktop while the phone sits on Fediverse is a reasonable
-thing to want. The next visit is soon enough.
+**Kayak's "only", on every row of the card.** A source row's "only" writes the
+same two columns its checkbox writes, so it is a shortcut and not a second
+mechanism. An **account's** "only" is the one control here that writes over a
+considered choice, and the two halves of it cost very different things. Which
+*sources* stay on is a short array on the member's own row. Which *accounts* stay
+on inside the surviving source is a row per follow — `Social.mute_follows_except/2`
+for the vutuv branch, `Fediverse.mute_remote_follows_except/3` for a server —
+so after one press a member's handful of deliberate mutes is indistinguishable
+from the thousands the press just made.
 
-**The bar is shown only to a member the fediverse actually reaches** (issue
-#1267). For anyone else "Fediverse" can never fill, so "vutuv" is the same
-list as "All" and the three tabs are one timeline under three names — which is
-what the reporter saw. The gate is `Posts.fediverse_feed_available?/1`, and it
-asks **the Fediverse tab's own sources** (one row each, `Enum.any?/2`
-short-circuiting) rather than any member-level flag, for two reasons. The
-obvious flags are wrong: `Fediverse.federated?/1` is about *publishing
-outward* — their opt-in, their actor, their standing — and "do they follow a
-remote account" misses the member with no fediverse involvement whatsoever who
-still has remote posts in their feed because somebody they follow *here*
-reshared one (`feed_remote_reposts/3`, issue #1166). And asking the sources
-cannot drift from what the tab renders, which a hand-maintained condition
-would. Every remote source short-circuits to `[]` while `:fediverse_enabled`
-is off, so the installation switch needs no separate check. The answer is read
-once per mount and rides the handoff — it is a fact about the whole timeline,
-not the open tab — so a member who follows their first remote account while
-the feed is open sees the bar on their next load. An empty *tab* keeps the bar
-(reachable once the content leaves under the reader — muting the account it
-came from), or they would be stranded on a tab they cannot leave.
+Three things pay for that. The remote variant is **scoped to the account's own
+server**, because the other servers are switched off a whole host at a time and a
+mute written onto their accounts as well would outlive that: the reader ticks
+such a server back on and it delivers nothing, with no row admitting why.
+**"Select all" now unmutes the accounts too**, which it never had to before —
+without it there is no way back from an account's "only" short of one press per
+follow. And every bulk press first captures what it is about to overwrite
+(`muted_follow_ids/1`, `muted_remote_follow_ids/1`, the muted hosts and the
+filter) and offers one **Undo**. That capture lives in the socket rather than a
+column on purpose: it is an undo of the act you just made, not a history, and a
+reload is itself an answer to "did I mean that". A single checkbox ends the offer,
+since an undo surviving it would put that tick back too.
 
-**A tab you are not on says something landed there** (issue #1503) — a coral
-dot beside its label (`post_filter_tabs/1`'s `unseen`), cleared by going there
-(`load_source_filter/2` → `clear_unseen/2`; "All" clears both, a named tab only
-itself). Only the two named tabs ever dot (`unseen_tabs/1`): "All" holds the
-same posts, so a dot there was true and read as a third place with news of its
-own. A dot and no count: what the reader needs is that there is something
-over there, and the tab reloads from the top anyway.
+The write path reads its host list from `FeedBand.hosts/1`, never off the
+`servers` assign: that list is narrowed by the search box, so a bulk switch
+naming hosts from it left every non-matching server quietly on.
 
-**The dot is derived at every mount, not carried by the socket.** It began as
-socket state meaning "since you have been looking at this page", and that is
-how long it lasted: opening a notification and coming back to /feed showed a
-clean tab bar over a post the reader had never seen. So did a reload, a second
-visit, and every LiveView **rejoin** — a mount with no page load at all, which
-is how a locked phone, a throttled background tab, a wifi handover or a deploy
-took the dot with them. None of those is somebody reading the post.
+**`Vutuv.FeedBand` is the read side** and answers only what the band draws: the
+accounts (sorted by traffic, by who posted last or by name — the sort runs in
+SQL, so it decides who survives the cap rather than reshuffling a fixed six), the
+servers grouped by host in memory, the tags on the page, and the two branch
+totals. The window is seven days.
 
-`unseen_at_mount/3` therefore asks, on the dead render: does the tab the reader
-is not on hold anything at or after the last moment they had it on screen
-(`Posts.feed_source_since?/3`, the boolean half of `newest_source_entry/3`)?
-That moment is `users.feed_source_at`, stamped beside `feed_source` by
-`remember_feed_filter/3`. Moving *to* a tab means the one being left was in
-front of them until then, and moving away again is what ends it, so the other
-tab's clock stands still exactly while it is off screen. Which tab is being
-left is an argument rather than a rule at the call site, because only that side
-knows it and the answer decides whether the clock moves at all: pressing the
-tab already open moves nobody, and a stamp there would swallow a dot still
-rightly standing on the other one. Going to a tab still clears its dot
-(`clear_unseen/2`) — and now that same press dates the next one.
+The numbers beside the rows are the point of the thing, so they are re-read after
+every change: a switch that leaves a stale count behind reads as a switch that
+did nothing. Two levels, two meanings, and the difference is deliberate. A **leaf
+row** shows what that account or server produced, muted or not — that is the
+figure you consult to decide whether to switch it back on. A **branch total**
+shows what actually gets through, passing over what is switched off, because the
+card is called "what gets through" and a master row contradicting its own heading
+is worse than no number. `vutuv_total/1` has that shape (`f.muted == false`). Its
+fediverse counterpart went with the "Fediverse" node itself, which was dropped
+once vutuv became one source among the servers rather than the other half of a
+split — but not before a browser check caught it summing muted servers, showing
+455 beside a branch delivering 365.
 
-A member with no stamp gets no dot rather than a guessed one (a row last
-written before the column existed; their first tab press heals it, and a
-one-off backfill gave everyone else the deploy moment). The answer rides the
-handoff like the rest of the payload, so it is in the first paint and the
-connected mount does not ask again. Members on "All" and members without a tab
-bar pay nothing; for the rest it is an `Enum.any?/2` over the other tab's
-sources, one `LIMIT 1` each, beside the seven the page itself runs.
+The split itself is unchanged: it is still `feed_page/2`'s `filter:` option
+picking sources rather than filtering rows, still `Posts.remembered_feed_filter/1`
+read off the struct the session already loaded, still folded back to `:all` at
+mount when `Posts.fediverse_feed_available?/1` says that half cannot fill (issue
+#1267 — otherwise the fediverse row would be a switch with nothing behind it),
+and still not broadcast to the member's other devices. Live arrivals are still
+gated by the in-memory twin `Posts.feed_filter_accepts?/3`, with the same one
+exception: the **viewer's own** post pulls the feed back to both halves rather
+than vanishing, and that pull deliberately does not touch the stored column. The
+band therefore takes its two checkboxes from the feed's live `@feed_filter`, not
+from `users.feed_source`, or it would tick a box the timeline is not obeying.
 
-The two halves reach it differently, and the difference is what each write
-knows about the reader:
+Everything the band changes it writes through and then hands the fresh `%User{}`
+up to the feed (`{:filter_band, :changed, user}`), which re-runs its page against
+that struct and recompiles the content filters. The band never holds a second
+copy of the truth the feed reads.
 
-* **A vutuv post is already broadcast.** `insert_entry/3` used to drop an
-  arrival the open tab cannot hold; now it dots that tab's source instead. The
-  tab check moved **below** `Posts.visible_to?/2` for it: while the answer was
-  "do nothing" the order was free, and it is not free for a dot — lighting a
-  tab for a post the reader is turned away from is exactly the lie to avoid.
-  A regression test is calibrated against the old order.
-* **A fediverse arrival broadcast nothing at all**, so the four writes that put
-  a row on that side now send a bare nudge to the local followers of the account
-  or the resharer: `record_remote_post/2`, `record_remote_boost/2` (both to the
-  followers of the sending account — the boost path reads its row back first,
-  because `ON CONFLICT DO NOTHING` cannot say whether *this* delivery wrote it
-  and an `Announce` arrives once per follower), `repost_remote_post/2` and
-  `repost_note/2` (the resharer plus their unmuted followers here). The nudge
-  carries the stamp the entry will wear in the merged feed and nothing else:
-  whether the row reaches this particular reader depends on their mute, the
-  follow's state, the audience and their language filter, so the feed asks its
-  own sources (`Posts.newest_source_entry/3`, one `LIMIT 1` per source, the
-  shape `fediverse_feed_available?/1` uses). It hands the entry back rather
-  than a boolean, because the ticker below quotes it. Only the tab the reader
-  is **not** on is probed — "All" holds both halves, so nothing ever landed
-  elsewhere — and a member with no tab bar pays no query.
+**What arrived while you were reading is a card, not a dot.** The timeline never
+moves under the reader: new posts wait, and the rail's "Not read yet" card lists
+the last four of them — who wrote each and its teaser line — over the one button
+that brings them all down. Above the timeline the same queue is a pill that
+quotes the newest one. Both read `@pending_posts` and fire the same event, so
+they cannot disagree, and both quote through `VutuvWeb.PostTeaser`, the same pair
+of strings the browser-tab title uses (see [realtime.md](realtime.md)).
 
-**And for a few seconds it says what landed** (issue #1668). The dot is the
-standing mark; beside it the bar quotes the arrival — author and the teaser
-line `VutuvWeb.PostTeaser.plain_line/2` picks (see `agents-and-seo.md`, so the
-bar and the RSS description never quote one post differently) — and then goes.
-`post_filter_tabs/1` takes a `ticker` map for it and the tab it
-names shares its warm tint for the length of the window, which is the whole
-mechanism for "which tab is this about" with a tab in between. On a narrow bar
-the other tabs fold their labels to zero width and the quote takes the room
-(a container query on `.filter-tabs`, so the settings page's example box
-behaves like a phone on a desktop screen); measured on a 356 px bar, that is
-the difference between no room for a quote at all and about twenty characters.
+That queue is also where a fediverse arrival now lands. The four writes that put
+a row on that side (`record_remote_post/2`, `record_remote_boost/2`,
+`repost_remote_post/2`, `repost_note/2`) still send the bare nudge they sent for
+the dot, carrying the stamp the entry will wear and nothing else: whether the row
+reaches this particular reader depends on their mutes, the follow's state, the
+audience and their language filter, so the feed asks its own sources
+(`Posts.newest_source_entry/3`). Without that the whole fediverse half would go
+silent while the page is open, which is the opposite of what the band is for.
 
-Five rules keep it from becoming a nuisance, and each one has a test:
+**The reader arranges the rail** (`users.feed_rail`, one JSON map: order,
+collapsed, removed). Every card wears the same chrome — a grip that drags it, a
+caret that folds it to its heading, a ✕ that puts it away — and a card put away
+comes back from the chips below the rail, which is the only way back and so has
+to sit at the foot of the column the card came out of. `Posts.feed_rail/2`
+measures the stored map against the current block list, so a card added later
+turns up at the end for everybody who already arranged theirs and a retired one
+leaves no orphan.
 
-* **One quote per window.** A second arrival inside it cannot replace the
-  first (both would stand for less time than it takes to read one) and cannot
-  queue behind it (ten would hold the bar open for a minute and a half), so
-  the quote gives up and becomes a count. The clock is **not** restarted by
-  it, or a busy source would own the bar: `data-ticker-window` stays put while
-  the count climbs, and that attribute is what the browser's timer keys on.
-* **The browser owns the clock** (the `FeedTicker` hook). A window counted out
-  on the server would include the trip back, and a hide that never arrives —
-  a dead socket — would leave the quote standing forever. The hook hides it
-  and then reports `hide-tab-ticker`, which only clears the server's copy so a
-  later patch cannot put it back.
-* **A silence after each window** (`:feed_ticker_cooldown_ms`, 2 s), longer
-  than the 400 ms fold-back. Arrivals are not evenly spaced on a bad line — a
-  reconnect delivers a backlog at once — and without it the bar would close
-  and reopen in the same breath. What lands inside the silence still gets its
-  dot.
-* **A muted word is never quoted.** `decorate/3` stamps `:filtered_by` only on
-  the branch for the tab the reader *is* on, so the teaser asks
-  `filtered_pattern/3` itself and falls back to the bare dot. The bar is the
-  one place a member cannot scroll past it.
-* **Not into a browser whose bundle predates the ticker.** A deploy does not
-  reload an open feed: the socket reconnects to the new release and patches
-  into a document downloaded hours ago. Everything else the feed streams is
-  markup whose CSS that browser already has — the ticker is new markup with a
-  stylesheet and a hook of its own, so on the v7.347.0 deploy the quote drew
-  as an unstyled 200-character paragraph across the tab bar that no clock ever
-  took away. Such a browser keeps the dot and skips the quote.
+Two details are load-bearing. The drag pushes **only the cards that were on
+screen** — half the rail is conditional — so `Posts.rearrange_feed_rail/2` merges
+that sequence into the stored order rather than replacing it, or a card that
+happens not to be showing today would be silently moved to the end tomorrow. And
+removing also **unfolds**, so a folded card that is put away and fetched back
+does not return as a heading with nothing under it, from a fold nobody remembers
+making.
 
-  **The bundle answers for itself.** `app.js` sends `feed_ticker: true` in the
-  LiveSocket params and `mount_feed/2` reads it once (connect params exist only
-  during mount) into `ticker_capable?`. Only a bundle carrying the hook can
-  send the key, so the claim proves itself — and it stays true however far
-  behind the running release that bundle is.
+The grip is a real button, not a decoration: it takes ↑/↓ from the keyboard, so
+the rail is arrangeable without a pointer.
 
-  v7.347.1 asked `static_changed?/1` instead, which answers the wider question
-  "is anything in this document older than the running release?". That is the
-  right question for the deploy that *introduces* a component and the wrong one
-  ever after: it is true following every asset deploy, so from the second one
-  on it refused browsers that had been carrying the ticker all along. v7.348.0
-  was that second deploy, and the ticker read as broken in every open feed
-  until a reload (fixed in v7.351.1). `phx-track-static` stays in
-  `root.html.heex` as the seam for the next component's first release.
+**Dragging past a card taller than the window was impossible**, and the reason
+is arithmetic rather than feel: the drop position is decided by each card's
+vertical *midpoint*, and the midpoint of a 700px "New here" card leaves the
+viewport long before its top edge does — so no pointer position ever named it,
+however patiently you dragged (reported 2026-08-28). The fix is a cap: a card's
+reference line is its midpoint but at most `TALL_CAP` (120px) into it, so every
+card behaves like one of at most 240px and the pointer never has to travel
+further than that, whatever the neighbour's height. Beside it the page scrolls
+itself near the window edges, for a rail longer than the window — a card whose
+top edge is off screen is out of reach whatever the cap does. That scroll runs
+on its own frame loop rather than on `dragover`, because a pointer held still at
+the edge stops firing that event in some browsers, which is exactly the moment
+the reader is waiting for the page to move.
 
-Only ever one tab at a time: `other_source/1` is nil on "All" and the two named
-tabs partition the feed, so a third source would be the first thing to need a
-rule for two open windows. The **browser tab** teases the same arrival in its
-own title while the whole window sits behind something else (issue #1681, see
-[realtime.md](realtime.md)); the quote both surfaces show is
-`VutuvWeb.PostTeaser`, so they cannot drift. Two member preferences (`Vutuv.Prefs`, group
-`:feed_tabs`): `feed_tab_ticker?` (on) and `feed_tab_ticker_seconds` (8, from a
-fixed list of 4–20 on /settings/preferences, where an example plays the
-combination currently selected).
+**The first attempt folded every card to its heading for the length of the drag**
+and had to be taken out the same day: mutating layout — or scrolling — inside
+`dragstart` cancels the native drag session in WebKit, so Safari lost
+drag-and-drop outright while the synthetic-event tests stayed green, because a
+dispatched `DragEvent` has no browser drag session to cancel. The lesson is
+narrow and worth keeping: **`dragstart` may change appearance and nothing else.**
 
-**The discovery rail renders with the page.** The rail (Tags you follow / Who
-to follow / Suggested posts) was lazily loaded for one release (v7.200.3: an
-empty aside plus a `LazyRails` hook asking for it after connect), and the
-pop-in after the paint read as the page being *slow* — so the laziness was
-deliberately undone (v7.200.8). The rail is computed once in `feed_payload/1`
+The grip's own arming had the same shape of bug and a different cause. A card is
+made `draggable` only while the pointer hovers its grip — a card full of
+checkboxes, links and text inputs that could be dragged from anywhere is a card
+whose controls cannot be used — and that used to happen on `pointerdown`, which
+reads as equivalent and is not: the browser decides whether a press begins a drag
+as the press arrives, so the attribute came too late for that same press. The
+first click armed the card and the second dragged it, every time.
+`rail_drag_css_test.exs` asserts the absence of that DOM work, since it is
+exactly the kind of thing a later improvement reintroduces without knowing what
+it costs. Both it and the drag are the shared
+`Reorder` hook in `app.js`, which the profile's section reorder tool already
+used; the rail passes its own item selector and event name, and a row carrying a
+`[data-reorder-handle]` may be dragged only by that handle — the band's cards are
+full of checkboxes, links and text inputs, and a card draggable by any of them is
+a card whose controls cannot be used.
+
+**On a phone the band is a sheet.** The rail is `hidden md:block`, so without one
+a phone would have no way to reach any of this — and with the tabs gone, no way
+to look at one source alone at all. A filter button above the timeline opens the
+same three cards over the feed; it is rendered only while open, so its components
+and their queries cost nothing to a reader who never opens it, and they carry
+their own ids because the rail is still in the DOM behind the sheet and two live
+components may not share one. Every id inside the band is prefixed with its
+component's — a repeated `<label for>` would otherwise toggle the rail's checkbox
+from the sheet. The filter button and the "what is waiting" pill share one line,
+and the button drops its word as soon as there is a quote to read.
+
+No arranging controls in the sheet: the order, the folding and the putting away
+are about a column that only exists on a desktop.
+
+
+**The rail renders with the page.** It was lazily loaded for one release
+(v7.200.3: an empty aside plus a `LazyRails` hook asking for it after connect),
+and the pop-in after the paint read as the page being *slow* — so the laziness
+was deliberately undone (v7.200.8). The rail is computed once in `feed_payload/1`
 on the dead render and rides the mount handoff to the connected socket (see
-[realtime.md](realtime.md)), so a visit still pays its queries only once.
-Phones keep it hidden under `md` by CSS and pay those queries on the dead
-render — the accepted cost of the immediate desktop paint. The periodic
-reshuffle timer is armed at connect; the refresh paths
-(`:refresh_suggestions`, `{:tag_follows_changed, _}`) redraw unconditionally.
+[realtime.md](realtime.md)), so a visit still pays its queries only once. Phones
+keep it hidden under `md` by CSS and pay those queries on the dead render — the
+accepted cost of the immediate desktop paint. The periodic redraw timer is armed
+at connect; the refresh paths (`:refresh_suggestions`,
+`{:tag_follows_changed, _}`) redraw unconditionally.
 
-**Both suggestion cards read a snapshot, and neither trusts it.** "Who to
-follow" takes its pool from `Vutuv.Social.PopularUsers`, "Vorschläge" from
-`Vutuv.Posts.PopularPosts`: one GenServer each, re-ranking every ten minutes
-into a `read_concurrency` ETS table, with `:miss` falling back to the live
-query so boot and tests behave exactly as before. The reason is the same for
-both, and it is not the page load — it is that timer above. Every open feed tab
-redraws the rail every five minutes, so the old per-viewer ranking scaled with
-tabs left open rather than with people reading, while the expensive half of the
-question ("which posts in this language were well received, one per author,
-best first") has the same answer for every reader on the installation.
+**"Suggested posts" is gone** (Stefan, 2026-08-27), and with it everything that
+existed only to fill it: `Posts.discover_posts/2` and its three-tier draw, the
+`Vutuv.Posts.PopularPosts` snapshot GenServer and its supervision entry. The card
+suggested recent well-liked posts by same-language members the reader does not
+follow — discovery beyond the follow graph — and the rail is a shorter, calmer
+column without it. **"New here" leads the rail now**, which is the same argument
+the card itself makes: greeting somebody who signed up this morning is the thing
+a reader can give away for free.
 
-What stays per request is the half that is actually personal, and for
-`discover_posts/2` that is where the old three-tier ladder went: the tiers were
-always one ordering over one candidate set (a stranger's post ahead of a
-followed author's, whose post must also be from this fortnight), so they are a
-`CASE` in the draw's `ORDER BY` now instead of three ranking scans, and the
-draw shuffles *inside* each tier — shuffling across the whole set silently
-throws the preference away. The ladder itself is still the code that runs on a
-`:miss`.
+One thing the removal had to be careful about. `discover_posts/2` was the probe
+in one of the two NULL-trap tests the organization milestone left behind
+(`organization_follows_test.exs`), because it asked
+`p.user_id NOT IN (all_followees_of(…))` — and `x NOT IN (…, NULL)` is never
+true, so one organization follow leaking a NULL would have emptied it silently.
+That list is still read, by the feed's **tag source**, so the test moved onto
+that rather than leaving with the card; it was re-calibrated there by dropping
+the `not is_nil(followee_id)` guard and watching it go red.
+
+**"Who to follow" reads a snapshot, and does not trust it.** Its pool comes from
+`Vutuv.Social.PopularUsers`: a GenServer re-ranking every ten minutes into a
+`read_concurrency` ETS table, with `:miss` falling back to the live query so boot
+and tests behave exactly as before. The reason is not the page load — it is the
+timer above: every open feed tab redraws the rail every five minutes, so a
+per-viewer ranking scaled with tabs left open rather than with people reading,
+while the expensive half of the question has the same answer for every reader on
+the installation.
 
 The rule the design rests on: **the pool proposes, the database disposes.** A
 snapshot is minutes old and moderation is not, so the draw re-applies the full
-anonymous visibility gate plus the viewer's blocks and mutes to the candidates
-it picked. That check is affordable exactly because it is bounded to a few
-hundred known ids. Staleness can therefore cost a reader a slightly out-of-date
-*suggestion*, never a post they were not allowed to see — `popular_posts_test.exs`
-holds one case per way the world can move after a snapshot (post frozen, author
-frozen / suspended / deactivated / unreachable, post restricted, author blocked
-or muted since).
+anonymous visibility gate plus the viewer's blocks and mutes to the candidates it
+picked. That check is affordable exactly because it is bounded to a few hundred
+known ids. Staleness can therefore cost a reader a slightly out-of-date
+*suggestion*, never a person they were not allowed to see.
 
 The composer's body field is the shared **Milkdown WYSIWYG Markdown editor**
 (`VutuvWeb.UI.markdown_editor/1` + the `MarkdownEditor` hook, also used by the

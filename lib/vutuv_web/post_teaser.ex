@@ -183,19 +183,46 @@ defmodule VutuvWeb.PostTeaser do
   text: the member muted a word because they do not want to read it, and where
   it was written changes nothing about that. Never the member's own posts — a
   remote post cannot reach that arm, having no author here.
+
+  **Every post the row draws is checked, not only the one it is keyed on.** The
+  feed renders a reply together with the posts it answers, so a post carrying a
+  muted word used to walk onto the page in full the moment somebody replied to
+  it — which is the normal fate of exactly the posts worth arguing about
+  (reported 2026-08-28). The reader's own posts keep their exemption **per
+  post**: replying once to a muted conversation must not reopen it, and a word
+  the reader wrote themselves must not fold the row either.
   """
   def filtered_pattern(entry, compiled, viewer_id) do
-    cond do
-      Posts.remote_feed_entry?(entry) ->
-        entry |> record() |> Posts.text() |> ContentFilters.filtered_text(compiled)
-
-      entry.post.user_id == viewer_id ->
-        nil
-
-      true ->
-        ContentFilters.filtered_pattern(entry.post, compiled)
+    case filtered_hit(entry, compiled, viewer_id) do
+      %{pattern: pattern} -> pattern
+      nil -> nil
     end
   end
+
+  @doc """
+  The same answer with the post it is about: `%{pattern:, record:}`, or nil.
+
+  For the surface that has room to say *what* it folded — the feed's placeholder
+  row names the author and the time, and the rule it matched is only half of
+  that. The record is the post that really matched, which in a conversation is
+  regularly an ancestor rather than the post the row is keyed on; naming the row
+  would name the wrong person.
+  """
+  def filtered_hit(entry, compiled, viewer_id) do
+    if Posts.remote_feed_entry?(entry) do
+      record = record(entry)
+
+      hit(record, record |> Posts.text() |> ContentFilters.filtered_text(compiled))
+    else
+      entry
+      |> Posts.thread_posts()
+      |> Enum.reject(&(&1.user_id == viewer_id))
+      |> Enum.find_value(&hit(&1, ContentFilters.filtered_pattern(&1, compiled)))
+    end
+  end
+
+  defp hit(_record, nil), do: nil
+  defp hit(record, pattern), do: %{pattern: pattern, record: record}
 
   @doc """
   Who wrote it, as a name a reader recognises — or nil.
@@ -219,6 +246,41 @@ defmodule VutuvWeb.PostTeaser do
         end
     end
   end
+
+  @doc """
+  Who wrote this **post** — `%{name:, handle:}`, either of which may be nil.
+
+  The record-level twin of `who/1`, which answers for a row and therefore for
+  the leaf of whatever conversation that row draws. A caller holding one
+  particular post out of that conversation needs this instead: the filter
+  preview quotes the post its rule *matched*, and that is regularly an ancestor
+  rather than the row's own post.
+
+  Both halves, because the two callers want different amounts of it. `who/1`
+  gives a handle alone, which is all a one-line quote has room for; a card with
+  a line to itself shows the name a reader actually recognises and keeps the
+  handle beside it as the identity.
+  """
+  def author_of(%Post{} = post) do
+    case Posts.author(post) do
+      nil -> %{name: nil, handle: nil}
+      author -> %{name: Identity.display_name(author), handle: local_who(author)}
+    end
+  end
+
+  def author_of(%{remote_account: %RemoteAccount{} = account}),
+    do: %{
+      name: account.name,
+      handle: Handle.short(RemoteAccount.display_handle(account))
+    }
+
+  def author_of(%{handle: handle, actor_uri: actor_uri} = record) when is_binary(handle),
+    do: %{
+      name: Map.get(record, :display_name),
+      handle: Handle.short(Handle.display(handle, actor_uri))
+    }
+
+  def author_of(_record), do: %{name: nil, handle: nil}
 
   @doc """
   How it opens: the entry's teaser line, flattened — or nil for a post with no

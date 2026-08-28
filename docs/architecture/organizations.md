@@ -364,11 +364,12 @@ address.
 
 **It belongs on `/feed`, with a URL.** Sending employees to
 `/organizations/:slug/feed` is the wrong door — that page is the team's
-workspace. `/feed` grows one tab per organization the viewer may read, beside
-All / vutuv / Fediverse (`VutuvWeb.PostComponents.post_filter_tabs/1` already
-takes an `options` list, which is the seam). Today none of those tabs has a
-URL: `filter-source` is a plain `phx-click` with no `push_patch`, and only
-`/feed` itself is routed. Giving them URLs needs one decision made up front:
+workspace. `/feed` grows one switch per organization the viewer may read, in the
+filter band beside the vutuv and Fediverse rows (the band's source rows are the
+seam; the All / vutuv / Fediverse **tabs** this plan was written against are
+gone, see [posts-and-feed.md](posts-and-feed.md)). Today the band's rows have no
+URL: they are plain `phx-click`s with no `push_patch`, and only `/feed` itself is
+routed. Giving them URLs needs one decision made up front:
 
 - **Sources as a query parameter, organizations as a path segment** —
   `/feed?source=vutuv` beside `/feed/<org-slug>`. If both were path segments,

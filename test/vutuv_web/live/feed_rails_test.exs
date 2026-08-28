@@ -1,8 +1,8 @@
 defmodule VutuvWeb.PostLive.FeedRailsTest do
   use VutuvWeb.ConnCase, async: true
 
-  # The feed's discovery rail (Tags you follow / New here / Suggested posts)
-  # renders WITH the page again: a lazily loaded rail popped in noticeably
+  # The feed's rail renders WITH the page: a lazily loaded rail popped in
+  # noticeably
   # after the paint on desktop, which read as the page being slow (Stefan,
   # 2026-07-30 — the v7.200.3 laziness is deliberately undone). The rail is
   # computed once on the dead render and rides the mount handoff to the
@@ -18,15 +18,15 @@ defmodule VutuvWeb.PostLive.FeedRailsTest do
     tag = insert(:tag)
     Tags.follow_tag(user, tag)
 
-    # One newcomer for the welcome card (it only greets members who show a
-    # face) who also has something to discover.
+    # One newcomer for the welcome card — it only greets members who show a
+    # face.
     newbie = insert(:activated_user, first_name: "New", last_name: "Face", avatar: "selfie.jpg")
-    {:ok, post} = Posts.create_post(newbie, %{body: "something worth discovering"})
+    {:ok, post} = Posts.create_post(newbie, %{body: "hello from a new face"})
 
     %{tag: tag, newbie: newbie, post: post}
   end
 
-  test "the dead render ships all three rail cards", %{conn: conn} do
+  test "the dead render ships the rail cards", %{conn: conn} do
     {conn, user} = create_and_login_user(conn)
     %{tag: tag} = seed_rails(user)
 
@@ -35,23 +35,17 @@ defmodule VutuvWeb.PostLive.FeedRailsTest do
     assert html =~ ~s(id="feed-rail")
     assert html =~ ~s(id="followed-tag-#{tag.id})
     assert html =~ ~s(id="newcomers")
-    assert html =~ ~s(id="discover-posts")
     refute html =~ "LazyRails"
   end
 
   test "the connected mount shows the rail without any client request", %{conn: conn} do
     {conn, user} = create_and_login_user(conn)
-    %{tag: tag, newbie: newbie, post: post} = seed_rails(user)
+    %{tag: tag, newbie: newbie} = seed_rails(user)
 
     {:ok, view, _html} = live(conn, ~p"/feed")
 
     assert has_element?(view, "#followed-tag-#{tag.id}")
     assert has_element?(view, ~s(#newcomers a[href="/#{newbie.username}"]))
-
-    assert has_element?(
-             view,
-             ~s(#discover-posts a[href="/#{newbie.username}/posts/#{post.id}"])
-           )
   end
 
   test "the rail is live: unfollowing a tag drops its chip", %{conn: conn} do

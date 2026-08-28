@@ -121,7 +121,7 @@ source: it runs through `VutuvWeb.Markdown.render_preview/3` into the
 `#hashtags` read as themselves and headings flatten to bold. Because the body
 then carries links of its own, the quote is a block with the permalink as a
 **stretched link** underneath it rather than one big `<a>` (an `<a>` inside an
-`<a>` is invalid) — the arrangement the feed's "Suggested posts" rail uses.
+`<a>` is invalid) — the arrangement the /notifications quotes use too.
 Inline image references are dropped before the quote is cut: the quote is text,
 so a picture must not eat a line of the budget.
 
@@ -387,8 +387,9 @@ The tab title has carried two marks for a while: `(3)` for unread messages and
 notifications, and a `•` once a post arrived while the tab was in the
 background. The dot says *that* something landed. For a few seconds the title
 now says **what** — the author and the first words, paged through the tab a
-line at a time, then handed back to the page's own title. It is the feed's
-source-tab ticker one surface further out, and the two share their quote
+line at a time, then handed back to the page's own title. It quotes the same
+arrival the feed's "not read yet" card and its pill do — the source-tab ticker
+this shipped beside is gone with the tabs — and all of them share the quote
 (`VutuvWeb.PostTeaser`: who wrote it, how it opens, and the one refusal).
 
 Measured in headless Chrome 151 against a real socket, a backgrounded tab reads:

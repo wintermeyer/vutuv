@@ -7,16 +7,19 @@ defmodule VutuvWeb.PostLive.Feed do
   `%{id:, post:, reposted_by:, at:}` maps; repost entries render the
   "Reposted by X" line on the card.
 
-  Above the timeline sit the **source tabs** — All / vutuv / Fediverse — the
-  same segmented control the profile's post-type tabs use
-  (`PostComponents.post_filter_tabs/1` with `feed_filter_options/0`). They
-  partition the feed by what kind of post an entry carries, so the two named
-  tabs together are "All"; the split itself lives in
-  `Vutuv.Posts.feed_page/2`. The choice has no URL of its own (this LiveView
-  is off-router and cannot patch) but it does outlive the visit: the tab is
-  remembered on the member (`Vutuv.Posts.remember_feed_filter/2`, issue
-  #1499) and read back at mount, so the next visit opens where they left off.
-  Deliberately **not** broadcast to their other devices — a live tab switch
+  The source tabs — All / vutuv / Fediverse — are gone. They made the source
+  question a *place*: choosing one hid the other, and the dot on the tab you
+  had left kept saying what you were missing, so readers hopped back and
+  forth. Their successor is the rail's **filter band**
+  (`VutuvWeb.PostLive.FilterBand`): one timeline that shows everything by
+  default, with a switch per account, per fediverse server and per source.
+
+  The split itself did not change — it still lives in `Vutuv.Posts.feed_page/2`
+  and is still remembered on the member (`users.feed_source`,
+  `Vutuv.Posts.remember_feed_filter/3`, issue #1499). What used to be a tab
+  press is now the band's two source checkboxes writing that same column, which
+  is why the tabs could be removed without their state going with them.
+  Deliberately **not** broadcast to the member's other devices — a live switch
   would reload a timeline somebody else is reading from the top and take its
   pending batch, its loaded pages and its scroll position with it.
 
@@ -38,7 +41,6 @@ defmodule VutuvWeb.PostLive.Feed do
   alias Vutuv.ContentFilters
   alias Vutuv.Posts
   alias Vutuv.Posts.Post
-  alias Vutuv.Prefs
   alias Vutuv.Social
   alias Vutuv.Tags.UserTag
   alias VutuvWeb.Live.DayClockRestream
@@ -47,7 +49,6 @@ defmodule VutuvWeb.PostLive.Feed do
   alias VutuvWeb.Live.PostTranslations
   alias VutuvWeb.Live.RemotePostActions
   alias VutuvWeb.Live.RemoteReplyActions
-  alias VutuvWeb.Markdown
   alias VutuvWeb.PostTeaser
   alias VutuvWeb.UserHelpers
 
@@ -69,8 +70,26 @@ defmodule VutuvWeb.PostLive.Feed do
   @newcomer_pool 30
   @tags_per_newcomer 3
   @suggestions_refresh :timer.minutes(5)
-  # "Suggested posts" rail: how many discovery posts to show at once.
-  @discover_posts 5
+
+  # The rail's cards, in the order a member who never touched them gets. The
+  # list is what `Vutuv.Posts.feed_rail/2` measures a stored arrangement
+  # against, so a card added here turns up at the end for everybody who already
+  # arranged theirs, and a card removed here leaves no orphan behind. The
+  # machine-format footer is deliberately not one of them: it is the page's
+  # colophon, not a card anybody curates.
+  # The order and the folded set are a product decision, not an alphabet, and
+  # both were arrived at by arranging the real thing rather than on paper
+  # (Stefan, 2026-08-28 — this is his own rail, taken as the default). Your own
+  # topics lead, then what arrived while you were reading, then the two hide
+  # lists, then the newcomers to greet, and the switch panel comes last: it is
+  # where you go when something is wrong, not something you read.
+  #
+  # Two of them ship folded to their heading. A card that is mostly a control
+  # you rarely touch still has to be *findable*, and a heading is what makes it
+  # findable — where the open card would only be a wall of checkboxes between
+  # you and the next thing you actually read.
+  @rail_blocks ~w(followed_tags unread hidden_tags words newcomers sources)
+  @rail_collapsed ~w(hidden_tags sources)
 
   @impl true
   # Rendered by VutuvWeb.NewsfeedController via `live_render` (off-router, so it
@@ -93,16 +112,7 @@ defmodule VutuvWeb.PostLive.Feed do
   end
 
   defp mount_feed(socket, user) do
-    # Can this browser draw the tab ticker at all? A deploy does not reload an
-    # open feed — the socket reconnects to the new release and patches into a
-    # document downloaded hours ago — so the question is not which release that
-    # document came from but what it is able to render. The bundle answers it
-    # itself: `feed_ticker` is a LiveSocket param (assets/js/app.js), so only a
-    # bundle carrying the stylesheet and the hook can claim the capability.
-    # Read here because connect params exist only during mount.
-    socket = assign(socket, :ticker_capable?, ticker_capable?(socket))
-
-    # The tab they left on (issue #1499). It opens the page *and* keys the
+    # The sources they left on (issue #1499). It opens the page *and* keys the
     # handoff below: the stash holds one entry per member, so two devices
     # opening /feed within its 15s TTL would otherwise let one take a page the
     # other computed for a different tab. Keyed by the filter, a mismatch is
@@ -114,7 +124,7 @@ defmodule VutuvWeb.PostLive.Feed do
       # Refresh the Berlin-day-relative post stamps ("09:50 Uhr" -> "Gestern,
       # 09:50 Uhr") the moment the German day rolls over at midnight.
       Vutuv.DayClock.subscribe()
-      # The discovery rail reshuffles itself while the feed stays open.
+      # The "New here" card draws other newcomers while the feed stays open.
       Process.send_after(self(), :refresh_suggestions, @suggestions_refresh)
 
       # The dead render stashed its computed page seconds ago
@@ -143,8 +153,10 @@ defmodule VutuvWeb.PostLive.Feed do
     # at all, and stranding them on the tab behind it would leave a timeline
     # they cannot get out of. The stored value stays untouched, so the tab
     # comes back with the content.
-    source_tabs? = Posts.fediverse_feed_available?(user)
-    filter = if source_tabs?, do: remembered, else: :all
+    # A member the fediverse does not reach has nothing to narrow, so a stored
+    # "vutuv only" would be a filter they cannot see and could not lift — the
+    # same fold `fediverse_feed_available?/1` did for the tab bar.
+    filter = if Posts.fediverse_feed_available?(user), do: remembered, else: :all
 
     page = Posts.feed_page(user, limit: @page_size, filter: filter)
     entries = page.entries |> with_engagement(user) |> mark_filtered(compiled, user.id)
@@ -159,21 +171,14 @@ defmodule VutuvWeb.PostLive.Feed do
       cursor: page.next_cursor,
       draft: draft,
       entries: entries,
-      # The tab these entries were pulled for — the remembered one, or `:all`
-      # where the bar is hidden.
+      # Which sources these entries were pulled for — what the band's two
+      # source checkboxes show, and what a switch there changes.
       filter: filter,
-      # Whether the source tabs are worth showing this member at all (issue
-      # #1267). Read once per mount and carried on the handoff like the rest;
-      # it is a fact about their whole timeline, not about the open tab, so
-      # switching tabs must not recompute it.
-      source_tabs?: source_tabs?,
-      # The dot on the tab they are not on, as this page opens (issue #1503).
-      unseen_sources: unseen_at_mount(user, filter, source_tabs?),
-      # The desktop discovery rail renders WITH the page: it was lazy-loaded
-      # for one release (v7.200.3) and the pop-in read as slowness, so it is
-      # eager again — computed here once, riding the handoff to the connected
-      # mount. Phones keep it hidden by CSS; that they pay its queries on the
-      # dead render is the accepted cost of the immediate desktop paint.
+      # The desktop rail renders WITH the page: it was lazy-loaded for one
+      # release (v7.200.3) and the pop-in read as slowness, so it is eager
+      # again — computed here once, riding the handoff to the connected mount.
+      # Phones keep it hidden by CSS; that they pay its queries on the dead
+      # render is the accepted cost of the immediate desktop paint.
       rails: rail_data(user)
     }
   end
@@ -183,10 +188,7 @@ defmodule VutuvWeb.PostLive.Feed do
   # cannot drift.
   defp rail_data(user) do
     Map.merge(
-      %{
-        followed_tags: Vutuv.Tags.followed_tags(user),
-        discover_posts: Posts.discover_posts(user, limit: @discover_posts)
-      },
+      %{followed_tags: Vutuv.Tags.followed_tags(user)},
       newcomer_rail(user)
     )
   end
@@ -204,22 +206,10 @@ defmodule VutuvWeb.PostLive.Feed do
     |> assign(:content_filters, payload.content_filters)
     |> assign(:revealed_filters, MapSet.new())
     |> assign(:page_title, gettext("Feed"))
-    # The tab this mount opened on (issue #1499) — from here on the assign is
-    # the truth, and the stored column is not read again while the page lives.
+    # Which sources this mount opened on (issue #1499) — from here on the
+    # assign is the truth, and the stored column is not read again while the
+    # page lives.
     |> assign(:feed_filter, payload.filter)
-    |> assign(:source_tabs?, payload.source_tabs?)
-    # The named sources holding something this reader has not seen (issue
-    # #1503), each one a dot on its tab. The socket carries it from here on,
-    # but it does not *begin* here: the mount derives it from the last time
-    # they had the other tab on screen (`unseen_at_mount/3`), because an unread
-    # post is unread on the next page as well.
-    |> assign(:unseen_sources, payload.unseen_sources)
-    # The transient half of that (issue #1668): what landed over there, quoted
-    # beside its tab for a few seconds. nil = no window open. `ticker_quiet_until`
-    # is the short silence after one closes, so a burst on a bad line cannot
-    # fold the bar open and shut in the same breath.
-    |> assign(:tab_ticker, nil)
-    |> assign(:ticker_quiet_until, nil)
     |> assign(:more?, payload.more?)
     |> assign(:cursor, payload.cursor)
     |> assign(:empty?, payload.entries == [])
@@ -239,7 +229,31 @@ defmodule VutuvWeb.PostLive.Feed do
     |> assign(:entries, payload.entries)
     # The posts on screen we hold a photo-scan subscription for (below).
     |> assign(:photo_watch, MapSet.new())
+    # How this member arranged the rail: the order of its cards, which are
+    # folded to their heading and which they put away. Read from the member the
+    # session already loaded, so the very first (dead) render draws the rail the
+    # way they left it rather than the default order and then rearranging it
+    # once the socket connects.
+    |> assign(:rail, Posts.feed_rail(socket.assigns.current_user, @rail_blocks, @rail_collapsed))
+    # The phone's filter sheet, closed at mount. Deliberately not remembered
+    # across a reconnect: a sheet is a thing the reader opened a moment ago and
+    # a rejoin that reopened it over their feed would be a patch nobody asked
+    # for. Everything it changes is written through and survives anyway.
+    |> assign(:band_sheet?, false)
+    # The name the follow field could not resolve, so the card can say so.
+    |> assign(:tag_missing, nil)
     |> assign(payload.rails)
+    # The follow-a-tag suggestions ride the first paint like the rest of the
+    # rail. Computed from what is already in hand rather than through
+    # `assign_followed_tags/1`, which would re-run the query the payload just
+    # answered.
+    |> assign(
+      :tag_suggestions,
+      Vutuv.FeedBand.tags_on_page(payload.entries,
+        except: Enum.map(payload.rails.followed_tags, &(&1.name || &1.slug)),
+        limit: 5
+      )
+    )
     |> stream_configure(:posts, dom_id: &"feed-#{&1.id}")
     |> stream(:posts, payload.entries)
     |> watch_pending_photos(payload.entries)
@@ -404,7 +418,20 @@ defmodule VutuvWeb.PostLive.Feed do
   # whenever the follow set changes (an unfollow here, or a follow/unfollow made
   # on a tag page while this feed is open — see the :tag_follows_changed handler).
   defp assign_followed_tags(socket) do
-    assign(socket, :followed_tags, Vutuv.Tags.followed_tags(socket.assigns.current_user))
+    followed = Vutuv.Tags.followed_tags(socket.assigns.current_user)
+
+    socket
+    |> assign(:followed_tags, followed)
+    # What the card offers to follow: the tags on the page, minus the ones this
+    # reader already follows. Computed here rather than in the card so both it
+    # and the "Hide tags" card read one list (`FeedBand.tags_on_page/2`).
+    |> assign(
+      :tag_suggestions,
+      Vutuv.FeedBand.tags_on_page(socket.assigns[:entries] || [],
+        except: Enum.map(followed, &(&1.name || &1.slug)),
+        limit: 5
+      )
+    )
   end
 
   # The ↻ both rail cards wear: one control, one glyph, one set of colours.
@@ -444,29 +471,6 @@ defmodule VutuvWeb.PostLive.Feed do
     """
   end
 
-  # The rail's "Suggested posts" card: a random handful of recent public posts
-  # by same-language members the viewer does not follow — discovery beyond the
-  # follow graph, like "New here" but for content (the draw itself lives in
-  # `Posts.discover_posts/2`). Re-run by the reload button, the periodic
-  # refresh tick and every follow (a just-followed author's post is no longer
-  # a discovery).
-  defp assign_discover_posts(socket) do
-    posts = Posts.discover_posts(socket.assigns.current_user, limit: @discover_posts)
-    assign(socket, :discover_posts, posts)
-  end
-
-  # The card's post body. Rendered through the exact same Markdown formatter as
-  # a normal post preview (`VutuvWeb.Markdown.render_preview/2` → `render_post/2`)
-  # so the rail shows formatted text — headings flattened to bold via
-  # `.markdown--post`, @mentions and #hashtags linked — instead of the raw
-  # Markdown source. The source is block-cut at the preview limit to keep the
-  # rail DOM light; the visible cut is the six-line CSS clamp (`line-clamp-6`)
-  # on the wrapper, so we drop the truncation flag here.
-  defp discover_body(body) do
-    {html, _truncated?} = Markdown.render_preview(body, [])
-    html
-  end
-
   # Pre-load the action-bar engagement AND the viewer's follow edge to each
   # author for the whole page in one query each, and hang them on each entry, so
   # the per-card Actions LiveViews don't each run their own query (was one query
@@ -477,6 +481,373 @@ defmodule VutuvWeb.PostLive.Feed do
   # Live-arriving single posts carry `engagement: nil` (falls back to the bar's
   # own query) and get their follow edge in `insert_entry/3`.
   # The one-line stand-in for a content-filtered post (issue #940): says which
+  # The newest waiting post as the pair the pill quotes, or nil when there is
+  # nothing to quote (a photo with no caption, an author we cannot name).
+  defp newest_quote([newest | _rest]) do
+    case {PostTeaser.who(newest), PostTeaser.text(newest)} do
+      {nil, _text} -> nil
+      {_who, nil} -> nil
+      {who, text} -> %{who: who, text: text}
+    end
+  end
+
+  # Write an arrangement change through and keep the socket's copy in step. The
+  # column is the truth here and the assign is a copy of it, so both move
+  # together or a second change would be computed from a stale rail.
+  defp save_rail(socket, fun) do
+    rail = fun.(socket.assigns.rail)
+    {:ok, _stored} = Posts.save_feed_rail(socket.assigns.current_user, rail)
+
+    assign(socket, :rail, rail)
+  end
+
+  defp toggle_rail_member(rail, field, key) do
+    current = Map.fetch!(rail, field)
+    next = if key in current, do: current -- [key], else: [key | current]
+
+    Map.put(rail, field, next)
+  end
+
+  # Whether a card has anything to say right now. A card that is empty is not
+  # rendered at all rather than rendered empty, which is what the `:if`s on the
+  # old rail did — but it stays in the stored order, so it returns to its own
+  # place rather than to the end of the rail when it fills up again.
+  defp rail_showing?(key, assigns) do
+    key not in assigns.rail.removed and rail_filled?(key, assigns)
+  end
+
+  defp rail_filled?("unread", assigns), do: assigns.pending_posts != []
+  # Always: the card is where a tag is followed, so hiding it until one already
+  # is would put the first follow behind a tag page — the long way round this
+  # card exists to remove.
+  defp rail_filled?("followed_tags", _assigns), do: true
+  defp rail_filled?("newcomers", assigns), do: assigns.newcomers != []
+  defp rail_filled?(_key, _assigns), do: true
+
+  # What a card is called, for the chip that offers it back. It is the same
+  # string the card's own heading uses — one list, so a renamed card cannot be
+  # offered back under its old name.
+  defp rail_title("unread"), do: gettext("Not read yet")
+  # Named for what the card holds, not for what switching things off achieves:
+  # "What gets through" described an effect and left a reader guessing whether
+  # the card was a list, a rule or a report (Stefan, 2026-08-28). It lists the
+  # sources of the timeline at three levels — the two halves, the servers, the
+  # accounts — so that is what it is called.
+  defp rail_title("sources"), do: gettext("Sources")
+  defp rail_title("words"), do: gettext("Hide words")
+  defp rail_title("hidden_tags"), do: gettext("Hide tags")
+  defp rail_title("followed_tags"), do: gettext("Tags you follow")
+  defp rail_title("newcomers"), do: gettext("New here")
+
+  # The chrome every rail card wears, and the only place the three arranging
+  # controls live: the grip that drags it, the caret that folds it to its
+  # heading, and the ✕ that takes it out of the rail altogether (it comes back
+  # from the chips below the rail). One component rather than a copy per card,
+  # so the arrangement cannot work on four of them and quietly not on the fifth.
+  #
+  # `count` is the figure that keeps a folded card worth folding: collapsed, the
+  # heading and that number are all there is, so "Not read yet · 3" still
+  # answers the question the card exists for.
+  attr(:key, :string, required: true)
+  attr(:title, :string, required: true)
+  attr(:rail, :map, required: true)
+  attr(:count, :string, default: nil)
+  attr(:dot, :boolean, default: false)
+  slot(:action)
+  slot(:inner_block, required: true)
+
+  defp rail_block(assigns) do
+    assigns = assign(assigns, :collapsed?, assigns.key in assigns.rail.collapsed)
+
+    ~H"""
+    <section
+      id={"rail-#{@key}"}
+      data-rail-block={@key}
+      data-id={@key}
+      class="rounded-2xl bg-white p-6 shadow-sm ring-1 ring-slate-200 dark:bg-slate-900 dark:ring-slate-800"
+    >
+      <div class={["flex items-center gap-2", not @collapsed? && "mb-3"]}>
+        <%!-- The grip is a real button, not a decorative span: dragging is a
+        pointer gesture and the rail has to be arrangeable without one, so it
+        takes ↑/↓ from the keyboard as well (the Reorder hook). --%>
+        <button
+          type="button"
+          data-reorder-handle
+          aria-label={gettext("Move %{card}", card: @title)}
+          title={gettext("Drag, or use the arrow keys")}
+          class="rail-handle -ml-1 flex h-6 w-4 shrink-0 items-center justify-center rounded text-slate-300 hover:text-slate-500 focus-visible:outline-2 focus-visible:outline-brand-500 dark:text-slate-600 dark:hover:text-slate-400"
+        >
+          <span aria-hidden="true">⠿</span>
+        </button>
+        <span
+          :if={@dot}
+          class="h-2 w-2 shrink-0 rounded-full bg-emerald-500"
+          aria-hidden="true"
+        >
+        </span>
+        <.section_title class="min-w-0 flex-1 truncate">{@title}</.section_title>
+        <span :if={@count} class="shrink-0 text-xs tabular-nums text-slate-500 dark:text-slate-400">
+          {@count}
+        </span>
+        {render_slot(@action)}
+        <button
+          type="button"
+          phx-click="rail-collapse"
+          phx-value-key={@key}
+          aria-expanded={to_string(not @collapsed?)}
+          aria-label={
+            if @collapsed?,
+              do: gettext("Unfold %{card}", card: @title),
+              else: gettext("Fold %{card}", card: @title)
+          }
+          class="flex h-6 w-6 shrink-0 items-center justify-center rounded text-slate-400 hover:bg-slate-100 hover:text-slate-700 dark:hover:bg-slate-800 dark:hover:text-slate-200"
+        >
+          <svg
+            viewBox="0 0 24 24"
+            fill="none"
+            stroke="currentColor"
+            stroke-width="2"
+            stroke-linecap="round"
+            stroke-linejoin="round"
+            aria-hidden="true"
+            class={["h-4 w-4 transition-transform", @collapsed? && "-rotate-90"]}
+          >
+            <path d="M6 9l6 6 6-6" />
+          </svg>
+        </button>
+        <button
+          type="button"
+          phx-click="rail-remove"
+          phx-value-key={@key}
+          aria-label={gettext("Remove %{card}", card: @title)}
+          title={gettext("Remove %{card}", card: @title)}
+          class="flex h-6 w-6 shrink-0 items-center justify-center rounded leading-none text-slate-400 hover:bg-slate-100 hover:text-slate-700 dark:hover:bg-slate-800 dark:hover:text-slate-200"
+        >
+          <span aria-hidden="true">×</span>
+        </button>
+      </div>
+      <div :if={not @collapsed?}>{render_slot(@inner_block)}</div>
+    </section>
+    """
+  end
+
+  # The rail's "not read yet" card: one line per waiting post — who wrote it and
+  # how it opens — plus the one button that brings them all down. The teaser is
+  # `VutuvWeb.PostTeaser`, the same pair of strings the browser-tab title uses,
+  # so a post reads the same wherever it is quoted.
+  #
+  # Four rows, newest first: this is a glance, not a second timeline. The rest
+  # are still counted in the heading and still arrive with the button.
+  attr(:entries, :list, required: true)
+
+  defp unread_body(assigns) do
+    assigns = assign(assigns, :shown, Enum.take(assigns.entries, 4))
+
+    ~H"""
+    <div id="unread-posts">
+      <button
+        :for={entry <- @shown}
+        type="button"
+        phx-click="show-new"
+        class="flex w-full items-start gap-2 border-t border-slate-100 py-2 text-left first:border-t-0 first:pt-0 hover:bg-slate-50 dark:border-slate-800 dark:hover:bg-slate-800/50"
+      >
+        <span class="min-w-0 flex-1">
+          <span class="block truncate text-xs text-slate-500 dark:text-slate-400">
+            {PostTeaser.who(entry)}
+          </span>
+          <span class="block truncate text-sm text-slate-800 dark:text-slate-200">
+            {PostTeaser.text(entry) || gettext("A photo")}
+          </span>
+        </span>
+      </button>
+
+      <.button id="unread-insert" variant="secondary" class="mt-3 w-full" phx-click="show-new">
+        {ngettext(
+          "Add %{formatted} post",
+          "Add %{formatted} posts",
+          length(@entries),
+          formatted: compact_count(length(@entries))
+        )}
+      </.button>
+    </div>
+    """
+  end
+
+  # The tag chips the viewer subscribed to, each with a reload-free ✕, plus the
+  # field that adds one.
+  #
+  # Following a tag used to mean finding its page first, which is a long way
+  # round for something the reader is looking straight at: the suggestions come
+  # from the posts on the page (`FeedBand.tags_on_page/2`, the same list the
+  # "Hide tags" card offers to mute).
+  attr(:tags, :list, required: true)
+  attr(:suggestions, :list, required: true)
+  attr(:missing, :string, default: nil)
+
+  defp followed_tags_body(assigns) do
+    ~H"""
+    <div>
+      <div id="followed-tags" class="flex flex-wrap items-start gap-2">
+      <span
+        :for={tag <- @tags}
+        id={"followed-tag-#{tag.id}"}
+        class="inline-flex max-w-full items-center gap-1 rounded-lg bg-brand-50 py-1 pl-3 pr-1.5 text-sm font-medium text-brand-700 dark:bg-brand-900/40 dark:text-brand-100"
+      >
+        <%!-- No leading "#", on the chip or in the ✕'s accessible name. The chip
+        is already inside a card named after tags, and the two cards beside it
+        dropped theirs for the same reason (Stefan, on the fourth demo and again
+        2026-08-28); a label that kept the hash would leave the sighted and the
+        screen-reader vocabulary saying different things. --%>
+        <.link navigate={~p"/tags/#{tag}"} class="min-w-0 truncate hover:underline">
+          {tag.name || tag.slug}
+        </.link>
+        <button
+          type="button"
+          phx-click="unfollow_tag"
+          phx-value-id={tag.id}
+          title={gettext("Unfollow")}
+          aria-label={gettext("Unfollow the tag %{tag}", tag: tag.name || tag.slug)}
+          class="flex h-4 w-4 flex-shrink-0 items-center justify-center rounded-full leading-none text-brand-500 transition hover:bg-brand-100 hover:text-brand-800 dark:text-brand-300 dark:hover:bg-brand-800 dark:hover:text-brand-100"
+        >
+          <span aria-hidden="true">×</span>
+        </button>
+      </span>
+
+        <%!-- The "+" rides the chip row, so adding a tag costs no height of
+        its own at all; open, the field takes the row's full width. --%>
+        <.rail_add_field
+          label={gettext("Follow a tag …")}
+          placeholder={gettext("Follow a tag …")}
+          submit="follow_tag"
+          name="name"
+          maxlength="60"
+        />
+      </div>
+
+      <%!-- A tag is only followed if it exists. Minting one because somebody
+      typed a word into a follow box would put an empty topic into a namespace
+      every member shares, and the reader would be its only inhabitant — so an
+      unknown name says so and points at the directory instead. --%>
+      <p :if={@missing} class="pt-1 text-xs text-slate-500 dark:text-slate-400">
+        {gettext("No tag called %{name} yet.", name: @missing)}
+        <.link
+          navigate={~p"/tags"}
+          class="font-semibold text-brand-600 hover:text-brand-700 dark:text-brand-400 dark:hover:text-brand-300"
+        >
+          {gettext("Browse the tags")}
+        </.link>
+      </p>
+
+      <div :if={@suggestions != []} class="pt-2">
+        <p class="pb-1 text-xs text-slate-500 dark:text-slate-400">
+          {gettext("In your feed right now:")}
+        </p>
+        <div class="flex flex-wrap gap-2">
+          <button
+            :for={name <- @suggestions}
+            type="button"
+            phx-click="follow_tag"
+            phx-value-name={name}
+            class="rounded-lg bg-slate-100 px-2.5 py-1 text-xs font-medium text-slate-600 hover:bg-slate-200 hover:text-slate-900 dark:bg-slate-800 dark:text-slate-300 dark:hover:bg-slate-700 dark:hover:text-slate-100"
+          >
+            {name}
+          </button>
+        </div>
+      </div>
+    </div>
+    """
+  end
+
+  attr(:newcomers, :list, required: true)
+  attr(:current_user, :map, required: true)
+  attr(:following_by_id, :map, required: true)
+
+  defp newcomers_body(assigns) do
+    ~H"""
+    <div id="newcomers">
+      <%!-- "A few of" carries the whole draw: these are not *the* newest members
+      in order, they are a random handful out of them, and a sentence that says
+      "the most recently joined" promises a ranking the ↻ visibly contradicts. It
+      also stays true on a quiet installation (an intranet vutuv with forty
+      members), where the newest member may have been here for months. --%>
+      <p class="mb-4 text-sm text-slate-600 dark:text-slate-400">
+        {gettext("A few of the newest members. Following them is a warm welcome.")}
+      </p>
+      <ul class="space-y-4">
+        <li :for={row <- @newcomers} id={"newcomer-#{row.user.id}"} class="flex items-start gap-3">
+          <.link href={~p"/#{row.user}"} class="shrink-0">
+            <.avatar
+              user={row.user}
+              size="sm"
+              alt={gettext("Profile picture of %{name}", name: UserHelpers.full_name(row.user))}
+            />
+          </.link>
+          <div class="min-w-0 flex-1">
+            <%!-- Only the name shares a line with the Follow pill. The meta line
+            below it runs the full column width instead, which is what makes it
+            readable at all: the pill is 5.5rem wide in a rail a third of the
+            page across, so beside it "seit 9 Tagen dabei · Privatier @ JL" was
+            cut mid-word. --%>
+            <div class="flex items-start gap-2">
+              <.link
+                href={~p"/#{row.user}"}
+                class="min-w-0 flex-1 truncate text-sm font-medium text-slate-800 hover:text-brand-700 dark:hover:text-brand-300 dark:text-slate-100"
+              >
+                {UserHelpers.full_name(row.user)}
+              </.link>
+              <.follow_button
+                variant="text"
+                follower_id={@current_user.id}
+                followee_id={row.user.id}
+                follow_id={Map.get(@following_by_id, row.user.id)}
+                live?
+              />
+            </div>
+            <%!-- The job title, when there is one. It used to lead with how long
+            the member had been here ("seit 3 Tagen dabei · …"), which was
+            interesting and cost a third of the row for a fact the card's own
+            heading already makes — five rows deep, that bought nothing (Stefan,
+            2026-08-24). A member with no job filled in, which most have not on
+            their first days, simply gets no line rather than an empty one. --%>
+            <p
+              :if={row.work != ""}
+              class="mb-0 mt-0.5 truncate text-xs text-slate-600 dark:text-slate-400"
+            >
+              {row.work}
+            </p>
+            <%!-- Three tags, at rail scale, each a link to that topic: enough to
+            be curious about somebody, never their whole profile. The +N is what
+            the sample leaves out and leads to the rest of them; it is the
+            tag-specific plural the member directory already uses, not a bare
+            "+3". --%>
+            <div
+              :if={row.tags != []}
+              data-newcomer-tags={row.user.id}
+              class="mt-1.5 flex flex-wrap items-center gap-1"
+            >
+              <.chip :for={user_tag <- row.tags} size="sm" navigate={~p"/tags/#{UserTag.tag(user_tag)}"}>
+                <span aria-hidden="true">#</span>{UserTag.truncated_name(user_tag)}
+              </.chip>
+              <.link
+                :if={row.more > 0}
+                navigate={~p"/#{row.user}/tags"}
+                class="text-xs font-medium text-slate-600 hover:text-brand-700 dark:text-slate-400 dark:hover:text-brand-300"
+              >
+                {ngettext("+1 more tag", "+%{formatted} more tags", row.more,
+                  formatted: compact_count(row.more)
+                )}
+              </.link>
+            </div>
+          </div>
+        </li>
+      </ul>
+      <.card_footer_link href={~p"/system/members"}>
+        {gettext("All members")}
+      </.card_footer_link>
+    </div>
+    """
+  end
+
   # filter hid it and offers to show it anyway, in place.
   attr(:pattern, :string, required: true)
 
@@ -485,12 +856,34 @@ defmodule VutuvWeb.PostLive.Feed do
     doc: "what the reveal set remembers this entry by (`filter_key/1`), not always a post id"
   )
 
+  attr(:record, :any,
+    default: nil,
+    doc: "the post that matched — regularly an ancestor, not the post the row is keyed on"
+  )
+
   defp filtered_placeholder(assigns) do
+    assigns = assign(assigns, :author, assigns.record && PostTeaser.author_of(assigns.record))
+
     ~H"""
     <div
       data-filtered-post={@pattern}
       class="flex flex-wrap items-center gap-x-2 gap-y-1 rounded-2xl bg-slate-50 px-4 py-3 text-sm text-slate-600 ring-1 ring-slate-200 dark:bg-slate-900/50 dark:text-slate-400 dark:ring-slate-800"
     >
+      <%!-- Whose post this was, and when. A row that says only "hidden" makes
+      the reader open it to find out whether it is worth opening, which is the
+      one thing a fold is supposed to save them (Stefan, 2026-08-28). The name
+      is the matching post's own — in a conversation that is regularly an
+      ancestor rather than the post the row is keyed on, and naming the row
+      would name the wrong person. --%>
+      <span :if={@author && (@author.name || @author.handle)} class="min-w-0 max-w-full truncate">
+        <span class="font-medium text-slate-700 dark:text-slate-300">
+          {@author.name || @author.handle}
+        </span>
+        <span :if={@author.name && @author.handle}>{@author.handle}</span>
+        <span :if={Posts.written_at(@record)}>
+          · <.post_time at={Posts.written_at(@record)} />
+        </span>
+      </span>
       <span>
         {gettext("Hidden: matches your filter")}
         <code class="rounded bg-slate-200 px-1.5 py-0.5 font-mono text-xs text-slate-800 dark:bg-slate-800 dark:text-slate-200">{@pattern}</code>
@@ -603,22 +996,6 @@ defmodule VutuvWeb.PostLive.Feed do
      |> auto_translate_entries(entries)}
   end
 
-  # A source tab (All / vutuv / Fediverse). The tab decides which sources the
-  # query pulls from, so it cannot be applied to the page already on screen —
-  # the timeline reloads from the top.
-  def handle_event("filter-source", %{"type" => type}, socket) do
-    filter = Posts.normalize_feed_filter(type)
-    # Remembered for the next visit (issue #1499) — here and not in
-    # `load_source_filter/2`, which the arrival of the member's own post also
-    # calls to pull the feed back to "All". That fallback is the code's doing,
-    # not theirs, and must not overwrite the tab they chose.
-    # It is handed the tab being left as well, because that is what dates the
-    # move for `unseen_at_mount/3` and only this side knows it.
-    Posts.remember_feed_filter(socket.assigns.current_user, filter, socket.assigns.feed_filter)
-
-    {:noreply, load_source_filter(socket, filter)}
-  end
-
   def handle_event("open-composer", _params, socket) do
     # Both triggers open the same composer — there are no modes. The camera
     # button additionally clicks the composer's "Add photos" control
@@ -691,16 +1068,13 @@ defmodule VutuvWeb.PostLive.Feed do
   # saying hello, the visible ✓ is the answer. A fresh draw (reshuffle, the
   # periodic tick, the next visit) leaves them out again, since by then the
   # viewer follows them.
-  #
-  # The posts rail redraws — the new followee's post may be in it, and a followed
-  # author is no longer a discovery.
   def handle_event("follow", %{"followee" => followee_id}, socket) do
     # Every refusal — a tampered id, a block, following yourself, an edge that
     # already exists — comes back as an error tuple rather than a raise, so
     # re-reading the follow table afterwards simply leaves the pill where it was.
     Social.follow(socket.assigns.current_user, followee_id)
 
-    {:noreply, socket |> assign_following() |> assign_discover_posts()}
+    {:noreply, assign_following(socket)}
   end
 
   # The other half of the same pill: a welcome taken back before the page is
@@ -716,7 +1090,33 @@ defmodule VutuvWeb.PostLive.Feed do
   # unfollowing a person, the change only shapes the next feed load.
   def handle_event("unfollow_tag", %{"id" => tag_id}, socket) do
     Vutuv.Tags.unfollow_tag(socket.assigns.current_user, tag_id)
-    {:noreply, assign_followed_tags(socket)}
+    {:noreply, socket |> assign(:tag_missing, nil) |> assign_followed_tags()}
+  end
+
+  # Following a tag from the rail, by name — typed into the field or taken from
+  # the suggestions, which is the same event because it is the same act.
+  #
+  # Resolved by slug and never minted: an unknown name is answered rather than
+  # turned into an empty topic in a namespace every member shares. The slug is
+  # what `Vutuv.SlugHelpers.tagify/1` makes of the name, so "Free Software" and
+  # "free-software" find the same tag, and `resolve_tag_by_slug/1` follows an
+  # alias to the topic it was merged into (#1338) instead of dead-ending on the
+  # old spelling.
+  def handle_event("follow_tag", %{"name" => name}, socket) do
+    case name |> to_string() |> String.trim() do
+      "" ->
+        {:noreply, socket}
+
+      typed ->
+        case Vutuv.Tags.resolve_tag_by_slug(Vutuv.SlugHelpers.tagify(typed)) do
+          nil ->
+            {:noreply, assign(socket, :tag_missing, typed)}
+
+          tag ->
+            Vutuv.Tags.follow_tag(socket.assigns.current_user, tag)
+            {:noreply, socket |> assign(:tag_missing, nil) |> assign_followed_tags()}
+        end
+    end
   end
 
   # The "New here" card's reload button: greet five other newcomers, with
@@ -726,15 +1126,38 @@ defmodule VutuvWeb.PostLive.Feed do
   end
 
   # The "Suggested posts" card's reload button: draw 5 fresh random ones.
-  def handle_event("reshuffle-discover", _params, socket) do
-    {:noreply, assign_discover_posts(socket)}
+  # The three arranging controls. Each writes the whole arrangement back, so a
+  # reader who folds a card on their laptop finds it folded on their phone —
+  # the same promise the band's switches make, and the reason the rail is a
+  # column on the member rather than something in this socket.
+  def handle_event("rail-reorder", %{"order" => order}, socket) when is_list(order) do
+    {:noreply, save_rail(socket, &Posts.rearrange_feed_rail(&1, order))}
   end
 
-  # The window ran out in the browser. It has already hidden itself there, so
-  # this only clears the server's copy — and starts the silence — which is what
-  # keeps a later patch from putting the quote back on screen.
-  def handle_event("hide-tab-ticker", _params, socket) do
-    {:noreply, hide_ticker(socket)}
+  def handle_event("rail-collapse", %{"key" => key}, socket) do
+    {:noreply, save_rail(socket, &toggle_rail_member(&1, :collapsed, key))}
+  end
+
+  # Removing also unfolds: the card comes back the way it went away otherwise,
+  # and a reader who put a folded card away and fetched it again would get a
+  # heading with nothing under it and no memory of having folded it.
+  def handle_event("rail-remove", %{"key" => key}, socket) do
+    {:noreply,
+     save_rail(socket, fn rail ->
+       %{rail | removed: Enum.uniq([key | rail.removed]), collapsed: rail.collapsed -- [key]}
+     end)}
+  end
+
+  def handle_event("rail-restore", %{"key" => key}, socket) do
+    {:noreply, save_rail(socket, &%{&1 | removed: &1.removed -- [key]})}
+  end
+
+  def handle_event("open-band", _params, socket) do
+    {:noreply, assign(socket, :band_sheet?, true)}
+  end
+
+  def handle_event("close-band", _params, socket) do
+    {:noreply, assign(socket, :band_sheet?, false)}
   end
 
   def handle_event("show-new", _params, socket) do
@@ -796,20 +1219,9 @@ defmodule VutuvWeb.PostLive.Feed do
     |> assign(:empty?, entries == [])
     |> assign(:pending_posts, [])
     |> assign(:entries, entries)
-    |> clear_unseen(filter)
-    |> close_ticker()
     |> stream(:posts, entries, reset: true)
     |> watch_pending_photos(entries)
   end
-
-  # Landing on a tab clears its dot — the page above is newest-first from the
-  # top, so whatever it was pointing at has now been seen. "All" clears both,
-  # because it shows both; a named tab clears only itself, so a dot waiting on
-  # the other one survives the trip.
-  defp clear_unseen(socket, :all), do: assign(socket, :unseen_sources, MapSet.new())
-
-  defp clear_unseen(socket, source),
-    do: update(socket, :unseen_sources, &MapSet.delete(&1, source))
 
   @impl true
   def handle_info({:new_post, %{post_id: post_id, author_id: author_id}}, socket) do
@@ -892,7 +1304,23 @@ defmodule VutuvWeb.PostLive.Feed do
   # "joined today" as "joined yesterday" without a reload.
   def handle_info(:refresh_suggestions, socket) do
     Process.send_after(self(), :refresh_suggestions, @suggestions_refresh)
-    {:noreply, socket |> assign_newcomers() |> assign_discover_posts()}
+    {:noreply, assign_newcomers(socket)}
+  end
+
+  # The filter band switched something off (or back on). It has already written
+  # the change through the contexts this page reads, and hands back the member
+  # it wrote it to — so the timeline is re-run against that struct rather than
+  # the one this socket loaded at mount, which is exactly the stale copy the
+  # source list would otherwise consult.
+  def handle_info({:filter_band, :changed, user}, socket) do
+    {:noreply,
+     socket
+     |> assign(:current_user, user)
+     # A word or tag rule changed too, and the compiled set is what every row
+     # is measured against — recompiled here rather than at each call site, so
+     # a rule added in the band cannot keep showing the post it hides.
+     |> assign(:content_filters, ContentFilters.compile_for(user))
+     |> load_source_filter(Posts.remembered_feed_filter(user))}
   end
 
   # Something landed through the fediverse (issue #1503) — a followed account
@@ -900,13 +1328,15 @@ defmodule VutuvWeb.PostLive.Feed do
   # `{:new_post, …}` this carries no entry, because whether that write reaches
   # THIS reader depends on their mutes, their follow states, the audience and
   # their language filter; so the nudge only says "look", and the feed asks its
-  # own sources (`Posts.feed_source_since?/3`).
+  # own sources (`Posts.newest_source_entry/3`).
   #
-  # Only the tab the reader is NOT on can be dotted, which is why "All" ignores
-  # this outright: it shows both halves, so nothing landed elsewhere. A member
-  # with no tab bar has nowhere to put a dot and pays no query either.
+  # It used to put a dot on the tab the reader was not standing on. With the
+  # tabs gone it joins the same queue everything else waits in, so the rail's
+  # "not read yet" card and the pill above the timeline count it like any other
+  # arrival — otherwise a fediverse-heavy feed would go completely quiet while
+  # the page is open, which is the opposite of what the band is for.
   def handle_info({:remote_feed_arrival, %{at: at}}, socket) do
-    {:noreply, dot_other_tab(socket, at)}
+    {:noreply, queue_remote_arrival(socket, at)}
   end
 
   # The viewer followed / unfollowed a tag elsewhere (a tag page in another tab,
@@ -990,55 +1420,29 @@ defmodule VutuvWeb.PostLive.Feed do
 
   def handle_info(_other, socket), do: {:noreply, socket}
 
-  # The dot half of `{:remote_feed_arrival, …}` above. Three cheap refusals
-  # before the query: "All" has no other tab, a member without the tab bar has
-  # nowhere to show one, and a tab already dotted has nothing to learn.
-  defp dot_other_tab(socket, at) do
-    source = dottable_source(socket)
+  # The queue half of `{:remote_feed_arrival, …}` above: ask this reader's own
+  # sources what actually arrived and put it behind the pill.
+  #
+  # A member who switched the fediverse half off is told nothing, and neither is
+  # one whose page already holds that entry — the announcement carries no id, so
+  # a burst of deliveries would otherwise queue the same newest post several
+  # times over.
+  defp queue_remote_arrival(%{assigns: %{feed_filter: :vutuv}} = socket, _at), do: socket
 
-    cond do
-      is_nil(source) ->
-        socket
-
-      # A window already open for this tab only needs the *fact* that another
-      # one landed — the count replaces the quote from the second on — so it
-      # skips the query the same way the plain dot used to.
-      ticking?(socket, source) ->
-        count_ticker(socket)
-
-      # Nothing left to learn: the dot is already there and no quote is due
-      # (the member switched it off, or the last window only just closed).
-      MapSet.member?(socket.assigns.unseen_sources, source) and not ticker_due?(socket) ->
-        socket
-
-      entry = Posts.newest_source_entry(socket.assigns.current_user, source, at) ->
-        socket |> mark_unseen(source) |> open_ticker(source, entry)
-
-      true ->
-        socket
+  defp queue_remote_arrival(socket, at) do
+    case Posts.newest_source_entry(socket.assigns.current_user, :fediverse, at) do
+      nil -> socket
+      entry -> if known_entry?(socket, entry), do: socket, else: queue(socket, entry)
     end
   end
 
-  # The tab a dot could go on, or nil: the one the reader is not looking at —
-  # "All" is both of them at once, so nothing ever landed elsewhere — and only
-  # where there is a tab bar to put one in. Taken apart from the socket because
-  # `unseen_at_mount/3` asks the same question before there is one.
-  defp dottable_source(socket),
-    do: dottable_source(socket.assigns.feed_filter, socket.assigns.source_tabs?)
+  defp queue(socket, entry),
+    do: socket |> update(:pending_posts, &[entry | &1]) |> assign(:empty?, false)
 
-  defp dottable_source(filter, true), do: other_source(filter)
-  defp dottable_source(_filter, false), do: nil
-
-  # The other named tab — nil on "All", which is both of them at once.
-  defp other_source(:vutuv), do: :fediverse
-  defp other_source(:fediverse), do: :vutuv
-  defp other_source(_all), do: nil
-
-  # The tab values carrying a dot: the named sources holding something unseen,
-  # and only those. "All" holds the same posts, so a dot there was true and read
-  # as a third place with news of its own. The component drops the dot on
-  # whichever tab is active, so this never has to know which one that is.
-  defp unseen_tabs(sources), do: Enum.map(sources, &to_string/1)
+  defp known_entry?(socket, entry) do
+    ids = Enum.map(socket.assigns.entries ++ socket.assigns.pending_posts, & &1.id)
+    entry.id in ids
+  end
 
   # Swap in the post's now-screenshot-carrying copy and re-stream the entry in
   # place (update_only, so an off-page id is a harmless no-op). The entry's other
@@ -1107,224 +1511,13 @@ defmodule VutuvWeb.PostLive.Feed do
       Posts.feed_filter_accepts?(socket.assigns.feed_filter, entry) ->
         {:noreply, update(socket, :pending_posts, &[decorate(entry, user, socket) | &1])}
 
-      # It belongs on a tab the reader is not looking at, so say so there
-      # rather than dropping it: a dot, not a count — the point is that
-      # something is over there, and the tab reloads from the top anyway.
+      # It belongs to a source this reader has switched off in the band, so it
+      # is not news for them at all: the switch is the answer, and queueing it
+      # would put a post they asked not to see behind a pill that promises to
+      # show exactly what it counts.
       true ->
-        source = entry_source(entry)
-        {:noreply, socket |> mark_unseen(source) |> open_or_count_ticker(source, entry)}
+        {:noreply, socket}
     end
-  end
-
-  # Which named tab an entry belongs to — the two are a partition, so the one
-  # question `remote_feed_entry?/1` answers decides it.
-  defp entry_source(entry) do
-    if Posts.remote_feed_entry?(entry), do: :fediverse, else: :vutuv
-  end
-
-  defp mark_unseen(socket, source),
-    do: update(socket, :unseen_sources, &MapSet.put(&1, source))
-
-  # The dot a mount opens with — the whole of what carries it from one look at
-  # the feed to the next.
-  #
-  # `unseen_sources` is socket state and a mount is a new socket, so the dot
-  # used to last exactly as long as the page: opening a notification and coming
-  # back showed a clean tab bar over a post nobody had read. So did a reload, a
-  # second visit, and every LiveView **rejoin** — a mount with no page load at
-  # all, which is how a locked phone, a throttled background tab, a wifi
-  # handover and every deploy took it. None of that is somebody reading a post.
-  #
-  # So the dot is *derived* rather than carried: does the tab they are not on
-  # hold anything at or after the last moment they had it on screen? That
-  # moment is `users.feed_source_at`, stamped when they move tabs
-  # (`Posts.remember_feed_filter/3`) — moving *to* one tab dates the moment
-  # they stopped looking at the other, and that clock then stands still exactly
-  # while the tab is off screen. Going there still clears the dot
-  # (`clear_unseen/2`), and now the same press dates the next one.
-  #
-  # No stamp, no dot, rather than a guessed one: that is a member last written
-  # by the release before the column, and their first tab press heals it.
-  #
-  # It runs on the **dead** render, so the dot is in the first paint and the
-  # connected mount takes it off the handoff with everything else. "All" and a
-  # member without a tab bar pay nothing; the rest pay an `Enum.any?/2` over
-  # the other tab's sources, a LIMIT 1 each, beside the seven the page runs.
-  defp unseen_at_mount(user, filter, source_tabs?) do
-    source = dottable_source(filter, source_tabs?)
-    since = user.feed_source_at
-
-    if source && since && Posts.feed_source_since?(user, source, since),
-      do: MapSet.new([source]),
-      else: MapSet.new()
-  end
-
-  ## ── The tab ticker (issue #1668) ──
-  #
-  # The dot says *that* something landed on the tab you are not on. The ticker
-  # says *what*, quoting the arrival's author and first words beside that tab —
-  # and then goes, because the bar belongs to the tabs. Three rules carry it:
-  #
-  # 1. **One quote per window.** A second arrival inside the window cannot
-  #    replace the first (both would stand for less time than it takes to read
-  #    one) and cannot queue behind it (ten arrivals would hold the bar open
-  #    for a minute and a half), so the quote gives up and becomes a count.
-  #    The clock is **not** restarted by it: the window belongs to the moment,
-  #    not to the last thing that landed, or a busy source owns the bar.
-  # 2. **The browser owns the clock.** See the `FeedTicker` hook — a window
-  #    counted out on the server would include the trip out, and a hide that
-  #    never arrives would leave the quote standing forever.
-  # 3. **A silence after each window** (`:feed_ticker_cooldown_ms`), longer
-  #    than the fold-away animation. Posts do not arrive evenly on a slow line
-  #    — a reconnect delivers a backlog at once — and without it the bar would
-  #    close and reopen in the same breath. What lands in the silence still
-  #    gets its dot.
-  #
-  # Only ever one tab at a time: `other_source/1` is nil on "All", and the two
-  # named tabs partition the feed, so the reader is on one of them and
-  # everything that is not theirs belongs to the other. A third source would be
-  # the first thing to break that, and would need a rule for two open windows.
-
-  # An arrival on a tab the reader is not on, from the path that carries the
-  # entry: extend the open window or start a new one.
-  defp open_or_count_ticker(socket, source, entry) do
-    if ticking?(socket, source),
-      do: count_ticker(socket),
-      else: open_ticker(socket, source, entry)
-  end
-
-  defp open_ticker(socket, source, entry) do
-    with true <- ticker_due?(socket),
-         %{} = teaser <- ticker_teaser(socket, entry) do
-      assign(socket, :tab_ticker, %{
-        tab: to_string(source),
-        who: teaser.who,
-        text: teaser.text,
-        count: 1,
-        seconds: Prefs.get(socket.assigns.current_user, :feed_tab_ticker_seconds),
-        # What tells the hook a *new* window started, so it restarts its clock.
-        # Stays put while the count climbs, which is how rule 1 above holds.
-        id: System.unique_integer([:positive]),
-        aria: ticker_aria(source, teaser.who, 1)
-      })
-    else
-      _ -> socket
-    end
-  end
-
-  defp count_ticker(socket) do
-    update(socket, :tab_ticker, fn ticker ->
-      count = ticker.count + 1
-
-      %{
-        ticker
-        | count: count,
-          aria: ticker_aria(ticker.tab, ticker.who, count)
-      }
-    end)
-  end
-
-  # The member went to the tab themselves, so the window has done its job —
-  # and no silence is owed: they acted, nothing flickered at them.
-  defp close_ticker(socket), do: assign(socket, :tab_ticker, nil)
-
-  # The window ran out (the hook says so). Its silence starts here.
-  defp hide_ticker(socket) do
-    socket
-    |> assign(:tab_ticker, nil)
-    |> assign(:ticker_quiet_until, System.monotonic_time(:millisecond) + ticker_cooldown_ms())
-  end
-
-  defp ticking?(socket, source) do
-    case socket.assigns.tab_ticker do
-      %{tab: tab} -> tab == to_string(source)
-      _ -> false
-    end
-  end
-
-  # Whether a fresh window may open: the member wants quotes at all, the tab
-  # bar exists to put one in, the last window's silence is over — and the
-  # browser can render a quote at all.
-  #
-  # That last one is the deploy case, and it is the one thing on this page that
-  # an old document cannot survive. Everything else the feed patches in is
-  # markup whose CSS that browser already has; the ticker is new markup with a
-  # stylesheet and a hook of its own, so on a feed left open across the v7.347.0
-  # deploy the quote drew as an unstyled 200-character paragraph across the tab
-  # bar that no clock ever took away (the `FeedTicker` hook was not in that
-  # bundle either). Such a browser keeps the dot, which is markup from #1503 and
-  # renders fine, and skips the quote until the next full page load.
-  defp ticker_due?(socket) do
-    socket.assigns.source_tabs? and is_nil(socket.assigns.tab_ticker) and
-      socket.assigns.ticker_capable? and
-      Prefs.get(socket.assigns.current_user, :feed_tab_ticker?) and not quiet?(socket)
-  end
-
-  # v7.347.1 asked `static_changed?/1` here, which answers the wider question
-  # "is anything in this document older than the running release?" — true after
-  # *every* asset deploy, so from the second one on it refused browsers that had
-  # been carrying the ticker all along. v7.348.0 was that second deploy, and the
-  # feature read as broken until a reload. A capability the bundle asserts about
-  # itself cannot go stale that way: it travels with the hook, and a bundle old
-  # enough to lack the hook has no way to send it.
-  #
-  # Retire this param together with the `FeedTicker` hook.
-  defp ticker_capable?(socket) do
-    case get_connect_params(socket) do
-      %{"feed_ticker" => true} -> true
-      _ -> false
-    end
-  end
-
-  defp quiet?(socket) do
-    case socket.assigns.ticker_quiet_until do
-      nil -> false
-      until -> System.monotonic_time(:millisecond) < until
-    end
-  end
-
-  defp ticker_cooldown_ms, do: Application.get_env(:vutuv, :feed_ticker_cooldown_ms, 2_000)
-
-  # Who wrote it and what it opens with — nil for an entry this reader has
-  # muted by content filter, since the quote would put the very word they
-  # silenced into the bar. The browser tab's teaser asks the same three
-  # questions on every page (issue #1681), so `VutuvWeb.PostTeaser` owns them
-  # and the two surfaces cannot drift.
-  defp ticker_teaser(socket, entry) do
-    PostTeaser.quote_for(
-      entry,
-      socket.assigns.content_filters,
-      socket.assigns.current_user.id
-    )
-  end
-
-  # Naming the tab with a colon rather than a preposition, and one string for
-  # both tabs: "new in the Fediverse" and "new on vutuv" do not share a German
-  # sentence, so a %{source} placeholder inside a prepositional phrase would be
-  # wrong in one of them. Screen readers only: what the eye gets is the tint.
-  defp ticker_aria(source, who, 1) when is_binary(who),
-    do: gettext("%{source}: new post from %{who}", source: source_name(source), who: who)
-
-  defp ticker_aria(source, _who, 1),
-    do: gettext("%{source}: new post", source: source_name(source))
-
-  defp ticker_aria(source, _who, count) do
-    ngettext(
-      "%{source}: %{formatted} new post",
-      "%{source}: %{formatted} new posts",
-      count,
-      source: source_name(source),
-      formatted: compact_count(count)
-    )
-  end
-
-  # The tab's own label, so the two never drift apart.
-  defp source_name(source) do
-    tab = to_string(source)
-
-    Enum.find_value(feed_filter_options(), tab, fn {value, label} ->
-      value == tab && label
-    end)
   end
 
   # A newly streamed reply renders the post it answers inline (the threaded
@@ -1374,7 +1567,10 @@ defmodule VutuvWeb.PostLive.Feed do
   end
 
   defp mark_one(entry, compiled, viewer_id) do
-    Map.put(entry, :filtered_by, PostTeaser.filtered_pattern(entry, compiled, viewer_id))
+    case PostTeaser.filtered_hit(entry, compiled, viewer_id) do
+      nil -> Map.merge(entry, %{filtered_by: nil, filtered_post: nil})
+      hit -> Map.merge(entry, %{filtered_by: hit.pattern, filtered_post: hit.record})
+    end
   end
 
   # What the reveal set remembers. A vutuv post is keyed by its own id (so the
@@ -1576,20 +1772,22 @@ defmodule VutuvWeb.PostLive.Feed do
   def render(assigns) do
     ~H"""
     <div id="feed" class="py-6">
-      <%!-- Two columns on desktop: the feed, plus a discovery rail that uses the
+      <%!-- Two columns on desktop: the feed, plus the rail that uses the
       otherwise-empty side space. The rail is desktop-only (the grid collapses
       to one column under md, and the rail is hidden anyway). --%>
-      <div class="grid gap-6 md:grid-cols-3">
+      <%!-- `data-filter-scope` pairs the controls that reload the timeline with
+      the timeline itself: while such a press is in flight the stylesheet dims
+      everything marked `data-filter-list` inside this container, so the press
+      is answered on the spot instead of a round trip later. It sits on the
+      grid rather than on the timeline column because the controls moved to the
+      rail — the band's source rows are the successor to the tab presses this
+      paint was built for, and both markers have to stay under one element. --%>
+      <div data-filter-scope class="grid gap-6 md:grid-cols-3">
         <%!-- min-w-0: below md the grid is a single implicit `auto` track that
         respects this column's min-content, so a long `truncate` descendant (a
         threaded reply's parent-excerpt) would otherwise force the column — and
         the whole page — wider than a phone viewport. --%>
-        <%!-- `data-filter-scope` pairs the source tabs below with the timeline
-        they govern: while a tab press is in flight the stylesheet dims
-        everything marked `data-filter-list` inside this container, so the press
-        is answered on the spot instead of a round trip later. Both markers have
-        to stay under this one element. --%>
-        <div data-filter-scope class="min-w-0 space-y-4 md:col-span-2">
+        <div class="min-w-0 space-y-4 md:col-span-2">
           <%!-- No visible headline: the top nav already marks Feed as active,
           so the page opens with the compose tile (like the profile's Beiträge
           card) and the h1 stays for screen readers only. The Likes/Bookmarks
@@ -1682,38 +1880,69 @@ defmodule VutuvWeb.PostLive.Feed do
             />
           </div>
 
-          <%!-- The source tabs, the same segmented control the profile's
-          post-type tabs use — shown only to a member the fediverse actually
-          reaches (issue #1267). For everyone else the three tabs are one
-          timeline under three names: "Fediverse" can never fill, so "vutuv"
-          is just "All" again. `Posts.fediverse_feed_available?/1` asks the
-          tab's own sources, so this cannot drift from what it would show, and
-          it is false on an installation with the fediverse switched off. A
-          feed with fediverse content in it is never empty, so no separate
-          empty-feed check is needed — and an empty *tab* keeps the bar, or
-          there would be no way back.
+          <%!-- One line, two controls, and on a phone it is the only way to
+          either of them. The filter button opens the band as a sheet, because
+          the rail it normally lives in does not exist under `md`; the pill
+          brings the waiting posts down and carries the newest one's opening
+          line, since the phone has no "Not read yet" card to say what is
+          waiting rather than merely how much.
 
-          A tab holding something that landed while the reader was on another
-          one wears a coral dot (issue #1503), cleared by going there. --%>
-          <.post_filter_tabs
-            :if={@source_tabs?}
-            id="feed-source-tabs"
-            active={to_string(@feed_filter)}
-            event="filter-source"
-            options={feed_filter_options()}
-            unseen={unseen_tabs(@unseen_sources)}
-            ticker={@tab_ticker}
-          />
+          They share the line and the width is fought over: as soon as there is
+          a quote to read, the filter button drops its word and keeps the glyph
+          alone (Stefan, on the fourth demo). With nothing waiting the row is a
+          phone-only affair, so it hides itself entirely on a desktop rather
+          than leaving a gap above the timeline. --%>
+          <div class={["items-center gap-2", if(@pending_posts == [], do: "flex md:hidden", else: "flex")]}>
+            <button
+              type="button"
+              id="open-filter-sheet"
+              phx-click="open-band"
+              aria-label={pgettext("feed filter sheet", "Filter")}
+              class="inline-flex h-10 shrink-0 items-center gap-2 rounded-full bg-white px-3 text-sm font-semibold text-slate-700 shadow-sm ring-1 ring-slate-200 hover:bg-slate-50 md:hidden dark:bg-slate-900 dark:text-slate-200 dark:ring-slate-800 dark:hover:bg-slate-800"
+            >
+              <svg
+                class="h-5 w-5 shrink-0"
+                fill="none"
+                viewBox="0 0 24 24"
+                stroke-width="1.5"
+                stroke="currentColor"
+                aria-hidden="true"
+              >
+                <path
+                  stroke-linecap="round"
+                  stroke-linejoin="round"
+                  d="M12 3c2.755 0 5.455.232 8.083.678.533.09.917.556.917 1.096v1.044a2.25 2.25 0 0 1-.659 1.591l-5.432 5.432a2.25 2.25 0 0 0-.659 1.591v2.927a2.25 2.25 0 0 1-1.244 2.013L9.75 21v-6.568a2.25 2.25 0 0 0-.659-1.591L3.659 7.409A2.25 2.25 0 0 1 3 5.818V4.774c0-.54.384-1.006.917-1.096A48.32 48.32 0 0 1 12 3Z"
+                />
+              </svg>
+              <span :if={@pending_posts == []}>{pgettext("feed filter sheet", "Filter")}</span>
+            </button>
 
-          <div :if={@pending_posts != []} class="text-center">
-            <.button id="show-new-posts" variant="secondary" phx-click="show-new">
-              {ngettext(
-                "Show %{formatted} new post",
-                "Show %{formatted} new posts",
-                length(@pending_posts),
-                formatted: compact_count(length(@pending_posts))
-              )}
-            </.button>
+            <div :if={@pending_posts != []} class="min-w-0 flex-1 text-center">
+              <button
+                id="show-new-posts"
+                type="button"
+                phx-click="show-new"
+                class="mx-auto flex w-full max-w-full items-center gap-2 rounded-full bg-brand-50 px-4 py-2 text-sm font-semibold text-brand-700 shadow-sm hover:bg-brand-100 sm:w-auto dark:bg-brand-900/40 dark:text-brand-100 dark:hover:bg-brand-900/70"
+              >
+                <span class="shrink-0 tabular-nums">
+                  {ngettext(
+                    "Show %{formatted} new post",
+                    "Show %{formatted} new posts",
+                    length(@pending_posts),
+                    formatted: compact_count(length(@pending_posts))
+                  )}
+                </span>
+                <span
+                  :if={newest_quote(@pending_posts)}
+                  class="flex min-w-0 flex-1 items-baseline gap-1 font-normal text-brand-600 dark:text-brand-200"
+                >
+                  <span class="min-w-0 max-w-[45%] shrink truncate">
+                    {newest_quote(@pending_posts).who}
+                  </span>
+                  <span class="min-w-0 flex-1 truncate">{newest_quote(@pending_posts).text}</span>
+                </span>
+              </button>
+            </div>
           </div>
 
           <%!-- The timeline is one card of flat divide-y rows — the same
@@ -1735,7 +1964,11 @@ defmodule VutuvWeb.PostLive.Feed do
                   <%!-- A content-filtered post (issue #940) collapses to a line
                   the reader can still open, instead of vanishing (a silently
                   shorter feed confuses and breaks reply threads). --%>
-                  <.filtered_placeholder pattern={entry.filtered_by} key={filter_key(entry)} />
+                  <.filtered_placeholder
+                    pattern={entry.filtered_by}
+                    record={entry[:filtered_post]}
+                    key={filter_key(entry)}
+                  />
                 <% Posts.remote_reply_entry?(entry) -> %>
                   <%!-- A reply from another network that somebody here passed
                   on (issue #1275). The same card the conversation draws, with
@@ -1793,9 +2026,11 @@ defmodule VutuvWeb.PostLive.Feed do
             </div>
           </.post_list>
 
-          <%!-- An empty *tab* says which half of the feed is missing; an empty
-          feed keeps the general invitation, which is the one that helps a new
-          member. --%>
+          <%!-- With one source switched off in the band, say which half is
+          missing — otherwise a reader who muted the other one is looking at an
+          empty page with no hint that they emptied it themselves. A feed that
+          is empty with both halves on keeps the general invitation, which is
+          the one that helps a new member. --%>
           <p
             :if={@empty? && @pending_posts == [] && @feed_filter != :all}
             class="text-slate-600 dark:text-slate-400"
@@ -1819,7 +2054,7 @@ defmodule VutuvWeb.PostLive.Feed do
           <.load_more :if={@more?} />
 
           <%!-- On mobile (where the desktop rail is hidden) the "Other formats"
-          card drops to the bottom of the page; the discovery rail stays
+          card drops to the bottom of the page; the rail itself stays
           desktop-only. The links are the feed's own agent siblings (/feed.md
           etc.) — the viewer's timeline in another format, not their profile. --%>
           <.other_formats_card
@@ -1831,210 +2066,245 @@ defmodule VutuvWeb.PostLive.Feed do
         </div>
 
         <%!-- Desktop-only rail (hidden under md, where the grid is one column):
-        the tags the viewer follows, the "New here" welcome card, the suggested
-        posts, and the "Other formats" card the profile shows too. Rendered WITH
-        the page on purpose: a lazily loaded rail popped in after the paint and
-        read as slowness (the v7.200.3 laziness was undone). --%>
+        the cards the reader arranged, in the order they arranged them. Rendered
+        WITH the page on purpose: a lazily loaded rail popped in after the paint
+        and read as slowness (the v7.200.3 laziness was undone). --%>
         <aside id="feed-rail" class="hidden space-y-6 md:block">
-          <%!-- "Tags you follow" (issue #872): the viewer's tag subscriptions,
-          each a chip linking to the tag page with a reload-free ✕ unfollow. Sits
-          at the top of the rail because it is the viewer's own state and the
-          easiest place to unsubscribe. Shown only once at least one tag is
-          followed. --%>
-          <.card :if={@followed_tags != []} id="followed-tags">
-            <.section_title class="mb-4">{gettext("Tags you follow")}</.section_title>
-            <div class="flex flex-wrap gap-2">
-              <span
-                :for={tag <- @followed_tags}
-                id={"followed-tag-#{tag.id}"}
-                class="inline-flex max-w-full items-center gap-1 rounded-lg bg-brand-50 py-1 pl-3 pr-1.5 text-sm font-medium text-brand-700 dark:bg-brand-900/40 dark:text-brand-100"
-              >
-                <.link navigate={~p"/tags/#{tag}"} class="min-w-0 truncate hover:underline">
-                  <span aria-hidden="true">#</span>{tag.name || tag.slug}
-                </.link>
-                <button
-                  type="button"
-                  phx-click="unfollow_tag"
-                  phx-value-id={tag.id}
-                  title={gettext("Unfollow")}
-                  aria-label={gettext("Unfollow #%{tag}", tag: tag.name || tag.slug)}
-                  class="flex h-4 w-4 flex-shrink-0 items-center justify-center rounded-full leading-none text-brand-500 transition hover:bg-brand-100 hover:text-brand-800 dark:text-brand-300 dark:hover:bg-brand-800 dark:hover:text-brand-100"
-                >
-                  <span aria-hidden="true">×</span>
-                </button>
-              </span>
-            </div>
-          </.card>
+          <%!-- Every card is dragged by its own grip and the hook pushes the
+          sequence they were dropped into. That sequence lists only what is on
+          screen — half these cards are conditional — which is why
+          `Posts.rearrange_feed_rail/2` merges it into the stored order rather
+          than replacing it. --%>
+          <div
+            id="rail-blocks"
+            phx-hook="Reorder"
+            data-reorder-item="[data-rail-block]"
+            data-reorder-event="rail-reorder"
+            class="space-y-6"
+          >
+            <%= for key <- @rail.order, rail_showing?(key, assigns) do %>
+              <%= case key do %>
+                <% "unread" -> %>
+                  <%!-- What arrived while the reader was reading. The timeline
+                  itself never moves under them — new posts wait here and come
+                  down only when they say so — so this card is the answer to "is
+                  anything happening", asked without giving up your place. It is
+                  the same queue the pill above the timeline counts
+                  (`@pending_posts`) and the same event, so the two can never
+                  disagree.
 
-          <%!-- "New here": five of the newest members, drawn at random and shown
-          with their face, how long they have been here and three of their tags.
-          It replaces a most-followed suggestion rail, whose problem was not its
-          data but its arithmetic: a ranking shows the same well-connected
-          members to everybody, and the one person for whom being seen decides
-          whether they come back at all — the one who signed up this morning —
-          is precisely the one it can never surface. The card asks for a
-          greeting rather than a recommendation, which is a thing a reader can
-          give away for free and a newcomer can feel. --%>
-          <.card :if={@newcomers != []} id="newcomers">
-            <div class="mb-1 flex items-center justify-between gap-3">
-              <.section_title>{gettext("New here")}</.section_title>
-              <.reshuffle_button
-                id="newcomers-reshuffle"
-                event="reshuffle-newcomers"
-                label={gettext("Greet other members")}
-              />
-            </div>
-            <%!-- "A few of" carries the whole draw: these are not *the* newest
-            members in order, they are a random handful out of them, and a
-            sentence that says "the most recently joined" promises a ranking the
-            ↻ visibly contradicts. It also stays true on a quiet installation
-            (an intranet vutuv with forty members), where the newest member may
-            have been here for months. --%>
-            <p class="mb-4 text-sm text-slate-600 dark:text-slate-400">
-              {gettext("A few of the newest members. Following them is a warm welcome.")}
-            </p>
-            <ul class="space-y-4">
-              <li :for={row <- @newcomers} id={"newcomer-#{row.user.id}"} class="flex items-start gap-3">
-                <.link href={~p"/#{row.user}"} class="shrink-0">
-                  <.avatar
-                    user={row.user}
-                    size="sm"
-                    alt={gettext("Profile picture of %{name}", name: UserHelpers.full_name(row.user))}
-                  />
-                </.link>
-                <div class="min-w-0 flex-1">
-                  <%!-- Only the name shares a line with the Follow pill. The
-                  meta line below it runs the full column width instead, which
-                  is what makes it readable at all: the pill is 5.5rem wide in a
-                  rail a third of the page across, so beside it "seit 9 Tagen
-                  dabei · Privatier @ JL" was cut mid-word. --%>
-                  <div class="flex items-start gap-2">
-                    <.link
-                      href={~p"/#{row.user}"}
-                      class="min-w-0 flex-1 truncate text-sm font-medium text-slate-800 hover:text-brand-700 dark:hover:text-brand-300 dark:text-slate-100"
-                    >
-                      {UserHelpers.full_name(row.user)}
-                    </.link>
-                    <.follow_button
-                      variant="text"
-                      follower_id={@current_user.id}
-                      followee_id={row.user.id}
-                      follow_id={Map.get(@following_by_id, row.user.id)}
-                      live?
+                  What it holds is what came in while this page was open: the
+                  feed has no read marker, so "since your last visit" is not a
+                  set it can compute yet. --%>
+                  <.rail_block
+                    key="unread"
+                    title={rail_title("unread")}
+                    rail={@rail}
+                    dot
+                    count={compact_count(length(@pending_posts))}
+                  >
+                    <.unread_body entries={@pending_posts} />
+                  </.rail_block>
+                <% "sources" -> %>
+                  <%!-- The filter band (the source tabs' successor): one
+                  timeline plus a switch per account, per fediverse server and
+                  per source. It writes through the same contexts the feed reads
+                  — `follows.muted`, `fediverse_follows.muted`,
+                  `users.feed_muted_hosts` and, for the two source rows, the very
+                  `users.feed_source` column the tabs used — and then hands the
+                  fresh member back here so the page is re-run against it.
+
+                  `entries` is passed for the word block's preview and the tag
+                  suggestions: both answer "what would this do to the feed in
+                  front of me", and that question can only be asked of the page
+                  actually on screen. --%>
+                  <.rail_block key="sources" title={rail_title("sources")} rail={@rail}>
+                    <.live_component
+                      module={VutuvWeb.PostLive.FilterBand}
+                      id="filter-band"
+                      block={:sources}
+                      current_user={@current_user}
+                      filter={@feed_filter}
+                      entries={@entries}
                     />
-                  </div>
-                  <%!-- The job title, when there is one. It used to lead with
-                  how long the member had been here ("seit 3 Tagen dabei · …"),
-                  which was interesting and cost a third of the row for a fact
-                  the card's own heading already makes — five rows deep, that
-                  bought nothing (Stefan, 2026-08-24). A member with no job
-                  filled in, which most have not on their first days, simply
-                  gets no line rather than an empty one. --%>
-                  <p
-                    :if={row.work != ""}
-                    class="mb-0 mt-0.5 truncate text-xs text-slate-600 dark:text-slate-400"
-                  >
-                    {row.work}
-                  </p>
-                  <%!-- Three tags, at rail scale, each a link to that topic:
-                  enough to be curious about somebody, never their whole
-                  profile. The +N is what the sample leaves out and leads to the
-                  rest of them; it is the tag-specific plural the member
-                  directory already uses, not a bare "+3". --%>
-                  <div
-                    :if={row.tags != []}
-                    data-newcomer-tags={row.user.id}
-                    class="mt-1.5 flex flex-wrap items-center gap-1"
-                  >
-                    <.chip
-                      :for={user_tag <- row.tags}
-                      size="sm"
-                      navigate={~p"/tags/#{UserTag.tag(user_tag)}"}
-                    >
-                      <span aria-hidden="true">#</span>{UserTag.truncated_name(user_tag)}
-                    </.chip>
-                    <.link
-                      :if={row.more > 0}
-                      navigate={~p"/#{row.user}/tags"}
-                      class="text-xs font-medium text-slate-600 hover:text-brand-700 dark:text-slate-400 dark:hover:text-brand-300"
-                    >
-                      {ngettext("+1 more tag", "+%{formatted} more tags", row.more,
-                        formatted: compact_count(row.more)
-                      )}
-                    </.link>
-                  </div>
-                </div>
-              </li>
-            </ul>
-            <.card_footer_link href={~p"/system/members"}>
-              {gettext("All members")}
-            </.card_footer_link>
-          </.card>
+                  </.rail_block>
+                <% "words" -> %>
+                  <.rail_block key="words" title={rail_title("words")} rail={@rail}>
+                    <.live_component
+                      module={VutuvWeb.PostLive.FilterBand}
+                      id="filter-band-words"
+                      block={:words}
+                      current_user={@current_user}
+                      filter={@feed_filter}
+                      entries={@entries}
+                    />
+                  </.rail_block>
+                <% "hidden_tags" -> %>
+                  <.rail_block key="hidden_tags" title={rail_title("hidden_tags")} rail={@rail}>
+                    <.live_component
+                      module={VutuvWeb.PostLive.FilterBand}
+                      id="filter-band-tags"
+                      block={:tags}
+                      current_user={@current_user}
+                      filter={@feed_filter}
+                      entries={@entries}
+                    />
+                  </.rail_block>
+                <% "followed_tags" -> %>
+                  <%!-- "Tags you follow" (issue #872): the viewer's tag
+                  subscriptions, each a chip linking to the tag page with a
+                  reload-free ✕ unfollow. Shown only once at least one tag is
+                  followed. --%>
+                  <.rail_block key="followed_tags" title={rail_title("followed_tags")} rail={@rail}>
+                    <.followed_tags_body
+                      tags={@followed_tags}
+                      suggestions={@tag_suggestions}
+                      missing={@tag_missing}
+                    />
+                  </.rail_block>
+                <% "newcomers" -> %>
+                  <%!-- "New here": five of the newest members, drawn at random
+                  and shown with their face, what they do and three of their
+                  tags. It replaces a most-followed suggestion rail, whose
+                  problem was not its data but its arithmetic: a ranking shows
+                  the same well-connected members to everybody, and the one
+                  person for whom being seen decides whether they come back at
+                  all — the one who signed up this morning — is precisely the one
+                  it can never surface. The card asks for a greeting rather than
+                  a recommendation, which is a thing a reader can give away for
+                  free and a newcomer can feel. --%>
+                  <.rail_block key="newcomers" title={rail_title("newcomers")} rail={@rail}>
+                    <:action>
+                      <.reshuffle_button
+                        id="newcomers-reshuffle"
+                        event="reshuffle-newcomers"
+                        label={gettext("Greet other members")}
+                      />
+                    </:action>
+                    <.newcomers_body
+                      newcomers={@newcomers}
+                      current_user={@current_user}
+                      following_by_id={@following_by_id}
+                    />
+                  </.rail_block>
+                <% _ -> %>
+              <% end %>
+            <% end %>
+          </div>
 
-          <%!-- "Suggested posts": a random handful of recent public posts by
-          same-language members the viewer doesn't follow — discovery beyond
-          the follow graph, like "Who to follow" but for content. Compact rows
-          (avatar + name + the Markdown-formatted, hyphenated body clamped at
-          six lines), each a stretched link to the post so a click anywhere
-          opens it — not full post cards, an action bar and gallery don't fit a
-          rail. The reload button draws 5 fresh ones with no page reload. --%>
-          <.card :if={@discover_posts != []} id="discover-posts">
-            <div class="mb-4 flex items-center justify-between gap-3">
-              <.section_title>{gettext("Suggested posts")}</.section_title>
-              <.reshuffle_button
-                id="discover-reshuffle"
-                event="reshuffle-discover"
-                label={gettext("Show other posts")}
-              />
-            </div>
-            <ul class="divide-y divide-slate-100 dark:divide-slate-800">
-              <li
-                :for={post <- @discover_posts}
-                class="relative flex items-start gap-3 py-3 first:pt-0 last:pb-0"
+          <%!-- What the reader took out, offered back. A removed card leaves no
+          trace in the rail itself — that is the point of removing it — so this
+          is the only way back, and it has to be somewhere they will look for it:
+          at the foot of the very column the card came out of. It renders only
+          when something is actually put away, so a reader who never removed a
+          card never sees it. --%>
+          <div
+            :if={@rail.removed != []}
+            id="rail-removed"
+            class="rounded-2xl border border-dashed border-slate-300 p-4 dark:border-slate-700"
+          >
+            <p class="mb-2 text-xs text-slate-500 dark:text-slate-400">
+              {gettext("Put away:")}
+            </p>
+            <div class="flex flex-wrap gap-2">
+              <button
+                :for={key <- @rail.removed}
+                type="button"
+                id={"rail-restore-#{key}"}
+                phx-click="rail-restore"
+                phx-value-key={key}
+                class="inline-flex items-center gap-1 rounded-lg bg-slate-100 px-2.5 py-1 text-xs font-medium text-slate-600 hover:bg-slate-200 hover:text-slate-900 dark:bg-slate-800 dark:text-slate-300 dark:hover:bg-slate-700 dark:hover:text-slate-100"
               >
-                <%!-- Stretched link: a click anywhere on the row that is not
-                itself a link (the body text, the avatar, the gaps) opens the
-                post. The author-name link and any inline @mention/#hashtag/URL
-                links in the body sit above it (relative + z-20) so they keep
-                their own targets. --%>
-                <.link
-                  href={Posts.path(post)}
-                  aria-label={gettext("View post")}
-                  class="absolute inset-0 z-10"
-                >
-                </.link>
-                <.avatar user={post.user} size="sm" shape="circle" presence />
-                <div class="min-w-0">
-                  <p class="mb-0 text-sm">
-                    <.link
-                      href={~p"/#{post.user}"}
-                      class="relative z-20 font-medium text-slate-800 hover:text-brand-700 dark:hover:text-brand-300 dark:text-slate-100"
-                    >
-                      {UserHelpers.full_name(post.user)}
-                    </.link>
-                    <span class="text-slate-600 dark:text-slate-400">
-                      · <.post_time at={post.inserted_at} />
-                    </span>
-                  </p>
-                  <%!-- Formatted like a normal post preview (Markdown, six-line
-                  clamp). The browser hyphenates the narrow rail column (long
-                  German compounds) via the `.markdown--post` hyphens seam, set
-                  to `auto` on desktop too. Inline links float above the
-                  stretched link (`[&_a]:relative` + z-20); the plain text falls
-                  through to it, so clicking it opens the post. --%>
-                  <div
-                    class="markdown markdown--post mt-1 line-clamp-6 text-sm text-slate-700 dark:text-slate-300 [&_a]:relative [&_a]:z-20"
-                    style="--post-hyphens-desktop:auto;--post-hyphens-mobile:auto"
-                  >
-                    {discover_body(post.body)}
-                  </div>
-                </div>
-              </li>
-            </ul>
-          </.card>
+                <span aria-hidden="true">+</span>{rail_title(key)}
+              </button>
+            </div>
+          </div>
 
           <.other_formats_card base_path="/feed" locale={@locale} id="feed-other-formats" />
         </aside>
+      </div>
+      <%!-- The band on a phone. The rail is a desktop column and there is no
+      room for one under `md`, so the same three cards arrive as a sheet over
+      the feed — which is also the honest shape for them there: a reader opens
+      it to change something and closes it again, rather than living beside it.
+
+      Rendered only while it is open, so the three components (and their
+      queries) cost nothing to a reader who never opens it. They carry their own
+      ids for that reason: the desktop rail is still in the DOM behind the sheet,
+      merely hidden by CSS, and two live components may not share one id.
+
+      No arranging controls here. The order, the folding and the putting away
+      are about a column that only exists on a desktop; on a phone the three
+      cards are simply the filter. --%>
+      <div
+        :if={@band_sheet?}
+        id="band-sheet"
+        class="fixed inset-0 z-50 md:hidden"
+        phx-window-keydown="close-band"
+        phx-key="escape"
+      >
+        <div
+          class="absolute inset-0 bg-slate-900/40"
+          phx-click="close-band"
+          aria-hidden="true"
+        >
+        </div>
+        <div
+          role="dialog"
+          aria-modal="true"
+          aria-label={pgettext("feed filter sheet", "Filter")}
+          class="absolute inset-x-0 bottom-0 top-12 overflow-y-auto rounded-t-2xl bg-slate-50 p-4 pb-[calc(1rem+env(safe-area-inset-bottom))] dark:bg-slate-950"
+        >
+          <div class="mb-4 flex items-center gap-3">
+            <h2 class="min-w-0 flex-1 truncate text-base font-semibold text-slate-900 dark:text-slate-100">
+              {pgettext("feed filter sheet", "Filter")}
+            </h2>
+            <button
+              type="button"
+              id="close-band-sheet"
+              phx-click="close-band"
+              class="inline-flex h-10 items-center rounded-full bg-brand-600 px-4 text-sm font-semibold text-white hover:bg-brand-700"
+            >
+              {gettext("Done")}
+            </button>
+          </div>
+
+          <div class="space-y-4">
+            <.card>
+              <.section_title class="mb-1">{rail_title("sources")}</.section_title>
+              <.live_component
+                module={VutuvWeb.PostLive.FilterBand}
+                id="sheet-band"
+                block={:sources}
+                current_user={@current_user}
+                filter={@feed_filter}
+                entries={@entries}
+              />
+            </.card>
+            <.card>
+              <.section_title class="mb-1">{rail_title("words")}</.section_title>
+              <.live_component
+                module={VutuvWeb.PostLive.FilterBand}
+                id="sheet-band-words"
+                block={:words}
+                current_user={@current_user}
+                filter={@feed_filter}
+                entries={@entries}
+              />
+            </.card>
+            <.card>
+              <.section_title class="mb-1">{rail_title("hidden_tags")}</.section_title>
+              <.live_component
+                module={VutuvWeb.PostLive.FilterBand}
+                id="sheet-band-tags"
+                block={:tags}
+                current_user={@current_user}
+                filter={@feed_filter}
+                entries={@entries}
+              />
+            </.card>
+          </div>
+        </div>
       </div>
     </div>
     """

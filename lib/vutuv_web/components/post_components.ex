@@ -455,6 +455,86 @@ defmodule VutuvWeb.PostComponents do
   def post_archive_path(user, type), do: ~p"/#{user}/posts?#{[type: type]}"
 
   @doc """
+  The "add one" affordance a feed-rail card wears instead of a permanently open
+  text field.
+
+  Three cards each carried a field — follow a tag, hide a word, hide a tag — and
+  together they spent about 150px of a 330px column on controls a reader touches
+  a handful of times a year (Stefan, 2026-08-28). The field is behind a native
+  `<details>` now, so it costs one small line at rest, opens with no JavaScript
+  and no server state, and keeps its own open/closed state for assistive tech.
+
+  The summary is a `+` pill at the end of a row of chips, where it costs no
+  height at all. **Open, the whole thing takes the full width of that row**
+  (`open:w-full`), so the flex-wrap puts it on a line of its own and the field is
+  as wide as the card: as a normally-sized flex item it grew *beside* the chips
+  instead, stretching them to its height and leaving the input a third of the
+  card wide (reported 2026-08-28). One class rather than a reveal flag on the
+  server, so nothing here can be lost to a patch.
+
+  Open, the glyph turns into a ✕ and **moves inside the field**, at its right
+  edge: a toggle on a line of its own costs a whole row for one 28px button, and
+  a ✕ sitting in the box it closes is where a reader looks for it anyway.
+
+  It gets there by leaving the flow (`group-open:absolute` against an
+  `open:relative` details), not by flex. Flex is the obvious answer and does not
+  work: `display: flex` on a `<details>` makes the summary one flex item and
+  wraps everything after it in the browser's own `::details-content` box, so a
+  `flex-1` on the form grows nothing — measured at 182px in a 297px row. Taking
+  the summary out of the flow sidesteps that box entirely and needs no
+  browser-specific selector.
+
+  `data-keep-open` is what stops the next unrelated patch (a count ticking) from
+  folding it shut under the reader's cursor.
+  """
+  attr(:label, :string, required: true)
+  attr(:placeholder, :string, required: true)
+  attr(:submit, :string, required: true)
+  attr(:change, :string, default: nil)
+  attr(:name, :string, default: "pattern")
+  attr(:value, :string, default: "")
+  attr(:maxlength, :any, default: nil)
+  attr(:target, :any, default: nil)
+  attr(:class, :string, default: nil)
+
+  def rail_add_field(assigns) do
+    ~H"""
+    <details data-keep-open class={["group open:relative open:w-full", @class]}>
+      <summary
+        title={@label}
+        class="inline-flex h-7 w-7 cursor-pointer list-none items-center justify-center rounded-lg bg-slate-100 text-sm font-semibold text-slate-500 hover:bg-slate-200 hover:text-slate-800 group-open:absolute group-open:right-[3px] group-open:top-1/2 group-open:-translate-y-1/2 group-open:bg-transparent group-open:hover:bg-slate-200 [&::-webkit-details-marker]:hidden dark:bg-slate-800 dark:text-slate-400 dark:hover:bg-slate-700 dark:hover:text-slate-100 dark:group-open:bg-transparent dark:group-open:hover:bg-slate-700"
+      >
+        <%!-- The glyph turns into a ✕ once the field is open. A "+" that stays
+        a "+" offers nothing to press to get rid of the field again, and the
+        reader is left with a box they cannot put away (reported 2026-08-28) —
+        the toggle worked all along, it just did not say so.
+
+        Each span owns `display` exactly once and conditionally (issue #880's
+        rule): the plus hides while open, the cross hides while closed. Neither
+        carries a base `hidden` beside a variant that has to out-cascade it. --%>
+        <span aria-hidden="true" class="group-open:hidden">+</span>
+        <span aria-hidden="true" class="group-[:not([open])]:hidden">×</span>
+        <span class="sr-only">{@label}</span>
+      </summary>
+
+      <form phx-submit={@submit} phx-change={@change} phx-target={@target}>
+        <%!-- `pr-10` keeps the typed text clear of the ✕ sitting over the
+        field's right edge. --%>
+        <input
+          type="text"
+          name={@name}
+          value={@value}
+          maxlength={@maxlength}
+          phx-debounce={@change && "300"}
+          placeholder={@placeholder}
+          class="w-full rounded-lg border border-slate-200 bg-slate-50 py-1.5 pl-3 pr-10 text-sm text-slate-900 placeholder:text-slate-400 focus:border-brand-500 focus:outline-none dark:border-slate-700 dark:bg-slate-950 dark:text-slate-100"
+        />
+      </form>
+    </details>
+    """
+  end
+
+  @doc """
   The filter tab bar (issue #945): the one control for "which of these am I
   looking at", worn by the profile's Beiträge card, the `/:slug/posts` archive
   and the feed's source tabs. Two modes, one look:
@@ -486,15 +566,6 @@ defmodule VutuvWeb.PostComponents do
   count because the host knows *that* something landed there, not how much.
   The active tab never carries one whatever is passed: you are looking at it.
 
-  `ticker` quotes what just landed on one of those tabs, for a few seconds,
-  beside it (issue #1668). The dot says *that* something is over there and
-  stays until the tab is visited; the ticker says *what*, and goes on its own.
-  While it stands, the bar and the quote share one warm tint so the pair reads
-  as belonging together, and on a narrow screen every other tab's label folds
-  away to give the quote the width — the tabs come back when it goes. Pressing
-  the quote goes where its tab goes; pointing at it deepens both, which is the
-  only thing that ever said so. The feed builds the map
-  (`VutuvWeb.PostLive.Feed`); everything here is rendering.
   """
   attr(:active, :string, required: true)
   attr(:event, :string, default: nil, doc: "phx-click event name → button mode")
@@ -506,12 +577,6 @@ defmodule VutuvWeb.PostComponents do
   )
 
   attr(:unseen, :list, default: [], doc: "tab values carrying an unseen dot")
-
-  attr(:ticker, :map,
-    default: nil,
-    doc:
-      "the transient quote beside a tab: %{tab, who, text, count, seconds, id, aria}; nil = no window open"
-  )
 
   attr(:class, :any,
     default: "mb-4",
@@ -531,18 +596,8 @@ defmodule VutuvWeb.PostComponents do
     picker's group tabs made. --%>
     <%!-- Wrapping is decided here rather than in CSS: `flex-wrap` is a Tailwind
     utility and components.css is a cascade layer, so a rule there would lose to
-    it. Exactly one of the two classes is ever emitted, so they never fight.
-    While the quote is up the bar stays on ONE line at every width — a bar that
-    wrapped would push the timeline down for eight seconds and pull it back —
-    and the quote shrinks and truncates instead. --%>
-    <div
-      class={[
-        "filter-tabs flex gap-1 text-sm",
-        (@ticker && "filter-tabs--ticking flex-nowrap") || "flex-wrap",
-        @class
-      ]}
-      {@rest}
-    >
+    it. --%>
+    <div class={["filter-tabs flex flex-wrap gap-1 text-sm", @class]} {@rest}>
       <%= for {value, label} <- @options do %>
         <button
           :if={@event}
@@ -551,10 +606,7 @@ defmodule VutuvWeb.PostComponents do
           phx-value-type={value}
           data-filter-tab={value}
           aria-pressed={to_string(@active == value)}
-          class={[
-            post_filter_tab_class(@active == value),
-            @ticker && @ticker.tab == value && "filter-tab--ticking"
-          ]}
+          class={post_filter_tab_class(@active == value)}
         >
           <.tab_label label={label} /><.unseen_dot show={value != @active and value in @unseen} />
         </button>
@@ -568,23 +620,17 @@ defmodule VutuvWeb.PostComponents do
           <.tab_label label={label} /><.unseen_dot show={value != @active and value in @unseen} />
         </.link>
       <% end %>
-      <.filter_tab_ticker :if={@ticker} ticker={@ticker} event={@event} />
     </div>
     """
   end
 
-  # The label in a span of its own, so the ticker's narrow-screen rule has
-  # something to fold: a width animates, a text node does not. `--n` is the
-  # label's own length, because a `max-width` that is the same for every tab
-  # would spend most of the animation above the width the word ever had —
-  # visibly late. Two characters of slack, so a label of wide capitals is
-  # never clipped in the resting state. Inert everywhere else: without the
-  # ticker the cap is above the text and nothing transitions.
+  # The label in a span of its own, so the dot beside it has a sibling to sit
+  # against rather than a bare text node.
   attr(:label, :string, required: true)
 
   defp tab_label(assigns) do
     ~H"""
-    <span class="filter-tab__label" style={"--n: #{String.length(@label)}"}>{@label}</span>
+    <span class="filter-tab__label">{@label}</span>
     """
   end
 
@@ -593,37 +639,6 @@ defmodule VutuvWeb.PostComponents do
   # The hook owns the clock (assets/js/app.js): the seconds run in the browser,
   # where the window is actually visible, and it hides itself before telling
   # the server, so a dead socket cannot leave the quote standing.
-  attr(:ticker, :map, required: true)
-  attr(:event, :string, default: nil)
-
-  defp filter_tab_ticker(assigns) do
-    ~H"""
-    <button
-      type="button"
-      id="feed-tab-ticker"
-      phx-hook="FeedTicker"
-      data-ticker-window={@ticker.id}
-      data-ticker-seconds={@ticker.seconds}
-      phx-click={@event}
-      phx-value-type={@ticker.tab}
-      aria-label={@ticker.aria}
-      class="filter-tab-ticker"
-    >
-      <span :if={@ticker.count > 1} class="filter-tab-ticker__count">
-        {ngettext("%{formatted} new post", "%{formatted} new posts", @ticker.count,
-          formatted: compact_count(@ticker.count)
-        )}
-      </span>
-      <span :if={@ticker.count == 1 and @ticker.who} class="filter-tab-ticker__who">
-        {@ticker.who}
-      </span>
-      <span :if={@ticker.count == 1 and @ticker.text} class="filter-tab-ticker__text">
-        {@ticker.text}
-      </span>
-    </button>
-    """
-  end
-
   # The unseen marker: the same 8px coral dot an unread notification row wears,
   # here riding beside the label rather than over it — a tab is text, so there
   # is no icon to sit on the corner of. Screen readers get the word; the dot

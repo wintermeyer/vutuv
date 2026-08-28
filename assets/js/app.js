@@ -421,72 +421,8 @@ document.addEventListener("click", (event) => {
   if (event.target.closest("[data-notify-allow]")) requestNotifyPermission()
 })
 
-// The feed-tab ticker's example on /settings/preferences (issue #1668). The
-// setting's whole effect happens on another page, seconds at a time, so the
-// card lets you press it once — with the switch and the seconds you are
-// currently looking at, not with the stored ones, or the example would answer
-// a question you already changed your mind about.
-//
-// It drives the real classes on the real markup, so it cannot drift into a
-// prettier lie than the feed.
-let tickerPreviewTimers = []
-
-function playTickerPreview(box) {
-  tickerPreviewTimers.forEach(clearTimeout)
-  tickerPreviewTimers = []
-
-  const bar = box.querySelector(".filter-tabs")
-  const tab = box.querySelector('[data-filter-tab="fediverse"]')
-  const dot = box.querySelector("[data-ticker-preview-dot]")
-  const quote = box.querySelector("[data-ticker-preview-quote]")
-  if (!bar || !tab || !dot || !quote) return
-
-  // Both controls are read from the document, not from an enclosing card: the
-  // kit's <.card> is a pile of utility classes and emits no `card` class at
-  // all, so the `.card` this used to climb to was always null — `on` came back
-  // undefined and the button silently did nothing from the day it shipped
-  // (v7.347.0), which is exactly what an example is supposed to disprove.
-  // Their `name` is server-rendered from the field and unique on this page.
-  const on = document.querySelector('input[type="checkbox"][name*="feed_tab_ticker"]')?.checked
-  const seconds =
-    parseInt(document.querySelector('select[name*="feed_tab_ticker_seconds"]')?.value, 10) || 8
-
-  // Whatever it did last time, back to the resting bar first.
-  bar.classList.remove("filter-tabs--ticking")
-  tab.classList.remove("filter-tab--ticking")
-  quote.classList.remove("filter-tab-ticker--leaving")
-  quote.hidden = true
-
-  // The dot is not part of the switch: it appears either way and stays.
-  dot.hidden = false
-  if (!on) return
-
-  quote.hidden = false
-  bar.classList.add("filter-tabs--ticking")
-  tab.classList.add("filter-tab--ticking")
-
-  tickerPreviewTimers.push(
-    setTimeout(() => {
-      quote.classList.add("filter-tab-ticker--leaving")
-      tickerPreviewTimers.push(
-        setTimeout(() => {
-          bar.classList.remove("filter-tabs--ticking")
-          tab.classList.remove("filter-tab--ticking")
-          quote.hidden = true
-        }, 400)
-      )
-    }, seconds * 1000)
-  )
-}
-
-document.addEventListener("click", (event) => {
-  if (!event.target.closest("[data-ticker-preview-play]")) return
-  const box = document.querySelector("[data-ticker-preview]")
-  if (box) playTickerPreview(box)
-})
-
-// The browser tab's teaser has the same problem as the ticker above and one
-// twist (issue #1681): its stage is the tab this settings page is sitting in,
+// The browser tab's teaser (issue #1681) has a twist the other examples do
+// not: its stage is the tab this settings page is sitting in,
 // so the example can simply BE the thing, played in the real tab title through
 // the real hook. Nothing here animates anything — it hands the frames to
 // TabBadge, which owns document.title and would otherwise put the marker back
@@ -495,8 +431,8 @@ document.addEventListener("click", (event) => {
   const button = event.target.closest("[data-tab-teaser-play]")
   if (!button) return
 
-  // Read from the document for the reason the ticker preview above records:
-  // there is no `.card` element to climb to.
+  // Read from the document rather than from an enclosing card: the kit's
+  // <.card> is a pile of utility classes and emits no `card` class to climb to.
   const on = document.querySelector('input[type="checkbox"][name*="browser_tab_teaser"]')?.checked
   if (!on) return
 
@@ -513,83 +449,6 @@ document.addEventListener("click", (event) => {
 const Hooks = {
   MarkdownEditor,
   TagInput,
-  // The feed's tab ticker (issue #1668): the quote beside the tab a post just
-  // landed on, which stands for a few seconds and then goes.
-  //
-  // The clock is HERE, not on the server, for two reasons. A window counted
-  // out over there includes the trip back, so it would stand for its seconds
-  // plus whatever the line costs — and on a line that has since died, the
-  // message telling it to go would never arrive at all and the quote would
-  // stay up forever. So the browser hides it and then reports; the server only
-  // has to forget it, which also stops a later patch putting it back.
-  //
-  // `data-ticker-window` is what says a NEW window started. It stays put while
-  // the count climbs inside one, so a second arrival cannot silently restart
-  // the clock and hand a busy source the bar for good.
-  //
-  // The window also waits for a reader who is reaching for the quote: it is a
-  // button that switches to the tab it names, and a target that disappears
-  // mid-reach is not one you can press. The hold hangs off pointer MOVEment,
-  // never `pointerenter` — a quote that opens under a cursor somebody parked
-  // there and walked away from would otherwise stand for the rest of the day.
-  FeedTicker: {
-    mounted() {
-      this.hold = () => this.pause()
-      this.release = () => this.resume()
-      this.el.addEventListener("pointermove", this.hold)
-      this.el.addEventListener("pointerleave", this.release)
-      this.el.addEventListener("focus", this.hold)
-      this.el.addEventListener("blur", this.release)
-      this.start()
-    },
-    updated() {
-      if (this.el.dataset.tickerWindow !== this.window) this.start()
-    },
-    destroyed() {
-      this.stop()
-      this.el.removeEventListener("pointermove", this.hold)
-      this.el.removeEventListener("pointerleave", this.release)
-      this.el.removeEventListener("focus", this.hold)
-      this.el.removeEventListener("blur", this.release)
-    },
-    start() {
-      this.stop()
-      this.held = false
-      this.window = this.el.dataset.tickerWindow
-      this.el.classList.remove("filter-tab-ticker--leaving")
-      this.run((parseInt(this.el.dataset.tickerSeconds, 10) || 8) * 1000)
-    },
-    run(ms) {
-      this.deadline = Date.now() + ms
-
-      this.timer = setTimeout(() => {
-        // Past this point the window is over and nothing may hold it: the fade
-        // is not clickable (`pointer-events: none`), but a keyboard focus
-        // still reaches it, and a hold there would clear the timer that tells
-        // the server to forget the quote — leaving an invisible one standing.
-        this.deadline = null
-        this.el.classList.add("filter-tab-ticker--leaving")
-        this.timer = setTimeout(() => this.pushEvent("hide-tab-ticker", {}), 400)
-      }, ms)
-    },
-    pause() {
-      if (this.held || !this.deadline) return
-      this.held = true
-      this.left = Math.max(0, this.deadline - Date.now())
-      this.stop()
-    },
-    resume() {
-      if (!this.held) return
-      this.held = false
-      // A floor, so the quote does not blink out from under a cursor that has
-      // just left it — that reads as the pointer having broken something.
-      this.run(Math.max(this.left, 1200))
-    },
-    stop() {
-      if (this.timer) clearTimeout(this.timer)
-      this.timer = null
-    },
-  },
   LocalTime: {
     mounted() {
       localizeTime(this.el)
@@ -1025,28 +884,95 @@ const Hooks = {
       this.style?.remove()
     },
   },
-  // Drag-and-drop ordering for the owner's profile-section reorder tool
-  // (VutuvWeb.SectionReorderLive). Listeners are delegated to the <ul> so they
-  // survive the server re-renders that follow each change. On drop we push the
-  // new id order to the LiveView, which renumbers positions 1..n and re-renders
-  // (the rows are keyed by id, so the DOM the drag already moved just settles).
-  // Touch devices can't fire native HTML5 drag, so the up/down arrows — plain
-  // phx-click events — are the reorder path there; this layers desktop drag on
-  // top. No CSRF token to manage: it rides the live socket.
+  // Drag-and-drop ordering, shared by the owner's profile-section reorder tool
+  // (VutuvWeb.SectionReorderLive) and the feed rail's arrangeable cards.
+  // Listeners are delegated to the container so they survive the server
+  // re-renders that follow each change. On drop we push the new `data-id` order
+  // to the LiveView, which stores it and re-renders (the rows are keyed by id,
+  // so the DOM the drag already moved just settles).
+  //
+  // Two things are per call site, read off the container: `data-reorder-item`
+  // (the selector for a row, default the section tool's) and
+  // `data-reorder-event` (what is pushed on drop, default "reorder").
+  //
+  // A row is dragged as a whole unless it carries a [data-reorder-handle], in
+  // which case only the handle starts a drag — the feed rail's cards are full
+  // of checkboxes, links and text inputs, and a card draggable by any of them
+  // is a card whose controls cannot be used. The handle is also the keyboard
+  // path: ↑/↓ on it move the row, which is what makes the rail arrangeable
+  // without a pointer at all. Touch devices can't fire native HTML5 drag; the
+  // section tool has its up/down arrows for that, and the rail is desktop-only.
   Reorder: {
     mounted() {
       this.dragging = null
       const list = this.el
-      const items = () => [...list.querySelectorAll(".reorder__item")]
+      const selector = list.dataset.reorderItem || ".reorder__item"
+      const event = list.dataset.reorderEvent || "reorder"
+      const items = () => [...list.querySelectorAll(selector)]
+      const push = () => this.pushEvent(event, { order: items().map((el) => el.dataset.id) })
 
-      // The row the dragged element should sit before, by vertical midpoint.
+      this._selector = selector
+
+      // Dragging past a row taller than the window was impossible, and not
+      // because the gesture was awkward: the drop position is decided by each
+      // row's MIDPOINT, and the midpoint of a 700px card sits above the
+      // viewport long before its top edge does — so no pointer position ever
+      // named it, however patiently you dragged.
+      //
+      // The cap is the whole fix. A row's reference line is its midpoint but at
+      // most `TALL_CAP` into it, so every row behaves like one of at most
+      // 2 × TALL_CAP: the pointer never has to travel further than that to put
+      // the dragged card before it, whatever the neighbour's height.
+      //
+      // The obvious alternative — folding the cards to their headings for the
+      // length of the drag — was written first and had to come out: mutating
+      // the layout (and scrolling) inside `dragstart` cancels the native drag
+      // session in WebKit outright, so Safari lost drag-and-drop entirely
+      // (2026-08-28). Nothing here touches the DOM while a drag is running.
+      //
+      // The page still scrolls itself while the pointer rests near a window
+      // edge, for the rail that is longer than the window — a row whose top
+      // edge is off screen is out of reach whatever the cap does. That scroll
+      // runs on its own frame loop rather than on `dragover`, because a pointer
+      // held still at the edge stops firing that event in some browsers, which
+      // is exactly the moment the reader is waiting for the page to move.
+      const TALL_CAP = 120
+      const EDGE = 90
+      const EDGE_SPEED = 14
+      let edgeY = null
+      let edgeFrame = null
+
+      const stepEdgeScroll = () => {
+        edgeFrame = requestAnimationFrame(stepEdgeScroll)
+        if (edgeY == null) return
+        const top = edgeY - EDGE
+        const bottom = edgeY - (window.innerHeight - EDGE)
+        if (top < 0) {
+          window.scrollBy(0, Math.max(-EDGE_SPEED, (top / EDGE) * EDGE_SPEED))
+        } else if (bottom > 0) {
+          window.scrollBy(0, Math.min(EDGE_SPEED, (bottom / EDGE) * EDGE_SPEED))
+        }
+      }
+
+      const startEdgeScroll = () => {
+        edgeY = null
+        if (edgeFrame == null) edgeFrame = requestAnimationFrame(stepEdgeScroll)
+      }
+
+      const stopEdgeScroll = () => {
+        if (edgeFrame != null) cancelAnimationFrame(edgeFrame)
+        edgeFrame = null
+        edgeY = null
+      }
+
+      // The row the dragged element should sit before, by the capped line above.
       const rowAfter = (y) =>
         items()
           .filter((row) => row !== this.dragging)
           .reduce(
             (closest, row) => {
               const box = row.getBoundingClientRect()
-              const offset = y - box.top - box.height / 2
+              const offset = y - box.top - Math.min(box.height / 2, TALL_CAP)
               return offset < 0 && offset > closest.offset
                 ? { offset, element: row }
                 : closest
@@ -1054,29 +980,95 @@ const Hooks = {
             { offset: Number.NEGATIVE_INFINITY, element: null }
           ).element
 
+      // Handle-only rows are not draggable at rest — a card full of
+      // checkboxes, links and text inputs that could be dragged from anywhere
+      // is a card whose controls cannot be used — so exactly one row carries
+      // the attribute at a time: the one the pointer is HOVERING the grip of.
+      //
+      // Hovering, not pressing. Arming on `pointerdown` looks equivalent and is
+      // not: the browser decides whether a press begins a drag as the press
+      // arrives, so an attribute set inside that same handler comes too late
+      // for it. The first press then only armed the row and the second one
+      // dragged it — every card needed two clicks (reported 2026-08-28).
+      //
+      // Re-armed on `pointermove` as well as on entering, because a LiveView
+      // patch of the rail (a count ticking) strips an attribute the server did
+      // not render, and the pointer may already be sitting on the grip when it
+      // happens. Both handlers cost nothing once the right row is armed.
+      const disarm = () =>
+        items().forEach((row) => {
+          if (row.querySelector("[data-reorder-handle]")) row.removeAttribute("draggable")
+        })
+
+      const arm = (e) => {
+        if (this.dragging) return
+        const row = e.target.closest("[data-reorder-handle]")?.closest(selector) || null
+        if (row && row.getAttribute("draggable") === "true") return
+        disarm()
+        if (row) row.setAttribute("draggable", "true")
+      }
+
+      list.addEventListener("pointerover", arm)
+      list.addEventListener("pointermove", arm)
+      list.addEventListener("pointerleave", () => {
+        if (!this.dragging) disarm()
+      })
+
       list.addEventListener("dragstart", (e) => {
-        const row = e.target.closest(".reorder__item")
+        const row = e.target.closest(selector)
         if (!row) return
+        // A row with a handle may only be dragged by it, i.e. only while the
+        // hover above has armed it.
+        if (row.querySelector("[data-reorder-handle]") && !row.draggable) return
         this.dragging = row
+        // `is-dragging` only fades the row, so it changes no geometry. Anything
+        // that does — a fold, a scroll — belongs outside `dragstart`.
         row.classList.add("is-dragging")
+        startEdgeScroll()
       })
 
       list.addEventListener("dragend", () => {
+        stopEdgeScroll()
+        // Deliberately no disarm here: the pointer is still on the grip, so the
+        // row has to stay armed or a second drag would need a second press
+        // again. `pointerleave` and the next `arm` take it off.
         if (!this.dragging) return
         this.dragging.classList.remove("is-dragging")
         this.dragging = null
-        this.pushEvent("reorder", { order: items().map((el) => el.dataset.id) })
+        push()
       })
 
       list.addEventListener("dragover", (e) => {
         e.preventDefault()
         if (!this.dragging) return
+        edgeY = e.clientY
         const after = rowAfter(e.clientY)
         if (after == null) {
           list.appendChild(this.dragging)
         } else if (after !== this.dragging) {
           list.insertBefore(this.dragging, after)
         }
+      })
+
+      // Keyboard: ↑/↓ on the handle move the row one place. Focus is put back
+      // on that handle after the server's patch (see updated), or a reader
+      // loses the row they were moving after a single press.
+      list.addEventListener("keydown", (e) => {
+        if (e.key !== "ArrowUp" && e.key !== "ArrowDown") return
+        const handle = e.target.closest("[data-reorder-handle]")
+        const row = handle?.closest(selector)
+        if (!row) return
+        const rows = items()
+        const to = rows.indexOf(row) + (e.key === "ArrowUp" ? -1 : 1)
+        if (to < 0 || to >= rows.length) return
+        e.preventDefault()
+        if (e.key === "ArrowUp") {
+          rows[to].before(row)
+        } else {
+          rows[to].after(row)
+        }
+        this._refocus = row.dataset.id
+        push()
       })
     },
     // Animate the arrow/keyboard reorders with FLIP: snapshot each row's top
@@ -1089,12 +1081,21 @@ const Hooks = {
       if (reducedMotion()) return
       this._tops = new Map()
       this.el
-        .querySelectorAll(".reorder__item")
+        .querySelectorAll(this._selector)
         .forEach((el) => this._tops.set(el.dataset.id, el.getBoundingClientRect().top))
     },
     updated() {
+      const rows = [...this.el.querySelectorAll(this._selector)]
+
+      if (this._refocus) {
+        rows
+          .find((el) => el.dataset.id === this._refocus)
+          ?.querySelector("[data-reorder-handle]")
+          ?.focus()
+        this._refocus = null
+      }
+
       if (!this._tops) return
-      const rows = [...this.el.querySelectorAll(".reorder__item")]
       // Invert: place each moved row at its old position with no transition.
       rows.forEach((el) => {
         const prev = this._tops.get(el.dataset.id)
@@ -1300,13 +1301,7 @@ const NAV_PRESSING = "data-nav-pressing"
 const KEEP_OPEN = "data-keep-open"
 
 const liveSocket = new LiveSocket("/live", Socket, {
-  // `feed_ticker` is a capability, not a setting: the feed's tab ticker brings
-  // its own stylesheet and its own hook, and a document loaded before v7.347.0
-  // has neither — a deploy reloads no open tab, it only reconnects the socket
-  // into hours-old markup. Only a bundle that ships the hook can send this key,
-  // so the claim proves itself, and it stays true however many deploys behind
-  // the document is. Retire it together with the FeedTicker hook.
-  params: { _csrf_token: csrfToken(), feed_ticker: true },
+  params: { _csrf_token: csrfToken() },
   hooks: Hooks,
   dom: {
     // Both navs live inside ShellLive, so a patch that has nothing to do with

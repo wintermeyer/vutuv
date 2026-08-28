@@ -36,10 +36,20 @@ defmodule VutuvWeb.PostLive.FeedFollowedTagsTest do
       refute Tags.tag_followed?(user, tag)
     end
 
-    test "the rail is absent when the member follows no tags", %{conn: conn} do
+    # It used to be absent with no tags followed, which was right while the card
+    # was a list and nothing else. It carries the follow field now (2026-08-28),
+    # so hiding it until a tag is already followed would put the *first* follow
+    # behind a tag page — the long way round the field exists to remove.
+    test "the card stands even with no tags followed, because it is the way in", %{conn: conn} do
       {conn, _user} = create_and_login_user(conn)
       {:ok, view, _html} = live_feed_with_rails(conn)
-      refute has_element?(view, "#followed-tags")
+
+      assert has_element?(view, "#followed-tags")
+
+      assert has_element?(
+               view,
+               ~s(#rail-followed_tags form input[name="name"])
+             )
     end
   end
 end

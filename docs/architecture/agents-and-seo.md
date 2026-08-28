@@ -336,7 +336,7 @@ its flattened twin `plain_line/2` — is the single owner of the app's one-line
 post teaser, read by the Open Graph description below, the RSS
 `<description>`, every doc builder that lists posts rather than rendering one,
 a search result, an organization's activity list, the /notifications
-breadcrumb, the daily report and the feed's tab ticker. It is the post's first
+breadcrumb, the daily report and the feed's "not read yet" card. It is the post's first
 line, minus the openers a reader learns nothing from: a quote post's
 `RE: <url>` reference to the status it quotes (Mastodon writes one, and it
 names that status by id), and a line with no words in it (a `---` rule, a lone

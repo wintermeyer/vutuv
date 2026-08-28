@@ -115,8 +115,10 @@ can leave a tag page behind but never a crawled one.
 The reader's controls are the embedded `VutuvWeb.TagLive.Timeline` LiveView
 (`live_render` from `VutuvWeb.TagController.show/2`, the profile's and the post
 permalink's pattern, so the controller keeps owning the URL and the agent-format
-siblings): the All / vutuv / Fediverse **source tabs** (the feed's
-`<.post_filter_tabs>`), a **sort** (newest, oldest, most liked), a full-text
+siblings): the All / vutuv / Fediverse **source tabs** (`<.post_filter_tabs>`,
+which the tag timeline still uses — the feed traded its own for a filter band,
+see [posts-and-feed.md](posts-and-feed.md)), a **sort** (newest, oldest, most
+liked), a full-text
 **search** over both sides' `search_tsv`, a **date range** read as German
 calendar days, and "Load more" — none of them reloading the page.
 
