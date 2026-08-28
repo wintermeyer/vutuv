@@ -167,8 +167,13 @@ defmodule Vutuv.Sitemap do
     query |> limit(^@chunk_size) |> offset(^((chunk - 1) * @chunk_size))
   end
 
-  # The crawlable member set lives in Vutuv.Directory (the /members pages),
-  # so directory and sitemap can never drift apart.
+  # The crawlable member set lives in Vutuv.Directory, where it is derived in
+  # one `where` from the set that module lists (`listed_users/0` minus the
+  # search-engine opt-out), so the two cannot drift apart in the direction that
+  # would matter — a member the sitemap advertises is always one the directory
+  # shows. The reverse is deliberately false since v7.407.0: the directory
+  # lists an opted-out member for people to find and marks their row
+  # `rel="nofollow"`, while this set still leaves them out.
   defp indexable_users, do: Vutuv.Directory.indexable_users()
 
   # scope_visible(nil) already drops restricted posts, frozen posts and

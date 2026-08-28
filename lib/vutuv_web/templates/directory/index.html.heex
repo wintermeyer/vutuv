@@ -3,6 +3,15 @@
   crumbs={[{gettext("Home"), ~p"/"}, gettext("Member directory")]}
 />
 
+<%!-- The search box, above the A-Z strip because it is what somebody with a
+name in mind reaches for; the alphabet below is for browsing. Embedded rather
+than routed so the controller keeps serving the agent-format siblings, and it
+takes `q` from the URL so a submitted search reloads and shares as itself. --%>
+{live_render(@conn, VutuvWeb.DirectorySearchLive,
+  id: "directory-search-lv",
+  session: Map.merge(VutuvWeb.ControllerHelpers.live_render_session(@conn), @search_session)
+)}
+
 <div class="card-list">
   <section class="card">
     <%!-- One line, and it says what the page is. The membership total and the
@@ -11,8 +20,7 @@
     three figures above an A-Z strip read as a statistics page rather than as a
     directory (Stefan, 2026-08-13). --%>
     <p>
-      {gettext(
-        "%{count} vutuv members whose profiles are open to search engines, filed alphabetically by last name.",
+      {gettext("%{count} vutuv members, filed alphabetically by last name.",
         count: delimited_count(@total)
       )}
     </p>

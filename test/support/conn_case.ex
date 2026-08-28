@@ -15,6 +15,7 @@ defmodule VutuvWeb.ConnCase do
       import Ecto.Query
       import Vutuv.Factory
       import Vutuv.MailboxHelpers
+      import VutuvWeb.HTMLHelpers
 
       use Phoenix.VerifiedRoutes,
         endpoint: VutuvWeb.Endpoint,

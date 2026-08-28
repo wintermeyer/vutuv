@@ -224,14 +224,67 @@ because every report here describes the site as it was at the last crawl.
 
 ## Member directory (`/system/members`)
 
-The crawlable A-Z index of every member whose profile is open to search engines
-— the same set `/sitemap.xml` advertises (`Vutuv.Directory` owns that one
-definition).
+The browsable A-Z index of **every** listed member, and the crawl surface for
+search engines that follow links rather than reading `/sitemap.xml`.
 
 An overview of letter tiles with counts plus one page per last-name initial,
 paginated at 50 members per page (accents folded, DIN 5007; names without a
 letter share an "other" bucket), linked in the footer of every page, so
-link-following crawlers and humans reach every indexable profile.
+link-following crawlers and humans reach every profile.
+
+`Vutuv.Directory` holds two member sets apart, and the difference is the point.
+`listed_users/0` — confirmed, not moderation-hidden — is what the directory
+shows. `indexable_users/0` is that set minus the search-engine opt-out
+(`noindex?`), and it is what `/sitemap.xml` advertises. Until v7.407.0 the
+directory used the second for both, so a member who had opted out of search
+engines was missing from the one page whose job is to help somebody find them —
+while `/search`, the most-followed listing and every follower list had listed
+them all along. The directory was the outlier, not the rule.
+
+What the opt-out buys now is `rel="nofollow"` on that member's row
+(`UserHelpers.profile_rel/1`, applied in the shared `card_list` and `user_row`
+and in the two public member lists that build their own rows, `/:slug/connections`
+and `/:slug/tags/:id/endorsers`) plus their absence from the sitemap and the
+`X-Robots-Tag: noindex` their profile already answers with. `noindex?` rides in
+`User.listing_fields/0` so a listing row can decide its own `rel` without a
+second query — left out, the struct would carry the schema default `false` and
+the link would fail *open*.
+
+### The search box
+
+`VutuvWeb.DirectorySearchLive`, embedded into the overview with `live_render`
+so `DirectoryController` keeps owning the agent-format siblings. A **field**
+search rather than the free-text page at `/search`: a case-insensitive
+substring in first name, last name and username, OR-ed across whichever of the
+three checkboxes are ticked, with every word of a multi-word query having to
+match some ticked field ("anna mei" and "mei anna" both find Anna Meier).
+
+All three boxes start ticked and unticking the last one ticks all three again —
+one rule, `Directory.parse_search_fields/1`, applied on every path. Keeping the
+previous selection instead cannot be rendered: `@fields` would not change, so
+the diff would carry nothing for that checkbox and it would stay visibly
+unticked while the server searched as though it were on.
+
+A large result set is revealed in bites of `results_step/0` (25) up to
+`results_ceiling/0` (the site-wide page maximum), with the total stated first;
+past the ceiling the box asks for a narrower query rather than offering another
+press. A pager would be the wrong control here — the next keystroke invalidates
+whichever page you walked to.
+
+Being off-router it cannot `push_patch`, so the box is a real GET form at
+`/system/members`: keystrokes patch results over the socket, Enter lands on a
+shareable `?q=` URL whose dead render shows the same results, and "show more"
+is a `?show=` link until the socket connects. A `?q=` page is stamped
+`noindex` — search results are the hall of mirrors `/search` is noindexed for,
+and here they would additionally publish the names of members who asked to stay
+out of search results. The bare overview stays indexable.
+
+The minimum is three characters, and that number is not arbitrary: pg_trgm
+needs three to form a trigram, so a shorter needle plans a sequential scan of
+`users` whatever indexes exist. `20260828083124_add_users_name_trigram_indexes`
+adds the GIN trigram indexes on the three columns, and the total rides along on
+the rows as a window count rather than as a second `Repo.aggregate/2` — one walk
+of the match set instead of two, on a query a member re-runs at every keystroke.
 
 A letter page files each row under the name it is sorted by ("Özil, Mesut",
 `UserHelpers.filed_name/1`, switched on by the `filed_names` assign the
@@ -240,18 +293,15 @@ Nachname" under a heading of "M" leaves the reader scanning for the word the
 order is built on. The avatar's alt text and the agent docs keep the canonical
 name, so only the visible listing changes.
 
-Members with `noindex?` never appear here or in the sitemap, and their profile
-answers with the robots meta tag *and* an `X-Robots-Tag` header.
-
-The overview prints **one** figure, the count it lists, in a single line that
-also says who is missing from it ("… anyone who does not open their profile to
-search engines is not among them"). It briefly printed three — the listed
+The overview prints **one** figure, the count it lists. It briefly printed three — the listed
 count, the whole membership and the Fediverse head count — and that was one
 number too many for a page whose job is an A-Z index: those two belong to the
 top bar's people pill, which is on this page like on every other (Stefan,
 2026-08-13). The agent formats carry the listed figure as `total` and repeat
 the sentence in the doc description, for the Markdown and text renderings,
-which print no counts of their own.
+which print no counts of their own. Those siblings answer for the directory
+itself and never for a `?q=`: a doc that changed under a query would make the
+canonical URL name a different document every time.
 
 It lives under `/system/` — the one reserved word all future site pages share,
 so new pages stop burning root path words members could have as handles.

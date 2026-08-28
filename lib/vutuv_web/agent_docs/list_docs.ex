@@ -203,7 +203,7 @@ defmodule VutuvWeb.AgentDocs.ListDocs do
   # page prints under its heading.
   defp directory_description(total) do
     gettext(
-      "%{listed} vutuv members are listed here, grouped by the first letter of their last name; anyone who does not open their profile to search engines is not among them.",
+      "%{listed} vutuv members are listed here, grouped by the first letter of their last name.",
       listed: UI.delimited_count(total)
     )
   end

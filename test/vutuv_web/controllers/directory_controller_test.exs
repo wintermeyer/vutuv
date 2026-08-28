@@ -1,9 +1,15 @@
 defmodule VutuvWeb.DirectoryControllerTest do
   @moduledoc """
-  The public member directory (`/system/members` + `/system/members/:letter`): the
-  crawl-friendly, human-browsable index of every member who wants to be
-  found by search engines. Members who opted out (`noindex?`), are
-  unconfirmed or moderation-hidden must never show up here.
+  The public member directory (`/system/members` + `/system/members/:letter`):
+  the human-browsable index of **every** listed member, and the crawl-friendly
+  sibling of the sitemap.
+
+  The two sets it holds apart are what these tests are mostly about. A member
+  who opted out of search engines (`noindex?`) is listed like anybody else —
+  a directory that hid them was the odd one out beside the most-followed
+  listing, the follower lists and `/search`, none of which ever did — and what
+  the opt-out buys is `rel="nofollow"` on their row plus their absence from
+  the sitemap. Unconfirmed and moderation-hidden accounts are still nowhere.
   """
 
   use VutuvWeb.ConnCase, async: true
@@ -28,21 +34,21 @@ defmodule VutuvWeb.DirectoryControllerTest do
       refute html =~ ~p"/system/members/x"
     end
 
-    test "counts only crawlable members", %{conn: conn} do
-      # Otto Opt-Out is the only O-by-last-name besides Özil; his noindex?
-      # must keep the O count at 1 (Özil folds into o).
+    test "counts every listed member, opted out of search engines or not", %{conn: conn} do
+      # Otto Opt-Out and Özil both file under O. Before v7.407.0 his noindex?
+      # kept the count at 1 and left him off his own letter page.
       html = get(conn, ~p"/system/members") |> html_response(200)
 
-      assert html =~ ~s(data-letter="o" data-count="1")
+      assert html =~ ~s(data-letter="o" data-count="2")
       assert html =~ ~s(data-letter="a" data-count="1")
       assert html =~ ~s(data-letter="x" data-count="0")
     end
 
     test "opens with the listed count and nothing else", %{conn: conn, adler: adler} do
-      # Two of the three confirmed members allow search engines. The page used
-      # to name the whole membership and the Fediverse head count below that;
-      # both are the top bar's business, and three figures above an A-Z strip
-      # read as a statistics page (Stefan, 2026-08-13).
+      # All three confirmed members. The page used to name the whole membership
+      # and the Fediverse head count below that; both are the top bar's
+      # business, and three figures above an A-Z strip read as a statistics
+      # page (Stefan, 2026-08-13).
       Repo.insert!(%Vutuv.Fediverse.Follower{
         user_id: adler.id,
         actor_uri: "https://remote.example/users/frida",
@@ -51,7 +57,8 @@ defmodule VutuvWeb.DirectoryControllerTest do
 
       html = get(conn, ~p"/system/members") |> html_response(200)
 
-      assert html =~ "2 vutuv members whose profiles are open to search engines"
+      assert html =~ "3 vutuv members, filed alphabetically by last name."
+      refute html =~ "open to search engines"
       refute html =~ "members in total"
       refute html =~ "from the Fediverse"
     end
@@ -66,7 +73,7 @@ defmodule VutuvWeb.DirectoryControllerTest do
         |> get(~p"/system/members")
         |> html_response(200)
 
-      assert html =~ "2 vutuv Mitglieder, deren Profile für Suchmaschinen freigegeben sind"
+      assert html =~ "3 vutuv Mitglieder, alphabetisch nach Nachname sortiert."
       refute html =~ "Insgesamt gibt es"
     end
 
@@ -109,10 +116,30 @@ defmodule VutuvWeb.DirectoryControllerTest do
       assert html =~ "Özil, Mesut"
     end
 
-    test "never lists an opted-out member", %{conn: conn} do
+    test "lists an opted-out member, and tells crawlers not to follow the link", %{
+      conn: conn,
+      opted_out: opted_out,
+      ozil: ozil
+    } do
       html = get(conn, ~p"/system/members/o") |> html_response(200)
 
-      refute html =~ "Otto Opt-Out"
+      assert html =~ "Opt-Out, Otto"
+
+      # The row is there for people; the two links in it carry rel="nofollow"
+      # so a crawler does not walk through to a profile whose owner asked to
+      # stay out of search results. A member who allowed indexing gets none.
+      assert [_avatar, _name] = nofollow_links(html, opted_out.username)
+      assert nofollow_links(html, ozil.username) == []
+    end
+
+    test "keeps an opted-out member out of the sitemap", %{opted_out: opted_out, ozil: ozil} do
+      # The other half of the pair: listed for people, never advertised to a
+      # crawler. If this ever goes green with `listed_users/0` behind the
+      # sitemap, the opt-out has quietly stopped meaning anything.
+      paths = Vutuv.Sitemap.user_entries(1) |> Enum.map(&elem(&1, 0))
+
+      assert ("/" <> ozil.username) in paths
+      refute ("/" <> opted_out.username) in paths
     end
 
     test "serves the other bucket for names that start with no letter", %{conn: conn} do

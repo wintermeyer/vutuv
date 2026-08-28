@@ -1830,9 +1830,16 @@ defmodule Vutuv.Organizations do
   end
 
   @doc """
-  The number of members whose linked work experience is at `organization` and who are
-  publicly listable (`Vutuv.Directory.indexable_users` semantics: confirmed, not
-  search-opted-out, not moderation-hidden). The count the People section shows.
+  The number of members whose linked work experience is at `organization` and who
+  are publicly listable here: confirmed, not moderation-hidden, and **not opted
+  out of search engines**. The count the People section shows.
+
+  That last condition used to cite `Vutuv.Directory.indexable_users` as its
+  authority, and no longer can: since v7.407.0 the member directory lists an
+  opted-out member and marks the row `rel="nofollow"` instead of hiding them.
+  Whether an organization's People list should follow is a product question
+  nobody has answered, so the gate is spelled out here rather than borrowed —
+  if it does follow, `people_base/1` is the one place to change.
   """
   def organization_people_count(%Organization{id: id}) do
     people_base(id)
@@ -1848,10 +1855,11 @@ defmodule Vutuv.Organizations do
 
   Each entry is `%{user:, title:, current?:}` where `title` is the linked role's
   title **exactly as the member wrote it** (their most recent role at the
-  organization). Privacy is the member-directory gate (`indexable_users` semantics),
-  so a member who opted out of public listing or is moderation-hidden never
-  appears — the same set the agent-format people list carries. Returns
-  `%{entries:, more?:, next_offset:}`.
+  organization). Privacy is `people_base/1`'s own gate (spelled out under
+  `organization_people_count/1`, and no longer borrowed from the member
+  directory), so a member who opted out of search engines or is
+  moderation-hidden never appears — the same set the agent-format people list
+  carries. Returns `%{entries:, more?:, next_offset:}`.
   """
   def organization_people_page(%Organization{id: organization_id}, opts \\ []) do
     limit = Keyword.get(opts, :limit, @people_per_page)
