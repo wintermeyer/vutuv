@@ -839,9 +839,9 @@ defmodule VutuvWeb.Markdown do
   end
 
   # Scheme-less, www-less display text for a bare URL, shortened to the host
-  # plus its leading path directory (or **two** directories for the hosts in
-  # `keep_two_dirs?/1`) — any deeper path is collapsed into a trailing `…`. So a
-  # long "https://www.hostsharing.net/downloads/hostsharing-manual.pdf" reads as
+  # plus its leading path directory (or more, for the hosts `kept_dirs/1` names)
+  # — any deeper path is collapsed into a trailing `…`. So a long
+  # "https://www.hostsharing.net/downloads/hostsharing-manual.pdf" reads as
   # "hostsharing.net/downloads/…" instead of a mid-word character cut.
   # `@url_display_max` stays a final safety cap for a pathologically long host
   # or first segment (or a query string on a single-segment path).
@@ -859,27 +859,32 @@ defmodule VutuvWeb.Markdown do
     |> String.replace_prefix("http://", "")
   end
 
-  # host + its leading path directory (two for `keep_two_dirs?/1` hosts),
-  # eliding anything deeper. A bare host — or one with only a trailing slash or
-  # fewer directories than the kept count — keeps its full text; the `…` appears
-  # only when there is a further path segment to hide.
+  # host + as many leading path directories as `kept_dirs/1` grants it, eliding
+  # anything deeper. A bare host — or one with only a trailing slash or fewer
+  # directories than the kept count — keeps its full text; the `…` appears only
+  # when there is a further path segment to hide.
   defp shorten_url_display(display) do
     host = display |> String.split("/", parts: 2) |> hd()
-    elide_path(display, if(keep_two_dirs?(host), do: 2, else: 1))
+    elide_path(display, kept_dirs(host))
   end
 
-  # Hosts whose display keeps TWO leading path directories, because their
-  # meaningful unit is two segments deep: GitHub (`/:owner/:repo`) and this
-  # installation's own host (a vutuv profile section is `/:slug/<section>`, so
-  # the section — `/tags`, `/work_experiences` — is worth showing). Every other
-  # host still collapses after the first directory. `www.` is stripped from both
-  # the display host (in `truncate_url/1`) and the endpoint host so the two
-  # forms compare equal, and the own host is derived from the endpoint rather
-  # than a literal `vutuv.de`, so it is correct on any third-party installation.
-  @two_dir_hosts ~w(github.com)
+  # Hosts whose display keeps more than one leading path directory, because
+  # their meaningful unit sits deeper: GitHub is `/:owner/:repo`, and the New
+  # York Times dates an article, `/:year/:month/:day/:desk/<headline>`, so one
+  # directory leaves a bare "nytimes.com/2026/…" that names nothing while four
+  # carry the date and the section. Every other host still collapses after the
+  # first directory. The host is matched whole, never by suffix: a subdomain is
+  # a different site with its own path shape.
+  @dirs_by_host %{"github.com" => 2, "nytimes.com" => 4}
 
-  defp keep_two_dirs?(host) do
-    host in @two_dir_hosts or Fediverse.local_host?(host)
+  # This installation's own host keeps TWO (a vutuv profile section is
+  # `/:slug/<section>`, so the section — `/tags`, `/work_experiences` — is worth
+  # showing). `www.` is stripped from both the display host (in `truncate_url/1`)
+  # and the endpoint host so the two forms compare equal, and the own host is
+  # derived from the endpoint rather than a literal `vutuv.de`, so it is correct
+  # on any third-party installation.
+  defp kept_dirs(host) do
+    if Fediverse.local_host?(host), do: 2, else: Map.get(@dirs_by_host, host, 1)
   end
 
   # Keep the host plus up to `keep` leading path directories; a deeper, non-empty
