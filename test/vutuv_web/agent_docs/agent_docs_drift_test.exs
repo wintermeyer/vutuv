@@ -1134,12 +1134,19 @@ defmodule VutuvWeb.AgentDocsDriftTest do
     doc = Jason.decode!(rendered.json)
     assert doc["type"] == "directory"
 
-    # The one figure the page states, in every format. It named the whole
-    # membership and the Fediverse head count beside it until 2026-08-13; those
-    # moved out of this page entirely (the top bar's people pill carries them),
-    # so no format may reintroduce them here.
-    assert_fact_everywhere(rendered, "#{doc["total"]} vutuv member")
+    # The sentence the page states, in every format — and it carries no figure.
+    # The whole membership and the Fediverse head count left in 2026-08-13 (the
+    # top bar's people pill carries them) and the listed count on 2026-08-28, so
+    # no format may reintroduce either as prose.
+    assert_fact_everywhere(rendered, "vutuv member")
+    refute rendered.html =~ "#{doc["total"]} vutuv member"
     refute Map.has_key?(doc, "members_total")
+
+    # The count survives as **data**, for a reader with no A-Z strip in front of
+    # them: `total` plus a per-letter `count`. That asymmetry is the point of
+    # having two renderings, not drift between them.
+    assert doc["total"] > 0
+    assert Enum.any?(doc["letters"], &(&1["count"] > 0))
   end
 
   test "member directory letter page in every format", %{tag: tag} do

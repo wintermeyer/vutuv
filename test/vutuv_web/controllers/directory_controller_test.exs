@@ -36,7 +36,9 @@ defmodule VutuvWeb.DirectoryControllerTest do
 
     test "counts every listed member, opted out of search engines or not", %{conn: conn} do
       # Otto Opt-Out and Özil both file under O. Before v7.407.0 his noindex?
-      # kept the count at 1 and left him off his own letter page.
+      # kept the count at 1 and left him off his own letter page. The figure is
+      # `data-count` only — invisible since 2026-08-28, but still what decides
+      # whether a letter tile is a link.
       html = get(conn, ~p"/system/members") |> html_response(200)
 
       assert html =~ ~s(data-letter="o" data-count="2")
@@ -44,11 +46,11 @@ defmodule VutuvWeb.DirectoryControllerTest do
       assert html =~ ~s(data-letter="x" data-count="0")
     end
 
-    test "opens with the listed count and nothing else", %{conn: conn, adler: adler} do
-      # All three confirmed members. The page used to name the whole membership
-      # and the Fediverse head count below that; both are the top bar's
-      # business, and three figures above an A-Z strip read as a statistics
-      # page (Stefan, 2026-08-13).
+    test "prints no figure at all", %{conn: conn, adler: adler} do
+      # Three members, one of them with a Fediverse follower. The page named the
+      # whole membership and that head count until 2026-08-13, its own listed
+      # count until 2026-08-28, and now says none of them: an A-Z index reads as
+      # a statistics page the moment it opens with numbers (Stefan, both times).
       Repo.insert!(%Vutuv.Fediverse.Follower{
         user_id: adler.id,
         actor_uri: "https://remote.example/users/frida",
@@ -57,10 +59,23 @@ defmodule VutuvWeb.DirectoryControllerTest do
 
       html = get(conn, ~p"/system/members") |> html_response(200)
 
-      assert html =~ "3 vutuv members, filed alphabetically by last name."
+      assert html =~ "All vutuv members, filed alphabetically by last name."
+      refute html =~ "3 vutuv members"
       refute html =~ "open to search engines"
       refute html =~ "members in total"
       refute html =~ "from the Fediverse"
+
+      # Not a digit anywhere in the A-Z strip. Asserted on the rendered strip
+      # rather than on the sentence, because the tile counts were the other half
+      # of the change and a `refute html =~ "3 vutuv members"` would pass with
+      # every one of them still printed.
+      assert [strip] =
+               html
+               |> LazyHTML.from_document()
+               |> LazyHTML.query("#directory-letters")
+               |> Enum.to_list()
+
+      refute LazyHTML.text(strip) =~ ~r/\d/
     end
 
     test "says the same in German", %{conn: conn} do
@@ -73,7 +88,7 @@ defmodule VutuvWeb.DirectoryControllerTest do
         |> get(~p"/system/members")
         |> html_response(200)
 
-      assert html =~ "3 vutuv Mitglieder, alphabetisch nach Nachname sortiert."
+      assert html =~ "Alle vutuv Mitglieder, alphabetisch nach Nachname sortiert."
       refute html =~ "Insgesamt gibt es"
     end
 

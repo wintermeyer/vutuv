@@ -37,10 +37,11 @@ defmodule VutuvWeb.DirectoryController do
     # `push_patch` its own URL.
     search_session = %{"q" => query, "fields" => params["fields"], "show" => params["show"]}
 
-    # Deliberately the listed count and nothing else. The whole membership and
-    # the Fediverse head count sat beside it until 2026-08-13; both are the top
-    # bar's business (`#people-total` is on this page too), and three figures
-    # above the A-Z strip turned a directory into a statistics page.
+    # The page states no figure at all: the whole membership and the Fediverse
+    # head count left in 2026-08-13 (they are the top bar's business, and
+    # `#people-total` is on this page too) and the listed count on 2026-08-28.
+    # `total` is still computed, for the agent formats — a machine reader has no
+    # A-Z strip to look at, so there a count is data worth carrying.
     AgentDocs.respond(conn,
       html: fn conn ->
         conn
@@ -52,7 +53,6 @@ defmodule VutuvWeb.DirectoryController do
         |> render("index.html",
           page_title: gettext("Member directory"),
           entries: entries,
-          total: total,
           search_session: search_session
         )
       end,
