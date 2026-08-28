@@ -101,7 +101,9 @@ defmodule VutuvWeb.OrganizationLive.Show do
   # The organization page's "People" section (issue #931): members whose linked work
   # experience is at this organization, current members first. Loaded once at mount
   # (state-transition events keep their own paging); "Load more" appends the next
-  # page. The list honors the member-directory privacy gate in the context.
+  # page. Who may appear is `Organizations.people_base/1`'s gate: confirmed and
+  # not moderation-hidden, with the search-engine opt-out no longer among it
+  # (v7.433.0) — that one buys the row's `rel="nofollow"` instead.
   defp assign_people(socket, organization) do
     total = Organizations.organization_people_count(organization)
 
@@ -674,11 +676,18 @@ defmodule VutuvWeb.OrganizationLive.Show do
               <span class="text-sm text-slate-600 dark:text-slate-400">{compact_count(@people_total)}</span>
             </div>
             <ul id="organization-people" class="mt-4 space-y-3">
+              <%!-- rel="nofollow" for a member who asked search engines to leave
+              their profile alone. Since v7.433.0 the list shows them like anybody
+              else — the switch is about search results, not about colleagues —
+              and the `rel` is what it buys, the same as a directory row. This
+              list builds its own markup rather than using `card_list`, so it
+              does not inherit that rule and has to ask for it. --%>
               <li :for={person <- @people} class="flex items-center gap-3">
                 <.avatar user={person.user} size="sm" shape="circle" />
                 <div class="min-w-0">
                   <a
                     href={"/" <> person.user.username}
+                    rel={UserHelpers.profile_rel(person.user)}
                     class="font-semibold text-slate-900 hover:text-brand-700 dark:text-slate-100 dark:hover:text-brand-400"
                   >
                     {UserHelpers.full_name(person.user)}

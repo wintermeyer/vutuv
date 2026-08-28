@@ -2,8 +2,11 @@ defmodule VutuvWeb.OrganizationPeopleTest do
   @moduledoc """
   The organization page's People section (issue #931): members whose linked work
   experience is at the organization appear, current members first, past members
-  tagged "Former", under the member-directory privacy gate. Load-more appends
-  the next page over the socket.
+  tagged "Former". Load-more appends the next page over the socket.
+
+  Who may appear is confirmed-and-not-moderation-hidden, and deliberately **not**
+  the search-engine opt-out (v7.433.0): a switch about Google must not hide
+  somebody from their own employer's page. It buys the row's `rel="nofollow"`.
   """
   use VutuvWeb.ConnCase, async: true
 
@@ -29,21 +32,53 @@ defmodule VutuvWeb.OrganizationPeopleTest do
     assert html =~ ~s(href="/cara")
   end
 
-  test "hides a member who opted out of public listing", %{conn: conn} do
+  test "lists a member who opted out of search engines, rel=nofollow", %{conn: conn} do
     organization = insert(:organization)
-    hidden = insert(:activated_user, first_name: "Hidden", last_name: "Person", noindex?: true)
+
+    opted_out =
+      insert(:activated_user,
+        first_name: "Nina",
+        last_name: "Noindex",
+        username: "nina",
+        noindex?: true
+      )
 
     insert(:work_experience,
-      user: hidden,
+      user: opted_out,
       organization_page: organization,
-      title: "Secret Role",
+      title: "Quiet Role",
       end_year: nil
     )
 
     html = conn |> get(path(organization)) |> html_response(200)
 
-    refute html =~ "Hidden Person"
-    refute html =~ "Secret Role"
+    # She is on her own employer's page like anybody else. Until v7.433.0 the
+    # search-engine switch hid her from it — from colleagues and from herself —
+    # while the directory, search and every follower list showed her.
+    assert html =~ "Nina Noindex"
+    assert html =~ "Quiet Role"
+
+    # What the switch buys instead: crawlers are told not to walk through.
+    assert [_link] = nofollow_links(html, "nina")
+  end
+
+  test "a member who allows indexing gets no nofollow", %{conn: conn} do
+    # The other side of the pair — without it the assertion above passes just as
+    # well with `rel="nofollow"` stamped on every row.
+    organization = insert(:organization)
+    open = insert(:activated_user, first_name: "Otto", last_name: "Open", username: "ottoopen")
+
+    insert(:work_experience,
+      user: open,
+      organization_page: organization,
+      title: "Loud Role",
+      end_year: nil
+    )
+
+    html = conn |> get(path(organization)) |> html_response(200)
+
+    assert html =~ "Otto Open"
+    assert nofollow_links(html, "ottoopen") == []
   end
 
   test "tags a past member as Former", %{conn: conn} do

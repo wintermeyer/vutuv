@@ -5897,6 +5897,32 @@ defmodule Vutuv.Fediverse do
   def subject_kind(%RemotePost{}), do: :remote_post
   def subject_kind(%Note{}), do: :note
 
+  @doc """
+  What makes two cards **the same card**: `{kind, id}` for a thing from another
+  network.
+
+  This is the identity `VutuvWeb.PostLive.RemoteActionsComponent.dom_id/2` is
+  built from, and therefore the only key a page may dedupe its cards by. The two
+  have to be the same question, because the bar is a LiveComponent keyed by it:
+  a page that renders two cards for one subject emits one LiveView id twice,
+  which raises inside `render_pending_components/6` during the **static** render
+  — the page 500s rather than degrading.
+
+  That is not hypothetical. `/feed` went down on 2026-08-28 (v7.422.1) because
+  `Vutuv.Posts.attach_remote_parents/3` deduped its batch reads by
+  `remote_post.id` and then placed the cards from a list keyed by `post_id`, so
+  two member posts answering one cached post each drew the parent. The rule was
+  written in prose beside three sibling implementations and broken by the fourth
+  in the very commit that wrote it down. Prose beside an implementation is not
+  an invariant; one function every site keys on is.
+
+  So: whenever a page decides how many cards a subject gets — `dedupe_remote/1`,
+  `attach_thread_notes/3`, `attach_remote_parents/3`, and whatever comes next —
+  dedupe on this, not on a field picked by hand. A `grep` for it finds every
+  site that owes the rule.
+  """
+  def subject_key(subject), do: {subject_kind(subject), subject.id}
+
   defp subject_schema(%RemotePost{}), do: RemotePost
   defp subject_schema(%Note{}), do: Note
 
