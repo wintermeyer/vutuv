@@ -1204,6 +1204,12 @@ defmodule VutuvWeb.PostComponents do
     doc: "the host's translation map (issue #1462), key {:note, id} — see <.post_card>"
   )
 
+  attr(:mode, :atom,
+    default: :preview,
+    values: [:preview, :full],
+    doc: "see <.remote_post_card> — `:full` is the answering page, which is about this one reply"
+  )
+
   def remote_reply_card(assigns) do
     note = assigns.note
     translation = card_translation(assigns, {:note, note.id}, note.content_text, note.language)
@@ -1211,6 +1217,8 @@ defmodule VutuvWeb.PostComponents do
     assigns =
       assigns
       |> assign(:translation, translation)
+      |> assign(:body_id, "remote-reply-body-#{note.id}")
+      |> assign(:body_style, post_body_style(User.post_prefs(assigns.viewer)))
       |> assign(:author, Note.label(note))
       |> assign(:handle, Note.display_handle(note))
       |> assign(:host, Note.host(note.actor_uri))
@@ -1290,6 +1298,9 @@ defmodule VutuvWeb.PostComponents do
             warning={@warned? && translated_summary(@translation, @note.summary)}
             text={@translation.body_source}
             lang={@translation.lang}
+            mode={@mode}
+            body_id={@body_id}
+            body_style={@body_style}
           />
 
           <.translation_line
@@ -1623,6 +1634,23 @@ defmodule VutuvWeb.PostComponents do
   # nil renders no attribute.
   attr(:lang, :string, default: nil)
 
+  # `:preview` (a feed, a profile, a tag timeline) cuts the body to the reader's
+  # own line budget and offers the in-place "Read more" a member's post already
+  # gets — the same clamp, the same hook, the same control, so a long post from
+  # another network costs the timeline what a long post from here costs and no
+  # reader has to learn a second way to open one. Text is all these cards ever
+  # hold (`render_remote/1` drops every image), so the plain line clamp fits
+  # unless a link screenshot floats beside it. `:full` renders the body whole,
+  # for the pages that ARE this one post.
+  attr(:mode, :atom, default: :preview, values: [:preview, :full])
+  attr(:body_id, :string, default: nil, doc: "the clamp body's DOM id; :preview needs one")
+  attr(:body_style, :string, default: nil, doc: "the reader's --post-clamp-* override, or nil")
+
+  # The auto link screenshot, when the card has one. It has to render INSIDE
+  # the clamp block, as its first child: a float placed outside a height-clamped
+  # `flow-root` box is not wrapped by the text at all, it narrows the whole box.
+  slot(:float)
+
   defp remote_body(assigns) do
     {text, hashtags} = Markdown.split_trailing_hashtags(assigns.text)
 
@@ -1646,26 +1674,79 @@ defmodule VutuvWeb.PostComponents do
               {gettext("Hide")}
             </span>
           </summary>
-          <div
+          <%!-- A warned post is clamped inside its own lid: the reader opened it
+          to read the text, not to be handed ten thousand characters of it. The
+          measurement runs on the `toggle` sweep in app.js, since a closed
+          `<details>` paints nothing and cannot be measured while shut. --%>
+          <.remote_prose
             :if={@body?}
+            html={@html}
             lang={@lang}
-            class="markdown markdown--post mt-1.5 text-sm text-slate-700 dark:text-slate-300"
-          >
-            {Phoenix.HTML.raw(@html)}
-          </div>
+            mode={@mode}
+            body_id={@body_id}
+            body_style={@body_style}
+            class="mt-1.5"
+          />
           <.remote_tags tags={@tags} />
         </details>
       <% else %>
-        <div
+        <.remote_prose
           :if={@body?}
+          html={@html}
           lang={@lang}
-          class="markdown markdown--post text-sm text-slate-700 dark:text-slate-300"
+          mode={@mode}
+          body_id={@body_id}
+          body_style={@body_style}
         >
-          {Phoenix.HTML.raw(@html)}
-        </div>
+          <:float :for={float <- @float}>{render_slot(float)}</:float>
+        </.remote_prose>
         <.remote_tags tags={@tags} />
       <% end %>
     </div>
+    """
+  end
+
+  # The skin a stranger's words wear wherever they appear: a size down from a
+  # member's post and a shade quieter. One definition, so a clamped remote body
+  # and a whole one cannot drift into two different types — and in `:preview` it
+  # rides the WRAPPER, never the clamp body (see `<.preview_body>`'s `class`).
+  defp remote_prose_class, do: "text-sm text-slate-700 dark:text-slate-300"
+
+  # The remote body's prose. `:preview` routes it through the shared
+  # `<.preview_body>` — the same wrapper, hook, fade and "Read more" a member's
+  # post gets — so there is one clamp mechanism in the app and not two.
+  attr(:html, :any, required: true)
+  attr(:lang, :string, default: nil)
+  attr(:mode, :atom, default: :preview, values: [:preview, :full])
+  attr(:body_id, :string, default: nil)
+  attr(:body_style, :string, default: nil)
+  attr(:class, :string, default: nil)
+  slot(:float)
+
+  defp remote_prose(%{mode: :full} = assigns) do
+    ~H"""
+    <%!-- The float rides inside the body, whose `.markdown--post::after`
+    clearfix keeps a tall shot from spilling past the text into the action bar
+    below — the same place full mode puts a member post's screenshot. --%>
+    <div lang={@lang} class={["markdown markdown--post", remote_prose_class(), @class]}>
+      {render_slot(@float)}
+      {Phoenix.HTML.raw(@html)}
+    </div>
+    """
+  end
+
+  defp remote_prose(assigns) do
+    ~H"""
+    <.preview_body
+      body_id={@body_id}
+      body_html={Phoenix.HTML.raw(@html)}
+      body_style={@body_style}
+      class={[remote_prose_class(), @class]}
+      lang={@lang}
+      wrap={@float != []}
+    >
+      <:float :for={float <- @float}>{render_slot(float)}</:float>
+    </.preview_body>
     """
   end
 
@@ -2322,6 +2403,13 @@ defmodule VutuvWeb.PostComponents do
     doc: "the host's translation map (issue #1462), key {:remote_post, id} — see <.post_card>"
   )
 
+  attr(:mode, :atom,
+    default: :preview,
+    values: [:preview, :full],
+    doc:
+      "`:preview` (every timeline: the feed, a profile, a tag page, the saved list) cuts the body to the reader's line budget like a member's post; `:full` renders it whole and is for the pages that ARE this one post"
+  )
+
   def remote_post_card(assigns) do
     post = assigns.remote_post
     account = post.remote_account
@@ -2332,6 +2420,12 @@ defmodule VutuvWeb.PostComponents do
     assigns =
       assigns
       |> assign(:translation, translation)
+      |> assign(:body_id, "remote-post-body-#{post.id}")
+      # The reader's own line budget, from the SAME `User.post_prefs/1` a
+      # member's post reads: "how much of a post before I ask for more" is a
+      # question about their screen, not about which server the post came from,
+      # and a second knob for remote posts is one nobody would know to look for.
+      |> assign(:body_style, post_body_style(User.post_prefs(assigns.viewer)))
       |> assign(:account, account)
       |> assign(:initials, name_initials(RemoteAccount.display_name(account) || account.handle))
       |> assign_remote_link_screenshot(post, assigns.images)
@@ -2446,27 +2540,30 @@ defmodule VutuvWeb.PostComponents do
           </.remote_restricted_note>
 
           <%!-- The auto link screenshot floats beside the text exactly as on a
-          member post's card, ahead of the body (a float only wraps what
-          follows it); the flow-root fence keeps a tall shot beside a short
-          body from spilling over the action bar below. A warned post never
-          has one, so the float can never sit beside a closed lid. --%>
-          <div class="flow-root">
-            <.link_screenshot_image
-              :if={@link_screenshot}
-              screenshot={@link_screenshot}
-              pixelated_url={@screenshot_pixelated}
-              class="float-right mb-1 ml-4 mt-1.5 w-2/5 sm:w-1/3"
-            />
-            <.remote_body
-              warning={
-                RemotePost.warned?(@remote_post) &&
-                  (translated_summary(@translation, @remote_post.summary) ||
-                     gettext("Marked as sensitive by its author"))
-              }
-              text={@translation.body_source}
-              lang={@translation.lang}
-            />
-          </div>
+          member post's card, as the body's first child (a float only wraps what
+          follows it); the body contains it, so a tall shot beside a short body
+          cannot spill over the action bar below. A warned post never has one,
+          so the float can never sit beside a closed lid. --%>
+          <.remote_body
+            warning={
+              RemotePost.warned?(@remote_post) &&
+                (translated_summary(@translation, @remote_post.summary) ||
+                   gettext("Marked as sensitive by its author"))
+            }
+            text={@translation.body_source}
+            lang={@translation.lang}
+            mode={@mode}
+            body_id={@body_id}
+            body_style={@body_style}
+          >
+            <:float :if={@link_screenshot}>
+              <.link_screenshot_image
+                screenshot={@link_screenshot}
+                pixelated_url={@screenshot_pixelated}
+                class="float-right mb-1 ml-4 mt-1.5 w-2/5 sm:w-1/3"
+              />
+            </:float>
+          </.remote_body>
 
           <.translation_line
             state={@translation.state}
@@ -3245,7 +3342,7 @@ defmodule VutuvWeb.PostComponents do
                 body_id={@body_id}
                 body_html={@body_html}
                 body_style={@body_style}
-                class="mt-2"
+                class="mt-2 text-slate-800 dark:text-slate-200"
                 tags={@post.tags}
                 lang={@translation.lang}
                 wrap
@@ -3275,7 +3372,7 @@ defmodule VutuvWeb.PostComponents do
                 body_id={@body_id}
                 body_html={@body_html}
                 body_style={@body_style}
-                class="mt-2"
+                class="mt-2 text-slate-800 dark:text-slate-200"
                 tags={@post.tags}
                 lang={@translation.lang}
                 wrap
@@ -3294,7 +3391,7 @@ defmodule VutuvWeb.PostComponents do
                 body_id={@body_id}
                 body_html={@body_html}
                 body_style={@body_style}
-                class="mt-2"
+                class="mt-2 text-slate-800 dark:text-slate-200"
                 media={@inline_media?}
                 tags={@post.tags}
                 lang={@translation.lang}
@@ -3516,7 +3613,13 @@ defmodule VutuvWeb.PostComponents do
   attr(:body_id, :string, required: true)
   attr(:body_html, :any, required: true)
   attr(:body_style, :string, default: nil)
-  attr(:class, :string, default: nil)
+  # The prose's own type and colour ride HERE, on the wrapper, and are inherited
+  # by the clamp body — never put a `text-*` or `leading-*` on the body itself.
+  # `.post-clamp--wrap` measures its budget in `lh`, which is only portable while
+  # the body declares no type of its own (see the note beside that rule in
+  # components.css), so a size on the body would cut the same post at two
+  # different places in Chrome and WebKit.
+  attr(:class, :any, default: nil)
   # Wrap mode: a small image/screenshot floats beside the body (the `:float`
   # slot) and the text flows around AND below it. `-webkit-line-clamp` cannot wrap
   # around a float, so wrap mode clamps by height (`.post-clamp--wrap`) inside a
@@ -3559,7 +3662,7 @@ defmodule VutuvWeb.PostComponents do
               @wrap -> "post-clamp--wrap"
               true -> "post-clamp"
             end,
-            "markdown markdown--post text-slate-800 dark:text-slate-200"
+            "markdown markdown--post"
           ]}
           data-clamp-body
           data-post-body

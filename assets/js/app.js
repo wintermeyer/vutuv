@@ -190,6 +190,29 @@ window.addEventListener("resize", () => {
   previewClampResizeTimer = setTimeout(sweepPreviewClamps, 150)
 })
 
+// A <details> that opens is the one reflow nothing above catches: a shut lid
+// paints nothing, so revealPreviewClamp bails on its zero-height body and the
+// clamped text behind it would sit cut with no "Read more" to open it. Toggle
+// does not bubble, hence the capture phase.
+//
+// Only the lid that moved can have gone from unpaintable to paintable, so this
+// measures its own subtree and NOT the page: nearly every <details> in the app
+// clamps nothing (a ⋯ menu on each of twenty feed cards, the sensitive-image
+// lid, the tag timeline's filter panel), and each of those opening or closing
+// would otherwise force a layout read on every preview in the document. There
+// is deliberately no `if (!el.open) return`: a CLOSING [data-remote-summary] is
+// exactly when its clamped copy becomes measurable again.
+document.addEventListener(
+  "toggle",
+  (e) => {
+    const el = e.target
+    if (!(el instanceof Element)) return
+    if (el.matches(CLAMP_PROBES)) revealPreviewClamp(el)
+    el.querySelectorAll(CLAMP_PROBES).forEach(revealPreviewClamp)
+  },
+  true
+)
+
 // Quote a passage into a reply (issue #1114). Mark part of a post, press that
 // post's Reply control, and the reply page opens with the marked text already
 // in the composer as a blockquote. No new chrome: the selection rides along on

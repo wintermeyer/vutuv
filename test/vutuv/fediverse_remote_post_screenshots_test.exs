@@ -369,6 +369,22 @@ defmodule Vutuv.FediverseRemotePostScreenshotsTest do
       assert html =~ "/screenshots/#{job_of(post).id}/thumb-0123456789ab.avif"
     end
 
+    test "on a timeline the shot sits INSIDE the clamped body, ahead of the text" do
+      post = recorded_post()
+      make_ready(job_of(post))
+
+      html = card(post)
+
+      # Two float rules meet here. A float only wraps what FOLLOWS it, so the
+      # shot has to come before the prose; and a float left outside a
+      # height-clamped `flow-root` box is not wrapped by it at all, it merely
+      # narrows the whole box — so it has to be the clamp block's first child.
+      # `post-clamp--wrap` is the body saying it switched to the height clamp a
+      # float needs (`-webkit-line-clamp` cannot wrap around one).
+      assert [_before, clamped] = String.split(html, "post-clamp--wrap", parts: 2)
+      assert clamped =~ ~r/data-link-screenshot.*Read/s
+    end
+
     test "an unreleased or missing capture renders nothing" do
       post = recorded_post()
       refute card(post) =~ "data-link-screenshot"
