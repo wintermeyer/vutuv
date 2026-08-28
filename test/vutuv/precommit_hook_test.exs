@@ -16,6 +16,14 @@ defmodule Vutuv.PrecommitHookTest do
   degraded path (missing dependency, unresolvable directory) that must fail
   closed rather than wave the push through.
 
+  A third defect is the opposite failure — the gate charging a push for an
+  answer it cannot give. Its whole cost is the ~9,100-test suite, and none of
+  precommit's five steps reads a `docs/` page or a top-level Markdown file, so
+  #1774 paid ~300-900 s nine times over for one Markdown file. The exemption
+  that fixes it is calibrated here from both sides: without it the two `SKIP`
+  cases go red, and widening it to "anything ending in `.md`" reds the two that
+  pin `mix.exs` and a build-input Markdown file to the full gate.
+
   The hook's `--explain` mode prints its decision without running precommit;
   that mode exists for this test, and the settings.json invocation passes no
   arguments so it can never be reached in normal use.
@@ -142,6 +150,78 @@ defmodule Vutuv.PrecommitHookTest do
     end
   end
 
+  describe "the documentation exemption" do
+    # `mix precommit`'s cost is its ~9,100-test suite, and none of its five
+    # steps can read a `docs/` page, a `.github/` workflow or a top-level
+    # Markdown file. A push carrying only those buys an answer about code it
+    # never touched — #1774 paid that run nine times for one Markdown file.
+    test "a push carrying only documentation skips the run", ctx do
+      repo =
+        tmp_project(["CONTRIBUTING.md", "docs/architecture/feed.md", ".github/workflows/ci.yml"])
+
+      decision = decide(ctx, "git -C #{repo} push")
+
+      assert decision =~ "SKIP", "expected a skip, got: #{decision}"
+      assert decision =~ "CI still checks everything"
+    end
+
+    test "one file precommit can read pays the whole gate", ctx do
+      # The mixed push is the case worth pinning: the docs do not dilute the
+      # source file beside them.
+      repo = tmp_project(["CONTRIBUTING.md", "lib/vutuv/thing.ex"])
+
+      assert decide(ctx, "git -C #{repo} push") == "PUSH #{repo}"
+    end
+
+    test "a version bump is not documentation", ctx do
+      # `mix.exs` is compiled, formatted and asserted on by `BumpVersionTest`,
+      # so a PR branch carrying its own bump still pays the full gate.
+      repo = tmp_project(["mix.exs"])
+
+      assert decide(ctx, "git -C #{repo} push") == "PUSH #{repo}"
+    end
+
+    test "Markdown the build reads is not documentation", ctx do
+      # The reason the rule is deny-first rather than extension-first:
+      # `priv/help/*.md` compiles into `HelpController`, `priv/dev_docs/*.md`
+      # into `DevDocController`, and `.claude/rules/design.md` is read and
+      # asserted on by the dark-mode tests.
+      for path <- [".claude/rules/design.md", "priv/help/imprint_en.md"] do
+        repo = tmp_project([path])
+
+        assert decide(ctx, "git -C #{repo} push") == "PUSH #{repo}",
+               "#{path} is a build input, not documentation"
+      end
+    end
+  end
+
+  describe "the exemption's degraded paths" do
+    # Rule 1 of the hook: an unanswered question is not an exemption. Each of
+    # these carries documentation only, and each must still run the gate
+    # because the hook cannot prove what the push would put on the remote.
+    test "a push naming another ref pays the gate", ctx do
+      repo = tmp_project(["CONTRIBUTING.md"])
+
+      assert decide(ctx, "git -C #{repo} push origin main") == "PUSH #{repo}"
+      assert decide(ctx, "git -C #{repo} push --all") == "PUSH #{repo}"
+      # Spelled as this branch, it is the same push and still skips.
+      assert decide(ctx, "git -C #{repo} push origin HEAD") =~ "SKIP"
+    end
+
+    test "a detached HEAD pays the gate", ctx do
+      repo = tmp_project(["CONTRIBUTING.md"])
+      {_, 0} = System.cmd("git", ["-C", repo, "checkout", "--quiet", "--detach"])
+
+      assert decide(ctx, "git -C #{repo} push") == "PUSH #{repo}"
+    end
+
+    test "no merge base to compare against pays the gate", ctx do
+      repo = tmp_project(["CONTRIBUTING.md"], trunk: false)
+
+      assert decide(ctx, "git -C #{repo} push") == "PUSH #{repo}"
+    end
+  end
+
   # Runs the hook in `--explain` mode against a payload and returns its verdict.
   # `System.cmd/3` cannot feed stdin, so the payload goes in through a file
   # redirect run by `sh`.
@@ -191,6 +271,43 @@ defmodule Vutuv.PrecommitHookTest do
     end
 
     tmp
+  end
+
+  # A throwaway repository shaped like the vutuv checkout: a `mix.exs` on a base
+  # commit registered as `upstream/main`, then one commit on branch `work`
+  # touching `paths`. That second commit is what a push from it would carry.
+  # `trunk: false` leaves the trunk ref out, so nothing can be compared.
+  defp tmp_project(paths, opts \\ []) do
+    repo = tmp_repo()
+    git = fn args -> {_, 0} = System.cmd("git", ["-C", repo | args]) end
+
+    git.(["config", "user.email", "hook-test@example.com"])
+    git.(["config", "user.name", "Hook Test"])
+    git.(["config", "commit.gpgsign", "false"])
+
+    File.write!(Path.join(repo, "mix.exs"), "# base\n")
+    git.(["add", "-A"])
+    git.(["commit", "--quiet", "-m", "base"])
+    git.(["branch", "-M", "work"])
+
+    if Keyword.get(opts, :trunk, true) do
+      {head, 0} = System.cmd("git", ["-C", repo, "rev-parse", "HEAD"])
+      git.(["update-ref", "refs/remotes/upstream/main", String.trim(head)])
+    end
+
+    for path <- paths do
+      full = Path.join(repo, path)
+      File.mkdir_p!(Path.dirname(full))
+      File.write!(full, "changed by #{inspect(self())}\n")
+    end
+
+    git.(["add", "-A"])
+    git.(["commit", "--quiet", "-m", "work"])
+
+    # The hook reports the resolved toplevel, and on macOS the temp directory
+    # reaches it through the `/var` → `/private/var` symlink.
+    {toplevel, 0} = System.cmd("git", ["-C", repo, "rev-parse", "--show-toplevel"])
+    String.trim(toplevel)
   end
 
   defp shell_quote(value), do: "'" <> String.replace(value, "'", ~S('\'')) <> "'"
