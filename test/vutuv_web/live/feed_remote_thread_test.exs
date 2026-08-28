@@ -205,6 +205,49 @@ defmodule VutuvWeb.FeedRemoteThreadTest do
                :binary.match(html, "meine Antwort darauf")
     end
 
+    test "two answers to the same post out there draw it once, not twice", %{conn: conn} do
+      # This 500ed /feed in production on 2026-08-28. The card's action bar is a
+      # LiveComponent keyed by the cached post
+      # (`RemoteActionsComponent.dom_id(:remote_post, id)`), so drawing the card
+      # above both answers emits one id twice, and LiveView raises
+      # `found duplicate ID` inside `render_pending_components/6` — during the
+      # **static** render, so the page does not degrade, it 500s. Two members
+      # answering the same post out there is ordinary behaviour and needs no
+      # unusual data at all: the first such pair in the database took the feed
+      # down for every reader who had both answers on one page.
+      {conn, user} = reader(conn)
+      remote = cached_post("was da draussen steht")
+
+      for body <- ["meine Antwort darauf", "und meine auch"] do
+        answerer = insert(:activated_user, fediverse_followers?: true)
+        {:ok, _actor} = Fediverse.ensure_actor(answerer)
+        Social.follow(user, answerer.id)
+
+        {:ok, _post} =
+          Posts.create_remote_post_reply(Repo.reload!(answerer), remote, %{body: body})
+      end
+
+      {:ok, view, _html} = live(conn, ~p"/feed")
+
+      html = timeline(view)
+      assert html =~ "meine Antwort darauf"
+      assert html =~ "und meine auch"
+
+      # The cached post is drawn exactly once — for the first answer that
+      # claimed it. The second keeps the bare "Replying to …" line, which is
+      # what this feature replaced and is still far better than a 500.
+      assert html |> String.split("was da draussen steht") |> length() == 2
+
+      # One action bar for it, too — the bar is what carries the id that
+      # raised, and `subject_id` rides every one of its controls as
+      # `phx-value-id`. Counting the like control is the closest the DOM comes
+      # to counting the LiveComponents; the crash above is the real assertion,
+      # and it is what goes red when the fix is taken back out.
+      assert html
+             |> String.split(~s(phx-value-id="#{remote.id}"))
+             |> length() > 1
+    end
+
     test "a reader who does not federate may read it but not pass it on", %{conn: conn} do
       # These cards now reach members who have nothing to do with the
       # fediverse, since the thread they sit in is an ordinary vutuv thread. The
