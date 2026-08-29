@@ -4,11 +4,15 @@ defmodule VutuvWeb.MastodonApi.PushController do
   instead of polling.
 
   Keyed on the access token, so one device is one subscription and revoking the
-  app takes it with it. The `server_key` a client needs to build the browser
-  subscription is this installation's VAPID public key, which every
-  installation has (`Vutuv.MastodonApi.WebPush` derives one where the operator
-  pinned none). Only an installation that switched push off answers 403, rather
-  than accepting a subscription that could never be delivered to.
+  app takes it with it. `subscription[standard]` rides along and decides which
+  content encoding the pushes to this device use; `Vutuv.MastodonApi.WebPush`
+  owns what that means and why leaving it out is the useful default.
+
+  The `server_key` a client needs to build the browser subscription is this
+  installation's VAPID public key, which every installation has (`WebPush`
+  derives one where the operator pinned none). Only an installation that
+  switched push off answers 403, rather than accepting a subscription that could
+  never be delivered to.
   """
 
   use VutuvWeb, :controller
@@ -29,7 +33,7 @@ defmodule VutuvWeb.MastodonApi.PushController do
       %PushSubscription{user_id: conn.assigns.current_user.id, api_token_id: token.id}
       |> PushSubscription.changeset(attrs)
       |> Repo.insert(
-        on_conflict: {:replace, [:endpoint, :p256dh, :auth, :alerts, :updated_at]},
+        on_conflict: {:replace, [:endpoint, :p256dh, :auth, :alerts, :standard, :updated_at]},
         conflict_target: :api_token_id
       )
       |> case do
@@ -86,14 +90,21 @@ defmodule VutuvWeb.MastodonApi.PushController do
 
   # Mastodon nests the browser's own PushSubscription under `subscription`, and
   # the alert preferences under `data`.
-  defp subscription_attrs(%{"subscription" => %{"endpoint" => endpoint, "keys" => keys}} = params)
+  defp subscription_attrs(
+         %{"subscription" => %{"endpoint" => endpoint, "keys" => keys} = subscription} = params
+       )
        when is_binary(endpoint) and is_map(keys) do
     {:ok,
      %{
        "endpoint" => endpoint,
        "p256dh" => keys["p256dh"],
        "auth" => keys["auth"],
-       "alerts" => params["data"]["alerts"] || %{}
+       "alerts" => params["data"]["alerts"] || %{},
+       # Written on every create and never left over from the row this one
+       # replaces: the same device can be resubscribed by a client that has
+       # since learned the standard encoding, or by an older build that has
+       # not. Absent reads as false — see `Vutuv.MastodonApi.WebPush`.
+       "standard" => subscription["standard"]
      }}
   end
 
@@ -104,6 +115,7 @@ defmodule VutuvWeb.MastodonApi.PushController do
       id: subscription.id,
       endpoint: subscription.endpoint,
       alerts: subscription.alerts,
+      standard: subscription.standard,
       server_key: WebPush.public_key(),
       policy: "all"
     }
