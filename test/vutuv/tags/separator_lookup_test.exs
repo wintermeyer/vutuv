@@ -82,6 +82,17 @@ defmodule Vutuv.Tags.SeparatorLookupTest do
       assert id == tag.id
     end
 
+    test "a NUL is invisible too, and would otherwise raise on the lookup itself" do
+      # The same rule as the zero-width case above with a sharper edge: this
+      # one did not miss its topic, it took the query down (#1825). Here the
+      # ranking parameter is the raw value, so the key being clean is not
+      # enough — `find_by_value/1` drops the byte itself.
+      tag = seed("Nul Byte", "nul_byte_")
+
+      assert %Tag{id: id} = Tag.find_by_value(String.replace(tag.name, " ", <<0>> <> " "))
+      assert id == tag.id
+    end
+
     test "a name with nothing to key on matches nothing, rather than grouping" do
       # These normalize to an empty key. Bucketing them would make every one of
       # them the same topic as every other.

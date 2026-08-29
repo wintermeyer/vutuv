@@ -20,6 +20,16 @@ defmodule Vutuv.Tags.MatchKey do
     call and stays two names for a human to merge.
   - **Strip zero-width characters** before comparing. Two names in the catalog
     differ only by a U+200B: invisible to every reader, distinct to Postgres.
+    A **NUL** is stripped with them and is the one that bites hardest: it is
+    valid UTF-8, Postgres refuses it outright (`22021`), and the key is bound
+    into a `SELECT` — so a name carrying one does not miss its topic, it
+    **raises on the lookup**, which no changeset scrub can reach because
+    nothing has been written yet. A hashtag out of an ActivityPub `tag` array
+    is the path that reached it (issue #1825), and `Tag.find_by_value/1` was
+    the same raise for any other typed value. Only the Elixir side needs it:
+    a stored name can never hold a NUL, since that is the very byte Postgres
+    turned away, so `sql/1` below cannot meet one and the two sides stay in
+    step.
   - **A key with nothing to key on is no key.** A value with no `[a-z0-9]` left
     (`-`, `.`) answers `nil` and matches nothing, rather than bucketing every
     such name into one topic.
@@ -31,8 +41,8 @@ defmodule Vutuv.Tags.MatchKey do
   a Postgres expression for the stored column, so they cannot drift apart.
   """
 
-  # U+200B ZERO WIDTH SPACE, U+200C ZWNJ, U+200D ZWJ, U+FEFF BOM.
-  @zero_width ~r/[\x{200B}\x{200C}\x{200D}\x{FEFF}]/u
+  # NUL, then U+200B ZERO WIDTH SPACE, U+200C ZWNJ, U+200D ZWJ, U+FEFF BOM.
+  @zero_width ~r/[\x{0000}\x{200B}\x{200C}\x{200D}\x{FEFF}]/u
   @separators ~r/[\s_-]+/u
   @keyable ~r/[a-z0-9]/u
 
