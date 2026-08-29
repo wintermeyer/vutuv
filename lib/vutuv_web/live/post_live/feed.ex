@@ -39,6 +39,7 @@ defmodule VutuvWeb.PostLive.Feed do
   alias Phoenix.LiveView.JS
   alias Vutuv.Activity
   alias Vutuv.ContentFilters
+  alias Vutuv.Fediverse
   alias Vutuv.Posts
   alias Vutuv.Posts.Post
   alias Vutuv.Social
@@ -47,6 +48,7 @@ defmodule VutuvWeb.PostLive.Feed do
   alias VutuvWeb.Live.InitAssigns
   alias VutuvWeb.Live.MountHandoff
   alias VutuvWeb.Live.PostTranslations
+  alias VutuvWeb.Live.RemoteImages
   alias VutuvWeb.Live.RemotePostActions
   alias VutuvWeb.Live.RemoteReplyActions
   alias VutuvWeb.PostTeaser
@@ -55,6 +57,11 @@ defmodule VutuvWeb.PostLive.Feed do
   # The origin's like/repost figures on a card from another network tick
   # while this page is open (issue #1283). One line, no handler.
   on_mount(VutuvWeb.Live.RemoteCounts)
+
+  # A picture on such a card appears the moment the AI gate releases it (issue
+  # #1801). The timeline mode: the cards are in a stream, so this listens and
+  # `handle_info({:remote_images_settled, …}, …)` below does the redraw.
+  on_mount(VutuvWeb.Live.RemoteImages)
 
   # What a mount loads, and what every older page after it adds. The arrival
   # page is deliberately double the rest: it is the one page nobody asked for,
@@ -1433,6 +1440,14 @@ defmodule VutuvWeb.PostLive.Feed do
     {:noreply, refresh_shown_post(socket, post_id)}
   end
 
+  # The same for a picture on a cached post from another network (issue #1801).
+  # It matters more here than for a member's own photo: a delivery draws the
+  # card in the second between recording the picture and its bytes landing, so
+  # the reader's FIRST sight of a boosted photo post is the waiting tile.
+  def handle_info({:remote_images_settled, %{remote_post_id: id}}, socket) do
+    {:noreply, refresh_remote_images(socket, id)}
+  end
+
   # The worker finished a translation this reader asked for (issue #1462):
   # swap it into the one card, or clear the pending line on a failure.
   def handle_info({:translation_ready, translation}, socket) do
@@ -1608,6 +1623,32 @@ defmodule VutuvWeb.PostLive.Feed do
     else
       _ -> socket
     end
+  end
+
+  # Re-read one cached post's pictures into every card on the page that draws it
+  # (issue #1801). Every card, not the first: the same post can be on the page
+  # twice, once as itself and once as the parent another card nests, and both
+  # show the same waiting tile. One pass in the shape `drop_note/2` uses, so the
+  # retained list and the stream are written once each rather than per hit.
+  defp refresh_remote_images(socket, remote_post_id) do
+    if Enum.any?(socket.assigns.entries, &RemoteImages.draws?(&1, remote_post_id)),
+      do: restream_remote_images(socket, remote_post_id),
+      else: socket
+  end
+
+  defp restream_remote_images(socket, remote_post_id) do
+    images = Fediverse.remote_images(remote_post_id)
+
+    {entries, changed} =
+      Enum.map_reduce(socket.assigns.entries, [], fn entry, changed ->
+        case RemoteImages.restate_entry(entry, remote_post_id, images) do
+          ^entry -> {entry, changed}
+          updated -> {updated, [updated | changed]}
+        end
+      end)
+
+    socket = assign(socket, :entries, entries)
+    Enum.reduce(changed, socket, &stream_insert(&2, :posts, &1, update_only: true))
   end
 
   # Swap the refreshed entry into the retained list by its stable entry id.

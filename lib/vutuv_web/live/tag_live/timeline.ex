@@ -47,11 +47,17 @@ defmodule VutuvWeb.TagLive.Timeline do
   alias Vutuv.Tags.Tag
   alias Vutuv.Tags.Timeline
   alias VutuvWeb.Live.InitAssigns
+  alias VutuvWeb.Live.RemoteImages
   alias VutuvWeb.Live.RemotePostActions
 
   # The origin's like/repost figures on a card from another network tick
   # while this page is open (issue #1283). One line, no handler.
   on_mount(VutuvWeb.Live.RemoteCounts)
+
+  # And a picture on such a card appears the moment the AI gate releases it
+  # (issue #1801). The timeline mode: the cards are in a stream, so the redraw
+  # below is this page's own.
+  on_mount(VutuvWeb.Live.RemoteImages)
 
   @impl true
   def mount(_params, session, socket) do
@@ -114,6 +120,35 @@ defmodule VutuvWeb.TagLive.Timeline do
   # round trip rather than sitting there until the next load.
   def handle_event("report-remote-post", %{"id" => id}, socket) do
     RemotePostActions.report(socket, id, &drop_remote_entry(&1, id))
+  end
+
+  # A picture on a cached post left the AI gate (issue #1801): the tile the card
+  # is showing becomes the picture, with no reload. Every open page hears every
+  # verdict, so the cheap "is it even on this page" question comes first.
+  @impl true
+  def handle_info({:remote_images_settled, %{remote_post_id: id}}, socket) do
+    {:noreply, restate_remote_images(socket, id)}
+  end
+
+  defp restate_remote_images(socket, remote_post_id) do
+    if Enum.any?(socket.assigns.entries, &RemoteImages.draws?(&1, remote_post_id)),
+      do: restream_remote_images(socket, remote_post_id),
+      else: socket
+  end
+
+  defp restream_remote_images(socket, remote_post_id) do
+    images = Fediverse.remote_images(remote_post_id)
+
+    {entries, changed} =
+      Enum.map_reduce(socket.assigns.entries, [], fn entry, changed ->
+        case RemoteImages.restate_entry(entry, remote_post_id, images) do
+          ^entry -> {entry, changed}
+          updated -> {updated, [updated | changed]}
+        end
+      end)
+
+    socket = assign(socket, :entries, entries)
+    Enum.reduce(changed, socket, &stream_insert(&2, :entries, &1, update_only: true))
   end
 
   # ── Loading ───────────────────────────────────────────────────────────────

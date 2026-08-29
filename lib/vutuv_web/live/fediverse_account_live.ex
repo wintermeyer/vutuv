@@ -53,6 +53,10 @@ defmodule VutuvWeb.FediverseAccountLive do
   # while this page is open (issue #1283). One line, no handler.
   on_mount(VutuvWeb.Live.RemoteCounts)
 
+  # And a picture on any of the cards appears the moment the AI gate releases it
+  # (issue #1801). One line, no handler: `@images` is the map keyed by post id.
+  on_mount({VutuvWeb.Live.RemoteImages, :assigns})
+
   @impl true
   def mount(%{"id" => id}, _session, socket) do
     case Fediverse.get_remote_account(id) do

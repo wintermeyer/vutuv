@@ -2208,11 +2208,16 @@ defmodule VutuvWeb.PostComponents do
   @doc """
   The pictures on a post from another network (issue #1163).
 
-  Only released ones ever reach here (`Vutuv.Fediverse.list_remote_images/1`
-  filters on the AI gate), so this component's own job is the second, separate
-  condition: a picture its **author** flagged sensitive, or one under their
-  content warning, renders blurred behind a click. That is deliberately not
-  overridable by our verdict — our model judging a picture safe does not
+  **Unreleased ones reach here too.** `Vutuv.Fediverse.list_remote_images/1`
+  deliberately does not filter on the AI gate (this doc claimed the opposite
+  until issue #1801, while the waiting tile below was already the proof), so
+  `RemoteImage.released?/1` is asked here, per picture, and the tile is what a
+  reader gets meanwhile.
+
+  The gate is one of two independent conditions, and the second is this
+  component's own: a picture its **author** flagged sensitive, or one under
+  their content warning, renders blurred behind a click. That is deliberately
+  not overridable by our verdict — our model judging a picture safe does not
   overrule the person who published it asking for it to be covered.
 
   The alt text is the author's own, kept through the whole journey, because it

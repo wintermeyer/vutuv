@@ -59,6 +59,10 @@ defmodule VutuvWeb.FediverseLookupLive do
   # while this page is open (issue #1283). One line, no handler.
   on_mount(VutuvWeb.Live.RemoteCounts)
 
+  # And a picture on the result appears the moment the AI gate releases it
+  # (issue #1801). One line, no handler: `@images` is a plain list.
+  on_mount({VutuvWeb.Live.RemoteImages, :assigns})
+
   @impl true
   def mount(_params, _session, socket) do
     {:ok,
@@ -167,7 +171,6 @@ defmodule VutuvWeb.FediverseLookupLive do
 
   defp load_result(socket, post) do
     viewer = socket.assigns.current_user
-    ids = [post.id]
 
     # No like/repost marks are read here: the card embeds `RemoteActionsComponent`,
     # which loads its own. Assigning them cost two queries per lookup for values
@@ -175,7 +178,7 @@ defmodule VutuvWeb.FediverseLookupLive do
     # could have read them without crashing on the empty state.
     socket
     |> assign(:post, post)
-    |> assign(:images, Map.get(Fediverse.list_remote_images(ids), post.id, []))
+    |> assign(:images, Fediverse.remote_images(post.id))
     |> assign(:follow, Fediverse.remote_follow_for(viewer, post.remote_account))
   end
 
