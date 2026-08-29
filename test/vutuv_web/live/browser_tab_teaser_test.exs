@@ -57,6 +57,24 @@ defmodule VutuvWeb.BrowserTabTeaserTest do
     view
   end
 
+  # Wait for the shell to have finished with the arrival that was just
+  # broadcast, before asking what it pushed (issue #1783).
+  #
+  # An arrival reaches the shell as a plain message, and answering it is not
+  # cheap: a feed lookup across this member's sources, then the quote flattened
+  # through the Markdown renderer and the HTML scrubber. Measured here that is
+  # 20–50 ms warm, and the first one in a fresh VM pays for loading Earmark and
+  # the scrubber on top. `assert_push_event` waits 100 ms — so these assertions
+  # were racing that work rather than reading its result, and a plain `mix test`
+  # on this file failed a different handful of tests every run, on `main`, with
+  # nothing changed.
+  #
+  # `render/1` pings the view, so it returns only once the message queued ahead
+  # of the ping has been handled and the push events it produced are already in
+  # this process' mailbox. Every `refute_push_event` below needs it just as
+  # much: one that fires while the shell is still working refutes nothing.
+  defp settle(view), do: render(view)
+
   defp followed_author(viewer, attrs \\ []) do
     author = insert(:user, [email_confirmed?: true] ++ attrs)
     Social.follow(viewer, author.id)
@@ -112,6 +130,8 @@ defmodule VutuvWeb.BrowserTabTeaserTest do
       {:ok, _post} =
         Posts.create_post(author, %{body: "Frisch geflasht, **unter zwei Sekunden**"})
 
+      settle(view)
+
       assert_push_event(view, "tab:teaser", %{frames: [first | _] = frames})
       assert first =~ "@quotable"
       # The body arrives as one line of plain text: no Markdown, no asterisks.
@@ -131,6 +151,8 @@ defmodule VutuvWeb.BrowserTabTeaserTest do
                  account.actor_uri
                )
 
+      settle(view)
+
       assert_push_event(view, "tab:teaser", %{frames: frames})
       line = Enum.join(frames, " ")
       assert line =~ "@them"
@@ -148,6 +170,8 @@ defmodule VutuvWeb.BrowserTabTeaserTest do
 
       {:ok, _post} = Posts.create_post(user, %{body: "etwas von mir"})
 
+      settle(view)
+
       refute_push_event(view, "tab:teaser", %{})
     end
   end
@@ -160,6 +184,8 @@ defmodule VutuvWeb.BrowserTabTeaserTest do
 
       {:ok, _post} = Posts.create_post(author, %{body: "etwas Neues"})
 
+      settle(view)
+
       assert_push_event(view, "tab:new_post", %{})
       refute_push_event(view, "tab:teaser", %{})
     end
@@ -170,6 +196,8 @@ defmodule VutuvWeb.BrowserTabTeaserTest do
       author = followed_author(user)
 
       {:ok, _post} = Posts.create_post(author, %{body: "etwas Neues"})
+
+      settle(view)
 
       assert_push_event(view, "tab:new_post", %{})
       refute_push_event(view, "tab:teaser", %{})
@@ -182,6 +210,8 @@ defmodule VutuvWeb.BrowserTabTeaserTest do
       author = followed_author(user)
 
       {:ok, _post} = Posts.create_post(author, %{body: "Der Kessel läuft wieder"})
+
+      settle(view)
 
       # The tab is the one place a member cannot scroll past it, so the quote
       # gives up entirely rather than being redacted.
@@ -197,9 +227,12 @@ defmodule VutuvWeb.BrowserTabTeaserTest do
       author = followed_author(user)
 
       {:ok, _first} = Posts.create_post(author, %{body: "der erste Beitrag"})
+      settle(view)
       assert_push_event(view, "tab:teaser", %{frames: _})
 
       {:ok, _second} = Posts.create_post(author, %{body: "und gleich der zweite"})
+
+      settle(view)
 
       assert_push_event(view, "tab:teaser_more", %{text: text})
       assert text =~ "1"
@@ -217,11 +250,13 @@ defmodule VutuvWeb.BrowserTabTeaserTest do
       author = followed_author(user)
 
       {:ok, _first} = Posts.create_post(author, %{body: "der erste Beitrag"})
+      settle(view)
       assert_push_event(view, "tab:teaser", %{frames: _})
 
       # Past the window this would be a fresh quote; inside the silence that
       # follows it, the socket does not go back to the database at all.
       send(view.pid, {:new_post, %{post_id: Vutuv.UUIDv7.generate(), author_id: author.id}})
+      settle(view)
       refute_push_event(view, "tab:teaser", %{})
     end
 
@@ -239,9 +274,11 @@ defmodule VutuvWeb.BrowserTabTeaserTest do
       author = followed_author(user)
 
       {:ok, _muted} = Posts.create_post(author, %{body: "Der Kessel läuft wieder"})
+      settle(view)
       refute_push_event(view, "tab:teaser", %{})
 
       {:ok, _other} = Posts.create_post(author, %{body: "etwas ganz anderes"})
+      settle(view)
       refute_push_event(view, "tab:teaser", %{})
     end
   end
@@ -269,6 +306,8 @@ defmodule VutuvWeb.BrowserTabTeaserTest do
 
       {:ok, _post} = Posts.create_post(author, %{body: "nach dem Reconnect"})
 
+      settle(view)
+
       assert_push_event(view, "tab:new_post", %{})
       refute_push_event(view, "tab:teaser", %{})
 
@@ -276,6 +315,7 @@ defmodule VutuvWeb.BrowserTabTeaserTest do
       # what `reconnected()` restores.
       render_hook(view, "tab:visibility", %{"hidden" => true})
       {:ok, _second} = Posts.create_post(author, %{body: "und jetzt doch"})
+      settle(view)
       assert_push_event(view, "tab:teaser", %{frames: _})
     end
 
