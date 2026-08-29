@@ -569,9 +569,14 @@ defmodule VutuvWeb.PostLive.Feed do
   # each entry carries a `%{post_id => engagement}` submap for those cards' bars.
   # Live-arriving single posts carry `engagement: nil` (falls back to the bar's
   # own query) and get their follow edge in `insert_entry/3`.
-  # The one-line stand-in for a content-filtered post (issue #940): says which
   # The newest waiting post as the pair the pill quotes, or nil when there is
-  # nothing to quote (a photo with no caption, an author we cannot name).
+  # nothing to quote: a photo with no caption, an author we cannot name, or a
+  # post this reader's own filters hide. The row below it folds to a placeholder
+  # (`hidden_by_filter?/2`) while the pill above it read the muted words out —
+  # and a teaser is the one place they cannot scroll past them (issue #940).
+  # Both read the same `:filtered_by` stamp, so the two cannot disagree.
+  defp newest_quote([%{filtered_by: pattern} | _rest]) when is_binary(pattern), do: nil
+
   defp newest_quote([newest | _rest]) do
     case {PostTeaser.who(newest), PostTeaser.text(newest)} do
       {nil, _text} -> nil
@@ -946,6 +951,7 @@ defmodule VutuvWeb.PostLive.Feed do
     """
   end
 
+  # The one-line stand-in for a content-filtered post (issue #940): says which
   # filter hid it and offers to show it anyway, in place.
   attr(:pattern, :string, required: true)
 
@@ -1893,6 +1899,88 @@ defmodule VutuvWeb.PostLive.Feed do
   # How many posts are waiting, drawn or not — what the card and the pill count.
   defp pending_count(assigns), do: length(assigns.pending_posts) + assigns.pending_overflow
 
+  attr(:pending_posts, :list, required: true)
+  attr(:pending_overflow, :integer, required: true)
+
+  attr(:cal_day, :any,
+    required: true,
+    doc: "the travelled-to day, or nil — decides whether the press can be a browser-side reveal"
+  )
+
+  # Fades in as the calendar folds out of the way, so the two read as one
+  # movement rather than as a pop over a jump. An insert plays a keyframe on its
+  # own; a later count tick only patches this node's text, so it does not replay.
+  #
+  # `h-10` and not vertical padding: it stands beside the filter button, which is
+  # `h-10`, and a pill sized by its own line height came out four pixels short of
+  # it.
+  #
+  # A component and not markup in `render/1` so that the quote is flattened once
+  # per arrival rather than once per render: everything below reads `@quote`, and
+  # the whole subtree leaves the diff on any render that did not touch the three
+  # attributes above (a translation landing, the five-minute suggestions
+  # refresh). Computing it into `render/1`'s own assigns would do the opposite —
+  # a key that is not in the incoming assigns is force-assigned, so it would be
+  # dirty on every render, for a pipeline run of about 150 µs each time.
+  defp new_posts_pill(assigns) do
+    assigns = assign(assigns, :quote, newest_quote(assigns.pending_posts))
+
+    ~H"""
+    <div class="feed-teaser-in min-w-0 flex-1 text-center">
+      <button
+        id="show-new-posts"
+        type="button"
+        phx-click={show_pending(assigns)}
+        class="mx-auto flex h-10 w-full max-w-full items-center gap-2 rounded-full bg-brand-50 px-4 text-sm font-semibold text-brand-700 shadow-sm hover:bg-brand-100 sm:w-auto dark:bg-brand-900/40 dark:text-brand-100 dark:hover:bg-brand-900/70"
+      >
+        <span class="shrink-0 tabular-nums">
+          <%!-- An sr-only span and not an `aria-label` on the button: the label
+          would become the whole accessible name and swallow the quote, while
+          this leaves it "Show 3 new posts, @ada, breaking news". --%>
+          <span :if={@quote} class="sr-only">{pending_sentence(assigns)}</span>
+          <span aria-hidden={@quote && "true"}>{pending_label(assigns)}</span>
+        </span>
+        <span
+          :if={@quote}
+          class="flex min-w-0 flex-1 items-baseline gap-1 font-normal text-brand-600 dark:text-brand-200"
+        >
+          <span class="min-w-0 max-w-[45%] shrink truncate">{@quote.who}</span>
+          <span class="min-w-0 flex-1 truncate">{@quote.text}</span>
+        </span>
+      </button>
+    </div>
+    """
+  end
+
+  # What the pill shows. Beside a quote the label is only what introduces it,
+  # "Neu:" or "Neu (3):", because on a phone the whole sentence took the line and
+  # left the quote three letters (Stefan, on a screenshot). The sentence is not
+  # lost: it stays as the button's screen-reader name, where it costs no width.
+  # With nothing to quote there is no colon to hang, so it is said in full.
+  #
+  # A desktop has the room, and takes the short label anyway: the rail's "Not
+  # read yet" card (`unread_body/1`) already lists what is waiting there, so the
+  # pill is not the only teller, and a `md:`-swapped label would put two copies
+  # in the DOM and change the button's accessible name with the viewport.
+  defp pending_label(%{quote: nil} = assigns), do: pending_sentence(assigns)
+
+  defp pending_label(assigns) do
+    count = pending_count(assigns)
+
+    ngettext("New:", "New (%{formatted}):", count, formatted: compact_count(count))
+  end
+
+  defp pending_sentence(assigns) do
+    count = pending_count(assigns)
+
+    ngettext(
+      "Show %{formatted} new post",
+      "Show %{formatted} new posts",
+      count,
+      formatted: compact_count(count)
+    )
+  end
+
   # Showing the waiting posts, in the browser, before the server hears about it.
   #
   # The rows are already drawn (`queue/2`); this drops the marker that hid them
@@ -2538,40 +2626,12 @@ defmodule VutuvWeb.PostLive.Feed do
               <span :if={@pending_posts == []}>{pgettext("feed filter sheet", "Filter")}</span>
             </button>
 
-            <%!-- Fades in as the calendar folds out of the way, so the two read
-            as one movement rather than as a pop over a jump. An insert plays a
-            keyframe on its own; a later count tick only patches this node's
-            text, so it does not replay.
-
-            `h-10` and not vertical padding: it stands beside the filter button,
-            which is `h-10`, and a pill sized by its own line height came out
-            four pixels short of it. --%>
-            <div :if={@pending_posts != []} class="feed-teaser-in min-w-0 flex-1 text-center">
-              <button
-                id="show-new-posts"
-                type="button"
-                phx-click={show_pending(assigns)}
-                class="mx-auto flex h-10 w-full max-w-full items-center gap-2 rounded-full bg-brand-50 px-4 text-sm font-semibold text-brand-700 shadow-sm hover:bg-brand-100 sm:w-auto dark:bg-brand-900/40 dark:text-brand-100 dark:hover:bg-brand-900/70"
-              >
-                <span class="shrink-0 tabular-nums">
-                  {ngettext(
-                    "Show %{formatted} new post",
-                    "Show %{formatted} new posts",
-                    pending_count(assigns),
-                    formatted: compact_count(pending_count(assigns))
-                  )}
-                </span>
-                <span
-                  :if={newest_quote(@pending_posts)}
-                  class="flex min-w-0 flex-1 items-baseline gap-1 font-normal text-brand-600 dark:text-brand-200"
-                >
-                  <span class="min-w-0 max-w-[45%] shrink truncate">
-                    {newest_quote(@pending_posts).who}
-                  </span>
-                  <span class="min-w-0 flex-1 truncate">{newest_quote(@pending_posts).text}</span>
-                </span>
-              </button>
-            </div>
+            <.new_posts_pill
+              :if={@pending_posts != []}
+              pending_posts={@pending_posts}
+              pending_overflow={@pending_overflow}
+              cal_day={@cal_day}
+            />
           </div>
 
           <%!-- The timeline is one card of flat divide-y rows — the same

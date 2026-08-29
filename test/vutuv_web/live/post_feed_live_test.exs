@@ -978,6 +978,54 @@ defmodule VutuvWeb.PostFeedLiveTest do
       assert render(live) =~ "breaking news"
     end
 
+    test "beside a quote the pill's visible label is only the prefix to it", %{conn: conn} do
+      {conn, user} = create_and_login_user(conn)
+      friend = other_user()
+      insert(:follow, follower: user, followee: friend)
+
+      {:ok, live, _html} = live(conn, ~p"/feed")
+      {:ok, _} = Posts.create_post(friend, %{body: "breaking news"})
+
+      pill = live |> element("#show-new-posts") |> render()
+
+      # On a phone the whole sentence took the line and left the quote three
+      # letters, so beside a quote the label shrinks to what introduces it.
+      assert pill =~ "New:"
+      assert pill =~ "breaking news"
+
+      # It is not lost, and not doubled either: it is said once, where a screen
+      # reader hears it and no width is spent on it.
+      assert pill =~ ~r{class="sr-only">Show 1 new post}
+      assert length(Regex.scan(~r/Show 1 new post/, pill)) == 1
+
+      # More than one and the count moves into the label, still short.
+      for n <- 2..3, do: {:ok, _} = Posts.create_post(friend, %{body: "arrival #{n}"})
+
+      pill = live |> element("#show-new-posts") |> render()
+      assert pill =~ "New (3):"
+      assert pill =~ ~r{class="sr-only">Show 3 new posts}
+    end
+
+    test "with nothing to quote the pill says the whole sentence", %{conn: conn} do
+      {conn, user} = create_and_login_user(conn)
+      friend = other_user()
+      insert(:follow, follower: user, followee: friend)
+
+      {:ok, live, _html} = live(conn, ~p"/feed")
+
+      # A photo without a caption: no line to quote, so a bare "New:" would
+      # hang its colon on nothing.
+      image = insert(:post_image, user: friend)
+      {:ok, _} = Posts.create_post(friend, %{body: "", image_ids: [image.id]})
+
+      pill = live |> element("#show-new-posts") |> render()
+
+      assert pill =~ "Show 1 new post"
+      refute pill =~ "New:"
+      # Said once: with no prefix to introduce there is no second, hidden copy.
+      assert length(Regex.scan(~r/Show 1 new post/, pill)) == 1
+    end
+
     test "a tab left open for days stops drawing and starts counting", %{conn: conn} do
       {conn, user} = create_and_login_user(conn)
       friend = other_user()
@@ -1543,6 +1591,25 @@ defmodule VutuvWeb.PostFeedLiveTest do
       assert has_element?(live, "[data-filtered-post='crypto']")
       # The body itself is not on the page until revealed.
       refute html =~ "buy crypto now"
+    end
+
+    test "the pill never quotes a post the reader muted", %{
+      conn: conn,
+      user: user,
+      friend: friend
+    } do
+      {:ok, _} =
+        Vutuv.ContentFilters.create_filter(user, %{"kind" => "keyword", "pattern" => "crypto"})
+
+      {:ok, live, _html} = live(conn, ~p"/feed")
+      {:ok, _} = Posts.create_post(friend, %{body: "buy crypto now"})
+
+      pill = live |> element("#show-new-posts") |> render()
+
+      # The row folds to a placeholder; a pill quoting its opening line would
+      # read out the very words they muted.
+      refute pill =~ "crypto"
+      assert pill =~ "Show 1 new post"
     end
 
     test "'Show anyway' reveals the post in place", %{conn: conn, user: user, friend: friend} do
