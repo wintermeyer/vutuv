@@ -785,7 +785,15 @@ is invalid", which sends a member looking for a mistake in their own text.
   `filters` return `[]` (`MastodonApi.CompatibilityController`). Notifications,
   markers and followed tags no longer do. vutuv has real filters (muted words
   and tags) and real direct messages behind two of those, so they are the next
-  worthwhile ones.
+  worthwhile ones. `follow_requests` sits in the same controller and is **not**
+  a stub: a follow here needs no approval (`Vutuv.Social.Follow`), an inbound
+  remote `Follow` is accepted on arrival (`Vutuv.Fediverse.Follower`) and every
+  account is presented `locked: false`, so the list is empty by construction
+  with nothing to implement later. It answered 404 until Tokodon, which calls it
+  straight after the authorisation step, read that as a failed login (issue
+  #1692). The `requested` state a client does see is the other direction, this
+  member waiting on a remote server's answer, and Mastodon carries that on the
+  Relationship.
 - **A path this adapter does not implement answers JSON, on both hosts.** The
   subdomain always had a catch-all; the **main host** — the one a member types
   into a phone app, and so the one every client actually uses — did not, so an

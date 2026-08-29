@@ -352,6 +352,15 @@ defmodule VutuvWeb.Router do
       assigns: %{mastodon_scope: "read:lists"}
     )
 
+    # Permanently empty, and that is the whole answer: a follow here needs no
+    # approval (`Vutuv.Social.Follow`) and an inbound remote one is accepted on
+    # arrival, so nothing is ever pending — which is what every account already
+    # tells a client with `locked: false`. Tokodon asks for this immediately
+    # after the authorisation step and read the 404 as a failed login (#1692).
+    get("/api/v1/follow_requests", CompatibilityController, :empty,
+      assigns: %{mastodon_scope: "read:follows"}
+    )
+
     # vutuv has followed tags (issue #872); this used to answer a hardcoded
     # empty list, so a client showed none of them and offered "Follow" on every
     # topic the member already follows.
