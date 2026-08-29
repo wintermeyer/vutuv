@@ -85,11 +85,19 @@ skip() {
 # `VutuvWeb.HelpController`, `priv/dev_docs/*.md` into `DevDocController`, and
 # `.claude/rules/design.md` is read and asserted on by the dark-mode tests — an
 # extension-only rule would have skipped the gate on all three.
+#
+# The `*/*` arm is why the two Markdown arms are not one. In a `case` pattern
+# `*` matches `/` as well, so a bare `*.md` exempts Markdown at ANY depth, not
+# just at the top — `rel/overlays/notes.md` would have sailed past the gate
+# even though `rel/` holds the release templates the deploy builds from. Only
+# the directories named above are exempt at depth; everything else has to be a
+# genuinely top-level file to qualify.
 precommit_blind_to() {
   case "$1" in
-    lib/* | test/* | config/* | priv/* | assets/* | scripts/* | .claude/*) return 1 ;;
+    lib/* | test/* | config/* | priv/* | assets/* | scripts/* | .claude/* | rel/*) return 1 ;;
     mix.exs | mix.lock | .formatter.exs | .credo.exs) return 1 ;;
     docs/* | .github/* | LICENSE | NOTICE | CODEOWNERS) return 0 ;;
+    */*) return 1 ;;
     *.md) return 0 ;;
     *) return 1 ;;
   esac
@@ -246,9 +254,8 @@ fi
 # ── Does this push carry anything precommit could look at? ──────────────────
 # The exemption is narrow on purpose: skip only when EVERY file the push newly
 # puts on the remote is one `precommit_blind_to` vouches for. `mix.exs` is not
-# among them — a version bump is compiled, formatted and asserted on by
-# `BumpVersionTest` — so a PR branch carrying its own bump still pays the full
-# gate. That is deliberate: the cheap, safe half is worth having on its own.
+# among them — it is compiled and format-checked, and it decides what the suite
+# builds at all — so any push touching it still pays the full gate.
 #
 # Rule 1 of this file governs here too. An unanswered question is not an
 # exemption, so every way of not knowing — detached HEAD, an argument list this

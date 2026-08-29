@@ -173,9 +173,9 @@ defmodule Vutuv.PrecommitHookTest do
       assert decide(ctx, "git -C #{repo} push") == "PUSH #{repo}"
     end
 
-    test "a version bump is not documentation", ctx do
-      # `mix.exs` is compiled, formatted and asserted on by `BumpVersionTest`,
-      # so a PR branch carrying its own bump still pays the full gate.
+    test "a change to mix.exs is not documentation", ctx do
+      # `mix.exs` is compiled and format-checked, and it decides what the suite
+      # builds at all, so any push touching it still pays the full gate.
       repo = tmp_project(["mix.exs"])
 
       assert decide(ctx, "git -C #{repo} push") == "PUSH #{repo}"
@@ -184,14 +184,30 @@ defmodule Vutuv.PrecommitHookTest do
     test "Markdown the build reads is not documentation", ctx do
       # The reason the rule is deny-first rather than extension-first:
       # `priv/help/*.md` compiles into `HelpController`, `priv/dev_docs/*.md`
-      # into `DevDocController`, and `.claude/rules/design.md` is read and
-      # asserted on by the dark-mode tests.
-      for path <- [".claude/rules/design.md", "priv/help/imprint_en.md"] do
+      # into `DevDocController`, `.claude/rules/design.md` is read and asserted
+      # on by the dark-mode tests, and `rel/` holds the release templates the
+      # deploy builds from.
+      for path <- [".claude/rules/design.md", "priv/help/imprint_en.md", "rel/overlays/notes.md"] do
         repo = tmp_project([path])
 
         assert decide(ctx, "git -C #{repo} push") == "PUSH #{repo}",
                "#{path} is a build input, not documentation"
       end
+    end
+
+    test "only top-level Markdown is documentation", ctx do
+      # In a `case` pattern `*` matches `/` too, so a bare `*.md` arm exempts
+      # Markdown at any depth — a directory nobody has denied yet would have
+      # skipped the gate the day it was added. Only the named directories are
+      # exempt at depth; anything else has to sit at the top.
+      nested = tmp_project(["content/posts/hello.md"])
+      top = tmp_project(["CONTRIBUTING.md"])
+
+      assert decide(ctx, "git -C #{nested} push") == "PUSH #{nested}"
+      assert decide(ctx, "git -C #{top} push") =~ "SKIP"
+      # A named directory still is exempt at any depth.
+      deep = tmp_project(["docs/architecture/a/b/c.md"])
+      assert decide(ctx, "git -C #{deep} push") =~ "SKIP"
     end
   end
 
