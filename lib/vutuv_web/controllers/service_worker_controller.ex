@@ -20,10 +20,12 @@ defmodule VutuvWeb.ServiceWorkerController do
     * the **asset version**, which is what the worker keys its cache on. It is
       the digested paths of the two tracked assets, so the bytes of this
       response change exactly when a browser holding the old bundle has become
-      stale — which is what raises the "new version" bar (`updatefound` in
-      app.js) on the deploys where it means something, and on no others. The
-      same string is why the previous release's cached assets are thrown away
-      rather than accumulating.
+      stale, and the previous release's cached assets are thrown away rather
+      than accumulating. It does **not** raise the shell's "new version" bar:
+      that reads the same two tracked assets, but per browser and from the
+      server (`static_changed?/1`), because a worker waiting to take over says
+      nothing about whether *this* document is the stale one. See
+      `docs/architecture/realtime.md`.
 
     * the **generic notification lines**, one per kind per locale this
       installation serves. A push carries no content (see `Vutuv.WebPush`), so

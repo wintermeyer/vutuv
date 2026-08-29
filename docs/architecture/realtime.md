@@ -71,10 +71,19 @@ carries **no content** — kind, id and destination — and the worker draws the
 line ("New message on vutuv"), because what a push turns into is text on a lock
 screen.
 
-While the worker exists, it also answers the stale-document problem
-`static_changed?/1` describes: a deploy reloads nothing, so `updatefound` shows
-the shell's `#sw-update` bar ("A new version of vutuv is ready"), and the
-waiting worker is promoted only when the member taps Reload.
+The worker does **not** decide when the "new version" bar appears, and that is
+worth saying because it looks like the obvious signal. `registration.waiting` is
+set from the moment a new worker installs until every vutuv tab is gone, so it
+is still true on a page that has *just* arrived from the new release — the bar
+came back on every page load until somebody pressed it, while the case it exists
+for (a tab open for hours) barely fired at all, nothing calling
+`registration.update()`. So the shell asks `static_changed?/1` instead:
+`phx-track-static` reports the bundle this browser is really running, and only a
+document that predates the deploy is offered `#sw-update` ("A new version is
+ready"). Dismissing it is socket state, so it lasts exactly as long as the
+document it applies to. The worker's remaining job is carrying the reload out —
+Reload posts `skip-waiting` to a waiting worker, or plainly reloads when there
+is none.
 
 **Which means a worker from the previous release keeps running, and nothing
 bounds how long.** This is the one asset that deliberately outlives a deploy,
@@ -82,13 +91,15 @@ so it is worth being exact about. A new worker appears only when `/sw.js`
 changes byte-for-byte, and its body is the config prelude plus the file: the
 `version` (the digested paths of the tracked assets, joined), the notification
 lines, and `sw.js` itself. A deploy that touches none of those three ships an
-identical worker, and no bar appears at all. When it does differ, the new
+identical worker, so the old one simply stays in charge. When it does differ, the new
 worker installs and then **waits**: the old one stays in charge of every open
 tab, serving `/assets/*` out of its own `vutuv-<version>` cache and handling
 that tab's `push` and `notificationclick` with the strings table baked into it
 at *its* release. It is replaced when the member taps
 Reload (which posts `skip-waiting`, and only then does `activate` drop the
 other caches and `clients.claim()`), or when every tab it controls is closed.
+Note this is about the **worker's** lifetime, not the bar's: whether anybody is
+offered a reload is the separate question answered above.
 An installed app on a phone is closed rarely and reloaded more rarely still,
 so "weeks" is the realistic upper bound, not "until the next deploy".
 
