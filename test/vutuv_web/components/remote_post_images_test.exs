@@ -28,6 +28,64 @@ defmodule VutuvWeb.RemotePostImagesTest do
   defp render_tile(images),
     do: render_component(&PostComponents.remote_post_images/1, images: images)
 
+  # No file and nothing left to wait for. Two ways in, because the two answers
+  # come from different places: the gate refused the bytes, or the download used
+  # up its tries. Both mean the same thing to a reader.
+  defp gone_picture(attrs \\ [moderation: "rejected"]),
+    do: struct(%RemoteImage{file: nil, moderation: "pending"}, attrs)
+
+  test "a picture that is not coming stops claiming a check is running" do
+    html = render_tile([gone_picture()])
+
+    assert html =~ "data-remote-image-unavailable"
+    assert html =~ "Picture unavailable"
+    # The old lie, on some production rows since 2026-08-03.
+    refute html =~ "data-remote-image-pending"
+    refute html =~ "Picture is being checked"
+    # ...and no line under the grid promising the AI will be through shortly.
+    refute html =~ "data-remote-images-checking"
+  end
+
+  test "a rejection written before the state existed reads the same" do
+    # `apply_rejected/1` used to leave `moderation` null, which is how the four
+    # oldest such rows on production are stored.
+    assert render_tile([gone_picture(moderation: nil)]) =~ "data-remote-image-unavailable"
+  end
+
+  test "a download that used up its tries reads the same" do
+    # The other half, and the one the verdict column knows nothing about: the
+    # gate never saw this picture, the refetcher simply stopped asking.
+    spent = gone_picture(fetch_failures: RemoteImage.max_fetch_failures())
+
+    assert render_tile([spent]) =~ "data-remote-image-unavailable"
+  end
+
+  test "German says it too" do
+    Gettext.put_locale(VutuvWeb.Gettext, "de")
+
+    assert render_tile([gone_picture()]) =~ "Bild nicht verfügbar"
+  end
+
+  test "a picture still waiting is not confused with one that is gone" do
+    html = render_tile([held_picture(), gone_picture()])
+
+    assert html =~ "data-remote-image-pending"
+    assert html =~ "data-remote-image-unavailable"
+    # One of the two is really being checked, and the line counts only that one.
+    assert html =~ ~s(data-remote-images-checking="1")
+  end
+
+  test "an author's covered picture still opens behind a click" do
+    # Moved when the three-way `if` became one `case` over `display_state/1`,
+    # and until then it had no test at all.
+    covered = %RemoteImage{file: "img-abc.avif", moderation: "approved", sensitive: true}
+
+    html = render_tile([covered])
+
+    assert html =~ "data-remote-image-sensitive"
+    assert html =~ "Sensitive. Show the picture."
+  end
+
   test "a held picture says it is being checked, not that it is travelling" do
     html = render_tile([held_picture()])
 

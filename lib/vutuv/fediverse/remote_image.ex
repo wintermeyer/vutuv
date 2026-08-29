@@ -35,6 +35,11 @@ defmodule Vutuv.Fediverse.RemoteImage do
   # (remote_post_id, source_uri) makes this a btree key, so cap it in bytes.
   @max_uri_bytes 2_048
 
+  # Refused downloads before the picture is given up on (issue #1803). Small on
+  # purpose: this exists to survive a blip or a deploy that killed the first
+  # attempt, not to argue with a server that has made up its mind.
+  @max_fetch_failures 5
+
   # An alt text is a description, not an essay. Generous, because the point of
   # keeping it is that somebody who cannot see the picture still can read it.
   @max_alt 2_000
@@ -49,6 +54,11 @@ defmodule Vutuv.Fediverse.RemoteImage do
     field(:moderation, :string)
     field(:sensitive, :boolean, default: false)
 
+    # What the download has tried (issue #1803). `Vutuv.Fediverse.MediaRefetcher`
+    # is the only writer; see `Vutuv.Fediverse.Media`.
+    field(:fetch_failures, :integer, default: 0)
+    field(:fetch_attempted_at, :utc_datetime)
+
     belongs_to(:remote_post, Vutuv.Fediverse.RemotePost)
 
     timestamps(updated_at: false)
@@ -58,12 +68,63 @@ defmodule Vutuv.Fediverse.RemoteImage do
   def max_per_post, do: @max_per_post
 
   @doc """
+  How many refused downloads a picture gets before nobody asks again (issue
+  #1803). The column's own bound, so the schema that declares `fetch_failures`
+  is what says when it is spent.
+  """
+  def max_fetch_failures, do: @max_fetch_failures
+
+  @doc """
   Whether this picture may be rendered at all: the gate cleared it and the file
   is here. The one chokepoint every surface reads, so "has a file" can never
   drift from "was allowed".
   """
-  def released?(%__MODULE__{file: file, moderation: moderation}),
-    do: is_binary(file) and file != "" and moderation == "approved"
+  def released?(%__MODULE__{moderation: moderation} = image),
+    do: stored?(image) and moderation == "approved"
+
+  @doc """
+  Whether this picture is **not coming** (issue #1803): the gate refused it, or
+  its bytes never arrived and `Vutuv.Fediverse.MediaRefetcher` has stopped
+  asking.
+
+  Two columns, because the two answers come from different places and only one
+  of them is a verdict. `moderation` is what the **gate** decided — `"rejected"`
+  now, `nil` in the rows it wrote before that word existed. `fetch_failures` is
+  what the **download** managed, and it is deliberately not folded into the
+  verdict column: an installation running without the vision model records
+  every picture `"approved"` on the spot (`ImageScans.initial_state/0`), so a
+  failed download there carries an approval and no file, and a terminal state
+  kept in `moderation` would have missed that whole class of installation.
+
+  The card asks this **before** it asks whether to wait. The two look identical
+  in the data — no file, not approved — and reading the second question first
+  is what left members watching a check that was never going to run, on some
+  rows since 2026-08-03.
+  """
+  def unavailable?(%__MODULE__{} = image), do: not stored?(image) and given_up?(image)
+
+  @doc """
+  What a card should draw for this picture, in the order the questions have to
+  be asked (issue #1803).
+
+  One function rather than a chain of `if`s at the call site, because the order
+  **is** the bug: "is it still being checked" answers yes for a picture that was
+  refused three weeks ago, so it may only be asked once "is it coming at all"
+  has said yes.
+  """
+  def display_state(%__MODULE__{} = image) do
+    cond do
+      unavailable?(image) -> :unavailable
+      not released?(image) -> :waiting
+      blurred?(image) -> :sensitive
+      true -> :ready
+    end
+  end
+
+  defp stored?(%__MODULE__{file: file}), do: is_binary(file) and file != ""
+
+  defp given_up?(%__MODULE__{moderation: moderation, fetch_failures: failures}),
+    do: moderation in [nil, "rejected"] or (failures || 0) >= @max_fetch_failures
 
   @doc """
   Whether it renders behind a click. The author's flag, never our verdict —
@@ -81,7 +142,9 @@ defmodule Vutuv.Fediverse.RemoteImage do
       :width,
       :height,
       :moderation,
-      :sensitive
+      :sensitive,
+      :fetch_failures,
+      :fetch_attempted_at
     ])
     |> validate_required([:source_uri])
     |> validate_length(:source_uri, max: @max_uri_bytes, count: :bytes)
