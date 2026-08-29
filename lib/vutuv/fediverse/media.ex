@@ -41,6 +41,13 @@ defmodule Vutuv.Fediverse.Media do
   # original" link, never a download: we would be storing a media library.
   @image_types ~w(image/jpeg image/png image/webp image/avif image/gif image/heic image/heif)
 
+  # The refetch ladder (issue #1803). The strike cap is the column's own, on
+  # `RemoteImage`. `@refetch_backoff_seconds` must stay clear of
+  # `MediaRefetcher`'s tick or the two beat against each other and the ladder
+  # silently runs at half speed.
+  @refetch_backoff_seconds 300
+  @refetch_batch 20
+
   @doc "The per-file ceiling (bytes) a fetched picture may not exceed."
   def max_bytes, do: Application.get_env(:vutuv, :fediverse_media_max_bytes, @max_bytes)
 
@@ -189,6 +196,30 @@ defmodule Vutuv.Fediverse.Media do
   again, so nothing is left at rest for a post nobody can reach.
   """
   def fetch_now(%RemoteImage{} = image) do
+    case try_and_record(image) do
+      :ok -> :ok
+      {:error, _reason} -> :skip
+    end
+  end
+
+  @doc """
+  The same fetch, saying **why** it failed (issue #1803).
+
+  `fetch_now/1` folds every refusal into one `:skip`, which is all its callers
+  can use. The ladder has to tell two of them apart, because they deserve
+  opposite treatment:
+
+    * `{:error, :unreachable}` — the server did not answer, or answered with
+      something other than a `200`. A bad minute, so it is worth another try.
+    * `{:error, :unusable}` — the bytes are here and they are not a picture we
+      can store: a video its server declares as an image, a file over the
+      ceiling, something that does not decode. Trying again fetches the same
+      thing, so this gives up at once.
+
+  A post deleted mid-download is `:unusable` too, deliberately: there is no row
+  left to hold a picture, and a retry would only race the sweep again.
+  """
+  def try_once(%RemoteImage{} = image) do
     with {:ok, bytes} <- download(image.source_uri),
          {:ok, %{file: file, width: width, height: height}} <-
            RemoteMedia.store_post_image(bytes, image.id),
@@ -196,8 +227,116 @@ defmodule Vutuv.Fediverse.Media do
       ImageScans.enqueue("remote_post_image", image.id, nil, file)
       :ok
     else
-      _ -> :skip
+      # `RemoteMedia.store_post_image/2` answers `{:error, reason}` for bytes
+      # that do not decode as an image, which is the same permanent answer under
+      # a different word. Only a server's silence earns another try.
+      {:error, :unreachable} -> {:error, :unreachable}
+      _other -> {:error, :unusable}
     end
+  end
+
+  @doc """
+  The pictures whose bytes never arrived and are due another try (issue #1803),
+  least recently tried first.
+
+  Least recently tried is the ordering every sweeper here uses, so the clock has
+  to move on **every** outcome — see `refetch_due/1`. Among the never-tried it
+  breaks ties **newest first**: an attempt that died with its slot leaves the
+  clock null, and serving the oldest of those first would leave the picture
+  somebody is looking at right now behind a three-week-old backlog.
+
+  Two conditions are worth reading twice. **A refusal is not a failed
+  download**: the gate looked at those bytes and said no, so asking for them
+  again is the one thing we must not do — `nil` is the spelling it used before
+  it wrote `"rejected"`, and both are excluded by name rather than left to
+  SQL's NULL rules, which would drop the null silently and for the wrong
+  reason. And a row is not due until `@refetch_backoff_seconds` after its
+  **insert** when it has never been stamped, so this cannot race the first
+  attempt, which is still running for a second or two after the row appears.
+  """
+  def due_refetches(limit \\ @refetch_batch) do
+    now = DateTime.utc_now(:second)
+    cutoff = DateTime.add(now, -@refetch_backoff_seconds, :second)
+    fresh = NaiveDateTime.add(NaiveDateTime.utc_now(:second), -@refetch_backoff_seconds, :second)
+
+    from(i in RemoteImage,
+      where: is_nil(i.file),
+      where: i.fetch_failures < ^RemoteImage.max_fetch_failures(),
+      where: not is_nil(i.moderation) and i.moderation != "rejected",
+      where:
+        (is_nil(i.fetch_attempted_at) and i.inserted_at < ^fresh) or
+          i.fetch_attempted_at < ^cutoff,
+      order_by: [asc_nulls_first: i.fetch_attempted_at, desc: i.id],
+      limit: ^limit
+    )
+    |> Repo.all()
+  end
+
+  @doc """
+  Tries every due picture once and returns how many were attempted.
+
+  **The clock moves on every outcome, including the ones that did nothing.** A
+  row this cannot finish would otherwise be due again on the next run — nothing
+  about it changes in a few minutes — and because the ordering is oldest-first
+  it would hold the front of every batch for ever, spending the whole cap on
+  work that can never complete. That is the deadlock #1316 shipped, and the test
+  for it asserts the due query no longer returns such a row after one pass.
+
+  **No per-host cap**, unlike `Vutuv.Fediverse.refresh_counts/1`: that one
+  re-asks the same object for a week and needs one, while a picture here costs
+  at most `RemoteImage.max_fetch_failures/0` requests ever and then leaves the
+  queue for good, so the total is bounded by construction. A cap applied to an
+  already-sorted, already-capped batch is the amplifier that starves the healthy
+  rows behind one blocked host.
+  """
+  def refetch_due(limit \\ @refetch_batch) do
+    due = due_refetches(limit)
+
+    Enum.each(due, &try_and_record/1)
+    length(due)
+  end
+
+  # One attempt with the ladder written down. **Both** the first fetch and the
+  # sweeper take this path, which is what makes it one ladder: an attempt that
+  # dies with its slot leaves the same trace as a refused one, and no row can
+  # sit in the queue with no clock on it.
+  defp try_and_record(%RemoteImage{} = image) do
+    outcome = try_once(image)
+    record(image, outcome)
+    outcome
+  end
+
+  # Nothing to stamp on success: the row leaves the queue by having a file, and
+  # writing to it here would be a guaranteed zero-row update.
+  defp record(_image, :ok), do: :ok
+
+  # The bytes are here and we cannot store them — a video its server calls an
+  # image, one over the ceiling, something that does not decode. They will be
+  # the same bytes tomorrow, so the tries are spent at once rather than fetching
+  # that video five more times.
+  defp record(image, {:error, :unusable}),
+    do: stamp(image, RemoteImage.max_fetch_failures())
+
+  # A server having a bad day is asked less and less rather than every run.
+  defp record(image, {:error, :unreachable}),
+    do: stamp(image, image.fetch_failures + 1)
+
+  # By id rather than through the struct in hand: the retention sweep can delete
+  # the row while this run is in flight, and `Repo.update/1` would then raise
+  # inside the sweeper. A vanished row is simply no rows updated.
+  #
+  # It writes the fetch state and nothing else. `moderation` is the **gate's**
+  # column and this is not the gate — folding "the download gave up" into it
+  # would give a verdict two writers and, worse, would be unreadable on an
+  # installation whose pictures are born `"approved"` because it runs no vision
+  # model.
+  defp stamp(%RemoteImage{} = image, failures) do
+    Repo.update_all(
+      from(i in RemoteImage, where: i.id == ^image.id),
+      set: [fetch_failures: failures, fetch_attempted_at: DateTime.utc_now(:second)]
+    )
+
+    :ok
   end
 
   defp store_file(%RemoteImage{} = image, attrs) do
@@ -209,7 +348,7 @@ defmodule Vutuv.Fediverse.Media do
 
       {:error, _changeset} ->
         RemoteMedia.delete_post_image(image.id)
-        :error
+        {:error, :unusable}
     end
   end
 
@@ -281,19 +420,32 @@ defmodule Vutuv.Fediverse.Media do
   defp download(url) when is_binary(url) do
     with {:parse, %URI{scheme: "https", host: host}} when is_binary(host) <-
            {:parse, URI.parse(url)},
-         {:ssrf, false} <- {:ssrf, Vutuv.Ssrf.resolves_to_internal?(host)},
-         {:ok, %Req.Response{status: 200, body: body}} <- Req.get(options(url)),
-         # Strictly under: the collector *halts* the stream at the ceiling, so a
-         # body that lands exactly on it is as likely a file cut in half as a
-         # file that happens to be that size. Refusing both is the honest read.
-         true <- is_binary(body) and byte_size(body) < max_bytes() do
-      {:ok, body}
+         {:ssrf, false} <- {:ssrf, Vutuv.Ssrf.resolves_to_internal?(host)} do
+      request(url)
     else
-      _ -> :error
+      # The address itself is refused, and it does not change between tries.
+      _ -> {:error, :unusable}
     end
   end
 
-  defp download(_url), do: :error
+  defp download(_url), do: {:error, :unusable}
+
+  # The two failures the refetcher tells apart (issue #1803): a server that did
+  # not answer with a picture may answer next time, while bytes we cannot store
+  # will be the same bytes tomorrow.
+  defp request(url) do
+    case Req.get(options(url)) do
+      # Strictly under: the collector *halts* the stream at the ceiling, so a
+      # body that lands exactly on it is as likely a file cut in half as a file
+      # that happens to be that size. Refusing both is the honest read — and
+      # either way it is this picture's own size, not a bad minute.
+      {:ok, %Req.Response{status: 200, body: body}} when is_binary(body) ->
+        if byte_size(body) < max_bytes(), do: {:ok, body}, else: {:error, :unusable}
+
+      _other ->
+        {:error, :unreachable}
+    end
+  end
 
   defp options(url) do
     Keyword.merge(

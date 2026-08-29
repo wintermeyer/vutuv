@@ -2226,8 +2226,16 @@ defmodule VutuvWeb.PostComponents do
   unlabelled image is honest, a made-up label is not.
   """
   def remote_post_images(assigns) do
+    # Only the pictures that are really still being looked at. A picture that is
+    # not coming is `not released?` too, and counting it here is what put the
+    # "our AI is looking at it" line under cards whose picture had been refused
+    # three weeks earlier (issue #1803).
     assigns =
-      assign(assigns, :held_count, Enum.count(assigns.images, &(not RemoteImage.released?(&1))))
+      assign(
+        assigns,
+        :held_count,
+        Enum.count(assigns.images, &(RemoteImage.display_state(&1) == :waiting))
+      )
 
     ~H"""
     <div
@@ -2239,69 +2247,92 @@ defmodule VutuvWeb.PostComponents do
       ]}
     >
       <div :for={image <- @images} class="overflow-hidden rounded-lg">
-        <%= if !RemoteImage.released?(image) do %>
-          <%!-- Recorded, not shown: still downloading from its own server, or
-          still with the AI gate. Once the bytes are here the tile is the
-          picture's own mosaic (issue #1720) with the badge on it; before that,
-          and after the pixelated preview's window has run out, it is the wordless tile
-          that keeps a photo post from rendering as an empty card. Both say the
-          same thing, under the same hourglass, because it is the same wait: the
-          picture is here and we are looking at it before showing it. The older
-          "a picture is on its way" named the download instead, which is over
-          in a second and is never what the reader is waiting for. --%>
-          <% pixelated_url = RemoteMedia.post_image_pixelated_url(image) %>
-          <div :if={pixelated_url} class="relative" data-remote-image-pixelated>
-            <img
-              src={pixelated_url}
-              alt=""
-              loading="lazy"
-              class="block max-h-96 w-full rounded-lg object-cover"
-            />
-            <.checking_badge />
-          </div>
-          <div
-            :if={!pixelated_url}
-            data-remote-image-pending
-            class="flex min-h-24 items-center justify-center gap-2 rounded-lg bg-slate-100 px-3 py-6 text-center text-xs text-slate-600 dark:bg-slate-800 dark:text-slate-400"
-          >
-            <.hourglass />
-            <span>{gettext("Picture is being checked")}</span>
-          </div>
-        <% else %>
-          <%= if RemoteImage.blurred?(image) do %>
-          <%!-- `<details>` rather than a JS toggle: the cover has to hold with
-          no JavaScript at all, because "this is covered for a reason" is not a
-          promise to break on a slow bundle. --%>
-          <details data-remote-image-sensitive class="group relative">
-            <%!-- The cover is inside the summary, so it must take itself away
-            when the picture is shown: a `<summary>` renders open or closed
-            alike, and without the `group-open:hidden` the blurred cover simply
-            stayed on top of the picture it had just revealed. What stands in
-            its place is the way back — like the content-warning lid above, a
-            cover you cannot put back is not a cover. --%>
-            <summary class="block cursor-pointer list-none">
-              <span class="relative block group-open:hidden">
-                <img
-                  src={RemoteMedia.post_image_url(image.id, image.file)}
-                  alt=""
-                  loading="lazy"
-                  class="block max-h-96 w-full scale-105 object-cover blur-xl"
-                />
-                <span class="absolute inset-0 flex items-center justify-center p-3 text-center text-xs font-semibold text-white">
-                  <span class="rounded-full bg-slate-900/70 px-3 py-2">
-                    {gettext("Sensitive. Show the picture.")}
+        <%!-- One `case` over `RemoteImage.display_state/1` rather than a chain
+        of `if`s, because the ORDER is the thing that was wrong (issue #1803):
+        "is it still being checked" answers yes for a picture that was refused
+        three weeks ago, so it may only be asked once "is it coming at all" has
+        said yes. That order lives beside the columns it reads, not here. --%>
+        <%= case RemoteImage.display_state(image) do %>
+          <% :unavailable -> %>
+            <%!-- The picture is not coming: the AI gate refused it, or its bytes
+            never arrived and `Vutuv.Fediverse.MediaRefetcher` has stopped
+            asking. It kept the waiting tile below until then, so a card promised
+            a check that had finished weeks earlier — on some rows since
+            2026-08-03. No hourglass and no explanation of *why*: one is a
+            moderation decision that is not the reader's argument to have, the
+            other is somebody else's server having a bad week, and from where the
+            reader sits both are the same fact. The tile stays rather than
+            vanishing, because a post from another network can be a photograph
+            and nothing else, and a card with a silent hole in it reads as
+            broken. --%>
+            <div
+              data-remote-image-unavailable
+              class="flex min-h-24 items-center justify-center rounded-lg bg-slate-100 px-3 py-6 text-center text-xs text-slate-500 dark:bg-slate-800 dark:text-slate-400"
+            >
+              <span>{gettext("Picture unavailable")}</span>
+            </div>
+          <% :waiting -> %>
+            <%!-- Recorded, not shown: still downloading from its own server, or
+            still with the AI gate. Once the bytes are here the tile is the
+            picture's own mosaic (issue #1720) with the badge on it; before that,
+            and after the pixelated preview's window has run out, it is the
+            wordless tile that keeps a photo post from rendering as an empty
+            card. Both say the same thing, under the same hourglass, because it
+            is the same wait: the picture is here and we are looking at it before
+            showing it. The older "a picture is on its way" named the download
+            instead, which is over in a second and is never what the reader is
+            waiting for. --%>
+            <% pixelated_url = RemoteMedia.post_image_pixelated_url(image) %>
+            <div :if={pixelated_url} class="relative" data-remote-image-pixelated>
+              <img
+                src={pixelated_url}
+                alt=""
+                loading="lazy"
+                class="block max-h-96 w-full rounded-lg object-cover"
+              />
+              <.checking_badge />
+            </div>
+            <div
+              :if={!pixelated_url}
+              data-remote-image-pending
+              class="flex min-h-24 items-center justify-center gap-2 rounded-lg bg-slate-100 px-3 py-6 text-center text-xs text-slate-600 dark:bg-slate-800 dark:text-slate-400"
+            >
+              <.hourglass />
+              <span>{gettext("Picture is being checked")}</span>
+            </div>
+          <% :sensitive -> %>
+            <%!-- `<details>` rather than a JS toggle: the cover has to hold with
+            no JavaScript at all, because "this is covered for a reason" is not a
+            promise to break on a slow bundle. --%>
+            <details data-remote-image-sensitive class="group relative">
+              <%!-- The cover is inside the summary, so it must take itself away
+              when the picture is shown: a `<summary>` renders open or closed
+              alike, and without the `group-open:hidden` the blurred cover simply
+              stayed on top of the picture it had just revealed. What stands in
+              its place is the way back — like the content-warning lid above, a
+              cover you cannot put back is not a cover. --%>
+              <summary class="block cursor-pointer list-none">
+                <span class="relative block group-open:hidden">
+                  <img
+                    src={RemoteMedia.post_image_url(image.id, image.file)}
+                    alt=""
+                    loading="lazy"
+                    class="block max-h-96 w-full scale-105 object-cover blur-xl"
+                  />
+                  <span class="absolute inset-0 flex items-center justify-center p-3 text-center text-xs font-semibold text-white">
+                    <span class="rounded-full bg-slate-900/70 px-3 py-2">
+                      {gettext("Sensitive. Show the picture.")}
+                    </span>
                   </span>
                 </span>
-              </span>
-              <span class="hidden min-h-10 items-center gap-1 text-xs font-medium text-brand-600 group-open:flex dark:text-brand-400">
-                <span aria-hidden="true">⚠</span>{gettext("Cover it again")}
-              </span>
-            </summary>
+                <span class="hidden min-h-10 items-center gap-1 text-xs font-medium text-brand-600 group-open:flex dark:text-brand-400">
+                  <span aria-hidden="true">⚠</span>{gettext("Cover it again")}
+                </span>
+              </summary>
+              <.remote_image image={image} />
+            </details>
+          <% :ready -> %>
             <.remote_image image={image} />
-          </details>
-          <% else %>
-            <.remote_image image={image} />
-          <% end %>
         <% end %>
       </div>
     </div>

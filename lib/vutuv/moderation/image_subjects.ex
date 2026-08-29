@@ -608,10 +608,16 @@ defmodule Vutuv.Moderation.ImageSubjects do
   # A rejected remote picture: the file goes at once, the row stays. Nobody is
   # notified — no member uploaded it, so there is no content of theirs that was
   # removed, and the post it hangs off simply renders without it.
+  #
+  # `"rejected"` and not the `nil` this wrote until issue #1803: a null here is
+  # also what a picture nobody has judged yet carries, so the card could not
+  # tell a refusal from a wait and went on claiming a check was running about a
+  # picture that had been refused weeks earlier. `RemoteImage.unavailable?/1`
+  # still reads the old nulls, which the migration has renamed anyway.
   def apply_rejected(%ImageScan{kind: "remote_post_image"} = scan) do
     with :ok <-
            verdict_applied(
-             flip_remote(RemoteImage, scan, :file, :moderation, nil, clear_file: true)
+             flip_remote(RemoteImage, scan, :file, :moderation, "rejected", clear_file: true)
            ) do
       RemoteMedia.delete_post_image(scan.subject_id)
       announce_when_applied(:ok, scan)
