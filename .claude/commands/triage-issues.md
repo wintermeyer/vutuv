@@ -55,8 +55,11 @@ Then, before deciding anything:
 - **Scope**: every remaining open issue, including the ones that already carry
   `Bug` or `Feature Request` — those get a sanity check, not a rewrite of
   somebody's decision. Retire `enhancement`: it means the same as
-  `Feature Request`, so swap it, and `gh label delete enhancement --yes` once no
-  open issue carries it. Leave `v1.x` alone.
+  `Feature Request`, so swap it on every open issue. **Do not delete the label**:
+  it still marks 182 closed issues and 7 pull requests, and deleting it strips
+  every one of them. That holds for any label with history — an empty-on-open
+  label is not an unused label, so count the closed ones first and put a
+  deletion to Stefan instead of making it. Leave `v1.x` alone.
 
 ## Step 2: done-checks, in parallel
 An issue that reads as if it might already be shipped is a **candidate**. Run
