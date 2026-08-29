@@ -300,7 +300,19 @@ never a hopeful one.
    `git branch -vv` must show no branch marked `[origin/<name>: gone]` — that
    marker is the leak.
 4. Thank them in one or two sentences.
-5. Release the lock and delete the `wip:` label.
+5. **Post any parked closing note.** A PR from `/fix-bugs` carries the note for
+   the issue it fixes in its own body, between an `<!-- closing-note #N -->`
+   marker and the end of that block. The agent that understood the bug wrote it;
+   you post it, because CLAUDE.md's rule is that an issue is never closed
+   silently. Append the contact line and the authorship footer in the note's
+   language, then `gh issue comment N --body "..."`. Name the **merge commit**
+   in it (`Shipped on `main` in <sha>.`) — you know it here and the fixer did
+   not, and there is no version number to quote any more.
+   **Then check whether the issue actually closed** (`gh issue view N --json
+   state`) and close it yourself if not: a squash merge only closes an issue
+   whose PR body carries a closing keyword, and four of five did not on
+   2026-08-29. No marker in the body means nothing to post.
+6. Release the lock and delete the `wip:` label.
 
 Do not wait for a CI run on `main` afterwards — for most changes there is none.
 

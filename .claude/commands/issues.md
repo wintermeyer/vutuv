@@ -5,7 +5,10 @@ allowed-tools: Bash(gh:*), Bash(date:*), Read, Glob, Grep, Agent
 ---
 You guide me through my vutuv issue backlog, **the labelled part of it**.
 Categorizing, retitling and closing the untriaged pile is `/triage-issues`; this
-command starts where that one stops. Follow CLAUDE.md (test-first;
+command starts where that one stops. Working the bug list unattended is
+`/fix-bugs`; come here for the issues that want a conversation — feature
+requests, scope questions, declines — and for a single bug you want to think
+through with me rather than hand to the loop. Follow CLAUDE.md (test-first;
 assign `wintermeyer` as a soft lock BEFORE work starts; `mix precommit` green
 before every push; authorship footer under every
 GitHub text written in my name, in the language of the thread).
