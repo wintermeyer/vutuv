@@ -19,6 +19,30 @@ defmodule Vutuv.RemoteHtmlTest do
     assert RemoteHtml.to_text("<p>&amp;amp;</p>") == "&amp;"
   end
 
+  test "so does the long tail of named entities, and case is not folded" do
+    # The six-entry table this replaced is what let `Google&rsquo;s new phone`
+    # through verbatim. `:mochiweb_charref` is the full HTML5 table.
+    assert RemoteHtml.to_text("<p>Google&rsquo;s new phone</p>") == "Google\u2019s new phone"
+    assert RemoteHtml.to_text("<p>&Aacute; und &aacute;</p>") == "\u00C1 und \u00E1"
+  end
+
+  test "an entity nobody knows is left standing rather than swallowed" do
+    assert RemoteHtml.to_text("<p>&bogus; bleibt</p>") == "&bogus; bleibt"
+  end
+
+  test "no NUL byte leaves to_text/3" do
+    # Not cosmetic: this text is STORED — `Vutuv.Fediverse`'s `remote_text/3`
+    # writes it into a delivered post's body — and Postgres refuses a NUL with
+    # `22021 character_not_in_repertoire`, so a federating server could raise
+    # our insert with `&#0;` in a Note.
+    #
+    # The decoder's own guard cannot catch it: `strip_tags/1` decodes numeric
+    # entities itself, so the byte exists before the decoder runs. Hence the
+    # separate scrub, and hence this test.
+    assert RemoteHtml.to_text("<p>hallo &#0; welt</p>") == "hallo  welt"
+    refute RemoteHtml.to_text("<p>&#0;</p>") =~ <<0>>
+  end
+
   describe "script and style go with their contents" do
     test "a paired element leaves nothing behind" do
       assert RemoteHtml.to_text("<script>alert(1)</script><p>safe</p>") == "safe"

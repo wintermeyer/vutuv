@@ -4,7 +4,7 @@ defmodule Vutuv.MixProject do
   def project do
     [
       app: :vutuv,
-      version: "7.507.2",
+      version: "7.525.1",
       elixir: "~> 1.20",
       elixirc_paths: elixirc_paths(Mix.env()),
       start_permanent: Mix.env() == :prod,
@@ -50,6 +50,11 @@ defmodule Vutuv.MixProject do
       # dangerous (user input must never reach the DOM unsanitized).
       {:earmark, "~> 1.4"},
       {:html_sanitize_ex, "~> 1.4"},
+      # The HTML5 named/numeric character-reference table (`:mochiweb_charref`),
+      # which `Vutuv.RemoteHtml` decodes a remote server's entities with;
+      # promotes the transitive dep of :html_sanitize_ex to a direct one, the
+      # same reason :nimble_csv is listed below.
+      {:mochiweb, "~> 3.3"},
       {:bandit, "~> 1.0"},
       # Resolves the real client IP from X-Forwarded-For behind the nginx
       # reverse proxy, so `conn.remote_ip` is the visitor's address instead of
