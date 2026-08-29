@@ -31,6 +31,8 @@ defmodule Vutuv.Fediverse.RemotePost do
 
   use VutuvWeb, :model
 
+  import Vutuv.ChangesetHelpers, only: [scrub_nul: 1]
+
   alias Vutuv.Translations
 
   # `public` — addressed to the public collection: on the timelines of that
@@ -176,6 +178,9 @@ defmodule Vutuv.Fediverse.RemotePost do
     # string. Ecto's default `:empty_values` reads "" as "not given", which
     # would drop the change and leave the NOT NULL column with a nil.
     |> cast(attrs, [:content_text], empty_values: [])
+    # After both casts, before the validations: remote strings, and a NUL in one
+    # raises on insert (issue #1767).
+    |> scrub_nul()
     # And so it cannot be `validate_required` either (which reads "" as missing
     # too). The column stays NOT NULL, and both write paths in `Vutuv.Fediverse`
     # compute the body through one `is_binary` gate, so it is never nil.

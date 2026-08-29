@@ -295,6 +295,17 @@ every activity of a member it finds no key for, silently.
     (`Vutuv.Mastodon.post_text/1`, which the REST API sends as text). Together
     with `to_text/3` those three are every path from a remote server's words
     into a column here.
+  - **A NUL byte is scrubbed at the write, not at each door.** A NUL is valid
+    UTF-8 and Postgres refuses it (`22021 character_not_in_repertoire`), so one
+    in stored text raises on `Repo.insert` — a delivery any server can make
+    fail. `to_text/3` scrubs the bodies it reduces, but the strings *beside* a
+    body never go near it: an actor's `preferredUsername` and `name`, an
+    attachment's `alt`, the object and inbox URIs are copied out of the JSON,
+    truncated and cast. So the guard sits in the changesets instead
+    (`Vutuv.ChangesetHelpers.scrub_nul/1`, walking every `:string` change on
+    `RemoteAccount`, `Follower`, `Note`, `RemotePost`, `Reaction` and
+    `RemoteImage`), and a new remote-fed column is covered the moment it is
+    cast (issue #1767).
   - **Cleaned on the way in, unlike a display name.** A name is re-derived from
     its column on every render; this text *is* the column, and every reader of
     it (the card, the agent formats, the Mastodon adapter, the teaser, the
