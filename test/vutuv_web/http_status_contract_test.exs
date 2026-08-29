@@ -121,7 +121,13 @@ defmodule VutuvWeb.HttpStatusContractTest do
     # Every routed LiveView, not a hand-picked five: the refusal is wired per
     # scope (`pipe_through`), so the next `live_session` scope that forgets
     # `:html_only` has to fail here rather than in production.
-    test "no routed LiveView answers one with a 500", %{conn: conn} do
+    # Extension-free paths only. A `.md`/`.json` URL on a LiveView route still
+    # 500s on a hostile Accept — `AgentFormat` normalizes the header on its
+    # negotiation path but not on its extension path, so `HtmlOnly` waves the
+    # request through and the LiveView renders for a format it has no template
+    # for. That is pre-existing on main (measured before and after this change,
+    # identically) and is issue #1823, not this fix.
+    test "no routed LiveView answers a bare-path one with a 500", %{conn: conn} do
       {conn, _admin} = create_and_login_admin(conn)
 
       paths =

@@ -24,6 +24,18 @@ defmodule VutuvWeb.Plug.HtmlOnly do
   (`VutuvWeb.Plug.AgentFormat`): `/jobs.md` is served from
   `VutuvWeb.AgentDocs` by the controller and never renders the LiveView, so the
   URL extension decides, not the header the client happened to send with it.
+  Dropping that exemption costs `/jobs.md` its Markdown (measured: 406), so it
+  is load-bearing rather than defensive.
+
+  It is also **wider than it should be**, and knowingly so. A `.md` URL whose
+  route is a LiveView that serves no document — `/notifications.md`,
+  `/search.md`, `/bookmarks.json` — is exempted here and then renders the
+  LiveView for whatever format the client asked for, i.e. the same 500 this
+  module exists to close. `AgentFormat` normalizes the `Accept` header on its
+  negotiation path and not on its extension path, which is where that belongs
+  and where issue #1823 fixes it. Until then the exemption stays as it is: the
+  hole predates this module (measured on `main`, identical), and narrowing it
+  here would only move the guess into a second plug.
   """
 
   @behaviour Plug
