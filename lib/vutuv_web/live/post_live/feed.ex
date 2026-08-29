@@ -79,6 +79,15 @@ defmodule VutuvWeb.PostLive.Feed do
   # How many waiting posts the "not read yet" card names before it stops at a
   # count.
   @unread_shown 10
+  # …and how many the timeline holds drawn-but-hidden before the pre-render gives
+  # up. It is the overflow valve for the tab nobody closed: every arrival costs a
+  # rendered card in the document and a decorated entry in this process (~9 KB
+  # measured), and a feed left open over a weekend delivers those by the
+  # thousand. Past this many the newest are kept and the oldest is dropped again,
+  # so the card keeps describing what actually just happened; the rest are only
+  # counted, and the press falls back to loading a fresh page — which after a
+  # weekend is what the reader wants anyway, not four hundred stale rows.
+  @pending_cap 25
 
   # The rail's cards, in the order a member who never touched them gets. The
   # list is what `Vutuv.Posts.feed_rail/2` measures a stored arrangement
@@ -232,6 +241,9 @@ defmodule VutuvWeb.PostLive.Feed do
     |> assign(:cursor, payload.cursor)
     |> assign(:empty?, payload.entries == [])
     |> assign(:pending_posts, [])
+    # How many arrivals the cap turned away. Nonzero means the timeline no longer
+    # holds a row for every waiting post, so the press has to load a page.
+    |> assign(:pending_overflow, 0)
     |> assign(:draft, payload.draft)
     # The composer starts collapsed to a single "What's new?" button; posting
     # (own activity arriving below) collapses it again. A stored draft opens it
@@ -660,6 +672,8 @@ defmodule VutuvWeb.PostLive.Feed do
   # 2026-08-29). The rest are still counted in the heading and still arrive with
   # the button.
   attr(:entries, :list, required: true)
+  attr(:total, :integer, required: true)
+  attr(:click, :any, required: true)
 
   defp unread_body(assigns) do
     assigns = assign(assigns, :shown, Enum.take(assigns.entries, @unread_shown))
@@ -669,7 +683,7 @@ defmodule VutuvWeb.PostLive.Feed do
       <button
         :for={entry <- @shown}
         type="button"
-        phx-click={reveal_pending()}
+        phx-click={@click}
         class="flex w-full items-start gap-2 border-t border-slate-100 py-2 text-left first:border-t-0 first:pt-0 hover:bg-slate-50 dark:border-slate-800 dark:hover:bg-slate-800/50"
       >
         <span class="min-w-0 flex-1">
@@ -686,17 +700,12 @@ defmodule VutuvWeb.PostLive.Feed do
       mechanism (they are inserted into the stream) and left the reader to guess
       where, which on a card that is itself a list of posts reads as if it would
       add them here (Stefan, 2026-08-29). --%>
-      <.button
-        id="unread-insert"
-        variant="secondary"
-        class="mt-3 w-full"
-        phx-click={reveal_pending()}
-      >
+      <.button id="unread-insert" variant="secondary" class="mt-3 w-full" phx-click={@click}>
         {ngettext(
           "Show %{formatted} post in the feed",
           "Show %{formatted} posts in the feed",
-          length(@entries),
-          formatted: compact_count(length(@entries))
+          @total,
+          formatted: compact_count(@total)
         )}
       </.button>
     </div>
@@ -1221,11 +1230,23 @@ defmodule VutuvWeb.PostLive.Feed do
       for(%{post: %{id: post_id}} <- pending, do: post_id)
     )
 
-    # The rows are already on the page and the browser has already shown them
-    # (`reveal_pending/0`). All that is left here is the state behind them: the
-    # card and the pill go, and every later re-render of those rows now renders
-    # them visible, because that is decided by this list.
-    {:noreply, socket |> assign(:pending_posts, []) |> assign(:empty?, false)}
+    # Two ways to finish, and which one it is was decided when the posts arrived.
+    #
+    # Under the cap the rows are already on the page and the browser has already
+    # shown them (`reveal_pending/0`), so all that is left is the state behind
+    # them: the card and the pill go, and every later re-render of those rows
+    # renders them visible, because that is decided by this list.
+    #
+    # Over it the timeline is missing a row for every post the valve turned away,
+    # so there is nothing to reveal and the honest answer is a fresh page. The
+    # control knows this too and does not run the browser-side reveal in that
+    # mode, or the kept rows would flash into view a moment before the reload
+    # replaced the whole list.
+    if socket.assigns.pending_overflow > 0 do
+      {:noreply, load_source_filter(socket, socket.assigns.feed_filter)}
+    else
+      {:noreply, socket |> assign(:pending_posts, []) |> assign(:empty?, false)}
+    end
   end
 
   # Load the timeline for one source tab, replacing whatever is on screen
@@ -1254,6 +1275,7 @@ defmodule VutuvWeb.PostLive.Feed do
     |> assign(:cursor, page.next_cursor)
     |> assign(:empty?, entries == [])
     |> assign(:pending_posts, [])
+    |> assign(:pending_overflow, 0)
     |> assign(:entries, entries)
     |> stream(:posts, entries, reset: true)
     |> watch_pending_photos(entries)
@@ -1494,7 +1516,35 @@ defmodule VutuvWeb.PostLive.Feed do
     |> prune_threaded_parent(entry)
     |> watch_pending_photos([entry])
     |> assign(:empty?, false)
+    |> trim_pending()
   end
+
+  # The valve. Past `@pending_cap` the OLDEST drawn row goes — the newest are
+  # what the card quotes and what the reader is about to be shown, so a window
+  # that kept the first twenty-five would freeze the card on this morning while
+  # the count climbed into the thousands.
+  #
+  # One arrival can only push the list one over, so this drops one row and never
+  # loops. The dropped post is not lost to the reader: it is in the feed, and the
+  # press now loads a page that has it.
+  defp trim_pending(socket) do
+    pending = socket.assigns.pending_posts
+
+    if length(pending) > @pending_cap do
+      dropped = List.last(pending)
+
+      socket
+      |> assign(:pending_posts, Enum.take(pending, @pending_cap))
+      |> update(:entries, &Enum.reject(&1, fn e -> e.id == dropped.id end))
+      |> stream_delete(:posts, dropped)
+      |> update(:pending_overflow, &(&1 + 1))
+    else
+      socket
+    end
+  end
+
+  # How many posts are waiting, drawn or not — what the card and the pill count.
+  defp pending_count(assigns), do: length(assigns.pending_posts) + assigns.pending_overflow
 
   # Showing the waiting posts, in the browser, before the server hears about it.
   #
@@ -1513,6 +1563,11 @@ defmodule VutuvWeb.PostLive.Feed do
   # a fire-once description of the arrival rather than a state, and the server
   # renders neither — so the first re-render of the row (a photo scan, a
   # translation, the midnight restream) leaves a plain visible row behind.
+  # What a "show me" control fires. Past the cap it is the plain event and the
+  # server loads a page; under it, the browser does the work first.
+  defp show_pending(%{pending_overflow: overflow}) when overflow > 0, do: "show-new"
+  defp show_pending(_assigns), do: reveal_pending()
+
   defp reveal_pending do
     JS.set_attribute({"data-pending-shown", "1"}, to: "#feed-posts > [hidden]")
     |> JS.remove_attribute("hidden", to: "#feed-posts > [hidden]")
@@ -2016,15 +2071,15 @@ defmodule VutuvWeb.PostLive.Feed do
               <button
                 id="show-new-posts"
                 type="button"
-                phx-click={reveal_pending()}
+                phx-click={show_pending(assigns)}
                 class="mx-auto flex w-full max-w-full items-center gap-2 rounded-full bg-brand-50 px-4 py-2 text-sm font-semibold text-brand-700 shadow-sm hover:bg-brand-100 sm:w-auto dark:bg-brand-900/40 dark:text-brand-100 dark:hover:bg-brand-900/70"
               >
                 <span class="shrink-0 tabular-nums">
                   {ngettext(
                     "Show %{formatted} new post",
                     "Show %{formatted} new posts",
-                    length(@pending_posts),
-                    formatted: compact_count(length(@pending_posts))
+                    pending_count(assigns),
+                    formatted: compact_count(pending_count(assigns))
                   )}
                 </span>
                 <span
@@ -2201,9 +2256,13 @@ defmodule VutuvWeb.PostLive.Feed do
                     title={rail_title("unread")}
                     rail={@rail}
                     dot
-                    count={compact_count(length(@pending_posts))}
+                    count={compact_count(pending_count(assigns))}
                   >
-                    <.unread_body entries={@pending_posts} />
+                    <.unread_body
+                      entries={@pending_posts}
+                      total={pending_count(assigns)}
+                      click={show_pending(assigns)}
+                    />
                   </.rail_block>
                 <% "sources" -> %>
                   <%!-- The filter band (the source tabs' successor): one
