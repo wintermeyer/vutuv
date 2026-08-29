@@ -14,6 +14,13 @@ defmodule VutuvWeb.PostFeedLiveTest do
 
   defp other_user(attrs \\ []), do: insert(:user, Keyword.merge([email_confirmed?: true], attrs))
 
+  # How many timeline rows are drawn but hidden — the waiting posts. Counted off
+  # the row wrapper's own class, so it cannot catch a `hidden` somewhere inside
+  # a card.
+  defp hidden_rows(html) do
+    Regex.scan(~r/class="py-4 first:pt-0 last:pb-0" hidden/, html) |> length()
+  end
+
   # Where `text` first shows up in the rendered feed — how the thread tests
   # assert reading order without parsing the whole card tree.
   defp position(html, text) do
@@ -953,6 +960,52 @@ defmodule VutuvWeb.PostFeedLiveTest do
       assert has_element?(live, "#feed-posts [id*='#{post.id}']")
       refute has_element?(live, "#feed-posts > [hidden]")
       assert render(live) =~ "breaking news"
+    end
+
+    test "a tab left open for days stops drawing and starts counting", %{conn: conn} do
+      {conn, user} = create_and_login_user(conn)
+      friend = other_user()
+      insert(:follow, follower: user, followee: friend)
+
+      {:ok, live, _html} = live(conn, ~p"/feed")
+
+      # Two past the cap of 25. The valve is what keeps a feed left open over a
+      # weekend from filling the document with thousands of hidden cards.
+      {:ok, first} = Posts.create_post(friend, %{body: "arrival number 1"})
+      for n <- 2..27, do: {:ok, _} = Posts.create_post(friend, %{body: "arrival number #{n}"})
+
+      html = render(live)
+
+      # Drawn: the newest 25. Counted: all 27.
+      assert hidden_rows(html) == 25
+      assert html =~ "Show 27 posts in the feed"
+
+      # And the two the valve turned away left no row behind.
+      refute has_element?(live, "#feed-posts [id*='#{first.id}']")
+
+      # The control drops the browser-side reveal, because there is no longer a
+      # row for every post it promises — it is the plain event, and the server
+      # answers with a page.
+      assert has_element?(live, "#unread-insert[phx-click='show-new']")
+
+      live |> element("#unread-insert") |> render_click()
+
+      assert render(live) =~ "arrival number 27"
+      refute has_element?(live, "#feed-posts > [hidden]")
+      refute has_element?(live, "#unread-posts")
+    end
+
+    test "under the cap the press stays a browser-side reveal", %{conn: conn} do
+      {conn, user} = create_and_login_user(conn)
+      friend = other_user()
+      insert(:follow, follower: user, followee: friend)
+
+      {:ok, live, _html} = live(conn, ~p"/feed")
+      {:ok, _} = Posts.create_post(friend, %{body: "just the one"})
+
+      # A JS command chain, not the bare event: the reader waits for nothing.
+      refute has_element?(live, "#unread-insert[phx-click='show-new']")
+      assert has_element?(live, "#unread-insert")
     end
 
     test "a denied post never reaches the pill", %{conn: conn} do

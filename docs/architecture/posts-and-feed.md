@@ -374,6 +374,21 @@ visible, and nothing has to remember to unstamp anything.
 `#feed-posts > [hidden] + :not([hidden])` give the first *visible* row back the
 `first:pt-0` it no longer matches.
 
+**And it needs an overflow valve, because nobody closes the tab.** Drawing every
+arrival costs a rendered card in the document and a decorated entry in the
+LiveView process (~9 KB, measured), and a feed left open over a weekend delivers
+those by the thousand. So `@pending_cap` (25) bounds it: past that the newest are
+kept and `trim_pending/1` drops the oldest drawn row again — the newest, because
+the card and the pill quote them, and a window that kept the first twenty-five
+would freeze the card on Friday morning while the count climbed into the
+thousands. What the valve turned away is only counted (`@pending_overflow`), and
+that count is what makes the press change shape: with rows missing there is
+nothing to reveal, so the control fires the plain `show-new` and the server
+answers with a fresh page (`show_pending/1` picks which). It deliberately does
+**not** run the browser-side reveal first — the kept rows would flash into view a
+moment before the reload replaced the whole list. After a weekend a fresh page is
+what the reader wants anyway, not four hundred stale rows.
+
 `Posts.feed_page/2` merges its sources through `Vutuv.FeedPage` (a shared
 cursor over independent fetchers). Three are local: own + followed authors'
 posts, their reposts, and — since issue #872 — posts carrying a **tag you follow**
