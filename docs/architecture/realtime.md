@@ -32,6 +32,77 @@ the old value on a device that reports no inset, which is why the change is
 invisible on a desktop. `mobile_tab_bar_css_test.exs` and
 `web_app_manifest_test.exs` fail the build if a piece goes missing.
 
+### The service worker and Web Push (issue #1729)
+
+Everything above works only while a vutuv page is open: a `Notification` raised
+by a tab dies with the tab, and the installed app could therefore never notify
+anyone. `assets/js/sw.js` — hand-written, no Workbox — is served by
+`VutuvWeb.ServiceWorkerController` at **`/sw.js`**, which is the root because a
+worker controls only the directory it is served from. It is not an esbuild
+entry point either: it is read at compile time (`@external_resource`), so it
+ships inside the release with no asset step, and the controller prepends the
+two things only the server knows — the digested paths of the tracked assets
+(the cache key) and one generic notification line per kind per locale.
+
+**Its load-bearing rule is that HTML is never cached.** A stored page carries a
+stale CSRF token and whoever was signed in when it was stored, and the LiveView
+socket would join against a document the server never sent. Only `/assets/*`
+is cached (digested filenames, so immutable — and only where a digest manifest
+exists, never in dev), plus `/system/offline`, the one document this app keeps.
+That page renders **without a layout** for exactly that reason. Full offline is
+not a goal.
+
+`Vutuv.WebPush` is the lifted crypto and delivery — VAPID (RFC 8292) and
+`aes128gcm` (RFC 8291), no dependency, keys derived from `secret_key_base`.
+It used to live in the Mastodon adapter, where a subscription hangs off an
+access token an installed app does not have;
+`Vutuv.MastodonApi.WebPush` is now a thin delegate that keeps the adapter's own
+`MASTODON_API_ENABLED` gate, which deliberately does not reach a member's own
+app. `web_push_subscriptions` is keyed on the **endpoint** — a browser's own
+address at its push service — so the same phone signed in as somebody else
+moves the row instead of leaving the previous member being woken by it.
+
+`Vutuv.WebPush.Dispatcher` hangs off `Activity.notify/2` beside the Mastodon
+one, plus `Vutuv.Chat`'s new-message broadcast, which never goes through
+`notify/2`. Two switches must be on: the account's `browser_notifications?`
+and the existence of a subscription row, which is the per-device answer,
+because a subscription belongs to a browser and not to an account. The payload
+carries **no content** — kind, id and destination — and the worker draws the
+line ("New message on vutuv"), because what a push turns into is text on a lock
+screen.
+
+While the worker exists, it also answers the stale-document problem
+`static_changed?/1` describes: a deploy reloads nothing, so `updatefound` shows
+the shell's `#sw-update` bar ("A new version of vutuv is ready"), and the
+waiting worker is promoted only when the member taps Reload.
+
+**Which means a worker from the previous release keeps running, and nothing
+bounds how long.** This is the one asset that deliberately outlives a deploy,
+so it is worth being exact about. A new worker appears only when `/sw.js`
+changes byte-for-byte, and its body is the config prelude plus the file: the
+`version` (the digested paths of the tracked assets, joined), the notification
+lines, and `sw.js` itself. A deploy that touches none of those three ships an
+identical worker, and no bar appears at all. When it does differ, the new
+worker installs and then **waits**: the old one stays in charge of every open
+tab, serving `/assets/*` out of its own `vutuv-<version>` cache and handling
+that tab's `push` and `notificationclick` with the strings table baked into it
+at *its* release. It is replaced when the member taps
+Reload (which posts `skip-waiting`, and only then does `activate` drop the
+other caches and `clients.claim()`), or when every tab it controls is closed.
+An installed app on a phone is closed rarely and reloaded more rarely still,
+so "weeks" is the realistic upper bound, not "until the next deploy".
+
+The consequence for whoever changes `sw.js` next: **the push payload is a wire
+contract with workers you already shipped**, not an internal call. The server
+sends `kind`, `locale` and `url`; a worker from an older release will receive
+tomorrow's pushes and look them up in yesterday's table. Adding a kind is
+therefore safe by construction — the handler falls back to `activity` for
+anything its table has no line for, which is why that fallback is load-bearing
+rather than defensive — while renaming or dropping a field is not, and fails
+silently on exactly the devices nobody is testing on. The same holds for the
+cache: `activate` deletes every key that is not its own, so two releases never
+share one, but the old cache lives as long as the old worker does.
+
 The **Messages** (`/messages`), **Notifications** (`/notifications`) and
 **Search** (`/search`) pages are LiveViews under a `live_session`. The search
 page itself is described in [search.md](search.md).

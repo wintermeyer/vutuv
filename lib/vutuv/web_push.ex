@@ -22,10 +22,10 @@ defmodule Vutuv.WebPush do
   happened and which one, and nothing else, so a push service — and anything
   reading the phone's lock screen — learns that something happened, never what
   was said. A phone client fetches the notification itself over the
-  authenticated API. That rule is why this module is worth sharing rather than
-  copying: it will matter more for the installed app than it does for a
-  third-party client, because there the result lands on a lock screen with our
-  own name on it.
+  authenticated API; our own service worker never fetches at all and draws a
+  generic line per kind (see `assets/js/sw.js`). It matters more for our own
+  app than for a third-party one, because the result lands on a lock screen
+  with our name on it.
 
   **The key pair is this installation's own**, and nobody issues it: VAPID is a
   self-signed identity, so a server that has none can simply make one. That is
@@ -102,12 +102,13 @@ defmodule Vutuv.WebPush do
   # on the secret would be correct — it just has to sit here rather than around
   # `keys/0`, where it would freeze a pair an operator pins later.
   #
-  # Not worth a `:persistent_term` write while the only caller is a push that
-  # is already going out over the network. Watch this when `public_key/0`
-  # gains a caller on a **render** path rather than a send path — the installed
-  # app (issue #1729) needs it to draw its subscribe switch, which would make
-  # this once per page view per member instead of once per push. Memoise then,
-  # rather than re-reading this comment as though it still said "once per push".
+  # Still not worth a `:persistent_term` write, but the reason is no longer
+  # "once per push": since issue #1729 the hottest caller is
+  # `VutuvWeb.ShellLive`, which needs `public_key/0` to render the subscribe
+  # switch and therefore derives a pair on **every authenticated mount**, i.e.
+  # once per page view per member. 45µs is still noise beside that mount's own
+  # badge aggregates — but if this list of callers grows again, memoise rather
+  # than re-reading this comment as though it still said "once per push".
   defp derived_keys(counter \\ 0) do
     candidate =
       :crypto.hash(:sha256, "vutuv/web_push/vapid/v1/#{counter}" <> secret_key_base())

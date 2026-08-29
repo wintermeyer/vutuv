@@ -7,25 +7,10 @@
 // when the browser actually supports WebAuthn, so an unsupported browser falls
 // back cleanly to the email-PIN flow.
 
-import { onReady, once, postJSON } from "./util"
-
-// base64url <-> ArrayBuffer. The WebAuthn API speaks ArrayBuffers; we send and
-// receive base64url strings (no padding) over JSON.
-function b64urlToBuf(value) {
-  const b64 = value.replace(/-/g, "+").replace(/_/g, "/")
-  const pad = b64.length % 4 === 0 ? "" : "=".repeat(4 - (b64.length % 4))
-  const bin = atob(b64 + pad)
-  const bytes = new Uint8Array(bin.length)
-  for (let i = 0; i < bin.length; i++) bytes[i] = bin.charCodeAt(i)
-  return bytes.buffer
-}
-
-function bufToB64url(buf) {
-  const bytes = new Uint8Array(buf)
-  let bin = ""
-  for (let i = 0; i < bytes.length; i++) bin += String.fromCharCode(bytes[i])
-  return btoa(bin).replace(/\+/g, "-").replace(/\//g, "_").replace(/=+$/, "")
-}
+// base64url <-> ArrayBuffer comes from util.js: the WebAuthn API speaks
+// ArrayBuffers while the wire carries base64url strings, and so does the Web
+// Push subscription's VAPID key.
+import { b64urlToBuf, bufToB64url, onReady, once, postJSON } from "./util"
 
 function showError(scope, message) {
   const el = scope.querySelector("[data-webauthn-error]")

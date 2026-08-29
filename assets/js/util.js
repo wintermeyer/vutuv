@@ -63,3 +63,45 @@ export function postJSON(url, body) {
 // it (the count pop, the FLIP reorder, …).
 export const reducedMotion = () =>
   window.matchMedia("(prefers-reduced-motion: reduce)").matches
+
+// base64url <-> ArrayBuffer. Two browser APIs in this app speak ArrayBuffers
+// while the wire carries unpadded base64url strings: WebAuthn's
+// create/get ceremony (webauthn.js) and `pushManager.subscribe`'s
+// `applicationServerKey` (the VAPID key, issue #1729). Written once here
+// rather than a second time beside whichever one came later.
+export function b64urlToBuf(value) {
+  const b64 = value.replace(/-/g, "+").replace(/_/g, "/")
+  const pad = b64.length % 4 === 0 ? "" : "=".repeat(4 - (b64.length % 4))
+  const bin = atob(b64 + pad)
+  const bytes = new Uint8Array(bin.length)
+  for (let i = 0; i < bin.length; i++) bytes[i] = bin.charCodeAt(i)
+  return bytes.buffer
+}
+
+export function bufToB64url(buf) {
+  const bytes = new Uint8Array(buf)
+  let bin = ""
+  for (let i = 0; i < bytes.length; i++) bin += String.fromCharCode(bytes[i])
+  return btoa(bin).replace(/\+/g, "-").replace(/\//g, "_").replace(/=+$/, "")
+}
+
+// localStorage, wrapped. A private window, or a browser set to block site data,
+// throws on plain access — so every read answers null and every write is a
+// no-op rather than taking an unrelated feature down with it. That failure mode
+// is reasoned about once, here, instead of in each `try {}` at a call site.
+export function localGet(key) {
+  try {
+    return window.localStorage.getItem(key)
+  } catch (_e) {
+    return null
+  }
+}
+
+// A null (or undefined) value forgets the key, which is what every caller here
+// means by "no longer true".
+export function localSet(key, value) {
+  try {
+    if (value == null) window.localStorage.removeItem(key)
+    else window.localStorage.setItem(key, value)
+  } catch (_e) {}
+}

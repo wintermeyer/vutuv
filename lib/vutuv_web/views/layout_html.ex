@@ -215,15 +215,21 @@ defmodule VutuvWeb.LayoutHTML do
 
   @doc """
   The `<title>` for the self-contained `error.html.heex` layout (the
-  exception-rescued render path). `render_errors` passes the numeric `:status`
-  in the assigns, so a 500 tab reads "500 - vutuv"; without it (e.g. rendered
-  directly) it falls back to the bare site name. Kept defensive on purpose -
-  the error layout must never raise on a missing assign.
+  exception-rescued render path, and the offline page, which borrows the same
+  shell for the same reason — see `service_worker/offline.html.heex`).
+
+  `render_errors` passes the numeric `:status` in the assigns, so a 500 tab
+  reads "500 - vutuv"; a page that borrows the layout deliberately rather than
+  by crashing names itself with `:page_title` instead, because a browser tab
+  showing the bare site name is the least useful thing an offline reader could
+  be told. Without either it falls back to the site name. Kept defensive on
+  purpose - the error layout must never raise on a missing assign.
   """
   def error_title(assigns) do
-    case Map.get(assigns, :status) do
-      status when is_integer(status) -> "#{status} - vutuv"
-      _ -> "vutuv"
+    case {Map.get(assigns, :status), Map.get(assigns, :page_title)} do
+      {status, _} when is_integer(status) -> "#{status} - vutuv"
+      {_, title} when is_binary(title) and title != "" -> "#{title} - vutuv"
+      _neither -> "vutuv"
     end
   end
 
