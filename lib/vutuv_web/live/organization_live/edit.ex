@@ -13,6 +13,7 @@ defmodule VutuvWeb.OrganizationLive.Edit do
   import VutuvWeb.ErrorHelpers
 
   alias Vutuv.Countries
+  alias Vutuv.OrganizationImageStore
   alias Vutuv.Organizations
   alias VutuvWeb.Live.InitAssigns
 
@@ -36,9 +37,9 @@ defmodule VutuvWeb.OrganizationLive.Edit do
       |> assign(:handle_value, organization.username || "")
       |> assign(:handle_error, nil)
       |> allow_upload(:logo,
-        accept: Vutuv.OrganizationImageStore.extension_whitelist(),
+        accept: OrganizationImageStore.extension_whitelist(),
         max_entries: 1,
-        max_file_size: 4_000_000
+        max_file_size: OrganizationImageStore.max_filesize()
       )
       |> assign_form(Organizations.change_organization(organization))
 
@@ -63,11 +64,11 @@ defmodule VutuvWeb.OrganizationLive.Edit do
   def handle_event("save", %{"organization" => params}, socket) do
     case Organizations.update_organization(socket.assigns.organization, params) do
       {:ok, organization} ->
-        organization = consume_logo(socket, organization)
+        {organization, level, message} = consume_logo(socket, organization)
 
         {:noreply,
          socket
-         |> put_flash(:info, gettext("Your organization page was updated."))
+         |> put_flash(level, message)
          |> push_navigate(to: ~p"/organizations/#{organization.slug}")}
 
       {:error, changeset} ->
@@ -204,6 +205,11 @@ defmodule VutuvWeb.OrganizationLive.Edit do
     end
   end
 
+  # Consumes the picked logo and reports what became of it as the page's flash.
+  # Every outcome has to say something: an image held by moderation and one the
+  # encoder refused both leave the page with its old logo, so silence (the
+  # plain "was updated" this used to flash either way) reads as a rejected file
+  # format.
   defp consume_logo(socket, organization) do
     results =
       consume_uploaded_entries(socket, :logo, fn %{path: path}, entry ->
@@ -217,8 +223,23 @@ defmodule VutuvWeb.OrganizationLive.Edit do
       end)
 
     case results do
-      [{:ok, updated} | _] -> updated
-      _ -> organization
+      [{:ok, updated} | _] ->
+        {updated, :info, gettext("Your organization page was updated.")}
+
+      [{:pending, updated} | _] ->
+        {updated, :info,
+         gettext(
+           "Your organization page was updated. The new logo is being checked and appears once that is through."
+         )}
+
+      [{:error, _reason} | _] ->
+        {organization, :error,
+         gettext(
+           "Your organization page was updated, but that picture could not be used as a logo. Please pick another one."
+         )}
+
+      [] ->
+        {organization, :info, gettext("Your organization page was updated.")}
     end
   end
 
@@ -261,9 +282,13 @@ defmodule VutuvWeb.OrganizationLive.Edit do
               >
                 {gettext("Remove logo")}
               </button>
-              <p :for={err <- upload_errors(@uploads.logo)} class="text-xs text-red-600">
-                {upload_error_to_string(err)}
+              <p class="text-xs text-slate-600 dark:text-slate-400">
+                {gettext("%{formats}, up to %{limit}",
+                  formats: format_list(OrganizationImageStore.extension_whitelist()),
+                  limit: megabyte_label(OrganizationImageStore.max_filesize())
+                )}
               </p>
+              <.upload_problems upload={@uploads.logo} />
             </div>
           </div>
         </div>
@@ -475,9 +500,4 @@ defmodule VutuvWeb.OrganizationLive.Edit do
     </div>
     """
   end
-
-  defp upload_error_to_string(:too_large), do: gettext("The file is too large.")
-  defp upload_error_to_string(:too_many_files), do: gettext("You can only upload one logo.")
-  defp upload_error_to_string(:not_accepted), do: gettext("That file type is not allowed.")
-  defp upload_error_to_string(_), do: gettext("The upload failed.")
 end

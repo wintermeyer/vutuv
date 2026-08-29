@@ -3154,6 +3154,41 @@ defmodule VutuvWeb.UI do
   def compact_count(n), do: to_string(n)
 
   @doc """
+  An upload budget as the label a member reads (`4_000_000` -> `"4 MB"`), for
+  the hint under a file field and the message that refuses an oversized one.
+  Both say the same number because both call this.
+  """
+  def megabyte_label(bytes) when is_integer(bytes), do: "#{div(bytes, 1_000_000)} MB"
+
+  @doc """
+  The formats an extension whitelist accepts, as a member-readable list
+  (`~w(.jpg .jpeg .png)` -> `"JPEG, PNG"`).
+
+  Derived rather than written out because a whitelist is not the same on every
+  installation — SVG needs librsvg in libvips, HEIC an HEVC decoder — and a
+  hint naming a format the box then refuses is worse than no hint. An
+  extension with no name here is dropped rather than shown raw.
+  """
+  @format_names %{
+    ".jpg" => "JPEG",
+    ".jpeg" => "JPEG",
+    ".png" => "PNG",
+    ".svg" => "SVG",
+    ".webp" => "WebP",
+    ".heic" => "HEIC",
+    ".heif" => "HEIC",
+    ".pdf" => "PDF"
+  }
+
+  def format_list(extensions) do
+    extensions
+    |> Enum.map(&Map.get(@format_names, &1))
+    |> Enum.reject(&is_nil/1)
+    |> Enum.uniq()
+    |> Enum.join(", ")
+  end
+
+  @doc """
   The translated name of a calendar month (`1..12`) — the one home of the
   month-name strings the work-experience form options and the profile/ad date
   labels share, instead of a copy of the twelve `gettext` literals per view.
@@ -3843,20 +3878,26 @@ defmodule VutuvWeb.UI do
 
   @doc """
   Changeset-error banner shared by the `editform` `form_content` templates and
-  the sign-up form. Renders the `.alert.alert-danger` strip only when
-  `@changeset.action` is set (a failed submit), nothing on a fresh form: a
-  warning glyph plus one actionable sentence ("Please check the fields marked
-  in red."), announced to assistive tech via `role="alert"`. The sentence must
-  stay true wherever the banner shows — classic editform pages mark errored
-  fields via `.editform__field--error`, kit forms via `input_class/2`. Styled
-  by `components.css`, not Tailwind — do not swap in utilities. Use it as
-  `<.form_error changeset={@changeset} />`.
+  the sign-up form. Renders the `.alert.alert-danger` strip only when the
+  changeset has been acted on **and** actually carries errors: a warning glyph
+  plus one actionable sentence ("Please check the fields marked in red."),
+  announced to assistive tech via `role="alert"`. The sentence must stay true
+  wherever the banner shows — classic editform pages mark errored fields via
+  `.editform__field--error`, kit forms via `input_class/2`.
+
+  The `errors` half of that condition is what makes it true. A live-validating
+  form (`phx-change="validate"`) stamps `action: :validate` on **every**
+  keystroke and on picking a file, so an `action`-only test put the banner up
+  against a form with nothing marked in red — which is what a member gets on
+  `/organizations/:slug/edit` the moment they choose a logo, and reads as "my
+  picture was refused". Styled by `components.css`, not Tailwind — do not swap
+  in utilities. Use it as `<.form_error changeset={@changeset} />`.
   """
   attr(:changeset, :any, required: true)
 
   def form_error(assigns) do
     ~H"""
-    <div :if={@changeset.action} class="alert alert-danger" role="alert">
+    <div :if={@changeset.action && @changeset.errors != []} class="alert alert-danger" role="alert">
       <svg class="alert__icon" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" aria-hidden="true">
         <path
           stroke-linecap="round"
@@ -3868,6 +3909,59 @@ defmodule VutuvWeb.UI do
     </div>
     """
   end
+
+  @doc """
+  Everything a `live_file_input` upload is currently refusing, as red lines
+  under the field: `<.upload_problems upload={@uploads.logo} />`.
+
+  Both levels, because a form that renders only one of them is silent for the
+  common half. `upload_errors(@uploads.x)` carries the *config* errors (too
+  many files); the error that matters to somebody who just picked a file —
+  too large, wrong type — hangs off the **entry** and needs
+  `upload_errors(@uploads.x, entry)`. Leaving the entry half out is what made
+  the organization logo field accept a file and then quietly drop it, which
+  reads as "my format was refused"; the job-posting form rendered neither.
+
+  The sentences come from the upload's own config, so the size in the message
+  is the size that rejected the file.
+  """
+  attr(:upload, :any, required: true, doc: "an `@uploads.<name>` config")
+
+  def upload_problems(assigns) do
+    assigns = assign(assigns, :messages, upload_problem_messages(assigns.upload))
+
+    ~H"""
+    <p :for={message <- @messages} class="text-xs text-red-600">{message}</p>
+    """
+  end
+
+  defp upload_problem_messages(upload) do
+    entry_errors =
+      for entry <- upload.entries, error <- upload_errors(upload, entry), do: error
+
+    (upload_errors(upload) ++ entry_errors)
+    |> Enum.uniq()
+    |> Enum.map(&upload_problem_message(&1, upload))
+  end
+
+  defp upload_problem_message(:too_large, upload) do
+    gettext("That file is larger than %{limit}. Please upload a smaller one.",
+      limit: megabyte_label(upload.max_file_size)
+    )
+  end
+
+  defp upload_problem_message(:too_many_files, upload) do
+    ngettext(
+      "You can upload one file at a time.",
+      "You can upload at most %{count} files at a time.",
+      upload.max_entries
+    )
+  end
+
+  defp upload_problem_message(:not_accepted, _upload),
+    do: gettext("That file type is not allowed.")
+
+  defp upload_problem_message(_other, _upload), do: gettext("The upload failed.")
 
   @doc """
   Classic-page (components.css-styled) `editform__field` wrapper shared by the `editform`

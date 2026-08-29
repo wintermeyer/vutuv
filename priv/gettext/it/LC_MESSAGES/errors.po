@@ -119,6 +119,9 @@ msgstr ""
 "Può avere al massimo %{max} tag. Ne rimuova uno prima di aggiungerne un "
 "altro."
 
+msgid "Please type at least one tag."
+msgstr "Inserisca almeno un tag."
+
 msgid "You already have this tag."
 msgstr "Questo tag è già presente."
 

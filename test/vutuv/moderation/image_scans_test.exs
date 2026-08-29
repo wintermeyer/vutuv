@@ -453,7 +453,9 @@ defmodule Vutuv.Moderation.ImageScansTest do
       organization = insert_organization(user)
       upload = jpeg_upload()
 
-      {:ok, updated} =
+      # `:pending`, not `:ok` — the edit form needs to be able to tell a logo
+      # that is waiting for the scan from one that is live, so it can say so.
+      {:pending, updated} =
         Vutuv.Organizations.store_logo(organization, user, upload.path, upload.filename)
 
       # The pointer did NOT flip: no unreleased byte behind organizations.logo.

@@ -23,6 +23,35 @@ Pending gallery uploads (a composer that was never submitted) are swept after a
 day by `Vutuv.Posts.PendingImageSweeper`, which cleans **both** the post and the
 job-posting galleries (rows and files).
 
+### SVG (organization logos)
+
+An **organization logo** may also be uploaded as SVG — the one picture members
+usually hold as a vector. `Vutuv.Uploads.Spec` rasterises it on the way in (at
+`svg_raster_size/0`, the widest version an organization image is stored at); the
+served versions are AVIF like every other picture, and the SVG stays behind as
+the original.
+
+*It is decided by content, never by filename.* What `open_rotated/1` is handed
+is the upload's temporary file, which has no extension, and libvips picks its
+loader by content anyway — so a `.png` full of SVG markup renders as SVG
+whatever the whitelist believed. The opening bytes decide instead.
+
+*The renderer is what is protected, not the browser.* No SVG is ever served, so
+this is not an XSS question: the XML parser runs on our machine, on markup a
+member — or a remote server — chose, and it will expand entities (XXE, billion
+laughs) and follow references while rendering. The gate refuses a DOCTYPE,
+entity, `<script>`, `<foreignObject>`, `javascript:`, `@import`, or a `href`
+pointing at `http(s):`, `file:` or `//`, and it sits inside **both**
+`open_rotated/1` and `open_rotated_binary/1` — the two doors every picture comes
+through — so it covers a fediverse attachment and an Open Library cover as well
+as the upload form.
+
+Availability is a property of the box: SVG needs librsvg inside libvips, the way
+`.heic` needs an HEVC decoder. `Spec.svg_supported?/0` answers that by rendering
+a probe (a registered loader is not proof — see `heic_supported?/0` next door);
+the whitelist and the hint under the upload field are built from it, and
+`spec_test.exs` asserts it beside the AVIF guard, so losing it is loud.
+
 Every uploaded **original** is kept verbatim (format + metadata) under the
 private `<UPLOADS_DIR_PREFIX>/originals/` tree (`Vutuv.Uploads.Originals`) as
 the source for re-deriving. It is not reachable by URL construction (no

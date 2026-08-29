@@ -127,6 +127,11 @@ msgstr ""
 "Sie können höchstens %{max} Tags haben. Entfernen Sie zuerst eines, bevor Sie "
 "ein weiteres hinzufügen."
 
+## Custom message from a submit that names no usable tag
+## (Vutuv.Tags.no_tags_changeset/0).
+msgid "Please type at least one tag."
+msgstr "Bitte geben Sie mindestens ein Tag ein."
+
 ## Custom message from the duplicate-tag unique constraint
 ## (Vutuv.Tags.UserTag.changeset/2).
 msgid "You already have this tag."

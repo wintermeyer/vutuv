@@ -620,6 +620,11 @@ config :vutuv, :post_images, max_filesize: 50_000_000, max_per_post: 10
 # Job-posting images: same pattern and limits as post images.
 config :vutuv, :job_posting_images, max_filesize: 6_000_000, max_per_post: 10
 
+# Organization logos (Vutuv.OrganizationImageStore). Far below the post budget
+# on purpose: a logo is a small picture, and the form names this number, so a
+# generous cap here would mostly collect 20 MB screenshots of one.
+config :vutuv, :organization_images, max_filesize: 4_000_000
+
 # Job postings (Vutuv.Jobs, milestone 11).
 #   * default_runtime_days — how long a published posting stays live before it
 #     auto-expires. Flat, no renewals: a still-open role gets a fresh posting.

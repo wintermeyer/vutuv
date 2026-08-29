@@ -367,6 +367,20 @@ defmodule Vutuv.Tags do
     |> Map.put(:action, :insert)
   end
 
+  @doc """
+  The sibling of `tag_limit_changeset/1` for a submit that names no usable tag
+  at all (`" , "`): the same shape, so the editor marks the field and says why.
+  It used to hand the form an *errorless* changeset and lean on the error
+  banner rendering off the `:insert` action alone — which promised a field
+  marked in red that no field ever was.
+  """
+  def no_tags_changeset do
+    %UserTag{}
+    |> UserTag.changeset(%{})
+    |> Ecto.Changeset.add_error(:tag_id, "Please type at least one tag.")
+    |> Map.put(:action, :insert)
+  end
+
   # `Tag.create_or_link_tag/2` always resolves to a `:tag_id` (it either links an
   # existing tag or mints a fresh one and links that). A member can only reach an
   # honor tag by linking the pre-existing reserved one — a freshly minted tag is

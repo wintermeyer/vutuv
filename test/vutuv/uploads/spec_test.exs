@@ -295,4 +295,83 @@ defmodule Vutuv.Uploads.SpecTest do
       assert {:error, :too_large} = Spec.open_rotated(path)
     end
   end
+
+  describe "SVG" do
+    @svg ~s(<svg xmlns="http://www.w3.org/2000/svg" width="64" height="64">) <>
+           ~s(<rect width="64" height="64" fill="#1b1408"/></svg>)
+
+    # The capability guard for SVG, the sibling of the AVIF one above: without
+    # librsvg the organization logo field silently stops offering the format,
+    # and a build losing it should say so here rather than on someone's upload.
+    test "this libvips build can rasterise SVG" do
+      assert Spec.svg_supported?()
+    end
+
+    test "renders at the raster size, not at the size the file names" do
+      tmp = tmp!()
+      path = Path.join(tmp, "logo.svg")
+      File.write!(path, @svg)
+
+      assert {:ok, image} = Spec.open_rotated(path)
+      assert Image.width(image) == Spec.svg_raster_size()
+    end
+
+    # The extension is not what routes a file to the SVG renderer — libvips
+    # sniffs the content — so neither is it what routes one to the vetting.
+    test "an SVG named .png is still rasterised and still vetted" do
+      tmp = tmp!()
+      path = Path.join(tmp, "logo.png")
+      File.write!(path, @svg)
+
+      assert {:ok, image} = Spec.open_rotated(path)
+      assert Image.width(image) == Spec.svg_raster_size()
+
+      File.write!(path, String.replace(@svg, "<rect", "<script>x</script><rect"))
+      assert {:error, :unsafe_svg} = Spec.open_rotated(path)
+    end
+
+    test "refuses markup that carries code, an entity or an external reference" do
+      tmp = tmp!()
+      path = Path.join(tmp, "hostile.svg")
+
+      for hostile <- [
+            String.replace(@svg, "<rect", "<script>x</script><rect"),
+            String.replace(@svg, "<rect", ~s(<foreignObject><b>hi</b></foreignObject><rect)),
+            ~s(<!DOCTYPE svg [<!ENTITY x "y">]>) <> @svg,
+            String.replace(@svg, "<rect", ~s(<image href="file:///etc/passwd"/><rect)),
+            String.replace(@svg, "<rect", ~s(<image xlink:href="https://example.com/x"/><rect)),
+            String.replace(@svg, "<rect", ~s|<style>@import url(x.css);</style><rect|)
+          ] do
+        File.write!(path, hostile)
+        assert {:error, :unsafe_svg} = Spec.open_rotated(path), "accepted: #{hostile}"
+      end
+    end
+
+    # What an editor exports: namespace URLs and Creative-Commons metadata,
+    # none of it fetched. A blanket URL ban would refuse ordinary logos.
+    test "accepts the URLs an editor writes into a file it never fetches" do
+      tmp = tmp!()
+      path = Path.join(tmp, "inkscape.svg")
+
+      File.write!(path, """
+      <svg xmlns="http://www.w3.org/2000/svg" xmlns:rdf="http://www.w3.org/1999/02/22-rdf-syntax-ns#"
+           xmlns:cc="http://creativecommons.org/ns#" width="64" height="64">
+        <metadata><rdf:RDF><cc:License rdf:about="http://creativecommons.org/licenses/by/4.0/"/></rdf:RDF></metadata>
+        <rect width="64" height="64" fill="#1b1408"/>
+      </svg>
+      """)
+
+      assert {:ok, _image} = Spec.open_rotated(path)
+    end
+
+    # Bytes reach the pipeline from remote servers too (a fediverse attachment,
+    # a book cover), and that door has its own decode.
+    test "open_rotated_binary/1 rasterises and vets the same way" do
+      assert {:ok, image} = Spec.open_rotated_binary(@svg)
+      assert Image.width(image) == Spec.svg_raster_size()
+
+      hostile = String.replace(@svg, "<rect", "<script>x</script><rect")
+      assert {:error, :unsafe_svg} = Spec.open_rotated_binary(hostile)
+    end
+  end
 end

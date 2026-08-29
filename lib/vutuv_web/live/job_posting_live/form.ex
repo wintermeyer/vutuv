@@ -708,6 +708,7 @@ defmodule VutuvWeb.JobPostingLive.Form do
               <.live_file_input upload={@uploads.images} class="sr-only" />
               📷 {gettext("Add images")}
             </label>
+            <.upload_problems upload={@uploads.images} />
           </div>
         </.card>
 

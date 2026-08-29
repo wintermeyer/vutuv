@@ -26,7 +26,6 @@ defmodule VutuvWeb.TagNewLive do
   on_mount({VutuvWeb.Live.InitAssigns, :require_login})
 
   alias Vutuv.Tags
-  alias Vutuv.Tags.UserTag
   alias VutuvWeb.UserHelpers
 
   @impl true
@@ -115,11 +114,9 @@ defmodule VutuvWeb.TagNewLive do
 
   defp save_tags(socket, user, value) do
     case value |> Tags.parse_tag_names() |> Tags.canonical_tag_names() do
-      # Nothing usable typed: keep the form, show the error banner (the same
-      # empty-changeset re-render the controller create used to do).
+      # Nothing usable typed (" , "): keep the form and say so on the field.
       [] ->
-        changeset = %UserTag{} |> UserTag.changeset(%{}) |> Map.put(:action, :insert)
-        {:noreply, socket |> assign(:changeset, changeset) |> assign_input(value)}
+        {:noreply, socket |> assign(:changeset, Tags.no_tags_changeset()) |> assign_input(value)}
 
       [single] ->
         case Tags.add_user_tag(user, single) do

@@ -2145,7 +2145,14 @@ defmodule Vutuv.Organizations do
   @doc """
   Stores a new logo for `organization` (replacing any previous one): writes the
   derived versions, records a `OrganizationImage` row and points `organizations.logo` at
-  its token. Returns `{:ok, organization}` or `{:error, :invalid_file}`.
+  its token.
+
+  Returns `{:ok, organization}` when the picture is live, `{:pending,
+  organization}` when moderation is on and the scan has yet to release it (the
+  page keeps its old logo meanwhile), or `{:error, :invalid_file}`. The caller
+  has to be able to tell the three apart: an upload that is merely waiting and
+  one that failed both leave the page looking unchanged, and saying nothing
+  reads as "my picture was refused".
   """
   def store_logo(%Organization{} = organization, %User{} = user, path, filename) do
     token = OrganizationImage.gen_token()
@@ -2175,7 +2182,7 @@ defmodule Vutuv.Organizations do
           release_logo(image)
         else
           ImageScans.enqueue("organization_image", image.id, user.id)
-          {:ok, organization}
+          {:pending, organization}
         end
 
       {:error, _reason} ->

@@ -28,6 +28,7 @@ defmodule Vutuv.Uploads.Spec do
   later) in a private location that is never served.
   """
 
+  alias Vix.Vips.Image, as: VipsImage
   alias Vix.Vips.Operation
 
   @served_ext ".avif"
@@ -190,6 +191,19 @@ defmodule Vutuv.Uploads.Spec do
   `{:ok, %Vix.Vips.Image{}}` ready for `write_derived/3` (decode and rotate
   once, then derive all versions from it) or `{:error, reason}` when the file
   cannot be decoded.
+
+  An SVG is rasterised here rather than decoded: it has no pixels of its own,
+  so opening one plainly yields whatever size its `width`/`height` attributes
+  happen to name — a 64px logo would come out as a 64px picture and every
+  derived version would be a blur. It is rendered at `svg_raster_size/0`
+  instead, which covers the largest version any type stores an SVG-sourced
+  image at.
+
+  Which file is an SVG is decided by its **first bytes**, never its name: what
+  arrives here is the upload's temporary file, which has no extension at all
+  (`consume_uploaded_entries` hands over `/tmp/live_view_upload-…`), and libvips
+  itself picks its loader by content — so a `.png` holding SVG markup renders as
+  SVG whatever the whitelist believed.
   """
   # A generous ceiling — far above any real avatar/cover/post photo (all
   # downscaled to ≤1600px), far below the pixel-flood "decompression bombs"
@@ -198,11 +212,148 @@ defmodule Vutuv.Uploads.Spec do
   # oversized image is rejected before autorotate/thumbnail pull its pixels.
   @max_megapixels 50
 
+  # Rendered by `svg_supported?/0` to prove this build really draws SVG.
+  @svg_probe ~s(<svg xmlns="http://www.w3.org/2000/svg" width="8" height="8">) <>
+               ~s(<rect width="8" height="8" fill="#000"/></svg>)
+
   def open_rotated(path) do
-    with {:ok, image} <- Image.open(path),
-         :ok <- within_pixel_budget(image),
-         {:ok, {rotated, _flags}} <- Image.autorotate(image) do
-      {:ok, rotated}
+    if svg_content?(path) do
+      open_svg(path)
+    else
+      with {:ok, image} <- Image.open(path),
+           :ok <- within_pixel_budget(image),
+           {:ok, {rotated, _flags}} <- Image.autorotate(image) do
+        {:ok, rotated}
+      end
+    end
+  end
+
+  @doc """
+  Whether this build can rasterise an SVG — librsvg inside libvips, the way
+  `.heic` needs an HEVC decoder inside libheif.
+
+  Probed the way `Vutuv.PostImageStore.heic_supported?/0` probes its format,
+  and for the reason that one records: vips is lazy, so a build can register
+  the loader and still fail at the point pixels are materialised. The verdict
+  is cached for the VM's lifetime.
+  """
+  def svg_supported? do
+    case :persistent_term.get({__MODULE__, :svg_supported}, :unknown) do
+      :unknown ->
+        supported =
+          with {:ok, {image, _flags}} <- Operation.svgload_buffer(@svg_probe),
+               {:ok, _binary} <- VipsImage.write_to_binary(image) do
+            true
+          else
+            _ -> false
+          end
+
+        :persistent_term.put({__MODULE__, :svg_supported}, supported)
+        supported
+
+      verdict ->
+        verdict
+    end
+  end
+
+  @doc """
+  The long edge an SVG is rasterised at: the widest version an organization
+  image is stored at, since that is the only type whose whitelist takes one.
+  Read off the version table rather than written out, so a resolution change
+  there moves the raster size with it. Every `fit` downscales from here and
+  none upscales — a type with a bigger version (post `xl` is 2560) starting to
+  take SVGs would want this widened.
+  """
+  def svg_raster_size, do: max_width(:organization_image)
+
+  # How far in an `<svg` may sit: past an XML declaration, a DOCTYPE, a comment
+  # or a licence header. Deliberately more than the ~1000 bytes libvips' own SVG
+  # sniff reads, so anything it is willing to hand to the SVG renderer is
+  # recognised here first — a smaller window would leave files that render as
+  # SVG but were never vetted as one.
+  @svg_sniff_bytes 2048
+
+  # Whether a file / a blob holds SVG markup, judged by its opening bytes.
+  # Every SVG decision in the pipeline hangs off content rather than a
+  # filename: an upload's temporary file has no extension, and libvips picks
+  # its loader by content anyway, so a file *named* `.png` that holds `<svg>`
+  # is an SVG to everything downstream and has to be one here too.
+  defp svg_content?(path) do
+    case File.open(path, [:read, :binary], &IO.binread(&1, @svg_sniff_bytes)) do
+      {:ok, head} when is_binary(head) -> svg_head?(head)
+      _ -> false
+    end
+  end
+
+  defp svg_binary?(binary) do
+    binary |> binary_part(0, min(byte_size(binary), @svg_sniff_bytes)) |> svg_head?()
+  end
+
+  defp svg_head?(head), do: String.contains?(String.downcase(head), "<svg")
+
+  # Code, and the entity lever the parser pulls before we ever see pixels:
+  #
+  #   * a DOCTYPE is where an entity declaration lives — XXE (read a local file
+  #     into the picture) and billion-laughs (expand until the box is out of
+  #     memory); a drawing has no use for one
+  #   * `<script>` and `javascript:` are code
+  #   * `<foreignObject>` embeds arbitrary HTML, and with it scripts
+  #   * `@import` pulls another stylesheet into the render
+  #
+  # One caseless regex rather than six `String.contains?` over a downcased
+  # copy: the copy alone costs ~20 ms per MB of markup, six times what the
+  # matching costs.
+  @svg_forbidden ~r/<!doctype|<!entity|<script|<foreignobject|javascript:|@import/i
+
+  # A reference the renderer would actually go and *fetch*: an <image> or <use>
+  # pointing at a URL or at a path on our disk.
+  @svg_external_ref ~r/(?:xlink:)?href\s*=\s*["']?\s*(?:https?:|file:|\/\/)/i
+
+  # Whether SVG markup is something we are willing to hand to the renderer.
+  #
+  # A rasterised SVG never reaches a browser here — every proxy serves the
+  # derived AVIF versions only — so this is not an XSS gate but a *renderer*
+  # gate: the XML parser runs on our server, on markup a member (or a remote
+  # server) chose, and left alone it will expand entities and follow references
+  # while rendering. So it has to be readable text, must carry none of
+  # `@svg_forbidden`, and may not point a reference at the network or the disk.
+  #
+  # Deliberately narrower than "contains no URL". Every SVG an editor exports
+  # names URLs that are never fetched — the `xmlns` namespaces, and the RDF /
+  # Creative-Commons metadata Inkscape writes — so a blanket URL ban would
+  # refuse ordinary logos for no reason a member could see. Only a `href`
+  # naming an external scheme is a fetch.
+  defp safe_svg?(markup) do
+    String.valid?(markup) and
+      not Regex.match?(@svg_forbidden, markup) and
+      not Regex.match?(@svg_external_ref, markup)
+  end
+
+  defp open_svg(path) do
+    with {:ok, markup} <- File.read(path), do: open_svg_binary(markup)
+  end
+
+  # Two loads, because the intrinsic size the scale factor needs comes from the
+  # file itself. Not free — librsvg parses the whole document on load, so the
+  # probe is a third of the work at logo sizes — but inherent to vector
+  # loading: libvips' own `thumbnail/2` measures the same. An SVG that already
+  # declares more than the raster size is scaled *down*, so the pixel budget
+  # still bounds what a 30000px viewBox can cost us.
+  defp open_svg_binary(markup) do
+    with :ok <- vet_svg(markup),
+         {:ok, {probe, _flags}} <- Operation.svgload_buffer(markup),
+         {:ok, {image, _flags}} <- Operation.svgload_buffer(markup, scale: svg_scale(probe)),
+         :ok <- within_pixel_budget(image) do
+      {:ok, image}
+    end
+  end
+
+  defp vet_svg(markup), do: if(safe_svg?(markup), do: :ok, else: {:error, :unsafe_svg})
+
+  defp svg_scale(probe) do
+    case max(Image.width(probe), Image.height(probe)) do
+      edge when edge > 0 -> svg_raster_size() / edge
+      _ -> 1.0
     end
   end
 
@@ -243,12 +394,21 @@ defmodule Vutuv.Uploads.Spec do
   now cached) then swap in an unsafe one, and the re-scan would judge the stale
   safe pixels and release the unsafe image. Decoding from the bytes sidesteps
   the filename cache entirely (`Vutuv.Moderation.Ollama`).
+
+  SVG markup is rasterised and vetted here exactly as in `open_rotated/1`, and
+  for the same reason: bytes reach this door from a remote server too (a
+  fediverse attachment via `Vutuv.RemoteMedia`, a cover from Open Library), and
+  libvips would hand any of them to the SVG renderer on content alone.
   """
   def open_rotated_binary(binary) when is_binary(binary) do
-    with {:ok, image} <- Image.from_binary(binary),
-         :ok <- within_pixel_budget(image),
-         {:ok, {rotated, _flags}} <- Image.autorotate(image) do
-      {:ok, rotated}
+    if svg_binary?(binary) do
+      open_svg_binary(binary)
+    else
+      with {:ok, image} <- Image.from_binary(binary),
+           :ok <- within_pixel_budget(image),
+           {:ok, {rotated, _flags}} <- Image.autorotate(image) do
+        {:ok, rotated}
+      end
     end
   end
 

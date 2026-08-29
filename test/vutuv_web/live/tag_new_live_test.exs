@@ -176,6 +176,9 @@ defmodule VutuvWeb.TagNewLiveTest do
       html = live |> form("#tag-form", tag_param: %{value: " , "}) |> render_submit()
 
       assert html =~ "Please check the fields marked in red."
+      # The banner promises a field marked in red, so there has to be one: this
+      # branch used to raise it off an errorless changeset.
+      assert html =~ "Please type at least one tag."
       assert tag_count(user) == base
     end
 

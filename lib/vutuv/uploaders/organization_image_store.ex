@@ -21,7 +21,32 @@ defmodule Vutuv.OrganizationImageStore do
   @versions ~w(thumb feed large)
   @og_size 512
 
-  defdelegate extension_whitelist, to: Vutuv.PostImageStore
+  @svg_extensions ~w(.svg)
+
+  @doc """
+  What a logo may be uploaded as: everything a post image may be, plus **SVG**
+  — a logo is the one picture members usually hold as a vector, and handing us
+  the vector beats a 64px PNG export scaled up.
+
+  SVG only counts when the running libvips can rasterise one (`Spec.svg_supported?/0`;
+  librsvg is a build-time dependency, exactly like the HEVC decoder behind
+  `.heic`), so an installation without it simply does not offer the format and
+  refuses the file at the gate instead of failing halfway through storing it.
+  """
+  def extension_whitelist do
+    svg = if Spec.svg_supported?(), do: @svg_extensions, else: []
+    Vutuv.PostImageStore.extension_whitelist() ++ svg
+  end
+
+  @doc """
+  The largest logo file the upload form accepts, in bytes. One source for the
+  `allow_upload` cap, the hint under the field and the "too large" message, so
+  the number a member reads is the number that rejects their file. Configurable
+  per installation like the post- and job-image budgets it sits beside.
+  """
+  def max_filesize, do: Keyword.get(image_config(), :max_filesize, 4_000_000)
+
+  defp image_config, do: Application.get_env(:vutuv, :organization_images, [])
 
   @doc """
   Stores every version of the file at `path` under a fresh `token` directory and
