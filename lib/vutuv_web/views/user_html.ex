@@ -611,7 +611,7 @@ defmodule VutuvWeb.UserHTML do
               <a
                 href={repo["url"]}
                 target="_blank"
-                rel="noopener nofollow ugc"
+                rel="ugc nofollow noopener noreferrer"
                 class="truncate font-medium text-brand-700 hover:text-brand-800 dark:text-brand-300"
               >
                 {repo["name"]}

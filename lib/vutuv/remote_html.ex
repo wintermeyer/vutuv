@@ -13,7 +13,7 @@ defmodule Vutuv.RemoteHtml do
     * `<br>` and `</p>` become the line breaks that carried the meaning,
     * every remaining tag is stripped (`HtmlSanitizeEx.strip_tags/1`), so there
       is no allowlist to get wrong and nothing to render `raw`,
-    * the base entities are decoded exactly **once**,
+    * HTML entities are decoded exactly **once** (`decode_entities/1`),
     * the sending server's own **custom-emoji shortcodes** go out with it
       (`strip_shortcodes/1`), and
     * the result is clamped, so one hostile delivery cannot park a novel.
@@ -86,7 +86,9 @@ defmodule Vutuv.RemoteHtml do
     |> String.replace(~r{<(script|style)\b[^>]*>.*}is, "")
     |> String.replace(~r{<br\s*/?>}i, "\n")
     |> String.replace(~r{</p>}i, "\n\n")
+    |> defuse_wide_charrefs()
     |> HtmlSanitizeEx.strip_tags()
+    |> scrub_nul()
     |> decode_entities()
     |> String.trim()
     |> strip_shortcodes()
@@ -141,18 +143,98 @@ defmodule Vutuv.RemoteHtml do
   defp clamp(text, nil), do: Post.truncate(text)
   defp clamp(text, max), do: Post.truncate(text, max)
 
-  # strip_tags/1 returns text with the base named entities still escaped (the
-  # numeric ones it decodes itself); undo them exactly once. `&amp;` must come
-  # last so a literal "&amp;amp;" cannot double-unescape.
-  defp decode_entities(text) do
-    text
-    |> String.replace("&lt;", "<")
-    |> String.replace("&gt;", ">")
-    |> String.replace("&quot;", "\"")
-    |> String.replace("&#39;", "'")
-    |> String.replace("&nbsp;", " ")
-    |> String.replace("&amp;", "&")
+  # A NUL byte is valid UTF-8 and Postgres refuses it (`22021
+  # character_not_in_repertoire`), so one in here is not a display problem, it
+  # is a raise on `Repo.insert` — and this text is stored: `Vutuv.Fediverse`'s
+  # `remote_text/3` writes it into a delivered post's body, so any federating
+  # server can reach that by putting `&#0;` in a Note.
+  #
+  # Its own step, and not part of `decode_entities/1`, where the same guard
+  # already lives (`entity_text/2` refuses to build a NUL). That guard cannot
+  # help: `strip_tags/1` decodes numeric entities **itself**, so `&#0;` is
+  # already a raw byte by the time the decoder runs. A guard the pipeline steps
+  # around is not a guard.
+  defp scrub_nul(text), do: String.replace(text, <<0>>, "")
+
+  # `strip_tags/1` decodes numeric character references itself, and its parser
+  # builds every one it sees: `:mochiutf8.codepoint_to_bytes/1` has no clause
+  # past 0x10FFFF, so `&#1114112;` does not become a replacement character, it
+  # RAISES a FunctionClauseError from inside `strip_tags/1` — before
+  # `scrub_nul/1` or `decode_entities/1` below can look at anything. Any
+  # federating server can stop an inbound Note that way, the same reach the NUL
+  # above has, and one line earlier in the pipeline.
+  #
+  # So the reference is defused before the parser sees it, by escaping its `&`.
+  # That leaves it standing as literal text, which is exactly what mochiweb
+  # already does with a lone surrogate (`&#xD800;` comes through untouched) —
+  # the point is that a number nobody can render is not worth an exception.
+  @wide_charref ~r/&#([xX])?0*([0-9a-fA-F]+);/
+  defp defuse_wide_charrefs(html) do
+    Regex.replace(@wide_charref, html, fn whole, hex, digits ->
+      base = if hex == "", do: 10, else: 16
+
+      case Integer.parse(digits, base) do
+        {codepoint, ""} when codepoint > 0x10FFFF ->
+          "&amp;" <> binary_part(whole, 1, byte_size(whole) - 1)
+
+        _ ->
+          whole
+      end
+    end)
   end
+
+  @entity_regex ~r/&(#[xX][0-9a-fA-F]+|#\d+|[a-zA-Z][a-zA-Z0-9]*);/
+
+  # The HTML entities `strip_tags/1` leaves escaped, resolved to the text they
+  # stand for. An entity nothing knows is left standing rather than swallowed.
+  #
+  # **One pass, not a chain of replacements.** A chain has to decode `&amp;`
+  # LAST or a literal `&amp;amp;` unescapes twice, and that ordering was a rule
+  # somebody had to keep obeying — it lived in a comment above the version this
+  # replaced. A single pass cannot double-decode at all, because
+  # `Regex.replace/3` does not re-scan what it has written.
+  defp decode_entities(text) do
+    Regex.replace(@entity_regex, text, fn whole, body -> entity(body, whole) end)
+  end
+
+  # `:mochiweb_charref` is the full HTML5 table, and it already ships here —
+  # `:html_sanitize_ex` depends on it and `strip_tags/1` above leans on it. It
+  # answers all three spellings the regex captures (`rsquo`, `#8217`, `#x2019`)
+  # and `:undefined` for anything it does not know.
+  #
+  # What this replaced was a six-entry table typed out by hand. Measured before
+  # replacing it, those six were not a gap: `strip_tags/1` resolves the whole
+  # HTML5 table itself and re-escapes only the four HTML-special entities, so
+  # `&rsquo;`, `&mdash;`, `&eacute;` and the rest already came through correctly,
+  # and the hand-written list covered exactly what was left. The reason to use
+  # the real table anyway is that nobody can tell that by reading it — the list
+  # looked like an arbitrary six of two thousand — and that the chain carried an
+  # ordering rule (`&amp;` last, or `&amp;amp;` unescapes twice) which lived in a
+  # comment and had to keep being obeyed. One pass over the real table cannot be
+  # short, and cannot be mis-ordered.
+  #
+  # Case matters and is not folded: `&Aacute;` is Á and `&aacute;` is á.
+  defp entity(body, whole) do
+    case :mochiweb_charref.charref(body) do
+      :undefined -> whole
+      codepoint -> entity_text(codepoint, whole)
+    end
+  end
+
+  # A lone surrogate is not a codepoint `<<n::utf8>>` can build (it raises), and
+  # neither is a number past the Unicode range: those stay text. `0` is refused
+  # with them, for the reason `scrub_nul/1` sets out above.
+  defp entity_text(number, _whole)
+       when is_integer(number) and (number in 1..0xD7FF or number in 0xE000..0x10FFFF),
+       do: <<number::utf8>>
+
+  # A few entities are two codepoints (`&NotEqualTilde;` is ≂ plus a combining
+  # slash); each half goes through the same guard.
+  defp entity_text(numbers, whole) when is_list(numbers) do
+    Enum.map_join(numbers, &entity_text(&1, whole))
+  end
+
+  defp entity_text(_number, whole), do: whole
 
   defp expand_mentions(text, tags) do
     map = mention_map(tags)

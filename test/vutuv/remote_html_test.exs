@@ -19,6 +19,54 @@ defmodule Vutuv.RemoteHtmlTest do
     assert RemoteHtml.to_text("<p>&amp;amp;</p>") == "&amp;"
   end
 
+  test "so does the long tail of named entities, and case is not folded" do
+    # The six-entry table this replaced is what let `Google&rsquo;s new phone`
+    # through verbatim. `:mochiweb_charref` is the full HTML5 table.
+    assert RemoteHtml.to_text("<p>Google&rsquo;s new phone</p>") == "Google\u2019s new phone"
+    assert RemoteHtml.to_text("<p>&Aacute; und &aacute;</p>") == "\u00C1 und \u00E1"
+  end
+
+  test "an entity nobody knows is left standing rather than swallowed" do
+    assert RemoteHtml.to_text("<p>&bogus; bleibt</p>") == "&bogus; bleibt"
+  end
+
+  test "no NUL byte leaves to_text/3" do
+    # Not cosmetic: this text is STORED — `Vutuv.Fediverse`'s `remote_text/3`
+    # writes it into a delivered post's body — and Postgres refuses a NUL with
+    # `22021 character_not_in_repertoire`, so a federating server could raise
+    # our insert with `&#0;` in a Note.
+    #
+    # The decoder's own guard cannot catch it: `strip_tags/1` decodes numeric
+    # entities itself, so the byte exists before the decoder runs. Hence the
+    # separate scrub, and hence this test.
+    assert RemoteHtml.to_text("<p>hallo &#0; welt</p>") == "hallo  welt"
+    refute RemoteHtml.to_text("<p>&#0;</p>") =~ <<0>>
+  end
+
+  test "a numeric character reference past the Unicode range does not raise" do
+    # The NUL above is the same attack one step further on: `strip_tags/1`
+    # decodes numeric references itself, and its parser builds every one it
+    # sees. `:mochiutf8.codepoint_to_bytes/1` has no clause past 0x10FFFF, so
+    # `&#1114112;` raises a FunctionClauseError from INSIDE `strip_tags/1` —
+    # earlier than `scrub_nul/1`, and an exception rather than a failed insert.
+    # Any federating server can stop an inbound Note with it.
+    #
+    # Defused before the parser, so the reference stays literal text, which is
+    # what mochiweb already does with a lone surrogate.
+    assert RemoteHtml.to_text("<p>a&#1114112;b</p>") == "a&#1114112;b"
+    assert RemoteHtml.to_text("<p>a&#x110000;b</p>") == "a&#x110000;b"
+    assert RemoteHtml.to_text("<p>a&#99999999;b</p>") == "a&#99999999;b"
+
+    # The boundary itself is a real codepoint and must still decode, or the
+    # guard is off by one.
+    assert RemoteHtml.to_text("<p>a&#x10FFFF;b</p>") == "a\u{10FFFF}b"
+
+    # Unchanged by the defusing: a surrogate was already left standing, and an
+    # ordinary reference must not be caught by it.
+    assert RemoteHtml.to_text("<p>a&#xD800;b</p>") == "a&#xD800;b"
+    assert RemoteHtml.to_text("<p>a&#8217;b</p>") == "a’b"
+  end
+
   describe "script and style go with their contents" do
     test "a paired element leaves nothing behind" do
       assert RemoteHtml.to_text("<script>alert(1)</script><p>safe</p>") == "safe"
