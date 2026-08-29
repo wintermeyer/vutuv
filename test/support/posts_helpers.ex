@@ -49,6 +49,11 @@ defmodule Vutuv.PostsHelpers do
   The day is the **viewer's** (`Vutuv.ViewerClock.day_window/1`), the same clock
   the feed calendar counts and shades by, so the placement and the assertion
   cannot disagree about which day a post is on.
+
+  For a **past** day, which is every caller so far. Asked for today it would
+  place the post at a midday still to come, and a batch spread wider than the
+  day is old cannot sit inside today at all — that is the calendar, not a
+  defect, so pick a past day rather than working around it.
   """
   def place_post_on_day!(post, %Date{} = date, index \\ 0) do
     {day_start, _day_end} = ViewerClock.day_window(date)
