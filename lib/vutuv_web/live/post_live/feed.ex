@@ -2541,13 +2541,17 @@ defmodule VutuvWeb.PostLive.Feed do
             <%!-- Fades in as the calendar folds out of the way, so the two read
             as one movement rather than as a pop over a jump. An insert plays a
             keyframe on its own; a later count tick only patches this node's
-            text, so it does not replay. --%>
+            text, so it does not replay.
+
+            `h-10` and not vertical padding: it stands beside the filter button,
+            which is `h-10`, and a pill sized by its own line height came out
+            four pixels short of it. --%>
             <div :if={@pending_posts != []} class="feed-teaser-in min-w-0 flex-1 text-center">
               <button
                 id="show-new-posts"
                 type="button"
                 phx-click={show_pending(assigns)}
-                class="mx-auto flex w-full max-w-full items-center gap-2 rounded-full bg-brand-50 px-4 py-2 text-sm font-semibold text-brand-700 shadow-sm hover:bg-brand-100 sm:w-auto dark:bg-brand-900/40 dark:text-brand-100 dark:hover:bg-brand-900/70"
+                class="mx-auto flex h-10 w-full max-w-full items-center gap-2 rounded-full bg-brand-50 px-4 text-sm font-semibold text-brand-700 shadow-sm hover:bg-brand-100 sm:w-auto dark:bg-brand-900/40 dark:text-brand-100 dark:hover:bg-brand-900/70"
               >
                 <span class="shrink-0 tabular-nums">
                   {ngettext(

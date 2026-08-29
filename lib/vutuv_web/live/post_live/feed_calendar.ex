@@ -72,11 +72,17 @@ defmodule VutuvWeb.PostLive.FeedCalendar do
       )
 
     ~H"""
+    <%!-- Folded, the card IS a control, so it takes the app's control height
+    (`h-10`) instead of whatever its padding and its tallest child add up to. On
+    a phone it stands beside the filter button, which is `h-10`, and the two sat
+    four pixels apart — eight once the amber "Now" joined the row. A fixed height
+    also keeps the line still: it is the same card whether the reader is
+    travelling or not. --%>
     <div
       id={@id}
       class={[
         "rounded-2xl bg-white shadow-sm ring-1 dark:bg-slate-900",
-        if(@open?, do: "p-4", else: "p-2"),
+        if(@open?, do: "p-4", else: "flex h-10 px-2"),
         @day && "ring-amber-400 dark:ring-amber-500/60",
         !@day && "ring-slate-200 dark:ring-slate-800",
         @class
@@ -88,8 +94,15 @@ defmodule VutuvWeb.PostLive.FeedCalendar do
       around it.
 
       Folded, this is the whole card and the only thing a reader who never
-      travels ever sees: which day the timeline is showing, and a way in. --%>
-      <div class="flex items-center gap-0.5">
+      travels ever sees: which day the timeline is showing, and a way in.
+
+      Folded the row is the card's only child and stretches to its full height,
+      so the fold toggle takes the whole 40px rather than the 28px its own
+      padding gives it — the tap target a phone control owes a finger. It
+      stretches unconditionally: unfolded the row is as tall as the month arrows
+      beside it, which is exactly the toggle's own height, so there is nothing
+      to stretch to and the class can stay a static string. --%>
+      <div class="flex w-full items-center gap-0.5">
         <.month_arrow
           :if={@open?}
           n={-12}
@@ -103,7 +116,7 @@ defmodule VutuvWeb.PostLive.FeedCalendar do
           type="button"
           phx-click="cal-toggle"
           aria-expanded={to_string(@open?)}
-          class="flex min-w-0 flex-1 items-center justify-center gap-1.5 rounded-lg px-1 py-1 hover:bg-slate-50 dark:hover:bg-slate-800"
+          class="flex min-w-0 flex-1 self-stretch items-center justify-center gap-1.5 rounded-lg px-1 py-1 hover:bg-slate-50 dark:hover:bg-slate-800"
         >
           <.calendar_glyph travelling?={!is_nil(@day)} />
 

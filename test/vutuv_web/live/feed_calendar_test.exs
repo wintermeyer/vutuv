@@ -281,6 +281,56 @@ defmodule VutuvWeb.FeedCalendarTest do
       assert has_element?(view, "#feed-mobile-controls #open-filter-sheet")
     end
 
+    test "and folded they are the same height", %{conn: conn} do
+      # Side by side, one control was the app's 40px touch target and the
+      # other as tall as its padding and its tallest child happened to make it
+      # — 44px, and 48px once the amber "Now" button joined the row. Two
+      # neighbours differing by four pixels read as one of them being wrong.
+      {conn, user} = create_and_login_user(conn)
+      feed_with_history(user)
+
+      {:ok, view, _html} = live(conn, ~p"/feed")
+
+      assert has_element?(view, "#open-filter-sheet.h-10")
+      assert has_element?(view, "#feed-calendar-mobile.h-10")
+
+      # The rail's copy is the same card and takes the same height — one
+      # control height for both, not a per-call-site override.
+      assert has_element?(view, "#feed-calendar-rail.h-10")
+
+      # Travelling: "Now" joins the folded row and must not push it taller.
+      render_click(view, "cal-day", %{"date" => iso(days_ago(3))})
+
+      assert has_element?(view, "#feed-calendar-mobile button[phx-click='travel-now']")
+      assert has_element?(view, "#feed-calendar-mobile.h-10")
+    end
+
+    test "and so is the pill that takes the calendar's place", %{conn: conn} do
+      # The second state of the same line: once posts are waiting the calendar
+      # folds away and the pill stands beside the filter button instead, so it
+      # owes that button the same height (it was 36px against 40px).
+      {conn, user} = create_and_login_user(conn)
+      author = feed_with_history(user)
+
+      {:ok, view, _html} = live(conn, ~p"/feed")
+      {:ok, _fresh} = Posts.create_post(author, %{body: "arriving while I read"})
+
+      assert has_element?(view, "#show-new-posts.h-10")
+      assert has_element?(view, "#open-filter-sheet.h-10")
+    end
+
+    test "unfolded the calendar is a card again, not a 40px line", %{conn: conn} do
+      # The other half of the same class: a month grid does not fit in one
+      # control's height, so an `h-10` somebody made unconditional would clip it.
+      {conn, user} = create_and_login_user(conn)
+      feed_with_history(user)
+
+      {:ok, view, _html} = live(conn, ~p"/feed")
+      render_click(view, "cal-toggle")
+
+      refute has_element?(view, "#feed-calendar-mobile.h-10")
+    end
+
     test "a waiting post takes the calendar out of the line", %{conn: conn} do
       # The pill carries the newest post's opening line and needs the width;
       # the calendar is the one control on the row nobody is waiting for.
@@ -343,7 +393,7 @@ defmodule VutuvWeb.FeedCalendarTest do
     test "a post the reader may not see is not counted either", %{conn: conn} do
       # The waiting count passes the same audience gate a drawn arrival does, or
       # the pill would promise posts that vanish the moment it is pressed.
-      {conn, user} = create_and_login_user(conn)
+      {conn, _user} = create_and_login_user(conn)
       stranger = insert(:activated_user)
 
       {:ok, view, _html} = live(conn, ~p"/feed")
