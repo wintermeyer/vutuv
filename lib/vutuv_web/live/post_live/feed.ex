@@ -2464,37 +2464,56 @@ defmodule VutuvWeb.PostLive.Feed do
             />
           </div>
 
-          <%!-- The phone's copy of the calendar. There is no filter column
-          under `md`, and a control that exists only on a desktop is not a
-          control this site ships — the rest of the feed's rail is genuinely
-          optional, but the way back from an opened day is not. Same component,
-          its own id, and it disappears at `md` where the rail's copy takes
-          over. --%>
-          <.feed_calendar
-            id="feed-calendar-mobile"
-            open?={@cal_open?}
-            earlier?={@cal_earlier?}
-            month={@cal_month}
-            day={@cal_day}
-            metric={@cal_metric}
-            counts={@cal_counts}
-            capped?={@cal_capped?}
-            class="md:hidden"
-          />
+          <%!-- One line, three controls, and on a phone it is the only way to
+          any of them. The calendar is the phone's copy of the rail's — there is
+          no filter column under `md`, and the way back from an opened day is
+          not optional the way the rest of the rail is; the filter button opens
+          the band as a sheet for the same reason; the pill brings the waiting
+          posts down and carries the newest one's opening line, since the phone
+          has no "Not read yet" card to say what is waiting rather than merely
+          how much.
 
-          <%!-- One line, two controls, and on a phone it is the only way to
-          either of them. The filter button opens the band as a sheet, because
-          the rail it normally lives in does not exist under `md`; the pill
-          brings the waiting posts down and carries the newest one's opening
-          line, since the phone has no "Not read yet" card to say what is
-          waiting rather than merely how much.
+          The line is narrow and they fight over it. Folded, the calendar takes
+          what the filter button leaves; unfolded it claims the whole line and
+          the other two wrap under it, because a month grid squeezed beside a
+          button draws day cells too small to hit. And as soon as posts are
+          waiting the folded calendar leaves altogether — one class, one CSS
+          transition, no hook (`.feed-cal-slot--away`) — so the quote gets the
+          width; the filter button drops its word in the same breath and keeps
+          the glyph alone (Stefan, on the fourth demo). Nothing is stranded by
+          that: the pill is what brings a travelling reader home anyway, and
+          pressing it puts the calendar back.
 
-          They share the line and the width is fought over: as soon as there is
-          a quote to read, the filter button drops its word and keeps the glyph
-          alone (Stefan, on the fourth demo). With nothing waiting the row is a
-          phone-only affair, so it hides itself entirely on a desktop rather
-          than leaving a gap above the timeline. --%>
-          <div class={["flex items-center gap-2", @pending_posts == [] && "md:hidden"]}>
+          With nothing waiting the pill is absent and the other two are
+          phone-only, so on a desktop the row hides itself rather than leaving
+          a gap above the timeline. --%>
+          <div
+            id="feed-mobile-controls"
+            class={["flex flex-wrap items-center gap-2", @pending_posts == [] && "md:hidden"]}
+          >
+            <%!-- The wrapper collapses, not the card: a card cannot shrink past
+            its own padding and ring (border-box floors its width there), and
+            clipping it from outside costs nothing. --%>
+            <div
+              id="feed-calendar-mobile-slot"
+              class={[
+                "feed-cal-slot md:hidden",
+                @cal_open? && "basis-full",
+                @pending_posts != [] && !@cal_open? && "feed-cal-slot--away"
+              ]}
+            >
+              <.feed_calendar
+                id="feed-calendar-mobile"
+                open?={@cal_open?}
+                earlier?={@cal_earlier?}
+                month={@cal_month}
+                day={@cal_day}
+                metric={@cal_metric}
+                counts={@cal_counts}
+                capped?={@cal_capped?}
+              />
+            </div>
+
             <button
               type="button"
               id="open-filter-sheet"
@@ -2519,7 +2538,11 @@ defmodule VutuvWeb.PostLive.Feed do
               <span :if={@pending_posts == []}>{pgettext("feed filter sheet", "Filter")}</span>
             </button>
 
-            <div :if={@pending_posts != []} class="min-w-0 flex-1 text-center">
+            <%!-- Fades in as the calendar folds out of the way, so the two read
+            as one movement rather than as a pop over a jump. An insert plays a
+            keyframe on its own; a later count tick only patches this node's
+            text, so it does not replay. --%>
+            <div :if={@pending_posts != []} class="feed-teaser-in min-w-0 flex-1 text-center">
               <button
                 id="show-new-posts"
                 type="button"

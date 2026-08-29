@@ -2973,6 +2973,87 @@ html.lightbox-open { overflow: hidden; }
   }
 }
 
+/* The phone's calendar and the filter button share one line above the feed's
+   timeline, and that line is narrow: the moment posts are waiting, the pill
+   carrying the newest one's opening line wants all of it. So the calendar
+   leaves — it is the one of the three nobody is waiting for — and comes back
+   by itself when the pill is pressed.
+
+   It leaves sideways instead of by `display: none`, because the element then
+   stays in the DOM the whole time and the class LiveView swaps is enough to
+   animate both directions with no hook at all. `flex-grow` is an animatable
+   number, which is what makes a horizontal collapse possible — `width: auto`
+   is not — and it is declared HERE rather than as a `flex-1` utility at the
+   call site: this file is in `layer(components)`, so the modifier below would
+   lose to a utility and the card would blink away instead of folding. The
+   `min-width` is the other half of that (a flex item floors at its min-content
+   otherwise, which is the whole card's row of glyphs), and the negative margin
+   eats the row's `gap` on the way out, or a card of zero width would still
+   hold 0.5rem of the line.
+
+   `clip` rather than `hidden` so `overflow-clip-margin` can let the card's
+   shadow paint outside the box it is being folded into; a browser that does
+   not know the property clips at the edge, which costs the resting card its
+   3px of lift and nothing else.
+
+   `visibility` switches at the END of the transition rather than with it, so
+   the card is out of the tab order and the accessibility tree once it is gone
+   but still animates on the way there. */
+.feed-cal-slot {
+  flex: 1 1 0%;
+  min-width: 0;
+  overflow: clip;
+  overflow-clip-margin: 0.5rem;
+  transition:
+    flex-grow 280ms ease,
+    opacity 180ms ease,
+    margin-inline-end 280ms ease,
+    visibility 0s;
+}
+
+.feed-cal-slot--away {
+  flex-grow: 0;
+  margin-inline-end: -0.5rem;
+  opacity: 0;
+  visibility: hidden;
+  transition:
+    flex-grow 280ms ease,
+    opacity 180ms ease,
+    margin-inline-end 280ms ease,
+    visibility 0s linear 280ms;
+}
+
+/* The pill moving into the space the calendar is leaving. It rides in from the
+   same side over the same time, so the two read as one movement rather than as
+   a pop over a jump. An inserted element plays a keyframe on its own; a later
+   count tick only patches this node's text, so it does not replay. */
+.feed-teaser-in {
+  animation: feed-teaser-in 280ms ease-out both;
+}
+
+@keyframes feed-teaser-in {
+  from {
+    opacity: 0;
+    transform: translateX(0.75rem);
+  }
+
+  to {
+    opacity: 1;
+    transform: none;
+  }
+}
+
+@media (prefers-reduced-motion: reduce) {
+  .feed-cal-slot,
+  .feed-cal-slot--away {
+    transition: none;
+  }
+
+  .feed-teaser-in {
+    animation: none;
+  }
+}
+
 /* The shape of something that has not arrived yet. A page whose data loads
    only once the socket has joined paints its own outline first, so the wait
    reads as "this is filling in" rather than as "you have nothing here" — the

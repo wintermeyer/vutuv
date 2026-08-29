@@ -264,7 +264,63 @@ defmodule VutuvWeb.FeedCalendarTest do
       render_click(view, "cal-toggle")
 
       assert has_element?(view, "#feed-rail #feed-calendar-rail")
-      assert has_element?(view, "#feed-calendar-mobile.md\\:hidden")
+      assert has_element?(view, "#feed-calendar-mobile-slot.md\\:hidden #feed-calendar-mobile")
+    end
+  end
+
+  describe "the phone's one line" do
+    # Under `md` the calendar, the filter sheet's button and the waiting-posts
+    # pill share a single row, and that row is the only way to any of them.
+    test "the calendar and the filter button share it", %{conn: conn} do
+      {conn, user} = create_and_login_user(conn)
+      feed_with_history(user)
+
+      {:ok, view, _html} = live(conn, ~p"/feed")
+
+      assert has_element?(view, "#feed-mobile-controls #feed-calendar-mobile")
+      assert has_element?(view, "#feed-mobile-controls #open-filter-sheet")
+    end
+
+    test "a waiting post takes the calendar out of the line", %{conn: conn} do
+      # The pill carries the newest post's opening line and needs the width;
+      # the calendar is the one control on the row nobody is waiting for.
+      {conn, user} = create_and_login_user(conn)
+      author = feed_with_history(user)
+
+      {:ok, view, _html} = live(conn, ~p"/feed")
+
+      refute has_element?(view, "#feed-calendar-mobile-slot.feed-cal-slot--away")
+
+      {:ok, _fresh} = Posts.create_post(author, %{body: "arriving while I read"})
+
+      assert has_element?(view, "#feed-calendar-mobile-slot.feed-cal-slot--away")
+    end
+
+    test "showing the waiting posts brings it back", %{conn: conn} do
+      {conn, user} = create_and_login_user(conn)
+      author = feed_with_history(user)
+
+      {:ok, view, _html} = live(conn, ~p"/feed")
+      {:ok, _fresh} = Posts.create_post(author, %{body: "arriving while I read"})
+      render_click(view, "show-new")
+
+      refute has_element?(view, "#feed-calendar-mobile-slot.feed-cal-slot--away")
+    end
+
+    test "an unfolded month keeps its place while posts wait", %{conn: conn} do
+      # Unfolded, the calendar has the line to itself and the other two wrap
+      # under it, so there is no width to win — and taking away a grid
+      # somebody is reading is the rudest possible moment for it.
+      {conn, user} = create_and_login_user(conn)
+      author = feed_with_history(user)
+
+      {:ok, view, _html} = live(conn, ~p"/feed")
+      render_click(view, "cal-toggle")
+
+      {:ok, _fresh} = Posts.create_post(author, %{body: "arriving while I read"})
+
+      assert has_element?(view, "#show-new-posts")
+      refute has_element?(view, "#feed-calendar-mobile-slot.feed-cal-slot--away")
     end
   end
 

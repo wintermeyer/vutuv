@@ -20,7 +20,12 @@ defmodule VutuvWeb.RowRevealCssTest do
   defp block do
     css = File.read!(@css)
     [_, rest] = String.split(css, ".row-reveal-host .row-reveal {", parts: 2)
-    [body, _] = String.split(rest, "\n.skeleton {", parts: 2)
+    # Ends at the next commented block, not at a neighbour named by class: the
+    # slice used to end at `.skeleton`, so the next block written between the
+    # two was read as part of this one and failed a check about a rule it does
+    # not contain (the feed calendar's `.feed-cal-slot`, whose comment mentions
+    # the `display: none` this one refuses).
+    [body, _] = String.split(rest, "\n/*", parts: 2)
     ".row-reveal-host .row-reveal {" <> body
   end
 
