@@ -80,10 +80,11 @@ for (a tab open for hours) barely fired at all, nothing calling
 `registration.update()`. So the shell asks `static_changed?/1` instead:
 `phx-track-static` reports the bundle this browser is really running, and only a
 document that predates the deploy is offered `#sw-update` ("A new version is
-ready"). Dismissing it is socket state, so it lasts exactly as long as the
-document it applies to. The worker's remaining job is carrying the reload out —
-Reload posts `skip-waiting` to a waiting worker, or plainly reloads when there
-is none.
+ready"). There is no way to put that bar away: this reader's markup, CSS and
+JavaScript all come from a release that is gone, so postponing would leave them
+on it for as long as the tab stays open. The worker's remaining job is carrying
+the reload out — Reload posts `skip-waiting` to a waiting worker, or plainly
+reloads when there is none.
 
 **Which means a worker from the previous release keeps running, and nothing
 bounds how long.** This is the one asset that deliberately outlives a deploy,

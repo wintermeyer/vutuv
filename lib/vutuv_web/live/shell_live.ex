@@ -652,23 +652,6 @@ defmodule VutuvWeb.ShellLive do
      })}
   end
 
-  # "Later" on the update bar (issue #1729). Socket state and nothing more: the
-  # offer is about this document, so the dismissal is scoped to it too.
-  #
-  # Known limit, and a deliberate one: a reconnect re-mounts and the bar comes
-  # back. A socket drops for entirely ordinary reasons — a sleeping laptop, a
-  # backgrounded phone tab, a change of network — and the long-open tab this bar
-  # exists for is precisely the one that does that most, so "Later" can mean
-  # "until the next blip". Carrying it across would mean telling the SERVER what
-  # this browser has already put away (a LiveSocket connect param keyed on the
-  # tracked bundle, since the flag must not outlive the release it refers to),
-  # and that plumbing sits on every LiveView join in the app. Not worth it while
-  # the thing coming back is one quiet strip dismissed again in a single click —
-  # revisit if anybody actually reports it.
-  def handle_event("dismiss_update", _params, socket) do
-    {:noreply, assign(socket, :update_ready?, false)}
-  end
-
   # The member clicked a browser notification, so they have seen exactly the
   # event it announced — and nothing else on the bell. Recording it drops that
   # one from the unread tally; the recount then comes back through
@@ -891,10 +874,12 @@ defmodule VutuvWeb.ShellLive do
       browser's own 24-hour worker check. The tracked bundle answers both.
 
       It is deliberately quiet: this is news, not a problem, and it stacks above
-      the header with two other bars of the same shape. A hairline strip, a text
-      link rather than the solid CTA, and a "Later" that takes it away - the
-      dismissal is plain socket state, so it lives exactly as long as the
-      document it applies to.
+      the header with two other bars of the same shape. A hairline strip and a
+      text link rather than the solid CTA. Quiet, but not optional - it carries
+      no "Later" beside the reload and should not carry one again, for the
+      reason `docs/architecture/realtime.md` gives: this reader's whole document
+      predates the deploy, so putting the notice away would leave them on the
+      old release for as long as the tab stays open.
 
       Every class here is one the app already ships. This markup is by
       definition patched into a document running the PREVIOUS release's CSS
@@ -931,16 +916,6 @@ defmodule VutuvWeb.ShellLive do
           <.button variant="ghost" href={reload_path(@path)} data-sw-reload class="min-h-10">
             {gettext("Reload")}
           </.button>
-          <%!-- Its own msgid rather than the "Not now" the notification prompt
-          uses: that one answers a request for permission, this one postpones an
-          offer, and German says them differently. --%>
-          <button
-            type="button"
-            phx-click="dismiss_update"
-            class="ml-auto min-h-10 rounded-lg px-3 text-slate-500 hover:bg-slate-100 hover:text-slate-700 dark:text-slate-400 dark:hover:bg-slate-800 dark:hover:text-slate-200"
-          >
-            {gettext("Later")}
-          </button>
         </div>
       </div>
       <div :if={@user_id} id="presence-hook" phx-hook="Presence" phx-update="ignore" class="hidden"></div>
