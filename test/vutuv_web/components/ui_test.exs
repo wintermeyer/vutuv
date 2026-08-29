@@ -237,6 +237,31 @@ defmodule VutuvWeb.UITest do
     end
   end
 
+  describe "organization_logo/1" do
+    # Every slot that shows a logo is square and few logos are, so `object-cover`
+    # cut the sides off — abuuba's 30×24 four-dot mark rendered as two and a
+    # half dots on its own page. A face survives that, a mark does not.
+    test "shows the whole mark instead of cropping it to the square slot" do
+      html =
+        render_component(&UI.organization_logo/1,
+          organization: %Vutuv.Organizations.Organization{name: "abuuba", logo: "tok3n"}
+        )
+
+      assert html =~ "object-contain"
+      refute html =~ "object-cover"
+    end
+
+    test "falls back to the page's initial when it has no logo" do
+      html =
+        render_component(&UI.organization_logo/1,
+          organization: %Vutuv.Organizations.Organization{name: "abuuba", logo: nil}
+        )
+
+      assert html =~ "A"
+      refute html =~ "<img"
+    end
+  end
+
   describe "avatar/1" do
     test "marks the <img> with data-avatar so the JS fallback can bind to it" do
       html = render_component(&UI.avatar/1, src: "/avatars/x/Jane%20Doe_thumb.avif")

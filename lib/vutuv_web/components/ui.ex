@@ -2075,6 +2075,14 @@ defmodule VutuvWeb.UI do
   page's twin of `<.avatar>`. Lives in the kit (issue #1410) because the shared
   face strips render it too, and `VutuvWeb.OrganizationComponents` cannot be
   imported here (it imports this module).
+
+  **`object-contain`, not `object-cover`** — this is where it differs from
+  `<.avatar>`. Every slot that shows a logo is square, and a mark is rarely
+  square: cover filled the box by cropping the sides off, which turned abuuba's
+  four-dot logo (30×24) into two-and-a-half dots on its own page. A face
+  survives being cropped; a wordmark or a logotype does not. Contain fits the
+  whole mark inside the box and leaves the card's own background in the
+  margins, which is what the ring and the rounded corners frame.
   """
   def organization_logo(assigns) do
     ~H"""
@@ -2082,7 +2090,7 @@ defmodule VutuvWeb.UI do
       <img
         src={OrganizationImage.token_url(@organization.logo, @version)}
         alt={@organization.name}
-        class={[@class, "rounded-2xl object-cover ring-1 ring-slate-200 dark:ring-slate-800"]}
+        class={[@class, "rounded-2xl object-contain ring-1 ring-slate-200 dark:ring-slate-800"]}
       />
     <% else %>
       <span
