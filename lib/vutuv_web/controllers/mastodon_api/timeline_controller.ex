@@ -14,6 +14,7 @@ defmodule VutuvWeb.MastodonApi.TimelineController do
   use VutuvWeb, :controller
 
   alias Vutuv.Fediverse
+  alias Vutuv.Keyset
   alias Vutuv.MastodonApi.Presenter
   alias Vutuv.Posts
   alias Vutuv.Tags
@@ -83,10 +84,10 @@ defmodule VutuvWeb.MastodonApi.TimelineController do
   defp public_items(:all, page) do
     opts = Pagination.opts(page)
 
-    (Posts.recent_public_posts(:all, opts) ++ Fediverse.recent_public_remote_posts(opts))
-    |> Enum.sort_by(& &1.id, :desc)
-    |> then(fn merged -> if page.min_id, do: Enum.take(merged, -page.limit), else: merged end)
-    |> Enum.take(page.limit)
+    Keyset.merge(
+      [Posts.recent_public_posts(:all, opts), Fediverse.recent_public_remote_posts(opts)],
+      opts
+    )
   end
 
   @doc """

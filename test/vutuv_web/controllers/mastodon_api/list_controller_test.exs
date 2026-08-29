@@ -7,10 +7,16 @@ defmodule VutuvWeb.MastodonApi.ListControllerTest do
 
   import Vutuv.MastodonHelpers
 
+  alias Vutuv.Fediverse
   alias Vutuv.Posts
   alias Vutuv.Social
 
   @mastodon_host "mastodon.localhost"
+
+  setup do
+    Vutuv.RateLimiter.reset()
+    :ok
+  end
 
   test "what you bookmarked and what you liked come back", %{conn: conn} do
     member = insert(:activated_user)
@@ -30,6 +36,113 @@ defmodule VutuvWeb.MastodonApi.ListControllerTest do
       build_conn() |> mastodon_conn(token) |> get("/api/v1/favourites") |> json_response(200)
 
     assert Enum.map(favourites, & &1["id"]) == [liked.id]
+  end
+
+  # Issue #1597. Saving or liking something from another network answers 200
+  # (#1588) — and then the list it went into has to hold it, or the client shows
+  # the act as done and the thing as gone, which reads as data loss rather than
+  # as a missing feature.
+  describe "the lists hold what came from another network" do
+    test "a cached post and a cached reply are in /bookmarks", %{conn: conn} do
+      member = insert(:activated_user)
+      author = insert(:activated_user)
+      {:ok, own} = Posts.create_post(author, %{body: "Von hier"})
+      account = remote_account()
+      remote = cached_post(account)
+      reply = insert(:note, actor_uri: account.actor_uri)
+
+      :ok = Posts.bookmark_post(member, own)
+      assert {:ok, :bookmarked} = Fediverse.bookmark_remote_post(member, remote)
+      assert {:ok, :bookmarked} = Fediverse.bookmark_note(member, reply)
+
+      statuses =
+        conn
+        |> mastodon_conn(mastodon_token(member, ["read"]))
+        |> get("/api/v1/bookmarks")
+        |> json_response(200)
+
+      ids = Enum.map(statuses, & &1["id"])
+      assert own.id in ids
+      assert ("remote-" <> remote.id) in ids
+      assert ("remote-note-" <> reply.id) in ids
+
+      # Read through `notes_with_account/0` like every other loader of a reply,
+      # so its author is the account this installation holds rather than the
+      # stand-in a stranger gets — one reply, one identity, whichever list it
+      # was reached from.
+      saved_reply = Enum.find(statuses, &(&1["id"] == "remote-note-" <> reply.id))
+      assert saved_reply["account"]["id"] == "remote-" <> account.id
+    end
+
+    test "a cached post and a cached reply are in /favourites", %{conn: conn} do
+      member = federating_member()
+      author = insert(:activated_user)
+      {:ok, own} = Posts.create_post(author, %{body: "Von hier"})
+      remote = cached_post(remote_account())
+      reply = insert(:note)
+
+      :ok = Posts.like_post(member, own)
+      assert {:ok, :liked} = Fediverse.like_remote_post(member, remote)
+      assert {:ok, :liked} = Fediverse.like_note(member, reply)
+
+      ids =
+        conn
+        |> mastodon_conn(mastodon_token(member, ["read"]))
+        |> get("/api/v1/favourites")
+        |> json_response(200)
+        |> Enum.map(& &1["id"])
+
+      assert own.id in ids
+      assert ("remote-" <> remote.id) in ids
+      assert ("remote-note-" <> reply.id) in ids
+    end
+
+    # The boundary a client hands back is the id it was given, and for anything
+    # from another network that is `remote-<uuid>`. Without the strip it casts
+    # to nil, a nil boundary is no boundary, and no boundary is the newest page
+    # — so "load more" serves the same page for ever.
+    test "walking past a remote bookmark reaches the older ones", %{conn: conn} do
+      member = insert(:activated_user)
+      author = insert(:activated_user)
+      {:ok, older} = Posts.create_post(author, %{body: "Älter"})
+      remote = cached_post(remote_account())
+
+      :ok = Posts.bookmark_post(member, older)
+      {:ok, :bookmarked} = Fediverse.bookmark_remote_post(member, remote)
+
+      ids =
+        conn
+        |> mastodon_conn(mastodon_token(member, ["read"]))
+        |> get("/api/v1/bookmarks", %{"max_id" => "remote-" <> remote.id})
+        |> json_response(200)
+        |> Enum.map(& &1["id"])
+
+      assert ids == [older.id]
+    end
+
+    # The other half of the same strip: the `Link` header names the boundary by
+    # comparing the ids on the page, and a prefixed id sorts by its prefix — so
+    # the oldest entry on a mixed page is not the one a raw comparison picks,
+    # and the next page repeats what the client already has.
+    test "the next link names the oldest entry even when it is a remote one", %{conn: conn} do
+      member = insert(:activated_user)
+      author = insert(:activated_user)
+      remote = cached_post(remote_account())
+      {:ok, newer} = Posts.create_post(author, %{body: "Neuer"})
+
+      {:ok, :bookmarked} = Fediverse.bookmark_remote_post(member, remote)
+      :ok = Posts.bookmark_post(member, newer)
+
+      conn =
+        conn
+        |> mastodon_conn(mastodon_token(member, ["read"]))
+        |> get("/api/v1/bookmarks", %{"limit" => "2"})
+
+      assert [link] = Plug.Conn.get_resp_header(conn, "link")
+      assert [_next, _prev] = String.split(link, ", ")
+      assert link =~ "max_id=#{remote.id}"
+      refute link =~ "max_id=#{newer.id}"
+    end
   end
 
   test "the follower list", %{conn: conn} do

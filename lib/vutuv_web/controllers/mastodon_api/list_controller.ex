@@ -23,6 +23,7 @@ defmodule VutuvWeb.MastodonApi.ListController do
 
   alias Vutuv.Accounts
   alias Vutuv.Accounts.User
+  alias Vutuv.Fediverse
   alias Vutuv.Keyset
   alias Vutuv.MastodonApi.Presenter
   alias Vutuv.Posts
@@ -33,8 +34,24 @@ defmodule VutuvWeb.MastodonApi.ListController do
   alias VutuvWeb.MastodonApi.Pagination
   alias VutuvWeb.MastodonApi.Statuses
 
-  def bookmarks(conn, params), do: engaged(conn, params, &Posts.bookmarked_statuses/2)
-  def favourites(conn, params), do: engaged(conn, params, &Posts.liked_statuses/2)
+  @doc """
+  What the member saved, and what they liked — **from both worlds**.
+
+  A client can bookmark or favourite a status that came from another network,
+  and since #1588 that answers 200 — while these two lists read the vutuv half
+  alone, so the thing the client had just been told was saved was not in the
+  place it puts saved things. The act looked done and the object looked gone,
+  which reads as data loss rather than as a missing feature (issue #1597).
+
+  The two halves are merged the way the public timeline merges its own two:
+  each bounded by the same window, then cut together (`Vutuv.Keyset.merge/2`).
+  """
+  def bookmarks(conn, params),
+    do: engaged(conn, params, [&Posts.bookmarked_statuses/2, &Fediverse.bookmarked_statuses/2])
+
+  @doc "The same list for what the member liked, both worlds included — see `bookmarks/2`."
+  def favourites(conn, params),
+    do: engaged(conn, params, [&Posts.liked_statuses/2, &Fediverse.liked_statuses/2])
 
   def followers(conn, %{"id" => id} = params) do
     page = Pagination.params(params)
@@ -121,16 +138,24 @@ defmodule VutuvWeb.MastodonApi.ListController do
   """
   def custom_emojis(conn, _params), do: json(conn, [])
 
-  defp engaged(conn, params, reader) do
-    page = Pagination.params(params)
+  # Half this list is now spelled `remote-<uuid>`, so **both** boundaries are
+  # the bare uuid underneath: the one read out of the request (see
+  # `Pagination.params/2`) and the one advertised in the `Link` header, whose
+  # comparison would otherwise sort by the prefix rather than by age and offer a
+  # next page that repeats what the client already holds.
+  defp engaged(conn, params, readers) do
+    page = Pagination.params(params, strip: &Pagination.bare_id/1)
+    user = conn.assigns.current_user
+    opts = Pagination.opts(page)
 
     statuses =
-      conn.assigns.current_user
-      |> reader.(Pagination.opts(page))
-      |> Presenter.statuses(conn.assigns.current_user)
+      readers
+      |> Enum.map(& &1.(user, opts))
+      |> Keyset.merge(opts)
+      |> Presenter.statuses(user)
 
     conn
-    |> Pagination.link_header(Enum.map(statuses, & &1.id), page)
+    |> Pagination.link_header(Enum.map(statuses, &Pagination.bare_id(&1.id)), page)
     |> json(statuses)
   end
 

@@ -7251,6 +7251,76 @@ defmodule Vutuv.Fediverse do
   def saved_from_networks_count(%User{id: user_id}),
     do: Repo.aggregate(from(b in Bookmark, where: b.user_id == ^user_id), :count)
 
+  @doc """
+  What this member saved from other networks, as a **walkable** list — the
+  fediverse half of a Mastodon client's `/bookmarks`
+  (`Vutuv.Posts.bookmarked_statuses/2` is the vutuv half, and
+  `VutuvWeb.MastodonApi.ListController` merges them).
+
+  `saved_from_networks/2` above answers the same rows for the website: newest
+  **saved** first, offset paged, with a search box over them. A client walks by
+  the id it was handed instead, which here is the cached post's or the reply's
+  own, so this one is ordered by that id and bounded by `Vutuv.Keyset` — a list
+  ordered by one column while paged by another is what repeats rows and skips
+  others. Two readers rather than options on one: only the ids can be walked.
+
+  Answers bare `%RemotePost{}` and `%Note{}` structs, newest first, which is
+  what `Vutuv.MastodonApi.Presenter` renders anything from another network from.
+  """
+  def bookmarked_statuses(%User{id: user_id}, opts \\ []),
+    do: engaged_objects(Bookmark, Bookmark, user_id, opts)
+
+  @doc """
+  What this member liked out there, walkable the same way — the fediverse half
+  of `/favourites`.
+
+  There is no website page for this and that is deliberate (see
+  `VutuvWeb.PostLive.Saved`): a like out there is a message to its author, not a
+  shelf of your own. A Mastodon client offers the tab regardless, and answering
+  it with the vutuv posts alone told a member their like of a cached post had
+  gone nowhere.
+  """
+  def liked_statuses(%User{id: user_id}, opts \\ []),
+    do: engaged_objects(PostLike, NoteLike, user_id, opts)
+
+  # A cached post and a reply are two tables and share no query, so each marker
+  # is bounded by the same window first and `Keyset.merge/2` cuts afterwards —
+  # what keeps the deepest page reading as few rows as the first.
+  #
+  # The two marker schemas name the same two columns, so they are the only
+  # parameter. On `fediverse_bookmarks` those columns are nullable (a row names
+  # a cached post **or** a reply) and the inner join on them is the point rather
+  # than the trap: a NULL never matches, so each leg picks up exactly its own
+  # kind and the other leg picks up the rest. No `NOT IN`, and no `nil` reaches
+  # a `Repo.get/2`.
+  defp engaged_objects(remote_post_schema, note_schema, user_id, opts) do
+    remote_posts =
+      from(p in RemotePost,
+        join: e in ^remote_post_schema,
+        on: e.remote_post_id == p.id,
+        where: e.user_id == ^user_id,
+        preload: [:remote_account]
+      )
+      |> Keyset.scope(opts)
+      |> Repo.all()
+
+    # Through `notes_with_account/0` like every other loader of a note: the
+    # virtual `account_id` it joins in is what decides whether the reply's
+    # author reads as an account this installation holds or as a stranger, and
+    # one reply answering with two identities depending on the list it came
+    # from is exactly the drift that chokepoint exists to prevent.
+    notes =
+      from(n in subquery(notes_with_account()),
+        join: e in ^note_schema,
+        on: e.note_id == n.id,
+        where: e.user_id == ^user_id
+      )
+      |> Keyset.scope(opts)
+      |> Repo.all()
+
+    Keyset.merge([remote_posts, notes], opts)
+  end
+
   defp saved_matching(query, q) when is_binary(q) and q != "" do
     like = "%" <> String.replace(q, ~r/[%_]/, "") <> "%"
 

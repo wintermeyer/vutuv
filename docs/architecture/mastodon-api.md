@@ -98,7 +98,14 @@ Server discovery, login and the core social workflow:
   no id, so the boundary rides the `Link` header, as it does in Mastodon.
 - `GET` and `POST /api/v1/markers` — where a client left off reading
 - `GET /api/v1/bookmarks`, `/favourites`, `/blocks`, `/mutes`,
-  `/accounts/:id/followers`, `/statuses/:id/favourited_by` and `/reblogged_by`
+  `/accounts/:id/followers`, `/statuses/:id/favourited_by` and `/reblogged_by`.
+  The first two carry **both worlds** (issue #1597): a client may save or
+  favourite a cached post or reply, so the vutuv half
+  (`Posts.bookmarked_statuses/2`) and the fediverse half
+  (`Fediverse.bookmarked_statuses/2`) are merged by `Keyset.merge/2`, the way
+  `/timelines/public` merges its own two. Half those ids are prefixed, so the
+  boundary read out of the request and the one written into the `Link` header
+  are both the bare uuid underneath.
 - `PATCH /api/v1/accounts/update_credentials` and `POST /api/v1/reports`
 - `POST|GET|PUT|DELETE /api/v1/push/subscription`
 - the streaming websocket at `/api/v1/streaming`

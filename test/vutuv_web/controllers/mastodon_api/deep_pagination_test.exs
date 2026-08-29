@@ -23,6 +23,7 @@ defmodule VutuvWeb.MastodonApi.DeepPaginationTest do
   import Vutuv.MastodonHelpers
   import Vutuv.OrganizationsHelpers
 
+  alias Vutuv.Fediverse
   alias Vutuv.Organizations
   alias Vutuv.Posts
   alias Vutuv.Social
@@ -36,9 +37,10 @@ defmodule VutuvWeb.MastodonApi.DeepPaginationTest do
 
   # One request per row plus one, so the walk has to survive going past the end
   # as well as getting there. Stops early if the endpoint repeats itself, which
-  # would otherwise spin.
-  defp walk(token, path) do
-    Enum.reduce_while(1..(@rows + 1), {[], nil}, fn _step, {seen, cursor} ->
+  # would otherwise spin. `rows` is the list's length where a test put something
+  # extra on it.
+  defp walk(token, path, rows) do
+    Enum.reduce_while(1..(rows + 1), {[], nil}, fn _step, {seen, cursor} ->
       separator = if String.contains?(path, "?"), do: "&", else: "?"
       query = separator <> "limit=1" <> if(cursor, do: "&max_id=#{cursor}", else: "")
 
@@ -50,13 +52,13 @@ defmodule VutuvWeb.MastodonApi.DeepPaginationTest do
     |> elem(0)
   end
 
-  defp assert_walks_everything(token, path) do
-    ids = walk(token, path)
+  defp assert_walks_everything(token, path, rows \\ @rows) do
+    ids = walk(token, path, rows)
 
-    assert length(ids) == @rows,
-           "#{path} stopped after #{length(ids)} of #{@rows} rows"
+    assert length(ids) == rows,
+           "#{path} stopped after #{length(ids)} of #{rows} rows"
 
-    assert length(Enum.uniq(ids)) == @rows, "#{path} served the same row twice"
+    assert length(Enum.uniq(ids)) == rows, "#{path} served the same row twice"
     ids
   end
 
@@ -88,10 +90,19 @@ defmodule VutuvWeb.MastodonApi.DeepPaginationTest do
       )
     end
 
-    test "bookmarks walk past the first read", %{reader: reader, posts: posts} do
+    # With one cached post saved among them (issue #1597) the list has two
+    # sources and a prefixed id in the middle of the walk. A boundary that does
+    # not survive that prefix is no boundary, and no boundary is the newest page
+    # — so the walk stops making progress at the remote row rather than at the
+    # end, and comes back holding the same id many times over.
+    test "bookmarks walk past the first read, remote ones included", %{
+      reader: reader,
+      posts: posts
+    } do
       Enum.each(posts, &Posts.bookmark_post(reader, &1))
+      {:ok, :bookmarked} = Fediverse.bookmark_remote_post(reader, cached_post(remote_account()))
 
-      assert_walks_everything(mastodon_token(reader, ["read"]), "/api/v1/bookmarks")
+      assert_walks_everything(mastodon_token(reader, ["read"]), "/api/v1/bookmarks", @rows + 1)
     end
 
     test "favourites walk past the first read", %{reader: reader, posts: posts} do
