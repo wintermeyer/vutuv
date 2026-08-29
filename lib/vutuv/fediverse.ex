@@ -2917,7 +2917,7 @@ defmodule Vutuv.Fediverse do
       |> scope_resharer(viewer_id, Keyword.get(opts, :only))
       |> reject_muted_hosts(viewer)
       |> Vutuv.Posts.named_language_scope(Vutuv.Posts.feed_language_filter(viewer))
-      |> remote_reposts_at_or_before(cursor)
+      |> repost_rows_at_or_before(cursor)
       |> Repo.all()
       |> Enum.map(&remote_repost_entry/1)
     else
@@ -2980,9 +2980,17 @@ defmodule Vutuv.Fediverse do
     }
   end
 
-  defp remote_reposts_at_or_before(query, nil), do: query
+  # The cursor window on a repost row, for both repost sources: the boost of a
+  # remote post and the reshare of a remote reply. Both bind the repost row
+  # first and order by its `inserted_at`, so one helper covers them — they were
+  # two identical copies 4,600 lines apart until the `:since` bound would have
+  # made it three clauses each.
+  defp repost_rows_at_or_before(query, nil), do: query
 
-  defp remote_reposts_at_or_before(query, %{at: at}),
+  defp repost_rows_at_or_before(query, %{at: at, since: since}) when not is_nil(since),
+    do: where(query, [r], r.inserted_at <= ^at and r.inserted_at >= ^since)
+
+  defp repost_rows_at_or_before(query, %{at: at}),
     do: where(query, [r], r.inserted_at <= ^at)
 
   @doc """
@@ -3169,6 +3177,15 @@ defmodule Vutuv.Fediverse do
   # these columns carry a zone, so the conversion lives here once instead of
   # once per source.
   defp utc_at_or_before(query, nil, _field), do: query
+
+  defp utc_at_or_before(query, %{at: at, since: since}, field) when not is_nil(since),
+    do:
+      where(
+        query,
+        [r],
+        field(r, ^field) <= ^DateTime.from_naive!(at, "Etc/UTC") and
+          field(r, ^field) >= ^DateTime.from_naive!(since, "Etc/UTC")
+      )
 
   defp utc_at_or_before(query, %{at: at}, field),
     do: where(query, [r], field(r, ^field) <= ^DateTime.from_naive!(at, "Etc/UTC"))
@@ -7661,18 +7678,13 @@ defmodule Vutuv.Fediverse do
       |> reject_muted_note_hosts(viewer)
       |> Vutuv.Posts.named_language_scope(Vutuv.Posts.feed_language_filter(viewer))
       |> limit(^fetch_n)
-      |> note_reposts_at_or_before(cursor)
+      |> repost_rows_at_or_before(cursor)
       |> Repo.all()
       |> Enum.map(&remote_reply_repost_entry/1)
     else
       []
     end
   end
-
-  defp note_reposts_at_or_before(query, nil), do: query
-
-  defp note_reposts_at_or_before(query, %{at: at}),
-    do: where(query, [r], r.inserted_at <= ^at)
 
   defp remote_reply_repost_entry(%NoteRepost{} = repost) do
     %{

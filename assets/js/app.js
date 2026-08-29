@@ -674,9 +674,30 @@ document.addEventListener("click", (event) => {
   window.dispatchEvent(new CustomEvent("vutuv:tab-teaser", { detail: { frames: frames } }))
 })
 
+// Keeps /feed's address bar in step with the calendar, so the day on screen is
+// the day a copied link reopens.
+//
+// The feed LiveView is `live_render`ed by the controller that owns the
+// agent-format siblings rather than routed, so it has no `push_patch/2` and
+// this is the only way it can touch the URL. `replaceState`, never `pushState`:
+// a reader stepping through a fortnight of days would otherwise have to press
+// Back fourteen times to leave the feed.
+const FeedUrl = {
+  mounted() {
+    this.handleEvent("feed:url", ({ query }) => {
+      const url = query ? `${location.pathname}?${query}` : location.pathname
+
+      if (url !== location.pathname + location.search) {
+        history.replaceState(history.state, "", url)
+      }
+    })
+  },
+}
+
 const Hooks = {
   MarkdownEditor,
   TagInput,
+  FeedUrl,
   LocalTime: {
     mounted() {
       localizeTime(this.el)

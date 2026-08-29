@@ -55,17 +55,7 @@ defmodule VutuvWeb.AdHTML do
   end
 
   @doc "Monday-first weekday initials for the calendar header."
-  def weekday_initials do
-    [
-      gettext("Mo"),
-      gettext("Tu"),
-      gettext("We"),
-      gettext("Th"),
-      gettext("Fr"),
-      gettext("Sa"),
-      gettext("Su")
-    ]
-  end
+  defdelegate weekday_initials, to: VutuvWeb.UI
 
   def status_label(%Ad{approved_at: nil}), do: gettext("Waiting for approval")
   def status_label(%Ad{}), do: gettext("Approved")

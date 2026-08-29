@@ -15,7 +15,10 @@ defmodule Vutuv.FeedPage do
     * `paginate/3` — **cursor**, for an endless "Load more" list that appends
       (the newsfeed, the API). The cursor is `%{at: timestamp, ids: [...]}` —
       the boundary timestamp plus every already-shown item id *at* that
-      timestamp. Timestamps have second precision, so several items (across
+      timestamp, and optionally `since:` — a **lower** bound that turns the walk
+      into a window (the feed calendar's one-day view). A source that honours
+      `at` but forgets `since` does not crash, it silently widens, so any new
+      source has to apply both. Timestamps have second precision, so several items (across
       all sources) can tie at a page boundary; fetching `<= at` and rejecting
       the seen ids means ties neither skip items nor repeat them. Treat the
       cursor as opaque.
@@ -93,6 +96,10 @@ defmodule Vutuv.FeedPage do
     # at that timestamp along — they are still "already shown".
     carried = if prev && NaiveDateTime.compare(prev.at, at) == :eq, do: prev.ids, else: []
 
-    %{at: at, ids: carried ++ boundary_ids}
+    # A window's lower bound (`:since`, the feed calendar's day pick) belongs to
+    # the whole walk, not to one page, so it is carried rather than recomputed.
+    # Dropped here, "Load more" inside a single day would silently widen to
+    # every earlier day the moment the reader pressed it.
+    %{at: at, ids: carried ++ boundary_ids, since: prev && prev[:since]}
   end
 end

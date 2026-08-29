@@ -17,8 +17,18 @@ defmodule VutuvWeb.PostFeedLiveTest do
   # How many timeline rows are drawn but hidden — the waiting posts. Counted off
   # the row wrapper's own class, so it cannot catch a `hidden` somewhere inside
   # a card.
+  # Timeline rows currently drawn but hidden (the pending-arrival valve).
+  #
+  # Two lookaheads rather than one literal `class="…" hidden`: that spelling
+  # asserted the two attributes were ADJACENT in the rendered tag, so adding any
+  # third attribute to the row between them (the day marker's `data-post-day`)
+  # dropped the count to zero while the feed behaved perfectly. Attribute order
+  # is HEEx's business, not this test's. `[\s=>]` because a boolean attribute
+  # renders as `hidden=""`, not bare `hidden`.
   defp hidden_rows(html) do
-    Regex.scan(~r/class="py-4 first:pt-0 last:pb-0" hidden/, html) |> length()
+    ~r/<div(?=[^>]*class="py-4 first:pt-0 last:pb-0")(?=[^>]*\shidden[\s=>])[^>]*>/
+    |> Regex.scan(html)
+    |> length()
   end
 
   # Where `text` first shows up in the rendered feed — how the thread tests
@@ -125,6 +135,12 @@ defmodule VutuvWeb.PostFeedLiveTest do
       # 20 rather than the 15 it did before v7.371. What actually proves the
       # stash was used is the comparison below: the same page, with and without
       # it, is immune to whatever else the rail costs.
+      #
+      # It also guards the feed calendar's laziness, which is what made this go
+      # red once: computing the heatmap (a nine-source union over a month) and
+      # its floor check on every mount, for a grid that ships folded and most
+      # readers never open, took a connected mount from 18 queries to 28. The
+      # counts are bought by unfolding now, not by arriving.
       assert hit <= 20, "handoff-hit feed connect ran #{hit} queries; the handoff was not used"
 
       assert miss >= hit + 10,

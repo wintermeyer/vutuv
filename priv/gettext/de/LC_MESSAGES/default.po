@@ -23027,3 +23027,75 @@ msgstr[1] "%{formatted} Beiträge im Feed anzeigen"
 #, elixir-autogen, elixir-format
 msgid "Picture unavailable"
 msgstr "Bild nicht verfügbar"
+
+#: lib/vutuv_web/live/post_live/feed.ex
+#, elixir-autogen, elixir-format
+msgid "Back to now"
+msgstr "Zurück zu jetzt"
+
+#: lib/vutuv_web/live/post_live/feed_calendar.ex
+#, elixir-autogen, elixir-format
+msgid "My posts"
+msgstr "Meine Beiträge"
+
+#: lib/vutuv_web/live/post_live/feed_calendar.ex
+#, elixir-autogen, elixir-format
+msgid "Previous month"
+msgstr "Voriger Monat"
+
+#: lib/vutuv_web/live/post_live/feed_calendar.ex
+#, elixir-autogen, elixir-format
+msgid "Next month"
+msgstr "Nächster Monat"
+
+#: lib/vutuv_web/live/post_live/feed_calendar.ex
+#, elixir-autogen, elixir-format
+msgid "Previous year"
+msgstr "Voriges Jahr"
+
+#: lib/vutuv_web/live/post_live/feed_calendar.ex
+#, elixir-autogen, elixir-format
+msgid "Next year"
+msgstr "Nächstes Jahr"
+
+#: lib/vutuv_web/live/post_live/feed_calendar.ex
+#, elixir-autogen, elixir-format
+msgid "Busy month: the shading counts at least this much."
+msgstr "Voller Monat: die Färbung zählt mindestens so viel."
+
+#: lib/vutuv_web/live/post_live/feed_calendar.ex
+#, elixir-autogen, elixir-format
+msgctxt "heatmap scale"
+msgid "Less"
+msgstr "Weniger"
+
+#: lib/vutuv_web/live/post_live/feed_calendar.ex
+#, elixir-autogen, elixir-format
+msgctxt "heatmap scale"
+msgid "More"
+msgstr "Mehr"
+
+#: lib/vutuv_web/live/post_live/feed_calendar.ex
+#, elixir-autogen, elixir-format
+msgid "%{count} entry on %{day}"
+msgid_plural "%{count} entries on %{day}"
+msgstr[0] "%{count} Eintrag am %{day}"
+msgstr[1] "%{count} Einträge am %{day}"
+
+#: lib/vutuv_web/live/post_live/feed_calendar.ex
+#, elixir-autogen, elixir-format
+msgid "%{count} post on %{day}"
+msgid_plural "%{count} posts on %{day}"
+msgstr[0] "%{count} Beitrag am %{day}"
+msgstr[1] "%{count} Beiträge am %{day}"
+
+#: lib/vutuv_web/live/post_live/feed.ex
+#, elixir-autogen, elixir-format
+msgid "Nothing reached your feed on %{day}."
+msgstr "Am %{day} ist nichts in Ihrem Feed angekommen."
+#: lib/vutuv_web/live/post_live/feed.ex
+#, elixir-autogen, elixir-format
+msgid "Load the whole day (%{formatted} post)"
+msgid_plural "Load the whole day (%{formatted} posts)"
+msgstr[0] "Ganzen Tag laden (%{formatted} Beitrag)"
+msgstr[1] "Ganzen Tag laden (%{formatted} Beiträge)"

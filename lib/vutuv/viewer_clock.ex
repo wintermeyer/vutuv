@@ -100,6 +100,40 @@ defmodule Vutuv.ViewerClock do
   def today, do: date(DateTime.utc_now())
 
   @doc """
+  One of this viewer's calendar days as the pair of UTC naive instants that
+  bound it — the inverse of `naive/1`, and the only place that conversion is
+  written.
+
+  Every `inserted_at` in the app is UTC naive, so anything that asks "what
+  happened on my Tuesday" (the feed calendar's day window and its heatmap
+  counts) has to turn the reader's day into that pair. `Vutuv.BerlinTime`'s
+  `day_bounds_utc/1` is the same idea for the **installation's** clock; this is
+  the per-reader twin.
+
+  A day boundary never falls in a DST gap (transitions run at 02:00/03:00) and
+  an ambiguous one still names the right day, so both odd shapes take the first
+  offset rather than refusing the answer: an hour's skew at midnight is a
+  nuisance, a 500 on the feed is not.
+  """
+  def day_window(%Date{} = date) do
+    {edge(date, ~T[00:00:00]), edge(date, ~T[23:59:59])}
+  end
+
+  defp edge(%Date{} = date, %Time{} = time) do
+    naive = NaiveDateTime.new!(date, time)
+
+    case DateTime.from_naive(naive, zone()) do
+      {:ok, at} -> to_utc_naive(at)
+      {:ambiguous, first, _second} -> to_utc_naive(first)
+      {:gap, just_before, _just_after} -> to_utc_naive(just_before)
+      {:error, _reason} -> naive
+    end
+  end
+
+  defp to_utc_naive(%DateTime{} = at),
+    do: at |> DateTime.shift_zone!("Etc/UTC") |> DateTime.to_naive()
+
+  @doc """
   A UTC instant written in this viewer's shape. The styles are `:date`,
   `:short_date`, `:day_month`, `:time`, `:seconds`, `:datetime` (date and
   time), `:short_datetime` (the post-stamp form, comma-separated) and

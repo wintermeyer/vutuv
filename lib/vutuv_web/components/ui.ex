@@ -3172,6 +3172,32 @@ defmodule VutuvWeb.UI do
   def month_name(12), do: gettext("December")
 
   @doc """
+  The two-letter names of the weekdays, Monday first — the column headings of
+  any calendar grid.
+
+  Here for the same reason `month_name/1` is: one home for the seven strings
+  rather than a copy per view. Moved up from `VutuvWeb.AdHTML`, which shipped
+  them for the ad booking calendar long before the feed calendar wanted the
+  same row; both call this now.
+
+  Deliberately whole msgids and not `String.slice/3` on the full weekday names:
+  the abbreviation is a translator's decision, not a substring, and slicing
+  would have added seven more one-word msgids of exactly the kind
+  `gettext.extract --merge` likes to fuzzy-fill.
+  """
+  def weekday_initials do
+    [
+      gettext("Mo"),
+      gettext("Tu"),
+      gettext("We"),
+      gettext("Th"),
+      gettext("Fr"),
+      gettext("Sa"),
+      gettext("Su")
+    ]
+  end
+
+  @doc """
   Exact, thousands-grouped form of a count (`60123` -> `"60,123"`, or
   `"60.123"` under the German locale), for the rare place that wants the full
   number rather than the floored `compact_count/1` — the live member counter on

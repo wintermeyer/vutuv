@@ -26,7 +26,7 @@ defmodule VutuvWeb.NewsfeedController do
 
   def index(conn, params) do
     case AgentDocs.negotiate(conn) do
-      :html -> show_html(conn)
+      :html -> show_html(conn, params)
       format -> send_feed_doc(conn, format, params)
     end
   end
@@ -36,10 +36,21 @@ defmodule VutuvWeb.NewsfeedController do
   # document <head>, with the agent-format alternates) still applies. The feed
   # is outside the `live_session`, so its session values are passed explicitly
   # (mirrors VutuvWeb.UserController.show).
-  defp show_html(conn) do
+  #
+  # `?day=` and `?cal=` are the feed calendar's state (issue: time travel). The
+  # LiveView is `live_render`ed rather than routed, so it has no
+  # `handle_params/3` to read them itself — the controller is the only side
+  # that sees the query string, and it hands the two values on through the
+  # session map. They are display state, not identity: that map is signed but
+  # **not encrypted**, so nothing that decides who the viewer is may ever
+  # travel this way.
+  defp show_html(conn, params) do
     conn
     |> AgentDocs.put_html_alternates()
-    |> ControllerHelpers.render_live(Feed)
+    |> ControllerHelpers.render_live(Feed, %{
+      "cal_day" => params["day"],
+      "cal_open" => params["cal"]
+    })
   end
 
   defp send_feed_doc(conn, format, params) do
