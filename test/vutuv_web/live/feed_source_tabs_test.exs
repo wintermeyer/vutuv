@@ -19,8 +19,7 @@ defmodule VutuvWeb.FeedSourceTabsTest do
   use VutuvWeb.ConnCase
 
   import Phoenix.LiveViewTest
-  import Vutuv.PostsHelpers, only: [backdate_post!: 2]
-
+  import VutuvWeb.FeedRailHelpers, only: [unfold: 2]
   alias Vutuv.Accounts.User
   alias Vutuv.Fediverse
   alias Vutuv.Fediverse.Follow
@@ -142,18 +141,6 @@ defmodule VutuvWeb.FeedSourceTabsTest do
   # The stored sources, read fresh — the socket's own
   # `%User{}` was loaded at mount and knows nothing of what was written since.
   defp stored_tab(user), do: Repo.get!(User, user.id).feed_source
-
-  # Two rail cards ship folded to their heading ("Sources" and "Hide
-  # tags"), so their bodies are not in the DOM until somebody opens them — which
-  # is what a reader does before touching a switch, and what these tests have to
-  # do too.
-  defp unfold(live, key) do
-    if has_element?(live, ~s(#rail-#{key} button[aria-expanded="false"])) do
-      live |> element(~s(#rail-#{key} button[phx-click="rail-collapse"])) |> render_click()
-    end
-
-    live
-  end
 
   describe "switching tabs" do
     test "vutuv shows only vutuv posts, fediverse only the cached ones", %{conn: conn} do

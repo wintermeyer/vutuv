@@ -324,6 +324,56 @@ whom being seen decides whether they come back. Following somebody here
 the click read as if it had undone something — and only a fresh draw retires
 them.
 
+**Three page sizes, and every difference is deliberate.** A mount loads **40**
+entries (`@first_page_size`), every "Load more" after it **20** (`@page_size`),
+and a source switch **10** (`@filter_page_size`). The arrival page is the one
+page nobody asked for, so it is the one that has to carry the reader past the
+first few scrolls without a round trip; an older page is fetched while they are
+still reading and can afford to be half of it; and a switch is a wait with
+nothing on screen at all, where twenty rendered cards are the bulk of the second
+it takes on a slow line, for a screen that holds three or four. `more?` comes
+from the same query in all three cases, so a short page still knows there is
+more and the button below picks the rest up. The `/feed.md|txt|json|xml`
+siblings take the arrival page as *their* page size, every page of them, and
+they read it off `Feed.first_page_size/0` rather than a mirrored constant. The
+**size** is all they share: the document is deliberately the whole feed, with no
+source filter applied, because it carries none of the switches the member has
+here and narrowing it by one they cannot see would hand an agent a document with
+no way to ask for the rest.
+
+**A post that arrives while somebody is reading is a fourth page, of one.** It is
+drawn into the timeline at the moment it arrives (`queue/2` — the row on top, the
+parent it nests dropped, its photo scan watched) carrying the plain `hidden`
+attribute. The rail's "not read yet" card names up to ten of them and the pill
+above the timeline quotes the newest; pressing either runs `reveal_pending/0`,
+which stamps `data-pending-shown` (the fade) and takes `hidden` off **in the
+browser**, then pushes `show-new` so the server can empty `@pending_posts` and
+take the card and the pill away. That push is chrome arriving late, not something
+the reader waits on: the reveal used to be a round trip that carried ten rendered
+cards, and everything needed to draw them already existed when they arrived.
+Measured on localhost, 2026-08-29: **6.6 ms** from click to all three rows
+visible, against **112 ms** for the server's answer.
+
+Three things make that safe rather than clever.
+
+**`hidden`, not a class or a `data-*` our stylesheet knows.** The browser's own
+stylesheet does the hiding, which matters because a deploy reloads nothing: a tab
+open across one reconnects to the new release and gets this markup patched into
+an hours-old document. Anything that needed `app.css` to hide would arrive
+*visible* there — a post shoving itself into the timeline unasked. What our CSS
+still contributes is decoration (the fade, and one padding rule), and its absence
+for a release costs nothing that reads as broken. The row carries no `display`
+utility of its own, which is the one thing `hidden` loses to (issue #880).
+
+**The attribute is server-owned.** The row renders it whenever the entry is still
+in `@pending_posts`, so every later re-render (a photo scan finishing, a
+translation, the midnight restream) agrees with the browser that the row is
+visible, and nothing has to remember to unstamp anything.
+
+**A waiting row is always inserted `at: 0`.** That is what lets
+`#feed-posts > [hidden] + :not([hidden])` give the first *visible* row back the
+`first:pt-0` it no longer matches.
+
 `Posts.feed_page/2` merges its sources through `Vutuv.FeedPage` (a shared
 cursor over independent fetchers). Three are local: own + followed authors'
 posts, their reposts, and — since issue #872 — posts carrying a **tag you follow**

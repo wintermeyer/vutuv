@@ -2899,12 +2899,12 @@ defmodule Vutuv.Posts do
   "last chosen" value means.
 
   `feed_source_at` is the exception, and `leaving` is why it is an argument
-  rather than a comment at the call site: it dates the reader's *move*, which
-  `VutuvWeb.PostLive.Feed.unseen_at_mount/3` reads as "you were still looking at
-  the tab you just left until now". A press on the tab already open moves
-  nobody, so stamping it there would swallow a dot still rightly standing on
-  the other one. Only the caller knows which tab is on screen, so only the
-  caller can say — but it has to say, not remember to.
+  rather than a comment at the call site: it dates the reader's *move*, and a
+  press on the source they are already on moves nobody. **Nothing reads that
+  column today.** Its reader was the coral dot on the tab you were not on, which
+  went with the tabs themselves; the column and this argument are still here
+  because dropping a column takes the two deploys of expand/contract, and this
+  is the write side that has to go first.
   """
   def remember_feed_filter(%User{} = user, filter, leaving) do
     stored = if filter in [:vutuv, :fediverse], do: to_string(filter)
@@ -2975,9 +2975,8 @@ defmodule Vutuv.Posts do
   end
 
   @doc """
-  Whether the tab `source` holds anything for `viewer` stamped at or after
-  `since` — the boolean half of `newest_source_entry/3` below, and all a mount
-  deriving the dot has to know (`VutuvWeb.PostLive.Feed.unseen_at_mount/3`).
+  Whether the source `source` holds anything for `viewer` stamped at or after
+  `since` — the boolean half of `newest_source_entry/3` below.
 
   It skips that one's decorate pass, and `Enum.any?/2` stops at the first
   source that answers rather than asking all of them.

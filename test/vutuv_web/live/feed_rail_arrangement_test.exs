@@ -14,6 +14,7 @@ defmodule VutuvWeb.PostLive.FeedRailArrangementTest do
   import Phoenix.LiveViewTest
 
   alias Vutuv.Posts
+  alias VutuvWeb.FeedRailHelpers
 
   defp order(html) do
     Regex.scan(~r/data-rail-block="([a-z_]+)"/, html) |> Enum.map(&List.last/1)
@@ -24,7 +25,7 @@ defmodule VutuvWeb.PostLive.FeedRailArrangementTest do
   # attribute a screen reader does rather than guessing from the markup.
   defp folded(live) do
     for key <- ~w(followed_tags unread hidden_tags words newcomers sources),
-        has_element?(live, ~s(#rail-#{key} button[aria-expanded="false"])),
+        FeedRailHelpers.folded?(live, key),
         do: key
   end
 

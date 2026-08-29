@@ -56,10 +56,16 @@ defmodule VutuvWeb.PostLive.Feed do
   # while this page is open (issue #1283). One line, no handler.
   on_mount(VutuvWeb.Live.RemoteCounts)
 
+  # What a mount loads, and what every older page after it adds. The arrival
+  # page is deliberately double the rest: it is the one page nobody asked for,
+  # so it has to carry the reader past the first few scrolls without a round
+  # trip, while an older page is fetched while they are still reading and can
+  # afford to be half the size.
+  @first_page_size 40
   @page_size 20
-  # What a source-tab press loads (see `load_source_filter/2`) — deliberately
-  # smaller than a mount's page, because that press is a wait with nothing on
-  # screen to read while it lasts.
+  # What a source switch loads (see `load_source_filter/2`) — deliberately
+  # smaller than either, because that press is a wait with nothing on screen to
+  # read while it lasts.
   @filter_page_size 10
   # "New here" rail: how many newcomers to greet, the size of the newest-members
   # pool they are drawn out of, how many of each one's tags the card shows, and
@@ -70,6 +76,9 @@ defmodule VutuvWeb.PostLive.Feed do
   @newcomer_pool 30
   @tags_per_newcomer 3
   @suggestions_refresh :timer.minutes(5)
+  # How many waiting posts the "not read yet" card names before it stops at a
+  # count.
+  @unread_shown 10
 
   # The rail's cards, in the order a member who never touched them gets. The
   # list is what `Vutuv.Posts.feed_rail/2` measures a stored arrangement
@@ -90,6 +99,15 @@ defmodule VutuvWeb.PostLive.Feed do
   # you and the next thing you actually read.
   @rail_blocks ~w(followed_tags unread hidden_tags words newcomers sources)
   @rail_collapsed ~w(hidden_tags sources)
+
+  @doc """
+  How many entries a `/feed` arrival carries.
+
+  Public because the agent-format siblings serve the same page
+  (`VutuvWeb.NewsfeedController`) and a number mirrored by hand across two
+  modules is a number that drifts.
+  """
+  def first_page_size, do: @first_page_size
 
   @impl true
   # Rendered by VutuvWeb.NewsfeedController via `live_render` (off-router, so it
@@ -158,7 +176,7 @@ defmodule VutuvWeb.PostLive.Feed do
     # same fold `fediverse_feed_available?/1` did for the tab bar.
     filter = if Posts.fediverse_feed_available?(user), do: remembered, else: :all
 
-    page = Posts.feed_page(user, limit: @page_size, filter: filter)
+    page = Posts.feed_page(user, limit: @first_page_size, filter: filter)
     entries = page.entries |> with_engagement(user) |> mark_filtered(compiled, user.id)
 
     # Read the stored draft once and hand it to the composer below, which then
@@ -636,19 +654,22 @@ defmodule VutuvWeb.PostLive.Feed do
   # `VutuvWeb.PostTeaser`, the same pair of strings the browser-tab title uses,
   # so a post reads the same wherever it is quoted.
   #
-  # Four rows, newest first: this is a glance, not a second timeline. The rest
-  # are still counted in the heading and still arrive with the button.
+  # Ten rows, newest first. It was four, which on a quiet morning meant the card
+  # named a fraction of what was waiting and the rest arrived unannounced; ten is
+  # what a rail card holds without becoming a second timeline (Stefan,
+  # 2026-08-29). The rest are still counted in the heading and still arrive with
+  # the button.
   attr(:entries, :list, required: true)
 
   defp unread_body(assigns) do
-    assigns = assign(assigns, :shown, Enum.take(assigns.entries, 4))
+    assigns = assign(assigns, :shown, Enum.take(assigns.entries, @unread_shown))
 
     ~H"""
     <div id="unread-posts">
       <button
         :for={entry <- @shown}
         type="button"
-        phx-click="show-new"
+        phx-click={reveal_pending()}
         class="flex w-full items-start gap-2 border-t border-slate-100 py-2 text-left first:border-t-0 first:pt-0 hover:bg-slate-50 dark:border-slate-800 dark:hover:bg-slate-800/50"
       >
         <span class="min-w-0 flex-1">
@@ -661,10 +682,19 @@ defmodule VutuvWeb.PostLive.Feed do
         </span>
       </button>
 
-      <.button id="unread-insert" variant="secondary" class="mt-3 w-full" phx-click="show-new">
+      <%!-- It says where the posts go, not what happens to them: "Add" named the
+      mechanism (they are inserted into the stream) and left the reader to guess
+      where, which on a card that is itself a list of posts reads as if it would
+      add them here (Stefan, 2026-08-29). --%>
+      <.button
+        id="unread-insert"
+        variant="secondary"
+        class="mt-3 w-full"
+        phx-click={reveal_pending()}
+      >
         {ngettext(
-          "Add %{formatted} post",
-          "Add %{formatted} posts",
+          "Show %{formatted} post in the feed",
+          "Show %{formatted} posts in the feed",
           length(@entries),
           formatted: compact_count(length(@entries))
         )}
@@ -865,37 +895,53 @@ defmodule VutuvWeb.PostLive.Feed do
     assigns = assign(assigns, :author, assigns.record && PostTeaser.author_of(assigns.record))
 
     ~H"""
+    <%!-- Two lines, and **exactly** two: this is a fold, so every line it takes
+    is a line it fails to save. It used to wrap to three whenever a phrase
+    filter was longer than a few words — the pattern set the row's height, and a
+    member who wrote a whole sentence into /settings/filters got a taller
+    placeholder than the post would have been (Stefan, 2026-08-29). Now the
+    pattern truncates and nothing here can grow. --%>
     <div
       data-filtered-post={@pattern}
-      class="flex flex-wrap items-center gap-x-2 gap-y-1 rounded-2xl bg-slate-50 px-4 py-3 text-sm text-slate-600 ring-1 ring-slate-200 dark:bg-slate-900/50 dark:text-slate-400 dark:ring-slate-800"
+      class="rounded-2xl bg-slate-50 px-4 py-3 text-sm text-slate-600 ring-1 ring-slate-200 dark:bg-slate-900/50 dark:text-slate-400 dark:ring-slate-800"
     >
       <%!-- Whose post this was, and when. A row that says only "hidden" makes
       the reader open it to find out whether it is worth opening, which is the
       one thing a fold is supposed to save them (Stefan, 2026-08-28). The name
       is the matching post's own — in a conversation that is regularly an
       ancestor rather than the post the row is keyed on, and naming the row
-      would name the wrong person. --%>
-      <span :if={@author && (@author.name || @author.handle)} class="min-w-0 max-w-full truncate">
-        <span class="font-medium text-slate-700 dark:text-slate-300">
-          {@author.name || @author.handle}
+      would name the wrong person.
+
+      "Show anyway" rides at the far end of this same line rather than on one of
+      its own. It is the row's only control, and a line holding one link is a
+      line spent on nothing else. --%>
+      <div class="flex items-baseline gap-x-2">
+        <span :if={@author && (@author.name || @author.handle)} class="min-w-0 truncate">
+          <span class="font-medium text-slate-700 dark:text-slate-300">
+            {@author.name || @author.handle}
+          </span>
+          <span :if={@author.name && @author.handle}>{@author.handle}</span>
+          <span :if={Posts.written_at(@record)}>
+            · <.post_time at={Posts.written_at(@record)} />
+          </span>
         </span>
-        <span :if={@author.name && @author.handle}>{@author.handle}</span>
-        <span :if={Posts.written_at(@record)}>
-          · <.post_time at={Posts.written_at(@record)} />
-        </span>
-      </span>
-      <span>
-        {gettext("Hidden: matches your filter")}
-        <code class="rounded bg-slate-200 px-1.5 py-0.5 font-mono text-xs text-slate-800 dark:bg-slate-800 dark:text-slate-200">{@pattern}</code>
-      </span>
-      <button
-        type="button"
-        phx-click="reveal_filter"
-        phx-value-id={@key}
-        class="font-semibold text-brand-600 hover:text-brand-700 dark:text-brand-400 dark:hover:text-brand-300"
-      >
-        {gettext("Show anyway")}
-      </button>
+        <button
+          type="button"
+          phx-click="reveal_filter"
+          phx-value-id={@key}
+          class="ml-auto shrink-0 font-semibold text-brand-600 hover:text-brand-700 dark:text-brand-400 dark:hover:text-brand-300"
+        >
+          {gettext("Show anyway")}
+        </button>
+      </div>
+      <%!-- Which rule hid it, in one line whatever its length. `min-w-0` is what
+      lets the chip shrink at all: a flex item's `min-width` is `auto`, so
+      without it the pattern pushes the row wider than the card instead of
+      truncating inside it. --%>
+      <div class="flex items-baseline gap-1.5">
+        <span class="shrink-0">{pgettext("filtered post", "Hidden:")}</span>
+        <code class="min-w-0 truncate rounded bg-slate-200 px-1.5 py-0.5 font-mono text-xs text-slate-800 dark:bg-slate-800 dark:text-slate-200">{@pattern}</code>
+      </div>
     </div>
     """
   end
@@ -1175,21 +1221,11 @@ defmodule VutuvWeb.PostLive.Feed do
       for(%{post: %{id: post_id}} <- pending, do: post_id)
     )
 
-    socket =
-      pending
-      # Oldest pending first, so the newest ends up on top.
-      |> Enum.reverse()
-      |> Enum.reduce(socket, fn entry, socket ->
-        socket
-        |> stream_insert(:posts, entry, at: 0)
-        |> prune_threaded_parent(entry)
-      end)
-      |> update(:entries, &(pending ++ &1))
-      |> watch_pending_photos(pending)
-      |> assign(:pending_posts, [])
-      |> assign(:empty?, false)
-
-    {:noreply, socket}
+    # The rows are already on the page and the browser has already shown them
+    # (`reveal_pending/0`). All that is left here is the state behind them: the
+    # card and the pill go, and every later re-render of those rows now renders
+    # them visible, because that is decided by this list.
+    {:noreply, socket |> assign(:pending_posts, []) |> assign(:empty?, false)}
   end
 
   # Load the timeline for one source tab, replacing whatever is on screen
@@ -1197,12 +1233,12 @@ defmodule VutuvWeb.PostLive.Feed do
   # re-filtered: the fresh page is newest-first from the top, so it already
   # carries everything that was waiting behind the pill.
   #
-  # **Half a page, not a whole one** (`@filter_page_size`): a mount is a page
-  # load and pays for a full page once, but a tab press happens mid-visit and
-  # its twenty rendered cards are the bulk of the second the member waits on a
-  # slow line — for a screen that holds three or four. `more?` comes from the
-  # same query, so the "Load more" button below picks the rest up at the full
-  # page size.
+  # **The smallest of the three pages** (`@filter_page_size`, a quarter of an
+  # arrival): a mount is a page load and pays for its page once, but a switch
+  # happens mid-visit and its rendered cards are the bulk of the second the
+  # member waits on a slow line — for a screen that holds three or four.
+  # `more?` comes from the same query, so the "Load more" button below picks the
+  # rest up at the full page size.
   defp load_source_filter(socket, filter) do
     user = socket.assigns.current_user
     page = Posts.feed_page(user, limit: @filter_page_size, filter: filter)
@@ -1436,8 +1472,67 @@ defmodule VutuvWeb.PostLive.Feed do
     end
   end
 
-  defp queue(socket, entry),
-    do: socket |> update(:pending_posts, &[entry | &1]) |> assign(:empty?, false)
+  # A waiting post goes into the timeline **now**, hidden, and not when the
+  # reader asks for it.
+  #
+  # The reveal used to be a round trip that carried the cards: the server held
+  # the decorated entries, `stream_insert`ed them on the press and shipped ten
+  # posts' worth of rendered HTML back before anything moved. Everything needed
+  # to draw them already exists at this moment, so the row is drawn at this
+  # moment and only the `hidden` attribute that keeps it out of sight waits for
+  # the press — which is then two attribute ops in the browser, with the server
+  # hearing about it afterwards.
+  #
+  # It rides the same three steps the author's own arrival takes, in the same
+  # order, because from the DOM's point of view this *is* that arrival: the row
+  # on top, the parent it nests dropped, and the photo scan watched.
+  defp queue(socket, entry) do
+    socket
+    |> update(:pending_posts, &[entry | &1])
+    |> update(:entries, &[entry | &1])
+    |> stream_insert(:posts, entry, at: 0)
+    |> prune_threaded_parent(entry)
+    |> watch_pending_photos([entry])
+    |> assign(:empty?, false)
+  end
+
+  # Showing the waiting posts, in the browser, before the server hears about it.
+  #
+  # The rows are already drawn (`queue/2`); this drops the marker that hid them
+  # and stamps the class that fades them in, so the reader sees the posts in the
+  # same frame as their click instead of after a round trip carrying ten cards.
+  # `JS.push` then tells the server, which empties the waiting list and takes the
+  # card and the pill away — chrome, arriving a moment later, with nothing the
+  # reader is waiting on hanging off it.
+  #
+  # Two attributes and not a class: `data-pending-shown` is what the animation
+  # hangs off, and it is set BEFORE `hidden` is removed, since removing it makes
+  # the selector stop matching and the second op would reach nothing.
+  #
+  # Neither attribute is ever cleaned up, and neither has to be. The animation is
+  # a fire-once description of the arrival rather than a state, and the server
+  # renders neither — so the first re-render of the row (a photo scan, a
+  # translation, the midnight restream) leaves a plain visible row behind.
+  defp reveal_pending do
+    JS.set_attribute({"data-pending-shown", "1"}, to: "#feed-posts > [hidden]")
+    |> JS.remove_attribute("hidden", to: "#feed-posts > [hidden]")
+    |> JS.push("show-new")
+  end
+
+  # Whether this row is one of the waiting ones, and so starts hidden. Read from
+  # `@pending_posts` at render time rather than stamped on the entry: the press
+  # empties that list, so every later re-render of the row (a photo scan
+  # finishing, a translation, the midnight restream) agrees with the browser
+  # that it is visible, and nothing has to remember to unstamp it.
+  #
+  # It becomes the plain `hidden` **attribute** and not a class or a data-* the
+  # stylesheet has to know, because the browser's own stylesheet hides it. A
+  # deploy reloads nothing: a tab open across one reconnects to the new release
+  # and gets this markup patched into an hours-old document, so anything that
+  # needed our CSS to hide would arrive visible there — a post shoving itself
+  # into the timeline unasked. The row carries no `display` utility of its own,
+  # which is the one thing `hidden` loses to (issue #880).
+  defp pending_row?(entry, pending), do: Enum.any?(pending, &(&1.id == entry.id))
 
   defp known_entry?(socket, entry) do
     ids = Enum.map(socket.assigns.entries ++ socket.assigns.pending_posts, & &1.id)
@@ -1509,7 +1604,7 @@ defmodule VutuvWeb.PostLive.Feed do
       # either: the pill's whole promise is that clicking it shows those posts
       # right here.
       Posts.feed_filter_accepts?(socket.assigns.feed_filter, entry) ->
-        {:noreply, update(socket, :pending_posts, &[decorate(entry, user, socket) | &1])}
+        {:noreply, queue(socket, decorate(entry, user, socket))}
 
       # It belongs to a source this reader has switched off in the band, so it
       # is not news for them at all: the switch is the answer, and queueing it
@@ -1892,7 +1987,7 @@ defmodule VutuvWeb.PostLive.Feed do
           alone (Stefan, on the fourth demo). With nothing waiting the row is a
           phone-only affair, so it hides itself entirely on a desktop rather
           than leaving a gap above the timeline. --%>
-          <div class={["items-center gap-2", if(@pending_posts == [], do: "flex md:hidden", else: "flex")]}>
+          <div class={["flex items-center gap-2", @pending_posts == [] && "md:hidden"]}>
             <button
               type="button"
               id="open-filter-sheet"
@@ -1921,7 +2016,7 @@ defmodule VutuvWeb.PostLive.Feed do
               <button
                 id="show-new-posts"
                 type="button"
-                phx-click="show-new"
+                phx-click={reveal_pending()}
                 class="mx-auto flex w-full max-w-full items-center gap-2 rounded-full bg-brand-50 px-4 py-2 text-sm font-semibold text-brand-700 shadow-sm hover:bg-brand-100 sm:w-auto dark:bg-brand-900/40 dark:text-brand-100 dark:hover:bg-brand-900/70"
               >
                 <span class="shrink-0 tabular-nums">
@@ -1958,7 +2053,12 @@ defmodule VutuvWeb.PostLive.Feed do
             filter, a cached post from another network, or a vutuv post. Named
             once each in one branch, so no pair of conditions has to be kept
             complementary by hand. --%>
-            <div :for={{dom_id, entry} <- @streams.posts} id={dom_id} class={post_row_class()}>
+            <div
+              :for={{dom_id, entry} <- @streams.posts}
+              id={dom_id}
+              class={post_row_class()}
+              hidden={pending_row?(entry, @pending_posts)}
+            >
               <%= cond do %>
                 <% hidden_by_filter?(entry, @revealed_filters) -> %>
                   <%!-- A content-filtered post (issue #940) collapses to a line

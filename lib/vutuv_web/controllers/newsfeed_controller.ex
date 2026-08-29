@@ -24,10 +24,6 @@ defmodule VutuvWeb.NewsfeedController do
   alias VutuvWeb.ControllerHelpers
   alias VutuvWeb.PostLive.Feed
 
-  # Mirrors VutuvWeb.PostLive.Feed's @page_size, so the doc's first page matches
-  # what the HTML page loads.
-  @page_size 20
-
   def index(conn, params) do
     case AgentDocs.negotiate(conn) do
       :html -> show_html(conn)
@@ -56,7 +52,14 @@ defmodule VutuvWeb.NewsfeedController do
         # erroring: the worst case is re-showing the latest posts.
         cursor = ApiV2.cursor_or_nil(params)
 
-        page = Posts.feed_page(viewer, limit: @page_size, cursor: cursor)
+        # One page of the document is one arrival on the HTML page
+        # (`Feed.first_page_size/0` rather than a mirrored constant — a number
+        # kept in step by a comment is a number that drifts). The size is all
+        # the two share: the document is deliberately the WHOLE feed, with no
+        # source filter, since it carries none of the switches the member has
+        # over there and narrowing it by one they cannot see here would leave an
+        # agent no way to ask for the rest.
+        page = Posts.feed_page(viewer, limit: Feed.first_page_size(), cursor: cursor)
         AgentDocs.send_doc(conn, format, FeedDoc.build(viewer, page), cache: "private, no-store")
     end
   end
