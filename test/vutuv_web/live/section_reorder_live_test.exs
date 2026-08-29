@@ -18,17 +18,9 @@ defmodule VutuvWeb.SectionReorderLiveTest do
   alias Vutuv.Profiles.Url
   alias Vutuv.Sessions
 
-  # A real active session for the owner: the tool authenticates from the
-  # cookie's session_token the way the embedded child sees it at mount, not a
-  # page-supplied user_id.
-  defp session_for(conn, user, extra) do
-    {token, _session} = Sessions.start_session(user, conn, alert: false)
-    Map.merge(%{"session_token" => token}, extra)
-  end
-
   defp mount_tool(conn, user, section) do
     live_isolated(conn, VutuvWeb.SectionReorderLive,
-      session: session_for(conn, user, %{"section" => section, "slug" => user.username})
+      session: shell_session(user, %{"section" => section, "slug" => user.username})
     )
   end
 
@@ -210,7 +202,7 @@ defmodule VutuvWeb.SectionReorderLiveTest do
       a = insert(:url, user: user, position: 1)
       b = insert(:url, user: user, position: 2)
 
-      session = session_for(conn, user, %{"section" => "links", "slug" => user.username})
+      session = shell_session(user, %{"section" => "links", "slug" => user.username})
 
       Repo.update_all(from(u in Vutuv.Accounts.User, where: u.id == ^user.id),
         set: [suspended_until: NaiveDateTime.add(NaiveDateTime.utc_now(:second), 86_400)]

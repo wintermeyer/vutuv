@@ -20,14 +20,11 @@ defmodule VutuvWeb.ReferenceCheckLiveTest do
   alias Vutuv.References.Check
   alias Vutuv.References.Checks
   alias Vutuv.Repo
-  alias Vutuv.Sessions
   alias VutuvWeb.JobReferenceHTML
 
   defp mount_panel(conn, user, reference) do
-    {token, _session} = Sessions.start_session(user, conn, alert: false)
-
     live_isolated(conn, VutuvWeb.ReferenceCheckLive,
-      session: %{"session_token" => token, "job_reference_id" => reference.id}
+      session: shell_session(user, %{"job_reference_id" => reference.id})
     )
   end
 

@@ -154,16 +154,18 @@ defmodule VutuvWeb.ConnCase do
   # it at 150 lines — it sat at exactly 150 before this pair moved out.
 
   @doc """
-  The mount session a browser hands `VutuvWeb.ShellLive`.
+  The mount session a browser hands the off-router `live_render` children —
+  `VutuvWeb.ShellLive`, `SectionReorderLive`, `ReferenceCheckLive`.
 
   A real, active session's raw token under `"session_token"` — the only
-  identity key the shell trusts (issue #1036), so a test drives it the way a
-  request does instead of curating a map (the curated map is the *production*
-  path, `VutuvWeb.LayoutHTML.shell_session/1`). `alert: false` keeps the
-  new-device security notice out of the test's mailbox.
+  identity key those LiveViews trust (issue #1036), so a test drives them the
+  way a request does instead of curating a map (the curated map is the
+  *production* path, `VutuvWeb.LayoutHTML.shell_session/1`). `alert: false`
+  keeps the new-device security notice out of the test's mailbox.
 
-  `extra` carries the non-identity keys the shell reads straight from the
-  session — `"path"`, `"locale"`, `"acting_as_organization_id"`.
+  `extra` carries the non-identity keys each child reads straight from the
+  session — `"path"`, `"acting_as_organization_id"`, `"section"`, `"slug"`,
+  `"job_reference_id"`.
   """
   def shell_session(user, extra \\ %{}) do
     {token, _session} =
