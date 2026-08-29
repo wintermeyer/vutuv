@@ -107,26 +107,30 @@ defmodule VutuvWeb.HttpStatusContractTest do
 
     # The URL extension decides, not whatever header rode along with it: a
     # `.md` sibling is answered from `AgentDocs` by its controller and never
-    # renders the LiveView, so the refusal must not reach it.
+    # renders the LiveView, so the refusal must not reach it. `/:slug.md` is the
+    # second path because it is the one where the two genuinely compete — the
+    # bare `/:slug` answers an ActivityPub fetch, so before #1823 that branch
+    # took the request and `enforce_handled/1` flipped it to an empty 404.
     test "an agent document is still served by its extension", %{conn: conn} do
-      conn =
-        conn
-        |> put_req_header("accept", "application/activity+json")
-        |> get("/jobs.md")
+      insert_activated_user(username: "extension_wins", first_name: "Agatha")
 
-      assert conn.status == 200
-      assert List.first(get_resp_header(conn, "content-type")) =~ "text/markdown"
+      for path <- ["/jobs.md", "/extension_wins.md"] do
+        conn =
+          conn
+          |> recycle()
+          |> put_req_header("accept", "application/activity+json")
+          |> get(path)
+
+        assert conn.status == 200, "expected 200 for #{path}"
+        assert List.first(get_resp_header(conn, "content-type")) =~ "text/markdown"
+      end
     end
 
     # Every routed LiveView, not a hand-picked five: the refusal is wired per
     # scope (`pipe_through`), so the next `live_session` scope that forgets
-    # `:html_only` has to fail here rather than in production.
-    # Extension-free paths only. A `.md`/`.json` URL on a LiveView route still
-    # 500s on a hostile Accept — `AgentFormat` normalizes the header on its
-    # negotiation path but not on its extension path, so `HtmlOnly` waves the
-    # request through and the LiveView renders for a format it has no template
-    # for. That is pre-existing on main (measured before and after this change,
-    # identically) and is issue #1823, not this fix.
+    # `:html_only` has to fail here rather than in production. Bare paths, so
+    # this measures the pipeline; the extension siblings answer 404 by a
+    # different route and are covered below.
     test "no routed LiveView answers a bare-path one with a 500", %{conn: conn} do
       {conn, _admin} = create_and_login_admin(conn)
 
@@ -143,6 +147,22 @@ defmodule VutuvWeb.HttpStatusContractTest do
         conn = conn |> recycle() |> put_req_header("accept", "application/activity+json")
 
         assert_error_sent(406, fn -> get(conn, path) end)
+      end
+    end
+
+    # The extension URL of a LiveView route that serves no agent document.
+    # `AgentFormat` has already read the format off the URL, so the header the
+    # client happened to send with it must not still steer the render: the
+    # documented answer is `enforce_handled/1`'s 404, never a 500 from a
+    # LiveView rendering for a format it has no template for.
+    test "an extension URL on a LiveView route 404s whatever the client asked for", %{conn: conn} do
+      {conn, _user} = create_and_login_user(conn)
+
+      for path <- ["/notifications.md", "/search.md", "/bookmarks.json"],
+          type <- ["application/activity+json", "application/ld+json"] do
+        conn = conn |> recycle() |> put_req_header("accept", type) |> get(path)
+
+        assert conn.status == 404, "expected 404 for #{path} with #{type}"
       end
     end
   end
