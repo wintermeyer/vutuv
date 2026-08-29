@@ -22699,7 +22699,7 @@ msgstr "Neu laden"
 #: lib/vutuv_web/push_line.ex:49
 #, elixir-autogen, elixir-format
 msgid "Someone started following you on vutuv"
-msgstr "Jemand folgt dir jetzt auf vutuv"
+msgstr "Jemand folgt Ihnen jetzt auf vutuv"
 
 #: lib/vutuv_web/push_line.ex:50
 #, elixir-autogen, elixir-format
@@ -22714,7 +22714,7 @@ msgstr "Dieses Gerät wird nicht mehr benachrichtigt."
 #: lib/vutuv_web/templates/settings/notifications.html.heex:229
 #, elixir-autogen, elixir-format
 msgid "This one browser only, so say it again on every phone and computer you want it on. On an iPhone, add vutuv to your Home Screen first - Safari can only do this for an installed app."
-msgstr "Gilt nur für diesen einen Browser; sag es also auf jedem Telefon und jedem Rechner erneut, auf dem du es haben willst. Auf dem iPhone musst du vutuv zuerst zum Home-Bildschirm hinzufügen, weil Safari das nur bei einer installierten App erlaubt."
+msgstr "Gilt nur für diesen einen Browser; sagen Sie es also auf jedem Telefon und jedem Rechner erneut, auf dem Sie es haben wollen. Auf dem iPhone müssen Sie vutuv zuerst zum Home-Bildschirm hinzufügen, weil Safari das nur bei einer installierten App erlaubt."
 
 #: lib/vutuv_web/templates/settings/notifications.html.heex:248
 #, elixir-autogen, elixir-format
@@ -22724,7 +22724,7 @@ msgstr "Unbekanntes Gerät"
 #: lib/vutuv_web/templates/service_worker/offline.html.heex:17
 #, elixir-autogen, elixir-format
 msgid "vutuv needs the network for everything it shows, so there is nothing to read here until you are back online."
-msgstr "vutuv braucht für alles, was es zeigt, das Netz. Hier gibt es deshalb nichts zu lesen, bis du wieder online bist."
+msgstr "vutuv braucht für alles, was es zeigt, das Netz. Hier gibt es deshalb nichts zu lesen, bis Sie wieder online sind."
 
 #: lib/vutuv_web/live/directory_search_live.ex:141
 #, elixir-autogen, elixir-format
