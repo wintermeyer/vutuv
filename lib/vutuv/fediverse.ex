@@ -3914,8 +3914,13 @@ defmodule Vutuv.Fediverse do
   # A redelivery is `{:exists, post}`, which the `Create` path drops so a post's
   # pictures are recorded exactly once, while the announce path (issue #1167)
   # takes the row it names instead of asking for it a second time.
-  defp stored_post({:ok, %RemotePost{id: minted_id}}, uri) do
-    case Repo.get_by(RemotePost, object_uri: uri) do
+  # Read back by the uri the row actually CARRIES, not by the one the delivery
+  # named: `scrub_nul/1` may have changed it on the way in, and a lookup by the
+  # raw string then misses a row that is really there — which is not a crash but
+  # a post stored with its hashtags never filed, its pictures never attached and
+  # nothing broadcast. A loud failure turned into a silent partial ingest.
+  defp stored_post({:ok, %RemotePost{id: minted_id, object_uri: stored_uri}}, _uri) do
+    case Repo.get_by(RemotePost, object_uri: stored_uri) do
       %RemotePost{id: ^minted_id} = post -> {:ok, post}
       %RemotePost{} = post -> {:exists, post}
       nil -> :error
