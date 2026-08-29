@@ -50,13 +50,14 @@ html {
    iOS 27, tapping the sign-up form's first field scaled the page by exactly
    1.14, which is 16 / 14 (issue #1726).
 
-   The 14px arrives from three places — `input_class/0`'s `text-sm`, the
-   `.editform` fields, the base `select` rule — and the first is why this block
-   is unlayered. `components.css` sits in the `components` layer, which loses to
-   the utilities layer WHATEVER its specificity, so the same rule written down
-   there is in the stylesheet, reads as if it applies, and does nothing to the
-   sign-up form. Measured when it was first written that way: only the tag box
-   moved. Here, after `@theme` and outside every layer, it beats a utility.
+   Three rules put a field under the floor: `input_class/0`'s `text-sm` and the
+   `.editform` fields at 14px, the base `[type=…]` / `select` rules at 15px.
+   The first is why this block is unlayered. `components.css` sits in the
+   `components` layer, which loses to the utilities layer WHATEVER its
+   specificity, so the same rule written down there is in the stylesheet, reads
+   as if it applies, and does nothing to the sign-up form. Measured when it was
+   first written that way: only the tag box moved. Here, after `@theme` and
+   outside every layer, it beats a utility.
 
    A pointer query rather than a width breakpoint, because the behaviour belongs
    to the input device: an iPad in landscape is wide and still zooms, while a

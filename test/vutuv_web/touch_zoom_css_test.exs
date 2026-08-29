@@ -14,7 +14,12 @@ defmodule VutuvWeb.TouchZoomCssTest do
   #
   # So this is a static check in the spirit of `press_paint_css_test`. It cannot
   # measure a browser, but it holds the one thing a reader cannot see by looking
-  # at the rule: that it is outside every cascade layer.
+  # at the rule: that it is outside every cascade layer. It holds that in two
+  # halves, because "unlayered" is not a property of a single declaration — the
+  # floor is in `app.css` and not in the layered `components.css`, AND `app.css`
+  # opens no `@layer` block of its own for it to fall into. Asserting only the
+  # file would pass on a rule someone had wrapped in `@layer components { … }`
+  # right there, which is the same silent failure by another route.
   #
   # The viewport half of the contract — that no `user-scalable=no` ever appears
   # — lives with the rest of the viewport assertions in
@@ -34,6 +39,21 @@ defmodule VutuvWeb.TouchZoomCssTest do
            iPad in landscape is wide and still zooms, a narrow desktop window
            never did — and `pointer` alone would answer `fine` on that iPad the
            moment a keyboard is attached (issue #1726).
+           """
+  end
+
+  test "app.css opens no cascade layer, so the floor cannot fall into one" do
+    # `@import … layer(components)` on line 13 puts components.css INTO a layer
+    # and is not an `@layer` block, so it does not match. Everything app.css
+    # itself declares is unlayered, which is exactly what makes it the one place
+    # that beats a utility — and what the test above relies on without saying.
+    refute File.read!(@app_css) =~ ~r/@layer[\s{]/,
+           """
+           Something in app.css now opens a cascade layer. Anything inside it
+           loses to the utilities layer whatever its specificity, so the 16px
+           touch floor (issue #1726) would be back to reading as if it applied
+           and doing nothing to the sign-up form. Keep app.css unlayered, or
+           move this test's assertion to the floor's own block.
            """
   end
 
