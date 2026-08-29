@@ -133,20 +133,34 @@ defmodule Vutuv.PageScreenshot do
     "screenshot generation failed for url ##{url.id} (#{url.value}): #{inspect(reason)}"
   end
 
-  # The profile path's own preflight (the post path has its own, ensure_http_ok):
-  # resolve the member link's redirect chain, validating every hop, so Chromium
-  # only ever receives a public URL. Frames the resolved target.
-  #
-  # The blocklist is consulted on the member's own link first, before the
-  # redirect probe, so a blocklisted site is not even asked for its headers;
-  # `capture_framed/2` checks the *resolved* target again, which is what catches
-  # a shortener pointing at one.
-  defp capture_and_frame(url) do
-    if ScreenshotBlocklist.blocked?(url.value) do
+  # The profile path's own preflight (the post path has its own, ensure_http_ok).
+  defp capture_and_frame(url), do: capture_resolved(url.value, url.id)
+
+  @doc """
+  Blocklist check, redirect resolution, then `capture_framed/2` on whatever the
+  chain ends at — the whole preflight a page a member merely *named* needs.
+  Returns `{:ok, framed_webp_path}` (the caller stores it and must `File.rm/1`
+  it) or `{:error, reason}`; `id` only names the temp files.
+
+  This is the right entry point wherever the URL is somebody's **homepage**
+  rather than a link to one particular document: an apex that redirects to
+  `www.`, or `http` to `https`, is the normal shape of a homepage, and refusing
+  to capture it would leave most organization pages without a picture. The post
+  queue does not use it — there a redirect usually means a shortener or a login
+  wall, so `Vutuv.Posts.Screenshots.ensure_http_ok/1` insists on a plain 200
+  instead.
+
+  The blocklist is consulted on the named URL first, before the redirect probe,
+  so a blocklisted site is not even asked for its headers; `capture_framed/2`
+  checks the *resolved* target again, which is what catches a shortener
+  pointing at one.
+  """
+  def capture_resolved(url_value, id) when is_binary(url_value) do
+    if ScreenshotBlocklist.blocked?(url_value) do
       {:error, :blocklisted}
     else
-      with {:ok, target} <- resolve_public_target(url.value) do
-        capture_framed(target, url.id)
+      with {:ok, target} <- resolve_public_target(url_value) do
+        capture_framed(target, id)
       end
     end
   end

@@ -911,7 +911,7 @@ the resulting ~200px rail width. --%>
             href={VutuvWeb.UrlHTML.linkable_url(url.value)}
             class="block overflow-hidden rounded-lg ring-1 ring-slate-200 dark:ring-slate-800"
           >
-            <.link_thumb url={url} />
+            <.link_thumb scope={url} value={url.value} alt={url.description} />
           </a>
           <div class="mt-2 min-w-0 text-sm">
             <p :if={url.description} class="mb-0.5 truncate font-medium text-slate-800 dark:text-slate-100">{url.description}</p>

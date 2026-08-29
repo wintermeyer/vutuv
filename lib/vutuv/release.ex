@@ -7,6 +7,7 @@ defmodule Vutuv.Release do
       bin/vutuv eval "Vutuv.Release.migrate()"
   """
   alias Vutuv.Moderation.ImageScans
+  alias Vutuv.Organizations.Screenshots, as: OrganizationScreenshots
   alias Vutuv.PageScreenshot
   alias Vutuv.Posts.ReviewCovers
   alias Vutuv.Posts.Screenshots
@@ -218,7 +219,8 @@ defmodule Vutuv.Release do
 
   @doc """
   Drops the screenshots of every page that is on the screenshot blocklist
-  today — profile links and post link previews alike — so an entry added to
+  today — profile links, post link previews and organization homepages alike —
+  so an entry added to
   `:screenshot_blocklist` also clears the consent-banner captures taken before
   it existed (nothing re-captures a link whose URL has not changed):
 
@@ -230,12 +232,17 @@ defmodule Vutuv.Release do
 
     {:ok, counts, _apps} =
       Ecto.Migrator.with_repo(repo, fn _repo ->
-        %{links: PageScreenshot.purge_blocklisted(), posts: Screenshots.purge_blocklisted()}
+        %{
+          links: PageScreenshot.purge_blocklisted(),
+          posts: Screenshots.purge_blocklisted(),
+          organizations: OrganizationScreenshots.purge_blocklisted()
+        }
       end)
 
     IO.puts(
       "purge_blocklisted_screenshots: #{counts.links} profile link(s), " <>
-        "#{counts.posts} post screenshot(s) dropped"
+        "#{counts.posts} post screenshot(s), " <>
+        "#{counts.organizations} organization homepage(s) dropped"
     )
 
     counts

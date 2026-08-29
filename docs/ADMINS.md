@@ -165,7 +165,7 @@ Everything else has a default (the vutuv.de production value):
 | `COLD_OUTREACH_WINDOW_HOURS` | `24` | The window, in hours, over which `COLD_OUTREACH_LIMIT` is measured |
 | `SAVED_SEARCHES_MAX_PER_MEMBER` | `10` | Most saved searches (with e-mail alerts) one member may store (anti-abuse). A member at the cap is asked to delete one first |
 | `GEO_COUNTRIES` | `DE,AT,CH` | Comma-separated ISO 3166-1 alpha-2 codes whose bundled GeoNames postal data is loaded for offline zip → coordinate resolution on job postings. To add a country, drop its GeoNames zip export (`download.geonames.org/export/zip/<CC>.zip` → extracted `<CC>.txt`, optionally gzipped to `<CC>.txt.gz`) into `priv/geo/` and add the code here. Fully offline — no outbound calls |
-| `IMAGE_MODERATION_ENABLED` | `true` | `false` turns AI image moderation off (images publish immediately, as before the feature). While enabled, **every** image — avatars, covers, post / job-posting / organization images and the automatic link screenshots — waits invisible to everyone but its owner until a local Ollama vision model approves it; an unsafe image is deleted on the spot and the owner notified. Fail-closed: with Ollama unreachable, new images queue up and are scanned automatically once it is back — nothing is ever auto-approved. Set `false` only on installations without Ollama |
+| `IMAGE_MODERATION_ENABLED` | `true` | `false` turns AI image moderation off (images publish immediately, as before the feature). While enabled, **every** image — avatars, covers, post / job-posting / organization images and the automatic link and homepage screenshots — waits invisible to everyone but its owner until a local Ollama vision model approves it; an unsafe image is deleted on the spot and the owner notified. Fail-closed: with Ollama unreachable, new images queue up and are scanned automatically once it is back — nothing is ever auto-approved. Set `false` only on installations without Ollama |
 | `IMAGE_PIXELATION_WINDOW_SECONDS` | `3600` | How long a picture waiting for that verdict shows readers a **pixelated preview** of itself — a separately stored file reduced to 64 cells on its long edge, not the picture behind a blur filter, so what reaches a reader carries none of the detail. It keeps a post card whole while the scan runs, and the real picture replaces it live the moment the verdict lands. Past this window the card falls back to a grey "being checked" tile, so a derivative of an unvetted picture never sits on a public page indefinitely. `0` switches the pixelated preview off entirely, which is the strictest posture |
 | `OLLAMA_URL` | `http://localhost:11434` | Base URL of the Ollama instance every AI feature talks to (image scan, translations, tag merge assist, employment-reference analysis). May be a **comma-separated list** (`http://gpu-box:11434,http://second-gpu:11434,http://localhost:11434`), which is read two ways at once. For a single call it is a **priority list**: every instance but the last is tried with a 30 s budget and skipped on any failure, the last one is the patient fallback (120 s, covers a CPU cold load). For calls that overlap it is also a **pool**: the second one starts on the least busy instance, so a second GPU takes work rather than waiting for the first to break. Verdicts are identical either way — the list only buys speed |
 | `OLLAMA_CONCURRENCY` | all `OLLAMA_URL` entries but the last | How many instances at the head of the list are treated as workers — which is both how deep the pool goes and how many calls a background sweep may have in flight. The default holds the **last** entry back as the fallback of record, because that is typically the web server's own CPU Ollama: `http://gpu-box:11434,http://localhost:11434` is one worker (unchanged from before this existed), `http://gpu1:11434,http://gpu2:11434,http://localhost:11434` is two. Set it to the number of entries when the list is all GPUs and nothing is held in reserve, or higher when one box can genuinely run two calls at once |
@@ -201,7 +201,8 @@ A few rarely-changed switches are compile-time settings in
 and the Content-Signal headers), `:fetch_gravatar`, `:fetch_mastodon_posts`,
 `:fetch_bluesky_posts`, `:fetch_code_stats` (the profile "Code" card's
 GitHub/GitLab/Codeberg and self-hosted Gitea/Forgejo statistics), `:generate_screenshots` (profile link
-previews **and** the auto-screenshot for single-link posts, including cached
+previews, an organization page's homepage capture **and** the auto-screenshot
+for single-link posts, including cached
 fediverse posts in the feed — admins watch the
 capture queue and browse the gallery at `/admin/screenshots`; a YouTube video
 link stores the video's published thumbnail instead of a capture, fetched
@@ -437,9 +438,9 @@ vutuv runs fine without internet access:
   Codeberg and self-hosted Gitea/Forgejo statistics — off, the accounts stay
   plain links, and a self-hosted address is taken at its word because the
   instance cannot be asked), and
-  `:generate_screenshots` (profile link-preview screenshots **and** the
-  auto-screenshot for single-link posts — these fetch the linked page and run
-  headless Chromium).
+  `:generate_screenshots` (profile link-preview screenshots, an organization
+  page's homepage capture **and** the auto-screenshot for single-link posts —
+  these fetch the linked page and run headless Chromium).
 - Set `FETCH_BOOK_METADATA=false`: the cover fetch and the
   page-count/publisher lookup behind book-review posts call Open Library, and
   an audiobook's running time is read from a library catalogue (`DNB_SRU_URL`).
@@ -635,8 +636,9 @@ database and every node picks changes up immediately.
 ## Screenshot blocklist
 
 vutuv screenshots the pages your members link to: every profile link gets a
-preview thumbnail, and a post that carries a single link and no picture gets a
-preview of that page.
+preview thumbnail, a post that carries a single link and no picture gets a
+preview of that page, and an organization page shows a capture of the website
+it names.
 
 The capture browser dismisses cookie-consent dialogs by itself. It always
 answers them with **reject**, never accept, so nothing is consented to on a

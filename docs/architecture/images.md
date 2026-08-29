@@ -156,6 +156,18 @@ window frame (`Vutuv.BrowserFrame`); see `Vutuv.PageScreenshot`. Needs a
 `chromium`/`chrome` binary on the host (set `CHROMIUM_PATH` if it is not on
 `$PATH`)
 
+Three surfaces ask for one, all storing through `Vutuv.Screenshot` and gated by
+`:generate_screenshots`: a member's **profile link** (`urls.screenshot`, captured
+on save), a **post's single link** (`post_screenshots`, a durable queue, see
+[posts-and-feed.md](posts-and-feed.md)) and an **organization's homepage**
+(`organization_screenshots`, the same queue shape, see
+[organizations.md](organizations.md)). They differ in one preflight: the link and
+homepage paths **follow** redirects to their destination
+(`PageScreenshot.capture_resolved/2`, every hop SSRF-vetted), because an apex
+redirecting to `www.` is the normal shape of a homepage; the post path insists on
+a plain HTTP 200 (`Vutuv.Posts.Screenshots.ensure_http_ok/1`), because there a
+redirect usually means a shortener or a login wall.
+
 ### How the browser is driven
 
 Over the **DevTools protocol** (`Vutuv.PageScreenshot.Cdp`), not by
@@ -254,12 +266,14 @@ other subdomain is covered but `notheise.de` is not) or a URL
 matched by whole path segments, with scheme, port, query and fragment ignored).
 
 Nothing downstream depends on a screenshot existing: a post shows its plain
-link, and a profile link renders `<.link_thumb>`'s tile naming the site instead
-of the "not created yet" placeholder. Captures taken *before* an entry was
+link, a profile link renders `<.link_thumb>`'s tile naming the site instead
+of the "not created yet" placeholder, and an organization page drops its
+website card. Captures taken *before* an entry was
 added are not replaced by anything (a link is only re-captured when its URL
 changes), so the admin page has a cleanup button —
 `Vutuv.PageScreenshot.purge_blocklisted/0` +
-`Vutuv.Posts.Screenshots.purge_blocklisted/0`, also reachable headless as
+`Vutuv.Posts.Screenshots.purge_blocklisted/0` +
+`Vutuv.Organizations.Screenshots.purge_blocklisted/0`, also reachable headless as
 `bin/vutuv eval "Vutuv.Release.purge_blocklisted_screenshots()"`.
 
 The capture browser sends vutuv's own `User-Agent`
@@ -321,9 +335,9 @@ hostile link cannot stream an unbounded body into memory.
 **Every** image that could become visible to anyone but its owner passes
 through one gate before release: member uploads (avatar, cover, post /
 job-posting / organization images, qualification proof documents) **and**
-the machine-fetched ones — link screenshots (a screenshot of an NSFW page
-must not bypass the upload gate) and the book covers on post reviews
-(`review_cover`, fetched from Open Library by ISBN). A PDF proof document is
+the machine-fetched ones — link screenshots and an organization page's homepage
+capture (a screenshot of an NSFW page must not bypass the upload gate) and the
+book covers on post reviews (`review_cover`, fetched from Open Library by ISBN). A PDF proof document is
 judged by its upload-time rendered first page (`scan_page.jpg` beside the
 original — the vision model cannot decode a PDF); later pages are covered by
 the report/moderation-case path like any other content.
@@ -394,7 +408,8 @@ about it are deliberate:
 Where it exists: post photos (`post_images/<token>/pixelated.avif`, served by
 the proxy at `pixelated.avif` — which redirects to the real picture once
 released, so a page rendered before the verdict never draws a broken image),
-link screenshots (`screenshots/<id>/pixelated-<hash>.avif`, in the *served* tree
+link screenshots and organization homepage captures
+(`screenshots/<id>/pixelated-<hash>.avif`, in the *served* tree
 while the thumb itself waits in quarantine) and pictures cached from other
 networks (`remote_media/posts/<id>/pixelated-<hash>.avif` — the fingerprinted
 name shape, for the two kinds whose directory outlives the picture in it). Not

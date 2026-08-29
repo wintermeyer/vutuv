@@ -624,6 +624,52 @@ rows survive their uploader deleting their account (`user_id` nilifies), so a
 logo never breaks. The description is untrusted Markdown, rendered like posts
 (`VutuvWeb.Markdown`, images stripped).
 
+## The homepage screenshot
+
+The page shows a picture of the website it names — a "Website" card at the top
+of the right rail, the capture above the address it links to. A domain name says
+who a page claims to be; the picture says what is actually there.
+
+`Vutuv.Organizations.Screenshots` owns it, as a **durable queue**: one
+`organization_screenshots` row per page that has a `website_url`
+(`Vutuv.Organizations.OrganizationScreenshot`), which is both the job and the
+result — `pending`/`capturing`/`failed` is work,`ready` carries the stored
+capture. `Vutuv.Organizations.ScreenshotWorker` drains it on a minute poll and
+`reconcile/1` nudges it, so nothing waits on a request and a crash or a
+re-deploy mid-capture loses nothing (`resume_stuck/0` re-queues what died in
+flight; a transient failure backs off exponentially to a cap of five attempts).
+
+`reconcile/1` runs after a claim, after an edit and after archiving. It is a
+no-op when the URL did not move — an ordinary edit never re-shoots the homepage
+— and drops the job and its files when a page clears its website or is archived
+(nobody can reach an archived page, so a capture would be a browser run spent on
+nothing).
+
+Nothing about the capture itself is new: `Vutuv.PageScreenshot.capture_resolved/2`
+does the redirect resolution, the SSRF vetting, the consent blocker and the
+browser frame, and `Vutuv.Screenshot` stores and serves the same 400×264 AVIF
+thumb a profile link gets. Redirects are **followed** here, unlike in the post
+queue: an apex that 301s to `www.` (or `http` to `https`) is the ordinary shape
+of a homepage, and insisting on a plain 200 would leave most pages without a
+picture. Every hop is vetted all the same.
+
+The capture is held by the AI image scan (kind `organization_screenshot`, see
+[images.md](images.md)) exactly like an upload: it waits in the quarantine tree,
+and meanwhile the card shows the **pixelated preview** with its "being checked"
+badge instead of an empty frame. The scan is **ownerless** — a page belongs to a
+team and nobody chose these pixels — so a rejection notifies nobody and simply
+leaves the page showing its plain website link.
+
+The card is dropped entirely unless there is something to show
+(`Screenshots.showable?/1`, which reads the *resolved* URL so a row naming
+missing bytes degrades to no card): a member's Links grid can carry a "coming"
+placeholder among several tiles, a lone card that is only a grey rectangle reads
+as a broken image.
+
+Existing pages were enqueued once by
+`priv/repo/migrations/20260829150300_enqueue_organization_screenshots.exs` — job
+rows only, no capture, because a deploy must not wait on headless Chromium.
+
 ## Structured location
 
 `country` is stored as an ISO 3166-1 alpha-2 code (`Vutuv.Countries`, the shared

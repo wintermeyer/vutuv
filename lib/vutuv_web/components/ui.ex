@@ -1032,9 +1032,9 @@ defmodule VutuvWeb.UI do
   end
 
   @doc """
-  The 400×264 preview tile of a profile link, in whichever of its three states
-  the link is in — the one place that decides what a link looks like when there
-  is no screenshot.
+  The 400×264 preview tile of a captured web page, in whichever of its four
+  states the capture is in — the one place that decides what a link looks like
+  when there is no screenshot.
 
     * a stored capture renders as the thumbnail (`Vutuv.Screenshot.url/2`);
     * a capture the AI scan has not judged yet renders as its **pixelated preview**
@@ -1047,22 +1047,35 @@ defmodule VutuvWeb.UI do
     * anything else is a capture still on its way and keeps the bundled
       placeholder image.
 
-  Carries `data-link-thumb` with that state (`shot` / `mosaic` / `site` /
-  `pending`) for tests. Sizing lives in the component, so both the profile Links card (kit
-  page) and the `/:slug/links` list (classic page) render one tile.
+  `scope` is whatever `Vutuv.Screenshot` addresses — a member's
+  `%Vutuv.Profiles.Url{}` or an organization page's
+  `%Vutuv.Organizations.OrganizationScreenshot{}` — and `value` is the page that
+  was captured. Two attributes rather than one struct, because the two kinds
+  keep the URL under different names while the tile is the same picture either
+  way. A `nil` scope (a page that has no capture job at all) renders nothing, so
+  a caller can hand one over without a guard of its own.
+
+  Carries `data-link-thumb` with that state (`shot` / `pixelated` / `site` /
+  `pending`) for tests. Sizing lives in the component, so the profile Links card
+  (kit page), the `/:slug/links` list (classic page) and an organization page's
+  website card all render one tile.
   """
-  attr(:url, :map, required: true, doc: "a %Vutuv.Profiles.Url{}")
+  attr(:scope, :map, default: nil, doc: "a Vutuv.Screenshot scope: has .id + .screenshot")
+  attr(:value, :string, required: true, doc: "the URL that was captured")
+  attr(:alt, :string, default: nil)
   attr(:class, :any, default: nil)
 
+  def link_thumb(%{scope: nil} = assigns), do: ~H""
+
   def link_thumb(assigns) do
-    src = Vutuv.Screenshot.url({assigns.url.screenshot, assigns.url}, :thumb)
-    pixelated_url = Vutuv.Screenshot.pixelated_url(assigns.url)
+    src = Vutuv.Screenshot.url({assigns.scope.screenshot, assigns.scope}, :thumb)
+    pixelated_url = Vutuv.Screenshot.pixelated_url(assigns.scope)
 
     assigns =
       assigns
       |> assign(:src, src)
       |> assign(:pixelated_url, pixelated_url)
-      |> assign(:state, link_thumb_state(assigns.url, src, pixelated_url))
+      |> assign(:state, link_thumb_state(assigns.scope, assigns.value, src, pixelated_url))
 
     ~H"""
     <span :if={@state == "pixelated"} class={["relative block", @class]} data-link-thumb="pixelated">
@@ -1085,14 +1098,14 @@ defmodule VutuvWeb.UI do
       ]}
     >
       <span class="truncate text-sm font-semibold text-slate-600 dark:text-slate-400">
-        {VutuvWeb.UrlHTML.display_url(@url.value)}
+        {VutuvWeb.UrlHTML.display_url(@value)}
       </span>
     </div>
     <img
       :if={@state in ["shot", "pending"]}
       data-link-thumb={@state}
       src={@src}
-      alt={@url.description || VutuvWeb.UrlHTML.display_url(@url.value)}
+      alt={@alt || VutuvWeb.UrlHTML.display_url(@value)}
       width="400"
       height="264"
       loading="lazy"
@@ -1108,10 +1121,10 @@ defmodule VutuvWeb.UI do
   # a capture whose file is not on disk, and `Screenshot.url/2` then answers the
   # placeholder (issue #1443) — calling that tile "shot" would be a state
   # nobody could act on.
-  defp link_thumb_state(url, src, pixelated_url) do
+  defp link_thumb_state(scope, value, src, pixelated_url) do
     cond do
       pixelated_url -> "pixelated"
-      is_nil(url.screenshot) and Vutuv.ScreenshotBlocklist.blocked?(url.value) -> "site"
+      is_nil(scope.screenshot) and Vutuv.ScreenshotBlocklist.blocked?(value) -> "site"
       src != Vutuv.Screenshot.placeholder_url() -> "shot"
       true -> "pending"
     end

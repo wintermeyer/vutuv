@@ -25,6 +25,7 @@ defmodule VutuvWeb.OrganizationLive.Show do
   alias Vutuv.Jobs
   alias Vutuv.Organizations
   alias Vutuv.Organizations.Organization
+  alias Vutuv.Organizations.Screenshots
   alias Vutuv.Posts
   alias Vutuv.Social
   alias VutuvWeb.Fediverse.Docs
@@ -126,6 +127,25 @@ defmodule VutuvWeb.OrganizationLive.Show do
   defp own_page?(%Organization{id: id}, %Organization{id: id}), do: true
   defp own_page?(_acting_as, _organization), do: false
 
+  # The domain the ✓ beside the website vouches for: the primary one when its
+  # proof actually went through, otherwise any domain that did. Reading the
+  # primary alone would put a "Verified via" label on a page whose proof is
+  # still pending — which an admin looking at a claimed-but-unverified page
+  # would see.
+  defp verified_domain(%{verified_at: at} = primary, _verified) when not is_nil(at), do: primary
+  defp verified_domain(_primary, verified), do: List.first(verified)
+
+  defp assign_screenshot(socket, organization) do
+    screenshot = Screenshots.for_organization(organization)
+
+    socket
+    |> assign(:screenshot, screenshot)
+    |> assign(
+      :screenshot_shown?,
+      not is_nil(organization.website_url) and Screenshots.showable?(screenshot)
+    )
+  end
+
   defp assign_organization(socket, organization, viewer) do
     # One query for every domain, partitioned in memory (an organization has few).
     domains = Organizations.list_domains(organization)
@@ -134,11 +154,14 @@ defmodule VutuvWeb.OrganizationLive.Show do
     # these were five reads of the same single row set.
     powers = Organizations.role_powers(organization, viewer)
 
+    verified = Enum.filter(domains, & &1.verified_at)
+
     socket
     |> assign(:organization, organization)
     |> assign(:page_title, organization.name)
-    |> assign(:verified_domains, Enum.filter(domains, & &1.verified_at))
+    |> assign(:verified_domains, verified)
     |> assign(:primary_domain, primary)
+    |> assign(:verified_domain, verified_domain(primary, verified))
     |> assign(:aliases, Organizations.list_aliases(organization))
     |> assign(:country_name, Countries.name(organization.country))
     |> assign(:can_manage?, powers.can_manage?)
@@ -167,6 +190,12 @@ defmodule VutuvWeb.OrganizationLive.Show do
       )
     )
     |> assign(:follower_count, Social.organization_follower_count(organization))
+    # The captured homepage, and whether there is anything to show yet: a
+    # released capture, or the pixelated stand-in while the AI scan is judging
+    # one. The rail card is dropped entirely otherwise — a member's Links grid
+    # can afford a "coming" placeholder among several tiles, a lone card that is
+    # only a grey rectangle reads as a broken image.
+    |> assign_screenshot(organization)
     |> assign(:pending?, organization.status == "pending")
     |> assign(:frozen?, not is_nil(organization.frozen_at))
     # The page's Fediverse address, or nil (issue #1334). `federated?/1` already
@@ -420,20 +449,39 @@ defmodule VutuvWeb.OrganizationLive.Show do
               <.organization_logo organization={@organization} class="h-20 w-20 shrink-0" />
               <div class="min-w-0 flex-1">
                 <h1 class="text-2xl font-bold text-slate-900 dark:text-slate-100">{@organization.name}</h1>
-                <div class="mt-2 flex flex-wrap items-center gap-2">
-                  <.kind_badge kind={@organization.kind} />
-                  <.verified_badge :if={@primary_domain} domain={@primary_domain.domain} />
-                </div>
+                <.kind_badge kind={@organization.kind} class="mt-2" />
                 <.organization_location organization={@organization} class="mt-2 text-sm text-slate-600 dark:text-slate-400" />
-                <a
-                  :if={@organization.website_url}
-                  href={@organization.website_url}
-                  rel="nofollow noopener"
-                  target="_blank"
-                  class="mt-2 inline-block text-sm font-semibold text-brand-600 hover:text-brand-700 dark:text-brand-400 dark:hover:text-brand-300"
+                <%!-- The website, and the domain proof beside it as the same
+                small emerald ✓ a member's verified webpage link wears. It used
+                to be a full pill on the badge row above, which spent a line of
+                the page on a fact that only means anything next to the link it
+                vouches for — this is that link, so the domain moves into the ✓'s
+                label. A page that proved a domain but names no website shows
+                that domain here instead, so the fact never goes missing. --%>
+                <div
+                  :if={@organization.website_url || @verified_domain}
+                  class="mt-2 flex items-center gap-1.5"
                 >
-                  {display_url(@organization.website_url)}
-                </a>
+                  <a
+                    :if={@organization.website_url}
+                    href={@organization.website_url}
+                    rel="nofollow noopener"
+                    target="_blank"
+                    class="text-sm font-semibold text-brand-600 hover:text-brand-700 dark:text-brand-400 dark:hover:text-brand-300"
+                  >
+                    {display_url(@organization.website_url)}
+                  </a>
+                  <span
+                    :if={is_nil(@organization.website_url)}
+                    class="text-sm text-slate-700 dark:text-slate-300"
+                  >
+                    {@verified_domain.domain}
+                  </span>
+                  <.verified_mark
+                    :if={@verified_domain}
+                    title={gettext("Verified via %{domain}", domain: @verified_domain.domain)}
+                  />
+                </div>
 
                 <%!-- The Fediverse address where a visitor scans for "where else
                 is this page". The card at the foot of the column carries the
@@ -799,6 +847,36 @@ defmodule VutuvWeb.OrganizationLive.Show do
         </div>
 
         <aside class="space-y-6">
+          <%!-- The organization's own homepage, captured by us
+          (`Vutuv.Organizations.Screenshots`). A picture of the site says in one
+          glance what a domain name cannot, so it leads the rail — and it is a
+          picture, not a claim, so it stays out of the header card where the
+          page's identity is stated. Nothing shows while the queue has not got
+          there: `<.link_thumb>` renders nothing without a job, and during the AI
+          scan it shows the pixelated stand-in with its badge rather than an
+          empty frame. --%>
+          <.card :if={@screenshot_shown?}>
+            <.section_title>{gettext("Website")}</.section_title>
+            <a
+              href={@organization.website_url}
+              rel="nofollow noopener"
+              target="_blank"
+              class="group mt-3 block"
+              data-organization-screenshot
+            >
+              <div class="overflow-hidden rounded-lg ring-1 ring-slate-200 dark:ring-slate-800">
+                <.link_thumb
+                  scope={@screenshot}
+                  value={@screenshot.url}
+                  alt={gettext("The website of %{name}", name: @organization.name)}
+                />
+              </div>
+              <div class="mt-2 truncate text-sm font-semibold text-brand-600 group-hover:text-brand-700 dark:text-brand-400 dark:group-hover:text-brand-300">
+                {display_url(@organization.website_url)}
+              </div>
+            </a>
+          </.card>
+
           <.card>
             <.section_title>{gettext("Address")}</.section_title>
             <address class="mt-3 space-y-0.5 text-sm not-italic text-slate-700 dark:text-slate-300">

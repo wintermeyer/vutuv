@@ -32,6 +32,7 @@ defmodule Vutuv.Organizations do
   alias Vutuv.Organizations.OrganizationLike
   alias Vutuv.Organizations.OrganizationName
   alias Vutuv.Organizations.OrganizationRole
+  alias Vutuv.Organizations.Screenshots
   alias Vutuv.Organizations.Verification
   alias Vutuv.Pages
   alias Vutuv.Posts.Post
@@ -941,9 +942,18 @@ defmodule Vutuv.Organizations do
     end)
     |> Repo.transaction()
     |> case do
-      {:ok, %{organization: _, domain: _} = result} -> {:ok, result}
-      {:error, :domain, _changeset, _} -> {:error, :domain_taken}
-      {:error, _step, changeset, _} -> {:error, changeset}
+      {:ok, %{organization: organization, domain: _} = result} ->
+        # Queue the homepage capture (issue: organization homepage screenshots).
+        # Outside the transaction on purpose: it is a background job for a
+        # decoration, and a hiccup writing it must not lose the claim.
+        Screenshots.reconcile(organization)
+        {:ok, result}
+
+      {:error, :domain, _changeset, _} ->
+        {:error, :domain_taken}
+
+      {:error, _step, changeset, _} ->
+        {:error, changeset}
     end
   end
 
@@ -965,9 +975,18 @@ defmodule Vutuv.Organizations do
     end)
     |> Repo.transaction()
     |> case do
-      {:ok, %{organization: updated}} -> {:ok, updated}
-      {:error, :organization, changeset, _} -> {:error, changeset}
-      {:error, _step, _reason, _} -> {:error, %{changeset | action: :update}}
+      {:ok, %{organization: updated}} ->
+        # A new website means the stored capture pictures the wrong site;
+        # `reconcile/1` is a no-op when the URL did not move, so an ordinary
+        # edit never re-shoots the homepage.
+        Screenshots.reconcile(updated)
+        {:ok, updated}
+
+      {:error, :organization, changeset, _} ->
+        {:error, changeset}
+
+      {:error, _step, _reason, _} ->
+        {:error, %{changeset | action: :update}}
     end
   end
 
@@ -2125,7 +2144,13 @@ defmodule Vutuv.Organizations do
 
   @doc "Archives an organization page (hides it, keeps the record and its URL reserved)."
   def archive_organization(%Organization{} = organization) do
-    organization |> Organization.status_changeset("archived") |> Repo.update()
+    with {:ok, archived} <-
+           organization |> Organization.status_changeset("archived") |> Repo.update() do
+      # Nobody can reach an archived page, so its homepage capture is bytes
+      # nothing will ever render; `reconcile/1` drops the job and the files.
+      Screenshots.reconcile(archived)
+      {:ok, archived}
+    end
   end
 
   @doc """
@@ -2258,11 +2283,16 @@ defmodule Vutuv.Organizations do
     tokens = image_tokens(organization.id)
     logo_cover = Enum.reject([organization.logo, organization.cover], &is_nil/1)
 
+    # Read the screenshot job before the delete: the DB cascade drops the row,
+    # and after that nothing names the files on disk any more.
+    screenshot = Screenshots.for_organization(organization)
+
     with {:ok, organization} <- Repo.delete(organization) do
       # Settle any open moderation case, then purge the on-disk image files (the
       # DB cascade already dropped the rows).
       Vutuv.Moderation.content_deleted(organization)
       for token <- Enum.uniq(tokens ++ logo_cover), do: Vutuv.OrganizationImageStore.delete(token)
+      if screenshot, do: Screenshots.delete_files(screenshot)
       {:ok, organization}
     end
   end

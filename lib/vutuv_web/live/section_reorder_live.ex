@@ -182,7 +182,7 @@ defmodule VutuvWeb.SectionReorderLive do
   defp entry_body(%{section: "links"} = assigns) do
     ~H"""
     <a class="reorder__thumb" href={linkable_url(@entry.value)}>
-      <.link_thumb url={@entry} />
+      <.link_thumb scope={@entry} value={@entry.value} alt={@entry.description} />
     </a>
     <div class="reorder__text">
       <div :if={@entry.description} class="reorder__title">{@entry.description}</div>

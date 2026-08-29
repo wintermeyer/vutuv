@@ -1,9 +1,11 @@
 defmodule VutuvWeb.OrganizationComponents do
   @moduledoc """
-  Shared kit-page pieces for verified organization pages (issue #929), the
-  verified-domain badge among them. Not globally imported — `import
-  VutuvWeb.OrganizationComponents` at the call site. The logo tile lives in
-  `VutuvWeb.UI` (issue #1410).
+  Shared kit-page pieces for verified organization pages (issue #929): the
+  domain-verification panel's parts, the kind badge, the location line. Not
+  globally imported — `import VutuvWeb.OrganizationComponents` at the call site.
+  The logo tile lives in `VutuvWeb.UI` (issue #1410), and so does the emerald ✓
+  that vouches for the proven domain (`<.verified_mark>`, shared with a member's
+  verified webpage link).
   """
 
   use Phoenix.Component
@@ -18,28 +20,6 @@ defmodule VutuvWeb.OrganizationComponents do
   alias Vutuv.Countries
   alias Vutuv.Organizations
   alias Vutuv.Organizations.Organization
-
-  attr(:domain, :string, required: true)
-  attr(:class, :string, default: nil)
-
-  @doc "The prominent verified-domain badge: the domain is what viewers trust."
-  def verified_badge(assigns) do
-    ~H"""
-    <span class={[
-      "inline-flex items-center gap-1.5 rounded-full bg-emerald-50 px-3 py-1 text-sm font-semibold text-emerald-700 ring-1 ring-emerald-200 dark:bg-emerald-900/30 dark:text-emerald-200 dark:ring-emerald-800",
-      @class
-    ]}>
-      <svg class="h-4 w-4" viewBox="0 0 20 20" fill="currentColor" aria-hidden="true">
-        <path
-          fill-rule="evenodd"
-          d="M16.704 4.153a.75.75 0 0 1 .143 1.052l-8 10.5a.75.75 0 0 1-1.127.075l-4.5-4.5a.75.75 0 0 1 1.06-1.06l3.894 3.893 7.48-9.817a.75.75 0 0 1 1.05-.143Z"
-          clip-rule="evenodd"
-        />
-      </svg>
-      {gettext("Verified via %{domain}", domain: @domain)}
-    </span>
-    """
-  end
 
   attr(:domain, :string, required: true)
 

@@ -24,6 +24,7 @@ defmodule Vutuv.Moderation.ImageSubjects do
   alias Vutuv.Moderation.ImageScan
   alias Vutuv.Organizations.Organization
   alias Vutuv.Organizations.OrganizationImage
+  alias Vutuv.Organizations.OrganizationScreenshot
   alias Vutuv.Posts.PostImage
   alias Vutuv.Posts.PostReview
   alias Vutuv.Posts.PostScreenshot
@@ -114,6 +115,16 @@ defmodule Vutuv.Moderation.ImageSubjects do
       moderation: :moderation,
       owner: nil,
       fingerprint: :file,
+      require_file: true
+    },
+    # An organization page's homepage capture: ownerless like the remote kinds
+    # (a page belongs to a team, and nobody chose these pixels), and the row
+    # exists as a queue job long before there are bytes, so `require_file`.
+    "organization_screenshot" => %{
+      schema: OrganizationScreenshot,
+      moderation: :moderation,
+      owner: nil,
+      fingerprint: :screenshot,
       require_file: true
     },
     "remote_avatar" => %{
@@ -246,6 +257,15 @@ defmodule Vutuv.Moderation.ImageSubjects do
     with %PostScreenshot{} = ps <- Repo.get(PostScreenshot, scan.subject_id),
          true <- ps.screenshot != nil and ps.screenshot == scan.fingerprint do
       screenshot_source(ps.id)
+    else
+      _ -> :gone
+    end
+  end
+
+  def source(%ImageScan{kind: "organization_screenshot"} = scan) do
+    with %OrganizationScreenshot{} = os <- Repo.get(OrganizationScreenshot, scan.subject_id),
+         true <- os.screenshot != nil and os.screenshot == scan.fingerprint do
+      screenshot_source(os.id)
     else
       _ -> :gone
     end
@@ -391,6 +411,28 @@ defmodule Vutuv.Moderation.ImageSubjects do
         # (`remote_post_id`) has no member post and nobody watching — its card
         # simply shows the screenshot on the next feed load.
         if ps.post_id, do: Vutuv.Posts.broadcast_screenshot_ready(ps.post_id)
+        :ok
+
+      _ ->
+        :stale
+    end
+  end
+
+  def apply_approved(%ImageScan{kind: "organization_screenshot"} = scan) do
+    flipped =
+      from(os in OrganizationScreenshot,
+        where:
+          os.id == ^scan.subject_id and os.screenshot == ^scan.fingerprint and
+            os.moderation == "pending"
+      )
+      |> Repo.update_all(set: [moderation: "approved"])
+
+    case flipped do
+      {1, _} ->
+        Vutuv.Screenshot.promote_from_quarantine(
+          Repo.get!(OrganizationScreenshot, scan.subject_id)
+        )
+
         :ok
 
       _ ->
@@ -558,6 +600,35 @@ defmodule Vutuv.Moderation.ImageSubjects do
     case cleared do
       {1, _} ->
         Vutuv.Screenshot.delete(%PostScreenshot{id: scan.subject_id})
+        :ok
+
+      _ ->
+        :stale
+    end
+  end
+
+  # A rejected homepage capture leaves the organization page showing its plain
+  # website link, exactly like a page whose capture never succeeded. The job is
+  # `failed` rather than re-queued: the same URL would only produce the same
+  # picture again, and re-shooting it every poll would burn a browser run a
+  # minute forever.
+  def apply_rejected(%ImageScan{kind: "organization_screenshot"} = scan) do
+    cleared =
+      from(os in OrganizationScreenshot,
+        where: os.id == ^scan.subject_id and os.screenshot == ^scan.fingerprint
+      )
+      |> Repo.update_all(
+        set: [
+          status: "failed",
+          moderation: "rejected",
+          screenshot: nil,
+          last_error: "moderation_rejected"
+        ]
+      )
+
+    case cleared do
+      {1, _} ->
+        Vutuv.Screenshot.delete(%OrganizationScreenshot{id: scan.subject_id})
         :ok
 
       _ ->
@@ -827,18 +898,25 @@ defmodule Vutuv.Moderation.ImageSubjects do
     end
   end
 
-  # A quarantine directory is named after its subject's id, and the two
-  # screenshot kinds share the tree, so the id is looked up in both tables. A
-  # directory name that is not even a UUID belongs to neither.
+  # A quarantine directory is named after its subject's id, and all three
+  # screenshot kinds share the tree, so the id is looked up in every table. A
+  # directory name that is not even a UUID belongs to none of them. Miss a
+  # table here and this repair reads its subject as gone and deletes the bytes
+  # of a capture that is legitimately still being judged.
   defp screenshot_subject(id) do
     case Vutuv.UUIDv7.cast_or_nil(id) do
-      nil -> nil
-      uuid -> Repo.get(Url, uuid) || Repo.get(PostScreenshot, uuid)
+      nil ->
+        nil
+
+      uuid ->
+        Repo.get(Url, uuid) || Repo.get(PostScreenshot, uuid) ||
+          Repo.get(OrganizationScreenshot, uuid)
     end
   end
 
   defp screenshot_moderation(%Url{screenshot_moderation: state}), do: state
   defp screenshot_moderation(%PostScreenshot{moderation: state}), do: state
+  defp screenshot_moderation(%OrganizationScreenshot{moderation: state}), do: state
 
   # The stored value is `<hash><ext>`; the quarantined thumb carries the hash
   # alone. Comparing them is what keeps a re-capture from publishing the

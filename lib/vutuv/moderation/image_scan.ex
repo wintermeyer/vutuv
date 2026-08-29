@@ -22,12 +22,14 @@ defmodule Vutuv.Moderation.ImageScan do
   use VutuvWeb, :model
 
   # `remote_post_image` / `remote_avatar` are pictures fetched from another
-  # network (issue #1163). They are the only kinds with **no owner**: nobody
-  # here uploaded them, so `owner_user_id` is nil and a rejection notifies
-  # nobody — there is no member whose content was removed.
+  # network (issue #1163), and `organization_screenshot` is a capture of the
+  # website an organization page names. They are the kinds with **no owner**:
+  # nobody here uploaded them, so `owner_user_id` is nil and a rejection
+  # notifies nobody — there is no member whose content was removed.
   @kinds ~w(avatar cover post_image job_posting_image organization_image
-            url_screenshot post_screenshot review_cover qualification_document
-            job_reference_document remote_post_image remote_avatar)
+            url_screenshot post_screenshot organization_screenshot review_cover
+            qualification_document job_reference_document remote_post_image
+            remote_avatar)
   @statuses ~w(pending scanning approved rejected canceled)
   @open_statuses ~w(pending scanning)
 
