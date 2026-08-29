@@ -37,6 +37,7 @@ defmodule Vutuv.SourceRepoTest do
     assert SourceRepo.url() == "https://codeberg.org/fork/vutuv"
     assert SourceRepo.issues_url() == "https://codeberg.org/fork/vutuv/issues"
     assert SourceRepo.new_issue_url() == "https://codeberg.org/fork/vutuv/issues/new"
+    assert SourceRepo.commit_url("3faa4b9d") == "https://codeberg.org/fork/vutuv/commit/3faa4b9d"
     assert SourceRepo.issues_label() == "codeberg.org/fork/vutuv/issues"
   end
 

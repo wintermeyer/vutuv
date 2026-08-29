@@ -7,6 +7,7 @@ defmodule Vutuv.MastodonApi do
   adapter and its OAuth machine endpoints live on the technical subdomain.
   """
 
+  alias Vutuv.BuildInfo
   alias VutuvWeb.Endpoint
 
   @compatibility_version "4.4.0"
@@ -57,15 +58,14 @@ defmodule Vutuv.MastodonApi do
   # integer that says which API generation this speaks, and the value Mastodon
   # itself shipped under the version above (`lib/mastodon/version.rb` at
   # v4.4.0). It exists **because** the version string is unparseable for a fork
-  # — ours reads `4.4.0 (compatible; vutuv 7.x)` — so a client that wants to
+  # — ours reads `4.4.0 (compatible; vutuv 2026.8.29)` — so a client that wants to
   # know what it may call reads this instead of guessing at prose. Kept beside
   # the string it belongs to, so the two claims cannot drift into naming
   # different Mastodon generations.
   @mastodon_api_version 6
 
   def compatibility_version do
-    vutuv_version = Application.spec(:vutuv, :vsn) |> to_string()
-    @compatibility_version <> " (compatible; vutuv " <> vutuv_version <> ")"
+    @compatibility_version <> " (compatible; vutuv " <> BuildInfo.version() <> ")"
   end
 
   @doc """

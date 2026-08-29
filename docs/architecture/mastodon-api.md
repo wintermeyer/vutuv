@@ -60,7 +60,7 @@ Server discovery, login and the core social workflow:
 - `GET /.well-known/oauth-authorization-server`
 - `GET /api/v1/instance` and `GET /api/v2/instance` — including `api_versions`
   (the machine-readable API generation a 4.3+ client checks instead of parsing
-  our `4.4.0 (compatible; vutuv x.y.z)` prose) and the operator contact, which
+  our `4.4.0 (compatible; vutuv 2026.8.29)` prose) and the operator contact, which
   is the `:operator_recipient` address `security.txt` already publishes plus the
   `:operator_handle` member as a full account entity (`null` where that handle
   names nobody on this installation)

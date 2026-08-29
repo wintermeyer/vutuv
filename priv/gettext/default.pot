@@ -7541,12 +7541,12 @@ msgstr ""
 
 #: lib/vutuv_web/templates/layout/app.html.heex:155
 #, elixir-autogen, elixir-format
-msgid "Deployment: %{date} at %{time}"
+msgid "Last change: %{date} at %{time}"
 msgstr ""
 
 #: lib/vutuv_web/templates/layout/app.html.heex:155
 #, elixir-autogen, elixir-format
-msgid "Last deployed (Berlin time)"
+msgid "Last commit (Berlin time)"
 msgstr ""
 
 #: lib/vutuv_web/templates/admin/admin/index.html.heex:43

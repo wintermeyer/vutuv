@@ -4,7 +4,7 @@ defmodule Vutuv.MixProject do
   def project do
     [
       app: :vutuv,
-      version: "7.612.0",
+      version: version(),
       elixir: "~> 1.20",
       elixirc_paths: elixirc_paths(Mix.env()),
       start_permanent: Mix.env() == :prod,
@@ -28,6 +28,26 @@ defmodule Vutuv.MixProject do
   def cli do
     [preferred_envs: [precommit: :test]]
   end
+
+  # The version is the date of the commit being built (`2026.8.29`), never a
+  # number somebody edits. Mix insists on a SemVer string, so the date is
+  # spelled without leading zeros (`Version.parse/1` rejects `2026.08.29`).
+  # A hand-written version was one line every open pull request had to change,
+  # so every merge set every other PR to CONFLICTING, and nothing ever compared
+  # the number: NodeInfo, the Mastodon API and the user agent only display it.
+  # What identifies a release is the commit, see `Vutuv.BuildInfo`.
+  # Without git (a checkout that is not a repository) the version is `0.0.0`.
+  defp version do
+    with git when is_binary(git) <- System.find_executable("git"),
+         {date, 0} <- System.cmd(git, ["log", "-1", "--format=%cs"], stderr_to_stdout: true) do
+      calver(String.trim(date))
+    else
+      _ -> "0.0.0"
+    end
+  end
+
+  @doc false
+  def calver(iso_date), do: Calendar.strftime(Date.from_iso8601!(iso_date), "%Y.%-m.%-d")
 
   defp elixirc_paths(:test), do: ["lib", "test/support"]
   defp elixirc_paths(_), do: ["lib"]

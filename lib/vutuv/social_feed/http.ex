@@ -11,6 +11,7 @@ defmodule Vutuv.SocialFeed.Http do
   intercepts the other network's requests by accident.
   """
 
+  alias Vutuv.BuildInfo
   alias Vutuv.Moderation.ImageScans
   alias Vutuv.Moderation.Ollama
 
@@ -127,7 +128,7 @@ defmodule Vutuv.SocialFeed.Http do
     public_url =
       Application.get_env(:vutuv, VutuvWeb.Endpoint)[:public_url] || "https://vutuv.de/"
 
-    "vutuv/#{Application.spec(:vutuv, :vsn)} (+#{String.trim_trailing(public_url, "/")})"
+    "vutuv/#{BuildInfo.version()} (+#{String.trim_trailing(public_url, "/")})"
   end
 
   @doc """

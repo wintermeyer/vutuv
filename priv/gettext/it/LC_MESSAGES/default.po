@@ -7843,13 +7843,13 @@ msgstr "altri post disponibili, aggiunga ?cursor=%{cursor}"
 
 #: lib/vutuv_web/templates/layout/app.html.heex:155
 #, elixir-autogen, elixir-format
-msgid "Deployment: %{date} at %{time}"
-msgstr "Rilascio: %{date} alle %{time}"
+msgid "Last change: %{date} at %{time}"
+msgstr "Aggiornato il %{date} alle %{time}"
 
 #: lib/vutuv_web/templates/layout/app.html.heex:155
 #, elixir-autogen, elixir-format
-msgid "Last deployed (Berlin time)"
-msgstr "Ultimo rilascio (ora di Berlino)"
+msgid "Last commit (Berlin time)"
+msgstr "Ultimo commit (ora di Berlino)"
 
 #: lib/vutuv_web/templates/admin/admin/index.html.heex:43
 #, elixir-autogen, elixir-format

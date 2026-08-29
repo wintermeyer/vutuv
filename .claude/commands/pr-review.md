@@ -36,7 +36,6 @@ A PR is mergeable when all of this holds:
   (`compact_count/1` / `delimited_count/1`), no vutuv.de assumption, LiveView
   sockets authenticated from the session token, new pages under `/system/`.
 - **CI is green** and `mix precommit` passes locally.
-- **The version in `mix.exs` is bumped** from the current `origin/main`.
 - **Nothing in it is a security problem** (see the scan below).
 - **It is as simple as it can be** (the simplify pass below).
 
@@ -148,9 +147,10 @@ because GitHub cannot build the merge ref, which reads like broken Actions.
 **Measure the conflict, never read it off the status:** `git fetch origin
 pull/N/head:pr<N>` then `git merge-tree --write-tree origin/main pr<N>` names the
 actual conflicting files in seconds, and `DIRTY` on a PR that sat for weeks is
-usually nothing but the version line.
-**One carve-out:** when the only conflict is the version line in `mix.exs`, that
-collision is our merge rate, not their mistake — rebase it yourself, re-bump,
+usually nothing but the old version line: a PR opened before the version became
+derived from the commit (2026-08-29) still edits `version:` in `mix.exs`.
+**One carve-out:** when that is the only conflict, it is our history, not their
+mistake — rebase it yourself, resolve the hunk to main's `version: version(),`,
 and do not count a round.
 
 **4. Check it out.** Use **one standing worktree for the whole loop**, never one
@@ -213,7 +213,7 @@ only when it is red. Add, when the diff touches them:
 mechanical, under roughly 20 lines, changes nothing about what the PR does, and
 we can prove it with the existing or one added test. Typical: a missing
 `validate_length`, a raw integer that needs `delimited_count/1`, a forgotten
-doc-builder sibling, a fuzzy German string, formatting, a missing version bump.
+doc-builder sibling, a fuzzy German string, formatting.
 Commit into **their** branch when `maintainerCanModify` is true (their
 authorship stays intact), re-run the gates, merge, and write the learning note.
 When pushing to the fork is blocked, open our own branch with
@@ -286,12 +286,10 @@ the whole call 422s.
 The merge to `main` **is** the production deploy, so it is the last step and
 never a hopeful one.
 
-1. `git fetch origin` and re-read the version: `git show origin/main:mix.exs |
-   grep -m1 version`. It must still show the number the PR bumped *from*, and
-   must not already show the PR's number. If it moved either way, re-bump
-   (`elixir scripts/bump_version.exs patch|minor`) on the PR branch, re-run
-   `mix precommit`, and only then merge. Another PR merging while this one sat
-   in CI is routine here, and a collision produces no conflict and no warning.
+1. `git fetch origin` and `gh pr view N --json mergeable,mergeStateStatus`: it
+   must still be `MERGEABLE`. Another PR merging while this one sat in CI is
+   routine here; if the two touched the same lines, rebase the PR branch, re-run
+   `mix precommit`, and only then merge.
 2. `gh pr merge N --squash --delete-branch`. From a worktree this **reports a
    failure it did not have**: it merges and deletes the remote branch, then dies
    on its own local checkout step with *"fatal: 'main' is already used by
@@ -301,7 +299,7 @@ never a hopeful one.
    origin/main`, then `git branch -D <branch>` and `git fetch --prune origin`.
    `git branch -vv` must show no branch marked `[origin/<name>: gone]` — that
    marker is the leak.
-4. Thank them in one or two sentences, with the version the change ships in.
+4. Thank them in one or two sentences.
 5. Release the lock and delete the `wip:` label.
 
 Do not wait for a CI run on `main` afterwards — for most changes there is none.

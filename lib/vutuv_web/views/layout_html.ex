@@ -2,10 +2,26 @@ defmodule VutuvWeb.LayoutHTML do
   @moduledoc false
   use VutuvWeb, :html
   import VutuvWeb.UserHelpers
+  alias Vutuv.BuildInfo
   alias Vutuv.SourceRepo
   alias VutuvWeb.OpenGraph
 
   embed_templates("../templates/layout/*")
+
+  @doc """
+  The credit bar's commit: the short sha, linked to its page in the configured
+  source repository. Nothing for a build without git (`Vutuv.BuildInfo`). The
+  decision sits behind assigns on purpose: the compiler knows at build time
+  whether there is a commit and flags a template `:if` on the bare value as
+  always true.
+  """
+  def commit_link(assigns) do
+    assigns = assign(assigns, sha: BuildInfo.commit_sha(), url: BuildInfo.commit_url())
+
+    ~H"""
+    <a :if={@url} href={@url} class="underline hover:text-brand-700 dark:hover:text-brand-300">{@sha}</a>
+    """
+  end
 
   @doc """
   One flash toast (the `#toast-tray` entry in `app.html.heex`). The info and

@@ -26,8 +26,9 @@ every link is a word inside a paragraph, and here each is a `py-2` row that a
 thumb can hit.
 
 The credit bar underneath carries the operator on the left and what is running
-on the right (version and deploy time). Both halves read from the operator
-identity in `config/config.exs`, so a third-party installation credits itself.
+on the right (the commit it runs and when that was made, `Vutuv.BuildInfo`). The
+operator half reads the identity in `config/config.exs`, the commit link the
+`:source_url`, so a third-party installation credits itself.
 
 ## The two company pages
 

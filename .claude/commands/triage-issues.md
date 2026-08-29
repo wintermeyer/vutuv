@@ -100,11 +100,12 @@ before you doubt the report. What it *does* earn is a line in the report: an
 issue whose stated `Where` no longer matches `main` is worth re-checking before
 somebody starts on it.
 
-For a `SHIPPED` verdict, name the version the fix rode in on, from the commit the
-agent proved or from the PR the cross-reference named:
+For a `SHIPPED` verdict, name the PR the fix rode in on and its merge date, from
+the commit the agent proved or from the PR the cross-reference named (there is
+no version number; the commit is what identifies a release):
 ```bash
-git show <sha>:mix.exs | grep -m1 version
-gh pr view <pr> --json mergeCommit --jq .mergeCommit.oid
+git log -1 --format='%h %cs %s' <sha>
+gh pr view <pr> --json number,mergedAt
 ```
 
 ## Step 3: decide, per issue

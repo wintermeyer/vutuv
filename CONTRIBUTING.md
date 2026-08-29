@@ -20,13 +20,11 @@ fork — is what you branch from. Set that up once after cloning:
 git remote add upstream https://github.com/wintermeyer/vutuv.git
 git remote set-url --push upstream DISABLED   # a stray push must not aim here
 git fetch upstream
-gh repo set-default wintermeyer/vutuv         # bump_version.exs reads open PRs through gh
+gh repo set-default wintermeyer/vutuv         # gh pr create / merge target this repo
 ```
 
-Then branch from and rebase onto `upstream/main`, and read `upstream/main` —
-not your fork — when you bump the version in `mix.exs`. A mirror one merge
-behind hands out a number that is already taken, and that collides without a
-merge conflict. Push only to `origin`; keep your fork's `main` a mirror with
+Then branch from and rebase onto `upstream/main`. Push only to `origin`; keep
+your fork's `main` a mirror with
 `gh repo sync <you>/vutuv --source wintermeyer/vutuv --branch main` and never
 commit to it.
 

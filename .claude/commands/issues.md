@@ -7,7 +7,7 @@ You guide me through my vutuv issue backlog, **the labelled part of it**.
 Categorizing, retitling and closing the untriaged pile is `/triage-issues`; this
 command starts where that one stops. Follow CLAUDE.md (test-first;
 assign `wintermeyer` as a soft lock BEFORE work starts; `mix precommit` green
-before every push; bump the `mix.exs` version; authorship footer under every
+before every push; authorship footer under every
 GitHub text written in my name, in the language of the thread).
 
 Talk to me in the language I write to you (German by default). Write GitHub texts
@@ -169,7 +169,7 @@ scope first (ask the author / plan mode) before code appears. Name dependencies
 2. `gh issue edit N --add-assignee wintermeyer` (CLAUDE.md soft lock, BEFORE work).
 3. Dispatch **one sub-agent with `isolation: "worktree"`**. Task: implement issue
    #N, strictly per CLAUDE.md — first a failing test, then the fix, `mix
-   precommit` green, bump `mix.exs`, push the branch, open the PR (body +
+   precommit` green, push the branch, open the PR (body +
    authorship footer). Report back: PR number, precommit result, short summary.
 4. **precommit green?** Yes → `gh pr merge <nr> --squash --delete-branch`, then
    clean up locally (see **Branch cleanup** below — `--delete-branch` leaves the
@@ -177,7 +177,7 @@ scope first (ask the author / plan mode) before code appears. Name dependencies
    the PR link + one sentence. No/conflict/unclear → do NOT merge, hold the lock,
    put the problem to me and ask.
 5. **The merge auto-closes the issue, so the note is on you.** Draft the shipped
-   note per CLAUDE.md's issue-close rule, case (a) — what now works, the version,
+   note per CLAUDE.md's issue-close rule, case (a) — what now works, the PR it shipped in,
    and why I built it this way. Show me the draft, get my OK, then
    `gh issue comment N --body "..."` (a closed issue still takes comments, so
    posting after the merge is fine). Skip only for an issue I filed myself.

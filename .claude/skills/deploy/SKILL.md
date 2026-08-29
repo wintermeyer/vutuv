@@ -1,6 +1,6 @@
 ---
 name: deploy
-description: "vutuv deploy: never push to main directly. Branch → mix precommit green → version bump → PR → wait for CI green → squash-merge. The merge to main is what triggers the production deploy."
+description: "vutuv deploy: never push to main directly. Branch → mix precommit green → PR → wait for CI green → squash-merge. The merge to main is what triggers the production deploy."
 argument-hint: "[message]"
 allowed-tools: Bash, Read, Grep, Glob, Agent
 ---
@@ -68,44 +68,12 @@ test suite, and the naive loop ingests its full output once per iteration:
    Do not proceed unless the subagent reports the full `mix precommit` exited 0.
    If it can't get to green, stop and tell the user what's still failing.
 
-4. **Bump the version from the current base branch** (deterministic — no
-   hand-editing `mix.exs`). Fetch first so the bump can't collide with a version
-   another branch already landed:
+4. **Check the working tree** — `git status --short` and `git diff --stat` to see
+   everything that changed (your work + any subagent fixes). There is **no
+   version to bump**: `mix.exs` derives it from the commit date at build time,
+   and the footer names the commit itself (`Vutuv.BuildInfo`).
 
-   ```bash
-   git fetch origin main    # from a fork: git fetch upstream main
-   elixir scripts/bump_version.exs patch "kurz, woran du arbeitest"
-   elixir scripts/bump_version.exs list    # wer hält gerade welche Nummer
-   ```
-
-   Default `patch`; `minor` for a new backward-compatible user-facing feature;
-   never `major` without Stefan's agreement. If the base branch has moved ahead
-   (from a fork that is `upstream/main`, never your own mirror), rebase onto it
-   **before** bumping (or re-bump after the rebase) so the number is monotonic.
-
-   The script also **asks `gh` which numbers the open pull requests already
-   claim** and bumps past the highest of them, because `main` alone does
-   not answer the question: an unmerged PR holds the next number for hours while
-   main still looks free, and two branches that pick the same one get no merge
-   conflict and no warning. It names each claim on stderr, and when `gh` cannot
-   answer it says so and bumps from `mix.exs` as before.
-
-   It then **files its own claim in a register the other sessions read**: one
-   file per version under the shared `.git` (so every worktree of this checkout
-   sees it, and nothing there can be committed or pushed). That covers what
-   GitHub cannot — the minutes between bumping and opening the PR, which is
-   exactly when the parallel sessions collide. The optional second argument is
-   the note the others see beside your number; `list` prints the register and
-   changes nothing. Claims expire by themselves (spent once `main` reaches
-   them, gone after a day).
-
-   Still a backstop, not a guarantee, so step 11's re-check before merging
-   stands.
-
-5. **Check the working tree** — `git status --short` and `git diff --stat` to see
-   everything that changed (your work + any subagent fixes + the bump).
-
-6. **Note the deploy strategy** for the PR body — a **cold deploy** is needed
+5. **Note the deploy strategy** for the PR body — a **cold deploy** is needed
    when any of these apply, otherwise it's a hot deploy:
    - New or changed Ecto migrations (`priv/repo/migrations/`)
    - Changes to supervision trees, GenServers, or application startup
@@ -116,16 +84,15 @@ test suite, and the naive loop ingests its full output once per iteration:
    Migrations also need the N-1 backward-compatibility check from `CLAUDE.md`
    (blue/green: the *previous* release keeps serving the migrated schema).
 
-7. **Commit** — a short summary line, a blank line, then a body explaining *why*
-   (motivation, context, trade-offs), per Stefan's commit rule. Put the new
-   version in the **subject**: `<summary> (vX.Y.Z)`. `gh pr merge --squash` takes
-   a single-commit PR's subject, not the PR title, so a version that only lives
-   in the title is dropped from `main`'s log. If cold deploy, append
+6. **Commit** — a short summary line, a blank line, then a body explaining *why*
+   (motivation, context, trade-offs), per Stefan's commit rule. `gh pr merge
+   --squash` takes a single-commit PR's subject, not the PR title, so write the
+   subject as you want it in `main`'s log. If cold deploy, append
    `[cold-deploy]` to the summary line. If the user passed `$ARGUMENTS`, use it
    as the basis. End the body with the plain-paragraph agent-authorship footer.
    Stage specific paths, never secrets (`.env`, credentials).
 
-8. **Push the branch — in a Bash call of its own.** The `PreToolUse` hook
+7. **Push the branch — in a Bash call of its own.** The `PreToolUse` hook
    `.claude/hooks/precommit-before-push.sh` intercepts any Bash command
    containing `git push` and runs the full precommit again, aborting the *whole*
    command on failure. So never chain (`git push && gh pr create …`): the chained
@@ -135,42 +102,41 @@ test suite, and the naive loop ingests its full output once per iteration:
    git push -u origin HEAD
    ```
 
-9. **Open the PR.** Body: what changed and why, hot vs cold deploy, the new
-   version, plus the agent-authorship footer in italics.
+8. **Open the PR.** Body: what changed and why, hot vs cold deploy, plus the
+   agent-authorship footer in italics.
 
    ```bash
    gh pr create --fill-first --title "…" --body "…"
    ```
 
-10. **Wait for CI to go green** — this is the point of the whole flow, so
-    actually wait, don't fire and forget:
+9. **Wait for CI to go green** — this is the point of the whole flow, so
+   actually wait, don't fire and forget:
+
+   ```bash
+   gh pr checks --watch --fail-fast
+   ```
+
+   - **Green** → step 10.
+   - **Red** → do NOT merge. Fix it (subagent as in step 3 if noisy), push the
+     fix to the branch, and watch again. If it stays red or the failure isn't
+     yours to fix, stop and report; leave the PR open.
+
+10. **Merge** — squash and delete the branch (the repo convention, same as
+    `/issues`):
 
     ```bash
-    gh pr checks --watch --fail-fast
-    ```
-
-    - **Green** → step 11.
-    - **Red** → do NOT merge. Fix it (subagent as in step 3 if noisy), push the
-      fix to the branch, and watch again. If it stays red or the failure isn't
-      yours to fix, stop and report; leave the PR open.
-
-11. **Merge** — but re-read the base branch's version first, then squash and
-    delete the branch (the repo convention, same as `/issues`):
-
-    ```bash
-    git fetch origin && git show origin/main:mix.exs | grep -m1 version    # from a fork: upstream
     gh pr merge <nr> --squash --delete-branch
     ```
 
-    Another PR can merge while yours sits in CI, and if it took your number
-    there is no conflict to notice: the squash lands your work without moving
-    the version, and one number names two changes. If it moved, rebase, re-bump
-    (step 4), re-run `mix precommit`, and only then merge.
+    Another PR can merge while yours sits in CI; that only matters when the two
+    touched the same lines, and then GitHub says `CONFLICTING` (`gh pr view
+    <nr> --json mergeable`). Rebase onto `origin/main`, re-run `mix precommit`,
+    push with `--force-with-lease`, watch CI again, and only then merge.
 
     The merge lands on `main` and that push is what starts
     `.github/workflows/deploy.yml`.
 
-12. **Delete the local branch by force, then prune** — `--delete-branch` reliably
+11. **Delete the local branch by force, then prune** — `--delete-branch` reliably
     removes the *remote* branch but routinely leaves the local one behind, so
     without this step every deploy leaks a branch (16 had piled up by
     2026-07-26). The cause is the **squash** merge: it replays your work as one
@@ -189,13 +155,13 @@ test suite, and the naive loop ingests its full output once per iteration:
     anywhere — so tear the worktree down instead (`ExitWorktree`, or
     `git worktree remove <path>`), which drops the branch with it.
 
-13. **Verify nothing leaked** — `git branch -vv` must show no branch marked
+12. **Verify nothing leaked** — `git branch -vv` must show no branch marked
     `[origin/<name>: gone]`. A `gone` marker is the signature of this leak: the
     remote branch was deleted, the local one survived.
 
-14. **Report** — one short summary: PR link, new version, hot vs cold, CI green,
-    merged, and (if step 3 ran) a one-line note that precommit failures were
-    fixed. Optionally confirm the deploy started
+13. **Report** — one short summary: PR link, hot vs cold, CI green, merged,
+    and (if step 3 ran) a one-line note that precommit failures were fixed.
+    Optionally confirm the deploy started
     (`gh run list --workflow=deploy.yml --limit 1`). Do not paste command output.
 
 ## When the user really wants a direct push

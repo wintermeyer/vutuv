@@ -91,6 +91,7 @@ defmodule Vutuv.NodeInfo do
 
   alias Vutuv.Accounts
   alias Vutuv.Accounts.User
+  alias Vutuv.BuildInfo
   alias Vutuv.Languages
   alias Vutuv.Legal
   alias Vutuv.Legal.LegalPage
@@ -237,7 +238,7 @@ defmodule Vutuv.NodeInfo do
   end
 
   defp software(_version) do
-    %{"name" => @software_name, "version" => to_string(Application.spec(:vutuv, :vsn))}
+    %{"name" => @software_name, "version" => BuildInfo.version()}
   end
 
   # Both windows in one round trip. `count(DISTINCT user_id)` because the

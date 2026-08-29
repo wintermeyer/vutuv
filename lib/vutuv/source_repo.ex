@@ -13,13 +13,17 @@ defmodule Vutuv.SourceRepo do
   fork could not correct the claim without editing nine files — and the two
   copies that were module attributes made it look settled.
 
-  `issues_url/0` and `new_issue_url/0` are here for the same reason: they are
-  where a GitHub repository puts its tracker, and an operator who moves the
-  source elsewhere gets to move both with one setting.
+  `issues_url/0`, `new_issue_url/0` and `commit_url/1` are here for the same
+  reason: they are where a GitHub repository puts its tracker and its commits,
+  and an operator who moves the source elsewhere gets to move all of them with
+  one setting.
   """
 
   @doc "The repository holding the source of the software running here."
   def url, do: Application.fetch_env!(:vutuv, :source_url)
+
+  @doc "The page of one commit in that repository (the footer links the one that is running)."
+  def commit_url(sha), do: url() <> "/commit/" <> sha
 
   @doc "The issue tracker beside that repository."
   def issues_url, do: url() <> "/issues"
