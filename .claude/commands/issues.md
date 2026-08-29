@@ -1,9 +1,11 @@
 ---
-description: Guided issue triage for vutuv — categorize, then walk bugs/features one by one, fix, PR + merge; parallel-safe via a soft lock
+description: Walk the triaged vutuv bugs and feature requests one by one, fix, PR + merge; parallel-safe via a soft lock
 argument-hint: "[issue#] | locks | unlock <issue#>"
 allowed-tools: Bash(gh:*), Bash(date:*), Read, Glob, Grep, Agent
 ---
-You guide me through my vutuv issue backlog. Follow CLAUDE.md (test-first;
+You guide me through my vutuv issue backlog, **the labelled part of it**.
+Categorizing, retitling and closing the untriaged pile is `/triage-issues`; this
+command starts where that one stops. Follow CLAUDE.md (test-first;
 assign `wintermeyer` as a soft lock BEFORE work starts; `mix precommit` green
 before every push; bump the `mix.exs` version; authorship footer under every
 GitHub text written in my name, in the language of the thread).
@@ -42,7 +44,7 @@ do not survive between two Bash calls. Your lock label is `wip:<ID>`; the
 under "🔒 other instance". A foreign lock with `<epoch>` **older than 6 h is
 expired** and does NOT lock (see "Expired locks").
 
-**Claim** — before you WRITE to an issue (categorize, fix, comment, snooze);
+**Claim** — before you WRITE to an issue (fix, comment, close, snooze);
 plain viewing/presenting needs no lock:
 1. `gh issue view N --json labels` — does it already carry a foreign `wip:*`?
    Then it's taken: tell me and move on.
@@ -53,7 +55,7 @@ plain viewing/presenting needs no lock:
    smallest → `gh issue edit N --remove-label "wip:<ID>"`, tell me, move on.
    Otherwise you hold the lock.
 
-**Release:** After quick write actions (categorize, comment, snooze) you release
+**Release:** After quick write actions (comment, snooze) you release
 the lock IMMEDIATELY; for a fix you hold it until the merge. Release with
 `gh issue edit N --remove-label "wip:<ID>" --remove-label "in progress"`. (A
 merged fix closes the issue anyway.) If I say "skip" after you already claimed,
@@ -128,27 +130,18 @@ no argument → the full flow below (generate the instance ID first).
 
 ## Phase 0 — scope (counts only, no list dump)
 `gh issue list --state open --limit 100 --json number,title,labels,assignees,author`.
-Internally: run the snooze wake pass, and set aside issues with a foreign,
-**non-expired** (`<epoch>` ≤ 6 h old) `wip:*` label. Then tell me only the
-**counts** — how many to categorize, how many bugs, how many feature requests
-(plus one line each if something woke up or is locked by another instance). Do
+Internally: set aside issues with a foreign, **non-expired** (`<epoch>` ≤ 6 h
+old) `wip:*` label. Then tell me only the **counts** — how many bugs, how many
+feature requests (plus one line if something is locked by another instance). Do
 **not** enumerate the backlog. Go straight into the per-issue walk below.
 
-## Phase 1 — categorize (labels + title)
-The category labels are exactly **`Bug`** and **`Feature Request`**. Walk the
-**uncategorized** issues strictly one at a time, and for each present ONLY that
-issue:
-1. Short summary (2–3 sentences) of what the issue wants.
-2. Weak title? Suggest a better one.
-3. Ask me **only about this one issue** (a single question), **with a reasoned
-   recommendation** (Bug vs. Feature Request; when in doubt `question`,
-   `duplicate`, `wontfix`; fold an optional title change into the same question).
-   Then wait for my answer before touching the next issue.
-4. After my decision: **claim** (soft lock), then
-   `gh issue edit N --add-label "<label>"` and optionally `--title "<new>"`, then
-   **release**. Claim lost → tell me, next issue.
+**You work labelled issues only.** An issue carrying neither `Bug` nor
+`Feature Request` is untriaged and not yours: count them in one line ("44
+uncategorized, run `/triage-issues`") and never categorize one yourself, not
+even in passing mid-walk. Same for the snooze wake pass: `/triage-issues`
+owns it, so a snoozed issue simply does not appear here until it wakes.
 
-## Phase 2 — walk the bugs (issue by issue)
+## Phase 1 — walk the bugs (issue by issue)
 `gh issue list --state open --label Bug --json number,title,author` (foreign-
 locked ones skipped). For each bug individually, wait for me after each:
 1. **Show the issue** (`gh issue view N --comments`), explain cause/context and
@@ -163,9 +156,9 @@ locked ones skipped). For each bug individually, wait for me after each:
    - **Snooze** → "Snooze" below.
    - **Skip** → next bug (release any held lock).
 
-## Phase 3 — walk the feature requests
+## Phase 2 — walk the feature requests
 `gh issue list --state open --label "Feature Request" --json number,title,author`.
-Like Phase 2, "Fix" here means "implement". For features, more often clarify the
+Like Phase 1, "Fix" here means "implement". For features, more often clarify the
 scope first (ask the author / plan mode) before code appears. Name dependencies
 (e.g. the Fediverse cluster #986/#985/#911/#910/#784 = one milestone).
 
@@ -214,7 +207,7 @@ may also be "none / just decline"), then, after **claim**:
 I can end the walk at any time — a `stop`/`drain`/`abbrechen` dispatch arg, or me
 just saying so mid-flow. **Do not treat this as an emergency kill.** The rule:
 **finish the work already in flight, touch no new issue.**
-1. **Stop starting new work immediately.** Present, claim, categorize, comment,
+1. **Stop starting new work immediately.** Present, claim, comment,
    snooze, or dispatch NOTHING new. The per-issue walk ends here — do not move to
    the next issue.
 2. **Let in-flight FIX AGENTS finish.** Any sub-agent already running keeps going;
@@ -241,7 +234,5 @@ today (macOS: `date -v+1w +%F`, `date -v+1m +%F`; an explicit `YYYY-MM-DD`
 verbatim). After **claim**: `gh label create snoozed --color c5def5 --force`,
 `gh label create "snooze:<date>" --color ededed --force`,
 `gh issue edit N --add-label snoozed --add-label "snooze:<date>"`, then
-**release**. At the start of every run do a **wake pass**: issues with
-`snooze:<date>` ≤ today → remove both labels and show them at the top as "⏰ woke
-up"; delete now-empty `snooze:*` labels afterward. Bundle future ones into a
-single line "💤 N snoozed".
+**release**. The **wake pass** lives in `/triage-issues`, not here: a snoozed
+issue is out of this walk until that command wakes it.
