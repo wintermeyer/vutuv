@@ -63,11 +63,26 @@ defmodule VutuvWeb.PostLive.FeedCalendar do
   attr(:capped?, :boolean, default: false)
   attr(:class, :string, default: nil)
 
+  attr(
+    :today,
+    :any,
+    required: true,
+    doc: """
+    The reader's calendar day. Passed in rather than read from
+    `Vutuv.ViewerClock` here, because it decides three things that go stale on a
+    page left open past midnight — the date this card shows folded, which cell
+    wears the today ring, and which cells are refused as future — and a clock
+    read at render time is only ever refreshed by a render, which nothing asks
+    for at midnight. As an assign it is state the feed owns and the
+    `Vutuv.DayClock` tick can move (`VutuvWeb.PostLive.Feed`), which is what
+    makes the rollover reach an open page.
+    """
+  )
+
   def feed_calendar(assigns) do
     assigns =
       assign(assigns,
         cells: FeedTimeTravel.month_grid(assigns.month),
-        today: Vutuv.ViewerClock.today(),
         peak: assigns.counts |> Map.values() |> Enum.max(fn -> 0 end)
       )
 
@@ -144,14 +159,14 @@ defmodule VutuvWeb.PostLive.FeedCalendar do
           :if={@open?}
           n={1}
           label={gettext("Next month")}
-          disabled={at_this_month?(@month)}
+          disabled={at_this_month?(@month, @today)}
         />
         <.month_arrow
           :if={@open?}
           n={12}
           label={gettext("Next year")}
           wide
-          disabled={at_this_month?(@month)}
+          disabled={at_this_month?(@month, @today)}
         />
 
         <%!-- Folded and away from today, the way back has to be on the one line
@@ -327,8 +342,11 @@ defmodule VutuvWeb.PostLive.FeedCalendar do
     """
   end
 
-  defp at_this_month?(month),
-    do: Date.compare(month, FeedTimeTravel.month_of(nil)) != :lt
+  # From the `today` above rather than from the clock, so that on the night a
+  # month rolls over the forward arrows unlock with the rest of the card instead
+  # of holding the reader in last month until they reload.
+  defp at_this_month?(month, today),
+    do: Date.compare(month, FeedTimeTravel.month_of(today)) != :lt
 
   # Five steps, GitHub's scale, keyed to the busiest day of the month SHOWN
   # rather than to a fixed count. An absolute scale would paint a normal month

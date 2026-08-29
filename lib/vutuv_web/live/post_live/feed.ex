@@ -45,6 +45,7 @@ defmodule VutuvWeb.PostLive.Feed do
   alias Vutuv.Posts.Post
   alias Vutuv.Social
   alias Vutuv.Tags.UserTag
+  alias Vutuv.ViewerClock
   alias VutuvWeb.Live.DayClockRestream
   alias VutuvWeb.Live.FeedTimeTravel
   alias VutuvWeb.Live.InitAssigns
@@ -302,6 +303,11 @@ defmodule VutuvWeb.PostLive.Feed do
     |> assign(:cal_month, FeedTimeTravel.month_of(day))
     |> assign(:cal_metric, "feed")
     |> assign(:cal_day, day)
+    # The reader's own calendar day, held as state rather than read inside the
+    # card: it decides the date the folded card shows, which cell wears the
+    # today ring and which cells are refused as future, and a page left open
+    # past midnight has to be told. `:day_changed` below moves it.
+    |> assign(:cal_today, ViewerClock.today())
     |> defer_calendar_counts()
     |> assign(:draft, payload.draft)
     # The composer starts collapsed to a single "What's new?" button; posting
@@ -1800,8 +1806,18 @@ defmodule VutuvWeb.PostLive.Feed do
   # shown post's stamp so "today" wording becomes "Gestern" and yesterday's
   # falls back to a full date. Shared with notifications + the saved hub; see
   # VutuvWeb.Live.DayClockRestream.
+  # `Vutuv.DayClock` ticks on every whole UTC hour, which is when some reader's
+  # midnight falls. Two things on this page are written in calendar days and
+  # both have to move: every post stamp ("09:50 Uhr" becomes "Gestern, 09:50
+  # Uhr"), and the calendar, whose today ring, folded date and future-day gate
+  # would otherwise hold yesterday until the next reload — with the new day's
+  # own cell greyed out, so the reader could not even click their way back to
+  # it.
   def handle_info(:day_changed, socket) do
-    {:noreply, DayClockRestream.restream(socket, :entries, :posts)}
+    {:noreply,
+     socket
+     |> assign(:cal_today, ViewerClock.today())
+     |> DayClockRestream.restream(:entries, :posts)}
   end
 
   # A post's link screenshot finished capturing (fan-out reaches the viewer over
@@ -2657,6 +2673,7 @@ defmodule VutuvWeb.PostLive.Feed do
                 metric={@cal_metric}
                 counts={@cal_counts}
                 capped?={@cal_capped?}
+                today={@cal_today}
               />
             </div>
 
@@ -2791,7 +2808,7 @@ defmodule VutuvWeb.PostLive.Feed do
           <.card :if={@empty? && !at_now?(assigns)} class="text-center">
             <p class="text-slate-600 dark:text-slate-400">
               {gettext("Nothing reached your feed on %{day}.",
-                day: Vutuv.ViewerClock.format(@cal_day, :date)
+                day: ViewerClock.format(@cal_day, :date)
               )}
             </p>
             <.button phx-click="travel-now" class="mt-3">{gettext("Back to now")}</.button>
@@ -2881,6 +2898,7 @@ defmodule VutuvWeb.PostLive.Feed do
             metric={@cal_metric}
             counts={@cal_counts}
             capped?={@cal_capped?}
+            today={@cal_today}
           />
 
           <%!-- Every card is dragged by its own grip and the hook pushes the

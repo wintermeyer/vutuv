@@ -186,6 +186,23 @@ with no reload. Berlin midnight is itself a whole UTC hour, so the one consumer
 that really does count German days — the admin "new members today" pill — still
 empties exactly then.
 
+**Anything that renders a calendar day has to hold it as state, not read the
+clock while rendering.** A clock read inside a component is only ever refreshed
+by a render, and at midnight nothing asks for one: the tick has to change an
+assign or the component is never re-invoked. The feed calendar
+(`VutuvWeb.PostLive.FeedCalendar`) learnt this the hard way — it took its
+`today` from `Vutuv.ViewerClock` inside the card, so a page left open past
+midnight kept yesterday's date in the folded card, kept the today ring on
+yesterday, and **greyed the new day out as a future day**, locking the reader out
+of the day they were in. `today` is an assign the feed owns now
+(`:cal_today`, moved by the same `:day_changed` handler that re-streams the post
+stamps), and the notifications page has always done it this way (`:today` +
+`assign_sections/1`). Rolling the clock over is testable rather than something
+to find out about at midnight: `Vutuv.ViewerClock.today/0` reads
+`:viewer_clock_now` from application env when it is set, which
+`test/vutuv_web/live/feed_calendar_midnight_test.exs` moves (`async: false` — it
+is global, and every timestamp in the app reads it).
+
 The layout is split into `root.html.heex` (document shell) and `app.html.heex`
 (chrome), shared by classic controller pages and LiveViews.
 
