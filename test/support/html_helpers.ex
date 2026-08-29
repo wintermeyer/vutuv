@@ -25,4 +25,21 @@ defmodule VutuvWeb.HTMLHelpers do
     |> LazyHTML.query(~s(a[href="/#{slug}"][rel~="nofollow"]))
     |> Enum.to_list()
   end
+
+  @doc """
+  The visible text of the first element matching `selector`, whitespace
+  trimmed.
+
+  For a promise about what a member (or a script reading the DOM) actually gets
+  out of an element, rather than about a string appearing anywhere in the
+  document: the TOTP page's copy button hands the clipboard the text of the
+  element it names, so the assertion has to read that element and not the page.
+  """
+  def text_of(html, selector) do
+    html
+    |> LazyHTML.from_document()
+    |> LazyHTML.query(selector)
+    |> LazyHTML.text()
+    |> String.trim()
+  end
 end

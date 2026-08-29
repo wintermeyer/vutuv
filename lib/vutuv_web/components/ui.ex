@@ -1414,7 +1414,7 @@ defmodule VutuvWeb.UI do
           <.feed_button id={"#{@id}-posts-feed"} href={@feed_href} />
           <.copy_field
             id={"#{@id}-posts-feed-url"}
-            class="min-w-0 flex-1 items-center"
+            class="min-w-0 flex-1"
             code_class="text-xs"
           >{AgentDocs.abs_url(@feed_href)}</.copy_field>
         </div>
@@ -2442,16 +2442,31 @@ defmodule VutuvWeb.UI do
   end
 
   @button_base "inline-flex items-center justify-center gap-1.5 rounded-lg px-4 py-2 text-sm font-semibold"
-  defp button_class("secondary"),
+
+  @doc """
+  The button recipe as a bare class string, for the rare anchor `button/1`
+  cannot render: `<.link>` raises on any URI scheme outside its allow-list, so
+  a link handing a value to a native app (the TOTP page's `otpauth://` link to
+  the authenticator app installed on this device) has to be a plain `<a>` and
+  still has to look like every other button. Compose like `input_class/0`:
+  `class={[button_class("secondary"), "mt-2"]}`. Prefer `<.button>` everywhere
+  a normal href works.
+
+  `<.link>` does take a `{:scheme, rest}` tuple for such a URI, so weigh that
+  first — it is the better answer whenever the scheme and the rest are separate
+  values already. It was the worse one here, because it would have the template
+  tear the scheme off a URI `LoginCodes.otpauth_uri/2` had just assembled.
+  """
+  def button_class("secondary"),
     do:
       "#{@button_base} bg-slate-100 text-slate-700 hover:bg-slate-200 dark:bg-slate-800 dark:text-slate-200 dark:hover:bg-slate-700"
 
-  defp button_class("ghost"),
+  def button_class("ghost"),
     do:
       "#{@button_base} text-brand-600 hover:bg-brand-50 hover:text-brand-700 dark:text-brand-400 dark:hover:bg-slate-800 dark:hover:text-brand-300"
 
-  defp button_class("danger"), do: "#{@button_base} bg-red-600 text-white hover:bg-red-700"
-  defp button_class(_), do: "#{@button_base} bg-brand-600 text-white hover:bg-brand-700"
+  def button_class("danger"), do: "#{@button_base} bg-red-600 text-white hover:bg-red-700"
+  def button_class(_), do: "#{@button_base} bg-brand-600 text-white hover:bg-brand-700"
 
   @doc """
   Follow / unfollow control — the single owner of the two `~p"/follows…"`
@@ -3327,6 +3342,10 @@ defmodule VutuvWeb.UI do
   address, next to the follower count). Same `<code>` and same copy button, so
   the copy contract lives in one place either way — the surface is all that
   changes.
+
+  In a `box` the button is a full `min-h-10` touch target and the row centers on
+  it; `inline` keeps the compact button, because a meta line has no room for a
+  40px control and carries the value as prose the reader can select anyway.
   """
   attr(:id, :string, required: true)
 
@@ -3340,19 +3359,32 @@ defmodule VutuvWeb.UI do
   attr(:class, :any, default: nil)
   attr(:code_class, :any, default: "text-sm")
   attr(:copy_text, :string, default: nil)
+
+  attr(:wrap, :string,
+    default: "anywhere",
+    values: ~w(anywhere words),
+    doc:
+      "`anywhere` breaks a long unbroken value (a URL, a URI) at any character; `words` keeps a value that already has spaces in it whole between them — the TOTP key is shown in groups of four and must not break inside a group"
+  )
+
   slot(:inner_block, required: true)
 
   def copy_field(assigns) do
     ~H"""
     <div class={[
       @variant == "box" &&
-        "flex gap-2 rounded-lg bg-slate-50 px-3 py-2 ring-1 ring-slate-200 dark:bg-slate-800/50 dark:ring-slate-700",
+        "flex items-center gap-2 rounded-lg bg-slate-50 px-3 py-2 ring-1 ring-slate-200 dark:bg-slate-800/50 dark:ring-slate-700",
       @variant == "inline" && "inline-flex max-w-full items-center gap-1.5 align-middle",
-      @class || (@variant == "box" && "mt-3 items-start")
+      @class || (@variant == "box" && "mt-3")
     ]}>
       <code
         id={@id}
-        class={["min-w-0 flex-1 select-all break-all text-slate-800 dark:text-slate-100", @code_class]}
+        class={[
+          "min-w-0 flex-1 select-all text-slate-800 dark:text-slate-100",
+          @wrap == "anywhere" && "break-all",
+          @wrap == "words" && "break-words",
+          @code_class
+        ]}
       >{render_slot(@inner_block)}</code>
       <button
         type="button"
@@ -3361,7 +3393,11 @@ defmodule VutuvWeb.UI do
         data-copy-text={@copy_text}
         data-label-copy={gettext("Copy")}
         data-label-copied={gettext("Copied")}
-        class="shrink-0 rounded-md bg-white px-2 py-1 text-xs font-semibold text-slate-700 ring-1 ring-slate-200 hover:bg-slate-100 dark:bg-slate-800 dark:text-slate-200 dark:ring-slate-700 dark:hover:bg-slate-700"
+        class={[
+          "shrink-0 rounded-md bg-white text-xs font-semibold text-slate-700 ring-1 ring-slate-200 hover:bg-slate-100 dark:bg-slate-800 dark:text-slate-200 dark:ring-slate-700 dark:hover:bg-slate-700",
+          @variant == "box" && "inline-flex min-h-10 items-center px-3",
+          @variant == "inline" && "px-2 py-1"
+        ]}
       >
         {gettext("Copy")}
       </button>

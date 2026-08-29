@@ -43,6 +43,42 @@ defmodule VutuvWeb.TotpControllerTest do
       refute LoginCodes.totp_enabled?(user)
     end
 
+    test "the setup link is copyable as text, not only as a QR code", %{conn: conn, user: user} do
+      html = conn |> recycle() |> get(~p"/settings/totp/new") |> html_response(200)
+
+      totp = LoginCodes.get_totp(user)
+      uri = LoginCodes.otpauth_uri(user, totp)
+
+      # Issue #1812: the URI carries issuer, account and key together, so a
+      # password manager fills the whole entry in from one paste. Before this
+      # it existed on the page only as the QR picture and as a link href, so
+      # getting at it meant decoding our own QR code.
+      assert html =~ ~s(data-copy-target="totp-setup-uri")
+
+      # The field carries no data-copy-text, so app.js copies the element's own
+      # text — assert on that text, not merely on the URI appearing somewhere
+      # in the document, or the QR code's href alone would satisfy this.
+      assert text_of(html, "#totp-setup-uri") == uri
+    end
+
+    test "the three ways to hand the secret over are translated", %{conn: conn} do
+      # vutuv is a German site, so the new labels are asserted by name in
+      # German: `gettext.extract --merge` fuzzy-fills a brand-new msgid with
+      # some unrelated translation and nothing fails the build, so an English
+      # assertion here would prove nothing about what a member reads.
+      html =
+        conn
+        |> recycle()
+        |> put_req_header("accept-language", "de-DE,de")
+        |> get(~p"/settings/totp/new")
+        |> html_response(200)
+
+      assert html =~ "Klappt das Scannen nicht?"
+      assert html =~ "In der Authenticator-App öffnen"
+      assert html =~ "Einrichtungs-Link kopieren"
+      assert html =~ "Nur den Schlüssel kopieren"
+    end
+
     test "confirming with the current app code turns the enrolment on", %{
       conn: conn,
       user: user

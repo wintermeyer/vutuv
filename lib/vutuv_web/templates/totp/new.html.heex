@@ -18,37 +18,72 @@
       )}
     </p>
 
-    <%!-- Always white, also in dark mode: camera scanners need the contrast. --%>
-    <div id="totp-qr" class="mt-4 w-56 rounded-lg bg-white p-3 ring-1 ring-slate-200 dark:ring-slate-700">
-      {qr_svg(@otpauth_uri)}
+    <%!-- On a desktop the space beside the 224px square sat empty while the
+          alternatives queued up underneath it, which read as "and if that
+          failed, keep scrolling". On a phone they stack in that order. --%>
+    <div class="mt-5 flex flex-col gap-6 sm:flex-row sm:items-start sm:gap-8">
+      <figure class="w-56 sm:shrink-0">
+        <%!-- Always white, also in dark mode: camera scanners need the contrast. --%>
+        <div id="totp-qr" class="rounded-lg bg-white p-3 ring-1 ring-slate-200 dark:ring-slate-700">
+          {qr_svg(@otpauth_uri)}
+        </div>
+        <figcaption class="mt-2 text-center text-xs text-slate-500 dark:text-slate-400">
+          {gettext("Scan it with the device that has the app")}
+        </figcaption>
+      </figure>
+
+      <div class="min-w-0 flex-1 sm:max-w-lg">
+        <h2 class="text-sm font-semibold text-slate-900 dark:text-white">
+          {gettext("Can't scan it? Three other ways to the same setup:")}
+        </h2>
+
+        <div class="mt-1 divide-y divide-slate-200 dark:divide-slate-700">
+          <%!-- Same-device enrolment (the common phone case): you can't scan
+                your own screen, so offer the otpauth:// URI as a tappable link
+                — iOS opens Apple Passwords with the code pre-filled, Android
+                whichever authenticator app owns the scheme, and a desktop
+                password manager that registered the scheme takes it too. --%>
+          <.setup_option
+            title={gettext("Hand it to an app on this device")}
+            hint={gettext("For the phone you are reading this on: it can't scan its own screen.")}
+          >
+            <a
+              href={@otpauth_uri}
+              id="totp-same-device"
+              class={[button_class("secondary"), "mt-3"]}
+            >{gettext("Open in the authenticator app")}</a>
+          </.setup_option>
+
+          <%!-- The string the QR code above draws (issue #1812). Until now it
+                sat on this page only as that picture and as the href above, so
+                getting at it meant pointing a QR reader at our own QR code. --%>
+          <.setup_option
+            title={gettext("Copy the setup link")}
+            hint={
+              gettext(
+                "Password managers like Bitwarden take the whole entry from it: name, account and key in one paste."
+              )
+            }
+          >
+            <.copy_field id="totp-setup-uri" code_class="text-xs">{@otpauth_uri}</.copy_field>
+          </.setup_option>
+
+          <%!-- data-copy-text carries the key without the display grouping
+                spaces, so what lands in the clipboard is the clean Base32
+                every authenticator app accepts. --%>
+          <.setup_option
+            title={gettext("Copy the key on its own")}
+            hint={gettext("For apps that ask for nothing but a key.")}
+          >
+            <.copy_field
+              id="totp-manual-key"
+              wrap="words"
+              copy_text={String.replace(@manual_secret, " ", "")}
+            >{@manual_secret}</.copy_field>
+          </.setup_option>
+        </div>
+      </div>
     </div>
-
-    <%!-- Same-device enrolment (the common phone case): you can't scan your
-          own screen, so offer the otpauth:// URI as a tappable link — iOS
-          opens Apple Passwords with the code pre-filled, Android whichever
-          authenticator app owns the scheme. --%>
-    <p class="editform__hint mt-3">
-      {gettext("Reading this on the phone that should generate the codes? You can't scan your own screen. Instead:")}
-      <a
-        href={@otpauth_uri}
-        id="totp-same-device"
-        class="font-semibold text-brand-600 hover:text-brand-700 dark:text-brand-400 dark:hover:text-brand-300"
-      >{gettext("set it up on this device")}</a>.
-    </p>
-
-    <p class="editform__hint mt-2">
-      {gettext("Can't scan the code? Enter this key in your app instead:")}
-    </p>
-
-    <%!-- The key on its own line, with a one-click copy (the security page's
-          data-copy enhancement). data-copy-text carries the key without the
-          display grouping spaces, so what lands in the clipboard is the clean
-          Base32 every authenticator app accepts. --%>
-    <.copy_field
-      id="totp-manual-key"
-      class="mt-1 max-w-md items-center"
-      copy_text={String.replace(@manual_secret, " ", "")}
-    >{@manual_secret}</.copy_field>
 
     <.form
       :let={f}
