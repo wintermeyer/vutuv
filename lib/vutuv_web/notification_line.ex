@@ -23,8 +23,11 @@ defmodule VutuvWeb.NotificationLine do
 
   The third per-kind wording is `VutuvWeb.NotificationDigestText`, which stays
   its own module on purpose: a digest mail names the actor inline and by
-  `@handle`, quotes nothing, and survives having no clause for a kind. When you
-  add a kind, spell it in both.
+  `@handle`, quotes nothing, and survives having no clause for a kind. The
+  fourth is `VutuvWeb.PushLine` (issue #1729), and it is the odd one out: a Web
+  Push may not carry content at all, so it says only what *sort* of thing
+  happened and folds every kind it has no line for into one. When you add a
+  kind, spell it in the first three — the fourth is meant to stay short.
   """
   use Gettext, backend: VutuvWeb.Gettext
 
@@ -254,6 +257,21 @@ defmodule VutuvWeb.NotificationLine do
     |> Enum.reject(&(&1 in [nil, ""]))
     |> Enum.join(" · ")
   end
+
+  @doc """
+  Where a notification leads, for a caller that must land the reader
+  *somewhere* — a browser popup or a Web Push, both of which are raised
+  precisely when the member is NOT looking at vutuv.
+
+  The twin of `notification_target/2`, which answers `nil` for a kind with no
+  page of its own, because the notifications page needs to know that a row is
+  not a link. A popup does not: sending the reader to the bell is worse than
+  the post, and better than nothing at all. Two callers had that fallback
+  written out beside them; the next kind that changes it should not have to be
+  remembered in three places.
+  """
+  def notification_url(notification, viewer),
+    do: notification_target(notification, viewer) || ~p"/notifications"
 
   # Where clicking the event text leads. Events about one of the viewer's
   # posts open that post's thread; an endorsement the viewer's tags;

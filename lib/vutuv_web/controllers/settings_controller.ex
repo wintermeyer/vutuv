@@ -48,6 +48,8 @@ defmodule VutuvWeb.SettingsController do
   alias Vutuv.SavedSearches.SavedSearch
   alias Vutuv.Sessions
   alias Vutuv.ViewerClock
+  alias Vutuv.WebPush
+  alias Vutuv.WebPush.Subscriptions
 
   # The hub: no forms of its own, just the grouped rows with per-section entry
   # counts. Each page sets its own :page_title so the browser tab / history
@@ -553,11 +555,29 @@ defmodule VutuvWeb.SettingsController do
   def notifications(conn, _params) do
     user = conn.assigns[:user]
 
-    render(conn, "notifications.html",
-      user: user,
-      changeset: User.changeset(user),
-      page_title: gettext("Notification settings")
+    render(
+      conn,
+      "notifications.html",
+      [user: user, changeset: User.changeset(user), page_title: gettext("Notification settings")] ++
+        push_assigns(user)
     )
+  end
+
+  # The browsers that asked to be woken while vutuv is closed (issue #1729),
+  # built in one place like `fediverse_assigns/1` beside it — the render and
+  # the re-render after a rejected changeset must not drift.
+  #
+  # Listed rather than merely counted, because a member cannot otherwise tell
+  # which of their phones is still on the list, and the answer belongs to a
+  # browser, so nothing else on this page can ask it. An installation with push
+  # switched off renders none of it, so it asks for none of it either.
+  defp push_assigns(user) do
+    enabled? = WebPush.enabled?()
+
+    [
+      push_enabled?: enabled?,
+      push_devices: if(enabled?, do: Subscriptions.for_user(user.id), else: [])
+    ]
   end
 
   def update_notifications(conn, %{"user" => params}) do
@@ -946,6 +966,13 @@ defmodule VutuvWeb.SettingsController do
        when template in ["fediverse.html", "fediverse_move.html"] do
     [user: conn.assigns[:user], changeset: changeset] ++
       fediverse_assigns(conn.assigns[:user])
+  end
+
+  # The notifications page carries a second, form-less block (issue #1729),
+  # which has to be built again for a re-render or a rejected changeset renders
+  # a page missing an assign.
+  defp error_assigns(conn, "notifications.html", changeset) do
+    [user: conn.assigns[:user], changeset: changeset] ++ push_assigns(conn.assigns[:user])
   end
 
   defp error_assigns(conn, _template, changeset),

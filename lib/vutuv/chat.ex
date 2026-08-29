@@ -27,6 +27,7 @@ defmodule Vutuv.Chat do
   alias Vutuv.Organizations
   alias Vutuv.Organizations.Organization
   alias Vutuv.Repo
+  alias Vutuv.WebPush.Dispatcher, as: WebPushDispatcher
 
   @pubsub Vutuv.PubSub
 
@@ -1281,13 +1282,23 @@ defmodule Vutuv.Chat do
     # `other_user_id/2` answers nil when the far side is a page, so the recipient
     # is the page itself — its team's shell subscribes to that topic while they
     # are speaking as it. Without this the badge only moved on a full reload.
+    recipient = recipient(conversation, message)
+
     Activity.broadcast(
-      recipient(conversation, message),
+      recipient,
       {:new_message,
        %{
          conversation_id: conversation.id
        }}
     )
+
+    # And the same event to the recipient's own installed app, if they asked
+    # for one (issue #1729). Beside the broadcast rather than inside
+    # `Activity.notify/2`, because a message never goes through it — the badge
+    # above is the whole of what a message announces. Fire and forget, and a
+    # no-op for both of `recipient/2`'s non-member answers: `nil`, and the
+    # `%Organization{}` struct a page conversation hands back.
+    WebPushDispatcher.dispatch_message(recipient)
   end
 
   # A request was accepted: nudge the conversation's open threads (the

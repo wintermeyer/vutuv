@@ -201,6 +201,62 @@ heading. --%>
           <p hidden data-notify-state="unsupported">
             {gettext("This browser cannot show notifications. Your other browsers are unaffected.")}
           </p>
+
+          <%!-- "Also when vutuv is closed" (issue #1729): the same account
+                switch above, carried by a service worker so a notification
+                survives the tab. It is **per device** and not part of the form,
+                because a push subscription belongs to one browser and not to
+                the account - which is why it is written straight from
+                app.js and why the box starts disabled, until the browser has
+                said whether it holds one.
+
+                On an iPhone this is the only path to a notification at all:
+                the Push API exists there only for a Home Screen web app, and
+                the switch above can do nothing until the site is installed.
+
+                Hidden entirely where the operator switched push off
+                (WEB_PUSH_ENABLED=false, the intranet case) - a switch that
+                cannot work is worse than no switch. --%>
+          <div :if={@push_enabled?} class="mt-3 border-t border-slate-200 pt-3 dark:border-slate-700">
+            <%!-- It starts `disabled` because only the browser knows whether it
+                  already holds a subscription; app.js answers that and enables
+                  it. A box that could be ticked before anything has read its
+                  real state would be a switch whose position is a guess. --%>
+            <.setting_toggle label={gettext("Also notify me on this device when vutuv is closed")}>
+              <:checkbox>
+                <input type="checkbox" data-push-device disabled class={checkbox_class()} />
+              </:checkbox>
+              {gettext(
+                "This one browser only, so say it again on every phone and computer you want it on. On an iPhone, add vutuv to your Home Screen first - Safari can only do this for an installed app."
+              )}
+            </.setting_toggle>
+
+            <%!-- What a member cannot otherwise find out: which of their
+                  browsers is still on the list. The row action forgets one from
+                  here, which is the only way to end a subscription on a device
+                  you no longer have — its own link rather than
+                  `<.row_actions>`, whose label is the word "Delete": nothing is
+                  deleted here that the device cannot register again in one tap,
+                  and beside a device name that word reads as a threat to the
+                  device. --%>
+            <div :if={@push_devices != []} class="ml-7 mt-3">
+              <p class="font-medium text-slate-900 dark:text-white">
+                {gettext("Devices being notified")}
+              </p>
+              <ul class="mt-1">
+                <li :for={device <- @push_devices} class="flex items-center gap-4">
+                  <span>{device.device || gettext("Unknown device")}</span>
+                  <.link
+                    href={~p"/settings/push_devices/#{device.id}"}
+                    method="delete"
+                    class="inline-flex min-h-10 items-center font-semibold text-red-600 hover:text-red-700 dark:text-red-400 dark:hover:text-red-300"
+                  >
+                    {gettext("Forget")}
+                  </.link>
+                </li>
+              </ul>
+            </div>
+          </div>
         </div>
       </:footnote>
     </.toggle_form_card>

@@ -1,0 +1,27 @@
+<%!-- The one page the service worker is allowed to keep (issue #1729), shown
+instead of the browser's own offline error.
+
+It rides the **error layout** (`layout/error.html.heex`), which already solves
+this exact problem for the rescued-500 path: a whole self-contained document
+whose styling is inlined because it must not depend on `/assets/app.css`. A
+stored page outlives the deploy it was stored in, so a reference to a digested
+stylesheet would sooner or later point at a file that is no longer there — the
+same reasoning, arrived at from the other direction. Borrowing it also means
+one inline stylesheet to keep in step with Direction A instead of two.
+
+Nothing here is per-member and nothing goes stale: no CSRF token, no session,
+no counts. --%>
+<div class="error-page">
+  <h1 class="error-page__title">{gettext("No connection")}</h1>
+  <p class="error-page__hint">
+    {gettext(
+      "vutuv needs the network for everything it shows, so there is nothing to read here until you are back online."
+    )}
+  </p>
+  <%!-- A plain link, not history.back(): the page the member came from is the
+  one that failed to load, and a reload of THIS document goes through the
+  worker again and lands on the site the moment there is a network. --%>
+  <p class="error-page__actions">
+    <a href="/" class="button">{gettext("Try again")}</a>
+  </p>
+</div>

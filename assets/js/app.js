@@ -16,7 +16,17 @@ import "./image_crop"
 import { openPhotoCropper } from "./photo_crop"
 // Shared plumbing (CSRF token, page lifecycle, "wire once" guard, CSRF fetch,
 // reduced-motion) reused by every classic-page enhancement below.
-import { csrfToken, onReady, once, request, reducedMotion } from "./util"
+import {
+  b64urlToBuf,
+  csrfToken,
+  localGet,
+  localSet,
+  onReady,
+  once,
+  postJSON,
+  request,
+  reducedMotion,
+} from "./util"
 // The Milkdown WYSIWYG Markdown editor shared by the post + message composers
 // (VutuvWeb.UI.markdown_editor/1) is deliberately NOT imported here: it is a
 // separate esbuild entry point, fetched on demand by the MarkdownEditor hook
@@ -378,22 +388,15 @@ function notifyPermission() {
   return "Notification" in window ? Notification.permission : "unsupported"
 }
 
-// Both sides wrap the store: a private window, or a browser set to block site
-// data, throws on access. Forgetting a dismissal simply offers the prompt
-// again, which is the right way to fail.
+// Through util.js's guarded store: a private window, or a browser set to block
+// site data, throws on plain access. Forgetting a dismissal simply offers the
+// prompt again, which is the right way to fail.
 function notifyPromptDismissed() {
-  try {
-    return window.localStorage.getItem(NOTIFY_PROMPT_KEY) === "1"
-  } catch (_e) {
-    return false
-  }
+  return localGet(NOTIFY_PROMPT_KEY) === "1"
 }
 
 function setNotifyPromptDismissed(dismissed) {
-  try {
-    if (dismissed) window.localStorage.setItem(NOTIFY_PROMPT_KEY, "1")
-    else window.localStorage.removeItem(NOTIFY_PROMPT_KEY)
-  } catch (_e) {}
+  localSet(NOTIFY_PROMPT_KEY, dismissed ? "1" : null)
 }
 
 // Must run inside a real click: Firefox and Safari refuse the request without
@@ -402,17 +405,28 @@ function setNotifyPromptDismissed(dismissed) {
 // - it ends in one `vutuv:notify-permission` event, which is how both the
 // prompt and the settings card re-read the state without knowing about each
 // other. Both the promise and the legacy callback form are handled.
+// It also RESOLVES on that one event, so a caller that has to wait for the
+// answer (the per-device push switch) awaits this rather than listening for the
+// event itself - a rendezvous any other dispatcher of the event could satisfy.
 function requestNotifyPermission() {
-  const finish = () => window.dispatchEvent(new CustomEvent("vutuv:notify-permission"))
+  return new Promise((resolve) => {
+    let done = false
+    const finish = () => {
+      if (done) return
+      done = true
+      window.dispatchEvent(new CustomEvent("vutuv:notify-permission"))
+      resolve()
+    }
 
-  if (!("Notification" in window)) return finish()
+    if (!("Notification" in window)) return finish()
 
-  try {
-    const result = Notification.requestPermission(finish)
-    if (result && typeof result.then === "function") result.then(finish, finish)
-  } catch (_e) {
-    finish()
-  }
+    try {
+      const result = Notification.requestPermission(finish)
+      if (result && typeof result.then === "function") result.then(finish, finish)
+    } catch (_e) {
+      finish()
+    }
+  })
 }
 
 // One delegated listener for both surfaces: the shell's prompt bar and the
@@ -420,6 +434,220 @@ function requestNotifyPermission() {
 document.addEventListener("click", (event) => {
   if (event.target.closest("[data-notify-allow]")) requestNotifyPermission()
 })
+
+// -- Service worker and Web Push (issue #1729) -----------------------------
+//
+// What the section above does works only while a vutuv page is open: a
+// `Notification` raised by a tab dies with the tab. Waking a phone whose app is
+// closed needs a service worker, and this is where it is registered, kept up to
+// date, and asked for a push subscription.
+//
+// The worker itself is /sw.js (served by VutuvWeb.ServiceWorkerController from
+// assets/js/sw.js) and it is not part of this bundle: a worker controls only
+// the directory it is served from, so it has to sit at the root.
+//
+// The shell's #web-notify element carries the two things this needs from the
+// server - who is signed in here, and this installation's VAPID public key -
+// because it is on every page for every logged-in member and is where the
+// permission prompt already lives.
+const PUSH_OWNER_KEY = "vutuv:push-owner"
+
+function shellNotifyEl() {
+  return document.getElementById("web-notify")
+}
+
+function pushMember() {
+  return shellNotifyEl()?.dataset.member || null
+}
+
+function vapidKey() {
+  return shellNotifyEl()?.dataset.vapidKey || null
+}
+
+// One registration per page, shared by everything below. It is deliberately
+// unconditional: the asset cache and the offline page are worth having for a
+// logged-out visitor too, and a failure (an unsupported browser, an insecure
+// origin, a member who blocked site data) resolves to null rather than
+// throwing into an unrelated feature.
+let swRegistration = null
+
+function serviceWorker() {
+  if (!("serviceWorker" in navigator)) return Promise.resolve(null)
+  if (swRegistration) return swRegistration
+
+  swRegistration = navigator.serviceWorker
+    .register("/sw.js")
+    .then((registration) => {
+      watchForNewVersion(registration)
+      return registration
+    })
+    .catch(() => null)
+
+  return swRegistration
+}
+
+// An installed app is reloaded even more rarely than a tab, and a deploy
+// reloads nothing at all - the LiveView socket simply reconnects to the new
+// release and patches into an hours-old document. The server-rendered bar in
+// the shell is what offers the way out; it ships `hidden` and is shown here.
+//
+// Only ever on an UPDATE, never on the first install: `controller` is null
+// until a worker is in charge, and the very first one arriving is not news
+// anybody has to act on.
+let swUpdateReady = false
+
+function watchForNewVersion(registration) {
+  const offer = (worker) => {
+    if (!worker || !navigator.serviceWorker.controller) return
+    const announce = () => {
+      if (worker.state !== "installed") return
+      swUpdateReady = true
+      window.dispatchEvent(new CustomEvent("vutuv:sw-update"))
+    }
+    worker.addEventListener("statechange", announce)
+    announce()
+  }
+
+  offer(registration.waiting)
+  registration.addEventListener("updatefound", () => offer(registration.installing))
+}
+
+// Delegated at the document, so it survives the patches that re-render the bar
+// (the SwUpdate hook below owns whether it is shown, not whether it works).
+document.addEventListener("click", async (event) => {
+  if (!event.target.closest("[data-sw-reload]")) return
+
+  const registration = await serviceWorker()
+  if (!registration) return
+
+  // The waiting worker takes over only when it is asked to, and the page
+  // reloads only once it has - promoting it unasked would swap the assets
+  // under a half-written post.
+  navigator.serviceWorker.addEventListener("controllerchange", () => window.location.reload(), {
+    once: true,
+  })
+  registration.waiting?.postMessage({ type: "skip-waiting" })
+})
+
+async function currentPushSubscription() {
+  const registration = await serviceWorker()
+  if (!registration || !("PushManager" in window)) return null
+  return registration.pushManager.getSubscription()
+}
+
+// Registers this browser. Everything it needs can be missing for an ordinary
+// reason - an unsupported browser, a member who said no, an installation with
+// push switched off - so each of them answers false rather than throwing.
+async function subscribeToPush() {
+  const registration = await serviceWorker()
+  const key = vapidKey()
+  if (!registration || !key || !("PushManager" in window)) return false
+  if (notifyPermission() !== "granted") return false
+
+  try {
+    const subscription =
+      (await registration.pushManager.getSubscription()) ||
+      (await registration.pushManager.subscribe({
+        // Required by Chrome, and true of us: every push we send draws
+        // something the member can see.
+        userVisibleOnly: true,
+        // base64url text on the wire, bytes in the API - `b64urlToBuf`
+        // from util.js, the same decoder the passkey ceremony uses.
+        applicationServerKey: b64urlToBuf(key),
+      }))
+
+    // The browser's own `PushSubscription` JSON, posted verbatim: one shape,
+    // defined by the web platform, with nothing to keep in step on two sides.
+    const answer = await postJSON("/settings/push_devices", subscription.toJSON())
+    if (!answer.ok) return false
+
+    localSet(PUSH_OWNER_KEY, pushMember())
+    return true
+  } catch (_e) {
+    return false
+  }
+}
+
+// Forgets this browser, at the push service AND here. The local
+// `unsubscribe()` is the half that matters: it invalidates the endpoint, so
+// even a server call that never lands leaves a subscription the next push
+// answers 410 for, which deletes the row.
+async function unsubscribeFromPush() {
+  const subscription = await currentPushSubscription()
+  localSet(PUSH_OWNER_KEY, null)
+  if (!subscription) return
+
+  try {
+    await request("/settings/push_devices", {
+      method: "DELETE",
+      headers: { "content-type": "application/json" },
+      body: JSON.stringify({ endpoint: subscription.endpoint }),
+    })
+  } catch (_e) {
+    // Offline, or signed out already; the unsubscribe below still stands.
+  }
+
+  try {
+    await subscription.unsubscribe()
+  } catch (_e) {}
+}
+
+// A subscription belongs to a browser, not to an account, so signing out - or
+// signing in as somebody else on the same phone - has to end the old one.
+// Without this, a device somebody handed back keeps being woken for the member
+// who used it last.
+//
+// **A missing #web-notify means "signed out" only where the shell is on the
+// page at all.** It is equally missing on every page rendered with the app
+// layout dropped - the outbound hand-off page is one (`chrome_for/2` in
+// ControllerHelpers), and the root layout still loads this bundle there - so
+// reading its absence as a sign-out would revoke a member's subscription for
+// the crime of clicking a link that leaves the site. `#app-shell` is what
+// ShellLive renders for everybody, logged in or out, so it tells the two
+// cases apart; with no shell we simply do not know, and do nothing.
+async function reconcilePushOwner() {
+  if (!document.getElementById("app-shell")) return
+
+  const owner = localGet(PUSH_OWNER_KEY)
+  if (!owner || owner === pushMember()) return
+  await unsubscribeFromPush()
+}
+
+onReady(() => {
+  serviceWorker().then(() => reconcilePushOwner())
+})
+
+// The per-device switch on /settings/notifications: "also when vutuv is
+// closed". Per device because the subscription is, which is why it is not one
+// of the account's checkboxes and never reaches a changeset - the answer IS
+// the row, written from here.
+function wirePushDeviceToggle(box) {
+  if (!once(box, "pushDevice")) return
+
+  currentPushSubscription().then((subscription) => {
+    box.checked = !!subscription
+    box.disabled = false
+  })
+
+  box.addEventListener("change", async () => {
+    box.disabled = true
+
+    if (box.checked) {
+      // Inside the change event, which is a real user gesture - Safari and
+      // Firefox refuse `requestPermission()` without one, and on an iPhone
+      // this is the only path to a notification at all.
+      if (notifyPermission() === "default") await requestNotifyPermission()
+      box.checked = await subscribeToPush()
+    } else {
+      await unsubscribeFromPush()
+    }
+
+    box.disabled = false
+    window.dispatchEvent(new CustomEvent("vutuv:notify-permission"))
+  })
+}
+
+onReady(() => document.querySelectorAll("[data-push-device]").forEach(wirePushDeviceToggle))
 
 // The browser tab's teaser (issue #1681) has a twist the other examples do
 // not: its stage is the tab this settings page is sitting in,
@@ -700,6 +928,32 @@ const Hooks = {
       window.removeEventListener("vutuv:tab-teaser", this.onPreview)
       if (this.teaserTimer) clearTimeout(this.teaserTimer)
       if (this.observer) this.observer.disconnect()
+    },
+  },
+  // "A new version is available" (issue #1729). The bar itself is
+  // server-rendered in the shell (only the server knows the reader's
+  // language); this hook owns the one thing the server cannot know - whether
+  // the service worker has a newer release waiting.
+  //
+  // It needs a hook rather than a plain querySelector because the shell
+  // re-renders on every badge tick, presence diff and hourly clock, and each
+  // of those patches puts the server's `hidden` back. `updated()` is what
+  // takes it off again - the same shape WebNotify uses below, and for the same
+  // reason.
+  SwUpdate: {
+    mounted() {
+      this.onUpdate = () => this.apply()
+      window.addEventListener("vutuv:sw-update", this.onUpdate)
+      this.apply()
+    },
+    updated() {
+      this.apply()
+    },
+    destroyed() {
+      window.removeEventListener("vutuv:sw-update", this.onUpdate)
+    },
+    apply() {
+      this.el.hidden = !swUpdateReady
     },
   },
   // Browser notifications (issue #1249): a popup for activity that arrives while

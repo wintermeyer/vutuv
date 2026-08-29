@@ -45,6 +45,7 @@ defmodule VutuvWeb.ShellLive do
   alias Vutuv.Posts
   alias Vutuv.Prefs
   alias Vutuv.Social
+  alias Vutuv.WebPush
   alias VutuvWeb.Live.InitAssigns
   alias VutuvWeb.NotificationLine
   alias VutuvWeb.PostTeaser
@@ -179,6 +180,10 @@ defmodule VutuvWeb.ShellLive do
     |> assign(:user_admin?, user.admin?)
     |> assign_shell_defaults(path)
     |> assign(:browser_notifications?, user.browser_notifications?)
+    # What `pushManager.subscribe` needs, and nil on an installation whose
+    # operator switched push off — which is also what stops the settings card
+    # offering a switch that could not work (issue #1729).
+    |> assign(:vapid_key, WebPush.public_key())
     # The resolved member themselves, for the browser tab's teaser (issue
     # #1681): it reads their preference and asks their own feed sources what
     # arrived. Nothing renders from it, so it never reaches the client.
@@ -203,6 +208,7 @@ defmodule VutuvWeb.ShellLive do
     # for the anonymous shell and for the throwaway dead render, which raises
     # none anyway — the real value arrives with the authenticated mount.
     |> assign(:browser_notifications?, false)
+    |> assign(:vapid_key, nil)
     # The browser tab's teaser (issue #1681). `tab_hidden?` is what the hook
     # reports and starts false, so nothing is spent on a tab that has not said
     # it is in the background; `teaser` holds the open window, `teaser_quiet_until`
@@ -798,11 +804,9 @@ defmodule VutuvWeb.ShellLive do
       # Where the row under the bell would take them - the post, the case, the
       # profile. A popup is raised precisely when the member is NOT looking at
       # vutuv, so the notifications list is the one place that makes them hunt
-      # for what they were just told about. It stays the fallback for a kind
-      # with no page of its own.
-      url:
-        NotificationLine.notification_target(notification, socket.assigns.user_param) ||
-          ~p"/notifications"
+      # for what they were just told about, and `notification_url/2` owns that
+      # fallback for both this and the Web Push payload.
+      url: NotificationLine.notification_url(notification, socket.assigns.user_param)
     })
   end
 
@@ -831,6 +835,37 @@ defmodule VutuvWeb.ShellLive do
       writes a generated stylesheet that reveals each online member's
       [data-presence-user-id] dot, across classic controller pages too. Empty +
       phx-update="ignore": it manages a document-wide stylesheet, not children. --%>
+      <%!-- "A new version is available" (issue #1729). A deploy reloads
+      nothing: an open page keeps the bundle it downloaded, and an installed
+      app is reloaded rarer still, so the service worker's `updatefound` is the
+      one moment anybody learns. The bar is server-rendered because only the
+      server knows the reader's language, and it is shown for logged-out
+      visitors too - a stale document is stale whoever is reading it.
+
+      It ships carrying the plain `hidden` attribute and no display utility
+      (the issue #880 trap - a utility would out-cascade it). A document from
+      the PREVIOUS release meets this markup with the previous release's CSS
+      and JS, which is exactly the situation it exists for: that JS never
+      unhides it, so the old page shows nothing rather than something
+      unstyled. --%>
+      <div
+        id="sw-update"
+        phx-hook="SwUpdate"
+        hidden
+        class="border-b border-brand-100 bg-brand-50 dark:border-brand-900/60 dark:bg-brand-900/30"
+      >
+        <div class={[
+          "mx-auto flex max-w-6xl flex-wrap items-center gap-x-3 gap-y-2 py-2 text-sm",
+          gutter_class()
+        ]}>
+          <span class="text-slate-700 dark:text-slate-200">
+            {gettext("A new version of vutuv is ready.")}
+          </span>
+          <.button type="button" data-sw-reload class="min-h-10">
+            {gettext("Reload")}
+          </.button>
+        </div>
+      </div>
       <div :if={@user_id} id="presence-hook" phx-hook="Presence" phx-update="ignore" class="hidden"></div>
       <%!-- Drives the browser-tab title indicator: prefixes document.title with
       "(N)" for unread messages + notifications and a "•" for new feed posts that
@@ -858,7 +893,21 @@ defmodule VutuvWeb.ShellLive do
       issue #880 trap - a utility would out-cascade it), and the hook takes it
       off only where it applies: permission still "default", and not dismissed
       in this browser before. --%>
-      <div :if={@user_id} id="web-notify" phx-hook="WebNotify" data-enabled={to_string(@browser_notifications?)}>
+      <%!-- `data-member` and `data-vapid-key` are what the Web Push half in
+      app.js reads (issue #1729): who this browser is signed in as, so a
+      subscription can be ended when somebody else signs in on the same phone,
+      and this installation's own VAPID public key, which
+      `pushManager.subscribe` cannot be called without. Both live here rather
+      than in the layout because this element is already on every page for
+      exactly the members they concern, and empty where push is switched off. --%>
+      <div
+        :if={@user_id}
+        id="web-notify"
+        phx-hook="WebNotify"
+        data-enabled={to_string(@browser_notifications?)}
+        data-member={@user_param}
+        data-vapid-key={@vapid_key}
+      >
         <div
           :if={@browser_notifications?}
           hidden

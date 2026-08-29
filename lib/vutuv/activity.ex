@@ -61,6 +61,7 @@ defmodule Vutuv.Activity do
   alias Vutuv.Repo
   alias Vutuv.Social.Follow
   alias Vutuv.Tags.UserTagEndorsement
+  alias Vutuv.WebPush.Dispatcher, as: WebPushDispatcher
 
   @pubsub Vutuv.PubSub
   @default_limit 50
@@ -453,10 +454,14 @@ defmodule Vutuv.Activity do
   def notify(user_id, %{} = notification) do
     notification = with_event_id(notification)
 
-    # The one place a notification is announced, which is why the Web Push
-    # fan-out hangs here rather than at each of the twenty callers: a push
-    # cannot then drift out of step with what the website shows.
+    # The one place a notification is announced, which is why both Web Push
+    # fan-outs hang here rather than at each of the twenty callers: a push
+    # cannot then drift out of step with what the website shows. Two of them,
+    # because the two kinds of client are subscribed differently — a
+    # third-party phone client by its access token, this installation's own
+    # installed app by the browser endpoint alone (issue #1729).
     PushDispatcher.dispatch(user_id, notification)
+    WebPushDispatcher.dispatch(user_id, notification)
     broadcast(user_id, {:new_notification, notification})
   end
 
