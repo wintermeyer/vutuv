@@ -11,6 +11,7 @@ defmodule VutuvWeb.PostLive.FilterBandTest do
   use VutuvWeb.ConnCase, async: true
 
   import Phoenix.LiveViewTest
+  import VutuvWeb.FeedRailHelpers, only: [unfold: 2]
 
   alias Vutuv.ContentFilters
   alias Vutuv.Fediverse
@@ -64,18 +65,6 @@ defmodule VutuvWeb.PostLive.FilterBandTest do
     |> render_click()
 
     view
-  end
-
-  # Two rail cards ship folded to their heading ("Sources" and "Hide
-  # tags"), so their bodies are not in the DOM until somebody opens them — which
-  # is what a reader does before touching a switch, and what these tests have to
-  # do too.
-  defp unfold(live, key) do
-    if has_element?(live, ~s(#rail-#{key} button[aria-expanded="false"])) do
-      live |> element(~s(#rail-#{key} button[phx-click="rail-collapse"])) |> render_click()
-    end
-
-    live
   end
 
   describe "the account branch" do
@@ -151,7 +140,9 @@ defmodule VutuvWeb.PostLive.FilterBandTest do
       assert html =~ ~s(id="unread-posts")
       assert has_element?(live, "#unread-posts", "Sturmflutwarnung für die Wesermündung")
       assert has_element?(live, "#unread-posts", "@#{friend.username}")
-      refute has_element?(live, "#feed-posts [id*='#{post.id}']")
+      # The row is drawn already — carrying `hidden`, which is what keeps the
+      # timeline still and makes the press cost no round trip.
+      assert has_element?(live, "#feed-posts [hidden][id*='#{post.id}']")
 
       live |> element("#unread-insert") |> render_click()
 

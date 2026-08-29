@@ -932,7 +932,7 @@ msgid "You follow back %{name}."
 msgstr "Ora segue anche %{name}."
 
 #: lib/vutuv_web/live/init_assigns.ex:54
-#: lib/vutuv_web/live/post_live/feed.ex:109
+#: lib/vutuv_web/live/post_live/feed.ex:124
 #: lib/vutuv_web/plugs/require_login.ex:20
 #, elixir-autogen
 msgid "You must be logged in to access that page"
@@ -2160,8 +2160,8 @@ msgstr "Modifica il post"
 #: lib/vutuv_web/components/organization_components.ex:274
 #: lib/vutuv_web/gettext_extraction_anchors.ex:87
 #: lib/vutuv_web/live/organization_live/feed.ex:114
-#: lib/vutuv_web/live/post_live/feed.ex:208
-#: lib/vutuv_web/live/post_live/feed.ex:1796
+#: lib/vutuv_web/live/post_live/feed.ex:223
+#: lib/vutuv_web/live/post_live/feed.ex:1831
 #: lib/vutuv_web/live/shell_live.ex:973
 #: lib/vutuv_web/live/shell_live.ex:1272
 #: lib/vutuv_web/templates/layout/app.html.heex:171
@@ -2206,7 +2206,7 @@ msgstr "Visitatori non connessi"
 msgid "No more than %{max} images per post."
 msgstr "Non più di %{max} immagini per post."
 
-#: lib/vutuv_web/live/post_live/feed.ex:2045
+#: lib/vutuv_web/live/post_live/feed.ex:2080
 #, elixir-autogen, elixir-format
 msgid "Nothing here yet. Follow people to fill your feed, or write your first post."
 msgstr ""
@@ -2301,7 +2301,7 @@ msgstr ""
 msgid "Saving…"
 msgstr "Salvataggio…"
 
-#: lib/vutuv_web/live/post_live/feed.ex:1928
+#: lib/vutuv_web/live/post_live/feed.ex:1963
 #, elixir-autogen, elixir-format
 msgid "Show %{formatted} new post"
 msgid_plural "Show %{formatted} new posts"
@@ -2517,7 +2517,7 @@ msgstr "Togli Mi piace"
 #: lib/vutuv_web/live/organization_live/following.ex:383
 #: lib/vutuv_web/live/organization_live/following.ex:458
 #: lib/vutuv_web/live/organization_live/show.ex:491
-#: lib/vutuv_web/live/post_live/feed.ex:708
+#: lib/vutuv_web/live/post_live/feed.ex:727
 #: lib/vutuv_web/templates/followee/index.html.heex:30
 #: lib/vutuv_web/templates/settings/followed_tags.html.heex:41
 #, elixir-autogen, elixir-format
@@ -2815,7 +2815,7 @@ msgstr "Scriva il Suo primo post"
 msgid "Manage"
 msgstr "Gestisci"
 
-#: lib/vutuv_web/live/post_live/feed.ex:1834
+#: lib/vutuv_web/live/post_live/feed.ex:1869
 #: lib/vutuv_web/templates/user/show.html.heex:491
 #, elixir-autogen, elixir-format
 msgid "Write a post"
@@ -2836,7 +2836,7 @@ msgid_plural "%{formatted} connections"
 msgstr[0] "1 collegamento"
 msgstr[1] "%{formatted} collegamenti"
 
-#: lib/vutuv_web/live/post_live/feed.ex:836
+#: lib/vutuv_web/live/post_live/feed.ex:855
 #: lib/vutuv_web/templates/user/card_list.html.heex:50
 #, elixir-autogen, elixir-format
 msgid "+1 more tag"
@@ -4721,7 +4721,7 @@ msgstr "Non ha bloccato nessuno."
 msgid "You unblocked @%{slug}."
 msgstr "Ha sbloccato @%{slug}."
 
-#: lib/vutuv_web/live/post_live/feed.ex:2050
+#: lib/vutuv_web/live/post_live/feed.ex:2085
 #, elixir-autogen, elixir-format
 msgid "Discover people to follow"
 msgstr "Scopra persone da seguire"
@@ -7745,7 +7745,7 @@ msgid "This updates on its own. You can leave this page; the send keeps running.
 msgstr "Si aggiorna da sola. Può lasciare questa pagina: l'invio prosegue."
 
 #: lib/vutuv_web/live/admin/newsletter_broadcast_live.ex:174
-#: lib/vutuv_web/live/post_live/feed.ex:2268
+#: lib/vutuv_web/live/post_live/feed.ex:2303
 #, elixir-autogen
 msgid "Done"
 msgstr "Fatto"
@@ -8222,7 +8222,7 @@ msgid "Admins"
 msgstr "Amministratori"
 
 #: lib/vutuv_web/live/admin/user_live.ex:257
-#: lib/vutuv_web/live/post_live/feed.ex:845
+#: lib/vutuv_web/live/post_live/feed.ex:864
 #, elixir-autogen, elixir-format
 msgid "All members"
 msgstr "Tutti i membri"
@@ -14229,7 +14229,7 @@ msgstr ""
 
 #: lib/vutuv_web/components/ui.ex:4516
 #: lib/vutuv_web/controllers/settings_controller.ex:614
-#: lib/vutuv_web/live/post_live/feed.ex:539
+#: lib/vutuv_web/live/post_live/feed.ex:554
 #: lib/vutuv_web/templates/settings/followed_tags.html.heex:1
 #: lib/vutuv_web/templates/settings/followed_tags.html.heex:3
 #, elixir-autogen, elixir-format
@@ -15175,11 +15175,6 @@ msgstr "Filtra per tag"
 msgid "Filter removed."
 msgstr "Filtro rimosso."
 
-#: lib/vutuv_web/live/post_live/feed.ex:888
-#, elixir-autogen, elixir-format
-msgid "Hidden: matches your filter"
-msgstr "Nascosto: corrisponde a un Suo filtro"
-
 #: lib/vutuv_web/templates/settings/filters.html.heex:5
 #, elixir-autogen, elixir-format
 msgid "Hide posts from your feed that carry a tag, or that contain a word or phrase. This list is yours alone: it is never shared, the author is never told, and a hidden post collapses to a line you can still open."
@@ -15214,7 +15209,7 @@ msgstr ""
 "Scelga qui sotto un titolo di studio o un istituto da mostrare in cima al "
 "Suo profilo al posto di una qualifica."
 
-#: lib/vutuv_web/live/post_live/feed.ex:897
+#: lib/vutuv_web/live/post_live/feed.ex:923
 #, elixir-autogen, elixir-format
 msgid "Show anyway"
 msgstr "Mostra comunque"
@@ -17399,8 +17394,8 @@ msgstr "Aggiungi foto"
 msgid "Licence"
 msgstr "Licenza"
 
-#: lib/vutuv_web/live/post_live/feed.ex:1843
-#: lib/vutuv_web/live/post_live/feed.ex:1844
+#: lib/vutuv_web/live/post_live/feed.ex:1878
+#: lib/vutuv_web/live/post_live/feed.ex:1879
 #, elixir-autogen, elixir-format
 msgid "Post photos"
 msgstr "Pubblica foto"
@@ -22447,7 +22442,7 @@ msgstr "Consigliato: %{width} × %{height} pixel (%{ratio})."
 msgid "Recommended: square, at least %{width} × %{height} pixels."
 msgstr "Consigliato: quadrata, almeno %{width} × %{height} pixel."
 
-#: lib/vutuv_web/live/post_live/feed.ex:782
+#: lib/vutuv_web/live/post_live/feed.ex:801
 #: lib/vutuv_web/views/user_html.ex:338
 #, elixir-autogen, elixir-format
 msgid "Profile picture of %{name}"
@@ -23142,12 +23137,12 @@ msgstr ""
 "Segua #%{tag} da Mastodon o da qualsiasi altra app del Fediverso e i suoi "
 "post pubblici arriveranno nella Sua cronologia. Non serve un account vutuv."
 
-#: lib/vutuv_web/live/post_live/feed.ex:2181
+#: lib/vutuv_web/live/post_live/feed.ex:2216
 #, elixir-autogen, elixir-format
 msgid "Greet other members"
 msgstr "Saluti gli altri membri"
 
-#: lib/vutuv_web/live/post_live/feed.ex:540
+#: lib/vutuv_web/live/post_live/feed.ex:555
 #, elixir-autogen, elixir-format
 msgid "New here"
 msgstr "Nuovi qui"
@@ -23197,7 +23192,7 @@ msgstr ""
 msgid "With a vutuv account"
 msgstr "Con un account vutuv"
 
-#: lib/vutuv_web/live/post_live/feed.ex:774
+#: lib/vutuv_web/live/post_live/feed.ex:793
 #, elixir-autogen, elixir-format
 msgid "A few of the newest members. Following them is a warm welcome."
 msgstr "Alcuni fra i membri più recenti. Seguirli è un bel benvenuto."
@@ -23522,18 +23517,11 @@ msgstr "Tutti i membri vutuv, in ordine alfabetico per cognome."
 msgid "Every vutuv member, grouped by the first letter of their last name."
 msgstr "Tutti i membri vutuv, raggruppati per la prima lettera del cognome."
 
-#: lib/vutuv_web/live/post_live/feed.ex:659
+#: lib/vutuv_web/live/post_live/feed.ex:674
 #: lib/vutuv_web/live/post_live/filter_band.ex:292
 #, elixir-autogen, elixir-format
 msgid "A photo"
 msgstr "Una foto"
-
-#: lib/vutuv_web/live/post_live/feed.ex:665
-#, elixir-autogen, elixir-format
-msgid "Add %{formatted} post"
-msgid_plural "Add %{formatted} posts"
-msgstr[0] "Aggiungi %{formatted} post"
-msgstr[1] "Aggiungi %{formatted} post"
 
 #: lib/vutuv_web/live/post_live/filter_band.ex:256
 #, elixir-autogen, elixir-format
@@ -23545,7 +23533,7 @@ msgstr "Anche dentro parole più lunghe: %{word} trova anche %{example}."
 msgid "A–Z"
 msgstr "A–Z"
 
-#: lib/vutuv_web/live/post_live/feed.ex:737
+#: lib/vutuv_web/live/post_live/feed.ex:756
 #, elixir-autogen, elixir-format
 msgid "Browse the tags"
 msgstr "Sfoglia i tag"
@@ -23560,7 +23548,7 @@ msgstr "Più attivi per primi"
 msgid "Clear all"
 msgstr "Cancella tutto"
 
-#: lib/vutuv_web/live/post_live/feed.ex:577
+#: lib/vutuv_web/live/post_live/feed.ex:592
 #, elixir-autogen, elixir-format
 msgid "Drag, or use the arrow keys"
 msgstr "Trascina, oppure usa i tasti freccia"
@@ -23575,13 +23563,13 @@ msgstr "Espandi o comprimi"
 msgid "Find an account or a server …"
 msgstr "Cerca un account o un server …"
 
-#: lib/vutuv_web/live/post_live/feed.ex:601
+#: lib/vutuv_web/live/post_live/feed.ex:616
 #, elixir-autogen, elixir-format
 msgid "Fold %{card}"
 msgstr "Riduci %{card}"
 
-#: lib/vutuv_web/live/post_live/feed.ex:719
-#: lib/vutuv_web/live/post_live/feed.ex:720
+#: lib/vutuv_web/live/post_live/feed.ex:738
+#: lib/vutuv_web/live/post_live/feed.ex:739
 #, elixir-autogen, elixir-format
 msgid "Follow a tag …"
 msgstr "Segui un tag …"
@@ -23598,17 +23586,17 @@ msgstr "Nascondi un tag …"
 msgid "Hide a word or a whole phrase …"
 msgstr "Nascondi una parola o un'intera frase …"
 
-#: lib/vutuv_web/live/post_live/feed.ex:538
+#: lib/vutuv_web/live/post_live/feed.ex:553
 #, elixir-autogen, elixir-format
 msgid "Hide tags"
 msgstr "Nascondi tag"
 
-#: lib/vutuv_web/live/post_live/feed.ex:537
+#: lib/vutuv_web/live/post_live/feed.ex:552
 #, elixir-autogen, elixir-format
 msgid "Hide words"
 msgstr "Nascondi parole"
 
-#: lib/vutuv_web/live/post_live/feed.ex:743
+#: lib/vutuv_web/live/post_live/feed.ex:762
 #: lib/vutuv_web/live/post_live/filter_band.ex:331
 #, elixir-autogen, elixir-format
 msgid "In your feed right now:"
@@ -23624,7 +23612,7 @@ msgstr "Ora non corrisponde a nulla nel suo feed — la regola vale comunque per
 msgid "More of your %{formatted} accounts"
 msgstr "Altri dei tuoi %{formatted} account"
 
-#: lib/vutuv_web/live/post_live/feed.ex:576
+#: lib/vutuv_web/live/post_live/feed.ex:591
 #, elixir-autogen, elixir-format
 msgid "Move %{card}"
 msgstr "Sposta %{card}"
@@ -23634,12 +23622,12 @@ msgstr "Sposta %{card}"
 msgid "No account found."
 msgstr "Nessun account trovato."
 
-#: lib/vutuv_web/live/post_live/feed.ex:732
+#: lib/vutuv_web/live/post_live/feed.ex:751
 #, elixir-autogen, elixir-format
 msgid "No tag called %{name} yet."
 msgstr "Nessun tag chiamato %{name} finora."
 
-#: lib/vutuv_web/live/post_live/feed.ex:530
+#: lib/vutuv_web/live/post_live/feed.ex:545
 #, elixir-autogen, elixir-format
 msgid "Not read yet"
 msgstr "Non ancora letti"
@@ -23669,13 +23657,13 @@ msgstr "I post con uno di questi tag vengono ridotti allo stesso modo."
 msgid "Posts containing one of these are folded to a single line — not deleted, and with a way to open them anyway."
 msgstr "I post che contengono una di queste parole vengono ridotti a una riga — non eliminati, e con un modo per aprirli comunque."
 
-#: lib/vutuv_web/live/post_live/feed.ex:2207
+#: lib/vutuv_web/live/post_live/feed.ex:2242
 #, elixir-autogen, elixir-format
 msgid "Put away:"
 msgstr "Messe da parte:"
 
-#: lib/vutuv_web/live/post_live/feed.ex:622
-#: lib/vutuv_web/live/post_live/feed.ex:623
+#: lib/vutuv_web/live/post_live/feed.ex:637
+#: lib/vutuv_web/live/post_live/feed.ex:638
 #, elixir-autogen, elixir-format
 msgid "Remove %{card}"
 msgstr "Rimuovi %{card}"
@@ -23707,7 +23695,7 @@ msgstr "Mostra solo %{source}"
 msgid "Show posts by %{name}"
 msgstr "Mostra i post di %{name}"
 
-#: lib/vutuv_web/live/post_live/feed.ex:536
+#: lib/vutuv_web/live/post_live/feed.ex:551
 #, elixir-autogen, elixir-format
 msgid "Sources"
 msgstr "Fonti"
@@ -23717,12 +23705,12 @@ msgstr "Fonti"
 msgid "Switching off means muting, not unfollowing. You stay a follower, the posts just stop reaching your feed: permanently and on every device, until you switch them back on here."
 msgstr "Disattivare significa silenziare, non smettere di seguire. Continui a seguire, ma i post non arrivano più nel tuo feed: in modo permanente e su tutti i dispositivi, finché non li riattivi qui."
 
-#: lib/vutuv_web/live/post_live/feed.ex:600
+#: lib/vutuv_web/live/post_live/feed.ex:615
 #, elixir-autogen, elixir-format
 msgid "Unfold %{card}"
 msgstr "Espandi %{card}"
 
-#: lib/vutuv_web/live/post_live/feed.ex:709
+#: lib/vutuv_web/live/post_live/feed.ex:728
 #, elixir-autogen, elixir-format
 msgid "Unfollow the tag %{tag}"
 msgstr "Smetti di seguire il tag %{tag}"
@@ -23746,11 +23734,24 @@ msgid_plural "and %{formatted} more"
 msgstr[0] "e 1 altro"
 msgstr[1] "e altri %{formatted}"
 
-#: lib/vutuv_web/live/post_live/feed.ex:1900
-#: lib/vutuv_web/live/post_live/feed.ex:1917
-#: lib/vutuv_web/live/post_live/feed.ex:2255
-#: lib/vutuv_web/live/post_live/feed.ex:2260
+#: lib/vutuv_web/live/post_live/feed.ex:1935
+#: lib/vutuv_web/live/post_live/feed.ex:1952
+#: lib/vutuv_web/live/post_live/feed.ex:2290
+#: lib/vutuv_web/live/post_live/feed.ex:2295
 #, elixir-autogen, elixir-format
 msgctxt "feed filter sheet"
 msgid "Filter"
 msgstr "Filtri"
+
+#: lib/vutuv_web/live/post_live/feed.ex:931
+#, elixir-autogen, elixir-format
+msgctxt "filtered post"
+msgid "Hidden:"
+msgstr "Nascosto:"
+
+#: lib/vutuv_web/live/post_live/feed.ex:684
+#, elixir-autogen, elixir-format
+msgid "Show %{formatted} post in the feed"
+msgid_plural "Show %{formatted} posts in the feed"
+msgstr[0] "Mostra %{formatted} post nel feed"
+msgstr[1] "Mostra %{formatted} post nel feed"

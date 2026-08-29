@@ -14,13 +14,6 @@ defmodule VutuvWeb.PostFeedLiveTest do
 
   defp other_user(attrs \\ []), do: insert(:user, Keyword.merge([email_confirmed?: true], attrs))
 
-  # The rail renders with the page again (the v7.200.3 laziness was undone —
-  # see FeedRailsTest); the helper name survives at the call sites.
-  defp live_feed_with_rails(conn) do
-    {:ok, view, html} = live(conn, ~p"/feed")
-    {:ok, view, html}
-  end
-
   # Where `text` first shows up in the rendered feed — how the thread tests
   # assert reading order without parsing the whole card tree.
   defp position(html, text) do
@@ -932,7 +925,7 @@ defmodule VutuvWeb.PostFeedLiveTest do
   end
 
   describe "live updates" do
-    test "a followed author's new post shows the pill, not the post", %{conn: conn} do
+    test "a followed author's new post is drawn hidden and shown by the pill", %{conn: conn} do
       {conn, user} = create_and_login_user(conn)
       friend = other_user()
       insert(:follow, follower: user, followee: friend)
@@ -944,15 +937,21 @@ defmodule VutuvWeb.PostFeedLiveTest do
       html = render(live)
       assert html =~ "Show 1 new post"
 
-      # The promise is that the timeline does not move under the reader — not
-      # that the words are nowhere on the page. Since the filter band shipped,
-      # the pill quotes the newest waiting post and the rail card lists what is
-      # waiting, both out of this same queue, which is visibility-checked before
-      # anything is even counted. So the claim to hold is about the stream.
-      refute has_element?(live, "#feed-posts [id*='#{post.id}']")
+      # The card is drawn straight away so that showing it costs no round trip,
+      # and `hidden` is the whole reason the timeline still does not move under
+      # the reader — the browser's own stylesheet drops the row until the press
+      # takes the attribute off, in the browser.
+      assert has_element?(live, "#feed-posts [hidden][id*='#{post.id}']")
 
       live |> element("#show-new-posts") |> render_click()
+
+      # The press is client-side, so the attribute is still in this DOM — what
+      # the server owes is that it never puts it back. A restream is the
+      # cheapest way to make it re-render the row and prove that.
+      refute has_element?(live, "#show-new-posts")
+      send(live.pid, :day_changed)
       assert has_element?(live, "#feed-posts [id*='#{post.id}']")
+      refute has_element?(live, "#feed-posts > [hidden]")
       assert render(live) =~ "breaking news"
     end
 
@@ -1106,11 +1105,14 @@ defmodule VutuvWeb.PostFeedLiveTest do
     test "loads older posts on demand", %{conn: conn} do
       {conn, user} = create_and_login_user(conn)
 
-      for n <- 1..21, do: {:ok, _} = Posts.create_post(user, %{body: "post number #{n}"})
+      for n <- 1..41, do: {:ok, _} = Posts.create_post(user, %{body: "post number #{n}"})
 
       {:ok, live, html} = live(conn, ~p"/feed")
 
-      assert html =~ "post number 21"
+      # Forty on arrival, twenty per page after that: the first screenful is
+      # the one nobody asked for, so it is the one that has to last.
+      assert html =~ "post number 41"
+      assert html =~ "post number 2<"
       refute html =~ "post number 1<"
       assert has_element?(live, "#load-more")
 
@@ -1501,6 +1503,42 @@ defmodule VutuvWeb.PostFeedLiveTest do
       # Own post shows in full; no placeholder swallows it.
       assert html =~ "my own crypto thoughts"
       refute html =~ "data-filtered-post"
+    end
+
+    test "the placeholder is two lines and cannot grow into a third", %{
+      conn: conn,
+      user: user,
+      friend: friend
+    } do
+      # A phrase filter long enough to have wrapped the old row onto a third
+      # line: the pattern sat in the flow, so the rule the member wrote decided
+      # how tall the fold was (Stefan, 2026-08-29).
+      sentence = "Noch ein paar der zuletzt hier besonders haeufig geteilten News"
+
+      {:ok, _} =
+        Vutuv.ContentFilters.create_filter(user, %{"kind" => "keyword", "pattern" => sentence})
+
+      {:ok, _} =
+        Posts.create_post(friend, %{
+          body: "Noch ein paar der zuletzt hier besonders haeufig geteilten News heute"
+        })
+
+      conn = conn |> recycle() |> put_req_header("accept-language", "de-DE,de;q=0.9")
+      {:ok, live, _html} = live(conn, ~p"/feed")
+
+      row = live |> element("[data-filtered-post]") |> render()
+
+      # One label, and the pattern truncated beside it rather than wrapped.
+      assert row =~ "Ausgeblendet:"
+      refute row =~ "passt zu Ihrem Filter"
+      assert row =~ "truncate"
+
+      # And the only control shares the line with the name and the time, so the
+      # row spends no line on a lone link.
+      assert has_element?(
+               live,
+               "[data-filtered-post] div:first-child button[phx-click='reveal_filter']"
+             )
     end
 
     test "a muted tag collapses a post carrying that tag", %{

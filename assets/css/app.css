@@ -144,6 +144,65 @@ html[data-nav-pressing] main {
   transition-delay: var(--press-pending-delay);
 }
 
+/* ---------- The feed's waiting posts ----------
+   A post that arrives while somebody is reading is drawn into the timeline at
+   once and hidden by the plain `hidden` attribute, so "show me" is two attribute
+   ops in this browser instead of a round trip carrying ten rendered cards
+   (`VutuvWeb.PostLive.Feed`'s `queue/2` and `reveal_pending/0`).
+
+   **Nothing here does the hiding** — the browser's own stylesheet does, which is
+   the point: a deploy reloads nothing, so a tab open across one meets this
+   markup with the PREVIOUS release's CSS, and a row that needed a rule from this
+   file would arrive visible there. What is left below is decoration, and its
+   absence for one release costs a little padding and a fade.
+
+   That padding is the price of hiding at all: the waiting rows sit at the TOP of
+   the list, so the first row anybody can see is no longer `:first-child` and
+   `first:pt-0` stops applying, which opens a 1rem gap between the card's padding
+   and the first post. It comes back the moment the attribute goes, and the rule
+   works only because a waiting row is always inserted at position 0, so the
+   first visible row's previous sibling is one of them. (`divide-y` needs no such
+   repair: Tailwind v4 draws it on the BOTTOM of every child but the last, and a
+   hidden row draws nothing.)
+
+   It sits in this file, outside every layer, because `components.css` is
+   imported INTO `layer(components)` and the utilities layer beats that, while
+   this has to beat a utility on the row. And `padding-block-start`, not
+   `padding-top`: `py-4` compiles to the logical `padding-block`, and the
+   physical longhand loses to it even from outside the layer — measured in
+   Chrome, 2026-08-29, where it silently did nothing. Match the axis Tailwind
+   wrote. */
+#feed-posts > [hidden] + :not([hidden]) {
+  padding-block-start: 0;
+}
+
+/* Fires once as the row appears and is never taken off again: it describes the
+   arrival, not a state, and the first re-render of the row drops it (the server
+   renders neither attribute). Short and small — ten of these run at once, and a
+   long slide would read as the page moving under the reader rather than as
+   posts arriving. */
+@keyframes feed-row-reveal {
+  from {
+    opacity: 0;
+    transform: translateY(-6px);
+  }
+
+  to {
+    opacity: 1;
+    transform: translateY(0);
+  }
+}
+
+[data-pending-shown] {
+  animation: feed-row-reveal 200ms ease-out both;
+}
+
+@media (prefers-reduced-motion: reduce) {
+  [data-pending-shown] {
+    animation: none;
+  }
+}
+
 /* Dark mode re-declares a palette at the SAME specificity it was set at, never
    only on the one-attribute default: `[data-nav-bar] [data-nav-item]` is
    (0,2,0) and would keep its light `--press-on-bg` right through a (0,1,0)
