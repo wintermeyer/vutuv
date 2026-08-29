@@ -42,13 +42,12 @@ defmodule Vutuv.RateLimiter do
   """
   def hit_remaining(key, limit, window_ms)
       when is_integer(limit) and limit > 0 and is_integer(window_ms) and window_ms > 0 do
-    ensure_table()
     now = System.system_time(:millisecond)
     window = div(now, window_ms)
     window_end = (window + 1) * window_ms
     bucket = {key, window}
 
-    count = :ets.update_counter(@table, bucket, {2, 1}, {bucket, 0, window_end})
+    count = count_hit(bucket, window_end)
 
     if count <= limit, do: {:ok, limit - count}, else: {:error, :rate_limited}
   end
@@ -60,7 +59,6 @@ defmodule Vutuv.RateLimiter do
   member's cold-outreach counter — without moving the counter.
   """
   def peek(key, window_ms) when is_integer(window_ms) and window_ms > 0 do
-    ensure_table()
     now = System.system_time(:millisecond)
     window = div(now, window_ms)
 
@@ -68,6 +66,12 @@ defmodule Vutuv.RateLimiter do
       [{_bucket, count, _window_end}] -> count
       [] -> 0
     end
+  rescue
+    # A table that is not there holds no buckets, so the answer is 0 either
+    # way. No retry to make: build it for the next caller and say 0.
+    ArgumentError ->
+      ensure_table()
+      0
   end
 
   @doc false
@@ -95,6 +99,29 @@ defmodule Vutuv.RateLimiter do
   end
 
   # ── Internals ──
+
+  # `init/1` creates the table and `Vutuv.RateLimiter` is an unconditional
+  # supervised child, so in a running app it always exists — probing first only
+  # spends an `:ets.whereis/1` on every rate-limited request, and
+  # `VutuvWeb.RateLimit.check/4` alone asks two to three times per login. Go
+  # straight at the table instead and pay for the missing one where it actually
+  # happens: a unit test calling `hit/3` with nothing supervised. Every other
+  # ETS owner here (`Vutuv.SocialFeed.Cache`, `VutuvWeb.Live.MountHandoff`, the
+  # three top-N caches) already reads this way; this module was the last one
+  # probing.
+  #
+  # Those five may fail soft, because a missed cache entry costs one slower
+  # render. An uncounted hit does not, so this one heals and retries. The retry
+  # is deliberately **one-shot** and sits outside the `rescue`, so a badarg the
+  # missing table cannot explain — a malformed counter spec — raises from the
+  # retry instead of looping.
+  defp count_hit(bucket, window_end) do
+    :ets.update_counter(@table, bucket, {2, 1}, {bucket, 0, window_end})
+  rescue
+    ArgumentError ->
+      ensure_table()
+      :ets.update_counter(@table, bucket, {2, 1}, {bucket, 0, window_end})
+  end
 
   defp ensure_table do
     case :ets.whereis(@table) do
