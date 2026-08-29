@@ -6,9 +6,9 @@ allowed-tools: Bash(gh:*), Bash(git:*), Bash(mix:*), Bash(mise:*), Bash(date:*),
 You work my `Bug` list from end to end without me. For each bug: reproduce it as
 a failing test, fix it, open a pull request, and go to the next one. You never
 merge — `/pr-review` does that, and two agents that read different things are the
-point. Follow CLAUDE.md throughout: test first, `mix precommit` green, version
-bumped from `origin/main`, German commit messages, English PR text, authorship
-footer on anything a person reads as my words.
+point. Follow CLAUDE.md throughout: test first, `mix precommit` green, German
+commit messages, English PR text, authorship footer on anything a person reads
+as my words.
 
 Talk to me in the language I write to you.
 
@@ -184,10 +184,11 @@ intended behaviour rather than to broken behaviour, or a migration that cannot
 be N-1 compatible (CLAUDE.md).
 
 ## Step 3: the pull request
-Bump the version from `origin/main` **immediately before** the push, not when
-you start, so the number is as fresh as it can be. Push in a Bash call of its
-own: the pre-push hook runs the full `mix precommit` and aborts the whole
-command on red, so a chained `git push && gh pr create` dies with it.
+**Do not touch the version.** `mix.exs` line 7 reads `version: version(),` and
+the number is computed from the commit at build time, so a fix branch leaves
+that file alone entirely and `scripts/bump_version.exs` is gone. Push in a Bash
+call of its own: the pre-push hook runs the full `mix precommit` and aborts the
+whole command on red, so a chained `git push && gh pr create` dies with it.
 
 The PR body is English, at most 150 words, symptom first. It ends with the
 **closing note parked for `/pr-review`**, which posts it when it merges:
@@ -212,13 +213,21 @@ question back together at the end. One batch of decisions beats fifteen
 interruptions.
 
 ## Draining the list
-You keep going until no bug qualifies. **That is what I asked for, and it has a
-cost worth stating:** every fix bumps `mix.exs`, so a run that opens ten pull
-requests leaves ten version claims, and the moment `/pr-review` merges the first
-one the other nine conflict on that line and each needs a rebase. That is the
-friction issue #1666 proposes to remove. Until it lands: bump late, re-check
-`origin/main` before every push, and say in the report how many PRs are stacked,
-so nobody is surprised by the rebases.
+You keep going until no bug qualifies. A run that opens ten pull requests leaves
+ten branches waiting on `/pr-review`, so say in the report how many are stacked.
+They no longer collide on the version line — that was issue #1666, and the
+version now comes from the commit — but they can still collide with each other
+in the source, so name the files each PR touches when there is more than one in
+flight.
+
+**Rebase at merge time, not on every push to `main`.** Several sessions merge
+here through the afternoon; on 2026-08-29 `main` moved four times in an hour. A
+branch rebased on every foreign merge is stale before its own CI finishes, and
+each rebase costs an ~8-minute precommit at push time. A pull request that is
+merely behind is fine. One that is CONFLICTING is not, because GitHub cannot
+build its merge ref and reports **no checks at all**, which reads exactly like
+broken Actions — so rebase when a PR conflicts or when it is about to be
+merged, and otherwise leave it alone.
 
 The other sessions share this machine and the dev database. Start no server on a
 port you did not choose yourself, never stop one by a process-name pattern, and
