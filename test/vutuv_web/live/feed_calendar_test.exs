@@ -48,6 +48,26 @@ defmodule VutuvWeb.FeedCalendarTest do
   defp iso(date), do: Date.to_iso8601(date)
   defp days_ago(n), do: Date.add(ViewerClock.today(), -n)
 
+  # Every day cell in `html` the heatmap has put a shade on. Read out of the
+  # parsed document rather than by matching a class anywhere on the page:
+  # `bg-brand-*` is a colour half the feed's controls wear.
+  defp shaded_days(html) do
+    elements(
+      html,
+      ~s([phx-click="cal-day"][class*="bg-brand-1"], [phx-click="cal-day"][class*="bg-brand-3"], [phx-click="cal-day"][class*="bg-brand-5"], [phx-click="cal-day"][class*="bg-brand-7"])
+    )
+  end
+
+  # A day with enough on it to take the heatmap's top step.
+  defp busy_day(author, days_back) do
+    for n <- 1..5 do
+      post = PostsHelpers.create_post!(author, %{body: "busy day post #{n}"})
+      PostsHelpers.backdate_post!(post, days_back * @day + n * 60)
+    end
+
+    days_ago(days_back)
+  end
+
   describe "the calendar" do
     test "a day click shows that day and nothing newer", %{conn: conn} do
       {conn, user} = create_and_login_user(conn)
@@ -175,12 +195,7 @@ defmodule VutuvWeb.FeedCalendarTest do
       {conn, user} = create_and_login_user(conn)
       author = feed_with_history(user)
 
-      busy = days_ago(2)
-
-      for n <- 1..5 do
-        post = PostsHelpers.create_post!(author, %{body: "busy day post #{n}"})
-        PostsHelpers.backdate_post!(post, 2 * @day + n * 60)
-      end
+      busy = busy_day(author, 2)
 
       {:ok, view, _html} = live(conn, ~p"/feed")
       render_click(view, "cal-toggle")
@@ -706,6 +721,33 @@ defmodule VutuvWeb.FeedCalendarTest do
       assert timeline(view) == ""
       assert render(view) =~ "Nothing reached your feed on"
       refute timeline(view) =~ "from this morning"
+    end
+  end
+
+  describe "the grid does not wait for its shading" do
+    test "the first render draws the days and shades none of them", %{conn: conn} do
+      # A month of a fediverse-heavy feed is ~26 queries, and paying them inside
+      # the press means the reader clicks the calendar and watches nothing
+      # happen. So the grid goes out with everything that does not need the
+      # month in it and the shading follows in a second render.
+      #
+      # The disconnected render is where that is observable at all: it is a
+      # first render with no second one behind it, so a shaded one is proof the
+      # counting ran on the blocking path.
+      {conn, user} = create_and_login_user(conn)
+      author = feed_with_history(user)
+      busy = busy_day(author, 2)
+
+      html = conn |> get(~p"/feed?cal=1") |> html_response(200)
+
+      assert html =~ ~s(phx-value-date="#{iso(busy)}")
+
+      assert shaded_days(html) == [],
+             "the disconnected render paid for a heatmap it has no second render to show"
+
+      # And the socket, which does get a second render, ends up shaded.
+      {:ok, view, _html} = live(conn, ~p"/feed?cal=1")
+      assert has_element?(view, ~s([phx-value-date="#{iso(busy)}"].bg-brand-700))
     end
   end
 

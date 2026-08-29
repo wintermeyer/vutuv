@@ -302,7 +302,7 @@ defmodule VutuvWeb.PostLive.Feed do
     |> assign(:cal_month, FeedTimeTravel.month_of(day))
     |> assign(:cal_metric, "feed")
     |> assign(:cal_day, day)
-    |> assign_calendar_counts()
+    |> defer_calendar_counts()
     |> assign(:draft, payload.draft)
     # The composer starts collapsed to a single "What's new?" button; posting
     # (own activity arriving below) collapses it again. A stored draft opens it
@@ -1136,7 +1136,7 @@ defmodule VutuvWeb.PostLive.Feed do
         {:noreply,
          socket
          |> assign(:cal_month, FeedTimeTravel.shift_month(socket.assigns.cal_month, value))
-         |> assign_calendar_counts()}
+         |> defer_calendar_counts()}
 
       :error ->
         {:noreply, socket}
@@ -1161,6 +1161,12 @@ defmodule VutuvWeb.PostLive.Feed do
       {:noreply,
        socket
        |> assign(:cal_metric, metric)
+       # Counted here and not deferred, unlike every other way into the
+       # heatmap: `load_day/2` on the next line sizes its page from these
+       # counts (`day_limit/2`), and handing it an empty map would fetch and
+       # decorate the whole-day limit for a day it is about to learn is busy.
+       # Nothing is lost by waiting — this press reloads the timeline under the
+       # calendar anyway, so it is not a press the reader watches do nothing.
        |> assign_calendar_counts()
        |> load_day(socket.assigns.cal_day)}
     end
@@ -1185,9 +1191,9 @@ defmodule VutuvWeb.PostLive.Feed do
   # reading Tuesday, and yanking them back to now would be a second thing they
   # did not ask for. Closing the DAY is what returns to the present.
   def handle_event("cal-toggle", _params, socket) do
-    # Unfolding is what pays for the heatmap: folded, the counts are not
-    # computed at all (see `assign_calendar_counts/1`).
-    {:noreply, socket |> update(:cal_open?, &(!&1)) |> assign_calendar_counts() |> sync_url()}
+    # The press unfolds and answers; the heatmap follows a moment later (see
+    # `defer_calendar_counts/1`). Folded, the counts are not asked for at all.
+    {:noreply, socket |> update(:cal_open?, &(!&1)) |> defer_calendar_counts() |> sync_url()}
   end
 
   # A day is a window, not a moment (`FeedTimeTravel.day_cursor/1`). Pressing
@@ -1519,12 +1525,44 @@ defmodule VutuvWeb.PostLive.Feed do
   # nobody had asked to see — enough to push a connected mount from 18 queries
   # to 28 and cost the mount handoff its whole point. Folded, the card shows a
   # date and needs no numbers; unfolding is what buys them.
-  defp assign_calendar_counts(%{assigns: %{cal_open?: false}} = socket) do
+  #
+  # And unfolding does not WAIT for them. The cheap `:marks` shape got the month
+  # down to well under half of what it cost (the figures are in
+  # `docs/architecture/posts-and-feed.md`), but it is still ~26 queries, and a
+  # press the reader watches do nothing is a slow press whatever the query
+  # count says. So the grid goes out first with everything that does not need
+  # the month in it — the dates, today's ring, the open day, both controls —
+  # and the shading follows in a second render, fading in over
+  # `transition-colors` rather than snapping. On a disconnected render there is
+  # no second render, so nothing is asked at all and the connected mount fills
+  # the grid in.
+  #
+  # A revisited month is asked for again rather than remembered. A memo keyed
+  # on the month would make a fold and unfold free, and would also hand the
+  # reader an hour-old shading of the day they are still in: the numbers are
+  # cheap to re-ask now and nobody sees the asking.
+  defp defer_calendar_counts(socket) do
+    if socket.assigns.cal_open? and connected?(socket) do
+      send(self(), {:cal_counts, calendar_key(socket)})
+    end
+
     socket
     |> assign(:cal_counts, %{})
     |> assign(:cal_capped?, false)
-    |> assign(:cal_earlier?, true)
+    # The one answer worth keeping while the next is in flight: whether the feed
+    # reaches back past this month barely changes from one month to its
+    # neighbour, and the last answer is a better guess than "there is always
+    # more" — which would let the back-step guard (`cal-month`) wave through a
+    # press it is there to refuse. Seeded true on the very first render, where
+    # there is no previous answer to keep.
+    |> assign_new(:cal_earlier?, fn -> true end)
   end
+
+  # Which question a pending heatmap answers. An answer whose question has moved
+  # on is dropped rather than assigned — it would only recompute the month now
+  # on screen, so this saves work rather than preventing a wrong shading, and
+  # only for a reader who out-paces the sweep.
+  defp calendar_key(socket), do: {socket.assigns.cal_month, effective_filter(socket)}
 
   defp assign_calendar_counts(socket) do
     user = socket.assigns.current_user
@@ -1578,6 +1616,14 @@ defmodule VutuvWeb.PostLive.Feed do
 
   # The rule itself, in one place: a day the feed knows to be small arrives
   # whole, a busy one pages.
+  #
+  # It answers for a day the heatmap has not counted yet, too: while the shading
+  # is still in flight (`defer_calendar_counts/1`) every day reads as 0 and
+  # therefore arrives whole. That is the same choice a `/feed?day=…` arrival
+  # makes outright (`feed_payload/3`) and for the same reason — running the
+  # month counter purely to pick between two page sizes costs more than the
+  # larger page does. A quiet day still costs its own size; a busy one opened
+  # inside that window pays a full page instead of a tenth of one.
   defp day_page_limit(total) when total < @day_full_limit, do: @day_full_limit
   defp day_page_limit(_total), do: @travel_page_size
 
@@ -1827,6 +1873,18 @@ defmodule VutuvWeb.PostLive.Feed do
   # collapses with it (the component cannot reach this assign itself).
   def handle_info({:composer_discarded, _id}, socket) do
     {:noreply, assign(socket, :composer_open?, false)}
+  end
+
+  # The month's shading, arriving after the grid it belongs to
+  # (`defer_calendar_counts/1`). Both guards drop work rather than prevent a
+  # wrong answer — the count is taken from the assigns, not from `key`, so a
+  # superseded message would merely recompute the month now on screen.
+  def handle_info({:cal_counts, key}, socket) do
+    if socket.assigns.cal_open? and calendar_key(socket) == key do
+      {:noreply, assign_calendar_counts(socket)}
+    else
+      {:noreply, socket}
+    end
   end
 
   def handle_info(_other, socket), do: {:noreply, socket}

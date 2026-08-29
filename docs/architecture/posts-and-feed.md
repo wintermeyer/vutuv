@@ -460,6 +460,36 @@ on the four columns that hide an account) keeps the EXISTS off a full scan.
 Measured on a copy of production seeded to 200,000 posts, the two indexes took
 that source from 76.7 ms to 0.53 ms.
 
+**The calendar's heatmap asks the same sources for less.** The feed calendar
+(`VutuvWeb.PostLive.FeedCalendar`) shades a month by how much reached the reader
+on each day, counted through `Posts.feed_activity_by_day/4` — the same sources a
+page is built from, so a day it calls busy really does have a timeline behind
+it. Counting them is not reading them, though, and the difference is the whole
+cost: a reader who follows a few hundred accounts out there meets several
+thousand remote posts and boosts in a month, and building those as preloaded
+structs to produce thirty numbers is where the time went. So `feed_sources/3`
+takes a **shape**. `:entries` is everything a card draws; `:marks` is the same
+query builder, the same `WHERE`, the same window, asked for as little as that
+source can get away with — a bare `SELECT {id, at}` for remote posts, and for
+boosts the same rows minus the card's preloads, since whether a boost reaches
+this reader is settled after the query out of the boosted post's own columns.
+Only the two fediverse sources that carry the volume offer it; a source that
+does not simply hands back the richer shape, which carries `id` and `at` too, so
+the two are interchangeable and nothing can be counted under a different
+definition than it is rendered under. `test/vutuv/feed_marks_shape_test.exs`
+holds them to that. Measured against a copy of production (August 2026, 6,142
+rows fetched for 3,882 counted entries): 175 ms for the month, 80 ms after.
+
+**And the grid does not wait for it.** 80 ms is still a press the reader watches
+do nothing, so unfolding the calendar renders the month first — the dates,
+today's ring, the open day, both controls — and the shading arrives in a second
+render from `handle_info({:cal_counts, key}, …)`, fading in over
+`transition-colors`. `key` names the month and the reading it was asked for, so
+somebody stepping through months pays only for the one still on screen. A
+disconnected render has no second render and therefore asks for nothing at all;
+the connected mount fills the grid in. Measured in the browser: the grid is on
+screen in 40 ms, the shading lands at ~130.
+
 **Which source a reshare lands in: whoever pressed the button.** The band
 switches sources, and an entry still belongs to exactly one of them
 (`feed_page/2`'s `filter:` option, `Fediverse.scope_resharer/3`). *Fediverse* is

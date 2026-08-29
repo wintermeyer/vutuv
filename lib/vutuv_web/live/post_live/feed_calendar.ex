@@ -180,7 +180,11 @@ defmodule VutuvWeb.PostLive.FeedCalendar do
           title={day_title(cell.date, Map.get(@counts, cell.date, 0), @metric)}
           aria-current={@day && cell.date == @day && "date"}
           class={[
+            # The shading arrives after the grid does (the feed's
+            # `defer_calendar_counts/1`), so it fades in rather than snapping —
+            # a month opens unshaded and colours a moment later.
             "relative flex aspect-square items-center justify-center rounded text-[11px] tabular-nums",
+            "transition-colors",
             "disabled:cursor-not-allowed disabled:opacity-30",
             heat_class(Map.get(@counts, cell.date, 0), @peak),
             !cell.in_month? && "opacity-40",

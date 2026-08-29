@@ -2696,7 +2696,7 @@ defmodule Vutuv.Posts do
   shared `Vutuv.FeedPage` scheme. Treat it as opaque.
 
   `filter:` narrows the feed to one **source tab** — `:all` (the default),
-  `:vutuv` or `:fediverse`; see `feed_sources/2`.
+  `:vutuv` or `:fediverse`; see `feed_sources/3`.
   """
   def feed_page(%User{} = viewer, opts \\ []) do
     limit = Keyword.get(opts, :limit, @default_feed_limit)
@@ -2712,10 +2712,17 @@ defmodule Vutuv.Posts do
   How many feed entries reached `viewer` on each day of a window — the numbers
   the feed calendar's heatmap shades (issue: the vertical time controls).
 
-  Counted through **`feed_sources/2`**, the same nine sources a page is built
+  Counted through **`feed_sources/3`**, the same nine sources a page is built
   from, so a day the heatmap calls busy is a day the timeline will actually
   have something on. A separate hand-written count query would be a second
   definition of "what is in my feed" and would drift from the first one.
+
+  Asked in the **`:marks`** shape, which is the same rows with what a card needs
+  left out. That is not a detail — building a month of a fediverse-heavy feed as
+  preloaded structs to produce thirty numbers was most of what unfolding the
+  calendar cost — and it is not a filter either: same queries, same window, same
+  counts. The figures are in `docs/architecture/posts-and-feed.md`; how much
+  each source can leave out is up to the source, and `Vutuv.Fediverse` says.
 
   Counts **arrivals, not cards**. The rendered timeline collapses several posts
   of one thread into a single entry, so a day counted at 306 here draws 271
@@ -2743,7 +2750,7 @@ defmodule Vutuv.Posts do
     cursor = %{at: last, ids: [], since: first}
 
     entries =
-      Enum.map(feed_sources(viewer, filter), fn fetch -> fetch.(cap, cursor) end)
+      Enum.map(feed_sources(viewer, filter, :marks), fn fetch -> fetch.(cap, cursor) end)
 
     # Truncation is a per-SOURCE fact, not a fact about their union: the cap is
     # each source's `LIMIT`, so nine sources of 400 rows each make 3,600
@@ -2772,8 +2779,9 @@ defmodule Vutuv.Posts do
   query would be a second definition of what is in a feed, and the arrows would
   eventually disagree with the timeline they scroll.
 
-  Undecorated on purpose: the question is whether anything exists, and
-  `decorate_feed_entries/3` is the expensive half of a page.
+  Undecorated on purpose, in the `:marks` shape: the question is whether
+  anything exists, and neither `decorate_feed_entries/3` nor a card's preloads
+  help answer it.
   """
   def feed_reaches_before_month?(%User{} = viewer, %Date{} = date, opts \\ []) do
     filter = Keyword.get(opts, :filter, :all)
@@ -2782,10 +2790,24 @@ defmodule Vutuv.Posts do
     before = NaiveDateTime.add(month_start, -1, :second)
 
     page =
-      Vutuv.FeedPage.paginate(feed_sources(viewer, filter), 1, %{at: before, ids: []})
+      Vutuv.FeedPage.paginate(feed_sources(viewer, filter, :marks), 1, %{at: before, ids: []})
 
     page.entries != []
   end
+
+  # `shape` is what the caller does with the rows: `:entries` carries everything
+  # a card draws, `:marks` only the `id` and the `at` a counter needs
+  # (`Vutuv.FeedPage.mark/1`). A source that has no cheaper shape ignores the
+  # argument and hands back the richer one, which carries both keys anyway — so
+  # the two are interchangeable and no source can be counted under a different
+  # definition than it is rendered under.
+  #
+  # Only the two fediverse sources below act on it, because they are the two
+  # that carry the volume: a reader who follows a few hundred accounts out there
+  # meets several thousand of their posts and boosts in a month and a couple of
+  # hundred of everything else. What each saves differs and the owning module
+  # says so — see `docs/architecture/posts-and-feed.md`.
+  defp feed_sources(viewer, filter, shape \\ :entries)
 
   # `:own` is a different axis from the three below and belongs to the feed
   # calendar, not to the source band: the band asks *which network*, this asks
@@ -2794,10 +2816,11 @@ defmodule Vutuv.Posts do
   # posts" and comes back tomorrow gets their ordinary feed.
   #
   # It is also what the calendar's "My posts" heatmap counts, so the shading and
-  # the timeline under it are one definition rather than two.
-  defp feed_sources(viewer, :own), do: [&feed_own_post_items(viewer, &1, &2)]
+  # the timeline under it are one definition rather than two. One local source,
+  # so there is no cheaper shape to offer.
+  defp feed_sources(viewer, :own, _shape), do: [&feed_own_post_items(viewer, &1, &2)]
 
-  defp feed_sources(viewer, :vutuv) do
+  defp feed_sources(viewer, :vutuv, shape) do
     [
       &feed_post_items(viewer, &1, &2),
       &feed_organization_post_items(viewer, &1, &2),
@@ -2805,20 +2828,20 @@ defmodule Vutuv.Posts do
       &feed_tag_items(viewer, &1, &2),
       &feed_reply_to_me_items(viewer, &1, &2),
       &feed_repost_of_mine_items(viewer, &1, &2),
-      &Vutuv.Fediverse.feed_remote_boosts(viewer, &1, &2, only: :local),
+      &Vutuv.Fediverse.feed_remote_boosts(viewer, &1, &2, only: :local, shape: shape),
       &Vutuv.Fediverse.feed_remote_reposts(viewer, &1, &2),
       &Vutuv.Fediverse.feed_remote_reply_reposts(viewer, &1, &2)
     ]
   end
 
-  defp feed_sources(viewer, :fediverse) do
+  defp feed_sources(viewer, :fediverse, shape) do
     [
-      &Vutuv.Fediverse.feed_remote_posts(viewer, &1, &2),
-      &Vutuv.Fediverse.feed_remote_boosts(viewer, &1, &2, only: :remote)
+      &Vutuv.Fediverse.feed_remote_posts(viewer, &1, &2, shape: shape),
+      &Vutuv.Fediverse.feed_remote_boosts(viewer, &1, &2, only: :remote, shape: shape)
     ]
   end
 
-  defp feed_sources(viewer, _all) do
+  defp feed_sources(viewer, _all, shape) do
     [
       &feed_post_items(viewer, &1, &2),
       # What the organizations the viewer follows have published (issue #1336).
@@ -2829,7 +2852,7 @@ defmodule Vutuv.Posts do
       # sources that are not about a follow at all.
       &feed_reply_to_me_items(viewer, &1, &2),
       &feed_repost_of_mine_items(viewer, &1, &2),
-      &Vutuv.Fediverse.feed_remote_posts(viewer, &1, &2),
+      &Vutuv.Fediverse.feed_remote_posts(viewer, &1, &2, shape: shape),
       # Fifth: what people the viewer follows *here* have reshared from
       # another network (issue #1166) — the one way a member who follows
       # nobody out there meets that content at all.
@@ -2837,7 +2860,7 @@ defmodule Vutuv.Posts do
       # Sixth: what the accounts the viewer follows out there have
       # re-shared (issue #1167) — a large part of what any account
       # contributes, and invisible here until now.
-      &Vutuv.Fediverse.feed_remote_boosts(viewer, &1, &2),
+      &Vutuv.Fediverse.feed_remote_boosts(viewer, &1, &2, shape: shape),
       # Seventh: **replies** from another network that people here have
       # passed on (issue #1275). The same act as the fifth source one table
       # over: a reply arrived under somebody's vutuv post, a member here
@@ -2988,12 +3011,12 @@ defmodule Vutuv.Posts do
 
   @doc """
   Whether the feed tab `filter` shows `entry` — the in-memory twin of the source
-  split in `feed_sources/2`, for the entries that arrive live over PubSub rather
+  split in `feed_sources/3`, for the entries that arrive live over PubSub rather
   than through a query.
 
   The split is not "which kind of post" alone: an entry carrying remote content
   is a **vutuv** entry as soon as a member here passed it on (`reposted_by`),
-  whoever that was. See `feed_sources/2` for why.
+  whoever that was. See `feed_sources/3` for why.
   """
   def feed_filter_accepts?(:vutuv, entry),
     do: not remote_feed_entry?(entry) or reshared_here?(entry)

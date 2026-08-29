@@ -76,6 +76,7 @@ defmodule Vutuv.Fediverse do
   alias Vutuv.Fediverse.RemoteFollow
   alias Vutuv.Fediverse.RemoteImage
   alias Vutuv.Fediverse.RemotePost
+  alias Vutuv.FeedPage
   alias Vutuv.Handles
   alias Vutuv.Keyset
   alias Vutuv.Organizations
@@ -2856,28 +2857,54 @@ defmodule Vutuv.Fediverse do
     end
   end
 
-  def feed_remote_posts(%User{id: viewer_id} = viewer, fetch_n, cursor) do
+  def feed_remote_posts(viewer, fetch_n, cursor, opts \\ [])
+
+  def feed_remote_posts(%User{} = viewer, fetch_n, cursor, opts) do
     if enabled?() do
-      from(p in RemotePost,
-        join: a in RemoteAccount,
-        as: :remote_account,
-        on: a.id == p.remote_account_id,
-        join: f in Follow,
-        on: f.remote_account_id == a.id,
-        where: f.user_id == ^viewer_id and f.muted == false,
-        where: p.audience in ^RemotePost.open_audiences() or f.state == "accepted",
-        order_by: [desc: p.published_at, desc: p.id],
-        limit: ^fetch_n,
-        preload: [:screenshot, remote_account: a]
-      )
-      |> reject_muted_hosts(viewer)
-      |> Vutuv.Posts.language_scope(Vutuv.Posts.feed_language_filter(viewer))
-      |> utc_at_or_before(cursor, :published_at)
-      |> Repo.all()
-      |> Enum.map(&remote_feed_entry/1)
+      viewer
+      |> remote_posts_query(fetch_n, cursor)
+      |> remote_post_rows(Keyword.get(opts, :shape, :entries))
     else
       []
     end
+  end
+
+  # A counter needs the id and the timestamp and nothing else, and here that
+  # really is all the database sends: no preloads and a two-column `SELECT`.
+  # The rows are the same rows — same `WHERE`, same window, same order — so the
+  # shape cannot change *which* posts are in the feed; see
+  # `docs/architecture/posts-and-feed.md` for what it saves.
+  defp remote_post_rows(query, :marks) do
+    query
+    |> select([p], {p.id, p.published_at})
+    |> Repo.all()
+    |> Enum.map(fn {id, at} -> remote_post_mark(id, at) end)
+  end
+
+  defp remote_post_rows(query, _entries) do
+    query
+    |> preload([remote_account: a], [:screenshot, remote_account: a])
+    |> Repo.all()
+    |> Enum.map(&remote_feed_entry/1)
+  end
+
+  # What both shapes above select from: one definition of which remote posts
+  # reach this viewer.
+  defp remote_posts_query(%User{id: viewer_id} = viewer, fetch_n, cursor) do
+    from(p in RemotePost,
+      join: a in RemoteAccount,
+      as: :remote_account,
+      on: a.id == p.remote_account_id,
+      join: f in Follow,
+      on: f.remote_account_id == a.id,
+      where: f.user_id == ^viewer_id and f.muted == false,
+      where: p.audience in ^RemotePost.open_audiences() or f.state == "accepted",
+      order_by: [desc: p.published_at, desc: p.id],
+      limit: ^fetch_n
+    )
+    |> reject_muted_hosts(viewer)
+    |> Vutuv.Posts.language_scope(Vutuv.Posts.feed_language_filter(viewer))
+    |> utc_at_or_before(cursor, :published_at)
   end
 
   @doc """
@@ -2891,7 +2918,7 @@ defmodule Vutuv.Fediverse do
 
   It feeds the **vutuv** tab, the reader's own reshares and everybody else's
   alike: pressing that button is something that happened here, whoever pressed
-  it (`Vutuv.Posts.feed_sources/2`).
+  it (`Vutuv.Posts.feed_sources/3`).
   """
   def feed_remote_reposts(viewer, fetch_n, cursor, opts \\ [])
 
@@ -3013,57 +3040,93 @@ defmodule Vutuv.Fediverse do
   """
   def feed_remote_boosts(viewer, fetch_n, cursor, opts \\ [])
 
-  def feed_remote_boosts(%User{id: viewer_id} = viewer, fetch_n, cursor, opts) do
+  def feed_remote_boosts(%User{} = viewer, fetch_n, cursor, opts) do
     if enabled?() do
-      # The author's own follow is consulted too, not only the booster's: a
-      # reader who muted an account out there muted *them*, and somebody else
-      # passing their post on is exactly the back door that would undo it.
-      muted_authors =
-        from(f in Follow,
-          where: f.user_id == ^viewer_id and f.muted == true,
-          select: f.remote_account_id
-        )
-
-      from(b in PostBoost,
-        join: a in RemoteAccount,
-        as: :remote_account,
-        on: a.id == b.remote_account_id,
-        join: f in Follow,
-        on: f.remote_account_id == a.id,
-        left_join: rp in RemotePost,
-        as: :language_source,
-        on: rp.id == b.remote_post_id,
-        # The boosted post's own author, for the muted-server check below: a
-        # switched-off instance must not come back in through somebody else's
-        # boost, the same back door the muted-author subquery closes.
-        left_join: author in RemoteAccount,
-        as: :boosted_author,
-        on: author.id == rp.remote_account_id,
-        where: f.user_id == ^viewer_id and f.muted == false and f.state == "accepted",
-        where: is_nil(rp.id) or rp.remote_account_id not in subquery(muted_authors),
-        order_by: [desc: b.announced_at, desc: b.id],
-        limit: ^fetch_n,
-        # A boosted vutuv post carries `denials` (the card's 🔒 marker reads
-        # them) and its author (`filter_visible_boosts/2`'s moderation check
-        # reads the struct instead of re-fetching the user per row); the rest
-        # a card needs is preloaded once for the whole page by `Vutuv.Posts`.
-        preload: [
-          remote_account: a,
-          remote_post: [:remote_account, :screenshot],
-          post: [:denials, :user]
-        ]
-      )
-      |> boosts_of_kind(opts[:only])
-      |> reject_muted_hosts(viewer)
-      |> reject_muted_boosted_hosts(viewer)
-      |> Vutuv.Posts.named_language_scope(Vutuv.Posts.feed_language_filter(viewer))
-      |> utc_at_or_before(cursor, :announced_at)
-      |> Repo.all()
-      |> Enum.map(&boost_entry/1)
-      |> filter_visible_boosts(viewer)
+      viewer
+      |> remote_boosts_query(fetch_n, cursor, opts)
+      |> remote_boost_rows(viewer, Keyword.get(opts, :shape, :entries))
     else
       []
     end
+  end
+
+  # Cheaper than a card, but not a two-column `SELECT` like the source above:
+  # whether a boost reaches this reader is settled *after* the query, out of the
+  # boosted post's own columns, so the marks shape still loads those and runs
+  # the same filter. What it drops is the card's own preloads.
+  # `FeedPage.mark/1` at the end is not tidiness — it lets the loaded structs be
+  # collected, and stops a counter quietly depending on fields the other shape
+  # happens to carry.
+  defp remote_boost_rows(query, viewer, :marks) do
+    query
+    |> visible_boost_entries(viewer)
+    |> Enum.map(&FeedPage.mark/1)
+  end
+
+  # What a *card* needs on top of what the visibility filter already reads: the
+  # booster, the boosted post's own author and screenshot, and the `denials`
+  # behind the vutuv card's 🔒 marker. The rest is preloaded once for the whole
+  # page by `Vutuv.Posts`.
+  defp remote_boost_rows(query, viewer, _entries) do
+    query
+    |> preload([remote_account: a],
+      remote_account: a,
+      remote_post: [:remote_account, :screenshot],
+      post: :denials
+    )
+    |> visible_boost_entries(viewer)
+  end
+
+  # What both shapes above select from: one definition of which boosts reach
+  # this viewer, before the in-memory visibility filter has its say.
+  #
+  # The two preloads here are the filter's own, not a card's: it reads the
+  # boosted vutuv post's author for the moderation check instead of re-fetching
+  # the user per row, and asks the boosted remote post's `audience` column
+  # whether it is still open.
+  defp remote_boosts_query(%User{id: viewer_id} = viewer, fetch_n, cursor, opts) do
+    # The author's own follow is consulted too, not only the booster's: a
+    # reader who muted an account out there muted *them*, and somebody else
+    # passing their post on is exactly the back door that would undo it.
+    muted_authors =
+      from(f in Follow,
+        where: f.user_id == ^viewer_id and f.muted == true,
+        select: f.remote_account_id
+      )
+
+    from(b in PostBoost,
+      join: a in RemoteAccount,
+      as: :remote_account,
+      on: a.id == b.remote_account_id,
+      join: f in Follow,
+      on: f.remote_account_id == a.id,
+      left_join: rp in RemotePost,
+      as: :language_source,
+      on: rp.id == b.remote_post_id,
+      # The boosted post's own author, for the muted-server check below: a
+      # switched-off instance must not come back in through somebody else's
+      # boost, the same back door the muted-author subquery closes.
+      left_join: author in RemoteAccount,
+      as: :boosted_author,
+      on: author.id == rp.remote_account_id,
+      where: f.user_id == ^viewer_id and f.muted == false and f.state == "accepted",
+      where: is_nil(rp.id) or rp.remote_account_id not in subquery(muted_authors),
+      order_by: [desc: b.announced_at, desc: b.id],
+      limit: ^fetch_n,
+      preload: [remote_post: rp, post: :user]
+    )
+    |> boosts_of_kind(opts[:only])
+    |> reject_muted_hosts(viewer)
+    |> reject_muted_boosted_hosts(viewer)
+    |> Vutuv.Posts.named_language_scope(Vutuv.Posts.feed_language_filter(viewer))
+    |> utc_at_or_before(cursor, :announced_at)
+  end
+
+  defp visible_boost_entries(query, viewer) do
+    query
+    |> Repo.all()
+    |> Enum.map(&boost_entry/1)
+    |> filter_visible_boosts(viewer)
   end
 
   # Which of the two things a boost can point at. `remote_post_id` is the one
@@ -3161,14 +3224,18 @@ defmodule Vutuv.Fediverse do
     end)
   end
 
+  # The two fields every shape of a cached remote post carries, minted in one
+  # place. The `"remote-"` prefix is not decoration: `Posts.feed_activity_by_day/4`
+  # dedupes on the whole string and `FeedPage.paginate/3` rejects a seen page by
+  # it, so a second author for it would change what the heatmap counts with
+  # nothing raising.
+  defp remote_post_mark(id, published_at),
+    do: %{id: "remote-#{id}", at: DateTime.to_naive(published_at)}
+
   defp remote_feed_entry(%RemotePost{} = post) do
-    %{
-      id: "remote-#{post.id}",
-      post: nil,
-      remote_post: post,
-      reposted_by: nil,
-      at: DateTime.to_naive(post.published_at)
-    }
+    post.id
+    |> remote_post_mark(post.published_at)
+    |> Map.merge(%{post: nil, remote_post: post, reposted_by: nil})
   end
 
   # The cursor for a source ordered by a `utc_datetime` column — a followed
