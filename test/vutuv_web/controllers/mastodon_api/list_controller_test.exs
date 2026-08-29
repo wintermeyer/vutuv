@@ -120,6 +120,40 @@ defmodule VutuvWeb.MastodonApi.ListControllerTest do
       assert ids == [older.id]
     end
 
+    # `min_id` asks for what is newer than the boundary and answers with the
+    # OLDEST of those, so a client can walk forward. `Keyset.take_page/2` is now
+    # the only place that rule lives, for this list and for the public timeline
+    # both — and a merged list is where losing it would hide: four entries, a
+    # limit of two, and taking the tail against taking the head give different
+    # pages. Without this, dropping the branch serves the newest page for ever
+    # while the whole suite stays green.
+    test "min_id over a merged list answers the oldest above the boundary", %{conn: conn} do
+      member = insert(:activated_user)
+      author = insert(:activated_user)
+
+      {:ok, oldest} = Posts.create_post(author, %{body: "Eins"})
+      remote = cached_post(remote_account())
+      {:ok, third} = Posts.create_post(author, %{body: "Drei"})
+      {:ok, newest} = Posts.create_post(author, %{body: "Vier"})
+
+      :ok = Posts.bookmark_post(member, oldest)
+      {:ok, :bookmarked} = Fediverse.bookmark_remote_post(member, remote)
+      :ok = Posts.bookmark_post(member, third)
+      :ok = Posts.bookmark_post(member, newest)
+
+      ids =
+        conn
+        |> mastodon_conn(mastodon_token(member, ["read"]))
+        |> get("/api/v1/bookmarks", %{"min_id" => oldest.id, "limit" => "2"})
+        |> json_response(200)
+        |> Enum.map(& &1["id"])
+
+      # Newest-first within the page, but the page itself is the two entries
+      # sitting just above the boundary — not the two newest of the four.
+      assert ids == [third.id, "remote-" <> remote.id]
+      refute newest.id in ids
+    end
+
     # The other half of the same strip: the `Link` header names the boundary by
     # comparing the ids on the page, and a prefixed id sorts by its prefix — so
     # the oldest entry on a mixed page is not the one a raw comparison picks,
