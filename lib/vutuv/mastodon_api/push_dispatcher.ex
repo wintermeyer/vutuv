@@ -17,10 +17,9 @@ defmodule Vutuv.MastodonApi.PushDispatcher do
 
   import Ecto.Query, only: [from: 2]
 
-  require Logger
-
   alias Vutuv.Accounts.User
   alias Vutuv.ApiAuth.Token
+  alias Vutuv.Languages
   alias Vutuv.MastodonApi.Notifications
   alias Vutuv.MastodonApi.PushSubscription
   alias Vutuv.MastodonApi.WebPush
@@ -74,20 +73,10 @@ defmodule Vutuv.MastodonApi.PushDispatcher do
     )
     |> Repo.all()
     |> Enum.filter(fn {subscription, _locale} -> wants?(subscription, type) end)
-    |> Enum.map(fn {subscription, locale} -> {subscription, locale(locale)} end)
+    |> Enum.map(fn {subscription, locale} -> {subscription, Languages.user_locale(locale)} end)
   end
 
   defp wants?(%PushSubscription{alerts: alerts}, type), do: Map.get(alerts, type, true) == true
-
-  # The member's own language, not a hardcoded "de": vutuv is installable by
-  # third parties, and a client uses this to pick which of its own strings to
-  # show beside the notification. A member who never chose falls back to the
-  # same "en" `VutuvWeb.Plugs.Locale` falls back to, so the push and the website
-  # cannot disagree about what language they think this person reads.
-  @fallback_locale "en"
-
-  defp locale(value) when is_binary(value) and value != "", do: value
-  defp locale(_no_choice), do: @fallback_locale
 
   defp deliver(subscription, type, notification, locale) do
     # No content: the payload says what kind of thing happened and which
@@ -101,17 +90,11 @@ defmodule Vutuv.MastodonApi.PushDispatcher do
       body: nil
     }
 
+    # `push/2` owns what happens to the answer — a subscription the service
+    # reports as dead is deleted there, which is the same promise this module
+    # used to keep by hand and the installed app's dispatcher kept beside it.
     Task.Supervisor.start_child(Vutuv.TaskSupervisor, fn ->
-      case WebPush.send(subscription, payload) do
-        :ok ->
-          :ok
-
-        {:error, :gone} ->
-          Repo.delete(subscription)
-
-        {:error, reason} ->
-          Logger.warning("web push failed: #{inspect(reason)}")
-      end
+      WebPush.push(subscription, payload)
     end)
   end
 end

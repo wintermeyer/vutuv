@@ -107,6 +107,27 @@ defmodule Vutuv.Languages do
     |> Keyword.get(:locales, ["en"])
   end
 
+  @doc """
+  The language to tell somebody else this member reads, or `"en"` for a member
+  who never chose.
+
+  Deliberately **not** clamped to `site_locales/0`, which is the difference
+  between naming a locale and rendering in one. `Vutuv.Notifications.Emailer`
+  has to render, so it refuses a locale we hold no translations for; a Web Push
+  payload only *names* the language, and the reader on the other end may have
+  strings we do not — a third-party Mastodon client with a French translation
+  should be told "fr" rather than "en" (`Vutuv.MastodonApi.PushDispatcher`),
+  and our own service worker falls back to its own table on a locale it was
+  given no line for (`Vutuv.WebPush.Dispatcher`).
+
+  vutuv is installable by third parties, so the fallback is the same `"en"`
+  `VutuvWeb.Plug.Locale` falls back to, never a hardcoded `"de"` — a push and
+  the website must not disagree about what language they think this person
+  reads.
+  """
+  def user_locale(locale) when is_binary(locale) and locale != "", do: locale
+  def user_locale(_no_choice), do: "en"
+
   @doc "Whether `code` is one of the curated languages."
   def known?(code) when is_binary(code), do: MapSet.member?(@code_set, code)
   def known?(_code), do: false

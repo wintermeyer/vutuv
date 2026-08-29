@@ -33,7 +33,7 @@ defmodule VutuvWeb.MastodonApi.PushStreamingTest do
 
   # Push on, with a pinned pair — what an operator who set the env vars has.
   defp pinned_keys do
-    keys = WebPush.generate_keys()
+    keys = Vutuv.WebPush.generate_keys()
     enable_push()
     with_vapid(vapid_public_key: keys.public_key, vapid_private_key: keys.private_key)
     keys
@@ -52,7 +52,7 @@ defmodule VutuvWeb.MastodonApi.PushStreamingTest do
 
   describe "VAPID keys" do
     test "generate_keys/0 produces a usable pair" do
-      %{public_key: public, private_key: private} = WebPush.generate_keys()
+      %{public_key: public, private_key: private} = Vutuv.WebPush.generate_keys()
 
       assert {:ok, decoded_public} = Base.url_decode64(public, padding: false)
       assert byte_size(decoded_public) == 65

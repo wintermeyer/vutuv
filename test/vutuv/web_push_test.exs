@@ -1,4 +1,4 @@
-defmodule Vutuv.MastodonApi.WebPushTest do
+defmodule Vutuv.WebPushTest do
   @moduledoc """
   The Web Push payload encryption, against the test vector in **RFC 8291 §5**.
 
@@ -21,7 +21,7 @@ defmodule Vutuv.MastodonApi.WebPushTest do
   """
   use ExUnit.Case, async: false
 
-  alias Vutuv.MastodonApi.WebPush
+  alias Vutuv.WebPush
 
   # RFC 8291 §5, verbatim.
   @plaintext "When I grow up, I want to be a watermelon"
@@ -114,6 +114,28 @@ defmodule Vutuv.MastodonApi.WebPushTest do
 
       refute WebPush.enabled?()
       refute WebPush.public_key()
+    end
+
+    # The reason this module was lifted out of the Mastodon adapter (issue
+    # #1729): a member's own installed app pushes through here without ever
+    # touching the phone-client API, so switching that adapter off must not
+    # silence their phone. `Vutuv.MastodonApi.WebPush` keeps the narrower gate
+    # for its own callers, which `push_streaming_test.exs` pins.
+    test "is unaffected by the phone-client adapter's own switch" do
+      Application.put_env(:vutuv, :web_push_enabled, true)
+      original = Application.fetch_env(:vutuv, :mastodon_api_enabled)
+      Application.put_env(:vutuv, :mastodon_api_enabled, false)
+
+      on_exit(fn ->
+        case original do
+          {:ok, was} -> Application.put_env(:vutuv, :mastodon_api_enabled, was)
+          :error -> Application.delete_env(:vutuv, :mastodon_api_enabled)
+        end
+      end)
+
+      assert WebPush.enabled?()
+      assert is_binary(WebPush.public_key())
+      refute Vutuv.MastodonApi.WebPush.enabled?()
     end
 
     test "an installation with push off refuses to send rather than trying" do
