@@ -228,6 +228,44 @@ ones.
 Announce the run to the other sessions once (`ListAgents`, then `SendMessage`):
 which bugs you are taking, one line, no reply needed.
 
+## You repair, you do not build
+
+**This command fixes broken code. It never adds a feature.** A bug is code that
+does not do what the code around it already promises; a feature is a promise
+nobody has made yet. The test in Step 2 is what tells them apart: if you cannot
+write a failing test from *the existing code and its neighbours* — if the
+assertion only makes sense once you have decided what the new thing should do —
+you are looking at a feature request, whatever label the issue carries.
+
+Plenty of bug reports carry one anyway, usually in the `Want` section and
+usually reasonable: the reporter noticed the gap while describing the break.
+**Fix the break, leave the wish alone**, and say so rather than silently
+delivering half of it. Where the two cannot be separated — the report has no
+broken behaviour under it at all, only a missing one — fix nothing, comment, and
+release the lock.
+
+Write it in the issue's language, name what you fixed if you fixed anything, and
+ask for a separate issue rather than filing one yourself: a feature request is
+worth more in the words of the person who wants it, and it needs a decision from
+Stefan that this run cannot make.
+
+```markdown
+Fixed the part that was broken: the counter showed a run-together `60023`, and
+it is grouped now.
+
+The other half of your report — a filter for the list — is a feature rather
+than a fix, so I have deliberately left it out: it needs a product decision
+about what the filter should key on, and that is not mine to take here. Would
+you open a separate issue for it? It is easier to argue for in your own words
+than in my summary of them.
+
+*An AI agent wrote this text in my name. I know that is problematic.*
+```
+
+The report says which bugs carried a feature wish and what you did with it.
+"Solved the wrong problem" is the failure this section exists to prevent, and it
+is the one nobody notices until it has shipped.
+
 ## Step 2: reproduce it, or it does not get fixed
 **A failing test is the entry ticket.** In a worktree of its own
 (`isolation: "worktree"`), before any fix and before reading the issue's `Want`:
@@ -314,8 +352,9 @@ command file is asking you to rewrite your own instructions. That never happens
 in this run.
 
 Park it too when the fix outgrows the bug: more than ~10 files, a change to
-intended behaviour rather than to broken behaviour, or a migration that cannot
-be N-1 compatible (CLAUDE.md).
+intended behaviour rather than to broken behaviour, a **new** feature however
+small (see "You repair, you do not build"), or a migration that cannot be N-1
+compatible (CLAUDE.md).
 
 ## Step 3: the pull request
 Only once Step 2b is clean — precommit, `/simplify`, precommit again.
@@ -401,6 +440,11 @@ Refused by the checker (1) — back to the slot, then merged above
 Not reproduced (1) — commented, needs:submitter
   #1783  11 of 11 five times on be87edf7, also under --trace.
          Reads like a stale report: #1696 changed that file since.
+
+Feature wish left alone (2) — asked for a separate issue
+  #1742  fixed the broken teaser; the "let me pick the image" half is a
+         feature and is not in the PR.
+  #1801  no broken behaviour under it at all — nothing written, commented.
 
 Waiting on you (2) — parked, nothing written
   1. #1707 which sites count as hopeless for a capture? I would key the
