@@ -134,6 +134,9 @@ defmodule Vutuv.Fediverse do
   # well-known collection URI whose spelling the audience readers depend on.
   @followers_suffix "/followers"
 
+  # One topic for every picture leaving the AI gate; see `remote_images_topic/0`.
+  @remote_images_topic "fediverse:remote_images"
+
   @doc "The installation-wide switch (FEDIVERSE_ENABLED; off = no endpoints, no deliveries)."
   def enabled?, do: Application.get_env(:vutuv, :fediverse_enabled, true)
 
@@ -3190,6 +3193,75 @@ defmodule Vutuv.Fediverse do
     |> Repo.all()
     |> Enum.group_by(& &1.remote_post_id)
   end
+
+  @doc """
+  Every picture recorded for one cached post, in the author's order.
+
+  The singular of `list_remote_images/1`, and the same deliberate lack of a
+  filter: a row here is not a permission (see above). It exists because six
+  surfaces draw these pictures and each of them re-reads one post's set when a
+  verdict lands, which was `Map.get(list_remote_images([id]), id, [])` written
+  out four times.
+  """
+  def remote_images(remote_post_id) when is_binary(remote_post_id),
+    do: [remote_post_id] |> list_remote_images() |> Map.get(remote_post_id, [])
+
+  @doc """
+  The topic every open page listens on for a picture leaving the AI gate
+  (issue #1801).
+
+  **One** topic rather than one per waiting post, the arrangement
+  `counts_topic/0` makes and for the same reason: a verdict is rare (a few an
+  hour on a busy installation, against a counts refresh every couple of
+  minutes), and each listener keeps only the cards it is showing. The
+  alternative — subscribing per picture that happens to be waiting — makes
+  every one of those six surfaces walk its own entries at mount and again on
+  every page append, which is a great deal of bookkeeping for an event this
+  quiet.
+  """
+  def remote_images_topic, do: @remote_images_topic
+
+  @doc "Listen for pictures leaving the AI gate. See `remote_images_topic/0`."
+  def subscribe_remote_images, do: Phoenix.PubSub.subscribe(Vutuv.PubSub, @remote_images_topic)
+
+  @doc """
+  Tells every open page that one of a cached post's pictures has left the AI
+  gate (issue #1801).
+
+  **Both verdicts**, because both change the row a card was drawn from: an
+  approval swaps the picture in for the waiting tile, a rejection clears the
+  file. What the tile then *says* about a rejected picture is a separate
+  question and still the wrong answer — it goes on claiming a check is running
+  for a picture that will never arrive.
+
+  Until this existed the verdict was a database flip and nothing else. Every
+  other image kind announces itself through
+  `Vutuv.Activity.broadcast(scan.owner_user_id, …)`, and a picture we fetched
+  has no owner here, so a card kept whatever it was first drawn with. That is
+  not a corner case: a delivery records the picture and nudges the open feeds
+  in the same breath, a second before the bytes land, so the *first* draw of a
+  boosted photo post is the wordless "picture is being checked" tile — and
+  without this it was also the last.
+
+  **A remote account's avatar is deliberately not announced**, though it is the
+  other ownerless scan kind and goes just as quiet: an avatar the gate has not
+  cleared renders as the account's initials, which is a whole placeholder
+  rather than a promise, so nobody is left waiting on it. If that changes, this
+  is the topic it joins.
+
+  `nil` is a no-op, the way every notification chokepoint here takes a missing
+  recipient: the retention sweep can take the post while the model is still
+  looking at its picture.
+  """
+  def broadcast_remote_images_settled(remote_post_id) when is_binary(remote_post_id) do
+    Phoenix.PubSub.broadcast(
+      Vutuv.PubSub,
+      @remote_images_topic,
+      {:remote_images_settled, %{remote_post_id: remote_post_id}}
+    )
+  end
+
+  def broadcast_remote_images_settled(_remote_post_id), do: :ok
 
   @doc """
   The **cached reply** each of `post_ids` answers, keyed by post id (issue

@@ -32,10 +32,17 @@ defmodule VutuvWeb.OrganizationLive.Feed do
   import VutuvWeb.OrganizationComponents, only: [manage_header: 1]
   import VutuvWeb.PostComponents, only: [post_card: 1, remote_post_card: 1]
 
+  alias Vutuv.Fediverse
   alias Vutuv.Organizations
   alias Vutuv.Posts
   alias VutuvWeb.Live.InitAssigns
+  alias VutuvWeb.Live.RemoteImages
   alias VutuvWeb.Live.RemotePostActions
+
+  # A picture on a card from another network appears the moment the AI gate
+  # releases it (issue #1801). This page holds its entries in a plain assign,
+  # so the redraw below is a re-assign rather than a stream write.
+  on_mount(VutuvWeb.Live.RemoteImages)
 
   @impl true
   def mount(_params, session, socket) do
@@ -99,7 +106,25 @@ defmodule VutuvWeb.OrganizationLive.Feed do
   end
 
   @impl true
+  def handle_info({:remote_images_settled, %{remote_post_id: id}}, socket) do
+    {:noreply, restate_remote_images(socket, id)}
+  end
+
   def handle_info(_message, socket), do: {:noreply, socket}
+
+  # Every open page hears every verdict, so the cheap "is it even on this page"
+  # question comes before the read.
+  defp restate_remote_images(socket, remote_post_id) do
+    if Enum.any?(socket.assigns.entries, &RemoteImages.draws?(&1, remote_post_id)) do
+      images = Fediverse.remote_images(remote_post_id)
+
+      update(socket, :entries, fn entries ->
+        Enum.map(entries, &RemoteImages.restate_entry(&1, remote_post_id, images))
+      end)
+    else
+      socket
+    end
+  end
 
   @impl true
   def render(assigns) do

@@ -1687,6 +1687,41 @@ renders as a neutral waiting tile with the same hourglass a member's own held
 post wears, because a photo post with its picture silently absent is not a quiet
 card, it is a broken one.
 
+**The verdict is announced, and it has to be** (issue #1801). Every other image
+kind reports itself through `Vutuv.Activity.broadcast(scan.owner_user_id, …)`,
+and these two are the ownerless ones, so for a while nothing was sent at all:
+`ImageSubjects.apply_approved/1` flipped a column and stopped, and a card
+already on screen kept its waiting tile until the reader pressed reload. That is
+the *ordinary* path, not an edge: `record_remote_post/2` records the picture and
+nudges the open feeds in the same breath, a second before the download finishes,
+so the first draw of a boosted photo post is the wordless tile — and it was also
+the last. Measured on production, a picture was approved 88 seconds before the
+screenshot that reported the bug.
+
+So both verdicts broadcast `{:remote_images_settled, %{remote_post_id: id}}` on
+`Fediverse.remote_images_topic/0` — **one** topic, the arrangement
+`counts_topic/0` makes and for the same reason: a verdict is rare, and each
+listener keeps only the cards it is showing. The alternative, a topic per
+waiting picture, would make every listening page walk its own entries at mount
+and again on each append, which is a great deal of bookkeeping for an event this
+quiet. A verdict that lost its race announces nothing, having changed no row.
+
+Listening is `VutuvWeb.Live.RemoteImages`, an `on_mount` hook, because the
+waiting tile prints its promise from **one shared component on six pages** (the
+feed, the post's own page, the account page, the URL lookup, a tag timeline and
+an organization's feed) and a guarantee made in one place must not depend on six
+hosts each remembering a subscription. It has two modes, since the pictures are
+held in two shapes: `:assigns` owns a page whose pictures are one `@images`
+assign end to end (no handler at all), and the default mode only subscribes, for
+a timeline whose cards are in a stream and whose redraw only it can write.
+
+**A remote account's avatar is deliberately left out**, though it is the other
+ownerless kind and just as silent: an unreleased avatar renders as the account's
+initials, a whole placeholder rather than a promise, so nobody is left waiting on
+it. `Fediverse.refresh_remote_account/1` does flip an approved avatar back to
+`pending` on an actor `Update`, so an open page can lose a face until the next
+load; if that is worth fixing, this is the topic it joins.
+
 Deletion is the part that is easy to get wrong: rows cascade, **files do not**.
 Every single-post delete therefore goes through one chokepoint
 (`delete_cached_post/1`) and every bulk sweep through `wipe_media/1` /

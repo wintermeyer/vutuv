@@ -52,6 +52,11 @@ defmodule VutuvWeb.FediversePostLive do
   # while this page is open (issue #1283). One line, no handler.
   on_mount(VutuvWeb.Live.RemoteCounts)
 
+  # And its pictures appear the moment the AI gate releases them (issue #1801).
+  # This page is the one a reader opens *because* of the picture, so a tile that
+  # waits for a reload is the plainest form of the broken promise it prints.
+  on_mount({VutuvWeb.Live.RemoteImages, :assigns})
+
   @impl true
   def mount(%{"id" => id}, _session, socket) do
     viewer = socket.assigns.current_user
@@ -75,7 +80,7 @@ defmodule VutuvWeb.FediversePostLive do
       gettext("A post by %{name} (another network)", name: RemoteAccount.label(account))
     )
     |> assign(:remote_post, post)
-    |> assign(:images, Map.get(Fediverse.list_remote_images([post.id]), post.id, []))
+    |> assign(:images, Fediverse.remote_images(post.id))
     # Whether the ⋯ menu offers Mute and Unfollow at all. This page is reachable
     # for a public post whose author the reader does not follow (it is cached
     # because somebody else does), and acting on a follow that does not exist is
