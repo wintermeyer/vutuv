@@ -1155,6 +1155,20 @@ now, with the page's own gates in front of it: the page must federate, the post
 must not be held by moderation, and a page that switched federation off gets the
 same `410`/`404` refusal its actor endpoint gives.
 
+**Every other page of the `:browser` pipeline answers that header with 406.**
+The accept list exists for the four URLs above; on the rest of the site the
+format simply survived negotiation, and a page whose HTML is a LiveView has no
+template for it, so `Phoenix.LiveView.Static` handed `Plug.Conn.resp/3` a
+`{:safe, iodata}` body and `/feed`, `/organizations`, `/search`,
+`/notifications` — all of them — answered **500** (issue #1776). The refusal is
+`VutuvWeb.Plug.HtmlOnly`, asked once per page *shape* rather than once per page:
+routed LiveViews pipe it as the router's `:html_only` pipeline, the controllers
+that `live_render` their page get it inside
+`VutuvWeb.ControllerHelpers.render_live/3`. Both give exactly the 406
+`application/ld+json` has always got, which is not on the accept list at all.
+A URL that already named an agent document is exempt, so `/jobs.md` keeps
+answering Markdown whatever `Accept` rode along with it.
+
 ## Mentions on the way out
 
 A member writes `@ada`, and on the server this post lands on that names *their*

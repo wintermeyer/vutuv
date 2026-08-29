@@ -53,6 +53,16 @@ defmodule VutuvWeb.Router do
     plug(Plugs.NoIndex)
   end
 
+  # Routed LiveViews (the two `live_session` blocks below). A LiveView has one
+  # representation, so the `activity+json` the pipeline above admits for the
+  # ActivityPub URLs is refused here rather than 500ing on a page that never
+  # served it — see `VutuvWeb.Plug.HtmlOnly` for why the accept list cannot
+  # simply drop it, and `VutuvWeb.ControllerHelpers.render_live/3` for the
+  # controller-embedded half.
+  pipeline :html_only do
+    plug(Plugs.HtmlOnly)
+  end
+
   # The machine-facing documents (robots.txt, llms.txt, the sitemaps, the RSS
   # feeds, the .well-known files, the ActivityPub endpoints) run without the
   # :browser pipeline on purpose, so `accepts ["html"]` cannot turn away a
@@ -1036,7 +1046,7 @@ defmodule VutuvWeb.Router do
     on_mount: [{VutuvWeb.Live.InitAssigns, :default}],
     root_layout: {VutuvWeb.LayoutHTML, :root} do
     scope "/", VutuvWeb do
-      pipe_through(:browser)
+      pipe_through([:browser, :html_only])
 
       live("/notifications", NotificationLive.Index, :index)
 
@@ -1113,7 +1123,7 @@ defmodule VutuvWeb.Router do
     # dead UserTagController keeps only manage + delete (and the public
     # index/show/endorsers).
     scope "/settings", VutuvWeb do
-      pipe_through([:browser, :settings_pipe])
+      pipe_through([:browser, :settings_pipe, :html_only])
 
       live("/tags/new", TagNewLive, :new)
 
@@ -1288,7 +1298,7 @@ defmodule VutuvWeb.Router do
     ],
     root_layout: {VutuvWeb.LayoutHTML, :root} do
     scope "/admin", VutuvWeb.Admin, as: :admin do
-      pipe_through([:browser, :admin])
+      pipe_through([:browser, :admin, :html_only])
 
       # The member browser: a live, filterable, searchable, sortable list of
       # every account (default: PIN-registered, newest first).

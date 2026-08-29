@@ -84,6 +84,63 @@ defmodule VutuvWeb.HttpStatusContractTest do
     end
   end
 
+  describe "an Accept header no page can answer" do
+    # `application/activity+json` rides the :browser pipeline's accepts list so
+    # ActivityPub requests reach the profile and permalink controllers. Every
+    # other page of that pipeline has no such representation, and a page whose
+    # HTML is a LiveView used to answer one with a 500: no template for the
+    # format, and `{:safe, iodata}` handed to `Plug.Conn.resp/3`. The honest
+    # answer is the one `application/ld+json` has always given — 406.
+    test "a LiveView page answers 406, exactly like it does for ld+json", %{conn: conn} do
+      {conn, _user} = create_and_login_user(conn)
+
+      # Both shapes: a controller that `live_render`s its page (/feed,
+      # /organizations) and a routed LiveView (/notifications, /search,
+      # /settings/tags/new).
+      for path <- ["/feed", "/organizations", "/notifications", "/search", "/settings/tags/new"],
+          type <- ["application/activity+json", "application/ld+json"] do
+        conn = conn |> recycle() |> put_req_header("accept", type)
+
+        assert_error_sent(406, fn -> get(conn, path) end)
+      end
+    end
+
+    # The URL extension decides, not whatever header rode along with it: a
+    # `.md` sibling is answered from `AgentDocs` by its controller and never
+    # renders the LiveView, so the refusal must not reach it.
+    test "an agent document is still served by its extension", %{conn: conn} do
+      conn =
+        conn
+        |> put_req_header("accept", "application/activity+json")
+        |> get("/jobs.md")
+
+      assert conn.status == 200
+      assert List.first(get_resp_header(conn, "content-type")) =~ "text/markdown"
+    end
+
+    # Every routed LiveView, not a hand-picked five: the refusal is wired per
+    # scope (`pipe_through`), so the next `live_session` scope that forgets
+    # `:html_only` has to fail here rather than in production.
+    test "no routed LiveView answers one with a 500", %{conn: conn} do
+      {conn, _admin} = create_and_login_admin(conn)
+
+      paths =
+        for route <- VutuvWeb.Router.__routes__(),
+            route.plug == Phoenix.LiveView.Plug,
+            not String.contains?(route.path, ":"),
+            do: route.path
+
+      # Sanity: the sweep is only worth anything if it found the live routes.
+      assert length(paths) > 20
+
+      for path <- paths do
+        conn = conn |> recycle() |> put_req_header("accept", "application/activity+json")
+
+        assert_error_sent(406, fn -> get(conn, path) end)
+      end
+    end
+  end
+
   describe "rate limits" do
     test "the login email step answers 429 over the limit", %{conn: conn} do
       previous = Application.get_env(:vutuv, :rate_limit)
