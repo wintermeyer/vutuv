@@ -594,10 +594,23 @@ defmodule Vutuv.References.ChecksTest do
 
       check = Checks.latest_for(reference)
 
-      # Bracketed between two clock reads: a one-sided bound flakes whenever the
-      # wall clock crosses a second inside the call.
-      assert DateTime.diff(check.next_attempt_at, before) <= 300
-      assert DateTime.diff(check.next_attempt_at, later) >= 299
+      # Bracketed between two clock reads, and the DIRECTION of each half is the
+      # whole point. `next_attempt_at` is `read + 300` for some read taken
+      # inside the call, so `before <= read <= later` gives exactly:
+      #
+      #   next_attempt_at - before >= 300   (read is at or after `before`)
+      #   next_attempt_at - later  <= 300   (read is at or before `later`)
+      #
+      # Both halves used to be the other way round, which inverted the claim
+      # into something the clock can break: `- before <= 300` is false the
+      # moment a second ticks between `before` and the read, and that is a coin
+      # flip on a loaded machine. It failed with `left: 301, right: 300`. The
+      # `>= 299` beside it was slack papering over the same inversion.
+      #
+      # As written now both are deterministic AND the stronger claim — the wait
+      # IS 300 seconds, not merely at most it.
+      assert DateTime.diff(check.next_attempt_at, before) >= 300
+      assert DateTime.diff(check.next_attempt_at, later) <= 300
     end
 
     test "an analysis error counts an attempt", %{reference: reference} do
