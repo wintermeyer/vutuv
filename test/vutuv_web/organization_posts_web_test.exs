@@ -4,6 +4,13 @@ defmodule VutuvWeb.OrganizationPostsWebTest do
   the composer on the organization page, the post rendering under the
   organization's own name, and the permalink's scoping. `async: false` because
   the organization helpers flip the global `:verify_organization_domains` flag.
+
+  The composer here is the feed's own `VutuvWeb.PostLive.Composer`, so what
+  these tests really assert is that writing in a page's name is not a poorer
+  kind of writing: the same tags and the same photos reach the post. They drive
+  it through the rendered form rather than calling
+  `Posts.create_organization_post/3`, because the form was the thing that was
+  missing.
   """
   use VutuvWeb.ConnCase, async: false
 
@@ -12,11 +19,25 @@ defmodule VutuvWeb.OrganizationPostsWebTest do
 
   alias Vutuv.Organizations
   alias Vutuv.Posts
+  alias Vutuv.Repo
 
   setup do
     Application.put_env(:vutuv, :verify_organization_domains, true)
 
+    # An attached photo is a real upload, and outside production the storage
+    # prefix is empty — the uploader would otherwise write into the checkout.
+    tmp = Path.join(System.tmp_dir!(), "vutuv_org_posts_#{System.unique_integer([:positive])}")
+    File.mkdir_p!(tmp)
+    previous_prefix = Application.get_env(:vutuv, :uploads_dir_prefix)
+    Application.put_env(:vutuv, :uploads_dir_prefix, tmp)
+
     on_exit(fn ->
+      File.rm_rf(tmp)
+
+      if previous_prefix,
+        do: Application.put_env(:vutuv, :uploads_dir_prefix, previous_prefix),
+        else: Application.delete_env(:vutuv, :uploads_dir_prefix)
+
       Application.put_env(:vutuv, :verify_organization_domains, false)
       Application.delete_env(:vutuv, :organizations_dns_resolver)
     end)
@@ -24,19 +45,28 @@ defmodule VutuvWeb.OrganizationPostsWebTest do
     :ok
   end
 
+  defp publisher_of_a_page(conn) do
+    {conn, owner} = create_and_login_user(conn)
+    organization = active_organization_for(owner)
+    {:ok, _} = Organizations.add_role(organization, owner, "publisher", owner)
+
+    {conn, owner, organization}
+  end
+
   describe "the composer on the organization page" do
     test "a publisher writes as the organization and the post appears under its name",
          %{conn: conn} do
-      {conn, owner} = create_and_login_user(conn)
-      organization = active_organization_for(owner)
-      {:ok, _} = Organizations.add_role(organization, owner, "publisher", owner)
-
+      {conn, owner, organization} = publisher_of_a_page(conn)
       {:ok, view, _html} = live(conn, ~p"/organizations/#{organization.slug}")
 
-      html =
-        view
-        |> element("#organization-post-form")
-        |> render_submit(%{"body" => "Wir stellen ein."})
+      view
+      |> form("#organization-composer-form", %{"post" => %{"body" => "Wir stellen ein."}})
+      |> render_submit()
+
+      # The card arrives on the composer's `{:composer_published, …}`, which is a
+      # message to the LiveView rather than part of the submit's own reply — so
+      # read the page after it, not the submit's return value.
+      html = render(view)
 
       # The post is signed by the organization, never by the member who wrote it.
       assert html =~ "Wir stellen ein."
@@ -47,13 +77,79 @@ defmodule VutuvWeb.OrganizationPostsWebTest do
       assert post.acting_user_id == owner.id
     end
 
+    test "the tags typed beside the text reach the post", %{conn: conn} do
+      {conn, owner, organization} = publisher_of_a_page(conn)
+      {:ok, view, _html} = live(conn, ~p"/organizations/#{organization.slug}")
+
+      view
+      |> form("#organization-composer-form", %{
+        "post" => %{"body" => "Wir suchen Verstärkung.", "tags" => "Elixir, Hamburg"}
+      })
+      |> render_submit()
+
+      [post] = Posts.organization_posts_page(organization, owner).entries
+      names = post |> Repo.preload(:tags) |> Map.fetch!(:tags) |> Enum.map(& &1.name)
+      assert "Elixir" in names
+      assert "Hamburg" in names
+
+      # And the card the page prepends carries them, which is also what drains
+      # the `{:composer_published, …}` before the test's sandbox owner exits.
+      html = render(view)
+      assert html =~ "Elixir"
+      assert html =~ "Hamburg"
+    end
+
+    test "a photo picked in the composer is attached to the page's post", %{conn: conn} do
+      {conn, owner, organization} = publisher_of_a_page(conn)
+      {:ok, view, _html} = live(conn, ~p"/organizations/#{organization.slug}")
+
+      {:ok, image} = Image.new(60, 40, color: [30, 90, 160])
+      {:ok, content} = Image.write(image, :memory, suffix: ".jpg")
+
+      view
+      |> file_input("#organization-composer-form", :images, [
+        %{name: "haus.jpg", content: content, type: "image/jpeg", size: byte_size(content)}
+      ])
+      |> render_upload("haus.jpg")
+
+      view
+      |> form("#organization-composer-form", %{"post" => %{"body" => "Unser neues Haus."}})
+      |> render_submit()
+
+      [post] = Posts.organization_posts_page(organization, owner).entries
+      assert [attached] = post |> Repo.preload(:images) |> Map.fetch!(:images)
+      # The uploader is the member; the post is the page's.
+      assert attached.user_id == owner.id
+      assert post.organization_id == organization.id
+
+      # Drains the `{:composer_published, …}` before the sandbox owner exits, and
+      # proves the prepended card rendered. Not asserted on the photo itself:
+      # a freshly attached image is still `images_pending?` while the moderation
+      # scan runs, so what the card shows at this instant is the placecard.
+      assert render(view) =~ "Unser neues Haus."
+    end
+
+    test "it never opens holding the member's own unfinished feed post", %{conn: conn} do
+      {conn, owner, organization} = publisher_of_a_page(conn)
+
+      # A draft is keyed by author plus context and an organization is not a
+      # context, so a page composer that kept drafts would read this row — and
+      # offer to publish a private half-thought in the page's name.
+      :ok = Posts.save_draft(owner, nil, %{"body" => "Halbfertiger eigener Gedanke."})
+
+      {:ok, _view, html} = live(conn, ~p"/organizations/#{organization.slug}")
+
+      refute html =~ "Halbfertiger eigener Gedanke."
+      assert Posts.get_draft(owner)
+    end
+
     test "an owner without the publisher role gets no composer", %{conn: conn} do
       {conn, owner} = create_and_login_user(conn)
       organization = active_organization_for(owner)
 
       {:ok, _view, html} = live(conn, ~p"/organizations/#{organization.slug}")
 
-      refute html =~ "organization-post-form"
+      refute html =~ "organization-composer"
     end
 
     test "a visitor sees the published post but no composer", %{conn: conn} do
@@ -65,7 +161,7 @@ defmodule VutuvWeb.OrganizationPostsWebTest do
       {:ok, _view, html} = live(conn, ~p"/organizations/#{organization.slug}")
 
       assert html =~ "Öffentlich."
-      refute html =~ "organization-post-form"
+      refute html =~ "organization-composer"
     end
   end
 

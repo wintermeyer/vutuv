@@ -18,7 +18,7 @@ defmodule VutuvWeb.OrganizationLive.Show do
   import VutuvWeb.VerificationComponents, only: [check_report: 1]
   import VutuvWeb.FediverseComponents, only: [follow_us_from_elsewhere: 1]
   import VutuvWeb.JobComponents, only: [job_card: 1]
-  import VutuvWeb.PostComponents, only: [post_card: 1]
+  import VutuvWeb.PostComponents, only: [post_card: 1, post_list: 1, post_row_class: 0]
 
   alias Vutuv.Countries
   alias Vutuv.Fediverse
@@ -47,7 +47,6 @@ defmodule VutuvWeb.OrganizationLive.Show do
       |> assign_organization(organization, current_user)
       |> assign_people(organization)
       |> assign_org_jobs(organization)
-      |> assign(:post_body, "")
       # What the last domain check saw (issue #1466). A socket assign rather
       # than a flash: it is the answer to a question the member just asked and
       # it has to survive on the page, where a toast auto-dismisses and a repeat
@@ -285,33 +284,6 @@ defmodule VutuvWeb.OrganizationLive.Show do
     end
   end
 
-  def handle_event("publish", %{"body" => body}, socket) do
-    organization = socket.assigns.organization
-
-    # The role is re-checked by `create_organization_post/3` itself, so a
-    # withdrawn publisher cannot post through a page they still have open.
-    case Posts.create_organization_post(organization, socket.assigns.current_user, %{body: body}) do
-      {:ok, _post} ->
-        {:noreply,
-         socket
-         |> assign(:post_body, "")
-         |> assign_org_posts(organization)
-         |> put_flash(:info, gettext("Published as %{name}.", name: organization.name))}
-
-      {:error, :forbidden} ->
-        {:noreply,
-         socket
-         |> assign(:publisher?, false)
-         |> put_flash(:error, gettext("You may no longer write in this organization's name."))}
-
-      {:error, _changeset} ->
-        {:noreply,
-         socket
-         |> assign(:post_body, body)
-         |> put_flash(:error, gettext("That post could not be published."))}
-    end
-  end
-
   def handle_event("load-more-posts", _params, socket) do
     page =
       Posts.organization_posts_page(socket.assigns.organization, socket.assigns.current_user,
@@ -432,6 +404,35 @@ defmodule VutuvWeb.OrganizationLive.Show do
      |> assign(:check_report, nil)
      |> assign_organization(organization, socket.assigns.current_user)
      |> put_flash(:info, gettext("Your organization page is verified and now live."))}
+  end
+
+  # The embedded composer published in this page's name. Nothing else would say
+  # so: a page's post is broadcast to nobody, because a page cannot be followed
+  # yet (`Vutuv.Posts.broadcast_new_post/1`), so this message is what puts the
+  # fresh post on the page it was written on.
+  #
+  # Prepended rather than re-reading the first page. The post arrives carrying
+  # the same `post_preloads/0` the list query gives its rows, so it is ready for
+  # a card as it stands, and `assign_org_posts/2` would spend a count, a list
+  # query and ~20 preloads to fetch back what is already in hand — and collapse
+  # a publisher who had pressed "Load more" to page one. The offset moves with
+  # the list so the next "Load more" does not hand back the row above it.
+  #
+  # No flash: this page is embedded with `live_render` and the flash container
+  # lives in the controller's layout, so a `put_flash/3` here renders nowhere.
+  # The post arriving at the head of the list is the confirmation anyway.
+  def handle_info({:composer_published, post}, socket) do
+    viewer = socket.assigns.current_user
+
+    {:noreply,
+     socket
+     |> assign(:posts, [post | socket.assigns.posts])
+     |> assign(
+       :posts_engagement,
+       Map.merge(socket.assigns.posts_engagement, engagement_map([post], viewer))
+     )
+     |> update(:posts_total, &(&1 + 1))
+     |> update(:posts_offset, &(&1 + 1))}
   end
 
   def handle_info(_message, socket), do: {:noreply, socket}
@@ -765,34 +766,27 @@ defmodule VutuvWeb.OrganizationLive.Show do
               {gettext("Write as %{name} for now", name: @organization.name)}
             </.link>
 
-            <%!-- The composer names the author right at the point of publishing,
-            in the button, because the characteristic failure of writing under a
-            brand is forgetting whose name is on it. --%>
-            <.form
-              :if={@publisher?}
-              for={%{}}
-              id="organization-post-form"
-              phx-submit="publish"
-              class="mt-3 space-y-3"
-            >
-              <textarea
-                name="body"
-                rows="3"
-                placeholder={gettext("Write something as %{name}", name: @organization.name)}
-                class={[input_class(), "resize-y"]}
-              >{@post_body}</textarea>
-              <div class="flex justify-end">
-                <button
-                  type="submit"
-                  class="rounded-lg bg-brand-600 px-4 py-2 text-sm font-semibold text-white hover:bg-brand-700"
-                >
-                  {gettext("Post as %{name}", name: @organization.name)}
-                </button>
-              </div>
-            </.form>
+            <%!-- The very composer the feed writes with, so a post in a page's
+            name gets what a member's post gets: Markdown with its editor,
+            photos with their captions and crops, tags, the language chip. The
+            plain textarea that stood here could do none of it. It names the
+            author in the button, because the characteristic failure of writing
+            under a brand is forgetting whose name is on it, and it renders bare
+            (`host={:organization}`) because this card is already a card. --%>
+            <div :if={@publisher?} class="mt-3">
+              <.live_component
+                module={VutuvWeb.PostLive.Composer}
+                id="organization-composer"
+                host={:organization}
+                surface={:flat}
+                current_user={@current_user}
+                acting_as={@organization}
+                post={nil}
+              />
+            </div>
 
-            <div :if={@posts != []} class="mt-4 divide-y divide-slate-100 dark:divide-slate-800">
-              <div :for={post <- @posts} class="py-4 first:pt-0 last:pb-0">
+            <.post_list :if={@posts != []} card={false} class="mt-4">
+              <div :for={post <- @posts} class={post_row_class()}>
                 <.post_card
                   post={post}
                   engagement={@posts_engagement[post.id]}
@@ -802,7 +796,7 @@ defmodule VutuvWeb.OrganizationLive.Show do
                   surface={:flat}
                 />
               </div>
-            </div>
+            </.post_list>
 
             <p :if={@posts == [] and @publisher?} class="mt-3 text-sm text-slate-600 dark:text-slate-400">
               {gettext("Nothing published yet.")}

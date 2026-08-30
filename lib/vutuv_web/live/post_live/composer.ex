@@ -50,6 +50,19 @@ defmodule VutuvWeb.PostLive.Composer do
   `post[image_ids][]` inputs; a re-mounted composer re-adopts the recovered,
   still-pending rows in `validate` (`Posts.pending_images/2`) — the photo
   half of issue #1130, whose text half form recovery already covered.
+
+  **The host says who it is.** `host` (`:feed`, `:organization`, `:page`)
+  decides the two things a composer cannot read off its own assigns — the
+  feed's ✕ and its draft — because the feed's new-post composer and the
+  organization page's are the same shape: no post, no parent, nothing remote.
+  `surface` is the ordinary kit knob (`:card` or `:flat`, as on `post_card/1`),
+  for a host that already owns the card around it. Neither is declared with
+  `attr/3`: Phoenix validates those for function components, not for a
+  `<.live_component>` (checked, with a deliberate typo, against this version),
+  so a declaration here would read as a guard while catching nothing. Both
+  predicates below therefore test for the value they want rather than against
+  the one they don't, and an unknown host lands on the cautious side — no
+  draft, no ✕.
   """
 
   use VutuvWeb, :live_component
@@ -93,14 +106,23 @@ defmodule VutuvWeb.PostLive.Composer do
           :remote_note,
           :remote_post,
           :initial_body,
-          :preloaded_draft
+          :preloaded_draft,
+          :host,
+          :surface
         ])
       )
 
-    # Only the feed passes `acting_as`; every other host (edit, reply, the
-    # answer to a remote post) composes personally, so the key has to exist
-    # either way or the template raises on a missing assign.
-    socket = Phoenix.Component.assign_new(socket, :acting_as, fn -> nil end)
+    # The feed passes `acting_as` when the member has switched into an
+    # organization for the session, and the organization page always does; the
+    # edit, reply and remote-answer pages compose personally, so the key has to
+    # exist either way or the template raises on a missing assign. The same for
+    # the two host knobs: only the feed and the organization page name
+    # themselves, and only the latter is hosted inside somebody else's card.
+    socket =
+      socket
+      |> Phoenix.Component.assign_new(:acting_as, fn -> nil end)
+      |> Phoenix.Component.assign_new(:host, fn -> :page end)
+      |> Phoenix.Component.assign_new(:surface, fn -> :card end)
 
     socket =
       if socket.assigns[:composer_ready?] do
@@ -218,7 +240,19 @@ defmodule VutuvWeb.PostLive.Composer do
   # The edit page is deliberately draft-free: its composer opens full of a
   # *published* post, and silently restoring a weeks-old unsaved edit over text
   # other people have already read is a different promise from keeping a draft.
-  defp draftable?(assigns), do: assigns[:post] == nil and assigns[:remote_post] == nil
+  #
+  # So is the organization page's, and for a sharper reason: a draft is keyed by
+  # author plus context (`Posts.draft_key/1`) and an organization is not a
+  # context, so that composer would share the row the feed's writes — a member
+  # would open their page and find half a personal post restored under the
+  # organization's name, one button press from publishing it there. Adding the
+  # context is an expand/contract pair of deploys (the 42P10 note on
+  # `Posts.draft_key/1`), not something to smuggle in here.
+  #
+  # Listed rather than excluded, so a fourth host has to answer this question
+  # instead of inheriting an answer.
+  defp draftable?(assigns),
+    do: assigns.host in [:feed, :page] and assigns[:post] == nil and assigns[:remote_post] == nil
 
   # Which composer this is, in the terms `Vutuv.Posts` keys drafts by. The
   # answer-to-a-followed-post composer (issue #1165) is deliberately absent: it
@@ -939,19 +973,15 @@ defmodule VutuvWeb.PostLive.Composer do
     socket
   end
 
-  # The standalone composer on /feed: not editing a post, and answering nothing —
-  # which is exactly "no draft context", so a new context is added in one place
-  # (`draft_context/1`) rather than in every list of nils.
-  # Deliberately spelled out rather than derived from `draft_context/1`, though
-  # the two look interchangeable: "is this the feed's own composer" and "does
-  # this composer keep drafts" are different questions that merely coincided
-  # until issue #1165 added a composer that is neither. Defining one in terms of
-  # the other put the feed's ✕ back on the answer page, where nothing handles
-  # `close-composer` and a click therefore kills the LiveView.
-  defp feed_composer?(assigns) do
-    is_nil(assigns.post) and is_nil(assigns.parent) and is_nil(assigns.remote_note) and
-      is_nil(assigns.remote_post)
-  end
+  # The standalone composer on /feed: the only one with a panel to collapse, and
+  # the only host that handles `close-composer`, `{:composer_drafting, …}` and
+  # `{:composer_discarded, …}`.
+  #
+  # It asks rather than deriving the answer from "no post, no parent, nothing
+  # remote". That derivation was the wrong shape once already — it put the
+  # feed's ✕ on the answer page of issue #1165, where a click killed the
+  # LiveView — and the organization page's composer is that same shape again.
+  defp feed_composer?(assigns), do: assigns.host == :feed
 
   # Answering a reply from another network goes through its own context function:
   # it writes the sidecar that carries the answer out to that network, and it
@@ -1003,8 +1033,21 @@ defmodule VutuvWeb.PostLive.Composer do
         {:noreply, push_navigate(socket, to: Posts.path(socket.assigns.parent))}
 
       true ->
-        # The feed prepends the new post via its own {:new_post, …} broadcast;
-        # the composer just resets (audience choice sticks).
+        # A composer that stays where it is: the feed's and the organization
+        # page's. It resets, and the audience choice sticks.
+        #
+        # The feed learns about its own post from `Posts`' `{:new_post, …}`
+        # broadcast, which prepends the card and collapses the panel. An
+        # organization post is broadcast to nobody — a page cannot be followed
+        # yet, so `Posts.broadcast_new_post/1` answers `[]` rather than build a
+        # `where: followee_id == ^nil` — so its host is handed the post
+        # directly, already carrying `post_preloads/0` from
+        # `create_organization_post/3` and ready for a card. Not sent to the
+        # feed: it would copy that whole struct into a mailbox to be dropped by
+        # a catch-all.
+        if not feed_composer?(socket.assigns),
+          do: send(self(), {:composer_published, post})
+
         {:noreply, reset_composer(socket)}
     end
   end
@@ -1061,6 +1104,13 @@ defmodule VutuvWeb.PostLive.Composer do
 
   defp save_error_message(reason) when reason in [:restricted, :not_visible],
     do: gettext("You can no longer reply to this post.")
+
+  # The publisher role was withdrawn while the composer sat open (issue #1335):
+  # `create_organization_post/3` re-checks it on every write, so this is the
+  # answer a stale page gets. Without a clause of its own it fell through to the
+  # image-count catch-all below and told them about a limit on photos.
+  defp save_error_message(:forbidden),
+    do: gettext("You may no longer write in this organization's name.")
 
   # Answering another network (issue #1070). `:not_federating` is handled by the
   # page before the composer ever renders, so these are the states that can only
@@ -1262,7 +1312,7 @@ defmodule VutuvWeb.PostLive.Composer do
 
     ~H"""
     <div id={@id}>
-      <.card>
+      <.composer_surface surface={@surface}>
         <%!-- Says out loud that this text came back rather than being typed
         just now (issue #1148) — without it a restored draft is indistinguishable
         from a composer someone else left open. It sits above the form, not
@@ -1700,7 +1750,7 @@ defmodule VutuvWeb.PostLive.Composer do
                   name="post[license]"
                   id={"#{@id}-license"}
                   title={gettext("Who may reuse these photos")}
-                  class={[input_class(), "h-9 w-auto max-w-full py-0 text-sm"]}
+                  class={compact_select_class()}
                 >
                   <option
                     :for={license <- PhotoLicense.values()}
@@ -1729,7 +1779,7 @@ defmodule VutuvWeb.PostLive.Composer do
                   phx-change="download-choice"
                   phx-target={@myself}
                   title={gettext("What a visitor can save")}
-                  class={[input_class(), "h-9 w-auto max-w-full py-0 text-sm"]}
+                  class={compact_select_class()}
                 >
                   <option value="none" selected={@download_choice == "none"}>
                     {download_label("none")}
@@ -1795,8 +1845,15 @@ defmodule VutuvWeb.PostLive.Composer do
           renders), the (slightly wider) submit button on the right. New
           posts publish public, so there is no audience picker here; a post
           pinned public by reposts/replies still shows the read-only lock
-          chip beside the button. --%>
-          <div class="mt-3 flex items-center gap-3">
+          chip beside the button.
+
+          Four controls that do not always fit one line: the organization
+          page's column is narrower than the feed's, and there the row used to
+          squeeze the picker until "Add photos" broke across two lines inside a
+          36px-high button. So it wraps, and each control keeps its own line
+          rather than its share of a line — the button and the picker say what
+          they do in words that must not break. --%>
+          <div class="mt-3 flex flex-wrap items-center gap-x-3 gap-y-2">
             <%!-- h-9 pins this to the Post button's height (both 36px, the
             standard control height): the 📷 emoji would otherwise inflate the
             line box, and mb-0 drops the global `label` margin (components.css)
@@ -1806,13 +1863,13 @@ defmodule VutuvWeb.PostLive.Composer do
             <label
               :if={@images == []}
               id={"#{@id}-add-photos"}
-              class="inline-flex h-9 mb-0 cursor-pointer items-center gap-1.5 rounded-lg bg-slate-100 px-3 text-sm font-semibold text-slate-700 hover:bg-slate-200 dark:bg-slate-800 dark:text-slate-200 dark:hover:bg-slate-700"
+              class="inline-flex h-9 mb-0 shrink-0 cursor-pointer items-center gap-1.5 whitespace-nowrap rounded-lg bg-slate-100 px-3 text-sm font-semibold text-slate-700 hover:bg-slate-200 dark:bg-slate-800 dark:text-slate-200 dark:hover:bg-slate-700"
             >
               📷 {gettext("Add photos")}
               <.live_file_input upload={@uploads.images} class="sr-only" />
             </label>
 
-            <div class="ml-auto flex items-center gap-3">
+            <div class="ml-auto flex flex-wrap items-center justify-end gap-x-3 gap-y-2">
               <%!-- The author's declaration of what language this post is
               written in (issue #1489, Mastodon's model): preset to the UI
               locale, quiet — the collapsed control reads "DE". The site's
@@ -1823,7 +1880,7 @@ defmodule VutuvWeb.PostLive.Composer do
                 id={"#{@id}-language"}
                 aria-label={gettext("Post language")}
                 title={gettext("The language this post is written in")}
-                class={[input_class(), "h-9 w-auto py-0 text-sm"]}
+                class={compact_select_class()}
               >
                 <option :for={code <- Languages.site_locales()} value={code} selected={@language == code}>
                   {String.upcase(code)}
@@ -1855,7 +1912,7 @@ defmodule VutuvWeb.PostLive.Composer do
 
               <.button
                 type="submit"
-                class="h-9 px-6"
+                class="h-9 whitespace-nowrap px-6"
                 disabled={@uploads.images.entries != []}
                 phx-disable-with={gettext("Saving…")}
               >
@@ -1992,10 +2049,46 @@ defmodule VutuvWeb.PostLive.Composer do
             {@error}
           </p>
         </.form>
-      </.card>
+      </.composer_surface>
     </div>
     """
   end
+
+  # The composer's outer surface, the same `:card` / `:flat` axis `post_card/1`
+  # and `composer_trigger/1` already name. It is the page's own block nearly
+  # everywhere and brings a card; the organization page sits it inside the
+  # "Posts" card it already owns, where a second card is 48px of padding and two
+  # rings. Two clauses rather than a conditional class list: the value is fixed
+  # for the life of a mounted composer, so nothing here changes shape under
+  # morphdom, and `<.card>` stays the one description of the surface.
+  attr(:surface, :atom, required: true)
+  slot(:inner_block, required: true)
+
+  defp composer_surface(%{surface: :card} = assigns) do
+    ~H"""
+    <.card>{render_slot(@inner_block)}</.card>
+    """
+  end
+
+  defp composer_surface(assigns) do
+    ~H"""
+    {render_slot(@inner_block)}
+    """
+  end
+
+  # The composer's three small selects — licence, download, language — all want
+  # the same thing: a control the width of its own content, 36px high to sit
+  # level with the Post button, on the shared input recipe.
+  #
+  # `w-auto!` and not `w-auto`, which is the whole reason this is a function.
+  # `input_class/0` opens with `w-full`, and Tailwind emits `.w-auto` BEFORE
+  # `.w-full`, so the plain utility loses to the very class it is appended to no
+  # matter which order the call site writes them in. Two of these three selects
+  # had been asking for `w-auto` and silently rendering full-width since they
+  # were written; the language one drew 260px to hold the word "DE", which is
+  # what left the bottom row nothing to wrap into on a narrow column.
+  defp compact_select_class,
+    do: [input_class(), "h-9 w-auto! max-w-full py-0 text-sm"]
 
   # What the folded details row says a visitor may save — the same wording
   # the download select's options use, so the fold and the open control can

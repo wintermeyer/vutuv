@@ -2619,6 +2619,7 @@ defmodule VutuvWeb.PostLive.Feed do
             <.live_component
               module={VutuvWeb.PostLive.Composer}
               id="composer"
+              host={:feed}
               current_user={@current_user}
               acting_as={@acting_as}
               post={nil}
