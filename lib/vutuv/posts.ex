@@ -3160,13 +3160,15 @@ defmodule Vutuv.Posts do
   # below free of "unless this is a remote entry" branches, and the merge is
   # needed (rather than a guarded map) because `collapse_threads/1` and
   # `collapse_reposts/1` drop and fold entries, so the local half is not 1:1.
-  # `threads: true` adds the two reads only a surface that draws the nested
+  # `threads: true` adds the three reads only a surface that draws the nested
   # conversation can use (`<.post_thread_entry>`): the replies from other
-  # networks under this page's posts, and the cached posts they answer. The
+  # networks under this page's posts, the cached posts they answer, and the post
+  # a row's conversation started with (`attach_thread_starts/3`). The
   # organization feed renders flat `<.post_card>`s and the tab ticker quotes a
   # single row, so both would pay for something they cannot show.
   defp decorate_feed_entries(entries, viewer, opts \\ []) do
     {remote, local} = Enum.split_with(entries, &remote_feed_entry?/1)
+    threads? = Keyword.get(opts, :threads, false)
 
     local =
       local
@@ -3174,7 +3176,8 @@ defmodule Vutuv.Posts do
       |> collapse_threads()
       |> collapse_reposts()
       |> attach_reposters(viewer)
-      |> attach_remote_thread(viewer, remote, Keyword.get(opts, :threads, false))
+      |> attach_thread_starts(viewer, threads?)
+      |> attach_remote_thread(viewer, remote, threads?)
 
     Vutuv.FeedPage.sort_entries(local ++ decorate_remote(remote, viewer))
   end
@@ -3185,6 +3188,85 @@ defmodule Vutuv.Posts do
     local
     |> attach_thread_notes(viewer, standalone_note_ids(remote))
     |> attach_remote_parents(viewer, standalone_remote_post_ids(remote))
+  end
+
+  # The post that STARTED the conversation, for a row that would otherwise open
+  # in the middle of one (issue #1787).
+  #
+  # `collapse_threads/1` already puts every thread post the page carries into
+  # one row and adds the topmost one's direct parent as context, and there the
+  # chain stops: the parent's own parent is not loaded. So a row about a reply
+  # three deep opened on a stranger's answer under a "Replying to @somebody"
+  # line, with the post the whole exchange is about nowhere on the page — and
+  # since the card above it in the timeline is another card, readers took the
+  # answer for a reply to *that* one. Loading the root gives the row a first
+  # card that says what is being talked about.
+  #
+  # It rides `threads: true` because that flag marks the one surface whose card
+  # can hold a conversation (`feed_page/2` sets it; the organization feed and the
+  # tab ticker draw a flat card and pay nothing). Within it the cost is measured:
+  # **+10 queries** — one lookup and the nine preload rounds a card needs — and
+  # only for a row whose top card is a reply whose root is on no page, which is
+  # a chain three deep or more, not an ordinary answer. It batches, so ten such
+  # rows cost the same ten queries as one. Getting it to two would mean reading
+  # `post_replies` for the page's ids *before* `hydrate_posts/1` and preloading
+  # the roots in that same pass; that trades this pass's precise post-collapse
+  # gate for an earlier guess, so it is the way out if a feed page ever needs
+  # one, not something to do up front.
+  #
+  # A root the viewer may not see is simply absent (`scope_visible/2`), and one
+  # that already has a card of its own is left where it is, the rule every other
+  # context card on the page follows.
+  defp attach_thread_starts(entries, _viewer, false), do: entries
+
+  defp attach_thread_starts(entries, viewer, true) do
+    shown = for entry <- entries, post <- thread_posts(entry), into: MapSet.new(), do: post.id
+
+    wanted =
+      for entry <- entries, root_id = missing_thread_start(entry, shown), do: {entry.id, root_id}
+
+    # First claim wins, so two rows of one conversation (a repost beside the
+    # thread that carries it) never draw the same opening post twice.
+    case Enum.uniq_by(wanted, &elem(&1, 1)) do
+      [] ->
+        entries
+
+      wanted ->
+        starts = wanted |> Enum.map(&elem(&1, 1)) |> load_thread_starts(viewer)
+        by_entry = Map.new(wanted)
+
+        Enum.map(entries, &put_thread_start(&1, by_entry, starts))
+    end
+  end
+
+  # The conversation `entry` opens on, when that is a post the page does not
+  # carry: its top card answers something nobody here can read. Both halves of
+  # the gate are `thread_key/1`'s answer — a top-level post and a degraded reply
+  # (the root was deleted, `root_post_id` nilified) name themselves, and there
+  # is no start left to show for either.
+  defp missing_thread_start(entry, shown) do
+    top = List.first(entry.ancestors, entry.post)
+    root_id = thread_key(top)
+
+    if root_id != top.id and not MapSet.member?(shown, root_id), do: root_id
+  end
+
+  defp put_thread_start(entry, wanted, starts) do
+    case starts[wanted[entry.id]] do
+      %Post{} = root -> Map.put(entry, :ancestors, [root | entry.ancestors])
+      _ -> entry
+    end
+  end
+
+  defp load_thread_starts(ids, viewer) do
+    # Not `visible_posts_by_ids/2`, which is the same query and the same scope
+    # with a two-association preload: what a card needs is `post_preloads/0`,
+    # and that difference is the whole of this function.
+    from(p in Post, where: p.id in ^ids)
+    |> scope_visible(viewer)
+    |> Repo.all()
+    |> Repo.preload(post_preloads())
+    |> Map.new(&{&1.id, &1})
   end
 
   # The cached post a member's answer answers (issue #1165), so the feed can
@@ -3995,19 +4077,39 @@ defmodule Vutuv.Posts do
   # that is not an entry is kept as the single nested context above the anchor
   # (its own parent is not preloaded). Reposts always render standalone, so they
   # are never grouped, dropped, or made a carrier.
+  #
+  # The anchor is the thread's **denormalized root** (`thread_key/1`), not the
+  # topmost post each branch happens to reach. Walking only reaches as far as
+  # the page's own posts plus one parent, so a conversation the page meets
+  # through a gap — the reader follows the two ends of root → stranger → reply
+  # but not the stranger in the middle — used to split in two: the opening post
+  # as a row of its own, down at its own age, and higher up a block that started
+  # on the stranger's answer under a bare "Replying to @author" (issue #1787).
+  # Both halves name the same `root_post_id`, so keying on it puts the whole
+  # conversation in one row that reads from the beginning; `thread_forest/1`
+  # then hangs the posts whose own parent is missing beside the root rather than
+  # under it, which is how the gap stays visible.
+  #
+  # Folding always leaves the whole conversation in `:ancestors`, so a surface
+  # that renders them loses nothing — but one that draws `entry.post` alone (the
+  # organization feed, the Mastodon timeline presenter) shows only the carrier,
+  # and the wider key means a little more of a page folds away there. That trade
+  # is older than the root key; it is what folding a conversation into one row
+  # costs a flat list, and the way out for such a surface is to render the
+  # conversation, not to un-fold it.
   defp collapse_threads(entries) do
     by_id =
       for %{reposted_by: nil, post: %{id: id} = post} <- entries, into: %{}, do: {id, post}
 
     # Oldest-first path (topmost context down to the post itself) for every
-    # present post entry; its head is the thread anchor.
+    # present post entry; its head names the thread.
     paths =
       Map.new(by_id, fn {id, post} -> {id, ancestor_chain(post, by_id) ++ [post]} end)
 
-    # Every post of each thread, deduped and oldest-first, keyed by anchor id.
+    # Every post of each thread, deduped and oldest-first, keyed by anchor.
     thread_posts =
       paths
-      |> Enum.group_by(fn {_id, path} -> hd(path).id end, fn {_id, path} -> path end)
+      |> Enum.group_by(fn {_id, path} -> thread_key(hd(path)) end, fn {_id, path} -> path end)
       |> Map.new(fn {anchor, branch_paths} ->
         posts =
           branch_paths
@@ -4025,11 +4127,14 @@ defmodule Vutuv.Posts do
     Enum.flat_map(entries, fn
       %{reposted_by: reposted_by} = entry when not is_nil(reposted_by) ->
         # Reposts render standalone; keep the one-level parent nesting they had.
+        # "Standalone" is about grouping, not about context: a reshared reply is
+        # a conversation like any other, so `attach_thread_starts/3` still puts
+        # its opening post on top afterwards.
         [Map.put(entry, :ancestors, ancestor_chain(entry.post, by_id))]
 
       %{post: post} = entry ->
         if MapSet.member?(carrier_ids, post.id) do
-          anchor = hd(Map.fetch!(paths, post.id)).id
+          anchor = paths |> Map.fetch!(post.id) |> hd() |> thread_key()
           ancestors = thread_posts |> Map.fetch!(anchor) |> Enum.drop(-1)
           [Map.put(entry, :ancestors, ancestors)]
         else
@@ -4038,6 +4143,16 @@ defmodule Vutuv.Posts do
         end
     end)
   end
+
+  # Which conversation a post belongs to: the root the reply row denormalizes,
+  # else the post itself. A degraded reply (the root was deleted, `root_post_id`
+  # nilified) names itself, which is the pre-#1787 behaviour — the links that
+  # would tie the survivors together are gone, so the topmost reachable post is
+  # all there is to group by.
+  defp thread_key(%Post{reply_ref: %PostReply{root_post_id: root_id}}) when is_binary(root_id),
+    do: root_id
+
+  defp thread_key(%Post{id: id}), do: id
 
   # The same post can land on one page several times: through more than one
   # followed reposter, and through its standalone original entry when the
@@ -4237,6 +4352,12 @@ defmodule Vutuv.Posts do
   # makes sense for entries carrying a vutuv post. A reshared post from another
   # network (issue #1166) has none, so it is set aside and merged back — the
   # same split `decorate_feed_entries/2` makes, for the same reason.
+  #
+  # The profile takes the folding but not `attach_thread_starts/3`: a row here
+  # is one member's own post, and its conversation almost always starts with
+  # another of theirs, which the page already carries. The one case it leaves
+  # standing — their answer into a stranger's thread three deep — is not worth
+  # a query on a page that is not about the conversation.
   defp collapse_profile_threads(entries) do
     {remote, local} = Enum.split_with(entries, &remote_feed_entry?/1)
 

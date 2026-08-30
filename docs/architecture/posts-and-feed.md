@@ -1200,6 +1200,24 @@ post is no longer shown twice) and hands each surviving leaf its
 posts, authors or branches a thread spans it renders once; the archive and saved
 lists fall back to nesting the single direct parent.
 
+**A row opens on the post that started the conversation** (issue #1787). The
+walk up the chain only reaches as far as the page's own posts plus one parent,
+so a thread the page meets through a gap — the reader follows the two ends of
+root → stranger → reply but not the stranger in the middle — used to arrive as
+two rows: the opening post down at its own age, and higher up a block that began
+on the stranger's answer under a bare "Replying to @author", which readers took
+for an answer to whatever card sat above it. Two things fix that. Threads group
+by their denormalized `root_post_id` (`thread_key/1`), not by the topmost post
+each branch happens to reach, so both halves land in one row; and when the root
+is on no page at all, `attach_thread_starts/3` loads it as the row's first card
+(measured +10 queries — one lookup plus the nine preload rounds a card needs —
+batched across the page, and only for a row whose top card is a reply whose root
+is on no page, hence `threads: true`). A root the viewer may not see stays
+absent, and one that already has a card of its own is left where it is. Posts
+whose own parent is still missing hang *beside* the root rather than under it —
+`thread_forest/1` makes them forest roots — so a remaining gap stays visible as
+air plus the card's own "Replying to @handle" line.
+
 All read the same (each a single card of flat `divide-y` rows).
 
 **A conversation does not stop at the site's edge.** The permalink has woven the

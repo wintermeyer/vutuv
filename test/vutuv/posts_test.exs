@@ -993,6 +993,76 @@ defmodule Vutuv.PostsTest do
       assert Enum.uniq(shown) == shown
     end
 
+    test "a thread reaching the page through a gap is still one row, opening post first" do
+      # Issue #1787. The thread is root -> mid -> leaf, and only the two ends
+      # reach the feed: the viewer follows the author of both, not the stranger
+      # who wrote the middle answer. Grouped by the topmost post each branch can
+      # reach, that split the conversation in two — the opening post as a row of
+      # its own down at its own age, and, higher up, a block that started at the
+      # stranger's answer under a bare "Replying to @author". Grouped by the
+      # thread's own root it is one row that reads from the beginning.
+      viewer = user()
+      author = user()
+      stranger = user()
+      follow!(viewer, author)
+
+      root = create_post!(author, %{body: "the post that started it"})
+      backdate_post!(root, 900)
+      {:ok, mid} = Posts.create_reply(stranger, root, %{body: "a stranger answers"})
+      backdate_post!(mid, 600)
+      {:ok, leaf} = Posts.create_reply(author, mid, %{body: "and the author answers back"})
+      backdate_post!(leaf, 300)
+
+      assert [entry] = Posts.feed_page(viewer).entries
+      assert entry.post.id == leaf.id
+      assert Enum.map(entry.ancestors, & &1.id) == [root.id, mid.id]
+    end
+
+    test "a conversation whose opening post is not in the feed pulls it in above" do
+      # Issue #1787, the other half: nothing about this thread belongs in the
+      # viewer's feed except the followee's answer, so the block used to open on
+      # the stranger's middle post — whose "Replying to @stranger" line pointed
+      # at a post nobody could see. The opening post is loaded as context.
+      viewer = user()
+      author = user()
+      stranger = user()
+      follow!(viewer, author)
+
+      root = create_post!(stranger, %{body: "the post that started it"})
+      backdate_post!(root, 900)
+      {:ok, mid} = Posts.create_reply(stranger, root, %{body: "the stranger's own follow-up"})
+      backdate_post!(mid, 600)
+      {:ok, leaf} = Posts.create_reply(author, mid, %{body: "the followee's answer"})
+      backdate_post!(leaf, 300)
+
+      assert [entry] = Posts.feed_page(viewer).entries
+      assert entry.post.id == leaf.id
+      assert Enum.map(entry.ancestors, & &1.id) == [root.id, mid.id]
+    end
+
+    test "an opening post the viewer may not see is left out" do
+      viewer = user()
+      author = user()
+      stranger = user()
+      follow!(viewer, author)
+
+      root = create_post!(stranger, %{body: "the post that started it"})
+      backdate_post!(root, 900)
+      {:ok, mid} = Posts.create_reply(stranger, root, %{body: "the stranger's own follow-up"})
+      backdate_post!(mid, 600)
+      {:ok, leaf} = Posts.create_reply(author, mid, %{body: "the followee's answer"})
+      backdate_post!(leaf, 300)
+
+      # Only a public post can be answered, so the audience narrows afterwards —
+      # which is the state that matters here: the row must not use the thread
+      # link to hand the reader a post its author has since shut them out of.
+      Repo.insert!(%PostDenial{post_id: root.id, denied_user_id: viewer.id})
+
+      assert [entry] = Posts.feed_page(viewer).entries
+      assert entry.post.id == leaf.id
+      assert Enum.map(entry.ancestors, & &1.id) == [mid.id]
+    end
+
     test "surfaces a followed tag's posts from authors the viewer doesn't follow (#872)" do
       viewer = user()
       stranger = user()

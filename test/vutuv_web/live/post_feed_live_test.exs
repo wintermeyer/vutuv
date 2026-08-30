@@ -286,33 +286,63 @@ defmodule VutuvWeb.PostFeedLiveTest do
       assert has_element?(live, "#post-actions-post-#{leaf.id}-parent-#{root.id}-like")
     end
 
-    test "a context parent that is itself a reply says who IT answers", %{conn: conn} do
+    test "a conversation met in the middle opens on the post that started it", %{conn: conn} do
       {conn, user} = create_and_login_user(conn)
 
       # Two members the viewer does not follow hold a conversation and the viewer
-      # answers the second of them. Only that answer is on this feed, so the
-      # chain stops one step up and the block's topmost card is a post pulled in
-      # purely as context — itself an answer to a post that is not on the page.
+      # answers the second of them. Only that answer is on this feed, so walking
+      # up the page's own posts stops one step short of the beginning: the block
+      # opened on the middle answer, wearing a "Replying to @opener" line that
+      # named a post nowhere on the page — which readers took for a reply to
+      # whatever card sat above it in the timeline (issue #1787). The opening
+      # post comes along as the block's first card instead.
       opener = other_user()
       middle = other_user()
       {:ok, root} = Posts.create_post(opener, %{body: "the post that opened it"})
       {:ok, parent} = Posts.create_reply(middle, root, %{body: "an answer to the opener"})
-      {:ok, _leaf} = Posts.create_reply(user, parent, %{body: "my answer to that answer"})
+      {:ok, leaf} = Posts.create_reply(user, parent, %{body: "my answer to that answer"})
 
-      {:ok, live, _html} = live(conn, ~p"/feed")
+      {:ok, live, html} = live(conn, ~p"/feed")
 
-      # It says so, rather than passing for the post that started the thread.
+      assert html =~ "the post that opened it"
+      assert has_element?(live, "#post-actions-post-#{leaf.id}-parent-#{root.id}-like")
+      assert has_element?(live, "#post-actions-post-#{leaf.id}-parent-#{parent.id}-like")
+
+      # Every card now hangs under the one it answers, so nothing is left
+      # pointing off the page.
+      refute has_element?(live, ~s(#feed-posts [data-reply-banner]))
+      refute has_element?(live, ~s(#feed-posts [data-thread-gap]))
+    end
+
+    test "a conversation met further down says so between the opener and the rest",
+         %{conn: conn} do
+      {conn, user} = create_and_login_user(conn)
+
+      # One more link than the test above: the opening post is loaded, but the
+      # answer between it and the card below is on nobody's page, so the two
+      # cards are not parent and child. The row says that rather than nesting
+      # them and claiming a relationship they do not have.
+      opener = other_user()
+      middle = other_user()
+      {:ok, root} = Posts.create_post(opener, %{body: "the post that opened it"})
+      {:ok, first} = Posts.create_reply(middle, root, %{body: "the first answer"})
+      {:ok, second} = Posts.create_reply(opener, first, %{body: "and the opener again"})
+      {:ok, leaf} = Posts.create_reply(user, second, %{body: "my answer to that"})
+
+      {:ok, live, html} = live(conn, ~p"/feed")
+
+      assert html =~ "the post that opened it"
+      assert has_element?(live, "#post-actions-post-#{leaf.id}-parent-#{root.id}-like")
+      # The elided answer keeps its card off the page…
+      refute has_element?(live, "#post-actions-post-#{leaf.id}-parent-#{first.id}-like")
+      # …so the card below the opener still names whom it answers, and the run
+      # of dots between them says posts are missing.
+      assert has_element?(live, ~s(#feed-posts [data-thread-gap]))
+
       assert has_element?(
                live,
-               ~s(#feed-posts [data-reply-banner="parent"] a[href="#{Posts.path(root)}"]),
-               "@#{opener.username}"
-             )
-
-      # The viewer's own reply keeps its banner off — the card above it already
-      # shows that relationship.
-      refute has_element?(
-               live,
-               ~s(#feed-posts [data-reply-banner] a[href="#{Posts.path(parent)}"])
+               ~s(#feed-posts [data-reply-banner="parent"] a[href="#{Posts.path(first)}"]),
+               "@#{middle.username}"
              )
     end
 

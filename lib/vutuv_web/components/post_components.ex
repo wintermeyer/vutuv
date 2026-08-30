@@ -1013,13 +1013,26 @@ defmodule VutuvWeb.PostComponents do
     <div
       :for={{node, first?, last?} <- @nodes}
       class={[
-        @connected? && "relative pt-3",
+        "relative",
+        @connected? && "pt-3",
         @connected? && @indent? && "pl-7",
-        # Separate roots: unrelated conversations (a thread whose links a
-        # deleted post broke), so they get air instead of a connector.
-        !@connected? && !first? && "mt-4"
+        # Separate roots: not siblings in a conversation, so no connector.
+        !@connected? && !first? && "pt-6"
       ]}
     >
+      <%!-- What stands between two roots is missing posts — deleted, or simply
+      not on this page (the feed loads a thread's opening post but not the
+      answers between it and the card below, issue #1787). A dotted run in the
+      avatar column says so; plain air said nothing, and the card below wears a
+      "Replying to @handle" line that then read as if it answered the card
+      above. Padding rather than a margin, so the run has a box to live in. --%>
+      <span
+        :if={!@connected? && !first?}
+        data-thread-gap
+        class="absolute left-[1.125rem] top-1.5 h-4 border-l-2 border-dotted border-slate-300 dark:border-slate-600"
+        aria-hidden="true"
+      >
+      </span>
       <%!-- The connector into this answer's avatar, drawn in the column of the
       card it answers (left-[1.125rem] of this block, which the pl-7 does not
       move). The last answer closes the spine with an elbow curving into its
