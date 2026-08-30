@@ -139,6 +139,15 @@ defmodule VutuvWeb.MastodonApi.ClientExpectationsTest do
                "expected #{path} to answer an empty list"
       end
     end
+
+    test "the pending follow requests of a server that has none", %{conn: conn, token: token} do
+      # Empty rather than missing, and it can never be anything else: a follow
+      # here needs no approval, which is what every account already says about
+      # itself with `locked: false`. Tokodon asks right after the authorisation
+      # step and read the 404 as a failed login (issue #1692).
+      assert conn |> mastodon_conn(token) |> get("/api/v1/follow_requests") |> json_response(200) ==
+               []
+    end
   end
 
   describe "grouped notifications" do

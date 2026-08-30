@@ -97,7 +97,25 @@ defmodule Vutuv.ViewerClock do
   def date(at), do: at |> naive() |> NaiveDateTime.to_date()
 
   @doc "Today, as this viewer's calendar day."
-  def today, do: date(DateTime.utc_now())
+  def today, do: date(now())
+
+  # The instant every calendar day here is read off, and the one seam a test has
+  # for moving it. A feature gated on the wall clock that only ever reads the
+  # real one passes all day and fails at night — and the day rollover this
+  # feeds (`Vutuv.DayClock` -> the feed calendar's today ring, its folded date
+  # and its future-day gate) is exactly such a feature: waiting until midnight
+  # is not a test.
+  #
+  # Application env rather than the process dictionary the rest of this module
+  # uses, because the process that has to see the moved clock is a LiveView, not
+  # the test's own. Unset in every other environment, so production pays one
+  # ETS read.
+  defp now do
+    case Application.get_env(:vutuv, :viewer_clock_now) do
+      %DateTime{} = at -> at
+      _unset -> DateTime.utc_now()
+    end
+  end
 
   @doc """
   One of this viewer's calendar days as the pair of UTC naive instants that

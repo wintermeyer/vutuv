@@ -5,8 +5,9 @@ defmodule VutuvWeb.OrganizationScreenshotRenderTest do
   and nothing at all while the queue has not got there — a lone card that is
   only the bundled grey rectangle reads as a broken image.
 
-  Also pins the shape the capture's card sits next to: the proven domain is the
-  small ✓ beside the website, not a pill of its own on the badge row.
+  Also pins where it sits — the header card's banner, above the page's name,
+  not the rail card it replaced — and the shape beside it: the proven domain is
+  the small ✓ next to the website, not a pill of its own on the badge row.
   """
   use VutuvWeb.ConnCase, async: false
 
@@ -67,8 +68,8 @@ defmodule VutuvWeb.OrganizationScreenshotRenderTest do
     start
   end
 
-  describe "the website card" do
-    test "shows the capture once it is released", %{conn: conn} do
+  describe "the header banner" do
+    test "shows the capture once it is released, above the page's name", %{conn: conn} do
       {organization, _owner} = active_organization()
       organization |> captured() |> write_file("thumb-#{@hash}.avif")
 
@@ -77,6 +78,11 @@ defmodule VutuvWeb.OrganizationScreenshotRenderTest do
       assert html =~ "data-organization-screenshot"
       assert html =~ ~s(data-link-thumb="shot")
       assert html =~ "/screenshots/"
+
+      # Where it sits is half the point — see the header-card comment in
+      # `VutuvWeb.OrganizationLive.Show`. The rail renders after the whole main
+      # column, so back in the rail this is 2,300px down a phone's page.
+      assert at(html, "data-organization-screenshot") < at(html, "<h1")
     end
 
     test "shows nothing while the capture is still queued", %{conn: conn} do

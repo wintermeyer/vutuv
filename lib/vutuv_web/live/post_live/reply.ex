@@ -1,14 +1,16 @@
 defmodule VutuvWeb.PostLive.Reply do
   @moduledoc """
   Reply page — the parent post (read-only preview) above the same composer
-  as the feed. Only visible, **public**, `Vutuv.Posts.answerable?/1` parents can
-  be answered; everything else is sent away with the unknown-id flash, so
-  existence never leaks. A post published in a page's name is answerable like any
-  other (issue #1336) as long as the page itself is publicly visible, which is
-  what `answerable?/1` — shared with `create_reply/3`'s own gate — asks; the
-  heading then names whichever author `Vutuv.Posts.author/1` hands back rather
-  than reaching for a member author a page's post has not got. A block is
-  deliberately *not* part of the gate: quiet blocking has to let the blocked
+  as the feed. Which parents may be answered is `Vutuv.Posts.answerable_by?/2`,
+  the one predicate that also states the compose half of `create_reply/3`'s own
+  gate (issue #1797) — this page used to spell its three arms out here, where
+  nothing tied them to the gate. Everything it refuses is sent away with the
+  unknown-id flash, so existence never leaks. A post published in a page's name
+  is answerable like any other (issue #1336) as long as the page itself is
+  publicly visible, which is what `answerable?/1`, that predicate's first arm,
+  asks; the heading then names whichever author `Vutuv.Posts.author/1` hands
+  back rather than reaching for a member author a page's post has not got. A
+  block is deliberately *not* part of it: quiet blocking has to let the blocked
   member reach the composer and be refused on submit, or the block leaks.
 
   **Quoting a passage** (issue #1114): a reader who marks part of a post before
@@ -36,8 +38,9 @@ defmodule VutuvWeb.PostLive.Reply do
     user = socket.assigns.current_user
     parent = Posts.get_post(id)
 
-    if parent && Posts.answerable?(parent) && Posts.visible_to?(parent, user) &&
-         not Posts.restricted?(parent) do
+    # `Vutuv.Posts.answerable_by?/2` is the compose page's half of the submit
+    # gate, and lives beside it — see its doc for why the block is not in it.
+    if parent && Posts.answerable_by?(parent, user) do
       {:ok,
        socket
        |> assign(:page_title, gettext("Reply"))

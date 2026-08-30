@@ -91,6 +91,41 @@ defmodule Vutuv.Keyset do
     if opts[:min_id], do: Enum.reverse(rows), else: rows
   end
 
+  @doc """
+  One page out of several sources that were each `scope/3`d by the same window.
+
+  The in-memory half of the merged list this module's own note describes: no
+  single query can order rows from two tables, but every id here is a
+  `Vutuv.UUIDv7`, so sorting the union by id *is* sorting it by age. Each source
+  is bounded first, so this cuts a page's worth of rows however deep the walk
+  has gone — it is not the unbounded read the note warns about.
+
+  Answers newest-first whichever boundary was asked for, so `restore/2` neither
+  precedes nor follows it.
+  """
+  def merge(lists, opts) when is_list(lists) do
+    lists
+    |> Enum.concat()
+    |> Enum.sort_by(& &1.id, :desc)
+    |> take_page(opts)
+  end
+
+  @doc """
+  Cuts an already-ordered, newest-first list to the page that was asked for.
+
+  One owner for what the three boundaries mean at the *end* of a merged read:
+  `:max_id` and `:since_id` want the newest of what is left, `:min_id` the
+  **oldest** — which over a merged list is its tail rather than a reversal, so
+  `restore/2` is the wrong tool and must not follow.
+  `VutuvWeb.MastodonApi.Pagination.window/3` finishes with this too, having
+  filtered rows that no query could bound.
+  """
+  def take_page(rows, opts) when is_list(rows) do
+    limit = page_size(opts)
+
+    if opts[:min_id], do: Enum.take(rows, -limit), else: Enum.take(rows, limit)
+  end
+
   @doc "The page size a reader should ask for."
   def page_size(opts), do: Keyword.get(opts, :limit) || @default_limit
 

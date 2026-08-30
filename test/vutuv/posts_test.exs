@@ -1893,6 +1893,42 @@ defmodule Vutuv.PostsTest do
       assert {:error, :not_visible} = Posts.create_reply(replier, parent, %{body: "y"})
     end
 
+    test "answerable_by?/2 refuses what the submit gate refuses, save a block (issue #1797)" do
+      # The point of the shared predicate: every arm the compose page can ask
+      # is an arm the submit gate asks too, so the two cannot answer
+      # differently. Drop an arm from `answerable_by?/2` and the matching pair
+      # below goes red on its own.
+      replier = user()
+      author = user()
+      follow!(replier, author)
+
+      restricted =
+        create_post!(author, %{body: "x", denials: [%{"wildcard" => "logged_out"}]})
+
+      refute Posts.answerable_by?(restricted, replier)
+      assert {:error, :restricted} = Posts.create_reply(replier, restricted, %{body: "y"})
+
+      hidden = create_post!(author, %{body: "x", denials: [%{"denied_user_id" => replier.id}]})
+
+      refute Posts.answerable_by?(hidden, replier)
+      assert {:error, :not_visible} = Posts.create_reply(replier, hidden, %{body: "y"})
+
+      # The fourth arm — a page's post while the page is not publicly visible —
+      # is `answerable?/1` on its own, covered against a guessed id in
+      # `VutuvWeb.OrganizationPostsWebTest`.
+
+      # And the one deliberate difference, which is why the page cannot simply
+      # call the gate: a block lets the blocked member reach the composer and
+      # refuses them on submit. Allowing it here is the assertion — a quiet
+      # block that closed the composer would announce itself.
+      blocker = user()
+      blocked_parent = create_post!(blocker, %{body: "x"})
+      {:ok, _} = Vutuv.Social.block_user(blocker, replier)
+
+      assert Posts.answerable_by?(blocked_parent, replier)
+      assert {:error, :restricted} = Posts.create_reply(replier, blocked_parent, %{body: "y"})
+    end
+
     test "rejects an empty reply like an empty post" do
       parent = create_post!(user(), %{body: "x"})
 

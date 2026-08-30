@@ -1,7 +1,18 @@
 defmodule Vutuv.WebPush do
   @moduledoc """
-  Web Push delivery: VAPID (RFC 8292) plus `aes128gcm` payload encryption
-  (RFC 8291 over RFC 8188).
+  Web Push delivery: VAPID (RFC 8292) plus payload encryption — RFC 8291's
+  `aes128gcm` over RFC 8188, or the `aesgcm` that came before it.
+
+  **Two encodings, because the phone clients need the older one.** Each
+  subscription carries a `standard` flag, defaulted to false as on Mastodon,
+  and `content_encoding/1` turns it into the encoding a send is built with.
+  `aesgcm` carries the salt in `Encryption:` and the sender's key in
+  `Crypto-Key: dh=`, which is where the APNs relays between us and an iOS
+  client read them, because APNs forwards a payload and not our headers.
+  `aes128gcm` hides both inside the record, so a relay has nothing to lift out
+  and the phone shows "Unable to decrypt notification" (issue #1698). A client
+  that never says otherwise therefore gets the legacy body, and both encodings
+  are checked against their own specs' test vectors in `web_push_test.exs`.
 
   **Two callers, one implementation.** This started life inside the
   Mastodon-compatible adapter, where a subscription hangs off an access token —
@@ -52,6 +63,7 @@ defmodule Vutuv.WebPush do
 
   alias Vutuv.Repo
   alias Vutuv.Ssrf
+  alias Vutuv.WebPush.Subscription
   alias VutuvWeb.Endpoint
 
   @curve :prime256v1
@@ -178,21 +190,43 @@ defmodule Vutuv.WebPush do
   Sends one push. Answers `:ok`, or `{:error, :gone}` when the subscription is
   dead. Prefer `push/2`, which acts on that answer; this is the bare transport.
   """
-  def send(%{endpoint: endpoint, p256dh: p256dh, auth: auth}, payload) do
+  def send(%{endpoint: _, p256dh: _, auth: _} = subscription, payload) do
     if enabled?() do
-      deliver(endpoint, p256dh, auth, Jason.encode!(payload))
+      deliver(subscription, Jason.encode!(payload))
     else
       {:error, :disabled}
     end
   end
 
-  defp deliver(endpoint, p256dh, auth, body) do
+  @doc """
+  Which content encoding a push to this subscription is built with.
+
+  **This installation's own app always gets `aes128gcm`**, and that is the
+  first clause rather than a default, because `Vutuv.WebPush.Subscription`
+  carries no flag to read: its client is our own service worker talking to the
+  browser's real push service, with no APNs relay in the middle rewriting the
+  payload — the case the legacy encoding exists for. Leaving it to the
+  catch-all would have quietly sent the installed app a body built for
+  somebody else's relay (issue #1729 landed while this was open).
+
+  An adapter subscription that says nothing gets the older `aesgcm`, which is
+  what Mastodon's own default means and what the phone clients were written
+  against. The last clause therefore catches a row loaded without the column
+  and a plain map that never had one, not only a stored false — the answer must
+  not depend on how completely the caller fetched the row.
+  """
+  def content_encoding(%Subscription{}), do: :aes128gcm
+  def content_encoding(%{standard: true}), do: :aes128gcm
+  def content_encoding(_legacy_or_unflagged), do: :aesgcm
+
+  defp deliver(%{endpoint: endpoint, p256dh: p256dh, auth: auth} = subscription, body) do
     with :ok <- check_target(endpoint),
          {:ok, ua_public} <- decode_key(p256dh),
          {:ok, auth_secret} <- decode_key(auth) do
-      {encrypted, _salt} = encrypt(body, ua_public, auth_secret)
+      {encrypted, encoding_headers} =
+        encode_body(body, ua_public, auth_secret, content_encoding(subscription))
 
-      case Req.post(endpoint, request_options(endpoint, encrypted)) do
+      case Req.post(endpoint, request_options(endpoint, encrypted, encoding_headers)) do
         {:ok, %{status: status}} when status in 200..299 -> :ok
         {:ok, %{status: status}} when status in [404, 410] -> {:error, :gone}
         {:ok, %{status: status}} -> {:error, {:status, status}}
@@ -216,17 +250,17 @@ defmodule Vutuv.WebPush do
   # (a `plug:`, the convention this app already uses for `Vutuv.Mastodon` and
   # the fediverse fetches). Nothing sets it outside the test environment, so a
   # real send is exactly the request written here.
-  defp request_options(endpoint, encrypted) do
+  defp request_options(endpoint, encrypted, encoding_headers) do
     Keyword.merge(
       [
         body: encrypted,
-        headers: [
-          {"content-encoding", "aes128gcm"},
-          {"content-type", "application/octet-stream"},
-          {"ttl", "2419200"},
-          {"urgency", "normal"},
-          {"authorization", authorization(endpoint)}
-        ],
+        headers:
+          [
+            {"content-type", "application/octet-stream"},
+            {"ttl", "2419200"},
+            {"urgency", "normal"},
+            {"authorization", authorization(endpoint)}
+          ] ++ encoding_headers,
         receive_timeout: 10_000,
         retry: false,
         # A push service has no business redirecting us, and following one would
@@ -237,6 +271,32 @@ defmodule Vutuv.WebPush do
       ],
       Application.get_env(:vutuv, :web_push_req_options, [])
     )
+  end
+
+  # `aes128gcm` is self-describing: salt and sender key sit in the record
+  # header, so nothing else has to be said.
+  defp encode_body(body, ua_public, auth_secret, :aes128gcm) do
+    {encrypted, _salt} = encrypt(body, ua_public, auth_secret)
+
+    {encrypted, [{"content-encoding", "aes128gcm"}]}
+  end
+
+  # `aesgcm` puts them in headers instead — unquoted and unpadded base64url,
+  # whatever the draft's own example prints, because that is what the relays
+  # parse. The VAPID key stays in the RFC 8292 `Authorization` header rather
+  # than joining `dh` as a `p256ecdsa` parameter: the draft spelling of VAPID
+  # is a separate thing from the draft spelling of the encoding, this one works
+  # against every push service today, and nothing between us and the phone
+  # reads it.
+  defp encode_body(body, ua_public, auth_secret, :aesgcm) do
+    {encrypted, salt, as_public} = encrypt_aesgcm(body, ua_public, auth_secret)
+
+    {encrypted,
+     [
+       {"content-encoding", "aesgcm"},
+       {"encryption", "salt=" <> encode(salt)},
+       {"crypto-key", "dh=" <> encode(as_public)}
+     ]}
   end
 
   # The resolving half of the SSRF pair. The changeset already refused an
@@ -300,6 +360,42 @@ defmodule Vutuv.WebPush do
 
     header = salt <> <<4096::unsigned-big-32, byte_size(as_public)::unsigned-8>> <> as_public
     {header <> ciphertext <> tag, salt}
+  end
+
+  @doc """
+  The encoding that came before it: `aesgcm`, from
+  draft-ietf-webpush-encryption-04. Answers `{body, salt, sender_public_key}`,
+  because unlike `aes128gcm` this record says nothing about itself — the salt
+  and the sender's key have to travel beside it, in `Encryption:` and
+  `Crypto-Key:`.
+
+  Three things differ from `encrypt/5` and each of them is a whole different
+  ciphertext: the first HKDF's info string is `Content-Encoding: auth`, the two
+  that follow take a **context** naming the curve and both public keys, and the
+  padding is two length octets in **front** of the plaintext rather than a
+  delimiter behind it.
+  """
+  def encrypt_aesgcm(plaintext, ua_public, auth_secret, salt \\ nil, keypair \\ nil) do
+    salt = salt || :crypto.strong_rand_bytes(16)
+    {as_public, as_private} = keypair || :crypto.generate_key(:ecdh, @curve)
+    shared = :crypto.compute_key(:ecdh, ua_public, as_private, @curve)
+
+    ikm = hkdf(auth_secret, shared, "Content-Encoding: auth" <> <<0>>, 32)
+
+    context =
+      "P-256" <>
+        <<0, byte_size(ua_public)::unsigned-big-16>> <>
+        ua_public <> <<byte_size(as_public)::unsigned-big-16>> <> as_public
+
+    cek = hkdf(salt, ikm, "Content-Encoding: aesgcm" <> <<0>> <> context, 16)
+    nonce = hkdf(salt, ikm, "Content-Encoding: nonce" <> <<0>> <> context, 12)
+
+    padded = <<0::unsigned-big-16>> <> plaintext
+
+    {ciphertext, tag} =
+      :crypto.crypto_one_time_aead(:aes_128_gcm, cek, nonce, padded, <<>>, true)
+
+    {ciphertext <> tag, salt, as_public}
   end
 
   # HKDF (RFC 5869) with the one-block expand every Web Push step needs.

@@ -135,6 +135,39 @@ defmodule VutuvWeb.OrganizationLive.Show do
   defp verified_domain(%{verified_at: at} = primary, _verified) when not is_nil(at), do: primary
   defp verified_domain(_primary, verified), do: List.first(verified)
 
+  # The owner links at the foot of the header card. A list rather than four
+  # pasted blocks of markup, because the comment beside them asks for exactly
+  # that: they are a hand-kept copy of the manage pages' tab bar, so adding the
+  # fifth should be adding a row.
+  defp manage_links(organization, can_edit?, owner?) do
+    slug = organization.slug
+
+    Enum.filter(
+      [
+        %{
+          show?: can_edit?,
+          id: nil,
+          label: gettext("Edit"),
+          path: ~p"/organizations/#{slug}/edit"
+        },
+        %{show?: owner?, id: nil, label: gettext("Team"), path: ~p"/organizations/#{slug}/roles"},
+        %{
+          show?: owner?,
+          id: nil,
+          label: gettext("Domains"),
+          path: ~p"/organizations/#{slug}/domains"
+        },
+        %{
+          show?: owner?,
+          id: "organization-manage-fediverse",
+          label: gettext("Fediverse"),
+          path: ~p"/organizations/#{slug}/fediverse"
+        }
+      ],
+      & &1.show?
+    )
+  end
+
   defp assign_screenshot(socket, organization) do
     screenshot = Screenshots.for_organization(organization)
 
@@ -443,177 +476,244 @@ defmodule VutuvWeb.OrganizationLive.Show do
       />
 
       <div class="flex flex-col gap-6 md:grid md:grid-cols-3">
-        <div class="min-w-0 md:col-span-2 md:space-y-6">
-          <.card>
-            <div class="flex items-start gap-4">
-              <.organization_logo organization={@organization} class="h-20 w-20 shrink-0" />
-              <div class="min-w-0 flex-1">
-                <h1 class="text-2xl font-bold text-slate-900 dark:text-slate-100">{@organization.name}</h1>
-                <.kind_badge kind={@organization.kind} class="mt-2" />
-                <.organization_location organization={@organization} class="mt-2 text-sm text-slate-600 dark:text-slate-400" />
-                <%!-- The website, and the domain proof beside it as the same
-                small emerald ✓ a member's verified webpage link wears. It used
-                to be a full pill on the badge row above, which spent a line of
-                the page on a fact that only means anything next to the link it
-                vouches for — this is that link, so the domain moves into the ✓'s
-                label. A page that proved a domain but names no website shows
-                that domain here instead, so the fact never goes missing. --%>
-                <div
-                  :if={@organization.website_url || @verified_domain}
-                  class="mt-2 flex items-center gap-1.5"
+        <%!-- `space-y-6`, not `md:space-y-6`: below `md` the cards of the main
+        column had no gap of their own and sat almost flush, while the desktop
+        rail kept its 24px. --%>
+        <div class="min-w-0 space-y-6 md:col-span-2">
+          <%!-- Header card (custom markup, like the profile's: a cover banner
+          with the logo overlapping it, which `<.card>`'s own padding cannot
+          do). The banner is the organization's own homepage, captured by us
+          (`Vutuv.Organizations.Screenshots`) — it used to lead the right rail,
+          where a phone put it 2,300px down the page, below the description,
+          the posts, the people and the jobs. A picture of the site says in one
+          glance what a domain name cannot, so it belongs where the page starts;
+          the rail card is gone rather than duplicated. Nothing shows while the
+          queue has not got there (`@screenshot_shown?`), and the card then
+          opens with the logo as before. --%>
+          <section class="overflow-hidden rounded-2xl bg-white shadow-sm ring-1 ring-slate-200 dark:bg-slate-900 dark:ring-slate-800">
+            <%!-- Cropped to a 5:2 band from the top (`object-top`), not shown
+            whole: a homepage capture is 400×264, and a banner that shape is
+            390px of picture on a phone and 240px more on a desktop before the
+            page has said whose it is. The top band is also the recognisable
+            part — a site's own logo and navigation live there. --%>
+            <a
+              :if={@screenshot_shown?}
+              href={@organization.website_url}
+              rel="nofollow noopener"
+              target="_blank"
+              data-organization-screenshot
+              class="block bg-slate-100 dark:bg-slate-800"
+            >
+              <%!-- The picture's `alt` is the link's whole accessible name, so
+              there is no `title` saying the same words beside it — a screen
+              reader would read the sentence twice. `loading="eager"` because
+              this is the page's LCP element now; lazy hides it from the preload
+              scanner. --%>
+              <.link_thumb
+                scope={@screenshot}
+                value={@screenshot.url}
+                alt={gettext("The website of %{name}", name: @organization.name)}
+                variant={:banner}
+                loading="eager"
+              />
+            </a>
+
+            <div class={["px-6 pb-6", not @screenshot_shown? && "pt-6"]}>
+              <%!-- The logo rides half over the banner's bottom edge, the
+              profile's avatar move. Over the picture it gets a white tile of
+              its own: a mark is usually transparent, and untiled it would read
+              as part of the screenshot. The tile is a wrapper rather than a
+              `bg-white` on `<.organization_logo>` itself, which would also
+              paint over the brand-tinted monogram a page with no logo shows.
+              Without a banner there is nothing to lift the logo off, so it
+              stays plain. --%>
+              <div class={[
+                "w-fit",
+                @screenshot_shown? && "-mt-10 rounded-3xl bg-white p-1.5 shadow-md dark:bg-slate-900"
+              ]}>
+                <.organization_logo organization={@organization} class="h-20 w-20" />
+              </div>
+
+              <h1 class="mt-3 text-2xl font-bold text-slate-900 dark:text-slate-100">{@organization.name}</h1>
+
+              <%!-- Kind and place share one line: two facts of the same weight,
+              each a few words long, that spent a line of a phone's screen each
+              while the picture they were pushing down waited at the bottom. --%>
+              <div class="mt-1.5 flex flex-wrap items-center gap-x-2 gap-y-1">
+                <.kind_badge kind={@organization.kind} />
+                <.organization_location organization={@organization} class="text-sm text-slate-600 dark:text-slate-400" />
+              </div>
+
+              <%!-- The website, and the domain proof beside it as the same
+              small emerald ✓ a member's verified webpage link wears. It used
+              to be a full pill on the badge row above, which spent a line of
+              the page on a fact that only means anything next to the link it
+              vouches for — this is that link, so the domain moves into the ✓'s
+              label. A page that proved a domain but names no website shows
+              that domain here instead, so the fact never goes missing. --%>
+              <div
+                :if={@organization.website_url || @verified_domain}
+                class="mt-2 flex items-center gap-1.5"
+              >
+                <a
+                  :if={@organization.website_url}
+                  href={@organization.website_url}
+                  rel="nofollow noopener"
+                  target="_blank"
+                  class="text-sm font-semibold text-brand-600 hover:text-brand-700 dark:text-brand-400 dark:hover:text-brand-300"
                 >
-                  <a
-                    :if={@organization.website_url}
-                    href={@organization.website_url}
-                    rel="nofollow noopener"
-                    target="_blank"
-                    class="text-sm font-semibold text-brand-600 hover:text-brand-700 dark:text-brand-400 dark:hover:text-brand-300"
+                  {display_url(@organization.website_url)}
+                </a>
+                <span
+                  :if={is_nil(@organization.website_url)}
+                  class="text-sm text-slate-700 dark:text-slate-300"
+                >
+                  {@verified_domain.domain}
+                </span>
+                <.verified_mark
+                  :if={@verified_domain}
+                  title={gettext("Verified via %{domain}", domain: @verified_domain.domain)}
+                />
+              </div>
+
+              <%!-- The Fediverse address where a visitor scans for "where else
+              is this page". The card at the foot of the column carries the
+              whole explanation — copy button and remote-follow tool — and
+              repeating that here would say the same thing twice on one screen,
+              so this is one line that names the address and jumps to it. It is
+              the shortcut row the member profile keeps in its Profiles card:
+              the card alone was not findable, which is what was reported. --%>
+              <a
+                :if={@fediverse}
+                id="organization-fediverse-shortcut"
+                href="#organization-subscribe"
+                class="group mt-2 flex items-center gap-2 text-sm text-slate-700 transition hover:text-brand-700 dark:hover:text-brand-300 dark:text-slate-200"
+              >
+                <.detail_icon
+                  name="globe"
+                  class="h-4 w-4 shrink-0 text-slate-400 transition group-hover:text-brand-600 dark:text-slate-500 dark:group-hover:text-brand-300"
+                />
+                <span class="truncate font-medium">{@fediverse.handle}</span>
+                <span class="shrink-0 text-xs text-slate-500 dark:text-slate-400">
+                  {gettext("Follow")} ›
+                </span>
+              </a>
+
+              <%!-- Three deliberate rows rather than one wrapping one. The old
+              single `flex-wrap` row broke on a phone wherever it happened to
+              run out of width: the heart and the bookmark landed alone on a
+              line of their own, and the owner's links — pushed right by an
+              `ml-auto` that only meant anything on one line — sat ragged under
+              them. So the two buttons take a full row and split it, the counts
+              and glyphs read as one quiet line, and managing the page is its
+              own labelled strip at the foot of the card. --%>
+              <div class="mt-5 flex flex-wrap items-center gap-x-4 gap-y-3 border-t border-slate-100 pt-4 dark:border-slate-800">
+                <div :if={@current_user} class="flex w-full gap-2 sm:w-auto">
+                  <%!-- Following a page (issue #1336). The same "one control,
+                  two states" pill the member and tag follows use, so the act
+                  reads the same wherever it appears: brand outline while you
+                  do not follow, a calm slate "Following" that turns rose and
+                  says "Unfollow" on hover once you do. `min-h-10` because it
+                  stands alone in a page header rather than in a dense list
+                  row; `flex-1` because on a phone the two buttons split the
+                  row into two thumb-sized halves. --%>
+                  <button
+                    type="button"
+                    id="organization-follow"
+                    phx-click="toggle-follow"
+                    aria-pressed={to_string(@following?)}
+                    class={[
+                      "group inline-flex min-h-10 flex-1 items-center justify-center gap-1.5 rounded-full border px-4 text-sm font-semibold transition-colors sm:flex-none sm:min-w-[7rem]",
+                      if(@following?,
+                        do:
+                          "border-slate-300 text-slate-700 hover:border-rose-300 hover:bg-rose-50 hover:text-rose-700 dark:border-slate-600 dark:text-slate-200 dark:hover:border-rose-500/60 dark:hover:bg-rose-950/40 dark:hover:text-rose-300",
+                        else:
+                          "border-brand-600 text-brand-700 hover:bg-brand-50 dark:border-brand-400 dark:text-brand-300 dark:hover:bg-brand-900/40"
+                      )
+                    ]}
                   >
-                    {display_url(@organization.website_url)}
-                  </a>
-                  <span
-                    :if={is_nil(@organization.website_url)}
-                    class="text-sm text-slate-700 dark:text-slate-300"
+                    <span :if={!@following?}>{gettext("Follow")}</span>
+                    <span :if={@following?} class="group-hover:hidden group-focus:hidden">
+                      {gettext("Following")}
+                    </span>
+                    <span :if={@following?} class="hidden group-hover:inline group-focus:inline">
+                      {gettext("Unfollow")}
+                    </span>
+                  </button>
+
+                  <%!-- Writing to the page (issue #1336). A quiet secondary
+                  next to the follow pill: following is the act this header is
+                  built around, and a second brand-weight control beside it
+                  would make the reader choose. Hidden while you are writing
+                  AS this page, where it would offer a conversation with
+                  yourself. --%>
+                  <.link
+                    :if={not own_page?(@acting_as, @organization)}
+                    navigate={~p"/messages/organization/#{@organization.slug}"}
+                    id="message-organization"
+                    data-message-organization
+                    class="inline-flex min-h-10 flex-1 items-center justify-center rounded-full bg-slate-100 px-4 text-sm font-semibold text-slate-700 hover:bg-slate-200 dark:bg-slate-800 dark:text-slate-200 dark:hover:bg-slate-700 sm:flex-none"
                   >
-                    {@verified_domain.domain}
-                  </span>
-                  <.verified_mark
-                    :if={@verified_domain}
-                    title={gettext("Verified via %{domain}", domain: @verified_domain.domain)}
-                  />
+                    {gettext("Message")}
+                  </.link>
                 </div>
 
-                <%!-- The Fediverse address where a visitor scans for "where else
-                is this page". The card at the foot of the column carries the
-                whole explanation — copy button and remote-follow tool — and
-                repeating that here would say the same thing twice on one screen,
-                so this is one line that names the address and jumps to it. It is
-                the shortcut row the member profile keeps in its Profiles card:
-                the card alone was not findable, which is what was reported. --%>
-                <a
-                  :if={@fediverse}
-                  id="organization-fediverse-shortcut"
-                  href="#organization-subscribe"
-                  class="group mt-2 flex items-center gap-2 text-sm text-slate-700 transition hover:text-brand-700 dark:hover:text-brand-300 dark:text-slate-200"
-                >
-                  <.detail_icon
-                    name="globe"
-                    class="h-4 w-4 shrink-0 text-slate-400 transition group-hover:text-brand-600 dark:text-slate-500 dark:group-hover:text-brand-300"
-                  />
-                  <span class="truncate font-medium">{@fediverse.handle}</span>
-                  <span class="shrink-0 text-xs text-slate-500 dark:text-slate-400">
-                    {gettext("Follow")} ›
+                <div class="flex items-center gap-4">
+                  <span
+                    :if={@follower_count > 0}
+                    data-organization-followers
+                    class="text-sm text-slate-600 dark:text-slate-400"
+                  >
+                    {ngettext("%{formatted} follower", "%{formatted} followers", @follower_count,
+                      formatted: compact_count(@follower_count)
+                    )}
                   </span>
-                </a>
-              </div>
-            </div>
 
-            <div class="mt-6 flex flex-wrap items-center gap-4 border-t border-slate-100 pt-4 dark:border-slate-800">
-              <%!-- Following a page (issue #1336). The same "one control, two
-              states" pill the member and tag follows use, so the act reads the
-              same wherever it appears: brand outline while you do not follow, a
-              calm slate "Following" that turns rose and says "Unfollow" on
-              hover once you do. `min-h-10` because it stands alone in a page
-              header rather than in a dense list row. --%>
-              <button
-                :if={@current_user}
-                type="button"
-                id="organization-follow"
-                phx-click="toggle-follow"
-                aria-pressed={to_string(@following?)}
-                class={[
-                  "group inline-flex min-h-10 min-w-[7rem] items-center justify-center gap-1.5 rounded-full border px-4 text-sm font-semibold transition-colors",
-                  if(@following?,
-                    do:
-                      "border-slate-300 text-slate-700 hover:border-rose-300 hover:bg-rose-50 hover:text-rose-700 dark:border-slate-600 dark:text-slate-200 dark:hover:border-rose-500/60 dark:hover:bg-rose-950/40 dark:hover:text-rose-300",
-                    else:
-                      "border-brand-600 text-brand-700 hover:bg-brand-50 dark:border-brand-400 dark:text-brand-300 dark:hover:bg-brand-900/40"
-                  )
-                ]}
-              >
-                <span :if={!@following?}>{gettext("Follow")}</span>
-                <span :if={@following?} class="group-hover:hidden group-focus:hidden">
-                  {gettext("Following")}
-                </span>
-                <span :if={@following?} class="hidden group-hover:inline group-focus:inline">
-                  {gettext("Unfollow")}
-                </span>
-              </button>
+                  <.engagement_bar engagement={@engagement} />
+                </div>
 
-              <%!-- Writing to the page (issue #1336). A quiet secondary next to
-              the follow pill: following is the act this header is built around,
-              and a second brand-weight control beside it would make the reader
-              choose. Hidden while you are writing AS this page, where it would
-              offer a conversation with yourself. --%>
-              <.link
-                :if={@current_user && not own_page?(@acting_as, @organization)}
-                navigate={~p"/messages/organization/#{@organization.slug}"}
-                id="message-organization"
-                data-message-organization
-                class="inline-flex min-h-10 items-center rounded-full bg-slate-100 px-4 text-sm font-semibold text-slate-700 hover:bg-slate-200 dark:bg-slate-800 dark:text-slate-200 dark:hover:bg-slate-700"
-              >
-                {gettext("Message")}
-              </.link>
-
-              <span
-                :if={@follower_count > 0}
-                data-organization-followers
-                class="text-sm text-slate-600 dark:text-slate-400"
-              >
-                {ngettext("%{formatted} follower", "%{formatted} followers", @follower_count,
-                  formatted: compact_count(@follower_count)
-                )}
-              </span>
-
-              <.engagement_bar engagement={@engagement} />
-
-              <div class="ml-auto flex flex-wrap items-center gap-4 text-sm">
-                <.link
-                  :if={@can_edit?}
-                  navigate={~p"/organizations/#{@organization.slug}/edit"}
-                  class="font-semibold text-brand-600 hover:text-brand-700 dark:text-brand-400 dark:hover:text-brand-300"
-                >
-                  {gettext("Edit")}
-                </.link>
-                <.link
-                  :if={@owner?}
-                  navigate={~p"/organizations/#{@organization.slug}/roles"}
-                  class="font-semibold text-brand-600 hover:text-brand-700 dark:text-brand-400 dark:hover:text-brand-300"
-                >
-                  {gettext("Team")}
-                </.link>
-                <.link
-                  :if={@owner?}
-                  navigate={~p"/organizations/#{@organization.slug}/domains"}
-                  class="font-semibold text-brand-600 hover:text-brand-700 dark:text-brand-400 dark:hover:text-brand-300"
-                >
-                  {gettext("Domains")}
-                </.link>
-                <%!-- This row and the manage pages' tab bar are two hand-kept
-                lists of the same map, and they had drifted: the tab bar names
-                eight areas, this row named three, and Fediverse was among the
-                five an owner could only reach by opening one of the three and
-                noticing a tab. Adding one link is the small fix; the real one is
-                to render both from a single source, which is a nav change worth
-                agreeing on first. Until then, keep them in step by hand. --%>
-                <.link
-                  :if={@owner?}
-                  id="organization-manage-fediverse"
-                  navigate={~p"/organizations/#{@organization.slug}/fediverse"}
-                  class="font-semibold text-brand-600 hover:text-brand-700 dark:text-brand-400 dark:hover:text-brand-300"
-                >
-                  {gettext("Fediverse")}
-                </.link>
                 <.link
                   :if={@current_user && !@can_manage?}
                   href={~p"/reports/new?#{[type: "organization", id: @organization.id, return_to: "/organizations/#{@organization.slug}"]}"}
-                  class="text-slate-600 hover:text-slate-800 dark:text-slate-400 dark:hover:text-slate-200"
+                  class="ml-auto text-sm text-slate-600 hover:text-slate-800 dark:text-slate-400 dark:hover:text-slate-200"
                 >
                   {gettext("Report")}
                 </.link>
               </div>
+
+              <%!-- This strip and the manage pages' tab bar are two hand-kept
+              lists of the same map, and they had drifted: the tab bar names
+              nine areas, this row named three, and Fediverse was among the
+              six an owner could only reach by opening one of the three and
+              noticing a tab. Adding one link is the small fix; the real one is
+              to render both from a single source, which is a nav change worth
+              agreeing on first. Until then, keep them in step by hand — the
+              label makes that gap louder, since a heading reads as an
+              inventory where a trailing row of links did not. --%>
+              <div
+                :if={@can_edit? or @owner?}
+                class="mt-4 border-t border-slate-100 pt-3 dark:border-slate-800"
+              >
+                <%!-- The label takes a line of its own rather than leading
+                the links: beside them it pushed the fourth onto a second row
+                on every phone. Its own msgid, not the "Manage" the ten Manage ›
+                links share: that one is an action a reader takes, and German
+                translates it as the verb "Verwalten", where a heading over the
+                links wants the noun. --%>
+                <.section_title class="text-xs">{gettext("Page management")}</.section_title>
+                <div class="mt-2 flex flex-wrap items-center gap-x-4 gap-y-2 text-sm">
+                  <.link
+                    :for={link <- manage_links(@organization, @can_edit?, @owner?)}
+                    id={link.id}
+                    navigate={link.path}
+                    class="font-semibold text-brand-600 hover:text-brand-700 dark:text-brand-400 dark:hover:text-brand-300"
+                  >
+                    {link.label}
+                  </.link>
+                </div>
+              </div>
             </div>
-          </.card>
+          </section>
 
           <.card :if={present?(@organization.description)}>
             <.section_title>{gettext("About")}</.section_title>
@@ -847,36 +947,6 @@ defmodule VutuvWeb.OrganizationLive.Show do
         </div>
 
         <aside class="space-y-6">
-          <%!-- The organization's own homepage, captured by us
-          (`Vutuv.Organizations.Screenshots`). A picture of the site says in one
-          glance what a domain name cannot, so it leads the rail — and it is a
-          picture, not a claim, so it stays out of the header card where the
-          page's identity is stated. Nothing shows while the queue has not got
-          there: `<.link_thumb>` renders nothing without a job, and during the AI
-          scan it shows the pixelated stand-in with its badge rather than an
-          empty frame. --%>
-          <.card :if={@screenshot_shown?}>
-            <.section_title>{gettext("Website")}</.section_title>
-            <a
-              href={@organization.website_url}
-              rel="nofollow noopener"
-              target="_blank"
-              class="group mt-3 block"
-              data-organization-screenshot
-            >
-              <div class="overflow-hidden rounded-lg ring-1 ring-slate-200 dark:ring-slate-800">
-                <.link_thumb
-                  scope={@screenshot}
-                  value={@screenshot.url}
-                  alt={gettext("The website of %{name}", name: @organization.name)}
-                />
-              </div>
-              <div class="mt-2 truncate text-sm font-semibold text-brand-600 group-hover:text-brand-700 dark:text-brand-400 dark:group-hover:text-brand-300">
-                {display_url(@organization.website_url)}
-              </div>
-            </a>
-          </.card>
-
           <.card>
             <.section_title>{gettext("Address")}</.section_title>
             <address class="mt-3 space-y-0.5 text-sm not-italic text-slate-700 dark:text-slate-300">

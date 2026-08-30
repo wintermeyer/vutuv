@@ -169,8 +169,7 @@ defmodule VutuvWeb.MastodonApi.Pagination do
   def window(entries, %__MODULE__{} = page, id_fun) when is_function(id_fun, 1) do
     entries
     |> Enum.filter(&in_window?(id_fun.(&1), page))
-    |> then(fn kept -> if page.min_id, do: Enum.take(kept, -page.limit), else: kept end)
-    |> Enum.take(page.limit)
+    |> Keyset.take_page(opts(page))
   end
 
   defp in_window?(nil, _page), do: false

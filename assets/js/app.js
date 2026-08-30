@@ -475,58 +475,58 @@ function serviceWorker() {
   if (!("serviceWorker" in navigator)) return Promise.resolve(null)
   if (swRegistration) return swRegistration
 
-  swRegistration = navigator.serviceWorker
-    .register("/sw.js")
-    .then((registration) => {
-      watchForNewVersion(registration)
-      return registration
-    })
-    .catch(() => null)
+  swRegistration = navigator.serviceWorker.register("/sw.js").catch(() => null)
 
   return swRegistration
 }
 
-// An installed app is reloaded even more rarely than a tab, and a deploy
-// reloads nothing at all - the LiveView socket simply reconnects to the new
-// release and patches into an hours-old document. The server-rendered bar in
-// the shell is what offers the way out; it ships `hidden` and is shown here.
+// "Reload" on the shell's update bar (issue #1729). WHETHER to offer it is the
+// server's answer - it is the only side that knows which release this document
+// came from - so all that is left here is carrying it out. Delegated at the
+// document, so it survives the patches that re-render the bar.
 //
-// Only ever on an UPDATE, never on the first install: `controller` is null
-// until a worker is in charge, and the very first one arriving is not news
-// anybody has to act on.
-let swUpdateReady = false
-
-function watchForNewVersion(registration) {
-  const offer = (worker) => {
-    if (!worker || !navigator.serviceWorker.controller) return
-    const announce = () => {
-      if (worker.state !== "installed") return
-      swUpdateReady = true
-      window.dispatchEvent(new CustomEvent("vutuv:sw-update"))
-    }
-    worker.addEventListener("statechange", announce)
-    announce()
-  }
-
-  offer(registration.waiting)
-  registration.addEventListener("updatefound", () => offer(registration.installing))
-}
-
-// Delegated at the document, so it survives the patches that re-render the bar
-// (the SwUpdate hook below owns whether it is shown, not whether it works).
+// **The control is an `<a href>` to the current page, and that is load-bearing
+// rather than tidiness.** The bar renders ONLY into a document running the
+// PREVIOUS release, so the handler that answers its click is the previous
+// release's, never this one. That handler posts `skip-waiting` to a waiting
+// worker and does nothing whatsoever when none is waiting - which is the common
+// case for exactly this reader, because a tab open across a deploy never
+// navigates and so never triggers the browser's own worker check. It does not
+// call `preventDefault` either, so the link's own navigation still carries them
+// to the new release. Without the href, the bar's primary control is dead for
+// most of the cohort it is shown to on the deploy that ships it. It also makes
+// the control work with no JavaScript at all.
 document.addEventListener("click", async (event) => {
   if (!event.target.closest("[data-sw-reload]")) return
 
-  const registration = await serviceWorker()
-  if (!registration) return
+  // Synchronously, before any await: one await later the browser has already
+  // followed the link and this handler is addressing a page that is leaving.
+  event.preventDefault()
+
+  // `reload()` rather than the href, which is the path without its query: once
+  // we are in JS the current URL is the better target.
+  const reload = () => window.location.reload()
+  const waiting = (await serviceWorker())?.waiting
+
+  // No worker waiting is the ordinary case, not a failure: the document is
+  // stale while the worker is not (it updates on its own schedule, which is not
+  // the deploy's), and then a plain reload is the whole errand.
+  if (!waiting) return reload()
 
   // The waiting worker takes over only when it is asked to, and the page
   // reloads only once it has - promoting it unasked would swap the assets
-  // under a half-written post.
-  navigator.serviceWorker.addEventListener("controllerchange", () => window.location.reload(), {
-    once: true,
-  })
-  registration.waiting?.postMessage({ type: "skip-waiting" })
+  // under a half-written post. If it never answers, go anyway after a moment:
+  // a control that visibly did nothing is worse than one that reloads twice.
+  const timer = setTimeout(reload, 2000)
+  navigator.serviceWorker.addEventListener(
+    "controllerchange",
+    () => {
+      clearTimeout(timer)
+      reload()
+    },
+    { once: true }
+  )
+  waiting.postMessage({ type: "skip-waiting" })
 })
 
 async function currentPushSubscription() {
@@ -949,32 +949,6 @@ const Hooks = {
       window.removeEventListener("vutuv:tab-teaser", this.onPreview)
       if (this.teaserTimer) clearTimeout(this.teaserTimer)
       if (this.observer) this.observer.disconnect()
-    },
-  },
-  // "A new version is available" (issue #1729). The bar itself is
-  // server-rendered in the shell (only the server knows the reader's
-  // language); this hook owns the one thing the server cannot know - whether
-  // the service worker has a newer release waiting.
-  //
-  // It needs a hook rather than a plain querySelector because the shell
-  // re-renders on every badge tick, presence diff and hourly clock, and each
-  // of those patches puts the server's `hidden` back. `updated()` is what
-  // takes it off again - the same shape WebNotify uses below, and for the same
-  // reason.
-  SwUpdate: {
-    mounted() {
-      this.onUpdate = () => this.apply()
-      window.addEventListener("vutuv:sw-update", this.onUpdate)
-      this.apply()
-    },
-    updated() {
-      this.apply()
-    },
-    destroyed() {
-      window.removeEventListener("vutuv:sw-update", this.onUpdate)
-    },
-    apply() {
-      this.el.hidden = !swUpdateReady
     },
   },
   // Browser notifications (issue #1249): a popup for activity that arrives while

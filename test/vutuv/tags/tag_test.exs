@@ -11,6 +11,13 @@ defmodule Vutuv.Tags.TagTest do
       assert get_change(changeset, :slug) == "elixir"
     end
 
+    test "drops a NUL, which Postgres would refuse on the insert" do
+      # The write-side guard on its own, so a red run here names the changeset
+      # rather than the lookup that precedes it on the minting path (#1825).
+      changeset = Tag.changeset(%Tag{}, %{"value" => "Ber" <> <<0>> <> "lin"})
+      assert get_change(changeset, :name) == "Berlin"
+    end
+
     test "keeps a trailing # (C# stays C#)" do
       changeset = Tag.changeset(%Tag{}, %{"value" => "C#"})
       assert get_change(changeset, :name) == "C#"

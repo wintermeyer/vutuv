@@ -63,20 +63,41 @@ defmodule VutuvWeb.PostLive.FeedCalendar do
   attr(:capped?, :boolean, default: false)
   attr(:class, :string, default: nil)
 
+  attr(
+    :today,
+    :any,
+    required: true,
+    doc: """
+    The reader's calendar day. Passed in rather than read from
+    `Vutuv.ViewerClock` here, because it decides three things that go stale on a
+    page left open past midnight — the date this card shows folded, which cell
+    wears the today ring, and which cells are refused as future — and a clock
+    read at render time is only ever refreshed by a render, which nothing asks
+    for at midnight. As an assign it is state the feed owns and the
+    `Vutuv.DayClock` tick can move (`VutuvWeb.PostLive.Feed`), which is what
+    makes the rollover reach an open page.
+    """
+  )
+
   def feed_calendar(assigns) do
     assigns =
       assign(assigns,
         cells: FeedTimeTravel.month_grid(assigns.month),
-        today: Vutuv.ViewerClock.today(),
         peak: assigns.counts |> Map.values() |> Enum.max(fn -> 0 end)
       )
 
     ~H"""
+    <%!-- Folded, the card IS a control, so it takes the app's control height
+    (`h-10`) instead of whatever its padding and its tallest child add up to. On
+    a phone it stands beside the filter button, which is `h-10`, and the two sat
+    four pixels apart — eight once the amber "Now" joined the row. A fixed height
+    also keeps the line still: it is the same card whether the reader is
+    travelling or not. --%>
     <div
       id={@id}
       class={[
         "rounded-2xl bg-white shadow-sm ring-1 dark:bg-slate-900",
-        if(@open?, do: "p-4", else: "p-2"),
+        if(@open?, do: "p-4", else: "flex h-10 px-2"),
         @day && "ring-amber-400 dark:ring-amber-500/60",
         !@day && "ring-slate-200 dark:ring-slate-800",
         @class
@@ -88,8 +109,15 @@ defmodule VutuvWeb.PostLive.FeedCalendar do
       around it.
 
       Folded, this is the whole card and the only thing a reader who never
-      travels ever sees: which day the timeline is showing, and a way in. --%>
-      <div class="flex items-center gap-0.5">
+      travels ever sees: which day the timeline is showing, and a way in.
+
+      Folded the row is the card's only child and stretches to its full height,
+      so the fold toggle takes the whole 40px rather than the 28px its own
+      padding gives it — the tap target a phone control owes a finger. It
+      stretches unconditionally: unfolded the row is as tall as the month arrows
+      beside it, which is exactly the toggle's own height, so there is nothing
+      to stretch to and the class can stay a static string. --%>
+      <div class="flex w-full items-center gap-0.5">
         <.month_arrow
           :if={@open?}
           n={-12}
@@ -103,7 +131,7 @@ defmodule VutuvWeb.PostLive.FeedCalendar do
           type="button"
           phx-click="cal-toggle"
           aria-expanded={to_string(@open?)}
-          class="flex min-w-0 flex-1 items-center justify-center gap-1.5 rounded-lg px-1 py-1 hover:bg-slate-50 dark:hover:bg-slate-800"
+          class="flex min-w-0 flex-1 self-stretch items-center justify-center gap-1.5 rounded-lg px-1 py-1 hover:bg-slate-50 dark:hover:bg-slate-800"
         >
           <.calendar_glyph travelling?={!is_nil(@day)} />
 
@@ -131,14 +159,14 @@ defmodule VutuvWeb.PostLive.FeedCalendar do
           :if={@open?}
           n={1}
           label={gettext("Next month")}
-          disabled={at_this_month?(@month)}
+          disabled={at_this_month?(@month, @today)}
         />
         <.month_arrow
           :if={@open?}
           n={12}
           label={gettext("Next year")}
           wide
-          disabled={at_this_month?(@month)}
+          disabled={at_this_month?(@month, @today)}
         />
 
         <%!-- Folded and away from today, the way back has to be on the one line
@@ -167,7 +195,11 @@ defmodule VutuvWeb.PostLive.FeedCalendar do
           title={day_title(cell.date, Map.get(@counts, cell.date, 0), @metric)}
           aria-current={@day && cell.date == @day && "date"}
           class={[
+            # The shading arrives after the grid does (the feed's
+            # `defer_calendar_counts/1`), so it fades in rather than snapping —
+            # a month opens unshaded and colours a moment later.
             "relative flex aspect-square items-center justify-center rounded text-[11px] tabular-nums",
+            "transition-colors",
             "disabled:cursor-not-allowed disabled:opacity-30",
             heat_class(Map.get(@counts, cell.date, 0), @peak),
             !cell.in_month? && "opacity-40",
@@ -310,8 +342,11 @@ defmodule VutuvWeb.PostLive.FeedCalendar do
     """
   end
 
-  defp at_this_month?(month),
-    do: Date.compare(month, FeedTimeTravel.month_of(nil)) != :lt
+  # From the `today` above rather than from the clock, so that on the night a
+  # month rolls over the forward arrows unlock with the rest of the card instead
+  # of holding the reader in last month until they reload.
+  defp at_this_month?(month, today),
+    do: Date.compare(month, FeedTimeTravel.month_of(today)) != :lt
 
   # Five steps, GitHub's scale, keyed to the busiest day of the month SHOWN
   # rather than to a fixed count. An absolute scale would paint a normal month

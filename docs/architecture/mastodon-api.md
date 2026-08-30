@@ -98,7 +98,14 @@ Server discovery, login and the core social workflow:
   no id, so the boundary rides the `Link` header, as it does in Mastodon.
 - `GET` and `POST /api/v1/markers` — where a client left off reading
 - `GET /api/v1/bookmarks`, `/favourites`, `/blocks`, `/mutes`,
-  `/accounts/:id/followers`, `/statuses/:id/favourited_by` and `/reblogged_by`
+  `/accounts/:id/followers`, `/statuses/:id/favourited_by` and `/reblogged_by`.
+  The first two carry **both worlds** (issue #1597): a client may save or
+  favourite a cached post or reply, so the vutuv half
+  (`Posts.bookmarked_statuses/2`) and the fediverse half
+  (`Fediverse.bookmarked_statuses/2`) are merged by `Keyset.merge/2`, the way
+  `/timelines/public` merges its own two. Half those ids are prefixed, so the
+  boundary read out of the request and the one written into the `Link` header
+  are both the bare uuid underneath.
 - `PATCH /api/v1/accounts/update_credentials` and `POST /api/v1/reports`
 - `POST|GET|PUT|DELETE /api/v1/push/subscription`
 - the streaming websocket at `/api/v1/streaming`
@@ -704,7 +711,8 @@ url means here. A client following it attaches a photo that has already cleared
 the scan. The window above belongs to clients that post immediately with a
 freshly uploaded id.
 
-**Push** is RFC 8291/8292 Web Push, implemented in `Vutuv.MastodonApi.WebPush`
+**Push** is RFC 8291/8292 Web Push, implemented in `Vutuv.WebPush` (the
+adapter's own `Vutuv.MastodonApi.WebPush` adds nothing but its on/off gate)
 with **no dependency**: the obvious hex package requires `httpoison ~> 1.0`,
 which this project bans, and has not shipped since 2021 — everything needed is
 in OTP's `:crypto`, and delivery goes through `Req` like every other outbound
@@ -712,6 +720,29 @@ call. A subscription is keyed on the access token, so one device is one
 subscription and revoking an app takes it along. A push carries **no content**:
 the kind and the notification id, nothing else, so neither the push service nor
 a lock screen learns what was written.
+
+**Two content encodings, and the subscription picks.** `subscription[standard]`
+is stored per device and defaults to false, exactly as on Mastodon, in which
+case the body is the older `aesgcm` with its salt in `Encryption:` and the
+sender key in `Crypto-Key: dh=`. That is not legacy politeness: an iOS client
+subscribes through an APNs relay, and APNs forwards a payload rather than our
+headers, so the relay has to lift those two values out and put them in the
+payload itself — `aes128gcm` hides both inside the record and the phone shows
+"Unable to decrypt notification" (issue #1698). A client that sets the flag gets
+RFC 8291 `aes128gcm`. Both are checked against their specs' own test vectors in
+`web_push_test.exs`.
+
+**The false default is a compatibility decision, not an oversight, and it has to
+survive being moved.** Two things carry it: the `standard` column on the
+subscription, and `Vutuv.WebPush.content_encoding/1` with the `aesgcm` branch of
+`encode_body/4` beside it. The crypto has already moved once — it lived in this
+adapter until the installed app needed it too — and the encoding choice travelled
+with it, which is the point: a refactor that lifts it again has to take both, and
+nothing will say otherwise, because every test that would catch the loss lives
+beside the code being moved. `content_encoding/1` reads a bare map rather than a
+schema so the shared transport never has to ask a Mastodon module what to send.
+Flipping the default is a separate decision from moving the code, and belongs to
+whoever can confirm the relays no longer need the headers.
 
 **It needs no configuration.** A VAPID pair is self-signed, so an installation
 that pinned none derives its own from `secret_key_base` (the same
@@ -785,7 +816,15 @@ is invalid", which sends a member looking for a mistake in their own text.
   `filters` return `[]` (`MastodonApi.CompatibilityController`). Notifications,
   markers and followed tags no longer do. vutuv has real filters (muted words
   and tags) and real direct messages behind two of those, so they are the next
-  worthwhile ones.
+  worthwhile ones. `follow_requests` sits in the same controller and is **not**
+  a stub: a follow here needs no approval (`Vutuv.Social.Follow`), an inbound
+  remote `Follow` is accepted on arrival (`Vutuv.Fediverse.Follower`) and every
+  account is presented `locked: false`, so the list is empty by construction
+  with nothing to implement later. It answered 404 until Tokodon, which calls it
+  straight after the authorisation step, read that as a failed login (issue
+  #1692). The `requested` state a client does see is the other direction, this
+  member waiting on a remote server's answer, and Mastodon carries that on the
+  Relationship.
 - **A path this adapter does not implement answers JSON, on both hosts.** The
   subdomain always had a catch-all; the **main host** — the one a member types
   into a phone app, and so the one every client actually uses — did not, so an

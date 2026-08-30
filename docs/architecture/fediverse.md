@@ -295,6 +295,17 @@ every activity of a member it finds no key for, silently.
     (`Vutuv.Mastodon.post_text/1`, which the REST API sends as text). Together
     with `to_text/3` those three are every path from a remote server's words
     into a column here.
+  - **A NUL byte is scrubbed at the write, not at each door.** A NUL is valid
+    UTF-8 and Postgres refuses it (`22021 character_not_in_repertoire`), so one
+    in stored text raises on `Repo.insert` — a delivery any server can make
+    fail. `to_text/3` scrubs the bodies it reduces, but the strings *beside* a
+    body never go near it: an actor's `preferredUsername` and `name`, an
+    attachment's `alt`, the object and inbox URIs are copied out of the JSON,
+    truncated and cast. So the guard sits in the changesets instead
+    (`Vutuv.ChangesetHelpers.scrub_nul/1`, walking every `:string` change on
+    `RemoteAccount`, `Follower`, `Note`, `RemotePost`, `Reaction` and
+    `RemoteImage`), and a new remote-fed column is covered the moment it is
+    cast (issue #1767).
   - **Cleaned on the way in, unlike a display name.** A name is re-derived from
     its column on every render; this text *is* the column, and every reader of
     it (the card, the agent formats, the Mastodon adapter, the teaser, the
@@ -1154,6 +1165,20 @@ while the member permalink had had its own branch from the start. It has one
 now, with the page's own gates in front of it: the page must federate, the post
 must not be held by moderation, and a page that switched federation off gets the
 same `410`/`404` refusal its actor endpoint gives.
+
+**Every other page of the `:browser` pipeline answers that header with 406.**
+The accept list exists for the four URLs above; on the rest of the site the
+format simply survived negotiation, and a page whose HTML is a LiveView has no
+template for it, so `Phoenix.LiveView.Static` handed `Plug.Conn.resp/3` a
+`{:safe, iodata}` body and `/feed`, `/organizations`, `/search`,
+`/notifications` — all of them — answered **500** (issue #1776). The refusal is
+`VutuvWeb.Plug.HtmlOnly`, asked once per page *shape* rather than once per page:
+routed LiveViews pipe it as the router's `:html_only` pipeline, the controllers
+that `live_render` their page get it inside
+`VutuvWeb.ControllerHelpers.render_live/3`. Both give exactly the 406
+`application/ld+json` has always got, which is not on the accept list at all.
+A URL that already named an agent document is exempt, so `/jobs.md` keeps
+answering Markdown whatever `Accept` rode along with it.
 
 ## Mentions on the way out
 

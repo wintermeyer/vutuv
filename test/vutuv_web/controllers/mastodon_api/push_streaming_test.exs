@@ -267,6 +267,79 @@ defmodule VutuvWeb.MastodonApi.PushStreamingTest do
       assert Repo.one(PushSubscription).endpoint == "https://push.example.com/two"
     end
 
+    # Issue #1698: the clients were written against Mastodon, which defaults
+    # this to false — so a client that says nothing has to be recorded as
+    # legacy, or its phone is sent a body it cannot open.
+    test "a client that sends no flag is recorded as legacy" do
+      pinned_keys()
+
+      user = insert(:activated_user)
+
+      body =
+        build_conn()
+        |> mastodon_conn(mastodon_token(user, ["push"]))
+        |> post("/api/v1/push/subscription", %{
+          "subscription" => %{
+            "endpoint" => "https://push.example.com/abc",
+            "keys" => browser_keys()
+          }
+        })
+        |> json_response(200)
+
+      assert body["standard"] == false
+      refute Repo.get_by!(PushSubscription, user_id: user.id).standard
+    end
+
+    # However the client's HTTP library felt like spelling a boolean. A value
+    # Ecto refuses to cast would answer 422 to a subscription that is otherwise
+    # perfectly good, leaving that device with no push at all.
+    test "the flag is read however the client spells it" do
+      pinned_keys()
+
+      for {sent, stored} <- [{true, true}, {"true", true}, {"1", true}, {"0", false}] do
+        user = insert(:activated_user)
+
+        body =
+          build_conn()
+          |> mastodon_conn(mastodon_token(user, ["push"]))
+          |> post("/api/v1/push/subscription", %{
+            "subscription" => %{
+              "endpoint" => "https://push.example.com/abc",
+              "keys" => browser_keys(),
+              "standard" => sent
+            }
+          })
+          |> json_response(200)
+
+        assert body["standard"] == stored, "#{inspect(sent)} answered #{body["standard"]}"
+        assert Repo.get_by!(PushSubscription, user_id: user.id).standard == stored
+      end
+    end
+
+    # The same device, resubscribed by a build that has since learned the
+    # standard encoding — or by an older one that has not. The flag has to
+    # follow the new subscription, never survive from the row it replaces.
+    test "re-registering rewrites the flag rather than keeping the old one" do
+      pinned_keys()
+
+      token = mastodon_token(insert(:activated_user), ["push"])
+
+      for standard <- [true, false] do
+        build_conn()
+        |> mastodon_conn(token)
+        |> post("/api/v1/push/subscription", %{
+          "subscription" => %{
+            "endpoint" => "https://push.example.com/abc",
+            "keys" => browser_keys(),
+            "standard" => standard
+          }
+        })
+        |> json_response(200)
+
+        assert Repo.one(PushSubscription).standard == standard
+      end
+    end
+
     test "reading and deleting the subscription", %{conn: conn} do
       pinned_keys()
 

@@ -20,6 +20,8 @@ defmodule Vutuv.Fediverse.Reaction do
 
   use VutuvWeb, :model
 
+  import Vutuv.ChangesetHelpers, only: [scrub_nul: 1]
+
   alias Vutuv.Fediverse.Handle
 
   @kinds ~w(like announce)
@@ -53,6 +55,10 @@ defmodule Vutuv.Fediverse.Reaction do
   def changeset(%__MODULE__{} = reaction, attrs) do
     reaction
     |> cast(attrs, [:actor_uri, :handle, :kind, :received_at])
+    # Remote strings, and a NUL in one raises on insert (issue #1767). This row
+    # is written with `insert_all` from the applied changeset, so the scrub has
+    # to sit here or nothing sees it.
+    |> scrub_nul()
     |> validate_required([:actor_uri, :kind, :received_at])
     |> validate_inclusion(:kind, @kinds)
     |> validate_length(:actor_uri, max: @max_uri_bytes, count: :bytes)

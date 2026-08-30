@@ -16,6 +16,8 @@ defmodule Vutuv.Fediverse.Follower do
 
   use VutuvWeb, :model
 
+  import Vutuv.ChangesetHelpers, only: [scrub_nul: 1]
+
   alias Vutuv.Fediverse.Handle
 
   # Remote URIs are unbounded in theory; cap generously (they are `text`
@@ -48,6 +50,8 @@ defmodule Vutuv.Fediverse.Follower do
   def changeset(%__MODULE__{} = follower, attrs) do
     follower
     |> cast(attrs, [:actor_uri, :inbox_uri, :shared_inbox_uri, :handle, :name])
+    # Remote strings, and a NUL in one raises on insert (issue #1767).
+    |> scrub_nul()
     |> validate_required([:actor_uri, :inbox_uri])
     |> validate_length(:actor_uri, max: @max_uri)
     |> validate_length(:inbox_uri, max: @max_uri)

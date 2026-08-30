@@ -14,6 +14,7 @@ defmodule VutuvWeb.ControllerHelpers do
   alias Vutuv.CodeStats
   alias Vutuv.Repo
   alias Vutuv.SocialFeed.Http
+  alias VutuvWeb.Plug.HtmlOnly
   alias VutuvWeb.RateLimit
 
   @doc """
@@ -165,9 +166,17 @@ defmodule VutuvWeb.ControllerHelpers do
   Note this is the *page is a LiveView* shape, not the embedded-child shape
   (`ShellLive` in the layout, `PostLive.Actions` in a card): those keep their
   surrounding chrome and pass their own session.
+
+  `VutuvWeb.Plug.HtmlOnly` is the other half worth having in one place: a page
+  reaching here did not answer the `application/activity+json` the `:browser`
+  pipeline admits for the ActivityPub URLs, so it refuses the format instead of
+  handing a LiveView one it has no template for and 500ing (issue #1776). It
+  runs after the caller's `AgentDocs.negotiate/1`, so the `.md`/`.txt` siblings
+  are untouched; the router's `:html_only` pipeline is the routed-LiveView half.
   """
   def render_live(%Conn{} = conn, live_view, extra \\ %{}) do
     conn
+    |> HtmlOnly.call([])
     |> Phoenix.Controller.put_layout(html: false)
     |> Phoenix.LiveView.Controller.live_render(live_view,
       session: Map.merge(live_render_session(conn), extra)
