@@ -20,9 +20,17 @@ defmodule Vutuv.PrecommitHookTest do
   answer it cannot give. Its whole cost is the ~9,100-test suite, and none of
   precommit's five steps reads a `docs/` page or a top-level Markdown file, so
   #1774 paid ~300-900 s nine times over for one Markdown file. The exemption
-  that fixes it is calibrated here from both sides: without it the two `SKIP`
-  cases go red, and widening it to "anything ending in `.md`" reds the two that
-  pin `mix.exs` and a build-input Markdown file to the full gate.
+  that fixes it is calibrated here from both sides: without it the `SKIP` cases
+  go red, and widening it to "anything ending in `.md`" reds the two that pin a
+  build-input Markdown file to the full gate. The `mix.exs` case is the one no
+  widening of the Markdown rule can red, because `mix.exs` is not Markdown; it
+  guards a different edit, somebody exempting `mix.*` or `*.exs` outright.
+
+  Which base that diff is read from is the whole of the exemption's worth, and
+  the hook says why. The cases that pin it are the three that give the branch a
+  tracking ref at all: two under "a branch that has caught up with main", and
+  the `tracking: true` degraded path, which is the one shape where the tracking
+  ref would answer and must still not be asked.
 
   The hook's `--explain` mode prints its decision without running precommit;
   that mode exists for this test, and the settings.json invocation passes no
@@ -211,6 +219,27 @@ defmodule Vutuv.PrecommitHookTest do
     end
   end
 
+  describe "a branch that has caught up with main" do
+    # A documentation PR lives long enough that main moves under it, so from
+    # its second push onwards the branch has merged main in or been rebased
+    # onto it. Both shapes carry `lib/vutuv/thing.ex` when the diff is read
+    # from the tracking ref and only the Markdown file when it is read from the
+    # trunk, which is the difference the hook's base comment is about.
+    test "a branch that merged main in still skips", ctx do
+      repo = tmp_project(["CONTRIBUTING.md"], integrate: :merge)
+
+      assert decide(ctx, "git -C #{repo} push") =~ "SKIP"
+    end
+
+    # The same assertion through a rewritten history rather than a merge
+    # commit, which is what would catch a base read off the top commit alone.
+    test "a branch rebased onto main still skips", ctx do
+      repo = tmp_project(["CONTRIBUTING.md"], integrate: :rebase)
+
+      assert decide(ctx, "git -C #{repo} push --force-with-lease") =~ "SKIP"
+    end
+  end
+
   describe "the exemption's degraded paths" do
     # Rule 1 of the hook: an unanswered question is not an exemption. Each of
     # these carries documentation only, and each must still run the gate
@@ -233,6 +262,16 @@ defmodule Vutuv.PrecommitHookTest do
 
     test "no merge base to compare against pays the gate", ctx do
       repo = tmp_project(["CONTRIBUTING.md"], trunk: false)
+
+      assert decide(ctx, "git -C #{repo} push") == "PUSH #{repo}"
+    end
+
+    test "a tracking ref is no substitute for the trunk", ctx do
+      # The one shape where a second base would answer: no trunk ref, but a
+      # tracking ref whose merge base yields the documentation file on its own.
+      # The hook does not ask it. That reading is the permissive one, and an
+      # unanswered question is not an exemption.
+      repo = tmp_project(["CONTRIBUTING.md"], trunk: false, tracking: true)
 
       assert decide(ctx, "git -C #{repo} push") == "PUSH #{repo}"
     end
@@ -293,6 +332,10 @@ defmodule Vutuv.PrecommitHookTest do
   # commit registered as `upstream/main`, then one commit on branch `work`
   # touching `paths`. That second commit is what a push from it would carry.
   # `trunk: false` leaves the trunk ref out, so nothing can be compared.
+  # `tracking: true` gives the branch a tracking ref at the base commit, and
+  # `integrate: :merge | :rebase` ages it instead: it is pushed once, main
+  # gains a source file, and the branch takes that in the two ways a long-lived
+  # PR does.
   defp tmp_project(paths, opts \\ []) do
     repo = tmp_repo()
     git = fn args -> {_, 0} = System.cmd("git", ["-C", repo | args]) end
@@ -306,10 +349,10 @@ defmodule Vutuv.PrecommitHookTest do
     git.(["commit", "--quiet", "-m", "base"])
     git.(["branch", "-M", "work"])
 
-    if Keyword.get(opts, :trunk, true) do
-      {head, 0} = System.cmd("git", ["-C", repo, "rev-parse", "HEAD"])
-      git.(["update-ref", "refs/remotes/upstream/main", String.trim(head)])
-    end
+    if Keyword.get(opts, :trunk, true),
+      do: git.(["update-ref", "refs/remotes/upstream/main", "HEAD"])
+
+    if Keyword.get(opts, :tracking, false), do: track(repo, git)
 
     for path <- paths do
       full = Path.join(repo, path)
@@ -320,10 +363,48 @@ defmodule Vutuv.PrecommitHookTest do
     git.(["add", "-A"])
     git.(["commit", "--quiet", "-m", "work"])
 
+    case Keyword.fetch(opts, :integrate) do
+      {:ok, how} -> integrate(repo, git, how)
+      :error -> :ok
+    end
+
     # The hook reports the resolved toplevel, and on macOS the temp directory
     # reaches it through the `/var` → `/private/var` symlink.
     {toplevel, 0} = System.cmd("git", ["-C", repo, "rev-parse", "--show-toplevel"])
     String.trim(toplevel)
+  end
+
+  # The branch gets a tracking ref at the current HEAD. The remote entry is not
+  # decoration: `@{upstream}` resolves through its fetch refspec and NOT through
+  # `branch.work.merge` alone, so without it git answers nothing, and a fixture
+  # built to tell two bases apart quietly stops telling them apart. Nothing ever
+  # contacts the address.
+  defp track(repo, git) do
+    git.(["remote", "add", "origin", Path.join(repo, "origin.git")])
+    git.(["update-ref", "refs/remotes/origin/work", "HEAD"])
+    git.(["branch", "--quiet", "--set-upstream-to=origin/work", "work"])
+  end
+
+  # The branch has been pushed once, and main has moved since. The tracking ref
+  # stays at the tip that was pushed, which is the whole point: once the branch
+  # takes main's commit in, that ref sits *behind* the integration and its merge
+  # base drags main's source file into the branch's diff. The trunk ref moves
+  # with main, so the merge base with it does not.
+  defp integrate(repo, git, how) do
+    track(repo, git)
+
+    git.(["checkout", "--quiet", "--detach", "refs/remotes/upstream/main"])
+    File.mkdir_p!(Path.join(repo, "lib/vutuv"))
+    File.write!(Path.join(repo, "lib/vutuv/thing.ex"), "# moved on\n")
+    git.(["add", "-A"])
+    git.(["commit", "--quiet", "-m", "main moved on"])
+    git.(["update-ref", "refs/remotes/upstream/main", "HEAD"])
+    git.(["checkout", "--quiet", "work"])
+
+    case how do
+      :merge -> git.(["merge", "--quiet", "--no-edit", "refs/remotes/upstream/main"])
+      :rebase -> git.(["rebase", "--quiet", "refs/remotes/upstream/main"])
+    end
   end
 
   defp shell_quote(value), do: "'" <> String.replace(value, "'", ~S('\'')) <> "'"

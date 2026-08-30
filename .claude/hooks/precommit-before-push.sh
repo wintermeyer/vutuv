@@ -303,20 +303,31 @@ $push_args
 EOF
 fi
 
-# What the remote does not have yet. A tracking branch answers it directly; a
-# branch with no counterpart yet has newly written everything since it left the
-# line it was cut from, which is the merge base with the trunk.
+# What this branch wrote on its own, which is the merge base with the trunk —
+# NOT the merge base with the tracking ref (`@{upstream}`). The moment a branch
+# merges main in or rebases onto it, the tracking ref's merge base falls back
+# behind that integration point, so the diff carries every file main changed
+# meanwhile and no docs-only branch is docs-only twice. That is rule 3's own
+# push, and reading the tracking ref would have exempted the first of those
+# nine runs and charged the eight after it. Main's code was gated on main; what
+# this push asks anybody to check is the work of the branch.
+#
+# The mirror case is the cost, and it is the direction this file always takes:
+# a code branch whose follow-up push touches only documentation pays the gate a
+# second time. That is also why the tracking ref is not kept as a fallback for
+# a checkout with no trunk ref — it is the permissive reading, and rule 1 says
+# an unanswered question is not an exemption.
+#
+# `git log HEAD --not --remotes` would name the pushed-for-the-first-time paths
+# exactly, without a base at all. It is not used: a merge commit lists no paths
+# without `--diff-merges`, and `--remotes` trusts every remote-tracking ref in
+# the checkout, forks included. Both miss in the permissive direction.
 base=""
 if [ -z "$gate" ]; then
-  tracked=$(git -C "$toplevel" rev-parse --verify --quiet '@{upstream}' 2>/dev/null)
-  [ -n "$tracked" ] && base=$(git -C "$toplevel" merge-base "$tracked" HEAD 2>/dev/null)
-
-  if [ -z "$base" ]; then
-    for trunk in refs/remotes/upstream/main refs/remotes/origin/main; do
-      base=$(git -C "$toplevel" merge-base "$trunk" HEAD 2>/dev/null) || base=""
-      [ -n "$base" ] && break
-    done
-  fi
+  for trunk in refs/remotes/upstream/main refs/remotes/origin/main; do
+    base=$(git -C "$toplevel" merge-base "$trunk" HEAD 2>/dev/null) || base=""
+    [ -n "$base" ] && break
+  done
 
   [ -n "$base" ] || gate="nothing to compare this push against"
 fi
@@ -342,7 +353,7 @@ EOF
 fi
 
 [ -n "$gate" ] ||
-  skip "this push carries only files \`mix precommit\` cannot read (docs, .github, top-level Markdown). CI still checks everything."
+  skip "this branch adds only files \`mix precommit\` cannot read (docs, .github, top-level Markdown). CI still checks everything."
 
 if [ "$explain" -eq 1 ]; then
   echo "PUSH $toplevel"
