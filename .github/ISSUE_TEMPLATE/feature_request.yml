@@ -5,46 +5,38 @@ body:
   - type: markdown
     attributes:
       value: |
-        **Please keep the whole issue under 150 words.** A mockup or a screenshot
-        carries more than three paragraphs of prose, and a short request gets
-        discussed sooner than a long one.
+        **Write the title so it names something you can point at** — a page, a
+        control, a mail — and what should change about it. That title is all we
+        see in the list.
 
-        If you are letting an AI agent write this for you, give it that ceiling
-        — left alone it will produce a specification nobody asked for.
+        **Then three sentences.** What is hard today, what should happen
+        instead, who it helps. Not a specification: prose. A mockup or a link
+        to prior art carries more than three paragraphs. If you are letting an
+        AI agent write this, give it that ceiling — left alone it will produce
+        a spec nobody asked for.
 
-  - type: input
-    id: tldr
+  - type: textarea
+    id: what
     attributes:
-      label: TL;DR
-      description: One sentence. What should vutuv do?
-      placeholder: Show the jobs earned with a qualification on its detail page.
+      label: What should change
+      description: >-
+        Three sentences of prose. What is awkward today, what should happen
+        instead, and who notices. If there is a neighbouring idea you are
+        *not* asking for, one more sentence naming it saves a long thread.
+      placeholder: |
+        A qualification's page does not say which jobs it earned, so the one
+        thing people want to know about a certificate is missing. It should
+        list the work experiences that cite it. This helps anybody deciding
+        whether a qualification is worth having.
     validations:
       required: true
 
   - type: textarea
-    id: problem
+    id: where
     attributes:
-      label: What is hard today
+      label: Where
       description: >-
-        The situation you keep running into. Skip this only if it is obvious
-        from the sentence above.
-    validations:
-      required: true
-
-  - type: textarea
-    id: proposal
-    attributes:
-      label: How it should work
-      description: >-
-        Your suggestion, plus a mockup or screenshot if you have one. Prior art
-        from another site is welcome and usually explains it in one link.
-    validations:
-      required: true
-
-  - type: textarea
-    id: out_of_scope
-    attributes:
-      label: What you are not asking for
-      description: >-
-        Optional, and more useful than it sounds: naming the neighbouring idea
-        you do *not* want keeps the discussion from growing into it.
+        Optional. The page or URL this is about, and a mockup or screenshot if
+        you have one.
+      placeholder: |
+        /wintermeyer/qualifications/erste-hilfe

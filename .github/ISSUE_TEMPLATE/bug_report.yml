@@ -5,57 +5,48 @@ body:
   - type: markdown
     attributes:
       value: |
-        **Please keep the whole issue under 150 words.** Short beats complete:
-        we can always ask a follow-up question, but nobody reads a wall of text
-        carefully, so a long issue gets answered slower, not faster.
+        **Write the title so it names something you can point at** — a page, a
+        button, a mail — and what is wrong with it. That title is all we see in
+        the list.
 
-        If you are letting an AI agent write this for you, give it that ceiling
-        — left alone it will produce two thousand words of context we already
-        have.
-
-  - type: input
-    id: tldr
-    attributes:
-      label: TL;DR
-      description: One sentence. What is broken?
-      placeholder: Saving a tagline longer than 255 characters returns a 500.
-    validations:
-      required: true
-
-  - type: input
-    id: where
-    attributes:
-      label: Where
-      description: The page, URL, route or module it happens in.
-      placeholder: /me/tagline/edit
+        **Then three sentences.** What happens, what should happen, who runs
+        into it. Not a report with headings and fields: prose. If you are
+        letting an AI agent write this, give it that ceiling — left alone it
+        will produce two thousand words of context we already have.
 
   - type: textarea
-    id: behaviour
+    id: what
     attributes:
-      label: Now vs. want
-      description: What happens today, and what should happen instead.
+      label: What happens
+      description: >-
+        Three sentences of prose. What goes wrong, what you expected instead,
+        and who runs into it.
       placeholder: |
-        Now: a 256-character tagline hits Postgres 22001 and the page 500s.
-        Want: the form rejects it with a field error.
+        Saving a tagline longer than 255 characters throws the member out to an
+        error page instead of telling them it is too long. The form should
+        refuse it with a field error and a character counter. Anybody who
+        writes a long tagline hits this.
     validations:
       required: true
 
   - type: textarea
     id: repro
     attributes:
-      label: Steps to reproduce
+      label: How to reproduce it
       placeholder: |
         1. Open /me/tagline/edit
         2. Paste 300 characters
-        3. Save -> 500
+        3. Save -> error page
     validations:
       required: true
 
   - type: textarea
     id: context
     attributes:
-      label: Screenshot, time, browser
+      label: Where and when
       description: >-
-        A screenshot says more than a paragraph. For a bug on vutuv.de please
+        The URL, plus a screenshot if you have one. For a bug on vutuv.de please
         add the exact time including seconds and time zone, so we can find the
         request in the log.
+      placeholder: |
+        /me/tagline/edit, 2026-08-30 14:22:07 CEST, Firefox on Android

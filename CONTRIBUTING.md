@@ -59,3 +59,8 @@ edits — please keep the curl examples runnable.
 Open a [GitHub issue](https://github.com/wintermeyer/vutuv/issues) with steps
 to reproduce, or — for anything security-sensitive — follow
 [SECURITY.md](SECURITY.md) instead of a public issue.
+
+Keep it to three sentences and a `Where:` line — what happens, what should
+happen, who runs into it. [docs/ISSUES.md](docs/ISSUES.md) shows the shape with
+worked examples; it is worth the minute before you file, and doubly so if an AI
+agent is writing the issue for you.
