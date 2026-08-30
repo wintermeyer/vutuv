@@ -203,6 +203,22 @@ defmodule VutuvWeb.ShellLive do
   # second.
   defp assign_shell_defaults(socket, path) do
     socket
+    # "A new version is ready" (issue #1729) — see the bar in render/1 for why
+    # the service worker cannot answer this and `phx-track-static` can. Called
+    # here because it is mount-only (`connect_params` is dropped afterwards),
+    # which is also the right moment: a deploy drops the socket, so the
+    # reconnect that follows is when the answer changes.
+    #
+    # **The `connected?/1` is NOT redundant, however much it looks it.**
+    # `static_changed?/1` does open with the same check, and `Static.mount`
+    # seeds `connect_params: %{}` — so on a root dead render the bare call is
+    # indeed safe, which is exactly what makes this worth a comment. The shell
+    # is never a root: `app.html.heex` embeds it with `live_render`, so a dead
+    # controller page takes `Static.disconnected_nested_render/6`, which sets
+    # `conn_session` and **no** `connect_params` — and `static_changed?/1`
+    # raises rather than answering. Only the `and` short-circuit keeps it from
+    # being called there. Dropping it 500s every classic page in the app.
+    |> assign(:update_ready?, connected?(socket) and static_changed?(socket))
     |> assign(:self_online?, false)
     # Whether this member asked for browser notifications (issue #1249). False
     # for the anonymous shell and for the throwaway dead render, which raises
@@ -354,6 +370,13 @@ defmodule VutuvWeb.ShellLive do
   # there it deep-links to the member's own profile instead.
   defp brand_path(user_param, "/feed") when is_binary(user_param), do: ~p"/#{user_param}"
   defp brand_path(_user_param, _path), do: ~p"/"
+
+  # Where the update bar's Reload points when JavaScript does not take the click
+  # (see the bar in render/1). `@path` is `conn.request_path`, so a query is
+  # lost — the accepted cost of the control having a target at all, and only on
+  # the fallback path: app.js reloads the real URL where it can.
+  defp reload_path(path) when is_binary(path) and path != "", do: path
+  defp reload_path(_path), do: ~p"/"
 
   # Both badges recompute from the source of truth rather than adjusting a
   # running tally, so they can't drift. A bare +1 on :new_notification went
@@ -835,33 +858,62 @@ defmodule VutuvWeb.ShellLive do
       writes a generated stylesheet that reveals each online member's
       [data-presence-user-id] dot, across classic controller pages too. Empty +
       phx-update="ignore": it manages a document-wide stylesheet, not children. --%>
-      <%!-- "A new version is available" (issue #1729). A deploy reloads
-      nothing: an open page keeps the bundle it downloaded, and an installed
-      app is reloaded rarer still, so the service worker's `updatefound` is the
-      one moment anybody learns. The bar is server-rendered because only the
-      server knows the reader's language, and it is shown for logged-out
-      visitors too - a stale document is stale whoever is reading it.
+      <%!-- "A new version is ready" (issue #1729). A deploy reloads nothing: an
+      open page keeps the bundle it downloaded, and an installed app is reloaded
+      rarer still. Shown for logged-out visitors too - a stale document is stale
+      whoever is reading it.
 
-      It ships carrying the plain `hidden` attribute and no display utility
-      (the issue #880 trap - a utility would out-cascade it). A document from
-      the PREVIOUS release meets this markup with the previous release's CSS
-      and JS, which is exactly the situation it exists for: that JS never
-      unhides it, so the old page shows nothing rather than something
-      unstyled. --%>
+      **The service worker is the wrong witness, which is why @update_ready?
+      comes from `static_changed?/1` instead.** `registration.waiting` is set
+      from the moment a new worker installs until every vutuv tab is gone, so it
+      is still true on a document that just arrived fresh from the new release -
+      and the bar came back on every page load until somebody pressed it. Nor
+      does the worker signal fire when it matters: nothing calls
+      `registration.update()`, so a tab that sits open for hours (the one reader
+      this is for) hears about the deploy from its socket long before the
+      browser's own 24-hour worker check. The tracked bundle answers both.
+
+      It is deliberately quiet: this is news, not a problem, and it stacks above
+      the header with two other bars of the same shape. A hairline strip and a
+      text link rather than the solid CTA. Quiet, but not optional - it carries
+      no "Later" beside the reload and should not carry one again, for the
+      reason `docs/architecture/realtime.md` gives: this reader's whole document
+      predates the deploy, so putting the notice away would leave them on the
+      old release for as long as the tab stays open.
+
+      Every class here is one the app already ships. This markup is by
+      definition patched into a document running the PREVIOUS release's CSS
+      (that is who it is rendered for), so a utility making its first appearance
+      here would arrive unstyled - the shape that put an undismissable
+      200-character paragraph across the feed's tab bar in v7.347.0. --%>
       <div
+        :if={@update_ready?}
         id="sw-update"
-        phx-hook="SwUpdate"
-        hidden
-        class="border-b border-brand-100 bg-brand-50 dark:border-brand-900/60 dark:bg-brand-900/30"
+        class="border-b border-slate-200 bg-slate-50 dark:border-slate-800 dark:bg-slate-900"
       >
         <div class={[
-          "mx-auto flex max-w-6xl flex-wrap items-center gap-x-3 gap-y-2 py-2 text-sm",
+          "mx-auto flex max-w-6xl flex-wrap items-center gap-x-3 gap-y-1 py-1.5 text-sm",
           gutter_class()
         ]}>
-          <span class="text-slate-700 dark:text-slate-200">
-            {gettext("A new version of vutuv is ready.")}
+          <span class="text-slate-600 dark:text-slate-400">
+            {gettext("A new version is ready.")}
           </span>
-          <.button type="button" data-sw-reload class="min-h-10">
+          <%!-- The ghost variant, not the solid CTA this bar used to carry and
+          not a hand-rolled text link: `ui.ex` ships in every release, so a
+          previous-release stylesheet is guaranteed to have these classes (see
+          the note above), and it brings the padding a bare `min-h-10` button
+          would leave off.
+
+          A LINK to this very page, not a button and not a phx-click. The reader
+          seeing this bar is by definition running the previous release's
+          JavaScript, whose handler promotes a waiting worker and does nothing
+          at all when none waits - the common case here, since a tab open across
+          a deploy never navigates and so never checks for one. That handler
+          does not preventDefault, so the navigation carries them to the new
+          release anyway; app.js takes the click over only when it has a worker
+          to promote. Without the href this control is dead for most of the
+          people it is shown to. --%>
+          <.button variant="ghost" href={reload_path(@path)} data-sw-reload class="min-h-10">
             {gettext("Reload")}
           </.button>
         </div>

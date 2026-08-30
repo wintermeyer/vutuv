@@ -35,6 +35,18 @@ defmodule VutuvWeb.Plug.AgentFormat do
   `text/html` so the browser pipeline's `accepts ["html"]` admits the
   request. Header-negotiated requests are best-effort: a page without agent
   documents simply answers HTML, no 404 guard.
+
+  **Both branches normalize the header**, and for the same reason: once the
+  format is settled, whatever the client sent must not still steer the render.
+  On the extension branch that is the URL's decision, so it outranks the
+  header outright — `/:slug.md` sent with `application/activity+json` is the
+  Markdown document, not the actor. Leaving the header alone there let a
+  hostile Accept reach a route whose HTML is a LiveView, which then rendered
+  for a format it has no template for and handed `{:safe, iodata}` to
+  `Plug.Conn.resp/3`: a **500** on `/notifications.md`, `/search.md` and
+  `/bookmarks.json` (issue #1823). Normalized, `enforce_handled/1` gives those
+  the documented 404 instead, and `VutuvWeb.Plug.HtmlOnly`'s agent-format
+  exemption is no longer wider than it reads.
   """
 
   @behaviour Plug
@@ -85,6 +97,7 @@ defmodule VutuvWeb.Plug.AgentFormat do
 
           %{conn | path_info: rewritten, request_path: "/" <> Enum.join(rewritten, "/")}
           |> put_private(:vutuv_agent_format, format)
+          |> normalize_accept()
           |> register_before_send(&enforce_handled/1)
 
         nil ->
@@ -135,11 +148,15 @@ defmodule VutuvWeb.Plug.AgentFormat do
     if format do
       conn
       |> put_private(:vutuv_agent_accept, format)
-      |> put_req_header("accept", "text/html")
+      |> normalize_accept()
     else
       conn
     end
   end
+
+  # Both branches end here, and that is the point: once the format is settled,
+  # the header has had its say and must not steer the render as well.
+  defp normalize_accept(conn), do: put_req_header(conn, "accept", "text/html")
 
   # The first listed media type the header contains, returning its mapped
   # format (which may be `nil`, e.g. text/html). `Enum.find` (not find_value)

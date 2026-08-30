@@ -16,8 +16,7 @@ name: CI
 #
 # The trade this accepts: two PRs that are each green alone but conflict once
 # merged are no longer caught here. The deploy's own build and `/health` gate
-# is what stands behind that, and the version-bump race the flow already warns
-# about is the same shape of problem.
+# is what stands behind that.
 on:
   pull_request:
   push:

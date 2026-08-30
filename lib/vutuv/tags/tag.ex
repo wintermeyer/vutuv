@@ -6,6 +6,8 @@ defmodule Vutuv.Tags.Tag do
 
   require Vutuv.Tags.MatchKey
 
+  import Vutuv.ChangesetHelpers, only: [scrub_nul: 1]
+
   alias Vutuv.Accounts.User
   alias Vutuv.Repo
   alias Vutuv.Tags.MatchKey
@@ -104,6 +106,12 @@ defmodule Vutuv.Tags.Tag do
 
   defp shared_validations(changeset) do
     changeset
+    # A tag is remote-fed now — a hashtag out of an ActivityPub `tag` array
+    # mints one — so it needs the write-side guard the fediverse schemas took in
+    # #1767: a NUL is valid UTF-8, Postgres refuses it (22021), and it would
+    # reach the driver on the INSERT. Here rather than at the ingest door, and
+    # after the last cast so what is validated is what is stored (issue #1825).
+    |> scrub_nul()
     |> validate_required([:slug, :name])
     # A tag name is a single line that may contain spaces ("Ruby on Rails"):
     # multi-word tags are first-class again. `normalize_value/1` already
@@ -303,8 +311,19 @@ defmodule Vutuv.Tags.Tag do
   (`Vutuv.Search`) and the `Vutuv.Tags.preview_tag_names/1` batch build the same
   case-insensitive name-or-slug predicate inline, because they compose it into a
   larger query rather than fetching a single row.
+
+  Being that single place is also why the **NUL** comes off here rather than at
+  each caller: the match key is not the only thing bound into the query, the raw
+  value is bound too (`by_match_key/2` ranks an exact hit by it), and half the
+  callers hand over a string a person or another server typed without passing it
+  through `normalize_value/1` first (`Vutuv.Newsletters`, `Vutuv.Jobs`, the job
+  board). Postgres refuses that byte (`22021`), so such a value did not fail to
+  find its topic, it raised — issue #1825, reported as a `Create` delivery that
+  500ed. Dropping it can only help a match: a stored name cannot contain one.
   """
   def find_by_value(value) when is_binary(value) do
+    value = String.replace(value, <<0>>, "")
+
     case MatchKey.normalize(value) do
       nil -> nil
       key -> value |> by_match_key(key) |> follow_alias()

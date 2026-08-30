@@ -30,6 +30,8 @@ defmodule Vutuv.Fediverse.Note do
 
   use VutuvWeb, :model
 
+  import Vutuv.ChangesetHelpers, only: [scrub_nul: 1]
+
   alias Vutuv.Fediverse.Handle
   alias Vutuv.Translations
 
@@ -174,6 +176,8 @@ defmodule Vutuv.Fediverse.Note do
       :checked_at,
       :expires_at
     ])
+    # Remote strings, and a NUL in one raises on insert (issue #1767).
+    |> scrub_nul()
     |> validate_required([
       :object_uri,
       :actor_uri,

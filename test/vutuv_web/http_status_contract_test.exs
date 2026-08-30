@@ -84,6 +84,89 @@ defmodule VutuvWeb.HttpStatusContractTest do
     end
   end
 
+  describe "an Accept header no page can answer" do
+    # `application/activity+json` rides the :browser pipeline's accepts list so
+    # ActivityPub requests reach the profile and permalink controllers. Every
+    # other page of that pipeline has no such representation, and a page whose
+    # HTML is a LiveView used to answer one with a 500: no template for the
+    # format, and `{:safe, iodata}` handed to `Plug.Conn.resp/3`. The honest
+    # answer is the one `application/ld+json` has always given — 406.
+    test "a LiveView page answers 406, exactly like it does for ld+json", %{conn: conn} do
+      {conn, _user} = create_and_login_user(conn)
+
+      # Both shapes: a controller that `live_render`s its page (/feed,
+      # /organizations) and a routed LiveView (/notifications, /search,
+      # /settings/tags/new).
+      for path <- ["/feed", "/organizations", "/notifications", "/search", "/settings/tags/new"],
+          type <- ["application/activity+json", "application/ld+json"] do
+        conn = conn |> recycle() |> put_req_header("accept", type)
+
+        assert_error_sent(406, fn -> get(conn, path) end)
+      end
+    end
+
+    # The URL extension decides, not whatever header rode along with it: a
+    # `.md` sibling is answered from `AgentDocs` by its controller and never
+    # renders the LiveView, so the refusal must not reach it. `/:slug.md` is the
+    # second path because it is the one where the two genuinely compete — the
+    # bare `/:slug` answers an ActivityPub fetch, so before #1823 that branch
+    # took the request and `enforce_handled/1` flipped it to an empty 404.
+    test "an agent document is still served by its extension", %{conn: conn} do
+      insert_activated_user(username: "extension_wins", first_name: "Agatha")
+
+      for path <- ["/jobs.md", "/extension_wins.md"] do
+        conn =
+          conn
+          |> recycle()
+          |> put_req_header("accept", "application/activity+json")
+          |> get(path)
+
+        assert conn.status == 200, "expected 200 for #{path}"
+        assert List.first(get_resp_header(conn, "content-type")) =~ "text/markdown"
+      end
+    end
+
+    # Every routed LiveView, not a hand-picked five: the refusal is wired per
+    # scope (`pipe_through`), so the next `live_session` scope that forgets
+    # `:html_only` has to fail here rather than in production. Bare paths, so
+    # this measures the pipeline; the extension siblings answer 404 by a
+    # different route and are covered below.
+    test "no routed LiveView answers a bare-path one with a 500", %{conn: conn} do
+      {conn, _admin} = create_and_login_admin(conn)
+
+      paths =
+        for route <- VutuvWeb.Router.__routes__(),
+            route.plug == Phoenix.LiveView.Plug,
+            not String.contains?(route.path, ":"),
+            do: route.path
+
+      # Sanity: the sweep is only worth anything if it found the live routes.
+      assert length(paths) > 20
+
+      for path <- paths do
+        conn = conn |> recycle() |> put_req_header("accept", "application/activity+json")
+
+        assert_error_sent(406, fn -> get(conn, path) end)
+      end
+    end
+
+    # The extension URL of a LiveView route that serves no agent document.
+    # `AgentFormat` has already read the format off the URL, so the header the
+    # client happened to send with it must not still steer the render: the
+    # documented answer is `enforce_handled/1`'s 404, never a 500 from a
+    # LiveView rendering for a format it has no template for.
+    test "an extension URL on a LiveView route 404s whatever the client asked for", %{conn: conn} do
+      {conn, _user} = create_and_login_user(conn)
+
+      for path <- ["/notifications.md", "/search.md", "/bookmarks.json"],
+          type <- ["application/activity+json", "application/ld+json"] do
+        conn = conn |> recycle() |> put_req_header("accept", type) |> get(path)
+
+        assert conn.status == 404, "expected 404 for #{path} with #{type}"
+      end
+    end
+  end
+
   describe "rate limits" do
     test "the login email step answers 429 over the limit", %{conn: conn} do
       previous = Application.get_env(:vutuv, :rate_limit)

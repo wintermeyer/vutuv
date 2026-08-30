@@ -22,6 +22,8 @@ defmodule Vutuv.Fediverse.RemoteAccount do
 
   use VutuvWeb, :model
 
+  import Vutuv.ChangesetHelpers, only: [scrub_nul: 1]
+
   alias Vutuv.Fediverse.Handle
 
   # Remote URIs are unbounded in theory; cap generously (they are `text`
@@ -84,6 +86,8 @@ defmodule Vutuv.Fediverse.RemoteAccount do
       :refreshed_at,
       :moved_to
     ])
+    # Remote strings, and a NUL in one raises on insert (issue #1767).
+    |> scrub_nul()
     |> validate_required([:actor_uri, :host, :inbox_uri])
     |> validate_length(:actor_uri, max: @max_uri, count: :bytes)
     |> validate_length(:inbox_uri, max: @max_uri, count: :bytes)

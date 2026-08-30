@@ -31,6 +31,8 @@ defmodule Vutuv.Fediverse.PostBoost do
 
   use VutuvWeb, :model
 
+  import Vutuv.ChangesetHelpers, only: [scrub_nul: 1]
+
   # Remote URIs are unbounded in theory; capped in bytes like every other one
   # here, so a hostile value fails the changeset rather than the insert.
   @max_uri_bytes 2_048
@@ -49,6 +51,7 @@ defmodule Vutuv.Fediverse.PostBoost do
   def changeset(%__MODULE__{} = boost, attrs) do
     boost
     |> cast(attrs, [:remote_post_id, :post_id, :activity_id, :announced_at])
+    |> scrub_nul()
     # `activity_id` is required, not merely capped: it is the only thing an
     # `Undo(Announce)` can match on, so a row without one could never be
     # withdrawn and would stand until its post or its account went.

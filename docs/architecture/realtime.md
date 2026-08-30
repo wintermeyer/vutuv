@@ -71,10 +71,20 @@ carries **no content** — kind, id and destination — and the worker draws the
 line ("New message on vutuv"), because what a push turns into is text on a lock
 screen.
 
-While the worker exists, it also answers the stale-document problem
-`static_changed?/1` describes: a deploy reloads nothing, so `updatefound` shows
-the shell's `#sw-update` bar ("A new version of vutuv is ready"), and the
-waiting worker is promoted only when the member taps Reload.
+The worker does **not** decide when the "new version" bar appears, and that is
+worth saying because it looks like the obvious signal. `registration.waiting` is
+set from the moment a new worker installs until every vutuv tab is gone, so it
+is still true on a page that has *just* arrived from the new release — the bar
+came back on every page load until somebody pressed it, while the case it exists
+for (a tab open for hours) barely fired at all, nothing calling
+`registration.update()`. So the shell asks `static_changed?/1` instead:
+`phx-track-static` reports the bundle this browser is really running, and only a
+document that predates the deploy is offered `#sw-update` ("A new version is
+ready"). There is no way to put that bar away: this reader's markup, CSS and
+JavaScript all come from a release that is gone, so postponing would leave them
+on it for as long as the tab stays open. The worker's remaining job is carrying
+the reload out — Reload posts `skip-waiting` to a waiting worker, or plainly
+reloads when there is none.
 
 **Which means a worker from the previous release keeps running, and nothing
 bounds how long.** This is the one asset that deliberately outlives a deploy,
@@ -82,13 +92,15 @@ so it is worth being exact about. A new worker appears only when `/sw.js`
 changes byte-for-byte, and its body is the config prelude plus the file: the
 `version` (the digested paths of the tracked assets, joined), the notification
 lines, and `sw.js` itself. A deploy that touches none of those three ships an
-identical worker, and no bar appears at all. When it does differ, the new
+identical worker, so the old one simply stays in charge. When it does differ, the new
 worker installs and then **waits**: the old one stays in charge of every open
 tab, serving `/assets/*` out of its own `vutuv-<version>` cache and handling
 that tab's `push` and `notificationclick` with the strings table baked into it
 at *its* release. It is replaced when the member taps
 Reload (which posts `skip-waiting`, and only then does `activate` drop the
 other caches and `clients.claim()`), or when every tab it controls is closed.
+Note this is about the **worker's** lifetime, not the bar's: whether anybody is
+offered a reload is the separate question answered above.
 An installed app on a phone is closed rarely and reloaded more rarely still,
 so "weeks" is the realistic upper bound, not "until the next deploy".
 
@@ -173,6 +185,23 @@ notifications / likes page rolls its stamps over at the reader's own midnight
 with no reload. Berlin midnight is itself a whole UTC hour, so the one consumer
 that really does count German days — the admin "new members today" pill — still
 empties exactly then.
+
+**Anything that renders a calendar day has to hold it as state, not read the
+clock while rendering.** A clock read inside a component is only ever refreshed
+by a render, and at midnight nothing asks for one: the tick has to change an
+assign or the component is never re-invoked. The feed calendar
+(`VutuvWeb.PostLive.FeedCalendar`) learnt this the hard way — it took its
+`today` from `Vutuv.ViewerClock` inside the card, so a page left open past
+midnight kept yesterday's date in the folded card, kept the today ring on
+yesterday, and **greyed the new day out as a future day**, locking the reader out
+of the day they were in. `today` is an assign the feed owns now
+(`:cal_today`, moved by the same `:day_changed` handler that re-streams the post
+stamps), and the notifications page has always done it this way (`:today` +
+`assign_sections/1`). Rolling the clock over is testable rather than something
+to find out about at midnight: `Vutuv.ViewerClock.today/0` reads
+`:viewer_clock_now` from application env when it is set, which
+`test/vutuv_web/live/feed_calendar_midnight_test.exs` moves (`async: false` — it
+is global, and every timestamp in the app reads it).
 
 The layout is split into `root.html.heex` (document shell) and `app.html.heex`
 (chrome), shared by classic controller pages and LiveViews.

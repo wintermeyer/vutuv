@@ -48,6 +48,28 @@ defmodule VutuvWeb.FeedCalendarTest do
   defp iso(date), do: Date.to_iso8601(date)
   defp days_ago(n), do: Date.add(ViewerClock.today(), -n)
 
+  # Every day cell in `html` the heatmap has put a shade on. Read out of the
+  # parsed document rather than by matching a class anywhere on the page:
+  # `bg-brand-*` is a colour half the feed's controls wear.
+  defp shaded_days(html) do
+    elements(
+      html,
+      ~s([phx-click="cal-day"][class*="bg-brand-1"], [phx-click="cal-day"][class*="bg-brand-3"], [phx-click="cal-day"][class*="bg-brand-5"], [phx-click="cal-day"][class*="bg-brand-7"])
+    )
+  end
+
+  # A day with enough on it to take the heatmap's top step.
+  defp busy_day(author, days_back) do
+    day = days_ago(days_back)
+
+    for n <- 1..5 do
+      post = PostsHelpers.create_post!(author, %{body: "busy day post #{n}"})
+      PostsHelpers.place_post_on_day!(post, day, n)
+    end
+
+    day
+  end
+
   describe "the calendar" do
     test "a day click shows that day and nothing newer", %{conn: conn} do
       {conn, user} = create_and_login_user(conn)
@@ -90,7 +112,7 @@ defmodule VutuvWeb.FeedCalendarTest do
 
       for n <- 1..120 do
         post = PostsHelpers.create_post!(author, %{body: "day three post #{n}"})
-        PostsHelpers.backdate_post!(post, 3 * @day + n * 10)
+        PostsHelpers.place_post_on_day!(post, days_ago(3), n)
       end
 
       {:ok, view, _html} = live(conn, ~p"/feed")
@@ -175,12 +197,7 @@ defmodule VutuvWeb.FeedCalendarTest do
       {conn, user} = create_and_login_user(conn)
       author = feed_with_history(user)
 
-      busy = days_ago(2)
-
-      for n <- 1..5 do
-        post = PostsHelpers.create_post!(author, %{body: "busy day post #{n}"})
-        PostsHelpers.backdate_post!(post, 2 * @day + n * 60)
-      end
+      busy = busy_day(author, 2)
 
       {:ok, view, _html} = live(conn, ~p"/feed")
       render_click(view, "cal-toggle")
@@ -203,10 +220,10 @@ defmodule VutuvWeb.FeedCalendarTest do
 
       day = days_ago(2)
       parent = PostsHelpers.create_post!(author, %{body: "thread root"})
-      PostsHelpers.backdate_post!(parent, 2 * @day + 300)
+      PostsHelpers.place_post_on_day!(parent, day, 300)
 
       reply = PostsHelpers.create_post!(author, %{body: "thread reply", parent_id: parent.id})
-      PostsHelpers.backdate_post!(reply, 2 * @day + 60)
+      PostsHelpers.place_post_on_day!(reply, day, 60)
 
       %{counts: counts} = Posts.feed_activity_by_day(user, day, day)
       counted = Map.get(counts, day, 0)
@@ -281,6 +298,56 @@ defmodule VutuvWeb.FeedCalendarTest do
       assert has_element?(view, "#feed-mobile-controls #open-filter-sheet")
     end
 
+    test "and folded they are the same height", %{conn: conn} do
+      # Side by side, one control was the app's 40px touch target and the
+      # other as tall as its padding and its tallest child happened to make it
+      # — 44px, and 48px once the amber "Now" button joined the row. Two
+      # neighbours differing by four pixels read as one of them being wrong.
+      {conn, user} = create_and_login_user(conn)
+      feed_with_history(user)
+
+      {:ok, view, _html} = live(conn, ~p"/feed")
+
+      assert has_element?(view, "#open-filter-sheet.h-10")
+      assert has_element?(view, "#feed-calendar-mobile.h-10")
+
+      # The rail's copy is the same card and takes the same height — one
+      # control height for both, not a per-call-site override.
+      assert has_element?(view, "#feed-calendar-rail.h-10")
+
+      # Travelling: "Now" joins the folded row and must not push it taller.
+      render_click(view, "cal-day", %{"date" => iso(days_ago(3))})
+
+      assert has_element?(view, "#feed-calendar-mobile button[phx-click='travel-now']")
+      assert has_element?(view, "#feed-calendar-mobile.h-10")
+    end
+
+    test "and so is the pill that takes the calendar's place", %{conn: conn} do
+      # The second state of the same line: once posts are waiting the calendar
+      # folds away and the pill stands beside the filter button instead, so it
+      # owes that button the same height (it was 36px against 40px).
+      {conn, user} = create_and_login_user(conn)
+      author = feed_with_history(user)
+
+      {:ok, view, _html} = live(conn, ~p"/feed")
+      {:ok, _fresh} = Posts.create_post(author, %{body: "arriving while I read"})
+
+      assert has_element?(view, "#show-new-posts.h-10")
+      assert has_element?(view, "#open-filter-sheet.h-10")
+    end
+
+    test "unfolded the calendar is a card again, not a 40px line", %{conn: conn} do
+      # The other half of the same class: a month grid does not fit in one
+      # control's height, so an `h-10` somebody made unconditional would clip it.
+      {conn, user} = create_and_login_user(conn)
+      feed_with_history(user)
+
+      {:ok, view, _html} = live(conn, ~p"/feed")
+      render_click(view, "cal-toggle")
+
+      refute has_element?(view, "#feed-calendar-mobile.h-10")
+    end
+
     test "a waiting post takes the calendar out of the line", %{conn: conn} do
       # The pill carries the newest post's opening line and needs the width;
       # the calendar is the one control on the row nobody is waiting for.
@@ -343,7 +410,7 @@ defmodule VutuvWeb.FeedCalendarTest do
     test "a post the reader may not see is not counted either", %{conn: conn} do
       # The waiting count passes the same audience gate a drawn arrival does, or
       # the pill would promise posts that vanish the moment it is pressed.
-      {conn, user} = create_and_login_user(conn)
+      {conn, _user} = create_and_login_user(conn)
       stranger = insert(:activated_user)
 
       {:ok, view, _html} = live(conn, ~p"/feed")
@@ -393,7 +460,7 @@ defmodule VutuvWeb.FeedCalendarTest do
 
       for n <- 1..12 do
         post = PostsHelpers.create_post!(author, %{body: "quiet day post #{n}"})
-        PostsHelpers.backdate_post!(post, 3 * @day + n * 60)
+        PostsHelpers.place_post_on_day!(post, days_ago(3), n)
       end
 
       {:ok, view, _html} = live(conn, ~p"/feed")
@@ -412,7 +479,7 @@ defmodule VutuvWeb.FeedCalendarTest do
 
       for n <- 1..120 do
         post = PostsHelpers.create_post!(author, %{body: "busy day post #{n}"})
-        PostsHelpers.backdate_post!(post, 3 * @day + n * 10)
+        PostsHelpers.place_post_on_day!(post, days_ago(3), n)
       end
 
       {:ok, view, _html} = live(conn, ~p"/feed")
@@ -433,7 +500,7 @@ defmodule VutuvWeb.FeedCalendarTest do
 
       for n <- 1..120 do
         post = PostsHelpers.create_post!(author, %{body: "busy day post #{n}"})
-        PostsHelpers.backdate_post!(post, 3 * @day + n * 10)
+        PostsHelpers.place_post_on_day!(post, days_ago(3), n)
       end
 
       {:ok, view, _html} = live(conn, ~p"/feed")
@@ -520,9 +587,9 @@ defmodule VutuvWeb.FeedCalendarTest do
       author = feed_with_history(user)
 
       mine = PostsHelpers.create_post!(user, %{body: "mine on that day"})
-      PostsHelpers.backdate_post!(mine, 3 * @day)
+      PostsHelpers.place_post_on_day!(mine, days_ago(3), 0)
       theirs = PostsHelpers.create_post!(author, %{body: "theirs on that day"})
-      PostsHelpers.backdate_post!(theirs, 3 * @day + 60)
+      PostsHelpers.place_post_on_day!(theirs, days_ago(3), 60)
 
       {:ok, view, _html} = live(conn, ~p"/feed")
       render_click(view, "cal-toggle")
@@ -659,6 +726,33 @@ defmodule VutuvWeb.FeedCalendarTest do
     end
   end
 
+  describe "the grid does not wait for its shading" do
+    test "the first render draws the days and shades none of them", %{conn: conn} do
+      # A month of a fediverse-heavy feed is ~26 queries, and paying them inside
+      # the press means the reader clicks the calendar and watches nothing
+      # happen. So the grid goes out with everything that does not need the
+      # month in it and the shading follows in a second render.
+      #
+      # The disconnected render is where that is observable at all: it is a
+      # first render with no second one behind it, so a shaded one is proof the
+      # counting ran on the blocking path.
+      {conn, user} = create_and_login_user(conn)
+      author = feed_with_history(user)
+      busy = busy_day(author, 2)
+
+      html = conn |> get(~p"/feed?cal=1") |> html_response(200)
+
+      assert html =~ ~s(phx-value-date="#{iso(busy)}")
+
+      assert shaded_days(html) == [],
+             "the disconnected render paid for a heatmap it has no second render to show"
+
+      # And the socket, which does get a second render, ends up shaded.
+      {:ok, view, _html} = live(conn, ~p"/feed?cal=1")
+      assert has_element?(view, ~s([phx-value-date="#{iso(busy)}"].bg-brand-700))
+    end
+  end
+
   describe "folded by default" do
     test "opens folded, on today, with no month grid", %{conn: conn} do
       # The calendar is a way *out* of the present, and most visits are not
@@ -791,7 +885,7 @@ defmodule VutuvWeb.FeedCalendarTest do
       # would prove nothing.
       for n <- 1..60 do
         post = PostsHelpers.create_post!(author, %{body: "quiet day post #{n}"})
-        PostsHelpers.backdate_post!(post, 3 * @day + n * 60)
+        PostsHelpers.place_post_on_day!(post, days_ago(3), n)
       end
 
       {:ok, view, _html} = live(conn, ~p"/feed?day=#{iso(days_ago(3))}")
@@ -903,7 +997,7 @@ defmodule VutuvWeb.FeedCalendarTest do
 
       for n <- 1..120 do
         post = PostsHelpers.create_post!(author, %{body: "busy day post #{n}"})
-        PostsHelpers.backdate_post!(post, 3 * @day + n * 10)
+        PostsHelpers.place_post_on_day!(post, days_ago(3), n)
       end
 
       conn = conn |> recycle() |> put_req_header("accept-language", "de-DE,de")

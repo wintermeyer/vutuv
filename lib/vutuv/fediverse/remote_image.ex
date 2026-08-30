@@ -27,6 +27,8 @@ defmodule Vutuv.Fediverse.RemoteImage do
 
   use VutuvWeb, :model
 
+  import Vutuv.ChangesetHelpers, only: [scrub_nul: 1]
+
   # Four is what the networks out there let an author attach, and it is as many
   # as a card can show without becoming a gallery page.
   @max_per_post 4
@@ -146,6 +148,9 @@ defmodule Vutuv.Fediverse.RemoteImage do
       :fetch_failures,
       :fetch_attempted_at
     ])
+    # `source_uri` and the author's `alt` come out of the attachment JSON, and a
+    # NUL in either raises on insert (issue #1767).
+    |> scrub_nul()
     |> validate_required([:source_uri])
     |> validate_length(:source_uri, max: @max_uri_bytes, count: :bytes)
     |> validate_length(:alt, max: @max_alt)

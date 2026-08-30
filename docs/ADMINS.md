@@ -19,6 +19,9 @@ Related documents: [README](../README.md) (overview) ·
   machine so far); very large installations can spread across multiple nodes,
   which Elixir/BEAM supports natively.
 - **PostgreSQL 17** (older 14+ versions likely work, 17 is what is tested).
+- **git** — the build reads the commit it is made from: the application version
+  is that commit's date and the footer links the commit. A source archive
+  without `.git` still builds, but reports version `0.0.0` and names no commit.
 - **Erlang and Elixir** to build the release — install via
   [mise](https://mise.jdx.dev/) (`mise install` reads the pinned versions from
   `.tool-versions`).
@@ -112,7 +115,7 @@ Everything else has a default (the vutuv.de production value):
 | `OPERATOR_EMAIL` | `sw@wintermeyer-consulting.de` | **Set this.** Receives the daily report, ad bookings and account-deletion records; also the `security.txt` contact |
 | `OPERATOR_URL` | `https://wintermeyer-consulting.de` | **Set this.** Linked from the site/email footer |
 | `OPERATOR_ADDRESS` | (vutuv.de's) | **Set this.** One-line postal address in every email footer |
-| `SOURCE_URL` | `https://github.com/wintermeyer/vutuv` | Where the source of the software you run can be read — the footer's "Source" link, the bug-report links on the error pages and in the developer docs, and the `source_url` / `repository` fields both API discovery documents publish. **Change this if you run a modified vutuv:** the link claims to be the source of what your users are running, so once you have patched anything, ours is no longer an honest answer. vutuv is MIT, so this is about accuracy rather than a licence obligation |
+| `SOURCE_URL` | `https://github.com/wintermeyer/vutuv` | Where the source of the software you run can be read — the footer's "Source" link and the commit link beside it, the bug-report links on the error pages and in the developer docs, and the `source_url` / `repository` fields both API discovery documents publish. **Change this if you run a modified vutuv:** the link claims to be the source of what your users are running, so once you have patched anything, ours is no longer an honest answer. vutuv is MIT, so this is about accuracy rather than a licence obligation |
 | `OPERATOR_HANDLE` | `wintermeyer` | The @handle of the person your media kit (`/system/media-kit`) names as the press contact; their profile is linked there for the remaining contact details. The link appears only when the handle really belongs to a member of *your* installation, so leaving the default set costs you nothing but a missing link. `""` renders none at all |
 | `APPEAL_REPLY_TO` | (vutuv.de's) | Reply-To on the account-deactivation (strike 3) email |
 | `BOUNCE_WEBHOOK_TOKEN` | – | Bearer token for `POST /webhooks/bounces`; unset = the endpoint 404s and webhook bounce handling is off. **Prefer the log watcher (`MAIL_LOG_PATH`) to this webhook:** the webhook acts on the DSN it receives without verifying the installation ever mailed the address, so feeding it a raw local bounce mailbox lets a forged bounce freeze a member ([#1063](https://github.com/wintermeyer/vutuv/issues/1063)). On a watcher-only setup leave this unset |
@@ -740,8 +743,8 @@ path in nginx.
 What the document says about you:
 
 - your name and a sentence or two, from `NODE_NAME` and `NODE_DESCRIPTION`;
-- the software and its version, so a directory can tell vutuv from anything
-  else, plus a link to its source;
+- the software and its version (the date of the commit it was built from), so
+  a directory can tell vutuv from anything else, plus a link to its source;
 - how many members you have, how many of them signed in over the last 30 and
   180 days, and how many public posts and replies they have written;
 - the languages you serve, your operator contact (the same one

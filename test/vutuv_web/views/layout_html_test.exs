@@ -1,6 +1,7 @@
 defmodule VutuvWeb.LayoutHTMLTest do
   use VutuvWeb.ConnCase, async: true
 
+  alias Vutuv.BuildInfo
   alias VutuvWeb.LayoutHTML
 
   test "shell_session avatar initials come from first+last, not the honorific title", %{conn: _} do
@@ -125,6 +126,29 @@ defmodule VutuvWeb.LayoutHTMLTest do
 
     assert body =~ "Beitrag oder Nachricht absenden, während Sie schreiben"
     assert body =~ "Die Einzeltasten-Kürzel pausieren, während Sie tippen"
+  end
+
+  # There is no version number any more: the credit bar names the commit the
+  # site runs (linked in the configured source repository) and dates it.
+  test "the credit bar links the running commit and dates it, in German", %{conn: conn} do
+    footer =
+      conn
+      |> put_req_header("accept-language", "de-DE,de")
+      |> get(~p"/impressum")
+      |> html_response(200)
+      |> footer_html()
+
+    assert footer =~ ~s(href="#{BuildInfo.commit_url()}")
+    assert footer =~ ">#{BuildInfo.commit_sha()}<"
+    assert footer =~ "Stand: #{BuildInfo.berlin_date()}, #{BuildInfo.berlin_time()} Uhr"
+    assert footer =~ "Letzter Commit (Berliner Zeit)"
+  end
+
+  test "and in English", %{conn: conn} do
+    footer = conn |> get(~p"/impressum") |> html_response(200) |> footer_html()
+
+    assert footer =~ "Last change: #{BuildInfo.berlin_date()} at #{BuildInfo.berlin_time()}"
+    assert footer =~ "Last commit (Berlin time)"
   end
 
   defp footer_html(body) do

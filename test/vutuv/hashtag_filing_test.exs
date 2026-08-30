@@ -284,6 +284,36 @@ defmodule Vutuv.HashtagFilingTest do
       assert Repo.get!(Tag, tag_id).name == name
     end
 
+    test "a NUL inside an AP hashtag name files the post instead of raising" do
+      # The reported delivery (#1825). The key is bound into a SELECT, so the
+      # byte took the query down before any write — see `Vutuv.Tags.MatchKey`
+      # for why it belongs with the zero-width characters.
+      tag = tag_named("berlin")
+      [head, tail] = String.split(tag.slug, "", parts: 2)
+      post = remote_post("Nothing in the text.")
+
+      Hashtags.sync(post, %{
+        "tag" => [%{"type" => "Hashtag", "name" => "#" <> head <> <<0>> <> tail}]
+      })
+
+      assert filed_tag_ids(post) == [tag.id]
+    end
+
+    test "a NUL in a hashtag that mints its tag is gone from the stored name" do
+      # The same delivery down the other branch: nothing answers to the name
+      # yet, so it is written rather than found. End to end on purpose — which
+      # of the two guards broke is what `Vutuv.Tags.TagTest` isolates.
+      name = "Fromoverthere#{System.unique_integer([:positive])}"
+      post = remote_post("Nothing in the text.")
+
+      Hashtags.sync(post, %{
+        "tag" => [%{"type" => "Hashtag", "name" => "#Fromoverthere" <> <<0>> <> name}]
+      })
+
+      assert [tag_id] = filed_tag_ids(post)
+      refute String.contains?(Repo.get!(Tag, tag_id).name, <<0>>)
+    end
+
     test "keeps the casing the AP tag array sent" do
       name = "Gr\u00fcne#{System.unique_integer([:positive])}"
       post = remote_post("Nothing in the text.")

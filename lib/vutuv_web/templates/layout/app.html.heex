@@ -150,9 +150,10 @@ finger-sized target instead of a word in a paragraph. --%>
         © 2016 - {Date.utc_today().year} ·
         <a href={Application.fetch_env!(:vutuv, :operator_url)} class="underline hover:text-brand-700 dark:hover:text-brand-300">{Application.fetch_env!(:vutuv, :operator_name)}</a>
       </p>
+      <%!-- No version number: the commit identifies a release (Vutuv.BuildInfo). --%>
       <p class="text-xs">
-        vutuv {Application.spec(:vutuv, :vsn)}
-        <span title={gettext("Last deployed (Berlin time)")}>· {gettext("Deployment: %{date} at %{time}", date: Vutuv.BuildInfo.deployed_date(), time: Vutuv.BuildInfo.deployed_time())}</span>
+        vutuv <.commit_link />
+        <span title={gettext("Last commit (Berlin time)")}>· {gettext("Last change: %{date} at %{time}", date: BuildInfo.berlin_date(), time: BuildInfo.berlin_time())}</span>
       </p>
     </div>
   </div>

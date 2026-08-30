@@ -38,6 +38,21 @@ defmodule Vutuv.FeedPage do
   """
   def sort_entries(entries), do: Enum.sort_by(entries, & &1.at, {:desc, NaiveDateTime})
 
+  @doc """
+  An entry cut down to the two fields the paginators actually read — a **mark**.
+
+  This is the whole contract above, spelled as data: `paginate/3` and
+  `sort_entries/1` touch `:id` and `:at` and nothing else, so a source asked to
+  count rather than to draw may hand marks back instead of entries and every
+  caller here is satisfied (`Vutuv.Posts.feed_sources/3`'s `:marks` shape,
+  which is what the feed calendar's heatmap asks for).
+
+  One definition rather than a `Map.take/2` at each site: the projection and
+  the promise it rests on belong together, and a source that widens what a mark
+  carries should widen it here.
+  """
+  def mark(entry), do: Map.take(entry, [:id, :at])
+
   def paginate(sources, limit, cursor) when is_list(sources) do
     seen = if cursor, do: cursor.ids, else: []
 

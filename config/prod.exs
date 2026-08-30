@@ -8,7 +8,6 @@ import Config
 config :vutuv, VutuvWeb.Endpoint,
   cache_static_manifest: "priv/static/cache_manifest.json",
   root: ".",
-  version: Mix.Project.config()[:version],
   locales: ~w(en de it)
 
 # Quiet by default, and `LOG_LEVEL` in config/runtime.exs raises the bar for a

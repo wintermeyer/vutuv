@@ -83,6 +83,38 @@ defmodule Vutuv.ChangesetHelpers do
 
   defp trim_or_nil(value), do: value
 
+  @nul <<0>>
+
+  @doc """
+  Takes the NUL bytes out of every `:string` change on the changeset.
+
+  A NUL is valid UTF-8 and Postgres refuses it (`22021
+  character_not_in_repertoire`), so one in a value we store is not a display
+  glitch — it is a raise on `Repo.insert`, which any server that can hand us a
+  string can trigger (issue #1767).
+
+  `Vutuv.RemoteHtml` already scrubs the bodies it reduces to text, but that
+  guards one door. The display strings beside a body — an actor's handle and
+  name, an attachment's alt text, the URIs — are copied straight out of the
+  JSON, truncated and cast, and each new ingest path would have to remember the
+  scrub again. So it goes at the write instead, where the byte would reach the
+  driver: run it after the last `cast/3` and before the validations, so what is
+  measured is what is stored.
+
+  Only `:string` changes are walked. A `:binary` column holds bytes, and a NUL
+  in those is data, not a mistake — silently rewriting one would corrupt it.
+  """
+  def scrub_nul(%Ecto.Changeset{changes: changes, types: types} = changeset) do
+    Enum.reduce(changes, changeset, fn {field, value}, acc ->
+      if is_binary(value) and Map.get(types, field) == :string and
+           String.contains?(value, @nul) do
+        put_change(acc, field, String.replace(value, @nul, ""))
+      else
+        acc
+      end
+    end)
+  end
+
   def normalize_name(string) do
     string
     |> String.normalize(:nfd)
