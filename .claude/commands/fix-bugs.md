@@ -245,14 +245,14 @@ does not do what the code around it already promises; a feature is a promise
 nobody has made yet. The test in Step 2 is what tells them apart: if you cannot
 write a failing test from *the existing code and its neighbours* — if the
 assertion only makes sense once you have decided what the new thing should do —
-you are looking at a feature request, whatever label the issue carries.
+you are not looking at a bug, whatever label the issue carries.
 
 Plenty of bug reports carry one anyway, usually in the `Want` section and
 usually reasonable: the reporter noticed the gap while describing the break.
 **Fix the break, leave the wish alone**, and say so rather than silently
 delivering half of it. Where the two cannot be separated — the report has no
-broken behaviour under it at all, only a missing one — fix nothing, comment, and
-release the lock.
+broken behaviour under it at all, only a missing one — fix nothing, comment,
+re-categorise it, and release the lock.
 
 Write it in the issue's language, name what you fixed if you fixed anything, and
 ask for a separate issue rather than filing one yourself: a feature request is
@@ -272,7 +272,32 @@ than in my summary of them.
 *An AI agent wrote this text in my name. I know that is problematic.*
 ```
 
-The report says which bugs carried a feature wish and what you did with it.
+**Move the label, or the next run repeats your judgement.** An issue you threw
+back keeps `Bug` unless you change it, so the next `/fix-bugs` locks it,
+reproduces nothing and writes the same comment again — the work is not saved
+until the label is. Use the test `/triage-issues` owns: does this fail a promise
+the system already makes (an interface we advertise, a standard we claim, parity
+between two surfaces of the same thing, the code's own evident intent)? You have
+just proved it does not, or Step 2 would have handed you a failing test. So it
+is one of the other three:
+
+- `Feature Request` — a capability nobody promised.
+- `Tech Debt` — it does what it should and the *way* it does it is the problem:
+  performance, an architecture that will not hold, a refactor, a flaky test.
+- `Design` — visual, layout, wording and UX work that breaks no promise.
+
+```bash
+gh issue edit N --add-label "Tech Debt" --remove-label "Bug"
+```
+
+Name the category you picked in the comment and in the report, so a wrong call
+is something Stefan can see and reverse rather than an issue quietly draining
+out of the bug list. **This is the only label a fixer may change**, and only on
+the throw-back path: an issue whose break you actually fixed stays `Bug`,
+whatever wish it also carried.
+
+The report says which bugs carried a feature wish and what you did with it, and
+lists every issue you threw back with its old and new category.
 "Solved the wrong problem" is the failure this section exists to prevent, and it
 is the one nobody notices until it has shipped.
 

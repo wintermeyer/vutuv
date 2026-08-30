@@ -52,10 +52,11 @@ Then, before deciding anything:
   ```
   An issue with an open PR is **in flight**: never close it, never call it
   stale, and mark it in the report. It still gets its label and its title.
-- **Scope**: every remaining open issue, including the ones that already carry
-  `Bug` or `Feature Request` — those get a sanity check, not a rewrite of
-  somebody's decision. Retire `enhancement`: it means the same as
-  `Feature Request`, so swap it on every open issue. **Do not delete the label**:
+- **Scope**: every remaining open issue, including the ones that already carry a
+  category. Step 3's test is applied to all of them and you may overrule what is
+  already there, in either direction. Retire `enhancement`: it is
+  `Feature Request` unless the test puts it in `Tech Debt` or `Design`, so swap
+  it on every open issue. **Do not delete the label**:
   it still marks 182 closed issues and 7 pull requests, and deleting it strips
   every one of them. That holds for any label with history — an empty-on-open
   label is not an unused label, so count the closed ones first and put a
@@ -109,11 +110,95 @@ gh pr view <pr> --json number,mergedAt
 ```
 
 ## Step 3: decide, per issue
-**Category — the repo knows exactly two.** A defect (it does not do what it says
-it does) is `Bug`; everything else, including refactors, tech debt, CI and docs
-work, is `Feature Request`. Do not invent a third label. If the two-label
-vocabulary strains on more than a handful of issues, say so in one report line
-and let me decide.
+### Category — exactly one of four
+Every open issue ends the sweep carrying exactly one of `Bug`,
+`Feature Request`, `Tech Debt`, `Design`. Never two, never none.
+
+**One question decides it: does this fail a promise the system already makes?**
+Not "is the code broken", and not "was this ever written" — a promise can
+predate its implementation by years. Four things count as a promise:
+
+1. an **interface we advertise** — the Mastodon API, ActivityPub, the agent-format
+   siblings, an env var in `docs/ADMINS.md` — against what it actually returns;
+2. a **standard we claim** — WCAG, an RFC, a spec we say we implement;
+3. **parity between two surfaces of the same thing**: the website shows a post's
+   link preview, the app of the same post does not;
+4. the **code's own evident intent**, where the result is the opposite of it.
+
+None of the four holds → nobody has been let down yet, and it is one of the
+other three:
+
+- `Bug` — a promise above is broken. Something is *wrong*, not merely absent.
+- `Feature Request` — a capability nobody promised: new surface, new behaviour,
+  or a best-effort feature asked to try harder.
+- `Tech Debt` — it does what it should and the *way* it does it is the problem.
+  Performance, an architecture that will not hold, a refactor, one concept
+  living in three modules, a flaky test, CI plumbing.
+- `Design` — visual, layout, wording and UX work that breaks no promise: a
+  redesign, a nicer empty state, a spacing pass.
+
+Apply it to the body's **Now** and **Repro**, never to the title. Titles here
+have already been normalised into imperatives, and an imperative hides which of
+the four this is — that is exactly how eight issues came to be labelled `Bug`.
+
+Worked examples from this backlog, chosen because each one looks like a
+different category than it is:
+
+```
+#1715  the Mastodon presenter hardcodes `card: nil` while the website
+       shows the preview                                  → Bug
+       Never implemented, and still a Bug: we advertise that API (1) and
+       the same post already answers differently on two surfaces (3).
+
+#1728  the active bottom tab is the palest of the five, 1.13:1 against
+       the inactive ones                                  → Bug
+       Renders exactly as coded, and still a Bug: the code's intent is to
+       mark the active tab and the result un-marks it (4), and WCAG 1.4.1
+       is a standard we claim (2).
+
+#1707  a link-preview capture shows the cookie dialog, not the page
+                                                          → Feature Request
+       Wrong output from working code, and still not a Bug: autoconsent
+       handles the CMPs it has a rule for and is fail-open by design, so
+       nothing was ever promised about zdf.de. The Want asks for new
+       heuristics, which is new capability.
+
+#1742  the link summary runs inline on the screenshot worker and stalls
+       the queue for ~2.5 minutes                         → Tech Debt
+       Runs as designed. The design is what does not hold under load.
+```
+
+**"It was never implemented" and "the code runs fine" are both non-answers** —
+they got #1715 and #1707 backwards. Ask about the promise.
+
+**Cross-check a `Bug` against the gate it is about to meet.** `/fix-bugs` starts
+by writing a failing test from the *existing* code and its neighbours; if the
+assertion only makes sense once somebody has decided what the new thing should
+do, that command throws the issue back. So ask it here, where it is cheap: could
+a test be written today that fails? A `Bug` whose fix needs a new column, a new
+worker or a product decision first is one you have mis-categorised — the promise
+you found is real, and the work to keep it is not a repair.
+
+**You may overrule a category that is already there, in both directions**,
+including one I set and one an earlier run of this command set. Every flip is
+one report line: the issue, `from → to`, and which promise it breaks or does not.
+A flip you cannot justify in that line is one you have not thought through —
+leave the label alone and put it under "Needs you".
+
+The two newer categories may be missing from a fresh clone:
+
+```bash
+gh label create "Tech Debt" --color 0052cc \
+  --description "Does what it promises; the way it does it is the problem" --force
+gh label create "Design" --color d4c5f9 \
+  --description "Visual, layout and UX work that breaks no promise" --force
+```
+
+**Why this label and not another is the one worth getting right:** `/fix-bugs`
+drains `Bug` unattended, and its own gate (can you write a failing test from the
+*existing* code?) throws back everything else — so a mislabel costs a fixer slot
+and an apologetic comment to the author. `Tech Debt` and `Design` are walked by
+`/issues`, with Stefan in the loop.
 
 **Area labels**, only the ones that already exist and only when obvious: at most
 one of `Fediverse`, `Security`, `Documentation`, `frontend`, `CSS and HTML`, plus
@@ -134,13 +219,23 @@ issue's own language:
 - No ticket prefixes, no `[area]`, no issue number, no jargon that only makes
   sense with the code open.
 
+**For a `Bug` the colon rule above is not optional.** The bare imperative erases
+the one thing the next reader categorises by: "Make the bottom tab clearest"
+reads as a wish, and that is how it gets re-labelled wrong. Every `Bug` title
+therefore carries its symptom, as a negative imperative or after a colon. The
+other three categories keep the plain imperative.
+
 ```
-The top bar scrolls away: its sticky has no effect at all
-  → Make the top bar stay put while the page scrolls
-Six copies of the same ETS-owner GenServer want one Vutuv.EtsCache
-  → Share one ETS cache instead of six copies of the same GenServer
-PeopleCounter crashes on every cold boot: Endpoint.host/0 before the endpoint
-  → Stop PeopleCounter from crashing on every cold boot
+Bug        The top bar scrolls away: its sticky has no effect at all
+        →  Make the top bar stay put: its sticky has no effect
+           (not "Make the top bar stay put while the page scrolls" —
+            that is the same sentence with the defect taken out)
+
+Tech Debt  Six copies of the same ETS-owner GenServer want one Vutuv.EtsCache
+        →  Share one ETS cache instead of six copies of the same GenServer
+
+Bug        PeopleCounter crashes on every cold boot: Endpoint.host/0 too early
+        →  Stop PeopleCounter from crashing on every cold boot
 ```
 
 Write it with `gh issue edit N --title "..."`, and set labels in the same call
@@ -304,7 +399,8 @@ gh issue edit N --add-label "needs:submitter"
   question, a design alternative) is drafted into the report and left there for
   `/issues` to post.
 - Editing an issue body, milestones, assignees, or anything on a locked issue.
-- Creating a label the repo does not have, `critical` excepted.
+- Creating a label the repo does not have — the four categories and `critical`
+  excepted.
 - Reopening, or overturning a category I set myself in an earlier run without
   saying why in the report.
 
@@ -318,9 +414,16 @@ One block at the end, no per-issue narration on the way there.
 
 Triage — 52 open, 44 untriaged
 
-  Bug              19        titles changed   38
+  Bug               8        titles changed   38
   Feature Request  22        area labels       9
-  skipped (locked)  1        enhancement → Feature Request: #1666 #1331
+  Tech Debt        14        enhancement → Feature Request: #1666 #1331
+  Design            7
+  skipped (locked)  1
+
+Re-categorised (2) — each with the promise it breaks or does not
+  #1742  Bug → Tech Debt        runs as designed; the design stalls the queue
+  #1707  Bug → Feature Request  autoconsent is fail-open by design, nothing
+                                was promised about that site
 
 Closed (2, proof verified)
   #1234  shipped v7.348.0, f059b4dd, uploaders/post_image.ex:88

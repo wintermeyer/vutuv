@@ -138,10 +138,11 @@ old) `wip:*` label. Then tell me only the **counts** — how many bugs, how many
 feature requests (plus one line if something is locked by another instance). Do
 **not** enumerate the backlog. Go straight into the per-issue walk below.
 
-**You work labelled issues only.** An issue carrying neither `Bug` nor
-`Feature Request` is untriaged and not yours: count them in one line ("44
-uncategorized, run `/triage-issues`") and never categorize one yourself, not
-even in passing mid-walk. Same for the snooze wake pass: `/triage-issues`
+**You work labelled issues only.** There are four categories — `Bug`,
+`Feature Request`, `Tech Debt`, `Design` — and an issue carrying none of them
+is untriaged and not yours: count them in one line ("44 uncategorized, run
+`/triage-issues`") and never categorize one yourself, not even in passing
+mid-walk. You walk all four; `/fix-bugs` takes `Bug` alone, unattended. Same for the snooze wake pass: `/triage-issues`
 owns it, so a snoozed issue simply does not appear here until it wakes.
 
 ## Phase 1 — walk the bugs (issue by issue)
@@ -159,11 +160,18 @@ locked ones skipped). For each bug individually, wait for me after each:
    - **Snooze** → "Snooze" below.
    - **Skip** → next bug (release any held lock).
 
-## Phase 2 — walk the feature requests
-`gh issue list --state open --label "Feature Request" --json number,title,author`.
-Like Phase 1, "Fix" here means "implement". For features, more often clarify the
-scope first (ask the author / plan mode) before code appears. Name dependencies
-(e.g. the Fediverse cluster #986/#985/#911/#910/#784 = one milestone).
+## Phase 2 — walk the other three categories
+`gh issue list --state open --label "Feature Request" --json number,title,author`,
+then the same for `"Tech Debt"` and `"Design"`. Like Phase 1, "Fix" here means
+"implement". Clarify the scope first (ask the author / plan mode) before code
+appears, more often than for a bug. Name dependencies (e.g. the Fediverse
+cluster #986/#985/#911/#910/#784 = one milestone).
+
+The category tells me what I am deciding, so lead with it:
+- `Feature Request` — do we want it at all? That is Stefan's call, not yours.
+- `Tech Debt` — nothing is broken, so the question is whether the cost is real
+  now. Bring the measurement, not the smell.
+- `Design` — show me the surface as it is today before proposing the change.
 
 ---
 
