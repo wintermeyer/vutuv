@@ -121,8 +121,7 @@ test suite, and the naive loop ingests its full output once per iteration:
      fix to the branch, and watch again. If it stays red or the failure isn't
      yours to fix, stop and report; leave the PR open.
 
-10. **Merge** — squash and delete the branch (the repo convention, same as
-    `/issues`):
+10. **Merge** — squash and delete the branch (the repo convention):
 
     ```bash
     gh pr merge <nr> --squash --delete-branch
