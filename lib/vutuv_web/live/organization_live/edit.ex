@@ -413,7 +413,7 @@ defmodule VutuvWeb.OrganizationLive.Edit do
             placeholder={gettext("Alternative name")}
             class={[input_class(), "flex-1"]}
           />
-          <select name="kind" class={[input_class(), "w-auto"]}>
+          <select name="kind" class={narrow_input_class()}>
             <option value="alias" selected={@alias_kind == "alias"}>{gettext("Alias")}</option>
             <option value="brand" selected={@alias_kind == "brand"}>{gettext("Brand")}</option>
             <option value="abbreviation" selected={@alias_kind == "abbreviation"}>{gettext("Abbreviation")}</option>

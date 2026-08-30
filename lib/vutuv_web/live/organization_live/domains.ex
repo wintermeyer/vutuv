@@ -261,7 +261,7 @@ defmodule VutuvWeb.OrganizationLive.Domains do
             class={input_class()}
           />
           <div class="flex flex-wrap items-center gap-3">
-            <select name="method" class={[input_class(), "w-auto"]}>
+            <select name="method" class={narrow_input_class()}>
               <option value="dns" selected={@new_method == "dns"}>{gettext("DNS TXT record")}</option>
               <option value="well_known" selected={@new_method == "well_known"}>{gettext("Website file")}</option>
             </select>

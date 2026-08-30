@@ -11,40 +11,15 @@ LiveViews fall through to `@socket`. --%>
 
 <%!-- Flash as top-right toasts. Every toast auto-dismisses after a few seconds
 (one knob, app.js `TOAST_DISMISS_MS`) and the × closes it early; on LiveView
-pages `phx-click="lv:clear-flash"` also clears the server-side flash. --%>
+pages `phx-click="lv:clear-flash"` also clears the server-side flash. This is
+the app's ONE tray — `<.embedded_flash>` is how a LiveView that renders no
+layout of its own reaches it. --%>
 <div
   id="toast-tray"
   class="pointer-events-none fixed right-[max(1rem,env(safe-area-inset-right))] top-20 z-50 flex w-80 max-w-[90vw] flex-col gap-2"
   aria-live="polite"
 >
-  <%= if msg = Phoenix.Flash.get(@flash, :info) do %>
-    <.toast
-      kind="info"
-      msg={msg}
-      role="status"
-      class="toast pointer-events-auto flex items-start gap-3 rounded-xl bg-white p-4 shadow-lg ring-1 ring-slate-200 dark:bg-slate-800 dark:ring-slate-700"
-      badge_class="mt-0.5 flex h-6 w-6 shrink-0 items-center justify-center rounded-full bg-emerald-100 text-emerald-600"
-    >
-      <:icon>
-        <svg class="h-4 w-4" fill="none" stroke="currentColor" stroke-width="2.5" viewBox="0 0 24 24">
-          <path stroke-linecap="round" stroke-linejoin="round" d="m4.5 12.75 6 6 9-13.5" />
-        </svg>
-      </:icon>
-    </.toast>
-  <% end %>
-  <%= if msg = Phoenix.Flash.get(@flash, :error) do %>
-    <.toast
-      kind="error"
-      msg={msg}
-      role="alert"
-      class="toast toast--error pointer-events-auto flex items-start gap-3 rounded-xl bg-white p-4 shadow-lg ring-1 ring-red-200 dark:bg-slate-800 dark:ring-red-900/60"
-      badge_class="mt-0.5 flex h-6 w-6 shrink-0 items-center justify-center rounded-full bg-red-100 font-bold text-red-600"
-    >
-      <:icon>
-        !
-      </:icon>
-    </.toast>
-  <% end %>
+  <.flash_toasts flash={@flash} />
 </div>
 
 <%!-- The daily text ad (or the house ad selling the slot), between the

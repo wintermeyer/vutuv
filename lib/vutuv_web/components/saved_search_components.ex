@@ -93,7 +93,11 @@ defmodule VutuvWeb.SavedSearchComponents do
         <span class="text-sm font-medium text-slate-700 dark:text-slate-200">
           {gettext("Email me")}:
         </span>
-        <select name="notify" class={[input_class(), "w-auto py-1.5 text-sm"]} aria-label={gettext("Alert frequency")}>
+        <select
+          name="notify"
+          class={[narrow_input_class(), "py-1.5 text-sm"]}
+          aria-label={gettext("Alert frequency")}
+        >
           <option :for={{label, value} <- cadence_options()} value={value}>{label}</option>
         </select>
         <button

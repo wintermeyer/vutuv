@@ -1687,12 +1687,17 @@ const TOAST_DISMISS_MS = 3000
 function wireToast(el) {
   if (!once(el, "toast")) return
 
+  // Both ways out go through the close button, because on a LiveView page its
+  // phx-click="lv:clear-flash" also clears the server-side flash — without that
+  // a later patch resurrects the dismissed toast, and the very same sentence
+  // never draws a toast a second time. Which is why the detach waits for the
+  // NEXT tick: LiveView listens for phx-click on the window, so it sees the ×
+  // only while the toast is still in the document.
   const closeBtn = el.querySelector("[data-toast-close]")
-  if (closeBtn) closeBtn.addEventListener("click", () => el.remove())
+  if (closeBtn) {
+    closeBtn.addEventListener("click", () => setTimeout(() => el.remove()))
+  }
 
-  // Click the close button instead of removing the node directly: on LiveView
-  // pages the button's phx-click="lv:clear-flash" clears the server-side flash
-  // too, so a later LiveView patch can't resurrect the dismissed toast.
   setTimeout(() => (closeBtn ? closeBtn.click() : el.remove()), TOAST_DISMISS_MS)
 }
 
@@ -1702,16 +1707,19 @@ function setupToasts() {
 
   tray.querySelectorAll(".toast").forEach(wireToast)
 
+  // `subtree`, not just the tray's own children: an embedded LiveView reaches
+  // the tray through `<.portal>` (LayoutHTML.embedded_flash), which lands its
+  // toasts one wrapper deep.
   if (once(tray, "toastObserver")) {
     new MutationObserver((mutations) => {
       mutations.forEach((m) =>
         m.addedNodes.forEach((node) => {
-          if (node.nodeType === 1 && node.classList.contains("toast")) {
-            wireToast(node)
-          }
+          if (node.nodeType !== 1) return
+          if (node.classList.contains("toast")) wireToast(node)
+          node.querySelectorAll(".toast").forEach(wireToast)
         })
       )
-    }).observe(tray, { childList: true })
+    }).observe(tray, { childList: true, subtree: true })
   }
 }
 

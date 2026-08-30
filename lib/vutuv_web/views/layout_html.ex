@@ -24,6 +24,89 @@ defmodule VutuvWeb.LayoutHTML do
   end
 
   @doc """
+  The whole content of the `#toast-tray` in `app.html.heex`: the info toast, the
+  error toast, or nothing. Shared with `embedded_flash/1`, which fills the same
+  tray from a LiveView that never renders the layout.
+  """
+  attr(:flash, :map, required: true)
+
+  def flash_toasts(assigns) do
+    ~H"""
+    <%= if msg = Phoenix.Flash.get(@flash, :info) do %>
+      <.toast
+        kind="info"
+        msg={msg}
+        role="status"
+        class="toast pointer-events-auto flex items-start gap-3 rounded-xl bg-white p-4 shadow-lg ring-1 ring-slate-200 dark:bg-slate-800 dark:ring-slate-700"
+        badge_class="mt-0.5 flex h-6 w-6 shrink-0 items-center justify-center rounded-full bg-emerald-100 text-emerald-600"
+      >
+        <:icon>
+          <svg class="h-4 w-4" fill="none" stroke="currentColor" stroke-width="2.5" viewBox="0 0 24 24">
+            <path stroke-linecap="round" stroke-linejoin="round" d="m4.5 12.75 6 6 9-13.5" />
+          </svg>
+        </:icon>
+      </.toast>
+    <% end %>
+    <%= if msg = Phoenix.Flash.get(@flash, :error) do %>
+      <.toast
+        kind="error"
+        msg={msg}
+        role="alert"
+        class="toast toast--error pointer-events-auto flex items-start gap-3 rounded-xl bg-white p-4 shadow-lg ring-1 ring-red-200 dark:bg-slate-800 dark:ring-red-900/60"
+        badge_class="mt-0.5 flex h-6 w-6 shrink-0 items-center justify-center rounded-full bg-red-100 font-bold text-red-600"
+      >
+        <:icon>
+          !
+        </:icon>
+      </.toast>
+    <% end %>
+    """
+  end
+
+  @doc """
+  How a LiveView that renders **no layout of its own** says what just happened.
+
+  An embedded child (`live_render`ed into a page the controller already wrapped
+  in `app.html.heex` — the tag timeline, the permalink conversation, a card's
+  action bar) reaches its own `render/1` and nothing else, so the `#toast-tray`
+  up in the layout belongs to whoever rendered that layout, and a `put_flash/3`
+  down here lands in a flash map nobody prints. This teleports the child's own
+  toasts into that one tray (LiveView's `<.portal>`), so the confirmation reads
+  exactly like the same act on a page that is a LiveView. Give it an id nothing
+  else on the page uses and render it anywhere in the child's tree:
+
+      <LayoutHTML.embedded_flash id="tag-timeline-flash" flash={@flash} />
+
+  The × still carries `phx-click="lv:clear-flash"` and still reaches **this**
+  child: a teleported element keeps belonging to the view that rendered it.
+
+  A page that is a LiveView (`ControllerHelpers.render_live/3`, or a routed
+  `live/4`) needs none of this — those bring `app.html.heex` and its tray
+  themselves, and their flash has always worked.
+  """
+  attr(:id, :string, required: true)
+  attr(:flash, :map, required: true)
+
+  def embedded_flash(assigns) do
+    ~H"""
+    <%!-- Only while there is something to say. A portal costs the client work on
+    every patch it survives — LiveView re-queries the target and morphs the
+    teleported node — and a host like the tag timeline patches on every
+    keystroke; removing the template takes the teleported node down with it.
+
+    `class="contents"`: the portal wraps what it teleports in one element, and
+    the tray is a flex column, so without this the toasts would stack inside
+    that wrapper instead of being rows of the tray. --%>
+    <.portal :if={flashing?(@flash)} id={@id} target="#toast-tray" class="contents">
+      <.flash_toasts flash={@flash} />
+    </.portal>
+    """
+  end
+
+  defp flashing?(flash),
+    do: Phoenix.Flash.get(flash, :info) != nil or Phoenix.Flash.get(flash, :error) != nil
+
+  @doc """
   One flash toast (the `#toast-tray` entry in `app.html.heex`). The info and
   error toasts are the same shell differing only in the outer ring colour, the
   ARIA role, the icon-badge tint and the icon glyph, so they share this

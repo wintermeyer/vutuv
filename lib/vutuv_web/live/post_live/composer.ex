@@ -2077,18 +2077,12 @@ defmodule VutuvWeb.PostLive.Composer do
   end
 
   # The composer's three small selects — licence, download, language — all want
-  # the same thing: a control the width of its own content, 36px high to sit
-  # level with the Post button, on the shared input recipe.
-  #
-  # `w-auto!` and not `w-auto`, which is the whole reason this is a function.
-  # `input_class/0` opens with `w-full`, and Tailwind emits `.w-auto` BEFORE
-  # `.w-full`, so the plain utility loses to the very class it is appended to no
-  # matter which order the call site writes them in. Two of these three selects
-  # had been asking for `w-auto` and silently rendering full-width since they
-  # were written; the language one drew 260px to hold the word "DE", which is
-  # what left the bottom row nothing to wrap into on a narrow column.
-  defp compact_select_class,
-    do: [input_class(), "h-9 w-auto! max-w-full py-0 text-sm"]
+  # the same thing: a control the width of its own content
+  # (`narrow_input_class/0`, which explains why that takes a `!`), 36px high so
+  # it sits level with the Post button. The language one used to draw 260px to
+  # hold the word "DE", which left the bottom row nothing to wrap into on a
+  # narrow column.
+  defp compact_select_class, do: [narrow_input_class(), "h-9 py-0 text-sm"]
 
   # What the folded details row says a visitor may save — the same wording
   # the download select's options use, so the fold and the open control can

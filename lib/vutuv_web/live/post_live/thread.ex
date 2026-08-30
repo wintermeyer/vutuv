@@ -329,8 +329,9 @@ defmodule VutuvWeb.PostLive.Thread do
   end
 
   # The outcome is shown as an inline notice above the conversation, not as a
-  # toast: this is an **embedded** LiveView and the toast tray lives in the dead
-  # app layout, so a `put_flash/3` here would never reach the screen.
+  # toast: a refusal belongs next to the reply it is about. (An embedded
+  # LiveView *can* toast — `LayoutHTML.embedded_flash/1` portals its flash into
+  # the layout's tray — so this is a placement choice, not a constraint.)
   #
   # A successful takedown says so by the card vanishing, which is why it clears
   # the notice rather than setting one.

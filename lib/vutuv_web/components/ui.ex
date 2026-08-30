@@ -81,11 +81,30 @@ defmodule VutuvWeb.UI do
   input recipe (full width, rounded, slate border, brand focus ring, dark-aware).
   The single source for the post composer, the auth pages and any green-field
   form, so the field look stays consistent. Compose with utilities via a list,
-  e.g. `class={[input_class(), "resize-y"]}`.
+  e.g. `class={[input_class(), "resize-y"]}`. A control that should be only as
+  wide as its content takes `narrow_input_class/0` — appending `w-auto` here
+  does not work, and that function says why.
   """
   def input_class do
     "w-full rounded-lg border border-slate-300 bg-white px-3 py-2 text-sm focus:border-brand-500 focus:outline-none focus:ring-3 focus:ring-brand-500/40 dark:border-slate-700 dark:bg-slate-800 dark:text-slate-100"
   end
+
+  @doc """
+  `input_class/0` for a control that should be as wide as the word it holds —
+  a two-option select, a unit picker — rather than the whole line.
+
+  A function and not two utilities at the call site, because the pair is not
+  guessable. `input_class/0` opens with `w-full`, and Tailwind emits `.w-auto`
+  *before* `.w-full`, so a plain appended `w-auto` loses to the very class it
+  was appended to no matter which order the call site writes them in: the
+  control silently draws the full width of its container. The `!` is what wins
+  (a variant like `sm:w-auto` wins on its own, its rules coming after the bare
+  ones), and `max-w-full` keeps a long option from then pushing past a narrow
+  column. Three forms asked the losing way for months.
+
+  Compose further utilities the same way: `[narrow_input_class(), "text-sm"]`.
+  """
+  def narrow_input_class, do: [input_class(), "w-auto! max-w-full"]
 
   @doc """
   Like `input_class/0`, but aware of a specific field's validation state: once
@@ -1650,11 +1669,13 @@ defmodule VutuvWeb.UI do
           >
             <.card_menu_item_body item={item} />
           </button>
+          <%!-- `|| "get"` for the same reason `button/1` defaults it so; a
+          slot attribute cannot carry a `:default`, so it is normalised here. --%>
           <.link
             :if={!item[:click]}
             id={item[:id]}
             href={item[:href]}
-            method={item[:method]}
+            method={item[:method] || "get"}
             target={item[:target]}
             rel={item[:rel]}
             data-confirm={item[:confirm]}
@@ -2459,7 +2480,11 @@ defmodule VutuvWeb.UI do
   attr(:navigate, :string, default: nil)
   attr(:patch, :string, default: nil)
   attr(:href, :string, default: nil)
-  attr(:method, :string, default: nil)
+  # `"get"`, not nil: `<.link>` reads any other method as a CSRF form post, so a
+  # nil made every plain `<.button href=…>` carry a `data-csrf` and a `data-to`
+  # it never uses — and made that token generation raise wherever the render
+  # happens off the request process.
+  attr(:method, :string, default: "get")
   attr(:type, :string, default: nil)
   attr(:class, :string, default: nil)
 

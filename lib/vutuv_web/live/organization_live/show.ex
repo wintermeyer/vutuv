@@ -418,9 +418,10 @@ defmodule VutuvWeb.OrganizationLive.Show do
   # a publisher who had pressed "Load more" to page one. The offset moves with
   # the list so the next "Load more" does not hand back the row above it.
   #
-  # No flash: this page is embedded with `live_render` and the flash container
-  # lives in the controller's layout, so a `put_flash/3` here renders nowhere.
-  # The post arriving at the head of the list is the confirmation anyway.
+  # No flash, by choice rather than by constraint: this page IS the LiveView the
+  # controller renders (`ControllerHelpers.render_live/3`), so it brings the app
+  # layout and its toast tray itself and a `put_flash/3` here would show. The
+  # post arriving at the head of the list is the better confirmation.
   def handle_info({:composer_published, post}, socket) do
     viewer = socket.assigns.current_user
 

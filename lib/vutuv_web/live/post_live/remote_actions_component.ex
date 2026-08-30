@@ -34,10 +34,10 @@ defmodule VutuvWeb.PostLive.RemoteActionsComponent do
   by one on the same path (`Vutuv.Fediverse`), which is why the change survives a
   reload rather than living in this socket.
 
-  A refusal is explained **here**, inline under the bar, rather than as a flash.
-  Two of the hosts are embedded LiveViews whose flash never reaches the toast
-  tray in the dead layout, so a `put_flash/3` would be swallowed on exactly the
-  page where the reply card lives.
+  A refusal is explained **here**, inline under the bar, rather than as a flash:
+  it is about this one card, and the reader's eye is on it. (An embedded host
+  *can* toast — `VutuvWeb.LayoutHTML.embedded_flash/1` portals its flash into the
+  layout's tray — so this is a placement choice, not a constraint.)
   """
   use VutuvWeb, :live_component
 

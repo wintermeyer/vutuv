@@ -46,6 +46,7 @@ defmodule VutuvWeb.TagLive.Timeline do
   alias Vutuv.Repo
   alias Vutuv.Tags.Tag
   alias Vutuv.Tags.Timeline
+  alias VutuvWeb.LayoutHTML
   alias VutuvWeb.Live.InitAssigns
   alias VutuvWeb.Live.RemoteImages
   alias VutuvWeb.Live.RemotePostActions
@@ -243,6 +244,10 @@ defmodule VutuvWeb.TagLive.Timeline do
     one container, so a press dims the list it is about while the answer is on
     its way (the rule lives in `assets/css/app.css`). --%>
     <section id="tag-timeline" data-filter-scope class="mt-6">
+      <%!-- Reporting a cached post answers here (`RemotePostActions`), and this
+      LiveView is embedded in a page the controller already wrapped in the app
+      layout, so its flash needs the portal to reach the one toast tray. --%>
+      <LayoutHTML.embedded_flash id="tag-timeline-flash" flash={@flash} />
       <div class="flex flex-wrap items-baseline justify-between gap-x-3 gap-y-1">
         <h2 class="text-sm font-semibold uppercase tracking-wide text-slate-500 dark:text-slate-400">
           {gettext("Posts with this tag")}

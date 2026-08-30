@@ -282,4 +282,30 @@ defmodule VutuvWeb.TagTimelineLiveTest do
       assert html =~ "1 aktiv"
     end
   end
+
+  describe "reporting a cached post" do
+    test "says so in the layout's toast tray, which this LiveView never renders",
+         %{conn: conn} do
+      {tag, _post} = tag_with_post("Ein Beitrag")
+      remote = remote_post(tag, "Etwas aus einem anderen Netz")
+
+      view = timeline(conn, tag, shell_session(insert_activated_user()))
+
+      # Nothing to say yet, so no portal at all.
+      refute has_element?(view, "#tag-timeline-flash")
+
+      view
+      |> element(~s(button[phx-click="report-remote-post"][phx-value-id="#{remote.id}"]))
+      |> render_click()
+
+      # The tray lives in `app.html.heex`, which the controller rendered and this
+      # embedded LiveView has no part of, so the confirmation travels by portal.
+      # Its contents are a `<template>`, which `element/3` cannot look inside —
+      # render the portal itself and read the string.
+      portal = view |> element("#tag-timeline-flash") |> render()
+
+      assert portal =~ ~s(data-phx-portal="#toast-tray")
+      assert portal =~ "Thank you. Our copy was deleted right away."
+    end
+  end
 end
