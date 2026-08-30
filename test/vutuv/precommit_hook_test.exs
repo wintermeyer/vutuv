@@ -65,32 +65,43 @@ defmodule Vutuv.PrecommitHookTest do
   end
 
   describe "pushes, however they are spelled" do
+    # These pin how a command line is READ, so the tree they name must not be
+    # the live checkout. The documentation exemption below answers SKIP for a
+    # branch carrying only docs, and this repository sits on such a branch
+    # whenever somebody edits only documentation — which reds six parsing tests
+    # for a reason that has nothing to do with parsing, on exactly the branches
+    # the exemption was built to speed up. One throwaway project carrying a
+    # source file keeps the answer PUSH whatever the checkout is on.
+    setup do
+      {:ok, repo: tmp_project(["lib/vutuv/thing.ex"])}
+    end
+
     test "a plain push resolves to the tool call's own directory", ctx do
-      assert decide(ctx, "git push") == "PUSH #{ctx.root}"
-      assert decide(ctx, "git push origin main") == "PUSH #{ctx.root}"
+      assert decide(ctx, "git push", cwd: ctx.repo) == "PUSH #{ctx.repo}"
+      assert decide(ctx, "git push origin main", cwd: ctx.repo) == "PUSH #{ctx.repo}"
     end
 
     test "`git -C <dir> push` is a push and names its own tree", ctx do
       # The spelling the old substring rule could not see at all.
-      assert decide(ctx, "git -C #{ctx.root} push") == "PUSH #{ctx.root}"
-      assert decide(ctx, "git -C#{ctx.root} push origin HEAD") == "PUSH #{ctx.root}"
+      assert decide(ctx, "git -C #{ctx.repo} push") == "PUSH #{ctx.repo}"
+      assert decide(ctx, "git -C#{ctx.repo} push origin HEAD") == "PUSH #{ctx.repo}"
     end
 
     test "a push behind a chain operator is still a push", ctx do
-      assert decide(ctx, "mix test && git push") == "PUSH #{ctx.root}"
-      assert decide(ctx, "echo one; git push") == "PUSH #{ctx.root}"
+      assert decide(ctx, "mix test && git push", cwd: ctx.repo) == "PUSH #{ctx.repo}"
+      assert decide(ctx, "echo one; git push", cwd: ctx.repo) == "PUSH #{ctx.repo}"
     end
 
     test "a leading cd governs the push that follows it", ctx do
-      assert decide(ctx, "cd #{ctx.root} && git push") == "PUSH #{ctx.root}"
+      assert decide(ctx, "cd #{ctx.repo} && git push") == "PUSH #{ctx.repo}"
     end
 
     test "environment assignments before git do not hide the push", ctx do
-      assert decide(ctx, "GIT_TRACE=1 git push") == "PUSH #{ctx.root}"
+      assert decide(ctx, "GIT_TRACE=1 git push", cwd: ctx.repo) == "PUSH #{ctx.repo}"
     end
 
     test "global options that swallow a word do not hide the push", ctx do
-      assert decide(ctx, "git -c user.name=x push") == "PUSH #{ctx.root}"
+      assert decide(ctx, "git -c user.name=x push", cwd: ctx.repo) == "PUSH #{ctx.repo}"
     end
   end
 
