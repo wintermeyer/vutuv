@@ -711,7 +711,8 @@ url means here. A client following it attaches a photo that has already cleared
 the scan. The window above belongs to clients that post immediately with a
 freshly uploaded id.
 
-**Push** is RFC 8291/8292 Web Push, implemented in `Vutuv.MastodonApi.WebPush`
+**Push** is RFC 8291/8292 Web Push, implemented in `Vutuv.WebPush` (the
+adapter's own `Vutuv.MastodonApi.WebPush` adds nothing but its on/off gate)
 with **no dependency**: the obvious hex package requires `httpoison ~> 1.0`,
 which this project bans, and has not shipped since 2021 — everything needed is
 in OTP's `:crypto`, and delivery goes through `Req` like every other outbound

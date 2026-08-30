@@ -5,14 +5,14 @@ defmodule VutuvWeb.MastodonApi.PushController do
 
   Keyed on the access token, so one device is one subscription and revoking the
   app takes it with it. `subscription[standard]` rides along and decides which
-  content encoding the pushes to this device use; `Vutuv.MastodonApi.WebPush`
-  owns what that means and why leaving it out is the useful default.
+  content encoding the pushes to this device use; `Vutuv.WebPush` owns what
+  that means and why leaving it out is the useful default.
 
   The `server_key` a client needs to build the browser subscription is this
-  installation's VAPID public key, which every installation has (`WebPush`
-  derives one where the operator pinned none). Only an installation that
-  switched push off answers 403, rather than accepting a subscription that could
-  never be delivered to.
+  installation's VAPID public key, which every installation has
+  (`Vutuv.WebPush` derives one where the operator pinned none). Only an
+  installation that switched push off answers 403, rather than accepting a
+  subscription that could never be delivered to.
   """
 
   use VutuvWeb, :controller
@@ -103,7 +103,7 @@ defmodule VutuvWeb.MastodonApi.PushController do
        # Written on every create and never left over from the row this one
        # replaces: the same device can be resubscribed by a client that has
        # since learned the standard encoding, or by an older build that has
-       # not. Absent reads as false — see `Vutuv.MastodonApi.WebPush`.
+       # not. Absent reads as false — see `Vutuv.WebPush`.
        "standard" => subscription["standard"]
      }}
   end
