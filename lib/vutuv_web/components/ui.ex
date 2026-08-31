@@ -1067,6 +1067,37 @@ defmodule VutuvWeb.UI do
   end
 
   @doc """
+  The placeholder rows a card draws while its data has not arrived — the
+  markup half of the `.skeleton` class (`components.css`), which owns the
+  breathing and its reduced-motion stop. The /messages conversation list and
+  the feed's sources card wear it.
+
+  The default slot is ONE row's bones, repeated `rows` times; build them from
+  `.skeleton` spans sized like the content they stand in for, and put the
+  row's layout (flex, gaps, padding) in `row_class`.
+
+  The component owns the half every call site was deciding for itself: the
+  list is `aria-hidden` — there is nothing in it to read out. `aria-busy`
+  deliberately stays with the CALLER, on a container that is still there once
+  the data lands: busy has to end on the element it began on, or assistive
+  tech never hears the end of it (the messages sidebar and the calendar
+  heatmap both hang it that way).
+  """
+  attr(:id, :string, required: true)
+  attr(:rows, :integer, default: 4)
+  attr(:class, :string, default: nil)
+  attr(:row_class, :string, default: nil)
+  slot(:inner_block, required: true)
+
+  def skeleton_rows(assigns) do
+    ~H"""
+    <ul id={@id} aria-hidden="true" class={@class}>
+      <li :for={_ <- 1..@rows} class={@row_class}>{render_slot(@inner_block)}</li>
+    </ul>
+    """
+  end
+
+  @doc """
   The 400×264 preview tile of a captured web page, in whichever of its four
   states the capture is in — the one place that decides what a link looks like
   when there is no screenshot.

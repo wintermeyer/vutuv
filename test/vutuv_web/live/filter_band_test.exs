@@ -146,6 +146,62 @@ defmodule VutuvWeb.PostLive.FilterBandTest do
 
       assert elements(dead_html, "#filter-band-skeleton") == []
     end
+
+    # A feed re-render the band's data does not depend on — "Load more"
+    # replaces `entries` — must not re-run the card's ~8 queries. Calibrated
+    # against the ungated code: there the load-more click re-runs
+    # `FeedBand.accounts/2` and the message arrives.
+    test "a load-more does not re-run the card's queries", %{conn: conn} do
+      %{conn: conn, user: user, friend: friend} = with_friend(conn)
+      {:ok, _} = Posts.save_feed_rail(user, %{order: ["sources"], collapsed: [], removed: []})
+      for n <- 1..41, do: {:ok, _} = Posts.create_post(friend, %{body: "Beitrag #{n}"})
+
+      {:ok, view, _html} = live(conn, ~p"/feed")
+      assert has_element?(view, "#load-more")
+
+      test_pid = self()
+      lv_pid = view.pid
+      handler_id = "band-gate-#{inspect(self())}"
+
+      :telemetry.attach(
+        handler_id,
+        [:vutuv, :repo, :query],
+        fn _e, _m, md, _c ->
+          if self() == lv_pid and
+               String.contains?(md.query, ~s(FROM "follows" AS f0 INNER JOIN "users")) do
+            send(test_pid, :band_reloaded)
+          end
+        end,
+        nil
+      )
+
+      on_exit(fn -> :telemetry.detach(handler_id) end)
+
+      view |> element("#load-more") |> render_click()
+      refute_received :band_reloaded
+    end
+
+    # The one live path that changes follow state from OUTSIDE the card — the
+    # remote card menu's mute — must still reach it, or the account keeps its
+    # tick over a mute that already stands. Calibrated by dropping the
+    # `bump_band_refresh/1` on the feed's handler: the row then stays checked.
+    test "a remote mute from a card menu still refreshes the card", %{conn: conn} do
+      %{conn: conn, user: user} = with_friend(conn)
+      {:ok, _} = Posts.save_feed_rail(user, %{order: ["sources"], collapsed: [], removed: []})
+      account = remote_account("social.example", "them")
+      remote_follow(user, account)
+
+      {:ok, view, _html} = live(conn, ~p"/feed")
+      view |> twist("social.example") |> render()
+
+      row = ~s(#filter-band-account-remote\\:#{account.id})
+      assert has_element?(view, row <> "[checked]")
+
+      render_click(view, "mute-remote-account", %{"id" => account.id})
+
+      assert has_element?(view, row)
+      refute has_element?(view, row <> "[checked]")
+    end
   end
 
   describe "what is waiting" do

@@ -92,14 +92,30 @@ defmodule VutuvWeb.PostLive.FilterBand do
   # is mounted and a shared load would run the account and server queries three
   # times over for the two cards that never look at them.
   # Sources is the one block whose data costs real queries (the ranked
-  # followee list alone reads every follow the member has), so a member who
-  # keeps the card open must not pay them before the page paints: the dead
-  # render draws the skeleton in `render/1` and the connected mount loads the
-  # real thing. The folded card never renders the component at all, so the
-  # default arrangement costs nothing either way.
+  # followee list alone reads every follow the member has), so it is loaded
+  # more carefully than its two cheap siblings. Two gates. The dead render
+  # skips the queries outright and draws the skeleton in `render/1`; the
+  # connected mount loads the real thing (the folded card never renders the
+  # component at all, so the default arrangement costs nothing either way).
+  # And once loaded, a parent re-render that changed nothing the card reads —
+  # "Load more" replacing `entries` is the common one — keeps the data it has:
+  # only a fresh member handed back after a band write (`changed/1` forces the
+  # reload anyway — a mute lands in `follows`, not on the user row, so the
+  # struct alone cannot be trusted to differ), a source switch, or the feed
+  # announcing an outside follow-state change through `refresh` re-runs them.
   defp load(%{assigns: %{block: :sources}} = socket) do
-    socket = assign(socket, :loaded?, connected?(socket))
-    if socket.assigns.loaded?, do: load_sources(socket), else: socket
+    cond do
+      not connected?(socket) ->
+        assign(socket, :loaded?, false)
+
+      socket.assigns.loaded? and
+          not (changed?(socket, :current_user) or changed?(socket, :filter) or
+                   changed?(socket, :refresh)) ->
+        socket
+
+      true ->
+        socket |> assign(:loaded?, true) |> load_sources()
+    end
   end
 
   defp load(%{assigns: %{block: :words}} = socket) do
@@ -166,23 +182,20 @@ defmodule VutuvWeb.PostLive.FilterBand do
     <div id={@id} aria-busy={(@block == :sources and not @loaded?) && "true"}>
       <%!-- What the open card shows before its data is loaded (the dead
       render, and the moment before the socket is up): placeholder rows in the
-      shape of the source rows, breathing via the shared `.skeleton` class.
-      `aria-busy` rides the component root — the element that survives the
-      swap, so assistive tech hears the busy state end (the messages sidebar
-      and the calendar heatmap hang it the same way) — and the rows are
-      `aria-hidden`, there is nothing in them to read out. --%>
-      <ul
+      shape of the source rows — checkbox, name, count. `aria-busy` rides the
+      component root above, the element that survives the swap, so assistive
+      tech hears the busy state end. --%>
+      <.skeleton_rows
         :if={@block == :sources and not @loaded?}
         id={@id <> "-skeleton"}
-        aria-hidden="true"
+        rows={4}
         class="space-y-2 py-1"
+        row_class="flex items-center gap-2"
       >
-        <li :for={_ <- 1..4} class="flex items-center gap-2">
-          <span class="skeleton h-5 w-5 shrink-0"></span>
-          <span class="skeleton h-3 min-w-0 flex-1"></span>
-          <span class="skeleton h-3 w-8"></span>
-        </li>
-      </ul>
+        <span class="skeleton h-5 w-5 shrink-0"></span>
+        <span class="skeleton h-3 min-w-0 flex-1"></span>
+        <span class="skeleton h-3 w-8"></span>
+      </.skeleton_rows>
 
       <div :if={@block == :sources and @loaded?}>
         <%!-- The one thing a reader has to be told before they touch a switch:
@@ -828,19 +841,19 @@ defmodule VutuvWeb.PostLive.FilterBand do
   end
 
   def handle_event("sort", %{"sort" => sort}, socket) do
-    {:noreply, socket |> assign(:sort, sort_atom(sort)) |> load()}
+    {:noreply, socket |> assign(:sort, sort_atom(sort)) |> force_load()}
   end
 
   def handle_event("search", %{"query" => query}, socket) do
-    {:noreply, socket |> assign(:query, query) |> load()}
+    {:noreply, socket |> assign(:query, query) |> force_load()}
   end
 
   def handle_event("more-accounts", _params, socket) do
-    {:noreply, socket |> assign(:more_accounts?, true) |> load()}
+    {:noreply, socket |> assign(:more_accounts?, true) |> force_load()}
   end
 
   def handle_event("more-servers", _params, socket) do
-    {:noreply, socket |> assign(:more_servers?, true) |> load()}
+    {:noreply, socket |> assign(:more_servers?, true) |> force_load()}
   end
 
   def handle_event("all-accounts", %{"host" => host}, socket) do
@@ -980,8 +993,14 @@ defmodule VutuvWeb.PostLive.FilterBand do
     user = reload_user(socket)
     send(self(), {:filter_band, :changed, user})
 
-    socket |> assign(:current_user, user) |> load()
+    socket |> assign(:current_user, user) |> force_load()
   end
+
+  # The band's own acts bypass the `load/1` gate: what they wrote lands in
+  # `follows` / `fediverse_follows` / content filters, so no assign this
+  # component is handed has to differ for the answer to have changed.
+  defp force_load(%{assigns: %{block: :sources}} = socket), do: load_sources(socket)
+  defp force_load(socket), do: load(socket)
 
   defp reload_user(socket), do: Repo.get!(Vutuv.Accounts.User, socket.assigns.current_user.id)
 

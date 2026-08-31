@@ -371,6 +371,11 @@ defmodule VutuvWeb.PostLive.Feed do
     # a rejoin that reopened it over their feed would be a patch nobody asked
     # for. Everything it changes is written through and survives anyway.
     |> assign(:band_sheet?, false)
+    # Bumped whenever follow/mute state changes OUTSIDE the filter band (the
+    # remote card menu's mute and unfollow), so the band's gated sources card
+    # re-reads its lists — its own writes force a reload themselves, and
+    # nothing else on this page touches that state.
+    |> assign(:band_refresh, 0)
     # The name the follow field could not resolve, so the card can say so.
     |> assign(:tag_missing, nil)
     |> assign(payload.rails)
@@ -1289,14 +1294,18 @@ defmodule VutuvWeb.PostLive.Feed do
   # follow survives; its posts leave this feed, so every row from that account
   # goes in the same round trip rather than lingering until the next reload.
   def handle_event("mute-remote-account", %{"id" => account_id}, socket) do
-    RemotePostActions.mute(socket, account_id, &drop_remote_entries_of(&1, account_id))
+    socket
+    |> bump_band_refresh()
+    |> RemotePostActions.mute(account_id, &drop_remote_entries_of(&1, account_id))
   end
 
   # And the same menu's way out that lasts. The rows leave for the same reason —
   # they were here because of that follow — and the cached posts themselves go
   # with it once nobody here follows the account any more.
   def handle_event("unfollow-remote-account", %{"id" => account_id}, socket) do
-    RemotePostActions.unfollow(socket, account_id, &drop_remote_entries_of(&1, account_id))
+    socket
+    |> bump_band_refresh()
+    |> RemotePostActions.unfollow(account_id, &drop_remote_entries_of(&1, account_id))
   end
 
   # The same two acts on a reply from another network, which the feed now draws
@@ -2585,6 +2594,11 @@ defmodule VutuvWeb.PostLive.Feed do
     |> Enum.reduce(socket, &drop_remote_entry(&2, &1.remote_post.id))
   end
 
+  # The band's sources card skips reloads the page does not owe it (the gate in
+  # `VutuvWeb.PostLive.FilterBand.load/1`); this is how the page says it owes
+  # one. Bumped BEFORE the act, so the assign rides whatever the act assigns.
+  defp bump_band_refresh(socket), do: update(socket, :band_refresh, &(&1 + 1))
+
   defp drop_remote_entry(socket, remote_post_id) do
     # By each entry's own id, not by a rebuilt one. The same cached post can be
     # on the page twice — once because the reader follows its author (issue
@@ -3169,6 +3183,7 @@ defmodule VutuvWeb.PostLive.Feed do
                       block={:sources}
                       current_user={@current_user}
                       filter={@feed_filter}
+                      refresh={@band_refresh}
                       entries={@entries}
                     />
                   </.rail_block>
@@ -3322,6 +3337,7 @@ defmodule VutuvWeb.PostLive.Feed do
                 block={:sources}
                 current_user={@current_user}
                 filter={@feed_filter}
+                refresh={@band_refresh}
                 entries={@entries}
               />
             </.card>
