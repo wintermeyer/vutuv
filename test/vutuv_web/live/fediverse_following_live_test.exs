@@ -230,7 +230,7 @@ defmodule VutuvWeb.FediverseFollowingLiveTest do
       assert_patched(view, ~p"/settings/fediverse/following?sort=account")
     end
 
-    test "an address handed over from the search page is prefilled, never followed", %{
+    test "an address handed over by a link is prefilled, never followed", %{
       conn: conn,
       user: user
     } do
@@ -310,12 +310,23 @@ defmodule VutuvWeb.FediverseFollowingLiveTest do
 
   describe "the search page's offer" do
     test "a full address offers the follow flow", %{conn: conn} do
-      {conn, _user} = create_and_login_user(conn)
+      {conn, _user} = federating(conn)
 
       {:ok, view, _html} = live(conn, ~p"/search?#{[q: "@them@social.example"]}")
 
       assert has_element?(view, "#search-remote-address")
       assert has_element?(view, "#search-remote-follow")
+    end
+
+    test "a member who does not federate reads why, instead of a dead button", %{conn: conn} do
+      {conn, _user} = create_and_login_user(conn)
+
+      {:ok, view, _html} = live(conn, ~p"/search?#{[q: "@them@social.example"]}")
+
+      assert has_element?(view, "#search-remote-address")
+      refute has_element?(view, "#search-remote-follow")
+      assert has_element?(view, "#search-remote-follow-refusal")
+      assert has_element?(view, "#enable-fediverse-link")
     end
 
     test "an ordinary query offers nothing of the sort", %{conn: conn} do
@@ -331,6 +342,43 @@ defmodule VutuvWeb.FediverseFollowingLiveTest do
 
       assert has_element?(view, "#search-remote-login")
       refute has_element?(view, "#search-remote-follow")
+    end
+
+    test "the click sends the follow and lands on the list", %{conn: conn} do
+      stub_account()
+      {conn, user} = federating(conn)
+
+      {:ok, view, _html} = live(conn, ~p"/search?#{[q: "@them@social.example"]}")
+      view |> element("#search-remote-follow") |> render_click()
+
+      # The whole point: one click, and the request is already out.
+      assert [%Follow{state: "requested"}] =
+               Repo.all(from(f in Follow, where: f.user_id == ^user.id))
+
+      flash = assert_redirect(view, ~p"/settings/fediverse/following")
+      assert flash["info"] =~ "Them"
+    end
+
+    test "a refusal stays on the card, with the search still there", %{conn: conn} do
+      # That server answers nothing, so the follow comes back refused. The
+      # member keeps their results and can correct the address in the box above.
+      Application.put_env(:vutuv, :fediverse_req_options,
+        plug: fn conn -> Plug.Conn.send_resp(conn, 404, "") end
+      )
+
+      on_exit(fn -> Application.delete_env(:vutuv, :fediverse_req_options) end)
+      {conn, user} = federating(conn)
+
+      {:ok, view, _html} = live(conn, ~p"/search?#{[q: "@them@social.example"]}")
+      view |> element("#search-remote-follow") |> render_click()
+
+      assert has_element?(view, "#search-remote-follow-error")
+      assert has_element?(view, "#search-remote-address")
+      assert Repo.all(from(f in Follow, where: f.user_id == ^user.id)) == []
+
+      # Typing on takes the refusal with it.
+      view |> element("#search-form") |> render_change(%{"q" => "@them@social.exampl"})
+      refute has_element?(view, "#search-remote-follow-error")
     end
   end
 end

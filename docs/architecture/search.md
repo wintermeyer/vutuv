@@ -78,8 +78,14 @@ both render as a card **above** the results, because they are the answer to what
 was pasted:
 
 * an **account address** (`@name@server`, or a profile URL, issue #1160):
-  `#search-remote-address` names it and hands it to the follow box at
-  `/settings/fediverse/following?address=`.
+  `#search-remote-address` names it, and its button **sends the follow from
+  here** — `Fediverse.follow_remote/2` on the click, then `push_navigate` to
+  `/settings/fediverse/following`, where the member finds the flash and the new
+  row. It used to carry the address there as `?address=` for a second press of
+  "Follow", which was the same click twice; the click stays on this page
+  because arriving on that one is a `GET`. A refusal stays on the card, and a
+  member the gate refuses (`Fediverse.follow_refusal/1`) gets the explanation
+  instead of the button — both exactly as the post card below does it.
 * the address of a **single post** out there (issue #1211):
   `#search-remote-post` offers the fetch that used to live only at
   `/system/fediverse/lookup` — a page under `/system/` that nobody finds, while

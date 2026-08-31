@@ -794,8 +794,10 @@ It **follows nothing**. The arrival is a `GET` from another site, so acting on
 it would let any page on the web make a signed-in member send a signed `Follow`
 to a server of its choosing simply by linking here. The resolved address is
 handed to the follow box on `/settings/fediverse/following` instead — the same
-`?address=` prefill the search page uses, for the same reason it prefills rather
-than acts. A signed-out visitor is bounced through `/login` with the
+`?address=` prefill a post lookup uses when what was pasted turns out to name an
+account. A follow the member themselves asked for is *sent* by the page that
+owns the click (the search page's address card); this arrival is somebody
+else's link. A signed-out visitor is bounced through `/login` with the
 `:login_return_to` marker the OAuth consent screen uses, so the PIN round trip
 lands them back on this URL. The installation switch is checked first: an
 endpoint this vutuv does not run 404s instead of first asking anyone to sign in.

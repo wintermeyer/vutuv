@@ -1,15 +1,17 @@
 defmodule VutuvWeb.FediverseComponents do
   @moduledoc """
-  What the two pages that offer a follow out there have in common: the
-  address box, the panel that explains a refusal, the wording of every
-  `{:error, reason}` the context can answer with, and the follow-state pill.
+  What every page that offers a follow out there has in common: the address
+  box, the panel that explains a refusal, the wording of every `{:error,
+  reason}` the context can answer with, the sentence a follow that went through
+  gets, and the follow-state pill.
 
-  `VutuvWeb.FediverseFollowingLive` (`/settings/fediverse/following`) and
+  `VutuvWeb.FediverseFollowingLive` (`/settings/fediverse/following`),
   `VutuvWeb.FediverseAccountLive` (`/system/fediverse/account/:id`, issue #1162)
-  arrive at the same act from opposite ends — one starts from an address, the
-  other from an account already in front of the reader — but from the moment
-  the member presses Follow they are the same flow against the same context
-  function, so they must not describe it differently.
+  and the search page's address card (`VutuvWeb.SearchLive`, issue #1160)
+  arrive at the same act from different ends — an address typed, an account
+  already in front of the reader, an address that was typed as a search — but
+  from the moment the member presses Follow they are the same flow against the
+  same context function, so they must not describe it differently.
 
   `Vutuv.Fediverse.follow_refusal/1` is the data half of that (which of the four
   situations the member is in); this is the half that says it in words. Keeping
@@ -42,6 +44,7 @@ defmodule VutuvWeb.FediverseComponents do
 
   alias Vutuv.Fediverse
   alias Vutuv.Fediverse.Follow
+  alias Vutuv.Fediverse.RemoteAccount
 
   attr(:id, :string,
     required: true,
@@ -378,6 +381,35 @@ defmodule VutuvWeb.FediverseComponents do
       true -> gettext("Cancel request")
     end
   end
+
+  @doc """
+  The sentence for one `{:ok, …}` from `Vutuv.Fediverse.follow_remote/2`.
+
+  Beside `refusal_message/1` and for the same reason: four surfaces start a
+  follow — the address box on the following page, the account page, a looked-up
+  post's card and the search page's address card (issue #1160) — and the member
+  has to read the same thing about the same outcome. Two of the three shapes are
+  the ones that did something *other* than what was asked, so the sentence has
+  to say what really happened: neither the vutuv follow nor the tag subscription
+  will show up in the remote-follow table the member is looking at.
+  """
+  def follow_message({:local_follow, member}),
+    do:
+      gettext("@%{handle} is on this vutuv, so you now follow them here.",
+        handle: member.username
+      )
+
+  # It names the tag page, because the table below will not list this either —
+  # and because a subscription is silent, so the link is the only way to check.
+  def follow_message({:local_tag_follow, tag}),
+    do:
+      gettext("#%{tag} is a topic on this vutuv, so you now follow the tag here.", tag: tag.slug)
+
+  # A Follow is a request, so the confirmation says what really happened rather
+  # than "Following" — and names the account, since the row it just added may be
+  # on page four of a filtered table.
+  def follow_message(%Follow{remote_account: %RemoteAccount{} = account}),
+    do: gettext("Follow request sent to %{account}.", account: RemoteAccount.label(account))
 
   @doc """
   The sentence for one `{:error, reason}` from `Vutuv.Fediverse`.

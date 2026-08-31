@@ -76,10 +76,14 @@ defmodule VutuvWeb.FediverseFollowingLive do
      |> load_page(params)}
   end
 
-  # `?address=` arrives from the search page (issue #1160), which offers a full
-  # `@name@server` query as something to follow. Prefilled rather than followed
-  # on arrival: a GET must not send a signed request to a stranger's server,
-  # and the member should see what they are about to do.
+  # `?address=` arrives from the remote-follow hand-off
+  # (`/authorize_interaction`) and from a post lookup that turned out to name an
+  # account rather than a post (`VutuvWeb.SearchLive`, `VutuvWeb.FediverseLookupLive`).
+  # Prefilled, never followed on arrival: the hand-off is a GET from another
+  # site, and a GET must not send a signed request to a stranger's server on a
+  # link the member did not write; the lookup asked for a post, not a follow.
+  # A member who *did* ask to follow has had it sent before they got here —
+  # `SearchLive.follow_pasted_address/1` owns that click.
   defp prefill(socket, address) when is_binary(address), do: assign(socket, :address, address)
   defp prefill(socket, _address), do: socket
 
@@ -129,28 +133,20 @@ defmodule VutuvWeb.FediverseFollowingLive do
   @impl true
   def handle_event("follow", %{"address" => address}, socket) do
     case Fediverse.follow_remote(socket.assigns.user, address) do
-      # The address turned out to live here, so the member got a plain vutuv
-      # follow instead of a Fediverse request — say so, since the table below
-      # (remote follows only) will not show it.
-      {:ok, {:local_follow, member}} ->
+      # The address turned out to live here, so `follow_remote/2` did the local
+      # thing it names instead of sending a Fediverse request: a plain vutuv
+      # follow, or a tag subscription (issue #1330). The flash carries it,
+      # because the table below (remote follows only) shows neither, and the
+      # totals cannot have moved.
+      {:ok, {_kind, _subject} = local} ->
         {:noreply,
          socket
          |> assign(:address, "")
          |> assign_error(nil)
-         |> put_flash(:info, local_follow_message(member))
+         |> put_flash(:info, follow_message(local))
          |> patch_browse(%{}, &browse_path/1)}
 
-      # Same again for a topic on our own tag host (issue #1330): what the
-      # member asked for is a tag subscription, and that is what they got.
-      {:ok, {:local_tag_follow, tag}} ->
-        {:noreply,
-         socket
-         |> assign(:address, "")
-         |> assign_error(nil)
-         |> put_flash(:info, local_tag_follow_message(tag))
-         |> patch_browse(%{}, &browse_path/1)}
-
-      {:ok, follow} ->
+      {:ok, %Follow{} = follow} ->
         # Patch rather than reload in place: it keeps any active filter and
         # drops the `?address=` the search page may have arrived with, so a
         # later sort does not put the followed address back in the box.
@@ -159,7 +155,7 @@ defmodule VutuvWeb.FediverseFollowingLive do
          |> assign(:address, "")
          |> assign_error(nil)
          |> assign_totals()
-         |> put_flash(:info, follow_sent_message(follow))
+         |> put_flash(:info, follow_message(follow))
          |> patch_browse(%{}, &browse_path/1)}
 
       {:error, reason} ->
@@ -233,29 +229,6 @@ defmodule VutuvWeb.FediverseFollowingLive do
   def handle_info(_other, socket), do: {:noreply, socket}
 
   # ── Wording ───────────────────────────────────────────────────────────────
-
-  # The vutuv follow that answered a Fediverse address (the auto-follow): named
-  # by handle, because the address the member typed was one.
-  defp local_follow_message(member) do
-    gettext("@%{handle} is on this vutuv, so you now follow them here.",
-      handle: member.username
-    )
-  end
-
-  # The tag twin: the address named a topic of this installation, so the member
-  # got the subscription rather than a request that could never be sent. It
-  # names the tag page, because the table below will not list this either — and
-  # because a subscription is silent, so the link is the only way to check.
-  defp local_tag_follow_message(tag) do
-    gettext("#%{tag} is a topic on this vutuv, so you now follow the tag here.", tag: tag.slug)
-  end
-
-  # A Follow is a request, so the confirmation says what really happened rather
-  # than "Following" — and names the account, since the row it just added may be
-  # on page four of a filtered table.
-  defp follow_sent_message(%Follow{remote_account: %RemoteAccount{} = account}) do
-    gettext("Follow request sent to %{account}.", account: RemoteAccount.label(account))
-  end
 
   # The confirmation that goes with `end_follow_label/1`. This page knows the
   # account behind the row (the table preloads it), so it names it.

@@ -116,10 +116,7 @@ defmodule VutuvWeb.FediverseAccountLive do
         # nothing to reload.
         {:noreply,
          socket
-         |> put_flash(
-           :info,
-           gettext("Follow request sent to %{account}.", account: RemoteAccount.label(account))
-         )
+         |> put_flash(:info, follow_message(follow))
          |> assign(:follow, follow)}
 
       {:error, reason} ->

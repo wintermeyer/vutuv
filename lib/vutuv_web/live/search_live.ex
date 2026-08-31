@@ -17,18 +17,29 @@ defmodule VutuvWeb.SearchLive do
   keystroke for two seconds), so typing "meier" stores one query, not five.
 
   Two things people paste in here are not queries at all, and both get named
-  and answered instead of searched: an `@name@server` address (the follow
-  hand-off, issue #1160) and the address of a **post** on another network, which
-  is offered the lookup that used to live at `/system/fediverse/lookup` alone
-  (issue #1211). Recognising either is pure string work, so a keystroke never
-  becomes an outbound request; the fetch behind the post address is a signed
-  request in the member's name against their hourly budget, so it happens on
-  their explicit submit or click and never while they type.
+  and answered instead of searched: an `@name@server` address, which is offered
+  the follow (issue #1160), and the address of a **post** on another network,
+  which is offered the lookup that used to live at `/system/fediverse/lookup`
+  alone (issue #1211). Recognising either is pure string work, so a keystroke
+  never becomes an outbound request; both acts behind them are signed requests
+  in the member's name against their hourly budget, so each happens on an
+  explicit submit or click and never while they type, and neither button is
+  offered to a member the gate would refuse. The follow is *sent from here* and
+  lands the member on `/settings/fediverse/following` with it done — carrying
+  the address over for them to press "Follow" a second time was the same click
+  twice.
   """
   use VutuvWeb, :live_view
 
   import VutuvWeb.FediverseComponents,
-    only: [lookup_refusal_link: 1, lookup_refusal_message: 1, lookup_refusal_text: 1]
+    only: [
+      follow_message: 1,
+      follow_refusal_panel: 1,
+      lookup_refusal_link: 1,
+      lookup_refusal_message: 1,
+      lookup_refusal_text: 1,
+      refusal_message: 1
+    ]
 
   import VutuvWeb.SavedSearchComponents
 
@@ -54,7 +65,13 @@ defmodule VutuvWeb.SearchLive do
      # than per keystroke: it reads their federation state, and the answer is
      # the same for every query they type. `look_up_post/2` asks again at the
      # click, so participation ending in another tab is still refused.
-     |> assign(:lookup_refusal, current_user && Fediverse.lookup_refusal(current_user))}
+     |> assign(:lookup_refusal, current_user && Fediverse.lookup_refusal(current_user))
+     # The follow's twin of the same question (`follow_refusal/1` tells the four
+     # situations apart where `federated?/1` collapses them). Without it the
+     # card would offer a live button to somebody who cannot sign a Follow at
+     # all, and answer their click with a page change instead of a sentence.
+     |> assign(:follow_refusal, current_user && Fediverse.follow_refusal(current_user))
+     |> assign(:remote_follow_error, nil)}
   end
 
   @impl true
@@ -63,6 +80,7 @@ defmodule VutuvWeb.SearchLive do
     scope = parse_scope(params["scope"])
     exact = params["exact"] == "1"
     results = Search.instant(q, scope: scope, exact: exact, viewer: socket.assigns[:current_user])
+    address = remote_address(q)
     post_url = remote_post_url(q)
 
     {:noreply,
@@ -79,8 +97,11 @@ defmodule VutuvWeb.SearchLive do
      |> assign(:effective_scope, (results && results.parsed.scope) || scope)
      |> assign(:scope_pinned?, (results && results.parsed.scope_pinned?) || false)
      |> assign(:results, results)
-     |> assign(:remote_address, remote_address(q))
+     |> assign(:remote_address, address)
      |> assign(:remote_post_url, post_url)
+     # Both refusals belong to what they were about and die with it, so the card
+     # is never still shouting about an address the member has since corrected.
+     |> assign(:remote_follow_error, kept_follow_error(socket, address))
      # A refusal belongs to the address it was about: it survives the patch the
      # debounced keystroke sends after a submit, and dies the moment the pasted
      # address changes, so the card is never still shouting about a URL the
@@ -93,6 +114,11 @@ defmodule VutuvWeb.SearchLive do
   defp kept_post_error(socket, post_url) do
     if post_url && post_url == socket.assigns[:remote_post_url],
       do: socket.assigns[:remote_post_error]
+  end
+
+  defp kept_follow_error(socket, address) do
+    if address && address == socket.assigns[:remote_address],
+      do: socket.assigns[:remote_follow_error]
   end
 
   # A full `@name@server` typed into the search box is not a vutuv query at all
@@ -184,6 +210,12 @@ defmodule VutuvWeb.SearchLive do
       else: {:noreply, socket}
   end
 
+  def handle_event("follow-remote-address", _params, socket) do
+    if follow_offered?(socket),
+      do: {:noreply, follow_pasted_address(socket)},
+      else: {:noreply, socket}
+  end
+
   def handle_event("toggle_save_search", _params, socket),
     do: {:noreply, update(socket, :show_save?, &(not &1))}
 
@@ -202,6 +234,13 @@ defmodule VutuvWeb.SearchLive do
   defp lookup_offered?(socket) do
     socket.assigns.remote_post_url != nil and socket.assigns.current_user != nil and
       socket.assigns.lookup_refusal == nil
+  end
+
+  # The same three questions for the follow: an address, a member, and nothing
+  # standing in the way of signing the request in their name.
+  defp follow_offered?(socket) do
+    socket.assigns.remote_address != nil and socket.assigns.current_user != nil and
+      socket.assigns.follow_refusal == nil
   end
 
   # The one outbound request this page can make, and only ever on an act of the
@@ -224,6 +263,30 @@ defmodule VutuvWeb.SearchLive do
 
       {:error, reason} ->
         assign(socket, :remote_post_error, reason)
+    end
+  end
+
+  # The other outbound request this page can make, and the twin of the one
+  # above in every respect: the member's own click, their hourly budget, their
+  # signature. It is sent from *here* rather than handed to
+  # `/settings/fediverse/following` as a prefilled box — the member asked for
+  # the follow once, and arriving on that page is a `GET`, which may not put a
+  # signed request on a stranger's server on the strength of a link somebody
+  # else wrote.
+  #
+  # A follow that goes through lands on that page, because the row, its state
+  # and the way to take it back are all there. A refusal stays on this card,
+  # like the pasted post's: the correction happens in the box above it, and the
+  # settings page has nothing to add to "that server did not answer".
+  defp follow_pasted_address(socket) do
+    case Fediverse.follow_remote(socket.assigns.current_user, socket.assigns.remote_address) do
+      {:ok, result} ->
+        socket
+        |> put_flash(:info, follow_message(result))
+        |> push_navigate(to: ~p"/settings/fediverse/following")
+
+      {:error, reason} ->
+        assign(socket, :remote_follow_error, reason)
     end
   end
 
@@ -441,10 +504,12 @@ defmodule VutuvWeb.SearchLive do
 
   attr(:address, :string, default: nil)
   attr(:signed_in?, :boolean, default: false)
+  attr(:refusal, :atom, default: nil)
+  attr(:error, :any, default: nil)
 
   # The result row for an address on another network. It sits above the vutuv
   # results because it is the *answer* to what was typed, and it renders for a
-  # signed-out visitor too — with the sign-in link instead of the follow one,
+  # signed-out visitor too — with the sign-in link instead of the follow button,
   # since the request has to be signed by a member's own key.
   defp remote_address_result(%{address: nil} = assigns) do
     ~H""
@@ -462,15 +527,29 @@ defmodule VutuvWeb.SearchLive do
           "That is an address on Mastodon or one of the other networks, so nobody here carries it. You can follow it from vutuv."
         )}
       </p>
-      <p class="mt-3">
-        <.link
+      <%!-- Somebody who cannot sign a Follow at all reads why here, rather than
+            pressing a button that was never going to work. Same shape as the
+            post card below, and the same panel the following page shows. --%>
+      <.follow_refusal_panel
+        :if={@signed_in? and @refusal}
+        id="search-remote-follow-refusal"
+        reason={@refusal}
+        class="mt-3"
+      />
+
+      <p :if={!@signed_in? or is_nil(@refusal)} class="mt-3">
+        <%!-- Full width on a phone, like the other card's: it is this card's
+              single call to action, and the standard pill is a small target for
+              a thumb. --%>
+        <.button
           :if={@signed_in?}
-          navigate={~p"/settings/fediverse/following?#{[address: @address]}"}
           id="search-remote-follow"
-          class="text-sm font-semibold text-brand-600 hover:text-brand-700 dark:text-brand-400 dark:hover:text-brand-300"
+          phx-click="follow-remote-address"
+          phx-disable-with={gettext("Following…")}
+          class="w-full sm:w-auto"
         >
-          {gettext("Follow this account")} ›
-        </.link>
+          {gettext("Follow this account")}
+        </.button>
         <.link
           :if={!@signed_in?}
           navigate={~p"/login"}
@@ -479,6 +558,15 @@ defmodule VutuvWeb.SearchLive do
         >
           {gettext("Sign in to follow this account")} ›
         </.link>
+      </p>
+
+      <p
+        :if={@error}
+        id="search-remote-follow-error"
+        role="alert"
+        class="mt-2 text-sm font-medium text-red-700 dark:text-red-300"
+      >
+        {refusal_message(@error)}
       </p>
     </.card>
     """
@@ -617,7 +705,12 @@ defmodule VutuvWeb.SearchLive do
         {gettext("Results appear once you have typed at least three letters.")}
       </p>
 
-      <.remote_address_result address={@remote_address} signed_in?={@current_user_id != nil} />
+      <.remote_address_result
+        address={@remote_address}
+        signed_in?={@current_user_id != nil}
+        refusal={@follow_refusal}
+        error={@remote_follow_error}
+      />
 
       <.remote_post_result
         url={@remote_post_url}
