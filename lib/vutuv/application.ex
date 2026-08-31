@@ -68,8 +68,10 @@ defmodule Vutuv.Application do
   def start(_type, _args) do
     if Application.get_env(:vutuv, :ops_log_visibility, true), do: ensure_ops_logs_visible()
     # The optional children below are gated per config flag (off in tests, see
-    # config/test.exs): mostly periodic jobs, plus the Vutuv.Prefs.Cache,
-    # whose DB reloads would likewise touch the SQL sandbox from outside.
+    # config/test.exs): mostly periodic jobs, plus the two memos whose answers
+    # outlive the process that asked — Vutuv.Prefs.Cache, whose DB reloads
+    # would touch the SQL sandbox from outside, and Vutuv.Tags.LinkableCache,
+    # which would answer one test with the tag state of the one before it.
     children =
       [
         Vutuv.Repo,
@@ -116,6 +118,7 @@ defmodule Vutuv.Application do
         VutuvWeb.Live.MountHandoff,
         VutuvWeb.Endpoint
       ] ++
+        optional_child(:linkable_tag_cache, Vutuv.Tags.LinkableCache) ++
         optional_child(:prefs_defaults_cache, Vutuv.Prefs.Cache) ++
         optional_child(:screenshot_blocklist_cache, Vutuv.ScreenshotBlocklist.Cache) ++
         optional_child(:sweep_pending_images, Vutuv.Posts.PendingImageSweeper) ++

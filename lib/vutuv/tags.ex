@@ -20,6 +20,7 @@ defmodule Vutuv.Tags do
   alias Vutuv.SlugHelpers
   require Vutuv.Tags.MatchKey
 
+  alias Vutuv.Tags.LinkableCache
   alias Vutuv.Tags.MatchKey
   alias Vutuv.Tags.Tag
   alias Vutuv.Tags.TagFollow
@@ -636,50 +637,79 @@ defmodule Vutuv.Tags do
   threshold of one member rather than two — that bar asks whether a page
   deserves a crawler, this one only whether it deserves a click.
 
-  One query per body (two arms of a union); an empty input skips the DB so the
-  renderer's no-hashtag path stays query-free.
-  """
-  def linkable_slugs(written) when is_list(written) do
-    import Vutuv.Moderation.Query, only: [account_hidden_row: 1, account_confirmed_row: 1]
+  At most one query per call (two arms of a union), and usually none:
+  `Vutuv.Tags.LinkableCache` remembers each folded key's answer — the misses
+  included — for a minute, and a feed page warms every hashtag it carries in
+  one go before the first card renders (`Posts.decorate_feed_entries/3`). The
+  cache is a fast path and never a requirement: with its process off (tests) or
+  its table not yet up, every call is the live query it always was. An empty
+  input skips both, so the renderer's no-hashtag path stays query-free.
 
+  `table` is the cache's ETS table, injectable so a test can run an isolated
+  instance.
+  """
+  def linkable_slugs(written, table \\ LinkableCache) when is_list(written) do
     keys = written |> Enum.map(&MatchKey.normalize/1) |> Enum.reject(&is_nil/1) |> Enum.uniq()
 
     if keys == [] do
       %{}
     else
-      held =
-        from(t in Tag,
-          as: :tag,
-          left_join: c in assoc(t, :merged_into),
-          as: :canonical,
-          join: ut in UserTag,
-          on: ut.tag_id == coalesce(c.id, t.id),
-          join: u in assoc(ut, :user),
-          where: account_confirmed_row(u) and not account_hidden_row(u)
-        )
-        |> keyed_target(keys)
+      # Whatever the memo already knows; anything it does not is one query for
+      # the lot, so a body naming five unseen tags still costs one round trip.
+      {known, missing} = LinkableCache.fetch(keys, table)
 
-      posted =
-        from([post_tag: pt] in Posts.visible_tagged_posts_query(),
-          join: t in Tag,
-          as: :tag,
-          on: pt.tag_id == coalesce(t.merged_into_id, t.id),
-          left_join: c in assoc(t, :merged_into),
-          as: :canonical
-        )
-        |> keyed_target(keys)
+      by_key =
+        case missing do
+          [] ->
+            known
 
-      from(row in subquery(union_all(held, ^posted)),
-        distinct: true,
-        select: {row.name, row.slug, row.target}
-      )
-      |> Repo.all()
-      |> Enum.map(fn {name, slug, target} ->
-        {MatchKey.normalize(name), MatchKey.normalize(slug), target}
-      end)
-      |> index_by_match_keys()
-      |> targets_for(written)
+          missing ->
+            fresh = query_targets(missing)
+            LinkableCache.put(missing, fresh, table)
+            Map.merge(known, fresh)
+        end
+
+      targets_for(by_key, written)
     end
+  end
+
+  # The live answer for `keys`: `{folded key => target slug}` for every tag they
+  # name that is worth a click. Split out of `linkable_slugs/2` so the memo in
+  # front of it has one thing to call and one thing to remember.
+  defp query_targets(keys) do
+    import Vutuv.Moderation.Query, only: [account_hidden_row: 1, account_confirmed_row: 1]
+
+    held =
+      from(t in Tag,
+        as: :tag,
+        left_join: c in assoc(t, :merged_into),
+        as: :canonical,
+        join: ut in UserTag,
+        on: ut.tag_id == coalesce(c.id, t.id),
+        join: u in assoc(ut, :user),
+        where: account_confirmed_row(u) and not account_hidden_row(u)
+      )
+      |> keyed_target(keys)
+
+    posted =
+      from([post_tag: pt] in Posts.visible_tagged_posts_query(),
+        join: t in Tag,
+        as: :tag,
+        on: pt.tag_id == coalesce(t.merged_into_id, t.id),
+        left_join: c in assoc(t, :merged_into),
+        as: :canonical
+      )
+      |> keyed_target(keys)
+
+    from(row in subquery(union_all(held, ^posted)),
+      distinct: true,
+      select: {row.name, row.slug, row.target}
+    )
+    |> Repo.all()
+    |> Enum.map(fn {name, slug, target} ->
+      {MatchKey.normalize(name), MatchKey.normalize(slug), target}
+    end)
+    |> index_by_match_keys()
   end
 
   # The half both arms of the union share. Written once because the two

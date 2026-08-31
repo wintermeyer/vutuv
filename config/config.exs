@@ -549,6 +549,12 @@ config :vutuv, :refresh_popular_users, true
 # Same deal for the "who to follow" recent-poster pool (Vutuv.Posts.TopPosters)
 # and the feed rail's suggested-posts pool (Vutuv.Posts.PopularPosts).
 config :vutuv, :refresh_top_posters, true
+# The memo in front of Vutuv.Tags.linkable_slugs/1 (Vutuv.Tags.LinkableCache):
+# whether a written #hashtag names a topic worth a click, remembered for a
+# minute. Every rendered post body asks, so a feed page asked once per card.
+# Off in tests, where a memo outliving the asking process would answer for the
+# next test's freshly created tag.
+config :vutuv, :linkable_tag_cache, true
 config :vutuv, :refresh_popular_posts, true
 
 # The inline social posts on profiles (Vutuv.SocialFeed), one flag per

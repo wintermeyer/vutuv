@@ -39,6 +39,12 @@ config :vutuv, :sweep_api_auth, false
 # pref resolution falls back to the shipped defaults and tests inject
 # installation defaults via Vutuv.Prefs.Cache.store/1 (see prefs_test.exs).
 config :vutuv, :prefs_defaults_cache, false
+# The hashtag-linkability memo is off here for the same reason it is elsewhere
+# a win: its answers outlive the process that asked. A global one-minute memo
+# would let one test's "no such tag" stand for the next test's freshly created
+# one, so every test sees the live query and the cache's own tests
+# (linkable_cache_test.exs) start an isolated instance.
+config :vutuv, :linkable_tag_cache, false
 # Same deal for the screenshot blocklist's cache: with it off, every check
 # reads the table from the calling (sandbox-owning) process, so a test that
 # inserts an entry sees it act immediately.

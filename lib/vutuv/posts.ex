@@ -3179,7 +3179,57 @@ defmodule Vutuv.Posts do
       |> attach_thread_starts(viewer, threads?)
       |> attach_remote_thread(viewer, remote, threads?)
 
-    Vutuv.FeedPage.sort_entries(local ++ decorate_remote(remote, viewer))
+    entries = Vutuv.FeedPage.sort_entries(local ++ decorate_remote(remote, viewer))
+    warm_hashtag_links(entries)
+    entries
+  end
+
+  # The last batch load a page of cards needs, and the only one that is not an
+  # association: whether each `#hashtag` in these bodies names a topic worth a
+  # click (`Tags.linkable_slugs/1`). The renderer asks that question **per
+  # body**, so without this a page of forty cards ran the query up to forty
+  # times — 3.4 ms and one round trip for every card carrying a hashtag against
+  # 0.2 ms for one that does not (measured on a copy of production,
+  # 2026-08-31). Asked here for the whole page at once, it is one query, and
+  # `Vutuv.Tags.LinkableCache` hands the answers to each card in turn.
+  #
+  # It belongs beside the other batch loads rather than in the renderer for the
+  # reason they all do: this is the one place that can see the whole page. The
+  # answer is discarded — the cache is the delivery mechanism — so a miss costs
+  # nothing but the ordinary per-body path, and with the cache process off
+  # (tests) this is one extra query and no change in behaviour.
+  defp warm_hashtag_links(entries) do
+    written =
+      entries
+      |> Enum.flat_map(&entry_bodies/1)
+      |> Enum.flat_map(&Mentions.written_hashtags/1)
+      |> Enum.uniq()
+
+    if written != [], do: Tags.linkable_slugs(written)
+    :ok
+  end
+
+  # Every text an entry's cards will render — its own post and the ancestors
+  # above it (`thread_posts/1`, the owner of that list), a cached remote post
+  # or remote reply, and the remote parent a local reply answers. Each read
+  # through `text/1` rather than by column, so a fourth kind of post arrives
+  # here already handled.
+  defp entry_bodies(entry) do
+    # `:remote_parents` is keyed by the answering post and its values are the
+    # decorated map a remote card is drawn from, not the cached post itself.
+    parents =
+      entry
+      |> Map.get(:remote_parents, %{})
+      |> Map.values()
+      |> Enum.map(& &1[:remote_post])
+
+    entry
+    |> thread_posts()
+    |> Enum.concat([entry[:remote_post], entry[:note]])
+    |> Enum.concat(parents)
+    |> Enum.reject(&is_nil/1)
+    |> Enum.map(&text/1)
+    |> Enum.reject(&is_nil/1)
   end
 
   defp attach_remote_thread(local, _viewer, _remote, false), do: local
