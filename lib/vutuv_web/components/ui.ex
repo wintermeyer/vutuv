@@ -1091,24 +1091,25 @@ defmodule VutuvWeb.UI do
   a caller can hand one over without a guard of its own.
 
   Carries `data-link-thumb` with that state (`shot` / `pixelated` / `site` /
-  `pending`) for tests. Sizing lives in the component and is picked by name, so
-  a call site never spells a ratio: `:tile` is the 400×264 preview the profile
-  Links card and the `/:slug/links` list render, `:banner` the organization
-  header's cover band. A named variant rather than a free-form aspect class,
-  because the banner's two classes are coupled — a 5:2 box without a crop taken
-  from the top centres the picture and throws away the recognisable part of a
-  homepage, its own logo and navigation. All four states take the shape
-  together, so the badge on a pixelated capture keeps sitting on the picture
-  rather than below its clipped edge.
+  `pending`) for tests. The shape is the component's, never the call site's: the
+  400×264 the capture was taken at, in every state, so the badge on a pixelated
+  capture keeps sitting on the picture rather than below a clipped edge.
+
+  **A capture is shown whole or not at all.** It arrives already wearing a fake
+  browser window — `Vutuv.BrowserFrame` composites a chrome bar with the address
+  in it — so a band cropped out of one leaves the frame's rounded corner chasing
+  whatever rounded corner it sits in, and a window with a top but no bottom. The
+  organization header did that for a while (`variant={:banner}`, a 5:2 crop from
+  the top) and it is why that header now puts the whole window beside the name.
+  A caller that wants a shorter picture wants a different picture.
   """
   attr(:scope, :map, default: nil, doc: "a Vutuv.Screenshot scope: has .id + .screenshot")
   attr(:value, :string, required: true, doc: "the URL that was captured")
   attr(:alt, :string, default: nil)
-  attr(:variant, :atom, default: :tile, values: [:tile, :banner])
   attr(:class, :any, default: nil)
   # Lazy by default: the profile Links card and the `/:slug/links` list render a
   # grid of these, mostly below the fold. An above-the-fold hero — the
-  # organization header's banner, which is that page's LCP element — passes
+  # organization header's capture, which is that page's LCP element — passes
   # loading="eager", the same knob `<.avatar>` carries for the same reason.
   attr(:loading, :string, default: "lazy", values: ~w(lazy eager))
 
@@ -1123,13 +1124,11 @@ defmodule VutuvWeb.UI do
       |> assign(:src, src)
       |> assign(:pixelated_url, pixelated_url)
       |> assign(:state, link_thumb_state(assigns.scope, assigns.value, src, pixelated_url))
-      |> assign(:box, thumb_box(assigns[:variant] || :tile))
-      |> assign(:crop, thumb_crop(assigns[:variant] || :tile))
 
     ~H"""
     <span
       :if={@state == "pixelated"}
-      class={["relative block w-full overflow-hidden", @box, @class]}
+      class={["relative block aspect-[400/264] w-full overflow-hidden", @class]}
       data-link-thumb="pixelated"
     >
       <img
@@ -1139,7 +1138,7 @@ defmodule VutuvWeb.UI do
         height="264"
         loading={@loading}
         fetchpriority={@loading == "eager" && "high"}
-        class={["h-full w-full object-cover", @crop]}
+        class="h-full w-full object-cover"
       />
       <.checking_badge />
     </span>
@@ -1147,8 +1146,7 @@ defmodule VutuvWeb.UI do
       :if={@state == "site"}
       data-link-thumb="site"
       class={[
-        "flex w-full items-center justify-center bg-slate-50 px-3 dark:bg-slate-800",
-        @box,
+        "flex aspect-[400/264] w-full items-center justify-center bg-slate-50 px-3 dark:bg-slate-800",
         @class
       ]}
     >
@@ -1165,20 +1163,10 @@ defmodule VutuvWeb.UI do
       height="264"
       loading={@loading}
       fetchpriority={@loading == "eager" && "high"}
-      class={["w-full object-cover", @box, @crop, @class]}
+      class={["aspect-[400/264] w-full object-cover", @class]}
     />
     """
   end
-
-  # The two halves of a variant's shape, spelled out as literal classes because
-  # Tailwind's scanner only sees literal class strings. `thumb_crop/1` lands on
-  # the picture, `thumb_box/1` on whatever draws the rectangle — which is the
-  # wrapper in the pixelated state, so the badge stays on the picture.
-  defp thumb_box(:banner), do: "aspect-[5/2]"
-  defp thumb_box(_tile), do: "aspect-[400/264]"
-
-  defp thumb_crop(:banner), do: "object-top"
-  defp thumb_crop(_tile), do: nil
 
   # Which of the four tiles this link gets, decided once so the three branches
   # above read as one choice rather than as three conditions that must agree.

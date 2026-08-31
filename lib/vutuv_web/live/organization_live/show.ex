@@ -482,101 +482,70 @@ defmodule VutuvWeb.OrganizationLive.Show do
         column had no gap of their own and sat almost flush, while the desktop
         rail kept its 24px. --%>
         <div class="min-w-0 space-y-6 md:col-span-2">
-          <%!-- Header card (custom markup, like the profile's: a cover banner
-          with the logo overlapping it, which `<.card>`'s own padding cannot
-          do). The banner is the organization's own homepage, captured by us
-          (`Vutuv.Organizations.Screenshots`) — it used to lead the right rail,
-          where a phone put it 2,300px down the page, below the description,
-          the posts, the people and the jobs. A picture of the site says in one
-          glance what a domain name cannot, so it belongs where the page starts;
-          the rail card is gone rather than duplicated. Nothing shows while the
-          queue has not got there (`@screenshot_shown?`), and the card then
-          opens with the logo as before. --%>
+          <%!-- Header card (custom markup, like the profile's, because
+          `<.card>`'s own `p-6` cannot be turned off from a `class`). The page
+          says who it is first and shows its homepage beside that
+          (`Vutuv.Organizations.Screenshots`), so nothing is cropped and nothing
+          is covered. That capture already IS a little browser window — the
+          chrome bar with the address in it is composited on by
+          `Vutuv.BrowserFrame` — so it is shown whole at the ratio it was taken
+          in; the 5:2 cover band this replaced sliced that frame, leaving the
+          card's rounded corner chased by a second one two pixels in, a window
+          with a top but no bottom, and the logo tile sitting on the site's own
+          headline. The picture still has to be near the top of the page: back
+          in the right rail, which renders after the whole main column, a phone
+          put it 2,300px down, below the description, the posts, the people and
+          the jobs (`organization_screenshot_render_test.exs` pins it above the
+          `<h1>`). Nothing shows at all while the queue has not got there
+          (`@screenshot_shown?`) — one grey placeholder tile alone reads as a
+          broken image. --%>
           <section class="overflow-hidden rounded-2xl bg-white shadow-sm ring-1 ring-slate-200 dark:bg-slate-900 dark:ring-slate-800">
-            <%!-- Cropped to a 5:2 band from the top (`object-top`), not shown
-            whole: a homepage capture is 400×264, and a banner that shape is
-            390px of picture on a phone and 240px more on a desktop before the
-            page has said whose it is. The top band is also the recognisable
-            part — a site's own logo and navigation live there. --%>
-            <a
-              :if={@screenshot_shown?}
-              href={@organization.website_url}
-              rel="nofollow noopener"
-              target="_blank"
-              data-organization-screenshot
-              class="block bg-slate-100 dark:bg-slate-800"
-            >
+            <%!-- The row starts at `lg`, not `sm`: between `md` and `lg` the
+            rail already takes a third of the page, leaving the main column
+            about 420px, and a fixed 256px window there would squeeze the name
+            and the place into 140px. Below that the window drops under the
+            name at `max-w-sm`, subordinate to the identity rather than the
+            wall of picture a full-width capture makes on a tablet. --%>
+            <div class="flex flex-col gap-5 px-6 pt-6 lg:flex-row lg:items-start lg:gap-6">
+              <div class="min-w-0 flex-1">
+                <%!-- No white tile under the logo any more: it stood on the
+                banner and a mark is usually transparent, so untiled it read as
+                part of the screenshot. Nothing overlaps here, so it is plain —
+                which also lets the brand-tinted monogram of a page with no logo
+                show through, as `<.organization_logo>` intends. --%>
+                <div class="w-fit">
+                  <.organization_logo organization={@organization} class="h-20 w-20" />
+                </div>
+
+                <.org_identity organization={@organization} verified_domain={@verified_domain} />
+              </div>
+
               <%!-- The picture's `alt` is the link's whole accessible name, so
               there is no `title` saying the same words beside it — a screen
               reader would read the sentence twice. `loading="eager"` because
-              this is the page's LCP element now; lazy hides it from the preload
+              this is the page's LCP element; lazy hides it from the preload
               scanner. --%>
-              <.link_thumb
-                scope={@screenshot}
-                value={@screenshot.url}
-                alt={gettext("The website of %{name}", name: @organization.name)}
-                variant={:banner}
-                loading="eager"
-              />
-            </a>
-
-            <div class={["px-6 pb-6", not @screenshot_shown? && "pt-6"]}>
-              <%!-- The logo rides half over the banner's bottom edge, the
-              profile's avatar move. Over the picture it gets a white tile of
-              its own: a mark is usually transparent, and untiled it would read
-              as part of the screenshot. The tile is a wrapper rather than a
-              `bg-white` on `<.organization_logo>` itself, which would also
-              paint over the brand-tinted monogram a page with no logo shows.
-              Without a banner there is nothing to lift the logo off, so it
-              stays plain. --%>
-              <div class={[
-                "w-fit",
-                @screenshot_shown? && "-mt-10 rounded-3xl bg-white p-1.5 shadow-md dark:bg-slate-900"
-              ]}>
-                <.organization_logo organization={@organization} class="h-20 w-20" />
-              </div>
-
-              <h1 class="mt-3 text-2xl font-bold text-slate-900 dark:text-slate-100">{@organization.name}</h1>
-
-              <%!-- Kind and place share one line: two facts of the same weight,
-              each a few words long, that spent a line of a phone's screen each
-              while the picture they were pushing down waited at the bottom. --%>
-              <div class="mt-1.5 flex flex-wrap items-center gap-x-2 gap-y-1">
-                <.kind_badge kind={@organization.kind} />
-                <.organization_location organization={@organization} class="text-sm text-slate-600 dark:text-slate-400" />
-              </div>
-
-              <%!-- The website, and the domain proof beside it as the same
-              small emerald ✓ a member's verified webpage link wears. It used
-              to be a full pill on the badge row above, which spent a line of
-              the page on a fact that only means anything next to the link it
-              vouches for — this is that link, so the domain moves into the ✓'s
-              label. A page that proved a domain but names no website shows
-              that domain here instead, so the fact never goes missing. --%>
-              <div
-                :if={@organization.website_url || @verified_domain}
-                class="mt-2 flex items-center gap-1.5"
+              <a
+                :if={@screenshot_shown?}
+                href={@organization.website_url}
+                rel="nofollow noopener"
+                target="_blank"
+                data-organization-screenshot
+                class="block w-full max-w-sm shrink-0 overflow-hidden rounded-xl shadow-md ring-1 ring-slate-900/10 transition hover:shadow-lg lg:mt-1 lg:w-64 dark:ring-white/10"
               >
-                <a
-                  :if={@organization.website_url}
-                  href={@organization.website_url}
-                  rel="nofollow noopener"
-                  target="_blank"
-                  class="text-sm font-semibold text-brand-600 hover:text-brand-700 dark:text-brand-400 dark:hover:text-brand-300"
-                >
-                  {display_url(@organization.website_url)}
-                </a>
-                <span
-                  :if={is_nil(@organization.website_url)}
-                  class="text-sm text-slate-700 dark:text-slate-300"
-                >
-                  {@verified_domain.domain}
-                </span>
-                <.verified_mark
-                  :if={@verified_domain}
-                  title={gettext("Verified via %{domain}", domain: @verified_domain.domain)}
+                <.link_thumb
+                  scope={@screenshot}
+                  value={@screenshot.url}
+                  alt={gettext("The website of %{name}", name: @organization.name)}
+                  loading="eager"
                 />
-              </div>
+              </a>
+            </div>
+
+            <%!-- The identity block above and everything below it share one
+            `px-6` column; the split exists because the two halves of the row
+            need their own top padding. --%>
+            <div class="px-6 pb-6">
 
               <%!-- The Fediverse address where a visitor scans for "where else
               is this page". The card at the foot of the column carries the
@@ -978,6 +947,55 @@ defmodule VutuvWeb.OrganizationLive.Show do
           />
         </aside>
       </div>
+    </div>
+    """
+  end
+
+  # The name, the kind and place, and the website with its proof mark — the
+  # block all three homepage-picture variants above show, wherever each of them
+  # puts it. A component rather than three copies: they differ in where the
+  # picture goes, not in what the page says about itself.
+  attr(:organization, :map, required: true)
+  attr(:verified_domain, :any, default: nil)
+
+  defp org_identity(assigns) do
+    ~H"""
+    <h1 class="mt-3 text-2xl font-bold text-slate-900 dark:text-slate-100">{@organization.name}</h1>
+
+    <%!-- Kind and place share one line: two facts of the same weight, each a
+    few words long, that spent a line of a phone's screen each while the
+    picture they were pushing down waited at the bottom. --%>
+    <div class="mt-1.5 flex flex-wrap items-center gap-x-2 gap-y-1">
+      <.kind_badge kind={@organization.kind} />
+      <.organization_location organization={@organization} class="text-sm text-slate-600 dark:text-slate-400" />
+    </div>
+
+    <%!-- The website, and the domain proof beside it as the same small emerald
+    ✓ a member's verified webpage link wears. It used to be a full pill on the
+    badge row above, which spent a line of the page on a fact that only means
+    anything next to the link it vouches for — this is that link, so the domain
+    moves into the ✓'s label. A page that proved a domain but names no website
+    shows that domain here instead, so the fact never goes missing. --%>
+    <div :if={@organization.website_url || @verified_domain} class="mt-2 flex items-center gap-1.5">
+      <a
+        :if={@organization.website_url}
+        href={@organization.website_url}
+        rel="nofollow noopener"
+        target="_blank"
+        class="text-sm font-semibold text-brand-600 hover:text-brand-700 dark:text-brand-400 dark:hover:text-brand-300"
+      >
+        {display_url(@organization.website_url)}
+      </a>
+      <span
+        :if={is_nil(@organization.website_url)}
+        class="text-sm text-slate-700 dark:text-slate-300"
+      >
+        {@verified_domain.domain}
+      </span>
+      <.verified_mark
+        :if={@verified_domain}
+        title={gettext("Verified via %{domain}", domain: @verified_domain.domain)}
+      />
     </div>
     """
   end

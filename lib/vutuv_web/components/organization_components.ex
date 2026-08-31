@@ -80,10 +80,21 @@ defmodule VutuvWeb.OrganizationComponents do
   attr(:organization, :map, required: true)
   attr(:class, :string, default: nil)
 
-  @doc "The organization's \"City, Country\" line (nil parts folded away)."
+  @doc """
+  The organization's "City, Country" line (nil parts folded away).
+
+  `mb-0` is baked in rather than left to the call site: this is a one-line fact,
+  never a paragraph, and `components.css` gives every `<p>` a 15px bottom margin
+  for the classic pages. In a `flex items-center` row that margin is part of the
+  box being centred, so the line rode 7.5px above the kind badge beside it on the
+  organization header — the row measured 35px tall for 20px of text. All six call
+  sites are a compact line in a card row or a header and none of them wants the
+  gap. It is not overridable through `class`: two `mb-` utilities are the same
+  group, and CSS source order decides that, not the order in the attribute.
+  """
   def organization_location(assigns) do
     ~H"""
-    <p class={@class}>
+    <p class={["mb-0", @class]}>
       {[@organization.city, Countries.name(@organization.country)] |> Enum.reject(&(&1 in [nil, ""])) |> Enum.join(", ")}
     </p>
     """

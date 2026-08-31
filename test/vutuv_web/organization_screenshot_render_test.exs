@@ -68,8 +68,8 @@ defmodule VutuvWeb.OrganizationScreenshotRenderTest do
     start
   end
 
-  describe "the header banner" do
-    test "shows the capture once it is released, above the page's name", %{conn: conn} do
+  describe "the header capture" do
+    test "shows the capture once it is released, in the header beside the name", %{conn: conn} do
       {organization, _owner} = active_organization()
       organization |> captured() |> write_file("thumb-#{@hash}.avif")
 
@@ -80,9 +80,17 @@ defmodule VutuvWeb.OrganizationScreenshotRenderTest do
       assert html =~ "/screenshots/"
 
       # Where it sits is half the point — see the header-card comment in
-      # `VutuvWeb.OrganizationLive.Show`. The rail renders after the whole main
-      # column, so back in the rail this is 2,300px down a phone's page.
-      assert at(html, "data-organization-screenshot") < at(html, "<h1")
+      # `VutuvWeb.OrganizationLive.Show`. Both directions are a decision, so
+      # both are pinned. It must stay out of the right rail, which renders
+      # after the WHOLE main column: back there a phone put it ~2,300px down,
+      # below the description, the posts, the people and the jobs.
+      assert at(html, "data-organization-screenshot") < at(html, "<aside")
+
+      # And it comes after the name, not before it. The 5:2 cover band that
+      # used to lead this card sliced the fake browser window every capture
+      # wears (`Vutuv.BrowserFrame`); the page names itself first now and shows
+      # the site whole beside that.
+      assert at(html, "data-organization-screenshot") > at(html, "<h1")
     end
 
     test "shows nothing while the capture is still queued", %{conn: conn} do
