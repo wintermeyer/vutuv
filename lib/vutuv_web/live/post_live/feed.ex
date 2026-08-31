@@ -1539,22 +1539,32 @@ defmodule VutuvWeb.PostLive.Feed do
   # count says. So the grid goes out first with everything that does not need
   # the month in it — the dates, today's ring, the open day, both controls —
   # and the shading follows in a second render, fading in over
-  # `transition-colors` rather than snapping. On a disconnected render there is
-  # no second render, so nothing is asked at all and the connected mount fills
-  # the grid in.
+  # `transition-colors` rather than snapping. While it is on its way the empty
+  # cells breathe (`.heatmap--waiting` in `components.css`): an unshaded grid
+  # and a genuinely quiet month are the same picture, so a card that says
+  # nothing has already given the wrong answer. On a disconnected render there
+  # is no second render, so nothing is asked at all, nothing breathes, and the
+  # connected mount fills the grid in.
   #
   # A revisited month is asked for again rather than remembered. A memo keyed
   # on the month would make a fold and unfold free, and would also hand the
   # reader an hour-old shading of the day they are still in: the numbers are
   # cheap to re-ask now and nobody sees the asking.
   defp defer_calendar_counts(socket) do
-    if socket.assigns.cal_open? and connected?(socket) do
-      send(self(), {:cal_counts, calendar_key(socket)})
-    end
+    pending? = socket.assigns.cal_open? and connected?(socket)
+
+    if pending?, do: send(self(), {:cal_counts, calendar_key(socket)})
 
     socket
     |> assign(:cal_counts, %{})
     |> assign(:cal_capped?, false)
+    # Whether an answer is on its way, which is not the same question as
+    # "are all the counts zero" and is the only one the card can say out loud.
+    # An unshaded grid and a genuinely quiet month look identical, so without
+    # this the second between the press and the shading reads as the answer.
+    # False on a disconnected render, where no second render is coming and the
+    # grid is as finished as it will get.
+    |> assign(:cal_counts_pending?, pending?)
     # The one answer worth keeping while the next is in flight: whether the feed
     # reaches back past this month barely changes from one month to its
     # neighbour, and the last answer is a better guess than "there is always
@@ -1589,6 +1599,7 @@ defmodule VutuvWeb.PostLive.Feed do
     socket
     |> assign(:cal_counts, counts)
     |> assign(:cal_capped?, capped?)
+    |> assign(:cal_counts_pending?, false)
     # Where the back arrows stop. Asked per month rather than resolved once,
     # because "is there anything before this month" is one row and a member's
     # true earliest entry is a nine-source minimum nobody needs.
@@ -2673,6 +2684,7 @@ defmodule VutuvWeb.PostLive.Feed do
                 day={@cal_day}
                 metric={@cal_metric}
                 counts={@cal_counts}
+                counts_pending?={@cal_counts_pending?}
                 capped?={@cal_capped?}
                 today={@cal_today}
               />
@@ -2898,6 +2910,7 @@ defmodule VutuvWeb.PostLive.Feed do
             day={@cal_day}
             metric={@cal_metric}
             counts={@cal_counts}
+            counts_pending?={@cal_counts_pending?}
             capped?={@cal_capped?}
             today={@cal_today}
           />

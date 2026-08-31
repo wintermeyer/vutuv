@@ -105,6 +105,45 @@ defmodule VutuvWeb.PressPaintCssTest do
     assert dark =~ ".skeleton {", "the placeholder needs its dark-mode colour"
   end
 
+  # The third thing a slow line shows: the document is here, the LiveView has
+  # joined, and one card is still counting.
+  test "the heatmap's wait breathes on the background, and holds still when asked to" do
+    css = File.read!(Path.expand("../../assets/css/components.css", __DIR__))
+
+    [_before, after_rule] =
+      String.split(css, ~s(.heatmap[aria-busy="true"] .heatmap-day {), parts: 2)
+
+    [rule, rest] = String.split(after_rule, "}", parts: 2)
+
+    # Pulsing the whole cell would fade the day number with it, and the number
+    # is the one thing the grid already has right.
+    refute rule =~ "opacity",
+           "the wait rides the cell's background; an opacity pulse dims the digit too"
+
+    assert rule =~ "heatmap-waiting"
+    assert rest =~ "@keyframes heatmap-waiting"
+
+    # A literal beside the token is a second copy of the app's one threshold,
+    # which is the drift `--press-pending-delay` exists to prevent. The same
+    # claim the transition-delay check above makes, for a file it cannot see.
+    refute rule =~ "--press-pending-delay,",
+           "read the threshold bare; a fallback here is a number that can go stale"
+
+    # The trough is deliberately unnamed - no 0%/100% - so the breath starts and
+    # ends on the cell's own background rather than a copy of it kept here.
+    refute rest =~ ~r/@keyframes heatmap-waiting \{\s*0%/,
+           "naming the resting colour duplicates heat_level_class(0) in CSS"
+
+    # The escape hatch has to name THIS rule, not merely exist in the file.
+    assert rest =~ ~r/@media \(prefers-reduced-motion: reduce\) \{\s*\.heatmap\[aria-busy/,
+           "the breath needs its own reduced-motion off-switch"
+
+    [_light, dark] = String.split(css, "@media (prefers-color-scheme: dark)", parts: 2)
+
+    assert dark =~ ".heatmap[aria-busy",
+           "the light peak is invisible against a dark cell"
+  end
+
   test "no bar names itself in the markers" do
     for path <- Path.wildcard(Path.expand("../../lib/vutuv_web/**/*.ex*", __DIR__)) do
       source = File.read!(path)

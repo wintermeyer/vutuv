@@ -60,6 +60,19 @@ defmodule VutuvWeb.PostLive.FeedCalendar do
   attr(:day, :any, default: nil, doc: "the selected day, a Date, or nil")
   attr(:metric, :string, default: "feed")
   attr(:counts, :map, default: %{})
+
+  attr(:counts_pending?, :boolean,
+    default: false,
+    doc: """
+    Whether the month's counts are still on their way (the feed's
+    `defer_calendar_counts/1`). Empty counts alone cannot answer that: a month
+    nothing happened in shades exactly like one that has not been counted yet.
+    Spelled out rather than `pending?`, because in the calling module pending
+    means the posts waiting behind the feed's pill, and the two are rendered on
+    the same phone control row.
+    """
+  )
+
   attr(:capped?, :boolean, default: false)
   attr(:class, :string, default: nil)
 
@@ -185,7 +198,16 @@ defmodule VutuvWeb.PostLive.FeedCalendar do
         <span :for={initial <- weekday_initials()}>{initial}</span>
       </div>
 
-      <div :if={@open?} class="mt-1 grid grid-cols-7 gap-1">
+      <%!-- `aria-busy` is the whole marker: it is what a screen reader has to be
+      told anyway, and `components.css` hangs the waiting breath off the same
+      attribute rather than off a class beside it, so the paint and the
+      announcement cannot drift apart. The cells say nothing themselves — there
+      is no text here for the wait to hold up. --%>
+      <div
+        :if={@open?}
+        aria-busy={@counts_pending? && "true"}
+        class="heatmap mt-1 grid grid-cols-7 gap-1"
+      >
         <button
           :for={cell <- @cells}
           type="button"
@@ -197,8 +219,10 @@ defmodule VutuvWeb.PostLive.FeedCalendar do
           class={[
             # The shading arrives after the grid does (the feed's
             # `defer_calendar_counts/1`), so it fades in rather than snapping —
-            # a month opens unshaded and colours a moment later.
-            "relative flex aspect-square items-center justify-center rounded text-[11px] tabular-nums",
+            # a month opens unshaded and colours a moment later. `heatmap-day`
+            # is what breathes in the meantime; the digit never moves, because
+            # the digit is the one thing that is already right.
+            "heatmap-day relative flex aspect-square items-center justify-center rounded text-[11px] tabular-nums",
             "transition-colors",
             "disabled:cursor-not-allowed disabled:opacity-30",
             heat_class(Map.get(@counts, cell.date, 0), @peak),

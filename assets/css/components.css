@@ -3174,6 +3174,75 @@ html.lightbox-open { overflow: hidden; }
   }
 }
 
+/* The heatmap's shading arrives a beat after the grid it shades: a month is
+   ~26 queries and the feed deliberately does not make the reader wait for them
+   (`VutuvWeb.PostLive.Feed`'s `defer_calendar_counts/1`), so the days go out
+   first and the colours follow in a second render. The gap that leaves is what
+   this block is for. An unshaded grid is EXACTLY the picture a genuinely quiet
+   month draws, so for that second the card answers the reader's question
+   confidently and wrongly, and the colours then arriving read as a stutter
+   rather than as the answer.
+
+   So the cells breathe until the counts land, from their resting slate toward
+   the palest step of the heatmap's own scale: the wait reads as "the colours
+   are coming", and when they do arrive one of them was already nearly right.
+   It breathes rather than sweeping a highlight across, the trade `.skeleton`
+   makes below and for the same reason: this app says "waiting" with a breath
+   (the hourglass, the row-changed tint), and a shimmer would be a second
+   vocabulary.
+
+   Four things are load-bearing. It animates BACKGROUND-COLOR and not opacity,
+   because the digit in each cell is the one thing that is already correct and
+   dimming it on every unfold is the irritation this exists to remove. A
+   keyframe outranks a normal declaration whatever the cascade layers say,
+   which is the only reason a rule in `layer(components)` can paint over the
+   cell's own `bg-slate-100` utility. The delay is `--press-pending-delay`, the
+   app's single threshold for "unanswered long enough to say so", so a month
+   that comes back fast never flashes — read bare, with no fallback beside it,
+   because a second copy of that number here is exactly the drift the token
+   exists to prevent. It is spelled in longhands rather than the `animation`
+   shorthand its three neighbours use (`.skeleton`, `.hourglass`,
+   `tr[data-row-changed]`) for the same reason the token is read bare: a
+   `var()` that ever failed to resolve would take a whole shorthand with it and
+   leave no breath at all, where a longhand loses only the delay.
+
+   Only the PEAK is named. The keyframe has no `0%`/`100%`, so the breath
+   starts and ends on the cell's own computed background — `heat_level_class(0)`
+   in `VutuvWeb.PostLive.FeedCalendar`, which stays the trough in both schemes
+   without this file holding a copy of it that has to be kept in step.
+
+   It keys on `aria-busy`, not on a class of its own, so the paint cannot
+   disagree with what a screen reader is told, and any other grid that marks
+   itself busy gets the same treatment. The cells themselves say nothing, there
+   being no text here for the wait to hold up. */
+.heatmap[aria-busy="true"] .heatmap-day {
+  --heatmap-waiting-peak: var(--color-brand-100);
+
+  animation-delay: var(--press-pending-delay);
+  animation-duration: 1.8s;
+  animation-iteration-count: infinite;
+  animation-name: heatmap-waiting;
+  animation-timing-function: ease-in-out;
+}
+
+/* Said to the pointer as well, and this is the half that survives the
+   reduced-motion switch below, where the breath has to stop. */
+.heatmap[aria-busy="true"] {
+  cursor: progress;
+}
+
+@keyframes heatmap-waiting {
+  50% {
+    background-color: var(--heatmap-waiting-peak);
+  }
+}
+
+@media (prefers-reduced-motion: reduce) {
+  .heatmap[aria-busy="true"] .heatmap-day {
+    animation: none;
+  }
+}
+
 /* The shape of something that has not arrived yet. A page whose data loads
    only once the socket has joined paints its own outline first, so the wait
    reads as "this is filling in" rather than as "you have nothing here" — the
@@ -3213,6 +3282,14 @@ html.lightbox-open { overflow: hidden; }
      (slate-900), not against the light one it was drawn for. */
   .skeleton {
     background-color: #334155;
+  }
+
+  /* The same breath one surface down. The trough looks after itself (the cell's
+     own `dark:bg-slate-800`); the peak is `heat_level_class(1)`'s
+     `dark:bg-brand-900/50` written out, half-alpha and all — at full strength
+     it would be a step the scale never paints. */
+  .heatmap[aria-busy="true"] .heatmap-day {
+    --heatmap-waiting-peak: color-mix(in oklab, var(--color-brand-900) 50%, transparent);
   }
 
   .profile-header__manage {

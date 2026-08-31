@@ -22,6 +22,7 @@ defmodule VutuvWeb.FeedCalendarTest do
   alias Vutuv.Social
   alias Vutuv.ViewerClock
   alias VutuvWeb.Live.FeedTimeTravel, as: Travel
+  alias VutuvWeb.PostLive.FeedCalendar
 
   @day 86_400
 
@@ -55,6 +56,18 @@ defmodule VutuvWeb.FeedCalendarTest do
     elements(
       html,
       ~s([phx-click="cal-day"][class*="bg-brand-1"], [phx-click="cal-day"][class*="bg-brand-3"], [phx-click="cal-day"][class*="bg-brand-5"], [phx-click="cal-day"][class*="bg-brand-7"])
+    )
+  end
+
+  # The card on its own, which is the only place the waiting state is visible
+  # at all: the message the feed sends itself is handled before `render_click`
+  # returns, so a connected view is always past it by the time a test can look.
+  defp calendar_markup(opts) do
+    today = ViewerClock.today()
+
+    render_component(
+      &FeedCalendar.feed_calendar/1,
+      Keyword.merge([id: "cal", open?: true, month: Travel.month_of(today), today: today], opts)
     )
   end
 
@@ -747,9 +760,28 @@ defmodule VutuvWeb.FeedCalendarTest do
       assert shaded_days(html) == [],
              "the disconnected render paid for a heatmap it has no second render to show"
 
+      # And it does not claim one is coming, either: nothing was asked for here,
+      # so a grid reading busy would promise a second render that never lands.
+      assert elements(html, ~s([aria-busy="true"])) == []
+
       # And the socket, which does get a second render, ends up shaded.
       {:ok, view, _html} = live(conn, ~p"/feed?cal=1")
       assert has_element?(view, ~s([phx-value-date="#{iso(busy)}"].bg-brand-700))
+    end
+
+    test "the grid says the shading is on its way, and stops once it is there" do
+      # An unshaded grid and a month nothing happened in are the same picture,
+      # so between the press and the counts the card was answering the reader's
+      # question wrongly. While they are out the grid reads busy, which is both
+      # what a screen reader is told and what `components.css` hangs the
+      # breathing cells off; once they land it says neither.
+      waiting = calendar_markup(counts_pending?: true)
+
+      assert waiting =~ ~s(aria-busy="true")
+
+      settled = calendar_markup(counts_pending?: false, counts: %{ViewerClock.today() => 3})
+
+      refute settled =~ "aria-busy"
     end
   end
 
