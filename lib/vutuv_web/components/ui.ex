@@ -4488,6 +4488,58 @@ defmodule VutuvWeb.UI do
   end
 
   @doc """
+  The page's one copy of the glyphs a timeline repeats.
+
+  A feed card carries a like, a reply, a repost and a bookmark, so a page of
+  forty draws each of those four paths forty times: measured on production
+  (2026-08-31), 237 inline `<path d="…">` on one `/feed` document, **six**
+  distinct shapes, 41 KB of the 673 KB. Defined once here and referenced with
+  `<use>`, the same page spends under a kilobyte on them.
+
+  It is a **parse-and-memory** saving, not a download one — zstd compresses that
+  repetition away on the wire — which is why it is worth doing for the phone
+  that has to build the DOM and not worth doing for the connection.
+
+  Rendered once by the app layout, before anything that references it. `fill`,
+  `stroke`, `stroke-width`, `stroke-linecap` and `stroke-linejoin` are all
+  inherited properties, so each `<svg>` wrapper keeps styling its own glyph
+  through the shadow tree exactly as it did when the path was inline — which is
+  what lets `filled?` still switch the heart and the bookmark to solid.
+  """
+  def icon_sprite(assigns) do
+    ~H"""
+    <svg xmlns="http://www.w3.org/2000/svg" width="0" height="0" aria-hidden="true" focusable="false">
+      <defs>
+        <path
+          id="glyph-repost"
+          stroke-linecap="round"
+          stroke-linejoin="round"
+          d="M19.5 12c0-1.232-.046-2.453-.138-3.662a4.006 4.006 0 0 0-3.7-3.7 48.678 48.678 0 0 0-7.324 0 4.006 4.006 0 0 0-3.7 3.7c-.017.22-.032.441-.046.662M19.5 12l3-3m-3 3-3-3m-12 3c0 1.232.046 2.453.138 3.662a4.006 4.006 0 0 0 3.7 3.7 48.656 48.656 0 0 0 7.324 0 4.006 4.006 0 0 0 3.7-3.7c.017-.22.032-.441.046-.662M4.5 12l3 3m-3-3-3 3"
+        />
+        <path
+          id="glyph-reply"
+          stroke-linecap="round"
+          stroke-linejoin="round"
+          d="M9 15 3 9m0 0 6-6M3 9h12a6 6 0 0 1 0 12h-3"
+        />
+        <path
+          id="glyph-bookmark"
+          stroke-linecap="round"
+          stroke-linejoin="round"
+          d="M17.593 3.322c.1.128.157.288.157.456v16.444a.75.75 0 0 1-1.218.585L12 17.21l-4.532 3.597A.75.75 0 0 1 6.25 20.222V3.778c0-.168.057-.328.157-.456A2.25 2.25 0 0 1 8.25 2.5h7.5a2.25 2.25 0 0 1 1.843.822Z"
+        />
+        <path
+          id="glyph-heart"
+          stroke-linecap="round"
+          stroke-linejoin="round"
+          d="M21 8.25c0-2.485-2.099-4.5-4.688-4.5-1.935 0-3.597 1.126-4.312 2.733-.715-1.607-2.377-2.733-4.313-2.733C5.1 3.75 3 5.765 3 8.25c0 7.22 9 12 9 12s9-4.78 9-12Z"
+        />
+      </defs>
+    </svg>
+    """
+  end
+
+  @doc """
   The outline repost-arrows icon (24×24 stroke), shared by the post card's
   "Reposted by" line and the action bar. Size it via `class`.
   """
@@ -4496,11 +4548,7 @@ defmodule VutuvWeb.UI do
   def icon_repost(assigns) do
     ~H"""
     <svg class={@class} fill="none" stroke="currentColor" stroke-width="1.8" viewBox="0 0 24 24">
-      <path
-        stroke-linecap="round"
-        stroke-linejoin="round"
-        d="M19.5 12c0-1.232-.046-2.453-.138-3.662a4.006 4.006 0 0 0-3.7-3.7 48.678 48.678 0 0 0-7.324 0 4.006 4.006 0 0 0-3.7 3.7c-.017.22-.032.441-.046.662M19.5 12l3-3m-3 3-3-3m-12 3c0 1.232.046 2.453.138 3.662a4.006 4.006 0 0 0 3.7 3.7 48.656 48.656 0 0 0 7.324 0 4.006 4.006 0 0 0 3.7-3.7c.017-.22.032-.441.046-.662M4.5 12l3 3m-3-3-3 3"
-      />
+      <use href="#glyph-repost" />
     </svg>
     """
   end
@@ -4514,7 +4562,7 @@ defmodule VutuvWeb.UI do
   def icon_reply(assigns) do
     ~H"""
     <svg class={@class} fill="none" stroke="currentColor" stroke-width="1.8" viewBox="0 0 24 24">
-      <path stroke-linecap="round" stroke-linejoin="round" d="M9 15 3 9m0 0 6-6M3 9h12a6 6 0 0 1 0 12h-3" />
+      <use href="#glyph-reply" />
     </svg>
     """
   end
@@ -4536,11 +4584,7 @@ defmodule VutuvWeb.UI do
       stroke-width="1.8"
       viewBox="0 0 24 24"
     >
-      <path
-        stroke-linecap="round"
-        stroke-linejoin="round"
-        d="M17.593 3.322c.1.128.157.288.157.456v16.444a.75.75 0 0 1-1.218.585L12 17.21l-4.532 3.597A.75.75 0 0 1 6.25 20.222V3.778c0-.168.057-.328.157-.456A2.25 2.25 0 0 1 8.25 2.5h7.5a2.25 2.25 0 0 1 1.843.822Z"
-      />
+      <use href="#glyph-bookmark" />
     </svg>
     """
   end
@@ -4562,11 +4606,7 @@ defmodule VutuvWeb.UI do
       stroke-width="1.8"
       viewBox="0 0 24 24"
     >
-      <path
-        stroke-linecap="round"
-        stroke-linejoin="round"
-        d="M21 8.25c0-2.485-2.099-4.5-4.688-4.5-1.935 0-3.597 1.126-4.312 2.733-.715-1.607-2.377-2.733-4.313-2.733C5.1 3.75 3 5.765 3 8.25c0 7.22 9 12 9 12s9-4.78 9-12Z"
-      />
+      <use href="#glyph-heart" />
     </svg>
     """
   end

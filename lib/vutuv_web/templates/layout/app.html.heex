@@ -3,6 +3,10 @@ classic controller pages and LiveViews. The shell (top bar + mobile bottom tab
 bar, with the live unread badges) is an embedded `ShellLive` so the badges stay
 live even on classic pages. `assigns[:conn]` is present on dead requests;
 LiveViews fall through to `@socket`. --%>
+<%!-- The glyphs a timeline repeats, defined once and referenced with `<use>`
+(see `<.icon_sprite>`). First, so every later `<use>` resolves. --%>
+<.icon_sprite />
+
 <%= if assigns[:conn] do %>
   {live_render(@conn, VutuvWeb.ShellLive, id: "app-shell-lv", session: shell_session(assigns))}
 <% else %>
