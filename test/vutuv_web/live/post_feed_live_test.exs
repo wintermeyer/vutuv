@@ -1256,11 +1256,20 @@ defmodule VutuvWeb.PostFeedLiveTest do
 
       {:ok, live, html} = live(conn, ~p"/feed")
 
-      # Forty on arrival, twenty per page after that: the first screenful is
-      # the one nobody asked for, so it is the one that has to last.
+      # The **document** carries a screenful (`@first_render_size`), because
+      # every card in it is server time the reader waits through before anything
+      # paints; the rest of the arrival follows over the socket. So the join
+      # holds the ten newest and not yet the eleventh.
       assert html =~ "post number 41"
-      assert html =~ "post number 2<"
-      refute html =~ "post number 1<"
+      assert html =~ "post number 32<"
+      refute html =~ "post number 31<"
+
+      # …and the **arrival** is still forty, twenty per page after that: the
+      # first screenful is the one nobody asked for, so it is the one that has
+      # to last. By the time anybody has scrolled to the tenth card it is here.
+      filled = render(live)
+      assert filled =~ "post number 2<"
+      refute filled =~ "post number 1<"
       assert has_element?(live, "#load-more")
 
       live |> element("#load-more") |> render_click()

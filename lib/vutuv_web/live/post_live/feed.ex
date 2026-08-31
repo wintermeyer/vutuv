@@ -73,6 +73,27 @@ defmodule VutuvWeb.PostLive.Feed do
   # trip, while an older page is fetched while they are still reading and can
   # afford to be half the size.
   @first_page_size 40
+  # …and how many of them the **HTML document** carries. The rest arrive over
+  # the socket the moment it connects, appended below the fold, so an arrival
+  # still holds forty cards by the time anybody has scrolled to the tenth.
+  #
+  # This is the split between what the reader waits for and what they merely
+  # get. Rendering a card is ~10 ms of server time on production (measured
+  # 2026-08-31 two ways: a twelve-day regression over `?day=` volumes and a
+  # paired A/B against an empty day, agreeing on 10.2 and 10.0), so the forty
+  # were about 400 ms of the ~660 ms the browser sat waiting for the first
+  # byte, to draw thirty-seven cards below a fold that shows two or three.
+  # Ten costs ~100 ms of that and fills the screen three times over.
+  #
+  # It is deliberately the same number as `@filter_page_size`, for the reason
+  # written there: ten is what a screen holding three or four cards needs to
+  # not run out. What is new is only that an *arrival* is now judged by the
+  # same standard as a switch — both are a wait with nothing on screen.
+  #
+  # Not a lazy rail (#1229, reverted the same day): nothing here pops in where
+  # the reader is looking. The fill lands below the tenth card, off-screen, and
+  # a reader who never scrolls never learns it happened.
+  @first_render_size 10
   @page_size 20
   # What a source switch loads (see `load_source_filter/2`) — deliberately
   # smaller than either, because that press is a wait with nothing on screen to
@@ -187,11 +208,20 @@ defmodule VutuvWeb.PostLive.Feed do
       # (VutuvWeb.Live.MountHandoff); take it and skip re-running the same
       # queries. Any miss (expired, consumed, a reconnect) recomputes.
       case MountHandoff.take(user.id, {:feed, remembered, day}) do
-        {:ok, payload} -> apply_feed_payload(socket, payload, day, open?)
-        :error -> apply_feed_payload(socket, feed_payload(user, remembered, day), day, open?)
+        # The dead render's short page (`@first_render_size`), so this mount
+        # owes the reader the rest of the arrival — see `:fill_arrival` below.
+        {:ok, payload} ->
+          apply_feed_payload(socket, payload, day, open?)
+
+        # No stash to take (a reconnect, an expired one, a socket that arrived
+        # without a dead render): nothing has been drawn yet, so there is no
+        # short page to extend and this mount loads the whole arrival at once.
+        :error ->
+          payload = feed_payload(user, remembered, day, @first_page_size)
+          apply_feed_payload(socket, payload, day, open?)
       end
     else
-      payload = feed_payload(user, remembered, day)
+      payload = feed_payload(user, remembered, day, @first_render_size)
       MountHandoff.stash(user.id, {:feed, remembered, day}, payload)
       apply_feed_payload(socket, payload, day, open?)
     end
@@ -199,7 +229,7 @@ defmodule VutuvWeb.PostLive.Feed do
 
   # Everything a feed mount computes, as data — what the dead render hands the
   # connected mount through the single-use stash.
-  defp feed_payload(user, remembered, day) do
+  defp feed_payload(user, remembered, day, limit) do
     # The member's private content filters (issue #940): compiled once, applied
     # to every page, and the set of posts they chose to reveal anyway.
     compiled = ContentFilters.compile_for(user)
@@ -226,7 +256,7 @@ defmodule VutuvWeb.PostLive.Feed do
     # arrival for one number.
     page =
       Posts.feed_page(user,
-        limit: if(day, do: @day_full_limit, else: @first_page_size),
+        limit: if(day, do: @day_full_limit, else: limit),
         cursor: FeedTimeTravel.day_cursor(day),
         filter: filter
       )
@@ -246,6 +276,11 @@ defmodule VutuvWeb.PostLive.Feed do
       # Which sources these entries were pulled for — what the band's two
       # source checkboxes show, and what a switch there changes.
       filter: filter,
+      # Whether this page is the dead render's short one and the arrival still
+      # owes the reader cards. Carried rather than inferred from the entry
+      # count: a genuinely short feed (a quiet day, a new member) also has
+      # fewer than `@first_render_size` entries and owes nothing.
+      partial?: limit < @first_page_size and page.more?,
       # The desktop rail renders WITH the page: it was lazy-loaded for one
       # release (v7.200.3) and the pop-in read as slowness, so it is eager
       # again — computed here once, riding the handoff to the connected mount.
@@ -353,7 +388,34 @@ defmodule VutuvWeb.PostLive.Feed do
     |> stream(:posts, payload.entries)
     |> watch_pending_photos(payload.entries)
     |> auto_translate_entries(payload.entries)
+    |> fill_arrival(payload)
   end
+
+  # The rest of the arrival, once the document the reader is looking at has
+  # been drawn. The dead render carries `@first_render_size` cards so the page
+  # arrives; this asks for the remainder as soon as the socket is up, and it
+  # lands below the fold.
+  #
+  # A message to self rather than a load here: mount has to return before the
+  # stream exists on the client, and appending to a stream in the same mount
+  # that populated it does not take (the same trap the day-link arrival above
+  # documents for `reset:`).
+  defp fill_arrival(socket, %{partial?: true}) do
+    if connected?(socket) do
+      send(self(), :fill_arrival)
+      # What the fill is owed *for*. The message sits in the mailbox behind
+      # anything the reader does in the meantime, and by the time it is handled
+      # they may be looking at a different timeline — an opened calendar day is
+      # the one that matters, since appending an older page there would spill
+      # cards from before that day into it. So the fill is claimed rather than
+      # assumed, and every reset below drops the claim.
+      assign(socket, :owes_fill?, true)
+    else
+      assign(socket, :owes_fill?, false)
+    end
+  end
+
+  defp fill_arrival(socket, _whole_page), do: assign(socket, :owes_fill?, false)
 
   # Every post on the page whose photo is still with the AI image scan gets a
   # subscription to its own topic, so the placecard swaps itself for the picture
@@ -1088,38 +1150,7 @@ defmodule VutuvWeb.PostLive.Feed do
 
   @impl true
   def handle_event("load-more", _params, socket) do
-    page =
-      Posts.feed_page(socket.assigns.current_user,
-        limit: @page_size,
-        cursor: socket.assigns.cursor,
-        filter: effective_filter(socket)
-      )
-
-    # A post shown higher up (as a newer repost, or nested in a shown thread)
-    # must not reappear on an older page: `feed_page/2` dedups within a page but
-    # can't see the ones already on screen. The higher card already carries the
-    # complete follow-scoped roster, so dropping the older duplicate loses
-    # nothing. Filter before the engagement batch so it queries only survivors.
-    shown = shown_post_ids(socket.assigns.entries)
-
-    fresh =
-      Enum.reject(page.entries, fn entry ->
-        not Posts.remote_feed_entry?(entry) and MapSet.member?(shown, entry.post.id)
-      end)
-
-    entries =
-      fresh
-      |> with_engagement(socket.assigns.current_user)
-      |> mark_filtered(socket.assigns.content_filters, socket.assigns.current_user.id)
-
-    {:noreply,
-     socket
-     |> assign(:more?, page.more?)
-     |> assign(:cursor, page.next_cursor)
-     |> update(:entries, &(&1 ++ entries))
-     |> stream(:posts, entries, at: -1)
-     |> watch_pending_photos(entries)
-     |> auto_translate_entries(entries)}
+    {:noreply, append_older_page(socket, @page_size)}
   end
 
   # Time travel (`VutuvWeb.Live.FeedTimeTravel`), all of it driven by the feed
@@ -1430,6 +1461,46 @@ defmodule VutuvWeb.PostLive.Feed do
   # member waits on a slow line — for a screen that holds three or four.
   # `more?` comes from the same query, so the "Load more" button below picks the
   # rest up at the full page size.
+  # One older page, appended below what is on screen. Shared by the "Load more"
+  # button and by the arrival's own fill (`:fill_arrival`), which is the same
+  # act — fetch from the cursor, drop what is already shown, append — and would
+  # otherwise be two copies of the dedup rule.
+  defp append_older_page(socket, limit) do
+    user = socket.assigns.current_user
+
+    page =
+      Posts.feed_page(user,
+        limit: limit,
+        cursor: socket.assigns.cursor,
+        filter: effective_filter(socket)
+      )
+
+    # A post shown higher up (as a newer repost, or nested in a shown thread)
+    # must not reappear on an older page: `feed_page/2` dedups within a page but
+    # can't see the ones already on screen. The higher card already carries the
+    # complete follow-scoped roster, so dropping the older duplicate loses
+    # nothing. Filter before the engagement batch so it queries only survivors.
+    shown = shown_post_ids(socket.assigns.entries)
+
+    fresh =
+      Enum.reject(page.entries, fn entry ->
+        not Posts.remote_feed_entry?(entry) and MapSet.member?(shown, entry.post.id)
+      end)
+
+    entries =
+      fresh
+      |> with_engagement(user)
+      |> mark_filtered(socket.assigns.content_filters, user.id)
+
+    socket
+    |> assign(:more?, page.more?)
+    |> assign(:cursor, page.next_cursor)
+    |> update(:entries, &(&1 ++ entries))
+    |> stream(:posts, entries, at: -1)
+    |> watch_pending_photos(entries)
+    |> auto_translate_entries(entries)
+  end
+
   defp load_source_filter(socket, filter) do
     user = socket.assigns.current_user
     page = Posts.feed_page(user, limit: @filter_page_size, filter: filter)
@@ -1446,6 +1517,9 @@ defmodule VutuvWeb.PostLive.Feed do
     |> assign(:empty?, entries == [])
     |> assign(:pending_posts, [])
     |> assign(:pending_overflow, 0)
+    # This timeline replaces the arrival, so a fill still on its way is owed to
+    # a page that is no longer on screen (see `fill_arrival/2`).
+    |> assign(:owes_fill?, false)
     |> assign(:entries, entries)
     |> stream(:posts, entries, reset: true)
     |> watch_pending_photos(entries)
@@ -1683,13 +1757,29 @@ defmodule VutuvWeb.PostLive.Feed do
     |> assign(:empty?, entries == [])
     |> assign(:pending_posts, [])
     |> assign(:pending_overflow, 0)
+    # This timeline replaces the arrival, so a fill still on its way is owed to
+    # a page that is no longer on screen (see `fill_arrival/2`).
+    |> assign(:owes_fill?, false)
     |> assign(:entries, entries)
     |> stream(:posts, entries, reset: true)
     |> watch_pending_photos(entries)
     |> auto_translate_entries(entries)
   end
 
+  # The rest of the arrival, once the reader has the page (see `fill_arrival/2`).
+  # It is the same act as pressing "Load more", so it is the same code — the
+  # cards land at the end of the stream, below the fold, and the cursor and the
+  # "Load more" button move on exactly as if the reader had pressed it.
   @impl true
+  def handle_info(:fill_arrival, %{assigns: %{owes_fill?: true}} = socket) do
+    socket = assign(socket, :owes_fill?, false)
+    {:noreply, append_older_page(socket, @first_page_size - @first_render_size)}
+  end
+
+  # The reader moved on (a source switch, an opened day) before the fill was
+  # handled; that page is not the one this was owed for.
+  def handle_info(:fill_arrival, socket), do: {:noreply, socket}
+
   def handle_info({:new_post, %{post_id: post_id, author_id: author_id}}, socket) do
     post = Posts.get_post(post_id)
 
