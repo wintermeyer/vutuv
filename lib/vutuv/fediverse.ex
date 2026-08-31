@@ -2896,12 +2896,38 @@ defmodule Vutuv.Fediverse do
 
   def feed_remote_posts(%User{} = viewer, fetch_n, cursor, opts) do
     if enabled?() do
-      viewer
-      |> remote_posts_query(fetch_n, cursor)
-      |> remote_post_rows(Keyword.get(opts, :shape, :entries))
+      case followed_account_ids_by_state(viewer) do
+        # Most members follow nobody out there; for them this source is one
+        # cheap lookup and no post query at all.
+        {[], []} ->
+          []
+
+        follows ->
+          viewer
+          |> remote_posts_query(follows, fetch_n, cursor)
+          |> remote_post_rows(Keyword.get(opts, :shape, :entries))
+      end
     else
       []
     end
+  end
+
+  # The viewer's non-muted remote follows, split by what each one is allowed to
+  # show: an **accepted** follow sees everything that account posts, a pending
+  # one only its open audiences.
+  #
+  # Read as two id lists rather than left to a join, and that is the whole
+  # point of this source's shape — see `remote_posts_query/4`.
+  defp followed_account_ids_by_state(%User{id: viewer_id}) do
+    from(f in Follow,
+      where: f.user_id == ^viewer_id and f.muted == false,
+      select: {f.remote_account_id, f.state}
+    )
+    |> Repo.all()
+    |> Enum.split_with(fn {_id, state} -> state == "accepted" end)
+    |> then(fn {accepted, pending} ->
+      {Enum.map(accepted, &elem(&1, 0)), Enum.map(pending, &elem(&1, 0))}
+    end)
   end
 
   # A counter needs the id and the timestamp and nothing else, and here that
@@ -2925,15 +2951,34 @@ defmodule Vutuv.Fediverse do
 
   # What both shapes above select from: one definition of which remote posts
   # reach this viewer.
-  defp remote_posts_query(%User{id: viewer_id} = viewer, fetch_n, cursor) do
+  # The follow set arrives as two **constant id lists**, not as a join, and that
+  # is what makes this source cheap. Joined, Postgres had no way to walk the
+  # feed in time order: it read every cached post of every account the viewer
+  # follows and top-N-sorted the lot. Measured on the production copy
+  # (2026-08-31), one arrival read **3,981 rows and 4,180 buffers** to return
+  # 31.
+  #
+  # Handed the ids as a literal array it can estimate how much of the table they
+  # cover, and it picks a plan per viewer: a broad follow set walks
+  # `fediverse_posts_published_at_id_index` backwards and stops as soon as the
+  # limit is full (31 rows read, 124 buffers — 20x faster), while a small or
+  # quiet one goes per account through
+  # `fediverse_posts_remote_account_id_published_at_index` and sorts a handful
+  # (13 buffers for a single account). Both were measured across follow sets
+  # from one account to all 643; the worst case came out at 310 buffers against
+  # today's 4,180.
+  #
+  # The rows are identical to the join's — `fediverse_follows` is unique on
+  # `(user_id, remote_account_id)`, so the join could never duplicate or drop a
+  # post either. `remote_posts_source_test.exs` pins that.
+  defp remote_posts_query(%User{} = viewer, {accepted, pending}, fetch_n, cursor) do
     from(p in RemotePost,
       join: a in RemoteAccount,
       as: :remote_account,
       on: a.id == p.remote_account_id,
-      join: f in Follow,
-      on: f.remote_account_id == a.id,
-      where: f.user_id == ^viewer_id and f.muted == false,
-      where: p.audience in ^RemotePost.open_audiences() or f.state == "accepted",
+      where:
+        p.remote_account_id in ^accepted or
+          (p.remote_account_id in ^pending and p.audience in ^RemotePost.open_audiences()),
       order_by: [desc: p.published_at, desc: p.id],
       limit: ^fetch_n
     )
