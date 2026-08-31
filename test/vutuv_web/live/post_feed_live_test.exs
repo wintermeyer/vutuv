@@ -741,6 +741,62 @@ defmodule VutuvWeb.PostFeedLiveTest do
     end
   end
 
+  describe "the compose line" do
+    test "the button owns the line while nothing is waiting", %{conn: conn} do
+      {conn, _user} = create_and_login_user(conn)
+      {:ok, live, _html} = live(conn, ~p"/feed")
+
+      assert has_element?(live, "#open-composer.flex-1")
+      refute has_element?(live, "#open-composer.flex-none")
+      refute has_element?(live, "#show-new-posts")
+    end
+
+    test "a waiting post takes the width the button does not need", %{conn: conn} do
+      # Not 50:50, on purpose: the quote is the half that carries information,
+      # and an even split left it three words on a phone. The button drops to
+      # its own content (`flex-none`) and the pill gets everything else.
+      {conn, user} = create_and_login_user(conn)
+      author = other_user()
+      insert(:follow, follower: user, followee: author)
+
+      {:ok, live, _html} = live(conn, ~p"/feed")
+      {:ok, _fresh} = Posts.create_post(author, %{body: "arriving while I read"})
+
+      assert has_element?(live, "#open-composer.flex-none")
+      refute has_element?(live, "#open-composer.flex-1")
+      assert has_element?(live, "#composer-trigger #show-new-posts")
+    end
+
+    test "pressing the pill gives the line back to the button", %{conn: conn} do
+      {conn, user} = create_and_login_user(conn)
+      author = other_user()
+      insert(:follow, follower: user, followee: author)
+
+      {:ok, live, _html} = live(conn, ~p"/feed")
+      {:ok, _fresh} = Posts.create_post(author, %{body: "arriving while I read"})
+      render_click(live, "show-new")
+
+      assert has_element?(live, "#open-composer.flex-1")
+      refute has_element?(live, "#show-new-posts")
+    end
+
+    test "the line is the same element in both states", %{conn: conn} do
+      # The whole point of the redesign: nothing above the timeline is created
+      # or destroyed when a post arrives, so the column cannot move. Only the
+      # contents of #composer-trigger change.
+      {conn, user} = create_and_login_user(conn)
+      author = other_user()
+      insert(:follow, follower: user, followee: author)
+
+      {:ok, live, _html} = live(conn, ~p"/feed")
+      assert has_element?(live, "#composer-trigger.flex")
+
+      {:ok, _fresh} = Posts.create_post(author, %{body: "arriving while I read"})
+
+      assert has_element?(live, "#composer-trigger.flex")
+    end
+  end
+
   describe "composer reveal" do
     test "the composer is collapsed behind a button until clicked", %{conn: conn} do
       {conn, _user} = create_and_login_user(conn)

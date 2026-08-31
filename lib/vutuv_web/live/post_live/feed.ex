@@ -2156,6 +2156,60 @@ defmodule VutuvWeb.PostLive.Feed do
     )
   end
 
+  attr(:alone?, :boolean,
+    required: true,
+    doc: "true while nothing is waiting, when the button owns the whole line"
+  )
+
+  # The feed's compose control. A BUTTON, not the input-shaped tile it replaced:
+  # that one wore a placeholder and a text cursor and took neither, which read as
+  # a field you could type in (Stefan, 2026-08-31).
+  #
+  # `h-10` puts it on the app's control line, level with the folded rail calendar
+  # beside it. Alone it takes the line (`flex-1`); beside a waiting-posts quote it
+  # keeps only what it needs (`flex-none`) and hands the rest over, because the
+  # quote is the half that carries information and a 50:50 split left it three
+  # words. Below `sm` it goes further and drops its own word, the same trade the
+  # filter button on the phone's control line makes.
+  defp compose_button(assigns) do
+    ~H"""
+    <%!-- The id is spelled here and nowhere else: `keyboard_shortcuts.js`
+    (`revealAndFocusComposer`) and the `#compose` arrival both click it by name,
+    and it only works while the button is visible. --%>
+    <button
+      type="button"
+      id="open-composer"
+      data-composer-trigger
+      phx-click="open-composer"
+      class={[
+        "inline-flex h-10 items-center justify-center gap-2 rounded-full bg-brand-600 px-4",
+        "text-sm font-semibold text-white shadow-sm hover:bg-brand-700",
+        if(@alone?, do: "flex-1", else: "flex-none")
+      ]}
+    >
+      <svg
+        class="h-4 w-4 shrink-0"
+        fill="none"
+        viewBox="0 0 24 24"
+        stroke-width="1.5"
+        stroke="currentColor"
+        aria-hidden="true"
+      >
+        <path
+          stroke-linecap="round"
+          stroke-linejoin="round"
+          d="m16.862 4.487 1.687-1.688a1.875 1.875 0 1 1 2.652 2.652L10.582 16.07a4.5 4.5 0 0 1-1.897 1.13L6 18l.8-2.685a4.5 4.5 0 0 1 1.13-1.897l8.932-8.931Zm0 0L19.5 7.125"
+        />
+      </svg>
+      <%!-- The label is the accessible name when it is showing; when the quote
+      has taken the line it is still read, just not drawn. --%>
+      <span class={!@alone? && "sr-only sm:not-sr-only"}>
+        {gettext("Write a post")}
+      </span>
+    </button>
+    """
+  end
+
   # Showing the waiting posts, in the browser, before the server hears about it.
   #
   # The rows are already drawn (`queue/2`); this drops the marker that hid them
@@ -2634,7 +2688,17 @@ defmodule VutuvWeb.PostLive.Feed do
         respects this column's min-content, so a long `truncate` descendant (a
         threaded reply's parent-excerpt) would otherwise force the column — and
         the whole page — wider than a phone viewport. --%>
-        <div class="min-w-0 space-y-4 md:col-span-2">
+        <%!-- `space-y-6`, the same scale the rail uses, and that is the whole
+        reason it is 6 and not 4: both columns open with a 40px control (this
+        column's compose line, the rail's folded calendar) sitting on one line,
+        so an equal gap under each is what puts the timeline and the first rail
+        card on one line too. They were 8px apart while this column was tighter.
+
+        It has to be the LOOSER of the two. A gap under the control that is
+        tighter than the rhythm between the cards below reads as the control
+        belonging to the first card — the calendar looked like part of "Tags,
+        denen Sie folgen" when it was tried the other way round. --%>
+        <div class="min-w-0 space-y-6 md:col-span-2">
           <%!-- No visible headline: the top nav already marks Feed as active,
           so the page opens with the compose tile (like the profile's Beiträge
           card) and the h1 stays for screen readers only. The Likes/Bookmarks
@@ -2642,75 +2706,43 @@ defmodule VutuvWeb.PostLive.Feed do
           in the avatar menu and as tabs on the saved hub. --%>
           <h1 class="sr-only">{gettext("Feed")}</h1>
 
-          <%!-- Collapsed by default: the shared avatar-card trigger (see
-          <.composer_trigger>), revealed via phx-click, plus the camera button
-          that opens the very same composer and client-side clicks its "Add
-          photos" control (the label exists in the hidden panel, so the
-          native picker opens in the same gesture; if a browser refuses the
-          scripted click, the opened composer still shows the control). The
-          composer stays mounted (just hidden) so a half-typed draft survives
-          a background feed re-render; posting or the composer's corner ✕
-          collapses it. A reconnect re-mounts this LiveView and would
-          collapse it under a draft, so a drafting composer re-opens itself
-          (:composer_drafting). --%>
-          <%!-- Hidden rather than dropped while the composer is open, and the
-          display class is picked by ONE condition so the two can never both
-          land on the element (the #880 trap: `hidden` loses the cascade to a
-          `flex` beside it). A conditional
-          element ABOVE the editor is the caret-killer of #1200: when it comes
-          and goes, morphdom relocates the following siblings to restore their
-          order — a removeChild + insertBefore of #composer-panel, measured —
-          and re-parenting a `contenteditable` blurs it, so a member typing
-          when the composer collapses or re-opens loses the caret and the
-          keystrokes after it. --%>
+          <%!-- ONE control line, `h-10`, always present and never taller: the
+          height the folded rail calendar and the filter button already take, so
+          the two columns start level and the timeline's top edge is fixed. What
+          it replaced was a 72px card whose input-shaped tile invited typing it
+          could not take, plus a waiting-posts row that only existed on a desktop
+          once a post had arrived — which shoved the timeline down 56px and
+          sprang back on the press.
+
+          Compose is a BUTTON now, and it owns the whole line while nothing is
+          waiting. When something is, it gives up everything it does not need
+          (`flex-none`) and the quote takes the rest; below `sm` it drops its
+          word and keeps the glyph, the way the filter button beside the
+          calendar already does, or the teaser is left with three letters on a
+          phone. Only the widths move, never the height.
+
+          It stays in the DOM while the composer is open, merely hidden, and the
+          display class is picked by ONE condition so the two can never both land
+          on it (the #880 trap: `hidden` loses the cascade to a `flex` beside
+          it). A conditional element ABOVE the editor is the caret-killer of
+          #1200 — morphdom relocates the following siblings to restore their
+          order and re-parenting a `contenteditable` blurs it — which is why the
+          line itself is unconditional and only its contents change. --%>
           <div
             id="composer-trigger"
             class={[
               if(@composer_open?, do: "hidden", else: "flex"),
-              "items-center gap-2 rounded-2xl bg-white p-4 shadow-sm ring-1 ring-slate-200 dark:bg-slate-900 dark:ring-slate-800"
+              "items-center gap-2"
             ]}
           >
-            <.composer_trigger
-              viewer={@current_user}
-              surface={:flat}
-              avatar_size="md"
-              class="min-w-0 flex-1"
-              id="open-composer"
-              phx-click="open-composer"
-            >
-              {gettext("Write a post")}
-            </.composer_trigger>
-            <button
-              type="button"
-              id="open-photo-composer"
-              phx-click={
-                JS.push("open-composer")
-                |> JS.dispatch("click", to: "#composer-add-photos input[type=file]")
-              }
-              title={gettext("Post photos")}
-              aria-label={gettext("Post photos")}
-              class="inline-flex h-10 w-10 shrink-0 items-center justify-center rounded-full bg-slate-100 text-slate-600 hover:bg-slate-200 hover:text-slate-900 dark:bg-slate-800 dark:text-slate-300 dark:hover:bg-slate-700 dark:hover:text-slate-100"
-            >
-              <svg
-                class="h-5 w-5"
-                fill="none"
-                viewBox="0 0 24 24"
-                stroke-width="1.5"
-                stroke="currentColor"
-                aria-hidden="true"
-              >
-                <path
-                  stroke-linecap="round"
-                  stroke-linejoin="round"
-                  d="M6.827 6.175A2.31 2.31 0 0 1 5.186 7.23c-.38.054-.757.112-1.134.175C2.999 7.58 2.25 8.507 2.25 9.574V18a2.25 2.25 0 0 0 2.25 2.25h15A2.25 2.25 0 0 0 21.75 18V9.574c0-1.067-.75-1.994-1.802-2.169a47.865 47.865 0 0 0-1.134-.175 2.31 2.31 0 0 1-1.64-1.055l-.822-1.316a2.192 2.192 0 0 0-1.736-1.039 48.774 48.774 0 0 0-5.232 0 2.192 2.192 0 0 0-1.736 1.039l-.821 1.316Z"
-                />
-                <path
-                  stroke-linecap="round"
-                  stroke-linejoin="round"
-                  d="M16.5 12.75a4.5 4.5 0 1 1-9 0 4.5 4.5 0 0 1 9 0Z"
-                />
-              </svg>
-            </button>
+            <.compose_button alone?={@pending_posts == []} />
+
+            <.new_posts_pill
+              :if={@pending_posts != []}
+              pending_posts={@pending_posts}
+              pending_overflow={@pending_overflow}
+              cal_day={@cal_day}
+            />
           </div>
 
           <%!-- The panel is just the composer component; its corner ✕ bubbles a
@@ -2728,43 +2760,28 @@ defmodule VutuvWeb.PostLive.Feed do
             />
           </div>
 
-          <%!-- One line, three controls, and on a phone it is the only way to
-          any of them. The calendar is the phone's copy of the rail's — there is
-          no filter column under `md`, and the way back from an opened day is
-          not optional the way the rest of the rail is; the filter button opens
-          the band as a sheet for the same reason; the pill brings the waiting
-          posts down and carries the newest one's opening line, since the phone
-          has no "Not read yet" card to say what is waiting rather than merely
-          how much.
+          <%!-- Two controls, and on a phone this is the only way to either. The
+          calendar is the phone's copy of the rail's — there is no filter column
+          under `md`, and the way back from an opened day is not optional the way
+          the rest of the rail is; the filter button opens the band as a sheet
+          for the same reason.
 
-          The line is narrow and they fight over it. Folded, the calendar takes
-          what the filter button leaves; unfolded it claims the whole line and
-          the other two wrap under it, because a month grid squeezed beside a
-          button draws day cells too small to hit. And as soon as posts are
-          waiting the folded calendar leaves altogether — one class, one CSS
-          transition, no hook (`.feed-cal-slot--away`) — so the quote gets the
-          width; the filter button drops its word in the same breath and keeps
-          the glyph alone (Stefan, on the fourth demo). Nothing is stranded by
-          that: the pill is what brings a travelling reader home anyway, and
-          pressing it puts the calendar back.
+          Folded, the calendar takes what the filter button leaves; unfolded it
+          claims the whole line and the button wraps under it, because a month
+          grid squeezed beside a button draws day cells too small to hit.
 
-          With nothing waiting the pill is absent and the other two are
-          phone-only, so on a desktop the row hides itself rather than leaving
-          a gap above the timeline. --%>
-          <div
-            id="feed-mobile-controls"
-            class={["flex flex-wrap items-center gap-2", @pending_posts == [] && "md:hidden"]}
-          >
+          The row is phone-only, full stop: the waiting-posts quote moved up to
+          the compose line, which exists at every width, so there is nothing left
+          here for a desktop to show. That also gave the calendar its line back —
+          it no longer slides aside to make room (`.feed-cal-slot--away`), and
+          the filter button keeps its word. --%>
+          <div id="feed-mobile-controls" class="flex flex-wrap items-center gap-2 md:hidden">
             <%!-- The wrapper collapses, not the card: a card cannot shrink past
             its own padding and ring (border-box floors its width there), and
             clipping it from outside costs nothing. --%>
             <div
               id="feed-calendar-mobile-slot"
-              class={[
-                "feed-cal-slot md:hidden",
-                @cal_open? && "basis-full",
-                @pending_posts != [] && !@cal_open? && "feed-cal-slot--away"
-              ]}
+              class={["feed-cal-slot", @cal_open? && "basis-full"]}
             >
               <.feed_calendar
                 id="feed-calendar-mobile"
@@ -2785,7 +2802,7 @@ defmodule VutuvWeb.PostLive.Feed do
               id="open-filter-sheet"
               phx-click="open-band"
               aria-label={pgettext("feed filter sheet", "Filter")}
-              class="inline-flex h-10 shrink-0 items-center gap-2 rounded-full bg-white px-3 text-sm font-semibold text-slate-700 shadow-sm ring-1 ring-slate-200 hover:bg-slate-50 md:hidden dark:bg-slate-900 dark:text-slate-200 dark:ring-slate-800 dark:hover:bg-slate-800"
+              class="inline-flex h-10 shrink-0 items-center gap-2 rounded-full bg-white px-3 text-sm font-semibold text-slate-700 shadow-sm ring-1 ring-slate-200 hover:bg-slate-50 dark:bg-slate-900 dark:text-slate-200 dark:ring-slate-800 dark:hover:bg-slate-800"
             >
               <svg
                 class="h-5 w-5 shrink-0"
@@ -2801,15 +2818,8 @@ defmodule VutuvWeb.PostLive.Feed do
                   d="M12 3c2.755 0 5.455.232 8.083.678.533.09.917.556.917 1.096v1.044a2.25 2.25 0 0 1-.659 1.591l-5.432 5.432a2.25 2.25 0 0 0-.659 1.591v2.927a2.25 2.25 0 0 1-1.244 2.013L9.75 21v-6.568a2.25 2.25 0 0 0-.659-1.591L3.659 7.409A2.25 2.25 0 0 1 3 5.818V4.774c0-.54.384-1.006.917-1.096A48.32 48.32 0 0 1 12 3Z"
                 />
               </svg>
-              <span :if={@pending_posts == []}>{pgettext("feed filter sheet", "Filter")}</span>
+              <span>{pgettext("feed filter sheet", "Filter")}</span>
             </button>
-
-            <.new_posts_pill
-              :if={@pending_posts != []}
-              pending_posts={@pending_posts}
-              pending_overflow={@pending_overflow}
-              cal_day={@cal_day}
-            />
           </div>
 
           <%!-- The timeline is one card of flat divide-y rows — the same

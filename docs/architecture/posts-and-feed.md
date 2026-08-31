@@ -731,8 +731,9 @@ and their queries cost nothing to a reader who never opens it, and they carry
 their own ids because the rail is still in the DOM behind the sheet and two live
 components may not share one. Every id inside the band is prefixed with its
 component's — a repeated `<label for>` would otherwise toggle the rail's checkbox
-from the sheet. The filter button and the "what is waiting" pill share one line,
-and the button drops its word as soon as there is a quote to read.
+from the sheet. The filter button shares that line with the phone's calendar and
+nothing else: the "what is waiting" quote sits on the compose line above,
+which exists at every width.
 
 No arranging controls in the sheet: the order, the folding and the putting away
 are about a column that only exists on a desktop.
@@ -1408,8 +1409,8 @@ like two kinds, with the questions asked diverging per tab, so they went:
 The **editor is always on top**. Attached photos always render as the
 **large grid** below it (adding more photos is a tile in the grid, and with
 no photos yet the picker is the bottom row's "Add photos" label — exactly
-one upload input renders, and both carry the same `composer-add-photos` id,
-which is how the feed's camera button finds its target). Tiles keep the photo's **own aspect ratio** (inline
+one upload input renders, and both carry the same `composer-add-photos` id).
+Tiles keep the photo's **own aspect ratio** (inline
 `aspect-ratio` from the stored dimensions — the author judges the upload by
 the full frame, never a square crop). Under every tile sit the things a
 photographer looks for and would not find behind a gear icon: **one caption
@@ -1428,12 +1429,13 @@ licence and download pair folds behind the **"Photo details" row** (see
 below). The cover badge appears only from the second photo on, and the amber
 ALT nudge only while a photo has **neither** caption nor alt.
 
-Entry points: the feed's trigger row offers the pill and a camera button —
-both open the **same** composer; the camera button additionally chains a
-`JS.dispatch` click onto the composer's "Add photos" control (the label
-exists in the hidden panel), so the native photo picker opens in the same
-gesture, and a browser that refuses the scripted click still lands in a
-composer with that control in view.
+Entry points: the feed's compose line offers one button, and photos are
+added from inside the composer that opens. It used to offer a second, round
+camera button beside it that chained a `JS.dispatch` click onto the "Add
+photos" control so the native picker opened in the same gesture; that went
+in the 2026-08-31 redesign of the line, because the line's width belongs to
+the waiting-posts quote and the composer offers the same control one click
+further in.
 
 **The ✕ always collapses and keeps the draft** (issue #1135) — the
 server-side draft (issue #1148) keeps the photos too, and the feed re-opens

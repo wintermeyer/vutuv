@@ -294,7 +294,12 @@ defmodule VutuvWeb.FeedCalendarTest do
       render_click(view, "cal-toggle")
 
       assert has_element?(view, "#feed-rail #feed-calendar-rail")
-      assert has_element?(view, "#feed-calendar-mobile-slot.md\\:hidden #feed-calendar-mobile")
+
+      # Phone-only is decided once, by the row, not by each control in it: the
+      # slot carried its own `md:hidden` while that row could still reach a
+      # desktop with a waiting-posts pill in it, and the pill left in the
+      # 2026-08-31 redesign.
+      assert has_element?(view, "#feed-mobile-controls.md\\:hidden #feed-calendar-mobile")
     end
   end
 
@@ -328,6 +333,12 @@ defmodule VutuvWeb.FeedCalendarTest do
       # control height for both, not a per-call-site override.
       assert has_element?(view, "#feed-calendar-rail.h-10")
 
+      # And the compose button, which is the control the column alignment
+      # hangs on: it and the folded rail calendar are the first thing in their
+      # respective columns, so the moment they stop being the same height the
+      # timeline and the first rail card stop starting on one line.
+      assert has_element?(view, "#open-composer.h-10")
+
       # Travelling: "Now" joins the folded row and must not push it taller.
       render_click(view, "cal-day", %{"date" => iso(days_ago(3))})
 
@@ -336,9 +347,10 @@ defmodule VutuvWeb.FeedCalendarTest do
     end
 
     test "and so is the pill that takes the calendar's place", %{conn: conn} do
-      # The second state of the same line: once posts are waiting the calendar
-      # folds away and the pill stands beside the filter button instead, so it
-      # owes that button the same height (it was 36px against 40px).
+      # The pill is on the compose line rather than this one, but it is the
+      # same control height as everything on both lines (it was 36px against
+      # 40px), which is what lets it sit beside the compose button without
+      # changing the line.
       {conn, user} = create_and_login_user(conn)
       author = feed_with_history(user)
 
@@ -361,9 +373,11 @@ defmodule VutuvWeb.FeedCalendarTest do
       refute has_element?(view, "#feed-calendar-mobile.h-10")
     end
 
-    test "a waiting post takes the calendar out of the line", %{conn: conn} do
-      # The pill carries the newest post's opening line and needs the width;
-      # the calendar is the one control on the row nobody is waiting for.
+    test "a waiting post leaves the calendar's line alone", %{conn: conn} do
+      # It used to fold sideways to give the pill the width, because the pill
+      # was on this line. The pill lives on the compose line now, which exists
+      # at every width, so the calendar has nothing to make room for and the
+      # filter button keeps its word.
       {conn, user} = create_and_login_user(conn)
       author = feed_with_history(user)
 
@@ -373,34 +387,27 @@ defmodule VutuvWeb.FeedCalendarTest do
 
       {:ok, _fresh} = Posts.create_post(author, %{body: "arriving while I read"})
 
-      assert has_element?(view, "#feed-calendar-mobile-slot.feed-cal-slot--away")
-    end
-
-    test "showing the waiting posts brings it back", %{conn: conn} do
-      {conn, user} = create_and_login_user(conn)
-      author = feed_with_history(user)
-
-      {:ok, view, _html} = live(conn, ~p"/feed")
-      {:ok, _fresh} = Posts.create_post(author, %{body: "arriving while I read"})
-      render_click(view, "show-new")
-
-      refute has_element?(view, "#feed-calendar-mobile-slot.feed-cal-slot--away")
-    end
-
-    test "an unfolded month keeps its place while posts wait", %{conn: conn} do
-      # Unfolded, the calendar has the line to itself and the other two wrap
-      # under it, so there is no width to win — and taking away a grid
-      # somebody is reading is the rudest possible moment for it.
-      {conn, user} = create_and_login_user(conn)
-      author = feed_with_history(user)
-
-      {:ok, view, _html} = live(conn, ~p"/feed")
-      render_click(view, "cal-toggle")
-
-      {:ok, _fresh} = Posts.create_post(author, %{body: "arriving while I read"})
-
+      # The class is gone from the stylesheet as well; this pins the markup so
+      # a future arrival cannot start folding the calendar again.
       assert has_element?(view, "#show-new-posts")
       refute has_element?(view, "#feed-calendar-mobile-slot.feed-cal-slot--away")
+    end
+
+    test "the waiting-posts pill sits on the compose line, not this one", %{conn: conn} do
+      # Which is what keeps the timeline still: that line is always there, so a
+      # post arriving cannot push the column down (issue: Stefan, 2026-08-31).
+      {conn, user} = create_and_login_user(conn)
+      author = feed_with_history(user)
+
+      {:ok, view, _html} = live(conn, ~p"/feed")
+      {:ok, _fresh} = Posts.create_post(author, %{body: "arriving while I read"})
+
+      assert has_element?(view, "#composer-trigger #show-new-posts")
+      refute has_element?(view, "#feed-mobile-controls #show-new-posts")
+
+      # Which is also why that row has no desktop story left: the quote was the
+      # only thing on it a wide screen ever showed.
+      assert has_element?(view, "#feed-mobile-controls.md\\:hidden")
     end
   end
 

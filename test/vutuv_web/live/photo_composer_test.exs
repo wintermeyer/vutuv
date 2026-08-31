@@ -71,15 +71,6 @@ defmodule VutuvWeb.PhotoComposerTest do
     live
   end
 
-  # The feed's camera button. It opens the very same composer (the tabs are
-  # gone); its extra client-side JS.dispatch click on the "Add photos" control
-  # cannot run in a LiveView test, so here it is equivalent to the pill.
-  defp open_photo_composer(conn) do
-    {:ok, live, _html} = live(conn, ~p"/feed")
-    live |> element("#open-photo-composer") |> render_click()
-    live
-  end
-
   defp open_details(live) do
     live |> element("#composer-photo-details-toggle") |> render_click()
   end
@@ -188,14 +179,13 @@ defmodule VutuvWeb.PhotoComposerTest do
       assert has_element?(live, ~s(#composer-form textarea[name="post[body]"]))
     end
 
-    test "the camera button opens the very same composer", %{conn: conn} do
-      live = open_photo_composer(conn)
+    test "photos are added from inside the composer", %{conn: conn} do
+      # The feed's round camera button is gone (2026-08-31): it bought a second
+      # control on the compose line for a gesture the composer already offers
+      # one click further in, and the line's width is the teaser's.
+      live = open_composer(conn)
 
-      refute has_element?(live, "#composer-panel.hidden")
-      refute has_element?(live, ~s(input[name="post[mode]"]))
-      # Same composer: the editor is right there, and so is the photo entry
-      # point the button's client-side dispatch clicks.
-      assert has_element?(live, ~s(#composer-form textarea[name="post[body]"]))
+      refute has_element?(live, "#open-photo-composer")
       assert has_element?(live, "#composer-add-photos")
     end
 

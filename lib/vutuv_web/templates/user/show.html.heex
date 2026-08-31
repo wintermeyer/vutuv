@@ -471,9 +471,11 @@ the resulting ~200px rail width. --%>
         </:action>
       </.section_header>
 
-      <%!-- Compose affordance on top, the convention everywhere: the same
-      avatar-card trigger as the feed's (shared <.composer_trigger>, flat
-      inside this card). Links to the feed with the `#compose` hash so the
+      <%!-- Compose affordance on top, the convention everywhere: the
+      avatar-card <.composer_trigger>, flat inside this card. It is the only
+      home that shape has left — /feed swapped its copy for a plain button on
+      its control line, because an input-shaped tile that takes no typing reads
+      as a field. Links to the feed with the `#compose` hash so the
       composer reveals and focuses on arrival (the same path the "n" keyboard
       shortcut uses) — clicking here opens the new-post form straight away
       instead of a closed composer. --%>

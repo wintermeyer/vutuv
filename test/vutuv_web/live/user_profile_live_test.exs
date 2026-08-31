@@ -458,8 +458,8 @@ defmodule VutuvWeb.UserProfileLiveTest do
 
       {:ok, view, _html} = live(conn, ~p"/#{owner}")
 
-      # The same avatar-card trigger as the feed's (shared <.composer_trigger>,
-      # not the dashed onboarding tile). It must land on /feed#compose, not
+      # The avatar-card <.composer_trigger> (not the dashed onboarding tile),
+      # whose one remaining home this is. It must land on /feed#compose, not
       # bare /feed — the #compose hash is what reveals and focuses the composer
       # on arrival (the same path the "n" keyboard shortcut uses), so clicking
       # it opens the new-post form straight away instead of dropping the owner
