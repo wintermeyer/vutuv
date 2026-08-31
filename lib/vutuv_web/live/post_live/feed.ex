@@ -2329,26 +2329,30 @@ defmodule VutuvWeb.PostLive.Feed do
     end
   end
 
-  # The line itself, and it needs no deploy gate: **every class here already
-  # ships bare in the previous release's bundle**, so it arrives styled even
-  # when patched into an hours-old document — which is the only reason the
-  # v7.347.0 ticker incident does not repeat here. That is why the hairline is
-  # `bg-brand-100` and not the `bg-brand-200` this first read better in: the
-  # tree has that one only as `hover:bg-brand-200`, which Tailwind compiles to
-  # a different selector, so a bare `bg-brand-200` would have been the single
-  # class an open tab could not draw. Check any class added here the same way
-  # (grep the tree for it *unprefixed*) rather than reaching for
-  # `static_changed?/1`, which suppresses the line after every future deploy
-  # too.
+  # The line itself. It is **coral**, because on this page blue is the colour of
+  # everything — links, tags, the composer button, the day picker — so a blue
+  # hairline with small blue text is one more card separator and reads as
+  # nothing. Coral is the app's one word for "unread" and appears nowhere else
+  # in the column but the dot beside it, which is exactly the association
+  # wanted. The two rules carry that colour and the label does not: coral text
+  # on white is ~2.7:1, under AA, and this label is a sentence somebody has to
+  # read rather than a badge digit, so the words stay `slate-900` and go bold,
+  # uppercase and tracked out — a divider label, not a link.
+  #
+  # It needs no deploy gate, because **every class here already ships bare in
+  # the previous release's bundle** and so arrives styled even when patched into
+  # an hours-old document. `feed_seam_class_availability_test.exs` holds that
+  # rule, the reasoning behind it and what it costs; let it answer for a class
+  # added here rather than reaching for `static_changed?/1`.
   defp visit_seam(assigns) do
     ~H"""
     <div
       data-feed-seam
-      class="mb-4 flex items-center gap-3 text-xs font-semibold text-brand-700 dark:text-brand-300"
+      class="mb-4 mt-2 flex items-center gap-3 text-xs font-bold uppercase tracking-wide text-slate-900 dark:text-slate-100"
     >
-      <span class="h-px flex-1 bg-brand-100 dark:bg-brand-800"></span>
-      <span>{gettext("Up to here is new")}</span>
-      <span class="h-px flex-1 bg-brand-100 dark:bg-brand-800"></span>
+      <span class="h-0.5 flex-1 bg-accent"></span>
+      <span class="whitespace-nowrap">{gettext("Up to here is new")}</span>
+      <span class="h-0.5 flex-1 bg-accent"></span>
     </div>
     """
   end
