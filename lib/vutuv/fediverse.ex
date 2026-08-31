@@ -3164,7 +3164,24 @@ defmodule Vutuv.Fediverse do
   # boosted vutuv post's author for the moderation check instead of re-fetching
   # the user per row, and asks the boosted remote post's `audience` column
   # whether it is still open.
+  # The boosters arrive as a **constant id list**, the same shape (and for the
+  # same reason) as `remote_posts_query/4` above. Joined to `fediverse_follows`,
+  # Postgres could not use `fediverse_post_boosts_recency_index` for anything
+  # but the smallest page: measured on the production copy (2026-08-31) it took
+  # the index at limit 11 and fell back to a full scan the moment the page grew
+  # — 3,039 buffers at the fill's limit of 31 and 3,708 at a calendar day's 100.
+  # Handed the ids, it walks the index at every limit: **156 and 448 buffers**,
+  # returning the same rows.
+  #
+  # So this is what makes that index earn its keep beyond the first ten cards.
   defp remote_boosts_query(%User{id: viewer_id} = viewer, fetch_n, cursor, opts) do
+    boosters =
+      from(f in Follow,
+        where: f.user_id == ^viewer_id and f.muted == false and f.state == "accepted",
+        select: f.remote_account_id
+      )
+      |> Repo.all()
+
     # The author's own follow is consulted too, not only the booster's: a
     # reader who muted an account out there muted *them*, and somebody else
     # passing their post on is exactly the back door that would undo it.
@@ -3178,8 +3195,6 @@ defmodule Vutuv.Fediverse do
       join: a in RemoteAccount,
       as: :remote_account,
       on: a.id == b.remote_account_id,
-      join: f in Follow,
-      on: f.remote_account_id == a.id,
       left_join: rp in RemotePost,
       as: :language_source,
       on: rp.id == b.remote_post_id,
@@ -3189,7 +3204,7 @@ defmodule Vutuv.Fediverse do
       left_join: author in RemoteAccount,
       as: :boosted_author,
       on: author.id == rp.remote_account_id,
-      where: f.user_id == ^viewer_id and f.muted == false and f.state == "accepted",
+      where: b.remote_account_id in ^boosters,
       where: is_nil(rp.id) or rp.remote_account_id not in subquery(muted_authors),
       order_by: [desc: b.announced_at, desc: b.id],
       limit: ^fetch_n,
