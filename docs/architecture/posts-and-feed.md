@@ -22,6 +22,23 @@ posts, chat messages, ads, the RSS/JSON renderings), skipping entities typed
 inside code spans/blocks or existing links and resolving all of a body's
 mentions and hashtags in one batched query each.
 
+**One batched query per body is still one per card**, which on a feed page is
+forty, and the hashtag half of it is not a cheap query: a `UNION ALL` of two
+multi-join subqueries under a `DISTINCT`. Measured on a copy of production
+(2026-08-31), a body carrying a hashtag cost **3.4 ms and one round trip**
+against **0.2 ms and none** for a body without one, and a single `/feed` arrival
+ran it twenty-one times for sixty-four distinct hashtags — about 90 % of what
+rendering a card cost at all. So `Vutuv.Tags.LinkableCache` sits in front of it:
+one ETS table for the whole installation (the answer depends on no viewer — both
+gates are the anonymous public view), each folded key remembered for a minute,
+**misses included**, since almost every hashtag on a cached remote post names no
+topic here. And because a memo only helps the *second* render, the one place
+that can see a whole page warms it in one go before the first card renders —
+`Posts.decorate_feed_entries/3`, beside the other batch loads. The cache is a
+fast path and never a requirement: with its process off (tests,
+`:linkable_tag_cache`) or its table not yet up, every call is the live query it
+always was. Card rendering went from 3.3 ms and 21 queries to 0.96 ms and none.
+
 A hashtag also **files the post under that tag**, so the link points both ways:
 `Vutuv.Posts.PostHashtag` (table `post_hashtags`, re-derived from the body on
 every save), **minting the tag** when the body is the first thing here to name
@@ -331,7 +348,28 @@ page nobody asked for, so it is the one that has to carry the reader past the
 first few scrolls without a round trip; an older page is fetched while they are
 still reading and can afford to be half of it; and a switch is a wait with
 nothing on screen at all, where twenty rendered cards are the bulk of the second
-it takes on a slow line, for a screen that holds three or four. `more?` comes
+it takes on a slow line, for a screen that holds three or four.
+
+**The arrival is forty cards, but the HTML document carries ten**
+(`@first_render_size`), and the socket appends the other thirty as soon as it
+connects (`:fill_arrival`, which is `append_older_page/2` — the same act as
+pressing "Load more", so the dedup rule has one owner). Rendering a card costs
+about **10 ms** of server time on production, measured two ways on 2026-08-31 —
+a twelve-day regression across `?day=` volumes and a twenty-run paired A/B
+against an empty day, agreeing on 10.2 and 10.0 — so the forty were roughly
+400 ms of the ~660 ms the browser waited for its first byte, spent drawing
+thirty-seven cards below a fold that shows two or three. Ten is the same number
+`@filter_page_size` uses and for the reason written there: it is what a screen
+holding three or four cards needs in order not to run out. What changed is only
+that an *arrival* is now judged by the same standard as a switch.
+
+This is **not** the lazy discovery rail of #1229, which was reverted the same
+day because content popping in where the reader was looking read as slowness:
+the fill lands below the tenth card, off-screen, and a reader who never scrolls
+never learns it happened. A fill is owed to the page that asked for it
+(`:owes_fill?`) and is dropped if the reader has meanwhile switched sources or
+opened a calendar day — appending an older page to a day would spill posts from
+before it into that day. `more?` comes
 from the same query in all three cases, so a short page still knows there is
 more and the button below picks the rest up. The `/feed.md|txt|json|xml`
 siblings take the arrival page as *their* page size, every page of them, and
