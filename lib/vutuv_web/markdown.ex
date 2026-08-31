@@ -973,6 +973,52 @@ defmodule VutuvWeb.Markdown do
   defp pattern(["href"]), do: @href_only
   defp pattern(attrs), do: ~r{(#{Enum.join(attrs, "|")})="/(?!/)}
 
+  # No capture group, so the split interleaves whole `<pre>` blocks between the
+  # segments around them and nothing else.
+  @preformatted ~r{<pre\b[^>]*>.*?</pre>}s
+
+  @block_tags "p|div|ul|ol|li|blockquote|h[1-6]|table|thead|tbody|tfoot|tr|td|th|br|hr|figure|figcaption|dl|dt|dd|pre|section|article"
+  @block_tag "(?:<(?:#{@block_tags})\\b[^>]*>|</(?:#{@block_tags})>)"
+
+  @soft_newline ~r/[ \t]*\r?\n[ \t]*/
+  @after_block ~r{(#{@block_tag})\s+}
+  @before_block ~r{\s+(#{@block_tag})}
+
+  @doc """
+  Strips the layout whitespace out of rendered HTML, for a reader that renders
+  it as **preformatted text**.
+
+  Earmark lays its output out to be read in a source file: a newline after every
+  opening `<p>`, indented list items, trailing spaces before a closing tag. A
+  browser collapses all of it, which is why the page is right and why this pass
+  changes nothing on any surface of ours. Mastodon's `.status__content p`
+  carries `white-space: pre-wrap`, so it **draws** every one of those newlines:
+  each paragraph opens with a blank line and each `<li>`'s text lands on the
+  line below its own bullet. The Mastodon client API renders the same way, so
+  both wire surfaces run this.
+
+  What is left is the whitespace a browser would show too: a soft newline inside
+  a paragraph becomes the single space it renders as (posts are rendered with
+  `breaks: false`, so those two source lines are one flowing line on our page
+  as well, and a hard break is a `<br>` long before this), while the whitespace
+  around a block tag goes. Content inside `<pre>` is the author's own and is
+  handed through untouched, since Mastodon renders `pre` preformatted on purpose.
+  """
+  def compact_html(html) when is_binary(html) do
+    @preformatted
+    |> Regex.split(html, include_captures: true)
+    |> Enum.map_join(&compact_segment/1)
+  end
+
+  defp compact_segment("<pre" <> _ = preformatted), do: preformatted
+
+  defp compact_segment(text) do
+    text
+    |> String.replace(@soft_newline, " ")
+    |> String.replace(@after_block, "\\1")
+    |> String.replace(@before_block, "\\1")
+  end
+
   ## @handle / fediverse mentions and #hashtags
 
   # Turns every `@handle` of an existing member into a same-tab link to their

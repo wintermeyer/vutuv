@@ -161,6 +161,35 @@ defmodule VutuvWeb.Fediverse.DocsTest do
       assert note["content"] =~ ~s(href="//evil.com")
       refute note["content"] =~ ~s(href="#{base()}//evil.com")
     end
+
+    # Mastodon renders `.status__content p` with `white-space: pre-wrap`, so
+    # Earmark's layout newlines are DRAWN: a blank line opening every paragraph
+    # and each bullet's text pushed onto the line below its own marker. Nothing
+    # about that is visible on our own page, where the browser collapses it.
+    test "the content carries no layout whitespace, which the other side draws" do
+      user = insert(:activated_user)
+
+      post =
+        insert(:post,
+          user: user,
+          body: "# Titel\n\nEin Satz.\n\n* eins\n* zwei"
+        )
+
+      content = Docs.create_activity(post, user)["object"]["content"]
+
+      assert content =~ "<h1>Titel</h1>"
+      assert content =~ "<li>eins</li><li>zwei</li>"
+      refute content =~ "\n"
+    end
+
+    test "the content keeps the newlines inside a code block" do
+      user = insert(:activated_user)
+      post = insert(:post, user: user, body: "```elixir\ndef a do\n  :ok\nend\n```")
+
+      content = Docs.create_activity(post, user)["object"]["content"]
+
+      assert content =~ "do</span>\n  <span"
+    end
   end
 
   describe "hashtags on an outgoing note (#1421)" do

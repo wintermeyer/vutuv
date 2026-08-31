@@ -507,4 +507,68 @@ defmodule VutuvWeb.MarkdownTest do
       assert html =~ "mastodon.social/@hostsharing"
     end
   end
+
+  describe "compact_html/1" do
+    # Mastodon renders a status paragraph with `white-space: pre-wrap`, so
+    # every newline and indent Earmark lays out for readability is *drawn*.
+    defp wire_html(body), do: body |> post_html() |> Markdown.compact_html()
+
+    test "a paragraph no longer opens with a blank line" do
+      assert wire_html("Ein Satz.") == "<p>Ein Satz.</p>"
+    end
+
+    test "a list item carries its text on the marker's own line" do
+      html = wire_html("* eins\n* zwei")
+
+      assert html == "<ul><li>eins</li><li>zwei</li></ul>"
+    end
+
+    test "a loose list keeps its paragraphs but loses the padding" do
+      html = wire_html("* eins\n\n* zwei")
+
+      assert html == "<ul><li><p>eins</p></li><li><p>zwei</p></li></ul>"
+    end
+
+    test "a heading and the paragraph under it do not run together" do
+      html = wire_html("# Titel\n\nEin Satz.")
+
+      assert html == "<h1>Titel</h1><p>Ein Satz.</p>"
+    end
+
+    test "a soft line break reads as the space it renders as on vutuv" do
+      # `breaks: false` means the two source lines are one flowing line on the
+      # page; without this they arrive as two lines on Mastodon.
+      html = wire_html("erste Zeile\nzweite Zeile")
+
+      assert html == "<p>erste Zeile zweite Zeile</p>"
+    end
+
+    test "a hard break survives as the <br> it already is" do
+      html = wire_html("erste Zeile\\\nzweite Zeile")
+
+      assert html == "<p>erste Zeile<br />zweite Zeile</p>"
+    end
+
+    test "the words around inline markup keep the spaces between them" do
+      html = wire_html("ganz **fett** und `code` dazwischen")
+
+      assert html ==
+               "<p>ganz <strong>fett</strong> und <code class=\"inline\">code</code> dazwischen</p>"
+    end
+
+    test "a code block keeps every line and every indent" do
+      # Highlighting wraps the keywords in spans, so read the newlines and the
+      # indent rather than the source text: those are what the pass must not eat.
+      html = wire_html("```elixir\ndef a do\n  :ok\nend\n```")
+
+      assert html =~ "do</span>\n  <span"
+      assert html =~ ":ok</span>\n<span"
+    end
+
+    test "a blockquote's own text is not glued to the paragraph after it" do
+      html = wire_html("> zitiert\n\ndanach")
+
+      assert html == "<blockquote><p>zitiert</p></blockquote><p>danach</p>"
+    end
+  end
 end

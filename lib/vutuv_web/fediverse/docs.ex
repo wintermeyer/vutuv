@@ -967,6 +967,9 @@ defmodule VutuvWeb.Fediverse.Docs do
   # sidecar is rendered INTO the content: the Note is one more rendering of
   # the post (like the agent docs), so a Mastodon reader gets the reviewed
   # work's facts even though remote software knows nothing of review cards.
+  #
+  # `compact_html/1` last, because a Note is read as preformatted text: see its
+  # docstring for what Mastodon does with Earmark's indentation.
   defp content_html(post, remote, hashtags) do
     body_html =
       post.body
@@ -976,6 +979,7 @@ defmodule VutuvWeb.Fediverse.Docs do
     (mention_html(remote) <>
        body_html <> PostComponents.review_content_html(post) <> hashtag_line(hashtags))
     |> absolutize()
+    |> VutuvWeb.Markdown.compact_html()
   end
 
   # The chips as a closing line of `#hashtags`, added **here, on the wire, only**

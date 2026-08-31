@@ -977,6 +977,10 @@ defmodule Vutuv.MastodonApi.Presenter do
   # `NotLoaded`, fail its `is_list` guard and silently render a status with no
   # text at all (`Vutuv.Search` does not preload, and the search endpoint duly
   # served blank posts once).
+  #
+  # `compact_html/1` for the reason the federated Note runs it: a client renders
+  # status HTML as preformatted text, so Earmark's layout newlines are drawn as
+  # blank lines and stray indents. See its docstring.
   defp content_html(post, photo_viewer) do
     post.body
     |> Markdown.render_post(Posts.released_images(post),
@@ -984,6 +988,7 @@ defmodule Vutuv.MastodonApi.Presenter do
     )
     |> safe_html()
     |> Markdown.absolutize_html(main_base())
+    |> Markdown.compact_html()
   end
 
   # The same for a cached post or reply. It carries no picture of ours, but
