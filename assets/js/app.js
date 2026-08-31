@@ -18,6 +18,7 @@ import { openPhotoCropper } from "./photo_crop"
 // reduced-motion) reused by every classic-page enhancement below.
 import {
   b64urlToBuf,
+  cancelIdle,
   csrfToken,
   localGet,
   localSet,
@@ -26,6 +27,8 @@ import {
   postJSON,
   request,
   reducedMotion,
+  savesData,
+  whenIdle,
 } from "./util"
 // The Milkdown WYSIWYG Markdown editor shared by the post + message composers
 // (VutuvWeb.UI.markdown_editor/1) is deliberately NOT imported here: it is a
@@ -328,9 +331,53 @@ function loadEditor(src) {
 // to cancel a boot that is still in flight, or the implementation would mount
 // itself onto an element LiveView has already removed.
 const MarkdownEditor = {
+  // The bundle is 512 kB of ProseMirror (137 kB over the wire), and it used to
+  // be fetched, parsed and run from `mounted()` on every page carrying a
+  // composer — including /feed, where the composer is collapsed. The panel
+  // stays mounted so a half-typed draft survives a re-render (#1148) and so
+  // morphdom never re-parents the editor mid-sentence (#1200), and LiveView
+  // mounts hooks on hidden elements all the same, so a feed visit ran the whole
+  // editor for a composer nobody had opened: measured at t=1.6s on an ordinary
+  // load (2026-08-31), competing with the first paint and the socket connect.
+  //
+  // So the boot asks one question, synchronously, at mount: **is this editor
+  // what the page is for?** A message thread, the organization form and the job
+  // form render it visible, and those boot exactly as they always did. The
+  // feed's collapsed composer is the only one that is not, and it waits for the
+  // browser to be idle — off the critical path, but still long before anybody
+  // presses "Write a post", so opening the composer is no slower than before.
+  //
+  // Deliberately NOT an IntersectionObserver, which is the obvious tool and the
+  // wrong one: it delivers nothing at all while a tab is in the background, so
+  // a feed opened in a background tab would sit on the plain textarea until the
+  // tab was focused (measured 2026-08-31). Idle callbacks have no such rule.
+  //
+  // On a metered connection nothing speculative runs and the first reach for
+  // the composer pays for it; the plain textarea underneath is a working
+  // composer until it lands.
   mounted() {
     const src = this.el.dataset.mdeSrc
     if (!src) return
+
+    // No client rects = `display: none` on it or on something above it.
+    if (this.el.getClientRects().length > 0) {
+      this.boot_(src)
+      return
+    }
+
+    this.onReach_ = () => this.boot_(src)
+    this.el.addEventListener("focusin", this.onReach_)
+    this.el.addEventListener("pointerdown", this.onReach_)
+
+    if (!savesData()) this.warm_ = whenIdle(() => this.boot_(src))
+  },
+
+  // Fetch, adopt and run the real hook. Idempotent: a reach and the idle
+  // warm-up can both arrive, and either may already have the module in hand.
+  boot_(src) {
+    if (this.booted_) return
+    this.booted_ = true
+    this.stopWaiting_()
 
     loadEditor(src)
       .then(({ MarkdownEditor: impl }) => {
@@ -360,7 +407,17 @@ const MarkdownEditor = {
 
   destroyed() {
     this.destroyed_ = true
+    this.stopWaiting_()
     this.impl_?.destroyed.call(this)
+  },
+
+  // Everything that was only there to notice the composer being reached.
+  stopWaiting_() {
+    cancelIdle(this.warm_)
+    if (!this.onReach_) return
+    this.el.removeEventListener("focusin", this.onReach_)
+    this.el.removeEventListener("pointerdown", this.onReach_)
+    this.onReach_ = null
   },
 }
 

@@ -25,6 +25,40 @@ export function onReady(fn) {
   window.addEventListener("phx:page-loading-stop", fn)
 }
 
+// Run `fn` when the browser has nothing better to do, for speculative work that
+// must never compete with the page it is speculating about. Returns a handle for
+// cancelIdle(). Safari has no requestIdleCallback, so it falls back to a timeout
+// long enough to be clear of the first paint and the LiveView connect.
+export function whenIdle(fn, timeout = 3000) {
+  if (typeof requestIdleCallback === "function") {
+    return { idle: requestIdleCallback(fn, { timeout }) }
+  }
+
+  return { timer: setTimeout(fn, 1500) }
+}
+
+export function cancelIdle(handle) {
+  if (!handle) return
+  if (handle.idle !== undefined && typeof cancelIdleCallback === "function") {
+    cancelIdleCallback(handle.idle)
+  }
+  if (handle.timer !== undefined) clearTimeout(handle.timer)
+}
+
+// Whether the member has asked their browser to spend less data (iOS/Safari
+// report nothing, which reads as "no"). What it gates here is speculative
+// prefetching, never anything the member actually asked for: on a metered or
+// very slow link, work nobody requested is the first thing to drop.
+export function savesData() {
+  const connection = navigator.connection
+  if (!connection) return false
+
+  return (
+    connection.saveData === true ||
+    ["slow-2g", "2g"].includes(connection.effectiveType)
+  )
+}
+
 // "Wire this element exactly once" guard. Returns true the first time it sees
 // `el` under `key` (and marks it), false every time after, so a re-scan from
 // onReady() can't attach a duplicate listener.
