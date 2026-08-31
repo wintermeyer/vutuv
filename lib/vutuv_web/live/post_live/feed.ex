@@ -357,6 +357,7 @@ defmodule VutuvWeb.PostLive.Feed do
     # Order/dupes don't matter: the refresh uses stream_insert update_only, which
     # updates existing rows where they sit and ignores ones already gone.
     |> assign(:entries, payload.entries)
+    |> rebase_seam(payload.entries)
     # The posts on screen we hold a photo-scan subscription for (below).
     |> assign(:photo_watch, MapSet.new())
     # How this member arranged the rail: the order of its cards, which are
@@ -1444,9 +1445,16 @@ defmodule VutuvWeb.PostLive.Feed do
     # saying "take me to those posts", so it closes the day and comes home —
     # which is exactly the reload the overflow case already wanted.
     if socket.assigns.pending_overflow > 0 or not at_now?(socket.assigns) do
+      # Both of these load a fresh timeline, which re-bases the seam: the reader
+      # is arriving at a new list, so "what I did not have when I got here" is
+      # about to mean something else.
       {:noreply, socket |> load_day(nil) |> sync_url()}
     else
-      {:noreply, socket |> assign(:pending_posts, []) |> assign(:empty?, false)}
+      {:noreply,
+       socket
+       |> assign(:pending_posts, [])
+       |> assign(:empty?, false)
+       |> show_seam()}
     end
   end
 
@@ -1521,6 +1529,7 @@ defmodule VutuvWeb.PostLive.Feed do
     # a page that is no longer on screen (see `fill_arrival/2`).
     |> assign(:owes_fill?, false)
     |> assign(:entries, entries)
+    |> rebase_seam(entries)
     |> stream(:posts, entries, reset: true)
     |> watch_pending_photos(entries)
   end
@@ -1761,6 +1770,7 @@ defmodule VutuvWeb.PostLive.Feed do
     # a page that is no longer on screen (see `fill_arrival/2`).
     |> assign(:owes_fill?, false)
     |> assign(:entries, entries)
+    |> rebase_seam(entries)
     |> stream(:posts, entries, reset: true)
     |> watch_pending_photos(entries)
     |> auto_translate_entries(entries)
@@ -2235,8 +2245,79 @@ defmodule VutuvWeb.PostLive.Feed do
 
   defp reveal_pending do
     JS.set_attribute({"data-pending-shown", "1"}, to: "#feed-posts > [hidden]")
+    # The unread dot, stamped in the same breath and on the same rows, because
+    # `[hidden]` stops matching one line below. It is deliberately never taken
+    # off here: the mark means "you have not looked at this one", and a reader
+    # who ignored six posts has still not read them once three more arrive. The
+    # only thing that clears it is the reader's own eyes, which is the browser's
+    # business (`FeedUrl` in app.js) and not this list's.
+    |> JS.set_attribute({"data-new-mark", "1"}, to: "#feed-posts > [hidden]")
     |> JS.remove_attribute("hidden", to: "#feed-posts > [hidden]")
     |> JS.push("show-new")
+  end
+
+  # Where the timeline ended when the reader got here. The seam is drawn above
+  # that post and does not move again for the rest of the visit, so every later
+  # batch lands above it and the line keeps answering one question: what did I
+  # not have yet when I arrived? A line that follows the newest batch answers
+  # the same question the dot already answers, and answers it worse, because it
+  # is gone the moment the next batch pushes it up.
+  #
+  # Re-based wherever the whole list is replaced (a source tab, a travelled-to
+  # day, the reload the overflow path takes), since the reader is then looking
+  # at a different timeline and the old boundary post is not in it.
+  # Two ids and no flag: the anchor is the row the line WOULD hang under, and
+  # `:seam_entry_id` is nil until it actually hangs there. An entry id is never
+  # nil, so the row's own comparison is the whole condition.
+  defp rebase_seam(socket, entries) do
+    socket
+    |> assign(:seam_anchor_id, seam_anchor(entries))
+    |> assign(:seam_entry_id, nil)
+  end
+
+  defp seam_anchor([first | _rest]), do: first.id
+  defp seam_anchor([]), do: nil
+
+  # Drawing it for the first time. The boundary row is already on the client and
+  # streams do not re-render what they have handed over, so it takes one
+  # `update_only` re-insert — which updates the row where it sits and is a no-op
+  # for a boundary that has since scrolled out of the stream.
+  defp show_seam(%{assigns: %{seam_entry_id: id}} = socket) when is_binary(id), do: socket
+
+  defp show_seam(socket) do
+    case Enum.find(socket.assigns.entries, &(&1.id == socket.assigns.seam_anchor_id)) do
+      nil ->
+        socket
+
+      entry ->
+        socket
+        |> assign(:seam_entry_id, entry.id)
+        |> stream_insert(:posts, entry, update_only: true)
+    end
+  end
+
+  # The line itself, and it needs no deploy gate: **every class here already
+  # ships bare in the previous release's bundle**, so it arrives styled even
+  # when patched into an hours-old document — which is the only reason the
+  # v7.347.0 ticker incident does not repeat here. That is why the hairline is
+  # `bg-brand-100` and not the `bg-brand-200` this first read better in: the
+  # tree has that one only as `hover:bg-brand-200`, which Tailwind compiles to
+  # a different selector, so a bare `bg-brand-200` would have been the single
+  # class an open tab could not draw. Check any class added here the same way
+  # (grep the tree for it *unprefixed*) rather than reaching for
+  # `static_changed?/1`, which suppresses the line after every future deploy
+  # too.
+  defp visit_seam(assigns) do
+    ~H"""
+    <div
+      data-feed-seam
+      class="mb-4 flex items-center gap-3 text-xs font-semibold text-brand-700 dark:text-brand-300"
+    >
+      <span class="h-px flex-1 bg-brand-100 dark:bg-brand-800"></span>
+      <span>{gettext("Up to here is new")}</span>
+      <span class="h-px flex-1 bg-brand-100 dark:bg-brand-800"></span>
+    </div>
+    """
   end
 
   # Whether this row is one of the waiting ones, and so starts hidden. Read from
@@ -2830,7 +2911,16 @@ defmodule VutuvWeb.PostLive.Feed do
           rather than a blank card; every live insert flips @empty? in the same
           diff, so the container is present whenever there is (or just became)
           content. --%>
-          <.post_list :if={!@empty?} id="feed-posts" phx-update="stream" data-filter-list>
+          <%!-- `NewMarks` (app.js) watches this container's own children for
+          the unread dots the pill's command stamps on them, and takes each one
+          off once the reader has looked at that card. --%>
+          <.post_list
+            :if={!@empty?}
+            id="feed-posts"
+            phx-update="stream"
+            phx-hook="NewMarks"
+            data-filter-list
+          >
             <%!-- Three ways a row can render, in precedence order: hidden by a
             filter, a cached post from another network, or a vutuv post. Named
             once each in one branch, so no pair of conditions has to be kept
@@ -2841,6 +2931,11 @@ defmodule VutuvWeb.PostLive.Feed do
               class={post_row_class()}
               hidden={pending_row?(entry, @pending_posts)}
             >
+              <%!-- The line saying where the list ended when the reader got
+              here. It is rendered by the boundary row rather than streamed as a
+              row of its own, so it cannot end up in the wrong place and costs
+              one `update_only` re-insert to appear (`show_seam/1`). --%>
+              <.visit_seam :if={entry.id == @seam_entry_id} />
               <%= cond do %>
                 <% hidden_by_filter?(entry, @revealed_filters) -> %>
                   <%!-- A content-filtered post (issue #940) collapses to a line

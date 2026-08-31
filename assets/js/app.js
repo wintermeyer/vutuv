@@ -751,10 +751,121 @@ const FeedUrl = {
   },
 }
 
+// How long a revealed card has to stand still in view before its unread dot
+// comes off, and how long the fade is given before the attribute goes. The
+// second has to outlast the `[data-new-mark]::before` transition in app.css
+// (260ms). A `transitionend` would remove the duplicate number, but
+// `prefers-reduced-motion` sets `transition: none` and then it never fires.
+const NEW_MARK_SEEN_MS = 1500
+const NEW_MARK_FADE_MS = 300
+
+// The unread dots on the rows the feed's "new posts" pill just revealed, and
+// the only thing that takes them off again. `reveal_pending/0` stamps
+// `data-new-mark` on those rows; this decides when the reader has looked at one.
+//
+// **An IntersectionObserver here where `MarkdownEditor` above turns one down**,
+// and for the same measured reason read the other way round: it reports nothing
+// at all while the tab is in the background. That was wrong for a boot that has
+// to finish anyway, and it is exactly right for a mark meaning "unread" —
+// nothing is being read in a background tab, so nothing there should stop being
+// unread.
+//
+// Safe to ship as a new hook: an old bundle logs one "unknown hook" line and
+// carries on, and it holds the old stylesheet too, which has no rule for the
+// dot — so such a tab draws nothing rather than something broken.
+const NewMarks = {
+  mounted() {
+    this.holds = new Map()
+
+    this.observer = new IntersectionObserver(
+      (entries) => {
+        for (const entry of entries) {
+          // Scrolled clean past upwards counts as looked at, however briefly it
+          // was in view: the reader has moved on, and a dot they can no longer
+          // reach is a mark nobody can act on.
+          if (entry.boundingClientRect.bottom < 0) {
+            this.clearMark(entry.target)
+          } else if (entry.intersectionRatio >= 0.6) {
+            this.hold(entry.target)
+          } else {
+            this.releaseHold(entry.target)
+          }
+        }
+      },
+      { threshold: [0, 0.6] },
+    )
+
+    // The pill is NOT inside this element — it sits on the compose line above —
+    // so the listener goes on the document, the way the rest of this file does
+    // its delegation. A frame later, because the JS command that stamps the
+    // marks runs in this same click and the order between the two is not ours
+    // to decide.
+    //
+    // `updated()` cannot replace this and is deliberately not implemented: the
+    // reveal happens entirely in the browser, and a stream sends no patch for
+    // rows it has already handed over, so LiveView has nothing to call back
+    // about. A row the server DOES re-render (a photo scan, a translation, the
+    // midnight restream) comes back without its mark, which is the accepted
+    // price of a marker the server never renders.
+    this.onPillClick = (event) => {
+      if (event.target.closest("#show-new-posts")) {
+        requestAnimationFrame(() => this.sweepMarks())
+      }
+    }
+
+    document.addEventListener("click", this.onPillClick)
+  },
+
+  sweepMarks() {
+    for (const row of this.el.querySelectorAll(':scope > [data-new-mark="1"]')) {
+      this.observer.observe(row)
+    }
+  },
+
+  hold(row) {
+    if (this.holds.has(row)) return
+
+    this.holds.set(
+      row,
+      setTimeout(() => this.clearMark(row), NEW_MARK_SEEN_MS),
+    )
+  },
+
+  releaseHold(row) {
+    const timer = this.holds.get(row)
+
+    if (timer) {
+      clearTimeout(timer)
+      this.holds.delete(row)
+    }
+  },
+
+  // Two steps, because the dot fades: the attribute has to keep matching the
+  // CSS long enough for the transition to run, and only then come off.
+  clearMark(row) {
+    this.releaseHold(row)
+    this.observer.unobserve(row)
+
+    if (row.dataset.newMark !== "1") return
+
+    row.dataset.newMark = "seen"
+    setTimeout(() => row.removeAttribute("data-new-mark"), NEW_MARK_FADE_MS)
+  },
+
+  destroyed() {
+    document.removeEventListener("click", this.onPillClick)
+    // A hold still running keeps its row alive through the closure and would
+    // fire on a node that has left the document.
+    for (const timer of this.holds.values()) clearTimeout(timer)
+    this.observer.disconnect()
+  },
+}
+
 const Hooks = {
   MarkdownEditor,
   TagInput,
   FeedUrl,
+  NewMarks,
   LocalTime: {
     mounted() {
       localizeTime(this.el)

@@ -253,6 +253,64 @@ html[data-nav-pressing] main {
   [data-pending-shown] {
     animation: none;
   }
+
+  [data-new-mark]::before {
+    transition: none;
+  }
+}
+
+/* ---------- The unread dot on a row the reader has not looked at ----------
+
+   Set by the browser in the same command that reveals the row
+   (`reveal_pending/0`) and taken off again by `app.js` once the card has stood
+   still in view for a moment. Both halves are the browser's, so the server
+   renders neither attribute and a row it re-renders for its own reasons (a
+   photo scan, a translation, the midnight restream) simply loses its dot —
+   the accepted price of a mark that costs the server nothing.
+
+   In the card's LEFT GUTTER rather than beside the timestamp, which is where
+   the study drew it: one row can hold several cards (a reply arrives with the
+   posts it answers), and a descendant selector would put a dot on every one of
+   them, marking posts from last week as unread. The row is the unit the mark
+   belongs to, so the row is what carries it. The gutter is the timeline card's
+   own `p-6`, so the dot sits in space that already exists.
+
+   Coral, and not a colour of its own: `--color-accent` is what this app has
+   always meant by "unread" (the tab badges, the unread group in the
+   notification list, which marks itself with this same 8px circle). */
+[data-new-mark] {
+  position: relative;
+}
+
+[data-new-mark]::before {
+  content: "";
+  position: absolute;
+  left: -0.875rem;
+  /* `post_row_class/0`'s `py-4`, plus half a line to the middle of the first
+     text line. Spelled as the sum so the borrowed number stays visible. */
+  top: calc(1rem + 0.55rem);
+  width: 0.5rem;
+  height: 0.5rem;
+  border-radius: 9999px;
+  background: var(--color-accent);
+  transition:
+    opacity 260ms ease-out,
+    transform 260ms ease-out;
+}
+
+/* The first row has no top padding (`first:pt-0` in `post_row_class/0`), and a
+   revealed row is always inserted at the top, so without this the topmost dot
+   sits a padding lower than the card it marks. */
+#feed-posts > [data-new-mark]:first-child::before {
+  top: 0.55rem;
+}
+
+/* Seen. The dot fades and shrinks into nothing rather than blinking out, and
+   `app.js` takes the attribute off once this has run. Shrinking rather than
+   collapsing a width: the dot is out of flow, so nothing moves when it goes. */
+[data-new-mark="seen"]::before {
+  opacity: 0;
+  transform: scale(0.4);
 }
 
 /* Dark mode re-declares a palette at the SAME specificity it was set at, never
