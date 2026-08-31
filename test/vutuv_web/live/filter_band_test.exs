@@ -118,6 +118,36 @@ defmodule VutuvWeb.PostLive.FilterBandTest do
     end
   end
 
+  describe "an open card and the arriving page" do
+    # Why the dead render owes no list is written at `FilterBand.load/1`.
+    # Calibrated against the un-deferred code: there the dead render carries
+    # the search field and no skeleton, and both assertions go red.
+    test "the dead render shows a skeleton, the connected mount the list", %{conn: conn} do
+      %{conn: conn, user: user} = with_friend(conn)
+
+      {:ok, _} =
+        Posts.save_feed_rail(user, %{order: ["sources"], collapsed: [], removed: []})
+
+      conn = get(conn, ~p"/feed")
+      dead_html = html_response(conn, 200)
+
+      assert elements(dead_html, "#filter-band-skeleton") != []
+      assert elements(dead_html, ~s(#filter-band form[phx-change="search"])) == []
+
+      {:ok, _view, html} = live(conn)
+      assert elements(html, "#filter-band-skeleton") == []
+      assert elements(html, ~s(#filter-band form[phx-change="search"])) != []
+    end
+
+    test "the folded default gets no skeleton", %{conn: conn} do
+      %{conn: conn} = with_friend(conn)
+
+      dead_html = conn |> get(~p"/feed") |> html_response(200)
+
+      assert elements(dead_html, "#filter-band-skeleton") == []
+    end
+  end
+
   describe "what is waiting" do
     test "the rail card and the pill both quote the waiting post", %{conn: conn} do
       %{conn: conn, friend: friend} = with_friend(conn)

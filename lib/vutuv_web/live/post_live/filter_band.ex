@@ -66,6 +66,7 @@ defmodule VutuvWeb.PostLive.FilterBand do
      # not in a column on purpose: this is an undo of the act you just made, not
      # a history, and a reload is itself an answer to "did I mean that".
      |> assign(undo: nil)
+     |> assign(loaded?: false)
      |> assign(word_draft: "", tag_draft: "")}
   end
 
@@ -90,7 +91,32 @@ defmodule VutuvWeb.PostLive.FilterBand do
   # rail now (the reader arranges them individually), so one instance per card
   # is mounted and a shared load would run the account and server queries three
   # times over for the two cards that never look at them.
+  # Sources is the one block whose data costs real queries (the ranked
+  # followee list alone reads every follow the member has), so a member who
+  # keeps the card open must not pay them before the page paints: the dead
+  # render draws the skeleton in `render/1` and the connected mount loads the
+  # real thing. The folded card never renders the component at all, so the
+  # default arrangement costs nothing either way.
   defp load(%{assigns: %{block: :sources}} = socket) do
+    socket = assign(socket, :loaded?, connected?(socket))
+    if socket.assigns.loaded?, do: load_sources(socket), else: socket
+  end
+
+  defp load(%{assigns: %{block: :words}} = socket) do
+    socket
+    |> assign(:words, filters_of_kind(socket, :keyword))
+    |> assign(:preview, preview(socket))
+  end
+
+  defp load(%{assigns: %{block: :tags}} = socket) do
+    filters = ContentFilters.list_for_user(socket.assigns.current_user)
+
+    socket
+    |> assign(:muted_tags, Enum.filter(filters, &(&1.kind == :tag)))
+    |> assign(:tag_suggestions, tag_suggestions(socket, filters))
+  end
+
+  defp load_sources(socket) do
     user = socket.assigns.current_user
     query = socket.assigns.query
     searching? = String.trim(query) != ""
@@ -128,20 +154,6 @@ defmodule VutuvWeb.PostLive.FilterBand do
     |> assign(:vutuv_total, FeedBand.vutuv_total(user))
   end
 
-  defp load(%{assigns: %{block: :words}} = socket) do
-    socket
-    |> assign(:words, filters_of_kind(socket, :keyword))
-    |> assign(:preview, preview(socket))
-  end
-
-  defp load(%{assigns: %{block: :tags}} = socket) do
-    filters = ContentFilters.list_for_user(socket.assigns.current_user)
-
-    socket
-    |> assign(:muted_tags, Enum.filter(filters, &(&1.kind == :tag)))
-    |> assign(:tag_suggestions, tag_suggestions(socket, filters))
-  end
-
   defp filters_of_kind(socket, kind) do
     socket.assigns.current_user
     |> ContentFilters.list_for_user()
@@ -151,8 +163,28 @@ defmodule VutuvWeb.PostLive.FilterBand do
   @impl true
   def render(assigns) do
     ~H"""
-    <div id={@id}>
-      <div :if={@block == :sources}>
+    <div id={@id} aria-busy={(@block == :sources and not @loaded?) && "true"}>
+      <%!-- What the open card shows before its data is loaded (the dead
+      render, and the moment before the socket is up): placeholder rows in the
+      shape of the source rows, breathing via the shared `.skeleton` class.
+      `aria-busy` rides the component root — the element that survives the
+      swap, so assistive tech hears the busy state end (the messages sidebar
+      and the calendar heatmap hang it the same way) — and the rows are
+      `aria-hidden`, there is nothing in them to read out. --%>
+      <ul
+        :if={@block == :sources and not @loaded?}
+        id={@id <> "-skeleton"}
+        aria-hidden="true"
+        class="space-y-2 py-1"
+      >
+        <li :for={_ <- 1..4} class="flex items-center gap-2">
+          <span class="skeleton h-5 w-5 shrink-0"></span>
+          <span class="skeleton h-3 min-w-0 flex-1"></span>
+          <span class="skeleton h-3 w-8"></span>
+        </li>
+      </ul>
+
+      <div :if={@block == :sources and @loaded?}>
         <%!-- The one thing a reader has to be told before they touch a switch:
         this is not an unfollow. Nothing here severs a relationship, and the
         other side is never told — a member checkbox writes `follows.muted`, a
