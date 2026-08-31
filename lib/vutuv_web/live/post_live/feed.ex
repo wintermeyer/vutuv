@@ -270,7 +270,9 @@ defmodule VutuvWeb.PostLive.Feed do
     %{
       content_filters: compiled,
       more?: page.more?,
-      cursor: page.next_cursor,
+      # Spelled the way `Posts.feed_page/2` spells it, so this payload and a
+      # page are the same shape to `put_timeline/3`.
+      next_cursor: page.next_cursor,
       draft: draft,
       entries: entries,
       # Which sources these entries were pulled for — what the band's two
@@ -317,13 +319,6 @@ defmodule VutuvWeb.PostLive.Feed do
     # assign is the truth, and the stored column is not read again while the
     # page lives.
     |> assign(:feed_filter, payload.filter)
-    |> assign(:more?, payload.more?)
-    |> assign(:cursor, payload.cursor)
-    |> assign(:empty?, payload.entries == [])
-    |> assign(:pending_posts, [])
-    # How many arrivals the cap turned away. Nonzero means the timeline no longer
-    # holds a row for every waiting post, so the press has to load a page.
-    |> assign(:pending_overflow, 0)
     # The calendar's own state: whether it is unfolded, which month is on
     # screen, which reading its heatmap shades, and which day (if any) the
     # reader opened. `cal_day` is a Date rather than a moment because it names a
@@ -352,12 +347,6 @@ defmodule VutuvWeb.PostLive.Feed do
     # thrown away. Resolved here rather than announced by the composer so the
     # disconnected render already agrees and the panel never flickers open.
     |> assign(:composer_open?, payload.draft != nil)
-    # The set of entries currently on screen, kept so the midnight :day_changed
-    # tick can re-render each stamp in place (streams don't retain their data).
-    # Order/dupes don't matter: the refresh uses stream_insert update_only, which
-    # updates existing rows where they sit and ignores ones already gone.
-    |> assign(:entries, payload.entries)
-    |> rebase_seam(payload.entries)
     # The posts on screen we hold a photo-scan subscription for (below).
     |> assign(:photo_watch, MapSet.new())
     # How this member arranged the rail: the order of its cards, which are
@@ -385,10 +374,15 @@ defmodule VutuvWeb.PostLive.Feed do
         limit: 5
       )
     )
+    # Everything that is true of the list the reader has just been handed
+    # (`put_timeline/3`), the entries themselves included. It sits here rather
+    # than up with the other assigns because `watch_pending_photos/2` reads the
+    # `:photo_watch` set above. The mount is the one of the three moments that
+    # does not REPLACE a timeline: it seeds the stream itself, and owes its fill
+    # to `fill_arrival/2` rather than clearing it.
+    |> put_timeline(payload.entries, payload)
     |> stream_configure(:posts, dom_id: &"feed-#{&1.id}")
     |> stream(:posts, payload.entries)
-    |> watch_pending_photos(payload.entries)
-    |> auto_translate_entries(payload.entries)
     |> fill_arrival(payload)
   end
 
@@ -1509,6 +1503,59 @@ defmodule VutuvWeb.PostLive.Feed do
     |> auto_translate_entries(entries)
   end
 
+  # Everything that is true of a list of entries the feed has just put on
+  # screen. Three moments do that — the mount, a source-filter change and a
+  # travelled-to day — and they used to spell this out one by one, which cost
+  # nothing until a fact was added to two of them and forgotten in the third.
+  # That is not hypothetical: every one of them asked for the page's
+  # translations except the source switch, so a reader with auto-translate on
+  # who moved to the Fediverse sources — where the foreign-language posts are —
+  # got untranslated cards until they reloaded (issue #1870).
+  #
+  # `page` is anything carrying `more?` and `next_cursor` — the result of
+  # `Posts.feed_page/2` for the two loaders, the mount's own payload, which
+  # `feed_payload/4` builds with the same two keys.
+  #
+  # **Nothing added here may touch the `:posts` stream.** The mount is the only
+  # caller that has not configured it yet (`stream_configure/3` raises once a
+  # stream exists, and it runs on the line after this one), so a `stream_insert`
+  # dropped in here would take every feed mount down and neither loader would
+  # show it. Streaming is the callers' half: `replace_timeline/3` resets,
+  # the mount seeds.
+  #
+  # `append_older_page/2` deliberately does NOT come through here: it adds a
+  # page below the fold rather than replacing one, so it must not clear the
+  # waiting posts, must not re-base the seam, and cannot change `:empty?`.
+  defp put_timeline(socket, entries, page) do
+    socket
+    |> assign(:more?, page.more?)
+    |> assign(:cursor, page.next_cursor)
+    |> assign(:empty?, entries == [])
+    |> assign(:pending_posts, [])
+    # How many arrivals the cap turned away. Nonzero means the timeline no
+    # longer holds a row for every waiting post, so the press has to load a
+    # page.
+    |> assign(:pending_overflow, 0)
+    # The set of entries currently on screen, kept so the midnight :day_changed
+    # tick can re-render each stamp in place (streams don't retain their data).
+    # Order/dupes don't matter: the refresh uses stream_insert update_only,
+    # which updates existing rows where they sit and ignores ones already gone.
+    |> assign(:entries, entries)
+    |> rebase_seam(entries)
+    |> watch_pending_photos(entries)
+    |> auto_translate_entries(entries)
+  end
+
+  # The same, for the two moments that throw an existing timeline away: the
+  # stream is reset rather than seeded, and a fill still on its way is owed to
+  # a page that is no longer on screen (see `fill_arrival/2`).
+  defp replace_timeline(socket, entries, page) do
+    socket
+    |> put_timeline(entries, page)
+    |> assign(:owes_fill?, false)
+    |> stream(:posts, entries, reset: true)
+  end
+
   defp load_source_filter(socket, filter) do
     user = socket.assigns.current_user
     page = Posts.feed_page(user, limit: @filter_page_size, filter: filter)
@@ -1520,18 +1567,7 @@ defmodule VutuvWeb.PostLive.Feed do
 
     socket
     |> assign(:feed_filter, filter)
-    |> assign(:more?, page.more?)
-    |> assign(:cursor, page.next_cursor)
-    |> assign(:empty?, entries == [])
-    |> assign(:pending_posts, [])
-    |> assign(:pending_overflow, 0)
-    # This timeline replaces the arrival, so a fill still on its way is owed to
-    # a page that is no longer on screen (see `fill_arrival/2`).
-    |> assign(:owes_fill?, false)
-    |> assign(:entries, entries)
-    |> rebase_seam(entries)
-    |> stream(:posts, entries, reset: true)
-    |> watch_pending_photos(entries)
+    |> replace_timeline(entries, page)
   end
 
   # Whether the reader is looking at the live present. One way to leave it, the
@@ -1761,19 +1797,7 @@ defmodule VutuvWeb.PostLive.Feed do
       :cal_month,
       if(day, do: FeedTimeTravel.month_of(day), else: socket.assigns.cal_month)
     )
-    |> assign(:more?, page.more?)
-    |> assign(:cursor, page.next_cursor)
-    |> assign(:empty?, entries == [])
-    |> assign(:pending_posts, [])
-    |> assign(:pending_overflow, 0)
-    # This timeline replaces the arrival, so a fill still on its way is owed to
-    # a page that is no longer on screen (see `fill_arrival/2`).
-    |> assign(:owes_fill?, false)
-    |> assign(:entries, entries)
-    |> rebase_seam(entries)
-    |> stream(:posts, entries, reset: true)
-    |> watch_pending_photos(entries)
-    |> auto_translate_entries(entries)
+    |> replace_timeline(entries, page)
   end
 
   # The rest of the arrival, once the reader has the page (see `fill_arrival/2`).
