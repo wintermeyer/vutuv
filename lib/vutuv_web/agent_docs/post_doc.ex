@@ -283,36 +283,31 @@ defmodule VutuvWeb.AgentDocs.PostDoc do
   `reposted_by` stays the newest for callers that want just the one name.
   """
   def timeline_entry(%{remote_post: %RemotePost{} = remote} = entry) do
-    account = remote.remote_account
-
-    %{
-      id: remote.id,
-      # The origin, not a vutuv URL: the post lives on its own server and we
-      # serve no page for it.
-      url: RemotePost.origin(remote),
-      author: RemoteAccount.label(account),
-      published_on: DateTime.to_date(remote.published_at),
-      excerpt: PostTeaser.line(remote),
+    entry
+    |> remote_timeline_entry(remote)
+    |> Map.merge(%{
       # How many pictures the entry carries (issue #1163). A post from another
       # network can be a photograph and nothing else, and its stored body is
       # then genuinely empty — so without this an agent would read a wordless
       # photo post as an entry with no content at all. The renderers turn the
       # count into a phrase in the reader's own language.
       pictures: Enum.count(entry[:images] || [], &RemoteImage.released?/1),
-      quote: quoted_entry(remote),
-      reposted_by: nil,
-      reposters: [],
-      # What the HTML card says in its footer, as a fact rather than a skin: an
-      # agent reading this timeline has to be able to tell a member's own post
-      # from somebody else's, published elsewhere and cached here.
-      network: "fediverse",
-      account: RemoteAccount.display_handle(account)
-    }
+      quote: quoted_entry(remote)
+    })
   end
 
-  def timeline_entry(%{post: post} = entry) do
-    reposters = entry[:reposters] || List.wrap(entry[:reposted_by])
+  # The **second** remote row shape (issue #1275): a reply from out there that
+  # somebody here reshared. It carries a `note` and no `remote_post` at all, so
+  # without this clause it fell through to the `%{post: post}` one below with a
+  # nil post, and every agent-format sibling of the feed — `.md`, `.txt`,
+  # `.json`, `.xml` — 500ed the moment one landed (issue #1880).
+  #
+  # A note is a reply and nothing more: no cached pictures of its own and
+  # nothing it quotes, so it takes the shared shape unchanged.
+  def timeline_entry(%{note: %Note{} = note} = entry),
+    do: remote_timeline_entry(entry, note)
 
+  def timeline_entry(%{post: post} = entry) do
     %{
       id: post.id,
       url: AgentDocs.abs_url(Posts.path(post)),
@@ -328,9 +323,83 @@ defmodule VutuvWeb.AgentDocs.PostDoc do
       # rendered the photos and every agent format showed an entry with no
       # content at all. Only released images count, exactly as on the page.
       pictures: picture_count(post),
-      reposted_by: entry[:reposted_by] && UserHelpers.author_name(entry[:reposted_by]),
-      reposters: Enum.map(reposters, &UserHelpers.author_name/1)
+      reposted_by: reposted_name(entry),
+      reposters: reposter_names(entry),
+      # The posts this row answers, oldest first (issue #1880). A feed entry is
+      # a conversation, not a post — `Posts.collapse_threads/1` folds every post
+      # of one thread that reached the page into a single row, and the HTML card
+      # stacks them above the answer. This document drew the answer alone, so
+      # the post it replied to was on no page of the feed at all and never came
+      # back: the cursor had already walked past it.
+      thread: thread_context(entry)
     }
+  end
+
+  # The nine keys a row from another network answers whichever kind it is —
+  # each read through the owner of that fact (`Vutuv.Fediverse.subject_origin/1`
+  # and `subject_author_ref/1`, `Vutuv.Posts.written_at/1`), so a third kind
+  # arrives here already handled and a tenth key cannot be remembered in one
+  # clause and forgotten in the other. That is not hypothetical: the note shape
+  # was the one forgotten, and it 500ed all four formats until issue #1880.
+  defp remote_timeline_entry(entry, subject) do
+    author = Fediverse.subject_author_ref(subject)
+
+    %{
+      id: subject.id,
+      # The origin, not a vutuv URL: the thing lives on its own server and we
+      # serve no page for it.
+      url: Fediverse.subject_origin(subject),
+      author: author.name,
+      published_on: subject |> Posts.written_at() |> DateTime.to_date(),
+      excerpt: PostTeaser.line(subject),
+      pictures: 0,
+      quote: nil,
+      # Who **here** passed it on — the reshare line the card wears (issue
+      # #1166), and for a reader who follows nobody out there the answer to "why
+      # is a stranger's post in my feed". It was hardcoded nil until issue
+      # #1880, so that half of the timeline read as unexplained. The other half
+      # still does: a row carried by a boost names its account in `boosted_by`,
+      # which no agent format reads yet — `Vutuv.MastodonApi.Presenter.resharer/1`
+      # is the one place that treats the two as one question.
+      reposted_by: reposted_name(entry),
+      reposters: reposter_names(entry),
+      # What the HTML card says in its footer, as a fact rather than a skin: an
+      # agent reading this timeline has to be able to tell a member's own post
+      # from somebody else's, published elsewhere and cached here.
+      network: "fediverse",
+      account: author.handle,
+      # A row from another network is one record; nothing is folded into it.
+      # The key is here rather than absent so a client reads one entry shape.
+      thread: []
+    }
+  end
+
+  # The conversation folded into a local row, oldest first — each post as the
+  # same four facts the entry line carries, so a reader meets one shape twice
+  # rather than two. `Posts.feed_subjects/1` is what says this must exist.
+  defp thread_context(entry) do
+    Enum.map(entry[:ancestors] || [], fn post ->
+      %{
+        id: post.id,
+        url: AgentDocs.abs_url(Posts.path(post)),
+        author: UserHelpers.author_name(post),
+        published_on: post.published_on,
+        excerpt: PostTeaser.line(post)
+      }
+    end)
+  end
+
+  # Who put this row in the reader's feed, for all three row shapes at once —
+  # `reposted_by` the newest resharer alone, `reposters` the whole follow-scoped
+  # roster the feed carries behind it (the archive carries a single one). Only
+  # the local rows ever get a roster attached, so the other two fall back to the
+  # one name they have.
+  defp reposted_name(entry),
+    do: entry[:reposted_by] && UserHelpers.author_name(entry[:reposted_by])
+
+  defp reposter_names(entry) do
+    reposters = entry[:reposters] || List.wrap(entry[:reposted_by])
+    Enum.map(reposters, &UserHelpers.author_name/1)
   end
 
   # An unloaded association answers 0 rather than raising: not every caller of

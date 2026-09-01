@@ -6900,6 +6900,47 @@ defmodule Vutuv.Fediverse do
   """
   def subject_key(subject), do: {subject_kind(subject), subject.id}
 
+  @doc """
+  Where a thing from another network really lives — the address a reader is sent
+  to, since this installation serves no page of its own for it.
+
+  For a caller that does not know which kind it holds — a feed row is either
+  (`VutuvWeb.ApiV2.PostController`, `VutuvWeb.AgentDocs.PostDoc`). A caller
+  inside a clause that already matched one keeps calling `RemotePost.origin/1`
+  or `Note.origin/1` directly; there is nothing to dispatch there. Same family
+  as `Vutuv.Posts.path/1` and `text/1`, one world over.
+  """
+  def subject_origin(%RemotePost{} = post), do: RemotePost.origin(post)
+  def subject_origin(%Note{} = note), do: Note.origin(note)
+
+  @doc """
+  Who wrote it, as `%{name:, handle:, url:}` — the remote twin of
+  `Vutuv.Identity.ref/1`, for the surfaces that describe an author to a machine
+  (`/api/2.0/feed`) and cannot use the protocol: an account out there is not a
+  vutuv identity and has no page here.
+
+  A cached post is keyed to a stored account, a reply carries its author's
+  handle and name on its own row, and `url` is the actor's own address on their
+  server in both cases. Requires `:remote_account` to be preloaded on a cached
+  post — the head deliberately does not say so, because a clause matching the
+  association reads as a type check and behaves as a preload check, and the
+  answer here belongs to the kind of thing, not to what somebody remembered to
+  load.
+  """
+  def subject_author_ref(%RemotePost{} = post) do
+    account = post.remote_account
+
+    %{
+      name: RemoteAccount.label(account),
+      handle: RemoteAccount.display_handle(account),
+      url: account.actor_uri
+    }
+  end
+
+  def subject_author_ref(%Note{} = note) do
+    %{name: Note.label(note), handle: Note.display_handle(note), url: note.actor_uri}
+  end
+
   defp subject_schema(%RemotePost{}), do: RemotePost
   defp subject_schema(%Note{}), do: Note
 

@@ -1,8 +1,12 @@
 defmodule VutuvWeb.ApiV2.PostsApiTest do
   use VutuvWeb.ConnCase
 
+  import Vutuv.MastodonHelpers, only: [remote_account: 1, cached_post: 2]
+
   alias Vutuv.ApiAuth
+  alias Vutuv.Fediverse
   alias Vutuv.Posts
+  alias Vutuv.Repo
 
   setup %{conn: conn} do
     Vutuv.RateLimiter.reset()
@@ -159,6 +163,69 @@ defmodule VutuvWeb.ApiV2.PostsApiTest do
       assert [entry] = entries
       assert Enum.map(entry["reposters"], & &1["name"]) == ["Bruno Booster", "Renate Repost"]
       assert entry["reposted_by"]["name"] == "Bruno Booster"
+    end
+
+    # Issue #1880. Four of the feed's nine sources carry no `%Post{}` at all, so
+    # the entry builder read `post.id` off a nil and this endpoint 500ed for
+    # anybody who follows one account out there — which the HTML feed has shown
+    # since #1161. Both remote row shapes are here because they are separately
+    # fatal: the cached post and the reply somebody here passed on, which does
+    # not even carry a `remote_post` key.
+    test "a post and a reply from another network describe themselves", %{
+      conn: conn,
+      me: me,
+      token: token
+    } do
+      account = remote_account(name: "Thea Remote")
+
+      Repo.insert!(%Fediverse.Follow{
+        user_id: me.id,
+        remote_account_id: account.id,
+        state: "accepted",
+        follow_activity_id: "https://vutuv.test/#{me.id}/actor#follows/1"
+      })
+
+      cached =
+        cached_post(account,
+          content_text: "Was da draussen steht.",
+          origin_url: "https://social.example/@them/1"
+        )
+
+      sharer = insert_activated_user(first_name: "Sina", last_name: "Share")
+      follow!(me, sharer)
+      {:ok, mine} = Posts.create_post(me, %{body: "Eine Frage in die Runde."})
+
+      note =
+        insert(:note,
+          post: mine,
+          actor_uri: account.actor_uri,
+          handle: account.handle,
+          content_text: "Die weitergereichte Antwort."
+        )
+
+      Repo.insert!(%Fediverse.NoteRepost{user_id: sharer.id, note_id: note.id})
+
+      body = json_response(get(authed(conn, token), "/api/2.0/feed"), 200)
+      by_id = Map.new(body["posts"], &{&1["id"], &1})
+
+      # The cached post: where it really lives, who wrote it out there, its
+      # text, and the marker that says how to read all three.
+      post_entry = by_id[cached.id]
+      assert post_entry["url"] == "https://social.example/@them/1"
+      assert post_entry["network"] == "fediverse"
+      assert post_entry["author"]["name"] == "Thea Remote"
+      assert post_entry["author"]["handle"] == "@#{account.handle}@social.example"
+      assert post_entry["author"]["url"] == account.actor_uri
+      assert post_entry["body_text"] == "Was da draussen steht."
+      assert post_entry["reposted_by"] == nil
+
+      # The reshared reply: same keys, and `reposted_by` naming the member here
+      # who put it in this feed — without them the row is unexplainable.
+      note_entry = by_id[note.id]
+      assert note_entry["network"] == "fediverse"
+      assert note_entry["body_text"] == "Die weitergereichte Antwort."
+      assert note_entry["reposted_by"]["name"] == "Sina Share"
+      assert Enum.map(note_entry["reposters"], & &1["name"]) == ["Sina Share"]
     end
   end
 

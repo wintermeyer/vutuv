@@ -2767,6 +2767,17 @@ defmodule Vutuv.Posts do
   the feed timestamp (publication or repost time). Posts are preloaded for
   rendering.
 
+  **`:post` is nil on the rows from another network, and a presenter that reads
+  it without asking is a 500.** Four of the nine sources produce such a row:
+  `:remote_post` holds a cached post (a followed account's, a member's reshare,
+  a boost), `:note` a reply somebody here passed on — and a note row carries no
+  `:remote_post` key at all, so even a nil check on that one is not enough.
+  `remote_feed_entry?/1` and `remote_reply_entry?/1` are the questions to ask;
+  `text/1`, `written_at/1` and `Vutuv.Fediverse.subject_origin/1` /
+  `subject_author_ref/1` answer for every kind, so a presenter need not know
+  which it holds. This was not written down, and both `/api/2.0/feed` and all
+  four `/feed.<ext>` siblings 500ed on it (issue #1880).
+
   A post appears **once per page**, at its newest event: several followed
   members reposting the same post collapse into one entry, and a repost of a
   post the viewer also follows directly replaces the standalone original
@@ -3595,6 +3606,28 @@ defmodule Vutuv.Posts do
   """
   def thread_posts(%{post: %Post{} = post} = entry), do: [post | entry[:ancestors] || []]
   def thread_posts(_entry), do: []
+
+  @doc """
+  Every record a feed row puts on the page, **in reading order** — the folded
+  conversation oldest-first, or the one thing from another network.
+
+  `thread_posts/1` answers the same question as a *set*, for the membership
+  checks (a content filter, an id list); this answers it as the *list a
+  presenter renders*, which is why the order matters and why the remote kinds
+  are in it.
+
+  **It is the contract every feed presenter owes.** Whatever this returns has to
+  appear in what the caller renders — the HTML card, the agent doc, the API
+  entry, the Mastodon status alike. Reading `entry.post` instead silently drops
+  the posts `collapse_threads/1` folded into the row, and silently is the word:
+  `/feed.md|txt|json|xml` and `/api/2.0/feed` each showed a reply while the post
+  it answered was on no page at all, beside an HTML feed that drew the whole
+  conversation (issue #1880). `feed_presenter_coverage_test.exs` walks this list
+  through every presenter, so a tenth source or a fourth row shape fails the
+  build instead of quietly losing a post.
+  """
+  def feed_subjects(%{post: %Post{} = post} = entry), do: (entry[:ancestors] || []) ++ [post]
+  def feed_subjects(entry), do: [remote_subject(entry)]
 
   @doc """
   The records from **another network** a feed entry draws a card for: the cached

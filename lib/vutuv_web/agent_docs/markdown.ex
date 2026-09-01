@@ -1006,8 +1006,24 @@ defmodule VutuvWeb.AgentDocs.Markdown do
   end
 
   defp post_line(post) do
-    "- #{post.published_on}#{pin_suffix(post)}#{repost_suffix(post)}: " <>
-      "[#{md_text(entry_label(post))}](#{post.url})#{quote_suffix(post)}"
+    line =
+      "- #{post.published_on}#{pin_suffix(post)}#{repost_suffix(post)}: " <>
+        "[#{md_text(entry_label(post))}](#{post.url})#{quote_suffix(post)}"
+
+    Enum.join([line | Enum.map(thread_context(post), &thread_context_line/1)], "\n")
+  end
+
+  @doc false
+  # The posts a feed row answers (issue #1880), oldest first. Absent on an
+  # archive entry and on a row from another network, so the shared reader
+  # answers `[]` rather than each call site guarding.
+  def thread_context(post), do: Map.get(post, :thread) || []
+
+  # Indented under the entry it belongs to, and naming its author — which is
+  # what tells it apart from an entry line, since those carry no author.
+  defp thread_context_line(post) do
+    "  - #{post.published_on} [#{md_text(post.author)}](#{post.url}): " <>
+      md_text(entry_label(post))
   end
 
   @doc false

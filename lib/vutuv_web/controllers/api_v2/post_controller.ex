@@ -19,6 +19,9 @@ defmodule VutuvWeb.ApiV2.PostController do
 
   use VutuvWeb, :controller
 
+  alias Vutuv.Fediverse
+  alias Vutuv.Fediverse.Note
+  alias Vutuv.Fediverse.RemotePost
   alias Vutuv.Posts
   alias Vutuv.Posts.Post
   alias VutuvWeb.AgentDocs.PostDoc
@@ -181,6 +184,25 @@ defmodule VutuvWeb.ApiV2.PostController do
     |> Map.put(:post_id, post.id)
   end
 
+  # A feed row from another network — the two shapes `Posts.feed_page/2`
+  # documents, neither carrying a `%Post{}`, so the clause below read `post.id`
+  # off a nil and 500ed this endpoint for any member who follows one account
+  # out there (issue #1880).
+  #
+  # Two shape decisions, since the row cannot borrow the local one. `author` is
+  # a `%{name:, handle:, url:}` ref rather than `Vutuv.Identity.ref/1`: that
+  # protocol is about vutuv identities and raises for anything else, on purpose.
+  # And `body_text`, not `body_markdown` — a remote body arrived as HTML and was
+  # reduced to plain text at the inbox (`Vutuv.RemoteHtml.to_text/3`), so a
+  # client that ran it through a Markdown renderer would shorten a URL the
+  # author never wrote as a link and eat a leading `1.` into a list marker.
+  # `network` is what a client branches on, spelled as the agent formats spell
+  # it (`VutuvWeb.AgentDocs.PostDoc.timeline_entry/1`).
+  defp feed_entry(%{remote_post: %RemotePost{} = cached} = entry),
+    do: remote_feed_entry(entry, cached)
+
+  defp feed_entry(%{note: %Note{} = note} = entry), do: remote_feed_entry(entry, note)
+
   defp feed_entry(%{post: post} = entry) do
     reposters = entry[:reposters] || List.wrap(entry[:reposted_by])
 
@@ -196,7 +218,48 @@ defmodule VutuvWeb.ApiV2.PostController do
       # `reposted_by` stays the newest reposter (unchanged shape); `reposters`
       # adds the whole follow-scoped roster behind the entry, newest first.
       reposted_by: entry[:reposted_by] && Vutuv.Identity.ref(entry[:reposted_by]),
-      reposters: Enum.map(reposters, &Vutuv.Identity.ref/1)
+      reposters: Enum.map(reposters, &Vutuv.Identity.ref/1),
+      # The posts this entry answers, oldest first (issue #1880). A feed row is
+      # a conversation: `Posts.collapse_threads/1` folds every post of one
+      # thread that reached the page into a single row, and reading `post`
+      # alone dropped the rest — a client saw the answer and no page of the
+      # feed ever carried the post it answered.
+      thread: thread_entries(entry)
+    }
+  end
+
+  defp thread_entries(entry) do
+    Enum.map(entry[:ancestors] || [], fn post ->
+      %{
+        id: post.id,
+        url: VutuvWeb.AgentDocs.abs_url(Posts.path(post)),
+        author: Vutuv.Identity.ref(Posts.author(post)),
+        published_on: post.published_on,
+        body_markdown: post.body
+      }
+    end)
+  end
+
+  # Both remote row shapes answer the same eight keys — only where each fact is
+  # kept differs, and `Vutuv.Fediverse` owns that (`subject_origin/1`,
+  # `subject_author_ref/1`) beside `Vutuv.Posts.text/1` and `written_at/1`.
+  # There is no roster to attach out there, so `reposters` is the one name the
+  # row carries, if any.
+  defp remote_feed_entry(entry, subject) do
+    resharer = entry[:reposted_by] && Vutuv.Identity.ref(entry[:reposted_by])
+
+    %{
+      id: subject.id,
+      url: Fediverse.subject_origin(subject),
+      author: Fediverse.subject_author_ref(subject),
+      published_on: subject |> Posts.written_at() |> DateTime.to_date(),
+      body_text: Posts.text(subject),
+      network: "fediverse",
+      reposted_by: resharer,
+      reposters: List.wrap(resharer),
+      # One record, nothing folded into it — the key is present so a client
+      # reads one entry shape rather than two.
+      thread: []
     }
   end
 

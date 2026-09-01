@@ -169,6 +169,7 @@ defmodule Vutuv.MastodonHelpers do
     Repo.insert!(%RemotePost{
       remote_account_id: account.id,
       object_uri: attrs[:object_uri] || "https://social.example/p/#{unique_suffix()}",
+      origin_url: attrs[:origin_url],
       in_reply_to_uri: attrs[:in_reply_to_uri],
       content_text: attrs[:content_text] || "Von woanders.",
       audience: attrs[:audience] || "public",
