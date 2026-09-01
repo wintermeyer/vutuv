@@ -335,6 +335,54 @@ defmodule VutuvWeb.FediverseComponents do
       "font-semibold text-brand-600 hover:text-brand-700 dark:text-brand-400 dark:hover:text-brand-300"
 
   @doc """
+  The one-sentence version of `follow_refusal_panel/1`, for a surface with no
+  room for a panel.
+
+  The mention card is that surface: a 20rem box on `<body>`, filled with a
+  fragment fetched over HTTP. The panel cannot go there, because its links are
+  `<.link navigate={…}>` — inert outside a LiveView root — and its ids are fixed
+  (`enable-fediverse-link` and friends), so a card opened over the account page
+  would put a second element of that id in the document. The sentences are the
+  same ones, and `refusal_message(:not_federating)` already ends with where to
+  go, so nothing is lost but the button.
+  """
+  def follow_refusal_sentence(:restricted),
+    do:
+      gettext(
+        "Your account is on hold at the moment, so nothing of yours goes out to other networks and you cannot follow anybody there. This lifts by itself once the hold ends."
+      )
+
+  def follow_refusal_sentence(:disabled), do: refusal_message(:fediverse_disabled)
+  def follow_refusal_sentence(:moved), do: refusal_message(:moved)
+  def follow_refusal_sentence(_opted_out), do: refusal_message(:not_federating)
+
+  attr(:follow, :map, required: true, doc: "a `Vutuv.Fediverse.Follow`")
+  attr(:class, :string, default: nil)
+
+  @doc """
+  The follow's state as a pill: the word from `follow_state_label/1`, the
+  colours from `follow_state_class/1`, and `data-follow-state` for the tests.
+
+  Four surfaces show it — the account page, the following list, a looked-up
+  post's card and the mention card — and one member's follow must not read as
+  three different things depending on where they met it.
+  """
+  def follow_state_pill(assigns) do
+    ~H"""
+    <span
+      data-follow-state={@follow.state}
+      class={[
+        "inline-flex rounded-full px-2 py-0.5 text-xs font-semibold ring-1",
+        follow_state_class(@follow),
+        @class
+      ]}
+    >
+      {follow_state_label(@follow)}
+    </span>
+    """
+  end
+
+  @doc """
   A follow that has not been answered reads **"Requested"**, not "Following".
   An account that approves its followers by hand may take days or never answer,
   and showing it as settled would be a lie the member acts on.

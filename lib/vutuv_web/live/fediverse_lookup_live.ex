@@ -305,16 +305,7 @@ defmodule VutuvWeb.FediverseLookupLive do
             </p>
           </div>
 
-          <span
-            :if={@follow}
-            data-follow-state={@follow.state}
-            class={[
-              "inline-flex rounded-full px-2 py-0.5 text-xs font-semibold ring-1",
-              follow_state_class(@follow)
-            ]}
-          >
-            {follow_state_label(@follow)}
-          </span>
+          <.follow_state_pill :if={@follow} follow={@follow} />
 
           <.button :if={is_nil(@follow)} id="follow-author" phx-click="follow">
             {gettext("Follow")}

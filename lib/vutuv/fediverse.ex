@@ -1405,6 +1405,51 @@ defmodule Vutuv.Fediverse do
   def get_remote_account(id), do: UUIDv7.with_cast(id, &Repo.get(RemoteAccount, &1))
 
   @doc """
+  The stored account an address names, or nil — **without asking anybody**
+  (issue: the mention card).
+
+  A reader who taps `@user@host` in a post wants to know who that is, and this
+  is the half of that answer that costs nothing: most accounts a member meets in
+  a post are already here, because somebody follows them or something of theirs
+  was stored. Only a miss goes on to `resolve_remote_account/2`, which spends an
+  outbound request and a slot of the member's hourly budget.
+
+  The handle is matched case-insensitively, but on `lower(…)` equality rather
+  than the `ilike` the follow browser's search uses: `_` is a legal character in
+  a handle and a single-character wildcard in LIKE, so `@ada_b@host` would also
+  match `@adaXb@host` — tolerable when somebody is searching their own follow
+  list, not when it decides whose card a reader is shown.
+
+  The **host is compared as stored**, which keeps the query on the `host` index
+  (`lower(host) = …` is not sargable, and a seq scan over every remote account
+  is not what a click on a word in a paragraph should cost): the column is
+  always written through `BlockedInstance.normalize_host/1`, which downcases,
+  and `parse_address/1` downcases what it hands back.
+
+  The stored `host` comes from the **actor URI**, so an address whose WebFinger
+  points at a different host than it spells (`@you@example.com` living at
+  `mastodon.example.com`) misses here and is resolved instead — a slower right
+  answer, never a wrong one.
+  """
+  def remote_account_by_address(address) do
+    case RemoteFollow.parse_address(address) do
+      {:ok, {name, host}} ->
+        name = String.downcase(name)
+
+        Repo.one(
+          from(a in RemoteAccount,
+            where: a.host == ^host,
+            where: fragment("lower(?)", a.handle) == ^name,
+            limit: 1
+          )
+        )
+
+      _invalid ->
+        nil
+    end
+  end
+
+  @doc """
   The stored remote accounts these actor URIs name, keyed by URI — one query
   for a whole page. A URI nobody here stored is simply absent, so callers
   fall back per actor.

@@ -823,6 +823,15 @@ defmodule VutuvWeb.Router do
     # `system` is already reserved (`Vutuv.Accounts.ReservedSlugs`).
     delete("/system/act_as", ActingAsController, :delete)
 
+    # The card behind a `@user@host` mention (`VutuvWeb.RemoteActorCardController`,
+    # which says why none of these is a GET). Login is the controller's
+    # `RequireLoginOr404`, not a pipeline redirect: a 404 is what tells the
+    # browser to fall back to the mention's own link, while a 302 to the login
+    # page would be fetched and shown *as* the card.
+    post("/system/fediverse/actor_card", RemoteActorCardController, :show)
+    post("/system/fediverse/actor_card/follow", RemoteActorCardController, :follow)
+    delete("/system/fediverse/actor_card/follow", RemoteActorCardController, :unfollow)
+
     get("/new_registration", PageController, :redirect_index)
     post("/new_registration", PageController, :new_registration)
 

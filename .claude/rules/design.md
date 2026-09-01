@@ -302,6 +302,27 @@ LiveView can sit on either style.
   `.error-page__note` is the prominent brand-tinted callout inside that card
   (the `/username` placeholder helper uses it to own up to a broken newsletter
   link); it is the one non-muted line, distinct from the grey `.error-page__hint`.
+- **The mention card is a body-level panel, not a page element** (`.actor-card*`
+  in `components.css`, `assets/js/mention_card.js`). A `@user@host` mention keeps
+  its link to that server; a plain left click by a signed-in member opens a
+  small card under the word instead — who that account is, one Follow button,
+  their page here and the original out there. The markup arrives from the server
+  on every act (`VutuvWeb.RemoteActorCardController` +
+  `templates/remote_actor_card/card.html.heex`, **POST only**, since opening one
+  may resolve an address nobody here has seen), so every sentence in it is
+  translated where sentences belong and the JS only positions a box and swaps
+  HTML into it. **Nothing in that fragment may be a `<.link navigate>` or carry
+  a fixed `id`**: it lands outside every LiveView root, where a live-navigation
+  link does nothing, and it can be open over a page that already renders the
+  same element (which is why the card shows `follow_refusal_sentence/1` and not
+  the `follow_refusal_panel/1` the account page shows). Appended to `<body>`,
+  like the emoji picker; under 40rem it becomes a bottom sheet with a backdrop,
+  and only the sheet dims the page (a popover is read together with the sentence
+  it came from). The signed-in test is the shell's own `[data-account-menu]`,
+  the marker `keyboard_shortcuts.js` already reads — a logged-out click stays
+  the plain link, with no request to find that out. Its dark rules sit **with**
+  its light ones at the end of `components.css` rather than in that file's big
+  `prefers-color-scheme` block: one component, one place.
 
 ### CSS architecture (don't break it)
 

@@ -106,6 +106,24 @@ defmodule Vutuv.Fediverse.Handle do
 
   def host(_uri), do: nil
 
+  @doc """
+  Where a `@user@host` address reads on the web: `https://host/@user`, the
+  Mastodon-web convention that geno.social and the vast majority of servers
+  follow.
+
+  A pure string mapping, no WebFinger — so it costs nothing, works on an
+  air-gapped installation, and leaks no reader's request to the remote host.
+  One owner because two callers must agree on it: the `href`
+  `VutuvWeb.Markdown` writes into a mention, and the "View the original" link on
+  the card that mention opens. A card that sent a reader somewhere the link
+  would not have is a card that lied about the link.
+
+  The host is lowercased (hostnames are case-insensitive); the typed user case
+  is kept, since a handle's case is the account's own.
+  """
+  def web_profile_url(user, host) when is_binary(user) and is_binary(host),
+    do: "https://#{String.downcase(host)}/@#{user}"
+
   # The last path segment, when it reads like a username. A leading "@" is part
   # of the URL style (`/@alice`), not part of the name.
   defp derive(uri) when is_binary(uri) do
