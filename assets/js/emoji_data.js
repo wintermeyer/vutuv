@@ -17,18 +17,18 @@
 //     aliases so muscle memory from another app lands (`:thumbsup:` = `:+1:`).
 //     These drive the type-through, so they must be names other apps really
 //     use; do not invent convenient ones here.
-//   * `english` / `german` — extra search words. Both are searched whatever the
-//     UI language, so a German member types "Herz" and an English one "heart";
-//     the group LABELS come from gettext on the server (data-emoji-groups),
-//     because the server is the only side that knows the reader's locale.
+//   * `english` / `german` — extra search words, kept against a future search
+//     over this table; nothing reads them today (see the note above
+//     `emojiForShortcode`).
 //
 // The set is deliberately curated rather than the full ~1,900 of Unicode: this
-// is a professional network, the picker has to stay scannable on a phone, and
-// the whole file is bundled into app.js (no fetch, so the first tap opens
-// instantly and an intranet installation needs nothing). Adding an emoji is one
-// line. Adding a GROUP means adding its gettext label in
-// VutuvWeb.UI.markdown_editor/1 — markdown_editor_test.exs fails the build if a
-// group has no label.
+// is a professional network, and the whole file is bundled into app.js (no
+// fetch, so an intranet installation needs nothing). Adding an emoji is one
+// line.
+//
+// **The groups are no longer tabs anybody sees** (issue #1886 removed the
+// picker): they are scaffolding for the shortcode lookup, so adding a group
+// needs no label anywhere and nothing fails the build over one.
 export const EMOJI_GROUPS = {
   smileys: [
     ["😀", "grinning", "happy smile face", "lachen freude gesicht froh"],
@@ -527,32 +527,8 @@ export const SHORTCODE_AT_CARET = /:([a-z0-9_+-]{1,32}):$/i
 // so "grün herz" finds 💚 and "green heart" does too. An empty query returns the
 // group unfiltered.
 //
-// Matching is by SUBSTRING, on purpose: German compounds mean "blume" has to find
-// "sonnenblume" and "herz" has to find "herzen". The cost is the odd mid-word
-// hit — "herz" also sits inside "scherz", so 😉 matches — so results are RANKED,
-// with the emoji whose words *begin* with the query first. Both stay findable;
-// only the order says which is likely meant.
-const escapeForRegex = (token) => token.replace(/[.*+?^${}()|[\]\\-]/g, "\\$&")
-
-const wordStartMatchers = (tokens) =>
-  tokens.map((token) => new RegExp(`(^|\\s)${escapeForRegex(token)}`))
-
-export const searchEmoji = (query, group) => {
-  const tokens = query.trim().toLowerCase().split(/\s+/).filter(Boolean)
-  if (tokens.length === 0) {
-    return EMOJI_LIST.filter((entry) => entry.group === group)
-  }
-
-  const matchers = wordStartMatchers(tokens)
-
-  return EMOJI_LIST.filter((entry) => tokens.every((token) => entry.haystack.includes(token)))
-    .map((entry) => ({
-      entry,
-      score: matchers.filter((matcher) => matcher.test(entry.haystack)).length,
-    }))
-    // Descending by how many tokens matched a whole word's start. Array.sort is
-    // stable in every browser we support, so equal scores keep the dataset's
-    // own order (canonical emoji before the variations that follow it).
-    .sort((a, b) => b.score - a.score)
-    .map(({ entry }) => entry)
-}
+// (`searchEmoji` and its word-start ranking lived here until issue #1886.
+// Its only caller was the emoji picker panel, which went with the toolbar
+// button that opened it. The `english`/`german` keyword columns below are
+// what it searched, and they are kept: they cost nothing at runtime and are
+// the whole of the work if a search over this table is ever wanted again.)

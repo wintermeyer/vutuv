@@ -1,9 +1,10 @@
 // The composer's `@`-mention picker (issue #1748).
 //
-// One panel for the whole page, appended to <body>, for the same reason the
-// emoji picker is (assets/js/emoji_picker.js): every editor on this site sits
-// inside a LiveView, so a panel rendered in the document would be patched away
-// by an unrelated re-render — a typing indicator, an unread badge tick.
+// One panel for the whole page, appended to <body>: every editor on this site
+// sits inside a LiveView, so a panel rendered in the document would be patched
+// away by an unrelated re-render — a typing indicator, an unread badge tick.
+// (The emoji picker used to make the same arrangement for the same reason; it
+// went with the toolbar button that opened it, issue #1886.)
 //
 // It is a **listbox the editor drives**, not a thing you tab into: focus never
 // leaves the prose, because a mention is typed mid-sentence and taking the

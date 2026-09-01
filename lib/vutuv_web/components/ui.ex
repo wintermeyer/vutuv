@@ -348,147 +348,91 @@ defmodule VutuvWeb.UI do
       data-mention-empty={gettext("No account found.")}
       data-mention-max={@mention_limit}
       data-mention-budget={@mention_limit && gettext("{used} of {max} mentions")}
-      data-emoji-title={gettext("Emoji")}
-      data-emoji-search={gettext("Search emoji")}
-      data-emoji-close={gettext("Close")}
-      data-emoji-empty={gettext("No emoji found.")}
-      data-emoji-groups={emoji_group_labels()}
       data-mde-langs={code_fence_labels()}
       class={["mde", @compact && "mde--compact", @class]}
       {@rest}
     >
       <div id={"#{@id}-frame"} data-mde-frame phx-update="ignore" class="mde__frame">
-        <div data-mde-toolbar class="mde__toolbar" role="toolbar" aria-label={gettext("Formatting")}>
-          <div class="mde__group">
-            <.mde_button cmd="strong" title={gettext("Bold")}>
+        <%!-- The prose itself, and nothing above it. What used to be a
+        permanent row of eighteen buttons is now two surfaces that appear
+        when they mean something: the bubble over a selection, the slash
+        menu on an empty line. Both live INSIDE the ignored frame, because
+        the composer re-renders this editor on every keystroke and morphdom
+        would otherwise wipe whatever the hook has stamped on them. --%>
+        <div data-mde-mount class="mde__mount"></div>
+
+        <%!-- Marks act on a selection, so they are offered exactly while
+        there is one. The hook positions this over the selection and shows
+        it; `hidden` is the resting state, and the hook owns it from there. --%>
+        <div
+          data-mde-bubble
+          class="mde__bubble"
+          role="toolbar"
+          aria-label={gettext("Formatting")}
+          hidden
+        >
+          <div class="mde__bubble-group mde__bubble-group--marks">
+            <.mde_mark cmd="strong" title={gettext("Bold")}>
               <span class="font-bold">B</span>
-            </.mde_button>
-            <.mde_button cmd="em" title={gettext("Italic")}>
+            </.mde_mark>
+            <.mde_mark cmd="em" title={gettext("Italic")}>
               <span class="font-serif italic">I</span>
-            </.mde_button>
-            <.mde_button cmd="link" title={gettext("Link")}>
+            </.mde_mark>
+            <.mde_mark cmd="strike" title={gettext("Strikethrough")}>
+              <span class="line-through">S</span>
+            </.mde_mark>
+            <.mde_mark cmd="code" title={gettext("Inline code")}>
+              <.mde_icon d="M17.25 6.75 22.5 12l-5.25 5.25m-10.5 0L1.5 12l5.25-5.25" />
+            </.mde_mark>
+            <.mde_mark cmd="link" title={gettext("Link")}>
               <.mde_icon d="M13.19 8.688a4.5 4.5 0 0 1 1.242 7.244l-4.5 4.5a4.5 4.5 0 0 1-6.364-6.364l1.757-1.757m13.35-.622 1.757-1.757a4.5 4.5 0 0 0-6.364-6.364l-4.5 4.5a4.5 4.5 0 0 0 1.242 7.244" />
-            </.mde_button>
-            <%!-- Emoji: offered on every editor, posts and DMs alike. The button
-            stays in the first group so it is one tap away on a phone, where the
-            secondary groups are collapsed behind the chevron. --%>
-            <.mde_button cmd="emoji" title={gettext("Emoji")}>
-              <.mde_icon d="M12 21.75a9.75 9.75 0 1 0 0-19.5 9.75 9.75 0 0 0 0 19.5ZM8.4 14.4a4.5 4.5 0 0 0 7.2 0M9 9.75h.008v.008H9zM15 9.75h.008v.008H15z" />
-            </.mde_button>
-            <.mde_button :if={@images} cmd="image" title={gettext("Insert image")}>
-              <.mde_icon d="m2.25 15.75 5.159-5.159a2.25 2.25 0 0 1 3.182 0l5.159 5.159m-1.5-1.5 1.409-1.409a2.25 2.25 0 0 1 3.182 0l2.909 2.909m-18 3.75h16.5a1.5 1.5 0 0 0 1.5-1.5V6a1.5 1.5 0 0 0-1.5-1.5H3.75A1.5 1.5 0 0 0 2.25 6v12a1.5 1.5 0 0 0 1.5 1.5Zm10.5-11.25h.008v.008h-.008V8.25Z" />
-            </.mde_button>
+            </.mde_mark>
           </div>
 
-          <%!-- Image alignment: shown only while an image node is selected in
-          the prose (the hook stamps data-mde-img on the root). The choice is
-          stored as a `#left`/`#right`/`#center` fragment on the image src; no
-          fragment = full text width (VutuvWeb.Markdown maps it to the
-          post-inline-image--* modifier at render time). --%>
-          <div :if={@images} class="mde__group mde__group--image">
-            <span class="mde__sep" aria-hidden="true"></span>
-            <.mde_button cmd="img-full" title={gettext("Full width")}>
+          <%!-- The four alignment controls sat permanently in the toolbar
+          while meaning nothing unless a picture was selected. Here they are
+          the bubble's other face: the hook stamps `data-mde-img` on the root
+          when an image node is selected, and components.css swaps which
+          group shows. --%>
+          <div :if={@images} class="mde__bubble-group mde__bubble-group--image">
+            <.mde_mark cmd="img-full" title={gettext("Full width")}>
               <.mde_icon d="M3 5h18v10H3zM3 19h18" />
-            </.mde_button>
-            <.mde_button cmd="img-left" title={gettext("Float left")}>
+            </.mde_mark>
+            <.mde_mark cmd="img-left" title={gettext("Float left")}>
               <.mde_icon d="M3 5h8v8H3zM14 6h7M14 10h7M3 17h18" />
-            </.mde_button>
-            <.mde_button cmd="img-center" title={gettext("Center")}>
+            </.mde_mark>
+            <.mde_mark cmd="img-center" title={gettext("Center")}>
               <.mde_icon d="M8 5h8v8H8zM3 17h18" />
-            </.mde_button>
-            <.mde_button cmd="img-right" title={gettext("Float right")}>
+            </.mde_mark>
+            <.mde_mark cmd="img-right" title={gettext("Float right")}>
               <.mde_icon d="M13 5h8v8h-8zM3 6h7M3 10h7M3 17h18" />
-            </.mde_button>
-          </div>
-
-          <%!-- Mobile only: collapses the toolbar to one row (the inline group +
-          controls); tapping it reveals the `--more` groups below. Hidden on sm+,
-          where the whole toolbar fits on one line. The chevron flips when open. --%>
-          <button
-            type="button"
-            data-mde-cmd="toggle-toolbar"
-            class="mde__btn mde__more-toggle"
-            title={gettext("More formatting")}
-            aria-label={gettext("More formatting")}
-            aria-expanded="false"
-            tabindex="-1"
-          >
-            <.mde_icon d="M6 9l6 6 6-6" />
-          </button>
-
-          <div class="mde__more-row">
-            <span class="mde__sep" aria-hidden="true"></span>
-
-            <%!-- Strikethrough and inline code live HERE, not in the first group:
-            on a phone the top row is the scarce resource, and these two are used
-            far less often than link / emoji / photo. They are the first thing the
-            chevron reveals, and on sm+ they simply read as their own cluster
-            between the always-visible marks and the block controls. --%>
-            <div class="mde__group">
-              <.mde_button cmd="strike" title={gettext("Strikethrough")}>
-                <span class="line-through">S</span>
-              </.mde_button>
-              <.mde_button cmd="code" title={gettext("Inline code")}>
-                <.mde_icon d="M17.25 6.75 22.5 12l-5.25 5.25m-10.5 0L1.5 12l5.25-5.25" />
-              </.mde_button>
-            </div>
-
-            <span class="mde__sep" aria-hidden="true"></span>
-
-            <div class="mde__group">
-            <.mde_button cmd="h1" title={gettext("Heading 1")}>
-              <span class="text-xs font-bold">H1</span>
-            </.mde_button>
-            <.mde_button cmd="h2" title={gettext("Heading 2")}>
-              <span class="text-xs font-bold">H2</span>
-            </.mde_button>
-            <.mde_button cmd="h3" title={gettext("Heading 3")}>
-              <span class="text-xs font-bold">H3</span>
-            </.mde_button>
-            <.mde_button cmd="blockquote" title={gettext("Quote")}>
-              <.mde_icon d="M6 5v14M10 8h8M10 12h8M10 16h5" />
-            </.mde_button>
-            <.mde_button cmd="code_block" title={gettext("Code block")}>
-              <.mde_icon d="M14.25 9.75 16.5 12l-2.25 2.25m-4.5 0L7.5 12l2.25-2.25M5.25 4.5h13.5A.75.75 0 0 1 19.5 5.25v13.5a.75.75 0 0 1-.75.75H5.25a.75.75 0 0 1-.75-.75V5.25a.75.75 0 0 1 .75-.75Z" />
-            </.mde_button>
-          </div>
-
-          <span class="mde__sep" aria-hidden="true"></span>
-
-          <div class="mde__group">
-            <.mde_button cmd="bullet_list" title={gettext("Bullet list")}>
-              <.mde_icon d="M8.25 6.75h12M8.25 12h12M8.25 17.25h12M3.9 6.75h.008v.008H3.9zM3.9 12h.008v.008H3.9zM3.9 17.25h.008v.008H3.9z" />
-            </.mde_button>
-            <.mde_button cmd="ordered_list" title={gettext("Numbered list")}>
-              <span class="font-mono text-xs font-bold">1.</span>
-            </.mde_button>
-          </div>
-
-          <span class="mde__sep" aria-hidden="true"></span>
-
-          <div class="mde__group">
-            <.mde_button cmd="table" title={gettext("Table")}>
-              <.mde_icon d="M3.75 6.75h16.5v10.5H3.75zM3.75 10.5h16.5M3.75 14.25h16.5M9.75 6.75v10.5" />
-            </.mde_button>
-            <.mde_button cmd="hr" title={gettext("Divider")}>
-              <.mde_icon d="M4 12h16" />
-            </.mde_button>
-          </div>
-          </div>
-
-          <span class="mde__spacer"></span>
-
-          <div class="mde__controls">
-            <.mde_button cmd="mode" title={gettext("Toggle Markdown source")}>
-              <span class="text-xs font-bold tracking-tight">MD</span>
-            </.mde_button>
-            <.mde_button cmd="fullscreen" title={gettext("Full screen")}>
-              <.mde_icon d="M3.75 8.25v-4.5h4.5M20.25 8.25v-4.5h-4.5M3.75 15.75v4.5h4.5M20.25 15.75v4.5h-4.5" />
-            </.mde_button>
+            </.mde_mark>
           </div>
         </div>
 
-        <div data-mde-mount class="mde__mount"></div>
+        <%!-- Blocks are inserts, not selection acts, so they answer to "/"
+        on an empty line. Every word is server-worded: the server is the only
+        side that knows the reader's language, and the JS ships no fallback
+        copy of its own (the same deal as the lightbox's data-label-*). --%>
+        <div
+          data-mde-slash
+          class="mde__slash"
+          role="listbox"
+          aria-label={gettext("Insert a block")}
+          id={"#{@id}-slash"}
+          hidden
+        >
+          <.mde_block cmd="h1" glyph="H1" label={gettext("Heading 1")} />
+          <.mde_block cmd="h2" glyph="H2" label={gettext("Heading 2")} />
+          <.mde_block cmd="bullet_list" glyph="•" label={gettext("Bullet list")} />
+          <.mde_block cmd="ordered_list" glyph="1." label={gettext("Numbered list")} />
+          <.mde_block cmd="blockquote" glyph="❞" label={gettext("Quote")} />
+          <.mde_block cmd="code_block" glyph="▤" label={gettext("Code block")} />
+          <.mde_block :if={@images} cmd="image" glyph="▨" label={gettext("Insert image")} />
+          <p data-mde-slash-empty class="mde__slash-empty" hidden>
+            {gettext("Nothing matches.")}
+          </p>
+        </div>
       </div>
 
       <label for={"#{@id}-source"} class="sr-only">{@label}</label>
@@ -500,6 +444,55 @@ defmodule VutuvWeb.UI do
         placeholder={@placeholder}
         class="mde__source"
       >{@value}</textarea>
+
+      <%!-- The footer row: which view is showing, and the way to a bigger
+      box. Deliberately NOT `phx-update="ignore"`, though the hook writes
+      `aria-pressed` here and the composer re-renders this component on every
+      keystroke: `applyState/0` re-stamps the view buttons inside the same
+      patch, before paint, exactly as it already does for `data-mde-mode` on
+      the server-managed root. Freezing the subtree instead would buy nothing
+      and cost the gettext strings below their ability to follow a locale
+      change, and would silently swallow anything the server later wants to
+      render here. --%>
+      <div data-mde-foot class="mde__foot">
+        <%!-- Named, not lettered. The old control was a button reading "MD",
+        and the source view is now how a member reaches everything the
+        smaller control set no longer offers (a table, a divider, an H3), so
+        it cannot be a two-letter guess. Showing both states is also what
+        tells a reader the source view exists at all. --%>
+        <%!-- Its own msgid, deliberately not the existing `gettext("View")`:
+        that one is translated "Ansehen" — the verb, for a link that takes you
+        to something. This is the noun, the name of a way of looking at the
+        same text, and German needs "Ansicht". A msgid is a key, not a
+        phrase. --%>
+        <div class="mde__views" role="group" aria-label={gettext("Editor view")}>
+          <button
+            type="button"
+            data-mde-view="rich"
+            class="mde__view"
+            aria-pressed="true"
+            tabindex="-1"
+          >Text</button>
+          <button
+            type="button"
+            data-mde-view="source"
+            class="mde__view"
+            aria-pressed="false"
+            tabindex="-1"
+          >Markdown</button>
+        </div>
+
+        <button
+          type="button"
+          data-mde-cmd="fullscreen"
+          class="mde__btn"
+          title={gettext("Full screen")}
+          aria-label={gettext("Full screen")}
+          tabindex="-1"
+        >
+          <.mde_icon d="M3.75 8.25v-4.5h4.5M20.25 8.25v-4.5h-4.5M3.75 15.75v4.5h4.5M20.25 15.75v4.5h-4.5" />
+        </button>
+      </div>
 
       <p :if={@help} class="mt-1 text-right">
         <.markdown_help_link />
@@ -537,21 +530,49 @@ defmodule VutuvWeb.UI do
     """
   end
 
+  # One mark in the selection bubble. `tabindex="-1"` and the mousedown guard
+  # in the hook are what keep the selection alive while it is pressed — a
+  # focusable button would take focus and collapse the very selection the mark
+  # is about to act on.
   attr(:cmd, :string, required: true)
   attr(:title, :string, required: true)
   slot(:inner_block, required: true)
 
-  defp mde_button(assigns) do
+  defp mde_mark(assigns) do
     ~H"""
     <button
       type="button"
-      data-mde-cmd={@cmd}
+      data-mde-mark={@cmd}
       class="mde__btn"
       title={@title}
       aria-label={@title}
       tabindex="-1"
     >
       {render_slot(@inner_block)}
+    </button>
+    """
+  end
+
+  # One row of the slash menu: a glyph column and the block's name. The name is
+  # what the hook filters on as the member keeps typing after the "/", so it is
+  # rendered as text rather than hidden in a title attribute.
+  attr(:cmd, :string, required: true)
+  attr(:glyph, :string, required: true)
+  attr(:label, :string, required: true)
+
+  defp mde_block(assigns) do
+    ~H"""
+    <button
+      type="button"
+      data-mde-block={@cmd}
+      data-mde-block-label={@label}
+      class="mde__slash-item"
+      role="option"
+      aria-selected="false"
+      tabindex="-1"
+    >
+      <span class="mde__slash-glyph" aria-hidden="true">{@glyph}</span>
+      <span>{@label}</span>
     </button>
     """
   end
@@ -575,32 +596,10 @@ defmodule VutuvWeb.UI do
     """
   end
 
-  # The emoji picker's group tabs, as "key:Label|key:Label" for the JS to parse
-  # (`data-emoji-groups`). The keys are the groups of `EMOJI_GROUPS` in
-  # `assets/js/emoji_data.js`; the labels are the only translated words in the
-  # picker, since the emoji themselves are named by their language-neutral
-  # shortcode. A group in the dataset with no label here would render its bare
-  # key — `markdown_editor_test.exs` fails the build on that drift.
-  # A label may not contain a "|" (the pair separator); a ":" is fine, the JS
-  # splits on the first one only.
-  defp emoji_group_labels do
-    [
-      {"smileys", gettext("Smileys")},
-      {"people", gettext("People")},
-      {"nature", gettext("Animals & nature")},
-      {"food", gettext("Food & drink")},
-      {"activity", gettext("Activities")},
-      {"travel", gettext("Travel & places")},
-      {"objects", gettext("Objects")},
-      {"symbols", gettext("Symbols")}
-    ]
-    |> Enum.map_join("|", fn {key, label} -> "#{key}:#{label}" end)
-  end
-
   # The fence-language display names for the composer's code-block preview
   # (issues #1108, #1137, #1138), as "word:Label|word:Label" on the editor root
-  # (`data-mde-langs`) — the same arrangement as the emoji group labels above:
-  # the server is the only side that holds the registry, so the preview names a
+  # (`data-mde-langs`): the server is the only side that holds the registry, so
+  # the preview names a
   # block exactly the way the published page will ("PHP", not "php"), and the
   # "no language" words carry an empty label, the sign to leave such a block
   # alone. Built at compile time: the registry is static, and the composer
