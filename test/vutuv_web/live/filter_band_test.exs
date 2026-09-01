@@ -11,6 +11,7 @@ defmodule VutuvWeb.PostLive.FilterBandTest do
   use VutuvWeb.ConnCase, async: true
 
   import Phoenix.LiveViewTest
+  import Vutuv.FormSubmitHelpers
   import VutuvWeb.FeedRailHelpers, only: [unfold: 2]
 
   alias Vutuv.ContentFilters
@@ -60,37 +61,6 @@ defmodule VutuvWeb.PostLive.FilterBandTest do
   # HTML's own list of input types that "block implicit submission". A bare
   # `<input>` with no type is a text field, so it counts too — which is why the
   # attribute is read rather than selected on.
-  @blocking_types ~w(text search url tel email password date month week time datetime-local number)
-
-  defp blocking_fields(form) do
-    form
-    |> LazyHTML.query("input")
-    |> Enum.count(fn input ->
-      case LazyHTML.attribute(input, "type") do
-        [] -> true
-        [type] -> String.downcase(type) in @blocking_types
-        _ -> false
-      end
-    end)
-  end
-
-  # A `<button>` inside a form submits it unless it says otherwise, so the
-  # absent type counts as a submit control and only "button"/"reset" do not.
-  defp submit_control?(form) do
-    buttons =
-      form
-      |> LazyHTML.query("button")
-      |> Enum.any?(fn button ->
-        case LazyHTML.attribute(button, "type") do
-          [] -> true
-          [type] -> String.downcase(type) == "submit"
-          _ -> false
-        end
-      end)
-
-    buttons or Enum.any?(LazyHTML.query(form, ~s(input[type="submit"], input[type="image"])))
-  end
-
   # A source starts folded, so its accounts are not in the DOM until the reader
   # opens it — which is what they do, and what a test has to.
   defp twist(view, key) do
@@ -607,27 +577,15 @@ defmodule VutuvWeb.PostLive.FilterBandTest do
 
       {:ok, view, _html} = live(conn, ~p"/feed")
 
-      forms =
-        view
-        |> unfold("hidden_tags")
-        |> render()
-        |> LazyHTML.from_document()
-        |> LazyHTML.query("form[phx-submit]")
-        |> Enum.to_list()
-
-      # Without this the sweep below is vacuous, and a page that rendered no
-      # forms at all would read as a page whose forms are all fine.
-      assert length(forms) >= 3,
-             "expected the three rail add fields among the feed's forms, found #{length(forms)}"
-
-      for form <- forms do
-        assert blocking_fields(form) < 2 or submit_control?(form) or
-                 LazyHTML.attribute(form, "phx-change") ==
-                   LazyHTML.attribute(form, "phx-submit"),
-               "the form with phx-submit=#{inspect(LazyHTML.attribute(form, "phx-submit"))} has " <>
-                 "#{blocking_fields(form)} fields that block implicit submission, no submit " <>
-                 "control and no phx-change repeating its event — a browser cannot submit it"
-      end
+      # The check itself lives in `Vutuv.FormSubmitHelpers` now and runs over
+      # every page in `form_submit_sweep_test.exs` (issue #1896) — it was here,
+      # watching one page of the thirty that carry a form. This stays because
+      # the rail's cards only exist once unfolded, which the sweep's plain GET
+      # never sees.
+      view
+      |> unfold("hidden_tags")
+      |> render()
+      |> assert_forms_submittable("/feed with the rail unfolded", min_forms: 3)
     end
 
     # The label is its own msgid rather than the "Hide" the post menu already
