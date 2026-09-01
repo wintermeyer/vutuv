@@ -30,6 +30,25 @@ defmodule VutuvWeb.SearchLiveTest do
       assert html =~ "words in public posts"
     end
 
+    test "the form carries a submit control, so Return keeps working (issue #1895)", %{
+      conn: conn
+    } do
+      {:ok, view, _html} = live(conn, ~p"/search")
+
+      # A browser submits a form with no submit control only while it holds
+      # exactly one text field. The search box is that one field today, so
+      # Return works by luck — and the day an author filter or a date range
+      # joins it, Return would go dead with nothing to say so. This is the
+      # same shape that cost the feed's words card its save (#1888).
+      assert has_element?(view, ~s(#search-form button[type="submit"]))
+
+      # Hidden, because the box already searches as you type — but hidden the
+      # way that keeps it focusable, not `hidden`/`disabled`, which would take
+      # the keyboard path away again.
+      assert has_element?(view, ~s(#search-form button[type="submit"].sr-only))
+      refute has_element?(view, ~s(#search-form button[type="submit"][disabled]))
+    end
+
     test "shows a hint instead of results below three letters", %{conn: conn} do
       searchable_user("Maria", "Meier")
 
