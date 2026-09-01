@@ -28,9 +28,16 @@ defmodule Vutuv.RemoteHtml do
   What comes out is plain text that HEEx escapes again on the way to the page,
   and that the agent-format siblings can carry unchanged. Links survive as bare
   URLs, which `VutuvWeb.Markdown` linkifies anyway — including the `@user@host`
-  handles of those networks, which it maps to the right remote profile.
+  handles of those networks, which it maps to the right remote profile. That
+  they survive is the repair below, though, not a property of the strip: the
+  strip keeps a link's *label* and drops the address with the tag.
 
-  **Mentions** need one repair on the way through: those networks render a
+  Two things need a repair on the way through, and it is the same repair twice:
+  what names the thing is in the anchor the strip throws away. A **link** keeps
+  its address that way (`restore_cut_links/1`) — some servers show only a
+  cut-short rendering of it.
+
+  **Mentions** need the other: those networks render a
   mention as the bare `@user` short form, while the full address that names the
   account lives only in the anchor the strip throws away — and in the object's
   `tag` array. Stripped naively, `@herrkaschke` is just a word, and the renderer
@@ -84,6 +91,7 @@ defmodule Vutuv.RemoteHtml do
     # An element left open runs to the end of the document by definition, so
     # there is nothing after it worth keeping either.
     |> String.replace(~r{<(script|style)\b[^>]*>.*}is, "")
+    |> restore_cut_links()
     |> String.replace(~r{<br\s*/?>}i, "\n")
     |> String.replace(~r{</p>}i, "\n\n")
     |> defuse_wide_charrefs()
@@ -235,6 +243,124 @@ defmodule Vutuv.RemoteHtml do
   end
 
   defp entity_text(_number, whole), do: whole
+
+  # An anchor as these servers write one: the opening tag's attributes, then the
+  # label up to its own `</a>` (anchors never nest, so the lazy run stops
+  # there). Both runs are **bounded** because this reads a stranger's document,
+  # and an unbounded one costs the rest of that document for every `<a` it then
+  # fails on. The shape that hurts is a body of `<a x>` with no `</a>` in it at
+  # all, where every one of them pays the label bound: measured over a megabyte
+  # of that, 2.3 s unbounded, 0.6 s at 256 characters. A cut label is a few
+  # dozen characters (`codeberg.org/superseriousbusin…` is 31), so 256 is eight
+  # times what one needs, and an anchor past either bound is simply left to the
+  # strip — which is what happened to every anchor before this.
+  @anchor ~r/<a\s([^>]{0,1024})>(.{0,256}?)<\/a\s*>/is
+
+  # The `href` of that opening tag. A URL carrying a quote is not one this
+  # rewrites (`link_url?/1` refuses it), so one character class covers both
+  # spellings.
+  @href ~r/\bhref\s*=\s*["']([^"']*)["']/i
+
+  # A label the server cut short, and what it cut it down to: everything before
+  # a closing ellipsis or three dots. Requiring a non-empty prefix is what makes
+  # a label of nothing but the marker no candidate.
+  @cut_marker ~r/\A(.+?)(?:…|\.\.\.)\s*\z/us
+
+  # The same marker anywhere in the document — the necessary condition for any
+  # anchor in it being a cut one, asked once instead of per anchor. A literal
+  # `…` and `...` only: a server that spells it `&hellip;` is not one this has
+  # seen, and the marker above would not read it either, so the two agree.
+  @cut_gate ~r/…|\.\.\./
+
+  # Those servers render a link as the full address in the `href` plus a
+  # **shortened** label, and the strip below keeps the label and throws the
+  # `href` away. Mastodon survives that: it hides the ends of the URL in
+  # `<span class="invisible">` rather than cutting them, so the strip
+  # reassembles the whole address by itself — which is why this went unnoticed
+  # for as long as it did. Friendica really cuts, and what was left of
+  # `https://github.com/mastodon/mastodon/issues` on the card was
+  # `github.com/mastodon/mastodon/i…`: no scheme, no tail, so the renderer had
+  # nothing it could link and the reader nothing they could copy.
+  #
+  # So an anchor whose label is that server's own cut rendering of its address
+  # gives way to the address. The cut is what says so: without it, a prose label
+  # that happens to open like its own link ("mastodon" over a mastodon.social
+  # URL) would be replaced by a URL the author never wrote. A `@user` mention
+  # and a `#hashtag` are anchors too and the same test leaves them alone — their
+  # labels are no prefix of their hrefs, and the label is exactly what the
+  # renderer wants from them.
+  #
+  # The anchor, and not the object's `tag` array `expand_mentions/2` reads: a
+  # `Link` tag (where a server sends one at all — Mastodon does not) says which
+  # addresses a post holds, never which cut label belongs to which, and pairing
+  # them up again would be this prefix test with the markup taken away.
+  #
+  # The gate asks for the **cut marker**, not for an anchor: those networks
+  # render every mention, every hashtag and every URL as an anchor, so almost no
+  # real post would skip a gate on `<a`, while almost every one skips this. A
+  # label with no marker in it cannot be a cut rendering, so nothing that would
+  # have been rewritten is missed — a `...` split across tags inside a label is
+  # the one shape it would, and no server writes that. It is worth the line:
+  # measured on an ordinary Mastodon status, five anchors that are all mentions,
+  # hashtags and invisible-span URLs cost 17 µs to prove uninteresting and 1 µs
+  # to skip; over a hostile megabyte of `<a x>`, 2.3 s against 0.5 ms.
+  defp restore_cut_links(html) do
+    if Regex.match?(@cut_gate, html) do
+      Regex.replace(@anchor, html, &restore_one_link/3)
+    else
+      html
+    end
+  end
+
+  # One anchor: its address if the three questions above answer yes, and
+  # otherwise the anchor exactly as it stood, for the strip to deal with.
+  defp restore_one_link(whole, attrs, label) do
+    with [href] <- Regex.run(@href, attrs, capture: :all_but_first),
+         true <- link_url?(href),
+         true <- cut_rendering?(label, href) do
+      href
+    else
+      _ -> whole
+    end
+  end
+
+  # Only an ordinary web address is ever written into a post body: a
+  # `javascript:` or `data:` href has no business there. Whitespace and angle
+  # brackets are refused for a second reason — this address becomes *text*, and
+  # the renderer's autolinker reads it back by exactly those boundaries.
+  # `@anchor`'s bounded attribute run already keeps it well inside the 2 KB
+  # `Vutuv.Fediverse.RemotePost` allows a remote URI.
+  defp link_url?(href) do
+    Regex.match?(~r{\Ahttps?://[^\s<>]+\z}i, href)
+  end
+
+  # The label with its inner markup taken out — Mastodon wraps parts of a URL in
+  # `<span>`s, and those spans are not the reader's text. Done with a plain
+  # regex rather than `HtmlSanitizeEx.strip_tags/1`, which cannot be called this
+  # early: `defuse_wide_charrefs/1` has not run yet, and a `&#1114112;` in the
+  # label would raise inside it (see there).
+  defp cut_rendering?(label, href) do
+    text = label |> String.replace(~r{<[^>]*>}, "") |> String.trim()
+
+    case Regex.run(@cut_marker, text) do
+      [_, cut] -> String.starts_with?(display_form(href), display_form(cut))
+      nil -> false
+    end
+  end
+
+  # Both sides reduced to what a server *shows* of an address: no scheme, no
+  # `www.`, no trailing slash. The label is written in that form and the `href`
+  # is not, so neither can be compared to the other as it stands. The scheme
+  # goes by a case-insensitive match on purpose (a remote server may well write
+  # `HTTPS://`), which is also why `Vutuv.WebVerification.normalize_url/1`
+  # cannot serve here: it works on a parsed `%URI{}`, and a cut label does not
+  # parse as one.
+  defp display_form(url) do
+    url
+    |> String.replace(~r{\Ahttps?://}i, "")
+    |> String.replace_prefix("www.", "")
+    |> String.trim_trailing("/")
+  end
 
   defp expand_mentions(text, tags) do
     map = mention_map(tags)
