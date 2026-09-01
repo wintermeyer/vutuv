@@ -29,6 +29,8 @@ import {
   request,
   reducedMotion,
   savesData,
+  sessionGet,
+  sessionSet,
   whenIdle,
 } from "./util"
 // The Milkdown WYSIWYG Markdown editor shared by the post + message composers
@@ -565,6 +567,13 @@ document.addEventListener("click", async (event) => {
   // followed the link and this handler is addressing a page that is leaving.
   event.preventDefault()
 
+  await applyUpdate()
+})
+
+// Carrying the update out, shared by the press and by the automatic path below
+// so the two cannot drift into applying it differently - the press promoting
+// the waiting worker while the quiet one leaves the old one serving the tab.
+async function applyUpdate() {
   // `reload()` rather than the href, which is the path without its query: once
   // we are in JS the current URL is the better target.
   const reload = () => window.location.reload()
@@ -589,7 +598,165 @@ document.addEventListener("click", async (event) => {
     { once: true }
   )
   waiting.postMessage({ type: "skip-waiting" })
-})
+}
+
+// The same bar, applied without being asked. "A new version is ready" is news
+// and not a problem — the page keeps working on the bundle it downloaded — so
+// it must not interrupt anybody, which is why it is a hairline strip and not a
+// dialog. But the one reader the strip exists for is the tab that sits open for
+// hours and never navigates (everybody else picks up the new release on their
+// next click), and a strip is easy to miss for exactly as long as that tab
+// stays open.
+//
+// So the page reloads itself at the one moment nobody is looking: while the tab
+// is in the background. The reader comes back to the new release having seen no
+// flash, lost no scroll position and answered no question, and the strip stays
+// for whoever wants it sooner.
+//
+// Like the click handler above, this ships one release before it can ever run:
+// the document that carries the bar is running the PREVIOUS release's
+// JavaScript, so what auto-reloads a tab is the code the deploy BEFORE this one
+// put there.
+const AUTO_RELOAD_KEY = "vutuv:auto-reloaded-for"
+
+let autoReloadTimer = null
+
+// Whether the reader has written anything into this document. The answer never
+// goes back to "no", which is deliberate rather than sloppy: a tab somebody has
+// typed in keeps its manual Reload and simply never applies an update by
+// itself, and the next navigation is a fresh document with a fresh answer. So
+// the listeners take themselves off the moment they have their answer.
+//
+// Two details are load-bearing. `input` alone would not do - a file chosen in a
+// picker raises only `change`, and choosing one is as deliberate as typing. And
+// **only a trusted event counts**: this app dispatches `input` at itself in
+// several places (the Milkdown hook mirroring the editor into its textarea, the
+// tag box mirroring its pills into the hidden field), and some of those fire
+// while a composer is still booting - so without the check a page carrying a
+// composer would answer "somebody is writing" before anybody had touched it,
+// which is /feed, the very tab this feature exists for.
+const TYPING_EVENTS = ["input", "change"]
+let readerTyped = false
+
+function markReaderTyped(event) {
+  if (!event.isTrusted) return
+
+  readerTyped = true
+  for (const kind of TYPING_EVENTS) document.removeEventListener(kind, markReaderTyped, true)
+}
+
+for (const kind of TYPING_EVENTS) {
+  document.addEventListener(kind, markReaderTyped, { capture: true, passive: true })
+}
+
+// ShellLive pushes this on the mount that decides to show the bar, and it is
+// the whole signal: the browser cannot see the bar arrive on its own, and a tab
+// that was ALREADY in the background when the deploy landed hears its socket
+// reconnect without a single `visibilitychange` ever firing. `once` because a
+// later reconnect pushing it again must not restart the wait below.
+window.addEventListener(
+  "phx:version:ready",
+  () => {
+    // Asked here rather than at reload time because it is a fact about the
+    // document and cannot change without a navigation - and a navigation
+    // replaces this whole context. So a page that must never be re-requested
+    // arms no listener and sets no timer for the rest of its life.
+    if (document.querySelector("[data-no-auto-reload]")) return
+
+    document.addEventListener("visibilitychange", onVisibilityForReload)
+    onVisibilityForReload()
+  },
+  { once: true }
+)
+
+// Coming back cancels a pending reload, which is the point of the wait: a tab
+// glanced away from and returned to a minute later is a tab somebody is
+// reading. Going away (re)starts it.
+function onVisibilityForReload() {
+  clearTimeout(autoReloadTimer)
+
+  // Spread over minutes, not seconds, and the number is about the SERVER rather
+  // than about the reader. It reads as an over-long wait for something nobody
+  // is watching, and that is exactly why it costs nothing: what synchronises
+  // these tabs is not a laptop lid, it is the deploy itself - every socket
+  // reconnects within a few hundred milliseconds of the switch, so every hidden
+  // tab learns of the release at once, and each reload is a full page render
+  // plus this shell's badge counts aimed at a slot that came up seconds ago.
+  // A wide window turns that spike into a trickle.
+  autoReloadTimer = document.hidden ? setTimeout(autoReload, 5000 + Math.random() * 115_000) : null
+}
+
+function autoReload() {
+  // Re-asked rather than assumed: the reader can have come back during the
+  // wait, which means "not now" and not "never" - the listener above is still
+  // armed for the next trip to the background.
+  if (!document.hidden) return
+
+  // Once per release per tab. `static_changed?/1` compares what the browser
+  // reports against the current manifest, so the document this reload fetches
+  // answers "current" and the question does not come back - but one that
+  // somehow kept answering "stale" would otherwise reload this tab on every
+  // trip to the background, unseen and forever. Keyed on the bundle rather than
+  // on a clock, because the bundle is what the answer is ABOUT: a second deploy
+  // ten minutes or ten seconds later is a different release and gets its turn,
+  // while a document repeating itself is refused for good. The strip still
+  // carries the manual reload throughout.
+  const bundle = document.querySelector("script[phx-track-static]")?.src || ""
+  if (bundle && sessionGet(AUTO_RELOAD_KEY) === bundle) return
+
+  if (hasUnsavedInput()) return
+
+  sessionSet(AUTO_RELOAD_KEY, bundle)
+  applyUpdate()
+}
+
+// Whether this page is holding work its author has not handed in yet. The
+// composer would survive (it autosaves into post_drafts and restores on mount),
+// but nothing else does - a half-written message, a settings form, a job
+// posting - and a reload is not worth guessing about, so anything a person has
+// touched and not submitted stops it.
+//
+// **Both halves are needed, because each is blind where the other sees.** On a
+// classic page the DOM is the whole truth, so a field differing from its
+// DEFAULT is what unsaved work looks like - against the default and not against
+// emptiness, or a settings form arriving full of the member's stored values
+// would count as work in progress and this would never fire on half the app.
+// But a LiveView form with `phx-change` has already sent every keystroke and
+// the server echoes it back into the `value` attribute, so the default catches
+// up with the text and a half-written job posting reads as clean. `readerTyped`
+// is what covers that one, and it is why the sweep does not ask a Milkdown
+// editor about its own text: the hook mirrors every change into the plain
+// textarea beside it, which the default comparison already reads, and treating
+// any text at all as unsaved would strand a restored draft forever.
+function hasUnsavedInput() {
+  if (readerTyped) return true
+
+  for (const el of document.querySelectorAll("input, textarea, select")) {
+    if (el.tagName === "SELECT") {
+      for (const option of el.options) if (option.selected !== option.defaultSelected) return true
+      continue
+    }
+
+    switch (el.type) {
+      // The CSRF token every form carries, and nothing a person types.
+      case "hidden":
+        break
+      // A chosen file has no `defaultValue` to differ from, and choosing one is
+      // as deliberate as typing.
+      case "file":
+        if (el.files.length > 0) return true
+        break
+      case "checkbox":
+      case "radio":
+        if (el.checked !== el.defaultChecked) return true
+        break
+      default:
+        if (el.value !== el.defaultValue) return true
+    }
+  }
+
+  return false
+}
 
 async function currentPushSubscription() {
   const registration = await serviceWorker()

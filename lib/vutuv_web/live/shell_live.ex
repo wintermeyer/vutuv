@@ -223,6 +223,7 @@ defmodule VutuvWeb.ShellLive do
     # raises rather than answering. Only the `and` short-circuit keeps it from
     # being called there. Dropping it 500s every classic page in the app.
     |> assign(:update_ready?, connected?(socket) and static_changed?(socket))
+    |> announce_update()
     |> assign(:self_online?, false)
     # Whether this member asked for browser notifications (issue #1249). False
     # for the anonymous shell and for the throwaway dead render, which raises
@@ -263,6 +264,22 @@ defmodule VutuvWeb.ShellLive do
     # the number sliding in.
     |> assign(:people_count_ticked?, false)
   end
+
+  # Tells app.js the same thing the bar tells the reader, because the browser
+  # cannot see the bar arrive. app.js reloads the page by itself once the tab
+  # goes into the background (nobody is looking, so nothing is interrupted), and
+  # the tab this is for is very often ALREADY hidden when the deploy lands: its
+  # socket reconnects, the bar appears, and no `visibilitychange` ever fires —
+  # the same blind spot `TabBadge` has to work around.
+  #
+  # A pushed event rather than a `phx-hook` on the bar, for the reason the bar's
+  # own comment gives: this markup is patched into a document running the
+  # PREVIOUS release's JavaScript, where a hook name that release does not know
+  # is a client-side error. A window event nobody listens for is a no-op.
+  defp announce_update(%{assigns: %{update_ready?: true}} = socket),
+    do: push_event(socket, "version:ready", %{})
+
+  defp announce_update(socket), do: socket
 
   # Site-wide online presence. The shell is the one component on every page, so
   # it is where the current member is tracked online. Tracking (broadcasting my

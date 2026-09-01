@@ -126,6 +126,53 @@ on it for as long as the tab stays open. The worker's remaining job is carrying
 the reload out — Reload posts `skip-waiting` to a waiting worker, or plainly
 reloads when there is none.
 
+**The page also applies that bar by itself, while the tab is in the
+background.** The strip is deliberately quiet, because nothing is broken — a
+dialog for news would spend on every asset deploy the attention the next real
+one needs — and the one reader it is for is the tab nobody has clicked in for
+hours, who is therefore the one least likely to notice it. So `app.js` reloads
+at the moment that costs nothing: the tab is hidden, the reader sees no flash,
+loses no scroll position and is asked nothing. `ShellLive` pushes
+`"version:ready"` alongside the bar, because the browser cannot see it arrive —
+a tab that was *already* in the background when the deploy landed hears its
+socket reconnect and no `visibilitychange` ever fires. The push is what the
+client listens for rather than a hook on the bar, for the reason everything
+about this bar comes back to: the markup lands in a document running the
+previous release's JavaScript, where an unknown hook name is an error and an
+unknown window event is nothing at all. Which also means the release that
+introduces this cannot use it — what auto-reloads a tab is always the code the
+deploy *before* put there.
+
+The reader coming back cancels the pending reload, and the wait before it is
+minutes rather than seconds — deliberately long for something nobody is
+watching, because what synchronises these tabs is the deploy itself: every
+socket reconnects within a few hundred milliseconds of the switch, so a narrow
+window would aim every hidden tab's full page render at a slot that came up
+seconds earlier. It reloads **once per release per tab**, keyed on the tracked
+bundle rather than on a clock, so a second deploy ten minutes or ten seconds
+later gets its turn while a document that kept answering "stale" is refused for
+good.
+
+Anything the reader has written holds it, and that takes two questions because
+each is blind where the other sees. On a classic page a field differing from
+its own **default** is what unsaved work looks like — against the default and
+not against emptiness, or a settings form full of stored values would read as
+work in progress. But a LiveView form with `phx-change` has already sent every
+keystroke and the server echoes it back into the `value` attribute, so the
+default catches up and a half-written job posting reads as clean; a document
+that has seen one **trusted** `input` or `change` covers that one. Trusted
+matters: the app dispatches `input` at itself while a composer boots, and
+counting that would strand /feed, the tab this is for.
+
+And a document that must not be re-requested at all carries
+**`data-no-auto-reload`**. It names the effect rather than a cause, because
+there are two: `root.html.heex` stamps it from `conn.method` for a page
+rendered in answer to a form submission (reloading raises the browser's
+"resubmit?" dialog in a tab nobody is watching), and `<.secret_once>` stamps it
+on itself, although its page is an ordinary GET after a redirect — the token it
+shows exists nowhere else, only its hash is stored, and the flash carrying it
+is spent by that render. A method check could never have seen the second one.
+
 **Which means a worker from the previous release keeps running, and nothing
 bounds how long.** This is the one asset that deliberately outlives a deploy,
 so it is worth being exact about. A new worker appears only when `/sw.js`

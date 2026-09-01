@@ -3266,6 +3266,14 @@ defmodule VutuvWeb.UI do
   freshly minted secret (access tokens, client secrets, webhook signing
   secrets). `label` is the "copy it now" sentence; `class` adds margin
   utilities at the call site.
+
+  It also carries **`data-no-auto-reload`**, which is not decoration: the value
+  shown here exists nowhere else — only its hash is stored — and a flash is
+  spent by the render that shows it, so re-requesting this URL loses the secret
+  for good (a webhook signing secret cannot even be minted again; the
+  subscription has to be deleted and rebuilt). Every call site is reached by a
+  redirect, so the document is an ordinary GET and nothing else about it says
+  it must stay. See the auto-reload block in `app.js`.
   """
   attr(:flash, :map, required: true)
   attr(:key, :atom, required: true)
@@ -3283,6 +3291,7 @@ defmodule VutuvWeb.UI do
         @class
       ]}
       data-secret-once={@key}
+      data-no-auto-reload
     >
       <p class="text-sm font-semibold text-brand-800 dark:text-brand-100">{@label}</p>
       <code class="mt-2 block select-all break-all rounded bg-white px-3 py-2 text-sm text-slate-800 dark:bg-slate-900 dark:text-slate-100">{@secret}</code>

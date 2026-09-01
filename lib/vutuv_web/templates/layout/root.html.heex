@@ -98,7 +98,21 @@
     <link phx-track-static rel="stylesheet" href={~p"/assets/app.css"} />
     <script defer phx-track-static src={~p"/assets/app.js"}></script>
   </head>
-  <body class={assigns[:conn] && @conn.assigns[:body_class]}>
+  <%!-- "This document must not be re-requested", the marker app.js reads before
+  reloading a backgrounded tab onto a new release. It names the **effect**
+  rather than one of its causes, so anything else that knows it holds something
+  a second GET would destroy can say so too — `<.secret_once>` does, for a
+  freshly minted token that exists nowhere else.
+
+  The cause here is a non-GET render: a `create`/`update` action that
+  re-renders its form instead of redirecting. Reloading such a page asks the
+  browser to resubmit the form, and re-fetching the URL throws away the input
+  it is showing back to its author. Absent on every LiveView page, which has no
+  conn here and is a GET either way. --%>
+  <body
+    class={assigns[:conn] && @conn.assigns[:body_class]}
+    data-no-auto-reload={assigns[:conn] && @conn.method != "GET" && "true"}
+  >
     {@inner_content}
   </body>
 </html>
