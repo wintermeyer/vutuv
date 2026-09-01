@@ -1491,12 +1491,12 @@ defmodule VutuvWeb.PostLive.Feed do
     # can't see the ones already on screen. The higher card already carries the
     # complete follow-scoped roster, so dropping the older duplicate loses
     # nothing. Filter before the engagement batch so it queries only survivors.
-    shown = shown_post_ids(socket.assigns.entries)
+    shown =
+      socket.assigns.entries
+      |> shown_post_ids()
+      |> MapSet.union(shown_remote_keys(socket.assigns.entries))
 
-    fresh =
-      Enum.reject(page.entries, fn entry ->
-        not Posts.remote_feed_entry?(entry) and MapSet.member?(shown, entry.post.id)
-      end)
+    fresh = Enum.reject(page.entries, &MapSet.member?(shown, dedupe_key(&1)))
 
     entries =
       fresh
@@ -2739,6 +2739,37 @@ defmodule VutuvWeb.PostLive.Feed do
         post <- [entry.post | entry[:ancestors] || []],
         into: MapSet.new(),
         do: post.id
+  end
+
+  # The same rule one world over, and it is not about repetition. A cached post
+  # reaches the feed from two sources — the reader follows its author, and
+  # somebody here reshared it — and `dedupe_remote/1` collapses them within one
+  # `feed_page/2` call. Across two calls neither sees the other, so both cards
+  # render, and they carry the **same** body id and the same action-bar
+  # LiveComponent: the browser's patch moves each into whichever card was
+  # rendered last and leaves the other a header with nothing under it. That is
+  # not exotic since the arrival itself is two calls (ten cards, then the fill),
+  # so an entry stamped with a reshare and its own entry stamped with the
+  # publication land on opposite sides of the boundary — which is exactly how a
+  # reshared post read as an empty card on 2026-09-01.
+  #
+  # Keyed by `subject_key/1`, the identity the DOM ids are built from, so the
+  # two cannot drift, and read through `entry_record/1`, which answers for a
+  # cached post and a remote reply alike.
+  defp shown_remote_keys(entries) do
+    for entry <- entries,
+        Posts.remote_feed_entry?(entry),
+        into: MapSet.new(),
+        do: remote_key(entry)
+  end
+
+  defp remote_key(entry), do: Fediverse.subject_key(entry_record(entry))
+
+  # What identifies an arriving entry against the two sets above — a remote card
+  # by its subject, a member's post by its id. Spelled once, so what goes into
+  # those sets and what is looked up in them cannot drift apart.
+  defp dedupe_key(entry) do
+    if Posts.remote_feed_entry?(entry), do: remote_key(entry), else: entry.post.id
   end
 
   # Fold a new reposter into an on-screen card's avatar stack, in place: keep

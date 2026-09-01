@@ -22,14 +22,23 @@ defmodule VutuvWeb.FeedDuplicateCardsTest do
   `Vutuv.Fediverse.subject_key/1` — the same identity the DOM id is built from,
   so the two cannot drift.
 
+  **And per feed, not per page.** An arrival is two `feed_page/2` calls (ten
+  cards in the document, the rest appended when the socket connects), so a
+  subject can hold a card in each without either call seeing the other. Two
+  renders raise nothing — they degrade, and a member's reshare read as an empty
+  card that way on 2026-09-01. `VutuvWeb.PostLive.Feed`'s `shown_remote_keys/1`
+  is where that rule lives and why.
+
   Not async: answering a note claims from `Vutuv.RateLimiter`, a shared ETS
   table the SQL sandbox does not roll back.
   """
   use VutuvWeb.ConnCase, async: false
 
   import Phoenix.LiveViewTest
+  import Vutuv.PostsHelpers
 
   alias Vutuv.Fediverse
+  alias Vutuv.Fediverse.Follow
   alias Vutuv.Fediverse.Note
   alias Vutuv.Fediverse.NoteRepost
   alias Vutuv.Fediverse.RemoteAccount
@@ -69,8 +78,11 @@ defmodule VutuvWeb.FeedDuplicateCardsTest do
     })
   end
 
-  defp cached_post(body) do
+  # `age` backdates the publication, which is what the feed stamps a direct
+  # entry with — the only way to put one below a reshare of the same post.
+  defp cached_post(body, age \\ 0) do
     now = DateTime.utc_now(:second)
+    published = DateTime.add(now, -age)
     unique = System.unique_integer([:positive])
 
     Repo.insert!(%RemotePost{
@@ -80,8 +92,8 @@ defmodule VutuvWeb.FeedDuplicateCardsTest do
       content_text: body,
       audience: "public",
       kind: "note",
-      published_at: now,
-      received_at: now,
+      published_at: published,
+      received_at: published,
       expires_at: DateTime.add(now, 86_400)
     })
     |> Repo.preload(:remote_account)
@@ -215,5 +227,42 @@ defmodule VutuvWeb.FeedDuplicateCardsTest do
     assert html =~ "zweite Antwort"
     assert html =~ "die Antwort von draussen"
     assert html =~ "mein Nachsatz"
+  end
+
+  test "a reshared post does not come back as its own row in the arrival's fill",
+       %{conn: conn} do
+    {conn, user} = reader(conn)
+
+    # Published two hours ago, so the reader's own follow puts its direct
+    # entry at the bottom of the arrival — while the reshare of it is stamped
+    # now and sits at the top. The twelve posts between them are what pushes
+    # the two into different `feed_page/2` calls, which is the whole shape:
+    # each call dedupes itself and neither knows about the other.
+    remote = cached_post("was da draussen steht", 7_200)
+
+    Repo.insert!(%Follow{
+      user_id: user.id,
+      remote_account_id: remote.remote_account_id,
+      state: "accepted",
+      follow_activity_id: "https://vutuv.test/#{user.id}/actor#follows/1"
+    })
+
+    author = insert(:activated_user)
+    follow!(user, author)
+
+    for i <- 1..12 do
+      author |> create_post!(%{body: "Beitrag Nummer #{i}"}) |> backdate_post!(60 + i)
+    end
+
+    {:ok, :reposted} = Fediverse.repost_remote_post(answerer(user), remote)
+
+    {:ok, view, html} = live(conn, ~p"/feed")
+
+    # The reshare is the newest thing here, so the document's ten cards hold
+    # it and the post's own entry is still below them.
+    assert cards_for(html, remote) == 1
+
+    assert cards_for(render(view), remote) == 1,
+           "the fill must not draw a second card for a post already on screen"
   end
 end
