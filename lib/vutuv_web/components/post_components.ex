@@ -4488,9 +4488,18 @@ defmodule VutuvWeb.PostComponents do
   # caption: the caption is at least *about* the picture, which beats an empty
   # string a screen reader announces as an unlabelled image. An alt the author
   # wrote always wins.
-  defp photo_alt(%PostImage{alt: alt}) when is_binary(alt) and alt != "", do: alt
-  defp photo_alt(%PostImage{caption: caption}) when is_binary(caption), do: caption
-  defp photo_alt(%PostImage{}), do: ""
+  @doc """
+  What a screen reader is told a photo shows: the author's alt text, else its
+  caption, else nothing (a decorative `alt=""`).
+
+  Public because every surface that draws a post's photo owes the same answer —
+  the post card, the mosaic, the lightbox and the notifications page's post
+  cards — and a thumbnail that answers it for itself is a thumbnail that
+  announces nothing the day somebody writes a caption instead of an alt text.
+  """
+  def photo_alt(%PostImage{alt: alt}) when is_binary(alt) and alt != "", do: alt
+  def photo_alt(%PostImage{caption: caption}) when is_binary(caption), do: caption
+  def photo_alt(%PostImage{}), do: ""
 
   defp present?(value), do: is_binary(value) and String.trim(value) != ""
 
