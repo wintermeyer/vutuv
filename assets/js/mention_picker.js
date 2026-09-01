@@ -16,6 +16,8 @@
 // It carries no copy of its own: the labels come from the data-mention-*
 // attributes the server rendered on the editor, because the server is the only
 // side that knows the reader's language.
+import { markActiveRow, stepIndex } from "./suggest_list"
+
 const ROW_ID = (index) => `mention-opt-${index}`
 
 let panel = null
@@ -93,14 +95,7 @@ const pick = (index) => {
 }
 
 const markActive = () => {
-  const rows = [...panel.list.children]
-  rows.forEach((row, index) => {
-    const active = index === session.active
-    row.setAttribute("aria-selected", String(active))
-    row.classList.toggle("is-active", active)
-    if (active) row.scrollIntoView({ block: "nearest" })
-  })
-  session.anchorEl?.setAttribute("aria-activedescendant", rows.length ? ROW_ID(session.active) : "")
+  markActiveRow([...panel.list.children], session.active, session.anchorEl)
 }
 
 const renderRow = (item, index) => {
@@ -238,8 +233,7 @@ export const mentionsOpenFor = (root) => mentionsOpen() && root?.contains(sessio
 // reach backwards than to walk down to.
 export const moveMention = (delta) => {
   if (!mentionsOpen() || session.items.length === 0) return
-  const count = session.items.length
-  session.active = (session.active + delta + count) % count
+  session.active = stepIndex(session.active, delta, session.items.length)
   markActive()
 }
 
