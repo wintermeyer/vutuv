@@ -2353,7 +2353,7 @@ div.footnotes li:target {
   cursor: pointer;
 }
 .mde__slash-item:hover,
-.mde__slash-item.is-current { background: #eff6ff; color: #1e40af; }
+.mde__slash-item.is-active { background: #eff6ff; color: #1e40af; }
 .mde__slash-glyph {
   flex: none;
   width: 1.35rem;
@@ -2363,7 +2363,7 @@ div.footnotes li:target {
   color: #64748b;
 }
 .mde__slash-item:hover .mde__slash-glyph,
-.mde__slash-item.is-current .mde__slash-glyph { color: inherit; }
+.mde__slash-item.is-active .mde__slash-glyph { color: inherit; }
 .mde__slash-empty { padding: 0.4rem 0.5rem; font-size: 0.8125rem; color: #475569; }
 
 /* --- the footer row (issue #1886) ---
@@ -2733,7 +2733,11 @@ body.mde-fullscreen-lock { overflow: hidden; }
 .mention-picker__list[hidden] { display: none; }
 /* Rows are pointed at with the caret still in the prose, so `.is-active`
    (arrow keys, hover) is the only "where am I" there is — no :focus ever lands
-   here. It has to read as clearly as a focus ring would. */
+   here. It has to read as clearly as a focus ring would. **`.is-active` is the
+   editor's one name for that** (`ACTIVE_CLASS` in assets/js/suggest_list.js):
+   the slash menu spells it the same way, so the two lists the same editor
+   opens cannot drift into disagreeing about what "highlighted" looks like —
+   which they had, as `.is-current` against `.is-active`. */
 .mention-picker__row {
   display: flex;
   align-items: center;
@@ -3414,7 +3418,7 @@ html.lightbox-open { overflow: hidden; }
   }
   .mde__slash-item { color: #e2e8f0; }
   .mde__slash-item:hover,
-  .mde__slash-item.is-current { background: #1e3a8a; color: #dbeafe; }
+  .mde__slash-item.is-active { background: #1e3a8a; color: #dbeafe; }
   .mde__slash-glyph { color: #94a3b8; }
   .mde__slash-empty { color: #94a3b8; }
   .mde__views { background: #1e293b; }

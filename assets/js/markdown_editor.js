@@ -58,6 +58,7 @@ import {
   NodeSelection,
   TextSelection,
 } from "@milkdown/kit/prose/state"
+import { ACTIVE_CLASS, markActiveRow, stepIndex, suggestKey } from "./suggest_list"
 import { Decoration, DecorationSet } from "@milkdown/kit/prose/view"
 import { inputRules, InputRule } from "@milkdown/kit/prose/inputrules"
 import { emojiForShortcode, SHORTCODE_AT_CARET } from "./emoji_data.js"
@@ -600,7 +601,7 @@ export const MarkdownEditor = {
     this.wireFoot()
     this.wireSubmitShortcut()
     this.wireSourceEmoji()
-    this.wireMentionKeys()
+    this.wireSuggestKeys()
   },
 
   // Last look at the DOM before morphdom patches it: a manual resize lives in
@@ -1145,20 +1146,29 @@ export const MarkdownEditor = {
     this.mentionRun = null
   },
 
-  // The keys the picker owns, taken in the CAPTURE phase on the way down to the
-  // prose. ProseMirror decides a keystroke by asking its plugins in order, and
-  // the base keymap — which owns Enter and Tab — is registered long before a
-  // plugin added at the end of the stack, so a `handleKeyDown` prop here would
-  // never see the Enter that is meant to take a suggestion. Catching it above
-  // the editable and stopping it there is what makes the list's Enter beat the
-  // paragraph split, and it keeps the two concerns in one place.
-  wireMentionKeys() {
+  // ONE keydown listener for everything the editor's pop-up surfaces claim,
+  // taken in the CAPTURE phase on the way down to the prose (issue #1891).
+  //
+  // Capture, because ProseMirror decides a keystroke by asking its plugins in
+  // order, and the base keymap — which owns Enter and Tab — is registered long
+  // before a plugin added at the end of the stack, so a `handleKeyDown` prop
+  // here would never see the Enter that is meant to take a suggestion.
+  //
+  // One listener, because two on the same element cannot be ordered by
+  // anything a reader can see: `stopPropagation` does not stop a sibling on
+  // the same node, so which of them owned Enter came down to the order of two
+  // lines in `mounted()`. The order is now declared here, in the only place it
+  // can be read — and because the two lists are mutually exclusive by
+  // construction (a run starts with `@` or with `/`, never both), the sequence
+  // below is a statement of intent rather than a tie-break.
+  wireSuggestKeys() {
     this.mountEl.addEventListener(
       "keydown",
       (event) => {
-        const handled = mentionsOpenFor(this.root)
-          ? this.handleMentionKey(event)
-          : event.key === "Backspace" && this.deleteMentionAtCaret()
+        const handled =
+          this.handleSlashKey(event) ||
+          (mentionsOpenFor(this.root) && this.handleMentionKey(event)) ||
+          (event.key === "Backspace" && this.deleteMentionAtCaret())
 
         if (!handled) return
         event.preventDefault()
@@ -1182,23 +1192,18 @@ export const MarkdownEditor = {
   // The keys the open list owns. Everything else falls through to the editor,
   // so typing never stops while it is up.
   handleMentionKey(event) {
-    if (event.key === "ArrowDown" || event.key === "ArrowUp") {
-      moveMention(event.key === "ArrowDown" ? 1 : -1)
-      return true
-    }
-
-    if (event.key === "Enter" || event.key === "Tab") return acceptMention()
-
-    if (event.key === "Escape") {
-      // The editor's full-page mode listens for Escape on `document`, and
-      // dismissing a list is not a request to leave the page you are writing on.
-      event.stopPropagation()
-      this.mentionRun = null
-      closeMentions()
-      return true
-    }
-
-    return false
+    return suggestKey(event, {
+      move: (delta) => moveMention(delta),
+      accept: () => acceptMention(),
+      dismiss: () => {
+        // The editor's full-page mode listens for Escape on `document`, and
+        // dismissing a list is not a request to leave the page you are writing
+        // on. (The caller's own stopPropagation covers the rest.)
+        event.stopPropagation()
+        this.mentionRun = null
+        closeMentions()
+      },
+    })
   },
 
   // Only a CONFIRMED mention is atomic: a handle still being typed has to stay
@@ -1207,7 +1212,7 @@ export const MarkdownEditor = {
   // "the mention the caret is at the end of", so the run the picker offers for
   // and the run Backspace takes can never mean two different things.
   //
-  // Reachable only while the list is CLOSED (see the branch in `wireMentionKeys`),
+  // Reachable only while the list is CLOSED (see the branch in `wireSuggestKeys`),
   // which is the right split rather than an oversight: with suggestions up you
   // are still composing that handle, so Backspace shortens it and narrows the
   // list. Move past the mention — or dismiss the list — and it becomes one
@@ -1580,29 +1585,20 @@ export const MarkdownEditor = {
 
   // The highlighted row is a field, not a class read back out of the DOM: the
   // DOM copy needed clearing in two places and answered "which one" with
-  // whichever came first once a filter had hidden a marked row.
+  // whichever came first once a filter had hidden a marked row. The marking
+  // itself is `markActiveRow`, shared with the mention picker (issue #1891) —
+  // including the `aria-activedescendant` the slash menu shipped without.
   markSlashCurrent(index) {
-    const items = this.slashVisible()
+    // Rows the filter has hidden must lose the mark too, or a widened filter
+    // leaves two rows claiming to be active.
     for (const item of this.slashItems) {
-      item.el.classList.remove("is-current")
+      item.el.classList.remove(ACTIVE_CLASS)
       item.el.setAttribute("aria-selected", "false")
     }
 
-    if (items.length === 0) {
-      this.slashAt = 0
-      this.mountEl.removeAttribute("aria-activedescendant")
-      return
-    }
-
-    this.slashAt = ((index % items.length) + items.length) % items.length
-    const el = items[this.slashAt].el
-    el.classList.add("is-current")
-    el.setAttribute("aria-selected", "true")
-    el.scrollIntoView({ block: "nearest" })
-    // How a screen reader follows a list whose user is not focused on it —
-    // the caret stays in the prose, the same arrangement mention_picker.js
-    // makes for its own rows.
-    this.mountEl.setAttribute("aria-activedescendant", el.id)
+    const items = this.slashVisible()
+    this.slashAt = stepIndex(index, 0, items.length)
+    markActiveRow(items.map((i) => i.el), this.slashAt, this.mountEl)
   },
 
   // Take the "/query" back out before running the block command, or the
@@ -1643,50 +1639,29 @@ export const MarkdownEditor = {
       this.runSlashBlock(item.dataset.mdeBlock)
     })
 
-    // Capture phase, and only while the menu is open. Three rules here are
-    // each a bug that was caught in review:
-    //
-    //   * A MODIFIED key is never ours. Cmd/Ctrl+Enter submits the form
-    //     (issue #1196) from a listener on this same element, in the bubble
-    //     phase — and a capture-phase stopPropagation on an ancestor kills
-    //     it before the event ever reaches the target. Typing "/" and
-    //     pressing Cmd+Enter inserted a heading instead of posting.
-    //   * `stopImmediatePropagation`, not `stopPropagation`: the mention
-    //     picker owns a second capture-phase listener on this very element,
-    //     and stopPropagation does not stop a sibling on the same node. Which
-    //     of the two won was decided by the order of two lines in mounted().
-    //   * Escape must be remembered, not just obeyed — see slashDismissed.
-    this.mountEl.addEventListener(
-      "keydown",
-      (e) => {
-        if (!this.slash || this.slash.hidden) return
-        if (e.metaKey || e.ctrlKey || e.altKey) return
+  },
 
-        const take = () => {
-          e.preventDefault()
-          e.stopImmediatePropagation()
-        }
-        const items = this.slashVisible()
+  // The keys the open slash menu owns, in `suggestKey`'s shape so it answers
+  // them identically to the mention picker. Returns whether it took the event.
+  handleSlashKey(event) {
+    if (!this.slash || this.slash.hidden) return false
 
-        if (e.key === "Escape") {
-          take()
-          this.slashDismissed = this.slashRun && this.slashRun.start
-          return this.closeSlash()
-        }
-        if (e.key === "ArrowDown" || e.key === "ArrowUp") {
-          if (items.length === 0) return
-          take()
-          return this.markSlashCurrent(this.slashAt + (e.key === "ArrowDown" ? 1 : -1))
-        }
-        if (e.key === "Enter" || e.key === "Tab") {
-          const item = items[this.slashAt]
-          if (!item) return
-          take()
-          this.runSlashBlock(item.el.dataset.mdeBlock)
-        }
+    return suggestKey(event, {
+      move: (delta) => this.markSlashCurrent(this.slashAt + delta),
+      accept: () => {
+        const item = this.slashVisible()[this.slashAt]
+        if (!item) return false
+        this.runSlashBlock(item.el.dataset.mdeBlock)
+        return true
       },
-      true
-    )
+      dismiss: () => {
+        // Remembered, not merely obeyed: without this the next transaction
+        // re-derives the predicate and the menu comes straight back, so a line
+        // that is legitimately a path could never be written.
+        this.slashDismissed = this.slashRun && this.slashRun.start
+        this.closeSlash()
+      },
+    })
   },
 
   // Everything that hangs off a position in the prose, shut at once. Three
