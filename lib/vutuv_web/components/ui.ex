@@ -27,6 +27,7 @@ defmodule VutuvWeb.UI do
   import PhoenixHTMLHelpers.Form, only: [checkbox: 3]
 
   alias Vutuv.Accounts.User
+  alias Vutuv.ContentFilters.ContentFilter
   alias Vutuv.DateRegions
   alias Vutuv.Organizations.Organization
   alias Vutuv.Organizations.OrganizationImage
@@ -3272,6 +3273,21 @@ defmodule VutuvWeb.UI do
   def recommended_avatar_size do
     size = ceil(Spec.max_width(:avatar) * 2 / 100) * 100
     {size, size}
+  end
+
+  @doc """
+  The accounts a content filter is aimed at, as a line to put under the rule —
+  or nil where it reads every account and there is nothing to say.
+
+  Both surfaces that show a rule render this: the feed's filter band chip and
+  the list on `/settings/filters`. One owner, so a rule cannot describe its own
+  scope two ways, and so the next shape a scope grows (a count, several
+  accounts) is written once.
+  """
+  def filter_account_label(filter) do
+    unless ContentFilter.every_account?(filter) do
+      gettext("only %{account}", account: filter.account)
+    end
   end
 
   @doc """

@@ -582,6 +582,47 @@ defmodule VutuvWeb.PostLive.FilterBandTest do
       assert has_element?(view, "#feed-posts [data-filtered-post]")
     end
 
+    # The account half rides the same form, so one Return saves both. Left
+    # empty it means every account, which is what every rule written before the
+    # field existed says.
+    test "a word rule carries the accounts it is aimed at", %{conn: conn} do
+      %{conn: conn, user: user} = with_friend(conn)
+
+      {:ok, view, _html} = live(conn, ~p"/feed")
+
+      view
+      |> element(~s(#filter-band-words form))
+      |> render_submit(%{"pattern" => "hier besonders häufig", "account" => "*@social.heise.de"})
+
+      view
+      |> element(~s(#filter-band-words form))
+      |> render_submit(%{"pattern" => "Kryptowährung", "account" => ""})
+
+      assert [%{pattern: "Kryptowährung", account: "*"}, %{account: "*@social.heise.de"}] =
+               ContentFilters.list_for_user(user)
+    end
+
+    # A preview that ignored the scope would promise to fold posts the rule
+    # then leaves alone, which is worse than no preview at all.
+    test "the preview obeys the accounts the rule names", %{conn: conn} do
+      %{conn: conn, friend: friend} = with_friend(conn)
+      {:ok, _} = Posts.create_post(friend, %{body: "Bitcoin steht wieder unter Druck"})
+
+      {:ok, view, _html} = live(conn, ~p"/feed")
+
+      view
+      |> element(~s(#filter-band-words form))
+      |> render_change(%{"pattern" => "Bitcoin", "account" => "*loud*"})
+
+      assert has_element?(view, "#filter-band-words-hits", "Bitcoin steht wieder unter Druck")
+
+      view
+      |> element(~s(#filter-band-words form))
+      |> render_change(%{"pattern" => "Bitcoin", "account" => "*heise*"})
+
+      refute has_element?(view, "#filter-band-words-hits")
+    end
+
     test "a tag in the feed is offered, and pressing it hides that tag", %{conn: conn} do
       %{conn: conn, user: user, friend: friend} = with_friend(conn)
       tag = insert(:tag, name: "Zeugnisanalyse")

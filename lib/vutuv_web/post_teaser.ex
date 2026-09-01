@@ -231,12 +231,12 @@ defmodule VutuvWeb.PostTeaser do
     if Posts.remote_feed_entry?(entry) do
       record = record(entry)
 
-      hit(record, record |> Posts.text() |> ContentFilters.filtered_text(compiled))
+      hit(record, ContentFilters.filtered(record, compiled))
     else
       entry
       |> Posts.thread_posts()
       |> Enum.reject(&(&1.user_id == viewer_id))
-      |> Enum.find_value(&hit(&1, ContentFilters.filtered_pattern(&1, compiled)))
+      |> Enum.find_value(&hit(&1, ContentFilters.filtered(&1, compiled)))
     end
   end
 

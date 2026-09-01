@@ -1029,6 +1029,71 @@ defmodule Vutuv.Posts do
   def written_at(%RemotePost{published_at: at}), do: at
   def written_at(%Note{received_at: at}), do: at
 
+  @doc """
+  The strings that name the account a post came from — its handle first, then
+  the name it goes by — as a reader would recognise it. `[]` where neither is
+  knowable.
+
+  The fourth of the family around `text/1`, `path/1` and `written_at/1`, and it
+  exists for a reader who wants to aim a rule at a source rather than at a word:
+  a member's content filter narrowed to `*@social.heise.de` has to ask each post
+  who wrote it, and the three post kinds keep that answer in three different
+  places — a member or page identity behind a nullable pair, a cached remote
+  post's account row, a remote reply's own `handle`/`actor_uri` columns.
+
+  The **full** handle (`@name@host`), not the shortened one a card header wears:
+  the host is the half that groups a news house's dozen accounts, so cutting it
+  off would take away the only pattern worth writing.
+
+  Both halves, because either can be missing and either can be the one a reader
+  reaches for: an organization page that never claimed a root handle has only a
+  name, and `heise Security` is what somebody who has not memorised
+  `@heisec@social.heise.de` would type.
+
+  Ask it only when something is going to read the answer — for a local post it
+  falls back to a lookup when the author was not preloaded, exactly as
+  `author/1` does.
+  """
+  # Both halves of the nullable pair empty, or a remote post with no account
+  # row: nothing to look up, and `Repo.get(Schema, nil)` raises rather than
+  # answering nothing.
+  def account_names(%Post{user_id: nil, organization_id: nil}), do: []
+
+  def account_names(%Post{} = post) do
+    case author(post) do
+      nil ->
+        []
+
+      author ->
+        names(handle_at(Vutuv.Identity.handle(author)), Vutuv.Identity.display_name(author))
+    end
+  end
+
+  def account_names(%RemotePost{remote_account: %NotLoaded{}, remote_account_id: nil}), do: []
+
+  def account_names(%RemotePost{remote_account: %NotLoaded{}, remote_account_id: id}),
+    do: RemoteAccount |> Repo.get(id) |> account_names()
+
+  def account_names(%RemotePost{remote_account: account}), do: account_names(account)
+
+  def account_names(%RemoteAccount{} = account),
+    do: names(RemoteAccount.display_handle(account), RemoteAccount.display_name(account))
+
+  def account_names(%Note{} = note),
+    do: names(Note.display_handle(note), Note.author_name(note))
+
+  # An author row that is gone — the two clauses above answer `Repo.get` with
+  # this. Deliberately the ONLY fall-through: `text/1` and `written_at/1` raise
+  # on a kind they do not know and so does this, because a quiet `[]` here would
+  # mean "no scoped rule ever matches", which is a filter that silently stops
+  # working rather than a crash somebody can see.
+  def account_names(nil), do: []
+
+  defp names(handle, name), do: Enum.filter([handle, name], &(is_binary(&1) and &1 != ""))
+
+  defp handle_at(handle) when is_binary(handle), do: "@" <> handle
+  defp handle_at(_handle), do: nil
+
   @doc "The author's id, whichever kind of author it is."
   def author_id(%Post{organization_id: nil, user_id: user_id}), do: user_id
   def author_id(%Post{organization_id: organization_id}), do: organization_id

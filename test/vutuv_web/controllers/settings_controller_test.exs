@@ -1074,6 +1074,27 @@ defmodule VutuvWeb.SettingsControllerTest do
       assert [%{pattern: "crypto*", whole_word: false}] = Vutuv.ContentFilters.list_for_user(user)
     end
 
+    # The account field submits through the same form; blank is every account,
+    # which is what the column has always meant.
+    test "adding a filter carries the accounts it is aimed at", %{conn: conn} do
+      {conn, user} = create_and_login_user(conn)
+
+      conn =
+        post(conn, ~p"/settings/filters",
+          content_filter: %{
+            "kind" => "keyword",
+            "pattern" => "hier besonders häufig",
+            "account" => "*@social.heise.de"
+          }
+        )
+
+      assert redirected_to(conn) == ~p"/settings/filters"
+      assert [%{account: "*@social.heise.de"}] = Vutuv.ContentFilters.list_for_user(user)
+
+      # And the list says so, so a member can tell two rules on the same word apart.
+      assert conn |> get(~p"/settings/filters") |> html_response(200) =~ "*@social.heise.de"
+    end
+
     test "a wildcard-only pattern is rejected with a 422", %{conn: conn} do
       {conn, user} = create_and_login_user(conn)
 

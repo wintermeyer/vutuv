@@ -12,22 +12,35 @@ defmodule Vutuv.ContentFiltersTest do
   alias Vutuv.Posts.Post
   alias Vutuv.Tags.Tag
 
-  # A bare in-memory post (body + preloaded tags), enough for the matcher.
+  # A bare in-memory post (body + preloaded tags), enough for the matcher. The
+  # author is a real row only where a test scopes a rule to an account —
+  # everything else never asks who wrote it.
   defp post(body, tags \\ []) do
     %Post{body: body, tags: Enum.map(tags, fn {name, slug} -> %Tag{name: name, slug: slug} end)}
   end
 
-  # Compile a hand-written filter list without touching the DB.
+  # Compile a hand-written filter list without touching the DB. Each entry is
+  # `{:tag, pattern}` / `{:keyword, pattern, whole_word?}`, optionally followed
+  # by the account scope (default: every account).
   defp compile(filters) do
-    tags = for {:tag, p} <- filters, into: %{}, do: {String.downcase(p), p}
+    filters
+    |> Enum.map(fn
+      {:tag, pattern} ->
+        %ContentFilter{kind: :tag, pattern: pattern, account: "*"}
 
-    keywords =
-      for {:keyword, p, ww} <- filters, do: {p, ContentFilters.compile_pattern(p, ww)}
+      {:tag, pattern, account} ->
+        %ContentFilter{kind: :tag, pattern: pattern, account: account}
 
-    %{tags: tags, keywords: keywords, tag_words: ContentFilters.tag_words(tags)}
+      {:keyword, pattern, whole_word} ->
+        %ContentFilter{kind: :keyword, pattern: pattern, whole_word: whole_word, account: "*"}
+
+      {:keyword, pattern, whole_word, account} ->
+        %ContentFilter{kind: :keyword, pattern: pattern, whole_word: whole_word, account: account}
+    end)
+    |> ContentFilters.compile()
   end
 
-  defp hidden_by(post, filters), do: ContentFilters.filtered_pattern(post, compile(filters))
+  defp hidden_by(post, filters), do: ContentFilters.filtered(post, compile(filters))
 
   describe "keyword matching" do
     test "a whole word matches only that word, not a longer one" do
@@ -150,8 +163,103 @@ defmodule Vutuv.ContentFiltersTest do
 
       compiled = ContentFilters.compile_for(user)
       assert ContentFilters.any?(compiled)
-      assert compiled.tags["crypto"] == "Crypto"
-      assert [{"web3*", _re}] = compiled.keywords
+      assert [%{pattern: "Crypto", tag: "crypto", account: nil}] = compiled.tags
+      assert [%{pattern: "web3*", account: nil}] = compiled.keywords
+    end
+
+    test "a scoped rule is stored and compiled as such", %{user: user} do
+      {:ok, _} =
+        ContentFilters.create_filter(user, %{
+          "kind" => "keyword",
+          "pattern" => "hier besonders häufig",
+          "account" => "*@social.heise.de"
+        })
+
+      assert [%{account: %Regex{}}] = ContentFilters.compile_for(user).keywords
+    end
+
+    test "an empty or wildcard-only account is stored as every account", %{user: user} do
+      {:ok, blank} =
+        ContentFilters.create_filter(user, %{
+          "kind" => "keyword",
+          "pattern" => "a",
+          "account" => ""
+        })
+
+      {:ok, stars} =
+        ContentFilters.create_filter(user, %{
+          "kind" => "keyword",
+          "pattern" => "b",
+          "account" => "**"
+        })
+
+      assert blank.account == "*"
+      assert stars.account == "*"
+      assert ContentFilter.every_account?(blank)
+      # Nothing names an account, so no post has to be asked who wrote it.
+      assert Enum.all?(ContentFilters.compile_for(user).keywords, &(&1.account == nil))
+    end
+
+    test "the same word may be muted twice for different accounts", %{user: user} do
+      attrs = %{"kind" => "keyword", "pattern" => "hier besonders häufig"}
+
+      {:ok, _} = ContentFilters.create_filter(user, Map.put(attrs, "account", "*heise*"))
+      {:ok, _} = ContentFilters.create_filter(user, Map.put(attrs, "account", "*@ard.social"))
+
+      # Only an identical scope is the duplicate the unique index refuses.
+      assert {:error, %Ecto.Changeset{}} =
+               ContentFilters.create_filter(user, Map.put(attrs, "account", "*heise*"))
+
+      assert length(ContentFilters.list_for_user(user)) == 2
+    end
+  end
+
+  describe "account scoping" do
+    setup do
+      # A name that shares nothing with the generated handle, so a scope that
+      # matches by name cannot be passing by way of the handle.
+      author = insert(:user, first_name: "Zora", last_name: "Blumenkohl")
+
+      %{author: author, post: %Post{post(nil) | user: author, user_id: author.id}}
+    end
+
+    test "a rule naming nobody reads every account", %{post: %Post{} = post} do
+      assert hidden_by(%Post{post | body: "crypto is here"}, [{:keyword, "crypto", true}]) ==
+               "crypto"
+    end
+
+    test "a scoped rule holds unless the account matches", %{author: author, post: %Post{} = post} do
+      post = %Post{post | body: "crypto is here"}
+      mine = [{:keyword, "crypto", true, "@" <> author.username}]
+
+      assert hidden_by(post, mine) == "crypto"
+      refute hidden_by(post, [{:keyword, "crypto", true, "@somebody-else"}])
+    end
+
+    # The half that makes `*heise*` reach `heise Security`, and the only thing an
+    # organization page that never claimed a root handle can be scoped by.
+    test "a wildcard scope matches the account's name as well as its handle", %{
+      post: %Post{} = post
+    } do
+      post = %Post{post | body: "crypto is here"}
+
+      assert hidden_by(post, [{:keyword, "crypto", true, "*blumenkohl*"}]) == "crypto"
+    end
+
+    test "a tag rule takes a scope too", %{author: author, post: %Post{} = post} do
+      post = %Post{post | tags: [%Tag{name: "Bitcoin", slug: "bitcoin"}]}
+
+      assert hidden_by(post, [{:tag, "bitcoin", "@" <> author.username}]) == "bitcoin"
+      refute hidden_by(post, [{:tag, "bitcoin", "@somebody-else"}])
+    end
+
+    # The safe direction: a rule aimed at somebody in particular must not fold a
+    # post from an account nothing can name.
+    test "a post with no knowable account never matches a scoped rule" do
+      orphan = %Post{post("crypto is here") | user_id: nil, organization_id: nil}
+
+      refute hidden_by(orphan, [{:keyword, "crypto", true, "*heise*"}])
+      assert hidden_by(orphan, [{:keyword, "crypto", true}]) == "crypto"
     end
   end
 

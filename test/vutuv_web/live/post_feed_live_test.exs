@@ -1688,6 +1688,36 @@ defmodule VutuvWeb.PostFeedLiveTest do
       refute html =~ "buy crypto now"
     end
 
+    # A rule aimed at accounts (`*heise*`) rather than at the whole timeline:
+    # the same sentence from two people, folded for one of them only.
+    test "a rule scoped to accounts folds only their posts", %{
+      conn: conn,
+      user: user,
+      friend: friend
+    } do
+      loud = other_user(first_name: "Redaktion", last_name: "Heiserstein")
+      insert(:follow, follower: user, followee: loud)
+
+      {:ok, _} =
+        Vutuv.ContentFilters.create_filter(user, %{
+          "kind" => "keyword",
+          "pattern" => "besonders häufig",
+          "account" => "*heiser*"
+        })
+
+      {:ok, _} =
+        Posts.create_post(loud, %{body: "Einige der besonders häufig gelesenen Beiträge"})
+
+      {:ok, _} = Posts.create_post(friend, %{body: "Was ich besonders häufig koche"})
+
+      {:ok, live, html} = live(conn, ~p"/feed")
+
+      assert has_element?(live, "[data-filtered-post='besonders häufig']")
+      refute html =~ "Einige der besonders häufig gelesenen"
+      # The friend says the same words and is not who the rule is about.
+      assert html =~ "Was ich besonders häufig koche"
+    end
+
     test "the pill never quotes a post the reader muted", %{
       conn: conn,
       user: user,

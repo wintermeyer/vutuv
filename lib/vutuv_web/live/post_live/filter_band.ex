@@ -28,7 +28,7 @@ defmodule VutuvWeb.PostLive.FilterBand do
   """
   use VutuvWeb, :live_component
 
-  import VutuvWeb.PostComponents, only: [rail_add_field: 1]
+  import VutuvWeb.PostComponents, only: [rail_add_field: 1, rail_field_class: 0]
 
   alias Vutuv.ContentFilters
   alias Vutuv.ContentFilters.ContentFilter
@@ -67,7 +67,10 @@ defmodule VutuvWeb.PostLive.FilterBand do
      # a history, and a reload is itself an answer to "did I mean that".
      |> assign(undo: nil)
      |> assign(loaded?: false)
-     |> assign(word_draft: "", tag_draft: "")}
+     # The rule being typed: the word or tag, and the accounts it is aimed at.
+     # Blank is the ordinary answer to the second — a rule with no account named
+     # reads every account, exactly as every rule did before there was one.
+     |> assign(word_draft: "", word_account: "", tag_draft: "", tag_account: "")}
   end
 
   @impl true
@@ -288,7 +291,11 @@ defmodule VutuvWeb.PostLive.FilterBand do
             value={@word_draft}
             maxlength={ContentFilter.max_pattern()}
             target={@myself}
-          />
+          >
+            <:extra>
+              <.account_scope_field value={@word_account} />
+            </:extra>
+          </.rail_add_field>
         </div>
 
         <%!-- What replaces a "whole words only" checkbox nobody could read: the
@@ -301,6 +308,10 @@ defmodule VutuvWeb.PostLive.FilterBand do
               {gettext("Also inside longer words: %{word} catches %{example} too.",
                 word: "Zeugnis",
                 example: "Arbeitszeugnis"
+              )}
+              {gettext(
+                "Leave the accounts empty and the rule reads everyone; %{example} narrows it to one server's accounts.",
+                example: "*@social.heise.de"
               )}
             <% @preview.count == 0 -> %>
               {gettext("Matches nothing in your feed right now — the rule still holds for what comes next.")}
@@ -368,7 +379,11 @@ defmodule VutuvWeb.PostLive.FilterBand do
             value={@tag_draft}
             maxlength={ContentFilter.max_pattern()}
             target={@myself}
-          />
+          >
+            <:extra>
+              <.account_scope_field value={@tag_account} />
+            </:extra>
+          </.rail_add_field>
         </div>
 
         <div :if={@tag_suggestions != []} class="pt-2">
@@ -393,13 +408,43 @@ defmodule VutuvWeb.PostLive.FilterBand do
     """
   end
 
+  @doc false
+  # Which accounts a rule being typed is aimed at. Inside the add field's own
+  # form, so Return submits the pair; empty is every account, which is what the
+  # placeholder says rather than a pre-filled `*` the reader has to delete.
+  attr(:value, :string, required: true)
+
+  defp account_scope_field(assigns) do
+    ~H"""
+    <input
+      type="text"
+      name="account"
+      value={@value}
+      maxlength={ContentFilter.max_pattern()}
+      phx-debounce="300"
+      placeholder={gettext("Only these accounts (empty = all) …")}
+      class={[rail_field_class(), "mt-1.5"]}
+    />
+    """
+  end
+
   attr(:filter, :map, required: true)
   attr(:target, :any, required: true)
 
   defp filter_chip(assigns) do
     ~H"""
     <span class="inline-flex max-w-full items-center gap-1 rounded-lg bg-brand-50 py-1 pl-3 pr-1.5 text-sm font-medium text-brand-700 dark:bg-brand-900/40 dark:text-brand-100">
-      <span class="min-w-0 truncate">{@filter.pattern}</span>
+      <%!-- The scope under the word rather than beside it: a chip is already as
+      wide as the card, and a rule reads "this word" first and "from these" second. --%>
+      <span class="flex min-w-0 flex-col">
+        <span class="min-w-0 truncate">{@filter.pattern}</span>
+        <span
+          :if={scope = filter_account_label(@filter)}
+          class="min-w-0 truncate text-xs font-normal text-brand-500 dark:text-brand-300"
+        >
+          {scope}
+        </span>
+      </span>
       <button
         type="button"
         phx-click="drop-filter"
@@ -947,24 +992,37 @@ defmodule VutuvWeb.PostLive.FilterBand do
     end
   end
 
-  def handle_event("word-draft", %{"pattern" => draft}, socket) do
-    {:noreply, socket |> assign(:word_draft, draft) |> assign(:preview, preview(socket, draft))}
+  def handle_event("word-draft", params, socket) do
+    {draft, account} = draft_params(params)
+
+    {:noreply,
+     socket
+     |> assign(word_draft: draft, word_account: account)
+     |> assign(:preview, preview(socket, draft, account))}
   end
 
-  def handle_event("tag-draft", %{"pattern" => draft}, socket) do
-    {:noreply, assign(socket, :tag_draft, draft)}
+  def handle_event("tag-draft", params, socket) do
+    {draft, account} = draft_params(params)
+
+    {:noreply, assign(socket, tag_draft: draft, tag_account: account)}
   end
 
-  def handle_event("add-word", %{"pattern" => pattern}, socket) do
-    {:noreply, socket |> add_filter(:keyword, pattern) |> assign(word_draft: "", preview: nil)}
+  def handle_event("add-word", params, socket) do
+    {:noreply,
+     socket
+     |> add_filter(:keyword, params)
+     |> assign(word_draft: "", word_account: "", preview: nil)}
   end
 
-  def handle_event("add-tag", %{"pattern" => pattern}, socket) do
-    {:noreply, socket |> add_filter(:tag, pattern) |> assign(:tag_draft, "")}
+  def handle_event("add-tag", params, socket) do
+    {:noreply, socket |> add_filter(:tag, params) |> assign(tag_draft: "", tag_account: "")}
   end
 
+  # A suggestion straight off the page is about the tag, not about who used it:
+  # it is one press, and there is nowhere in it to say "only from these" — so
+  # its params carry no account and the rule reads everyone.
   def handle_event("hide-tag", %{"pattern" => pattern}, socket) do
-    {:noreply, add_filter(socket, :tag, pattern)}
+    {:noreply, add_filter(socket, :tag, %{"pattern" => pattern})}
   end
 
   def handle_event("drop-filter", %{"id" => id}, socket) do
@@ -1004,10 +1062,20 @@ defmodule VutuvWeb.PostLive.FilterBand do
 
   defp reload_user(socket), do: Repo.get!(Vutuv.Accounts.User, socket.assigns.current_user.id)
 
+  # Both halves of the rule off one form. The account is optional and often
+  # absent — a `hide-tag` press sends no such field at all — so it defaults to
+  # blank, which the changeset reads as "every account".
+  defp draft_params(params),
+    do: {Map.get(params, "pattern", ""), Map.get(params, "account", "")}
+
   # A blank line is not a rule, and the cap is the context's to enforce — the
-  # band only has to stay quiet when either says no.
-  defp add_filter(socket, kind, pattern) do
-    case String.trim(to_string(pattern)) do
+  # band only has to stay quiet when either says no. The form's own params go
+  # through, so the account rides along wherever the form had a field for it and
+  # is simply absent where it did not.
+  defp add_filter(socket, kind, params) do
+    {pattern, account} = draft_params(params)
+
+    case String.trim(pattern) do
       "" ->
         socket
 
@@ -1015,6 +1083,7 @@ defmodule VutuvWeb.PostLive.FilterBand do
         ContentFilters.create_filter(socket.assigns.current_user, %{
           "kind" => kind,
           "pattern" => trimmed,
+          "account" => account,
           # Substring, not whole words. German is the reason and it is not a
           # detail: a member typing "Zeugnis" means "Arbeitszeugnis" and
           # "Zeugnisanalyse" too, and "Bitcoin" is expected to cover "Bitcoins"
@@ -1035,7 +1104,8 @@ defmodule VutuvWeb.PostLive.FilterBand do
   # Built from the real matcher (`PostTeaser.filtered_pattern/3`, the one thing
   # that knows how to ask a vutuv post and a cached remote one the same
   # question), so the preview cannot drift from what actually gets folded.
-  defp preview(socket), do: preview(socket, socket.assigns[:word_draft] || "")
+  defp preview(socket),
+    do: preview(socket, socket.assigns[:word_draft] || "", socket.assigns[:word_account] || "")
 
   # What the rule being typed would do to the feed in front of the reader: how
   # many posts, and which ones. The count alone answered "is this rule too
@@ -1045,17 +1115,15 @@ defmodule VutuvWeb.PostLive.FilterBand do
   # Quoted per **post**, not per row. A row is a conversation and the match is
   # regularly an ancestor rather than the post the row is keyed on, so quoting
   # the row would name the wrong author and the wrong sentence.
-  defp preview(socket, draft) do
+  defp preview(socket, draft, account) do
     pattern = String.trim(to_string(draft))
 
-    with true <- pattern != "",
-         re when not is_nil(re) <- ContentFilters.compile_pattern(pattern, false) do
-      compiled = %{tags: %{}, keywords: [{pattern, re}], tag_words: []}
-      hits = matching_posts(socket, compiled)
+    if pattern == "" do
+      nil
+    else
+      hits = matching_posts(socket, ContentFilters.compile_draft(pattern, account))
 
       %{count: length(hits), quotes: hits |> Enum.take(@preview_quotes) |> Enum.map(&quote_of/1)}
-    else
-      _blank_or_uncompilable -> nil
     end
   end
 
@@ -1069,7 +1137,7 @@ defmodule VutuvWeb.PostLive.FilterBand do
     |> Map.get(:entries, [])
     |> Enum.flat_map(&preview_records/1)
     |> Enum.reject(&(Map.get(&1, :user_id) == viewer_id))
-    |> Enum.filter(&(ContentFilters.filtered_text(Posts.text(&1), compiled) != nil))
+    |> Enum.filter(&(ContentFilters.filtered(&1, compiled) != nil))
   end
 
   defp preview_records(entry) do

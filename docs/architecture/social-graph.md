@@ -293,14 +293,26 @@ stands
 
 Topic-level muting, the third layer above per-follow mute and the block
 (issue #940): `Vutuv.ContentFilters` is a member's private, viewer-only deny
-list, managed at `/settings/filters` ("Muted words & tags"). Each
-`content_filters` row mutes a **tag** or a **keyword/phrase** (with `*`
-wildcards); keyword rows match the post body **and** its tags/hashtags, tag rows
-match the post's tags only.
+list, managed at `/settings/filters` ("Muted words & tags") and in the feed's
+filter band. Each `content_filters` row mutes a **tag** or a **keyword/phrase**
+(with `*` wildcards); keyword rows match the post body **and** its tags/hashtags,
+tag rows match the post's tags only.
+
+A row also carries an **`account`** scope: `*` (the default, and what every row
+written before the column existed says) reads every account, anything else
+narrows the rule to the accounts whose handle or display name it matches, with
+the same `*` wildcard. It exists because a news house publishes the same story
+under a dozen accounts in a dozen spellings, so the phrase worth silencing is
+worth silencing *there* rather than across the whole timeline:
+`*@social.heise.de` reaches `@heiseonline@social.heise.de` and
+`@ct_Magazin@social.heise.de` alike. The names a post is matched against come
+from `Vutuv.Posts.account_names/1`, the one function that answers "who is this
+from" for all three post kinds; a post whose account cannot be named never
+matches a scoped rule.
 
 Unlike a muted follow (which drops a *person* out of the feed via the query),
 content filters run **after** the feed page is hydrated: the feed compiles the
-viewer's whole list once (`compile_for/1`) and asks `filtered_pattern/2` per post
+viewer's whole list once (`compile_for/1`) and asks `filtered/2` per post
 which filter, if any, hides it. A match does not vanish — the post collapses to a
 "Show anyway" line (`PostLive.Feed`, `data-filtered-post`), so a filtered post
 never silently shortens the feed or breaks a reply thread; the reveal is

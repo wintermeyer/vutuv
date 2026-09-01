@@ -256,7 +256,13 @@ defmodule Vutuv.Export do
   # belongs in their GDPR export.
   defp content_filters(user) do
     Enum.map(Vutuv.ContentFilters.list_for_user(user), fn f ->
-      %{kind: f.kind, pattern: f.pattern, whole_word: f.whole_word, added_at: f.inserted_at}
+      %{
+        kind: f.kind,
+        pattern: f.pattern,
+        account: f.account,
+        whole_word: f.whole_word,
+        added_at: f.inserted_at
+      }
     end)
   end
 

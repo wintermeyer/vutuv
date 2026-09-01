@@ -26,6 +26,7 @@ defmodule VutuvWeb.SettingsHTML do
   import Phoenix.HTML.Form, only: [input_id: 2]
 
   alias Vutuv.Accounts.User
+  alias Vutuv.ContentFilters.ContentFilter
   alias Vutuv.SavedSearches
 
   embed_templates("../templates/settings/*")
@@ -61,6 +62,20 @@ defmodule VutuvWeb.SettingsHTML do
 
   def filter_kind_label(%{kind: :keyword}),
     do: gettext("Word or phrase (whole word)")
+
+  @doc """
+  What the account field shows for the rule being written: nothing where the
+  rule reads every account.
+
+  `*` is what the column stores for that, and handing it back to the reader as
+  text is a `*` they have to select and delete before they can name anybody —
+  the placeholder says what an empty field means instead.
+  """
+  def account_value(form) do
+    value = form[:account].value
+
+    if ContentFilter.every_account?(value), do: "", else: value
+  end
 
   @doc """
   The human, localized status of one of the member's organization pages, derived

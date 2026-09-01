@@ -478,6 +478,12 @@ defmodule VutuvWeb.PostComponents do
   edge: a toggle on a line of its own costs a whole row for one 28px button, and
   a ✕ sitting in the box it closes is where a reader looks for it anyway.
 
+  It is offset from the **top** (`top-[3px]`, which is exactly where centring a
+  28px button in a 34px `py-1.5 text-sm` field puts it) rather than centred on
+  the `<details>`: an `:extra` field under the input makes that box taller, and
+  a centred ✕ then floats in the gap between the two fields, belonging to
+  neither.
+
   It gets there by leaving the flow (`group-open:absolute` against an
   `open:relative` details), not by flex. Flex is the obvious answer and does not
   work: `display: flex` on a `<details>` makes the summary one flex item and
@@ -499,12 +505,18 @@ defmodule VutuvWeb.PostComponents do
   attr(:target, :any, default: nil)
   attr(:class, :string, default: nil)
 
+  # A second question the same rule answers, under the field and inside its
+  # form, so one Return submits both. It is deliberately not a second
+  # `rail_add_field`: two `+` glyphs would read as two separate things to add.
+  # Style its inputs with `rail_field_class/1` so the pair matches.
+  slot(:extra)
+
   def rail_add_field(assigns) do
     ~H"""
     <details data-keep-open class={["group open:relative open:w-full", @class]}>
       <summary
         title={@label}
-        class="inline-flex h-7 w-7 cursor-pointer list-none items-center justify-center rounded-lg bg-slate-100 text-sm font-semibold text-slate-500 hover:bg-slate-200 hover:text-slate-800 group-open:absolute group-open:right-[3px] group-open:top-1/2 group-open:-translate-y-1/2 group-open:bg-transparent group-open:hover:bg-slate-200 [&::-webkit-details-marker]:hidden dark:bg-slate-800 dark:text-slate-400 dark:hover:bg-slate-700 dark:hover:text-slate-100 dark:group-open:bg-transparent dark:group-open:hover:bg-slate-700"
+        class="inline-flex h-7 w-7 cursor-pointer list-none items-center justify-center rounded-lg bg-slate-100 text-sm font-semibold text-slate-500 hover:bg-slate-200 hover:text-slate-800 group-open:absolute group-open:right-[3px] group-open:top-[3px] group-open:bg-transparent group-open:hover:bg-slate-200 [&::-webkit-details-marker]:hidden dark:bg-slate-800 dark:text-slate-400 dark:hover:bg-slate-700 dark:hover:text-slate-100 dark:group-open:bg-transparent dark:group-open:hover:bg-slate-700"
       >
         <%!-- The glyph turns into a ✕ once the field is open. A "+" that stays
         a "+" offers nothing to press to get rid of the field again, and the
@@ -529,11 +541,27 @@ defmodule VutuvWeb.PostComponents do
           maxlength={@maxlength}
           phx-debounce={@change && "300"}
           placeholder={@placeholder}
-          class="w-full rounded-lg border border-slate-200 bg-slate-50 py-1.5 pl-3 pr-10 text-sm text-slate-900 placeholder:text-slate-400 focus:border-brand-500 focus:outline-none dark:border-slate-700 dark:bg-slate-950 dark:text-slate-100"
+          class={rail_field_class("pl-3 pr-10")}
         />
+        {render_slot(@extra)}
       </form>
     </details>
     """
+  end
+
+  @doc """
+  The rail add-field's own input recipe, as a string — `VutuvWeb.UI.input_class/0`
+  at rail scale.
+
+  Public so a field in the `:extra` slot wears exactly what the field above it
+  wears, rather than a second copy of the same twelve utilities drifting at a
+  call site. `padding` is the one thing that differs: the first input keeps its
+  right edge clear of the ✕ sitting over it, an extra field has no ✕.
+  """
+  def rail_field_class(padding \\ "px-3") do
+    "w-full rounded-lg border border-slate-200 bg-slate-50 py-1.5 #{padding} text-sm " <>
+      "text-slate-900 placeholder:text-slate-400 focus:border-brand-500 focus:outline-none " <>
+      "dark:border-slate-700 dark:bg-slate-950 dark:text-slate-100"
   end
 
   @doc """
