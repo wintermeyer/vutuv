@@ -140,6 +140,23 @@ API profile responses carry the member's `noindex?`/`noai?` consent flags
 in-band (the public `.json`/`.md` siblings signal the same via
 `Content-Signal`/`X-Robots-Tag` headers)
 
+**A feed row is not always a vutuv post, and `GET /feed` says so per entry.**
+Four of the timeline's nine sources carry something from another network — a
+cached post, a reply somebody here reshared, a boost — and none of them holds a
+`%Post{}`, so `/api/2.0/feed` answered a 500 to any member who follows one
+account out there, from the day the source shipped until issue #1880. Such a row
+is marked `"network": "fediverse"` and names the origin URL, the remote account
+(`%{name:, handle:, url:}`, since the `Vutuv.Identity` protocol is about vutuv
+identities and deliberately raises for anything else) and a plain `body_text`
+rather than `body_markdown` — a remote body was reduced to text at the inbox,
+and a client rendering it as Markdown would eat a leading `1.` into a list
+marker. The facts come from the same owners the HTML card reads
+(`Vutuv.Fediverse.subject_origin/1` and `subject_author_ref/1`,
+`Vutuv.Posts.text/1` and `written_at/1`), so the API cannot drift from the page.
+The agent-format siblings (`/feed.md|.txt|.json|.xml`,
+`VutuvWeb.AgentDocs.PostDoc.timeline_entry/1`) had the cached-post half and were
+missing the reshared reply, which 500ed all four the same way.
+
 
 ## The Mastodon-compatible surface is elsewhere
 

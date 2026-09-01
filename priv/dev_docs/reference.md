@@ -238,6 +238,24 @@ auth "$API/feed?cursor=NEXT_CURSOR_FROM_LAST_PAGE"
 }
 ```
 
+A feed also carries posts and replies from **other networks** — from accounts
+the member follows out there, from things somebody here reshared, and from what
+a followed account boosted. Such an entry is marked `"network": "fediverse"` and
+describes itself differently, because it lives on its own server and vutuv
+serves no page for it: `url` is the origin address, `author` names the remote
+account (`name`, `handle`, `url`) instead of a vutuv identity, and the text is
+plain — `body_text`, never Markdown. `reposted_by` and `reposters` still name
+whoever here put it in this feed. Branch on `network`; an entry without it is a
+vutuv post.
+
+```json
+{"id": "0190…", "url": "https://social.example/@them/1",
+ "author": {"name": "Thea Remote", "handle": "@them@social.example",
+            "url": "https://social.example/users/them"},
+ "published_on": "2026-06-12", "body_text": "…", "network": "fediverse",
+ "reposted_by": null, "reposters": []}
+```
+
 ### POST /posts
 
 Scope: `posts:write`. Fields: `body` (Markdown, required unless images),

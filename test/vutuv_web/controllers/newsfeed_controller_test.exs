@@ -8,7 +8,9 @@ defmodule VutuvWeb.NewsfeedControllerTest do
   """
   use VutuvWeb.ConnCase
 
+  alias Vutuv.Fediverse.NoteRepost
   alias Vutuv.Posts
+  alias Vutuv.Repo
 
   defp fresh_conn, do: Phoenix.ConnTest.build_conn() |> Plug.Test.init_test_session(%{})
 
@@ -95,6 +97,43 @@ defmodule VutuvWeb.NewsfeedControllerTest do
       entry = Enum.find(json["posts"], &(&1["id"] == post.id))
       assert entry["reposters"] == ["Bruno Booster", "Renate Repost"]
       assert entry["reposted_by"] == "Bruno Booster"
+    end
+
+    # The second remote row shape (issue #1275): a reply from another network
+    # that a member here passed on. It carries a `note` and no `remote_post`, so
+    # it fell through to the local clause with a nil post and every one of these
+    # four formats 500ed the moment one reached the reader (issue #1880) — while
+    # the HTML feed drew it fine.
+    test "a reshared reply from another network is a line like any other", %{conn: conn} do
+      {conn, user} = create_and_login_user(conn)
+      sharer = insert(:user, email_confirmed?: true, first_name: "Sina", last_name: "Share")
+      insert(:follow, follower: user, followee: sharer)
+
+      {:ok, post} = Posts.create_post(user, %{body: "eine Frage in die Runde"})
+
+      note =
+        insert(:note,
+          post: post,
+          actor_uri: "https://social.example/users/them",
+          origin_url: "https://social.example/@them/1",
+          handle: "them",
+          content_text: "die weitergereichte Antwort"
+        )
+
+      Repo.insert!(%NoteRepost{user_id: sharer.id, note_id: note.id})
+
+      json = Jason.decode!(get(conn, "/feed.json").resp_body)
+      entry = Enum.find(json["posts"], &(&1["id"] == note.id))
+
+      assert entry["network"] == "fediverse"
+      assert entry["account"] == "@them@social.example"
+      assert entry["url"] == "https://social.example/@them/1"
+      assert entry["excerpt"] == "die weitergereichte Antwort"
+      # Why it is in this feed at all — the reshare line the HTML card wears.
+      assert entry["reposted_by"] == "Sina Share"
+
+      assert recycle(conn) |> get("/feed.md") |> Map.get(:resp_body) =~
+               "die weitergereichte Antwort"
     end
 
     test "?lang=de renders the German labels", %{conn: conn} do

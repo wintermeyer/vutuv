@@ -2767,6 +2767,17 @@ defmodule Vutuv.Posts do
   the feed timestamp (publication or repost time). Posts are preloaded for
   rendering.
 
+  **`:post` is nil on the rows from another network, and a presenter that reads
+  it without asking is a 500.** Four of the nine sources produce such a row:
+  `:remote_post` holds a cached post (a followed account's, a member's reshare,
+  a boost), `:note` a reply somebody here passed on — and a note row carries no
+  `:remote_post` key at all, so even a nil check on that one is not enough.
+  `remote_feed_entry?/1` and `remote_reply_entry?/1` are the questions to ask;
+  `text/1`, `written_at/1` and `Vutuv.Fediverse.subject_origin/1` /
+  `subject_author_ref/1` answer for every kind, so a presenter need not know
+  which it holds. This was not written down, and both `/api/2.0/feed` and all
+  four `/feed.<ext>` siblings 500ed on it (issue #1880).
+
   A post appears **once per page**, at its newest event: several followed
   members reposting the same post collapse into one entry, and a repost of a
   post the viewer also follows directly replaces the standalone original
