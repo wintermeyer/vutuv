@@ -83,19 +83,29 @@ the resulting ~200px rail width. --%>
           {if cover_url, do: gettext("Change cover"), else: gettext("Add cover photo")}
         </.link>
       </div>
-      <%!-- Header card body. #profile-actions keeps the viewer's primary move
-      (the Follow relationship pill) up front and folds everything else (Message,
-      mute, the private save toggles, report, block) into one labeled ⋯ menu so
-      the header stays calm — especially on mobile, where a full-width Message
-      button crowded the row. The <.follow_relationship> pill is always shown in full and
-      reads both follow directions from each half's text + colour, so every
-      status (no relationship, one-way out, follow-back, mutual "vernetzt") is
-      legible at a glance without the pill changing shape. Action controls are
-      per-viewer and never appear in the agent-format ProfileDoc, so this rework
-      needs no doc change. --%>
+      <%!-- Header card body. Two things are true of every arrangement below.
+      An ACT is a button and a STATUS is not: the segmented `<.follow_relationship>`
+      pill this replaces glued a clickable Follow half to a read-only "Folgt
+      Ihnen" half of the same size and colour weight, so half of what looked
+      like a control did nothing when pressed, and the direction rode on a seam
+      glyph (· → ← ⇄) that carried its meaning in a single character. The three
+      states it encoded still read — from the button's own two states, from the
+      status chip beside it, and from the emerald "Vernetzt" a mutual follow
+      lights. And MESSAGE is one tap: it left the ⋯ menu, which keeps what is
+      rare or heavy. Action controls are per-viewer and never appear in the
+      agent-format ProfileDoc, so none of this needs a doc change. --%>
       <div class="px-6 pb-6">
         <% member_since = member_since(@user) %>
         <% can_act? = @current_user != nil and not same_user?(@user, @current_user) %>
+        <%!-- Exactly the viewer the cond's `can_act?` branch below reaches: a
+        signed-in member looking at somebody else, who is not the owner, has not
+        blocked them, and is speaking as themselves. The last one matters — while
+        you speak for a page, "does this member follow you" has no answer (you
+        and the page are two different followers), so a page-voice viewer keeps
+        the single "Follow as …" pill and gets none of the arrangements below.
+        Every part of an arrangement that lives outside that cond carries this
+        guard, so the two can never drift apart. --%>
+        <% viewer_actions? = can_act? && !@as_owner? && !@viewer_block && !@acting_as %>
         <% vcard_path = if @vcard_full?, do: ~p"/#{@user}/vcard", else: "/#{@user.username}.vcf" %>
         <% bookmarked? = @user_saved && @user_saved.bookmarked? %>
         <% liked? = @user_saved && @user_saved.liked? %>
@@ -162,20 +172,16 @@ the resulting ~200px rail width. --%>
                     else: gettext("Follow as %{name}", name: @acting_as.name)}
                 </button>
               <% can_act? -> %>
-                <%!-- Directional relationship as one always-full segmented pill:
-                the clickable Follow / Following half (you follow him), a seam
-                glyph that encodes the direction (· → ← ⇄), and a read-only
-                inbound half that always states it ("Folgt dir" / "Folgt dir
-                nicht", he follows you or not). Mutual ("vernetzt") lights the
-                seam + inbound half brand. Status reads from text + colour, so
-                the pill never changes shape. Replaces the old badge + button. --%>
-                <.follow_relationship
-                  follower_id={@current_user_id}
-                  followee_id={@user.id}
-                  follow_id={@header_follow_id}
-                  follows_viewer?={@header_follows_viewer?}
-                  live?
-                />
+                <%!-- The act stays where the old segmented pill stood, beside
+                the avatar, but it is only the act: a Follow button and the
+                envelope, no read-only half dressed up as a button. The envelope
+                is icon-only because two text buttons plus a 96px avatar do not
+                fit a 374px phone on one line; the follow-back status reads from
+                the chip below. --%>
+                <div class="flex items-center gap-2">
+                  <.profile_follow_button id="follow-user" follow_id={@header_follow_id} followee_id={@user.id} />
+                  <.profile_message_button id="message-user" user={@user} icon_only? />
+                </div>
               <% true -> %>
             <% end %>
           </div>
@@ -189,13 +195,16 @@ the resulting ~200px rail width. --%>
           {gettext("Profile picture awaiting review, visible only to you")}
         </p>
 
-        <%!-- Name row. The ⋯ actions menu (Message / mute / private saves / report
-        / block) lives here on the right rather than in the cluster beside the
-        avatar, so the follow pill gets the full width up there to breathe. Guarded
-        by the same condition as the pill (the cond's can_act? branch: logged-in,
-        not the owner, not a blocker) so a blocker still only sees Unblock. --%>
+        <%!-- Name row. The ⋯ actions menu lives here on the right in every
+        arrangement — it is the calm home for what is rare or heavy (mute,
+        report, block). Message left that menu: it is the positive act a visitor
+        comes for, and it now has a control of its own in each arrangement, so
+        writing to somebody costs one tap instead of two behind a glyph that
+        names nothing. Guarded by the same condition as the follow control (the
+        cond's can_act? branch: logged-in, not the owner, not a blocker) so a
+        blocker still only sees Unblock. --%>
         <div class="mt-4 flex items-center justify-between gap-3">
-          <h1 class="flex items-center gap-2 text-2xl font-bold text-slate-900 dark:text-white">
+          <h1 class="flex min-w-0 items-center gap-2 text-2xl font-bold text-slate-900 dark:text-white">
             {full_name(@user)}
             <span :if={@user.identity_verified?} title={gettext("Verified profile")} class="text-brand-600 dark:text-brand-400">
               <svg class="h-5 w-5" viewBox="0 0 24 24" fill="currentColor"><path d="M12 2 4 5v6c0 5 3.4 8.7 8 10 4.6-1.3 8-5 8-10V5l-8-3Zm-1.2 13.4-3.5-3.5 1.4-1.4 2.1 2.1 4.6-4.6 1.4 1.4-6 6Z" /></svg>
@@ -206,19 +215,17 @@ the resulting ~200px rail width. --%>
             class="shrink-0"
           >
             <.card_menu id="profile-actions-menu">
-              <%!-- Message is the primary positive action; it leads the menu. --%>
-              <:item id="message-user" href={~p"/messages/with/#{@user}"}>{gettext("Message")}</:item>
               <%!-- Mute is a property of your own follow, so it shows only once you
               follow them; it silences their posts in your feed only. A live
               phx-click toggle, so the label flips with no reload. --%>
               <:item :if={is_binary(@header_follow_id)} click="toggle_mute" value={@header_follow_id}>
                 {if @header_follow_muted?, do: gettext("Unmute"), else: gettext("Mute")}
               </:item>
-              <%!-- Bookmark and Like are NOT in here any more: they are the two
-              one-click glyph toggles in the footer row below, where they read
-              like the bookmark and heart under a post. What stays in the menu
-              is what has no glyph vocabulary of its own (Message, Report) or
-              what should not be one tap away (Block). --%>
+              <%!-- Bookmark, Like and now Message are NOT in here any more:
+              the two saves are the glyph toggles in the footer row below, and
+              Message is a control of its own in each arrangement. What is left
+              is what nobody reaches for often (Report) and what should not be
+              one tap away (Block). --%>
               <:item id="report-profile" href={report_path}>{gettext("Report")}</:item>
               <:item id="block-user" click="block_user" confirm={block_confirm} danger>
                 {gettext("Block")}
@@ -299,55 +306,47 @@ the resulting ~200px rail width. --%>
         </p>
 
         <% has_counts = @follower_count > 0 or @followee_count > 0 or @connection_count > 0 %>
-        <%!-- Each counter is hidden when its total is 0 (a bare "0" says nothing). --%>
-        <div :if={has_counts} class="mt-4 flex flex-wrap items-center gap-x-6 gap-y-1 text-sm">
-          <.link :if={@follower_count > 0} href={~p"/#{@user}/followers"} class="hover:underline">
-            <span class="font-bold text-slate-900 dark:text-white">{compact_count(@follower_count)}</span>
-            <span class="text-slate-600 dark:text-slate-400">{ngettext("follower", "followers", @follower_count)}</span>
-          </.link>
-          <.link :if={@followee_count > 0} href={~p"/#{@user}/following"} class="hover:underline">
-            <span class="font-bold text-slate-900 dark:text-white">{compact_count(@followee_count)}</span>
-            <span class="text-slate-600 dark:text-slate-400">{gettext("following")}</span>
-          </.link>
-          <.link
-            :if={@connection_count > 0}
-            id="profile-connections"
-            href={~p"/#{@user}/connections"}
-            class="hover:underline"
-          >
-            <span class="font-bold text-slate-900 dark:text-white">{compact_count(@connection_count)}</span>
-            <span class="text-slate-600 dark:text-slate-400">{ngettext("connection", "connections", @connection_count)}</span>
-          </.link>
-        </div>
+        <% show_saves? = saved_present? && !@viewer_block %>
+        <%!-- Facts row: the three counts and the follow-back chip on ONE line,
+        the chip last. It is another fact about this member, so it belongs
+        beside the numbers rather than on a line of its own above them. On a
+        phone the labels give way before the chip does — see
+        `<.profile_counts>` for how, and why that is the right way round. --%>
+        <.profile_counts
+          :if={has_counts || viewer_actions?}
+          class="mt-4"
+          user={@user}
+          follower_count={@follower_count}
+          followee_count={@followee_count}
+          connection_count={@connection_count}
+        >
+          <:extra>
+            <.profile_relationship_chip
+              :if={viewer_actions?}
+              follow_id={@header_follow_id}
+              follows_viewer?={@header_follows_viewer?}
+            />
+          </:extra>
+        </.profile_counts>
 
-        <%!-- Footer, ordered by how often a viewer reaches for each thing rather
-        than by kind: the two save toggles are the frequent act and own the
-        right-hand end of the row, where a thumb rests and where the same two
-        glyphs sit under every post; the rare vCard download follows the
-        member-since line on the left. Bookmark and Like live here and not in
-        the ⋯ menu, so saving a member costs the one tap it already costs on a
-        post; the menu keeps what has no such glyph vocabulary. Member-since and
-        vCard stay universal (owner and logged-out visitor included); the
-        toggles need a logged-in non-owner who has not blocked this member,
-        which is exactly what the ⋯ menu above is guarded by. The two glyphs
-        are held a good gap apart (rather than tucked together as one cluster)
-        so a thumb can tell them apart on a phone. --%>
-        <div class="mt-4 flex flex-wrap items-center gap-x-4 gap-y-2 border-t border-slate-100 pt-3 dark:border-slate-800">
-          <.member_since_line :if={member_since} value={member_since} class="my-0" />
-          <.link
-            id="download-vcard"
-            href={vcard_path}
-            title={gettext("Download")}
-            class="inline-flex items-center gap-1.5 text-sm font-semibold text-brand-600 hover:text-brand-700 dark:text-brand-400 dark:hover:text-brand-300"
-          >
-            <svg class="h-4 w-4" fill="none" stroke="currentColor" stroke-width="1.8" viewBox="0 0 24 24">
-              <path stroke-linecap="round" stroke-linejoin="round" d="M3 16.5v2.25A2.25 2.25 0 0 0 5.25 21h13.5A2.25 2.25 0 0 0 21 18.75V16.5M16.5 12 12 16.5m0 0L7.5 12m4.5 4.5V3" />
-            </svg>
-            {gettext("vCard")}
-          </.link>
-          <div :if={saved_present? && !@viewer_block} class="ml-auto flex items-center gap-3">
-            <.profile_save_toggle kind={:bookmark} active?={bookmarked?} />
-            <.profile_save_toggle kind={:like} active?={liked?} />
+        <%!-- Footer: one row that never wraps. "Member since" holds the left
+        and truncates rather than pushing anything down; the three things a
+        viewer can DO here — download, bookmark, like — line up as equal 40px
+        glyphs on the right, where a thumb rests and where the same two glyphs
+        sit under every post. It used to be a `flex-wrap` row, which on a phone
+        dropped the two save glyphs onto a line of their own, right-aligned
+        under an empty band. The vCard gets its word back from `sm` up, where
+        there is room for it. Member-since and vCard are universal (owner and
+        logged-out visitor included); the toggles need a logged-in non-owner
+        who has not blocked this member, the same guard the ⋯ menu carries. --%>
+        <div class="mt-4 flex items-center gap-1 border-t border-slate-100 pt-3 dark:border-slate-800">
+          <.member_since_line :if={member_since} value={member_since} class="my-0 min-w-0 truncate" />
+          <div class="ml-auto flex shrink-0 items-center gap-0.5 sm:gap-1">
+            <.profile_vcard_link path={vcard_path} />
+            <%= if show_saves? do %>
+              <.profile_save_toggle kind={:bookmark} active?={bookmarked?} />
+              <.profile_save_toggle kind={:like} active?={liked?} />
+            <% end %>
           </div>
         </div>
       </div>

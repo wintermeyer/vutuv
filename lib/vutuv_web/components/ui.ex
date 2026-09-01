@@ -2589,14 +2589,15 @@ defmodule VutuvWeb.UI do
       `<.button>` "Following" / a primary `<.button>` "Follow". `teaser` renders
       only the follow half — pass `follow_id={nil}` (a non-follower can only
       follow) and it emits exactly that one button.
-    * `"segment"` — the **clickable outbound cell** of the profile header's
-      segmented `<.follow_relationship>` control: a flush, square-cornered,
-      `flex-1` `<.link>` whose colour encodes your follow state — green
-      "✓ Following" once you follow, the brand call-to-action "Follow" while you
-      do not. Sized to sit inside the pill (the wrapper clips the corners). Not
-      used on its own.
+
+  There was a fourth, `"segment"`, the clickable outbound cell of a segmented
+  profile-header pill whose other half was a read-only status of the same size
+  and colour weight — so half of what looked like a control did nothing when
+  pressed. The header says the act and the status apart now
+  (`VutuvWeb.UserHTML.profile_follow_button/1` beside
+  `profile_relationship_chip/1`), and the variant went with it.
   """
-  attr(:variant, :string, required: true, values: ~w(icon text button segment))
+  attr(:variant, :string, required: true, values: ~w(icon text button))
   attr(:follower_id, :any, required: true)
   attr(:followee_id, :any, required: true)
   attr(:follow_id, :any, default: nil, doc: "the follow id, or nil when not following")
@@ -2665,67 +2666,6 @@ defmodule VutuvWeb.UI do
     </.button>
     """
   end
-
-  def follow_button(%{variant: "segment"} = assigns) do
-    ~H"""
-    <%!-- The outbound half fills the left of the <.follow_relationship> pill;
-    flex-1 keeps it the same width as the inbound half. Its colour encodes your
-    follow state: a green "active" cell (with a check) once you follow, the brand
-    call-to-action while you do not. The `title` carries the label for hover and
-    screen readers. In `live?` mode it is a phx-click <button> (the profile
-    LiveView, no reload); otherwise the CSRF <.link> (the no-JS fallback). Both
-    share segment_class/1 so the two render identically. --%>
-    <.link
-      :if={is_binary(@follow_id) and not @live?}
-      href={~p"/follows/#{@follow_id}"}
-      method="delete"
-      title={gettext("Following")}
-      class={segment_class(:following)}
-    >
-      <span aria-hidden="true">✓</span><span class="whitespace-nowrap">{gettext("Following")}</span>
-    </.link>
-    <button
-      :if={is_binary(@follow_id) and @live?}
-      type="button"
-      phx-click="unfollow"
-      phx-value-id={@follow_id}
-      title={gettext("Following")}
-      class={segment_class(:following)}
-    >
-      <span aria-hidden="true">✓</span><span class="whitespace-nowrap">{gettext("Following")}</span>
-    </button>
-    <.link
-      :if={!is_binary(@follow_id) and not @live?}
-      href={~p"/follows?#{[follow: %{follower_id: @follower_id, followee_id: @followee_id}]}"}
-      method="post"
-      title={gettext("Follow")}
-      class={segment_class(:follow)}
-    >
-      <span class="whitespace-nowrap">{gettext("Follow")}</span>
-    </.link>
-    <button
-      :if={!is_binary(@follow_id) and @live?}
-      type="button"
-      phx-click="follow"
-      phx-value-followee={@followee_id}
-      title={gettext("Follow")}
-      class={segment_class(:follow)}
-    >
-      <span class="whitespace-nowrap">{gettext("Follow")}</span>
-    </button>
-    """
-  end
-
-  # The two outbound-cell looks of the <.follow_relationship> pill, shared by the
-  # CSRF-link and phx-click renderings so they stay pixel-identical: green
-  # "active" once you follow, the brand call-to-action while you do not.
-  defp segment_class(:following),
-    do:
-      "flex min-w-0 flex-1 items-center justify-center gap-1.5 overflow-hidden bg-emerald-700 px-2 py-1.5 text-white transition-colors hover:bg-emerald-800 active:bg-emerald-900"
-
-  defp segment_class(:follow),
-    do:
-      "flex min-w-0 flex-1 items-center justify-center gap-1.5 overflow-hidden bg-brand-600 px-2 py-1.5 text-white transition-colors hover:bg-brand-700 active:bg-brand-800"
 
   # The `text` follow-button look (the `user_row` rail), shared by the live
   # phx-click and the classic CSRF renderings. Both states are the same small
@@ -2799,122 +2739,6 @@ defmodule VutuvWeb.UI do
   defp tag_follow_class(:follow),
     do:
       "inline-flex shrink-0 items-center justify-center gap-1 rounded-full border px-3 py-1.5 text-xs font-semibold transition-colors border-brand-600 text-brand-700 hover:bg-brand-50 dark:border-brand-500 dark:text-brand-400 dark:hover:bg-brand-900"
-
-  @doc """
-  The profile header's **follow relationship** control — one fixed-width
-  segmented pill (`w-80`) with two **equal-width halves** (`flex-1`) that is
-  **always rendered in full**, so its size never changes between states; the
-  relationship status reads at a glance from the text, colour and icon of each
-  half. Three segments, always present in this order:
-
-    1. **Outbound toggle** (`a`) — the clickable Follow / Following half, owned by
-       `<.follow_button variant="segment">`. Brand call-to-action "Follow" while
-       you do not follow; green "✓ Following" once you do.
-    2. **Seam** (`span`) — a fixed-width `aria-hidden` glyph that encodes the
-       follow direction: `·` none, `→` you follow them, `←` they follow you,
-       `⇄` mutual (the seam goes emerald to mark a "vernetzt" mutual follow).
-    3. **Inbound status** (`span`) — the read-only inbound half. Always states
-       the inbound direction: green "✓ Follows you" when this member follows you,
-       muted grey "✗ Doesn't follow you" otherwise.
-
-  A mutual follow lights **both** halves green and the ring emerald, so
-  "vernetzt" is unmistakable at a glance.
-
-  `follow_id` is the viewer's follow of this member (`nil` = not following);
-  `follows_viewer?` is whether this member follows the viewer back. Keep the
-  owner / visitor / logged-in guard on the `:if` at the call site, like
-  `<.follow_button>`.
-  """
-  attr(:follower_id, :any, required: true)
-  attr(:followee_id, :any, required: true)
-  attr(:follow_id, :any, default: nil, doc: "the viewer's follow id, or nil when not following")
-  attr(:follows_viewer?, :boolean, default: false, doc: "does this member follow the viewer back")
-
-  attr(:live?, :boolean,
-    default: false,
-    doc: "fire the outbound toggle as a `phx-click` (the profile LiveView) instead of a CSRF link"
-  )
-
-  def follow_relationship(assigns) do
-    follows? = is_binary(assigns.follow_id)
-    follows_viewer? = assigns.follows_viewer?
-    mutual? = follows? and follows_viewer?
-
-    {seam_glyph, seam_title} =
-      cond do
-        mutual? -> {"⇄", gettext("You follow each other")}
-        follows? -> {"→", gettext("You follow this member")}
-        follows_viewer? -> {"←", gettext("This member follows you")}
-        true -> {"·", nil}
-      end
-
-    assigns =
-      assigns
-      |> assign(:follows_viewer?, follows_viewer?)
-      |> assign(:mutual?, mutual?)
-      |> assign(:seam_glyph, seam_glyph)
-      |> assign(:seam_title, seam_title)
-
-    ~H"""
-    <%!-- Two equal-width halves (flex-1) whose size never changes between follow
-    states. Green with a check = an active follow direction, grey with a cross =
-    an inactive one; a mutual "vernetzt" follow lights both halves green and the
-    ring emerald. The seam glyph (· → ← ⇄) shows the direction. The pill is a
-    horizontal row at every width. On a phone it sizes to its labels (`w-auto`,
-    each half one line via whitespace-nowrap) with the seam hidden, so it stays
-    one short row in the white area beside the avatar (measured ~115px at a 374px
-    viewport, well inside the space below the cover) rather than riding up into the
-    cover banner. From sm up it is the fixed w-80 pill with the seam. --%>
-    <div class={[
-      "flex w-52 items-stretch divide-x overflow-hidden rounded-lg text-xs font-semibold ring-1 sm:w-80 sm:text-sm",
-      if(@mutual?,
-        do: "divide-emerald-300 ring-emerald-300 dark:divide-emerald-700 dark:ring-emerald-700",
-        else: "divide-slate-300 ring-slate-200 dark:divide-slate-600 dark:ring-slate-700"
-      )
-    ]}>
-      <.follow_button
-        variant="segment"
-        follower_id={@follower_id}
-        followee_id={@followee_id}
-        follow_id={@follow_id}
-        live?={@live?}
-      />
-      <span
-        aria-hidden="true"
-        title={@seam_title}
-        class={[
-          "flex w-7 shrink-0 items-center justify-center text-xs",
-          if(@mutual?,
-            do: "bg-emerald-50 text-emerald-600 dark:bg-emerald-900/40 dark:text-emerald-300",
-            else: "bg-slate-50 text-slate-400 dark:bg-slate-800/60 dark:text-slate-500"
-          )
-        ]}
-      >
-        {@seam_glyph}
-      </span>
-      <span
-        title={if(@follows_viewer?, do: gettext("This member follows you"), else: gettext("This member doesn't follow you"))}
-        class={[
-          "flex min-w-0 flex-1 items-center justify-center gap-1.5 overflow-hidden px-2 py-1.5",
-          if(@follows_viewer?,
-            do: "bg-emerald-700 text-white",
-            else: "bg-slate-100 text-slate-600 dark:bg-slate-800 dark:text-slate-400"
-          )
-        ]}
-      >
-        <%= if @follows_viewer? do %>
-          <span aria-hidden="true">✓</span><span class="whitespace-nowrap">{gettext("Follows you")}</span>
-        <% else %>
-          <%!-- They don't follow you: the full label, no cross. Dropping the ✗ (and
-          the segment divider added on the pill) keeps this half from blending into
-          the seam glyph beside it. It can truncate on a very narrow phone; the
-          title preserves the meaning. --%>
-          <span class="whitespace-nowrap">{gettext("Doesn't follow you")}</span>
-        <% end %>
-      </span>
-    </div>
-    """
-  end
 
   @doc """
   The **mute / unmute** toggle for a follow you own — silences the followee's

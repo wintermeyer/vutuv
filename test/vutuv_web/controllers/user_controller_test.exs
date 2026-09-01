@@ -173,6 +173,41 @@ defmodule VutuvWeb.UserControllerTest do
     refute html =~ ~p"/#{user}/following"
   end
 
+  test "the counts and the follow-back chip share one line that never wraps", %{conn: conn} do
+    # The chip is another fact about this member, so it rides the counts row
+    # rather than owning a line above it. That only works if the row cannot
+    # wrap and the LABELS give way instead — with the longest German word
+    # ("Vernetzungen") spent first, or a 374px phone loses "31 folgt" to an
+    # ellipsis before it loses anything worth saving. The lopsided shrink pair
+    # is what expresses that, and it is exactly the kind of oddity a later
+    # cleanup pass removes as noise, so it is pinned here.
+    {conn, _viewer} = create_and_login_user(conn)
+    profile = insert_activated_user()
+    # A mutual follow, so all three counters render — the connections one is
+    # the counter that carries the heavy shrink weight.
+    other = insert(:user, email_confirmed?: true)
+    insert(:follow, follower: other, followee: profile)
+    insert(:follow, follower: profile, followee: other)
+
+    html = conn |> get(~p"/#{profile}") |> html_response(200)
+
+    assert [row] =
+             Regex.run(
+               ~r/<div class="[^"]*flex items-center gap-x-2[^"]*">.*?<\/div>\s*<div class="mt-4 flex items-center gap-1 border-t/s,
+               html
+             )
+
+    refute row =~ "flex-wrap"
+    assert row =~ "shrink-[100]"
+    assert row =~ "shrink-[0.01]"
+    assert row =~ "truncate"
+    # the chip closes the row, after the counters
+    assert row =~ "data-profile-relationship"
+    {follower_at, _} = :binary.match(row, ~p"/#{profile}/followers")
+    {chip_at, _} = :binary.match(row, "data-profile-relationship")
+    assert follower_at < chip_at
+  end
+
   test "with no followers or following, the counts row is gone but Member since still shows",
        %{conn: conn} do
     # "Member since" always anchors the footer row (left of the vCard action),
@@ -212,18 +247,19 @@ defmodule VutuvWeb.UserControllerTest do
     refute actions_div =~ "flex-wrap"
   end
 
-  test "Message lives inside the ⋯ actions menu, not as a standalone header button",
+  test "Message is a control of its own in the header, not an item in the ⋯ menu",
        %{conn: conn} do
-    # Message used to be a full-width secondary button that crowded the header
-    # row on mobile; it now folds into the #profile-actions-menu dropdown, which
-    # sits on the name row beside the member's name (the avatar row is the Follow
-    # pill alone).
+    # Message spent a release inside the #profile-actions-menu dropdown, where
+    # writing to somebody cost two taps behind a glyph that names nothing. It is
+    # a first-class header control again — the menu keeps only what is rare or
+    # heavy (mute, report, block).
     {conn, _visitor} = create_and_login_user(conn)
     profile = insert_activated_user()
     html = conn |> get(~p"/#{profile}") |> html_response(200)
 
     assert [menu] = Regex.run(~r/id="profile-actions-menu".*?<\/details>/s, html)
-    assert menu =~ ~p"/messages/with/#{profile}"
+    refute menu =~ ~p"/messages/with/#{profile}"
+    assert String.replace(html, menu, "") =~ ~p"/messages/with/#{profile}"
   end
 
   test "lists the user's full profile information to visitors", %{conn: conn} do
@@ -1255,15 +1291,14 @@ defmodule VutuvWeb.UserControllerTest do
   end
 
   describe "header directional follow state" do
-    # The follow-only model shows BOTH directions in one segmented pill that is
-    # always present in full, so the relationship status reads at a glance from
-    # the text + colour of each half rather than from which parts appear: the
-    # clickable outbound toggle (Follow / Following, "I follow him"), a seam
-    # whose glyph encodes the direction (· none, → out, ← in, ⇄ mutual), and a
-    # read-only inbound half that always states the inbound direction
-    # ("Follows you" / "Doesn't follow you", "he follows me"). The inbound text
-    # and the ⇄ connector render only in the header, so they are unambiguous
-    # probes for header_follows_viewer? and the mutual state.
+    # The follow-only model shows BOTH directions, but as two different kinds of
+    # thing: the outbound one is the Follow / Following BUTTON ("I follow him"),
+    # the inbound one a read-only status chip that always states it ("Follows
+    # you" / "Doesn't follow you", "he follows me") and goes to the relationship's
+    # own word, "Connected" (vernetzt), once both directions are live. The
+    # `data-profile-relationship` token on that chip is the exact probe for
+    # header_follows_viewer? and the mutual state; the chip and the strip's
+    # sentence render only in the header.
 
     test "states the inbound direction even when there is no relationship yet", %{conn: conn} do
       {conn, _viewer} = create_and_login_user(conn)
@@ -1271,12 +1306,12 @@ defmodule VutuvWeb.UserControllerTest do
 
       html = conn |> get(~p"/#{other}") |> html_response(200)
 
-      # the inbound half is always present and reads the negative when this
-      # member does not follow the viewer
+      # the chip is always present and reads the negative when this member
+      # does not follow the viewer
       # Phoenix HTML-escapes the apostrophe, so match the rendered form
+      assert html =~ ~s(data-profile-relationship="none")
       assert html =~ "Doesn&#39;t follow you"
       refute html =~ "Follows you"
-      refute html =~ "You follow each other"
       # the toggle offers a follow (a phx-click create-follow targeting other)
       assert html =~ ~s(phx-click="follow")
       assert html =~ ~s(phx-value-followee="#{other.id}")
@@ -1292,16 +1327,15 @@ defmodule VutuvWeb.UserControllerTest do
 
       html = conn |> get(~p"/#{other}") |> html_response(200)
 
+      assert html =~ ~s(data-profile-relationship="inbound")
       assert html =~ "Follows you"
       # the toggle offers a follow-back (a phx-click "follow" targeting other),
       # not an unfollow
       assert html =~ ~s(phx-value-followee="#{other.id}")
       refute html =~ ~s(phx-click="unfollow")
-      # a follow-back is not yet mutual, so no ⇄ connector
-      refute html =~ "You follow each other"
     end
 
-    test "shows the ⇄ connector for a mutual follow (the directional replacement for vernetzt)",
+    test "says 'Connected' (vernetzt) for a mutual follow, not just 'Follows you'",
          %{
            conn: conn
          } do
@@ -1312,9 +1346,9 @@ defmodule VutuvWeb.UserControllerTest do
 
       html = conn |> get(~p"/#{other}") |> html_response(200)
 
-      assert html =~ "Follows you"
-      # both directions active → the ⇄ connector marks the mutual follow
-      assert html =~ "You follow each other"
+      # Both directions live: the chip goes to the relationship's own word.
+      assert html =~ ~s(data-profile-relationship="mutual")
+      assert html =~ "Connected"
     end
 
     test "reads 'Doesn't follow you' when only the viewer follows (one-way out)", %{
@@ -1326,12 +1360,12 @@ defmodule VutuvWeb.UserControllerTest do
 
       html = conn |> get(~p"/#{other}") |> html_response(200)
 
-      # the inbound half is still present, just negative; never "Follows you"
-      # (capital F, with the trailing s) and never the mutual connector
+      # the chip is still present, just negative; never "Follows you" (capital
+      # F, with the trailing s) and never the mutual word
       # Phoenix HTML-escapes the apostrophe, so match the rendered form
+      assert html =~ ~s(data-profile-relationship="none")
       assert html =~ "Doesn&#39;t follow you"
       refute html =~ "Follows you"
-      refute html =~ "You follow each other"
     end
   end
 

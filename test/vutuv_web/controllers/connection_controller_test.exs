@@ -72,19 +72,22 @@ defmodule VutuvWeb.ConnectionControllerTest do
       assert html =~ ~s(phx-value-id="#{follow.id}")
     end
 
-    test "a mutual follow shows the connected (vernetzt) state via the ⇄ connector", %{conn: conn} do
+    test "a mutual follow reads as connected (vernetzt), not as a plain follow-back", %{
+      conn: conn
+    } do
       {conn, me} = create_and_login_user(conn)
       other = insert_activated_user()
       connect!(me, other)
 
       html = conn |> get(~p"/#{other}") |> html_response(200)
 
-      # The follow-only model marks "vernetzt" with both follow directions lit in
-      # the segmented control plus a ⇄ connector, not a standalone "Connected"
-      # word (mirrors the header_directional_follow_state tests in
-      # user_controller_test).
-      assert html =~ "Follows you"
-      assert html =~ "You follow each other"
+      # The header says it in the relationship's own word: "Connected" is
+      # "Vernetzt", guarded by VutuvWeb.ConnectionVocabularyTest. The plain
+      # inbound "Follows you" is the FOLLOW-BACK state and must not stand in
+      # for a mutual follow (mirrors the header_directional_follow_state tests
+      # in user_controller_test).
+      assert html =~ ~s(data-profile-relationship="mutual")
+      assert html =~ "Connected"
     end
   end
 

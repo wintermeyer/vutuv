@@ -304,7 +304,11 @@ defmodule VutuvWeb.UserHTML do
       <svg class="h-4 w-4 shrink-0" fill="none" stroke="currentColor" stroke-width="1.8" viewBox="0 0 24 24">
         <path stroke-linecap="round" stroke-linejoin="round" d="M6.75 3v2.25M17.25 3v2.25M3 18.75V7.5a2.25 2.25 0 0 1 2.25-2.25h13.5A2.25 2.25 0 0 1 21 7.5v11.25m-18 0A2.25 2.25 0 0 0 5.25 21h13.5A2.25 2.25 0 0 0 21 18.75m-18 0v-7.5A2.25 2.25 0 0 1 5.25 9h13.5A2.25 2.25 0 0 1 21 11.25v7.5" />
       </svg>
-      {@value}
+      <%!-- `min-w-0 truncate` on the text, not on the <p>: the <p> is a flex
+      row, so text-overflow set on it never reaches the string. Without this
+      the line's min-content is a whole "Mitglied seit Juli 2026" and it pushes
+      the footer's glyph cluster off a 374px phone. --%>
+      <span class="min-w-0 truncate">{@value}</span>
     </p>
     """
   end
@@ -468,6 +472,287 @@ defmodule VutuvWeb.UserHTML do
       active_class: "text-accent"
     }
   end
+
+  @doc """
+  The profile header's **follower / following / connection counts** as one
+  wrapping row of links.
+
+  A counter whose total is 0 is left out entirely: a bare "0 followers" says
+  nothing, and three zeroes say nothing three times. The `extra` slot takes
+  whatever an arrangement wants to ride along at the end of the row (the
+  follow-back chip, the "Member since" line, the save glyphs), so the counts
+  markup exists once no matter how many of them there are.
+  """
+  attr(:user, :any, required: true)
+  attr(:follower_count, :integer, required: true)
+  attr(:followee_count, :integer, required: true)
+  attr(:connection_count, :integer, required: true)
+  attr(:class, :any, default: nil)
+
+  slot(:extra)
+
+  def profile_counts(assigns) do
+    ~H"""
+    <div class={["flex items-center gap-x-2 text-sm sm:gap-x-6", @class]}>
+      <.link :if={@follower_count > 0} href={~p"/#{@user}/followers"} class={count_link_class()}>
+        <span class={count_number_class()}>{compact_count(@follower_count)}</span>
+        <span class={count_label_class()}>{ngettext("follower", "followers", @follower_count)}</span>
+      </.link>
+      <.link :if={@followee_count > 0} href={~p"/#{@user}/following"} class={count_link_class()}>
+        <span class={count_number_class()}>{compact_count(@followee_count)}</span>
+        <span class={count_label_class()}>{gettext("following")}</span>
+      </.link>
+      <.link
+        :if={@connection_count > 0}
+        id="profile-connections"
+        href={~p"/#{@user}/connections"}
+        class={[count_link_class(), "shrink-[100]"]}
+      >
+        <span class={count_number_class()}>{compact_count(@connection_count)}</span>
+        <span class={count_label_class()}>
+          {ngettext("connection", "connections", @connection_count)}
+        </span>
+      </.link>
+      {render_slot(@extra)}
+    </div>
+    """
+  end
+
+  # The row NEVER wraps and the follow-back chip beside it is never cut (it
+  # carries its own `shrink-0`), so what gives way on a narrow phone is the
+  # LABELS: they ellipsise, the numbers stay whole. A number is the point of a
+  # counter, and a label can be guessed from the two beside it and from the
+  # page it links to.
+  #
+  # The shrink weights are what make that readable rather than merely true.
+  # Flex distributes shrinkage in proportion to weight * width, so equal
+  # weights nibble every label at once and "31 folgt" — five letters against a
+  # two-digit number — loses its word first, which is the least useful place to
+  # save the pixels. The lopsided pair (`shrink-[0.01]` on the two short links,
+  # `shrink-[100]` on the connections one) spends the longest German word
+  # first: at a 374px viewport the row reads "5 Follower · 31 folgt · 4 Ver… ·
+  # ✓ Folgt Ihnen", all four on one line. Only once "Vernetzungen" is spent do
+  # the other two give a pixel, which is what keeps a 320px phone from
+  # overflowing the card instead of clipping a word (measured: 0px overflow at
+  # a 240px card body, where the connections label is down to nothing).
+  defp count_link_class, do: "flex min-w-0 shrink-[0.01] items-baseline gap-1 hover:underline"
+  defp count_number_class, do: "shrink-0 font-bold text-slate-900 dark:text-white"
+  defp count_label_class, do: "min-w-0 truncate text-slate-600 dark:text-slate-400"
+
+  @doc """
+  The **vCard download** in the profile header's footer.
+
+  A 40px glyph on a phone, where it stands in a row with the bookmark and the
+  heart and the word would not fit; the word comes back from `sm` up. The
+  `aria-label` carries the name either way, so the label is decoration rather
+  than the only thing naming the link.
+
+  The `sm:` half is spelled with variants rather than a computed class —
+  `w-10 sm:w-auto sm:px-2` — because two utilities for the same property in one
+  class list are decided by the order Tailwind emits them, not the order they
+  are written.
+  """
+  attr(:path, :string, required: true)
+
+  def profile_vcard_link(assigns) do
+    ~H"""
+    <.link
+      id="download-vcard"
+      href={@path}
+      title={gettext("vCard")}
+      aria-label={gettext("vCard")}
+      class={[
+        "inline-flex h-10 w-10 items-center justify-center gap-1.5 rounded-lg text-sm font-semibold sm:w-auto sm:px-2",
+        "hover:bg-slate-100 dark:hover:bg-slate-800",
+        "text-brand-600 hover:text-brand-700 dark:text-brand-400 dark:hover:text-brand-300"
+      ]}
+    >
+      <svg class="h-5 w-5 shrink-0" fill="none" stroke="currentColor" stroke-width="1.8" viewBox="0 0 24 24">
+        <path
+          stroke-linecap="round"
+          stroke-linejoin="round"
+          d="M3 16.5v2.25A2.25 2.25 0 0 0 5.25 21h13.5A2.25 2.25 0 0 0 21 18.75V16.5M16.5 12 12 16.5m0 0L7.5 12m4.5 4.5V3"
+        />
+      </svg>
+      <span class="hidden sm:inline">{gettext("vCard")}</span>
+    </.link>
+    """
+  end
+
+  @doc """
+  The profile header's **follow** control as one button in two states, beside
+  the avatar in `templates/user/show.html.heex`.
+
+  It replaces the outbound half of the old segmented `<.follow_relationship>`
+  pill, which sat glued to a read-only status half of the same size and colour
+  weight — so half of what looked like a control did nothing when pressed. Here
+  the button is only the act (`phx-click`, no reload) and the inbound direction
+  is stated beside it by `<.profile_relationship_chip>`.
+
+  Two states, the "one control, two states" language the rail's
+  `<.follow_button variant="text">` already uses: the brand call-to-action
+  while you do not follow, a calm outline "Following" once you do, which turns
+  rose and swaps its label to "Unfollow" on hover and focus so the button says
+  what pressing it does. `min-h-10` is the 40px touch target every header
+  control here shares; `class` takes the per-arrangement width (`flex-1` in the
+  two-CTA row, `w-full` in the strip on a phone).
+
+  Both states carry the same `id` (`follow-user`), so a test can name the one
+  control without knowing which way round it currently is.
+  """
+  attr(:id, :string, required: true)
+  attr(:follow_id, :any, required: true, doc: "the viewer's follow id, or nil when not following")
+  attr(:followee_id, :any, required: true)
+
+  def profile_follow_button(assigns) do
+    ~H"""
+    <button
+      :if={is_binary(@follow_id)}
+      id={@id}
+      type="button"
+      phx-click="unfollow"
+      phx-value-id={@follow_id}
+      class={["group px-4", header_action_class(:secondary)]}
+    >
+      <span class="group-hover:hidden group-focus:hidden">{gettext("Following")}</span>
+      <span class="hidden group-hover:inline group-focus:inline">{gettext("Unfollow")}</span>
+    </button>
+    <button
+      :if={!is_binary(@follow_id)}
+      id={@id}
+      type="button"
+      phx-click="follow"
+      phx-value-followee={@followee_id}
+      class={["px-4", header_action_class(:primary)]}
+    >
+      {gettext("Follow")}
+    </button>
+    """
+  end
+
+  @doc """
+  The profile header's **Message** control — the direct way into the
+  conversation with this member, which used to be reachable only through the ⋯
+  menu (two taps, behind a glyph that names nothing).
+
+  A plain `href` link, not `navigate`: `/messages` lives in its own
+  `live_session` and this LiveView is embedded off-router, so a live navigation
+  would fall back to a full load anyway.
+
+  `icon_only?` renders the envelope alone (a 40px square beside the Follow
+  button, where two text buttons plus a 96px avatar do not fit a phone row);
+  the label then rides `title` + `aria-label`, as on the footer's save toggles.
+  """
+  attr(:id, :string, required: true)
+  attr(:user, :any, required: true)
+  attr(:icon_only?, :boolean, default: false)
+
+  def profile_message_button(assigns) do
+    ~H"""
+    <.link
+      id={@id}
+      href={~p"/messages/with/#{@user}"}
+      title={gettext("Message")}
+      aria-label={@icon_only? && gettext("Message")}
+      class={[header_action_class(:outline), if(@icon_only?, do: "w-10", else: "px-4")]}
+    >
+      <svg class="h-5 w-5" fill="none" stroke="currentColor" stroke-width="1.6" viewBox="0 0 24 24" aria-hidden="true">
+        <path
+          stroke-linecap="round"
+          stroke-linejoin="round"
+          d="M21.75 6.75v10.5a2.25 2.25 0 0 1-2.25 2.25h-15a2.25 2.25 0 0 1-2.25-2.25V6.75m19.5 0A2.25 2.25 0 0 0 19.5 4.5h-15a2.25 2.25 0 0 0-2.25 2.25m19.5 0v.243a2.25 2.25 0 0 1-1.07 1.916l-7.5 4.615a2.25 2.25 0 0 1-2.36 0L3.32 8.91a2.25 2.25 0 0 1-1.07-1.916V6.75"
+        />
+      </svg>
+      <span :if={!@icon_only?}>{gettext("Message")}</span>
+    </.link>
+    """
+  end
+
+  # The three header-control looks, shared by the follow button and the message
+  # link so a row of them lines up: same height (min-h-10, the 40px touch
+  # target), same radius, same type scale. Only the fill differs.
+  # Every header action control is the same 40px-high, same-radius shape, so a
+  # row of them lines up whatever sits in it. Defined above the
+  # `header_action_class/1` clauses that read it — a module attribute is nil
+  # above its own definition.
+  #
+  # No horizontal padding in here: the icon-only Message button is a `w-10`
+  # square, and a `px-0` appended after a `px-4` in the same class list does
+  # NOT win — Tailwind decides a same-property conflict by the order the two
+  # utilities sit in the bundle, not by the order they are written, and `px-4`
+  # is emitted last. That squeezed the 20px envelope into the 6px a 40px box
+  # has left after 2 * 16px of padding. So each call site names its own.
+  @header_action_base "inline-flex min-h-10 shrink-0 items-center justify-center gap-1.5 rounded-lg text-sm font-semibold transition-colors"
+
+  defp header_action_class(:primary),
+    do: "#{@header_action_base} bg-brand-600 text-white hover:bg-brand-700"
+
+  defp header_action_class(:secondary),
+    do:
+      "#{@header_action_base} border border-slate-300 bg-white text-slate-700 hover:border-rose-300 hover:text-rose-700 dark:border-slate-700 dark:bg-slate-900 dark:text-slate-200 dark:hover:border-rose-800 dark:hover:text-rose-400"
+
+  defp header_action_class(:outline),
+    do:
+      "#{@header_action_base} border border-slate-300 bg-white text-slate-700 hover:bg-slate-50 hover:text-brand-700 dark:border-slate-700 dark:bg-slate-900 dark:text-slate-200 dark:hover:bg-slate-800 dark:hover:text-brand-300"
+
+  @doc """
+  What this member's side of the relationship is, as a **status chip** — never
+  a button.
+
+  The old segmented pill said it in a half that was the same size, colour and
+  shape as the clickable half beside it, which is what made the control read as
+  two buttons of which one was broken. Here the inbound direction is a small
+  chip: emerald "Connected" for a mutual follow (the `vernetzt` word family,
+  guarded by `VutuvWeb.ConnectionVocabularyTest`), an emerald tint for a
+  one-way inbound follow, calm slate when they do not follow you — so all three
+  states the pill encoded stay legible, and the seam glyph (· → ← ⇄) nobody
+  could read is gone. `data-profile-relationship` names the state for tests,
+  which is a steadier probe than a translated word.
+  """
+  attr(:follow_id, :any, required: true)
+  attr(:follows_viewer?, :boolean, required: true)
+
+  def profile_relationship_chip(assigns) do
+    assigns =
+      assign(assigns, :state, relationship_state(assigns.follow_id, assigns.follows_viewer?))
+
+    ~H"""
+    <span
+      data-profile-relationship={@state}
+      class={[
+        "inline-flex shrink-0 items-center gap-1 rounded-full px-2.5 py-1 text-xs font-semibold",
+        relationship_chip_class(@state)
+      ]}
+    >
+      <span :if={@state != :none} aria-hidden="true">✓</span>
+      {relationship_label(@state)}
+    </span>
+    """
+  end
+
+  defp relationship_state(follow_id, follows_viewer?) do
+    cond do
+      is_binary(follow_id) and follows_viewer? -> :mutual
+      follows_viewer? -> :inbound
+      true -> :none
+    end
+  end
+
+  defp relationship_chip_class(:mutual),
+    do:
+      "bg-emerald-700 text-white ring-1 ring-emerald-700 dark:bg-emerald-800 dark:ring-emerald-700"
+
+  defp relationship_chip_class(:inbound),
+    do:
+      "bg-emerald-50 text-emerald-800 ring-1 ring-emerald-200 dark:bg-emerald-900/40 dark:text-emerald-200 dark:ring-emerald-800"
+
+  defp relationship_chip_class(:none),
+    do:
+      "bg-slate-100 text-slate-600 ring-1 ring-slate-200 dark:bg-slate-800 dark:text-slate-400 dark:ring-slate-700"
+
+  defp relationship_label(:mutual), do: gettext("Connected")
+  defp relationship_label(:inbound), do: gettext("Follows you")
+  defp relationship_label(:none), do: gettext("Doesn't follow you")
 
   @doc """
   A single-path brand glyph for a social-media provider (Simple Icons, CC0),

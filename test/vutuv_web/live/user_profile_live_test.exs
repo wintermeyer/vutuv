@@ -19,41 +19,51 @@ defmodule VutuvWeb.UserProfileLiveTest do
   alias Vutuv.Tags
 
   describe "follow / unfollow without a reload" do
-    test "following flips the header pill and reveals the follower count", %{conn: conn} do
+    # The id is on BOTH states of the control, so one selector covers follow
+    # and unfollow and the test never has to know which way round it is.
+    @follow "#follow-user"
+
+    test "following flips the header control and reveals the follower count", %{conn: conn} do
       {conn, _viewer} = create_and_login_user(conn)
       owner = insert_activated_user()
 
       {:ok, view, _html} = live(conn, ~p"/#{owner}")
 
-      # The pill starts on the brand "Follow" call to action and there is no
-      # follower count yet (a bare "0 followers" says nothing, so it is hidden).
-      assert has_element?(view, ~s(button[phx-click="follow"][phx-value-followee="#{owner.id}"]))
+      # It starts on the brand "Follow" call to action and there is no follower
+      # count yet (a bare "0 followers" says nothing, so it is hidden).
+      assert has_element?(
+               view,
+               ~s(#{@follow}[phx-click="follow"][phx-value-followee="#{owner.id}"])
+             )
+
       refute has_element?(view, ~s([href="/#{owner.username}/followers"]))
 
-      view
-      |> element(~s(button[phx-click="follow"][phx-value-followee="#{owner.id}"]))
-      |> render_click()
+      view |> element(@follow) |> render_click()
 
-      # The pill is now the green "Following" (an unfollow toggle) and the
-      # follower count link appeared — all without a page reload.
-      assert has_element?(view, ~s(button[phx-click="unfollow"]))
-      refute has_element?(view, ~s(button[phx-click="follow"][phx-value-followee="#{owner.id}"]))
+      # The same button is now the "Following" unfollow toggle and the follower
+      # count link appeared — all without a page reload.
+      assert has_element?(view, ~s(#{@follow}[phx-click="unfollow"]))
+      refute has_element?(view, ~s(#{@follow}[phx-click="follow"]))
       assert has_element?(view, ~s([href="/#{owner.username}/followers"]))
     end
 
-    test "unfollowing flips the pill back and hides the follower count", %{conn: conn} do
+    test "unfollowing flips it back and hides the follower count", %{conn: conn} do
       {conn, viewer} = create_and_login_user(conn)
       owner = insert_activated_user()
       insert(:follow, follower: viewer, followee: owner)
 
       {:ok, view, _html} = live(conn, ~p"/#{owner}")
 
-      assert has_element?(view, ~s(button[phx-click="unfollow"]))
+      assert has_element?(view, ~s(#{@follow}[phx-click="unfollow"]))
       assert has_element?(view, ~s([href="/#{owner.username}/followers"]))
 
-      view |> element(~s(button[phx-click="unfollow"])) |> render_click()
+      view |> element(@follow) |> render_click()
 
-      assert has_element?(view, ~s(button[phx-click="follow"][phx-value-followee="#{owner.id}"]))
+      assert has_element?(
+               view,
+               ~s(#{@follow}[phx-click="follow"][phx-value-followee="#{owner.id}"])
+             )
+
       refute has_element?(view, ~s([href="/#{owner.username}/followers"]))
     end
   end
@@ -270,8 +280,10 @@ defmodule VutuvWeb.UserProfileLiveTest do
       menu = "#profile-actions-menu"
       refute has_element?(view, ~s(#{menu} button[phx-click="bookmark_user"]))
       refute has_element?(view, ~s(#{menu} button[phx-click="like_user"]))
-      # What the menu keeps: navigation and the heavier moderation actions.
-      assert has_element?(view, "#{menu} #message-user")
+      # Message left too — it is a header control of its own now, one tap.
+      refute has_element?(view, "#{menu} #message-user")
+      assert has_element?(view, "#message-user")
+      # What the menu keeps: the heavier moderation actions.
       assert has_element?(view, "#{menu} #report-profile")
       assert has_element?(view, "#{menu} #block-user")
     end
