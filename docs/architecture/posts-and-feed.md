@@ -799,13 +799,14 @@ opt-in the message composer passes, one handler in the hook); the shortcut
 respects a disabled submit button, so it cannot post past the photo-upload
 guard, and the "?" shortcuts overlay lists it.
 
-**Emoji** (issue #1197) are picked from the 🙂 toolbar button's picker or typed as
-a shortcode (`:tada:` becomes 🎉 on the closing colon, aliases included). What a
-body stores is the emoji **character**, never the shortcode, so this is a
-client-side feature end to end: `assets/js/emoji_data.js` holds the table,
-`emoji_picker.js` the panel, and no server code takes part — a character is
-already correct in the HTML page, every agent-format sibling, RSS, mail and the
-fediverse. Both surfaces work in the message composer too.
+**Emoji** (issue #1197) are typed as a shortcode: `:tada:` becomes 🎉 on the
+closing colon, aliases included. The picker panel that used to sit behind a 🙂
+toolbar button is **gone** (issue #1886, with the toolbar). What a body stores
+is the emoji **character**, never the shortcode, so this is a client-side
+feature end to end: `assets/js/emoji_data.js` holds the table and no server code
+takes part — a character is already correct in the HTML page, every
+agent-format sibling, RSS, mail and the fediverse. The type-through works in the
+message composer too.
 
 **A post appears at most once.** When several followed members repost the same
 post — or the viewer already follows its author, so it would also show as its
@@ -1405,11 +1406,11 @@ drops every other `<img>` — a hotlinked remote picture would leak each
 reader's IP, so `Vutuv.MarkdownContent.validate_own_images_only/2` in
 `Post.changeset` also rejects any non-own-upload `![](…)` at write time (the
 composer and `POST /api/2.0/posts` alike — a 422 for the API). In the composer,
-files can be dropped/pasted straight into the prose or picked via the 🖼
-toolbar button (both insert at the cursor once uploaded, via the
+files can be dropped/pasted straight into the prose or picked via the slash
+menu's "Bild einfügen" (both insert at the cursor once uploaded, via the
 `mde-image-uploaded` / `mde-insert-image` push events), each thumbnail row has
-an explicit "Insert into text", and selecting an image in the editor reveals
-the alignment buttons. Attachments the body does **not** reference render as
+an explicit "Insert into text", and selecting an image in the editor turns the
+selection bubble into its alignment controls. Attachments the body does **not** reference render as
 the gallery / image tile row below the post (`VutuvWeb.PostComponents`
 de-duplicates via `PostImage.referenced_in?/2`); **both** full mode and
 previews render inline references in place (previews via the

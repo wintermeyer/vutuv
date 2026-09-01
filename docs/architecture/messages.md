@@ -25,9 +25,11 @@ empties the composer after a send is the **re-seed token** `assign_form/1` bumps
 beside the reset body (`seed=`), because the editor deliberately ignores its own
 text coming back — every other re-render on this page, the other side's typing
 bubble included, must leave the writer's caret alone. See
-`.claude/rules/design.md` for the component. Emoji come with it (issue #1197):
-the 🙂 toolbar button's picker and the `:tada:` type-through both work here, and
-both store the emoji **character**, so a message needs no rendering change.
+`.claude/rules/design.md` for the component — including that there is no
+toolbar since issue #1886: marks come from the selection bubble, blocks from
+the slash menu, and the `Text | Markdown` switch sits under the field. Emoji
+come with it (issue #1197) as the `:tada:` type-through, which stores the emoji
+**character**, so a message needs no rendering change.
 
 Because the stored body is Markdown **source**, every place that shows a message
 outside the thread must flatten it or it prints the markers themselves. The

@@ -1,16 +1,22 @@
 defmodule VutuvWeb.EmojiDataTest do
   @moduledoc """
   The composer's emoji dataset (`assets/js/emoji_data.js`, issue #1197) is
-  client-side, so `mix test` cannot exercise the picker itself — but the data is
-  a flat table, and its invariants are exactly the ones a browser would not
-  complain about:
+  client-side, so `mix test` cannot exercise the type-through itself — but the
+  data is a flat table, and its invariants are exactly the ones a browser would
+  not complain about:
 
     * a shortcode outside `[a-z0-9_+-]` can never be typed through, because
-      `SHORTCODE_AT_CARET` would not match it. The picker would still offer the
-      emoji, so nothing looks broken; `:Tada:` simply does nothing, forever.
-    * a duplicated emoji shows up twice in one group's grid.
+      `SHORTCODE_AT_CARET` would not match it — `:Tada:` simply does nothing,
+      forever, with nothing anywhere to say so.
+    * a duplicated emoji is a second entry nothing will ever reach.
     * a duplicated shortcode is a silently-ignored second definition (the map is
       first-writer-wins), so the alias points at the wrong picture.
+
+  **The picker panel this dataset was first written for is gone** (issue #1886:
+  the toolbar button that opened it went with the toolbar). What still reads
+  the table is the `:shortcode:` type-through, in the prose (`emojiInputRule`)
+  and in the source textarea (`wireSourceEmoji`) — so the group structure is
+  now scaffolding for the lookup rather than a set of tabs anybody sees.
 
   Every entry is `[character, shortcodes, english, german]`; parsing that with a
   regex is enough, and it keeps the dataset a plain list a human can extend with

@@ -2259,30 +2259,27 @@ div.footnotes li:target {
   border-top: 1px solid #e2e8f0;
   min-height: 9rem;
 }
-.mde[data-mde-mode="source"] .mde__group,
-.mde[data-mde-mode="source"] .mde__sep { display: none; }
+/* (Source mode needs no rule here: `syncBubble` and `syncSlash` both return
+   early on it, and `setMode` closes both on the way over. A third mechanism —
+   and an `!important` on elements the hook positions — would only be a
+   surprise for whoever debugs this next.) */
 
-/* Frame + toolbar chrome. */
+/* The bubble hangs ABOVE the selection, so it has to be allowed out of the
+   frame's box — which is why this no longer clips. Everything else the frame
+   drew stays: dropping the border with the clip took the editor's outline AND
+   its focus indicator (`:focus-within`) with it, and a focus state you cannot
+   see is a WCAG 2.4.7 failure, not a cleaner look. */
 .mde__frame {
+  position: relative;
+  overflow: visible;
   border: 1px solid #cbd5e1;
   border-radius: 0.5rem;
   background: #fff;
-  overflow: hidden;
 }
 .mde__frame:focus-within { border-color: #3b82f6; }
-.mde__toolbar {
-  display: flex;
-  flex-wrap: wrap;
-  align-items: center;
-  gap: 0.15rem;
-  padding: 0.3rem 0.4rem;
-  border-bottom: 1px solid #e2e8f0;
-  background: #f8fafc;
-}
-.mde__group,
-.mde__controls { display: flex; align-items: center; gap: 0.1rem; }
-.mde__sep { width: 1px; height: 1.1rem; margin: 0 0.25rem; background: #e2e8f0; }
-.mde__spacer { flex: 1 1 auto; }
+
+/* One button recipe, now shared by the bubble's marks and the footer's
+   full-screen control. */
 .mde__btn {
   display: inline-flex;
   align-items: center;
@@ -2296,23 +2293,122 @@ div.footnotes li:target {
 }
 .mde__btn:hover { background: #e2e8f0; color: #0f172a; }
 .mde__btn:active { background: #cbd5e1; }
-.mde[data-mde-mode="source"] [data-mde-cmd="mode"],
 .mde[data-mde-fullscreen="1"] [data-mde-cmd="fullscreen"] {
   background: #dbeafe;
   color: #1d4ed8;
 }
 
-/* Inline post images (post composer only). The alignment button group appears
-   while an image node is selected (the hook stamps data-mde-img on the root);
-   the active alignment is aria-pressed. The prose previews the alignment
+/* --- the selection bubble (issue #1886) ---
+   Dark on purpose: it sits ON the prose rather than beside it, and a light
+   panel over light text reads as part of the document. Positioned by the hook
+   against the frame; the transform is what makes those coordinates mean "the
+   middle of the selection, just above it". */
+.mde__bubble {
+  position: absolute;
+  z-index: 30;
+  display: flex;
+  gap: 0.1rem;
+  padding: 0.2rem;
+  border-radius: 0.5rem;
+  background: #0f172a;
+  box-shadow: 0 8px 20px -6px rgb(2 6 23 / 0.5);
+  transform: translate(-50%, calc(-100% - 0.5rem));
+}
+.mde__bubble .mde__btn { color: #e2e8f0; min-width: 1.75rem; height: 1.75rem; }
+.mde__bubble .mde__btn:hover { background: #334155; color: #fff; }
+.mde__bubble .mde__btn[aria-pressed="true"] { background: #1d4ed8; color: #fff; }
+.mde__bubble-group { display: flex; align-items: center; gap: 0.1rem; }
+
+/* The bubble has two faces. Marks are the default; select an image node and it
+   becomes the alignment controls, which is the only time those mean anything.
+   They used to sit in the toolbar permanently, doing nothing. */
+.mde__bubble-group--image { display: none; }
+.mde[data-mde-img="1"] .mde__bubble-group--marks { display: none; }
+.mde[data-mde-img="1"] .mde__bubble-group--image { display: flex; }
+
+/* --- the slash menu (issue #1886) ---
+   Opens under the "/" on an otherwise empty line and filters as the word is
+   typed. A light panel here, unlike the bubble: it is a list to read and pick
+   from, not a set of marks laid over the words. */
+.mde__slash {
+  position: absolute;
+  z-index: 30;
+  min-width: 13rem;
+  padding: 0.25rem;
+  border: 1px solid #e2e8f0;
+  border-radius: 0.625rem;
+  background: #fff;
+  box-shadow: 0 14px 34px -10px rgb(2 6 23 / 0.28);
+}
+.mde__slash-item {
+  display: flex;
+  align-items: center;
+  gap: 0.55rem;
+  width: 100%;
+  padding: 0.4rem 0.5rem;
+  border-radius: 0.375rem;
+  font-size: 0.875rem;
+  color: #0f172a;
+  text-align: left;
+  cursor: pointer;
+}
+.mde__slash-item:hover,
+.mde__slash-item.is-current { background: #eff6ff; color: #1e40af; }
+.mde__slash-glyph {
+  flex: none;
+  width: 1.35rem;
+  font-size: 0.75rem;
+  font-weight: 700;
+  text-align: center;
+  color: #64748b;
+}
+.mde__slash-item:hover .mde__slash-glyph,
+.mde__slash-item.is-current .mde__slash-glyph { color: inherit; }
+.mde__slash-empty { padding: 0.4rem 0.5rem; font-size: 0.8125rem; color: #475569; }
+
+/* --- the footer row (issue #1886) ---
+   What used to be the toolbar's right-hand controls, moved under the field:
+   which view is showing, and the way to a bigger box. */
+/* Hidden until the hook has booted, like the frame it used to live inside.
+   Every control here is dead without JS — and worse than dead: the switch
+   would show "Text" pressed while the textarea showing through IS the
+   Markdown source, so an un-gated footer does not merely fail to work, it
+   states the opposite of what is on screen. */
+.mde__foot { display: none; }
+.mde[data-mde-ready] .mde__foot {
+  display: flex;
+  align-items: center;
+  justify-content: flex-end;
+  gap: 0.4rem;
+  margin-top: 0.25rem;
+}
+.mde__views {
+  display: inline-flex;
+  gap: 1px;
+  padding: 2px;
+  border-radius: 0.5rem;
+  background: #f1f5f9;
+}
+/* Named rather than lettered — the source view is how a member reaches a
+   table, a divider or an H3 now, so it cannot be a two-letter guess. */
+.mde__view {
+  padding: 0.15rem 0.55rem;
+  border-radius: 0.375rem;
+  font-size: 0.75rem;
+  font-weight: 600;
+  color: #475569;
+  cursor: pointer;
+}
+.mde__view:hover { color: #0f172a; }
+.mde__view[aria-pressed="true"] {
+  background: #fff;
+  color: #0f172a;
+  box-shadow: 0 1px 2px rgb(15 23 42 / 0.12);
+}
+
+/* Inline post images (post composer only). The prose previews the alignment
    straight off the src's #fragment, mirroring the read-side
    `.post-inline-image--*` rules. */
-.mde__group--image { display: none; }
-.mde[data-mde-img="1"] .mde__group--image { display: flex; }
-.mde__btn[aria-pressed="true"] {
-  background: #dbeafe;
-  color: #1d4ed8;
-}
 .mde__mount .ProseMirror img {
   border-radius: 8px;
   height: auto;
@@ -2334,52 +2430,16 @@ div.footnotes li:target {
   margin-right: auto;
 }
 
-/* Mobile: collapse the toolbar to a single row — the inline group + the MD /
-   full-screen controls. The "more" toggle (hidden on sm+, where the whole
-   toolbar fits) reveals the secondary groups, which drop to their own wrapped
-   row below (`.mde__more-row`, ordered after the controls so those keep the top
-   row). The chevron flips when open. */
-.mde__more-row { display: flex; align-items: center; gap: 0.15rem; }
-.mde__more-toggle { display: none; }
-.mde__more-toggle svg { transition: transform 0.15s ease; }
+/* On a phone the bubble's targets grow: it is now the only way to reach a
+   mark, so it cannot be the mouse-sized 1.9rem. There is room for it here in a
+   way there never was for a toolbar — five controls in a floating panel, not
+   eighteen fighting for one row across the viewport. */
 @media (width < 40rem) {
-  .mde__toolbar .mde__sep { display: none; }
-  .mde__more-toggle { display: inline-flex; }
-  /* Finger-sized toolbar targets on a phone (the desktop 1.9rem is a mouse
-     target). The gap goes to zero so the top row still fits across a narrow
-     screen: the buttons themselves are what has to grow, not the spacing.
-     The size is arithmetic, not preference. The phone's row carries eight
-     controls (B, I, link, emoji, photo, the chevron, then MD and full screen
-     pushed right by the spacer), and the toolbar's own width is the viewport
-     minus the page gutter (32), the card padding (48), the frame border (2)
-     and its own padding (13). So the row fits when 8 x <size> is under that:
-     295px at a 390px viewport takes 2.25rem (288px) but not 2.5rem (320px),
-     which is why the touch-target rule's ~40px is not reachable here. */
-  .mde__toolbar { gap: 0; }
+  .mde__bubble .mde__btn { min-width: 2.25rem; height: 2.25rem; }
+  .mde__slash { min-width: 12rem; }
+  .mde__slash-item { padding: 0.55rem 0.5rem; }
+  .mde__view { padding: 0.3rem 0.6rem; }
   .mde__btn { min-width: 2.25rem; height: 2.25rem; padding: 0 0.2rem; }
-  .mde__toolbar:not(.is-open) .mde__more-row { display: none; }
-  .mde__toolbar.is-open .mde__more-row {
-    order: 2;
-    flex-basis: 100%;
-    flex-wrap: wrap;
-    margin-top: 0.25rem;
-  }
-  .mde__toolbar.is-open .mde__more-toggle svg { transform: rotate(180deg); }
-}
-
-/* Under 25rem (400px) those same eight controls have to fit into as little as
-   265px (a 360px Android), 280px (an SE / mini at 375px) or 295px (a 390px
-   iPhone), so they step down to 2rem = 256px and MD + full screen stay up on
-   the first row instead of wrapping onto a second one (Stefan, 2026-07-30).
-   The boundary is 25rem rather than the 24rem where 2.25rem *just* stops
-   fitting, because "just" was one pixel of slack at 384px: a step needs room
-   for a scrollbar or a rounding difference, not a photo finish. A 320px
-   viewport (or a desktop window zoomed until its CSS width is that narrow) has
-   225px and wraps whatever we do: fitting it would mean 28px targets, and a
-   wrapped toolbar is the better trade at that point. */
-@media (width < 25rem) {
-  .mde__btn { min-width: 2rem; height: 2rem; padding: 0 0.15rem; }
-  .mde__btn svg { width: 0.95rem; height: 0.95rem; }
 }
 
 /* ProseMirror base (adapted from @milkdown/prose), scoped to .mde so it can't
@@ -2625,175 +2685,26 @@ body.mde-fullscreen-lock { overflow: hidden; }
 .mde[data-mde-fullscreen="1"] .mde__mount { flex: 1 1 auto; overflow-y: auto; max-height: none; }
 .mde[data-mde-fullscreen="1"] .mde__source { flex: 1 1 auto; }
 
-/* The composer's emoji picker (issue #1197, assets/js/emoji_picker.js).
-   One panel per page, appended to <body> so no LiveView patch can take it
-   away. z-index sits above the editor's own full-page mode (60) and below the
-   lightbox (100). Desktop: a popover the JS pins under the toolbar button.
-   Mobile: a bottom sheet — the geometry below is why the JS clears its inline
-   top/left under 40rem, since an inline style would win over these rules. */
-.emoji-picker {
-  position: fixed;
-  z-index: 70;
-  display: flex;
-  flex-direction: column;
-  width: 20rem;
-  max-height: 21rem;
-  overflow: hidden;
-  border: 1px solid #e2e8f0;
-  border-radius: 0.75rem;
-  background: #fff;
-  box-shadow: 0 10px 25px -5px rgb(15 23 42 / 0.18), 0 8px 10px -6px rgb(15 23 42 / 0.1);
-}
-.emoji-picker[hidden] { display: none; }
-.emoji-picker__backdrop {
-  position: fixed;
-  inset: 0;
-  z-index: 69;
-  background: rgb(15 23 42 / 0.35);
-}
-.emoji-picker__backdrop[hidden] { display: none; }
 
-.emoji-picker__head {
-  display: flex;
-  align-items: center;
-  gap: 0.5rem;
-  padding: 0.5rem;
-  border-bottom: 1px solid #f1f5f9;
-}
 /* Reproduces UI.input_class/0's two-part focus treatment (brand border + 3px
    halo) — keep it in step with the .editform and kit-form inputs. */
-.emoji-picker__search {
-  flex: 1 1 auto;
-  min-width: 0;
-  height: 2.25rem;
-  border: 1px solid #cbd5e1;
-  border-radius: 0.5rem;
-  background: #fff;
-  padding: 0 0.625rem;
-  font-size: 0.875rem;
-  color: #1e293b;
-  appearance: none;
-}
-.emoji-picker__search:focus {
-  border-color: #3b82f6;
-  outline: none;
-  box-shadow: 0 0 0 3px rgb(59 130 246 / 0.4);
-}
-.emoji-picker__close {
-  display: none;
-  align-items: center;
-  justify-content: center;
-  flex: 0 0 auto;
-  width: 2.5rem;
-  height: 2.5rem;
-  border-radius: 0.5rem;
-  color: #475569;
-  cursor: pointer;
-}
-.emoji-picker__close svg { width: 1.1rem; height: 1.1rem; }
-.emoji-picker__close:hover { background: #f1f5f9; color: #0f172a; }
 
-.emoji-picker__tabs {
-  display: flex;
-  gap: 0.125rem;
-  padding: 0.375rem 0.5rem;
-  overflow-x: auto;
-  border-bottom: 1px solid #f1f5f9;
-  scrollbar-width: none;
-}
-.emoji-picker__tabs::-webkit-scrollbar { display: none; }
-.emoji-picker__tab {
-  flex: 0 0 auto;
-  width: 2rem;
-  height: 2rem;
-  border-radius: 0.5rem;
-  font-size: 1.05rem;
-  line-height: 1;
-  cursor: pointer;
-  /* An emoji glyph is the tab's whole label, so it must not be dimmed into
-     illegibility — the inactive state is a plain background, not a fade. */
-  opacity: 0.75;
-}
-.emoji-picker__tab:hover { background: #f1f5f9; opacity: 1; }
-.emoji-picker__tab[aria-pressed="true"] {
-  background: #dbeafe;
-  opacity: 1;
-  box-shadow: inset 0 0 0 1px #93c5fd;
-}
 
-.emoji-picker__grid {
-  display: grid;
-  grid-template-columns: repeat(8, minmax(0, 1fr));
-  gap: 0.125rem;
-  padding: 0.5rem;
-  overflow-y: auto;
-  overscroll-behavior: contain;
-}
-.emoji-picker__grid[hidden] { display: none; }
-.emoji-picker__emoji {
-  display: flex;
-  align-items: center;
-  justify-content: center;
-  aspect-ratio: 1;
-  border-radius: 0.5rem;
-  /* Emoji render through the platform's colour font; naming it keeps a stray
-     inherited family from falling back to a monochrome glyph. */
-  font-family: "Apple Color Emoji", "Segoe UI Emoji", "Noto Color Emoji", sans-serif;
-  font-size: 1.35rem;
-  line-height: 1;
-  cursor: pointer;
-}
-.emoji-picker__emoji:hover,
-.emoji-picker__emoji:focus-visible {
-  background: #dbeafe;
-  outline: none;
-}
-.emoji-picker__empty {
-  margin: 0;
-  padding: 1.25rem 1rem;
-  color: #475569;
-  font-size: 0.875rem;
-  text-align: center;
-}
-.emoji-picker__empty[hidden] { display: none; }
 
 /* Phones: a bottom sheet with finger-sized targets. `dvh` so the height follows
    the visual viewport when the on-screen keyboard opens (the JS deliberately
    does not focus the search field here, exactly so the keyboard stays down
    until the member asks for it). */
 @media (width < 40rem) {
-  body.emoji-picker-open { overflow: hidden; }
-  .emoji-picker {
-    left: 0;
-    right: 0;
-    bottom: 0;
-    top: auto;
-    width: auto;
-    max-height: 60dvh;
-    border-width: 1px 0 0;
-    border-radius: 1rem 1rem 0 0;
-    padding-bottom: env(safe-area-inset-bottom);
-  }
-  .emoji-picker__close { display: flex; }
-  .emoji-picker__head { padding: 0.625rem 0.75rem; }
-  .emoji-picker__search { height: 2.5rem; font-size: 1rem; }
-  .emoji-picker__tabs { gap: 0.25rem; padding: 0.5rem 0.75rem; }
-  .emoji-picker__tab { width: 2.5rem; height: 2.5rem; font-size: 1.25rem; }
-  .emoji-picker__grid {
-    grid-template-columns: repeat(auto-fill, minmax(2.75rem, 1fr));
-    gap: 0.25rem;
-    padding: 0.5rem 0.75rem 0.75rem;
-  }
-  .emoji-picker__emoji { font-size: 1.6rem; }
 }
 
 /* The composer's `@`-mention picker (issue #1748, assets/js/mention_picker.js).
-   One panel per page on <body>, like the emoji picker above and for the same
-   reason — every editor here sits inside a LiveView. It hangs off the caret
-   rather than off a button, so the JS owns top/left and the width is capped
-   instead of fixed: a list of names should be as wide as the names, and no
-   wider than a phone. Same z-index band as the emoji picker (above the
-   editor's full-page mode, below the lightbox). */
+   One panel per page on <body> — every editor here sits inside a LiveView, so
+   a panel in the document would be patched away by an unrelated re-render. It
+   hangs off the caret rather than off a button, so the JS owns top/left and
+   the width is capped instead of fixed: a list of names should be as wide as
+   the names, and no wider than a phone. Its z-index band sits above the
+   editor's full-page mode and below the lightbox. */
 .mention-picker {
   position: fixed;
   z-index: 70;
@@ -2878,9 +2789,9 @@ body.mde-fullscreen-lock { overflow: hidden; }
   font-size: 0.72rem;
 }
 /* Phones: finger-sized rows (the 2.75rem the design system asks for), and a
-   little more room for a long name. The panel stays a caret popover rather than
-   becoming a bottom sheet like the emoji picker — a sheet would cover the
-   sentence being written, and this list is read against that sentence. */
+   little more room for a long name. The panel stays a caret popover rather
+   than becoming a bottom sheet — a sheet would cover the sentence being
+   written, and this list is read against that sentence. */
 @media (width < 40rem) {
   .mention-picker__row { min-height: 2.75rem; padding: 0.4rem 0.6rem; }
   .mention-picker__face { width: 2rem; height: 2rem; font-size: 0.75rem; }
@@ -3478,11 +3389,8 @@ html.lightbox-open { overflow: hidden; }
   /* Milkdown Markdown editor (light values above). */
   .mde__source { background: #1e293b; border-color: #334155; color: #e2e8f0; }
   .mde__frame { background: #0f172a; border-color: #334155; }
-  .mde__toolbar { background: #1e293b; border-color: #334155; }
-  .mde__sep { background: #334155; }
   .mde__btn { color: #94a3b8; }
   .mde__btn:hover { background: #334155; color: #f1f5f9; }
-  .mde[data-mde-mode="source"] [data-mde-cmd="mode"],
   .mde[data-mde-fullscreen="1"] [data-mde-cmd="fullscreen"] {
     background: #1e3a8a;
     color: #dbeafe;
@@ -3490,6 +3398,32 @@ html.lightbox-open { overflow: hidden; }
   .mde__btn[aria-pressed="true"] {
     background: #1e3a8a;
     color: #dbeafe;
+  }
+
+  /* The bubble keeps its dark ground in both schemes — it sits ON the prose,
+     and a panel the colour of the page behind it stops reading as a layer.
+     It gets a ring instead, so it does not melt into a dark card. */
+  .mde__bubble {
+    background: #020617;
+    box-shadow: 0 0 0 1px #334155, 0 8px 20px -6px rgb(0 0 0 / 0.7);
+  }
+  .mde__slash {
+    background: #0f172a;
+    border-color: #334155;
+    box-shadow: 0 14px 34px -10px rgb(0 0 0 / 0.6);
+  }
+  .mde__slash-item { color: #e2e8f0; }
+  .mde__slash-item:hover,
+  .mde__slash-item.is-current { background: #1e3a8a; color: #dbeafe; }
+  .mde__slash-glyph { color: #94a3b8; }
+  .mde__slash-empty { color: #94a3b8; }
+  .mde__views { background: #1e293b; }
+  .mde__view { color: #94a3b8; }
+  .mde__view:hover { color: #f1f5f9; }
+  .mde__view[aria-pressed="true"] {
+    background: #0f172a;
+    color: #f1f5f9;
+    box-shadow: 0 1px 2px rgb(0 0 0 / 0.4);
   }
   .mde[data-mde-ready][data-mde-mode="source"] .mde__source { border-top-color: #334155; }
   .mde__mount .ProseMirror { color: #e2e8f0; }
@@ -3516,23 +3450,6 @@ html.lightbox-open { overflow: hidden; }
   .mde .ProseMirror th { background: #1e293b; }
   .mde[data-mde-fullscreen="1"] { background: #0b1220; }
 
-  /* Emoji picker (issue #1197). */
-  .emoji-picker {
-    border-color: #334155;
-    background: #0f172a;
-    box-shadow: 0 10px 25px -5px rgb(0 0 0 / 0.5), 0 8px 10px -6px rgb(0 0 0 / 0.4);
-  }
-  .emoji-picker__backdrop { background: rgb(2 6 23 / 0.6); }
-  .emoji-picker__head,
-  .emoji-picker__tabs { border-color: #1e293b; }
-  .emoji-picker__search {
-    border-color: #334155;
-    background: #1e293b;
-    color: #f1f5f9;
-  }
-  .emoji-picker__search:focus { border-color: #3b82f6; }
-  .emoji-picker__close { color: #cbd5e1; }
-  .emoji-picker__close:hover { background: #1e293b; color: #f1f5f9; }
 
   /* Mention picker + chip (issue #1748). */
   .mention-picker {
@@ -3547,14 +3464,6 @@ html.lightbox-open { overflow: hidden; }
   .mention-picker__note { color: #94a3b8; }
   .mention-picker__note--budget { border-color: #1e293b; }
   .mde__mount .ProseMirror .mde-mention { background: rgb(30 58 138 / 0.55); color: #bfdbfe; }
-  .emoji-picker__tab:hover { background: #1e293b; }
-  .emoji-picker__tab[aria-pressed="true"] {
-    background: #1e3a8a;
-    box-shadow: inset 0 0 0 1px #3b82f6;
-  }
-  .emoji-picker__emoji:hover,
-  .emoji-picker__emoji:focus-visible { background: #1e3a8a; }
-  .emoji-picker__empty { color: #94a3b8; }
 }
 
 /* The people total ticking over in the top bar (VutuvWeb.ShellLive).

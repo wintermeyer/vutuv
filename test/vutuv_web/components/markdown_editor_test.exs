@@ -60,13 +60,43 @@ defmodule VutuvWeb.MarkdownEditorTest do
     refute editor() =~ "data-mde-seed"
   end
 
-  test "every rendered Markdown feature has a toolbar command" do
+  test "nothing stands between the member and the field (issue #1886)" do
     html = editor()
 
-    for cmd <- ~w(strong em strike code link h1 h2 h3 blockquote code_block
-                  bullet_list ordered_list table hr) do
-      assert html =~ ~s(data-mde-cmd="#{cmd}"), "missing toolbar command: #{cmd}"
+    # The eighteen-button toolbar is gone. This is the whole point of the
+    # change, so it is asserted directly rather than left to follow from the
+    # tests below: anything that re-grows a persistent command row above the
+    # prose has to come and delete this line first.
+    refute html =~ "mde__toolbar"
+    refute html =~ "mde__more-row"
+    refute html =~ ~s(data-mde-cmd="toggle-toolbar")
+  end
+
+  test "every rendered Markdown feature is still reachable (issue #1886)" do
+    html = editor()
+
+    # Marks ride the selection bubble: they only mean anything with something
+    # selected, which is exactly when the bubble appears.
+    for cmd <- ~w(strong em strike code link) do
+      assert html =~ ~s(data-mde-mark="#{cmd}"), "missing bubble mark: #{cmd}"
     end
+
+    # Blocks ride the slash menu, reached by typing "/" on an empty line.
+    for cmd <- ~w(h1 h2 blockquote code_block bullet_list ordered_list) do
+      assert html =~ ~s(data-mde-block="#{cmd}"), "missing slash-menu block: #{cmd}"
+    end
+
+    # `table`, `hr` and `h3` are deliberately NOT offered as controls any more
+    # — they are rare enough that a button for each cost every member a wider
+    # toolbar forever. The Markdown source view is how they are reached, which
+    # is why the switch below is not optional decoration but the thing that
+    # keeps this cut honest.
+    for cmd <- ~w(table hr h3) do
+      refute html =~ ~s(data-mde-block="#{cmd}"), "#{cmd} should not be a control"
+      refute html =~ ~s(data-mde-mark="#{cmd}"), "#{cmd} should not be a control"
+    end
+
+    assert html =~ ~s(data-mde-view="source")
   end
 
   test "task lists are intentionally NOT offered (server renders them as text)" do
@@ -75,19 +105,18 @@ defmodule VutuvWeb.MarkdownEditorTest do
     refute html =~ "checkbox"
   end
 
-  test "the emoji picker button and its labels ride the toolbar (issue #1197)" do
+  test "the emoji picker is gone, the :shortcode: type-through is not (issue #1886)" do
     html = editor()
 
-    # The picker is offered on every editor, posts and DMs alike — an emoji in a
-    # direct message is the most natural use there is.
-    assert html =~ ~s(data-mde-cmd="emoji")
+    # The picker panel went with the toolbar it hung off (Stefan, 2026-09-01:
+    # "Die Emojis brauchen wir nicht"). What is NOT removed is typing `:tada:`
+    # and getting 🎉 — that costs no pixels and no button, and members who use
+    # it would lose it silently. If that should go too it is its own change.
+    refute html =~ ~s(data-mde-cmd="emoji")
 
-    # Every word the picker shows comes from the server, because the server is
-    # the only side that knows the reader's language (same deal as the
-    # lightbox's data-label-*). The JS supplies no fallback copy of its own.
     for attr <- ~w(data-emoji-title data-emoji-search data-emoji-close
                    data-emoji-empty data-emoji-groups) do
-      assert html =~ attr, "missing picker label attribute: #{attr}"
+      refute html =~ attr, "picker label attribute survived the picker: #{attr}"
     end
   end
 
@@ -117,66 +146,40 @@ defmodule VutuvWeb.MarkdownEditorTest do
     refute editor() =~ "data-mention-budget="
   end
 
-  test "the phone's top row keeps only the frequent controls" do
+  test "inserting a picture is a slash-menu block, where images are allowed" do
+    # Not a bubble mark: a mark acts on a selection, and putting a picture at
+    # the cursor is an insert. The composer's own bottom bar keeps its separate
+    # "attach photos" — that one adds to the post, this one places one in the
+    # prose. Message, organization and job bodies get neither.
+    assert editor(%{images: true}) =~ ~s(data-mde-block="image")
+    refute editor() =~ ~s(data-mde-block="image")
+  end
+
+  test "image alignment rides the bubble, for when an image is selected" do
+    # Four controls that were permanently in the toolbar while meaning nothing
+    # unless a picture was selected. In the bubble they appear exactly then.
     html = editor(%{images: true})
 
-    # The top row is the scarce resource on a phone (Stefan, 2026-07-30: the
-    # emoji button pushed the toolbar onto two lines). Bold, italic, link, emoji
-    # and photo stay up there; strikethrough and inline code moved behind the
-    # chevron, into `.mde__more-row` — which is what these index comparisons
-    # assert, since a "tidy-up" that moves them back would silently cost the
-    # phone a whole toolbar row again.
-    more_row = :binary.match(html, "mde__more-row") |> elem(0)
-
-    for cmd <- ~w(strong em link emoji image) do
-      {at, _} = :binary.match(html, ~s(data-mde-cmd="#{cmd}"))
-      assert at < more_row, "#{cmd} belongs in the always-visible first group"
+    for cmd <- ~w(img-full img-left img-center img-right) do
+      assert html =~ ~s(data-mde-mark="#{cmd}"), "missing alignment control: #{cmd}"
     end
 
-    for cmd <- ~w(strike code h1 blockquote bullet_list table hr) do
-      {at, _} = :binary.match(html, ~s(data-mde-cmd="#{cmd}"))
-      assert at > more_row, "#{cmd} belongs behind the chevron, not in the top row"
-    end
+    refute editor() =~ ~s(data-mde-mark="img-full")
   end
 
-  test "the group labels cover every group the dataset ships" do
-    html = editor()
-
-    labels =
-      Regex.run(~r/data-emoji-groups="([^"]*)"/, html, capture: :all_but_first)
-      |> hd()
-      |> String.split("|")
-      |> Enum.map(&(&1 |> String.split(":", parts: 2) |> hd()))
-
-    # The keys of the EMOJI object in assets/js/emoji_data.js. A group added
-    # there without a gettext label here would render its bare key at the
-    # reader — this is the drift guard for that.
-    data = File.read!("assets/js/emoji_data.js")
-
-    groups =
-      ~r/^  (\w+): \[$/m
-      |> Regex.scan(data, capture: :all_but_first)
-      |> List.flatten()
-
-    assert groups != [], "could not read the groups out of emoji_data.js"
-
-    for group <- groups do
-      assert group in labels, "emoji group #{group} has no label in markdown_editor/1"
-    end
-
-    assert Enum.sort(labels) == Enum.sort(groups)
-  end
-
-  test "the picker labels are translated (a German member picks emoji too)" do
+  test "the slash menu is worded by the server (a German member types / too)" do
     Gettext.put_locale(VutuvWeb.Gettext, "de")
     on_exit(fn -> Gettext.put_locale(VutuvWeb.Gettext, "en") end)
 
     html = editor()
 
-    assert html =~ ~s(data-emoji-title="Emoji")
-    assert html =~ ~s(data-emoji-search="Emoji suchen")
-    assert html =~ "Smileys"
-    refute html =~ "Search emoji"
+    # Same deal as the lightbox's data-label-*: the server is the only side
+    # that knows the reader's language, so every word in the menu comes from
+    # here and the JS ships no fallback copy of its own.
+    assert html =~ "Überschrift 1"
+    assert html =~ "Aufzählung"
+    assert html =~ "Codeblock"
+    refute html =~ ">Heading 1<"
   end
 
   test "the fence-language labels ride the editor root (issues #1108/#1137/#1138)" do
@@ -208,10 +211,65 @@ defmodule VutuvWeb.MarkdownEditorTest do
     assert pairs["plain"] == ""
   end
 
-  test "power users get a WYSIWYG/source toggle and a full-screen control" do
+  test "the source view is named, not an icon (issue #1886)" do
     html = editor()
-    assert html =~ ~s(data-mde-cmd="mode")
-    assert html =~ ~s(data-mde-cmd="fullscreen")
+
+    # The old control was a button reading "MD" — the source view is how a
+    # member reaches everything the smaller control set no longer offers, so it
+    # cannot be a two-letter guess. Both states are named and both are on
+    # screen, which is also what tells a reader the source view exists at all.
+    assert html =~ ~s(data-mde-view="rich")
+    assert html =~ ~s(data-mde-view="source")
+    assert html =~ ">Text<"
+    assert html =~ ">Markdown<"
+    refute html =~ ~s(data-mde-cmd="mode")
+  end
+
+  test "the footer is reachable by contract attribute, not by style class" do
+    # The hook looks it up to wire the view switch and full screen. Every other
+    # handle beside it (`frame`, `bubble`, `slash`, `mount`, `source`) is a
+    # `data-mde-*` contract; the footer was the one taken off `.mde__foot`, so
+    # a stylesheet rename would have killed both controls silently.
+    assert editor() =~ "data-mde-foot"
+  end
+
+  test "the footer is NOT frozen against the server (issue #1886)" do
+    html = editor()
+
+    # `applyState/0` re-stamps `aria-pressed` inside the same patch, so the
+    # subtree does not need `phx-update="ignore"` — and freezing it would strand
+    # these gettext strings against a locale change and swallow anything the
+    # server later renders here. If a future change adds the wrapper back it
+    # owes an answer to both.
+    refute html =~ ~s(id="ed-foot" phx-update="ignore")
+  end
+
+  test "every slash-menu option carries an id (issue #1886)" do
+    # `aria-activedescendant` is how a screen reader follows a listbox whose
+    # user is not focused on it — the caret stays in the prose while ↑/↓ walk
+    # the menu, so without ids on the options the movement is announced to
+    # nobody. The hook writes the attribute; the ids have to exist for it.
+    assert editor() =~ ~s(id="ed-slash")
+  end
+
+  test "the full-screen control survives the toolbar it used to sit in" do
+    # A shipped feature, and nobody asked for it to go: writing a long post in
+    # a 3-row box is what it exists for. It moved to the footer row beside the
+    # view switch rather than disappearing with the toolbar.
+    assert editor() =~ ~s(data-mde-cmd="fullscreen")
+  end
+
+  test "German names both sides of the view switch" do
+    Gettext.put_locale(VutuvWeb.Gettext, "de")
+    on_exit(fn -> Gettext.put_locale(VutuvWeb.Gettext, "en") end)
+
+    html = editor()
+
+    # "Text" is the same word in both languages; "Markdown" is a proper noun.
+    # What must be translated is the accessible naming around them, or a
+    # screen-reader user gets an unlabelled pair of buttons.
+    assert html =~ "Ansicht"
+    assert html =~ "Vollbild"
   end
 
   test "submit_on and compact are passed through for the message composer" do

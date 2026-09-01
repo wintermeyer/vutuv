@@ -62,7 +62,9 @@ import { Decoration, DecorationSet } from "@milkdown/kit/prose/view"
 import { inputRules, InputRule } from "@milkdown/kit/prose/inputrules"
 import { emojiForShortcode, SHORTCODE_AT_CARET } from "./emoji_data.js"
 import { request } from "./util.js"
-import { openPicker, closePicker, closePickerFor, pickerOpen } from "./emoji_picker.js"
+// No emoji picker import: the panel went with the toolbar button it hung off
+// (issue #1886). `emojiForShortcode` above stays — typing `:tada:` still
+// becomes 🎉, which costs no pixels and no control.
 import {
   showMentions,
   closeMentions,
@@ -185,7 +187,7 @@ const imagePolicy = (allowImages) =>
       })
   )
 
-// Watches the selection so the toolbar can reveal the alignment buttons while
+// Watches the selection so the bubble can reveal the alignment controls while
 // an image node is selected (and mark the active alignment on them).
 const imageSelectionWatch = (hook) =>
   $prose(
@@ -194,6 +196,22 @@ const imageSelectionWatch = (hook) =>
         key: new PluginKey("MDE_IMAGE_SELECT"),
         view: () => ({
           update: (view) => hook.syncImageSelection(view),
+        }),
+      })
+  )
+
+// The two surfaces that replaced the toolbar (issue #1886), driven off the
+// selection rather than sitting there permanently: the bubble over a
+// selection, the slash menu on a line that is just "/". One plugin for both,
+// because both answer the same question — where is the caret and what is
+// around it — and ProseMirror already calls this once per transaction.
+const chromeWatch = (hook) =>
+  $prose(
+    () =>
+      new Plugin({
+        key: new PluginKey("MDE_CHROME"),
+        view: () => ({
+          update: (view, prev) => hook.syncChrome(view, prev),
         }),
       })
   )
@@ -493,7 +511,10 @@ const COMMANDS = {
 export const MarkdownEditor = {
   async mounted() {
     this.root = this.el
-    this.toolbar = this.el.querySelector("[data-mde-toolbar]")
+    this.frame = this.el.querySelector("[data-mde-frame]")
+    this.bubble = this.el.querySelector("[data-mde-bubble]")
+    this.slash = this.el.querySelector("[data-mde-slash]")
+    this.foot = this.el.querySelector("[data-mde-foot]")
     this.mountEl = this.el.querySelector("[data-mde-mount]")
     this.source = this.el.querySelector("[data-mde-source]")
     if (!this.mountEl || !this.source) return
@@ -558,6 +579,7 @@ export const MarkdownEditor = {
       .use(emojiInputRule())
       .use(codeFencePreview(this.fenceLabels()))
       .use(mentionChips(this))
+      .use(chromeWatch(this))
 
     if (this.imagesEnabled) {
       editor = editor.use(imageSelectionWatch(this)).use(imageFileCapture(this))
@@ -573,7 +595,9 @@ export const MarkdownEditor = {
     // body stayed plain until the member touched them.
     this.refreshMentionChips()
     this.applyState()
-    this.wireToolbar()
+    this.wireBubble()
+    this.wireSlash()
+    this.wireFoot()
     this.wireSubmitShortcut()
     this.wireSourceEmoji()
     this.wireMentionKeys()
@@ -654,15 +678,15 @@ export const MarkdownEditor = {
     this.root.dataset.mdeFullscreen = this.fullscreen ? "1" : "0"
     this.root.dataset.mdeImg = this.imageSelected ? "1" : "0"
     if (this.sourceHeight) this.source.style.height = this.sourceHeight
+    this.syncViewButtons()
   },
 
   destroyed() {
     this.editor?.destroy()
-    // The picker lives on <body>, outside every LiveView root, so it would
-    // outlive the editor it belongs to (and its onPick closure would hold on to
-    // a destroyed hook).
-    closePickerFor(this.root)
     closeMentionsFor(this.root)
+    // The one listener this hook puts outside its own subtree; everything
+    // else dies with the editor's DOM.
+    if (this._away) document.removeEventListener("mousedown", this._away)
     // A pending suggest/check timer would fire into a destroyed editor —
     // retaining it (and its document) until it does, then dispatching onto a
     // dead view. The messages page tears an editor down per closed conversation.
@@ -955,12 +979,9 @@ export const MarkdownEditor = {
   },
 
   run(name) {
-    if (name === "mode") return this.toggleMode()
     if (name === "fullscreen") return this.toggleFullscreen()
-    if (name === "toggle-toolbar") return this.toggleToolbar()
     if (name === "link") return this.runLink()
     if (name === "image") return this.pickImage()
-    if (name === "emoji") return this.toggleEmojiPicker()
     if (name.startsWith("img-")) return this.setImageAlignment(name.slice(4))
     const spec = COMMANDS[name]
     if (!spec || !this.editor) return
@@ -969,46 +990,16 @@ export const MarkdownEditor = {
     this.focusEditor()
   },
 
-  // --- emoji (issue #1197) ---
+  // --- emoji (issue #1197, trimmed by #1886) ---
+  //
+  // The picker panel is gone with the toolbar button that opened it. What
+  // stays is the type-through: `:tada:` becomes 🎉 as it is typed, in both the
+  // prose (emojiInputRule) and the source textarea (wireSourceEmoji). It costs
+  // no control and no pixels, and members who use it would otherwise lose it
+  // without being told.
 
-  // The 🙂 toolbar button. A second press closes again, so the button reads as
-  // the toggle it looks like.
-  toggleEmojiPicker() {
-    if (pickerOpen()) return closePicker()
-
-    openPicker({
-      anchor: this.toolbar.querySelector('[data-mde-cmd="emoji"]'),
-      labels: this.root.dataset,
-      onPick: (char) => this.insertEmoji(char),
-      // Hand the caret back to whichever surface is showing, so the member
-      // carries on typing where they left off.
-      onClose: () => (this.mode === "source" ? this.source.focus() : this.focusEditor()),
-    })
-  },
-
-  // Put the character in at the cursor. Deliberately does NOT take focus: on a
-  // desktop the panel stays open for a second pick and to keep the search field
-  // typeable, so focus is restored once, when the panel closes.
-  insertEmoji(char) {
-    if (!this.editor || this.mode === "source") return this.insertEmojiSource(char)
-
-    this.editor.action((ctx) => {
-      const view = ctx.get(editorViewCtx)
-      // insertText at the live selection (not a position remembered when the
-      // panel opened), so picking three in a row lines them up in order.
-      view.dispatch(view.state.tr.insertText(char))
-    })
-  },
-
-  insertEmojiSource(char) {
-    const at = this.source.selectionStart ?? this.source.value.length
-    const value = this.source.value
-    this.source.value = `${value.slice(0, at)}${char}${value.slice(at)}`
-    // A blurred textarea keeps its selection, so moving the caret past what we
-    // inserted is what makes a second pick land after the first.
-    this.source.setSelectionRange(at + char.length, at + char.length)
-    this.source.dispatchEvent(new Event("input", { bubbles: true }))
-  },
+  // (`insertEmoji`/`insertEmojiSource` went with the picker: the panel's
+  // onPick was their only caller. The two paths below insert for themselves.)
 
   // The source textarea gets the same type-through as the prose. The WYSIWYG
   // path is a ProseMirror InputRule (emojiInputRule); this is its twin for
@@ -1446,19 +1437,325 @@ export const MarkdownEditor = {
     this.root.dataset.mdeImg = this.imageSelected ? "1" : "0"
     const active = node ? (node.attrs.src || "").split("#")[1] || "full" : null
     for (const name of ["full", "left", "center", "right"]) {
-      const btn = this.toolbar?.querySelector(`[data-mde-cmd="img-${name}"]`)
+      const btn = this.bubble?.querySelector(`[data-mde-mark="img-${name}"]`)
       if (btn) btn.setAttribute("aria-pressed", String(active === name))
     }
   },
 
-  // Mobile: expand/collapse the extra toolbar groups. The class lives on the
-  // toolbar (inside the phx-update="ignore" frame), so it survives re-renders
-  // without needing applyState().
-  toggleToolbar() {
-    const open = !this.toolbar.classList.contains("is-open")
-    this.toolbar.classList.toggle("is-open", open)
-    const btn = this.toolbar.querySelector(".mde__more-toggle")
-    if (btn) btn.setAttribute("aria-expanded", String(open))
+  // --- the bubble and the slash menu (issue #1886) ---
+
+  // One call per transaction, from chromeWatch above. `prev` is what makes it
+  // cheap AND correct: ProseMirror hands us the previous state, and a
+  // transaction that changed neither the document nor the selection cannot
+  // have changed either answer. Skipping those is not only work saved — the
+  // mention check's decoration redraw is such a transaction, and re-running
+  // openSlash on it threw away an arrow-key choice the member had just made.
+  syncChrome(view, prev) {
+    if (prev && prev.doc === view.state.doc && prev.selection.eq(view.state.selection)) return
+    this.syncBubble(view)
+    this.syncSlash(view)
+  },
+
+  // Marks act on a selection, so the bubble is offered exactly while there is
+  // one. Positioned against the frame, which components.css makes the
+  // containing block — measuring against the viewport would leave it behind
+  // the moment the page scrolls.
+  syncBubble(view) {
+    if (!this.bubble) return
+    const sel = view.state.selection
+
+    if (this.mode === "source" || sel.empty || !view.hasFocus()) {
+      if (!this.bubble.hidden) this.bubble.hidden = true
+      return
+    }
+
+    this.bubble.hidden = false
+
+    const from = view.coordsAtPos(sel.from)
+    const to = view.coordsAtPos(sel.to)
+    const frame = this.frame.getBoundingClientRect()
+
+    this.bubble.style.top = `${Math.min(from.top, to.top) - frame.top}px`
+    // Clamped so a selection at either edge does not push the bubble out of
+    // the card. MEASURED, not a literal: the bubble is 5 buttons wide on the
+    // marks face and 4 on the image one, and the phone rule grows every
+    // button from 1.75rem to 2.25rem — a hard-coded half-width is wrong on
+    // three of those four combinations, and wrongest on the narrowest screen.
+    const half = this.bubble.offsetWidth / 2
+    const mid = (from.left + to.left) / 2 - frame.left
+    this.bubble.style.left = `${Math.max(half, Math.min(frame.width - half, mid))}px`
+  },
+
+  // The slash menu opens on a paragraph whose whole text is "/" plus what has
+  // been typed since, with the caret at the end of it. Deliberately strict: a
+  // "/" mid-sentence, or a URL, is not a command, and a member writing about
+  // and/or should never see a menu.
+  // Reads the document for the run the menu is offering for, and keeps it in
+  // `this.slashRun` — one definition of "the /word the caret is at the end of",
+  // so the run the menu filters on and the run `runSlashBlock` deletes can
+  // never mean two different things. Same reason `insertMention` holds
+  // `this.mentionRun` rather than re-deriving it.
+  syncSlash(view) {
+    if (!this.slash) return
+    const sel = view.state.selection
+    if (this.mode === "source" || !sel.empty) return this.closeSlash()
+
+    const $from = sel.$from
+    const parent = $from.parent
+
+    // Cheap fields first: `textContent` is uncached in ProseMirror, so building
+    // it up front copies the whole paragraph on every keystroke only to throw
+    // it away for a heading, a caret that is not at the end, or a line that
+    // does not start with "/".
+    if (
+      parent.type.name !== "paragraph" ||
+      parent.content.size !== $from.parentOffset ||
+      parent.content.size === 0 ||
+      parent.textBetween(0, 1) !== "/"
+    ) {
+      // Out of a slash run entirely, so the dismissal has nothing left to
+      // apply to. Positions shift as the document is edited above, and a
+      // remembered one that outlives its run would suppress a menu the member
+      // then asks for by name.
+      this.slashDismissed = null
+      return this.closeSlash()
+    }
+
+    const text = parent.textContent
+    if (/\s/.test(text)) {
+      this.slashDismissed = null
+      return this.closeSlash()
+    }
+
+    const start = $from.start()
+    // "The member said no." Escape has to mean something more than one
+    // transaction, or a line that is legitimately a path (`/etc/passwd`,
+    // `/system/members`) re-opens the menu on every keystroke with nothing to
+    // show and no way to be rid of it.
+    if (this.slashDismissed === start) return this.closeSlash()
+
+    const query = text.slice(1).toLowerCase()
+    if (this.slashRun && this.slashRun.start === start && this.slashRun.query === query) return
+
+    this.slashRun = { start, query }
+    this.openSlash(view, query)
+  },
+
+  openSlash(view, query) {
+    let shown = 0
+
+    for (const item of this.slashItems) {
+      const hit = item.label.includes(query)
+      item.el.hidden = !hit
+      if (hit) shown++
+    }
+    if (this.slashEmpty) this.slashEmpty.hidden = shown > 0
+
+    const opening = this.slash.hidden
+    this.slash.hidden = false
+
+    // Place it once, on the way open. It hangs off the "/" itself, not the
+    // caret, precisely so it stays put while the rest of the word is typed —
+    // re-measuring every keystroke would cost two forced layouts to arrive at
+    // the same two numbers.
+    if (opening) {
+      const at = view.coordsAtPos(this.slashRun.start)
+      const frame = this.frame.getBoundingClientRect()
+      this.slash.style.top = `${at.bottom - frame.top + 6}px`
+      this.slash.style.left = `${Math.max(0, at.left - frame.left)}px`
+    }
+
+    this.markSlashCurrent(0)
+  },
+
+  closeSlash() {
+    this.slashRun = null
+    if (this.slash && !this.slash.hidden) this.slash.hidden = true
+  },
+
+  slashVisible() {
+    if (!this.slash || this.slash.hidden) return []
+    return this.slashItems.filter((i) => !i.el.hidden)
+  },
+
+  // The highlighted row is a field, not a class read back out of the DOM: the
+  // DOM copy needed clearing in two places and answered "which one" with
+  // whichever came first once a filter had hidden a marked row.
+  markSlashCurrent(index) {
+    const items = this.slashVisible()
+    for (const item of this.slashItems) {
+      item.el.classList.remove("is-current")
+      item.el.setAttribute("aria-selected", "false")
+    }
+
+    if (items.length === 0) {
+      this.slashAt = 0
+      this.mountEl.removeAttribute("aria-activedescendant")
+      return
+    }
+
+    this.slashAt = ((index % items.length) + items.length) % items.length
+    const el = items[this.slashAt].el
+    el.classList.add("is-current")
+    el.setAttribute("aria-selected", "true")
+    el.scrollIntoView({ block: "nearest" })
+    // How a screen reader follows a list whose user is not focused on it —
+    // the caret stays in the prose, the same arrangement mention_picker.js
+    // makes for its own rows.
+    this.mountEl.setAttribute("aria-activedescendant", el.id)
+  },
+
+  // Take the "/query" back out before running the block command, or the
+  // heading would arrive with "/h1" still in it. Deletes the run the menu was
+  // offering for, not a freshly re-derived one.
+  runSlashBlock(name) {
+    if (!this.editor || !this.slashRun) return
+    const { start, query } = this.slashRun
+    this.closeSlash()
+
+    this.editor.action((ctx) => {
+      const view = ctx.get(editorViewCtx)
+      view.dispatch(view.state.tr.delete(start, start + query.length + 1))
+    })
+
+    this.run(name)
+  },
+
+  wireSlash() {
+    if (!this.slash) return
+
+    // The rows live inside the phx-update="ignore" frame, so these nodes are
+    // stable for the hook's life: read them once instead of querying (and
+    // lowercasing seven labels) on every keystroke the menu is open.
+    this.slashItems = [...this.slash.querySelectorAll("[data-mde-block]")].map((el, i) => {
+      el.id = el.id || `${this.root.id}-block-${i}`
+      return { el, label: el.dataset.mdeBlockLabel.toLowerCase() }
+    })
+    this.slashEmpty = this.slash.querySelector("[data-mde-slash-empty]")
+
+    this.slash.addEventListener("mousedown", (e) => {
+      if (e.target.closest("[data-mde-block]")) e.preventDefault()
+    })
+    this.slash.addEventListener("click", (e) => {
+      const item = e.target.closest("[data-mde-block]")
+      if (!item) return
+      e.preventDefault()
+      this.runSlashBlock(item.dataset.mdeBlock)
+    })
+
+    // Capture phase, and only while the menu is open. Three rules here are
+    // each a bug that was caught in review:
+    //
+    //   * A MODIFIED key is never ours. Cmd/Ctrl+Enter submits the form
+    //     (issue #1196) from a listener on this same element, in the bubble
+    //     phase — and a capture-phase stopPropagation on an ancestor kills
+    //     it before the event ever reaches the target. Typing "/" and
+    //     pressing Cmd+Enter inserted a heading instead of posting.
+    //   * `stopImmediatePropagation`, not `stopPropagation`: the mention
+    //     picker owns a second capture-phase listener on this very element,
+    //     and stopPropagation does not stop a sibling on the same node. Which
+    //     of the two won was decided by the order of two lines in mounted().
+    //   * Escape must be remembered, not just obeyed — see slashDismissed.
+    this.mountEl.addEventListener(
+      "keydown",
+      (e) => {
+        if (!this.slash || this.slash.hidden) return
+        if (e.metaKey || e.ctrlKey || e.altKey) return
+
+        const take = () => {
+          e.preventDefault()
+          e.stopImmediatePropagation()
+        }
+        const items = this.slashVisible()
+
+        if (e.key === "Escape") {
+          take()
+          this.slashDismissed = this.slashRun && this.slashRun.start
+          return this.closeSlash()
+        }
+        if (e.key === "ArrowDown" || e.key === "ArrowUp") {
+          if (items.length === 0) return
+          take()
+          return this.markSlashCurrent(this.slashAt + (e.key === "ArrowDown" ? 1 : -1))
+        }
+        if (e.key === "Enter" || e.key === "Tab") {
+          const item = items[this.slashAt]
+          if (!item) return
+          take()
+          this.runSlashBlock(item.el.dataset.mdeBlock)
+        }
+      },
+      true
+    )
+  },
+
+  // Everything that hangs off a position in the prose, shut at once. Three
+  // places need this — the view switch, full screen, and a click that lands
+  // outside — and before this existed only two of the three agreed on what
+  // "everything" meant.
+  closeOverlays() {
+    closeMentionsFor(this.root)
+    this.closeSlash()
+    if (this.bubble) this.bubble.hidden = true
+  },
+
+  wireBubble() {
+    if (!this.bubble) return
+
+    // Both surfaces are refreshed only from a ProseMirror transaction, and
+    // clicking away from the editor dispatches none — ProseMirror's blur
+    // changes no state. Without this the dark bubble sits over the prose
+    // after a click on the composer's photo button or a sidebar link. Same
+    // listener, same reasoning, as mention_picker.js.
+    this._away = (e) => {
+      if (this.root.contains(e.target)) return
+      if (this.bubble) this.bubble.hidden = true
+      this.closeSlash()
+    }
+    document.addEventListener("mousedown", this._away)
+
+    // The prose is its own scroll container (.mde__mount caps at 24rem), and
+    // the bubble is positioned against the frame outside it, so a scroll
+    // leaves it behind. Only while it is showing — this must not cost
+    // anything on an ordinary scroll.
+    this.mountEl.addEventListener("scroll", () => {
+      if (this.bubble && !this.bubble.hidden) this.editor?.action((ctx) => this.syncBubble(ctx.get(editorViewCtx)))
+    })
+    this.bubble.addEventListener("mousedown", (e) => {
+      // The whole point of the bubble is that a selection exists; letting the
+      // press move focus would collapse it before the command runs.
+      if (e.target.closest("[data-mde-mark]")) e.preventDefault()
+    })
+    this.bubble.addEventListener("click", (e) => {
+      const btn = e.target.closest("[data-mde-mark]")
+      if (!btn) return
+      e.preventDefault()
+      this.run(btn.dataset.mdeMark)
+    })
+  },
+
+  // The footer row: the named view switch and the full-screen control.
+  wireFoot() {
+    if (!this.foot) return
+    this.foot.addEventListener("click", (e) => {
+      const view = e.target.closest("[data-mde-view]")
+      if (view) {
+        e.preventDefault()
+        return this.setMode(view.dataset.mdeView === "source" ? "source" : "wysiwyg")
+      }
+      const btn = e.target.closest("[data-mde-cmd]")
+      if (!btn) return
+      e.preventDefault()
+      this.run(btn.dataset.mdeCmd)
+    })
+  },
+
+  syncViewButtons() {
+    if (!this.foot) return
+    for (const btn of this.foot.querySelectorAll("[data-mde-view]")) {
+      const on = (btn.dataset.mdeView === "source") === (this.mode === "source")
+      btn.setAttribute("aria-pressed", String(on))
+    }
   },
 
   runLink() {
@@ -1466,20 +1763,6 @@ export const MarkdownEditor = {
     if (!href) return
     this.editor.action(callCommand(toggleLinkCommand.key, { href }))
     this.focusEditor()
-  },
-
-  wireToolbar() {
-    if (!this.toolbar) return
-    this.toolbar.addEventListener("mousedown", (e) => {
-      // Keep the editor selection while clicking a toolbar button.
-      if (e.target.closest("[data-mde-cmd]")) e.preventDefault()
-    })
-    this.toolbar.addEventListener("click", (e) => {
-      const btn = e.target.closest("[data-mde-cmd]")
-      if (!btn) return
-      e.preventDefault()
-      this.run(btn.dataset.mdeCmd)
-    })
   },
 
   // Cmd/Ctrl+Enter submits the surrounding form — the post and the message
@@ -1503,29 +1786,34 @@ export const MarkdownEditor = {
     this.source.addEventListener("keydown", submit)
   },
 
-  toggleMode() {
-    // The picker hangs off a caret in the prose; both toggles below move or
-    // hide that prose, so a panel left open would point at nothing.
-    closeMentionsFor(this.root)
+  // The named `Text | Markdown` switch (issue #1886) rather than the old "MD"
+  // button, so it is set to a state rather than flipped — pressing "Markdown"
+  // while already in the source view must be a no-op, not a way back.
+  setMode(mode) {
+    if (this.mode === mode) return
 
-    if (this.mode !== "source") {
+    // Everything below moves or hides the prose these hang off.
+    this.closeOverlays()
+
+    if (mode === "source") {
       // Editor -> raw Markdown: hand the current Markdown to the textarea.
       this.source.value = this.editorMarkdown()
-      this.mode = "source"
-      this.applyState()
-      this.source.focus()
     } else {
       // Raw Markdown -> editor: re-parse whatever the power user typed.
       this.setEditorMarkdown(this.source.value)
       this.writeSource(this.editorMarkdown())
-      this.mode = "wysiwyg"
-      this.applyState()
-      this.focusEditor()
     }
+
+    this.mode = mode
+    this.applyState()
+    mode === "source" ? this.source.focus() : this.focusEditor()
   },
 
   toggleFullscreen() {
-    closeMentionsFor(this.root)
+    // Re-lays out `.mde__frame`, which is the box both overlays measured
+    // their top/left against — leaving them up would strand them at stale
+    // coordinates.
+    this.closeOverlays()
     this.fullscreen = !this.fullscreen
     this.applyState()
     document.body.classList.toggle("mde-fullscreen-lock", this.fullscreen)
