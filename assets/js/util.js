@@ -139,3 +139,36 @@ export function localSet(key, value) {
     else window.localStorage.setItem(key, value)
   } catch (_e) {}
 }
+
+// Copy to the clipboard, with the fallback the modern API needs. `writeText`
+// wants a secure context (https or localhost — every place vutuv runs itself),
+// so an intranet installation served over plain http would otherwise copy
+// nothing at all and say so nowhere; the hidden-textarea + execCommand path
+// covers that and every older browser.
+//
+// Shared because two surfaces copy: the settings page's permanent profile link,
+// wired on load, and the mention card's address, which lives inside a fragment
+// the server swaps in and that no on-load wiring can reach. The fallback
+// belongs to neither of them on its own.
+export function copyText(text) {
+  if (navigator.clipboard && window.isSecureContext) {
+    return navigator.clipboard.writeText(text)
+  }
+
+  const area = document.createElement("textarea")
+  area.value = text
+  area.setAttribute("readonly", "")
+  area.style.position = "absolute"
+  area.style.left = "-9999px"
+  document.body.appendChild(area)
+  area.select()
+
+  try {
+    document.execCommand("copy")
+    return Promise.resolve()
+  } catch (err) {
+    return Promise.reject(err)
+  } finally {
+    document.body.removeChild(area)
+  }
+}

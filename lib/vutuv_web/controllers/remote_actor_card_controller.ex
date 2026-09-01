@@ -41,8 +41,10 @@ defmodule VutuvWeb.RemoteActorCardController do
   plug(:put_root_layout, html: false)
   plug(:put_layout, html: false)
 
+  alias Vutuv.ContentFilters
   alias Vutuv.Fediverse
   alias Vutuv.Fediverse.RemoteAccount
+  alias Vutuv.Fediverse.RemotePost
 
   @doc """
   Who is `address`, and where do I stand with them.
@@ -109,18 +111,94 @@ defmodule VutuvWeb.RemoteActorCardController do
     end
   end
 
+  @doc """
+  Silence this account, or the whole server it is on — and switch either back.
+
+  Both levers already existed and neither was reachable from the sentence the
+  reader is actually looking at: muting an account lived on its own page, and
+  muting a server in the feed's settings. "Not this one, not today" is a
+  reaction to meeting somebody in a post, so it belongs on the card that opens
+  from that meeting.
+
+  The flip itself belongs to `Vutuv.Fediverse` (`toggle_remote_follow_mute/2`,
+  `toggle_host_mute/2`), not here. Three surfaces offer these switches and each
+  read "what is it now" from something different — a struct held since mount, a
+  fresh list, a fresh follow row — so deriving the target state at the call site
+  is both a fourth derivation and a race with the member's own second tab.
+
+  A scope nobody offered is not an error — no such control was ever rendered,
+  so the honest answer is the card, unchanged.
+  """
+  def mute(conn, %{"address" => address, "scope" => scope}) when is_binary(address) do
+    account = Fediverse.remote_account_by_address(address)
+
+    # The toggle's own answer replaces the viewer this request loaded, and that
+    # is not tidiness: the muted-server list is a **column on the member**
+    # (`users.feed_muted_hosts`), so the struct the plug put in `assigns` is one
+    # write out of date the moment the mute lands. The follow states are re-read
+    # from the database and never had the problem; this one silently re-rendered
+    # "Mute social.heise.de" onto a server that was now muted, so the press read
+    # as having done nothing.
+    conn
+    |> Plug.Conn.assign(:current_user, apply_mute(conn.assigns[:current_user], account, scope))
+    |> card(address, account)
+  end
+
+  defp apply_mute(viewer, %RemoteAccount{id: id}, "account") do
+    Fediverse.toggle_remote_follow_mute(viewer, id)
+    viewer
+  end
+
+  defp apply_mute(viewer, %RemoteAccount{host: host}, "host") when is_binary(host) do
+    {:ok, viewer} = Fediverse.toggle_host_mute(viewer, host)
+    viewer
+  end
+
+  defp apply_mute(viewer, _account, _scope), do: viewer
+
   # The one render. The follow is re-read from the database rather than taken
   # from whatever the act returned, so what the card draws is what is true — a
   # second tab that changed it is then not contradicted by this one.
   defp card(conn, address, account, error \\ nil) do
     viewer = conn.assigns[:current_user]
 
+    summary =
+      (account && Fediverse.account_card_summary(account, viewer)) || %{count: 0, latest: nil}
+
     render(conn, :card,
       address: address,
       account: account,
       follow: account && Fediverse.remote_follow_for(viewer, account),
       blocked_reason: Fediverse.follow_refusal(viewer),
-      error: error
+      error: error,
+      post_count: summary.count,
+      latest: preview(summary.latest, account, viewer),
+      host_muted?: account && account.host in Fediverse.muted_hosts(viewer)
     )
+  end
+
+  # Which post, if any, the card may quote. Three gates, and each one is a
+  # reader's decision this line would otherwise walk straight past.
+  #
+  # A content warning is the author asking for a click before their words are
+  # read, so a preview that ignores it puts them on screen unasked —
+  # `RemotePost.warned?/1` and not a bare `sensitive` test, because the two
+  # arrive independently and a server that sets only `summary` still asked. A
+  # word the member muted is the same promise from the other side; the count
+  # line deliberately stays either way, because we do hold the post, they just
+  # do not want to read it here.
+  defp preview(nil, _account, _viewer), do: nil
+
+  defp preview(%RemotePost{} = post, account, viewer) do
+    # The author, put back where the filter looks for it: a rule scoped to an
+    # account asks `Posts.account_names/1` who wrote this, which loads the row
+    # from the database when the association is not there. It is in hand — by
+    # construction this post is that account's.
+    post = %{post | remote_account: account}
+
+    if RemotePost.warned?(post) or
+         ContentFilters.filtered(post, ContentFilters.compile_for(viewer)),
+       do: nil,
+       else: post
   end
 end

@@ -173,8 +173,12 @@ defmodule Vutuv.MastodonHelpers do
       in_reply_to_uri: attrs[:in_reply_to_uri],
       content_text: attrs[:content_text] || "Von woanders.",
       audience: attrs[:audience] || "public",
+      sensitive: attrs[:sensitive] || false,
       kind: "note",
-      published_at: now,
+      # Overridable so a test can order two of them: the card's "latest here"
+      # line picks by `published_at`, and two rows minted in the same second
+      # would leave that pick to the id tiebreaker instead of to the test.
+      published_at: attrs[:published_at] || now,
       received_at: now,
       expires_at: DateTime.add(now, 86_400)
     })

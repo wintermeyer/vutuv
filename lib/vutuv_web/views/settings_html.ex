@@ -418,20 +418,10 @@ defmodule VutuvWeb.SettingsHTML do
     """
   end
 
-  # A short, localized "last active" reading: just now / N minutes / N hours / N
-  # days ago, falling back to an absolute date for anything older than a week.
+  # A short, localized "last active" reading. The ladder itself is
+  # `VutuvWeb.UI.relative_time/1`, shared since the mention card grew a "latest
+  # here" line and would otherwise have been the third copy of it; the name
+  # stays because that is what this column means to a reader of this page.
   @doc false
-  def last_active(nil), do: gettext("unknown")
-
-  def last_active(%DateTime{} = at) do
-    seconds = DateTime.diff(DateTime.utc_now(), at, :second)
-
-    cond do
-      seconds < 60 -> gettext("just now")
-      seconds < 3600 -> ngettext("%{count} minute ago", "%{count} minutes ago", div(seconds, 60))
-      seconds < 86_400 -> ngettext("%{count} hour ago", "%{count} hours ago", div(seconds, 3600))
-      seconds < 604_800 -> ngettext("%{count} day ago", "%{count} days ago", div(seconds, 86_400))
-      true -> Vutuv.ViewerClock.format(at, :date)
-    end
-  end
+  def last_active(at), do: relative_time(at)
 end

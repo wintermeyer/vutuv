@@ -21,7 +21,7 @@
 // LiveView root: a patch of the page underneath must not be able to take the
 // open card with it. That is also why the fragment carries no `phx-` link and
 // no fixed id (see the template).
-import { request } from "./util"
+import { copyText, request } from "./util"
 
 const CARD_URL = "/system/fediverse/actor_card"
 
@@ -147,14 +147,25 @@ function takeFocus() {
 // supplied — a display name, a self-description — is escaped there, on the side
 // that knows what is markup and what is text. Building the card here instead
 // would mean writing its sentences twice, once in German.
-async function fetchCard(url, method) {
+async function fetchCard(url, method, extra = "") {
   const resp = await request(url, {
     method,
     headers: { "content-type": "application/x-www-form-urlencoded" },
-    body: `address=${encodeURIComponent(anchor.dataset.remoteActor)}`,
+    body: `address=${encodeURIComponent(anchor.dataset.remoteActor)}${extra}`,
   })
   if (!resp.ok) throw new Error(`actor card ${resp.status}`)
   return resp.text()
+}
+
+// What each control on the card sends. The card is the only thing that knows
+// which way round a mute currently is and it re-renders on every act, so the
+// two mutes are toggles with a scope rather than a target state — this side
+// stays the dumb thing that swaps HTML.
+const ACTS = {
+  follow: { path: "/follow", method: "POST" },
+  unfollow: { path: "/follow", method: "DELETE" },
+  "mute-account": { path: "/mute", method: "POST", extra: "&scope=account" },
+  "mute-host": { path: "/mute", method: "POST", extra: "&scope=host" },
 }
 
 // The mention's own link, taken as soon as the enhancement gives up: a session
@@ -187,16 +198,17 @@ async function open(link) {
   }
 }
 
-// Follow / unfollow from inside the card. The answer is the whole card again,
-// so the button's next state, the status pill and any refusal all arrive
-// together and this side never has to guess what the act meant.
+// Any act from inside the card. The answer is the whole card again, so the
+// button's next state, the mute state and any refusal all arrive together and
+// this side never has to guess what the act meant.
 async function act(button) {
+  const spec = ACTS[button.dataset.actorAct]
+  if (!spec) return
+
   button.disabled = true
 
-  const method = button.dataset.actorAct === "follow" ? "POST" : "DELETE"
-
   try {
-    panel.innerHTML = await fetchCard(`${CARD_URL}/follow`, method)
+    panel.innerHTML = await fetchCard(`${CARD_URL}${spec.path}`, spec.method, spec.extra || "")
     place()
     takeFocus()
   } catch (_e) {
@@ -204,6 +216,94 @@ async function act(button) {
     // comes back, so the reader can try again.
     button.disabled = false
   }
+}
+
+// The hover swap is the pointer's confirmation step: the follow button reads as
+// the state and only becomes "Unfollow" once the pointer is on it, so the act is
+// never what a stray click lands on. A touch screen has no such moment, so the
+// first press asks and the second one acts.
+//
+// Worth the two presses because the two mistakes are not the same size: an
+// unfollow is one press away from being undone, while a withdrawn request has
+// to be approved by hand on the other side again and may take days or never
+// come back. The wording is the server's (`data-actor-confirm`) — this file
+// writes no sentences.
+//
+// `matchMedia("(hover: hover)")` and not `SHEET`: the question is whether this
+// input device can hover, which is not the same as how wide the window is. A
+// touch laptop asked to open the card in a narrow window gets a sheet and can
+// still hover; a stylus tablet at 900px gets a popover and cannot. The same
+// query gates the CSS half, so the two cannot disagree about which device this
+// is.
+const CAN_HOVER = window.matchMedia("(hover: hover)")
+
+function armed(button) {
+  const asks = button.querySelector("[data-actor-state-confirm]")
+  if (!asks || CAN_HOVER.matches || button.classList.contains("is-confirming")) return false
+
+  button.classList.add("is-confirming")
+  return true
+}
+
+// The overflow: the mutes and the address, behind one ⋯. Closing it also takes
+// back an armed follow button, so the two never sit waiting at the same time.
+function closeMenu() {
+  if (!isOpen()) return
+
+  const menu = panel.querySelector("[data-actor-card-menu]")
+  if (menu) menu.hidden = true
+
+  const more = panel.querySelector("[data-actor-menu]")
+  if (more) more.setAttribute("aria-expanded", "false")
+
+  panel
+    .querySelectorAll(".is-confirming")
+    .forEach((button) => button.classList.remove("is-confirming"))
+}
+
+function toggleMenu(button) {
+  const menu = panel.querySelector("[data-actor-card-menu]")
+  if (!menu) return
+
+  const opening = menu.hidden
+  closeMenu()
+  menu.hidden = !opening
+  button.setAttribute("aria-expanded", String(opening))
+  // In the popover the menu floats over the card's lower edge, so nothing
+  // moves; in the sheet it opens in the flow and the sheet grows upward from
+  // the bottom edge, which `place()` has nothing to do with. Either way the
+  // card must not end up hanging off the top of the window.
+  place()
+}
+
+// The address, for pasting into another client. Purely local: nothing here is a
+// question for the server. The confirmation is the button's own label for a
+// moment — a toast for something this small would outweigh it — and the word is
+// the server's (`data-actor-copied`).
+//
+// `copyText` from util.js rather than `navigator.clipboard` directly: that one
+// carries the fallback an installation without a secure context needs, and it
+// is the same path the settings page's copy button takes.
+async function copyAddress(button) {
+  const address = button.dataset.actorCopy
+  const said = button.dataset.actorCopied
+  const label = button.querySelector("[data-actor-copy-label]")
+
+  try {
+    await copyText(address)
+  } catch (_e) {
+    // The copy really failed. Say nothing rather than claim it worked; the
+    // address is on the card to select by hand.
+    return
+  }
+
+  if (!said || !label) return
+
+  const was = label.textContent
+  label.textContent = said
+  window.setTimeout(() => {
+    if (label.isConnected) label.textContent = was
+  }, 1500)
 }
 
 document.addEventListener("click", (e) => {
@@ -216,11 +316,30 @@ document.addEventListener("click", (e) => {
         return close()
       }
 
+      const more = e.target.closest("[data-actor-menu]")
+      if (more) {
+        e.preventDefault()
+        return toggleMenu(more)
+      }
+
+      const copy = e.target.closest("[data-actor-copy]")
+      if (copy) {
+        e.preventDefault()
+        return copyAddress(copy)
+      }
+
       const button = e.target.closest("[data-actor-act]")
       if (button) {
         e.preventDefault()
+        if (armed(button)) return
         return act(button)
       }
+
+      // A press anywhere else inside the card puts the overflow away — and
+      // takes back a follow button that was waiting for its second press,
+      // because "are you sure" that outlives the moment is a trap the next
+      // press falls into.
+      closeMenu()
 
       // A link inside the card (their page here, the original out there):
       // that is a destination, not a control. Let it navigate.

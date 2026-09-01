@@ -305,8 +305,23 @@ LiveView can sit on either style.
 - **The mention card is a body-level panel, not a page element** (`.actor-card*`
   in `components.css`, `assets/js/mention_card.js`). A `@user@host` mention keeps
   its link to that server; a plain left click by a signed-in member opens a
-  small card under the word instead — who that account is, one Follow button,
-  their page here and the original out there. The markup arrives from the server
+  small card under the word instead. It answers three questions in that order:
+  **who is this** (a `.actor-card__chip` carrying the globe and the host, then
+  name, address and a two-line self-description), **is it worth it**
+  (`.actor-card__stats` — how many of their posts we hold for *this* reader and
+  how recently, through `delimited_count/1` and `relative_time/1`; plus
+  `.actor-card__latest`, the newest one quoted in two lines, left out when its
+  author marked it sensitive or the reader's own filters hide it), and **what
+  now** (one `.actor-card__state-btn` that reads as the follow state and becomes
+  the refusal in red on hover — never a status pill beside a loud Unfollow,
+  which said the same thing twice and made the one unwanted act the loudest
+  control — a `.actor-card__more` ⋯ holding both mutes and the address, and
+  `.actor-card__links`, both ways onward in one weight). **One fragment serves
+  both shapes**: `.actor-card--sheet` restyles it for the phone (grab bar,
+  stacked full-width targets, the ⋯ menu in the flow rather than floating, the
+  links as full-width rows), and the only thing that cannot be CSS travels as an
+  attribute — a touch screen has no hover, so the follow button's first press
+  asks with the server-written `data-actor-confirm` and the second one acts. The markup arrives from the server
   on every act (`VutuvWeb.RemoteActorCardController` +
   `templates/remote_actor_card/card.html.heex`, **POST only**, since opening one
   may resolve an address nobody here has seen), so every sentence in it is
