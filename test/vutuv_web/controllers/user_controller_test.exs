@@ -181,19 +181,19 @@ defmodule VutuvWeb.UserControllerTest do
     # ellipsis before it loses anything worth saving. The lopsided shrink pair
     # is what expresses that, and it is exactly the kind of oddity a later
     # cleanup pass removes as noise, so it is pinned here.
-    {conn, _viewer} = create_and_login_user(conn)
+    {conn, viewer} = create_and_login_user(conn)
     profile = insert_activated_user()
-    # A mutual follow, so all three counters render — the connections one is
-    # the counter that carries the heavy shrink weight.
-    other = insert(:user, email_confirmed?: true)
-    insert(:follow, follower: other, followee: profile)
-    insert(:follow, follower: profile, followee: other)
+    # A mutual follow with the viewer: all three counters render (the
+    # connections one carries the heavy shrink weight), and it is also the one
+    # condition under which the chip renders at all.
+    insert(:follow, follower: viewer, followee: profile)
+    insert(:follow, follower: profile, followee: viewer)
 
     html = conn |> get(~p"/#{profile}") |> html_response(200)
 
     assert [row] =
              Regex.run(
-               ~r/<div class="[^"]*flex items-center gap-x-2[^"]*">.*?<\/div>\s*<div class="mt-4 flex items-center gap-1 border-t/s,
+               ~r/<div id="profile-counts".*?<\/div>\s*<div class="mt-4 flex items-center gap-1 border-t/s,
                html
              )
 
@@ -1293,25 +1293,26 @@ defmodule VutuvWeb.UserControllerTest do
   describe "header directional follow state" do
     # The follow-only model shows BOTH directions, but as two different kinds of
     # thing: the outbound one is the Follow / Following BUTTON ("I follow him"),
-    # the inbound one a read-only status chip that always states it ("Follows
-    # you" / "Doesn't follow you", "he follows me") and goes to the relationship's
-    # own word, "Connected" (vernetzt), once both directions are live. The
-    # `data-profile-relationship` token on that chip is the exact probe for
-    # header_follows_viewer? and the mutual state; the chip and the strip's
-    # sentence render only in the header.
+    # the inbound one a read-only status chip — and that chip appears ONLY when
+    # there is something to state, i.e. when this member follows the viewer
+    # ("Follows you", or the relationship's own word "Connected"/vernetzt once
+    # both directions are live). Not following back is the state nearly every
+    # profile is in, so saying it took a line for the absence of news. The
+    # `data-profile-relationship` token is the exact probe for
+    # header_follows_viewer? and the mutual state; the chip renders only in the
+    # header.
 
-    test "states the inbound direction even when there is no relationship yet", %{conn: conn} do
+    test "says nothing at all when there is no relationship yet", %{conn: conn} do
       {conn, _viewer} = create_and_login_user(conn)
       other = insert(:user, email_confirmed?: true)
 
       html = conn |> get(~p"/#{other}") |> html_response(200)
 
-      # the chip is always present and reads the negative when this member
-      # does not follow the viewer
-      # Phoenix HTML-escapes the apostrophe, so match the rendered form
-      assert html =~ ~s(data-profile-relationship="none")
-      assert html =~ "Doesn&#39;t follow you"
-      refute html =~ "Follows you"
+      refute html =~ "data-profile-relationship"
+      # Nobody follows this member and this member follows nobody, so with no
+      # chip either the row that would hold them is left out entirely rather
+      # than shipping an empty `mt-4` div above the footer.
+      refute html =~ ~s(id="profile-counts")
       # the toggle offers a follow (a phx-click create-follow targeting other)
       assert html =~ ~s(phx-click="follow")
       assert html =~ ~s(phx-value-followee="#{other.id}")
@@ -1351,7 +1352,7 @@ defmodule VutuvWeb.UserControllerTest do
       assert html =~ "Connected"
     end
 
-    test "reads 'Doesn't follow you' when only the viewer follows (one-way out)", %{
+    test "stays silent when only the viewer follows (one-way out)", %{
       conn: conn
     } do
       {conn, viewer} = create_and_login_user(conn)
@@ -1360,12 +1361,12 @@ defmodule VutuvWeb.UserControllerTest do
 
       html = conn |> get(~p"/#{other}") |> html_response(200)
 
-      # the chip is still present, just negative; never "Follows you" (capital
-      # F, with the trailing s) and never the mutual word
-      # Phoenix HTML-escapes the apostrophe, so match the rendered form
-      assert html =~ ~s(data-profile-relationship="none")
-      assert html =~ "Doesn&#39;t follow you"
-      refute html =~ "Follows you"
+      # The Following button states the outbound direction on its own; the
+      # inbound one has no news, so there is no chip at all.
+      assert html =~ ~s(phx-click="unfollow")
+      refute html =~ "data-profile-relationship"
+      # This member has a follower (the viewer), so the row itself stays.
+      assert html =~ ~s(id="profile-counts")
     end
   end
 
