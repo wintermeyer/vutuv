@@ -194,6 +194,12 @@ defmodule VutuvWeb.PostLive.Composer do
     # above the form says out loud (issue #1148). Cleared by the first edit:
     # from then on it is simply what the member is writing.
     |> assign(:restored_draft?, false)
+    # The undo window after a discard, and the question the ✕ asks. Both are
+    # views of a moment rather than data: neither survives a reconnect, and
+    # neither holds anything a reconnect could lose — the stash points at
+    # pending rows that are still in the database.
+    |> assign(:discarded, nil)
+    |> assign(:closing?, false)
     # True while an autosave is already queued, so a burst of keystrokes
     # schedules one write rather than one per character.
     |> assign(:draft_scheduled?, false)
@@ -883,27 +889,73 @@ defmodule VutuvWeb.PostLive.Composer do
     {:noreply, cancel_upload(socket, :images, ref)}
   end
 
-  # Discarding really discards. Two controls share it: the header's own
-  # "Discard draft" button (shown while there is something to lose — the ✕
-  # only collapses, issue #1135) and the restore notice's "Discard draft"
-  # (issue #1148). So the pending rows die now (their files with them), the
-  # stored draft goes, and the form falls back to the state the composer
-  # opened in — which on the reply page still includes the quote.
+  # Discarding is undoable (issue #1893). It used to delete the pending rows
+  # and their files on the spot, which made a mis-tap final — so it now stashes
+  # what was on screen and clears the form, and the notice that follows offers
+  # the way back.
+  #
+  # **The rows are deliberately NOT deleted here any more.** They are what undo
+  # has to give back, and letting them lie is already the composer's own
+  # arrangement for abandoned uploads: `Vutuv.Posts` sweeps a pending row that
+  # never reached a post after a day. So the cost of the undo window is that a
+  # discarded photo occupies disk until that sweep instead of vanishing at
+  # once, and the gain is that "I didn't mean that" has an answer.
   #
   # Only the feed has a panel to collapse, and only the feed LiveView has the
   # matching handle_info: the reply, remote-reply and edit pages define none at
   # all, so an ungated `send` would crash them the moment the notice's button
   # is used there.
   def handle_event("discard-draft", _params, socket) do
-    Enum.each(socket.assigns.images, fn image ->
-      if is_nil(image.post_id), do: Posts.delete_pending_image(image)
-    end)
-
     if feed_composer?(socket.assigns) do
       send(self(), {:composer_discarded, socket.assigns.id})
     end
 
-    {:noreply, socket |> drop_draft() |> reset_composer()}
+    {:noreply,
+     socket
+     |> assign(:discarded, stash_draft(socket))
+     |> assign(:closing?, false)
+     |> drop_draft()
+     |> reset_composer()}
+  end
+
+  # Everything back at once — the text, the photos, the tags and the
+  # arrangement. A discard that gave back only the words would be its own kind
+  # of loss, and photos are the half that costs real work to redo.
+  def handle_event("undo-discard", _params, socket) do
+    case socket.assigns.discarded do
+      nil ->
+        {:noreply, socket}
+
+      stash ->
+        {:noreply,
+         socket
+         |> restore_stash(stash)
+         |> assign(:discarded, nil)
+         |> persist_draft()}
+    end
+  end
+
+  # The member let the window pass. The stash goes; the rows it named are now
+  # the sweeper's business, exactly like any other abandoned upload.
+  def handle_event("dismiss-discard", _params, socket) do
+    {:noreply, assign(socket, :discarded, nil)}
+  end
+
+  # The ✕ used to collapse the panel and quietly keep the draft (issue #1135).
+  # That is the right answer and it said nothing, so anyone who meant to
+  # discard pressed it and was surprised. With a draft in hand it asks; with an
+  # empty one there is nothing to ask about and the plain close still bubbles
+  # to the feed.
+  def handle_event("close-request", _params, socket) do
+    {:noreply, assign(socket, :closing?, true)}
+  end
+
+  def handle_event("keep-draft", _params, socket) do
+    if feed_composer?(socket.assigns) do
+      send(self(), {:composer_closed, socket.assigns.id})
+    end
+
+    {:noreply, assign(socket, :closing?, false)}
   end
 
   def handle_event("save", %{"post" => params} = payload, socket) do
@@ -1102,6 +1154,38 @@ defmodule VutuvWeb.PostLive.Composer do
   # The audience choice sticks on purpose. The stored draft is dropped by the
   # caller (issue #1148), not here — a reset is not always a discard, and
   # clearing the form would autosave an empty draft away anyway.
+  # What a discard has to be able to give back. Everything here is composer
+  # state, not a database write — the pending rows themselves are left alone,
+  # so restoring is a matter of pointing at them again.
+  defp stash_draft(socket) do
+    %{
+      body: socket.assigns.body,
+      tags_value: socket.assigns.tags_value,
+      images: socket.assigns.images,
+      photos: socket.assigns.photos,
+      layout: socket.assigns.layout,
+      fill?: socket.assigns.fill?,
+      license: socket.assigns.license,
+      language: socket.assigns.language
+    }
+  end
+
+  defp restore_stash(socket, stash) do
+    socket
+    |> assign(:body, stash.body)
+    # The editor owns its prose and ignores the server's echo; changing the
+    # seed is the one way to hand it text back (the same door the post-save
+    # reset and the original "Discard draft" use).
+    |> update(:editor_seed, &(&1 + 1))
+    |> assign(:tags_value, stash.tags_value)
+    |> assign(:images, stash.images)
+    |> assign(:photos, stash.photos)
+    |> assign(:layout, stash.layout)
+    |> assign(:fill?, stash.fill?)
+    |> assign(:license, stash.license)
+    |> assign(:language, stash.language)
+  end
+
   defp reset_composer(socket) do
     opening_body = socket.assigns[:initial_body] || ""
 
@@ -1379,11 +1463,74 @@ defmodule VutuvWeb.PostLive.Composer do
               type="button"
               phx-click="discard-draft"
               phx-target={@myself}
-              data-confirm={gettext("Discard the photos and text of this draft?")}
               class="font-semibold underline underline-offset-2 hover:text-brand-900 dark:hover:text-white"
             >
               {gettext("Discard draft")}
             </button>
+          </div>
+
+          <%!-- The way back from a discard (issue #1893). No confirmation
+          dialog anywhere any more: an act that reports itself and offers the
+          undo is kinder than one that interrogates you first and is then
+          final. It lives in this same wrapper for the reason above — an
+          element appearing and disappearing among the form's siblings
+          relocates the form and blurs the editor. --%>
+          <div
+            :if={@discarded}
+            id={"#{@id}-discarded"}
+            data-draft-discarded
+            class="mb-3 flex flex-wrap items-center justify-between gap-2 rounded-lg bg-slate-100 px-3 py-2 text-sm text-slate-700 dark:bg-slate-800 dark:text-slate-200"
+          >
+            <span>{gettext("Draft discarded.")}</span>
+            <span class="flex items-center gap-3">
+              <button
+                type="button"
+                phx-click="undo-discard"
+                phx-target={@myself}
+                data-undo-discard
+                class="font-semibold text-brand-700 underline underline-offset-2 hover:text-brand-800 dark:text-brand-300 dark:hover:text-brand-200"
+              >
+                {gettext("Undo")}
+              </button>
+              <button
+                type="button"
+                phx-click="dismiss-discard"
+                phx-target={@myself}
+                aria-label={gettext("Close")}
+                class="font-semibold text-slate-500 hover:text-slate-700 dark:text-slate-400 dark:hover:text-slate-200"
+              >
+                ✕
+              </button>
+            </span>
+          </div>
+
+          <%!-- What the ✕ asks once there is something to lose. --%>
+          <div
+            :if={@closing?}
+            id={"#{@id}-closing"}
+            data-close-confirm
+            class="mb-3 flex flex-wrap items-center justify-between gap-2 rounded-lg bg-slate-100 px-3 py-2 text-sm text-slate-700 dark:bg-slate-800 dark:text-slate-200"
+          >
+            <span>{gettext("Keep this draft for later?")}</span>
+            <span class="flex items-center gap-3">
+              <button
+                type="button"
+                phx-click="keep-draft"
+                phx-target={@myself}
+                data-keep-draft
+                class="font-semibold text-brand-700 underline underline-offset-2 hover:text-brand-800 dark:text-brand-300 dark:hover:text-brand-200"
+              >
+                {gettext("Keep it")}
+              </button>
+              <button
+                type="button"
+                phx-click="discard-draft"
+                phx-target={@myself}
+                class="font-semibold text-slate-500 underline underline-offset-2 hover:text-red-600 dark:text-slate-400 dark:hover:text-red-400"
+              >
+                {gettext("Discard draft")}
+              </button>
+            </span>
           </div>
         </div>
 
@@ -1437,14 +1584,20 @@ defmodule VutuvWeb.PostLive.Composer do
               id={"#{@id}-discard"}
               phx-click="discard-draft"
               phx-target={@myself}
-              data-confirm={gettext("Discard the photos and text of this draft?")}
               class="rounded-lg px-3 py-2 text-sm font-semibold text-slate-500 hover:bg-slate-100 hover:text-red-600 dark:text-slate-400 dark:hover:bg-slate-800 dark:hover:text-red-400"
             >
               {gettext("Discard draft")}
             </button>
+            <%!-- ONE button whose attributes change, not two swapping under an
+            `:if`: this row sits above the editor, and a sibling appearing or
+            disappearing here relocates the form and blurs the contenteditable
+            (the jumping cursor of #1130/#1143). With a draft in hand it asks
+            the question below; with nothing to lose it bubbles the plain close
+            to the feed, exactly as before. --%>
             <button
               type="button"
-              phx-click="close-composer"
+              phx-click={(drafting?(assigns) && "close-request") || "close-composer"}
+              phx-target={drafting?(assigns) && @myself}
               aria-label={gettext("Close")}
               title={gettext("Close")}
               class="-mr-2 rounded-lg px-3 py-2 text-sm font-semibold text-slate-500 hover:bg-slate-100 hover:text-slate-700 dark:text-slate-400 dark:hover:bg-slate-800 dark:hover:text-slate-200"

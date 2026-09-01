@@ -2057,6 +2057,14 @@ defmodule VutuvWeb.PostLive.Feed do
     {:noreply, assign(socket, :composer_open?, false)}
   end
 
+  # The ✕ now asks before it closes over a draft (issue #1893), so "keep it"
+  # arrives here rather than as the composer's own bubbled `close-composer`.
+  # Same outcome — the panel folds away and the draft is still there when it
+  # opens again.
+  def handle_info({:composer_closed, _id}, socket) do
+    {:noreply, assign(socket, :composer_open?, false)}
+  end
+
   # The month's shading, arriving after the grid it belongs to
   # (`defer_calendar_counts/1`). Both guards drop work rather than prevent a
   # wrong answer — the count is taken from the assigns, not from `key`, so a
