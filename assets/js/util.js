@@ -119,26 +119,37 @@ export function bufToB64url(buf) {
   return btoa(bin).replace(/\+/g, "-").replace(/\//g, "_").replace(/=+$/, "")
 }
 
-// localStorage, wrapped. A private window, or a browser set to block site data,
-// throws on plain access — so every read answers null and every write is a
-// no-op rather than taking an unrelated feature down with it. That failure mode
-// is reasoned about once, here, instead of in each `try {}` at a call site.
-export function localGet(key) {
+// Browser storage, wrapped. A private window, or a browser set to block site
+// data, throws on plain access — so every read answers null and every write is
+// a no-op rather than taking an unrelated feature down with it. That failure
+// mode is reasoned about once, here, instead of in each `try {}` at a call
+// site; the two stores differ only in scope, so they share the wrapper too.
+// A null (or undefined) value forgets the key, which is what every caller here
+// means by "no longer true".
+function storeGet(store, key) {
   try {
-    return window.localStorage.getItem(key)
+    return window[store].getItem(key)
   } catch (_e) {
     return null
   }
 }
 
-// A null (or undefined) value forgets the key, which is what every caller here
-// means by "no longer true".
-export function localSet(key, value) {
+function storeSet(store, key, value) {
   try {
-    if (value == null) window.localStorage.removeItem(key)
-    else window.localStorage.setItem(key, value)
+    if (value == null) window[store].removeItem(key)
+    else window[store].setItem(key, value)
   } catch (_e) {}
 }
+
+// localStorage: this browser, all its tabs, across sittings.
+export const localGet = (key) => storeGet("localStorage", key)
+export const localSet = (key, value) => storeSet("localStorage", key, value)
+
+// sessionStorage: this tab, and it dies with it — which is what a fact about
+// "this window, in this sitting" needs. The same fact in localStorage would
+// speak for every other tab of the same browser too.
+export const sessionGet = (key) => storeGet("sessionStorage", key)
+export const sessionSet = (key, value) => storeSet("sessionStorage", key, value)
 
 // Copy to the clipboard, with the fallback the modern API needs. `writeText`
 // wants a secure context (https or localhost — every place vutuv runs itself),

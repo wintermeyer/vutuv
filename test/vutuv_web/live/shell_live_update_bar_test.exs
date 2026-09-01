@@ -32,12 +32,17 @@ defmodule VutuvWeb.ShellLiveUpdateBarTest do
   end
 
   defp mount_shell(conn, connect_params, session \\ %{}) do
-    {:ok, _view, html} =
+    {_view, html} = mount_shell_view(conn, connect_params, session)
+    html
+  end
+
+  defp mount_shell_view(conn, connect_params, session \\ %{}) do
+    {:ok, view, html} =
       conn
       |> put_connect_params(connect_params)
       |> live_isolated(VutuvWeb.ShellLive, session: session)
 
-    html
+    {view, html}
   end
 
   describe "who gets offered the reload" do
@@ -83,6 +88,70 @@ defmodule VutuvWeb.ShellLiveUpdateBarTest do
       html = mount_shell(conn, %{})
 
       refute html =~ ~s(id="sw-update")
+    end
+  end
+
+  # The bar is also what app.js reloads on by itself once the tab goes into the
+  # background, and the browser cannot see it arrive. A tab that was ALREADY
+  # hidden when the deploy landed hears its socket reconnect and the bar appear
+  # without a single `visibilitychange` firing (the same blind spot the TabBadge
+  # hook has), so the server has to say so.
+  #
+  # It says so with a pushed event and not with a `phx-hook` on the bar, for the
+  # reason every other note in this file circles: the bar renders ONLY into a
+  # document running the previous release's JavaScript, and a hook name that
+  # release does not know is a client-side error there. An unknown window event
+  # is a no-op in every release that predates it.
+  describe "the announcement app.js reloads on" do
+    test "a stale browser is told a new version is ready", %{conn: conn} do
+      {view, _html} = mount_shell_view(conn, %{"_track_static" => @stale})
+
+      assert_push_event(view, "version:ready", %{})
+    end
+
+    test "a browser already on the current release is told nothing", %{conn: conn} do
+      {view, _html} = mount_shell_view(conn, %{"_track_static" => @current})
+
+      refute_push_event(view, "version:ready", %{})
+    end
+  end
+
+  # What app.js must NOT reload on its own. The marker names the effect — this
+  # document may not be re-requested — rather than any one cause, so the two
+  # sources that know it can both say so, and a third can be added without app.js
+  # learning a second selector.
+  #
+  # The root layout's cause is a non-GET render: a `create`/`update` action that
+  # re-renders its form instead of redirecting leaves the reader on a document
+  # born of a POST, and reloading that raises the browser's "resubmit this form?"
+  # dialog in a tab nobody is watching. `<.secret_once>`'s cause is the opposite
+  # shape — an ordinary GET after a redirect — which is exactly why the method
+  # alone could not answer for it: the freshly minted token it shows exists
+  # nowhere else (only its hash is stored) and the flash carrying it is spent by
+  # this render, so a second GET of the same URL loses it for good.
+  describe "the marker on a document that must not be re-requested" do
+    test "the PIN screen a login POST renders carries it", %{conn: conn} do
+      html =
+        conn
+        |> post(~p"/login", %{"session" => %{"email" => "nobody@example.com"}})
+        |> html_response(200)
+
+      assert html =~ ~s(data-no-auto-reload="true")
+    end
+
+    test "an ordinary page does not", %{conn: conn} do
+      refute conn |> get(~p"/") |> html_response(200) =~ "data-no-auto-reload"
+    end
+
+    test "a show-once secret carries it although its page is a plain GET" do
+      html =
+        render_component(&VutuvWeb.UI.secret_once/1,
+          flash: %{"new_token" => "vtv_plaintext_only_shown_once"},
+          key: :new_token,
+          label: "Copy it now"
+        )
+
+      assert html =~ "data-no-auto-reload"
     end
   end
 
