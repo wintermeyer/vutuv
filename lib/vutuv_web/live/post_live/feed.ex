@@ -1798,14 +1798,20 @@ defmodule VutuvWeb.PostLive.Feed do
       |> with_engagement(user)
       |> mark_filtered(socket.assigns.content_filters, user.id)
 
+    month = if day, do: FeedTimeTravel.month_of(day), else: socket.assigns.cal_month
+
     socket
     |> assign(:cal_day, day)
     # Opening a day from another month moves the calendar to it, or the reader
     # is looking at a highlighted day that is not on the grid in front of them.
-    |> assign(
-      :cal_month,
-      if(day, do: FeedTimeTravel.month_of(day), else: socket.assigns.cal_month)
-    )
+    |> assign(:cal_month, month)
+    # …and the shading has to travel with the grid. Every cell is a button, and
+    # a grid draws whole weeks, so its first row holds days of the month before
+    # — clicking one moved the month and kept the counts of the month left
+    # behind, which shaded the new grid by the old month's numbers and left the
+    # day the reader had just opened reading as empty. "Load the whole day" went
+    # with it, since it asks those counts how big the day is.
+    |> then(&if(month != socket.assigns.cal_month, do: defer_calendar_counts(&1), else: &1))
     |> replace_timeline(entries, page)
   end
 

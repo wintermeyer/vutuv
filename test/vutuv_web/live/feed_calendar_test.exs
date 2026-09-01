@@ -49,6 +49,33 @@ defmodule VutuvWeb.FeedCalendarTest do
   defp iso(date), do: Date.to_iso8601(date)
   defp days_ago(n), do: Date.add(ViewerClock.today(), -n)
 
+  # Unfolds the rail **at the month `day` sits in**, which is not the month it
+  # opens at for the first days of a new one. The grid draws whole weeks from
+  # the Monday on or before the 1st, so it reaches at most six days back: on
+  # 2026-09-01 it began on 31 August and a day two or three back was simply not
+  # a cell — and the counts the rail holds are that month's, which is where the
+  # "load the whole day" button reads a day's size from. Five tests in this file
+  # went red that morning, every 1st and 2nd of a month, for that alone.
+  #
+  # Paging is what a reader does here too, so the tests reach those days the way
+  # they would rather than by pinning the clock. Only the tests that read the
+  # grid or its counts need it: clicking a day re-anchors the month by itself
+  # (`load_day/3`), so a test that only asks what the timeline then holds can
+  # keep unfolding and clicking.
+  # It asserts it arrived: a backward step is refused once the feed stops
+  # reaching past the shown month (`cal_earlier?`), and a helper that silently
+  # did nothing would fail two lines later on the cell instead of here.
+  defp open_calendar(view, day) do
+    today = ViewerClock.today()
+    months = (today.year - day.year) * 12 + (today.month - day.month)
+
+    render_click(view, "cal-toggle")
+    if months > 0, do: render_click(view, "cal-month", %{"n" => to_string(-months)})
+
+    assert has_element?(view, ~s(#feed-calendar-rail [phx-value-date="#{iso(day)}"])),
+           "the rail did not page to #{iso(day)}"
+  end
+
   # Every day cell in `html` the heatmap has put a shade on. Read out of the
   # parsed document rather than by matching a class anywhere on the page:
   # `bg-brand-*` is a colour half the feed's controls wear.
@@ -213,11 +240,36 @@ defmodule VutuvWeb.FeedCalendarTest do
       busy = busy_day(author, 2)
 
       {:ok, view, _html} = live(conn, ~p"/feed")
-      render_click(view, "cal-toggle")
+      open_calendar(view, busy)
 
       # The busiest day of the month gets the top step; an empty day gets none.
+      # Yesterday is the empty one: nothing is placed there, and it is on the
+      # same grid as `busy` whichever month that grid is showing — a day twenty
+      # back is off it for most of any month.
       assert has_element?(view, ~s([phx-value-date="#{iso(busy)}"].bg-brand-700))
-      assert has_element?(view, ~s([phx-value-date="#{iso(days_ago(20))}"].bg-slate-100))
+      assert has_element?(view, ~s([phx-value-date="#{iso(days_ago(1))}"].bg-slate-100))
+    end
+
+    test "a day from a neighbouring month brings the shading with it", %{conn: conn} do
+      # A grid draws whole weeks, so its first row holds days of the month
+      # before — as ordinary buttons, not decoration. Opening one moves the grid
+      # to that month (`load_day/3`) and used to leave the counts behind on the
+      # month the reader came from: the day they had just opened drew unshaded,
+      # every other cell wore a shade belonging to a different month, and
+      # "load the whole day" never appeared, because it reads the day's size
+      # from those same counts.
+      {conn, user} = create_and_login_user(conn)
+      author = feed_with_history(user)
+
+      # Five weeks back is a cell of another month whatever today's date is.
+      elsewhere = busy_day(author, 35)
+
+      {:ok, view, _html} = live(conn, ~p"/feed")
+      render_click(view, "cal-toggle")
+      render_click(view, "cal-day", %{"date" => iso(elsewhere)})
+
+      assert has_element?(view, ~s([phx-value-date="#{iso(elsewhere)}"].bg-brand-700)),
+             "the opened day is shaded by the month it belongs to, not the one behind it"
     end
 
     test "the heatmap counts arrivals, which is never fewer than the cards",
@@ -260,7 +312,7 @@ defmodule VutuvWeb.FeedCalendarTest do
       PostsHelpers.backdate_post!(theirs, 2 * @day)
 
       {:ok, view, _html} = live(conn, ~p"/feed")
-      render_click(view, "cal-toggle")
+      open_calendar(view, quiet)
 
       assert has_element?(view, ~s([phx-value-date="#{iso(quiet)}"].bg-brand-700))
 
@@ -504,8 +556,9 @@ defmodule VutuvWeb.FeedCalendarTest do
 
       {:ok, view, _html} = live(conn, ~p"/feed")
       # Unfold first, as a reader must: the grid is what a day is clicked from,
-      # and unfolding is what computes the counts the button names.
-      render_click(view, "cal-toggle")
+      # and unfolding is what computes the counts the button names — that day's
+      # month, hence `open_calendar/2`.
+      open_calendar(view, days_ago(3))
       render_click(view, "cal-day", %{"date" => iso(days_ago(3))})
 
       assert has_element?(view, "#load-more")
@@ -760,7 +813,11 @@ defmodule VutuvWeb.FeedCalendarTest do
       author = feed_with_history(user)
       busy = busy_day(author, 2)
 
-      html = conn |> get(~p"/feed?cal=1") |> html_response(200)
+      # A dead render has no rail to page, so the URL names the day instead —
+      # the grid then opens at ITS month, whatever today's date is. `?cal=1`
+      # opens at the current month, where a day two back is not a cell during
+      # the first days of a new one.
+      html = conn |> get(~p"/feed?day=#{iso(busy)}") |> html_response(200)
 
       assert html =~ ~s(phx-value-date="#{iso(busy)}")
 
@@ -772,7 +829,7 @@ defmodule VutuvWeb.FeedCalendarTest do
       assert elements(html, ~s([aria-busy="true"])) == []
 
       # And the socket, which does get a second render, ends up shaded.
-      {:ok, view, _html} = live(conn, ~p"/feed?cal=1")
+      {:ok, view, _html} = live(conn, ~p"/feed?day=#{iso(busy)}")
       assert has_element?(view, ~s([phx-value-date="#{iso(busy)}"].bg-brand-700))
     end
 
@@ -1041,7 +1098,7 @@ defmodule VutuvWeb.FeedCalendarTest do
 
       conn = conn |> recycle() |> put_req_header("accept-language", "de-DE,de")
       {:ok, view, _html} = live(conn, ~p"/feed")
-      render_click(view, "cal-toggle")
+      open_calendar(view, days_ago(3))
       render_click(view, "cal-day", %{"date" => iso(days_ago(3))})
 
       assert render(view) =~ "Ganzen Tag laden"
