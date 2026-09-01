@@ -493,7 +493,7 @@ defmodule VutuvWeb.UserHTML do
 
   def profile_counts(assigns) do
     ~H"""
-    <div class={["flex items-center gap-x-2 text-sm sm:gap-x-6", @class]}>
+    <div id="profile-counts" class={["flex items-center gap-x-2 text-sm sm:gap-x-6", @class]}>
       <.link :if={@follower_count > 0} href={~p"/#{@user}/followers"} class={count_link_class()}>
         <span class={count_number_class()}>{compact_count(@follower_count)}</span>
         <span class={count_label_class()}>{ngettext("follower", "followers", @follower_count)}</span>
@@ -697,24 +697,25 @@ defmodule VutuvWeb.UserHTML do
 
   @doc """
   What this member's side of the relationship is, as a **status chip** — never
-  a button.
+  a button, and only when there is something to say.
 
-  The old segmented pill said it in a half that was the same size, colour and
-  shape as the clickable half beside it, which is what made the control read as
-  two buttons of which one was broken. Here the inbound direction is a small
-  chip: emerald "Connected" for a mutual follow (the `vernetzt` word family,
-  guarded by `VutuvWeb.ConnectionVocabularyTest`), an emerald tint for a
-  one-way inbound follow, calm slate when they do not follow you — so all three
-  states the pill encoded stay legible, and the seam glyph (· → ← ⇄) nobody
-  could read is gone. `data-profile-relationship` names the state for tests,
+  It renders exactly when this member follows the viewer: emerald "Connected"
+  for a mutual follow (the `vernetzt` word family, guarded by
+  `VutuvWeb.ConnectionVocabularyTest`), an emerald tint for a one-way inbound
+  follow. There is no negative state, because not following back is the state
+  nearly every profile is in — see `.claude/rules/design.md` for why that line
+  was worth nothing. `data-profile-relationship` names the state for tests,
   which is a steadier probe than a translated word.
   """
   attr(:follow_id, :any, required: true)
   attr(:follows_viewer?, :boolean, required: true)
 
+  # The call site owns the guard (`show_relationship?`); this clause is the
+  # belt-and-braces half, so no caller can state a relationship that isn't there.
+  def profile_relationship_chip(%{follows_viewer?: false} = assigns), do: ~H""
+
   def profile_relationship_chip(assigns) do
-    assigns =
-      assign(assigns, :state, relationship_state(assigns.follow_id, assigns.follows_viewer?))
+    assigns = assign(assigns, :state, relationship_state(assigns.follow_id))
 
     ~H"""
     <span
@@ -724,19 +725,16 @@ defmodule VutuvWeb.UserHTML do
         relationship_chip_class(@state)
       ]}
     >
-      <span :if={@state != :none} aria-hidden="true">✓</span>
+      <span aria-hidden="true">✓</span>
       {relationship_label(@state)}
     </span>
     """
   end
 
-  defp relationship_state(follow_id, follows_viewer?) do
-    cond do
-      is_binary(follow_id) and follows_viewer? -> :mutual
-      follows_viewer? -> :inbound
-      true -> :none
-    end
-  end
+  # This member follows the viewer either way, so the viewer's own follow id is
+  # all that separates the two states.
+  defp relationship_state(follow_id) when is_binary(follow_id), do: :mutual
+  defp relationship_state(_follow_id), do: :inbound
 
   defp relationship_chip_class(:mutual),
     do:
@@ -746,13 +744,8 @@ defmodule VutuvWeb.UserHTML do
     do:
       "bg-emerald-50 text-emerald-800 ring-1 ring-emerald-200 dark:bg-emerald-900/40 dark:text-emerald-200 dark:ring-emerald-800"
 
-  defp relationship_chip_class(:none),
-    do:
-      "bg-slate-100 text-slate-600 ring-1 ring-slate-200 dark:bg-slate-800 dark:text-slate-400 dark:ring-slate-700"
-
   defp relationship_label(:mutual), do: gettext("Connected")
   defp relationship_label(:inbound), do: gettext("Follows you")
-  defp relationship_label(:none), do: gettext("Doesn't follow you")
 
   @doc """
   A single-path brand glyph for a social-media provider (Simple Icons, CC0),

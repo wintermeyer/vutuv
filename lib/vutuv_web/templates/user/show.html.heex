@@ -306,14 +306,21 @@ the resulting ~200px rail width. --%>
         </p>
 
         <% has_counts = @follower_count > 0 or @followee_count > 0 or @connection_count > 0 %>
+        <% show_relationship? = viewer_actions? && @header_follows_viewer? %>
         <% show_saves? = saved_present? && !@viewer_block %>
         <%!-- Facts row: the three counts and the follow-back chip on ONE line,
         the chip last. It is another fact about this member, so it belongs
         beside the numbers rather than on a line of its own above them. On a
         phone the labels give way before the chip does — see
-        `<.profile_counts>` for how, and why that is the right way round. --%>
+        `<.profile_counts>` for how, and why that is the right way round. The
+        chip only exists while this member follows the viewer, so with no
+        counts either the row is left out rather than shipped empty. Do not
+        fold the second disjunct away as implied by the first: a member who
+        follows the viewer has a followee, but the counts are visibility-gated
+        and the raw edge is not, so a viewer invisible to those counts (frozen,
+        unreachable) still gets the chip and nothing else on the row. --%>
         <.profile_counts
-          :if={has_counts || viewer_actions?}
+          :if={has_counts || show_relationship?}
           class="mt-4"
           user={@user}
           follower_count={@follower_count}
@@ -322,7 +329,7 @@ the resulting ~200px rail width. --%>
         >
           <:extra>
             <.profile_relationship_chip
-              :if={viewer_actions?}
+              :if={show_relationship?}
               follow_id={@header_follow_id}
               follows_viewer?={@header_follows_viewer?}
             />

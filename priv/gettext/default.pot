@@ -6668,11 +6668,6 @@ msgstr ""
 msgid "Professional"
 msgstr ""
 
-#: lib/vutuv_web/components/ui.ex:2913
-#, elixir-autogen, elixir-format
-msgid "Doesn't follow you"
-msgstr ""
-
 #: lib/vutuv_web/components/ui.ex:2907
 #, elixir-autogen, elixir-format
 msgid "Follows you"

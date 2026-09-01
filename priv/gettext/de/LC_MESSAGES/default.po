@@ -6944,11 +6944,6 @@ msgstr "Zum Profil, um zu folgen"
 msgid "Professional"
 msgstr "Beruflich"
 
-#: lib/vutuv_web/components/ui.ex:2913
-#, elixir-autogen, elixir-format
-msgid "Doesn't follow you"
-msgstr "Folgt Ihnen nicht"
-
 #: lib/vutuv_web/components/ui.ex:2907
 #, elixir-autogen, elixir-format
 msgid "Follows you"

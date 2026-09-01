@@ -82,19 +82,22 @@ defmodule VutuvWeb.OrganizationFollowsMemberTest do
   end
 
   test "the relationship pill returns once you stop speaking for the page", %{conn: conn} do
-    {conn, _organization, _owner} = acting_as_page(conn)
+    {conn, _organization, owner} = acting_as_page(conn)
     member = insert(:activated_user)
+    # The member follows the owner, so the chip WOULD render for them — which is
+    # what makes the refute below say something.
+    insert(:follow, follower: member, followee: owner)
 
     acting = conn |> get(~p"/#{member}") |> html_response(200)
     assert acting =~ "follow-as-page"
-    # The two-direction pill asks a question that has no answer for a page.
-    refute acting =~ "Folgt dir"
-    refute acting =~ "Doesn't follow you"
+    # "Does this member follow you" has no answer while you speak for a page.
+    refute acting =~ "data-profile-relationship"
 
     conn = delete(conn, ~p"/system/act_as")
 
     back = conn |> get(~p"/#{member}") |> html_response(200)
     refute back =~ "follow-as-page"
+    assert back =~ ~s(data-profile-relationship="inbound")
   end
 
   test "the notification links to the page, not into the handle namespace", %{conn: conn} do
