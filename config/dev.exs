@@ -37,9 +37,23 @@ config :phoenix_live_view,
   debug_heex_annotations: true,
   debug_attributes: true
 
+# Several sessions work this repository in parallel git worktrees, each with its
+# own dev server against the same Postgres. Each gets its own database and its
+# own port, derived from the checkout it runs in, so one session's `ecto.migrate`
+# or `ecto.reset` does not land in every other tree and two servers do not race
+# for 4000. The main checkout is unchanged: `vutuv1_dev` on 4000. `DEV_DATABASE`
+# and `PORT` still win. See `Vutuv.MixProject.worktree_name/1`.
+dev_database = System.get_env("DEV_DATABASE") || "vutuv1_dev#{Vutuv.MixProject.worktree_suffix()}"
+
+dev_port =
+  case System.get_env("PORT") do
+    nil -> Vutuv.MixProject.worktree_port()
+    port -> String.to_integer(port)
+  end
+
 config :vutuv, VutuvWeb.Endpoint,
-  http: [port: String.to_integer(System.get_env("PORT") || "4000")],
-  url: [host: "localhost", port: String.to_integer(System.get_env("PORT") || "4000")],
+  http: [port: dev_port],
+  url: [host: "localhost", port: dev_port],
   # Dev-only signing secret so `mix phx.server` boots without extra setup.
   # This is not a real secret: it only signs localhost dev sessions/cookies.
   # Production reads its secret_key_base from the environment in runtime.exs,
@@ -62,7 +76,7 @@ config :vutuv, VutuvWeb.Endpoint,
     # a correct one-shot build per change — see VutuvWeb.TailwindWatcher.
     tailwind: {VutuvWeb.TailwindWatcher, :watch, [:vutuv]}
   ],
-  public_url: "http://localhost:4000/",
+  public_url: "http://localhost:#{dev_port}/",
   live_reload: [
     patterns: [
       ~r{priv/static/(?!assets).*\.(js|css|png|jpeg|jpg|gif|svg)$},
@@ -81,9 +95,7 @@ config :vutuv, Vutuv.Repo,
   adapter: Ecto.Adapters.Postgres,
   username: "postgres",
   password: "postgres",
-  # Overridable so two checkouts (a git worktree working on a schema change,
-  # say) can each keep their own dev database instead of migrating one another's.
-  database: System.get_env("DEV_DATABASE", "vutuv1_dev"),
+  database: dev_database,
   hostname: "localhost",
   pool_size: 10,
   # Keep the dev log readable: don't echo every SQL query.

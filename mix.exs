@@ -49,6 +49,74 @@ defmodule Vutuv.MixProject do
   @doc false
   def calver(iso_date), do: Calendar.strftime(Date.from_iso8601!(iso_date), "%Y.%-m.%-d")
 
+  @doc """
+  The name of the git worktree this checkout is, or `nil` for the main checkout.
+
+  Several sessions work this repository in parallel worktrees, each running its
+  own `mix phx.server` and its own `mix test` against the same Postgres. Sharing
+  one dev database means one session's `ecto.migrate` or `ecto.reset` lands in
+  everybody else's tree, so `config/dev.exs` and `config/test.exs` suffix the
+  database name with `worktree_suffix/0` and the dev endpoint takes its port
+  from `worktree_port/1`. `DEV_DATABASE`, `MIX_TEST_PARTITION` and `PORT` still
+  win.
+
+  The name comes out of the `.git` **file** a linked worktree has in place of a
+  directory, which reads `gitdir: …/.git/worktrees/<name>`. That is git's own
+  name for the worktree, which `git worktree add` keeps unique — a directory
+  basename is neither unique nor conclusive, and a git **submodule** also has a
+  `.git` file (`gitdir: …/.git/modules/<name>`), so a vendored copy of vutuv
+  would otherwise be handed a worktree's treatment. Reading the file costs one
+  `File.read` per `mix` invocation and no shell-out to git.
+
+  What comes back is cut to what Postgres takes unquoted and to 20 characters,
+  so `vutuv1_test_<name><partition>` stays inside the 63-byte identifier limit.
+  (`Vutuv.SlugHelpers.handleize/1` does the same reduction and is the obvious
+  reuse, but it lives in `lib/`, which is not compiled yet when `config/*.exs`
+  is evaluated — that is also why these two functions are in `mix.exs`.)
+  """
+  def worktree_name(dir \\ __DIR__) do
+    with {:ok, "gitdir: " <> gitdir} <- File.read(Path.join(dir, ".git")),
+         ["worktrees", name] <- gitdir |> String.trim() |> Path.split() |> Enum.take(-2) do
+      name
+      |> String.downcase()
+      |> String.replace(~r/[^a-z0-9]+/, "_")
+      |> String.slice(0, 20)
+    else
+      _not_a_worktree -> nil
+    end
+  end
+
+  @doc """
+  What a worktree appends to a database name: `""` in the main checkout,
+  `"_profile"` in the worktree named `profile`. The one spelling of the naming
+  scheme, so `config/dev.exs` and `config/test.exs` cannot drift apart.
+  """
+  def worktree_suffix(dir \\ __DIR__) do
+    case worktree_name(dir) do
+      nil -> ""
+      name -> "_" <> name
+    end
+  end
+
+  @doc """
+  The dev-server port for a worktree: 4000 in the main checkout, else
+  4100..4899.
+
+  Two dev servers on port 4000 is the collision that makes somebody reach for a
+  `pkill -f "mix phx.server"` and take a parallel session's server down with
+  their own. The port is derived rather than assigned because nothing in a
+  worktree survives to hold an assignment: a rolling hash over the name's bytes
+  (`h = rem(h * 31 + byte, 800)`). 800 slots and no registry, so two names can
+  still land on one port — that fails loudly with `:eaddrinuse`, and `PORT`
+  overrides it.
+  """
+  def worktree_port(name \\ worktree_name())
+  def worktree_port(nil), do: 4000
+
+  def worktree_port(name) when is_binary(name) do
+    4100 + Enum.reduce(:binary.bin_to_list(name), 0, &rem(&2 * 31 + &1, 800))
+  end
+
   defp elixirc_paths(:test), do: ["lib", "test/support"]
   defp elixirc_paths(_), do: ["lib"]
 

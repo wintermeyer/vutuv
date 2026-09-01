@@ -48,12 +48,48 @@ mix setup           # deps.get + npm ci + ecto.create/migrate/seeds + esbuild/ta
 mix phx.server
 ```
 
-Visit http://localhost:4000. (`mix setup` does everything except the
+Visit http://localhost:4000 — or the port of your checkout, if you are in a
+worktree (see below). (`mix setup` does everything except the
 `config/dev.secret.exs` step above.)
+
+### Working in a git worktree
+
+Several checkouts of this repository can be worked at once through `git
+worktree`, and they share one Postgres. Each linked worktree therefore gets its
+own dev database, its own test database and its own dev-server port, all derived
+from the checkout's directory name so that nothing has to be exported:
+
+| checkout | dev database | port |
+| --- | --- | --- |
+| the main one | `vutuv1_dev` | 4000 |
+| `…/worktrees/profile` | `vutuv1_dev_profile` | 4653 |
+
+Without the split, one checkout's `mix ecto.migrate` or `mix ecto.reset` lands
+in every other one, and two `mix phx.server` race for port 4000. `DEV_DATABASE`,
+`MIX_TEST_PARTITION` and `PORT` still win where you want them to;
+`Vutuv.MixProject.worktree_name/1` holds the derivation.
+
+Two things a `git worktree add` leaves behind, both because they are gitignored:
+
+- **The build artefacts.** `deps/`, `assets/node_modules/` and
+  `priv/static/assets/` are missing, so run `mix setup` in the new checkout.
+  Until you do, `/assets/app.js` 404s and every page renders with no JavaScript
+  at all — no LiveView, and `data-method` links degrade to a plain GET.
+- **The member uploads.** In dev `:uploads_dir_prefix` is empty, so every image
+  path resolves against the cwd of the running server, and the new checkout's
+  upload trees are empty. Symlink each of them to the main checkout's — all of
+  them, the list is `@upload_trees` in
+  `test/vutuv/uploads_gitignore_test.exs` — and never `ln -sfn` over a tree that
+  already holds files: move it aside first, those are member uploads.
+
+The new dev database starts empty: `mix ecto.setup` seeds it, or copy the one
+you already have with `pg_dump -Fc vutuv1_dev | pg_restore -d vutuv1_dev_<name>`
+(`createdb -T` refuses to run while any session is connected to the source, and
+a dev server always is).
 
 ### Email in development
 
-Emails are displayed in the browser via Swoosh's mailbox preview at http://localhost:4000/sent_emails.
+Emails are displayed in the browser via Swoosh's mailbox preview at `/sent_emails` (http://localhost:4000/sent_emails on the main checkout).
 
 The email architecture (the single `Emailer` chokepoint, the multipart
 text + HTML bodies, bounce handling) is described in

@@ -224,7 +224,11 @@ config :vutuv, Vutuv.Repo,
   adapter: Ecto.Adapters.Postgres,
   username: "postgres",
   password: "postgres",
-  database: "vutuv1_test#{System.get_env("MIX_TEST_PARTITION")}",
+  # A worktree runs its own suite against the same Postgres, so it gets its own
+  # test database (`Vutuv.MixProject.worktree_name/1`, same reasoning as the dev
+  # one). `MIX_TEST_PARTITION` still isolates targeted runs inside one checkout.
+  database:
+    "vutuv1_test#{Vutuv.MixProject.worktree_suffix()}#{System.get_env("MIX_TEST_PARTITION")}",
   hostname: System.get_env("DATABASE_HOST", "localhost"),
   pool: Ecto.Adapters.SQL.Sandbox,
   # The suite runs ~20 async cases; the default pool (10) plus the default
