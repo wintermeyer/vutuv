@@ -115,7 +115,7 @@ defmodule VutuvWeb.RemotePostReplyTest do
       refute has_element?(view, "#composer [phx-click='close-composer']")
     end
 
-    test "sending creates a top-level post that wears the replying-to line", ctx do
+    test "sending creates a top-level post carrying the post it answers", ctx do
       {:ok, view, _html} = live(ctx.conn, ~p"/system/fediverse/reply/post/#{ctx.post.id}")
 
       view
@@ -126,11 +126,30 @@ defmodule VutuvWeb.RemotePostReplyTest do
       assert post.body == "Meine Antwort."
 
       {:ok, view, html} = live(ctx.conn, ~p"/feed")
+      assert html =~ "Meine Antwort."
+
+      # One row for the conversation: the answer carries the post it answers
+      # above it, and that post gives up the row its own author's follow would
+      # otherwise give it — so it is on the page exactly once.
+      assert has_element?(view, "#feed-post-#{post.id} [data-remote-post='#{ctx.post.id}']")
+    end
+
+    test "the replying-to line names the account here, not out there", ctx do
+      # The line is what a card without the answered post above it wears, and
+      # the profile is such a surface: it draws flat cards and pulls in no
+      # parent from another network.
+      {:ok, view, _html} = live(ctx.conn, ~p"/system/fediverse/reply/post/#{ctx.post.id}")
+
+      view
+      |> form("#composer form", post: %{body: "Meine Antwort."})
+      |> render_submit()
+
+      {:ok, view, html} = live(ctx.conn, ~p"/#{ctx.user}")
       assert html =~ "data-reply-banner=\"remote\""
       assert html =~ "@them@social.example"
 
-      # The line names who is being answered, so it links to that account's
-      # page here — not out to their server, and not to a compose form.
+      # It names who is being answered, so it links to that account's page
+      # here — not out to their server, and not to a compose form.
       assert has_element?(
                view,
                "[data-reply-banner='remote'] a[href='/system/fediverse/account/#{ctx.account.id}']"

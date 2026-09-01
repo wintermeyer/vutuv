@@ -1278,11 +1278,41 @@ which the flat-card surfaces leave off), and `post_thread_entry/1` takes them:
   as the head of that branch in place of its "Replying to @user@host" line.
 
 **One card per thing per page** is the rule both obey, the one `dedupe_remote/1`
-and `collapse_reposts/1` already hold: a reply that is on the page as a reshared
-row of its own is not drawn a second time inside a thread (nor a cached post
-that has its own card), and within the threads the first claim wins. A second
-card is not merely repetition — the action bar is a LiveComponent keyed by the
-subject, so a duplicate id takes the render down.
+and `collapse_reposts/1` already hold, and within the threads the first claim
+wins. A second card is not merely repetition — the action bar is a LiveComponent
+keyed by the subject, so a duplicate id takes the render down.
+
+The two halves settle a tie in **opposite** directions, and each direction is a
+product decision rather than a dedup detail. A **note** that is on the page as a
+reshared row of its own keeps that row and is not woven into the thread as well:
+the row exists because somebody here passed it on, an act the woven copy does
+not carry. A **cached post** the other way round — the conversation wins, so a
+post that an answer on this page carries as its parent card gives up the row it
+would otherwise hold and the exchange is one row, the way a local thread is one
+row. Until 2026-09-01 the standalone row won there too, and the same exchange
+stood twice in the timeline a few cards apart, the answer under a bare "Replying
+to @handle" line. What that costs is the dropped row's reshare stamp; a parent
+card at the head of a branch deliberately wears no reshare line.
+
+**Across two pages neither call can see the other**, and the arrival is two of
+them (ten cards in the document, the rest on connect), so the rule is split.
+`VutuvWeb.PostLive.Feed`'s `shown_remote_keys/1` collects every subject already
+on screen — a remote entry's own, **and** the ones nested inside an entry
+(`:remote_parents`, `:remote_replies`) — and does two things with it: it drops an
+arriving row for a subject that is already up there, and it hands the set to the
+next `feed_page/2` as **`seen:`**, which is the only way the nested cards can be
+suppressed (they hang off an entry the page has every reason to keep). Without
+that second half the two cards render, no error is raised, and the browser's
+patch moves the shared body into whichever was rendered last — leaving the other
+a name with its hashtags and nothing under them.
+
+Both ties above are decided **within a page**; across the boundary it is simply
+first come, first served, since the earlier page was already sent. So a note
+whose reshare row lands on the second page loses it to the woven-in copy above
+(reshare stamp and all), which is the opposite of what the same pair does side
+by side. Two cards a page apart are not read as a repetition, so this is the
+cheap answer rather than a wrong one — but do not read either tie as an absolute
+rule about the two records.
 
 A surface that draws these cards **owes their events**: the ⋯ menu's
 `remove-remote-reply` / `report-remote-reply` (`VutuvWeb.Live.RemoteReplyActions`,

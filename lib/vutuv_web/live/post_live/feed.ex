@@ -473,13 +473,24 @@ defmodule VutuvWeb.PostLive.Feed do
     end
   end
 
-  # What a feed entry shows that could be translated: its own post (plus the
-  # nested ancestors of a reply), a cached remote post, or a remote reply.
+  # Everything a feed entry puts on the page: its own post (plus the nested
+  # ancestors of a reply), a cached remote post or a remote reply, and the cards
+  # a conversation pulls in from the other network (`Posts.remote_cards/1`) —
+  # the post an answer answers is as much on the row as the answer is, and a
+  # reader with auto-translate on was getting the answer in their language and
+  # the foreign post above it untouched.
+  #
+  # Two callers, both asking the same question of a row: what may be translated
+  # (`auto_translate_entries/2`) and what already holds a card
+  # (`shown_remote_keys/1`).
   defp entry_subjects(entry) do
-    case entry_record(entry) do
-      %Post{} = post -> [post | entry[:ancestors] || []]
-      remote -> [remote]
-    end
+    own =
+      case entry_record(entry) do
+        %Post{} = post -> [post | entry[:ancestors] || []]
+        remote -> [remote]
+      end
+
+    own ++ Posts.remote_cards(entry)
   end
 
   # The desktop "New here" rail: five of the newest members, drawn at random out
@@ -1478,12 +1489,16 @@ defmodule VutuvWeb.PostLive.Feed do
   # otherwise be two copies of the dedup rule.
   defp append_older_page(socket, limit) do
     user = socket.assigns.current_user
+    seen_remote = shown_remote_keys(socket.assigns.entries)
 
     page =
       Posts.feed_page(user,
         limit: limit,
         cursor: socket.assigns.cursor,
-        filter: effective_filter(socket)
+        filter: effective_filter(socket),
+        # What is on screen already, for the cards this page would nest inside
+        # its own entries — the half no filter out here can reach.
+        seen: seen_remote
       )
 
     # A post shown higher up (as a newer repost, or nested in a shown thread)
@@ -1494,7 +1509,7 @@ defmodule VutuvWeb.PostLive.Feed do
     shown =
       socket.assigns.entries
       |> shown_post_ids()
-      |> MapSet.union(shown_remote_keys(socket.assigns.entries))
+      |> MapSet.union(seen_remote)
 
     fresh = Enum.reject(page.entries, &MapSet.member?(shown, dedupe_key(&1)))
 
@@ -2759,14 +2774,22 @@ defmodule VutuvWeb.PostLive.Feed do
   # publication land on opposite sides of the boundary — which is exactly how a
   # reshared post read as an empty card on 2026-09-01.
   #
+  # A card **nested inside** an entry counts here too — the cached post an
+  # answer answers and the replies woven into a thread (`Posts.remote_cards/1`)
+  # each get a full card with the subject's own action bar. That is the half
+  # this set was missing on 2026-09-01: a member's answer carried the post above
+  # it, the same post came back as its own row in the fill, and the patch moved
+  # the body into the lower card.
+  #
   # Keyed by `subject_key/1`, the identity the DOM ids are built from, so the
   # two cannot drift, and read through `entry_record/1`, which answers for a
   # cached post and a remote reply alike.
   defp shown_remote_keys(entries) do
     for entry <- entries,
-        Posts.remote_feed_entry?(entry),
+        subject <- entry_subjects(entry),
+        not match?(%Post{}, subject),
         into: MapSet.new(),
-        do: remote_key(entry)
+        do: Fediverse.subject_key(subject)
   end
 
   defp remote_key(entry), do: Fediverse.subject_key(entry_record(entry))

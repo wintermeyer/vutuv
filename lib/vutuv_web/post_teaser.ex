@@ -210,6 +210,12 @@ defmodule VutuvWeb.PostTeaser do
   (reported 2026-08-28). The reader's own posts keep their exemption **per
   post**: replying once to a muted conversation must not reopen it, and a word
   the reader wrote themselves must not fold the row either.
+
+  **The posts it draws from the other network count too** (`remote_cards/1`).
+  They always should have, and since the conversation started winning the tie
+  against a cached post's own row (2026-09-01) they have to: that row was the
+  copy this check could see, so without them a muted word answered by anybody
+  would be back on the page with nothing looking at it.
   """
   def filtered_pattern(entry, compiled, viewer_id) do
     case filtered_hit(entry, compiled, viewer_id) do
@@ -236,6 +242,7 @@ defmodule VutuvWeb.PostTeaser do
       entry
       |> Posts.thread_posts()
       |> Enum.reject(&(&1.user_id == viewer_id))
+      |> Enum.concat(Posts.remote_cards(entry))
       |> Enum.find_value(&hit(&1, ContentFilters.filtered(&1, compiled)))
     end
   end

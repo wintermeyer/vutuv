@@ -2770,8 +2770,14 @@ defmodule Vutuv.Posts do
   A post appears **once per page**, at its newest event: several followed
   members reposting the same post collapse into one entry, and a repost of a
   post the viewer also follows directly replaces the standalone original
-  (`collapse_reposts/1`). Cross-page duplicates are the LiveView's job — the
-  cursor merge can't see previous pages.
+  (`collapse_reposts/1`). A post from another network that an answer on this
+  page carries as its parent card gives up its own row, so a conversation that
+  crossed the network boundary is one row like any other.
+
+  Cross-page duplicates are mostly the LiveView's job — the cursor merge can't
+  see previous pages — but a card nested **inside** an entry is not one it can
+  drop, so `seen:` takes the subject keys (`Vutuv.Fediverse.subject_key/1`)
+  already on screen and nothing on this page draws a card for one of them.
 
   Returns `%{entries:, more?:, next_cursor:}` — pass `cursor:` back for the
   next older page. The cursor (and the merge across the two sources) is the
@@ -2787,7 +2793,13 @@ defmodule Vutuv.Posts do
 
     page = Vutuv.FeedPage.paginate(feed_sources(viewer, filter), limit, cursor)
 
-    %{page | entries: decorate_feed_entries(page.entries, viewer, threads: true)}
+    decorated =
+      decorate_feed_entries(page.entries, viewer,
+        threads: true,
+        seen: Keyword.get(opts, :seen, [])
+      )
+
+    %{page | entries: decorated}
   end
 
   @doc """
@@ -3234,6 +3246,7 @@ defmodule Vutuv.Posts do
   defp decorate_feed_entries(entries, viewer, opts \\ []) do
     {remote, local} = Enum.split_with(entries, &remote_feed_entry?/1)
     threads? = Keyword.get(opts, :threads, false)
+    seen = opts |> Keyword.get(:seen, []) |> MapSet.new()
 
     local =
       local
@@ -3242,7 +3255,8 @@ defmodule Vutuv.Posts do
       |> collapse_reposts()
       |> attach_reposters(viewer)
       |> attach_thread_starts(viewer, threads?)
-      |> attach_remote_thread(viewer, remote, threads?)
+
+    {local, remote} = settle_remote_cards(local, viewer, remote, seen, threads?)
 
     entries = Vutuv.FeedPage.sort_entries(local ++ decorate_remote(remote, viewer))
     warm_hashtag_links(entries)
@@ -3297,12 +3311,61 @@ defmodule Vutuv.Posts do
     |> Enum.reject(&is_nil/1)
   end
 
-  defp attach_remote_thread(local, _viewer, _remote, false), do: local
+  # Which cards from the other network this page gets, and the **one** place
+  # that settles it — the threads pull in what they can draw, and the rows for
+  # subjects that are drawn anyway step aside. Both directions in one function
+  # because they are one decision; splitting them is how the page ended up
+  # drawing some subjects twice.
+  #
+  # `seen` is what already has a card **further up this feed**: an earlier
+  # `feed_page/2` call of the same timeline, which this one cannot see
+  # (`VutuvWeb.PostLive.Feed` keeps that set and hands it down). Nothing here
+  # draws a second card for one of those. Within a page a repeat is fatal — a
+  # repeated LiveComponent id raises in the static render — and across two it is
+  # merely silent, which is worse to find: the browser's patch moves the body
+  # into whichever card was rendered last and leaves the other one a name with
+  # its hashtags and nothing under them (reported 2026-09-01).
+  #
+  # The tie between a row and a card inside a conversation goes **opposite ways
+  # for the two kinds**, and each way is a product decision:
+  #
+  #   * a **cached post** loses its row — the conversation wins, so an exchange
+  #     that crossed the network boundary is one row like any other, at the
+  #     newest post of it. Until 2026-09-01 the row won and the answer wore a
+  #     bare "Replying to @handle" line, so the same exchange stood twice in the
+  #     timeline a few cards apart. What it costs is the dropped row's reshare
+  #     stamp; a parent card at the head of a branch deliberately wears no
+  #     reshare line, it says "this is what is being answered".
+  #   * a **note** keeps its row: that row exists because somebody **here
+  #     reshared it** (issue #1275), an act of its own that the woven-in copy
+  #     does not carry, so the thread does without it.
+  defp settle_remote_cards(local, _viewer, remote, seen, false),
+    do: {local, drop_drawn(remote, seen)}
 
-  defp attach_remote_thread(local, viewer, remote, true) do
-    local
-    |> attach_thread_notes(viewer, standalone_note_ids(remote))
-    |> attach_remote_parents(viewer, standalone_remote_post_ids(remote))
+  defp settle_remote_cards(local, viewer, remote, seen, true) do
+    notes_taken = MapSet.union(seen, MapSet.new(standalone_note_ids(remote)))
+
+    local =
+      local
+      |> attach_thread_notes(viewer, notes_taken)
+      |> attach_remote_parents(viewer, seen)
+
+    {local, drop_drawn(remote, parent_card_subjects(local, seen))}
+  end
+
+  # The subjects the page's conversations now draw a parent card for, on top of
+  # the ones already up the timeline. Read back off the entries rather than
+  # carried out of `attach_remote_parents/3`: they are on the entries either
+  # way, and one of the two spellings would eventually stop matching the other.
+  defp parent_card_subjects(local, seen) do
+    for entry <- local,
+        parent <- Map.values(entry[:remote_parents] || %{}),
+        into: seen,
+        do: Vutuv.Fediverse.subject_key(parent.remote_post)
+  end
+
+  defp drop_drawn(remote, drawn) do
+    Enum.reject(remote, &MapSet.member?(drawn, Vutuv.Fediverse.subject_key(remote_subject(&1))))
   end
 
   # The post that STARTED the conversation, for a row that would otherwise open
@@ -3392,10 +3455,10 @@ defmodule Vutuv.Posts do
   # (`post_preloads/0`), so this costs no lookup — only the same three batch
   # reads a remote card needs anywhere (its pictures, the reader's marks, the
   # reader's follow), run once for the page. `taken` keeps a post that already
-  # has a card of its own from getting a second one, exactly as for a reply.
+  # has a card **further up the feed** from getting a second one; a post whose
+  # own row is on *this* page is not in it — that row steps aside instead, see
+  # `settle_remote_cards/5`.
   defp attach_remote_parents(entries, viewer, taken) do
-    taken = MapSet.new(taken)
-
     parents =
       for entry <- entries,
           post <- thread_posts(entry),
@@ -3403,7 +3466,7 @@ defmodule Vutuv.Posts do
           Vutuv.Fediverse.subject_key(parent) not in taken,
           do: %{post_id: post.id, remote_post: parent}
 
-    case Enum.uniq_by(parents, &Vutuv.Fediverse.subject_key(&1.remote_post)) do
+    case Enum.uniq_by(parents, &parent_key/1) do
       [] ->
         entries
 
@@ -3439,6 +3502,8 @@ defmodule Vutuv.Posts do
     end
   end
 
+  defp parent_key(%{remote_post: post}), do: Vutuv.Fediverse.subject_key(post)
+
   defp claim_remote_parents(entry, by_post) do
     case Map.take(by_post, Enum.map(thread_posts(entry), & &1.id)) do
       mine when mine == %{} -> entry
@@ -3450,15 +3515,6 @@ defmodule Vutuv.Posts do
     do: p
 
   defp remote_parent(_post), do: nil
-
-  # The cached posts that already have a card of their own on this page.
-  defp standalone_remote_post_ids(remote),
-    do:
-      for(
-        entry <- remote,
-        entry[:remote_post],
-        do: Vutuv.Fediverse.subject_key(entry.remote_post)
-      )
 
   # The replies from other networks (issues #1069/#1071) that belong inside the
   # threads on this page, read once for the whole page and hung on the entries
@@ -3496,7 +3552,7 @@ defmodule Vutuv.Posts do
         marks = notes |> Map.values() |> List.flatten() |> Vutuv.Fediverse.mark_lookup(viewer)
 
         {entries, _seen} =
-          Enum.map_reduce(entries, MapSet.new(taken), &claim_thread_notes(&1, &2, notes, marks))
+          Enum.map_reduce(entries, taken, &claim_thread_notes(&1, &2, notes, marks))
 
         entries
     end
@@ -3539,6 +3595,28 @@ defmodule Vutuv.Posts do
   """
   def thread_posts(%{post: %Post{} = post} = entry), do: [post | entry[:ancestors] || []]
   def thread_posts(_entry), do: []
+
+  @doc """
+  The records from **another network** a feed entry draws a card for: the cached
+  post an answer answers (`:remote_parents`) and the replies woven into its
+  thread (`:remote_replies`).
+
+  The other half of `thread_posts/1`, and public for the same reason — a row
+  carries more than the post it is keyed on, and every question about "what is
+  on this row" that forgot these got a quietly wrong answer. Each of them is a
+  full card with the subject's own action bar, so it counts for the reader's
+  content filters, for auto-translation and for the one-card-per-subject rule
+  alike.
+
+  A remote entry's own subject is **not** in here — that is the entry itself
+  (`remote_feed_entry?/1`), not something nested inside it.
+  """
+  def remote_cards(entry) do
+    parents = entry[:remote_parents] || %{}
+    notes = entry[:remote_replies] || %{}
+
+    Enum.map(Map.values(parents), & &1.remote_post) ++ Enum.concat(Map.values(notes))
+  end
 
   # The remote reply this post answers (issue #1070), if it answers one at all.
   defp answered_note_ids(%Post{remote_reply_ref: %PostRemoteReply{note_id: id}})

@@ -27,7 +27,9 @@ defmodule VutuvWeb.FeedDuplicateCardsTest do
   subject can hold a card in each without either call seeing the other. Two
   renders raise nothing — they degrade, and a member's reshare read as an empty
   card that way on 2026-09-01. `VutuvWeb.PostLive.Feed`'s `shown_remote_keys/1`
-  is where that rule lives and why.
+  is where that rule lives and why; a card nested inside an entry cannot be
+  dropped out here at all, so the same set rides back down as `feed_page/2`'s
+  `seen:`.
 
   Not async: answering a note claims from `Vutuv.RateLimiter`, a shared ETS
   table the SQL sandbox does not roll back.
@@ -119,6 +121,26 @@ defmodule VutuvWeb.FeedDuplicateCardsTest do
     })
   end
 
+  # The reader follows the account out there, and twelve posts sit between the
+  # two things under test — which is what pushes them into different
+  # `feed_page/2` calls (ten cards in the document, the rest in the fill), the
+  # whole point of every test that uses it.
+  defp two_pages!(user, remote) do
+    Repo.insert!(%Follow{
+      user_id: user.id,
+      remote_account_id: remote.remote_account_id,
+      state: "accepted",
+      follow_activity_id: "https://vutuv.test/#{user.id}/actor#follows/1"
+    })
+
+    author = insert(:activated_user)
+    follow!(user, author)
+
+    for i <- 1..12 do
+      author |> create_post!(%{body: "Beitrag Nummer #{i}"}) |> backdate_post!(60 + i)
+    end
+  end
+
   # How many cards a cached post got. `data-remote-post` rides every one of
   # them, so this counts the thing whose repeated LiveComponent id is fatal.
   defp cards_for(html, %RemotePost{id: id}),
@@ -177,20 +199,19 @@ defmodule VutuvWeb.FeedDuplicateCardsTest do
   end
 
   test "a cached post that is both a standalone row and a post's parent", %{conn: conn} do
-    # `standalone_remote_post_ids/1`'s case: the reader follows the account, so
-    # the cached post has a row of its own, and a member here answered it, which
-    # would draw it a second time above the answer.
+    # The conversation wins: the cached post has a row of its own (somebody
+    # reshared it) and a member here answered it, and what the reader gets is
+    # **one** row — the answer with the post it answers above it — not a row for
+    # each a few cards apart.
     {conn, user} = reader(conn)
     remote = cached_post("was da draussen steht")
 
-    # A member the reader follows reshares it, which gives it a row of its own;
-    # another answers it, which would draw it again above the answer. Reshared
-    # rather than followed-directly because following an account out there is a
-    # signed request to a server that does not exist in a test, while the
-    # reshare produces the same standalone row.
+    # Reshared rather than followed-directly because following an account out
+    # there is a signed request to a server that does not exist in a test, while
+    # the reshare produces the same standalone row.
     {:ok, :reposted} = Fediverse.repost_remote_post(answerer(user), remote)
 
-    {:ok, _post} =
+    {:ok, post} =
       Posts.create_remote_post_reply(answerer(user), remote, %{body: "meine Antwort darauf"})
 
     {:ok, view, _html} = live(conn, ~p"/feed")
@@ -198,6 +219,56 @@ defmodule VutuvWeb.FeedDuplicateCardsTest do
     html = render(view)
     assert html =~ "meine Antwort darauf"
     assert cards_for(html, remote) == 1
+
+    # And the one card is the answer's parent, inside the answer's own row.
+    assert has_element?(view, "#feed-post-#{post.id} [data-remote-post='#{remote.id}']")
+  end
+
+  test "an answer's parent card and the post's own row across two pages", %{conn: conn} do
+    # The reported shape (2026-09-01), and the one no `feed_page/2` call can see
+    # by itself: the answer is the newest thing here, so it and its parent card
+    # are in the document's ten, while the post's own row is old enough to land
+    # in the fill. Both cards carry the same body id and the same action-bar
+    # LiveComponent, so the second render moved the body into the lower card and
+    # left the upper one a name with three hashtags under it.
+    {conn, user} = reader(conn)
+    remote = cached_post("was da draussen steht", 7_200)
+
+    two_pages!(user, remote)
+
+    {:ok, _post} =
+      Posts.create_remote_post_reply(answerer(user), remote, %{body: "meine Antwort darauf"})
+
+    {:ok, view, html} = live(conn, ~p"/feed")
+
+    assert cards_for(html, remote) == 1
+
+    assert cards_for(render(view), remote) == 1,
+           "the fill must not draw a second card for a post already answered above"
+  end
+
+  test "a post's own row above and an answer to it on the next page", %{conn: conn} do
+    # The same pair the other way round, which the `seen:` half of the rule
+    # covers: the post's row is on screen and the answer arrives in the fill, so
+    # the answer keeps its "Replying to @handle" line rather than drawing the
+    # post a second card underneath it.
+    {conn, user} = reader(conn)
+    remote = cached_post("was da draussen steht")
+
+    two_pages!(user, remote)
+
+    {:ok, post} =
+      Posts.create_remote_post_reply(answerer(user), remote, %{body: "meine Antwort darauf"})
+
+    backdate_post!(post, 7_200)
+
+    {:ok, view, html} = live(conn, ~p"/feed")
+
+    assert cards_for(html, remote) == 1
+
+    html = render(view)
+    assert html =~ "meine Antwort darauf"
+    assert cards_for(html, remote) == 1, "the answer must not draw a card the page already has"
   end
 
   test "all four shapes on one page at once", %{conn: conn} do
@@ -240,19 +311,7 @@ defmodule VutuvWeb.FeedDuplicateCardsTest do
     # each call dedupes itself and neither knows about the other.
     remote = cached_post("was da draussen steht", 7_200)
 
-    Repo.insert!(%Follow{
-      user_id: user.id,
-      remote_account_id: remote.remote_account_id,
-      state: "accepted",
-      follow_activity_id: "https://vutuv.test/#{user.id}/actor#follows/1"
-    })
-
-    author = insert(:activated_user)
-    follow!(user, author)
-
-    for i <- 1..12 do
-      author |> create_post!(%{body: "Beitrag Nummer #{i}"}) |> backdate_post!(60 + i)
-    end
+    two_pages!(user, remote)
 
     {:ok, :reposted} = Fediverse.repost_remote_post(answerer(user), remote)
 
