@@ -71,8 +71,11 @@ defmodule VutuvWeb.PhotoComposerTest do
     live
   end
 
+  # The licence and download answers moved from a folded row into the gallery
+  # sheet (issue #1892), which is also where the arrangement lives now — one
+  # control for everything that belongs to the set rather than to one photo.
   defp open_details(live) do
-    live |> element("#composer-photo-details-toggle") |> render_click()
+    live |> element("#composer-gallery-open") |> render_click()
   end
 
   # A pending row minted outside any composer — the shape a reconnected
@@ -135,7 +138,7 @@ defmodule VutuvWeb.PhotoComposerTest do
   # so a test drives it through the element rather than through `form/3`.
   defp choose_download(live, choice) do
     live
-    |> element("#composer-download")
+    |> element("#composer-gallery-download")
     |> render_change(%{"post" => %{"download" => choice}})
   end
 
@@ -160,9 +163,9 @@ defmodule VutuvWeb.PhotoComposerTest do
       refute render(live) =~ "data-photo-tile"
       # The two rights questions are about photos; without one they would be
       # controls about nothing.
-      refute has_element?(live, "[data-photo-details-toggle]")
-      refute has_element?(live, "#composer-license")
-      refute has_element?(live, "#composer-download")
+      refute has_element?(live, "[data-gallery-open]")
+      refute has_element?(live, "#composer-gallery-license")
+      refute has_element?(live, "#composer-gallery-download")
     end
   end
 
@@ -206,12 +209,18 @@ defmodule VutuvWeb.PhotoComposerTest do
 
       assert has_element?(live, ~s([data-photo-tile="#{image.id}"] img[src$="/feed.avif"]))
 
-      # One visible text per photo, right under the tile.
+      # The caption is one tap in, in the photo's own sheet — it used to sit
+      # inline under the tile, which is what made one photo's settings live in
+      # two places at once (issue #1892).
+      refute has_element?(live, ~s(input[name="photo[#{image.id}][caption]"]))
+      open_panel(live, image)
       assert has_element?(live, ~s(input[name="photo[#{image.id}][caption]"]))
 
-      # Adding more photos is now a tile among tiles; the same id, so the
-      # feed's camera button always finds its target.
-      assert has_element?(live, "[data-photo-add-tile]")
+      # Adding more photos sits in the row under the pictures, not as a tile
+      # among them: the mosaic's cells are the arrangement, and a "+" occupying
+      # one of them would be a seat the gallery does not have (issue #1892).
+      # The id is unchanged, so the feed's camera button still finds its target.
+      refute has_element?(live, "[data-photo-add-tile]")
       assert has_element?(live, "#composer-add-photos")
     end
 
@@ -238,7 +247,7 @@ defmodule VutuvWeb.PhotoComposerTest do
              end)
     end
 
-    test "a photo carrying camera facts offers the publish switch right under its tile", %{
+    test "a photo carrying camera facts offers the publish switch in its sheet", %{
       conn: conn,
       user: user
     } do
@@ -255,6 +264,12 @@ defmodule VutuvWeb.PhotoComposerTest do
             {"exif-ifd2-ISOSpeedRatings", "400"}
           ]
         )
+
+      # In the photo's sheet, beside its caption and description — the switch
+      # is about this picture, so it lives where everything about this picture
+      # lives (issue #1892).
+      refute has_element?(live, ~s([data-photo-camera-inline="#{image.id}"]))
+      open_panel(live, image)
 
       assert has_element?(live, ~s([data-photo-camera-inline="#{image.id}"]))
       assert render(live) =~ "Canon EOS R6 · 50 mm · f/1.8 · 1/200 s · ISO 400"
@@ -302,7 +317,10 @@ defmodule VutuvWeb.PhotoComposerTest do
       assert has_element?(live, ~s([data-photo-alt-missing="#{image.id}"]))
 
       # A caption gives the photo its accessible name (photo_alt/1 falls back
-      # to it), so the nudge is satisfied without the panel.
+      # to it), so the nudge is satisfied by either field — which is the point
+      # of writing them side by side in the photo's own sheet.
+      open_panel(live, image)
+
       live
       |> form("#composer-form", %{
         "photo" => %{image.id => %{"caption" => "Zugfenster"}}
@@ -355,6 +373,9 @@ defmodule VutuvWeb.PhotoComposerTest do
       live = open_composer(conn)
       image = upload_photo!(live, user)
 
+      # The caption field only exists while the photo's sheet is open.
+      open_panel(live, image)
+
       live
       |> form("#composer-form", %{
         "photo" => %{image.id => %{"caption" => "Gleich weg"}}
@@ -393,7 +414,7 @@ defmodule VutuvWeb.PhotoComposerTest do
       {:ok, live, _html} = live(conn, ~p"/posts/#{post.id}/edit")
 
       assert has_element?(live, ~s([data-photo-tile="#{image.id}"]))
-      assert has_element?(live, "#composer-photo-details-toggle")
+      assert has_element?(live, "#composer-gallery-open")
       assert has_element?(live, ~s(#composer-form textarea[name="post[body]"]))
     end
   end
@@ -640,21 +661,21 @@ defmodule VutuvWeb.PhotoComposerTest do
     } do
       live = open_composer(conn)
 
-      refute has_element?(live, "#composer-photo-details-toggle")
+      refute has_element?(live, "#composer-gallery-open")
 
       upload_photo!(live, user)
 
       # The row is there, its answers are named on the fold, but the selects
       # stay away until the author opens it.
-      assert has_element?(live, "#composer-photo-details-toggle")
+      assert has_element?(live, "#composer-gallery-open")
       assert render(live) =~ "All rights reserved"
-      refute has_element?(live, "#composer-license")
-      refute has_element?(live, "#composer-download")
+      refute has_element?(live, "#composer-gallery-license")
+      refute has_element?(live, "#composer-gallery-download")
 
       open_details(live)
 
-      assert has_element?(live, "#composer-license")
-      assert has_element?(live, "#composer-download")
+      assert has_element?(live, "#composer-gallery-license")
+      assert has_element?(live, "#composer-gallery-download")
     end
 
     test "left untouched, a post keeps the defaults silently", %{conn: conn, user: user} do
@@ -704,8 +725,8 @@ defmodule VutuvWeb.PhotoComposerTest do
 
       {:ok, live, _html} = live(conn, ~p"/posts/#{post.id}/edit")
 
-      assert has_element?(live, "#composer-photo-details-toggle")
-      refute has_element?(live, "#composer-license")
+      assert has_element?(live, "#composer-gallery-open")
+      refute has_element?(live, "#composer-gallery-license")
 
       live |> form("#composer-form", %{"post" => %{"body" => "Andere Worte."}}) |> render_submit()
 
@@ -720,7 +741,7 @@ defmodule VutuvWeb.PhotoComposerTest do
       image = upload_photo!(live, user)
       open_details(live)
 
-      assert has_element?(live, ~s(#composer-download option[value="none"][selected]))
+      assert has_element?(live, ~s(#composer-gallery-download option[value="none"][selected]))
 
       live |> form("#composer-form") |> render_submit()
 
@@ -794,7 +815,7 @@ defmodule VutuvWeb.PhotoComposerTest do
 
       # The set now disagrees, and the select says so rather than claiming an
       # answer nobody gave.
-      assert has_element?(live, ~s(#composer-download option[value="mixed"][selected]))
+      assert has_element?(live, ~s(#composer-gallery-download option[value="mixed"][selected]))
 
       # A validate carrying the select's stale value (every keystroke does)
       # must not push that value back onto the photos.
@@ -854,56 +875,85 @@ defmodule VutuvWeb.PhotoComposerTest do
     end
   end
 
-  describe "the bento workshop" do
+  describe "the gallery sheet" do
     setup %{conn: conn} do
       {conn, user} = create_and_login_user(conn)
       %{conn: conn, live: open_composer(conn), user: user}
     end
 
-    test "appears with the second photo: live preview, pattern chips, swap hint", %{
+    test "the tiles ARE the mosaic; the sheet holds what belongs to the set", %{
       live: live,
       user: user
     } do
       upload_photo!(live, user)
-      refute has_element?(live, "[data-bento-editor]")
+      # One photo is no arrangement, so the control names the two rights
+      # questions instead — they are the whole of what the sheet then holds,
+      # and they have to stay reachable for a single photo.
+      assert has_element?(live, "[data-gallery-open]")
+      assert render(live) =~ "Photo details"
+      refute render(live) =~ "grid-template-columns: repeat(12, 1fr)"
 
       upload_photo!(live, user)
-      assert has_element?(live, "[data-bento-editor]")
-      assert has_element?(live, "[data-bento-preview]")
-      # The Auto chip leads and is the state in force…
+
+      # The tiles themselves are laid out on the mosaic's 12x6 grid — there is
+      # no separate preview to compare them against any more (issue #1892).
+      assert render(live) =~ "grid-template-columns: repeat(12, 1fr)"
+      refute has_element?(live, "[data-bento-preview]")
+      refute has_element?(live, "[data-bento-editor]")
+
+      # The set's choices are one control away, and the chip names what is in
+      # force so the arrangement reads without opening it.
+      assert has_element?(live, "[data-gallery-open]")
+      refute has_element?(live, "[data-gallery-sheet]")
+
+      live |> element("[data-gallery-open]") |> render_click()
+      assert has_element?(live, "[data-gallery-sheet]")
       assert has_element?(live, ~s([data-bento-pattern="auto"][aria-pressed="true"]))
-      # …beside the two-photo arrangements from the catalog.
+
       for variant <- GalleryLayout.variants(2) do
         assert has_element?(live, ~s([data-bento-pattern="#{variant.name}"]))
       end
     end
 
-    test "tap-tap swaps two photos, and the swapped order is what saves", %{
+    test "dragging one photo onto another swaps them, and that order saves", %{
       live: live,
       user: user
     } do
       first = upload_photo!(live, user)
       second = upload_photo!(live, user)
 
-      live |> element(~s([data-bento-tile="#{first.id}"])) |> render_click()
-      assert has_element?(live, ~s([data-bento-tile="#{first.id}"] [data-bento-swap-marked]))
-
-      live |> element(~s([data-bento-tile="#{second.id}"])) |> render_click()
-      refute has_element?(live, "[data-bento-swap-marked]")
+      # The drop the PhotoStrip hook reports. It names both ends in one event —
+      # the tap-tap swap it replaces needed a "which one is marked" mode, and a
+      # preview to tap in.
+      live
+      |> element("#composer-images")
+      |> render_hook("photo-swap", %{"from" => first.id, "to" => second.id})
 
       live |> form("#composer-form", %{"post" => %{"body" => "Swapped."}}) |> render_submit()
       post = only_post(user)
+
       assert Enum.map(post.images, & &1.id) == [second.id, first.id]
     end
 
-    test "tapping the marked photo again unmarks it", %{live: live, user: user} do
+    test "a swap onto itself, or onto a photo that is gone, changes nothing", %{
+      live: live,
+      user: user
+    } do
       first = upload_photo!(live, user)
-      _second = upload_photo!(live, user)
+      second = upload_photo!(live, user)
 
-      live |> element(~s([data-bento-tile="#{first.id}"])) |> render_click()
-      live |> element(~s([data-bento-tile="#{first.id}"])) |> render_click()
+      for params <- [
+            %{"from" => first.id, "to" => first.id},
+            %{"from" => first.id, "to" => "not-a-real-id"},
+            %{"from" => "gone", "to" => second.id}
+          ] do
+        live |> element("#composer-images") |> render_hook("photo-swap", params)
+      end
 
-      refute has_element?(live, "[data-bento-swap-marked]")
+      live |> form("#composer-form", %{"post" => %{"body" => "Unmoved."}}) |> render_submit()
+      post = only_post(user)
+
+      assert Enum.map(post.images, & &1.id) == [first.id, second.id]
     end
 
     test "a pattern chip sets the arrangement and the save stores it", %{
@@ -912,21 +962,14 @@ defmodule VutuvWeb.PhotoComposerTest do
     } do
       upload_photo!(live, user)
       upload_photo!(live, user)
+      live |> element("[data-gallery-open]") |> render_click()
 
       live |> element(~s([data-bento-pattern="stack"])) |> render_click()
       assert has_element?(live, ~s([data-bento-pattern="stack"][aria-pressed="true"]))
       refute has_element?(live, ~s([data-bento-pattern="auto"][aria-pressed="true"]))
 
-      live |> form("#composer-form", %{"post" => %{"body" => "Arranged."}}) |> render_submit()
+      live |> form("#composer-form", %{"post" => %{"body" => "Stacked."}}) |> render_submit()
       assert only_post(user).gallery_layout == "stack"
-    end
-
-    test "Auto stays the default and stores no arrangement", %{live: live, user: user} do
-      upload_photo!(live, user)
-      upload_photo!(live, user)
-
-      live |> form("#composer-form", %{"post" => %{"body" => "Auto."}}) |> render_submit()
-      assert only_post(user).gallery_layout == nil
     end
 
     test "whole photos are the default fit; filling the tiles is the explicit choice", %{
@@ -935,62 +978,55 @@ defmodule VutuvWeb.PhotoComposerTest do
     } do
       upload_photo!(live, user)
       upload_photo!(live, user)
+      live |> element("[data-gallery-open]") |> render_click()
 
-      # The pair renders, "whole" in force, and the preview shows whole photos.
       assert has_element?(live, ~s([data-bento-fit="whole"][aria-pressed="true"]))
       assert has_element?(live, ~s([data-bento-fit="fill"][aria-pressed="false"]))
-      assert has_element?(live, "[data-bento-preview] img.object-contain")
-
-      live |> form("#composer-form", %{"post" => %{"body" => "Whole."}}) |> render_submit()
-      assert only_post(user).gallery_fill? == false
-    end
-
-    test "switching to filled tiles crops the preview and the save stores it", %{
-      live: live,
-      user: user
-    } do
-      upload_photo!(live, user)
-      upload_photo!(live, user)
+      # The fit is read off the TILES now, because the tiles are the gallery.
+      assert has_element?(live, "#composer-images img.object-contain")
 
       live |> element(~s([data-bento-fit="fill"])) |> render_click()
       assert has_element?(live, ~s([data-bento-fit="fill"][aria-pressed="true"]))
-      assert has_element?(live, "[data-bento-preview] img.object-cover")
-
-      live |> form("#composer-form", %{"post" => %{"body" => "Filled."}}) |> render_submit()
-      assert only_post(user).gallery_fill? == true
+      assert has_element?(live, "#composer-images img.object-cover")
     end
 
-    test "the fit rides the draft and comes back on reload", %{
+    test "the arrangement and the fit survive a reconnect", %{
       conn: conn,
       live: live,
       user: user
     } do
       upload_photo!(live, user)
       upload_photo!(live, user)
+      live |> element("[data-gallery-open]") |> render_click()
 
       live |> element(~s([data-bento-fit="fill"])) |> render_click()
-      assert %Posts.PostDraft{fill?: true} = Posts.get_draft(user)
+      live |> element(~s([data-bento-pattern="stack"])) |> render_click()
 
-      {:ok, reopened, _html} = live(conn, ~p"/feed")
+      reopened = open_composer(conn)
+      # The sheet itself is a view, not data: it comes back closed, and what it
+      # was showing is still in force underneath.
+      refute has_element?(reopened, "[data-gallery-sheet]")
+
+      reopened |> element("[data-gallery-open]") |> render_click()
       assert has_element?(reopened, ~s([data-bento-fit="fill"][aria-pressed="true"]))
+      assert has_element?(reopened, ~s([data-bento-pattern="stack"][aria-pressed="true"]))
     end
 
-    test "the chosen arrangement rides the draft and comes back on reload", %{
-      conn: conn,
-      live: live,
-      user: user
-    } do
-      upload_photo!(live, user)
-      upload_photo!(live, user)
+    test "a photo past the mosaic's five tiles stays reachable", %{live: live, user: user} do
+      images = for _ <- 1..6, do: upload_photo!(live, user)
+      sixth = List.last(images)
 
-      live |> element(~s([data-bento-pattern="stack"])) |> render_click()
-      assert %Posts.PostDraft{layout: "stack"} = Posts.get_draft(user)
+      # The post shows five; the composer holds ten. Hiding the sixth behind a
+      # "+1" the author cannot open would make it impossible to remove.
+      assert has_element?(live, ~s(#composer-overflow [data-photo-tile="#{sixth.id}"]))
 
-      # A reload rebuilds the composer from the stored draft (issue #1148);
-      # the arrangement must come back with the photos. The feed re-opens the
-      # composer over a held draft by itself, so there is no pill to click.
-      {:ok, reopened, _html} = live(conn, ~p"/feed")
-      assert has_element?(reopened, ~s([data-bento-pattern="stack"][aria-pressed="true"]))
+      live
+      |> element(
+        ~s(#composer-overflow [data-photo-tile="#{sixth.id}"] [phx-click="remove-image"])
+      )
+      |> render_click()
+
+      refute has_element?(live, ~s([data-photo-tile="#{sixth.id}"]))
     end
   end
 
@@ -1121,15 +1157,20 @@ defmodule VutuvWeb.PhotoComposerTest do
       upload_photo!(live, user)
       upload_photo!(live, user)
 
+      # What the tiles themselves say, before anything is opened.
       html = render(live)
-      assert html =~ "Automatisch"
-      assert html =~ "Galerie-Vorschau"
-      assert html =~ "Tippen Sie zwei Fotos an, um sie zu tauschen."
+      assert html =~ "Galerie"
+      assert html =~ "Ein Foto auf ein anderes ziehen, um sie zu tauschen."
       assert html =~ "Foto zuschneiden"
-      assert html =~ "Nebeneinander"
       assert html =~ "Fotos hier ablegen, um sie hinzuzufügen"
+
+      # …and what the sheet says once it is.
+      html = open_details(live)
+      assert html =~ "Automatisch"
+      assert html =~ "Nebeneinander"
       assert html =~ "Ganze Fotos"
       assert html =~ "Kacheln füllen"
+      assert html =~ "Lizenz"
     end
   end
 end

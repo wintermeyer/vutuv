@@ -1646,6 +1646,12 @@ const Hooks = {
       // author already sees.
       const HOLD_MS = 220
       const LIFT_CLASSES = ["opacity-60", "z-10", "scale-[1.03]", "shadow-xl"]
+      // What the tile under the pointer wears while it is the one that would
+      // be traded with.
+      const OVER_CLASSES = ["ring-2", "ring-brand-500", "z-10"]
+      // A grid container means fixed cells: the same hook drives the composer's
+      // mosaic and the plain overflow row, and only the shape tells them apart.
+      const mosaic = strip.classList.contains("grid")
       let drag = null
 
       const lift = () => {
@@ -1666,6 +1672,7 @@ const Hooks = {
         if (!drag) return
         clearTimeout(drag.timer)
         drag.tile.classList.remove(...LIFT_CLASSES)
+        if (!fromPointerUp) drag.over?.classList.remove(...OVER_CLASSES)
         if (drag.lifted) {
           // A lifted drop must not also open the photo panel: swallow the
           // click the release generates (only on a real pointerup — a
@@ -1681,9 +1688,23 @@ const Hooks = {
               { capture: true, once: true }
             )
           }
-          this.pushEventTo(this.el, "photo-reorder", {
-            order: tiles().map((tile) => tile.dataset.photoTile),
-          })
+          if (mosaic) {
+            // The server swaps the pair; the re-render settles the cells. The
+            // tiles were never moved in the DOM here, so nothing has to be put
+            // back if the drop landed nowhere.
+            const over = drag.over
+            drag.over?.classList.remove(...OVER_CLASSES)
+            if (over && over !== drag.tile) {
+              this.pushEventTo(this.el, "photo-swap", {
+                from: drag.tile.dataset.photoTile,
+                to: over.dataset.photoTile,
+              })
+            }
+          } else {
+            this.pushEventTo(this.el, "photo-reorder", {
+              order: tiles().map((tile) => tile.dataset.photoTile),
+            })
+          }
         }
         drag = null
       }
@@ -1701,6 +1722,8 @@ const Hooks = {
           y: e.clientY,
           touch: e.pointerType !== "mouse",
           lifted: false,
+          // The tile a mosaic drop would trade with, or null.
+          over: null,
           timer: null,
         }
         if (drag.touch) drag.timer = setTimeout(lift, HOLD_MS)
@@ -1721,8 +1744,23 @@ const Hooks = {
           if (moved <= 6) return
           lift()
         }
+        // In a MOSAIC the cells are fixed and a tile cannot be slid between
+        // two others — dropping one onto another trades their places, which is
+        // also the only gesture that means anything on a 2x2 arrangement
+        // (issue #1892). A plain strip keeps sliding: the row has an order,
+        // not a set of seats.
         const { tile, before } = nearest(e.clientX, e.clientY)
         if (!tile) return
+
+        if (mosaic) {
+          if (drag.over !== tile) {
+            drag.over?.classList.remove(...OVER_CLASSES)
+            tile.classList.add(...OVER_CLASSES)
+            drag.over = tile
+          }
+          return
+        }
+
         if (before) strip.insertBefore(drag.tile, tile)
         else strip.insertBefore(drag.tile, tile.nextSibling)
       })
