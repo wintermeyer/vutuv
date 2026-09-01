@@ -900,6 +900,7 @@ defmodule VutuvWeb.PostLive.Feed do
         <.rail_add_field
           label={gettext("Follow a tag …")}
           placeholder={gettext("Follow a tag …")}
+          submit_label={gettext("Follow")}
           submit="follow_tag"
           name="name"
           maxlength="60"

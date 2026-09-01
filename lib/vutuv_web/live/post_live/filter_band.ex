@@ -286,6 +286,7 @@ defmodule VutuvWeb.PostLive.FilterBand do
           <.rail_add_field
             label={gettext("Hide a word or a whole phrase …")}
             placeholder={gettext("Hide a word or a whole phrase …")}
+            submit_label={pgettext("filter rule", "Hide")}
             submit="add-word"
             change="word-draft"
             value={@word_draft}
@@ -374,6 +375,7 @@ defmodule VutuvWeb.PostLive.FilterBand do
           <.rail_add_field
             label={gettext("Hide a tag …")}
             placeholder={gettext("Hide a tag …")}
+            submit_label={pgettext("filter rule", "Hide")}
             submit="add-tag"
             change="tag-draft"
             value={@tag_draft}

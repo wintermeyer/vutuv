@@ -57,6 +57,40 @@ defmodule VutuvWeb.PostLive.FilterBandTest do
     Repo.get_by!(Fediverse.Follow, user_id: user.id, remote_account_id: account.id).muted
   end
 
+  # HTML's own list of input types that "block implicit submission". A bare
+  # `<input>` with no type is a text field, so it counts too — which is why the
+  # attribute is read rather than selected on.
+  @blocking_types ~w(text search url tel email password date month week time datetime-local number)
+
+  defp blocking_fields(form) do
+    form
+    |> LazyHTML.query("input")
+    |> Enum.count(fn input ->
+      case LazyHTML.attribute(input, "type") do
+        [] -> true
+        [type] -> String.downcase(type) in @blocking_types
+        _ -> false
+      end
+    end)
+  end
+
+  # A `<button>` inside a form submits it unless it says otherwise, so the
+  # absent type counts as a submit control and only "button"/"reset" do not.
+  defp submit_control?(form) do
+    buttons =
+      form
+      |> LazyHTML.query("button")
+      |> Enum.any?(fn button ->
+        case LazyHTML.attribute(button, "type") do
+          [] -> true
+          [type] -> String.downcase(type) == "submit"
+          _ -> false
+        end
+      end)
+
+    buttons or Enum.any?(LazyHTML.query(form, ~s(input[type="submit"], input[type="image"])))
+  end
+
   # A source starts folded, so its accounts are not in the DOM until the reader
   # opens it — which is what they do, and what a test has to.
   defp twist(view, key) do
@@ -548,6 +582,76 @@ defmodule VutuvWeb.PostLive.FilterBandTest do
   end
 
   describe "words and tags" do
+    # The bug the card shipped with (Stefan, 2026-09-01): "there is no way to
+    # save a new entry here". Return was the only way in, and Return had
+    # silently stopped working the moment a rule grew its second field — HTML
+    # switches implicit submission *off* for a form with no submit button and
+    # more than one field that blocks it, and two `type="text"` inputs are two
+    # such fields. So the word and the accounts it names could be typed, the
+    # preview underneath counted the posts they would fold, and nothing saved.
+    #
+    # `render_submit/2` cannot see any of that: it fires the event the form
+    # declares whether or not a browser would ever fire it, which is why every
+    # test around this one stayed green. So this reads the rendered markup —
+    # and reads the *rule* rather than the three cards that happen to break it
+    # today, which is what covers the fourth rail card the day somebody adds it.
+    #
+    # A form nobody can submit declares a `phx-submit`, carries two or more
+    # fields that block implicit submission, and offers no submit control. The
+    # one honest exemption is a `phx-change` naming that same event — the admin
+    # activity log and the tag timeline filter that way, and their Return is
+    # dead with nothing lost. It is read off the same form, never off the page:
+    # an exemption found somewhere else in the document is not this form's.
+    test "no form on the feed is one a browser cannot submit", %{conn: conn} do
+      %{conn: conn} = with_friend(conn)
+
+      {:ok, view, _html} = live(conn, ~p"/feed")
+
+      forms =
+        view
+        |> unfold("hidden_tags")
+        |> render()
+        |> LazyHTML.from_document()
+        |> LazyHTML.query("form[phx-submit]")
+        |> Enum.to_list()
+
+      # Without this the sweep below is vacuous, and a page that rendered no
+      # forms at all would read as a page whose forms are all fine.
+      assert length(forms) >= 3,
+             "expected the three rail add fields among the feed's forms, found #{length(forms)}"
+
+      for form <- forms do
+        assert blocking_fields(form) < 2 or submit_control?(form) or
+                 LazyHTML.attribute(form, "phx-change") ==
+                   LazyHTML.attribute(form, "phx-submit"),
+               "the form with phx-submit=#{inspect(LazyHTML.attribute(form, "phx-submit"))} has " <>
+                 "#{blocking_fields(form)} fields that block implicit submission, no submit " <>
+                 "control and no phx-change repeating its event — a browser cannot submit it"
+      end
+    end
+
+    # The label is its own msgid rather than the "Hide" the post menu already
+    # has, because that one is translated "Verbergen" and this card says
+    # "ausblenden" from its heading down. `gettext.extract --merge` duly
+    # fuzzy-filled the new entry with "Verbergen" and flagged nothing that fails
+    # a build, so the German is asserted by name here.
+    test "the button says, in German, what pressing it does", %{conn: conn} do
+      %{conn: conn, user: user} = with_friend(conn)
+      user |> Ecto.Changeset.change(%{locale: nil}) |> Repo.update!()
+
+      {:ok, view, _html} =
+        conn
+        |> recycle()
+        |> put_req_header("accept-language", "de-DE,de;q=0.9")
+        |> live(~p"/feed")
+
+      assert has_element?(
+               view,
+               ~s(#filter-band-words form button[type="submit"]),
+               "Ausblenden"
+             )
+    end
+
     test "a word rule is written to the member's own deny list", %{conn: conn} do
       %{conn: conn, user: user} = with_friend(conn)
 
@@ -582,21 +686,29 @@ defmodule VutuvWeb.PostLive.FilterBandTest do
       assert has_element?(view, "#feed-posts [data-filtered-post]")
     end
 
-    # The account half rides the same form, so one Return saves both. Left
-    # empty it means every account, which is what every rule written before the
-    # field existed says.
+    # The account half rides the same form, so one press saves both. Left empty
+    # it means every account, which is what every rule written before the field
+    # existed says.
+    #
+    # Driven through `form/3` rather than `element/2 |> render_submit(params)`:
+    # the latter fabricates the payload, so it would go on passing with the
+    # account input sitting outside the form — which is the shape of the bug
+    # that took this card's save away in the first place.
     test "a word rule carries the accounts it is aimed at", %{conn: conn} do
       %{conn: conn, user: user} = with_friend(conn)
 
       {:ok, view, _html} = live(conn, ~p"/feed")
 
       view
-      |> element(~s(#filter-band-words form))
-      |> render_submit(%{"pattern" => "hier besonders häufig", "account" => "*@social.heise.de"})
+      |> form(~s(#filter-band-words form), %{
+        "pattern" => "hier besonders häufig",
+        "account" => "*@social.heise.de"
+      })
+      |> render_submit()
 
       view
-      |> element(~s(#filter-band-words form))
-      |> render_submit(%{"pattern" => "Kryptowährung", "account" => ""})
+      |> form(~s(#filter-band-words form), %{"pattern" => "Kryptowährung", "account" => ""})
+      |> render_submit()
 
       assert [%{pattern: "Kryptowährung", account: "*"}, %{account: "*@social.heise.de"}] =
                ContentFilters.list_for_user(user)
