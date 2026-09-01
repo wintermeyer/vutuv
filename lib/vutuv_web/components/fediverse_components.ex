@@ -363,9 +363,11 @@ defmodule VutuvWeb.FediverseComponents do
   The follow's state as a pill: the word from `follow_state_label/1`, the
   colours from `follow_state_class/1`, and `data-follow-state` for the tests.
 
-  Four surfaces show it — the account page, the following list, a looked-up
-  post's card and the mention card — and one member's follow must not read as
-  three different things depending on where they met it.
+  Three surfaces show it — the account page, the following list and a looked-up
+  post's card — and one member's follow must not read as three different things
+  depending on where they met it. The mention card is no longer one of them: its
+  follow control carries its own state (`actor-card__state-btn`) rather than
+  standing a pill beside a button that says the same thing.
   """
   def follow_state_pill(assigns) do
     ~H"""
@@ -393,23 +395,23 @@ defmodule VutuvWeb.FediverseComponents do
   of an address that no longer posts.
   """
   def follow_state_label(follow) do
-    cond do
-      Follow.moved?(follow) -> gettext("Moved")
-      Follow.accepted?(follow) -> gettext("Following")
-      true -> gettext("Requested")
+    case Follow.display_state(follow) do
+      :moved -> gettext("Moved")
+      :accepted -> gettext("Following")
+      :requested -> gettext("Requested")
     end
   end
 
   @doc "The pill's colours for that state: emerald once settled, calm slate while it waits."
   def follow_state_class(follow) do
-    cond do
-      Follow.moved?(follow) ->
+    case Follow.display_state(follow) do
+      :moved ->
         "bg-amber-50 text-amber-800 ring-amber-200 dark:bg-amber-900/30 dark:text-amber-200 dark:ring-amber-800"
 
-      Follow.accepted?(follow) ->
+      :accepted ->
         "bg-emerald-50 text-emerald-800 ring-emerald-200 dark:bg-emerald-900/30 dark:text-emerald-200 dark:ring-emerald-800"
 
-      true ->
+      :requested ->
         "bg-slate-100 text-slate-700 ring-slate-200 dark:bg-slate-800 dark:text-slate-300 dark:ring-slate-700"
     end
   end
@@ -420,13 +422,13 @@ defmodule VutuvWeb.FediverseComponents do
   Requested row learns that the state badge does not mean anything.
   """
   def end_follow_label(follow) do
-    cond do
+    case Follow.display_state(follow) do
       # A husk left by a move was never requested and is not being followed —
       # the row is a record of where the member's subscription came from, and
       # what they do to it is put it away.
-      Follow.moved?(follow) -> gettext("Remove")
-      Follow.accepted?(follow) -> gettext("Unfollow")
-      true -> gettext("Cancel request")
+      :moved -> gettext("Remove")
+      :accepted -> gettext("Unfollow")
+      :requested -> gettext("Cancel request")
     end
   end
 

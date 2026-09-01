@@ -3651,6 +3651,277 @@ html.lightbox-open { overflow: hidden; }
 .actor-card__skeleton-lines i:nth-child(2) { width: 85%; }
 .actor-card__skeleton-lines i:nth-child(3) { width: 40%; }
 
+/* Where the account lives, above its name. A chip, because the full-width
+   uppercase line this replaced spent 30 shouted characters saying it and was
+   the first thing a reader learned to skip. The host rides in it: it is the
+   card's most load-bearing fact and had been hiding as the tail of an address.
+
+   The pill itself is `PostComponents.network_chip_class/0`, the same one the
+   post underneath the card wears for the same host — the chip may not say the
+   same thing in two looks on one screen. Only its one-line rule lives here:
+   wrapped onto a second line it stops being a label and pushes the name down
+   the card (measured at 41px before the label was shortened), and since the
+   label is fixed and short, the host is the half that gives way (`truncate` at
+   the call site). */
+.actor-card__origin { margin: 0 1.75rem 0.6rem 0; }
+.actor-card__origin > * { white-space: nowrap; }
+
+/* How much of this account is here, and how recently — the reader's own
+   evidence, as against the self-description, which is what the account says
+   about itself. `tabular-nums` so the figure does not jitter as it re-renders. */
+.actor-card__stats {
+  margin: 0.35rem 0 0;
+  color: #64748b;
+  font-size: 0.8125rem;
+  font-variant-numeric: tabular-nums;
+}
+
+/* The last thing they wrote: two lines, quoted, and a link to our copy of it.
+   The rule on the left is the quotation mark this does not spend a character
+   on. */
+.actor-card__latest {
+  display: block;
+  margin-top: 0.7rem;
+  padding: 0.45rem 0.6rem 0.5rem;
+  border-left: 2px solid var(--color-brand-300);
+  border-radius: 0.5rem;
+  background: #f8fafc;
+  text-decoration: none;
+}
+.actor-card__latest:hover { background: #f1f5f9; }
+.actor-card__latest-label {
+  display: block;
+  color: #64748b;
+  font-size: 0.6875rem;
+  font-weight: 600;
+  letter-spacing: 0.06em;
+  text-transform: uppercase;
+}
+/* The two-line clamp is `line-clamp-2` at the call site, like the
+   self-description two elements above it — one spelling of "cut this at two
+   lines" on this card, and the utility already carries the four properties. */
+.actor-card__latest-text {
+  display: block;
+  margin-top: 0.1rem;
+  color: #334155;
+  font-size: 0.84375rem;
+  line-height: 1.45;
+  overflow-wrap: anywhere;
+}
+
+.actor-card__actions {
+  display: flex;
+  flex-wrap: wrap;
+  align-items: center;
+  gap: 0.5rem;
+  margin-top: 0.75rem;
+}
+
+/* One button carrying its own state. It reads as the state at rest and turns
+   into the act on hover — so the one thing nobody wants to press by accident is
+   never what the eye is drawn to, which is what the loud secondary Unfollow
+   beside a green pill got wrong.
+
+   `:focus-visible` shows the same swap, or the keyboard reader presses a button
+   whose label is not what it does. On a touch screen neither fires and
+   `mention_card.js` asks instead (`data-actor-confirm`). */
+.actor-card__state-btn {
+  display: inline-flex;
+  align-items: center;
+  gap: 0.35rem;
+  padding: 0.5rem 1rem;
+  border: 0;
+  border-radius: 0.5rem;
+  font-size: 0.875rem;
+  font-weight: 600;
+  line-height: 1.25rem;
+  cursor: pointer;
+}
+/* Three labels, one shown: the state at rest, the act under a pointer, and the
+   question a touch screen asks instead. Which one is CSS's business alone, so
+   JS arms by adding a class and disarms by removing it — it never writes a
+   word. */
+.actor-card__state-btn [data-actor-state-off],
+.actor-card__state-btn [data-actor-state-confirm] { display: none; }
+.actor-card__state-btn.is-confirming [data-actor-state-on] { display: none; }
+.actor-card__state-btn.is-confirming [data-actor-state-confirm] { display: inline; }
+
+/* The swap is gated on the pointer being able to hover, and that gate is
+   load-bearing rather than tidy — the same rule this file states for the
+   post action bar. A touch browser applies `:hover` on tap and KEEPS it, so
+   ungated these three rules leave the button showing "Unfollow" in refusal red
+   after a press that only armed it; `closeMenu()` can strip `.is-confirming`
+   but nothing can strip a sticky `:hover`. On touch the class is the only
+   driver, which is what `mention_card.js` arms. */
+@media (hover: hover) {
+  .actor-card__state-btn:hover [data-actor-state-on],
+  .actor-card__state-btn:focus-visible [data-actor-state-on] { display: none; }
+  .actor-card__state-btn:hover [data-actor-state-off],
+  .actor-card__state-btn:focus-visible [data-actor-state-off] { display: inline; }
+}
+
+.actor-card__state-btn--following {
+  background: #ecfdf5;
+  box-shadow: inset 0 0 0 1px #a7f3d0;
+  color: #065f46;
+}
+.actor-card__state-btn--requested {
+  background: #f1f5f9;
+  box-shadow: inset 0 0 0 1px #cbd5e1;
+  color: #334155;
+}
+.actor-card__state-btn--moved {
+  background: #fffbeb;
+  box-shadow: inset 0 0 0 1px #fde68a;
+  color: #92400e;
+}
+/* Whatever it was resting as, the act it becomes is the same refusal red. */
+.actor-card__state-btn.is-confirming {
+  background: #fef2f2;
+  box-shadow: inset 0 0 0 1px #fecaca;
+  color: #b91c1c;
+}
+@media (hover: hover) {
+  .actor-card__state-btn:hover,
+  .actor-card__state-btn:focus-visible {
+    background: #fef2f2;
+    box-shadow: inset 0 0 0 1px #fecaca;
+    color: #b91c1c;
+  }
+}
+
+/* Everything that is not following, behind one control — and it stays
+   reachable when the follow itself is refused: a member who does not federate
+   can still want this server out of their feed. */
+.actor-card__more {
+  display: inline-flex;
+  align-items: center;
+  justify-content: center;
+  min-width: 2.25rem;
+  padding: 0.5rem 0.6rem;
+  border: 0;
+  border-radius: 0.5rem;
+  background: #f1f5f9;
+  color: #334155;
+  font-size: 0.875rem;
+  font-weight: 600;
+  line-height: 1.25rem;
+  cursor: pointer;
+}
+.actor-card__more:hover { background: #e2e8f0; }
+.actor-card__more-label { display: none; }
+
+.actor-card__menu {
+  position: absolute;
+  right: 0.875rem;
+  bottom: 3.25rem;
+  z-index: 5;
+  width: 15rem;
+  max-width: calc(100% - 1.75rem);
+  padding: 0.3rem;
+  border: 1px solid #e2e8f0;
+  border-radius: 0.6rem;
+  background: #fff;
+  box-shadow: 0 10px 25px -5px rgb(15 23 42 / 0.18), 0 8px 10px -6px rgb(15 23 42 / 0.1);
+}
+.actor-card__menu[hidden] { display: none; }
+.actor-card__menu button {
+  display: flex;
+  width: 100%;
+  align-items: center;
+  gap: 0.5rem;
+  padding: 0.45rem 0.5rem;
+  border: 0;
+  border-radius: 0.4rem;
+  background: transparent;
+  color: #334155;
+  font-size: 0.84375rem;
+  text-align: left;
+  cursor: pointer;
+}
+.actor-card__menu button:hover { background: #f1f5f9; color: #0f172a; }
+.actor-card__menu-icon { flex: 0 0 auto; width: 1rem; text-align: center; opacity: 0.7; }
+
+/* Both ways onward in one weight and one colour. They were blue and grey, which
+   reads as a main way and a lesser one; they are neither. */
+.actor-card__links {
+  display: flex;
+  flex-wrap: wrap;
+  align-items: center;
+  gap: 0.3rem 0.9rem;
+  margin-top: 0.75rem;
+  padding-top: 0.65rem;
+  border-top: 1px solid #f1f5f9;
+  font-size: 0.84375rem;
+}
+.actor-card__links a {
+  color: var(--color-brand-600);
+  font-weight: 600;
+  text-decoration: none;
+}
+.actor-card__links a:hover { text-decoration: underline; }
+.actor-card__go { opacity: 0.6; }
+
+/* The grab bar: only the sheet has one, and it says "swipe this away". */
+.actor-card__grab { display: none; }
+
+/* ---------- The sheet form (a phone) ----------
+   Same fragment, different shape. Everything below is the phone's answer to a
+   rule that only holds where there is a pointer: a thumb needs full-width
+   targets, cannot hover, and reaches the bottom of the screen far more easily
+   than the top corner of a panel.
+
+   Written against the `--sheet` class rather than a media query so it follows
+   `mention_card.js`'s own `(width < 40rem)` decision — one breakpoint, in one
+   place, and the card cannot end up styled as a sheet while being positioned as
+   a popover. */
+.actor-card--sheet .actor-card__grab {
+  display: block;
+  width: 2.25rem;
+  height: 0.25rem;
+  margin: 0.1rem auto 0.7rem;
+  border-radius: 999px;
+  background: #cbd5e1;
+}
+/* Stacked and full width: two buttons side by side on a 360px screen leaves
+   both of them too narrow to hit. */
+.actor-card--sheet .actor-card__actions { display: block; }
+.actor-card--sheet .actor-card__state-btn,
+.actor-card--sheet .actor-card__act,
+.actor-card--sheet .actor-card__more {
+  width: 100%;
+  min-height: 2.75rem;
+  justify-content: center;
+}
+.actor-card--sheet .actor-card__more { margin-top: 0.5rem; }
+.actor-card--sheet .actor-card__more-glyph { display: none; }
+.actor-card--sheet .actor-card__more-label { display: inline; }
+/* In the flow, not floating: a menu over a sheet is a sheet on top of a sheet,
+   and the sheet is at the bottom of the screen with nowhere to put one. */
+.actor-card--sheet .actor-card__menu {
+  position: static;
+  width: auto;
+  max-width: none;
+  margin-top: 0.5rem;
+  box-shadow: none;
+}
+.actor-card--sheet .actor-card__menu button { min-height: 2.75rem; }
+/* Full-width list rows with a chevron, rather than two text links sharing a
+   line: same two destinations, a thumb's worth of target each. */
+.actor-card--sheet .actor-card__links {
+  display: block;
+  padding-top: 0.25rem;
+}
+.actor-card--sheet .actor-card__links a {
+  display: flex;
+  align-items: center;
+  justify-content: space-between;
+  padding: 0.75rem 0.1rem;
+  border-bottom: 1px solid #f1f5f9;
+  font-size: 0.875rem;
+}
+.actor-card--sheet .actor-card__links a:last-child { border-bottom: 0; }
+
 @media (prefers-color-scheme: dark) {
   .actor-card {
     border-color: #1e293b;
@@ -3661,6 +3932,57 @@ html.lightbox-open { overflow: hidden; }
   .actor-card__backdrop { background: rgb(2 6 23 / 0.6); }
   .actor-card__close { color: #94a3b8; }
   .actor-card__close:hover { background: #1e293b; color: #f1f5f9; }
+
+  .actor-card__chip {
+    background: #0f1c33;
+    box-shadow: inset 0 0 0 1px #152643;
+    color: #bfdbfe;
+  }
+  .actor-card__stats { color: #94a3b8; }
+
+  .actor-card__latest { border-left-color: var(--color-brand-600); background: #16233b; }
+  .actor-card__latest:hover { background: #1e293b; }
+  .actor-card__latest-label { color: #94a3b8; }
+  .actor-card__latest-text { color: #cbd5e1; }
+
+  .actor-card__state-btn--following {
+    background: rgb(6 78 59 / 0.35);
+    box-shadow: inset 0 0 0 1px #065f46;
+    color: #a7f3d0;
+  }
+  .actor-card__state-btn--requested {
+    background: #1e293b;
+    box-shadow: inset 0 0 0 1px #334155;
+    color: #cbd5e1;
+  }
+  .actor-card__state-btn--moved {
+    background: rgb(120 53 15 / 0.35);
+    box-shadow: inset 0 0 0 1px #92400e;
+    color: #fde68a;
+  }
+  .actor-card__state-btn:hover,
+  .actor-card__state-btn:focus-visible,
+  .actor-card__state-btn.is-confirming {
+    background: rgb(127 29 29 / 0.25);
+    box-shadow: inset 0 0 0 1px #7f1d1d;
+    color: #fca5a5;
+  }
+
+  .actor-card__more { background: #1e293b; color: #cbd5e1; }
+  .actor-card__more:hover { background: #334155; }
+
+  .actor-card__menu {
+    border-color: #1e293b;
+    background: #0f172a;
+    box-shadow: 0 10px 25px -5px rgb(0 0 0 / 0.6), 0 8px 10px -6px rgb(0 0 0 / 0.5);
+  }
+  .actor-card__menu button { color: #cbd5e1; }
+  .actor-card__menu button:hover { background: #1e293b; color: #f1f5f9; }
+
+  .actor-card__links { border-top-color: #1e293b; }
+  .actor-card__links a { color: var(--color-brand-300); }
+  .actor-card--sheet .actor-card__links a { border-bottom-color: #1e293b; }
+  .actor-card--sheet .actor-card__grab { background: #334155; }
 }
 
 /* Changing this file (or app.css @theme / lib/vutuv_web/components/ui.ex) is a

@@ -1650,6 +1650,55 @@ defmodule Vutuv.Fediverse do
   end
 
   @doc """
+  Flips the mute on the member's follow of one remote account, and answers with
+  the follow as it now stands (`nil` when there is none to flip).
+
+  A toggle rather than the caller reading the current state and asking for its
+  opposite, because that read-modify-write is a race with the member's own
+  second tab and with the account page: both read `muted: false`, both write
+  `true`, and one press is lost. `NOT muted` in the UPDATE lets Postgres do the
+  flip, so the round trip that read the row disappears along with the race.
+
+  The mirror of `Vutuv.Social.toggle_follow_mute!/2` on the local side, and for
+  the same reason: three surfaces offer this switch (the account page, the
+  mention card, the following list), and the current state must be answered in
+  one place rather than derived from whatever each of them happens to hold.
+  """
+  def toggle_remote_follow_mute(party, remote_account_id) do
+    now = NaiveDateTime.truncate(NaiveDateTime.utc_now(), :second)
+
+    UUIDv7.with_cast(remote_account_id, fn account_id ->
+      {_n, rows} =
+        from(f in Follow,
+          where: party_is(f, party) and f.remote_account_id == ^account_id,
+          update: [set: [muted: fragment("NOT ?", f.muted), updated_at: ^now]],
+          select: f
+        )
+        |> Repo.update_all([])
+
+      List.first(rows || [])
+    end)
+  end
+
+  @doc """
+  Switches one server off or back on for `user`, whichever it is not right now,
+  and answers with the member as they now stand.
+
+  Beside `toggle_remote_follow_mute/2` and for the same reason: the muted-server
+  list is a column on the member, so a caller that derives the target state from
+  a `%User{}` it loaded earlier is deciding from a stale copy — which is exactly
+  how the mention card came to re-render "Mute this server" onto a server it had
+  just muted. Handing the updated struct back is the other half: nothing
+  downstream has to know the write happened.
+  """
+  def toggle_host_mute(%User{} = user, host) when is_binary(host) do
+    host = host |> String.trim() |> String.downcase()
+    {:ok, hosts} = set_host_mute(user, host, host not in muted_hosts(user))
+
+    {:ok, %{user | feed_muted_hosts: hosts}}
+  end
+
+  @doc """
   *Why* this member cannot follow anybody out there, when they cannot: `nil`
   when they can, else `:opted_out`, `:restricted` or `:disabled`.
 
@@ -3933,35 +3982,8 @@ defmodule Vutuv.Fediverse do
   cap is fetched and dropped — so no caller has to know the number or repeat the
   +1 trick to rediscover a fact this query already had.
   """
-  def account_posts(%RemoteAccount{id: account_id}, %User{id: viewer_id}) do
-    accepted =
-      from(f in Follow,
-        where:
-          f.remote_account_id == ^account_id and f.user_id == ^viewer_id and
-            f.state == "accepted"
-      )
-
-    account_posts_query(account_id, accepted)
-  end
-
-  def account_posts(%RemoteAccount{id: account_id}, %Organization{id: organization_id}) do
-    accepted =
-      from(f in Follow,
-        where:
-          f.remote_account_id == ^account_id and f.organization_id == ^organization_id and
-            f.state == "accepted"
-      )
-
-    account_posts_query(account_id, accepted)
-  end
-
-  defp account_posts_query(account_id, accepted) do
-    from(p in RemotePost,
-      where: p.remote_account_id == ^account_id,
-      # The feed's vocabulary, not a negated literal: `open_audiences/0` is the
-      # one list the query and the card (`RemotePost.open?/1`) both read, so a
-      # fourth audience value cannot open here and close there.
-      where: p.audience in ^RemotePost.open_audiences() or exists(accepted),
+  def account_posts(%RemoteAccount{} = account, party) do
+    from(p in visible_account_posts(account, party),
       order_by: [desc: p.published_at, desc: p.id],
       limit: ^(@account_page_posts + 1),
       preload: [:screenshot]
@@ -3969,6 +3991,81 @@ defmodule Vutuv.Fediverse do
     |> Repo.all()
     |> Enum.split(@account_page_posts)
     |> then(fn {posts, rest} -> {posts, rest != []} end)
+  end
+
+  @doc """
+  What the mention card says about an account beyond its own words: how many of
+  its posts this installation holds **for this reader**, and the newest of them,
+  as `%{count: n, latest: post_or_nil}`.
+
+  A self-description settles nothing — every account claims to be worth reading
+  — so the card that opens from a `@user@host` in a sentence carries the
+  reader's actual evidence instead: how much of this account is already here,
+  and the last thing it wrote.
+
+  Audience-scoped through the same `visible_account_posts/2` the account page's
+  list uses. That sharing is the point rather than tidiness: this number is read
+  as a fact about the account, so a count built over rows the reader may not see
+  is a leak that looks like a feature, and one of the two widening its audience
+  without the other is exactly how that happens.
+
+  One query, not two. `count(*) OVER ()` rides along with the row the card is
+  fetching anyway, which is both simpler and measurably cheaper than a separate
+  `Repo.aggregate/2`: on a table seeded to 50,000 posts across 200 accounts the
+  pair took 112–128 µs and this takes 80–84 µs, because it scans once instead of
+  scanning and then seeking. (An earlier version of this comment claimed the
+  separate count kept an index-only plan. It never had one —
+  `(remote_account_id, published_at)` does not carry `audience`, so the audience
+  test is a heap filter either way.)
+  """
+  def account_card_summary(%RemoteAccount{} = account, party) do
+    from(p in visible_account_posts(account, party),
+      order_by: [desc: p.published_at, desc: p.id],
+      limit: 1,
+      select: {p, fragment("count(*) OVER ()")}
+    )
+    |> Repo.one()
+    |> case do
+      nil -> %{count: 0, latest: nil}
+      {latest, count} -> %{count: count, latest: latest}
+    end
+  end
+
+  # Which of an account's cached posts one identity may read. Public and
+  # unlisted for any signed-in member or organization identity, followers-only
+  # solely when that identity's own follow is **accepted** — so neither the page
+  # nor the card can become a way to read what an author addressed to somebody
+  # else's followers, and a follow still waiting for an answer opens nothing.
+  #
+  # Named rather than inlined at both call sites because it is a permission
+  # answer: there is one place to fix it, and a third surface asking the same
+  # question inherits it instead of re-deriving it.
+  defp visible_account_posts(%RemoteAccount{id: account_id}, party) do
+    accepted = accepted_follow_query(account_id, party)
+
+    from(p in RemotePost,
+      where: p.remote_account_id == ^account_id,
+      # The feed's vocabulary, not a negated literal: `open_audiences/0` is the
+      # one list the query and the card (`RemotePost.open?/1`) both read, so a
+      # fourth audience value cannot open here and close there.
+      where: p.audience in ^RemotePost.open_audiences() or exists(accepted)
+    )
+  end
+
+  # Nobody in particular follows nothing: the card is behind a login, but a nil
+  # identity reaching here must answer "no accepted follow" rather than raise on
+  # a nil comparison (`where: x == ^nil` is not a silent no-op) — and `party_is/2`
+  # raises on nil too, so this clause comes first.
+  defp accepted_follow_query(_account_id, nil), do: from(f in Follow, where: false)
+
+  # `party_is/2` and not a clause per identity kind: the member/organization pair
+  # is nullable on both sides, so a hand-written half is the shape that answers
+  # `false` for the kind whoever wrote it was not thinking about. Seven other
+  # Follow scopes in this module already go through it.
+  defp accepted_follow_query(account_id, party) do
+    from(f in Follow,
+      where: party_is(f, party) and f.remote_account_id == ^account_id and f.state == "accepted"
+    )
   end
 
   @doc """

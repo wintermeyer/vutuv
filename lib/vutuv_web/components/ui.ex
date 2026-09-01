@@ -3230,6 +3230,37 @@ defmodule VutuvWeb.UI do
   end
 
   @doc """
+  How long ago something happened, as a person would say it: `just now`, then
+  minutes, hours and days, and a plain date past a week.
+
+  A point in time is not a duration — nobody reads "vor 172800 Sekunden" — and
+  the two largest-unit rule the number-formatting guidance asks for is what the
+  ladder here implements. It answers `unknown` for a missing stamp rather than
+  raising, because every caller so far has a nullable column.
+
+  Shared because two surfaces already spelled this out and a third was about to:
+  the signed-in devices list (`last_active/1`, which delegates here) and the
+  mention card's "latest here" line. Every msgid it uses is an existing one, so
+  a new caller inherits the German rather than minting a string that comes back
+  fuzzy-filled. Deliberately **not** shared with `job_age/1`, which counts
+  calendar days from the Berlin clock and speaks in weeks and months — same
+  shape, different question.
+  """
+  def relative_time(nil), do: gettext("unknown")
+
+  def relative_time(%DateTime{} = at) do
+    seconds = DateTime.diff(DateTime.utc_now(), at, :second)
+
+    cond do
+      seconds < 60 -> gettext("just now")
+      seconds < 3600 -> ngettext("%{count} minute ago", "%{count} minutes ago", div(seconds, 60))
+      seconds < 86_400 -> ngettext("%{count} hour ago", "%{count} hours ago", div(seconds, 3600))
+      seconds < 604_800 -> ngettext("%{count} day ago", "%{count} days ago", div(seconds, 86_400))
+      true -> Vutuv.ViewerClock.format(at, :date)
+    end
+  end
+
+  @doc """
   The show-once credential reveal: a brand-tint box with a `select-all`
   `<code>` line, rendered only while the one-shot flash under `key` holds a
   freshly minted secret (access tokens, client secrets, webhook signing

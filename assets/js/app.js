@@ -19,6 +19,7 @@ import { openPhotoCropper } from "./photo_crop"
 import {
   b64urlToBuf,
   cancelIdle,
+  copyText,
   csrfToken,
   localGet,
   localSet,
@@ -2589,30 +2590,9 @@ onReady(setupDeleteGate)
 // select-all so it can be copied by hand; this just makes it one click. The
 // button copies the textContent of the element named by data-copy-target (an
 // id) and, for ~1.5s, swaps its label from data-label-copy to data-label-copied
-// so no translated text is hardcoded here. writeText needs a secure context
-// (https or localhost — every place vutuv runs), so a hidden-textarea +
-// execCommand fallback covers older/insecure ones.
-function copyText(text) {
-  if (navigator.clipboard && window.isSecureContext) {
-    return navigator.clipboard.writeText(text)
-  }
-  const area = document.createElement("textarea")
-  area.value = text
-  area.setAttribute("readonly", "")
-  area.style.position = "absolute"
-  area.style.left = "-9999px"
-  document.body.appendChild(area)
-  area.select()
-  try {
-    document.execCommand("copy")
-    return Promise.resolve()
-  } catch (err) {
-    return Promise.reject(err)
-  } finally {
-    document.body.removeChild(area)
-  }
-}
-
+// so no translated text is hardcoded here. The copy itself (and the fallback
+// for a browser or an installation without a secure context) is `copyText/1` in
+// util.js, shared with the mention card.
 function wireCopyButton(btn) {
   if (!once(btn, "copy")) return
   const target = document.getElementById(btn.dataset.copyTarget)

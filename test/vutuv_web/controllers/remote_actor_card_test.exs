@@ -9,6 +9,7 @@ defmodule VutuvWeb.RemoteActorCardTest do
   use VutuvWeb.ConnCase, async: false
 
   import Vutuv.FediverseHelpers
+  import Vutuv.MastodonHelpers, only: [cached_post: 2]
 
   alias Vutuv.Fediverse
   alias Vutuv.Fediverse.Follow
@@ -147,7 +148,7 @@ defmodule VutuvWeb.RemoteActorCardTest do
       |> post(~p"/system/fediverse/actor_card", address: @address)
       |> html_response(200)
 
-    assert html =~ "Konto in einem anderen Netzwerk"
+    assert html =~ "Anderes Netzwerk"
     assert html =~ "Folgen"
     assert html =~ "Die Seite dieses Kontos hier"
     assert html =~ "Original ansehen"
@@ -211,5 +212,199 @@ defmodule VutuvWeb.RemoteActorCardTest do
     assert html =~ ~s(data-actor-card-error)
     assert html =~ "https://social.example/@nobody"
     refute html =~ ~s(data-actor-act="follow")
+  end
+
+  # ── What the card knows beyond the account's own words ────────────────────
+  #
+  # A self-description is what an account says about itself and settles nothing:
+  # every account claims to be worth reading. What it last wrote, and how much
+  # of it we hold, is the reader's actual evidence — so the card carries a count
+  # line and one preview, and the description shrinks to make room.
+
+  test "it says how much of the account we hold and quotes the newest post", %{conn: conn} do
+    {conn, _user} = federating(conn)
+    acc = account()
+
+    cached_post(acc,
+      content_text: "Der ältere.",
+      published_at: DateTime.add(DateTime.utc_now(:second), -3600)
+    )
+
+    cached_post(acc, content_text: "Ein Zug fährt durch die Nacht.")
+
+    html = post(conn, ~p"/system/fediverse/actor_card", address: @address) |> html_response(200)
+
+    assert html =~ "2 posts here"
+    assert html =~ "Ein Zug fährt durch die Nacht."
+    refute html =~ "Der ältere."
+  end
+
+  # An account we hold nothing from must not grow an empty row saying so: "0
+  # posts here" is noise on a card this small, and the reader can see the same
+  # thing by opening the account page.
+  test "an account we hold nothing from grows no count line", %{conn: conn} do
+    {conn, _user} = federating(conn)
+    account()
+
+    html = post(conn, ~p"/system/fediverse/actor_card", address: @address) |> html_response(200)
+
+    refute html =~ "posts here"
+    refute html =~ ~s(data-actor-card-latest)
+  end
+
+  # The preview is a second surface showing a post, so it obeys the reader's
+  # filters like the first one. Without the `ContentFilters` call in
+  # `RemoteActorCardController.preview/2` this quotes the muted word straight at
+  # the member who muted it — and the count line stays, which is the honest
+  # half: we hold the post, they just do not want to read it here.
+  test "a post the reader filtered away is not quoted at them", %{conn: conn} do
+    {conn, user} = federating(conn)
+    acc = account()
+
+    {:ok, _filter} =
+      Vutuv.ContentFilters.create_filter(user, %{"kind" => "keyword", "pattern" => "Krypto"})
+
+    cached_post(acc, content_text: "Alles über Krypto.")
+
+    html = post(conn, ~p"/system/fediverse/actor_card", address: @address) |> html_response(200)
+
+    assert html =~ "1 post here"
+    refute html =~ "Alles über Krypto."
+    refute html =~ ~s(data-actor-card-latest)
+  end
+
+  # A content warning is the author asking for a click before their words are
+  # read. A preview line that ignores it puts them on screen unasked.
+  test "a post its author marked sensitive is not quoted either", %{conn: conn} do
+    {conn, _user} = federating(conn)
+    acc = account()
+
+    cached_post(acc, content_text: "Das will nicht jeder sehen.", sensitive: true)
+
+    html = post(conn, ~p"/system/fediverse/actor_card", address: @address) |> html_response(200)
+
+    assert html =~ "1 post here"
+    refute html =~ "Das will nicht jeder sehen."
+  end
+
+  # ── Muting, from the card ─────────────────────────────────────────────────
+
+  test "the account can be muted and unmuted without leaving the card", %{conn: conn} do
+    {conn, user} = federating(conn)
+    acc = account()
+    serve_actor()
+
+    post(conn, ~p"/system/fediverse/actor_card/follow", address: @address)
+
+    html =
+      conn
+      |> post(~p"/system/fediverse/actor_card/mute", address: @address, scope: "account")
+      |> html_response(200)
+
+    assert Repo.get_by!(Follow, user_id: user.id, remote_account_id: acc.id).muted
+    # The way back out is on the card that comes back, or a mute is a one-way door.
+    assert html =~ "Unmute"
+
+    conn
+    |> post(~p"/system/fediverse/actor_card/mute", address: @address, scope: "account")
+    |> html_response(200)
+
+    refute Repo.get_by!(Follow, user_id: user.id, remote_account_id: acc.id).muted
+  end
+
+  # Muting the account is only offered where there is a follow to mute:
+  # `set_remote_follow_mute/3` scopes to the member's own row and answers `:ok`
+  # for a row that is not there, so an offer without a follow is a control that
+  # visibly does nothing.
+  test "muting the account is not offered to somebody who does not follow it", %{conn: conn} do
+    {conn, _user} = federating(conn)
+    account()
+
+    html = post(conn, ~p"/system/fediverse/actor_card", address: @address) |> html_response(200)
+
+    refute html =~ ~s(data-actor-act="mute-account")
+    # The server can always be muted — that lever is the member's own feed
+    # setting and needs no relationship with anybody on it.
+    assert html =~ ~s(data-actor-act="mute-host")
+  end
+
+  # The muted-server list is a column on the *member*, so the viewer this
+  # request loaded is one write out of date the moment the mute lands — unlike
+  # the follow states, which `card/4` re-reads from the database. Without
+  # `mute/2` putting the act's answer back into the conn, the card that comes
+  # back still offers "Mute social.example" on a server that is now muted, and
+  # the press reads as having done nothing. Found in a browser, not by a test.
+  test "the whole server can be muted from the card, and says so on the way back",
+       %{conn: conn} do
+    {conn, user} = federating(conn)
+    account()
+
+    html =
+      conn
+      |> post(~p"/system/fediverse/actor_card/mute", address: @address, scope: "host")
+      |> html_response(200)
+
+    assert "social.example" in Vutuv.Fediverse.muted_hosts(Repo.reload!(user))
+    assert html =~ "Unmute social.example"
+    refute html =~ "Mute social.example"
+
+    html =
+      conn
+      |> post(~p"/system/fediverse/actor_card/mute", address: @address, scope: "host")
+      |> html_response(200)
+
+    assert Vutuv.Fediverse.muted_hosts(Repo.reload!(user)) == []
+    assert html =~ "Mute social.example"
+  end
+
+  test "a scope nobody offered mutes nothing", %{conn: conn} do
+    {conn, user} = federating(conn)
+    account()
+
+    assert post(conn, ~p"/system/fediverse/actor_card/mute", address: @address, scope: "wat")
+           |> html_response(200)
+
+    assert Vutuv.Fediverse.muted_hosts(Repo.reload!(user)) == []
+  end
+
+  # ── The phone ─────────────────────────────────────────────────────────────
+  #
+  # One fragment serves both shapes: the popover under the word and the sheet at
+  # the bottom of a phone. What differs is CSS, except the one thing CSS cannot
+  # do — on a touch screen there is no hover, so the follow button's "are you
+  # sure" step has to travel with the fragment as a translated string, as a
+  # third pre-rendered label CSS picks between. `mention_card.js` arms by adding
+  # a class and never writes a word.
+  test "the follow button carries all three of its labels", %{conn: conn} do
+    {conn, _user} = federating(conn)
+    account()
+    serve_actor()
+
+    html =
+      post(conn, ~p"/system/fediverse/actor_card/follow", address: @address)
+      |> html_response(200)
+
+    assert html =~ ~s(data-actor-state-on)
+    assert html =~ ~s(data-actor-state-off)
+    assert html =~ ~s(data-actor-state-confirm)
+    assert html =~ "Really withdraw?"
+  end
+
+  test "the German reader gets the new lines in German too", %{conn: conn} do
+    {conn, _user} = federating(conn)
+    acc = account()
+    cached_post(acc, content_text: "Ein Zug fährt durch die Nacht.")
+
+    html =
+      conn
+      |> recycle()
+      |> put_req_header("accept-language", "de-DE,de")
+      |> post(~p"/system/fediverse/actor_card", address: @address)
+      |> html_response(200)
+
+    assert html =~ "1 Beitrag hier"
+    assert html =~ "Zuletzt hier"
+    assert html =~ "Adresse kopieren"
+    assert html =~ "social.example stummschalten"
   end
 end

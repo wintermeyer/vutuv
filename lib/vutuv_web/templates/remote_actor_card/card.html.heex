@@ -1,7 +1,15 @@
 <%!-- The whole card, re-rendered after every act on it: the follow state, the
-refusal and the buttons are one answer from the server, so the browser never
-has to work out what a click meant. mention_card.js swaps this fragment in
-place.
+mute state, the refusal and the buttons are one answer from the server, so the
+browser never has to work out what a click meant. mention_card.js swaps this
+fragment in place.
+
+ONE fragment serves both shapes — the popover under the word on a desktop or an
+iPad, and the sheet at the bottom of a phone. `.actor-card--sheet` restyles it
+(see `components.css`); nothing here branches on the screen, because a second
+template would be a second place for every sentence. The one thing CSS cannot
+do travels as an attribute instead: a touch screen has no hover, so the follow
+button's "are you sure" step needs its wording (`data-actor-confirm`) here,
+where it can be translated.
 
 Nothing in here may be a `<.link navigate>` or carry a fixed `id`: the fragment
 lands on a `<body>`-level node outside every LiveView root, where a live
@@ -22,12 +30,30 @@ renders the same element. --%>
     <span aria-hidden="true">×</span>
   </button>
 
-  <%!-- Before the name, like the account page's header: a reader has to know
-  which world they are looking at before they read who it is. It gets the full
-  width of the card (`pr-6` clears the ×) rather than the column beside the
-  avatar, where it wrapped to two lines and pushed the name down. --%>
-  <p class="mb-1.5 pr-6 text-xs font-semibold uppercase tracking-wide text-slate-500 dark:text-slate-400">
-    {gettext("Account on another network")}
+  <%!-- The grab bar of the sheet form. Hidden on the popover (CSS), and the
+  reason it is markup rather than a pseudo-element: it says "you can swipe this
+  away", which is the gesture a sheet is put away by, and the × in the corner of
+  a panel at the bottom edge of a phone is not what a thumb reaches for. --%>
+  <div class="actor-card__grab" aria-hidden="true"></div>
+
+  <%!-- Where this account lives, before the name: a reader has to know which
+  world they are looking at before they read who it is. A chip rather than the
+  full-width uppercase line it replaced — that line said the same thing in 30
+  shouted characters, and after the third card nobody reads it. The host rides
+  along in it because it is the card's most load-bearing fact and had been
+  hiding as the tail of an address. --%>
+  <%!-- Two words and not the sentence it replaced ("Account on another
+  network"): with the host beside it, the longer wording wrapped the chip onto a
+  second line and pushed the host into an ellipsis on a 20rem card — measured in
+  the browser at 41px tall. The chip may never end a line, and it may never be
+  the reason the host is unreadable, since the host is the fact it is carrying.
+  So the label gives way and the host gets the room. --%>
+  <p class="actor-card__origin">
+    <span class={network_chip_class()}>
+      <span aria-hidden="true">🌐</span>
+      {gettext("Another network")}
+      <span :if={@account} class="min-w-0 truncate opacity-80">· {@account.host}</span>
+    </span>
   </p>
 
   <div class="flex items-start gap-3">
@@ -52,17 +78,60 @@ renders the same element. --%>
       >
         {card_handle(@account, @address)}
       </a>
+
+      <%!-- How much of this account is already here, and how recently. The
+      reader's own evidence, as against the self-description below, which is
+      what the account says about itself and settles nothing. Left out entirely
+      at zero: "0 posts here" is noise on a card this small.
+
+      `compact_count/1` and not `delimited_count/1`: this is a figure read at a
+      glance beside a name, not one anybody audits, so `2K` beats `2.048`.
+
+      `%{formatted}` and not `%{count}`: `ngettext/3` binds `%{count}` to the
+      raw integer and a `count:` binding does not override it, so a formatted
+      number needs a placeholder of its own. --%>
+      <p :if={@post_count > 0} class="actor-card__stats">
+        {ngettext("%{formatted} post here", "%{formatted} posts here", @post_count,
+          formatted: compact_count(@post_count)
+        )}
+        <span :if={@latest}>
+          · {relative_time(@latest.published_at)}
+        </span>
+      </p>
     </div>
   </div>
 
   <%!-- A self-description can be 10,000 characters, and this card is 20rem
-  wide: three lines, and the account page carries the whole of it. --%>
+  wide: two lines now rather than three, because the line below is worth more
+  than a third line of somebody introducing themselves. The account page carries
+  the whole of it. --%>
   <p
     :if={@account && @account.summary}
-    class="mb-0 mt-3 line-clamp-3 whitespace-pre-line break-words text-sm leading-relaxed text-slate-700 dark:text-slate-300"
+    class="mb-0 mt-3 line-clamp-2 whitespace-pre-line break-words text-sm leading-relaxed text-slate-700 dark:text-slate-300"
   >
     {@account.summary}
   </p>
+
+  <%!-- The last thing they wrote, which is what actually answers "is this worth
+  following". Gated in the controller: a post its author marked sensitive and a
+  post the reader's own filters hide are both left out, and the count line above
+  stays either way. --%>
+  <%!-- `PostTeaser.plain_line/2` and not the raw body: it is the app's one owner
+  of a post in one line, so this quote skips what every other teaser skips (a
+  bare `RE: <url>` quote line, a hashtags-only post), shortens our own handles
+  and arrives already cut to length instead of shipping 10,000 characters for
+  CSS to hide. It answers nil for a post with no words at all — a photo without
+  a caption — which is why the box is gated on the line and not on the post. --%>
+  <% line = @latest && VutuvWeb.PostTeaser.plain_line(@latest) %>
+  <.link
+    :if={line}
+    href={remote_post_permalink(@latest, @current_user)}
+    data-actor-card-latest
+    class="actor-card__latest"
+  >
+    <span class="actor-card__latest-label">{gettext("Latest here")}</span>
+    <span class="actor-card__latest-text line-clamp-2">{line}</span>
+  </.link>
 
   <%!-- Why nothing can be followed from here, in the vocabulary every other
   follow surface speaks: the standing refusal (this member has no Fediverse
@@ -77,34 +146,103 @@ renders the same element. --%>
     {(@blocked_reason && follow_refusal_sentence(@blocked_reason)) || refusal_message(@error)}
   </p>
 
-  <div :if={is_nil(@blocked_reason) && @account} class="mt-3 flex flex-wrap items-center gap-2">
-    <%= if @follow do %>
-      <.follow_state_pill follow={@follow} />
-      <.button variant="secondary" type="button" data-actor-act="unfollow">
-        {end_follow_label(@follow)}
-      </.button>
-    <% else %>
-      <.button type="button" data-actor-act="follow">{gettext("Follow")}</.button>
+  <div :if={@account} class="actor-card__actions">
+    <%= if is_nil(@blocked_reason) do %>
+      <%= if @follow do %>
+        <%!-- One button carrying its own state, rather than the status pill
+        beside a separate Unfollow that shipped first: those said the same thing
+        twice, and the one act nobody wants to trigger by accident was the
+        loudest control on the card. It reads as the state and turns into the
+        act on hover — and on a touch screen, where there is no hover, the first
+        press asks (`data-actor-confirm`) instead of doing it. --%>
+        <button
+          type="button"
+          data-actor-act="unfollow"
+          class={["actor-card__state-btn", state_btn_modifier(@follow)]}
+        >
+          <span data-follow-state={@follow.state} data-actor-state-on>
+            {follow_state_label(@follow)}
+          </span>
+          <span data-actor-state-off>{end_follow_label(@follow)}</span>
+          <%!-- Three pre-rendered labels rather than JS rewriting one of them:
+          which shows is CSS's business, so arming is a class and disarming is
+          taking it off. The version that overwrote the middle label's text left
+          "Really unfollow?" behind as the hover label once disarmed. --%>
+          <span data-actor-state-confirm>{confirm_label(@follow)}</span>
+        </button>
+      <% else %>
+        <%!-- `actor-card__act` is what the sheet's full-width rule hooks onto.
+        It cannot key off the button's own classes: `<.button>` emits Tailwind
+        utilities and never a `.button` class, so a selector naming that class
+        matches nothing here and the sheet would stretch Unfollow and ⋯ while
+        leaving Follow inline-sized. --%>
+        <.button type="button" class="actor-card__act" data-actor-act="follow">
+          {gettext("Follow")}
+        </.button>
+      <% end %>
     <% end %>
+
+    <%!-- Everything that is not following, behind one control. It stays
+    reachable when the follow is refused: a member who does not federate can
+    still want this server out of their feed. --%>
+    <button
+      type="button"
+      data-actor-menu
+      aria-haspopup="true"
+      aria-expanded="false"
+      aria-label={gettext("More")}
+      class="actor-card__more"
+    >
+      <%!-- A glyph beside the follow button, the word inside the sheet: there
+      the control is a row across the whole screen, and a full-width button
+      carrying nothing but three dots reads as a mistake. CSS picks which one
+      shows. --%>
+      <span aria-hidden="true" class="actor-card__more-glyph">⋯</span>
+      <span aria-hidden="true" class="actor-card__more-label">{gettext("More")}</span>
+    </button>
   </div>
 
-  <div class="mt-3 flex flex-wrap items-center gap-x-4 gap-y-1 border-t border-slate-100 pt-2.5 text-sm dark:border-slate-800">
+  <%!-- The overflow. On the popover it is a small panel over the card's lower
+  edge; in the sheet the same markup opens in the flow and the sheet grows,
+  because a menu floating over a sheet is a sheet on top of a sheet. --%>
+  <div :if={@account} class="actor-card__menu" data-actor-card-menu hidden>
+    <%!-- Only where there is a follow to mute: `set_remote_follow_mute/3` is
+    scoped to the member's own row and answers `:ok` for a row that is not
+    there, so offering this without a follow is a control that visibly does
+    nothing. --%>
+    <button :if={@follow} type="button" data-actor-act="mute-account">
+      <span class="actor-card__menu-icon" aria-hidden="true">🔕</span>
+      {if @follow.muted, do: gettext("Unmute"), else: gettext("Mute")}
+    </button>
+    <button type="button" data-actor-act="mute-host">
+      <span class="actor-card__menu-icon" aria-hidden="true">🌐</span>
+      {if @host_muted?,
+        do: gettext("Unmute %{host}", host: @account.host),
+        else: gettext("Mute %{host}", host: @account.host)}
+    </button>
+    <button
+      type="button"
+      data-actor-copy={card_handle(@account, @address)}
+      data-actor-copied={gettext("Address copied")}
+    >
+      <span class="actor-card__menu-icon" aria-hidden="true">⧉</span>
+      <span data-actor-copy-label>{gettext("Copy address")}</span>
+    </button>
+  </div>
+
+  <%!-- Both ways onward in one weight and one colour. They were blue and grey
+  before, which reads as a main way and a lesser one; they are neither. In the
+  sheet the same two become full-width list rows, where a thumb can hit them. --%>
+  <div class="actor-card__links">
     <%!-- The page here first: it is the one that holds this account's cached
     posts, the mute switch and the whole self-description. --%>
-    <.link
-      :if={@account}
-      href={~p"/system/fediverse/account/#{@account}"}
-      class="font-medium text-brand-600 hover:text-brand-700 dark:text-brand-400 dark:hover:text-brand-300"
-    >
+    <.link :if={@account} href={~p"/system/fediverse/account/#{@account}"}>
       {gettext("Their account page here")}
+      <span class="actor-card__go" aria-hidden="true">›</span>
     </.link>
-    <a
-      href={origin}
-      target="_blank"
-      rel="nofollow noopener noreferrer"
-      class="font-medium text-slate-600 hover:text-slate-900 dark:text-slate-400 dark:hover:text-slate-200"
-    >
+    <a href={origin} target="_blank" rel="nofollow noopener noreferrer">
       {gettext("View the original")}
+      <span class="actor-card__go" aria-hidden="true">↗</span>
     </a>
   </div>
 </div>

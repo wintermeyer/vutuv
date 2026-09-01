@@ -80,4 +80,22 @@ defmodule Vutuv.Fediverse.Follow do
   @doc "Whether this follow is a husk left behind by a move."
   def moved?(%__MODULE__{state: @moved}), do: true
   def moved?(%__MODULE__{}), do: false
+
+  @doc """
+  Which of the three states a reader is looking at, as an atom.
+
+  Six surfaces dress this up — the pill's word and its colours, the button that
+  ends the follow, that button's confirmation, and on the mention card the
+  state-carrying button's colours and its touch confirmation. Every one of them
+  used to be its own `cond` over `moved?/1` and `accepted?/1` ending in a
+  catch-all, which is fine until a fourth state arrives: `states/0` is a closed
+  set the schema validates against, so a new member of it would have fallen
+  silently into "Requested" in six places at once with nothing failing.
+
+  Matching on the atom instead means whichever surface forgot the new state
+  raises there, which is the whole point of naming it.
+  """
+  def display_state(%__MODULE__{state: @moved}), do: :moved
+  def display_state(%__MODULE__{state: @accepted}), do: :accepted
+  def display_state(%__MODULE__{state: @requested}), do: :requested
 end

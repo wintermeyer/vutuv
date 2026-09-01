@@ -5,6 +5,7 @@ defmodule VutuvWeb.RemoteActorCardHTML do
   import VutuvWeb.FediverseComponents
   import VutuvWeb.PostComponents
 
+  alias Vutuv.Fediverse.Follow
   alias Vutuv.Fediverse.Handle
   alias Vutuv.Fediverse.RemoteAccount
   alias Vutuv.Fediverse.RemoteFollow
@@ -58,6 +59,41 @@ defmodule VutuvWeb.RemoteActorCardHTML do
     case RemoteFollow.parse_address(address) do
       {:ok, {user, host}} -> Handle.web_profile_url(user, host)
       _unparsable -> nil
+    end
+  end
+
+  @doc """
+  The colours the one state-carrying follow button wears, as a modifier rather
+  than the pill's utility string (`follow_state_class/1`).
+
+  A pill is a label and only needs a resting colour; this control is also the
+  way *out* of the state it names, so each variant needs a hover half that turns
+  it into the refusal it is about to become. That pairing lives in
+  `components.css` beside the button, where a hover state belongs, instead of as
+  twelve utilities here — and it keeps the vocabulary: the same three states the
+  pill knows, in the same three colours.
+  """
+  def state_btn_modifier(follow), do: "actor-card__state-btn--#{Follow.display_state(follow)}"
+
+  @doc """
+  What the follow button asks before it acts, on a screen that cannot hover.
+
+  The hover swap is the desktop's confirmation step — the button says "Following"
+  and only turns into "Unfollow" once the pointer is on it, so the act is never
+  what a stray click lands on. A phone has no such moment, and the two mistakes
+  are not the same size: an unfollow can be undone with one press, while a
+  withdrawn request has to be approved by hand on the other side all over again
+  and may take days or never come back.
+
+  So the wording is the act, phrased as the question the second press answers.
+  It rides along as an attribute because `mention_card.js` must not write
+  sentences: the card's words are the server's, in the reader's language.
+  """
+  def confirm_label(follow) do
+    case Follow.display_state(follow) do
+      :moved -> gettext("Really remove?")
+      :accepted -> gettext("Really unfollow?")
+      :requested -> gettext("Really withdraw?")
     end
   end
 end

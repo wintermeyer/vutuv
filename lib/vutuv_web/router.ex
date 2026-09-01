@@ -831,6 +831,7 @@ defmodule VutuvWeb.Router do
     post("/system/fediverse/actor_card", RemoteActorCardController, :show)
     post("/system/fediverse/actor_card/follow", RemoteActorCardController, :follow)
     delete("/system/fediverse/actor_card/follow", RemoteActorCardController, :unfollow)
+    post("/system/fediverse/actor_card/mute", RemoteActorCardController, :mute)
 
     get("/new_registration", PageController, :redirect_index)
     post("/new_registration", PageController, :new_registration)

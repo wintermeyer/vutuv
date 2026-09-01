@@ -1623,7 +1623,15 @@ defmodule VutuvWeb.PostComponents do
   # one are the same pill. The slate text colour is spelled out because
   # `components.css` colours a bare `a` brand-600, which would otherwise turn
   # the linked chip into a blue pill.
-  defp network_chip_class do
+  @doc """
+  The provenance chip's look, as a bare class string.
+
+  Public so the mention card wears the same pill it opens over: the card is
+  read on top of a post that already carries this chip for the same host, and
+  two spellings of "this is from another network" on one screen is one of them
+  going stale the next time the other is touched.
+  """
+  def network_chip_class do
     "inline-flex max-w-full items-center gap-1 rounded-full bg-slate-100 px-2 py-0.5 text-[11px] font-medium text-slate-600 dark:bg-slate-800 dark:text-slate-300"
   end
 
@@ -2896,16 +2904,22 @@ defmodule VutuvWeb.PostComponents do
       else: gettext("View the original")
   end
 
-  # Our copy's own page (`VutuvWeb.FediversePostLive`), for the stamp in the
-  # header. Signed-in readers only, because that page is: it is assembled from
-  # what somebody else wrote on somebody else's server, so it is a members' page
-  # like every other `/system/fediverse/*` one — and a link an anonymous reader
-  # of the tag timeline could only follow into a login wall is worse than the
-  # plain stamp they have today.
-  defp remote_post_permalink(%RemotePost{id: id}, %User{}),
+  @doc """
+  Our copy's own page (`VutuvWeb.FediversePostLive`), for the stamp in the
+  header. Signed-in readers only, because that page is: it is assembled from
+  what somebody else wrote on somebody else's server, so it is a members' page
+  like every other `/system/fediverse/*` one — and a link an anonymous reader of
+  the tag timeline could only follow into a login wall is worse than the plain
+  stamp they have today.
+
+  Public because the mention card links a quoted post here too, and a
+  hand-built `/system/fediverse/post/<id>` at that call site would be a second
+  place to remember the signed-in rule.
+  """
+  def remote_post_permalink(%RemotePost{id: id}, %User{}),
     do: ~p"/system/fediverse/post/#{id}"
 
-  defp remote_post_permalink(_post, _viewer), do: nil
+  def remote_post_permalink(_post, _viewer), do: nil
 
   @doc """
   The sentence for one `{:error, reason}` refusing the heart above (issue
