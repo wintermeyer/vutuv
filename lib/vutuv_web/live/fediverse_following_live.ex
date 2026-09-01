@@ -393,15 +393,7 @@ defmodule VutuvWeb.FediverseFollowingLive do
                     </td>
                     <td>
                       <div class="flex flex-wrap items-center justify-end gap-x-3 gap-y-1">
-                        <span
-                          data-follow-state={follow.state}
-                          class={[
-                            "inline-flex rounded-full px-2 py-0.5 text-xs font-semibold ring-1",
-                            follow_state_class(follow)
-                          ]}
-                        >
-                          {follow_state_label(follow)}
-                        </span>
+                        <.follow_state_pill follow={follow} />
                         <button
                           type="button"
                           phx-click="unfollow"

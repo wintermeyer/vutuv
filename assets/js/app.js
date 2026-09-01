@@ -45,6 +45,10 @@ import "./lightbox"
 // (self-contained; marks <html>, which is outside every LiveView root, so no
 // patch can drop the state. See scroll_top_tab.js).
 import "./scroll_top_tab"
+// The card behind a `@user@host` mention in a post: who that is, and a Follow
+// button, instead of leaving the site for their server (self-contained; its
+// panel lives on <body>, outside every LiveView root. See mention_card.js).
+import "./mention_card"
 
 // LiveSocket drives the incremental LiveView shell (live unread badges, the
 // notifications/messages pages, presence). The CSRF token is rendered into the

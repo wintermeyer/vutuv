@@ -1,0 +1,110 @@
+<%!-- The whole card, re-rendered after every act on it: the follow state, the
+refusal and the buttons are one answer from the server, so the browser never
+has to work out what a click meant. mention_card.js swaps this fragment in
+place.
+
+Nothing in here may be a `<.link navigate>` or carry a fixed `id`: the fragment
+lands on a `<body>`-level node outside every LiveView root, where a live
+navigation link does nothing, and it can be open over a page that already
+renders the same element. --%>
+<% origin = origin_url(@account, @address) %>
+<div class="actor-card__content" data-actor-card-content>
+  <%!-- The way out lives in the fragment, not in the shell mention_card.js
+  builds, so its label is a translated string like every other word on the card.
+  Escape and a click outside close it too; this is the one a thumb can reach on
+  a phone, where the card is a sheet at the bottom of the screen. --%>
+  <button
+    type="button"
+    data-actor-card-close
+    class="actor-card__close"
+    aria-label={gettext("Close")}
+  >
+    <span aria-hidden="true">×</span>
+  </button>
+
+  <%!-- Before the name, like the account page's header: a reader has to know
+  which world they are looking at before they read who it is. It gets the full
+  width of the card (`pr-6` clears the ×) rather than the column beside the
+  avatar, where it wrapped to two lines and pushed the name down. --%>
+  <p class="mb-1.5 pr-6 text-xs font-semibold uppercase tracking-wide text-slate-500 dark:text-slate-400">
+    {gettext("Account on another network")}
+  </p>
+
+  <div class="flex items-start gap-3">
+    <.remote_avatar
+      initials={card_initials(@account, @address)}
+      src={@account && RemoteAccount.avatar_url(@account)}
+      size="sm"
+    />
+
+    <div class="min-w-0 flex-1">
+      <p class="mb-0 break-words font-bold leading-tight text-slate-900 dark:text-white">
+        {card_name(@account, @address)}
+      </p>
+      <%!-- `break-words`, not `break-all`: the address only breaks when it has
+      to, so `@name@social.bund.de` does not come apart mid-host on a card this
+      narrow. --%>
+      <a
+        href={origin}
+        target="_blank"
+        rel="nofollow noopener noreferrer"
+        class="break-words text-sm font-medium text-brand-600 hover:text-brand-700 dark:text-brand-400 dark:hover:text-brand-300"
+      >
+        {card_handle(@account, @address)}
+      </a>
+    </div>
+  </div>
+
+  <%!-- A self-description can be 10,000 characters, and this card is 20rem
+  wide: three lines, and the account page carries the whole of it. --%>
+  <p
+    :if={@account && @account.summary}
+    class="mb-0 mt-3 line-clamp-3 whitespace-pre-line break-words text-sm leading-relaxed text-slate-700 dark:text-slate-300"
+  >
+    {@account.summary}
+  </p>
+
+  <%!-- Why nothing can be followed from here, in the vocabulary every other
+  follow surface speaks: the standing refusal (this member has no Fediverse
+  identity, is on hold, has moved) first, then whatever the last act answered.
+  Never a dead end — the links below stay, so a spent hourly budget still leaves
+  the reader one click from the account. --%>
+  <p
+    :if={@blocked_reason || @error}
+    data-actor-card-error
+    class="mb-0 mt-3 rounded-lg bg-slate-50 p-2.5 text-sm leading-relaxed text-slate-700 dark:bg-slate-800/60 dark:text-slate-300"
+  >
+    {(@blocked_reason && follow_refusal_sentence(@blocked_reason)) || refusal_message(@error)}
+  </p>
+
+  <div :if={is_nil(@blocked_reason) && @account} class="mt-3 flex flex-wrap items-center gap-2">
+    <%= if @follow do %>
+      <.follow_state_pill follow={@follow} />
+      <.button variant="secondary" type="button" data-actor-act="unfollow">
+        {end_follow_label(@follow)}
+      </.button>
+    <% else %>
+      <.button type="button" data-actor-act="follow">{gettext("Follow")}</.button>
+    <% end %>
+  </div>
+
+  <div class="mt-3 flex flex-wrap items-center gap-x-4 gap-y-1 border-t border-slate-100 pt-2.5 text-sm dark:border-slate-800">
+    <%!-- The page here first: it is the one that holds this account's cached
+    posts, the mute switch and the whole self-description. --%>
+    <.link
+      :if={@account}
+      href={~p"/system/fediverse/account/#{@account}"}
+      class="font-medium text-brand-600 hover:text-brand-700 dark:text-brand-400 dark:hover:text-brand-300"
+    >
+      {gettext("Their account page here")}
+    </.link>
+    <a
+      href={origin}
+      target="_blank"
+      rel="nofollow noopener noreferrer"
+      class="font-medium text-slate-600 hover:text-slate-900 dark:text-slate-400 dark:hover:text-slate-200"
+    >
+      {gettext("View the original")}
+    </a>
+  </div>
+</div>

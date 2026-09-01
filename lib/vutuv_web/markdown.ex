@@ -29,6 +29,7 @@ defmodule VutuvWeb.Markdown do
   use Gettext, backend: VutuvWeb.Gettext
 
   alias Vutuv.Fediverse
+  alias Vutuv.Fediverse.Handle
   alias Vutuv.Mentions
   alias Vutuv.Organizations
   alias Vutuv.Organizations.Organization
@@ -1178,7 +1179,7 @@ defmodule VutuvWeb.Markdown do
     cond do
       Fediverse.tag_host?(host) -> tag_actor_link(whole, user, tags)
       Fediverse.local_host?(host) -> local_address_link(whole, user, host, users, form)
-      true -> remote_actor_link(user, host)
+      true -> remote_actor_link(user, host, form)
     end
   end
 
@@ -1236,10 +1237,26 @@ defmodule VutuvWeb.Markdown do
   # case-insensitive); the typed user case is kept in both the URL and the
   # label. Opens in a new tab like other external links; both parts are a
   # validated charset (`[A-Za-z0-9_]` / `[A-Za-z0-9.-]`), so no escaping needed.
-  defp remote_actor_link(user, host) do
-    href = "https://#{String.downcase(host)}/@#{user}"
+  # `data-remote-actor` is what `assets/js/mention_card.js` binds the mention
+  # card to: a click opens a small card with the account and a Follow button
+  # instead of leaving the site, because "who is that" and "I want their posts
+  # here" is what a reader means far more often than "take me to their server".
+  # The `href` stays this link's whole truth, so a middle-click, a copied link,
+  # a logged-out visitor and a page whose JavaScript never arrived all keep
+  # today's behaviour.
+  #
+  # Only on the `:local` form, which is the on-site render. The `:address` form
+  # is what goes out — `Vutuv.Fediverse.Docs` builds the ActivityPub Note's
+  # `content` with it, and the RSS/Atom item bodies come through here too — and
+  # a hook for our own click handler has no business in a copy stored on
+  # somebody else's server, which sanitizes it away on arrival anyway. Per
+  # mention, per follower inbox.
+  defp remote_actor_link(user, host, form) do
+    href = Handle.web_profile_url(user, host)
+    hook = if form == :local, do: ~s( data-remote-actor="#{user}@#{host}"), else: ""
 
-    ~s(<a href="#{href}" target="_blank" rel="noopener noreferrer" class="mention">@#{user}@#{host}</a>)
+    ~s(<a href="#{href}" target="_blank" rel="noopener noreferrer" class="mention"#{hook}>) <>
+      ~s(@#{user}@#{host}</a>)
   end
 
   # A bare `@ada` is the everyday spelling here and the wrong one everywhere

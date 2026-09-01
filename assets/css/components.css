@@ -3647,6 +3647,109 @@ html.lightbox-open { overflow: hidden; }
   }
 }
 
+/* ---------- The card behind a `@user@host` mention (mention_card.js) ----------
+   A mention is a link to another server, and a plain click on it opens this
+   instead: who that account is, one Follow button, and the way onward. The why
+   is in `assets/js/mention_card.js`; what matters here is that the panel lives
+   on <body>, outside every LiveView root, and is filled with a fragment the
+   server renders.
+
+   Written as one block, its dark half nested rather than filed in this file's
+   big `prefers-color-scheme` section: this is a self-contained component whose
+   two halves are read together, and 400 lines between them is how a dark
+   variant gets forgotten. */
+.actor-card {
+  position: fixed;
+  /* The band the other body-level panels sit in (the emoji and @ pickers), not
+     the full-page editor's 60 — a card opened over that editor must be on top
+     of it, not under it. */
+  z-index: 70;
+  width: 20rem;
+  max-width: calc(100vw - 1rem);
+  padding: 0.875rem;
+  border: 1px solid #e2e8f0;
+  border-radius: 0.75rem;
+  background: #fff;
+  color: #0f172a;
+  box-shadow: 0 10px 25px -5px rgb(15 23 42 / 0.18), 0 8px 10px -6px rgb(15 23 42 / 0.1);
+}
+.actor-card[hidden] { display: none; }
+
+/* On a phone the box becomes a sheet at the bottom edge: a 20rem popover
+   anchored to a word in a paragraph has nowhere to go on a 360px screen, and
+   the buttons belong where the thumb already is. `env(safe-area-inset-bottom)`
+   keeps them clear of the home indicator. */
+.actor-card--sheet {
+  left: 0.5rem;
+  right: 0.5rem;
+  bottom: 0.5rem;
+  top: auto;
+  width: auto;
+  max-width: none;
+  border-radius: 1rem;
+  padding-bottom: calc(0.875rem + env(safe-area-inset-bottom));
+}
+
+/* Only the sheet dims the page behind it — a popover under a word is read
+   together with the sentence it came from, and dimming that sentence would
+   take away the context the card is about. */
+.actor-card__backdrop {
+  position: fixed;
+  inset: 0;
+  z-index: 69;
+  background: rgb(15 23 42 / 0.35);
+}
+.actor-card__backdrop[hidden] { display: none; }
+
+.actor-card__close {
+  position: absolute;
+  top: 0.4rem;
+  right: 0.4rem;
+  display: flex;
+  align-items: center;
+  justify-content: center;
+  width: 2rem;
+  height: 2rem;
+  border: 0;
+  border-radius: 0.5rem;
+  background: transparent;
+  color: #64748b;
+  font-size: 1.25rem;
+  line-height: 1;
+  cursor: pointer;
+}
+.actor-card__close:hover { background: #f1f5f9; color: #0f172a; }
+@media (any-pointer: coarse) {
+  .actor-card__close { width: 2.5rem; height: 2.5rem; }
+}
+
+/* The wait: the same breathing outline every other not-yet-arrived thing here
+   wears (`.skeleton`), in the shape of the card that is coming. */
+.actor-card__skeleton { display: flex; gap: 0.75rem; align-items: flex-start; }
+.actor-card__skeleton-tile {
+  flex: 0 0 auto;
+  width: 2.25rem;
+  height: 2.25rem;
+  border-radius: 999px;
+}
+.actor-card__skeleton-lines { flex: 1 1 auto; display: flex; flex-direction: column; gap: 0.4rem; }
+.actor-card__skeleton-lines i { display: block; height: 0.7rem; }
+.actor-card__skeleton-lines i:nth-child(1) { width: 55%; }
+.actor-card__skeleton-lines i:nth-child(2) { width: 85%; }
+.actor-card__skeleton-lines i:nth-child(3) { width: 40%; }
+
+@media (prefers-color-scheme: dark) {
+  .actor-card {
+    border-color: #1e293b;
+    background: #0f172a;
+    color: #e2e8f0;
+    box-shadow: 0 10px 25px -5px rgb(0 0 0 / 0.6), 0 8px 10px -6px rgb(0 0 0 / 0.5);
+  }
+  .actor-card__backdrop { background: rgb(2 6 23 / 0.6); }
+  .actor-card__close { color: #94a3b8; }
+  .actor-card__close:hover { background: #1e293b; color: #f1f5f9; }
+}
+
 /* Changing this file (or app.css @theme / lib/vutuv_web/components/ui.ex) is a
    design-language change — a PostToolUse hook reminds you to update
    .claude/rules/design.md so the design rule stays in sync. */

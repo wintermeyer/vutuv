@@ -2839,7 +2839,16 @@ defmodule VutuvWeb.PostComponents do
   # to the handle for the letters — `RemoteAccount.display_name/1` exists for
   # exactly that distinction, and the full card and the quoted card must draw
   # the same tile for the same account.
-  defp remote_initials(account),
+  @doc """
+  The monogram for a remote account: its display name's initials, and the bare
+  handle's when it has no display name.
+
+  Public because the mention card (`VutuvWeb.RemoteActorCardHTML`) draws the
+  same account and must draw the same letters. Deliberately not built from
+  `RemoteAccount.label/1`, whose fallback is the whole `@user@host` address —
+  `name_initials/1` would answer "@" for it.
+  """
+  def remote_initials(account),
     do: name_initials(RemoteAccount.display_name(account) || account.handle)
 
   # Where the fallback link goes, or nil when there is nothing to add: no quote

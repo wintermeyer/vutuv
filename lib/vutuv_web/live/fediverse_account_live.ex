@@ -354,15 +354,7 @@ defmodule VutuvWeb.FediverseAccountLive do
                   word and colour and the button's label, and those come from
                   the sibling page, so "Requested" cannot mean two things. --%>
             <div :if={@follow} class="flex flex-wrap items-center gap-3">
-              <span
-                data-follow-state={@follow.state}
-                class={[
-                  "inline-flex rounded-full px-2 py-0.5 text-xs font-semibold ring-1",
-                  follow_state_class(@follow)
-                ]}
-              >
-                {follow_state_label(@follow)}
-              </span>
+              <.follow_state_pill follow={@follow} />
               <span
                 :if={@follow.muted}
                 data-follow-muted

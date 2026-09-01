@@ -422,6 +422,17 @@ defmodule VutuvWeb.MarkdownTest do
       assert html =~ ">@hostsharing@geno.social</a>"
     end
 
+    test "marks the handle for the mention card without giving up its link" do
+      # `data-remote-actor` is what app.js opens the card on. The `href` is what
+      # everything else still uses — a middle-click, a copied link, a visitor
+      # who is not signed in — so the two have to travel together.
+      html = post_html("Follow @hostsharing@geno.social for hosting")
+
+      assert html =~ ~s(data-remote-actor="hostsharing@geno.social")
+      assert html =~ ~s(href="https://geno.social/@hostsharing")
+      assert html =~ ~s(target="_blank")
+    end
+
     test "links the same handle identically in a post (shared with messages)" do
       html = post_html("Follow @hostsharing@geno.social for hosting")
 
