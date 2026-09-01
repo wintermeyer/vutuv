@@ -280,6 +280,7 @@ defmodule VutuvWeb.PostComponents do
         not inline_media? and square_layout?(post, gallery, assigns.mode)
       )
       |> assign_link_screenshot(post, assigns.mode)
+      |> assign_tags_placement(post)
       # The book/film review sidecar; nil for ordinary posts (and for nested
       # renderings whose preload chain didn't carry it).
       |> assign(:review, review_of(post))
@@ -3566,14 +3567,14 @@ defmodule VutuvWeb.PostComponents do
             <div class={@review_aside? && "min-w-0 md:flex-1"}>
               <%!-- Full mode: the whole body, no clamp. The reader's hyphenation
               preference still rides along via @body_style (the clamp vars in it are
-              simply unused here). The tags live INSIDE the body flow so they follow
-              the end of the text — beside a tall floated inline image (a flex row
-              establishes its own formatting context, so the float narrows it
-              instead of overlapping) rather than pushed below the whole picture;
-              the container's clearfix (`.markdown--post::after`) keeps everything
-              after this div below the float. The link screenshot floats here too,
-              ahead of the prose (a float only wraps what follows it) — the same
-              beside-the-text reading as the preview, at the same width. --%>
+              simply unused here). The tags join the body flow when `@tags_in_body?`
+              says this body floats something, and the chips row is a flex row, which
+              establishes its own formatting context — so the float narrows it rather
+              than overlapping it; the container's clearfix (`.markdown--post::after`)
+              keeps everything after this div below the float. The link screenshot
+              floats here too, ahead of the prose (a float only wraps what follows
+              it) — the same beside-the-text reading as the preview, at the same
+              width. --%>
               <div
                 :if={@mode == :full and @post.body != ""}
                 data-post-body
@@ -3588,7 +3589,7 @@ defmodule VutuvWeb.PostComponents do
                   class="float-right mb-1 ml-4 w-2/5 sm:w-1/3"
                 />
                 {@body_html}
-                <.post_tags tags={@post.tags} />
+                <.post_tags :if={@tags_in_body?} tags={@post.tags} />
               </div>
 
               <%= cond do %>
@@ -3745,20 +3746,10 @@ defmodule VutuvWeb.PostComponents do
           <.photo_check_progress :if={@limbo_pill?} progress={@check_progress} />
 
 
-          <%!-- The remaining layouts put the tags in their own full-width row
-          below the body/images: plain (line-clamp) previews — no float there,
-          so this row already sits at the end of the text — and the photo-only
-          renderings (no body to end). Everything float-capable carries the
-          tags at the end of the text instead: full mode inside the body div,
-          the wrap/media previews inside `<.preview_body>`. --%>
-          <.post_tags
-            :if={
-              not @square_layout? and not @link_screenshot_layout? and
-                not (@mode == :full and @post.body != "") and
-                not (@mode == :preview and @inline_media?)
-            }
-            tags={@post.tags}
-          />
+          <%!-- A body that floats nothing leaves the tags to this row, below
+          the pictures; the float-capable layouts carry them at the end of the
+          text instead. `@tags_in_body?` is the whole of that decision. --%>
+          <.post_tags :if={not @tags_in_body?} tags={@post.tags} />
 
           <.liked_by :if={@likers} likers={@likers} />
 
@@ -3894,13 +3885,14 @@ defmodule VutuvWeb.PostComponents do
   attr(:media, :boolean, default: false)
   # The post's tag chips. In the flow-root variants (wrap/media — the ones that
   # can carry a float) they render INSIDE the clamp block so they follow the end
-  # of the text beside a tall floated image (like full mode since v7.110.3),
-  # plus a CSS-toggled fallback row below the block that stands in while the
-  # body is clamped — inside the clamp the inline row would be cut away with
-  # the text (see the `.post-preview__tags-*` rules in components.css). The
-  # line-clamp variant ignores them (a -webkit-box cannot hold the chips row;
-  # there is no float there, so the caller's plain row below already sits at
-  # the end of the text).
+  # of the text beside a tall floated image, plus a CSS-toggled fallback row
+  # below the block that stands in while the body is clamped — inside the clamp
+  # the inline row would be cut away with the text (see the
+  # `.post-preview__tags-*` rules in components.css). The line-clamp variant
+  # ignores them (a -webkit-box cannot hold the chips row), and the caller's own
+  # row below the pictures carries them there. `wrap or media` is this body's
+  # half of the card's `@tags_in_body?` — same question, asked of the branch
+  # that already had the answer — so the two never both draw the chips.
   attr(:tags, :list, default: [])
   # The body's language (BCP47 primary subtag) for the `lang` attribute —
   # screen readers and hyphenation; nil renders no attribute.
@@ -4816,6 +4808,36 @@ defmodule VutuvWeb.PostComponents do
   end
 
   defp square_layout?(_post, _gallery, _mode), do: false
+
+  # Where this card's tag chips go, asked once for every layout it has.
+  #
+  # They sit at the end of the body text exactly when the body floats something
+  # they should stand beside: the roughly-square photo and the link screenshot
+  # the card floats itself, and the pictures an author placed inline with
+  # `![](…#left/right)`. Pushed under a tall float they would leave a column of
+  # whitespace beside it, which is what put them in the body flow in the first
+  # place (v7.110.3). With nothing floated they belong in their own row below
+  # the body AND the pictures.
+  #
+  # One predicate for both of the card's chip rows, and the same question
+  # `<.preview_body>` asks as `wrap or media` for the row it owns. Three
+  # independent copies of this decision is how the surfaces drifted apart: full
+  # mode never asked it at all and kept the chips at the end of the text
+  # whatever the body held, so the permalink listed them above every photo while
+  # the feed listed them below — one post, two readings.
+  #
+  # An empty body can hold nothing, so the row below carries them. That is not
+  # a dead branch: a screenshot outlives an edit that empties the body it was
+  # taken from, and the chips would then have no place left to render.
+  defp assign_tags_placement(card_assigns, post) do
+    assign(
+      card_assigns,
+      :tags_in_body?,
+      post.body != "" and
+        (card_assigns.square_layout? or card_assigns.inline_media? or
+           card_assigns.link_screenshot != nil)
+    )
+  end
 
   # Whether to render the author's amber progress panel. It keys on the
   # post-level flag rather than on the individual pictures, so it cannot

@@ -878,6 +878,18 @@ already-`is-expanded` preview so a later resize/font sweep can't re-clamp it out
 from under the reader. With JS off such a card keeps the native line-clamp ellipsis
 and no control. The permalink (`mode={:full}`) never clamps.
 
+**One card, one order.** `:preview` and `:full` are the same card and lay their
+parts out in the same sequence: body, pictures, tag chips, liked-by, action bar.
+What `:full` varies is what it *shows* — the lightbox and photo captions, the
+licence line, the "Liked by" row, no clamp — never the order. The chips are the
+case that drifted: they follow the end of the body text when the body floats
+something they should stand beside (`@tags_in_body?` in
+`VutuvWeb.PostComponents`: a roughly-square photo, a link screenshot, an
+author-placed inline image), and otherwise sit in their own row under the
+pictures. Full mode used to skip that question and keep them at the end of the
+text whatever the body held, so the permalink listed the chips above every photo
+while the feed listed them below.
+
 The profile page and the archive show the author's timeline (posts + reposts).
 
 ## Automatic post deletion (issue #1255)

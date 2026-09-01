@@ -622,6 +622,31 @@ defmodule VutuvWeb.PostControllerTest do
       assert tag_pos < gallery_pos
     end
 
+    test "with nothing floated the chips follow the photo, permalink as feed", %{conn: conn} do
+      user = insert_activated_user()
+      image = insert(:post_image, user: user, post: nil, token: "tagordertok")
+
+      post =
+        create_post!(user, %{
+          body: "A plain body that floats nothing.",
+          tags: "elixir",
+          image_ids: [image.id]
+        })
+
+      # The permalink (`:full`) and the author archive (`:preview`) are the
+      # same card, so a reader must not meet the parts in two different orders.
+      # Nothing floats here, so the chips belong in their own row under the
+      # picture on both — the permalink used to carry them at the end of the
+      # text whatever the body held, which put them above every photo.
+      for path <- [Posts.path(post), "/#{user.username}/posts"] do
+        html = html_response(get(conn, path), 200)
+
+        assert position(html, "/post_images/tagordertok/feed.avif") <
+                 position(html, ~s(href="/tags/elixir")),
+               "#{path} lists the tag chips above the photo"
+      end
+    end
+
     test "a photo-only post (empty body) still shows its tags", %{conn: conn} do
       user = insert_activated_user()
       image = insert(:post_image, user: user, post: nil, token: "phototok")
