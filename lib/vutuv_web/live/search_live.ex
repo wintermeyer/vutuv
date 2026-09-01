@@ -668,6 +668,20 @@ defmodule VutuvWeb.SearchLive do
           phx-debounce="250"
           class={[input_class(), "text-base"]}
         />
+        <%!-- Return in the search box submits, and this button is what keeps
+        that true (issue #1895). A browser submits a form with no submit
+        control only while it holds exactly ONE text field — so today it works
+        by luck, and the day somebody puts an author filter or a date range
+        beside the box, Return goes dead with nothing to say so. That is how
+        the feed's "Wörter ausblenden" card lost its save (#1888).
+
+        Hidden rather than drawn: the box already searches as you type, so a
+        visible "Search" would offer a second way to do what has just
+        happened, and the one thing Return does that typing cannot — fetching
+        a pasted post from another network — has its own button on the card
+        below. Hidden, not `disabled` or `hidden`: it stays in the tab order,
+        which is a keyboard path the form did not have at all before. --%>
+        <button type="submit" class="sr-only">{gettext("Search")}</button>
       </form>
 
       <div id="search-filters" class="mt-3 flex flex-wrap items-center gap-2">
