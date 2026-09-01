@@ -495,10 +495,32 @@ defmodule VutuvWeb.PostComponents do
 
   `data-keep-open` is what stops the next unrelated patch (a count ticking) from
   folding it shut under the reader's cursor.
+
+  **The form ends in a real submit button, and that is load-bearing rather than
+  decoration.** HTML switches implicit submission *off* for a form that has no
+  submit button and more than one field that blocks it — two `type="text"`
+  inputs are two such fields — so the moment the `:extra` slot grew the word
+  rule its second question, Return silently stopped saving anything at all
+  (reported 2026-09-01: "there is no way to save a new entry here"). The word
+  and the accounts could be typed, the preview underneath counted the posts they
+  would fold, and the rule was never written. A button answers both halves: it
+  is the way in a reader can see, and it hands the form a default button again
+  so Return works for whoever reaches for it. Never take it away, whatever the
+  field count is at the time — the trap only reappears when the next `:extra`
+  arrives, long after anyone remembers this.
+
+  `submit_label` is the caller's and has no default, for two reasons. It says
+  what pressing it *does* ("Ausblenden" on the two deny-list cards, "Folgen" on
+  the tag one), which no one label covers; and `attr/3` escapes its default into
+  the module body, so a `gettext` default would bake whichever locale compiled
+  first into every card forever. Required also means a fourth card that forgets
+  the button fails `compile --warnings-as-errors`, which is the gate this bug
+  walked straight through.
   """
   attr(:label, :string, required: true)
   attr(:placeholder, :string, required: true)
   attr(:submit, :string, required: true)
+  attr(:submit_label, :string, required: true)
   attr(:change, :string, default: nil)
   attr(:name, :string, default: "pattern")
   attr(:value, :string, default: "")
@@ -507,8 +529,11 @@ defmodule VutuvWeb.PostComponents do
   attr(:class, :string, default: nil)
 
   # A second question the same rule answers, under the field and inside its
-  # form, so one Return submits both. It is deliberately not a second
-  # `rail_add_field`: two `+` glyphs would read as two separate things to add.
+  # form, so one press of the button below saves both (and not, as this said
+  # until the field cost the card its Return, "so one Return submits both" —
+  # see the implicit-submission paragraph in the @doc). It is deliberately not a
+  # second `rail_add_field`: two `+` glyphs would read as two separate things to
+  # add.
   # Style its inputs with `rail_field_class/1` so the pair matches.
   slot(:extra)
 
@@ -545,6 +570,9 @@ defmodule VutuvWeb.PostComponents do
           class={rail_field_class("pl-3 pr-10")}
         />
         {render_slot(@extra)}
+        <%!-- Full width, so it lines up with the fields above it rather than
+        floating at one end of a row of its own. --%>
+        <.button type="submit" class="mt-1.5 w-full">{@submit_label}</.button>
       </form>
     </details>
     """
