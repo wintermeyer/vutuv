@@ -200,6 +200,11 @@ defmodule VutuvWeb.PostLive.Composer do
     # pending rows that are still in the database.
     |> assign(:discarded, nil)
     |> assign(:closing?, false)
+    # Whether the ⋯ disclosure is open (issue #1894). Starts closed even on an
+    # edit whose audience is custom: the closed button says so in words, and a
+    # reconnect that resets this hides no data — every value it shows lives in
+    # assigns and in the draft.
+    |> assign(:options_open?, false)
     # True while an autosave is already queued, so a burst of keystrokes
     # schedules one write rather than one per character.
     |> assign(:draft_scheduled?, false)
@@ -946,6 +951,10 @@ defmodule VutuvWeb.PostLive.Composer do
   # discard pressed it and was surprised. With a draft in hand it asks; with an
   # empty one there is nothing to ask about and the plain close still bubbles
   # to the feed.
+  def handle_event("toggle-post-options", _params, socket) do
+    {:noreply, assign(socket, :options_open?, not socket.assigns.options_open?)}
+  end
+
   def handle_event("close-request", _params, socket) do
     {:noreply, assign(socket, :closing?, true)}
   end
@@ -1157,6 +1166,23 @@ defmodule VutuvWeb.PostLive.Composer do
   # What a discard has to be able to give back. Everything here is composer
   # state, not a database write — the pending rows themselves are left alone,
   # so restoring is a matter of pointing at them again.
+  # What the closed ⋯ says about itself (issue #1894). Nothing hides in there
+  # unannounced: a language other than the reader's own, or an audience already
+  # narrowed, reads off the button. Both silent in the ordinary case, which is
+  # what lets the control stay a single glyph nearly always.
+  defp post_options_summary(assigns) do
+    [
+      assigns.preset == "custom" && gettext("Hidden from some"),
+      assigns.language != to_string(Gettext.get_locale(VutuvWeb.Gettext)) &&
+        String.upcase(assigns.language)
+    ]
+    |> Enum.filter(& &1)
+    |> case do
+      [] -> nil
+      parts -> Enum.join(parts, " · ")
+    end
+  end
+
   defp stash_draft(socket) do
     %{
       body: socket.assigns.body,
@@ -1809,8 +1835,8 @@ defmodule VutuvWeb.PostLive.Composer do
             <%!-- h-9 pins this to the Post button's height (both 36px, the
             standard control height): the 📷 emoji would otherwise inflate the
             line box, and mb-0 drops the global `label` margin (components.css)
-            that would offset it in this row. Shares its id with the grid's
-            add tile (one of the two renders), so the feed's camera button
+            that would offset it in this row. Shares its id with the photo
+            area's picker (one of the two renders), so the feed's camera button
             always has a target to click. --%>
             <label
               :if={@images == []}
@@ -1821,32 +1847,44 @@ defmodule VutuvWeb.PostLive.Composer do
               <.live_file_input upload={@uploads.images} class="sr-only" />
             </label>
 
+            <%!-- Everything that is about the post rather than in it (issue
+            #1894). The language select and the "Hide from…" block used to
+            stand in this row and unfold below it, so the last thing seen
+            before publishing was a dropdown for a decision that has the same
+            right answer nearly every time. Tags stay on screen: they change
+            who the post reaches, which is worth thinking about while writing.
+
+            The button says when something is set, so nothing hides in here
+            unannounced — a post being written in another language, or an
+            audience already narrowed, reads off the closed control. --%>
+            <button
+              type="button"
+              id={"#{@id}-more"}
+              phx-click="toggle-post-options"
+              phx-target={@myself}
+              aria-expanded={to_string(@options_open?)}
+              aria-controls={"#{@id}-options"}
+              data-post-options-toggle
+              class={[
+                "inline-flex h-9 shrink-0 items-center gap-1.5 rounded-lg px-3 text-sm font-semibold",
+                (@options_open? &&
+                   "bg-brand-50 text-brand-700 dark:bg-brand-900/40 dark:text-brand-100") ||
+                  "bg-slate-100 text-slate-700 hover:bg-slate-200 dark:bg-slate-800 dark:text-slate-200 dark:hover:bg-slate-700"
+              ]}
+            >
+              <span aria-hidden="true">⋯</span>
+              <span class="sr-only">{gettext("Post options")}</span>
+              <span :if={post_options_summary(assigns)} class="font-normal" data-post-options-summary>
+                {post_options_summary(assigns)}
+              </span>
+            </button>
+
             <div class="ml-auto flex flex-wrap items-center justify-end gap-x-3 gap-y-2">
-              <%!-- The author's declaration of what language this post is
-              written in (issue #1489, Mastodon's model): preset to the UI
-              locale, quiet — the collapsed control reads "DE". The site's
-              own locales lead as short codes, the curated rest follows by
-              localized name. --%>
-              <select
-                name="post[language]"
-                id={"#{@id}-language"}
-                aria-label={gettext("Post language")}
-                title={gettext("The language this post is written in")}
-                class={compact_select_class()}
-              >
-                <option :for={code <- Languages.site_locales()} value={code} selected={@language == code}>
-                  {String.upcase(code)}
-                </option>
-                <optgroup label={gettext("More languages")}>
-                  <option
-                    :for={{label, code} <- other_language_options()}
-                    value={code}
-                    selected={@language == code}
-                  >
-                    {label}
-                  </option>
-                </optgroup>
-              </select>
+              <%!-- Stays in the row, deliberately: this is a STATEMENT, not a
+              control. A post whose audience is already pinned public — by
+              reposts and replies, or by being written in an organization's
+              name — has to say so where the Post button is, not behind a
+              control somebody would have to think to open. --%>
               <span
                 :if={@audience_locked? or @acting_as}
                 id={"#{@id}-audience-locked"}
@@ -1882,9 +1920,76 @@ defmodule VutuvWeb.PostLive.Composer do
             </div>
           </div>
 
-          <%!-- The "Hide from…" sheet (custom audience) --%>
+          <%!-- The options themselves. The language select renders ONLY while
+          this is open, which is safe because the server keeps `@language` in
+          assigns and `save` falls back to it — the same arrangement the photo
+          rights use, and the reason a save with the panel closed cannot reset
+          a choice made in it. --%>
           <div
-            :if={@preset == "custom"}
+            :if={@options_open?}
+            id={"#{@id}-options"}
+            data-post-options
+            class="mt-3 space-y-3 rounded-xl bg-slate-50 p-4 ring-1 ring-slate-200 dark:bg-slate-800/50 dark:ring-slate-700"
+          >
+            <div class="flex flex-wrap items-center gap-x-3 gap-y-1">
+              <%!-- The author's declaration of what language this post is
+              written in (issue #1489, Mastodon's model): preset to the UI
+              locale. The site's own locales lead as short codes, the curated
+              rest follows by localized name. --%>
+              <label
+                for={"#{@id}-language"}
+                class="text-sm font-medium text-slate-600 dark:text-slate-400"
+              >
+                {gettext("Post language")}
+              </label>
+              <select
+                name="post[language]"
+                id={"#{@id}-language"}
+                title={gettext("The language this post is written in")}
+                class={compact_select_class()}
+              >
+                <option
+                  :for={code <- Languages.site_locales()}
+                  value={code}
+                  selected={@language == code}
+                >
+                  {String.upcase(code)}
+                </option>
+                <optgroup label={gettext("More languages")}>
+                  <option
+                    :for={{label, code} <- other_language_options()}
+                    value={code}
+                    selected={@language == code}
+                  >
+                    {label}
+                  </option>
+                </optgroup>
+              </select>
+            </div>
+
+            <div :if={feed_composer?(assigns) and drafting?(assigns)} class="pt-1">
+              <%!-- The way to throw the draft away, next to the other things
+              that are about the post rather than in it. It is undoable
+              (issue #1893), so it needs no confirmation and no prominence. --%>
+              <button
+                type="button"
+                id={"#{@id}-discard"}
+                phx-click="discard-draft"
+                phx-target={@myself}
+                class="-ml-2 rounded-lg px-2 py-1 text-sm font-semibold text-slate-600 hover:text-red-600 dark:text-slate-400 dark:hover:text-red-400"
+              >
+                {gettext("Discard draft")}
+              </button>
+            </div>
+          </div>
+
+          <%!-- The "Hide from…" sheet, for a post whose audience is already
+          custom. It only ever appears on an edit, and it is the one thing in
+          here big enough to want the room, so it stays its own block below the
+          options rather than nesting inside them — but it is gated on the same
+          disclosure, so a closed composer shows neither. --%>
+          <div
+            :if={@preset == "custom" and @options_open?}
             id={"#{@id}-audience-sheet"}
             class="mt-4 rounded-xl bg-slate-50 p-4 ring-1 ring-slate-200 dark:bg-slate-800/50 dark:ring-slate-700"
           >
