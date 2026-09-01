@@ -160,10 +160,10 @@ defmodule VutuvWeb.PostLive.Composer do
     # page seeds a Markdown blockquote when the reader marked part of the post
     # before pressing Reply (issue #1114). An edited post's own body wins.
     |> assign(:body, (post && post.body) || socket.assigns[:initial_body] || "")
-    # Whether the folded licence/download row is opened. Starts folded even on
-    # edit — the fold names the answers in force, and a reconnect that resets
-    # the flag hides no data (the values live in assigns and the draft).
-    |> assign(:photo_details_open?, false)
+    # Whether the gallery sheet is open — the one place the arrangement, the
+    # fit and the two rights questions live (issue #1892). Closed on mount and
+    # after a reconnect: it holds no data of its own, only a view of assigns.
+    |> assign(:gallery_open?, false)
     |> assign(:tags_value, tags_value(post))
     |> assign(:images, images)
     # The per-photo settings the composer is editing (issue #1104), keyed by
@@ -182,7 +182,6 @@ defmodule VutuvWeb.PostLive.Composer do
     # photo tapped first, highlighted until its partner (or the same photo
     # again, to cancel) is tapped. Event-driven on purpose — tap-tap needs no
     # drag, so it works the same on a phone and a desktop.
-    |> assign(:swap_photo, nil)
     |> assign(:license, initial_license(post, socket.assigns.current_user))
     |> assign(:language, initial_language(post))
     |> assign(:preset, preset)
@@ -419,11 +418,47 @@ defmodule VutuvWeb.PostLive.Composer do
     }
   end
 
+  # The mosaic's own tiles, and the ones it has no room for (issue #1892).
+  # `mosaic_layout/2` caps at five, which is what the post will show — but the
+  # composer holds up to ten, and every one of them has to stay reachable or a
+  # sixth photo could never be removed again.
+  # `@bento` is `false` rather than nil when there is nothing to arrange (the
+  # render builds it with `length(images) > 1 && …`), so both of these match on
+  # the map instead of on the absence — a `nil` clause alone let a
+  # single-photo composer through to `bento.cells` and raised BadMapError.
+  defp gallery_tiles(_images, %{cells: cells}), do: Enum.map(cells, & &1.image)
+  defp gallery_tiles(images, _bento), do: images
+
+  defp overflow_photos(images, %{cells: cells}) do
+    shown = MapSet.new(cells, & &1.image.id)
+    Enum.reject(images, &MapSet.member?(shown, &1.id))
+  end
+
+  defp overflow_photos(_images, _bento), do: []
+
+  # The 12×6 grid the arrangements are written on, and the frame aspect the
+  # hero's orientation picked. Both come straight from `mosaic_layout/2`, so
+  # the composer's mosaic and the published one cannot disagree.
+  defp bento_grid_style(bento) do
+    "aspect-ratio: #{bento.aspect}; " <>
+      "grid-template-columns: repeat(12, 1fr); grid-template-rows: repeat(6, 1fr); " <>
+      "max-height: 32rem"
+  end
+
+  defp bento_cell_style(bento, index) do
+    case Enum.at(bento.cells, index) do
+      %{area: area} -> "grid-area: #{area}"
+      _ -> nil
+    end
+  end
+
   defp photo_settings(photos, %PostImage{} = image),
     do: Map.get(photos, image.id) || photo_defaults(image)
 
-  defp photo_setting(photos, %PostImage{} = image, key),
-    do: photos |> photo_settings(image) |> Map.fetch!(key)
+  # (`photo_setting/3` read one key for the inline caption input and camera
+  # switch under each tile. Issue #1892 moved both into the photo's sheet,
+  # which takes the whole settings map, so the single-key reader has no
+  # callers left.)
 
   # Whether the photo has an accessible name: an alt, or the caption that
   # `PostComponents.photo_alt/1` falls back to. The amber ALT nudge shows
@@ -683,9 +718,29 @@ defmodule VutuvWeb.PostLive.Composer do
 
   # The folded licence/download row (the two rights questions) opens on
   # request and stays open; the fold itself names the answers in force.
-  def handle_event("toggle-photo-details", _params, socket) do
-    {:noreply, assign(socket, :photo_details_open?, not socket.assigns.photo_details_open?)}
+  # The one control for everything that belongs to the SET rather than to a
+  # single photo (issue #1892): the arrangement, the fit, and the two rights
+  # questions that used to sit in a folded row of their own.
+  def handle_event("gallery-open", _params, socket) do
+    {:noreply, socket |> assign(:gallery_open?, true) |> assign(:open_photo, nil)}
   end
+
+  def handle_event("gallery-close", _params, socket) do
+    {:noreply, assign(socket, :gallery_open?, false)}
+  end
+
+  # A drag dropped one tile onto another. The tap-tap swap this replaces needed
+  # a "which photo is marked" mode; a drag says both ends in one gesture, so
+  # the mode is gone with it.
+  def handle_event("photo-swap", %{"from" => from, "to" => to}, socket)
+      when is_binary(from) and is_binary(to) and from != to do
+    {:noreply,
+     socket
+     |> assign(:images, swap_images(socket.assigns.images, from, to))
+     |> schedule_draft_save()}
+  end
+
+  def handle_event("photo-swap", _params, socket), do: {:noreply, socket}
 
   def handle_event("photo-open", %{"id" => id}, socket) do
     # Tapping the open photo's ⚙ again closes it — the same button, so nobody
@@ -764,26 +819,10 @@ defmodule VutuvWeb.PostLive.Composer do
     {:noreply, socket |> assign(:images, reordered ++ missing) |> schedule_draft_save()}
   end
 
-  # The bento preview's tap-tap swap: the first tap marks a photo, the second
-  # trades the two places (tapping the marked photo again unmarks it). Chosen
-  # over drag because it needs no pointer gymnastics on a phone and stays a
-  # plain pair of clicks in a test.
-  def handle_event("mosaic-swap", %{"id" => id}, socket) do
-    case socket.assigns.swap_photo do
-      nil ->
-        {:noreply, assign(socket, :swap_photo, id)}
-
-      ^id ->
-        {:noreply, assign(socket, :swap_photo, nil)}
-
-      other_id ->
-        {:noreply,
-         socket
-         |> assign(:images, swap_images(socket.assigns.images, other_id, id))
-         |> assign(:swap_photo, nil)
-         |> schedule_draft_save()}
-    end
-  end
+  # (`mosaic-swap` was the preview's tap-tap swap — first tap marks a photo,
+  # second trades the places. It needed a "which photo is marked" mode and a
+  # preview to tap in; issue #1892 put the tiles themselves in the mosaic, so a
+  # drag now says both ends in one gesture and `photo-swap` above replaced it.)
 
   # The bento pattern chips ("Muster"). "" is the Auto chip; an unknown name
   # (a stale chip after photos were removed) falls back to auto the same way.
@@ -836,7 +875,6 @@ defmodule VutuvWeb.PostLive.Composer do
            :open_photo,
            if(socket.assigns.open_photo == id, do: nil, else: socket.assigns.open_photo)
          )
-         |> update(:swap_photo, &if(&1 == id, do: nil, else: &1))
          |> schedule_draft_save()}
     end
   end
@@ -1077,8 +1115,7 @@ defmodule VutuvWeb.PostLive.Composer do
     |> assign(:open_photo, nil)
     |> assign(:layout, nil)
     |> assign(:fill?, false)
-    |> assign(:swap_photo, nil)
-    |> assign(:photo_details_open?, false)
+    |> assign(:gallery_open?, false)
     |> assign(:error, nil)
   end
 
@@ -1420,28 +1457,31 @@ defmodule VutuvWeb.PostLive.Composer do
           first, whether or not pictures join it below. --%>
           <.body_editor id={@id} body={@body} post={@post} seed={@editor_seed} />
 
-          <%!-- The photo grid, whenever photos are attached: they come large
-          in their own aspect ratio, with their caption and camera switch in
-          plain sight under every tile — nothing to hunt for behind ⚙, which
-          keeps only the rarer refinements (alt text, download override).
-          Adding more is a tile of its own, the way every photo tool does it.
-          Tiles reorder by pointer drag everywhere — the PhotoStrip hook
-          lifts a tile after a short hold on touch (so ordinary scrolling
-          over the photos keeps working) and on the first movement with a
-          mouse; the first tile leads the mosaic. Each tile carries a DOM id
-          so morphdom keys it: a drag has already moved the node when the
-          server's re-render arrives, and the patch then just settles it. --%>
-          <%!-- No phx-drop-target of its own: the whole form is the drop
-          zone now, and nesting a second one would steal the active state
-          from the overlay. The data-crop-* attributes carry the crop
-          dialog's translated copy (assets/js/photo_crop.js), server-worded
-          like the lightbox labels. --%>
+          <%!-- **The photos ARE the gallery** (issue #1892). They used to be a
+          plain grid with a small live preview of the arrangement further down,
+          so the author tuned a mosaic by looking at a copy of it. Now the
+          tiles are laid out in the very mosaic the feed will draw — the same
+          `mosaic_layout/2` the post card renders from — and dragging one onto
+          another swaps them in it.
+
+          Decisions about one photo used to live in four places (a caption
+          field under the tile, the ⚙ panel, that workshop, and a folded
+          licence row). They live in two now: the photo's own sheet, opened by
+          tapping it, and one **Galerie** control for the choices that belong
+          to the set. What stays on the tile is only what acts directly on the
+          picture — remove and crop.
+
+          No phx-drop-target of its own: the whole form is the drop zone, and
+          nesting a second one would steal the active state from the overlay.
+          The data-crop-* attributes carry the crop dialog's translated copy
+          (assets/js/photo_crop.js), server-worded like the lightbox labels. --%>
           <div
             :if={@images != []}
             id={"#{@id}-images"}
             phx-hook="PhotoStrip"
             phx-target={@myself}
-            class="mt-3 grid grid-cols-2 gap-3 sm:grid-cols-3"
+            class={["mt-3", @bento && "grid gap-1 overflow-hidden rounded-xl"]}
+            style={@bento && bento_grid_style(@bento)}
             data-crop-title={gettext("Crop photo")}
             data-crop-hint={
               gettext("Pick a shape, then drag and zoom. The framed part is what the post shows.")
@@ -1451,237 +1491,97 @@ defmodule VutuvWeb.PostLive.Composer do
             data-crop-reset={gettext("Whole photo")}
             data-crop-zoom={gettext("Zoom")}
           >
+            <%!-- Each tile carries a DOM id so morphdom keys it: a drag has
+            already moved the node when the server's re-render arrives, and the
+            patch then just settles it. --%>
             <div
-              :for={{image, index} <- Enum.with_index(@images)}
+              :for={{image, index} <- Enum.with_index(gallery_tiles(@images, @bento))}
               id={"#{@id}-photo-#{image.id}"}
               data-photo-tile={image.id}
-              class="min-w-0"
+              style={@bento && bento_cell_style(@bento, index)}
+              class="relative min-w-0"
             >
               <.photo_frame
                 image={image}
                 index={index}
                 count={length(@images)}
+                bento?={!!@bento}
+                fill?={@fill?}
                 open?={@open_photo == image.id}
                 alt_missing?={photo_described?(@photos, image) == false}
                 myself={@myself}
               />
+            </div>
+          </div>
 
-              <div class="mt-1.5 space-y-1.5">
-                <%!-- One visible text per photo: the caption. It doubles as
-                the accessible name when no alt is written (photo_alt/1), so
-                the alt input can stay an opt-in refinement in the panel
-                instead of a second required-looking field. Full input size
-                on purpose: a shrunken input is a shrunken touch target. --%>
-                <input
-                  type="text"
-                  name={"photo[#{image.id}][caption]"}
-                  value={photo_setting(@photos, image, :caption)}
-                  phx-debounce="300"
-                  placeholder={gettext("Caption (optional)")}
-                  class={input_class()}
+          <%!-- Photos past the mosaic's five tiles. The post will not show
+          them, and saying so is better than hiding them behind a "+3" the
+          author cannot open: they stay tappable and removable, and dragging
+          one into the mosaic is how it gets seen. --%>
+          <div :if={overflow_photos(@images, @bento) != []} class="mt-2">
+            <p class="mb-1.5 text-xs text-slate-600 dark:text-slate-400">
+              {gettext("Not shown in the gallery — drag one into it to swap.")}
+            </p>
+            <div
+              id={"#{@id}-overflow"}
+              phx-hook="PhotoStrip"
+              phx-target={@myself}
+              class="flex flex-wrap gap-2"
+            >
+              <div
+                :for={image <- overflow_photos(@images, @bento)}
+                id={"#{@id}-photo-#{image.id}"}
+                data-photo-tile={image.id}
+                class="relative w-20"
+              >
+                <.photo_frame
+                  image={image}
+                  index={-1}
+                  count={length(@images)}
+                  bento?={false}
+                  fill?={@fill?}
+                  open?={@open_photo == image.id}
+                  alt_missing?={photo_described?(@photos, image) == false}
+                  myself={@myself}
                 />
-
-                <%!-- The photographer's marquee switch, right where the photo
-                is — behind the tile's ⚙ nobody found it. Only rendered when
-                the file actually carries camera facts, and it shows the very
-                line visitors would see. --%>
-                <label
-                  :if={PostImage.camera_info?(image)}
-                  data-photo-camera-inline={image.id}
-                  class="flex items-start gap-2 py-1 text-sm text-slate-700 dark:text-slate-200"
-                >
-                  <input
-                    type="checkbox"
-                    checked={photo_setting(@photos, image, :show_camera_info)}
-                    phx-click="photo-toggle"
-                    phx-value-id={image.id}
-                    phx-value-field="show_camera_info"
-                    phx-target={@myself}
-                    class={checkbox_class()}
-                  />
-                  <span class="min-w-0">
-                    <span class="font-semibold">{gettext("Show camera settings")}</span>
-                    <span class="mt-0.5 block text-xs text-slate-600 dark:text-slate-400">
-                      {PostComponents.camera_line(image)}
-                    </span>
-                  </span>
-                </label>
               </div>
             </div>
+          </div>
 
-            <%!-- Adding more photos is a tile among tiles. It shares its id
-            with the bottom row's picker (exactly one of the two renders, so
-            the upload input exists exactly once), which is how the feed's
-            camera button always finds a target to click. --%>
+          <%!-- One row under the pictures: the way to add more, and the one
+          control for everything that belongs to the set rather than to a
+          single photo. The chip names what is in force, so the arrangement is
+          readable without opening it. --%>
+          <div :if={@images != []} class="mt-2 flex flex-wrap items-center gap-2">
             <label
               id={"#{@id}-add-photos"}
-              data-photo-add-tile
-              class="flex aspect-square cursor-pointer flex-col items-center justify-center gap-1.5 rounded-lg border-2 border-dashed border-slate-300 text-slate-600 hover:border-brand-400 hover:bg-brand-50/50 hover:text-brand-700 dark:border-slate-700 dark:text-slate-400 dark:hover:border-brand-500 dark:hover:bg-brand-900/20 dark:hover:text-brand-200"
+              class="inline-flex h-9 mb-0 shrink-0 cursor-pointer items-center gap-1.5 whitespace-nowrap rounded-lg bg-slate-100 px-3 text-sm font-semibold text-slate-700 hover:bg-slate-200 dark:bg-slate-800 dark:text-slate-200 dark:hover:bg-slate-700"
             >
-              <.camera_icon class="h-6 w-6" />
-              <span class="px-2 text-center text-xs font-semibold">{gettext("Add photos")}</span>
+              📷 {gettext("Add photos")}
               <.live_file_input upload={@uploads.images} class="sr-only" />
             </label>
-          </div>
 
-          <p
-            :if={length(@images) > 1}
-            class="mt-1.5 text-xs text-slate-600 dark:text-slate-400"
-          >
-            {gettext("Drag to reorder. The first photo leads the gallery.")}
-          </p>
-
-          <%!-- The bento workshop (only with something to arrange): the very
-          mosaic the feed will show, live. Tap two tiles to swap the photos;
-          the chips switch the arrangement ("Muster") — each chip is that
-          arrangement's real geometry in miniature, drawn from the same
-          catalog the mosaic renders from. "Auto" keeps the orientation-aware
-          choice and stays the default. --%>
-          <div :if={@bento} class="mt-4" data-bento-editor>
-            <div class="flex flex-wrap items-baseline justify-between gap-x-3 gap-y-1">
-              <span class="text-sm font-semibold uppercase tracking-wide text-slate-500 dark:text-slate-400">
-                {gettext("Gallery preview")}
-              </span>
-              <span class="text-xs text-slate-600 dark:text-slate-400">
-                {gettext("Tap two photos to swap them.")}
-              </span>
-            </div>
-
-            <div class="mt-2 flex flex-wrap items-center gap-2">
-              <button
-                type="button"
-                phx-click="mosaic-pattern"
-                phx-value-name=""
-                phx-target={@myself}
-                aria-pressed={to_string(is_nil(@layout))}
-                data-bento-pattern="auto"
-                class={[
-                  "h-10 shrink-0 rounded-lg px-3 text-sm font-semibold ring-1",
-                  (is_nil(@layout) &&
-                     "bg-brand-50 text-brand-700 ring-2 ring-brand-500 dark:bg-brand-900/40 dark:text-brand-100") ||
-                    "text-slate-700 ring-slate-300 hover:bg-slate-100 dark:text-slate-200 dark:ring-slate-700 dark:hover:bg-slate-800"
-                ]}
-              >
-                {gettext("Auto")}
-              </button>
-
-              <button
-                :for={variant <- GalleryLayout.variants(min(length(@images), 5))}
-                type="button"
-                phx-click="mosaic-pattern"
-                phx-value-name={variant.name}
-                phx-target={@myself}
-                aria-pressed={to_string(@layout == variant.name)}
-                aria-label={layout_label(variant.name)}
-                title={layout_label(variant.name)}
-                data-bento-pattern={variant.name}
-                class={[
-                  "h-10 w-14 shrink-0 rounded-lg p-1.5",
-                  (@layout == variant.name &&
-                     "bg-brand-50 ring-2 ring-brand-500 dark:bg-brand-900/40") ||
-                    "ring-1 ring-slate-300 hover:bg-slate-100 dark:ring-slate-700 dark:hover:bg-slate-800"
-                ]}
-              >
-                <span
-                  class="grid h-full w-full gap-0.5"
-                  style="grid-template-columns: repeat(12, 1fr); grid-template-rows: repeat(6, 1fr)"
-                >
-                  <span
-                    :for={area <- variant.areas}
-                    style={"grid-area: #{area}"}
-                    class={[
-                      "rounded-[2px]",
-                      (@layout == variant.name && "bg-brand-500") ||
-                        "bg-slate-400 dark:bg-slate-500"
-                    ]}
-                  />
-                </span>
-              </button>
-            </div>
-
-            <%!-- The fit pair: whole photos (default) or tiles filled by
-            their photos, which crops them. Whole is the default on purpose —
-            nobody's picture loses its edges unless the author asks. --%>
-            <div class="mt-2 flex flex-wrap items-center gap-2">
-              <button
-                type="button"
-                phx-click="mosaic-fit"
-                phx-value-fill="false"
-                phx-target={@myself}
-                aria-pressed={to_string(not @fill?)}
-                data-bento-fit="whole"
-                class={[
-                  "h-10 shrink-0 rounded-lg px-3 text-sm font-semibold",
-                  (!@fill? &&
-                     "bg-brand-50 text-brand-700 ring-2 ring-brand-500 dark:bg-brand-900/40 dark:text-brand-100") ||
-                    "text-slate-700 ring-1 ring-slate-300 hover:bg-slate-100 dark:text-slate-200 dark:ring-slate-700 dark:hover:bg-slate-800"
-                ]}
-              >
-                {gettext("Whole photos")}
-              </button>
-              <button
-                type="button"
-                phx-click="mosaic-fit"
-                phx-value-fill="true"
-                phx-target={@myself}
-                aria-pressed={to_string(@fill?)}
-                data-bento-fit="fill"
-                class={[
-                  "h-10 shrink-0 rounded-lg px-3 text-sm font-semibold",
-                  (@fill? &&
-                     "bg-brand-50 text-brand-700 ring-2 ring-brand-500 dark:bg-brand-900/40 dark:text-brand-100") ||
-                    "text-slate-700 ring-1 ring-slate-300 hover:bg-slate-100 dark:text-slate-200 dark:ring-slate-700 dark:hover:bg-slate-800"
-                ]}
-              >
-                {gettext("Fill the tiles")}
-              </button>
-              <span class="text-xs text-slate-600 dark:text-slate-400">
-                {if @fill?,
-                  do: gettext("Each photo covers its tile and is cropped by it."),
-                  else: gettext("Each photo shows whole inside its tile.")}
-              </span>
-            </div>
-
-            <div
-              class="mt-2 grid gap-1 overflow-hidden rounded-lg"
-              style={"aspect-ratio: #{@bento.aspect}; grid-template-columns: repeat(12, 1fr); grid-template-rows: repeat(6, 1fr); max-height: 44rem"}
-              data-bento-preview
+            <button
+              type="button"
+              id={"#{@id}-gallery-open"}
+              phx-click="gallery-open"
+              phx-target={@myself}
+              data-gallery-open
+              class="inline-flex h-9 items-center gap-2 rounded-lg border border-slate-200 px-3 text-sm font-semibold text-slate-700 hover:border-brand-400 hover:text-brand-700 dark:border-slate-700 dark:text-slate-200 dark:hover:border-brand-500 dark:hover:text-brand-200"
             >
-              <button
-                :for={cell <- @bento.cells}
-                type="button"
-                phx-click="mosaic-swap"
-                phx-value-id={cell.image.id}
-                phx-target={@myself}
-                style={"grid-area: #{cell.area}"}
-                aria-pressed={to_string(@swap_photo == cell.image.id)}
-                aria-label={gettext("Swap this photo with another")}
-                title={gettext("Swap this photo with another")}
-                data-bento-tile={cell.image.id}
-                class="relative cursor-pointer overflow-hidden bg-slate-100 ring-1 ring-slate-200 focus-visible:z-10 focus-visible:ring-2 focus-visible:ring-brand-500 dark:bg-slate-800 dark:ring-slate-800"
-              >
-                <img
-                  src={PostImage.url(cell.image, "feed")}
-                  alt=""
-                  class={["h-full w-full", (@fill? && "object-cover") || "object-contain"]}
-                />
-                <span
-                  :if={@swap_photo == cell.image.id}
-                  class="absolute inset-0 flex items-center justify-center bg-brand-600/50 text-3xl font-semibold text-white"
-                  data-bento-swap-marked
-                >
-                  ⇄
-                </span>
-                <span
-                  :if={cell.more > 0}
-                  class="pointer-events-none absolute inset-0 flex items-center justify-center bg-slate-900/55 text-2xl font-semibold text-white"
-                >
-                  +{compact_count(cell.more)}
-                </span>
-              </button>
-            </div>
-          </div>
+              <%!-- Named for what it holds. With one photo there is no
+              arrangement to speak of, and calling that "Gallery" would promise
+              a choice the sheet does not offer — but the licence and the
+              download answer still have to be reachable, which is exactly what
+              the folded row this replaces was for. --%>
+              {(@bento && "#{gettext("Gallery")} · #{layout_label(@layout) || gettext("Automatic")}") ||
+                "#{gettext("Photo details")} · #{PhotoLicense.label(@license)}"}
+            </button>
 
+            <p :if={@bento} class="text-xs text-slate-600 dark:text-slate-400">
+              {gettext("Drag one photo onto another to swap them.")}
+            </p>
+          </div>
           <%!-- In-flight uploads --%>
           <div :for={entry <- @uploads.images.entries} class="mt-2 flex items-center gap-3 text-sm text-slate-600 dark:text-slate-400">
             <span class="truncate">{entry.client_name}</span>
@@ -1700,6 +1600,18 @@ defmodule VutuvWeb.PostLive.Composer do
             </p>
           </div>
 
+          <.gallery_sheet
+            :if={@gallery_open? and @images != []}
+            bento={@bento}
+            images={@images}
+            layout={@layout}
+            fill?={@fill?}
+            license={@license}
+            download_choice={@download_choice}
+            id={"#{@id}-gallery"}
+            myself={@myself}
+          />
+
           <.photo_panel
             :if={open_photo(@images, @open_photo)}
             image={open_photo(@images, @open_photo)}
@@ -1708,119 +1620,6 @@ defmodule VutuvWeb.PostLive.Composer do
             id={"#{@id}-photo-panel"}
             myself={@myself}
           />
-
-          <%!-- The two questions about the pictures themselves — who may reuse
-          them, and what a visitor can actually save — behind one collapsed
-          row that appears with the first photo. Someone stapling a screenshot
-          to a text is not publishing a picture, so they are never made to
-          rule on reuse rights and original files as the price of an ordinary
-          post (the spirit of issue #1157): the fold names the answers in
-          force and can simply be ignored, while a photographer is one tap
-          away. The selects render only while open, so a save with the row
-          folded falls back to the stored value and cannot reset it. --%>
-          <div :if={@images != []} class="mt-3">
-            <button
-              type="button"
-              id={"#{@id}-photo-details-toggle"}
-              data-photo-details-toggle
-              phx-click="toggle-photo-details"
-              phx-target={@myself}
-              aria-expanded={to_string(@photo_details_open?)}
-              aria-controls={"#{@id}-photo-details"}
-              class="-ml-2 inline-flex min-h-9 flex-wrap items-center gap-x-1.5 gap-y-0.5 rounded-lg px-2 py-1.5 text-left text-sm font-medium text-slate-600 hover:bg-slate-100 hover:text-slate-900 dark:text-slate-400 dark:hover:bg-slate-800 dark:hover:text-slate-100"
-            >
-              <span aria-hidden="true" class="text-xs">
-                {if @photo_details_open?, do: "▾", else: "▸"}
-              </span>
-              {gettext("Photo details")}
-              <span class="font-normal text-slate-500 dark:text-slate-400">
-                · {PhotoLicense.label(@license)} · {download_label(@download_choice)}
-              </span>
-            </button>
-
-            <div :if={@photo_details_open?} id={"#{@id}-photo-details"} class="mt-2 space-y-2">
-              <div class="flex flex-wrap items-center gap-x-3 gap-y-1">
-                <label
-                  for={"#{@id}-license"}
-                  class="text-sm font-medium text-slate-600 dark:text-slate-400"
-                >
-                  {gettext("Licence")}
-                </label>
-                <select
-                  name="post[license]"
-                  id={"#{@id}-license"}
-                  title={gettext("Who may reuse these photos")}
-                  class={compact_select_class()}
-                >
-                  <option
-                    :for={license <- PhotoLicense.values()}
-                    value={license}
-                    selected={@license == license}
-                  >
-                    {PhotoLicense.label(license)}
-                  </option>
-                </select>
-              </div>
-
-              <%!-- What a visitor gets is the licence's practical half, and
-              it is one answer for the whole set. The panel keeps the
-              per-photo override, so a post whose photos disagree reads
-              "Different per photo" rather than pretending the set agrees. --%>
-              <div class="flex flex-wrap items-center gap-x-3 gap-y-1">
-                <label
-                  for={"#{@id}-download"}
-                  class="text-sm font-medium text-slate-600 dark:text-slate-400"
-                >
-                  {gettext("Download")}
-                </label>
-                <select
-                  name="post[download]"
-                  id={"#{@id}-download"}
-                  phx-change="download-choice"
-                  phx-target={@myself}
-                  title={gettext("What a visitor can save")}
-                  class={compact_select_class()}
-                >
-                  <option value="none" selected={@download_choice == "none"}>
-                    {download_label("none")}
-                  </option>
-                  <option value="clean" selected={@download_choice == "clean"}>
-                    {download_label("clean")}
-                  </option>
-                  <option value="exact" selected={@download_choice == "exact"}>
-                    {download_label("exact")}
-                  </option>
-                  <option :if={@download_choice == "mixed"} value="mixed" selected>
-                    {download_label("mixed")}
-                  </option>
-                </select>
-              </div>
-
-              <%!-- The two things that make the choice an informed one, each
-              shown at the moment it applies rather than as a standing notice
-              nobody reads. --%>
-              <p
-                :if={@download_choice == "exact" and located_photos(@images) > 0}
-                class="rounded-lg bg-amber-50 px-3 py-2 text-xs text-amber-800 ring-1 ring-amber-200 dark:bg-amber-900/30 dark:text-amber-200 dark:ring-amber-800"
-                data-download-gps-warning
-              >
-                {ngettext(
-                  "This photo carries the location it was taken at, and the exact file hands it over.",
-                  "Some of these photos carry the location they were taken at, and the exact file hands it over.",
-                  located_photos(@images)
-                )}
-              </p>
-              <p
-                :if={@download_choice == "clean" and uncleanable?(@images)}
-                class="rounded-lg bg-amber-50 px-3 py-2 text-xs text-amber-800 ring-1 ring-amber-200 dark:bg-amber-900/30 dark:text-amber-200 dark:ring-amber-800"
-                data-download-clean-notice
-              >
-                {gettext(
-                  "A file whose format cannot be cleaned is handed out exactly as uploaded."
-                )}
-              </p>
-            </div>
-          </div>
 
           <%!-- Tags get their own full-width row. --%>
           <.tag_input
@@ -2139,18 +1938,31 @@ defmodule VutuvWeb.PostLive.Composer do
   attr(:count, :integer, required: true)
   attr(:open?, :boolean, required: true)
   attr(:alt_missing?, :boolean, required: true)
+  attr(:bento?, :boolean, default: false)
+  attr(:fill?, :boolean, default: false)
   attr(:myself, :any, required: true)
 
   defp photo_frame(assigns) do
-    assigns = assign(assigns, :ratio_style, natural_ratio(assigns.image))
+    # Inside the mosaic the cell decides the shape — that IS the arrangement —
+    # so the tile fills it and the picture is fitted by `@fill?`, exactly as
+    # the published gallery does it. Outside it (one photo, or one the mosaic
+    # has no room for) the photo's own ratio decides, as before.
+    assigns =
+      assign(
+        assigns,
+        :ratio_style,
+        if(assigns.bento?, do: nil, else: natural_ratio(assigns.image))
+      )
 
     ~H"""
     <div
       data-photo-drag={@image.id}
       style={@ratio_style}
       class={[
-        "group relative overflow-hidden rounded-lg ring-1",
-        !@ratio_style && "aspect-square",
+        "group relative overflow-hidden ring-1",
+        @bento? && "h-full w-full",
+        !@bento? && "rounded-lg",
+        !@bento? && !@ratio_style && "aspect-square",
         (@open? && "ring-2 ring-brand-500") || "ring-slate-200 dark:ring-slate-800"
       ]}
     >
@@ -2177,7 +1989,7 @@ defmodule VutuvWeb.PostLive.Composer do
           src={PostImage.url(@image, "feed")}
           alt=""
           draggable="false"
-          class="h-full w-full object-cover"
+          class={["h-full w-full", (@bento? && !@fill? && "object-contain") || "object-cover"]}
         />
       </button>
 
@@ -2329,6 +2141,213 @@ defmodule VutuvWeb.PostLive.Composer do
   end
 
   @doc """
+  Everything that belongs to the SET of photos rather than to one of them
+  (issue #1892): the arrangement, how the pictures sit in it, and the two
+  rights questions.
+
+  It exists because those three used to be three separate places — a bento
+  workshop with its own live preview, a folded "Photo details" row, and the
+  post-wide download select inside it — stacked down the composer under a grid
+  that was itself a fourth. The tiles are the mosaic now, so the workshop had
+  nothing left to preview; what remains is a set of choices, and a set of
+  choices is a sheet you open when you want it.
+
+  The licence and download selects render only while it is open, so a save with
+  the sheet closed falls back to the stored value and cannot reset them — the
+  same guarantee the folded row gave.
+  """
+  attr(:bento, :any, required: true)
+  attr(:images, :list, required: true)
+  attr(:layout, :any, required: true)
+  attr(:fill?, :boolean, required: true)
+  attr(:license, :string, required: true)
+  attr(:download_choice, :string, required: true)
+  attr(:id, :string, required: true)
+  attr(:myself, :any, required: true)
+
+  def gallery_sheet(assigns) do
+    ~H"""
+    <div
+      id={@id}
+      data-gallery-sheet
+      class="mt-3 rounded-xl bg-slate-50 p-4 ring-1 ring-slate-200 dark:bg-slate-800/50 dark:ring-slate-700"
+    >
+      <div class="flex items-start justify-between gap-3">
+        <h3 class="text-sm font-semibold uppercase tracking-wide text-slate-500 dark:text-slate-400">
+          {(@bento && gettext("Gallery")) || gettext("Photo details")}
+        </h3>
+        <button
+          type="button"
+          phx-click="gallery-close"
+          phx-target={@myself}
+          aria-label={gettext("Close")}
+          class="-mt-1 shrink-0 rounded-lg px-2 py-1 text-sm font-semibold text-slate-500 hover:bg-slate-100 dark:hover:bg-slate-800"
+        >
+          ✕
+        </button>
+      </div>
+
+      <%!-- Each chip is that arrangement's real geometry in miniature, drawn
+      from the same catalog the mosaic renders from — so the choice is made by
+      looking at the shape rather than by reading a name for it. Only with
+      something to arrange: one photo has no arrangement, and the two rights
+      questions below are then the whole sheet. --%>
+      <div :if={@bento} class="mt-3 flex flex-wrap items-center gap-2">
+        <button
+          type="button"
+          phx-click="mosaic-pattern"
+          phx-value-name=""
+          phx-target={@myself}
+          aria-pressed={to_string(is_nil(@layout))}
+          data-bento-pattern="auto"
+          class={[
+            "h-10 shrink-0 rounded-lg px-3 text-sm font-semibold ring-1",
+            (is_nil(@layout) &&
+               "bg-brand-50 text-brand-700 ring-2 ring-brand-500 dark:bg-brand-900/40 dark:text-brand-100") ||
+              "text-slate-700 ring-slate-300 hover:bg-slate-100 dark:text-slate-200 dark:ring-slate-700 dark:hover:bg-slate-800"
+          ]}
+        >
+          {gettext("Automatic")}
+        </button>
+
+        <button
+          :for={variant <- GalleryLayout.variants(min(length(@images), 5))}
+          type="button"
+          phx-click="mosaic-pattern"
+          phx-value-name={variant.name}
+          phx-target={@myself}
+          aria-pressed={to_string(@layout == variant.name)}
+          aria-label={layout_label(variant.name)}
+          title={layout_label(variant.name)}
+          data-bento-pattern={variant.name}
+          class={[
+            "h-10 w-14 shrink-0 rounded-lg p-1.5",
+            (@layout == variant.name &&
+               "bg-brand-50 ring-2 ring-brand-500 dark:bg-brand-900/40") ||
+              "ring-1 ring-slate-300 hover:bg-slate-100 dark:ring-slate-700 dark:hover:bg-slate-800"
+          ]}
+        >
+          <span
+            class="grid h-full w-full gap-0.5"
+            style="grid-template-columns: repeat(12, 1fr); grid-template-rows: repeat(6, 1fr)"
+          >
+            <span
+              :for={area <- variant.areas}
+              style={"grid-area: #{area}"}
+              class={[
+                "rounded-[2px]",
+                (@layout == variant.name && "bg-brand-500") || "bg-slate-400 dark:bg-slate-500"
+              ]}
+            />
+          </span>
+        </button>
+      </div>
+
+      <%!-- Whole photos (default) or tiles filled by their photos, which crops
+      them. Whole is the default on purpose — nobody's picture loses its edges
+      unless the author asks. --%>
+      <div :if={@bento} class="mt-3 flex flex-wrap items-center gap-2">
+        <button
+          type="button"
+          phx-click="mosaic-fit"
+          phx-value-fill="false"
+          phx-target={@myself}
+          aria-pressed={to_string(not @fill?)}
+          data-bento-fit="whole"
+          class={[
+            "h-10 shrink-0 rounded-lg px-3 text-sm font-semibold",
+            (!@fill? &&
+               "bg-brand-50 text-brand-700 ring-2 ring-brand-500 dark:bg-brand-900/40 dark:text-brand-100") ||
+              "text-slate-700 ring-1 ring-slate-300 hover:bg-slate-100 dark:text-slate-200 dark:ring-slate-700 dark:hover:bg-slate-800"
+          ]}
+        >
+          {gettext("Whole photos")}
+        </button>
+        <button
+          type="button"
+          phx-click="mosaic-fit"
+          phx-value-fill="true"
+          phx-target={@myself}
+          aria-pressed={to_string(@fill?)}
+          data-bento-fit="fill"
+          class={[
+            "h-10 shrink-0 rounded-lg px-3 text-sm font-semibold",
+            (@fill? &&
+               "bg-brand-50 text-brand-700 ring-2 ring-brand-500 dark:bg-brand-900/40 dark:text-brand-100") ||
+              "text-slate-700 ring-1 ring-slate-300 hover:bg-slate-100 dark:text-slate-200 dark:ring-slate-700 dark:hover:bg-slate-800"
+          ]}
+        >
+          {gettext("Fill the tiles")}
+        </button>
+      </div>
+
+      <div class={[
+        "mt-4 space-y-2",
+        @bento && "border-t border-slate-200 pt-3 dark:border-slate-700"
+      ]}>
+        <div class="flex flex-wrap items-center gap-x-3 gap-y-1">
+          <label for={"#{@id}-license"} class="text-sm font-medium text-slate-600 dark:text-slate-400">
+            {gettext("Licence")}
+          </label>
+          <select
+            name="post[license]"
+            id={"#{@id}-license"}
+            title={gettext("Who may reuse these photos")}
+            class={compact_select_class()}
+          >
+            <option :for={license <- PhotoLicense.values()} value={license} selected={@license == license}>
+              {PhotoLicense.label(license)}
+            </option>
+          </select>
+        </div>
+
+        <div class="flex flex-wrap items-center gap-x-3 gap-y-1">
+          <label for={"#{@id}-download"} class="text-sm font-medium text-slate-600 dark:text-slate-400">
+            {gettext("Download")}
+          </label>
+          <select
+            name="post[download]"
+            id={"#{@id}-download"}
+            phx-change="download-choice"
+            phx-target={@myself}
+            title={gettext("What a visitor can save")}
+            class={compact_select_class()}
+          >
+            <option value="none" selected={@download_choice == "none"}>{download_label("none")}</option>
+            <option value="clean" selected={@download_choice == "clean"}>{download_label("clean")}</option>
+            <option value="exact" selected={@download_choice == "exact"}>{download_label("exact")}</option>
+            <option :if={@download_choice == "mixed"} value="mixed" selected>
+              {download_label("mixed")}
+            </option>
+          </select>
+        </div>
+
+        <%!-- The two things that make the choice an informed one, each shown at
+        the moment it applies rather than as a standing notice nobody reads. --%>
+        <p
+          :if={@download_choice == "exact" and located_photos(@images) > 0}
+          class="rounded-lg bg-amber-50 px-3 py-2 text-xs text-amber-800 ring-1 ring-amber-200 dark:bg-amber-900/30 dark:text-amber-200 dark:ring-amber-800"
+          data-download-gps-warning
+        >
+          {ngettext(
+            "This photo carries the location it was taken at, and the exact file hands it over.",
+            "Some of these photos carry the location they were taken at, and the exact file hands it over.",
+            located_photos(@images)
+          )}
+        </p>
+        <p
+          :if={@download_choice == "clean" and uncleanable?(@images)}
+          class="rounded-lg bg-amber-50 px-3 py-2 text-xs text-amber-800 ring-1 ring-amber-200 dark:bg-amber-900/30 dark:text-amber-200 dark:ring-amber-800"
+          data-download-clean-notice
+        >
+          {gettext("A file whose format cannot be cleaned is handed out exactly as uploaded.")}
+        </p>
+      </div>
+    </div>
+    """
+  end
+
+  @doc """
   The per-photo panel: the two texts and the two opt-ins for one photo
   (issue #1104).
 
@@ -2378,6 +2397,20 @@ defmodule VutuvWeb.PostLive.Composer do
           class="h-16 w-16 shrink-0 rounded-lg object-cover ring-1 ring-slate-200 dark:ring-slate-800"
         />
         <div class="min-w-0 flex-1 space-y-2">
+          <%!-- The caption and the camera switch moved in here with issue
+          #1892: they used to sit inline under the tile, which is what made a
+          single photo's settings live in two places at once. There is exactly
+          one input of each name now, which is what keeps the submit honest. --%>
+          <input
+            type="text"
+            name={"photo[#{@image.id}][caption]"}
+            value={@settings.caption}
+            phx-debounce="300"
+            placeholder={gettext("Caption (optional)")}
+            class={input_class()}
+            data-photo-caption={@image.id}
+          />
+
           <input
             type="text"
             name={"photo[#{@image.id}][alt]"}
@@ -2386,6 +2419,28 @@ defmodule VutuvWeb.PostLive.Composer do
             placeholder={gettext("Describe the photo for people who can't see it")}
             class={input_class()}
           />
+
+          <label
+            :if={PostImage.camera_info?(@image)}
+            data-photo-camera-inline={@image.id}
+            class="flex items-start gap-2 py-1 text-sm text-slate-700 dark:text-slate-200"
+          >
+            <input
+              type="checkbox"
+              checked={@settings.show_camera_info}
+              phx-click="photo-toggle"
+              phx-value-id={@image.id}
+              phx-value-field="show_camera_info"
+              phx-target={@myself}
+              class={checkbox_class()}
+            />
+            <span class="min-w-0">
+              <span class="font-semibold">{gettext("Show camera settings")}</span>
+              <span class="mt-0.5 block text-xs text-slate-600 dark:text-slate-400">
+                {PostComponents.camera_line(@image)}
+              </span>
+            </span>
+          </label>
         </div>
         <button
           type="button"
