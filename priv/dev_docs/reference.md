@@ -238,6 +238,19 @@ auth "$API/feed?cursor=NEXT_CURSOR_FROM_LAST_PAGE"
 }
 ```
 
+A feed row is a **conversation, not a post**: when several posts of one thread
+reach the same page they arrive as one entry, and `thread` carries the ones it
+answers, oldest first (`[]` for a standalone post). Read it, or you will show a
+reply and never show the post it replied to — no other page of the feed carries
+it.
+
+```json
+{"id": "0190…", "excerpt": "…", "thread": [
+  {"id": "018f…", "url": "…", "author": {"name": "…", "username": "…"},
+   "published_on": "2026-06-11", "body_markdown": "…"}
+]}
+```
+
 A feed also carries posts and replies from **other networks** — from accounts
 the member follows out there, from things somebody here reshared, and from what
 a followed account boosted. Such an entry is marked `"network": "fediverse"` and

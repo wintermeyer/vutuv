@@ -733,8 +733,17 @@ defmodule VutuvWeb.AgentDocs.Text do
   defp verified_suffix(_link), do: ""
 
   defp post_lines(post) do
-    "* #{post.published_on}#{Markdown.pin_suffix(post)}#{Markdown.repost_suffix(post)}: " <>
-      "#{Markdown.entry_label(post)}#{Markdown.quote_suffix(post)}\n  #{post.url}"
+    line =
+      "* #{post.published_on}#{Markdown.pin_suffix(post)}#{Markdown.repost_suffix(post)}: " <>
+        "#{Markdown.entry_label(post)}#{Markdown.quote_suffix(post)}\n  #{post.url}"
+
+    Enum.join([line | Enum.map(Markdown.thread_context(post), &thread_context_lines/1)], "\n")
+  end
+
+  # The posts a feed row answers (issue #1880), oldest first — indented one
+  # level under it, the same shape the entry above carries.
+  defp thread_context_lines(post) do
+    "  * #{post.published_on} #{post.author}: #{Markdown.entry_label(post)}\n    #{post.url}"
   end
 
   defp person_line(person, prefix \\ "* ") do

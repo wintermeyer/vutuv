@@ -23,6 +23,17 @@ defmodule VutuvWeb.OrganizationLive.Feed do
   existed (issue #1482) — the same split `VutuvWeb.PostLive.Feed` and the tag
   timeline make.
 
+  **A row is a conversation, and it is drawn as one** (issue #1880). Several
+  posts of one thread reaching the same page arrive as a single entry with the
+  rest on `:ancestors`; this view drew the carrier alone, so a post a followed
+  member had answered simply left the feed — the cursor had already walked past
+  its own row, so no later page brought it back. It renders the same
+  `<.post_thread_entry>` the member feed does, which was the way out the note
+  above `Posts.collapse_threads/1` named. What it still does not pay for is
+  `threads: true`: no thread root is fetched and no reply from another network
+  is woven in, so a row whose parent never reached this page keeps its plain
+  "Replying to" banner.
+
   Embedded via `live_render` from `VutuvWeb.OrganizationController`, which gates
   it before this ever mounts.
   """
@@ -30,7 +41,7 @@ defmodule VutuvWeb.OrganizationLive.Feed do
   use VutuvWeb, :live_view
 
   import VutuvWeb.OrganizationComponents, only: [manage_header: 1]
-  import VutuvWeb.PostComponents, only: [post_card: 1, remote_post_card: 1]
+  import VutuvWeb.PostComponents, only: [post_thread_entry: 1, remote_post_card: 1]
 
   alias Vutuv.Fediverse
   alias Vutuv.Organizations
@@ -77,13 +88,18 @@ defmodule VutuvWeb.OrganizationLive.Feed do
   end
 
   # One engagement read for the whole page instead of one per card: without a
-  # handed-in map every `<.post_card>`'s action bar falls back to its own
+  # handed-in map every card's action bar falls back to its own
   # `Posts.post_engagement/2`, which is twenty extra round trips at the default
-  # feed limit. Remote entries carry no vutuv post, so they are skipped.
+  # feed limit.
+  #
+  # Read through `Posts.thread_posts/1`, which answers the carrier **and** the
+  # posts folded under it — every one of those draws a card with its own bar, so
+  # a list of carriers alone left each nested card to load its own. It answers
+  # `[]` for a row from another network, which carries no vutuv post at all.
   defp engagement_map(entries, viewer) do
     entries
-    |> Enum.reject(&Posts.remote_feed_entry?/1)
-    |> Enum.map(& &1.post.id)
+    |> Enum.flat_map(&Posts.thread_posts/1)
+    |> Enum.map(& &1.id)
     |> Posts.post_engagement_map(viewer)
   end
 
@@ -167,13 +183,23 @@ defmodule VutuvWeb.OrganizationLive.Feed do
               />
             </.card>
           <% else %>
-            <.post_card
+            <%!-- A row is a **conversation**, not a post (issue #1880).
+            `Posts.collapse_threads/1` folds every post of one thread that
+            reached this page into a single entry and hangs the rest off
+            `:ancestors`; the flat `<.post_card>` here drew only the carrier, so
+            a post a followed member had answered left this feed for good — the
+            cursor had already walked past its own row. The same component the
+            member feed uses stacks them, so a page reads a thread the way its
+            publishers read theirs. --%>
+            <.post_thread_entry
               entry_id={entry.id}
               post={entry.post}
+              ancestors={entry[:ancestors]}
               engagement={@engagement[entry.post.id]}
+              ancestor_engagement={@engagement}
               viewer={@current_user}
               conn_or_socket={@socket}
-              mode={:preview}
+              surface={:card}
             />
           <% end %>
         <% end %>

@@ -3608,6 +3608,28 @@ defmodule Vutuv.Posts do
   def thread_posts(_entry), do: []
 
   @doc """
+  Every record a feed row puts on the page, **in reading order** — the folded
+  conversation oldest-first, or the one thing from another network.
+
+  `thread_posts/1` answers the same question as a *set*, for the membership
+  checks (a content filter, an id list); this answers it as the *list a
+  presenter renders*, which is why the order matters and why the remote kinds
+  are in it.
+
+  **It is the contract every feed presenter owes.** Whatever this returns has to
+  appear in what the caller renders — the HTML card, the agent doc, the API
+  entry, the Mastodon status alike. Reading `entry.post` instead silently drops
+  the posts `collapse_threads/1` folded into the row, and silently is the word:
+  `/feed.md|txt|json|xml` and `/api/2.0/feed` each showed a reply while the post
+  it answered was on no page at all, beside an HTML feed that drew the whole
+  conversation (issue #1880). `feed_presenter_coverage_test.exs` walks this list
+  through every presenter, so a tenth source or a fourth row shape fails the
+  build instead of quietly losing a post.
+  """
+  def feed_subjects(%{post: %Post{} = post} = entry), do: (entry[:ancestors] || []) ++ [post]
+  def feed_subjects(entry), do: [remote_subject(entry)]
+
+  @doc """
   The records from **another network** a feed entry draws a card for: the cached
   post an answer answers (`:remote_parents`) and the replies woven into its
   thread (`:remote_replies`).

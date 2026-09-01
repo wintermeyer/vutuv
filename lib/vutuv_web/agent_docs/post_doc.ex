@@ -324,7 +324,14 @@ defmodule VutuvWeb.AgentDocs.PostDoc do
       # content at all. Only released images count, exactly as on the page.
       pictures: picture_count(post),
       reposted_by: reposted_name(entry),
-      reposters: reposter_names(entry)
+      reposters: reposter_names(entry),
+      # The posts this row answers, oldest first (issue #1880). A feed entry is
+      # a conversation, not a post — `Posts.collapse_threads/1` folds every post
+      # of one thread that reached the page into a single row, and the HTML card
+      # stacks them above the answer. This document drew the answer alone, so
+      # the post it replied to was on no page of the feed at all and never came
+      # back: the cursor had already walked past it.
+      thread: thread_context(entry)
     }
   end
 
@@ -360,8 +367,26 @@ defmodule VutuvWeb.AgentDocs.PostDoc do
       # agent reading this timeline has to be able to tell a member's own post
       # from somebody else's, published elsewhere and cached here.
       network: "fediverse",
-      account: author.handle
+      account: author.handle,
+      # A row from another network is one record; nothing is folded into it.
+      # The key is here rather than absent so a client reads one entry shape.
+      thread: []
     }
+  end
+
+  # The conversation folded into a local row, oldest first — each post as the
+  # same four facts the entry line carries, so a reader meets one shape twice
+  # rather than two. `Posts.feed_subjects/1` is what says this must exist.
+  defp thread_context(entry) do
+    Enum.map(entry[:ancestors] || [], fn post ->
+      %{
+        id: post.id,
+        url: AgentDocs.abs_url(Posts.path(post)),
+        author: UserHelpers.author_name(post),
+        published_on: post.published_on,
+        excerpt: PostTeaser.line(post)
+      }
+    end)
   end
 
   # Who put this row in the reader's feed, for all three row shapes at once —

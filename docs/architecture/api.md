@@ -140,6 +140,20 @@ API profile responses carry the member's `noindex?`/`noai?` consent flags
 in-band (the public `.json`/`.md` siblings signal the same via
 `Content-Signal`/`X-Robots-Tag` headers)
 
+**A feed row is a conversation, and every presenter owes the whole of it.**
+`Posts.collapse_threads/1` folds every post of one thread that reached the page
+into a single entry and hangs the rest off `:ancestors`, so a presenter that
+reads `entry.post` shows the answer and drops what it answers — and the cursor
+has already walked past that post's own row, so no later page brings it back.
+The HTML feed stacked the conversation; `/feed.md|txt|json|xml` and
+`/api/2.0/feed` each showed one post of two, silently, until issue #1880. Both
+now carry it as a `thread` array (oldest first, `[]` for a standalone row), and
+`/organizations/:slug/feed` renders the same `<.post_thread_entry>` the member
+feed does rather than a flat card. `Posts.feed_subjects/1` is the contract —
+what it returns for a row has to appear in what the presenter renders — and
+`feed_presenter_coverage_test.exs` walks one fixture per source through all of
+them, so a tenth source fails the build instead of quietly losing a post.
+
 **A feed row is not always a vutuv post, and `GET /feed` says so per entry.**
 Four of the timeline's nine sources carry something from another network — a
 cached post, a reply somebody here reshared, a boost — and none of them holds a

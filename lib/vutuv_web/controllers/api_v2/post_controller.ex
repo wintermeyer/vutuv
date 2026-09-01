@@ -218,8 +218,26 @@ defmodule VutuvWeb.ApiV2.PostController do
       # `reposted_by` stays the newest reposter (unchanged shape); `reposters`
       # adds the whole follow-scoped roster behind the entry, newest first.
       reposted_by: entry[:reposted_by] && Vutuv.Identity.ref(entry[:reposted_by]),
-      reposters: Enum.map(reposters, &Vutuv.Identity.ref/1)
+      reposters: Enum.map(reposters, &Vutuv.Identity.ref/1),
+      # The posts this entry answers, oldest first (issue #1880). A feed row is
+      # a conversation: `Posts.collapse_threads/1` folds every post of one
+      # thread that reached the page into a single row, and reading `post`
+      # alone dropped the rest — a client saw the answer and no page of the
+      # feed ever carried the post it answered.
+      thread: thread_entries(entry)
     }
+  end
+
+  defp thread_entries(entry) do
+    Enum.map(entry[:ancestors] || [], fn post ->
+      %{
+        id: post.id,
+        url: VutuvWeb.AgentDocs.abs_url(Posts.path(post)),
+        author: Vutuv.Identity.ref(Posts.author(post)),
+        published_on: post.published_on,
+        body_markdown: post.body
+      }
+    end)
   end
 
   # Both remote row shapes answer the same eight keys — only where each fact is
@@ -238,7 +256,10 @@ defmodule VutuvWeb.ApiV2.PostController do
       body_text: Posts.text(subject),
       network: "fediverse",
       reposted_by: resharer,
-      reposters: List.wrap(resharer)
+      reposters: List.wrap(resharer),
+      # One record, nothing folded into it — the key is present so a client
+      # reads one entry shape rather than two.
+      thread: []
     }
   end
 
