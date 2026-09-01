@@ -347,14 +347,22 @@ defmodule VutuvWeb.PhotoComposerTest do
       assert [%{caption: "Abendlicht", alt: "Ein Sonnenuntergang"}] = post.images
     end
 
-    test "the ✕ closes the composer and keeps the draft, photos included", %{
+    test "the ✕ asks over a draft, and keeping it collapses without losing anything", %{
       conn: conn,
       user: user
     } do
       live = open_composer(conn)
       image = upload_photo!(live, user)
 
-      live |> element(~s(#composer-form button[phx-click="close-composer"])) |> render_click()
+      # With something to lose the ✕ no longer guesses (issue #1893): it used
+      # to collapse and quietly keep the draft, which is the right answer said
+      # so silently that anyone meaning to discard pressed it and was
+      # surprised.
+      refute has_element?(live, ~s(#composer-form button[phx-click="close-composer"]))
+      live |> element(~s(#composer-form button[phx-click="close-request"])) |> render_click()
+      assert has_element?(live, "[data-close-confirm]")
+
+      live |> element("[data-keep-draft]") |> render_click()
 
       # Collapsed, not discarded: the pending row survives, and reopening
       # shows the photo right where it was left.
@@ -364,9 +372,20 @@ defmodule VutuvWeb.PhotoComposerTest do
       live |> element("#open-composer") |> render_click()
 
       assert has_element?(live, ~s([data-photo-tile="#{image.id}"]))
+      refute has_element?(live, "[data-close-confirm]")
     end
 
-    test "Discard draft really discards: rows deleted, form empty, panel collapsed", %{
+    test "with nothing to lose the ✕ just closes", %{conn: conn} do
+      live = open_composer(conn)
+
+      # Nothing to ask about, so the plain close still bubbles to the feed.
+      assert has_element?(live, ~s(#composer-form button[phx-click="close-composer"]))
+      live |> element(~s(#composer-form button[phx-click="close-composer"])) |> render_click()
+
+      assert has_element?(live, "#composer-panel.hidden")
+    end
+
+    test "Discard clears the form and collapses the panel, and can be undone", %{
       conn: conn,
       user: user
     } do
@@ -384,12 +403,39 @@ defmodule VutuvWeb.PhotoComposerTest do
 
       live |> element("#composer-discard") |> render_click()
 
-      assert reload(image) == nil
       assert has_element?(live, "#composer-panel.hidden")
 
       live |> element("#open-composer") |> render_click()
-
       refute has_element?(live, "[data-photo-tile]")
+
+      # The row survives the discard on purpose (issue #1893): it is what undo
+      # gives back. An abandoned pending row is swept after a day, which is
+      # the same arrangement every other unfinished upload already relies on.
+      assert reload(image)
+
+      assert has_element?(live, "[data-draft-discarded]")
+      live |> element("[data-undo-discard]") |> render_click()
+
+      assert has_element?(live, ~s([data-photo-tile="#{image.id}"]))
+      refute has_element?(live, "[data-draft-discarded]")
+
+      # And the caption came back with it — a discard that returned only the
+      # words would be its own kind of loss.
+      open_panel(live, image)
+      assert render(live) =~ "Gleich weg"
+    end
+
+    test "letting the undo window pass leaves the draft gone", %{conn: conn, user: user} do
+      live = open_composer(conn)
+      image = upload_photo!(live, user)
+
+      live |> element("#composer-discard") |> render_click()
+      live |> element("#open-composer") |> render_click()
+
+      live |> element(~s([data-draft-discarded] [phx-click="dismiss-discard"])) |> render_click()
+
+      refute has_element?(live, "[data-draft-discarded]")
+      refute has_element?(live, ~s([data-photo-tile="#{image.id}"]))
     end
 
     test "the discard control shows only while there is something to lose", %{conn: conn} do
