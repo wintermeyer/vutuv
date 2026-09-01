@@ -1868,16 +1868,22 @@ defmodule VutuvWeb.PostComponents do
   # A tag we do not carry still gets its chip, as a plain span: dropping it
   # would silently swallow part of what the author wrote, and rendering it
   # differently would say something about the tag that is really about us.
+  #
+  # The chip shows `text` (the tag as its author typed it, `/Halle` and all)
+  # and is looked up by `name` (the tag that text names) — see
+  # `Markdown.split_trailing_hashtags/1`. The two differ exactly where a tag
+  # row glues something to a tag, and showing `name` there would delete the
+  # difference from the card.
   defp remote_tag_chips([]), do: []
 
   defp remote_tag_chips(hashtags) do
-    linkable = Tags.linkable_slugs(hashtags)
+    linkable = hashtags |> Enum.map(& &1.name) |> Tags.linkable_slugs()
 
-    Enum.map(hashtags, fn hashtag ->
+    Enum.map(hashtags, fn %{name: name, text: text} ->
       # The slug we link is the one the gate hands back, which is the canonical
       # tag's when the remote server wrote an alternative name (issue #1338).
-      slug = Map.get(linkable, String.downcase(hashtag))
-      %{name: hashtag, path: slug && ~p"/tags/#{slug}"}
+      slug = Map.get(linkable, String.downcase(name))
+      %{name: text, path: slug && ~p"/tags/#{slug}"}
     end)
   end
 

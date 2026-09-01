@@ -352,7 +352,18 @@ every activity of a member it finds no key for, silently.
     — one we do not carry stays a plain chip rather than being dropped. Only a
     **closing** run is taken (blank lines between hashtag lines go with it); a
     hashtag inside a sentence, or a hashtag line the author wrote in the middle
-    of a post, stays exactly where they put it and still links inline. The
+    of a post, stays exactly where they put it and still links inline. A token
+    only has to **begin** with a hashtag, because a tag row is typed by hand
+    and glues things to its tags (tagesschau closes on
+    `#FlughafenLeipzig/Halle`), and demanding the whole token be one hashtag
+    left the whole line in the body as a run of blue words. **Lifting is a
+    move, never a delete**, so the chip shows the tag as it was typed and links
+    the tag that text names — `FlughafenLeipzig/Halle` on the pill,
+    `/tags/flughafenleipzig` behind it — and tags run together in one token
+    (`#Nepal#Rockfall#FlashFlood`) become one chip each. A token carrying a URL
+    or an address disqualifies its line instead: authors write their closing
+    link straight onto the last tag (`#linuxhttps://flathub.org/apps/…`), and
+    that line is better left where they put it than folded into a pill. The
     grammar is Unicode-wide (`#München` is an ordinary German hashtag), and a
     warned post keeps its chips **inside** the content-warning lid: the tags of
     a post its author covered up are part of what they covered. Only the two

@@ -163,20 +163,27 @@ defmodule Vutuv.Mentions do
   @doc "The canonical entity regex, so the renderer shares this module's grammar."
   def entity_regex, do: @entity
 
-  # One whole `#hashtag` and nothing else, in the same alphabet `@entity` reads.
-  # Split out so `VutuvWeb.Markdown.split_trailing_hashtags/1` — which asks of a
-  # *token* what `@entity` asks of a body — cannot answer it with a second,
-  # slightly different class. The two had already drifted (`\p{N}` against
-  # `\p{Nd}\p{M}`), which decided differently on a decomposed `#Thüringen`.
-  @hashtag_token ~r"\A#([\p{L}\p{M}\p{Nd}_]+)\z"u
+  # A token that **opens** with a whole `#hashtag`, in the same alphabet
+  # `@entity` reads. Split out so `VutuvWeb.Markdown.split_trailing_hashtags/1`
+  # — which asks of a *token* what `@entity` asks of a body — cannot answer it
+  # with a second, slightly different class. The two had already drifted
+  # (`\p{N}` against `\p{Nd}\p{M}`), which decided differently on a decomposed
+  # `#Thüringen`.
+  #
+  # Unanchored at the end, because a closing tag line is written by hand and
+  # routinely glues something to a tag: `#Berlin,` in a list, `#Wahl2026.` at
+  # the end of a sentence, `#FlughafenLeipzig/Halle` where the tag names half
+  # of a double name. The hashtag still has to come first, which is what keeps
+  # a sentence a sentence.
+  @hashtag_prefix ~r"\A#([\p{L}\p{M}\p{Nd}_]+)"u
 
   @doc """
-  Matches a single token that is one whole hashtag, capturing the name.
+  Matches a token that begins with one whole hashtag, capturing its name.
 
   The token twin of `entity_regex/0`, for a caller deciding whether a *line*
-  is nothing but hashtags rather than finding them inside prose.
+  is a row of hashtags rather than finding them inside prose.
   """
-  def hashtag_token_regex, do: @hashtag_token
+  def hashtag_prefix_regex, do: @hashtag_prefix
 
   @doc "How many distinct local accounts one post may mention."
   def max_post_mentions, do: @max_post_mentions
