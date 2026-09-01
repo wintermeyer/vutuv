@@ -979,37 +979,23 @@ defmodule VutuvWeb.NotificationLiveTest do
       {:ok, live, _html} = live(conn, ~p"/notifications")
       html = render(live)
 
-      assert length(row_ids(html, "fediverse_reaction")) == 1
+      assert length(row_ids(html, "fediverse_post")) == 1
       assert html =~ "@alice@social.example"
-      assert html =~ "shared your post on another network."
+      assert html =~ "shared this."
       # It opens the reader's own post, where the line naming them sits — not
       # the remote copy, which they can still reach from the chip there.
       assert has_element?(live, ~s(a[href="/#{user.username}/posts/#{post.id}"]))
     end
 
-    test "a favourite and a boost of one post stay two rows", %{conn: conn} do
-      {conn, user} = create_and_login_user(conn)
-      post = create_post!(user, %{body: "two kinds of answer"})
-      remote_reaction!(post, "alice", "announce")
-      remote_reaction!(post, "bob", "like")
-
-      html = render_the_page(conn)
-
-      # Same post, same day, but a re-share and a favourite are different news,
-      # so they must not merge into one sentence.
-      assert length(row_ids(html, "fediverse_reaction")) == 2
-      assert html =~ "shared your post on another network."
-      assert html =~ "liked your post on another network."
-    end
-
-    test "same-day boosts of one post merge into a single row", %{conn: conn} do
+    test "same-day boosts of one post merge into a single line", %{conn: conn} do
       {conn, user} = create_and_login_user(conn)
       post = create_post!(user, %{body: "much shared"})
       for name <- ~w(alice bob carol), do: remote_reaction!(post, name, "announce")
 
       html = render_the_page(conn)
 
-      assert length(row_ids(html, "fediverse_reaction")) == 1
+      assert length(row_ids(html, "fediverse_post")) == 1
+      assert event_kinds(html) == ["fediverse_reaction"]
       assert html =~ "and 1 more"
     end
 
@@ -1019,12 +1005,191 @@ defmodule VutuvWeb.NotificationLiveTest do
 
       {:ok, live, _html} = live(conn, ~p"/notifications?filter=posts")
 
-      assert length(row_ids(render(live), "fediverse_reaction")) == 1
+      assert length(row_ids(render(live), "fediverse_post")) == 1
     end
 
     defp render_the_page(conn) do
       {:ok, live, _html} = live(conn, ~p"/notifications")
       render(live)
+    end
+  end
+
+  describe "one card per post, for everything the fediverse sends back" do
+    alias Vutuv.Posts.PostImage
+
+    test "a favourite, a boost and a reply to one post share one card", %{conn: conn} do
+      {conn, user} = create_and_login_user(conn)
+      post = create_post!(user, %{body: "two kinds of answer"})
+      remote_reaction!(post, "alice", "announce")
+      remote_reaction!(post, "bob", "like")
+      remote_note!(post, "carol", "the delays come down to two factors")
+
+      html = render_the_page(conn)
+
+      # One post, one card — the three verbs are three lines inside it, not
+      # three cards asking the reader which post each one meant.
+      assert length(row_ids(html, "fediverse_post")) == 1
+
+      assert Enum.sort(event_kinds(html)) ==
+               ~w(fediverse_reaction fediverse_reaction fediverse_reply)
+
+      assert html =~ "likes this."
+      assert html =~ "shared this."
+      assert html =~ "replied."
+      assert html =~ "the delays come down to two factors"
+    end
+
+    test "reactions to two posts stay two cards", %{conn: conn} do
+      {conn, user} = create_and_login_user(conn)
+      remote_reaction!(create_post!(user, %{body: "the first one"}), "alice", "like")
+      remote_reaction!(create_post!(user, %{body: "the second one"}), "bob", "like")
+
+      html = render_the_page(conn)
+
+      assert length(row_ids(html, "fediverse_post")) == 2
+      assert html =~ "the first one"
+      assert html =~ "the second one"
+    end
+
+    test "the card names the post and opens it", %{conn: conn} do
+      {conn, user} = create_and_login_user(conn)
+      post = create_post!(user, %{body: "warum sind die Züge zu spät"})
+      remote_reaction!(post, "alice", "like")
+
+      {:ok, live, _html} = live(conn, ~p"/notifications")
+
+      assert has_element?(live, "[data-post-card]", "warum sind die Züge zu spät")
+
+      assert has_element?(
+               live,
+               ~s([data-post-card][href="/#{user.username}/posts/#{post.id}"])
+             )
+    end
+
+    test "two images ride the card and the rest are counted", %{conn: conn} do
+      {conn, user} = create_and_login_user(conn)
+      post = create_post!(user, %{body: "fünf Bilder"})
+
+      [first, second, third] =
+        for position <- 0..2,
+            do: insert(:post_image, post: post, user: user, position: position)
+
+      remote_reaction!(post, "alice", "like")
+
+      html = render_the_page(conn)
+
+      # Two thumbnails, then a count: the card's right edge has to sit in the
+      # same place whether a post carries two pictures or twenty.
+      assert html =~ PostImage.url(first, "thumb")
+      assert html =~ PostImage.url(second, "thumb")
+      refute html =~ PostImage.url(third, "thumb")
+      assert html =~ ~s(data-images-more="1")
+    end
+
+    test "a single image rides alone, with no count", %{conn: conn} do
+      {conn, user} = create_and_login_user(conn)
+      post = create_post!(user, %{body: "ein Bild"})
+      image = insert(:post_image, post: post, user: user)
+      remote_reaction!(post, "alice", "like")
+
+      html = render_the_page(conn)
+
+      assert html =~ PostImage.url(image, "thumb")
+      refute html =~ "data-images-more"
+    end
+
+    test "an image the scan still holds never reaches the card", %{conn: conn} do
+      {conn, user} = create_and_login_user(conn)
+      post = create_post!(user, %{body: "noch in Prüfung"})
+      insert(:post_image, post: post, user: user, moderation: "pending")
+      remote_reaction!(post, "alice", "like")
+
+      # The image proxy 404s on an unreleased picture, so a card that linked to
+      # one would draw a broken thumbnail on the reader's own notifications.
+      refute render_the_page(conn) =~ "/post_images/"
+    end
+
+    test "a post with no text says so instead of showing an empty line", %{conn: conn} do
+      {conn, user} = create_and_login_user(conn)
+      post = insert(:post, user: user, body: "")
+      insert(:post_image, post: post, user: user)
+      remote_reaction!(post, "alice", "like")
+
+      html = render_the_page(conn)
+
+      assert html =~ ~s(data-post-card-textless)
+      assert html =~ "Post without text"
+    end
+
+    test "the German is written, not fuzzy-filled from something else", %{conn: conn} do
+      # A brand-new msgid comes out of `gettext.extract --merge` fuzzy-filled
+      # with the translation of whatever looked similar, and nothing fails the
+      # build. vutuv is a German site, so the German is asserted by name.
+      {conn, user} = create_and_login_user(conn)
+      post = create_post!(user, %{body: "die Züge sind zu spät"})
+      remote_reaction!(post, "alice", "like")
+      remote_reaction!(post, "bob", "announce")
+      remote_note!(post, "carol", "das liegt an zwei Faktoren")
+
+      bodyless = insert(:post, user: user, body: "")
+      remote_reaction!(bodyless, "dora", "like")
+
+      {:ok, live, _html} =
+        conn
+        |> recycle()
+        |> put_req_header("accept-language", "de-DE,de;q=0.9")
+        |> live(~p"/notifications")
+
+      html = render(live)
+
+      assert html =~ "gefällt das."
+      assert html =~ "hat das geteilt."
+      assert html =~ "hat geantwortet."
+      assert html =~ "Beitrag ohne Text"
+      assert html =~ "1 Like"
+      assert html =~ "1 Antwort"
+      assert html =~ "1 Mal geteilt"
+    end
+
+    test "the card counts what it holds", %{conn: conn} do
+      {conn, user} = create_and_login_user(conn)
+      post = create_post!(user, %{body: "gut gelaufen"})
+      for name <- ~w(alice bob carol), do: remote_reaction!(post, name, "like")
+      remote_note!(post, "dora", "schöner Beitrag")
+
+      html = render_the_page(conn)
+
+      assert html =~ "3 likes"
+      assert html =~ "1 reply"
+    end
+
+    test "a private reply keeps its warning inside the card", %{conn: conn} do
+      {conn, user} = create_and_login_user(conn)
+      post = create_post!(user, %{body: "why are the trains late"})
+
+      post
+      |> remote_note!("ba_eh", "just between us")
+      |> Ecto.Changeset.change(audience: "direct")
+      |> Vutuv.Repo.update!()
+
+      {:ok, live, _html} = live(conn, ~p"/notifications")
+
+      # The member has to know the reply is private *before* they answer it, so
+      # the notice cannot be a casualty of moving the row into a card.
+      assert has_element?(live, "[data-remote-private]")
+    end
+
+    test "unread reactions keep their own marker per line", %{conn: conn} do
+      {conn, user} = create_and_login_user(conn)
+      # A minute back, not "now": the marker and the reaction would otherwise
+      # land in the same second, and `unread?` compares with `:gt`.
+      set_read_marker(user, NaiveDateTime.add(NaiveDateTime.utc_now(:second), -60))
+      post = create_post!(user, %{body: "frisch"})
+      remote_reaction!(post, "alice", "like")
+
+      html = render_the_page(conn)
+
+      assert html =~ ~s(data-unread="true")
     end
   end
 
@@ -1271,6 +1436,13 @@ defmodule VutuvWeb.NotificationLiveTest do
   # Grouped rows carry `id="notification-<kind>-..."` plus a data-kind marker.
   defp row_ids(html, kind) do
     Regex.scan(~r/data-kind="#{kind}"/, html)
+  end
+
+  # The lines inside a post card, one per merged event.
+  defp event_kinds(html) do
+    ~r/data-event-kind="([a-z_]+)"/
+    |> Regex.scan(html)
+    |> Enum.map(fn [_, kind] -> kind end)
   end
 
   defp backdate_follow(%Vutuv.Social.Follow{id: id}, at) do

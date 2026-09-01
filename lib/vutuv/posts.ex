@@ -5004,19 +5004,41 @@ defmodule Vutuv.Posts do
     |> Enum.group_by(& &1.user_id)
   end
 
-  # The lead photo of each teased post, as `%{post_id => %PostImage{}}`. Only
-  # images the AI scan has released can be shown: the proxy 404s on the rest,
-  # so a held photo must leave the rail thumbnail-less rather than broken.
-  defp teaser_images([]), do: %{}
-
+  # The lead photo of each teased post, as `%{post_id => %PostImage{}}`.
   defp teaser_images(post_ids) do
-    from(i in PostImage,
-      where: i.post_id in ^post_ids,
-      order_by: [asc: i.position, asc: i.id]
-    )
-    |> Repo.all()
-    |> Enum.filter(&ImageScans.released?(&1.moderation))
-    |> Enum.reduce(%{}, fn image, acc -> Map.put_new(acc, image.post_id, image) end)
+    post_ids
+    |> released_images_by_ids()
+    |> Map.new(fn {post_id, [lead | _rest]} -> {post_id, lead} end)
+  end
+
+  @doc """
+  The photos of `post_ids` a viewer may actually be shown, as
+  `%{post_id => [%PostImage{}]}` in gallery order (position, then id).
+
+  Only images the AI scan has released are in it: the image proxy 404s on the
+  rest, so a held photo has to leave a thumbnail slot empty rather than draw a
+  broken picture. A post whose images are all held is absent from the map, as
+  is one with no images at all — callers pattern-match on the list being there,
+  never on its length.
+
+  Batched on purpose: the surfaces that want it (the feed's "Who to follow"
+  rail, the notifications page's post cards) each hold a page of posts, and one
+  query per post is what this replaces.
+  """
+  def released_images_by_ids(post_ids) do
+    post_ids = post_ids |> Enum.filter(&is_binary/1) |> Enum.uniq()
+
+    if post_ids == [] do
+      %{}
+    else
+      from(i in PostImage,
+        where: i.post_id in ^post_ids,
+        order_by: [asc: i.position, asc: i.id]
+      )
+      |> Repo.all()
+      |> released_images()
+      |> Enum.group_by(& &1.post_id)
+    end
   end
 
   @doc """

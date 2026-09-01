@@ -14,8 +14,12 @@ defmodule VutuvWeb.NotificationLive.Groups do
     * one endorser's **endorsements** - "endorsed you for Elixir and Phoenix."
     * **thread** events of the same thread - "Anna and Ben replied in a
       thread you posted in."
-    * **reactions from other networks** to the same post, per kind -
-      "@anna@chaos.social and @ben@social.example shared your post."
+    * everything **another network** sent back about the same post - favourites,
+      re-shares and replies together - as one **post card** (`kind:
+      "fediverse_post"`), headed by the post itself and carrying an `:events`
+      list of one line per verb. The three used to be three rows that named the
+      senders and the verb but never the post, so a reader with more than one
+      post that day could not tell which of them anybody meant.
 
   Direct replies, mentions and every rarer kind (moderation, CV updates,
   handle changes, ...) stay one row per event - each carries its own content.
@@ -31,6 +35,14 @@ defmodule VutuvWeb.NotificationLive.Groups do
   @named_actors 2
 
   def named_actors, do: @named_actors
+
+  # The kinds that answer a post from another network. They share one card per
+  # post; `Vutuv.Activity` keeps them as separate kinds, and the filter tabs
+  # still speak in those.
+  @post_card_kinds ~w(fediverse_reaction fediverse_reply)
+
+  @doc "The event kinds a post card merges (`kind: \"fediverse_post\"`)."
+  def post_card_kinds, do: @post_card_kinds
 
   @doc """
   Group `items` into `[%{day: Date, groups: [group]}]`, newest day first.
@@ -71,9 +83,19 @@ defmodule VutuvWeb.NotificationLive.Groups do
         item.kind == "follower" and MapSet.member?(connected, actor_key(item))
       end)
 
+    day_items
+    |> bucket(&group_key/1)
+    |> Enum.map(fn {key, members} -> build_group(key, day, members, read_marker) end)
+  end
+
+  # Bucket `items` by `key_fun` into `[{key, members}]`, both the buckets and
+  # the members in the newest-first order they arrived in (`Enum.group_by`
+  # keeps neither). Used twice: once to cut a day into rows, once more to cut a
+  # post card into one line per verb.
+  defp bucket(items, key_fun) do
     {keys, members} =
-      Enum.reduce(day_items, {[], %{}}, fn item, {keys, members} ->
-        key = group_key(item)
+      Enum.reduce(items, {[], %{}}, fn item, {keys, members} ->
+        key = key_fun.(item)
 
         case members do
           %{^key => list} -> {keys, Map.put(members, key, [item | list])}
@@ -83,9 +105,7 @@ defmodule VutuvWeb.NotificationLive.Groups do
 
     keys
     |> Enum.reverse()
-    |> Enum.map(fn key ->
-      build_group(key, day, Enum.reverse(members[key]), read_marker)
-    end)
+    |> Enum.map(&{&1, Enum.reverse(members[&1])})
   end
 
   # What merges: same-day likes per post, same-day followers/connections as
@@ -97,19 +117,54 @@ defmodule VutuvWeb.NotificationLive.Groups do
   defp group_key(%{kind: "thread", root_post_id: root_id}) when is_binary(root_id),
     do: {:thread, root_id}
 
-  # Reactions from other networks merge per post *and per kind*: a favourite and
-  # a re-share are different news, and one row can only carry one verb.
-  defp group_key(%{kind: "fediverse_reaction", post_id: post_id, reaction_kind: reaction_kind})
-       when is_binary(post_id) and is_binary(reaction_kind),
-       do: {:fediverse_reaction, post_id, reaction_kind}
+  # Everything one post collected from the other networks — favourites,
+  # re-shares and replies alike — merges into a single card headed by that post
+  # (`event_key/1` splits it back into one line per verb below). Before this the
+  # three arrived as three separate rows that named the senders and the verb but
+  # never the post, so a reader with more than one post that day could not tell
+  # which of them anybody meant.
+  defp group_key(%{kind: kind, post_id: post_id})
+       when kind in @post_card_kinds and is_binary(post_id),
+       do: {:fediverse_post, post_id}
 
   defp group_key(%{kind: "follower"}), do: :follower
   defp group_key(%{kind: "connection"}), do: :connection
   defp group_key(%{kind: "endorsement"} = item), do: {:endorsement, actor_key(item)}
   defp group_key(item), do: {:single, item.id}
 
+  # A post card is a group of groups: the head names the post, and each of its
+  # `:events` is an ordinary group built by the very same function one level
+  # down. Its own `actors` are empty on purpose — every actor belongs to one of
+  # the event lines, and the card has no sentence of its own for them to be the
+  # subject of.
+  defp build_group({:fediverse_post, post_id} = key, day, members, read_marker) do
+    events =
+      members
+      |> bucket(&event_key(post_id, &1))
+      |> Enum.map(fn {key, event_members} ->
+        build_group(key, day, event_members, read_marker)
+      end)
+
+    key
+    |> base_group(day, members, read_marker)
+    |> Map.merge(%{kind: "fediverse_post", actors: [], actor_count: 0, events: events})
+  end
+
+  defp build_group(key, day, members, read_marker),
+    do: base_group(key, day, members, read_marker)
+
+  # One line per verb inside a card: the favourites merge into one, the
+  # re-shares into another, and every reply keeps its own line, because each
+  # carries its own words. The keys are the same ones a row would use, so the
+  # ids stay what they were before the card existed.
+  defp event_key(post_id, %{kind: "fediverse_reaction", reaction_kind: reaction_kind})
+       when is_binary(reaction_kind),
+       do: {:fediverse_reaction, post_id, reaction_kind}
+
+  defp event_key(_post_id, item), do: {:single, item.id}
+
   # `members` arrive newest-first.
-  defp build_group(key, day, members, read_marker) do
+  defp base_group(key, day, members, read_marker) do
     newest = hd(members)
     actors = distinct_actors(members)
 
@@ -128,6 +183,9 @@ defmodule VutuvWeb.NotificationLive.Groups do
   defp group_id({:single, id}, _day, _newest), do: id
   defp group_id({:like, post_id}, day, _newest), do: "like-#{post_id}-#{day_key(day)}"
   defp group_id({:thread, root_id}, day, _newest), do: "thread-#{root_id}-#{day_key(day)}"
+
+  defp group_id({:fediverse_post, post_id}, day, _newest),
+    do: "fediverse-post-#{post_id}-#{day_key(day)}"
 
   defp group_id({:fediverse_reaction, post_id, reaction_kind}, day, _newest),
     do: "fediverse-reaction-#{reaction_kind}-#{post_id}-#{day_key(day)}"
