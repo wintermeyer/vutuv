@@ -17,17 +17,28 @@ defmodule VutuvWeb.WebAppManifestTest do
   tests because it is the same feature: without it `env(safe-area-inset-*)`
   resolves to 0 on every device, so the bottom tab bar cannot reserve the home
   indicator's strip and the safe-area rules in `components.css` are dead code.
+
+  Issue #1732 added what makes it read as an app rather than as a bookmark: the
+  long-press `shortcuts` (whose labels are translated, which is what the `vary`
+  header is about) and the install-dialog metadata. Each shortcut has to point at
+  a route that really exists — a manifest is fetched once at install time and
+  never checked again, so a dead shortcut is a dead menu entry for as long as the
+  app stays installed.
   """
   use VutuvWeb.ConnCase, async: true
 
   @path "/site.webmanifest"
 
-  defp manifest(conn) do
-    conn = get(conn, @path)
+  # Takes the request conn and answers the decoded document, so a test never
+  # holds a response conn unless it wants the headers (the locale test does).
+  defp manifest(conn), do: conn |> get(@path) |> decode()
 
+  defp decode(conn) do
     assert conn.status == 200
     Jason.decode!(conn.resp_body)
   end
+
+  defp shortcut_names(document), do: document |> Map.fetch!("shortcuts") |> Enum.map(& &1["name"])
 
   describe "GET /site.webmanifest" do
     test "answers a manifest document", %{conn: conn} do
@@ -53,6 +64,21 @@ defmodule VutuvWeb.WebAppManifestTest do
       assert manifest["start_url"] == "/"
       assert manifest["display"] == "standalone"
       assert manifest["id"] == "/"
+    end
+
+    test "carries the metadata an install dialog prints", %{conn: conn} do
+      manifest = manifest(conn)
+
+      assert is_binary(manifest["description"]) and manifest["description"] != ""
+      assert manifest["lang"] in Vutuv.Languages.site_locales()
+      assert manifest["dir"] == "ltr"
+      assert is_list(manifest["categories"]) and manifest["categories"] != []
+
+      assert "standalone" in manifest["display_override"],
+             """
+             `display_override` is read before `display` where it is understood,
+             so dropping "standalone" from it silently demotes the installed app.
+             """
     end
 
     test "names this installation rather than hard-coding vutuv", %{conn: conn} do
@@ -89,6 +115,65 @@ defmodule VutuvWeb.WebAppManifestTest do
         assert String.starts_with?(content_type, "image/"),
                "the manifest declares #{icon["src"]}, which answered #{content_type}"
       end
+    end
+  end
+
+  describe "the long-press shortcuts" do
+    test "every shortcut points at a route this installation serves", %{conn: conn} do
+      shortcuts = manifest(conn)["shortcuts"]
+
+      assert length(shortcuts) >= 3, "a long-press menu of one or two entries is not a menu"
+
+      for %{"name" => name, "url" => url} <- shortcuts do
+        assert name != ""
+
+        assert String.starts_with?(url, "/"),
+               "#{url} leaves the manifest's scope, so the shortcut would open a browser"
+
+        path = url |> String.split(["?", "#"], parts: 2) |> hd()
+
+        assert Phoenix.Router.route_info(VutuvWeb.Router, "GET", path, conn.host) != :error,
+               "the manifest offers a shortcut to #{path}, which this app does not route"
+      end
+    end
+
+    test "\"Write a post\" reuses the composer deep link, rather than a second one",
+         %{conn: conn} do
+      write = Enum.find(manifest(conn)["shortcuts"], &(&1["url"] =~ "/feed"))
+
+      # `/feed#compose` is the one spelling of "open the feed with the composer
+      # ready" — the profile's Beiträge card and the "n" shortcut already use it,
+      # and keyboard_shortcuts.js reveals AND focuses the composer for it. A
+      # launcher entry whose whole purpose is writing must not land the member in
+      # a box with no caret in it.
+      assert write["url"] == "/feed#compose"
+    end
+
+    test "the labels are the reader's language, and the answer says it varies", %{conn: conn} do
+      german =
+        conn
+        |> Plug.Conn.put_req_header("accept-language", "de-DE,de;q=0.9,en;q=0.8")
+        |> get(@path)
+
+      # `vary` can arrive as more than one field line (the compressor adds its
+      # own `accept-encoding` one further down the stack), which HTTP reads as
+      # a single comma-joined list — so ask whether ours is among them.
+      assert Enum.any?(get_resp_header(german, "vary"), &(&1 =~ "accept-language")),
+             """
+             The body differs per Accept-Language, so a shared cache must be told
+             — or one reader's language is handed to the next.
+             """
+
+      german_names = german |> decode() |> shortcut_names()
+      assert "Nachrichten" in german_names
+      assert "Beitrag schreiben" in german_names
+
+      english =
+        conn
+        |> Plug.Conn.put_req_header("accept-language", "en-GB,en")
+        |> manifest()
+
+      assert "Messages" in shortcut_names(english)
     end
   end
 

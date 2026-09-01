@@ -129,11 +129,17 @@ defmodule VutuvWeb.OpenGraph do
       default_description()
   end
 
-  # The generic fallback for a page that is about neither a member nor a post
-  # and has no page-specific copy: the site pitch. vutuv is a business network,
-  # so the pitch leads with that, not the old "career network / no premium
-  # accounts" line.
-  defp default_description do
+  @doc """
+  The generic fallback for a page that is about neither a member nor a post
+  and has no page-specific copy: the site pitch. vutuv is a business network,
+  so the pitch leads with that, not the old "career network / no premium
+  accounts" line.
+
+  Public because the web app manifest says the same sentence in the install
+  dialog (`VutuvWeb.PageController.webmanifest/2`, issue #1732) — what the site
+  claims to be belongs in one place, not in two that drift.
+  """
+  def default_description do
     gettext(
       "vutuv is the open business network where professionals connect, share, and get found. Free to join."
     )

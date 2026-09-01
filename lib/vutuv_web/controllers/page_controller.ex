@@ -11,7 +11,12 @@ defmodule VutuvWeb.PageController do
   alias VutuvWeb.AgentDocs.ListDocs
   alias VutuvWeb.ControllerHelpers
   alias VutuvWeb.LandingExperiment
+  alias VutuvWeb.OpenGraph
+  alias VutuvWeb.Plug.Locale
   alias VutuvWeb.RateLimit
+
+  # The one :machine_docs document with translated content — see webmanifest/2.
+  plug(Locale when action in [:webmanifest])
 
   def index(conn, _params) do
     # Sign-up form defaults: pre-check "show on profile" (public?: true) and
@@ -131,24 +136,58 @@ defmodule VutuvWeb.PageController do
   Android's launcher shape can crop it to a circle without cutting the "v" —
   without a maskable icon the whole square is shrunk inside the shape instead,
   which reads as a sticker rather than an app icon.
+
+  The **shortcuts** are what a long press on the installed icon offers (issue
+  #1732). Their labels are the one part of this document a person reads, so it
+  is the one discovery document whose body is not the same bytes for everybody:
+  `VutuvWeb.Plug.Locale` runs on this action alone (the `:machine_docs` pipeline
+  has neither a session nor the plug, and its other documents — robots.txt,
+  llms.txt, the sitemaps — are gettext-free and `public` cached with no `vary`,
+  so arming it pipeline-wide would set a cache-poisoning trap for whoever adds
+  the first translated string to one of them). Hence the `vary` header here.
   """
   def webmanifest(conn, _params) do
     conn
     |> discovery_cache_headers()
+    |> put_resp_header("vary", "accept-language")
     |> put_resp_content_type("application/manifest+json")
-    |> send_resp(200, Jason.encode!(web_app_manifest()))
+    |> send_resp(200, Jason.encode!(web_app_manifest(conn.assigns.locale)))
   end
 
-  defp web_app_manifest do
+  defp web_app_manifest(locale) do
     name = Application.fetch_env!(:vutuv, :node_name)
 
     %{
       id: "/",
       name: name,
       short_name: name,
+      # The sentence the install dialog prints under the name — the same one the
+      # page already carries as its <meta name="description">, see
+      # `VutuvWeb.OpenGraph.default_description/0`.
+      #
+      # Deliberately NOT `:node_description`, though that is the operator's own
+      # sentence and sits one fetch_env! away. That string has no notion of
+      # language (docs/ADMINS.md tells operators to write it in the one their
+      # visitors read), and this document varies per Accept-Language — so on
+      # vutuv.de, which never sets it, taking it would trade a German sentence
+      # for an English one in the dialog German members read. The cost is that a
+      # third-party operator's dialog says what vutuv is rather than what THEY
+      # are; `docs/ADMINS.md` says so on the NODE_DESCRIPTION row. Worth
+      # revisiting together with the meta tag, not alone.
+      description: OpenGraph.default_description(),
+      lang: locale,
+      # Both languages this installation ships are left-to-right. An operator
+      # who translates it into an rtl one changes this line and nothing else.
+      dir: "ltr",
+      # An app-store style hint, used by the few launchers that group by it.
+      categories: ["social", "business"],
       start_url: "/",
       scope: "/",
       display: "standalone",
+      # Read before `display` by browsers that understand it: `minimal-ui` keeps
+      # a reload control and the address the page is on, which is the better
+      # fallback than the plain browser tab `display` alone would drop to.
+      display_override: ["standalone", "minimal-ui"],
       # The splash screen behind the app while it starts, and the launcher
       # background: the page canvas (slate-50) and the light theme-color the
       # document already ships, so the start does not flash a colour the app
@@ -164,16 +203,41 @@ defmodule VutuvWeb.PageController do
           type: "image/png",
           purpose: "maskable"
         }
-      ]
+      ],
+      shortcuts: shortcuts()
     }
   end
 
-  # robots.txt, llms.txt and the manifest answer every visitor with the same
-  # bytes and carry nothing personal, so they are `public` cacheable like
-  # /sitemap.xml and /.well-known/security.txt beside them in the router (an
-  # hour, short enough
+  # The long-press menu on the installed icon. Four entries, because that is
+  # what a launcher shows, and deliberately **not** the feed: `start_url` is
+  # "/", which for a signed-in member is the feed already, so a shortcut to it
+  # would spend one of the four on the thing opening the app does anyway.
+  # Every label is a msgid the navigation already uses, in the same voice.
+  #
+  # "Write a post" is `/feed#compose`, the composer deep link the profile's
+  # Beiträge card and the "n" shortcut already use — it reveals the composer
+  # *and* puts the caret in it (`revealAndFocusComposer` in
+  # keyboard_shortcuts.js, which retries while the socket is still joining, the
+  # cold-launch case this shortcut is). A second spelling that only unfolded the
+  # panel would leave the launcher's one writing entry point without a caret.
+  defp shortcuts do
+    [
+      %{name: gettext("Write a post"), url: ~p"/feed#compose"},
+      %{name: gettext("Search"), url: ~p"/search"},
+      %{name: gettext("Messages"), url: ~p"/messages"},
+      %{name: gettext("Notifications"), url: ~p"/notifications"}
+    ]
+  end
+
+  # robots.txt and llms.txt answer every visitor with the same bytes and carry
+  # nothing personal, so they are `public` cacheable like /sitemap.xml and
+  # /.well-known/security.txt beside them in the router (an hour, short enough
   # that flipping :ai_crawler_policy reaches crawlers promptly; Googlebot keeps
   # its own robots.txt copy for up to 24h regardless).
+  #
+  # A caller whose body is not byte-identical per visitor adds its own `vary` on
+  # top (the manifest does, for its translated shortcut labels), so this helper
+  # promises the cache lifetime and not the sameness.
   #
   # This is NOT what makes them readable in Safari, though it was the first
   # suspect: the `nosniff` header is, and it comes from the :machine_docs

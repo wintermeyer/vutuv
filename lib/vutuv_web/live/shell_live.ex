@@ -91,7 +91,12 @@ defmodule VutuvWeb.ShellLive do
         # another member's chrome or subscribe to their "user:<id>" unread-badge
         # topic. All identity therefore comes from the resolved user, not the
         # curated map.
-        mount_authenticated(socket, InitAssigns.session_user(session), session, path)
+        # `push_badge/1` here rather than in either clause: both need it, and the
+        # anonymous one needs it most — its zero is the only thing that takes a
+        # signed-out member's count off the Home Screen icon (see push_badge/1).
+        socket
+        |> mount_authenticated(InitAssigns.session_user(session), session, path)
+        |> push_badge()
       else
         # The throwaway dead render, authenticated by the HTTP request that built
         # shell_session/1 from the validated current_user — so its curated
@@ -191,7 +196,6 @@ defmodule VutuvWeb.ShellLive do
     |> maybe_start_counts(user, path)
     |> maybe_start_new_members()
     |> maybe_start_presence(user_id, user.show_online_status?)
-    |> push_badge()
   end
 
   # The assigns every render carries, so render/1 never sees a missing key. The
@@ -591,12 +595,21 @@ defmodule VutuvWeb.ShellLive do
   end
 
   # Push the current attention total (unread messages + notifications) to the
-  # TabBadge JS hook, which prefixes the browser-tab <title> with "(N)" so a
-  # backgrounded tab shows there is something to read. Sent on connect and
-  # whenever either count changes; no-op for a logged-out shell (no hook) and on
-  # the throwaway dead render.
-  defp push_badge(%{assigns: %{user_id: nil}} = socket), do: socket
-
+  # TabBadge JS hook, which prefixes the browser-tab <title> with "(N)" and,
+  # since issue #1732, writes the same number onto the installed app's icon.
+  # Sent on connect and whenever either count changes; a no-op only on the
+  # throwaway dead render, which the connect replaces immediately.
+  #
+  # Nothing else can take a stale count off a Home Screen icon after a sign-out,
+  # which is why the logged-out shell pushes at all. Two cheaper spellings were
+  # considered and both state the fact less well.
+  # Letting the browser infer "signed out" from a missing `#tab-badge` silently
+  # wipes the badge on any page that renders no shell at all (an unsubscribe
+  # link out of an email is one). A `<meta>` in the root layout is cheaper still
+  # and would cover those pages — but it would read `assigns[:current_user]`,
+  # which is also absent when a page simply never assigned it, so its "nobody is
+  # signed in" is an inference wearing a statement's clothes. This clause is the
+  # answer of the module that resolved the session token itself.
   defp push_badge(socket) do
     if connected?(socket) do
       unread = socket.assigns.messages_count + socket.assigns.notifications_count
@@ -923,8 +936,18 @@ defmodule VutuvWeb.ShellLive do
       "(N)" for unread messages + notifications and a "•" for new feed posts that
       arrived while the tab was backgrounded (see the TabBadge hook in app.js).
       Fed by push_badge/1 + the {:new_post} handler; phx-update="ignore" because
-      the hook owns document.title, not this node. --%>
-      <div :if={@user_id} id="tab-badge" phx-hook="TabBadge" phx-update="ignore" class="hidden"></div>
+      the hook owns document.title, not this node.
+
+      The one element here NOT gated on @user_id (push_badge/1 says why); the
+      gate moves to data-report-visibility instead, which the hook reads. --%>
+      <div
+        id="tab-badge"
+        phx-hook="TabBadge"
+        phx-update="ignore"
+        data-report-visibility={@user_id && "1"}
+        class="hidden"
+      >
+      </div>
       <%!-- Browser notifications (issue #1249). The hook raises the popups
       ShellLive pushes as "notify:show", and owns the two questions the server
       cannot answer: is this member looking at vutuv right now, and did THIS

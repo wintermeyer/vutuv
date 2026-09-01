@@ -733,13 +733,25 @@ defmodule VutuvWeb.ShellLiveTest do
   # notifications, and a "new posts" nudge for feed posts. It pushes the total
   # on connect and re-pushes it whenever either count changes.
   describe "browser-tab title badge" do
-    test "carries the tab-badge hook only for a logged-in member", %{conn: conn} do
+    test "carries the tab-badge hook for the logged-out shell too", %{conn: conn} do
       user = insert(:user)
       {:ok, view, _html} = live_isolated(conn, VutuvWeb.ShellLive, session: shell_session(user))
       assert has_element?(view, "#tab-badge[phx-hook='TabBadge']")
 
+      # Unlike every other hook in the shell this one is NOT gated on the member
+      # (issue #1732): it also writes the installed app's icon badge, so a
+      # signed-out shell has to be able to take the previous member's count off
+      # it — and the zero below is how.
       {:ok, anon, _html} = live_isolated(conn, VutuvWeb.ShellLive, session: %{})
-      refute has_element?(anon, "#tab-badge")
+      assert has_element?(anon, "#tab-badge[phx-hook='TabBadge']")
+      assert_push_event(anon, "tab:badge", %{unread: 0})
+
+      # What the @user_id gate became instead: the visibility report, which only
+      # feeds the tab teaser and would be a wasted round trip per anonymous page
+      # view. Dropping the attribute costs the member the teaser silently, so
+      # both directions are pinned.
+      assert has_element?(view, "#tab-badge[data-report-visibility]")
+      refute has_element?(anon, "#tab-badge[data-report-visibility]")
     end
 
     test "pushes the unread total to the hook on connect", %{conn: conn} do

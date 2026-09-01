@@ -32,6 +32,46 @@ the old value on a device that reports no inset, which is why the change is
 invisible on a desktop. `mobile_tab_bar_css_test.exs` and
 `web_app_manifest_test.exs` fail the build if a piece goes missing.
 
+Three things then make the installed app read as an app rather than as a
+bookmark (issue #1732). The **icon badge**: `ShellLive.push_badge/1` already
+sends the unread total (messages + notifications) to the `TabBadge` hook for the
+browser tab, and the same number goes onto the Home Screen icon through
+`navigator.setAppBadge`. One owner on each side, so the badge and the "(3) " in
+front of the title cannot disagree. The call is guarded and never falls back:
+most browsers do not carry the API, and where they do the platform ignores the
+write outside an installed app.
+
+`#tab-badge` is therefore the one element in the shell **not** gated on the
+member: the logged-out shell renders it too and is pushed a zero, which is what
+takes a signed-out member's count off the Home Screen icon. `push_badge/1`
+records why the two cheaper spellings were rejected. What the gate becomes
+instead is `data-report-visibility`, since only a member's tab has a visibility
+answer worth a round trip.
+
+The **long-press shortcuts** are four manifest entries: write a post, search,
+messages, notifications. Not the feed, which is where `start_url` already lands a
+signed-in member. Their labels are the one part of the manifest a person reads,
+so `VutuvWeb.Plug.Locale` runs on that action alone — scoped to the action and
+not to the `:machine_docs` pipeline, whose other documents are gettext-free and
+`public` cached with no `vary` — and the answer carries
+`Vary: accept-language`, which is why it is the one discovery document with a
+cache line of its own. "Write a post" points at `/feed#compose`, the composer
+deep link the profile's Beiträge card and the "n" shortcut already use: the
+manifest gets the caret that `revealAndFocusComposer` puts in the box, and this
+app keeps one spelling of "open the feed ready to write".
+
+The rest is **install-dialog metadata**: `description`
+(`VutuvWeb.OpenGraph.default_description/0`, the same sentence the page carries
+as its `<meta name="description">`), `lang`, `dir`, `categories` and
+`display_override`. Still open on #1732: `share_target` (vutuv in Android's share
+sheet), `screenshots` (which earns a real install dialog instead of a thin
+strip), and the badge while the app is **closed** — `TabBadge` writes it only
+from an open page, so a message arriving overnight raises a lock-screen line and
+leaves the icon at last night's number. The service worker below is the half that
+knows, since it already branches on "no visible client"; a bare
+`self.navigator.setAppBadge()` there would earn the platform dot for free, an
+exact count needs `unread` in the push payload.
+
 ### The service worker and Web Push (issue #1729)
 
 Everything above works only while a vutuv page is open: a `Notification` raised
