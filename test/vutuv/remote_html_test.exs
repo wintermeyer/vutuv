@@ -274,4 +274,72 @@ defmodule Vutuv.RemoteHtmlTest do
       assert RemoteHtml.to_text(html, 20) == String.duplicate("a", 19) <> "\u{2026}"
     end
   end
+
+  describe "a shortened link label gives way to the address it hides" do
+    # The shape Friendica really sends, down to the attribute order.
+    @friendica ~s(<p>🐘 <strong>Mastodon</strong><br>) <>
+                 ~s(<a href="https://github.com/mastodon/mastodon/issues" target="_blank" ) <>
+                 ~s(rel="noopener noreferrer">github.com/mastodon/mastodon/i…</a></p>)
+
+    test "the cut-off label is replaced by the full address" do
+      assert RemoteHtml.to_text(@friendica) ==
+               "🐘 Mastodon\nhttps://github.com/mastodon/mastodon/issues"
+    end
+
+    test "three dots cut a label as surely as one ellipsis" do
+      html = ~s(<a href="https://example.org/a/b/c">example.org/a/b...</a>)
+
+      assert RemoteHtml.to_text(html) == "https://example.org/a/b/c"
+    end
+
+    test "a label the server wrote with the scheme still matches its address" do
+      html = ~s(<a href="https://example.org/a/b/c">https://example.org/a…</a>)
+
+      assert RemoteHtml.to_text(html) == "https://example.org/a/b/c"
+    end
+
+    test "the entities in the address are decoded like any other text" do
+      html = ~s(<a href="https://example.org/s?a=1&amp;b=2">example.org/s?a…</a>)
+
+      assert RemoteHtml.to_text(html) == "https://example.org/s?a=1&b=2"
+    end
+
+    test "the URL Mastodon spreads over invisible spans still comes out whole" do
+      # The shape that always worked, and the reason nobody noticed the one
+      # above: Mastodon hides the ends of the URL rather than cutting them, so
+      # the strip reassembles it. `fediverse_remote_post_screenshots_test.exs`
+      # leans on this too.
+      html =
+        ~s(<a href="https://blog.example/entry"><span class="invisible">https://</span>) <>
+          ~s(<span class="ellipsis">blog.example</span><span class="invisible">/entry</span></a>)
+
+      assert RemoteHtml.to_text(html) == "https://blog.example/entry"
+    end
+
+    test "a label that is prose keeps the author's words" do
+      # An ellipsis alone means nothing: the words have to be the start of the
+      # address for the label to be a rendering of it.
+      assert RemoteHtml.to_text(~s(<a href="https://example.org/x">Weiterlesen…</a>)) ==
+               "Weiterlesen…"
+    end
+
+    test "a mention and a hashtag keep their label, not their href" do
+      mention =
+        ~s(<a href="https://social.cologne/@herrkaschke" class="u-url mention">@<span>herrkaschke</span></a>)
+
+      hashtag =
+        ~s(<a href="https://social.cologne/tags/musik" class="hashtag">#<span>musik</span></a>)
+
+      assert RemoteHtml.to_text(mention) == "@herrkaschke"
+      assert RemoteHtml.to_text(hashtag) == "#musik"
+    end
+
+    test "no address on another scheme is ever written into the text" do
+      # The label looks exactly like a shortened rendering of its own href, so
+      # only the `https?` gate keeps this out.
+      html = ~s|<a href="javascript:alert(1)//example.org">javascript:alert…</a>|
+
+      refute RemoteHtml.to_text(html) =~ "alert(1)"
+    end
+  end
 end

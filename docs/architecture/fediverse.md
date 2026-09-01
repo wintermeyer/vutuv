@@ -266,14 +266,24 @@ every activity of a member it finds no key for, silently.
     clamps. So no markup a stranger wrote survives into the database, the
     agent-format siblings carry the value unchanged, and the cap is well
     defined. **No avatar is copied**: the card renders initials and links to the
-    origin. One repair on the way through: those networks render a mention as
-    the bare `@user` short form, its full address hiding in the anchor the strip
-    throws away — so every content path hands the object's `Mention` tags along
-    and the reducer widens `@user` to the full `@user@host` (only where the pair
-    is unambiguous, matches the shared entity grammar and is not this very
-    installation), which the renderer below then links like any typed fediverse
-    handle. The Mastodon profile feed normalizes its REST `mentions` to the same
-    shape.
+    origin. **Two repairs on the way through**, both for the same reason — what
+    names the thing lives in the anchor the strip throws away. *Mentions*: those
+    networks render one as the bare `@user` short form, so every content path
+    hands the object's `Mention` tags along and the reducer widens `@user` to
+    the full `@user@host` (only where the pair is unambiguous, matches the
+    shared entity grammar and is not this very installation), which the renderer
+    below then links like any typed fediverse handle. The Mastodon profile feed
+    normalizes its REST `mentions` to the same shape. *Links*: some servers show
+    only a **cut-short** rendering of the address — Friendica sends
+    `github.com/mastodon/mastodon/i…` over the full issues URL — so what
+    survived was half a URL, unlinkable and too short to even copy. An anchor
+    whose label is that cut rendering of its own address now gives way to the
+    address (`restore_cut_links/1`); the cut is the signal, so a prose label, a
+    `@user` and a `#hashtag` keep their words. Mastodon hides the ends of the
+    URL in `<span class="invisible">` instead of cutting them and never needed
+    it, which is why this went unnoticed for as long as it did.
+    **Already-stored copies keep their cut text** — the original HTML is kept
+    nowhere — and age out with the retention window.
   - **Custom-emoji shortcodes go out with the markup**
     (`Vutuv.RemoteHtml.strip_shortcodes/1`, v7.449.1). Those networks let an
     account put its **own server's** emoji in a post and send it as a shortcode
