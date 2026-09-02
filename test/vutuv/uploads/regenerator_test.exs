@@ -188,6 +188,50 @@ defmodule Vutuv.Uploads.RegeneratorTest do
       assert Enum.sort(File.ls!(dir)) == ["lite-a1b2c3d4e5f6.avif", "thumb-a1b2c3d4e5f6.avif"]
       assert File.exists?(Path.join(tmp, "originals/screenshots/#{url.id}/original.png"))
     end
+
+    # A post's link screenshot and an organization's homepage capture are
+    # stored by the same `Vutuv.Screenshot` under the same tree, so a Spec
+    # change has to reach them too. Until 2026-09-02 the regenerator listed
+    # only profile links, and the seven link screenshots on a member's feed —
+    # 249 kB, the biggest picture cost on the page — kept serving without a
+    # lite version while the lite existed for everything else.
+    test "reaches a post's and an organization's screenshot as well", %{tmp: tmp} do
+      post_shot =
+        Repo.insert!(%Vutuv.Posts.PostScreenshot{
+          post_id: insert(:post).id,
+          url: "https://example.org/article",
+          status: "ready",
+          screenshot: "b1b2c3d4e5f6.png",
+          moderation: "approved"
+        })
+
+      org_shot =
+        Repo.insert!(%Vutuv.Organizations.OrganizationScreenshot{
+          organization_id: insert(:organization).id,
+          url: "https://example.org/",
+          status: "ready",
+          screenshot: "c1c2c3d4e5f6.png",
+          moderation: "approved"
+        })
+
+      for shot <- [post_shot, org_shot] do
+        dir = Path.join(tmp, "screenshots/#{shot.id}")
+        hash = Path.rootname(shot.screenshot)
+        jpeg!(Path.join(dir, "thumb-#{hash}.avif"))
+        jpeg!(Path.join(dir, "original-#{hash}.png"), width: 1280, height: 844)
+      end
+
+      summary = Regenerator.run(only: :screenshots)
+
+      assert summary.screenshots == %{regenerated: 2, unchanged: 0, skipped: 0, failed: 0}
+
+      for shot <- [post_shot, org_shot] do
+        hash = Path.rootname(shot.screenshot)
+
+        assert Enum.sort(File.ls!(Path.join(tmp, "screenshots/#{shot.id}"))) ==
+                 ["lite-#{hash}.avif", "thumb-#{hash}.avif"]
+      end
+    end
   end
 
   describe "post images" do

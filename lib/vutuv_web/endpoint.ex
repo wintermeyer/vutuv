@@ -19,8 +19,21 @@ defmodule VutuvWeb.Endpoint do
   # UTF-8) rides well under it — while bounding a hostile frame. Only a single
   # frame above 1 MB (an oversized paste far past the 20,000-char post limit, or
   # a malicious payload) now closes the connection to reconnect.
+  #
+  # `compress: true` negotiates permessage-deflate, which Phoenix leaves off by
+  # default because every open socket then holds a zlib context (up to a few
+  # hundred kB). nginx cannot do this half: after the upgrade it only passes
+  # frames through, so the frames are compressed here or not at all. Measured
+  # on the feed as `@wintermeyer` (34 cards, 2026-09-02, Bandit's own frame
+  # counters): the join sent 530,711 bytes uncompressed and 55,299 with this
+  # on — a tenth, and more than every picture on the page together. Every
+  # later patch is text of the same kind.
   socket("/live", Phoenix.LiveView.Socket,
-    websocket: [connect_info: [session: @session_options], max_frame_size: 1_000_000]
+    websocket: [
+      connect_info: [session: @session_options],
+      max_frame_size: 1_000_000,
+      compress: true
+    ]
   )
 
   # Mastodon's streaming API. Mounted on the shared endpoint because a socket

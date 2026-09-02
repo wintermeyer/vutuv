@@ -35,7 +35,9 @@ defmodule Vutuv.Uploads.Regenerator do
   import Ecto.Query
 
   alias Vutuv.Accounts.User
+  alias Vutuv.Organizations.OrganizationScreenshot
   alias Vutuv.Posts.PostImage
+  alias Vutuv.Posts.PostScreenshot
   alias Vutuv.Profiles.Qualification
   alias Vutuv.Profiles.Url
   alias Vutuv.Repo
@@ -182,7 +184,16 @@ defmodule Vutuv.Uploads.Regenerator do
 
   defp rows(:avatars), do: Repo.all(from(u in User, where: not is_nil(u.avatar)))
   defp rows(:covers), do: Repo.all(from(u in User, where: not is_nil(u.cover_photo)))
-  defp rows(:screenshots), do: Repo.all(from(u in Url, where: not is_nil(u.screenshot)))
+  # Every scope `Vutuv.Screenshot` stores under `screenshots/<id>`: a profile
+  # link, a post's link and an organization's homepage. Listing only the
+  # first left the other two on the old Spec for good — a member's feed is
+  # mostly post links, so that was where a Spec change was least visible.
+  defp rows(:screenshots) do
+    Repo.all(from(u in Url, where: not is_nil(u.screenshot))) ++
+      Repo.all(from(s in PostScreenshot, where: not is_nil(s.screenshot))) ++
+      Repo.all(from(s in OrganizationScreenshot, where: not is_nil(s.screenshot)))
+  end
+
   defp rows(:post_images), do: Repo.all(PostImage)
   defp rows(:job_posting_images), do: Repo.all(Vutuv.Jobs.JobPostingImage)
 
