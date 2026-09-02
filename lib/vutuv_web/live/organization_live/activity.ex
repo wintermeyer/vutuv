@@ -33,24 +33,32 @@ defmodule VutuvWeb.OrganizationLive.Activity do
   alias Vutuv.Organizations
   alias Vutuv.Posts
   alias VutuvWeb.Live.InitAssigns
+  alias VutuvWeb.OrganizationLive.ManageGate
   alias VutuvWeb.PostTeaser
 
   @impl true
   def mount(_params, session, socket) do
     socket = InitAssigns.assign_embedded(socket, session)
-    organization = Organizations.get_organization!(session["organization_id"])
 
-    # The marker is read BEFORE it is stamped, or the page would clear its own
-    # "new" marks before drawing them and nothing would ever look unread.
-    marker = organization.activity_read_at
-    if connected?(socket), do: Organizations.mark_activity_read(organization)
+    # The role is re-asked here, not left to the controller that embedded
+    # this page — see `VutuvWeb.OrganizationLive.ManageGate`.
+    case ManageGate.allow(socket, session, &Organizations.can_manage?/2) do
+      {:ok, organization} ->
+        # The marker is read BEFORE it is stamped, or the page would clear its own
+        # "new" marks before drawing them and nothing would ever look unread.
+        marker = organization.activity_read_at
+        if connected?(socket), do: Organizations.mark_activity_read(organization)
 
-    {:ok,
-     socket
-     |> assign(:organization, organization)
-     |> assign(:marker, marker)
-     |> assign(:page_title, gettext("Activity – %{name}", name: organization.name))
-     |> load_activity(0)}
+        {:ok,
+         socket
+         |> assign(:organization, organization)
+         |> assign(:marker, marker)
+         |> assign(:page_title, gettext("Activity – %{name}", name: organization.name))
+         |> load_activity(0)}
+
+      {:refused, socket} ->
+        {:ok, socket}
+    end
   end
 
   defp load_activity(socket, offset) do

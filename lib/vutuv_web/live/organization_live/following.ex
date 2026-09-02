@@ -44,21 +44,29 @@ defmodule VutuvWeb.OrganizationLive.Following do
   alias Vutuv.Social
   alias Vutuv.Tags
   alias VutuvWeb.Live.InitAssigns
+  alias VutuvWeb.OrganizationLive.ManageGate
 
   @impl true
   def mount(_params, session, socket) do
     socket = InitAssigns.assign_embedded(socket, session)
-    organization = Organizations.get_organization!(session["organization_id"])
 
-    {:ok,
-     socket
-     |> assign(:organization, organization)
-     |> assign(:page_title, gettext("Follows – %{name}", name: organization.name))
-     |> assign(:local_form, local_form())
-     |> assign(:local_follow_error, nil)
-     |> assign(:remote_form, remote_form())
-     |> assign(:follow_error, nil)
-     |> load_following()}
+    # The role is re-asked here, not left to the controller that embedded
+    # this page — see `VutuvWeb.OrganizationLive.ManageGate`.
+    case ManageGate.allow(socket, session, &Organizations.publisher?/2) do
+      {:ok, organization} ->
+        {:ok,
+         socket
+         |> assign(:organization, organization)
+         |> assign(:page_title, gettext("Follows – %{name}", name: organization.name))
+         |> assign(:local_form, local_form())
+         |> assign(:local_follow_error, nil)
+         |> assign(:remote_form, remote_form())
+         |> assign(:follow_error, nil)
+         |> load_following()}
+
+      {:refused, socket} ->
+        {:ok, socket}
+    end
   end
 
   defp load_following(socket) do

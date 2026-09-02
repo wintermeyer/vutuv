@@ -16,34 +16,43 @@ defmodule VutuvWeb.OrganizationLive.Edit do
   alias Vutuv.OrganizationImageStore
   alias Vutuv.Organizations
   alias VutuvWeb.Live.InitAssigns
+  alias VutuvWeb.OrganizationLive.ManageGate
 
   @impl true
   def mount(_params, session, socket) do
     socket = InitAssigns.assign_embedded(socket, session)
-    current_user = socket.assigns.current_user
-    locale = session["locale"] || "en"
-    organization = Organizations.get_organization!(session["organization_id"])
 
-    socket =
-      socket
-      |> assign(:locale, locale)
-      |> assign(:organization, organization)
-      |> assign(:owner?, Organizations.owner?(organization, current_user))
-      |> assign(:page_title, gettext("Edit %{name}", name: organization.name))
-      |> assign(:countries, Countries.select_options(locale))
-      |> assign(:aliases, Organizations.list_aliases(organization))
-      |> assign(:alias_name, "")
-      |> assign(:alias_kind, "alias")
-      |> assign(:handle_value, organization.username || "")
-      |> assign(:handle_error, nil)
-      |> allow_upload(:logo,
-        accept: OrganizationImageStore.extension_whitelist(),
-        max_entries: 1,
-        max_file_size: OrganizationImageStore.max_filesize()
-      )
-      |> assign_form(Organizations.change_organization(organization))
+    # The role is re-asked here, not left to the controller that embedded
+    # this page — see `VutuvWeb.OrganizationLive.ManageGate`.
+    case ManageGate.allow(socket, session, &Organizations.can_edit_page?/2) do
+      {:ok, organization} ->
+        current_user = socket.assigns.current_user
+        locale = session["locale"] || "en"
 
-    {:ok, socket}
+        socket =
+          socket
+          |> assign(:locale, locale)
+          |> assign(:organization, organization)
+          |> assign(:owner?, Organizations.owner?(organization, current_user))
+          |> assign(:page_title, gettext("Edit %{name}", name: organization.name))
+          |> assign(:countries, Countries.select_options(locale))
+          |> assign(:aliases, Organizations.list_aliases(organization))
+          |> assign(:alias_name, "")
+          |> assign(:alias_kind, "alias")
+          |> assign(:handle_value, organization.username || "")
+          |> assign(:handle_error, nil)
+          |> allow_upload(:logo,
+            accept: OrganizationImageStore.extension_whitelist(),
+            max_entries: 1,
+            max_file_size: OrganizationImageStore.max_filesize()
+          )
+          |> assign_form(Organizations.change_organization(organization))
+
+        {:ok, socket}
+
+      {:refused, socket} ->
+        {:ok, socket}
+    end
   end
 
   @impl true
