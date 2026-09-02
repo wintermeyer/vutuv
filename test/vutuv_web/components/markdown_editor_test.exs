@@ -225,6 +225,22 @@ defmodule VutuvWeb.MarkdownEditorTest do
     refute html =~ ~s(data-mde-cmd="mode")
   end
 
+  test "the Markdown help link rides the footer row, not a line of its own" do
+    html = editor(%{help: true})
+
+    # It belongs to the source view, so it belongs beside the switch that
+    # reaches it — one row rather than two. `.mde__help` is the handle
+    # components.css gates it by.
+    assert html =~ "mde__help"
+    assert html =~ "/system/markdown"
+
+    [above_foot, _] = String.split(html, "data-mde-foot", parts: 2)
+    refute above_foot =~ "/system/markdown", "the help link still hangs above the footer"
+
+    # Off by default: the message composer's panel has no room for it.
+    refute editor() =~ "/system/markdown"
+  end
+
   test "the footer is reachable by contract attribute, not by style class" do
     # The hook looks it up to wire the view switch and full screen. Every other
     # handle beside it (`frame`, `bubble`, `slash`, `mount`, `source`) is a

@@ -1732,13 +1732,7 @@ defmodule VutuvWeb.PostLive.Composer do
           single photo. The chip names what is in force, so the arrangement is
           readable without opening it. --%>
           <div :if={@images != []} class="mt-2 flex flex-wrap items-center gap-2">
-            <label
-              id={"#{@id}-add-photos"}
-              class="inline-flex h-9 mb-0 shrink-0 cursor-pointer items-center gap-1.5 whitespace-nowrap rounded-lg bg-slate-100 px-3 text-sm font-semibold text-slate-700 hover:bg-slate-200 dark:bg-slate-800 dark:text-slate-200 dark:hover:bg-slate-700"
-            >
-              📷 {gettext("Add photos")}
-              <.live_file_input upload={@uploads.images} class="sr-only" />
-            </label>
+            <.add_photos_picker id={@id} upload={@uploads.images} />
 
             <button
               type="button"
@@ -1832,20 +1826,7 @@ defmodule VutuvWeb.PostLive.Composer do
           rather than its share of a line — the button and the picker say what
           they do in words that must not break. --%>
           <div class="mt-3 flex flex-wrap items-center gap-x-3 gap-y-2">
-            <%!-- h-9 pins this to the Post button's height (both 36px, the
-            standard control height): the 📷 emoji would otherwise inflate the
-            line box, and mb-0 drops the global `label` margin (components.css)
-            that would offset it in this row. Shares its id with the photo
-            area's picker (one of the two renders), so the feed's camera button
-            always has a target to click. --%>
-            <label
-              :if={@images == []}
-              id={"#{@id}-add-photos"}
-              class="inline-flex h-9 mb-0 shrink-0 cursor-pointer items-center gap-1.5 whitespace-nowrap rounded-lg bg-slate-100 px-3 text-sm font-semibold text-slate-700 hover:bg-slate-200 dark:bg-slate-800 dark:text-slate-200 dark:hover:bg-slate-700"
-            >
-              📷 {gettext("Add photos")}
-              <.live_file_input upload={@uploads.images} class="sr-only" />
-            </label>
+            <.add_photos_picker :if={@images == []} id={@id} upload={@uploads.images} />
 
             <%!-- Everything that is about the post rather than in it (issue
             #1894). The language select and the "Hide from…" block used to
@@ -2178,6 +2159,40 @@ defmodule VutuvWeb.PostLive.Composer do
         {delimited_count(String.length(@body))} / {delimited_count(Post.max_body_length())}
       </p>
     </div>
+    """
+  end
+
+  # The way to attach photos. It renders in two places — under the grid once
+  # there are photos, in the bottom row while there are none — and exactly one
+  # of them at a time, which is why both carry the same id: the feed's camera
+  # button always has a target to click.
+  #
+  # `h-9` pins it to the Post button's height (both 36px, the standard control
+  # height): the 📷 emoji would otherwise inflate the line box, and `mb-0`
+  # drops the global `label` margin (components.css) that would offset it here.
+  #
+  # On a phone the verb goes. Three controls share the bottom row (picker,
+  # ⋯, Post) and "Add photos" was wide enough to push Post onto a line of its
+  # own; beside a camera glyph, in a row whose other button publishes, the noun
+  # says it. Two spans rather than one string picked server-side, because the
+  # server has no idea how wide the viewport is and the composer is rendered
+  # once for a window the member goes on resizing. Unlike the feed's pending
+  # pill (`Feed.pending_label/1`, which refuses the same swap), the short form
+  # here is a complete name for the control, so nothing has to be kept back for
+  # a screen reader.
+  attr(:id, :string, required: true)
+  attr(:upload, :any, required: true)
+
+  defp add_photos_picker(assigns) do
+    ~H"""
+    <label
+      id={"#{@id}-add-photos"}
+      class="inline-flex h-9 mb-0 shrink-0 cursor-pointer items-center gap-1.5 whitespace-nowrap rounded-lg bg-slate-100 px-3 text-sm font-semibold text-slate-700 hover:bg-slate-200 dark:bg-slate-800 dark:text-slate-200 dark:hover:bg-slate-700"
+    >
+      📷 <span class="sm:hidden">{gettext("Photos")}</span>
+      <span class="hidden sm:inline">{gettext("Add photos")}</span>
+      <.live_file_input upload={@upload} class="sr-only" />
+    </label>
     """
   end
 

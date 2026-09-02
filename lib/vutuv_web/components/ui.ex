@@ -312,9 +312,11 @@ defmodule VutuvWeb.UI do
   attr(:help, :boolean,
     default: false,
     doc:
-      "render the quiet `/system/markdown` link under the editor. On the post " <>
-        "composer, where a member writes prose; off in the message composer, " <>
-        "whose panel has no room for a second line"
+      "render the quiet `/system/markdown` link in the footer row, left of the " <>
+        "view switch — and only while the Markdown source is on screen, since " <>
+        "the syntax page answers nothing about the rich-text view. On the two " <>
+        "surfaces where a member writes prose at length (the post composer and " <>
+        "the job description); off where the panel is a chat line"
   )
 
   attr(:mention_limit, :integer,
@@ -455,6 +457,11 @@ defmodule VutuvWeb.UI do
       change, and would silently swallow anything the server later wants to
       render here. --%>
       <div data-mde-foot class="mde__foot">
+        <%!-- The way to the syntax page, on the same row as the switch that
+        makes it worth reading — components.css (`.mde__help`) decides when it
+        shows. --%>
+        <.markdown_help_link :if={@help} class="mde__help" />
+
         <%!-- Named, not lettered. The old control was a button reading "MD",
         and the source view is now how a member reaches everything the
         smaller control set no longer offers (a table, a divider, an H3), so
@@ -493,10 +500,6 @@ defmodule VutuvWeb.UI do
           <.mde_icon d="M3.75 8.25v-4.5h4.5M20.25 8.25v-4.5h-4.5M3.75 15.75v4.5h4.5M20.25 15.75v4.5h-4.5" />
         </button>
       </div>
-
-      <p :if={@help} class="mt-1 text-right">
-        <.markdown_help_link />
-      </p>
     </div>
     """
   end

@@ -2368,20 +2368,29 @@ div.footnotes li:target {
 
 /* --- the footer row (issue #1886) ---
    What used to be the toolbar's right-hand controls, moved under the field:
-   which view is showing, and the way to a bigger box. */
-/* Hidden until the hook has booted, like the frame it used to live inside.
-   Every control here is dead without JS — and worse than dead: the switch
-   would show "Text" pressed while the textarea showing through IS the
-   Markdown source, so an un-gated footer does not merely fail to work, it
-   states the opposite of what is on screen. */
-.mde__foot { display: none; }
-.mde[data-mde-ready] .mde__foot {
+   which view is showing, the way to a bigger box, and the way to the syntax
+   page. */
+/* Its controls are dead without JS — and worse than dead: the switch would
+   show "Text" pressed while the textarea showing through IS the Markdown
+   source, so an un-gated footer does not merely fail to work, it states the
+   opposite of what is on screen. */
+.mde__foot {
   display: flex;
   align-items: center;
   justify-content: flex-end;
   gap: 0.4rem;
   margin-top: 0.25rem;
 }
+/* The help link is the exception: it is TRUE without JS, because what shows
+   through then is the raw textarea, i.e. the Markdown source the linked page
+   documents. Everything else here is hidden — as a rule about the row, not a
+   list of today's controls, so the next control added is covered too. */
+.mde:not([data-mde-ready]) .mde__foot > :not(.mde__help) { display: none; }
+/* Same reason from the other side: with the hook up, the link goes away in
+   the rich-text view, where a member never sees a character of Markdown. It
+   takes the empty left half of the row rather than a line of its own. */
+.mde__help { margin-right: auto; }
+.mde[data-mde-ready]:not([data-mde-mode="source"]) .mde__help { display: none; }
 .mde__views {
   display: inline-flex;
   gap: 1px;
