@@ -218,6 +218,22 @@ defmodule Vutuv.SearchTest do
     test "an unknown status value degrades to plain text" do
       assert %{status: nil, text: "status:employed"} = Search.parse("status:employed")
     end
+
+    # The cap lives in `Vutuv.SearchText` (see its moduledoc for why); this
+    # asserts that `parse/2` really applies it, against the literal rather than
+    # against the accessor, so raising the cap cannot keep the test green.
+    test "cuts an over-long query to 200 characters" do
+      parsed = Search.parse(String.duplicate("a", 5_000))
+
+      assert String.length(parsed.raw) == 200
+      assert String.length(parsed.text) == 200
+    end
+
+    test "a query at the cap is left alone" do
+      name = String.duplicate("a", 200)
+
+      assert %{raw: ^name} = Search.parse(name)
+    end
   end
 
   describe "status operator matching" do

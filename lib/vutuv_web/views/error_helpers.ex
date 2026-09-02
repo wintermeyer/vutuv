@@ -101,6 +101,8 @@ defmodule VutuvWeb.ErrorHelpers do
         "PDF uploads are not available on this installation. Please upload an image instead."
       ),
       dgettext_noop("errors", "could not be read. Please upload a PDF, JPG, PNG or WebP file."),
+      # Vutuv.Accounts.User, sign-up: only the address the PIN goes to.
+      dgettext_noop("errors", "Only one email address can be given at sign-up."),
       # Vutuv.Tags.Tag / Vutuv.Accounts.User, the "this field is not a
       # billboard" rule (Vutuv.WebAddress).
       dgettext_noop("errors", "must not be a web or email address"),

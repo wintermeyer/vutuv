@@ -1028,16 +1028,48 @@ defmodule Vutuv.Accounts.User do
     |> Mentions.validate_handle_available(:username)
   end
 
+  # Kept byte-identical to its anchor in
+  # `VutuvWeb.ErrorHelpers.__error_message_extraction_anchors__/0`, which is what
+  # gets it into errors.pot and translated.
+  @one_email_message "Only one email address can be given at sign-up."
+
   # Registration is the one place where an email address may ride along with
   # the user: the address is verified right afterwards by the login PIN. It is
   # also the one place that enforces the tag minimum — tags are how members
   # are found, so an account may not start without at least three distinct
   # ones (an existing member is never forced to keep three).
   def registration_changeset(model, params \\ %{}) do
-    model
-    |> changeset(params)
-    |> validate_tag_list()
-    |> cast_assoc(:emails)
+    changeset = model |> changeset(params) |> validate_tag_list()
+
+    if several_emails?(params) do
+      # Refused without casting. `cast_assoc/3` builds a nested changeset per
+      # entry before anything can reject the list, so a 10,000-address POST to
+      # this unauthenticated endpoint costs 5.5M reductions to say no; this
+      # costs five.
+      add_error(changeset, :emails, @one_email_message)
+    else
+      cast_assoc(changeset, :emails)
+    end
+  end
+
+  # Exactly one address may ride along, because exactly one is proven: the login
+  # PIN goes to `emails["0"]` and nothing checks the rest. `POST
+  # /new_registration` is unauthenticated and takes whatever is posted, so a
+  # second entry used to be stored as a login identity for the new account —
+  # `Accounts.user_by_email/1` resolves any stored address to its user, so the
+  # address's real owner could no longer register it, and their next login would
+  # mail them a valid PIN into somebody else's account. Additional addresses go
+  # through the PIN-verified flow in `VutuvWeb.EmailController` instead.
+  #
+  # Both key spellings are read: the web params arrive with string keys, and an
+  # atom-keyed caller would otherwise walk past the check into `cast_assoc/3`,
+  # which accepts either.
+  defp several_emails?(params) do
+    case Map.get(params, "emails") || Map.get(params, :emails) do
+      [_, _ | _] -> true
+      emails when is_map(emails) -> map_size(emails) > 1
+      _ -> false
+    end
   end
 
   # The three tag rules share one resolved list: `distinct_tag_names/1` asks the

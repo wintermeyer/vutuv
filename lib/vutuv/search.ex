@@ -19,6 +19,7 @@ defmodule Vutuv.Search do
   alias Vutuv.Accounts.SearchTerm
   alias Vutuv.Accounts.User
   alias Vutuv.Repo
+  alias Vutuv.SearchText
   alias Vutuv.Tags.Tag
 
   @min_chars 3
@@ -83,7 +84,8 @@ defmodule Vutuv.Search do
   (the UI toggle, OR-ed with the quotes).
   """
   def parse(value, opts \\ []) when is_binary(value) do
-    raw = value |> String.trim() |> String.downcase()
+    # Cut first, so nothing this function reaches walks more than the cap.
+    raw = value |> SearchText.cap() |> String.trim() |> String.downcase()
     {quoted?, unquoted} = strip_quotes(raw)
 
     {fields, words} =

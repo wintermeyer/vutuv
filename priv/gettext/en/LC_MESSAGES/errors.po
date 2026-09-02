@@ -205,112 +205,117 @@ msgstr ""
 msgid "is larger than 10 MB. Please upload a smaller file."
 msgstr ""
 
-#: lib/vutuv_web/views/error_helpers.ex:106
+#: lib/vutuv_web/views/error_helpers.ex:108
 #, elixir-autogen, elixir-format
 msgid "must not be a web or email address"
 msgstr ""
 
-#: lib/vutuv_web/views/error_helpers.ex:107
+#: lib/vutuv_web/views/error_helpers.ex:109
 #, elixir-autogen, elixir-format
 msgid "can't be only a link. Please describe yourself in a few words."
 msgstr ""
 
-#: lib/vutuv_web/views/error_helpers.ex:111
+#: lib/vutuv_web/views/error_helpers.ex:113
 #, elixir-autogen, elixir-format
 msgid "\"%{tag}\" is a web address, not a tag. Please describe yourself with words."
 msgstr ""
 
-#: lib/vutuv_web/views/error_helpers.ex:118
+#: lib/vutuv_web/views/error_helpers.ex:120
 #, elixir-autogen, elixir-format
 msgid "must not be only punctuation"
 msgstr ""
 
-#: lib/vutuv_web/views/error_helpers.ex:119
+#: lib/vutuv_web/views/error_helpers.ex:121
 #, elixir-autogen, elixir-format
 msgid "\"%{tag}\" is only punctuation, not a tag."
 msgstr ""
 
-#: lib/vutuv_web/views/error_helpers.ex:129
+#: lib/vutuv_web/views/error_helpers.ex:131
 #, elixir-autogen, elixir-format
 msgid "\"%{uri}\" is not a valid https account address."
 msgstr ""
 
-#: lib/vutuv_web/views/error_helpers.ex:128
+#: lib/vutuv_web/views/error_helpers.ex:130
 #, elixir-autogen, elixir-format
 msgid "Please list at most %{max} accounts."
 msgstr ""
 
-#: lib/vutuv_web/views/error_helpers.ex:116
+#: lib/vutuv_web/views/error_helpers.ex:118
 #, elixir-autogen, elixir-format
 msgid "must spell out how the name sounds"
 msgstr ""
 
-#: lib/vutuv_web/views/error_helpers.ex:121
+#: lib/vutuv_web/views/error_helpers.ex:123
 #, elixir-autogen, elixir-format
 msgid "Please use at most %{max} tags."
 msgstr ""
 
-#: lib/vutuv_web/views/error_helpers.ex:131
+#: lib/vutuv_web/views/error_helpers.ex:133
 #, elixir-autogen, elixir-format
 msgid "Enter your Signal link, it starts with https://signal.me/#"
 msgstr ""
 
-#: lib/vutuv_web/views/error_helpers.ex:123
+#: lib/vutuv_web/views/error_helpers.ex:125
 #, elixir-autogen, elixir-format
 msgid "We allow at most %{max} accounts per post. Please remove some mentions."
 msgstr ""
 
-#: lib/vutuv_web/views/error_helpers.ex:134
+#: lib/vutuv_web/views/error_helpers.ex:136
 #, elixir-autogen, elixir-format
 msgid "Enter your Bluesky handle, e.g. name.bsky.social"
 msgstr ""
 
-#: lib/vutuv_web/views/error_helpers.ex:147
+#: lib/vutuv_web/views/error_helpers.ex:149
 #, elixir-autogen, elixir-format
 msgid "Enter your Codeberg username, not a full URL with extra path segments"
 msgstr ""
 
-#: lib/vutuv_web/views/error_helpers.ex:143
+#: lib/vutuv_web/views/error_helpers.ex:145
 #, elixir-autogen, elixir-format
 msgid "Enter your GitHub username, not a full URL with extra path segments"
 msgstr ""
 
-#: lib/vutuv_web/views/error_helpers.ex:139
+#: lib/vutuv_web/views/error_helpers.ex:141
 #, elixir-autogen, elixir-format
 msgid "Enter your GitLab username, e.g. gitlab.com/username (not a /-/u/ ID link)"
 msgstr ""
 
-#: lib/vutuv_web/views/error_helpers.ex:133
+#: lib/vutuv_web/views/error_helpers.ex:135
 #, elixir-autogen, elixir-format
 msgid "Enter your full Mastodon handle, e.g. @user@instance.social"
 msgstr ""
 
-#: lib/vutuv_web/views/error_helpers.ex:135
+#: lib/vutuv_web/views/error_helpers.ex:137
 #, elixir-autogen, elixir-format
 msgid "Enter your username and your instance, e.g. name@git.example.com"
 msgstr ""
 
-#: lib/vutuv_web/views/error_helpers.ex:151
+#: lib/vutuv_web/views/error_helpers.ex:153
 #, elixir-autogen, elixir-format
 msgid "Invalid account name"
 msgstr ""
 
-#: lib/vutuv_web/views/error_helpers.ex:152
+#: lib/vutuv_web/views/error_helpers.ex:154
 #, elixir-autogen, elixir-format
 msgid "Someone has already claimed this account"
 msgstr ""
 
-#: lib/vutuv_web/views/error_helpers.ex:159
+#: lib/vutuv_web/views/error_helpers.ex:161
 #, elixir-autogen, elixir-format
 msgid "That instance did not answer. Please try again in a moment."
 msgstr ""
 
-#: lib/vutuv_web/views/error_helpers.ex:160
+#: lib/vutuv_web/views/error_helpers.ex:162
 #, elixir-autogen, elixir-format
 msgid "Too many checks for now. Please try again later."
 msgstr ""
 
-#: lib/vutuv_web/views/error_helpers.ex:155
+#: lib/vutuv_web/views/error_helpers.ex:157
 #, elixir-autogen, elixir-format
 msgid "We could not find this account on that instance. Please check the address."
 msgstr ""
+
+#: lib/vutuv_web/views/error_helpers.ex:105
+#, elixir-autogen, elixir-format
+msgid "Only one email address can be given at sign-up."
+msgstr "Only one email address can be given at sign-up."
