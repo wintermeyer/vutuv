@@ -29,6 +29,7 @@ defmodule VutuvWeb.ShellLive do
       delimited_count: 1,
       gutter_class: 0,
       icon_bookmark: 1,
+      icon_pencil: 1,
       name_initials: 1,
       presence_dot: 1
     ]
@@ -1408,20 +1409,23 @@ defmodule VutuvWeb.ShellLive do
         <% end %>
         <.tab :let={active} href={~p"/search"} label={gettext("Search")} active={on_route?(@path, "/search")}><.icon_search filled?={active} /></.tab>
         <%= if @user_id do %>
+          <%!-- Write, in the middle: the feed's compose control, moved from the
+          top of the page (where a thumb does not reach) to where the thumb is,
+          in the Profile tab's old slot (the profile stays one tap behind the
+          top bar's avatar). A plain link to the composer deep link the profile
+          card and the launcher shortcut already use; on the feed itself
+          `compose_tab.js` opens the composer in place instead. An action, not a
+          place, so it never wears `aria-current` and its glyph is the same
+          filled disc on every page. `-my-1`: the disc draws 32px but takes the
+          24px the other glyphs take, so its label sits on their line (it sat
+          four pixels lower without it). --%>
+          <.tab href={~p"/feed#compose"} label={pgettext("phone tab bar", "Write")} data-mobile-compose>
+            <span class="-my-1 flex h-8 w-8 items-center justify-center rounded-full bg-brand-600 text-white shadow-sm">
+              <.icon_pencil />
+            </span>
+          </.tab>
           <.tab :let={active} href={~p"/messages"} label={gettext("Messages")} count={@messages_count} active={on_route?(@path, "/messages")}><.icon_envelope filled?={active} /></.tab>
           <.tab :let={active} href={~p"/notifications"} label={gettext("Alerts")} count={@notifications_count} active={on_route?(@path, "/notifications")}><.icon_bell filled?={active} /></.tab>
-          <%!-- The member's own avatar is the Profile tab — the universal mobile
-          convention for "you", so the profile is reachable on phones too, not
-          just via the desktop nav or the logo's /feed deep-link. --%>
-          <.tab :let={active} href={~p"/#{@user_param}"} label={gettext("Profile")} data-mobile-profile active={on_route?(@path, "/#{@user_param}")}>
-            <%= if @user_avatar do %>
-              <img src={@user_avatar} alt="" class={["h-6 w-6 rounded-full object-cover", active && tab_avatar_ring()]} />
-            <% else %>
-              <span class={["flex h-6 w-6 items-center justify-center rounded-full bg-brand-700 text-[10px] font-bold text-white", active && tab_avatar_ring()]}>
-                {@user_initials}
-              </span>
-            <% end %>
-          </.tab>
         <% else %>
           <.tab href={~p"/login"} label={gettext("Log in")}><.icon_login /></.tab>
         <% end %>
@@ -1491,21 +1495,6 @@ defmodule VutuvWeb.ShellLive do
       <span class="text-[10px]">{@label}</span>
     </.link>
     """
-  end
-
-  # The Profile tab's icon is the member's own face, so unlike the other four it
-  # has no filled twin to swap in. A ring around the avatar is the equivalent
-  # move and the same one the phone apps make. The offset is what makes it work
-  # on both faces: without it, a brand-coloured ring drawn straight onto the
-  # brand-coloured initials circle is invisible.
-  #
-  # The colour is named rather than `ring-current`, so this one ornament does
-  # NOT follow the press paint: while another tab is being pressed, this tab's
-  # label greys to `--press-off-fg` and its ring stays brand until the new
-  # document paints. `ring-current` is not the fix — the initials fallback is
-  # `text-white`, so currentColor there is a white ring on a white bar.
-  defp tab_avatar_ring do
-    "ring-2 ring-brand-700 ring-offset-1 ring-offset-white dark:ring-brand-200 dark:ring-offset-slate-900"
   end
 
   # Shared classes for an avatar account-menu item — mirrors the card_menu

@@ -325,8 +325,8 @@ A member who follows nobody yet (most visibly a brand-new sign-up, whose feed
 would be empty) lands on their own **profile** instead, where they can fill it
 in and find people to follow.
 
-It is a LiveView: a collapsed compose tile (the same dashed `<.empty_add>` tile
-as the profile's Beiträge section) expands the inline composer, a pull-model
+It is a LiveView: a collapsed compose button (on a desktop; a phone opens the
+same composer from the tab bar's Write tab) expands the inline composer, a pull-model
 timeline (own + followed authors' posts **and reposts**, with a "Reposted by X"
 line) with cursor "Load more", a *"Show N new posts"* pill fed by `{:new_post,
 …}` / `{:new_repost, …}` broadcasts, and a desktop-only **"New here"** welcome
@@ -653,7 +653,9 @@ copy of the truth the feed reads.
 moves under the reader: new posts wait, and the rail's "Not read yet" card lists
 the last four of them — who wrote each and its teaser line — over the one button
 that brings them all down. Above the timeline the same queue is a pill that
-quotes the newest one. Both read `@pending_posts` and fire the same event, so
+quotes the newest one (on the desktop's compose line; on a phone in the date's
+slot of the control row, where pulling the timeline down presses it). Both read
+`@pending_posts` and fire the same event, so
 they cannot disagree, and both quote through `VutuvWeb.PostTeaser`, the same pair
 of strings the browser-tab title uses (see [realtime.md](realtime.md)).
 
@@ -731,9 +733,20 @@ and their queries cost nothing to a reader who never opens it, and they carry
 their own ids because the rail is still in the DOM behind the sheet and two live
 components may not share one. Every id inside the band is prefixed with its
 component's — a repeated `<label for>` would otherwise toggle the rail's checkbox
-from the sheet. The filter button shares that line with the phone's calendar and
-nothing else: the "what is waiting" quote sits on the compose line above,
-which exists at every width.
+from the sheet. The phone's control row is the filter button, icon-only (its
+word was a fifth of the width), and then the folded calendar's date — which is
+also where a waiting post announces itself: the "what is waiting" pill takes the
+date's cell (the stylesheet sees it arrive via `:has()` and crossfades the two in
+place; the date stays in the DOM underneath so it can fade back) and gives it
+back when pressed. Pulling the timeline down at the top of the page is that
+press made with the thumb (`assets/js/pull_to_reveal.js`: touch events, the
+`touchmove` cancelled while the pull is ours, the slide a Web Animation on
+`#feed-body` and the phase on `<html>` — neither is an attribute a patch could
+drop). The compose line above, with its button and the
+desktop's copy of the pill, is `md:flex`: on a phone the compose control is the
+tab bar's middle **Write** tab (`VutuvWeb.ShellLive`, `data-mobile-compose`),
+under the thumb rather than at the top of the page, a link to `/feed#compose`
+that `assets/js/compose_tab.js` answers in place on the feed itself.
 
 No arranging controls in the sheet: the order, the folding and the putting away
 are about a column that only exists on a desktop.

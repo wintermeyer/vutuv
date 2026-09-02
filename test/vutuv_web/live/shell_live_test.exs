@@ -292,22 +292,62 @@ defmodule VutuvWeb.ShellLiveTest do
       assert has_element?(view, ~s(nav a[data-nav-profile][href="/stefan"]), "Profile")
     end
 
-    test "the mobile tab bar carries a Profile tab to the member's profile", %{conn: conn} do
-      # Desktop is not the only surface: the bottom tab bar gets a Profile tab
-      # too, so phone visitors can reach their profile without hunting for it.
+    test "the mobile tab bar's middle tab writes a post", %{conn: conn} do
+      # The feed's compose button sat at the top of the page, the one place a
+      # thumb holding the phone cannot reach; the tab bar is where the thumb
+      # already is. It took the Profile tab's slot — the profile is still one
+      # tap away behind the avatar in the top bar — and stands in the MIDDLE,
+      # the spot the phone apps give the one action that is not a place.
       user = stefan()
       {:ok, view, _html} = live_isolated(conn, VutuvWeb.ShellLive, session: shell_session(user))
 
-      assert has_element?(view, ~s(nav a[data-mobile-profile][href="/stefan"]), "Profile")
-      # Five tabs now (Feed, Search, Messages, Alerts, Profile), so the grid grows.
+      assert has_element?(view, ~s(nav a[data-mobile-compose][href="/feed#compose"]), "Write")
+      refute has_element?(view, "[data-mobile-profile]")
+      # Still five tabs (Feed, Search, Write, Messages, Alerts).
       assert has_element?(view, "nav.grid-cols-5")
+
+      labels =
+        view
+        |> render()
+        |> LazyHTML.from_document()
+        |> LazyHTML.query(~s(#{tabs()} a[data-nav-item]))
+        |> Enum.map(&(&1 |> LazyHTML.text() |> String.trim()))
+
+      assert labels == ["Feed", "Search", "Write", "Messages", "Alerts"]
     end
 
-    test "logged out there is no Profile nav link or tab", %{conn: conn} do
+    test "the Write tab is never the current page, on the feed included", %{conn: conn} do
+      # It is an action, not a place: what it opens sits on /feed, but marking
+      # it current there would put two filled tabs on one bar.
+      user = stefan()
+
+      {:ok, view, _html} =
+        live_isolated(conn, VutuvWeb.ShellLive,
+          session: shell_session(user, %{"path" => "/feed"})
+        )
+
+      assert has_element?(view, ~s(nav a[href="/feed"][aria-current="page"]))
+      refute has_element?(view, ~s(nav a[data-mobile-compose][aria-current]))
+    end
+
+    test "the Write tab reads Schreiben in German", %{conn: conn} do
+      # A one-word msgid is the likeliest to be fuzzy-filled by a merge, and a
+      # tab label is the least likely place anyone reads twice.
+      # The shell takes its locale from the session it is mounted with
+      # (`LiveLocale.put_viewer/2`), the way the layout hands it over.
+      user = stefan()
+
+      {:ok, view, _html} =
+        live_isolated(conn, VutuvWeb.ShellLive, session: shell_session(user, %{"locale" => "de"}))
+
+      assert has_element?(view, "nav a[data-mobile-compose]", "Schreiben")
+    end
+
+    test "logged out there is no Profile nav link and no Write tab", %{conn: conn} do
       {:ok, view, _html} = live_isolated(conn, VutuvWeb.ShellLive, session: %{})
 
       refute has_element?(view, "[data-nav-profile]")
-      refute has_element?(view, "[data-mobile-profile]")
+      refute has_element?(view, "[data-mobile-compose]")
     end
   end
 
@@ -340,7 +380,6 @@ defmodule VutuvWeb.ShellLiveTest do
           live_isolated(conn, VutuvWeb.ShellLive, session: shell_session(user, %{"path" => path}))
 
         assert has_element?(view, ~s(a[data-nav-profile][aria-current="page"]))
-        assert has_element?(view, ~s(a[data-mobile-profile][aria-current="page"]))
         # A different member's profile must not activate my Profile item.
         refute has_element?(view, ~s(a[href="/feed"][aria-current="page"]))
       end
@@ -355,7 +394,6 @@ defmodule VutuvWeb.ShellLiveTest do
         )
 
       refute has_element?(view, ~s(a[data-nav-profile][aria-current="page"]))
-      refute has_element?(view, ~s(a[data-mobile-profile][aria-current="page"]))
     end
 
     test "Jobs stays active across the whole jobs section", %{conn: conn} do
@@ -435,8 +473,11 @@ defmodule VutuvWeb.ShellLiveTest do
       assert has_element?(search, ~s(#{tabs()} a[href="/search"] svg[stroke-width="2.6"]))
       refute has_element?(profile, ~s(#{tabs()} a[href="/search"] svg[stroke-width="2.6"]))
 
-      assert has_element?(profile, ~s(#{tabs()} a[data-mobile-profile] .ring-2))
-      refute has_element?(search, ~s(#{tabs()} a[data-mobile-profile] .ring-2))
+      # The Write tab has no "current" face at all: its glyph is a filled brand
+      # disc on every page, the way a compose button is drawn, so it neither
+      # competes with the filled current tab nor changes with the route.
+      assert has_element?(search, ~s(#{tabs()} a[data-mobile-compose] .bg-brand-600))
+      assert has_element?(profile, ~s(#{tabs()} a[data-mobile-compose] .bg-brand-600))
     end
 
     # The colour split is the second half of the fix and the half a later

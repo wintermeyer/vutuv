@@ -62,8 +62,9 @@ function go(path) {
 
 // "n" (new post): focus the feed composer if it is on the page, otherwise jump
 // to the feed and focus it on arrival (#compose). Returning false (no composer
-// here) is what makes the handler navigate to the feed instead.
-function focusComposer() {
+// here) is what makes the handler navigate to the feed instead. Exported for
+// the phone tab bar's Write tab (compose_tab.js), which asks the same question.
+export function focusComposer() {
   if (!document.getElementById("composer-body")) return false
   revealAndFocusComposer()
   // Drop the hash so a later reload / back-button doesn't refocus out of the blue.
@@ -80,14 +81,16 @@ function isVisible(el) {
 }
 
 // On the feed the composer starts collapsed (display:none) behind a "Write a
-// post" tile, and focus() is a no-op on a display:none node, so click the
+// post" button, and focus() is a no-op on a display:none node, so click the
 // reveal trigger first, then focus once it paints. The reveal is a LiveView
 // round-trip, and on a cross-page arrival (#compose) the socket may still be
 // joining, which swallows the first click; so retry the click each tick until
-// the panel is actually visible, then focus. Only click while the trigger is
-// itself visible: it stays in the DOM once the composer opens (it is merely
-// hidden, so morphdom cannot relocate the panel below it), so an unguarded
-// retry would keep pushing `open-composer` at an already-open composer.
+// the editor is actually visible, then focus. Reaching the click at all means
+// the editor — and with it the panel it sits in — is still hidden, so this
+// never pushes `open-composer` at an already-open composer. The trigger's own
+// visibility is deliberately not asked: on a phone it is never visible (its
+// line is desktop-only, the tab bar's Write tab does its job there), and a
+// hidden button still takes a click().
 function revealAndFocusComposer(tries = 0) {
   const el = document.getElementById("composer-body")
   if (el && isVisible(el)) {
@@ -95,8 +98,7 @@ function revealAndFocusComposer(tries = 0) {
     return
   }
   if (tries > 40) return
-  const trigger = document.getElementById("open-composer")
-  if (trigger && isVisible(trigger)) trigger.click()
+  document.getElementById("open-composer")?.click()
   setTimeout(() => revealAndFocusComposer(tries + 1), 50)
 }
 

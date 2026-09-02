@@ -25,6 +25,7 @@ import {
   localSet,
   onReady,
   once,
+  plainClick,
   postJSON,
   request,
   reducedMotion,
@@ -48,6 +49,12 @@ import "./lightbox"
 // (self-contained; marks <html>, which is outside every LiveView root, so no
 // patch can drop the state. See scroll_top_tab.js).
 import "./scroll_top_tab"
+// The phone tab bar's Write tab: on the feed it opens the composer in place
+// instead of navigating to `/feed#compose` (self-contained; see compose_tab.js).
+import "./compose_tab"
+// Pulling the feed down at the top of the page presses the waiting-posts pill;
+// registered as the PullToReveal hook below. See pull_to_reveal.js.
+import { PullToReveal } from "./pull_to_reveal"
 // The card behind a `@user@host` mention in a post: who that is, and a Follow
 // button, instead of leaving the site for their server (self-contained; its
 // panel lives on <body>, outside every LiveView root. See mention_card.js).
@@ -989,7 +996,8 @@ const NewMarks = {
       { threshold: [0, 0.6] },
     )
 
-    // The pill is NOT inside this element — it sits on the compose line above —
+    // The pill is NOT inside this element — it sits on the compose line above,
+    // or in the phone's date slot, one copy per breakpoint under one marker —
     // so the listener goes on the document, the way the rest of this file does
     // its delegation. A frame later, because the JS command that stamps the
     // marks runs in this same click and the order between the two is not ours
@@ -1002,7 +1010,7 @@ const NewMarks = {
     // midnight restream) comes back without its mark, which is the accepted
     // price of a marker the server never renders.
     this.onPillClick = (event) => {
-      if (event.target.closest("#show-new-posts")) {
+      if (event.target.closest("[data-show-new]")) {
         requestAnimationFrame(() => this.sweepMarks())
       }
     }
@@ -1060,6 +1068,7 @@ const Hooks = {
   TagInput,
   FeedUrl,
   NewMarks,
+  PullToReveal,
   LocalTime: {
     mounted() {
       localizeTime(this.el)
@@ -2073,7 +2082,7 @@ document.addEventListener("click", (e) => {
   // Three presses that leave THIS document exactly as it is, so painting any
   // of them would be a lie: one that opens a new tab or window, one already
   // handled by something else, and one on the page the reader is on.
-  if (e.defaultPrevented || e.metaKey || e.ctrlKey || e.shiftKey || e.altKey) return
+  if (!plainClick(e)) return
   if (item.target === "_blank") return
   if (item.getAttribute("aria-current") === "page") return
 

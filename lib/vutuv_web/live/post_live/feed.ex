@@ -2149,6 +2149,14 @@ defmodule VutuvWeb.PostLive.Feed do
   # How many posts are waiting, drawn or not — what the card and the pill count.
   defp pending_count(assigns), do: length(assigns.pending_posts) + assigns.pending_overflow
 
+  attr(:id, :string,
+    required: true,
+    doc:
+      "spelled by the caller: the pill renders once per breakpoint, and two live elements may not share an id"
+  )
+
+  attr(:class, :any, default: nil, doc: "the wrapper's place in its line, e.g. `flex-1`")
+
   attr(:pending_posts, :list, required: true)
   attr(:pending_overflow, :integer, required: true)
 
@@ -2157,9 +2165,14 @@ defmodule VutuvWeb.PostLive.Feed do
     doc: "the travelled-to day, or nil — decides whether the press can be a browser-side reveal"
   )
 
-  # Fades in as the calendar folds out of the way, so the two read as one
-  # movement rather than as a pop over a jump. An insert plays a keyframe on its
-  # own; a later count tick only patches this node's text, so it does not replay.
+  # Rendered twice: on the desktop's compose line, and in the phone's date slot,
+  # where it fades in as the date fades out so the two read as one movement
+  # rather than as a pop over a jump (the slot turns the arrival keyframe
+  # upward, see `.feed-cal-slot` in components.css). An insert plays a keyframe
+  # on its own; a later count tick only patches this node's text, so it does not
+  # replay. `data-show-new` is what the phone's pull gesture presses: it takes
+  # the first copy it finds, the hidden desktop one, and that is fine because
+  # both copies fire the same commands and neither depends on being visible.
   #
   # `h-10` and not vertical padding: it stands beside the filter button, which is
   # `h-10`, and a pill sized by its own line height came out four pixels short of
@@ -2176,10 +2189,11 @@ defmodule VutuvWeb.PostLive.Feed do
     assigns = assign(assigns, :quote, newest_quote(assigns.pending_posts))
 
     ~H"""
-    <div class="feed-teaser-in min-w-0 flex-1 text-center">
+    <div class={["feed-teaser-in min-w-0 text-center", @class]}>
       <button
-        id="show-new-posts"
+        id={@id}
         type="button"
+        data-show-new
         phx-click={show_pending(assigns)}
         class="mx-auto flex h-10 w-full max-w-full items-center gap-2 rounded-full bg-brand-50 px-4 text-sm font-semibold text-brand-700 shadow-sm hover:bg-brand-100 sm:w-auto dark:bg-brand-900/40 dark:text-brand-100 dark:hover:bg-brand-900/70"
       >
@@ -2244,8 +2258,8 @@ defmodule VutuvWeb.PostLive.Feed do
   # beside it. Alone it takes the line (`flex-1`); beside a waiting-posts quote it
   # keeps only what it needs (`flex-none`) and hands the rest over, because the
   # quote is the half that carries information and a 50:50 split left it three
-  # words. Below `sm` it goes further and drops its own word, the same trade the
-  # filter button on the phone's control line makes.
+  # words. A desktop control: the line it stands on is `md:flex`, and on a phone
+  # the tab bar's Write tab does this job, so it never has to drop its word.
   defp compose_button(assigns) do
     ~H"""
     <%!-- The id is spelled here and nowhere else: `keyboard_shortcuts.js`
@@ -2262,25 +2276,8 @@ defmodule VutuvWeb.PostLive.Feed do
         if(@alone?, do: "flex-1", else: "flex-none")
       ]}
     >
-      <svg
-        class="h-4 w-4 shrink-0"
-        fill="none"
-        viewBox="0 0 24 24"
-        stroke-width="1.5"
-        stroke="currentColor"
-        aria-hidden="true"
-      >
-        <path
-          stroke-linecap="round"
-          stroke-linejoin="round"
-          d="m16.862 4.487 1.687-1.688a1.875 1.875 0 1 1 2.652 2.652L10.582 16.07a4.5 4.5 0 0 1-1.897 1.13L6 18l.8-2.685a4.5 4.5 0 0 1 1.13-1.897l8.932-8.931Zm0 0L19.5 7.125"
-        />
-      </svg>
-      <%!-- The label is the accessible name when it is showing; when the quote
-      has taken the line it is still read, just not drawn. --%>
-      <span class={!@alone? && "sr-only sm:not-sr-only"}>
-        {gettext("Write a post")}
-      </span>
+      <.icon_pencil class="h-4 w-4 shrink-0" />
+      <span>{gettext("Write a post")}</span>
     </button>
     """
   end
@@ -2861,7 +2858,28 @@ defmodule VutuvWeb.PostLive.Feed do
     `sync_url/1`). It hangs off the page root rather than off the calendar
     because there are two calendars, one per breakpoint, and the URL has one
     owner. --%>
-    <div id="feed" phx-hook="FeedUrl" class="py-6">
+    <div id="feed" phx-hook="FeedUrl" class="relative py-6">
+      <%!-- Pull to reveal. On a phone, dragging the timeline down at the top of
+      the page is the press on the waiting-posts pill (`pull_to_reveal.js`);
+      this is the arrow that fades in over the gap the pull opens. The hook
+      hangs off it because `#feed` already carries `FeedUrl` and an element
+      takes one hook. `phx-update="ignore"`, because the hook draws the arrow
+      as inline styles on this element and a patch would otherwise drop them
+      (#1143) — the pill's count ticking mid-pull is enough. Out of the
+      accessibility tree: the pill is the control, this only draws the gesture. --%>
+      <div
+        id="feed-pull"
+        class="feed-pull"
+        phx-hook="PullToReveal"
+        phx-update="ignore"
+        aria-hidden="true"
+      >
+        <span class="feed-pull__glyph flex h-9 w-9 items-center justify-center rounded-full bg-white text-brand-700 shadow-sm ring-1 ring-slate-200 dark:bg-slate-900 dark:text-brand-200 dark:ring-slate-800">
+          <svg class="h-5 w-5" fill="none" viewBox="0 0 24 24" stroke-width="2" stroke="currentColor">
+            <path stroke-linecap="round" stroke-linejoin="round" d="M12 4.5v15m0 0 6.75-6.75M12 19.5l-6.75-6.75" />
+          </svg>
+        </span>
+      </div>
       <%!-- Two columns on desktop: the feed, plus the rail that uses the
       otherwise-empty side space. The rail is desktop-only (the grid collapses
       to one column under md, and the rail is hidden anyway). --%>
@@ -2872,7 +2890,10 @@ defmodule VutuvWeb.PostLive.Feed do
       grid rather than on the timeline column because the controls moved to the
       rail — the band's source rows are the successor to the tab presses this
       paint was built for, and both markers have to stay under one element. --%>
-      <div data-filter-scope class="grid gap-6 md:grid-cols-3">
+      <%!-- `id`: what `pull_to_reveal.js` slides down with the finger — the
+      grid and not `#feed`, because the filter sheet below is `position: fixed`
+      inside `#feed`, and a transform there would become its containing block. --%>
+      <div id="feed-body" data-filter-scope class="grid gap-6 md:grid-cols-3">
         <%!-- min-w-0: below md the grid is a single implicit `auto` track that
         respects this column's min-content, so a long `truncate` descendant (a
         threaded reply's parent-excerpt) would otherwise force the column — and
@@ -2916,11 +2937,19 @@ defmodule VutuvWeb.PostLive.Feed do
           it). A conditional element ABOVE the editor is the caret-killer of
           #1200 — morphdom relocates the following siblings to restore their
           order and re-parenting a `contenteditable` blurs it — which is why the
-          line itself is unconditional and only its contents change. --%>
+          line itself is unconditional and only its contents change.
+
+          A desktop line (`md:flex`). On a phone the compose control is the tab
+          bar's Write tab (`VutuvWeb.ShellLive`), under the thumb instead of at
+          the top of the page where a thumb does not reach, and the pill stands
+          in the date's slot on the phone's own control row below — so this line
+          has nothing to show there and is hidden rather than removed, for the
+          #1200 reason above. The button stays in the DOM, and that is what the
+          Write tab clicks (`revealAndFocusComposer` in keyboard_shortcuts.js). --%>
           <div
             id="composer-trigger"
             class={[
-              if(@composer_open?, do: "hidden", else: "flex"),
+              if(@composer_open?, do: "hidden", else: "hidden md:flex"),
               "items-center gap-2"
             ]}
           >
@@ -2928,6 +2957,8 @@ defmodule VutuvWeb.PostLive.Feed do
 
             <.new_posts_pill
               :if={@pending_posts != []}
+              id="show-new-posts"
+              class="flex-1"
               pending_posts={@pending_posts}
               pending_overflow={@pending_overflow}
               cal_day={@cal_day}
@@ -2949,49 +2980,43 @@ defmodule VutuvWeb.PostLive.Feed do
             />
           </div>
 
-          <%!-- Two controls, and on a phone this is the only way to either. The
-          calendar is the phone's copy of the rail's — there is no filter column
-          under `md`, and the way back from an opened day is not optional the way
-          the rest of the rail is; the filter button opens the band as a sheet
-          for the same reason.
+          <%!-- The phone's control row, and on a phone the only way to either
+          control. The calendar is the phone's copy of the rail's — there is no
+          filter column under `md`, and the way back from an opened day is not
+          optional the way the rest of the rail is; the filter button opens the
+          band as a sheet for the same reason. Phone-only, full stop: a desktop
+          has the rail and the compose line for everything here.
 
-          Folded, the calendar takes what the filter button leaves; unfolded it
-          claims the whole line and the button wraps under it, because a month
-          grid squeezed beside a button draws day cells too small to hit.
+          Glyph first, then the date. The filter button is icon-only here — its
+          word was a fifth of a phone's width, and the funnel says it on its own
+          (the `aria-label` still spells it out) — and a fixed-width control
+          belongs at the edge, with the one whose width varies with what it has
+          to say taking the rest.
 
-          The row is phone-only, full stop: the waiting-posts quote moved up to
-          the compose line, which exists at every width, so there is nothing left
-          here for a desktop to show. That also gave the calendar its line back —
-          it no longer slides aside to make room (`.feed-cal-slot--away`), and
-          the filter button keeps its word. --%>
+          The date's slot is where a waiting post announces itself. The pill
+          takes the date's cell (the stylesheet sees it arrive — `:has()` — and
+          crossfades the two in place, the date fading out upward while the pill
+          fades in from below) and gives it back when pressed. The date stays in
+          the DOM underneath, because a node that leaves cannot fade, and it is
+          the one that has to fade back in. Unfolded (`data-open`) there is no
+          date to stand in for and a pill over a month grid would cover the days,
+          so the slot stacks the pill under the card instead; the same attribute
+          gives the slot the whole line and puts it first, so the button wraps
+          under it rather than sitting alone above it — a month grid squeezed
+          beside a button draws day cells too small to hit.
+
+          The pill is the same component as the compose line's, rendered once
+          per breakpoint under its own id; each line is hidden on the other's
+          breakpoint, so a reader only ever sees one, and a press on either
+          empties the one queue. Pulling the timeline down at the top of the
+          page presses this copy for the reader (`#feed-pull` above). --%>
           <div id="feed-mobile-controls" class="flex flex-wrap items-center gap-2 md:hidden">
-            <%!-- The wrapper collapses, not the card: a card cannot shrink past
-            its own padding and ring (border-box floors its width there), and
-            clipping it from outside costs nothing. --%>
-            <div
-              id="feed-calendar-mobile-slot"
-              class={["feed-cal-slot", @cal_open? && "basis-full"]}
-            >
-              <.feed_calendar
-                id="feed-calendar-mobile"
-                open?={@cal_open?}
-                earlier?={@cal_earlier?}
-                month={@cal_month}
-                day={@cal_day}
-                metric={@cal_metric}
-                counts={@cal_counts}
-                counts_pending?={@cal_counts_pending?}
-                capped?={@cal_capped?}
-                today={@cal_today}
-              />
-            </div>
-
             <button
               type="button"
               id="open-filter-sheet"
               phx-click="open-band"
               aria-label={pgettext("feed filter sheet", "Filter")}
-              class="inline-flex h-10 shrink-0 items-center gap-2 rounded-full bg-white px-3 text-sm font-semibold text-slate-700 shadow-sm ring-1 ring-slate-200 hover:bg-slate-50 dark:bg-slate-900 dark:text-slate-200 dark:ring-slate-800 dark:hover:bg-slate-800"
+              class="inline-flex h-10 w-10 shrink-0 items-center justify-center rounded-full bg-white text-slate-700 shadow-sm ring-1 ring-slate-200 hover:bg-slate-50 dark:bg-slate-900 dark:text-slate-200 dark:ring-slate-800 dark:hover:bg-slate-800"
             >
               <svg
                 class="h-5 w-5 shrink-0"
@@ -3007,8 +3032,31 @@ defmodule VutuvWeb.PostLive.Feed do
                   d="M12 3c2.755 0 5.455.232 8.083.678.533.09.917.556.917 1.096v1.044a2.25 2.25 0 0 1-.659 1.591l-5.432 5.432a2.25 2.25 0 0 0-.659 1.591v2.927a2.25 2.25 0 0 1-1.244 2.013L9.75 21v-6.568a2.25 2.25 0 0 0-.659-1.591L3.659 7.409A2.25 2.25 0 0 1 3 5.818V4.774c0-.54.384-1.006.917-1.096A48.32 48.32 0 0 1 12 3Z"
                 />
               </svg>
-              <span>{pgettext("feed filter sheet", "Filter")}</span>
             </button>
+
+            <div id="feed-calendar-mobile-slot" class="feed-cal-slot" data-open={@cal_open? && "1"}>
+              <.feed_calendar
+                id="feed-calendar-mobile"
+                class="feed-cal-slot__cal"
+                open?={@cal_open?}
+                earlier?={@cal_earlier?}
+                month={@cal_month}
+                day={@cal_day}
+                metric={@cal_metric}
+                counts={@cal_counts}
+                counts_pending?={@cal_counts_pending?}
+                capped?={@cal_capped?}
+                today={@cal_today}
+              />
+
+              <.new_posts_pill
+                :if={@pending_posts != []}
+                id="show-new-posts-mobile"
+                pending_posts={@pending_posts}
+                pending_overflow={@pending_overflow}
+                cal_day={@cal_day}
+              />
+            </div>
           </div>
 
           <%!-- The timeline is one card of flat divide-y rows — the same
