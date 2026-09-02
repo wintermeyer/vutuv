@@ -107,7 +107,17 @@ defmodule VutuvWeb.NotificationLiveTest do
       assert html =~ "started following you"
 
       assert render(live) =~ "endorsed you for Phoenix"
-      assert has_element?(live, ~s([data-notification-row][data-kind="follower"]))
+
+      # Both people events sit as lines inside the day's one people card.
+      assert has_element?(
+               live,
+               ~s([data-notification-row][data-kind="people"] [data-event-kind="follower"])
+             )
+
+      assert has_element?(
+               live,
+               ~s([data-notification-row][data-kind="people"] [data-event-kind="endorsement"])
+             )
 
       # The actor's name links to their profile.
       assert render(live) =~ ~s(href="/#{follower.username}")
@@ -127,7 +137,7 @@ defmodule VutuvWeb.NotificationLiveTest do
       assert render(live) =~ ~r/<time[^>]*datetime="\d{4}-\d{2}-\d{2}T[^"]*Z"/
     end
 
-    test "a derived row shows the actor's real avatar when they have one", %{conn: conn} do
+    test "a people card shows the actor's real avatar when they have one", %{conn: conn} do
       {conn, user} = create_and_login_user(conn)
 
       follower =
@@ -154,7 +164,7 @@ defmodule VutuvWeb.NotificationLiveTest do
       assert has_element?(live, ~s([data-presence-user-id="#{follower.id}"]))
     end
 
-    test "a picture-less actor still gets the presence dot on the kind glyph", %{conn: conn} do
+    test "a picture-less actor still gets the presence dot", %{conn: conn} do
       {conn, user} = create_and_login_user(conn)
 
       follower = insert(:user, first_name: "Ada", last_name: "Lovelace")
@@ -178,14 +188,14 @@ defmodule VutuvWeb.NotificationLiveTest do
       assert render(live) =~ "🤝"
     end
 
-    test "a same-day mutual follow shows only the connection row, not a follower double", %{
+    test "a same-day mutual follow shows only the connection line, not a follower double", %{
       conn: conn
     } do
       {conn, user} = create_and_login_user(conn)
 
       # The mutual follow derives both a follower and a connection event with
       # the same actor on the same day; "is now connected" implies "follows
-      # you", so the follower row would be redundant noise.
+      # you", so the follower line would be redundant noise.
       connect!(user, insert(:user, first_name: "Wojtek", last_name: "Mach"))
       # An unrelated one-way follower on the same day still shows.
       insert(:follow, follower: insert(:user, first_name: "Grace"), followee: user)
@@ -193,25 +203,51 @@ defmodule VutuvWeb.NotificationLiveTest do
       {:ok, live, _html} = live(conn, ~p"/notifications")
       html = render(live)
 
-      assert length(row_ids(html, "connection")) == 1
-      assert [_] = row_ids(html, "follower")
-      # The follower row names Grace, not the already-connected Wojtek.
-      assert has_element?(live, ~s([data-notification-row][data-kind="follower"]), "Grace")
-      refute has_element?(live, ~s([data-notification-row][data-kind="follower"]), "Wojtek")
+      assert length(lines(html, "connection")) == 1
+      assert [_] = lines(html, "follower")
+      # The follower line names Grace, not the already-connected Wojtek.
+      assert has_element?(live, ~s([data-event-kind="follower"]), "Grace")
+      refute has_element?(live, ~s([data-event-kind="follower"]), "Wojtek")
     end
 
-    test "a reply notification links to the parent post's thread", %{conn: conn} do
+    test "the people card's head counts the day's people events", %{conn: conn} do
       {conn, user} = create_and_login_user(conn)
 
-      parent = insert(:post, user: user)
+      connect!(user, insert(:user, first_name: "Wojtek"))
+      insert(:follow, follower: insert(:user, first_name: "Grace"), followee: user)
+      insert(:follow, follower: insert(:user, first_name: "Ada"), followee: user)
+      user_tag = insert(:user_tag, user: user, tag: insert(:tag, name: "Elixir"))
+      insert(:user_tag_endorsement, user: insert(:user), user_tag: user_tag)
+
+      {:ok, live, _html} = live(conn, ~p"/notifications")
+
+      # One card for the day's people, and its head is the tally: the reader
+      # knows what happened before reading a single line.
+      assert length(rows(render(live), "people")) == 1
+      assert has_element?(live, ~s([data-kind="people"] [data-card-title]), "1 new connection")
+      assert has_element?(live, ~s([data-kind="people"] [data-card-title]), "2 new followers")
+      assert has_element?(live, ~s([data-kind="people"] [data-card-title]), "1 endorsement")
+    end
+
+    test "a reply card is headed by the parent post and opens its thread", %{conn: conn} do
+      {conn, user} = create_and_login_user(conn)
+
+      parent = insert(:post, user: user, body: "Which editor do you swear by?")
       insert(:post_reply, post: insert(:post), parent_post: parent, parent_author: user)
 
       {:ok, live, _html} = live(conn, ~p"/notifications")
 
-      assert render(live) =~ ~s(href="/#{user.username}/posts/#{parent.id}")
+      assert has_element?(
+               live,
+               ~s([data-post-card][href="/#{user.username}/posts/#{parent.id}"]),
+               "Which editor do you swear by?"
+             )
+
+      # The head says whose post this is: the reader's own.
+      assert has_element?(live, ~s([data-kind="post"] [data-card-eyebrow]), "Your post")
     end
 
-    test "a like is shown and links to the liked post", %{conn: conn} do
+    test "a like is a line under the liked post's card", %{conn: conn} do
       {conn, user} = create_and_login_user(conn)
 
       post = insert(:post, user: user)
@@ -221,29 +257,14 @@ defmodule VutuvWeb.NotificationLiveTest do
       {:ok, live, _html} = live(conn, ~p"/notifications")
       html = render(live)
 
-      assert html =~ "liked your post"
+      # The card's head already names the post, so the line only says who and
+      # what.
+      assert html =~ "Fanny First"
+      assert has_element?(live, ~s([data-event-kind="like"]), "likes this.")
       assert html =~ ~s(href="/#{user.username}/posts/#{post.id}")
     end
 
-    test "a like notification previews the liked post's body", %{conn: conn} do
-      {conn, user} = create_and_login_user(conn)
-
-      post = insert(:post, user: user, body: "Ship the redesign on Friday")
-      :ok = Vutuv.Posts.like_post(insert(:user), post)
-
-      {:ok, live, _html} = live(conn, ~p"/notifications")
-
-      assert has_element?(live, ~s([data-post-preview]), "Ship the redesign on Friday")
-
-      assert has_element?(
-               live,
-               ~s([data-post-preview] a[href="/#{user.username}/posts/#{post.id}"])
-             )
-    end
-
-    test "a quoted post is formatted like a feed post, not shown as Markdown source", %{
-      conn: conn
-    } do
+    test "the card head quotes the liked post's body as a plain two-line teaser", %{conn: conn} do
       {conn, user} = create_and_login_user(conn)
 
       post =
@@ -257,31 +278,19 @@ defmodule VutuvWeb.NotificationLiveTest do
       {:ok, live, _html} = live(conn, ~p"/notifications")
       html = render(live)
 
-      assert html =~ "<strong>Ship it</strong>"
-      assert html =~ "<li>"
+      # Plain text: no Markdown markers, no rendered markup — the formatted
+      # quote belongs to a reply line, which the reader opens on purpose.
+      assert has_element?(live, ~s([data-post-card]), "Ship it on Friday")
       refute html =~ "**Ship it**"
-      # The same body recipe the feed uses, so the quote reads like a post.
-      assert has_element?(live, ~s([data-post-preview] .markdown.markdown--post))
+      refute has_element?(live, ~s([data-post-preview]))
+
+      assert has_element?(
+               live,
+               ~s([data-post-card][href="/#{user.username}/posts/#{post.id}"])
+             )
     end
 
-    test "a @mention in a quoted post links to that member", %{conn: conn} do
-      {conn, user} = create_and_login_user(conn)
-      # The factory's `user-<n>` handle carries a hyphen, which a real handle
-      # never may (`Vutuv.Handles.format/0`) and a mention therefore never
-      # matches, so this needs a handle-shaped one.
-      colleague = insert(:user, username: "quoted_colleague")
-
-      post = insert(:post, user: user, body: "Thanks @#{colleague.username}!")
-      :ok = Vutuv.Posts.like_post(insert(:user), post)
-
-      {:ok, live, _html} = live(conn, ~p"/notifications")
-
-      # The mention keeps its own target, so the quote cannot be one big link:
-      # the permalink is a stretched link underneath the body instead.
-      assert has_element?(live, ~s([data-post-preview] a[href="/#{colleague.username}"]))
-    end
-
-    test "a post that is nothing but an inline image shows no quote", %{conn: conn} do
+    test "a post that is nothing but an inline image is named as textless", %{conn: conn} do
       {conn, user} = create_and_login_user(conn)
 
       post = insert(:post, user: user, body: "![a cat](/post_images/cat.jpg)")
@@ -289,11 +298,13 @@ defmodule VutuvWeb.NotificationLiveTest do
 
       {:ok, live, _html} = live(conn, ~p"/notifications")
 
-      assert render(live) =~ "liked your post"
-      refute has_element?(live, ~s([data-post-preview]))
+      assert render(live) =~ "likes this."
+      assert has_element?(live, ~s([data-post-card-textless]), "Post without text")
     end
 
-    test "two likes of the same post on the same day merge into one row", %{conn: conn} do
+    test "two likes of the same post on the same day merge into one line of one card", %{
+      conn: conn
+    } do
       {conn, user} = create_and_login_user(conn)
 
       post = insert(:post, user: user, body: "Grouped post body")
@@ -303,14 +314,16 @@ defmodule VutuvWeb.NotificationLiveTest do
       {:ok, live, _html} = live(conn, ~p"/notifications")
       html = render(live)
 
-      # One row names both likers; the post is quoted once, not per like.
-      assert length(row_ids(html, "like")) == 1
+      # One card, one like line naming both; the post is quoted once, not per like.
+      assert length(rows(html, "post")) == 1
+      assert length(lines(html, "like")) == 1
       assert html =~ "Anna Arnold"
       assert html =~ "Ben Otto"
+      assert html =~ "like this."
       assert length(String.split(html, "Grouped post body")) - 1 == 1
     end
 
-    test "likes of different posts stay separate rows", %{conn: conn} do
+    test "likes of different posts stay separate cards", %{conn: conn} do
       {conn, user} = create_and_login_user(conn)
 
       :ok = Vutuv.Posts.like_post(insert(:user), insert(:post, user: user, body: "First post"))
@@ -318,10 +331,27 @@ defmodule VutuvWeb.NotificationLiveTest do
 
       {:ok, live, _html} = live(conn, ~p"/notifications")
 
-      assert length(row_ids(render(live), "like")) == 2
+      assert length(rows(render(live), "post")) == 2
     end
 
-    test "several followers on one day merge into one row with an overflow link", %{conn: conn} do
+    test "a local like and a like from another network share one line", %{conn: conn} do
+      {conn, user} = create_and_login_user(conn)
+      post = create_post!(user, %{body: "liked on both sides"})
+      :ok = Vutuv.Posts.like_post(insert(:user, first_name: "Anna", last_name: "Arnold"), post)
+      remote_reaction!(post, "alice", "like")
+
+      html = render_the_page(conn)
+
+      # One post, one like line: where a like came from is a globe on the name,
+      # not a second line saying the same thing.
+      assert length(rows(html, "post")) == 1
+      assert length(lines(html, "like")) == 1
+      assert html =~ "Anna Arnold"
+      assert html =~ "@alice@social.example"
+      assert html =~ "2 likes"
+    end
+
+    test "several followers on one day merge into one line with an overflow link", %{conn: conn} do
       {conn, user} = create_and_login_user(conn)
 
       insert(:follow,
@@ -347,15 +377,15 @@ defmodule VutuvWeb.NotificationLiveTest do
       {:ok, live, _html} = live(conn, ~p"/notifications")
       html = render(live)
 
-      # One grouped row: two names spelled out, the rest counted, plural verb.
-      assert length(row_ids(html, "follower")) == 1
+      # One grouped line: two names spelled out, the rest counted, plural verb.
+      assert length(lines(html, "follower")) == 1
       assert html =~ "and 2 more"
       assert html =~ "are now following you."
       # The overflow leads to the member's own followers list.
       assert has_element?(live, ~s(a[href="/#{user.username}/followers"]), "and 2 more")
     end
 
-    test "one endorser's same-day endorsements merge into one row naming every tag", %{
+    test "one endorser's same-day endorsements merge into one line naming every tag", %{
       conn: conn
     } do
       {conn, user} = create_and_login_user(conn)
@@ -370,11 +400,11 @@ defmodule VutuvWeb.NotificationLiveTest do
       {:ok, live, _html} = live(conn, ~p"/notifications")
       html = render(live)
 
-      assert length(row_ids(html, "endorsement")) == 1
+      assert length(lines(html, "endorsement")) == 1
       assert html =~ "endorsed you for Elixir and Phoenix."
     end
 
-    test "different endorsers stay separate rows", %{conn: conn} do
+    test "different endorsers stay separate lines", %{conn: conn} do
       {conn, user} = create_and_login_user(conn)
 
       for _ <- 1..2 do
@@ -384,10 +414,10 @@ defmodule VutuvWeb.NotificationLiveTest do
 
       {:ok, live, _html} = live(conn, ~p"/notifications")
 
-      assert length(row_ids(render(live), "endorsement")) == 2
+      assert length(lines(render(live), "endorsement")) == 2
     end
 
-    test "rows sit under Berlin-day section headings", %{conn: conn} do
+    test "cards sit under Berlin-day section headings", %{conn: conn} do
       {conn, user} = create_and_login_user(conn)
 
       # One event today, one on a fixed historic day.
@@ -402,50 +432,72 @@ defmodule VutuvWeb.NotificationLiveTest do
       assert html =~ "November 24, 2016"
     end
 
-    test "a reply notification previews both the parent post and the reply", %{conn: conn} do
+    test "a reply line carries the reply's text and opens to the formatted quote", %{conn: conn} do
       {conn, user} = create_and_login_user(conn)
 
-      replier = insert(:user)
+      replier = insert(:user, first_name: "Joe", last_name: "Armstrong")
       parent = insert(:post, user: user, body: "Which editor do you swear by?")
-      reply = insert(:post, user: replier, body: "Neovim, without a doubt.")
+
+      reply =
+        insert(:post, user: replier, body: "**Neovim**, without a doubt.\n\n- fast\n- everywhere")
 
       insert(:post_reply, post: reply, parent_post: parent, parent_author: user)
 
       {:ok, live, _html} = live(conn, ~p"/notifications")
 
-      assert has_element?(
-               live,
-               ~s([data-post-preview][href="/#{user.username}/posts/#{parent.id}"]),
-               "Which editor do you swear by?"
-             )
+      # Collapsed: who, what, and the reply's words on one clamped line — plain
+      # text, so the markers stay out of it.
+      assert has_element?(live, ~s([data-event-kind="reply"]), "Joe Armstrong")
+      assert has_element?(live, ~s([data-event-kind="reply"]), "replied.")
+      assert has_element?(live, ~s([data-event-kind="reply"] [data-reply-teaser]), "Neovim")
+      refute render(live) =~ "**Neovim**"
+      refute has_element?(live, ~s([data-reply-preview]))
 
-      assert has_element?(live, ~s([data-reply-preview]), "Neovim, without a doubt.")
+      # Opened: the reply formatted the way /feed formats a post, its permalink
+      # under it as the stretched link, and a Reply link for the answer.
+      live |> element(~s([data-event-kind="reply"] [data-line-toggle])) |> render_click()
+
+      html = render(live)
+      assert html =~ "<strong>Neovim</strong>"
+      assert html =~ "<li>"
+      assert has_element?(live, ~s([data-reply-preview] .markdown.markdown--post))
 
       assert has_element?(
                live,
                ~s([data-reply-preview] a[href="/#{replier.username}/posts/#{reply.id}"])
              )
+
+      assert has_element?(
+               live,
+               ~s([data-event-kind="reply"] a[data-reply-link][href="/#{replier.username}/posts/#{reply.id}"]),
+               "Reply"
+             )
+
+      # And it folds again.
+      live |> element(~s([data-event-kind="reply"] [data-line-toggle])) |> render_click()
+      refute has_element?(live, ~s([data-reply-preview]))
     end
 
-    test "the one-line context above a reply drops the Markdown markers", %{conn: conn} do
+    test "a @mention in an opened reply links to that member", %{conn: conn} do
       {conn, user} = create_and_login_user(conn)
+      # The factory's `user-<n>` handle carries a hyphen, which a real handle
+      # never may (`Vutuv.Handles.format/0`) and a mention therefore never
+      # matches, so this needs a handle-shaped one.
+      colleague = insert(:user, username: "quoted_colleague")
 
-      replier = insert(:user)
-      parent = insert(:post, user: user, body: "**Which editor** do you swear by?")
-      reply = insert(:post, user: replier, body: "Neovim, without a doubt.")
-
+      parent = insert(:post, user: user, body: "Who helped?")
+      reply = insert(:post, user: insert(:user), body: "Thanks @#{colleague.username}!")
       insert(:post_reply, post: reply, parent_post: parent, parent_author: user)
 
       {:ok, live, _html} = live(conn, ~p"/notifications")
-      html = render(live)
+      live |> element(~s([data-event-kind="reply"] [data-line-toggle])) |> render_click()
 
-      # A breadcrumb stays one plain line (it is inside the row's own link, so
-      # it cannot carry links of its own) — but it must not show the markers.
-      assert has_element?(live, ~s([data-post-preview]), "Which editor do you swear by?")
-      refute html =~ "**Which editor**"
+      # The mention keeps its own target, so the quote cannot be one big link:
+      # the permalink is a stretched link underneath the body instead.
+      assert has_element?(live, ~s([data-reply-preview] a[href="/#{colleague.username}"]))
     end
 
-    test "an answer to someone else in my thread renders as a thread row linking the reply", %{
+    test "an answer to someone else in my thread is a thread line under the root's card", %{
       conn: conn
     } do
       {conn, user} = create_and_login_user(conn)
@@ -461,14 +513,21 @@ defmodule VutuvWeb.NotificationLiveTest do
       {:ok, live, _html} = live(conn, ~p"/notifications")
       html = render(live)
 
-      assert length(row_ids(html, "thread")) == 1
-      assert html =~ "Joe Armstrong"
-      assert html =~ "replied in a thread you posted in."
+      # The root's card holds both the direct answer and the deeper one.
+      assert length(rows(html, "post")) == 1
+      assert length(lines(html, "thread")) == 1
+      assert length(lines(html, "reply")) == 1
+      assert has_element?(live, ~s([data-post-card]), "The root question")
+      assert has_element?(live, ~s([data-event-kind="thread"]), "Joe Armstrong")
+      assert has_element?(live, ~s([data-event-kind="thread"]), "replied in the thread.")
 
-      # The row quotes the reply and links to its permalink. The quote is a
-      # formatted block with a stretched link, so the href sits on the inner
-      # <a>, not on the element carrying the marker.
-      assert has_element?(live, ~s([data-reply-preview]), "The answer I used to miss")
+      assert has_element?(
+               live,
+               ~s([data-event-kind="thread"] [data-reply-teaser]),
+               "The answer I used to miss"
+             )
+
+      live |> element(~s([data-event-kind="thread"] [data-line-toggle])) |> render_click()
 
       assert has_element?(
                live,
@@ -476,7 +535,9 @@ defmodule VutuvWeb.NotificationLiveTest do
              )
     end
 
-    test "several same-day answers in one thread merge into one thread row", %{conn: conn} do
+    test "every answer in a thread keeps its own line, because each carries its own words", %{
+      conn: conn
+    } do
       {conn, user} = create_and_login_user(conn)
 
       root = insert(:post, user: user, body: "The root question")
@@ -499,18 +560,46 @@ defmodule VutuvWeb.NotificationLiveTest do
       {:ok, live, _html} = live(conn, ~p"/notifications")
       html = render(live)
 
-      # One grouped row names both answerers; the direct reply row stays its own.
-      assert length(row_ids(html, "thread")) == 1
+      assert length(rows(html, "post")) == 1
+      assert length(lines(html, "thread")) == 2
+      assert length(lines(html, "reply")) == 1
       assert html =~ "Anna Arnold"
       assert html =~ "Ben Otto"
-      assert length(row_ids(html, "reply")) == 1
     end
 
-    test "only the day's first thread row carries the opt-out hint (issue #1025)", %{conn: conn} do
+    test "a thread rooted in somebody else's post says whose thread it is", %{conn: conn} do
+      {conn, user} = create_and_login_user(conn)
+
+      host = insert(:user, first_name: "Grace", last_name: "Hopper")
+      # No apostrophe in the body: the teaser typesets `'` as `’`, and this
+      # test is about whose thread it is, not about quotes.
+      root = create_post!(host, %{body: "The root question Grace asked"})
+      {:ok, mine} = Vutuv.Posts.create_reply(user, root, %{body: "My answer"})
+      # Participation has to predate the answer, and both land in the same
+      # second here.
+      backdate_reply(mine, NaiveDateTime.add(NaiveDateTime.utc_now(:second), -60))
+
+      {:ok, _} =
+        Vutuv.Posts.create_reply(insert(:user, first_name: "Joe"), root, %{
+          body: "What Joe answered"
+        })
+
+      {:ok, live, _html} = live(conn, ~p"/notifications")
+
+      assert has_element?(
+               live,
+               ~s([data-kind="post"] [data-card-eyebrow]),
+               "Thread by Grace Hopper"
+             )
+
+      assert has_element?(live, ~s([data-post-card]), "The root question Grace asked")
+    end
+
+    test "only the day's first thread line carries the opt-out hint (issue #1025)", %{conn: conn} do
       {conn, user} = create_and_login_user(conn)
 
       # Two separate threads the member rooted, each answered by a third party
-      # to the first replier - two distinct thread rows on the same day.
+      # to the first replier - two distinct thread cards on the same day.
       for body <- ["Thread one", "Thread two"] do
         root = insert(:post, user: user, body: body)
         {:ok, first} = Vutuv.Posts.create_reply(insert(:user), root, %{body: "First answer"})
@@ -519,7 +608,7 @@ defmodule VutuvWeb.NotificationLiveTest do
 
       {:ok, live, html} = live(conn, ~p"/notifications")
 
-      assert length(row_ids(html, "thread")) == 2
+      assert length(lines(html, "thread")) == 2
       # Exactly one hint for the day, linking to the notification settings.
       assert length(Regex.scan(~r/data-thread-hint/, html)) == 1
       assert has_element?(live, ~s([data-thread-hint] a[href="/settings/notifications"]))
@@ -531,16 +620,16 @@ defmodule VutuvWeb.NotificationLiveTest do
              )
     end
 
-    test "the posts filter tab keeps thread rows", %{conn: conn} do
+    test "the replies filter keeps thread lines", %{conn: conn} do
       {conn, user} = create_and_login_user(conn)
 
       root = insert(:post, user: user, body: "The root question")
       {:ok, first} = Vutuv.Posts.create_reply(insert(:user), root, %{body: "First answer"})
       {:ok, _} = Vutuv.Posts.create_reply(insert(:user), first, %{body: "Deeper answer"})
 
-      {:ok, live, _html} = live(conn, ~p"/notifications?filter=posts")
+      {:ok, live, _html} = live(conn, ~p"/notifications?filter=replies")
 
-      assert length(row_ids(render(live), "thread")) == 1
+      assert length(lines(render(live), "thread")) == 1
     end
 
     test "a reply hidden from the recipient is not quoted", %{conn: conn} do
@@ -557,62 +646,58 @@ defmodule VutuvWeb.NotificationLiveTest do
 
       assert render(live) =~ "Public question"
       refute render(live) =~ "Secret answer"
-      refute has_element?(live, ~s([data-reply-preview]))
+      refute has_element?(live, ~s([data-reply-teaser]))
+      refute has_element?(live, ~s([data-line-toggle]))
     end
 
-    test "the post preview keeps only the first five lines by default", %{conn: conn} do
+    test "an opened quote keeps only the first five lines by default", %{conn: conn} do
       {conn, user} = create_and_login_user(conn)
 
       body = Enum.map_join(1..7, "\n", &"Line #{&1}")
-      post = insert(:post, user: user, body: body)
-      :ok = Vutuv.Posts.like_post(insert(:user), post)
+      reply_with_body!(user, body)
 
       {:ok, live, _html} = live(conn, ~p"/notifications")
+      live |> element(~s([data-event-kind="reply"] [data-line-toggle])) |> render_click()
       html = render(live)
 
-      assert html =~ "Line 1"
-      assert html =~ "Line 5"
+      assert has_element?(live, ~s([data-reply-preview]), "Line 5")
       refute html =~ "Line 6"
       # The shipped default needs no inline override: the .notif-clamp
       # stylesheet fallback already says 5.
-      assert has_element?(live, ~s([data-post-preview] .notif-clamp))
+      assert has_element?(live, ~s([data-reply-preview] .notif-clamp))
       refute html =~ "--notif-clamp"
     end
 
-    test "a quote is wired to reveal the truncation ellipsis", %{conn: conn} do
+    test "an opened quote is wired to reveal the truncation ellipsis", %{conn: conn} do
       {conn, user} = create_and_login_user(conn)
 
-      body = Enum.map_join(1..7, "\n", &"Line #{&1}")
-      post = insert(:post, user: user, body: body)
-      :ok = Vutuv.Posts.like_post(insert(:user), post)
+      reply_with_body!(user, Enum.map_join(1..7, "\n", &"Line #{&1}"))
 
       {:ok, live, _html} = live(conn, ~p"/notifications")
+      live |> element(~s([data-event-kind="reply"] [data-line-toggle])) |> render_click()
 
       # The server cuts the quote to the reader's line budget, but whether those
       # lines still overflow the box depends on column width and font — only the
       # browser knows. The quote therefore carries the same two markers the
       # feed's post previews use: app.js measures `[data-clamp-body]` and puts
       # `is-clamped` on `[data-post-preview]`, which is what paints the "…"
-      # (the shared excerpt-clamp rules in components.css). The hook re-measures
-      # after a patch, since rows stream in.
+      # (the shared excerpt-clamp rules in components.css).
       assert has_element?(live, ~s([data-post-preview][phx-hook="PostPreviewClamp"]))
       assert has_element?(live, ~s([data-post-preview] .notif-clamp[data-clamp-body]))
     end
 
-    test "the reader's own line count cuts the quote, server-side and in the CSS clamp", %{
-      conn: conn
-    } do
+    test "the reader's own line count cuts the opened quote, server-side and in the CSS clamp",
+         %{conn: conn} do
       {conn, user} = create_and_login_user(conn)
       {:ok, _user} = Vutuv.Accounts.update_user(user, %{"notification_post_lines" => "2"})
 
-      body = Enum.map_join(1..7, "\n", &"Line #{&1}")
-      post = insert(:post, user: user, body: body)
-      :ok = Vutuv.Posts.like_post(insert(:user), post)
+      reply_with_body!(user, Enum.map_join(1..7, "\n", &"Line #{&1}"))
 
       {:ok, live, _html} = live(conn, ~p"/notifications")
+      live |> element(~s([data-event-kind="reply"] [data-line-toggle])) |> render_click()
       html = render(live)
 
-      assert html =~ "Line 2"
+      assert has_element?(live, ~s([data-reply-preview]), "Line 2")
       refute html =~ "Line 3"
       assert html =~ "--notif-clamp:2"
     end
@@ -621,19 +706,18 @@ defmodule VutuvWeb.NotificationLiveTest do
       {conn, user} = create_and_login_user(conn)
       with_installation_defaults(%{notification_post_lines: 3})
 
-      body = Enum.map_join(1..7, "\n", &"Line #{&1}")
-      post = insert(:post, user: user, body: body)
-      :ok = Vutuv.Posts.like_post(insert(:user), post)
+      reply_with_body!(user, Enum.map_join(1..7, "\n", &"Line #{&1}"))
 
       {:ok, live, _html} = live(conn, ~p"/notifications")
+      live |> element(~s([data-event-kind="reply"] [data-line-toggle])) |> render_click()
       html = render(live)
 
-      assert html =~ "Line 3"
+      assert has_element?(live, ~s([data-reply-preview]), "Line 3")
       refute html =~ "Line 4"
       assert html =~ "--notif-clamp:3"
     end
 
-    test "a like on a bodyless (photo-only) post shows no preview", %{conn: conn} do
+    test "a like on a bodyless (photo-only) post names the post as textless", %{conn: conn} do
       {conn, user} = create_and_login_user(conn)
 
       post = insert(:post, user: user, body: "")
@@ -641,21 +725,21 @@ defmodule VutuvWeb.NotificationLiveTest do
 
       {:ok, live, _html} = live(conn, ~p"/notifications")
 
-      assert render(live) =~ "liked your post"
-      refute has_element?(live, ~s([data-post-preview]))
+      assert render(live) =~ "likes this."
+      assert has_element?(live, ~s([data-post-card-textless]))
     end
 
-    test "non-post notifications carry no preview", %{conn: conn} do
+    test "non-post notifications carry no post card", %{conn: conn} do
       {conn, user} = create_and_login_user(conn)
       insert(:follow, follower: insert(:user), followee: user)
 
       {:ok, live, _html} = live(conn, ~p"/notifications")
 
       assert render(live) =~ "started following you"
-      refute has_element?(live, ~s([data-post-preview]))
+      refute has_element?(live, ~s([data-post-card]))
     end
 
-    test "a like arriving live carries its post preview", %{conn: conn} do
+    test "a like arriving live brings its post card", %{conn: conn} do
       {conn, user} = create_and_login_user(conn)
       post = insert(:post, user: user, body: "Live-quoted post body")
 
@@ -665,25 +749,27 @@ defmodule VutuvWeb.NotificationLiveTest do
       Vutuv.Activity.notify_like(user.id, fan, post.id)
       _ = :sys.get_state(live.pid)
 
-      assert has_element?(live, ~s([data-post-preview]), "Live-quoted post body")
+      assert has_element?(live, ~s([data-post-card]), "Live-quoted post body")
+      assert has_element?(live, ~s([data-event-kind="like"]), "Fanny First")
     end
 
-    test "a live like merges into the derived same-day row for the same post", %{conn: conn} do
+    test "a live like merges into the derived same-day card for the same post", %{conn: conn} do
       {conn, user} = create_and_login_user(conn)
 
       post = insert(:post, user: user, body: "Merged live post")
       :ok = Vutuv.Posts.like_post(insert(:user, first_name: "Anna", last_name: "Arnold"), post)
 
       {:ok, live, _html} = live(conn, ~p"/notifications")
-      assert length(row_ids(render(live), "like")) == 1
+      assert length(rows(render(live), "post")) == 1
 
       fan = insert(:user, first_name: "Fanny", last_name: "First")
       Vutuv.Activity.notify_like(user.id, fan, post.id)
       _ = :sys.get_state(live.pid)
 
       html = render(live)
-      # Still one row for the post - now naming both likers.
-      assert length(row_ids(html, "like")) == 1
+      # Still one card and one like line for the post - now naming both likers.
+      assert length(rows(html, "post")) == 1
+      assert length(lines(html, "like")) == 1
       assert html =~ "Anna Arnold"
       assert html =~ "Fanny First"
     end
@@ -699,7 +785,7 @@ defmodule VutuvWeb.NotificationLiveTest do
       assert render(live) =~ "Connection"
     end
 
-    test "shows a reply as a reply event, but not a self-reply", %{conn: conn} do
+    test "shows a reply as a reply line, but not a self-reply", %{conn: conn} do
       {conn, user} = create_and_login_user(conn)
 
       replier = insert(:user, first_name: "Joe", last_name: "Armstrong")
@@ -719,19 +805,19 @@ defmodule VutuvWeb.NotificationLiveTest do
 
       {:ok, live, _html} = live(conn, ~p"/notifications")
 
-      assert render(live) =~ "replied to your post"
+      assert render(live) =~ "replied."
       assert render(live) =~ "Joe Armstrong"
-      # The self-reply derives no row.
-      assert length(row_ids(render(live), "reply")) == 1
+      # The self-reply derives no line.
+      assert length(lines(render(live), "reply")) == 1
     end
 
     # Every confirmed account carries its own username welcome note, so an
     # utterly empty feed no longer exists; the empty state now belongs to a
-    # filter tab with nothing in it.
-    test "shows the empty state for a filter tab with nothing in it", %{conn: conn} do
+    # filter with nothing in it.
+    test "shows the empty state for a filter with nothing in it", %{conn: conn} do
       {conn, _user} = create_and_login_user(conn)
 
-      {:ok, live, _html} = live(conn, ~p"/notifications?filter=posts")
+      {:ok, live, _html} = live(conn, ~p"/notifications?filter=replies")
 
       assert render(live) =~ "Nothing new yet."
       refute has_element?(live, ~s([data-notification-row]))
@@ -767,9 +853,10 @@ defmodule VutuvWeb.NotificationLiveTest do
       {:ok, live, _html} = live(conn, ~p"/notifications")
       html = render(live)
 
-      # The fresh like is highlighted, the long-seen follower row is not.
-      assert has_element?(live, ~s([data-notification-row][data-kind="like"][data-unread]))
-      refute has_element?(live, ~s([data-notification-row][data-kind="follower"][data-unread]))
+      # The fresh like is highlighted, card and line; the long-seen people card is not.
+      assert has_element?(live, ~s([data-notification-row][data-kind="post"][data-unread]))
+      assert has_element?(live, ~s([data-event-kind="like"][data-unread]))
+      refute has_element?(live, ~s([data-notification-row][data-kind="people"][data-unread]))
       # The header counts what is new since the last visit.
       assert html =~ "1 new notification"
       # And the visit still clears the badge for next time.
@@ -777,7 +864,7 @@ defmodule VutuvWeb.NotificationLiveTest do
     end
 
     test "a reply I already answered is listed but not marked unread", %{conn: conn} do
-      # The row stays - the page is the log of what happened - but answering the
+      # The line stays - the page is the log of what happened - but answering the
       # reply out in the feed already settled it, so it must not read as new
       # here either, or the page and the bell badge would tell two stories.
       {conn, user} = create_and_login_user(conn)
@@ -792,8 +879,127 @@ defmodule VutuvWeb.NotificationLiveTest do
 
       {:ok, live, _html} = live(conn, ~p"/notifications")
 
-      assert has_element?(live, ~s([data-notification-row][data-kind="reply"]))
-      refute has_element?(live, ~s([data-notification-row][data-kind="reply"][data-unread]))
+      assert has_element?(live, ~s([data-event-kind="reply"]))
+      refute has_element?(live, ~s([data-event-kind="reply"][data-unread]))
+      refute has_element?(live, ~s([data-notification-row][data-kind="post"][data-unread]))
+    end
+
+    test "within a day, cards with unanswered replies come first and a rule marks the seen ones",
+         %{conn: conn} do
+      {conn, user} = create_and_login_user(conn)
+      backdate_welcome_note(user, ~N[2016-11-24 12:00:00])
+      # Everything below is newer than the marker; what settles a card is the
+      # per-post engagement, not the clock.
+      set_read_marker(user, ~N[2016-11-25 00:00:00])
+
+      liked = insert(:post, user: user, body: "The liked one")
+      :ok = Vutuv.Posts.like_post(insert(:user), liked)
+
+      answered = insert(:post, user: user, body: "The answered one")
+      answer = insert(:post, user: insert(:user), body: "an answer I saw")
+      insert(:post_reply, post: answer, parent_post: answered, parent_author: user)
+      {:ok, _} = Vutuv.Posts.create_reply(user, answer, %{body: "Thanks!"})
+
+      # Oldest of the three, yet its unanswered reply puts it on top.
+      open = insert(:post, user: user, body: "The open one")
+      backdate_post(open, NaiveDateTime.add(NaiveDateTime.utc_now(:second), -3600))
+      pending = insert(:post, user: insert(:user), body: "a reply waiting for me")
+      insert(:post_reply, post: pending, parent_post: open, parent_author: user)
+      backdate_reply(pending, NaiveDateTime.add(NaiveDateTime.utc_now(:second), -3600))
+
+      html = render_the_page(conn)
+
+      assert at(html, "The open one") < at(html, "The liked one")
+      assert at(html, "The liked one") < at(html, "The answered one")
+      # One rule, between the last new card and the first seen one.
+      assert length(Regex.scan(~r/data-seen-rule/, html)) == 1
+      assert at(html, "The liked one") < at(html, "data-seen-rule")
+      assert at(html, "data-seen-rule") < at(html, "The answered one")
+    end
+
+    test "no seen-rule when nothing on the page is new", %{conn: conn} do
+      {conn, user} = create_and_login_user(conn)
+      :ok = Vutuv.Posts.like_post(insert(:user), insert(:post, user: user, body: "old news"))
+      set_read_marker(user, NaiveDateTime.add(NaiveDateTime.utc_now(:second), 60))
+
+      refute render_the_page(conn) =~ "data-seen-rule"
+    end
+
+    test "a card shows four lines and folds the rest behind a count", %{conn: conn} do
+      {conn, user} = create_and_login_user(conn)
+      post = insert(:post, user: user, body: "Much discussed")
+
+      for i <- 1..6 do
+        reply = insert(:post, user: insert(:user), body: "Answer number #{i}")
+        insert(:post_reply, post: reply, parent_post: post, parent_author: user)
+      end
+
+      {:ok, live, _html} = live(conn, ~p"/notifications")
+
+      assert length(lines(render(live), "reply")) == 4
+      assert has_element?(live, ~s([data-card-more]), "Show 2 more")
+
+      live |> element(~s([data-card-more])) |> render_click()
+
+      assert length(lines(render(live), "reply")) == 6
+      refute has_element?(live, ~s([data-card-more]))
+    end
+
+    test "the card's head counts likes, shares and replies from both sides", %{conn: conn} do
+      {conn, user} = create_and_login_user(conn)
+      post = create_post!(user, %{body: "counted"})
+      :ok = Vutuv.Posts.like_post(insert(:user), post)
+      remote_reaction!(post, "alice", "like")
+      remote_reaction!(post, "bob", "announce")
+      remote_note!(post, "carol", "a remote answer")
+
+      insert(:post_reply,
+        post: insert(:post, user: insert(:user)),
+        parent_post: post,
+        parent_author: user
+      )
+
+      html = render_the_page(conn)
+
+      assert html =~ "2 likes"
+      assert html =~ "1 share"
+      assert html =~ "2 replies"
+    end
+
+    test "the filter chips count what is new since the last visit", %{conn: conn} do
+      {conn, user} = create_and_login_user(conn)
+      backdate_welcome_note(user, ~N[2016-11-24 12:00:00])
+      set_read_marker(user, ~N[2016-11-25 00:00:00])
+
+      post = insert(:post, user: user)
+      :ok = Vutuv.Posts.like_post(insert(:user), post)
+      :ok = Vutuv.Posts.like_post(insert(:user), post)
+
+      insert(:post_reply,
+        post: insert(:post, user: insert(:user)),
+        parent_post: post,
+        parent_author: user
+      )
+
+      insert(:follow, follower: insert(:user), followee: user)
+
+      {:ok, live, _html} = live(conn, ~p"/notifications")
+
+      assert has_element?(live, ~s([data-filter-tab="all"] [data-filter-count]), "4")
+      assert has_element?(live, ~s([data-filter-tab="replies"] [data-filter-count]), "1")
+      assert has_element?(live, ~s([data-filter-tab="reactions"] [data-filter-count]), "2")
+      assert has_element?(live, ~s([data-filter-tab="people"] [data-filter-count]), "1")
+      refute has_element?(live, ~s([data-filter-tab="other"] [data-filter-count]))
+    end
+
+    test "chips carry no counts when nothing is new", %{conn: conn} do
+      {conn, user} = create_and_login_user(conn)
+      insert(:follow, follower: insert(:user), followee: user)
+      set_read_marker(user, NaiveDateTime.add(NaiveDateTime.utc_now(:second), 60))
+
+      {:ok, live, _html} = live(conn, ~p"/notifications")
+
+      refute has_element?(live, ~s([data-filter-count]))
     end
 
     test "redirects a logged-out visitor to the login", %{conn: conn} do
@@ -817,6 +1023,78 @@ defmodule VutuvWeb.NotificationLiveTest do
       # The grouped plural sentence and the folded overflow, both German.
       assert body =~ "folgen Ihnen jetzt."
       assert body =~ "und 1 weitere"
+    end
+
+    test "the card vocabulary is written German, not fuzzy-filled from something else", %{
+      conn: conn
+    } do
+      # `gettext.extract --merge` fills a brand-new msgid with the translation of
+      # whatever looked similar and nothing fails the build, so the German of
+      # every new string on this page is asserted by name, the short ones first.
+      {conn, user} = create_and_login_user(conn)
+      backdate_welcome_note(user, ~N[2016-11-24 12:00:00])
+      set_read_marker(user, ~N[2016-11-25 00:00:00])
+
+      host = insert(:user, first_name: "Grace", last_name: "Hopper")
+      root = create_post!(host, %{body: "Grace fragt"})
+      {:ok, mine} = Vutuv.Posts.create_reply(user, root, %{body: "Meine Antwort"})
+      backdate_reply(mine, NaiveDateTime.add(NaiveDateTime.utc_now(:second), -60))
+      {:ok, _} = Vutuv.Posts.create_reply(insert(:user), root, %{body: "Joes Antwort"})
+
+      mine = create_post!(user, %{body: "Mein Beitrag"})
+      :ok = Vutuv.Posts.like_post(insert(:user), mine)
+
+      insert(:post_reply,
+        post: insert(:post, user: insert(:user)),
+        parent_post: mine,
+        parent_author: user
+      )
+
+      answered = create_post!(user, %{body: "Beantwortet"})
+      answer = insert(:post, user: insert(:user), body: "gesehen")
+      insert(:post_reply, post: answer, parent_post: answered, parent_author: user)
+      {:ok, _} = Vutuv.Posts.create_reply(user, answer, %{body: "Danke!"})
+      # A like on a card of its own: `mine`'s like line sits behind its fold,
+      # and a like on `answered` would make that card new again.
+      :ok = Vutuv.Posts.like_post(insert(:user), create_post!(user, %{body: "Nur gelikt"}))
+
+      create_post!(insert(:activated_user), %{body: "Hallo @#{user.username}"})
+
+      for i <- 1..6 do
+        reply = insert(:post, user: insert(:user), body: "Antwort #{i}")
+        insert(:post_reply, post: reply, parent_post: mine, parent_author: user)
+      end
+
+      connect!(user, insert(:user))
+      insert(:follow, follower: insert(:user), followee: user)
+
+      {:ok, live, _html} =
+        conn
+        |> recycle()
+        |> put_req_header("accept-language", "de-DE,de;q=0.9")
+        |> live(~p"/notifications")
+
+      html = render(live)
+
+      assert html =~ "Ihr Beitrag"
+      assert html =~ "Thread von Grace Hopper"
+      assert html =~ "hat im Thread geantwortet."
+      assert html =~ "hat Sie erwähnt."
+      assert html =~ "gefällt das."
+      assert html =~ "hat geantwortet."
+      assert html =~ "Personen"
+      assert html =~ "1 neue Vernetzung"
+      assert html =~ "1 neuer Follower"
+      assert html =~ "Bereits gesehen"
+      # `mine` holds seven answers and a like: four lines shown, four folded.
+      assert html =~ "4 weitere anzeigen"
+      assert has_element?(live, ~s([data-filter-tab="replies"]), "Antworten")
+      assert has_element?(live, ~s([data-filter-tab="reactions"]), "Reaktionen")
+      assert has_element?(live, ~s([data-filter-tab="people"]), "Personen")
+      assert has_element?(live, ~s([data-filter-tab="other"]), "Mehr")
+
+      live |> element(~s([data-event-kind="thread"] [data-line-toggle])) |> render_click()
+      assert has_element?(live, ~s(a[data-reply-link]), "Antworten")
     end
 
     test "a new follower appears live without a reload", %{conn: conn} do
@@ -870,8 +1148,10 @@ defmodule VutuvWeb.NotificationLiveTest do
     end
   end
 
-  describe "mention rows" do
-    test "a post naming the reader renders a mention row linking that post", %{conn: conn} do
+  describe "mention lines" do
+    test "a post naming the reader is a card headed by that post, under its author", %{
+      conn: conn
+    } do
       {conn, user} = create_and_login_user(conn)
       author = insert(:activated_user, first_name: "Joe", last_name: "Armstrong")
 
@@ -881,53 +1161,55 @@ defmodule VutuvWeb.NotificationLiveTest do
       {:ok, live, _html} = live(conn, ~p"/notifications")
       html = render(live)
 
-      assert length(row_ids(html, "mention")) == 1
-      assert html =~ "Joe Armstrong"
-      assert html =~ "mentioned you in a post."
+      assert length(lines(html, "mention")) == 1
+      assert has_element?(live, ~s([data-event-kind="mention"]), "Joe Armstrong")
+      assert has_element?(live, ~s([data-event-kind="mention"]), "mentioned you.")
 
-      # The quoted post and the row both open the permalink under the *author*
-      # — it is their post, not the reader's, which is what sets this kind
-      # apart from a reply or a like.
-      assert has_element?(live, ~s([data-post-preview]), "they know it")
+      # The head names the post and opens the permalink under the *author* — it
+      # is their post, not the reader's, which is what sets this kind apart from
+      # a reply or a like — and the eyebrow says so.
+      assert has_element?(live, ~s([data-post-card]), "they know it")
 
       assert has_element?(
                live,
-               ~s([data-post-preview] a[href="/#{author.username}/posts/#{post.id}"])
+               ~s([data-post-card][href="/#{author.username}/posts/#{post.id}"])
              )
+
+      assert has_element?(live, ~s([data-card-eyebrow]), "Post by Joe Armstrong")
+
+      # The head IS the quote here, so the line has nothing to unfold.
+      refute has_element?(live, ~s([data-event-kind="mention"] [data-line-toggle]))
     end
 
-    test "the posts filter tab keeps mention rows", %{conn: conn} do
+    test "the replies filter keeps mention lines", %{conn: conn} do
       {conn, user} = create_and_login_user(conn)
       create_post!(insert(:activated_user), %{body: "Hello @#{user.username}."})
 
-      {:ok, live, _html} = live(conn, ~p"/notifications?filter=posts")
+      {:ok, live, _html} = live(conn, ~p"/notifications?filter=replies")
 
-      assert length(row_ids(render(live), "mention")) == 1
+      assert length(lines(render(live), "mention")) == 1
     end
   end
 
   describe "replies from other networks (#1069)" do
-    defp remote_note!(post, name, text) do
-      Vutuv.Repo.insert!(%Vutuv.Fediverse.Note{
-        post_id: post.id,
-        object_uri:
-          "https://social.example/users/#{name}/statuses/#{System.unique_integer([:positive])}",
-        actor_uri: "https://social.example/users/#{name}",
-        handle: name,
-        display_name: String.capitalize(name),
-        content_text: text,
-        audience: "public",
-        received_at: DateTime.utc_now(:second),
-        expires_at: DateTime.add(DateTime.utc_now(:second), 30, :day)
-      })
-    end
-
-    test "the quoted reply opens the conversation, anchored at that reply", %{conn: conn} do
+    test "the line carries the reply's words and opens to the conversation, anchored at it", %{
+      conn: conn
+    } do
       {conn, user} = create_and_login_user(conn)
       post = create_post!(user, %{body: "why are the trains late"})
       note = remote_note!(post, "ba_eh", "the delays come down to two factors")
 
       {:ok, live, _html} = live(conn, ~p"/notifications")
+
+      assert has_element?(
+               live,
+               ~s([data-event-kind="fediverse_reply"] [data-reply-teaser]),
+               "the delays come down to two factors"
+             )
+
+      live
+      |> element(~s([data-event-kind="fediverse_reply"] [data-line-toggle]))
+      |> render_click()
 
       # The quote is what the reader reaches for, so it has to be the link — a
       # readable block of somebody's words that does nothing on tap reads as a
@@ -954,23 +1236,15 @@ defmodule VutuvWeb.NotificationLiveTest do
         |> put_req_header("accept-language", "de-DE,de;q=0.9")
         |> live(~p"/notifications")
 
+      live
+      |> element(~s([data-event-kind="fediverse_reply"] [data-line-toggle]))
+      |> render_click()
+
       assert render(live) =~ ~s(aria-label="Unterhaltung ansehen")
     end
   end
 
   describe "reactions from other networks (#1068)" do
-    # Written straight to the table: the inbox gates are the Fediverse tests'
-    # business, this is about the row the reader gets.
-    defp remote_reaction!(post, name, kind) do
-      Vutuv.Repo.insert!(%Vutuv.Fediverse.Reaction{
-        post_id: post.id,
-        actor_uri: "https://social.example/users/#{name}",
-        handle: name,
-        kind: kind,
-        received_at: DateTime.utc_now(:second)
-      })
-    end
-
     test "a boost names the account and says what they did", %{conn: conn} do
       {conn, user} = create_and_login_user(conn)
       post = create_post!(user, %{body: "went out into the world"})
@@ -979,7 +1253,7 @@ defmodule VutuvWeb.NotificationLiveTest do
       {:ok, live, _html} = live(conn, ~p"/notifications")
       html = render(live)
 
-      assert length(row_ids(html, "fediverse_post")) == 1
+      assert length(rows(html, "post")) == 1
       assert html =~ "@alice@social.example"
       assert html =~ "shared this."
       # It opens the reader's own post, where the line naming them sits — not
@@ -994,8 +1268,23 @@ defmodule VutuvWeb.NotificationLiveTest do
 
       html = render_the_page(conn)
 
-      assert length(row_ids(html, "fediverse_post")) == 1
-      assert event_kinds(html) == ["fediverse_reaction"]
+      assert length(rows(html, "post")) == 1
+      assert event_kinds(html) == ["share"]
+      # A like or share line names three before folding — where a people line
+      # names two — so three sharers are all spelled out.
+      for name <- ~w(alice bob carol), do: assert(html =~ "@#{name}@social.example")
+      refute html =~ "and 1 more"
+      assert html =~ "shared this."
+    end
+
+    test "a fourth sharer folds into the count", %{conn: conn} do
+      {conn, user} = create_and_login_user(conn)
+      post = create_post!(user, %{body: "much shared"})
+      for name <- ~w(alice bob carol dave), do: remote_reaction!(post, name, "announce")
+
+      html = render_the_page(conn)
+
+      assert length(lines(html, "share")) == 1
       assert html =~ "and 1 more"
     end
 
@@ -1020,23 +1309,19 @@ defmodule VutuvWeb.NotificationLiveTest do
       assert has_element?(live, ~s(a[href="https://social.example/users/alice"]))
     end
 
-    test "the posts filter tab keeps them", %{conn: conn} do
+    test "the reactions filter keeps them", %{conn: conn} do
       {conn, user} = create_and_login_user(conn)
       remote_reaction!(create_post!(user, %{body: "filtered"}), "alice", "like")
 
-      {:ok, live, _html} = live(conn, ~p"/notifications?filter=posts")
+      {:ok, live, _html} = live(conn, ~p"/notifications?filter=reactions")
 
-      assert length(row_ids(render(live), "fediverse_post")) == 1
-    end
-
-    defp render_the_page(conn) do
-      {:ok, live, _html} = live(conn, ~p"/notifications")
-      render(live)
+      assert length(rows(render(live), "post")) == 1
     end
   end
 
-  describe "one card per post, for everything the fediverse sends back" do
+  describe "one card per post, for everything that came back about it" do
     alias Vutuv.Posts.PostImage
+    alias Vutuv.Posts.PostScreenshot
 
     test "a favourite, a boost and a reply to one post share one card", %{conn: conn} do
       {conn, user} = create_and_login_user(conn)
@@ -1048,11 +1333,10 @@ defmodule VutuvWeb.NotificationLiveTest do
       html = render_the_page(conn)
 
       # One post, one card — the three verbs are three lines inside it, not
-      # three cards asking the reader which post each one meant.
-      assert length(row_ids(html, "fediverse_post")) == 1
-
-      assert Enum.sort(event_kinds(html)) ==
-               ~w(fediverse_reaction fediverse_reaction fediverse_reply)
+      # three cards asking the reader which post each one meant. Replies lead,
+      # because each carries its own words.
+      assert length(rows(html, "post")) == 1
+      assert event_kinds(html) == ~w(fediverse_reply like share)
 
       assert html =~ "likes this."
       assert html =~ "shared this."
@@ -1067,7 +1351,7 @@ defmodule VutuvWeb.NotificationLiveTest do
 
       html = render_the_page(conn)
 
-      assert length(row_ids(html, "fediverse_post")) == 2
+      assert length(rows(html, "post")) == 2
       assert html =~ "the first one"
       assert html =~ "the second one"
     end
@@ -1095,12 +1379,13 @@ defmodule VutuvWeb.NotificationLiveTest do
         for position <- 0..2,
             do: insert(:post_image, post: post, user: user, position: position)
 
-      remote_reaction!(post, "alice", "like")
+      :ok = Vutuv.Posts.like_post(insert(:user), post)
 
       html = render_the_page(conn)
 
       # Two thumbnails, then a count: the card's right edge has to sit in the
-      # same place whether a post carries two pictures or twenty.
+      # same place whether a post carries two pictures or twenty. A local like
+      # earns the pictures exactly as a remote one does.
       assert html =~ PostImage.url(first, "thumb")
       assert html =~ PostImage.url(second, "thumb")
       refute html =~ PostImage.url(third, "thumb")
@@ -1128,6 +1413,40 @@ defmodule VutuvWeb.NotificationLiveTest do
       # The image proxy 404s on an unreleased picture, so a card that linked to
       # one would draw a broken thumbnail on the reader's own notifications.
       refute render_the_page(conn) =~ "/post_images/"
+    end
+
+    test "a link post's ready screenshot rides the card where the pictures would", %{conn: conn} do
+      {conn, user} = create_and_login_user(conn)
+      post = create_post!(user, %{body: "Check https://example.com/page"})
+
+      Vutuv.Repo.insert!(%PostScreenshot{
+        post_id: post.id,
+        url: "https://example.com/page",
+        status: "ready",
+        screenshot: "0123456789ab.avif",
+        moderation: "approved"
+      })
+
+      :ok = Vutuv.Posts.like_post(insert(:user), post)
+
+      html = render_the_page(conn)
+
+      assert html =~ "data-post-card-screenshot"
+    end
+
+    test "a pending screenshot shows nothing", %{conn: conn} do
+      {conn, user} = create_and_login_user(conn)
+      post = create_post!(user, %{body: "Check https://example.com/page"})
+
+      Vutuv.Repo.insert!(%PostScreenshot{
+        post_id: post.id,
+        url: "https://example.com/page",
+        status: "pending"
+      })
+
+      :ok = Vutuv.Posts.like_post(insert(:user), post)
+
+      refute render_the_page(conn) =~ "data-post-card-screenshot"
     end
 
     test "a post with no text says so instead of showing an empty line", %{conn: conn} do
@@ -1184,7 +1503,9 @@ defmodule VutuvWeb.NotificationLiveTest do
       assert html =~ "1 reply"
     end
 
-    test "a private reply keeps its warning inside the card", %{conn: conn} do
+    test "a private reply carries its warning on the line, before the reader opens it", %{
+      conn: conn
+    } do
       {conn, user} = create_and_login_user(conn)
       post = create_post!(user, %{body: "why are the trains late"})
 
@@ -1196,8 +1517,8 @@ defmodule VutuvWeb.NotificationLiveTest do
       {:ok, live, _html} = live(conn, ~p"/notifications")
 
       # The member has to know the reply is private *before* they answer it, so
-      # the notice cannot be a casualty of moving the row into a card.
-      assert has_element?(live, "[data-remote-private]")
+      # the notice cannot wait behind the toggle.
+      assert has_element?(live, ~s([data-event-kind="fediverse_reply"] [data-remote-private]))
     end
 
     test "unread reactions keep their own marker per line", %{conn: conn} do
@@ -1210,13 +1531,13 @@ defmodule VutuvWeb.NotificationLiveTest do
 
       html = render_the_page(conn)
 
-      assert html =~ ~s(data-unread="true")
+      assert html =~ ~s(data-event-kind="like" data-unread="true")
     end
   end
 
   describe "pagination" do
-    # The page size is 50 raw events; a day's followers group into ONE row, so
-    # the rows are counted through the grouped row's overflow label ("and N
+    # The page size is 50 raw events; a day's followers group into ONE line, so
+    # the events are counted through the grouped line's overflow label ("and N
     # more") rather than by counting <article>s.
     test "a long feed is split into numbered pages the reader can patch between", %{conn: conn} do
       {conn, user} = create_and_login_user(conn)
@@ -1228,7 +1549,7 @@ defmodule VutuvWeb.NotificationLiveTest do
       assert has_element?(live, ~s(nav[aria-label="Pagination"] a[href="/notifications?page=2"]))
       assert has_element?(live, ~s(nav[aria-label="Pagination"] a[href="/notifications?page=3"]))
       refute has_element?(live, ~s(nav[aria-label="Pagination"] a[href="/notifications?page=4"]))
-      # 50 raw events in one grouped row: 2 named + 48 counted.
+      # 50 raw events in one grouped line: 2 named + 48 counted.
       assert render(live) =~ "and 48 more"
 
       live |> element(~s(a[href="/notifications?page=2"])) |> render_click()
@@ -1239,7 +1560,7 @@ defmodule VutuvWeb.NotificationLiveTest do
 
       live |> element(~s(a[href="/notifications?page=3"])) |> render_click()
 
-      # The last page holds the leftover 2 events, so its grouped row names
+      # The last page holds the leftover 2 events, so its grouped line names
       # both actors and has no overflow link at all.
       refute render(live) =~ "and 48 more"
       assert has_element?(live, ~s(nav[aria-label="Pagination"] span[aria-current="page"]), "3")
@@ -1272,24 +1593,24 @@ defmodule VutuvWeb.NotificationLiveTest do
       refute has_element?(live, ~s(nav a[href="/notifications?page=1"]))
     end
 
-    test "paging inside a filter tab keeps the filter", %{conn: conn} do
+    test "paging inside a filter keeps the filter", %{conn: conn} do
       {conn, user} = create_and_login_user(conn)
       post = insert(:post, user: user)
       for _ <- 1..60, do: :ok = Vutuv.Posts.like_post(insert(:user), post)
-      # People events the "posts" tab must leave out of both list and count.
+      # People events the "reactions" filter must leave out of both list and count.
       for _ <- 1..60, do: insert(:follow, follower: insert(:user), followee: user)
 
-      {:ok, live, _html} = live(conn, ~p"/notifications?filter=posts")
+      {:ok, live, _html} = live(conn, ~p"/notifications?filter=reactions")
 
-      assert has_element?(live, ~s(a[href="/notifications?filter=posts&page=2"]))
+      assert has_element?(live, ~s(a[href="/notifications?filter=reactions&page=2"]))
       refute has_element?(live, ~s(nav[aria-label="Pagination"] a[href="/notifications?page=2"]))
 
-      live |> element(~s(a[href="/notifications?filter=posts&page=2"])) |> render_click()
+      live |> element(~s(a[href="/notifications?filter=reactions&page=2"])) |> render_click()
 
-      # 60 likes = 50 + 10, so the second page of THIS tab holds 10 likes and
-      # none of the 60 followers.
+      # 60 likes = 50 + 10, so the second page of THIS filter holds 10 likes
+      # (three named, seven folded) and none of the 60 followers.
       html = render(live)
-      assert html =~ "and 8 more"
+      assert html =~ "and 7 more"
       refute html =~ "started following you"
     end
 
@@ -1312,19 +1633,45 @@ defmodule VutuvWeb.NotificationLiveTest do
     end
   end
 
-  describe "filter tabs" do
-    test "?filter=posts keeps replies and likes, drops people events", %{conn: conn} do
+  describe "filter chips" do
+    test "?filter=reactions keeps likes, drops replies and people events", %{conn: conn} do
       {conn, user} = create_and_login_user(conn)
 
       insert(:follow, follower: insert(:user, first_name: "Grace"), followee: user)
       post = insert(:post, user: user, body: "Filterable post")
       :ok = Vutuv.Posts.like_post(insert(:user, first_name: "Fanny"), post)
 
-      {:ok, live, _html} = live(conn, ~p"/notifications?filter=posts")
+      insert(:post_reply,
+        post: insert(:post, user: insert(:user)),
+        parent_post: post,
+        parent_author: user
+      )
+
+      {:ok, live, _html} = live(conn, ~p"/notifications?filter=reactions")
 
       html = render(live)
-      assert html =~ "liked your post"
+      assert html =~ "likes this."
+      refute html =~ "replied."
       refute html =~ "started following you"
+    end
+
+    test "?filter=replies keeps replies, drops likes", %{conn: conn} do
+      {conn, user} = create_and_login_user(conn)
+
+      post = insert(:post, user: user, body: "Filterable post")
+      :ok = Vutuv.Posts.like_post(insert(:user, first_name: "Fanny"), post)
+
+      insert(:post_reply,
+        post: insert(:post, user: insert(:user)),
+        parent_post: post,
+        parent_author: user
+      )
+
+      {:ok, live, _html} = live(conn, ~p"/notifications?filter=replies")
+
+      html = render(live)
+      assert html =~ "replied."
+      refute html =~ "likes this."
     end
 
     test "?filter=people keeps follower events, drops post events", %{conn: conn} do
@@ -1338,10 +1685,10 @@ defmodule VutuvWeb.NotificationLiveTest do
 
       html = render(live)
       assert html =~ "started following you"
-      refute html =~ "liked your post"
+      refute html =~ "likes this."
     end
 
-    test "the tabs patch the filter without a reload", %{conn: conn} do
+    test "the chips patch the filter without a reload", %{conn: conn} do
       {conn, user} = create_and_login_user(conn)
       insert(:follow, follower: insert(:user, first_name: "Grace"), followee: user)
 
@@ -1349,19 +1696,19 @@ defmodule VutuvWeb.NotificationLiveTest do
       assert has_element?(live, ~s([data-filter-tab="all"][aria-current="page"]))
 
       live
-      |> element(~s([data-filter-tab="posts"]))
+      |> element(~s([data-filter-tab="reactions"]))
       |> render_click()
 
-      assert_patch(live, ~p"/notifications?filter=posts")
+      assert_patch(live, ~p"/notifications?filter=reactions")
       refute render(live) =~ "started following you"
     end
 
-    # A tab switch reloads the whole list, so on a slow line nothing in the DOM
+    # A chip switch reloads the whole list, so on a slow line nothing in the DOM
     # moves between the press and a page of rows arriving — a control that
     # reads as dead. The press paints itself instead, which is CSS on
     # LiveView's own `phx-click-loading` (`assets/css/app.css`) and cannot be
     # asserted here. What this pins is the markup that paint silently needs.
-    test "the tabs and the list sit inside one scope", %{conn: conn} do
+    test "the chips and the list sit inside one scope", %{conn: conn} do
       {conn, user} = create_and_login_user(conn)
       insert(:follow, follower: insert(:user, first_name: "Grace"), followee: user)
 
@@ -1370,7 +1717,7 @@ defmodule VutuvWeb.NotificationLiveTest do
       # `[data-filter-scope]:has([data-filter-tab].phx-click-loading)
       # [data-filter-list]` — move either marker out of that container and the
       # feedback dies with every other test still green.
-      assert has_element?(live, ~s([data-filter-scope] [data-filter-tab="posts"]))
+      assert has_element?(live, ~s([data-filter-scope] [data-filter-tab="replies"]))
       assert has_element?(live, ~s([data-filter-scope] [data-filter-list]))
 
       # And the bar names which of the app's two tab looks the paint wears; the
@@ -1387,11 +1734,11 @@ defmodule VutuvWeb.NotificationLiveTest do
       Vutuv.Activity.notify_like(user.id, insert(:user, first_name: "Fanny"), post.id)
       _ = :sys.get_state(live.pid)
 
-      refute render(live) =~ "liked your post"
+      refute render(live) =~ "likes this."
     end
   end
 
-  describe "the desktop rail" do
+  describe "the rail and the summary line" do
     test "suggests following back a recent follower and follows on click", %{conn: conn} do
       {conn, user} = create_and_login_user(conn)
       follower = insert(:user, first_name: "Grace", last_name: "Hopper")
@@ -1419,16 +1766,19 @@ defmodule VutuvWeb.NotificationLiveTest do
       refute has_element?(live, "#follow-back")
     end
 
-    test "summarizes the last 30 days of activity", %{conn: conn} do
+    test "summarizes the last 30 days in one line under the title", %{conn: conn} do
       {conn, user} = create_and_login_user(conn)
       insert(:follow, follower: insert(:user), followee: user)
+      :ok = Vutuv.Posts.like_post(insert(:user), insert(:post, user: user))
 
       {:ok, live, _html} = live(conn, ~p"/notifications")
 
-      assert has_element?(live, "#activity-summary", "Follower")
+      assert has_element?(live, "#activity-summary", "Last 30 days")
+      assert has_element?(live, "#activity-summary", "1 follower")
+      assert has_element?(live, "#activity-summary", "1 like")
     end
 
-    test "shows no summary card when the window is empty", %{conn: conn} do
+    test "shows no summary line when the window is empty", %{conn: conn} do
       {conn, user} = create_and_login_user(conn)
       old = insert(:follow, follower: insert(:user), followee: user)
       backdate_follow(old, ~N[2016-11-24 12:00:00])
@@ -1446,24 +1796,73 @@ defmodule VutuvWeb.NotificationLiveTest do
       :ok = Vutuv.Posts.like_post(insert(:user), post)
 
       {:ok, live, _html} = live(conn, ~p"/notifications")
-      assert has_element?(live, ~s([data-post-preview]), "Ship the redesign on Friday")
+      assert has_element?(live, ~s([data-post-card]), "Ship the redesign on Friday")
 
       send(live.pid, :day_changed)
       _ = :sys.get_state(live.pid)
-      assert has_element?(live, ~s([data-post-preview]), "Ship the redesign on Friday")
+      assert has_element?(live, ~s([data-post-card]), "Ship the redesign on Friday")
     end
   end
 
-  # Grouped rows carry `id="notification-<kind>-..."` plus a data-kind marker.
-  defp row_ids(html, kind) do
-    Regex.scan(~r/data-kind="#{kind}"/, html)
+  # ── helpers ──
+
+  # Written straight to the table: the inbox gates are the Fediverse tests'
+  # business, this is about the line the reader gets.
+  defp remote_reaction!(post, name, kind) do
+    Vutuv.Repo.insert!(%Vutuv.Fediverse.Reaction{
+      post_id: post.id,
+      actor_uri: "https://social.example/users/#{name}",
+      handle: name,
+      kind: kind,
+      received_at: DateTime.utc_now(:second)
+    })
   end
 
-  # The lines inside a post card, one per merged event.
+  defp remote_note!(post, name, text) do
+    Vutuv.Repo.insert!(%Vutuv.Fediverse.Note{
+      post_id: post.id,
+      object_uri:
+        "https://social.example/users/#{name}/statuses/#{System.unique_integer([:positive])}",
+      actor_uri: "https://social.example/users/#{name}",
+      handle: name,
+      display_name: String.capitalize(name),
+      content_text: text,
+      audience: "public",
+      received_at: DateTime.utc_now(:second),
+      expires_at: DateTime.add(DateTime.utc_now(:second), 30, :day)
+    })
+  end
+
+  # One reply to a fresh post of `user`'s, with `body` as the reply's text.
+  defp reply_with_body!(user, body) do
+    parent = insert(:post, user: user, body: "The question")
+    reply = insert(:post, user: insert(:user), body: body)
+    insert(:post_reply, post: reply, parent_post: parent, parent_author: user)
+    reply
+  end
+
+  defp render_the_page(conn) do
+    {:ok, live, _html} = live(conn, ~p"/notifications")
+    render(live)
+  end
+
+  # Cards and single rows carry `data-kind`; the lines inside a card carry
+  # `data-event-kind`, so counting one never counts the other.
+  defp rows(html, kind), do: Regex.scan(~r/data-kind="#{kind}"/, html)
+  defp lines(html, kind), do: Regex.scan(~r/data-event-kind="#{kind}"/, html)
+
+  # The lines inside the cards, one per merged event, in document order.
   defp event_kinds(html) do
     ~r/data-event-kind="([a-z_]+)"/
     |> Regex.scan(html)
     |> Enum.map(fn [_, kind] -> kind end)
+  end
+
+  # Source-order position of `needle`, so a test can pin that one piece of
+  # markup comes before another.
+  defp at(html, needle) do
+    assert {start, _length} = :binary.match(html, needle)
+    start
   end
 
   defp backdate_follow(%Vutuv.Social.Follow{id: id}, at) do
@@ -1471,6 +1870,23 @@ defmodule VutuvWeb.NotificationLiveTest do
 
     Vutuv.Repo.update_all(
       from(c in Vutuv.Social.Follow, where: c.id == ^id),
+      set: [inserted_at: at]
+    )
+  end
+
+  defp backdate_post(%Vutuv.Posts.Post{id: id}, at) do
+    import Ecto.Query
+
+    Vutuv.Repo.update_all(from(p in Vutuv.Posts.Post, where: p.id == ^id), set: [inserted_at: at])
+  end
+
+  # A reply event is timestamped by its post_replies row, so an old answer
+  # needs that row backdated, not only the reply post.
+  defp backdate_reply(%Vutuv.Posts.Post{id: id}, at) do
+    import Ecto.Query
+
+    Vutuv.Repo.update_all(
+      from(r in Vutuv.Posts.PostReply, where: r.post_id == ^id),
       set: [inserted_at: at]
     )
   end

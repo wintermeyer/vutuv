@@ -1183,6 +1183,41 @@ defmodule Vutuv.Activity do
     total_count(user_id, read_at, nil, true)
   end
 
+  @doc """
+  `unread_notification_count/1` split by named kind groups — `groups` is
+  `%{name => [kind, ...]}` (the kind strings `notifications_page/2`'s `kinds:`
+  takes) — as `%{name => count}`: what the notifications page's filter chips
+  show. ONE query for all of them: every kind's count subquery is added into
+  its group's column of a single SELECT, the way `total_count/4` sums the
+  whole feed. A group whose kinds count nothing answers 0.
+  """
+  def unread_notification_counts(%User{id: user_id, notifications_read_at: read_at}, groups)
+      when is_map(groups) do
+    arms =
+      for spec <- kind_specs(user_id, read_at, true),
+          {count, dismiss} <- Enum.zip(spec.counts, spec.dismiss),
+          do: {spec.kind, unless_dismissed(count, user_id, dismiss, true)}
+
+    case arms do
+      [] ->
+        Map.new(groups, fn {name, _kinds} -> {name, 0} end)
+
+      [{_kind, first} | _rest] ->
+        columns = Map.new(groups, fn {name, kinds} -> {name, group_sum(arms, kinds)} end)
+        Repo.one(from(s in subquery(first), select: ^columns))
+    end
+  end
+
+  # One group's column: its kinds' count subqueries added up, from a zero so a
+  # group with no arm at all still selects a number.
+  defp group_sum(arms, kinds) do
+    arms
+    |> Enum.filter(fn {kind, _count} -> kind in kinds end)
+    |> Enum.reduce(dynamic(fragment("0")), fn {_kind, count}, acc ->
+      dynamic(^acc + subquery(count))
+    end)
+  end
+
   # The feed sources are counted in a single round trip: each count is a
   # scalar subquery, summed in one SELECT. unread_notification_count/1 still
   # needs one prior read for the marker, so it ends up at 2 queries;

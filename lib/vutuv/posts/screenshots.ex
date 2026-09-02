@@ -346,6 +346,21 @@ defmodule Vutuv.Posts.Screenshots do
   @doc "Loads one job by id, raising when it is gone (the admin views' reads)."
   def get_job!(id), do: Repo.get!(PostScreenshot, id)
 
+  @doc """
+  The screenshots ready to render for these member posts, as
+  `%{post_id => %PostScreenshot{}}` — captured **and** released by the image
+  scan (`PostScreenshot.ready?/1`), nothing else. One query for a page of
+  posts; a post with no capture, a pending one or a held one is simply absent.
+  """
+  def ready_by_post_ids([]), do: %{}
+
+  def ready_by_post_ids(post_ids) when is_list(post_ids) do
+    from(s in PostScreenshot, where: s.post_id in ^post_ids and s.status == "ready")
+    |> Repo.all()
+    |> Enum.filter(&PostScreenshot.ready?/1)
+    |> Map.new(&{&1.post_id, &1})
+  end
+
   ## Draining the queue
 
   @doc """

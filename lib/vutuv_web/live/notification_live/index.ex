@@ -4,41 +4,43 @@ defmodule VutuvWeb.NotificationLive.Index do
   `Vutuv.Activity.notifications_page/2` from the event tables that already
   exist, so it reaches back to events from before this page existed.
 
-  Presentation (the 2026-07 redesign):
+  Presentation (the 2026-09 card layout, replacing the 2026-07 rows):
 
-    * Raw events are **merged into grouped rows** under **Berlin-day sections**
-      by `VutuvWeb.NotificationLive.Groups` - same-day likes of one post, the
-      day's followers, one endorser's endorsements each read as a single row
-      instead of a card per event.
-    * Events newer than the previous visit's read marker are highlighted as
-      unread (tint + coral dot); the visit itself still advances the marker
-      and clears the shell's bell badge, exactly as before.
-    * **Filter tabs** (all / posts / people / more) restrict the feed
-      server-side via `notifications_page`'s `kinds:` option and live in the
-      URL (`?filter=`), patched without a reload. A press **paints itself**
-      rather than waiting for the answer: the bar is `data-filter-bar="track"`,
-      each tab `data-filter-tab`, and the whole list `data-filter-list` inside
-      the column's `data-filter-scope` — the shared in-flight rules in
-      `app.css` do the rest, off the `phx-click-loading` LiveView puts on a
-      pressed patch link. Without it a slow line shows nothing at all between
-      the press and a page of rows arriving, which reads as a dead control.
-    * A rail (right column on md+, below the list on phones) offers **Follow
-      back** suggestions (recent followers, reload-free follow via
-      `Vutuv.Social`) and a **Last 30 days** summary
-      (`Vutuv.Activity.activity_summary/2`).
-    * A post a row quotes (the liked post, the reply) is **formatted the way
-      /feed formats a post** - rendered from its Markdown source through
-      `VutuvWeb.Markdown` into the `.markdown markdown--post` body recipe, so
-      bold, lists, links, @mentions and #hashtags read as themselves instead of
-      as source markers. It is cut to the reader's own line budget -
-      `Vutuv.Accounts.User.notification_post_lines/1`, the
-      `:notification_post_lines` preference: server-side to that many source
-      lines, and visually by the `.notif-clamp` CSS clamp fed through the
-      inline `--notif-clamp` custom property. The compact one-line contexts (a
-      reply's "Your post:" breadcrumb, the handle-change list) sit inside the
-      row's own link, so they cannot carry links of their own: those come from
-      `VutuvWeb.PostTeaser`, the app's shared one-line teaser, which flattens
-      the line and skips the openers no reader learns anything from.
+    * Raw events are grouped **by subject** under **the reader's calendar
+      days** by `VutuvWeb.NotificationLive.Groups`: everything about one post
+      — likes, replies, mentions, answers deeper in its thread, and what other
+      networks sent back — is one **post card** headed by the post itself (a
+      two-line teaser, its first pictures or its link screenshot on the right,
+      a count of what came back), followed by one line per verb: every reply
+      keeps a line of its own carrying its words, likes and re-shares merge
+      into one line each. The day's followers, connections and endorsements
+      are one **people card**. Measured on the real feed before the change: 39
+      events on one day were about 11 posts, and the verb-keyed rows showed
+      the busiest post three times over.
+    * A reply line **unfolds** on tap (`toggle_line`) into the reply formatted
+      the way /feed formats a post (`<.quoted_post>`, cut to the reader's
+      `:notification_post_lines`) plus a Reply link to its permalink; a card
+      with more than `@card_lines` lines folds the rest behind "Show N more"
+      (`unfold`). Both are socket round trips, so the dead render is exactly
+      what the connected one starts from.
+    * Within a day the cards with an **unanswered reply** come first, then the
+      rest of what is new since the previous visit, then what the reader has
+      seen — the page draws a "Seen before" rule at that transition. Unread is
+      still the pre-visit read marker (tint + coral dot), and the visit still
+      advances the marker and clears the shell's bell badge.
+    * The **filter chips** (all / replies / reactions / people / more) count
+      what is new since the last visit and restrict the feed server-side via
+      `notifications_page`'s `kinds:` option; they live in the URL
+      (`?filter=`), patched without a reload. A press **paints itself** rather
+      than waiting for the answer: the bar is `data-filter-bar="track"`, each
+      chip `data-filter-tab`, and the whole list `data-filter-list` inside the
+      column's `data-filter-scope` — the shared in-flight rules in `app.css`
+      do the rest, off the `phx-click-loading` LiveView puts on a pressed patch
+      link.
+    * The last 30 days are one line under the title
+      (`Vutuv.Activity.activity_summary/2`); the rail (right column on md+,
+      below the list on phones) keeps the **Follow back** suggestions (recent
+      followers, reload-free follow via `Vutuv.Social`).
 
   The page is **numbered** (`?page=`), not an endless list: both the page and
   the filter live in the URL, so a page can be linked to and the back button
@@ -48,7 +50,7 @@ defmodule VutuvWeb.NotificationLive.Index do
   **static** mount too (issue #919), so the list is in the first HTTP paint.
 
   Live events arrive over `Vutuv.Activity` (PubSub `"user:<id>"`) and merge into
-  their group, but only while the reader is on page 1 - an older page is a
+  their card, but only while the reader is on page 1 - an older page is a
   fixed window into the past and must not shift under them. Because grouping is
   a pure function over the retained item list, every change (paging, live push,
   the DayClock's midnight rollover) simply recomputes the sections - there is no
@@ -65,10 +67,8 @@ defmodule VutuvWeb.NotificationLive.Index do
     only: [
       cv_entry_label: 1,
       cv_entry_path: 2,
-      fediverse_reaction_text: 2,
       notification_target: 2,
-      notification_text: 1,
-      thread_text: 1
+      notification_text: 1
     ]
 
   # Like the feed and messages: not a page for anonymous visitors —
@@ -78,10 +78,13 @@ defmodule VutuvWeb.NotificationLive.Index do
   alias Vutuv.Accounts.User
   alias Vutuv.Activity
   alias Vutuv.Fediverse
+  alias Vutuv.Fediverse.Note
   alias Vutuv.Pages
   alias Vutuv.Posts
   alias Vutuv.Posts.Post
   alias Vutuv.Posts.PostImage
+  alias Vutuv.Posts.Screenshots
+  alias Vutuv.Screenshot
   alias Vutuv.Social
   alias Vutuv.ViewerClock
   alias VutuvWeb.Live.MountHandoff
@@ -95,21 +98,23 @@ defmodule VutuvWeb.NotificationLive.Index do
   @summary_days 30
   @follow_back_limit 5
 
-  # The kinds `Groups` folds into a post card, read from it at compile time so
-  # the list has one home and a guard can still use it.
-  @post_card_kinds Groups.post_card_kinds()
+  # How many lines a card shows before folding the rest behind a count. Four
+  # keeps a card with a dozen answers to the height of the busiest real one
+  # (three replies and a like line) while a tap still reaches everything.
+  @card_lines 4
 
-  # The filter tabs: each maps to the event kinds `notifications_page`'s
+  # The filter chips: each maps to the event kinds `notifications_page`'s
   # `kinds:` option keeps. "all" passes nil (every source).
   #
-  # Every kind in `Vutuv.Activity.kinds/0` must appear under exactly one tab, or
-  # it is unreachable from the tabs AND `filtered_out?/2` drops it from the live
-  # push for any reader not on "All" — which is what happened to
+  # Every kind in `Vutuv.Activity.kinds/0` must appear under exactly one chip,
+  # or it is unreachable from the chips AND `filtered_out?/2` drops it from the
+  # live push for any reader not on "All" — which is what happened to
   # `reference_check`. `notification_filter_coverage_test.exs` fails the build
   # when the two lists drift apart again.
   @filters %{
     "all" => nil,
-    "posts" => ~w(reply thread mention like fediverse_reply fediverse_reaction),
+    "replies" => ~w(reply thread mention fediverse_reply),
+    "reactions" => ~w(like fediverse_reaction),
     "people" => ~w(follower connection endorsement),
     "other" =>
       ~w(organization_role moderation image_rejected report_protection handle_change cv_update
@@ -124,10 +129,10 @@ defmodule VutuvWeb.NotificationLive.Index do
     user = socket.assigns.current_user
 
     # The previous visit's read marker - what "new since your last visit"
-    # highlights - and its badge count, both captured *before* this visit
-    # advances the marker below.
+    # highlights - and its per-chip badge counts, all captured *before* this
+    # visit advances the marker below.
     read_marker = user.notifications_read_at
-    new_count = if connected?(socket), do: Activity.unread_notification_count(user), else: 0
+    new_counts = if connected?(socket), do: unread_counts(user), else: %{}
 
     # The rows the member already acknowledged one by one, from the browser
     # notifications they clicked — captured here for the same reason as the
@@ -146,15 +151,17 @@ defmodule VutuvWeb.NotificationLive.Index do
      socket
      |> assign(:page_title, gettext("Notifications"))
      |> assign(:read_marker, read_marker)
-     |> assign(:new_count, new_count)
+     |> assign(:new_counts, new_counts)
      |> assign(:dismissed, dismissed)
      |> assign(:today, ViewerClock.today())
      |> assign(:quote_lines, User.notification_post_lines(user))
+     |> assign(:expanded, MapSet.new())
+     |> assign(:unfolded, MapSet.new())
      |> assign_rail(connected?(socket))}
   end
 
-  # Both the filter (?filter=posts) and the page (?page=3) live in the URL, so
-  # the tabs and the pager are patch links and the back button works; an
+  # Both the filter (?filter=replies) and the page (?page=3) live in the URL, so
+  # the chips and the pager are patch links and the back button works; an
   # unknown filter falls back to "all", an unparseable page to 1. Runs on both
   # the static and the connected mount, so the page is in the first HTTP paint
   # (issue #919).
@@ -185,6 +192,35 @@ defmodule VutuvWeb.NotificationLive.Index do
     {:noreply, assign_rail(socket, true)}
   end
 
+  # A reply line unfolds into the formatted quote and folds again on the next
+  # tap. Kept per line id, so a live push or a midnight rollover that rebuilds
+  # the sections leaves an open line open. The quote itself is rendered here,
+  # on the unfold, not for every reply on the page: a full Markdown pass per
+  # line was paid for fifty lines and shown for none until somebody tapped.
+  def handle_event("toggle_line", %{"id" => id}, socket) do
+    expanded = socket.assigns.expanded
+
+    if MapSet.member?(expanded, id) do
+      {:noreply, assign(socket, :expanded, MapSet.delete(expanded, id))}
+    else
+      viewer = socket.assigns.current_user
+      lines = socket.assigns.quote_lines
+
+      {:noreply,
+       socket
+       |> assign(:expanded, MapSet.put(expanded, id))
+       |> update(:items, fn items ->
+         Enum.map(items, &if(&1.id == id, do: with_reply_preview(&1, viewer, lines), else: &1))
+       end)
+       |> assign_sections()}
+    end
+  end
+
+  # "Show N more" on a card: every line from then on, for this card.
+  def handle_event("unfold", %{"id" => id}, socket) do
+    {:noreply, update(socket, :unfolded, &MapSet.put(&1, id))}
+  end
+
   @impl true
   def handle_info({:new_notification, notification}, socket) do
     # The user is watching the event arrive, so it is already read: advance
@@ -205,8 +241,8 @@ defmodule VutuvWeb.NotificationLive.Index do
       |> Map.put_new(:id, "live-#{System.unique_integer([:positive, :monotonic])}")
 
     cond do
-      # Not part of what this tab shows: it belongs to neither the list nor
-      # the tab's total.
+      # Not part of what this chip shows: it belongs to neither the list nor
+      # the chip's total.
       filtered_out?(item, socket.assigns.filter) ->
         {:noreply, socket}
 
@@ -248,7 +284,7 @@ defmodule VutuvWeb.NotificationLive.Index do
   # pass stashes what it computed and the connected mount's handle_params —
   # moments later, same viewer, same URL — takes it instead of re-running the
   # same queries (`VutuvWeb.Live.MountHandoff`). The subject carries the
-  # filter and the *requested* page, so a patch to another tab or page can
+  # filter and the *requested* page, so a patch to another chip or page can
   # never reuse a stale stash; any miss (expired, consumed, a patch, a
   # reconnect) falls back to the plain full load. The visit's mark-read write
   # lives in mount, not here, so the handoff leaves it at exactly once.
@@ -322,11 +358,31 @@ defmodule VutuvWeb.NotificationLive.Index do
   end
 
   defp assign_sections(socket) do
-    sections = Groups.sections(socket.assigns.items, socket.assigns.read_marker)
+    sections =
+      socket.assigns.items
+      |> Groups.sections(socket.assigns.read_marker)
+      |> Enum.map(&Map.put(&1, :rows, with_seen_rule(&1.groups)))
 
     socket
     |> assign(:sections, sections)
     |> assign(:empty?, sections == [])
+  end
+
+  # `[{group, rule?}]`: the "Seen before" rule sits before the first seen card
+  # that follows a new one in the same day — once, since `Groups` sorts a
+  # day's new cards ahead of its seen ones. A day that is all new or all seen
+  # draws no rule.
+  defp with_seen_rule(groups) do
+    {rows, _state} =
+      Enum.map_reduce(groups, :before, fn group, state ->
+        cond do
+          group.unread? -> {{group, false}, :new_seen}
+          state == :new_seen -> {{group, true}, :done}
+          true -> {{group, false}, state}
+        end
+      end)
+
+    rows
   end
 
   defp filtered_out?(item, filter) do
@@ -336,15 +392,32 @@ defmodule VutuvWeb.NotificationLive.Index do
     end
   end
 
-  # The id of the day's first "thread" group, so its row alone carries the
-  # opt-out hint (issue #1025) - one hint per Berlin-day section, not per row.
-  # nil when the day has no thread row, so nothing is marked.
-  defp first_thread_group_id(groups) do
-    Enum.find_value(groups, fn group -> group.kind == "thread" && group.id end)
+  # The day's first thread line, for the opt-out hint (issue #1025): one hint
+  # per day, on the first line that would be silenced.
+  defp first_thread_line_id(groups) do
+    Enum.find_value(groups, fn
+      %{kind: "post", events: events} -> Enum.find_value(events, &(&1.verb == :thread && &1.id))
+      _group -> nil
+    end)
   end
 
-  # The rail data (follow-back suggestions + 30-day summary) is skipped on
-  # the static mount, like the remaining count, to keep the first paint lean.
+  # What is new since the last visit, per chip. The whole-feed count is what
+  # the shell badge showed; the split into chips is one more query, and only
+  # when there is something to split.
+  defp unread_counts(user) do
+    case Activity.unread_notification_count(user) do
+      0 ->
+        %{"all" => 0}
+
+      all ->
+        user
+        |> Activity.unread_notification_counts(Map.delete(@filters, "all"))
+        |> Map.put("all", all)
+    end
+  end
+
+  # The rail and the summary line need the DB and the viewer's follow graph;
+  # the static render skips both (they arrive with the connected mount).
   defp assign_rail(socket, false) do
     socket
     |> assign(:follow_back, [])
@@ -355,14 +428,13 @@ defmodule VutuvWeb.NotificationLive.Index do
   defp assign_rail(socket, true) do
     user = socket.assigns.current_user
     follow_back = Social.followers_to_follow_back(user.id, @follow_back_limit)
-
     since = NaiveDateTime.add(NaiveDateTime.utc_now(:second), -@summary_days, :day)
     summary = Activity.activity_summary(user.id, since)
 
     socket
     |> assign(:follow_back, follow_back)
     |> assign(:work_info_by_id, UserHelpers.work_information_map(follow_back, 45))
-    |> assign(:summary, if(summary_total(summary) > 0, do: summary))
+    |> assign(:summary, if(summary_total(summary) > 0, do: summary, else: nil))
   end
 
   defp summary_total(summary) do
@@ -375,23 +447,37 @@ defmodule VutuvWeb.NotificationLive.Index do
     ~H"""
     <div id="notifications" class="py-6 md:py-8">
       <div class="grid gap-6 md:grid-cols-3">
-        <%!-- `data-filter-scope` pairs the tabs with the list they replace: the
+        <%!-- `data-filter-scope` pairs the chips with the list they replace: the
         in-flight paint in `app.css` dims every `[data-filter-list]` inside this
-        container while one of its tabs is waiting for an answer, so both
+        container while one of its chips is waiting for an answer, so both
         markers have to stay under this one element. --%>
         <div data-filter-scope class="min-w-0 md:col-span-2">
           <div class="flex flex-wrap items-baseline justify-between gap-x-4 gap-y-1">
             <h1 class="text-2xl font-bold text-slate-800 dark:text-slate-100">
               {gettext("Notifications")}
             </h1>
-            <p :if={@new_count > 0} id="new-count" class="mb-0 text-sm font-semibold text-accent">
-              {new_count_label(@new_count)}
+            <p
+              :if={unread_badge(@new_counts, "all")}
+              id="new-count"
+              class="mb-0 text-sm font-semibold text-accent"
+            >
+              {new_count_label(unread_badge(@new_counts, "all"))}
             </p>
           </div>
 
+          <%!-- The last 30 days as one quiet line: the context the reader
+          glances at, never the thing they came for. --%>
+          <p
+            :if={@summary}
+            id="activity-summary"
+            class="mb-0 mt-1 text-xs text-slate-600 dark:text-slate-400"
+          >
+            {summary_line(@summary)}
+          </p>
+
           <%!-- `data-filter-bar="track"` picks which of the app's two tab looks
           the in-flight paint reaches for: here the white pill on a filled
-          trough, so a pressed tab turns into this bar's own active tab rather
+          trough, so a pressed chip turns into this bar's own active chip rather
           than into the brand pill the post filter tabs wear. --%>
           <div
             id="notification-filter"
@@ -405,12 +491,16 @@ defmodule VutuvWeb.NotificationLive.Index do
               aria-current={@filter == value && "page"}
               class={filter_tab_class(@filter == value)}
             >
-              {label}
+              {label}<span
+                :if={unread_badge(@new_counts, value)}
+                data-filter-count
+                class="ml-1.5 inline-flex min-w-5 items-center justify-center rounded-full bg-accent px-1.5 text-[11px] font-bold leading-5 text-white"
+              >{compact_count(unread_badge(@new_counts, value))}</span>
             </.link>
           </div>
 
-          <%!-- Everything a tab replaces lives in one `data-filter-list`, so the
-          shared paint can dim it while the answer is on its way. The tabs stay
+          <%!-- Everything a chip replaces lives in one `data-filter-list`, so the
+          shared paint can dim it while the answer is on its way. The chips stay
           outside it: the reader has to keep seeing which one they pressed. --%>
           <div data-filter-list>
             <section :for={section <- @sections} data-day-section>
@@ -420,16 +510,28 @@ defmodule VutuvWeb.NotificationLive.Index do
               >
                 {day_label(section.day, @today)}
               </h2>
-              <% first_thread_id = first_thread_group_id(section.groups) %>
-              <div class="mt-2 divide-y divide-slate-100 overflow-hidden rounded-2xl bg-white shadow-sm ring-1 ring-slate-200 dark:divide-slate-800 dark:bg-slate-900 dark:ring-slate-800">
-                <.notification_row
-                  :for={group <- section.groups}
-                  group={group}
-                  current_user={@current_user}
-                  quote_lines={@quote_lines}
-                  post_cards={@post_cards}
-                  thread_hint={group.kind == "thread" and group.id == first_thread_id}
-                />
+              <% thread_hint_id = first_thread_line_id(section.groups) %>
+              <div class="mt-2 space-y-3">
+                <%= for {group, rule?} <- section.rows do %>
+                  <div
+                    :if={rule?}
+                    data-seen-rule
+                    class="flex items-center gap-3 px-1 pt-1 text-xs font-semibold text-slate-500 dark:text-slate-400"
+                  >
+                    <span class="h-px flex-1 bg-slate-200 dark:bg-slate-700" aria-hidden="true"></span>
+                    {gettext("Seen before")}
+                    <span class="h-px flex-1 bg-slate-200 dark:bg-slate-700" aria-hidden="true"></span>
+                  </div>
+                  <.notification_card
+                    group={group}
+                    current_user={@current_user}
+                    quote_lines={@quote_lines}
+                    post_cards={@post_cards}
+                    expanded={@expanded}
+                    unfolded={@unfolded}
+                    thread_hint_id={thread_hint_id}
+                  />
+                <% end %>
               </div>
             </section>
 
@@ -464,29 +566,6 @@ defmodule VutuvWeb.NotificationLive.Index do
               />
             </ul>
           </.card>
-
-          <.card :if={@summary} id="activity-summary" class="p-5">
-            <.section_title>{gettext("Last 30 days")}</.section_title>
-            <ul class="mt-4 space-y-2.5">
-              <li
-                :for={{kind, count} <- summary_rows(@summary)}
-                class="flex items-center gap-3 text-sm"
-              >
-                <span class={[
-                  "flex h-7 w-7 shrink-0 items-center justify-center rounded-full text-xs font-bold",
-                  kind_classes(kind)
-                ]}>
-                  {kind_glyph(kind)}
-                </span>
-                <span class="min-w-0 flex-1 truncate text-slate-700 dark:text-slate-300">
-                  {summary_label(kind)}
-                </span>
-                <span class="font-semibold text-slate-900 dark:text-white">
-                  {compact_count(count)}
-                </span>
-              </li>
-            </ul>
-          </.card>
         </aside>
       </div>
     </div>
@@ -497,69 +576,111 @@ defmodule VutuvWeb.NotificationLive.Index do
   # assigns, not the module attribute.
   defp page_size, do: @page_size
 
-  # The pager carries the active tab onto every page link, so paging inside a
-  # filtered feed stays in that filter. "all" is the default and needs no param.
+  # The pager carries the active chip onto every page link, so paging inside a
+  # filter stays inside it.
   defp pager_query("all"), do: %{}
   defp pager_query(filter), do: %{"filter" => filter}
 
-  # ── One grouped row ──
+  # ── One card ──
 
   attr(:group, :map, required: true)
   attr(:current_user, :any, required: true)
   attr(:quote_lines, :integer, required: true)
   attr(:post_cards, :map, default: %{})
-  attr(:thread_hint, :boolean, default: false)
+  attr(:expanded, :any, required: true)
+  attr(:unfolded, :any, required: true)
+  attr(:thread_hint_id, :string, default: nil)
 
-  defp notification_row(%{group: %{kind: "fediverse_post"}} = assigns) do
-    assigns = assign(assigns, :card, Map.get(assigns.post_cards, assigns.group.item[:post_id]))
+  defp notification_card(%{group: %{kind: "post"}} = assigns) do
+    lines = assigns.group.events
+    unfolded? = MapSet.member?(assigns.unfolded, assigns.group.id)
+    shown = if unfolded?, do: lines, else: Enum.take(lines, @card_lines)
+
+    assigns =
+      assigns
+      |> assign(:card, Map.get(assigns.post_cards, assigns.group.post_id))
+      |> assign(:shown, shown)
+      |> assign(:hidden, length(lines) - length(shown))
 
     ~H"""
     <.notification_article group={@group}>
-      <.post_card_head card={@card} counts={event_counts(@group.events)} />
+      <.post_card_head
+        card={@card}
+        eyebrow={card_eyebrow(@card, @group, @current_user)}
+        counts={card_counts(@group.events)}
+        at={@group.at}
+        unread?={@group.unread?}
+      />
 
-      <%!-- One line per verb, on the same quote rail the row quotes wear: the
-      card head already said which post, so each line only has to say who and
-      what. --%>
-      <ul class="mt-2.5 space-y-1 border-l-2 border-slate-200 pl-3 dark:border-slate-700">
-        <li
-          :for={event <- @group.events}
-          data-notification-event
-          data-event-kind={event.kind}
-          data-unread={event.unread? && "true"}
-        >
-          <div class="flex items-baseline gap-2 text-sm leading-relaxed text-slate-800 dark:text-slate-100">
-            <span class="shrink-0 text-xs" aria-hidden="true">{kind_glyph(event.kind)}</span>
-            <p class="mb-0 min-w-0 flex-1">
-              <span class="sr-only">{kind_label(event.kind)}:</span>
-              <.actor_links group={event} current_user={@current_user} />
-              <.link
-                href={card_event_target(event, @current_user)}
-                class="hover:text-brand-700 hover:underline dark:hover:text-brand-300"
-              >
-                {card_event_text(event)}
-              </.link>
-            </p>
-            <.row_time at={event.at} />
-            <.unread_dot :if={event.unread?} class="mt-1.5 shrink-0" />
-          </div>
+      <ul class="mt-2 divide-y divide-slate-100 dark:divide-slate-800">
+        <.card_line
+          :for={line <- @shown}
+          line={line}
+          current_user={@current_user}
+          quote_lines={@quote_lines}
+          expanded={MapSet.member?(@expanded, line.id)}
+          thread_hint={line.id == @thread_hint_id}
+        />
+      </ul>
 
-          <%!-- A reply brings words of its own, so it keeps the quote (and the
-          private-reply warning) it had as its own row — the reader has to know
-          a reply is private before they answer it. --%>
-          <.remote_reply
-            :if={event.kind == "fediverse_reply" and event.item[:note_text]}
-            id={"quote-remote-#{event.id}"}
-            n={event.item}
-            current_user={@current_user}
-            quote_lines={@quote_lines}
+      <button
+        :if={@hidden > 0}
+        type="button"
+        phx-click="unfold"
+        phx-value-id={@group.id}
+        data-card-more
+        class="mt-1 inline-flex min-h-10 items-center text-sm font-semibold text-brand-600 hover:text-brand-700 dark:text-brand-400 dark:hover:text-brand-300"
+      >
+        {gettext("Show %{formatted} more", formatted: compact_count(@hidden))}
+      </button>
+    </.notification_article>
+    """
+  end
+
+  # The day's people: their avatars, a tally, and one line per verb.
+  defp notification_card(%{group: %{kind: "people"}} = assigns) do
+    ~H"""
+    <.notification_article group={@group}>
+      <div class="flex items-start gap-3">
+        <div class="flex shrink-0 -space-x-2">
+          <.avatar
+            :for={actor <- Enum.take(@group.actors, 4)}
+            src={actor.avatar}
+            size="sm"
+            presence
+            presence_id={actor.id}
+            alt={"Avatar of #{actor.name}"}
+            class="ring-2 ring-white dark:ring-slate-900"
           />
-        </li>
+        </div>
+        <div class="min-w-0 flex-1">
+          <span data-card-eyebrow class={eyebrow_class()}>{gettext("People")}</span>
+          <span
+            data-card-title
+            class="mt-0.5 block text-sm font-medium text-slate-900 dark:text-white"
+          >
+            {people_title(@group)}
+          </span>
+        </div>
+        <.row_meta at={@group.at} unread?={@group.unread?} />
+      </div>
+
+      <ul class="mt-2 divide-y divide-slate-100 dark:divide-slate-800">
+        <.card_line
+          :for={line <- @group.events}
+          line={line}
+          current_user={@current_user}
+          quote_lines={@quote_lines}
+          expanded={false}
+          thread_hint={false}
+        />
       </ul>
     </.notification_article>
     """
   end
 
-  defp notification_row(assigns) do
+  # Every rarer kind: one row per event, each carrying its own content.
+  defp notification_card(assigns) do
     assigns = assign(assigns, :n, assigns.group.item)
 
     ~H"""
@@ -580,88 +701,6 @@ defmodule VutuvWeb.NotificationLive.Index do
             <% true -> %>
               {group_text(@group)}
           <% end %>
-        </p>
-
-        <%!-- A like quotes the liked post once, formatted like a feed post and
-        cut to the reader's line budget (:notification_post_lines). --%>
-        <.quoted_post
-          :if={@group.kind == "like" and @n[:post_preview]}
-          id={"quote-#{@group.id}"}
-          href={~p"/#{@current_user}/posts/#{@n.post_id}"}
-          html={@n.post_preview.html}
-          quote_lines={@quote_lines}
-          class="mt-1.5"
-        />
-
-        <%!-- A mention quotes the post that named the reader. Its permalink
-        lives under the post's own author, not under the reader — and that
-        author may be an organization (issue #1334), so it is asked of
-        `Posts.path/1` rather than assembled here from a member handle. --%>
-        <.quoted_post
-          :if={@group.kind == "mention" and @n[:post_preview]}
-          id={"quote-#{@group.id}"}
-          href={Posts.path(@n.post_preview.post)}
-          html={@n.post_preview.html}
-          quote_lines={@quote_lines}
-          class="mt-1.5"
-        />
-
-        <%!-- A reply quotes the reply itself, under a one-line breadcrumb naming
-        the recipient's own post it answers. A thread event carries no post of
-        the recipient's, so there only the reply quotes. --%>
-        <div
-          :if={@group.kind in ["reply", "thread"] and (@n[:post_preview] || @n[:reply_preview])}
-          class="mt-1.5 space-y-1"
-        >
-          <.link
-            :if={@n[:post_preview]}
-            data-post-preview="true"
-            href={~p"/#{@current_user}/posts/#{@n.post_id}"}
-            class="block text-xs text-slate-500 hover:text-brand-700 dark:text-slate-400 dark:hover:text-brand-300"
-          >
-            <span class="font-medium">{gettext("Your post")}:</span>
-            <span class="line-clamp-1 whitespace-pre-line align-bottom">{@n.post_preview.text}</span>
-          </.link>
-          <.quoted_post
-            :if={@n[:reply_preview]}
-            id={"quote-reply-#{@group.id}"}
-            data-reply-preview="true"
-            href={Posts.path(@n.reply_preview.post)}
-            html={@n.reply_preview.html}
-            quote_lines={@quote_lines}
-          />
-        </div>
-
-        <%!-- A reply from another network quotes its text (issue #1069). Plain
-        text, clamped like the other quotes and deliberately NOT run through the
-        Markdown renderer: a stranger's words must not be able to mint links,
-        least of all @mention links into local profiles. A private reply
-        (issue #1071) says so, since the member has to know that before they
-        answer. --%>
-        <.remote_reply
-          :if={@group.kind == "fediverse_reply" and @n[:note_text]}
-          id={"quote-remote-#{@group.id}"}
-          n={@n}
-          current_user={@current_user}
-          quote_lines={@quote_lines}
-        />
-
-        <%!-- The day's first thread row says why it is here and links to the
-        switch that stops it (issue #1025), once per day so it stays a hint and
-        not a banner. It shows only when thread events reach this reader, which
-        is exactly when the switch is still on. --%>
-        <p
-          :if={@thread_hint}
-          data-thread-hint
-          class="mb-0 mt-1.5 text-xs text-slate-500 dark:text-slate-400"
-        >
-          {gettext("You wrote in this thread.")}
-          <.link
-            href={~p"/settings/notifications"}
-            class="font-medium text-brand-600 hover:text-brand-700 dark:text-brand-400 dark:hover:text-brand-300"
-          >
-            {gettext("Turn off thread notifications")} ›
-          </.link>
         </p>
 
         <%!-- A CV update covering several entries names them, each linking to
@@ -701,18 +740,15 @@ defmodule VutuvWeb.NotificationLive.Index do
           </p>
         </div>
       </div>
-      <div class="flex shrink-0 flex-col items-end gap-1.5 pt-0.5">
-        <.row_time at={@group.at} />
-        <.unread_dot :if={@group.unread?} />
-      </div>
+      <.row_meta at={@group.at} unread?={@group.unread?} />
     </.notification_article>
     """
   end
 
-  # The shell every row wears, whatever it holds: the id and the markers the
+  # The shell every card wears, whatever it holds: the id and the markers the
   # tests and the CSS key on (`assets/css/components.css` reads
   # `[data-notification-row][data-unread]` to paint the quote clamp's fade on
-  # the row's own tint, so the tint cannot live in only one of the clauses).
+  # the card's own tint, so the tint cannot live in only one of the clauses).
   attr(:group, :map, required: true)
   attr(:class, :string, default: nil)
   slot(:inner_block, required: true)
@@ -725,13 +761,27 @@ defmodule VutuvWeb.NotificationLive.Index do
       data-kind={@group.kind}
       data-unread={@group.unread? && "true"}
       class={[
-        "px-4 py-3 sm:px-5",
+        "rounded-2xl bg-white px-4 py-3 shadow-sm ring-1 ring-slate-200 dark:bg-slate-900 dark:ring-slate-800 sm:px-5",
         @class,
         @group.unread? && "bg-brand-50/60 dark:bg-brand-900/15"
       ]}
     >
       {render_slot(@inner_block)}
     </article>
+    """
+  end
+
+  # The right edge of a card head, a card line and a single row alike: the
+  # clock time over the unread dot.
+  attr(:at, :any, required: true)
+  attr(:unread?, :boolean, required: true)
+
+  defp row_meta(assigns) do
+    ~H"""
+    <div class="flex shrink-0 flex-col items-end gap-1.5 pt-0.5">
+      <.row_time at={@at} />
+      <.unread_dot :if={@unread?} />
+    </div>
     """
   end
 
@@ -745,95 +795,64 @@ defmodule VutuvWeb.NotificationLive.Index do
     """
   end
 
-  # The post a row quotes, formatted exactly the way /feed formats a post: the
-  # rendered Markdown in the `.markdown markdown--post` body recipe (headings
-  # flattened to bold, @mentions and #hashtags linked), clipped by `.notif-clamp`
-  # to the reader's line budget.
+  defp eyebrow_class,
+    do:
+      "block text-[11px] font-semibold uppercase tracking-wide text-slate-500 dark:text-slate-400"
+
+  # ── The head of a post card ──
+
+  # What the post says on the left, its first photos or its link screenshot on
+  # the right, and under the text a line counting what came back. Above it all
+  # an eyebrow saying whose post this is — the reader's own for a like or a
+  # reply, somebody else's for a mention, a thread they wrote in.
   #
-  # It is a block with a *stretched* permalink link rather than one big `<a>`,
-  # because a formatted body carries links of its own and an `<a>` inside an
-  # `<a>` is invalid: the prose falls through to the stretched link, so a click
-  # anywhere still opens the post, while a mention/hashtag/URL keeps its own
-  # target. The feed's "Suggested posts" rail is arranged the same way.
-  # `id` is what lets the clamp measurement re-run after a patch: the row is
-  # marked `data-post-preview` and the body `data-clamp-body`, the same pair the
-  # feed's post previews use, so app.js measures the quote and sets `is-clamped`
-  # on the wrapper — which is what paints the "…" that says the quote goes on
-  # (see the excerpt-clamp block in components.css). Whether the reader's line
-  # budget was enough depends on column width and font, so only the browser can
-  # decide it.
-  attr(:id, :string, required: true)
-  attr(:href, :string, required: true)
-  attr(:html, :any, required: true)
-  attr(:quote_lines, :integer, required: true)
-  attr(:class, :string, default: nil)
-  attr(:rest, :global)
-
-  defp quoted_post(assigns) do
-    ~H"""
-    <div
-      id={@id}
-      phx-hook="PostPreviewClamp"
-      data-post-preview
-      class={[
-        "relative border-l-2 border-slate-200 pl-2.5 transition-colors hover:border-brand-400",
-        "dark:border-slate-700 dark:hover:border-brand-500",
-        @class
-      ]}
-      {@rest}
-    >
-      <.link href={@href} aria-label={gettext("View post")} class="absolute inset-0 z-10"></.link>
-      <%!-- The type size and line height come from `.notif-clamp` itself: the
-      reader's line budget is a box height counted in them, so a `text-*` here
-      would cut the quote mid-letter. --%>
-      <div
-        data-clamp-body
-        class="markdown markdown--post notif-clamp text-slate-600 dark:text-slate-400 [&_a]:relative [&_a]:z-20"
-        {clamp_attrs(@quote_lines)}
-      >
-        {@html}
-      </div>
-    </div>
-    """
-  end
-
-  # ── The post card ──
-
-  # The head of a post card: what the post says on the left, its first photos on
-  # the right, and under the text a line counting what came back.
-  #
-  # The text starts at the same edge whether the post carries a photo or not —
-  # the photos hang off the right — so a column of cards reads as one column
-  # rather than as two indents. The card is one link to the post: the reader's
-  # question is "which post was that", and the answer is one tap away.
+  # The text starts at the same edge whether the post carries a picture or not
+  # — the pictures hang off the right — so a column of cards reads as one
+  # column rather than as two indents. The head is one link to the post: the
+  # reader's question is "which post was that", and the answer is one tap away.
   attr(:card, :any, required: true)
+  attr(:eyebrow, :string, required: true)
   attr(:counts, :list, required: true)
+  attr(:at, :any, required: true)
+  attr(:unread?, :boolean, required: true)
 
   defp post_card_head(assigns) do
     ~H"""
-    <div :if={@card} class="flex items-start gap-3">
-      <.link
-        href={Posts.path(@card.post)}
-        data-post-card
-        class="min-w-0 flex-1 text-sm font-medium text-slate-900 hover:text-brand-700 dark:text-white dark:hover:text-brand-300"
-      >
-        <%!-- A photo post has no text to name it with (`PostTeaser` skips an
-        image-only line), so the card says so rather than opening on a blank
-        line the reader has to interpret. --%>
-        <span
-          :if={@card.text == ""}
-          data-post-card-textless
-          class="italic font-normal text-slate-500 dark:text-slate-400"
+    <div class="flex items-start gap-3">
+      <div class="min-w-0 flex-1">
+        <span :if={@eyebrow} data-card-eyebrow class={eyebrow_class()}>{@eyebrow}</span>
+        <.link
+          :if={@card}
+          href={Posts.path(@card.post)}
+          data-post-card
+          class="mt-0.5 block text-sm font-medium text-slate-900 hover:text-brand-700 dark:text-white dark:hover:text-brand-300"
         >
-          {gettext("Post without text")}
-        </span>
-        <span :if={@card.text != ""} class="line-clamp-2 whitespace-pre-line">{@card.text}</span>
-        <span class="mt-0.5 block text-xs font-normal text-slate-500 dark:text-slate-400">
+          <%!-- A photo post has no text to name it with (`PostTeaser` skips an
+          image-only line), so the card says so rather than opening on a blank
+          line the reader has to interpret. --%>
+          <span
+            :if={@card.text == ""}
+            data-post-card-textless
+            class="italic font-normal text-slate-500 dark:text-slate-400"
+          >
+            {gettext("Post without text")}
+          </span>
+          <span :if={@card.text != ""} class="line-clamp-2 whitespace-pre-line">{@card.text}</span>
+        </.link>
+        <%!-- The post is hidden from the reader or gone (a visibility-scoped
+        lookup returned nothing): the lines below still say what happened. --%>
+        <p :if={!@card} class="mb-0 mt-0.5 text-sm italic text-slate-500 dark:text-slate-400">
+          {gettext("The post is no longer available.")}
+        </p>
+        <span :if={@counts != []} class="mt-0.5 block text-xs text-slate-500 dark:text-slate-400">
           {Enum.join(@counts, " · ")}
         </span>
-      </.link>
+      </div>
 
-      <.post_card_images card={@card} big={@card.text == ""} />
+      <.post_card_images :if={@card} card={@card} big={@card.text == ""} />
+      <.post_card_screenshot :if={@card && @card.images == [] && @card.screenshot} card={@card} />
+
+      <.row_meta at={@at} unread?={@unread?} />
     </div>
     """
   end
@@ -875,6 +894,210 @@ defmodule VutuvWeb.NotificationLive.Index do
     """
   end
 
+  # A link post's auto screenshot, in the slot the photos would take: the same
+  # capture the feed floats beside the post, at thumbnail size, so a card about
+  # a shared link shows the page it points at. Decorative — the head's text link
+  # already names and opens the post — so it is kept out of the tab order.
+  attr(:card, :map, required: true)
+
+  defp post_card_screenshot(assigns) do
+    ~H"""
+    <.link
+      href={Posts.path(@card.post)}
+      data-post-card-screenshot
+      aria-hidden="true"
+      tabindex="-1"
+      class="shrink-0"
+    >
+      <.picture
+        picture={Screenshot.picture({@card.screenshot.screenshot, @card.screenshot})}
+        width="72"
+        height="48"
+        loading="lazy"
+        alt=""
+        class="h-12 w-[4.5rem] rounded-lg object-cover ring-1 ring-slate-200 dark:ring-slate-800"
+      />
+    </.link>
+    """
+  end
+
+  # ── One line inside a card ──
+
+  # Who did what, on one line: a small kind glyph, the actors, the verb — and
+  # for a reply its words, clamped to two lines, as the button that unfolds
+  # the formatted quote. The card's head already named the post, so no line
+  # repeats it.
+  attr(:line, :map, required: true)
+  attr(:current_user, :any, required: true)
+  attr(:quote_lines, :integer, required: true)
+  attr(:expanded, :boolean, required: true)
+  attr(:thread_hint, :boolean, default: false)
+
+  defp card_line(assigns) do
+    assigns =
+      assigns
+      |> assign(:n, assigns.line.item)
+      |> assign(:teaser, line_teaser(assigns.line))
+      |> assign(:kind, line_kind(assigns.line))
+
+    ~H"""
+    <li
+      id={"notification-#{@line.id}"}
+      data-notification-event
+      data-event-kind={@kind}
+      data-unread={@line.unread? && "true"}
+      class="py-2 first:pt-0 last:pb-0"
+    >
+      <div class="flex items-start gap-2.5">
+        <span
+          class={[
+            "mt-0.5 flex h-6 w-6 shrink-0 items-center justify-center rounded-full text-xs font-bold",
+            kind_classes(@kind)
+          ]}
+          aria-hidden="true"
+        >
+          {kind_glyph(@kind)}
+        </span>
+        <div class="min-w-0 flex-1">
+          <p class="mb-0 text-sm leading-relaxed text-slate-800 dark:text-slate-100">
+            <span class="sr-only">{kind_label(@kind)}:</span>
+            <.actor_links group={@line} current_user={@current_user} named={named_actors(@line)} />
+            {line_text(@line)}
+          </p>
+
+          <%!-- Folded: the reply's words, two lines of them, as the button that
+          opens the rest. A private reply from another network (issue #1071)
+          says so right here, since the member has to know that before they
+          answer, not after they unfold it. --%>
+          <button
+            :if={@teaser && !@expanded}
+            type="button"
+            phx-click="toggle_line"
+            phx-value-id={@line.id}
+            data-line-toggle
+            aria-expanded="false"
+            class="mt-0.5 block w-full text-left text-sm text-slate-600 hover:text-slate-900 dark:text-slate-400 dark:hover:text-slate-200"
+          >
+            <span :if={remote_private?(@n)} data-remote-private aria-hidden="true">🔒</span>
+            <span data-reply-teaser class="line-clamp-2 whitespace-pre-line">{@teaser}</span>
+          </button>
+
+          <%!-- Unfolded: the quote formatted like a feed post (or the remote
+          reply's plain text), the Reply link to where an answer is written,
+          and the way back. --%>
+          <div :if={@expanded} class="mt-1.5 space-y-1.5">
+            <.quoted_post
+              :if={local_reply?(@line) and @n[:reply_preview]}
+              id={"quote-#{@line.id}"}
+              data-reply-preview="true"
+              href={Posts.path(@n.reply_preview.post)}
+              html={@n.reply_preview.html}
+              quote_lines={@quote_lines}
+            />
+            <.remote_reply
+              :if={@line.verb == :remote_reply and @n[:note_text]}
+              id={"quote-remote-#{@line.id}"}
+              n={@n}
+              current_user={@current_user}
+              quote_lines={@quote_lines}
+            />
+            <div class="flex flex-wrap items-center gap-x-4">
+              <.link
+                href={reply_target(@line, @current_user)}
+                data-reply-link
+                class="inline-flex min-h-10 items-center text-sm font-semibold text-brand-600 hover:text-brand-700 dark:text-brand-400 dark:hover:text-brand-300"
+              >
+                {gettext("Reply")} ›
+              </.link>
+              <button
+                type="button"
+                phx-click="toggle_line"
+                phx-value-id={@line.id}
+                data-line-toggle
+                aria-expanded="true"
+                class="inline-flex min-h-10 items-center text-sm font-medium text-slate-600 hover:text-slate-900 dark:text-slate-400 dark:hover:text-slate-200"
+              >
+                {gettext("Less")}
+              </button>
+            </div>
+          </div>
+
+          <%!-- The day's first thread line says why it is here and links to the
+          switch that stops it (issue #1025), once per day so it stays a hint and
+          not a banner. It shows only when thread events reach this reader, which
+          is exactly when the switch is still on. --%>
+          <p
+            :if={@thread_hint}
+            data-thread-hint
+            class="mb-0 mt-1 text-xs text-slate-500 dark:text-slate-400"
+          >
+            {gettext("You wrote in this thread.")}
+            <.link
+              href={~p"/settings/notifications"}
+              class="font-medium text-brand-600 hover:text-brand-700 dark:text-brand-400 dark:hover:text-brand-300"
+            >
+              {gettext("Turn off thread notifications")} ›
+            </.link>
+          </p>
+        </div>
+        <.row_meta at={@line.at} unread?={@line.unread?} />
+      </div>
+    </li>
+    """
+  end
+
+  # The post a line quotes, formatted exactly the way /feed formats a post: the
+  # rendered Markdown in the `.markdown markdown--post` body recipe (headings
+  # flattened to bold, @mentions and #hashtags linked), clipped by `.notif-clamp`
+  # to the reader's line budget.
+  #
+  # It is a block with a *stretched* permalink link rather than one big `<a>`,
+  # because a formatted body carries links of its own and an `<a>` inside an
+  # `<a>` is invalid: the prose falls through to the stretched link, so a click
+  # anywhere still opens the post, while a mention/hashtag/URL keeps its own
+  # target. The feed's "Suggested posts" rail is arranged the same way.
+  # `id` is what lets the clamp measurement re-run after a patch: the block is
+  # marked `data-post-preview` and the body `data-clamp-body`, the same pair the
+  # feed's post previews use, so app.js measures the quote and sets `is-clamped`
+  # on the wrapper — which is what paints the "…" that says the quote goes on
+  # (see the excerpt-clamp block in components.css). Whether the reader's line
+  # budget was enough depends on column width and font, so only the browser can
+  # decide it.
+  attr(:id, :string, required: true)
+  attr(:href, :string, required: true)
+  attr(:html, :any, required: true)
+  attr(:quote_lines, :integer, required: true)
+  attr(:class, :string, default: nil)
+  attr(:rest, :global)
+
+  defp quoted_post(assigns) do
+    ~H"""
+    <div
+      id={@id}
+      phx-hook="PostPreviewClamp"
+      data-post-preview
+      class={[
+        "relative border-l-2 border-slate-200 pl-2.5 transition-colors hover:border-brand-400",
+        "dark:border-slate-700 dark:hover:border-brand-500",
+        @class
+      ]}
+      {@rest}
+    >
+      <.link href={@href} aria-label={gettext("View post")} class="absolute inset-0 z-10"></.link>
+      <%!-- The type size and line height come from `.notif-clamp` itself: the
+      reader's line budget is a box height counted in them, so a `text-*` here
+      would cut the quote mid-letter. --%>
+      <div
+        data-clamp-body
+        class="markdown markdown--post notif-clamp text-slate-600 dark:text-slate-400 [&_a]:relative [&_a]:z-20"
+        {clamp_attrs(@quote_lines)}
+      >
+        {@html}
+      </div>
+    </div>
+    """
+  end
+
   # A reply written on another network (issue #1069). Plain text, clamped like
   # the other quotes and deliberately NOT run through the Markdown renderer: a
   # stranger's words must not be able to mint links, least of all @mention links
@@ -888,8 +1111,8 @@ defmodule VutuvWeb.NotificationLive.Index do
   #
   # And it is a link, on the same stretched-overlay arrangement as
   # <.quoted_post>: a readable block of somebody's words is what the reader
-  # reaches for, so a quote that does nothing on tap reads as a broken row,
-  # whichever network the words came from. It goes where the row's own sentence
+  # reaches for, so a quote that does nothing on tap reads as a broken line,
+  # whichever network the words came from. It goes where the line's own sentence
   # already goes (the reader's post, not the stranger's server, which the card
   # over there links to) and carries the note's anchor, so a post that collected
   # several replies opens on this one. No `[&_a]:relative` escape hatch is needed
@@ -902,9 +1125,9 @@ defmodule VutuvWeb.NotificationLive.Index do
 
   defp remote_reply(assigns) do
     ~H"""
-    <div class="mt-1.5 space-y-1">
+    <div class="space-y-1">
       <p
-        :if={@n[:note_audience] && @n.note_audience != "public"}
+        :if={remote_private?(@n)}
         data-remote-private
         class="mb-0 text-xs font-medium text-slate-600 dark:text-slate-400"
       >
@@ -938,10 +1161,12 @@ defmodule VutuvWeb.NotificationLive.Index do
     """
   end
 
-  # The row's left visual: the lead (newest) actor's avatar with a small
-  # kind badge riding its corner - or, for a picture-less lead actor and the
-  # actor-less kinds (moderation, image review), the colored kind glyph
-  # circle. Either way a present actor gets the online-presence dot via
+  defp remote_private?(n), do: is_binary(n[:note_audience]) and n.note_audience != "public"
+
+  # The row's left visual (the single rows): the lead (newest) actor's avatar
+  # with a small kind badge riding its corner - or, for a picture-less lead
+  # actor and the actor-less kinds (moderation, image review), the colored kind
+  # glyph circle. Either way a present actor gets the online-presence dot via
   # <.presence_wrap> (the dot sits bottom-right, the kind badge bottom-left).
   attr(:group, :map, required: true)
 
@@ -987,14 +1212,15 @@ defmodule VutuvWeb.NotificationLive.Index do
     """
   end
 
-  # The sentence's subject: up to two linked actor names, the rest folded
+  # The sentence's subject: up to `named` linked actor names, the rest folded
   # into "and N more" - which links to the recipient's own followers /
   # connections list where that is the natural place to see everyone.
   attr(:group, :map, required: true)
   attr(:current_user, :any, required: true)
+  attr(:named, :integer, default: nil, doc: "nil: the page's default from Groups")
 
   defp actor_links(assigns) do
-    named = Enum.take(assigns.group.actors, Groups.named_actors())
+    named = Enum.take(assigns.group.actors, assigns.named || Groups.named_actors())
     overflow = assigns.group.actor_count - length(named)
 
     assigns =
@@ -1018,42 +1244,34 @@ defmodule VutuvWeb.NotificationLive.Index do
     """
   end
 
+  # One actor's name, linked. Three shapes: a member or a page
+  # (`actor_path/1`, never `~p"/#{@actor.param}"` — a page's param is a slug
+  # under /organizations/:slug, and the root belongs to member handles, issue
+  # #1336); somebody on another network (issue #1069) — no vutuv profile behind
+  # the name, so a press opens the account card over it, the same card their
+  # handle opens on a post card (`remote_actor_link/3`), with the `@handle@host`
+  # beside the name saying which network answered and the `href` out there
+  # still what a middle click takes; and a bare name for a payload with neither.
+  #
+  # Deliberately ONE line of markup: the pieces sit inside a sentence, and any
+  # newline between them is whitespace the browser renders — which is how the
+  # old `cond` put a space before every comma ("Anna , Ben und 3 weitere").
   attr(:actor, :map, required: true)
 
   defp actor_link(assigns) do
+    assigns =
+      assigns
+      |> assign(:remote?, is_nil(assigns.actor.param) and is_binary(assigns.actor[:url]))
+      |> assign(:bare?, is_nil(assigns.actor.param) and not is_binary(assigns.actor[:url]))
+
     ~H"""
-    <%= cond do %>
-      <% @actor.param -> %>
-        <%!-- `actor_path/1`, never `~p"/#{@actor.param}"`: a page's param is a
-        slug under /organizations/:slug, and the root belongs to member handles
-        (issue #1336). This is the second link on the row and the one that is
-        easy to miss — `actor_target/1` below covers the row's own href. --%>
-        <.link
-          href={actor_path(@actor)}
-          class="font-semibold text-slate-900 hover:text-brand-700 dark:text-white dark:hover:text-brand-300"
-        >{@actor.name}</.link>
-      <% @actor[:url] -> %>
-        <%!-- Somebody on another network (issue #1069). There is no vutuv
-        profile behind the name, so a press opens the account card over it —
-        who they are, one Follow button, both mutes — the same card their
-        handle opens on a post card and inside a post body
-        (`remote_actor_link/3`). This row is where a member most often meets a
-        stranger for the first time, and until now it was the one place that
-        answered "who just boosted me" by handing them to a server they have no
-        account on. The `@handle@host` beside the name still says which network
-        answered, and the `href` out there is still what a middle click takes. --%>
-        <.link
-          {remote_actor_link(nil, @actor.url, @actor[:handle])}
-          class="font-semibold text-slate-900 hover:text-brand-700 dark:text-white dark:hover:text-brand-300"
-        >{@actor.name}</.link><span
-          :if={@actor[:handle] && @actor.handle != @actor.name}
-          class="text-xs font-normal text-slate-600 dark:text-slate-400"
-        > {@actor.handle}</span>
-      <% true -> %>
-        <span class="font-semibold">{@actor.name}</span>
-    <% end %>
+    <.link :if={@actor.param} href={actor_path(@actor)} class={actor_name_class()}>{@actor.name}</.link><.link :if={@remote?} {remote_actor_link(nil, @actor.url, @actor[:handle])} class={actor_name_class()}>{@actor.name}</.link><span :if={@remote? and @actor[:handle] && @actor.handle != @actor.name} class="text-xs font-normal text-slate-600 dark:text-slate-400"> {@actor.handle}</span><span :if={@bare?} class="font-semibold">{@actor.name}</span>
     """
   end
+
+  defp actor_name_class,
+    do:
+      "font-semibold text-slate-900 hover:text-brand-700 dark:text-white dark:hover:text-brand-300"
 
   # The welcome note is the one row that is NOT one big link: the handle points
   # at the member's own profile and the two URLs at the pages they name, so
@@ -1117,7 +1335,7 @@ defmodule VutuvWeb.NotificationLive.Index do
   defp separator(_index, _named, _overflow), do: ", "
 
   # Where "and N more" leads: the recipient's own people lists for the
-  # people kinds; nowhere for a like group (there is no public likers list).
+  # people kinds; nowhere for a like line (there is no public likers list).
   defp overflow_href("follower", viewer), do: ~p"/#{viewer}/followers"
   defp overflow_href("connection", viewer), do: ~p"/#{viewer}/connections"
   defp overflow_href(_kind, _viewer), do: nil
@@ -1127,7 +1345,8 @@ defmodule VutuvWeb.NotificationLive.Index do
   defp filter_options do
     [
       {"all", gettext("All")},
-      {"posts", gettext("Posts")},
+      {"replies", gettext("Replies")},
+      {"reactions", gettext("Reactions")},
       {"people", gettext("People")},
       {"other", gettext("More")}
     ]
@@ -1136,15 +1355,23 @@ defmodule VutuvWeb.NotificationLive.Index do
   defp filter_path("all"), do: ~p"/notifications"
   defp filter_path(value), do: ~p"/notifications?filter=#{value}"
 
-  # The active tab reads as a raised white pill, the rest as quiet muted text
+  # The active chip reads as a raised white pill, the rest as quiet muted text
   # - the segmented-control treatment of the post-type filter tabs.
   defp filter_tab_class(true),
     do:
-      "whitespace-nowrap rounded-md bg-white px-3 py-1 font-semibold text-brand-700 shadow-sm dark:bg-slate-900 dark:text-brand-100"
+      "inline-flex min-h-9 items-center whitespace-nowrap rounded-md bg-white px-3 py-1 font-semibold text-brand-700 shadow-sm dark:bg-slate-900 dark:text-brand-100"
 
   defp filter_tab_class(false),
     do:
-      "whitespace-nowrap rounded-md px-3 py-1 font-medium text-slate-600 hover:text-slate-900 dark:text-slate-400 dark:hover:text-slate-100"
+      "inline-flex min-h-9 items-center whitespace-nowrap rounded-md px-3 py-1 font-medium text-slate-600 hover:text-slate-900 dark:text-slate-400 dark:hover:text-slate-100"
+
+  # A chip's badge: the count of what is new under it, nothing at zero.
+  defp unread_badge(counts, filter) do
+    case Map.get(counts, filter) do
+      count when is_integer(count) and count > 0 -> count
+      _ -> nil
+    end
+  end
 
   defp new_count_label(count) do
     ngettext("%{formatted} new notification", "%{formatted} new notifications", count,
@@ -1169,7 +1396,7 @@ defmodule VutuvWeb.NotificationLive.Index do
     end
   end
 
-  # The row's clock time: sections are the reader's calendar days, so the
+  # The line's clock time: sections are the reader's calendar days, so the
   # visible time is their own wall clock in their own region (like post
   # stamps); the <time> keeps an unambiguous ISO-8601 UTC datetime for
   # machines. Server-rendered final - deliberately no data-localtime rewrite.
@@ -1191,31 +1418,37 @@ defmodule VutuvWeb.NotificationLive.Index do
     """
   end
 
-  # ── The 30-day summary card ──
+  # ── The 30-day summary line ──
 
-  defp summary_rows(summary) do
-    [
-      {"follower", summary.followers},
-      {"connection", summary.connections},
-      {"like", summary.likes},
-      {"reply", summary.replies},
-      {"endorsement", summary.endorsements}
-    ]
-    |> Enum.filter(fn {_kind, count} -> count > 0 end)
+  # "Last 30 days: 163 likes · 68 replies · 47 followers …", zero parts
+  # dropped. Every part is its own complete translatable phrase — the line is a
+  # list of facts, not a sentence assembled from pieces.
+  defp summary_line(summary) do
+    parts =
+      [
+        likes_label(summary.likes),
+        replies_label(summary.replies),
+        count_label(
+          summary.followers,
+          &ngettext("%{formatted} follower", "%{formatted} followers", &1, &2)
+        ),
+        count_label(
+          summary.connections,
+          &ngettext("%{formatted} connection", "%{formatted} connections", &1, &2)
+        ),
+        endorsements_label(summary.endorsements)
+      ]
+      |> Enum.reject(&is_nil/1)
+
+    gettext("Last 30 days: %{parts}", parts: Enum.join(parts, " · "))
   end
-
-  defp summary_label("follower"), do: gettext("Followers")
-  defp summary_label("connection"), do: gettext("Connections")
-  defp summary_label("like"), do: gettext("Likes")
-  defp summary_label("reply"), do: gettext("Replies")
-  defp summary_label("endorsement"), do: gettext("Endorsements")
 
   # ── Kind styling (badge colour + glyph + accessible label) ──
 
   # Event kinds that share the brand badge colour, so the class string lives
   # in one place.
   @brand_kind_classes "bg-brand-50 text-brand-700 dark:bg-brand-900/40 dark:text-brand-100"
-  @brand_kinds ~w(follower reply thread mention connection report_protection organization_role handle_change cv_update fediverse_reply fediverse_reaction)
+  @brand_kinds ~w(follower reply thread mention connection report_protection organization_role handle_change cv_update fediverse_reply fediverse_reaction share)
 
   defp kind_classes("endorsement"),
     do: "bg-emerald-50 text-emerald-600 dark:bg-emerald-900/30 dark:text-emerald-300"
@@ -1238,17 +1471,20 @@ defmodule VutuvWeb.NotificationLive.Index do
   defp kind_glyph("reply"), do: "↩"
   # A reply elsewhere in a thread the recipient writes in.
   defp kind_glyph("thread"), do: "⤷"
-  # Being named by @handle. Shares the glyph with the (rare, "More"-tab)
+  # Being named by @handle. Shares the glyph with the (rare, "More"-chip)
   # handle-change kind: both are about a handle, and the badge's title/sr-only
   # label tells them apart where the glyph alone would not.
   defp kind_glyph("mention"), do: "@"
   defp kind_glyph("like"), do: "♥"
+  # A re-share from another network (issue #1068): the arrows, since the line
+  # beside it names the verb and the globe already sits on the sharer's name.
+  defp kind_glyph("share"), do: "↻"
   # A reply written on another network (issue #1069) — the same globe the
   # post card's "from other networks" line uses, so one glyph means one thing.
   defp kind_glyph("fediverse_reply"), do: "🌐"
-  # A favourite or a re-share from out there (issue #1068) — same globe, since
-  # "this came from another network" is the one thing the glyph has to say; the
-  # sentence beside it names the verb.
+  # A reaction from out there of a kind that is neither a favourite nor a
+  # re-share — the globe, since "this came from another network" is the one
+  # thing the glyph has to say; the sentence beside it names the verb.
   defp kind_glyph("fediverse_reaction"), do: "🌐"
   # "connection" is the vernetzt (mutual-follow) event; the handshake glyph.
   defp kind_glyph("connection"), do: "🤝"
@@ -1275,6 +1511,7 @@ defmodule VutuvWeb.NotificationLive.Index do
   defp kind_label("mention"), do: gettext("Mention")
   defp kind_label("like"), do: gettext("Like")
   defp kind_label("fediverse_reply"), do: gettext("Reply from another network")
+  defp kind_label("share"), do: gettext("Reaction from another network")
   defp kind_label("fediverse_reaction"), do: gettext("Reaction from another network")
   defp kind_label("connection"), do: gettext("Connection")
   defp kind_label("moderation"), do: gettext("Moderation")
@@ -1287,14 +1524,83 @@ defmodule VutuvWeb.NotificationLive.Index do
   defp kind_label("reference_check"), do: gettext("Employment reference review")
   defp kind_label(_), do: gettext("Activity")
 
-  # ── The sentence ──
+  # ── A card line's vocabulary ──
 
-  # The grouped sentence tail after the actor names. Only the forms that differ
-  # from the single-actor one are spelled here - German conjugates the
-  # follower/connection verbs across the count where English does not, hence
-  # the count-branched msgids. Everything else falls through to
-  # VutuvWeb.NotificationText, which the browser notification shares, so one
-  # event cannot read differently in the two places (issue #1249).
+  # The verbs whose kind string is the verb's own name.
+  @named_verbs [:reply, :thread, :mention, :follower, :connection, :endorsement]
+
+  # The two verbs that quote a member's post: a folded line carries its
+  # teaser, an unfolded one the formatted quote. A mention is deliberately not
+  # one of them — the card's head already IS the naming post — and a remote
+  # reply quotes a note rather than a post.
+  @local_reply_verbs [:reply, :thread]
+
+  # The one kind string a card line wears — for its glyph, colour and label
+  # AND for its `data-event-kind`, so what the line looks like and what a test
+  # or a stylesheet keys on can never say two different things. The verb
+  # decides, not the newest item's kind: a merged like line may have a
+  # favourite from another network as its newest member and is still "like".
+  defp line_kind(%{verb: :like}), do: "like"
+  defp line_kind(%{verb: :share}), do: "share"
+  defp line_kind(%{verb: :reaction}), do: "fediverse_reaction"
+  defp line_kind(%{verb: :remote_reply}), do: "fediverse_reply"
+  defp line_kind(%{verb: verb}) when verb in @named_verbs, do: Atom.to_string(verb)
+  defp line_kind(%{kind: kind}), do: kind
+
+  defp local_reply?(%{verb: verb}), do: verb in @local_reply_verbs
+
+  # A like or re-share line names three before folding; the people lines and
+  # the single rows keep the page's default of two.
+  defp named_actors(%{verb: verb}) when verb in [:like, :share, :reaction], do: 3
+  defp named_actors(_line), do: Groups.named_actors()
+
+  # The sentence after the actor names. The card's head already named the post,
+  # so a line says only what was done. German conjugates the verb across the
+  # count where English conjugates it the other way round ("likes this" is the
+  # singular), so those are count-branched msgids rather than one string with a
+  # number in it.
+  defp line_text(%{verb: :like, actor_count: count}),
+    do: ngettext("likes this.", "like this.", count)
+
+  defp line_text(%{verb: :share, actor_count: count}),
+    do: ngettext("shared this.", "shared this.", count)
+
+  defp line_text(%{verb: :reaction, actor_count: count}),
+    do: ngettext("reacted to this.", "reacted to this.", count)
+
+  defp line_text(%{verb: verb}) when verb in [:reply, :remote_reply], do: gettext("replied.")
+  defp line_text(%{verb: :thread}), do: gettext("replied in the thread.")
+  defp line_text(%{verb: :mention}), do: gettext("mentioned you.")
+  defp line_text(line), do: group_text(line)
+
+  # The reply's words on the folded line: the local reply's teaser, or the
+  # remote note's text folded to one line. Nothing for a like, a share or a
+  # reply the reader may not see.
+  defp line_teaser(%{verb: verb, item: item}) when verb in @local_reply_verbs,
+    do: item[:reply_teaser]
+
+  defp line_teaser(%{verb: :remote_reply, item: item}), do: item[:note_teaser]
+  defp line_teaser(_line), do: nil
+
+  # Where a line's Reply link leads: the reply itself, so the answer is written
+  # under the words it answers; a remote reply to the conversation anchored at
+  # that note; anything else to what the notification itself opens.
+  defp reply_target(%{verb: verb, item: %{reply_preview: %{post: post}}}, _viewer)
+       when verb in @local_reply_verbs,
+       do: Posts.path(post)
+
+  defp reply_target(%{verb: :remote_reply, item: item}, viewer),
+    do: remote_reply_target(item, viewer)
+
+  defp reply_target(%{item: item}, viewer), do: notification_target(item, viewer)
+
+  # The grouped sentence tail after the actor names, for the people lines and
+  # the single rows. Only the forms that differ from the single-actor one are
+  # spelled here - German conjugates the follower/connection verbs across the
+  # count where English does not, hence the count-branched msgids. Everything
+  # else falls through to VutuvWeb.NotificationLine, which the browser
+  # notification shares, so one event cannot read differently in the two places
+  # (issue #1249).
   defp group_text(%{kind: "follower", actor_count: count}) when count > 1,
     do: gettext("are now following you.")
 
@@ -1307,56 +1613,64 @@ defmodule VutuvWeb.NotificationLive.Index do
   defp group_text(%{kind: "endorsement", tags: [_ | _] = tags}),
     do: gettext("endorsed you for %{tags}.", tags: join_names(tags))
 
-  defp group_text(%{kind: "thread", actor_count: count}), do: thread_text(count)
-
-  defp group_text(%{kind: "fediverse_reaction", actor_count: count, item: item}),
-    do: fediverse_reaction_text(item[:reaction_kind], count)
-
   defp group_text(%{item: item}), do: notification_text(item)
 
-  # ── A post card's lines ──
+  # ── The card heads ──
 
-  # The sentence on one line inside a post card. It says only what was done:
-  # the card's head already named the post, so the row's "your post in another
-  # network" would be repeating the heading in every line under it.
-  defp card_event_text(%{kind: "fediverse_reply"}), do: gettext("replied.")
+  # Whose post a card is about. The reader's own for a like, a reply, a thread
+  # they rooted; somebody else's for a mention or a thread they wrote in — the
+  # thread wording says why a stranger's post is on the reader's page at all.
+  # Nothing when the post itself is out of reach: the head says so in words.
+  defp card_eyebrow(nil, _group, _viewer), do: nil
 
-  defp card_event_text(%{kind: "fediverse_reaction", actor_count: count, item: item}),
-    do: card_reaction_text(item[:reaction_kind], count)
+  defp card_eyebrow(%{post: post}, group, viewer) do
+    cond do
+      Posts.self_vote?(post, viewer) ->
+        gettext("Your post")
 
-  # German conjugates the verb across the count where English conjugates it the
-  # other way round ("likes this" is the singular), so both are count-branched
-  # msgids rather than one string with a number in it.
-  defp card_reaction_text("like", count),
-    do: ngettext("likes this.", "like this.", count)
+      Enum.any?(group.events, &(&1.verb == :thread)) ->
+        gettext("Thread by %{name}", name: PostTeaser.author_of(post).name)
 
-  defp card_reaction_text("announce", count),
-    do: ngettext("shared this.", "shared this.", count)
+      true ->
+        gettext("Post by %{name}", name: PostTeaser.author_of(post).name)
+    end
+  end
 
-  defp card_reaction_text(_kind, count),
-    do: ngettext("reacted to this.", "reacted to this.", count)
+  # What the card's head counts: likes and re-shares by distinct actor, and
+  # every line that carries words — a reply, a thread answer, a mention, one
+  # from another network. Each fragment is its own complete translatable
+  # phrase — the line is a list of facts, not a sentence assembled from pieces.
+  defp card_counts(events) do
+    likes = actor_sum(events, :like)
+    shares = actor_sum(events, :share)
+    replies = Enum.count(events, &Groups.reply_verb?/1)
 
-  # Where a card line leads: a reply to the reader's own post anchored at that
-  # reply, a favourite or re-share to the post itself.
-  defp card_event_target(%{kind: "fediverse_reply", item: item}, viewer),
-    do: remote_reply_target(item, viewer)
+    [likes_label(likes), shares_label(shares), replies_label(replies)]
+    |> Enum.reject(&is_nil/1)
+  end
 
-  defp card_event_target(%{item: item}, viewer), do: notification_target(item, viewer)
+  defp actor_sum(events, verb) do
+    events
+    |> Enum.filter(&(&1.verb == verb))
+    |> Enum.map(& &1.actor_count)
+    |> Enum.sum()
+  end
 
-  # What the card's head counts: the reactions folded into its lines, one
-  # fragment per verb. Each fragment is its own complete translatable phrase —
-  # the line is a list of facts, not a sentence assembled from pieces.
-  defp event_counts(events) do
-    likes = reaction_count(events, "like")
-    shares = reaction_count(events, "announce")
-    replies = Enum.count(events, &(&1.kind == "fediverse_reply"))
-
+  # The people card's title: the day's tally, each part its own phrase.
+  defp people_title(%{events: events}) do
     [
-      count_label(likes, &ngettext("%{formatted} like", "%{formatted} likes", &1, &2)),
-      count_label(shares, &ngettext("%{formatted} share", "%{formatted} shares", &1, &2)),
-      count_label(replies, &ngettext("%{formatted} reply", "%{formatted} replies", &1, &2))
+      count_label(
+        actor_sum(events, :connection),
+        &ngettext("%{formatted} new connection", "%{formatted} new connections", &1, &2)
+      ),
+      count_label(
+        actor_sum(events, :follower),
+        &ngettext("%{formatted} new follower", "%{formatted} new followers", &1, &2)
+      ),
+      endorsements_label(Enum.count(events, &(&1.verb == :endorsement)))
     ]
     |> Enum.reject(&is_nil/1)
+    |> Enum.join(" · ")
   end
 
   # `ngettext/3` binds `%{count}` to the raw integer and a `count:` binding does
@@ -1364,14 +1678,19 @@ defmodule VutuvWeb.NotificationLive.Index do
   defp count_label(0, _phrase), do: nil
   defp count_label(count, phrase), do: phrase.(count, formatted: compact_count(count))
 
-  defp reaction_count(events, reaction_kind) do
-    events
-    |> Enum.filter(
-      &(&1.kind == "fediverse_reaction" and &1.item[:reaction_kind] == reaction_kind)
-    )
-    |> Enum.map(& &1.actor_count)
-    |> Enum.sum()
-  end
+  # One phrase per noun, shared by the card head's counts, the people tally
+  # and the 30-day line, so the same fact is never worded twice.
+  defp likes_label(n),
+    do: count_label(n, &ngettext("%{formatted} like", "%{formatted} likes", &1, &2))
+
+  defp shares_label(n),
+    do: count_label(n, &ngettext("%{formatted} share", "%{formatted} shares", &1, &2))
+
+  defp replies_label(n),
+    do: count_label(n, &ngettext("%{formatted} reply", "%{formatted} replies", &1, &2))
+
+  defp endorsements_label(n),
+    do: count_label(n, &ngettext("%{formatted} endorsement", "%{formatted} endorsements", &1, &2))
 
   # "Elixir, Phoenix and Rails" - all but the last joined by commas, the last
   # by the localized joining word.
@@ -1382,10 +1701,10 @@ defmodule VutuvWeb.NotificationLive.Index do
     Enum.join(front, ", ") <> " " <> gettext("and") <> " " <> last
   end
 
-  # Where the quoted remote reply itself goes: the same conversation the row's
+  # Where the quoted remote reply itself goes: the same conversation the line's
   # sentence opens, plus the anchor of this note (`Fediverse.reply_anchor/1`),
   # so a post that collected several replies lands on the one being quoted
-  # rather than at the top. The anchor is dropped when the row somehow carries
+  # rather than at the top. The anchor is dropped when the line somehow carries
   # no note id, which leaves the plain conversation link rather than a dead "#".
   defp remote_reply_target(n, viewer) do
     target = notification_target(n, viewer)
@@ -1409,20 +1728,23 @@ defmodule VutuvWeb.NotificationLive.Index do
 
   # ── Post previews ──
 
-  # Reply and like notifications carry post ids the row can quote: a like the
-  # liked post (`:post_id`), a reply both the recipient's own post that was
-  # replied to (`:post_id`) and the reply itself (`:reply_post_id`). Look every
-  # referenced post up in one batched, visibility-scoped query and attach a
-  # preview map (`%{post:, html:}` or `%{post:, text:}`, see `render_excerpt/3`)
-  # as `:post_preview` / `:reply_preview`. Other kinds carry no ids, a post with
-  # no text (a photo-only one) yields no preview, and a reply hidden from the
-  # viewer is absent from `posts`, so all pass through unchanged.
+  # Reply and thread notifications carry the reply's post id (`:reply_post_id`);
+  # every post-bound kind carries the post the card is about (`:post_id`, or a
+  # thread's `:root_post_id`); a handle change lists rewritten posts. Look every
+  # referenced post up in one batched, visibility-scoped query and attach what
+  # the folded lines show: the reply's one-line teaser (`:reply_teaser`) and a
+  # remote note's text teased the same way (`:note_teaser`). The formatted
+  # quote waits for the unfold (`with_reply_preview/3`). A post the viewer may
+  # not see is absent from `posts`, so such an entry passes through unchanged
+  # and its line shows the sentence alone.
   # Returns `{entries, posts}` — the looked-up posts come back out so the post
   # cards can be built from the same batch instead of asking for them again.
   defp with_post_previews(entries, viewer) do
     posts =
       entries
-      |> Enum.flat_map(&[&1[:post_id], &1[:reply_post_id] | List.wrap(&1[:post_ids])])
+      |> Enum.flat_map(
+        &[&1[:post_id], &1[:reply_post_id], &1[:root_post_id] | List.wrap(&1[:post_ids])]
+      )
       |> then(&Posts.visible_posts_by_ids(viewer, &1))
 
     lines = User.notification_post_lines(viewer)
@@ -1430,13 +1752,30 @@ defmodule VutuvWeb.NotificationLive.Index do
     entries =
       Enum.map(entries, fn entry ->
         entry
-        |> put_preview(:post_preview, entry[:post_id], posts, lines, quoted_form(entry))
-        |> put_preview(:reply_preview, entry[:reply_post_id], posts, lines, :html)
+        |> put_teaser(posts)
         |> put_change_previews(posts, lines)
       end)
 
     {entries, posts}
   end
+
+  # The formatted quote a line shows once unfolded (`toggle_line`), rendered
+  # then and not before: one full Markdown pass, for the one reply somebody
+  # opened. A line that already carries its quote keeps it.
+  defp with_reply_preview(%{reply_preview: %{}} = item, _viewer, _lines), do: item
+
+  defp with_reply_preview(%{reply_post_id: id} = item, viewer, lines) when is_binary(id),
+    do:
+      put_preview(
+        item,
+        :reply_preview,
+        id,
+        Posts.visible_posts_by_ids(viewer, [id]),
+        lines,
+        :html
+      )
+
+  defp with_reply_preview(item, _viewer, _lines), do: item
 
   # ── The head of a post card ──
 
@@ -1450,7 +1789,8 @@ defmodule VutuvWeb.NotificationLive.Index do
   @card_teaser_lines 2
 
   # The card heads for one page, as `%{post_id => card}`: the post itself, its
-  # one-line teaser and its released photos.
+  # two-line teaser, its released photos and — for a link post with no photos
+  # — its ready link screenshot.
   #
   # One entry per *post*, not per event — a post that collected a favourite, a
   # re-share and a reply is one card, and hanging that card off each raw item
@@ -1472,13 +1812,19 @@ defmodule VutuvWeb.NotificationLive.Index do
     # already visibility-scoped, so a hidden or deleted post costs nothing here.
     ids =
       for entry <- entries,
-          entry[:kind] in @post_card_kinds,
-          is_map_key(posts, entry[:post_id]),
-          not is_map_key(known, entry[:post_id]),
+          id = Groups.post_id_of(entry),
+          is_map_key(posts, id),
+          not is_map_key(known, id),
           uniq: true,
-          do: entry[:post_id]
+          do: id
 
     images = Posts.released_images_by_ids(ids)
+
+    # Only a post with no photos shows its link screenshot, so only those ask.
+    screenshots =
+      ids
+      |> Enum.filter(&(Map.get(images, &1, []) == []))
+      |> Screenshots.ready_by_post_ids()
 
     for id <- ids, into: %{} do
       post = Map.fetch!(posts, id)
@@ -1489,24 +1835,11 @@ defmodule VutuvWeb.NotificationLive.Index do
          post: post,
          text: PostTeaser.plain_line(post, length: char_budget(@card_teaser_lines)),
          images: Enum.take(photos, @card_images),
-         more_images: max(length(photos) - @card_images, 0)
+         more_images: max(length(photos) - @card_images, 0),
+         screenshot: if(photos == [], do: Map.get(screenshots, id))
        }}
     end
   end
-
-  # A reply row shows the recipient's own post only as the one-line breadcrumb
-  # above the reply it quotes in full, so that one is flattened to text. Every
-  # other quoted post is rendered formatted. Deciding here (rather than building
-  # both forms) keeps a page of 50 rows off the Markdown renderer's DB lookups
-  # for bodies nothing will show formatted.
-  defp quoted_form(%{kind: "reply"}), do: :text
-
-  # A post card renders the post's *head*, never a formatted quote of it, so
-  # rendering one would be a full Markdown pass (Earmark + sanitizer +
-  # highlighter, ~0.2 ms) per event, thrown away — and it is per event, so 50
-  # reactions to one post paid for it 50 times on the blocking first paint.
-  defp quoted_form(%{kind: kind}) when kind in @post_card_kinds, do: :none
-  defp quoted_form(_entry), do: :html
 
   # A handle-change entry links the recipient's own posts that were rewritten:
   # the newest few as excerpt lines, with `handle_change_more/1` counting the
@@ -1551,13 +1884,40 @@ defmodule VutuvWeb.NotificationLive.Index do
     end
   end
 
+  # The folded line's words, through the app's one teaser rule for both: a
+  # member's reply as the post it is, a remote note as the `%Note{}` its text
+  # came from (`Vutuv.RemoteHtml.to_text/3` reduced it to plain text at the
+  # inbox, and `PostTeaser` knows not to run that through Markdown).
+  defp put_teaser(%{kind: kind, reply_post_id: id} = entry, posts)
+       when kind in ~w(reply thread) and is_binary(id) do
+    case Map.get(posts, id) do
+      %Post{} = post ->
+        Map.put(entry, :reply_teaser, blank_to_nil(PostTeaser.plain_line(post)))
+
+      _ ->
+        entry
+    end
+  end
+
+  defp put_teaser(%{kind: "fediverse_reply", note_text: text} = entry, _posts)
+       when is_binary(text),
+       do:
+         Map.put(
+           entry,
+           :note_teaser,
+           blank_to_nil(PostTeaser.plain_line(%Note{content_text: text}))
+         )
+
+  defp put_teaser(entry, _posts), do: entry
+
+  defp blank_to_nil(""), do: nil
+  defp blank_to_nil(text), do: text
+
   # The one-line form is the app's shared post teaser, so this page skips a
   # quote post's `RE: <url>` opener and an image-only first line exactly as the
   # feed's ticker and the RSS description do; the reader's line budget only
   # decides how many characters may ride the row. The formatted multi-line
-  # quote below it is this page's own, and stays here.
-  defp quoted_excerpt(_post, _lines, :none), do: nil
-
+  # quote is this page's own, and stays here.
   defp quoted_excerpt(post, lines, :text) do
     case PostTeaser.plain_line(post, length: char_budget(lines)) do
       "" -> nil
@@ -1579,7 +1939,7 @@ defmodule VutuvWeb.NotificationLive.Index do
   # picture would quote an empty box.
   @inline_image ~r/!\[[^\]]*\]\([^)]*\)/
 
-  # The excerpt shown under a reply/like notification: the post's first `lines`
+  # The excerpt an unfolded reply line shows: the post's first `lines`
   # non-empty lines (the reader's `:notification_post_lines` preference), cut
   # server-side (not only by the CSS clamp) so the rest of a quoted body never
   # reaches the DOM. Returns nil for a body with no text left to show.
@@ -1613,9 +1973,7 @@ defmodule VutuvWeb.NotificationLive.Index do
 
   # The formatted rendering /feed gives a post, block-cut at the character
   # budget so one essay-long line still ships a small DOM. Images are
-  # deliberately not passed: a quote is text. The compact one-line contexts (the
-  # "Your post:" breadcrumb above a reply, the handle-change list) do not come
-  # through here at all — see `quoted_excerpt/3`.
+  # deliberately not passed: a quote is text.
   defp render_excerpt(source, lines) do
     {html, _truncated?} = Markdown.render_preview(source, [], limit: char_budget(lines))
     %{html: html}

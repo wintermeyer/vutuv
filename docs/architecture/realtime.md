@@ -445,22 +445,51 @@ item name the same row. Opening /notifications deletes the member's dismissals:
 the marker now covers them, so the table only ever holds the exceptions that
 still matter.
 
-### The notifications page (2026-07 redesign)
+### The notifications page (2026-09 cards)
 
-`VutuvWeb.NotificationLive.Index` renders the derived feed as **grouped rows
-under calendar-day sections** (`VutuvWeb.NotificationLive.Groups`, a pure
-function over the item list; the days are the **reader's**, like post stamps).
-What reads as one piece of news merges into one row, keyed within a day: same-day likes of one post, the day's
-new followers ("Anna, Ben and 111 more are now following you.", the overflow
-linking to the member's followers list), the day's new connections, one
-endorser's endorsements ("endorsed you for Elixir and Phoenix."), and same-day
-thread events of one thread ("Anna and Ben replied in a thread you posted
-in."). Direct replies and the rarer kinds (moderation, CV updates, handle
-changes, ...) stay one row per event. Because grouping is pure, every change —
-a page, a live push, the
-DayClock midnight rollover — recomputes the sections wholesale; there is no
-LiveView stream to patch, and a live-pushed like merges into the derived row
-for its post/day.
+`VutuvWeb.NotificationLive.Index` renders the derived feed as **cards under
+calendar-day sections** (`VutuvWeb.NotificationLive.Groups`, a pure function
+over the item list; the days are the **reader's**, like post stamps). The
+grouping key is the **subject**, not the verb — measured on the real feed
+before the change, 39 events on one day were about 11 posts, and the busiest
+post showed up three times as verb-keyed rows (a like row, a fediverse card, a
+reply row), every reply repeating its "Your post" breadcrumb.
+
+* A **post card** (`kind: "post"`) holds everything about one post: likes,
+  replies, mentions, answers deeper in its thread (keyed on the thread's
+  `root_post_id`) and whatever another network sent back. Its head is an
+  eyebrow saying whose post it is ("Your post", "Post by Anna", "Thread by
+  Anna"), the post's two-line teaser (`VutuvWeb.PostTeaser`, linked to the
+  permalink), a count of what came back, and on the right the post's first
+  two released photos or — for a photo-less link post — its ready link
+  screenshot (`Vutuv.Posts.Screenshots.ready_by_post_ids/1`). Under it one
+  line per verb: every reply keeps a line of its own carrying its words (the
+  teaser, two lines, as a button), the likes merge into one line — a member's
+  like and a favourite from another network are the same verb, the globe on a
+  name says where it came from — the re-shares into another. Replies lead,
+  then likes, then shares; a card shows four lines and folds the rest behind
+  "Show N more" (`unfold`). Tapping a reply line (`toggle_line`) unfolds the
+  reply formatted like a feed post (cut to `:notification_post_lines`) plus a
+  Reply link to its permalink; both are socket round trips, so the dead render
+  is exactly what the connected one starts from.
+* A **people card** (`kind: "people"`), one per day: an avatar row, a tally
+  ("2 new connections · 1 new follower · 1 endorsement") and one line per
+  verb — followers merged ("Anna, Ben and 111 more are now following you.",
+  the overflow linking to the member's followers list), connections merged,
+  one endorser's endorsements merged ("endorsed you for Elixir and Phoenix.").
+  A same-day mutual follow suppresses the redundant follower line.
+* The rarer kinds (moderation, CV updates, handle changes, the welcome note,
+  ...) stay one row per event.
+
+Within a day the cards with an **unanswered reply** come first, then the rest
+of what is new since the last visit, then what the reader has seen; the page
+draws a "Seen before" rule at that transition (`with_seen_rule/1`). Because
+grouping is pure, every change — a page, a live push, the DayClock midnight
+rollover, a line unfolding — recomputes the sections wholesale; there is no
+LiveView stream to patch, and a live-pushed like merges into the derived card
+for its post/day. The card heads are built once per **post**, not per event
+(`post_cards/3`): the page payload crosses `MountHandoff`'s ETS table, which
+does not preserve sharing, so one card per raw item would multiply it.
 
 Around the list:
 
@@ -480,19 +509,21 @@ Around the list:
   its own overflow item so the page stays one page long.
 
 * **Unread highlighting**: events newer than the previous visit's read marker
-  get a tint + coral dot and a "N new notifications" header line; the visit
-  itself still advances `users.notifications_read_at` and clears the bell. A row
-  whose post the reader already engaged with is exempt (see the read-state
-  section above) — it is listed, plain.
-* **Filter tabs** (all / posts / people / more) restrict the feed server-side
-  via `Activity.notifications_page/2`'s `kinds:` option (only the matching
-  source queries run, so pagination stays exact) and live in the URL
-  (`?filter=`), patched without a reload.
-* **The rail** (right column on md+, below the list on phones), loaded on the
-  connected mount only: **Follow back** — `Social.followers_to_follow_back/2`,
-  recent followers not yet followed back, followed reload-free via the shared
-  `<.user_row live?>` — and **Last 30 days**, a per-kind count card from
-  `Activity.activity_summary/2` (one round trip of scalar subqueries).
+  get a tint + coral dot (card and line) and a "N new notifications" header
+  line; the visit itself still advances `users.notifications_read_at` and
+  clears the bell. A line whose post the reader already engaged with is exempt
+  (see the read-state section above) — it is listed, plain.
+* **Filter chips** (all / replies / reactions / people / more) restrict the
+  feed server-side via `Activity.notifications_page/2`'s `kinds:` option (only
+  the matching source queries run, so pagination stays exact) and live in the
+  URL (`?filter=`), patched without a reload. Each chip carries the count of
+  what is new under it (`Activity.unread_notification_count/2`, per chip one
+  query, and only when the whole-feed count is not zero).
+* **Last 30 days** is one line under the title (`Activity.activity_summary/2`,
+  one round trip of scalar subqueries). **The rail** (right column on md+,
+  below the list on phones), loaded on the connected mount only, keeps
+  **Follow back** — `Social.followers_to_follow_back/2`, recent followers not
+  yet followed back, followed reload-free via the shared `<.user_row live?>`.
 
 Row times are the reader's own wall clock in their own date region (like post
 stamps), server-rendered final with an ISO-8601 UTC `datetime` for machines.
