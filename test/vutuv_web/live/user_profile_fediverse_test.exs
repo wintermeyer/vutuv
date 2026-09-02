@@ -66,6 +66,17 @@ defmodule VutuvWeb.UserProfileFediverseTest do
 
       assert has_element?(view, "#fediverse-moved-to")
       assert render(view) =~ "@greta@social.example"
+      # And the sentence above it asks the reader to follow that address, which
+      # is the one thing the account card is for: a press opens it here rather
+      # than handing them to a server they have no account on
+      # (`remote_actor_link/3`). The link out is still what the anchor carries.
+      assert has_element?(view, ~s(#fediverse-moved-to[data-remote-actor="greta@social.example"]))
+
+      assert has_element?(
+               view,
+               ~s(#fediverse-moved-to[href="https://social.example/users/greta"])
+             )
+
       # Following here would land on a redirect, so the tool is not offered.
       refute has_element?(view, @form)
       refute has_element?(view, @handle)

@@ -56,6 +56,7 @@ defmodule VutuvWeb.NotificationLive.Index do
   """
   use VutuvWeb, :live_view
 
+  import VutuvWeb.FediverseComponents, only: [remote_actor_link: 3]
   import VutuvWeb.UserHTML, only: [user_row: 1]
 
   # What a notification says and where it leads, shared with the browser
@@ -1033,14 +1034,18 @@ defmodule VutuvWeb.NotificationLive.Index do
         >{@actor.name}</.link>
       <% @actor[:url] -> %>
         <%!-- Somebody on another network (issue #1069). There is no vutuv
-        profile behind the name, so it links out to their account and the
-        `@handle@host` beside it says which network answered. --%>
-        <a
-          href={@actor.url}
-          target="_blank"
-          rel="nofollow noopener noreferrer"
+        profile behind the name, so a press opens the account card over it —
+        who they are, one Follow button, both mutes — the same card their
+        handle opens on a post card and inside a post body
+        (`remote_actor_link/3`). This row is where a member most often meets a
+        stranger for the first time, and until now it was the one place that
+        answered "who just boosted me" by handing them to a server they have no
+        account on. The `@handle@host` beside the name still says which network
+        answered, and the `href` out there is still what a middle click takes. --%>
+        <.link
+          {remote_actor_link(nil, @actor.url, @actor[:handle])}
           class="font-semibold text-slate-900 hover:text-brand-700 dark:text-white dark:hover:text-brand-300"
-        >{@actor.name}</a><span
+        >{@actor.name}</.link><span
           :if={@actor[:handle] && @actor.handle != @actor.name}
           class="text-xs font-normal text-slate-600 dark:text-slate-400"
         > {@actor.handle}</span>

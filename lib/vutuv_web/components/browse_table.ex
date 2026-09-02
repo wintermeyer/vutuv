@@ -23,6 +23,7 @@ defmodule VutuvWeb.BrowseTable do
   use Gettext, backend: VutuvWeb.Gettext
 
   import Phoenix.LiveView, only: [push_patch: 2]
+  import VutuvWeb.FediverseComponents, only: [remote_actor_link: 3]
   import VutuvWeb.UI
 
   alias Vutuv.Fediverse
@@ -403,13 +404,31 @@ defmodule VutuvWeb.BrowseTable do
   attr(:name, :string, default: nil)
   attr(:handle, :string, required: true)
 
+  attr(:account_id, :any,
+    default: nil,
+    doc:
+      "the stored account's **id**, when we hold a row for it: the cell then leads to its page here rather than out. A follower is not a stored account (`fediverse_followers` is its own table), so the two follower tables pass none."
+  )
+
   @doc """
-  The Account cell's content: the display name over the `@user@server` handle,
-  both linking out to the account on its own server.
+  The Account cell's content: the display name over the `@user@server` handle.
+
+  A press opens the account card over the row (`remote_actor_link/3`), the same
+  card the handle opens on a post and inside a post body — because a table of
+  people the member follows, or who follow them, is exactly where "who is this
+  again, and do I follow them back" gets asked, and answering it used to mean
+  leaving for a server the member has no account on and finding their way home
+  again. Ten thousand rows and one of them is somebody worth a second look.
+
+  Where the card cannot open, `@uri` is still where the cell goes — which is why
+  it stays required even though `@account_id` outranks it.
   """
   def account_link(assigns) do
     ~H"""
-    <a href={@uri} target="_blank" rel="nofollow noopener noreferrer" class="group block min-w-0">
+    <.link
+      {remote_actor_link(@account_id, @uri, @handle)}
+      class="group block min-w-0"
+    >
       <span
         :if={@name}
         class="breakwrap block font-medium text-slate-800 group-hover:text-brand-700 dark:text-slate-100 dark:group-hover:text-brand-300"
@@ -423,7 +442,7 @@ defmodule VutuvWeb.BrowseTable do
       <span class="block break-all text-slate-600 group-hover:text-brand-600 dark:text-slate-400 dark:group-hover:text-brand-300 sm:break-normal">
         {@handle}
       </span>
-    </a>
+    </.link>
     """
   end
 

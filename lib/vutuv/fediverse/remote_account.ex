@@ -111,7 +111,7 @@ defmodule Vutuv.Fediverse.RemoteAccount do
   reaction never write the same person two different ways on one page.
   """
   def display_handle(%__MODULE__{} = account),
-    do: Handle.display(account.handle, account.actor_uri)
+    do: Handle.display(account.handle, account.actor_uri, account.host)
 
   @doc """
   Whether this account's cached picture may be shown: we have one and the AI

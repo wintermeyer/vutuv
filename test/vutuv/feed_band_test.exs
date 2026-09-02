@@ -17,13 +17,20 @@ defmodule Vutuv.FeedBandTest do
   alias Vutuv.FeedBand
   alias Vutuv.Social.Follow
 
+  # `handle` is the bare username the actor document's `preferredUsername`
+  # carries ("loud"), never the `@loud@loud.example` a reader is shown:
+  # `RemoteAccount.display_handle/1` composes that from this column and the
+  # host. Storing the composed form here fed `Handle.display/2` its own output
+  # and made the row's label look right for the wrong reason — the production
+  # value has no `@` to strip, so the band showed `loud` where a member's row
+  # shows `@stefan`.
   defp remote_account(host, handle) do
     actor = "https://#{host}/users/#{handle}"
 
     Repo.insert!(%RemoteAccount{
       actor_uri: actor,
       host: host,
-      handle: "@#{handle}@#{host}",
+      handle: handle,
       name: handle,
       inbox_uri: actor <> "/inbox"
     })

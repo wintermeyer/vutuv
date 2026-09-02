@@ -20,13 +20,20 @@ defmodule VutuvWeb.PostLive.FilterBandTest do
   alias Vutuv.Posts
   alias Vutuv.Social.Follow
 
+  # `handle` is the bare username the actor document's `preferredUsername`
+  # carries ("them"), never the `@them@social.example` a reader is shown:
+  # `RemoteAccount.display_handle/1` composes that from this column and the
+  # host, and `remote_account_by_address/1` matches an address against it bare.
+  # Storing the composed form here fed `Handle.display/2` its own output —
+  # "@@them@social.example@social.example" — which is not a handle any surface
+  # can read back.
   defp remote_account(host, handle) do
     actor = "https://#{host}/users/#{handle}"
 
     Repo.insert!(%RemoteAccount{
       actor_uri: actor,
       host: host,
-      handle: "@#{handle}@#{host}",
+      handle: handle,
       name: handle,
       inbox_uri: actor <> "/inbox"
     })
@@ -183,6 +190,25 @@ defmodule VutuvWeb.PostLive.FilterBandTest do
 
       view |> element("#load-more") |> render_click()
       refute_received :band_reloaded
+    end
+
+    test "the account row opens its card, the way its handle does on a post", %{conn: conn} do
+      %{conn: conn, user: user} = with_friend(conn)
+      {:ok, _} = Posts.save_feed_rail(user, %{order: ["sources"], collapsed: [], removed: []})
+      account = remote_account("social.example", "them")
+      remote_follow(user, account)
+
+      {:ok, view, _html} = live(conn, ~p"/feed")
+      view |> twist("social.example") |> render()
+
+      # This list is where a reader scanning who fills their feed decides they
+      # have had enough of somebody, and mute lives on the card — so the row
+      # answers the press with the same card the handle above it opens, rather
+      # than with a page they have to come back from. The account page is still
+      # where the anchor leads when the card cannot open.
+      link = ~s(a[data-remote-actor="them@social.example"])
+      assert has_element?(view, link)
+      assert view |> element(link) |> render() =~ "/system/fediverse/account/#{account.id}"
     end
 
     # The one live path that changes follow state from OUTSIDE the card — the

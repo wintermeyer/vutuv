@@ -162,6 +162,49 @@ Every field whose stored `@handle` linkifies is one `{schema, field}` entry in
 | `job_postings` | `description` |
 | `ads` | `content` |
 
+## The account card behind a remote handle
+
+An account on another network has no profile here, so every place that named one
+had to answer "who is this" by sending the reader somewhere — that server, or
+the cached account page at `/system/fediverse/account/:id`, which they then had
+to come back from. A plain left click by a signed-in member now opens a small
+card over the handle instead: name, address, self-description, how much of them
+we hold, one Follow button, both mutes, and the two ways onward.
+
+The card's markup is a server-rendered fragment
+(`VutuvWeb.RemoteActorCardController`, POST only — resolving an unknown address
+is an outbound request, so it may not be reachable by a link or a crawler), and
+`assets/js/mention_card.js` positions a box and swaps the HTML in. It binds to
+`a[data-remote-actor]` and two places write that hook:
+
+| Writer | Anchors |
+|---|---|
+| `VutuvWeb.Markdown` | a `@user@host` inside any rendered body — a post, a **chat message**, a work-experience description |
+| `VutuvWeb.FediverseComponents.remote_actor_link/3` | every other remote account the app draws |
+
+The second is the chokepoint. It owns **both** halves of the answer — where the
+anchor leads and what a press does — and its ten callers are the post card's
+header and its reaction chips, the boost banner, the "Replying to" line, a
+notification row, the followers and following tables (a member's own and an
+organization's), the feed's filter band, and a member's forwarding address after
+they moved. A handle that is not a full `user@host` (the actor document carried
+no username, so `Handle.display/2` fell back to `@name` or a bare `@host`) gets
+no hook and keeps its plain link: the card is addressed by the address.
+
+Nothing else about the anchor changes, so the `href` stays its whole truth — a
+middle click, a copied link, a logged-out visitor and a page whose JavaScript
+never arrived all still go to the destination. Those anchors are often
+`<.link navigate>`, which is why the JS stops the click's bubble as well as its
+default: LiveView's nav listener on `window` reads `data-phx-link` without
+asking whether the default was prevented, so the card would open and the page
+would leave underneath it in one gesture.
+
+Three surfaces deliberately stay out. The quoted-post card is one big link to
+the original, and an anchor inside an anchor is not markup. `/settings/fediverse/move`
+shows the member their *own* forwarding address, where a Follow button is the
+wrong offer. And the admin queues name a handle as a row label, not as somebody
+to meet.
+
 ## Existence validation (anti-reservation)
 
 Every one of those changesets runs `Mentions.validate_mentions_exist/2`: a saved
@@ -328,6 +371,11 @@ posts (the newest five, plus an "and N more" count).
 - `lib/vutuv/accounts/handle_change_notification.ex` — the durable row.
 - `lib/vutuv_web/live/notification_live/index.ex` — the `mention` and
   `handle_change` renderings.
+- `lib/vutuv_web/components/fediverse_components.ex` — `remote_actor_link/3`,
+  the one owner of where a remote handle leads and what a press does;
+  `lib/vutuv_web/controllers/remote_actor_card_controller.ex` +
+  `templates/remote_actor_card/card.html.heex` render the card,
+  `assets/js/mention_card.js` positions it.
 - `test/vutuv/mentions_test.exs`, `mentions_local_address_test.exs`,
   `vutuv_web/markdown_local_address_test.exs`, `vutuv_web/mention_form_test.exs`,
   `mention_existence_test.exs`, `mention_suggest_test.exs`,
@@ -336,4 +384,6 @@ posts (the newest five, plus an "and N more" count).
   `mention_limit_test.exs`,
   `mention_notifications_test.exs`, `handle_availability_test.exs`,
   `accounts/handle_change_propagation_test.exs`,
-  `vutuv_web/live/handle_change_notification_test.exs`.
+  `vutuv_web/live/handle_change_notification_test.exs`,
+  `vutuv_web/components/remote_actor_link_test.exs`,
+  `vutuv_web/controllers/remote_actor_card_test.exs`.

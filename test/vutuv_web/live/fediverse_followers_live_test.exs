@@ -53,6 +53,21 @@ defmodule VutuvWeb.FediverseFollowersLiveTest do
     refute has_element?(live, "#followers")
   end
 
+  test "a follower's name opens their card rather than leading off the site", %{conn: conn} do
+    {conn, user} = federating(conn)
+    follower(user, handle: "crse", name: "Christian Yoga", host: "social.linux.pizza")
+
+    {:ok, live, _html} = live(conn, ~p"/settings/fediverse/followers")
+
+    # One hook for every remote account on the site (`assets/js/mention_card.js`):
+    # the row names somebody the member may well want back, and "who is this,
+    # and do I follow them too" is answered on the card instead of on a server
+    # they have no account on. The `href` out there is still what a middle-click
+    # and a copied link take.
+    assert has_element?(live, ~s(a[data-remote-actor="crse@social.linux.pizza"]))
+    assert has_element?(live, ~s(a[href="https://social.linux.pizza/users/crse"]))
+  end
+
   describe "the table" do
     setup %{conn: conn} do
       {conn, user} = federating(conn)

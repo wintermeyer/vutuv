@@ -377,7 +377,12 @@ defmodule VutuvWeb.FediverseFollowingLive do
                     data-row-changed={row_changed?(@changed_ids, follow.id)}
                   >
                     <td>
+                      <%!-- The row names an account we hold, so where the card
+                      cannot open it leads to that account's page here rather
+                      than out to their server — the same destination its handle
+                      has on a post card. --%>
                       <.account_link
+                        account_id={follow.remote_account.id}
                         uri={follow.remote_account.actor_uri}
                         name={RemoteAccount.display_name(follow.remote_account)}
                         handle={RemoteAccount.display_handle(follow.remote_account)}

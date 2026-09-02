@@ -11,11 +11,13 @@
 // It binds to `a[data-remote-actor]`, wherever that is written. Two places
 // write it. A `@user@host` inside rendered text (`VutuvWeb.Markdown`), which is
 // more than posts — a chat message and a work-experience description run
-// through the same renderer. And the handle in the header of a card from
-// another network (`VutuvWeb.PostComponents`), where the reader is asking the
-// same question about the same account and until now got a page they had to
-// come back from. The two anchors lead different places when the card cannot
-// open, which is why `followTheLink` reads the target rather than assuming one.
+// through the same renderer. And every other remote account the app draws,
+// through `VutuvWeb.FediverseComponents.remote_actor_link/3`, whose docstring
+// names its callers. Wherever a reader meets somebody from another network they
+// are asking the same question about the same account, and until this they got
+// either a trip to a server they have no account on or a page they had to come
+// back from. The two writers lead different places when the card cannot open,
+// which is why `followTheLink` reads the target rather than assuming one.
 //
 // The card's markup comes from the server on every act
 // (`VutuvWeb.RemoteActorCardController`), so no sentence about a follow, a
