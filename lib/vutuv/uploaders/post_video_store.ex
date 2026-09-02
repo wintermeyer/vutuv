@@ -152,14 +152,16 @@ defmodule Vutuv.PostVideoStore do
   defp recipe("lite-h264", fps), do: Recipes.lite_h264(fps)
   defp recipe("lite-av1", fps), do: Recipes.lite_av1(fps)
 
-  @doc "Drops the temporary files a killed encode left behind."
-  def clear_temp(token) do
+  @doc "The temporary files an encode in flight (or a killed one) is writing."
+  def temp_files(token) do
     token
     |> dir()
     |> Path.join(".*.mp4")
     |> Path.wildcard(match_dot: true)
-    |> Enum.each(&File.rm/1)
   end
+
+  @doc "Drops the temporary files a killed encode left behind."
+  def clear_temp(token), do: token |> temp_files() |> Enum.each(&File.rm/1)
 
   @doc """
   Whether this ffmpeg can write AV1 at all (an installation whose build lacks

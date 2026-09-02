@@ -150,7 +150,12 @@ defmodule Vutuv.VideosTest do
       # kill takes the job and not the test.
       pid = spawn(fn -> Job.run(video.id) end)
 
-      wait_until(fn -> reload(video).stage == "transcoding" end)
+      # Kill once ffmpeg has its output file open. It opens that file only
+      # after probing the input, and a kill inside that gap leaves an orphan
+      # that creates the file AFTER the resume's sweep and dies on its next
+      # progress write. Production never resumes inside the 180 s window; a
+      # test that resumes at once would.
+      wait_until(fn -> PostVideoStore.temp_files(video.token) != [] end)
       Process.exit(pid, :kill)
       wait_until(fn -> not Process.alive?(pid) end)
       # A three-second clip encodes in well under a second, so whether the
@@ -176,8 +181,7 @@ defmodule Vutuv.VideosTest do
       assert PostVideoStore.rendition_path(video.token, "h264")
 
       # And the temp file the killed encode was writing is gone.
-      dir = Path.dirname(PostVideoStore.rendition_path(video.token, "h264"))
-      assert Path.wildcard(Path.join(dir, ".*.mp4"), match_dot: true) == []
+      assert PostVideoStore.temp_files(video.token) == []
     end
 
     test "claim_due works the clips missing their H.264 file before the enhancements",
