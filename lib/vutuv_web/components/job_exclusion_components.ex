@@ -185,14 +185,9 @@ defmodule VutuvWeb.JobExclusionComponents do
                   </div>
               <% end %>
             </div>
-            <button
-              type="button"
-              phx-click="remove"
-              phx-value-id={x.id}
-              class="shrink-0 text-sm font-semibold text-red-600 hover:text-red-700 dark:text-red-400 dark:hover:text-red-300"
-            >
+            <.button variant="danger-ghost" class="shrink-0" phx-click="remove" phx-value-id={x.id}>
               {gettext("Remove")}
-            </button>
+            </.button>
           </li>
         </ul>
       </.card>

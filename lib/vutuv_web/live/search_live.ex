@@ -476,7 +476,7 @@ defmodule VutuvWeb.SearchLive do
       id={@id}
       aria-disabled="true"
       title={@title}
-      class="cursor-not-allowed rounded-full bg-slate-100 px-3 py-1.5 text-sm font-semibold text-slate-600 opacity-40 dark:bg-slate-800 dark:text-slate-300"
+      class={[filter_chip_class(false), "cursor-not-allowed opacity-40"]}
     >
       {render_slot(@inner_block)}
     </span>
@@ -488,14 +488,7 @@ defmodule VutuvWeb.SearchLive do
     <.link
       id={@id}
       patch={@patch}
-      class={[
-        "rounded-full px-3 py-1.5 text-sm font-semibold transition-colors",
-        if(@active,
-          do: "bg-brand-600 text-white",
-          else:
-            "bg-slate-100 text-slate-600 hover:bg-slate-200 dark:bg-slate-800 dark:text-slate-300 dark:hover:bg-slate-700"
-        )
-      ]}
+      class={filter_chip_class(@active)}
     >
       {render_slot(@inner_block)}
     </.link>

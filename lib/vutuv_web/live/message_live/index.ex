@@ -588,20 +588,10 @@ defmodule VutuvWeb.MessageLive.Index do
   defp request_actions(assigns) do
     ~H"""
     <div class={["flex gap-2", @class]}>
-      <button
-        phx-click="accept"
-        phx-value-id={@id}
-        class="rounded-lg bg-brand-600 px-3 py-1.5 text-xs font-semibold text-white hover:bg-brand-700"
-      >
-        {gettext("Accept")}
-      </button>
-      <button
-        phx-click="decline"
-        phx-value-id={@id}
-        class="rounded-lg bg-slate-100 px-3 py-1.5 text-xs font-semibold text-slate-700 hover:bg-slate-200 dark:bg-slate-800 dark:text-slate-200 dark:hover:bg-slate-700"
-      >
+      <.button phx-click="accept" phx-value-id={@id}>{gettext("Accept")}</.button>
+      <.button variant="secondary" phx-click="decline" phx-value-id={@id}>
         {gettext("Decline")}
-      </button>
+      </.button>
     </div>
     """
   end

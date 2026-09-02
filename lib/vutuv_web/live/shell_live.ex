@@ -943,7 +943,7 @@ defmodule VutuvWeb.ShellLive do
           release anyway; app.js takes the click over only when it has a worker
           to promote. Without the href this control is dead for most of the
           people it is shown to. --%>
-          <.button variant="ghost" href={reload_path(@path)} data-sw-reload class="min-h-10">
+          <.button variant="ghost" href={reload_path(@path)} data-sw-reload>
             {gettext("Reload")}
           </.button>
         </div>
@@ -1013,16 +1013,12 @@ defmodule VutuvWeb.ShellLive do
             <span class="text-slate-700 dark:text-slate-200">
               {gettext("You switched browser notifications on. This browser has not been asked for permission yet.")}
             </span>
-            <.button type="button" data-notify-allow class="min-h-10">
+            <.button data-notify-allow>
               {gettext("Allow")}
             </.button>
-            <button
-              type="button"
-              data-notify-dismiss
-              class="ml-auto min-h-10 rounded-lg px-3 text-sm font-semibold text-slate-600 hover:bg-brand-100 dark:text-slate-300 dark:hover:bg-brand-900/60"
-            >
+            <.button variant="ghost" class="ml-auto" data-notify-dismiss>
               {gettext("Not now")}
-            </button>
+            </.button>
           </div>
         </div>
       </div>
@@ -1362,12 +1358,7 @@ defmodule VutuvWeb.ShellLive do
                 </div>
               </details>
             <% else %>
-              <.link
-                href={~p"/login"}
-                class="rounded-lg bg-brand-600 px-4 py-2 text-sm font-semibold text-white hover:bg-brand-700"
-              >
-                {gettext("Log in")}
-              </.link>
+              <.button href={~p"/login"}>{gettext("Log in")}</.button>
             <% end %>
           </div>
         </div>

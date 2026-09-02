@@ -34,12 +34,9 @@ every entry. So this is where the member looks at what they uploaded. --%>
           Only the grade and the way in — the report itself has its own page. --%>
     <div :if={@check && @check.status == "done"} class="mt-4 flex flex-wrap items-center gap-3">
       <.grade_label check={@check} />
-      <.link
-        navigate={~p"/settings/job_references/#{@reference}/check"}
-        class="min-h-10 inline-flex items-center rounded-lg bg-slate-100 px-4 py-2 text-sm font-semibold text-slate-700 hover:bg-slate-200 dark:bg-slate-800 dark:text-slate-200 dark:hover:bg-slate-700"
-      >
+      <.button navigate={~p"/settings/job_references/#{@reference}/check"} variant="secondary">
         {gettext("Read the review")}
-      </.link>
+      </.button>
     </div>
 
     <div :if={document_url(@reference, @user)} class="mt-6">

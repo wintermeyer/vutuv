@@ -102,13 +102,14 @@
             {scope}
           </span>
         </div>
-        <.link
+        <.button
           href={~p"/settings/filters/#{filter.id}"}
           method="delete"
-          class="flex-shrink-0 rounded-lg px-3 py-1.5 text-sm font-semibold text-rose-600 hover:bg-rose-50 dark:text-rose-400 dark:hover:bg-rose-950/40"
+          variant="danger-ghost"
+          class="flex-shrink-0"
         >
           {gettext("Unmute")}
-        </.link>
+        </.button>
       </li>
     </ul>
 

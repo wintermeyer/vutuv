@@ -218,18 +218,8 @@ defmodule VutuvWeb.OrganizationLive.New do
         </fieldset>
 
         <div class="flex items-center gap-3 pt-2">
-          <button
-            type="submit"
-            class="rounded-lg bg-brand-600 px-4 py-2 text-sm font-semibold text-white hover:bg-brand-700"
-          >
-            {gettext("Continue to verification")}
-          </button>
-          <.link
-            navigate={~p"/organizations"}
-            class="text-sm font-semibold text-slate-600 hover:text-slate-800 dark:text-slate-400 dark:hover:text-slate-200"
-          >
-            {gettext("Cancel")}
-          </.link>
+          <.button type="submit">{gettext("Continue to verification")}</.button>
+          <.button navigate={~p"/organizations"} variant="secondary">{gettext("Cancel")}</.button>
         </div>
       </.form>
     </div>

@@ -100,33 +100,21 @@ defmodule VutuvWeb.SavedSearchComponents do
         >
           <option :for={{label, value} <- cadence_options()} value={value}>{label}</option>
         </select>
-        <button
-          type="submit"
-          class="rounded-lg bg-brand-600 px-3 py-1.5 text-sm font-semibold text-white hover:bg-brand-700"
-        >
-          {gettext("Save search")}
-        </button>
-        <button
-          type="button"
-          phx-click="toggle_save_search"
-          class="text-sm font-semibold text-slate-600 hover:text-slate-800 dark:text-slate-400"
-        >
-          {gettext("Cancel")}
-        </button>
+        <.button type="submit">{gettext("Save search")}</.button>
+        <.button variant="ghost" phx-click="toggle_save_search">{gettext("Cancel")}</.button>
       </form>
 
-      <button
+      <.button
         :if={not @saved? and not @show?}
         id={"#{@id}-button"}
-        type="button"
+        variant="secondary"
         phx-click="toggle_save_search"
-        class="inline-flex items-center gap-1.5 rounded-lg bg-slate-100 px-3 py-1.5 text-sm font-semibold text-slate-700 hover:bg-slate-200 dark:bg-slate-800 dark:text-slate-200 dark:hover:bg-slate-700"
       >
         <svg class="h-4 w-4" fill="none" viewBox="0 0 24 24" stroke-width="1.8" stroke="currentColor">
           <path stroke-linecap="round" stroke-linejoin="round" d="M17.593 3.322c1.1.128 1.907 1.077 1.907 2.185V21L12 17.25 4.5 21V5.507c0-1.108.806-2.057 1.907-2.185a48.507 48.507 0 0 1 11.186 0Z" />
         </svg>
         {gettext("Save search")}
-      </button>
+      </.button>
     </div>
     """
   end

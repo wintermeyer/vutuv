@@ -163,14 +163,9 @@ defmodule VutuvWeb.Admin.UserDeleteLive do
                   <.local_time at={user.inserted_at} id={"joined-#{user.id}"} format="%Y-%m-%d" />
                 </td>
                 <td class="text-right">
-                  <button
-                    type="button"
-                    phx-click="confirm"
-                    phx-value-id={user.id}
-                    class="rounded-lg bg-rose-600 px-3 py-1 text-xs font-semibold text-white hover:bg-rose-700"
-                  >
+                  <.button variant="danger" phx-click="confirm" phx-value-id={user.id}>
                     {gettext("Delete")}
-                  </button>
+                  </.button>
                 </td>
               </tr>
             </tbody>
@@ -204,22 +199,15 @@ defmodule VutuvWeb.Admin.UserDeleteLive do
           <p class="text-slate-600 dark:text-slate-400">{"@" <> @confirming.username}</p>
         </div>
         <div class="mt-6 flex justify-end gap-3">
-          <button
-            type="button"
-            phx-click="cancel"
-            class="rounded-lg bg-slate-100 px-4 py-2 text-sm font-semibold text-slate-700 hover:bg-slate-200 dark:bg-slate-800 dark:text-slate-200 dark:hover:bg-slate-700"
-          >
-            {gettext("Cancel")}
-          </button>
-          <button
-            type="button"
+          <.button variant="secondary" phx-click="cancel">{gettext("Cancel")}</.button>
+          <.button
             id="confirm-delete"
+            variant="danger"
             phx-click="delete"
             phx-value-id={@confirming.id}
-            class="rounded-lg bg-rose-600 px-4 py-2 text-sm font-semibold text-white hover:bg-rose-700"
           >
             {gettext("Delete account")}
-          </button>
+          </.button>
         </div>
       </div>
     </div>

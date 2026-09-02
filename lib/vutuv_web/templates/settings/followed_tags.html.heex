@@ -33,13 +33,14 @@
         >
           <span aria-hidden="true">#</span><span class="truncate">{tag.name || tag.slug}</span>
         </.link>
-        <.link
+        <.button
           href={~p"/tag_follows/#{tag.id}"}
           method="delete"
-          class="flex-shrink-0 rounded-lg px-3 py-1.5 text-sm font-semibold text-rose-600 hover:bg-rose-50 dark:text-rose-400 dark:hover:bg-rose-950/40"
+          variant="danger-ghost"
+          class="flex-shrink-0"
         >
           {gettext("Unfollow")}
-        </.link>
+        </.button>
       </li>
     </ul>
   </.card>

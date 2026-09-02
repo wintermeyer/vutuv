@@ -227,24 +227,23 @@ defmodule VutuvWeb.OrganizationLive.Domains do
           {verify_block(assigns, domain)}
 
           <div class="mt-4 flex flex-wrap items-center gap-4 border-t border-slate-100 pt-3 dark:border-slate-800">
-            <button
+            <.button
               :if={domain.verified_at && !domain.primary?}
-              type="button"
+              variant="ghost"
               phx-click="set_primary"
               phx-value-id={domain.id}
-              class="text-sm font-semibold text-brand-600 hover:text-brand-700 dark:text-brand-400 dark:hover:text-brand-300"
             >
               {gettext("Make primary")}
-            </button>
-            <button
-              type="button"
+            </.button>
+            <.button
+              variant="danger-ghost"
+              class="ml-auto"
               phx-click="remove"
               phx-value-id={domain.id}
               data-confirm={gettext("Remove this domain?")}
-              class="ml-auto text-sm font-semibold text-red-600 hover:text-red-700"
             >
               {gettext("Remove")}
-            </button>
+            </.button>
           </div>
         </li>
       </ul>
@@ -265,12 +264,7 @@ defmodule VutuvWeb.OrganizationLive.Domains do
               <option value="dns" selected={@new_method == "dns"}>{gettext("DNS TXT record")}</option>
               <option value="well_known" selected={@new_method == "well_known"}>{gettext("Website file")}</option>
             </select>
-            <button
-              type="submit"
-              class="rounded-lg bg-brand-600 px-4 py-2 text-sm font-semibold text-white hover:bg-brand-700"
-            >
-              {gettext("Add")}
-            </button>
+            <.button type="submit">{gettext("Add")}</.button>
           </div>
         </.form>
       </.card>
@@ -329,16 +323,15 @@ defmodule VutuvWeb.OrganizationLive.Domains do
 
       <%!-- `phx-disable-with` is the whole feedback while the check runs, and it
       is a DNS or HTTP round trip that can take seconds (issue #1466). --%>
-      <button
-        type="button"
+      <.button
+        id={"verify-#{@domain.id}"}
+        class="mt-3"
         phx-click="verify"
         phx-value-id={@domain.id}
         phx-disable-with={gettext("Checking …")}
-        id={"verify-#{@domain.id}"}
-        class="mt-3 rounded-lg bg-brand-600 px-4 py-2 text-sm font-semibold text-white hover:bg-brand-700 disabled:opacity-60"
       >
         {gettext("Verify now")}
-      </button>
+      </.button>
 
       <.check_report
         id={"verify-report-#{@domain.id}"}

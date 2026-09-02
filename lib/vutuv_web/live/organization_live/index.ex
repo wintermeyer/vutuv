@@ -3,9 +3,11 @@ defmodule VutuvWeb.OrganizationLive.Index do
   The public directory of verified organization pages (`/organizations`, issue #929).
   Embedded via `live_render` from `VutuvWeb.OrganizationController` (off-router, like
   the profile), so the agent-format siblings stay controller-owned. Search is
-  live (`phx-change`, socket state); pagination is real `<.link navigate>`
-  anchors carrying the current search, so every active page is reachable by
-  following links alone (the crawl path).
+  live (`phx-change`, socket state); pagination is the shared `<.pager>` in its
+  plain-anchor mode, carrying the current search, so every active page is
+  reachable by following links alone (the crawl path). Being off-router it
+  cannot `patch`, and a live `navigate` would leave the embedding controller
+  behind, so the anchor is the honest control here as well as the crawlable one.
   """
 
   use VutuvWeb, :live_view
@@ -46,11 +48,10 @@ defmodule VutuvWeb.OrganizationLive.Index do
     assign(socket, :result, Organizations.directory_page(search: search, page: page))
   end
 
-  # Real anchors carrying the current search so pagination is link-walk crawlable.
-  defp page_path(search, page) do
-    query = if(search in [nil, ""], do: [], else: [{"q", search}]) ++ [{"page", page}]
-    ~p"/organizations?#{query}"
-  end
+  # The search the pager has to carry into every page link, so pagination stays
+  # link-walk crawlable and a paged result keeps the query it belongs to.
+  defp page_query(search) when search in [nil, ""], do: %{}
+  defp page_query(search), do: %{"q" => search}
 
   @impl true
   def render(assigns) do
@@ -63,12 +64,9 @@ defmodule VutuvWeb.OrganizationLive.Index do
             {gettext("Verified pages for companies, associations, schools, public authorities and other groups, not for single people. Every page has a proven web domain, so you know it is really them.")}
           </p>
         </div>
-        <.link
-          navigate={~p"/organizations/new"}
-          class="rounded-lg bg-brand-600 px-4 py-2 text-center text-sm font-semibold text-white hover:bg-brand-700"
-        >
+        <.button navigate={~p"/organizations/new"}>
           {gettext("Add your organization")}
-        </.link>
+        </.button>
       </div>
 
       <form phx-change="search" phx-submit="search" class="mb-6">
@@ -117,26 +115,16 @@ defmodule VutuvWeb.OrganizationLive.Index do
           </.link>
         </div>
 
-        <nav
-          :if={@result.total_pages > 1}
-          aria-label={gettext("Pagination")}
-          class="mt-8 flex flex-wrap justify-center gap-1"
-        >
-          <.link
-            :for={page <- 1..@result.total_pages}
-            navigate={page_path(@search, page)}
-            aria-current={page == @result.page && "page"}
-            class={[
-              "rounded-lg px-3 py-1.5 text-sm font-semibold",
-              if(page == @result.page,
-                do: "bg-brand-600 text-white",
-                else: "bg-slate-100 text-slate-700 hover:bg-slate-200 dark:bg-slate-800 dark:text-slate-200 dark:hover:bg-slate-700"
-              )
-            ]}
-          >
-            {page}
-          </.link>
-        </nav>
+        <%!-- The site's one pager. This page used to draw its own — every page
+        number as a filled slate box, at a size nothing else on the site uses —
+        and on a long directory it printed all of them in a row rather than a
+        window around the current page. --%>
+        <.pager
+          params={%{"page" => @result.page}}
+          total={@result.total}
+          per_page={@result.per_page}
+          query={page_query(@search)}
+        />
       <% end %>
     </div>
     """

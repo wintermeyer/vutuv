@@ -564,19 +564,18 @@ defmodule VutuvWeb.JobPostingLive.Form do
             </label>
 
             <div class="flex flex-wrap gap-2">
-              <button
+              <.button
                 :for={region <- Countries.regions()}
-                type="button"
+                variant="secondary"
                 phx-click="country-region"
                 phx-value-region={region.key}
                 title={region.name}
-                class="inline-flex items-center gap-1.5 rounded-lg bg-slate-100 px-3 py-1.5 text-sm font-semibold text-slate-700 hover:bg-slate-200 dark:bg-slate-800 dark:text-slate-200 dark:hover:bg-slate-700"
               >
                 + {region.key}
                 <span class="font-normal text-slate-500 dark:text-slate-400">
                   {delimited_count(region.count)}
                 </span>
-              </button>
+              </.button>
             </div>
 
             <input
@@ -800,17 +799,11 @@ defmodule VutuvWeb.JobPostingLive.Form do
         </.card>
 
         <div class="flex flex-wrap items-center gap-3">
-          <button type="submit" name="do" value="publish"
-            class="rounded-lg bg-brand-600 px-4 py-2 text-sm font-semibold text-white hover:bg-brand-700">
-            {gettext("Publish")}
-          </button>
-          <button type="submit" name="do" value="draft"
-            class="rounded-lg bg-slate-100 px-4 py-2 text-sm font-semibold text-slate-700 hover:bg-slate-200 dark:bg-slate-800 dark:text-slate-200 dark:hover:bg-slate-700">
+          <.button type="submit" name="do" value="publish">{gettext("Publish")}</.button>
+          <.button type="submit" name="do" value="draft" variant="secondary">
             {gettext("Save draft")}
-          </button>
-          <.link navigate={~p"/jobs/mine"} class="text-sm font-semibold text-slate-600 hover:text-slate-800 dark:text-slate-400">
-            {gettext("Cancel")}
-          </.link>
+          </.button>
+          <.button navigate={~p"/jobs/mine"} variant="ghost">{gettext("Cancel")}</.button>
         </div>
       </.form>
     </div>

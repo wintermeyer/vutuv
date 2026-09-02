@@ -69,19 +69,12 @@
         value={value}
       />
       <div class="flex flex-wrap items-center gap-3">
-        <button
-          type="submit"
-          formaction={~p"/ads/new"}
-          class="rounded-lg bg-slate-100 px-4 py-2 text-sm font-semibold text-slate-700 hover:bg-slate-200 dark:bg-slate-800 dark:text-slate-200 dark:hover:bg-slate-700"
-        >
+        <.button type="submit" variant="secondary" formaction={~p"/ads/new"}>
           {gettext("Edit the ad")}
-        </button>
-        <button
-          type="submit"
-          class="rounded-lg bg-brand-600 px-4 py-2 text-sm font-semibold text-white hover:bg-brand-700"
-        >
+        </.button>
+        <.button type="submit">
           {gettext("Book now (binding, by invoice)")}
-        </button>
+        </.button>
       </div>
     </form>
   </section>

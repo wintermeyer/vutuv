@@ -239,15 +239,7 @@ defmodule VutuvWeb.ReferenceCheckLive do
     </p>
 
     <div class="flex flex-wrap items-center gap-3">
-      <%!-- The primary-button recipe at a full 40px height: this stands alone
-            in a card footer on a phone, not in a dense row. --%>
-      <button
-        type="button"
-        phx-click="check"
-        class="min-h-10 rounded-lg bg-brand-600 px-4 py-2 text-sm font-semibold text-white hover:bg-brand-700"
-      >
-        {gettext("Decode this reference")}
-      </button>
+      <.button phx-click="check">{gettext("Decode this reference")}</.button>
       <%!-- No duration here, deliberately. This line used to open with
             "Usually about 4 minutes", worked out from the median of past runs
             and what is queued — a promise made before there is anything to
@@ -325,12 +317,9 @@ defmodule VutuvWeb.ReferenceCheckLive do
             opens with a five-column matrix, which in this card had 468px to
             live in — readable only by scrolling it sideways. Here the panel
             keeps what the list is for: the state, and the way in. --%>
-      <.link
-        navigate={~p"/settings/job_references/#{@reference}/check"}
-        class="min-h-10 inline-flex items-center rounded-lg bg-slate-100 px-4 py-2 text-sm font-semibold text-slate-700 hover:bg-slate-200 dark:bg-slate-800 dark:text-slate-200 dark:hover:bg-slate-700"
-      >
+      <.button navigate={~p"/settings/job_references/#{@reference}/check"} variant="secondary">
         {gettext("Read the review")}
-      </.link>
+      </.button>
     </div>
 
     <%!-- A warning with no way out is just bad news. The text really did
@@ -340,13 +329,7 @@ defmodule VutuvWeb.ReferenceCheckLive do
       <p class="text-xs text-amber-700 dark:text-amber-300">
         {gettext("You changed the text after this review.")}
       </p>
-      <button
-        type="button"
-        phx-click="check"
-        class="min-h-10 rounded-lg bg-brand-600 px-4 py-2 text-sm font-semibold text-white hover:bg-brand-700"
-      >
-        {gettext("Review again")}
-      </button>
+      <.button phx-click="check">{gettext("Review again")}</.button>
     </div>
     <.check_error error={@error} viewer={@viewer} />
     """

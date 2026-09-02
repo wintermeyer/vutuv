@@ -213,13 +213,9 @@ defmodule VutuvWeb.JobBoardLive do
             {gettext("Open positions on vutuv, newest first.")}
           </p>
         </div>
-        <.link
-          :if={@current_user}
-          navigate={~p"/jobs/new"}
-          class="rounded-lg bg-brand-600 px-4 py-2 text-sm font-semibold text-white hover:bg-brand-700"
-        >
+        <.button :if={@current_user} navigate={~p"/jobs/new"}>
           {gettext("Post a job")}
-        </.link>
+        </.button>
       </div>
 
       <.search_form params={@params} filters={@filters} suggestions={@tag_suggestions} />
@@ -228,7 +224,7 @@ defmodule VutuvWeb.JobBoardLive do
         <.link
           :for={type <- [:onsite, :hybrid, :remote]}
           navigate={~p"/jobs?#{toggle_param(@params, "workplace", Atom.to_string(type))}"}
-          class={chip_class(active?(@params, "workplace", Atom.to_string(type)))}
+          class={filter_chip_class(active?(@params, "workplace", Atom.to_string(type)))}
         >
           {JobPosting.workplace_type_label(type)}
         </.link>
@@ -236,7 +232,7 @@ defmodule VutuvWeb.JobBoardLive do
         <.link
           :if={@current_user}
           navigate={~p"/jobs?#{toggle_param(@params, "my_tags", "1")}"}
-          class={chip_class(active?(@params, "my_tags", "1"))}
+          class={filter_chip_class(active?(@params, "my_tags", "1"))}
         >
           {gettext("Matches my tags")}
         </.link>
@@ -244,7 +240,7 @@ defmodule VutuvWeb.JobBoardLive do
         <.link
           :if={@current_user && @has_salary_expectation?}
           navigate={~p"/jobs?#{toggle_param(@params, "salary_min", "mine")}"}
-          class={chip_class(active?(@params, "salary_min", "mine"))}
+          class={filter_chip_class(active?(@params, "salary_min", "mine"))}
         >
           {gettext("From my salary expectation")}
         </.link>
@@ -252,7 +248,10 @@ defmodule VutuvWeb.JobBoardLive do
         <.link
           :if={any_filters?(@params)}
           navigate={~p"/jobs"}
-          class="whitespace-nowrap rounded-full px-3 py-1.5 text-sm font-semibold text-slate-600 underline decoration-dotted hover:text-slate-800 dark:text-slate-400"
+          class={[
+            button_base(),
+            "whitespace-nowrap text-slate-600 underline decoration-dotted hover:text-slate-800 dark:text-slate-400"
+          ]}
         >
           {gettext("Clear filters")}
         </.link>
@@ -317,12 +316,9 @@ defmodule VutuvWeb.JobBoardLive do
       </div>
 
       <div :if={@more?} class="mt-6 text-center">
-        <.link
-          navigate={~p"/jobs?#{Map.put(@params, "cursor", @next_cursor)}"}
-          class="inline-block rounded-lg bg-slate-100 px-4 py-2 text-sm font-semibold text-slate-700 hover:bg-slate-200 dark:bg-slate-800 dark:text-slate-200 dark:hover:bg-slate-700"
-        >
+        <.button navigate={~p"/jobs?#{Map.put(@params, "cursor", @next_cursor)}"} variant="secondary">
           {gettext("More jobs")}
-        </.link>
+        </.button>
       </div>
     </div>
     """
@@ -411,12 +407,7 @@ defmodule VutuvWeb.JobBoardLive do
         class={[input_class(), "disabled:cursor-not-allowed disabled:opacity-60"]}
       />
 
-      <button
-        type="submit"
-        class="rounded-lg bg-brand-600 px-4 py-2 text-sm font-semibold text-white hover:bg-brand-700"
-      >
-        {gettext("Search")}
-      </button>
+      <.button type="submit">{gettext("Search")}</.button>
 
       <details class="group text-sm text-slate-600 dark:text-slate-400 sm:col-span-2 lg:col-span-4">
         <summary class="inline-flex cursor-pointer list-none items-center gap-1 font-medium text-slate-700 hover:text-brand-700 [&::-webkit-details-marker]:hidden dark:text-slate-300 dark:hover:text-brand-300">
@@ -461,17 +452,6 @@ defmodule VutuvWeb.JobBoardLive do
     gettext("Min. salary/year (%{currency})",
       currency: Salary.currency_symbol(Jobs.default_currency())
     )
-  end
-
-  defp chip_class(active?) do
-    [
-      "whitespace-nowrap rounded-full px-3 py-1.5 text-sm font-semibold transition-colors",
-      if(active?,
-        do: "bg-brand-600 text-white",
-        else:
-          "bg-slate-100 text-slate-700 hover:bg-slate-200 dark:bg-slate-800 dark:text-slate-200 dark:hover:bg-slate-700"
-      )
-    ]
   end
 
   # Worked examples for the "Search tips" disclosure under the box (issue #952),

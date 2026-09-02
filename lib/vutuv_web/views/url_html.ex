@@ -57,13 +57,7 @@ defmodule VutuvWeb.UrlHTML do
     ~H"""
     <.form for={%{}} action={~p"/settings/links/#{@url}/verify"} method="post">
       <input type="hidden" name="method" value={@method} />
-      <button
-        type="submit"
-        id={"verify-#{@method}"}
-        class="rounded-lg bg-brand-600 px-4 py-2 text-sm font-semibold text-white hover:bg-brand-700"
-      >
-        {@label}
-      </button>
+      <.button type="submit" id={"verify-#{@method}"}>{@label}</.button>
     </.form>
     <.check_report
       id={"verify-report-#{@method}"}

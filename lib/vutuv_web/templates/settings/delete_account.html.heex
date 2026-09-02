@@ -45,17 +45,17 @@ slate ring baked into <.card>. --%>
       )}
 
       <div class="mt-4">
-        <button
+        <.button
           type="submit"
           id="delete-account"
+          variant="danger"
           data-delete-gate-submit
           data-confirm={
             gettext("Start deleting your account? We will email you a PIN to confirm.")
           }
-          class="inline-flex items-center rounded-lg bg-red-600 px-4 py-2 text-sm font-semibold text-white hover:bg-red-700 disabled:cursor-not-allowed disabled:opacity-40 disabled:hover:bg-red-600"
         >
           {gettext("Delete my account")}
-        </button>
+        </.button>
       </div>
     </.form>
   </section>

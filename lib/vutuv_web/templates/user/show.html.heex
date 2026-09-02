@@ -1506,20 +1506,19 @@ the resulting ~200px rail width. --%>
               data-map-row
               data-map-persist-url={@current_user && ~p"/maps/default"}
             >
-              <a
+              <.button
+                href={map.primary.url}
+                target="_blank"
+                rel="noopener noreferrer"
                 data-map-link
                 data-map-primary
                 data-service={map.primary.service}
                 data-label-primary={gettext("Open in %{name}", name: map.primary.label)}
                 data-label-alt={map.primary.label}
-                href={map.primary.url}
-                target="_blank"
-                rel="noopener noreferrer"
-                class="inline-flex items-center gap-1.5 rounded-lg bg-brand-600 px-3 py-1.5 text-xs font-semibold text-white hover:bg-brand-700"
               >
                 <.detail_icon name="map-pin" class="h-3.5 w-3.5" />
                 <span data-map-text>{gettext("Open in %{name}", name: map.primary.label)}</span>
-              </a>
+              </.button>
               <div
                 :if={map.alternatives != []}
                 class="mt-1.5 flex flex-wrap items-center gap-x-2 gap-y-0.5 text-xs text-slate-600 dark:text-slate-400"

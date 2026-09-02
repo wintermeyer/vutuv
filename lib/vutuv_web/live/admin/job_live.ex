@@ -278,7 +278,7 @@ defmodule VutuvWeb.Admin.JobLive do
                 </td>
                 <td>
                   <% {label, tone} = posting_status_badge(posting) %>
-                  <.admin_pill tone={tone}>{label}</.admin_pill>
+                  <.status_pill tone={tone}>{label}</.status_pill>
                 </td>
                 <td class="text-right">
                   <button
@@ -361,7 +361,7 @@ defmodule VutuvWeb.Admin.JobLive do
           <dt class="card__label">{gettext("Status")}</dt>
           <dd class="mt-1 text-sm">
             <% {label, tone} = posting_status_badge(@detail.posting) %>
-            <.admin_pill tone={tone}>{label}</.admin_pill>
+            <.status_pill tone={tone}>{label}</.status_pill>
           </dd>
         </div>
 
@@ -450,44 +450,41 @@ defmodule VutuvWeb.Admin.JobLive do
       </div>
 
       <div class="mt-5 flex flex-wrap gap-2 border-t border-slate-100 pt-4 dark:border-slate-800">
-        <button
+        <.button
           :if={is_nil(@detail.posting.frozen_at)}
-          type="button"
+          variant="secondary"
           phx-click="freeze"
           phx-value-id={@detail.posting.id}
           data-confirm={gettext("Freeze this posting? It disappears from the public board and its indexing but stays visible to its poster.")}
-          class="rounded-lg bg-amber-100 px-3 py-1.5 text-sm font-semibold text-amber-800 hover:bg-amber-200 dark:bg-amber-900/40 dark:text-amber-200"
         >
           {gettext("Freeze")}
-        </button>
-        <button
+        </.button>
+        <.button
           :if={not is_nil(@detail.posting.frozen_at)}
-          type="button"
+          variant="secondary"
           phx-click="unfreeze"
           phx-value-id={@detail.posting.id}
-          class="rounded-lg bg-emerald-100 px-3 py-1.5 text-sm font-semibold text-emerald-700 hover:bg-emerald-200 dark:bg-emerald-900/40 dark:text-emerald-200"
         >
           {gettext("Unfreeze")}
-        </button>
-        <button
+        </.button>
+        <.button
           :if={Jobs.effective_status(@detail.posting) == :published}
-          type="button"
+          variant="secondary"
           phx-click="close-posting"
           phx-value-id={@detail.posting.id}
           data-confirm={gettext("Close this posting? It ends the listing (a regular ending, not a deletion).")}
-          class="rounded-lg bg-slate-100 px-3 py-1.5 text-sm font-semibold text-slate-700 hover:bg-slate-200 dark:bg-slate-800 dark:text-slate-200 dark:hover:bg-slate-700"
         >
           {gettext("Close")}
-        </button>
-        <button
-          type="button"
+        </.button>
+        <.button
+          variant="danger"
+          class="ml-auto"
           phx-click="delete"
           phx-value-id={@detail.posting.id}
           data-confirm={gettext("Delete this posting and everything it owns? This cannot be undone.")}
-          class="ml-auto rounded-lg bg-rose-100 px-3 py-1.5 text-sm font-semibold text-rose-700 hover:bg-rose-200 dark:bg-rose-900/40 dark:text-rose-200"
         >
           {gettext("Delete")}
-        </button>
+        </.button>
       </div>
     </section>
     """

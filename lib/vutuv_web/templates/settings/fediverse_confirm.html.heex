@@ -19,22 +19,16 @@ question, so the answer is a decision rather than a scroll-past. --%>
         <input type="hidden" name="fediverse_ack" value="1" />
 
         <div class="flex flex-wrap items-center justify-end gap-3">
-          <.link
-            navigate={~p"/settings/fediverse"}
-            class="rounded-lg bg-slate-100 px-4 py-2 text-sm font-semibold text-slate-700 hover:bg-slate-200 dark:bg-slate-800 dark:text-slate-200 dark:hover:bg-slate-700"
-          >
+          <.button navigate={~p"/settings/fediverse"} variant="secondary">
             {gettext("Cancel")}
-          </.link>
-          <button
-            type="submit"
-            class="rounded-lg bg-brand-600 px-4 py-2 text-sm font-semibold text-white hover:bg-brand-700"
-          >
+          </.button>
+          <.button type="submit">
             <%= if @switching_on do %>
               {gettext("I understand, take part")}
             <% else %>
               {gettext("I understand, switch off")}
             <% end %>
-          </button>
+          </.button>
         </div>
       </.form>
     </.card>

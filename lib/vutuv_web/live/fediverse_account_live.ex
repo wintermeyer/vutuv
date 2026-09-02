@@ -297,6 +297,21 @@ defmodule VutuvWeb.FediverseAccountLive do
               </a>
               · {gettext("From another network")}
             </p>
+            <%!-- The follow state reads beside the name, not among the buttons.
+            A status is not an act: standing a 20px pill in a row of 40px
+            controls made the row read as three unrelated widgets, and the same
+            mistake is what retired the profile's old segmented follow pill —
+            half of what looked like a control did nothing when pressed. --%>
+            <div :if={@follow} class="mt-2 flex flex-wrap items-center gap-2">
+              <.follow_state_pill follow={@follow} />
+              <.status_pill
+                :if={@follow.muted}
+                tone="bg-slate-100 text-slate-700 ring-1 ring-slate-200 dark:bg-slate-800 dark:text-slate-300 dark:ring-slate-700"
+                data-follow-muted
+              >
+                {gettext("Muted")}
+              </.status_pill>
+            </div>
           </div>
         </div>
 
@@ -352,25 +367,18 @@ defmodule VutuvWeb.FediverseAccountLive do
           <%= if @blocked_reason do %>
             <.follow_refusal_panel id="cannot-follow" reason={@blocked_reason} />
           <% else %>
-            <%!-- One block for both follow states: what differs is the badge's
-                  word and colour and the button's label, and those come from
-                  the sibling page, so "Requested" cannot mean two things. --%>
-            <div :if={@follow} class="flex flex-wrap items-center gap-3">
-              <.follow_state_pill follow={@follow} />
-              <span
-                :if={@follow.muted}
-                data-follow-muted
-                class="inline-flex rounded-full bg-slate-100 px-2 py-0.5 text-xs font-semibold text-slate-700 ring-1 ring-slate-200 dark:bg-slate-800 dark:text-slate-300 dark:ring-slate-700"
-              >
-                {gettext("Muted")}
-              </span>
+            <%!-- Two adjustments to a follow that already exists, so neither
+                  outranks the other and both wear the same calm variant. The
+                  label is what differs, and it comes from the sibling page, so
+                  "Requested" cannot mean two things. --%>
+            <div :if={@follow} class="flex flex-wrap items-center gap-2">
               <.button id="unfollow" variant="secondary" phx-click="unfollow">
                 {end_follow_label(@follow)}
               </.button>
               <%!-- The way back out of a mute. Muting from the feed removes the
               account's posts, and with them the menu that muted it, so without
               this the flash's "you still follow them" led nowhere. --%>
-              <.button id="toggle-mute" variant="ghost" phx-click="toggle-mute">
+              <.button id="toggle-mute" variant="secondary" phx-click="toggle-mute">
                 <%= if @follow.muted do %>
                   {gettext("Unmute")}
                 <% else %>

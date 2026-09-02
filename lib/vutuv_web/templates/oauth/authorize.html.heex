@@ -71,25 +71,18 @@
       </p>
 
       <div class="flex gap-3">
-        <button
+        <.button
           type="submit"
           name="decision"
           value="allow"
           id="oauth-allow"
           disabled={@identities == []}
-          class="rounded-lg bg-brand-600 px-4 py-2 text-sm font-semibold text-white hover:bg-brand-700"
         >
           {gettext("Allow access")}
-        </button>
-        <button
-          type="submit"
-          name="decision"
-          value="deny"
-          id="oauth-deny"
-          class="rounded-lg bg-slate-100 px-4 py-2 text-sm font-semibold text-slate-700 hover:bg-slate-200 dark:bg-slate-800 dark:text-slate-200 dark:hover:bg-slate-700"
-        >
+        </.button>
+        <.button type="submit" name="decision" value="deny" id="oauth-deny" variant="secondary">
           {gettext("Deny")}
-        </button>
+        </.button>
       </div>
     </.form>
   </section>

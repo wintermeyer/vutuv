@@ -363,6 +363,11 @@ defmodule VutuvWeb.FediverseFollowingLive do
                       filters={@filters}
                     />
                     <th>{gettext("State")}</th>
+                    <%!-- The act gets a column of its own, as in the admin
+                    tables: sharing the State cell put a pill and a button in
+                    one narrow column, where they stacked and the reader had a
+                    label over a control that is not what the label names. --%>
+                    <th></th>
                   </tr>
                 </thead>
                 <tbody id="following">
@@ -392,19 +397,22 @@ defmodule VutuvWeb.FediverseFollowingLive do
                       />
                     </td>
                     <td>
-                      <div class="flex flex-wrap items-center justify-end gap-x-3 gap-y-1">
-                        <.follow_state_pill follow={follow} />
-                        <button
-                          type="button"
-                          phx-click="unfollow"
-                          phx-value-id={follow.id}
-                          id={"unfollow-#{follow.id}"}
-                          data-confirm={end_follow_confirm(follow)}
-                          class="inline-flex min-h-10 items-center px-2 text-sm font-semibold text-rose-600 hover:text-rose-800 dark:text-rose-400 dark:hover:text-rose-300"
-                        >
-                          {end_follow_label(follow)}
-                        </button>
-                      </div>
+                      <.follow_state_pill follow={follow} />
+                    </td>
+                    <td class="text-right">
+                      <%!-- The same control the account page offers, so it
+                      wears the same variant: a member who ends a follow here
+                      and one who ends it there must not learn that the site
+                      has two Unfollows. --%>
+                      <.button
+                        variant="secondary"
+                        phx-click="unfollow"
+                        phx-value-id={follow.id}
+                        id={"unfollow-#{follow.id}"}
+                        data-confirm={end_follow_confirm(follow)}
+                      >
+                        {end_follow_label(follow)}
+                      </.button>
                     </td>
                   </tr>
                 </tbody>

@@ -224,22 +224,12 @@ defmodule VutuvWeb.CVLive do
               )}
             </p>
             <div class="mt-4 flex flex-wrap gap-2">
-              <button
-                type="button"
-                id="cv-anonymize"
-                phx-click="anonymize"
-                class="rounded-lg bg-slate-100 px-4 py-2 text-sm font-semibold text-slate-700 hover:bg-slate-200 dark:bg-slate-800 dark:text-slate-200 dark:hover:bg-slate-700"
-              >
+              <.button id="cv-anonymize" variant="secondary" phx-click="anonymize">
                 {gettext("Anonymize")}
-              </button>
-              <button
-                type="button"
-                id="cv-reset"
-                phx-click="reset"
-                class="text-sm font-semibold text-brand-600 hover:text-brand-700 dark:text-brand-400 dark:hover:text-brand-300"
-              >
+              </.button>
+              <.button id="cv-reset" variant="ghost" phx-click="reset">
                 {gettext("Reset")}
-              </button>
+              </.button>
             </div>
           </.card>
 
@@ -439,24 +429,24 @@ defmodule VutuvWeb.CVLive do
             <p class="mb-4 text-xs text-slate-600 dark:text-slate-400">
               {gettext("Every download reflects the parts you selected.")}
             </p>
-            <a
+            <.button
               id="cv-print"
               href={~p"/#{@user}/cv/print?#{@query}"}
               target="_blank"
               rel="noopener"
-              class="block w-full rounded-lg bg-brand-600 px-4 py-2 text-center text-sm font-semibold text-white hover:bg-brand-700"
+              class="w-full"
             >
               {gettext("Print / Save as PDF")}
-            </a>
+            </.button>
             <div class="mt-3 grid gap-2">
-              <a
+              <.button
                 :for={{label, format} <- download_formats()}
                 id={"cv-download-#{format}"}
                 href={~p"/#{@user}/cv/download/#{format}?#{@query}"}
-                class="rounded-lg bg-slate-100 px-4 py-2 text-center text-sm font-semibold text-slate-700 hover:bg-slate-200 dark:bg-slate-800 dark:text-slate-200 dark:hover:bg-slate-700"
+                variant="secondary"
               >
                 {label}
-              </a>
+              </.button>
             </div>
             <p class="mt-4 text-xs text-slate-600 dark:text-slate-400">
               {raw(

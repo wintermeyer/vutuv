@@ -2564,9 +2564,31 @@ defmodule VutuvWeb.UI do
   @doc """
   Button. Renders a `<.link>` when given `navigate`/`patch`/`href` (with optional
   `method` for POST/DELETE actions), otherwise a `<button>` (set `type`). Variants:
-  `primary` (default), `secondary`, `ghost`, `danger`.
+  `primary` (default), `secondary`, `ghost`, `danger`, `danger-ghost`.
+
+  `danger` is the filled red of an irreversible act on its own page (delete this
+  account, delete this page). **`danger-ghost` is the quiet remove that ends one
+  row of a list** — Unmute a muted account, Unfollow a tag, Delete a saved
+  search: red enough to read as removal, light enough that a list of twenty of
+  them is not a wall of red. It was four hand-spellings across eleven call sites
+  (`text-rose-600` with padding and without, `text-red-600` at `text-sm` and at
+  `text-xs`) before it had a name.
+
+  **There is one button size.** Every variant shares `button_base/0`, so any two
+  controls standing in the same row are the same height whatever their label,
+  whether one of them carries an icon, and whichever variant each one is. That is
+  not decoration: a row that mixes a filled box, a bare word and a tinted chip
+  reads as three unrelated things rather than a set of choices, which is how the
+  fediverse account page ended up offering "Unfollow" and "Mute" at two visible
+  weights beside a pill a third the height. Reach for `class="w-full"` or a
+  margin at the call site; never re-spell the padding, the text size or the
+  colours there — `button_recipe_test.exs` fails the build on a hand-copy.
   """
-  attr(:variant, :string, default: "primary", values: ~w(primary secondary ghost danger))
+  attr(:variant, :string,
+    default: "primary",
+    values: ~w(primary secondary ghost danger danger-ghost)
+  )
+
   attr(:navigate, :string, default: nil)
   attr(:patch, :string, default: nil)
   attr(:href, :string, default: nil)
@@ -2580,7 +2602,7 @@ defmodule VutuvWeb.UI do
 
   attr(:rest, :global,
     include:
-      ~w(download name value disabled form title target rel phx-click phx-value-id phx-disable-with)
+      ~w(download name value disabled form formaction formnovalidate title target rel phx-click phx-value-id phx-disable-with)
   )
 
   slot(:inner_block, required: true)
@@ -2609,7 +2631,18 @@ defmodule VutuvWeb.UI do
     """
   end
 
-  @button_base "inline-flex items-center justify-center gap-1.5 rounded-lg px-4 py-2 text-sm font-semibold"
+  # Everything you can press, minus the radius and the colours. `min-h-10` is
+  # the 40px touch target, and it is what makes "one size" hold in practice:
+  # padding alone leaves a button with an icon taller than the plain one beside
+  # it, and a link-shaped control shorter than both. The disabled pair lives
+  # here too — it was the one part of the recipe every call site still spelled,
+  # in four opacities across eight of them.
+  @control_base "inline-flex min-h-10 items-center justify-center gap-1.5 px-4 text-sm font-semibold disabled:cursor-not-allowed disabled:opacity-40"
+
+  @button_base "#{@control_base} rounded-lg py-2"
+
+  @doc "The shared geometry of every button, with no colours: layout, 40px height, radius, padding, type. For a control that has to keep a colour of its own and still stand at the same height as its neighbours — the job board's dotted \"Clear filters\", the profile header's two round controls."
+  def button_base, do: @button_base
 
   @doc """
   The button recipe as a bare class string, for the rare anchor `button/1`
@@ -2625,16 +2658,56 @@ defmodule VutuvWeb.UI do
   values already. It was the worse one here, because it would have the template
   tear the scheme off a URI `LoginCodes.otpauth_uri/2` had just assembled.
   """
+  # The hairline ring is not decoration: the page canvas is `#f1f5f9`, which is
+  # exactly `slate-100`, so a secondary button standing on the bare canvas
+  # rather than inside a white card was the page colour on the page colour — a
+  # floating word with a hover state. The ring gives it an edge there and reads
+  # as an ordinary button border inside a card.
   def button_class("secondary"),
     do:
-      "#{@button_base} bg-slate-100 text-slate-700 hover:bg-slate-200 dark:bg-slate-800 dark:text-slate-200 dark:hover:bg-slate-700"
+      "#{@button_base} bg-slate-100 text-slate-700 ring-1 ring-slate-300 hover:bg-slate-200 dark:bg-slate-800 dark:text-slate-200 dark:ring-slate-600 dark:hover:bg-slate-700"
 
   def button_class("ghost"),
     do:
       "#{@button_base} text-brand-600 hover:bg-brand-50 hover:text-brand-700 dark:text-brand-400 dark:hover:bg-slate-800 dark:hover:text-brand-300"
 
-  def button_class("danger"), do: "#{@button_base} bg-red-600 text-white hover:bg-red-700"
+  def button_class("danger"),
+    do: "#{@button_base} bg-red-600 text-white hover:bg-red-700 disabled:hover:bg-red-600"
+
+  def button_class("danger-ghost"),
+    do:
+      "#{@button_base} text-rose-600 hover:bg-rose-50 hover:text-rose-700 dark:text-rose-400 dark:hover:bg-rose-950/40 dark:hover:text-rose-300"
+
   def button_class(_), do: "#{@button_base} bg-brand-600 text-white hover:bg-brand-700"
+
+  @doc """
+  A **filter chip**: one narrowing of a list the member switches on and off, in
+  the horizontally scrolling strip above the results (`/jobs`, `/search`).
+  Round rather than square, so a strip of them does not read as a row of
+  buttons, but the same 40px height as everything else you can press — these
+  are the main way a phone narrows a result list, and they were 30px.
+
+  One owner because the two pages had drifted to two spellings of it
+  (`text-slate-700` on the job board, `text-slate-600` on search): a member who
+  filters jobs and then searches must not meet two chips.
+
+  The off state is white with a slate ring, not `bg-slate-100` — both chip
+  strips sit on the **bare canvas**, and the canvas is `#f1f5f9`, which is
+  exactly `slate-100`. The old chips were the page colour on the page colour: a
+  row of four filters that looked like a row of four words.
+
+  Built from the same `@control_base` as `button_class/1`, so "round" is a
+  modifier of the one recipe rather than a second copy of the geometry that has
+  to be kept level with it by hand.
+  """
+  def filter_chip_class(active?) do
+    "#{@control_base} whitespace-nowrap rounded-full border transition-colors " <>
+      if active? do
+        "border-brand-600 bg-brand-600 text-white"
+      else
+        "border-slate-300 bg-white text-slate-700 hover:border-brand-300 hover:bg-brand-50 hover:text-brand-700 dark:border-slate-700 dark:bg-slate-900 dark:text-slate-200 dark:hover:border-brand-500 dark:hover:bg-brand-900/30 dark:hover:text-brand-200"
+      end
+  end
 
   @doc """
   Follow / unfollow control — the single owner of the two `~p"/follows…"`
@@ -3673,23 +3746,31 @@ defmodule VutuvWeb.UI do
   end
 
   @doc """
-  The status pill in the admin oversight tables (jobs, organizations, users):
-  the shape is fixed, the colour is not. `tone` is the tint the host's own
-  `*_status_badge/1` picked for this row — "frozen" is amber wherever it
-  appears, and only the host knows what frozen means for its records.
+  A **status pill**: the shape is fixed, the colour is not. `tone` is the tint
+  the host picked for this row — "frozen" is amber wherever it appears, and only
+  the host knows what frozen means for its records.
 
-  Beside `admin_pager/1` because it has the same reach: seven copies of the
-  five base utilities sat across four admin LiveViews, so a change to the pill
-  shape was a change in four files, and one of them drifting was invisible.
+  Beside `admin_pager/1` because it has the same reach: seven copies of the five
+  base utilities sat across four admin LiveViews, so a change to the pill shape
+  was a change in four files, and one of them drifting was invisible. It was
+  `admin_pill/1` until the same shape turned up on a member-facing surface (the
+  fediverse account page's follow state and its "Muted" badge) — a status reads
+  the same whoever is looking at it, and the old name was the only thing keeping
+  those copies apart.
   """
   attr(:tone, :string, required: true)
+  attr(:class, :string, default: nil)
   attr(:rest, :global)
   slot(:inner_block, required: true)
 
-  def admin_pill(assigns) do
+  def status_pill(assigns) do
     ~H"""
     <span
-      class={["inline-flex items-center rounded-full px-2 py-0.5 text-xs font-semibold", @tone]}
+      class={[
+        "inline-flex items-center rounded-full px-2 py-0.5 text-xs font-semibold",
+        @tone,
+        @class
+      ]}
       {@rest}
     >
       {render_slot(@inner_block)}
@@ -3702,14 +3783,16 @@ defmodule VutuvWeb.UI do
   LiveViews (jobs, organizations, users). Distinct from `pager/1` (URL links):
   this fires `phx-click="page"` with `phx-value-page`, so the host LiveView owns
   the paging. `prev_id`/`next_id` add button ids (the user browser's tests key
-  on `#prev-page`/`#next-page`); a nil id omits the attribute, and a nil
-  `disabled_class` drops out of the class list. Renders nothing for a single page.
+  on `#prev-page`/`#next-page`); a nil id omits the attribute. Renders nothing
+  for a single page. Its two controls are ordinary secondary `button/1`s, so the
+  admin's pagers read as the same control as everything else you press — and the
+  disabled look comes from `button_base/0`, which is why this no longer takes a
+  `disabled_class`.
   """
   attr(:page, :integer, required: true)
   attr(:pages, :integer, required: true)
   attr(:prev_id, :string, default: nil)
   attr(:next_id, :string, default: nil)
-  attr(:disabled_class, :string, default: nil)
 
   def admin_pager(assigns) do
     ~H"""
@@ -3718,35 +3801,27 @@ defmodule VutuvWeb.UI do
       class="mt-6 flex items-center justify-center gap-3 text-sm font-semibold"
       aria-label={gettext("Pagination")}
     >
-      <button
-        type="button"
+      <.button
+        variant="secondary"
         phx-click="page"
         phx-value-page={@page - 1}
         disabled={@page <= 1}
         id={@prev_id}
-        class={[
-          "rounded-lg px-3 py-1.5 text-slate-600 hover:bg-slate-100 disabled:opacity-40 dark:text-slate-300 dark:hover:bg-slate-800",
-          @disabled_class
-        ]}
       >
         ‹ {gettext("Previous")}
-      </button>
+      </.button>
       <span class="text-slate-600 dark:text-slate-400">
         {gettext("Page %{page} of %{pages}", page: @page, pages: @pages)}
       </span>
-      <button
-        type="button"
+      <.button
+        variant="secondary"
         phx-click="page"
         phx-value-page={@page + 1}
         disabled={@page >= @pages}
         id={@next_id}
-        class={[
-          "rounded-lg px-3 py-1.5 text-slate-600 hover:bg-slate-100 disabled:opacity-40 dark:text-slate-300 dark:hover:bg-slate-800",
-          @disabled_class
-        ]}
       >
         {gettext("Next")} ›
-      </button>
+      </.button>
     </nav>
     """
   end
@@ -3882,7 +3957,7 @@ defmodule VutuvWeb.UI do
         <%= if num == @current do %>
           <span
             aria-current="page"
-            class="flex h-9 min-w-9 items-center justify-center rounded-lg bg-brand-600 px-2 text-white"
+            class="flex min-h-10 min-w-10 items-center justify-center rounded-lg bg-brand-600 px-2 text-white"
           >
             {num}
           </span>
@@ -3913,7 +3988,7 @@ defmodule VutuvWeb.UI do
     <.link
       href={if(is_nil(@path), do: page_query(@query, @num))}
       patch={if(@path, do: @path <> page_query(@query, @num))}
-      class="flex h-9 min-w-9 items-center justify-center rounded-lg px-2 text-slate-600 hover:bg-slate-100 dark:text-slate-300 dark:hover:bg-slate-800"
+      class="flex min-h-10 min-w-10 items-center justify-center rounded-lg px-2 text-slate-600 hover:bg-slate-100 dark:text-slate-300 dark:hover:bg-slate-800"
     >
       {@num}
     </.link>
@@ -4298,9 +4373,13 @@ defmodule VutuvWeb.UI do
   unified replacement for the loud pencil + red trash-circle icon pair
   (`<.edit_delete_actions>`). Editing/removing an entry now reads the same on
   every management page and matches the calm Direction A surface instead of
-  shouting. Renders an "Edit" (brand link) and "Delete" (muted red, CSRF DELETE
-  behind a `data-confirm` prompt) text link; omit `edit_to` for delete-only rows
-  (tags). Keep the owner guard at the call site. `align` is `:end` (default,
+  shouting. Renders an "Edit" (`ghost`) and a "Delete" (`danger-ghost`, CSRF
+  DELETE behind a `data-confirm` prompt); omit `edit_to` for delete-only rows
+  (tags). Keep the owner guard at the call site. Both are `button/1`s rather than
+  the bare text links they used to be: same colours and the same weight, so the
+  calm this component exists for is intact, but a Delete somebody has to hit on
+  a phone is a 40px target instead of a word, and the quiet red has one owner
+  instead of a fifth spelling. `align` is `:end` (default,
   right-aligned for table-row cells) or `:start` (left-aligned, e.g. under a
   role on the work-experience timeline).
   """
@@ -4317,18 +4396,18 @@ defmodule VutuvWeb.UI do
       @align == :end && "justify-end",
       @class
     ]}>
-      <.link :if={@edit_to} href={@edit_to} class="text-brand-600 hover:text-brand-700 dark:text-brand-400 dark:hover:text-brand-300">
+      <.button :if={@edit_to} href={@edit_to} variant="ghost">
         {gettext("Edit")}
-      </.link>
-      <.link
+      </.button>
+      <.button
         :if={@delete_to}
         href={@delete_to}
         method="delete"
+        variant="danger-ghost"
         data-confirm={@confirm || gettext("Are you sure?")}
-        class="text-red-600 hover:text-red-700 dark:text-red-400 dark:hover:text-red-300"
       >
         {gettext("Delete")}
-      </.link>
+      </.button>
     </div>
     """
   end

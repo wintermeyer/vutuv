@@ -23,6 +23,7 @@
 // crop — exactly the behaviour from before this file existed.
 
 import { bindEscape, buildStage, createCropStage, cropString, el } from "./crop_stage"
+import { buttonPrimary, buttonSecondary } from "./util"
 
 const MAX_ZOOM = 4 // up to 4x past "cover" fit
 
@@ -226,13 +227,13 @@ function buildModal(aspect, labels) {
   const actions = el("div", "mt-4 flex items-center justify-end gap-3")
   const cancel = el(
     "button",
-    "rounded-lg bg-slate-100 px-4 py-2 text-sm font-semibold text-slate-700 hover:bg-slate-200 dark:bg-slate-800 dark:text-slate-200 dark:hover:bg-slate-700",
+    buttonSecondary,
     labels.cancel
   )
   cancel.type = "button"
   const save = el(
     "button",
-    "rounded-lg bg-brand-600 px-4 py-2 text-sm font-semibold text-white hover:bg-brand-700",
+    buttonPrimary,
     labels.save
   )
   save.type = "button"

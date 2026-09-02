@@ -207,12 +207,7 @@ defmodule VutuvWeb.OrganizationLive.Roles do
 
           <.role_checkboxes id="add" options={@roles_options} checked={@add_roles} hints={true} />
 
-          <button
-            type="submit"
-            class="rounded-lg bg-brand-600 px-4 py-2 text-sm font-semibold text-white hover:bg-brand-700"
-          >
-            {gettext("Add")}
-          </button>
+          <.button type="submit">{gettext("Add")}</.button>
         </.form>
       </.card>
 
@@ -232,8 +227,9 @@ defmodule VutuvWeb.OrganizationLive.Roles do
                 <span class="block truncate text-xs text-slate-600 dark:text-slate-400">@{entry.user.username}</span>
               </div>
 
-              <button
-                type="button"
+              <.button
+                variant="danger-ghost"
+                class="shrink-0"
                 phx-click="remove"
                 phx-value-user_id={entry.user.id}
                 data-confirm={
@@ -242,10 +238,9 @@ defmodule VutuvWeb.OrganizationLive.Roles do
                     else: gettext("Remove this member from the team?")
                   )
                 }
-                class="shrink-0 text-sm font-semibold text-red-600 hover:text-red-700"
               >
                 {if entry.user.id == @current_user_id, do: gettext("Leave"), else: gettext("Remove")}
-              </button>
+              </.button>
             </div>
 
             <form phx-change="set_roles" class="mt-2">

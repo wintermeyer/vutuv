@@ -139,17 +139,15 @@ handle is the single most misleading pixel this page can render. --%>
       confirms the browser supports WebAuthn; the ceremony only stamps the
       session, then submits the plain form below it. --%>
       <div :if={@options.passkey?} id="passkey-confirm" hidden class="mt-4">
-        <button
-          type="button"
+        <.button
           data-webauthn-confirm
           data-challenge-url={~p"/settings/username/passkey/challenge"}
           data-verify-url={~p"/settings/username/passkey"}
           data-submit-form="username-passkey-form"
           data-error-generic={gettext("That passkey could not be verified. Please try again.")}
-          class="rounded-lg bg-brand-600 px-4 py-2 text-sm font-semibold text-white hover:bg-brand-700"
         >
           {gettext("Confirm with your passkey")}
-        </button>
+        </.button>
         <p data-webauthn-error hidden class="mt-2 text-sm text-red-600 dark:text-red-400"></p>
 
         <.form

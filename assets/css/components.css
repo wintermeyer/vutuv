@@ -909,6 +909,11 @@ input[type="submit"].button {
   color: #ffffff;
   font-size: 0.875rem;
   font-weight: 600;
+  /* Box height, not hit area — the two are separate here. This is the same 40px
+     the kit's `button_base/0` sets, so a classic page's button and a kit page's
+     button line up in a row; the hit area is the 44px `:before` overlay below,
+     which is deliberately larger and has nothing to line up with. */
+  min-height: 2.5rem;
   padding: 0.5rem 1rem;
   cursor: pointer;
   text-decoration: none;
@@ -929,13 +934,23 @@ input[type="submit"].button--cancel,
 input[type="submit"].button--secondary {
   background: #f1f5f9;
   color: #334155;
+  /* The kit's `ring-1 ring-slate-300`, for the same reason: this fill is the
+     page canvas, so without an edge the button disappears outside a card. */
+  box-shadow: 0 0 0 1px #cbd5e1;
 }
 .button--cancel:hover,
 .button--secondary:hover {
   background: #e2e8f0;
   color: #334155;
 }
+/* The one deliberate exception to the single size, and it stays inside a row of
+   its own kind: the admin tables' compact action pairs and the icon triple
+   (`.button--icon.button--small`) beside a list row. Never mix it with a
+   full-size button in the same cluster, and reach for it only on a dense admin
+   table — the 44px hit area above still applies, so what shrinks is the box,
+   not the target. */
 .button--small {
+  min-height: 0;
   padding: 0.3rem 0.6rem;
   font-size: 0.8rem;
 }
@@ -954,7 +969,10 @@ input[type="submit"].button--secondary {
   gap: 0.5rem;
   justify-content: flex-end;
 }
-/* Keep the 44px touch target legacy gave every .button. */
+/* The hit area, 44px, deliberately larger than the 40px box above: an invisible
+   overlay, so growing it never moves anything on the page. Legacy gave every
+   `.button` this and it is worth keeping — `min-height` alone would trade a
+   bigger target for a taller row. */
 .button {
   position: relative;
 }
