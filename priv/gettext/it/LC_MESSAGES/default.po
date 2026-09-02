@@ -22052,8 +22052,9 @@ msgstr "Altre lingue"
 
 #: lib/vutuv_web/live/post_live/composer.ex:1952
 #, elixir-autogen, elixir-format
-msgid "Post language"
-msgstr "Lingua del post"
+msgctxt "post composer"
+msgid "Language"
+msgstr "Lingua"
 
 #: lib/vutuv_web/live/post_live/composer.ex:1957
 #, elixir-autogen, elixir-format
@@ -24021,16 +24022,6 @@ msgstr "Conserva"
 #, elixir-autogen, elixir-format
 msgid "Keep this draft for later?"
 msgstr "Conservare questa bozza per dopo?"
-
-#: lib/vutuv_web/live/post_live/composer.ex:1186
-#, elixir-autogen, elixir-format
-msgid "Hidden from some"
-msgstr "Nascosto ad alcuni"
-
-#: lib/vutuv_web/live/post_live/composer.ex:1885
-#, elixir-autogen, elixir-format
-msgid "Post options"
-msgstr "Opzioni del post"
 
 #: lib/vutuv_web/live/organization_live/edit.ex:315
 #, elixir-autogen, elixir-format

@@ -99,13 +99,11 @@ defmodule VutuvWeb.PostEditLiveTest do
           denials: [%{"wildcard" => "logged_out"}]
         })
 
-      {:ok, live, _html} = live(conn, ~p"/posts/#{post.id}/edit")
+      {:ok, live, html} = live(conn, ~p"/posts/#{post.id}/edit")
 
-      # The "Hide from…" block moved behind the composer's ⋯ with everything
-      # else that is about the post rather than in it (issue #1894). The closed
-      # button says an audience is narrowed, so the fact stays on screen.
-      assert render(live) =~ "Hidden from some"
-      html = live |> element("[data-post-options-toggle]") |> render_click()
+      # The sheet stands open on the page. It used to hide behind the ⋯ that
+      # announced it in words ("Hidden from some") — two ways of saying the
+      # same thing, for a state only an edit can ever be in.
       assert html =~ "Hide this post from"
 
       # Typeahead: search, then deny the person.
@@ -151,10 +149,9 @@ defmodule VutuvWeb.PostEditLiveTest do
         })
 
       {:ok, live, _html} = live(conn, ~p"/posts/#{post.id}/edit")
-      live |> element("[data-post-options-toggle]") |> render_click()
 
-      # The custom post's sheet is one ⋯ in; search to surface a deny-user
-      # control, then tamper the id the client sends. A non-UUID must not reach
+      # Search to surface a deny-user control in the custom post's sheet, then
+      # tamper the id the client sends. A non-UUID must not reach
       # Repo.get as a raw cast (which would raise CastError and kill the composer).
       live
       |> form("#composer-form", %{"post" => %{"user_search" => "Maxima"}})
