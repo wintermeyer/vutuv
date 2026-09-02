@@ -370,16 +370,36 @@ The private `originals/` tree under `UPLOADS_DIR_PREFIX` must **not** get any
 `location`/`alias`: uploaded originals (with their EXIF/GPS metadata) are
 never served, by design.
 
+### Compressing pages
+
+The app server compresses its own responses: Bandit answers a client that
+offers gzip with gzip, and nginx never re-compresses a body that already
+carries a `Content-Encoding`. So `brotli on` in the vhost touches nothing but
+the precompressed assets — on vutuv.de it sat there for months without ever
+compressing a page — unless nginx keeps the negotiation for itself by
+stripping the header on the way upstream:
+
+```nginx
+location / {
+    proxy_set_header Accept-Encoding "";
+    proxy_pass http://127.0.0.1:4003;
+    # ... the proxy_* lines from above
+}
+```
+
+With that, every page goes out as brotli (level 6 by default) to a client
+that accepts it and as nginx's gzip to the rest, and the app spends nothing on
+compression. Measured on vutuv.de's landing page (59 kB of HTML, 2026-09-02):
+11.5 kB as the app's gzip, 10.7 kB as brotli 6.
+
 ### Data-saving mode (optional)
 
 Every browser request from a member in data-saving mode (see "Preference
 defaults" above) carries the cookie `vutuv_low_bandwidth=1`; the app keeps it
 in step with the preference, so nginx can tell these requests apart without
-asking the app. What it is for: compressing their **dynamic pages** harder.
-The precompressed assets are already brotli 11; the pages themselves are
-compressed per request at whatever level the vhost sets, and nginx cannot
-read that level from a variable — so the members with the cookie are sent
-through a named location of their own:
+asking the app. What it buys them is a harder brotli level on their pages.
+nginx cannot read the level from a variable, so these members go through a
+named location of their own:
 
 ```nginx
 # In the http block: the cookie, as a flag.
@@ -388,33 +408,40 @@ map $cookie_vutuv_low_bandwidth $vutuv_saver {
     default 0;
 }
 
-# In the server block, inside the `location /` that proxies to the app:
+# Inside the `location /` that proxies to the app — AFTER any other
+# `if … return` there (a maintenance gate): nginx takes the first one.
     if ($vutuv_saver) { return 418; }
     error_page 418 = @saver;
 
-# Beside it: the same proxy, compressed harder. Copy every proxy_* line of
-# `location /` — a named location inherits none of them.
+# The same proxy, harder. Hold exactly what `location /` holds — the same
+# `include` if the proxy lines live in a snippet, never a hand copy with a
+# literal port, or whatever your deploy rewrites in `location /` stops
+# reaching these members — and only the level differs.
 location @saver {
-    brotli on;
-    brotli_comp_level 11;
-    gzip_comp_level 9;
-    proxy_pass http://127.0.0.1:4003;
-    proxy_http_version 1.1;
-    proxy_set_header Upgrade $http_upgrade;
-    proxy_set_header Connection "upgrade";
-    proxy_set_header Host $host;
-    proxy_set_header X-Forwarded-For $proxy_add_x_forwarded_for;
-    proxy_set_header X-Forwarded-Proto $scheme;
+    include snippets/vutuv-proxy.conf;
+    brotli_comp_level 10;
 }
 ```
 
-`return` inside `if` is one of the two things `if` does safely, and the
-`error_page` jump keeps the original URI. Know what it buys before you add it:
-the landing page (60 kB of HTML) is 12.0 kB as gzip, 11.4 kB at brotli 6 and
-10.4 kB at brotli 11, so the harder level saves these members about 1.7 kB a
-page load at roughly ten times the CPU per page (measured 2026-09-02) — a
-tenth of one lite photo. Their pictures, not their pages, are where the mode
-earns its name, and those need no proxy change at all.
+`return` inside `if` is one of the two things `if` does safely, the
+`error_page` jump keeps the original URI, and the `Accept-Encoding` strip
+from above has to reach `@saver` too (it does through the include) or nothing
+compresses there. **The include is not a style point: these members take
+`@saver` for the LiveView websocket as well.** A hand-written copy that
+forgets the `Upgrade` or `Connection` header kills every live page for
+exactly the members the mode is for, while the pages themselves still load.
+Verify with the cookie that `/live/websocket` still answers 101.
+
+The level is 10, not 11, by measurement: on a 197 kB profile page brotli 6
+gives 26,847 bytes, 9 gives 26,282, 10 gives 24,012 and 11 gives 23,815 —
+level 9 buys one percent, level 10 nine tenths of what 11 buys at a third of
+its CPU (5 / 43 / 130 ms per page at 6 / 10 / 11). vutuv.de runs it this way
+(issue #1944): measured from outside, the profile page went from 26,562 to
+23,748 bytes with the cookie, the landing page from 10,681 to 9,593. When you
+measure with a bare `curl` and the cookie, know that the app answers such an
+anonymous request by deleting the cookie (`max-age=0`) — the route is tested,
+a member session is not. Their pictures, not their pages, are still where the
+mode earns its name, and those need no proxy change at all.
 
 **Post images need no nginx setup**: they are audience-guarded, so the app
 authorizes and serves them itself (`send_file`).
