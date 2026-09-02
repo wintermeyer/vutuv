@@ -115,19 +115,6 @@ defmodule Vutuv.PrecommitHookTest do
       assert decision =~ "cannot tell which git worktree"
     end
 
-    test "a push from a tree that is not the project blocks", ctx do
-      # Resolvable as a git repo is not enough — it must be the vutuv checkout,
-      # or precommit would vouch for the wrong thing. This repository has no
-      # remote, so it is also the degraded path of the wiki exemption below:
-      # an unreadable remote is an unanswered question, not an exemption.
-      tmp = tmp_repo()
-
-      decision = decide(ctx, "git -C #{tmp} push")
-
-      assert decision =~ "BLOCK", "expected a block, got: #{decision}"
-      assert decision =~ "not the vutuv project root"
-    end
-
     test "without jq a push is refused rather than waved through", ctx do
       # The dependency this hook reads its input with, removed. Silence must
       # mean "block", never "allow".
@@ -141,31 +128,43 @@ defmodule Vutuv.PrecommitHookTest do
     end
   end
 
-  describe "the wiki exemption" do
-    # A GitHub wiki lives in a repository of its own (`<repo>.wiki.git`): no
-    # mix.exs, no suite, no deploy, so precommit has nothing to vouch for and
-    # the gate would make a wiki page unpublishable. The exemption is scoped to
-    # that one shape, and every other reading of it still blocks.
-    test "a push from a wiki clone is allowed, ssh or https", ctx do
-      ssh = tmp_repo(remote: "git@github.com:wintermeyer/vutuv.wiki.git")
-      https = tmp_repo(remote: "https://github.com/wintermeyer/vutuv.wiki.git")
-
-      assert decide(ctx, "git -C #{ssh} push origin master") == "ALLOW"
-      assert decide(ctx, "git -C #{https} push") == "ALLOW"
+  describe "the foreign-repository exemption" do
+    # This hook is a session-wide `PreToolUse` on Bash, so it sees every push
+    # made while a vutuv session is open — including pushes that have nothing
+    # to do with vutuv. `git push` sends the objects of the tree it resolved,
+    # so a push out of another repository cannot carry a line of vutuv code and
+    # precommit has nothing to vouch for. Blocking those made them impossible
+    # from a vutuv session, the user's own `!` command included, which is how
+    # the dotfiles commit holding this very rule got stranded.
+    test "a push from another repository is allowed", ctx do
+      # The dotfiles checkout that holds `~/.claude/CLAUDE.md`, a wiki clone
+      # (`<repo>.wiki.git` is a repository of its own), any other project.
+      assert decide(ctx, "git -C #{tmp_repo()} push") == "ALLOW"
     end
 
-    test "a remote that only looks like one still blocks", ctx do
-      # Calibration against a false positive: the URL has to *end* in
-      # `.wiki.git`, not merely mention it. The repository with no remote at
-      # all is the test above this describe block.
-      backup = tmp_repo(remote: "git@github.com:wintermeyer/vutuv.wiki.git.backup")
-      foreign = tmp_repo(remote: "git@github.com:someone/something.git")
+    test "another Elixir project is a stranger too", ctx do
+      # The half a `mix.exs`-first rule got backwards. There are two dozen
+      # other mix projects on this machine, and answering by shape sends the
+      # hook into one of them to run *our* precommit — which simply fails in
+      # the ones that have no `precommit` alias, with no way past it.
+      stranger = tmp_repo()
+      File.write!(Path.join(stranger, "mix.exs"), "# somebody else's project\n")
 
-      decision = decide(ctx, "git -C #{backup} push")
+      assert decide(ctx, "git -C #{stranger} push") == "ALLOW"
+    end
+
+    test "another clone of this repository is not a stranger", ctx do
+      # Calibration against reading the exemption as "a different checkout is
+      # somebody else's". A second full clone has a `--git-common-dir` of its
+      # own, so identity falls to the origin, and it really can push vutuv
+      # code to vutuv's main. Without a `mix.exs` that is our tree looking
+      # wrong — an unanswered question, not an exemption.
+      clone = tmp_repo(remote: origin_url(ctx.root))
+
+      decision = decide(ctx, "git -C #{clone} push")
 
       assert decision =~ "BLOCK", "expected a block, got: #{decision}"
-      assert decision =~ "not the vutuv project root"
-      assert decide(ctx, "git -C #{foreign} push") =~ "BLOCK"
+      assert decision =~ "has no mix.exs"
     end
   end
 
@@ -339,6 +338,14 @@ defmodule Vutuv.PrecommitHookTest do
     tmp
   end
 
+  # What the hook compares a foreign repository's origin against. Read from the
+  # checkout rather than written down, so the clone fixture matches whatever
+  # spelling this machine or CI cloned with.
+  defp origin_url(root) do
+    {url, 0} = System.cmd("git", ["-C", root, "remote", "get-url", "origin"])
+    String.trim(url)
+  end
+
   # A throwaway repository shaped like the vutuv checkout: a `mix.exs` on a base
   # commit registered as `upstream/main`, then one commit on branch `work`
   # touching `paths`. That second commit is what a push from it would carry.
@@ -348,7 +355,10 @@ defmodule Vutuv.PrecommitHookTest do
   # gains a source file, and the branch takes that in the two ways a long-lived
   # PR does.
   defp tmp_project(paths, opts \\ []) do
-    repo = tmp_repo()
+    # The origin is what makes this fixture a checkout of *this* project rather
+    # than a stranger with a mix.exs — the hook asks which repository before it
+    # asks what shape the tree has.
+    repo = tmp_repo(remote: origin_url(File.cwd!()))
     git = fn args -> {_, 0} = System.cmd("git", ["-C", repo | args]) end
 
     git.(["config", "user.email", "hook-test@example.com"])
@@ -389,11 +399,13 @@ defmodule Vutuv.PrecommitHookTest do
   # decoration: `@{upstream}` resolves through its fetch refspec and NOT through
   # `branch.work.merge` alone, so without it git answers nothing, and a fixture
   # built to tell two bases apart quietly stops telling them apart. Nothing ever
-  # contacts the address.
+  # contacts the address. It is deliberately not called `origin`: that name
+  # carries the fixture's identity as a checkout of this project, and the hook
+  # reads it to tell our repository from a stranger's.
   defp track(repo, git) do
-    git.(["remote", "add", "origin", Path.join(repo, "origin.git")])
-    git.(["update-ref", "refs/remotes/origin/work", "HEAD"])
-    git.(["branch", "--quiet", "--set-upstream-to=origin/work", "work"])
+    git.(["remote", "add", "pushed", Path.join(repo, "pushed.git")])
+    git.(["update-ref", "refs/remotes/pushed/work", "HEAD"])
+    git.(["branch", "--quiet", "--set-upstream-to=pushed/work", "work"])
   end
 
   # The branch has been pushed once, and main has moved since. The tracking ref

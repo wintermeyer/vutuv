@@ -8,8 +8,8 @@
 # The tool call arrives as JSON on stdin. Exit 2 blocks the call and feeds the
 # reason back to Claude; exit 0 lets it through.
 #
-# Three rules this script exists to honour, each learned the hard way (the
-# first two on 2026-08-02, the third on 2026-08-28):
+# Four rules this script exists to honour, each learned the hard way (the
+# first two on 2026-08-02, the third on 2026-08-28, the fourth on 2026-09-02):
 #
 #   1. CHECK THE TREE THE PUSH COMES FROM. This used to `cd $CLAUDE_PROJECT_DIR`,
 #      which names the *session's* project directory, not the worktree the push
@@ -34,6 +34,15 @@
 #      carrying only those buys nothing — #1774 paid that run nine times for
 #      one Markdown file. Such a push is now skipped; see the exemption below
 #      for what counts and, more importantly, what does not.
+#
+#   4. GATE THIS REPOSITORY, NOT EVERY REPOSITORY. Being a session-wide
+#      `PreToolUse` on Bash, this sees pushes that have nothing to do with
+#      vutuv, and it used to answer them by shape — a `mix.exs` at the top —
+#      which blocked every foreign repository without one and would have run
+#      our precommit inside every foreign repository with one. The user's own
+#      `!` command is blocked the same way, so there was no way past it from
+#      an open session; it stranded a dotfiles commit exactly so. The
+#      identity question below is asked first and by repository, not shape.
 #
 # LIMITS — read this as a backstop, not a sandbox. It sees `git` invoked
 # directly in a segment of one Bash tool call. It cannot see a push made through
@@ -236,20 +245,60 @@ toplevel=$(git -C "$dir" rev-parse --show-toplevel 2>/dev/null)
 [ -n "$toplevel" ] ||
   block "cannot tell which git worktree this push comes from (looked in: ${dir:-<empty>}). Refusing to guess."
 
-# A GitHub wiki lives in a repository of its own (`<repo>.wiki.git`) and can
-# never hold a mix.exs: no suite, no CI, no deploy, so precommit has nothing to
-# vouch for here and the gate would only make a wiki page unpublishable. Scoped
-# to that one shape, the remote URL ENDING in `.wiki.git`, and a remote that
-# cannot be read is not an exemption but an unanswered question, so it falls
-# through to the block below.
-if [ ! -f "$toplevel/mix.exs" ]; then
-  origin=$(git -C "$toplevel" remote get-url origin 2>/dev/null)
-  case "$origin" in
-    *.wiki.git) allow ;;
-  esac
+# ── Is this push out of THIS repository? ───────────────────────────────────
+# Asked here, before the `mix.exs` test below, and the order is the whole
+# point. Testing for a `mix.exs` first says "gate every Elixir project", which
+# on this machine is 26 of them: the hook would `cd` into a stranger's
+# checkout and run OUR precommit there, failing outright in the nine that have
+# no `precommit` alias — the same stranding rule 4 is about, with different
+# victims. Identity first, and shape only once the answer is yes.
+#
+# Two ways to answer yes, because one of them alone fails in the permissive
+# direction:
+#
+#   * the same `--git-common-dir` — every worktree of this repository shares
+#     one, and `--path-format=absolute` canonicalizes symlinks, so the two
+#     answers can be compared as strings;
+#   * the same origin, spellings folded — a second full CLONE has a common dir
+#     of its own and would otherwise read as a stranger, and it can really
+#     push vutuv code to vutuv's `main`. Scheme, `user@`, the ssh colon, a
+#     trailing `.git` and case all fold; an explicit ssh port does not, and
+#     that spelling would read as foreign.
+#
+# Everything else is somebody else's repository, and `git push` sends the
+# objects of the tree it resolved, so it cannot carry a line of vutuv code:
+# a dotfiles checkout (where `~/.claude/CLAUDE.md` actually lives), a GitHub
+# wiki (`<repo>.wiki.git` is a repository of its own), any other project.
+# Failing to identify OUR OWN repository, though, is an unanswered question
+# and blocks rather than waving every push through.
+common_dir_of() {
+  git -C "$1" rev-parse --path-format=absolute --git-common-dir 2>/dev/null
+}
 
-  block "$toplevel is not the vutuv project root (no mix.exs), so the precommit gate cannot vouch for this push."
+origin_of() {
+  git -C "$1" remote get-url origin 2>/dev/null |
+    sed -e 's#^[a-z][a-z0-9+.-]*://##' -e 's#^[^@/]*@##' -e 's#:#/#' -e 's#/*$##' -e 's#\.git$##' |
+    tr '[:upper:]' '[:lower:]'
+}
+
+hook_repo=${BASH_SOURCE[0]%/*}
+ours=$(common_dir_of "$hook_repo")
+[ -n "$ours" ] ||
+  block "this hook cannot find the repository it belongs to (looked in: $hook_repo), so it cannot tell a vutuv push from any other."
+
+theirs=$(common_dir_of "$toplevel")
+[ -n "$theirs" ] ||
+  block "cannot tell which repository $toplevel belongs to. Refusing to guess."
+
+if [ "$ours" != "$theirs" ]; then
+  our_origin=$(origin_of "$hook_repo")
+  their_origin=$(origin_of "$toplevel")
+
+  [ -n "$our_origin" ] && [ "$our_origin" = "$their_origin" ] || allow
 fi
+
+[ -f "$toplevel/mix.exs" ] ||
+  block "$toplevel belongs to this repository but has no mix.exs, so the precommit gate cannot vouch for this push."
 
 # ── Does this push carry anything precommit could look at? ──────────────────
 # The exemption is narrow on purpose: skip only when EVERY file the push newly
