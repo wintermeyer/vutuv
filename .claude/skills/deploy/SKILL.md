@@ -16,6 +16,13 @@ commit is the deploy trigger.
 This project skill overrides the personal `deploy` skill in
 `~/.claude/skills/deploy/`. When both are offered, use this one.
 
+**The merge is not a second decision.** Invoking this skill *was* the decision
+to deploy, so once the PR is open the only thing standing between it and `main`
+is CI. Never ask whether to merge, never end a turn with a green PR sitting
+open, and never treat the CI wait as a reason to hand the PR back — the answer
+to all three is always the same, and being asked for it is the single thing
+Stefan named as wasting his time.
+
 **Token/latency discipline.** The expensive part is `mix precommit` over the
 test suite, and the naive loop ingests its full output once per iteration:
 
@@ -109,19 +116,28 @@ test suite, and the naive loop ingests its full output once per iteration:
    gh pr create --fill-first --title "…" --body "…"
    ```
 
-9. **Wait for CI to go green** — this is the point of the whole flow, so
-   actually wait, don't fire and forget:
+9. **Wait for CI to go green — in the background, without ending the turn.**
+   A run takes 8 to 10 minutes. Start the watch as a background Bash task so
+   the turn stays alive and you can do something useful meanwhile; the moment
+   it answers, act on it in the same turn.
 
    ```bash
    gh pr checks --watch --fail-fast
    ```
 
-   - **Green** → step 10.
+   - **Green** → step 10, immediately and without asking. The hour does not
+     matter and neither does hot vs cold: a green PR gets merged.
    - **Red** → do NOT merge. Fix it (subagent as in step 3 if noisy), push the
-     fix to the branch, and watch again. If it stays red or the failure isn't
-     yours to fix, stop and report; leave the PR open.
+     fix to the branch, and watch again — **at most two such rounds**. If it is
+     still red after the second, or the failure isn't yours to fix, stop and
+     report the failing job by name; leave the PR open.
 
-10. **Merge** — squash and delete the branch (the repo convention):
+   If you cannot see this through — context exhausted, a hard block — say so in
+   the last thing you write, naming the orphan: *"PR #N is open, CI green,
+   merge it with `gh pr merge N --squash --delete-branch`"*.
+
+10. **Merge** — squash and delete the branch (the repo convention). No
+    confirmation question: step 9 going green is the whole condition.
 
     ```bash
     gh pr merge <nr> --squash --delete-branch
