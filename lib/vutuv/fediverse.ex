@@ -2254,6 +2254,20 @@ defmodule Vutuv.Fediverse do
       "tags." <> String.downcase(main_host || site_host())
   end
 
+  @doc """
+  Every host name an inbound signed delivery may legitimately be addressed to:
+  this installation's own host, its `www.` alias and its tag host.
+
+  From configuration, never from the request — `conn.host` is derived from the
+  Host header, so a signature check against it would compare an attacker's value
+  with itself (see `Vutuv.Fediverse.HttpSignature.valid?/2`).
+  """
+  def inbox_hosts do
+    main = String.downcase(site_host())
+
+    Enum.uniq([main, "www." <> String.replace_prefix(main, "www.", ""), tag_host(main)])
+  end
+
   @doc "Whether `uri` names this installation's tag host."
   def tag_host?(uri) do
     case BlockedInstance.normalize_host(uri) do

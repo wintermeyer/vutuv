@@ -516,7 +516,10 @@ defmodule VutuvWeb.FediverseController do
         method: "post",
         path: conn.request_path,
         headers: headers,
-        body: RawBodyReader.raw_body(conn)
+        body: RawBodyReader.raw_body(conn),
+        # From configuration, not from the conn: `conn.host` is derived from the
+        # same Host header being checked, so it would prove nothing.
+        hosts: Fediverse.inbox_hosts()
       },
       remote.public_key_pem
     )

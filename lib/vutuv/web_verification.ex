@@ -239,21 +239,43 @@ defmodule Vutuv.WebVerification do
   """
   def rel_me_check(url, expected_urls, req_options)
       when is_binary(url) and is_list(expected_urls) do
-    with %URI{host: host} when is_binary(host) <- URI.parse(url),
-         {:ok, body} <- fetch(url, host, req_options, @max_html_bytes, "text/html") do
+    proof_url = over_tls(url)
+
+    with %URI{host: host} when is_binary(host) <- URI.parse(proof_url),
+         {:ok, body} <- fetch(proof_url, host, req_options, @max_html_bytes, "text/html") do
       wanted = MapSet.new(expected_urls, &normalize_url/1)
       hrefs = rel_me_hrefs(body)
-      report = rel_me_report(url, expected_urls, 200, Enum.map(hrefs, &excerpt/1))
+      report = rel_me_report(proof_url, expected_urls, 200, Enum.map(hrefs, &excerpt/1))
 
       if Enum.any?(hrefs, &MapSet.member?(wanted, normalize_url(&1))),
         do: {:ok, report},
         else: {:error, report}
     else
       {:error, {:status, status}} ->
-        {:error, rel_me_report(url, expected_urls, status, [])}
+        {:error, rel_me_report(proof_url, expected_urls, status, [])}
 
       _ ->
-        {:error, rel_me_report(url, expected_urls, nil, [])}
+        {:error, rel_me_report(proof_url, expected_urls, nil, [])}
+    end
+  end
+
+  # The proof is read over TLS whatever the row holds, like `well_known_url/2`
+  # has always done. What this decides is that a member owns a domain — and for
+  # a proof whose path is `/`, `VerifiedLinks.host_claim?/1` reads it as a claim
+  # on the whole host, which then marks every link to that host in their posts.
+  # Deciding that from a cleartext body gives the decision to anybody on the
+  # path, who need only answer the GET with a back-link naming them. The row
+  # keeps the member's own spelling for display; only the request is pinned, and
+  # `ensure_http_prefix/1` mints `http://` for a bare host, so this is the
+  # ordinary case rather than an exotic one.
+  #
+  # Port 80 goes with the scheme (it is the http default, not a choice); any
+  # other explicit port is the member's and stays.
+  defp over_tls(url) do
+    case URI.parse(url) do
+      %URI{scheme: "http", port: 80} = uri -> URI.to_string(%{uri | scheme: "https", port: 443})
+      %URI{scheme: "http"} = uri -> URI.to_string(%{uri | scheme: "https"})
+      _already_tls_or_unparsable -> url
     end
   end
 

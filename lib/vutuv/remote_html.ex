@@ -74,6 +74,34 @@ defmodule Vutuv.RemoteHtml do
   # colons and come out `std::size`.
   @shortcode ~r/(?<![\w:])(?::[a-zA-Z0-9_]{2,}:)+(?![\w:])/
 
+  # This reads a stranger's document, so both runs are **bounded** and so is what
+  # reaches them — the same reasoning as `@anchor` below, which was bounded for
+  # exactly this and left these two alone.
+  #
+  # Same shape as `@anchor` below, on the element that carries a body: many
+  # opens and no close, so every one expands its lazy run to the end of the
+  # subject before failing. Measured on 720 KB of that, **232 s** unbounded —
+  # and the inbox reduces content synchronously, before its 202, so that is one
+  # request holding a process for four minutes inside a 300/hour per-IP budget.
+  #
+  # **The run bound is what fixes it**, and its tightness is the whole lever:
+  # 200 KB costs 8.9 s at 65535 against 525 ms at 4096. The input clamp is worth
+  # its line on top (100 KB x 4096 measures ~530 ms), but its real job is the
+  # rest of the pipeline — every *other* regex below reads whatever arrives, and
+  # this is the only place that bounds them. The attribute run gets the same
+  # treatment for the same reason, at a length no real tag approaches.
+  #
+  # 100 KB is ten times the 10,000-character content cap the callers pass
+  # (`Note.max_content/0`, `RemotePost.max_content/0`) — a 10,000-character
+  # status is about 10,000 bytes of Mastodon HTML even with a mention on every
+  # line — and an ordinary status costs the same either way (~450 us on a
+  # deliberately huge 39 KB one).
+  @max_input 100_000
+  @script_body 4_096
+
+  @script_pair ~r/<(script|style)\b[^>]{0,1024}>.{0,#{@script_body}}?<\/\1\s*>/is
+  @script_open ~r/<(script|style)\b[^>]{0,1024}>.*/is
+
   @doc """
   Reduces a remote server's HTML to clamped plain text, at most `max`
   characters (the shared social-feed clamp by default).
@@ -87,10 +115,13 @@ defmodule Vutuv.RemoteHtml do
 
   def to_text(html, max, tags) when is_binary(html) do
     html
-    |> String.replace(~r{<(script|style)\b[^>]*>.*?</\1\s*>}is, "")
+    |> clamp_input()
+    |> String.replace(@script_pair, "")
     # An element left open runs to the end of the document by definition, so
-    # there is nothing after it worth keeping either.
-    |> String.replace(~r{<(script|style)\b[^>]*>.*}is, "")
+    # there is nothing after it worth keeping either. A body longer than
+    # `@script_body` counts as open for the same reason: nothing after it is
+    # worth the cost of finding out.
+    |> String.replace(@script_open, "")
     |> restore_cut_links()
     |> String.replace(~r{<br\s*/?>}i, "\n")
     |> String.replace(~r{</p>}i, "\n\n")
@@ -105,6 +136,20 @@ defmodule Vutuv.RemoteHtml do
   end
 
   def to_text(_html, _max, _tags), do: ""
+
+  # BYTES, because that is what bounds the work: the patterns below carry no
+  # `u` flag, so `@script_body` counts bytes too, and `String.slice/3` would
+  # count graphemes — which on a body of combining marks let four times the cap
+  # through to every regex in the chain. `String.byte_slice/3` cuts on a
+  # codepoint boundary, so the result stays valid UTF-8.
+  #
+  # The guard is not a micro-optimisation but the common case: a status is a few
+  # hundred bytes, and slicing allocates a copy of the whole body whether or not
+  # anything is cut (0.005 us against 0.234 us on a typical one). UTF-8 never
+  # spends fewer bytes than characters, so under the byte cap nothing can need
+  # cutting.
+  defp clamp_input(html) when byte_size(html) <= @max_input, do: html
+  defp clamp_input(html), do: String.byte_slice(html, 0, @max_input)
 
   @doc """
   `text` — already plain, not HTML — with its custom-emoji shortcodes taken out

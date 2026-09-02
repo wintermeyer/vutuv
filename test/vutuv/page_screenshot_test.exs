@@ -93,6 +93,31 @@ defmodule Vutuv.PageScreenshotTest do
       # can slip past the vetting — fail closed, per the safety-check rule.
       assert "--host-resolver-rules=MAP * ~NOTFOUND,EXCLUDE 127.0.0.1" in args
     end
+
+    # The resolver rule above is not the whole egress control, because Chromium
+    # never asks the resolver about an IP literal — and it applies *implicit*
+    # proxy-bypass rules for loopback and link-local, documented and on by
+    # default. So a captured page that navigates itself to
+    # `http://127.0.0.1:4000/` was dialled DIRECTLY, never offered to the
+    # vetting proxy, and the rendered result was screenshotted onto the
+    # attacker's own public profile: a readable SSRF against everything on the
+    # capture host's loopback, which is what the proxy exists to stop.
+    #
+    # `<-loopback>` is the token that removes those implicit rules. It does not
+    # stop Chromium reaching the proxy itself (that connection is not a request
+    # subject to the bypass list), which is why `EXCLUDE 127.0.0.1` stays.
+    test "Chromium's implicit loopback bypass is removed, so IP literals are vetted too" do
+      args = Vutuv.PageScreenshot.capture_args(proxy_port: 1080)
+
+      assert "--proxy-bypass-list=<-loopback>" in args
+    end
+
+    test "no proxy port means no bypass list either" do
+      refute Enum.any?(
+               Vutuv.PageScreenshot.capture_args(),
+               &String.starts_with?(&1, "--proxy-bypass-list")
+             )
+    end
   end
 
   test "capture_framed routes Chromium through the vetting SOCKS proxy" do

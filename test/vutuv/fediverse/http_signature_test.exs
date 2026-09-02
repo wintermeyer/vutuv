@@ -36,7 +36,8 @@ defmodule Vutuv.Fediverse.HttpSignatureTest do
                    method: "post",
                    path: "/users/alice/inbox",
                    headers: header_map,
-                   body: body
+                   body: body,
+                   hosts: ["mastodon.example"]
                  },
                  pub
                )
@@ -57,7 +58,13 @@ defmodule Vutuv.Fediverse.HttpSignatureTest do
 
       assert :ok ==
                HttpSignature.valid?(
-                 %{method: "get", path: "/users/alice", headers: header_map, body: nil},
+                 %{
+                   method: "get",
+                   path: "/users/alice",
+                   headers: header_map,
+                   body: nil,
+                   hosts: ["mastodon.example"]
+                 },
                  pub
                )
     end
@@ -79,9 +86,136 @@ defmodule Vutuv.Fediverse.HttpSignatureTest do
 
       assert {:error, :body_not_captured} ==
                HttpSignature.valid?(
-                 %{method: "post", path: "/inbox", headers: Map.new(headers), body: nil},
+                 %{
+                   method: "post",
+                   path: "/inbox",
+                   headers: Map.new(headers),
+                   body: nil,
+                   hosts: ["m.example"]
+                 },
                  pub
                )
+    end
+
+    # `(request-target)` is the PATH, not the destination, so a signature over
+    # it alone says nothing about which installation the delivery was addressed
+    # to. Two vutuv installations share the inbox path, so the exact bytes one
+    # receives verify at the other inside the 12-hour date window, and the
+    # sender's activity runs there as if she had addressed it — a Create cached,
+    # an Announce recorded, a Move or Delete processed.
+    #
+    # Requiring `host` in the signed set only guarantees the value is covered by
+    # the signature; it does not say the value names US. The replay does not
+    # rewrite the header — that would break the signature and is the one thing an
+    # attacker has no reason to do. He keeps `Host: first.example` and posts the
+    # same bytes at the second installation, whose inbox path is identical: the
+    # signing string rebuilds from the header he sent, so it matches.
+    #
+    # So the destination has to be CHECKED, not merely signed, against a host
+    # this installation actually answers on — a value from configuration, never
+    # from the request (`conn.host` is that same header).
+    test "a delivery addressed to another installation is refused", %{
+      priv: priv,
+      pub: pub,
+      key_id: key_id
+    } do
+      body = ~s({"type":"Create"})
+
+      headers =
+        HttpSignature.signed_headers(
+          "post",
+          "https://first.example/system/inbox",
+          body,
+          key_id,
+          priv
+        )
+        |> Map.new()
+
+      # Authentic at the installation it names.
+      assert :ok ==
+               HttpSignature.valid?(
+                 %{
+                   method: "post",
+                   path: "/system/inbox",
+                   headers: headers,
+                   body: body,
+                   hosts: ["first.example"]
+                 },
+                 pub
+               )
+
+      # The same bytes, unaltered, offered to a second installation.
+      assert {:error, :wrong_destination} ==
+               HttpSignature.valid?(
+                 %{
+                   method: "post",
+                   path: "/system/inbox",
+                   headers: headers,
+                   body: body,
+                   hosts: ["second.example"]
+                 },
+                 pub
+               )
+    end
+
+    test "a request that names no acceptable destination is refused", %{
+      priv: priv,
+      pub: pub,
+      key_id: key_id
+    } do
+      body = ~s({"type":"Create"})
+
+      headers =
+        HttpSignature.signed_headers(
+          "post",
+          "https://first.example/system/inbox",
+          body,
+          key_id,
+          priv
+        )
+        |> Map.new()
+
+      # Fails closed: a caller that forgets to say where the delivery arrived
+      # gets a refusal, not a pass.
+      assert {:error, :wrong_destination} ==
+               HttpSignature.valid?(
+                 %{method: "post", path: "/system/inbox", headers: headers, body: body},
+                 pub
+               )
+    end
+
+    test "a sender that leaves the destination unsigned is refused", %{
+      priv: priv,
+      pub: pub,
+      key_id: key_id
+    } do
+      body = ~s({"type":"Create"})
+
+      headers =
+        HttpSignature.signed_headers(
+          "post",
+          "https://first.example/system/inbox",
+          body,
+          key_id,
+          priv
+        )
+        |> Map.new()
+
+      # A signature whose header list omits `host`: nothing in the signed string
+      # names where the delivery was going, so it is replayable by construction.
+      unbound =
+        put_in(
+          headers["signature"],
+          String.replace(
+            headers["signature"],
+            "headers=\"(request-target) host date digest\"",
+            "headers=\"(request-target) date digest\""
+          )
+        )
+
+      request = %{method: "post", path: "/system/inbox", headers: unbound, body: body}
+
+      assert {:error, :unsigned_required_header} == HttpSignature.valid?(request, pub)
     end
 
     test "a tampered body is rejected (digest mismatch)", %{priv: priv, pub: pub, key_id: key_id} do
@@ -90,7 +224,13 @@ defmodule Vutuv.Fediverse.HttpSignatureTest do
 
       assert {:error, :digest_mismatch} ==
                HttpSignature.valid?(
-                 %{method: "post", path: "/inbox", headers: Map.new(headers), body: "tampered"},
+                 %{
+                   method: "post",
+                   path: "/inbox",
+                   headers: Map.new(headers),
+                   body: "tampered",
+                   hosts: ["m.example"]
+                 },
                  pub
                )
     end
@@ -103,7 +243,13 @@ defmodule Vutuv.Fediverse.HttpSignatureTest do
 
       assert {:error, _reason} =
                HttpSignature.valid?(
-                 %{method: "post", path: "/inbox", headers: tampered, body: "x"},
+                 %{
+                   method: "post",
+                   path: "/inbox",
+                   headers: tampered,
+                   body: "x",
+                   hosts: ["m.example"]
+                 },
                  pub
                )
     end
@@ -116,7 +262,13 @@ defmodule Vutuv.Fediverse.HttpSignatureTest do
 
       assert {:error, :invalid_signature} ==
                HttpSignature.valid?(
-                 %{method: "post", path: "/inbox", headers: Map.new(headers), body: "x"},
+                 %{
+                   method: "post",
+                   path: "/inbox",
+                   headers: Map.new(headers),
+                   body: "x",
+                   hosts: ["m.example"]
+                 },
                  other_pub
                )
     end
@@ -132,7 +284,13 @@ defmodule Vutuv.Fediverse.HttpSignatureTest do
 
       assert {:error, :bad_date} ==
                HttpSignature.valid?(
-                 %{method: "post", path: "/inbox", headers: Map.new(headers), body: "x"},
+                 %{
+                   method: "post",
+                   path: "/inbox",
+                   headers: Map.new(headers),
+                   body: "x",
+                   hosts: ["m.example"]
+                 },
                  pub
                )
     end
@@ -150,7 +308,13 @@ defmodule Vutuv.Fediverse.HttpSignatureTest do
 
       assert {:error, :stale_date} ==
                HttpSignature.valid?(
-                 %{method: "post", path: "/inbox", headers: Map.new(headers), body: "x"},
+                 %{
+                   method: "post",
+                   path: "/inbox",
+                   headers: Map.new(headers),
+                   body: "x",
+                   hosts: ["m.example"]
+                 },
                  pub
                )
     end

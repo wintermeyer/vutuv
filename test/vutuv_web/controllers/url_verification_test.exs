@@ -25,6 +25,85 @@ defmodule VutuvWeb.UrlVerificationTest do
     on_exit(fn -> Application.delete_env(:vutuv, :user_links_req_options) end)
   end
 
+  describe "the rel=me proof is read over TLS" do
+    # The mark this grants says a member owns a domain, and for a proof whose
+    # path is `/` it is read as a claim on the WHOLE host — which then puts the
+    # verified-author check on every link to that host in their posts. Deciding
+    # that from a body read over cleartext hands the decision to anybody on the
+    # path: answer the GET with `<a rel="me" href="…/mallory">` and the mark is
+    # granted for a domain they do not control. The `well_known` sibling has
+    # always hardcoded `https://`; this one took whatever the row held, and the
+    # changeset MINTS `http://` for a member who types a bare host.
+    test "an http:// link is still proved over https", %{conn: conn} do
+      {conn, user} = create_and_login_user(conn)
+      url = insert(:url, user: user, value: "http://alice.example/")
+
+      test_pid = self()
+
+      Application.put_env(:vutuv, :user_links_req_options,
+        adapter: fn req ->
+          send(test_pid, {:fetched, to_string(req.url)})
+          {req, %Req.Response{status: 200, body: "<html></html>"}}
+        end
+      )
+
+      on_exit(fn -> Application.delete_env(:vutuv, :user_links_req_options) end)
+
+      post(conn, ~p"/settings/links/#{url}/verify", %{"method" => "rel_me"})
+
+      assert_received {:fetched, fetched}
+
+      assert String.starts_with?(fetched, "https://"),
+             "the proof was fetched over #{fetched}"
+    end
+  end
+
+  describe "the verify press is budgeted" do
+    setup do
+      original = Application.fetch_env(:vutuv, :rate_limit)
+      Application.put_env(:vutuv, :rate_limit, enabled: true)
+      Vutuv.RateLimiter.reset()
+
+      on_exit(fn ->
+        case original do
+          {:ok, was} -> Application.put_env(:vutuv, :rate_limit, was)
+          :error -> Application.delete_env(:vutuv, :rate_limit)
+        end
+
+        Vutuv.RateLimiter.reset()
+      end)
+
+      :ok
+    end
+
+    # Each press makes this server fetch a URL the member typed. Only SAVING was
+    # budgeted, and the link's value can be edited between presses for nothing,
+    # so the pair was an unthrottled request reflector at any host a member
+    # named — the very thing the forge probe's 20/hour budget exists to stop.
+    test "a looping member is refused before the fetch, not after", %{conn: conn} do
+      {conn, user} = create_and_login_user(conn)
+      url = insert(:url, user: user, value: "https://alice.example/")
+
+      fetches = :counters.new(1, [])
+
+      Application.put_env(:vutuv, :user_links_req_options,
+        adapter: fn req ->
+          :counters.add(fetches, 1, 1)
+          {req, %Req.Response{status: 200, body: "<html></html>"}}
+        end
+      )
+
+      on_exit(fn -> Application.delete_env(:vutuv, :user_links_req_options) end)
+
+      for _ <- 1..40 do
+        post(recycle(conn), ~p"/settings/links/#{url}/verify", %{"method" => "rel_me"})
+      end
+
+      assert :counters.get(fetches, 1) <= 20,
+             "the server fetched #{:counters.get(fetches, 1)} times for 40 presses"
+    end
+  end
+
   describe "GET /settings/links/:id/verify" do
     test "renders the three methods, mints a token, and posts to the verify action", %{conn: conn} do
       {conn, user} = create_and_login_user(conn)

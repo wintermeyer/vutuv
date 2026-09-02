@@ -7,6 +7,7 @@ defmodule VutuvWeb.SocialMediaAccountController do
   alias VutuvWeb.AgentDocs
   alias VutuvWeb.AgentDocs.SectionDocs
   alias VutuvWeb.ControllerHelpers
+  alias VutuvWeb.RateLimit
 
   plug(VutuvWeb.Plug.AuthUser when action not in [:index, :show])
 
@@ -168,9 +169,19 @@ defmodule VutuvWeb.SocialMediaAccountController do
 
   def run_verify(conn, %{"id" => id}) do
     account = ControllerHelpers.get_owned!(conn, :social_media_accounts, id)
+    user = conn.assigns[:user]
 
+    # The same outbound probe `verify_forge_instance/3` budgets when the account
+    # is SAVED — reached here by pressing a button instead, which paid nothing
+    # and could be looped at the named instance.
     conn
-    |> verify_result(Verification.verify(account, conn.assigns[:user]))
+    |> then(fn conn ->
+      if RateLimit.check_instance_probe(conn, user) == :rate_limited do
+        put_flash(conn, :error, gettext("Too many attempts. Please try again later."))
+      else
+        verify_result(conn, Verification.verify(account, user))
+      end
+    end)
     |> redirect(to: verify_path(account))
   end
 
