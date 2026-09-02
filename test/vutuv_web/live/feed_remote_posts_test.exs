@@ -743,6 +743,48 @@ defmodule VutuvWeb.FeedRemotePostsTest do
       assert render(view) =~ "Kamen die Gespräche zu spät?"
     end
 
+    test "a tag with a name glued to its end leaves the prose whole", %{conn: conn} do
+      {conn, user} = create_and_login_user(conn)
+      tag = linkable_tag()
+
+      # tagesschau closes on `#FlughafenLeipzig/Halle`, and one such token used
+      # to keep the whole line in the body as a run of blue words.
+      post =
+        cached_post(user, %{content_text: "Kommentar zu Sanktionen\n\n##{tag.name}/Halle"})
+
+      {:ok, view, _html} = live(conn, ~p"/feed")
+
+      card = "[data-remote-post='#{post.id}']"
+
+      # The chip reads as the author typed it and links the tag it names, so
+      # lifting the line moved the "/Halle" rather than deleting it.
+      assert has_element?(
+               view,
+               "#{card} a[data-remote-tag='#{tag.name}/Halle'][href='/tags/#{tag.slug}']"
+             )
+
+      assert render(view) =~ "Kommentar zu Sanktionen"
+    end
+
+    test "a closing URL glued to the last tag stays in the body", %{conn: conn} do
+      {conn, user} = create_and_login_user(conn)
+      tag = linkable_tag()
+
+      # Authors write their closing link straight onto the last tag; folding
+      # that line into pills would put a whole URL in one.
+      post =
+        cached_post(user, %{
+          content_text: "Neu im Store\n\n#flathub ##{tag.name}https://flathub.org/apps/kweather"
+        })
+
+      {:ok, view, _html} = live(conn, ~p"/feed")
+
+      card = "[data-remote-post='#{post.id}']"
+
+      refute has_element?(view, "#{card} [data-remote-tags]")
+      assert render(view) =~ "flathub.org/apps/kweather"
+    end
+
     test "a hashtag inside a sentence stays in the sentence", %{conn: conn} do
       {conn, user} = create_and_login_user(conn)
       tag = linkable_tag()

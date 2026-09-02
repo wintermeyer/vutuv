@@ -5,10 +5,11 @@ defmodule Vutuv.Fediverse.RemotePostTag do
 
   The row is written from the post's hashtags — the ActivityPub `tag` array's
   `Hashtag` objects and, for servers that send none, the `#hashtags` left in the
-  text — and it names a tag that **already exists here**. Ingestion mints no tag
-  from a stranger's hashtag: our tag namespace is what members chose to call
-  things, and a table a remote server can extend is a table a remote server can
-  flood with pages on our own domain.
+  text. A hashtag naming a topic nobody here has written about yet **mints** it
+  (`Vutuv.Fediverse.Hashtags`, which explains what changed and what still holds
+  the line): nothing reaches that module unless a member here follows the
+  account that sent it, so the names arriving are the topics our own members
+  chose to read about rather than a table a stranger can flood.
 
   There is deliberately no changeset. Nothing here is user-supplied: both ids
   come from records `Vutuv.Fediverse.Hashtags` already resolved, and the write

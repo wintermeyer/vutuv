@@ -369,14 +369,31 @@ defmodule VutuvWeb.Markdown do
   thing a member's own post does with its tags.
 
   Only a **closing** run is taken: walking the text back to front, every line
-  that consists solely of hashtags is lifted (blank lines between them go
-  too), and the walk stops at the first line carrying anything else. A hashtag
-  inside a sentence, or a hashtag line the author wrote in the *middle* of a
-  post, therefore stays exactly where it was and still links through
-  `render_remote/1`. Hashtags come back in reading order, in the case the
-  author typed, with repeats dropped case-insensitively.
+  that is a row of tags is lifted (blank lines between them go too), and the
+  walk stops at the first line carrying anything else. A hashtag inside a
+  sentence, or a hashtag line the author wrote in the *middle* of a post,
+  therefore stays exactly where it was and still links through
+  `render_remote/1`.
 
-  The grammar is `Vutuv.Mentions.hashtag_token_regex/0`, so a line splits on
+  Each tag comes back as `%{name: _, text: _}`: `text` is what the chip shows
+  and `name` is the tag it links. **Lifting a line is a move, never a delete**,
+  so `text` is the tag exactly as it was typed, whatever is glued to it
+  included — a tag row is written by hand and routinely carries more than the
+  tag. `#FlughafenLeipzig/Halle` shows as `FlughafenLeipzig/Halle` and links
+  `flughafenleipzig`, which is the tag the post was filed under and the one
+  Mastodon named in the `tag` array it sent. Tags run together in one token
+  (`#Nepal#Rockfall#FlashFlood`) become one chip each, because three tags in
+  one pill is three tags nobody can click. Order is reading order, repeats drop
+  case-insensitively on the name.
+
+  A token carrying a **URL or an address** disqualifies its line instead. Both
+  are things to read rather than tags, and authors glue their closing link
+  straight onto the last tag (`#linuxhttps://flathub.org/apps/org.kde.kweather`
+  — 7 posts of 5,398 in the cache did this against 8 that the glue rule fixes);
+  moving that into a chip row would fold a whole URL into a pill. The line
+  stays in the body, where it read the way its author wrote it all along.
+
+  The grammar is `Vutuv.Mentions.hashtag_prefix_regex/0`, so a line splits on
   exactly what the body's own `#hashtag` linking reads — `#München` is an
   ordinary German hashtag and a line holding one must split like any other.
   (It used to carry its own wider class, because the shared grammar was
@@ -392,7 +409,7 @@ defmodule VutuvWeb.Markdown do
         text |> String.split("\n") |> Enum.reverse() |> take_trailing_hashtag_lines([])
 
       {kept |> Enum.join("\n") |> String.trim_trailing(),
-       Enum.uniq_by(hashtags, &String.downcase/1)}
+       Enum.uniq_by(hashtags, &String.downcase(&1.name))}
     else
       {text, []}
     end
@@ -408,30 +425,71 @@ defmodule VutuvWeb.Markdown do
   defp take_trailing_hashtag_lines([], hashtags), do: {[], hashtags}
 
   defp take_trailing_hashtag_lines([line | above], hashtags) do
+    if String.trim(line) == "" do
+      take_trailing_hashtag_lines(above, hashtags)
+    else
+      case tag_row(line) do
+        [] -> {Enum.reverse([line | above]), hashtags}
+        row -> take_trailing_hashtag_lines(above, row ++ hashtags)
+      end
+    end
+  end
+
+  # `Vutuv.Mentions` owns what a hashtag is; this asks it of a token that has to
+  # **begin** with one, rather than of a token that is nothing else. A tag row
+  # is typed by hand and glues things to its tags — tagesschau closes on
+  # `#FlughafenLeipzig/Halle` — and demanding the whole token be one hashtag
+  # left the entire line in the body as a run of blue words, chips and all.
+  @hashtag_prefix Mentions.hashtag_prefix_regex()
+
+  # Where one tag ends and the next begins inside a single token. Authors run
+  # them together (`#Nepal#Rockfall#FlashFlood`, `#oksh#mekofestival#…`), and
+  # three tags in one pill is three tags nobody can click. Zero-width, so the
+  # `#` stays with the tag it opens.
+  @glued_tags ~r/(?=#[\p{L}\p{M}\p{Nd}_])/u
+
+  # The tags a line carries, in reading order, or `[]` when the line is not a
+  # tag row at all — one answer, so the two questions cannot be asked with two
+  # slightly different rules and the caller cannot ask them in the wrong order.
+  defp tag_row(line) do
+    line |> String.split(~r/\s+/u, trim: true) |> collect_tags([])
+  end
+
+  defp collect_tags([], acc), do: Enum.reverse(acc)
+
+  # One token that is not a tag ends the whole row, which is what keeps a
+  # sentence a sentence: "Mehr dazu: #Berlin." fails on "Mehr" long before the
+  # full stop is reached.
+  defp collect_tags([token | rest], acc) do
+    case tags_in(token) do
+      [] -> []
+      tags -> collect_tags(rest, Enum.reverse(tags) ++ acc)
+    end
+  end
+
+  # A URL or an address disqualifies the line rather than riding into a chip:
+  # authors glue their closing link onto the last tag
+  # (`#linuxhttps://flathub.org/apps/org.kde.kweather`), and lifting that line
+  # would fold the URL into a pill — or, if the chip only kept the tag, delete
+  # it from the card outright. Seven posts of 5,398 in the cache write that,
+  # against eight the glue rule fixes; both are better served by leaving those
+  # lines where their author put them.
+  defp tags_in(token) do
     cond do
-      String.trim(line) == "" -> take_trailing_hashtag_lines(above, hashtags)
-      hashtag_line?(line) -> take_trailing_hashtag_lines(above, hashtags_in(line) ++ hashtags)
-      true -> {Enum.reverse([line | above]), hashtags}
+      not Regex.match?(@hashtag_prefix, token) -> []
+      String.contains?(token, "://") or String.contains?(token, "@") -> []
+      true -> @glued_tags |> Regex.split(token, trim: true) |> Enum.flat_map(&tag_of/1)
     end
   end
 
-  # `Vutuv.Mentions` owns what a hashtag is; this asks it of a whole token.
-  # Punctuation is not part of a hashtag, so a line like "Mehr dazu: #Berlin."
-  # keeps its full stop and is therefore not a hashtag line — which is right,
-  # it is a sentence.
-  @hashtag_token Mentions.hashtag_token_regex()
-
-  defp hashtag_line?(line) do
-    case String.split(line, ~r/\s+/u, trim: true) do
-      [] -> false
-      tokens -> Enum.all?(tokens, &Regex.match?(@hashtag_token, &1))
+  # `text` is the tag as it was typed, glue included, so lifting the line moves
+  # it and never deletes part of it; `name` is the tag that text names, which is
+  # what the chip links and what the post was filed under.
+  defp tag_of(segment) do
+    case Regex.run(@hashtag_prefix, segment, capture: :all_but_first) do
+      [name] -> [%{name: name, text: String.trim_leading(segment, "#")}]
+      nil -> []
     end
-  end
-
-  defp hashtags_in(line) do
-    line
-    |> String.split(~r/\s+/u, trim: true)
-    |> Enum.map(&String.trim_leading(&1, "#"))
   end
 
   @doc """
