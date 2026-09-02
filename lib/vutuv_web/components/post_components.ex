@@ -26,6 +26,7 @@ defmodule VutuvWeb.PostComponents do
   import VutuvWeb.FediverseComponents, only: [remote_actor_link: 3]
   import VutuvWeb.UI
   import VutuvWeb.UserHelpers, only: [full_name: 1]
+  import VutuvWeb.VideoComponents, only: [post_video: 1]
 
   alias Phoenix.LiveView.JS
   alias Vutuv.Accounts.User
@@ -45,6 +46,7 @@ defmodule VutuvWeb.PostComponents do
   alias Vutuv.Posts.PhotoLicense
   alias Vutuv.Posts.Post
   alias Vutuv.Posts.PostImage
+  alias Vutuv.Posts.PostVideo
   alias Vutuv.Posts.PostRemoteReply
   alias Vutuv.Posts.PostReview
   alias Vutuv.Posts.PostScreenshot
@@ -282,6 +284,9 @@ defmodule VutuvWeb.PostComponents do
       |> assign(:permalink, Posts.path(post))
       |> assign(:gallery, gallery)
       |> assign(:inline_media?, inline_media?)
+      # The clip (issue #1906): preloaded by `post_preloads/0`, absent on a
+      # nested parent card's shorter chain — which then simply shows none.
+      |> assign(:video, card_video(post))
       # The authored inline placement owns the media layout: the float-a-square-
       # image and screenshot-beside-the-text automatics stay off when the body
       # embeds pictures itself.
@@ -3810,6 +3815,11 @@ defmodule VutuvWeb.PostComponents do
               <% end %>
             </div>
 
+            <%!-- The clip (issue #1912): the same player in both modes — on the
+            feed card too, since a tap plays it in place and nothing loads
+            before that tap. --%>
+            <.post_video :if={@video} video={@video} />
+
             <%!-- The book/film review card (the post's structured sidecar,
             Vutuv.Posts.PostReview): cover or kind glyph, title, creator, year
             and the shop/IMDb link. Rendered in both modes, outside the clamp,
@@ -4962,6 +4972,11 @@ defmodule VutuvWeb.PostComponents do
            card_assigns.link_screenshot != nil)
     )
   end
+
+  # The post's clip when it is loaded, else nil — never a `NotLoaded` that a
+  # template would trip over.
+  defp card_video(%Post{video: %PostVideo{} = video}), do: video
+  defp card_video(_post), do: nil
 
   # Whether to render the author's amber progress panel. It keys on the
   # post-level flag rather than on the individual pictures, so it cannot

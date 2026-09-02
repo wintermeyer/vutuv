@@ -4217,3 +4217,24 @@ html[data-feed-pull="busy"] .feed-pull__glyph {
 /* Changing this file (or app.css @theme / lib/vutuv_web/components/ui.ex) is a
    design-language change — a PostToolUse hook reminds you to update
    .claude/rules/design.md so the design rule stays in sync. */
+
+/* ---------- Video on posts: the poster overlay and the HD control ---------- */
+/* `VutuvWeb.VideoComponents.post_video/1` lays the play glyph and the length
+   over the poster; app.js stamps `data-playing` on the figure at the first
+   play, and the native controls carry on from there. The HD control of
+   data-saving mode hides once app.js has swapped the full files in
+   (`data-hd-loaded`), the way the picture's control does. No colours, so no
+   dark copy. */
+[data-video-figure][data-playing] [data-video-overlay] { display: none; }
+[data-video-figure][data-hd-loaded] [data-video-hd] { display: none; }
+
+[data-video-hd][aria-busy="true"] > span {
+  animation: skeleton-breathe 1s ease-in-out infinite;
+}
+
+@media (prefers-reduced-motion: reduce) {
+  [data-video-hd][aria-busy="true"] > span {
+    animation: none;
+    opacity: 0.6;
+  }
+}

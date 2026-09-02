@@ -78,7 +78,7 @@ defmodule Vutuv.Videos do
   defp config, do: Application.fetch_env!(:vutuv, :post_videos)
 
   @doc "The MIME types the API announces as accepted."
-  def mime_types, do: ~w(video/mp4 video/quicktime video/webm video/x-m4v)
+  def mime_types, do: ~w(video/mp4 video/quicktime video/webm)
 
   ## PubSub
 

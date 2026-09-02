@@ -36,6 +36,7 @@ defmodule VutuvWeb.PostLive.Feed do
 
   import VutuvWeb.PostComponents
   import VutuvWeb.PostLive.FeedCalendar
+  import VutuvWeb.VideoComponents, only: [pending_video_post: 1]
 
   alias Phoenix.LiveView.JS
   alias Vutuv.Activity
@@ -46,6 +47,7 @@ defmodule VutuvWeb.PostLive.Feed do
   alias Vutuv.Posts.Post
   alias Vutuv.Social
   alias Vutuv.Tags.UserTag
+  alias Vutuv.Videos
   alias Vutuv.ViewerClock
   alias VutuvWeb.Live.DayClockRestream
   alias VutuvWeb.Live.FeedTimeTravel
@@ -190,6 +192,11 @@ defmodule VutuvWeb.PostLive.Feed do
   end
 
   defp mount_feed(socket, user, {day, open?}) do
+    # The author's posts still waiting on their clip (issue #1910), drawn as
+    # cards above the timeline; the progress arrives over the video topic the
+    # embedded mount subscribed to (`InitAssigns.assign_embedded/2`).
+    socket = assign(socket, :pending_video_posts, waiting_video_posts(user))
+
     # The sources they left on (issue #1499). It opens the page *and* keys the
     # handoff below: the stash holds one entry per member, so two devices
     # opening /feed within its 15s TTL would otherwise let one take a page the
@@ -1276,6 +1283,26 @@ defmodule VutuvWeb.PostLive.Feed do
   end
 
   # The composer's corner ✕ (feed compose only) bubbles up here to collapse it.
+  # The waiting card's two ways out (issue #1910): drop the text and the clip,
+  # or publish the text without the clip once the check refused it.
+  def handle_event("cancel-pending-video", %{"id" => id}, socket) do
+    case Videos.get_pending_post(socket.assigns.current_user, id) do
+      nil -> :ok
+      pending -> Videos.cancel_pending_post(pending)
+    end
+
+    {:noreply, refresh_waiting_video_posts(socket)}
+  end
+
+  def handle_event("publish-without-video", %{"id" => id}, socket) do
+    case Videos.get_pending_post(socket.assigns.current_user, id) do
+      nil -> :ok
+      pending -> Videos.publish_without_video(pending)
+    end
+
+    {:noreply, refresh_waiting_video_posts(socket)}
+  end
+
   def handle_event("close-composer", _params, socket) do
     {:noreply, assign(socket, :composer_open?, false)}
   end
@@ -2003,6 +2030,20 @@ defmodule VutuvWeb.PostLive.Feed do
     {:noreply, refresh_shown_post(socket, post_id)}
   end
 
+  # A clip of this member's moved a step (issue #1911): re-read the waiting
+  # cards, which draw their stage from the row. One query per tick, and only
+  # while the member has something waiting.
+  def handle_info({:post_video, _summary}, socket) do
+    {:noreply, refresh_waiting_video_posts(socket)}
+  end
+
+  # A waiting post was published, dropped or failed: the card goes (a
+  # published one is followed by its own `{:new_post, …}`, which draws the
+  # real card in the timeline).
+  def handle_info({:pending_video_post, _summary}, socket) do
+    {:noreply, refresh_waiting_video_posts(socket)}
+  end
+
   # A photo of the author's post cleared the AI image scan (issue #1104):
   # refresh the card so the picture appears and the "checking your photos…"
   # line counts down and finally disappears — the author watches it finish
@@ -2414,6 +2455,20 @@ defmodule VutuvWeb.PostLive.Feed do
   # Swap in the post's now-screenshot-carrying copy and re-stream the entry in
   # place (update_only, so an off-page id is a harmless no-op). The entry's other
   # fields — engagement, follow edge, repost roster — are preserved.
+  # The member's own posts still waiting on a clip, clips preloaded.
+  defp waiting_video_posts(user), do: Videos.pending_posts_for(user)
+
+  defp refresh_waiting_video_posts(socket) do
+    assign(socket, :pending_video_posts, waiting_video_posts(socket.assigns.current_user))
+  end
+
+  # The waiting text, rendered the way the card will render it — through the
+  # same Markdown pipeline and sanitizer, with no images of its own yet.
+  defp waiting_body_html(%{attrs: %{"body" => body}}) when is_binary(body) and body != "",
+    do: VutuvWeb.Markdown.render_post(body, [])
+
+  defp waiting_body_html(_pending), do: nil
+
   defp refresh_shown_post(socket, post_id) do
     with entry when not is_nil(entry) <- find_by_post_id(socket.assigns.entries, post_id),
          post when not is_nil(post) <- Posts.get_post(post_id) do
@@ -3098,6 +3153,18 @@ defmodule VutuvWeb.PostLive.Feed do
                 cal_day={@cal_day}
               />
             </div>
+          </div>
+
+          <%!-- The author's posts waiting on a clip (issues #1910, #1911),
+          above the timeline: the text, the tile with the stage, and a way out.
+          Nobody else ever sees them; a published one becomes an ordinary card
+          in the timeline below. --%>
+          <div :if={@pending_video_posts != []} id="pending-video-posts">
+            <.pending_video_post
+              :for={pending <- @pending_video_posts}
+              pending={pending}
+              body_html={waiting_body_html(pending)}
+            />
           </div>
 
           <%!-- The timeline is one card of flat divide-y rows — the same

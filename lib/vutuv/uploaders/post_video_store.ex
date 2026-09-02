@@ -33,7 +33,11 @@ defmodule Vutuv.PostVideoStore do
   alias Vutuv.Videos.FFmpeg
   alias Vutuv.Videos.Recipes
 
-  @extension_whitelist ~w(.mp4 .m4v .mov .webm)
+  # The containers a phone or a screen recorder writes. `.m4v` is deliberately
+  # absent: LiveView's upload `accept` needs a MIME type for every extension
+  # and the MIME table has none for it; an `.m4v` renamed to `.mp4` is the
+  # same file.
+  @extension_whitelist ~w(.mp4 .mov .webm)
   @renditions ~w(h264 av1 lite-h264 lite-av1)
   @served_files ~w(h264.mp4 av1.mp4 lite-h264.mp4 lite-av1.mp4 cover.avif cover-lite.avif)
   # The stills are at most this wide: enough for the vision model and the

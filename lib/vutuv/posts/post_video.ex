@@ -37,10 +37,16 @@ defmodule Vutuv.Posts.PostVideo do
 
   use VutuvWeb, :model
 
+  alias Vutuv.LowBandwidth
   alias Vutuv.Posts.PostVideoFrame
+  alias Vutuv.PostVideoStore
 
   @stages ~w(queued frames transcoding checking ready rejected failed)
   @done_stages ~w(ready rejected failed)
+  # AV1 Main 8-bit, level 4.0 — what the SVT recipe writes — and H.264 High
+  # 4.0 with AAC-LC. The strings are what `canPlayType` is asked.
+  @av1_type ~s(video/mp4; codecs="av01.0.08M.08, mp4a.40.2")
+  @h264_type ~s(video/mp4; codecs="avc1.640028, mp4a.40.2")
 
   schema "post_videos" do
     belongs_to(:post, Vutuv.Posts.Post)
@@ -96,6 +102,59 @@ defmodule Vutuv.Posts.PostVideo do
 
   @doc "A fresh unguessable URL token (~128 bits, URL-safe)."
   defdelegate gen_token, to: Vutuv.Uploads
+
+  ## URLs — one owner, like `Vutuv.Posts.PostImage`
+
+  @doc "Root-relative proxy URL of one served file (`h264.mp4`, `cover.avif`, …)."
+  def url(%__MODULE__{token: token}, file) when is_binary(file), do: "#{token_prefix(token)}#{file}"
+
+  @doc """
+  The poster's URL. It carries the cover frame's id as a cache buster: the
+  proxy serves every file as immutable for a year, and the author may pick
+  another frame, which rewrites the file under the same name.
+  """
+  def cover_url(%__MODULE__{} = video), do: url(video, "cover.avif") <> cover_buster(video)
+
+  @doc "The `%{src:, lite:}` pair `VutuvWeb.UI.picture/1` renders for the poster."
+  def cover_picture(%__MODULE__{} = video) do
+    LowBandwidth.picture(cover_url(video), fn ->
+      if video.cover_written_at, do: url(video, "cover-lite.avif") <> cover_buster(video)
+    end)
+  end
+
+  @doc "The link-preview JPEG (`og:image`, the Fediverse attachment's icon)."
+  def og_url(%__MODULE__{} = video), do: url(video, "cover.jpg") <> cover_buster(video)
+
+  @doc "The author-only URL of one still in the strip."
+  def frame_url(%__MODULE__{} = video, %PostVideoFrame{position: position}),
+    do: url(video, "frame-#{String.pad_leading("#{position}", 2, "0")}.jpg")
+
+  defp cover_buster(%__MODULE__{cover_frame_id: nil}), do: ""
+  defp cover_buster(%__MODULE__{cover_frame_id: id}), do: "?v=" <> binary_part(id, 24, 12)
+
+  @doc """
+  The `<source>` list the player offers, best first: the AV1 file where a
+  browser decodes it (the `codecs` string is what lets Safari without an AV1
+  decoder skip it), the H.264 file for everyone — and for a viewer in
+  data-saving mode the two 360p files ahead of both (issue #1924). Only files
+  that exist are named, so a clip whose enhancements are still being written
+  plays from what is there.
+  """
+  def sources(%__MODULE__{} = video) do
+    lite =
+      if LowBandwidth.on?() and video.lite_ready_at,
+        do: [{"lite-av1", @av1_type}, {"lite-h264", @h264_type}],
+        else: []
+
+    (lite ++ [{"av1", @av1_type}, {"h264", @h264_type}])
+    |> Enum.filter(fn {name, _type} -> PostVideoStore.rendition_path(video.token, name) end)
+    |> Enum.map(fn {name, type} -> %{src: url(video, "#{name}.mp4"), type: type} end)
+  end
+
+  @doc "Whether the data-saving viewer is being offered the 360p files (the HD control's cue)."
+  def lite_offered?(%__MODULE__{} = video), do: LowBandwidth.on?() and video.lite_ready_at != nil
+
+  defp token_prefix(token), do: "/post_videos/#{token}/"
 
   @doc "The clip's aspect ratio (width / height), or 16:9 when the dimensions are missing."
   def aspect(%__MODULE__{width: width, height: height})

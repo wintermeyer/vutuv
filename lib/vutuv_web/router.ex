@@ -918,6 +918,11 @@ defmodule VutuvWeb.Router do
     # e.g. "feed.avif"; nginx only streams what this controller approves.
     get("/post_images/:token/:version", PostImageController, :show)
 
+    # The authorizing post-video proxy (issue #1912), the same idea for a clip's
+    # renditions and cover; it answers byte ranges itself, which a `<video>`
+    # element needs.
+    get("/post_videos/:token/:file", PostVideoController, :show)
+
     # The authorizing organization-image proxy (logo/cover + description images),
     # like /post_images: a pending or frozen page's images are owner/admin-only.
     get("/organization_images/:token/:version", OrganizationImageController, :show)

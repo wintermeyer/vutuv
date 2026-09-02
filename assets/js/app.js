@@ -3540,3 +3540,80 @@ document.addEventListener(
   },
   true
 )
+
+// Video on posts (issues #1912, #1924). Two delegated listeners, no hook: the
+// player is plain HTML wherever a card renders, live page or dead.
+//
+// `play` does not bubble, so it is caught in the capture phase; the first play
+// stamps the figure and the poster's overlay (play glyph, length) steps aside
+// for the native controls (components.css).
+document.addEventListener(
+  "play",
+  (e) => {
+    const figure = e.target.closest && e.target.closest("[data-video-figure]")
+    if (figure) figure.setAttribute("data-playing", "")
+  },
+  true,
+)
+
+// The HD control of data-saving mode: swap the 360p sources for the full ones
+// the figure carries, reload the player where it was, and carry on if it was
+// playing. Marked on the figure so the control hides and a later patch does
+// not bring it back for a player already in full quality.
+function loadFullVideo(control) {
+  const figure = control.closest("[data-video-figure]")
+  const video = figure && figure.querySelector("video[data-video-player]")
+  const raw = figure && figure.getAttribute("data-hd-sources")
+  if (!video || !raw || figure.hasAttribute("data-hd-loaded")) return
+  let sources = []
+  try {
+    sources = JSON.parse(raw)
+  } catch (_e) {
+    return
+  }
+  if (!sources.length) return
+  const at = video.currentTime
+  const playing = !video.paused && !video.ended
+  control.setAttribute("aria-busy", "true")
+  video.querySelectorAll("source").forEach((s) => s.remove())
+  sources.forEach((s) => {
+    const el = document.createElement("source")
+    el.src = s.src
+    el.type = s.type
+    video.appendChild(el)
+  })
+  video.addEventListener(
+    "loadedmetadata",
+    () => {
+      if (at > 0) video.currentTime = at
+      if (playing) video.play().catch(() => {})
+      control.removeAttribute("aria-busy")
+      figure.setAttribute("data-hd-loaded", "")
+    },
+    { once: true },
+  )
+  video.load()
+}
+
+document.addEventListener(
+  "click",
+  (e) => {
+    const control = e.target.closest && e.target.closest("[data-video-hd]")
+    if (!control) return
+    e.preventDefault()
+    e.stopPropagation()
+    loadFullVideo(control)
+  },
+  true,
+)
+
+document.addEventListener(
+  "keydown",
+  (e) => {
+    if ((e.key === "Enter" || e.key === " ") && e.target.matches?.("[data-video-hd]")) {
+      e.preventDefault()
+      loadFullVideo(e.target)
+    }
+  },
+  true,
+)

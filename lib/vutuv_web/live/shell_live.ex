@@ -28,6 +28,7 @@ defmodule VutuvWeb.ShellLive do
       count_badge: 1,
       delimited_count: 1,
       gutter_class: 0,
+      hourglass: 1,
       icon_bookmark: 1,
       icon_pencil: 1,
       name_initials: 1,
@@ -46,6 +47,7 @@ defmodule VutuvWeb.ShellLive do
   alias Vutuv.Posts
   alias Vutuv.Prefs
   alias Vutuv.Social
+  alias Vutuv.Videos
   alias Vutuv.WebPush
   alias VutuvWeb.Live.InitAssigns
   alias VutuvWeb.NotificationLine
@@ -163,6 +165,9 @@ defmodule VutuvWeb.ShellLive do
   defp mount_authenticated(socket, %User{} = user, session, path) do
     user_id = user.id
     Activity.subscribe(user_id)
+    # The clips this member's posts are waiting on (issue #1911): the chip in
+    # the bar follows their progress on every page.
+    Videos.subscribe(user_id)
     # Re-asked from the cookie session's id against `organization_roles`, never
     # taken from the curated map: the shell is on every page, so a mode it drew
     # from a replayable payload would be the loudest possible lie about whose
@@ -196,6 +201,7 @@ defmodule VutuvWeb.ShellLive do
     |> assign(:current_user, user)
     |> maybe_start_counts(user, path)
     |> maybe_start_new_members()
+    |> assign(:videos_in_progress, Videos.in_progress_summary(user_id))
     |> maybe_start_presence(user_id, user.show_online_status?)
   end
 
@@ -244,6 +250,9 @@ defmodule VutuvWeb.ShellLive do
     |> assign(:presence_hidden_ids, MapSet.new())
     |> assign(:messages_count, 0)
     |> assign(:notifications_count, 0)
+    # The posts waiting on a clip (issue #1911): none until the socket connects
+    # and asks, like the badges.
+    |> assign(:videos_in_progress, %{count: 0, progress: nil})
     |> assign(:brand_path, brand_path(socket.assigns.user_param, path))
     # The current path also drives the active-nav highlight (which top/bottom
     # nav item is the page being viewed). Like brand_path it is the path at
@@ -429,6 +438,15 @@ defmodule VutuvWeb.ShellLive do
   def handle_info(:messages_read, socket),
     do: {:noreply, recount_messages(socket)}
 
+  # A clip of this member's moved, or a post waiting on one was published or
+  # dropped (issue #1911): re-ask the one query the chip draws from. The
+  # percent arrives every couple of points, so a two-minute clip costs a few
+  # dozen of these — a cheap count, not a page.
+  def handle_info({:post_video, _summary}, socket), do: {:noreply, recount_videos(socket)}
+
+  def handle_info({:pending_video_post, _summary}, socket),
+    do: {:noreply, recount_videos(socket)}
+
   # A new post reached this member's feed (Vutuv.Posts.create_post broadcasts
   # {:new_post, …} to the author *and* every follower). They may be reading
   # another page or another tab, so nudge the TabBadge hook to mark the browser
@@ -527,6 +545,11 @@ defmodule VutuvWeb.ShellLive do
   end
 
   def handle_info(_other, socket), do: {:noreply, socket}
+
+  defp recount_videos(%{assigns: %{user_id: user_id}} = socket) when is_binary(user_id),
+    do: assign(socket, :videos_in_progress, Videos.in_progress_summary(user_id))
+
+  defp recount_videos(socket), do: socket
 
   defp recount_messages(socket) do
     socket
@@ -1208,6 +1231,24 @@ defmodule VutuvWeb.ShellLive do
           document. They inherit that bar's palette, so a press fills the circle
           the way hovering it already tints it. --%>
           <div data-nav-bar class="flex items-center justify-end gap-1">
+            <%!-- A post of this member's waiting on its clip (issue #1911): how
+            many, and the percent of the one being converted. On every page,
+            because the author will not sit on one for a minute; it links to
+            the feed, where the waiting card carries the rest. Rendered only
+            while there is something to wait for. --%>
+            <.link
+              :if={@videos_in_progress.count > 0}
+              id="videos-in-progress"
+              href={~p"/feed"}
+              title={videos_in_progress_label(@videos_in_progress)}
+              aria-label={videos_in_progress_label(@videos_in_progress)}
+              data-videos-in-progress={@videos_in_progress.count}
+              class="inline-flex items-center gap-1.5 rounded-full bg-amber-50 px-3 py-1 text-sm font-semibold text-amber-800 hover:bg-amber-100 dark:bg-amber-900/40 dark:text-amber-100 dark:hover:bg-amber-900/70"
+            >
+              <.hourglass class="h-4 w-4" />
+              <span class="tabular-nums">{videos_in_progress_text(@videos_in_progress)}</span>
+            </.link>
+
             <%!-- Admins only: today's confirmed sign-ups (German calendar day),
             live from PeopleCounter and reset by the DayClock at Berlin
             midnight. Rendered only when there is something to report, so a
@@ -1435,6 +1476,22 @@ defmodule VutuvWeb.ShellLive do
   end
 
   ## Components
+
+  # The chip's text: the percent while one clip converts, the count otherwise
+  # — "62 %" says more than "1" to the one person it is for.
+  defp videos_in_progress_text(%{count: 1, progress: percent}) when is_integer(percent),
+    do: "#{percent} %"
+
+  defp videos_in_progress_text(%{count: count}), do: compact_count(count)
+
+  defp videos_in_progress_label(%{count: count, progress: percent}) do
+    base =
+      ngettext("%{count} video in progress", "%{count} videos in progress", count,
+        count: count
+      )
+
+    if is_integer(percent), do: "#{base} · #{percent} %", else: base
+  end
 
   attr(:href, :string, required: true)
   attr(:label, :string, required: true)
