@@ -452,7 +452,19 @@ defmodule VutuvWeb.UI do
           aria-label={gettext("Formatting")}
           hidden
         >
-          <div class="mde__bubble-group mde__bubble-group--marks">
+          <div class="mde__bubble-group mde__bubble-group--text">
+            <%!-- The two headings act on the LINE the selection sits in, the
+            rest on the selected words, hence the divider. They are in the
+            slash menu as well, but that one opens on an empty line, so it can
+            only make a heading of a line before it is written — promoting a
+            paragraph that already stands is what this half is for. --%>
+            <.mde_mark cmd="h1" title={gettext("Heading 1")}>
+              <span class="text-xs font-bold">H1</span>
+            </.mde_mark>
+            <.mde_mark cmd="h2" title={gettext("Heading 2")}>
+              <span class="text-xs font-bold">H2</span>
+            </.mde_mark>
+            <span class="mde__bubble-sep" aria-hidden="true"></span>
             <.mde_mark cmd="strong" title={gettext("Bold")}>
               <span class="font-bold">B</span>
             </.mde_mark>

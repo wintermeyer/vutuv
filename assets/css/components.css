@@ -2342,12 +2342,24 @@ div.footnotes li:target {
 .mde__bubble .mde__btn:hover { background: #334155; color: #fff; }
 .mde__bubble .mde__btn[aria-pressed="true"] { background: #1d4ed8; color: #fff; }
 .mde__bubble-group { display: flex; align-items: center; gap: 0.1rem; }
+/* Between the two headings and the marks: the first pair acts on the line the
+   selection sits in, the rest on the selected words. Inside the face, so it
+   hides with it. */
+.mde__bubble-sep {
+  align-self: stretch;
+  width: 1px;
+  margin: 0.15rem 0.2rem;
+  background: #334155;
+}
 
-/* The bubble has two faces. Marks are the default; select an image node and it
-   becomes the alignment controls, which is the only time those mean anything.
-   They used to sit in the toolbar permanently, doing nothing. */
+/* The bubble has two faces. The text one is the default; select an image node
+   and it becomes the alignment controls, which is the only time those mean
+   anything. They used to sit in the toolbar permanently, doing nothing.
+   `--text` rather than `--marks`: the group holds the two headings as well, and
+   this rule is what makes every control in it vanish over a selected image, so
+   a new one belongs INSIDE the face and not in a third group beside it. */
 .mde__bubble-group--image { display: none; }
-.mde[data-mde-img="1"] .mde__bubble-group--marks { display: none; }
+.mde[data-mde-img="1"] .mde__bubble-group--text { display: none; }
 .mde[data-mde-img="1"] .mde__bubble-group--image { display: flex; }
 
 /* --- the slash menu (issue #1886) ---
