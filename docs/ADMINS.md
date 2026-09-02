@@ -392,6 +392,13 @@ that accepts it and as nginx's gzip to the rest, and the app spends nothing on
 compression. Measured on vutuv.de's landing page (59 kB of HTML, 2026-09-02):
 11.5 kB as the app's gzip, 10.7 kB as brotli 6.
 
+The LiveView **websocket** is the one thing nginx cannot compress: after the
+upgrade it only passes frames through. The app compresses those frames
+itself (`compress: true` on the `/live` socket, permessage-deflate), which is
+where most of a live page's bytes are — the feed's join is 531 kB of JSON
+uncompressed and 55 kB compressed. Nothing to configure in nginx; just do not
+strip the `Sec-WebSocket-Extensions` header on the way upstream.
+
 ### Data-saving mode (optional)
 
 Every browser request from a member in data-saving mode (see "Preference
