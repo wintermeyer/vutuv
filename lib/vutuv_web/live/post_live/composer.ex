@@ -400,9 +400,20 @@ defmodule VutuvWeb.PostLive.Composer do
   defp initial_language(%Post{language: language}) when is_binary(language), do: language
   defp initial_language(_post), do: Gettext.get_locale(VutuvWeb.Gettext)
 
-  defp other_language_options do
+  # The codes the closed box can ever have to show: this installation's own
+  # locales, plus the post's own language when the author picked one of the
+  # long names. A box sized for two letters must never be handed
+  # "Aserbaidschanisch", and somebody writing in Portuguese is owed the same
+  # glanceable "PT" a German writer gets. `Languages.options_except/1` then
+  # keeps that language out of the long list, so no value is in both groups.
+  defp code_language_options(language) do
     site = Languages.site_locales()
-    Enum.reject(Languages.options(), fn {_label, code} -> code in site end)
+
+    if language in site, do: site, else: site ++ [language]
+  end
+
+  defp other_language_options(language) do
+    Languages.options_except(code_language_options(language))
   end
 
   # Editing keeps the post's own license; a new post starts from the author's
@@ -1827,9 +1838,14 @@ defmodule VutuvWeb.PostLive.Composer do
           column is narrower than the feed's, and there the row used to squeeze
           the picker until "Add photos" broke across two lines inside a
           36px-high button. So it wraps, and each control keeps its own line
-          rather than its share of a line — every one of them says what it does
-          in words that must not break, which is what the `shrink-0` and the
-          `whitespace-nowrap` on each are for. --%>
+          rather than its share of a line — the picker and the language box may
+          not be narrowed below what they hold, which is what the `shrink-0` on
+          each is for, and the picker's words carry a `whitespace-nowrap`
+          besides. Since the language select became a code chip the picker, the
+          chip and the Post button share one line down to a 360px phone; the
+          row still wraps where a fourth control joins them, which is the
+          organization page, where every post carries the 🌐 chip and the
+          button reads "Post as <page>". --%>
           <div
             id={"#{@id}-actions"}
             data-composer-actions
@@ -1839,56 +1855,51 @@ defmodule VutuvWeb.PostLive.Composer do
 
             <%!-- The author's declaration of what language this post is
             written in (issue #1489, Mastodon's model): preset to the UI
-            locale. The site's own locales lead as short codes, the curated
-            rest follows by localized name.
+            locale, and a **code chip** — two letters wide, at every width.
 
-            It stands in the row rather than behind the ⋯ disclosure of issue
-            #1894, which is gone: that panel never held a second entry anybody
-            could reach, so it hid one select behind a glyph that then had to
-            say in words what it was hiding. The label and the select are one
-            group at `gap-2`, tighter than the row's own `gap-x-3`, so they
-            read as one control and wrap onto a new line together.
+            A `<select>` is as wide as its widest option, so a list of language
+            names drew a 184px box to display "DE", and the bottom row fell
+            into three ragged lines on a phone (picker / language / Post). The
+            box is therefore sized by hand (`language_select_class/0`), and the
+            options are arranged so it never has to render anything longer:
+            this installation's locales lead as codes, and an author who
+            reached into the long list gets that language's code up there too
+            (`code_language_options/1`), dropped from the list below rather
+            than repeated in it.
 
-            **The label is one word, and that is measured.** The ⋯ it replaces
-            was 45px and held this row on one line down to a 360px column; a
-            select cannot. "Sprache des Beitrags" put the organization page's
-            424px column and every phone on THREE lines (picker / language /
-            Post), and the bare word gets one back; dropping the label
-            altogether buys nothing beyond that and costs the word. Its own
-            msgid rather than the profile's `gettext("Language")`, which labels
-            a language somebody speaks: same German today, different subject.
-            The sentence it leaves out is the `title` below. --%>
-            <div class="flex shrink-0 items-center gap-2">
-              <label
-                for={"#{@id}-language"}
-                class="whitespace-nowrap text-sm font-medium text-slate-600 dark:text-slate-400"
-              >
-                {pgettext("post composer", "Language")}
-              </label>
-              <select
-                name="post[language]"
-                id={"#{@id}-language"}
-                title={gettext("The language this post is written in")}
-                class={compact_select_class()}
-              >
+            The word "Sprache" moved inside the control, onto the first
+            optgroup, and no longer stands beside it: a box of language codes
+            between the camera and the Post button explains itself, and on a
+            phone that word is exactly what the third line cost. It keeps its
+            own msgid rather than the profile's `gettext("Language")`, which
+            labels a language somebody speaks: same German today, different
+            subject. The sentence both leave out is on the select itself, twice
+            over: as the `aria-label`, which is the accessible name now that no
+            `<label>` carries it, and as the `title`, which is the same words
+            for a pointer. Neither reaches a phone before the list is open, and
+            that is the honest cost of the line this buys back. --%>
+            <select
+              name="post[language]"
+              id={"#{@id}-language"}
+              aria-label={gettext("The language this post is written in")}
+              title={gettext("The language this post is written in")}
+              class={language_select_class()}
+            >
+              <optgroup label={pgettext("post composer", "Language")}>
                 <option
-                  :for={code <- Languages.site_locales()}
+                  :for={code <- code_language_options(@language)}
                   value={code}
                   selected={@language == code}
                 >
                   {String.upcase(code)}
                 </option>
-                <optgroup label={gettext("More languages")}>
-                  <option
-                    :for={{label, code} <- other_language_options()}
-                    value={code}
-                    selected={@language == code}
-                  >
-                    {label}
-                  </option>
-                </optgroup>
-              </select>
-            </div>
+              </optgroup>
+              <optgroup label={gettext("More languages")}>
+                <option :for={{label, code} <- other_language_options(@language)} value={code}>
+                  {label}
+                </option>
+              </optgroup>
+            </select>
 
             <div class="ml-auto flex flex-wrap items-center justify-end gap-x-3 gap-y-2">
               <%!-- Stays in the row, deliberately: this is a STATEMENT, not a
@@ -2080,13 +2091,30 @@ defmodule VutuvWeb.PostLive.Composer do
     """
   end
 
-  # The composer's three small selects — licence, download, language — all want
-  # the same thing: a control the width of its own content
-  # (`narrow_input_class/0`, which explains why that takes a `!`), at the site's
-  # one control height so it sits level with the Post button. The language one
-  # used to draw 260px to hold the word "DE", which left the bottom row nothing
-  # to wrap into on a narrow column.
-  defp compact_select_class, do: [narrow_input_class(), "h-10 py-0 text-sm"]
+  # The site's one control height, so every select in here sits level with the
+  # Post button (#1933). Only the width differs below, and it has to: two `!`
+  # width utilities would race.
+  @select_sizing "h-10 py-0 text-sm"
+
+  # The composer's two panel selects — licence and download — want a control
+  # the width of its own content (`narrow_input_class/0`, which explains why
+  # that takes a `!`). They stand in a stacked panel, so their width is nobody
+  # else's business.
+  defp compact_select_class, do: [narrow_input_class(), @select_sizing]
+
+  # The language select is the one that cannot have that: `w-auto` on a select
+  # means "as wide as the longest option", which for a list of language names
+  # is 184px of box to display "DE" (measured in the bottom row, where it cost
+  # the row two of its three lines). `w-18` (4.5rem) holds two uppercase
+  # letters, the `px-3` and the browser's own arrow, at the 16px every field
+  # takes on a touch screen — two letters and not "some short label", because
+  # `Translations.cast_language/1` refuses anything outside `Vutuv.Languages`
+  # and `site_locales_chokepoint_test.exs` refuses a configured locale with no
+  # curated name, so every code that can reach this box is ISO 639-1. The `!`
+  # is what beats `input_class/0`'s leading `w-full` (see `narrow_input_class/0`
+  # for why that pair is not guessable). Only the closed box is capped: the
+  # popup is the browser's own and keeps the full names at full width.
+  defp language_select_class, do: [input_class(), "w-18! shrink-0", @select_sizing]
 
   # What the folded details row says a visitor may save — the same wording
   # the download select's options use, so the fold and the open control can

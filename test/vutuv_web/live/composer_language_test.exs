@@ -80,12 +80,14 @@ defmodule VutuvWeb.ComposerLanguageTest do
 
       {:ok, live, html} = live(conn, ~p"/feed")
 
-      # The label carries its own msgctxt so it can be the bare word here while
-      # the profile's `gettext("Language")` goes on labelling a language
-      # somebody speaks. Assert the German by name: a one-word msgid is the
-      # likeliest thing a `gettext.extract --merge` fuzzy-fills wrongly and the
-      # least likely to be noticed.
-      assert has_element?(live, ~s(label[for="composer-language"]), "Sprache")
+      # The word is inside the control now, on the group holding the codes —
+      # the box is two letters wide and has no room beside it. It keeps its own
+      # msgctxt so it can be the bare word here while the profile's
+      # `gettext("Language")` goes on labelling a language somebody speaks.
+      # Assert the German by name: a one-word msgid is the likeliest thing a
+      # `gettext.extract --merge` fuzzy-fills wrongly and the least likely to
+      # be noticed.
+      assert has_element?(live, ~s(select#composer-language optgroup[label="Sprache"]))
       assert html =~ "Die Sprache, in der dieser Beitrag geschrieben ist"
       assert html =~ "Weitere Sprachen"
       assert html =~ ~r/<option[^>]*value="de"[^>]*selected/
@@ -139,6 +141,29 @@ defmodule VutuvWeb.ComposerLanguageTest do
       |> render_submit()
 
       assert Repo.reload!(post).language == "en"
+    end
+
+    test "a language outside the site's own gets a code of its own", %{conn: conn} do
+      {conn, user} = create_and_login_user(conn)
+      {:ok, post} = Posts.create_post(user, %{body: "Bom dia.", language: "pt"})
+
+      {:ok, live, _html} = live(conn, ~p"/posts/#{post.id}/edit")
+
+      # The closed box is 4.5rem, so whatever it has to show has to be a code:
+      # "pt" joins the site's own rather than standing in the long list as
+      # "Portuguese" and being cut off in the box. Assert it SELECTED — an
+      # option that merely exists is what the browser falls back off, and the
+      # box would show "EN".
+      assert has_element?(
+               live,
+               ~s(optgroup[label="Language"] option[value="pt"][selected]),
+               "PT"
+             )
+
+      # And it leaves the long list, or two options would carry one value and
+      # the second — the long one — would win the closed box back.
+      refute has_element?(live, ~s(optgroup[label="More languages"] option[value="pt"]))
+      assert has_element?(live, ~s(optgroup[label="More languages"] option[value="fr"]))
     end
   end
 end

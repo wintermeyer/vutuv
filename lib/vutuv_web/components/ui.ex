@@ -105,6 +105,17 @@ defmodule VutuvWeb.UI do
   column. Three forms asked the losing way for months.
 
   Compose further utilities the same way: `[narrow_input_class(), "text-sm"]`.
+
+  **On a `<select>`, `w-auto` means as wide as the longest OPTION, not as wide
+  as the selected one**, so this is the wrong recipe for a control whose list
+  is longer than its answer: a picker holding two-letter language codes drew a
+  184px box to display "DE", because one of its sixty options reads
+  "Aserbaidschanisch". Such a control takes an explicit width instead
+  (`[input_class(), "w-18!"]` — the same `!`, for the same reason), and its
+  options have to be arranged so the closed box never has to render one of the
+  long ones. `VutuvWeb.PostLive.Composer`'s `language_select_class/0` is the
+  worked example; the recipe here stays right for a select whose options are
+  all about as long as each other.
   """
   def narrow_input_class, do: [input_class(), "w-auto! max-w-full"]
 
