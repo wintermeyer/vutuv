@@ -4616,6 +4616,26 @@ defmodule VutuvWeb.UI do
   end
 
   @doc """
+  The outline pencil (24×24 stroke): the "write a post" glyph, shared by the
+  feed's desktop compose button and the phone tab bar's Write tab. Inline
+  rather than in the sprite, which pays off for a glyph drawn once per card;
+  this one is drawn twice per page. Size it via `class`.
+  """
+  attr(:class, :any, default: "h-5 w-5")
+
+  def icon_pencil(assigns) do
+    ~H"""
+    <svg class={@class} fill="none" stroke="currentColor" stroke-width="1.8" viewBox="0 0 24 24" aria-hidden="true">
+      <path
+        stroke-linecap="round"
+        stroke-linejoin="round"
+        d="m16.862 4.487 1.687-1.688a1.875 1.875 0 1 1 2.652 2.652L10.582 16.07a4.5 4.5 0 0 1-1.897 1.13L6 18l.8-2.685a4.5 4.5 0 0 1 1.13-1.897l8.932-8.931Zm0 0L19.5 7.125"
+      />
+    </svg>
+    """
+  end
+
+  @doc """
   The outline repost-arrows icon (24×24 stroke), shared by the post card's
   "Reposted by" line and the action bar. Size it via `class`.
   """

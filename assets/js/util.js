@@ -98,6 +98,13 @@ export function postJSON(url, body) {
 export const reducedMotion = () =>
   window.matchMedia("(prefers-reduced-motion: reduce)").matches
 
+// A click that means "this link, here, now": nobody else has handled it and
+// no modifier turned it into "open elsewhere". The one test for every
+// document-level press interceptor (the nav press paint, the Feed tab's
+// back-to-top, the Write tab), so they cannot drift over which modifiers count.
+export const plainClick = (event) =>
+  !(event.defaultPrevented || event.metaKey || event.ctrlKey || event.shiftKey || event.altKey)
+
 // base64url <-> ArrayBuffer. Two browser APIs in this app speak ArrayBuffers
 // while the wire carries unpadded base64url strings: WebAuthn's
 // create/get ceremony (webauthn.js) and `pushManager.subscribe`'s

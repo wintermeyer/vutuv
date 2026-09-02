@@ -17,7 +17,7 @@
 // server's call, not a path check here: it renders `data-scroll-top` on the
 // active tab alone, so this file never has to know what counts as "the feed".
 
-import { reducedMotion } from "./util"
+import { plainClick, reducedMotion } from "./util"
 
 const MARKER = "data-page-scrolled"
 
@@ -56,7 +56,7 @@ window.addEventListener("pageshow", sync)
 document.addEventListener("click", (event) => {
   // Leave a modified click alone: it opens the feed in a new tab, where the
   // reader really is asking for the page and not for this document's scroll.
-  if (event.defaultPrevented || event.metaKey || event.ctrlKey || event.shiftKey) return
+  if (!plainClick(event)) return
 
   const tab = event.target.closest?.("a[data-scroll-top]")
   if (!tab || !document.documentElement.hasAttribute(MARKER)) return

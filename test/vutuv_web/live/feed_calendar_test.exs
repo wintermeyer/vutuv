@@ -368,6 +368,56 @@ defmodule VutuvWeb.FeedCalendarTest do
       assert has_element?(view, "#feed-mobile-controls #open-filter-sheet")
     end
 
+    test "the filter button comes first and keeps only its glyph", %{conn: conn} do
+      # A phone's control line is the width of a phone. The word "Filter" was
+      # a fifth of it, and the date beside it — or the waiting-posts quote that
+      # takes the date's place — is what the reader is actually reading; the
+      # funnel says filter on its own, and the accessible name still spells it
+      # out. Glyph left, date right: the fixed-width control at the edge, the
+      # one whose width varies with what it has to say on the inside.
+      {conn, user} = create_and_login_user(conn)
+      feed_with_history(user)
+
+      {:ok, view, _html} = live(conn, ~p"/feed")
+
+      controls =
+        view
+        |> render()
+        |> LazyHTML.from_document()
+        |> LazyHTML.query("#feed-mobile-controls > *")
+        |> LazyHTML.attribute("id")
+
+      assert controls == ["open-filter-sheet", "feed-calendar-mobile-slot"]
+
+      button = view |> element("#open-filter-sheet") |> render()
+      assert button =~ ~s(aria-label="Filter")
+      assert button |> LazyHTML.from_fragment() |> LazyHTML.text() |> String.trim() == ""
+    end
+
+    test "the compose line is the desktop's, and the phone never sees it", %{conn: conn} do
+      # The "Write a post" button stood at the top of the page, the one place
+      # a thumb cannot reach on a phone; the tab bar's Write tab took its job
+      # there (`VutuvWeb.ShellLive`), and the line it stood on goes with it.
+      # Under `md` that line is hidden, not removed: it is the sibling above
+      # the editor, and a conditional one is what blurs the caret (#1200).
+      {conn, _user} = create_and_login_user(conn)
+
+      {:ok, view, _html} = live(conn, ~p"/feed")
+
+      assert has_element?(view, "#composer-trigger.hidden.md\\:flex #open-composer")
+      assert has_element?(view, "#feed-mobile-controls.md\\:hidden")
+    end
+
+    test "pulling the feed down is the phone's press on the pill", %{conn: conn} do
+      # The hook lives on its own indicator element rather than on `#feed`,
+      # which `FeedUrl` already holds — one hook per element.
+      {conn, _user} = create_and_login_user(conn)
+
+      {:ok, view, _html} = live(conn, ~p"/feed")
+
+      assert has_element?(view, ~s(#feed > #feed-pull[phx-hook="PullToReveal"]))
+    end
+
     test "and folded they are the same height", %{conn: conn} do
       # Side by side, one control was the app's 40px touch target and the
       # other as tall as its padding and its tallest child happened to make it
@@ -399,17 +449,15 @@ defmodule VutuvWeb.FeedCalendarTest do
     end
 
     test "and so is the pill that takes the calendar's place", %{conn: conn} do
-      # The pill is on the compose line rather than this one, but it is the
-      # same control height as everything on both lines (it was 36px against
-      # 40px), which is what lets it sit beside the compose button without
-      # changing the line.
+      # It stands where the date stood, in the same cell, so the swap is a
+      # crossfade and not a line changing height (it was 36px against 40px).
       {conn, user} = create_and_login_user(conn)
       author = feed_with_history(user)
 
       {:ok, view, _html} = live(conn, ~p"/feed")
       {:ok, _fresh} = Posts.create_post(author, %{body: "arriving while I read"})
 
-      assert has_element?(view, "#show-new-posts.h-10")
+      assert has_element?(view, "#feed-calendar-mobile-slot #show-new-posts-mobile.h-10")
       assert has_element?(view, "#open-filter-sheet.h-10")
     end
 
@@ -425,41 +473,67 @@ defmodule VutuvWeb.FeedCalendarTest do
       refute has_element?(view, "#feed-calendar-mobile.h-10")
     end
 
-    test "a waiting post leaves the calendar's line alone", %{conn: conn} do
-      # It used to fold sideways to give the pill the width, because the pill
-      # was on this line. The pill lives on the compose line now, which exists
-      # at every width, so the calendar has nothing to make room for and the
-      # filter button keeps its word.
+    test "a waiting post takes the date's place, and the date waits underneath", %{
+      conn: conn
+    } do
+      # The stylesheet sees the pill arrive in the slot (`:has()`) and
+      # crossfades: the date fades out upward, the pill fades in from below.
+      # The date is NOT removed — a node that leaves the DOM cannot fade, and
+      # it is the one that has to fade back in when the pill is pressed.
+      # Nothing changes height, so the timeline under it does not move.
       {conn, user} = create_and_login_user(conn)
       author = feed_with_history(user)
 
       {:ok, view, _html} = live(conn, ~p"/feed")
 
-      refute has_element?(view, "#feed-calendar-mobile-slot.feed-cal-slot--away")
+      refute has_element?(view, "#show-new-posts-mobile")
 
       {:ok, _fresh} = Posts.create_post(author, %{body: "arriving while I read"})
 
-      # The class is gone from the stylesheet as well; this pins the markup so
-      # a future arrival cannot start folding the calendar again.
-      assert has_element?(view, "#show-new-posts")
-      refute has_element?(view, "#feed-calendar-mobile-slot.feed-cal-slot--away")
+      assert has_element?(view, "#feed-calendar-mobile-slot #show-new-posts-mobile")
+      assert has_element?(view, "#feed-calendar-mobile-slot #feed-calendar-mobile")
+
+      view |> element("#show-new-posts-mobile") |> render_click()
+
+      refute has_element?(view, "#show-new-posts-mobile")
+      assert has_element?(view, "#feed-calendar-mobile-slot #feed-calendar-mobile")
     end
 
-    test "the waiting-posts pill sits on the compose line, not this one", %{conn: conn} do
-      # Which is what keeps the timeline still: that line is always there, so a
-      # post arriving cannot push the column down (issue: Stefan, 2026-08-31).
+    test "with the calendar unfolded the pill gets a row of its own", %{conn: conn} do
+      # There is no date to stand in for while the month grid is open, and a
+      # pill over a month grid would cover the days. The slot says which case
+      # it is in (`data-open`) and the stylesheet stacks instead of overlaying.
+      {conn, user} = create_and_login_user(conn)
+      author = feed_with_history(user)
+
+      {:ok, view, _html} = live(conn, ~p"/feed")
+      render_click(view, "cal-toggle")
+      {:ok, _fresh} = Posts.create_post(author, %{body: "arriving while I read"})
+
+      assert has_element?(view, "#feed-calendar-mobile-slot[data-open] #show-new-posts-mobile")
+      refute has_element?(view, "#feed-calendar-mobile.h-10")
+    end
+
+    test "the pill is rendered once per breakpoint, never twice on one", %{conn: conn} do
+      # The desktop's copy stays on the compose line, which is what keeps that
+      # column still (Stefan, 2026-08-31); the phone's is in the date's slot.
+      # Two ids, because two live elements may not share one, and each line is
+      # hidden on the other's breakpoint, so a reader only ever sees one.
       {conn, user} = create_and_login_user(conn)
       author = feed_with_history(user)
 
       {:ok, view, _html} = live(conn, ~p"/feed")
       {:ok, _fresh} = Posts.create_post(author, %{body: "arriving while I read"})
 
-      assert has_element?(view, "#composer-trigger #show-new-posts")
-      refute has_element?(view, "#feed-mobile-controls #show-new-posts")
+      assert has_element?(view, "#composer-trigger.md\\:flex #show-new-posts")
+      assert has_element?(view, "#feed-mobile-controls.md\\:hidden #show-new-posts-mobile")
 
-      # Which is also why that row has no desktop story left: the quote was the
-      # only thing on it a wide screen ever showed.
-      assert has_element?(view, "#feed-mobile-controls.md\\:hidden")
+      # Both are the same control: one press, whichever copy took it, empties
+      # the queue and takes both away.
+      view |> element("#show-new-posts") |> render_click()
+
+      refute has_element?(view, "#show-new-posts")
+      refute has_element?(view, "#show-new-posts-mobile")
     end
   end
 

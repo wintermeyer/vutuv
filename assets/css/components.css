@@ -3041,23 +3041,122 @@ html.lightbox-open { overflow: hidden; }
   }
 }
 
-/* The phone's calendar and the filter button share one line above the feed's
-   timeline (`#feed-mobile-controls`). The slot has to floor at 0 rather than at
-   its min-content, which is the card's whole row of glyphs, or the line wraps.
+/* The phone's control row above the feed's timeline (`#feed-mobile-controls`):
+   the filter button, then this slot, which holds the folded calendar's date
+   and, while posts are waiting, the pill that quotes the newest of them. The
+   slot has to floor at 0 rather than at its min-content, which is the card's
+   whole row of glyphs, or the line wraps.
 
-   Until 2026-08-31 it also folded sideways (`--away`) whenever posts were
-   waiting, because the pill carrying the newest post's opening line was on this
-   same line and needed the width; the pill moved to the compose line, which
-   exists at every width, so there is nothing left to animate. Two things went
-   with the fold and are worth knowing if it ever comes back: the declarations
-   had to live HERE rather than as `flex-1` / `min-w-0` utilities, because this
-   file is in `layer(components)` and a utility beats a modifier in it, and
-   `overflow: clip` + `overflow-clip-margin` were what hid the folding card
-   without clipping its shadow. Neither reason survives a slot that never
-   moves. */
+   Folded, the date and the pill share ONE grid cell, so a waiting post is a
+   crossfade in place and never a line changing height: the date fades out
+   upward the moment the pill is in the slot (`:has()` — the pill's presence IS
+   the state, so the server marks nothing), the pill fades in from below (the
+   compose line's arrival keyframe, turned upward here through `--feed-enter`),
+   and a press takes the pill out of the DOM while the date fades back. (When
+   checking this in a browser: a background tab's document timeline does not
+   advance, so the transition sits at its first frame until the tab is shown.)
+   `visibility` rides along a beat late so the hidden date cannot be tabbed to,
+   and comes back at once. The date stays in the DOM throughout because a node
+   that leaves cannot fade — which is also why none of this is a `hidden`
+   attribute.
+
+   Unfolded (`data-open`, the server's one word here) the two stack instead:
+   there is no date to stand in for, and a pill over a month grid would cover
+   the days; the slot then takes the whole line and goes first, so the filter
+   button wraps under it rather than sitting alone above a month grid.
+
+   These live HERE rather than as utilities on the slot because this file is in
+   `layer(components)` and a utility on the same element beats a modifier in
+   it (the sideways `--away` fold of 2026-08 learned that first). */
 .feed-cal-slot {
   flex: 1 1 0%;
   min-width: 0;
+  display: grid;
+  --feed-enter: translateY(0.5rem);
+}
+
+.feed-cal-slot:not([data-open]) > * {
+  grid-area: 1 / 1;
+}
+
+.feed-cal-slot[data-open] {
+  order: -1;
+  flex-basis: 100%;
+  row-gap: 0.5rem;
+}
+
+.feed-cal-slot > .feed-cal-slot__cal {
+  transition:
+    opacity 220ms ease-out,
+    transform 220ms ease-out,
+    visibility 0s;
+}
+
+.feed-cal-slot:has([data-show-new]):not([data-open]) > .feed-cal-slot__cal {
+  opacity: 0;
+  transform: translateY(-0.5rem);
+  visibility: hidden;
+  transition-delay: 0s, 0s, 220ms;
+}
+
+@media (prefers-reduced-motion: reduce) {
+  .feed-cal-slot > .feed-cal-slot__cal {
+    transition: none;
+  }
+}
+
+/* ---------- Pull to reveal (`pull_to_reveal.js`) ----------
+
+   The hook draws the gesture itself — the timeline's slide as a Web Animation
+   on `#feed-body`, the arrow as inline `opacity`/`transform` on this
+   `phx-update="ignore"` indicator — so the drag costs the compositor and
+   nothing else, and a patch mid-pull drops none of it. All the stylesheet
+   holds is the indicator's resting place and the phase, which the hook writes
+   onto <html> as `data-feed-pull` (pulling → ready → busy → settling; on the
+   root because everything inside the feed is patched): past the threshold the
+   arrow turns over — letting go will do it — and while the reveal runs the
+   disc spins. */
+.feed-pull {
+  position: absolute;
+  inset-inline: 0;
+  top: 0;
+  z-index: 1;
+  display: flex;
+  justify-content: center;
+  opacity: 0;
+  pointer-events: none;
+}
+
+.feed-pull__glyph {
+  transition: transform 180ms ease-out;
+}
+
+html[data-feed-pull="ready"] .feed-pull__glyph {
+  transform: rotate(180deg);
+}
+
+html[data-feed-pull="busy"] .feed-pull__glyph {
+  animation: feed-pull-spin 700ms linear infinite;
+}
+
+@keyframes feed-pull-spin {
+  from {
+    transform: rotate(180deg);
+  }
+
+  to {
+    transform: rotate(540deg);
+  }
+}
+
+@media (prefers-reduced-motion: reduce) {
+  .feed-pull__glyph {
+    transition: none;
+  }
+
+  html[data-feed-pull="busy"] .feed-pull__glyph {
+    animation: none;
+  }
 }
 
 /* The pill arriving on the compose line, fading in from the right over the
@@ -3075,7 +3174,9 @@ html.lightbox-open { overflow: hidden; }
 @keyframes feed-teaser-in {
   from {
     opacity: 0;
-    transform: translateX(0.75rem);
+    /* From the right by default; a context that wants another direction sets
+       `--feed-enter` (the phone's date slot slides it up from below). */
+    transform: var(--feed-enter, translateX(0.75rem));
   }
 
   to {

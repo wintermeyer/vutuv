@@ -826,11 +826,11 @@ defmodule VutuvWeb.PostFeedLiveTest do
       insert(:follow, follower: user, followee: author)
 
       {:ok, live, _html} = live(conn, ~p"/feed")
-      assert has_element?(live, "#composer-trigger.flex")
+      assert has_element?(live, "#composer-trigger.md\\:flex")
 
       {:ok, _fresh} = Posts.create_post(author, %{body: "arriving while I read"})
 
-      assert has_element?(live, "#composer-trigger.flex")
+      assert has_element?(live, "#composer-trigger.md\\:flex")
     end
   end
 
@@ -846,7 +846,7 @@ defmodule VutuvWeb.PostFeedLiveTest do
       # trigger is #open-composer, which the shortcut clicks before focusing.
       # Renaming either id silently breaks the shortcut, so pin both here.
       assert has_element?(live, "#open-composer")
-      assert has_element?(live, "#composer-trigger.flex")
+      assert has_element?(live, "#composer-trigger.md\\:flex")
       assert has_element?(live, "#composer-panel.hidden")
       assert has_element?(live, "#composer-panel.hidden #composer-body")
 
@@ -855,11 +855,13 @@ defmodule VutuvWeb.PostFeedLiveTest do
       # Revealed: the panel is no longer hidden and the trigger is merely
       # hidden — it must stay IN the DOM (issue #1200's shape: a conditional
       # sibling above the editor makes morphdom relocate the panel, which blurs
-      # the contenteditable), and its two display classes stay mutually
-      # exclusive so `hidden` cannot lose the cascade (issue #880).
+      # the contenteditable). Closed, the line is `hidden md:flex` (the phone
+      # never shows it; the tab bar's Write tab is its compose control), so
+      # "open" is the responsive half being gone, and the class list is picked
+      # by one condition so `hidden` cannot lose the cascade to a bare `flex`
+      # beside it (issue #880).
       refute has_element?(live, "#composer-panel.hidden")
-      assert has_element?(live, "#composer-trigger.hidden")
-      refute has_element?(live, "#composer-trigger.flex")
+      assert has_element?(live, "#composer-trigger.hidden:not(.md\\:flex)")
     end
 
     test "the composer submits on Cmd/Ctrl+Enter like the message composer", %{conn: conn} do
@@ -893,7 +895,7 @@ defmodule VutuvWeb.PostFeedLiveTest do
       {:ok, live, _html} = live(conn, ~p"/feed")
 
       live |> element("#open-composer") |> render_click()
-      assert has_element?(live, "#composer-trigger.hidden")
+      assert has_element?(live, "#composer-trigger.hidden:not(.md\\:flex)")
 
       # The composer's corner ✕ (feed compose only) bubbles up to the feed and
       # collapses the panel again.
@@ -901,7 +903,7 @@ defmodule VutuvWeb.PostFeedLiveTest do
 
       live |> element(~s(#composer-form button[phx-click="close-composer"])) |> render_click()
 
-      assert has_element?(live, "#composer-trigger.flex")
+      assert has_element?(live, "#composer-trigger.md\\:flex")
       assert has_element?(live, "#composer-panel.hidden")
     end
 
@@ -910,14 +912,14 @@ defmodule VutuvWeb.PostFeedLiveTest do
       {:ok, live, _html} = live(conn, ~p"/feed")
 
       live |> element("#open-composer") |> render_click()
-      assert has_element?(live, "#composer-trigger.hidden")
+      assert has_element?(live, "#composer-trigger.hidden:not(.md\\:flex)")
 
       live
       |> form("#composer-form", %{"post" => %{"body" => "first words"}})
       |> render_submit()
 
       # The viewer's own post arrived below, so the composer collapsed again.
-      assert has_element?(live, "#composer-trigger.flex")
+      assert has_element?(live, "#composer-trigger.md\\:flex")
       assert has_element?(live, "#composer-panel.hidden")
     end
 
@@ -938,7 +940,7 @@ defmodule VutuvWeb.PostFeedLiveTest do
       |> render_change()
 
       refute has_element?(live, "#composer-panel.hidden")
-      assert has_element?(live, "#composer-trigger.hidden")
+      assert has_element?(live, "#composer-trigger.hidden:not(.md\\:flex)")
     end
 
     test "typed tags alone bring the composer back too", %{conn: conn} do
@@ -963,7 +965,7 @@ defmodule VutuvWeb.PostFeedLiveTest do
       |> render_change()
 
       assert has_element?(live, "#composer-panel.hidden")
-      assert has_element?(live, "#composer-trigger.flex")
+      assert has_element?(live, "#composer-trigger.md\\:flex")
     end
   end
 
