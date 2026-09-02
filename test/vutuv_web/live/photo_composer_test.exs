@@ -192,6 +192,20 @@ defmodule VutuvWeb.PhotoComposerTest do
       assert has_element?(live, "#composer-add-photos")
     end
 
+    test "the picker carries a short label for the phone beside the long one", %{conn: conn} do
+      # Three controls share the bottom row (picker, ⋯, Post) and on a narrow
+      # screen "Add photos" pushed the last one onto a line of its own. The
+      # verb is what goes: beside a camera glyph, in a row whose other button
+      # publishes, the noun is unambiguous. Which of the two shows is CSS
+      # (Tailwind's `sm:` breakpoint) and not assertable here — this only
+      # guards that the short one is still rendered to swap in.
+      live = open_composer(conn)
+      picker = element(live, "#composer-add-photos") |> render()
+
+      assert picker =~ ">Photos<"
+      assert picker =~ ">Add photos<"
+    end
+
     test "a photo grows into the grid: natural ratio, feed version, caption inline", %{
       conn: conn,
       user: user

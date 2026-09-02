@@ -1451,8 +1451,11 @@ like two kinds, with the questions asked diverging per tab, so they went:
 
 The **editor is always on top**. Attached photos always render as the
 **large grid** below it (adding more photos is a tile in the grid, and with
-no photos yet the picker is the bottom row's "Add photos" label — exactly
+no photos yet the picker is the bottom row's photo label — exactly
 one upload input renders, and both carry the same `composer-add-photos` id).
+That label drops its verb under 40rem: "Fotos" rather than "Fotos
+hinzufügen", so the picker, the ⋯ control and the Post button share one line
+on a phone instead of pushing Post onto a second.
 Tiles keep the photo's **own aspect ratio** (inline
 `aspect-ratio` from the stored dimensions — the author judges the upload by
 the full frame, never a square crop). Under every tile sit the things a
