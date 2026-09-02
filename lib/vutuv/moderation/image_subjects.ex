@@ -28,7 +28,10 @@ defmodule Vutuv.Moderation.ImageSubjects do
   alias Vutuv.Posts.PostImage
   alias Vutuv.Posts.PostReview
   alias Vutuv.Posts.PostScreenshot
+  alias Vutuv.Posts.PostVideo
+  alias Vutuv.Posts.PostVideoFrame
   alias Vutuv.Posts.Screenshots
+  alias Vutuv.PostVideoStore
   alias Vutuv.Profiles.Qualification
   alias Vutuv.Profiles.Url
   alias Vutuv.QualificationDocument
@@ -37,6 +40,7 @@ defmodule Vutuv.Moderation.ImageSubjects do
   alias Vutuv.Repo
   alias Vutuv.Uploads
   alias Vutuv.Uploads.Originals
+  alias Vutuv.Videos
 
   # The avatar/cover twins differ only in their column names + uploader module.
   @profile_images %{
@@ -219,6 +223,18 @@ defmodule Vutuv.Moderation.ImageSubjects do
         Originals.path("review_covers/#{review.id}"),
         largest_served_file("review_covers/#{review.id}")
       ])
+    else
+      _ -> :gone
+    end
+  end
+
+  # One still of a post's clip (issue #1908): the JPEG the pipeline pulled,
+  # in the private tree beside the original. Immutable once written, so no
+  # fingerprint; gone when the clip was refused or swept meanwhile.
+  def source(%ImageScan{kind: "post_video_frame"} = scan) do
+    with %PostVideoFrame{} = frame <- Repo.get(PostVideoFrame, scan.subject_id),
+         %PostVideo{} = video <- Repo.get(PostVideo, frame.video_id) do
+      first_existing([PostVideoStore.frame_path(video.token, frame.position)])
     else
       _ -> :gone
     end
@@ -521,6 +537,15 @@ defmodule Vutuv.Moderation.ImageSubjects do
     end
   end
 
+  # A frame that passed: the clip's own verdict is re-derived from all of its
+  # frames, and the last one to pass releases the clip (`Vutuv.Videos`).
+  def apply_approved(%ImageScan{kind: "post_video_frame"} = scan) do
+    with :ok <- Videos.frame_approved(scan.subject_id) do
+      broadcast(scan, :approved)
+      :ok
+    end
+  end
+
   @doc """
   Deletes the rejected image on the spot: files (served, quarantined and the
   private original — nothing unsafe stays at rest) and the asset's
@@ -732,6 +757,15 @@ defmodule Vutuv.Moderation.ImageSubjects do
 
       _ ->
         :stale
+    end
+  end
+
+  # One refused frame refuses the whole clip: every file of it goes, the row
+  # keeps the verdict and the second (`Vutuv.Videos.frame_rejected/1`).
+  def apply_rejected(%ImageScan{kind: "post_video_frame"} = scan) do
+    with :ok <- Videos.frame_rejected(scan.subject_id) do
+      broadcast(scan, :rejected)
+      :ok
     end
   end
 
@@ -953,7 +987,24 @@ defmodule Vutuv.Moderation.ImageSubjects do
       gallery_stranded("organization_image") ++
       post_screenshot_stranded() ++
       review_cover_stranded() ++
+      video_frame_stranded() ++
       Enum.flat_map(Map.keys(@flat_stranded), &flat_stranded/1)
+  end
+
+  # A clip's stills waiting on a scan nobody queued (the enqueue is a separate
+  # write after the frames are recorded, so a crash between the two leaves
+  # exactly this). Owned by the clip's uploader.
+  defp video_frame_stranded do
+    from(f in PostVideoFrame,
+      as: :subject,
+      join: v in PostVideo,
+      on: v.id == f.video_id,
+      where: f.moderation == "pending",
+      where: not exists(open_scan_exists("post_video_frame")),
+      select: {f.id, v.user_id}
+    )
+    |> Repo.all()
+    |> Enum.map(fn {id, owner_id} -> {"post_video_frame", id, owner_id, nil} end)
   end
 
   defp open_scan_exists(kind) do

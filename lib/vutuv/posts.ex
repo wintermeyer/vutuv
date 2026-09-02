@@ -85,6 +85,7 @@ defmodule Vutuv.Posts do
   alias Vutuv.Posts.PostReview
   alias Vutuv.Posts.PostScreenshot
   alias Vutuv.Posts.PostTag
+  alias Vutuv.Posts.PostVideo
   alias Vutuv.Posts.ReviewCovers
   alias Vutuv.Posts.Screenshots
   alias Vutuv.Posts.ScreenshotWorker
@@ -198,11 +199,12 @@ defmodule Vutuv.Posts do
 
   defp do_create_organization_post(organization, acting_user, attrs) do
     image_ids = parse_ids(fetch(attrs, :image_ids) || [])
+    video_id = parse_id(fetch(attrs, :video_id))
     seed = %Post{organization_id: organization.id, acting_user_id: acting_user.id}
 
     with :ok <- check_image_count(image_ids),
-         {:ok, changeset} <- build_changeset(seed, attrs, [], image_ids) do
-      case insert_post(changeset, image_ids, nil, nil) do
+         {:ok, changeset} <- build_changeset(seed, attrs, [], image_ids, video_id) do
+      case insert_post(changeset, image_ids, nil, nil, video_id) do
         {:ok, post} ->
           post = preload_post(post)
           broadcast_new_post(post)
@@ -311,10 +313,12 @@ defmodule Vutuv.Posts do
   # the insert is the same act either way, so it is written once here.
   defp do_create_post(%User{} = author, attrs, denials, remote_target) do
     image_ids = parse_ids(fetch(attrs, :image_ids) || [])
+    video_id = parse_id(fetch(attrs, :video_id))
 
     with :ok <- check_image_count(image_ids),
-         {:ok, changeset} <- build_changeset(%Post{user_id: author.id}, attrs, denials, image_ids) do
-      case insert_post(changeset, image_ids, nil, remote_target) do
+         {:ok, changeset} <-
+           build_changeset(%Post{user_id: author.id}, attrs, denials, image_ids, video_id) do
+      case insert_post(changeset, image_ids, nil, remote_target, video_id) do
         {:ok, post} ->
           post = preload_post(post)
           broadcast_new_post(post)
@@ -341,6 +345,7 @@ defmodule Vutuv.Posts do
 
   defp do_create_reply(%User{} = author, %Post{} = parent, attrs, note) do
     image_ids = parse_ids(fetch(attrs, :image_ids) || [])
+    video_id = parse_id(fetch(attrs, :video_id))
 
     with :ok <- check_reply_allowed(author, parent),
          :ok <- check_image_count(image_ids),
@@ -348,8 +353,8 @@ defmodule Vutuv.Posts do
          # check_reply_allowed already constrains to public. Any denials in the
          # params are dropped, so the public reply count and the parent-author
          # notification only ever concern content the author can see (issue #774).
-         {:ok, changeset} <- build_changeset(%Post{user_id: author.id}, attrs, [], image_ids) do
-      case insert_post(changeset, image_ids, parent, note) do
+         {:ok, changeset} <- build_changeset(%Post{user_id: author.id}, attrs, [], image_ids, video_id) do
+      case insert_post(changeset, image_ids, parent, note, video_id) do
         {:ok, post} ->
           post = preload_post(post)
           # Answering a post is the clearest possible proof of having read it,
@@ -454,14 +459,17 @@ defmodule Vutuv.Posts do
   `{:error, :edit_engaged}` once someone liked, reposted or answered it.
   """
   def update_post(%Post{} = post, attrs) do
-    post = Repo.preload(post, [:denials, :post_tags, :post_hashtags, :images, :review])
+    post = Repo.preload(post, [:denials, :post_tags, :post_hashtags, :images, :review, :video])
     image_ids = parse_ids(fetch(attrs, :image_ids) || [])
+    # An edit never changes the clip; it only has to know there is one, so a
+    # video-only post can keep its empty body.
+    video_id = post.video && post.video.id
 
     with :ok <- check_edit_open(post),
          {:ok, denials} <- normalize_denials(post.user_id, fetch(attrs, :denials) || []),
          :ok <- check_visibility_lock(post, denials),
          :ok <- check_image_count(image_ids),
-         {:ok, changeset} <- build_changeset(post, attrs, denials, image_ids) do
+         {:ok, changeset} <- build_changeset(post, attrs, denials, image_ids, video_id) do
       removed = Enum.reject(post.images, &(&1.id in image_ids))
       run_update(changeset, removed, image_ids)
     end
@@ -559,12 +567,14 @@ defmodule Vutuv.Posts do
     # cascades away with the post, but the Delete(Tombstone) still has to reach
     # the person on the other network who was answered (issue #1070). The
     # in-memory struct is the only place that address is left afterwards.
-    post = Repo.preload(post, [:images, :screenshot, :review, :remote_reply_ref])
+    post = Repo.preload(post, [:images, :video, :screenshot, :review, :remote_reply_ref])
     parent_id = reply_parent_id(post.id)
 
     case Repo.delete(post) do
       {:ok, deleted} ->
         Enum.each(post.images, &PostImageStore.delete(&1.token))
+        # The clip's row cascades with the post; its files do not.
+        if post.video, do: Vutuv.Videos.delete_files(post.video)
         # The post_screenshots row cascades with the post; its stored files do
         # not, so purge them explicitly (a no-op when there was no screenshot).
         if post.screenshot, do: Screenshots.delete(post.screenshot)
@@ -586,7 +596,7 @@ defmodule Vutuv.Posts do
 
   # Body + denials + tags + review in one changeset; images attach separately
   # (they are pre-existing rows, not nested params).
-  defp build_changeset(post_or_struct, attrs, denials, image_ids) do
+  defp build_changeset(post_or_struct, attrs, denials, image_ids, video_id) do
     tag_values = attrs |> fetch(:tags) |> parse_tag_values()
     # Over the cap the post does not save at all, so nothing is minted for it
     # either — by the chip row **or** by the body's hashtags: find-or-create runs
@@ -601,7 +611,7 @@ defmodule Vutuv.Posts do
       |> Ecto.Changeset.put_assoc(:post_tags, Enum.map(tag_ids, &%PostTag{tag_id: &1}))
       |> put_body_hashtags(tag_ids, keepable?)
       |> put_review(post_or_struct, fetch(attrs, :review))
-      |> require_content(image_ids)
+      |> require_content(image_ids, video_id)
       |> validate_tag_count(tag_values)
 
     if changeset.valid?, do: {:ok, changeset}, else: {:error, changeset}
@@ -719,10 +729,11 @@ defmodule Vutuv.Posts do
   defp put_review(changeset, _post, _other),
     do: Ecto.Changeset.add_error(changeset, :review, "is invalid")
 
-  defp require_content(changeset, image_ids) do
+  # A post needs words, a picture or a clip — any one of the three.
+  defp require_content(changeset, image_ids, video_id) do
     body = Ecto.Changeset.get_field(changeset, :body) || ""
 
-    if String.trim(body) == "" and image_ids == [] do
+    if String.trim(body) == "" and image_ids == [] and is_nil(video_id) do
       Ecto.Changeset.add_error(changeset, :body, "can't be blank")
     else
       changeset
@@ -734,7 +745,7 @@ defmodule Vutuv.Posts do
   # claims and — for a reply — the PostReply row (plus, when it answers another
   # network, the PostRemoteReply sidecar) in one transaction, so post and
   # references land (or roll back) together.
-  defp insert_post(changeset, image_ids, parent, remote_target) do
+  defp insert_post(changeset, image_ids, parent, remote_target, video_id) do
     Repo.transaction(fn ->
       changeset
       |> Ecto.Changeset.change(published_on: Vutuv.BerlinTime.today())
@@ -742,6 +753,7 @@ defmodule Vutuv.Posts do
       |> case do
         {:ok, post} ->
           attach_images!(post, image_ids)
+          attach_video!(post, video_id)
           insert_reply_ref!(post, parent)
           insert_remote_reply_ref!(post, remote_target)
           mark_images_pending!(post)
@@ -853,6 +865,30 @@ defmodule Vutuv.Posts do
 
       if count != 1, do: Repo.rollback(:invalid_images)
     end)
+  end
+
+  # Claims the clip for the post (issue #1906) the way the images are claimed:
+  # the uploader's own, still unattached, and **ready** — a post never carries a
+  # clip that is still being converted or checked (`Vutuv.Posts.PendingVideoPost`
+  # holds the text until then), so a tampered or premature id rolls the whole
+  # insert back.
+  defp attach_video!(_post, nil), do: :ok
+
+  defp attach_video!(%Post{} = post, video_id) do
+    uploader_id = post.user_id || post.acting_user_id
+    if is_nil(uploader_id), do: Repo.rollback(:invalid_video)
+
+    {count, _} =
+      Repo.update_all(
+        from(v in PostVideo,
+          where:
+            v.id == ^video_id and v.user_id == ^uploader_id and is_nil(v.post_id) and
+              v.stage == "ready"
+        ),
+        set: [post_id: post.id, updated_at: NaiveDateTime.utc_now(:second)]
+      )
+
+    if count != 1, do: Repo.rollback(:invalid_video)
   end
 
   # Sets the flag inside the insert transaction (issue #1104), so the struct the
@@ -6020,6 +6056,9 @@ defmodule Vutuv.Posts do
     # where an unbounded walk up the chain would start.
     [
       :images,
+      # The clip (issue #1906), nil for every post without one. The card, the
+      # agent formats and the Fediverse Note all draw it from here.
+      :video,
       # The other kind of author (issue #1334) — nil on a personal post, and the
       # one `Vutuv.Posts.author/1` names on an organization post. Deliberately
       # not `:acting_user`: who pressed publish is never rendered, so paying a
@@ -6531,7 +6570,17 @@ defmodule Vutuv.Posts do
         |> Repo.insert(
           on_conflict:
             {:replace,
-             [:body, :tags, :license, :image_ids, :photos, :layout, :fill?, :updated_at]},
+             [
+               :body,
+               :tags,
+               :license,
+               :image_ids,
+               :video_id,
+               :photos,
+               :layout,
+               :fill?,
+               :updated_at
+             ]},
           conflict_target: draft_conflict_target(context)
         )
         |> case do

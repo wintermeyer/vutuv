@@ -22,6 +22,7 @@ defmodule Vutuv.UploadsGitignoreTest do
     avatars
     covers
     post_images
+    post_videos
     review_covers
     screenshots
     originals

@@ -97,6 +97,11 @@ defmodule Vutuv.Posts.Post do
     has_many(:denials, Vutuv.Posts.PostDenial, on_replace: :delete)
     has_many(:images, Vutuv.Posts.PostImage, preload_order: [asc: :position])
 
+    # The clip (issue #1906), at most one. It only ever hangs off a post once it
+    # is ready: a post with a clip is not created before that
+    # (`Vutuv.Posts.PendingVideoPost`).
+    has_one(:video, Vutuv.Posts.PostVideo)
+
     # The auto-generated link screenshot: present iff this post carried a single
     # URL and no image at save time (see Vutuv.Posts.Screenshots). Rendered
     # beside the body once `status: "ready"`.
