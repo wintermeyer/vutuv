@@ -158,7 +158,7 @@ window frame (`Vutuv.BrowserFrame`); see `Vutuv.PageScreenshot`. Needs a
 
 Three surfaces ask for one, all storing through `Vutuv.Screenshot` and gated by
 `:generate_screenshots`: a member's **profile link** (`urls.screenshot`, captured
-on save), a **post's single link** (`post_screenshots`, a durable queue, see
+on save and swept, below), a **post's single link** (`post_screenshots`, a durable queue, see
 [posts-and-feed.md](posts-and-feed.md)) and an **organization's homepage**
 (`organization_screenshots`, the same queue shape, see
 [organizations.md](organizations.md)). They differ in one preflight: the link and
@@ -167,6 +167,43 @@ homepage paths **follow** redirects to their destination
 redirecting to `www.` is the normal shape of a homepage; the post path insists on
 a plain HTTP 200 (`Vutuv.Posts.Screenshots.ensure_http_ok/1`), because there a
 redirect usually means a shortener or a login wall.
+
+### The profile link's standing retry
+
+The link form's capture is fire-and-forget (`PageScreenshot.generate_async/1`),
+which is the fast path and never the guarantee: a blue/green deploy stops the
+slot mid-capture without a word, and a link created by any other path — the
+LinkedIn import inserts them straight through `Repo` — had nothing capturing it
+at all. Both left the member a grey camera tile for good; 15 of the 1,938 links
+on vutuv.de sat like that, most in same-second batches an import left behind.
+
+So the row is the record of unfinished work and `Vutuv.PageScreenshot.Sweeper`
+acts on it: every five minutes it captures `PageScreenshot.due/1`, up to five
+links, least recently attempted first. `urls.screenshot_attempted_at` is
+stamped before each capture and on every outcome — that is the sweeper's clock,
+not a claim that anything was captured, and without it the one link that can
+never be shot sorts to the front and spends every batch (the deadlock that
+stalled `Vutuv.Fediverse.refresh_counts/1`, #1316). It rides `:generate_screenshots`
+like the captures themselves, so an air-gapped installation runs no sweeper.
+
+Three things keep a link out of that query for good: `broken?` (an SSRF-refused
+target), a `screenshot_moderation` of `"rejected"` (the AI scan threw the
+picture out, and re-shooting it every six hours would be a treadmill), and
+simply having a screenshot.
+
+`broken?` had to be cleaned up before it could carry that weight. Until v5 the
+pipeline flagged **every** failure with it — a missing Chromium binary, a
+timeout, a site down that afternoon — and nothing ever cleared it, so vutuv.de
+carried 45 links flagged between 2016-12 and 2018-03, none of which resolves to
+an internal address today. They are ordinary member homepages that a rule which
+no longer exists poisoned, and the sweeper would have stepped over them forever;
+`clear_stale_broken_flag_on_urls` sets them back to NULL. A link that really is
+an internal target costs one DNS lookup on the next sweep and is flagged again. Which is why **editing a link's URL clears it**
+(`Url.changeset/2`): otherwise the row keeps a photograph of a different page
+and, having one, is never captured again. The LinkedIn import nudges the
+member's own waiting links after its transaction commits
+(`capture_missing_async/1`, one task for the batch), so the pictures arrive
+while they are still looking at their fresh profile.
 
 ### How the browser is driven
 

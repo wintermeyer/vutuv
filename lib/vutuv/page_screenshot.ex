@@ -56,6 +56,10 @@ defmodule Vutuv.PageScreenshot do
 
   A blocklisted page (`Vutuv.ScreenshotBlocklist`) never gets a task at all —
   the check is a cached string comparison, cheaper than the process it saves.
+
+  This is the fast path only, never the guarantee: the task dies with the slot a
+  deploy stops, and a link created anywhere else never gets one at all. What
+  makes a screenshot actually happen is `due/1` and the sweeper behind it.
   """
   def generate_async(%Url{} = url) do
     if Application.get_env(:vutuv, :generate_screenshots, true) and
@@ -64,6 +68,85 @@ defmodule Vutuv.PageScreenshot do
     end
 
     :ok
+  end
+
+  @doc """
+  Works through `user_id`'s waiting links in one background task, so a member
+  who just imported an archive sees the pictures arrive instead of waiting for
+  the next sweep. One task for the batch, not one per link: each capture is a
+  headless Chromium of its own, and five at once is not a nudge.
+
+  Fire it **after** the import's transaction commits — a task started inside it
+  reads on another connection and finds no row yet.
+  """
+  def capture_missing_async(user_id) do
+    if Application.get_env(:vutuv, :generate_screenshots, true) do
+      Task.Supervisor.start_child(Vutuv.TaskSupervisor, fn ->
+        capture_due(user_id: user_id)
+      end)
+    end
+
+    :ok
+  end
+
+  # How long before a link whose capture produced no screenshot is tried again.
+  @retry_after_hours 6
+  # How many links one pass captures. Each one costs a Chromium run of up to
+  # `Cdp.capture_seconds/0` + 10 s, and they run one after the other.
+  @batch 5
+
+  @doc """
+  The profile links still waiting for a screenshot, least-recently-attempted
+  first: never captured, not permanently refused (`broken?`), not moderated
+  away (`screenshot_moderation`), and either never attempted or last attempted
+  more than #{@retry_after_hours} hours ago. Capped at #{@batch}; `user_id:`
+  narrows it to one member's links (what an import nudges, so a member with
+  more than #{@batch} fresh links gets the rest from the next sweep).
+
+  There is deliberately no attempt ceiling, unlike the post and organization
+  queues: a link is a page somebody chose to show, so a site that is down today
+  is worth another look tomorrow, and one run every #{@retry_after_hours} hours
+  is cheap enough to keep offering that indefinitely.
+
+  This is what makes a screenshot happen. `generate_async/1` is the fast path
+  from the link form, and it was the only one: a task the deploy killed
+  mid-capture was never retried, and a link created by any other path (the
+  LinkedIn import inserts them straight through `Repo`) was never captured at
+  all — 15 of the 1,938 links on vutuv.de sat like that, most of them in
+  same-second batches an import left behind. So the *row* is the record of
+  unfinished work, and `Vutuv.PageScreenshot.Sweeper` acts on it.
+
+  Both nullable columns are asked twice (`is_nil(x) or x != …`): a bare
+  inequality is NULL rather than true for a row that was never flagged, which
+  is almost all of them, so it would silently return nothing.
+  """
+  def due(opts \\ []) do
+    cutoff = NaiveDateTime.add(NaiveDateTime.utc_now(:second), -@retry_after_hours, :hour)
+
+    from(u in Url,
+      where: is_nil(u.screenshot),
+      where: is_nil(u.broken?) or u.broken? == false,
+      where: is_nil(u.screenshot_moderation) or u.screenshot_moderation != "rejected",
+      where: is_nil(u.screenshot_attempted_at) or u.screenshot_attempted_at <= ^cutoff,
+      order_by: [asc_nulls_first: u.screenshot_attempted_at],
+      limit: @batch
+    )
+    |> scope_to_user(Keyword.get(opts, :user_id))
+    |> Repo.all()
+  end
+
+  defp scope_to_user(query, nil), do: query
+  defp scope_to_user(query, user_id), do: from(u in query, where: u.user_id == ^user_id)
+
+  @doc """
+  Captures the due links one after the other and returns how many it worked
+  through — attempts, not successes, since a blocklisted page is neither. What
+  `Vutuv.PageScreenshot.Sweeper` runs; `opts` are `due/1`'s.
+  """
+  def capture_due(opts \\ []) do
+    urls = due(opts)
+    Enum.each(urls, &generate_screenshot/1)
+    length(urls)
   end
 
   @doc """
@@ -98,10 +181,16 @@ defmodule Vutuv.PageScreenshot do
   end
 
   defp capture_store_and_flag(url) do
+    # Before the capture, not after, and on every outcome: this is `due/1`'s
+    # clock, not a claim that anything was captured. A run that dies mid-way —
+    # a Chromium crash, a deploy stopping the slot — must still move the link
+    # off the front of the next batch, or the one link that can never be shot
+    # sorts oldest-first and spends every batch on itself forever.
+    stamp_attempt(url)
+
     case capture_and_frame(url) do
       {:ok, framed_path} ->
         store(url, framed_path)
-        set_broken(url, false)
         File.rm(framed_path)
         :ok
 
@@ -345,7 +434,9 @@ defmodule Vutuv.PageScreenshot do
 
     result =
       url
-      |> Url.changeset(%{screenshot: upload})
+      # `broken?: false` rides along rather than following as a second update
+      # of the same row: a page we just photographed is by definition reachable.
+      |> Url.changeset(%{screenshot: upload, broken?: false})
       |> Repo.update()
 
     # The fresh capture waits in AI-moderation limbo until the scan releases
@@ -362,6 +453,14 @@ defmodule Vutuv.PageScreenshot do
     url
     |> Url.changeset(%{broken?: value})
     |> Repo.update()
+  end
+
+  # One targeted write rather than a changeset round trip: nothing downstream
+  # reads the stamp, and leaving `updated_at` alone keeps this out of the
+  # row's own history.
+  defp stamp_attempt(%Url{id: id}) do
+    from(u in Url, where: u.id == ^id)
+    |> Repo.update_all(set: [screenshot_attempted_at: NaiveDateTime.utc_now(:second)])
   end
 
   @doc """

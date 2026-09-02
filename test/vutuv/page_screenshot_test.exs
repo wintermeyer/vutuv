@@ -12,6 +12,7 @@ defmodule Vutuv.PageScreenshotTest do
   import ExUnit.CaptureLog
   import Vutuv.Factory
 
+  alias Vutuv.Profiles.Url
   alias Vutuv.SocialFeed.Http
 
   setup do
@@ -172,7 +173,7 @@ defmodule Vutuv.PageScreenshotTest do
       # the wrong reason.
       assert :ok = Vutuv.PageScreenshot.generate_screenshot(url)
 
-      reloaded = Vutuv.Repo.get!(Vutuv.Profiles.Url, url.id)
+      reloaded = Vutuv.Repo.get!(Url, url.id)
       assert is_nil(reloaded.screenshot)
       assert is_nil(reloaded.broken?)
     end
@@ -189,8 +190,8 @@ defmodule Vutuv.PageScreenshotTest do
 
     assert Vutuv.PageScreenshot.purge_blocklisted() == 1
 
-    assert is_nil(Vutuv.Repo.get!(Vutuv.Profiles.Url, blocked.id).screenshot)
-    assert Vutuv.Repo.get!(Vutuv.Profiles.Url, kept.id).screenshot == "b0efec47a6e9.webp"
+    assert is_nil(Vutuv.Repo.get!(Url, blocked.id).screenshot)
+    assert Vutuv.Repo.get!(Url, kept.id).screenshot == "b0efec47a6e9.webp"
   end
 
   test "capture_framed refuses a host that resolves to an internal IP before launching Chromium" do
@@ -232,7 +233,7 @@ defmodule Vutuv.PageScreenshotTest do
       end)
 
     assert log =~ "internal_target"
-    assert Repo.get!(Vutuv.Profiles.Url, url.id).broken? == true
+    assert Repo.get!(Url, url.id).broken? == true
   end
 
   test "refuses a profile URL that 3xx-redirects to an internal address" do
@@ -259,7 +260,7 @@ defmodule Vutuv.PageScreenshotTest do
       end)
 
     assert log =~ "internal_target"
-    assert Repo.get!(Vutuv.Profiles.Url, url.id).broken? == true
+    assert Repo.get!(Url, url.id).broken? == true
   end
 
   test "an environment failure is logged but does not poison the URL, so it is retried later" do
@@ -286,8 +287,128 @@ defmodule Vutuv.PageScreenshotTest do
     # Logged at :error so a broken capture pipeline is visible under prod's
     # :error Logger level, instead of failing silently ...
     assert log =~ "screenshot generation failed"
-    # ... and the row is left un-poisoned, so the bulk urls.create_screenshots
-    # task retries it once capture works again.
-    refute Repo.get!(Vutuv.Profiles.Url, url.id).broken?
+    # ... and the row is left un-poisoned, so the sweeper retries it once
+    # capture works again.
+    refute Repo.get!(Url, url.id).broken?
+  end
+
+  describe "due/1, the standing retry" do
+    setup do
+      %{user: insert_activated_user()}
+    end
+
+    defp due_ids, do: Enum.map(Vutuv.PageScreenshot.due(), & &1.id)
+
+    test "hands over the waiting links, never-attempted first", %{user: user} do
+      # A link with nothing but a URL is the shape the LinkedIn import leaves
+      # behind — it writes rows straight through `Repo`, so the link form's
+      # fire-and-forget capture never sees them. Before this query nothing ever
+      # looked at such a link again, and 15 of the 1,938 links on vutuv.de sat
+      # without a picture for good.
+      never = insert(:url, user: user, value: "https://never.example")
+
+      older =
+        insert(:url,
+          user: user,
+          value: "https://older.example",
+          screenshot_attempted_at: hours_ago(48)
+        )
+
+      newer =
+        insert(:url,
+          user: user,
+          value: "https://newer.example",
+          screenshot_attempted_at: hours_ago(24)
+        )
+
+      assert due_ids() == [never.id, older.id, newer.id]
+    end
+
+    test "leaves out what has a picture, cannot have one, or was just tried", %{user: user} do
+      shot = insert(:url, user: user, value: "https://a.example", screenshot: "abc123.webp")
+      broken = insert(:url, user: user, value: "https://b.example", broken?: true)
+      # A capture the AI moderation threw out. Without this the sweeper would
+      # shoot, store and re-scan the same rejected picture every six hours.
+      rejected =
+        insert(:url, user: user, value: "https://c.example", screenshot_moderation: "rejected")
+
+      just_tried =
+        insert(:url,
+          user: user,
+          value: "https://d.example",
+          screenshot_attempted_at: hours_ago(1)
+        )
+
+      due = due_ids()
+      refute shot.id in due
+      refute broken.id in due
+      refute rejected.id in due
+      refute just_tried.id in due
+    end
+
+    test "narrows to one member's links (what an import nudges)", %{user: user} do
+      other = insert_activated_user()
+      insert(:url, user: user, value: "https://mine.example")
+      theirs = insert(:url, user: other, value: "https://theirs.example")
+
+      assert Enum.map(Vutuv.PageScreenshot.due(user_id: other.id), & &1.id) == [theirs.id]
+    end
+
+    defp hours_ago(hours),
+      do: NaiveDateTime.add(NaiveDateTime.utc_now(:second), -hours, :hour)
+  end
+
+  describe "capture_due/1" do
+    test "a link it could not capture stops being due" do
+      # The deadlock this guards: an unshootable link is due again on the next
+      # sweep and, ordered oldest-first, spends the whole batch — so the links
+      # behind it are never reached. Calibrated by dropping the stamp in
+      # capture_store_and_flag/1: this link comes back and the test goes red.
+      user = insert_activated_user()
+      url = insert(:url, user: user, value: "https://unshootable.example")
+
+      args_file =
+        Path.join(System.tmp_dir!(), "chromium-args-#{System.unique_integer([:positive])}")
+
+      on_exit(fn -> File.rm(args_file) end)
+      Application.put_env(:vutuv, :chromium_path, fake_chromium(args_file))
+
+      capture_log(fn -> assert Vutuv.PageScreenshot.capture_due() == 1 end)
+
+      reloaded = Repo.get!(Url, url.id)
+      assert is_nil(reloaded.screenshot)
+      refute is_nil(reloaded.screenshot_attempted_at)
+      refute url.id in Enum.map(Vutuv.PageScreenshot.due(), & &1.id)
+    end
+
+    test "a blocklisted link is stamped too, so it never holds up the batch" do
+      # Nothing is captured here by design — a blocklisted page is one this
+      # installation never shoots, which is no failure and leaves no log. It
+      # still has to leave the batch, or the one link that will never have a
+      # picture is the only one the sweeper ever looks at.
+      user = insert_activated_user()
+      # The seeded blocklist ships heise.de (see Vutuv.ScreenshotBlocklist).
+      url = insert(:url, user: user, value: "https://www.heise.de/newsticker/meldung-1.html")
+
+      assert capture_log(fn -> assert Vutuv.PageScreenshot.capture_due() == 1 end) == ""
+
+      refute is_nil(Repo.get!(Url, url.id).screenshot_attempted_at)
+      refute url.id in Enum.map(Vutuv.PageScreenshot.due(), & &1.id)
+    end
+  end
+
+  test "editing a link to another address drops the picture of the old one" do
+    # Otherwise the profile shows a photograph of somebody else's page under
+    # the new address — and because the retry query asks for links with *no*
+    # screenshot, that row would never be captured again if the edit's own
+    # fire-and-forget task died. Wrong content instead of none, forever.
+    user = insert_activated_user()
+    url = insert(:url, user: user, value: "https://old.example", screenshot: "abc123.webp")
+
+    {:ok, moved} =
+      url |> Url.changeset(%{"value" => "https://new.example"}) |> Repo.update()
+
+    assert is_nil(moved.screenshot)
+    assert moved.id in Enum.map(Vutuv.PageScreenshot.due(), & &1.id)
   end
 end

@@ -15,6 +15,10 @@ defmodule Vutuv.Profiles.Url do
     # nil = none/grandfathered, "pending" = limbo, "approved" = released. Set
     # programmatically with the screenshot, never cast from params.
     field(:screenshot_moderation, :string)
+    # When the screenshot pipeline last ran for this link, whatever came of it:
+    # the clock Vutuv.PageScreenshot.due/1 orders its retry batch by. Set
+    # programmatically, never cast from params.
+    field(:screenshot_attempted_at, :naive_datetime)
     field(:broken?, :boolean)
     # The owner's chosen display order. Set programmatically (on create and via
     # the reorder/move actions), never cast from user params. NULLs sort last so
@@ -64,6 +68,24 @@ defmodule Vutuv.Profiles.Url do
     |> ensure_http_prefix
     |> validate_url
     |> reset_verification_on_value_change()
+    |> drop_screenshot_on_value_change()
+  end
+
+  # Pointing the row at another address makes the stored capture a picture of
+  # somebody else's page, so it goes with the URL it was taken of. Dropping the
+  # column is also what puts the row back in front of
+  # `Vutuv.PageScreenshot.due/1`, which asks for links with no screenshot — a
+  # row that kept the old one would never be captured again if the edit's
+  # fire-and-forget task died, and would show the wrong page indefinitely
+  # rather than none.
+  defp drop_screenshot_on_value_change(changeset) do
+    if get_change(changeset, :value) && get_field(changeset, :screenshot) do
+      changeset
+      |> put_change(:screenshot, nil)
+      |> put_change(:screenshot_moderation, nil)
+    else
+      changeset
+    end
   end
 
   # Editing the link to a different URL invalidates any existing proof (the

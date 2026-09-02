@@ -29,6 +29,7 @@ defmodule Vutuv.Imports.LinkedIn do
   alias Vutuv.Accounts
   alias Vutuv.Accounts.User
   alias Vutuv.Mentions
+  alias Vutuv.PageScreenshot
   alias Vutuv.Profiles.Education
   alias Vutuv.Profiles.PhoneNumber
   alias Vutuv.Profiles.Qualification
@@ -1145,7 +1146,17 @@ defmodule Vutuv.Imports.LinkedIn do
     # relax the mention-existence check for this whole transaction — otherwise a
     # stray `@token` would silently drop the row. A rename still rewrites these
     # bodies later, and only posts are scanned for handle availability.
-    Mentions.without_existence_check(fn -> do_apply_selection(user, selection) end)
+    result = Mentions.without_existence_check(fn -> do_apply_selection(user, selection) end)
+
+    # Links land here through `Repo.insert` rather than through the link form,
+    # so nothing queues their screenshot. The sweeper would find them within
+    # five minutes either way; this is only so the member watching their fresh
+    # profile sees the pictures arrive. After the transaction, never inside it:
+    # a task started in there reads on another connection and finds no row yet.
+    with {:ok, %{created: %{urls: created}}} when created > 0 <- result,
+         do: PageScreenshot.capture_missing_async(user.id)
+
+    result
   end
 
   defp do_apply_selection(user, selection) do
