@@ -368,13 +368,14 @@ defmodule VutuvWeb.FeedCalendarTest do
       assert has_element?(view, "#feed-mobile-controls #open-filter-sheet")
     end
 
-    test "the filter button comes first and keeps only its glyph", %{conn: conn} do
-      # A phone's control line is the width of a phone. The word "Filter" was
-      # a fifth of it, and the date beside it — or the waiting-posts quote that
-      # takes the date's place — is what the reader is actually reading; the
-      # funnel says filter on its own, and the accessible name still spells it
-      # out. Glyph left, date right: the fixed-width control at the edge, the
-      # one whose width varies with what it has to say on the inside.
+    test "the filter button comes first and says its word beside the date", %{conn: conn} do
+      # Glyph left, date right: the narrow control at the edge, the one whose
+      # width varies with what it has to say taking the rest. Beside the date
+      # the funnel says its word too — the date needs half the line at most,
+      # and a glyph a reader has never pressed is a guess. The word is rendered
+      # unconditionally and the stylesheet is what takes it away again once the
+      # waiting-posts pill needs that width (`.feed-filter` in components.css),
+      # so there is one source for the swap rather than two that have to agree.
       {conn, user} = create_and_login_user(conn)
       feed_with_history(user)
 
@@ -391,7 +392,9 @@ defmodule VutuvWeb.FeedCalendarTest do
 
       button = view |> element("#open-filter-sheet") |> render()
       assert button =~ ~s(aria-label="Filter")
-      assert button |> LazyHTML.from_fragment() |> LazyHTML.text() |> String.trim() == ""
+      assert button |> LazyHTML.from_fragment() |> LazyHTML.text() |> String.trim() == "Filter"
+
+      refute has_element?(view, "#open-filter-sheet.feed-filter--tight")
     end
 
     test "the compose line is the desktop's, and the phone never sees it", %{conn: conn} do
@@ -459,6 +462,37 @@ defmodule VutuvWeb.FeedCalendarTest do
 
       assert has_element?(view, "#feed-calendar-mobile-slot #show-new-posts-mobile.h-10")
       assert has_element?(view, "#open-filter-sheet.h-10")
+    end
+
+    test "the filter button gives its word up to the quote, and takes it back", %{conn: conn} do
+      # The quote is what the reader came for, so on the one line a phone has,
+      # the word steps aside for it — and only there. It stays in the DOM the
+      # whole time, collapsed by `--tight` rather than removed, so it fades
+      # instead of blinking out and the button keeps its name either way.
+      {conn, user} = create_and_login_user(conn)
+      author = feed_with_history(user)
+
+      {:ok, view, _html} = live(conn, ~p"/feed")
+      refute has_element?(view, "#open-filter-sheet.feed-filter--tight")
+
+      {:ok, _fresh} = Posts.create_post(author, %{body: "arriving while I read"})
+
+      assert has_element?(view, "#open-filter-sheet.feed-filter--tight")
+      assert has_element?(view, "#open-filter-sheet .feed-filter__label")
+
+      # Unfolded is not that situation: the slot takes the whole line and the
+      # button wraps under it with the line to itself, where the word is free.
+      render_click(view, "cal-toggle")
+
+      assert has_element?(view, "#show-new-posts-mobile")
+      refute has_element?(view, "#open-filter-sheet.feed-filter--tight")
+
+      # And pressing the pill gives the date its slot back, word and all.
+      render_click(view, "cal-toggle")
+      view |> element("#show-new-posts-mobile") |> render_click()
+
+      refute has_element?(view, "#show-new-posts-mobile")
+      refute has_element?(view, "#open-filter-sheet.feed-filter--tight")
     end
 
     test "unfolded the calendar is a card again, not a 40px line", %{conn: conn} do

@@ -3117,6 +3117,61 @@ html.lightbox-open { overflow: hidden; }
   }
 }
 
+/* The filter button on that same row (`.feed-filter`, `#open-filter-sheet`).
+   Beside the date it says its word: the date needs half the line at most, and a
+   funnel a reader has never pressed is a guess. Beside the waiting-posts pill it
+   gives the word up again and shrinks back to the 40px circle, because the pill
+   is a quote of the newest post and every pixel it loses comes off that quote
+   (Stefan, 2026-09-02).
+
+   Which of the two it is, the server says (`--tight`, `VutuvWeb.PostLive.Feed`):
+   the pill arrives in the same render, so one condition can shape both, and the
+   crossfade's `:has()` beside it is a different case — the date it fades has to
+   STAY in the DOM to fade at all, and no assign can express "still here, on its
+   way out". Here nothing is removed, so a class does.
+
+   It collapses over the crossfade's 220ms rather than snapping, because the date
+   underneath is centred in the slot and would jump sideways mid-fade; the two
+   durations have to stay equal, and `feed_filter_label_css_test.exs` compares
+   them. The cap is a hair over the word ("Filter", "Filtri"): a `max-width`
+   animation only reads as the word's own width while the two are close, and a
+   translation longer than the cap would be clipped. The padding carries the rest
+   of the width — 0.625rem either side of a 1.25rem glyph is exactly the 2.5rem
+   circle — so nothing here may be a width or padding utility: this file is
+   `layer(components)` and a utility on the button would win. */
+.feed-filter {
+  padding-inline: 1rem;
+  transition: padding-inline 220ms ease-out;
+}
+
+.feed-filter__label {
+  max-width: 4rem;
+  margin-inline-start: 0.5rem;
+  overflow: hidden;
+  white-space: nowrap;
+  transition:
+    max-width 220ms ease-out,
+    margin-inline-start 220ms ease-out,
+    opacity 220ms ease-out;
+}
+
+.feed-filter--tight {
+  padding-inline: 0.625rem;
+}
+
+.feed-filter--tight .feed-filter__label {
+  max-width: 0;
+  margin-inline-start: 0;
+  opacity: 0;
+}
+
+@media (prefers-reduced-motion: reduce) {
+  .feed-filter,
+  .feed-filter__label {
+    transition: none;
+  }
+}
+
 /* ---------- Pull to reveal (`pull_to_reveal.js`) ----------
 
    The hook draws the gesture itself — the timeline's slide as a Web Animation
