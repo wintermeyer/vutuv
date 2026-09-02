@@ -5,6 +5,7 @@ defmodule VutuvWeb.UrlController do
   alias VutuvWeb.AgentDocs
   alias VutuvWeb.AgentDocs.SectionDocs
   alias VutuvWeb.ControllerHelpers
+  alias VutuvWeb.RateLimit
 
   plug(VutuvWeb.Plug.AuthUser when action not in [:index, :show])
   plug(:scrub_params, "url" when action in [:create, :update])
@@ -141,10 +142,20 @@ defmodule VutuvWeb.UrlController do
     method = params["method"]
     user = conn.assigns[:user]
 
-    if method in Url.methods() do
-      handle_verify(conn, url, user, method)
-    else
-      redirect(conn, to: ~p"/settings/links/#{url}/verify")
+    cond do
+      method not in Url.methods() ->
+        redirect(conn, to: ~p"/settings/links/#{url}/verify")
+
+      # Each press fetches a URL the member chose, so the press is budgeted and
+      # not just the save: editing the link's value between rounds costs
+      # nothing, which made this an unthrottled request reflector at any host.
+      RateLimit.check_link_verify(conn, user) == :rate_limited ->
+        conn
+        |> put_flash(:error, gettext("Too many attempts. Please try again later."))
+        |> redirect(to: ~p"/settings/links/#{url}/verify")
+
+      true ->
+        handle_verify(conn, url, user, method)
     end
   end
 

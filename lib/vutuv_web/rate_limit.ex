@@ -147,6 +147,22 @@ defmodule VutuvWeb.RateLimit do
     check(conn, :instance_probe, user.id, limit: @probe_limit, window_ms: @probe_window_ms)
   end
 
+  @doc """
+  Throttles proving a profile link is yours (#{@probe_limit} per hour, per IP and
+  per member): every press of "Run the check" makes this server fetch a URL the
+  member typed, or ask a zone they named for a TXT record — the same act
+  `check_instance_probe/2` budgets for a forge, reached from a different page.
+
+  Its own bucket rather than that one, because the two are separate pages a
+  member can legitimately be fighting with at the same time, and being locked
+  out of proving a website by having re-checked a Gitea account would be a
+  puzzle. The size is the same for the same reason: generous enough that anyone
+  really fixing a DNS record never notices it.
+  """
+  def check_link_verify(conn, user) do
+    check(conn, :link_verify, user.id, limit: @probe_limit, window_ms: @probe_window_ms)
+  end
+
   defp identity_keys(_event, nil), do: []
   defp identity_keys(event, extra), do: [{event, :id, hash_identity(extra)}]
 

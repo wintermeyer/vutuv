@@ -86,6 +86,53 @@ defmodule Vutuv.RemoteHtmlTest do
     test "a member's own text mentioning the word is untouched" do
       assert RemoteHtml.to_text("<p>Ich schreibe ein Script.</p>") == "Ich schreibe ein Script."
     end
+
+    # The inbox reduces a delivery's content synchronously, before its 202, so
+    # the cost of this pass is request latency an attacker chooses. The shape
+    # that hurts is many opening tags and no closing one: each lazy run expands
+    # to the end of the subject before failing, which is quadratic in the body.
+    #
+    # Reductions, not the clock — twenty cases run in parallel here, so a timer
+    # measures the machine (see the calibration in `Vutuv.WorkCounter`).
+    # Calibrated against the unfixed code, which on this same 720 KB body costs
+    # about **1.46 billion** reductions and 232 s of wall time: with the runs
+    # unbounded the counter does not finish inside its own timeout. What this
+    # bound guards is `@script_body`; the input clamp is measured separately by
+    # the test below, because it is there for the rest of the pipeline.
+    #
+    # A note carrying `>` is not decoration: with no `>` in the string the
+    # `[^>]*>` never completes, the run never starts, and the benchmark measures
+    # nothing at all.
+    test "a hostile body of unclosed script tags is bounded work" do
+      hostile = String.duplicate("<script foo>", 60_000)
+
+      {reductions, text} =
+        Vutuv.WorkCounter.count_reductions(fn -> RemoteHtml.to_text(hostile, 10_000) end)
+
+      assert text == ""
+
+      assert reductions < 50_000_000,
+             "reducing a hostile body cost #{reductions} reductions"
+    end
+
+    test "an ordinary status is not slowed by the bound" do
+      ordinary =
+        String.duplicate(~s(<p>Ein Satz mit <a href="https://example.org">Link</a>.</p>), 200)
+
+      {reductions, text} =
+        Vutuv.WorkCounter.count_reductions(fn -> RemoteHtml.to_text(ordinary, 10_000) end)
+
+      assert text =~ "Ein Satz mit"
+      assert reductions < 5_000_000, "an ordinary status cost #{reductions} reductions"
+    end
+
+    test "content past the input clamp is dropped rather than reduced" do
+      # Ten times the callers' 10,000-character cap, so nothing a real server
+      # sends is touched; what is past it was never going to be stored anyway.
+      long = String.duplicate("a", 150_000)
+
+      assert String.length(RemoteHtml.to_text(long, nil)) <= 100_000
+    end
   end
 
   test "everything else is stripped, attributes included" do

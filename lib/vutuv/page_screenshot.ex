@@ -522,7 +522,7 @@ defmodule Vutuv.PageScreenshot do
 
   `opts[:proxy_port]` routes **all** of Chromium's egress through the loopback
   SOCKS5 vetting proxy (`Vutuv.Ssrf.SocksProxy`) on that port — the SSRF egress
-  control (GHSA-mmjf-8cwc-6vwv). Two flags, both needed:
+  control (GHSA-mmjf-8cwc-6vwv). Three flags, all needed:
 
     * `--proxy-server=socks5://127.0.0.1:<port>` — Chromium treats `socks5://`
       as remote-DNS (its network-stack docs): it resolves no hostname itself
@@ -566,7 +566,20 @@ defmodule Vutuv.PageScreenshot do
   defp proxy_args(proxy_port) do
     [
       "--proxy-server=socks5://127.0.0.1:#{proxy_port}",
-      "--host-resolver-rules=MAP * ~NOTFOUND,EXCLUDE 127.0.0.1"
+      "--host-resolver-rules=MAP * ~NOTFOUND,EXCLUDE 127.0.0.1",
+      # The resolver rule cannot speak for an IP literal — Chromium never asks
+      # the resolver about one — and Chromium applies documented *implicit*
+      # proxy-bypass rules for loopback and link-local. So a captured page that
+      # navigated itself to `http://127.0.0.1:4000/` was dialled directly, never
+      # offered to the vetting proxy, and the loopback page was rendered and
+      # stored as the member's own screenshot: a readable SSRF against whatever
+      # the capture host runs, which is the hole this proxy exists to close.
+      #
+      # `<-loopback>` removes those implicit rules, so every connection is
+      # offered to `Vutuv.Ssrf.SocksProxy`, which refuses an unroutable address.
+      # Chromium's own connection TO the proxy is not a request subject to the
+      # bypass list, so `EXCLUDE 127.0.0.1` above still does its job.
+      "--proxy-bypass-list=<-loopback>"
     ]
   end
 

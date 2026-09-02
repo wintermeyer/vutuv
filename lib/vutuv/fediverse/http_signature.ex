@@ -54,13 +54,22 @@ defmodule Vutuv.Fediverse.HttpSignature do
   end
 
   @doc """
-  Verifies an inbound request (`%{method:, path:, headers:, body:}`, header
-  names lowercase) against the sender's public key PEM.
+  Verifies an inbound request (`%{method:, path:, headers:, body:, hosts:}`,
+  header names lowercase) against the sender's public key PEM.
+
+  `hosts` are the host names this installation answers this route on. They come
+  from configuration, never from the request: `conn.host` is derived from the
+  very Host header being checked, so comparing the two would compare an
+  attacker's value with itself.
   """
-  def valid?(%{method: method, path: path, headers: headers, body: body}, public_key_pem) do
+  def valid?(
+        %{method: method, path: path, headers: headers, body: body} = request,
+        public_key_pem
+      ) do
     with :ok <- check_body_captured(method, body),
          {:ok, params} <- parse(headers["signature"]),
          :ok <- check_required(params.headers, body),
+         :ok <- check_destination(headers["host"], request[:hosts]),
          :ok <- check_digest(headers["digest"], body),
          :ok <- check_date(headers["date"]),
          {:ok, key} <- Keys.decode_pem(public_key_pem) do
@@ -115,11 +124,25 @@ defmodule Vutuv.Fediverse.HttpSignature do
   defp check_body_captured("post", nil), do: {:error, :body_not_captured}
   defp check_body_captured(_method, _body), do: :ok
 
-  # The signature must cover the target, the date (replay window) and, when
+  # The signature must cover the destination, the date (replay window) and, when
   # a body exists, its digest — otherwise a valid signature could be replayed
   # against another inbox or with another payload.
+  #
+  # `host` is half of "the destination" and used to be missing: `(request-target)`
+  # is only the PATH, and two vutuv installations share `/system/inbox`, so the
+  # exact bytes one received were replayable at the other inside the 12-hour
+  # date window and the sender's activity ran there as though she had addressed
+  # it. Requiring the name is what makes the value *authenticated*;
+  # `check_destination/2` below is what makes it OURS. Neither half is enough:
+  # without this one an attacker may send any Host, and without that one a
+  # signed foreign host sails through.
+  #
+  # The cost is a sender that signs neither: it is refused now. Mastodon signs
+  # `host`, this app's own `signed_headers/6` signs it, and draft-cavage names it
+  # for exactly this reason — a delivery that does not say where it was going
+  # cannot be checked against where it arrived.
   defp check_required(names, body) do
-    required = ["(request-target)", "date"] ++ if(body, do: ["digest"], else: [])
+    required = ["(request-target)", "host", "date"] ++ if(body, do: ["digest"], else: [])
 
     if Enum.all?(required, &(&1 in names)) do
       :ok
@@ -127,6 +150,29 @@ defmodule Vutuv.Fediverse.HttpSignature do
       {:error, :unsigned_required_header}
     end
   end
+
+  # The signed `host` has to name an address this installation actually serves.
+  #
+  # The replay this stops does NOT rewrite the header — that would break the
+  # signature, and is the one thing an attacker has no reason to do. He keeps
+  # the original `Host:` and posts the same bytes at another installation whose
+  # inbox path is identical; the signing string rebuilds from the header he
+  # sent, so it matches. Requiring `host` in the signed set alone therefore
+  # changed nothing about that.
+  #
+  # `hosts` must come from configuration. `conn.host` is derived from this same
+  # header, so a check against it compares the attacker's value with itself.
+  #
+  # No `hosts` means the caller did not say where the delivery arrived, and a
+  # destination that cannot be proven is refused rather than assumed (the
+  # fail-closed rule the body-capture clause above follows).
+  defp check_destination(host, hosts) when is_binary(host) and is_list(hosts) do
+    if String.downcase(host) in Enum.map(hosts, &String.downcase/1),
+      do: :ok,
+      else: {:error, :wrong_destination}
+  end
+
+  defp check_destination(_host, _hosts), do: {:error, :wrong_destination}
 
   defp check_digest(_header, nil), do: :ok
   defp check_digest(nil, _body), do: {:error, :missing_digest}
