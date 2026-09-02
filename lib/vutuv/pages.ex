@@ -99,5 +99,12 @@ defmodule Vutuv.Pages do
     end
   end
 
-  defp sanitize_page(page), do: max(page, 1)
+  defp sanitize_page(page) when is_integer(page), do: max(page, 1)
+
+  # Anything else is page 1. `?page[]=1` hands this a **list**, and `max/2` does
+  # not raise on one — Elixir's term ordering puts a list above an integer, so
+  # `max(["1"], 1)` answered `["1"]` and the `(page - 1)` in `effective_page/3`
+  # then raised `ArithmeticError`: a 500 on a public listing from a query string
+  # anybody can type.
+  defp sanitize_page(_page), do: 1
 end
