@@ -173,6 +173,7 @@ defmodule Vutuv.Export do
       ad_bookings: ad_bookings(user),
       blocked_members: blocks(user),
       content_filters: content_filters(user),
+      post_rewrites: post_rewrites(user),
       # The account-activity log (issue #1087): the member's own record of what
       # changed on their account. Personal data by definition, so Art. 20 covers
       # it — and it is the section that answers "was that me?".
@@ -262,6 +263,20 @@ defmodule Vutuv.Export do
         account: f.account,
         whole_word: f.whole_word,
         added_at: f.inserted_at
+      }
+    end)
+  end
+
+  # The member's per-author search-and-replace rules: owner-only like the
+  # filters, and they say what the member does not want to read.
+  defp post_rewrites(user) do
+    Enum.map(Vutuv.PostRewrites.list_for_user(user), fn r ->
+      %{
+        account: r.account,
+        pattern: r.pattern,
+        replacement: r.replacement,
+        position: r.position,
+        added_at: r.inserted_at
       }
     end)
   end

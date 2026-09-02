@@ -46,6 +46,7 @@ defmodule VutuvWeb.FediverseAccountLive do
 
   alias Vutuv.Fediverse
   alias Vutuv.Fediverse.RemoteAccount
+  alias Vutuv.PostRewrites
   alias VutuvWeb.Live.InitAssigns
   alias VutuvWeb.Live.RemotePostActions
 
@@ -79,6 +80,9 @@ defmodule VutuvWeb.FediverseAccountLive do
          )
          |> assign(:blocked_reason, Fediverse.follow_refusal(viewer))
          |> assign(:follow, Fediverse.remote_follow_for(viewer, account))
+         # The reader's search-and-replace rules for this one account, read
+         # once for the page: `load_posts/1` runs again on every follow event.
+         |> assign(:rewrite_rules, PostRewrites.author_rules(viewer, account))
          |> load_posts()}
 
       _ ->
@@ -92,7 +96,12 @@ defmodule VutuvWeb.FediverseAccountLive do
   defp load_posts(socket) do
     viewer = socket.assigns.current_user
     {posts, more?} = Fediverse.account_posts(socket.assigns.account, viewer)
-    posts = Fediverse.with_quotes(posts)
+
+    posts =
+      posts
+      |> Fediverse.with_quotes()
+      |> Enum.map(&PostRewrites.rewrite_with(&1, socket.assigns.rewrite_rules))
+
     ids = Enum.map(posts, & &1.id)
 
     socket

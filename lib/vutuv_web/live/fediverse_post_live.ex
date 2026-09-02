@@ -45,6 +45,7 @@ defmodule VutuvWeb.FediversePostLive do
   alias Vutuv.Fediverse
   alias Vutuv.Fediverse.RemoteAccount
   alias Vutuv.Fediverse.RemotePost
+  alias Vutuv.PostRewrites
   alias VutuvWeb.Live.InitAssigns
   alias VutuvWeb.Live.RemotePostActions
 
@@ -73,6 +74,10 @@ defmodule VutuvWeb.FediversePostLive do
 
   defp assign_post(socket, %RemotePost{} = post, viewer) do
     account = post.remote_account
+
+    # The reader's own search-and-replace rules for this account, the same
+    # ones the feed's card obeyed on the way here.
+    post = PostRewrites.rewrite_with(post, PostRewrites.author_rules(viewer, account))
 
     socket
     # Named for what it is, because the tab, the bookmark and the history entry

@@ -39,9 +39,11 @@ defmodule VutuvWeb.PostComponents do
   alias Vutuv.Languages
   alias Vutuv.Moderation.ImageScans
   alias Vutuv.Organizations.Organization
+  alias Vutuv.PostRewrites
   alias Vutuv.Posts
   alias Vutuv.Posts.GalleryLayout
   alias Vutuv.Posts.PhotoLicense
+  alias Vutuv.Posts.Post
   alias Vutuv.Posts.PostImage
   alias Vutuv.Posts.PostRemoteReply
   alias Vutuv.Posts.PostReview
@@ -250,6 +252,13 @@ defmodule VutuvWeb.PostComponents do
     # the `entry_id || post.id` fallback.
     entry_key = assigns.entry_id || post.id
 
+    # Who this post is BY, resolved once (issue #1334): a member, or the
+    # organization it was published in the name of. Everything the header
+    # needs is derived from this rather than branched at each of the half-dozen
+    # places that name the author, and `Posts.author/1` is the single decision
+    # about which of the two author columns speaks.
+    author = Posts.author(post)
+
     assigns =
       assigns
       |> assign(:post, post)
@@ -309,12 +318,7 @@ defmodule VutuvWeb.PostComponents do
       |> assign(:time_id, "post-time-#{entry_key}")
       |> assign(:body_id, "post-body-#{entry_key}")
       |> assign(:author?, author?)
-      # Who this post is BY, resolved once (issue #1334): a member, or the
-      # organization it was published in the name of. Everything the header
-      # needs is derived here rather than branched at each of the half-dozen
-      # places that name the author, and `Posts.author/1` is the single decision
-      # about which of the two author columns speaks.
-      |> assign(:author, Posts.author(post))
+      |> assign(:author, author)
       |> assign(:organization_author?, Posts.organization_post?(post))
       |> assign(:author_path, Posts.author_path(post))
       |> assign(:author_name, UserHelpers.author_name(post))
@@ -335,6 +339,10 @@ defmodule VutuvWeb.PostComponents do
       # The no-query half of Posts.editable?/1 — the feed renders many cards.
       |> assign(:editable?, Posts.edit_window_open?(post))
       |> assign(:reporter?, user? and not Posts.author?(post, viewer))
+      # Derived per render from the post and the viewer alone, so `Map.put/3`
+      # rather than `assign/3`: a key marked changed on every render would
+      # re-send the ⋯ item on every diff (see `.claude/rules/liveview.md`).
+      |> Map.put(:rewrite_link, rewrite_link(post, author, viewer))
       |> assign(:frozen?, post.frozen_at != nil)
       |> assign(:reply_banner, reply_banner(post, assigns.show_reply_banner, assigns[:viewer]))
       |> assign(:reposters, repost_roster(assigns))
@@ -1307,6 +1315,7 @@ defmodule VutuvWeb.PostComponents do
       |> assign(:initials, name_initials(Note.author_name(note) || note.handle))
       |> assign(:public?, Note.public?(note))
       |> assign(:warned?, Note.warned?(note))
+      |> Map.put(:rewrite_link, rewrite_link(note, note, assigns.viewer))
 
     ~H"""
     <%!-- The `id` is this reply's anchor: it has no permalink of its own, so a
@@ -1352,6 +1361,9 @@ defmodule VutuvWeb.PostComponents do
                   confirm={gettext("Remove this reply from your post?")}
                 >
                   {gettext("Remove")}
+                </:item>
+                <:item :if={@rewrite_link} href={@rewrite_link.href} hint={@rewrite_link.hint}>
+                  {gettext("Search & replace")}
                 </:item>
                 <:item
                   click="report-remote-reply"
@@ -2557,6 +2569,7 @@ defmodule VutuvWeb.PostComponents do
       |> assign_remote_link_screenshot(post, assigns.images)
       |> assign(:permalink, remote_post_permalink(post, assigns.viewer))
       |> assign(:origin, RemotePost.origin(post))
+      |> Map.put(:rewrite_link, rewrite_link(post, account, assigns.viewer))
 
     ~H"""
     <article data-remote-post={@remote_post.id} data-audience={@remote_post.audience}>
@@ -2642,6 +2655,14 @@ defmodule VutuvWeb.PostComponents do
                   }
                 >
                   {gettext("Unfollow")}
+                </:item>
+                <%!-- The reader's own search-and-replace rules for this account
+                (`Vutuv.PostRewrites`): the footer a mirror puts under every
+                post, gone from this reader's view alone. A link rather than an
+                event, so every host of this card offers it without handling
+                anything; the editor comes back here when they are done. --%>
+                <:item :if={@rewrite_link} href={@rewrite_link.href} hint={@rewrite_link.hint}>
+                  {gettext("Search & replace")}
                 </:item>
                 <:item
                   click="report-remote-post"
@@ -2922,6 +2943,30 @@ defmodule VutuvWeb.PostComponents do
     do: ~p"/system/fediverse/post/#{id}"
 
   def remote_post_permalink(_post, _viewer), do: nil
+
+  # The ⋯ menu's "Search & replace" item, the same for all three card kinds:
+  # `href` leads to the reader's rule editor for this record's author
+  # (`VutuvWeb.PostRewritesLive`) carrying this very record as the before/after
+  # sample, `hint` is the author's handle as displayed. `author` is whatever
+  # the card already resolved for the header — the member or page behind a
+  # post, the account behind a cached post, the reply itself — so naming them
+  # costs no second lookup. Nil for a visitor and for an author nobody can
+  # name, which is when there is no item. The three record kinds travel under
+  # three parameter names because their ids live in three tables.
+  defp rewrite_link(_record, _author, nil), do: nil
+
+  defp rewrite_link(record, author, _viewer) do
+    handle = PostRewrites.account_handle(author)
+
+    case PostRewrites.normalize_account(handle) do
+      nil -> nil
+      key -> %{href: ~p"/settings/rewrites/#{key}?#{[sample_param(record)]}", hint: handle}
+    end
+  end
+
+  defp sample_param(%Post{id: id}), do: {:post, id}
+  defp sample_param(%RemotePost{id: id}), do: {:remote_post, id}
+  defp sample_param(%Note{id: id}), do: {:note, id}
 
   @doc """
   The sentence for one `{:error, reason}` refusing the heart above (issue
@@ -3599,6 +3644,12 @@ defmodule VutuvWeb.PostComponents do
                   hint={"@" <> @post.user.username}
                 >
                   {if @viewer_follow.muted?, do: gettext("Unmute"), else: gettext("Mute")}
+                </:item>
+                <%!-- The reader's own search-and-replace rules for this author
+                (`Vutuv.PostRewrites`): a link, not an event, so it works on a
+                dead page too. The editor comes back here when they are done. --%>
+                <:item :if={@rewrite_link} href={@rewrite_link.href} hint={@rewrite_link.hint}>
+                  {gettext("Search & replace")}
                 </:item>
                 <:item href={~p"/reports/new?#{[type: "post", id: @post.id, return_to: @permalink]}"}>
                   {gettext("Report")}

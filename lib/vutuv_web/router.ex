@@ -1185,6 +1185,24 @@ defmodule VutuvWeb.Router do
     end
   end
 
+  # The reader's per-author search-and-replace rules (`Vutuv.PostRewrites`),
+  # opened from a post card's ⋯ menu. Its own live_session for one reason: the
+  # editor promises to send the member back to the page they came from, and
+  # the only thing that knows that page is the `Referer` of the dead render —
+  # which a LiveView never sees unless the session function reads it off the
+  # conn here.
+  live_session :post_rewrites,
+    on_mount: [{VutuvWeb.Live.InitAssigns, :default}],
+    root_layout: {VutuvWeb.LayoutHTML, :root},
+    session: {VutuvWeb.PostRewritesLive, :session, []} do
+    scope "/settings", VutuvWeb do
+      pipe_through([:browser, :settings_pipe, :html_only])
+
+      live("/rewrites", PostRewritesLive, :index)
+      live("/rewrites/:account", PostRewritesLive, :edit)
+    end
+  end
+
   scope "/admin", VutuvWeb.Admin, as: :admin do
     pipe_through([:browser, :admin])
     resources("/", AdminController, only: [:index])

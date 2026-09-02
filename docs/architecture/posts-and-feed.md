@@ -1000,6 +1000,48 @@ writes one `posts_auto_deleted` line into the member's account activity log
 with a count and never a stream; a settings change writes
 `auto_post_deletion_changed` beside it.
 
+## Search and replace, per author
+
+A reader's private regular expressions over one author's posts
+(`Vutuv.PostRewrites`, table `post_rewrites`): the Flipboard mirror's
+"Gepostet in GOLEM @golem-Golemde" under every Golem post, a signature, a
+hashtag wall, gone from that reader's view alone. The sibling of the content
+filters above and shaped like them.
+
+- **A rule is a handle.** `account` is the author's handle as
+  `Vutuv.Posts.account_names/1` spells it (`@golemde@flipboard.com`,
+  `@handle`), downcased: one string column for all three author kinds rather
+  than another nullable foreign-key pair. Rules run top to bottom (`position`),
+  each on the previous one's output; the flags are unicode and multiline, so
+  `^` and `$` anchor lines; `\1`…`\9` and `\0` work in the replacement and `&`
+  is the literal character.
+- **Text, not HTML.** A post from another network is plain text at rest
+  (`Vutuv.RemoteHtml.to_text/3`, the markup is kept nowhere), a member's post
+  is Markdown, so a rule reads exactly the text the card renders from and the
+  editor can show it as the "before".
+- **Applied inside the record, never in the row.** `rewrite_entry/3` replaces
+  `Post.body` / `RemotePost.content_text` / `Note.content_text` on a feed entry
+  before `mark_filtered/3` on every path (mount, load-more, live arrivals, the
+  day and source reloads), so the card, the translation source, the tag chips
+  and the content filter read one text. The permalink (`PostLive.Thread`), the
+  cached post's own page and the account page apply the same rules; the agent
+  formats, the API and every other reader see the stored text. Never the
+  reader's own posts, so the edit form never meets a rewritten body.
+- **A member's regex is untrusted input.** Every match runs through `:re` with
+  a `match_limit` of 50,000 steps: `(a+)+$` over forty characters comes back
+  unchanged in half a millisecond instead of never. `Regex.replace/4` exposes
+  no such knob, which is why the module calls `:re` itself. Patterns are capped
+  at 255 characters, 50 rules per account, 200 per member, compiled once per
+  page.
+- **The editor** (`VutuvWeb.PostRewritesLive`, `/settings/rewrites/:account`)
+  opens from every post card's ⋯ menu with that post as the sample (`?post=`,
+  `?remote_post=`, `?note=`), redraws before and after on each keystroke with
+  the draft's catches marked, prefills the first rule with the sample's last
+  line, and its Done button leads back to the page the member came from: the
+  route's own `live_session` reads the dead render's `Referer` (`session/1`),
+  an explicit `?return_to=` wins, `/feed` is the fallback. `/settings/rewrites`
+  lists the accounts with rules. Owner-only, and in the GDPR export.
+
 ## The pinned post (issue #1110)
 
 A member can pin **one** of their own posts to the top of their profile, so
