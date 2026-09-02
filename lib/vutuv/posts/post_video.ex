@@ -41,8 +41,6 @@ defmodule Vutuv.Posts.PostVideo do
   alias Vutuv.Posts.PostVideoFrame
   alias Vutuv.PostVideoStore
 
-  @stages ~w(queued frames transcoding checking ready rejected failed)
-  @done_stages ~w(ready rejected failed)
   # AV1 Main 8-bit, level 4.0 — what the SVT recipe writes — and H.264 High
   # 4.0 with AAC-LC. The strings are what `canPlayType` is asked.
   @av1_type ~s(video/mp4; codecs="av01.0.08M.08, mp4a.40.2")
@@ -80,11 +78,6 @@ defmodule Vutuv.Posts.PostVideo do
 
     timestamps()
   end
-
-  def stages, do: @stages
-
-  @doc "Whether the pipeline has nothing left to decide about this clip."
-  def done?(%__MODULE__{stage: stage}), do: stage in @done_stages
 
   @doc "Whether the clip may be shown and played: the check passed and the H.264 file exists."
   def ready?(%__MODULE__{stage: "ready"}), do: true
@@ -141,9 +134,9 @@ defmodule Vutuv.Posts.PostVideo do
   that exist are named, so a clip whose enhancements are still being written
   plays from what is there.
   """
-  def sources(%__MODULE__{} = video) do
+  def sources(%__MODULE__{} = video, opts \\ []) do
     lite =
-      if LowBandwidth.on?() and video.lite_ready_at,
+      if Keyword.get(opts, :lite?, lite?(video)),
         do: [{"lite-av1", @av1_type}, {"lite-h264", @h264_type}],
         else: []
 
@@ -152,17 +145,10 @@ defmodule Vutuv.Posts.PostVideo do
     |> Enum.map(fn {name, type} -> %{src: url(video, "#{name}.mp4"), type: type} end)
   end
 
-  @doc "Whether the data-saving viewer is being offered the 360p files (the HD control's cue)."
-  def lite_offered?(%__MODULE__{} = video), do: LowBandwidth.on?() and video.lite_ready_at != nil
+  @doc "Whether this viewer is offered the 360p files: data-saving mode is on and they exist."
+  def lite?(%__MODULE__{} = video), do: LowBandwidth.on?() and video.lite_ready_at != nil
 
   defp token_prefix(token), do: "/post_videos/#{token}/"
-
-  @doc "The clip's aspect ratio (width / height), or 16:9 when the dimensions are missing."
-  def aspect(%__MODULE__{width: width, height: height})
-      when is_integer(width) and is_integer(height) and width > 0 and height > 0,
-      do: width / height
-
-  def aspect(%__MODULE__{}), do: 16 / 9
 
   @doc "The length in whole seconds, rounded up — what every label and the API say."
   def seconds(%__MODULE__{duration_ms: ms}) when is_integer(ms) and ms > 0,

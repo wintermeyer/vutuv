@@ -869,6 +869,14 @@ defmodule Vutuv.Moderation.ImageSubjects do
     :ok
   end
 
+  # A frame scan canceled because its still is gone (the clip was refused or
+  # swept meanwhile): the row goes too, or the drift repair would re-queue it
+  # every hour for a file that is not coming back.
+  def cleanup_canceled(%ImageScan{kind: "post_video_frame"} = scan) do
+    Repo.delete_all(from(f in PostVideoFrame, where: f.id == ^scan.subject_id))
+    :ok
+  end
+
   def cleanup_canceled(%ImageScan{}), do: :ok
 
   # The four profile-image columns (file, fingerprint, crop, moderation) reset to

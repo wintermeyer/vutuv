@@ -10,6 +10,7 @@ defmodule VutuvWeb.MastodonApi.MediaVideoTest do
   use VutuvWeb.ConnCase, async: false
 
   import Vutuv.MastodonHelpers
+  import Vutuv.WebPushHelpers, only: [put_config: 2]
 
   alias Vutuv.Posts
   alias Vutuv.VideoFixtures
@@ -22,17 +23,8 @@ defmodule VutuvWeb.MastodonApi.MediaVideoTest do
       Path.join(System.tmp_dir!(), "vutuv_mastodon_video_#{System.unique_integer([:positive])}")
 
     File.mkdir_p!(tmp)
-    original = Application.fetch_env(:vutuv, :uploads_dir_prefix)
-    Application.put_env(:vutuv, :uploads_dir_prefix, tmp)
-
-    on_exit(fn ->
-      File.rm_rf(tmp)
-
-      case original do
-        {:ok, value} -> Application.put_env(:vutuv, :uploads_dir_prefix, value)
-        :error -> Application.delete_env(:vutuv, :uploads_dir_prefix)
-      end
-    end)
+    put_config(:uploads_dir_prefix, tmp)
+    on_exit(fn -> File.rm_rf(tmp) end)
 
     :ok
   end

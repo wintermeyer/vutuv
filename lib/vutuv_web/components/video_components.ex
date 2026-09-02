@@ -11,7 +11,8 @@ defmodule VutuvWeb.VideoComponents do
   use Phoenix.Component
   use Gettext, backend: VutuvWeb.Gettext
 
-  import VutuvWeb.UI, only: [hourglass: 1, card: 1, button: 1]
+  import VutuvWeb.UI,
+    only: [hourglass: 1, card: 1, button: 1, picture: 1, picture_badge_class: 0]
 
   alias Phoenix.LiveView.JS
   alias Vutuv.Posts.PostVideo
@@ -23,7 +24,7 @@ defmodule VutuvWeb.VideoComponents do
   The clip on a post card: the cover with a play glyph and the length, and
   on a tap the native player — no autoplay, nothing preloaded, so a clip
   nobody plays costs the page its poster and not a byte more. The sources are
-  `Vutuv.Posts.PostVideo.sources/1`, best first; the browser takes the first
+  `Vutuv.Posts.PostVideo.sources/2`, best first; the browser takes the first
   it can decode.
 
   For a viewer in data-saving mode the 360p files come first and an **HD**
@@ -35,15 +36,21 @@ defmodule VutuvWeb.VideoComponents do
   attr(:class, :any, default: nil)
 
   def post_video(assigns) do
-    picture = PostVideo.cover_picture(assigns.video)
+    video = assigns.video
+    picture = PostVideo.cover_picture(video)
+    lite? = PostVideo.lite?(video)
 
+    # `assign/3`, not `Map.put/3`: these follow the clip, and a clip changes
+    # under the card (an enhancement lands, the cover moves), so they have to
+    # be tracked as changed with it or the `<source>` list goes stale.
     assigns =
       assigns
-      |> assign(:sources, PostVideo.sources(assigns.video))
+      |> assign(:sources, PostVideo.sources(video, lite?: lite?))
+      |> assign(:hd_sources, if(lite?, do: Jason.encode!(PostVideo.sources(video, lite?: false))))
       |> assign(:poster, picture.lite || picture.src)
-      |> assign(:lite?, PostVideo.lite_offered?(assigns.video))
-      |> assign(:aspect, aspect_style(assigns.video))
-      |> assign(:label, video_label(assigns.video))
+      |> assign(:lite?, lite?)
+      |> assign(:aspect, aspect_style(video))
+      |> assign(:label, video_label(video))
 
     ~H"""
     <figure
@@ -51,7 +58,7 @@ defmodule VutuvWeb.VideoComponents do
       class={["mt-3", @class]}
       data-post-video={@video.id}
       data-video-figure
-      data-hd-sources={@lite? && Jason.encode!(full_sources(@video))}
+      data-hd-sources={@hd_sources}
     >
       <div
         class="relative overflow-hidden rounded-xl bg-slate-950 ring-1 ring-slate-200 dark:ring-slate-800"
@@ -89,7 +96,7 @@ defmodule VutuvWeb.VideoComponents do
         <span
           data-video-overlay
           aria-hidden="true"
-          class="pointer-events-none absolute left-2 top-2 rounded-full bg-slate-900/75 px-2 py-1 text-xs font-semibold tabular-nums text-white"
+          class={["pointer-events-none absolute left-2 top-2 tabular-nums", picture_badge_class()]}
         >
           {duration_label(@video)}
         </span>
@@ -102,23 +109,12 @@ defmodule VutuvWeb.VideoComponents do
           title={gettext("Play this video in full quality")}
           class="absolute right-1 top-1 cursor-pointer p-1.5"
         >
-          <span class="inline-flex items-center gap-1 rounded-full bg-slate-900/75 px-2 py-1 text-xs font-semibold text-white">
-            HD
-          </span>
+          <span class={picture_badge_class()}>HD</span>
         </span>
       </div>
       <figcaption :if={@video.alt != ""} class="sr-only">{@video.alt}</figcaption>
     </figure>
     """
-  end
-
-  # The full files, for the HD control to swap in — the same list a viewer
-  # outside the mode is offered.
-  defp full_sources(video) do
-    Vutuv.LowBandwidth.put(false)
-    sources = PostVideo.sources(video)
-    Vutuv.LowBandwidth.put(true)
-    sources
   end
 
   defp video_label(%PostVideo{alt: alt}) when is_binary(alt) and alt != "", do: alt
@@ -140,12 +136,18 @@ defmodule VutuvWeb.VideoComponents do
   def video_tile(assigns) do
     assigns =
       assigns
-      |> assign(:cover, cover_url(assigns.video))
+      |> assign(:cover, cover_picture(assigns.video))
       |> assign(:aspect, aspect_style(assigns.video))
 
     ~H"""
     <div class={["relative overflow-hidden rounded-lg ring-1 ring-slate-200 dark:ring-slate-800", @class]} style={@aspect} data-video-tile={@video.stage}>
-      <img :if={@cover} src={@cover} alt="" class="block h-full w-full object-cover" />
+      <.picture
+        :if={@cover}
+        picture={@cover}
+        alt=""
+        wrap_class="h-full w-full"
+        class="block h-full w-full object-cover"
+      />
       <div
         :if={!@cover}
         class="flex h-full w-full flex-col items-center justify-center gap-2 bg-slate-100 text-slate-500 dark:bg-slate-800 dark:text-slate-400"
@@ -154,7 +156,7 @@ defmodule VutuvWeb.VideoComponents do
       </div>
       <span
         aria-hidden="true"
-        class="pointer-events-none absolute bottom-2 left-2 rounded-full bg-slate-900/75 px-2 py-1 text-xs font-semibold tabular-nums text-white"
+        class={["pointer-events-none absolute bottom-2 left-2 tabular-nums", picture_badge_class()]}
       >
         {duration_label(@video)}
       </span>
@@ -163,11 +165,11 @@ defmodule VutuvWeb.VideoComponents do
     """
   end
 
-  # The poster while the author looks at their own clip: the cover file once
+  # The poster while the author looks at their own clip: the cover once
   # written (author-only until the post exists — the proxy asks), else nothing.
-  defp cover_url(%PostVideo{cover_written_at: nil}), do: nil
-  defp cover_url(%PostVideo{stage: stage}) when stage in ~w(rejected failed), do: nil
-  defp cover_url(video), do: PostVideo.cover_url(video)
+  defp cover_picture(%PostVideo{cover_written_at: nil}), do: nil
+  defp cover_picture(%PostVideo{stage: stage}) when stage in ~w(rejected failed), do: nil
+  defp cover_picture(video), do: PostVideo.cover_picture(video)
 
   @doc """
   The stage as a sentence: where the pipeline is with this clip, in the
@@ -227,7 +229,9 @@ defmodule VutuvWeb.VideoComponents do
     video = assigns.pending.video
 
     assigns =
-      assign(assigns, :video, video) |> assign(:refused?, video && PostVideo.refused?(video))
+      assigns
+      |> assign(:video, video)
+      |> assign(:refused?, video == nil or PostVideo.refused?(video))
 
     ~H"""
     <.card class="mt-3" data-pending-video-post={@pending.id} data-pending-status={(@refused? && "refused") || "working"}>
@@ -254,7 +258,7 @@ defmodule VutuvWeb.VideoComponents do
       </p>
       <div class="mt-3 flex flex-wrap gap-2">
         <.button
-          :if={@refused? or !@video}
+          :if={@refused?}
           type="button"
           phx-click="publish-without-video"
           phx-value-id={@pending.id}
@@ -262,14 +266,14 @@ defmodule VutuvWeb.VideoComponents do
         >
           {gettext("Post without the video")}
         </.button>
-        <button
+        <.button
           type="button"
+          variant="danger-ghost"
           phx-click={JS.push("cancel-pending-video", value: %{id: @pending.id})}
           data-cancel-pending-video
-          class="inline-flex h-10 items-center rounded-lg border border-slate-200 px-3 text-sm font-semibold text-slate-700 hover:border-red-400 hover:text-red-700 dark:border-slate-700 dark:text-slate-200 dark:hover:border-red-500 dark:hover:text-red-300"
         >
-          {if @refused? or !@video, do: gettext("Delete this post"), else: gettext("Cancel")}
-        </button>
+          {if @refused?, do: gettext("Delete this post"), else: gettext("Cancel")}
+        </.button>
       </div>
     </.card>
     """
@@ -280,7 +284,8 @@ defmodule VutuvWeb.VideoComponents do
   @doc "The clip's length as `m:ss` — the chip on the poster."
   def duration_label(%PostVideo{} = video), do: clock(PostVideo.seconds(video))
 
-  defp clock(seconds) when is_integer(seconds) do
+  @doc "Seconds as `m:ss` — the one spelling of a moment in a clip."
+  def clock(seconds) when is_integer(seconds) do
     "#{div(seconds, 60)}:#{String.pad_leading("#{rem(seconds, 60)}", 2, "0")}"
   end
 

@@ -179,6 +179,41 @@ defmodule Vutuv.Posts do
   end
 
   @doc """
+  The one dispatch over the five ways a post is created, keyed the way the
+  composer keys them (issue #1910): `"post"`, `"reply"` (`context.parent`),
+  `"organization_post"` (`context.organization`), `"remote_reply"`
+  (`context.note`) and `"remote_post_reply"` (`context.remote_post`). The
+  composer calls it on save, and `Vutuv.Videos.Publisher` calls it for a post
+  that waited on its clip, so the two cannot drift apart. A kind whose context
+  is missing is `{:error, :context_gone}`, never a post in the wrong place.
+  """
+  def create_in_context(%User{} = author, "post", _context, attrs), do: create_post(author, attrs)
+
+  def create_in_context(%User{} = author, "reply", %{parent: %Post{} = parent}, attrs),
+    do: create_reply(author, parent, attrs)
+
+  def create_in_context(
+        %User{} = author,
+        "organization_post",
+        %{organization: %Organization{} = organization},
+        attrs
+      ),
+      do: create_organization_post(organization, author, attrs)
+
+  def create_in_context(%User{} = author, "remote_reply", %{note: %Note{} = note}, attrs),
+    do: create_remote_reply(author, note, attrs)
+
+  def create_in_context(
+        %User{} = author,
+        "remote_post_reply",
+        %{remote_post: %RemotePost{} = remote_post},
+        attrs
+      ),
+      do: create_remote_post_reply(author, remote_post, attrs)
+
+  def create_in_context(_author, _kind, _context, _attrs), do: {:error, :context_gone}
+
+  @doc """
   Publishes a post in `organization`'s name, with `acting_user` recorded as the
   member who pressed publish (issue #1334). Returns `{:error, :forbidden}` when
   they do not hold the organization's `publisher` role.

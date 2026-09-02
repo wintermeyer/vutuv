@@ -28,23 +28,19 @@ defmodule Vutuv.Posts.PendingImageSweeper do
     {:ok, nil}
   end
 
+  # Every eager-upload table with the same day-old rule. The clips (issue
+  # #1906) are the heaviest: an abandoned one is up to 500 MB of original
+  # plus its renditions.
+  @sweeps [
+    {"post image", &Vutuv.Posts.sweep_pending_images/0},
+    {"job-posting image", &Vutuv.Jobs.sweep_pending_images/0},
+    {"post video", &Vutuv.Videos.sweep_pending_videos/0}
+  ]
+
   @impl true
   def handle_info(:sweep, state) do
-    case Vutuv.Posts.sweep_pending_images() do
-      0 -> :ok
-      count -> Logger.info("Swept #{count} abandoned pending post image(s)")
-    end
-
-    case Vutuv.Jobs.sweep_pending_images() do
-      0 -> :ok
-      count -> Logger.info("Swept #{count} abandoned pending job-posting image(s)")
-    end
-
-    # The clips (issue #1906), same eager-upload pattern: an abandoned one is
-    # up to 500 MB of original plus its renditions.
-    case Vutuv.Videos.sweep_pending_videos() do
-      0 -> :ok
-      count -> Logger.info("Swept #{count} abandoned pending post video(s)")
+    for {what, sweep} <- @sweeps, count = sweep.(), count > 0 do
+      Logger.info("Swept #{count} abandoned pending #{what}(s)")
     end
 
     schedule()

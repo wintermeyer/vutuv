@@ -57,6 +57,7 @@ defmodule VutuvWeb.PostLive.Feed do
   alias VutuvWeb.Live.RemoteImages
   alias VutuvWeb.Live.RemotePostActions
   alias VutuvWeb.Live.RemoteReplyActions
+  alias VutuvWeb.Live.VideoProgress
   alias VutuvWeb.PostLive.FeedCalendar
   alias VutuvWeb.PostTeaser
   alias VutuvWeb.UserHelpers
@@ -195,7 +196,10 @@ defmodule VutuvWeb.PostLive.Feed do
     # The author's posts still waiting on their clip (issue #1910), drawn as
     # cards above the timeline; the progress arrives over the video topic the
     # embedded mount subscribed to (`InitAssigns.assign_embedded/2`).
-    socket = assign(socket, :pending_video_posts, waiting_video_posts(user))
+    socket =
+      socket
+      |> assign(:pending_video_posts, waiting_video_posts(user))
+      |> VideoProgress.attach(user)
 
     # The sources they left on (issue #1499). It opens the page *and* keys the
     # handoff below: the stash holds one entry per member, so two devices
@@ -2030,11 +2034,13 @@ defmodule VutuvWeb.PostLive.Feed do
     {:noreply, refresh_shown_post(socket, post_id)}
   end
 
-  # A clip of this member's moved a step (issue #1911): re-read the waiting
-  # cards, which draw their stage from the row. One query per tick, and only
-  # while the member has something waiting.
-  def handle_info({:post_video, _summary}, socket) do
-    {:noreply, refresh_waiting_video_posts(socket)}
+  # A clip of this member's moved a step (issue #1911). A percent is patched
+  # into the waiting card that holds the clip; a stage, a verdict or a cover
+  # change re-reads the cards, which draw those from the row. The percent
+  # arrives every couple of points, so this is what keeps the ticks off the
+  # database.
+  def handle_info({:post_video, summary}, socket) do
+    {:noreply, patch_waiting_video(socket, summary)}
   end
 
   # A waiting post was published, dropped or failed: the card goes (a
@@ -2460,6 +2466,31 @@ defmodule VutuvWeb.PostLive.Feed do
 
   defp refresh_waiting_video_posts(socket) do
     assign(socket, :pending_video_posts, waiting_video_posts(socket.assigns.current_user))
+  end
+
+  defp patch_waiting_video(socket, %{id: video_id} = summary) do
+    pending = socket.assigns.pending_video_posts
+
+    case Enum.find(pending, &(&1.video && &1.video.id == video_id)) do
+      nil ->
+        socket
+
+      %{video: video} ->
+        if Videos.stage_changed?(video, summary),
+          do: refresh_waiting_video_posts(socket),
+          else: assign(socket, :pending_video_posts, patch_percent(pending, summary))
+    end
+  end
+
+  # The percent alone, into the row that holds the clip.
+  defp patch_percent(pending, %{id: video_id} = summary) do
+    Enum.map(pending, fn
+      %{video: %{id: ^video_id} = held} = row ->
+        %{row | video: Videos.apply_summary(held, summary)}
+
+      row ->
+        row
+    end)
   end
 
   # The waiting text, rendered the way the card will render it — through the

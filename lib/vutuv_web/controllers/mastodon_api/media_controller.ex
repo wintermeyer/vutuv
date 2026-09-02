@@ -196,14 +196,15 @@ defmodule VutuvWeb.MastodonApi.MediaController do
     with uuid when is_binary(uuid) <- UUIDv7.cast_or_nil(id) do
       user_id = conn.assigns.current_user.id
 
-      PostImage
-      |> where([i], i.id == ^uuid and i.user_id == ^user_id and is_nil(i.post_id))
-      |> Repo.one()
-      |> Kernel.||(
+      image =
+        PostImage
+        |> where([i], i.id == ^uuid and i.user_id == ^user_id and is_nil(i.post_id))
+        |> Repo.one()
+
+      image ||
         PostVideo
         |> where([v], v.id == ^uuid and v.user_id == ^user_id and is_nil(v.post_id))
         |> Repo.one()
-      )
     end
   end
 

@@ -32,6 +32,9 @@ defmodule VutuvWeb.PostLive.Reply do
   alias VutuvWeb.Markdown
 
   on_mount({VutuvWeb.Live.InitAssigns, :require_login})
+  # The composer here takes a clip; its progress arrives through this hook
+  # (issue #1911).
+  on_mount(VutuvWeb.Live.VideoProgress)
 
   @impl true
   def mount(%{"id" => id} = params, _session, socket) do

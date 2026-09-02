@@ -1157,9 +1157,12 @@ defmodule VutuvWeb.UI do
     """
   end
 
-  # The one recipe for a word on top of a picture: the checking badge and the
-  # HD control wear it, so the two cannot drift apart.
-  defp picture_badge_class,
+  @doc """
+  The one recipe for a word on top of a picture: the checking badge, the HD
+  control and the clip's length chip (`VutuvWeb.VideoComponents`) wear it, so
+  they cannot drift apart.
+  """
+  def picture_badge_class,
     do:
       "inline-flex items-center gap-1 rounded-full bg-slate-900/75 px-2 py-1 text-xs font-semibold text-white"
 

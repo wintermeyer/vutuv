@@ -438,11 +438,14 @@ defmodule VutuvWeb.ShellLive do
   def handle_info(:messages_read, socket),
     do: {:noreply, recount_messages(socket)}
 
-  # A clip of this member's moved, or a post waiting on one was published or
-  # dropped (issue #1911): re-ask the one query the chip draws from. The
-  # percent arrives every couple of points, so a two-minute clip costs a few
-  # dozen of these — a cheap count, not a page.
-  def handle_info({:post_video, _summary}, socket), do: {:noreply, recount_videos(socket)}
+  # A clip of this member's moved (issue #1911): the percent arrives every
+  # couple of points, so it is patched into the chip from the message rather
+  # than re-queried — one query per tick per open tab was the alternative. A
+  # post waiting on a clip was published or dropped: that changes the set,
+  # so the one query the chip draws from is asked again.
+  def handle_info({:post_video, %{stage: stage, progress: progress}}, socket),
+    do:
+      {:noreply, update(socket, :videos_in_progress, &patch_video_progress(&1, stage, progress))}
 
   def handle_info({:pending_video_post, _summary}, socket),
     do: {:noreply, recount_videos(socket)}
@@ -550,6 +553,12 @@ defmodule VutuvWeb.ShellLive do
     do: assign(socket, :videos_in_progress, Videos.in_progress_summary(user_id))
 
   defp recount_videos(socket), do: socket
+
+  # Nothing waits, nothing to patch; converting carries a percent, any other
+  # stage none.
+  defp patch_video_progress(%{count: 0} = summary, _stage, _progress), do: summary
+  defp patch_video_progress(summary, "transcoding", progress), do: %{summary | progress: progress}
+  defp patch_video_progress(summary, _stage, _progress), do: %{summary | progress: nil}
 
   defp recount_messages(socket) do
     socket

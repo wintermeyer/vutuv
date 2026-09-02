@@ -19,7 +19,6 @@ defmodule Vutuv.Posts.PendingVideoPost do
   use VutuvWeb, :model
 
   @kinds ~w(post reply organization_post remote_reply remote_post_reply)
-  @statuses ~w(waiting published failed canceled)
 
   schema "pending_video_posts" do
     belongs_to(:user, Vutuv.Accounts.User)
@@ -39,9 +38,6 @@ defmodule Vutuv.Posts.PendingVideoPost do
 
     timestamps()
   end
-
-  def kinds, do: @kinds
-  def statuses, do: @statuses
 
   def changeset(pending, params) do
     pending

@@ -84,9 +84,10 @@ defmodule VutuvWeb.PostLive.Composer do
   alias Vutuv.Uploads.Spec
   alias Vutuv.Videos
   alias VutuvWeb.ErrorHelpers
+  alias VutuvWeb.Live.VideoProgress
   alias VutuvWeb.PostComponents
 
-  import VutuvWeb.VideoComponents, only: [video_tile: 1, stage_line: 1]
+  import VutuvWeb.VideoComponents, only: [video_tile: 1, stage_line: 1, clock: 1]
 
   @presets ~w(public followers connections only_me custom)
 
@@ -98,13 +99,14 @@ defmodule VutuvWeb.PostLive.Composer do
   def update(%{save_draft: true}, socket), do: {:ok, persist_draft(socket)}
 
   # The clip moved a step (issue #1911): the host LiveView's hook
-  # (`VutuvWeb.Live.InitAssigns`) forwards every `{:post_video, …}` for the
-  # clip this composer registered. Re-read rather than patched from the
-  # summary, so the tile and the strip draw from one row.
-  def update(%{video_event: %{id: id}}, socket) do
+  # (`VutuvWeb.Live.VideoProgress`) forwards every `{:post_video, …}` for the
+  # clip this composer registered. A percent is patched in place; a stage,
+  # a verdict or a cover change re-reads the row, which is where the frames
+  # and the strip come from.
+  def update(%{video_event: %{id: id} = summary}, socket) do
     case socket.assigns[:video] do
-      %PostVideo{id: ^id} ->
-        {:ok, assign(socket, :video, Videos.get_video(id) || socket.assigns.video)}
+      %PostVideo{id: ^id} = video ->
+        {:ok, assign(socket, :video, Videos.apply_summary(video, summary))}
 
       _other ->
         {:ok, socket}
@@ -239,38 +241,35 @@ defmodule VutuvWeb.PostLive.Composer do
       auto_upload: true,
       progress: &handle_progress/3
     )
-    |> allow_video_upload()
-    |> restore_draft()
-  end
-
-  # One clip per post, up to the installation's cap (the length is checked
-  # after ffprobe, on the server). Not offered at all where the feature is
-  # off — `@uploads.video` then does not exist, and the template asks first.
-  defp allow_video_upload(%{assigns: %{video_uploads?: true}} = socket) do
-    allow_upload(socket, :video,
+    # One clip per post, up to the installation's cap (the length is checked
+    # after ffprobe, on the server). Always allowed, so the template can rely
+    # on `@uploads.video`; only the picker asks whether the feature is on.
+    |> allow_upload(:video,
       accept: Videos.extension_whitelist(),
       max_entries: 1,
       max_file_size: Videos.max_filesize(),
       auto_upload: true,
       progress: &handle_progress/3
     )
+    |> restore_draft()
   end
-
-  defp allow_video_upload(socket), do: socket
 
   defp post_video(%Post{video: %PostVideo{} = video}), do: video
   defp post_video(_post), do: nil
 
-  # Whether this composer offers the upload at all: the feature is on, ffmpeg
+  # Whether this composer offers the picker at all: the feature is on, ffmpeg
   # is there, and this is a new post — a clip is never swapped on an edit.
   defp video_uploads?(nil), do: Videos.enabled?()
   defp video_uploads?(_post), do: false
 
-  # Which clip this composer holds, told to the host LiveView so its hook
-  # forwards that clip's progress here (`InitAssigns.forward_video_progress/2`).
-  # `nil` withdraws the registration.
+  # Which clip this composer holds, told to the host so its hook forwards that
+  # clip's progress here (`VutuvWeb.Live.VideoProgress`); `nil` withdraws the
+  # registration. Only a new post's composer says so — its hosts carry the
+  # hook — an edited post's clip is done and moves no more.
   defp assign_video(socket, video) do
-    send(self(), {:composer_video, socket.assigns.id, video && video.id})
+    if socket.assigns.post == nil,
+      do: VideoProgress.register(socket.assigns.id, video && video.id)
+
     assign(socket, :video, video)
   end
 
@@ -1135,7 +1134,7 @@ defmodule VutuvWeb.PostLive.Composer do
          )}
 
       true ->
-        {kind, context} = pending_kind(socket.assigns)
+        {kind, context} = post_context(socket.assigns)
         user = socket.assigns.current_user
 
         case Videos.create_pending_post(user, video, kind, context, attrs) do
@@ -1145,20 +1144,29 @@ defmodule VutuvWeb.PostLive.Composer do
     end
   end
 
-  # The create path the pending post takes later, keyed the way `save_post/2`
-  # keys it, plus the context that path needs.
-  defp pending_kind(%{post: nil, remote_note: %Note{} = note}),
-    do: {"remote_reply", %{note: note}}
+  # Which of the five create paths this composer is, in the vocabulary
+  # `Vutuv.Posts.create_in_context/4` takes — for a post saved now and for one
+  # stored to wait on its clip alike.
+  #
+  # An answer to a reply from another network writes the sidecar that carries
+  # it out to that network and holds the federation gates (issue #1070); an
+  # answer to a followed account's post (issue #1165) is a top-level post with
+  # the same sidecar; a reply is personal even while writing as an organization
+  # (a page cannot answer anything until issue #1336 gives it a reading side),
+  # which is why the organization clause sits below it; and the publisher role
+  # is re-checked inside `create_organization_post/3`, so a withdrawn publisher
+  # cannot publish through a composer they still have open.
+  defp post_context(%{remote_note: %Note{} = note}), do: {"remote_reply", %{note: note}}
 
-  defp pending_kind(%{post: nil, remote_post: %RemotePost{} = post}),
+  defp post_context(%{remote_post: %RemotePost{} = post}),
     do: {"remote_post_reply", %{remote_post: post}}
 
-  defp pending_kind(%{post: nil, parent: %Post{} = parent}), do: {"reply", %{parent: parent}}
+  defp post_context(%{parent: %Post{} = parent}), do: {"reply", %{parent: parent}}
 
-  defp pending_kind(%{post: nil, acting_as: %Organization{} = organization}),
+  defp post_context(%{acting_as: %Organization{} = organization}),
     do: {"organization_post", %{organization: organization}}
 
-  defp pending_kind(_assigns), do: {"post", %{}}
+  defp post_context(_assigns), do: {"post", %{}}
 
   # The submission is stored; the composer behaves as after a post. The feed
   # draws the waiting card from the broadcast the store just sent, and every
@@ -1262,33 +1270,13 @@ defmodule VutuvWeb.PostLive.Composer do
   # LiveView — and the organization page's composer is that same shape again.
   defp feed_composer?(assigns), do: assigns.host == :feed
 
-  # Answering a reply from another network goes through its own context function:
-  # it writes the sidecar that carries the answer out to that network, and it
-  # holds the federation gates (issue #1070).
-  defp save_post(%{post: nil, remote_note: %Note{} = note, current_user: author}, attrs),
-    do: Posts.create_remote_reply(author, note, attrs)
+  # A new post takes one of the five create paths (`post_context/1`); an edit
+  # is an update.
+  defp save_post(%{post: nil, current_user: author} = assigns, attrs) do
+    {kind, context} = post_context(assigns)
+    Posts.create_in_context(author, kind, context, attrs)
+  end
 
-  # Answering a post by a followed account (issue #1165). Not a reply to
-  # anything here — the thing answered lives on another server — so what this
-  # creates is a top-level post carrying the same sidecar.
-  defp save_post(%{post: nil, remote_post: %RemotePost{} = post, current_user: author}, attrs),
-    do: Posts.create_remote_post_reply(author, post, attrs)
-
-  defp save_post(%{post: nil, parent: %Post{} = parent, current_user: author}, attrs),
-    do: Posts.create_reply(author, parent, attrs)
-
-  # Writing as an organization (issue #1335). Below the reply clauses on
-  # purpose: a reply is always personal, because an organization cannot answer
-  # anything until issue #1336 gives it a reading side. The role is re-checked
-  # inside `create_organization_post/3`, so a withdrawn publisher cannot publish
-  # through a composer they still have open.
-  defp save_post(
-         %{post: nil, acting_as: %Organization{} = organization, current_user: author},
-         attrs
-       ),
-       do: Posts.create_organization_post(organization, author, attrs)
-
-  defp save_post(%{post: nil, current_user: author}, attrs), do: Posts.create_post(author, attrs)
   defp save_post(%{post: post}, attrs), do: Posts.update_post(post, attrs)
 
   defp handle_save_result({:ok, post}, socket) do
@@ -1465,13 +1453,8 @@ defmodule VutuvWeb.PostLive.Composer do
   end
 
   defp sweep_rejected_uploads(socket, name) do
-    case socket.assigns.uploads[name] do
-      nil -> socket
-      upload -> cancel_rejected(socket, name, upload)
-    end
-  end
+    upload = Map.fetch!(socket.assigns.uploads, name)
 
-  defp cancel_rejected(socket, name, upload) do
     case Enum.filter(upload.entries, &(upload_errors(upload, &1) != [])) do
       [] ->
         socket
@@ -2017,7 +2000,7 @@ defmodule VutuvWeb.PostLive.Composer do
           <%!-- The clip on its way up (issue #1907): a 500 MB file takes a
           while over the socket, and the bar is the only thing saying so. --%>
           <div
-            :for={entry <- (@video_uploads? && @uploads.video.entries) || []}
+            :for={entry <- @uploads.video.entries}
             id={"#{@id}-video-upload"}
             class="mt-2 flex items-center gap-3 text-sm text-slate-600 dark:text-slate-400"
           >
@@ -2182,7 +2165,7 @@ defmodule VutuvWeb.PostLive.Composer do
               <.button
                 type="submit"
                 class="whitespace-nowrap px-6"
-                disabled={@uploads.images.entries != [] or uploading_video?(assigns)}
+                disabled={@uploads.images.entries != [] or @uploads.video.entries != []}
                 phx-disable-with={gettext("Saving…")}
               >
                 <%!-- The button names the author while writing as an
@@ -2434,15 +2417,6 @@ defmodule VutuvWeb.PostLive.Composer do
   # pill (`Feed.pending_label/1`, which refuses the same swap), the short form
   # here is a complete name for the control, so nothing has to be kept back for
   # a screen reader.
-  attr(:id, :string, required: true)
-  attr(:upload, :any, required: true)
-
-  # Whether the clip is still on its way up, which holds the Post button the
-  # way an in-flight photo does.
-  defp uploading_video?(%{video_uploads?: true, uploads: uploads}),
-    do: uploads.video.entries != []
-
-  defp uploading_video?(_assigns), do: false
 
   # The clip's picker, beside the photos' (issue #1907): one file, and only
   # while there is none — a post carries at most one clip.
@@ -2456,13 +2430,7 @@ defmodule VutuvWeb.PostLive.Composer do
 
   defp add_video_picker(assigns) do
     ~H"""
-    <label
-      id={"#{@id}-add-video"}
-      class={[
-        "inline-flex h-10 mb-0 shrink-0 cursor-pointer items-center gap-1.5 whitespace-nowrap rounded-lg bg-slate-100 px-3 text-sm font-semibold text-slate-700 hover:bg-slate-200 dark:bg-slate-800 dark:text-slate-200 dark:hover:bg-slate-700",
-        @uploading? && "sr-only"
-      ]}
-    >
+    <label id={"#{@id}-add-video"} class={[picker_label_class(), @uploading? && "sr-only"]}>
       🎬 <span class="sm:hidden">{gettext("Video")}</span>
       <span class="hidden sm:inline">{gettext("Add video")}</span>
       <.live_file_input upload={@upload} class="sr-only" />
@@ -2519,13 +2487,15 @@ defmodule VutuvWeb.PostLive.Composer do
             />
           </label>
 
+          <%!-- A plain button in the kit's quiet-red recipe: `<.button>` does
+          not pass `phx-target`, and this one has to reach the component. --%>
           <button
             :if={not @editing?}
             type="button"
             phx-click="remove-video"
             phx-target={@myself}
             data-remove-video
-            class="mt-2 inline-flex h-10 items-center rounded-lg border border-slate-200 px-3 text-sm font-semibold text-slate-700 hover:border-red-400 hover:text-red-700 dark:border-slate-700 dark:text-slate-200 dark:hover:border-red-500 dark:hover:text-red-300"
+            class={["mt-2", button_class("danger-ghost")]}
           >
             {gettext("Remove video")}
           </button>
@@ -2549,7 +2519,7 @@ defmodule VutuvWeb.PostLive.Composer do
             data-video-frame={frame.position}
             data-video-cover={to_string(frame.id == @video.cover_frame_id)}
             aria-pressed={to_string(frame.id == @video.cover_frame_id)}
-            title={frame_time(frame)}
+            title={clock(frame.seconds)}
             class={[
               "relative w-24 shrink-0 overflow-hidden rounded-md ring-2",
               (frame.id == @video.cover_frame_id && "ring-brand-500") ||
@@ -2558,7 +2528,7 @@ defmodule VutuvWeb.PostLive.Composer do
           >
             <img src={PostVideo.frame_url(@video, frame)} alt="" loading="lazy" class="block aspect-video w-full object-cover" />
             <span class="absolute bottom-1 left-1 rounded bg-slate-900/70 px-1 text-[10px] font-semibold tabular-nums text-white">
-              {frame_time(frame)}
+              {clock(frame.seconds)}
             </span>
           </button>
         </div>
@@ -2567,15 +2537,17 @@ defmodule VutuvWeb.PostLive.Composer do
     """
   end
 
-  defp frame_time(%{seconds: seconds}),
-    do: "#{div(seconds, 60)}:#{String.pad_leading("#{rem(seconds, 60)}", 2, "0")}"
+  # The two pickers side by side share one look, so they cannot drift apart.
+  defp picker_label_class,
+    do:
+      "inline-flex h-10 mb-0 shrink-0 cursor-pointer items-center gap-1.5 whitespace-nowrap rounded-lg bg-slate-100 px-3 text-sm font-semibold text-slate-700 hover:bg-slate-200 dark:bg-slate-800 dark:text-slate-200 dark:hover:bg-slate-700"
+
+  attr(:id, :string, required: true)
+  attr(:upload, :any, required: true)
 
   defp add_photos_picker(assigns) do
     ~H"""
-    <label
-      id={"#{@id}-add-photos"}
-      class="inline-flex h-10 mb-0 shrink-0 cursor-pointer items-center gap-1.5 whitespace-nowrap rounded-lg bg-slate-100 px-3 text-sm font-semibold text-slate-700 hover:bg-slate-200 dark:bg-slate-800 dark:text-slate-200 dark:hover:bg-slate-700"
-    >
+    <label id={"#{@id}-add-photos"} class={picker_label_class()}>
       📷 <span class="sm:hidden">{gettext("Photos")}</span>
       <span class="hidden sm:inline">{gettext("Add photos")}</span>
       <.live_file_input upload={@upload} class="sr-only" />

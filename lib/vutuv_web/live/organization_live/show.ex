@@ -31,12 +31,15 @@ defmodule VutuvWeb.OrganizationLive.Show do
   alias VutuvWeb.Fediverse.Docs
   alias VutuvWeb.JsonLd
   alias VutuvWeb.Live.InitAssigns
+  alias VutuvWeb.Live.VideoProgress
   alias VutuvWeb.UserHelpers
   alias VutuvWeb.VerificationComponents
 
   @impl true
   def mount(_params, session, socket) do
     socket = InitAssigns.assign_embedded(socket, session)
+    # The page's composer takes a clip too (issue #1911).
+    socket = VideoProgress.attach(socket, socket.assigns.current_user)
     current_user = socket.assigns.current_user
 
     organization = Organizations.get_organization!(session["organization_id"])

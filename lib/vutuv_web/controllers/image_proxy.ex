@@ -45,11 +45,14 @@ defmodule VutuvWeb.ImageProxy do
   Options — `:accel_path` and `:version_path` wrap the subject store's
   functions (each receives the version); `:decorate` (optional) receives
   `(conn, extname)` to add per-response headers, e.g. the post proxy's
-  download filename.
+  download filename; `:send` (optional) receives `(conn, path)` and sends the
+  file, for a proxy that answers byte ranges (the video proxy) — the default
+  is the whole file with `send_file/3`.
   """
   def serve(conn, version, opts) do
     conn = put_cache_control(conn)
     decorate = Keyword.get(opts, :decorate, fn conn, _ext -> conn end)
+    send = Keyword.get(opts, :send, &send_file(&1, 200, &2))
 
     case Application.get_env(:vutuv, :post_image_serving, :send_file) do
       :accel_redirect ->
@@ -70,7 +73,7 @@ defmodule VutuvWeb.ImageProxy do
             conn
             |> put_resp_content_type(MIME.from_path(path), nil)
             |> decorate.(Path.extname(path))
-            |> send_file(200, path)
+            |> send.(path)
         end
     end
   end

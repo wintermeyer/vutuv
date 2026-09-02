@@ -46,7 +46,6 @@ defmodule Vutuv.PostVideoStore do
   @cover_quality 58
 
   def extension_whitelist, do: @extension_whitelist
-  def renditions, do: @renditions
 
   @doc "The file names the proxy resolves — nothing else in the directory is reachable."
   def served_files, do: @served_files

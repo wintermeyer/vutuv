@@ -89,48 +89,28 @@ defmodule VutuvWeb.PostVideoController do
 
   # A still of the strip: the author's alone (an admin's too), never cached —
   # a frame the check refuses is deleted, and must not outlive that anywhere.
+  # The pixelated preview's shape exactly: a private file under `no-store`.
   defp serve(conn, video, viewer, {:frame, position}) do
     path = PostVideoStore.frame_path(video.token, position)
-
-    if Videos.owner_or_admin?(video, viewer) and File.exists?(path) do
-      conn
-      |> put_resp_header("cache-control", "private, no-store")
-      |> put_resp_content_type("image/jpeg", nil)
-      |> send_file(200, path)
-    else
-      ImageProxy.not_found(conn)
-    end
+    own? = Videos.owner_or_admin?(video, viewer) and File.exists?(path)
+    ImageProxy.serve_pixelated(conn, if(own?, do: path))
   end
 
+  # The renditions and the covers through the shared serving switch (X-Accel
+  # or `send_file`); what differs is the send, which answers byte ranges.
   defp serve(conn, video, _viewer, file) do
-    conn = ImageProxy.put_cache_control(conn)
-
-    case Application.get_env(:vutuv, :post_image_serving, :send_file) do
-      :accel_redirect ->
-        accel = PostVideoStore.accel_path(video.token, file)
-
-        conn
-        |> put_resp_content_type(MIME.from_path(file), nil)
-        |> put_resp_header("x-accel-redirect", accel)
-        |> send_resp(200, "")
-
-      _send_file ->
-        case PostVideoStore.served_path(video.token, file) do
-          nil -> ImageProxy.not_found(conn)
-          path -> send_ranged(conn, path, MIME.from_path(file))
-        end
-    end
+    ImageProxy.serve(conn, file,
+      accel_path: &PostVideoStore.accel_path(video.token, &1),
+      version_path: &PostVideoStore.served_path(video.token, &1),
+      send: &send_ranged/2
+    )
   end
 
   ## Ranges
 
-  defp send_ranged(conn, path, content_type) do
+  defp send_ranged(conn, path) do
     size = File.stat!(path).size
-
-    conn =
-      conn
-      |> put_resp_content_type(content_type, nil)
-      |> put_resp_header("accept-ranges", "bytes")
+    conn = put_resp_header(conn, "accept-ranges", "bytes")
 
     case range(conn, size) do
       :whole ->

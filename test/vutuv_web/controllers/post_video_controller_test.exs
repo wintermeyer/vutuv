@@ -7,6 +7,8 @@ defmodule VutuvWeb.PostVideoControllerTest do
 
   use VutuvWeb.ConnCase, async: false
 
+  import Vutuv.WebPushHelpers, only: [put_config: 2]
+
   alias Vutuv.Posts
   alias Vutuv.Posts.PostVideo
   alias Vutuv.PostVideoStore
@@ -18,16 +20,8 @@ defmodule VutuvWeb.PostVideoControllerTest do
   setup %{conn: conn} do
     tmp = Path.join(System.tmp_dir!(), "vutuv_video_proxy_#{System.unique_integer([:positive])}")
     File.mkdir_p!(tmp)
-    prev = Application.get_env(:vutuv, :uploads_dir_prefix)
-    Application.put_env(:vutuv, :uploads_dir_prefix, tmp)
-
-    on_exit(fn ->
-      File.rm_rf(tmp)
-
-      if prev,
-        do: Application.put_env(:vutuv, :uploads_dir_prefix, prev),
-        else: Application.delete_env(:vutuv, :uploads_dir_prefix)
-    end)
+    put_config(:uploads_dir_prefix, tmp)
+    on_exit(fn -> File.rm_rf(tmp) end)
 
     {author_conn, author} = create_and_login_user(conn)
     path = VideoFixtures.mp4_path()

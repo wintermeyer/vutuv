@@ -13,6 +13,8 @@ defmodule VutuvWeb.VideoComposerTest do
 
   import Phoenix.LiveViewTest
 
+  import Vutuv.WebPushHelpers, only: [put_config: 2]
+
   alias Vutuv.Posts
   alias Vutuv.Posts.PendingVideoPost
   alias Vutuv.Posts.PostVideo
@@ -24,16 +26,8 @@ defmodule VutuvWeb.VideoComposerTest do
   setup %{conn: conn} do
     tmp = Path.join(System.tmp_dir!(), "vutuv_video_ui_#{System.unique_integer([:positive])}")
     File.mkdir_p!(tmp)
-    prev = Application.get_env(:vutuv, :uploads_dir_prefix)
-    Application.put_env(:vutuv, :uploads_dir_prefix, tmp)
-
-    on_exit(fn ->
-      File.rm_rf(tmp)
-
-      if prev,
-        do: Application.put_env(:vutuv, :uploads_dir_prefix, prev),
-        else: Application.delete_env(:vutuv, :uploads_dir_prefix)
-    end)
+    put_config(:uploads_dir_prefix, tmp)
+    on_exit(fn -> File.rm_rf(tmp) end)
 
     {conn, user} = create_and_login_user(conn)
     %{conn: conn, user: user}
@@ -198,8 +192,7 @@ defmodule VutuvWeb.VideoComposerTest do
        %{conn: conn, user: user} do
     # With the check on, the frames wait for a verdict instead of clearing on
     # the spot — which is what lets this test refuse one.
-    Application.put_env(:vutuv, :moderate_images, true)
-    on_exit(fn -> Application.put_env(:vutuv, :moderate_images, false) end)
+    put_config(:moderate_images, true)
 
     live = open_composer(conn)
     video = upload_video!(live, user)

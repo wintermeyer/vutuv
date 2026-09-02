@@ -6,6 +6,8 @@ defmodule VutuvWeb.ApiV2.VideosApiTest do
 
   use VutuvWeb.ConnCase, async: false
 
+  import Vutuv.WebPushHelpers, only: [put_config: 2]
+
   alias Vutuv.ApiAuth
   alias Vutuv.Posts
   alias Vutuv.VideoFixtures
@@ -16,16 +18,8 @@ defmodule VutuvWeb.ApiV2.VideosApiTest do
 
     tmp = Path.join(System.tmp_dir!(), "vutuv_api_video_#{System.unique_integer([:positive])}")
     File.mkdir_p!(tmp)
-    prev = Application.get_env(:vutuv, :uploads_dir_prefix)
-    Application.put_env(:vutuv, :uploads_dir_prefix, tmp)
-
-    on_exit(fn ->
-      File.rm_rf(tmp)
-
-      if prev,
-        do: Application.put_env(:vutuv, :uploads_dir_prefix, prev),
-        else: Application.delete_env(:vutuv, :uploads_dir_prefix)
-    end)
+    put_config(:uploads_dir_prefix, tmp)
+    on_exit(fn -> File.rm_rf(tmp) end)
 
     user = insert_activated_user()
     {:ok, token, _} = ApiAuth.create_pat(user, %{"name" => "t", "scopes" => ["posts:write"]})

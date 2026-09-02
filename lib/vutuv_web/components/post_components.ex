@@ -2426,12 +2426,10 @@ defmodule VutuvWeb.PostComponents do
                   <span aria-hidden="true">⚠</span>{gettext("Cover it again")}
                 </span>
               </summary>
-              <.remote_video :if={RemoteImage.video?(image)} image={image} />
-              <.remote_image :if={not RemoteImage.video?(image)} picture={picture} alt={image.alt} />
+              <.remote_media image={image} picture={picture} />
             </details>
           <% :ready -> %>
-            <.remote_video :if={RemoteImage.video?(image)} image={image} />
-            <.remote_image :if={not RemoteImage.video?(image)} picture={RemoteMedia.picture(image)} alt={image.alt} />
+            <.remote_media image={image} picture={RemoteMedia.picture(image)} />
         <% end %>
       </div>
     </div>
@@ -2461,6 +2459,19 @@ defmodule VutuvWeb.PostComponents do
   # as a local photo post.
   defp presence?(text), do: is_binary(text) and String.trim(text) != ""
 
+  # What a released attachment renders as: the picture, or — for a clip
+  # (issue #1914) — the player. One dispatch, so the display-state `case`
+  # above stays about state.
+  attr(:image, RemoteImage, required: true)
+  attr(:picture, :map, required: true, doc: "`Vutuv.RemoteMedia.picture/1` of the image")
+
+  defp remote_media(assigns) do
+    ~H"""
+    <.remote_video :if={RemoteImage.video?(@image)} image={@image} picture={@picture} />
+    <.remote_image :if={not RemoteImage.video?(@image)} picture={@picture} alt={@image.alt} />
+    """
+  end
+
   # A clip from another network (issue #1914): the cover we fetched and judged
   # as the poster, the clip itself played straight from its server on a tap —
   # nothing of it is cached here (up to 99 MB a post on Mastodon), and
@@ -2468,9 +2479,10 @@ defmodule VutuvWeb.PostComponents do
   # not a byte more. The play glyph and the sender's sensitive flag are the
   # same ones a member's own clip and a remote picture wear.
   attr(:image, RemoteImage, required: true)
+  attr(:picture, :map, required: true)
 
   defp remote_video(assigns) do
-    poster = if RemoteImage.released?(assigns.image), do: RemoteMedia.picture(assigns.image)
+    poster = if RemoteImage.released?(assigns.image), do: assigns.picture
     assigns = assign(assigns, :poster, poster && (poster.lite || poster.src))
 
     ~H"""

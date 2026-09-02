@@ -51,9 +51,6 @@ defmodule Vutuv.Videos.FFmpeg do
     end
   end
 
-  @doc false
-  def forget_availability, do: :persistent_term.erase({__MODULE__, :available})
-
   @doc "Whether this ffmpeg build has encoder `name` (e.g. `libsvtav1`)."
   def encoder?(name) when is_binary(name) do
     case run(ffmpeg(), ["-hide_banner", "-encoders"], @probe_timeout_ms) do

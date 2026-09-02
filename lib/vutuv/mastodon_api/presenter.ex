@@ -1141,8 +1141,13 @@ defmodule Vutuv.MastodonApi.Presenter do
   # A clip from another network (issue #1914): the origin's file is what
   # plays — nothing of it is cached here — and the cover we fetched is the
   # preview, where there is one.
-  defp remote_attachment(%RemoteImage{media_type: type} = image, viewer)
-       when is_binary(type) and type != "" do
+  defp remote_attachment(%RemoteImage{} = image, viewer) do
+    if RemoteImage.video?(image),
+      do: remote_video_attachment(image, viewer),
+      else: remote_picture_attachment(image, viewer)
+  end
+
+  defp remote_video_attachment(%RemoteImage{} = image, viewer) do
     preview =
       if RemoteImage.released?(image),
         do:
@@ -1154,7 +1159,7 @@ defmodule Vutuv.MastodonApi.Presenter do
     attachment(image, image.source_uri, preview, image.source_uri)
   end
 
-  defp remote_attachment(%RemoteImage{} = image, viewer) do
+  defp remote_picture_attachment(%RemoteImage{} = image, viewer) do
     # One stored version, so the preview and the picture are the same file — a
     # derived copy is all this installation keeps of somebody else's photograph.
     url =

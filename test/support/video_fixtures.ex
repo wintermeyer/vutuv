@@ -21,13 +21,6 @@ defmodule Vutuv.VideoFixtures do
     do:
       clip("tiny.webm", ["-c:v", "libvpx-vp9", "-b:v", "150k", "-c:a", "libopus", "-b:a", "32k"])
 
-  @doc "A clip longer than `seconds`, for the length cap."
-  def long_mp4_path(seconds),
-    do:
-      clip("long-#{seconds}.mp4", ["-c:v", "libx264", "-pix_fmt", "yuv420p", "-an"],
-        seconds: seconds
-      )
-
   @doc "The bytes of the standard clip, for `file_input/4`."
   def mp4_binary, do: File.read!(mp4_path())
 

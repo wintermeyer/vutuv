@@ -73,7 +73,8 @@ defmodule Vutuv.Videos do
   def max_frames, do: @max_frames
   def frame_interval_seconds, do: @frame_interval_seconds
   def cover_window_seconds, do: @cover_window_seconds
-  def stale_after_seconds, do: @stale_after_seconds
+  @doc "How long an unattached clip is kept before the sweep takes it."
+  def pending_max_age_hours, do: @pending_max_age_hours
   defdelegate extension_whitelist, to: PostVideoStore
   defp config, do: Application.fetch_env!(:vutuv, :post_videos)
 
@@ -159,8 +160,11 @@ defmodule Vutuv.Videos do
     end)
   end
 
+  # The proxy's lookup: the post for the audience question, no frames — a
+  # `<video>` asks for many byte ranges, and the stills are only needed for
+  # the cover (`cover_frame/1` fetches them then).
   def get_video_by_token(token) when is_binary(token) do
-    PostVideo |> Repo.get_by(token: token) |> Repo.preload([:frames, post: :user])
+    PostVideo |> Repo.get_by(token: token) |> Repo.preload(post: :user)
   end
 
   def get_video_by_token(_token), do: nil
@@ -175,16 +179,6 @@ defmodule Vutuv.Videos do
   end
 
   def pending_video(_author, _id), do: nil
-
-  @doc "A post's clip with its frames, or `nil`; takes the post or its id."
-  def video_of(%Post{video: %PostVideo{} = video}), do: Repo.preload(video, :frames)
-  def video_of(%Post{id: id}), do: video_of(id)
-
-  def video_of(post_id) when is_binary(post_id) do
-    from(v in PostVideo, where: v.post_id == ^post_id) |> Repo.one() |> Repo.preload(:frames)
-  end
-
-  def video_of(_), do: nil
 
   ## The author's choices
 
@@ -294,7 +288,7 @@ defmodule Vutuv.Videos do
 
   @doc "What every listener hears about a clip: enough to draw a tile, never the row."
   def summary(%PostVideo{} = video) do
-    frames = frames_of(video)
+    %{total: total, checked: checked} = check_progress(video)
 
     %{
       id: video.id,
@@ -305,10 +299,28 @@ defmodule Vutuv.Videos do
       rejected_second: video.rejected_second,
       error: video.error,
       duration_ms: video.duration_ms,
-      frames: length(frames),
-      checked: Enum.count(frames, &(&1.moderation != "pending")),
+      frames: total,
+      checked: checked,
       cover_frame_id: video.cover_frame_id
     }
+  end
+
+  @doc """
+  Whether a summary says more than a percent moved. A tile that holds the
+  row patches the percent in place and re-reads the row only for this — the
+  frames, the cover and the verdict live on the row, the percent does not
+  have to.
+  """
+  def stage_changed?(%PostVideo{} = video, summary) do
+    summary.stage != video.stage or summary.moderation != video.moderation or
+      summary.cover_frame_id != video.cover_frame_id
+  end
+
+  @doc "The row brought up to a summary: re-read when the stage moved, the percent patched otherwise."
+  def apply_summary(%PostVideo{} = video, summary) do
+    if stage_changed?(video, summary),
+      do: get_video(video.id) || video,
+      else: %{video | progress: summary.progress}
   end
 
   def broadcast_progress(%PostVideo{} = video) do
@@ -418,15 +430,25 @@ defmodule Vutuv.Videos do
       Repo.transaction(fn ->
         Repo.delete_all(from(f in PostVideoFrame, where: f.video_id == ^video.id))
 
-        Enum.map(frames, fn frame ->
-          Repo.insert!(%PostVideoFrame{
-            video_id: video.id,
-            position: frame.position,
-            seconds: frame.seconds,
-            scene_cut: frame.scene_cut,
-            moderation: state
-          })
-        end)
+        # `insert_all` autogenerates neither the id nor the timestamps.
+        stamped = NaiveDateTime.utc_now(:second)
+
+        entries =
+          Enum.map(frames, fn frame ->
+            %{
+              id: Vutuv.UUIDv7.generate(),
+              video_id: video.id,
+              position: frame.position,
+              seconds: frame.seconds,
+              scene_cut: frame.scene_cut,
+              moderation: state,
+              inserted_at: stamped,
+              updated_at: stamped
+            }
+          end)
+
+        {_count, rows} = Repo.insert_all(PostVideoFrame, entries, returning: true)
+        Enum.sort_by(rows, & &1.position)
       end)
 
     with {:ok, rows} <- rows do
@@ -439,7 +461,7 @@ defmodule Vutuv.Videos do
         )
 
       Enum.each(rows, &ImageScans.enqueue("post_video_frame", &1.id, video.user_id))
-      {:ok, recompute_moderation(video)}
+      {:ok, recompute_moderation(video.id)}
     end
   end
 
@@ -448,8 +470,8 @@ defmodule Vutuv.Videos do
   all approved approves it, anything else is still pending. Called after
   every frame verdict and once the frames are recorded.
   """
-  def recompute_moderation(%PostVideo{id: id}) do
-    video = get_video(id)
+  def recompute_moderation(video_id) do
+    video = get_video(video_id)
     frames = video.frames
 
     verdict =
@@ -480,7 +502,7 @@ defmodule Vutuv.Videos do
     case flipped do
       {1, _} ->
         case Repo.get(PostVideoFrame, frame_id) do
-          %PostVideoFrame{video_id: video_id} -> recompute_moderation(%PostVideo{id: video_id})
+          %PostVideoFrame{video_id: video_id} -> recompute_moderation(video_id)
           nil -> :ok
         end
 
@@ -514,14 +536,12 @@ defmodule Vutuv.Videos do
           video ->
             PostVideoStore.delete(video.token)
 
-            video
-            |> update_state(
+            update_state(video,
               moderation: "rejected",
               stage: "rejected",
               rejected_second: frame.seconds,
               worked_at: nil
             )
-            |> broadcast_progress()
 
             :ok
         end
@@ -533,11 +553,10 @@ defmodule Vutuv.Videos do
   file exists and the check passed (and publishes every post waiting on it),
   `checking` while the file waits for the verdict. Called by the job after
   the H.264 rendition and by every frame verdict, so whichever lands last
-  releases the clip.
+  releases the clip. Trusts the row it is handed — every caller has just
+  read or written it.
   """
   def settle(%PostVideo{} = video) do
-    video = get_video(video.id) || video
-
     cond do
       video.stage in ["rejected", "failed", "ready"] ->
         video

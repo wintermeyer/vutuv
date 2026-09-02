@@ -39,7 +39,6 @@ defmodule VutuvWeb.Live.InitAssigns do
       |> assign(:current_user, user)
       |> assign(:acting_as, acting_as(user, session))
       |> Phoenix.LiveView.attach_hook(:shell_path, :handle_params, &assign_shell_path/3)
-      |> subscribe_video_progress(user)
 
     {:cont, socket}
   end
@@ -110,10 +109,6 @@ defmodule VutuvWeb.Live.InitAssigns do
     |> assign(:acting_as, acting_as(user, session))
     |> assign(:locale, session["locale"])
     |> assign(:shell_path, session["request_path"])
-    # The feed and the organization page host a composer too, and are
-    # embedded rather than routed, so the `:default` on_mount never runs for
-    # them — the clip's progress has to be wired here as well.
-    |> subscribe_video_progress(user)
   end
 
   @doc """
@@ -168,52 +163,4 @@ defmodule VutuvWeb.Live.InitAssigns do
   # Mirrors the plug's own gate: a suspension or deactivation must end running
   # sessions, not just block new logins.
   defp allowed?(%User{} = user), do: is_nil(Moderation.login_block(user))
-
-  # A clip's progress reaches every page the member has open (issue #1911):
-  # the composer's tile wherever a composer is, the waiting card on the feed.
-  # The subscription is made once here, for the whole live session, and the
-  # hook forwards each `{:post_video, …}` to the composer components that told
-  # it which clip they hold — a LiveComponent cannot subscribe or receive
-  # messages itself, and each host page having to know about it is how such a
-  # message gets lost on the page that forgot. The message goes on to the host
-  # (`:cont`), so the feed's waiting card sees it too.
-  #
-  # Connected mounts only: the dead render receives no messages, and a hook
-  # needs a socket that came through a real mount (a bare `%Socket{}` in a
-  # test has no lifecycle to attach to).
-  defp subscribe_video_progress(socket, %User{id: user_id}) do
-    if Phoenix.LiveView.connected?(socket) do
-      Vutuv.Videos.subscribe(user_id)
-
-      socket
-      |> assign(:video_composers, %{})
-      |> Phoenix.LiveView.attach_hook(:video_progress, :handle_info, &forward_video_progress/2)
-    else
-      socket
-    end
-  end
-
-  defp subscribe_video_progress(socket, _anonymous), do: socket
-
-  defp forward_video_progress({:composer_video, composer_id, video_id}, socket) do
-    composers =
-      if video_id,
-        do: Map.put(socket.assigns.video_composers, composer_id, video_id),
-        else: Map.delete(socket.assigns.video_composers, composer_id)
-
-    {:halt, assign(socket, :video_composers, composers)}
-  end
-
-  defp forward_video_progress({:post_video, %{id: video_id} = summary}, socket) do
-    for {composer_id, ^video_id} <- socket.assigns.video_composers do
-      Phoenix.LiveView.send_update(VutuvWeb.PostLive.Composer,
-        id: composer_id,
-        video_event: summary
-      )
-    end
-
-    {:cont, socket}
-  end
-
-  defp forward_video_progress(_message, socket), do: {:cont, socket}
 end

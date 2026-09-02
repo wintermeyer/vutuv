@@ -14,6 +14,8 @@ defmodule Vutuv.VideosTest do
 
   import Ecto.Query
 
+  import Vutuv.WebPushHelpers, only: [put_config: 2]
+
   alias Vutuv.Moderation.ImageScans
   alias Vutuv.Posts
   alias Vutuv.Posts.PendingVideoPost
@@ -27,16 +29,8 @@ defmodule Vutuv.VideosTest do
   setup do
     tmp = Path.join(System.tmp_dir!(), "vutuv_videos_#{System.unique_integer([:positive])}")
     File.mkdir_p!(tmp)
-    prev = Application.get_env(:vutuv, :uploads_dir_prefix)
-    Application.put_env(:vutuv, :uploads_dir_prefix, tmp)
-
-    on_exit(fn ->
-      File.rm_rf(tmp)
-
-      if prev,
-        do: Application.put_env(:vutuv, :uploads_dir_prefix, prev),
-        else: Application.delete_env(:vutuv, :uploads_dir_prefix)
-    end)
+    put_config(:uploads_dir_prefix, tmp)
+    on_exit(fn -> File.rm_rf(tmp) end)
 
     %{user: insert_activated_user(), tmp: tmp}
   end
@@ -62,18 +56,20 @@ defmodule Vutuv.VideosTest do
     end
 
     test "refuses a file over the size cap before reading it", %{user: user} do
-      prev = Application.get_env(:vutuv, :post_videos)
-      Application.put_env(:vutuv, :post_videos, Keyword.put(prev, :max_filesize, 10))
-      on_exit(fn -> Application.put_env(:vutuv, :post_videos, prev) end)
+      put_config(
+        :post_videos,
+        Keyword.put(Application.get_env(:vutuv, :post_videos), :max_filesize, 10)
+      )
 
       assert {:error, :too_large} =
                Videos.create_pending_video(user, VideoFixtures.mp4_path(), "tiny.mp4")
     end
 
     test "refuses a clip over the length cap after probing it", %{user: user} do
-      prev = Application.get_env(:vutuv, :post_videos)
-      Application.put_env(:vutuv, :post_videos, Keyword.put(prev, :max_duration_seconds, 2))
-      on_exit(fn -> Application.put_env(:vutuv, :post_videos, prev) end)
+      put_config(
+        :post_videos,
+        Keyword.put(Application.get_env(:vutuv, :post_videos), :max_duration_seconds, 2)
+      )
 
       assert {:error, :too_long} =
                Videos.create_pending_video(user, VideoFixtures.mp4_path(), "tiny.mp4")
@@ -157,8 +153,9 @@ defmodule Vutuv.VideosTest do
       wait_until(fn -> reload(video).stage == "transcoding" end)
       Process.exit(pid, :kill)
       wait_until(fn -> not Process.alive?(pid) end)
-      # The temp file the encode was writing may still be there.
-      assert reload(video).h264_ready_at == nil
+      # A three-second clip encodes in well under a second, so whether the
+      # kill landed before or after the H.264 file is the machine's call; the
+      # frames were certainly done, and the rest is the resume's to finish.
       assert reload(video).frames_extracted_at
 
       # The claim is stale in the sweeper's eyes only after the window; here
@@ -219,9 +216,7 @@ defmodule Vutuv.VideosTest do
 
   describe "the AI check over the frames" do
     setup do
-      prev = Application.get_env(:vutuv, :moderate_images)
-      Application.put_env(:vutuv, :moderate_images, true)
-      on_exit(fn -> Application.put_env(:vutuv, :moderate_images, prev) end)
+      put_config(:moderate_images, true)
       :ok
     end
 
@@ -356,8 +351,7 @@ defmodule Vutuv.VideosTest do
       video = upload!(user)
       {:ok, pending} = Videos.create_pending_post(user, video, "post", %{}, %{body: "Text stays"})
 
-      Application.put_env(:vutuv, :moderate_images, true)
-      on_exit(fn -> Application.put_env(:vutuv, :moderate_images, false) end)
+      put_config(:moderate_images, true)
       assert :ok = Job.run(video.id)
 
       ImageScans.deliver_due(

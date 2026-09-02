@@ -90,8 +90,11 @@ draw from it:
 * the **composer's tile** — cover, length, the stage line ("Converting ·
   62 %", "Our AI is checking it, 4 of 6 frames done") and the strip of stills
   to pick the cover from. A LiveComponent cannot subscribe itself, so
-  `VutuvWeb.Live.InitAssigns` subscribes once per LiveView and forwards each
-  `{:post_video, …}` to the composer that registered the clip.
+  `VutuvWeb.Live.VideoProgress` subscribes once per host page (an `on_mount`
+  on the routed reply pages, `attach/2` from the embedded feed's and
+  organization page's mount) and forwards each `{:post_video, …}` to the
+  composer that registered the clip. A percent is patched in place; a stage,
+  a verdict or a cover change re-reads the row.
 * the **waiting card** above the feed's timeline (`VutuvWeb.VideoComponents.
   pending_video_post/1`): the text, the tile, the stage, the length rounded
   up to whole minutes, a cancel button, and after a refusal the two ways out.

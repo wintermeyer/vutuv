@@ -3,9 +3,9 @@ defmodule Vutuv.Videos.Job do
   Everything that happens to one clip after the upload (issues #1907–#1909),
   as a sequence of steps each of which is stamped on the row when it is done:
 
-    1. **frames** — probe, pull the stills (opening frame, one every twenty
-       seconds, the hard cuts), cut the default cover, queue one AI scan per
-       still (`Vutuv.Videos.record_frames/3`).
+    1. **frames** — pull the stills (opening frame, one every twenty seconds,
+       the hard cuts), cut the default cover, queue one AI scan per still
+       (`Vutuv.Videos.record_frames/3`).
     2. **h264** — the 720p file, with progress. Once it exists the clip is
        settled: ready if the check has passed, checking if not.
     3. **av1** — the 1080p enhancement, skipped where ffmpeg has no encoder.
@@ -18,8 +18,9 @@ defmodule Vutuv.Videos.Job do
   scheduler stops offering it, and costs nothing else — the page offers what
   is on disk.
 
-  Between steps the row is re-read: a frame verdict can refuse the clip while
-  an encode runs, and the files that encode just wrote must go with the rest.
+  The original is probed once at the start; between steps the row is re-read,
+  because a frame verdict can refuse the clip while an encode runs, and the
+  files that encode just wrote must go with the rest.
   """
 
   require Logger
@@ -37,35 +38,54 @@ defmodule Vutuv.Videos.Job do
   @doc "Runs every step still to do on `video_id`. Always releases the claim."
   def run(video_id) do
     case Videos.get_video(video_id) do
-      nil ->
-        :ok
+      nil -> :ok
+      video -> run_steps(video)
+    end
+  end
 
-      video ->
-        PostVideoStore.clear_temp(video.token)
+  defp run_steps(video) do
+    PostVideoStore.clear_temp(video.token)
 
-        result =
-          with {:ok, video} <- step_frames(video),
-               {:ok, video} <- step_rendition(video, "h264", :h264_ready_at),
-               {:ok, video} <- step_rendition(video, "av1", :av1_ready_at) do
-            step_lite(video)
-          end
+    result =
+      with {:ok, facts} <- probe(video),
+           {:ok, video} <- step_frames(video, facts),
+           {:ok, video} <- step_rendition(video, "h264", :h264_ready_at, facts),
+           {:ok, video} <- step_rendition(video, "av1", :av1_ready_at, facts) do
+        step_lite(video, facts)
+      end
 
-        case result do
-          {:ok, video} -> Videos.release(video)
-          {:stop, _video} -> :ok
-        end
+    case result do
+      {:ok, video} -> Videos.release(video)
+      {:stop, _video} -> :ok
+    end
 
-        :ok
+    :ok
+  end
+
+  # The clip's facts, read once: every step needs the length and the frame
+  # rate, and the original never changes.
+  defp probe(video) do
+    with {:ok, original} <- original(video),
+         {:ok, facts} <- FFmpeg.probe(original) do
+      {:ok, facts}
+    else
+      {:error, reason} -> {:stop, Videos.fail(video, {:probe, reason})}
+    end
+  end
+
+  defp original(video) do
+    case PostVideoStore.original_path(video.token) do
+      nil -> {:error, :missing_original}
+      path -> {:ok, path}
     end
   end
 
   ## 1. Frames
 
-  defp step_frames(%PostVideo{frames_extracted_at: nil} = video) do
+  defp step_frames(%PostVideo{frames_extracted_at: nil} = video, facts) do
     video = Videos.update_state(video, stage: "frames")
 
     with {:ok, original} <- original(video),
-         {:ok, facts} <- FFmpeg.probe(original),
          {:ok, {frames, cover}} <- pull_frames(video, original, facts),
          {:ok, video} <- Videos.record_frames(video, frames, cover),
          :ok <- write_cover(video) do
@@ -75,14 +95,7 @@ defmodule Vutuv.Videos.Job do
     end
   end
 
-  defp step_frames(video), do: continue(video)
-
-  defp original(video) do
-    case PostVideoStore.original_path(video.token) do
-      nil -> {:error, :missing_original}
-      path -> {:ok, path}
-    end
-  end
+  defp step_frames(video, _facts), do: continue(video)
 
   # Which seconds get a still: the opening frame and the fixed ticks first
   # (they describe the whole clip evenly), the most representative opening
@@ -149,33 +162,28 @@ defmodule Vutuv.Videos.Job do
 
   ## 2./3. The two main renditions
 
-  defp step_rendition(video, name, stamp) do
-    video = Videos.get_video(video.id) || video
+  defp step_rendition(video, name, stamp, facts) do
+    with {:ok, video} <- continue(video) do
+      cond do
+        Map.get(video, stamp) != nil ->
+          {:ok, video}
 
-    cond do
-      PostVideo.refused?(video) ->
-        {:stop, video}
+        name == "av1" and not PostVideoStore.av1_supported?() ->
+          {:ok, Videos.update_state(video, av1_ready_at: DateTime.utc_now(:second))}
 
-      Map.get(video, stamp) != nil ->
-        {:ok, video}
-
-      name == "av1" and not PostVideoStore.av1_supported?() ->
-        {:ok, Videos.update_state(video, av1_ready_at: DateTime.utc_now(:second))}
-
-      true ->
-        encode(video, name, stamp)
+        true ->
+          encode(video, name, stamp, facts)
+      end
     end
   end
 
-  defp encode(video, name, stamp) do
+  defp encode(video, name, stamp, facts) do
     video = if name == "h264", do: Videos.update_state(video, stage: "transcoding"), else: video
 
-    with {:ok, original} <- original(video),
-         {:ok, facts} <- FFmpeg.probe(original),
-         :ok <-
-           PostVideoStore.write_rendition(video.token, name, facts, progress_fun(video, name)) do
-      after_rendition(video, name, stamp)
-    else
+    case PostVideoStore.write_rendition(video.token, name, facts, progress_fun(video, name)) do
+      :ok ->
+        after_rendition(video, name, stamp)
+
       {:error, reason} when name == "h264" ->
         {:stop, Videos.fail(video, {:h264, reason})}
 
@@ -188,14 +196,14 @@ defmodule Vutuv.Videos.Job do
   # A verdict may have refused the clip while ffmpeg ran; the file it just
   # wrote goes with everything else, and the job stops.
   defp after_rendition(video, name, stamp) do
-    fresh = Videos.get_video(video.id) || video
+    case continue(video) do
+      {:stop, refused} ->
+        PostVideoStore.delete(refused.token)
+        {:stop, refused}
 
-    if PostVideo.refused?(fresh) do
-      PostVideoStore.delete(fresh.token)
-      {:stop, fresh}
-    else
-      stamped = Videos.update_state(fresh, [{stamp, DateTime.utc_now(:second)}])
-      if name == "h264", do: {:ok, Videos.settle(stamped)}, else: {:ok, stamped}
+      {:ok, fresh} ->
+        stamped = Videos.update_state(fresh, [{stamp, DateTime.utc_now(:second)}])
+        if name == "h264", do: {:ok, Videos.settle(stamped)}, else: {:ok, stamped}
     end
   end
 
@@ -214,34 +222,18 @@ defmodule Vutuv.Videos.Job do
 
   ## 4. The data-saving pair
 
-  defp step_lite(video) do
-    video = Videos.get_video(video.id) || video
-
-    cond do
-      PostVideo.refused?(video) ->
-        {:stop, video}
-
-      video.lite_ready_at != nil ->
-        {:ok, video}
-
-      true ->
-        encode_lite(video)
+  defp step_lite(video, facts) do
+    with {:ok, video} <- continue(video) do
+      if video.lite_ready_at, do: {:ok, video}, else: encode_lite(video, facts)
     end
   end
 
-  defp encode_lite(video) do
-    with {:ok, original} <- original(video),
-         {:ok, facts} <- FFmpeg.probe(original) do
-      names =
-        if PostVideoStore.av1_supported?(), do: ["lite-av1", "lite-h264"], else: ["lite-h264"]
+  defp encode_lite(video, facts) do
+    names =
+      if PostVideoStore.av1_supported?(), do: ["lite-av1", "lite-h264"], else: ["lite-h264"]
 
-      Enum.each(names, &write_lite(video, &1, facts))
-      after_rendition(video, "lite", :lite_ready_at)
-    else
-      {:error, reason} ->
-        Logger.warning("post_video lite failed video=#{video.id} reason=#{inspect(reason)}")
-        {:ok, Videos.update_state(video, lite_ready_at: DateTime.utc_now(:second))}
-    end
+    Enum.each(names, &write_lite(video, &1, facts))
+    after_rendition(video, "lite", :lite_ready_at)
   end
 
   # One of the two 360p files; a failure costs that file and nothing else.
@@ -255,6 +247,8 @@ defmodule Vutuv.Videos.Job do
     end
   end
 
+  # The row as it is now: a verdict may have refused the clip since the last
+  # look, and then there is nothing left to do.
   defp continue(video) do
     fresh = Videos.get_video(video.id) || video
     if PostVideo.refused?(fresh), do: {:stop, fresh}, else: {:ok, fresh}

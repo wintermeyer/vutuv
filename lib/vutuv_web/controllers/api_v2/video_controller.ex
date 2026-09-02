@@ -96,7 +96,7 @@ defmodule VutuvWeb.ApiV2.VideoController do
       ready: PostVideo.ready?(video),
       refused: PostVideo.refused?(video),
       # The composer sweep applies to API uploads too.
-      attach_within_hours: 24
+      attach_within_hours: Videos.pending_max_age_hours()
     }
   end
 end
