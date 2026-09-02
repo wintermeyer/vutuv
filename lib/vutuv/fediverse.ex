@@ -10556,7 +10556,14 @@ defmodule Vutuv.Fediverse do
          {:ssrf, false} <- {:ssrf, Vutuv.Ssrf.resolves_to_internal?(host)},
          {:ok, %Req.Response{status: 200, body: body}} <- ap_get(bare, signer),
          {:size, true} <- {:size, byte_size(body) <= @max_body_bytes},
-         {:ok, %{"id" => id, "inbox" => inbox} = doc} <- Jason.decode(body) do
+         {:ok, %{"id" => id, "inbox" => inbox} = doc} <- Jason.decode(body),
+         # The document is only allowed to name itself. Without this a server we
+         # fetched from could answer with `"id": "https://mastodon.social/users/x"`
+         # and every caller that stores or keys on that id — `upsert_remote_account/1`
+         # above all — would file a stranger's document under somebody else's
+         # identity. The inbox already applies this rule to `keyId`; the actor
+         # fetch is the same rule on the other side of the request.
+         {:bound, true} <- {:bound, same_host?(bare, id)} do
       {:ok,
        %{
          id: id,
@@ -10586,6 +10593,7 @@ defmodule Vutuv.Fediverse do
       {:parse, _} -> {:error, :https_only}
       {:ssrf, true} -> {:error, :internal_host}
       {:size, false} -> {:error, :too_large}
+      {:bound, false} -> {:error, :actor_host_mismatch}
       {:ok, %Req.Response{status: status}} -> {:error, {:http, status}}
       {:error, _} = error -> error
       other -> {:error, {:bad_actor, other}}

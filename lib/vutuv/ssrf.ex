@@ -48,7 +48,7 @@ defmodule Vutuv.Ssrf do
 
       bare ->
         case :inet.parse_address(to_charlist(bare)) do
-          {:ok, addr} -> internal_ip?(addr)
+          {:ok, addr} -> unroutable_ip?(addr)
           _ -> false
         end
     end
@@ -71,7 +71,7 @@ defmodule Vutuv.Ssrf do
     cond do
       internal_host?(host) -> true
       literal_ip?(bare) -> false
-      true -> Enum.any?(resolved_addresses(bare), &internal_ip?/1)
+      true -> Enum.any?(resolved_addresses(bare), &unroutable_ip?/1)
     end
   end
 
@@ -110,7 +110,7 @@ defmodule Vutuv.Ssrf do
   defp vet_resolved([]), do: {:error, :unresolvable}
 
   defp vet_resolved([first | _] = addrs) do
-    if Enum.any?(addrs, &internal_ip?/1), do: {:error, :internal}, else: {:ok, first}
+    if Enum.any?(addrs, &unroutable_ip?/1), do: {:error, :internal}, else: {:ok, first}
   end
 
   defp parse_ip!(bare) do
@@ -136,7 +136,16 @@ defmodule Vutuv.Ssrf do
     end
   end
 
-  @doc false
+  @doc """
+  Whether `ip` belongs to a **private or loopback** network.
+
+  Deliberately narrower than `unroutable_ip?/1`, because this one is not only an
+  SSRF predicate: `Vutuv.Geo.private_or_loopback?/1` classifies a visitor's own
+  client address with it, and `Vutuv.Dns` uses it to drop nameservers. For those
+  a documentation or multicast address is not "private" — it is simply not a
+  client and not a nameserver. Widening this function once made `203.0.113.7`
+  read as a private client and `2001:db8::1` as an unusable nameserver.
+  """
   def internal_ip?({0, _, _, _}), do: true
   def internal_ip?({10, _, _, _}), do: true
   def internal_ip?({127, _, _, _}), do: true
@@ -150,8 +159,67 @@ defmodule Vutuv.Ssrf do
   def internal_ip?({0, 0, 0, 0, 0, 0xFFFF, a, b}),
     do: internal_ip?({div(a, 256), rem(a, 256), div(b, 256), rem(b, 256)})
 
+  # IPv4-compatible IPv6 (::a.b.c.d), deprecated but still parsed and still
+  # routed to the embedded v4 address by some stacks — so `::127.0.0.1` is a
+  # loopback address written the long way round, and belongs here rather than
+  # among the merely-reserved ranges below.
+  def internal_ip?({0, 0, 0, 0, 0, 0, a, b}) when {a, b} != {0, 0},
+    do: internal_ip?({div(a, 256), rem(a, 256), div(b, 256), rem(b, 256)})
+
   # Unique-local fc00::/7 and link-local fe80::/10.
   def internal_ip?({n, _, _, _, _, _, _, _}) when n in 0xFC00..0xFDFF, do: true
   def internal_ip?({n, _, _, _, _, _, _, _}) when n in 0xFE80..0xFEBF, do: true
+
+  # Deprecated site-local fec0::/10 (RFC 3879) — still accepted by resolvers.
+  def internal_ip?({n, _, _, _, _, _, _, _}) when n in 0xFEC0..0xFEFF, do: true
+
   def internal_ip?(_), do: false
+
+  @doc """
+  Whether `ip` is anything an outbound fetch may not be pointed at: private and
+  loopback (`internal_ip?/1`) **plus** the ranges that are not globally routable
+  unicast at all.
+
+  A deny list is only as good as what it names, and the private ranges alone
+  left seven doors open. Carrier-grade NAT is somebody's provider equipment; the
+  IETF and benchmarking ranges terminate on local kit; anything answering on a
+  documentation range is a stand-in for the host the member actually named; and
+  multicast and the reserved 240/4 block are not a host to fetch from in the
+  first place.
+
+  This is the predicate every SSRF decision uses. `internal_ip?/1` stays the
+  narrower "is this a private address" question its other callers ask.
+  """
+  def unroutable_ip?(ip), do: internal_ip?(ip) or reserved_ip?(ip)
+
+  # Carrier-grade NAT (RFC 6598).
+  defp reserved_ip?({100, b, _, _}) when b in 64..127, do: true
+
+  # IETF protocol assignments (RFC 6890), incl. the DS-Lite 192.0.0.0/29 range
+  # that terminates on the local router.
+  defp reserved_ip?({192, 0, 0, _}), do: true
+
+  # Benchmarking (RFC 2544): routed to a lab, never to the public internet.
+  defp reserved_ip?({198, b, _, _}) when b in 18..19, do: true
+
+  # The three IPv4 documentation ranges (RFC 5737).
+  defp reserved_ip?({192, 0, 2, _}), do: true
+  defp reserved_ip?({198, 51, 100, _}), do: true
+  defp reserved_ip?({203, 0, 113, _}), do: true
+
+  # Multicast (224/4) and reserved (240/4, which holds the 255.255.255.255
+  # broadcast address).
+  defp reserved_ip?({a, _, _, _}) when a in 224..255, do: true
+
+  # The embedded v4 address of both IPv6 mappings gets the same reading.
+  defp reserved_ip?({0, 0, 0, 0, 0, 0xFFFF, a, b}),
+    do: reserved_ip?({div(a, 256), rem(a, 256), div(b, 256), rem(b, 256)})
+
+  defp reserved_ip?({0, 0, 0, 0, 0, 0, a, b}) when {a, b} != {0, 0},
+    do: reserved_ip?({div(a, 256), rem(a, 256), div(b, 256), rem(b, 256)})
+
+  # IPv6 documentation range 2001:db8::/32 (RFC 3849).
+  defp reserved_ip?({0x2001, 0x0DB8, _, _, _, _, _, _}), do: true
+
+  defp reserved_ip?(_), do: false
 end

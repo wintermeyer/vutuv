@@ -44,7 +44,7 @@ defmodule Vutuv.Ssrf.SocksProxy do
   through untouched either way (no MITM).
 
   A CONNECT that names an IP **literal** (ATYP 1/4) is vetted against
-  `Vutuv.Ssrf.internal_ip?/1` directly — which the resolver-rule approach
+  `Vutuv.Ssrf.unroutable_ip?/1` directly — which the resolver-rule approach
   could not reliably cover, since a literal never consults the resolver. So
   `<img src="http://127.0.0.1:9100/...">` is refused here, by the same guard.
 
@@ -120,12 +120,12 @@ defmodule Vutuv.Ssrf.SocksProxy do
   @doc """
   The production vetting: a hostname goes through `Vutuv.Ssrf.vetted_address/1`
   (resolve once, refuse if any answer is internal, dial exactly the vetted IP);
-  an IP literal is checked against `Vutuv.Ssrf.internal_ip?/1` directly.
+  an IP literal is checked against `Vutuv.Ssrf.unroutable_ip?/1` directly.
   """
   def default_vet({:domain, host}), do: Ssrf.vetted_address(host)
 
   def default_vet({:ip, ip}) do
-    if Ssrf.internal_ip?(ip), do: {:error, :internal}, else: {:ok, ip}
+    if Ssrf.unroutable_ip?(ip), do: {:error, :internal}, else: {:ok, ip}
   end
 
   @impl true
