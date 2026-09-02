@@ -144,7 +144,17 @@ people who liked it (issue #1233, see the "Who liked it" section in
 [posts-and-feed.md](posts-and-feed.md)). It is the one pref whose home is not
 `/settings/preferences` but the visibility page (`/settings/privacy`, reset via
 POST `/settings/privacy/reset`), because it is a privacy posture rather than a
-display detail. Every such knob is declared once in the
+display detail. The `:bandwidth` group holds one knob with a different shape
+again: `low_bandwidth?` decides whether this member's browser is ever told
+where the 155 kB WYSIWYG editor bundle lives (see "Low-bandwidth mode" in
+[posts-and-feed.md](posts-and-feed.md)). It is the only pref also asked at
+**sign-up**, and the only one whose form box is dropped rather than stored when
+it is left unticked — `Vutuv.Prefs` needs NULL to mean "inherit", and a
+checkbox posts `"false"` for the box nobody touched, which would cut every new
+account off from an installation default an operator later turns on. Unticking
+it on `/settings/preferences` is a real choice and is stored as one; the card's
+reset link (POST `/settings/low_bandwidth/reset`) is the way back to
+inheriting. Every such knob is declared once in the
 `Vutuv.Prefs.registry/0` (key, type, shipped default, constraints, group) and
 resolves in three layers: the member's **explicit value** (a non-nil `users`
 column; an explicit `0`/`false` is a choice) → the **installation default**

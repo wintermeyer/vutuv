@@ -799,6 +799,31 @@ opt-in the message composer passes, one handler in the hook); the shortcut
 respects a disabled submit button, so it cannot post past the photo-upload
 guard, and the "?" shortcuts overlay lists it.
 
+**Low-bandwidth mode** is the second composer, and it is the *absence* of the
+first. `markdown_editor.js` is its own esbuild entry point (155 kB gzipped
+against 61 kB for all of `app.js`), fetched on demand by the hook, and a member
+with the `low_bandwidth?` preference on is never told where it lives.
+`VutuvWeb.UI.markdown_editor/1` takes a required `user=` and asks
+`Vutuv.Prefs.get/2` once. `editor_hook/1` then returns either every
+`data-mde-*` attribute and the `phx-hook`, or nothing at all, and the editor's
+frame (mount point, selection bubble, slash menu) is skipped with it. What is
+left is the plain `<textarea>` that `components.css` shows whenever
+`data-mde-ready` is absent: the same fallback a member with JavaScript off has
+always had, and a working Markdown composer. Withholding the URL rather than
+letting the hook decide is deliberate, because the decision is then the
+server's, made once for every composer on the site, and no failed fetch or
+client-side race can undo it. `user=` is required rather than defaulted so a
+new composer cannot silently ship the bundle to somebody who asked not to be
+sent it; `--warnings-as-errors` turns the omission into a build failure.
+
+Two consequences. An **unticked** sign-up box is dropped rather than stored
+(`PageController.drop_untouched_low_bandwidth/1`), because `Vutuv.Prefs` needs
+NULL to mean "inherit the installation default" and a checkbox posts `"false"`
+for the box nobody touched. And the photo panel's *Insert into text* button has
+no editor to push into, so `Composer.append_image_reference/2` writes the
+`![](…)` reference to the end of the body instead: a button that silently did
+nothing would read as a failed upload.
+
 **Emoji** (issue #1197) are typed as a shortcode: `:tada:` becomes 🎉 on the
 closing colon, aliases included. The picker panel that used to sit behind a 🙂
 toolbar button is **gone** (issue #1886, with the toolbar). What a body stores

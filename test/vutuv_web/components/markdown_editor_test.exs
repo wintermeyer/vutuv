@@ -10,12 +10,18 @@ defmodule VutuvWeb.MarkdownEditorTest do
   use ExUnit.Case, async: true
   import Phoenix.LiveViewTest
 
+  alias Vutuv.Accounts.User
+
+  # `user: nil` resolves the low-bandwidth pref to the installation default,
+  # which in the test env is the shipped one (the Prefs cache is off here) —
+  # so the plain `editor()` below is the full-bandwidth editor everybody gets.
   defp editor(overrides \\ %{}) do
     assigns =
       Map.merge(
         %{
           id: "ed",
           name: "post[body]",
+          user: nil,
           value: "hello **world**",
           label: "Body",
           placeholder: "Write something…"
@@ -24,6 +30,12 @@ defmodule VutuvWeb.MarkdownEditorTest do
       )
 
     render_component(&VutuvWeb.UI.markdown_editor/1, assigns)
+  end
+
+  # A member who asked for low-bandwidth mode. No DB: `Prefs.get/2` reads the
+  # struct's own column and only falls back to the defaults when it is nil.
+  defp thrifty_editor(overrides \\ %{}) do
+    editor(Map.put(overrides, :user, %User{low_bandwidth?: true}))
   end
 
   test "the hidden textarea stays the form field and the no-JS fallback" do
@@ -180,6 +192,74 @@ defmodule VutuvWeb.MarkdownEditorTest do
     assert html =~ "Aufzählung"
     assert html =~ "Codeblock"
     refute html =~ ">Heading 1<"
+  end
+
+  # ── Low-bandwidth mode ──
+  #
+  # Every refute below is paired with the assert that proves it is not vacuous:
+  # a refute on a misspelt attribute passes for the wrong reason and would hide
+  # exactly the regression these tests exist to catch.
+
+  test "a low-bandwidth member is never told where the editor bundle lives" do
+    full = editor()
+    thrifty = thrifty_editor()
+
+    # The whole mechanism. A browser cannot fetch a URL that is not on the
+    # page, so this one refute is the promise the setting makes.
+    assert full =~ ~s(data-mde-src="/assets/markdown_editor.js")
+    refute thrifty =~ "markdown_editor.js"
+    refute thrifty =~ "data-mde-src"
+
+    # And no hook to go looking for it either.
+    assert full =~ ~s(phx-hook="MarkdownEditor")
+    refute thrifty =~ "phx-hook"
+  end
+
+  test "a low-bandwidth member still gets a working Markdown field" do
+    html = thrifty_editor()
+
+    # The point of the setting is a cheaper composer, not a broken one: this is
+    # the same real form field the no-JS fallback has always shown, carrying
+    # the same value, and components.css shows it whenever data-mde-ready is
+    # absent.
+    assert html =~ ~s(<textarea)
+    assert html =~ ~s(name="post[body]")
+    assert html =~ "data-mde-source"
+    assert html =~ "hello **world**"
+    assert html =~ ~s(placeholder="Write something…")
+    # The sr-only label keeps the field named for a screen reader.
+    assert html =~ "Body"
+  end
+
+  test "none of the editor's furniture is rendered for a low-bandwidth member" do
+    full = editor(%{images: true, mention_limit: 5})
+    thrifty = thrifty_editor(%{images: true, mention_limit: 5})
+
+    # The frame, the mount point, the bubble and the slash menu are the
+    # editor's own scaffolding — dead markup without the hook, and on a slow
+    # line the bytes are the thing being saved.
+    for marker <- ["mde__frame", "data-mde-mount", "data-mde-bubble", "data-mde-slash"] do
+      assert full =~ marker, "the full editor should render #{marker}"
+      refute thrifty =~ marker, "low bandwidth should not render #{marker}"
+    end
+
+    # Nor the words, endpoints and language registry that only ever fed it.
+    # data-mde-langs is the biggest single attribute on the root.
+    for marker <- ["data-mde-langs", "data-mention-url", "data-mde-value", "data-mde-images"] do
+      assert full =~ marker, "the full editor should carry #{marker}"
+      refute thrifty =~ marker, "low bandwidth should not carry #{marker}"
+    end
+  end
+
+  test "low-bandwidth mode is a per-member answer, not a site-wide one" do
+    # Two members, one page render each: the switch has to follow whoever is
+    # writing, or a shared component would answer it once for everybody.
+    assert thrifty_editor() =~ "data-mde-source"
+    refute thrifty_editor() =~ "data-mde-src"
+
+    assert editor(%{user: %User{low_bandwidth?: false}}) =~ "data-mde-src"
+    # nil = never chose = inherit the installation default (off as shipped).
+    assert editor(%{user: %User{low_bandwidth?: nil}}) =~ "data-mde-src"
   end
 
   test "the fence-language labels ride the editor root (issues #1108/#1137/#1138)" do

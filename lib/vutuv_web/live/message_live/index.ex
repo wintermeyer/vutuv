@@ -895,6 +895,7 @@ defmodule VutuvWeb.MessageLive.Index do
           <.markdown_editor
             id="message-body"
             name="message[body]"
+            user={@current_user}
             value={@form[:body].value || ""}
             seed={@editor_seed}
             label={gettext("Write a message…")}

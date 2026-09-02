@@ -266,6 +266,36 @@
       </fieldset>
     </.inputs_for>
 
+    <%!-- The one question on this form that is about the member's line rather
+          than about their data. Unticked by default, and deliberately the only
+          box here that leaves its column NULL when it is not ticked (see
+          PageController.drop_untouched_low_bandwidth/1), so a member who walks
+          past it keeps inheriting whatever this installation's default is - an
+          intranet or a rural co-op turns it on for everybody at
+          /admin/preferences and nobody has to find this box.
+
+          The label and the explanation are Vutuv.Prefs' own, the same two
+          sentences /settings/preferences shows, so the member recognizes the
+          switch they are looking for later. --%>
+    <fieldset id="signup-bandwidth">
+      <%!-- Not gettext("Connection"): that msgid is vutuv's social one and is
+            translated "Vernetzung" (being connected to another member), which
+            over a bandwidth box says something else entirely. A msgid is a
+            key, not a phrase. This is the same word the settings card wears,
+            so the member recognizes the switch when they go looking. --%>
+      <legend class={label_class}>{gettext("Bandwidth")}</legend>
+      <label class={check_label_class}>
+        <%= checkbox f, :low_bandwidth?, class: checkbox_class() %>
+        <span>
+          {Vutuv.Prefs.label(:low_bandwidth?)}
+          <span class="mt-0.5 block text-xs font-normal text-slate-600 dark:text-slate-400">
+            {Vutuv.Prefs.hint(:low_bandwidth?)}
+          </span>
+        </span>
+        <%= error_tag f, :low_bandwidth? %>
+      </label>
+    </fieldset>
+
     <.button type="submit" class="w-full">{gettext("Sign up for a free account")}</.button>
 
     <%!-- Consent / information notice by the button. Accepting the

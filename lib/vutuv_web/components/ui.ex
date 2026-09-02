@@ -32,6 +32,7 @@ defmodule VutuvWeb.UI do
   alias Vutuv.Organizations.Organization
   alias Vutuv.Organizations.OrganizationImage
   alias Vutuv.Posts
+  alias Vutuv.Prefs
   alias Vutuv.Tags.UserTag
   alias Vutuv.Uploads.Spec
   alias Vutuv.ViewerClock
@@ -267,6 +268,12 @@ defmodule VutuvWeb.UI do
   a raw-Markdown source view for power users, and "⤢" expands to a near
   full-page editor. With JS off the plain textarea shows through as the fallback.
 
+  That fallback is also the whole of the **low-bandwidth composer**: a member
+  who turned on `low_bandwidth?` (at sign-up or on /settings/preferences) is
+  never told where the 155 kB editor bundle lives, so their browser never
+  fetches it and they write in the plain Markdown box instead. `@user` is
+  required for exactly that reason — see `editor_hook/1`.
+
   The offered features are exactly the subset `VutuvWeb.Markdown` renders: bold,
   italic, strikethrough (durchgestrichen), links, bullet / ordered / nested
   lists, headings, blockquote, inline + fenced code, tables and horizontal
@@ -285,6 +292,17 @@ defmodule VutuvWeb.UI do
   """
   attr(:id, :string, required: true)
   attr(:name, :string, required: true, doc: "the form field name, e.g. post[body]")
+
+  attr(:user, :any,
+    required: true,
+    doc:
+      "the signed-in member whose editor this is. Their `low_bandwidth?` " <>
+        "preference decides whether the WYSIWYG bundle is offered at all. " <>
+        "Required, not optional: a composer that forgot to pass it would " <>
+        "silently send 155 kB to somebody who asked not to be sent it, and " <>
+        "`--warnings-as-errors` is what stops that reaching a release"
+  )
+
   attr(:value, :string, default: "")
   attr(:label, :string, required: true, doc: "sr-only label for the field")
   attr(:placeholder, :string, default: "")
@@ -333,28 +351,17 @@ defmodule VutuvWeb.UI do
   attr(:rest, :global)
 
   def markdown_editor(assigns) do
+    assigns = assign(assigns, :low_bandwidth?, Prefs.get(assigns.user, :low_bandwidth?))
+
     ~H"""
-    <div
-      id={@id}
-      phx-hook="MarkdownEditor"
-      data-mde-src={~p"/assets/markdown_editor.js"}
-      data-mde-value={@value}
-      data-mde-seed={@seed}
-      data-mde-placeholder={@placeholder}
-      data-mde-submit={@submit_on}
-      data-mde-images={@images && "1"}
-      data-mde-link-prompt={gettext("Link URL")}
-      data-mention-url={~p"/system/mentions/suggest"}
-      data-mention-check-url={~p"/system/mentions/check"}
-      data-mention-label={gettext("Mention an account")}
-      data-mention-empty={gettext("No account found.")}
-      data-mention-max={@mention_limit}
-      data-mention-budget={@mention_limit && gettext("{used} of {max} mentions")}
-      data-mde-langs={code_fence_labels()}
-      class={["mde", @compact && "mde--compact", @class]}
-      {@rest}
-    >
-      <div id={"#{@id}-frame"} data-mde-frame phx-update="ignore" class="mde__frame">
+    <div id={@id} class={["mde", @compact && "mde--compact", @class]} {editor_hook(assigns)} {@rest}>
+      <div
+        :if={not @low_bandwidth?}
+        id={"#{@id}-frame"}
+        data-mde-frame
+        phx-update="ignore"
+        class="mde__frame"
+      >
         <%!-- The prose itself, and nothing above it. What used to be a
         permanent row of eighteen buttons is now two surfaces that appear
         when they mean something: the bubble over a selection, the slash
@@ -502,6 +509,43 @@ defmodule VutuvWeb.UI do
       </div>
     </div>
     """
+  end
+
+  # Everything the MarkdownEditor hook needs, or nothing at all.
+  #
+  # A member with `low_bandwidth?` on gets no `phx-hook`, so LiveView builds no
+  # hook; no `data-mde-src`, so nothing on the page names the 155 kB bundle and
+  # the browser cannot fetch a URL it was never given; and none of the words,
+  # endpoints and language labels that only ever existed to feed it. What is
+  # left is the plain `<textarea>` below, which components.css shows whenever
+  # `data-mde-ready` is absent — the same fallback that has always served a
+  # member with JavaScript switched off, and a working Markdown composer in its
+  # own right.
+  #
+  # Withholding the URL, rather than letting the hook decide, is what makes the
+  # promise keepable: the decision is the server's, it is made once here for
+  # every composer on the site, and no client-side race or failed fetch can
+  # turn it back on.
+  defp editor_hook(%{low_bandwidth?: true}), do: []
+
+  defp editor_hook(assigns) do
+    [
+      "phx-hook": "MarkdownEditor",
+      "data-mde-src": ~p"/assets/markdown_editor.js",
+      "data-mde-value": assigns.value,
+      "data-mde-seed": assigns.seed,
+      "data-mde-placeholder": assigns.placeholder,
+      "data-mde-submit": assigns.submit_on,
+      "data-mde-images": assigns.images && "1",
+      "data-mde-link-prompt": gettext("Link URL"),
+      "data-mention-url": ~p"/system/mentions/suggest",
+      "data-mention-check-url": ~p"/system/mentions/check",
+      "data-mention-label": gettext("Mention an account"),
+      "data-mention-empty": gettext("No account found."),
+      "data-mention-max": assigns.mention_limit,
+      "data-mention-budget": assigns.mention_limit && gettext("{used} of {max} mentions"),
+      "data-mde-langs": code_fence_labels()
+    ]
   end
 
   @doc """

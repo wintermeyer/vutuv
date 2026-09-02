@@ -309,6 +309,7 @@ defmodule VutuvWeb.OrganizationLive.Edit do
           <.markdown_editor
             id="organization-description"
             name="organization[description]"
+            user={@current_user}
             value={@form[:description].value || ""}
             label={gettext("Description")}
             placeholder={gettext("Describe the organization. Markdown is supported.")}

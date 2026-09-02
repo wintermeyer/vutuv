@@ -1648,6 +1648,9 @@ defmodule VutuvWeb.Router do
     put("/browser_tab", SettingsController, :update_browser_tab)
     patch("/browser_tab", SettingsController, :update_browser_tab)
     post("/browser_tab/reset", SettingsController, :reset_browser_tab)
+    put("/low_bandwidth", SettingsController, :update_low_bandwidth)
+    patch("/low_bandwidth", SettingsController, :update_low_bandwidth)
+    post("/low_bandwidth/reset", SettingsController, :reset_low_bandwidth)
     # Clear a whole preference group back to nil = "inherit the installation
     # default" (Vutuv.Prefs) — the quiet reset links under the two cards.
     post("/post_display/reset", SettingsController, :reset_post_display)

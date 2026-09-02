@@ -687,6 +687,7 @@ defmodule VutuvWeb.JobPostingLive.Form do
           <.markdown_editor
             id="job-description"
             name="job_posting[description]"
+            user={@current_user}
             value={@form[:description].value || ""}
             label={gettext("Job description")}
             placeholder={gettext("Describe the role. Markdown is supported.")}

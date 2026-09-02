@@ -78,6 +78,7 @@ defmodule VutuvWeb.PostLive.Composer do
   alias Vutuv.Posts.Post
   alias Vutuv.Posts.PostDraft
   alias Vutuv.Posts.PostImage
+  alias Vutuv.Prefs
   alias Vutuv.Uploads.Spec
   alias VutuvWeb.ErrorHelpers
   alias VutuvWeb.PostComponents
@@ -721,7 +722,17 @@ defmodule VutuvWeb.PostLive.Composer do
         {:noreply, socket}
 
       image ->
-        {:noreply, push_event(socket, "mde-insert-image", editor_image_payload(socket, image))}
+        # A low-bandwidth composer has no editor to push the picture into, so
+        # the button would sit there doing nothing - which reads as a failed
+        # upload, not as a setting. Write the reference into the Markdown
+        # instead. Not "at the cursor": where the caret sits is the browser's
+        # business and this side cannot ask, so the honest place is the end of
+        # what the member has written, on a paragraph of its own.
+        if Prefs.get(socket.assigns.current_user, :low_bandwidth?) do
+          {:noreply, append_image_reference(socket, image)}
+        else
+          {:noreply, push_event(socket, "mde-insert-image", editor_image_payload(socket, image))}
+        end
     end
   end
 
@@ -1362,6 +1373,23 @@ defmodule VutuvWeb.PostLive.Composer do
 
   # The payload both editor-hook events share: which editor (the DOM id of
   # this composer's markdown_editor), the served URL to embed and the alt.
+  # `![alt](/post_images/...)` appended to the body, escaped the way the
+  # editor's own serializer would: an alt text is member-written, and an
+  # unescaped `]` in it would end the label early and leave the rest of their
+  # caption standing in the post as stray characters.
+  defp append_image_reference(socket, image) do
+    alt = String.replace(image.alt || "", ["[", "]"], &("\\" <> &1))
+    reference = "![#{alt}](#{PostImage.url(image, "feed")})"
+
+    body =
+      case String.trim_trailing(socket.assigns.body) do
+        "" -> reference
+        written -> written <> "\n\n" <> reference
+      end
+
+    assign(socket, :body, body)
+  end
+
   defp editor_image_payload(socket, image) do
     %{
       editor: "#{socket.assigns.id}-body",
@@ -1634,7 +1662,7 @@ defmodule VutuvWeb.PostLive.Composer do
 
           <%!-- The editor is always on screen: a post is one kind, words
           first, whether or not pictures join it below. --%>
-          <.body_editor id={@id} body={@body} post={@post} seed={@editor_seed} />
+          <.body_editor id={@id} body={@body} post={@post} seed={@editor_seed} user={@current_user} />
 
           <%!-- **The photos ARE the gallery** (issue #1892). They used to be a
           plain grid with a small live preview of the arrangement further down,
@@ -2137,6 +2165,7 @@ defmodule VutuvWeb.PostLive.Composer do
   attr(:body, :string, required: true)
   attr(:post, :any, required: true)
   attr(:seed, :integer, required: true)
+  attr(:user, :any, required: true)
 
   defp body_editor(assigns) do
     ~H"""
@@ -2144,6 +2173,7 @@ defmodule VutuvWeb.PostLive.Composer do
       <.markdown_editor
         id={"#{@id}-body"}
         name="post[body]"
+        user={@user}
         value={@body}
         seed={@seed}
         label={gettext("What's new?")}

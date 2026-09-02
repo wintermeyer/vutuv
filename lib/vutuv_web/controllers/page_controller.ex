@@ -303,7 +303,10 @@ defmodule VutuvWeb.PageController do
   end
 
   def new_registration(conn, %{"user" => user_params}) do
-    user_params = expand_fediverse_choice(user_params)
+    user_params =
+      user_params
+      |> expand_fediverse_choice()
+      |> drop_untouched_low_bandwidth()
 
     # Extract defensively: a malformed "emails" param (not the nested
     # %{"0" => %{"value" => …}} the form produces) must reach register_user/2
@@ -359,6 +362,22 @@ defmodule VutuvWeb.PageController do
   end
 
   defp expand_fediverse_choice(params), do: params
+
+  # The low-bandwidth box is a `Vutuv.Prefs` knob, not a plain column, and the
+  # three layers only work while "never chose" stays distinguishable from
+  # "chose off". A checkbox posts "false" for the box nobody touched, which
+  # would write that indifference into the column as a decision and cut the
+  # member off from the installation default forever - on exactly the kind of
+  # installation this switch exists for, where an admin turns it on for
+  # everybody at /admin/preferences. So an unticked box is dropped: the column
+  # stays NULL and inherits. A ticked one is a real choice and is stored.
+  # (/settings/preferences is the other way round on purpose - unticking there
+  # IS a choice, and its reset link is the way back to inheriting.)
+  defp drop_untouched_low_bandwidth(%{"low_bandwidth?" => value} = params)
+       when value in [true, "true", "1", "on"],
+       do: params
+
+  defp drop_untouched_low_bandwidth(params), do: Map.delete(params, "low_bandwidth?")
 
   defp handle_post_registration_login(conn, email) do
     # The account was just created, so login_by_email/2 always mails the PIN

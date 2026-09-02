@@ -626,6 +626,18 @@ feed turns *Quote what arrives on the other tab* off at `/admin/preferences`,
 or shortens the window there; the dot is unaffected, and every member can set
 both for themselves.
 
+A fourth is about what the site costs to load: **low-bandwidth mode**. The
+composer is a WYSIWYG editor whose bundle is 155 kB gzipped, two and a half
+times the rest of vutuv's JavaScript together. A member with the mode on is
+never sent it: everywhere they write they get the plain Markdown field that has
+always been the no-JavaScript fallback, and what they publish is byte for byte
+what the editor would have produced. vutuv ships it off and asks every new
+account once, on the sign-up form. Where the line is the scarce resource (a
+rural co-op, a ship, mobile data), turn *Low-bandwidth mode* on at
+`/admin/preferences` and every member who has not decided for themselves gets
+the cheap composer. Walking past the sign-up box leaves the column empty, so
+this default reaches new accounts too.
+
 - **`/admin` → Preference defaults** (`/admin/preferences`): change the
   default for the whole installation at any time. It applies immediately to
   every member who has not set an own value — and to logged-out visitors.
