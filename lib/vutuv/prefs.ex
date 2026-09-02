@@ -100,6 +100,20 @@ defmodule Vutuv.Prefs do
     # else's first line can end up in a screenshot, a recording or a window
     # switcher.
     %Pref{key: :browser_tab_teaser?, type: :boolean, default: true, group: :browser_tab},
+    # Whether this member's browser is spared the WYSIWYG editor bundle
+    # (155 kB gzipped, measured 2026-09-02 — two and a half times the whole
+    # rest of app.js). On, every place a member writes prose renders the plain
+    # Markdown textarea that already sits under Milkdown as the no-JS
+    # fallback, and `VutuvWeb.UI.markdown_editor/1` leaves out the bundle's
+    # URL entirely, so the browser cannot fetch what it is never told about.
+    #
+    # Off by default: the editor is what most members expect from a composer,
+    # and a switch that quietly takes it away would be a worse first
+    # impression than a slow one. The knob exists for the member on a metered
+    # or rural link, who is the one person able to judge that trade — and for
+    # the installation whose members are all on one (an intranet, a rural
+    # co-op), which flips the default once at /admin/preferences.
+    %Pref{key: :low_bandwidth?, type: :boolean, default: false, group: :bandwidth},
     # How a member's dates and times are written, and which clock they are
     # written on (issue #1502). Two knobs rather than one because they answer
     # different questions — a German-speaking member in Chicago wants German
@@ -174,6 +188,8 @@ defmodule Vutuv.Prefs do
   def label(:feed_foreign_posts),
     do: Gettext.gettext(VutuvWeb.Gettext, "Posts in other languages")
 
+  def label(:low_bandwidth?), do: Gettext.gettext(VutuvWeb.Gettext, "Low-bandwidth mode")
+
   def label(:browser_tab_teaser?),
     do: Gettext.gettext(VutuvWeb.Gettext, "Tease new posts in the browser tab")
 
@@ -191,6 +207,13 @@ defmodule Vutuv.Prefs do
       Gettext.gettext(
         VutuvWeb.Gettext,
         "What your feed does with posts outside your chosen languages: show them as they are, translate them for you, or hide them. Posts that declare no language always show."
+      )
+
+  def hint(:low_bandwidth?),
+    do:
+      Gettext.gettext(
+        VutuvWeb.Gettext,
+        "Writing a post or a message then uses a plain Markdown box instead of the formatting editor, which saves about 150 kB of download. Everything you write still looks the same to everyone who reads it."
       )
 
   def hint(:browser_tab_teaser?),
@@ -249,6 +272,7 @@ defmodule Vutuv.Prefs do
   def group_label(:post_display), do: Gettext.gettext(VutuvWeb.Gettext, "Posts")
   def group_label(:feed), do: Gettext.gettext(VutuvWeb.Gettext, "Feed")
   def group_label(:browser_tab), do: Gettext.gettext(VutuvWeb.Gettext, "Browser tab")
+  def group_label(:bandwidth), do: Gettext.gettext(VutuvWeb.Gettext, "Bandwidth")
   def group_label(:privacy), do: Gettext.gettext(VutuvWeb.Gettext, "Privacy")
   def group_label(:region), do: Gettext.gettext(VutuvWeb.Gettext, "Date & time")
   def group_label(:maps), do: Gettext.gettext(VutuvWeb.Gettext, "Maps")
@@ -457,6 +481,50 @@ defmodule Vutuv.Prefs do
       nil -> default(key)
       value -> value
     end
+  end
+
+  @doc """
+  Whether this member writes in the cheap composer: no WYSIWYG editor bundle,
+  the plain Markdown textarea instead (`VutuvWeb.UI.markdown_editor/1`).
+
+  A named predicate rather than `get(user, :low_bandwidth?)` spelled out at
+  each call site, because two modules now ask (the component and the post
+  composer's inline-image handler) and the key should be written down once.
+  """
+  def low_bandwidth?(user), do: get(user, :low_bandwidth?)
+
+  @doc """
+  Drop every boolean-pref param that is not ticked, so the column stays NULL.
+
+  For a form where an untouched box means *no opinion*: the sign-up form, where
+  a member is offered a preference in passing and most walk past it. A checkbox
+  posts `"false"` for the box nobody touched, and storing that would record a
+  choice nobody made and cut the member off from the installation default for
+  good — on exactly the kind of installation the switch exists for, where an
+  admin later turns it on for everybody at /admin/preferences.
+
+  Registry-driven rather than written per key, because the failure is silent
+  and permanent: the next preference offered on a sign-up or onboarding form
+  would need the same clause, and nothing breaks when it is forgotten.
+
+  **Not** for /settings, which is the opposite case: unticking there is a real
+  choice and is stored as one, with the card's reset link as the way back to
+  inheriting.
+  """
+  def drop_unchosen_booleans(params) when is_map(params) do
+    Enum.reduce(@registry, params, fn
+      %Pref{type: :boolean, key: key}, acc ->
+        param = Atom.to_string(key)
+
+        case Map.fetch(acc, param) do
+          {:ok, value} when value in [true, "true", "1", "on"] -> acc
+          {:ok, _unticked} -> Map.delete(acc, param)
+          :error -> acc
+        end
+
+      %Pref{}, acc ->
+        acc
+    end)
   end
 
   @doc """

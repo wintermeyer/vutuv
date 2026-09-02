@@ -14,6 +14,29 @@ defmodule VutuvWeb.PostFeedLiveTest do
 
   defp other_user(attrs \\ []), do: insert(:user, Keyword.merge([email_confirmed?: true], attrs))
 
+  # Real files land on disk, so each upload test gets an uploads root of its
+  # own. Captured with `fetch_env/2`, not `get_env/2`: that one answers nil both
+  # for "absent" and for "holds nil", so the naive restore writes nil back as a
+  # real value and every later reader in the run gets nil instead of the
+  # configured default.
+  defp isolate_uploads_root! do
+    tmp = Path.join(System.tmp_dir!(), "vutuv_feed_uploads_#{System.unique_integer([:positive])}")
+    File.mkdir_p!(tmp)
+    original = Application.fetch_env(:vutuv, :uploads_dir_prefix)
+    Application.put_env(:vutuv, :uploads_dir_prefix, tmp)
+
+    on_exit(fn ->
+      File.rm_rf(tmp)
+
+      case original do
+        {:ok, was} -> Application.put_env(:vutuv, :uploads_dir_prefix, was)
+        :error -> Application.delete_env(:vutuv, :uploads_dir_prefix)
+      end
+    end)
+
+    tmp
+  end
+
   # How many timeline rows are drawn but hidden — the waiting posts. Counted off
   # the row wrapper's own class, so it cannot catch a `hidden` somewhere inside
   # a card.
@@ -453,21 +476,7 @@ defmodule VutuvWeb.PostFeedLiveTest do
     # post_edit_live_test.exs.
 
     test "publishes a photo-only post (upload, no text)", %{conn: conn} do
-      # Real files land on disk: isolate the uploads root per test.
-      tmp =
-        Path.join(System.tmp_dir!(), "vutuv_feed_upload_#{System.unique_integer([:positive])}")
-
-      File.mkdir_p!(tmp)
-      prev = Application.get_env(:vutuv, :uploads_dir_prefix)
-      Application.put_env(:vutuv, :uploads_dir_prefix, tmp)
-
-      on_exit(fn ->
-        File.rm_rf(tmp)
-
-        if prev,
-          do: Application.put_env(:vutuv, :uploads_dir_prefix, prev),
-          else: Application.delete_env(:vutuv, :uploads_dir_prefix)
-      end)
+      isolate_uploads_root!()
 
       {conn, user} = create_and_login_user(conn)
       {:ok, live, _html} = live(conn, ~p"/feed")
@@ -499,20 +508,7 @@ defmodule VutuvWeb.PostFeedLiveTest do
     test "an uploaded image gets alt + remove + inline-insert controls", %{
       conn: conn
     } do
-      tmp =
-        Path.join(System.tmp_dir!(), "vutuv_feed_inline_#{System.unique_integer([:positive])}")
-
-      File.mkdir_p!(tmp)
-      prev = Application.get_env(:vutuv, :uploads_dir_prefix)
-      Application.put_env(:vutuv, :uploads_dir_prefix, tmp)
-
-      on_exit(fn ->
-        File.rm_rf(tmp)
-
-        if prev,
-          do: Application.put_env(:vutuv, :uploads_dir_prefix, prev),
-          else: Application.delete_env(:vutuv, :uploads_dir_prefix)
-      end)
+      isolate_uploads_root!()
 
       {conn, _user} = create_and_login_user(conn)
       {:ok, live, _html} = live(conn, ~p"/feed")
@@ -564,6 +560,47 @@ defmodule VutuvWeb.PostFeedLiveTest do
         editor: "composer-body",
         url: ^expected_url
       })
+    end
+
+    # The same button on a low-bandwidth composer, which has no editor to push
+    # the picture into. It would sit there doing nothing - which a member reads
+    # as a failed upload, not as a setting they turned on - so the server
+    # writes the reference into the Markdown instead.
+    test "low bandwidth: Insert writes the reference into the Markdown itself", %{conn: conn} do
+      isolate_uploads_root!()
+
+      {conn, user} = create_and_login_user(conn)
+
+      user
+      |> Ecto.Changeset.change(%{low_bandwidth?: true})
+      |> Vutuv.Repo.update!()
+
+      {:ok, live, html} = live(conn, ~p"/feed")
+      # The premise: this composer really is the cheap one.
+      refute html =~ "markdown_editor.js"
+
+      {:ok, image} = Image.new(64, 64, color: [10, 100, 200])
+      {:ok, png} = Image.write(image, :memory, suffix: ".png")
+
+      live
+      |> file_input("#composer-form", :images, [
+        %{name: "photo.png", content: png, type: "image/png"}
+      ])
+      |> render_upload("photo.png")
+
+      [stored] = Vutuv.Repo.all(PostImage)
+
+      live
+      |> element(~s(button[phx-click="photo-open"][phx-value-id="#{stored.id}"]))
+      |> render_click()
+
+      live
+      |> element(~s(button[phx-click="insert-inline"][phx-value-id="#{stored.id}"]))
+      |> render_click()
+
+      # The reference is in the field the form actually submits, so pressing
+      # Post now publishes a picture in the prose exactly as the editor would.
+      assert render(live) =~ "![](#{PostImage.url(stored, "feed")})"
     end
 
     test "an inline-referenced image renders inside the preview body, not below it", %{

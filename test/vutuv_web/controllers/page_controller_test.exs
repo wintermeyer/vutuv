@@ -490,27 +490,47 @@ defmodule VutuvWeb.PageControllerTest do
     # One home for the visibility choices. The email address's own "may others
     # see it" box used to sit up beside the address while the other three sat in
     # a block of their own, so four identical-looking checkboxes appeared in two
-    # unrelated places on one short form. Asserting that the form holds no
-    # checkbox OUTSIDE this fieldset is the part that keeps it that way.
-    test "every visibility choice sits in the one Privacy fieldset", %{conn: conn} do
+    # unrelated places on one short form.
+    #
+    # What keeps it that way is the second half: no checkbox may float LOOSE in
+    # this form. It used to be spelt "every checkbox is in the Privacy
+    # fieldset", which was the same sentence while privacy was the only thing
+    # the form asked with a box. Low-bandwidth mode is not a visibility choice
+    # and must not sit under a "Privacy" legend, so the rule is now the one it
+    # always meant: every box belongs to a named group, and the visibility ones
+    # belong to that group.
+    test "every checkbox sits in a named fieldset, the visibility ones in Privacy",
+         %{conn: conn} do
       doc = conn |> get(~p"/") |> html_response(200) |> LazyHTML.from_document()
 
-      in_fieldset =
+      in_privacy =
         doc
         |> LazyHTML.query(~s(#signup-privacy input[type="checkbox"]))
         |> LazyHTML.attribute("name")
 
-      assert "user[emails][0][public?]" in in_fieldset
-      assert "user[noindex?]" in in_fieldset
-      assert "user[noai?]" in in_fieldset
-      assert "user[fediverse_followers?]" in in_fieldset
+      assert "user[emails][0][public?]" in in_privacy
+      assert "user[noindex?]" in in_privacy
+      assert "user[noai?]" in in_privacy
+      assert "user[fediverse_followers?]" in in_privacy
 
       in_form =
         doc
         |> LazyHTML.query(~s(#registration-form input[type="checkbox"]))
         |> LazyHTML.attribute("name")
 
-      assert Enum.sort(in_form) == Enum.sort(in_fieldset)
+      in_a_fieldset =
+        doc
+        |> LazyHTML.query(~s(#registration-form fieldset input[type="checkbox"]))
+        |> LazyHTML.attribute("name")
+
+      assert Enum.sort(in_form) == Enum.sort(in_a_fieldset)
+
+      # And every one of those groups says what it is, or the grouping is
+      # invisible to the person reading the form.
+      for id <- ~w(signup-privacy signup-bandwidth) do
+        assert [_] = Enum.to_list(LazyHTML.query(doc, ~s(##{id} > legend))),
+               "the #{id} fieldset has no legend"
+      end
     end
   end
 

@@ -96,6 +96,12 @@ defmodule VutuvWeb.GettextExtractionAnchors do
       gettext(
         "Only while you are looking at another tab, and only for a few seconds. The tab title also shows up in screenshots, in your window switcher and in a screen share."
       ),
+      # Vutuv.Prefs - low-bandwidth mode. "Bandwidth" itself is anchored by the
+      # settings card and the sign-up legend, which both use the macro.
+      gettext("Low-bandwidth mode"),
+      gettext(
+        "Writing a post or a message then uses a plain Markdown box instead of the formatting editor, which saves about 150 kB of download. Everything you write still looks the same to everyone who reads it."
+      ),
       gettext("Between 4 and 20 seconds."),
       gettext("0 means posts are never shortened."),
       gettext("How much of a post a notification quotes before it is cut off."),

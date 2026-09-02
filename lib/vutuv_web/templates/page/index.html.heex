@@ -66,6 +66,11 @@
   <% email_type_options = Enum.map(Email.email_types(), &{email_type_label(&1), &1}) %>
   <% label_class = "mb-1.5 block text-sm font-semibold text-slate-700 dark:text-slate-300" %>
   <% check_label_class = "flex items-start gap-2 text-sm text-slate-600 dark:text-slate-300" %>
+  <%!-- The helper line under a box label. `font-normal` is not decoration:
+        components.css sets every <label> bold, which the box labels want and an
+        explanation does not - without it the helper shouts as loudly as the
+        choice it explains. --%>
+  <% hint_class = "mt-0.5 block text-xs font-normal text-slate-600 dark:text-slate-400" %>
 
   <.form
     :let={f}
@@ -232,10 +237,6 @@
             <%= checkbox f, :fediverse_followers?, class: checkbox_class() %>
             <span>
               {gettext("Take part in the Fediverse")}
-              <%!-- `font-normal` is not decoration: components.css sets every
-                    <label> bold, which the box labels want and this helper line
-                    does not - without it the explanation shouts as loudly as the
-                    choice it explains. --%>
               <%!-- "Mastodon" links out to the project's own site, because the
                     word is the one thing in this sentence a first-time visitor
                     may not know, and the tick is only informed consent if they
@@ -251,7 +252,7 @@
                   ),
                   "{mastodon}"
                 ) %>
-              <span class="mt-0.5 block text-xs font-normal text-slate-600 dark:text-slate-400">
+              <span class={hint_class}>
                 {mastodon_pre}<a
                   href="https://joinmastodon.org"
                   target="_blank"
@@ -265,6 +266,34 @@
         </div>
       </fieldset>
     </.inputs_for>
+
+    <%!-- The one question on this form that is about the member's line rather
+          than about their data. Unticked by default, and deliberately the only
+          box here that leaves its column NULL when it is not ticked (see
+          PageController.drop_untouched_low_bandwidth/1), so a member who walks
+          past it keeps inheriting whatever this installation's default is - an
+          intranet or a rural co-op turns it on for everybody at
+          /admin/preferences and nobody has to find this box.
+
+          The label and the explanation are Vutuv.Prefs' own, the same two
+          sentences /settings/preferences shows, so the member recognizes the
+          switch they are looking for later. --%>
+    <fieldset id="signup-bandwidth">
+      <%!-- Not gettext("Connection"): that msgid is vutuv's social one and is
+            translated "Vernetzung" (being connected to another member), which
+            over a bandwidth box says something else entirely. A msgid is a
+            key, not a phrase. This is the same word the settings card wears,
+            so the member recognizes the switch when they go looking. --%>
+      <legend class={label_class}>{gettext("Bandwidth")}</legend>
+      <label class={check_label_class}>
+        <%= checkbox f, :low_bandwidth?, class: checkbox_class() %>
+        <span>
+          {Vutuv.Prefs.label(:low_bandwidth?)}
+          <span class={hint_class}>{Vutuv.Prefs.hint(:low_bandwidth?)}</span>
+        </span>
+        <%= error_tag f, :low_bandwidth? %>
+      </label>
+    </fieldset>
 
     <.button type="submit" class="w-full">{gettext("Sign up for a free account")}</.button>
 

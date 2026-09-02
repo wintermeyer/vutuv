@@ -6,6 +6,7 @@ defmodule VutuvWeb.PageController do
   alias Vutuv.Accounts.User
   alias Vutuv.Fediverse
   alias Vutuv.Languages
+  alias Vutuv.Prefs
   alias Vutuv.SourceRepo
   alias VutuvWeb.AgentDocs
   alias VutuvWeb.AgentDocs.ListDocs
@@ -303,7 +304,10 @@ defmodule VutuvWeb.PageController do
   end
 
   def new_registration(conn, %{"user" => user_params}) do
-    user_params = expand_fediverse_choice(user_params)
+    user_params =
+      user_params
+      |> expand_fediverse_choice()
+      |> Prefs.drop_unchosen_booleans()
 
     # Extract defensively: a malformed "emails" param (not the nested
     # %{"0" => %{"value" => …}} the form produces) must reach register_user/2
@@ -340,6 +344,11 @@ defmodule VutuvWeb.PageController do
     end
   end
 
+  # What a ticked checkbox posts, in the four spellings a form can send. A guard
+  # rather than a function so it can head a clause, and one place rather than
+  # one per box.
+  defguardp checked_box?(value) when value in [true, "true", "1", "on"]
+
   # The sign-up form asks about the Fediverse once; `/settings/fediverse` has
   # three switches. Ticking the box means the whole thing, so it sets all three:
   # taking part, the reactions that come back, and the replies people write out
@@ -354,7 +363,7 @@ defmodule VutuvWeb.PageController do
   # land on exactly the defaults that page argues for, rather than on a silent
   # echo of a box they unticked at sign-up.
   defp expand_fediverse_choice(%{"fediverse_followers?" => value} = params)
-       when value in [true, "true", "1", "on"] do
+       when checked_box?(value) do
     Map.merge(params, %{"fediverse_reactions?" => "true", "fediverse_replies?" => "true"})
   end
 

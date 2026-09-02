@@ -10,12 +10,18 @@ defmodule VutuvWeb.MarkdownEditorTest do
   use ExUnit.Case, async: true
   import Phoenix.LiveViewTest
 
+  alias Vutuv.Accounts.User
+
+  # `user: nil` resolves the low-bandwidth pref to the installation default,
+  # which in the test env is the shipped one (the Prefs cache is off here) —
+  # so the plain `editor()` below is the full-bandwidth editor everybody gets.
   defp editor(overrides \\ %{}) do
     assigns =
       Map.merge(
         %{
           id: "ed",
           name: "post[body]",
+          user: nil,
           value: "hello **world**",
           label: "Body",
           placeholder: "Write something…"
@@ -24,6 +30,12 @@ defmodule VutuvWeb.MarkdownEditorTest do
       )
 
     render_component(&VutuvWeb.UI.markdown_editor/1, assigns)
+  end
+
+  # A member who asked for low-bandwidth mode. No DB: `Prefs.get/2` reads the
+  # struct's own column and only falls back to the defaults when it is nil.
+  defp thrifty_editor(overrides \\ %{}) do
+    editor(Map.put(overrides, :user, %User{low_bandwidth?: true}))
   end
 
   test "the hidden textarea stays the form field and the no-JS fallback" do
@@ -180,6 +192,134 @@ defmodule VutuvWeb.MarkdownEditorTest do
     assert html =~ "Aufzählung"
     assert html =~ "Codeblock"
     refute html =~ ">Heading 1<"
+  end
+
+  # ── Low-bandwidth mode ──
+  #
+  # Every refute below is paired with the assert that proves it is not vacuous:
+  # a refute on a misspelt attribute passes for the wrong reason and would hide
+  # exactly the regression these tests exist to catch.
+
+  test "a low-bandwidth member is never told where the editor bundle lives" do
+    full = editor()
+    thrifty = thrifty_editor()
+
+    # The whole mechanism. A browser cannot fetch a URL that is not on the
+    # page, so this one refute is the promise the setting makes.
+    assert full =~ ~s(data-mde-src="/assets/markdown_editor.js")
+    refute thrifty =~ "markdown_editor.js"
+    refute thrifty =~ "data-mde-src"
+
+    # And no hook to go looking for it either.
+    assert full =~ ~s(phx-hook="MarkdownEditor")
+    refute thrifty =~ "phx-hook"
+  end
+
+  test "a low-bandwidth member still gets a working Markdown field" do
+    html = thrifty_editor()
+
+    # The point of the setting is a cheaper composer, not a broken one: this is
+    # the same real form field the no-JS fallback has always shown, carrying
+    # the same value, and components.css shows it whenever data-mde-ready is
+    # absent.
+    assert html =~ ~s(<textarea)
+    assert html =~ ~s(name="post[body]")
+    assert html =~ "data-mde-source"
+    assert html =~ "hello **world**"
+    assert html =~ ~s(placeholder="Write something…")
+    # The sr-only label keeps the field named for a screen reader.
+    assert html =~ "Body"
+  end
+
+  test "none of the editor's furniture is rendered for a low-bandwidth member" do
+    full = editor(%{images: true, mention_limit: 5})
+    thrifty = thrifty_editor(%{images: true, mention_limit: 5})
+
+    # The frame, the mount point, the bubble and the slash menu are the
+    # editor's own scaffolding — dead markup without the hook, and on a slow
+    # line the bytes are the thing being saved.
+    for marker <- ["mde__frame", "data-mde-mount", "data-mde-bubble", "data-mde-slash"] do
+      assert full =~ marker, "the full editor should render #{marker}"
+      refute thrifty =~ marker, "low bandwidth should not render #{marker}"
+    end
+
+    # Nor the words, endpoints and language registry that only ever fed it.
+    # data-mde-langs is the biggest single attribute on the root.
+    for marker <- ["data-mde-langs", "data-mention-url", "data-mde-value", "data-mde-images"] do
+      assert full =~ marker, "the full editor should carry #{marker}"
+      refute thrifty =~ marker, "low bandwidth should not carry #{marker}"
+    end
+  end
+
+  # The gate costs the OTHER member nothing.
+  #
+  # Two shapes make this component re-send its whole attribute list on every
+  # keystroke, and both are the tidier-looking way to write the gate: collecting
+  # the attributes into a `{editor_hook(assigns)}` spread (handing `assigns` to
+  # a function is a strong taint in Phoenix.LiveView.Engine), and deriving
+  # `low_bandwidth?` with `assign/3` instead of `Map.put/3` (which marks it
+  # changed on every render). Either one re-sends the 1.6 kB fence-language
+  # table per keystroke, to every member who did NOT turn low bandwidth on —
+  # the exact opposite of the point. Both were measured at 2,353 bytes against
+  # 422 here, which is also what the component cost before the feature existed.
+  test "a keystroke does not re-send the editor's constants (change tracking)" do
+    assigns = %{
+      id: "ed",
+      name: "post[body]",
+      user: nil,
+      value: String.duplicate("a", 200),
+      label: "Body",
+      placeholder: "Write",
+      rows: 6,
+      submit_on: nil,
+      compact: false,
+      seed: nil,
+      images: false,
+      help: false,
+      mention_limit: nil,
+      class: nil,
+      rest: %{},
+      # What LiveView hands a component on a re-render where only the body moved.
+      __changed__: %{value: true}
+    }
+
+    rendered = VutuvWeb.UI.markdown_editor(assigns)
+
+    # The language table is the canary: it is a compile-time constant, so it
+    # must ride the full render and never a keystroke.
+    assert langs?(rendered, false), "the fence-language table is not being sent at all"
+    refute langs?(rendered, true), "the fence-language table is re-sent on every keystroke"
+
+    # And the whole re-send stays in the hundreds of bytes, not the thousands.
+    assert diff_size(rendered, true) < 1_000
+  end
+
+  # Every byte the socket would carry for this render, following nested
+  # Rendered structs the way the diff engine does. `track?` false is a full
+  # render, true is what a re-render actually re-sends.
+  defp diff_size(%Phoenix.LiveView.Rendered{dynamic: dynamic}, track?),
+    do: dynamic.(track?) |> Enum.map(&diff_size(&1, track?)) |> Enum.sum()
+
+  defp diff_size(list, track?) when is_list(list),
+    do: list |> Enum.map(&diff_size(&1, track?)) |> Enum.sum()
+
+  defp diff_size(binary, _track?) when is_binary(binary), do: byte_size(binary)
+  defp diff_size(_other, _track?), do: 0
+
+  defp langs?(%Phoenix.LiveView.Rendered{dynamic: dynamic}, track?),
+    do: dynamic.(track?) |> Enum.any?(&langs?(&1, track?))
+
+  defp langs?(list, track?) when is_list(list), do: Enum.any?(list, &langs?(&1, track?))
+  defp langs?(binary, _track?) when is_binary(binary), do: String.contains?(binary, "php:PHP")
+  defp langs?(_other, _track?), do: false
+
+  test "an explicit no and an untouched nil both still get the editor" do
+    # The three states of a Prefs boolean, and only one of them is thrifty
+    # (that one is the test above). An explicit false is a member who said no;
+    # nil is a member who never chose and inherits the installation default,
+    # which ships off.
+    assert editor(%{user: %User{low_bandwidth?: false}}) =~ "data-mde-src"
+    assert editor(%{user: %User{low_bandwidth?: nil}}) =~ "data-mde-src"
   end
 
   test "the fence-language labels ride the editor root (issues #1108/#1137/#1138)" do

@@ -848,6 +848,26 @@ defmodule VutuvWeb.SettingsController do
     reset_prefs(conn, :browser_tab, gettext("Browser tab settings reset to the site defaults."))
   end
 
+  # Low-bandwidth mode: whether this member's composer fetches the WYSIWYG
+  # editor at all (`VutuvWeb.UI.markdown_editor/1`). Unticking here IS a
+  # choice and is stored as one - the reset link below is the way back to
+  # inheriting the installation default, which is also what an untouched
+  # sign-up keeps.
+  def update_low_bandwidth(conn, %{"user" => params}) do
+    save(
+      conn,
+      params,
+      "preferences.html",
+      ~p"/settings/preferences",
+      gettext("Bandwidth settings saved."),
+      event: "preferences_changed"
+    )
+  end
+
+  def reset_low_bandwidth(conn, _params) do
+    reset_prefs(conn, :bandwidth, gettext("Bandwidth settings reset to the site defaults."))
+  end
+
   # The like-attribution switch (issue #1233) lives on the visibility page
   # rather than under language & display, so its reset lands back there.
   def reset_privacy_prefs(conn, _params) do
