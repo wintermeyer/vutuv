@@ -77,14 +77,9 @@ lands here). --%>
           plainly what pressing it sends. Submits #gravatar-form, which is
           rendered below the main form (a form cannot nest). --%>
           <div :if={Vutuv.Accounts.gravatar_import_available?()} class="mt-4">
-            <button
-              type="submit"
-              form="gravatar-form"
-              id="import-gravatar"
-              class="inline-flex min-h-10 items-center rounded-lg bg-slate-100 px-4 py-2 text-sm font-semibold text-slate-700 hover:bg-slate-200 dark:bg-slate-800 dark:text-slate-200 dark:hover:bg-slate-700"
-            >
+            <.button type="submit" form="gravatar-form" id="import-gravatar" variant="secondary">
               {gettext("Fetch my picture from gravatar.com")}
-            </button>
+            </.button>
             <p class="mt-1 text-xs text-slate-600 dark:text-slate-400">
               {gettext(
                 "Only when you press this: we ask gravatar.com whether there is a picture for your email address, sending a hash of the address rather than the address itself. Nothing leaves this server otherwise."
@@ -419,16 +414,17 @@ lands here). --%>
             enhancement in app.js intercepts the click and asks for confirmation
             in the dialog below, then submits for real. Shown only while a
             birthday is set. --%>
-            <button
+            <.button
               :if={@user.birthdate}
               type="submit"
               name="clear_birthdate"
               value="1"
+              variant="danger-ghost"
+              class="mt-2"
               formnovalidate
               data-birthday-remove
               aria-haspopup="dialog"
               aria-controls="birthday-remove-modal"
-              class="mt-2 inline-flex items-center gap-1.5 text-sm font-semibold text-red-600 hover:text-red-700 dark:text-red-400 dark:hover:text-red-300"
             >
               <svg class="h-4 w-4" fill="none" stroke="currentColor" stroke-width="2" viewBox="0 0 24 24" aria-hidden="true">
                 <path
@@ -438,7 +434,7 @@ lands here). --%>
                 />
               </svg>
               {gettext("Remove date of birth")}
-            </button>
+            </.button>
           </div>
 
           <%!-- How much of the birthday the public profile (and its agent
@@ -508,20 +504,12 @@ lands here). --%>
         )}
       </p>
       <div class="mt-6 flex justify-end gap-3">
-        <button
-          type="button"
-          data-birthday-remove-cancel
-          class="rounded-lg bg-slate-100 px-4 py-2 text-sm font-semibold text-slate-700 hover:bg-slate-200 dark:bg-slate-800 dark:text-slate-200 dark:hover:bg-slate-700"
-        >
+        <.button variant="secondary" data-birthday-remove-cancel>
           {gettext("Cancel")}
-        </button>
-        <button
-          type="button"
-          data-birthday-remove-confirm
-          class="rounded-lg bg-red-600 px-4 py-2 text-sm font-semibold text-white hover:bg-red-700"
-        >
+        </.button>
+        <.button variant="danger" data-birthday-remove-confirm>
           {gettext("Remove date of birth")}
-        </button>
+        </.button>
       </div>
     </div>
   </div>

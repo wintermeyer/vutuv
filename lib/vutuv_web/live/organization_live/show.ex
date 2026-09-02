@@ -827,14 +827,9 @@ defmodule VutuvWeb.OrganizationLive.Show do
               <.job_card :for={posting <- @org_jobs} posting={posting} />
             </div>
             <div :if={@org_jobs_more?} class="text-center">
-              <button
-                type="button"
-                id="load-more-jobs"
-                phx-click="load-more-jobs"
-                class="rounded-lg bg-slate-100 px-4 py-2 text-sm font-semibold text-slate-700 hover:bg-slate-200 dark:bg-slate-800 dark:text-slate-200 dark:hover:bg-slate-700"
-              >
+              <.button id="load-more-jobs" variant="secondary" phx-click="load-more-jobs">
                 {gettext("More jobs")}
-              </button>
+              </.button>
             </div>
           </section>
 
@@ -1088,15 +1083,14 @@ defmodule VutuvWeb.OrganizationLive.Show do
           check runs, and the check is a DNS or HTTP round trip that can take
           seconds. Without it the button sits there unchanged and the click
           reads as swallowed, which is half of what issue #1466 reported. --%>
-          <button
-            type="button"
+          <.button
+            id="verify-domain"
+            class="mt-6"
             phx-click="verify"
             phx-disable-with={gettext("Checking …")}
-            id="verify-domain"
-            class="mt-6 rounded-lg bg-brand-600 px-4 py-2 text-sm font-semibold text-white hover:bg-brand-700 disabled:opacity-60"
           >
             {gettext("Verify now")}
-          </button>
+          </.button>
 
           <.check_report
             id="verify-domain-report"

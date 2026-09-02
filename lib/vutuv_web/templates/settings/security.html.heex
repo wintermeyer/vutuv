@@ -79,14 +79,14 @@ who still looks here first. --%>
         <% end %>
       </ul>
       <div :if={Enum.any?(@sessions, &(&1.id != @current_session_id))} class="mt-4">
-        <.link
+        <.button
           href={~p"/settings/devices"}
           method="delete"
+          variant="secondary"
           data-confirm={gettext("Log out of every device except this one?")}
-          class="inline-flex items-center rounded-lg bg-slate-100 px-4 py-2 text-sm font-semibold text-slate-700 hover:bg-slate-200 dark:bg-slate-800 dark:text-slate-200 dark:hover:bg-slate-700"
         >
           {gettext("Log out all other devices")}
-        </.link>
+        </.button>
       </div>
     </.card>
 
@@ -133,17 +133,16 @@ who still looks here first. --%>
               class={input_class()}
             />
           </div>
-          <button
-            type="button"
+          <.button
+            class="shrink-0"
             data-webauthn-register
             data-nickname-input="passkey-nickname"
             data-challenge-url={~p"/settings/passkeys/challenge"}
             data-create-url={~p"/settings/passkeys"}
             data-error-generic={gettext("Could not add the passkey. Please try again.")}
-            class="shrink-0 rounded-lg bg-brand-600 px-4 py-2 text-sm font-semibold text-white hover:bg-brand-700"
           >
             {gettext("Add a passkey")}
-          </button>
+          </.button>
         </div>
         <p data-webauthn-error hidden class="mt-2 text-sm text-red-600 dark:text-red-400"></p>
       </div>
@@ -180,18 +179,19 @@ who still looks here first. --%>
             </span>
           </span>
           <%= if @totp_enabled? do %>
-            <.link
+            <.button
               href={~p"/settings/totp"}
               method="delete"
+              variant="danger-ghost"
+              class="shrink-0"
               data-confirm={
                 gettext(
                   "Turn off the authenticator app? Its codes stop working at login; the emailed PIN is unaffected."
                 )
               }
-              class="shrink-0 text-sm font-semibold text-red-600 hover:text-red-700 dark:text-red-400 dark:hover:text-red-300"
             >
               {gettext("Turn off")}
-            </.link>
+            </.button>
           <% else %>
             <.link
               navigate={~p"/settings/totp/new"}

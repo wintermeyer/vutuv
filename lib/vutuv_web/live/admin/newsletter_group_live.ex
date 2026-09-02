@@ -606,21 +606,20 @@ defmodule VutuvWeb.Admin.NewsletterGroupLive do
                 <td class="text-sm text-slate-600 dark:text-slate-400">{summary(group)}</td>
                 <td>{compact_count(group.member_count)}</td>
                 <td class="text-right">
-                  <.link
+                  <.button
                     navigate={~p"/admin/newsletter_groups/#{group.id}/edit"}
-                    class="font-semibold text-brand-600 hover:text-brand-700 dark:text-brand-400 dark:hover:text-brand-300"
+                    variant="ghost"
                   >
                     {gettext("Edit")}
-                  </.link>
-                  <button
-                    type="button"
+                  </.button>
+                  <.button
+                    variant="danger-ghost"
                     phx-click="delete"
                     phx-value-id={group.id}
                     data-confirm={gettext("Delete this audience?")}
-                    class="ml-3 font-semibold text-rose-600 hover:text-rose-700"
                   >
                     {gettext("Delete")}
-                  </button>
+                  </.button>
                 </td>
               </tr>
             </tbody>
@@ -646,21 +645,17 @@ defmodule VutuvWeb.Admin.NewsletterGroupLive do
             <p class="mt-1 text-sm text-slate-600 dark:text-slate-400">{summary(@group)}</p>
           </div>
           <div class="flex items-center gap-3">
-            <.link
-              navigate={~p"/admin/newsletter_groups/#{@group.id}/edit"}
-              class="button button--secondary"
-            >
+            <.button navigate={~p"/admin/newsletter_groups/#{@group.id}/edit"} variant="secondary">
               {gettext("Edit")}
-            </.link>
-            <button
-              type="button"
+            </.button>
+            <.button
+              variant="danger-ghost"
               phx-click="delete"
               phx-value-id={@group.id}
               data-confirm={gettext("Delete this audience?")}
-              class="font-semibold text-rose-600 hover:text-rose-700"
             >
               {gettext("Delete")}
-            </button>
+            </.button>
           </div>
         </div>
       </section>
@@ -987,12 +982,12 @@ defmodule VutuvWeb.Admin.NewsletterGroupLive do
             </div>
 
             <div class="flex flex-wrap items-center gap-3">
-              <button type="button" phx-click="select_all" class={preview_nav_class()}>
+              <.button variant="secondary" phx-click="select_all">
                 {gettext("Select all")}
-              </button>
-              <button type="button" phx-click="unselect_all" class={preview_nav_class()}>
+              </.button>
+              <.button variant="secondary" phx-click="unselect_all">
                 {gettext("Unselect all")}
-              </button>
+              </.button>
               <span class="text-xs text-slate-600 dark:text-slate-400">
                 {gettext("applies to the whole list, not just this page")}
               </span>
@@ -1148,11 +1143,6 @@ defmodule VutuvWeb.Admin.NewsletterGroupLive do
   defp other_groups(groups, %NewsletterGroup{id: nil}), do: groups
   defp other_groups(groups, %NewsletterGroup{id: id}), do: Enum.reject(groups, &(&1.id == id))
 
-  defp preview_nav_class do
-    "rounded-lg bg-slate-100 px-3 py-1.5 text-sm font-semibold text-slate-700 hover:bg-slate-200 " <>
-      "disabled:cursor-not-allowed disabled:opacity-40 dark:bg-slate-800 dark:text-slate-200 dark:hover:bg-slate-700"
-  end
-
   # The "page X of Y, Z total" heading + Previous/Next controls shared by the
   # filters-mode preview and the accounts-mode search results.
   attr(:label, :string, required: true)
@@ -1173,24 +1163,22 @@ defmodule VutuvWeb.Admin.NewsletterGroupLive do
         </span>
       </p>
       <div :if={list_pages(@total) > 1} class="flex items-center gap-2">
-        <button
-          type="button"
+        <.button
+          variant="secondary"
           phx-click="list_page"
           phx-value-page={@page - 1}
           disabled={@page <= 1}
-          class={preview_nav_class()}
         >
           {gettext("Previous")}
-        </button>
-        <button
-          type="button"
+        </.button>
+        <.button
+          variant="secondary"
           phx-click="list_page"
           phx-value-page={@page + 1}
           disabled={@page >= list_pages(@total)}
-          class={preview_nav_class()}
         >
           {gettext("Next")}
-        </button>
+        </.button>
       </div>
     </div>
     """

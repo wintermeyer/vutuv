@@ -54,15 +54,15 @@
             {gettext("Generate a new list")}
           </.button>
         </.form>
-        <.link
+        <.button
           href={~p"/settings/login_codes"}
           method="delete"
-          data-confirm={gettext("Delete your code list? All its codes stop working immediately.")}
-          class="text-sm font-semibold text-red-600 hover:text-red-700 dark:text-red-400 dark:hover:text-red-300"
+          variant="danger-ghost"
           id="delete-codes-link"
+          data-confirm={gettext("Delete your code list? All its codes stop working immediately.")}
         >
           {gettext("Delete the list")}
-        </.link>
+        </.button>
       </div>
     <% end %>
   </section>

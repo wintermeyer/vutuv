@@ -24,12 +24,7 @@ defmodule VutuvWeb.Admin.AccountHTML do
     ~H"""
     <.form for={%{}} action={~p"/admin/accounts/#{@user.id}/unfreeze"} class="inline">
       <input type="hidden" name="return_to" value={@return_to} />
-      <button
-        type="submit"
-        class="rounded-lg bg-slate-100 px-3 py-1 text-xs font-semibold text-slate-700 hover:bg-slate-200 dark:bg-slate-800 dark:text-slate-200 dark:hover:bg-slate-700"
-      >
-        {gettext("Unfreeze")}
-      </button>
+      <.button type="submit" variant="secondary">{gettext("Unfreeze")}</.button>
     </.form>
     """
   end
@@ -38,12 +33,7 @@ defmodule VutuvWeb.Admin.AccountHTML do
     ~H"""
     <.form for={%{}} action={~p"/admin/accounts/#{@user.id}/freeze"} class="inline">
       <input type="hidden" name="return_to" value={@return_to} />
-      <button
-        type="submit"
-        class="rounded-lg bg-brand-600 px-3 py-1 text-xs font-semibold text-white hover:bg-brand-700"
-      >
-        {gettext("Freeze")}
-      </button>
+      <.button type="submit">{gettext("Freeze")}</.button>
     </.form>
     """
   end

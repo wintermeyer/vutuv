@@ -64,13 +64,9 @@ settings content column. --%>
       class="mt-4 flex flex-wrap items-center gap-3 rounded bg-amber-50 px-3 py-2 text-sm text-amber-800 dark:bg-amber-900/30 dark:text-amber-200"
     >
       <p>{gettext("You changed the text after this review. It describes the earlier version.")}</p>
-      <.link
-        href={~p"/settings/job_references/#{@reference}/check"}
-        method="post"
-        class="min-h-10 inline-flex items-center rounded-lg bg-brand-600 px-4 py-2 text-sm font-semibold text-white hover:bg-brand-700"
-      >
+      <.button href={~p"/settings/job_references/#{@reference}/check"} method="post">
         {gettext("Review again")}
-      </.link>
+      </.button>
     </div>
 
     <%!-- What the model read is not necessarily what the document says. An OCR

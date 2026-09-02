@@ -289,15 +289,15 @@ defmodule VutuvWeb.SettingsHTML do
           <span class="h-2 w-2 rounded-full bg-emerald-500"></span>
           {gettext("Active")}
         </span>
-        <.link
+        <.button
           :if={!@current?}
           href={~p"/settings/devices/#{@session.id}"}
           method="delete"
+          variant="danger-ghost"
           data-confirm={gettext("Log this device out of your account?")}
-          class="text-sm font-semibold text-red-600 hover:text-red-700 dark:text-red-400 dark:hover:text-red-300"
         >
           {gettext("Log out")}
-        </.link>
+        </.button>
       </div>
     </li>
     """
@@ -336,14 +336,14 @@ defmodule VutuvWeb.SettingsHTML do
         </span>
       </div>
       <div class="shrink-0">
-        <.link
+        <.button
           href={~p"/settings/passkeys/#{@passkey.id}"}
           method="delete"
+          variant="danger-ghost"
           data-confirm={gettext("Remove this passkey?")}
-          class="text-sm font-semibold text-red-600 hover:text-red-700 dark:text-red-400 dark:hover:text-red-300"
         >
           {gettext("Remove")}
-        </.link>
+        </.button>
       </div>
     </li>
     """

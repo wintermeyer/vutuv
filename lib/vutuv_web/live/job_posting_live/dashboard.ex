@@ -99,9 +99,7 @@ defmodule VutuvWeb.JobPostingLive.Dashboard do
     <div class="py-6">
       <div class="mb-6 flex flex-wrap items-center justify-between gap-3">
         <h1 class="text-2xl font-bold text-slate-900 dark:text-slate-100">{gettext("My postings")}</h1>
-        <.link navigate={~p"/jobs/new"} class="rounded-lg bg-brand-600 px-4 py-2 text-sm font-semibold text-white hover:bg-brand-700">
-          {gettext("New posting")}
-        </.link>
+        <.button navigate={~p"/jobs/new"}>{gettext("New posting")}</.button>
       </div>
 
       <nav class="mb-4 flex flex-wrap gap-2 border-b border-slate-200 pb-2 dark:border-slate-800">
@@ -144,30 +142,31 @@ defmodule VutuvWeb.JobPostingLive.Dashboard do
               </p>
             </div>
 
-            <div class="flex flex-wrap gap-2 text-sm">
-              <.link navigate={~p"/jobs/#{posting.slug}/edit"} class="font-semibold text-brand-600 hover:text-brand-700 dark:text-brand-400 dark:hover:text-brand-300">
+            <%!-- Three peer acts on one posting, so one variant between them:
+            they used to be a brand word, a slate word and a brand word, which
+            reads as a hierarchy that isn't there. --%>
+            <div class="flex flex-wrap gap-2">
+              <.button navigate={~p"/jobs/#{posting.slug}/edit"} variant="ghost">
                 {gettext("Edit")}
-              </.link>
-              <button
+              </.button>
+              <.button
                 :if={@tab == :published}
-                type="button"
+                variant="ghost"
                 phx-click="close"
                 phx-value-id={posting.id}
                 phx-value-reason="filled"
                 data-confirm={gettext("Mark this posting as filled and close it?")}
-                class="font-semibold text-slate-600 hover:text-slate-800 dark:text-slate-400"
               >
                 {gettext("Mark as filled")}
-              </button>
-              <button
+              </.button>
+              <.button
                 :if={@tab in [:expired, :closed]}
-                type="button"
+                variant="ghost"
                 phx-click="repost"
                 phx-value-id={posting.id}
-                class="font-semibold text-brand-600 hover:text-brand-700 dark:text-brand-400 dark:hover:text-brand-300"
               >
                 {gettext("Repost")}
-              </button>
+              </.button>
             </div>
           </div>
         </li>

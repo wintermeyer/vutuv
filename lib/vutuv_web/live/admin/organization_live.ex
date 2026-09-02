@@ -253,7 +253,7 @@ defmodule VutuvWeb.Admin.OrganizationLive do
                 <td class="breakwrap text-slate-600 dark:text-slate-400">{organization.city}</td>
                 <td>
                   <% {label, tone} = organization_status_badge(organization) %>
-                  <.admin_pill tone={tone}>{label}</.admin_pill>
+                  <.status_pill tone={tone}>{label}</.status_pill>
                 </td>
                 <td class="text-right">
                   <button
@@ -359,44 +359,45 @@ defmodule VutuvWeb.Admin.OrganizationLive do
       </dl>
 
       <div class="mt-5 flex flex-wrap gap-2 border-t border-slate-100 pt-4 dark:border-slate-800">
-        <button
+        <%!-- Freeze and Unfreeze are two states of one control and never show
+        together, so the amber/emerald pair they used to wear distinguished
+        nothing and only added two more button looks to the site. The one
+        colour that carries meaning in this row is the last one. --%>
+        <.button
           :if={is_nil(@detail.organization.frozen_at)}
-          type="button"
+          variant="secondary"
           phx-click="freeze"
           phx-value-id={@detail.organization.id}
           data-confirm={gettext("Freeze this page? It disappears for the public but stays visible to its owner.")}
-          class="rounded-lg bg-amber-100 px-3 py-1.5 text-sm font-semibold text-amber-800 hover:bg-amber-200 dark:bg-amber-900/40 dark:text-amber-200"
         >
           {gettext("Freeze")}
-        </button>
-        <button
+        </.button>
+        <.button
           :if={not is_nil(@detail.organization.frozen_at)}
-          type="button"
+          variant="secondary"
           phx-click="unfreeze"
           phx-value-id={@detail.organization.id}
-          class="rounded-lg bg-emerald-100 px-3 py-1.5 text-sm font-semibold text-emerald-700 hover:bg-emerald-200 dark:bg-emerald-900/40 dark:text-emerald-200"
         >
           {gettext("Unfreeze")}
-        </button>
-        <button
+        </.button>
+        <.button
           :if={@detail.organization.status != "archived"}
-          type="button"
+          variant="secondary"
           phx-click="archive"
           phx-value-id={@detail.organization.id}
           data-confirm={gettext("Archive this page?")}
-          class="rounded-lg bg-slate-100 px-3 py-1.5 text-sm font-semibold text-slate-700 hover:bg-slate-200 dark:bg-slate-800 dark:text-slate-200 dark:hover:bg-slate-700"
         >
           {gettext("Archive")}
-        </button>
-        <button
-          type="button"
+        </.button>
+        <.button
+          variant="danger"
+          class="ml-auto"
           phx-click="delete"
           phx-value-id={@detail.organization.id}
           data-confirm={gettext("Delete this page and everything it owns? This cannot be undone.")}
-          class="ml-auto rounded-lg bg-rose-100 px-3 py-1.5 text-sm font-semibold text-rose-700 hover:bg-rose-200 dark:bg-rose-900/40 dark:text-rose-200"
         >
           {gettext("Delete")}
-        </button>
+        </.button>
       </div>
     </section>
     """

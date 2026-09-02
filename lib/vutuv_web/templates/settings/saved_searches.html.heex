@@ -58,22 +58,17 @@
                 {label}
               </option>
             </select>
-            <button
-              type="submit"
-              class="rounded-lg bg-slate-100 px-3 py-1.5 text-sm font-semibold text-slate-700 hover:bg-slate-200 dark:bg-slate-800 dark:text-slate-200 dark:hover:bg-slate-700"
-            >
-              {gettext("Save")}
-            </button>
+            <.button type="submit" variant="secondary">{gettext("Save")}</.button>
           </.form>
 
-          <.link
+          <.button
             href={~p"/settings/saved_searches/#{search.id}"}
             method="delete"
+            variant="danger-ghost"
             data-confirm={gettext("Delete this saved search?")}
-            class="rounded-lg px-3 py-1.5 text-sm font-semibold text-rose-600 hover:bg-rose-50 dark:text-rose-400 dark:hover:bg-rose-950/40"
           >
             {gettext("Delete")}
-          </.link>
+          </.button>
         </div>
       </li>
     </ul>

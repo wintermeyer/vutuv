@@ -54,11 +54,6 @@ defmodule VutuvWeb.Admin.UserDetailLive do
     end
   end
 
-  # Standard secondary-button recipe (design.md); reused by the footer links.
-  defp button_class,
-    do:
-      "rounded-lg bg-slate-100 px-3 py-1.5 text-sm font-semibold text-slate-700 hover:bg-slate-200 dark:bg-slate-800 dark:text-slate-200 dark:hover:bg-slate-700"
-
   @impl true
   def render(assigns) do
     ~H"""
@@ -89,12 +84,12 @@ defmodule VutuvWeb.Admin.UserDetailLive do
           </div>
 
           <div class="flex flex-wrap gap-1">
-            <.admin_pill tone={confirmed_tone(@user)}>
+            <.status_pill tone={confirmed_tone(@user)}>
               {if @user.email_confirmed?, do: gettext("PIN"), else: gettext("Unconfirmed")}
-            </.admin_pill>
-            <.admin_pill :for={{label, tone} <- status_badges(@user)} tone={badge_class(tone)}>
+            </.status_pill>
+            <.status_pill :for={{label, tone} <- status_badges(@user)} tone={badge_class(tone)}>
               {label}
-            </.admin_pill>
+            </.status_pill>
           </div>
         </div>
 
@@ -147,21 +142,21 @@ defmodule VutuvWeb.Admin.UserDetailLive do
         </div>
 
         <div class="mt-5 flex flex-wrap gap-2 border-t border-slate-100 pt-4 dark:border-slate-800">
-          <.link
+          <.button
             id="member-prefs-link"
             navigate={~p"/admin/users/#{@user.id}/preferences"}
-            class={button_class()}
+            variant="secondary"
           >
             {gettext("Preferences")}
-          </.link>
-          <.link
+          </.button>
+          <.button
             :if={@user.username}
             id="member-postings-link"
             navigate={~p"/admin/jobs?#{[q: @user.username]}"}
-            class={button_class()}
+            variant="secondary"
           >
             {gettext("Job postings")}
-          </.link>
+          </.button>
         </div>
       </section>
     </div>

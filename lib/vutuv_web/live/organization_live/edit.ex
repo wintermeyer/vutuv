@@ -274,14 +274,9 @@ defmodule VutuvWeb.OrganizationLive.Edit do
             <.organization_logo organization={@organization} class="h-16 w-16 shrink-0" />
             <div class="space-y-2">
               <.live_file_input upload={@uploads.logo} class="text-sm" />
-              <button
-                :if={@organization.logo}
-                type="button"
-                phx-click="remove_logo"
-                class="block text-xs font-semibold text-red-600 hover:text-red-700"
-              >
+              <.button :if={@organization.logo} variant="danger-ghost" phx-click="remove_logo">
                 {gettext("Remove logo")}
-              </button>
+              </.button>
               <p class="text-xs text-slate-600 dark:text-slate-400">
                 {gettext("%{formats}, up to %{limit}",
                   formats: format_list(OrganizationImageStore.extension_whitelist()),
@@ -369,18 +364,10 @@ defmodule VutuvWeb.OrganizationLive.Edit do
         </fieldset>
 
         <div class="flex items-center gap-3 pt-2">
-          <button
-            type="submit"
-            class="rounded-lg bg-brand-600 px-4 py-2 text-sm font-semibold text-white hover:bg-brand-700"
-          >
-            {gettext("Save")}
-          </button>
-          <.link
-            navigate={~p"/organizations/#{@organization.slug}"}
-            class="text-sm font-semibold text-slate-600 hover:text-slate-800 dark:text-slate-400 dark:hover:text-slate-200"
-          >
+          <.button type="submit">{gettext("Save")}</.button>
+          <.button navigate={~p"/organizations/#{@organization.slug}"} variant="secondary">
             {gettext("Cancel")}
-          </.link>
+          </.button>
         </div>
       </.form>
 
@@ -398,15 +385,15 @@ defmodule VutuvWeb.OrganizationLive.Edit do
                 {alias_kind_label(organization_name.kind)}
               </span>
             </span>
-            <button
-              type="button"
+            <.button
+              variant="danger-ghost"
+              class="shrink-0"
               phx-click="remove_alias"
               phx-value-id={organization_name.id}
               data-confirm={gettext("Remove this name?")}
-              class="shrink-0 text-sm font-semibold text-red-600 hover:text-red-700"
             >
               {gettext("Remove")}
-            </button>
+            </.button>
           </li>
         </ul>
 
@@ -424,12 +411,7 @@ defmodule VutuvWeb.OrganizationLive.Edit do
             <option value="brand" selected={@alias_kind == "brand"}>{gettext("Brand")}</option>
             <option value="abbreviation" selected={@alias_kind == "abbreviation"}>{gettext("Abbreviation")}</option>
           </select>
-          <button
-            type="submit"
-            class="rounded-lg bg-slate-100 px-4 py-2 text-sm font-semibold text-slate-700 hover:bg-slate-200 dark:bg-slate-800 dark:text-slate-200 dark:hover:bg-slate-700"
-          >
-            {gettext("Add")}
-          </button>
+          <.button type="submit" variant="secondary">{gettext("Add")}</.button>
         </.form>
       </.card>
 
@@ -475,12 +457,9 @@ defmodule VutuvWeb.OrganizationLive.Edit do
             />
             <p :if={@handle_error} class="mt-1 text-xs text-red-600">{@handle_error}</p>
           </div>
-          <button
-            type="submit"
-            class="rounded-lg bg-brand-600 px-4 py-2 text-sm font-semibold text-white hover:bg-brand-700"
-          >
+          <.button type="submit">
             {if @organization.username, do: gettext("Change"), else: gettext("Claim")}
-          </button>
+          </.button>
         </.form>
       </.card>
 
@@ -491,17 +470,17 @@ defmodule VutuvWeb.OrganizationLive.Edit do
             "Deleting this organization page is permanent. Its verified domains and its @handle are freed and can be claimed again."
           )}
         </p>
-        <button
+        <.button
           id="delete-organization"
-          type="button"
+          variant="danger"
+          class="mt-3"
           phx-click="delete_organization"
           data-confirm={
             gettext("Really delete %{name}? This cannot be undone.", name: @organization.name)
           }
-          class="mt-3 rounded-lg bg-red-600 px-4 py-2 text-sm font-semibold text-white hover:bg-red-700"
         >
           {gettext("Delete this organization")}
-        </button>
+        </.button>
       </.card>
     </div>
     """

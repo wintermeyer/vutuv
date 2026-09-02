@@ -641,14 +641,14 @@ defmodule VutuvWeb.PostLive.Saved do
                     <.organization_location organization={organization} class="block truncate text-sm text-slate-600 dark:text-slate-400" />
                   </span>
                 </.link>
-                <button
-                  type="button"
+                <.button
+                  variant="danger-ghost"
+                  class="shrink-0"
                   phx-click="remove_organization"
                   phx-value-id={organization.id}
-                  class="shrink-0 text-sm font-semibold text-slate-500 hover:text-red-600 dark:text-slate-400"
                 >
                   {gettext("Remove")}
-                </button>
+                </.button>
               </li>
             </ul>
           <% true -> %>
@@ -669,14 +669,14 @@ defmodule VutuvWeb.PostLive.Saved do
                     {posting.organization.name}
                   </span>
                 </.link>
-                <button
-                  type="button"
+                <.button
+                  variant="danger-ghost"
+                  class="shrink-0"
                   phx-click="remove_job"
                   phx-value-id={posting.id}
-                  class="shrink-0 text-sm font-semibold text-slate-500 hover:text-red-600 dark:text-slate-400"
                 >
                   {gettext("Remove")}
-                </button>
+                </.button>
               </li>
             </ul>
         <% end %>

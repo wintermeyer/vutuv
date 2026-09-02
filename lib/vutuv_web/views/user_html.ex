@@ -682,6 +682,12 @@ defmodule VutuvWeb.UserHTML do
   # utilities sit in the bundle, not by the order they are written, and `px-4`
   # is emitted last. That squeezed the 20px envelope into the 6px a 40px box
   # has left after 2 * 16px of padding. So each call site names its own.
+  # It is `VutuvWeb.UI.button_base/0` minus the horizontal padding, and it keeps
+  # the same `min-h-10` deliberately — the header's two controls stand in a row
+  # with the rest of the site's buttons in the reader's eye even though they
+  # never share a line with one. It cannot compose `button_base/0` for exactly
+  # the padding reason above, so when that recipe's height changes, change it
+  # here too.
   @header_action_base "inline-flex min-h-10 shrink-0 items-center justify-center gap-1.5 rounded-lg text-sm font-semibold transition-colors"
 
   defp header_action_class(:primary),

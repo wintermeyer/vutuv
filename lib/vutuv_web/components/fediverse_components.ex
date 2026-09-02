@@ -371,16 +371,13 @@ defmodule VutuvWeb.FediverseComponents do
   """
   def follow_state_pill(assigns) do
     ~H"""
-    <span
+    <.status_pill
+      tone={"ring-1 #{follow_state_class(@follow)}"}
+      class={@class}
       data-follow-state={@follow.state}
-      class={[
-        "inline-flex rounded-full px-2 py-0.5 text-xs font-semibold ring-1",
-        follow_state_class(@follow),
-        @class
-      ]}
     >
       {follow_state_label(@follow)}
-    </span>
+    </.status_pill>
     """
   end
 

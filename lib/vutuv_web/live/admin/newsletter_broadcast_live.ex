@@ -207,13 +207,7 @@ defmodule VutuvWeb.Admin.NewsletterBroadcastLive do
           )}
         </p>
         <div class="mt-6 flex items-center justify-end gap-3">
-          <button
-            type="button"
-            phx-click="cancel"
-            class="rounded-lg bg-slate-100 px-4 py-2 text-sm font-semibold text-slate-700 hover:bg-slate-200 dark:bg-slate-800 dark:text-slate-200 dark:hover:bg-slate-700"
-          >
-            {gettext("Cancel")}
-          </button>
+          <.button variant="secondary" phx-click="cancel">{gettext("Cancel")}</.button>
           <.button variant="danger" phx-click="send" id="confirm-send">
             {gettext("Send now")}
           </.button>

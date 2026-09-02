@@ -483,13 +483,12 @@ defmodule VutuvWeb.Admin.ScreenshotLive do
     ]
   end
 
-  # A tab link: the active one is a brand pill, the rest quiet.
-  defp tab_class(true),
-    do: "rounded-lg bg-brand-600 px-3 py-1.5 text-sm font-semibold text-white"
-
-  defp tab_class(false),
-    do:
-      "rounded-lg bg-slate-100 px-3 py-1.5 text-sm font-semibold text-slate-700 hover:bg-slate-200 dark:bg-slate-800 dark:text-slate-200 dark:hover:bg-slate-700"
+  # A tab link: the active one is a brand pill, the rest quiet. Both are the
+  # site's button recipe rather than a second spelling of it — these read as
+  # controls, and a tab row two pixels shorter than the buttons below it is
+  # exactly the drift this page carried.
+  defp tab_class(true), do: button_class("primary")
+  defp tab_class(false), do: button_class("secondary")
 
   attr(:status, :string, required: true)
 

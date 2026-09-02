@@ -251,24 +251,16 @@ subpage now (/settings/fediverse/move), linked from the footer below. --%>
     <div class="relative w-full max-w-lg rounded-2xl bg-white p-6 shadow-xl ring-1 ring-slate-200 dark:bg-slate-900 dark:ring-slate-800">
       <.fediverse_consent_notice switching_on={on?} title_id={"#{id}-title"} />
       <div class="mt-6 flex flex-wrap justify-end gap-3">
-        <button
-          type="button"
-          data-fediverse-consent-cancel
-          class="rounded-lg bg-slate-100 px-4 py-2 text-sm font-semibold text-slate-700 hover:bg-slate-200 dark:bg-slate-800 dark:text-slate-200 dark:hover:bg-slate-700"
-        >
+        <.button variant="secondary" data-fediverse-consent-cancel>
           {gettext("Cancel")}
-        </button>
-        <button
-          type="button"
-          data-fediverse-consent-confirm
-          class="rounded-lg bg-brand-600 px-4 py-2 text-sm font-semibold text-white hover:bg-brand-700"
-        >
+        </.button>
+        <.button data-fediverse-consent-confirm>
           <%= if on? do %>
             {gettext("I understand, take part")}
           <% else %>
             {gettext("I understand, switch off")}
           <% end %>
-        </button>
+        </.button>
       </div>
     </div>
   </div>

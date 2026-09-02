@@ -117,12 +117,7 @@ defmodule VutuvWeb.JobPostingLive.Show do
               action={~p"/jobs/#{@posting.slug}/apply"}
               method="post"
             >
-              <button
-                type="submit"
-                class="rounded-lg bg-brand-600 px-4 py-2 text-sm font-semibold text-white hover:bg-brand-700"
-              >
-                {apply_label(@posting)}
-              </button>
+              <.button type="submit">{apply_label(@posting)}</.button>
             </.form>
 
             <.engagement_bar engagement={@engagement} />

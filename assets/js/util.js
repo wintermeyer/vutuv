@@ -183,3 +183,19 @@ export function copyText(text) {
     document.body.removeChild(area)
   }
 }
+
+// The kit's button recipe, for the two dialogs JavaScript builds itself (the
+// avatar crop modal and the post-photo crop modal). `VutuvWeb.UI.button_class/1`
+// is the owner on the server side and cannot reach here, so this is the one
+// deliberate copy — kept in one place rather than four, and kept honest by
+// `button_recipe_test.exs`, which scans this directory too. Both dialogs used
+// to spell it themselves and had missed the 40px height, so a crop dialog's
+// Cancel/Save stood 4px shorter than every button around it.
+const BUTTON_BASE =
+  "inline-flex min-h-10 items-center justify-center gap-1.5 rounded-lg px-4 py-2 text-sm font-semibold disabled:cursor-not-allowed disabled:opacity-40"
+
+export const buttonPrimary = `${BUTTON_BASE} bg-brand-600 text-white hover:bg-brand-700`
+
+export const buttonSecondary =
+  `${BUTTON_BASE} bg-slate-100 text-slate-700 ring-1 ring-slate-300 hover:bg-slate-200 ` +
+  "dark:bg-slate-800 dark:text-slate-200 dark:ring-slate-600 dark:hover:bg-slate-700"
