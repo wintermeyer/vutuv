@@ -37,6 +37,11 @@ defmodule Vutuv.ExportTest do
     {:ok, _} =
       Vutuv.ContentFilters.create_filter(user, %{"kind" => "keyword", "pattern" => "crypto"})
 
+    {:ok, _} =
+      Vutuv.PostRewrites.create_rule(user, "@golemde@flipboard.com", %{
+        "pattern" => "^Gepostet .*$"
+      })
+
     data = Export.build(user)
 
     # The exact number moves with every new section; what this case is really
@@ -46,6 +51,8 @@ defmodule Vutuv.ExportTest do
     # The private content filters (issue #940) are owner-only, so they ride
     # along in the member's own GDPR export.
     assert Enum.any?(data.content_filters, &(&1.pattern == "crypto"))
+    # So do the per-author search-and-replace rules, for the same reason.
+    assert Enum.any?(data.post_rewrites, &(&1.account == "@golemde@flipboard.com"))
     assert Enum.any?(data.saved_members.bookmarked, &(&1.member == saved_member.username))
     # The keys exist even when empty, so the export shape stays stable.
     assert Map.has_key?(data.saved_organizations, :liked)

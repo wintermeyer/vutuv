@@ -41,6 +41,7 @@ defmodule VutuvWeb.PostLive.Feed do
   alias Vutuv.Activity
   alias Vutuv.ContentFilters
   alias Vutuv.Fediverse
+  alias Vutuv.PostRewrites
   alias Vutuv.Posts
   alias Vutuv.Posts.Post
   alias Vutuv.Social
@@ -234,6 +235,11 @@ defmodule VutuvWeb.PostLive.Feed do
     # to every page, and the set of posts they chose to reveal anyway.
     compiled = ContentFilters.compile_for(user)
 
+    # And their per-author search-and-replace rules, compiled the same way and
+    # applied to every entry BEFORE the filters, so a filter reads the text the
+    # reader will see.
+    rewrites = PostRewrites.compile_for(user)
+
     # The gate before the page, because it decides which tab this mount opens
     # on: a remembered "Fediverse" whose content has gone away shows no tab bar
     # at all, and stranding them on the tab behind it would leave a timeline
@@ -261,7 +267,7 @@ defmodule VutuvWeb.PostLive.Feed do
         filter: filter
       )
 
-    entries = page.entries |> with_engagement(user) |> mark_filtered(compiled, user.id)
+    entries = prepare_entries(page.entries, user, rewrites, compiled)
 
     # Read the stored draft once and hand it to the composer below, which then
     # skips its own identical query on init.
@@ -269,6 +275,7 @@ defmodule VutuvWeb.PostLive.Feed do
 
     %{
       content_filters: compiled,
+      post_rewrites: rewrites,
       more?: page.more?,
       # Spelled the way `Posts.feed_page/2` spells it, so this payload and a
       # page are the same shape to `put_timeline/3`.
@@ -313,6 +320,7 @@ defmodule VutuvWeb.PostLive.Feed do
     # read that straight off the one assign.
     |> assign(:post_translations, PostTranslations.initial_map(socket.assigns.current_user))
     |> assign(:content_filters, payload.content_filters)
+    |> assign(:post_rewrites, payload.post_rewrites)
     |> assign(:revealed_filters, MapSet.new())
     |> assign(:page_title, gettext("Feed"))
     # Which sources this mount opened on (issue #1499) — from here on the
@@ -1516,8 +1524,7 @@ defmodule VutuvWeb.PostLive.Feed do
 
     entries =
       fresh
-      |> with_engagement(user)
-      |> mark_filtered(socket.assigns.content_filters, user.id)
+      |> prepare_entries(user, socket.assigns.post_rewrites, socket.assigns.content_filters)
 
     socket
     |> assign(:more?, page.more?)
@@ -1587,8 +1594,7 @@ defmodule VutuvWeb.PostLive.Feed do
 
     entries =
       page.entries
-      |> with_engagement(user)
-      |> mark_filtered(socket.assigns.content_filters, user.id)
+      |> prepare_entries(user, socket.assigns.post_rewrites, socket.assigns.content_filters)
 
     socket
     |> assign(:feed_filter, filter)
@@ -1811,8 +1817,7 @@ defmodule VutuvWeb.PostLive.Feed do
 
     entries =
       page.entries
-      |> with_engagement(user)
-      |> mark_filtered(socket.assigns.content_filters, user.id)
+      |> prepare_entries(user, socket.assigns.post_rewrites, socket.assigns.content_filters)
 
     month = if day, do: FeedTimeTravel.month_of(day), else: socket.assigns.cal_month
 
@@ -2592,7 +2597,20 @@ defmodule VutuvWeb.PostLive.Feed do
     entry
     |> Map.put(:viewer_follow, Social.follow_edge(user.id, entry.post.user_id))
     |> Map.put(:engagement, Posts.post_engagement(entry.post.id, user.id))
+    |> PostRewrites.rewrite_entry(socket.assigns.post_rewrites, user.id)
     |> mark_one(socket.assigns.content_filters, user.id)
+  end
+
+  # Everything a page of entries goes through before it is streamed — the one
+  # place the order is decided: the reader's search-and-replace rules run
+  # BEFORE their content filters, so a filter reads the text the card shows.
+  # Mount, load-more and the source and day reloads all come through here;
+  # a live arrival takes the same two steps in `decorate/3`.
+  defp prepare_entries(entries, user, rewrites, filters) do
+    entries
+    |> with_engagement(user)
+    |> Enum.map(&PostRewrites.rewrite_entry(&1, rewrites, user.id))
+    |> mark_filtered(filters, user.id)
   end
 
   # Content filters (issue #940): stamp each entry with the pattern that hides it

@@ -4881,6 +4881,10 @@ defmodule VutuvWeb.UI do
            hint: gettext("Keep posts out of your feed"),
            terms: gettext("mute block hide filter keyword word tag feed")
          ),
+         row(:rewrites, gettext("Search & replace"), ~p"/settings/rewrites",
+           hint: gettext("Rewrite what an account's posts say, for you alone"),
+           terms: gettext("regex regular expression rewrite replace footer signature strip")
+         ),
          # Its own row rather than a card on "Language & display" (issue
          # #1672): that page is where the *interface* language is changed, a
          # different question sharing a word, and somebody whose feed is full

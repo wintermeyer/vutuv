@@ -1016,6 +1016,15 @@ defmodule Vutuv.Posts do
   def text(%Note{content_text: text}), do: text
 
   @doc """
+  The same record with its text replaced — the write-side twin of `text/1`, so
+  the three column names stay in this one module (a reader's private rewrite,
+  `Vutuv.PostRewrites`, is what puts a text back).
+  """
+  def put_text(%Post{} = post, text), do: %{post | body: text}
+  def put_text(%RemotePost{} = post, text), do: %{post | content_text: text}
+  def put_text(%Note{} = note, text), do: %{note | content_text: text}
+
+  @doc """
   When a post was written, whichever kind of post it is.
 
   The third of the same family as `text/1` and `path/1`: three kinds, three
@@ -1059,15 +1068,12 @@ defmodule Vutuv.Posts do
   # answering nothing.
   def account_names(%Post{user_id: nil, organization_id: nil}), do: []
 
-  def account_names(%Post{} = post) do
-    case author(post) do
-      nil ->
-        []
+  def account_names(%Post{} = post), do: post |> author() |> account_names()
 
-      author ->
-        names(handle_at(Vutuv.Identity.handle(author)), Vutuv.Identity.display_name(author))
-    end
-  end
+  # The author itself, for a caller that already resolved it (the post card
+  # does, once per card) and must not pay `author/1`'s fallback lookup again.
+  def account_names(author) when is_struct(author, User) or is_struct(author, Organization),
+    do: names(handle_at(Vutuv.Identity.handle(author)), Vutuv.Identity.display_name(author))
 
   def account_names(%RemotePost{remote_account: %NotLoaded{}, remote_account_id: nil}), do: []
 
@@ -3651,6 +3657,35 @@ defmodule Vutuv.Posts do
     Enum.map(Map.values(parents), & &1.remote_post) ++ Enum.concat(Map.values(notes))
   end
 
+  @doc """
+  The entry with `fun` applied to every record it draws — the post it is keyed
+  on, the folded ancestors, a remote row's own subject, the answered cached
+  posts and the woven-in replies: `thread_posts/1` and `remote_cards/1` as a
+  *map* rather than a read, for a caller that changes those records for one
+  reader (`Vutuv.PostRewrites.rewrite_entry/3`). The shape is spelled here once,
+  so a fourth entry key is remembered beside the three readers of it.
+  """
+  def map_entry_records(entry, fun) do
+    entry
+    |> map_present(:post, fun)
+    |> map_present(:remote_post, fun)
+    |> map_present(:note, fun)
+    |> map_present(:ancestors, &Enum.map(&1, fun))
+    |> map_present(:remote_parents, fn parents ->
+      Map.new(parents, fn {id, parent} -> {id, Map.update!(parent, :remote_post, fun)} end)
+    end)
+    |> map_present(:remote_replies, fn replies ->
+      Map.new(replies, fn {id, notes} -> {id, Enum.map(notes, fun)} end)
+    end)
+  end
+
+  defp map_present(entry, key, fun) do
+    case entry do
+      %{^key => value} when not is_nil(value) -> Map.put(entry, key, fun.(value))
+      _absent -> entry
+    end
+  end
+
   # The remote reply this post answers (issue #1070), if it answers one at all.
   defp answered_note_ids(%Post{remote_reply_ref: %PostRemoteReply{note_id: id}})
        when is_binary(id),
@@ -5379,6 +5414,24 @@ defmodule Vutuv.Posts do
       |> thread_order()
 
     %{posts: posts, truncated?: truncated?}
+  end
+
+  @doc """
+  A `thread_window/3` result with `fun` applied to every post it holds, in
+  either of its two shapes — beside the function that decides those shapes, so
+  a third slice is mapped the day it is added rather than rendered as stored
+  (`VutuvWeb.PostLive.Thread` rewrites the window for one reader this way).
+  """
+  def map_thread_window(%{mode: :all, posts: posts} = window, fun),
+    do: %{window | posts: Enum.map(posts, fun)}
+
+  def map_thread_window(%{mode: :window} = window, fun) do
+    %{
+      window
+      | root: window.root && fun.(window.root),
+        chain: Enum.map(window.chain, fun),
+        subtree: Enum.map(window.subtree, fun)
+    }
   end
 
   @doc """

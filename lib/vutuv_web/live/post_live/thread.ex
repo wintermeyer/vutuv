@@ -48,6 +48,7 @@ defmodule VutuvWeb.PostLive.Thread do
 
   alias Vutuv.Accounts.User
   alias Vutuv.Fediverse
+  alias Vutuv.PostRewrites
   alias Vutuv.Posts
   alias Vutuv.Prefs
   alias Vutuv.Social
@@ -234,11 +235,17 @@ defmodule VutuvWeb.PostLive.Thread do
         |> assign(:note_marks, Fediverse.mark_lookup([], nil))
 
       post ->
+        # The reader's per-author search-and-replace rules, over every card the
+        # window draws — the same treatment the feed gives its rows.
+        rewrites = PostRewrites.compile_for(viewer)
+
         window =
-          Posts.thread_window(post, viewer,
+          post
+          |> Posts.thread_window(viewer,
             ancestors: socket.assigns.ancestor_budget,
             replies: socket.assigns.reply_budget
           )
+          |> rewrite_window(rewrites, viewer)
 
         posts = window_posts(window)
         ids = Enum.map(posts, & &1.id)
@@ -257,7 +264,7 @@ defmodule VutuvWeb.PostLive.Thread do
         # Replies written on other networks under any post in the window
         # (issues #1069 and #1071), viewer-scoped by `list_notes/2` — a reply
         # addressed to the member alone never reaches anybody else's render.
-        remote = Fediverse.list_notes(ids, viewer)
+        remote = ids |> Fediverse.list_notes(viewer) |> rewrite_notes(rewrites, viewer)
 
         # What this reader has already done with each of them — three batched
         # reads for the whole window rather than three per card, the way the
@@ -351,6 +358,22 @@ defmodule VutuvWeb.PostLive.Thread do
   defp window_posts(%{mode: :window} = window) do
     List.wrap(window.root) ++ window.chain ++ window.subtree
   end
+
+  # The window, and the replies from other networks keyed by the post they
+  # answer, with the reader's rewrites applied. A no-op for the many readers
+  # with no rules — which is also the only case with no viewer to name.
+  defp rewrite_window(window, compiled, _viewer) when compiled == %{}, do: window
+
+  defp rewrite_window(window, compiled, viewer),
+    do: Posts.map_thread_window(window, &PostRewrites.rewrite(&1, compiled, viewer.id))
+
+  defp rewrite_notes(notes, compiled, _viewer) when compiled == %{}, do: notes
+
+  defp rewrite_notes(notes, compiled, viewer),
+    do:
+      Map.new(notes, fn {id, list} ->
+        {id, PostRewrites.rewrite_all(list, compiled, viewer.id)}
+      end)
 
   # One counter subscription per shown card, added as expanders reveal more —
   # bounded by the window, never the conversation.
