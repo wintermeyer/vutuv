@@ -11,15 +11,23 @@ Everything a member can change about themselves lives behind **one map** —
 is that map's single source: the hub and the desktop sidebar both render it, so
 they cannot drift. If an editable area is not on it, it does not exist.
 
-**Five groups**, each named for its own subject and at most eight rows long:
+**Six groups**, each named for its own subject and at most eight rows long:
 
 | Group | Holds |
 | --- | --- |
 | Profile | Basics & photos, Username, Experience, Education, Certificates & licenses, Language skills, Tags, Organizations |
 | Contact details | Email addresses, Phone numbers, Addresses, Websites & links, Social media profiles, Messengers |
-| Notifications & feed | Notifications, Muted words & tags, Tags you follow, Saved searches |
+| Notifications & feed | Notifications, Muted words & tags, Search & replace, Feed languages, Tags you follow, Find your contacts, Saved searches |
+| Appearance | Language & display, Data-saving mode |
 | Privacy | Visibility, Blocked members, Automatic post deletion, Fediverse |
-| Account | Sign-in & security, Account activity, Language & display, Import, Export, Apps & API, Delete account (red) |
+| Account | Sign-in & security, Account activity, Import, Export, Organizations, Apps & API, Delete account (red) |
+
+*Appearance* is the newest group and holds what vutuv looks and costs like
+to this member — the interface language, dates, maps and post display on one
+row, data-saving mode on the other — as opposed to what the site holds about
+them. *Language & display* used to sit under Account, which had reached its
+eight rows and left the data-saving switch nowhere to go but the feed group,
+where it was not about the feed.
 
 Each row is a map with `:key` (the sidebar's active state and the hub's entry
 counts), `:label`, `:path`, a `:hint` line saying what is inside, `:terms`
@@ -150,8 +158,8 @@ browser is ever told where the 155 kB WYSIWYG editor bundle lives (see
 "Low-bandwidth mode" in [posts-and-feed.md](posts-and-feed.md)) and whether
 their pictures load as the lite versions (see "The lite versions" in
 [images.md](images.md)). It has a page of its own, `/settings/bandwidth`, with
-a hub row under *Notifications & feed* — where the mode is felt — rather than
-a card on "Language & display", whose group was full. It is the only pref also
+a hub row under *Appearance* beside "Language & display" rather than a card on
+that page, so the hub has a row to find by name. It is the only pref also
 asked at **sign-up**, and the only one whose form box is dropped rather than
 stored when it is left unticked (`Prefs.drop_unchosen_booleans/1`,
 registry-driven so the next preference offered on a sign-up or onboarding form

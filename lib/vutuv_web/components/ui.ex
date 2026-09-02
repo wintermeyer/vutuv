@@ -4965,18 +4965,6 @@ defmodule VutuvWeb.UI do
            hint: gettext("Topics whose posts reach your feed"),
            terms: gettext("tag topic subscribe follow feed")
          ),
-         # Here rather than under Account beside "Language & display", which
-         # is full (eight rows), and because this is where the mode is felt:
-         # the feed's photos, screenshots and composer are what it makes
-         # cheaper. The label is the switch's own name (Vutuv.Prefs), so the
-         # word a member met on the sign-up form is the word the hub shows.
-         row(:bandwidth, Vutuv.Prefs.label(:low_bandwidth?), ~p"/settings/bandwidth",
-           hint: gettext("Smaller pictures and a plain composer on a slow connection"),
-           terms:
-             gettext(
-               "bandwidth slow internet mobile data saving saver volume metered compression pictures images screenshots editor langsam daten sparen datensparmodus volumen schmalband komprimierung bilder"
-             )
-         ),
          # Under "feed" rather than beside Import: that page fills your profile
          # from a LinkedIn archive, this one fills your feed from it, and this
          # is the group a member reads when their feed is too quiet.
@@ -4993,6 +4981,34 @@ defmodule VutuvWeb.UI do
          row(:saved_searches, gettext("Saved searches"), ~p"/settings/saved_searches",
            hint: gettext("Job and people searches that email you new matches"),
            terms: gettext("job alert search agent watchlist")
+         )
+       ]},
+      # How vutuv presents itself to this member, as opposed to what it holds
+      # about them: the interface language, dates, maps and post display on
+      # one row, and what the pages cost to load on the other. Both used to
+      # sit elsewhere — the first under Account, which had eight rows and no
+      # room for a second, the switch briefly under Notifications & feed —
+      # and neither is about the account or the feed. The switch's label is
+      # its own name (Vutuv.Prefs), so the word a member met on the sign-up
+      # form is the word the hub shows.
+      {gettext("Appearance"),
+       [
+         row(:preferences, gettext("Language & display"), ~p"/settings/preferences",
+           hint:
+             gettext(
+               "Interface language, date format and time zone, maps, how posts are shortened"
+             ),
+           terms:
+             gettext(
+               "german english locale map font length hyphenation übersetzen sprache zeitzone timezone time zone utc datum date uhrzeit clock 24 hour datumsformat"
+             )
+         ),
+         row(:bandwidth, Vutuv.Prefs.label(:low_bandwidth?), ~p"/settings/bandwidth",
+           hint: gettext("Smaller pictures and a plain composer on a slow connection"),
+           terms:
+             gettext(
+               "bandwidth slow internet mobile data saving saver volume metered compression pictures images screenshots editor langsam daten sparen datensparmodus volumen schmalband komprimierung bilder"
+             )
          )
        ]},
       {gettext("Privacy"),
@@ -5031,16 +5047,6 @@ defmodule VutuvWeb.UI do
            hint: gettext("What changed on your account, and when"),
            terms:
              gettext("log history audit trail security was that me who changed when protocol")
-         ),
-         row(:preferences, gettext("Language & display"), ~p"/settings/preferences",
-           hint:
-             gettext(
-               "Interface language, date format and time zone, maps, how posts are shortened"
-             ),
-           terms:
-             gettext(
-               "german english locale map font length hyphenation übersetzen sprache zeitzone timezone time zone utc datum date uhrzeit clock 24 hour datumsformat"
-             )
          ),
          row(:import, gettext("Import"), ~p"/settings/import/linkedin",
            hint: gettext("Take your data over from LinkedIn"),
