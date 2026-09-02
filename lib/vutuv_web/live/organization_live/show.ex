@@ -738,7 +738,7 @@ defmodule VutuvWeb.OrganizationLive.Show do
 
             <%!-- The very composer the feed writes with, so a post in a page's
             name gets what a member's post gets: Markdown with its editor,
-            photos with their captions and crops, tags, the language chip. The
+            photos with their captions and crops, tags, the language select. The
             plain textarea that stood here could do none of it. It names the
             author in the button, because the characteristic failure of writing
             under a brand is forgetting whose name is on it, and it renders bare

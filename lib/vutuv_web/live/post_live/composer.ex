@@ -202,11 +202,6 @@ defmodule VutuvWeb.PostLive.Composer do
     # pending rows that are still in the database.
     |> assign(:discarded, nil)
     |> assign(:closing?, false)
-    # Whether the ⋯ disclosure is open (issue #1894). Starts closed even on an
-    # edit whose audience is custom: the closed button says so in words, and a
-    # reconnect that resets this hides no data — every value it shows lives in
-    # assigns and in the draft.
-    |> assign(:options_open?, false)
     # True while an autosave is already queued, so a burst of keystrokes
     # schedules one write rather than one per character.
     |> assign(:draft_scheduled?, false)
@@ -963,10 +958,6 @@ defmodule VutuvWeb.PostLive.Composer do
   # discard pressed it and was surprised. With a draft in hand it asks; with an
   # empty one there is nothing to ask about and the plain close still bubbles
   # to the feed.
-  def handle_event("toggle-post-options", _params, socket) do
-    {:noreply, assign(socket, :options_open?, not socket.assigns.options_open?)}
-  end
-
   def handle_event("close-request", _params, socket) do
     {:noreply, assign(socket, :closing?, true)}
   end
@@ -1171,30 +1162,9 @@ defmodule VutuvWeb.PostLive.Composer do
     {:noreply, assign(socket, :error, save_error_message(reason))}
   end
 
-  # Back to an empty form: after a successful post, and after "Discard draft".
-  # The audience choice sticks on purpose. The stored draft is dropped by the
-  # caller (issue #1148), not here — a reset is not always a discard, and
-  # clearing the form would autosave an empty draft away anyway.
   # What a discard has to be able to give back. Everything here is composer
   # state, not a database write — the pending rows themselves are left alone,
   # so restoring is a matter of pointing at them again.
-  # What the closed ⋯ says about itself (issue #1894). Nothing hides in there
-  # unannounced: a language other than the reader's own, or an audience already
-  # narrowed, reads off the button. Both silent in the ordinary case, which is
-  # what lets the control stay a single glyph nearly always.
-  defp post_options_summary(assigns) do
-    [
-      assigns.preset == "custom" && gettext("Hidden from some"),
-      assigns.language != to_string(Gettext.get_locale(VutuvWeb.Gettext)) &&
-        String.upcase(assigns.language)
-    ]
-    |> Enum.filter(& &1)
-    |> case do
-      [] -> nil
-      parts -> Enum.join(parts, " · ")
-    end
-  end
-
   defp stash_draft(socket) do
     %{
       body: socket.assigns.body,
@@ -1224,6 +1194,10 @@ defmodule VutuvWeb.PostLive.Composer do
     |> assign(:language, stash.language)
   end
 
+  # Back to an empty form: after a successful post, and after "Discard draft".
+  # The audience choice sticks on purpose. The stored draft is dropped by the
+  # caller (issue #1148), not here — a reset is not always a discard, and
+  # clearing the form would autosave an empty draft away anyway.
   defp reset_composer(socket) do
     opening_body = socket.assigns[:initial_body] || ""
 
@@ -1842,53 +1816,79 @@ defmodule VutuvWeb.PostLive.Composer do
           pending rows the re-mount dropped from socket state. --%>
           <input :for={image <- @images} type="hidden" name="post[image_ids][]" value={image.id} />
 
-          <%!-- Bottom row: the photo picker on the left (once photos are
-          attached, the grid's add tile takes over — exactly one upload input
-          renders), the (slightly wider) submit button on the right. New
-          posts publish public, so there is no audience picker here; a post
-          pinned public by reposts/replies still shows the read-only lock
-          chip beside the button.
+          <%!-- Bottom row: the photo picker and the language select on the
+          left (once photos are attached, the grid's add tile takes over —
+          exactly one upload input renders), the (slightly wider) submit button
+          on the right. New posts publish public, so there is no audience
+          picker here; a post pinned public by reposts/replies still shows the
+          read-only lock chip beside the button.
 
-          Four controls that do not always fit one line: the organization
-          page's column is narrower than the feed's, and there the row used to
-          squeeze the picker until "Add photos" broke across two lines inside a
+          The controls do not always fit one line: the organization page's
+          column is narrower than the feed's, and there the row used to squeeze
+          the picker until "Add photos" broke across two lines inside a
           36px-high button. So it wraps, and each control keeps its own line
-          rather than its share of a line — the button and the picker say what
-          they do in words that must not break. --%>
-          <div class="mt-3 flex flex-wrap items-center gap-x-3 gap-y-2">
+          rather than its share of a line — every one of them says what it does
+          in words that must not break, which is what the `shrink-0` and the
+          `whitespace-nowrap` on each are for. --%>
+          <div
+            id={"#{@id}-actions"}
+            data-composer-actions
+            class="mt-3 flex flex-wrap items-center gap-x-3 gap-y-2"
+          >
             <.add_photos_picker :if={@images == []} id={@id} upload={@uploads.images} />
 
-            <%!-- Everything that is about the post rather than in it (issue
-            #1894). The language select and the "Hide from…" block used to
-            stand in this row and unfold below it, so the last thing seen
-            before publishing was a dropdown for a decision that has the same
-            right answer nearly every time. Tags stay on screen: they change
-            who the post reaches, which is worth thinking about while writing.
+            <%!-- The author's declaration of what language this post is
+            written in (issue #1489, Mastodon's model): preset to the UI
+            locale. The site's own locales lead as short codes, the curated
+            rest follows by localized name.
 
-            The button says when something is set, so nothing hides in here
-            unannounced — a post being written in another language, or an
-            audience already narrowed, reads off the closed control. --%>
-            <button
-              type="button"
-              id={"#{@id}-more"}
-              phx-click="toggle-post-options"
-              phx-target={@myself}
-              aria-expanded={to_string(@options_open?)}
-              aria-controls={"#{@id}-options"}
-              data-post-options-toggle
-              class={[
-                "inline-flex h-9 shrink-0 items-center gap-1.5 rounded-lg px-3 text-sm font-semibold",
-                (@options_open? &&
-                   "bg-brand-50 text-brand-700 dark:bg-brand-900/40 dark:text-brand-100") ||
-                  "bg-slate-100 text-slate-700 hover:bg-slate-200 dark:bg-slate-800 dark:text-slate-200 dark:hover:bg-slate-700"
-              ]}
-            >
-              <span aria-hidden="true">⋯</span>
-              <span class="sr-only">{gettext("Post options")}</span>
-              <span :if={post_options_summary(assigns)} class="font-normal" data-post-options-summary>
-                {post_options_summary(assigns)}
-              </span>
-            </button>
+            It stands in the row rather than behind the ⋯ disclosure of issue
+            #1894, which is gone: that panel never held a second entry anybody
+            could reach, so it hid one select behind a glyph that then had to
+            say in words what it was hiding. The label and the select are one
+            group at `gap-2`, tighter than the row's own `gap-x-3`, so they
+            read as one control and wrap onto a new line together.
+
+            **The label is one word, and that is measured.** The ⋯ it replaces
+            was 45px and held this row on one line down to a 360px column; a
+            select cannot. "Sprache des Beitrags" put the organization page's
+            424px column and every phone on THREE lines (picker / language /
+            Post), and the bare word gets one back; dropping the label
+            altogether buys nothing beyond that and costs the word. Its own
+            msgid rather than the profile's `gettext("Language")`, which labels
+            a language somebody speaks: same German today, different subject.
+            The sentence it leaves out is the `title` below. --%>
+            <div class="flex shrink-0 items-center gap-2">
+              <label
+                for={"#{@id}-language"}
+                class="whitespace-nowrap text-sm font-medium text-slate-600 dark:text-slate-400"
+              >
+                {pgettext("post composer", "Language")}
+              </label>
+              <select
+                name="post[language]"
+                id={"#{@id}-language"}
+                title={gettext("The language this post is written in")}
+                class={compact_select_class()}
+              >
+                <option
+                  :for={code <- Languages.site_locales()}
+                  value={code}
+                  selected={@language == code}
+                >
+                  {String.upcase(code)}
+                </option>
+                <optgroup label={gettext("More languages")}>
+                  <option
+                    :for={{label, code} <- other_language_options()}
+                    value={code}
+                    selected={@language == code}
+                  >
+                    {label}
+                  </option>
+                </optgroup>
+              </select>
+            </div>
 
             <div class="ml-auto flex flex-wrap items-center justify-end gap-x-3 gap-y-2">
               <%!-- Stays in the row, deliberately: this is a STATEMENT, not a
@@ -1931,76 +1931,12 @@ defmodule VutuvWeb.PostLive.Composer do
             </div>
           </div>
 
-          <%!-- The options themselves. The language select renders ONLY while
-          this is open, which is safe because the server keeps `@language` in
-          assigns and `save` falls back to it — the same arrangement the photo
-          rights use, and the reason a save with the panel closed cannot reset
-          a choice made in it. --%>
-          <div
-            :if={@options_open?}
-            id={"#{@id}-options"}
-            data-post-options
-            class="mt-3 space-y-3 rounded-xl bg-slate-50 p-4 ring-1 ring-slate-200 dark:bg-slate-800/50 dark:ring-slate-700"
-          >
-            <div class="flex flex-wrap items-center gap-x-3 gap-y-1">
-              <%!-- The author's declaration of what language this post is
-              written in (issue #1489, Mastodon's model): preset to the UI
-              locale. The site's own locales lead as short codes, the curated
-              rest follows by localized name. --%>
-              <label
-                for={"#{@id}-language"}
-                class="text-sm font-medium text-slate-600 dark:text-slate-400"
-              >
-                {gettext("Post language")}
-              </label>
-              <select
-                name="post[language]"
-                id={"#{@id}-language"}
-                title={gettext("The language this post is written in")}
-                class={compact_select_class()}
-              >
-                <option
-                  :for={code <- Languages.site_locales()}
-                  value={code}
-                  selected={@language == code}
-                >
-                  {String.upcase(code)}
-                </option>
-                <optgroup label={gettext("More languages")}>
-                  <option
-                    :for={{label, code} <- other_language_options()}
-                    value={code}
-                    selected={@language == code}
-                  >
-                    {label}
-                  </option>
-                </optgroup>
-              </select>
-            </div>
-
-            <div :if={feed_composer?(assigns) and drafting?(assigns)} class="pt-1">
-              <%!-- The way to throw the draft away, next to the other things
-              that are about the post rather than in it. It is undoable
-              (issue #1893), so it needs no confirmation and no prominence. --%>
-              <button
-                type="button"
-                id={"#{@id}-discard"}
-                phx-click="discard-draft"
-                phx-target={@myself}
-                class="-ml-2 rounded-lg px-2 py-1 text-sm font-semibold text-slate-600 hover:text-red-600 dark:text-slate-400 dark:hover:text-red-400"
-              >
-                {gettext("Discard draft")}
-              </button>
-            </div>
-          </div>
-
           <%!-- The "Hide from…" sheet, for a post whose audience is already
-          custom. It only ever appears on an edit, and it is the one thing in
-          here big enough to want the room, so it stays its own block below the
-          options rather than nesting inside them — but it is gated on the same
-          disclosure, so a closed composer shows neither. --%>
+          custom (see the moduledoc for how one gets that way). It stands open:
+          it was gated on the ⋯ disclosure, which then had to announce in words
+          that something was narrowed, and showing the thing says it better. --%>
           <div
-            :if={@preset == "custom" and @options_open?}
+            :if={@preset == "custom"}
             id={"#{@id}-audience-sheet"}
             class="mt-4 rounded-xl bg-slate-50 p-4 ring-1 ring-slate-200 dark:bg-slate-800/50 dark:ring-slate-700"
           >
@@ -2204,8 +2140,8 @@ defmodule VutuvWeb.PostLive.Composer do
   # drops the global `label` margin (components.css) that would offset it here.
   #
   # On a phone the verb goes. Three controls share the bottom row (picker,
-  # ⋯, Post) and "Add photos" was wide enough to push Post onto a line of its
-  # own; beside a camera glyph, in a row whose other button publishes, the noun
+  # language, Post) and "Add photos" was wide enough to push Post onto a line of
+  # its own; beside a camera glyph, in a row whose other button publishes, the noun
   # says it. Two spans rather than one string picked server-side, because the
   # server has no idea how wide the viewport is and the composer is rendered
   # once for a window the member goes on resizing. Unlike the feed's pending
