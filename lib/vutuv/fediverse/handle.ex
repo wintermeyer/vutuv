@@ -96,6 +96,34 @@ defmodule Vutuv.Fediverse.Handle do
 
   def short(handle), do: handle
 
+  @doc """
+  The bare `user@host` an `@user@host` handle names, or nil when the handle
+  names none: `"@tagesschau@ard.social"` → `"tagesschau@ard.social"`.
+
+  The address form is what a surface hands to the account card
+  (`assets/js/mention_card.js` reads it off `data-remote-actor`) and what
+  `Vutuv.Fediverse.RemoteFollow.parse_address/1` takes on the way back in. Here
+  rather than at those call sites because this module already owns the two
+  halves of a handle — it is `short/1`'s split, read the other way round — and a
+  handle is not always an address: `display/2` falls back to `@name` and to a
+  bare `@host` when the actor document carried no username, and nil is what says
+  so.
+
+  Deliberately **not** `RemoteFollow.parse_address/1`, which is for a string
+  somebody typed or pasted: its two charset regexes are re-validating a handle
+  this server composed moments earlier (measured at 2.9 µs against 0.17 µs for
+  the split), and the surface that reads the attribute back parses it properly
+  anyway.
+  """
+  def address("@" <> rest) do
+    case String.split(rest, "@", parts: 2) do
+      [name, host] when name != "" and host != "" -> rest
+      _no_address -> nil
+    end
+  end
+
+  def address(_handle), do: nil
+
   @doc "The server an account URI names, or nil."
   def host(uri) when is_binary(uri) do
     case URI.parse(uri) do

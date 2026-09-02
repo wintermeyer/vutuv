@@ -348,14 +348,21 @@ defmodule Vutuv.RemoteHtml do
     end
   end
 
-  # Both sides reduced to what a server *shows* of an address: no scheme, no
-  # `www.`, no trailing slash. The label is written in that form and the `href`
-  # is not, so neither can be compared to the other as it stands. The scheme
-  # goes by a case-insensitive match on purpose (a remote server may well write
-  # `HTTPS://`), which is also why `Vutuv.WebVerification.normalize_url/1`
-  # cannot serve here: it works on a parsed `%URI{}`, and a cut label does not
-  # parse as one.
-  defp display_form(url) do
+  @doc """
+  What a server *shows* of an address: no scheme, no `www.`, no trailing slash.
+
+  Written for comparing a cut anchor label against its own `href` (neither is in
+  the other's form as it stands), and public because it is also how an address
+  is written when a **reader** is meant to check where a link goes — the account
+  card's way out (`VutuvWeb.RemoteActorCardHTML.origin_address/1`) reduces an
+  actor URI with it before cutting it to the card's width.
+
+  The scheme goes by a case-insensitive match on purpose (a remote server may
+  well write `HTTPS://`), which is also why `Vutuv.WebVerification.normalize_url/1`
+  cannot serve here: it works on a parsed `%URI{}`, and a cut label does not
+  parse as one.
+  """
+  def display_form(url) do
     url
     |> String.replace(~r{\Ahttps?://}i, "")
     |> String.replace_prefix("www.", "")

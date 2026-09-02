@@ -14,6 +14,7 @@ defmodule VutuvWeb.RemoteActorCardTest do
   alias Vutuv.Fediverse
   alias Vutuv.Fediverse.Follow
   alias Vutuv.Fediverse.RemoteAccount
+  alias VutuvWeb.RemoteActorCardHTML
 
   @actor "https://social.example/users/them"
   @address "them@social.example"
@@ -151,7 +152,54 @@ defmodule VutuvWeb.RemoteActorCardTest do
     assert html =~ "Anderes Netzwerk"
     assert html =~ "Folgen"
     assert html =~ "Die Seite dieses Kontos hier"
-    assert html =~ "Original ansehen"
+    assert html =~ "Original auf social.example/users/them ansehen"
+  end
+
+  # The one way off this site, and it used to say only that it was one. A reader
+  # about to leave for somebody else's server reads the address first, the way
+  # they would read a browser's status bar — and here that address is not
+  # guessable from the card, since an actor URI need not be spelled like the
+  # `@user@host` above it (`/users/them`, `/u/them`, `/profile/them`).
+  test "the way out names where it goes", %{conn: conn} do
+    {conn, _user} = federating(conn)
+    account()
+
+    html = post(conn, ~p"/system/fediverse/actor_card", address: @address) |> html_response(200)
+
+    assert html =~ "View the original on social.example/users/them"
+    # And the label is only ever a label: the href stays the whole URL.
+    assert html =~ @actor
+  end
+
+  # A scheme and a `www.` are noise every reader already knows, and dropping them
+  # buys the characters the account name needs. The cap was 32 for one afternoon,
+  # which is one character short of `social.heise.de/users/heiseonline` — so the
+  # part the reader is checking, the account's name, lost its last two letters on
+  # a card that had room for them. An ordinary actor URI reaches the whole way.
+  #
+  # `HTTPS://` is not a curiosity here: this string is a remote server's, not
+  # ours, and a scheme left standing would spend eight characters saying that a
+  # link is a link.
+  test "an ordinary actor address reaches the card whole, without scheme or www" do
+    assert RemoteActorCardHTML.origin_address("https://social.heise.de/users/heiseonline") ==
+             "social.heise.de/users/heiseonline"
+
+    assert RemoteActorCardHTML.origin_address("HTTPS://www.chaos.social/@feed/") ==
+             "chaos.social/@feed"
+  end
+
+  # Cut from the end and never from the front: the host leads the string and is
+  # the fact it is carrying, so it is the one part that may not be what goes.
+  # `…` says there is more behind the click.
+  test "an address too long for the card is cut, not wrapped across it" do
+    address =
+      RemoteActorCardHTML.origin_address(
+        "https://www.example.social/users/a-very-long-handle-indeed"
+      )
+
+    assert String.starts_with?(address, "example.social/users/")
+    assert String.ends_with?(address, "…")
+    assert String.length(address) == 40
   end
 
   test "a member without a Fediverse identity is told why, not shown a dead button", %{conn: conn} do

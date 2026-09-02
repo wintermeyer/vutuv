@@ -1,16 +1,21 @@
-// The card behind a `@user@host` mention.
+// The card behind a remote handle.
 //
-// The mention stays a link to that server (`VutuvWeb.Markdown`), and this
-// intercepts the plain left click on it to open a small card instead: who that
-// account is, one Follow button, and the two ways onward (their page here, the
-// original out there). Every other way of following the link is left alone —
-// a modified click, a middle click, "copy link address", a visitor who is not
-// signed in, and a page whose JavaScript never arrived all get today's
-// behaviour, because the `href` is still the whole truth of that anchor.
+// The handle keeps its own link, and this intercepts the plain left click on it
+// to open a small card instead: who that account is, one Follow button, and the
+// two ways onward (their page here, the original out there). Every other way of
+// following the link is left alone — a modified click, a middle click, "copy
+// link address", a visitor who is not signed in, and a page whose JavaScript
+// never arrived all get today's behaviour, because the `href` is still the
+// whole truth of that anchor.
 //
-// It reaches every rendered `@user@host`, which is more than posts: a chat
-// message and a work-experience description run through the same renderer, and
-// the same reader wants the same thing there.
+// It binds to `a[data-remote-actor]`, wherever that is written. Two places
+// write it. A `@user@host` inside rendered text (`VutuvWeb.Markdown`), which is
+// more than posts — a chat message and a work-experience description run
+// through the same renderer. And the handle in the header of a card from
+// another network (`VutuvWeb.PostComponents`), where the reader is asking the
+// same question about the same account and until now got a page they had to
+// come back from. The two anchors lead different places when the card cannot
+// open, which is why `followTheLink` reads the target rather than assuming one.
 //
 // The card's markup comes from the server on every act
 // (`VutuvWeb.RemoteActorCardController`), so no sentence about a follow, a
@@ -168,14 +173,33 @@ const ACTS = {
   "mute-host": { path: "/mute", method: "POST", extra: "&scope=host" },
 }
 
-// The mention's own link, taken as soon as the enhancement gives up: a session
-// that expired, a server that answered with something else. `window.open`
-// keeps the new tab the anchor asks for; a blocked popup falls back to this
-// tab, which is still where the reader wanted to go.
+// The anchor's own link, taken as soon as the enhancement gives up: a session
+// that expired, a server that answered with something else. Where it leads is
+// the anchor's business and not this file's — a mention leaves for the other
+// server in a new tab, a card header's handle leads to that account's page here
+// and belongs in this one — so the anchor's target decides. A blocked popup
+// falls back to this tab, which is still where the reader wanted to go.
 function followTheLink(link) {
   const href = link.getAttribute("href")
   if (!href) return
-  if (!window.open(href, "_blank", "noopener,noreferrer")) window.location.assign(href)
+  if (link.target === "_blank" && window.open(href, "_blank", "noopener,noreferrer")) return
+  window.location.assign(href)
+}
+
+// The click is ours, and saying so takes both halves. `preventDefault` alone is
+// enough for a mention, which is a plain anchor — but a card header's handle is
+// a `<.link navigate>`, and LiveView's own nav listener on `window` never asks
+// whether the default was prevented: it reads `data-phx-link` and navigates, so
+// the card would open and the page would leave underneath it in one gesture.
+// Stopping the bubble at `document` keeps the event from reaching that listener
+// at all, and only ever on the presses this file has taken over.
+//
+// The one thing this also swallows is `phx-click-away`, which LiveView dispatches
+// from the same window listener. The app uses none today; the day a page with
+// remote cards does, this is where it goes quiet.
+function keepTheClick(e) {
+  e.preventDefault()
+  e.stopPropagation()
 }
 
 async function open(link) {
@@ -346,11 +370,11 @@ document.addEventListener("click", (e) => {
       return
     }
 
-    // A click anywhere else closes it — and on the mention it belongs to, that
+    // A click anywhere else closes it — and on the anchor it belongs to, that
     // is the whole gesture: pressing the word again puts the card away.
     const sameMention = anchor === link
     close()
-    if (sameMention) return e.preventDefault()
+    if (sameMention) return keepTheClick(e)
   }
 
   if (!link) return
@@ -364,7 +388,7 @@ document.addEventListener("click", (e) => {
   if (e.button !== 0 || e.metaKey || e.ctrlKey || e.shiftKey || e.altKey) return
   if (!document.querySelector("[data-account-menu]")) return
 
-  e.preventDefault()
+  keepTheClick(e)
   open(link)
 })
 

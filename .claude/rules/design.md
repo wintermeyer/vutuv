@@ -306,9 +306,20 @@ LiveView can sit on either style.
   (the `/username` placeholder helper uses it to own up to a broken newsletter
   link); it is the one non-muted line, distinct from the grey `.error-page__hint`.
 - **The mention card is a body-level panel, not a page element** (`.actor-card*`
-  in `components.css`, `assets/js/mention_card.js`). A `@user@host` mention keeps
-  its link to that server; a plain left click by a signed-in member opens a
-  small card under the word instead. It answers three questions in that order:
+  in `components.css`, `assets/js/mention_card.js`). Every remote handle keeps
+  its own link; a plain left click by a signed-in member opens a small card
+  under it instead. Two surfaces write the `a[data-remote-actor]` hook the JS
+  binds to: a `@user@host` in rendered text (`VutuvWeb.Markdown`, which leaves
+  for that server) and every remote handle a post card draws — its header and
+  its reaction chips alike — through the one function that owns where such a
+  handle leads and what a press does, `PostComponents.remote_actor_link/3`
+  (which leads to that account's page here). Both from that one place, because a
+  chip answering "who is this" differently from the card it sits under is what
+  that function exists to prevent. Those anchors are `<.link navigate>`, so the
+  JS stops the click's bubble as well as its default: LiveView's nav listener on
+  `window` reads `data-phx-link` without asking whether the default was
+  prevented — which also swallows `phx-click-away`, dispatched from the same
+  listener and used nowhere in the app today. It answers three questions in that order:
   **who is this** (a `.actor-card__chip` carrying the globe and the host, then
   name, address and a two-line self-description), **is it worth it**
   (`.actor-card__stats` — how many of their posts we hold for *this* reader and
@@ -319,7 +330,17 @@ LiveView can sit on either style.
   the refusal in red on hover — never a status pill beside a loud Unfollow,
   which said the same thing twice and made the one unwanted act the loudest
   control — a `.actor-card__more` ⋯ holding both mutes and the address, and
-  `.actor-card__links`, both ways onward in one weight). **One fragment serves
+  `.actor-card__links`, both ways onward in one weight — the one that leaves
+  this site **names where it goes** ("View the original on
+  chaos.social/@feed", `RemoteActorCardHTML.origin_address/1`, which borrows
+  both halves: `RemoteHtml.display_form/1` drops the scheme, the `www.` and a
+  trailing slash — case-insensitively, since the string is a remote server's and
+  may well say `HTTPS://` — and `SocialFeed.Post.truncate/2` cuts it at 40, a
+  measurement of *this* card, so the host at the front can never be the part
+  that goes. An actor URI need not be spelled like the `@user@host` above it, so
+  the destination is not guessable from the card, and `overflow-wrap: anywhere`
+  is what lets an address with no spaces in it wrap rather than overflow).
+  **One fragment serves
   both shapes**: `.actor-card--sheet` restyles it for the phone (grab bar,
   stacked full-width targets, the ⋯ menu in the flow rather than floating, the
   links as full-width rows), and the only thing that cannot be CSS travels as an

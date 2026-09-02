@@ -9,6 +9,8 @@ defmodule VutuvWeb.RemoteActorCardHTML do
   alias Vutuv.Fediverse.Handle
   alias Vutuv.Fediverse.RemoteAccount
   alias Vutuv.Fediverse.RemoteFollow
+  alias Vutuv.RemoteHtml
+  alias Vutuv.SocialFeed.Post
 
   embed_templates("../templates/remote_actor_card/*")
 
@@ -61,6 +63,42 @@ defmodule VutuvWeb.RemoteActorCardHTML do
       _unparsable -> nil
     end
   end
+
+  # How much of the address the way out may carry. Measured in the browser on
+  # the 20rem popover, where the whole sentence wraps to two lines at any real
+  # length and to three past ~45 characters: 40 is what leaves the account name
+  # whole for every ordinary actor URI while keeping the two lines. It was 32
+  # for one afternoon, which is one character short of
+  # `social.heise.de/users/heiseonline` and cut the account's name two letters
+  # from its end — the worst place for the cut to land, since the name is what
+  # the reader is checking. The number lives here and not beside the other
+  # display-URL caps because it is a measurement of *this* card.
+  @origin_address_max 40
+
+  @doc """
+  The destination, written the way a reader checks a link before following it:
+  the address as a server shows it, cut at the end when it is longer than the
+  card is wide.
+
+  Worth spelling out because the destination is **not** guessable from the card:
+  an actor URI need not be spelled like the `@user@host` above it
+  (`/users/them`, `/u/them`, `/profile/them` are all in use), and this is the one
+  control that takes the reader off this site.
+
+  Both halves are borrowed. `Vutuv.RemoteHtml.display_form/1` drops the scheme,
+  the `www.` and a trailing slash — and drops the scheme case-insensitively,
+  which matters here because the input is a *remote* server's actor URI and one
+  writing `HTTPS://` would otherwise spend eight of these characters saying that
+  a link is a link. `Vutuv.SocialFeed.Post.truncate/2` does the cut; its
+  word-boundary half never fires on a URL, which has no whitespace to find, so
+  what is left is the blunt cut this wants.
+
+  Only ever cut, never elided in the middle: the host leads the string and is
+  the fact this is carrying, so the part naming which server can never be the
+  part that goes.
+  """
+  def origin_address(url) when is_binary(url),
+    do: url |> RemoteHtml.display_form() |> Post.truncate(@origin_address_max)
 
   @doc """
   The colours the one state-carrying follow button wears, as a modifier rather

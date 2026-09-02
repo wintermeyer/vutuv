@@ -480,6 +480,12 @@ defmodule VutuvWeb.PostActionsLiveTest do
       assert html =~ ~s(data-fediverse-reactions="1")
       assert html =~ "@alice@social.example"
       assert html =~ ~s(data-fediverse-reaction="announce")
+
+      # A chip is the same handle as the header above it, so a press opens the
+      # same account card (`remote_actor_link/3` writes the hook for both — the
+      # chip answering "who is this" differently from the card it sits under is
+      # the thing that one function exists to prevent).
+      assert html =~ ~s(data-remote-actor="alice@social.example")
     end
   end
 
