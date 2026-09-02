@@ -804,17 +804,30 @@ first. `markdown_editor.js` is its own esbuild entry point (155 kB gzipped
 against 61 kB for all of `app.js`), fetched on demand by the hook, and a member
 with the `low_bandwidth?` preference on is never told where it lives.
 `VutuvWeb.UI.markdown_editor/1` takes a required `user=` and asks
-`Vutuv.Prefs.get/2` once. `editor_hook/1` then returns either every
-`data-mde-*` attribute and the `phx-hook`, or nothing at all, and the editor's
-frame (mount point, selection bubble, slash menu) is skipped with it. What is
-left is the plain `<textarea>` that `components.css` shows whenever
-`data-mde-ready` is absent: the same fallback a member with JavaScript off has
-always had, and a working Markdown composer. Withholding the URL rather than
-letting the hook decide is deliberate, because the decision is then the
-server's, made once for every composer on the site, and no failed fetch or
-client-side race can undo it. `user=` is required rather than defaulted so a
-new composer cannot silently ship the bundle to somebody who asked not to be
-sent it; `--warnings-as-errors` turns the omission into a build failure.
+`Vutuv.Prefs.low_bandwidth?/1` once; every `data-mde-*` attribute and the
+`phx-hook` itself are gated on the answer, and the editor's frame (mount point,
+selection bubble, slash menu) is skipped with them. What is left is the plain
+`<textarea>` that `components.css` shows whenever `data-mde-ready` is absent:
+the same fallback a member with JavaScript off has always had, and a working
+Markdown composer. Withholding the URL rather than letting the hook decide is
+deliberate, because the decision is then the server's, made once for every
+composer on the site, and no failed fetch or client-side race can undo it.
+`user=` is required rather than defaulted so a new composer cannot silently
+ship the bundle to somebody who asked not to be sent it;
+`--warnings-as-errors` turns the omission into a build failure.
+
+**Two tidier spellings of that gate each cost every OTHER member ~2 kB per
+keystroke**, so both are pinned by a test. Collecting the attributes into a
+`{editor_hook(assigns)}` spread hands `assigns` to a function, which is a
+strong taint in `Phoenix.LiveView.Engine`: fifteen independently-tracked
+dynamics collapse into one that is recomputed and re-sent on every render, the
+1.6 kB fence-language table included. Deriving the flag with `assign/3` rather
+than `Map.put/3` does the same by marking the key changed on every render (it
+is absent from the incoming assigns, so any value counts as new). Measured on a
+keystroke with a 200-byte body: 422 bytes either way when written as it is now,
+2,353 with either shape, against 422 for the component before this feature
+existed. The flag cannot change without a new mount, which is what makes it
+derived state rather than a tracked assign.
 
 Two consequences. An **unticked** sign-up box is dropped rather than stored
 (`PageController.drop_untouched_low_bandwidth/1`), because `Vutuv.Prefs` needs

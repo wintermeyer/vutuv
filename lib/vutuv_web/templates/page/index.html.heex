@@ -66,6 +66,11 @@
   <% email_type_options = Enum.map(Email.email_types(), &{email_type_label(&1), &1}) %>
   <% label_class = "mb-1.5 block text-sm font-semibold text-slate-700 dark:text-slate-300" %>
   <% check_label_class = "flex items-start gap-2 text-sm text-slate-600 dark:text-slate-300" %>
+  <%!-- The helper line under a box label. `font-normal` is not decoration:
+        components.css sets every <label> bold, which the box labels want and an
+        explanation does not - without it the helper shouts as loudly as the
+        choice it explains. --%>
+  <% hint_class = "mt-0.5 block text-xs font-normal text-slate-600 dark:text-slate-400" %>
 
   <.form
     :let={f}
@@ -232,10 +237,6 @@
             <%= checkbox f, :fediverse_followers?, class: checkbox_class() %>
             <span>
               {gettext("Take part in the Fediverse")}
-              <%!-- `font-normal` is not decoration: components.css sets every
-                    <label> bold, which the box labels want and this helper line
-                    does not - without it the explanation shouts as loudly as the
-                    choice it explains. --%>
               <%!-- "Mastodon" links out to the project's own site, because the
                     word is the one thing in this sentence a first-time visitor
                     may not know, and the tick is only informed consent if they
@@ -251,7 +252,7 @@
                   ),
                   "{mastodon}"
                 ) %>
-              <span class="mt-0.5 block text-xs font-normal text-slate-600 dark:text-slate-400">
+              <span class={hint_class}>
                 {mastodon_pre}<a
                   href="https://joinmastodon.org"
                   target="_blank"
@@ -288,9 +289,7 @@
         <%= checkbox f, :low_bandwidth?, class: checkbox_class() %>
         <span>
           {Vutuv.Prefs.label(:low_bandwidth?)}
-          <span class="mt-0.5 block text-xs font-normal text-slate-600 dark:text-slate-400">
-            {Vutuv.Prefs.hint(:low_bandwidth?)}
-          </span>
+          <span class={hint_class}>{Vutuv.Prefs.hint(:low_bandwidth?)}</span>
         </span>
         <%= error_tag f, :low_bandwidth? %>
       </label>

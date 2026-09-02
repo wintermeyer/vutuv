@@ -484,6 +484,50 @@ defmodule Vutuv.Prefs do
   end
 
   @doc """
+  Whether this member writes in the cheap composer: no WYSIWYG editor bundle,
+  the plain Markdown textarea instead (`VutuvWeb.UI.markdown_editor/1`).
+
+  A named predicate rather than `get(user, :low_bandwidth?)` spelled out at
+  each call site, because two modules now ask (the component and the post
+  composer's inline-image handler) and the key should be written down once.
+  """
+  def low_bandwidth?(user), do: get(user, :low_bandwidth?)
+
+  @doc """
+  Drop every boolean-pref param that is not ticked, so the column stays NULL.
+
+  For a form where an untouched box means *no opinion*: the sign-up form, where
+  a member is offered a preference in passing and most walk past it. A checkbox
+  posts `"false"` for the box nobody touched, and storing that would record a
+  choice nobody made and cut the member off from the installation default for
+  good — on exactly the kind of installation the switch exists for, where an
+  admin later turns it on for everybody at /admin/preferences.
+
+  Registry-driven rather than written per key, because the failure is silent
+  and permanent: the next preference offered on a sign-up or onboarding form
+  would need the same clause, and nothing breaks when it is forgotten.
+
+  **Not** for /settings, which is the opposite case: unticking there is a real
+  choice and is stored as one, with the card's reset link as the way back to
+  inheriting.
+  """
+  def drop_unchosen_booleans(params) when is_map(params) do
+    Enum.reduce(@registry, params, fn
+      %Pref{type: :boolean, key: key}, acc ->
+        param = Atom.to_string(key)
+
+        case Map.fetch(acc, param) do
+          {:ok, value} when value in [true, "true", "1", "on"] -> acc
+          {:ok, _unticked} -> Map.delete(acc, param)
+          :error -> acc
+        end
+
+      %Pref{}, acc ->
+        acc
+    end)
+  end
+
+  @doc """
   The member struct with every inherited (nil) pref field filled with its
   installation default — what the /settings forms render, so a member always
   sees the values that actually apply to them.

@@ -70,6 +70,7 @@ defmodule VutuvWeb.PostLive.Composer do
   alias Vutuv.Fediverse.Note
   alias Vutuv.Fediverse.RemotePost
   alias Vutuv.Languages
+  alias Vutuv.MarkdownContent
   alias Vutuv.Mentions
   alias Vutuv.Organizations.Organization
   alias Vutuv.Posts
@@ -728,7 +729,7 @@ defmodule VutuvWeb.PostLive.Composer do
         # instead. Not "at the cursor": where the caret sits is the browser's
         # business and this side cannot ask, so the honest place is the end of
         # what the member has written, on a paragraph of its own.
-        if Prefs.get(socket.assigns.current_user, :low_bandwidth?) do
+        if Prefs.low_bandwidth?(socket.assigns.current_user) do
           {:noreply, append_image_reference(socket, image)}
         else
           {:noreply, push_event(socket, "mde-insert-image", editor_image_payload(socket, image))}
@@ -1371,15 +1372,14 @@ defmodule VutuvWeb.PostLive.Composer do
     end
   end
 
-  # The payload both editor-hook events share: which editor (the DOM id of
-  # this composer's markdown_editor), the served URL to embed and the alt.
-  # `![alt](/post_images/...)` appended to the body, escaped the way the
-  # editor's own serializer would: an alt text is member-written, and an
-  # unescaped `]` in it would end the label early and leave the rest of their
-  # caption standing in the post as stray characters.
+  # The picture written into the Markdown itself, for the low-bandwidth
+  # composer, which has no editor to place it in. Its own paragraph at the end
+  # of what the member has written: where the caret sits is the browser's
+  # business and this side cannot ask, so the end is the honest answer.
+  # `Vutuv.MarkdownContent` owns the reference's shape, because that module's
+  # regex is what has to read it back when the post is saved.
   defp append_image_reference(socket, image) do
-    alt = String.replace(image.alt || "", ["[", "]"], &("\\" <> &1))
-    reference = "![#{alt}](#{PostImage.url(image, "feed")})"
+    reference = MarkdownContent.image_markdown(PostImage.url(image, "feed"), image.alt)
 
     body =
       case String.trim_trailing(socket.assigns.body) do
@@ -1390,6 +1390,8 @@ defmodule VutuvWeb.PostLive.Composer do
     assign(socket, :body, body)
   end
 
+  # The payload both editor-hook events share: which editor (the DOM id of
+  # this composer's markdown_editor), the served URL to embed and the alt.
   defp editor_image_payload(socket, image) do
     %{
       editor: "#{socket.assigns.id}-body",

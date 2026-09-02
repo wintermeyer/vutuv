@@ -23,6 +23,21 @@ defmodule Vutuv.MarkdownContent do
   @own_upload_src ~r{\A/post_images/[A-Za-z0-9_-]+/(thumb|feed|large)\.(avif|webp)(\?v=[A-Za-z0-9_-]+)?(#(left|right|center))?\z}
 
   @doc """
+  The Markdown for an embedded image, in the one shape `@image_markdown` above
+  can read back.
+
+  Lives here rather than at the call site because that regex is the definition
+  of "an image reference" for every stored body, and it takes no `]` inside the
+  label at all — escaped or not. So an alt text is stripped of brackets rather
+  than escaped: `![a\]b](…)` is invisible to `validate_own_images_only/2`
+  while Earmark renders it happily, which is a body whose pictures nothing
+  checked.
+  """
+  def image_markdown(url, alt) do
+    "![#{String.replace(alt || "", ["[", "]"], "")}](#{url})"
+  end
+
+  @doc """
   Reject a body that embeds an image. Code samples are exempt: `![](x)` inside a
   fenced or inline code span renders as literal text, not an image (the same
   distinction `VutuvWeb.Markdown` makes at render time), so it stays allowed.

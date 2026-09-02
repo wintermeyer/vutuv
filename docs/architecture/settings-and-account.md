@@ -149,9 +149,11 @@ again: `low_bandwidth?` decides whether this member's browser is ever told
 where the 155 kB WYSIWYG editor bundle lives (see "Low-bandwidth mode" in
 [posts-and-feed.md](posts-and-feed.md)). It is the only pref also asked at
 **sign-up**, and the only one whose form box is dropped rather than stored when
-it is left unticked — `Vutuv.Prefs` needs NULL to mean "inherit", and a
-checkbox posts `"false"` for the box nobody touched, which would cut every new
-account off from an installation default an operator later turns on. Unticking
+it is left unticked (`Prefs.drop_unchosen_booleans/1`, registry-driven so the
+next preference offered on a sign-up or onboarding form is covered too) —
+`Vutuv.Prefs` needs NULL to mean "inherit", and a checkbox posts `"false"` for
+the box nobody touched, which would cut every new account off from an
+installation default an operator later turns on. Unticking
 it on `/settings/preferences` is a real choice and is stored as one; the card's
 reset link (POST `/settings/low_bandwidth/reset`) is the way back to
 inheriting. Every such knob is declared once in the

@@ -251,14 +251,74 @@ defmodule VutuvWeb.MarkdownEditorTest do
     end
   end
 
-  test "low-bandwidth mode is a per-member answer, not a site-wide one" do
-    # Two members, one page render each: the switch has to follow whoever is
-    # writing, or a shared component would answer it once for everybody.
-    assert thrifty_editor() =~ "data-mde-source"
-    refute thrifty_editor() =~ "data-mde-src"
+  # The gate costs the OTHER member nothing.
+  #
+  # Two shapes make this component re-send its whole attribute list on every
+  # keystroke, and both are the tidier-looking way to write the gate: collecting
+  # the attributes into a `{editor_hook(assigns)}` spread (handing `assigns` to
+  # a function is a strong taint in Phoenix.LiveView.Engine), and deriving
+  # `low_bandwidth?` with `assign/3` instead of `Map.put/3` (which marks it
+  # changed on every render). Either one re-sends the 1.6 kB fence-language
+  # table per keystroke, to every member who did NOT turn low bandwidth on —
+  # the exact opposite of the point. Both were measured at 2,353 bytes against
+  # 422 here, which is also what the component cost before the feature existed.
+  test "a keystroke does not re-send the editor's constants (change tracking)" do
+    assigns = %{
+      id: "ed",
+      name: "post[body]",
+      user: nil,
+      value: String.duplicate("a", 200),
+      label: "Body",
+      placeholder: "Write",
+      rows: 6,
+      submit_on: nil,
+      compact: false,
+      seed: nil,
+      images: false,
+      help: false,
+      mention_limit: nil,
+      class: nil,
+      rest: %{},
+      # What LiveView hands a component on a re-render where only the body moved.
+      __changed__: %{value: true}
+    }
 
+    rendered = VutuvWeb.UI.markdown_editor(assigns)
+
+    # The language table is the canary: it is a compile-time constant, so it
+    # must ride the full render and never a keystroke.
+    assert langs?(rendered, false), "the fence-language table is not being sent at all"
+    refute langs?(rendered, true), "the fence-language table is re-sent on every keystroke"
+
+    # And the whole re-send stays in the hundreds of bytes, not the thousands.
+    assert diff_size(rendered, true) < 1_000
+  end
+
+  # Every byte the socket would carry for this render, following nested
+  # Rendered structs the way the diff engine does. `track?` false is a full
+  # render, true is what a re-render actually re-sends.
+  defp diff_size(%Phoenix.LiveView.Rendered{dynamic: dynamic}, track?),
+    do: dynamic.(track?) |> Enum.map(&diff_size(&1, track?)) |> Enum.sum()
+
+  defp diff_size(list, track?) when is_list(list),
+    do: list |> Enum.map(&diff_size(&1, track?)) |> Enum.sum()
+
+  defp diff_size(binary, _track?) when is_binary(binary), do: byte_size(binary)
+  defp diff_size(_other, _track?), do: 0
+
+  defp langs?(%Phoenix.LiveView.Rendered{dynamic: dynamic}, track?),
+    do: dynamic.(track?) |> Enum.any?(&langs?(&1, track?))
+
+  defp langs?(list, track?) when is_list(list), do: Enum.any?(list, &langs?(&1, track?))
+  defp langs?(binary, _track?) when is_binary(binary), do: String.contains?(binary, "php:PHP")
+  defp langs?(_other, _track?), do: false
+
+  test "an explicit no and an untouched nil both still get the editor" do
+    # The three states of a Prefs boolean, and only one of them is thrifty
+    # (that one is the test above). An explicit false is a member who said no;
+    # nil is a member who never chose and inherits the installation default,
+    # which ships off.
     assert editor(%{user: %User{low_bandwidth?: false}}) =~ "data-mde-src"
-    # nil = never chose = inherit the installation default (off as shipped).
     assert editor(%{user: %User{low_bandwidth?: nil}}) =~ "data-mde-src"
   end
 

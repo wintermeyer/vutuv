@@ -14,6 +14,29 @@ defmodule VutuvWeb.PostFeedLiveTest do
 
   defp other_user(attrs \\ []), do: insert(:user, Keyword.merge([email_confirmed?: true], attrs))
 
+  # Real files land on disk, so each upload test gets an uploads root of its
+  # own. Captured with `fetch_env/2`, not `get_env/2`: that one answers nil both
+  # for "absent" and for "holds nil", so the naive restore writes nil back as a
+  # real value and every later reader in the run gets nil instead of the
+  # configured default.
+  defp isolate_uploads_root! do
+    tmp = Path.join(System.tmp_dir!(), "vutuv_feed_uploads_#{System.unique_integer([:positive])}")
+    File.mkdir_p!(tmp)
+    original = Application.fetch_env(:vutuv, :uploads_dir_prefix)
+    Application.put_env(:vutuv, :uploads_dir_prefix, tmp)
+
+    on_exit(fn ->
+      File.rm_rf(tmp)
+
+      case original do
+        {:ok, was} -> Application.put_env(:vutuv, :uploads_dir_prefix, was)
+        :error -> Application.delete_env(:vutuv, :uploads_dir_prefix)
+      end
+    end)
+
+    tmp
+  end
+
   # How many timeline rows are drawn but hidden — the waiting posts. Counted off
   # the row wrapper's own class, so it cannot catch a `hidden` somewhere inside
   # a card.
@@ -453,21 +476,7 @@ defmodule VutuvWeb.PostFeedLiveTest do
     # post_edit_live_test.exs.
 
     test "publishes a photo-only post (upload, no text)", %{conn: conn} do
-      # Real files land on disk: isolate the uploads root per test.
-      tmp =
-        Path.join(System.tmp_dir!(), "vutuv_feed_upload_#{System.unique_integer([:positive])}")
-
-      File.mkdir_p!(tmp)
-      prev = Application.get_env(:vutuv, :uploads_dir_prefix)
-      Application.put_env(:vutuv, :uploads_dir_prefix, tmp)
-
-      on_exit(fn ->
-        File.rm_rf(tmp)
-
-        if prev,
-          do: Application.put_env(:vutuv, :uploads_dir_prefix, prev),
-          else: Application.delete_env(:vutuv, :uploads_dir_prefix)
-      end)
+      isolate_uploads_root!()
 
       {conn, user} = create_and_login_user(conn)
       {:ok, live, _html} = live(conn, ~p"/feed")
@@ -499,20 +508,7 @@ defmodule VutuvWeb.PostFeedLiveTest do
     test "an uploaded image gets alt + remove + inline-insert controls", %{
       conn: conn
     } do
-      tmp =
-        Path.join(System.tmp_dir!(), "vutuv_feed_inline_#{System.unique_integer([:positive])}")
-
-      File.mkdir_p!(tmp)
-      prev = Application.get_env(:vutuv, :uploads_dir_prefix)
-      Application.put_env(:vutuv, :uploads_dir_prefix, tmp)
-
-      on_exit(fn ->
-        File.rm_rf(tmp)
-
-        if prev,
-          do: Application.put_env(:vutuv, :uploads_dir_prefix, prev),
-          else: Application.delete_env(:vutuv, :uploads_dir_prefix)
-      end)
+      isolate_uploads_root!()
 
       {conn, _user} = create_and_login_user(conn)
       {:ok, live, _html} = live(conn, ~p"/feed")
@@ -571,21 +567,7 @@ defmodule VutuvWeb.PostFeedLiveTest do
     # as a failed upload, not as a setting they turned on - so the server
     # writes the reference into the Markdown instead.
     test "low bandwidth: Insert writes the reference into the Markdown itself", %{conn: conn} do
-      tmp =
-        Path.join(System.tmp_dir!(), "vutuv_feed_lowbw_#{System.unique_integer([:positive])}")
-
-      File.mkdir_p!(tmp)
-      prev = Application.fetch_env(:vutuv, :uploads_dir_prefix)
-      Application.put_env(:vutuv, :uploads_dir_prefix, tmp)
-
-      on_exit(fn ->
-        File.rm_rf(tmp)
-
-        case prev do
-          {:ok, was} -> Application.put_env(:vutuv, :uploads_dir_prefix, was)
-          :error -> Application.delete_env(:vutuv, :uploads_dir_prefix)
-        end
-      end)
+      isolate_uploads_root!()
 
       {conn, user} = create_and_login_user(conn)
 

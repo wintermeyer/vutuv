@@ -6,6 +6,7 @@ defmodule VutuvWeb.PageController do
   alias Vutuv.Accounts.User
   alias Vutuv.Fediverse
   alias Vutuv.Languages
+  alias Vutuv.Prefs
   alias Vutuv.SourceRepo
   alias VutuvWeb.AgentDocs
   alias VutuvWeb.AgentDocs.ListDocs
@@ -306,7 +307,7 @@ defmodule VutuvWeb.PageController do
     user_params =
       user_params
       |> expand_fediverse_choice()
-      |> drop_untouched_low_bandwidth()
+      |> Prefs.drop_unchosen_booleans()
 
     # Extract defensively: a malformed "emails" param (not the nested
     # %{"0" => %{"value" => …}} the form produces) must reach register_user/2
@@ -343,6 +344,11 @@ defmodule VutuvWeb.PageController do
     end
   end
 
+  # What a ticked checkbox posts, in the four spellings a form can send. A guard
+  # rather than a function so it can head a clause, and one place rather than
+  # one per box.
+  defguardp checked_box?(value) when value in [true, "true", "1", "on"]
+
   # The sign-up form asks about the Fediverse once; `/settings/fediverse` has
   # three switches. Ticking the box means the whole thing, so it sets all three:
   # taking part, the reactions that come back, and the replies people write out
@@ -357,27 +363,11 @@ defmodule VutuvWeb.PageController do
   # land on exactly the defaults that page argues for, rather than on a silent
   # echo of a box they unticked at sign-up.
   defp expand_fediverse_choice(%{"fediverse_followers?" => value} = params)
-       when value in [true, "true", "1", "on"] do
+       when checked_box?(value) do
     Map.merge(params, %{"fediverse_reactions?" => "true", "fediverse_replies?" => "true"})
   end
 
   defp expand_fediverse_choice(params), do: params
-
-  # The low-bandwidth box is a `Vutuv.Prefs` knob, not a plain column, and the
-  # three layers only work while "never chose" stays distinguishable from
-  # "chose off". A checkbox posts "false" for the box nobody touched, which
-  # would write that indifference into the column as a decision and cut the
-  # member off from the installation default forever - on exactly the kind of
-  # installation this switch exists for, where an admin turns it on for
-  # everybody at /admin/preferences. So an unticked box is dropped: the column
-  # stays NULL and inherits. A ticked one is a real choice and is stored.
-  # (/settings/preferences is the other way round on purpose - unticking there
-  # IS a choice, and its reset link is the way back to inheriting.)
-  defp drop_untouched_low_bandwidth(%{"low_bandwidth?" => value} = params)
-       when value in [true, "true", "1", "on"],
-       do: params
-
-  defp drop_untouched_low_bandwidth(params), do: Map.delete(params, "low_bandwidth?")
 
   defp handle_post_registration_login(conn, email) do
     # The account was just created, so login_by_email/2 always mails the PIN
