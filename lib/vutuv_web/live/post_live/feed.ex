@@ -2944,10 +2944,11 @@ defmodule VutuvWeb.PostLive.Feed do
 
           Compose is a BUTTON now, and it owns the whole line while nothing is
           waiting. When something is, it gives up everything it does not need
-          (`flex-none`) and the quote takes the rest; below `sm` it drops its
-          word and keeps the glyph, the way the filter button beside the
-          calendar already does, or the teaser is left with three letters on a
-          phone. Only the widths move, never the height.
+          (`flex-none`) and the quote takes the rest, or the teaser is left with
+          three letters. It keeps its word throughout — this line is a desktop's
+          and has the room; the phone's filter button, on the same fact, is the
+          one that gives its word up (`--tight` below). Only the widths move,
+          never the height.
 
           It stays in the DOM while the composer is open, merely hidden, and the
           display class is picked by ONE condition so the two can never both land
@@ -3005,11 +3006,19 @@ defmodule VutuvWeb.PostLive.Feed do
           band as a sheet for the same reason. Phone-only, full stop: a desktop
           has the rail and the compose line for everything here.
 
-          Glyph first, then the date. The filter button is icon-only here — its
-          word was a fifth of a phone's width, and the funnel says it on its own
-          (the `aria-label` still spells it out) — and a fixed-width control
-          belongs at the edge, with the one whose width varies with what it has
-          to say taking the rest.
+          Glyph first, then the date. The funnel says its word beside a date,
+          which needs half the line at most, and gives it up to a waiting-posts
+          quote, which needs all of it (Stefan, on a screenshot). `--tight` is
+          that decision, taken from the same two assigns the row below is built
+          from and taken here rather than in the stylesheet, the way the compose
+          button takes it from `alone?`: the pill's arrival and the button's
+          shape are one render, so they can be one condition. The narrow control
+          stays at the edge either way, and the one whose width varies with what
+          it has to say takes the rest.
+
+          Unfolded is not that situation, which is why `@cal_open?` is in it:
+          the slot takes the whole line then and the button wraps under it with
+          the line to itself, where the word costs nobody anything.
 
           The date's slot is where a waiting post announces itself. The pill
           takes the date's cell (the stylesheet sees it arrive — `:has()` — and
@@ -3029,12 +3038,20 @@ defmodule VutuvWeb.PostLive.Feed do
           empties the one queue. Pulling the timeline down at the top of the
           page presses this copy for the reader (`#feed-pull` above). --%>
           <div id="feed-mobile-controls" class="flex flex-wrap items-center gap-2 md:hidden">
+            <%!-- Not `button_base/0`: that recipe brings `px-4`, and a padding
+            utility would beat the padding this button animates (the layer rule
+            the whole row is built on). --%>
             <button
               type="button"
               id="open-filter-sheet"
               phx-click="open-band"
               aria-label={pgettext("feed filter sheet", "Filter")}
-              class="inline-flex h-10 w-10 shrink-0 items-center justify-center rounded-full bg-white text-slate-700 shadow-sm ring-1 ring-slate-200 hover:bg-slate-50 dark:bg-slate-900 dark:text-slate-200 dark:ring-slate-800 dark:hover:bg-slate-800"
+              class={[
+                "feed-filter inline-flex h-10 shrink-0 items-center justify-center rounded-full",
+                "bg-white text-sm font-semibold text-slate-700 shadow-sm ring-1 ring-slate-200",
+                "hover:bg-slate-50 dark:bg-slate-900 dark:text-slate-200 dark:ring-slate-800 dark:hover:bg-slate-800",
+                @pending_posts != [] and !@cal_open? and "feed-filter--tight"
+              ]}
             >
               <svg
                 class="h-5 w-5 shrink-0"
@@ -3050,6 +3067,12 @@ defmodule VutuvWeb.PostLive.Feed do
                   d="M12 3c2.755 0 5.455.232 8.083.678.533.09.917.556.917 1.096v1.044a2.25 2.25 0 0 1-.659 1.591l-5.432 5.432a2.25 2.25 0 0 0-.659 1.591v2.927a2.25 2.25 0 0 1-1.244 2.013L9.75 21v-6.568a2.25 2.25 0 0 0-.659-1.591L3.659 7.409A2.25 2.25 0 0 1 3 5.818V4.774c0-.54.384-1.006.917-1.096A48.32 48.32 0 0 1 12 3Z"
                 />
               </svg>
+
+              <%!-- The word. `--tight` collapses it rather than removing it, so
+              it fades instead of blinking out and the button keeps its name
+              either way; the `aria-label` above says the same word so the name
+              a screen reader hears and the one on the screen cannot drift. --%>
+              <span class="feed-filter__label">{pgettext("feed filter sheet", "Filter")}</span>
             </button>
 
             <div id="feed-calendar-mobile-slot" class="feed-cal-slot" data-open={@cal_open? && "1"}>
