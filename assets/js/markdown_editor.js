@@ -58,7 +58,7 @@ import {
   NodeSelection,
   TextSelection,
 } from "@milkdown/kit/prose/state"
-import { ACTIVE_CLASS, markActiveRow, stepIndex, suggestKey } from "./suggest_list"
+import { ACTIVE_CLASS, followsCaret, markActiveRow, stepIndex, suggestKey } from "./suggest_list"
 import { Decoration, DecorationSet } from "@milkdown/kit/prose/view"
 import { inputRules, InputRule } from "@milkdown/kit/prose/inputrules"
 import { emojiForShortcode, SHORTCODE_AT_CARET } from "./emoji_data.js"
@@ -685,9 +685,12 @@ export const MarkdownEditor = {
   destroyed() {
     this.editor?.destroy()
     closeMentionsFor(this.root)
-    // The one listener this hook puts outside its own subtree; everything
-    // else dies with the editor's DOM.
+    // The listeners this hook puts outside its own subtree; everything else
+    // dies with the editor's DOM. `followsCaret` holds two on `window`, which
+    // outlives every editor on the page — the messages page tears one down per
+    // closed conversation, so leaking these would pile up a handler per chat.
     if (this._away) document.removeEventListener("mousedown", this._away)
+    if (this._unfollow) this._unfollow()
     // A pending suggest/check timer would fire into a destroyed editor —
     // retaining it (and its document) until it does, then dispatching onto a
     // dead view. The messages page tears an editor down per closed conversation.
@@ -1559,18 +1562,48 @@ export const MarkdownEditor = {
     const opening = this.slash.hidden
     this.slash.hidden = false
 
-    // Place it once, on the way open. It hangs off the "/" itself, not the
+    // Placed on the way open only. It hangs off the "/" itself, not the
     // caret, precisely so it stays put while the rest of the word is typed —
     // re-measuring every keystroke would cost two forced layouts to arrive at
-    // the same two numbers.
-    if (opening) {
-      const at = view.coordsAtPos(this.slashRun.start)
-      const frame = this.frame.getBoundingClientRect()
-      this.slash.style.top = `${at.bottom - frame.top + 6}px`
-      this.slash.style.left = `${Math.max(0, at.left - frame.left)}px`
-    }
+    // the same two numbers. A SCROLL is the other story: then the "/" really
+    // has moved, and `replaceOverlays` re-places it.
+    if (opening) this.placeSlash(view)
 
     this.markSlashCurrent(0)
+  },
+
+  // Pin the menu under the "/" that opened it — and close it when that "/" has
+  // scrolled out of the prose box. Somebody who scrolls away from the word
+  // they were typing is done with the menu, and the alternative is a panel
+  // clamped to an edge, pointing at whatever they scrolled to. The mention
+  // picker makes the same judgement about the window.
+  placeSlash(view) {
+    if (!this.slashRun) return
+
+    const at = view.coordsAtPos(this.slashRun.start)
+    const mount = this.mountEl.getBoundingClientRect()
+
+    if (at.bottom < mount.top || at.top > mount.bottom) return this.closeSlash()
+
+    const frame = this.frame.getBoundingClientRect()
+    this.slash.style.top = `${at.bottom - frame.top + 6}px`
+    this.slash.style.left = `${Math.max(0, at.left - frame.left)}px`
+  },
+
+  // Both overlays, re-pinned after the page moved under them. Only whichever
+  // is actually showing: this runs on every scroll of a page that is mostly
+  // not composing anything, so the resting cost has to be two hidden checks.
+  replaceOverlays() {
+    if (!this.editor) return
+    const bubbleUp = this.bubble && !this.bubble.hidden
+    const slashUp = this.slash && !this.slash.hidden
+    if (!bubbleUp && !slashUp) return
+
+    this.editor.action((ctx) => {
+      const view = ctx.get(editorViewCtx)
+      if (bubbleUp) this.syncBubble(view)
+      if (slashUp) this.placeSlash(view)
+    })
   },
 
   closeSlash() {
@@ -1689,13 +1722,11 @@ export const MarkdownEditor = {
     }
     document.addEventListener("mousedown", this._away)
 
-    // The prose is its own scroll container (.mde__mount caps at 24rem), and
-    // the bubble is positioned against the frame outside it, so a scroll
-    // leaves it behind. Only while it is showing — this must not cost
-    // anything on an ordinary scroll.
-    this.mountEl.addEventListener("scroll", () => {
-      if (this.bubble && !this.bubble.hidden) this.editor?.action((ctx) => this.syncBubble(ctx.get(editorViewCtx)))
-    })
+    // Both overlays hang off a position in the prose, and the prose is its own
+    // scroll container once it passes 24rem — so a scroll leaves them behind
+    // and nothing tells them (issue #1898). The bubble had this; the slash
+    // menu did not, and was placed once on the way open and then abandoned.
+    this._unfollow = followsCaret(() => this.replaceOverlays())
     this.bubble.addEventListener("mousedown", (e) => {
       // The whole point of the bubble is that a selection exists; letting the
       // press move focus would collapse it before the command runs.

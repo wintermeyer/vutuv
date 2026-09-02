@@ -16,7 +16,7 @@
 // It carries no copy of its own: the labels come from the data-mention-*
 // attributes the server rendered on the editor, because the server is the only
 // side that knows the reader's language.
-import { markActiveRow, stepIndex } from "./suggest_list"
+import { followsCaret, markActiveRow, stepIndex } from "./suggest_list"
 
 const ROW_ID = (index) => `mention-opt-${index}`
 
@@ -82,8 +82,11 @@ const wire = () => {
     closeMentions()
   })
 
-  window.addEventListener("resize", () => place())
-  window.addEventListener("scroll", () => place(), { passive: true, capture: true })
+  // The same rule the slash menu follows (issue #1898), from the one place it
+  // is written. `wire()` runs once for the page's single panel, so the detach
+  // it hands back has nobody to hand it to — that is why this reads as a bare
+  // call and the editor's does not.
+  followsCaret(() => place())
 }
 
 const pick = (index) => {
