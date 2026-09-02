@@ -108,6 +108,42 @@ defmodule Vutuv.CoverTest do
     end
   end
 
+  # The lite version (data-saving mode, `Vutuv.LowBandwidth`): nginx-served,
+  # so it is offered only when the file is there — a cover from before the
+  # lite existed keeps showing its banner rather than a broken one.
+  describe "picture/1" do
+    setup do
+      {:ok, user: %{@user | cover_photo: "banner.jpg", cover_fingerprint: @fingerprint}}
+    end
+
+    test "is the banner alone outside data-saving mode", %{user: user} do
+      Vutuv.LowBandwidth.put(false)
+
+      assert Vutuv.Cover.picture(user) ==
+               %{src: "/covers/7/john.doe-wide-#{@fingerprint}.avif", lite: nil}
+    end
+
+    test "offers the lite in data-saving mode once its file exists", %{tmp: tmp, user: user} do
+      Vutuv.LowBandwidth.put(true)
+      assert Vutuv.Cover.picture(user).lite == nil
+
+      dir = Path.join(tmp, "covers/7")
+      File.mkdir_p!(dir)
+      {:ok, img} = Image.new(20, 20, color: [1, 2, 3])
+      {:ok, _} = Image.write(img, Path.join(dir, "john.doe-lite-#{@fingerprint}.avif"))
+
+      assert Vutuv.Cover.picture(user) == %{
+               src: "/covers/7/john.doe-wide-#{@fingerprint}.avif",
+               lite: "/covers/7/john.doe-lite-#{@fingerprint}.avif"
+             }
+    end
+
+    test "without a cover there is nothing to offer either way" do
+      Vutuv.LowBandwidth.put(true)
+      assert Vutuv.Cover.picture(@user) == %{src: nil, lite: nil}
+    end
+  end
+
   describe "fingerprinted URL (scheme B: handle + content hash in the filename)" do
     setup do
       {:ok, user: %{@user | cover_photo: "banner.jpg", cover_fingerprint: @fingerprint}}

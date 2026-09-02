@@ -1151,11 +1151,63 @@ defmodule VutuvWeb.UI do
 
   def checking_badge(assigns) do
     ~H"""
-    <span class={[
-      "inline-flex items-center gap-1 rounded-full bg-slate-900/75 px-2 py-1 text-xs font-semibold text-white",
-      @class
-    ]}>
+    <span class={[picture_badge_class(), @class]}>
       <.hourglass class="h-3.5 w-3.5" />{gettext("Being checked")}
+    </span>
+    """
+  end
+
+  # The one recipe for a word on top of a picture: the checking badge and the
+  # HD control wear it, so the two cannot drift apart.
+  defp picture_badge_class,
+    do:
+      "inline-flex items-center gap-1 rounded-full bg-slate-900/75 px-2 py-1 text-xs font-semibold text-white"
+
+  @doc """
+  An `<img>` for a picture that has a lite version (`Vutuv.LowBandwidth`).
+
+  `picture` is the `%{src:, lite:}` pair the stores answer
+  (`Vutuv.Posts.PostImage.picture/2`, `Vutuv.RemoteMedia.picture/1`,
+  `Vutuv.Screenshot.picture/1`, `Vutuv.Cover.picture/1`): the version the
+  page always showed, and the cheap one — only while the viewer is in
+  data-saving mode *and* the file exists, `nil` otherwise. Without a lite this
+  renders the plain `<img>` every call site rendered before, attribute for
+  attribute, so nobody outside the mode pays for it.
+
+  With one, the lite is what loads, and an **HD** control sits in the
+  picture's corner: one tap swaps the full version in, in place
+  (`app.js`, `[data-hd-load]`), and the mark it leaves on the `<img>` survives
+  every LiveView patch. The control is a `role="button"` span rather than a
+  `<button>` because most of these pictures sit inside a link — the permalink,
+  the lightbox — and a button is not valid inside an anchor. The wrapper is a
+  block; `wrap_class` is for the sites where the picture's own box is not the
+  plain full-width one (a mosaic cell's `h-full`, a centred whole photo's
+  `w-fit`), so the control lands on the picture and not beside it.
+  """
+  attr(:picture, :map, required: true, doc: "`%{src: full URL, lite: lite URL | nil}`")
+  attr(:wrap_class, :any, default: nil, doc: "the lite wrapper's box, where it is not `block`")
+  attr(:rest, :global, include: ~w(alt width height loading fetchpriority))
+
+  def picture(%{picture: %{lite: nil}} = assigns) do
+    ~H"""
+    <img src={@picture.src} {@rest} />
+    """
+  end
+
+  def picture(assigns) do
+    ~H"""
+    <span class={["relative block", @wrap_class]} data-lite-picture>
+      <img src={@picture.lite} data-hd={@picture.src} {@rest} />
+      <span
+        role="button"
+        tabindex="0"
+        data-hd-load
+        aria-label={gettext("Load this picture in full quality")}
+        title={gettext("Load this picture in full quality")}
+        class="absolute bottom-1 right-1 cursor-pointer p-1.5"
+      >
+        <span class={picture_badge_class()}>HD</span>
+      </span>
     </span>
     """
   end
@@ -1241,12 +1293,13 @@ defmodule VutuvWeb.UI do
   def link_thumb(%{scope: nil} = assigns), do: ~H""
 
   def link_thumb(assigns) do
-    src = Vutuv.Screenshot.url({assigns.scope.screenshot, assigns.scope}, :thumb)
+    picture = Vutuv.Screenshot.picture({assigns.scope.screenshot, assigns.scope})
+    src = picture.src
     pixelated_url = Vutuv.Screenshot.pixelated_url(assigns.scope)
 
     assigns =
       assigns
-      |> assign(:src, src)
+      |> assign(:picture, picture)
       |> assign(:pixelated_url, pixelated_url)
       |> assign(:state, link_thumb_state(assigns.scope, assigns.value, src, pixelated_url))
 
@@ -1279,10 +1332,10 @@ defmodule VutuvWeb.UI do
         {VutuvWeb.UrlHTML.display_url(@value)}
       </span>
     </div>
-    <img
+    <.picture
       :if={@state in ["shot", "pending"]}
+      picture={@picture}
       data-link-thumb={@state}
-      src={@src}
       alt={@alt || VutuvWeb.UrlHTML.display_url(@value)}
       width="400"
       height="264"
@@ -4911,6 +4964,18 @@ defmodule VutuvWeb.UI do
          row(:followed_tags, gettext("Tags you follow"), ~p"/settings/followed_tags",
            hint: gettext("Topics whose posts reach your feed"),
            terms: gettext("tag topic subscribe follow feed")
+         ),
+         # Here rather than under Account beside "Language & display", which
+         # is full (eight rows), and because this is where the mode is felt:
+         # the feed's photos, screenshots and composer are what it makes
+         # cheaper. The label is the switch's own name (Vutuv.Prefs), so the
+         # word a member met on the sign-up form is the word the hub shows.
+         row(:bandwidth, Vutuv.Prefs.label(:low_bandwidth?), ~p"/settings/bandwidth",
+           hint: gettext("Smaller pictures and a plain composer on a slow connection"),
+           terms:
+             gettext(
+               "bandwidth slow internet mobile data saving saver volume metered compression pictures images screenshots editor langsam daten sparen datensparmodus volumen schmalband komprimierung bilder"
+             )
          ),
          # Under "feed" rather than beside Import: that page fills your profile
          # from a LinkedIn archive, this one fills your feed from it, and this

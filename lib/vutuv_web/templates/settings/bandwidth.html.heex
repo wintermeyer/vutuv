@@ -1,0 +1,40 @@
+<%!-- Bandwidth: the one switch a member on a slow or metered line turns on.
+With it, every picture with a lite version loads as that (an HD control on
+the picture fetches the full one on request), the lightbox opens the 1600 px
+photo, and the composer is the plain Markdown field instead of the editor
+bundle (`Vutuv.LowBandwidth`). Everything they write still reads the same to
+everybody else - this changes what THEY download, never the post. Its own
+page rather than a card on "Language & display", so the hub has a row to find
+by name. --%>
+<.settings_shell user={@user} active={:bandwidth} title={gettext("Bandwidth")}>
+  <div class="space-y-6">
+    <.toggle_form_card
+      changeset={@changeset}
+      field={:low_bandwidth?}
+      form_id="low-bandwidth-form"
+      action={~p"/settings/low_bandwidth"}
+      title={gettext("Bandwidth")}
+      intro={
+        gettext(
+          "If you are on a slow or metered connection, vutuv can leave out the parts of the page that cost the most to download."
+        )
+      }
+      label={Vutuv.Prefs.label(:low_bandwidth?)}
+      hint={Vutuv.Prefs.hint(:low_bandwidth?)}
+    />
+
+    <%!-- Back to inheriting the installation default (a nil field). Outside the
+          card and only once the member holds a value of their own, the same
+          shape the like-attribution switch on /settings/privacy uses. --%>
+    <div :if={Vutuv.Prefs.customized_in_group?(@user, :bandwidth)} class="-mt-3">
+      <.link
+        href={~p"/settings/low_bandwidth/reset"}
+        method="post"
+        id="reset-low-bandwidth"
+        class="text-sm font-semibold text-slate-600 hover:text-slate-800 dark:text-slate-400 dark:hover:text-slate-200"
+      >
+        {gettext("Reset to the site defaults")}
+      </.link>
+    </div>
+  </div>
+</.settings_shell>

@@ -40,11 +40,15 @@ defmodule Vutuv.Posts.PostImage do
 
   use VutuvWeb, :model
 
+  alias Vutuv.LowBandwidth
   alias Vutuv.Moderation.Pixelation
+  alias Vutuv.PostImageStore
   alias Vutuv.Uploads.Exif
   alias Vutuv.Uploads.Spec
 
-  @versions ~w(thumb feed large xl)
+  # `lite` (640 px, `Vutuv.Uploads.Spec`) is the feed-slot version a viewer in
+  # data-saving mode gets in place of `feed`; see `picture/1`.
+  @versions ~w(thumb lite feed large xl)
 
   @max_caption_length 1_000
 
@@ -171,6 +175,35 @@ defmodule Vutuv.Posts.PostImage do
   @doc "Root-relative proxy URL for a version of this image."
   def url(%__MODULE__{token: token} = image, version) when version in @versions do
     "#{token_prefix(token)}#{version}#{Spec.served_ext()}#{crop_buster(image)}"
+  end
+
+  @doc """
+  What the feed slot loads for this viewer (`VutuvWeb.UI.picture/1`): `feed`
+  as `:src`, and as `:lite` the 640 px version while the viewer is in
+  data-saving mode (`Vutuv.LowBandwidth`) and the file is on disk — a photo
+  the regeneration has not reached yet keeps showing `feed`, never a broken
+  picture. Asked of the disk rather than handed out blind: the proxy caches
+  every version for a year as immutable, so a lite URL answered with the
+  feed bytes would stay the feed for that year, on exactly the member the
+  mode is for.
+
+  Only the feed slot has a lite: the 320 px `thumb` is already small, and
+  `large`/`xl` are the lightbox's, which `lightbox_url/1` answers.
+  """
+  def picture(%__MODULE__{} = image) do
+    LowBandwidth.picture(url(image, "feed"), fn ->
+      if PostImageStore.version_path(image, "lite"), do: url(image, "lite")
+    end)
+  end
+
+  @doc """
+  The version the lightbox opens: `xl` (2560 px, sized to fill a 4K screen),
+  or `large` (1600 px) for a viewer in data-saving mode — on the phone screen
+  such a viewer most likely holds, 1600 px is the picture at more than its own
+  size, and the bigger file exists for a screen they do not have.
+  """
+  def lightbox_url(%__MODULE__{} = image) do
+    url(image, if(LowBandwidth.on?(), do: "large", else: "xl"))
   end
 
   # The proxy serves every version under an immutable-cache header, so a

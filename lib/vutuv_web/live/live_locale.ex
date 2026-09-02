@@ -16,12 +16,20 @@ defmodule VutuvWeb.LiveLocale do
   """
 
   alias Vutuv.Accounts.User
+  alias Vutuv.LowBandwidth
   alias Vutuv.ViewerClock
 
-  @doc "Apply the user's (or session's) language and viewer clock to this process."
+  @doc """
+  Apply the user's (or session's) language, viewer clock and data-saving
+  mode to this process. Called without a user, the mode is the installation
+  default — the same answer the plug gives a logged-out visitor — and the
+  LiveViews that mount that way show no picture that has a lite version.
+  """
   def put_viewer(user \\ nil, session) do
     put_locale(user, session)
     ViewerClock.put_viewer(user, session["date_region"])
+    LowBandwidth.put_viewer(user)
+    :ok
   end
 
   defp put_locale(%User{locale: locale}, _session) when is_binary(locale) and locale != "" do

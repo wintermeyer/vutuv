@@ -315,7 +315,11 @@ defmodule Vutuv.PostImageStore do
   # every photo uploaded before it existed has no `xl` file, and the lightbox
   # must still show something. It resolves to `large` until
   # `Vutuv.Uploads.Regenerator` has derived the bigger version — a slightly
-  # softer picture on a big screen, never a broken one.
+  # softer picture on a big screen, never a broken one. `lite` (data-saving
+  # mode) deliberately has no such fallback: `PostImage.picture/1` asks this
+  # module whether the file exists before naming it, because the proxy's
+  # year-long immutable cache would otherwise pin the feed bytes under the
+  # lite URL.
   defp version_filename(token, version) do
     if version in PostImage.versions() do
       dir = dir(token)

@@ -812,8 +812,11 @@ opt-in the message composer passes, one handler in the hook); the shortcut
 respects a disabled submit button, so it cannot post past the photo-upload
 guard, and the "?" shortcuts overlay lists it.
 
-**Low-bandwidth mode** is the second composer, and it is the *absence* of the
-first. `markdown_editor.js` is its own esbuild entry point (155 kB gzipped
+**Low-bandwidth mode** (data-saving mode, `/settings/bandwidth`) is the second
+composer, and it is the *absence* of the first. The same preference also puts
+the feed's photos, link screenshots and remote pictures on their lite versions
+with an HD control — that half lives in [images.md](images.md), "The lite
+versions". `markdown_editor.js` is its own esbuild entry point (155 kB gzipped
 against 61 kB for all of `app.js`), fetched on demand by the hook, and a member
 with the `low_bandwidth?` preference on is never told where it lives.
 `VutuvWeb.UI.markdown_editor/1` takes a required `user=` and asks

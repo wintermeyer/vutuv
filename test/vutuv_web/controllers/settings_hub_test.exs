@@ -107,6 +107,20 @@ defmodule VutuvWeb.SettingsHubTest do
       refute "Languages" in labels
     end
 
+    # The switch a member on a slow line looks for, by the name the sign-up
+    # form gave it and by the words they would type instead.
+    test "data-saving mode has a row of its own, findable by the obvious words", %{user: user} do
+      row = Enum.find(rows(user), &(&1.key == :bandwidth))
+      assert row.path == "/settings/bandwidth"
+      assert row.label == Vutuv.Prefs.label(:low_bandwidth?)
+
+      needle = UI.settings_search_text(row)
+
+      for word <- ~w(slow data saving pictures langsam datensparmodus schmalband bilder) do
+        assert needle =~ word, "the bandwidth row cannot be found by #{inspect(word)}"
+      end
+    end
+
     test "no row repeats the name of its own group", %{user: user} do
       for {name, rows} <- UI.settings_menu(user), row <- rows do
         refute row.label == name, "#{name} > #{row.label} reads as a loop"

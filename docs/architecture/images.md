@@ -19,6 +19,56 @@ change is a Spec edit plus one `mix vutuv.images.regenerate` run — the
 regenerator (`Vutuv.Uploads.Regenerator`) covers all five types, including
 `job_posting_images`.
 
+### The lite versions (data-saving mode)
+
+Four types carry a **`lite`** version beside their display version, for a
+viewer in data-saving mode (`Vutuv.LowBandwidth`, the `low_bandwidth?`
+preference): a post photo (640 px beside the 1200 px `feed`), a picture from
+another network (640 px beside its 1200 px `image`), a URL screenshot (400×264
+beside the 800×528 `thumb`) and a profile cover (800 px beside the 1600 px
+`wide`), all at Q40. The sizes are measured, not chosen: over 40 real photos
+on the production copy, 640 px at Q40 is 21 % of the `feed` bytes (12 kB
+against 44 kB at the median) and the next steps down buy little more — the
+numbers sit beside `@lite_quality` in the Spec. Avatars have none: the 96 px
+thumb is 1.7 kB, and a softer one would blur every name on the page.
+
+The mode is a **per-process flag**, not an argument: which version an `<img>`
+loads is decided deep inside a component that has no business being handed
+the viewer, so `Vutuv.LowBandwidth.on?/0` lives in the process dictionary
+beside the Gettext locale and the viewer clock and is written by the same two
+writers (`VutuvWeb.Plug.Locale`, `VutuvWeb.LiveLocale`). Each store answers
+one `picture/…` function — `Vutuv.Posts.PostImage.picture/2`,
+`Vutuv.RemoteMedia.picture/1`, `Vutuv.Screenshot.picture/1`,
+`Vutuv.Cover.picture/1` — returning `%{src:, lite:}`: the version the page
+always showed, and the lite only while the flag is on *and the file exists*.
+`VutuvWeb.UI.picture/1` renders the pair: without a lite it is the plain
+`<img>` it replaced, attribute for attribute; with one, the lite loads and an
+**HD** control in the corner swaps the full version in on tap (`app.js`,
+`[data-hd-load]`), leaving a `data-hd-loaded` mark the LiveSocket carries
+across every later patch so a like count ticking cannot blur the picture
+back. The lightbox opens `large` (1600 px) rather than `xl`
+(`PostImage.lightbox_url/1`).
+
+**A lite is never a broken picture, and never a blind URL.** Every store asks
+the disk before naming a lite (`Vutuv.LowBandwidth.picture/2` runs the probe
+only for a viewer in the mode), so a row the regeneration has not reached
+keeps showing its full version. The post photo does this too although its
+proxy could fall back the way `xl` falls back to `large`: the proxy caches
+every version as immutable for a year, so a lite URL answered with the feed
+bytes would stay the feed for that year, on exactly the member the mode is
+for. A remote picture keeps no original, so only pictures fetched after the
+version existed have one (`lite-<hash>.avif`, the same hash as the picture,
+opened by the same proxy rules). Adding the version made every row
+non-converged, so the deploy's `regenerate_images` step re-derives them all
+once — screenshots included, a few minutes after the traffic switch.
+
+Not covered, on purpose: a picture placed **inline in a post body** (the
+`![](…/feed.avif)` reference `VutuvWeb.Markdown` renders, 10 posts on
+vutuv.de) and the composer's own upload previews still load the full version.
+The inline image is a string the Markdown renderer builds, and a second copy
+of the HD control's markup there would be the drift the component exists to
+prevent.
+
 Pending gallery uploads (a composer that was never submitted) are swept after a
 day by `Vutuv.Posts.PendingImageSweeper`, which cleans **both** the post and the
 job-posting galleries (rows and files).

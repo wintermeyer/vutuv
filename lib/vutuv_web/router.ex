@@ -1595,6 +1595,7 @@ defmodule VutuvWeb.Router do
     # method <.form for={changeset} emits for a persisted record.
     get("/security", SettingsController, :security)
     get("/preferences", SettingsController, :preferences)
+    get("/bandwidth", SettingsController, :bandwidth)
     get("/delete", SettingsController, :delete_account)
     get("/privacy", SettingsController, :privacy)
     put("/privacy", SettingsController, :update_privacy)

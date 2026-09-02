@@ -848,24 +848,36 @@ defmodule VutuvWeb.SettingsController do
     reset_prefs(conn, :browser_tab, gettext("Browser tab settings reset to the site defaults."))
   end
 
-  # Low-bandwidth mode: whether this member's composer fetches the WYSIWYG
-  # editor at all (`VutuvWeb.UI.markdown_editor/1`). Unticking here IS a
-  # choice and is stored as one - the reset link below is the way back to
-  # inheriting the installation default, which is also what an untouched
-  # sign-up keeps.
+  # Data-saving mode (`Vutuv.LowBandwidth`): its own page rather than a card
+  # on "Language & display", so the hub has a row a member on a slow line can
+  # find by name. Unticking here IS a choice and is stored as one - the reset
+  # link is the way back to inheriting the installation default, which is
+  # also what an untouched sign-up keeps.
+  def bandwidth(conn, _params) do
+    user = conn.assigns[:user]
+
+    render(conn, "bandwidth.html",
+      user: user,
+      changeset: User.changeset(Prefs.with_effective(user)),
+      page_title: gettext("Bandwidth")
+    )
+  end
+
   def update_low_bandwidth(conn, %{"user" => params}) do
     save(
       conn,
       params,
-      "preferences.html",
-      ~p"/settings/preferences",
+      "bandwidth.html",
+      ~p"/settings/bandwidth",
       gettext("Bandwidth settings saved."),
       event: "preferences_changed"
     )
   end
 
   def reset_low_bandwidth(conn, _params) do
-    reset_prefs(conn, :bandwidth, gettext("Bandwidth settings reset to the site defaults."))
+    reset_prefs(conn, :bandwidth, gettext("Bandwidth settings reset to the site defaults."),
+      redirect_to: ~p"/settings/bandwidth"
+    )
   end
 
   # The like-attribution switch (issue #1233) lives on the visibility page

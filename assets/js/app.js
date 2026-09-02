@@ -188,6 +188,79 @@ document.addEventListener("click", (e) => {
   if (preview) togglePreviewExpand(preview, btn)
 })
 
+// Data-saving mode (Vutuv.LowBandwidth, `VutuvWeb.UI.picture/1`): a picture
+// rendered as its lite version carries the full one in `data-hd` and an HD
+// control beside it. One tap swaps the full version in, in place; the mark it
+// leaves on the <img> is what the LiveSocket's onBeforeElUpdated carries across
+// every later patch, or a like count ticking would blur the picture back.
+//
+// Capture phase, deliberately: the control sits INSIDE the picture's own link
+// (the permalink, the lightbox), and only a listener that runs before the
+// link's can keep the tap from opening it. Delegated, so it works on a dead
+// page as on a live one and nothing is ever bound to the control itself.
+const HD_LOADED = "data-hd-loaded"
+
+function loadFullPicture(control) {
+  const wrap = control.closest("[data-lite-picture]")
+  const img = wrap && wrap.querySelector("img[data-hd]")
+  if (!img || img.hasAttribute(HD_LOADED)) return
+  const lite = img.src
+  // One signal for both outcomes, so whichever does not fire is dropped with
+  // the other instead of holding the control for the picture's lifetime.
+  const done = new AbortController()
+  const settle = () => {
+    control.removeAttribute("aria-busy")
+    done.abort()
+  }
+  control.setAttribute("aria-busy", "true")
+  img.addEventListener(
+    "load",
+    () => {
+      img.setAttribute(HD_LOADED, "")
+      settle()
+    },
+    { signal: done.signal },
+  )
+  // A full version that fails to arrive puts the lite back: a broken image
+  // where a picture just was is worse than the picture as it was.
+  img.addEventListener(
+    "error",
+    () => {
+      img.src = lite
+      settle()
+    },
+    { signal: done.signal },
+  )
+  img.src = img.dataset.hd
+}
+
+function onHdControl(control, e) {
+  e.preventDefault()
+  e.stopPropagation()
+  loadFullPicture(control)
+}
+
+document.addEventListener(
+  "click",
+  (e) => {
+    const control = e.target.closest && e.target.closest("[data-hd-load]")
+    if (control) onHdControl(control, e)
+  },
+  true,
+)
+
+// A key event targets the focused element, and only the control itself is
+// focusable — no ancestor walk on every Space typed into a composer.
+document.addEventListener(
+  "keydown",
+  (e) => {
+    if ((e.key === "Enter" || e.key === " ") && e.target.matches?.("[data-hd-load]")) {
+      onHdControl(e.target, e)
+    }
+  },
+  true,
+)
+
 // Sweep every preview on the page (classic pages, and the initial static render
 // of live pages). The PostPreviewClamp hook re-checks each one on stream patches;
 // a debounced resize sweep catches reflows that change how many lines wrap.
@@ -1997,6 +2070,14 @@ const liveSocket = new LiveSocket("/live", Socket, {
       // render, so it carries no marker.
       if (from.hasAttribute(KEEP_OPEN)) {
         from.open ? to.setAttribute("open", "") : to.removeAttribute("open")
+      }
+
+      // A picture the reader asked for in full quality (data-saving mode,
+      // `loadFullPicture`). The server keeps rendering the lite version, so
+      // the swapped src and its mark travel with the element.
+      if (from.hasAttribute(HD_LOADED)) {
+        to.setAttribute(HD_LOADED, "")
+        to.src = from.src
       }
     },
   },

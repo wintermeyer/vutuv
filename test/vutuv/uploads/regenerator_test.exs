@@ -171,7 +171,12 @@ defmodule Vutuv.Uploads.RegeneratorTest do
   end
 
   describe "screenshots" do
-    test "relocates the fingerprinted original, derives the AVIF thumb", %{tmp: tmp} do
+    # This is also how the lite version (data-saving mode) reaches captures
+    # from before it existed; until then `Vutuv.Screenshot.url/2` answers no
+    # lite and the page shows the thumb.
+    test "relocates the fingerprinted original, derives the AVIF thumb and its lite", %{
+      tmp: tmp
+    } do
       url = insert(:url, user: insert(:user), screenshot: "a1b2c3d4e5f6.png")
       dir = Path.join(tmp, "screenshots/#{url.id}")
       jpeg!(Path.join(dir, "thumb-a1b2c3d4e5f6.webp"))
@@ -180,7 +185,7 @@ defmodule Vutuv.Uploads.RegeneratorTest do
       summary = Regenerator.run(only: :screenshots)
 
       assert summary.screenshots == %{regenerated: 1, unchanged: 0, skipped: 0, failed: 0}
-      assert File.ls!(dir) == ["thumb-a1b2c3d4e5f6.avif"]
+      assert Enum.sort(File.ls!(dir)) == ["lite-a1b2c3d4e5f6.avif", "thumb-a1b2c3d4e5f6.avif"]
       assert File.exists?(Path.join(tmp, "originals/screenshots/#{url.id}/original.png"))
     end
   end
@@ -205,7 +210,7 @@ defmodule Vutuv.Uploads.RegeneratorTest do
       assert summary.post_images == %{regenerated: 1, unchanged: 0, skipped: 0, failed: 0}
 
       assert dir |> File.ls!() |> Enum.sort() ==
-               ["feed.avif", "large.avif", "thumb.avif", "xl.avif"]
+               ["feed.avif", "large.avif", "lite.avif", "thumb.avif", "xl.avif"]
 
       assert File.exists?(Path.join(tmp, "originals/post_images/#{image.token}/original.jpg"))
     end

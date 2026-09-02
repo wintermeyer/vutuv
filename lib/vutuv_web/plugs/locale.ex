@@ -7,6 +7,10 @@ defmodule VutuvWeb.Plug.Locale do
   The language goes into Gettext, the other two into the viewer clock, and both
   are also stored in the session so a LiveView — a process this plug never ran
   in — can pick them up on mount (`VutuvWeb.LiveLocale`).
+
+  The fourth thing it resolves is what the reader's *line* is: data-saving
+  mode (`Vutuv.LowBandwidth`), the same per-process shape as the clock, plus
+  a cookie kept in step with it for the reverse proxy.
   """
 
   import Plug.Conn
@@ -14,7 +18,13 @@ defmodule VutuvWeb.Plug.Locale do
   alias Vutuv.Accounts.User
   alias Vutuv.DateRegions
   alias Vutuv.Languages
+  alias Vutuv.LowBandwidth
   alias Vutuv.ViewerClock
+
+  # A year: the cookie mirrors a stored preference and is re-asserted on every
+  # browser request anyway, so its lifetime only decides how long a member who
+  # stops visiting keeps it.
+  @cookie_max_age 365 * 24 * 60 * 60
 
   def init(default), do: default
 
@@ -22,7 +32,50 @@ defmodule VutuvWeb.Plug.Locale do
     conn
     |> handle_locale(conn.assigns[:current_user])
     |> put_viewer_clock(conn.assigns[:current_user])
+    |> put_low_bandwidth(conn.assigns[:current_user])
   end
+
+  # Data-saving mode for this process (`Vutuv.LowBandwidth.on?/0`), and the
+  # cookie nginx can route on. The cookie is written only when it disagrees
+  # with the preference, so the common request carries no Set-Cookie at all,
+  # and only on a browser request — an API call has no cookie jar to keep in
+  # step. Same attributes as the session cookie: `Secure` follows the scheme
+  # (Plug's default), and there is nothing in it worth reading from a script.
+  defp put_low_bandwidth(conn, user) do
+    on? = LowBandwidth.put_viewer(user)
+
+    if cookies_fetched?(conn), do: sync_cookie(conn, on?), else: conn
+  end
+
+  # The browser pipeline's session plug fetches the cookies with the session;
+  # an API request (no jar to keep in step) and a test conn with an injected
+  # session (`init_test_session/2` fetches no cookies) both stay Unfetched.
+  defp cookies_fetched?(conn), do: not match?(%Plug.Conn.Unfetched{}, conn.req_cookies)
+
+  defp sync_cookie(conn, on?) do
+    name = LowBandwidth.cookie_name()
+
+    case {on?, conn.req_cookies[name]} do
+      {true, "1"} -> conn
+      {false, nil} -> conn
+      {true, _absent} -> put_resp_cookie(conn, name, "1", cookie_opts())
+      {false, _stale} -> delete_resp_cookie(conn, name, cookie_opts())
+    end
+  end
+
+  # `Secure` follows the configured scheme the way the session cookie's does
+  # (`VutuvWeb.Endpoint.session_options/1`): behind nginx `conn.scheme` is
+  # `:http`, so Plug's own default would ship it without the flag.
+  defp cookie_opts do
+    [
+      max_age: @cookie_max_age,
+      http_only: true,
+      same_site: "Lax",
+      secure: VutuvWeb.Endpoint.secure_cookies?()
+    ]
+  end
+
+  defp session_fetched?(conn), do: match?(%{plug_session_fetch: :done}, conn.private)
 
   defp handle_locale(conn, %User{locale: nil}), do: handle_locale(conn, nil)
 
@@ -101,10 +154,7 @@ defmodule VutuvWeb.Plug.Locale do
 
   # API requests run this plug without a fetched session — skip them.
   defp store_in_session(conn, key, value) do
-    case conn.private do
-      %{plug_session_fetch: :done} -> put_session(conn, key, value)
-      _ -> conn
-    end
+    if session_fetched?(conn), do: put_session(conn, key, value), else: conn
   end
 
   # Gets the first locale provided

@@ -213,7 +213,7 @@ defmodule Vutuv.Prefs do
     do:
       Gettext.gettext(
         VutuvWeb.Gettext,
-        "Writing a post or a message then uses a plain Markdown box instead of the formatting editor, which saves about 150 kB of download. Everything you write still looks the same to everyone who reads it."
+        "For members on a slow connection, data-saving mode shows pictures and screenshots in a stronger compression and leaves out a few luxuries, such as the richer editor. Any picture loads in full quality with one tap, and you can switch the mode off at any time."
       )
 
   def hint(:browser_tab_teaser?),

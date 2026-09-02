@@ -199,6 +199,49 @@ defmodule Vutuv.PostImageStoreTest do
     end
   end
 
+  # The lite version (data-saving mode, `Vutuv.LowBandwidth`): derived with
+  # the others at upload, and for every photo uploaded before it existed the
+  # proxy answers the `feed` file to a lite URL until the regeneration has run
+  # — the picture the page always showed, never a broken one.
+  describe "the lite version" do
+    test "is written at upload, at 640 px and beside the others", %{tmp: tmp} do
+      token = PostImage.gen_token()
+      {:ok, _} = PostImageStore.store(exif_jpeg!(tmp), "photo.jpg", token)
+      image = %PostImage{token: token}
+
+      path = PostImageStore.version_path(image, "lite")
+      assert path == Path.join([tmp, "post_images", token, "lite.avif"])
+      # The source is 80×40 landscape rotated to 40×80: nothing to shrink to
+      # 640, so the lite keeps the source size — the fit never upscales.
+      {:ok, lite} = Image.open(path)
+      assert {Image.width(lite), Image.height(lite)} == {40, 80}
+    end
+
+    # No URL without the file: the proxy caches every version as immutable for
+    # a year, so a lite URL answered with the feed bytes would stay the feed.
+    test "picture/1 names the lite only in data-saving mode and only once it exists", %{
+      tmp: tmp
+    } do
+      token = PostImage.gen_token()
+      dir = Path.join([tmp, "post_images", token])
+      File.mkdir_p!(dir)
+      {:ok, img} = Image.new(20, 20, color: [1, 2, 3])
+      {:ok, _} = Image.write(img, Path.join(dir, "feed.avif"))
+      image = %PostImage{token: token}
+      feed = PostImage.url(image, "feed")
+
+      Vutuv.LowBandwidth.put(true)
+      assert PostImage.picture(image) == %{src: feed, lite: nil}
+      assert PostImageStore.version_path(image, "lite") == nil
+
+      {:ok, _} = Image.write(img, Path.join(dir, "lite.avif"))
+      assert PostImage.picture(image) == %{src: feed, lite: PostImage.url(image, "lite")}
+
+      Vutuv.LowBandwidth.put(false)
+      assert PostImage.picture(image) == %{src: feed, lite: nil}
+    end
+  end
+
   describe "accel_path/2" do
     test "targets the resolved on-disk file, defaulting to .avif", %{tmp: tmp} do
       token = PostImage.gen_token()

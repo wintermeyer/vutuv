@@ -25,6 +25,7 @@ defmodule Vutuv.Cover do
   (`@config`).
   """
 
+  alias Vutuv.LowBandwidth
   alias Vutuv.Uploads
 
   @config %{
@@ -106,6 +107,30 @@ defmodule Vutuv.Cover do
   """
   def display_url(%{cover_photo: nil}, _version), do: nil
   def display_url(user, version), do: url({user.cover_photo, user}, version)
+
+  @doc """
+  What the profile header loads for this viewer (`VutuvWeb.UI.picture/1`):
+  the wide banner as `:src`, and as `:lite` the 800 px version while the
+  viewer is in data-saving mode (`Vutuv.LowBandwidth`) and the file is on
+  disk — a cover from before the lite existed offers nothing cheaper and
+  keeps showing its banner. `nil` `:src` when there is no cover at all, so
+  the caller falls back to the gradient exactly as with `display_url/2`.
+
+  Asks the disk (`Vutuv.Uploads.version_path/3`) rather than building the
+  name: the lite is born with the deploy's regeneration run, which happens
+  *after* the traffic switch, and a URL to a file that is not there yet is a
+  broken banner on every profile in between.
+  """
+  def picture(user) do
+    LowBandwidth.picture(display_url(user, :wide), fn -> lite_url(user) end)
+  end
+
+  defp lite_url(%{cover_photo: nil}), do: nil
+
+  defp lite_url(user) do
+    if Uploads.version_path({user.cover_photo, user}, :lite, @config),
+      do: url({user.cover_photo, user}, :lite)
+  end
 
   @doc """
   Removes the user's cover-photo files — the served version and the private

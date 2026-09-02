@@ -10,7 +10,9 @@ defmodule Vutuv.Uploads.Spec do
   size so they stay crisp on HiDPI screens (avatar slots per `VutuvWeb.UI`:
   xs 32 / sm 36 / md 48 / lg 96 px) — except the versions that exist to be
   *looked at* rather than to fill a layout slot (`post_image` `xl`, `avatar`
-  `large`), which are sized for the lightbox's full screen.
+  `large`), which are sized for the lightbox's full screen, and the `lite`
+  versions (data-saving mode, `Vutuv.LowBandwidth`), which are sized at ~1x
+  and a lower quality on purpose.
 
   The write pipeline is decode → `Image.autorotate` (`open_rotated/1`, once
   per upload) → resize per `fit` → `Vix.Vips.Operation.heifsave` with
@@ -56,6 +58,19 @@ defmodule Vutuv.Uploads.Spec do
   @pixelated_width 960
   @pixelated_quality 50
 
+  # The **lite** version a picture gets beside its display version, for a
+  # viewer in data-saving mode (`Vutuv.LowBandwidth`): the same picture at
+  # roughly its 1x CSS size and a lower quality. Measured on the production
+  # copy (2026-09-02, 40 real photos): 640 px at Q40 is 21 % of the bytes of
+  # the 1200 px `feed` version (12 kB against 44 kB at the median), 480 px is
+  # 14 % and 640 px at Q32 is 16 % — the quality step buys less than the size
+  # step past this point, and 640 still reads as the photo on a phone at DPR 2.
+  # A screenshot at its 400×264 display size and Q40 is 22 % of its thumb (3 kB
+  # against 13 kB); a cover at 800 px is 18 %. It is a size beside the served
+  # one, never instead of it: the page shows the lite and offers the full one
+  # on request (`VutuvWeb.UI.picture/1`).
+  @lite_quality 40
+
   # `fit` shapes: {:crop, w, h, gravity} crops to exactly w×h;
   # {:crop_down, s, gravity} crops to a square of at most s×s;
   # {:box_down, s} fits within s×s; {:width_down, w} caps the width —
@@ -92,11 +107,13 @@ defmodule Vutuv.Uploads.Spec do
     cover: [
       # Displayed ~768px wide on HiDPI; aspect ratio preserved, the display
       # crop is CSS object-cover, so tall photos are never baked away here.
-      %{name: :wide, fit: {:width_down, 1600}, quality: 58}
+      %{name: :wide, fit: {:width_down, 1600}, quality: 58},
+      %{name: :lite, fit: {:width_down, 800}, quality: @lite_quality}
     ],
     screenshot: [
       # 2x the 400x264 on-page display size; crop :high keeps the page top.
-      %{name: :thumb, fit: {:crop, 800, 528, :high}, quality: 58}
+      %{name: :thumb, fit: {:crop, 800, 528, :high}, quality: 58},
+      %{name: :lite, fit: {:crop, 400, 264, :high}, quality: @lite_quality}
     ],
     review_cover: [
       # A book cover fetched by ISBN (Vutuv.ReviewCover): portrait aspect
@@ -115,7 +132,8 @@ defmodule Vutuv.Uploads.Spec do
     # justify keeping. It is also why there is no lightbox `xl` here; the
     # full-size original is one click away on their own server.
     remote_media: [
-      %{name: :image, fit: {:box_down, 1200}, quality: 58}
+      %{name: :image, fit: {:box_down, 1200}, quality: 58},
+      %{name: :lite, fit: {:box_down, 640}, quality: @lite_quality}
     ],
     # The avatar of such an account: the same two sizes a member's own avatar
     # gets would be two files for a picture only ever shown at 36-56px, so it
@@ -133,6 +151,7 @@ defmodule Vutuv.Uploads.Spec do
       # version sized for looking at rather than for a layout slot, so it is
       # also the only one worth its extra bytes — nothing else requests it.
       %{name: :thumb, fit: {:crop, 320, 320, :center}, quality: 58},
+      %{name: :lite, fit: {:box_down, 640}, quality: @lite_quality},
       %{name: :feed, fit: {:box_down, 1200}, quality: 58},
       %{name: :large, fit: {:box_down, 1600}, quality: 58},
       %{name: :xl, fit: {:box_down, 2560}, quality: 60}

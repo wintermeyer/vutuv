@@ -88,6 +88,47 @@ defmodule Vutuv.ScreenshotTest do
     end
   end
 
+  # The lite version (data-saving mode, `Vutuv.LowBandwidth`). It is
+  # nginx-served, so unlike a post photo's there is no proxy to fall back in:
+  # the URL is offered only when the file is there.
+  describe "url/2 with :lite and picture/1" do
+    test "names the lite file when it is on disk, nil when only the thumb is", %{tmp: tmp} do
+      write_thumb(tmp, "thumb-a1b2c3d4e5f6.avif")
+      assert Vutuv.Screenshot.url({"a1b2c3d4e5f6.png", @url}, :lite) == nil
+
+      write_thumb(tmp, "lite-a1b2c3d4e5f6.avif")
+
+      assert Vutuv.Screenshot.url({"a1b2c3d4e5f6.png", @url}, :lite) ==
+               "/screenshots/42/lite-a1b2c3d4e5f6.avif"
+    end
+
+    test "is nil without a screenshot and in moderation limbo", %{tmp: tmp} do
+      assert Vutuv.Screenshot.url({nil, @url}, :lite) == nil
+
+      write_thumb(tmp, "lite-a1b2c3d4e5f6.avif")
+      held = %Url{id: 42, screenshot_moderation: "pending"}
+      assert Vutuv.Screenshot.url({"a1b2c3d4e5f6.png", held}, :lite) == nil
+    end
+
+    test "picture/1 offers the lite only to a viewer in data-saving mode", %{tmp: tmp} do
+      write_thumb(tmp, "thumb-a1b2c3d4e5f6.avif")
+      write_thumb(tmp, "lite-a1b2c3d4e5f6.avif")
+
+      Vutuv.LowBandwidth.put(false)
+
+      assert Vutuv.Screenshot.picture({"a1b2c3d4e5f6.png", @url}) ==
+               %{src: "/screenshots/42/thumb-a1b2c3d4e5f6.avif", lite: nil}
+
+      Vutuv.LowBandwidth.put(true)
+
+      assert Vutuv.Screenshot.picture({"a1b2c3d4e5f6.png", @url}) ==
+               %{
+                 src: "/screenshots/42/thumb-a1b2c3d4e5f6.avif",
+                 lite: "/screenshots/42/lite-a1b2c3d4e5f6.avif"
+               }
+    end
+  end
+
   describe "store/1" do
     setup do
       {:ok, img} = Image.new(1280, 844, color: [200, 200, 200])
@@ -108,6 +149,9 @@ defmodule Vutuv.ScreenshotTest do
       hash = Path.rootname(stored)
       dir = Path.join(tmp, "screenshots/42")
       assert File.exists?(Path.join(dir, "thumb-#{hash}.avif"))
+      # The lite beside it, at the tile's 1x display size.
+      {:ok, lite} = Image.open(Path.join(dir, "lite-#{hash}.avif"))
+      assert {Image.width(lite), Image.height(lite)} == {400, 264}
       assert File.exists?(Path.join(tmp, "originals/screenshots/42/original.png"))
 
       # Nothing original may land in the publicly served tree.
@@ -159,7 +203,7 @@ defmodule Vutuv.ScreenshotTest do
       assert {:ok, stored} = Vutuv.Screenshot.store({upload, @url})
       hash = Path.rootname(stored)
 
-      assert File.ls!(dir) == ["thumb-#{hash}.avif"]
+      assert Enum.sort(File.ls!(dir)) == ["lite-#{hash}.avif", "thumb-#{hash}.avif"]
     end
   end
 end

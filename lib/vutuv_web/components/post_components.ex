@@ -2391,6 +2391,11 @@ defmodule VutuvWeb.PostComponents do
             <%!-- `<details>` rather than a JS toggle: the cover has to hold with
             no JavaScript at all, because "this is covered for a reason" is not a
             promise to break on a slow bundle. --%>
+            <%!-- Once for both halves: the blurred cover takes the lite where
+            there is one (a blur needs no detail, and never an HD control,
+            which would offer to sharpen what is covered), the picture behind
+            it takes the pair. --%>
+            <% picture = RemoteMedia.picture(image) %>
             <details data-remote-image-sensitive class="group relative">
               <%!-- The cover is inside the summary, so it must take itself away
               when the picture is shown: a `<summary>` renders open or closed
@@ -2401,7 +2406,7 @@ defmodule VutuvWeb.PostComponents do
               <summary class="block cursor-pointer list-none">
                 <span class="relative block group-open:hidden">
                   <img
-                    src={RemoteMedia.post_image_url(image.id, image.file)}
+                    src={picture.lite || picture.src}
                     alt=""
                     loading="lazy"
                     class="block max-h-96 w-full scale-105 object-cover blur-xl"
@@ -2416,10 +2421,10 @@ defmodule VutuvWeb.PostComponents do
                   <span aria-hidden="true">⚠</span>{gettext("Cover it again")}
                 </span>
               </summary>
-              <.remote_image image={image} />
+              <.remote_image picture={picture} alt={image.alt} />
             </details>
           <% :ready -> %>
-            <.remote_image image={image} />
+            <.remote_image picture={RemoteMedia.picture(image)} alt={image.alt} />
         <% end %>
       </div>
     </div>
@@ -2449,15 +2454,16 @@ defmodule VutuvWeb.PostComponents do
   # as a local photo post.
   defp presence?(text), do: is_binary(text) and String.trim(text) != ""
 
-  attr(:image, :map, required: true)
+  attr(:picture, :map, required: true, doc: "`Vutuv.RemoteMedia.picture/1` of the image")
+  attr(:alt, :string, default: nil)
 
   # The picture itself — the same rendering whether it stood open or the reader
   # just uncovered a sensitive one, so it is written once.
   defp remote_image(assigns) do
     ~H"""
-    <img
-      src={RemoteMedia.post_image_url(@image.id, @image.file)}
-      alt={@image.alt || ""}
+    <.picture
+      picture={@picture}
+      alt={@alt || ""}
       loading="lazy"
       class="block max-h-96 w-full object-contain"
     />
@@ -3721,8 +3727,8 @@ defmodule VutuvWeb.PostComponents do
                     aria-label={gettext("View post")}
                     class="float-right mb-1 ml-4 w-2/5 sm:w-1/3"
                   >
-                    <img
-                      src={PostImage.url(hd(@gallery), "feed")}
+                    <.picture
+                      picture={PostImage.picture(hd(@gallery))}
                       alt={hd(@gallery).alt}
                       width={hd(@gallery).width}
                       height={hd(@gallery).height}
@@ -4117,8 +4123,8 @@ defmodule VutuvWeb.PostComponents do
           license={@license}
           class="block"
         >
-          <img
-            src={PostImage.url(image, "feed")}
+          <.picture
+            picture={PostImage.picture(image)}
             alt={photo_alt(image)}
             width={image.width}
             height={image.height}
@@ -4194,8 +4200,9 @@ defmodule VutuvWeb.PostComponents do
         <%!-- Whole photos by default: object-contain letterboxes a photo
         inside its tile instead of cropping it — nobody's picture loses its
         edges unless the author switched the tiles to "filled". --%>
-        <img
-          src={PostImage.url(cell.image, "feed")}
+        <.picture
+          picture={PostImage.picture(cell.image)}
+          wrap_class="h-full w-full"
           alt={photo_alt(cell.image)}
           loading="lazy"
           class={["h-full w-full", (@fill && "object-cover") || "object-contain"]}
@@ -4297,13 +4304,14 @@ defmodule VutuvWeb.PostComponents do
       assigns
       |> assign(:camera, PostImage.show_camera_info?(assigns.image) && camera_line(assigns.image))
       |> assign(:download, PostImage.download_url(assigns.image))
+      |> assign(:src, PostImage.lightbox_url(assigns.image))
 
     ~H"""
     <a
-      href={PostImage.url(@image, "xl")}
+      href={@src}
       class={@class}
       data-lightbox-photo={@index}
-      data-photo-src={PostImage.url(@image, "xl")}
+      data-photo-src={@src}
       data-photo-alt={photo_alt(@image)}
       data-photo-caption={@image.caption}
       data-photo-camera={@camera}
@@ -4398,9 +4406,10 @@ defmodule VutuvWeb.PostComponents do
     assigns = assign(assigns, :fit, feed_photo_fit(assigns.image))
 
     ~H"""
-    <img
+    <.picture
       :if={@fit == :whole}
-      src={PostImage.url(@image, "feed")}
+      picture={PostImage.picture(@image)}
+      wrap_class="mx-auto w-fit max-w-full"
       alt={photo_alt(@image)}
       width={@image.width}
       height={@image.height}
@@ -4408,9 +4417,9 @@ defmodule VutuvWeb.PostComponents do
       class="mx-auto max-h-[32rem] w-auto max-w-full rounded-lg ring-1 ring-slate-200 dark:ring-slate-800"
       data-photo-fit="whole"
     />
-    <img
+    <.picture
       :if={@fit != :whole}
-      src={PostImage.url(@image, "feed")}
+      picture={PostImage.picture(@image)}
       alt={photo_alt(@image)}
       loading="lazy"
       style={"aspect-ratio: #{elem(@fit, 1)}"}
@@ -5467,9 +5476,9 @@ defmodule VutuvWeb.PostComponents do
         />
         <.checking_badge />
       </span>
-      <img
+      <.picture
         :if={!@pixelated_url}
-        src={Vutuv.Screenshot.url({@screenshot.screenshot, @screenshot}, :thumb)}
+        picture={Vutuv.Screenshot.picture({@screenshot.screenshot, @screenshot})}
         width="400"
         height="264"
         loading="lazy"
