@@ -680,8 +680,9 @@ picture at about its 1x display size and a lower quality (measured on
 vutuv.de: a post photo 12 kB instead of 44 kB, a screenshot 3 kB instead of
 13 kB, a cover 8 kB instead of 34 kB, at the median) — with an **HD** control
 in its corner that fetches the full version on request; avatars are left
-alone, they are under 2 kB each. The lightbox opens a photo at 1600 px rather
-than 2560 px. And the composer is the plain Markdown field that has always
+alone, they are under 2 kB each. The pixelated preview of a picture still
+being checked is not fetched at all — the grey "being checked" tile stands in,
+at no cost. The lightbox opens a photo at 1600 px rather than 2560 px. And the composer is the plain Markdown field that has always
 been the no-JavaScript fallback rather than the WYSIWYG editor, whose bundle
 is 155 kB gzipped, two and a half times the rest of vutuv's JavaScript
 together; what they publish is byte for byte what the editor would have

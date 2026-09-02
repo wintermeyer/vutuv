@@ -62,6 +62,14 @@ opened by the same proxy rules). Adding the version made every row
 non-converged, so the deploy's `regenerate_images` step re-derives them all
 once — screenshots included, a few minutes after the traffic switch.
 
+The **pixelated preview** of a picture still being checked is the one thing
+the mode drops entirely rather than shrinks: `Pixelation.stands_in?/2` answers
+false for a viewer in the mode, so the three renderers that ask fall back to
+the grey hourglass tile they already have for installations without previews.
+The preview is 64 blocks blown up to 960 px and costs about what the finished
+picture's lite does (13 kB against 12 kB on one photo), for the minutes a scan
+takes; serving is not gated, so a preview URL rendered earlier keeps answering.
+
 Not covered, on purpose: a picture placed **inline in a post body** (the
 `![](…/feed.avif)` reference `VutuvWeb.Markdown` renders, 10 posts on
 vutuv.de) and the composer's own upload previews still load the full version.

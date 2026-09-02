@@ -59,6 +59,7 @@ defmodule Vutuv.Moderation.Pixelation do
   the served name has to change with the bytes.
   """
 
+  alias Vutuv.LowBandwidth
   alias Vutuv.Moderation.ImageScans
   alias Vutuv.Uploads.Spec
 
@@ -126,17 +127,28 @@ defmodule Vutuv.Moderation.Pixelation do
   end
 
   @doc """
-  Whether the preview at `path` stands in for its picture right now: inside the
-  window, and actually on disk.
+  Whether the preview at `path` stands in for its picture right now, for the
+  viewer this process renders for: inside the window, actually on disk, and
+  not in data-saving mode.
 
   The disk check is what keeps a tile from rendering as a broken image when the
   file is already gone (a settled scan, a swept leftover, an installation that
   turned the preview on after the picture was stored). It is paid only for a
   picture that is still waiting, which is a state measured in seconds.
+
+  The mode check (`Vutuv.LowBandwidth`) is here rather than in the three
+  renderers that ask, so one answer covers a post photo, a capture and a
+  picture from another network. A preview is 64 blocks blown up to 960 px and
+  costs about what the lite version of the finished picture does (13 kB
+  against 12 kB, measured on one photo) — for a picture nobody has looked at
+  yet, and for the minutes the scan takes. The grey hourglass tile that stands
+  in wherever there is no preview says the same thing in words and costs
+  nothing, so a member on a slow line gets that. Serving is not gated: a
+  preview URL rendered before the mode was switched on keeps answering.
   """
   def stands_in?(nil, _started_at), do: false
 
   def stands_in?(path, started_at) when is_binary(path) do
-    within_window?(started_at) and File.exists?(path)
+    not LowBandwidth.on?() and within_window?(started_at) and File.exists?(path)
   end
 end
