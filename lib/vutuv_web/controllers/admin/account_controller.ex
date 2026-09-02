@@ -113,12 +113,12 @@ defmodule VutuvWeb.Admin.AccountController do
   # Only ever redirect back inside the admin area. A caller-supplied return_to
   # that is not a local /admin/ path (a full URL, a scheme-relative //host, a
   # different scope) falls back to the frozen list, so the hidden field can
-  # never be turned into an open redirect.
-  defp safe_return("/admin/" <> _ = path) do
-    if String.starts_with?(path, "/admin//"), do: default_return(), else: path
+  # never be turned into an open redirect. The prefix is what this page adds;
+  # the rule is the shared one, so the admin path also gets the backslash and
+  # stripped-character coverage its own copy never had.
+  defp safe_return(value) do
+    ControllerHelpers.safe_return_to(value, "/admin/") || default_return()
   end
-
-  defp safe_return(_other), do: default_return()
 
   defp default_return, do: ~p"/admin/accounts/frozen"
 end

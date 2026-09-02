@@ -56,6 +56,11 @@ defmodule Vutuv.ApiAuth.App do
     |> cast(params, [:name, :description, :homepage_url, :redirect_uris])
     |> validate_required([:name])
     |> validate_length(:name, max: 60)
+    # The name is whatever the client registered under, and it is read in two
+    # places that treat a line break as structure: the consent screen a member
+    # decides on, and the operator's log line naming a runaway client. `\A`/`\z`
+    # rather than `^`/`$`, which in PCRE still admit a trailing newline.
+    |> validate_format(:name, ~r/\A[^[:cntrl:]]+\z/u, message: "must be a single line")
     |> validate_length(:description, max: 500)
     |> validate_length(:homepage_url, max: 255)
     |> update_change(:redirect_uris, &clean_uris/1)

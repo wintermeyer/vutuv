@@ -104,7 +104,7 @@ defmodule VutuvWeb.AgentDocs.Markdown do
   end
 
   def render(%{type: "post"} = doc) do
-    author_link = "[#{md_text(doc.author.name)}](#{doc.author.url})"
+    author_link = md_link(doc.author.name, doc.author.url)
 
     [
       frontmatter(doc),
@@ -144,7 +144,7 @@ defmodule VutuvWeb.AgentDocs.Markdown do
   # opened answering, #1334 already brought the remote replies), under the same
   # headings, so a reader parsing both meets the same field in the same place.
   def render(%{type: "organization_post"} = doc) do
-    author_link = "[#{md_text(doc.author.name)}](#{doc.author.url})"
+    author_link = md_link(doc.author.name, doc.author.url)
 
     [
       frontmatter(doc),
@@ -170,7 +170,7 @@ defmodule VutuvWeb.AgentDocs.Markdown do
   end
 
   def render(%{type: "post_archive"} = doc) do
-    author_link = "[#{md_text(doc.author.name)}](#{doc.author.url})"
+    author_link = md_link(doc.author.name, doc.author.url)
 
     [
       frontmatter(doc),
@@ -301,7 +301,7 @@ defmodule VutuvWeb.AgentDocs.Markdown do
       "# #{doc.title}",
       doc.description,
       Enum.map_join(doc.postings, "\n\n", &job_summary/1),
-      doc.next && "[#{gettext("Next page")}](#{doc.next})"
+      doc.next && md_link(gettext("Next page"), doc.next)
     ]
     |> join_blocks()
   end
@@ -396,13 +396,13 @@ defmodule VutuvWeb.AgentDocs.Markdown do
       |> Enum.sort_by(&elem(&1, 0))
       |> Enum.map_join("\n", fn {label, value} -> "- #{label}: #{value}" end),
       "## Brand assets",
-      Enum.map_join(doc.assets, "\n", &"- [#{&1.name}](#{&1.url}) (#{&1.kind}) - #{&1.note}"),
+      Enum.map_join(doc.assets, "\n", &"- #{md_link(&1.name, &1.url)} (#{&1.kind}) - #{&1.note}"),
       "## Colours",
       Enum.map_join(doc.colors, "\n", &"- #{&1.name} `#{&1.hex}` - #{&1.note}"),
       "## Typography",
       Enum.map_join(doc.typography, "\n", &"- #{&1.role}: #{&1.name} - #{&1.note}"),
       "## Screenshots",
-      Enum.map_join(doc.screenshots, "\n", &"- [#{&1.name}](#{&1.url}) - #{&1.note}"),
+      Enum.map_join(doc.screenshots, "\n", &"- #{md_link(&1.name, &1.url)} - #{&1.note}"),
       "## Using all this",
       Enum.map_join(doc.usage, "\n", &("- " <> &1)),
       "## Press contact",
@@ -425,7 +425,7 @@ defmodule VutuvWeb.AgentDocs.Markdown do
   defp followed_organizations(%{organizations: [_ | _] = organizations}) do
     join_blocks([
       "## " <> gettext("Organizations"),
-      Enum.map_join(organizations, "\n", &"- [#{&1.name}](#{&1.url})")
+      Enum.map_join(organizations, "\n", &"- #{md_link(&1.name, &1.url)}")
     ])
   end
 
@@ -443,7 +443,7 @@ defmodule VutuvWeb.AgentDocs.Markdown do
     [
       "## #{gettext("People")}",
       Enum.map_join(people, "\n", fn person ->
-        "- [#{person.name}](#{person.url})" <>
+        "- #{md_link(person.name, person.url)}" <>
           if(person.title, do: " · #{person.title}", else: "") <>
           if(person.current, do: "", else: " (#{gettext("former")})")
       end)
@@ -455,7 +455,7 @@ defmodule VutuvWeb.AgentDocs.Markdown do
 
   defp job_employer(%{name: name, verified: verified, url: url}) do
     verified_mark = if verified, do: " (#{gettext("verified")})", else: ""
-    if url, do: "[#{name}](#{url})#{verified_mark}", else: "#{name}#{verified_mark}"
+    md_maybe_link(name, url) <> verified_mark
   end
 
   defp job_location(%{location: %{city: city, country_name: country}}),
@@ -478,13 +478,13 @@ defmodule VutuvWeb.AgentDocs.Markdown do
   defp job_tags(_label, []), do: nil
 
   defp job_tags(label, tags) do
-    "## #{label}\n" <> Enum.map_join(tags, "\n", &"- [#{&1.name}](#{&1.url})")
+    "## #{label}\n" <> Enum.map_join(tags, "\n", &"- #{md_link(&1.name, &1.url)}")
   end
 
   # One posting summary block on the board (/jobs) or an "Offene Stellen" section.
   defp job_summary(entry) do
     [
-      "## [#{md_text(entry.title)}](#{entry.url})",
+      "## #{md_link(entry.title, entry.url)}",
       "- #{gettext("Employer")}: #{job_employer(entry.employer)}",
       "- #{gettext("Employment type")}: #{entry.employment_type}",
       "- #{gettext("Workplace")}: #{entry.workplace_type}",
@@ -500,7 +500,7 @@ defmodule VutuvWeb.AgentDocs.Markdown do
   defp job_summary_tags([]), do: nil
 
   defp job_summary_tags(tags),
-    do: "- #{gettext("Tags")}: " <> Enum.map_join(tags, ", ", &"[#{&1.name}](#{&1.url})")
+    do: "- #{gettext("Tags")}: " <> Enum.map_join(tags, ", ", &md_link(&1.name, &1.url))
 
   # The tag page's "Offene Stellen" section (#933): the postings carrying the
   # tag, then a link into the pre-filtered board.
@@ -508,7 +508,7 @@ defmodule VutuvWeb.AgentDocs.Markdown do
     [
       "## #{gettext("Open positions")}",
       Enum.map_join(postings, "\n\n", &job_summary/1),
-      doc[:jobs_url] && "[#{gettext("All jobs with this tag")}](#{doc.jobs_url})"
+      doc[:jobs_url] && md_link(gettext("All jobs with this tag"), doc.jobs_url)
     ]
     |> Enum.filter(&is_binary/1)
     |> Enum.join("\n\n")
@@ -639,10 +639,10 @@ defmodule VutuvWeb.AgentDocs.Markdown do
   # An honor tag is an admin-granted badge, not a peer-vouched skill, so it shows
   # the "honor tag" marker in place of the endorsement count.
   defp entry_line("tags", %{honor: true} = tag),
-    do: "- [#{tag.name}](#{tag.url}) (#{gettext("honor tag")})"
+    do: "- #{md_link(tag.name, tag.url)} (#{gettext("honor tag")})"
 
   defp entry_line("tags", tag),
-    do: "- [#{tag.name}](#{tag.url}) (#{endorsements_label(tag)}#{endorser_names(tag)})"
+    do: "- #{md_link(tag.name, tag.url)} (#{endorsements_label(tag)}#{endorser_names(tag)})"
 
   defp entry_line("work_experiences", work), do: work_line(work)
   defp entry_line("educations", edu), do: education_line(edu)
@@ -654,11 +654,20 @@ defmodule VutuvWeb.AgentDocs.Markdown do
     do: "- #{md_text(language.name)}: #{language.level}#{language_preferred_gloss(language)}"
 
   defp entry_line("links", link), do: link_line(link)
-  defp entry_line("emails", email), do: "- #{email.type}: <#{email.value}>"
+
+  defp entry_line("emails", email),
+    do: "- #{md_text(email.type)}: #{md_autolink(email.value)}"
+
   defp entry_line("social_media_accounts", account), do: social_line(account)
   defp entry_line("messengers", messenger), do: messenger_line(messenger)
-  defp entry_line("phone_numbers", phone), do: "- #{phone.type}: #{phone.value}"
-  defp entry_line("addresses", address), do: "- " <> address_line(address)
+
+  defp entry_line("phone_numbers", phone),
+    do: "- #{md_text(phone.type)}: #{md_text(phone.value)}"
+
+  # `address_line/1` and `code_stats_facts/1` are shared with the plain-text
+  # renderer, which must not carry backslashes, so the Markdown side escapes
+  # what it is handed rather than the fragment escaping itself.
+  defp entry_line("addresses", address), do: "- " <> md_text(address_line(address))
 
   # One code-forge account of the profile's "Code" section (Vutuv.CodeStats):
   # the account line with its glanceable facts, then one indented line per top
@@ -666,14 +675,15 @@ defmodule VutuvWeb.AgentDocs.Markdown do
   # list) so the loose section join separates accounts, not an account from its
   # own repos.
   defp code_stats_block(account) do
-    ["- #{account.provider}: #{account.url} (#{code_stats_facts(account)})"]
+    [
+      "- #{md_text(account.provider)}: #{md_url(account.url)} (#{md_text(code_stats_facts(account))})"
+    ]
     |> Kernel.++(Enum.map(account.top_repos, &code_repo_line/1))
     |> Enum.join("\n")
   end
 
   defp code_repo_line(repo) do
-    name = md_text(repo.name || "")
-    linked = if repo.url, do: "[#{name}](#{repo.url})", else: name
+    linked = md_maybe_link(repo.name || "", repo.url)
 
     details =
       [
@@ -734,7 +744,7 @@ defmodule VutuvWeb.AgentDocs.Markdown do
   # links after the count. The profile's tag list carries no roster, so it
   # renders nothing there.
   defp endorser_names(%{endorsers: [_ | _] = people}),
-    do: ": " <> Enum.map_join(people, ", ", &"[#{md_text(&1.name)}](#{&1.url})")
+    do: ": " <> Enum.map_join(people, ", ", &md_link(&1.name, &1.url))
 
   defp endorser_names(_tag), do: ""
 
@@ -756,7 +766,7 @@ defmodule VutuvWeb.AgentDocs.Markdown do
     qualification_note = work_qualification_note(work)
 
     ["- ", Enum.join([work.title, work.organization] |> Enum.filter(& &1), " @ ")]
-    |> Kernel.++(if page, do: [" ([#{page.name}](#{page.url}))"], else: [])
+    |> Kernel.++(if page, do: [" (#{md_link(page.name, page.url)})"], else: [])
     |> Kernel.++(if kind_note, do: [" [#{kind_note}]"], else: [])
     |> Kernel.++(if period, do: [" (#{period})"], else: [])
     |> Kernel.++(if qualification_note, do: [" [#{qualification_note}]"], else: [])
@@ -841,7 +851,7 @@ defmodule VutuvWeb.AgentDocs.Markdown do
     base
     |> append_if(
       reference.document,
-      &(&1 <> " [#{gettext("document")}](#{md_url(reference.document.url)})")
+      &(&1 <> " " <> md_link(gettext("document"), reference.document.url))
     )
     |> append_if(reference.text, &(&1 <> "\n\n  " <> md_text(reference.text)))
   end
@@ -856,10 +866,10 @@ defmodule VutuvWeb.AgentDocs.Markdown do
 
     line =
       base
-      |> append_if(qualification.url, &(&1 <> " <#{md_url(qualification.url)}>"))
+      |> append_if(qualification.url, &(&1 <> " " <> md_autolink(qualification.url)))
       |> append_if(
         qualification.document,
-        &(&1 <> " [#{gettext("proof document")}](#{md_url(qualification.document.url)})")
+        &(&1 <> " " <> md_link(gettext("proof document"), qualification.document.url))
       )
 
     # The jobs the credential earned (issue #1109), one indented line each —
@@ -878,8 +888,7 @@ defmodule VutuvWeb.AgentDocs.Markdown do
   end
 
   defp citing_job_line(job) do
-    title = md_text(job.title)
-    linked = if job.url, do: "[#{title}](#{md_url(job.url)})", else: title
+    linked = md_maybe_link(job.title, job.url)
     facts = citing_job_facts(job)
 
     if facts == "", do: "  - #{linked}", else: "  - #{linked}: #{md_text(facts)}"
@@ -947,10 +956,10 @@ defmodule VutuvWeb.AgentDocs.Markdown do
   end
 
   defp link_line(%{description: nil, url: url} = link),
-    do: "- <#{md_url(url)}>" <> verified_suffix(link)
+    do: "- " <> md_autolink(url) <> verified_suffix(link)
 
   defp link_line(%{description: description, url: url} = link),
-    do: "- [#{md_text(description)}](#{md_url(url)})" <> verified_suffix(link)
+    do: "- #{md_link(description, url)}" <> verified_suffix(link)
 
   # A verified link (proved to be the member's own webpage) carries the same
   # marker the profile's verified mark shows.
@@ -961,10 +970,10 @@ defmodule VutuvWeb.AgentDocs.Markdown do
   # section. A provider without a canonical URL scheme (Snapchat) carries
   # only the account name, so there is no link to offer.
   defp social_line(%{provider: provider, url: "http" <> _ = url} = account),
-    do: "- [#{provider}](#{md_url(url)})" <> verified_profile_suffix(account)
+    do: "- " <> md_link(provider, url) <> verified_profile_suffix(account)
 
   defp social_line(%{provider: provider, url: value} = account),
-    do: "- #{provider}: #{value}" <> verified_profile_suffix(account)
+    do: "- #{md_text(provider)}: #{md_text(value)}" <> verified_profile_suffix(account)
 
   # A verified social account (proved to be the member's own) carries the same
   # marker its verified mark shows on the profile card.
@@ -976,13 +985,13 @@ defmodule VutuvWeb.AgentDocs.Markdown do
   # shows the bare contact. A contact link IS its own address, so it is printed
   # once rather than as a link labelled with itself.
   defp messenger_line(%{provider: provider, kind: "link", url: "http" <> _ = url}),
-    do: "- #{provider}: <#{md_url(url)}>"
+    do: "- #{md_text(provider)}: " <> md_autolink(url)
 
   defp messenger_line(%{provider: provider, contact: contact, url: "http" <> _ = url}),
-    do: "- #{provider}: [#{contact}](#{md_url(url)})"
+    do: "- #{md_text(provider)}: #{md_link(contact, url)}"
 
   defp messenger_line(%{provider: provider, contact: contact}),
-    do: "- #{provider}: #{contact}"
+    do: "- #{md_text(provider)}: #{md_text(contact)}"
 
   @doc false
   def address_line(address) do
@@ -1008,7 +1017,7 @@ defmodule VutuvWeb.AgentDocs.Markdown do
   defp post_line(post) do
     line =
       "- #{post.published_on}#{pin_suffix(post)}#{repost_suffix(post)}: " <>
-        "[#{md_text(entry_label(post))}](#{post.url})#{quote_suffix(post)}"
+        md_link(entry_label(post), post.url) <> md_text(quote_suffix(post))
 
     Enum.join([line | Enum.map(thread_context(post), &thread_context_line/1)], "\n")
   end
@@ -1022,7 +1031,7 @@ defmodule VutuvWeb.AgentDocs.Markdown do
   # Indented under the entry it belongs to, and naming its author — which is
   # what tells it apart from an entry line, since those carry no author.
   defp thread_context_line(post) do
-    "  - #{post.published_on} [#{md_text(post.author)}](#{post.url}): " <>
+    "  - #{post.published_on} #{md_link(post.author, post.url)}: " <>
       md_text(entry_label(post))
   end
 
@@ -1048,6 +1057,11 @@ defmodule VutuvWeb.AgentDocs.Markdown do
   # The card on the page shows the quoted post's author and words; an agent gets
   # the same two facts as a sentence, because an entry that only reacts to
   # something ("exactly this") is unreadable without it.
+  #
+  # Both halves are the quoting server's. The escaping is the Markdown caller's
+  # (the plain-text renderer must not carry backslashes), and it escapes the
+  # whole assembled sentence — the surrounding words are ours and hold none of
+  # the three characters `md_text/1` touches.
   def quote_suffix(%{quote: %{url: url, author: nil}}),
     do: " — " <> gettext("Quotes %{url}", url: url)
 
@@ -1092,8 +1106,8 @@ defmodule VutuvWeb.AgentDocs.Markdown do
   defp person_line(person), do: "- #{person_text(person)}"
 
   defp person_text(person) do
-    "[#{md_text(person.name)}](#{person.url})" <>
-      if(person.work_info, do: " — #{person.work_info}", else: "") <>
+    md_link(person.name, person.url) <>
+      if(person.work_info, do: " — " <> md_text(person.work_info), else: "") <>
       tags_suffix(Map.get(person, :tags))
   end
 
@@ -1103,7 +1117,7 @@ defmodule VutuvWeb.AgentDocs.Markdown do
   defp tags_suffix(nil), do: ""
 
   defp tags_suffix(%{top: top, total: total}) do
-    links = Enum.map_join(top, ", ", fn tag -> "[#{md_text(tag.name)}](#{tag.url})" end)
+    links = Enum.map_join(top, ", ", fn tag -> md_link(tag.name, tag.url) end)
     " · #{gettext("Tags")}: #{links} (#{gettext("%{count} total", count: total)})"
   end
 
@@ -1125,7 +1139,7 @@ defmodule VutuvWeb.AgentDocs.Markdown do
     do: "> " <> gettext("In reply to a deleted post by %{name}.", name: author)
 
   defp in_reply_to_line(%{url: url, author: author}) do
-    author_link = "[#{md_text(author)}](#{url})"
+    author_link = md_link(author, url)
     "> " <> gettext("In reply to a post by %{name}.", name: author_link)
   end
 
@@ -1288,10 +1302,11 @@ defmodule VutuvWeb.AgentDocs.Markdown do
   # so a reader (human or machine) can tell the facts apart.
   defp image_line(image) do
     [
-      "- ![#{image.alt || "image"}](#{image_url(image)})",
+      "- " <> md_image(image.alt || "image", image_url(image)),
       image[:caption] && "  #{md_text(image.caption)}",
       camera_line(image),
-      image[:download_url] && "  [#{gettext("Download the original")}](#{image.download_url})"
+      image[:download_url] &&
+        "  " <> md_link(gettext("Download the original"), image.download_url)
     ]
     |> Enum.reject(&is_nil/1)
     |> Enum.join("\n")
@@ -1324,7 +1339,7 @@ defmodule VutuvWeb.AgentDocs.Markdown do
   # same rule the HTML page follows, so the formats cannot disagree about
   # whether a post says anything about reuse.
   defp license_line(%{spdx: spdx, name: name, url: url}) when is_binary(spdx) do
-    "**#{gettext("Photos:")}** [#{md_text(name)}](#{url})"
+    "**#{gettext("Photos:")}** #{md_link(name, url)}"
   end
 
   defp license_line(_license), do: nil
@@ -1345,7 +1360,7 @@ defmodule VutuvWeb.AgentDocs.Markdown do
     heading = String.duplicate("#", min(3 + entry.depth, 6))
 
     [
-      "#{heading} [#{md_text(entry.author)}](#{entry.url}) · #{entry.published_on}",
+      "#{heading} #{md_link(entry.author, entry.url)} · #{entry.published_on}",
       reply_to,
       entry.body_markdown
     ]
@@ -1363,7 +1378,7 @@ defmodule VutuvWeb.AgentDocs.Markdown do
       entry.content_warning &&
         "> " <> gettext("Content warning") <> ": " <> md_text(entry.content_warning),
       md_text(entry.text),
-      "[#{gettext("View the original")}](#{entry.url})"
+      md_link(gettext("View the original"), entry.url)
     ]
     |> Enum.reject(&is_nil/1)
     |> Enum.join("\n\n")
@@ -1416,6 +1431,36 @@ defmodule VutuvWeb.AgentDocs.Markdown do
 
     ~s(") <> escaped <> ~s(")
   end
+
+  # One Markdown link, both halves escaped. A link assembled at the call site is
+  # a place the next author has to remember md_text/1 and md_url/1 again, and a
+  # dozen of them had already forgotten one or both: a member's own free text
+  # (an employer name, a display name, a tag) closed the `]` and forged a second
+  # link, and a remote server's URL closed the `)`.
+  defp md_link(label, url), do: "[" <> md_label(label) <> "](" <> md_url(url) <> ")"
+
+  # `[label](url)` for a label that may be absent a destination, which three
+  # sections need: a code repository, a job that cites a credential, an employer.
+  defp md_maybe_link(label, nil), do: md_text(label)
+  defp md_maybe_link(label, url), do: md_link(label, url)
+
+  # `![alt](url)`. The `!` is the only thing between an image and a link, so it
+  # belongs beside the function that owns the rest of the shape.
+  defp md_image(alt, url), do: "!" <> md_link(alt, url)
+
+  # `<url>`, the other link syntax. Same reason as `md_link/2`: the angle
+  # brackets were written out at four call sites and one of them had forgotten
+  # the escaper.
+  defp md_autolink(url), do: "<" <> md_url(url) <> ">"
+
+  # A link label is one line by definition, so a newline in it does not merely
+  # read oddly — it ends the list item the link sits in and hands the rest of a
+  # member's name to the document as structure of its own. `md_text/1` cannot
+  # do this for everyone: it also escapes post bodies and remote replies, where
+  # a line break is the author's.
+  defp md_label(value), do: value |> to_string() |> fold_lines() |> md_text()
+
+  defp fold_lines(value), do: String.replace(value, ~r/\s*[\r\n]+\s*/u, " ")
 
   # Escape the Markdown link-syntax characters in user-controlled link *text*
   # (names, excerpts), so a value like `x](http://evil)` cannot break out of

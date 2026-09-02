@@ -149,9 +149,14 @@ defmodule VutuvWeb.OauthController do
          limit: 1,
          window_ms: @consent_window
        ) == :ok do
+      # `inspect/1` escapes a newline rather than letting it
+      # end the record and start a plausible second one — an operator reading
+      # this line is diagnosing the very client that wrote them, so it must not
+      # be forgeable by that client. It also delimits each value, which is what
+      # says where an app called `Ivory user_agent=curl` ends.
       Logger.error(
-        "oauth: consent budget spent, app=#{request.app.name} " <>
-          "user_agent=#{UserAgent.capture(conn) || "(none sent)"}"
+        "oauth: consent budget spent, app=#{inspect(request.app.name)} " <>
+          "user_agent=#{inspect(UserAgent.capture(conn) || "(none sent)")}"
       )
     end
   end

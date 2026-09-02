@@ -85,6 +85,30 @@ defmodule Vutuv.ApiAuth.OAuthTest do
       assert %{redirect_uris: _} = errors_on(changeset)
     end
 
+    # The name is read by two things that treat a line break as structure: the
+    # consent screen a member decides on, and the operator's log line naming a
+    # runaway client. Both self-service registration paths take it, so the rule
+    # sits on the changeset they share.
+    test "an app name spanning two lines is refused", %{developer: developer} do
+      forged = "Ivory\n[error] oauth: consent budget spent"
+
+      assert {:error, changeset} =
+               ApiAuth.create_app(developer, %{
+                 "name" => forged,
+                 "redirect_uris" => ["https://example.org/cb"]
+               })
+
+      assert %{name: ["must be a single line"]} = errors_on(changeset)
+
+      assert {:error, changeset} =
+               ApiAuth.create_mastodon_app(%{
+                 "name" => forged,
+                 "redirect_uris" => ["org.example.client://oauth"]
+               })
+
+      assert %{name: ["must be a single line"]} = errors_on(changeset)
+    end
+
     test "regenerating the secret invalidates the old one", %{
       member: member,
       app: app,

@@ -76,9 +76,16 @@ defmodule VutuvWeb.ControllerHelpers do
   route sigil expands at the call site with that controller's correct default.
   """
   def referrer_url(%Conn{} = conn, fallback) when is_binary(fallback) do
-    case Conn.get_req_header(conn, "referer") do
-      [referer | _] -> URI.parse(referer).path || fallback
-      [] -> fallback
+    # A referer is as caller-supplied as a `return_to` parameter — a header is
+    # whatever the client sent — and `https://evil.example//x` parses to the
+    # path `//x`, which is the first shape `safe_return_to/2` refuses. So the
+    # two go through one rule rather than one of them being the careful half.
+    with [referer | _] <- Conn.get_req_header(conn, "referer"),
+         path when is_binary(path) <- URI.parse(referer).path,
+         local when is_binary(local) <- safe_return_to(path) do
+      local
+    else
+      _ -> fallback
     end
   end
 
@@ -95,16 +102,53 @@ defmodule VutuvWeb.ControllerHelpers do
   defp profile_path(%User{} = user), do: ~p"/#{user}"
   defp profile_path(_), do: ~p"/"
 
-  @doc """
+  # Lowercase only: the value is downcased before the test, so a spelling can
+  # never be added in one case and forgotten in the other.
+  @never_local ["\\", "\t", "\n", "\r", "%09", "%0a", "%0d"]
+
+  @doc ~S"""
   Validates a caller-supplied redirect target, returning the path only when it
   is a same-origin absolute path (`/foo`) and `nil` otherwise.
 
-  Protocol-relative URLs (`//evil.com`) are external and rejected; matching the
-  prefixes (rather than slicing) also keeps the bare `"/"` from raising.
+  `prefix` narrows what counts as local — `safe_return_to(value, "/admin/")`
+  answers only for a path inside the admin area — so a scope that must not be
+  left says so here rather than writing the rule again.
+
+  The value reaches an `href` and a `redirect(to:)`, so what decides it is how a
+  **browser** resolves the string, not how it reads. Two things move it to
+  another origin, and only the first is the obvious one:
+
+    * a second slash right after the leading one (`//evil.example`) — and a
+      backslash counts, because the WHATWG URL parser treats `\` as `/` for an
+      http(s) document, so `/\evil.example` navigates to `evil.example` in
+      Chrome, Firefox and Safari alike. That is the shape this used to admit;
+    * a character the browser **removes before it parses at all** — tab, LF and
+      CR — which hides such a slash from any check that reads the string as
+      written: `/\tevil.example` is `//evil.example` by the time it is resolved.
+
+  So the shape is rejected rather than repaired, in the same spelling Phoenix's
+  own `redirect(to:)` refuses (it raises there; this is the read-only half that
+  has to answer instead of blowing up a page render). Their percent-encoded
+  forms go with them, since anything decoding once hands the browser the raw
+  character back.
   """
-  def safe_return_to("//" <> _), do: nil
-  def safe_return_to("/" <> _ = path), do: path
-  def safe_return_to(_), do: nil
+  def safe_return_to(value, prefix \\ "/")
+
+  def safe_return_to(value, prefix) when is_binary(value) and is_binary(prefix) do
+    # The second segment is what can move the value to another origin, so it is
+    # read relative to the prefix rather than to the string: inside `/admin/`
+    # the shape to refuse is `/admin//evil.example`, not `//evil.example`.
+    rest = String.replace_prefix(value, prefix, "")
+
+    cond do
+      not String.starts_with?(value, prefix) -> nil
+      String.starts_with?(rest, ["/", "\\"]) -> nil
+      String.contains?(String.downcase(value), @never_local) -> nil
+      true -> value
+    end
+  end
+
+  def safe_return_to(_value, _prefix), do: nil
 
   @doc """
   Loads an owned member resource: `Repo.get!` scoped to the path user's
