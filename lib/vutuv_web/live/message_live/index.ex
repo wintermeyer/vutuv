@@ -47,7 +47,6 @@ defmodule VutuvWeb.MessageLive.Index do
      socket
      |> assign_viewer()
      |> assign(:page_title, gettext("Messages"))
-     |> assign(:user_name, display_name(user))
      |> assign(:typing_tokens, %{})
      |> assign(:online_ids, Presence.online_ids())
      |> assign(:conversation, nil)
@@ -65,8 +64,19 @@ defmodule VutuvWeb.MessageLive.Index do
   # else reads their own. `:acting_as` is resolved by `Live.InitAssigns` from
   # the roles on every mount, never trusted out of the session, so a stale
   # session naming a page the member no longer speaks for lands on themselves.
-  defp assign_viewer(socket),
-    do: assign(socket, :viewer, socket.assigns[:acting_as] || socket.assigns.current_user)
+  # `:user_name` is derived here rather than in `mount/3`, and from the VIEWER
+  # rather than from `current_user`: it is the name the typing indicator
+  # broadcasts to the other side, and every message a publisher sends is signed
+  # with the page. Taking it from `current_user` told the other side the human's
+  # real name the moment somebody started typing — the one place the page's desk
+  # leaked the person sitting at it.
+  defp assign_viewer(socket) do
+    viewer = socket.assigns[:acting_as] || socket.assigns.current_user
+
+    socket
+    |> assign(:viewer, viewer)
+    |> assign(:user_name, display_name(viewer))
+  end
 
   # The sidebar lists load only on the connected mount (the page is
   # login-required, so the static render is replaced a moment later — no

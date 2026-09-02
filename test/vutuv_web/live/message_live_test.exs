@@ -2,8 +2,11 @@ defmodule VutuvWeb.MessageLiveTest do
   use VutuvWeb.ConnCase
 
   import Phoenix.LiveViewTest
+  import Vutuv.OrganizationsHelpers
 
   alias Vutuv.Chat
+  alias Vutuv.Identity
+  alias Vutuv.Organizations
 
   # A second browser session for another member.
   defp login_other_user(name \\ "Other") do
@@ -679,6 +682,55 @@ defmodule VutuvWeb.MessageLiveTest do
       _ = :sys.get_state(view.pid)
 
       assert has_element?(view, "#other-online")
+    end
+  end
+
+  # Its own describe: the organization helpers need a global flag, which this
+  # sync module may set but which should not be held for the whole file.
+  describe "speaking for a page" do
+    setup do
+      Application.put_env(:vutuv, :verify_organization_domains, true)
+
+      on_exit(fn ->
+        Application.put_env(:vutuv, :verify_organization_domains, false)
+        Application.delete_env(:vutuv, :organizations_dns_resolver)
+      end)
+
+      :ok
+    end
+
+    # Every message a publisher sends is signed with the page, and the whole
+    # point of speaking for a page is that the desk answers rather than the
+    # person at it. The typing indicator took its name from `current_user`, so
+    # the moment they started typing the other side was told who they really are.
+    test "a publisher typing for a page shows the page's name, not their own", %{conn: conn} do
+      {conn, owner} = create_and_login_user(conn)
+      # Both logins first: `sent_pin/0` reads the most recent email, and the
+      # role-grant notification below would otherwise be sitting on top of it.
+      {other_conn, other} = login_other_user()
+
+      page = active_organization_for(owner, %{"name" => "Acme GmbH"})
+      {:ok, _role} = Organizations.add_role(page, owner, "publisher", owner)
+
+      conn =
+        conn
+        |> post(~p"/organizations/#{page.slug}/act_as")
+        |> recycle()
+        |> Map.put(:secret_key_base, conn.secret_key_base)
+
+      # `login_other_user/0` hands back the struct `register_user/2` returned,
+      # which is still unconfirmed; the PIN login confirmed the row, not the copy.
+      {:ok, conversation} = Chat.find_or_create_conversation(Repo.reload!(other), page)
+
+      {:ok, typer, _} = live(conn, ~p"/messages/#{conversation.id}")
+      {:ok, watcher, _} = live(other_conn, ~p"/messages/#{conversation.id}")
+
+      typer |> form("#message-form", message: %{body: "hallo"}) |> render_change()
+      _ = :sys.get_state(watcher.pid)
+
+      html = render(watcher)
+      assert html =~ "Acme GmbH"
+      refute html =~ Identity.display_name(owner)
     end
   end
 end

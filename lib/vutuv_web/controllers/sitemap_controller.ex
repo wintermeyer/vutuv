@@ -51,8 +51,14 @@ defmodule VutuvWeb.SitemapController do
   # its list from `Sitemap.chunk_counts/0`) and this action answered it 404.
   # One list decides what exists.
   def show(conn, %{"name" => name}) do
+    # The chunk is bounded in the pattern, not only by the empty list below. The
+    # comment about "windowing off the end" holds while the number fits a
+    # bigint; past 2^63 Postgres never sees a query at all — Postgrex raises
+    # `DBConnection.EncodeError` on the OFFSET parameter, so an unbounded run of
+    # digits in the URL was a 500 rather than the 404 this action promises. Seven
+    # digits is far more chunks than any installation will ever have.
     with %{"type" => type, "chunk" => chunk} <-
-           Regex.named_captures(~r/^(?<type>[a-z_]+)-(?<chunk>[1-9]\d*)\.xml$/, name),
+           Regex.named_captures(~r/^(?<type>[a-z_]+)-(?<chunk>[1-9]\d{0,6})\.xml$/, name),
          {:ok, entries_fun} <- Map.fetch(@entry_funs, type),
          [_ | _] = entries <- entries_fun.(String.to_integer(chunk)) do
       send_xml(conn, urlset(entries))
