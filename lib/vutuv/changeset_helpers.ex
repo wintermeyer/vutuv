@@ -115,6 +115,59 @@ defmodule Vutuv.ChangesetHelpers do
     end)
   end
 
+  @doc """
+  Drops any of `fields` whose change is not an ordinary `http(s)` web address.
+
+  The sibling of `scrub_nul/1`, and for the same reason: these columns hold URLs
+  copied out of another server's JSON, and they end up in an `href`. A value
+  like `javascript:1` does not merely render oddly — `Phoenix.Component.link/1`
+  calls `valid_destination!/2`, which **raises** on a scheme it does not know,
+  so one hostile URL takes down every render of the page that shows it. The
+  member whose feed it is has no way to remove it, and the socket dies on each
+  reconnect until the cache entry expires.
+
+  Dropped, not refused. These are optional display fields, and the rule the
+  quote-URI cap already states holds here too: one bad optional field must not
+  take an otherwise good post out of every feed. What is lost is a link; what a
+  refusal would lose is the post.
+
+  Run after the last `cast/3`, like `scrub_nul/1`, so what is validated is what
+  would be stored.
+  """
+  def drop_non_web_urls(%Ecto.Changeset{} = changeset, fields) do
+    Enum.reduce(fields, changeset, &drop_unless_web_url/2)
+  end
+
+  defp drop_unless_web_url(field, changeset) do
+    case fetch_change(changeset, field) do
+      {:ok, value} when is_binary(value) -> keep_or_drop(changeset, field, value)
+      _ -> changeset
+    end
+  end
+
+  defp keep_or_drop(changeset, field, value) do
+    if web_url?(value), do: changeset, else: put_change(changeset, field, nil)
+  end
+
+  @doc """
+  Whether `value` is an ordinary web address: `http`/`https` and a real host.
+
+  The one definition of "safe to put in an `href`" for a string that came from
+  somewhere else. Everything `Phoenix.Component.link/1` would raise on — and
+  everything a browser would treat as a script or a local file — answers false.
+  """
+  def web_url?(value) when is_binary(value) do
+    case URI.parse(value) do
+      %URI{scheme: scheme, host: host} when scheme in ["http", "https"] and is_binary(host) ->
+        host != ""
+
+      _ ->
+        false
+    end
+  end
+
+  def web_url?(_value), do: false
+
   def normalize_name(string) do
     string
     |> String.normalize(:nfd)

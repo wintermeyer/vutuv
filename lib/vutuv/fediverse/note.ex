@@ -30,7 +30,7 @@ defmodule Vutuv.Fediverse.Note do
 
   use VutuvWeb, :model
 
-  import Vutuv.ChangesetHelpers, only: [scrub_nul: 1]
+  import Vutuv.ChangesetHelpers, only: [drop_non_web_urls: 2, scrub_nul: 1]
 
   alias Vutuv.Fediverse.Handle
   alias Vutuv.Translations
@@ -178,6 +178,11 @@ defmodule Vutuv.Fediverse.Note do
     ])
     # Remote strings, and a NUL in one raises on insert (issue #1767).
     |> scrub_nul()
+    # The URLs that become an `href`: `Phoenix.Component.link/1` raises on a
+    # scheme it does not know, so one hostile value would take down every render
+    # that shows this row. Dropped rather than refused — see
+    # `Vutuv.ChangesetHelpers.drop_non_web_urls/2`.
+    |> drop_non_web_urls([:origin_url])
     |> validate_required([
       :object_uri,
       :actor_uri,

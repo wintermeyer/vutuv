@@ -30,6 +30,8 @@ defmodule Vutuv.ContentFilters.ContentFilter do
 
   use VutuvWeb, :model
 
+  alias Vutuv.ContentFilters
+
   @kinds [:tag, :keyword]
 
   # A muted tag slug is short; a muted phrase can be a few words. Capped so a
@@ -92,6 +94,14 @@ defmodule Vutuv.ContentFilters.ContentFilter do
     |> validate_format(:pattern, ~r/[^\s*]/,
       message: "must contain something to match, not only wildcards"
     )
+    # Each `*` becomes a `.*`, and the length cap alone left room for about
+    # fifty of them — `a.*a.*a.*…` against a post that does not match is the
+    # textbook exponential backtrack, run over every post in the feed and on
+    # every keystroke of the live preview. `Vutuv.ContentFilters.compile_pattern/2`
+    # refuses to build such a regex at all; this is so the member is told rather
+    # than left with a rule that quietly matches nothing.
+    |> validate_wildcards(:pattern)
+    |> validate_wildcards(:account)
     # The account half has no such rule — `*` is exactly the wildcard-only value
     # it is supposed to carry — but it does share the column's ceiling.
     |> validate_length(:account, min: 1, max: @max_pattern)
@@ -104,6 +114,19 @@ defmodule Vutuv.ContentFilters.ContentFilter do
       name: :content_filters_user_id_kind_pattern_index,
       message: "you already mute this"
     )
+  end
+
+  defp validate_wildcards(changeset, field) do
+    validate_change(changeset, field, fn ^field, value ->
+      if ContentFilters.too_many_wildcards?(value) do
+        [
+          {field,
+           {"may use at most %{max} wildcards (*).", [max: ContentFilters.max_wildcards()]}}
+        ]
+      else
+        []
+      end
+    end)
   end
 
   # Trim and collapse inner whitespace so "  machine   learning " and
