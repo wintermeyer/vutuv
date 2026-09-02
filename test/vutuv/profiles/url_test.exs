@@ -13,6 +13,33 @@ defmodule Vutuv.Profiles.UrlTest do
     Url.changeset(%Url{}, %{"value" => value, "description" => "x"}).valid?
   end
 
+  # The capture is what the profile presents as an automatic picture *of the
+  # linked page*, and it is taken server-side for exactly that reason. The
+  # changeset leaves `:screenshot` out of `cast/3` and then read it back out of
+  # the raw params under its string key — the one shape only a multipart request
+  # produces — so a member could upload any image into the slot, and the file
+  # was written to disk from inside the changeset, before any insert.
+  test "a screenshot cannot be uploaded through the params" do
+    # A real file, so the test fails on the upload being stored rather than on
+    # the fixture being absent.
+    path = Path.join(System.tmp_dir!(), "not-a-capture-#{System.unique_integer([:positive])}.png")
+    File.write!(path, <<0x89, ?P, ?N, ?G, 13, 10, 26, 10>>)
+    on_exit(fn -> File.rm(path) end)
+
+    upload = %Plug.Upload{path: path, filename: Path.basename(path), content_type: "image/png"}
+
+    changeset =
+      Url.changeset(%Url{}, %{
+        "value" => "https://example.org",
+        "description" => "x",
+        "screenshot" => upload
+      })
+
+    assert changeset.valid?
+    assert Ecto.Changeset.get_change(changeset, :screenshot) == nil
+    assert Ecto.Changeset.get_change(changeset, :screenshot_moderation) == nil
+  end
+
   test "accepts ordinary public URLs" do
     assert valid?("https://example.org/profile")
     assert valid?("example.org")

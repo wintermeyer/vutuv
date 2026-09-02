@@ -50,6 +50,28 @@ defmodule VutuvWeb.PostThreadLiveTest do
     {root, chain |> Enum.reverse() |> tl()}
   end
 
+  describe "the focus post is authorized on the socket" do
+    # The `post_id` reaches this LiveView through the controller-curated
+    # `live_render` session — signed, unencrypted, bound to no user and good for
+    # days. The controller checked visibility once, when the page was public;
+    # nothing re-asked. So a token lifted from a public permalink kept serving
+    # the post in full after its author narrowed it, to a socket carrying no
+    # cookie at all.
+    test "a post restricted after the token was minted is not rendered" do
+      writer = author()
+      post = create_post!(writer, %{body: "Erst öffentlich, dann nicht mehr"})
+
+      {:ok, _view, html} = thread_view(post)
+      assert html =~ "Erst öffentlich, dann nicht mehr"
+
+      {:ok, restricted} =
+        Posts.update_post(post, %{body: post.body, denials: [%{"wildcard" => "everyone"}]})
+
+      {:ok, _view, html} = thread_view(restricted)
+      refute html =~ "Erst öffentlich, dann nicht mehr"
+    end
+  end
+
   describe "small conversations (unchanged, issue #1006)" do
     test "a lone post renders as a single card without the thread frame" do
       post = create_post!(author(), %{body: "all alone here"})

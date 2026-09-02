@@ -129,9 +129,15 @@ defmodule Vutuv.Profiles.Url do
   # Screenshots are generated server-side (headless Chromium) and stored via
   # the uploader, so the field is set programmatically rather than cast from
   # params.
-  defp put_screenshot(changeset, %{"screenshot" => %Plug.Upload{} = upload}),
-    do: store_screenshot(changeset, upload)
-
+  #
+  # ATOM key only, and that is the whole guard: request params are always
+  # string-keyed, so this clause can be reached by `Vutuv.PageScreenshot` and by
+  # nothing a member can send. A string-key twin used to sit here, which meant
+  # `:screenshot` was left out of `cast/3` and then read straight back out of
+  # the raw params — a member could put any picture in the slot the profile
+  # presents as an automatic capture OF THE LINKED PAGE, and the file was
+  # written to disk from inside the changeset, so it landed even when the row
+  # was never inserted. Never add a string-key clause here.
   defp put_screenshot(changeset, %{screenshot: %Plug.Upload{} = upload}),
     do: store_screenshot(changeset, upload)
 

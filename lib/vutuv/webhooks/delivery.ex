@@ -11,6 +11,11 @@ defmodule Vutuv.Webhooks.Delivery do
   schema "webhook_deliveries" do
     belongs_to(:subscription, Vutuv.Webhooks.Subscription)
 
+    # Whose event this carries, so the sender can re-ask whether they still
+    # authorize the app. `nil` for a ping (no member, no grant) and for a row
+    # queued before the column existed.
+    belongs_to(:member, Vutuv.Accounts.User)
+
     field(:event, :string)
     field(:payload, :map, default: %{})
     field(:attempts, :integer, default: 0)

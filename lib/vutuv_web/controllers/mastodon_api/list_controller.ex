@@ -21,7 +21,6 @@ defmodule VutuvWeb.MastodonApi.ListController do
 
   import Ecto.Query, only: [from: 2]
 
-  alias Vutuv.Accounts
   alias Vutuv.Accounts.User
   alias Vutuv.Fediverse
   alias Vutuv.Keyset
@@ -30,7 +29,7 @@ defmodule VutuvWeb.MastodonApi.ListController do
   alias Vutuv.Posts.Post
   alias Vutuv.Repo
   alias Vutuv.Social
-  alias Vutuv.UUIDv7
+  alias VutuvWeb.MastodonApi.AccountIds
   alias VutuvWeb.MastodonApi.Pagination
   alias VutuvWeb.MastodonApi.Statuses
 
@@ -53,21 +52,25 @@ defmodule VutuvWeb.MastodonApi.ListController do
   def favourites(conn, params),
     do: engaged(conn, params, [&Posts.liked_statuses/2, &Fediverse.liked_statuses/2])
 
+  # The roster of an account this installation withholds is not ours to serve,
+  # and a non-empty answer would confirm the account exists where the profile
+  # itself answers 403 — so the subject goes through the same gate the sibling
+  # endpoints in `AccountController` apply, and a withheld one 404s.
   def followers(conn, %{"id" => id} = params) do
     page = Pagination.params(params)
 
-    accounts =
-      case UUIDv7.with_cast(id, &Accounts.get_user/1) do
-        %User{} = user ->
+    case AccountIds.visible(conn, id) do
+      %User{} = user ->
+        accounts =
           user
           |> Social.follow_accounts(:followers, Pagination.opts(page))
           |> Enum.map(&Presenter.account/1)
 
-        nil ->
-          []
-      end
+        respond(conn, accounts, page)
 
-    respond(conn, accounts, page)
+      _withheld_or_absent ->
+        not_found(conn)
+    end
   end
 
   def blocks(conn, params) do

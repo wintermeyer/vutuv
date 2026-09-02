@@ -93,15 +93,15 @@ defmodule Vutuv.Moderation do
   :already_reported | changeset}`.
   """
   def report_content(%User{} = reporter, content, attrs) do
-    # An open case means the content was already frozen by an earlier report;
-    # the visibility check would now refuse everyone, but further reports on
-    # an open case are wanted (they add weight), so the case wins.
+    # The gate is `can_report?/2`, the one `ReportController.new` already asks —
+    # see its `@doc` for why the open-case allowance has to be reporter-specific.
+    # It also answers the missing-owner case, so there is no separate branch for
+    # it here.
     open = open_case_for(content)
 
     cond do
-      owner_id(content) == nil -> {:error, :not_allowed}
       owner_id(content) == reporter.id -> {:error, :own_content}
-      is_nil(open) and not reportable_by?(reporter, content) -> {:error, :not_allowed}
+      not can_report?(reporter, content, open) -> {:error, :not_allowed}
       is_nil(open) -> open_new_case(reporter, content, attrs)
       true -> join_case(open, reporter, content, attrs)
     end
@@ -121,17 +121,22 @@ defmodule Vutuv.Moderation do
   moment a case was opened. A bystander with no report on the case falls through
   to the ordinary visibility check.
   """
-  def can_report?(%User{} = reporter, content) do
+  def can_report?(%User{} = reporter, content),
+    do: can_report?(reporter, content, open_case_for(content))
+
+  # The arity-3 twin exists so `report_content/3`, which has already loaded the
+  # open case to decide what to do with it, does not read the same row twice.
+  defp can_report?(%User{} = reporter, content, open) do
     owner_id(content) != nil and
-      (reporter_on_open_case?(reporter, content) or reportable_by?(reporter, content))
+      (reporter_on_open_case?(reporter, open) or reportable_by?(reporter, content))
   end
 
   # Whether `reporter` already filed a report on `content`'s open case. Being
   # tied to the case this way keeps the report form reachable (e.g. to file a
   # follow-up), but a case nobody else can see never opens the form to a
   # stranger who cannot otherwise view the content.
-  defp reporter_on_open_case?(%User{id: reporter_id}, content) do
-    case open_case_for(content) do
+  defp reporter_on_open_case?(%User{id: reporter_id}, open) do
+    case open do
       nil ->
         false
 

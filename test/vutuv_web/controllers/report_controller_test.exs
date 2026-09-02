@@ -4,6 +4,11 @@ defmodule VutuvWeb.ReportControllerTest do
   alias Vutuv.Moderation
   alias Vutuv.Moderation.Case
 
+  # Both members must be logged in before a freeze fires its owner-notification
+  # email, so each login PIN is still the newest mail; each needs its own
+  # session-initialised conn (see the ConnCase setup).
+  defp fresh_conn, do: Plug.Test.init_test_session(build_conn(), %{})
+
   setup %{conn: conn} do
     author = insert_activated_user()
     post = insert(:post, user: author)
@@ -95,12 +100,8 @@ defmodule VutuvWeb.ReportControllerTest do
     end
 
     test "a bystander cannot preview frozen content once a case is open, but the author can" do
-      # Log both members in first, so each login PIN is read from the mailbox
-      # before the freeze fires its owner-notification email. Each needs its own
-      # session-initialised conn (see the ConnCase setup).
-      fresh_conn = fn -> Plug.Test.init_test_session(build_conn(), %{}) end
-      {author_conn, author} = create_and_login_user(fresh_conn.())
-      {bystander_conn, _bystander} = create_and_login_user(fresh_conn.())
+      {author_conn, author} = create_and_login_user(fresh_conn())
+      {bystander_conn, _bystander} = create_and_login_user(fresh_conn())
 
       post = insert(:post, user: author)
 
@@ -177,6 +178,30 @@ defmodule VutuvWeb.ReportControllerTest do
       assert flash =~ "paused"
       assert flash =~ "either"
       assert flash =~ "unfounded"
+    end
+
+    # The `new` action has refused a bystander since #F10, but `create` never
+    # shared the gate: an open case made the visibility check unreachable for
+    # *everyone*, so a member the author had blocked could still file — and a
+    # trusted reporter's report is what upgrades a flagged case and freezes the
+    # content. The form 404ing while the POST behind it worked is the whole bug.
+    test "a bystander cannot file on an open case they could not see" do
+      {_author_conn, author} = create_and_login_user(fresh_conn())
+      {bystander_conn, bystander} = create_and_login_user(fresh_conn())
+
+      post = insert(:post, user: author)
+      {:ok, _} = Vutuv.Social.block_user(author, bystander)
+
+      {:ok, _} = Moderation.report_content(insert_activated_user(), post, %{"category" => "spam"})
+      cases_before = Repo.aggregate(Case, :count)
+
+      assert bystander_conn
+             |> post(~p"/reports", %{
+               "report" => %{"type" => "post", "id" => post.id, "category" => "spam"}
+             })
+             |> response(404)
+
+      assert Repo.aggregate(Case, :count) == cases_before
     end
 
     test "reporting your own content is refused", %{conn: conn} do

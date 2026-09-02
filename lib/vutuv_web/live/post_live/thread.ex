@@ -218,15 +218,29 @@ defmodule VutuvWeb.PostLive.Thread do
 
   def handle_info(_other, socket), do: {:noreply, socket}
 
+  defp visible_focus(post_id, viewer) do
+    with %Posts.Post{} = post <- Posts.get_post(post_id),
+         true <- Posts.visible_to?(post, viewer) do
+      post
+    else
+      _withheld_or_gone -> nil
+    end
+  end
+
   # (Re)computes the window for the current budgets and batches what the
   # cards need: engagement for every shown post's action bar and the viewer's
   # follow edges for the ⋯ menus' mute items — the way the feed does it.
   defp load_window(socket) do
     viewer = socket.assigns.current_user
 
-    case Posts.get_post(socket.assigns.post_id) do
+    # The controller checked visibility once, for the request that rendered the
+    # page. This session map is signed but not encrypted and lives for days, so
+    # a socket joining with it has to be told again — a post narrowed or frozen
+    # since then is as absent here as a deleted one.
+    case visible_focus(socket.assigns.post_id, viewer) do
       nil ->
-        # Deleted while the socket lived; the controller 404s the next load.
+        # Deleted, or no longer this viewer's to see; the controller answers the
+        # next full load.
         socket
         |> assign(:window, nil)
         |> assign(:focus, nil)

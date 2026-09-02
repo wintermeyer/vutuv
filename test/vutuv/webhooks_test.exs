@@ -290,6 +290,32 @@ defmodule Vutuv.WebhooksTest do
       assert Webhooks.deliver_due() == 0
     end
 
+    # The app-level kill switch above cuts in-flight deliveries; the member's own
+    # revocation did not, because the grant was checked once at emit and never
+    # again. The backoff ladder retries a failing endpoint for about four hours,
+    # so "I revoked it" and "it stopped receiving my events" were hours apart.
+    test "a revoked grant stops an already-queued delivery", %{member: member, app: app} do
+      subscribe!(app, ["follower.created"])
+      grant!(member, app, ["social:read"])
+      Webhooks.emit(member.id, "follower.created", %{"follower" => "anna"})
+
+      assert Repo.aggregate(Delivery, :count) == 1
+
+      [grant] = ApiAuth.list_grants(member)
+      ApiAuth.revoke_grant!(grant)
+
+      assert Webhooks.deliver_due() == 0
+
+      # And the row is retired, not merely skipped: the due query only lets a
+      # row go at @max_attempts, so one that is filtered out of the batch would
+      # otherwise be selected again every 15 s forever — and, the batch being
+      # capped and unordered, would eventually starve real deliveries out of it.
+      assert Webhooks.deliver_due() == 0
+      assert %{attempts: attempts, last_error: reason} = Repo.one(Delivery)
+      assert attempts == Webhooks.max_attempts()
+      assert reason =~ "revoked"
+    end
+
     test "failures back off and eventually disable the subscription", %{member: member, app: app} do
       {subscription, _secret} = subscribe!(app, ["follower.created"])
       grant!(member, app, ["social:read"])
@@ -371,6 +397,8 @@ defmodule Vutuv.WebhooksTest do
       assert [%Delivery{delivered_at: nil, last_status: 302}] = Repo.all(Delivery)
     end
 
+    # Also the guard on the send-time grant check: a ping carries no member and
+    # no grant, so it is the one delivery deliberately left ungated.
     test "ping delivers without any grant", %{app: app} do
       {subscription, _secret} = subscribe!(app, ["follower.created"])
 

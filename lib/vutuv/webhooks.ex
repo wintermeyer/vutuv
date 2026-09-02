@@ -25,7 +25,7 @@ defmodule Vutuv.Webhooks do
 
   alias Vutuv.Accounts.User
   alias Vutuv.ApiAuth
-  alias Vutuv.ApiAuth.{App, Grant}
+  alias Vutuv.ApiAuth.{App, Grant, Scopes}
   alias Vutuv.Repo
   alias Vutuv.SocialFeed.Http
   alias Vutuv.Webhooks.{Deliverer, Delivery, Subscription}
@@ -148,7 +148,7 @@ defmodule Vutuv.Webhooks do
     if subscription_ids == [] do
       :ok
     else
-      queue_all(subscription_ids, event, envelope(member_id, event, data))
+      queue_all(member_id, subscription_ids, event, envelope(member_id, event, data))
     end
   end
 
@@ -164,7 +164,7 @@ defmodule Vutuv.Webhooks do
     }
   end
 
-  defp queue_all(subscription_ids, event, payload) do
+  defp queue_all(member_id, subscription_ids, event, payload) do
     now = DateTime.utc_now(:second)
     naive_now = NaiveDateTime.utc_now(:second)
 
@@ -173,6 +173,7 @@ defmodule Vutuv.Webhooks do
         %{
           id: Vutuv.UUIDv7.generate(),
           subscription_id: subscription_id,
+          member_id: member_id,
           event: event,
           payload: payload,
           next_attempt_at: now,
@@ -229,6 +230,7 @@ defmodule Vutuv.Webhooks do
           limit: 100
         )
       )
+      |> drop_revoked()
 
     due
     |> Task.async_stream(&safe_attempt/1,
@@ -239,6 +241,77 @@ defmodule Vutuv.Webhooks do
     |> Stream.run()
 
     length(due)
+  end
+
+  # The member's own revocation has to cut in-flight deliveries the way the
+  # app-level kill switch above does. Their grant is checked when the row is
+  # queued, so without this a revocation reached only *future* events while the
+  # backoff ladder kept retrying the queued ones for about four hours — the
+  # opposite of what the moduledoc promises about cutting a leak.
+  #
+  # Asked here rather than in the due query because the scope a row needs comes
+  # from its `event` (`required_scope/1`), which no column holds; the batch is
+  # capped at 100, so it costs one query for the whole pass.
+  #
+  # **A row that fails this is retired, not merely skipped.** The due query's
+  # only exit is `attempts < @max_attempts`, so a row filtered out of the batch
+  # keeps its past `next_attempt_at` forever and is selected again every pass —
+  # and since the batch is capped and unordered, enough of them starve the real
+  # deliveries out of it entirely. Stamping the counter is the scheduler's
+  # bookkeeping, not a claim that anything was attempted, which is what
+  # `last_error` records.
+  defp drop_revoked(deliveries) do
+    live_scopes =
+      deliveries
+      |> Enum.map(& &1.member_id)
+      |> Enum.reject(&is_nil/1)
+      |> Enum.uniq()
+      |> live_grant_scopes()
+
+    {keep, revoked} = Enum.split_with(deliveries, &granted?(&1, live_scopes))
+
+    retire(revoked)
+    keep
+  end
+
+  defp retire([]), do: :ok
+
+  defp retire(deliveries) do
+    ids = Enum.map(deliveries, & &1.id)
+
+    Repo.update_all(
+      from(d in Delivery, where: d.id in ^ids),
+      set: [
+        attempts: @max_attempts,
+        last_error: "grant revoked before delivery",
+        updated_at: NaiveDateTime.utc_now(:second)
+      ]
+    )
+
+    :ok
+  end
+
+  defp live_grant_scopes([]), do: %{}
+
+  # One row per member × app (`oauth_grants` carries a unique index on the
+  # pair), so the map is built rather than merged.
+  defp live_grant_scopes(member_ids) do
+    from(g in Grant,
+      where: g.user_id in ^member_ids and is_nil(g.revoked_at),
+      select: {{g.user_id, g.app_id}, g.scopes}
+    )
+    |> Repo.all()
+    |> Map.new()
+  end
+
+  # A ping carries no member and nothing of anyone's, and a row queued before
+  # the column existed records no member to ask about — neither is gated.
+  defp granted?(%Delivery{member_id: nil}, _live_scopes), do: true
+
+  defp granted?(%Delivery{} = delivery, live_scopes) do
+    live_scopes
+    |> Map.get({delivery.member_id, delivery.subscription.app_id}, [])
+    |> Scopes.granted?(required_scope(delivery.event))
   end
 
   # One delivery raising must not take down the whole batch (and the Deliverer
