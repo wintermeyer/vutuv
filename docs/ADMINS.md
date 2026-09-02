@@ -723,9 +723,10 @@ too.
 The lite versions are derived at upload like every other version, and for
 everything uploaded before they existed by the deploy's `regenerate_images`
 step — which, on the deploy that introduces them, re-derives every post
-photo, profile-link screenshot and cover from its original (on vutuv.de about
-1,900 screenshots, a few minutes of CPU after the traffic switch). Until a
-row has its lite file the page shows the full version, never a broken one.
+photo, screenshot (profile links, post links and organization homepages) and
+cover from its original (on vutuv.de about 3,800 screenshots, some minutes of
+CPU after the traffic switch). Until a row has its lite file the page shows
+the full version, never a broken one.
 Pictures from other networks keep no original, so only those fetched after
 the deploy have a lite. See "Data-saving mode" under nginx for the one thing
 the proxy can add.
