@@ -97,7 +97,9 @@ defmodule Vutuv.Videos.Job do
       |> Stream.iterate(&(&1 + Videos.frame_interval_seconds()))
       |> Enum.take_while(&(&1 < duration))
 
-    cover_second = FFmpeg.representative_second(original, min(Videos.cover_window_seconds(), duration))
+    cover_second =
+      FFmpeg.representative_second(original, min(Videos.cover_window_seconds(), duration))
+
     Videos.heartbeat(video)
     cuts = FFmpeg.scene_cuts(original, limit)
     Videos.heartbeat(video)
@@ -171,7 +173,8 @@ defmodule Vutuv.Videos.Job do
 
     with {:ok, original} <- original(video),
          {:ok, facts} <- FFmpeg.probe(original),
-         :ok <- PostVideoStore.write_rendition(video.token, name, facts, progress_fun(video, name)) do
+         :ok <-
+           PostVideoStore.write_rendition(video.token, name, facts, progress_fun(video, name)) do
       after_rendition(video, name, stamp)
     else
       {:error, reason} when name == "h264" ->
@@ -201,7 +204,8 @@ defmodule Vutuv.Videos.Job do
   # waits for. The enhancements refresh the heartbeat and nothing else.
   defp progress_fun(video, "h264") do
     fn percent ->
-      if rem(percent, @progress_step) == 0 or percent == 100, do: Videos.set_progress(video, percent)
+      if rem(percent, @progress_step) == 0 or percent == 100,
+        do: Videos.set_progress(video, percent)
     end
   end
 
@@ -229,12 +233,18 @@ defmodule Vutuv.Videos.Job do
   defp encode_lite(video) do
     with {:ok, original} <- original(video),
          {:ok, facts} <- FFmpeg.probe(original) do
-      names = if PostVideoStore.av1_supported?(), do: ["lite-av1", "lite-h264"], else: ["lite-h264"]
+      names =
+        if PostVideoStore.av1_supported?(), do: ["lite-av1", "lite-h264"], else: ["lite-h264"]
 
       Enum.each(names, fn name ->
         case PostVideoStore.write_rendition(video.token, name, facts, progress_fun(video, name)) do
-          :ok -> :ok
-          {:error, reason} -> Logger.warning("post_video #{name} failed video=#{video.id} reason=#{inspect(reason)}")
+          :ok ->
+            :ok
+
+          {:error, reason} ->
+            Logger.warning(
+              "post_video #{name} failed video=#{video.id} reason=#{inspect(reason)}"
+            )
         end
       end)
 

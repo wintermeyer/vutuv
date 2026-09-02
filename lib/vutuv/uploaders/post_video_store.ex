@@ -231,7 +231,8 @@ defmodule Vutuv.PostVideoStore do
   ## nginx
 
   @doc "The path nginx resolves inside its `internal` alias location (X-Accel mode)."
-  def accel_path(token, file) when file in @served_files, do: "/internal_post_videos/#{token}/#{file}"
+  def accel_path(token, file) when file in @served_files,
+    do: "/internal_post_videos/#{token}/#{file}"
 
   @doc "Absolute on-disk path of a served file, or `nil` when it is missing."
   def served_path(token, file) when file in @served_files do

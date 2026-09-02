@@ -18,7 +18,8 @@ defmodule Vutuv.VideoFixtures do
 
   @doc "A 3-second VP9/Opus WebM."
   def webm_path,
-    do: clip("tiny.webm", ["-c:v", "libvpx-vp9", "-b:v", "150k", "-c:a", "libopus", "-b:a", "32k"])
+    do:
+      clip("tiny.webm", ["-c:v", "libvpx-vp9", "-b:v", "150k", "-c:a", "libopus", "-b:a", "32k"])
 
   @doc "A clip longer than `seconds`, for the length cap."
   def long_mp4_path(seconds),

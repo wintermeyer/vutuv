@@ -428,7 +428,6 @@ defmodule VutuvWeb.OpenGraph do
 
   defp video_cover_dimensions(%PostVideo{width: width, height: height}), do: {width, height}
 
-
   # Whoever the page is about, as a picture: the member's avatar, else the
   # organization's logo, else the brand card.
   defp author_image(ca), do: member_image(ca) || organization_image(ca) || brand_card()

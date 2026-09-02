@@ -131,6 +131,7 @@ defmodule VutuvWeb.VideoComposerTest do
     # The app bar's chip counts it.
     {:ok, shell, _} =
       live_isolated(build_conn(), VutuvWeb.ShellLive, session: shell_session(user))
+
     assert render(shell) =~ ~s(data-videos-in-progress="1")
 
     # The clip finishes: the post is published, the card goes, the chip goes.

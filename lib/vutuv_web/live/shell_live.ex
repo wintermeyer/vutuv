@@ -1486,9 +1486,7 @@ defmodule VutuvWeb.ShellLive do
 
   defp videos_in_progress_label(%{count: count, progress: percent}) do
     base =
-      ngettext("%{count} video in progress", "%{count} videos in progress", count,
-        count: count
-      )
+      ngettext("%{count} video in progress", "%{count} videos in progress", count, count: count)
 
     if is_integer(percent), do: "#{base} · #{percent} %", else: base
   end

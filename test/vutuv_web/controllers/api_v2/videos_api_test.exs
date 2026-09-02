@@ -79,7 +79,10 @@ defmodule VutuvWeb.ApiV2.VideosApiTest do
     assert Posts.get_post(post_id).user_id == user.id
 
     # Attached now: the pending endpoints no longer know it.
-    assert conn |> authed(token) |> get("/api/2.0/me/post_videos/#{video_id}") |> json_response(404)
+    assert conn
+           |> authed(token)
+           |> get("/api/2.0/me/post_videos/#{video_id}")
+           |> json_response(404)
   end
 
   test "an unposted upload can be deleted", %{conn: conn, token: token} do
@@ -91,11 +94,19 @@ defmodule VutuvWeb.ApiV2.VideosApiTest do
 
     conn2 = conn |> authed(token) |> delete("/api/2.0/me/post_videos/#{video_id}")
     assert conn2.status == 204
-    assert conn |> authed(token) |> get("/api/2.0/me/post_videos/#{video_id}") |> json_response(404)
+
+    assert conn
+           |> authed(token)
+           |> get("/api/2.0/me/post_videos/#{video_id}")
+           |> json_response(404)
   end
 
   test "a file that is not a video is refused with a reason", %{conn: conn, token: token} do
-    upload = %Plug.Upload{path: VideoFixtures.mp4_path(), filename: "clip.txt", content_type: "text/plain"}
+    upload = %Plug.Upload{
+      path: VideoFixtures.mp4_path(),
+      filename: "clip.txt",
+      content_type: "text/plain"
+    }
 
     conn1 = conn |> authed(token) |> post("/api/2.0/me/post_videos", %{"video" => upload})
     assert conn1.status == 422

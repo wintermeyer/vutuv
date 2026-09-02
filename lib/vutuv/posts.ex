@@ -353,7 +353,8 @@ defmodule Vutuv.Posts do
          # check_reply_allowed already constrains to public. Any denials in the
          # params are dropped, so the public reply count and the parent-author
          # notification only ever concern content the author can see (issue #774).
-         {:ok, changeset} <- build_changeset(%Post{user_id: author.id}, attrs, [], image_ids, video_id) do
+         {:ok, changeset} <-
+           build_changeset(%Post{user_id: author.id}, attrs, [], image_ids, video_id) do
       case insert_post(changeset, image_ids, parent, note, video_id) do
         {:ok, post} ->
           post = preload_post(post)

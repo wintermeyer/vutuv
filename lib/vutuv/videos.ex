@@ -602,7 +602,12 @@ defmodule Vutuv.Videos do
 
   @doc "What listeners hear about a pending post."
   def pending_summary(%PendingVideoPost{} = pending) do
-    %{id: pending.id, status: pending.status, post_id: pending.post_id, video_id: pending.video_id}
+    %{
+      id: pending.id,
+      status: pending.status,
+      post_id: pending.post_id,
+      video_id: pending.video_id
+    }
   end
 
   @doc "The member's posts still waiting on a clip (or refused one), newest first, clips preloaded."
@@ -663,7 +668,11 @@ defmodule Vutuv.Videos do
     if count == 1 do
       pending = Repo.preload(pending, :video)
       if pending.video, do: delete_pending_video(pending.video)
-      broadcast(pending.user_id, {:pending_video_post, %{pending_summary(pending) | status: "canceled"}})
+
+      broadcast(
+        pending.user_id,
+        {:pending_video_post, %{pending_summary(pending) | status: "canceled"}}
+      )
     end
 
     :ok

@@ -106,7 +106,8 @@ defmodule Vutuv.Posts.PostVideo do
   ## URLs — one owner, like `Vutuv.Posts.PostImage`
 
   @doc "Root-relative proxy URL of one served file (`h264.mp4`, `cover.avif`, …)."
-  def url(%__MODULE__{token: token}, file) when is_binary(file), do: "#{token_prefix(token)}#{file}"
+  def url(%__MODULE__{token: token}, file) when is_binary(file),
+    do: "#{token_prefix(token)}#{file}"
 
   @doc """
   The poster's URL. It carries the cover frame's id as a cache buster: the

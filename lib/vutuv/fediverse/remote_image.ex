@@ -128,10 +128,17 @@ defmodule Vutuv.Fediverse.RemoteImage do
       video?(image) and is_nil(image.poster_uri) ->
         if blurred?(image), do: :sensitive, else: :ready
 
-      unavailable?(image) -> :unavailable
-      not released?(image) -> :waiting
-      blurred?(image) -> :sensitive
-      true -> :ready
+      unavailable?(image) ->
+        :unavailable
+
+      not released?(image) ->
+        :waiting
+
+      blurred?(image) ->
+        :sensitive
+
+      true ->
+        :ready
     end
   end
 

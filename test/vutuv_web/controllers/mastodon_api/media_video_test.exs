@@ -17,7 +17,10 @@ defmodule VutuvWeb.MastodonApi.MediaVideoTest do
 
   setup do
     Vutuv.RateLimiter.reset()
-    tmp = Path.join(System.tmp_dir!(), "vutuv_mastodon_video_#{System.unique_integer([:positive])}")
+
+    tmp =
+      Path.join(System.tmp_dir!(), "vutuv_mastodon_video_#{System.unique_integer([:positive])}")
+
     File.mkdir_p!(tmp)
     original = Application.fetch_env(:vutuv, :uploads_dir_prefix)
     Application.put_env(:vutuv, :uploads_dir_prefix, tmp)

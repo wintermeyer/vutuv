@@ -43,7 +43,9 @@ defmodule VutuvWeb.PostVideoControllerTest do
 
   defp stranger_conn do
     {conn, _stranger} =
-      build_conn() |> Plug.Test.init_test_session(%{}) |> create_and_login_user(registration_attrs("stranger"))
+      build_conn()
+      |> Plug.Test.init_test_session(%{})
+      |> create_and_login_user(registration_attrs("stranger"))
 
     conn
   end

@@ -103,8 +103,11 @@ defmodule VutuvWeb.PostLive.Composer do
   # summary, so the tile and the strip draw from one row.
   def update(%{video_event: %{id: id}}, socket) do
     case socket.assigns[:video] do
-      %PostVideo{id: ^id} -> {:ok, assign(socket, :video, Videos.get_video(id) || socket.assigns.video)}
-      _other -> {:ok, socket}
+      %PostVideo{id: ^id} ->
+        {:ok, assign(socket, :video, Videos.get_video(id) || socket.assigns.video)}
+
+      _other ->
+        {:ok, socket}
     end
   end
 
@@ -984,8 +987,11 @@ defmodule VutuvWeb.PostLive.Composer do
     case socket.assigns.video do
       %PostVideo{} = video ->
         case Videos.choose_cover(video, frame_id) do
-          {:ok, updated} -> {:noreply, assign(socket, :video, %{updated | frames: video.frames})}
-          {:error, _} -> {:noreply, assign(socket, :error, gettext("That frame could not be used."))}
+          {:ok, updated} ->
+            {:noreply, assign(socket, :video, %{updated | frames: video.frames})}
+
+          {:error, _} ->
+            {:noreply, assign(socket, :error, gettext("That frame could not be used."))}
         end
 
       nil ->
@@ -1102,12 +1108,11 @@ defmodule VutuvWeb.PostLive.Composer do
   defp save_with_video(%{assigns: %{video: nil}} = socket, attrs),
     do: socket.assigns |> save_post(attrs) |> handle_save_result(socket)
 
-  defp save_with_video(%{assigns: %{video: %PostVideo{post_id: post_id} = video}} = socket, attrs)
-       when is_binary(post_id) do
-    # An edit: the clip stays as it is, only its alt text may have changed.
-    if attrs[:video_alt] != nil, do: Videos.update_alt(video, attrs[:video_alt])
-    socket.assigns |> save_post(attrs) |> handle_save_result(socket)
-  end
+  # An edit: the clip stays as it is; its alt text is written on blur by
+  # `update_video_alt/2`, like a new post's.
+  defp save_with_video(%{assigns: %{video: %PostVideo{post_id: post_id}}} = socket, attrs)
+       when is_binary(post_id),
+       do: socket.assigns |> save_post(attrs) |> handle_save_result(socket)
 
   defp save_with_video(%{assigns: %{video: %PostVideo{} = video}} = socket, attrs) do
     video = Videos.get_video(video.id) || video
@@ -1139,7 +1144,8 @@ defmodule VutuvWeb.PostLive.Composer do
 
   # The create path the pending post takes later, keyed the way `save_post/2`
   # keys it, plus the context that path needs.
-  defp pending_kind(%{post: nil, remote_note: %Note{} = note}), do: {"remote_reply", %{note: note}}
+  defp pending_kind(%{post: nil, remote_note: %Note{} = note}),
+    do: {"remote_reply", %{note: note}}
 
   defp pending_kind(%{post: nil, remote_post: %RemotePost{} = post}),
     do: {"remote_post_reply", %{remote_post: post}}
@@ -1470,7 +1476,9 @@ defmodule VutuvWeb.PostLive.Composer do
           rejected ->
             messages =
               Enum.map_join(rejected, " ", fn entry ->
-                reason = upload |> upload_errors(entry) |> List.first() |> upload_error_message(name)
+                reason =
+                  upload |> upload_errors(entry) |> List.first() |> upload_error_message(name)
+
                 "#{entry.client_name}: #{reason}"
               end)
 
@@ -1517,13 +1525,13 @@ defmodule VutuvWeb.PostLive.Composer do
     if entry.done? do
       result =
         consume_uploaded_entry(socket, entry, fn %{path: path} ->
-          {:ok,
-           Videos.create_pending_video(socket.assigns.current_user, path, entry.client_name)}
+          {:ok, Videos.create_pending_video(socket.assigns.current_user, path, entry.client_name)}
         end)
 
       case result do
         {:ok, video} ->
-          {:noreply, socket |> assign_video(video) |> assign(:error, nil) |> schedule_draft_save()}
+          {:noreply,
+           socket |> assign_video(video) |> assign(:error, nil) |> schedule_draft_save()}
 
         {:error, reason} ->
           {:noreply, assign(socket, :error, video_error_message(reason))}
@@ -2431,7 +2439,9 @@ defmodule VutuvWeb.PostLive.Composer do
 
   # Whether the clip is still on its way up, which holds the Post button the
   # way an in-flight photo does.
-  defp uploading_video?(%{video_uploads?: true, uploads: uploads}), do: uploads.video.entries != []
+  defp uploading_video?(%{video_uploads?: true, uploads: uploads}),
+    do: uploads.video.entries != []
+
   defp uploading_video?(_assigns), do: false
 
   # The clip's picker, beside the photos' (issue #1907): one file, and only

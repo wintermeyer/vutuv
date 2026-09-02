@@ -59,7 +59,8 @@ defmodule Vutuv.Videos.Pipeline do
 
   def handle_info({:DOWN, ref, :process, _pid, reason}, state) do
     if reason != :normal,
-      do: Logger.warning("video job crashed video=#{state.running[ref]} reason=#{inspect(reason)}")
+      do:
+        Logger.warning("video job crashed video=#{state.running[ref]} reason=#{inspect(reason)}")
 
     {:noreply, fill(drop(state, ref))}
   end

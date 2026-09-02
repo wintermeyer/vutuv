@@ -164,7 +164,9 @@ defmodule Vutuv.VideosTest do
       # The claim is stale in the sweeper's eyes only after the window; here
       # the row is handed back the way a dead heartbeat would be.
       from(v in PostVideo, where: v.id == ^video.id)
-      |> Repo.update_all(set: [worked_at: DateTime.add(DateTime.utc_now(:second), -3600, :second)])
+      |> Repo.update_all(
+        set: [worked_at: DateTime.add(DateTime.utc_now(:second), -3600, :second)]
+      )
 
       assert [claimed] = Videos.claim_due(2)
       assert claimed.id == video.id
@@ -189,7 +191,10 @@ defmodule Vutuv.VideosTest do
       # The older one already has its main file, the newer one nothing yet.
       from(v in PostVideo, where: v.id == ^older.id)
       |> Repo.update_all(
-        set: [frames_extracted_at: DateTime.utc_now(:second), h264_ready_at: DateTime.utc_now(:second)]
+        set: [
+          frames_extracted_at: DateTime.utc_now(:second),
+          h264_ready_at: DateTime.utc_now(:second)
+        ]
       )
 
       assert [first, second] = Videos.claim_due(2)
@@ -263,7 +268,8 @@ defmodule Vutuv.VideosTest do
       assert_received {:post_video, %{stage: "rejected"}}
 
       # The owner is told, like for a photo.
-      assert_received {:new_notification, %{kind: "image_rejected", image_kind: "post_video_frame"}}
+      assert_received {:new_notification,
+                       %{kind: "image_rejected", image_kind: "post_video_frame"}}
     end
 
     test "a frame whose file is gone cancels its scan rather than judging nothing",
@@ -291,7 +297,14 @@ defmodule Vutuv.VideosTest do
       video = upload!(user)
       Videos.subscribe(user.id)
 
-      attrs = %{body: "Watch this", tags: "talks", license: "all_rights_reserved", image_ids: [], denials: []}
+      attrs = %{
+        body: "Watch this",
+        tags: "talks",
+        license: "all_rights_reserved",
+        image_ids: [],
+        denials: []
+      }
+
       {:ok, pending} = Videos.create_pending_post(user, video, "post", %{}, attrs)
       assert pending.status == "waiting"
       assert Videos.in_progress_summary(user.id) == %{count: 1, progress: nil}
@@ -326,11 +339,14 @@ defmodule Vutuv.VideosTest do
     test "a reply waits and then answers its parent", %{user: user} do
       parent = insert(:post, user: insert_activated_user())
       video = upload!(user)
-      {:ok, pending} = Videos.create_pending_post(user, video, "reply", %{parent: parent}, %{body: "Re"})
+
+      {:ok, pending} =
+        Videos.create_pending_post(user, video, "reply", %{parent: parent}, %{body: "Re"})
 
       assert :ok = Job.run(video.id)
       published = Repo.get!(PendingVideoPost, pending.id)
       assert published.status == "published"
+
       assert Repo.get_by!(Vutuv.Posts.PostReply, post_id: published.post_id).parent_post_id ==
                parent.id
     end
@@ -349,7 +365,9 @@ defmodule Vutuv.VideosTest do
       )
 
       assert Repo.get!(PendingVideoPost, pending.id).status == "waiting"
-      assert [%PendingVideoPost{video: %PostVideo{stage: "rejected"}}] = Videos.pending_posts_for(user)
+
+      assert [%PendingVideoPost{video: %PostVideo{stage: "rejected"}}] =
+               Videos.pending_posts_for(user)
 
       pending = Videos.get_pending_post(user, pending.id)
       assert {:ok, post} = Videos.publish_without_video(pending)
@@ -370,14 +388,17 @@ defmodule Vutuv.VideosTest do
 
     test "a post cannot claim a clip that is not ready", %{user: user} do
       video = upload!(user)
-      assert {:error, :invalid_video} = Posts.create_post(user, %{body: "Too soon", video_id: video.id})
+
+      assert {:error, :invalid_video} =
+               Posts.create_post(user, %{body: "Too soon", video_id: video.id})
 
       assert :ok = Job.run(video.id)
       assert {:ok, post} = Posts.create_post(user, %{body: "", video_id: video.id})
       assert post.video.id == video.id
 
       # And never twice.
-      assert {:error, :invalid_video} = Posts.create_post(user, %{body: "Again", video_id: video.id})
+      assert {:error, :invalid_video} =
+               Posts.create_post(user, %{body: "Again", video_id: video.id})
     end
   end
 
@@ -414,8 +435,12 @@ defmodule Vutuv.VideosTest do
 
   defp wait_until(fun, tries \\ 200) do
     cond do
-      fun.() -> :ok
-      tries == 0 -> flunk("condition never held")
+      fun.() ->
+        :ok
+
+      tries == 0 ->
+        flunk("condition never held")
+
       true ->
         Process.sleep(25)
         wait_until(fun, tries - 1)

@@ -1310,7 +1310,8 @@ defmodule VutuvWeb.AgentDocs.Markdown do
     [
       "## #{gettext("Video")}",
       "",
-      "- " <> md_link(video.alt || gettext("Video"), video.url) <> " (#{video.duration_seconds} s)",
+      "- " <>
+        md_link(video.alt || gettext("Video"), video.url) <> " (#{video.duration_seconds} s)",
       "- " <> md_image(gettext("Cover"), video.cover_url)
     ]
     |> Enum.join("\n")

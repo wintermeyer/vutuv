@@ -82,10 +82,14 @@ defmodule VutuvWeb.VideoComponents do
             <.play_icon class="ml-1 h-8 w-8" />
           </span>
         </span>
+        <%!-- Top-left, not bottom-left like the tiles: Chrome and Safari draw
+        the native control bar along the bottom of the poster before the
+        first play, and a chip under it was half hidden (measured on the
+        phone-width smoke test). --%>
         <span
           data-video-overlay
           aria-hidden="true"
-          class="pointer-events-none absolute bottom-2 left-2 rounded-full bg-slate-900/75 px-2 py-1 text-xs font-semibold tabular-nums text-white"
+          class="pointer-events-none absolute left-2 top-2 rounded-full bg-slate-900/75 px-2 py-1 text-xs font-semibold tabular-nums text-white"
         >
           {duration_label(@video)}
         </span>
@@ -96,7 +100,7 @@ defmodule VutuvWeb.VideoComponents do
           data-video-hd
           aria-label={gettext("Play this video in full quality")}
           title={gettext("Play this video in full quality")}
-          class="absolute bottom-1 right-1 cursor-pointer p-1.5"
+          class="absolute right-1 top-1 cursor-pointer p-1.5"
         >
           <span class="inline-flex items-center gap-1 rounded-full bg-slate-900/75 px-2 py-1 text-xs font-semibold text-white">
             HD
@@ -221,7 +225,9 @@ defmodule VutuvWeb.VideoComponents do
 
   def pending_video_post(assigns) do
     video = assigns.pending.video
-    assigns = assign(assigns, :video, video) |> assign(:refused?, video && PostVideo.refused?(video))
+
+    assigns =
+      assign(assigns, :video, video) |> assign(:refused?, video && PostVideo.refused?(video))
 
     ~H"""
     <.card class="mt-3" data-pending-video-post={@pending.id} data-pending-status={(@refused? && "refused") || "working"}>

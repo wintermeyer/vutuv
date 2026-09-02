@@ -676,19 +676,20 @@ if config_env() == :prod do
     end
   end
 
-  config :vutuv, :post_videos,
-    Keyword.merge(video_defaults,
-      enabled: System.get_env("VIDEO_UPLOADS") != "false",
-      max_filesize:
-        (video_env_int.("VIDEO_MAX_MB") && video_env_int.("VIDEO_MAX_MB") * 1_000_000) ||
-          video_defaults[:max_filesize],
-      max_duration_seconds:
-        video_env_int.("VIDEO_MAX_SECONDS") || video_defaults[:max_duration_seconds],
-      ffmpeg: System.get_env("FFMPEG_PATH") || video_defaults[:ffmpeg],
-      ffprobe: System.get_env("FFPROBE_PATH") || video_defaults[:ffprobe],
-      threads: video_env_int.("VIDEO_THREADS") || video_defaults[:threads],
-      concurrency: video_env_int.("VIDEO_CONCURRENCY") || video_defaults[:concurrency]
-    )
+  config :vutuv,
+         :post_videos,
+         Keyword.merge(video_defaults,
+           enabled: System.get_env("VIDEO_UPLOADS") != "false",
+           max_filesize:
+             (video_env_int.("VIDEO_MAX_MB") && video_env_int.("VIDEO_MAX_MB") * 1_000_000) ||
+               video_defaults[:max_filesize],
+           max_duration_seconds:
+             video_env_int.("VIDEO_MAX_SECONDS") || video_defaults[:max_duration_seconds],
+           ffmpeg: System.get_env("FFMPEG_PATH") || video_defaults[:ffmpeg],
+           ffprobe: System.get_env("FFPROBE_PATH") || video_defaults[:ffprobe],
+           threads: video_env_int.("VIDEO_THREADS") || video_defaults[:threads],
+           concurrency: video_env_int.("VIDEO_CONCURRENCY") || video_defaults[:concurrency]
+         )
 
   # Post images are auth-proxied: the app checks the post's audience, then
   # serves the bytes itself with send_file (the sendfile syscall, no in-memory

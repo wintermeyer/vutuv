@@ -130,7 +130,10 @@ defmodule VutuvWeb.MastodonApi.MediaController do
         error(conn, 413, "Video exceeds #{Videos.max_filesize()} bytes")
 
       {:error, :too_long} ->
-        validation_error(conn, "Videos may be at most #{Videos.max_duration_seconds()} seconds long.")
+        validation_error(
+          conn,
+          "Videos may be at most #{Videos.max_duration_seconds()} seconds long."
+        )
 
       {:error, _invalid} ->
         validation_error(conn, "Send #{accepted_types()} in the \"file\" field.")
