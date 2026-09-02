@@ -509,6 +509,24 @@ const COMMANDS = {
   hr: [insertHrCommand],
 }
 
+// The heading level of the first block the selection covers, 0 for anything
+// that is not a heading — the same "first block decides" rule ProseMirror's own
+// setBlockType applies when it rewrites the whole range. Read from the RANGE
+// rather than from `$from.node()`: Cmd+A resolves to depth 0, where that answer
+// is the document node itself, so the H1 button silently reported "off" over a
+// heading a member had just made (caught in the browser, not by a test).
+const headingLevel = (state) => {
+  const { from, to } = state.selection
+  let level = null
+  state.doc.nodesBetween(from, to, (node) => {
+    if (level !== null) return false
+    if (!node.isTextblock) return true
+    level = node.type.name === "heading" ? node.attrs.level : 0
+    return false
+  })
+  return level ?? 0
+}
+
 export const MarkdownEditor = {
   async mounted() {
     this.root = this.el
@@ -990,8 +1008,23 @@ export const MarkdownEditor = {
     const spec = COMMANDS[name]
     if (!spec || !this.editor) return
     const [command, payload] = spec
-    this.editor.action(callCommand(command.key, payload))
+    // A heading is a toggle, and the command is not: `wrapInHeadingCommand`
+    // only ever SETS a level, so on the bubble — which offers H1/H2 over prose
+    // that already stands — pressing H1 on a line that is already H1 would be a
+    // dead button with no way back to a paragraph. 0 is that command's own word
+    // for "paragraph". Asked of the table rather than of the button's name, so
+    // an h3 row that ever gets a control back inherits it.
+    const arg = command === wrapInHeadingCommand && this.headingNow() === payload ? 0 : payload
+    this.editor.action(callCommand(command.key, arg))
     this.focusEditor()
+  },
+
+  headingNow() {
+    let level = 0
+    this.editor.action((ctx) => {
+      level = headingLevel(ctx.get(editorViewCtx).state)
+    })
+    return level
   },
 
   // --- emoji (issue #1197, trimmed by #1886) ---
@@ -1461,7 +1494,22 @@ export const MarkdownEditor = {
   syncChrome(view, prev) {
     if (prev && prev.doc === view.state.doc && prev.selection.eq(view.state.selection)) return
     this.syncBubble(view)
+    this.syncHeadingState(view)
     this.syncSlash(view)
+  },
+
+  // Which heading button is on, the twin of syncImageSelection below. The marks
+  // show no state, but the headings are toggles (see run()) and a toggle that
+  // never says it is on reads as a button that did nothing. It hangs off
+  // syncChrome rather than syncBubble because a scroll re-pins the bubble
+  // (replaceOverlays) without dispatching a transaction, and a selection that
+  // did not move cannot have changed its answer.
+  syncHeadingState(view) {
+    const level = headingLevel(view.state)
+    for (const n of [1, 2]) {
+      const btn = this.bubble?.querySelector(`[data-mde-mark="h${n}"]`)
+      if (btn) btn.setAttribute("aria-pressed", String(level === n))
+    }
   },
 
   // Marks act on a selection, so the bubble is offered exactly while there is
@@ -1485,10 +1533,13 @@ export const MarkdownEditor = {
 
     this.bubble.style.top = `${Math.min(from.top, to.top) - frame.top}px`
     // Clamped so a selection at either edge does not push the bubble out of
-    // the card. MEASURED, not a literal: the bubble is 5 buttons wide on the
-    // marks face and 4 on the image one, and the phone rule grows every
-    // button from 1.75rem to 2.25rem — a hard-coded half-width is wrong on
-    // three of those four combinations, and wrongest on the narrowest screen.
+    // the card. MEASURED, not a literal: the text face is 7 buttons and a
+    // divider, the image one 4, and the phone rule grows every button from
+    // 1.75rem to 2.25rem — a hard-coded half-width is wrong on three of those
+    // four combinations, and wrongest on the narrowest screen. The text face
+    // measures 277px under that rule against a frame of viewport minus 80px
+    // (page gutter + card padding), so below ~360px it is wider than the frame
+    // and this clamp centres it over the card rather than inside it.
     const half = this.bubble.offsetWidth / 2
     const mid = (from.left + to.left) / 2 - frame.left
     this.bubble.style.left = `${Math.max(half, Math.min(frame.width - half, mid))}px`

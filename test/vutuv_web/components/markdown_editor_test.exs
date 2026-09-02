@@ -88,9 +88,11 @@ defmodule VutuvWeb.MarkdownEditorTest do
     html = editor()
 
     # Marks ride the selection bubble: they only mean anything with something
-    # selected, which is exactly when the bubble appears.
-    for cmd <- ~w(strong em strike code link) do
-      assert html =~ ~s(data-mde-mark="#{cmd}"), "missing bubble mark: #{cmd}"
+    # selected, which is exactly when the bubble appears. The two headings ride
+    # it too — the slash menu can only make a heading of a line before it is
+    # written, and promoting a paragraph that already stands needs a selection.
+    for cmd <- ~w(strong em strike code link h1 h2) do
+      assert html =~ ~s(data-mde-mark="#{cmd}"), "missing bubble control: #{cmd}"
     end
 
     # Blocks ride the slash menu, reached by typing "/" on an empty line.
