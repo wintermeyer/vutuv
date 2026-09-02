@@ -1746,13 +1746,29 @@ so the first draw of a boosted photo post is the wordless tile — and it was al
 the last. Measured on production, a picture was approved 88 seconds before the
 screenshot that reported the bug.
 
-So both verdicts broadcast `{:remote_images_settled, %{remote_post_id: id}}` on
+So both verdicts broadcast `{:remote_images_changed, %{remote_post_id: id}}` on
 `Fediverse.remote_images_topic/0` — **one** topic, the arrangement
-`counts_topic/0` makes and for the same reason: a verdict is rare, and each
+`counts_topic/0` makes and for the same reason: these are rare, and each
 listener keeps only the cards it is showing. The alternative, a topic per
 waiting picture, would make every listening page walk its own entries at mount
 and again on each append, which is a great deal of bookkeeping for an event this
 quiet. A verdict that lost its race announces nothing, having changed no row.
+
+**And the verdict was only half of it** (issue #1927). The card is drawn at
+delivery, when the row exists and its bytes do not; a second later they do, and
+from that moment there is a mosaic preview to stand in for the picture
+(`Vutuv.Moderation.Pixelation`, issue #1720) — or, where no vision model runs,
+the picture itself. Announcing only the verdict meant nobody watching a feed
+ever saw that mosaic: the wordless tile held the card for the whole scan, a
+median of 97 seconds on production data, against a median of one second for the
+download it was really waiting on. `Media.try_once/1` therefore announces the
+bytes landing on the same topic, and `Screenshots` announces a **link capture**
+the same way — at capture time, not only at its verdict, for the same reason,
+and for a member's own post as well as a cached one (there the audience is the
+author's followers' feeds, `Posts.broadcast_screenshot_ready/1`). A rejection is
+announced too, on both paths: it deletes the very file the mosaic on an open
+card names, so a page nobody tells goes on asking for it and draws a broken
+image.
 
 Listening is `VutuvWeb.Live.RemoteImages`, an `on_mount` hook, because the
 waiting tile prints its promise from **one shared component on six pages** (the

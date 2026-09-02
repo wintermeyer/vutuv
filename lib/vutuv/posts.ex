@@ -6727,11 +6727,17 @@ defmodule Vutuv.Posts do
     broadcast_post_followers_event(post_id, :post_screenshot_ready)
   end
 
-  # The counterpart to `broadcast_screenshot_ready/1`: the author removed a
-  # post's auto link screenshot, so open feeds/profiles drop it from the card
-  # with no reload. Fans out to the same recipients (author topic + followers'
-  # feeds).
-  defp broadcast_screenshot_removed(post_id) when is_binary(post_id) do
+  @doc """
+  The counterpart to `broadcast_screenshot_ready/1`: a post's auto link
+  screenshot is gone, so open feeds/profiles drop it from the card with no
+  reload. Fans out to the same recipients (author topic + followers' feeds).
+
+  Two ways for it to go, and a card cannot tell them apart: the author removed
+  it, or the AI gate refused it. The second one matters because the card may be
+  showing the mosaic preview of a capture that is still being judged — a file
+  the rejection deletes, which without this leaves an open page asking for it.
+  """
+  def broadcast_screenshot_removed(post_id) when is_binary(post_id) do
     broadcast_post_followers_event(post_id, :post_screenshot_removed)
   end
 

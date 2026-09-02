@@ -574,23 +574,49 @@ defmodule Vutuv.Posts.Screenshots do
       )
       |> Repo.update()
 
-    if moderation == "approved" do
-      announce_ready(ready)
-    else
+    if moderation != "approved" do
       ImageScans.enqueue("post_screenshot", ready.id, owner_user_id(ready), ready.screenshot)
     end
+
+    # Announced whether or not the gate still has it (issue #1927). It used to
+    # wait for the verdict, which was right while a held capture drew nothing:
+    # since issue #1720 it draws its mosaic preview, so the capture landing is
+    # itself something to show, and the card that has been sitting there
+    # picture-less since the post arrived can stop being picture-less.
+    announce(ready, :ready)
 
     ready
   end
 
-  # Open feeds/profiles upgrade a member post's card to show the screenshot
-  # with no reload. A cached remote post has no author watching their fresh
-  # post and no topic of its own, so it simply shows the screenshot on the
-  # next feed load — no broadcast.
-  defp announce_ready(%PostScreenshot{post_id: post_id}) when is_binary(post_id),
+  @doc """
+  Tells whoever is drawing this capture that it moved: `:ready` when there is
+  something new to show of it, `:gone` when there is not any more.
+
+  **Two audiences, one decision, and it lives here** — the module that owns the
+  row — because a capture hangs off either kind of post: a member's own reaches
+  their followers' feeds and their profile, a cached post's reaches whoever has
+  a card of it open, over the one topic those six surfaces already listen on.
+  `Vutuv.Moderation.ImageSubjects` announces the same row's verdicts and calls
+  this rather than keeping a second copy of the routing, which had already
+  drifted apart on the rejection.
+
+  `:gone` matters because a rejection deletes the very file an open card may be
+  showing as its mosaic preview; the cached-post side has no second word for it,
+  where both verdicts are the same "re-read what you draw".
+  """
+  def announce(screenshot, verdict \\ :ready)
+
+  def announce(%PostScreenshot{post_id: post_id}, :ready) when is_binary(post_id),
     do: Vutuv.Posts.broadcast_screenshot_ready(post_id)
 
-  defp announce_ready(%PostScreenshot{}), do: :ok
+  def announce(%PostScreenshot{post_id: post_id}, :gone) when is_binary(post_id),
+    do: Vutuv.Posts.broadcast_screenshot_removed(post_id)
+
+  def announce(%PostScreenshot{remote_post_id: id}, _verdict) when is_binary(id),
+    do: Fediverse.broadcast_remote_images_changed(id)
+
+  # A row the retention sweep has taken between the verdict and this.
+  def announce(_screenshot, _verdict), do: :ok
 
   # The AI scan's owning member: the post's author, or nobody for a remote
   # post's capture (the same ownerless shape the "remote_post_image" and

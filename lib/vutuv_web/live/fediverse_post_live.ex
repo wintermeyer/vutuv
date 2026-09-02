@@ -52,10 +52,12 @@ defmodule VutuvWeb.FediversePostLive do
   # while this page is open (issue #1283). One line, no handler.
   on_mount(VutuvWeb.Live.RemoteCounts)
 
-  # And its pictures appear the moment the AI gate releases them (issue #1801).
-  # This page is the one a reader opens *because* of the picture, so a tile that
-  # waits for a reload is the plainest form of the broken promise it prints.
-  on_mount({VutuvWeb.Live.RemoteImages, :assigns})
+  # And its pictures appear the moment there is something to show of them
+  # (issues #1801, #1927). This page is the one a reader opens *because* of the
+  # picture, so a tile that waits for a reload is the plainest form of the
+  # broken promise it prints. The hook needs both assigns it writes: `@images`
+  # by that name, the post by the one named here.
+  on_mount({VutuvWeb.Live.RemoteImages, {:assigns, :remote_post}})
 
   @impl true
   def mount(%{"id" => id}, _session, socket) do

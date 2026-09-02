@@ -28,6 +28,7 @@ defmodule Vutuv.Moderation.ImageSubjects do
   alias Vutuv.Posts.PostImage
   alias Vutuv.Posts.PostReview
   alias Vutuv.Posts.PostScreenshot
+  alias Vutuv.Posts.Screenshots
   alias Vutuv.Profiles.Qualification
   alias Vutuv.Profiles.Url
   alias Vutuv.QualificationDocument
@@ -406,11 +407,7 @@ defmodule Vutuv.Moderation.ImageSubjects do
       {1, _} ->
         ps = Repo.get!(PostScreenshot, scan.subject_id)
         Vutuv.Screenshot.promote_from_quarantine(ps)
-        # The card upgrade was deliberately held back at capture time; the
-        # screenshot is only announced once it is released. A remote-owned row
-        # (`remote_post_id`) has no member post and nobody watching — its card
-        # simply shows the screenshot on the next feed load.
-        if ps.post_id, do: Vutuv.Posts.broadcast_screenshot_ready(ps.post_id)
+        Screenshots.announce(ps, :ready)
         :ok
 
       _ ->
@@ -586,7 +583,13 @@ defmodule Vutuv.Moderation.ImageSubjects do
   def apply_rejected(%ImageScan{kind: "post_screenshot"} = scan) do
     cleared =
       from(ps in PostScreenshot,
-        where: ps.id == ^scan.subject_id and ps.screenshot == ^scan.fingerprint
+        where: ps.id == ^scan.subject_id and ps.screenshot == ^scan.fingerprint,
+        # Which card to tell comes back with the write rather than from a second
+        # read: the flip has the row in hand and the announcement needs nothing
+        # but its owner (issue #1927). A `select` on the query, not the
+        # `:returning` option — that one is silently ignored here and answers
+        # `{1, nil}`.
+        select: ps
       )
       |> Repo.update_all(
         set: [
@@ -598,8 +601,9 @@ defmodule Vutuv.Moderation.ImageSubjects do
       )
 
     case cleared do
-      {1, _} ->
+      {1, [%PostScreenshot{} = cleared_row]} ->
         Vutuv.Screenshot.delete(%PostScreenshot{id: scan.subject_id})
+        Screenshots.announce(cleared_row, :gone)
         :ok
 
       _ ->
@@ -745,7 +749,7 @@ defmodule Vutuv.Moderation.ImageSubjects do
   # standing (a rejection clears `file` and keeps it). A row the retention sweep
   # has taken meanwhile reads as `nil`, which the broadcast takes as a no-op.
   defp announce_when_applied(:ok, %ImageScan{subject_id: subject_id}) do
-    Fediverse.broadcast_remote_images_settled(remote_post_id_of(subject_id))
+    Fediverse.broadcast_remote_images_changed(remote_post_id_of(subject_id))
     :ok
   end
 

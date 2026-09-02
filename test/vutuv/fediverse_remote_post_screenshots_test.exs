@@ -308,12 +308,31 @@ defmodule Vutuv.FediverseRemotePostScreenshotsTest do
       assert is_nil(scan.owner_user_id)
       assert scan.fingerprint == job.screenshot
     end
+
+    test "the capture is announced although the gate still has it (issue #1927)" do
+      # The card has been picture-less since the post was cached, and from this
+      # moment there is a mosaic preview to stand in for the capture. Waiting
+      # for the verdict left every open card as it was for the whole scan — and
+      # a cached post has no author watching who might reload it either.
+      Application.put_env(:vutuv, :moderate_images, true)
+      on_exit(fn -> Application.put_env(:vutuv, :moderate_images, false) end)
+
+      post = recorded_post()
+      Fediverse.subscribe_remote_images()
+
+      Screenshots.deliver_due(force: true, capture: ok_capture())
+
+      assert_receive {:remote_images_changed, %{remote_post_id: id}}
+      assert id == post.id
+      assert job_of(post).moderation == "pending"
+    end
   end
 
   describe "moderation verdicts on a remote-owned row" do
     test "an approval releases the screenshot (and needs no member post)" do
       post = recorded_post()
       job = make_ready(job_of(post), "pending")
+      Fediverse.subscribe_remote_images()
 
       scan = %ImageScan{
         kind: "post_screenshot",
@@ -323,6 +342,12 @@ defmodule Vutuv.FediverseRemotePostScreenshotsTest do
 
       assert :ok = ImageSubjects.apply_approved(scan)
       assert PostScreenshot.ready?(job_of(post))
+
+      # Announced on the cached post's own topic: there is no member post here,
+      # so the author-and-followers fan-out every other capture uses would
+      # reach nobody (issue #1927).
+      assert_receive {:remote_images_changed, %{remote_post_id: announced}}
+      assert announced == post.id
     end
 
     test "a rejection clears the capture" do
@@ -335,12 +360,19 @@ defmodule Vutuv.FediverseRemotePostScreenshotsTest do
         fingerprint: job.screenshot
       }
 
+      Fediverse.subscribe_remote_images()
+
       assert :ok = ImageSubjects.apply_rejected(scan)
 
       job = job_of(post)
       assert job.status == "failed"
       assert job.moderation == "rejected"
       assert is_nil(job.screenshot)
+
+      # Announced too, because a card drawn during the scan is showing the
+      # mosaic preview of the very file this verdict has just deleted.
+      assert_receive {:remote_images_changed, %{remote_post_id: announced}}
+      assert announced == post.id
     end
 
     test "a stranded pending row is found for re-enqueue, owner-less" do

@@ -150,6 +150,24 @@ defmodule Vutuv.FediverseMediaTest do
       assert scan.owner_user_id == nil
     end
 
+    test "the bytes landing is announced, verdict or no verdict (issue #1927)" do
+      # What every open card was missing. It was drawn a second ago, when this
+      # row had no file and there was nothing to show; from here on there is the
+      # mosaic preview standing in for the picture, and the gate's own
+      # announcement is a median of 97 seconds away.
+      with_moderation()
+      serving_bytes(jpeg_bytes())
+      post = cached_post(account())
+      [image] = Media.record_attachments(post, [attachment()], false)
+      Fediverse.subscribe_remote_images()
+
+      assert :ok = Media.fetch_now(image)
+
+      assert_receive {:remote_images_changed, %{remote_post_id: id}}
+      assert id == post.id
+      assert Repo.get!(RemoteImage, image.id).moderation == "pending"
+    end
+
     test "a server that does not answer leaves the post readable" do
       stub_download(fn conn -> Plug.Conn.send_resp(conn, 500, "") end)
       post = cached_post(account())

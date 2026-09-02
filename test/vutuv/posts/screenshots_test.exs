@@ -9,6 +9,8 @@ defmodule Vutuv.Posts.ScreenshotsTest do
 
   import Vutuv.PostsHelpers
 
+  alias Vutuv.Moderation.ImageScan
+  alias Vutuv.Moderation.ImageSubjects
   alias Vutuv.Posts
   alias Vutuv.Posts.PostImage
   alias Vutuv.Posts.PostScreenshot
@@ -301,6 +303,52 @@ defmodule Vutuv.Posts.ScreenshotsTest do
 
       assert_receive {:post_screenshot_ready, %{post_id: ready_id}}
       assert ready_id == post.id
+    end
+
+    test "a capture the AI gate still holds is announced too (issue #1927)" do
+      # It used to wait for the verdict, which was right while a held capture
+      # drew nothing at all. Since issue #1720 it draws its mosaic preview, so
+      # the capture landing is itself something to show — and the author has
+      # been looking at a picture-less card since they posted the link.
+      Application.put_env(:vutuv, :moderate_images, true)
+      on_exit(fn -> Application.put_env(:vutuv, :moderate_images, false) end)
+
+      author = user()
+      Vutuv.Activity.subscribe(author.id)
+      post = url_post(author)
+      {:ok, _job} = Screenshots.reconcile(post)
+
+      Screenshots.deliver_due(force: true, capture: ok_capture())
+
+      assert_receive {:post_screenshot_ready, %{post_id: ready_id}}
+      assert ready_id == post.id
+      assert Repo.get_by!(PostScreenshot, post_id: post.id).moderation == "pending"
+    end
+
+    test "a refused capture is announced, so an open card drops its mosaic" do
+      # The other end of the same wait: the verdict deletes the file the mosaic
+      # on an open card names, so a page nobody tells goes on asking for it and
+      # draws a broken image.
+      Application.put_env(:vutuv, :moderate_images, true)
+      on_exit(fn -> Application.put_env(:vutuv, :moderate_images, false) end)
+
+      author = user()
+      post = url_post(author)
+      {:ok, _job} = Screenshots.reconcile(post)
+      Screenshots.deliver_due(force: true, capture: ok_capture())
+      job = Repo.get_by!(PostScreenshot, post_id: post.id)
+
+      Vutuv.Activity.subscribe(author.id)
+
+      assert :ok =
+               ImageSubjects.apply_rejected(%ImageScan{
+                 kind: "post_screenshot",
+                 subject_id: job.id,
+                 fingerprint: job.screenshot
+               })
+
+      assert_receive {:post_screenshot_removed, %{post_id: gone_id}}
+      assert gone_id == post.id
     end
 
     test "a transient failure keeps the job pending with backoff" do
