@@ -31,6 +31,7 @@ defmodule VutuvWeb.UserProfileLive do
   alias Vutuv.CodeStats
   alias Vutuv.Fediverse
   alias Vutuv.Fediverse.RemoteFollow
+  alias Vutuv.Moderation
   alias Vutuv.Organizations.Organization
   alias Vutuv.Profiles.Address
   alias Vutuv.Profiles.Education
@@ -743,9 +744,30 @@ defmodule VutuvWeb.UserProfileLive do
   @recommended_pool 60
   @suggested_window_days 28
 
+  # The subject is re-authorized here, not only by the controller that embedded
+  # this LiveView. That controller's request was gated by
+  # `VutuvWeb.Plug.EnsureActivated`, but the `live_render` session carrying this
+  # id is signed and NOT encrypted, bound to no user and good for days — and a
+  # rejoin is ordinary, since a deploy reconnects every open tab. So a profile
+  # frozen, suspended or deactivated since the page was rendered would otherwise
+  # keep streaming in full to whoever holds the token.
+  #
+  # It raises rather than rendering an apology: this LiveView is embedded by a
+  # controller that already answers 403/410 for the withheld cases, so there is
+  # no half-page to draw here — the socket simply does not serve one.
+  defp subject!(profile_user_id, viewer) do
+    user = Repo.get!(User, profile_user_id)
+
+    if Moderation.profile_visible_to?(user, viewer) do
+      user
+    else
+      raise Ecto.NoResultsError, queryable: User
+    end
+  end
+
   defp load_profile(socket) do
     current_user = socket.assigns.current_user
-    base_user = Repo.get!(User, socket.assigns.profile_user_id)
+    base_user = subject!(socket.assigns.profile_user_id, current_user)
 
     owner? = !!(current_user && current_user.id == base_user.id)
 

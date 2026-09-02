@@ -20,6 +20,8 @@ defmodule VutuvWeb.CVLive do
   import VutuvWeb.UserHelpers
 
   alias Vutuv.Accounts
+  alias Vutuv.Accounts.User
+  alias Vutuv.Moderation
   alias VutuvWeb.CV
   alias VutuvWeb.CV.MarkdownBlocks
   alias VutuvWeb.Live.InitAssigns
@@ -29,7 +31,11 @@ defmodule VutuvWeb.CVLive do
     socket = InitAssigns.assign_embedded(socket, session)
     current_user = socket.assigns.current_user
 
-    user = Accounts.get_user(session["profile_user_id"])
+    # Re-authorized on the socket, not only by `CVController`: the session map
+    # carrying this id is signed but not encrypted and lives for days, and a CV
+    # is the member's whole work history, name, phone, address and links. See
+    # the twin in `VutuvWeb.UserProfileLive.subject!/2`.
+    user = visible_subject(session["profile_user_id"], current_user)
 
     # Name-qualify the tab/OpenGraph title and give the CV page its own
     # OpenGraph description, so a shared link reads as "<Name>'s Lebenslauf",
@@ -99,6 +105,18 @@ defmodule VutuvWeb.CVLive do
   # language/social-media id. Any other key is a no-op (F12). The CV is built
   # once at mount and never rebuilt for the socket's life, so this is computed
   # once too.
+  # `nil` rather than a raise: this LiveView's own template reads `@user`, and a
+  # CV of nobody renders nothing, which is the honest answer for a member the
+  # site withholds. The controller that embeds it answers the real 403/410.
+  defp visible_subject(nil, _viewer), do: nil
+
+  defp visible_subject(profile_user_id, viewer) do
+    case Accounts.get_user(profile_user_id) do
+      %User{} = user -> if Moderation.profile_visible_to?(user, viewer), do: user
+      nil -> nil
+    end
+  end
+
   defp allowed_keys(cv) do
     identity = for {key, _field} <- CV.identity_fields(), do: key
     card_keys = ~w(tags links qualifications languages social_media)

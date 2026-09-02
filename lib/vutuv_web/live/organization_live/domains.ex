@@ -16,24 +16,32 @@ defmodule VutuvWeb.OrganizationLive.Domains do
 
   alias Vutuv.Organizations
   alias VutuvWeb.Live.InitAssigns
+  alias VutuvWeb.OrganizationLive.ManageGate
   alias VutuvWeb.VerificationComponents
 
   @impl true
   def mount(_params, session, socket) do
     socket = InitAssigns.assign_embedded(socket, session)
-    organization = Organizations.get_organization!(session["organization_id"])
 
-    {:ok,
-     socket
-     |> assign(:organization, organization)
-     |> assign(:page_title, gettext("Domains – %{name}", name: organization.name))
-     |> assign(:new_domain, "")
-     |> assign(:new_method, "dns")
-     # What the last check saw, per domain (issue #1466). Keyed by domain id
-     # because this page can have several claims running at once.
-     |> assign(:check_reports, %{})
-     |> assign(:verification_enabled?, Organizations.verification_enabled?())
-     |> load_domains()}
+    # The role is re-asked here, not left to the controller that embedded
+    # this page — see `VutuvWeb.OrganizationLive.ManageGate`.
+    case ManageGate.allow(socket, session, &Organizations.can_manage_domains?/2) do
+      {:ok, organization} ->
+        {:ok,
+         socket
+         |> assign(:organization, organization)
+         |> assign(:page_title, gettext("Domains – %{name}", name: organization.name))
+         |> assign(:new_domain, "")
+         |> assign(:new_method, "dns")
+         # What the last check saw, per domain (issue #1466). Keyed by domain id
+         # because this page can have several claims running at once.
+         |> assign(:check_reports, %{})
+         |> assign(:verification_enabled?, Organizations.verification_enabled?())
+         |> load_domains()}
+
+      {:refused, socket} ->
+        {:ok, socket}
+    end
   end
 
   defp load_domains(socket) do

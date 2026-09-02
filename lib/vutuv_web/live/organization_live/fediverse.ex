@@ -23,16 +23,24 @@ defmodule VutuvWeb.OrganizationLive.Fediverse do
   alias Vutuv.Organizations
   alias VutuvWeb.Fediverse.Docs
   alias VutuvWeb.Live.InitAssigns
+  alias VutuvWeb.OrganizationLive.ManageGate
 
   @impl true
   def mount(_params, session, socket) do
     socket = InitAssigns.assign_embedded(socket, session)
-    organization = Organizations.get_organization!(session["organization_id"])
 
-    {:ok,
-     socket
-     |> assign(:page_title, gettext("Fediverse – %{name}", name: organization.name))
-     |> assign_state(organization)}
+    # The role is re-asked here, not left to the controller that embedded
+    # this page — see `VutuvWeb.OrganizationLive.ManageGate`.
+    case ManageGate.allow(socket, session, &Organizations.owner?/2) do
+      {:ok, organization} ->
+        {:ok,
+         socket
+         |> assign(:page_title, gettext("Fediverse – %{name}", name: organization.name))
+         |> assign_state(organization)}
+
+      {:refused, socket} ->
+        {:ok, socket}
+    end
   end
 
   defp assign_state(socket, organization) do

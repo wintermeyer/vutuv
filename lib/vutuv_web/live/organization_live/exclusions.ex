@@ -19,22 +19,30 @@ defmodule VutuvWeb.OrganizationLive.Exclusions do
   alias Vutuv.Jobs.Exclusions
   alias Vutuv.Organizations
   alias VutuvWeb.Live.InitAssigns
+  alias VutuvWeb.OrganizationLive.ManageGate
 
   @impl true
   def mount(_params, session, socket) do
     socket = InitAssigns.assign_embedded(socket, session)
-    organization = Organizations.get_organization!(session["organization_id"])
 
-    {:ok,
-     socket
-     |> assign(:organization, organization)
-     |> assign(:page_title, gettext("Job exclusions – %{name}", name: organization.name))
-     |> assign(:member_error, nil)
-     |> assign(:org_error, nil)
-     |> assign_member_form()
-     |> assign_org_form()
-     |> assign_domain_form()
-     |> load_exclusions()}
+    # The role is re-asked here, not left to the controller that embedded
+    # this page — see `VutuvWeb.OrganizationLive.ManageGate`.
+    case ManageGate.allow(socket, session, &Organizations.can_manage?/2) do
+      {:ok, organization} ->
+        {:ok,
+         socket
+         |> assign(:organization, organization)
+         |> assign(:page_title, gettext("Job exclusions – %{name}", name: organization.name))
+         |> assign(:member_error, nil)
+         |> assign(:org_error, nil)
+         |> assign_member_form()
+         |> assign_org_form()
+         |> assign_domain_form()
+         |> load_exclusions()}
+
+      {:refused, socket} ->
+        {:ok, socket}
+    end
   end
 
   @impl true

@@ -48,6 +48,7 @@ defmodule VutuvWeb.OrganizationLive.Feed do
   alias VutuvWeb.Live.InitAssigns
   alias VutuvWeb.Live.RemoteImages
   alias VutuvWeb.Live.RemotePostActions
+  alias VutuvWeb.OrganizationLive.ManageGate
 
   # A picture on a card from another network appears the moment the AI gate
   # releases it (issue #1801). This page holds its entries in a plain assign,
@@ -57,13 +58,20 @@ defmodule VutuvWeb.OrganizationLive.Feed do
   @impl true
   def mount(_params, session, socket) do
     socket = InitAssigns.assign_embedded(socket, session)
-    organization = Organizations.get_organization!(session["organization_id"])
 
-    {:ok,
-     socket
-     |> assign(:organization, organization)
-     |> assign(:page_title, gettext("Feed – %{name}", name: organization.name))
-     |> load_feed(nil)}
+    # The role is re-asked here, not left to the controller that embedded
+    # this page — see `VutuvWeb.OrganizationLive.ManageGate`.
+    case ManageGate.allow(socket, session, &Organizations.publisher?/2) do
+      {:ok, organization} ->
+        {:ok,
+         socket
+         |> assign(:organization, organization)
+         |> assign(:page_title, gettext("Feed – %{name}", name: organization.name))
+         |> load_feed(nil)}
+
+      {:refused, socket} ->
+        {:ok, socket}
+    end
   end
 
   defp load_feed(socket, cursor) do
