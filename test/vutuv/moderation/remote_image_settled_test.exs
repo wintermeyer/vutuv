@@ -45,7 +45,7 @@ defmodule Vutuv.Moderation.RemoteImageSettledTest do
 
     assert :ok = ImageSubjects.apply_approved(scan_for(image, image.file))
 
-    assert_receive {:remote_images_settled, %{remote_post_id: id}}
+    assert_receive {:remote_images_changed, %{remote_post_id: id}}
     assert id == post.id
     assert Repo.get!(RemoteImage, image.id).moderation == "approved"
   end
@@ -59,7 +59,7 @@ defmodule Vutuv.Moderation.RemoteImageSettledTest do
 
     assert :ok = ImageSubjects.apply_rejected(scan_for(image, image.file))
 
-    assert_receive {:remote_images_settled, %{remote_post_id: id}}
+    assert_receive {:remote_images_changed, %{remote_post_id: id}}
     assert id == post.id
   end
 
@@ -72,7 +72,7 @@ defmodule Vutuv.Moderation.RemoteImageSettledTest do
 
     assert :stale = ImageSubjects.apply_approved(scan_for(image, "img-stale.avif"))
 
-    refute_receive {:remote_images_settled, _}
+    refute_receive {:remote_images_changed, _}
   end
 
   test "a picture whose post is already gone announces nothing and does not raise" do
@@ -84,6 +84,6 @@ defmodule Vutuv.Moderation.RemoteImageSettledTest do
 
     assert :stale = ImageSubjects.apply_approved(scan_for(image, image.file))
 
-    refute_receive {:remote_images_settled, _}
+    refute_receive {:remote_images_changed, _}
   end
 end

@@ -27,6 +27,7 @@ defmodule Vutuv.Fediverse.Media do
 
   import Ecto.Query, only: [from: 2]
 
+  alias Vutuv.Fediverse
   alias Vutuv.Fediverse.RemoteImage
   alias Vutuv.Moderation.ImageScans
   alias Vutuv.RemoteMedia
@@ -225,6 +226,13 @@ defmodule Vutuv.Fediverse.Media do
            RemoteMedia.store_post_image(bytes, image.id),
          {:ok, _stored} <- store_file(image, %{file: file, width: width, height: height}) do
       ImageScans.enqueue("remote_post_image", image.id, nil, file)
+      # The bytes are what the card was missing, not the verdict (issue #1927).
+      # It was drawn a second ago, when this row had no file and there was
+      # nothing to show; now there is the mosaic preview standing in for the
+      # picture — or the picture itself where no vision model runs. Waiting for
+      # the gate to announce it meant the wordless tile held the card for the
+      # whole scan, which is a median of 97 seconds.
+      Fediverse.broadcast_remote_images_changed(image.remote_post_id)
       :ok
     else
       # `RemoteMedia.store_post_image/2` answers `{:error, reason}` for bytes

@@ -43,7 +43,6 @@ defmodule VutuvWeb.OrganizationLive.Feed do
   import VutuvWeb.OrganizationComponents, only: [manage_header: 1]
   import VutuvWeb.PostComponents, only: [post_thread_entry: 1, remote_post_card: 1]
 
-  alias Vutuv.Fediverse
   alias Vutuv.Organizations
   alias Vutuv.Posts
   alias VutuvWeb.Live.InitAssigns
@@ -122,20 +121,20 @@ defmodule VutuvWeb.OrganizationLive.Feed do
   end
 
   @impl true
-  def handle_info({:remote_images_settled, %{remote_post_id: id}}, socket) do
+  def handle_info({:remote_images_changed, %{remote_post_id: id}}, socket) do
     {:noreply, restate_remote_images(socket, id)}
   end
 
   def handle_info(_message, socket), do: {:noreply, socket}
 
-  # Every open page hears every verdict, so the cheap "is it even on this page"
-  # question comes before the read.
+  # Every open page hears every picture that moves anywhere, so the cheap "is it
+  # even on this page" question comes before the read.
   defp restate_remote_images(socket, remote_post_id) do
     if Enum.any?(socket.assigns.entries, &RemoteImages.draws?(&1, remote_post_id)) do
-      images = Fediverse.remote_images(remote_post_id)
+      pictures = RemoteImages.pictures(remote_post_id)
 
       update(socket, :entries, fn entries ->
-        Enum.map(entries, &RemoteImages.restate_entry(&1, remote_post_id, images))
+        Enum.map(entries, &RemoteImages.restate_entry(&1, remote_post_id, pictures))
       end)
     else
       socket

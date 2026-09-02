@@ -911,7 +911,8 @@ federates without that picture. None of this applies when
 
 Readers *here* are not kept waiting meanwhile: a held picture shows as its
 pixelated preview (see `IMAGE_PIXELATION_WINDOW_SECONDS`) and swaps itself for the real one
-when the verdict lands.
+when the verdict lands. Both steps reach an open page on their own — the
+preview appears the moment the picture has been downloaded, without a reload.
 
 **Followers who leave without saying so.** Somebody on another server who
 unfollows, or who deletes their account and whose server announces it, disappears

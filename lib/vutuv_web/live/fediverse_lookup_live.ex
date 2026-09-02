@@ -59,9 +59,10 @@ defmodule VutuvWeb.FediverseLookupLive do
   # while this page is open (issue #1283). One line, no handler.
   on_mount(VutuvWeb.Live.RemoteCounts)
 
-  # And a picture on the result appears the moment the AI gate releases it
-  # (issue #1801). One line, no handler: `@images` is a plain list.
-  on_mount({VutuvWeb.Live.RemoteImages, :assigns})
+  # And a picture on the result appears the moment there is something to show of
+  # it (issues #1801, #1927). One line, no handler: `@images` is a plain list
+  # and the result itself is `@post`, which carries the link capture.
+  on_mount({VutuvWeb.Live.RemoteImages, {:assigns, :post}})
 
   @impl true
   def mount(_params, _session, socket) do

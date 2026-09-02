@@ -62,9 +62,9 @@ defmodule VutuvWeb.PostLive.Feed do
   # while this page is open (issue #1283). One line, no handler.
   on_mount(VutuvWeb.Live.RemoteCounts)
 
-  # A picture on such a card appears the moment the AI gate releases it (issue
-  # #1801). The timeline mode: the cards are in a stream, so this listens and
-  # `handle_info({:remote_images_settled, …}, …)` below does the redraw.
+  # A picture on such a card appears the moment there is something to show of it
+  # (issues #1801, #1927). The timeline mode: the cards are in a stream, so this
+  # listens and `handle_info({:remote_images_changed, …}, …)` does the redraw.
   on_mount(VutuvWeb.Live.RemoteImages)
 
   # What a mount loads, and what every older page after it adds. The arrival
@@ -2009,8 +2009,10 @@ defmodule VutuvWeb.PostLive.Feed do
   # The same for a picture on a cached post from another network (issue #1801).
   # It matters more here than for a member's own photo: a delivery draws the
   # card in the second between recording the picture and its bytes landing, so
-  # the reader's FIRST sight of a boosted photo post is the waiting tile.
-  def handle_info({:remote_images_settled, %{remote_post_id: id}}, socket) do
+  # the reader's FIRST sight of a boosted photo post is the waiting tile — and
+  # since issue #1927 that second is exactly what this announces, rather than
+  # the verdict a minute and a half later.
+  def handle_info({:remote_images_changed, %{remote_post_id: id}}, socket) do
     {:noreply, refresh_remote_images(socket, id)}
   end
 
@@ -2435,15 +2437,10 @@ defmodule VutuvWeb.PostLive.Feed do
   end
 
   defp restream_remote_images(socket, remote_post_id) do
-    images = Fediverse.remote_images(remote_post_id)
+    pictures = RemoteImages.pictures(remote_post_id)
 
     {entries, changed} =
-      Enum.map_reduce(socket.assigns.entries, [], fn entry, changed ->
-        case RemoteImages.restate_entry(entry, remote_post_id, images) do
-          ^entry -> {entry, changed}
-          updated -> {updated, [updated | changed]}
-        end
-      end)
+      RemoteImages.restate_entries(socket.assigns.entries, remote_post_id, pictures)
 
     socket = assign(socket, :entries, entries)
     Enum.reduce(changed, socket, &stream_insert(&2, :posts, &1, update_only: true))

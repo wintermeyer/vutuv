@@ -123,11 +123,12 @@ defmodule VutuvWeb.TagLive.Timeline do
     RemotePostActions.report(socket, id, &drop_remote_entry(&1, id))
   end
 
-  # A picture on a cached post left the AI gate (issue #1801): the tile the card
-  # is showing becomes the picture, with no reload. Every open page hears every
-  # verdict, so the cheap "is it even on this page" question comes first.
+  # A picture on a cached post moved (issues #1801, #1927): the tile the card is
+  # showing becomes the mosaic preview, and then the picture, with no reload.
+  # Every open page hears every one of these, so the cheap "is it even on this
+  # page" question comes first.
   @impl true
-  def handle_info({:remote_images_settled, %{remote_post_id: id}}, socket) do
+  def handle_info({:remote_images_changed, %{remote_post_id: id}}, socket) do
     {:noreply, restate_remote_images(socket, id)}
   end
 
@@ -138,15 +139,10 @@ defmodule VutuvWeb.TagLive.Timeline do
   end
 
   defp restream_remote_images(socket, remote_post_id) do
-    images = Fediverse.remote_images(remote_post_id)
+    pictures = RemoteImages.pictures(remote_post_id)
 
     {entries, changed} =
-      Enum.map_reduce(socket.assigns.entries, [], fn entry, changed ->
-        case RemoteImages.restate_entry(entry, remote_post_id, images) do
-          ^entry -> {entry, changed}
-          updated -> {updated, [updated | changed]}
-        end
-      end)
+      RemoteImages.restate_entries(socket.assigns.entries, remote_post_id, pictures)
 
     socket = assign(socket, :entries, entries)
     Enum.reduce(changed, socket, &stream_insert(&2, :entries, &1, update_only: true))

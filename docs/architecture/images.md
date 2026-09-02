@@ -404,6 +404,13 @@ about it are deliberate:
   flips the state, because an interruption between the two should cost a reader
   the last seconds of a preview (the grey tile instead) rather than leave an
   orphan file nothing will ever look at again. A rejection wipes the directory.
+- **Announced when it is written, not only when it goes** (issue #1927). The
+  preview exists for the wait, so the moment it exists is the moment a card
+  needs to hear about it: a picture cached from another network and a link
+  capture both reach an open page as soon as their bytes are stored, and the
+  cards re-read again on the verdict. Announcing only the verdict meant nobody
+  watching a feed ever saw a preview — the card was drawn a second before the
+  download finished and kept its grey tile for the whole scan.
 
 Where it exists: post photos (`post_images/<token>/pixelated.avif`, served by
 the proxy at `pixelated.avif` — which redirects to the real picture once

@@ -57,7 +57,7 @@ defmodule VutuvWeb.FeedRemoteImageSettlesTest do
     |> Ecto.Changeset.change(file: "img-abc.avif", moderation: "approved")
     |> Repo.update!()
 
-    Fediverse.broadcast_remote_images_settled(image.remote_post_id)
+    Fediverse.broadcast_remote_images_changed(image.remote_post_id)
   end
 
   test "the waiting tile becomes the picture with no reload", %{conn: conn} do
