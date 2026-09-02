@@ -24,6 +24,40 @@ defmodule Vutuv.Accounts.UserTest do
     refute changeset.valid?
   end
 
+  # Sign-up proves exactly one address, the one the PIN is mailed to. A second
+  # entry in the same POST would be stored as an unverified login identity for
+  # this account: its real owner could then never register it, and their own
+  # login would resolve here. Every further address goes through the
+  # PIN-verified /settings/emails flow instead.
+  test "registration_changeset refuses a second email address" do
+    changeset =
+      User.registration_changeset(%User{}, %{
+        "first_name" => "first_name",
+        "tag_list" => "elixir, phoenix, ecto",
+        "emails" => %{
+          "0" => %{"value" => "mine@example.com"},
+          "1" => %{"value" => "someone.else@example.com"}
+        }
+      })
+
+    refute changeset.valid?
+    assert %{emails: [_]} = errors_on(changeset)
+  end
+
+  # The same shape as a list, which is what Ecto hands `cast_assoc/3` once the
+  # index-keyed map has been normalized — and what a JSON client would send.
+  test "registration_changeset refuses a second email given as a list" do
+    changeset =
+      User.registration_changeset(%User{}, %{
+        "first_name" => "first_name",
+        "tag_list" => "elixir, phoenix, ecto",
+        "emails" => [%{"value" => "mine@example.com"}, %{"value" => "other@example.com"}]
+      })
+
+    refute changeset.valid?
+    assert %{emails: [_]} = errors_on(changeset)
+  end
+
   test "rejects a locale longer than its varchar(255) column" do
     changeset =
       User.changeset(%User{}, %{

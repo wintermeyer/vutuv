@@ -26,7 +26,7 @@ defmodule Vutuv.Directory do
 
   import Ecto.Query
   import Vutuv.Moderation.Query
-  import Vutuv.SearchText, only: [contains: 1, normalize_search: 1]
+  import Vutuv.SearchText, only: [cap: 1, contains: 1, normalize_search: 1]
 
   alias Vutuv.Accounts.User
   alias Vutuv.Pages
@@ -249,7 +249,10 @@ defmodule Vutuv.Directory do
   33 ms against 67 ms on a 100k-row copy).
   """
   def search(query, fields \\ @search_fields, limit \\ @results_step) do
-    with needle when is_binary(needle) <- normalize_search(query),
+    # `/system/members?q=` is open to visitors and `field_match/2` emits one
+    # leading-wildcard `ILIKE` per word per selected column, so the query is cut
+    # to `SearchText.max_chars/0` before any of that is built.
+    with needle when is_binary(needle) <- query |> cap() |> normalize_search(),
          true <- String.length(needle) >= @min_query_chars do
       listed_users()
       |> where(^field_match(parse_search_fields(fields), needle))

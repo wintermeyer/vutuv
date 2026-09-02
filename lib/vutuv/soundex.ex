@@ -47,13 +47,20 @@ defmodule Vutuv.Soundex do
       ?w
     ]
 
+  # Same bound and same reason as `Vutuv.ColognePhonetics`: a name, handed over
+  # by a stranger from the public search box or from raw sign-up params.
+  @max_chars 100
+
   def to_soundex(""), do: ""
 
   def to_soundex(nil), do: nil
 
   def to_soundex(string) do
     # Downcase to prevent unwanted behavior
-    String.downcase(string)
+    string
+    |> String.byte_slice(0, @max_chars * 4)
+    |> String.slice(0, @max_chars)
+    |> String.downcase()
     # Normalizes special characters
     |> normalize
     # Converts the string into a char list
@@ -88,11 +95,16 @@ defmodule Vutuv.Soundex do
 
   defp encode_list(tail, ~c"", head), do: encode_list([head | tail], ~c"")
 
-  defp encode_list(~c"", encoded), do: encoded
+  # The accumulator collects the replacements in reverse and is turned around
+  # once at the end. Appending per character (`encoded ++ [replace(head)]`)
+  # copies the whole accumulator every time, which is quadratic in the length of
+  # the word — and the word comes from the public `/search` box (see the work
+  # bound in `test/vutuv/soundex_test.exs`).
+  defp encode_list(~c"", encoded), do: Enum.reverse(encoded)
 
   # Recurses the char list and applies the apropriate replacements until it has replaced each letter
   defp encode_list([head | tail], encoded) do
-    encode_list(tail, encoded ++ [replace(head)])
+    encode_list(tail, [replace(head) | encoded])
   end
 
   # Generates non-breaking drops

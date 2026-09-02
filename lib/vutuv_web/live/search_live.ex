@@ -47,6 +47,7 @@ defmodule VutuvWeb.SearchLive do
   alias Vutuv.Fediverse.RemoteFollow
   alias Vutuv.Posts
   alias Vutuv.Search
+  alias Vutuv.SearchText
   alias VutuvWeb.PostTeaser
   alias VutuvWeb.UserHelpers
   alias VutuvWeb.UserHTML
@@ -189,7 +190,8 @@ defmodule VutuvWeb.SearchLive do
   end
 
   @impl true
-  def handle_event("search", %{"q" => q}, socket), do: {:noreply, patch_search(socket, q)}
+  def handle_event("search", %{"q" => q}, socket),
+    do: {:noreply, patch_search(socket, SearchText.cap(q))}
 
   # Enter on a pasted post address means "get me that post", which is the one
   # thing a text search can never do with it, so a submit takes the lookup where
@@ -197,6 +199,7 @@ defmodule VutuvWeb.SearchLive do
   # than read off the assign: `phx-debounce` holds the change event back, so a
   # paste followed straight away by Enter arrives here first.
   def handle_event("submit-search", %{"q" => q}, socket) do
+    q = SearchText.cap(q)
     socket = socket |> assign(:q, q) |> assign(:remote_post_url, remote_post_url(q))
 
     if lookup_offered?(socket),

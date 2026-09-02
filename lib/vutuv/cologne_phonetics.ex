@@ -73,6 +73,13 @@ defmodule Vutuv.ColognePhonetics do
       {?c, ~c"8"}
     ]
 
+  # This encodes names, and the longest name any column here holds is 50
+  # characters. Both callers can be handed more than that by a stranger —
+  # `Vutuv.Search` from the public query box, `Vutuv.Accounts.SearchTerm` from
+  # the raw sign-up params, before any length validation runs — so the word is
+  # cut here rather than at each of them.
+  @max_chars 100
+
   def to_cologne(""), do: ""
 
   def to_cologne(nil), do: nil
@@ -80,7 +87,10 @@ defmodule Vutuv.ColognePhonetics do
   # The three steps of the cologne phonetics algorithm.
   def to_cologne(string) do
     # Downcase to prevent unwanted behavior
-    String.downcase(string)
+    string
+    |> String.byte_slice(0, @max_chars * 4)
+    |> String.slice(0, @max_chars)
+    |> String.downcase()
     # Normalizes special characters
     |> normalize
     # Converts the string to representative coded numbers in a char list
@@ -101,17 +111,24 @@ defmodule Vutuv.ColognePhonetics do
     encode_string(~c"", nil, nil, head, tail)
   end
 
+  # The accumulator collects the codes reversed and flat, and the last clause
+  # turns it around once. Appending instead (`encoded ++ encode(…)`) copies the
+  # whole accumulator per character, which is quadratic in the length of the
+  # word — and this encoder is reachable with a word an unauthenticated visitor
+  # chooses, both from the `/search` box and from a sign-up's raw `first_name`
+  # (`Vutuv.Accounts.SearchTerm.create_search_terms/1`, which runs before the
+  # changeset's length validation). See the work bound in
+  # `test/vutuv/cologne_phonetics_test.exs`.
   defp encode_string(encoded, prev, char, next, [head | tail]) do
     # As long as the char list is not empty, recurse
-    (encoded ++ encode(prev, char, next))
+    encode(prev, char, next)
+    |> Enum.reverse(encoded)
     |> encode_string(char, next, head, tail)
   end
 
   defp encode_string(encoded, prev, char, next, []) do
     # If the char list is empty, the operation  is finished, encode the last two letters.
-    encoded ++
-      encode(prev, char, next) ++
-      encode(char, next, nil)
+    Enum.reverse(encoded, encode(prev, char, next) ++ encode(char, next, nil))
   end
 
   # This function block defines pattern matchable functions for every possible replacement.

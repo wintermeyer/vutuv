@@ -29,7 +29,7 @@ defmodule Vutuv.Jobs do
   """
 
   import Ecto.Query
-  import Vutuv.SearchText, only: [contains: 1, escape_like: 1, normalize_search: 1]
+  import Vutuv.SearchText, only: [cap: 1, contains: 1, escape_like: 1, normalize_search: 1]
 
   alias Vutuv.Accounts.User
   alias Vutuv.BerlinTime
@@ -957,12 +957,14 @@ defmodule Vutuv.Jobs do
   other value is validated (radius/country/enums) or dropped.
   """
   def board_filters(raw, viewer) when is_map(raw) do
+    # The board is public and `q` is split into one `ILIKE` group per token
+    # (`Vutuv.Jobs.SearchQuery`), so both free-text fields are cut first.
     %{
-      q: normalize_search(raw["q"]),
+      q: raw["q"] |> cap() |> normalize_search(),
       tags: parse_board_tags(raw["tag"]),
       workplace: parse_workplace(raw["workplace"]),
       employment: parse_employment(raw["employment"]),
-      near: normalize_search(raw["near"]),
+      near: raw["near"] |> cap() |> normalize_search(),
       radius: parse_radius(raw["radius"]),
       country: parse_country(raw["country"]),
       my_tags?: raw["my_tags"] in ["1", "true", "on"]

@@ -161,6 +161,12 @@
           form's hidden `_persistent_id` field twice under one name. `f` is still
           in scope in here, so the three user-level checkboxes below cost
           nothing for sitting in this block. --%>
+    <%!-- The association's own error, as opposed to the nested field's: the
+          only one that can land here is the "one address at sign-up" rule, and
+          without this the form would fail silently, because a refused list is
+          never cast and so has no nested form to carry the message. --%>
+    <%= error_tag f, :emails %>
+
     <.inputs_for :let={ef} field={f[:emails]}>
       <div>
         <label for={ef[:value].id} class={label_class}>{gettext("Email address")}</label>
