@@ -79,4 +79,32 @@ defmodule VutuvWeb.AvatarControllerTest do
     sleepy = insert_activated_user(email_confirmed?: false, avatar: "selfie.jpg")
     assert get(conn, "/#{sleepy.username}/avatar.jpg").status == 404
   end
+
+  # This endpoint answers anonymously, so a face it hands out is readable by
+  # anybody who knows the handle. A member the rest of the slug space withholds
+  # has to be withheld here too — `email_confirmed?` on its own is not that gate.
+  test "404 for a member the site withholds", %{conn: conn} do
+    user = member_with_avatar()
+    assert get(conn, "/#{user.username}/avatar.jpg").status == 200
+
+    suspended =
+      user
+      |> Ecto.Changeset.change(
+        suspended_until: NaiveDateTime.add(NaiveDateTime.utc_now(:second), 86_400)
+      )
+      |> Repo.update!()
+
+    assert get(conn, "/#{suspended.username}/avatar.jpg").status == 404
+  end
+
+  test "404 for a deactivated member", %{conn: conn} do
+    user = member_with_avatar()
+
+    deactivated =
+      user
+      |> Ecto.Changeset.change(deactivated_at: NaiveDateTime.utc_now(:second))
+      |> Repo.update!()
+
+    assert get(conn, "/#{deactivated.username}/avatar.jpg").status == 404
+  end
 end

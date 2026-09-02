@@ -10,19 +10,28 @@ defmodule VutuvWeb.AvatarController do
   404s: unknown slugs, unactivated members and members without an avatar
   all look the same. The public cache lifetime keeps repeat scraper
   traffic off libvips.
+
+  A member the site withholds keeps their picture withheld too. `email_confirmed?`
+  alone let this endpoint answer for a suspended, frozen or deactivated account
+  whose every other page is a 404 or a 410 — and it answers **anonymously**, so
+  the face stayed readable by anybody who knew the handle. The gate is now the
+  one the rest of the slug space uses, asked with no viewer, exactly as
+  `VutuvWeb.OrganizationAvatarController` asks it for a page.
   """
 
   use VutuvWeb, :controller
 
   alias Vutuv.Accounts.User
   alias Vutuv.Avatar
+  alias Vutuv.Moderation
   alias Vutuv.Repo
   alias VutuvWeb.ControllerHelpers
 
   def show(conn, %{"slug" => slug}) do
     bytes =
-      with %User{email_confirmed?: true, avatar: avatar} = user when not is_nil(avatar) <-
-             Repo.get_by(User, username: slug) do
+      with %User{avatar: avatar} = user when not is_nil(avatar) <-
+             Repo.get_by(User, username: slug),
+           true <- Moderation.profile_visible_to?(user, nil) do
         Avatar.og_jpeg(user)
       end
 

@@ -758,8 +758,24 @@ defmodule Vutuv.Organizations do
   Taking `owner` away runs under the same `guard_last_owner/2` row lock the
   single-role path used: two concurrent edits each dropping a *different* owner
   could otherwise both read "there are two owners" and both commit, leaving zero.
+
+  `actor` is **authorized here**, not merely recorded as `granted_by`. It used to
+  be the latter only, so the whole rule that this is an owner's operation lived in
+  the controller that renders the roster — and the roster is an embedded LiveView
+  whose `live_render` session map is signed but not encrypted and valid for days.
+  A replayed payload, or simply a tab still open after the member's own owner role
+  was taken away, could push `set_roles` and grant itself anything. Returns
+  `{:error, :unauthorized}` for anyone who may not manage this page's roles.
   """
   def set_roles(%Organization{} = organization, %User{} = user, roles, %User{} = actor) do
+    if can_manage_roles?(organization, actor) do
+      do_set_roles(organization, user, roles, actor)
+    else
+      {:error, :unauthorized}
+    end
+  end
+
+  defp do_set_roles(organization, user, roles, actor) do
     wanted = roles |> Enum.filter(&(&1 in @roles)) |> Enum.uniq()
     held = roles_of(organization, user)
 

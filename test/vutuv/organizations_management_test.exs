@@ -189,6 +189,38 @@ defmodule Vutuv.OrganizationsManagementTest do
       assert {:ok, ["admin"]} = Organizations.set_roles(organization, owner, ["admin"], owner)
     end
 
+    # `actor` used to be recorded as `granted_by` and nothing else, so the "this
+    # is an owner's operation" rule lived only in the controller that renders the
+    # roster — an embedded LiveView whose session map is signed but not encrypted
+    # and valid for days. Pushing the event was enough to grant yourself a role.
+    test "set_roles refuses an actor who may not manage roles" do
+      {organization, owner} = active_organization()
+      member = insert(:activated_user)
+      outsider = insert(:activated_user)
+      {:ok, _} = Organizations.set_roles(organization, member, ["publisher"], owner)
+
+      assert {:error, :unauthorized} =
+               Organizations.set_roles(organization, member, ["owner"], outsider)
+
+      # An admin is on the team and still may not hand out roles.
+      {:ok, _} = Organizations.set_roles(organization, member, ["admin"], owner)
+
+      assert {:error, :unauthorized} =
+               Organizations.set_roles(organization, member, ["owner"], member)
+
+      assert Organizations.roles_of(organization, member) == ["admin"]
+    end
+
+    test "set_roles refuses a former owner whose own role was taken away" do
+      {organization, owner} = active_organization()
+      second = insert(:activated_user)
+      {:ok, _} = Organizations.set_roles(organization, second, ["owner"], owner)
+      {:ok, _} = Organizations.set_roles(organization, second, [], owner)
+
+      assert {:error, :unauthorized} =
+               Organizations.set_roles(organization, second, ["owner"], second)
+    end
+
     test "list_team gives one entry per member with every role they hold" do
       {organization, owner} = active_organization()
       member = insert(:activated_user)

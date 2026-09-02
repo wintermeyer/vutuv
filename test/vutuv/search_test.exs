@@ -2,7 +2,9 @@ defmodule Vutuv.SearchTest do
   use Vutuv.DataCase, async: true
 
   alias Vutuv.Accounts.SearchTerm
+  alias Vutuv.Accounts.ViewerExclusion
   alias Vutuv.Search
+  alias Vutuv.Social
 
   # A user findable by name search: the factory does not create search terms
   # (Accounts.create_user does), so insert the same terms create_user would.
@@ -266,6 +268,25 @@ defmodule Vutuv.SearchTest do
 
       results = Search.instant("status:looking", viewer: ctx.viewer)
       assert Enum.map(results.exact_people, & &1.id) == [ctx.looking.id]
+    end
+
+    # The exclusion list (#938) is a promise about exactly this fact. Hiding it
+    # on the profile while `status:looking` still lists the member does not keep
+    # that promise, so the live operator applies the same gate the alert mail does.
+    test "a member who excluded the viewer never matches", ctx do
+      Repo.insert!(ViewerExclusion.member_changeset(ctx.looking, ctx.viewer))
+
+      results = Search.instant("status:looking", viewer: ctx.viewer)
+
+      refute ctx.looking.id in Enum.map(results.exact_people, & &1.id)
+    end
+
+    test "a block hides the status from the blocked viewer's search", ctx do
+      Social.block_user(ctx.looking, ctx.viewer)
+
+      results = Search.instant("status:looking", viewer: ctx.viewer)
+
+      refute ctx.looking.id in Enum.map(results.exact_people, & &1.id)
     end
 
     test "logged-out search ignores the operator", ctx do

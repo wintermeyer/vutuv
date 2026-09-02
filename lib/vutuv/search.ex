@@ -192,12 +192,13 @@ defmodule Vutuv.Search do
     if runnable?(parsed) do
       {exact, similar} = people(parsed)
       tags = tags(parsed)
+      viewer = opts[:viewer]
 
       %{
         query: parsed.raw,
         parsed: parsed,
-        exact_people: exact,
-        similar_people: similar,
+        exact_people: status_visible(exact, parsed, viewer),
+        similar_people: status_visible(similar, parsed, viewer),
         tags: tags,
         tag_member_counts: tag_member_counts(tags),
         posts: posts(parsed)
@@ -280,6 +281,25 @@ defmodule Vutuv.Search do
 
   defp honor_status_exclusion(people, _parsed, _viewer), do: people
 
+  # The live `/search` results get the same gate as the alert mail. It used to be
+  # skipped here, called "a transient interactive query" — but the exclusion list
+  # (#938) is a promise about one fact, and hiding that fact on the profile while
+  # `status:looking` still lists the member is not keeping it.
+  #
+  # `viewer_excluded?/2` rather than the alert path's `job_search_visibility/2`:
+  # the rows here come from `list_people/1`, which selects a narrow struct, so
+  # every visibility column reads `nil` and that predicate would answer "hidden"
+  # for everybody. It does not have to be asked anyway — `filter_status/2` has
+  # already required a non-hidden status in SQL and the operator only runs for a
+  # signed-in viewer, so the exclusion is the one question left, and it needs
+  # nothing but the two ids.
+  defp status_visible(people, %{status: status}, %User{} = viewer)
+       when status in @status_values do
+    Enum.reject(people, &Accounts.viewer_excluded?(&1, viewer))
+  end
+
+  defp status_visible(people, _parsed, _viewer), do: people
+
   defp people(%{scope: scope}) when scope not in [:all, :people], do: {[], []}
 
   defp people(parsed) do
@@ -357,8 +377,8 @@ defmodule Vutuv.Search do
 
   # A member matches `status:` when they carry that availability and it is
   # visible to a signed-in member (never "hidden" — issue #928). The per-viewer
-  # exclusion list (#938) is honored on the profile and in the alert mail, not
-  # in this live operator (a transient interactive query).
+  # exclusion list (#938) is applied after this, in `status_visible/3`, because
+  # it is a per-pair question this SQL predicate cannot ask.
   defp filter_status(query, status) when status in @status_values do
     where(
       query,

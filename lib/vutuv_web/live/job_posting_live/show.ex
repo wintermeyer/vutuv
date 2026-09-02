@@ -9,6 +9,14 @@ defmodule VutuvWeb.JobPostingLive.Show do
   "Wünschenswert" (a signed-in viewer's own matching tags highlighted), the
   apply button and the like / bookmark bar. The like count is live over PubSub;
   a closure or edit updates open tabs.
+
+  **The socket re-asks whether the viewer may see the posting.** The controller
+  answering that on the dead render is not enough: the `live_render` session map
+  is signed but not encrypted and stays valid for days, so a captured payload
+  could be replayed straight at `/live/websocket` with the slug in it — and a
+  draft, an expired or a withdrawn posting would render in full. So the mount
+  resolves through `Jobs.fetch_visible_job_posting/2`, and every later refresh
+  asks again, because a posting can be closed while a tab is open.
   """
 
   use VutuvWeb, :live_view
@@ -25,18 +33,32 @@ defmodule VutuvWeb.JobPostingLive.Show do
     socket = InitAssigns.assign_embedded(socket, session)
     current_user = socket.assigns.current_user
 
-    posting = Jobs.get_job_posting_by_slug(session["slug"])
+    case visible_posting(session["slug"], current_user) do
+      {:ok, posting} ->
+        if connected?(socket), do: on_connect(posting, current_user)
+        {:ok, assign_posting(socket, posting, current_user)}
 
-    if connected?(socket) do
-      Jobs.subscribe(posting.id)
-      # Approximate view counting; skip the owner's own visits.
-      unless Jobs.owner?(posting, current_user), do: Jobs.increment_view(posting)
+      {:error, :not_found} ->
+        {:ok, push_navigate(socket, to: ~p"/jobs")}
     end
-
-    socket = assign_posting(socket, posting, current_user)
-
-    {:ok, socket}
   end
+
+  defp on_connect(posting, viewer) do
+    Jobs.subscribe(posting.id)
+    # Approximate view counting; skip the owner's own visits.
+    unless Jobs.owner?(posting, viewer), do: Jobs.increment_view(posting)
+  end
+
+  # The gate, asked on the socket rather than inherited from the dead render.
+  # `fetch_visible_job_posting/2` deliberately returns an unpreloaded row, so the
+  # associations this page renders are loaded only once it has said yes.
+  defp visible_posting(slug, viewer) when is_binary(slug) do
+    with {:ok, posting} <- Jobs.fetch_visible_job_posting(slug, viewer) do
+      {:ok, Jobs.preload_for_show(posting)}
+    end
+  end
+
+  defp visible_posting(_slug, _viewer), do: {:error, :not_found}
 
   defp assign_posting(socket, posting, viewer) do
     socket
@@ -68,9 +90,15 @@ defmodule VutuvWeb.JobPostingLive.Show do
     {:noreply, assign(socket, :engagement, %{socket.assigns.engagement | likes: likes})}
   end
 
+  # A posting can be withdrawn, frozen or expire while a tab sits open, so the
+  # refresh asks the gate again rather than re-reading the row unconditionally.
   def handle_info({:job_posting_updated, _}, socket) do
-    posting = Jobs.get_job_posting_by_slug(socket.assigns.posting.slug)
-    {:noreply, assign_posting(socket, posting, socket.assigns.current_user)}
+    viewer = socket.assigns.current_user
+
+    case visible_posting(socket.assigns.posting.slug, viewer) do
+      {:ok, posting} -> {:noreply, assign_posting(socket, posting, viewer)}
+      {:error, :not_found} -> {:noreply, push_navigate(socket, to: ~p"/jobs")}
+    end
   end
 
   def handle_info(_msg, socket), do: {:noreply, socket}
