@@ -157,4 +157,19 @@ defmodule Vutuv.Languages do
     |> Enum.map(&{name(&1), &1})
     |> Enum.sort_by(fn {label, _code} -> String.downcase(label) end)
   end
+
+  @doc """
+  `options/0` without the given codes — what is left to offer once something
+  else on the page already offers those.
+
+  Both callers show a short list of codes and then everything else: the feed's
+  language settings put the ones this member already picked above the "add
+  another language" list, the post composer's language chip puts this
+  installation's locales (and the post's own language) above its long list. A
+  code in both places would be a duplicate the reader has to tell apart, and
+  in a `<select>` two options carrying one value are worse than that.
+  """
+  def options_except(codes) do
+    Enum.reject(options(), fn {_label, code} -> code in codes end)
+  end
 end

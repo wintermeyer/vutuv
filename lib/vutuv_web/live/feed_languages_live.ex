@@ -170,7 +170,7 @@ defmodule VutuvWeb.FeedLanguagesLive do
     |> assign(:chosen, chosen)
     |> assign(:mode, Prefs.get(user, :feed_foreign_posts))
     |> assign(:target, PostTranslations.target_language(user))
-    |> assign(:addable, Enum.reject(Languages.options(), fn {_label, code} -> code in chosen end))
+    |> assign(:addable, Languages.options_except(chosen))
     |> assign(:suggested, Enum.reject(socket.assigns.suggestion_pool, &(&1 in chosen)))
   end
 
