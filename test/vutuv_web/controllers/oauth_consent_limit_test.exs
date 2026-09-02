@@ -154,8 +154,31 @@ defmodule VutuvWeb.OauthConsentLimitTest do
       end)
 
     assert log =~ "consent budget spent"
-    assert log =~ "app=#{app.name}"
+    assert log =~ ~s(app="#{app.name}")
     assert log =~ "Ivory/1.2"
+  end
+
+  # The app name is the client's own free text, and this line exists to be read
+  # by an operator diagnosing that very client — so the client must not be able
+  # to write a second, plausible record into it. A row that predates the
+  # single-line rule on `App.common_changeset/2` still can hold a newline, which
+  # is why the guard is at the log line and not only at the write.
+  test "a newline in the app name cannot forge a second log record", %{conn: conn, app: app} do
+    forged = "Ivory\n2026-09-02 12:00:00.000 [error] oauth: consent budget spent, app=Innocent"
+    # `change/2`, not the changeset, so the row can hold what the rule now
+    # refuses — which is the point: the log guard must stand without it.
+    Repo.update!(change(app, name: forged))
+
+    log =
+      ExUnit.CaptureLog.capture_log([level: :error], fn ->
+        exhaust_budget(conn, app)
+      end)
+
+    assert log =~ "consent budget spent"
+    # The newline is escaped into the value, so the fabricated record is text
+    # inside our line rather than a line of its own.
+    assert log =~ ~S(app="Ivory\n2026-09-02)
+    refute log =~ "\n2026-09-02 12:00:00.000 [error]"
   end
 
   # A budget shared across apps would let one looping client lock a member out

@@ -7,6 +7,8 @@ defmodule VutuvWeb.AgentFormatTest do
 
   use VutuvWeb.ConnCase, async: true
 
+  alias Vutuv.Posts
+
   setup do
     user = insert_activated_user(username: "agent_tester", first_name: "Agatha")
     %{user: user}
@@ -241,6 +243,90 @@ defmodule VutuvWeb.AgentFormatTest do
       # link text and smuggle in an attacker URL.
       assert body =~ "x\\]"
       refute body =~ "[Eve x](https://evil.example)"
+    end
+
+    # Every link in an agent document is built by `Markdown.md_link/2`, so these
+    # aim at surfaces that reach it by different routes — a people list, an
+    # image line, a remote reply — rather than at the helper itself.
+    @forged "x](https://phish.example/payroll)"
+    @escaped "x\\](https://phish.example/payroll)"
+
+    test "a hostile name cannot forge a link in an organization's people list" do
+      organization = insert(:organization)
+
+      member =
+        insert_activated_user(username: "org_person", first_name: "Eve", last_name: @forged)
+
+      insert(:work_experience,
+        user: member,
+        organization_id: organization.id,
+        organization: "Acme GmbH"
+      )
+
+      body = get(build_conn(), "/organizations/#{organization.slug}.md").resp_body
+
+      assert body =~ @escaped
+      refute body =~ @forged
+    end
+
+    test "a hostile photo alt cannot forge a link on the post permalink" do
+      author = insert_activated_user(username: "photo_author")
+      post = insert(:post, user: author)
+      insert(:post_image, post: post, user: author, alt: @forged)
+
+      body = get(build_conn(), Posts.path(post) <> ".md").resp_body
+
+      # The alt text still reads as the attacker wrote it — it is the escaped
+      # `]` that keeps it inside the label instead of ending it.
+      assert body =~ @escaped
+      refute body =~ @forged
+    end
+
+    test "a remote reply's URL cannot close the link it sits in" do
+      author = insert_activated_user(username: "reply_target")
+      post = insert(:post, user: author)
+
+      # `origin_url` is filtered on ingest; `object_uri` is what `Note.origin/1`
+      # falls back to, and nothing about its shape is checked.
+      insert(:note,
+        post: post,
+        audience: "public",
+        origin_url: nil,
+        object_uri: "https://evil.example/x) [Verify](https://phish.example/"
+      )
+
+      body = get(build_conn(), Posts.path(post) <> ".md").resp_body
+
+      # The `)` that would have ended the destination is percent-encoded, so the
+      # attacker's own bracket pair never becomes a link of its own.
+      assert body =~ "evil.example/x%29"
+      refute body =~ "[Verify](https://phish.example/)"
+    end
+
+    # A link label is one line, so a newline in a name does not merely read
+    # oddly: it ends the list item and hands the rest to the document as
+    # structure. Names carry only a length rule, so the renderer folds it.
+    test "a newline in a member's name cannot open a heading of its own", %{user: target} do
+      evil =
+        insert_activated_user(first_name: "Eve", last_name: "x\n## Verified partner")
+
+      follow!(evil, target)
+
+      body = get(build_conn(), "/agent_tester/followers.md").resp_body
+
+      refute body =~ "\n## Verified partner"
+      assert body =~ "Eve x ## Verified partner"
+    end
+
+    # The Addresses section reaches the document through a fragment shared with
+    # the plain-text renderer, so it never passed through a link helper.
+    test "a hostile address line cannot forge a link on the profile", %{user: user} do
+      insert(:address, user: user, line_1: @forged, city: "Köln", country: "Germany")
+
+      body = get(build_conn(), "/agent_tester.md").resp_body
+
+      assert body =~ @escaped
+      refute body =~ @forged
     end
 
     test "YAML frontmatter keeps interpolation-looking text literal", %{user: _user} do

@@ -62,11 +62,10 @@ defmodule VutuvWeb.ActingAsController do
 
   # Back where they were, so leaving the mode is not also a navigation. Only a
   # same-site path is honored: an absolute URL in a parameter is an open
-  # redirect, and this one is reachable from every page.
+  # redirect, and this one is reachable from every page. The rule itself is
+  # `ControllerHelpers.safe_return_to/2` — this used to carry its own copy,
+  # which knew about `//` and not about the backslash a browser reads as one.
   defp return_to(conn) do
-    case conn.params["return_to"] do
-      "/" <> _ = path -> if String.starts_with?(path, "//"), do: ~p"/feed", else: path
-      _ -> ~p"/feed"
-    end
+    ControllerHelpers.safe_return_to(conn.params["return_to"]) || ~p"/feed"
   end
 end
