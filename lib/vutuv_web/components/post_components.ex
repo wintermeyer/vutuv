@@ -2426,10 +2426,12 @@ defmodule VutuvWeb.PostComponents do
                   <span aria-hidden="true">⚠</span>{gettext("Cover it again")}
                 </span>
               </summary>
-              <.remote_image picture={picture} alt={image.alt} />
+              <.remote_video :if={RemoteImage.video?(image)} image={image} />
+              <.remote_image :if={not RemoteImage.video?(image)} picture={picture} alt={image.alt} />
             </details>
           <% :ready -> %>
-            <.remote_image picture={RemoteMedia.picture(image)} alt={image.alt} />
+            <.remote_video :if={RemoteImage.video?(image)} image={image} />
+            <.remote_image :if={not RemoteImage.video?(image)} picture={RemoteMedia.picture(image)} alt={image.alt} />
         <% end %>
       </div>
     </div>
@@ -2458,6 +2460,51 @@ defmodule VutuvWeb.PostComponents do
   # the post, so an empty body renders no rail and no empty paragraph, the same
   # as a local photo post.
   defp presence?(text), do: is_binary(text) and String.trim(text) != ""
+
+  # A clip from another network (issue #1914): the cover we fetched and judged
+  # as the poster, the clip itself played straight from its server on a tap —
+  # nothing of it is cached here (up to 99 MB a post on Mastodon), and
+  # `preload="none"` means a reader who does not play it costs the poster and
+  # not a byte more. The play glyph and the sender's sensitive flag are the
+  # same ones a member's own clip and a remote picture wear.
+  attr(:image, RemoteImage, required: true)
+
+  defp remote_video(assigns) do
+    poster = if RemoteImage.released?(assigns.image), do: RemoteMedia.picture(assigns.image)
+    assigns = assign(assigns, :poster, poster && (poster.lite || poster.src))
+
+    ~H"""
+    <figure data-remote-video={@image.id} data-video-figure class="relative">
+      <div class="relative overflow-hidden rounded-lg bg-slate-950">
+        <video
+          controls
+          preload="none"
+          playsinline
+          poster={@poster}
+          src={@image.source_uri}
+          width={@image.width}
+          height={@image.height}
+          aria-label={@image.alt || gettext("Video")}
+          data-video-player
+          class="block max-h-96 w-full"
+        >
+        </video>
+        <span
+          data-video-overlay
+          aria-hidden="true"
+          class="pointer-events-none absolute inset-0 flex items-center justify-center"
+        >
+          <span class="flex h-14 w-14 items-center justify-center rounded-full bg-slate-900/70 text-white shadow-lg">
+            <svg viewBox="0 0 24 24" fill="currentColor" class="ml-1 h-7 w-7" aria-hidden="true">
+              <path d="M8 5.14v13.72a1 1 0 0 0 1.5.86l11-6.86a1 1 0 0 0 0-1.72l-11-6.86A1 1 0 0 0 8 5.14z" />
+            </svg>
+          </span>
+        </span>
+      </div>
+      <figcaption :if={@image.alt} class="sr-only">{@image.alt}</figcaption>
+    </figure>
+    """
+  end
 
   attr(:picture, :map, required: true, doc: "`Vutuv.RemoteMedia.picture/1` of the image")
   attr(:alt, :string, default: nil)

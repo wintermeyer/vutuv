@@ -30,6 +30,7 @@ installing and operating vutuv in [Running your own vutuv](../ADMINS.md).
 | [agents-and-seo.md](agents-and-seo.md) | agent formats (`.md`/`.txt`/`.json`/`.xml`/`.vcf`), the member directory, sitemap/RSS/JSON-LD, Open Graph, how to read the Search Console reports |
 | [email.md](email.md) | the Emailer chokepoint, multipart bodies, opt-outs, bounces & deliverability |
 | [images.md](images.md) | the AVIF pipeline, kept originals, fingerprinted filenames, URL screenshots, AI image moderation (Ollama) |
+| [video.md](video.md) | video on posts: the ffmpeg pipeline and its resumable job, the AI check over the stills, the post that waits for its clip, the player and the range-answering proxy, what federates and what the Mastodon API says |
 | [admin.md](admin.md) | the admin panel: live dashboard, member browser, account deletion, newsletter & audiences, daily report |
 | [ads.md](ads.md) | the daily text ad: booking, review, serving |
 | [experiments.md](experiments.md) | split tests on public copy: the landing-page headline test, per-variant counters, how the winner is called |

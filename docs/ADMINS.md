@@ -33,6 +33,16 @@ Related documents: [README](../README.md) (overview) ·
   certificates & licenses. Without `pdftoppm` on `$PATH`, PDF uploads are
   refused with a clear message ("please upload an image instead"); image
   proofs keep working.
+- **ffmpeg** (optional, `apt-get install ffmpeg`) — video on posts: converts
+  a member's clip into the files browsers play and pulls the stills the AI
+  check looks at. Debian's build carries `libx264` and `libsvtav1`; without
+  the latter the AV1 renditions are skipped and the H.264 files still serve.
+  Without `ffmpeg` and `ffprobe` on `$PATH` (or `FFMPEG_PATH` /
+  `FFPROBE_PATH`) the feature is off: the composer offers no video and the
+  Mastodon API announces no video limits. A two-minute 4K clip takes about a
+  minute of two cores on a modern server; at most `VIDEO_CONCURRENCY` clips
+  are worked on at once and every run is `nice`d. See
+  [docs/architecture/video.md](architecture/video.md).
 - An **SMTP relay** vutuv can send email through. Email is not optional:
   login works via emailed PINs (vutuv is passwordless).
 - **nginx** (or another reverse proxy) in front of the app. Optional for a
@@ -100,6 +110,12 @@ Everything else has a default (the vutuv.de production value):
 | `POOL_SIZE` | `10` | DB connection pool |
 | `UPLOADS_DIR_PREFIX` | `/srv/legacy-vutuv` (fallback only) | **Set this.** Root directory for uploaded images (avatars, covers, screenshots, post images, private originals). The default is a historical fallback, not a recommendation: pick a directory your app user owns (vutuv.de uses `/srv/vutuv3`) |
 | `CHROMIUM_PATH` | – | Chromium binary, if not on `$PATH` |
+| `VIDEO_UPLOADS` | `true` | `false` turns video on posts off even where ffmpeg is installed: no picker in the composer, no video in the Mastodon API's limits. Without ffmpeg it is off whatever this says |
+| `VIDEO_MAX_MB` | `500` | The largest clip a member may upload, in megabytes. 500 MB is two minutes of the heaviest setting a phone offers (4K30 HEVC, 1080p60) plus a margin. **Over HTTP** — the Mastodon API and `/api/2.0`, not the website's own composer, which uploads over the LiveView socket — nginx's `client_max_body_size` in front has to allow at least this much plus a little framing (`client_max_body_size 520m;` on the app location), or the app never sees the upload and the client gets nginx's bare 413 |
+| `VIDEO_MAX_SECONDS` | `120` | The longest clip a member may upload. Two minutes keep the 720p file far under Mastodon's 99 MB attachment limit, so the clip federates as a playable file |
+| `VIDEO_THREADS` | `4` | The thread cap every ffmpeg run gets. Raise it on a big idle machine, lower it where the web server shares few cores |
+| `VIDEO_CONCURRENCY` | `2` | How many clips are converted at once. Everything past that queues; the author sees "waiting in line" |
+| `FFMPEG_PATH` / `FFPROBE_PATH` | `ffmpeg` / `ffprobe` | The two binaries, if not on `$PATH` under those names |
 | `SCREENSHOT_BLOCKLIST` | – | Extra pages never to take a link-preview screenshot of, on top of the shipped `reddit.com` and `heise.de`. Comma-separated domains and/or URLs, copied into the blocklist table the first time you migrate; afterwards the live list is edited in the admin area (see "Screenshot blocklist" below) and this variable is inert. `SCREENSHOT_BLOCKED_HOSTS` is the older name and still works |
 | `SMTP_RELAY` | `127.0.0.1` | SMTP server |
 | `SMTP_PORT` | `25` | SMTP port |
@@ -539,6 +555,10 @@ vutuv runs fine without internet access:
   `:generate_screenshots` (profile link-preview screenshots, an organization
   page's homepage capture **and** the auto-screenshot for single-link posts —
   these fetch the linked page and run headless Chromium).
+- Video on posts needs nothing from the internet: ffmpeg runs locally and the
+  AI check over the stills is the same local Ollama the photos use. Leave
+  `ffmpeg` uninstalled (or set `VIDEO_UPLOADS=false`) if the installation
+  should not take clips at all.
 - Set `FETCH_BOOK_METADATA=false`: the cover fetch and the
   page-count/publisher lookup behind book-review posts call Open Library, and
   an audiobook's running time is read from a library catalogue (`DNB_SRU_URL`).

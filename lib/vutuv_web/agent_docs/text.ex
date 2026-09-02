@@ -110,6 +110,7 @@ defmodule VutuvWeb.AgentDocs.Text do
       Markdown.engagement_line(doc),
       Markdown.likers_line(doc),
       section(gettext("Images"), Enum.map(doc.images, &image_lines/1)),
+      video_text(doc[:video]),
       license_text(doc.license),
       section(
         "#{gettext("Conversation")} (#{length(doc.thread)})",
@@ -141,6 +142,7 @@ defmodule VutuvWeb.AgentDocs.Text do
       Markdown.engagement_line(doc),
       Markdown.likers_line(doc),
       section(gettext("Images"), Enum.map(doc.images, &image_lines/1)),
+      video_text(doc[:video]),
       license_text(doc.license),
       section(
         "#{gettext("Conversation")} (#{length(doc.thread)})",
@@ -795,6 +797,18 @@ defmodule VutuvWeb.AgentDocs.Text do
   end
 
   defp license_text(_license), do: nil
+
+  defp video_text(nil), do: nil
+
+  defp video_text(video) do
+    [
+      gettext("Video"),
+      "* #{video.alt || gettext("Video")} (#{video.duration_seconds} s)",
+      "  #{video.url}",
+      "  #{gettext("Cover")}: #{video.cover_url}"
+    ]
+    |> Enum.join("\n")
+  end
 
   defp image_lines(image) do
     alt = image.alt || "image"

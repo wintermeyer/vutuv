@@ -20,7 +20,13 @@ defmodule VutuvWeb.MastodonApi.MediaController do
   clients do not poll — such a post simply behaves like its website twin and
   appears for everybody once the scan finishes.
 
-  Video is not part of this: vutuv stores photos only.
+  **A video takes the same two steps** (issue #1915), on a longer clock: the
+  upload lands as a `Vutuv.Posts.PostVideo`, the pipeline converts and checks
+  it for about a minute, and both v1 and v2 answer **202** with a `url` of
+  `null` — a video is never ready synchronously, whatever v1 promises for a
+  picture. `GET /api/v1/media/:id` answers **206** until it is, and a status
+  naming an unfinished clip is refused with **422** the way Mastodon refuses
+  one ("Cannot attach files that have not finished processing").
   """
 
   use VutuvWeb, :controller
@@ -32,8 +38,10 @@ defmodule VutuvWeb.MastodonApi.MediaController do
   alias Vutuv.MastodonApi.Presenter
   alias Vutuv.Posts
   alias Vutuv.Posts.PostImage
+  alias Vutuv.Posts.PostVideo
   alias Vutuv.Repo
   alias Vutuv.UUIDv7
+  alias Vutuv.Videos
   alias VutuvWeb.RateLimit
 
   @upload_limit 60
@@ -44,31 +52,31 @@ defmodule VutuvWeb.MastodonApi.MediaController do
 
   def show(conn, %{"id" => id}) do
     case own_media(conn, id) do
-      %PostImage{} = image ->
-        status = if Presenter.media_ready?(image), do: 200, else: 206
+      nil ->
+        not_found(conn)
+
+      media ->
+        status = if Presenter.media_ready?(media), do: 200, else: 206
 
         conn
         |> put_status(status)
-        |> json(Presenter.media_attachment(image, conn.assigns.current_user))
-
-      nil ->
-        not_found(conn)
+        |> json(Presenter.media_attachment(media, conn.assigns.current_user))
     end
   end
 
   def update(conn, %{"id" => id} = params) do
     case own_media(conn, id) do
-      %PostImage{} = image ->
+      nil ->
+        not_found(conn)
+
+      media ->
         json(
           conn,
           Presenter.media_attachment(
-            describe(image, params["description"]),
+            describe(media, params["description"]),
             conn.assigns.current_user
           )
         )
-
-      nil ->
-        not_found(conn)
     end
   end
 
@@ -93,6 +101,10 @@ defmodule VutuvWeb.MastodonApi.MediaController do
         :ok = Posts.delete_pending_image(image)
         json(conn, %{})
 
+      %PostVideo{} = video ->
+        :ok = Videos.delete_pending_video(video)
+        json(conn, %{})
+
       nil ->
         not_found(conn)
     end
@@ -100,19 +112,25 @@ defmodule VutuvWeb.MastodonApi.MediaController do
 
   defp upload(conn, %{"file" => %Plug.Upload{} = upload} = params, ready_status) do
     with :ok <- within_rate_limit(conn),
-         {:ok, image} <- Posts.create_pending_image(conn.assigns.current_user, upload) do
-      image = describe(image, params["description"])
-      status = if Presenter.media_ready?(image), do: 200, else: ready_status
+         {:ok, media} <- store(conn.assigns.current_user, upload) do
+      media = describe(media, params["description"])
+      status = if Presenter.media_ready?(media), do: 200, else: ready_status(media, ready_status)
 
       conn
       |> put_status(status)
-      |> json(Presenter.media_attachment(image, conn.assigns.current_user))
+      |> json(Presenter.media_attachment(media, conn.assigns.current_user))
     else
       {:error, :rate_limited} ->
         error(conn, 429, "Too many uploads")
 
       {:error, :too_large} ->
         error(conn, 413, "File exceeds #{Posts.max_image_filesize()} bytes")
+
+      {:error, :video_too_large} ->
+        error(conn, 413, "Video exceeds #{Videos.max_filesize()} bytes")
+
+      {:error, :too_long} ->
+        validation_error(conn, "Videos may be at most #{Videos.max_duration_seconds()} seconds long.")
 
       {:error, _invalid} ->
         validation_error(conn, "Send #{accepted_types()} in the \"file\" field.")
@@ -121,6 +139,23 @@ defmodule VutuvWeb.MastodonApi.MediaController do
 
   defp upload(conn, _params, _ready_status),
     do: validation_error(conn, "Send multipart/form-data with the file in the \"file\" field.")
+
+  # A clip is never ready when the upload answers, on v1 as on v2.
+  defp ready_status(%PostVideo{}, _requested), do: 202
+  defp ready_status(_image, requested), do: requested
+
+  # By extension, the way the two stores decide it: a clip goes to the video
+  # pipeline, anything else is tried as a picture.
+  defp store(user, %Plug.Upload{filename: filename} = upload) do
+    if Vutuv.Uploads.valid_extension?(filename, Videos.extension_whitelist()) do
+      case Videos.create_pending_video(user, upload.path, filename) do
+        {:error, :too_large} -> {:error, :video_too_large}
+        other -> other
+      end
+    else
+      Posts.create_pending_image(user, upload)
+    end
+  end
 
   # Named from the uploader's own whitelist rather than typed out here. The
   # fixed sentence said "a JPEG, PNG or WebP image" whatever the installation
@@ -131,11 +166,21 @@ defmodule VutuvWeb.MastodonApi.MediaController do
   # (`supported_mime_types`), which is where a client looks before it converts
   # a picture out of the phone's photo library at all.
   defp accepted_types do
-    Vutuv.PostImageStore.extension_whitelist()
-    |> Enum.map(&(&1 |> String.trim_leading(".") |> String.upcase()))
-    |> Enum.uniq()
-    |> Enum.join(", ")
-    |> then(&"an image (#{&1})")
+    images =
+      Vutuv.PostImageStore.extension_whitelist()
+      |> Enum.map(&(&1 |> String.trim_leading(".") |> String.upcase()))
+      |> Enum.uniq()
+      |> Enum.join(", ")
+
+    if Videos.enabled?() do
+      videos =
+        Videos.extension_whitelist()
+        |> Enum.map_join(", ", &(&1 |> String.trim_leading(".") |> String.upcase()))
+
+      "an image (#{images}) or a video (#{videos})"
+    else
+      "an image (#{images})"
+    end
   end
 
   # Only the member's own, still-unattached uploads. An attached picture belongs
@@ -151,17 +196,31 @@ defmodule VutuvWeb.MastodonApi.MediaController do
       PostImage
       |> where([i], i.id == ^uuid and i.user_id == ^user_id and is_nil(i.post_id))
       |> Repo.one()
+      |> Kernel.||(
+        PostVideo
+        |> where([v], v.id == ^uuid and v.user_id == ^user_id and is_nil(v.post_id))
+        |> Repo.one()
+      )
     end
   end
 
-  defp describe(image, description) when is_binary(description) and description != "" do
+  defp describe(%PostVideo{} = video, description)
+       when is_binary(description) and description != "" do
+    case Videos.update_alt(video, description) do
+      {:ok, updated} -> updated
+      {:error, _changeset} -> video
+    end
+  end
+
+  defp describe(%PostImage{} = image, description)
+       when is_binary(description) and description != "" do
     case Posts.update_image_alt(image, description) do
       {:ok, updated} -> updated
       {:error, _changeset} -> image
     end
   end
 
-  defp describe(image, _none), do: image
+  defp describe(media, _none), do: media
 
   defp within_rate_limit(conn) do
     case RateLimit.check(conn, :mastodon_media_upload, nil,

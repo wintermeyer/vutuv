@@ -117,6 +117,7 @@ defmodule VutuvWeb.AgentDocs.Markdown do
       engagement_line(doc),
       likers_line(doc),
       section(gettext("Images"), Enum.map(doc.images, &image_line/1)),
+      video_line(doc[:video]),
       license_line(doc.license),
       # The whole conversation (issue #1006), like the HTML permalink: every
       # other thread post oldest first (the page's own post already reads in
@@ -155,6 +156,7 @@ defmodule VutuvWeb.AgentDocs.Markdown do
       engagement_line(doc),
       likers_line(doc),
       section(gettext("Images"), Enum.map(doc.images, &image_line/1)),
+      video_line(doc[:video]),
       license_line(doc.license),
       section(
         "#{gettext("Conversation")} (#{length(doc.thread)})",
@@ -1300,6 +1302,20 @@ defmodule VutuvWeb.AgentDocs.Markdown do
   # picture, its caption, the camera settings when the author published them
   # and the download when the author opened it — each on its own indented line
   # so a reader (human or machine) can tell the facts apart.
+  # The clip (issue #1906): one line naming the file, its length and its
+  # description, under its own heading.
+  defp video_line(nil), do: nil
+
+  defp video_line(video) do
+    [
+      "## #{gettext("Video")}",
+      "",
+      "- " <> md_link(video.alt || gettext("Video"), video.url) <> " (#{video.duration_seconds} s)",
+      "- " <> md_image(gettext("Cover"), video.cover_url)
+    ]
+    |> Enum.join("\n")
+  end
+
   defp image_line(image) do
     [
       "- " <> md_image(image.alt || "image", image_url(image)),

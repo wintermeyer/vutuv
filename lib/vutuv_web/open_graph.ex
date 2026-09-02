@@ -55,6 +55,7 @@ defmodule VutuvWeb.OpenGraph do
   alias Vutuv.Posts
   alias Vutuv.Posts.Post
   alias Vutuv.Posts.PostImage
+  alias Vutuv.Posts.PostVideo
   alias Vutuv.SiteName
   alias VutuvWeb.Markdown
   alias VutuvWeb.OgCard
@@ -393,13 +394,40 @@ defmodule VutuvWeb.OpenGraph do
   # avatar or the organization's logo, else the brand card. A restricted post's
   # images must stay out of the tags like its body does.
   defp image(%{post: %Post{} = post} = ca) do
-    case quotable?(post) && first_image(post) do
+    case quotable?(post) && (first_image(post) || post_video(post)) do
       %PostImage{} = post_image -> post_image_entry(post_image, ca)
+      %PostVideo{} = video -> video_cover_entry(video, ca)
       _no_image -> author_image(ca)
     end
   end
 
   defp image(ca), do: author_image(ca)
+
+  # A post with a clip and no photo previews with the clip's cover (issue
+  # #1906): the same JPEG the Fediverse attachment names as its icon.
+  defp post_video(%Post{video: %PostVideo{} = video}), do: if(PostVideo.ready?(video), do: video)
+  defp post_video(_post), do: nil
+
+  defp video_cover_entry(%PostVideo{} = video, ca) do
+    {width, height} = video_cover_dimensions(video)
+
+    %{
+      url: abs_url(PostVideo.og_url(video)),
+      width: width,
+      height: height,
+      type: "image/jpeg",
+      alt: video_alt(video, ca),
+      card: "summary_large_image"
+    }
+  end
+
+  # The cover JPEG is cut at 1200 px wide, aspect kept, never upscaled.
+  defp video_cover_dimensions(%PostVideo{width: width, height: height})
+       when is_integer(width) and is_integer(height) and width > 1200,
+       do: {1200, round(height * 1200 / width)}
+
+  defp video_cover_dimensions(%PostVideo{width: width, height: height}), do: {width, height}
+
 
   # Whoever the page is about, as a picture: the member's avatar, else the
   # organization's logo, else the brand card.
@@ -427,6 +455,9 @@ defmodule VutuvWeb.OpenGraph do
       card: "summary_large_image"
     }
   end
+
+  defp video_alt(%PostVideo{alt: alt}, _ca) when alt not in [nil, ""], do: alt
+  defp video_alt(_video, ca), do: image_alt(%{alt: nil}, ca)
 
   defp image_alt(%{alt: alt}, _ca) when alt not in [nil, ""], do: alt
   defp image_alt(_post_image, %{user: %User{} = user}), do: UserHelpers.full_name(user)

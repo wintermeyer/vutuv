@@ -1450,6 +1450,12 @@ defmodule VutuvWeb.Router do
     post("/me/post_images", ImageController, :create, assigns: %{api_scope: "posts:write"})
     delete("/me/post_images/:id", ImageController, :delete, assigns: %{api_scope: "posts:write"})
 
+    # Pending post videos (issue #1915): the same shape on a longer clock —
+    # upload, poll until `ready`, attach via video_id in POST /posts.
+    post("/me/post_videos", VideoController, :create, assigns: %{api_scope: "posts:write"})
+    get("/me/post_videos/:id", VideoController, :show, assigns: %{api_scope: "posts:write"})
+    delete("/me/post_videos/:id", VideoController, :delete, assigns: %{api_scope: "posts:write"})
+
     # The social graph: people lists (same doc shape as the public .json
     # pages), the viewer's standing with a member, and follow/unfollow. Vernetzt
     # is a mutual follow now, so there is no separate connection lifecycle —

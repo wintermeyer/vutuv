@@ -19,6 +19,7 @@ defmodule Vutuv.MastodonApi.Presenter do
   alias Vutuv.Posts
   alias Vutuv.Posts.Post
   alias Vutuv.Posts.PostImage
+  alias Vutuv.Posts.PostVideo
   alias Vutuv.Profiles.Url
   alias Vutuv.Profiles.VerifiedLinks
   alias Vutuv.RemoteMedia
@@ -956,8 +957,20 @@ defmodule Vutuv.MastodonApi.Presenter do
       else: %{attachment | url: nil, preview_url: nil}
   end
 
+  # A clip that is still being converted or checked (issue #1915): the same
+  # shape with `url` and `preview_url` empty, which is what tells a client to
+  # keep polling.
+  def media_attachment(%PostVideo{} = video, viewer) do
+    attachment = video_attachment(video, viewer)
+
+    if PostVideo.ready?(video),
+      do: attachment,
+      else: %{attachment | url: nil, preview_url: nil}
+  end
+
   @doc "Whether the scan has finished with this picture, either way."
   def media_ready?(%PostImage{} = image), do: ImageScans.released?(image.moderation)
+  def media_ready?(%PostVideo{} = video), do: PostVideo.ready?(video)
 
   # **A body is served away from home too, so its own URLs have to travel**
   # (issue #1647). The attachments were fixed first, but a client renders
@@ -1007,7 +1020,55 @@ defmodule Vutuv.MastodonApi.Presenter do
   # thing that can be shared. One per photo, since the token names the picture
   # it opens.
   defp media_attachments(post, viewer) do
-    post |> Posts.released_images() |> Enum.map(&post_attachment(&1, capability(&1, viewer)))
+    images =
+      post |> Posts.released_images() |> Enum.map(&post_attachment(&1, capability(&1, viewer)))
+
+    images ++ video_attachments(post, viewer)
+  end
+
+  # The clip (issue #1915), described as Mastodon describes one: `type`
+  # `video`, the H.264 file as `url` (the one every app's player decodes), the
+  # cover as `preview_url`, and the length in `meta`.
+  defp video_attachments(%Post{video: %PostVideo{} = video}, viewer) do
+    if PostVideo.ready?(video), do: [video_attachment(video, viewer)], else: []
+  end
+
+  defp video_attachments(_post, _viewer), do: []
+
+  defp video_attachment(%PostVideo{} = video, viewer) do
+    query = video_capability(video, viewer)
+
+    %{
+      id: video.id,
+      type: "video",
+      url: video_url(video, "h264.mp4", query),
+      preview_url: video_url(video, "cover.avif", query),
+      remote_url: nil,
+      preview_remote_url: nil,
+      text_url: nil,
+      meta: %{
+        original: %{
+          width: video.width,
+          height: video.height,
+          duration: PostVideo.seconds(video) / 1
+        },
+        small: %{width: video.width, height: video.height}
+      },
+      description: video.alt || "",
+      blurhash: nil
+    }
+  end
+
+  defp video_capability(%PostVideo{token: token}, %User{id: user_id}),
+    do: RemoteMediaToken.post_video_query(token, user_id)
+
+  defp video_capability(_video, _viewer), do: nil
+
+  defp video_url(%PostVideo{} = video, file, query) do
+    video
+    |> PostVideo.url(file)
+    |> Markdown.append_query(query)
+    |> MastodonApi.main_url()
   end
 
   defp post_attachment(%PostImage{} = image, query) do
@@ -1020,7 +1081,7 @@ defmodule Vutuv.MastodonApi.Presenter do
   defp attachment(image, url, preview_url, remote_url \\ nil) do
     %{
       id: image.id,
-      type: "image",
+      type: attachment_type(image),
       url: url,
       preview_url: preview_url,
       remote_url: remote_url,
@@ -1031,6 +1092,13 @@ defmodule Vutuv.MastodonApi.Presenter do
       blurhash: nil
     }
   end
+
+  # A cached attachment from another network is a clip when its server said
+  # so (issue #1914); the app then plays `url`, which is the origin's file.
+  defp attachment_type(%RemoteImage{} = image),
+    do: if(RemoteImage.video?(image), do: "video", else: "image")
+
+  defp attachment_type(_image), do: "image"
 
   # `nil` for anything but a member: `Vutuv.Posts.image_visible_to?/2` and
   # `Vutuv.Fediverse.remote_image_visible?/2` both answer a `%User{}` and
@@ -1066,8 +1134,24 @@ defmodule Vutuv.MastodonApi.Presenter do
   defp remote_attachments(%RemotePost{} = post, context) do
     context.remote_images
     |> Map.get(post.id, [])
-    |> Enum.filter(&RemoteImage.released?/1)
+    |> Enum.filter(&(RemoteImage.released?(&1) or RemoteImage.display_state(&1) == :ready))
     |> Enum.map(&remote_attachment(&1, context.viewer))
+  end
+
+  # A clip from another network (issue #1914): the origin's file is what
+  # plays — nothing of it is cached here — and the cover we fetched is the
+  # preview, where there is one.
+  defp remote_attachment(%RemoteImage{media_type: type} = image, viewer)
+       when is_binary(type) and type != "" do
+    preview =
+      if RemoteImage.released?(image),
+        do:
+          MastodonApi.main_url(
+            RemoteMedia.post_image_url(image.id, image.file),
+            capability(image, viewer)
+          )
+
+    attachment(image, image.source_uri, preview, image.source_uri)
   end
 
   defp remote_attachment(%RemoteImage{} = image, viewer) do

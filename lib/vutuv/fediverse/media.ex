@@ -41,6 +41,10 @@ defmodule Vutuv.Fediverse.Media do
   # What we will even try to decode. A video or an audio file is a "View the
   # original" link, never a download: we would be storing a media library.
   @image_types ~w(image/jpeg image/png image/webp image/avif image/gif image/heic image/heif)
+  # A clip (issue #1914): recorded with its declared type and played straight
+  # from the other server; only its cover (the attachment's `icon`) is fetched
+  # and judged, like a picture.
+  @video_types ~w(video/mp4 video/webm video/quicktime video/ogg)
 
   # The refetch ladder (issue #1803). The strike cap is the column's own, on
   # `RemoteImage`. `@refetch_backoff_seconds` must stay clear of
@@ -68,6 +72,36 @@ defmodule Vutuv.Fediverse.Media do
 
   def image_attachment?(_attachment), do: false
 
+  @doc "Whether an ActivityPub `attachment` entry is a clip we would record (issue #1914)."
+  def video_attachment?(%{"url" => url} = attachment) when is_binary(url) do
+    type = attachment["mediaType"]
+    is_binary(type) and String.downcase(type) in @video_types
+  end
+
+  def video_attachment?(_attachment), do: false
+
+  @doc "A picture or a clip: what `record_attachments/3` keeps."
+  def media_attachment?(attachment),
+    do: image_attachment?(attachment) or video_attachment?(attachment)
+
+  # The cover a video attachment names, when it names one: Mastodon sends it
+  # as an `icon` with its own `url`.
+  defp poster_uri(attachment) do
+    case attachment["icon"] do
+      %{"url" => url} when is_binary(url) -> url
+      url when is_binary(url) -> url
+      _ -> nil
+    end
+  end
+
+  defp media_attrs(attachment) do
+    if video_attachment?(attachment) do
+      %{media_type: String.downcase(attachment["mediaType"]), poster_uri: poster_uri(attachment)}
+    else
+      %{}
+    end
+  end
+
   @doc """
   Records the pictures a cached post carries, without fetching anything yet.
 
@@ -80,17 +114,21 @@ defmodule Vutuv.Fediverse.Media do
   """
   def record_attachments(remote_post, attachments, sensitive?) when is_list(attachments) do
     attachments
-    |> Enum.filter(&image_attachment?/1)
+    |> Enum.filter(&media_attachment?/1)
     |> Enum.take(RemoteImage.max_per_post())
     |> Enum.with_index()
     |> Enum.flat_map(fn {attachment, position} ->
-      attrs = %{
-        source_uri: attachment["url"],
-        position: position,
-        alt: attachment["name"],
-        sensitive: sensitive?,
-        moderation: ImageScans.initial_state()
-      }
+      attrs =
+        Map.merge(
+          %{
+            source_uri: attachment["url"],
+            position: position,
+            alt: attachment["name"],
+            sensitive: sensitive?,
+            moderation: ImageScans.initial_state()
+          },
+          media_attrs(attachment)
+        )
 
       case Repo.insert(
              RemoteImage.changeset(%RemoteImage{remote_post_id: remote_post.id}, attrs),
@@ -122,7 +160,7 @@ defmodule Vutuv.Fediverse.Media do
   def sync_attachments(remote_post, attachments, sensitive?) when is_list(attachments) do
     wanted =
       attachments
-      |> Enum.filter(&image_attachment?/1)
+      |> Enum.filter(&media_attachment?/1)
       |> Enum.take(RemoteImage.max_per_post())
 
     drop_pictures(remote_post, Enum.map(wanted, & &1["url"]))
@@ -197,9 +235,14 @@ defmodule Vutuv.Fediverse.Media do
   again, so nothing is left at rest for a post nobody can reach.
   """
   def fetch_now(%RemoteImage{} = image) do
-    case try_and_record(image) do
-      :ok -> :ok
-      {:error, _reason} -> :skip
+    # A clip with no cover has nothing to fetch (issue #1914).
+    if RemoteImage.fetch_uri(image) == nil do
+      :skip
+    else
+      case try_and_record(image) do
+        :ok -> :ok
+        {:error, _reason} -> :skip
+      end
     end
   end
 
@@ -221,7 +264,7 @@ defmodule Vutuv.Fediverse.Media do
   left to hold a picture, and a retry would only race the sweep again.
   """
   def try_once(%RemoteImage{} = image) do
-    with {:ok, bytes} <- download(image.source_uri),
+    with {:ok, bytes} <- download(RemoteImage.fetch_uri(image)),
          {:ok, %{file: file, width: width, height: height}} <-
            RemoteMedia.store_post_image(bytes, image.id),
          {:ok, _stored} <- store_file(image, %{file: file, width: width, height: height}) do
@@ -269,6 +312,9 @@ defmodule Vutuv.Fediverse.Media do
 
     from(i in RemoteImage,
       where: is_nil(i.file),
+      # A clip that came with no cover has nothing to fetch (issue #1914); it
+      # would otherwise be due for ever, at the front of every batch.
+      where: is_nil(i.media_type) or not is_nil(i.poster_uri),
       where: i.fetch_failures < ^RemoteImage.max_fetch_failures(),
       where: not is_nil(i.moderation) and i.moderation != "rejected",
       where:

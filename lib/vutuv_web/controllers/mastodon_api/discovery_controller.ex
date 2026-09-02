@@ -18,6 +18,7 @@ defmodule VutuvWeb.MastodonApi.DiscoveryController do
   alias Vutuv.Posts.Post
   alias Vutuv.SourceRepo
   alias Vutuv.Uploads.Spec
+  alias Vutuv.Videos
   alias VutuvWeb.MastodonApi.Errors
 
   def instance_v2(conn, _params) do
@@ -126,9 +127,32 @@ defmodule VutuvWeb.MastodonApi.DiscoveryController do
   # The MIME types the post-image uploader really accepts, from its own
   # extension whitelist, so this cannot drift from what an upload does.
   defp supported_mime_types do
-    Vutuv.PostImageStore.extension_whitelist()
-    |> Enum.map(&MIME.from_path("x" <> &1))
-    |> Enum.uniq()
+    images =
+      Vutuv.PostImageStore.extension_whitelist()
+      |> Enum.map(&MIME.from_path("x" <> &1))
+      |> Enum.uniq()
+
+    # The clip containers too, where the installation takes video at all
+    # (issue #1915): a client reads this before it offers the camera roll's
+    # videos, so an installation without ffmpeg must not list them.
+    if Videos.enabled?(), do: images ++ Videos.mime_types(), else: images
+  end
+
+  # Mastodon's three video figures (issue #1915). The size is the cap the
+  # composer applies (over HTTP the endpoint's multipart limit and nginx's
+  # `client_max_body_size` sit in front, both raised to it — docs/ADMINS.md);
+  # the frame rate and the pixel budget are what the pipeline accepts and
+  # scales down from, a 4K clip at 60 fps.
+  defp video_limits do
+    if Videos.enabled?() do
+      %{
+        video_size_limit: Videos.max_filesize(),
+        video_frame_rate_limit: 60,
+        video_matrix_limit: 3840 * 2160
+      }
+    else
+      %{video_size_limit: 0, video_frame_rate_limit: 0, video_matrix_limit: 0}
+    end
   end
 
   # Mastodon states the pixel budget of an image, not its dimensions. Ours is
@@ -156,14 +180,15 @@ defmodule VutuvWeb.MastodonApi.DiscoveryController do
         max_media_attachments: Posts.max_images_per_post(),
         characters_reserved_per_url: 0
       },
-      media_attachments: %{
-        supported_mime_types: supported_mime_types(),
-        image_size_limit: Posts.max_image_filesize(),
-        image_matrix_limit: image_matrix_limit(),
-        video_size_limit: 0,
-        video_frame_rate_limit: 0,
-        video_matrix_limit: 0
-      },
+      media_attachments:
+        Map.merge(
+          %{
+            supported_mime_types: supported_mime_types(),
+            image_size_limit: Posts.max_image_filesize(),
+            image_matrix_limit: image_matrix_limit()
+          },
+          video_limits()
+        ),
       polls: %{
         max_options: 0,
         max_characters_per_option: 0,

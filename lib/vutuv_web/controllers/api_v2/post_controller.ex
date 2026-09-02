@@ -305,7 +305,7 @@ defmodule VutuvWeb.ApiV2.PostController do
   defp post_error(conn, :not_visible), do: Problem.not_found(conn)
 
   defp post_error(conn, reason)
-       when reason in [:invalid_denials, :invalid_images, :too_many_images] do
+       when reason in [:invalid_denials, :invalid_images, :too_many_images, :invalid_video] do
     Problem.send_problem(conn, 422, "Validation failed",
       detail: invalid_detail(reason),
       extra: %{reason: reason}
@@ -317,4 +317,7 @@ defmodule VutuvWeb.ApiV2.PostController do
 
   defp invalid_detail(:invalid_images), do: "image_ids must be your own pending uploads."
   defp invalid_detail(:too_many_images), do: "Too many images for one post."
+
+  defp invalid_detail(:invalid_video),
+    do: "video_id must be your own pending upload, and ready (poll GET /me/post_videos/:id)."
 end

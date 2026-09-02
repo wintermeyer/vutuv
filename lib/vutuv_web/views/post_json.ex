@@ -33,6 +33,7 @@ defmodule VutuvWeb.PostJSON do
       published_at: post.inserted_at |> DateTime.from_naive!("Etc/UTC") |> DateTime.to_iso8601(),
       tags: Enum.map(post.tags, & &1.name),
       images: Enum.map(images, &image/1),
+      video: video(post),
       reply_count: Posts.reply_count(post.id),
       in_reply_to: in_reply_to(post),
       audience: audience(post, viewer)
@@ -84,6 +85,23 @@ defmodule VutuvWeb.PostJSON do
         Posts.released_images(post)
     end
   end
+
+  # The clip (issue #1906), or nil. Only a ready one ever hangs off a post.
+  defp video(%Post{video: %Vutuv.Posts.PostVideo{} = video}) do
+    base = VutuvWeb.Endpoint.url()
+
+    %{
+      id: video.id,
+      alt: video.alt,
+      width: video.width,
+      height: video.height,
+      duration_seconds: Vutuv.Posts.PostVideo.seconds(video),
+      url: base <> Vutuv.Posts.PostVideo.url(video, "h264.mp4"),
+      cover_url: base <> Vutuv.Posts.PostVideo.cover_url(video)
+    }
+  end
+
+  defp video(_post), do: nil
 
   defp image(%PostImage{} = image) do
     %{

@@ -24,6 +24,7 @@ defmodule VutuvWeb.AgentDocs.PostDoc do
   alias Vutuv.Posts.PhotoLicense
   alias Vutuv.Posts.Post
   alias Vutuv.Posts.PostImage
+  alias Vutuv.Posts.PostVideo
   alias Vutuv.Posts.PostRemoteReply
   alias Vutuv.Posts.PostReview
   alias Vutuv.Profiles.VerifiedLinks
@@ -93,6 +94,9 @@ defmodule VutuvWeb.AgentDocs.PostDoc do
       # Anonymous public view: images still in (or deleted by) AI moderation
       # never appear here.
       images: post |> Posts.released_images() |> Enum.map(&image_entry/1),
+      # The clip (issue #1906): the file every player decodes, its cover and
+      # its length — nil for the many posts without one.
+      video: video_entry(post),
       # The licence the photos are published under (issue #1104), as both the
       # human label and the SPDX identifier — a machine deciding whether it may
       # reuse a picture should not have to parse a translated sentence.
@@ -195,6 +199,9 @@ defmodule VutuvWeb.AgentDocs.PostDoc do
       review: review_entry(post.review),
       tags: Enum.map(post.tags, & &1.name),
       images: post |> Posts.released_images() |> Enum.map(&image_entry/1),
+      # The clip (issue #1906): the file every player decodes, its cover and
+      # its length — nil for the many posts without one.
+      video: video_entry(post),
       license: license_entry(post),
       # Counted off the two loaded lists rather than re-queried, the same way
       # `build/3` does it, so the figure and the entries under it cannot drift.
@@ -586,6 +593,21 @@ defmodule VutuvWeb.AgentDocs.PostDoc do
   # nothing it does not: a photo whose camera panel is off carries no camera
   # keys at all, rather than a set of nulls that would tell a reader the facts
   # exist and are being withheld.
+  defp video_entry(%Post{video: %PostVideo{} = video}) do
+    if PostVideo.ready?(video) do
+      %{
+        alt: video.alt,
+        width: video.width,
+        height: video.height,
+        duration_seconds: PostVideo.seconds(video),
+        url: absolutize(PostVideo.url(video, "h264.mp4")),
+        cover_url: absolutize(PostVideo.cover_url(video))
+      }
+    end
+  end
+
+  defp video_entry(_post), do: nil
+
   defp image_entry(%PostImage{} = image) do
     %{
       alt: image.alt,

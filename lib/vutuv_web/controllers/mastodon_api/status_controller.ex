@@ -12,6 +12,8 @@ defmodule VutuvWeb.MastodonApi.StatusController do
   alias Vutuv.MastodonApi.Presenter
   alias Vutuv.Posts
   alias Vutuv.Posts.Post
+  alias Vutuv.Posts.PostVideo
+  alias Vutuv.Videos
   alias Vutuv.Repo
   alias VutuvWeb.MastodonApi.Statuses
 
@@ -52,8 +54,9 @@ defmodule VutuvWeb.MastodonApi.StatusController do
 
   def create(conn, %{"status" => body} = params) when is_binary(body) do
     with :ok <- validate_visibility(params["visibility"]),
-         {:ok, image_ids} <- resolve_media(conn, params["media_ids"]),
-         {:ok, post} <- create_post(conn, params, %{body: body, image_ids: image_ids}) do
+         {:ok, image_ids, video_id} <- resolve_media(conn, params["media_ids"]),
+         {:ok, post} <-
+           create_post(conn, params, %{body: body, image_ids: image_ids, video_id: video_id}) do
       conn |> put_status(200) |> json(Presenter.one_status(post, viewer(conn)))
     else
       {:error, :unsupported_visibility} ->
@@ -61,6 +64,16 @@ defmodule VutuvWeb.MastodonApi.StatusController do
 
       {:error, :unknown_media} ->
         validation_error(conn, "Upload the media first; unknown or already attached ids.")
+
+      # Mastodon's own sentence, which the apps show verbatim while they wait.
+      {:error, :media_processing} ->
+        validation_error(
+          conn,
+          "Cannot attach files that have not finished processing. Try again in a moment!"
+        )
+
+      {:error, :one_video} ->
+        validation_error(conn, "A status can carry one video.")
 
       {:error, :too_many_images} ->
         validation_error(conn, "At most #{Posts.max_images_per_post()} images per status.")
@@ -78,7 +91,7 @@ defmodule VutuvWeb.MastodonApi.StatusController do
   def update(conn, %{"id" => id, "status" => body}) when is_binary(body) do
     with :ok <- validate_visibility(conn.params["visibility"]),
          %Post{} = post <- own_post(conn, id) do
-      post = Repo.preload(post, :images)
+      post = Repo.preload(post, [:images, :video])
 
       # An edit that names no media keeps what the post carries; one that does
       # is the new set, so a client can add a picture or drop one. `Posts`
@@ -619,15 +632,25 @@ defmodule VutuvWeb.MastodonApi.StatusController do
   # pictures are the ones the publisher put there. Resolving before the insert
   # turns a stale or foreign id into a 422 the client can explain, rather than
   # the rollback the data layer would raise underneath.
-  defp resolve_media(_conn, nil), do: {:ok, []}
-  defp resolve_media(_conn, []), do: {:ok, []}
+  #
+  # A clip among the ids (issue #1915) has to be **ready**: an app that names
+  # one still converting gets the 422 Mastodon gives, and polls the media
+  # endpoint until it is. One clip per status.
+  defp resolve_media(_conn, nil), do: {:ok, [], nil}
+  defp resolve_media(_conn, []), do: {:ok, [], nil}
 
   defp resolve_media(conn, media_ids) when is_list(media_ids) do
+    user = conn.assigns.current_user
     ids = Enum.map(media_ids, &to_string/1)
+    images = Posts.pending_images(user, ids)
+    image_ids = Enum.map(images, & &1.id)
+    videos = ids |> Enum.reject(&(&1 in image_ids)) |> Enum.map(&Videos.pending_video(user, &1))
 
-    case Posts.pending_images(conn.assigns.current_user, ids) do
-      images when length(images) == length(ids) -> {:ok, Enum.map(images, & &1.id)}
-      _missing_or_foreign -> {:error, :unknown_media}
+    cond do
+      Enum.any?(videos, &is_nil/1) -> {:error, :unknown_media}
+      length(videos) > 1 -> {:error, :one_video}
+      Enum.any?(videos, &(not PostVideo.ready?(&1))) -> {:error, :media_processing}
+      true -> {:ok, image_ids, videos |> List.first() |> then(&(&1 && &1.id))}
     end
   end
 
@@ -636,8 +659,13 @@ defmodule VutuvWeb.MastodonApi.StatusController do
   defp edited_image_ids(nil, post), do: Enum.map(post.images, & &1.id)
   defp edited_image_ids([], _post), do: []
 
-  defp edited_image_ids(media_ids, _post) when is_list(media_ids),
-    do: Enum.map(media_ids, &to_string/1)
+  # An edit keeps the post's clip whatever the ids say (issue #1915): its id
+  # is dropped from the picture list rather than refused, so a client that
+  # echoes every attachment back does not fail the edit.
+  defp edited_image_ids(media_ids, post) when is_list(media_ids) do
+    video_id = post.video && post.video.id
+    media_ids |> Enum.map(&to_string/1) |> Enum.reject(&(&1 == video_id))
+  end
 
   defp edited_image_ids(media_id, post), do: edited_image_ids([media_id], post)
 end

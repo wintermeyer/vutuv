@@ -40,6 +40,13 @@ defmodule Vutuv.Posts.PendingImageSweeper do
       count -> Logger.info("Swept #{count} abandoned pending job-posting image(s)")
     end
 
+    # The clips (issue #1906), same eager-upload pattern: an abandoned one is
+    # up to 500 MB of original plus its renditions.
+    case Vutuv.Videos.sweep_pending_videos() do
+      0 -> :ok
+      count -> Logger.info("Swept #{count} abandoned pending post video(s)")
+    end
+
     schedule()
     {:noreply, state}
   end
