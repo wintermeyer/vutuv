@@ -6186,7 +6186,9 @@ defmodule Vutuv.Fediverse do
     with true <- enabled?(),
          true <- Note.public?(note),
          %Post{} = post <- Repo.get(Post, note.post_id),
-         %User{} = author <- Repo.get(User, post.user_id) do
+         # `Posts.author/1` for the same reason `counts_signer/1` uses it: a
+         # page's post has a NULL `user_id` and `Repo.get(User, nil)` raises.
+         %User{} = author <- Posts.author(post) do
       apply_refresh(note, fetch_remote_note(note.object_uri, signer(author)))
     else
       _ -> :skip
@@ -6919,9 +6921,17 @@ defmodule Vutuv.Fediverse do
     end
   end
 
+  # `Posts.author/1`, never `Repo.get(User, post.user_id)`: a page publishes
+  # with `organization_id` and a NULL `user_id` (issue #1334), and that raises
+  # rather than answering nothing. It raised inside the batch, so one reply
+  # under a page's post stopped the sweep for **every** object — on production
+  # from 2026-08-31, one log line every two minutes and no figure refreshed
+  # anywhere since. A page has no actor yet, so its posts' replies simply have
+  # nobody to sign as: `signer/1` answers nil for an actor-less subject and the
+  # ask is skipped and stamped, which is what the `%User{}` match spells out.
   defp counts_signer(%Note{} = note) do
     with %Post{} = post <- Repo.get(Post, note.post_id),
-         %User{} = author <- Repo.get(User, post.user_id) do
+         %User{} = author <- Posts.author(post) do
       signer(author)
     else
       _ -> nil

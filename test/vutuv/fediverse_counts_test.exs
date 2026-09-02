@@ -17,6 +17,7 @@ defmodule Vutuv.FediverseCountsTest do
   alias Vutuv.Fediverse.PostBoost
   alias Vutuv.Fediverse.RemoteAccount
   alias Vutuv.Fediverse.RemotePost
+  alias Vutuv.Posts.Post
 
   @actor "https://social.example/users/them"
 
@@ -464,6 +465,34 @@ defmodule Vutuv.FediverseCountsTest do
       serve(object(note))
 
       assert :skip = Fediverse.refresh_counts(note)
+    end
+
+    # A page publishes with `posts.organization_id` and a NULL `user_id`
+    # (issue #1334), and `Repo.get(User, nil)` RAISES rather than answering
+    # nothing. So a single reply under a page's post took the whole two-minute
+    # sweep down with it — not that one object, the batch — and no figure
+    # anywhere was refreshed again. On production that was one log line every
+    # two minutes and nothing else. Calibrated against the un-fixed code, where
+    # `refresh_due_counts/0` raises here instead of tallying a skip.
+    test "a reply under a page's post is skipped without taking the sweep down" do
+      organization = insert(:organization)
+
+      post =
+        Repo.insert!(%Post{
+          organization_id: organization.id,
+          acting_user_id: insert(:activated_user).id,
+          body: "Wir stellen ein.",
+          published_on: Vutuv.BerlinTime.today()
+        })
+
+      note = remote_note(insert(:activated_user), %{post_id: post.id})
+      serve(object(note))
+
+      assert %{skipped: 1, failed: 0} = Fediverse.refresh_due_counts()
+
+      # Stamped like every other skip, so it rejoins the ladder instead of
+      # holding the front of every batch from now on.
+      assert Repo.get!(Note, note.id).counts_checked_at
     end
   end
 

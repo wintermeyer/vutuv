@@ -773,6 +773,41 @@ defmodule Vutuv.FediverseNotesTest do
       assert :skip = Fediverse.refresh_note(Repo.one!(Note))
       assert Repo.aggregate(Note, :count) == 1
     end
+
+    # The retention sweep's half of the same nil (see the counts refresher):
+    # a page's post has a NULL `posts.user_id`, so reading the signer off that
+    # column raised instead of answering nothing — and a raise in a sweep is
+    # not one bad row, it is the sweep. Calibrated: without `Posts.author/1`
+    # this raises rather than skipping.
+    test "a reply under a page's post is skipped, not raised on" do
+      organization = insert(:organization)
+      now = DateTime.utc_now(:second)
+
+      post =
+        Repo.insert!(%Vutuv.Posts.Post{
+          organization_id: organization.id,
+          acting_user_id: insert(:activated_user).id,
+          body: "Wir stellen ein.",
+          published_on: Vutuv.BerlinTime.today()
+        })
+
+      note =
+        Repo.insert!(%Note{
+          post_id: post.id,
+          object_uri: "#{@actor}/statuses/page-reply",
+          actor_uri: @actor,
+          inbox_uri: @actor <> "/inbox",
+          handle: "alice",
+          content_text: "Viel Erfolg!",
+          audience: "public",
+          received_at: now,
+          expires_at: DateTime.add(now, 86_400)
+        })
+
+      stub_origin(fn _conn -> raise "a page's post has nobody to sign as" end)
+
+      assert :skip = Fediverse.refresh_note(note)
+    end
   end
 
   describe "cascades" do
