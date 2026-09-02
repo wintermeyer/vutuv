@@ -23,6 +23,7 @@ defmodule Vutuv.Screenshot do
   one-shot regeneration has converted them.
   """
 
+  alias Vutuv.LowBandwidth
   alias Vutuv.Moderation.ImageScans
   alias Vutuv.Moderation.Pixelation
   alias Vutuv.Uploads.Originals
@@ -52,9 +53,9 @@ defmodule Vutuv.Screenshot do
 
       with {:ok, rotated} <- Spec.open_rotated(upload.path),
            # Remove any prior versions first so a regeneration leaves exactly
-           # one fingerprinted thumb behind instead of accumulating files.
+           # one fingerprinted set behind instead of accumulating files.
            :ok <- clear_versions(target_dir),
-           :ok <- write_thumb(rotated, target_dir, hash),
+           :ok <- write_versions(rotated, target_dir, hash),
            :ok <- clear_displaced_versions(target_dir, dir) do
         Pixelation.write_if_enabled(rotated, dir, hash)
         :ok = Originals.store(storage_dir(scope), upload.path, ext)
@@ -113,10 +114,10 @@ defmodule Vutuv.Screenshot do
       hash = rootname(url.screenshot)
 
       Vutuv.Uploads.regenerate_from_original(storage_dir(url), dir,
-        canonical: [thumb_filename(hash, Spec.served_ext())],
-        stale_glob: "{thumb,original}*",
+        canonical: canonical_filenames(hash),
+        stale_glob: "{thumb,lite,original}*",
         legacy_candidates: [Path.join(dir, "original-*")],
-        derive: &write_thumb(&1, dir, hash),
+        derive: &write_versions(&1, dir, hash),
         opts: opts
       )
     end
@@ -167,6 +168,28 @@ defmodule Vutuv.Screenshot do
       true ->
         placeholder_url()
     end
+  end
+
+  # The 400×264 lite version (data-saving mode), or `nil` whenever the thumb
+  # would not be served either — and also when only the thumb is on disk: a
+  # capture from before the lite existed has nothing cheaper to offer, so the
+  # page shows its thumb rather than a broken tile.
+  def url({nil, _scope}, :lite), do: nil
+
+  def url({screenshot, scope}, :lite) do
+    lite = version_filename(:lite, rootname(screenshot), Spec.served_ext())
+
+    if not held_in_limbo?(scope) and existing(scope, lite), do: served_url(scope, lite)
+  end
+
+  @doc """
+  What the link tile loads for this viewer (`VutuvWeb.UI.picture/1`): the
+  thumb as `:src`, and as `:lite` the cheap version while the viewer is in
+  data-saving mode (`Vutuv.LowBandwidth`) and the file exists — `nil`
+  otherwise.
+  """
+  def picture({_screenshot, _scope} = file_and_scope) do
+    LowBandwidth.picture(url(file_and_scope, :thumb), fn -> url(file_and_scope, :lite) end)
   end
 
   @doc """
@@ -224,7 +247,7 @@ defmodule Vutuv.Screenshot do
   # Also sweeps pre-AVIF leftovers: legacy `.webp` thumbs and the originals
   # that used to live in this public directory.
   defp clear_versions(dir) do
-    for file <- Path.wildcard(Path.join(dir, "{thumb,original}*")), do: File.rm(file)
+    for file <- Path.wildcard(Path.join(dir, "{thumb,lite,original}*")), do: File.rm(file)
     :ok
   end
 
@@ -262,9 +285,16 @@ defmodule Vutuv.Screenshot do
     end
   end
 
-  defp write_thumb(rotated, dir, hash) do
-    spec = Spec.version(:screenshot, :thumb)
-    Spec.write_derived(spec, rotated, Path.join(dir, thumb_filename(hash, Spec.served_ext())))
+  # Every served version (`Vutuv.Uploads.Spec`): the thumb and its lite.
+  defp write_versions(rotated, dir, hash) do
+    Spec.write_all(:screenshot, rotated, fn spec ->
+      Path.join(dir, version_filename(spec.name, hash, Spec.served_ext()))
+    end)
+  end
+
+  defp canonical_filenames(hash) do
+    for spec <- Spec.versions(:screenshot),
+        do: version_filename(spec.name, hash, Spec.served_ext())
   end
 
   # The .avif is authoritative; until the regeneration has run, a pre-AVIF
@@ -272,21 +302,23 @@ defmodule Vutuv.Screenshot do
   # `Spec.legacy_exts/0`. `nil` when neither is on disk, which is what makes
   # `url/2` fail closed (issue #1443) instead of naming a file that 404s.
   defp served_filename(scope, screenshot) do
-    avif = thumb_filename(rootname(screenshot), Spec.served_ext())
+    hash = rootname(screenshot)
 
-    cond do
-      File.exists?(Path.join(disk_dir(scope), avif)) -> avif
-      (legacy = legacy_filename(scope, screenshot)) != nil -> legacy
-      true -> nil
-    end
+    existing(scope, thumb_filename(hash, Spec.served_ext())) ||
+      existing(scope, thumb_filename(hash, ".webp"))
   end
 
-  defp legacy_filename(scope, screenshot) do
-    candidate = thumb_filename(rootname(screenshot), ".webp")
-    if File.exists?(Path.join(disk_dir(scope), candidate)), do: candidate
+  # `filename` when it is on this capture's disk, nil otherwise — the one
+  # probe every served name goes through before it becomes a URL.
+  defp existing(scope, filename) do
+    if File.exists?(Path.join(disk_dir(scope), filename)), do: filename
   end
 
-  defp thumb_filename(hash, ext), do: "thumb-#{hash}#{ext}"
+  defp thumb_filename(hash, ext), do: version_filename(:thumb, hash, ext)
+
+  # `thumb-<hash>.avif`, `lite-<hash>.avif`: the version first, so one glob
+  # (`clear_versions/1`) sweeps a set and the hash keeps every URL immutable.
+  defp version_filename(version, hash, ext), do: "#{version}-#{hash}#{ext}"
 
   # The one place a served screenshot file becomes a URL.
   defp served_url(scope, filename),

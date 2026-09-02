@@ -4136,6 +4136,29 @@ html[data-feed-pull="busy"] .feed-pull__glyph {
   .actor-card--sheet .actor-card__grab { background: #334155; }
 }
 
+/* ---------- Data-saving mode: the lite picture and its HD control ---------- */
+/* `VutuvWeb.UI.picture/1` gives a viewer in data-saving mode the lite version
+   with an HD control in the corner (`[data-hd-load]`); app.js swaps the full
+   version in on request and marks the <img> `data-hd-loaded`, and the
+   LiveSocket's onBeforeElUpdated carries that mark across every patch. The
+   control hides OFF that mark rather than being removed, so a later server
+   render that puts it back finds it hidden by the same rule. `aria-busy` is the
+   moment between the tap and the picture's `load`; the pill breathes with the
+   skeleton's own keyframes (below), and under `prefers-reduced-motion` it dims
+   and holds. No colours, so no dark copy. */
+[data-lite-picture] img[data-hd-loaded] ~ [data-hd-load] { display: none; }
+
+[data-hd-load][aria-busy="true"] > span {
+  animation: skeleton-breathe 1s ease-in-out infinite;
+}
+
+@media (prefers-reduced-motion: reduce) {
+  [data-hd-load][aria-busy="true"] > span {
+    animation: none;
+    opacity: 0.6;
+  }
+}
+
 /* Changing this file (or app.css @theme / lib/vutuv_web/components/ui.ex) is a
    design-language change — a PostToolUse hook reminds you to update
    .claude/rules/design.md so the design rule stays in sync. */

@@ -35,6 +35,7 @@ defmodule VutuvWeb.SettingsHubTest do
                "Profile",
                "Contact details",
                "Notifications & feed",
+               "Appearance",
                "Privacy",
                "Account"
              ]
@@ -105,6 +106,27 @@ defmodule VutuvWeb.SettingsHubTest do
       assert "Language skills" in labels
       assert "Language & display" in labels
       refute "Languages" in labels
+    end
+
+    # The switch a member on a slow line looks for, by the name the sign-up
+    # form gave it and by the words they would type instead — beside the
+    # display settings, which are the same question (how vutuv presents
+    # itself to me), not under the feed or the account.
+    test "data-saving mode has a row of its own, findable by the obvious words", %{user: user} do
+      row = Enum.find(rows(user), &(&1.key == :bandwidth))
+      assert row.path == "/settings/bandwidth"
+      assert row.label == Vutuv.Prefs.label(:low_bandwidth?)
+
+      {"Appearance", appearance} =
+        Enum.find(UI.settings_menu(user), fn {_name, rows} -> row in rows end)
+
+      assert Enum.map(appearance, & &1.key) == [:preferences, :bandwidth]
+
+      needle = UI.settings_search_text(row)
+
+      for word <- ~w(slow data saving pictures langsam datensparmodus schmalband bilder) do
+        assert needle =~ word, "the bandwidth row cannot be found by #{inspect(word)}"
+      end
     end
 
     test "no row repeats the name of its own group", %{user: user} do

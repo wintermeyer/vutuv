@@ -138,6 +138,39 @@ defmodule VutuvWeb.RemoteMediaControllerTest do
       assert get(ctx.out, media_url(image)).status == 404
     end
 
+    # The lite version (data-saving mode, `Vutuv.LowBandwidth`) is stored
+    # beside the picture under the same hash and opens under the same rules —
+    # and under no other name, so the URL space still says nothing.
+    test "its lite version is served under the same rules", ctx do
+      image = picture(remote_post(ctx.account))
+      follow(ctx.user, ctx.account, "accepted")
+
+      lite_url = RemoteMedia.lite_url(image)
+
+      assert lite_url ==
+               "/system/remote_media/posts/#{image.id}/" <> RemoteMedia.lite_name(image.file)
+
+      assert get(ctx.conn, lite_url).status == 200
+      assert get(ctx.out, lite_url).status == 404
+      assert get(ctx.conn, String.replace(lite_url, "lite-", "lite-0")).status == 404
+    end
+
+    test "picture/1 offers the lite only to a viewer in data-saving mode", ctx do
+      image = picture(remote_post(ctx.account))
+
+      Vutuv.LowBandwidth.put(false)
+      assert RemoteMedia.picture(image) == %{src: media_url(image), lite: nil}
+
+      Vutuv.LowBandwidth.put(true)
+
+      assert RemoteMedia.picture(image) == %{
+               src: media_url(image),
+               lite: RemoteMedia.lite_url(image)
+             }
+
+      assert RemoteMedia.picture(image).lite =~ "/lite-"
+    end
+
     test "an open post's picture is served to any signed-in member", ctx do
       # The account page already shows them the post itself, and a boost or a
       # member's repost carries it into a feed without any follow of the author,

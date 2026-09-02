@@ -74,9 +74,11 @@ defmodule Vutuv.Uploads.SpecTest do
     # `large` is the profile header's click-to-enlarge (issue #1528): the one
     # avatar version sized for the lightbox rather than for a 96px slot.
     assert Spec.version(:avatar, :large).fit == {:crop_down, 1024, :center}
+    assert Enum.map(Spec.versions(:cover), & &1.name) == [:wide, :lite]
     assert Spec.version(:cover, :wide).fit == {:width_down, 1600}
+    assert Enum.map(Spec.versions(:screenshot), & &1.name) == [:thumb, :lite]
     assert Spec.version(:screenshot, :thumb).fit == {:crop, 800, 528, :high}
-    assert Enum.map(Spec.versions(:post_image), & &1.name) == [:thumb, :feed, :large, :xl]
+    assert Enum.map(Spec.versions(:post_image), & &1.name) == [:thumb, :lite, :feed, :large, :xl]
     assert Spec.version(:post_image, :thumb).fit == {:crop, 320, 320, :center}
     assert Spec.version(:post_image, :feed).fit == {:box_down, 1200}
     assert Spec.version(:post_image, :large).fit == {:box_down, 1600}
@@ -84,6 +86,30 @@ defmodule Vutuv.Uploads.SpecTest do
     # looking at rather than for a layout slot, so it is the only one big
     # enough to fill a 4K screen.
     assert Spec.version(:post_image, :xl).fit == {:box_down, 2560}
+    assert Enum.map(Spec.versions(:remote_media), & &1.name) == [:image, :lite]
+  end
+
+  # The lite versions (data-saving mode, `Vutuv.LowBandwidth`): each at about
+  # its 1x display size and one shared lower quality. Sized from a measurement
+  # on the production copy, not from taste — see the module attribute — so a
+  # change here is a re-measurement, not a tweak: the four are what the page
+  # shows a member on a slow line instead of the version beside it.
+  test "the lite versions are the display version at 1x and a lower quality" do
+    assert Spec.version(:post_image, :lite).fit == {:box_down, 640}
+    assert Spec.version(:remote_media, :lite).fit == {:box_down, 640}
+    assert Spec.version(:screenshot, :lite).fit == {:crop, 400, 264, :high}
+    assert Spec.version(:cover, :lite).fit == {:width_down, 800}
+
+    for type <- [:post_image, :remote_media, :screenshot, :cover] do
+      lite = Spec.version(type, :lite)
+      full = type |> Spec.versions() |> Enum.reject(&(&1.name == :lite)) |> hd()
+      assert lite.quality < full.quality, "#{type}'s lite is not cheaper than its display version"
+    end
+
+    # Avatars deliberately have none: the feed's 96 px avatar is 1.7 kB, and a
+    # softer one would blur every name on the page for a kilobyte a face.
+    refute Enum.any?(Spec.versions(:avatar), &(&1.name == :lite))
+    refute Enum.any?(Spec.versions(:remote_avatar), &(&1.name == :lite))
   end
 
   # A store that derives from a version list its own URL layer does not know

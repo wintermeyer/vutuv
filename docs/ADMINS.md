@@ -370,6 +370,52 @@ The private `originals/` tree under `UPLOADS_DIR_PREFIX` must **not** get any
 `location`/`alias`: uploaded originals (with their EXIF/GPS metadata) are
 never served, by design.
 
+### Data-saving mode (optional)
+
+Every browser request from a member in data-saving mode (see "Preference
+defaults" above) carries the cookie `vutuv_low_bandwidth=1`; the app keeps it
+in step with the preference, so nginx can tell these requests apart without
+asking the app. What it is for: compressing their **dynamic pages** harder.
+The precompressed assets are already brotli 11; the pages themselves are
+compressed per request at whatever level the vhost sets, and nginx cannot
+read that level from a variable — so the members with the cookie are sent
+through a named location of their own:
+
+```nginx
+# In the http block: the cookie, as a flag.
+map $cookie_vutuv_low_bandwidth $vutuv_saver {
+    "1"     1;
+    default 0;
+}
+
+# In the server block, inside the `location /` that proxies to the app:
+    if ($vutuv_saver) { return 418; }
+    error_page 418 = @saver;
+
+# Beside it: the same proxy, compressed harder. Copy every proxy_* line of
+# `location /` — a named location inherits none of them.
+location @saver {
+    brotli on;
+    brotli_comp_level 11;
+    gzip_comp_level 9;
+    proxy_pass http://127.0.0.1:4003;
+    proxy_http_version 1.1;
+    proxy_set_header Upgrade $http_upgrade;
+    proxy_set_header Connection "upgrade";
+    proxy_set_header Host $host;
+    proxy_set_header X-Forwarded-For $proxy_add_x_forwarded_for;
+    proxy_set_header X-Forwarded-Proto $scheme;
+}
+```
+
+`return` inside `if` is one of the two things `if` does safely, and the
+`error_page` jump keeps the original URI. Know what it buys before you add it:
+the landing page (60 kB of HTML) is 12.0 kB as gzip, 11.4 kB at brotli 6 and
+10.4 kB at brotli 11, so the harder level saves these members about 1.7 kB a
+page load at roughly ten times the CPU per page (measured 2026-09-02) — a
+tenth of one lite photo. Their pictures, not their pages, are where the mode
+earns its name, and those need no proxy change at all.
+
 **Post images need no nginx setup**: they are audience-guarded, so the app
 authorizes and serves them itself (`send_file`).
 
@@ -626,17 +672,36 @@ feed turns *Quote what arrives on the other tab* off at `/admin/preferences`,
 or shortens the window there; the dot is unaffected, and every member can set
 both for themselves.
 
-A fourth is about what the site costs to load: **low-bandwidth mode**. The
-composer is a WYSIWYG editor whose bundle is 155 kB gzipped, two and a half
-times the rest of vutuv's JavaScript together. A member with the mode on is
-never sent it: everywhere they write they get the plain Markdown field that has
-always been the no-JavaScript fallback, and what they publish is byte for byte
-what the editor would have produced. vutuv ships it off and asks every new
-account once, on the sign-up form. Where the line is the scarce resource (a
-rural co-op, a ship, mobile data), turn *Low-bandwidth mode* on at
-`/admin/preferences` and every member who has not decided for themselves gets
-the cheap composer. Walking past the sign-up box leaves the column empty, so
-this default reaches new accounts too.
+A fourth is about what the site costs to load: **data-saving mode**
+(`low_bandwidth?`, its own page at `/settings/bandwidth`). A member with the
+mode on gets three things. Every post photo, picture from another network,
+URL screenshot and profile cover loads as its **lite version** — the same
+picture at about its 1x display size and a lower quality (measured on
+vutuv.de: a post photo 12 kB instead of 44 kB, a screenshot 3 kB instead of
+13 kB, a cover 8 kB instead of 34 kB, at the median) — with an **HD** control
+in its corner that fetches the full version on request; avatars are left
+alone, they are under 2 kB each. The pixelated preview of a picture still
+being checked is not fetched at all — the grey "being checked" tile stands in,
+at no cost. The lightbox opens a photo at 1600 px rather than 2560 px. And the composer is the plain Markdown field that has always
+been the no-JavaScript fallback rather than the WYSIWYG editor, whose bundle
+is 155 kB gzipped, two and a half times the rest of vutuv's JavaScript
+together; what they publish is byte for byte what the editor would have
+produced. vutuv ships it off and asks every new account once, on the sign-up
+form. Where the line is the scarce resource (a rural co-op, a ship, mobile
+data), turn *Low-bandwidth mode* on at `/admin/preferences` and every member
+who has not decided for themselves gets the cheap site. Walking past the
+sign-up box leaves the column empty, so this default reaches new accounts
+too.
+
+The lite versions are derived at upload like every other version, and for
+everything uploaded before they existed by the deploy's `regenerate_images`
+step — which, on the deploy that introduces them, re-derives every post
+photo, profile-link screenshot and cover from its original (on vutuv.de about
+1,900 screenshots, a few minutes of CPU after the traffic switch). Until a
+row has its lite file the page shows the full version, never a broken one.
+Pictures from other networks keep no original, so only those fetched after
+the deploy have a lite. See "Data-saving mode" under nginx for the one thing
+the proxy can add.
 
 - **`/admin` → Preference defaults** (`/admin/preferences`): change the
   default for the whole installation at any time. It applies immediately to

@@ -19,9 +19,11 @@ defmodule VutuvWeb.Plug.LocaleTest do
 
   @session Plug.Session.init(store: :cookie, key: "_test", signing_salt: "locale-test")
 
-  defp call(accept_language, user \\ nil) do
-    conn(:get, "/")
-    |> put_req_header("accept-language", accept_language)
+  defp call(accept_language, user \\ nil, opts \\ []) do
+    conn = conn(:get, "/") |> put_req_header("accept-language", accept_language)
+    conn = if opts[:cookie], do: put_req_header(conn, "cookie", opts[:cookie]), else: conn
+
+    conn
     |> Plug.Session.call(@session)
     |> Plug.Conn.fetch_session()
     |> assign(:current_user, user)
@@ -72,6 +74,71 @@ defmodule VutuvWeb.Plug.LocaleTest do
 
       assert conn.assigns.browser_date_region == "GB"
       assert Plug.Conn.get_session(conn, "date_region") == "GB"
+    end
+  end
+
+  # The plug is also where the reader's line is resolved (`Vutuv.LowBandwidth`):
+  # the same per-process shape as the clock, plus the cookie a reverse proxy
+  # routes on — written only when it disagrees with the preference, so the
+  # ordinary request carries no Set-Cookie at all.
+  describe "call/2 — data-saving mode" do
+    alias Vutuv.LowBandwidth
+
+    # The Set-Cookie header is written when the response is sent; before that
+    # the cookie sits in `resp_cookies`, which is what a plug test can read.
+    defp cookie(conn), do: conn.resp_cookies["vutuv_low_bandwidth"]
+
+    test "a member with the mode on renders lite and gets the cookie" do
+      conn = call("de-DE", %User{locale: "de", low_bandwidth?: true})
+
+      assert LowBandwidth.on?()
+      assert %{value: "1", http_only: true, same_site: "Lax", max_age: max_age} = cookie(conn)
+      assert max_age == 365 * 24 * 60 * 60
+    end
+
+    test "a member who already carries the cookie is not sent it again" do
+      conn =
+        call("de-DE", %User{locale: "de", low_bandwidth?: true}, cookie: "vutuv_low_bandwidth=1")
+
+      assert LowBandwidth.on?()
+      assert cookie(conn) == nil
+    end
+
+    test "a member with the mode off renders full and carries no cookie" do
+      conn = call("de-DE", %User{locale: "de", low_bandwidth?: false})
+
+      refute LowBandwidth.on?()
+      assert cookie(conn) == nil
+    end
+
+    # Switching the mode off must reach the proxy on the next request, or
+    # nginx keeps treating the member as being on a slow line.
+    test "a stale cookie is deleted once the mode is off" do
+      conn =
+        call("de-DE", %User{locale: "de", low_bandwidth?: false}, cookie: "vutuv_low_bandwidth=1")
+
+      refute LowBandwidth.on?()
+      assert %{max_age: 0} = cookie(conn)
+    end
+
+    # A previous request on a re-used process must not leak into this one.
+    test "every request writes the flag, off included" do
+      LowBandwidth.put(true)
+      call("de-DE")
+      refute LowBandwidth.on?()
+    end
+
+    # An API request runs this plug without a session and has no cookie jar
+    # to keep in step; the flag is still set for the render.
+    test "without a fetched session the flag is set and no cookie is touched" do
+      conn =
+        conn(:get, "/api/2.0/x")
+        |> put_req_header("accept-language", "de-DE")
+        |> assign(:current_user, %User{locale: "de", low_bandwidth?: true})
+        |> Locale.call([])
+
+      assert LowBandwidth.on?()
+      assert cookie(conn) == nil
     end
   end
 

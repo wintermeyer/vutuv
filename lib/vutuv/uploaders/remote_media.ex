@@ -27,9 +27,13 @@ defmodule Vutuv.RemoteMedia do
   """
 
   alias Vutuv.Fediverse.RemoteImage
+  alias Vutuv.LowBandwidth
   alias Vutuv.Moderation.Pixelation
   alias Vutuv.Uploads
   alias Vutuv.Uploads.Spec
+
+  # The lite version's filename prefix; the picture's own is `img-`/`avatar-`.
+  @lite_prefix "lite"
 
   @doc """
   Stores the fetched `bytes` for one remote post image, replacing anything
@@ -56,24 +60,78 @@ defmodule Vutuv.RemoteMedia do
 
       File.mkdir_p!(Uploads.disk_dir(dir))
       clear(dir, prefix)
+      clear(dir, @lite_prefix)
 
-      spec = Spec.version(spec_name, :image)
       file = "#{prefix}-#{hash}#{Spec.served_ext()}"
 
-      with :ok <- Spec.write_derived(spec, rotated, Path.join(Uploads.disk_dir(dir), file)) do
+      with :ok <- Spec.write_all(spec_name, rotated, &version_dest(&1, dir, file)) do
         write_pixelated(opts[:pixelated?], rotated, dir, hash)
         {:ok, %{file: file, width: Image.width(rotated), height: Image.height(rotated)}}
       end
     end
   end
 
+  # Where every version the spec names lands (`Vutuv.Uploads.Spec`): the
+  # picture under its own prefixed name, and for a post picture its lite
+  # beside it under the name `lite_name/1` derives from the row.
+  defp version_dest(%{name: :image}, dir, file), do: Path.join(Uploads.disk_dir(dir), file)
+
+  defp version_dest(%{name: :lite}, dir, file),
+    do: Path.join(Uploads.disk_dir(dir), lite_name(file))
+
+  @doc """
+  The stored name of a post picture's lite version, derived from the row's
+  `file` exactly as `pixelated_name/1` derives the preview's — it is the name
+  in the URL, so it is fingerprinted like the picture's own. `nil` without a
+  file. Whether the file exists is a different question (`lite_url/1`): a
+  picture fetched before the lite existed has none, and there is no original
+  to derive one from later — the copy we hold is the served picture itself.
+  """
+  def lite_name(file) when is_binary(file) and file != "" do
+    "#{@lite_prefix}-#{hash_of(file)}#{Spec.served_ext()}"
+  end
+
+  def lite_name(_file), do: nil
+
+  # The content hash a stored `img-<hash>.avif` carries; every sibling name
+  # (the lite, the pixelated preview) is built from it.
+  defp hash_of(file), do: file |> Path.rootname() |> String.replace_prefix("img-", "")
+
+  @doc """
+  Root-relative URL of a post picture's lite version, or `nil` when none is on
+  disk.
+  """
+  def lite_url(%RemoteImage{id: id, file: file}) do
+    with name when is_binary(name) <- lite_name(file),
+         true <- File.exists?(Path.join(Uploads.disk_dir(post_dir(id)), name)) do
+      post_image_url(id, name)
+    else
+      _ -> nil
+    end
+  end
+
+  @doc """
+  What a card loads for this viewer (`VutuvWeb.UI.picture/1`): the picture
+  as `:src`, and as `:lite` its 640 px version while the viewer is in
+  data-saving mode (`Vutuv.LowBandwidth`) and the file exists — `nil`
+  otherwise.
+  """
+  def picture(%RemoteImage{} = image) do
+    LowBandwidth.picture(post_image_url(image.id, image.file), fn -> lite_url(image) end)
+  end
+
   @doc """
   Absolute on-disk path of a stored picture, or nil. `version` must be exactly
-  the fingerprinted name the row carries — anything else never resolves, which
-  is what makes the URL unguessable rather than merely private.
+  the fingerprinted name the row carries — or, for a post picture, that of its
+  lite version (`lite_name/1`), which carries the same hash — anything else
+  never resolves, which is what makes the URL unguessable rather than merely
+  private.
   """
   def post_image_path(image_id, version, stored_file) do
-    resolve(post_dir(image_id), version, stored_file)
+    Enum.find_value(
+      [stored_file, lite_name(stored_file)],
+      &resolve(post_dir(image_id), version, &1)
+    )
   end
 
   @doc "The same for an account's avatar."
@@ -159,7 +217,7 @@ defmodule Vutuv.RemoteMedia do
   in the URL, so it is fingerprinted exactly like the picture's own.
   """
   def pixelated_name(file) when is_binary(file) and file != "" do
-    file |> Path.rootname() |> String.replace_prefix("img-", "") |> Pixelation.filename()
+    file |> hash_of() |> Pixelation.filename()
   end
 
   def pixelated_name(_file), do: nil

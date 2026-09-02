@@ -101,7 +101,12 @@ defmodule VutuvWeb.RemoteMediaController do
   defp resolve_post_version(%RemoteImage{} = image, version_file) do
     cond do
       RemoteImage.released?(image) ->
-        versioned(:picture, parse_version(version_file, image.file))
+        # Its own name, or its lite version's (data-saving mode) — the same
+        # hash under the other prefix, so nothing outside the row's set opens.
+        versioned(
+          :picture,
+          parse_version(version_file, [image.file, RemoteMedia.lite_name(image.file)])
+        )
 
       Pixelation.within_window?(image.inserted_at) ->
         versioned(:pixelated, parse_version(version_file, RemoteMedia.pixelated_name(image.file)))
@@ -178,6 +183,13 @@ defmodule VutuvWeb.RemoteMediaController do
 
   # The whitelist is exactly the fingerprinted name the stored row yields, so a
   # picture that was replaced or rejected stops resolving at its old URL.
+  defp parse_version(version_file, stored_files) when is_list(stored_files) do
+    ImageProxy.parse_version(
+      version_file,
+      for(file <- stored_files, is_binary(file), do: Path.rootname(file))
+    )
+  end
+
   defp parse_version(version_file, stored_file) when is_binary(stored_file) do
     ImageProxy.parse_version(version_file, [Path.rootname(stored_file)])
   end

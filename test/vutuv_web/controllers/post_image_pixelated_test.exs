@@ -192,5 +192,24 @@ defmodule VutuvWeb.PostImagePixelatedTest do
       assert html =~ "/post_images/#{image.token}/pixelated.avif"
       refute html =~ "/post_images/#{image.token}/feed.avif"
     end
+
+    # The preview costs about what the lite version of the finished picture
+    # does, for a picture nobody has looked at yet: the one download
+    # data-saving mode has no use for. The grey tile says the same in words.
+    test "shows a member in data-saving mode the hourglass tile, no preview at all", %{
+      conn: conn,
+      tmp: tmp
+    } do
+      {post, image, _author} = post_with_held_photo!(tmp)
+      {conn, reader} = create_and_login_user(conn)
+      reader |> Ecto.Changeset.change(%{low_bandwidth?: true}) |> Repo.update!()
+
+      html = html_response(get(conn, Posts.path(post)), 200)
+
+      assert html =~ "Photo is being checked"
+      refute html =~ "data-image-pixelated"
+      refute html =~ "/post_images/#{image.token}/pixelated.avif"
+      refute html =~ "/post_images/#{image.token}/feed.avif"
+    end
   end
 end
