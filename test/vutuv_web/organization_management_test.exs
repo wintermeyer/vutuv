@@ -230,6 +230,27 @@ defmodule VutuvWeb.OrganizationManagementTest do
     end
   end
 
+  describe "the description field on the edit page" do
+    test "the Markdown link lives in the editor's footer, not over the WYSIWYG box",
+         %{conn: conn} do
+      {conn, owner} = create_and_login_user(conn)
+      organization = active_organization_for(owner)
+
+      html = get(conn, ~p"/organizations/#{organization.slug}/edit") |> html_response(200)
+
+      # The page used to hand-roll "Markdown is supported" plus the link in a
+      # paragraph ABOVE a rich-text box, where a member sees no Markdown at
+      # all. The editor's own `help` puts the link in its footer row, where
+      # components.css shows it only once the source view is on screen, and the
+      # hint moves into the placeholder — the way the job description does it.
+      assert html =~ "mde__help"
+      assert html =~ "Describe the organization. Markdown is supported."
+
+      [above_foot, _] = String.split(html, "data-mde-foot", parts: 2)
+      refute above_foot =~ "/system/markdown", "the link still hangs over the editor"
+    end
+  end
+
   describe "root handle on the edit page (issue #941)" do
     test "owner claims a handle and the organization gets a root URL", %{conn: conn} do
       {conn, owner} = create_and_login_user(conn)

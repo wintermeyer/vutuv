@@ -300,14 +300,19 @@ defmodule VutuvWeb.OrganizationLive.Edit do
           <label class="block text-sm font-semibold text-slate-700 dark:text-slate-200">
             {gettext("Description")}
           </label>
-          <p class="text-xs text-slate-600 dark:text-slate-400">
-            {gettext("Markdown is supported")} <.markdown_help_link />
-          </p>
+          <%!-- The hint used to be a paragraph over the box, with the syntax
+          link beside it, which said "Markdown" permanently above a rich-text
+          editor where a member sees none of it. Same deal as the job
+          description now: the sentence is the placeholder, and `help` puts the
+          link in the editor's footer, which shows it only in the source
+          view. --%>
           <.markdown_editor
             id="organization-description"
             name="organization[description]"
             value={@form[:description].value || ""}
             label={gettext("Description")}
+            placeholder={gettext("Describe the organization. Markdown is supported.")}
+            help
             class="mt-1"
           />
           {error_tag(@form, :description)}
