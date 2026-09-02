@@ -34,7 +34,7 @@ defmodule VutuvWeb.FeedCalendarTest do
     Social.follow(viewer, author.id)
 
     recent = PostsHelpers.create_post!(author, %{body: "from this morning"})
-    PostsHelpers.backdate_post!(recent, 3_600)
+    PostsHelpers.backdate_post!(recent, min(3_600, seconds_into_today()))
 
     old = PostsHelpers.create_post!(author, %{body: "from a week ago"})
     PostsHelpers.backdate_post!(old, 7 * @day)
@@ -48,6 +48,18 @@ defmodule VutuvWeb.FeedCalendarTest do
 
   defp iso(date), do: Date.to_iso8601(date)
   defp days_ago(n), do: Date.add(ViewerClock.today(), -n)
+
+  # How far into the German day it is. An hour counted back from "now" leaves
+  # the day it was meant for during the first hour of one — "from this morning"
+  # above then lands on YESTERDAY's cell and shades a day the heatmap test
+  # needs empty, so that test went red at 00:08 and would have gone green again
+  # at 01:00 on its own. Clamping keeps the post inside today whatever the hour,
+  # without moving it to midday (which is still in the future just after
+  # midnight, and a post in the future is a different bug).
+  defp seconds_into_today do
+    {day_start, _day_end} = ViewerClock.day_window(ViewerClock.today())
+    NaiveDateTime.diff(NaiveDateTime.utc_now(:second), day_start)
+  end
 
   # Unfolds the rail **at the month `day` sits in**, which is not the month it
   # opens at for the first days of a new one. The grid draws whole weeks from
