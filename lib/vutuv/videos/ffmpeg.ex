@@ -109,33 +109,32 @@ defmodule Vutuv.Videos.FFmpeg do
 
       video ->
         duration = parse_float(get_in(json, ["format", "duration"]))
-        width = video["width"]
-        height = video["height"]
 
-        cond do
-          not (is_integer(width) and is_integer(height) and width > 0 and height > 0) ->
-            {:error, :unreadable}
+        if sized?(video) and is_float(duration) and duration > 0 do
+          {width, height} = rotate(video["width"], video["height"], rotation(video))
 
-          not (is_float(duration) and duration > 0) ->
-            {:error, :unreadable}
-
-          true ->
-            {width, height} = rotate(width, height, rotation(video))
-
-            {:ok,
-             %{
-               duration_ms: round(duration * 1000),
-               width: width,
-               height: height,
-               fps: fps(video),
-               video_codec: video["codec_name"],
-               audio?: Enum.any?(streams, &(&1["codec_type"] == "audio"))
-             }}
+          {:ok,
+           %{
+             duration_ms: round(duration * 1000),
+             width: width,
+             height: height,
+             fps: fps(video),
+             video_codec: video["codec_name"],
+             audio?: Enum.any?(streams, &(&1["codec_type"] == "audio"))
+           }}
+        else
+          {:error, :unreadable}
         end
     end
   end
 
   defp parse_probe(_json), do: {:error, :unreadable}
+
+  defp sized?(%{"width" => width, "height" => height})
+       when is_integer(width) and is_integer(height),
+       do: width > 0 and height > 0
+
+  defp sized?(_video), do: false
 
   defp parse_float(value) when is_binary(value) do
     case Float.parse(value) do
@@ -336,28 +335,26 @@ defmodule Vutuv.Videos.FFmpeg do
   # encoded position in microseconds. Percent is clamped: the last block can
   # overshoot the probed duration by a frame.
   defp progress_parser(duration_ms, on_progress) do
-    fn line, last ->
-      case line do
-        "out_time_us=" <> us ->
-          case Integer.parse(String.trim(us)) do
-            {micro, _} when micro >= 0 ->
-              percent = min(100, div(micro, max(duration_ms * 10, 1)))
-
-              if percent != last do
-                on_progress.(percent)
-                percent
-              else
-                last
-              end
-
-            _ ->
-              last
-          end
-
-        _ ->
-          last
-      end
+    fn
+      "out_time_us=" <> us, last -> report(percent_of(us, duration_ms), last, on_progress)
+      _line, last -> last
     end
+  end
+
+  defp percent_of(us, duration_ms) do
+    case Integer.parse(String.trim(us)) do
+      {micro, _} when micro >= 0 -> min(100, div(micro, max(duration_ms * 10, 1)))
+      _ -> nil
+    end
+  end
+
+  # Only a changed percent reaches the callback (and the row behind it).
+  defp report(nil, last, _on_progress), do: last
+  defp report(percent, last, _on_progress) when percent == last, do: last
+
+  defp report(percent, _last, on_progress) do
+    on_progress.(percent)
+    percent
   end
 
   ## Running

@@ -177,12 +177,20 @@ defmodule VutuvWeb.Live.InitAssigns do
   # messages itself, and each host page having to know about it is how such a
   # message gets lost on the page that forgot. The message goes on to the host
   # (`:cont`), so the feed's waiting card sees it too.
+  #
+  # Connected mounts only: the dead render receives no messages, and a hook
+  # needs a socket that came through a real mount (a bare `%Socket{}` in a
+  # test has no lifecycle to attach to).
   defp subscribe_video_progress(socket, %User{id: user_id}) do
-    if Phoenix.LiveView.connected?(socket), do: Vutuv.Videos.subscribe(user_id)
+    if Phoenix.LiveView.connected?(socket) do
+      Vutuv.Videos.subscribe(user_id)
 
-    socket
-    |> assign(:video_composers, %{})
-    |> Phoenix.LiveView.attach_hook(:video_progress, :handle_info, &forward_video_progress/2)
+      socket
+      |> assign(:video_composers, %{})
+      |> Phoenix.LiveView.attach_hook(:video_progress, :handle_info, &forward_video_progress/2)
+    else
+      socket
+    end
   end
 
   defp subscribe_video_progress(socket, _anonymous), do: socket

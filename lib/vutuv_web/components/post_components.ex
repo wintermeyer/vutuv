@@ -46,10 +46,10 @@ defmodule VutuvWeb.PostComponents do
   alias Vutuv.Posts.PhotoLicense
   alias Vutuv.Posts.Post
   alias Vutuv.Posts.PostImage
-  alias Vutuv.Posts.PostVideo
   alias Vutuv.Posts.PostRemoteReply
   alias Vutuv.Posts.PostReview
   alias Vutuv.Posts.PostScreenshot
+  alias Vutuv.Posts.PostVideo
   alias Vutuv.Posts.Screenshots
   alias Vutuv.Profiles.VerifiedLinks
   alias Vutuv.RemoteMedia

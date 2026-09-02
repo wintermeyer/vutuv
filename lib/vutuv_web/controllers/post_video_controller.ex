@@ -161,30 +161,26 @@ defmodule VutuvWeb.PostVideoController do
 
   defp parse_range(spec, size) do
     case String.split(spec, "-", parts: 2) do
-      ["", suffix] ->
-        case Integer.parse(suffix) do
-          {n, ""} when n > 0 -> {:ok, max(size - n, 0), size - 1}
-          _ -> :whole
-        end
-
-      [first, ""] ->
-        case Integer.parse(first) do
-          {f, ""} when f < size -> {:ok, f, size - 1}
-          {_f, ""} -> :unsatisfiable
-          _ -> :whole
-        end
-
-      [first, last] ->
-        with {f, ""} <- Integer.parse(first),
-             {l, ""} <- Integer.parse(last),
-             true <- f <= l do
-          if f < size, do: {:ok, f, min(l, size - 1)}, else: :unsatisfiable
-        else
-          _ -> :whole
-        end
-
-      _ ->
-        :whole
+      ["", suffix] -> suffix_range(Integer.parse(suffix), size)
+      [first, ""] -> open_range(Integer.parse(first), size)
+      [first, last] -> closed_range(Integer.parse(first), Integer.parse(last), size)
+      _ -> :whole
     end
   end
+
+  # `bytes=-n`: the last n bytes.
+  defp suffix_range({n, ""}, size) when n > 0, do: {:ok, max(size - n, 0), size - 1}
+  defp suffix_range(_parsed, _size), do: :whole
+
+  # `bytes=a-`: from a to the end.
+  defp open_range({first, ""}, size) when first < size, do: {:ok, first, size - 1}
+  defp open_range({_first, ""}, _size), do: :unsatisfiable
+  defp open_range(_parsed, _size), do: :whole
+
+  # `bytes=a-b`, clipped to the file.
+  defp closed_range({first, ""}, {last, ""}, size) when first <= last and first < size,
+    do: {:ok, first, min(last, size - 1)}
+
+  defp closed_range({first, ""}, {last, ""}, _size) when first <= last, do: :unsatisfiable
+  defp closed_range(_first, _last, _size), do: :whole
 end

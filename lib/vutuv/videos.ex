@@ -205,18 +205,22 @@ defmodule Vutuv.Videos do
 
       frame ->
         with :ok <- PostVideoStore.write_cover(video.token, frame.position) do
-          video
-          |> Ecto.Changeset.change(
-            cover_frame_id: frame.id,
-            cover_written_at: DateTime.utc_now(:second)
-          )
-          |> Repo.update()
-          |> tap(fn
-            {:ok, updated} -> broadcast_progress(updated)
-            _ -> :ok
-          end)
+          record_cover(video, frame)
         end
     end
+  end
+
+  defp record_cover(video, frame) do
+    result =
+      video
+      |> Ecto.Changeset.change(
+        cover_frame_id: frame.id,
+        cover_written_at: DateTime.utc_now(:second)
+      )
+      |> Repo.update()
+
+    with {:ok, updated} <- result, do: broadcast_progress(updated)
+    result
   end
 
   defp frames_of(%PostVideo{frames: frames}) when is_list(frames), do: frames
@@ -339,17 +343,18 @@ defmodule Vutuv.Videos do
       limit: ^(limit * 2)
     )
     |> Repo.all()
-    |> Enum.reduce_while([], fn video, claimed ->
-      if length(claimed) >= limit do
-        {:halt, claimed}
-      else
-        case claim(video, now) do
-          {:ok, video} -> {:cont, [video | claimed]}
-          :taken -> {:cont, claimed}
-        end
-      end
-    end)
+    |> Enum.reduce_while([], &claim_into(&1, &2, limit, now))
     |> Enum.reverse()
+  end
+
+  defp claim_into(_video, claimed, limit, _now) when length(claimed) >= limit,
+    do: {:halt, claimed}
+
+  defp claim_into(video, claimed, _limit, now) do
+    case claim(video, now) do
+      {:ok, video} -> {:cont, [video | claimed]}
+      :taken -> {:cont, claimed}
+    end
   end
 
   defp claim(%PostVideo{worked_at: nil} = video, now) do

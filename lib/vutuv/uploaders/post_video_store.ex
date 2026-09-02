@@ -198,9 +198,8 @@ defmodule Vutuv.PostVideoStore do
 
     with true <- File.exists?(frame) || {:error, :missing_frame},
          {:ok, rotated} <- Spec.open_rotated(frame),
-         :ok <- write_cover_file(rotated, token, :full, 1200),
-         :ok <- write_cover_file(rotated, token, :lite, 640) do
-      :ok
+         :ok <- write_cover_file(rotated, token, :full, 1200) do
+      write_cover_file(rotated, token, :lite, 640)
     end
   end
 

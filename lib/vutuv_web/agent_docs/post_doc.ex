@@ -24,9 +24,9 @@ defmodule VutuvWeb.AgentDocs.PostDoc do
   alias Vutuv.Posts.PhotoLicense
   alias Vutuv.Posts.Post
   alias Vutuv.Posts.PostImage
-  alias Vutuv.Posts.PostVideo
   alias Vutuv.Posts.PostRemoteReply
   alias Vutuv.Posts.PostReview
+  alias Vutuv.Posts.PostVideo
   alias Vutuv.Profiles.VerifiedLinks
   alias VutuvWeb.AgentDocs
   alias VutuvWeb.Markdown

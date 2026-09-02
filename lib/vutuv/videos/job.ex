@@ -46,9 +46,8 @@ defmodule Vutuv.Videos.Job do
         result =
           with {:ok, video} <- step_frames(video),
                {:ok, video} <- step_rendition(video, "h264", :h264_ready_at),
-               {:ok, video} <- step_rendition(video, "av1", :av1_ready_at),
-               {:ok, video} <- step_lite(video) do
-            {:ok, video}
+               {:ok, video} <- step_rendition(video, "av1", :av1_ready_at) do
+            step_lite(video)
           end
 
         case result do
@@ -236,23 +235,23 @@ defmodule Vutuv.Videos.Job do
       names =
         if PostVideoStore.av1_supported?(), do: ["lite-av1", "lite-h264"], else: ["lite-h264"]
 
-      Enum.each(names, fn name ->
-        case PostVideoStore.write_rendition(video.token, name, facts, progress_fun(video, name)) do
-          :ok ->
-            :ok
-
-          {:error, reason} ->
-            Logger.warning(
-              "post_video #{name} failed video=#{video.id} reason=#{inspect(reason)}"
-            )
-        end
-      end)
-
+      Enum.each(names, &write_lite(video, &1, facts))
       after_rendition(video, "lite", :lite_ready_at)
     else
       {:error, reason} ->
         Logger.warning("post_video lite failed video=#{video.id} reason=#{inspect(reason)}")
         {:ok, Videos.update_state(video, lite_ready_at: DateTime.utc_now(:second))}
+    end
+  end
+
+  # One of the two 360p files; a failure costs that file and nothing else.
+  defp write_lite(video, name, facts) do
+    case PostVideoStore.write_rendition(video.token, name, facts, progress_fun(video, name)) do
+      :ok ->
+        :ok
+
+      {:error, reason} ->
+        Logger.warning("post_video #{name} failed video=#{video.id} reason=#{inspect(reason)}")
     end
   end
 

@@ -14,6 +14,7 @@ defmodule VutuvWeb.PostJSON do
   alias Vutuv.Posts
   alias Vutuv.Posts.Post
   alias Vutuv.Posts.PostImage
+  alias Vutuv.Posts.PostVideo
 
   @doc "Serializes a preloaded post for `viewer` (a `%User{}` or `nil`)."
   def post(%Post{} = post, viewer) do
@@ -87,7 +88,7 @@ defmodule VutuvWeb.PostJSON do
   end
 
   # The clip (issue #1906), or nil. Only a ready one ever hangs off a post.
-  defp video(%Post{video: %Vutuv.Posts.PostVideo{} = video}) do
+  defp video(%Post{video: %PostVideo{} = video}) do
     base = VutuvWeb.Endpoint.url()
 
     %{
@@ -95,9 +96,9 @@ defmodule VutuvWeb.PostJSON do
       alt: video.alt,
       width: video.width,
       height: video.height,
-      duration_seconds: Vutuv.Posts.PostVideo.seconds(video),
-      url: base <> Vutuv.Posts.PostVideo.url(video, "h264.mp4"),
-      cover_url: base <> Vutuv.Posts.PostVideo.cover_url(video)
+      duration_seconds: PostVideo.seconds(video),
+      url: base <> PostVideo.url(video, "h264.mp4"),
+      cover_url: base <> PostVideo.cover_url(video)
     }
   end
 

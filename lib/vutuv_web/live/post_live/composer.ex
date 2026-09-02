@@ -189,9 +189,7 @@ defmodule VutuvWeb.PostLive.Composer do
     # The clip (issue #1907): an edited post's own, read-only but for its alt
     # text; a new post's arrives through the upload below.
     |> assign(:video, post_video(post))
-    # Whether this composer offers the upload at all: the feature is on, ffmpeg
-    # is there, and this is a new post — a clip is never swapped on an edit.
-    |> assign(:video_uploads?, Videos.enabled?() and post == nil)
+    |> assign(:video_uploads?, video_uploads?(post))
     # The per-photo settings the composer is editing (issue #1104), keyed by
     # image id. Held in the socket rather than in form fields: the two switches
     # reveal follow-up controls, and an unchecked checkbox submits nothing — so
@@ -262,6 +260,11 @@ defmodule VutuvWeb.PostLive.Composer do
 
   defp post_video(%Post{video: %PostVideo{} = video}), do: video
   defp post_video(_post), do: nil
+
+  # Whether this composer offers the upload at all: the feature is on, ffmpeg
+  # is there, and this is a new post — a clip is never swapped on an edit.
+  defp video_uploads?(nil), do: Videos.enabled?()
+  defp video_uploads?(_post), do: false
 
   # Which clip this composer holds, told to the host LiveView so its hook
   # forwards that clip's progress here (`InitAssigns.forward_video_progress/2`).
@@ -1463,29 +1466,26 @@ defmodule VutuvWeb.PostLive.Composer do
 
   defp sweep_rejected_uploads(socket, name) do
     case socket.assigns.uploads[name] do
-      nil ->
+      nil -> socket
+      upload -> cancel_rejected(socket, name, upload)
+    end
+  end
+
+  defp cancel_rejected(socket, name, upload) do
+    case Enum.filter(upload.entries, &(upload_errors(upload, &1) != [])) do
+      [] ->
         socket
 
-      upload ->
-        rejected = Enum.filter(upload.entries, &(upload_errors(upload, &1) != []))
+      rejected ->
+        messages =
+          Enum.map_join(rejected, " ", fn entry ->
+            reason = upload |> upload_errors(entry) |> List.first() |> upload_error_message(name)
+            "#{entry.client_name}: #{reason}"
+          end)
 
-        case rejected do
-          [] ->
-            socket
-
-          rejected ->
-            messages =
-              Enum.map_join(rejected, " ", fn entry ->
-                reason =
-                  upload |> upload_errors(entry) |> List.first() |> upload_error_message(name)
-
-                "#{entry.client_name}: #{reason}"
-              end)
-
-            rejected
-            |> Enum.reduce(socket, &cancel_upload(&2, name, &1.ref))
-            |> assign(:error, messages)
-        end
+        rejected
+        |> Enum.reduce(socket, &cancel_upload(&2, name, &1.ref))
+        |> assign(:error, messages)
     end
   end
 

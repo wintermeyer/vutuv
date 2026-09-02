@@ -121,7 +121,7 @@ defmodule Vutuv.VideosTest do
 
       # A three-second clip gets its opening frame, plus the representative
       # opening second when it differs.
-      assert length(video.frames) >= 1
+      assert video.frames != []
       assert Enum.all?(video.frames, &(&1.moderation == "approved"))
       assert video.cover_frame_id in Enum.map(video.frames, & &1.id)
 

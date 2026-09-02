@@ -13,8 +13,8 @@ defmodule VutuvWeb.MastodonApi.StatusController do
   alias Vutuv.Posts
   alias Vutuv.Posts.Post
   alias Vutuv.Posts.PostVideo
-  alias Vutuv.Videos
   alias Vutuv.Repo
+  alias Vutuv.Videos
   alias VutuvWeb.MastodonApi.Statuses
 
   # The empty conversation, in Mastodon's own shape — the honest answer

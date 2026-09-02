@@ -30,10 +30,10 @@ defmodule VutuvWeb.Fediverse.Docs do
   alias Vutuv.Posts
   alias Vutuv.Posts.Post
   alias Vutuv.Posts.PostImage
-  alias Vutuv.Posts.PostVideo
   alias Vutuv.Posts.PostRemoteReply
   alias Vutuv.Posts.PostReply
   alias Vutuv.Posts.PostReview
+  alias Vutuv.Posts.PostVideo
   alias Vutuv.ReviewCover
   alias Vutuv.Tags.MatchKey
   alias Vutuv.Tags.Tag
