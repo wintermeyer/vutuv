@@ -426,7 +426,7 @@ map $cookie_vutuv_low_bandwidth $vutuv_saver {
 # reaching these members — and only the level differs.
 location @saver {
     include snippets/vutuv-proxy.conf;
-    brotli_comp_level 10;
+    brotli_comp_level 9;
 }
 ```
 
@@ -439,16 +439,25 @@ forgets the `Upgrade` or `Connection` header kills every live page for
 exactly the members the mode is for, while the pages themselves still load.
 Verify with the cookie that `/live/websocket` still answers 101.
 
-The level is 10, not 11, by measurement: on a 197 kB profile page brotli 6
-gives 26,847 bytes, 9 gives 26,282, 10 gives 24,012 and 11 gives 23,815 —
-level 9 buys one percent, level 10 nine tenths of what 11 buys at a third of
-its CPU (5 / 43 / 130 ms per page at 6 / 10 / 11). vutuv.de runs it this way
-(issue #1944): measured from outside, the profile page went from 26,562 to
-23,748 bytes with the cookie, the landing page from 10,681 to 9,593. When you
-measure with a bare `curl` and the cookie, know that the app answers such an
-anonymous request by deleting the cookie (`max-age=0`) — the route is tested,
-a member session is not. Their pictures, not their pages, are still where the
-mode earns its name, and those need no proxy change at all.
+**The level is 9, and the ceiling is not a preference — it is where brotli
+changes algorithm.** Quality 10 and 11 switch on a far more expensive search
+for backward references; everything up to 9 uses the fast hasher. On a 189 kB
+profile page, measured on the production CPU: level 6 costs 8 ms and 27,055
+bytes, 9 costs 17 ms and 26,476, **10 costs 78 ms** and 24,179, 11 costs
+222 ms and 23,792. So the step from 6 to 10 buys 2.9 kB for 70 ms of server
+time — which only pays for itself below roughly 330 kbit/s, and is charged to
+every request on the box, not only to the member who wanted the bytes.
+
+This installation ran level 10 from issue #1944 until 2026-09-02 and it was a
+net loss: measured through nginx, a saver member's page went from ~300 ms to
+~215 ms when the level dropped to 9, for 2.3 kB more. If you are tempted to
+raise it, measure the **time** as well as the size — the earlier note here
+compared only 10 against 11 and picked the cheaper of two expensive options.
+
+When you measure with a bare `curl` and the cookie, know that the app answers
+such an anonymous request by deleting the cookie (`max-age=0`) — the route is
+tested, a member session is not. Their pictures, not their pages, are still
+where the mode earns its name, and those need no proxy change at all.
 
 **Post images need no nginx setup**: they are audience-guarded, so the app
 authorizes and serves them itself (`send_file`).
@@ -627,6 +636,35 @@ Run on the server, against the release:
 (In a source checkout the same exist as `mix vutuv.images.regenerate` /
 `mix vutuv.review_covers.refresh` / `mix vutuv.admin.promote`; URL screenshots
 can be re-rendered with `mix urls.create_screenshots`.)
+
+### Watch the tables for bloat after a mass rewrite
+
+Autovacuum reclaims dead rows but never gives the pages back, so anything that
+touches every row of a table — a re-key, a column backfill, a repeated
+whole-table `UPDATE` — leaves the file at its old size, mostly empty. Nothing
+reports this: the row counts are right, the queries are right, and every scan
+just reads far more pages than it has to. On vutuv.de `users` sat at 82 MB for
+1.6 MB of live rows, and since every feed and profile query gates on that
+table (`frozen_at`, `deactivated_at`, `suspended_until`), one page load paid it
+dozens of times over.
+
+Compare each table against the space its rows actually need:
+
+```sql
+SELECT relname,
+       n_live_tup,
+       pg_size_pretty(pg_relation_size(relid)) AS heap
+  FROM pg_stat_user_tables
+ ORDER BY pg_relation_size(relid) DESC
+ LIMIT 15;
+```
+
+A table whose heap is many times `n_live_tup × the width of a row` is bloated.
+`VACUUM (FULL, ANALYZE) <table>;` rewrites it compactly and rebuilds its
+indexes. It takes an exclusive lock, so requests touching that table wait —
+but at this scale that is well under a second per table (the four bloated ones
+on vutuv.de took 1.7 s together and gave back 410 MB), and the page it fixed
+went from ~200 ms to ~85 ms.
 
 ## Book covers on review posts
 
