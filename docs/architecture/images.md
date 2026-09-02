@@ -189,7 +189,16 @@ like the captures themselves, so an air-gapped installation runs no sweeper.
 Three things keep a link out of that query for good: `broken?` (an SSRF-refused
 target), a `screenshot_moderation` of `"rejected"` (the AI scan threw the
 picture out, and re-shooting it every six hours would be a treadmill), and
-simply having a screenshot. Which is why **editing a link's URL clears it**
+simply having a screenshot.
+
+`broken?` had to be cleaned up before it could carry that weight. Until v5 the
+pipeline flagged **every** failure with it — a missing Chromium binary, a
+timeout, a site down that afternoon — and nothing ever cleared it, so vutuv.de
+carried 45 links flagged between 2016-12 and 2018-03, none of which resolves to
+an internal address today. They are ordinary member homepages that a rule which
+no longer exists poisoned, and the sweeper would have stepped over them forever;
+`clear_stale_broken_flag_on_urls` sets them back to NULL. A link that really is
+an internal target costs one DNS lookup on the next sweep and is flagged again. Which is why **editing a link's URL clears it**
 (`Url.changeset/2`): otherwise the row keeps a photograph of a different page
 and, having one, is never captured again. The LinkedIn import nudges the
 member's own waiting links after its transaction commits
