@@ -16,9 +16,11 @@ defmodule VutuvWeb.Admin.DashboardLive do
   disconnects (they ride the `VutuvWeb.Presence` diffs, in-memory, no database);
   the database figures refresh on a gentle timer.
 
-  Access control is the host page's job: `/admin` is gated by the `:admin`
-  pipeline (403 for non-admins), so only an admin is ever handed the signed
-  session that lets this embedded LiveView's socket connect.
+  **The socket does its own access control**, per the standing rule for
+  off-router `live_render` children: `/admin` behind the `:admin` pipeline gates
+  the page, not this child's socket. The connected mount resolves the viewer
+  through `VutuvWeb.Live.InitAssigns.assign_embedded/2` and sends anybody who is
+  not an admin away, subscribing to nothing and starting no timer for them.
   """
   use Phoenix.LiveView
 
@@ -34,6 +36,7 @@ defmodule VutuvWeb.Admin.DashboardLive do
 
   alias Vutuv.Accounts.User
   alias Vutuv.Dashboard
+  alias VutuvWeb.Live.InitAssigns
   alias VutuvWeb.Presence
 
   # The database figures change slowly, so a relaxed cadence keeps them fresh
@@ -43,21 +46,35 @@ defmodule VutuvWeb.Admin.DashboardLive do
 
   @impl true
   def mount(_params, session, socket) do
-    # Embedded outside the admin live_session, so re-apply the request locale
-    # (the labels are gettext, the admin UI is German) the way ShellLive does.
-    VutuvWeb.LiveLocale.put_viewer(session)
+    # The shared preamble for an off-router child: resolves the viewer from the
+    # cookie's session token and applies their locale and clock.
+    socket = InitAssigns.assign_embedded(socket, session)
 
-    if connected?(socket) do
-      Presence.subscribe_online()
-      schedule_refresh()
+    cond do
+      # The throwaway dead render: the HTTP request that produced it already
+      # passed the `:admin` pipeline, and it is replaced the instant the socket
+      # connects and re-checks the token.
+      not connected?(socket) -> {:ok, assign_figures(socket)}
+      admin?(socket.assigns.current_user) -> {:ok, mount_admin(socket)}
+      _anyone_else = true -> {:ok, push_navigate(socket, to: ~p"/")}
     end
+  end
 
-    {:ok,
-     socket
-     |> assign_online()
-     |> assign_snapshot()
-     |> assign_newest_members()
-     |> assign(:gender_breakdown, Dashboard.gender_breakdown())}
+  defp admin?(%User{admin?: true}), do: true
+  defp admin?(_viewer), do: false
+
+  defp mount_admin(socket) do
+    Presence.subscribe_online()
+    schedule_refresh()
+    assign_figures(socket)
+  end
+
+  defp assign_figures(socket) do
+    socket
+    |> assign_online()
+    |> assign_snapshot()
+    |> assign_newest_members()
+    |> assign(:gender_breakdown, Dashboard.gender_breakdown())
   end
 
   @impl true

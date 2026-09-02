@@ -798,6 +798,51 @@ defmodule Vutuv.TagsTest do
       assert endorsement.user_tag_id == user_tag.id
     end
 
+    # Both rules used to live only in the rendered control, so a crafted POST
+    # walked past them — and the block case also delivered a notification to the
+    # very member who blocked the endorser.
+    test "create_endorsement/1 refuses your own tag" do
+      owner = insert(:user)
+      user_tag = insert(:user_tag, user: owner, tag: insert(:tag))
+
+      assert {:error, :self} =
+               Tags.create_endorsement(%{user_id: owner.id, user_tag_id: user_tag.id})
+
+      refute Tags.endorsed?(user_tag.id, owner.id)
+    end
+
+    test "create_endorsement/1 refuses across a block, in either direction" do
+      blocker = insert(:user)
+      blocked = insert(:user)
+      Vutuv.Social.block_user(blocker, blocked)
+
+      blocker_tag = insert(:user_tag, user: blocker, tag: insert(:tag))
+      blocked_tag = insert(:user_tag, user: blocked, tag: insert(:tag))
+
+      assert {:error, :blocked} =
+               Tags.create_endorsement(%{user_id: blocked.id, user_tag_id: blocker_tag.id})
+
+      assert {:error, :blocked} =
+               Tags.create_endorsement(%{user_id: blocker.id, user_tag_id: blocked_tag.id})
+
+      refute Tags.endorsed?(blocker_tag.id, blocked.id)
+      refute Tags.endorsed?(blocked_tag.id, blocker.id)
+    end
+
+    test "create_endorsement/1 sends no notification across a block" do
+      blocker = insert(:user)
+      blocked = insert(:user)
+      Vutuv.Social.block_user(blocker, blocked)
+      user_tag = insert(:user_tag, user: blocker, tag: insert(:tag))
+
+      Vutuv.Activity.subscribe(blocker.id)
+
+      assert {:error, :blocked} =
+               Tags.create_endorsement(%{user_id: blocked.id, user_tag_id: user_tag.id})
+
+      refute_receive {:endorsement_changed, _}, 100
+    end
+
     test "create_endorsement/1 pushes a live notification to the tag's owner" do
       endorser = insert(:user, first_name: "Ada", last_name: "Lovelace")
       tag_owner = insert(:user)
@@ -814,14 +859,17 @@ defmodule Vutuv.TagsTest do
       assert n.actor_param == endorser.username
     end
 
-    test "create_endorsement/1 does not notify on a self-endorsement" do
+    # This used to let the row through and merely skip the notification. The
+    # rule the controls state is that you cannot vouch for yourself at all, so
+    # the chokepoint now says so — and still notifies nobody.
+    test "create_endorsement/1 refuses a self-endorsement without notifying" do
       tag_owner = insert(:user)
       tag = insert(:tag)
       user_tag = insert(:user_tag, user: tag_owner, tag: tag)
 
       Vutuv.Activity.subscribe(tag_owner.id)
 
-      assert {:ok, _} =
+      assert {:error, :self} =
                Tags.create_endorsement(%{user_id: tag_owner.id, user_tag_id: user_tag.id})
 
       refute_receive {:new_notification, _}

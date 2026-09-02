@@ -18,6 +18,7 @@ defmodule Vutuv.Tags do
   alias Vutuv.Repo
   alias Vutuv.SearchText
   alias Vutuv.SlugHelpers
+  alias Vutuv.Social
   require Vutuv.Tags.MatchKey
 
   alias Vutuv.Tags.LinkableCache
@@ -1106,36 +1107,68 @@ defmodule Vutuv.Tags do
   Endorse a user's tag. The chokepoint for endorsements: besides inserting the
   row it pushes the live in-app notification to the tag's owner, so all
   endorsement paths must come through here (not a raw `Repo.insert`).
+
+  Three rules are enforced here rather than at the controls, because the profile
+  and the tag list page each render their own and a crafted request reaches
+  neither: an honor tag is not endorsable, you may not endorse your own tag, and
+  a block in either direction refuses the vouch. The last two used to live only
+  in the rendered control, so a `POST /user_tag_endorsements` still let somebody
+  vouch for themselves, and let a blocked member both endorse the person who
+  blocked them and send them a notification saying so.
   """
   def create_endorsement(attrs) do
-    if endorsement_target_honor?(attrs) do
-      # An honor tag is an authoritative badge, not a peer vouch, so it
-      # is not endorsable. The profile hides the pill; this guards a crafted
-      # request that reaches the chokepoint anyway.
-      {:error, :honor}
-    else
-      result = %UserTagEndorsement{} |> UserTagEndorsement.changeset(attrs) |> Repo.insert()
+    endorser = endorsement_attr(attrs, :user_id)
 
-      with {:ok, endorsement} <- result do
-        # notify_endorsement preloaded the owner already, so reuse the id it
-        # returns for the live-count broadcast instead of re-querying it.
-        broadcast_endorsement_changed(notify_endorsement(endorsement), endorsement.user_tag_id)
-      end
-
-      result
+    case endorsement_target(endorsement_attr(attrs, :user_tag_id)) do
+      # An honor tag is an authoritative badge, not a peer vouch, so it is not
+      # endorsable. The profile hides the pill; this guards a crafted request
+      # that reaches the chokepoint anyway.
+      %{honor?: true} -> {:error, :honor}
+      %{user_id: ^endorser} -> {:error, :self}
+      %{user_id: owner} -> insert_unless_blocked(attrs, endorser, owner)
+      # No such user_tag: let the changeset's own foreign-key error answer.
+      nil -> insert_endorsement(attrs)
     end
   end
 
-  defp endorsement_target_honor?(attrs) do
-    user_tag_id = Map.get(attrs, :user_tag_id) || Map.get(attrs, "user_tag_id")
-
-    is_binary(user_tag_id) and
-      Repo.exists?(
-        from(ut in UserTag,
-          join: t in assoc(ut, :tag),
-          where: ut.id == ^user_tag_id and t.honor?
-        )
+  # One row read for all three questions — who owns this tag, and is it an honor
+  # tag. Shared with `delete_endorsement/2`, which needs the owner to broadcast.
+  defp endorsement_target(user_tag_id) when is_binary(user_tag_id) do
+    Repo.one(
+      from(ut in UserTag,
+        join: t in assoc(ut, :tag),
+        where: ut.id == ^user_tag_id,
+        select: %{user_id: ut.user_id, honor?: t.honor?}
       )
+    )
+  end
+
+  defp endorsement_target(_user_tag_id), do: nil
+
+  # A block cuts both ways: neither side endorses the other, and neither gets a
+  # notification out of the attempt.
+  defp insert_unless_blocked(attrs, endorser, owner) do
+    if is_binary(endorser) and Social.blocked_between?(endorser, owner) do
+      {:error, :blocked}
+    else
+      insert_endorsement(attrs)
+    end
+  end
+
+  defp insert_endorsement(attrs) do
+    result = %UserTagEndorsement{} |> UserTagEndorsement.changeset(attrs) |> Repo.insert()
+
+    with {:ok, endorsement} <- result do
+      # notify_endorsement preloaded the owner already, so reuse the id it
+      # returns for the live-count broadcast instead of re-querying it.
+      broadcast_endorsement_changed(notify_endorsement(endorsement), endorsement.user_tag_id)
+    end
+
+    result
+  end
+
+  defp endorsement_attr(attrs, key) do
+    Map.get(attrs, key) || Map.get(attrs, Atom.to_string(key))
   end
 
   @doc """

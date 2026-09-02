@@ -289,6 +289,28 @@ defmodule VutuvWeb.JobPostingTest do
 
       assert conn |> get(~p"/jobs/#{posting.slug}") |> response(404)
     end
+
+    # The controller answering the gate on the dead render is not the gate: the
+    # live_render session map is signed but not encrypted and lives for days, so
+    # a captured payload can be replayed at /live/websocket with the slug in it.
+    # The socket has to refuse for itself.
+    test "the socket refuses a members-only posting on its own", %{conn: conn} do
+      posting = publish_job!()
+      {:ok, _} = posting |> Ecto.Changeset.change(visibility: :members) |> Repo.update()
+
+      assert {:error, {:live_redirect, %{to: "/jobs"}}} =
+               live_isolated(conn, VutuvWeb.JobPostingLive.Show,
+                 session: %{"slug" => posting.slug}
+               )
+    end
+
+    test "the socket refuses a draft posting on its own", %{conn: conn} do
+      owner = insert(:activated_user)
+      {:ok, draft} = Jobs.create_draft(owner, %{"title" => "Secret role"})
+
+      assert {:error, {:live_redirect, %{to: "/jobs"}}} =
+               live_isolated(conn, VutuvWeb.JobPostingLive.Show, session: %{"slug" => draft.slug})
+    end
   end
 
   describe "report → freeze" do

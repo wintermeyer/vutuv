@@ -11,8 +11,13 @@ defmodule VutuvWeb.OrganizationLive.Roles do
   would have silently taken their `admin` away, which is the mistake the whole
   role separation exists to prevent.
 
-  Embedded via `live_render` from `VutuvWeb.OrganizationController`, which gates it on
-  an owner.
+  Embedded via `live_render` from `VutuvWeb.OrganizationController`, which gates
+  the page on an owner — and this asks the same question again on the socket,
+  because that map is signed but not encrypted and stays valid for days. The
+  real backstop is `Organizations.set_roles/4`, which authorizes its actor
+  rather than merely recording them, so no surface can grant a role by pushing
+  an event; the two checks here are what make the refusal visible instead of
+  silent.
   """
 
   use VutuvWeb, :live_view
@@ -30,17 +35,24 @@ defmodule VutuvWeb.OrganizationLive.Roles do
     socket = InitAssigns.assign_embedded(socket, session)
     organization = Organizations.get_organization!(session["organization_id"])
 
-    {:ok,
-     socket
-     |> assign(:organization, organization)
-     |> assign(:page_title, gettext("Team – %{name}", name: organization.name))
-     |> assign(:identifier, "")
-     # Nothing pre-ticked: with four roles a guessed default is wrong more often
-     # than right, and `publisher` in particular must never arrive by accident.
-     |> assign(:add_roles, [])
-     |> assign(:roles_options, Organizations.roles())
-     |> assign(:suggestions, [])
-     |> load_team()}
+    if Organizations.can_manage_roles?(organization, socket.assigns.current_user) do
+      {:ok, mount_roster(socket, organization)}
+    else
+      {:ok, push_navigate(socket, to: ~p"/organizations/#{organization}")}
+    end
+  end
+
+  defp mount_roster(socket, organization) do
+    socket
+    |> assign(:organization, organization)
+    |> assign(:page_title, gettext("Team – %{name}", name: organization.name))
+    |> assign(:identifier, "")
+    # Nothing pre-ticked: with four roles a guessed default is wrong more often
+    # than right, and `publisher` in particular must never arrive by accident.
+    |> assign(:add_roles, [])
+    |> assign(:roles_options, Organizations.roles())
+    |> assign(:suggestions, [])
+    |> load_team()
   end
 
   defp load_team(socket) do
@@ -118,6 +130,9 @@ defmodule VutuvWeb.OrganizationLive.Roles do
 
       {:error, :last_owner} ->
         {:noreply, socket |> load_team() |> put_flash(:error, last_owner_error())}
+
+      {:error, :unauthorized} ->
+        {:noreply, push_navigate(socket, to: ~p"/organizations/#{socket.assigns.organization}")}
     end
   end
 
