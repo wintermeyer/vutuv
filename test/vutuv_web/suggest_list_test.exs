@@ -67,6 +67,35 @@ defmodule VutuvWeb.SuggestListTest do
     assert css =~ ".mde__slash-item.is-active"
   end
 
+  test "\"follow the caret when the page moves\" is written once (issue #1898)" do
+    # A panel pinned to a caret is wrong the moment the page moves under it,
+    # and the editor only re-asks on a ProseMirror transaction — scrolling
+    # dispatches none. The slash menu shipped without this and was placed once
+    # on the way open, then abandoned; the bubble had an ad-hoc copy.
+    assert shared() =~ "followsCaret"
+    assert picker() =~ "followsCaret("
+    assert editor() =~ "followsCaret("
+
+    # `capture: true` on window is the whole trick — a scroll on an element
+    # does not bubble but does travel down the capture phase, so one listener
+    # sees the prose box scrolling as well as the page. A second copy of that
+    # subtlety is how the two drifted apart in the first place.
+    for {name, source} <- [{"mention_picker.js", picker()}, {"markdown_editor.js", editor()}] do
+      refute source =~ ~r/addEventListener\(\s*"scroll"/,
+             "#{name} wires its own scroll listener; call followsCaret/1 instead"
+    end
+  end
+
+  test "the editor detaches its window listeners when it dies" do
+    # `followsCaret` puts two handlers on `window`, which outlives every editor
+    # on the page — and the messages page tears one down per closed
+    # conversation, so an editor that never detaches leaks a handler per chat.
+    source = editor()
+
+    assert source =~ "this._unfollow = followsCaret("
+    assert source =~ "if (this._unfollow) this._unfollow()"
+  end
+
   test "a modified key is never a list key (issue #1196 vs #1886)" do
     # Cmd/Ctrl+Enter submits the composer from a listener on the same element.
     # A list that swallowed it turned a post into a heading — which is what the

@@ -42,6 +42,36 @@ export const markActiveRow = (rows, index, anchorEl) => {
   else anchorEl.removeAttribute("aria-activedescendant")
 }
 
+// A panel pinned to a caret is wrong the moment the page moves under it, and
+// nothing tells it so: the editor only re-asks on a ProseMirror transaction,
+// and scrolling dispatches none (issue #1898). The prose is its own scroll
+// container once it passes ~24rem, so this is not only about the window.
+//
+// The TRIGGER is shared; the arithmetic is not, and deliberately stays with
+// each caller — the mention picker places a <body>-level panel against the
+// viewport, the slash menu places a frame-relative one, and folding those into
+// one function would be a coincidence dressed as an abstraction.
+//
+// `capture: true` is what makes one window listener enough: a scroll event on
+// an element does NOT bubble, but it does travel down the capture phase, so
+// this sees the prose box scrolling as well as the page. The mention picker
+// proved that arrangement before there was anywhere to share it from.
+//
+// Returns the detach function. A caller that dies while the page lives — the
+// messages page tears an editor down per closed conversation — must hold it
+// and call it, or it leaks a handler on `window` per editor.
+export const followsCaret = (onMove) => {
+  const handler = () => onMove()
+
+  window.addEventListener("scroll", handler, { passive: true, capture: true })
+  window.addEventListener("resize", handler)
+
+  return () => {
+    window.removeEventListener("scroll", handler, { capture: true })
+    window.removeEventListener("resize", handler)
+  }
+}
+
 // The keys an open suggestion list owns, in one place so both lists answer
 // them the same way. Returns whether the event was taken — the caller swallows
 // it only then, so ordinary typing never stops while a list is up.
