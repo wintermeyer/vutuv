@@ -5,20 +5,17 @@ defmodule VutuvWeb.MastodonApi.AccountController do
 
   import VutuvWeb.MastodonApi.Errors
 
-  alias Vutuv.Accounts
   alias Vutuv.Accounts.User
   alias Vutuv.Fediverse
   alias Vutuv.Fediverse.RemoteAccount
   alias Vutuv.MastodonApi.AccountCounts
   alias Vutuv.MastodonApi.Presenter
-  alias Vutuv.Moderation
-  alias Vutuv.Organizations
   alias Vutuv.Organizations.Organization
   alias Vutuv.Posts
   alias Vutuv.Profiles.VerifiedLinks
   alias Vutuv.Repo
   alias Vutuv.Social
-  alias Vutuv.UUIDv7
+  alias VutuvWeb.MastodonApi.AccountIds
   alias VutuvWeb.MastodonApi.Handles
   alias VutuvWeb.MastodonApi.Pagination
   alias VutuvWeb.MastodonApi.Statuses
@@ -49,7 +46,7 @@ defmodule VutuvWeb.MastodonApi.AccountController do
   def lookup(conn, _params), do: not_found(conn)
 
   def show(conn, %{"id" => id}) do
-    case target(conn, id) do
+    case AccountIds.visible(conn, id) do
       nil -> not_found(conn)
       account -> json(conn, Presenter.account(with_links(account), counts(conn, account)))
     end
@@ -62,13 +59,13 @@ defmodule VutuvWeb.MastodonApi.AccountController do
   # account embedded in a status, so the same page reported two different post
   # counts depending on which object the client happened to read.
   # The viewer differs by subject and always has: a page's own publisher may see
-  # its frozen posts, a member's profile is read as `profile_viewer/1` decides.
+  # its frozen posts, a member's profile is read as `AccountIds.viewer/1` decides.
   # Only the *arithmetic* moved out; passing the viewer stays here, because this
   # is the only layer that knows which page the request is acting for.
   defp counts(conn, %Organization{} = page),
-    do: AccountCounts.for_account(page, organization_viewer(conn, page))
+    do: AccountCounts.for_account(page, AccountIds.organization_viewer(conn, page))
 
-  defp counts(conn, subject), do: AccountCounts.for_account(subject, profile_viewer(conn))
+  defp counts(conn, subject), do: AccountCounts.for_account(subject, AccountIds.viewer(conn))
 
   def follow(conn, %{"id" => id}), do: relationship_action(conn, id, :follow)
   def unfollow(conn, %{"id" => id}), do: relationship_action(conn, id, :unfollow)
@@ -92,7 +89,7 @@ defmodule VutuvWeb.MastodonApi.AccountController do
       |> List.wrap()
       |> Enum.uniq()
       |> Enum.take(@max_relationships)
-      |> Enum.map(&target(conn, &1))
+      |> Enum.map(&AccountIds.visible(conn, &1))
       |> Enum.reject(&is_nil/1)
       |> Enum.map(&relationship(conn, &1))
 
@@ -110,8 +107,8 @@ defmodule VutuvWeb.MastodonApi.AccountController do
     # remote account we only cache, so both answer the empty list rather than
     # their newest post.
     posts =
-      case target(conn, id) do
-        %User{} = user -> user |> Posts.pinned_post(profile_viewer(conn)) |> List.wrap()
+      case AccountIds.visible(conn, id) do
+        %User{} = user -> user |> Posts.pinned_post(AccountIds.viewer(conn)) |> List.wrap()
         _page_or_remote -> []
       end
 
@@ -123,15 +120,15 @@ defmodule VutuvWeb.MastodonApi.AccountController do
     opts = Pagination.opts(page)
 
     statuses =
-      case target(conn, id) do
+      case AccountIds.visible(conn, id) do
         %User{} = user ->
           user
-          |> Posts.author_statuses(profile_viewer(conn), opts)
+          |> Posts.author_statuses(AccountIds.viewer(conn), opts)
           |> Presenter.statuses(viewer(conn))
 
         %Organization{} = organization ->
           organization
-          |> Posts.organization_statuses(organization_viewer(conn, organization), opts)
+          |> Posts.organization_statuses(AccountIds.organization_viewer(conn, organization), opts)
           |> Presenter.statuses(viewer(conn))
 
         # The only source here that cannot be bounded in its query: what we
@@ -166,7 +163,7 @@ defmodule VutuvWeb.MastodonApi.AccountController do
     opts = Pagination.opts(page)
 
     accounts =
-      case {target(conn, id), conn.assigns.current_organization} do
+      case {AccountIds.visible(conn, id), conn.assigns.current_organization} do
         {%User{} = user, _identity} ->
           user_following(conn, user, opts)
 
@@ -192,7 +189,7 @@ defmodule VutuvWeb.MastodonApi.AccountController do
   end
 
   defp relationship_action(conn, id, action) do
-    case target(conn, id) do
+    case AccountIds.visible(conn, id) do
       nil ->
         not_found(conn)
 
@@ -443,28 +440,6 @@ defmodule VutuvWeb.MastodonApi.AccountController do
       Social.organization_followed_pages(organization, opts) ++ remote_accounts
   end
 
-  defp target(_conn, "remote-" <> id), do: Fediverse.get_remote_account(id)
-
-  defp target(conn, id) do
-    with uuid when not is_nil(uuid) <- UUIDv7.cast_or_nil(id) do
-      visible_target(conn, Accounts.get_user(uuid) || Organizations.get_organization(uuid))
-    end
-  end
-
-  defp visible_target(conn, %User{} = user) do
-    if Moderation.profile_visible_to?(user, profile_viewer(conn)), do: user
-  end
-
-  defp visible_target(conn, %Organization{} = organization) do
-    if Organizations.organization_visible_to?(
-         organization,
-         organization_viewer(conn, organization)
-       ),
-       do: organization
-  end
-
-  defp visible_target(_conn, nil), do: nil
-
   # The webpages a member has PROVED are their own, which is what the account's
   # Mastodon `fields` are built from. Loaded here rather than in the presenter,
   # so this stays the endpoints that answer with a **single** account: a
@@ -475,27 +450,11 @@ defmodule VutuvWeb.MastodonApi.AccountController do
   defp with_links(%User{} = user), do: Repo.preload(user, VerifiedLinks.preload_spec())
   defp with_links(other), do: other
 
-  defp profile_viewer(%{assigns: %{current_organization: nil, current_user: user}}), do: user
-  defp profile_viewer(_conn), do: nil
-
   # The acting identity, for the engagement figures on a status. Distinct from
-  # `profile_viewer/1`, which answers who may *see* a profile: a page identity
-  # sees what an anonymous reader sees, but it likes and bookmarks as itself.
+  # `AccountIds.viewer/1`, which answers who may *see* a profile: a page
+  # identity sees what an anonymous reader sees, but it likes and bookmarks as
+  # itself.
   defp viewer(conn), do: Statuses.viewer(conn)
-
-  defp organization_viewer(
-         %{assigns: %{current_organization: %Organization{id: id}, current_user: user}},
-         %Organization{id: id}
-       ),
-       do: user
-
-  defp organization_viewer(
-         %{assigns: %{current_organization: nil, current_user: user}},
-         _organization
-       ),
-       do: user
-
-  defp organization_viewer(_conn, _organization), do: nil
 
   defp action_error(conn, :not_following),
     do: error(conn, 422, "The account is not followed")

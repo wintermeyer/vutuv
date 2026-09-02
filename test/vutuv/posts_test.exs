@@ -2285,6 +2285,32 @@ defmodule Vutuv.PostsTest do
     end
   end
 
+  describe "thread_window/3 visibility" do
+    # The window re-adds the permalinked post to its own slice because the
+    # skeleton cap can cut it — but it did so whatever the viewer may see, so
+    # the function handed its caller back the one post it had just scoped away.
+    # That is what let a captured permalink socket keep rendering a post after
+    # its author narrowed the audience or moderation froze it.
+    test "does not hand back a post the viewer may not see" do
+      writer = insert_activated_user()
+
+      {:ok, post} =
+        Posts.create_post(writer, %{
+          body: "Nur für Follower",
+          denials: [%{"wildcard" => "everyone"}]
+        })
+
+      # A short conversation comes back whole (mode :all), so the focus post is
+      # in `posts` — or, for a viewer who may not see it, in nothing at all.
+      assert %{mode: :all, posts: []} = Posts.thread_window(post, nil, ancestors: 5, replies: 5)
+
+      assert %{mode: :all, posts: [%{id: id}]} =
+               Posts.thread_window(post, writer, ancestors: 5, replies: 5)
+
+      assert id == post.id
+    end
+  end
+
   describe "thread_window/3" do
     # A chain thread: root, then `depth` replies each answering the previous
     # one. Returns `[root, c1, ..., cN]`.

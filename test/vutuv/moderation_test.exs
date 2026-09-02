@@ -97,19 +97,42 @@ defmodule Vutuv.ModerationTest do
                Moderation.report_content(reporter, post, %{"category" => "spam"})
     end
 
-    test "a second reporter joins the existing open case", %{owner: owner, reporter: reporter} do
+    # Weight still accumulates where accumulating it means something: an
+    # untrusted reporter only *flags*, so the content stays visible and anyone
+    # who can see it may add their report to the open case.
+    test "a second reporter joins the open case on content still visible", %{owner: owner} do
+      bad_reporter = make_untrusted!(insert(:activated_user))
       post = insert_post(owner)
-      case_record = report!(reporter, post)
+      case_record = report!(bad_reporter, post)
 
-      other = insert(:activated_user)
-      # Reload: the post is frozen now, but reports on an open case must
-      # still be accepted (they add weight to the case).
+      refute Repo.get!(Vutuv.Posts.Post, post.id).frozen_at
+
+      assert %Case{id: same_id} = report!(insert(:activated_user), post)
+      assert same_id == case_record.id
+      # Scoped to this case: make_untrusted!/1 files a report of its own.
+      assert Repo.aggregate(from(r in Report, where: r.case_id == ^same_id), :count) == 2
+    end
+
+    # This used to be allowed, and it was the hole: an open case made the
+    # visibility check unreachable for *everyone*, so once a first report froze
+    # the post, a stranger who could no longer see it (and a member the author
+    # had blocked) could still file — and a trusted reporter's report is what
+    # upgrades a flagged case and freezes content. The allowance is
+    # reporter-specific now, which is what the report form always asked.
+    test "a stranger cannot report content the freeze has already hidden", %{
+      owner: owner,
+      reporter: reporter
+    } do
+      post = insert_post(owner)
+      report!(reporter, post)
+
       post = Repo.get!(Vutuv.Posts.Post, post.id)
       assert post.frozen_at
 
-      assert %Case{id: same_id} = report!(other, post)
-      assert same_id == case_record.id
-      assert Repo.aggregate(Report, :count) == 2
+      assert {:error, :not_allowed} =
+               Moderation.report_content(insert(:activated_user), post, %{"category" => "spam"})
+
+      assert Repo.aggregate(Report, :count) == 1
     end
 
     test "a report from an untrusted reporter only flags, without freezing", %{owner: owner} do

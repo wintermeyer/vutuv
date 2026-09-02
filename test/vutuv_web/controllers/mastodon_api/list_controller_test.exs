@@ -195,6 +195,22 @@ defmodule VutuvWeb.MastodonApi.ListControllerTest do
     assert Enum.map(accounts, & &1["id"]) == [follower.id]
   end
 
+  # Every sibling endpoint resolves its subject through the profile gate, so a
+  # frozen account answers nothing about itself; this one read the roster with a
+  # bare lookup, which both leaked the list and confirmed the account exists.
+  test "a withheld member's follower list is not served", %{conn: conn} do
+    frozen = insert_activated_user(frozen_at: NaiveDateTime.utc_now(:second))
+    follower = insert(:activated_user)
+    {:ok, _} = Social.follow(follower, frozen.id)
+
+    token = mastodon_token(insert(:activated_user), ["read"])
+
+    assert conn
+           |> mastodon_conn(token)
+           |> get("/api/v1/accounts/#{frozen.id}/followers")
+           |> response(404)
+  end
+
   test "blocked and muted members are listed", %{conn: conn} do
     member = insert(:activated_user)
     blocked = insert(:activated_user)

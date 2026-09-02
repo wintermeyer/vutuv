@@ -14,12 +14,10 @@ defmodule VutuvWeb.MastodonApi.Handles do
   """
 
   alias Vutuv.Accounts
-  alias Vutuv.Accounts.User
   alias Vutuv.Fediverse
   alias Vutuv.MastodonApi
-  alias Vutuv.Moderation
   alias Vutuv.Organizations
-  alias Vutuv.Organizations.Organization
+  alias VutuvWeb.MastodonApi.AccountIds
   alias VutuvWeb.MastodonApi.Statuses
 
   @doc """
@@ -85,7 +83,7 @@ defmodule VutuvWeb.MastodonApi.Handles do
     handle
     |> String.downcase()
     |> known_account()
-    |> visible_to_identity(conn)
+    |> AccountIds.visible_to_identity(conn)
   end
 
   defp known_account(handle) do
@@ -93,29 +91,4 @@ defmodule VutuvWeb.MastodonApi.Handles do
       Organizations.get_organization_by_username(handle) ||
       Organizations.get_organization_by_slug(handle)
   end
-
-  defp visible_to_identity(%User{} = user, conn) do
-    viewer = if is_nil(conn.assigns.current_organization), do: conn.assigns.current_user
-    if Moderation.profile_visible_to?(user, viewer), do: user
-  end
-
-  # A member viewer gets the **account** rule, the one `GET /api/v1/accounts/:id`
-  # answers by (`Organizations.organization_visible_to?/2`, which also covers a
-  # manager and a site admin). Anything narrower means an owner can fetch their
-  # own frozen page by id and is told "no such account" when they look the same
-  # page up by handle. A client acting **as** a page has no member to ask about,
-  # so it sees the public pages and itself.
-  defp visible_to_identity(%Organization{} = organization, conn) do
-    case conn.assigns.current_organization do
-      %Organization{id: id} ->
-        if Organizations.public_visible?(organization) or id == organization.id,
-          do: organization
-
-      nil ->
-        if Organizations.organization_visible_to?(organization, conn.assigns.current_user),
-          do: organization
-    end
-  end
-
-  defp visible_to_identity(nil, _conn), do: nil
 end

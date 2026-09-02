@@ -5407,8 +5407,15 @@ defmodule Vutuv.Posts do
 
     truncated? = length(scoped) > limit
 
+    # The focus post is unioned back in because the cap can cut it — but only
+    # when this viewer may see it, the same rule `thread_skeletons/3` follows.
+    # Every caller pre-gates today, so this changes nothing for them; it stops
+    # the function from being able to hand a caller the one post it just scoped
+    # away, which is the shape that bit the permalink socket.
+    focus = if visible_to?(post, viewer), do: [post], else: []
+
     posts =
-      (Enum.take(scoped, limit) ++ up ++ [post] ++ list_replies(post, viewer))
+      (Enum.take(scoped, limit) ++ up ++ focus ++ list_replies(post, viewer))
       |> Enum.uniq_by(& &1.id)
       |> Repo.preload(post_preloads())
       |> thread_order()
@@ -5597,16 +5604,22 @@ defmodule Vutuv.Posts do
         truncated? = length(rows) > limit
         rows = if truncated?, do: Enum.take(rows, limit), else: rows
 
-        # The permalinked post itself must always be in its own window, like
-        # list_thread/3's union floor — even when the cap cut its tail.
-        rows =
-          if Enum.any?(rows, &(elem(&1, 0) == post.id)) do
-            rows
-          else
-            rows ++ [{post.id, reply_row && elem(reply_row, 1)}]
-          end
+        {with_focus(rows, post, viewer, reply_row), truncated?}
+    end
+  end
 
-        {rows, truncated?}
+  # The permalinked post itself must always be in its own window, like
+  # list_thread/3's union floor — even when the cap cut its tail. But only when
+  # this viewer may see it: `scope_visible/2` dropped it for a reason when it
+  # dropped it for them, and re-adding it unconditionally handed the caller back
+  # the one post it had just scoped away. That is what let a captured permalink
+  # socket keep rendering a post after its author narrowed the audience or
+  # moderation froze it.
+  defp with_focus(rows, post, viewer, reply_row) do
+    if not List.keymember?(rows, post.id, 0) and visible_to?(post, viewer) do
+      rows ++ [{post.id, reply_row && elem(reply_row, 1)}]
+    else
+      rows
     end
   end
 
