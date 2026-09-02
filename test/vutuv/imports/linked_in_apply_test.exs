@@ -9,8 +9,10 @@ defmodule Vutuv.Imports.LinkedInApplyTest do
   import Vutuv.Factory
 
   alias Vutuv.Imports.LinkedIn
+  alias Vutuv.PageScreenshot
   alias Vutuv.Profiles.Education
   alias Vutuv.Profiles.Qualification
+  alias Vutuv.Profiles.Url
   alias Vutuv.Profiles.WorkExperience
   alias Vutuv.Tags
   alias Vutuv.Tags.UserTag
@@ -284,6 +286,25 @@ defmodule Vutuv.Imports.LinkedInApplyTest do
     assert summary.blocked.positions == 1
     assert Repo.get_by(WorkExperience, user_id: user.id, organization: "Beta")
     refute Repo.get_by(WorkExperience, user_id: user.id, organization: "Acme")
+  end
+
+  test "an imported link is waiting for its screenshot like a hand-added one" do
+    # The import writes links straight through `Repo`, so the link form's
+    # fire-and-forget capture never sees them. Until they joined the capture
+    # queue, an imported link showed the grey camera tile for good — 15 links
+    # on vutuv.de sat like that, most in same-second batches an import left.
+    user = insert(:user)
+
+    profile_csv =
+      "First Name,Last Name,Maiden Name,Address,Birth Date,Headline,Summary,Industry,Zip Code,Geo Location,Twitter Handles,Websites,Instant Messengers\n" <>
+        "Stefan,Wintermeyer,,,,,,,,,,[PORTFOLIO:https://andreashechler.example],\n"
+
+    {:ok, parsed} = LinkedIn.parse(zip([{"Profile.csv", profile_csv}]))
+    {:ok, summary} = LinkedIn.apply_selection(user, parsed)
+
+    assert summary.created.urls == 1
+    imported = Repo.get_by!(Url, user_id: user.id)
+    assert imported.id in Enum.map(PageScreenshot.due(user_id: user.id), & &1.id)
   end
 
   test "an overlong website URL is skipped, not crashed" do

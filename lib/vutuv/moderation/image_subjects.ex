@@ -568,7 +568,12 @@ defmodule Vutuv.Moderation.ImageSubjects do
   def apply_rejected(%ImageScan{kind: "url_screenshot"} = scan) do
     cleared =
       from(u in Url, where: u.id == ^scan.subject_id and u.screenshot == ^scan.fingerprint)
-      |> Repo.update_all(set: [screenshot: nil, screenshot_moderation: nil])
+      # "rejected", not nil, the way the post branch below records it: the row
+      # is the only memory of the verdict, and `Vutuv.PageScreenshot.due/1`
+      # reads it to leave the link alone. Clearing it would put the page back
+      # in the capture queue and have the sweeper shoot, store and re-scan the
+      # same rejected picture every retry window, forever.
+      |> Repo.update_all(set: [screenshot: nil, screenshot_moderation: "rejected"])
 
     case cleared do
       {1, _} ->

@@ -17,6 +17,7 @@ defmodule Vutuv.Moderation.ImageScansTest do
   alias Vutuv.Accounts
   alias Vutuv.Moderation.ImageScan
   alias Vutuv.Moderation.ImageScans
+  alias Vutuv.Moderation.ImageSubjects
   alias Vutuv.Posts
   alias Vutuv.Posts.Screenshots
   alias Vutuv.Profiles.Url
@@ -514,6 +515,32 @@ defmodule Vutuv.Moderation.ImageScansTest do
 
       assert url.screenshot_moderation == "pending"
       assert Vutuv.Screenshot.url({url.screenshot, url}, :thumb) == "/images/screenshot.png"
+    end
+
+    test "a rejected link screenshot is remembered, not just removed", %{user: user} do
+      # The row is the only memory of the verdict. Clearing the column would
+      # put the page straight back in front of Vutuv.PageScreenshot.due/1, and
+      # the sweeper would shoot, store and re-scan the same rejected picture
+      # every six hours for good.
+      {:ok, url} =
+        user
+        |> Ecto.build_assoc(:urls)
+        |> Url.changeset(%{"value" => "https://example.com"})
+        |> Repo.insert()
+
+      {:ok, url} = url |> Url.changeset(%{screenshot: jpeg_upload()}) |> Repo.update()
+
+      assert :ok =
+               ImageSubjects.apply_rejected(%ImageScan{
+                 kind: "url_screenshot",
+                 subject_id: url.id,
+                 fingerprint: url.screenshot
+               })
+
+      judged = Repo.reload!(url)
+      assert is_nil(judged.screenshot)
+      assert judged.screenshot_moderation == "rejected"
+      refute judged.id in Enum.map(Vutuv.PageScreenshot.due(), & &1.id)
     end
   end
 

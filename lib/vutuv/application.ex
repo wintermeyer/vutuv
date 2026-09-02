@@ -156,6 +156,7 @@ defmodule Vutuv.Application do
           Vutuv.Organizations.PendingDomainSweeper
         ) ++
         optional_child(:recheck_user_links, Vutuv.Profiles.LinkRecheckSweeper) ++
+        optional_child(:generate_screenshots, Vutuv.PageScreenshot.Sweeper) ++
         optional_child(
           :recheck_social_accounts,
           Vutuv.Profiles.SocialAccountRecheckSweeper

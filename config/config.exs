@@ -75,6 +75,10 @@ config :vutuv, Vutuv.Repo,
 # Vutuv.TaskSupervisor; the flags let tests disable them so the SQL Sandbox
 # connection is never used by a process that does not own it (and so the test
 # suite makes no live HTTP request / Chromium launch).
+# :generate_screenshots also starts Vutuv.PageScreenshot.Sweeper, the standing
+# retry that captures the links still waiting for a picture — one a deploy
+# killed mid-capture, or one created without a form behind it (the LinkedIn
+# import). Off, there are no captures at all, so there is nothing to sweep.
 config :vutuv, :generate_screenshots, true
 config :vutuv, :fetch_gravatar, true
 
