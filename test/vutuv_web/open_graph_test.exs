@@ -334,9 +334,12 @@ defmodule VutuvWeb.OpenGraphTest do
 
       {:ok, organization} =
         Organizations.update_organization(organization, %{
-          "description" => "We build **great** widgets.\n\nSince 1994.",
-          "logo" => "logo-token"
+          "description" => "We build **great** widgets.\n\nSince 1994."
         })
+
+      # `logo` is not castable from the edit form — `Organizations.store_logo/4`
+      # owns that column — so set it the way the upload path does.
+      organization = organization |> Ecto.Changeset.change(logo: "logo-token") |> Repo.update!()
 
       html = conn |> get(~p"/organizations/#{organization.slug}") |> html_response(200)
 
@@ -462,7 +465,8 @@ defmodule VutuvWeb.OpenGraphTest do
     test "a page's post previews like a member's: teaser, date and the page's logo",
          %{conn: conn} do
       {organization, owner} = active_organization(%{"name" => "Acme GmbH"})
-      {:ok, organization} = Organizations.update_organization(organization, %{"logo" => "tok"})
+      # `logo` is not castable from the edit form; the upload path owns it.
+      organization = organization |> Ecto.Changeset.change(logo: "tok") |> Repo.update!()
       {:ok, _role} = Organizations.add_role(organization, owner, "publisher", owner)
 
       {:ok, post} =

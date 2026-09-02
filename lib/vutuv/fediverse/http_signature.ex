@@ -58,7 +58,8 @@ defmodule Vutuv.Fediverse.HttpSignature do
   names lowercase) against the sender's public key PEM.
   """
   def valid?(%{method: method, path: path, headers: headers, body: body}, public_key_pem) do
-    with {:ok, params} <- parse(headers["signature"]),
+    with :ok <- check_body_captured(method, body),
+         {:ok, params} <- parse(headers["signature"]),
          :ok <- check_required(params.headers, body),
          :ok <- check_digest(headers["digest"], body),
          :ok <- check_date(headers["date"]),
@@ -102,6 +103,17 @@ defmodule Vutuv.Fediverse.HttpSignature do
       _ -> {:error, :no_key_id}
     end
   end
+
+  # A POST always carries a payload, so a `nil` body here does not mean "there
+  # was nothing to hash" — it means the raw bytes were never captured
+  # (`VutuvWeb.RawBodyReader` keeps them per route). Verifying anyway would drop
+  # `digest` from the required headers below and skip `check_digest/2` entirely,
+  # so the signature would vouch for the headers and **any** payload could ride
+  # them. Two of the four inbox routes were in exactly that state. Fails closed,
+  # so the next route added without a reader clause is refused rather than
+  # trusted. A GET (authorized fetch) legitimately has no body.
+  defp check_body_captured("post", nil), do: {:error, :body_not_captured}
+  defp check_body_captured(_method, _body), do: :ok
 
   # The signature must cover the target, the date (replay window) and, when
   # a body exists, its digest — otherwise a valid signature could be replayed

@@ -62,6 +62,28 @@ defmodule Vutuv.Fediverse.HttpSignatureTest do
                )
     end
 
+    # `nil` on a POST means the raw bytes were never captured, not that there was
+    # nothing to hash. Verifying anyway drops `digest` from the required header
+    # list and makes `check_digest/2` answer `:ok`, so the signature would vouch
+    # for the headers alone and any payload could ride them — which is what the
+    # organization and tag inboxes did until `VutuvWeb.RawBodyReader` learned
+    # their path shapes. It fails closed so the next route added without a
+    # reader clause is refused rather than trusted.
+    test "a POST whose body was never captured is refused", %{
+      priv: priv,
+      pub: pub,
+      key_id: key_id
+    } do
+      headers =
+        HttpSignature.signed_headers("post", "https://m.example/inbox", "payload", key_id, priv)
+
+      assert {:error, :body_not_captured} ==
+               HttpSignature.valid?(
+                 %{method: "post", path: "/inbox", headers: Map.new(headers), body: nil},
+                 pub
+               )
+    end
+
     test "a tampered body is rejected (digest mismatch)", %{priv: priv, pub: pub, key_id: key_id} do
       headers =
         HttpSignature.signed_headers("post", "https://m.example/inbox", "original", key_id, priv)

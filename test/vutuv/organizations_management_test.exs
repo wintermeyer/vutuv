@@ -356,6 +356,23 @@ defmodule Vutuv.OrganizationsManagementTest do
       assert Enum.any?(former, &(&1.name == "Acme GmbH" and &1.kind == "former"))
     end
 
+    # `logo` holds the image token `store_logo/4` mints after a real upload. No
+    # form posts it, and while it was castable an ordinary edit could point a
+    # page's logo at any other page's stored image just by naming its token.
+    test "the edit form cannot set or clear the logo token" do
+      {organization, _owner} = active_organization()
+      stored = organization |> Ecto.Changeset.change(logo: "own-token") |> Repo.update!()
+
+      {:ok, updated} =
+        Organizations.update_organization(stored, %{
+          "name" => "Acme Holding GmbH",
+          "logo" => "somebody-elses-token"
+        })
+
+      assert updated.name == "Acme Holding GmbH"
+      assert updated.logo == "own-token"
+    end
+
     test "an alias equal to another verified organization's name is flagged for the admin queue" do
       {organization_a, _} = active_organization()
 

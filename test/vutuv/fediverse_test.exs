@@ -440,12 +440,19 @@ defmodule Vutuv.FediverseTest do
       assert Repo.reload(user).moved_to == nil
     end
 
-    test "refuses to move to this same account" do
+    # The target document names our own actor URL as its id. That is a document
+    # on one host claiming an identity on another, so `fetch_remote_actor/2`'s
+    # host binding now refuses it before the `:self_target` guard is reached —
+    # the same refusal, from the more general rule. `:self_target` still answers
+    # a move whose target really is this account's own URL.
+    test "refuses a target whose document claims our own actor URL" do
       user = with_follower(federated_user())
-      # The fetched target's id IS our own actor URL.
       stub_target([Docs.actor_url(user)], Docs.actor_url(user))
 
-      assert {:error, :self_target} = Fediverse.move_out(user, @target)
+      assert {:error, reason} = Fediverse.move_out(user, @target)
+      assert reason in [:self_target, :target_unreachable]
+      assert Repo.aggregate(Delivery, :count) == 0
+      assert Repo.reload(user).moved_to == nil
     end
 
     test "rejects a non-https target without reaching the network" do
@@ -589,6 +596,33 @@ defmodule Vutuv.FediverseTest do
       assert remote.preferred_username == "alice"
       assert remote.name == "Alice Example"
       assert remote.public_key_pem =~ "BEGIN PUBLIC KEY"
+    end
+
+    # A document may only name itself. Without this, a server answers a fetch of
+    # its own actor with somebody else's `id` and every caller that keys on that
+    # id — `upsert_remote_account/1` first of all — files the stranger's inbox,
+    # public key and display name under the impersonated account.
+    test "refuses a document claiming an id on another host" do
+      stub_remote(fn conn ->
+        body =
+          Jason.encode!(%{
+            "id" => "https://mastodon.example/users/victim",
+            "type" => "Person",
+            "preferredUsername" => "victim",
+            "inbox" => "https://evil.example/users/mallory/inbox",
+            "publicKey" => %{
+              "id" => "https://mastodon.example/users/victim#main-key",
+              "publicKeyPem" => "-----BEGIN PUBLIC KEY-----..."
+            }
+          })
+
+        conn
+        |> Plug.Conn.put_resp_content_type("application/activity+json")
+        |> Plug.Conn.send_resp(200, body)
+      end)
+
+      assert {:error, :actor_host_mismatch} =
+               Fediverse.fetch_remote_actor("https://evil.example/users/mallory")
     end
 
     test "refuses plain-http and internal hosts" do

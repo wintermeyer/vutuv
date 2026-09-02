@@ -40,10 +40,61 @@ defmodule Vutuv.SsrfTest do
       assert Ssrf.internal_host?("[::ffff:10.0.0.5]")
     end
 
+    # The filter is a deny list, so every range it does not name is reachable.
+    # These eight were missing: an address that is not RFC 1918 can still be
+    # somebody's internal network (carrier-grade NAT), a lab, a local stand-in
+    # (the documentation ranges), or not a unicast host at all.
+    test "rejects the reserved ranges that are not RFC 1918" do
+      for host <- ~w(100.64.0.1 100.127.255.254 192.0.0.8 192.0.2.1 198.18.0.1
+                     198.51.100.1 203.0.113.1 224.0.0.1 239.255.255.250
+                     240.0.0.1 255.255.255.255) do
+        assert Ssrf.internal_host?(host), "expected #{host} to be internal"
+      end
+
+      assert Ssrf.internal_host?("[fec0::1]")
+      assert Ssrf.internal_host?("[2001:db8::1]")
+      # IPv4-compatible IPv6, the deprecated ::a.b.c.d form.
+      assert Ssrf.internal_host?("[::127.0.0.1]")
+      assert Ssrf.internal_host?("[::169.254.169.254]")
+    end
+
+    # The neighbours of each new range, so a guard's bounds are pinned rather
+    # than just its middle.
+    test "leaves the public addresses next to those ranges alone" do
+      for host <- ~w(100.63.255.255 100.128.0.1 192.0.1.1 192.0.3.1 198.17.255.255
+                     198.20.0.1 198.51.99.1 203.0.112.1 223.255.255.255) do
+        refute Ssrf.internal_host?(host), "expected #{host} to be public"
+      end
+    end
+
     test "accepts public hosts and public IP literals" do
       refute Ssrf.internal_host?("example.org")
       refute Ssrf.internal_host?("93.184.216.34")
       refute Ssrf.internal_host?("[2606:2800:220:1:248:1893:25c8:1946]")
+    end
+
+    # The two predicates answer different questions and must not be merged.
+    # `internal_ip?/1` is also `Vutuv.Geo.private_or_loopback?/1` (is this
+    # visitor's own address private?) and the filter `Vutuv.Dns` drops
+    # nameservers with. Folding the reserved ranges into it made 203.0.113.7
+    # read as a private client and 2001:db8::1 as an unusable nameserver.
+    test "reserved is not the same question as private" do
+      for ip <- [
+            {203, 0, 113, 7},
+            {100, 64, 0, 1},
+            {224, 0, 0, 1},
+            {0x2001, 0x0DB8, 0, 0, 0, 0, 0, 1}
+          ] do
+        refute Ssrf.internal_ip?(ip), "#{inspect(ip)} is reserved, not private"
+        assert Ssrf.unroutable_ip?(ip), "#{inspect(ip)} must still be refused an outbound fetch"
+      end
+
+      # Private addresses are both, and the loopback written the long way round
+      # is genuinely loopback rather than merely reserved.
+      for ip <- [{127, 0, 0, 1}, {10, 0, 0, 5}, {0, 0, 0, 0, 0, 0, 0x7F00, 1}] do
+        assert Ssrf.internal_ip?(ip)
+        assert Ssrf.unroutable_ip?(ip)
+      end
     end
 
     test "a nil / hostless URL is not a target" do

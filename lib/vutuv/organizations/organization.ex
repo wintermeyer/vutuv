@@ -160,7 +160,7 @@ defmodule Vutuv.Organizations.Organization do
     |> shared_validations()
   end
 
-  @doc "Owner edit: the wizard fields minus verification, plus description + toggles + logo."
+  @doc "Owner edit: the wizard fields minus verification, plus description + toggles."
   def edit_changeset(organization, attrs) do
     organization
     |> cast(attrs, [
@@ -174,8 +174,13 @@ defmodule Vutuv.Organizations.Organization do
       :state,
       :country,
       :seo?,
-      :geo?,
-      :logo
+      :geo?
+      # `:logo` is deliberately NOT castable. It holds the image token that
+      # `Vutuv.Organizations.store_logo/4` mints after a real upload, and
+      # `release_logo/1` / `remove_logo/1` clear — the same rule this project
+      # states for every programmatically-set field. No form posts it, and
+      # while it was in this list an ordinary edit could point a page's logo at
+      # any other page's stored image just by naming its token.
     ])
     |> validate_required([:name, :kind, :city, :country])
     |> validate_length(:description, max: 10_000)
