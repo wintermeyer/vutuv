@@ -109,6 +109,12 @@ textarea {
   min-height: 100px;
   resize: vertical;
 }
+/* Legacy form rows only: a submit standing beside the 44px fields above lines up
+   with them. It is an ELEMENT selector, so it also reached every kit
+   `<.button type="submit">` and made Save 4px taller than the Cancel next to it,
+   site-wide and invisibly — `min-h-10` is a floor and cannot argue with a
+   `height`. `button_base/0` carries `h-auto` for exactly this, which wins
+   because a utility beats the components layer whatever the specificity. */
 [type="submit"] {
   height: 44px;
 }

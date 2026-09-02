@@ -1744,7 +1744,7 @@ defmodule VutuvWeb.PostLive.Composer do
               phx-click="gallery-open"
               phx-target={@myself}
               data-gallery-open
-              class="inline-flex h-9 items-center gap-2 rounded-lg border border-slate-200 px-3 text-sm font-semibold text-slate-700 hover:border-brand-400 hover:text-brand-700 dark:border-slate-700 dark:text-slate-200 dark:hover:border-brand-500 dark:hover:text-brand-200"
+              class="inline-flex h-10 items-center gap-2 rounded-lg border border-slate-200 px-3 text-sm font-semibold text-slate-700 hover:border-brand-400 hover:text-brand-700 dark:border-slate-700 dark:text-slate-200 dark:hover:border-brand-500 dark:hover:text-brand-200"
             >
               <%!-- Named for what it holds. With one photo there is no
               arrangement to speak of, and calling that "Gallery" would promise
@@ -1906,14 +1906,14 @@ defmodule VutuvWeb.PostLive.Composer do
                       gettext("The audience cannot be restricted while reposts or replies exist.")
                   )
                 }
-                class="inline-flex items-center gap-1.5 rounded-lg border border-slate-200 px-3 py-2 text-sm text-slate-500 dark:border-slate-700 dark:text-slate-400"
+                class="inline-flex h-10 items-center gap-1.5 rounded-lg border border-slate-200 px-3 text-sm text-slate-500 dark:border-slate-700 dark:text-slate-400"
               >
                 🌐 {gettext("Public")}
               </span>
 
               <.button
                 type="submit"
-                class="h-9 whitespace-nowrap px-6"
+                class="whitespace-nowrap px-6"
                 disabled={@uploads.images.entries != []}
                 phx-disable-with={gettext("Saving…")}
               >
@@ -2082,11 +2082,11 @@ defmodule VutuvWeb.PostLive.Composer do
 
   # The composer's three small selects — licence, download, language — all want
   # the same thing: a control the width of its own content
-  # (`narrow_input_class/0`, which explains why that takes a `!`), 36px high so
-  # it sits level with the Post button. The language one used to draw 260px to
-  # hold the word "DE", which left the bottom row nothing to wrap into on a
-  # narrow column.
-  defp compact_select_class, do: [narrow_input_class(), "h-9 py-0 text-sm"]
+  # (`narrow_input_class/0`, which explains why that takes a `!`), at the site's
+  # one control height so it sits level with the Post button. The language one
+  # used to draw 260px to hold the word "DE", which left the bottom row nothing
+  # to wrap into on a narrow column.
+  defp compact_select_class, do: [narrow_input_class(), "h-10 py-0 text-sm"]
 
   # What the folded details row says a visitor may save — the same wording
   # the download select's options use, so the fold and the open control can
@@ -2135,9 +2135,10 @@ defmodule VutuvWeb.PostLive.Composer do
   # of them at a time, which is why both carry the same id: the feed's camera
   # button always has a target to click.
   #
-  # `h-9` pins it to the Post button's height (both 36px, the standard control
-  # height): the 📷 emoji would otherwise inflate the line box, and `mb-0`
-  # drops the global `label` margin (components.css) that would offset it here.
+  # `h-10` pins it to the Post button's height (both 40px, `button_base/0`'s
+  # height and the site's only one): the 📷 emoji would otherwise inflate the
+  # line box, and `mb-0` drops the global `label` margin (components.css) that
+  # would offset it here.
   #
   # On a phone the verb goes. Three controls share the bottom row (picker,
   # language, Post) and "Add photos" was wide enough to push Post onto a line of
@@ -2155,7 +2156,7 @@ defmodule VutuvWeb.PostLive.Composer do
     ~H"""
     <label
       id={"#{@id}-add-photos"}
-      class="inline-flex h-9 mb-0 shrink-0 cursor-pointer items-center gap-1.5 whitespace-nowrap rounded-lg bg-slate-100 px-3 text-sm font-semibold text-slate-700 hover:bg-slate-200 dark:bg-slate-800 dark:text-slate-200 dark:hover:bg-slate-700"
+      class="inline-flex h-10 mb-0 shrink-0 cursor-pointer items-center gap-1.5 whitespace-nowrap rounded-lg bg-slate-100 px-3 text-sm font-semibold text-slate-700 hover:bg-slate-200 dark:bg-slate-800 dark:text-slate-200 dark:hover:bg-slate-700"
     >
       📷 <span class="sm:hidden">{gettext("Photos")}</span>
       <span class="hidden sm:inline">{gettext("Add photos")}</span>
