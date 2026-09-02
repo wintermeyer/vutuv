@@ -28,6 +28,7 @@ defmodule VutuvWeb.PostLive.FilterBand do
   """
   use VutuvWeb, :live_component
 
+  import VutuvWeb.FediverseComponents, only: [remote_actor_link: 3]
   import VutuvWeb.PostComponents, only: [rail_add_field: 1, rail_field_class: 0]
 
   alias Vutuv.ContentFilters
@@ -835,9 +836,16 @@ defmodule VutuvWeb.PostLive.FilterBand do
       <%!-- A row names somebody, so it goes to them. Deliberately not bold: six
       of these under a heading read as six headings, and the weight was never a
       decision — it came from `components.css`'s element-level `label` rule,
-      which this markup inherited by accident. --%>
+      which this markup inherited by accident.
+
+      An account on another network answers the press with its card, the way
+      its handle does on every post card in the feed this band is filtering
+      (`remote_actor_link/3`) — this list is where a reader scanning who fills
+      their feed decides they have had enough of somebody, and mute lives on
+      that card. Where the card cannot open, the row still leads to the account
+      page it always led to. --%>
       <.link
-        href={@row.path}
+        {row_link(@row)}
         class="min-w-0 shrink truncate text-sm font-normal text-slate-700 hover:text-brand-700 dark:text-slate-300 dark:hover:text-brand-300"
       >
         {@row.name}
@@ -852,6 +860,17 @@ defmodule VutuvWeb.PostLive.FilterBand do
     </div>
     """
   end
+
+  # Where a row leads and what a press on it does. A member or a page here is a
+  # destination and nothing more; an account on another network is the same
+  # question the feed's own cards answer with a card, so it is answered by the
+  # one function that owns that (`remote_actor_link/3`) rather than by a second
+  # spelling of it here.
+  # No actor URI: a band row is built from a stored account, so it always has an
+  # id and `remote_actor_link/3` never reaches its out-link fallback.
+  defp row_link(%{kind: :remote} = row), do: remote_actor_link(row.id, nil, row.address)
+
+  defp row_link(row), do: [href: row.path]
 
   attr(:id, :string, required: true)
   attr(:open?, :boolean, required: true)

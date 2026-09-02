@@ -23,6 +23,7 @@ defmodule VutuvWeb.PostComponents do
     router: VutuvWeb.Router,
     statics: ~w(assets fonts images favicon.ico)
 
+  import VutuvWeb.FediverseComponents, only: [remote_actor_link: 3]
   import VutuvWeb.UI
   import VutuvWeb.UserHelpers, only: [full_name: 1]
 
@@ -1324,7 +1325,7 @@ defmodule VutuvWeb.PostComponents do
       <.reshare_line
         :if={@reposted_by}
         name={full_name(@reposted_by)}
-        navigate={~p"/#{@reposted_by.username}"}
+        link={[navigate: ~p"/#{@reposted_by.username}"]}
         data-reshared-reply
       />
       <div class="flex items-start gap-3">
@@ -1633,49 +1634,6 @@ defmodule VutuvWeb.PostComponents do
   """
   def network_chip_class do
     "inline-flex max-w-full items-center gap-1 rounded-full bg-slate-100 px-2 py-0.5 text-[11px] font-medium text-slate-600 dark:bg-slate-800 dark:text-slate-300"
-  end
-
-  # Where a remote handle leads and what a press on it does, as the attributes
-  # to splat onto a `<.link>`.
-  #
-  # Inward when we know the account (issue #1162): the handle is the thing a
-  # reader taps to ask "who is this", and the answer to that is a page here
-  # where they can see what the account posts and follow it — not a trip off
-  # the site to somebody else's server. The link out is still one click away,
-  # in the footer. Straight out when we do not know them, since there would be
-  # nothing to show.
-  #
-  # And a plain left click answers that question without going anywhere at all:
-  # `data-remote-actor` is what `assets/js/mention_card.js` binds to, so it opens
-  # the account card over the handle — who this is, one Follow button, both ways
-  # onward — the same card a `@user@host` written inside a post body already
-  # opens. Everything else about the anchor is untouched, so a middle click, a
-  # copied link, a reader who is not signed in and a page whose JavaScript never
-  # arrived all still land on the destination above.
-  #
-  # One definition, because the header of every remote card and the reaction
-  # chips ask the same question, and a chip that answered it differently from
-  # the card above it would be the same handle leading two places. The hook
-  # therefore lives here rather than at either call site — which is also why
-  # this takes the handle: nothing else on the way in carries the address.
-  defp remote_actor_link(account_id, actor_uri, handle),
-    do: remote_actor_destination(account_id, actor_uri) ++ card_hook(handle)
-
-  defp remote_actor_destination(nil, actor_uri),
-    do: [href: actor_uri, target: "_blank", rel: "nofollow noopener noreferrer"]
-
-  defp remote_actor_destination(account_id, _actor_uri),
-    do: [navigate: ~p"/system/fediverse/account/#{account_id}"]
-
-  # Nothing, for a handle that is not an address: `Handle.display/2` falls back
-  # to `@name` and to a bare `@host` when the actor document carried no
-  # username, and the card cannot resolve either. Such a handle keeps today's
-  # behaviour rather than opening a card that can only say it failed.
-  defp card_hook(handle) do
-    case Handle.address(handle) do
-      nil -> []
-      address -> ["data-remote-actor": address]
-    end
   end
 
   # The lock line. The same glyph a restricted vutuv post wears, so "not
@@ -2269,6 +2227,11 @@ defmodule VutuvWeb.PostComponents do
   line names the messenger, never the writer.
   """
   def boosted_banner(assigns) do
+    # Once, not three times: the line names the handle, the link is addressed by
+    # it, and `label/1` falls back to it — and composing it is the cheap half of
+    # `display_handle/1`, not the whole of it.
+    assigns = assign(assigns, :handle, RemoteAccount.display_handle(assigns.account))
+
     ~H"""
     <%!-- Name **and** handle, unlike the local line beside it. A display name
     on a remote account is whatever that server lets somebody type, and this
@@ -2277,22 +2240,30 @@ defmodule VutuvWeb.PostComponents do
     read as the member of that name. Every other surface pairs the two for the
     same reason. --%>
     <.reshare_line
-      name={"#{RemoteAccount.label(@account)} (#{RemoteAccount.display_handle(@account)})"}
-      navigate={~p"/system/fediverse/account/#{@account.id}"}
+      name={"#{RemoteAccount.label(@account)} (#{@handle})"}
+      link={remote_actor_link(@account.id, @account.actor_uri, @handle)}
       data-boosted-by={@account.id}
     />
     """
   end
 
   attr(:name, :string, required: true)
-  attr(:navigate, :any, default: nil, doc: "in-app destination (a remote account page)")
-  attr(:href, :any, default: nil, doc: "full-navigation destination (a member's profile)")
+
+  attr(:link, :list,
+    required: true,
+    doc:
+      "the anchor's attributes, splatted: `[navigate: ...]` / `[href: ...]` for a member here, `remote_actor_link/3` for an account out there"
+  )
+
   attr(:rest, :global)
 
   # "Reposted by NAME" over the post it carries: the one markup for both worlds,
   # a member here resharing a cached post (issue #1166) and an account the
-  # reader follows out there boosting one (issue #1167). Pass whichever of
-  # `navigate` / `href` the destination needs.
+  # reader follows out there boosting one (issue #1167). The destination arrives
+  # as attributes rather than as a `navigate` / `href` pair, because the remote
+  # half of it is not a destination alone: a press on the account that boosted
+  # this opens its card, exactly as a press on the handle in the header below
+  # does, and only the one function that owns both may say so.
   defp reshare_line(assigns) do
     ~H"""
     <p
@@ -2300,7 +2271,7 @@ defmodule VutuvWeb.PostComponents do
       {@rest}
     >
       <.icon_repost class="h-4 w-4 shrink-0" />
-      <.link navigate={@navigate} href={@href} class="min-w-0 truncate hover:text-brand-700 dark:hover:text-brand-300">
+      <.link {@link} class="min-w-0 truncate hover:text-brand-700 dark:hover:text-brand-300">
         {gettext("Reposted by %{name}", name: @name)}
       </.link>
     </p>
@@ -2596,7 +2567,7 @@ defmodule VutuvWeb.PostComponents do
       <.reshare_line
         :if={@reposted_by}
         name={full_name(@reposted_by)}
-        href={~p"/#{@reposted_by}"}
+        link={[href: ~p"/#{@reposted_by}"]}
         data-remote-reposted-by={@reposted_by.id}
       />
 
@@ -3503,16 +3474,18 @@ defmodule VutuvWeb.PostComponents do
             </.link>
           </.reply_banner_line>
         <% {:remote, remote_handle, remote_account_id} -> %>
-          <%!-- Answering a post on another network (issue #1165). The link goes
-          to that account's page *here* rather than out to their server: the
-          reader is one click from the same context the answer's author had,
+          <%!-- Answering a post on another network (issue #1165). A press opens
+          that account's card, exactly as a press on the same handle in the
+          header below does (`remote_actor_link/3`); where the card cannot open,
+          the link goes to their page *here* rather than out to their server, so
+          the reader is one click from the context the answer's author had
           without leaving the site and without an outbound request. It degrades
           to plain text once our copy of the post has expired, since the account
           is reached through the post. --%>
           <.reply_banner_line variant="remote">
             <.link
               :if={remote_account_id}
-              navigate={~p"/system/fediverse/account/#{remote_account_id}"}
+              {remote_actor_link(remote_account_id, nil, remote_handle)}
               class="hover:text-brand-700 dark:hover:text-brand-300"
             >
               {gettext("Replying to %{handle}", handle: remote_handle)}

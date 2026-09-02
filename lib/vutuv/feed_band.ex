@@ -386,14 +386,27 @@ defmodule Vutuv.FeedBand do
     accounts =
       rows
       |> Enum.map(fn agg ->
+        # Both spellings of the address come from the one chokepoint, not from
+        # the raw column: `handle` stores the bare username, so `Handle.short/1`
+        # on it had nothing to strip and the row read `them` where a member's
+        # row reads `@stefan`. `address` is the whole `@user@host` the account
+        # card is addressed by; `handle` is the short form the row shows,
+        # because the server it names is the heading this row already sits
+        # under.
+        address = RemoteAccount.display_handle(agg.account)
+
         %{
           key: "remote:" <> agg.account.id,
           kind: :remote,
           id: agg.account.id,
           host: agg.account.host,
-          name: agg.account.name || agg.account.handle,
-          handle: Fediverse.Handle.short(agg.account.handle),
-          path: "/system/fediverse/account/" <> agg.account.id,
+          name: RemoteAccount.label(agg.account),
+          handle: Fediverse.Handle.short(address),
+          address: address,
+          # No `path`, unlike a member's or a page's row: where this one leads
+          # is the same question as what a press on it does, and
+          # `remote_actor_link/3` answers both from the id. A second spelling of
+          # the account URL here is how the two drift apart.
           posts: agg.posts,
           last_at: agg.last_at,
           muted?: agg.muted

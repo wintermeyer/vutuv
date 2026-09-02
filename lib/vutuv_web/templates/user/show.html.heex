@@ -1031,15 +1031,18 @@ the resulting ~200px rail width. --%>
               name: full_name(@user)
             )}
           </p>
+          <%!-- The sentence above asks the reader to follow an address, and the
+          card is the one place on the site where following one is a button
+          rather than a trip (`remote_actor_link/3`). An address we cannot read
+          as `@user@host` keeps the plain link out, which is all it ever was. --%>
           <p class="mt-3">
-            <a
+            <.link
               id="fediverse-moved-to"
-              href={@fediverse.moved_to}
-              rel="nofollow noopener noreferrer"
+              {remote_actor_link(nil, @fediverse.moved_to, @fediverse.moved_handle)}
               class="break-all text-sm font-semibold text-brand-600 hover:text-brand-700 dark:text-brand-400 dark:hover:text-brand-300"
             >
               {@fediverse.moved_handle}
-            </a>
+            </.link>
           </p>
         <% else %>
           <.follow_us_from_elsewhere

@@ -132,6 +132,22 @@ defmodule VutuvWeb.FediverseFollowingLiveTest do
       refute has_element?(view, "#no-following")
     end
 
+    test "the followed account opens its card rather than leading off the site", %{conn: conn} do
+      {:ok, view, _html} = live(conn, ~p"/settings/fediverse/following")
+      view |> element("#follow-form") |> render_submit(%{"address" => "@them@social.example"})
+
+      # The one hook every remote account on the site wears
+      # (`assets/js/mention_card.js`): the card is where the follow state, the
+      # mutes and the way to their page here already live, so the row that names
+      # them opens it instead of handing the member to somebody else's server.
+      assert has_element?(view, ~s(a[data-remote-actor="them@social.example"]))
+
+      # And where the card cannot open, an account we already hold leads to its
+      # page here, not out to their server.
+      [account] = Repo.all(Vutuv.Fediverse.RemoteAccount)
+      assert has_element?(view, ~s(a[href="/system/fediverse/account/#{account.id}"]))
+    end
+
     test "an Accept flips the state on the open page, no reload", %{conn: conn, user: user} do
       {:ok, view, _html} = live(conn, ~p"/settings/fediverse/following")
       view |> element("#follow-form") |> render_submit(%{"address" => "@them@social.example"})

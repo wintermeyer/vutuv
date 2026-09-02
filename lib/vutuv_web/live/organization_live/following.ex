@@ -30,6 +30,7 @@ defmodule VutuvWeb.OrganizationLive.Following do
   import VutuvWeb.OrganizationComponents,
     only: [manage_header: 1, organization_location: 1]
 
+  import VutuvWeb.FediverseComponents, only: [remote_actor_link: 3]
   import VutuvWeb.UserHelpers, only: [author_name: 1]
 
   alias Vutuv.Accounts
@@ -422,15 +423,24 @@ defmodule VutuvWeb.OrganizationLive.Following do
 
         <ul :if={@remote_follows != []} class="mt-2 divide-y divide-slate-100 dark:divide-slate-800">
           <li :for={follow <- @remote_follows} class="flex items-center gap-4 py-3">
-            <div class="min-w-0 flex-1">
-              <p class="truncate text-sm font-semibold text-slate-900 dark:text-slate-100">
-                {RemoteAccount.display_name(follow.remote_account) ||
-                  follow.remote_account.handle}
+            <%!-- The one remote-account list that named its rows in raw column
+            values and gave the reader nothing to press: a bare `handle` reads
+            `them` where every other surface says `@them@social.example`, and a
+            page whose admin is deciding whom to unfollow could not see who any
+            of them were. Same name, same card, same press as everywhere else
+            (`remote_actor_link/3`). --%>
+            <% handle = RemoteAccount.display_handle(follow.remote_account) %>
+            <.link
+              {remote_actor_link(follow.remote_account.id, follow.remote_account.actor_uri, handle)}
+              class="group min-w-0 flex-1"
+            >
+              <p class="truncate text-sm font-semibold text-slate-900 group-hover:text-brand-700 dark:text-slate-100 dark:group-hover:text-brand-300">
+                {RemoteAccount.label(follow.remote_account)}
               </p>
-              <p class="truncate text-sm text-slate-600 dark:text-slate-400">
-                {follow.remote_account.handle}
+              <p class="truncate text-sm text-slate-600 group-hover:text-brand-600 dark:text-slate-400 dark:group-hover:text-brand-300">
+                {handle}
               </p>
-            </div>
+            </.link>
 
             <%!-- "Requested" is the truth until the other server answers, and
             an account that approves by hand may never do so. Showing

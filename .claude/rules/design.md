@@ -309,17 +309,23 @@ LiveView can sit on either style.
   in `components.css`, `assets/js/mention_card.js`). Every remote handle keeps
   its own link; a plain left click by a signed-in member opens a small card
   under it instead. Two surfaces write the `a[data-remote-actor]` hook the JS
-  binds to: a `@user@host` in rendered text (`VutuvWeb.Markdown`, which leaves
-  for that server) and every remote handle a post card draws — its header and
-  its reaction chips alike — through the one function that owns where such a
-  handle leads and what a press does, `PostComponents.remote_actor_link/3`
-  (which leads to that account's page here). Both from that one place, because a
-  chip answering "who is this" differently from the card it sits under is what
-  that function exists to prevent. Those anchors are `<.link navigate>`, so the
-  JS stops the click's bubble as well as its default: LiveView's nav listener on
-  `window` reads `data-phx-link` without asking whether the default was
-  prevented — which also swallows `phx-click-away`, dispatched from the same
-  listener and used nowhere in the app today. It answers three questions in that order:
+  binds to. A `@user@host` in rendered text (`VutuvWeb.Markdown`, which leaves
+  for that server), which reaches further than posts — a chat message and a
+  work-experience description run through the same renderer. And **every other
+  remote account the app draws**, through the one function that owns where such
+  a handle leads and what a press does,
+  `FediverseComponents.remote_actor_link/3`, whose docstring holds the list of
+  its callers — the only copy of that list, so do not repeat it here. A chip
+  answering "who is this" differently from the card it sits under is what that
+  function exists to prevent, and a surface that answered it with a trip to
+  somebody else's server was not offering less, it was offering a different app.
+  It lives in `FediverseComponents` rather than beside the post card that first
+  needed it because most of its callers hold no post. Those anchors
+  are `<.link navigate>`, so the JS stops the click's bubble as well as its
+  default: LiveView's nav listener on `window` reads `data-phx-link` without
+  asking whether the default was prevented — which also swallows
+  `phx-click-away`, dispatched from the same listener and used nowhere in the
+  app today. It answers three questions in that order:
   **who is this** (a `.actor-card__chip` carrying the globe and the host, then
   name, address and a two-line self-description), **is it worth it**
   (`.actor-card__stats` — how many of their posts we hold for *this* reader and

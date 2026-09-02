@@ -238,6 +238,19 @@ defmodule VutuvWeb.FeedRemoteThreadTest do
       # what this feature replaced and is still far better than a 500.
       assert html |> String.split("was da draussen steht") |> length() == 2
 
+      # And that bare line names an account on another network, so a press on it
+      # opens the same card the handle in a card header opens
+      # (`remote_actor_link/3`) — this line is the reader's only handle on who
+      # is being answered, and it used to be the one that led nowhere useful.
+      # Scoped to the banner, not asserted against the whole page: the card
+      # drawn above the first answer carries the same hook in its header, so a
+      # bare `html =~` here passes with the banner unchanged and measures
+      # nothing.
+      assert has_element?(
+               view,
+               ~s([data-reply-banner="remote"] a[data-remote-actor="them@social.example"])
+             )
+
       # One action bar for it, too — the bar is what carries the id that
       # raised, and `subject_id` rides every one of its controls as
       # `phx-value-id`. Counting the like control is the closest the DOM comes

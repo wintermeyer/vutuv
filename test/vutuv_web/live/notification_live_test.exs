@@ -999,6 +999,27 @@ defmodule VutuvWeb.NotificationLiveTest do
       assert html =~ "and 1 more"
     end
 
+    test "the account opens its card here rather than leading off the site", %{conn: conn} do
+      {conn, user} = create_and_login_user(conn)
+
+      remote_reaction!(
+        create_post!(user, %{body: "went out into the world"}),
+        "alice",
+        "announce"
+      )
+
+      {:ok, live, _html} = live(conn, ~p"/notifications")
+
+      # The same hook every other remote handle on the site wears
+      # (`assets/js/mention_card.js` binds the account card to it): a plain
+      # click answers "who is this and do I want their posts here" without
+      # leaving vutuv for a server the reader has no account on. The `href`
+      # stays the anchor's whole truth, so a middle-click, a copied link and a
+      # page whose JavaScript never arrived still go there.
+      assert has_element?(live, ~s(a[data-remote-actor="alice@social.example"]))
+      assert has_element?(live, ~s(a[href="https://social.example/users/alice"]))
+    end
+
     test "the posts filter tab keeps them", %{conn: conn} do
       {conn, user} = create_and_login_user(conn)
       remote_reaction!(create_post!(user, %{body: "filtered"}), "alice", "like")

@@ -30,6 +30,13 @@ defmodule VutuvWeb.FediverseComponents do
   this subsystem offers a member — fetching one post by its address — which has
   likewise grown a second surface: the lookup page and, since a URL means
   nothing to a text search, the search box itself (issue #1211).
+
+  `remote_actor_link/3` is the same idea one step earlier: before a member can
+  follow somebody out there they have to be able to *reach* them, and a remote
+  account is named on a dozen surfaces here. That function owns where each of
+  those names leads and what a press on it does, so the answer cannot differ
+  between a post card and a notification about the same account. Its docstring
+  holds the list of callers.
   """
 
   use Phoenix.Component
@@ -44,6 +51,7 @@ defmodule VutuvWeb.FediverseComponents do
 
   alias Vutuv.Fediverse
   alias Vutuv.Fediverse.Follow
+  alias Vutuv.Fediverse.Handle
   alias Vutuv.Fediverse.RemoteAccount
 
   attr(:id, :string,
@@ -355,6 +363,69 @@ defmodule VutuvWeb.FediverseComponents do
   def follow_refusal_sentence(:disabled), do: refusal_message(:fediverse_disabled)
   def follow_refusal_sentence(:moved), do: refusal_message(:moved)
   def follow_refusal_sentence(_opted_out), do: refusal_message(:not_federating)
+
+  @doc """
+  Where a remote handle leads and what a press on it does, as the attributes to
+  splat onto a `<.link>`.
+
+  Inward when we know the account (issue #1162): the handle is the thing a
+  reader taps to ask "who is this", and the answer to that is a page here where
+  they can see what the account posts and follow it — not a trip off the site to
+  somebody else's server. The link out is still one click away, in the footer.
+  Straight out when we do not know them, since there would be nothing to show.
+
+  And a plain left click answers that question without going anywhere at all:
+  `data-remote-actor` is what `assets/js/mention_card.js` binds to, so it opens
+  the account card over the handle — who this is, one Follow button, both ways
+  onward — the same card a `@user@host` written inside a post body already
+  opens. Everything else about the anchor is untouched, so a middle click, a
+  copied link, a reader who is not signed in and a page whose JavaScript never
+  arrived all still land on the destination above.
+
+  **This is where every remote account the app draws becomes clickable**, which
+  is why it lives here rather than beside the post card that first needed it.
+  The callers, and the only list of them worth keeping current:
+
+    * a post card's header and its reaction chips (`PostComponents`),
+    * the boost banner and the "Replying to" line above a reply,
+    * a notification row (`NotificationLive.Index`),
+    * the three account tables — a member's followers and following, and an
+      organization's follows,
+    * the feed's filter band (`PostLive.FilterBand`),
+    * a member's forwarding address after they moved (`user/show.html.heex`).
+
+  Every one is the same reader asking the same question about the same account,
+  and a surface that answered it with a trip to somebody else's server was not
+  offering less, it was offering a different app.
+
+  The **one** remote handle that does not come through here is a `@user@host`
+  written inside a body, which `VutuvWeb.Markdown` links at render time and
+  which writes the same `data-remote-actor` hook by hand. That one always leads
+  out: it is a string mapping with no database lookup, so it works on an
+  air-gapped install and never tells us whether we hold the account.
+
+  Takes the handle rather than reading it off a record, because the callers hold
+  eight different record shapes and only some of them have one.
+  """
+  def remote_actor_link(account_id, actor_uri, handle),
+    do: remote_actor_destination(account_id, actor_uri) ++ card_hook(handle)
+
+  defp remote_actor_destination(nil, actor_uri),
+    do: [href: actor_uri, target: "_blank", rel: "nofollow noopener noreferrer"]
+
+  defp remote_actor_destination(account_id, _actor_uri),
+    do: [navigate: ~p"/system/fediverse/account/#{account_id}"]
+
+  # Nothing, for a handle that is not an address: `Handle.display/2` falls back
+  # to `@name` and to a bare `@host` when the actor document carried no
+  # username, and the card cannot resolve either. Such a handle keeps today's
+  # behaviour rather than opening a card that can only say it failed.
+  defp card_hook(handle) do
+    case Handle.address(handle) do
+      nil -> []
+      address -> ["data-remote-actor": address]
+    end
+  end
 
   attr(:follow, :map, required: true, doc: "a `Vutuv.Fediverse.Follow`")
   attr(:class, :string, default: nil)

@@ -2,7 +2,7 @@ defmodule VutuvWeb.UserHTML do
   @moduledoc false
   use VutuvWeb, :html
 
-  import VutuvWeb.FediverseComponents, only: [follow_us_from_elsewhere: 1]
+  import VutuvWeb.FediverseComponents, only: [follow_us_from_elsewhere: 1, remote_actor_link: 3]
 
   import VutuvWeb.PostComponents,
     only: [
