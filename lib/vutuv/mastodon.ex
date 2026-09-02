@@ -20,6 +20,7 @@ defmodule Vutuv.Mastodon do
 
   require Logger
 
+  alias Vutuv.ChangesetHelpers
   alias Vutuv.Fediverse.Handle
   alias Vutuv.RemoteHtml
   alias Vutuv.SocialFeed.Feed
@@ -114,10 +115,18 @@ defmodule Vutuv.Mastodon do
     %{
       id: to_string(account["id"]),
       name: name,
-      url: Post.presence(account["url"]) || "https://#{instance}/@#{user}",
+      # The account page we link to. A remote server may answer with anything;
+      # `Phoenix.Component.link/1` raises on a scheme it does not know, so an
+      # unusable value falls back to the address we already know rather than
+      # taking the profile's render down.
+      url: account_url(account["url"]) || "https://#{instance}/@#{user}",
       avatar_url: Post.presence(account["avatar_static"]) || Post.presence(account["avatar"]),
       followers: Feed.follower_count(account["followers_count"])
     }
+  end
+
+  defp account_url(value) do
+    if ChangesetHelpers.web_url?(value), do: value
   end
 
   defp fetch_statuses(instance, id) do
@@ -149,12 +158,14 @@ defmodule Vutuv.Mastodon do
     |> Enum.take(@posts_shown)
   end
 
+  # A status with no usable permalink is dropped rather than rendered: the card
+  # is a link to the original, so there is nothing to show without one.
   defp to_post(status) do
     text = post_text(status)
     url = status["url"]
     created = status["created_at"]
 
-    with true <- is_binary(url) and url != "" and text != "" and is_binary(created),
+    with true <- ChangesetHelpers.web_url?(url) and text != "" and is_binary(created),
          false <- is_nil(status["id"]),
          {:ok, created_at, _offset} <- DateTime.from_iso8601(created) do
       %Post{id: to_string(status["id"]), url: url, text: text, created_at: created_at}

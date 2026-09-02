@@ -28,6 +28,9 @@ defmodule Vutuv.ContentFilters do
   # bored user) can't turn every feed page into a compile of hundreds of regexes.
   @max_filters 200
 
+  # See `max_wildcards/0` for why three.
+  @max_wildcards 3
+
   @doc "The maximum number of filters one member may keep."
   def max_filters, do: @max_filters
 
@@ -265,9 +268,38 @@ defmodule Vutuv.ContentFilters do
   # escaped, so no user input reaches the regex engine as syntax. With
   # `whole_word` the match is bounded by word boundaries, except on a side the
   # pattern opens with a `*` (that side is deliberately affix/substring).
-  # Returns `nil` if the pattern cannot compile (defensive; the changeset
-  # already caps the length).
+  # Returns `nil` if the pattern cannot compile, or if it names more wildcards
+  # than `max_wildcards/0` allows.
   defp compile_pattern(pattern, whole_word) do
+    if too_many_wildcards?(pattern) do
+      nil
+    else
+      compile_bounded_pattern(pattern, whole_word)
+    end
+  end
+
+  @doc """
+  The most `*` segments one rule may name.
+
+  Escaping the literal parts keeps the member's text out of the regex syntax,
+  but `*` is syntax by design and each one becomes a `.*`. The length cap alone
+  left room for about fifty of them, and `a.*a.*a.*…` against a long post that
+  does not match is the textbook exponential backtrack — run over every post in
+  the feed, and over every keystroke of the live preview, by a rule the member
+  writes for themselves.
+
+  Three covers what the feature is for: a prefix, a suffix, and one hole in the
+  middle (`*@social.heise.de`, `Arbeits*zeugnis*`).
+  """
+  def max_wildcards, do: @max_wildcards
+
+  @doc "Whether `pattern` names more `*` segments than `max_wildcards/0`."
+  def too_many_wildcards?(pattern) when is_binary(pattern),
+    do: length(String.split(pattern, "*")) - 1 > @max_wildcards
+
+  def too_many_wildcards?(_pattern), do: false
+
+  defp compile_bounded_pattern(pattern, whole_word) do
     body =
       pattern
       |> String.split("*")

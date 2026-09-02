@@ -35,7 +35,7 @@ defmodule Vutuv.Fediverse.RemotePost do
 
   use VutuvWeb, :model
 
-  import Vutuv.ChangesetHelpers, only: [scrub_nul: 1]
+  import Vutuv.ChangesetHelpers, only: [drop_non_web_urls: 2, scrub_nul: 1]
 
   alias Vutuv.Translations
 
@@ -314,6 +314,12 @@ defmodule Vutuv.Fediverse.RemotePost do
     # After both casts, before the validations: remote strings, and a NUL in one
     # raises on insert (issue #1767).
     |> scrub_nul()
+    # The URLs a card turns into an `href`. A remote server may put anything
+    # here, and `Phoenix.Component.link/1` RAISES on a scheme it does not know,
+    # so one `javascript:` value would take down every render of the feed that
+    # shows this post. Dropped rather than refused: losing a link beats losing
+    # the post.
+    |> drop_non_web_urls([:origin_url, :quote_uri])
     # And so it cannot be `validate_required` either (which reads "" as missing
     # too). The column stays NOT NULL, and both write paths in `Vutuv.Fediverse`
     # compute the body through one `is_binary` gate, so it is never nil.
