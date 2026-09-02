@@ -2639,7 +2639,12 @@ defmodule VutuvWeb.UI do
   # in four opacities across eight of them.
   @control_base "inline-flex min-h-10 items-center justify-center gap-1.5 px-4 text-sm font-semibold disabled:cursor-not-allowed disabled:opacity-40"
 
-  @button_base "#{@control_base} rounded-lg py-2"
+  # `h-auto` is not decoration either: `components.css` sizes legacy form rows
+  # with `[type="submit"] { height: 44px }`, an element selector that reached
+  # every kit submit too — so Save stood 4px taller than the Cancel beside it on
+  # every page with a form, and `min-h-10` could not argue, being a floor rather
+  # than a height. A utility beats the components layer whatever the specificity.
+  @button_base "#{@control_base} h-auto rounded-lg py-2"
 
   @doc "The shared geometry of every button, with no colours: layout, 40px height, radius, padding, type. For a control that has to keep a colour of its own and still stand at the same height as its neighbours — the job board's dotted \"Clear filters\", the profile header's two round controls."
   def button_base, do: @button_base
