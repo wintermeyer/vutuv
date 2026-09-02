@@ -1553,7 +1553,7 @@ defmodule VutuvWeb.PostComponents do
           {@author}
         </span>
         <.link
-          {remote_actor_destination(@account_id, @actor_uri)}
+          {remote_actor_link(@account_id, @actor_uri, @handle)}
           data-remote-account={@account_id}
           data-remote-handle={@handle}
           title={@handle}
@@ -1635,7 +1635,8 @@ defmodule VutuvWeb.PostComponents do
     "inline-flex max-w-full items-center gap-1 rounded-full bg-slate-100 px-2 py-0.5 text-[11px] font-medium text-slate-600 dark:bg-slate-800 dark:text-slate-300"
   end
 
-  # Where a remote handle leads, as the attributes to splat onto a `<.link>`.
+  # Where a remote handle leads and what a press on it does, as the attributes
+  # to splat onto a `<.link>`.
   #
   # Inward when we know the account (issue #1162): the handle is the thing a
   # reader taps to ask "who is this", and the answer to that is a page here
@@ -1644,14 +1645,38 @@ defmodule VutuvWeb.PostComponents do
   # in the footer. Straight out when we do not know them, since there would be
   # nothing to show.
   #
+  # And a plain left click answers that question without going anywhere at all:
+  # `data-remote-actor` is what `assets/js/mention_card.js` binds to, so it opens
+  # the account card over the handle — who this is, one Follow button, both ways
+  # onward — the same card a `@user@host` written inside a post body already
+  # opens. Everything else about the anchor is untouched, so a middle click, a
+  # copied link, a reader who is not signed in and a page whose JavaScript never
+  # arrived all still land on the destination above.
+  #
   # One definition, because the header of every remote card and the reaction
   # chips ask the same question, and a chip that answered it differently from
-  # the card above it would be the same handle leading two places.
+  # the card above it would be the same handle leading two places. The hook
+  # therefore lives here rather than at either call site — which is also why
+  # this takes the handle: nothing else on the way in carries the address.
+  defp remote_actor_link(account_id, actor_uri, handle),
+    do: remote_actor_destination(account_id, actor_uri) ++ card_hook(handle)
+
   defp remote_actor_destination(nil, actor_uri),
     do: [href: actor_uri, target: "_blank", rel: "nofollow noopener noreferrer"]
 
   defp remote_actor_destination(account_id, _actor_uri),
     do: [navigate: ~p"/system/fediverse/account/#{account_id}"]
+
+  # Nothing, for a handle that is not an address: `Handle.display/2` falls back
+  # to `@name` and to a bare `@host` when the actor document carried no
+  # username, and the card cannot resolve either. Such a handle keeps today's
+  # behaviour rather than opening a card that can only say it failed.
+  defp card_hook(handle) do
+    case Handle.address(handle) do
+      nil -> []
+      address -> ["data-remote-actor": address]
+    end
+  end
 
   # The lock line. The same glyph a restricted vutuv post wears, so "not
   # everybody sees this" reads the same way across the app; the sentence is the
@@ -5653,12 +5678,14 @@ defmodule VutuvWeb.PostComponents do
         <p :if={@shown != []} class="flex flex-wrap items-center gap-x-2 gap-y-1">
           <%!-- A chip is somebody the reader may well want to know more about —
                 that is the whole point of naming them — so it goes wherever the
-                handle on a remote card goes (`remote_actor_destination/2`): to
-                their page here when we know them, out to their own server when
-                we do not. Only the destination differs; the chip is one. --%>
+                handle on a remote card goes (`remote_actor_link/3`): a press
+                opens the account card, and where the card cannot open the chip
+                leads to their page here when we know them, out to their own
+                server when we do not. Only the destination differs; the chip is
+                one. --%>
           <.link
             :for={actor <- @shown}
-            {remote_actor_destination(actor.account_id, actor.uri)}
+            {remote_actor_link(actor.account_id, actor.uri, actor.handle)}
             data-fediverse-reaction={actor.kind}
             data-remote-account={actor.account_id}
             title={reaction_title(actor)}

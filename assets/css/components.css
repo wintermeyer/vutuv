@@ -3891,6 +3891,11 @@ html.lightbox-open { overflow: hidden; }
   color: var(--color-brand-600);
   font-weight: 600;
   text-decoration: none;
+  /* The way out names its destination, and an address has no spaces to break
+     at. `anywhere` and not `break-word`: only the former lowers the box's
+     min-content width, which is what a flex item (the sheet form's rows) sizes
+     against — with `break-word` the row simply overflows instead. */
+  overflow-wrap: anywhere;
 }
 .actor-card__links a:hover { text-decoration: underline; }
 .actor-card__go { opacity: 0.6; }

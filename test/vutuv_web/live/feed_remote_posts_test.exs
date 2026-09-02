@@ -574,6 +574,25 @@ defmodule VutuvWeb.FeedRemotePostsTest do
     assert opening_tag =~ "gap-y-"
   end
 
+  # The handle in the header asks "who is this", and until now the answer was a
+  # page the reader had to come back from. `data-remote-actor` is what
+  # `assets/js/mention_card.js` binds to, so a plain click opens the same card a
+  # `@user@host` written inside a post body already opens — one answer to one
+  # question, wherever the handle is read. The `href` stays the whole truth of
+  # the anchor: a middle click, a copied link and a page whose JavaScript never
+  # arrived all still land on the account page here.
+  test "the handle in the header opens the account card", %{conn: conn} do
+    {conn, user} = create_and_login_user(conn)
+    cached_post(user)
+
+    {:ok, view, _html} = live(conn, ~p"/feed")
+
+    assert has_element?(view, "[data-remote-handle][data-remote-actor='them@social.example']")
+
+    assert view |> element("[data-remote-handle]") |> render() =~
+             "/system/fediverse/account/"
+  end
+
   test "muting the account takes its posts out of the feed and keeps the follow", %{conn: conn} do
     {conn, user} = create_and_login_user(conn)
     post = cached_post(user)

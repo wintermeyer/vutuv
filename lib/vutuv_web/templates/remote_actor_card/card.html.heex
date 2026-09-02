@@ -240,8 +240,19 @@ renders the same element. --%>
       {gettext("Their account page here")}
       <span class="actor-card__go" aria-hidden="true">›</span>
     </.link>
-    <a href={origin} target="_blank" rel="nofollow noopener noreferrer">
-      {gettext("View the original")}
+    <%!-- And out to their server, named. "View the original" said only that
+    there was one; a reader about to leave this site for somebody else's reads
+    the address first, the way they would read a browser's status bar. It is not
+    guessable from the card either — an actor URI need not be spelled like the
+    `@user@host` above it (`/users/them`, `/u/them`, `/profile/them`). The name
+    is only a label: the `href` stays the whole URL.
+
+    `:if={origin}` rather than a second wording for a card with no address at
+    all: this used to render the sentence on an anchor carrying no `href`, which
+    is a way out that goes nowhere. There is nothing to link to in that state —
+    the account page above is gated on the same missing row. --%>
+    <a :if={origin} href={origin} target="_blank" rel="nofollow noopener noreferrer">
+      {gettext("View the original on %{url}", url: origin_address(origin))}
       <span class="actor-card__go" aria-hidden="true">↗</span>
     </a>
   </div>
