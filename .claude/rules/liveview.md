@@ -107,6 +107,24 @@ pages — both render `PostComponents.post_actions/1` and share `PostLive.Action
   builds the page a careless dedup chokes on and lets LiveView do the asserting
   — that catches code paths nobody has written yet, which a rule cannot.
 
+- **A value a function component derives per render belongs in `Map.put/3`,
+  never `assign/3`, and never in a `{helper(assigns)}` spread.** Both spellings
+  are the tidier-looking ones and both switch change tracking off for every
+  attribute that reads the value, so the component re-sends them on every
+  keystroke — to the members who did *not* ask for the cheaper page.
+  `assign/3` marks the key changed each time (it is absent from the incoming
+  assigns, so any value counts as new), and handing `assigns` to a function is
+  a strong taint in `Phoenix.LiveView.Engine`, which collapses the separately
+  tracked dynamics into one it always recomputes. Measured on the composer with
+  a 200-byte body: 2,353 bytes per keystroke either way, against 422 written
+  correctly, which is also what the component cost before the feature existed.
+  The test to write asserts on `rendered.dynamic.(true)` (what a re-render
+  actually re-sends) against `rendered.dynamic.(false)`, picking a constant big
+  enough to notice as the canary — see the change-tracking test in
+  `markdown_editor_test.exs`. Reach for `Map.put/3` only where the value truly
+  cannot change without a new mount; anything that can change is a real assign
+  and belongs in `assign/3`.
+
 ## Phoenix LiveView guidelines
 
 - **Never** use the deprecated `live_redirect` and `live_patch` functions, instead **always** use the `<.link navigate={href}>` and  `<.link patch={href}>` in templates, and `push_navigate` and `push_patch` functions LiveViews
