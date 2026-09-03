@@ -114,26 +114,26 @@ defmodule VutuvWeb.ProfileEditAffordancesTest do
   describe "profile completion checklist" do
     # The owner's onboarding nudge: a few high-impact steps, shown only while
     # something is still undone, and gone once the profile is complete. It is
-    # owner-only (a visitor never sees it). Since sign-up requires three tags,
-    # the tag step arrives already checked: the list opens at 1/5, visible
-    # progress instead of a wall of zeros.
+    # owner-only (a visitor never sees it). All three are about the profile the
+    # card sits on, and all three start undone — the list opens at 0/3.
 
-    test "a new owner sees the checklist with the tag step already done", %{conn: conn} do
+    test "a new owner sees the three profile steps", %{conn: conn} do
       {conn, user} = create_and_login_user(conn)
 
       html = conn |> get(~p"/#{user}") |> html_response(200)
       checklist = completion_text(html)
 
       assert checklist =~ "Complete your profile"
-      assert checklist =~ "Add a tag"
+      assert checklist =~ "Import your LinkedIn profile"
       assert checklist =~ "Add a profile photo"
       assert checklist =~ "Add a tagline"
-      assert checklist =~ "Follow other members"
       # No "write your first post" step: it asked the one thing a member cannot
-      # do well in their first minute here, with nobody yet reading.
+      # do well in their first minute here, with nobody yet reading. And no
+      # "add a tag" step: sign-up requires three, so it arrived ticked for
+      # everybody who came in the front door.
       refute checklist =~ "Write your first post"
-      # The registration tags already check the first step off.
-      assert checklist =~ "1/4"
+      refute checklist =~ "Follow other members"
+      assert checklist =~ "0/3"
     end
 
     # Both profile-data steps lead to the page that actually holds the fields,
@@ -147,8 +147,8 @@ defmodule VutuvWeb.ProfileEditAffordancesTest do
       refute completion_html(html) =~ ~s(href="/#{user.username}/edit")
     end
 
-    # The checklist leads to photo / tagline / following; work experience is
-    # deliberately not pushed there (its section card keeps its own add tile).
+    # The checklist asks for the import, not for one typed-in job: the section
+    # card keeps its own add tile for that.
     test "the checklist does not push work experience", %{conn: conn} do
       {conn, user} = create_and_login_user(conn)
 
@@ -165,9 +165,8 @@ defmodule VutuvWeb.ProfileEditAffordancesTest do
       {:ok, user} =
         Repo.update(Ecto.Changeset.change(user, avatar: "me.jpg", headline: "Builder of things"))
 
-      # The follow step completes at five followed members — the label no longer
-      # says so, but the threshold is unchanged.
-      for _ <- 1..5, do: insert(:follow, follower: user, followee: insert_activated_user())
+      # The import step is counted off what an import leaves behind.
+      insert(:work_experience, user: user)
 
       html = conn |> get(~p"/#{user}") |> html_response(200)
 
