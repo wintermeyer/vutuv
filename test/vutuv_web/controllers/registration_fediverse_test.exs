@@ -38,19 +38,19 @@ defmodule VutuvWeb.RegistrationFediverseTest do
       assert checkbox_checked?(body, "user[fediverse_followers?]")
     end
 
-    # One tick switches all three of the settings page's switches on, and one of
-    # those stores what people who never signed up here wrote. A consent covers
-    # what it says out loud, so the box has to say it: that replies come back,
-    # and that a copy is kept for up to six months.
-    test "the box says that replies are stored, and for how long", %{conn: conn} do
+    # The one thing the tick is about, and the only sentence left on it: posts
+    # written here leave here. It used to add that replies from those networks
+    # come back under the post and are kept for up to six months — true, and
+    # nobody read it on a sign-up form (Stefan, 2026-09-03). That half now
+    # lives where somebody reading about it has room for it:
+    # /settings/fediverse (asserted there) and the privacy policy. The line
+    # under this group's legend carries "changeable at any time" for every box
+    # at once.
+    test "the box says that posts leave the site", %{conn: conn} do
       body = conn |> get(~p"/") |> html_response(200)
 
-      assert body =~ "kept for up to six months"
-      assert body =~ "come back under your posts"
-      # The two facts that make the tick informed consent: what is stored, and
-      # that it can be undone. The sentence was shortened once (2026-08-04) and
-      # may be shortened again, but never past these.
-      assert body =~ "switch it off at any time"
+      assert body =~ "Your public posts then also appear on"
+      assert body =~ "Can be changed at any time."
     end
 
     # The word is the one thing in that sentence a first-time visitor may not
@@ -83,8 +83,8 @@ defmodule VutuvWeb.RegistrationFediverseTest do
         |> html_response(200)
 
       assert body =~ "Am Fediverse teilnehmen"
-      assert body =~ "bis zu sechs Monate gespeichert"
-      assert body =~ "Jederzeit abschaltbar."
+      assert body =~ "Ihre öffentlichen Beiträge erscheinen dann auch"
+      assert body =~ "Können jederzeit geändert werden."
     end
 
     # An intranet installation (FEDIVERSE_ENABLED=false) federates nothing, so

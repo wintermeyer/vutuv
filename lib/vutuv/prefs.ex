@@ -213,7 +213,7 @@ defmodule Vutuv.Prefs do
     do:
       Gettext.gettext(
         VutuvWeb.Gettext,
-        "For members on a slow connection, data-saving mode shows pictures and screenshots in a stronger compression and leaves out a few luxuries, such as the richer editor. Any picture loads in full quality with one tap, and you can switch the mode off at any time."
+        "For members on a slow connection."
       )
 
   def hint(:browser_tab_teaser?),

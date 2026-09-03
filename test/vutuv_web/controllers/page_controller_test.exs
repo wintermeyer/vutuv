@@ -495,23 +495,23 @@ defmodule VutuvWeb.PageControllerTest do
     # What keeps it that way is the second half: no checkbox may float LOOSE in
     # this form. It used to be spelt "every checkbox is in the Privacy
     # fieldset", which was the same sentence while privacy was the only thing
-    # the form asked with a box. Low-bandwidth mode is not a visibility choice
-    # and must not sit under a "Privacy" legend, so the rule is now the one it
-    # always meant: every box belongs to a named group, and the visibility ones
-    # belong to that group.
-    test "every checkbox sits in a named fieldset, the visibility ones in Privacy",
-         %{conn: conn} do
+    # the form asked with a box. Low-bandwidth mode is not a visibility choice,
+    # so rather than a second group of one it sits with the others under a
+    # legend that covers both — "Settings" (Stefan, 2026-09-03) — and the rule
+    # is the one it always meant: every box belongs to one named group.
+    test "every checkbox sits in the one named fieldset", %{conn: conn} do
       doc = conn |> get(~p"/") |> html_response(200) |> LazyHTML.from_document()
 
-      in_privacy =
+      in_settings =
         doc
-        |> LazyHTML.query(~s(#signup-privacy input[type="checkbox"]))
+        |> LazyHTML.query(~s(#signup-settings input[type="checkbox"]))
         |> LazyHTML.attribute("name")
 
-      assert "user[emails][0][public?]" in in_privacy
-      assert "user[noindex?]" in in_privacy
-      assert "user[noai?]" in in_privacy
-      assert "user[fediverse_followers?]" in in_privacy
+      assert "user[emails][0][public?]" in in_settings
+      assert "user[noindex?]" in in_settings
+      assert "user[noai?]" in in_settings
+      assert "user[fediverse_followers?]" in in_settings
+      assert "user[low_bandwidth?]" in in_settings
 
       in_form =
         doc
@@ -525,12 +525,10 @@ defmodule VutuvWeb.PageControllerTest do
 
       assert Enum.sort(in_form) == Enum.sort(in_a_fieldset)
 
-      # And every one of those groups says what it is, or the grouping is
-      # invisible to the person reading the form.
-      for id <- ~w(signup-privacy signup-bandwidth) do
-        assert [_] = Enum.to_list(LazyHTML.query(doc, ~s(##{id} > legend))),
-               "the #{id} fieldset has no legend"
-      end
+      # And that group says what it is, or the grouping is invisible to the
+      # person reading the form.
+      assert [_] = Enum.to_list(LazyHTML.query(doc, ~s(#signup-settings > legend))),
+             "the signup-settings fieldset has no legend"
     end
   end
 

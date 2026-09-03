@@ -34,16 +34,16 @@ defmodule VutuvWeb.LowBandwidthTest do
       refute checkbox_checked?(body, "user[low_bandwidth?]")
     end
 
-    test "the explanation says what the switch actually does", %{conn: conn} do
+    # The explanation used to name everything the mode changes — the stronger
+    # compression, the plainer editor, the tap that loads a picture in full.
+    # Three sentences on a sign-up form nobody read (Stefan, 2026-09-03), so it
+    # is down to who it is for; what it does in detail is on
+    # /settings/bandwidth, where somebody looking it up has room for it, and
+    # that it can be changed is the line under the group's legend.
+    test "the explanation says who the switch is for", %{conn: conn} do
       body = conn |> get(~p"/") |> html_response(200)
 
-      # The member is being asked to give something up, so the box has to name
-      # what changes (pictures, the editor), the way back per picture, and
-      # that the whole thing is theirs to switch off.
-      assert body =~ "stronger compression"
-      assert body =~ "richer editor"
-      assert body =~ "full quality with one tap"
-      assert body =~ "switch the mode off at any time"
+      assert body =~ "For members on a slow connection."
     end
 
     # vutuv is a German site, and a one-word label is both the likeliest thing
@@ -57,13 +57,14 @@ defmodule VutuvWeb.LowBandwidthTest do
         |> html_response(200)
 
       assert body =~ "Datensparmodus"
-      assert body =~ "Bandbreite"
-      assert body =~ "stärker komprimiert"
-      assert body =~ "jederzeit abschaltbar"
+      assert body =~ "Für Mitglieder mit langsamer Internetanbindung"
+      # It sits in the one settings group now, under the line that covers every
+      # box on the form; there is no "Bandbreite" legend of its own any more.
+      assert body =~ "Können jederzeit geändert werden."
       # The English must not leak through beside it.
       refute body =~ "Low-bandwidth mode"
       # And not the social sense of "Connection", which is what the obvious
-      # msgid would have rendered here.
+      # msgid would have rendered over a bandwidth box.
       refute body =~ "Vernetzung"
     end
 
