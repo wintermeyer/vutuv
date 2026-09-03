@@ -418,8 +418,23 @@ defmodule VutuvWeb.ShellLive do
   # `inline-flex` and a gap because the Feed item carries a badge beside its
   # word: a text link would put the pill on the text baseline, half a line below
   # the word's centre.
+  # `relative` so a badge can hang off the item's corner the way the bell's and
+  # the phone tab bar's do — one shape for an unread count across the whole
+  # chrome, rather than a second, inline one that only the worded items wear.
+  #
+  # An icon has slack a word does not: the bell is a 24px glyph in a 40px box,
+  # so a badge at its corner covers empty space, while "Feed" fills its pill and
+  # a badge at `-right-0.5` sat on the "d". Hence the item hangs its badge
+  # OUTSIDE its right edge (`-right-2`) and the nav's own gap carries the
+  # clearance — `gap-3`, measured: the badge ends 4px before the next item, and
+  # the word keeps 2px. The gap is the same at rest, so nothing moves when a
+  # count arrives; widening the item instead would have shifted every item to
+  # its right the moment somebody posted.
   defp nav_link_class(active?),
-    do: ["inline-flex items-center gap-1.5 rounded-md px-3 py-2", nav_link_tone(active?)]
+    do: [
+      "relative inline-flex items-center gap-1.5 rounded-md px-3 py-2",
+      nav_link_tone(active?)
+    ]
 
   defp nav_link_tone(true),
     do: "bg-brand-50 font-semibold text-brand-700 dark:bg-brand-900/40 dark:text-brand-100"
@@ -1241,7 +1256,7 @@ defmodule VutuvWeb.ShellLive do
             <nav
               aria-label={gettext("Main navigation")}
               data-nav-bar
-              class="hidden items-center gap-1 text-sm font-medium md:flex"
+              class="hidden items-center gap-3 text-sm font-medium md:flex"
             >
               <.link
                 :if={@user_id}
@@ -1253,16 +1268,26 @@ defmodule VutuvWeb.ShellLive do
               >
                 {gettext("Feed")}
                 <%!-- How much arrived while the member was on this page or any
-                other, live over PubSub — the bell's badge one nav item over. The
-                digits are a glyph, so the sentence beside them is what a screen
-                reader gets ("Feed, 3 new posts in your feed") and the pill
-                itself is hidden from it: an `aria-label` on the link would have
-                replaced the visible word "Feed" instead of adding to it. --%>
+                other, live over PubSub — the bell's badge one nav item over,
+                and worn the same way: over the item's top-right corner rather
+                than inline after the word. An unread count is one shape across
+                the chrome, so the reader learns it once; a second, larger pill
+                sitting in the text flow also widened the item every time
+                something arrived. Where it hangs, and why the nav's gap carries
+                its clearance, is in `nav_link_class/1`. The digits are a glyph, so the sentence
+                beside them is what a screen reader gets ("Feed, 3 new posts in
+                your feed") and the badge itself is hidden from it: an
+                `aria-label` on the link would have replaced the visible word
+                "Feed" instead of adding to it. --%>
                 <span :if={@feed_count > 0} class="sr-only">
                   {feed_new_label(@feed_count, @feed_cap)}
                 </span>
                 <span :if={@feed_count > 0} aria-hidden="true">
-                  <.count_badge count={@feed_count} cap={@feed_cap} />
+                  <.count_badge
+                    count={@feed_count}
+                    cap={@feed_cap}
+                    class="absolute -right-2 -top-2 ring-2 ring-white dark:ring-slate-900"
+                  />
                 </span>
               </.link>
               <%!-- An explicit "Profile" item makes the member's own profile a

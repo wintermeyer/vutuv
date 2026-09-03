@@ -41,9 +41,10 @@ defmodule VutuvWeb.ShellFeedBadgeTest do
     live_isolated(conn, VutuvWeb.ShellLive, session: shell_session(user, %{"path" => path}))
   end
 
-  # What `Vutuv.Posts.create_post/2` broadcasts to every follower's topic. Sent
-  # by hand rather than awaited, so the test does not depend on the fan-out's
-  # timing — the point under test is what the shell does with the message.
+  # What `Vutuv.Posts.create_post/2` broadcasts to every follower's topic, for
+  # the cases that need an arrival with no post behind it — one the reader may
+  # not see, one carrying a nil id. Where the fan-out itself is the promise,
+  # write the post instead.
   defp announce(view, post) do
     send(
       view.pid,
@@ -88,6 +89,9 @@ defmodule VutuvWeb.ShellFeedBadgeTest do
     assert has_element?(view, @feed_badge, "1")
   end
 
+  # Through the real write, not `announce/2`: this is the one test standing in
+  # for what a reader actually does, and a hand-sent message would leave the
+  # fan-out itself — whether pressing "Post" produces one at all — unproven.
   test "a post arriving while the member is elsewhere raises the badge", %{conn: conn} do
     reader = reader()
     author = followed_author(reader)
@@ -95,7 +99,7 @@ defmodule VutuvWeb.ShellFeedBadgeTest do
     {:ok, view, _html} = shell(conn, reader, "/#{reader.username}")
     refute has_element?(view, @feed_badge)
 
-    announce(view, create_post!(author, %{body: "arrived while reading a profile"}))
+    create_post!(author, %{body: "arrived while reading a profile"})
 
     assert has_element?(view, @feed_badge, "1")
   end

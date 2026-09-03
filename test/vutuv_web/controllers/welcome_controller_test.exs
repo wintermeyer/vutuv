@@ -264,6 +264,24 @@ defmodule VutuvWeb.WelcomeControllerTest do
       refute body =~ ~s(name="address[city]")
     end
 
+    # The question a member who has just said they are looking answers is
+    # "which of these do you NOT want", not "name one" — and this is where
+    # almost every member meets it once.
+    test "the second step offers the three workplace boxes ticked", %{conn: conn} do
+      {conn, user} = register_and_confirm(conn)
+      conn = to_job_step(conn)
+
+      body = conn |> get(~p"/#{user}") |> html_response(200)
+
+      for value <- User.workplace_type_values() do
+        assert [_ticked] =
+                 elements(
+                   body,
+                   ~s(input[name="user[desired_workplace_types][]"][value="#{value}"][checked])
+                 )
+      end
+    end
+
     test "answering the last step closes the window", %{conn: conn} do
       {conn, user} = register_and_confirm(conn)
       conn = to_job_step(conn)
