@@ -3861,8 +3861,17 @@ defmodule VutuvWeb.UI do
   defp relative_yesterday("it"), do: "Ieri"
   defp relative_yesterday(_), do: "Yesterday"
 
-  @doc "Coral unread-count badge. Renders nothing when `count` is 0. Pass `class` to position it."
+  @doc """
+  Coral unread-count badge. Renders nothing when `count` is 0. Pass `class` to
+  position it.
+
+  `cap` is for a count its own query stops at (the feed badge's
+  `Vutuv.Posts.unread_feed_count/1` builds at most that many rows): at the
+  ceiling the badge draws "50+" rather than a bare "50", which would state a
+  floor as a figure. Without it the count is shown as it is.
+  """
   attr(:count, :integer, default: 0)
+  attr(:cap, :integer, default: nil)
   attr(:class, :string, default: nil)
 
   def count_badge(assigns) do
@@ -3874,10 +3883,23 @@ defmodule VutuvWeb.UI do
         @class
       ]}
     >
-      {compact_count(@count)}
+      {capped_count(@count, @cap)}
     </span>
     """
   end
+
+  @doc """
+  A count that may have hit its query's ceiling: `capped_count(50, 50)` is
+  "50+", anything below the cap the plain `compact_count/1`.
+
+  Public because the badge is a glyph-sized number and its accessible name is a
+  sentence, so two surfaces have to say the same thing about the same ceiling
+  (see `VutuvWeb.ShellLive`'s Feed badge).
+  """
+  def capped_count(count, cap) when is_integer(cap) and count >= cap,
+    do: compact_count(cap) <> "+"
+
+  def capped_count(count, _cap), do: compact_count(count)
 
   @doc """
   The owner-facing moderation freezer notice — the one rendering of "only you

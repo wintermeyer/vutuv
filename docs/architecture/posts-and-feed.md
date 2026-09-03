@@ -427,6 +427,54 @@ answers with a fresh page (`show_pending/1` picks which). It deliberately does
 moment before the reload replaced the whole list. After a weekend a fresh page is
 what the reader wants anyway, not four hundred stale rows.
 
+### The "Feed" badge counts what the pill cannot
+
+The pill only speaks while the reader is standing on /feed. Walk over to a
+profile and everything that lands is silent, which is what the badge on the
+shell's **Feed** nav item is for: the same coral count the bell and the envelope
+carry, one nav item over, live over the member's own `"user:<id>"` topic.
+
+It reads a marker, `users.feed_read_at`, and counts what is stamped after it
+(`Vutuv.Posts.unread_feed_count/1`) through **`feed_sources/3`** — the same ten
+sources a page is built from, in the cheap `:marks` shape, and through the
+member's remembered source filter, so somebody who switched the fediverse half
+off in the band is not badged for it. Two things are deliberately not in the
+figure. The reader's **own** post and own repost are rejected: both are in their
+own feed, so without that a member answering a post from its permalink page —
+away from the feed, where nothing marks it read — walks off badged for their own
+words. And **arrivals are counted, not cards**, exactly as the calendar's heatmap
+counts them: the timeline folds a thread into one entry, so three can unfold into
+two cards. Collapsing only ever reduces, so the figure never undersells.
+
+`Posts.mark_feed_read/1` writes the marker at two moments, and the third one it
+skips is the design: **opening** the feed, and **revealing** what waited behind
+the pill. Not every arrival while the page is open — the notifications page marks
+its own arrivals read on the spot, but there the event *is* on screen as it
+lands, while these posts are behind a press. So a reader who was told and did not
+look keeps the count when they leave. The write broadcasts a bare `:feed_read`,
+like `:notifications_read`, and every open shell of that member empties its
+badge.
+
+**A recount asks by id, never with the socket's own `%User{}`** — the two-arity
+split `Activity.unread_notification_count/1` already established, and here for
+one reason more than there: the marker moves in the member's *other* tab, and
+this count also reads their language filter and remembered source off the
+struct, both of which a settings page in the next tab can change. A shell's copy
+of the member is as old as its mount, so `unread_feed_count/1`'s id clause
+re-reads them (one `Repo.get` against the ten source queries it feeds) and the
+struct clause stays what a fresh mount uses. That is also why the broadcast
+needs no payload.
+
+On /feed itself the badge is never drawn and no arrival recounts it
+(`recount_feed/1` asks `@path`), which also means the page that pays for the
+pill pays for nothing else. The figure stops at **50** and the badge then reads "50+"
+(`VutuvWeb.UI.capped_count/2`): measured on a copy of production for the member
+with the most follows (2,687 of them, a year of arrivals), the ten `LIMIT`s are
+the whole cost and the ceiling is nearly free — 7.5 ms at a cap of 9 against
+7.7 at 50 and 9.0 at 200, beside 5.2 ms for the bell's own badge on the same
+member. So 50 is a readability choice, not a budget: past a couple of dozen the
+answer to "how much did I miss" is "a lot".
+
 `Posts.feed_page/2` merges its sources through `Vutuv.FeedPage` (a shared
 cursor over independent fetchers). Three are local: own + followed authors'
 posts, their reposts, and — since issue #872 — posts carrying a **tag you follow**

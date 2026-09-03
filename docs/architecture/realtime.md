@@ -10,6 +10,17 @@ The app shell `VutuvWeb.ShellLive` (sticky top bar + mobile bottom tab bar, with
 live unread badges) is embedded in the shared `app` layout via `live_render`, so
 the chrome and badges are live on every page.
 
+Three badges, each a real count recomputed from its own source rather than a
+tally the events nudge: messages (`Chat.unread_conversations_count/1`),
+notifications (`Activity.unread_notification_count/1`, whose read state the next
+section describes) and the **Feed** nav item
+(`Posts.unread_feed_count/1`) — posts that reached the member's feed after the
+marker the feed writes, drawn only *away* from /feed, where the timeline's own
+"new posts" pill already says it. The feed one lives with the feed:
+[posts-and-feed.md](posts-and-feed.md). The browser tab's own "(3)" and the
+installed app's icon carry the first two only (`push_badge/1`); a busy feed would
+drown a number that means "somebody wrote to you".
+
 ### Installed on a phone (issue #1464)
 
 The site is installable: `/site.webmanifest` (`VutuvWeb.PageController`)

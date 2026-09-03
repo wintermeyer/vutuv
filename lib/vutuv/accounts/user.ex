@@ -358,11 +358,11 @@ defmodule Vutuv.Accounts.User do
     # changeset. Only the opening value: while the feed is open the LiveView's
     # own assign is the truth.
     field(:feed_source, :string)
-    # When that tab was last chosen. Stamped by the same writer, and read at
-    # every feed mount as the anchor for the unseen dot: moving to one tab
-    # dates the moment the reader stopped looking at the other, and that is
-    # what "unseen" is measured against — the socket it used to live in is
-    # gone the moment they open another page.
+    # When that tab was last chosen. Stamped by the same writer and read by
+    # **nobody**: its reader was the coral dot on the tab you were not on, which
+    # went with the source tabs themselves. Still written and still here because
+    # dropping a column takes the two deploys of expand/contract; see
+    # `Vutuv.Posts.remember_feed_filter/3`.
     field(:feed_source_at, :naive_datetime)
     # The feed's filter band. `feed_muted_hosts` switches whole fediverse
     # servers off — the instance-level twin of `fediverse_follows.muted`, which
@@ -453,6 +453,14 @@ defmodule Vutuv.Accounts.User do
     field(:welcome_notified_at, :naive_datetime)
     # Set programmatically by Vutuv.Activity.mark_notifications_read/1; never cast.
     field(:notifications_read_at, :naive_datetime)
+    # The same marker one surface over: how far this member has read their
+    # **feed**, which is what the "Feed" nav badge counts arrivals against
+    # (`Vutuv.Posts.unread_feed_count/1`). Written by
+    # `Vutuv.Posts.mark_feed_read/1` at every feed mount and whenever the reader
+    # reveals what waited behind the pill; never cast. NOT NULL with a `now()`
+    # default, so a member the marker has never been written for is "up to date
+    # as of their sign-up" rather than owed a badge counting their whole feed.
+    field(:feed_read_at, :naive_datetime)
     # How far the digest mail has got (`Vutuv.Activity.Digest`). The feed is
     # derived, so there is no row to flag as sent — this is the high-water mark
     # that stands in for one.

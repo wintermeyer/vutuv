@@ -103,6 +103,19 @@ defmodule Vutuv.Posts do
 
   @default_feed_limit 20
 
+  # The ceiling on the "Feed" nav badge (`unread_feed_count/1`), which is also a
+  # `LIMIT` on each of ten sources, paid on every page a member opens away from
+  # their feed. Measured on a copy of production for the member with the most
+  # follows (2,687) against a year of arrivals, best of three: **9 → 7.5 ms,
+  # 50 → 7.7 ms, 200 → 9.0 ms, 999 → 18.7 ms**, beside 5.2 ms for the bell's own
+  # badge on the same member; an ordinary quiet day costs 1.4 to 3.3 ms. So the
+  # ten `LIMIT`s are what the query costs and the ceiling is nearly free up to a
+  # couple of hundred — which makes this a readability choice rather than the
+  # budget it looks like. Fifty is where "how much did I miss" stops being a
+  # figure anybody reads and starts being "a lot", which is what the "50+" the
+  # badge draws at the ceiling says.
+  @feed_unread_cap 50
+
   # How many resharers a feed entry carries. The "Reposted by" banner draws this
   # many faces and then a `+N` chip, so loading more would be rows fetched to be
   # thrown away — and on a post of the reader's own, where the roster is no
@@ -3204,6 +3217,138 @@ defmodule Vutuv.Posts do
     {1, nil} = Repo.update_all(from(u in User, where: u.id == ^user.id), set: set)
 
     :ok
+  end
+
+  @doc """
+  The ceiling `unread_feed_count/1` counts to — what the badge needs in order to
+  draw "50+" and to say so in words, without the number living in a template.
+  """
+  def feed_unread_cap, do: @feed_unread_cap
+
+  @doc """
+  How many feed entries reached `viewer` after they last read their feed — the
+  figure the shell's "Feed" nav badge shows (`VutuvWeb.ShellLive`), and the
+  feed's answer to the bell's `Vutuv.Activity.unread_notification_count/1`.
+
+  The marker is `users.feed_read_at`, written by `mark_feed_read/1`; everything
+  stamped after it is news. Read off the struct the caller already holds, so the
+  badge costs no extra round trip for it.
+
+  Counted through **`feed_sources/3`**, the same sources a page is built from, so
+  the badge cannot promise news the timeline does not have — asked in the
+  **`:marks`** shape and never decorated, which is where the saving is: a number
+  needs none of `decorate_feed_entries/3`'s preloads, follow edges or engagement
+  reads. `:marks` itself only narrows the two fediverse sources that carry the
+  volume (the six local ones ignore it and still select their `%Post{}`), so it
+  is the decorate pass this skips, not eight cheaper queries. Through the
+  member's remembered source filter, too: somebody who switched the fediverse
+  half off in the band must not be badged for it.
+
+  Counts **arrivals, not cards**, exactly as `feed_activity_by_day/4` does and
+  for the same reason: the rendered timeline folds several posts of one thread
+  into one entry, so a badge of three can unfold into two cards. Collapsing only
+  ever reduces, so the figure is an upper bound and never undersells what is
+  waiting.
+
+  **The reader's own writing is not news to them.** Their own post and their own
+  repost are both in their feed (`feed_post_items/3`, `repost_reaches_me/1`), so
+  without the reject below the member who answers a post from its permalink page
+  — away from the feed, where nothing marks it read — would walk off with a badge
+  counting what they had just written themselves.
+
+  Bounded by `cap`, because a badge is a nudge and this runs on every page load:
+  at the ceiling it returns exactly `cap`, which `VutuvWeb.UI.count_badge/1`
+  renders as "50+". A feed holding exactly `cap` arrivals therefore reads one
+  post short of honest, which is the cheaper side of the trade — the expensive
+  side is `LIMIT`ing ten sources by a number nobody reads.
+  """
+  def unread_feed_count(viewer, opts \\ [])
+
+  def unread_feed_count(nil, _opts), do: 0
+
+  def unread_feed_count(%User{feed_read_at: nil}, _opts), do: 0
+
+  def unread_feed_count(%User{id: viewer_id} = viewer, opts) do
+    cap = Keyword.get(opts, :cap, @feed_unread_cap)
+    filter = Keyword.get(opts, :filter, remembered_feed_filter(viewer))
+
+    # `>= since` is what the sources apply, and the marker is a second the member
+    # has already seen, so the window opens the one after it.
+    cursor = %{
+      at: NaiveDateTime.utc_now(:second),
+      ids: [],
+      since: NaiveDateTime.add(viewer.feed_read_at, 1, :second)
+    }
+
+    # Summed with no dedup, because the sources are disjoint **in the query**:
+    # the reply source excludes a followee's reply (`feed_reply_to_me_items/3`)
+    # and the tag source excludes anybody the reader follows
+    # (`tag_source_member_gate/1`), each because the paginator counts rows for
+    # `more?` and a duplicate would shorten a page. A `uniq_by` here was written
+    # first and measured nothing — no pair of sources can produce one id.
+    viewer
+    |> feed_sources(filter, :marks)
+    |> Vutuv.FeedPage.fetch_sources(cap, cursor)
+    |> Enum.concat()
+    |> Enum.reject(&own_feed_act?(&1, viewer_id))
+    |> length()
+    |> min(cap)
+  end
+
+  # A recount re-reads the member, and the id clause is the one recounts take —
+  # the same split `Vutuv.Activity.unread_notification_count/1` makes, for the
+  # same reason and one reason more. The marker moves in the member's OTHER tab,
+  # so a socket that counted against its mount-time copy would resurrect what
+  # that tab has just read; and unlike the bell's, this count also reads the
+  # member's language filter and remembered source off the struct, both of which
+  # a settings page in the next tab can change. One `Repo.get` against the ten
+  # source queries it feeds is not a cost worth caching a stale answer for.
+  def unread_feed_count(user_id, opts) when is_binary(user_id),
+    do: unread_feed_count(Repo.get(User, user_id), opts)
+
+  # An entry the reader put in front of themselves — the two local shapes that
+  # can be theirs. A mark from a fediverse source carries neither key, and a
+  # page's reshare carries an organization, whose id is not a member's.
+  defp own_feed_act?(entry, viewer_id) do
+    case entry do
+      %{reposted_by: %{id: ^viewer_id}} -> true
+      %{post: %{user_id: ^viewer_id}} -> true
+      _other -> false
+    end
+  end
+
+  @doc """
+  Move `user`'s feed read marker to now and tell their open shells, whose badge
+  drops to zero.
+
+  Called when the feed is opened and whenever the reader reveals the arrivals
+  that waited behind the "new posts" pill — the two moments posts are actually
+  put in front of them. Deliberately **not** on every arrival while the feed is
+  open, the way the notifications page marks its own: those posts are behind a
+  press, not on screen, so the pill is what speaks for them — and it is still
+  speaking when the reader leaves the page without pressing it.
+
+  The wall clock rather than the newest entry's stamp: an entry landing in the
+  same second stays unread, which `Vutuv.Activity.mark_notifications_read/1` has
+  to arrange explicitly and which falls out here from the count's window opening
+  a second after the marker.
+  """
+  def mark_feed_read(nil), do: :ok
+
+  def mark_feed_read(%User{id: user_id}), do: mark_feed_read(user_id)
+
+  def mark_feed_read(user_id) when is_binary(user_id) do
+    now = NaiveDateTime.utc_now(:second)
+
+    # A narrow `update_all` for the reason `remember_feed_filter/3` gives: the
+    # caller's `%User{}` was loaded at mount and writing the whole struct back
+    # would undo whatever else changed meanwhile.
+    Repo.update_all(from(u in User, where: u.id == ^user_id), set: [feed_read_at: now])
+
+    # A bare atom, like `:notifications_read`: every recount re-reads the member
+    # (see the id clause of `unread_feed_count/1`), so a shell in the member's
+    # other tab has nothing to be told beyond "empty it".
+    Vutuv.Activity.broadcast(user_id, :feed_read)
   end
 
   @doc """
