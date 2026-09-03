@@ -1775,7 +1775,7 @@ defmodule VutuvWeb.PostComponents do
             body_style={@body_style}
             class="mt-1.5"
           />
-          <.remote_tags tags={@tags} />
+          <.remote_tags tags={@tags} mode={@mode} />
         </details>
       <% else %>
         <.remote_prose
@@ -1788,7 +1788,7 @@ defmodule VutuvWeb.PostComponents do
         >
           <:float :for={float <- @float}>{render_slot(float)}</:float>
         </.remote_prose>
-        <.remote_tags tags={@tags} />
+        <.remote_tags tags={@tags} mode={@mode} />
       <% end %>
     </div>
     """
@@ -1850,12 +1850,19 @@ defmodule VutuvWeb.PostComponents do
   # It showed most where a post ends on a link, which is where the eye already
   # sits low in the line.
   attr(:tags, :list, required: true)
+  attr(:mode, :atom, required: true, values: [:preview, :full])
 
   defp remote_tags(assigns) do
     ~H"""
-    <div :if={@tags != []} data-remote-tags class="mt-3 flex flex-wrap gap-2">
-      <.chip :for={tag <- @tags} navigate={tag.path} data-remote-tag={tag.name}>{tag.name}</.chip>
-    </div>
+    <.tag_row
+      :let={tag}
+      tags={@tags}
+      mode={@mode}
+      class="mt-3 flex flex-wrap gap-2"
+      data-remote-tags
+    >
+      <.tag_chip path={tag.path} label={tag.name} data-remote-tag={tag.name} />
+    </.tag_row>
     """
   end
 
@@ -3765,7 +3772,7 @@ defmodule VutuvWeb.PostComponents do
                   class="float-right mb-1 ml-4 w-2/5 sm:w-1/3"
                 />
                 {@body_html}
-                <.post_tags :if={@tags_in_body?} tags={@post.tags} />
+                <.post_tags :if={@tags_in_body?} tags={@post.tags} mode={@mode} />
               </div>
 
               <%= cond do %>
@@ -3930,7 +3937,7 @@ defmodule VutuvWeb.PostComponents do
           <%!-- A body that floats nothing leaves the tags to this row, below
           the pictures; the float-capable layouts carry them at the end of the
           text instead. `@tags_in_body?` is the whole of that decision. --%>
-          <.post_tags :if={not @tags_in_body?} tags={@post.tags} />
+          <.post_tags :if={not @tags_in_body?} tags={@post.tags} mode={@mode} />
 
           <.liked_by :if={@likers} likers={@likers} />
 
@@ -4107,7 +4114,12 @@ defmodule VutuvWeb.PostComponents do
           wraps around it; the block contains + clips it (flow-root + overflow). --%>
           {render_slot(@float)}
           {@body_html}
-          <.post_tags :if={@wrap or @media} tags={@tags} class="post-preview__tags-inline" />
+          <.post_tags
+            :if={@wrap or @media}
+            tags={@tags}
+            mode={:preview}
+            class="post-preview__tags-inline"
+          />
         </div>
         <%!-- The cut fades out (a mask on the clamp body itself, gated on the
         `is-clamped` the hook sets — see components.css), so it needs no overlay
@@ -4126,7 +4138,7 @@ defmodule VutuvWeb.PostComponents do
           {gettext("Read more")}
         </button>
       </div>
-      <.post_tags :if={@wrap or @media} tags={@tags} class="post-preview__tags-below" />
+      <.post_tags :if={@wrap or @media} tags={@tags} mode={:preview} class="post-preview__tags-below" />
     </div>
     """
   end
@@ -4138,16 +4150,127 @@ defmodule VutuvWeb.PostComponents do
   # layered rules in the cascade.
   attr(:tags, :list, required: true)
   attr(:class, :string, default: "mt-3 flex flex-wrap gap-2")
+  attr(:mode, :atom, required: true, values: [:preview, :full])
 
   defp post_tags(assigns) do
     ~H"""
-    <%!-- no-underline: inside the full-mode/preview body the row sits in
-    `.markdown`, whose `a { text-decoration: underline }` would underline the
-    chips; the utility wins over the components-layer rule and is a no-op
-    elsewhere. --%>
-    <div :if={@tags != []} class={@class}>
-      <.chip :for={tag <- @tags} navigate={~p"/tags/#{tag}"} class="no-underline">{tag.name}</.chip>
+    <.tag_row :let={tag} tags={@tags} mode={@mode} class={@class} data-post-tags>
+      <.tag_chip path={~p"/tags/#{tag}"} label={tag.name} />
+    </.tag_row>
+    """
+  end
+
+  # A post's row of tag chips, member and remote alike: five of them, then the
+  # rest behind a "+N" pill. The caller renders one chip through `:let`, since
+  # a member's tag and a remote hashtag reach different paths and the remote
+  # one carries the `data-remote-tag` its tests read; everything about the fold
+  # is here, once. Two copies of that rule is how this file's tag placement
+  # drifted into three different answers before (`assign_tags_placement/2`).
+  attr(:tags, :list, required: true)
+  attr(:mode, :atom, required: true, values: [:preview, :full])
+  attr(:class, :string, required: true)
+  attr(:rest, :global)
+  slot(:inner_block, required: true)
+
+  defp tag_row(assigns) do
+    {shown, folded} = split_tags(assigns.tags, assigns.mode)
+    assigns = assign(assigns, shown: shown, folded: folded)
+
+    ~H"""
+    <div :if={@tags != []} class={@class} {@rest}>
+      <%= for tag <- @shown do %>{render_slot(@inner_block, tag)}<% end %>
+      <.folded_tags :if={@folded != []} count={length(@folded)}>
+        <%= for tag <- @folded do %>{render_slot(@inner_block, tag)}<% end %>
+      </.folded_tags>
     </div>
+    """
+  end
+
+  # The permalink IS this one post, so it shows every tag it has; a timeline
+  # card folds the rest behind the pill. Six is not worth a control — a "+1"
+  # pill costs the row exactly what the chip it hides costs — so the sixth tag
+  # simply shows.
+  #
+  # The long rows come from over there. A member's post is capped at five tags
+  # by the composer, so today only a remote post can reach the fold — and it
+  # reaches it often: of the 6,390 cached fediverse posts in the dev copy of
+  # production, 2,641 close with a hashtag line, 847 of those name more than
+  # five and the longest names 32. That is four lines of pills between one post
+  # and the next (Stefan, 2026-09-03).
+  defp split_tags(tags, :full), do: {tags, []}
+
+  defp split_tags(tags, :preview) do
+    shown = Posts.tags_shown()
+    if length(tags) <= shown + 1, do: {tags, []}, else: Enum.split(tags, shown)
+  end
+
+  # One tag pill, for a member's tag and a remote post's closing hashtag alike.
+  #
+  # no-underline: inside the full-mode/preview body the row sits in `.markdown`,
+  # whose `a { text-decoration: underline }` would underline the chips; the
+  # utility wins over the components-layer rule and is a no-op elsewhere.
+  #
+  # A tag name runs to 255 characters and a hashtag from over there is often a
+  # whole compound sentence, so the pill caps its width and cuts the name rather
+  # than spending three lines of the card on one tag; the full name stays in the
+  # `title` and on the tag page. `min-w-0` here and the `truncate`'s own
+  # `overflow: hidden` on the label are what let it shrink at all — a flex item
+  # otherwise refuses to go below its min-content width, and on a phone that is
+  # the card scrolling sideways rather than the tag getting shorter.
+  attr(:path, :string, default: nil)
+  attr(:label, :string, required: true)
+  attr(:rest, :global)
+
+  defp tag_chip(assigns) do
+    ~H"""
+    <.chip navigate={@path} class="min-w-0 max-w-56 no-underline" title={@label} {@rest}>
+      <span class="truncate">{@label}</span>
+    </.chip>
+    """
+  end
+
+  # The tags a timeline card does not show at rest, behind a "+N" pill.
+  #
+  # A native `<details>`: opening costs no JavaScript, no round trip and no
+  # server state, and `data-keep-open` is what stops the next unrelated patch (a
+  # like count ticking, a post streaming in above) from folding it shut under
+  # the reader's cursor.
+  #
+  # Open, the whole disclosure **dissolves** (the `[data-folded-tags][open]`
+  # pair in components.css): the pill and the tags it revealed become flex
+  # items of the chip row itself, so they simply continue the line the fifth
+  # chip ended on, and the row's own `gap` governs them — a `<details>` made a
+  # flex row instead would re-declare that gap in a second place and put the
+  # revealed tags on a line of their own. Shut, that same box is what the
+  # browser hides the tags with, which is why the rule is scoped to `[open]`.
+  attr(:count, :integer, required: true)
+  slot(:inner_block, required: true)
+
+  defp folded_tags(assigns) do
+    ~H"""
+    <details data-keep-open data-folded-tags class="group">
+      <%!-- Each span owns `display` exactly once and conditionally (issue
+      #880): the count hides while open, the way back hides while closed.
+      Neither carries a base `hidden` beside a variant that has to out-cascade
+      it. The pill wears the chip's own geometry (`chip_class/0`, so a padding
+      or radius change to the chips carries it along) in slate, so it lines up
+      with the tags without pretending to be one of them. `aria-label` rather
+      than the visible text, because "+7" is nothing to hear and a disclosure
+      already announces which way it goes. --%>
+      <summary
+        aria-label={gettext("All tags")}
+        class={[
+          chip_class(),
+          "cursor-pointer list-none bg-slate-100 text-slate-600 hover:bg-slate-200",
+          "hover:text-slate-900 [&::-webkit-details-marker]:hidden dark:bg-slate-800",
+          "dark:text-slate-300 dark:hover:bg-slate-700 dark:hover:text-slate-100"
+        ]}
+      >
+        <span class="group-open:hidden">+{compact_count(@count)}</span>
+        <span class="group-[:not([open])]:hidden">{gettext("Less")}</span>
+      </summary>
+      {render_slot(@inner_block)}
+    </details>
     """
   end
 

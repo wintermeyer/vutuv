@@ -144,10 +144,22 @@ defmodule Vutuv.Posts do
   # stack's `+N` chip (issue #1233). The same cap the row and the agent-format
   # siblings use, so both name the same people.
   @likers_shown 5
+  # How many tag chips a timeline card shows before the rest fold behind its
+  # own `+N` pill. Deliberately independent of `@max_tags` above, which happens
+  # to be the same number today: that one is what a member may write, this one
+  # is how much of a row the feed will spend. Raising the composer's cap should
+  # make a member's post fold like a remote one, not widen every card.
+  @tags_shown 5
 
   def max_images_per_post, do: Keyword.fetch!(config(), :max_per_post)
   def max_image_filesize, do: Keyword.fetch!(config(), :max_filesize)
   def max_tags_per_post, do: @max_tags
+
+  @doc """
+  How many of a post's tags a timeline card shows before folding the rest.
+  """
+  def tags_shown, do: @tags_shown
+
   defp config, do: Application.fetch_env!(:vutuv, :post_images)
 
   ## Creating / updating / deleting
