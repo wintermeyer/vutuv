@@ -109,6 +109,50 @@ defmodule Vutuv.AudiobookLengthTest do
     assert AudiobookLength.minutes(@isbn) == nil
   end
 
+  describe "a catalogue that answers with junk" do
+    # `Req.get` here reads the whole response — no `into:`, no `max_bytes` — and
+    # the MARC regexes ran over whatever arrived. On a body of opening `<record>`
+    # tags with no closer, each lazy run expands to the end of the subject before
+    # failing: measured 13.6 s on 200 KB. This is a background task against a
+    # fixed catalogue host, so the cost is a pinned worker rather than request
+    # latency, but the host is config-overridable and nothing bounded this.
+    #
+    # Reductions, not the clock: the suite runs twenty cases in parallel.
+    #
+    # Calibrated: this goes red only with BOTH guards out. At this size either
+    # one alone already holds — the cap keeps the runs off most of the body, and
+    # the runs are cheap enough for what is left. They are both kept because
+    # they answer different questions: the cap bounds a fetch that reads
+    # whatever a host sends, the bounds protect against a hostile body that fits
+    # UNDER the cap, which no amount of capping reaches.
+    test "a hostile answer is bounded work" do
+      hostile = String.duplicate("<record foo>", 40_000)
+
+      Application.put_env(:vutuv, :dnb_req_options,
+        plug: fn conn ->
+          conn
+          |> Plug.Conn.put_resp_content_type("text/xml")
+          |> Plug.Conn.send_resp(200, hostile)
+        end
+      )
+
+      review = %Vutuv.Posts.PostReview{
+        kind: "book",
+        identifier: "9783442541683",
+        title: "Egal",
+        creator: "Wer auch immer",
+        medium: "audiobook"
+      }
+
+      {reductions, result} =
+        Vutuv.WorkCounter.count_reductions(fn -> Vutuv.AudiobookLength.lookup(review) end)
+
+      # Nothing to find in junk, and it must not cost a second to say so.
+      refute result
+      assert reductions < 50_000_000, "a hostile answer cost #{reductions} reductions"
+    end
+  end
+
   describe "lookup/1 falling back to the work's other audio editions" do
     # Most reviews carry the PRINT ISBN, so the by-ISBN answer is empty and
     # the catalogue is searched by title + author instead. These records are
