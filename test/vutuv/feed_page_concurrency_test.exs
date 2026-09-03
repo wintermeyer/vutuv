@@ -53,7 +53,11 @@ defmodule Vutuv.FeedPageConcurrencyTest do
       # is itself the assertion: the failure travels out of the task.
       {pid, ref} = spawn_monitor(fn -> FeedPage.fetch_sources(sources, 5, nil) end)
 
-      assert_receive {:DOWN, ^ref, :process, ^pid, {%RuntimeError{message: "source down"}, _}}
+      # Generously, because the default 100 ms is a bet on scheduling: the whole
+      # suite runs twenty cases at once, and this failed there while passing
+      # alone. What is asserted is that the exit arrives at all, not how quickly.
+      assert_receive {:DOWN, ^ref, :process, ^pid, reason}, 5_000
+      assert {%RuntimeError{message: "source down"}, _stacktrace} = reason
     end
 
     test "each source is handed the fetch size and the cursor the caller passed" do
