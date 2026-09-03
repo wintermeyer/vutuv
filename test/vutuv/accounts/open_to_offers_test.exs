@@ -84,12 +84,19 @@ defmodule Vutuv.Accounts.OpenToOffersTest do
   # matching over a loaded struct — two spellings of the one #928 rule, which is
   # exactly the shape that drifts. This pins them to each other: every
   # visibility value, seen by nobody and by a signed-in member.
+  #
+  # `nil` is not a value the column can hold (NOT NULL): passing it means "let
+  # the default decide", which is what a member who never opened the block gets
+  # — so the row is read back before the predicate is asked, or the struct
+  # answers about a value the database does not have. That reload is doing real
+  # work here: it is the only reason this case tests the shipped default rather
+  # than whatever the fixture happened to type.
   test "the SQL gate answers what the struct predicate answers" do
     viewer = insert(:activated_user)
 
     for visibility <- ["everyone", "members", "hidden", nil],
         {label, looker} <- [{"anonymous", nil}, {"signed in", viewer}] do
-      member = seeker(employment_status_visibility: visibility)
+      member = Repo.reload!(seeker(employment_status_visibility: visibility))
       listed? = member.id in ids(Accounts.open_to_offers(looker))
       predicate? = User.employment_status_visible?(member, looker)
 

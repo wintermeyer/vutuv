@@ -71,9 +71,15 @@ defmodule VutuvWeb.EmploymentStatusTest do
   end
 
   describe "badge visibility scoping (issue #928)" do
-    test "the default (members) hides the badge from a logged-out visitor", %{conn: conn} do
-      user = insert_activated_user(employment_status: "looking")
-      assert user.employment_status_visibility == "members"
+    test "members hides the badge from a logged-out visitor", %{conn: conn} do
+      # Spelled out rather than left to the default, which stopped being
+      # "members" on 2026-09-03 — the rule this pins is the one the value
+      # names, not whichever value ships as the default.
+      user =
+        insert_activated_user(
+          employment_status: "looking",
+          employment_status_visibility: "members"
+        )
 
       html = conn |> get(~p"/#{user}") |> html_response(200)
 
@@ -81,7 +87,19 @@ defmodule VutuvWeb.EmploymentStatusTest do
       refute html =~ "Looking for a job"
     end
 
-    test "the default (members) shows the badge to a signed-in member", %{conn: conn} do
+    test "the default shows the badge to a logged-out visitor", %{conn: conn} do
+      # The other half of that change, end to end: somebody who only said they
+      # are looking, and touched nothing else, is seen by the visitor who is
+      # not signed in — which is what saying it is for.
+      user = insert_activated_user(employment_status: "looking")
+      assert user.employment_status_visibility == "everyone"
+
+      html = conn |> get(~p"/#{user}") |> html_response(200)
+
+      assert html =~ "Looking for a job"
+    end
+
+    test "the default shows the badge to a signed-in member", %{conn: conn} do
       {conn, _viewer} = create_and_login_user(conn)
       user = insert_activated_user(employment_status: "looking")
 

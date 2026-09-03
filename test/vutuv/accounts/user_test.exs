@@ -367,8 +367,11 @@ defmodule Vutuv.Accounts.UserTest do
   end
 
   describe "employment-status visibility (issue #928)" do
-    test "defaults to members" do
-      assert %User{}.employment_status_visibility == "members"
+    # Since 2026-09-03. The column is only read once a status is set, and
+    # somebody who has just said they are open to offers is not helped by
+    # hiding that from everyone who is not signed in.
+    test "defaults to everyone" do
+      assert %User{}.employment_status_visibility == "everyone"
     end
 
     test "accepts the three visibility values" do
