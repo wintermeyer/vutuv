@@ -1978,6 +1978,21 @@ div.footnotes li:target {
 .post-preview--wrap.is-clamped:not(.is-expanded) .post-preview__tags-inline { display: none; }
 .post-preview--wrap.is-clamped:not(.is-expanded) .post-preview__tags-below { display: flex; }
 
+/* The tags a card folds away sit in a `<details>` inside the chip row. Open, it
+   dissolves entirely — the pill and the tags it revealed become flex items of
+   the row, so they continue the line the fifth chip ended on and the row's own
+   gap governs them. Both halves are needed: the `<details>` is one flex item,
+   and the browser wraps everything after its summary in a second one
+   (`::details-content`), so dissolving only the outer box still lands the
+   revealed tags BELOW the word that revealed them, alone on a row of the card.
+   Scoped to `[open]`, because shut, that inner box is what the browser hides
+   the tags with and a box that is not there hides nothing; a browser too old
+   for the pseudo-element keeps the stacked reading and hides nothing either. */
+[data-folded-tags][open],
+[data-folded-tags][open]::details-content {
+  display: contents;
+}
+
 /* Enough left padding that the markers (which sit in it, list-style outside)
    clear the paragraph margin and the list reads as an indented block — 1.4em
    left the "1." barely off the margin, so it looked un-indented. */

@@ -1971,11 +1971,20 @@ defmodule VutuvWeb.UI do
     """
   end
 
-  defp chip_class("sm"),
+  @doc """
+  The chip's geometry and type, without its brand tint — for a control that has
+  to line up in a row of chips while reading as a control rather than as one of
+  them (the post card's "+N more tags" pill wears it in slate). A copy of the
+  utilities would have to be kept level with `chip/1` by hand, which is the
+  reason `filter_chip_class/1` is a tone over one recipe too.
+  """
+  def chip_class(size \\ "md")
+
+  def chip_class("sm"),
     do:
       "inline-flex items-center gap-1 rounded-md bg-brand-50 px-2 py-0.5 text-xs font-medium text-brand-700 dark:bg-brand-900/40 dark:text-brand-100"
 
-  defp chip_class(_md),
+  def chip_class(_md),
     do:
       "inline-flex items-center gap-2 rounded-lg bg-brand-50 px-3 py-1.5 text-sm font-medium text-brand-700 dark:bg-brand-900/40 dark:text-brand-100"
 
