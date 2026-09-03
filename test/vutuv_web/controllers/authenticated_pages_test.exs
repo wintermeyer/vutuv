@@ -103,8 +103,7 @@ defmodule VutuvWeb.AuthenticatedPagesTest do
       renders(conn, ~p"/settings/messengers/#{messenger}/edit")
     end
 
-    test "public listing and global tag pages render", %{conn: conn, tag: tag} do
-      renders(conn, ~p"/listings/most_followed_users")
+    test "the global tag pages render", %{conn: conn, tag: tag} do
       renders(conn, ~p"/tags")
       renders(conn, ~p"/tags/#{tag}")
     end

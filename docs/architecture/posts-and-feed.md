@@ -782,13 +782,13 @@ that rather than leaving with the card; it was re-calibrated there by dropping
 the `not is_nil(followee_id)` guard and watching it go red.
 
 **"Who to follow" reads a snapshot, and does not trust it.** Its pool comes from
-`Vutuv.Social.PopularUsers`: a GenServer re-ranking every ten minutes into a
-`read_concurrency` ETS table, with `:miss` falling back to the live query so boot
-and tests behave exactly as before. The reason is not the page load — it is the
-timer above: every open feed tab redraws the rail every five minutes, so a
-per-viewer ranking scaled with tabs left open rather than with people reading,
-while the expensive half of the question has the same answer for every reader on
-the installation.
+`Vutuv.Posts.TopPosters`: a GenServer re-ranking the window's most-hearted
+posters every ten minutes into a `read_concurrency` ETS table, with `:miss`
+falling back to the live query so boot and tests behave exactly as before. The
+reason is not the page load — it is the timer above: every open feed tab redraws
+the rail every five minutes, so a per-viewer ranking scaled with tabs left open
+rather than with people reading, while the expensive half of the question has
+the same answer for every reader on the installation.
 
 The rule the design rests on: **the pool proposes, the database disposes.** A
 snapshot is minutes old and moderation is not, so the draw re-applies the full

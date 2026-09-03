@@ -8,9 +8,10 @@ DB-backed helpers per row. --%>
 <%!-- Optional per-row mute toggle: only the owner's own "Following" list passes
 muted_by_id (followee_id => muted?), so other listings render no mute control. --%>
 <% muted_by_id = assigns[:muted_by_id] || %{} %>
-<%!-- Optional per-row tag summary: only the most-followed listing passes
-tags_by_id (user_id => %{top: [user_tag], total: n}), so other listings render
-no tag line and the rows keep their compact height. --%>
+<%!-- Optional per-row tag summary: the follower / following lists and the
+directory's letter pages pass tags_by_id (user_id => %{top: [user_tag],
+total: n}), so other listings render no tag line and the rows keep their
+compact height. --%>
 <% tags_by_id = assigns[:tags_by_id] %>
 <%!-- Optional filing order: only the member directory passes filed_names, since
 it is the one listing sorted by last name ("Özil, Mesut"). Every other listing

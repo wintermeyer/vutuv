@@ -80,12 +80,8 @@ defmodule Vutuv.Application do
         # distinct Fediverse accounts following them). Starts after the Repo (it
         # seeds from it) and PubSub (it broadcasts over it).
         Vutuv.PeopleCounter,
-        # Snapshots the "most followed members" pool for the profile's
-        # who-to-follow card and the public listing. Starts after the Repo (it
-        # seeds the snapshot from it).
-        Vutuv.Social.PopularUsers,
         # Snapshots the "who to follow" recent-poster pool the profile rail
-        # draws from — same deal as PopularUsers. Starts after the Repo.
+        # draws from. Starts after the Repo (it seeds the snapshot from it).
         Vutuv.Posts.TopPosters,
         # Fans a :day_changed broadcast out at Berlin midnight so open pages
         # re-render "today"/"Gestern" post timestamps. Needs PubSub only.

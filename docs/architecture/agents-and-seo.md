@@ -14,8 +14,7 @@ as `.vcf` (vCard 3.0) — or via `Accept: text/markdown` / `text/plain` /
 "markdown for agents" convention).
 
 Covered pages: profile, post permalinks, the post archive, follower/following
-lists, tag pages, the most-followed listing and the member directory;
-`/llms.txt` documents the scheme.
+lists, tag pages and the member directory; `/llms.txt` documents the scheme.
 
 An **"Other formats" card** surfaces these links on the profile aside, the post
 permalink and the feed rail.
@@ -238,8 +237,8 @@ shows. `indexable_users/0` is that set minus the search-engine opt-out
 (`noindex?`), and it is what `/sitemap.xml` advertises. Until v7.407.0 the
 directory used the second for both, so a member who had opted out of search
 engines was missing from the one page whose job is to help somebody find them —
-while `/search`, the most-followed listing and every follower list had listed
-them all along. The directory was the outlier, not the rule.
+while `/search` and every follower list had listed them all along. The directory
+was the outlier, not the rule.
 
 What the opt-out buys now is `rel="nofollow"` on that member's row
 (`UserHelpers.profile_rel/1`, applied in the shared `card_list` and `user_row`
@@ -365,7 +364,7 @@ assign — the CV builder and the tag page set one), else a public post's teaser
 line, else a member's work info, else an organization's own description, else a
 **per-page description** keyed on the request path (`page_copy/1`: the settings
 sections, the `/system` directory, and the public info pages — login, community,
-legal, developers, the tags and most-followed listings), else the generic site
+legal, developers and the tag listings), else the generic site
 pitch (a business network, free to join). That path lookup keys the
 organization **directory**'s copy on `/organizations` alone: matching every path
 below it put "Verified organization pages on vutuv…" under each individual page

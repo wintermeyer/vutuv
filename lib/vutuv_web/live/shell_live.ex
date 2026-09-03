@@ -1170,14 +1170,6 @@ defmodule VutuvWeb.ShellLive do
                 {gettext("Profile")}
               </.link>
               <.link
-                href={~p"/listings/most_followed_users"}
-                data-nav-item
-                aria-current={on_route?(@path, "/listings/most_followed_users") && "page"}
-                class={nav_link_class(on_route?(@path, "/listings/most_followed_users"))}
-              >
-                {gettext("Network")}
-              </.link>
-              <.link
                 href={~p"/jobs"}
                 data-nav-item
                 aria-current={on_route?(@path, "/jobs") && "page"}

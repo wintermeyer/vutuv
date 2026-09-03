@@ -27,8 +27,8 @@ defmodule VutuvWeb.CompanyControllerTest do
       html = conn |> german() |> get(~p"/") |> html_response(200)
 
       # The four group headings, in German, since the footer itself is
-      # translated. Matched as headings and not as bare words: "Netzwerk" is
-      # also the top bar's nav label, so `html =~ "Netzwerk"` would pass on a
+      # translated. Matched as headings and not as bare words: every one of
+      # them is a common enough word that `html =~ "Netzwerk"` would pass on a
       # page with no footer groups at all.
       for heading <- ["Netzwerk", "Entwickler", "Unternehmen", "Rechtliches"] do
         assert html =~ ">#{heading}</h2>"

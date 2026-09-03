@@ -2,8 +2,7 @@ defmodule VutuvWeb.AgentDocs.ListDocs do
   @moduledoc """
   The people-list pages as data maps for the agent formats: the follower /
   following lists (`/:slug/followers`, `/:slug/following`), the connections
-  list (`/:slug/connections`), the tag page (`/tags/:slug`), the
-  most-followed listing (`/listings/most_followed_users`) and the member
+  list (`/:slug/connections`), the tag page (`/tags/:slug`) and the member
   directory (`/system/members` + `/system/members/:letter`).
 
   The follow and connection lists are noindexed in HTML (the `NoIndex`
@@ -161,19 +160,6 @@ defmodule VutuvWeb.AgentDocs.ListDocs do
     })
   end
 
-  @doc "The /listings/most_followed_users page."
-  def build_most_followed(users, work_info_by_id, tags_by_id \\ %{}) do
-    AgentDocs.doc_meta("listing", "/listings/most_followed_users")
-    |> Map.merge(%{
-      title: gettext("Most followed members"),
-      description:
-        gettext(
-          "We haven't yet figured out the best way to help everyone discover other interesting vutuv users. So for now, this page simply lists the 1,000 users with the most followers."
-        ),
-      people: Enum.map(users, &person_entry(&1, work_info_by_id, tags_by_id))
-    })
-  end
-
   @doc """
   The member-directory overview (`/system/members`): one entry per letter bucket
   with its member count and letter-page URL. Zero-count letters ride along
@@ -209,9 +195,8 @@ defmodule VutuvWeb.AgentDocs.ListDocs do
   end
 
   @doc """
-  One page of a member-directory letter (`/system/members/:letter`). Same doc type
-  as the most-followed listing — it is a plain people list; the directory
-  context lives in the title and the canonical URL.
+  One page of a member-directory letter (`/system/members/:letter`). A plain
+  people list; the directory context lives in the title and the canonical URL.
   """
   def build_directory_letter(letter, label, people, total, work_info_by_id, tags_by_id) do
     title = gettext("Members: %{letter}", letter: label)
@@ -234,7 +219,7 @@ defmodule VutuvWeb.AgentDocs.ListDocs do
     |> maybe_put_tags(tags_by_id[user.id])
   end
 
-  # The most-followed listing and the follower / following lists pass a tag
+  # The follower / following lists and the directory's letter pages pass a tag
   # summary; the connection and tag-endorser lists leave it nil so their person
   # entries are unchanged.
   defp maybe_put_tags(person, nil), do: person

@@ -18,7 +18,7 @@ defmodule Vutuv.SocialFeed.Cache do
   (`Vutuv.SocialFeed.record_result/3` decides), so a struggling server is not
   re-asked before its `fetch_retry_at`.
 
-  Like `Vutuv.Social.PopularUsers`, `name:`/`table:`/TTL opts are injectable
+  Like `Vutuv.Posts.TopPosters`, `name:`/`table:`/TTL opts are injectable
   so tests run isolated instances; the app-wide instance always starts (it
   does no work until a page requests a fetch, and the per-provider feature
   flags gate that in tests).

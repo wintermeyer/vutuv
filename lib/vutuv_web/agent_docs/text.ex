@@ -760,7 +760,7 @@ defmodule VutuvWeb.AgentDocs.Text do
 
   defp endorser_names(_tag), do: ""
 
-  # The most-followed listing and the follower / following lists carry a
+  # The follower / following lists and the directory's letter pages carry a
   # per-person tag summary; the plain names go inline (the structured links live
   # in the JSON/XML formats). The connection and tag-endorser lists leave it nil.
   defp tags_suffix(nil), do: ""

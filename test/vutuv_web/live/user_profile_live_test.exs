@@ -991,7 +991,7 @@ defmodule VutuvWeb.UserProfileLiveTest do
       # Alone on the installation: no rail card to jump to, so the step links
       # to the browsable listing instead of a dead anchor.
       refute has_element?(view, "#profile-who-to-follow")
-      assert has_element?(view, ~s(#profile-completion a[href="/listings/most_followed_users"]))
+      assert has_element?(view, ~s(#profile-completion a[href="/system/members"]))
     end
   end
 

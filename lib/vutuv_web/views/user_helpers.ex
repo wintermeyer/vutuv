@@ -82,8 +82,8 @@ defmodule VutuvWeb.UserHelpers do
   (`VutuvWeb.ContentPolicy`), but only once the crawler has fetched it. The
   `rel` says it a step earlier, at the link, so a listing that shows an
   opted-out member to people — the member directory since it stopped hiding
-  them, and the most-followed / follower listings, which never did — does not
-  hand a crawler a path to walk.
+  them, and the follower / following listings, which never did — does not hand
+  a crawler a path to walk.
 
   One definition rather than the flag re-read per template: it is the same
   question at every listing row, and the answer must not depend on which

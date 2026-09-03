@@ -546,12 +546,9 @@ config :vutuv, :ai_crawler_policy, :permissive
 # does not own.
 config :vutuv, :reconcile_people_count, true
 
-# The "most followed members" pool (Vutuv.Social.PopularUsers) re-ranks on a
+# The "who to follow" recent-poster pool (Vutuv.Posts.TopPosters) re-ranks on a
 # slow timer. Tests turn this off (sandbox ownership); every call then falls
 # back to the direct ranking query, so tests always see fresh data.
-config :vutuv, :refresh_popular_users, true
-# Same deal for the "who to follow" recent-poster pool (Vutuv.Posts.TopPosters)
-# and the feed rail's suggested-posts pool (Vutuv.Posts.PopularPosts).
 config :vutuv, :refresh_top_posters, true
 # The memo in front of Vutuv.Tags.linkable_slugs/1 (Vutuv.Tags.LinkableCache):
 # whether a written #hashtag names a topic worth a click, remembered for a
@@ -566,7 +563,6 @@ config :vutuv, :linkable_tag_cache, true
 # and again in every other member's feed. Off in tests, where a memo outliving
 # the asking process would answer for the next test's freshly written post.
 config :vutuv, :markdown_cache, true
-config :vutuv, :refresh_popular_posts, true
 
 # The inline social posts on profiles (Vutuv.SocialFeed), one flag per
 # provider. Tests turn them off: every profile LiveView test performs a

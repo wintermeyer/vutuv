@@ -1113,7 +1113,7 @@ defmodule VutuvWeb.AgentDocs.Markdown do
       tags_suffix(Map.get(person, :tags))
   end
 
-  # The most-followed listing and the follower / following lists carry a
+  # The follower / following lists and the directory's letter pages carry a
   # per-person tag summary; the connection and tag-endorser lists leave it nil
   # and the suffix is empty.
   defp tags_suffix(nil), do: ""

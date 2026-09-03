@@ -4811,8 +4811,8 @@ defmodule Vutuv.Posts do
   like their own post.
 
   Viewer-independent, so it is served from the `Vutuv.Posts.TopPosters`
-  snapshot when that can answer (10-minute freshness, the
-  `Vutuv.Social.PopularUsers` deal) and computed live on a miss.
+  snapshot when that can answer (10-minute freshness) and computed live on a
+  miss.
   """
   def top_recent_posters(days, limit) do
     case TopPosters.top(days, limit) do

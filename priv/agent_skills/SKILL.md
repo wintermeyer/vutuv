@@ -33,7 +33,6 @@ pointing back at the canonical HTML page. Respect `Content-Signal` and
 - `/<username>/<section>` — profile sections: `work_experiences`, `links`,
   `social_media_accounts`, `addresses`, `phone_numbers`, `emails`, `tags`
 - `/tags/<tag>` — a tag and its most endorsed members
-- `/listings/most_followed_users` — the most followed members
 - `/search?q=<query>` — member search (HTML)
 
 List pages paginate with `?page=N`.
