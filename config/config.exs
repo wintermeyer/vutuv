@@ -322,7 +322,6 @@ config :vutuv, :welcome_suggestions, %{
     "@tagesschau@ard.social",
     "@tazgetroete@mastodon.social",
     "@heiseonline@social.heise.de",
-    "@bundestag@social.bund.de",
     "@Bundesregierung@social.bund.de",
     "@DeutscherWetterdienst@social.bund.de"
   ]
