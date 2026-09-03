@@ -761,74 +761,46 @@ defmodule VutuvWeb.PostComponents do
   defp post_filter_link(base_path, type), do: base_path <> "?type=" <> type
 
   @doc """
-  The collapsed composer trigger: the viewer's avatar beside an input-shaped
-  pill, the composer pattern every network trains. Card-weight on purpose —
-  its dashed `<.empty_add>` predecessor was an outline rather than a surface
-  and read as a void next to solid cards.
+  The **compose control**: one button, "Write a post", that unfolds the
+  composer its host keeps folded behind it.
 
-  One home: the **profile's Beiträge card** (`href={~p"/feed#compose"}`, a link
-  that opens the feed with the composer revealed and focused). The default
-  `surface={:card}` carries its own white card shell for standing alone on the
-  canvas; pass `surface={:flat}` when it sits inside an existing card. Carries
-  `data-composer-trigger` for tests.
+  Two homes, the same gesture on purpose (Stefan, 2026-09-03): the feed's
+  control line and the owner's own profile Posts card. Both push
+  `open-composer` at the LiveView that owns the panel, so what is shared is the
+  whole affordance and not merely its paint.
 
-  **/feed used to be the second home and no longer is** (2026-08-31): at the top
-  of the feed this had to become a 40px control sharing one line with the
-  calendar and the waiting-posts quote, and a shape that looks like a field but
-  takes no typing reads as broken the moment somebody clicks into it. That
-  surface uses a plain button now (`VutuvWeb.PostLive.Feed`'s private
-  `compose_button/1`).
+  A BUTTON, not the input-shaped tile it replaced on either surface: that one
+  wore a placeholder and a text cursor and took neither, which read as a field
+  you could type in (the feed, 2026-08-31; the profile, 2026-09-03).
 
-  **That argument is not really about /feed, and this component is the open half
-  of it.** The tile here is a `<.link>` that navigates away, so it takes no
-  typing either; what it has that the feed's copy did not is room, a card of its
-  own to sit in, and a destination that is a real editor one click later. Nobody
-  has decided whether that is enough. Until somebody does, do not copy this shape
-  onto a third surface — reach for `compose_button/1`'s plainer one.
+  The id is spelled here and nowhere else — `keyboard_shortcuts.js`
+  (`revealAndFocusComposer`), the phone tab bar's Write tab and the `#compose`
+  arrival all click it by name — which is also why a page carries exactly one.
+
+  `h-10` puts it on the app's control line, level with the folded rail calendar
+  beside it on the feed; how wide it gets is the host's business (`class`).
+  `label` says "Write a post" unless the host has something better to offer —
+  the profile's empty state asks for a first one.
   """
-  attr(:viewer, :any, required: true, doc: "the viewer; their avatar anchors the row")
-  attr(:href, :any, required: true)
-  attr(:surface, :atom, default: :card, values: [:card, :flat])
+  attr(:label, :string, default: nil)
   attr(:class, :any, default: nil)
-  attr(:rest, :global)
-  slot(:inner_block, required: true)
 
-  def composer_trigger(assigns) do
-    assigns =
-      assign(assigns, :shell_class, [
-        "group flex w-full items-center gap-3 text-left",
-        assigns.surface == :card &&
-          "rounded-2xl bg-white p-4 shadow-sm ring-1 ring-slate-200 dark:bg-slate-900 dark:ring-slate-800",
-        assigns.class
-      ])
-
+  def compose_button(assigns) do
     ~H"""
-    <.link href={@href} data-composer-trigger class={@shell_class} {@rest}>
-      <.composer_trigger_body viewer={@viewer} surface={@surface}>
-        {render_slot(@inner_block)}
-      </.composer_trigger_body>
-    </.link>
-    """
-  end
-
-  attr(:viewer, :any, required: true)
-  attr(:surface, :atom, required: true)
-  slot(:inner_block, required: true)
-
-  # Standalone (:card) carries the big `md` avatar as the page's anchor. Flat
-  # (:flat) sits among post rows, so it follows their grammar: the same `sm`
-  # avatar the post headers use (a bigger one towers over the list and shifts
-  # the pill off the post text column) and a py-2 pill, which at text-sm comes
-  # out exactly avatar-high (36px).
-  defp composer_trigger_body(assigns) do
-    ~H"""
-    <.avatar user={@viewer} size={if(@surface == :card, do: "md", else: "sm")} />
-    <span class={[
-      "flex-1 rounded-full bg-slate-100 px-4 text-sm text-slate-500 group-hover:bg-slate-200 dark:bg-slate-800 dark:text-slate-400 dark:group-hover:bg-slate-700",
-      if(@surface == :card, do: "py-2.5", else: "py-2")
-    ]}>
-      {render_slot(@inner_block)}
-    </span>
+    <button
+      type="button"
+      id="open-composer"
+      data-composer-trigger
+      phx-click="open-composer"
+      class={[
+        "inline-flex h-10 items-center justify-center gap-2 rounded-full bg-brand-600 px-4",
+        "text-sm font-semibold text-white shadow-sm hover:bg-brand-700",
+        @class
+      ]}
+    >
+      <.icon_pencil class="h-4 w-4 shrink-0" />
+      <span>{@label || gettext("Write a post")}</span>
+    </button>
     """
   end
 

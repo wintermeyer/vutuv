@@ -49,6 +49,7 @@ defmodule VutuvWeb.PostLive.Feed do
   alias Vutuv.Tags.UserTag
   alias Vutuv.Videos
   alias Vutuv.ViewerClock
+  alias VutuvWeb.Live.ComposerPanel
   alias VutuvWeb.Live.DayClockRestream
   alias VutuvWeb.Live.FeedTimeTravel
   alias VutuvWeb.Live.InitAssigns
@@ -199,6 +200,9 @@ defmodule VutuvWeb.PostLive.Feed do
     socket =
       socket
       |> assign(:pending_video_posts, waiting_video_posts(user))
+      # The folded composer's two events and three messages, and a clip's
+      # progress on its way to the composer holding it.
+      |> ComposerPanel.attach()
       |> VideoProgress.attach(user)
 
     # The sources they left on (issue #1499). It opens the page *and* keys the
@@ -363,14 +367,11 @@ defmodule VutuvWeb.PostLive.Feed do
     # past midnight has to be told. `:day_changed` below moves it.
     |> assign(:cal_today, ViewerClock.today())
     |> defer_calendar_counts()
-    |> assign(:draft, payload.draft)
-    # The composer starts collapsed to a single "What's new?" button; posting
+    # The composer starts collapsed to a single "Write a post" button; posting
     # (own activity arriving below) collapses it again. A stored draft opens it
-    # instead (issue #1148): the composer will restore that draft, and text
-    # hidden behind a collapsed panel is indistinguishable from text that was
-    # thrown away. Resolved here rather than announced by the composer so the
-    # disconnected render already agrees and the panel never flickers open.
-    |> assign(:composer_open?, payload.draft != nil)
+    # instead — see `VutuvWeb.Live.ComposerPanel`. The draft rides the payload
+    # rather than being read here, so mount asks for it exactly once.
+    |> ComposerPanel.open_for_draft(payload.draft)
     # The posts on screen we hold a photo-scan subscription for (below).
     |> assign(:photo_watch, MapSet.new())
     # How this member arranged the rail: the order of its cards, which are
@@ -1298,15 +1299,11 @@ defmodule VutuvWeb.PostLive.Feed do
     end
   end
 
-  def handle_event("open-composer", _params, socket) do
-    # Both triggers open the same composer — there are no modes. The camera
-    # button additionally clicks the composer's "Add photos" control
-    # client-side (a JS.dispatch chained onto its phx-click), so the photo
-    # picker opens in the same gesture.
-    {:noreply, assign(socket, :composer_open?, true)}
-  end
-
-  # The composer's corner ✕ (feed compose only) bubbles up here to collapse it.
+  # `open-composer` and `close-composer` belong to `VutuvWeb.Live.ComposerPanel`
+  # (both compose triggers open the same composer — there are no modes; the
+  # camera button additionally clicks the composer's "Add photos" control
+  # client-side, so the photo picker opens in the same gesture).
+  #
   # The waiting card's two ways out (issue #1910): drop the text and the clip,
   # or publish the text without the clip once the check refused it.
   def handle_event("cancel-pending-video", %{"id" => id}, socket) do
@@ -1325,10 +1322,6 @@ defmodule VutuvWeb.PostLive.Feed do
     end
 
     {:noreply, refresh_waiting_video_posts(socket)}
-  end
-
-  def handle_event("close-composer", _params, socket) do
-    {:noreply, assign(socket, :composer_open?, false)}
   end
 
   # "Show anyway" on a content-filtered post (issue #940): reveal it in place,
@@ -2118,31 +2111,6 @@ defmodule VutuvWeb.PostLive.Feed do
     end
   end
 
-  # The composer says it holds a draft, so show it (issue #1130). Two moments
-  # send this: the first characters of a normal compose (the panel is already
-  # open, so the assign is a no-op), and the `validate` LiveView's form recovery
-  # replays after a reconnect — which is the one that matters. A reconnect
-  # re-mounts this LiveView, and `composer_open?` is plain socket state, so the
-  # panel collapses while the text stays in it: the author comes back to their
-  # tab, finds the form gone and has no reason to believe the draft survived.
-  def handle_info({:composer_drafting, _id}, socket) do
-    {:noreply, assign(socket, :composer_open?, true)}
-  end
-
-  # Photo mode's ✕ discarded the draft inside the component; the panel
-  # collapses with it (the component cannot reach this assign itself).
-  def handle_info({:composer_discarded, _id}, socket) do
-    {:noreply, assign(socket, :composer_open?, false)}
-  end
-
-  # The ✕ now asks before it closes over a draft (issue #1893), so "keep it"
-  # arrives here rather than as the composer's own bubbled `close-composer`.
-  # Same outcome — the panel folds away and the draft is still there when it
-  # opens again.
-  def handle_info({:composer_closed, _id}, socket) do
-    {:noreply, assign(socket, :composer_open?, false)}
-  end
-
   # The month's shading, arriving after the grid it belongs to
   # (`defer_calendar_counts/1`). Both guards drop work rather than prevent a
   # wrong answer — the count is taken from the assigns, not from `key`, so a
@@ -2367,43 +2335,6 @@ defmodule VutuvWeb.PostLive.Feed do
       count,
       formatted: compact_count(count)
     )
-  end
-
-  attr(:alone?, :boolean,
-    required: true,
-    doc: "true while nothing is waiting, when the button owns the whole line"
-  )
-
-  # The feed's compose control. A BUTTON, not the input-shaped tile it replaced:
-  # that one wore a placeholder and a text cursor and took neither, which read as
-  # a field you could type in (Stefan, 2026-08-31).
-  #
-  # `h-10` puts it on the app's control line, level with the folded rail calendar
-  # beside it. Alone it takes the line (`flex-1`); beside a waiting-posts quote it
-  # keeps only what it needs (`flex-none`) and hands the rest over, because the
-  # quote is the half that carries information and a 50:50 split left it three
-  # words. A desktop control: the line it stands on is `md:flex`, and on a phone
-  # the tab bar's Write tab does this job, so it never has to drop its word.
-  defp compose_button(assigns) do
-    ~H"""
-    <%!-- The id is spelled here and nowhere else: `keyboard_shortcuts.js`
-    (`revealAndFocusComposer`) and the `#compose` arrival both click it by name,
-    and it only works while the button is visible. --%>
-    <button
-      type="button"
-      id="open-composer"
-      data-composer-trigger
-      phx-click="open-composer"
-      class={[
-        "inline-flex h-10 items-center justify-center gap-2 rounded-full bg-brand-600 px-4",
-        "text-sm font-semibold text-white shadow-sm hover:bg-brand-700",
-        if(@alone?, do: "flex-1", else: "flex-none")
-      ]}
-    >
-      <.icon_pencil class="h-4 w-4 shrink-0" />
-      <span>{gettext("Write a post")}</span>
-    </button>
-    """
   end
 
   # Showing the waiting posts, in the browser, before the server hears about it.
@@ -2661,7 +2592,7 @@ defmodule VutuvWeb.PostLive.Feed do
 
     cond do
       actor_id == user.id ->
-        {:noreply, socket |> assign(:composer_open?, false) |> load_day(nil) |> sync_url()}
+        {:noreply, socket |> ComposerPanel.collapse() |> load_day(nil) |> sync_url()}
 
       # The same two gates a queued arrival passes at now: can this post reach
       # this reader at all, and did they switch its source off.
@@ -2702,7 +2633,7 @@ defmodule VutuvWeb.PostLive.Feed do
           not view_accepts?(socket, entry, actor_id) ->
         {:noreply,
          socket
-         |> assign(:composer_open?, false)
+         |> ComposerPanel.collapse()
          |> load_source_filter(:all)}
 
       actor_id == user.id ->
@@ -2712,7 +2643,7 @@ defmodule VutuvWeb.PostLive.Feed do
          socket
          |> assign(:empty?, false)
          # The viewer just posted (this or another session): collapse the composer.
-         |> assign(:composer_open?, false)
+         |> ComposerPanel.collapse()
          |> update(:entries, &[decorated | &1])
          |> stream_insert(:posts, decorated, at: 0)
          |> prune_threaded_parent(entry)}
@@ -3194,7 +3125,11 @@ defmodule VutuvWeb.PostLive.Feed do
               "items-center gap-2"
             ]}
           >
-            <.compose_button alone?={@pending_posts == []} />
+            <%!-- Alone it takes the line; beside a waiting-posts quote it keeps
+            only what it needs and hands the rest over, because the quote is the
+            half that carries information and a 50:50 split left it three
+            words. --%>
+            <.compose_button class={if @pending_posts == [], do: "flex-1", else: "flex-none"} />
 
             <.new_posts_pill
               :if={@pending_posts != []}

@@ -205,8 +205,8 @@ defmodule VutuvWeb.PageController do
   # would spend one of the four on the thing opening the app does anyway.
   # Every label is a msgid the navigation already uses, in the same voice.
   #
-  # "Write a post" is `/feed#compose`, the composer deep link the profile's
-  # Beiträge card and the "n" shortcut already use — it reveals the composer
+  # "Write a post" is `/feed#compose`, the composer deep link the "n" shortcut
+  # already uses from any page without one — it reveals the composer
   # *and* puts the caret in it (`revealAndFocusComposer` in
   # keyboard_shortcuts.js, which retries while the socket is still joining, the
   # cold-launch case this shortcut is). A second spelling that only unfolded the

@@ -51,10 +51,13 @@ defmodule VutuvWeb.PostLive.Composer do
   still-pending rows in `validate` (`Posts.pending_images/2`) — the photo
   half of issue #1130, whose text half form recovery already covered.
 
-  **The host says who it is.** `host` (`:feed`, `:organization`, `:page`)
-  decides the two things a composer cannot read off its own assigns — the
-  feed's ✕ and its draft — because the feed's new-post composer and the
-  organization page's are the same shape: no post, no parent, nothing remote.
+  **The host says who it is.** `host` (`:feed`, `:profile`, `:organization`,
+  `:page`) decides the two things a composer cannot read off its own assigns —
+  the collapsing ✕ and the draft — because the feed's new-post composer, the
+  owner's profile one and the organization page's are the same shape: no post,
+  no parent, nothing remote. `:feed` and `:profile` are the two their host keeps
+  folded behind a "Write a post" button, so they get the ✕ and announce a draft;
+  the others render open and have nothing to fold.
   `surface` is the ordinary kit knob (`:card` or `:flat`, as on `post_card/1`),
   for a host that already owns the card around it. Neither is declared with
   `attr/3`: Phoenix validates those for function components, not for a
@@ -311,10 +314,17 @@ defmodule VutuvWeb.PostLive.Composer do
   # context is an expand/contract pair of deploys (the 42P10 note on
   # `Posts.draft_key/1`), not something to smuggle in here.
   #
-  # Listed rather than excluded, so a fourth host has to answer this question
+  # The owner's own profile is in, and shares the feed's row on purpose: same
+  # author, same (empty) context, and it is the same unpublished personal post —
+  # starting it on the profile and finding it in the feed composer is the
+  # answer somebody who typed it there expects.
+  #
+  # Listed rather than excluded, so a fifth host has to answer this question
   # instead of inheriting an answer.
   defp draftable?(assigns),
-    do: assigns.host in [:feed, :page] and assigns[:post] == nil and assigns[:remote_post] == nil
+    do:
+      assigns.host in [:feed, :profile, :page] and assigns[:post] == nil and
+        assigns[:remote_post] == nil
 
   # Which composer this is, in the terms `Vutuv.Posts` keys drafts by. The
   # answer-to-a-followed-post composer (issue #1165) is deliberately absent: it
@@ -1015,12 +1025,12 @@ defmodule VutuvWeb.PostLive.Composer do
   # discarded photo occupies disk until that sweep instead of vanishing at
   # once, and the gain is that "I didn't mean that" has an answer.
   #
-  # Only the feed has a panel to collapse, and only the feed LiveView has the
-  # matching handle_info: the reply, remote-reply and edit pages define none at
-  # all, so an ungated `send` would crash them the moment the notice's button
-  # is used there.
+  # Only a folded host has a panel to collapse, and only /feed and the owner's
+  # profile define the matching handle_info: the reply, remote-reply and edit
+  # pages define none at all, so an ungated `send` would crash them the moment
+  # the notice's button is used there.
   def handle_event("discard-draft", _params, socket) do
-    if feed_composer?(socket.assigns) do
+    if collapsible_composer?(socket.assigns) do
       send(self(), {:composer_discarded, socket.assigns.id})
     end
 
@@ -1065,7 +1075,7 @@ defmodule VutuvWeb.PostLive.Composer do
   end
 
   def handle_event("keep-draft", _params, socket) do
-    if feed_composer?(socket.assigns) do
+    if collapsible_composer?(socket.assigns) do
       send(self(), {:composer_closed, socket.assigns.id})
     end
 
@@ -1251,26 +1261,30 @@ defmodule VutuvWeb.PostLive.Composer do
   # with the text hidden inside it. Announcing the first content lets the feed
   # re-open the panel in the same round trip.
   #
-  # Only the feed composer announces. The edit, reply and remote-reply pages
-  # render the composer unconditionally, so they have nothing to re-open (and no
-  # handler for the message).
+  # Only a folded composer announces — /feed's and the profile's, which share
+  # the trap above. The edit, reply and remote-reply pages render the composer
+  # unconditionally, so they have nothing to re-open (and no handler for the
+  # message).
   defp announce_draft(socket, drafting_before?) do
-    if not drafting_before? and drafting?(socket.assigns) and feed_composer?(socket.assigns) do
+    if not drafting_before? and drafting?(socket.assigns) and
+         collapsible_composer?(socket.assigns) do
       send(self(), {:composer_drafting, socket.assigns.id})
     end
 
     socket
   end
 
-  # The standalone composer on /feed: the only one with a panel to collapse, and
-  # the only host that handles `close-composer`, `{:composer_drafting, …}` and
-  # `{:composer_discarded, …}`.
+  # A composer its host keeps folded behind a "Write a post" button: /feed and
+  # the owner's own profile. Both get that half from one place —
+  # `VutuvWeb.Live.ComposerPanel`, which owns `close-composer` and the three
+  # messages below — so declaring a host here and having the handlers is one
+  # act. Every other host renders the composer open and has no panel to fold.
   #
   # It asks rather than deriving the answer from "no post, no parent, nothing
   # remote". That derivation was the wrong shape once already — it put the
   # feed's ✕ on the answer page of issue #1165, where a click killed the
   # LiveView — and the organization page's composer is that same shape again.
-  defp feed_composer?(assigns), do: assigns.host == :feed
+  defp collapsible_composer?(assigns), do: assigns.host in [:feed, :profile]
 
   # A new post takes one of the five create paths (`post_context/1`); an edit
   # is an update.
@@ -1302,19 +1316,21 @@ defmodule VutuvWeb.PostLive.Composer do
         {:noreply, push_navigate(socket, to: Posts.path(socket.assigns.parent))}
 
       true ->
-        # A composer that stays where it is: the feed's and the organization
-        # page's. It resets, and the audience choice sticks.
+        # A composer that stays where it is: the feed's, the profile's and the
+        # organization page's. It resets, and the audience choice sticks.
         #
-        # The feed learns about its own post from `Posts`' `{:new_post, …}`
-        # broadcast, which prepends the card and collapses the panel. An
+        # The folded hosts learn about the post from `Posts`' `{:new_post, …}`
+        # broadcast, which prepends the card and collapses the panel: the
+        # fan-out leads with the author's own id, so the feed and the author's
+        # own profile — subscribed to that very topic — both hear it. An
         # organization post is broadcast to nobody — a page cannot be followed
         # yet, so `Posts.broadcast_new_post/1` answers `[]` rather than build a
         # `where: followee_id == ^nil` — so its host is handed the post
         # directly, already carrying `post_preloads/0` from
         # `create_organization_post/3` and ready for a card. Not sent to the
-        # feed: it would copy that whole struct into a mailbox to be dropped by
-        # a catch-all.
-        if not feed_composer?(socket.assigns),
+        # two that already heard: it would copy that whole struct into a mailbox
+        # to be dropped by a catch-all.
+        if not collapsible_composer?(socket.assigns),
           do: send(self(), {:composer_published, post})
 
         {:noreply, reset_composer(socket)}
@@ -1818,10 +1834,10 @@ defmodule VutuvWeb.PostLive.Composer do
               {gettext("Drop photos to add them")}
             </p>
           </div>
-          <%!-- Header row, feed compose only: "Discard draft" (while there is
-          something to lose) and the corner ✕ that merely collapses the
-          composer. While the restore notice above is showing, its own
-          "Discard draft" owns the action and this one stays away — with both
+          <%!-- Header row, folded hosts only (/feed and the owner's profile):
+          "Discard draft" (while there is something to lose) and the corner ✕
+          that merely collapses the composer. While the restore notice above is
+          showing, its own "Discard draft" owns the action and this one stays away — with both
           gates true the button rendered twice, one right above the other
           (issue #1221); the first edit clears the notice and hands over. The ✕ carries no phx-target: the event bubbles up to the
           feed LiveView that owns the reveal (`close-composer`) — a draft
@@ -1833,7 +1849,7 @@ defmodule VutuvWeb.PostLive.Composer do
           remote-reply page has no close handler and a click there crashed
           the page). --%>
           <div
-            :if={feed_composer?(assigns)}
+            :if={collapsible_composer?(assigns)}
             class="-mt-1 mb-2 flex items-center justify-end gap-1"
           >
             <button
@@ -2318,12 +2334,12 @@ defmodule VutuvWeb.PostLive.Composer do
   end
 
   # The composer's outer surface, the same `:card` / `:flat` axis `post_card/1`
-  # and `composer_trigger/1` already name. It is the page's own block nearly
-  # everywhere and brings a card; the organization page sits it inside the
-  # "Posts" card it already owns, where a second card is 48px of padding and two
-  # rings. Two clauses rather than a conditional class list: the value is fixed
-  # for the life of a mounted composer, so nothing here changes shape under
-  # morphdom, and `<.card>` stays the one description of the surface.
+  # already names. It is the page's own block nearly everywhere and brings a
+  # card; the organization page sits it inside the "Posts" card it already owns,
+  # where a second card is 48px of padding and two rings. Two clauses rather
+  # than a conditional class list: the value is fixed for the life of a mounted
+  # composer, so nothing here changes shape under morphdom, and `<.card>` stays
+  # the one description of the surface.
   attr(:surface, :atom, required: true)
   slot(:inner_block, required: true)
 

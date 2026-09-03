@@ -6,7 +6,7 @@ defmodule VutuvWeb.UserHTML do
 
   import VutuvWeb.PostComponents,
     only: [
-      composer_trigger: 1,
+      compose_button: 1,
       post_archive_path: 2,
       post_card: 1,
       post_filter_empty_text: 1,
@@ -36,9 +36,14 @@ defmodule VutuvWeb.UserHTML do
   Fediverse address, a feed with posts behind it), and the header's
   `<.subscribe_link>` must point at it exactly when it is there, or the anchor
   is a jump to nothing.
+
+  Never for the owner, whatever the parts say (Stefan, 2026-09-03): a card
+  headed "Subscribe" on your own profile offers you an RSS reader for your own
+  writing and a form that resolves your own server so you can follow yourself.
+  Nobody wants any of it, and the owner already has the whole page.
   """
-  def subscribe_card?(current_user, fediverse, posts_total),
-    do: current_user == nil or fediverse != nil or posts_total > 0
+  def subscribe_card?(as_owner?, current_user, fediverse, posts_total),
+    do: not as_owner? and (current_user == nil or fediverse != nil or posts_total > 0)
 
   @doc """
   One compact user row (avatar, name, work line, follow/unfollow) shared by
