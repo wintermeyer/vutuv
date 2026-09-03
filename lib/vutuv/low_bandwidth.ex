@@ -28,7 +28,7 @@ defmodule Vutuv.LowBandwidth do
       (`Vutuv.Cover.picture/1`). Each answers `%{src:, lite:}`: the version
       the page always showed and, only while this flag is on and the lite file
       exists, the cheap one. `VutuvWeb.UI.picture/1` renders the pair as the
-      lite picture with an HD control that swaps the full one in on request.
+      lite picture with the SD/HD switch that swaps the full one in on request.
     * the lightbox opens a post photo at `large` (1600 px) rather than `xl`
       (2560 px): `Vutuv.Posts.PostImage.lightbox_url/1`.
 

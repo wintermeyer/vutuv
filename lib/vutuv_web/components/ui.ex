@@ -1157,14 +1157,91 @@ defmodule VutuvWeb.UI do
     """
   end
 
+  @picture_chrome "inline-flex items-center rounded-full bg-slate-900/75 text-xs font-semibold text-white"
+
   @doc """
-  The one recipe for a word on top of a picture: the checking badge, the HD
-  control and the clip's length chip (`VutuvWeb.VideoComponents`) wear it, so
-  they cannot drift apart.
+  The ground every word on a picture stands on, without the padding each shape
+  chooses for itself: the checking badge, the clip's length chip and the
+  quality switch's pill all sit on this grey.
+
+  Only the first two reach it through `picture_badge_class/0`.
+  `quality_switch/1` spells the same string out as a **literal in its markup**,
+  because a class built by a function is a per-instance dynamic in the
+  LiveView diff, and that surface is a feed page's worth of pictures: measured
+  at 102 bytes and 112 reductions per picture, paid by exactly the member who
+  turned data-saving mode on to save bytes. The price of the literal is that
+  nothing but a test keeps the two on one grey, so
+  `low_bandwidth_test.exs` asserts the parity.
   """
-  def picture_badge_class,
-    do:
-      "inline-flex items-center gap-1 rounded-full bg-slate-900/75 px-2 py-1 text-xs font-semibold text-white"
+  def picture_chrome_class, do: @picture_chrome
+
+  @doc """
+  The one recipe for a word on top of a picture: the checking badge and the
+  clip's length chip (`VutuvWeb.VideoComponents`) wear it, so they cannot
+  drift apart.
+  """
+  def picture_badge_class, do: @picture_chrome <> " gap-1 px-2 py-1"
+
+  defp corner_class(:bottom), do: "bottom-0"
+  defp corner_class(:top), do: "top-0"
+
+  @doc """
+  The corner switch a picture and a post's clip wear while the viewer is in
+  data-saving mode: which version is on screen, and the other one a tap away.
+
+  It shows the **state** rather than naming the offer, because a lone **HD**
+  pill did not. A word on a picture reads as a label of what you are looking
+  at, so "HD" told as many people "this one is the sharp one" as it told them
+  "tap for the sharp one", and the ones who read it the first way never
+  tapped. Two segments cannot be read that way: **SD** lit is the version you
+  have, **HD** dim the one that has not been fetched yet. The whole switch
+  then goes away rather than flipping to HD — by then the bytes are spent, so
+  an SD side to go back to would save nothing and only take the picture away
+  again.
+
+  It owns the **control**, not just the pill, or the two surfaces would each
+  keep a copy of the same decisions: the `role="button"` span (never a
+  `<button>` — most of these pictures sit inside a link, and a button is not
+  valid inside an anchor), the `min-h-10` touch target, and `label`, which
+  says in prose what the segments say in shapes and is all a screen reader
+  gets. `rest` carries the surface's own marker for `app.js`
+  (`data-hd-load`, `data-video-hd`), while `data-quality-switch` is the shared
+  one `components.css` hides and pulses the switch by, so a third surface
+  needs no rule of its own. `corner` is the only thing the two disagree about:
+  a clip's poster wears the browser's own control bar along its bottom edge
+  before the first play.
+
+  The words are the international abbreviations and stay untranslated, and the
+  pill's class is a literal rather than `picture_chrome_class/0` for the
+  render cost that function names.
+  """
+  attr(:label, :string, required: true, doc: "what a tap does, for the tooltip and the reader")
+  attr(:corner, :atom, default: :bottom, values: [:bottom, :top])
+  attr(:rest, :global, doc: "the surface's own marker — `data-hd-load` or `data-video-hd`")
+
+  def quality_switch(assigns) do
+    ~H"""
+    <span
+      role="button"
+      tabindex="0"
+      data-quality-switch
+      aria-label={@label}
+      title={@label}
+      class={[
+        "absolute right-0 inline-flex min-h-10 cursor-pointer items-center px-2",
+        corner_class(@corner)
+      ]}
+      {@rest}
+    >
+      <%!-- `picture_chrome_class/0`'s string, spelled out: a literal class is
+      hoisted into the template's statics, a function call is not. --%>
+      <span class="inline-flex items-center gap-0.5 rounded-full bg-slate-900/75 p-0.5 text-xs font-semibold text-white">
+        <span data-quality-on class="rounded-full bg-white px-1.5 py-0.5 text-slate-900">SD</span>
+        <span class="px-1.5 py-0.5 text-white/70">HD</span>
+      </span>
+    </span>
+    """
+  end
 
   @doc """
   An `<img>` for a picture that has a lite version (`Vutuv.LowBandwidth`).
@@ -1177,15 +1254,13 @@ defmodule VutuvWeb.UI do
   renders the plain `<img>` every call site rendered before, attribute for
   attribute, so nobody outside the mode pays for it.
 
-  With one, the lite is what loads, and an **HD** control sits in the
-  picture's corner: one tap swaps the full version in, in place
+  With one, the lite is what loads and `quality_switch/1` sits in the
+  picture's bottom corner: one tap swaps the full version in, in place
   (`app.js`, `[data-hd-load]`), and the mark it leaves on the `<img>` survives
-  every LiveView patch. The control is a `role="button"` span rather than a
-  `<button>` because most of these pictures sit inside a link — the permalink,
-  the lightbox — and a button is not valid inside an anchor. The wrapper is a
-  block; `wrap_class` is for the sites where the picture's own box is not the
-  plain full-width one (a mosaic cell's `h-full`, a centred whole photo's
-  `w-fit`), so the control lands on the picture and not beside it.
+  every LiveView patch. The wrapper is a block; `wrap_class` is for the sites
+  where the picture's own box is not the plain full-width one (a mosaic cell's
+  `h-full`, a centred whole photo's `w-fit`), so the switch lands on the
+  picture and not beside it.
   """
   attr(:picture, :map, required: true, doc: "`%{src: full URL, lite: lite URL | nil}`")
   attr(:wrap_class, :any, default: nil, doc: "the lite wrapper's box, where it is not `block`")
@@ -1201,16 +1276,10 @@ defmodule VutuvWeb.UI do
     ~H"""
     <span class={["relative block", @wrap_class]} data-lite-picture>
       <img src={@picture.lite} data-hd={@picture.src} {@rest} />
-      <span
-        role="button"
-        tabindex="0"
-        data-hd-load
-        aria-label={gettext("Load this picture in full quality")}
-        title={gettext("Load this picture in full quality")}
-        class="absolute bottom-1 right-1 cursor-pointer p-1.5"
-      >
-        <span class={picture_badge_class()}>HD</span>
-      </span>
+      <.quality_switch
+        data-hd-load=""
+        label={gettext("Standard quality. Load this picture in HD.")}
+      />
     </span>
     """
   end

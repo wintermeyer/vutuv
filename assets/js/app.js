@@ -189,8 +189,8 @@ document.addEventListener("click", (e) => {
 })
 
 // Data-saving mode (Vutuv.LowBandwidth, `VutuvWeb.UI.picture/1`): a picture
-// rendered as its lite version carries the full one in `data-hd` and an HD
-// control beside it. One tap swaps the full version in, in place; the mark it
+// rendered as its lite version carries the full one in `data-hd` and an SD/HD
+// switch beside it. One tap swaps the full version in, in place; the mark it
 // leaves on the <img> is what the LiveSocket's onBeforeElUpdated carries across
 // every later patch, or a like count ticking would blur the picture back.
 //
@@ -3556,7 +3556,7 @@ document.addEventListener(
   true,
 )
 
-// The HD control of data-saving mode: swap the 360p sources for the full ones
+// The SD/HD switch of data-saving mode: swap the 360p sources for the full ones
 // the figure carries, reload the player where it was, and carry on if it was
 // playing. Marked on the figure so the control hides and a later patch does
 // not bring it back for a player already in full quality.

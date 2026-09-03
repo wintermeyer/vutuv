@@ -12,7 +12,14 @@ defmodule VutuvWeb.VideoComponents do
   use Gettext, backend: VutuvWeb.Gettext
 
   import VutuvWeb.UI,
-    only: [hourglass: 1, card: 1, button: 1, picture: 1, picture_badge_class: 0]
+    only: [
+      hourglass: 1,
+      card: 1,
+      button: 1,
+      picture: 1,
+      picture_badge_class: 0,
+      quality_switch: 1
+    ]
 
   alias Phoenix.LiveView.JS
   alias Vutuv.Posts.PostVideo
@@ -27,10 +34,10 @@ defmodule VutuvWeb.VideoComponents do
   `Vutuv.Posts.PostVideo.sources/2`, best first; the browser takes the first
   it can decode.
 
-  For a viewer in data-saving mode the 360p files come first and an **HD**
-  control sits in the corner (issue #1924): a tap reloads the player with the
-  full files where it was, the way the picture's HD control swaps the full
-  picture in (`app.js`, `[data-video-hd]`).
+  For a viewer in data-saving mode the 360p files come first and
+  `VutuvWeb.UI.quality_switch/1` sits in the top corner (issue #1924): a tap
+  reloads the player with the full files where it was, the way the same switch
+  swaps a full picture in (`app.js`, `[data-video-hd]`).
   """
   attr(:video, PostVideo, required: true)
   attr(:class, :any, default: nil)
@@ -100,17 +107,15 @@ defmodule VutuvWeb.VideoComponents do
         >
           {duration_label(@video)}
         </span>
-        <span
+        <%!-- Top corner, like the length chip and for the same reason: the
+        browser draws its own control bar along the bottom of the poster
+        before the first play. --%>
+        <.quality_switch
           :if={@lite?}
-          role="button"
-          tabindex="0"
-          data-video-hd
-          aria-label={gettext("Play this video in full quality")}
-          title={gettext("Play this video in full quality")}
-          class="absolute right-1 top-1 cursor-pointer p-1.5"
-        >
-          <span class={picture_badge_class()}>HD</span>
-        </span>
+          corner={:top}
+          data-video-hd=""
+          label={gettext("Standard quality. Play this video in HD.")}
+        />
       </div>
       <figcaption :if={@video.alt != ""} class="sr-only">{@video.alt}</figcaption>
     </figure>

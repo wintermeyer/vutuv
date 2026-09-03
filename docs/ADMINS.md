@@ -771,8 +771,8 @@ mode on gets three things. Every post photo, picture from another network,
 URL screenshot and profile cover loads as its **lite version** — the same
 picture at about its 1x display size and a lower quality (measured on
 vutuv.de: a post photo 12 kB instead of 44 kB, a screenshot 3 kB instead of
-13 kB, a cover 8 kB instead of 34 kB, at the median) — with an **HD** control
-in its corner that fetches the full version on request; avatars are left
+13 kB, a cover 8 kB instead of 34 kB, at the median) — with an **SD/HD**
+switch in its corner that fetches the full version on request; avatars are left
 alone, they are under 2 kB each. The pixelated preview of a picture still
 being checked is not fetched at all — the grey "being checked" tile stands in,
 at no cost. The lightbox opens a photo at 1600 px rather than 2560 px. And the composer is the plain Markdown field that has always

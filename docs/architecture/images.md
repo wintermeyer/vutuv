@@ -42,8 +42,8 @@ one `picture/…` function — `Vutuv.Posts.PostImage.picture/2`,
 `Vutuv.Cover.picture/1` — returning `%{src:, lite:}`: the version the page
 always showed, and the lite only while the flag is on *and the file exists*.
 `VutuvWeb.UI.picture/1` renders the pair: without a lite it is the plain
-`<img>` it replaced, attribute for attribute; with one, the lite loads and an
-**HD** control in the corner swaps the full version in on tap (`app.js`,
+`<img>` it replaced, attribute for attribute; with one, the lite loads and the
+**SD/HD switch** in the corner swaps the full version in on tap (`app.js`,
 `[data-hd-load]`), leaving a `data-hd-loaded` mark the LiveSocket carries
 across every later patch so a like count ticking cannot blur the picture
 back. The lightbox opens `large` (1600 px) rather than `xl`
@@ -74,7 +74,7 @@ Not covered, on purpose: a picture placed **inline in a post body** (the
 `![](…/feed.avif)` reference `VutuvWeb.Markdown` renders, 10 posts on
 vutuv.de) and the composer's own upload previews still load the full version.
 The inline image is a string the Markdown renderer builds, and a second copy
-of the HD control's markup there would be the drift the component exists to
+of the switch's markup there would be the drift the component exists to
 prevent.
 
 Pending gallery uploads (a composer that was never submitted) are swept after a

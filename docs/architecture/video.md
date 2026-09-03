@@ -121,8 +121,8 @@ draw from it:
 autoplay, `preload="none"`, the cover as the poster with a play glyph and the
 length over it — with `<source>` elements best first: AV1 with a `codecs`
 string, so a browser without an AV1 decoder skips it, then H.264. A viewer in
-data-saving mode (`Vutuv.LowBandwidth`) gets the two 360p files first and an
-**HD** control that reloads the player with the full files where it was.
+data-saving mode (`Vutuv.LowBandwidth`) gets the two 360p files first and the
+**SD/HD switch** that reloads the player with the full files where it was.
 
 Every byte goes through `VutuvWeb.PostVideoController` at
 `/post_videos/:token/:file`, which asks the post's audience the way the image

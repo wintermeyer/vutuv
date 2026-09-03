@@ -3,7 +3,8 @@ defmodule VutuvWeb.LowBandwidthTest do
   Data-saving mode end to end: the box on the sign-up form, its own page under
   /settings, and the two things the mode is for — a composer that never
   fetches the 155 kB WYSIWYG editor, and pictures that load as their lite
-  version with an HD control to fetch the full one.
+  version with an SD/HD switch to fetch the full one, and a clip whose 360p
+  files come first behind the same switch.
 
   `VutuvWeb.MarkdownEditorTest` covers what the editor component renders
   either way, and the uploader tests cover which files exist. What is asserted
@@ -191,7 +192,7 @@ defmodule VutuvWeb.LowBandwidthTest do
   describe "the pictures a low-bandwidth member gets" do
     # The lite version in the slot, the full one a tap away — and for everybody
     # else not a byte of it: no wrapper, no control, the URL the page always had.
-    test "a post photo in the feed loads as its lite version with an HD control", %{conn: conn} do
+    test "a post photo in the feed loads as its lite version with an SD/HD switch", %{conn: conn} do
       {conn, user} = create_and_login_user(conn)
       image = insert(:post_image, user: user, post: nil, token: "litegal")
       {:ok, _} = Posts.create_post(user, %{body: "A picture.", image_ids: [image.id]})
@@ -214,7 +215,16 @@ defmodule VutuvWeb.LowBandwidthTest do
       assert html =~ ~s(src="/post_images/litegal/lite.avif")
       assert html =~ ~s(data-hd="/post_images/litegal/feed.avif")
       assert html =~ "data-hd-load"
-      assert html =~ "Load this picture in full quality"
+      assert html =~ "Standard quality. Load this picture in HD."
+
+      # The switch says which version is on screen, because the word alone did
+      # not: a lone "HD" on a picture reads as a label of what you are looking
+      # at as readily as an offer of something better, and the people who read
+      # it that way never tapped it. So both segments have to be there — an
+      # assertion on "HD" alone stays green for the badge this replaced — and
+      # the lit one has to be the version they actually have.
+      assert text_of(html, "[data-quality-on]") == "SD"
+      assert html =~ ">HD</span>"
     end
 
     # The lightbox is the one place the member explicitly asks for the big
@@ -233,6 +243,75 @@ defmodule VutuvWeb.LowBandwidthTest do
       assert html =~ ~s(data-photo-src="/post_images/litebox/large.avif")
       refute html =~ "/post_images/litebox/xl.avif"
     end
+  end
+
+  describe "the clip a low-bandwidth member gets" do
+    # The same switch as the picture's, deliberately: a member should not have
+    # to learn that the word on a clip means something other than the word on a
+    # photo. Rendered through the component, because no fixture in this repo
+    # carries a post with a playable clip.
+    test "the player offers the 360p files behind the SD/HD switch" do
+      video = video_with_renditions!("liteclip")
+
+      Vutuv.LowBandwidth.put(false)
+      plain = render_component(&VutuvWeb.VideoComponents.post_video/1, video: video)
+      refute plain =~ "data-video-hd"
+      refute plain =~ "lite-h264.mp4"
+
+      Vutuv.LowBandwidth.put(true)
+      html = render_component(&VutuvWeb.VideoComponents.post_video/1, video: video)
+      assert html =~ "/post_videos/liteclip/lite-h264.mp4"
+      assert html =~ "data-video-hd"
+      assert text_of(html, "[data-quality-on]") == "SD"
+      assert html =~ ">HD</span>"
+      assert html =~ "Standard quality. Play this video in HD."
+      # The full files ride along for the tap that asks for them.
+      assert html =~ "data-hd-sources"
+    end
+  end
+
+  # The switch's pill spells its class out instead of calling
+  # `picture_chrome_class/0`, because a class built by a function is a
+  # per-instance dynamic in the LiveView diff and this one rides a feed page's
+  # worth of pictures (102 bytes and 112 reductions each, paid by the member
+  # who turned the mode on to save bytes). This test is the price of that
+  # literal: it is the only thing left keeping the switch on the same grey as
+  # the badge beside it.
+  test "the switch's pill stands on the same ground as the words on a picture" do
+    html = render_component(&VutuvWeb.UI.quality_switch/1, label: "Load in HD")
+    pill = attribute_of(html, "[data-quality-switch] > span", "class")
+
+    for token <- String.split(VutuvWeb.UI.picture_chrome_class()) do
+      assert token in String.split(pill),
+             "the quality switch's pill has drifted off picture_chrome_class/0: #{token} is missing"
+    end
+  end
+
+  defp attribute_of(html, selector, name) do
+    html
+    |> LazyHTML.from_fragment()
+    |> LazyHTML.query(selector)
+    |> LazyHTML.attribute(name)
+    |> List.first()
+  end
+
+  # A clip the player will name: two renditions on disk, one of them the 360p
+  # pair the mode offers first.
+  defp video_with_renditions!(token) do
+    dir = Vutuv.Uploads.disk_dir("post_videos/#{token}")
+    File.mkdir_p!(dir)
+    for name <- ~w(h264 lite-h264), do: File.write!(Path.join(dir, "#{name}.mp4"), "x")
+    on_exit(fn -> File.rm_rf(dir) end)
+
+    %Vutuv.Posts.PostVideo{
+      id: Vutuv.UUIDv7.generate(),
+      token: token,
+      width: 1280,
+      height: 720,
+      duration_ms: 12_000,
+      alt: "",
+      lite_ready_at: NaiveDateTime.utc_now(:second)
+    }
   end
 
   defp low_bandwidth_attrs(prefix, value) do
