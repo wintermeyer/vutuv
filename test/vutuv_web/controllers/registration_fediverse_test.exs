@@ -42,10 +42,12 @@ defmodule VutuvWeb.RegistrationFediverseTest do
     # written here leave here. It used to add that replies from those networks
     # come back under the post and are kept for up to six months — true, and
     # nobody read it on a sign-up form (Stefan, 2026-09-03). That half now
-    # lives where somebody reading about it has room for it:
-    # /settings/fediverse (asserted there) and the privacy policy. The line
-    # under this group's legend carries "changeable at any time" for every box
-    # at once.
+    # lives where somebody reading about it has room for it: the privacy policy,
+    # and /settings/fediverse — where `fediverse_groundwork_test.exs` asserts
+    # it, and where, note, it is shown only to a member who has ALREADY ticked
+    # the box, since the sentence sits behind that page's `federated?/1` gate.
+    # The line under this group's legend carries "changeable at any time" for
+    # every box at once.
     test "the box says that posts leave the site", %{conn: conn} do
       body = conn |> get(~p"/") |> html_response(200)
 
