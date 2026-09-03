@@ -38,6 +38,58 @@ defmodule Vutuv.FeedPage do
   """
   def sort_entries(entries), do: Enum.sort_by(entries, & &1.at, {:desc, NaiveDateTime})
 
+  # How many sources may be in flight at once. They are independent reads of
+  # different tables, so running them one after the other only adds their
+  # latencies up: the newsfeed's ten sources cost 0.8 to 5.6 ms each and
+  # **31 ms in a row**, measured on a copy of production (2026-09-03), which was
+  # three quarters of the whole `/feed` dead render and, on the production
+  # machine, roughly 90 ms of it.
+  #
+  # Four rather than "all of them" because the number bounds how much of the
+  # **connection pool** one request may hold, and production runs a pool of ten
+  # (`POOL_SIZE`, `config/runtime.exs`). Concurrency does not increase the total
+  # connection-time a request costs — the same ten queries occupy the same ~31
+  # connection-milliseconds either way — it only shortens the span they are held
+  # over, so throughput is unchanged and latency is what improves. Ten in flight
+  # would still be safe by that argument and is not worth the shape of the
+  # failure it invites: one request able to empty the pool turns a slow query
+  # into a site-wide stall. Four takes about 60 % of the available saving and
+  # never holds more than 40 % of the pool.
+  #
+  # `timeout: :infinity` hands the deadline to Ecto, which has its own per-query
+  # timeout; a second one here would only cut a query short in a way the caller
+  # cannot tell from a crash. A raising source still brings the request down,
+  # exactly as it did when these ran in a row.
+  @max_concurrency 4
+
+  @doc """
+  Runs every source and returns what each one gave back, in the order the
+  sources were listed.
+
+  The one place a list of sources is turned into rows, so both paginators here
+  and the feed calendar's counter (`Vutuv.Posts.feed_activity_by_day/4`, which
+  merges nothing and only wants the lists) share the concurrency rule above
+  rather than each spelling out its own loop.
+
+  `$callers` travels into each task, which is what lets the Ecto SQL sandbox
+  find the test's connection — so these stay plain `Task`s rather than anything
+  supervised.
+  """
+  def fetch_sources(sources, fetch_n, cursor) when is_list(sources) do
+    sources
+    |> Task.async_stream(fn fetch -> fetch.(fetch_n, cursor) end,
+      max_concurrency: @max_concurrency,
+      timeout: :infinity
+    )
+    |> Enum.map(fn {:ok, items} -> items end)
+  end
+
+  # Both paginators want the sources merged into one list; the only difference
+  # is the cursor they pass on.
+  defp fetch_all(sources, fetch_n, cursor) do
+    sources |> fetch_sources(fetch_n, cursor) |> Enum.concat()
+  end
+
   @doc """
   An entry cut down to the two fields the paginators actually read — a **mark**.
 
@@ -63,7 +115,7 @@ defmodule Vutuv.FeedPage do
 
     candidates =
       sources
-      |> Enum.flat_map(fn fetch -> fetch.(fetch_n, cursor) end)
+      |> fetch_all(fetch_n, cursor)
       |> Enum.reject(&(&1.id in seen))
       |> sort_entries()
 
@@ -87,7 +139,7 @@ defmodule Vutuv.FeedPage do
 
     candidates =
       sources
-      |> Enum.flat_map(fn fetch -> fetch.(fetch_n, nil) end)
+      |> fetch_all(fetch_n, nil)
       |> sort_entries()
 
     %{
