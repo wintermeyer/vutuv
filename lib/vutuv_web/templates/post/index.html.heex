@@ -59,6 +59,8 @@
           reposted_by={entry.reposted_by}
           viewer={nil}
         />
+        <%!-- The counts arrive batched from the controller
+        (`archive_engagement/2`), so no action bar runs its own mount query. --%>
         <.post_thread_entry
           :if={!Vutuv.Posts.remote_feed_entry?(entry)}
           post={entry.post}
@@ -66,6 +68,8 @@
           entry_id={entry.id}
           conn_or_socket={@conn}
           viewer={@current_user}
+          engagement={@engagement[entry.post.id]}
+          ancestor_engagement={@engagement}
           surface={:flat}
         />
       </div>
