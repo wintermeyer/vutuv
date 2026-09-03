@@ -263,12 +263,11 @@ defmodule VutuvWeb.JobBoardLive do
       <div class="mb-4 flex flex-wrap items-end justify-between gap-3">
         <div>
           <h1 class="text-2xl font-bold text-slate-900 dark:text-slate-100">{gettext("Jobs")}</h1>
-          <p class="mt-1 text-sm text-slate-600 dark:text-slate-400">
-            <%= if @reach do %>
-              {gettext("No posting yet. Yours would be the first, and it would stand at the top on its own.")}
-            <% else %>
-              {gettext("Open positions on vutuv, newest first.")}
-            <% end %>
+          <%!-- No subline on an empty board: what there is to say is in the
+          card below, and a sentence about the missing stock only says the
+          heading again. --%>
+          <p :if={!@reach} class="mt-1 text-sm text-slate-600 dark:text-slate-400">
+            {gettext("Open positions on vutuv, newest first.")}
           </p>
         </div>
         <%!-- Shown logged out too, and deliberately: a visitor with a job to
@@ -399,7 +398,7 @@ defmodule VutuvWeb.JobBoardLive do
   # Both blocks render only when they have something, so a brand-new
   # installation shows the heading and the button and nothing that reads as a
   # gap.
-  attr(:reach, :map, required: true, doc: "`Vutuv.Jobs.board_reach/1`: count + fields")
+  attr(:reach, :map, required: true, doc: "`Vutuv.Jobs.board_reach/1`: the fields")
   attr(:seekers, :list, required: true, doc: "its members, decorated by `seeker_rows/1`")
 
   defp reach(assigns) do
@@ -409,14 +408,16 @@ defmodule VutuvWeb.JobBoardLive do
         <div>
           <.section_title>{gettext("Who you would reach")}</.section_title>
           <p class="mt-1 text-sm text-slate-600 dark:text-slate-400">
-            <%!-- `%{formatted}` rather than `%{count}`: ngettext binds the raw
-            integer to `count` and a `count:` binding does not override it, so
-            the grouped number needs a placeholder of its own. --%>
+            <%!-- The number is what is DRAWN, not how many exist: the draw is
+            random, so a total nobody can page to would be a number the page
+            cannot back up. `%{formatted}` rather than `%{count}`, because
+            ngettext binds the raw integer to `count` and a `count:` binding
+            does not override it. --%>
             {ngettext(
-              "One member has said they are available.",
-              "%{formatted} members have said they are available.",
-              @reach.count,
-              formatted: delimited_count(@reach.count)
+              "One random vutuv account that is open to offers.",
+              "%{formatted} random vutuv accounts that are open to offers.",
+              length(@seekers),
+              formatted: delimited_count(length(@seekers))
             )}
           </p>
         </div>

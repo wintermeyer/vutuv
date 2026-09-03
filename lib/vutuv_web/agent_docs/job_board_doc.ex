@@ -8,10 +8,13 @@ defmodule VutuvWeb.AgentDocs.JobBoardDoc do
   filter client-side; a `next` link walks to the following page.
 
   With no posting at all the HTML board shows the other side of the market
-  instead — the members who said they are available and the fields they carry —
-  so the document carries the same two facts under `open_to_offers` and
-  `fields`. An agent asked "is anybody hiring on vutuv?" then gets the honest
-  answer *and* the reason to look further, exactly like a reader.
+  instead — a random handful of the members who said they are available, and
+  the fields they carry — so the document carries the same two facts under
+  `open_to_offers` and `fields`. An agent asked "is anybody hiring on vutuv?"
+  then gets the honest answer *and* the reason to look further, exactly like a
+  reader. `open_to_offers` is the drawn people and nothing else: with a random
+  sample, how many there are in all is a number neither the page nor this
+  document can back up with rows.
   """
 
   use Gettext, backend: VutuvWeb.Gettext
@@ -25,15 +28,15 @@ defmodule VutuvWeb.AgentDocs.JobBoardDoc do
   @tags_shown 3
 
   @doc """
-  The board document. `reach` is the empty-board companion (`%{count:, people:,
-  fields:}` from `Vutuv.Jobs`/`Vutuv.Accounts`, anonymous view) or nil on a
-  board that has postings.
+  The board document. `reach` is the empty-board companion (`%{people:,
+  fields:}` from `Vutuv.Jobs.board_reach/1`, anonymous view) or nil on a board
+  that has postings.
   """
   def build(postings, next_cursor \\ nil, reach \\ nil) do
     AgentDocs.doc_meta("job_board", "/jobs")
     |> Map.merge(%{
       title: gettext("Jobs"),
-      description: description(reach),
+      description: gettext("Open positions on vutuv, newest first."),
       count: length(postings),
       next: next_url(next_cursor),
       postings: Enum.map(postings, &JobPostingDoc.summary/1)
@@ -41,25 +44,14 @@ defmodule VutuvWeb.AgentDocs.JobBoardDoc do
     |> put_reach(reach)
   end
 
-  defp description(nil), do: gettext("Open positions on vutuv, newest first.")
-
-  defp description(_reach),
-    do:
-      gettext(
-        "No posting yet. Yours would be the first, and it would stand at the top on its own."
-      )
-
   defp put_reach(doc, nil), do: doc
 
-  defp put_reach(doc, %{count: count, people: people, fields: fields}) do
+  defp put_reach(doc, %{people: people, fields: fields}) do
     work_info = UserHelpers.work_information_map(people, 45)
     tags = UserHelpers.tag_summary_map(people, @tags_shown)
 
     Map.merge(doc, %{
-      open_to_offers: %{
-        total: count,
-        people: Enum.map(people, &person_entry(&1, work_info, tags))
-      },
+      open_to_offers: Enum.map(people, &person_entry(&1, work_info, tags)),
       fields:
         Enum.map(fields, fn {tag, members} ->
           %{name: tag.name, url: AgentDocs.abs_url("/tags/" <> tag.slug), members: members}

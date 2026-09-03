@@ -883,13 +883,13 @@ defmodule Vutuv.Jobs do
   # the two call sites, because the HTML board and its agent-format sibling have
   # to show the same two facts (`VutuvWeb.AgentDocs.JobBoardDoc`) and a number
   # written twice is a number that drifts.
-  @reach_people 6
+  @reach_people 12
   @reach_fields 12
 
   @doc """
   What the board shows in place of a listing when `viewer` would find no
-  posting at all: the members who said they are available (with how many there
-  are) and the fields the most members carry — `%{count:, people:, fields:}`.
+  posting at all: a random handful of the members who said they are available
+  and the fields the most members carry — `%{people:, fields:}`.
 
   `nil` on a board that has something to list, which is the caller's signal to
   render the ordinary board. One home for the answer, so the page
@@ -898,11 +898,8 @@ defmodule Vutuv.Jobs do
   """
   def board_reach(viewer) do
     if board_empty?(viewer) do
-      available = Accounts.open_to_offers(viewer, limit: @reach_people)
-
       %{
-        count: available.total,
-        people: available.people,
+        people: Accounts.open_to_offers(viewer, limit: @reach_people),
         fields: Tags.popular_member_tags(@reach_fields)
       }
     end

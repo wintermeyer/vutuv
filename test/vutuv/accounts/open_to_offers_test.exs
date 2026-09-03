@@ -31,7 +31,6 @@ defmodule Vutuv.Accounts.OpenToOffersTest do
     _hidden = seeker(employment_status_visibility: "hidden")
 
     assert ids(Accounts.open_to_offers(nil)) == [public.id]
-    assert Accounts.open_to_offers(nil).total == 1
   end
 
   test "a signed-in member also sees the members-only ones, never the hidden" do
@@ -43,7 +42,6 @@ defmodule Vutuv.Accounts.OpenToOffersTest do
     listed = ids(Accounts.open_to_offers(viewer))
 
     assert Enum.sort(listed) == Enum.sort([public.id, members_only.id])
-    assert Accounts.open_to_offers(viewer).total == 2
   end
 
   test "a viewer on the seeker's exclusion list never sees them (issue #938)" do
@@ -51,9 +49,7 @@ defmodule Vutuv.Accounts.OpenToOffersTest do
     viewer = insert(:activated_user)
     insert(:viewer_exclusion, user: seeker, excluded_user: viewer, domain: nil)
 
-    # The count is the same answer as the list, so an excluded viewer is not
-    # told "one member is looking" by a number they can never resolve to a row.
-    assert Accounts.open_to_offers(viewer) == %{people: [], total: 0}
+    assert Accounts.open_to_offers(viewer) == []
   end
 
   test "an unconfirmed or moderation-hidden member is not listed" do
@@ -62,22 +58,26 @@ defmodule Vutuv.Accounts.OpenToOffersTest do
 
     seeker(employment_status_visibility: "everyone", frozen_at: NaiveDateTime.utc_now(:second))
 
-    assert Accounts.open_to_offers(nil) == %{people: [], total: 0}
+    assert Accounts.open_to_offers(nil) == []
   end
 
-  test "the freshest signal comes first, and the limit is honoured" do
-    older = seeker(employment_status_visibility: "everyone")
-    newer = seeker(employment_status_visibility: "everyone")
+  test "the limit is honoured and the draw is random, not an order" do
+    first = seeker(employment_status_visibility: "everyone")
+    second = seeker(employment_status_visibility: "everyone")
 
-    stamp(older, ~N[2026-01-01 10:00:00])
-    stamp(newer, ~N[2026-09-01 10:00:00])
+    # Both are eligible, so a page of two holds both whatever the draw.
+    assert Accounts.open_to_offers(nil) |> ids() |> Enum.sort() ==
+             Enum.sort([first.id, second.id])
 
-    assert ids(Accounts.open_to_offers(nil)) == [newer.id, older.id]
+    # Drawing one of two, forty times: a fixed order would name the same member
+    # every time. Missing one of them by chance is a 2^-39 event, so a failure
+    # here is a lost draw, not a flake.
+    drawn =
+      for _ <- 1..40, reduce: MapSet.new() do
+        seen -> MapSet.union(seen, MapSet.new(ids(Accounts.open_to_offers(nil, limit: 1))))
+      end
 
-    # The limit shortens the list and not the count: the page says "showing 1
-    # of 2", never "there is 1".
-    assert Accounts.open_to_offers(nil, limit: 1) |> ids() == [newer.id]
-    assert Accounts.open_to_offers(nil, limit: 1).total == 2
+    assert MapSet.size(drawn) == 2, "the draw always returned the same member"
   end
 
   # The listing gate is SQL and `User.employment_status_visible?/2` is pattern
@@ -104,18 +104,12 @@ defmodule Vutuv.Accounts.OpenToOffersTest do
   test "the rows carry what a listing card draws, without a second query" do
     seeker(employment_status_visibility: "everyone", desired_workplace_types: ["remote"])
 
-    %{people: [row]} = Accounts.open_to_offers(nil)
+    [row] = Accounts.open_to_offers(nil)
 
     assert row.employment_status == "open"
     assert row.desired_workplace_types == ["remote"]
     assert is_binary(row.username)
   end
 
-  defp ids(%{people: people}), do: Enum.map(people, & &1.id)
-
-  defp stamp(user, at) do
-    user
-    |> Ecto.Changeset.change(employment_status_set_at: at)
-    |> Repo.update!()
-  end
+  defp ids(people), do: Enum.map(people, & &1.id)
 end

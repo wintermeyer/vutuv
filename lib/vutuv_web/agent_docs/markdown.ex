@@ -1114,12 +1114,12 @@ defmodule VutuvWeb.AgentDocs.Markdown do
     [
       "## #{gettext("Who you would reach")}",
       ngettext(
-        "One member has said they are available.",
-        "%{formatted} members have said they are available.",
-        available.total,
-        formatted: to_string(available.total)
+        "One random vutuv account that is open to offers.",
+        "%{formatted} random vutuv accounts that are open to offers.",
+        length(available),
+        formatted: to_string(length(available))
       ),
-      Enum.map_join(available.people, "\n", &person_line/1),
+      Enum.map_join(available, "\n", &person_line/1),
       "## #{gettext("What members here work on")}",
       Enum.map_join(fields, "\n", fn field ->
         "- #{md_link(field.name, field.url)} (#{field.members})"

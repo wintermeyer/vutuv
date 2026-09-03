@@ -2105,11 +2105,19 @@ defmodule Vutuv.Accounts do
   @available_shown 6
 
   @doc """
-  The members who said they are available — `%{people: [%User{}], total:
-  integer}`, freshest signal first. The same #928 availability the profile
-  badge carries, read as a **listing**.
+  **A random handful** of the members who said they are available. The same
+  #928 availability the profile badge carries, read as a **listing**.
 
-  `viewer` decides what is on it, exactly as on a profile: an anonymous visitor
+  Random rather than ranked or newest-first, and that is the point: a ranking
+  would show the same faces to every visitor for as long as nobody's status
+  changes, so the members further down the list might as well not have answered
+  the question. The draw happens in the query, so the caller decides how long
+  one lasts by deciding when to ask again (the job board draws on mount, not on
+  render, or the list would reshuffle under a reader). Nothing states how many
+  members there are in all: with a random sample the page can only vouch for
+  what it drew, so it says that number and no other.
+
+  `viewer` decides who is on it, exactly as on a profile: an anonymous visitor
   (nil) sees only the members open to `everyone`, a signed-in one also the
   `members` ones, nobody sees `hidden`, and the #938 exclusion list is
   subtracted last. Both gates run in SQL rather than over the loaded rows: a
@@ -2119,12 +2127,6 @@ defmodule Vutuv.Accounts do
   `test/vutuv/accounts/open_to_offers_test.exs`, so the SQL spelling and the
   struct predicate cannot drift into two different answers.
 
-  `total` counts the whole gated set, not the returned page, and comes back
-  from the same query as the rows (`count(*) OVER ()`) — one round trip, and no
-  way for the headline number to disagree with what is under it. A count that
-  ignored the exclusion list would tell an excluded visitor that somebody is
-  looking and then show them nobody.
-
   Opts: `:limit` (default #{@available_shown}). The rows carry the listing
   fields plus the two the availability line reads, so a card needs no second
   query.
@@ -2132,20 +2134,12 @@ defmodule Vutuv.Accounts do
   def open_to_offers(viewer, opts \\ []) do
     fields = User.listing_fields() ++ ~w(employment_status desired_workplace_types)a
 
-    rows =
-      available(viewer)
-      |> order_by([candidate: u], desc_nulls_last: u.employment_status_set_at, desc: u.id)
-      |> limit(^Keyword.get(opts, :limit, @available_shown))
-      |> select([candidate: u], {struct(u, ^fields), fragment("count(*) OVER ()")})
-      |> Repo.all()
-
-    %{people: Enum.map(rows, &elem(&1, 0)), total: gated_total(rows)}
+    available(viewer)
+    |> order_by(fragment("random()"))
+    |> limit(^Keyword.get(opts, :limit, @available_shown))
+    |> select([candidate: u], struct(u, ^fields))
+    |> Repo.all()
   end
-
-  # The window count rides on every row, so an empty page carries none — and an
-  # empty page means an empty set.
-  defp gated_total([]), do: 0
-  defp gated_total([{_person, total} | _rest]), do: total
 
   # The listed, confirmed members carrying a status this viewer may see.
   defp available(viewer) do

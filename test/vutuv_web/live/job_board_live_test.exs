@@ -69,7 +69,7 @@ defmodule VutuvWeb.JobBoardLiveTest do
     # the same view, so neither it nor the filter chips render.
     refute has_element?(view, "form[action='/jobs'] input[name='q']")
     refute has_element?(view, "#job-filter-chips")
-    assert html =~ "Yours would be the first"
+    refute html =~ "Open positions on vutuv"
     # The way in stays, logged out included: whoever has a job to fill is who
     # this page exists for.
     assert has_element?(view, "a[href='/jobs/new']")
@@ -88,6 +88,8 @@ defmodule VutuvWeb.JobBoardLiveTest do
     assert has_element?(view, "#seeker-#{seeker.id}")
     assert html =~ "Open to offers"
     assert html =~ "Who you would reach"
+    # The number says what was drawn, not how many exist.
+    assert html =~ "One random vutuv account that is open to offers."
   end
 
   test "the empty board keeps a members-only availability from a logged-out visitor", %{
@@ -127,7 +129,7 @@ defmodule VutuvWeb.JobBoardLiveTest do
       |> live(~p"/jobs")
 
     assert html =~ "Wen Sie hier erreichen"
-    assert html =~ "stünde allein oben"
+    assert html =~ "zufälliger vutuv Account"
     assert html =~ "Offen für Angebote"
   end
 
@@ -138,7 +140,7 @@ defmodule VutuvWeb.JobBoardLiveTest do
     {:ok, view, html} = live(conn, ~p"/jobs?#{[q: "elixir"]}")
 
     assert has_element?(view, "#job-filter-chips")
-    refute html =~ "Yours would be the first"
+    refute html =~ "random vutuv accounts"
     assert html =~ "No matching positions"
   end
 
