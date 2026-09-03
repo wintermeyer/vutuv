@@ -29,8 +29,19 @@ defmodule VutuvWeb.VideoComposerTest do
     put_config(:uploads_dir_prefix, tmp)
     on_exit(fn -> File.rm_rf(tmp) end)
 
-    {conn, user} = create_and_login_user(conn)
+    # Uploads are for admins until an installation opens them (VIDEO_UPLOADERS).
+    {conn, user} = create_and_login_admin(conn)
     %{conn: conn, user: user}
+  end
+
+  test "a member who is not an admin is offered no video at all" do
+    {conn, _member} =
+      build_conn() |> Plug.Test.init_test_session(%{}) |> create_and_login_user()
+
+    live = open_composer(conn)
+
+    refute has_element?(live, "#composer-add-video")
+    refute has_element?(live, "input[type=file][name=video]")
   end
 
   defp open_composer(conn) do

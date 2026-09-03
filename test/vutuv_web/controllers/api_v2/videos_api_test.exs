@@ -21,9 +21,19 @@ defmodule VutuvWeb.ApiV2.VideosApiTest do
     put_config(:uploads_dir_prefix, tmp)
     on_exit(fn -> File.rm_rf(tmp) end)
 
-    user = insert_activated_user()
+    # Uploads are for admins until an installation opens them (VIDEO_UPLOADERS).
+    user = insert_activated_user(admin?: true)
     {:ok, token, _} = ApiAuth.create_pat(user, %{"name" => "t", "scopes" => ["posts:write"]})
     {:ok, conn: conn, user: user, token: token}
+  end
+
+  test "a member who is not an admin is told videos are not accepted", %{conn: conn} do
+    member = insert_activated_user()
+    {:ok, token, _} = ApiAuth.create_pat(member, %{"name" => "t", "scopes" => ["posts:write"]})
+
+    conn = conn |> authed(token) |> post("/api/2.0/me/post_videos", %{"video" => clip!()})
+
+    assert %{"title" => "Videos are not accepted"} = json_response(conn, 422)
   end
 
   defp clip! do

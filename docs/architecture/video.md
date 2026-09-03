@@ -16,6 +16,19 @@ boot. An installation without the binaries — an air-gapped intranet, a
 container built without them — simply has no video: the composer offers no
 picker, the Mastodon API announces no video limits, and nothing else changes.
 
+## Who may upload
+
+`Vutuv.Videos.uploads_for?/1` answers per member: an admin always (while
+`enabled?/0` holds), anyone else once the installation sets
+`VIDEO_UPLOADERS=members` (`:uploaders` in `:post_videos`, default
+`:admins`). `create_pending_video/3` is the chokepoint; the surfaces only
+hide, and a member outside the audience gets the picture-only refusal from
+both APIs rather than a hint that video exists. `advertised?/0` is the
+anonymous half: the Mastodon instance answer names video only once every
+member may upload, because a client shows its video button to whoever reads
+it — so while uploads are for admins, even they cannot reach video from a
+Mastodon client. Playback is never gated.
+
 ## The upload
 
 The composer uploads a clip over the LiveView socket like a photo, eagerly:

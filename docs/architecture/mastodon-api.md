@@ -144,7 +144,9 @@ and featuring a hashtag needs a vutuv concept, since the tags on a profile carry
 other members' endorsements and an "unfeature" that dropped them would throw
 away somebody else's vouch.
 
-Status creation accepts public text posts with photos and one video (issue
+Status creation accepts public text posts with photos and, for a member
+`Vutuv.Videos.uploads_for?/1` allows (admins by default, `VIDEO_UPLOADERS`),
+one video (issue
 #1915, [video.md](video.md): the upload answers 202, the media endpoint 206
 until the clip is converted and checked, and a status naming it too early is
 refused with 422 and Mastodon's own sentence). Organization posts are

@@ -58,7 +58,7 @@ defmodule VutuvWeb.MastodonApi.ClientCompatibilityTest do
         |> Enum.map(&MIME.from_path("x" <> &1))
         |> Enum.uniq()
 
-      videos = if Vutuv.Videos.enabled?(), do: Vutuv.Videos.mime_types(), else: []
+      videos = if Vutuv.Videos.advertised?(), do: Vutuv.Videos.mime_types(), else: []
 
       assert media["supported_mime_types"] == images ++ videos
       assert media["image_size_limit"] == Posts.max_image_filesize()

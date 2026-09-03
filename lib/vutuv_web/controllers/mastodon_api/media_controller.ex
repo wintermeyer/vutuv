@@ -136,7 +136,10 @@ defmodule VutuvWeb.MastodonApi.MediaController do
         )
 
       {:error, _invalid} ->
-        validation_error(conn, "Send #{accepted_types()} in the \"file\" field.")
+        validation_error(
+          conn,
+          "Send #{accepted_types(conn.assigns.current_user)} in the \"file\" field."
+        )
     end
   end
 
@@ -148,9 +151,12 @@ defmodule VutuvWeb.MastodonApi.MediaController do
   defp ready_status(_image, requested), do: requested
 
   # By extension, the way the two stores decide it: a clip goes to the video
-  # pipeline, anything else is tried as a picture.
+  # pipeline, anything else is tried as a picture. A clip from a member who
+  # may not upload one takes the picture path too, and is refused with the
+  # picture sentence: the feature stays invisible to them.
   defp store(user, %Plug.Upload{filename: filename} = upload) do
-    if Vutuv.Uploads.valid_extension?(filename, Videos.extension_whitelist()) do
+    if Vutuv.Uploads.valid_extension?(filename, Videos.extension_whitelist()) and
+         Videos.uploads_for?(user) do
       case Videos.create_pending_video(user, upload.path, filename) do
         {:error, :too_large} -> {:error, :video_too_large}
         other -> other
@@ -164,18 +170,18 @@ defmodule VutuvWeb.MastodonApi.MediaController do
   # fixed sentence said "a JPEG, PNG or WebP image" whatever the installation
   # could really take, so an installation whose libvips decodes HEIC refused to
   # admit it — and this is the message a member reads after the upload has
-  # already gone up, so it is the one place the answer has to be exact. What
-  # this endpoint accepts is also what `/api/v2/instance` advertises
-  # (`supported_mime_types`), which is where a client looks before it converts
-  # a picture out of the phone's photo library at all.
-  defp accepted_types do
+  # already gone up, so it is the one place the answer has to be exact. This
+  # sentence is for the one member asking; what `/api/v2/instance` advertises
+  # (`supported_mime_types`, read by a client before it offers the photo
+  # library to anyone) names video only once every member may upload.
+  defp accepted_types(user) do
     images =
       Vutuv.PostImageStore.extension_whitelist()
       |> Enum.map(&(&1 |> String.trim_leading(".") |> String.upcase()))
       |> Enum.uniq()
       |> Enum.join(", ")
 
-    if Videos.enabled?() do
+    if Videos.uploads_for?(user) do
       videos =
         Videos.extension_whitelist()
         |> Enum.map_join(", ", &(&1 |> String.trim_leading(".") |> String.upcase()))

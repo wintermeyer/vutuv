@@ -191,7 +191,7 @@ defmodule VutuvWeb.PostLive.Composer do
     # The clip (issue #1907): an edited post's own, read-only but for its alt
     # text; a new post's arrives through the upload below.
     |> assign(:video, post_video(post))
-    |> assign(:video_uploads?, video_uploads?(post))
+    |> assign(:video_uploads?, video_uploads?(post, socket.assigns.current_user))
     # The per-photo settings the composer is editing (issue #1104), keyed by
     # image id. Held in the socket rather than in form fields: the two switches
     # reveal follow-up controls, and an unchecked checkbox submits nothing — so
@@ -242,8 +242,9 @@ defmodule VutuvWeb.PostLive.Composer do
       progress: &handle_progress/3
     )
     # One clip per post, up to the installation's cap (the length is checked
-    # after ffprobe, on the server). Always allowed, so the template can rely
-    # on `@uploads.video`; only the picker asks whether the feature is on.
+    # after ffprobe, on the server). Always configured, so the template can
+    # rely on `@uploads.video`; the picker and `handle_progress/3` ask whether
+    # this member may upload at all.
     |> allow_upload(:video,
       accept: Videos.extension_whitelist(),
       max_entries: 1,
@@ -257,10 +258,11 @@ defmodule VutuvWeb.PostLive.Composer do
   defp post_video(%Post{video: %PostVideo{} = video}), do: video
   defp post_video(_post), do: nil
 
-  # Whether this composer offers the picker at all: the feature is on, ffmpeg
-  # is there, and this is a new post — a clip is never swapped on an edit.
-  defp video_uploads?(nil), do: Videos.enabled?()
-  defp video_uploads?(_post), do: false
+  # Whether this composer offers the picker at all: this member may upload
+  # (`Vutuv.Videos.uploads_for?/1` — admins only until the installation opens
+  # it), and this is a new post — a clip is never swapped on an edit.
+  defp video_uploads?(nil, user), do: Videos.uploads_for?(user)
+  defp video_uploads?(_post, _user), do: false
 
   # Which clip this composer holds, told to the host so its hook forwards that
   # clip's progress here (`VutuvWeb.Live.VideoProgress`); `nil` withdraws the
@@ -1504,6 +1506,12 @@ defmodule VutuvWeb.PostLive.Composer do
   # The clip landed (issue #1907): keep it, probe it, and start the pipeline
   # while the author is still writing. The length is only known now, so a
   # clip over the cap is refused here, with the cap in the message.
+  # Nothing offered this upload (the picker is not there for this member, or
+  # this is an edit): a crafted client is cut off at its first chunk rather
+  # than fed through to the context's refusal after 500 MB.
+  defp handle_progress(:video, entry, %{assigns: %{video_uploads?: false}} = socket),
+    do: {:noreply, cancel_upload(socket, :video, entry.ref)}
+
   defp handle_progress(:video, entry, socket) do
     if entry.done? do
       result =

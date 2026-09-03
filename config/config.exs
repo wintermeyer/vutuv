@@ -653,6 +653,8 @@ config :vutuv, :post_images, max_filesize: 50_000_000, max_per_post: 10
 # so a burst of uploads queues instead of taking the server down.
 config :vutuv, :post_videos,
   enabled: true,
+  # Who may attach a clip: :admins while the feature is new, :members later.
+  uploaders: :admins,
   max_filesize: 500_000_000,
   max_duration_seconds: 120,
   ffmpeg: "ffmpeg",

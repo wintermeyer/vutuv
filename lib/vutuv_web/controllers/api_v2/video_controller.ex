@@ -37,7 +37,7 @@ defmodule VutuvWeb.ApiV2.VideoController do
 
       {:error, :disabled} ->
         Problem.send_problem(conn, 422, "Videos are not accepted",
-          detail: "This installation does not take videos."
+          detail: "This installation does not take videos from this account."
         )
 
       {:error, _invalid} ->

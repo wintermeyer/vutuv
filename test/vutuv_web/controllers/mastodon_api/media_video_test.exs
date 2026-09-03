@@ -34,7 +34,7 @@ defmodule VutuvWeb.MastodonApi.MediaVideoTest do
   end
 
   test "upload, poll, post: the two-step shape on a longer clock", %{conn: conn} do
-    user = insert(:activated_user)
+    user = insert(:activated_user, admin?: true)
     token = mastodon_token(user, ["read", "write"])
 
     uploaded =
@@ -94,7 +94,9 @@ defmodule VutuvWeb.MastodonApi.MediaVideoTest do
     assert Posts.get_post(status["id"]).video.id == uploaded["id"]
   end
 
-  test "the instance announces the video limits", %{conn: conn} do
+  test "the instance announces the video limits once every member may upload", %{conn: conn} do
+    VideoFixtures.put_video_config(:uploaders, :members)
+
     body = conn |> on_mastodon_host() |> get("/api/v2/instance") |> json_response(200)
     media = body["configuration"]["media_attachments"]
 
@@ -103,8 +105,30 @@ defmodule VutuvWeb.MastodonApi.MediaVideoTest do
     assert "video/mp4" in media["supported_mime_types"]
   end
 
-  test "an unposted clip can be deleted", %{conn: conn} do
+  test "while only admins upload, the instance says nothing about video", %{conn: conn} do
+    body = conn |> on_mastodon_host() |> get("/api/v2/instance") |> json_response(200)
+    media = body["configuration"]["media_attachments"]
+
+    assert media["video_size_limit"] == 0
+    refute "video/mp4" in media["supported_mime_types"]
+  end
+
+  test "a member who is not an admin gets the picture-only refusal for a clip", %{conn: conn} do
     user = insert(:activated_user)
+    token = mastodon_token(user, ["read", "write"])
+
+    body =
+      conn
+      |> mastodon_conn(token)
+      |> post("/api/v2/media", %{"file" => clip!()})
+      |> json_response(422)
+
+    assert body["error"] =~ "an image"
+    refute body["error"] =~ "video"
+  end
+
+  test "an unposted clip can be deleted", %{conn: conn} do
+    user = insert(:activated_user, admin?: true)
     token = mastodon_token(user, ["read", "write"])
 
     uploaded =
