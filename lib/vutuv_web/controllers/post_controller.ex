@@ -51,7 +51,14 @@ defmodule VutuvWeb.PostController do
         filter = if is_nil(period), do: Posts.normalize_post_filter(params["type"]), else: :all
 
         {posts, total} =
-          Posts.author_posts_page(author, conn.assigns[:current_user], params, period, filter)
+          Posts.author_posts_page(
+            author,
+            conn.assigns[:current_user],
+            params,
+            period,
+            filter,
+            Posts.author_posts_per_page()
+          )
 
         {noindex?, noai?} = PostDoc.robots_axes(author, false)
 
@@ -70,6 +77,14 @@ defmodule VutuvWeb.PostController do
           engagement: archive_engagement(posts, conn.assigns[:current_user]),
           total: total,
           post_filter: Atom.to_string(filter),
+          per_page: Posts.author_posts_per_page(),
+          # What every page link has to carry with it. Only the type filter:
+          # `conn.params` also holds the path segments (the slug, and the year /
+          # month / day of a scoped archive), and putting those in the query
+          # string would name the same thing twice — the links are relative to
+          # the current path, which already says it. Without this a reader
+          # paging through "Replies" landed back on "All" at page two.
+          page_query: page_query(filter),
           period_label: period_label,
           period_crumbs: period_crumbs(author, params, period_label),
           page_title: "#{VutuvWeb.UserHelpers.full_name(author)} · #{gettext("Posts")}"
@@ -120,6 +135,11 @@ defmodule VutuvWeb.PostController do
 
   # A reshare of a post from another network carries no local post at all.
   defp archive_post_ids(_entry), do: []
+
+  # The type filter is the only thing a page link carries; `:all` is the
+  # default the bare URL already means, so it is left off.
+  defp page_query(:all), do: %{}
+  defp page_query(filter), do: %{"type" => Atom.to_string(filter)}
 
   # With no explicit `ancestors` the card falls back to the one preloaded
   # parent, which carries an action bar of its own — so it belongs in the batch

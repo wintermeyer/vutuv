@@ -47,6 +47,13 @@ defmodule VutuvWeb.PostControllerTest do
     {drain_queries(ref, 0), result}
   end
 
+  # How many post bodies a rendered archive page carries. Counted by the id the
+  # card gives each body, so a nested parent card counts too — which is the
+  # point: what makes this page heavy is cards, not entries.
+  defp bodies_on(conn) do
+    length(Regex.scan(~r/id="post-body-post-/, conn.resp_body))
+  end
+
   defp drain_queries(ref, n) do
     receive do
       {^ref, :query} -> drain_queries(ref, n + 1)
@@ -1256,6 +1263,49 @@ defmodule VutuvWeb.PostControllerTest do
              "ten more posts cost #{wide - narrow} more queries (#{narrow} then #{wide}) — " <>
                "an action bar or a nested card is loading per post again instead of " <>
                "taking the batched map"
+    end
+
+    test "carries one page of posts, and the next page carries the rest", %{conn: conn} do
+      # 250 was the site-wide listing figure, meant for pages whose item is one
+      # row; here every item is a full post card, so a member with a real
+      # history shipped a multi-megabyte document (3.5 MB and 258 cards for 93
+      # entries, measured 2026-09-03).
+      per_page = Posts.author_posts_per_page()
+      user = insert_activated_user()
+
+      for n <- 1..(per_page + 3),
+          do: {:ok, _} = Posts.create_post(user, %{body: "archive post #{n}"})
+
+      first = get(conn, "/#{user.username}/posts")
+      second = get(conn, "/#{user.username}/posts?page=2")
+
+      assert bodies_on(first) == per_page
+      assert bodies_on(second) == 3
+
+      # Newest first, so the last three written open the archive and the three
+      # oldest close it — which is also what says the second page is a
+      # continuation rather than the same rows again.
+      assert html_response(first, 200) =~ "archive post #{per_page + 3}"
+      refute first.resp_body =~ "archive post 1<"
+      assert html_response(second, 200) =~ "archive post 1<"
+      refute second.resp_body =~ "archive post #{per_page + 3}"
+    end
+
+    test "a page link keeps the filter the reader is on", %{conn: conn} do
+      # Without this the reader paging through "Replies" landed back on "All"
+      # at page two, having asked for nothing of the sort.
+      user = insert_activated_user()
+      {:ok, parent} = Posts.create_post(user, %{body: "the post being answered"})
+
+      for n <- 1..(Posts.author_posts_per_page() + 1) do
+        {:ok, _} = Posts.create_reply(user, parent, %{body: "reply #{n}"})
+      end
+
+      conn = get(conn, "/#{user.username}/posts?type=replies")
+      html = html_response(conn, 200)
+
+      assert [_ | _] = links = Regex.scan(~r/href="\?[^"]*page=2[^"]*"/, html)
+      assert Enum.all?(links, fn [link] -> link =~ "type=replies" end), inspect(links)
     end
 
     test "lists the author's posts, visibility-filtered per viewer", %{conn: conn} do
