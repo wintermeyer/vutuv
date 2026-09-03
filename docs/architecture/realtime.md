@@ -67,7 +67,7 @@ not to the `:machine_docs` pipeline, whose other documents are gettext-free and
 `public` cached with no `vary` — and the answer carries
 `Vary: accept-language`, which is why it is the one discovery document with a
 cache line of its own. "Write a post" points at `/feed#compose`, the composer
-deep link the profile's Beiträge card and the "n" shortcut already use: the
+deep link the "n" shortcut already uses from a page without one: the
 manifest gets the caret that `revealAndFocusComposer` puts in the box, and this
 app keeps one spelling of "open the feed ready to write".
 

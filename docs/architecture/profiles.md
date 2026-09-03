@@ -1078,10 +1078,15 @@ the only way listed under the offer.
 
 The card renders when any part does and nothing at all when none, which is what
 keeps the header's sign from ever pointing at nothing —
-`UserHTML.subscribe_card?/3` is the one predicate both sites read. The feed
+`UserHTML.subscribe_card?/4` is the one predicate both sites read. The feed
 pill used to sit in the Posts card header (issue #1287) and was the loudest
 control on that section for the rarer of the two ways to follow a member, while
 the Fediverse address had no link above the fold at all.
+
+**Never on the owner's own profile**, whatever the parts say (Stefan,
+2026-09-03): there the card offers an RSS reader for your own writing and a
+form that resolves your own server so you can follow yourself. The sign goes
+with it, since the two are one predicate.
 
 The handle is public data on a public page, so the agent-format siblings carry
 it too (`ProfileDoc`'s `fediverse` map: handle, actor URL, `moved_to`; a

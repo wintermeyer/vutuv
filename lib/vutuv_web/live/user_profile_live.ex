@@ -51,9 +51,11 @@ defmodule VutuvWeb.UserProfileLive do
   alias Vutuv.Tags.UserTag
   alias Vutuv.Tags.UserTagEndorsement
   alias VutuvWeb.Fediverse.Docs
+  alias VutuvWeb.Live.ComposerPanel
   alias VutuvWeb.Live.InitAssigns
   alias VutuvWeb.Live.MountHandoff
   alias VutuvWeb.Live.PostTranslations
+  alias VutuvWeb.Live.VideoProgress
 
   # The controller embeds this LiveView with `live_render/3` (not a `live/3`
   # router route), so `VutuvWeb.Live.InitAssigns` cannot be the on_mount: it
@@ -87,6 +89,7 @@ defmodule VutuvWeb.UserProfileLive do
       # means this viewer gets the controls, nil means they do not.
       |> assign(:post_translations, PostTranslations.initial_map(socket.assigns.current_user))
       |> mount_profile()
+      |> attach_owner_composer()
 
     # Only a real visitor triggers the (cached, single-flight) social feed
     # fetches; the disconnected SEO pass stays a no-network render. Rebinds:
@@ -120,6 +123,20 @@ defmodule VutuvWeb.UserProfileLive do
       socket
     end
   end
+
+  # The owner writes here, so this page hosts the folded composer /feed hosts:
+  # `VutuvWeb.Live.ComposerPanel` owns the panel's events and messages, and
+  # `VutuvWeb.Live.VideoProgress` forwards a clip's progress to the composer
+  # holding it (issue #1911) over a topic only the page's own process can
+  # subscribe to. After `mount_profile/1`, which is what knows whose profile
+  # this is — and owner-only, because nobody else is handed a composer here.
+  defp attach_owner_composer(%{assigns: %{as_owner?: true}} = socket) do
+    socket
+    |> ComposerPanel.attach()
+    |> VideoProgress.attach(socket.assigns.current_user)
+  end
+
+  defp attach_owner_composer(socket), do: socket
 
   # Apply the dead render's assigns, then recompute the two connected-only
   # slices the dead pass deliberately left cold: the social-feed card reads
@@ -244,14 +261,7 @@ defmodule VutuvWeb.UserProfileLive do
      socket
      |> assign(:post_filter, filter)
      |> assign_posts_with_engagement(filter)
-     |> assign(
-       :post_filter_total,
-       Vutuv.Posts.count_author_posts(
-         socket.assigns.user,
-         socket.assigns.current_user,
-         Vutuv.Posts.normalize_post_filter(filter)
-       )
-     )}
+     |> assign(:post_filter_total, post_count(socket, filter))}
   end
 
   # Mute / unmute the viewer's own follow (feed-only, silent). Scoped to the
@@ -381,6 +391,25 @@ defmodule VutuvWeb.UserProfileLive do
   # viewer's badge / salary line drops out (or reappears) with no reload.
   def handle_info({:job_search_visibility_changed, _payload}, socket),
     do: {:noreply, put_job_search_assigns(socket, socket.assigns.user)}
+
+  # This member published a post. `Posts` fans a new post out to its author
+  # first and their followers after, so it arrives on the very topic this page
+  # already subscribes to — no message of its own is needed. The head matches
+  # only their own posts: the same topic carries every post by everybody they
+  # follow, and those are not this page's business.
+  #
+  # Every open socket on this profile hears it, not only the author's, so a
+  # visitor watching sees the post arrive too. Re-read the timeline and the two
+  # counts — not `reload_posts/1`, which would also re-read the pinned post and
+  # its twenty preloads, and a brand-new post is never the pin. Folding the
+  # composer is a no-op for everyone but the author.
+  def handle_info({:new_post, %{author_id: id}}, %{assigns: %{profile_user_id: id}} = socket) do
+    {:noreply,
+     socket
+     |> ComposerPanel.collapse()
+     |> assign_posts_with_engagement(socket.assigns.post_filter)
+     |> refresh_post_counts()}
+  end
 
   # A shown post was deleted elsewhere. The owner's posts broadcast their
   # deletion on the owner's topic (which this page already subscribes to), so
@@ -726,6 +755,33 @@ defmodule VutuvWeb.UserProfileLive do
     |> then(&assign_posts_with_engagement(&1, &1.assigns.post_filter))
   end
 
+  # Both counts the Beiträge card renders, re-read rather than incremented: the
+  # heading's total and the active filter's, which drives the "View all" footer.
+  # A new post always joins the total and does not always join the filter (a
+  # post under the "Reposts" tab does not), so the second is a question only the
+  # query can answer. Under "all" they are the same number and it is not asked.
+  defp refresh_post_counts(socket) do
+    filter = socket.assigns.post_filter
+    total = post_count(socket, "all")
+
+    socket
+    |> assign(:posts_total, total)
+    |> assign(
+      :post_filter_total,
+      if(filter == "all", do: total, else: post_count(socket, filter))
+    )
+  end
+
+  # What one tab of the Beiträge card counts, scoped to this viewer. One home
+  # for it: a tab click and a fresh post ask the same question.
+  defp post_count(socket, filter) do
+    Vutuv.Posts.count_author_posts(
+      socket.assigns.user,
+      socket.assigns.current_user,
+      Vutuv.Posts.normalize_post_filter(filter)
+    )
+  end
+
   # ── Initial load (ports UserController.show_html) ──
 
   # The discovery threshold: the owner's own profile leads the rail with the
@@ -830,6 +886,11 @@ defmodule VutuvWeb.UserProfileLive do
 
     socket
     |> assign(:as_owner?, owner?)
+    # The owner's folded composer and the draft that decides whether it opens
+    # (`ComposerPanel`). Read here so it rides the `MountHandoff` and reaches
+    # the composer as `preloaded_draft`; it is the row /feed reads — same
+    # author, same empty context, the same unpublished post.
+    |> ComposerPanel.assign_draft(owner? && current_user)
     |> assign(:vcard_full?, private_emails?)
     |> assign(:viewer_block, viewer_block(current_user, user))
     |> assign(:user_saved, header_user_saved(current_user, user))

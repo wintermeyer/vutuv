@@ -464,28 +464,111 @@ defmodule VutuvWeb.UserProfileLiveTest do
     end
   end
 
-  describe "the owner's 'Write a post' composer trigger" do
-    test "links to the feed with the composer pre-opened", %{conn: conn} do
+  describe "the owner's compose control" do
+    test "the button opens the feed's composer in place, on the profile", %{conn: conn} do
       {conn, owner} = create_and_login_user(conn)
 
       {:ok, view, _html} = live(conn, ~p"/#{owner}")
 
-      # The avatar-card <.composer_trigger> (not the dashed onboarding tile),
-      # whose one remaining home this is. It must land on /feed#compose, not
-      # bare /feed — the #compose hash is what reveals and focuses the composer
-      # on arrival (the same path the "n" keyboard shortcut uses), so clicking
-      # it opens the new-post form straight away instead of dropping the owner
-      # on a closed composer.
-      trigger = element(view, "#profile-posts [data-composer-trigger]")
-      assert render(trigger) =~ ~s(href="/feed#compose")
-      refute has_element?(view, "#profile-posts [data-empty-add]")
+      # The very control /feed carries, and it stays on the page: the tile that
+      # stood here answered "write a post" by leaving for /feed#compose.
+      button = element(view, "#profile-posts #open-composer[data-composer-trigger]")
+      assert render(button) =~ "Write your first post"
+      refute render(button) =~ "href="
 
-      # Flat inside the post list, the trigger follows the rows' grammar: the
-      # same `sm` avatar the post headers use (h-9), not the feed card's `md` —
-      # a bigger avatar towers over the list and shifts the pill off the post
-      # text column.
-      assert render(trigger) =~ "h-9 w-9"
-      refute render(trigger) =~ "h-12 w-12"
+      # Folded, with both halves in the DOM (see `VutuvWeb.Live.ComposerPanel`).
+      assert has_element?(view, "#profile-posts #composer-panel.hidden")
+      refute has_element?(view, "#profile-posts #composer-trigger.hidden")
+
+      render_click(button)
+
+      assert has_element?(view, "#profile-posts #composer-trigger.hidden")
+      refute has_element?(view, "#profile-posts #composer-panel.hidden")
+      assert has_element?(view, "#composer-form")
+    end
+
+    test "a post written here lands in the Beiträge card and folds the panel", %{conn: conn} do
+      {conn, owner} = create_and_login_user(conn)
+
+      {:ok, view, _html} = live(conn, ~p"/#{owner}")
+
+      view |> element("#profile-posts #open-composer") |> render_click()
+
+      view
+      |> form("#composer-form", %{"post" => %{"body" => "Written **from** my profile"}})
+      |> render_submit()
+
+      # The post is on the page it was written on — no trip to /feed to see it.
+      assert render(view) =~ "<strong>from</strong>"
+
+      # And the card counted it, so the button stops asking for a first post.
+      assert [%{post: _}] = Posts.profile_posts(owner, owner)
+      assert render(element(view, "#profile-posts #open-composer")) =~ "Write a post"
+
+      # The panel folded again, the way it does on the feed.
+      assert has_element?(view, "#profile-posts #composer-panel.hidden")
+      refute has_element?(view, "#profile-posts #composer-trigger.hidden")
+    end
+
+    test "the corner ✕ folds an empty composer again", %{conn: conn} do
+      {conn, owner} = create_and_login_user(conn)
+
+      {:ok, view, _html} = live(conn, ~p"/#{owner}")
+      view |> element("#profile-posts #open-composer") |> render_click()
+
+      # With nothing to lose the ✕ bubbles the plain `close-composer` up to
+      # this LiveView, which owns the panel — the composer cannot fold itself.
+      view |> element(~s(#composer-panel button[phx-click="close-composer"])) |> render_click()
+
+      assert has_element?(view, "#profile-posts #composer-panel.hidden")
+    end
+
+    test "a stored draft opens the panel on arrival", %{conn: conn} do
+      {conn, owner} = create_and_login_user(conn)
+      :ok = Posts.save_draft(owner, nil, %{body: "half a thought"})
+
+      {:ok, view, _html} = live(conn, ~p"/#{owner}")
+
+      # The same draft row /feed reads — same author, same empty context — so a
+      # thought started in the feed is here, and one started here is in the feed.
+      refute has_element?(view, "#profile-posts #composer-panel.hidden")
+      assert render(view) =~ "half a thought"
+    end
+
+    test "a visitor gets no composer at all", %{conn: conn} do
+      {conn, _viewer} = create_and_login_user(conn)
+      owner = insert_activated_user()
+
+      {:ok, view, _html} = live(conn, ~p"/#{owner}")
+
+      refute has_element?(view, "#open-composer")
+      refute has_element?(view, "#composer-panel")
+    end
+  end
+
+  describe "the Subscribe card and its sign" do
+    test "neither shows on the owner's own profile", %{conn: conn} do
+      {conn, owner} = create_and_login_user(conn)
+      {:ok, _post} = Posts.create_post(owner, %{body: "something to subscribe to"})
+
+      {:ok, view, _html} = live(conn, ~p"/#{owner}")
+
+      # An RSS reader for your own writing, and a form that resolves your own
+      # server so you can follow yourself: nobody wants either, and the owner
+      # already has the whole page (Stefan, 2026-09-03).
+      refute has_element?(view, "#profile-subscribe-link")
+      refute has_element?(view, "#profile-subscribe")
+    end
+
+    test "a visitor still gets both, and the sign still points at the card", %{conn: conn} do
+      {conn, _viewer} = create_and_login_user(conn)
+      owner = insert_activated_user()
+      {:ok, _post} = Posts.create_post(owner, %{body: "something to subscribe to"})
+
+      {:ok, view, _html} = live(conn, ~p"/#{owner}")
+
+      assert has_element?(view, ~s(#profile-subscribe-link[href="#profile-subscribe"]))
+      assert has_element?(view, "#profile-subscribe")
     end
   end
 

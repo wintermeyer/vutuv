@@ -60,9 +60,10 @@ function go(path) {
   if (path) window.location.assign(path)
 }
 
-// "n" (new post): focus the feed composer if it is on the page, otherwise jump
-// to the feed and focus it on arrival (#compose). Returning false (no composer
-// here) is what makes the handler navigate to the feed instead. Exported for
+// "n" (new post): focus this page's composer if it has one — /feed and the
+// owner's own profile both do — otherwise jump to the feed and focus it on
+// arrival (#compose). Returning false (no composer here) is what makes the
+// handler navigate to the feed instead. Exported for
 // the phone tab bar's Write tab (compose_tab.js), which asks the same question.
 export function focusComposer() {
   if (!document.getElementById("composer-body")) return false
@@ -80,17 +81,17 @@ function isVisible(el) {
   return !!(el.offsetWidth || el.offsetHeight || el.getClientRects().length)
 }
 
-// On the feed the composer starts collapsed (display:none) behind a "Write a
-// post" button, and focus() is a no-op on a display:none node, so click the
-// reveal trigger first, then focus once it paints. The reveal is a LiveView
+// The composer starts collapsed (display:none) behind a "Write a post" button
+// on both pages that host one, and focus() is a no-op on a display:none node,
+// so click the reveal trigger first, then focus once it paints. The reveal is a LiveView
 // round-trip, and on a cross-page arrival (#compose) the socket may still be
 // joining, which swallows the first click; so retry the click each tick until
 // the editor is actually visible, then focus. Reaching the click at all means
 // the editor — and with it the panel it sits in — is still hidden, so this
 // never pushes `open-composer` at an already-open composer. The trigger's own
-// visibility is deliberately not asked: on a phone it is never visible (its
-// line is desktop-only, the tab bar's Write tab does its job there), and a
-// hidden button still takes a click().
+// visibility is deliberately not asked: on the feed it is invisible on a phone
+// (that line is desktop-only, the tab bar's Write tab does its job there) while
+// on the profile it is not, and a hidden button still takes a click() anyway.
 function revealAndFocusComposer(tries = 0) {
   const el = document.getElementById("composer-body")
   if (el && isVisible(el)) {

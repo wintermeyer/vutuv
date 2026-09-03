@@ -1129,6 +1129,46 @@ ActivityPub **`featured` collection** and pushed to their followers as
 profile they render — same anonymous-public gate, see
 `docs/architecture/fediverse.md`.
 
+## Where you write: two homes, one control
+
+Writing a post happens in exactly one component, `VutuvWeb.PostLive.Composer`,
+and it is folded behind exactly one control, `<.compose_button>` in
+`VutuvWeb.PostComponents`. Two pages host that pair: **/feed**, on its control
+line, and the **owner's own profile**, inside the Beiträge card. Both render
+the button, both push `open-composer` at the LiveView that owns the panel, and
+both fold it again on `close-composer` — so the gesture is the same wherever a
+member happens to be when they have something to say (Stefan, 2026-09-03).
+
+The composer knows which it is from `host` (`:feed` / `:profile` /
+`:organization` / `:page`), and that assign decides only the two things it
+cannot read off its own state: whether it has a panel to fold (the corner ✕,
+and the `{:composer_drafting, …}` / `{:composer_closed, …}` messages that go
+with it) and whether it keeps a draft. `:feed` and `:profile` answer yes to
+both; the organization page and the standalone reply/edit pages render open and
+have nothing to fold.
+
+Neither host is told about the finished post directly. `Posts` fans a new post
+out to its **author first** and their followers after, so the same
+`{:new_post, …}` broadcast reaches the feed and the author's own profile, which
+subscribes to that very topic — the profile checks the author id (the posts of
+everybody it follows ride the same topic) and re-reads its Beiträge card. An
+organization post is the exception and is handed to its page directly, because
+a page cannot be followed and therefore broadcasts to nobody.
+
+Both halves of the control stay in the DOM at all times and only `hidden` moves
+between them. An element that appears or disappears *above* the editor makes
+morphdom relocate the siblings below it, and re-parenting a `contenteditable`
+blurs it mid-word (#1200).
+
+The profile's control used to be an avatar-card tile shaped like an input, and
+a link: it took no typing, and it answered "write a post" by leaving for
+`/feed#compose` — the page the post was going to appear on. `/feed` dropped
+that shape on 2026-08-31 and the profile followed on 2026-09-03. The deep link
+survives for pages with no composer of their own: the "n" shortcut and the
+phone tab bar's **Write** tab navigate to it, and where the page *does* have
+one (`#composer-body` is present) they open it in place instead
+(`assets/js/keyboard_shortcuts.js`, `compose_tab.js`).
+
 ## The composer keeps what you typed (issue #1148)
 
 A page reload used to empty the composer, with no warning and no way back.
@@ -1165,7 +1205,9 @@ still includes the `?quote=` passage). The notice steps aside on the first
 edit. `/feed` opens its collapsed composer when a draft exists (resolved in
 `Feed.mount`, so the disconnected render agrees and the panel never flickers),
 because text hidden behind a collapsed panel reads exactly like text that was
-thrown away. Nothing restored is trusted: `Posts.pending_images/2` re-checks
+thrown away. The owner's own profile does the same, from the same row — same
+author, same empty context — so a thought started in one is waiting in the
+other. Nothing restored is trusted: `Posts.pending_images/2` re-checks
 every image id against the author's own unattached rows, and the post changeset
 validates the content on save as it always did.
 

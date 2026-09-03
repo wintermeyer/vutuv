@@ -1971,7 +1971,7 @@ defmodule VutuvWeb.UI do
   `:if={same_user?(…) and <collection empty>}`); once there are entries the card
   is a clean showcase with a `<.card_footer_link>` "Verwalten ›" instead. The
   exceptions are Beiträge (whose compose affordance stays always but is the
-  avatar-card `<.composer_trigger>` in `VutuvWeb.PostComponents`, not this tile)
+  `<.compose_button>` in `VutuvWeb.PostComponents`, not this tile)
   and General Info (empty tile graduates to an "Ändern ›" footer). On the legacy
   **management pages** `<.card_section>` renders it above the list, empty or
   populated (those are the editor). Pass the call-to-action label as the inner
