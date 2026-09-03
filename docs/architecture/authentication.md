@@ -72,18 +72,21 @@ revoke a single device or all others, and add / remove passkeys at
 `/:slug/settings`; a noteworthy login (new device, suspicious location) mails a
 security alert
 
-**Where a login lands.** Normally `VutuvWeb.Home.path/1`: the feed, or the
-member's own profile while they follow nobody. The one exception is the PIN
-that confirms a **brand-new registration** — that member is sent to the
-one-time welcome page (`/system/welcome`) first, where they are asked once for
-their location and job search. `SessionController.post_login_path/2` gates it on
-both the PIN form's `"registration"` context and a `nil`
-`users.welcome_completed_at`, so an ordinary login never lands there and a
-member who abandons the page is not asked again. See
-[Profiles](profiles.md#the-one-time-welcome-page-systemwelcome).
+**Where a login lands.** Always `VutuvWeb.Home.path/1`: the feed, or the
+member's own profile while they follow nobody (a page that asked for the login
+wins over both via `return_to`). The PIN that confirms a **brand-new
+registration** lands there too — it just carries the one-time welcome questions
+(location and job search) with it, as a modal floating over that profile.
+`SessionController.welcome_due?/2` gates them on both the PIN form's
+`"registration"` context and a `nil` `users.welcome_completed_at`, and stores
+the one-shot `:welcome_pending` session key `VutuvWeb.Plug.WelcomeModal` reads,
+so an ordinary login never sees them and a member who closed them is not asked
+again. See
+[Profiles](profiles.md#the-one-time-welcome-questions-systemwelcome).
 
-A newcomer gets **no welcome toast** on either page: the welcome screen greets
-them in its own hero, and the profile it hands them to already shows the
-completion checklist, so a toast on top would only repeat it. The returning
-member's "Welcome back, …" (plus the unread-conversations nudge) is unchanged.
+A newcomer gets **no welcome toast**: the modal owns that screen and a toast
+behind its dimmed backdrop cannot be read, "Welcome back" is the wrong word for
+somebody who has just arrived, and the profile underneath already shows the
+completion checklist. The returning member's "Welcome back, …" (plus the
+unread-conversations nudge) is unchanged.
 

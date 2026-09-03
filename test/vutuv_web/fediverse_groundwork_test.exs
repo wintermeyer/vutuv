@@ -71,6 +71,30 @@ defmodule VutuvWeb.FediverseGroundworkTest do
       refute privacy =~ ~s(name="user[fediverse_followers?]")
     end
 
+    # What the sign-up box used to say and no longer does: taking part stores
+    # replies written by people who never signed up here, for a bounded time.
+    # The sign-up form is down to the one fact the tick is about (posts leave
+    # here), so THIS page is where the rest is said — and a sentence that
+    # carries consent weight and nothing asserts is a sentence that can vanish
+    # in a redesign with nobody noticing.
+    test "the page says that replies are stored, and for how long", %{conn: conn} do
+      {conn, _user} = create_and_login_user(conn)
+      # Only a member who takes part is told this: the sentence sits behind the
+      # `federated?/1` gate, so the tick has to be on before the page says it.
+      conn =
+        put(conn, ~p"/settings/fediverse", %{
+          "user" => %{"fediverse_followers?" => "true"},
+          "fediverse_ack" => "1"
+        })
+
+      body = conn |> recycle() |> get(~p"/settings/fediverse") |> html_response(200)
+
+      assert body =~ "for up to six months"
+      assert body =~ "Answers people write out there appear under your post"
+      # And that it can be undone, which is the other half of an informed tick.
+      assert body =~ "switching this off deletes all of them"
+    end
+
     test "the settings hub lists the Fediverse page", %{conn: conn} do
       {conn, _user} = create_and_login_user(conn)
 

@@ -245,7 +245,7 @@ defmodule VutuvWeb.SessionController do
         # navigates, and Phoenix keeps a flash across requests only on a 3xx —
         # so a plain put_flash here was silently dropped and the passkey login
         # never greeted anyone (the PIN login, which redirects, always did).
-        |> PendingFlash.put_pending_flash(:info, welcome_flash(nil, user))
+        |> PendingFlash.put_pending_flash(:info, welcome_flash(user))
         # Same landing as the PIN path: home is the feed once you follow someone,
         # otherwise your profile (see VutuvWeb.Home).
         |> json(%{ok: true, redirect: return_to || Home.path(user)})
@@ -376,15 +376,18 @@ defmodule VutuvWeb.SessionController do
         # A member who follows nobody yet (a fresh sign-up) would meet an empty
         # feed, so Home.path/1 sends them to their profile instead. A page that
         # sent them here to log in (the OAuth consent screen) still wins via
-        # return_to.
-        path = return_to || post_login_path(context, user)
+        # return_to — and takes the welcome questions with it: a member who
+        # signed up in the middle of authorizing an app is answering that, not
+        # us.
+        path = return_to || Home.path(user)
+        welcome? = is_nil(return_to) and welcome_due?(context, user)
 
         conn
         |> maybe_record_landing_confirmation(context)
         |> Accounts.login(user, factor)
         |> Accounts.delete_pin_cookie()
-        |> maybe_open_welcome(path)
-        |> maybe_welcome_flash(path, context, user)
+        |> maybe_open_welcome(welcome?)
+        |> maybe_welcome_flash(welcome?, user)
         |> redirect(to: path)
 
       {:suspended, until} ->
@@ -417,40 +420,39 @@ defmodule VutuvWeb.SessionController do
 
   defp maybe_record_landing_confirmation(conn, _context), do: conn
 
-  # Where a successful login lands. Normally home (the feed, or the member's
-  # own profile while they follow nobody — VutuvWeb.Home). The one exception is
-  # the PIN that confirms a brand-new registration: that member goes to the
-  # one-time welcome page first, where they are asked once for their location
-  # and job search. Gated on BOTH the form's "registration" context and the
-  # never-yet-completed flag, so an ordinary login can never be sent there —
-  # and a member who abandons the page is not asked again on their next login.
-  defp post_login_path("registration", user) do
-    if Accounts.needs_welcome?(user), do: ~p"/system/welcome", else: Home.path(user)
+  # Whether this login is the one that asks the one-time welcome questions
+  # (location + job search). Gated on BOTH the PIN form's "registration"
+  # context and the never-yet-completed flag, so an ordinary login never asks —
+  # and a member who left the questions unanswered is not asked again on their
+  # next login. Every login lands on home either way (VutuvWeb.Home): the
+  # questions float over that page rather than standing in front of it.
+  defp welcome_due?("registration", user), do: Accounts.needs_welcome?(user)
+  defp welcome_due?(_context, _user), do: false
+
+  # The questions are a **one-shot**, and this session marker is the key:
+  # `VutuvWeb.Plug.WelcomeModal` opens the modal only while it is set, and
+  # `VutuvWeb.WelcomeController` accepts the submit only then. Another session,
+  # or this one after the member has answered, gets nothing. It survives a
+  # reload and a failed submit (both stay in this session), and the controller
+  # drops it the moment the questions are done.
+  # Opening it also CLEARS the step, because logging in keeps the session's
+  # contents (it renews the id, not the data): a browser where somebody signed
+  # up earlier and got as far as the last step still carries `:welcome_step`,
+  # and the next account created in it would open on that step and skip both
+  # questions. Found by walking two sign-ups through one browser, 2026-09-03.
+  defp maybe_open_welcome(conn, true) do
+    conn |> put_session(:welcome_pending, true) |> delete_session(:welcome_step)
   end
 
-  defp post_login_path(_context, user), do: Home.path(user)
+  defp maybe_open_welcome(conn, false), do: conn
 
-  # The one-time welcome page greets the member in its own hero and its two
-  # questions deserve an uncluttered screen, so no toast rides along to it -
-  # and none follows afterwards either: the profile it hands them to already
-  # shows the completion checklist.
-  # The welcome page is a **one-shot URL**: it opens only for the login that
-  # routes there, and this session marker is the key. Typing /system/welcome
-  # later - or in another session - finds no key and is sent to the profile,
-  # so the page cannot be revisited once it has been left behind. It survives
-  # a reload and a failed submit (both stay in this session), and
-  # VutuvWeb.WelcomeController drops it the moment the page is done.
-  defp maybe_open_welcome(conn, path) do
-    if path == ~p"/system/welcome", do: put_session(conn, :welcome_pending, true), else: conn
-  end
+  # The welcome modal owns that first screen, and a toast behind its dimmed
+  # backdrop is a greeting nobody can read — and "Welcome back" is the wrong
+  # word for somebody who has just arrived anyway.
+  defp maybe_welcome_flash(conn, true, _user), do: conn
 
-  defp maybe_welcome_flash(conn, path, context, user) do
-    if path == ~p"/system/welcome" do
-      conn
-    else
-      put_flash(conn, :info, welcome_flash(context, user))
-    end
-  end
+  defp maybe_welcome_flash(conn, false, user),
+    do: put_flash(conn, :info, welcome_flash(user))
 
   # The one lockout response, shared by the per-PIN DB counter (real account)
   # and the per-identity counter (any address) so the two are byte-identical
@@ -472,9 +474,9 @@ defmodule VutuvWeb.SessionController do
   # A returning member gets a personal greeting with their name and, when they
   # have any, a nudge about the conversations waiting for them (the same count
   # the shell's message badge shows, so the two never disagree). A brand-new
-  # member gets none: their PIN routes them to the welcome page, and
-  # maybe_welcome_flash/4 keeps that screen free of toasts.
-  defp welcome_flash(_context, %User{} = user) do
+  # member gets none: the welcome modal has that screen, and
+  # maybe_welcome_flash/3 keeps the toast tray clear behind it.
+  defp welcome_flash(%User{} = user) do
     [greeting(user), unread_note(user)]
     |> Enum.reject(&is_nil/1)
     |> Enum.join(" ")

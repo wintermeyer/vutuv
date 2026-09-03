@@ -69,6 +69,22 @@ export function once(el, key) {
   return true
 }
 
+// Escape closes a dialog like its Cancel / ✕ control. The listener unhooks
+// itself on the first keydown after `overlay` has left the DOM (however it was
+// closed), so a page that opens several dialogs does not accumulate them. On
+// the document rather than the overlay: the member may click the page behind
+// before pressing Escape, and focus is then outside the dialog. Shared by the
+// two crop dialogs and the welcome modal.
+export function bindEscape(overlay, onEscape) {
+  document.addEventListener("keydown", function onKey(e) {
+    if (!document.body.contains(overlay)) {
+      document.removeEventListener("keydown", onKey)
+    } else if (e.key === "Escape") {
+      onEscape()
+    }
+  })
+}
+
 // fetch() with the page CSRF token attached, plus the `x-requested-with` marker
 // the controllers look for to answer JSON from the :browser pipeline. No Accept
 // header on purpose: `accepts ["html"]` 406s an explicit application/json

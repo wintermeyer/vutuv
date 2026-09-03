@@ -198,9 +198,15 @@
             engines), the GEO question (AI agents / LLMs) and the Fediverse
             question (other social networks) are asked separately, since a member
             may say yes to one and no to the next. --%>
-      <fieldset id="signup-privacy">
-        <legend class={label_class}>{gettext("Privacy")}</legend>
-        <div class="space-y-3">
+      <fieldset id="signup-settings">
+        <%!-- "Settings", not "Privacy" (Stefan, 2026-09-03): the low-bandwidth
+              box below is not a visibility choice, and one group of settings
+              beats two groups of one and four. The line under the legend is
+              what every box used to say for itself — nothing here is a
+              decision anybody is stuck with. --%>
+        <legend class={label_class}>{gettext("Settings")}</legend>
+        <p class={hint_class}>{gettext("Can be changed at any time.")}</p>
+        <div class="mt-3 space-y-3">
           <%!-- Checked by default (the controller primes public?: true on the
                 changeset), so a normal member's address shows on their profile
                 unless they opt out here. --%>
@@ -231,14 +237,17 @@
                 looking for later.
 
                 One box, all three of that page's switches (see
-                PageController.expand_fediverse_choice/1) — which is exactly why
-                this box carries three lines of explanation where the others carry
-                none. It is the only choice on this form that is not just about
-                the member's own data: ticking it means answers written by people
-                who never signed up here are stored on our server, so the text has
-                to say that, and say for how long, before the tick counts as
-                consent to it. Left out entirely where the installation federates
-                nothing (FEDIVERSE_ENABLED=false, intranets). --%>
+                PageController.expand_fediverse_choice/1) — and the only box here
+                whose consequence reaches past the member's own account, which is
+                why it is the only one with a line of explanation at all. That
+                line says the one thing the tick is about: posts written here
+                leave here. What else comes with it — that replies from those
+                networks are stored under the post, and for how long — is on
+                /settings/fediverse and in the privacy policy, where somebody
+                reading about it has room for it; three sentences of it on a
+                sign-up form were read by nobody (Stefan, 2026-09-03). Left out
+                entirely where the installation federates nothing
+                (FEDIVERSE_ENABLED=false, intranets). --%>
           <label :if={Vutuv.Fediverse.enabled?()} class={check_label_class}>
             <%= checkbox f, :fediverse_followers?, class: checkbox_class() %>
             <span>
@@ -253,9 +262,7 @@
                     text is not translated - it is a product name. --%>
               <% {mastodon_pre, mastodon_post} =
                 split_marker(
-                  gettext(
-                    "Your public posts then also appear on {mastodon} and other independent networks, where people can follow you. Replies and reposts come back under your posts, with the account's address, and are kept for up to six months. You can switch it off at any time."
-                  ),
+                  gettext("Your public posts then also appear on {mastodon}, for example."),
                   "{mastodon}"
                 ) %>
               <span class={hint_class}>
@@ -269,37 +276,30 @@
             </span>
             <%= error_tag f, :fediverse_followers? %>
           </label>
+
+          <%!-- The one box on this form that is about the member's line rather
+                than about their data, which is why the group above it is called
+                Settings and not Privacy. Unticked by default, and deliberately
+                the only box here that leaves its column NULL when it is not
+                ticked (see PageController.drop_untouched_low_bandwidth/1), so a
+                member who walks past it keeps inheriting whatever this
+                installation's default is — an intranet or a rural co-op turns it
+                on for everybody at /admin/preferences and nobody has to find
+                this box. Label and hint are Vutuv.Prefs' own, the same words
+                /settings/bandwidth shows, so the member recognizes the switch
+                they are looking for later. --%>
+          <label class={check_label_class}>
+            <%= checkbox f, :low_bandwidth?, class: checkbox_class() %>
+            <span>
+              {Vutuv.Prefs.label(:low_bandwidth?)}
+              <span class={hint_class}>{Vutuv.Prefs.hint(:low_bandwidth?)}</span>
+            </span>
+            <%= error_tag f, :low_bandwidth? %>
+          </label>
         </div>
       </fieldset>
     </.inputs_for>
 
-    <%!-- The one question on this form that is about the member's line rather
-          than about their data. Unticked by default, and deliberately the only
-          box here that leaves its column NULL when it is not ticked (see
-          PageController.drop_untouched_low_bandwidth/1), so a member who walks
-          past it keeps inheriting whatever this installation's default is - an
-          intranet or a rural co-op turns it on for everybody at
-          /admin/preferences and nobody has to find this box.
-
-          The label and the explanation are Vutuv.Prefs' own, the same two
-          sentences /settings/preferences shows, so the member recognizes the
-          switch they are looking for later. --%>
-    <fieldset id="signup-bandwidth">
-      <%!-- Not gettext("Connection"): that msgid is vutuv's social one and is
-            translated "Vernetzung" (being connected to another member), which
-            over a bandwidth box says something else entirely. A msgid is a
-            key, not a phrase. This is the same word the settings card wears,
-            so the member recognizes the switch when they go looking. --%>
-      <legend class={label_class}>{gettext("Bandwidth")}</legend>
-      <label class={check_label_class}>
-        <%= checkbox f, :low_bandwidth?, class: checkbox_class() %>
-        <span>
-          {Vutuv.Prefs.label(:low_bandwidth?)}
-          <span class={hint_class}>{Vutuv.Prefs.hint(:low_bandwidth?)}</span>
-        </span>
-        <%= error_tag f, :low_bandwidth? %>
-      </label>
-    </fieldset>
 
     <.button type="submit" class="w-full">{gettext("Sign up for a free account")}</.button>
 

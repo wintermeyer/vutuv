@@ -99,9 +99,7 @@ defmodule VutuvWeb.GettextExtractionAnchors do
       # Vutuv.Prefs - low-bandwidth mode. "Bandwidth" itself is anchored by the
       # settings card and the sign-up legend, which both use the macro.
       gettext("Low-bandwidth mode"),
-      gettext(
-        "For members on a slow connection, data-saving mode shows pictures and screenshots in a stronger compression and leaves out a few luxuries, such as the richer editor. Any picture loads in full quality with one tap, and you can switch the mode off at any time."
-      ),
+      gettext("For members on a slow connection."),
       gettext("Between 4 and 20 seconds."),
       gettext("0 means posts are never shortened."),
       gettext("How much of a post a notification quotes before it is cut off."),

@@ -6,10 +6,11 @@
 //
 // What lives here is what the two croppers had as identical copies: the
 // stage DOM chunk, the geometry (layout / draw / clampOffsets and the
-// crop-fraction math) and the dialog scaffolding (Escape, teardown).
-// Everything that genuinely differs — the rest of the dialog DOM, the zoom
-// and pan interactions, where the fractions go on Save — stays local to the
-// croppers.
+// crop-fraction math) and the teardown. Everything that genuinely differs —
+// the rest of the dialog DOM, the zoom and pan interactions, where the
+// fractions go on Save — stays local to the croppers. Escape used to live
+// here too and moved to util.js `bindEscape` once a third dialog (the welcome
+// modal) needed it: it is about dialogs, not about cropping.
 
 // Tiny DOM builder both dialogs use. Tailwind scans assets/js, so utility
 // classes written through it are part of the build (app.css `@source "../js"`).
@@ -122,18 +123,6 @@ export function createCropStage({ overlay, stage, canvas, zoom, bitmap, aspect, 
   st.layout()
   window.addEventListener("resize", st.layout)
   return st
-}
-
-// Escape closes the dialog like Cancel. The listener unhooks itself on the
-// first keydown after the overlay is gone (however it was closed).
-export function bindEscape(overlay, onEscape) {
-  document.addEventListener("keydown", function onKey(e) {
-    if (!document.body.contains(overlay)) {
-      document.removeEventListener("keydown", onKey)
-    } else if (e.key === "Escape") {
-      onEscape()
-    }
-  })
 }
 
 // Serializes crop fractions for the server, four decimals apiece.

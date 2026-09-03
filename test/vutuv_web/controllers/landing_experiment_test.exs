@@ -134,7 +134,9 @@ defmodule VutuvWeb.LandingExperimentTest do
           "session" => %{"pin" => sent_pin(), "context" => "registration"}
         })
 
-      assert redirected_to(conn) == ~p"/system/welcome"
+      # Home is the new member's own profile, whose slug comes from the name in
+      # registration_attrs/0; the welcome questions float over it as a modal.
+      assert redirected_to(conn) =~ ~r"^/landing"
       assert totals(@knapp).confirmations == 1
       # Counted once, then forgotten, so a later login cannot count a second.
       refute session_variant(conn)

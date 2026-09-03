@@ -18,6 +18,7 @@ import { openPhotoCropper } from "./photo_crop"
 // reduced-motion) reused by every classic-page enhancement below.
 import {
   b64urlToBuf,
+  bindEscape,
   cancelIdle,
   copyText,
   csrfToken,
@@ -3341,6 +3342,27 @@ function setupBirthdayRemove() {
   })
 }
 onReady(setupBirthdayRemove)
+
+// The one-time welcome questions (see welcome_components.ex), floating over the
+// profile a brand-new member's registration PIN landed them on. The ✕ and the
+// "Skip for now" button are ordinary submits carrying `skip`, so the window
+// closes with JS off too; this only adds the two gestures a modal is expected
+// to answer, Esc and a click on the backdrop, and routes both through that same
+// submit. Closing IS the answer -- the server stamps welcome_completed_at and
+// never asks again -- so there is no client-side "hide" that would leave the
+// two sides disagreeing. (The keyboard-shortcuts handler leaves Esc to a
+// [data-block-shortcuts] dialog, which this is.)
+function setupWelcomeModal() {
+  const modal = document.getElementById("welcome-modal")
+  const skip = document.getElementById("welcome-skip")
+  if (!modal || !skip || !once(modal, "welcomeModal")) return
+
+  modal.addEventListener("click", (e) => {
+    if (e.target.hasAttribute("data-welcome-backdrop")) skip.click()
+  })
+  bindEscape(modal, () => skip.click())
+}
+onReady(setupWelcomeModal)
 
 // The Fediverse take-part switch (see settings/fediverse.html.heex) asks before
 // it flips, in either direction: taking part means posts leave vutuv for good,
