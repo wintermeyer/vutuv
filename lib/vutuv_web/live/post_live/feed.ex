@@ -1561,10 +1561,7 @@ defmodule VutuvWeb.PostLive.Feed do
     # can't see the ones already on screen. The higher card already carries the
     # complete follow-scoped roster, so dropping the older duplicate loses
     # nothing. Filter before the engagement batch so it queries only survivors.
-    shown =
-      socket.assigns.entries
-      |> shown_post_ids()
-      |> MapSet.union(seen_remote)
+    shown = shown_keys(socket.assigns.entries, seen_remote)
 
     fresh = Enum.reject(page.entries, &MapSet.member?(shown, dedupe_key(&1)))
 
@@ -2471,9 +2468,28 @@ defmodule VutuvWeb.PostLive.Feed do
   # which is the one thing `hidden` loses to (issue #880).
   defp pending_row?(entry, pending), do: Enum.any?(pending, &(&1.id == entry.id))
 
+  # Whether the page already holds this arrival — asked of the **subject**, not
+  # of the entry. An entry is keyed by the event that produced it, so a post an
+  # account the reader follows boosts arrives as `boost-<id>` while the same
+  # post reaching them through their follow of its author is `remote-<id>`: an
+  # id check calls the second one new and the reader gets two cards for one
+  # cached post. Those cards carry the same body id and the same action-bar
+  # LiveComponent, so the browser moves each into whichever rendered last and
+  # leaves the other a name with the hashtags under it and nothing in between
+  # (reported 2026-09-03) — the failure `shown_remote_keys/1` was written for
+  # one door along.
+  #
+  # An id is derived from the record, so equal ids mean the same subject and the
+  # key check answers the burst of deliveries that queues one row twice as well.
+  # Which of the two survives is first come, first served, as it is across a
+  # page boundary: the card on screen stays and the arrival is dropped rather
+  # than queued behind the pill. Within one page `dedupe_remote/1` decides it
+  # the other way (the direct entry wins over a passed-on one), so a boost that
+  # got here first keeps its banner until the next reload.
   defp known_entry?(socket, entry) do
-    ids = Enum.map(socket.assigns.entries ++ socket.assigns.pending_posts, & &1.id)
-    entry.id in ids
+    on_page = socket.assigns.entries ++ socket.assigns.pending_posts
+
+    MapSet.member?(shown_keys(on_page), dedupe_key(entry))
   end
 
   # Swap in the post's now-screenshot-carrying copy and re-stream the entry in
@@ -2946,6 +2962,21 @@ defmodule VutuvWeb.PostLive.Feed do
         into: MapSet.new(),
         do: Fediverse.subject_key(subject)
   end
+
+  # Everything the page already holds, in the keys `dedupe_key/1` answers in.
+  # Both doors an entry can come through measure it with this — an older page
+  # appended below (`append_older_page/2`) and an arrival queued on top
+  # (`known_entry?/2`) — because a subject that has a card must not get a second
+  # one whichever way the second one would have arrived.
+  #
+  # The remote half arrives as an argument where the caller already holds it:
+  # `append_older_page/2` has to build that set anyway, for `feed_page/2`'s
+  # `seen:`, and walking every on-screen entry twice is a walk that grows with
+  # each "Load more".
+  defp shown_keys(entries), do: shown_keys(entries, shown_remote_keys(entries))
+
+  defp shown_keys(entries, remote_keys),
+    do: entries |> shown_post_ids() |> MapSet.union(remote_keys)
 
   defp remote_key(entry), do: Fediverse.subject_key(entry_record(entry))
 

@@ -1415,6 +1415,17 @@ that second half the two cards render, no error is raised, and the browser's
 patch moves the shared body into whichever was rendered last — leaving the other
 a name with its hashtags and nothing under them.
 
+The **live** arrival is the third way in and owes the same rule, measured
+against the same set (`shown_keys/1`, that one plus the member posts on screen).
+It is keyed by the **event**, not by the subject: a post an account the reader
+follows boosts arrives as `boost-<id>`, while the same post reaching them
+through their follow of its author is `remote-<id>`, so a gate that compared ids
+called the boost new — and the reader got the empty card above, this time with a
+"Reposted by" line over it (reported 2026-09-03). It is first come, first served
+here as it is across a page boundary: the card on screen stays and the arrival
+is dropped rather than queued behind the pill, which within a single page is the
+tie `dedupe_remote/1` settles the other way round.
+
 Both ties above are decided **within a page**; across the boundary it is simply
 first come, first served, since the earlier page was already sent. So a note
 whose reshare row lands on the second page loses it to the woven-in copy above
