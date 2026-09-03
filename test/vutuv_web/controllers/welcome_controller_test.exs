@@ -251,9 +251,10 @@ defmodule VutuvWeb.WelcomeControllerTest do
       assert user.desired_salary_min == 60_000
       # Ticked in any order, stored in the canonical one, blanks dropped.
       assert user.desired_workplace_types == ["hybrid", "remote"]
-      # The shipped visibility defaults are untouched: the status shows to
-      # signed-in members, the salary to nobody.
-      assert user.employment_status_visibility == "members"
+      # The shipped visibility defaults are untouched, and they deliberately
+      # differ: saying you are looking is meant to be seen, so the status opens
+      # to everyone, while what you want to earn is nobody's business.
+      assert user.employment_status_visibility == "everyone"
       assert user.desired_salary_visibility == "hidden"
     end
 

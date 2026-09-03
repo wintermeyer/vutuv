@@ -12,6 +12,18 @@ defmodule Vutuv.Accounts.User do
   alias Vutuv.WebAddress
   @derive {Phoenix.Param, key: :username}
 
+  # How a job-seeking member wants to work. Deliberately the same three values
+  # `Vutuv.Jobs.JobPosting`'s workplace_type uses (kept as literals here rather
+  # than read from that schema, so the Accounts context does not depend on the
+  # Jobs one). The single source of truth for the changeset's subset check and,
+  # via workplace_type_values/0, the form's checkboxes — and the canonical
+  # ORDER a member's choices are stored and rendered in, so two members who
+  # ticked the same boxes read alike.
+  #
+  # Defined up here rather than beside its reader below, because the schema's
+  # own default is this list and an attribute has to exist before it is read.
+  @desired_workplace_types ~w(onsite hybrid remote)
+
   schema "users" do
     field(:first_name, :string)
     field(:last_name, :string)
@@ -65,11 +77,19 @@ defmodule Vutuv.Accounts.User do
     field(:employment_status, :string)
     # Who may see the employment-status badge (issue #928): "everyone" (all
     # visitors, incl. logged-out + crawlers/agent formats), "members" (only a
-    # signed-in member — the safe default) or "hidden" (nobody; the status
-    # stays stored but shows to no one). Resolved for a given viewer through
+    # signed-in member) or "hidden" (nobody; the status stays stored but shows
+    # to no one). Resolved for a given viewer through
     # employment_status_visible?/2, the single seam the profile pill and the
-    # agent docs both read. NOT NULL with a "members" default in the DB.
-    field(:employment_status_visibility, :string, default: "members")
+    # agent docs both read. NOT NULL with an "everyone" default in the DB.
+    #
+    # It defaults to "everyone" because the column only means anything once a
+    # status is set — `employment_status` is nil until the member says
+    # otherwise, and a nil status renders no badge for anybody — so the default
+    # is read as "somebody who just said they are open to offers", and hiding
+    # that from logged-out visitors is the opposite of what saying it is for.
+    # It was "members" until 2026-09-03; rows written before that keep their
+    # stored value, deliberately, since a stored visibility is a member's own.
+    field(:employment_status_visibility, :string, default: "everyone")
     # When the member last changed their availability status or its visibility
     # (issue #935): the freshness signal a saved recruiter "people" search reads,
     # so a member who newly becomes "open"/"looking" (or opens up a hidden
@@ -94,12 +114,19 @@ defmodule Vutuv.Accounts.User do
     # "remote" — the same vocabulary a job posting's workplace_type uses, so a
     # preference maps straight onto the board's workplace chips. A **list**,
     # because the three are not mutually exclusive: plenty of people take
-    # hybrid or remote but not a five-day office. `[]` = no preference (the
-    # default; NOT NULL in the DB, so no call site has to tell nil and [] apart).
+    # hybrid or remote but not a five-day office. `[]` = no preference (NOT NULL
+    # in the DB, so no call site has to tell nil and [] apart).
     # It is part of the availability signal, not a separate secret: it shows
     # beside the status badge under employment_status_visibility and is cleared
     # whenever the status goes back to "not open to work".
-    field(:desired_workplace_types, {:array, :string}, default: [])
+    #
+    # All three are the default (since 2026-09-03; it was `[]`), for the reason
+    # the visibility above defaults to "everyone": the column is only read once
+    # somebody has said they are open to offers, and starting them out excluded
+    # from every posting that is not their one ticked shape is a narrowing
+    # nobody asked for. Ticking none still means "no preference" — the two
+    # answers only differ in which postings the board offers first.
+    field(:desired_workplace_types, {:array, :string}, default: @desired_workplace_types)
     field(:birthdate, :date)
     # How much of the birthday the public profile (and its agent-format
     # siblings + the public CV) reveal: "full" (date + age, the historical
@@ -611,19 +638,10 @@ defmodule Vutuv.Accounts.User do
 
   def max_also_known_as, do: @max_also_known_as
 
-  # How a job-seeking member wants to work. Deliberately the same three values
-  # `Vutuv.Jobs.JobPosting`'s workplace_type uses (kept as literals here rather
-  # than read from that schema, so the Accounts context does not depend on the
-  # Jobs one). The single source of truth for the changeset's subset check and,
-  # via workplace_type_values/0, the form's checkboxes — and the canonical
-  # ORDER a member's choices are stored and rendered in, so two members who
-  # ticked the same boxes read alike.
-  @desired_workplace_types ~w(onsite hybrid remote)
-
   def workplace_type_values, do: @desired_workplace_types
 
   # The shared three-way visibility set (issue #928), used by BOTH
-  # employment_status_visibility (default "members") and
+  # employment_status_visibility (default "everyone") and
   # desired_salary_visibility (default "hidden"): "everyone" (all visitors,
   # incl. logged-out + crawlers/agent formats), "members" (only a signed-in
   # member) or "hidden" (nobody). The single source of truth for the
