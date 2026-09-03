@@ -453,15 +453,18 @@ defmodule VutuvWeb.WelcomeControllerTest do
       assert user.desired_salary_visibility == "hidden"
     end
 
-    test "the member can open their availability up to everyone right here", %{conn: conn} do
+    # The interesting direction since the default opened up (#1974): submitting
+    # "everyone" and asserting "everyone" would pass with the select ignored
+    # entirely, so this narrows instead.
+    test "the member can narrow their availability right here", %{conn: conn} do
       {conn, user} = register_and_confirm(conn)
       conn = to_job_step(conn)
 
       post(conn, ~p"/system/welcome", %{
-        "user" => %{"employment_status" => "open", "employment_status_visibility" => "everyone"}
+        "user" => %{"employment_status" => "open", "employment_status_visibility" => "members"}
       })
 
-      assert reload(user).employment_status_visibility == "everyone"
+      assert reload(user).employment_status_visibility == "members"
     end
 
     test "a workplace preference without a status is dropped", %{conn: conn} do

@@ -265,11 +265,6 @@ defmodule VutuvWeb.WelcomeComponents do
             <p class="text-sm font-medium text-slate-900 dark:text-white">
               {gettext("Minimum salary expectation")}
             </p>
-            <p class={hint_class}>
-              {gettext(
-                "Optional, and nobody else sees it. It filters postings below it out of your own job search."
-              )}
-            </p>
             <div class="mt-2 grid gap-3 sm:grid-cols-3">
               <div>
                 <%= label uf, :desired_salary_min, gettext("Amount"), class: small_label_class %>
@@ -310,9 +305,6 @@ defmodule VutuvWeb.WelcomeComponents do
                 <span>{wlabel}</span>
               </label>
             </div>
-            <p class={hint_class}>
-              {gettext("Shown next to your availability, and used to match you with postings.")}
-            </p>
             <%= error_tag uf, :desired_workplace_types %>
           </fieldset>
         </div>
