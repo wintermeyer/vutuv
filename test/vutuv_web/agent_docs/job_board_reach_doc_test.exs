@@ -30,8 +30,7 @@ defmodule VutuvWeb.AgentDocs.JobBoardReachDocTest do
     doc = build_conn() |> get(~p"/jobs.json") |> json_response(200)
 
     assert doc["count"] == 0
-    assert doc["open_to_offers"]["total"] == 1
-    assert [person] = doc["open_to_offers"]["people"]
+    assert [person] = doc["open_to_offers"]
     assert person["employment_status"] == "open"
     assert person["desired_workplace_types"] == ["remote"]
     assert Enum.any?(doc["fields"], &(&1["name"] == "Reach Doc Elixir" and &1["members"] == 1))
@@ -50,8 +49,7 @@ defmodule VutuvWeb.AgentDocs.JobBoardReachDocTest do
 
     doc = build_conn() |> get(~p"/jobs.json") |> json_response(200)
 
-    assert doc["open_to_offers"]["total"] == 0
-    assert doc["open_to_offers"]["people"] == []
+    assert doc["open_to_offers"] == []
   end
 
   test "a board with a posting carries neither key" do

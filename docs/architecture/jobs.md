@@ -216,7 +216,7 @@ and the crawl path — the board is a shared-footer + top-bar nav link). PubSub
   carrying the structured location / salary / tag fields
   (`JobPostingDoc.summary/1`) so agents filter client-side, cursor-paginated with
   a `next` link. On an empty board the document adds `open_to_offers`
-  (`%{total:, people:}`) and `fields` from the same `Jobs.board_reach/1` the
+  (the drawn people) and `fields` from the same `Jobs.board_reach/1` the
   page reads, with the anonymous viewer — the people entries are the shared
   listing shape (`AgentDocs.person_entry/3`, as on the follow lists) plus the
   availability. **No `JobPosting` JSON-LD on the list** (leaf pages only).
@@ -228,15 +228,18 @@ and the crawl path — the board is a shared-footer + top-bar nav link). PubSub
   `Jobs.board_reach(viewer)` returns `%{count:, people:, fields:}` or `nil`
   ("render the ordinary board"), so the page and its agent documents cannot show
   different members or a different number of them. It composes
-  `Accounts.open_to_offers/2` (the members who set a #928 availability, under
-  the same three-way visibility and the same #938 exclusion list — both in SQL,
-  and `count(*) OVER ()` brings the total back with the rows, so one round trip
-  and no way for the headline number to disagree with what is under it; a test
-  pins that SQL gate to `User.employment_status_visible?/2`) and
+  `Accounts.open_to_offers/2` (twelve of the members who set a #928
+  availability, **drawn at random** — a ranking would show the same faces to
+  every visitor until somebody's status changes — under the same three-way
+  visibility and the same #938 exclusion list, both in SQL, with a test pinning
+  that gate to `User.employment_status_visible?/2`) and
   `Tags.popular_member_tags/1` (the fields the most listed members carry). The
   "Post a job" button renders logged out too, because whoever has a job to fill
   is exactly who that page has to keep; `/jobs/new` sends them to the login page
-  with a line saying why. The reach block is for a visitor who arrived at the
+  with a line saying why. The block states **what it drew** ("12 random vutuv
+  accounts that are open to offers"), never how many there are in all: a sample
+  can only vouch for its own rows, and the empty board carries no subline of its
+  own either, since a sentence about the missing stock only repeats the heading. The reach block is for a visitor who arrived at the
   **plain** board: with a filter active the ordinary "no matching positions" card
   answers instead, which also keeps the everyday filtered-to-zero case from
   paying for the corpus check. `JobPostingLive.Form` answers the same question

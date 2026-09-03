@@ -756,12 +756,12 @@ defmodule VutuvWeb.AgentDocs.Text do
     [
       heading(gettext("Who you would reach")),
       ngettext(
-        "One member has said they are available.",
-        "%{formatted} members have said they are available.",
-        available.total,
-        formatted: to_string(available.total)
+        "One random vutuv account that is open to offers.",
+        "%{formatted} random vutuv accounts that are open to offers.",
+        length(available),
+        formatted: to_string(length(available))
       ),
-      Enum.map(available.people, &person_line/1),
+      Enum.map(available, &person_line/1),
       heading(gettext("What members here work on")),
       Enum.map(fields, fn field -> "* #{field.name} (#{field.members})\n  #{field.url}" end)
     ]
