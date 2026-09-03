@@ -438,29 +438,12 @@ the resulting ~200px rail width. --%>
         </li>
       </ul>
 
-      <%!-- A quiet link into the LinkedIn importer: the fastest way to fill
-      several of the steps above at once. Owner-only (it lives inside this
-      owner-only card) and part of the same onboarding push. --%>
-      <div class="mt-4 space-y-1 border-t border-brand-100 pt-4 dark:border-brand-900/50">
-        <.link
-          navigate={~p"/settings/import/linkedin"}
-          class="inline-flex items-center gap-1 text-sm font-semibold text-brand-800 hover:underline dark:text-brand-100"
-        >
-          {gettext("Import from LinkedIn")}
-          <span aria-hidden="true">→</span>
-        </.link>
-        <%!-- The other thing that same archive is good for (issue #1476), and
-        the fastest way through the "follow other members" step above: the
-        people you already know are better company than any suggestion we can
-        make on a member's first minute here. --%>
-        <.link
-          navigate={~p"/settings/import/linkedin/connections"}
-          class="flex items-center gap-1 text-sm font-semibold text-brand-800 hover:underline dark:text-brand-100"
-        >
-          {gettext("Find people you know from LinkedIn")}
-          <span aria-hidden="true">→</span>
-        </.link>
-      </div>
+      <%!-- No link strip under the list any more. The importer was the first
+      of the two and is a step in the list itself now, where it is counted; a
+      second copy underneath would be the same destination twice. The other one
+      pointed at the connections importer, which answers "who do I know here" —
+      a good question, and not one this card is about: it lives on in the "Who
+      to follow" card, which is where somebody asking it is already looking. --%>
     </section>
 
     <%!-- Posts (latest visible to this viewer; writing happens in the /feed

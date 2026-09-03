@@ -489,27 +489,6 @@ defmodule VutuvWeb.UserProfileLiveTest do
     end
   end
 
-  describe "onboarding checklist 'Add a tag' step (issue #845)" do
-    test "links to the /settings/tags/new form, not the retired /:slug/tags/new", %{conn: conn} do
-      {conn, owner} = create_and_login_user(conn)
-
-      # Strip the three registration tags so the step is incomplete: the
-      # checklist only renders a *link* for a not-done step. The account is
-      # freshly registered, so it is still inside the onboarding window and the
-      # checklist shows.
-      Repo.delete_all(from(ut in Tags.UserTag, where: ut.user_id == ^owner.id))
-
-      {:ok, view, _html} = live(conn, ~p"/#{owner}")
-      html = render(view)
-
-      # /:slug/tags/new has no new-form route: it matches the tag show action
-      # (id="new") and 404s. The add-tag form lives under /settings.
-      assert html =~ "Add a tag"
-      assert html =~ ~s(href="/settings/tags/new")
-      refute html =~ ~s(href="/#{owner.username}/tags/new")
-    end
-  end
-
   describe "posts section author links" do
     test "a post author's avatar and name link to their profile", %{conn: conn} do
       {conn, _viewer} = create_and_login_user(conn)
@@ -935,18 +914,14 @@ defmodule VutuvWeb.UserProfileLiveTest do
       refute has_element?(view, ~s(#{rail} a[href="/#{silent.username}"]))
     end
 
-    test "the fifth follow ticks the checklist live but leaves the card in place",
-         %{conn: conn} do
+    test "the fifth follow leaves the promoted card where it is", %{conn: conn} do
       {conn, owner} = create_and_login_user(conn)
       candidate = suggest_to(owner, insert_activated_user())
       for _ <- 1..4, do: insert(:follow, follower: owner, followee: insert_activated_user())
 
       {:ok, view, _html} = live(conn, ~p"/#{owner}")
 
-      # Four follows: promoted, and the checklist's follow step is still a
-      # link (an undone step renders as a link, a done one as plain text).
       assert has_element?(view, ~s(#profile-who-to-follow[data-promoted]))
-      assert has_element?(view, ~s(#profile-completion a[href="#profile-who-to-follow"]))
 
       view
       |> element(
@@ -954,44 +929,63 @@ defmodule VutuvWeb.UserProfileLiveTest do
       )
       |> render_click()
 
-      # The step completed without a reload...
-      refute has_element?(view, ~s(#profile-completion a[href="#profile-who-to-follow"]))
-      assert render(view) =~ "Follow other members"
-      # ...but the promoted card stays where it is: recomputing the placement
-      # mid-click would teleport the rail away under the member's cursor. The
-      # next visit demotes it.
+      # The card stays where it is: recomputing the placement mid-click would
+      # teleport the rail away under the member's cursor. The next visit
+      # demotes it.
       assert has_element?(view, ~s(#profile-who-to-follow[data-promoted]))
     end
   end
 
-  describe "onboarding checklist follow step" do
-    test "links to the rail card and counts existing follows in its hint", %{conn: conn} do
-      {conn, owner} = create_and_login_user(conn)
-      suggest_to(owner, insert_activated_user())
-      for _ <- 1..2, do: insert(:follow, follower: owner, followee: insert_activated_user())
-
-      {:ok, view, _html} = live(conn, ~p"/#{owner}")
-
-      step = view |> element(~s(#profile-completion a[href="#profile-who-to-follow"])) |> render()
-      # The label names no number: the threshold is ours, not the member's,
-      # and "Follow 5 members" read as a quota. The hint below carries the
-      # real progress instead.
-      assert step =~ "Follow other members"
-      refute step =~ "5"
-      # The progress hint sits under the label once the count is started.
-      assert render(view) =~ "You already follow 2 members."
-    end
-
-    test "falls back to the most-followed listing when there is nobody to suggest",
+  describe "onboarding checklist steps (2026-09-03)" do
+    # Three steps, all of them about the profile this card sits on. What left:
+    # "Add a tag", which sign-up already requires and which therefore arrived
+    # ticked for everybody, and "Follow other members", whose link led out of
+    # the card and whose subject is the feed rather than the profile.
+    test "the import step is a link until there is something to show for it",
          %{conn: conn} do
       {conn, owner} = create_and_login_user(conn)
 
       {:ok, view, _html} = live(conn, ~p"/#{owner}")
 
-      # Alone on the installation: no rail card to jump to, so the step links
-      # to the browsable listing instead of a dead anchor.
-      refute has_element?(view, "#profile-who-to-follow")
-      assert has_element?(view, ~s(#profile-completion a[href="/system/members"]))
+      # An undone step renders as a link, a done one as plain text.
+      assert has_element?(
+               view,
+               ~s(#profile-completion a[href="#{~p"/settings/import/linkedin"}"])
+             )
+
+      # Counted off what an import leaves behind, not off the act — somebody
+      # who typed the job in by hand has done the same thing.
+      insert(:work_experience, user: owner)
+
+      {:ok, view, _html} = live(conn, ~p"/#{owner}")
+
+      refute has_element?(
+               view,
+               ~s(#profile-completion a[href="#{~p"/settings/import/linkedin"}"])
+             )
+
+      assert render(view) =~ "Import your LinkedIn profile"
+    end
+
+    test "the two retired steps and the link strip under the list are gone",
+         %{conn: conn} do
+      {conn, owner} = create_and_login_user(conn)
+      Repo.delete_all(from(ut in Tags.UserTag, where: ut.user_id == ^owner.id))
+
+      {:ok, view, _html} = live(conn, ~p"/#{owner}")
+
+      # By destination, not by label. "Add a tag" is the Tags card's own
+      # empty-state tile too — a different control on the same page, which
+      # stays — and it is a prefix of "Add a tagline", which is a step that
+      # stays as well, so a text match answers yes for two wrong reasons.
+      refute has_element?(view, ~s(#profile-completion a[href="/settings/tags/new"]))
+      refute has_element?(view, "#profile-completion", "Follow other members")
+      # The connections importer answers "who do I know here", which is the
+      # "Who to follow" card's question, not this card's.
+      refute has_element?(
+               view,
+               ~s(#profile-completion a[href="#{~p"/settings/import/linkedin/connections"}"])
+             )
     end
   end
 

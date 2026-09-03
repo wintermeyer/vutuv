@@ -1330,17 +1330,12 @@ defmodule VutuvWeb.UserProfileLive do
     )
   end
 
-  # Re-derive the checklist from the current assigns; called from the initial
-  # load and from the social-graph refresh (the follow step's count changes
-  # live). Reads :followee_count, so it must run after put_social_assigns.
+  # Re-derive the checklist from the current assigns. Every step now reads the
+  # member's own record, so this no longer depends on the social graph; it stays
+  # a function rather than a one-off assign because the record changes under an
+  # open page (a photo finishes uploading, an import lands).
   defp refresh_completion_steps(socket) do
-    %{user: user, followee_count: followee_count} = socket.assigns
-
-    assign(
-      socket,
-      :completion_steps,
-      completion_steps(user, followee_count, socket.assigns.recommended_users != [])
-    )
+    assign(socket, :completion_steps, completion_steps(socket.assigns.user))
   end
 
   defp show_completion?(%{as_owner?: owner?, user: user, completion_steps: steps}) do
@@ -1348,14 +1343,24 @@ defmodule VutuvWeb.UserProfileLive do
       Enum.any?(steps, &(not &1.done)) and onboarding_window?(user)
   end
 
-  defp completion_steps(user, followee_count, suggestions?) do
+  defp completion_steps(user) do
     [
-      # Sign-up requires three tags, so this step arrives already checked: the
-      # checklist opens with visible progress instead of a wall of zeros
-      # (people finish lists they have visibly started). It stays actionable
-      # for tag-less accounts from before the minimum, in their
-      # dormant-return window.
-      %{label: gettext("Add a tag"), done: user.user_tags != [], href: ~p"/settings/tags/new"},
+      # The import is the first step because it is the one that can finish the
+      # other two by itself, and because a member who has just left LinkedIn is
+      # holding the export. It is counted done off what an import leaves behind
+      # rather than off the act: somebody who typed a job in by hand has done
+      # the same thing, and a step that only a particular button can tick reads
+      # as an advert for that button.
+      #
+      # There is deliberately no "add a tag" step any more. Sign-up requires
+      # three, so it arrived already ticked for everybody who came in the front
+      # door — a strikethrough line that taught the reader the list was about
+      # things already behind them.
+      %{
+        label: gettext("Import your LinkedIn profile"),
+        done: user.work_experiences != [],
+        href: ~p"/settings/import/linkedin"
+      },
       # Both land on /settings/profile, which is where the two fields actually
       # live. They used to point at /:slug/edit, the retired owner URL that only
       # redirects there — one wasted round trip, and a link that shows the old
@@ -1369,38 +1374,22 @@ defmodule VutuvWeb.UserProfileLive do
         label: gettext("Add a tagline"),
         done: present?(user.headline),
         href: ~p"/settings/profile"
-      },
+      }
       # There is deliberately NO "write your first post" step. It asked the one
       # thing a member cannot do well on their first minute here — they have
       # nobody reading yet and nothing to answer — and it is the step a new
       # account is least likely to complete, so the list ended on a dead end.
       # Posting has its own permanent invitation at the top of the Posts card
       # and on the feed; it does not need a checkbox.
-      # vutuv runs on following: the feed stays empty until the member follows
-      # people, so the list closes with the social step. Its link jumps to the
-      # "Who to follow" card, which the under-threshold owner view promotes to
-      # the top of the rail; an installation with nobody to suggest falls back
-      # to the browsable member directory instead of a dead anchor.
-      %{
-        # Deliberately no number in the label. "Follow 5 members" reads as a
-        # quota to be served, and the figure is ours, not the member's. The
-        # threshold below still decides when the step is done; the hint under it
-        # reports real progress, which is the encouraging half of a count.
-        label: gettext("Follow other members"),
-        done: followee_count >= @discovery_follow_target,
-        href: if(suggestions?, do: "#profile-who-to-follow", else: ~p"/system/members"),
-        hint: follow_step_hint(followee_count)
-      }
+      #
+      # And no "follow other members" step either. Following is what makes the
+      # feed worth opening, but it is not something a member does *to their
+      # profile*, which is what this card is about and where it sits; the
+      # welcome flow asks it once, with real accounts to pick from, and the
+      # "Who to follow" rail keeps asking. A checkbox for it here was a step
+      # whose link left the card.
     ]
   end
-
-  # Progress under the follow step ("You already follow 2 members."): visible
-  # momentum once the count has started, nothing at zero (the label alone
-  # reads cleaner) and nothing once the step is done.
-  defp follow_step_hint(n) when n < 1 or n >= @discovery_follow_target, do: nil
-
-  defp follow_step_hint(n),
-    do: ngettext("You already follow one member.", "You already follow %{count} members.", n)
 
   defp present?(nil), do: false
   defp present?(value) when is_binary(value), do: String.trim(value) != ""
