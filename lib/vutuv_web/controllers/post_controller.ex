@@ -67,6 +67,7 @@ defmodule VutuvWeb.PostController do
         |> render("index.html",
           author: author,
           posts: posts,
+          engagement: archive_engagement(posts, conn.assigns[:current_user]),
           total: total,
           post_filter: Atom.to_string(filter),
           period_label: period_label,
@@ -93,6 +94,40 @@ defmodule VutuvWeb.PostController do
 
       {:error, _format} ->
         VutuvWeb.ControllerHelpers.render_error(conn, 404)
+    end
+  end
+
+  # Every other surface that shows a stack of post cards hands the action bars
+  # their counts in one batched read — the feed, the profile, the tag timeline,
+  # the saved list, both organization pages. This page did not, so each bar ran
+  # its own mount query and a member with ninety posts served **416 queries**,
+  # 280 of them this same one (measured on a copy of production, 2026-09-03:
+  # 140 ms of the page's 350). An archive page is public, so that was the shape
+  # a crawler walking a member's whole history met.
+  #
+  # A row nests the posts it answers, and those cards carry their own bars, so
+  # the ancestors are collected too rather than only the entries themselves.
+  defp archive_engagement(entries, viewer) do
+    entries
+    |> Enum.flat_map(&archive_post_ids/1)
+    |> Enum.uniq()
+    |> Posts.post_engagement_map(viewer)
+  end
+
+  defp archive_post_ids(%{post: %Post{} = post} = entry) do
+    [post.id | Enum.map(entry[:ancestors] || parent_posts(post), & &1.id)]
+  end
+
+  # A reshare of a post from another network carries no local post at all.
+  defp archive_post_ids(_entry), do: []
+
+  # With no explicit `ancestors` the card falls back to the one preloaded
+  # parent, which carries an action bar of its own — so it belongs in the batch
+  # too. Missed at first, and it was two thirds of the queries that remained.
+  defp parent_posts(post) do
+    case Posts.reply_ref_state(post) do
+      {:parent, %Post{} = parent} -> [parent]
+      _no_parent_card -> []
     end
   end
 

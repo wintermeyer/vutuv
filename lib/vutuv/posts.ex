@@ -6057,6 +6057,13 @@ defmodule Vutuv.Posts do
           :screenshot,
           :review,
           :organization,
+          # Whether it is restricted: `restricted?/1` takes this list when it
+          # is there and runs an EXISTS query when it is not, so without it
+          # every nested parent card asked on its own — 93 queries on one
+          # archive page (measured 2026-09-03). The rows are never rendered (a
+          # card shows the lock, never the audience), so unlike the top-level
+          # preload this needs no `:denied_user`.
+          :denials,
           # Rendered as a full card, so its author's proven links come along
           # too (issue #1246) — same reason as the top-level `user` above.
           user: verified_links_preload(),

@@ -25,6 +25,36 @@ defmodule VutuvWeb.PostControllerTest do
 
   defp pad(int), do: String.pad_leading(Integer.to_string(int), 2, "0")
 
+  # How much SQL a request runs. `:telemetry.attach/4` is global, so this
+  # counts whatever else is running beside it — which is why the one assertion
+  # using it takes a generous bound and asks only whether the count grows with
+  # the number of posts.
+  defp count_queries(fun) do
+    ref = make_ref()
+    parent = self()
+    handler = "pc-#{inspect(ref)}"
+
+    :telemetry.attach(
+      handler,
+      [:vutuv, :repo, :query],
+      fn _event, _measure, _meta, _config -> send(parent, {ref, :query}) end,
+      nil
+    )
+
+    result = fun.()
+    :telemetry.detach(handler)
+
+    {drain_queries(ref, 0), result}
+  end
+
+  defp drain_queries(ref, n) do
+    receive do
+      {^ref, :query} -> drain_queries(ref, n + 1)
+    after
+      0 -> n
+    end
+  end
+
   # One reaction from another network, written straight to the table: these
   # tests are about what the page *shows*, not about the inbox gates that put
   # the row there (`Vutuv.FediverseReactionsTest` owns those). `handle: nil`
@@ -1198,6 +1228,36 @@ defmodule VutuvWeb.PostControllerTest do
   end
 
   describe "GET /:slug/posts (the author archive)" do
+    # This page is public, so a crawler walking a member's whole history is the
+    # ordinary case rather than the exotic one. Every other surface that stacks
+    # post cards hands the action bars their counts in one batched read; this
+    # one did not, so each bar ran its own mount query and each nested parent
+    # card its own restriction check — 416 queries for ninety posts on a copy of
+    # production (2026-09-03), 45 after. The bound is deliberately generous and
+    # counts only that it does not grow with the posts: calibrated against the
+    # un-fixed code, which served 100 queries for the ten posts below.
+    test "asks a number of queries that does not grow with the number of posts", %{conn: conn} do
+      # Two page sizes rather than one absolute bound: what has to hold is that
+      # the count is flat, and a bound would be a number to keep in step with
+      # every future preload. Calibrated — un-batched, the wider page ran ten
+      # queries more than the narrow one; batched, the two agree.
+      few = insert_activated_user()
+      many = insert_activated_user()
+
+      for n <- 1..2, do: {:ok, _} = Posts.create_post(few, %{body: "few post #{n}"})
+      for n <- 1..12, do: {:ok, _} = Posts.create_post(many, %{body: "many post #{n}"})
+
+      {narrow, _} = count_queries(fn -> get(conn, "/#{few.username}/posts") end)
+      {wide, conn} = count_queries(fn -> get(conn, "/#{many.username}/posts") end)
+
+      assert html_response(conn, 200) =~ "many post 12"
+
+      assert wide - narrow <= 2,
+             "ten more posts cost #{wide - narrow} more queries (#{narrow} then #{wide}) — " <>
+               "an action bar or a nested card is loading per post again instead of " <>
+               "taking the batched map"
+    end
+
     test "lists the author's posts, visibility-filtered per viewer", %{conn: conn} do
       user = insert_activated_user()
       {:ok, _} = Posts.create_post(user, %{body: "open words"})
