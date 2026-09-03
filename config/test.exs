@@ -45,6 +45,7 @@ config :vutuv, :prefs_defaults_cache, false
 # one, so every test sees the live query and the cache's own tests
 # (linkable_cache_test.exs) start an isolated instance.
 config :vutuv, :linkable_tag_cache, false
+config :vutuv, :markdown_cache, false
 # Same deal for the screenshot blocklist's cache: with it off, every check
 # reads the table from the calling (sandbox-owning) process, so a test that
 # inserts an entry sees it act immediately.

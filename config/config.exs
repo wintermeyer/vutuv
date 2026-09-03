@@ -559,6 +559,13 @@ config :vutuv, :refresh_top_posters, true
 # Off in tests, where a memo outliving the asking process would answer for the
 # next test's freshly created tag.
 config :vutuv, :linkable_tag_cache, true
+
+# The rendered HTML of a post body, memoized on everything the rendering
+# depends on (VutuvWeb.Markdown.Cache). The same body is drawn twice per feed
+# arrival on its own — the HTML document, then the LiveView's join payload —
+# and again in every other member's feed. Off in tests, where a memo outliving
+# the asking process would answer for the next test's freshly written post.
+config :vutuv, :markdown_cache, true
 config :vutuv, :refresh_popular_posts, true
 
 # The inline social posts on profiles (Vutuv.SocialFeed), one flag per

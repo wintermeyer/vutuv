@@ -40,6 +40,7 @@ defmodule VutuvWeb.Markdown do
   alias VutuvWeb.CodeHighlight
   alias VutuvWeb.CodeHighlight.Diff
   alias VutuvWeb.CodeHighlight.Fences
+  alias VutuvWeb.Markdown.Cache
   alias VutuvWeb.Markdown.Footnotes
   alias VutuvWeb.UserHelpers
 
@@ -145,6 +146,40 @@ defmodule VutuvWeb.Markdown do
   def render_post(text, images, opts \\ [])
 
   def render_post(text, images, opts) when is_binary(text) and is_list(images) do
+    Phoenix.HTML.raw(cached_post_html(text, images, opts))
+  end
+
+  def render_post(_text, _images, _opts), do: Phoenix.HTML.raw("")
+
+  # The same body is rendered over and over — twice per feed arrival on its own
+  # (the HTML document, then the LiveView's join payload), and again in every
+  # other member's feed — so the result is memoized on everything it depends on
+  # (`VutuvWeb.Markdown.Cache`).
+  #
+  # `:image_query` is the one caller that opts out: it is a **function**, so it
+  # has no stable key, and it belongs to the Mastodon adapter rather than to any
+  # page a member waits for.
+  #
+  # The locale is in the key because `mark_verified_author_links/2` titles the
+  # mark in the reader's language. The images go in whole rather than as the
+  # fields that happen to matter today: a struct that gains a rendered field
+  # would otherwise start serving yesterday's HTML, and that is not a mistake
+  # anyone would see.
+  defp cached_post_html(text, images, opts) do
+    render = fn -> post_html(text, images, opts) end
+
+    if Keyword.has_key?(opts, :image_query) do
+      render.()
+    else
+      Cache.render(
+        {:post, text, images, Keyword.get(opts, :verified_links, []),
+         Keyword.get(opts, :mention_form, :local), Gettext.get_locale(VutuvWeb.Gettext)},
+        render
+      )
+    end
+  end
+
+  defp post_html(text, images, opts) do
     {prepared, replacements} =
       extract_inline_images(text, images, Keyword.get(opts, :image_query))
 
@@ -154,10 +189,7 @@ defmodule VutuvWeb.Markdown do
     |> mark_verified_author_links(Keyword.get(opts, :verified_links, []))
     |> linkify_entities(:all, Keyword.get(opts, :mention_form, :local))
     |> inject_inline_images(replacements)
-    |> Phoenix.HTML.raw()
   end
-
-  def render_post(_text, _images, _opts), do: Phoenix.HTML.raw("")
 
   @doc """
   Render **remote** plain text — a Mastodon post reduced to text by
@@ -183,11 +215,16 @@ defmodule VutuvWeb.Markdown do
   `raw/1`; it is sanitized exactly like member-post HTML.
   """
   def render_remote(text) when is_binary(text) do
-    text
-    |> render_pipeline()
-    |> open_links_in_new_tab()
-    |> linkify_entities(:hashtags_only)
-    |> mark_foreign_links()
+    # Memoized like a member post above, and it pays more here: a boosted post
+    # reaches everybody who follows the account that boosted it, so one remote
+    # body is drawn across many feeds from the same cached copy.
+    Cache.render({:remote, text, Gettext.get_locale(VutuvWeb.Gettext)}, fn ->
+      text
+      |> render_pipeline()
+      |> open_links_in_new_tab()
+      |> linkify_entities(:hashtags_only)
+      |> mark_foreign_links()
+    end)
   end
 
   def render_remote(_), do: ""
