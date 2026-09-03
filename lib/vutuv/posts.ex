@@ -3313,9 +3313,10 @@ defmodule Vutuv.Posts do
   pass and showed a line no other surface in the app would have shown.
   """
   def newest_source_entry(%User{} = viewer, source, %NaiveDateTime{} = since)
-      when source in [:vutuv, :fediverse] do
+      when source in [:vutuv, :fediverse, :all] do
     viewer
     |> feed_sources(source)
+    |> Vutuv.FeedPage.fetch_sources(1, nil)
     |> Enum.flat_map(&newest_row(&1, since))
     |> case do
       [] ->
@@ -3333,12 +3334,14 @@ defmodule Vutuv.Posts do
   end
 
   # One source's newest row, kept only if it is at least as new as `since`.
-  defp newest_row(fetch, since) do
-    case fetch.(1, nil) do
-      [entry | _] -> if NaiveDateTime.compare(entry.at, since) != :lt, do: [entry], else: []
-      [] -> []
-    end
+  # The rows arrive already fetched: `:all` asks ten sources for one row each,
+  # once per arrival announcement, and `Vutuv.FeedPage.fetch_sources/3` owns how
+  # many of those may be in flight at a time.
+  defp newest_row([entry | _], since) do
+    if NaiveDateTime.compare(entry.at, since) != :lt, do: [entry], else: []
   end
+
+  defp newest_row([], _since), do: []
 
   # Everything the six sources produce, made ready to render.
   #
