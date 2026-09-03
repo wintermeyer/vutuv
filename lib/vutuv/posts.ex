@@ -2861,7 +2861,9 @@ defmodule Vutuv.Posts do
     cursor = %{at: last, ids: [], since: first}
 
     entries =
-      Enum.map(feed_sources(viewer, filter, :marks), fn fetch -> fetch.(cap, cursor) end)
+      viewer
+      |> feed_sources(filter, :marks)
+      |> Vutuv.FeedPage.fetch_sources(cap, cursor)
 
     # Truncation is a per-SOURCE fact, not a fact about their union: the cap is
     # each source's `LIMIT`, so nine sources of 400 rows each make 3,600
