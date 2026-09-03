@@ -844,9 +844,8 @@ defmodule VutuvWeb.PageControllerTest do
 
     # A brand-new member must not be greeted with the returning-user
     # "Welcome back!" that the plain login flow uses — and gets no toast of
-    # their own either: the PIN routes them to the one-time welcome page, which
-    # greets them in its own hero, and the profile it hands them to already
-    # shows the completion checklist.
+    # their own either: the PIN lands them on their own profile with the
+    # welcome questions floating over it, and that modal greets them by name.
     test "the first PIN login after sign-up raises no toast at all", %{conn: conn} do
       conn = post(conn, ~p"/new_registration", user: valid_attrs())
       body = html_response(conn, 200)
@@ -858,7 +857,7 @@ defmodule VutuvWeb.PageControllerTest do
           "session" => %{"pin" => pin, "context" => "registration"}
         })
 
-      assert redirected_to(conn) == ~p"/system/welcome"
+      assert redirected_to(conn) =~ ~r"^/newcomer"
       refute Phoenix.Flash.get(conn.assigns.flash, :info)
 
       conn = post(conn, ~p"/system/welcome", %{"skip" => "1"})

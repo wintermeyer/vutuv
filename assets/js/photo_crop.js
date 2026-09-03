@@ -21,8 +21,8 @@
 // change nothing. Labels arrive translated via data-* attributes, like the
 // lightbox's.
 
-import { bindEscape, buildStage, createCropStage, cropString, el } from "./crop_stage"
-import { buttonPrimary, buttonSecondary } from "./util"
+import { buildStage, createCropStage, cropString, el } from "./crop_stage"
+import { bindEscape, buttonPrimary, buttonSecondary } from "./util"
 
 const MAX_ZOOM = 4
 

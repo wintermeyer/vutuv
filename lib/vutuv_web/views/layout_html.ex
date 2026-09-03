@@ -2,6 +2,8 @@ defmodule VutuvWeb.LayoutHTML do
   @moduledoc false
   use VutuvWeb, :html
   import VutuvWeb.UserHelpers
+  # The one-time welcome questions, rendered over the page they land on.
+  import VutuvWeb.WelcomeComponents, only: [welcome_modal: 1]
   alias Vutuv.BuildInfo
   alias Vutuv.SourceRepo
   alias VutuvWeb.OpenGraph

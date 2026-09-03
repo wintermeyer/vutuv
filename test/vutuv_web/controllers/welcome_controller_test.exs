@@ -1,12 +1,16 @@
 defmodule VutuvWeb.WelcomeControllerTest do
   @moduledoc """
-  The one-time welcome page (/system/welcome): the location + job-search
-  questions a brand-new member answers right after the registration PIN.
+  The one-time welcome questions: the location + job search a brand-new member
+  is asked right after the registration PIN, in a **modal over their own
+  profile** (`VutuvWeb.Plug.WelcomeModal` + the layout) that closes with the ✕.
+  `/system/welcome` is the form's POST target and the frame a rejected submit
+  falls back to.
 
-  The two things worth guarding are the **laxness** (any single location field
-  is a complete answer, and an empty form is not an error) and the **once**
-  (`welcome_completed_at` gates the redirect and the page alike, so nobody is
-  nagged on later logins).
+  Three things worth guarding: the **laxness** (any single location field is a
+  complete answer, and an empty form is not an error), the **once**
+  (`welcome_completed_at` gates modal and page alike, so nobody is nagged on
+  later logins) and that **closing is an answer** — the ✕ posts the same skip
+  the button does, so the questions are visibly optional.
   """
   use VutuvWeb.ConnCase, async: true
 
@@ -42,7 +46,10 @@ defmodule VutuvWeb.WelcomeControllerTest do
   end
 
   describe "arriving from the registration PIN" do
-    test "the confirming PIN lands on the welcome page", %{conn: conn} do
+    # The member is in — so the PIN hands them their own profile, and the
+    # questions float over it. Landing on a form instead reads as a step of the
+    # registration that still has to be got through.
+    test "the confirming PIN lands on the profile, not on a form", %{conn: conn} do
       attrs = %{
         "emails" => %{"0" => %{"value" => "welcome-newcomer@example.com"}},
         "first_name" => "Newcomer",
@@ -57,7 +64,8 @@ defmodule VutuvWeb.WelcomeControllerTest do
           "session" => %{"pin" => pin, "context" => "registration"}
         })
 
-      assert redirected_to(conn) == ~p"/system/welcome"
+      user = Repo.get!(User, Plug.Conn.get_session(conn, :user_id))
+      assert redirected_to(conn) == ~p"/#{user}"
     end
 
     test "an ordinary login goes home, never to the welcome page", %{conn: conn} do
@@ -105,6 +113,102 @@ defmodule VutuvWeb.WelcomeControllerTest do
     end
   end
 
+  describe "the modal over the page" do
+    test "the questions float over the profile, with both closing controls real submits",
+         %{conn: conn} do
+      {conn, user} = register_and_confirm(conn)
+
+      body = conn |> get(~p"/#{user}") |> html_response(200)
+
+      assert body =~ ~s(id="welcome-modal")
+      assert body =~ ~s(name="address[city]")
+      assert body =~ ~s(name="user[employment_status]")
+      # The form posts to the URL that handles it, not to the page it floats
+      # over (the /settings form-action lesson).
+      assert body =~ ~s(action="/system/welcome")
+
+      # The ✕ and the "Skip for now" button are the same thing: a submit
+      # carrying `skip`, so closing works with JS off and is what stamps the
+      # questions as answered.
+      closers = ~r/<button[^>]*data-welcome-skip[^>]*>/ |> Regex.scan(body) |> List.flatten()
+      assert length(closers) == 2
+      assert Enum.all?(closers, &(&1 =~ ~s(name="skip") and &1 =~ ~s(type="submit")))
+    end
+
+    # A toast behind the dimmed backdrop is a greeting nobody can read.
+    test "no welcome toast rides along with it", %{conn: conn} do
+      {conn, _user} = register_and_confirm(conn)
+
+      refute Phoenix.Flash.get(conn.assigns.flash, :info)
+    end
+
+    test "it survives a reload and follows the member to the next page", %{conn: conn} do
+      {conn, user} = register_and_confirm(conn)
+
+      assert conn |> get(~p"/#{user}") |> html_response(200) =~ ~s(id="welcome-modal")
+      assert conn |> get(~p"/#{user}") |> html_response(200) =~ ~s(id="welcome-modal")
+      assert conn |> get(~p"/settings/profile") |> html_response(200) =~ ~s(id="welcome-modal")
+    end
+
+    test "closing it saves nothing and never asks again", %{conn: conn} do
+      {conn, user} = register_and_confirm(conn)
+      conn = get(conn, ~p"/#{user}")
+
+      conn = submit_with_csrf(conn, ~p"/system/welcome", %{"skip" => "1"})
+
+      assert redirected_to(conn) == ~p"/#{user}"
+      assert address_of(user) == nil
+      refute Accounts.needs_welcome?(reload(user))
+      refute conn |> get(~p"/#{user}") |> html_response(200) =~ ~s(id="welcome-modal")
+    end
+
+    # The daily ad strip would sit behind the dimmed backdrop and still burn
+    # the member's hourly slot on a sighting they cannot read. /community is a
+    # plain controller page and carries the banner otherwise, so this goes red
+    # the moment VutuvWeb.Plug.AdBanner stops asking.
+    test "no ad banner rides along behind it", %{conn: conn} do
+      {conn, _user} = register_and_confirm(conn)
+
+      body = conn |> get(~p"/community") |> html_response(200)
+
+      assert body =~ ~s(id="welcome-modal")
+      refute body =~ ~s(id="vutuv-ad")
+    end
+
+    test "an ordinary login never gets it", %{conn: conn} do
+      {conn, user} = create_and_login_user(conn)
+
+      refute conn |> get(~p"/#{user}") |> html_response(200) =~ ~s(id="welcome-modal")
+    end
+
+    # vutuv is a German site, and a plain English render would hide an
+    # untranslated island in the first thing a new member sees.
+    test "renders in German for a German browser", %{conn: conn} do
+      # German from the very first request: the locale plug stores what it
+      # resolved in the session (and sign-up stores it on the account), so a
+      # German visitor has to arrive German rather than switch afterwards.
+      {conn, user} =
+        conn
+        |> put_req_header("accept-language", "de-DE,de;q=0.9")
+        |> register_and_confirm()
+
+      body =
+        conn
+        |> recycle()
+        |> put_req_header("accept-language", "de-DE,de;q=0.9")
+        |> get(~p"/#{user}")
+        |> html_response(200)
+
+      assert body =~ "Art der Adresse"
+      assert body =~ "Suchen Sie eine Stelle?"
+      assert body =~ "Erstmal überspringen"
+      # No greeting, no preamble and no "Wo sind Sie?" above the fields: the
+      # window opens on the first question.
+      refute body =~ "Willkommen bei vutuv"
+      refute body =~ "Wo sind Sie?"
+    end
+  end
+
   describe "the form" do
     test "asks for the location and the job search", %{conn: conn} do
       {conn, _user} = register_and_confirm(conn)
@@ -147,7 +251,7 @@ defmodule VutuvWeb.WelcomeControllerTest do
         |> get(~p"/system/welcome")
         |> html_response(200)
 
-      assert body =~ "Wo sind Sie?"
+      assert body =~ "Art der Adresse"
       assert body =~ "Suchen Sie eine Stelle?"
       assert body =~ "Erstmal überspringen"
       # The country list is localized too — but keeps storing the English name
@@ -287,7 +391,11 @@ defmodule VutuvWeb.WelcomeControllerTest do
           "user" => %{"employment_status" => "looking", "desired_salary_min" => "0"}
         })
 
-      assert html_response(conn, 422) =~ ~s(name="address[city]")
+      body = html_response(conn, 422)
+      assert body =~ ~s(name="address[city]")
+      # The page IS the frame for a rejected submit, so the modal must not
+      # render a second copy of the same form behind it.
+      refute body =~ ~s(id="welcome-modal")
       # Nothing was written, and the member still gets their one shot at it.
       assert address_of(user) == nil
       assert Accounts.needs_welcome?(reload(user))

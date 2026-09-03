@@ -217,16 +217,15 @@ preference behind that the next status change would resurrect. The agent docs
 carry it under the same gate (`Preferred workplace:` in md/txt, the raw array in
 JSON/XML).
 
-## The one-time welcome page (`/system/welcome`)
+## The one-time welcome questions (`/system/welcome`)
 
 A fresh account arrives with a name, three tags and an email. Nothing says
 *where* this person is or *whether they are looking* — the two facts the `ort:`
 people search, the job board and a recruiter's saved search need to be useful to
 them. Asking during sign-up would lengthen the form standing between a visitor
-and an account, so `VutuvWeb.WelcomeController` asks **once**, right after the
-registration PIN, on a page that is trivial to skip:
+and an account, so we ask **once**, right after the registration PIN:
 
-- **Where are you?** — a Private/Work label plus postal code, city and country
+- **Where you are** — a Private/Work label plus postal code, city and country
   (no street). Validation is deliberately lax: `Address.welcome_changeset/2`
   requires **nothing**, any one of the three fields is a complete answer, and a
   form with no location at all (`Address.location_given?/1`) simply stores no
@@ -245,24 +244,46 @@ registration PIN, on a page that is trivial to skip:
   `User.changeset/2` with the existing visibility defaults, so the page can
   never store something more public than the Basics form would.
 
-**The URL is one-shot.** Two things must agree for the page to render: the
-account never finished it (`users.welcome_completed_at` is NULL) *and* this
-session was routed here by the confirming PIN (the `:welcome_pending` session
-key, set in `SessionController` next to the redirect). So it opens once,
-survives a reload and a failed submit, and every later visit — a bookmark, a
-typed URL, a second session — redirects to the member's **profile** (not
-`Home.path/1`: someone who already follows people would otherwise land on the
-feed). A logged-out visitor never reaches the controller; the settings
-pipeline's RequireLogin sends them to the start page.
+**They are shown as a modal, not as a step.** The confirming PIN lands the
+member on their own profile (`Home.path/1` like every other login), and
+`VutuvWeb.WelcomeComponents.welcome_modal/1` floats the questions over it — so
+the site behind the window says "you are in" and the questions read as an offer
+rather than as the last hurdle of the registration. That is the whole point of
+the shape: as a full page they looked required, and nothing on them is. The
+window carries **no greeting and no preamble** and opens straight on the first
+field label: the ✕ beside it says what a paragraph about optionality would have
+said, and the page keeps the greeting for the rare frame that renders it.
+**Closing the window is an answer.** The ✕, the "Skip for now" button and, via
+`app.js`, Esc and a click on the backdrop are all the same `skip` submit, so
+the server stamps `welcome_completed_at` and nobody is asked twice; with
+JavaScript off the two buttons still work. The modal renders from
+`root.html.heex`, not `app.html.heex`, because the profile renders its `app`
+layout from the socket (`ControllerHelpers.render_live/3` sets `layout: false`)
+— and outside the live root is where an overlay belongs anyway, so no patch
+underneath can re-render it away mid-answer.
 
-`SessionController` routes there only when the PIN form's `"registration"`
-context and the `nil` stamp agree; both buttons ("Save and continue" and "Skip
-for now") stamp it, `Accounts.complete_welcome/2` writes the address, the user
-fields and the stamp in one transaction, and the controller drops the session
-key. A member who navigates away is never asked again — everything on the page
-lives under /settings, and nagging on every login is exactly what this page is
-designed not to do. The migration backfilled the stamp for every account that
-predates the page.
+**It is one-shot.** Two things must agree, in `VutuvWeb.Plug.WelcomeModal` and
+`VutuvWeb.WelcomeController` alike: the account never finished it
+(`users.welcome_completed_at` is NULL) *and* this session was sent here by the
+confirming PIN (the `:welcome_pending` session key, set in `SessionController`
+beside the redirect, and only when nothing else claimed the landing — a sign-up
+in the middle of an OAuth consent goes back to that instead). So the modal
+opens over the profile, survives a reload, follows the member to the next
+controller page until they answer it, and never appears in a later session. The
+`/system/welcome` **page** renders the same form for the two requests the modal
+cannot answer itself: a rejected submit (a POST cannot re-open a modal over a
+page it does not render) and a direct GET while the window is open; every other
+visit — a bookmark, a typed URL, a second session — redirects to the member's
+**profile** (not `Home.path/1`: someone who already follows people would
+otherwise land on the feed). A logged-out visitor never reaches the controller;
+the settings pipeline's RequireLogin sends them to the start page.
+
+Both buttons stamp the flag, `Accounts.complete_welcome/2` writes the address,
+the user fields and the stamp in one transaction, and the controller drops the
+session key. A member who navigates away without answering is never asked again
+— everything asked here lives under /settings, and nagging on every login is
+exactly what this is designed not to do. The migration backfilled the stamp for
+every account that predates it.
 
 ## Job-search exclusion list / Ausschlussliste (issue #938)
 

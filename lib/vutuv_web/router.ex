@@ -41,6 +41,10 @@ defmodule VutuvWeb.Router do
     # than trusted from the session.
     plug(Plugs.ActingAs)
     plug(Plugs.Locale)
+    # The one-time welcome questions, floating over the page a brand-new
+    # member's registration PIN landed them on. Before the ad plug, which
+    # stands down while they are open.
+    plug(Plugs.WelcomeModal)
     # The daily text ad between navigation and content (1/hour per session).
     plug(Plugs.AdBanner)
   end
@@ -1552,12 +1556,15 @@ defmodule VutuvWeb.Router do
     match(:*, "/*path", NotFoundController, :show, assigns: %{api_scope: :none})
   end
 
-  # The one-time welcome page (VutuvWeb.WelcomeController): the location + job
-  # search questions a brand-new member answers right after their registration
-  # PIN, once. It lives under /system/ like the member directory so it burns no
-  # root path word, and rides the :settings_pipe because it is exactly that
-  # kind of page — logged-in, user-agnostic (:user = the signed-in member) and
-  # kept out of search indexes. Must stay ABOVE the /:slug catch-all.
+  # The one-time welcome questions (VutuvWeb.WelcomeController): the location +
+  # job search a brand-new member is asked right after their registration PIN,
+  # once. This is where they are ANSWERED — the member meets them as a modal
+  # over their own profile (Plugs.WelcomeModal), and the GET renders the same
+  # form as a page only for a rejected submit. It lives under /system/ like the
+  # member directory so it burns no root path word, and rides the
+  # :settings_pipe because it is exactly that kind of page — logged-in,
+  # user-agnostic (:user = the signed-in member) and kept out of search
+  # indexes. Must stay ABOVE the /:slug catch-all.
   scope "/system", VutuvWeb do
     pipe_through([:browser, :settings_pipe])
 

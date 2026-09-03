@@ -22,8 +22,8 @@
 // the plain file input still submits and the server falls back to its centered
 // crop — exactly the behaviour from before this file existed.
 
-import { bindEscape, buildStage, createCropStage, cropString, el } from "./crop_stage"
-import { buttonPrimary, buttonSecondary } from "./util"
+import { buildStage, createCropStage, cropString, el } from "./crop_stage"
+import { bindEscape, buttonPrimary, buttonSecondary } from "./util"
 
 const MAX_ZOOM = 4 // up to 4x past "cover" fit
 

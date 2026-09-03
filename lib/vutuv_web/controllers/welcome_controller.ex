@@ -1,6 +1,13 @@
 defmodule VutuvWeb.WelcomeController do
   @moduledoc """
-  The one-time welcome page (`/system/welcome`).
+  The one-time welcome questions: where you are, and whether you are looking.
+
+  `/system/welcome` is where they are **answered** (the POST) and, as a page,
+  where a rejected submit lands. Where a new member **meets** them is the modal
+  the app layout floats over their own profile right after the registration PIN
+  (`VutuvWeb.Plug.WelcomeModal`, `VutuvWeb.WelcomeComponents.welcome_modal/1`),
+  so the site is visibly already theirs and the questions read as an offer they
+  can close. Closing that window is the same POST as "Skip for now".
 
   A fresh account arrives with a name, three tags and an email — nothing that
   says *where* this person is or *whether they are looking*, the two facts the
@@ -11,7 +18,8 @@ defmodule VutuvWeb.WelcomeController do
 
   Two groups, one form:
 
-    * **Where are you?** — a Private/Work label, postal code, city, country.
+    * **Where you are** (no headline of its own, it opens on "Type of
+      address") — a Private/Work label, postal code, city, country.
       Validation is deliberately lax (`Address.welcome_changeset/2`): any one
       of the three is a complete answer and none of them is required. What is
       filled in becomes an ordinary profile address, so it shows on the profile
@@ -23,16 +31,16 @@ defmodule VutuvWeb.WelcomeController do
       salary: nobody), so nothing this page stores is more public than what the
       Basics form would store.
 
-  **The URL is one-shot.** Two things must agree for the page to render: the
+  **It is one-shot.** Two things must agree, here and in the plug alike: the
   account has never finished it (`users.welcome_completed_at` is NULL) *and*
-  this session was routed here by the confirming PIN (the `:welcome_pending`
-  session key, set by `VutuvWeb.SessionController`). So it opens once, survives
-  a reload and a failed submit, and every later visit — a bookmark, a typed
-  URL, another session — lands on the member's profile instead. A logged-out
-  visitor never reaches the controller at all: the settings pipeline's
-  RequireLogin sends them to the start page. Everything on the page stays
-  editable under /settings, and nagging on every login is exactly what this
-  page is designed not to do.
+  this session was sent here by the confirming PIN (the `:welcome_pending`
+  session key, set by `VutuvWeb.SessionController`). So the questions open
+  once, survive a reload and a failed submit, and every later visit — a
+  bookmark, a typed URL, another session — lands on the member's profile
+  instead. A logged-out visitor never reaches the controller at all: the
+  settings pipeline's RequireLogin sends them to the start page. Everything
+  asked here stays editable under /settings, and nagging on every login is
+  exactly what this is designed not to do.
   """
   use VutuvWeb, :controller
 

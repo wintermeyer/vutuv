@@ -114,5 +114,18 @@
     data-no-auto-reload={assigns[:conn] && @conn.method != "GET" && "true"}
   >
     {@inner_content}
+
+    <%!-- The one-time welcome questions (location + job search), floating over
+    the page a brand-new member's registration PIN landed them on — which is
+    their own profile, and that page renders its `app` layout from the SOCKET,
+    so the modal has to sit out here in the document the request itself built
+    (see VutuvWeb.Plug.WelcomeModal for who gets the assign). Outside the live
+    root is also where an overlay belongs: a patch underneath cannot re-render
+    it away while the member is answering it. Every way out of it — the ✕,
+    "Skip for now", Esc, the backdrop — is the same skip submit, so closing the
+    window is an answer and the server hears about it. --%>
+    <%= if assigns[:conn] && @conn.assigns[:welcome_modal] do %>
+      <.welcome_modal user={@conn.assigns.current_user} />
+    <% end %>
   </body>
 </html>

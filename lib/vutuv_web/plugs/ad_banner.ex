@@ -49,8 +49,8 @@ defmodule VutuvWeb.Plug.AdBanner do
     conn = fetch_cookies(conn)
 
     if not Vutuv.Ads.enabled?() or AgentFormat.agent_format?(conn) or landing_page?(conn) or
-         booking_pages?(conn) or account_pages?(conn) or dismissed_today?(conn) or
-         recently_seen?(conn) do
+         booking_pages?(conn) or account_pages?(conn) or welcome_modal?(conn) or
+         dismissed_today?(conn) or recently_seen?(conn) do
       conn
     else
       conn
@@ -77,13 +77,19 @@ defmodule VutuvWeb.Plug.AdBanner do
   # somewhere a visitor is browsing. A deeper "edit" segment on a public
   # page (e.g. /:slug/links/:id/edit no longer exists, but the guard keys
   # on the first/second segment only) is unaffected. The one-time welcome
-  # page joins them for the landing page's reason: it is the first screen
-  # after sign-up, and a house ad has no business competing with it.
+  # page joins them for the landing page's reason: it belongs to the
+  # sign-up, and a house ad has no business competing with it.
   defp account_pages?(conn) do
     List.first(conn.path_info) == "settings" or
       conn.path_info == ["system", "welcome"] or
       Enum.at(conn.path_info, 1) in ["edit", "settings", "export"]
   end
+
+  # The one-time welcome questions are open over this page (VutuvWeb.Plug.
+  # WelcomeModal, which runs first): the strip would sit behind a dimmed
+  # backdrop and still burn the visitor's hourly slot on a sighting they
+  # cannot read. Same reasoning that keeps ads off the sign-up funnel.
+  defp welcome_modal?(conn), do: conn.assigns[:welcome_modal] == true
 
   defp recently_seen?(conn) do
     case get_session(conn, :ad_seen_at) do

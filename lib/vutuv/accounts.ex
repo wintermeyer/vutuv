@@ -1835,9 +1835,10 @@ defmodule Vutuv.Accounts do
   end
 
   @doc """
-  Whether `user` still has the one-time welcome page (`/system/welcome`) ahead
-  of them. The single gate: the post-registration redirect and the page itself
-  both ask this, so a member meets it exactly once.
+  Whether `user` still has the one-time welcome questions ahead of them. The
+  single gate: the login that opens them, the plug that renders the modal and
+  the `/system/welcome` controller all ask this, so a member meets them exactly
+  once — and closing the modal is what answers them.
   """
   def needs_welcome?(%User{welcome_completed_at: nil}), do: true
   def needs_welcome?(%User{}), do: false
