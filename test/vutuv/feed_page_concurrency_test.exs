@@ -29,10 +29,13 @@ defmodule Vutuv.FeedPageConcurrencyTest do
 
   describe "fetching the sources" do
     test "every source's rows come back, and in the order the sources were listed" do
-      sources = for n <- 1..10, do: source([%{id: "s#{n}", at: at(n)}])
+      # One clock read: the rows the sources answer with ARE the expected rows.
+      # Built twice, a second boundary between the two reads split them (CI,
+      # 2026-09-03: `07:37:52` against `07:37:53` on every row).
+      rows = for n <- 1..10, do: [%{id: "s#{n}", at: at(n)}]
+      sources = Enum.map(rows, &source/1)
 
-      assert FeedPage.fetch_sources(sources, 5, nil) ==
-               Enum.map(1..10, &[%{id: "s#{&1}", at: at(&1)}])
+      assert FeedPage.fetch_sources(sources, 5, nil) == rows
     end
 
     test "more sources than may run at once still all run" do
