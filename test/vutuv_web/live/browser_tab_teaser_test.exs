@@ -220,6 +220,37 @@ defmodule VutuvWeb.BrowserTabTeaserTest do
     end
   end
 
+  describe "the reader's own rules" do
+    # The teaser quotes one line, so the rule under test has to change THAT
+    # line: a rule that deletes a footer two lines down would leave the title
+    # identical either way and prove nothing.
+    test "the title quotes the text this reader's rules rewrote", %{conn: conn} do
+      user = insert(:user)
+      account = remote_account(user, "golemde")
+
+      {:ok, _rule} =
+        Vutuv.PostRewrites.create_rule(user, "@golemde@social.example", %{
+          pattern: "Zahnbürste",
+          replacement: "Zahnputzstab"
+        })
+
+      view = tab(conn, user)
+
+      assert :ok =
+               Fediverse.record_remote_post(
+                 remote_note(account, "Dyson stellt Zahnbürste vor"),
+                 account.actor_uri
+               )
+
+      settle(view)
+
+      assert_push_event(view, "tab:teaser", %{frames: frames})
+      line = Enum.join(frames, " ")
+      assert line =~ "Zahnputzstab"
+      refute line =~ "Zahnbürste"
+    end
+  end
+
   describe "more than one inside the window" do
     test "the second arrival is counted, not quoted again", %{conn: conn} do
       user = insert(:user)

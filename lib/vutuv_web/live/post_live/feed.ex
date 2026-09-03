@@ -672,16 +672,30 @@ defmodule VutuvWeb.PostLive.Feed do
   # post this reader's own filters hide. The row below it folds to a placeholder
   # (`hidden_by_filter?/2`) while the pill above it read the muted words out —
   # and a teaser is the one place they cannot scroll past them (issue #940).
-  # Both read the same `:filtered_by` stamp, so the two cannot disagree.
-  defp newest_quote([%{filtered_by: pattern} | _rest]) when is_binary(pattern), do: nil
-
+  # It refuses before reading anything: `who/1` can fall back to a query and
+  # `text/1` runs the whole line through the Markdown renderer, and neither is
+  # work a muted post should cost.
   defp newest_quote([newest | _rest]) do
+    if muted_quote?(newest), do: nil, else: quoted_pair(newest)
+  end
+
+  defp quoted_pair(newest) do
     case {PostTeaser.who(newest), PostTeaser.text(newest)} do
       {nil, _text} -> nil
       {_who, nil} -> nil
       {who, text} -> %{who: who, text: text}
     end
   end
+
+  # Whether quoting this post would read the reader's own muted words back to
+  # them: the one spelling of the `:filtered_by` stamp, shared by the pill
+  # above, the rail's "not read yet" card (`unread_body/1`) and the timeline row
+  # (`hidden_by_filter?/2`), so no two of them can read the stamp differently.
+  # What they then DO differs, and deliberately: the pill gives its quote up
+  # entirely, the rail skips that post and lists the next, the row folds to a
+  # placeholder the reader can open. Only the rail's count stays whole either
+  # way — it counts what is waiting, not what it may quote.
+  defp muted_quote?(entry), do: is_binary(entry[:filtered_by])
 
   # Write an arrangement change through and keep the socket's copy in step. The
   # column is the truth here and the assign is a copy of it, so both move
@@ -838,7 +852,8 @@ defmodule VutuvWeb.PostLive.Feed do
   attr(:click, :any, required: true)
 
   defp unread_body(assigns) do
-    assigns = assign(assigns, :shown, Enum.take(assigns.entries, @unread_shown))
+    shown = assigns.entries |> Enum.reject(&muted_quote?/1) |> Enum.take(@unread_shown)
+    assigns = assign(assigns, :shown, shown)
 
     ~H"""
     <div id="unread-posts">
@@ -2143,9 +2158,12 @@ defmodule VutuvWeb.PostLive.Feed do
   defp queue_remote_arrival(%{assigns: %{feed_filter: :vutuv}} = socket, _at), do: socket
 
   defp queue_remote_arrival(socket, at) do
-    case Posts.newest_source_entry(socket.assigns.current_user, :fediverse, at) do
-      nil -> socket
-      entry -> if known_entry?(socket, entry), do: socket, else: queue(socket, entry)
+    entry = Posts.newest_source_entry(socket.assigns.current_user, :fediverse, at)
+
+    cond do
+      is_nil(entry) -> socket
+      known_entry?(socket, entry) -> socket
+      true -> queue(socket, for_reader(entry, socket))
     end
   end
 
@@ -2581,11 +2599,13 @@ defmodule VutuvWeb.PostLive.Feed do
         {:noreply, socket}
 
       true ->
-        # `mark_one/3` and not `decorate/3`: nothing here is streamed, and the
+        # `for_reader/2` and not `decorate/3`: nothing here is streamed, and the
         # pill only reads the author and the opening line. Decorating would buy
         # a follow edge and an engagement count per arrival, two queries, for a
         # card that is never drawn — including the ones the cap throws away.
-        {:noreply, count_away(socket, mark_one(entry, socket.assigns.content_filters, user.id))}
+        # The reader's own two passes are not that: they run on the sets the
+        # mount compiled, and the pill quotes what they leave.
+        {:noreply, count_away(socket, for_reader(entry, socket))}
     end
   end
 
@@ -2613,7 +2633,7 @@ defmodule VutuvWeb.PostLive.Feed do
          |> load_source_filter(:all)}
 
       actor_id == user.id ->
-        decorated = decorate(entry, user, socket)
+        decorated = decorate(entry, socket)
 
         {:noreply,
          socket
@@ -2639,7 +2659,7 @@ defmodule VutuvWeb.PostLive.Feed do
       # either: the pill's whole promise is that clicking it shows those posts
       # right here.
       view_accepts?(socket, entry, actor_id) ->
-        {:noreply, queue(socket, decorate(entry, user, socket))}
+        {:noreply, queue(socket, decorate(entry, socket))}
 
       # It belongs to a source this reader has switched off in the band, so it
       # is not news for them at all: the switch is the answer, and queueing it
@@ -2679,24 +2699,52 @@ defmodule VutuvWeb.PostLive.Feed do
   # dropped before either query runs. A live-arrived reply nests only its direct
   # parent (one level, whose bar self-loads); the full visible chain reassembles
   # on the next reload / "Load more" (which run through `collapse_threads/1`).
-  defp decorate(entry, user, socket) do
+  defp decorate(entry, socket) do
+    user_id = socket.assigns.current_user.id
+
     entry
-    |> Map.put(:viewer_follow, Social.follow_edge(user.id, entry.post.user_id))
-    |> Map.put(:engagement, Posts.post_engagement(entry.post.id, user.id))
-    |> PostRewrites.rewrite_entry(socket.assigns.post_rewrites, user.id)
-    |> mark_one(socket.assigns.content_filters, user.id)
+    |> Map.put(:viewer_follow, Social.follow_edge(user_id, entry.post.user_id))
+    |> Map.put(:engagement, Posts.post_engagement(entry.post.id, user_id))
+    |> for_reader(socket)
   end
 
-  # Everything a page of entries goes through before it is streamed — the one
-  # place the order is decided: the reader's search-and-replace rules run
-  # BEFORE their content filters, so a filter reads the text the card shows.
-  # Mount, load-more and the source and day reloads all come through here;
-  # a live arrival takes the same two steps in `decorate/3`.
+  # The passes that turn posts into *this reader's* copy of them, and the one
+  # place their order is decided: the reader's search-and-replace rules run
+  # BEFORE their content filters, so a filter reads the text the card will
+  # show.
+  #
+  # Every entry the page draws owes them, whichever door it came in by — and
+  # each door that spelled them for itself has forgotten one. A cached post
+  # from another network has no author here, so it takes no other step of
+  # `decorate/3` and used to be streamed raw: the footer a rule deletes on
+  # every reload stayed on the card that arrived behind the pill, and a filter
+  # that hides that post let it through and quoted it in the pill besides.
+  defp reader_passes(entries, rewrites, filters, viewer_id) do
+    entries
+    |> Enum.map(&PostRewrites.rewrite_entry(&1, rewrites, viewer_id))
+    |> mark_filtered(filters, viewer_id)
+  end
+
+  # One arrival's worth of the same, reading the sets the mount compiled. The
+  # three doors a single entry comes in by (`decorate/3` for the reader's own
+  # post, `queue_remote_arrival/2` for one from another network, and the
+  # travelling reader's `insert_while_travelling/3`) all end here.
+  defp for_reader(entry, socket) do
+    [entry]
+    |> reader_passes(
+      socket.assigns.post_rewrites,
+      socket.assigns.content_filters,
+      socket.assigns.current_user.id
+    )
+    |> hd()
+  end
+
+  # Everything a page of entries goes through before it is streamed. Mount,
+  # load-more and the source and day reloads all come through here.
   defp prepare_entries(entries, user, rewrites, filters) do
     entries
     |> with_engagement(user)
-    |> Enum.map(&PostRewrites.rewrite_entry(&1, rewrites, user.id))
-    |> mark_filtered(filters, user.id)
+    |> reader_passes(rewrites, filters, user.id)
   end
 
   # Content filters (issue #940): stamp each entry with the pattern that hides it
@@ -2727,7 +2775,7 @@ defmodule VutuvWeb.PostLive.Feed do
   # branch on, so the placeholder and the card it stands in for cannot both show
   # (or both vanish).
   defp hidden_by_filter?(entry, revealed),
-    do: entry[:filtered_by] != nil and filter_key(entry) not in revealed
+    do: muted_quote?(entry) and filter_key(entry) not in revealed
 
   # A reported or muted cached post leaves the feed in the same round trip, so
   # the reader never looks at a row that is no longer theirs to see.

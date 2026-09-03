@@ -503,6 +503,24 @@ defmodule VutuvWeb.FeedRemotePostsTest do
     assert has_element?(view, "[data-remote-post='#{post.id}']")
   end
 
+  test "a muted word collapses a post that arrived live too, and the pill does not quote it",
+       %{conn: conn} do
+    {conn, user} = create_and_login_user(conn)
+
+    {:ok, _filter} =
+      Vutuv.ContentFilters.create_filter(user, %{"kind" => "keyword", "pattern" => "thought"})
+
+    # Open before the post exists, so it can only reach this page behind the pill.
+    {:ok, view, _html} = live(conn, ~p"/feed")
+    post = cached_post(user)
+    send(view.pid, {:remote_feed_arrival, %{at: ~N[2000-01-01 00:00:00]}})
+    render(view)
+
+    assert has_element?(view, "[data-filtered-post]")
+    refute has_element?(view, "[data-remote-post='#{post.id}']")
+    refute render(view) =~ "A thought from over there."
+  end
+
   test "reporting deletes our copy and drops the row", %{conn: conn} do
     {conn, user} = create_and_login_user(conn)
     post = cached_post(user)

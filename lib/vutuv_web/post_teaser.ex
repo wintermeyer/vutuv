@@ -56,6 +56,12 @@ defmodule VutuvWeb.PostTeaser do
   window sits behind something else (issue #1681). Both ask the same three
   questions, so all three answers live here instead of twice.
 
+  The feed's "new posts" pill is the exception, and reads as one on purpose: it
+  quotes an entry it has already put through the reader's passes on its way
+  into the stream, so it asks `who/1` and `text/1` here and reads the filter
+  answer off the stamp the row carries. `quote_for/4` is for a surface holding
+  an entry straight from `Vutuv.Posts.newest_source_entry/3`.
+
   `title_frames/1` is the browser tab's half and belongs here for the same
   reason: it cuts the quote the two surfaces share, and where it cuts is a
   decision about how a tab strip reads, not about the feed.
@@ -66,6 +72,7 @@ defmodule VutuvWeb.PostTeaser do
   alias Vutuv.Fediverse.RemoteAccount
   alias Vutuv.Identity
   alias Vutuv.Mentions
+  alias Vutuv.PostRewrites
   alias Vutuv.Posts
   alias Vutuv.Posts.Post
   alias VutuvWeb.Markdown
@@ -163,15 +170,25 @@ defmodule VutuvWeb.PostTeaser do
     do: "#{Identity.display_name(Posts.author(post))} · #{Date.to_iso8601(post.published_on)}"
 
   @doc """
-  The quote for one feed entry — `%{who: …, text: …}` — or nil where this
-  reader has muted it.
+  The quote for one feed entry, as **this** reader would read it —
+  `%{who: …, text: …}` — or nil where they have muted it.
+
+  Their two passes over a post happen here, and in this order: their
+  search-and-replace rules (`rewrites`, compiled) rewrite the text, then their
+  content filters (`filters`, compiled) read what would be quoted. Reversed,
+  a filter would judge a line the reader was never going to see; skipped, the
+  tab strip reads out the footer a mirror puts under every post while every
+  other surface deletes it. The order is here rather than at the call site
+  because this module is what a surface asks for a quote.
 
   nil rather than a redacted line: the member silenced that word, and a teaser
   is the one place they cannot scroll past it. Both surfaces then fall back to
   the bare dot, which says *that* something landed without saying what.
   """
-  def quote_for(entry, compiled, viewer_id) do
-    if filtered_pattern(entry, compiled, viewer_id) do
+  def quote_for(entry, rewrites, filters, viewer_id) do
+    entry = PostRewrites.rewrite_entry(entry, rewrites, viewer_id)
+
+    if filtered_pattern(entry, filters, viewer_id) do
       nil
     else
       %{who: who(entry), text: text(entry)}
