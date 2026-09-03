@@ -31,6 +31,7 @@ defmodule Vutuv.Jobs do
   import Ecto.Query
   import Vutuv.SearchText, only: [cap: 1, contains: 1, escape_like: 1, normalize_search: 1]
 
+  alias Vutuv.Accounts
   alias Vutuv.Accounts.User
   alias Vutuv.BerlinTime
   alias Vutuv.Countries
@@ -49,6 +50,7 @@ defmodule Vutuv.Jobs do
   alias Vutuv.Pages
   alias Vutuv.Repo
   alias Vutuv.Salary
+  alias Vutuv.Tags
   alias Vutuv.Tags.Tag
   alias Vutuv.Tags.UserTag
 
@@ -865,6 +867,45 @@ defmodule Vutuv.Jobs do
     |> board_scope()
     |> apply_board_filters(filters, viewer)
     |> finish_board(limit, Keyword.get(opts, :cursor))
+  end
+
+  @doc """
+  Whether `viewer` would find no posting at all on the board — the corpus, not
+  the current page, so a filter that matches nothing does not answer true.
+
+  The board reads it to decide whether it is a board at all: with nothing to
+  search, a search form over four fields and a row of filter chips promise a
+  stock and prove in the same breath that there is none.
+  """
+  def board_empty?(viewer), do: not Repo.exists?(board_scope(viewer))
+
+  # How much of the reach below to show. Both figures live here rather than at
+  # the two call sites, because the HTML board and its agent-format sibling have
+  # to show the same two facts (`VutuvWeb.AgentDocs.JobBoardDoc`) and a number
+  # written twice is a number that drifts.
+  @reach_people 6
+  @reach_fields 12
+
+  @doc """
+  What the board shows in place of a listing when `viewer` would find no
+  posting at all: the members who said they are available (with how many there
+  are) and the fields the most members carry — `%{count:, people:, fields:}`.
+
+  `nil` on a board that has something to list, which is the caller's signal to
+  render the ordinary board. One home for the answer, so the page
+  (`VutuvWeb.JobBoardLive`) and its agent documents cannot show different
+  members or a different number of them.
+  """
+  def board_reach(viewer) do
+    if board_empty?(viewer) do
+      available = Accounts.open_to_offers(viewer, limit: @reach_people)
+
+      %{
+        count: available.total,
+        people: available.people,
+        fields: Tags.popular_member_tags(@reach_fields)
+      }
+    end
   end
 
   @doc """

@@ -215,7 +215,34 @@ and the crawl path — the board is a shared-footer + top-bar nav link). PubSub
   are the anonymous public view — only `everyone`, `geo?` postings, each entry
   carrying the structured location / salary / tag fields
   (`JobPostingDoc.summary/1`) so agents filter client-side, cursor-paginated with
-  a `next` link. **No `JobPosting` JSON-LD on the list** (leaf pages only).
+  a `next` link. On an empty board the document adds `open_to_offers`
+  (`%{total:, people:}`) and `fields` from the same `Jobs.board_reach/1` the
+  page reads, with the anonymous viewer — the people entries are the shared
+  listing shape (`AgentDocs.person_entry/3`, as on the follow lists) plus the
+  availability. **No `JobPosting` JSON-LD on the list** (leaf pages only).
+- **An empty board is not a board (`Jobs.board_reach/1`).** With no posting at
+  all, the search form, the filter chips and the "no results" card do not
+  render: a box over an empty corpus promises a stock and disproves it in the
+  same view. In their place the board shows the side of the market this
+  installation *does* have, and **one function owns that answer** —
+  `Jobs.board_reach(viewer)` returns `%{count:, people:, fields:}` or `nil`
+  ("render the ordinary board"), so the page and its agent documents cannot show
+  different members or a different number of them. It composes
+  `Accounts.open_to_offers/2` (the members who set a #928 availability, under
+  the same three-way visibility and the same #938 exclusion list — both in SQL,
+  and `count(*) OVER ()` brings the total back with the rows, so one round trip
+  and no way for the headline number to disagree with what is under it; a test
+  pins that SQL gate to `User.employment_status_visible?/2`) and
+  `Tags.popular_member_tags/1` (the fields the most listed members carry). The
+  "Post a job" button renders logged out too, because whoever has a job to fill
+  is exactly who that page has to keep; `/jobs/new` sends them to the login page
+  with a line saying why. The reach block is for a visitor who arrived at the
+  **plain** board: with a filter active the ordinary "no matching positions" card
+  answers instead, which also keeps the everyday filtered-to-zero case from
+  paying for the corpus check. `JobPostingLive.Form` answers the same question
+  while a posting is being written: `Tags.member_counts_by_name/1` puts the
+  member count beside each typed tag, recomputed only when a tag field really
+  changed (`validate` fires on every keystroke of the whole form).
 - **Scoped sections.** `Jobs.list_organization_postings/2` and
   `Jobs.list_tag_postings/2` power the "Offene Stellen" sections on
   `/organizations/:slug` and `/tags/:slug` (the tag section links into the

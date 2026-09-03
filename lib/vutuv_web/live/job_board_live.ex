@@ -25,8 +25,10 @@ defmodule VutuvWeb.JobBoardLive do
   alias Vutuv.Jobs.JobPosting
   alias Vutuv.Salary
   alias Vutuv.Tags.Tag
+  alias Vutuv.Tags.UserTag
   alias VutuvWeb.ApiV2
   alias VutuvWeb.Live.InitAssigns
+  alias VutuvWeb.UserHelpers
 
   @impl true
   def mount(_params, session, socket) do
@@ -63,6 +65,58 @@ defmodule VutuvWeb.JobBoardLive do
     |> assign(:more?, page.more?)
     |> assign(:next_cursor, page.cursor && ApiV2.encode_cursor(page.cursor))
     |> assign_tag_suggestions(page.entries)
+    |> assign_reach()
+  end
+
+  # Tags per drawn member: enough to be curious about somebody, never their
+  # whole profile, which their tag page one tap away holds. How many members and
+  # how many fields the block shows belongs to `Jobs.board_reach/1`, which the
+  # agent documents read too.
+  @tags_per_seeker 3
+
+  # A board with nothing on it shows the other half of the market instead (see
+  # `render/1`). `nil` reach means "render the ordinary board", so the queries
+  # behind it never run on a board that has a stock.
+  defp assign_reach(socket) do
+    reach = board_reach(socket)
+
+    socket
+    |> assign(:reach, reach)
+    |> assign(:seekers, if(reach, do: seeker_rows(reach.people), else: []))
+  end
+
+  # The reach block replaces the board only for a visitor who arrived at the
+  # plain board. With a filter active they asked a question, and "no matching
+  # positions" plus a way to clear it is the answer — which also keeps the
+  # everyday filtered-to-zero case from paying for the corpus check.
+  defp board_reach(%{assigns: %{postings: []}} = socket) do
+    if any_filters?(socket.assigns.params),
+      do: nil,
+      else: Jobs.board_reach(socket.assigns.current_user)
+  end
+
+  defp board_reach(_socket), do: nil
+
+  # The available members as finished rows — member, their work line, a sample
+  # of their tags — assembled here so each batched query is asked once rather
+  # than per row in the markup. The row shape and its markup deliberately mirror
+  # the feed's "New here" card (`VutuvWeb.PostLive.Feed`), which samples its
+  # tags at random because a newcomer has no endorsements yet; these members do,
+  # so theirs are ranked (`tag_summary_map/2`).
+  defp seeker_rows(users) do
+    work = UserHelpers.work_information_map(users, 60)
+    tags = UserHelpers.tag_summary_map(users, @tags_per_seeker)
+
+    Enum.map(users, fn user ->
+      summary = Map.get(tags, user.id, %{top: [], total: 0})
+
+      %{
+        user: user,
+        work: Map.get(work, user.id, ""),
+        tags: summary.top,
+        more: summary.total - length(summary.top)
+      }
+    end)
   end
 
   # Tags to offer as one-tap additions to the filter (issue #951), drawn from
@@ -210,116 +264,224 @@ defmodule VutuvWeb.JobBoardLive do
         <div>
           <h1 class="text-2xl font-bold text-slate-900 dark:text-slate-100">{gettext("Jobs")}</h1>
           <p class="mt-1 text-sm text-slate-600 dark:text-slate-400">
-            {gettext("Open positions on vutuv, newest first.")}
+            <%= if @reach do %>
+              {gettext("No posting yet. Yours would be the first, and it would stand at the top on its own.")}
+            <% else %>
+              {gettext("Open positions on vutuv, newest first.")}
+            <% end %>
           </p>
         </div>
-        <.button :if={@current_user} navigate={~p"/jobs/new"}>
+        <%!-- Shown logged out too, and deliberately: a visitor with a job to
+        fill is exactly who the empty board has to keep, and /jobs/new sends
+        them to the login page with a line saying why. --%>
+        <.button navigate={~p"/jobs/new"}>
           {gettext("Post a job")}
         </.button>
       </div>
 
-      <.search_form params={@params} filters={@filters} suggestions={@tag_suggestions} />
+      <.reach :if={@reach} reach={@reach} seekers={@seekers} />
 
-      <div id="job-filter-chips" class="mt-3 -mx-4 flex gap-2 overflow-x-auto px-4 pb-1 [scrollbar-width:none]">
-        <.link
-          :for={type <- [:onsite, :hybrid, :remote]}
-          navigate={~p"/jobs?#{toggle_param(@params, "workplace", Atom.to_string(type))}"}
-          class={filter_chip_class(active?(@params, "workplace", Atom.to_string(type)))}
-        >
-          {JobPosting.workplace_type_label(type)}
-        </.link>
+      <div :if={!@reach}>
+        <.search_form params={@params} filters={@filters} suggestions={@tag_suggestions} />
 
-        <.link
-          :if={@current_user}
-          navigate={~p"/jobs?#{toggle_param(@params, "my_tags", "1")}"}
-          class={filter_chip_class(active?(@params, "my_tags", "1"))}
-        >
-          {gettext("Matches my tags")}
-        </.link>
+        <div id="job-filter-chips" class="mt-3 -mx-4 flex gap-2 overflow-x-auto px-4 pb-1 [scrollbar-width:none]">
+          <.link
+            :for={type <- [:onsite, :hybrid, :remote]}
+            navigate={~p"/jobs?#{toggle_param(@params, "workplace", Atom.to_string(type))}"}
+            class={filter_chip_class(active?(@params, "workplace", Atom.to_string(type)))}
+          >
+            {JobPosting.workplace_type_label(type)}
+          </.link>
 
-        <.link
-          :if={@current_user && @has_salary_expectation?}
-          navigate={~p"/jobs?#{toggle_param(@params, "salary_min", "mine")}"}
-          class={filter_chip_class(active?(@params, "salary_min", "mine"))}
-        >
-          {gettext("From my salary expectation")}
-        </.link>
+          <.link
+            :if={@current_user}
+            navigate={~p"/jobs?#{toggle_param(@params, "my_tags", "1")}"}
+            class={filter_chip_class(active?(@params, "my_tags", "1"))}
+          >
+            {gettext("Matches my tags")}
+          </.link>
 
-        <.link
-          :if={any_filters?(@params)}
-          navigate={~p"/jobs"}
-          class={[
-            button_base(),
-            "whitespace-nowrap text-slate-600 underline decoration-dotted hover:text-slate-800 dark:text-slate-400"
-          ]}
-        >
-          {gettext("Clear filters")}
-        </.link>
-      </div>
+          <.link
+            :if={@current_user && @has_salary_expectation?}
+            navigate={~p"/jobs?#{toggle_param(@params, "salary_min", "mine")}"}
+            class={filter_chip_class(active?(@params, "salary_min", "mine"))}
+          >
+            {gettext("From my salary expectation")}
+          </.link>
 
-      <.save_search_control
-        :if={@current_user && any_filters?(@params)}
-        id="jobs-save-search"
-        show?={@show_save?}
-        saved?={@saved?}
-        class="mt-3"
-      />
+          <.link
+            :if={any_filters?(@params)}
+            navigate={~p"/jobs"}
+            class={[
+              button_base(),
+              "whitespace-nowrap text-slate-600 underline decoration-dotted hover:text-slate-800 dark:text-slate-400"
+            ]}
+          >
+            {gettext("Clear filters")}
+          </.link>
+        </div>
 
-      <%!-- Active tag filters as removable pills, and one-tap suggestions drawn
-      from the current results (issue #951). Each pill's ✕ drops just that tag;
-      the whole `tag` param is comma-separated and shareable. --%>
-      <div
-        :if={tag_slugs(@params) != [] or @tag_suggestions != []}
-        id="job-tag-filters"
-        class="mt-3 flex flex-wrap items-center gap-2 text-sm text-slate-600 dark:text-slate-400"
-      >
-        <span :if={tag_slugs(@params) != []} class="font-medium">{gettext("Tags")}:</span>
-        <.link
-          :for={slug <- tag_slugs(@params)}
-          navigate={~p"/jobs?#{drop_tag(@params, slug)}"}
-          data-active-tag={slug}
-          class="inline-flex items-center gap-1 rounded-lg bg-brand-50 px-2.5 py-1 font-medium text-brand-700 dark:bg-brand-900/40 dark:text-brand-100"
-        >
-          {slug} <span aria-hidden="true">✕</span>
-        </.link>
-
-        <span :if={tag_slugs(@params) != [] and @tag_suggestions != []} class="text-slate-400">·</span>
-
-        <.link
-          :for={tag <- @tag_suggestions}
-          navigate={~p"/jobs?#{add_tag(@params, tag.slug)}"}
-          data-suggest-tag={tag.slug}
-          class="inline-flex items-center gap-1 rounded-lg px-2.5 py-1 font-medium text-slate-600 ring-1 ring-slate-200 hover:bg-slate-50 hover:text-slate-800 dark:text-slate-300 dark:ring-slate-700 dark:hover:bg-slate-800"
-        >
-          <span aria-hidden="true">+</span> {tag.name}
-        </.link>
-      </div>
-
-      <div :if={@postings == []} class="mt-6 rounded-2xl bg-white p-8 text-center shadow-sm ring-1 ring-slate-200 dark:bg-slate-900 dark:ring-slate-800">
-        <p class="text-sm text-slate-600 dark:text-slate-400">{empty_line(@params)}</p>
-        <.link
-          :if={not any_filters?(@params) && @current_user}
-          navigate={~p"/jobs/new"}
-          class="mt-3 inline-block text-sm font-semibold text-brand-600 hover:text-brand-700 dark:text-brand-400 dark:hover:text-brand-300"
-        >
-          {gettext("Post the first one")}
-        </.link>
-      </div>
-
-      <div class="mt-6 grid gap-4 sm:grid-cols-2">
-        <.job_card
-          :for={posting <- @postings}
-          posting={posting}
-          viewer_tags={@viewer_tags}
-          engagement={@engagement[posting.id]}
+        <.save_search_control
+          :if={@current_user && any_filters?(@params)}
+          id="jobs-save-search"
+          show?={@show_save?}
+          saved?={@saved?}
+          class="mt-3"
         />
-      </div>
 
-      <div :if={@more?} class="mt-6 text-center">
-        <.button navigate={~p"/jobs?#{Map.put(@params, "cursor", @next_cursor)}"} variant="secondary">
-          {gettext("More jobs")}
-        </.button>
+        <%!-- Active tag filters as removable pills, and one-tap suggestions drawn
+        from the current results (issue #951). Each pill's ✕ drops just that tag;
+        the whole `tag` param is comma-separated and shareable. --%>
+        <div
+          :if={tag_slugs(@params) != [] or @tag_suggestions != []}
+          id="job-tag-filters"
+          class="mt-3 flex flex-wrap items-center gap-2 text-sm text-slate-600 dark:text-slate-400"
+        >
+          <span :if={tag_slugs(@params) != []} class="font-medium">{gettext("Tags")}:</span>
+          <.link
+            :for={slug <- tag_slugs(@params)}
+            navigate={~p"/jobs?#{drop_tag(@params, slug)}"}
+            data-active-tag={slug}
+            class="inline-flex items-center gap-1 rounded-lg bg-brand-50 px-2.5 py-1 font-medium text-brand-700 dark:bg-brand-900/40 dark:text-brand-100"
+          >
+            {slug} <span aria-hidden="true">✕</span>
+          </.link>
+
+          <span :if={tag_slugs(@params) != [] and @tag_suggestions != []} class="text-slate-400">·</span>
+
+          <.link
+            :for={tag <- @tag_suggestions}
+            navigate={~p"/jobs?#{add_tag(@params, tag.slug)}"}
+            data-suggest-tag={tag.slug}
+            class="inline-flex items-center gap-1 rounded-lg px-2.5 py-1 font-medium text-slate-600 ring-1 ring-slate-200 hover:bg-slate-50 hover:text-slate-800 dark:text-slate-300 dark:ring-slate-700 dark:hover:bg-slate-800"
+          >
+            <span aria-hidden="true">+</span> {tag.name}
+          </.link>
+        </div>
+
+        <div :if={@postings == []} class="mt-6 rounded-2xl bg-white p-8 text-center shadow-sm ring-1 ring-slate-200 dark:bg-slate-900 dark:ring-slate-800">
+          <p class="text-sm text-slate-600 dark:text-slate-400">{empty_line(@params)}</p>
+          <.link
+            :if={not any_filters?(@params) && @current_user}
+            navigate={~p"/jobs/new"}
+            class="mt-3 inline-block text-sm font-semibold text-brand-600 hover:text-brand-700 dark:text-brand-400 dark:hover:text-brand-300"
+          >
+            {gettext("Post the first one")}
+          </.link>
+        </div>
+
+        <div class="mt-6 grid gap-4 sm:grid-cols-2">
+          <.job_card
+            :for={posting <- @postings}
+            posting={posting}
+            viewer_tags={@viewer_tags}
+            engagement={@engagement[posting.id]}
+          />
+        </div>
+
+        <div :if={@more?} class="mt-6 text-center">
+          <.button navigate={~p"/jobs?#{Map.put(@params, "cursor", @next_cursor)}"} variant="secondary">
+            {gettext("More jobs")}
+          </.button>
+        </div>
       </div>
+    </div>
+    """
+  end
+
+  @doc false
+  # What a board with nothing on it shows instead of a search form over an
+  # empty corpus: the other half of the market. The stock of postings is the
+  # side vutuv does not have yet, the members are the side it does — so the
+  # page answers the question somebody with a job to fill actually came with
+  # ("who is here?") rather than reporting that a table is empty.
+  #
+  # Both blocks render only when they have something, so a brand-new
+  # installation shows the heading and the button and nothing that reads as a
+  # gap.
+  attr(:reach, :map, required: true, doc: "`Vutuv.Jobs.board_reach/1`: count + fields")
+  attr(:seekers, :list, required: true, doc: "its members, decorated by `seeker_rows/1`")
+
+  defp reach(assigns) do
+    ~H"""
+    <div class="mt-6 space-y-6">
+      <.card :if={@seekers != []} class="space-y-4">
+        <div>
+          <.section_title>{gettext("Who you would reach")}</.section_title>
+          <p class="mt-1 text-sm text-slate-600 dark:text-slate-400">
+            <%!-- `%{formatted}` rather than `%{count}`: ngettext binds the raw
+            integer to `count` and a `count:` binding does not override it, so
+            the grouped number needs a placeholder of its own. --%>
+            {ngettext(
+              "One member has said they are available.",
+              "%{formatted} members have said they are available.",
+              @reach.count,
+              formatted: delimited_count(@reach.count)
+            )}
+          </p>
+        </div>
+
+        <ul class="grid gap-4 sm:grid-cols-2">
+          <li :for={row <- @seekers} id={"seeker-#{row.user.id}"} class="flex items-start gap-3">
+            <.link href={~p"/#{row.user}"} class="shrink-0">
+              <.avatar
+                user={row.user}
+                size="sm"
+                alt={gettext("Profile picture of %{name}", name: UserHelpers.full_name(row.user))}
+              />
+            </.link>
+            <div class="min-w-0 flex-1">
+              <.link
+                href={~p"/#{row.user}"}
+                class="block truncate text-sm font-medium text-slate-800 hover:text-brand-700 dark:text-slate-100 dark:hover:text-brand-300"
+              >
+                {UserHelpers.full_name(row.user)}
+              </.link>
+              <.employment_status_badge
+                status={row.user.employment_status}
+                workplace={row.user.desired_workplace_types}
+                class="mt-1"
+              />
+              <p :if={row.work != ""} class="mb-0 mt-1 truncate text-xs text-slate-600 dark:text-slate-400">
+                {row.work}
+              </p>
+              <div :if={row.tags != []} class="mt-1.5 flex flex-wrap items-center gap-1">
+                <.chip :for={user_tag <- row.tags} size="sm" navigate={~p"/tags/#{UserTag.tag(user_tag)}"}>
+                  <span aria-hidden="true">#</span>{UserTag.truncated_name(user_tag)}
+                </.chip>
+                <.link
+                  :if={row.more > 0}
+                  navigate={~p"/#{row.user}/tags"}
+                  class="text-xs font-medium text-slate-600 hover:text-brand-700 dark:text-slate-400 dark:hover:text-brand-300"
+                >
+                  {ngettext("+1 more tag", "+%{formatted} more tags", row.more,
+                    formatted: compact_count(row.more)
+                  )}
+                </.link>
+              </div>
+            </div>
+          </li>
+        </ul>
+
+        <.card_footer_link href={~p"/system/members"}>
+          {gettext("All members")}
+        </.card_footer_link>
+      </.card>
+
+      <.card :if={@reach.fields != []} class="space-y-3">
+        <div>
+          <.section_title>{gettext("What members here work on")}</.section_title>
+          <p class="mt-1 text-sm text-slate-600 dark:text-slate-400">
+            {gettext("The fields the most members carry, and how many of them do.")}
+          </p>
+        </div>
+        <div class="flex flex-wrap gap-2">
+          <.chip :for={{tag, count} <- @reach.fields} navigate={~p"/tags/#{tag}"}>
+            <span aria-hidden="true">#</span>{tag.name}
+            <span class="text-brand-600 dark:text-brand-300">{compact_count(count)}</span>
+          </.chip>
+        </div>
+      </.card>
     </div>
     """
   end

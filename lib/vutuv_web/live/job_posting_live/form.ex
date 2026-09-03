@@ -46,6 +46,7 @@ defmodule VutuvWeb.JobPostingLive.Form do
   alias Vutuv.Languages
   alias Vutuv.Organizations
   alias Vutuv.Salary
+  alias Vutuv.Tags
 
   # How many search hits the box offers at once. Long enough that a two-letter
   # fragment still shows the country you meant, short enough to stay a list you
@@ -85,6 +86,7 @@ defmodule VutuvWeb.JobPostingLive.Form do
 
     socket
     |> base_assigns(posting, changeset)
+    |> assign_tag_reach("", "")
     |> assign(:required_tags, "")
     |> assign(:nice_tags, "")
     |> assign(:images, [])
@@ -94,10 +96,14 @@ defmodule VutuvWeb.JobPostingLive.Form do
     posting = Jobs.get_job_posting_by_slug(slug)
 
     if posting && Jobs.owner?(posting, socket.assigns.current_user) do
+      required = Jobs.tag_names(posting, :required)
+      nice = Jobs.tag_names(posting, :nice_to_have)
+
       socket
       |> base_assigns(posting, Jobs.change_job_posting(posting))
-      |> assign(:required_tags, Jobs.tag_names(posting, :required))
-      |> assign(:nice_tags, Jobs.tag_names(posting, :nice_to_have))
+      |> assign_tag_reach(required, nice)
+      |> assign(:required_tags, required)
+      |> assign(:nice_tags, nice)
       |> assign(:images, posting.images)
     else
       socket
@@ -133,6 +139,21 @@ defmodule VutuvWeb.JobPostingLive.Form do
     |> assign_country_matches()
   end
 
+  # How many members carry the tags the poster has typed so far — the one number
+  # that answers "is this posting worth writing here?" while they are still
+  # writing it. `validate` fires on every keystroke in the whole form, so the
+  # two queries behind it run only when a tag field really changed: it is called
+  # BEFORE the new strings are assigned, so the old ones are still there to
+  # compare against.
+  defp assign_tag_reach(socket, required, nice) do
+    if {required, nice} == {socket.assigns[:required_tags], socket.assigns[:nice_tags]} do
+      socket
+    else
+      names = Tags.parse_tag_names(required) ++ Tags.parse_tag_names(nice)
+      assign(socket, :tag_reach, Tags.member_counts_by_name(names))
+    end
+  end
+
   # The hits the search box offers: what the query finds, minus what is already
   # a pill. Offering a country you have picked would answer a tap with nothing
   # visibly happening.
@@ -157,11 +178,15 @@ defmodule VutuvWeb.JobPostingLive.Form do
       |> Jobs.change_job_posting(seed_remote_countries(params, socket.assigns.changeset))
       |> Map.put(:action, :validate)
 
+    required = params["required_tags"] || ""
+    nice = params["nice_to_have_tags"] || ""
+
     {:noreply,
      socket
      |> assign_form(changeset)
-     |> assign(:required_tags, params["required_tags"] || "")
-     |> assign(:nice_tags, params["nice_to_have_tags"] || "")}
+     |> assign_tag_reach(required, nice)
+     |> assign(:required_tags, required)
+     |> assign(:nice_tags, nice)}
   end
 
   def handle_event("country-search", %{"country_query" => query}, socket) do
@@ -736,6 +761,32 @@ defmodule VutuvWeb.JobPostingLive.Form do
               value={@nice_tags}
               field_class={input_class()}
             />
+          </div>
+          <%!-- What the tags typed so far are worth here: the members who carry
+          them. A posting is written before anybody can answer it, so this is
+          the only thing the form can honestly say about its audience — and a
+          zero is the useful half, because it says the field is spelled in a way
+          nobody here uses. --%>
+          <div :if={@tag_reach != []} id="job-tag-reach">
+            <p class="text-xs text-slate-600 dark:text-slate-400">
+              {gettext("Members carrying these tags:")}
+            </p>
+            <div class="mt-1.5 flex flex-wrap gap-2">
+              <%!-- The chips' own geometry (`chip_class/1`, so a padding or
+              radius change carries it along) in slate: these line up in a row
+              of tag chips without pretending to be tags. --%>
+              <span
+                :for={{name, count} <- @tag_reach}
+                data-tag-reach={name}
+                class={[
+                  chip_class("sm"),
+                  "bg-slate-100 text-slate-700 dark:bg-slate-800 dark:text-slate-200"
+                ]}
+              >
+                {name}
+                <span class="text-slate-600 dark:text-slate-400">{delimited_count(count)}</span>
+              </span>
+            </div>
           </div>
         </.card>
 

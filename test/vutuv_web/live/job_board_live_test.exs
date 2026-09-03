@@ -55,18 +55,104 @@ defmodule VutuvWeb.JobBoardLiveTest do
   end
 
   test "the search-tips help is on the board", %{conn: conn} do
+    publish_job!()
     {:ok, view, _html} = live(conn, ~p"/jobs")
 
     assert has_element?(view, "details summary", "Search tips")
     assert render(view) =~ "Webentwickler, PHP-Entwickler"
   end
 
-  test "shows an empty state with no postings", %{conn: conn} do
-    {:ok, _view, html} = live(conn, ~p"/jobs")
-    assert html =~ "No job postings yet"
+  test "with no postings at all the board is not a board", %{conn: conn} do
+    {:ok, view, html} = live(conn, ~p"/jobs")
+
+    # A search box over an empty corpus promises a stock and disproves it in
+    # the same view, so neither it nor the filter chips render.
+    refute has_element?(view, "form[action='/jobs'] input[name='q']")
+    refute has_element?(view, "#job-filter-chips")
+    assert html =~ "Yours would be the first"
+    # The way in stays, logged out included: whoever has a job to fill is who
+    # this page exists for.
+    assert has_element?(view, "a[href='/jobs/new']")
+  end
+
+  test "the empty board offers the members who said they are available", %{conn: conn} do
+    seeker =
+      insert(:activated_user,
+        employment_status: "open",
+        employment_status_visibility: "everyone",
+        desired_workplace_types: ["remote"]
+      )
+
+    {:ok, view, html} = live(conn, ~p"/jobs")
+
+    assert has_element?(view, "#seeker-#{seeker.id}")
+    assert html =~ "Open to offers"
+    assert html =~ "Who you would reach"
+  end
+
+  test "the empty board keeps a members-only availability from a logged-out visitor", %{
+    conn: conn
+  } do
+    quiet =
+      insert(:activated_user,
+        employment_status: "looking",
+        employment_status_visibility: "members"
+      )
+
+    {:ok, view, _html} = live(conn, ~p"/jobs")
+
+    refute has_element?(view, "#seeker-#{quiet.id}")
+  end
+
+  test "the empty board names the fields members carry", %{conn: conn} do
+    tag = insert(:tag, name: "Elixir", slug: "elixir")
+    user = insert(:activated_user)
+    insert(:user_tag, user: user, tag: tag)
+
+    {:ok, view, html} = live(conn, ~p"/jobs")
+
+    assert html =~ "What members here work on"
+    assert has_element?(view, "a[href='/tags/elixir']", "Elixir")
+  end
+
+  test "the empty board speaks German to a German browser", %{conn: conn} do
+    # Every string on this page is new, and `mix gettext.extract --merge`
+    # fuzzy-fills a new msgid with the translation of whatever it resembles —
+    # so the German render is asserted by name rather than trusted.
+    insert(:activated_user, employment_status: "open", employment_status_visibility: "everyone")
+
+    {:ok, _view, html} =
+      conn
+      |> put_req_header("accept-language", "de-DE,de;q=0.9")
+      |> live(~p"/jobs")
+
+    assert html =~ "Wen Sie hier erreichen"
+    assert html =~ "stünde allein oben"
+    assert html =~ "Offen für Angebote"
+  end
+
+  test "a filter that matches nothing keeps the board, it does not read as empty", %{conn: conn} do
+    # The reach page is for somebody who arrived at the plain board. A visitor
+    # who searched asked a question, and the answer is "nothing matched" plus a
+    # way to clear it — even on a corpus that happens to be empty.
+    {:ok, view, html} = live(conn, ~p"/jobs?#{[q: "elixir"]}")
+
+    assert has_element?(view, "#job-filter-chips")
+    refute html =~ "Yours would be the first"
+    assert html =~ "No matching positions"
+  end
+
+  test "one published posting brings the board back", %{conn: conn} do
+    publish_job!()
+
+    {:ok, view, _html} = live(conn, ~p"/jobs")
+
+    assert has_element?(view, "#job-filter-chips")
+    refute has_element?(view, "[id^='seeker-']")
   end
 
   test "a signed-in member sees the tag- and salary-match chips", %{conn: conn} do
+    publish_job!()
     {conn, user} = create_and_login_user(conn)
     # A stored minimum-salary expectation (#928) offers the "from my expectation"
     # prefill chip; every signed-in member gets the "Matches my tags" chip.
@@ -169,6 +255,7 @@ defmodule VutuvWeb.JobBoardLiveTest do
 
   describe "salary field (#953)" do
     test "everyone gets a minimum-salary input, even logged out", %{conn: conn} do
+      publish_job!()
       {:ok, view, _html} = live(conn, ~p"/jobs")
       assert has_element?(view, "input#job-salary-min[name='salary_min']")
     end
@@ -197,6 +284,7 @@ defmodule VutuvWeb.JobBoardLiveTest do
     end
 
     test "the 'from my expectation' chip never renders the private figure", %{conn: conn} do
+      publish_job!()
       {conn, user} = create_and_login_user(conn)
 
       user
@@ -220,6 +308,7 @@ defmodule VutuvWeb.JobBoardLiveTest do
     end
 
     test "a member saves the current board filters as an alert", %{conn: conn} do
+      publish_job!()
       {conn, user} = create_and_login_user(conn)
       {:ok, view, _html} = live(conn, ~p"/jobs?#{[q: "elixir"]}")
 

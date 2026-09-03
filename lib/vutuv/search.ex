@@ -20,6 +20,7 @@ defmodule Vutuv.Search do
   alias Vutuv.Accounts.User
   alias Vutuv.Repo
   alias Vutuv.SearchText
+  alias Vutuv.Tags
   alias Vutuv.Tags.Tag
 
   @min_chars 3
@@ -586,27 +587,9 @@ defmodule Vutuv.Search do
 
   # How many members carry each found tag - the number that makes a tag chip
   # worth clicking.
-  defp tag_member_counts([]), do: %{}
-
-  defp tag_member_counts(tags) do
-    ids = Enum.map(tags, & &1.id)
-
-    # Count only members the tag page would actually show: activated and not
-    # moderation-hidden (Tag.recommended_users applies the same gate), so the
-    # chip's "N members" can't exceed what clicking it reveals.
-    Repo.all(
-      from(ut in Vutuv.Tags.UserTag,
-        join: u in User,
-        on: u.id == ut.user_id,
-        where:
-          ut.tag_id in ^ids and account_confirmed_row(u) and
-            not account_hidden_row(u),
-        group_by: ut.tag_id,
-        select: {ut.tag_id, count(ut.id)}
-      )
-    )
-    |> Map.new()
-  end
+  # The tag chips' "N members", counted the way the tag page lists: `Vutuv.Tags`
+  # owns that gate, so the chip and the page it leads to cannot drift apart.
+  defp tag_member_counts(tags), do: Tags.listed_member_counts(tags)
 
   # Posts are matched by Postgres full-text search over the body, which is
   # word-exact already; the `tag:` operator (issue #946) additionally filters

@@ -54,6 +54,31 @@ defmodule VutuvWeb.JobPostingTest do
       assert html =~ "Publish"
     end
 
+    test "the tag fields say how many members carry what was typed", %{conn: conn} do
+      tag = insert(:tag, name: "Reach Elixir", slug: "reach_elixir")
+      for _ <- 1..2, do: insert(:user_tag, user: insert(:activated_user), tag: tag)
+
+      {conn, _user} = create_and_login_user(conn)
+      {:ok, view, html} = live(conn, ~p"/jobs/new")
+
+      # Nothing typed yet, so there is nothing to say.
+      refute html =~ "job-tag-reach"
+
+      html =
+        view
+        |> form("#job-posting-form",
+          job_posting: form_params(%{"required_tags" => "Reach Elixir"})
+        )
+        |> render_change()
+
+      assert html =~ "Members carrying these tags:"
+      assert html =~ ~s(data-tag-reach="Reach Elixir")
+      assert has_element?(view, "[data-tag-reach='Reach Elixir']", "2")
+      # A tag nobody here carries says 0 rather than going quiet: that is the
+      # half the poster can act on, by spelling the field the way members do.
+      assert has_element?(view, "[data-tag-reach='Kubernetes']", "0")
+    end
+
     test "publishing without a salary range is rejected inline", %{conn: conn} do
       {conn, user} = create_and_login_user(conn)
       age_account(user)
