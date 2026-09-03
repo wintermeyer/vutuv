@@ -5087,19 +5087,47 @@ defmodule Vutuv.Posts do
   `author_timeline_query/3`. Returns `{entries, total}` (entry shape as in
   `feed_page/2`).
   """
-  def author_posts_page(%User{} = author, viewer, params, period \\ nil, filter \\ :all) do
+  @author_posts_per_page 25
+
+  def author_posts_page(
+        %User{} = author,
+        viewer,
+        params,
+        period \\ nil,
+        filter \\ :all,
+        per_page \\ Vutuv.Pages.max_page_items()
+      ) do
     query = author |> author_timeline_query(viewer, filter) |> scope_period(period)
     total = Repo.aggregate(query, :count)
 
     entries =
       query
       |> order_by([t], desc: t.at, desc: t.ref_id)
-      |> Vutuv.Pages.paginate(params, total)
+      |> Vutuv.Pages.paginate(params, total, per_page)
       |> Repo.all()
       |> author_entries(author)
 
     {entries, total}
   end
+
+  @doc """
+  How many entries one page of the **HTML** archive (`/:slug/posts`) carries.
+
+  Its own number rather than the site-wide `Vutuv.Pages.max_page_items/0`,
+  which is 250: that figure was chosen for listing pages whose item is one row,
+  and here every item is a full post card — a reply nesting the post it answers
+  renders two. On a copy of production a member with 93 entries drew **258
+  cards** and the document came to 3.5 MB (measured 2026-09-03: 136 ms of
+  render locally, about 1.3 s on the production machine). The same page at this
+  size is 292 kB and 21 ms.
+
+  **The agent-format siblings and `/api/2.0` deliberately keep the site-wide
+  250.** Neither document carries a next-page pointer, so shrinking their page
+  would not paginate them, it would silently hand a reader of `/posts.json`
+  a quarter of the archive with a `total` saying otherwise — and a machine
+  fetching a snapshot would rather have it in one piece anyway.
+  """
+  def author_posts_per_page, do: @author_posts_per_page
 
   @organization_posts_per_page 10
 

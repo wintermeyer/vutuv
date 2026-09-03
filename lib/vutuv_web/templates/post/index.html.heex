@@ -5,6 +5,20 @@
       <h1 class="text-2xl font-bold text-slate-800 dark:text-slate-100">
         {gettext("Posts by %{name}", name: full_name(@author))}
         <span :if={@period_label} class="font-normal text-slate-600 dark:text-slate-400">· {@period_label}</span>
+        <%!-- How much there is to page through, shown only once there is more
+        than one page: a pager offering "1 2 3 4" with no total says how far the
+        reader can go but not how far they have to. On a single page the number
+        is already on the screen, so it would only be noise. `%{formatted}`
+        rather than `%{count}`, which ngettext binds to the raw integer. --%>
+        <span
+          :if={@total > @per_page}
+          class="font-normal text-slate-600 dark:text-slate-400"
+          data-archive-total
+        >
+          · {ngettext("%{formatted} post", "%{formatted} posts", @total,
+            formatted: compact_count(@total)
+          )}
+        </span>
       </h1>
       <%!-- The page IS what the feed carries, so the pill belongs here — this
       is the one place it still stands alone, since a page about a single feed
@@ -79,6 +93,8 @@
       {post_filter_empty_text(@post_filter)}
     </p>
 
-    <.pager params={@conn.params} total={@total} />
+    <%!-- `per_page` must be the one the query used, or the page count and the
+    rows disagree; `query` is what keeps the type filter across a page turn. --%>
+    <.pager params={@conn.params} total={@total} per_page={@per_page} query={@page_query} />
   </div>
 </div>
