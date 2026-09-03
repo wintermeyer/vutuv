@@ -3289,6 +3289,16 @@ defmodule Vutuv.Posts do
 
   Costs one decorate pass on a single row, so quoting the arrival is no more
   work than the boolean this replaced plus that pass.
+
+  The entry comes back with the post **as it was written**. A caller that shows
+  or quotes it owes it the reader's own two passes, in this order: their
+  search-and-replace rules (`Vutuv.PostRewrites.rewrite_entry/3`), then their
+  content filters. Two functions discharge that, and a third caller should
+  reach for one of them rather than spelling it again: `for_reader/2` in the
+  feed, which STAMPS the filter answer onto the entry so the row can fold to a
+  placeholder the reader may open, and `VutuvWeb.PostTeaser.quote_for/4`, which
+  REFUSES to quote a muted post at all. Both existing callers once skipped a
+  pass and showed a line no other surface in the app would have shown.
   """
   def newest_source_entry(%User{} = viewer, source, %NaiveDateTime{} = since)
       when source in [:vutuv, :fediverse] do

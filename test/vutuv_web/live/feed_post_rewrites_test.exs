@@ -102,4 +102,44 @@ defmodule VutuvWeb.FeedPostRewritesTest do
              ~s(a[href="/settings/rewrites/%40erika-rewrites?post=#{theirs.id}"])
            )
   end
+
+  test "rewrites a post that arrived live behind the pill, not only one the page load carried",
+       %{conn: conn} do
+    {conn, reader} = create_and_login_user(conn)
+    account = golem_account()
+    follow_remote(reader, account)
+
+    {:ok, _rule} = PostRewrites.create_rule(reader, @account, %{pattern: "^Gepostet in .*$"})
+
+    # The feed is open BEFORE the post exists, so the only way it reaches this
+    # page is the live arrival behind the pill.
+    {:ok, live, _html} = live(conn, ~p"/feed")
+    post = remote_post(account)
+    send(live.pid, {:remote_feed_arrival, %{at: ~N[2000-01-01 00:00:00]}})
+    render(live)
+
+    card = live |> element(~s([data-remote-post="#{post.id}"])) |> render()
+    assert card =~ "Dyson stellt Zahnbürste vor"
+    refute card =~ "Gepostet in"
+  end
+
+  test "rewrites a post that lands while the reader is on another day, before the pill quotes it",
+       %{conn: conn} do
+    {conn, reader} = create_and_login_user(conn)
+    author = insert(:activated_user, username: "erika-travel")
+    insert(:follow, follower: reader, followee: author)
+
+    {:ok, _} = PostRewrites.create_rule(reader, "@erika-travel", %{pattern: " -- Gruß Erika"})
+
+    # A day in the past is on screen, so the arrival is counted behind the pill
+    # and never drawn — the rail's card and the pill quote it from the waiting
+    # list alone.
+    {:ok, live, _html} = live(conn, ~p"/feed?day=1999-01-04")
+    post = insert(:post, user: author, body: "Hallo zusammen -- Gruß Erika")
+    send(live.pid, {:new_post, %{post_id: post.id, author_id: author.id}})
+
+    waiting = render(live)
+    assert waiting =~ "Hallo zusammen"
+    refute waiting =~ "Gruß Erika"
+  end
 end

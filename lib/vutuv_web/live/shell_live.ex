@@ -44,6 +44,7 @@ defmodule VutuvWeb.ShellLive do
   alias Vutuv.DayClock
   alias Vutuv.Organizations
   alias Vutuv.PeopleCounter
+  alias Vutuv.PostRewrites
   alias Vutuv.Posts
   alias Vutuv.Prefs
   alias Vutuv.Social
@@ -240,13 +241,14 @@ defmodule VutuvWeb.ShellLive do
     # The browser tab's teaser (issue #1681). `tab_hidden?` is what the hook
     # reports and starts false, so nothing is spent on a tab that has not said
     # it is in the background; `teaser` holds the open window, `teaser_quiet_until`
-    # the silence after it, and `teaser_filters` this member's compiled content
-    # filters once something is actually quoted.
+    # the silence after it, and `teaser_rules` this member's compiled
+    # search-and-replace rules and content filters once something is actually
+    # quoted.
     |> assign(:current_user, nil)
     |> assign(:tab_hidden?, false)
     |> assign(:teaser, nil)
     |> assign(:teaser_quiet_until, nil)
-    |> assign(:teaser_filters, nil)
+    |> assign(:teaser_rules, nil)
     |> assign(:presence_hidden_ids, MapSet.new())
     |> assign(:messages_count, 0)
     |> assign(:notifications_count, 0)
@@ -799,16 +801,24 @@ defmodule VutuvWeb.ShellLive do
   # the release before this one carries none (the blue/green window), and that
   # skips the teaser rather than quoting whatever happens to sit on top.
   defp open_teaser(socket, source, at) do
-    {socket, filters} = teaser_filters(socket)
     user = socket.assigns.current_user
 
-    frames =
-      case Posts.newest_source_entry(user, source, at) do
-        nil -> []
-        entry -> entry |> PostTeaser.quote_for(filters, user.id) |> PostTeaser.title_frames()
-      end
+    case Posts.newest_source_entry(user, source, at) do
+      nil ->
+        push_teaser(socket, [])
 
-    push_teaser(socket, frames)
+      entry ->
+        # Compiled here and not above the case: an arrival this member's own
+        # sources answer nothing for is the common outcome, and it should not
+        # pay for two queries. `quote_for/4` owns what happens to the entry —
+        # it comes back from the sources as it was written.
+        {socket, {rewrites, filters}} = teaser_rules(socket)
+
+        push_teaser(
+          socket,
+          entry |> PostTeaser.quote_for(rewrites, filters, user.id) |> PostTeaser.title_frames()
+        )
+    end
   end
 
   defp push_teaser(socket, []), do: {:off, arm_quiet(socket, 0)}
@@ -846,15 +856,18 @@ defmodule VutuvWeb.ShellLive do
     )
   end
 
-  # Compiled once per socket, and only when a teaser is actually attempted: the
-  # vast majority of shells never raise one, and the query would otherwise ride
-  # every page load site-wide.
-  defp teaser_filters(%{assigns: %{teaser_filters: nil}} = socket) do
-    compiled = ContentFilters.compile_for(socket.assigns.current_user)
-    {assign(socket, :teaser_filters, compiled), compiled}
+  # This reader's rewrite rules and content filters, compiled once per socket
+  # and only when a teaser is actually quoted: the vast majority of shells never
+  # raise one, and the two queries would otherwise ride every page load
+  # site-wide. One assign for the pair, because they are only ever wanted
+  # together — the quote applies both or neither.
+  defp teaser_rules(%{assigns: %{teaser_rules: nil}} = socket) do
+    user = socket.assigns.current_user
+    compiled = {PostRewrites.compile_for(user), ContentFilters.compile_for(user)}
+    {assign(socket, :teaser_rules, compiled), compiled}
   end
 
-  defp teaser_filters(socket), do: {socket, socket.assigns.teaser_filters}
+  defp teaser_rules(socket), do: {socket, socket.assigns.teaser_rules}
 
   defp arm_quiet(socket, window_ms),
     do: assign(socket, :teaser_quiet_until, now_ms() + window_ms + teaser_cooldown_ms())
