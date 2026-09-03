@@ -2148,20 +2148,54 @@ defmodule VutuvWeb.PostLive.Feed do
   # The queue half of `{:remote_feed_arrival, …}` above: ask this reader's own
   # sources what actually arrived and put it behind the pill.
   #
-  # A member who switched the fediverse half off is told nothing, and neither is
-  # one whose page already holds that entry — the announcement carries no id, so
-  # a burst of deliveries would otherwise queue the same newest post several
-  # times over.
-  defp queue_remote_arrival(%{assigns: %{feed_filter: :vutuv}} = socket, _at), do: socket
-
+  # It asks the sources of the band **the reader is standing on**, which is the
+  # same question `feed_page/2` asks, so the door cannot answer differently from
+  # the timeline it feeds. It used to ask a hard-wired `:fediverse` — and the
+  # announcement is sent for four kinds of write, two of which are vutuv-half
+  # entries: a followed account boosting a **member's** post
+  # (`feed_remote_boosts(only: :local)`, whose own comment in `Fediverse` says
+  # so) and a member here passing a cached post or reply on. For those the door
+  # looked in the wrong place, found nothing and said nothing — no pill, no
+  # card, no error, until the next page load — and on the vutuv half it did not
+  # look at all, which is where both of them belong.
+  #
+  # "My posts" is the one narrowing that needs no query: the announcement is
+  # only ever sent for somebody else's write, and that view holds the reader's
+  # own posts alone.
+  #
+  # A reader whose page already holds the entry is told nothing either — the
+  # announcement carries no id, so a burst of deliveries would otherwise queue
+  # the same newest post several times over.
   defp queue_remote_arrival(socket, at) do
-    entry = Posts.newest_source_entry(socket.assigns.current_user, :fediverse, at)
+    case effective_filter(socket) do
+      :own ->
+        socket
 
-    cond do
-      is_nil(entry) -> socket
-      known_entry?(socket, entry) -> socket
-      true -> place_arrival(socket, for_reader(entry, socket))
+      filter ->
+        entry = Posts.newest_source_entry(socket.assigns.current_user, filter, at)
+
+        cond do
+          is_nil(entry) -> socket
+          known_entry?(socket, entry) -> socket
+          true -> place_arrival(socket, decorate_arrival(entry, socket))
+        end
     end
+  end
+
+  # What an arriving entry still needs, which is not the same for the two kinds
+  # this door can now produce. A cached post or reply from another network wants
+  # the reader's own passes and nothing else — it has no author here, no thread
+  # and no engagement of ours. A **member's** post, carried here by a followed
+  # account's boost, draws the local card and therefore needs everything a local
+  # arrival needs: `decorate/2`, the same one `insert_entry/3`'s doors use.
+  #
+  # Not a nicety. The card reads `entry.engagement` with dot access, so the
+  # missing key raises inside the render instead of degrading — which is what
+  # this door did the moment it could reach a boosted member post at all.
+  defp decorate_arrival(entry, socket) do
+    if Posts.remote_feed_entry?(entry),
+      do: for_reader(entry, socket),
+      else: decorate(entry, socket)
   end
 
   # Where the arrival goes, which is the question `insert_entry/3` asks of every
