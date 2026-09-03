@@ -17,6 +17,7 @@ defmodule VutuvWeb.OrganizationLive.Domains do
   alias Vutuv.Organizations
   alias VutuvWeb.Live.InitAssigns
   alias VutuvWeb.OrganizationLive.ManageGate
+  alias VutuvWeb.RateLimit
   alias VutuvWeb.VerificationComponents
 
   @impl true
@@ -41,6 +42,26 @@ defmodule VutuvWeb.OrganizationLive.Domains do
 
       {:refused, socket} ->
         {:ok, socket}
+    end
+  end
+
+  defp verify_domain(socket, organization, id) do
+    case Organizations.get_domain(organization, id) do
+      nil ->
+        {:noreply, socket}
+
+      domain ->
+        case Organizations.check_domain(organization, domain) do
+          {:ok, _organization} ->
+            {:noreply,
+             socket
+             |> forget_report(id)
+             |> load_domains()
+             |> put_flash(:info, gettext("Domain verified."))}
+
+          {:error, report} ->
+            {:noreply, put_report(socket, id, report)}
+        end
     end
   end
 
@@ -102,22 +123,13 @@ defmodule VutuvWeb.OrganizationLive.Domains do
   def handle_event("verify", %{"id" => id}, socket) do
     organization = socket.assigns.organization
 
-    case Organizations.get_domain(organization, id) do
-      nil ->
-        {:noreply, socket}
-
-      domain ->
-        case Organizations.check_domain(organization, domain) do
-          {:ok, _organization} ->
-            {:noreply,
-             socket
-             |> forget_report(id)
-             |> load_domains()
-             |> put_flash(:info, gettext("Domain verified."))}
-
-          {:error, report} ->
-            {:noreply, put_report(socket, id, report)}
-        end
+    # Each press makes this server fetch or query a host somebody typed, and the
+    # domain can be swapped between presses for nothing — the same shape the
+    # link-verification budget exists for, reached from a socket instead.
+    if RateLimit.check_link_verify(socket.assigns.current_user) == :rate_limited do
+      {:noreply, put_flash(socket, :error, gettext("Too many attempts. Please try again later."))}
+    else
+      verify_domain(socket, organization, id)
     end
   end
 

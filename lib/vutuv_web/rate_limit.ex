@@ -163,6 +163,17 @@ defmodule VutuvWeb.RateLimit do
     check(conn, :link_verify, user.id, limit: @probe_limit, window_ms: @probe_window_ms)
   end
 
+  @doc """
+  The socket-side twin, for the organization pages that press the very same
+  check over a LiveView (`Organizations.check_domain/2` reaches the same
+  `WebVerification.dns_check/4` and `well_known_check/4`).
+
+  It shares the bucket rather than taking one of its own, because it is the same
+  act — this server fetching or querying a host somebody typed — and keyed on
+  the member alone, since a LiveView has no conn to read a client address from.
+  """
+  def check_link_verify(user), do: check_link_verify(nil, user)
+
   defp identity_keys(_event, nil), do: []
   defp identity_keys(event, extra), do: [{event, :id, hash_identity(extra)}]
 

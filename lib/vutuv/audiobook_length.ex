@@ -51,6 +51,20 @@ defmodule Vutuv.AudiobookLength do
   # length attached — so it is filtered out rather than trusted.
   @radio_play ~r/hörspiel/i
 
+  # 64 KB of answer, and bounded runs inside it. Measured on a body of opening
+  # `<record>` tags with no closer, the shape that makes each lazy run expand to
+  # the end of the subject before failing: 200 KB cost **13.6 s** unbounded and
+  # 7.4 s bounded at 65535, so the answer cap is the lever here, exactly as in
+  # `Vutuv.RemoteHtml`. This runs on a background task against a fixed catalogue
+  # host, so what it costs is a pinned worker rather than request latency — but
+  # the host is config-overridable and nothing else bounded this.
+  #
+  # A real answer is untouched: five records parse in 10 us either way.
+  @max_answer_bytes 64 * 1024
+  @field_body 8_192
+
+  @record ~r/<(?:\w+:)?record\b[^>]{0,1024}>.{0,#{@field_body}}?<\/(?:\w+:)?record>/s
+
   @doc "Where the SRU lookup goes; nil/blank switches the feature off."
   def endpoint, do: Application.get_env(:vutuv, :dnb_sru_url, "https://services.dnb.de/sru/dnb")
 
@@ -166,25 +180,44 @@ defmodule Vutuv.AudiobookLength do
     |> Keyword.merge(Application.get_env(:vutuv, @req_options_key, []))
     |> Req.get()
     |> case do
-      {:ok, %Req.Response{status: 200, body: xml}} when is_binary(xml) -> {:ok, xml}
+      {:ok, %Req.Response{status: 200, body: xml}} when is_binary(xml) -> {:ok, clamp(xml)}
       _other -> :error
     end
   end
 
+  # An SRU answer for a handful of records is a few hundred bytes (five MARC
+  # records measure 455), so 64 KB is a hundred times a real one — and it is the
+  # only thing bounding the regexes below, since the fetch above reads whatever
+  # arrives. A catalogue that answers with megabytes is not one we can use.
+  #
+  # Bytes, and `String.byte_slice/3` so the cut lands on a codepoint boundary;
+  # the guard skips the copy for every real answer.
+  defp clamp(xml) when byte_size(xml) <= @max_answer_bytes, do: xml
+  defp clamp(xml), do: String.byte_slice(xml, 0, @max_answer_bytes)
+
   # One record out of an SRU answer is a handful of MARC fields, so these read
   # the XML with targeted regexes rather than dragging in a parser: a miss
   # yields nil, the same answer as "the record does not say".
+  # Built per tag/code, so they carry the caller's literal — the values are our
+  # own MARC constants ("300", "a"), never anything a catalogue sends.
+  defp datafield_regex(tag) do
+    ~r/<(?:\w+:)?datafield[^>]{0,1024}tag="#{tag}".{0,#{@field_body}}?<\/(?:\w+:)?datafield>/s
+  end
+
+  defp subfield_regex(code) do
+    ~r/<(?:\w+:)?subfield[^>]{0,1024}code="#{code}">([^<]{0,#{@field_body}})</
+  end
+
   defp records(xml) do
-    Regex.scan(~r{<(?:\w+:)?record\b.*?</(?:\w+:)?record>}s, xml) |> Enum.map(&hd/1)
+    Regex.scan(@record, xml) |> Enum.map(&hd/1)
   end
 
   defp record_minutes(nil), do: nil
   defp record_minutes(record), do: record |> subfield("300", "a") |> parse_minutes()
 
   defp subfield(record, tag, code) do
-    with [field] <-
-           Regex.run(~r{<(?:\w+:)?datafield[^>]*tag="#{tag}".*?</(?:\w+:)?datafield>}s, record),
-         [_match, value] <- Regex.run(~r{<(?:\w+:)?subfield[^>]*code="#{code}">([^<]*)<}, field) do
+    with [field] <- Regex.run(datafield_regex(tag), record),
+         [_match, value] <- Regex.run(subfield_regex(code), field) do
       value
     else
       _nothing -> nil
