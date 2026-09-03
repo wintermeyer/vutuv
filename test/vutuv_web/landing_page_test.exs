@@ -42,21 +42,28 @@ defmodule VutuvWeb.LandingPageTest do
   end
 
   describe "the landing page" do
-    # The three claims beside the quote, both halves of each: whoever agrees that
-    # LinkedIn is annoying wants to know what they have to retype, how it feels,
-    # and what it will cost them later. Asserted as the rendered German literals
-    # for the reason the whole file renders in German — an untranslated or
-    # fuzzy-filled msgstr shows up perfectly in an English render, and the
-    # short ones ("Schnell.") are the likeliest to be fuzzy-matched.
+    # The three claims beside the quote: whoever agrees that LinkedIn is
+    # annoying wants to know what they have to retype, how it feels, and what it
+    # will cost them later. Asserted as the rendered German literals for the
+    # reason the whole file renders in German — an untranslated or fuzzy-filled
+    # msgstr shows up perfectly in an English render, and the short ones
+    # ("Schnell.") are the likeliest to be fuzzy-matched.
+    #
+    # Two of them carry a reason; "Schnell." does not, since its own only
+    # restated it. Both spellings are refused below because the way that
+    # sentence would come back is the English one: an empty `msgstr` reads as
+    # untranslated, and gettext then renders the msgid on the German page.
     test "the hero lists what a LinkedIn refugee gets", %{conn: conn} do
       html = landing_de(conn)
 
       assert html =~ "Einfacher Profilimport."
       assert html =~ "Ihr LinkedIn-Profil kann mitkommen."
       assert html =~ "Schnell."
-      assert html =~ "vutuv ist einfach rattenschnell."
       assert html =~ "Keine bezahlten Premium-Accounts."
       assert html =~ "Das will doch eh keiner."
+
+      refute html =~ "rattenschnell"
+      refute html =~ "ridiculously fast"
 
       # Deliberately statements, not links: /import/linkedin needs an account,
       # so a logged-out click would trade the sign-up form for the login page.
