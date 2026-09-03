@@ -60,6 +60,11 @@ defmodule VutuvWeb.ShellLive do
   alias VutuvWeb.PostTeaser
   alias VutuvWeb.Presence
 
+  # The half of an unread badge's placement that every counted item shares: the
+  # corner it hangs from and the ring that lifts it off whatever is behind. Read
+  # by `count_badge_class/1`, which adds the one thing that differs.
+  @count_badge_base "absolute -top-0.5 ring-2 ring-white dark:ring-slate-900"
+
   # How long one browser-tab frame really stands (issue #1681), which is what
   # the server's window has to be measured in — it is the only thing deciding
   # whether a second arrival still reaches a running animation as a count.
@@ -418,8 +423,31 @@ defmodule VutuvWeb.ShellLive do
   # `inline-flex` and a gap because the Feed item carries a badge beside its
   # word: a text link would put the pill on the text baseline, half a line below
   # the word's centre.
+  # `h-10` and not `py-2`, so a worded item is the same 40px box the icon
+  # buttons beside it are. That is what lets ONE badge offset serve the whole
+  # bar (`count_badge_class/1`): a badge is positioned from its item's top edge,
+  # so two items of different heights put their badges on two different lines —
+  # which is exactly how the Feed count came to sit 4px above the bell's. Every
+  # counted thing up here is now 40px tall, hung from the same corner, on one
+  # line. `relative` is what the badge hangs from.
   defp nav_link_class(active?),
-    do: ["inline-flex items-center gap-1.5 rounded-md px-3 py-2", nav_link_tone(active?)]
+    do: ["relative inline-flex h-10 items-center rounded-md px-3", nav_link_tone(active?)]
+
+  # Where an unread count hangs, for every item in the top bar and for the phone
+  # tab bar's glyphs — one definition, because four call sites spelling their own
+  # offsets is how they drifted apart in the first place. The vertical half is
+  # shared and is the whole point: same box height, same `-top-0.5`, one line.
+  #
+  # Only the horizontal differs, and that is the item's shape talking rather
+  # than a preference. A glyph is 24px inside a 40px box, so 8px of slack sits
+  # under a badge at `-right-0.5`; a word fills its pill, so the same offset put
+  # the badge on the "d" of "Feed" and cut it. A worded item therefore hangs its
+  # badge clear of the last letter, and the nav's own `gap-3` carries the
+  # clearance — measured: 2px to the word, 4px to the next item. Never buy that
+  # room with padding on the item: the width would change the moment somebody
+  # posted, and every item to its right would shift.
+  defp count_badge_class(:glyph), do: @count_badge_base <> " -right-0.5"
+  defp count_badge_class(:word), do: @count_badge_base <> " -right-2"
 
   defp nav_link_tone(true),
     do: "bg-brand-50 font-semibold text-brand-700 dark:bg-brand-900/40 dark:text-brand-100"
@@ -1241,7 +1269,7 @@ defmodule VutuvWeb.ShellLive do
             <nav
               aria-label={gettext("Main navigation")}
               data-nav-bar
-              class="hidden items-center gap-1 text-sm font-medium md:flex"
+              class="hidden items-center gap-3 text-sm font-medium md:flex"
             >
               <.link
                 :if={@user_id}
@@ -1253,16 +1281,22 @@ defmodule VutuvWeb.ShellLive do
               >
                 {gettext("Feed")}
                 <%!-- How much arrived while the member was on this page or any
-                other, live over PubSub — the bell's badge one nav item over. The
-                digits are a glyph, so the sentence beside them is what a screen
-                reader gets ("Feed, 3 new posts in your feed") and the pill
-                itself is hidden from it: an `aria-label` on the link would have
-                replaced the visible word "Feed" instead of adding to it. --%>
+                other, live over PubSub — the bell's badge one nav item over,
+                and worn the same way: over the item's top-right corner rather
+                than inline after the word. An unread count is one shape across
+                the chrome, so the reader learns it once; a second, larger pill
+                sitting in the text flow also widened the item every time
+                something arrived. Where it hangs, and why the nav's gap carries
+                its clearance, is in `nav_link_class/1`. The digits are a glyph, so the sentence
+                beside them is what a screen reader gets ("Feed, 3 new posts in
+                your feed") and the badge itself is hidden from it: an
+                `aria-label` on the link would have replaced the visible word
+                "Feed" instead of adding to it. --%>
                 <span :if={@feed_count > 0} class="sr-only">
                   {feed_new_label(@feed_count, @feed_cap)}
                 </span>
                 <span :if={@feed_count > 0} aria-hidden="true">
-                  <.count_badge count={@feed_count} cap={@feed_cap} />
+                  <.count_badge count={@feed_count} cap={@feed_cap} class={count_badge_class(:word)} />
                 </span>
               </.link>
               <%!-- An explicit "Profile" item makes the member's own profile a
@@ -1417,7 +1451,7 @@ defmodule VutuvWeb.ShellLive do
                 <.icon_envelope />
                 <.count_badge
                   count={@messages_count}
-                  class="absolute -right-0.5 -top-0.5 ring-2 ring-white dark:ring-slate-900"
+                  class={count_badge_class(:glyph)}
                 />
               </.link>
               <.link
@@ -1429,7 +1463,7 @@ defmodule VutuvWeb.ShellLive do
                 <.icon_bell />
                 <.count_badge
                   count={@notifications_count}
-                  class="absolute -right-0.5 -top-0.5 ring-2 ring-white dark:ring-slate-900"
+                  class={count_badge_class(:glyph)}
                 />
               </.link>
               <%!-- The avatar opens the account menu (a native <details data-menu>,
@@ -1683,7 +1717,7 @@ defmodule VutuvWeb.ShellLive do
         <.count_badge
           count={@count}
           cap={@cap}
-          class="absolute -right-0.5 -top-0.5 ring-2 ring-white dark:ring-slate-900"
+          class={count_badge_class(:glyph)}
         />
       </span>
       <span class="text-[10px]">{@label}</span>

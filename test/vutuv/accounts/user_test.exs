@@ -442,6 +442,51 @@ defmodule Vutuv.Accounts.UserTest do
     end
   end
 
+  describe "preferred workplace (issue #928)" do
+    # Since 2026-09-03, for the reason the visibility default above gives.
+    test "defaults to all three" do
+      assert %User{}.desired_workplace_types == ~w(onsite hybrid remote)
+    end
+
+    test "registration keeps the default instead of clearing it" do
+      changeset = User.registration_changeset(%User{}, @valid_attrs)
+
+      assert Ecto.Changeset.get_field(changeset, :desired_workplace_types) ==
+               User.workplace_type_values()
+    end
+
+    # A stored member, because this is the case a guard on "is the row stored"
+    # cannot see: nearly every member's status is blank, so a clearing rule
+    # keyed on that value fires on every save — a nickname, a locale, a
+    # LinkedIn import — and takes the default with it on the way past.
+    test "an unrelated save leaves a stored member's preference alone" do
+      user = insert(:user)
+
+      changeset = User.changeset(user, %{"nickname" => "nick"})
+
+      assert Ecto.Changeset.get_field(changeset, :desired_workplace_types) ==
+               User.workplace_type_values()
+
+      refute Ecto.Changeset.get_change(changeset, :desired_workplace_types)
+    end
+
+    test "the preference is cleared once the status goes blank" do
+      user = %User{employment_status: "looking", desired_workplace_types: ["remote"]}
+
+      changeset = User.changeset(user, %{"employment_status" => ""})
+
+      assert Ecto.Changeset.get_field(changeset, :desired_workplace_types) == []
+    end
+
+    # A preference ticked with no status to carry it is dropped too, so the
+    # column never holds an answer the profile has no way to show.
+    test "a preference submitted without a status is dropped" do
+      changeset = User.changeset(%User{}, %{"desired_workplace_types" => ["remote"]})
+
+      assert Ecto.Changeset.get_field(changeset, :desired_workplace_types) == []
+    end
+  end
+
   describe "salary expectation (issue #928)" do
     defp salary_changeset(attrs) do
       User.changeset(%User{}, Map.merge(%{"first_name" => "first_name"}, attrs))

@@ -1445,8 +1445,25 @@ defmodule Vutuv.Accounts.User do
   # member back at "not open to work" advertises no workplace form either. Clear
   # it rather than leave a stale value that the next status change would
   # silently resurrect — and that the hidden form panel would keep resubmitting.
+  #
+  # Only when this write actually touched one of the two, like every other
+  # derived step in this pipeline. Firing on the *value* instead fired on every
+  # write, and since a fresh account arrives with a nil status that meant every
+  # insert stored `[]` — so the schema's own default (all three since
+  # 2026-09-03) reached no row at all, and the welcome window, where all but a
+  # handful of members meet this question once, offered three empty boxes to
+  # somebody who had just said they were looking. A blank status is the state
+  # nearly every member is in, so any unrelated save (a nickname, a locale, a
+  # LinkedIn import) wiped the default again on the way past.
+  #
+  # Nothing reads the column while the status is nil — the badge renders on the
+  # status, the agent docs and the job board gate on it — so the default sitting
+  # there unread costs nothing and is what the member finds ticked the moment
+  # they pick a status.
   defp clear_workplace_without_status(changeset) do
-    if get_field(changeset, :employment_status) in [nil, ""] do
+    if (changed?(changeset, :employment_status) or
+          changed?(changeset, :desired_workplace_types)) and
+         get_field(changeset, :employment_status) in [nil, ""] do
       put_change(changeset, :desired_workplace_types, [])
     else
       changeset
