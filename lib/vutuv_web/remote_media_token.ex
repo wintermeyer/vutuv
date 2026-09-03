@@ -161,6 +161,26 @@ defmodule VutuvWeb.RemoteMediaToken do
   def post_image_viewer(_token, _image_token), do: nil
 
   @doc """
+  The same capability for a post's **clip** (issue #1915): keyed on the video's
+  URL token, so the one capability opens every file of it — the renditions the
+  app's player asks for and the cover — as the member it was minted for.
+  """
+  def post_video_query(video_token, user_id, signed_at \\ bucket())
+      when is_binary(video_token) and is_binary(user_id),
+      do: sign_query({:post_video, video_token, user_id}, signed_at)
+
+  @doc "The id of the member `token` was minted for on exactly this clip, or `nil`."
+  def post_video_viewer(token, video_token)
+      when is_binary(token) and is_binary(video_token) do
+    case verify(token) do
+      {:ok, {:post_video, ^video_token, user_id}} -> user_id
+      _other -> nil
+    end
+  end
+
+  def post_video_viewer(_token, _video_token), do: nil
+
+  @doc """
   The same for a photograph cached from another network, pinned to the stored
   file the way `avatar_query/3` is: a picture the gate rejects and re-fetches
   stops answering at its old URL.

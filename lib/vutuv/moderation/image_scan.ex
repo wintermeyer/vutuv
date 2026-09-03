@@ -26,10 +26,13 @@ defmodule Vutuv.Moderation.ImageScan do
   # website an organization page names. They are the kinds with **no owner**:
   # nobody here uploaded them, so `owner_user_id` is nil and a rejection
   # notifies nobody — there is no member whose content was removed.
+  #
+  # `post_video_frame` is one still of a post's clip (issue #1908): a clip is
+  # judged frame by frame, and one refused frame refuses the whole clip.
   @kinds ~w(avatar cover post_image job_posting_image organization_image
             url_screenshot post_screenshot organization_screenshot review_cover
             qualification_document job_reference_document remote_post_image
-            remote_avatar)
+            remote_avatar post_video_frame)
   @statuses ~w(pending scanning approved rejected canceled)
   @open_statuses ~w(pending scanning)
 

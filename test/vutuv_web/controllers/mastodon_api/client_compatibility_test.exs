@@ -51,13 +51,16 @@ defmodule VutuvWeb.MastodonApi.ClientCompatibilityTest do
       assert media["supported_mime_types"] != []
       assert "image/jpeg" in media["supported_mime_types"]
 
-      # Derived, so an installation whose libvips decodes HEIC advertises it.
-      expected =
+      # Derived, so an installation whose libvips decodes HEIC advertises it —
+      # and the clip containers follow only where ffmpeg is there (issue #1915).
+      images =
         PostImageStore.extension_whitelist()
         |> Enum.map(&MIME.from_path("x" <> &1))
         |> Enum.uniq()
 
-      assert media["supported_mime_types"] == expected
+      videos = if Vutuv.Videos.enabled?(), do: Vutuv.Videos.mime_types(), else: []
+
+      assert media["supported_mime_types"] == images ++ videos
       assert media["image_size_limit"] == Posts.max_image_filesize()
       assert media["image_matrix_limit"] > 0
     end

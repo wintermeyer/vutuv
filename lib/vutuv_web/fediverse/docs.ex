@@ -33,6 +33,7 @@ defmodule VutuvWeb.Fediverse.Docs do
   alias Vutuv.Posts.PostRemoteReply
   alias Vutuv.Posts.PostReply
   alias Vutuv.Posts.PostReview
+  alias Vutuv.Posts.PostVideo
   alias Vutuv.ReviewCover
   alias Vutuv.Tags.MatchKey
   alias Vutuv.Tags.Tag
@@ -1114,6 +1115,11 @@ defmodule VutuvWeb.Fediverse.Docs do
   # servable through the authorizing proxy — so their URLs can ride along.
   # A released review cover rides along as an attachment too — a public
   # post's cover is publicly servable through the authorizing proxy.
+  #
+  # A photo carries its alt text as `name` and its size, the way Mastodon's
+  # own attachments do (issue #1913): a receiving server lays the card out from
+  # `width`/`height` before the bytes arrive, and the description is the only
+  # thing that makes the picture readable to somebody who cannot see it.
   defp put_attachments(note, post) do
     attachments =
       Enum.map(images(post), fn image ->
@@ -1122,13 +1128,56 @@ defmodule VutuvWeb.Fediverse.Docs do
           "mediaType" => "image/avif",
           "url" => base() <> PostImage.url(image, "large")
         }
-      end) ++ cover_attachments(post)
+        |> put_name(image.alt)
+        |> put_size(image.width, image.height)
+      end) ++ video_attachments(post) ++ cover_attachments(post)
 
     case attachments do
       [] -> note
       attachments -> Map.put(note, "attachment", attachments)
     end
   end
+
+  # The clip (issue #1913): exactly one `Document`, and it names the **H.264**
+  # file — the one profile Mastodon copies without re-encoding; anything else
+  # costs every receiving server a full transcode, and the servers that do not
+  # transcode hand the raw file to the reader's browser. `duration` is the
+  # ISO 8601 spelling, and `icon` the cover as JPEG for the servers that use
+  # it as the poster. The AV1 and 360p files stay ours: an attachment has one
+  # `url`, and the fallback here is what plays everywhere.
+  defp video_attachments(%Post{video: %PostVideo{} = video}) do
+    if PostVideo.ready?(video) do
+      [
+        %{
+          "type" => "Document",
+          "mediaType" => "video/mp4",
+          "url" => base() <> PostVideo.url(video, "h264.mp4"),
+          "duration" => PostVideo.iso8601_duration(video),
+          "icon" => %{
+            "type" => "Image",
+            "mediaType" => "image/jpeg",
+            "url" => base() <> PostVideo.og_url(video)
+          }
+        }
+        |> put_name(video.alt)
+        |> put_size(video.width, video.height)
+      ]
+    else
+      []
+    end
+  end
+
+  defp video_attachments(%Post{}), do: []
+
+  defp put_name(attachment, alt) when is_binary(alt) and alt != "",
+    do: Map.put(attachment, "name", alt)
+
+  defp put_name(attachment, _alt), do: attachment
+
+  defp put_size(attachment, width, height) when is_integer(width) and is_integer(height),
+    do: Map.merge(attachment, %{"width" => width, "height" => height})
+
+  defp put_size(attachment, _width, _height), do: attachment
 
   defp cover_attachments(%Post{review: %PostReview{} = review}) do
     if PostReview.cover_ready?(review) do

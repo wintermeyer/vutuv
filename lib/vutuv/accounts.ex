@@ -841,6 +841,11 @@ defmodule Vutuv.Accounts do
     image_tokens =
       Repo.all(from(i in Vutuv.Posts.PostImage, where: i.user_id == ^user.id, select: i.token))
 
+    # The user's clips (issue #1906): rows cascade, the renditions, stills and
+    # originals on disk do not.
+    video_tokens =
+      Repo.all(from(v in Vutuv.Posts.PostVideo, where: v.user_id == ^user.id, select: v.token))
+
     # The user's job-posting images (issue #932): the rows cascade with the
     # postings/account, but their on-disk files would be orphaned otherwise.
     job_image_tokens = Vutuv.Jobs.image_tokens_for_user(user.id)
@@ -949,6 +954,7 @@ defmodule Vutuv.Accounts do
     if counted_member?(user), do: PeopleCounter.decrement()
 
     Enum.each(image_tokens, &Vutuv.PostImageStore.delete/1)
+    Enum.each(video_tokens, &Vutuv.PostVideoStore.delete/1)
     Enum.each(job_image_tokens, &Vutuv.JobPostingImageStore.delete/1)
     Enum.each(url_ids, &Vutuv.Screenshot.delete/1)
     Enum.each(screenshot_ids, &Vutuv.Screenshot.delete/1)

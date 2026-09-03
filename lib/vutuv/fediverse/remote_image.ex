@@ -56,6 +56,13 @@ defmodule Vutuv.Fediverse.RemoteImage do
     field(:moderation, :string)
     field(:sensitive, :boolean, default: false)
 
+    # A video attachment (issue #1914): the declared type (`nil` for a
+    # picture, as every row before it was) and where its cover is fetched
+    # from — the file at `source_uri` is then the clip, which is never
+    # downloaded and plays straight from the other server.
+    field(:media_type, :string)
+    field(:poster_uri, :string)
+
     # What the download has tried (issue #1803). `Vutuv.Fediverse.MediaRefetcher`
     # is the only writer; see `Vutuv.Fediverse.Media`.
     field(:fetch_failures, :integer, default: 0)
@@ -116,12 +123,32 @@ defmodule Vutuv.Fediverse.RemoteImage do
   """
   def display_state(%__MODULE__{} = image) do
     cond do
-      unavailable?(image) -> :unavailable
-      not released?(image) -> :waiting
-      blurred?(image) -> :sensitive
-      true -> :ready
+      # A clip that came with no cover has nothing to fetch and nothing to
+      # judge: it is playable as it is (issue #1914).
+      video?(image) and is_nil(image.poster_uri) ->
+        if blurred?(image), do: :sensitive, else: :ready
+
+      unavailable?(image) ->
+        :unavailable
+
+      not released?(image) ->
+        :waiting
+
+      blurred?(image) ->
+        :sensitive
+
+      true ->
+        :ready
     end
   end
+
+  @doc "Whether this attachment is a clip rather than a picture (issue #1914)."
+  def video?(%__MODULE__{media_type: type}),
+    do: is_binary(type) and String.starts_with?(type, "video/")
+
+  @doc "The URL the fetch downloads: a picture itself, a clip's cover (or nothing)."
+  def fetch_uri(%__MODULE__{} = image),
+    do: if(video?(image), do: image.poster_uri, else: image.source_uri)
 
   defp stored?(%__MODULE__{file: file}), do: is_binary(file) and file != ""
 
@@ -146,13 +173,17 @@ defmodule Vutuv.Fediverse.RemoteImage do
       :moderation,
       :sensitive,
       :fetch_failures,
-      :fetch_attempted_at
+      :fetch_attempted_at,
+      :media_type,
+      :poster_uri
     ])
     # `source_uri` and the author's `alt` come out of the attachment JSON, and a
     # NUL in either raises on insert (issue #1767).
     |> scrub_nul()
     |> validate_required([:source_uri])
     |> validate_length(:source_uri, max: @max_uri_bytes, count: :bytes)
+    |> validate_length(:poster_uri, max: @max_uri_bytes, count: :bytes)
+    |> validate_length(:media_type, max: 255)
     |> validate_length(:alt, max: @max_alt)
     |> unique_constraint([:remote_post_id, :source_uri])
   end

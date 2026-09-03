@@ -918,6 +918,11 @@ defmodule VutuvWeb.Router do
     # e.g. "feed.avif"; nginx only streams what this controller approves.
     get("/post_images/:token/:version", PostImageController, :show)
 
+    # The authorizing post-video proxy (issue #1912), the same idea for a clip's
+    # renditions and cover; it answers byte ranges itself, which a `<video>`
+    # element needs.
+    get("/post_videos/:token/:file", PostVideoController, :show)
+
     # The authorizing organization-image proxy (logo/cover + description images),
     # like /post_images: a pending or frozen page's images are owner/admin-only.
     get("/organization_images/:token/:version", OrganizationImageController, :show)
@@ -1444,6 +1449,12 @@ defmodule VutuvWeb.Router do
     # POST /posts, swept after a day if left unattached).
     post("/me/post_images", ImageController, :create, assigns: %{api_scope: "posts:write"})
     delete("/me/post_images/:id", ImageController, :delete, assigns: %{api_scope: "posts:write"})
+
+    # Pending post videos (issue #1915): the same shape on a longer clock —
+    # upload, poll until `ready`, attach via video_id in POST /posts.
+    post("/me/post_videos", VideoController, :create, assigns: %{api_scope: "posts:write"})
+    get("/me/post_videos/:id", VideoController, :show, assigns: %{api_scope: "posts:write"})
+    delete("/me/post_videos/:id", VideoController, :delete, assigns: %{api_scope: "posts:write"})
 
     # The social graph: people lists (same doc shape as the public .json
     # pages), the viewer's standing with a member, and follow/unfollow. Vernetzt

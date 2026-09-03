@@ -108,7 +108,7 @@ defmodule Vutuv.FediverseMediaTest do
       assert Enum.all?(images, &(&1.alt == "Ein Zug"))
     end
 
-    test "a video or an audio file is not a picture" do
+    test "an audio file or an undeclared file is not a picture; a video is recorded (issue #1914)" do
       post = cached_post(account())
 
       attachments = [
@@ -117,7 +117,34 @@ defmodule Vutuv.FediverseMediaTest do
         %{"url" => "https://social.example/media/x.jpg"}
       ]
 
-      assert Media.record_attachments(post, attachments, false) == []
+      assert [%RemoteImage{media_type: "video/mp4", poster_uri: nil, file: nil} = clip] =
+               Media.record_attachments(post, attachments, false)
+
+      assert RemoteImage.video?(clip)
+      # Nothing to fetch, nothing to judge: it plays as it is.
+      assert RemoteImage.display_state(clip) == :ready
+      assert Media.fetch_now(clip) == :skip
+      assert Media.due_refetches() == []
+    end
+
+    test "a video's cover is what gets fetched and judged (issue #1914)" do
+      post = cached_post(account())
+
+      attachment =
+        "https://social.example/media/clip.mp4"
+        |> attachment("video/mp4")
+        |> Map.put("icon", %{
+          "type" => "Image",
+          "mediaType" => "image/jpeg",
+          "url" => "https://social.example/media/clip-cover.jpg"
+        })
+
+      assert [%RemoteImage{poster_uri: "https://social.example/media/clip-cover.jpg"} = clip] =
+               Media.record_attachments(post, [attachment], false)
+
+      assert RemoteImage.fetch_uri(clip) == "https://social.example/media/clip-cover.jpg"
+      # With a cover named and none fetched yet, the card waits for the cover.
+      assert RemoteImage.display_state(clip) == :waiting
     end
 
     test "the author's sensitive flag rides along" do

@@ -643,6 +643,23 @@ config :vutuv, :audible_domain, "www.audible.de"
 # through the per-photo download an author switches on (Vutuv.PostImageStore).
 config :vutuv, :post_images, max_filesize: 50_000_000, max_per_post: 10
 
+# Video on posts (issue #1906, Vutuv.Videos). `enabled` is the product switch
+# (an installation without ffmpeg runs with it off — VIDEO_UPLOADS in
+# runtime.exs); the two caps are what the composer and the API announce and
+# refuse against: 500 MB is two minutes of the heaviest setting a phone offers
+# (4K30 HEVC, 1080p60) plus a margin, and two minutes is the length whose
+# 720p rendition stays far under Mastodon's 99 MB attachment limit. `threads`
+# caps every ffmpeg run and `concurrency` how many clips are worked on at once,
+# so a burst of uploads queues instead of taking the server down.
+config :vutuv, :post_videos,
+  enabled: true,
+  max_filesize: 500_000_000,
+  max_duration_seconds: 120,
+  ffmpeg: "ffmpeg",
+  ffprobe: "ffprobe",
+  threads: 4,
+  concurrency: 2
+
 # Job-posting images: same pattern and limits as post images.
 config :vutuv, :job_posting_images, max_filesize: 6_000_000, max_per_post: 10
 

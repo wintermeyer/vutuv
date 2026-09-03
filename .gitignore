@@ -45,6 +45,7 @@ erl_crash.dump
 /avatars
 /covers
 /post_images
+/post_videos
 /review_covers
 /screenshots
 /originals

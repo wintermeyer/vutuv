@@ -144,7 +144,12 @@ defmodule VutuvWeb.Endpoint do
   # +json type) would otherwise consume — VutuvWeb.RawBodyReader keeps a copy
   # for exactly that one path.
   plug(Plug.Parsers,
-    parsers: [:urlencoded, {:multipart, length: 64_000_000}, :json],
+    # 520 MB: the video cap (500 MB, `config :vutuv, :post_videos`) plus the
+    # multipart framing, so a clip a phone app POSTs to the Mastodon API is
+    # not cut off here — nginx's `client_max_body_size` in front has to allow
+    # the same (docs/ADMINS.md). The composer's own uploads travel over the
+    # LiveView socket and never meet this limit.
+    parsers: [:urlencoded, {:multipart, length: 520_000_000}, :json],
     pass: ["*/*"],
     json_decoder: Jason,
     body_reader: {VutuvWeb.RawBodyReader, :read_body, []}

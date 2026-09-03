@@ -4392,7 +4392,7 @@ defmodule Vutuv.Fediverse do
   # photo post). The reader is told there is a picture by seeing it, in the
   # card, in their own language.
   defp picture_only_text(object) do
-    pictures = object["attachment"] |> List.wrap() |> Enum.filter(&Media.image_attachment?/1)
+    pictures = object["attachment"] |> List.wrap() |> Enum.filter(&Media.media_attachment?/1)
     if pictures != [], do: ""
   end
 

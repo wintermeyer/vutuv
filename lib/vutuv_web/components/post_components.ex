@@ -26,6 +26,7 @@ defmodule VutuvWeb.PostComponents do
   import VutuvWeb.FediverseComponents, only: [remote_actor_link: 3]
   import VutuvWeb.UI
   import VutuvWeb.UserHelpers, only: [full_name: 1]
+  import VutuvWeb.VideoComponents, only: [post_video: 1]
 
   alias Phoenix.LiveView.JS
   alias Vutuv.Accounts.User
@@ -48,6 +49,7 @@ defmodule VutuvWeb.PostComponents do
   alias Vutuv.Posts.PostRemoteReply
   alias Vutuv.Posts.PostReview
   alias Vutuv.Posts.PostScreenshot
+  alias Vutuv.Posts.PostVideo
   alias Vutuv.Posts.Screenshots
   alias Vutuv.Profiles.VerifiedLinks
   alias Vutuv.RemoteMedia
@@ -282,6 +284,9 @@ defmodule VutuvWeb.PostComponents do
       |> assign(:permalink, Posts.path(post))
       |> assign(:gallery, gallery)
       |> assign(:inline_media?, inline_media?)
+      # The clip (issue #1906): preloaded by `post_preloads/0`, absent on a
+      # nested parent card's shorter chain — which then simply shows none.
+      |> assign(:video, card_video(post))
       # The authored inline placement owns the media layout: the float-a-square-
       # image and screenshot-beside-the-text automatics stay off when the body
       # embeds pictures itself.
@@ -2421,10 +2426,10 @@ defmodule VutuvWeb.PostComponents do
                   <span aria-hidden="true">⚠</span>{gettext("Cover it again")}
                 </span>
               </summary>
-              <.remote_image picture={picture} alt={image.alt} />
+              <.remote_media image={image} picture={picture} />
             </details>
           <% :ready -> %>
-            <.remote_image picture={RemoteMedia.picture(image)} alt={image.alt} />
+            <.remote_media image={image} picture={RemoteMedia.picture(image)} />
         <% end %>
       </div>
     </div>
@@ -2453,6 +2458,65 @@ defmodule VutuvWeb.PostComponents do
   # the post, so an empty body renders no rail and no empty paragraph, the same
   # as a local photo post.
   defp presence?(text), do: is_binary(text) and String.trim(text) != ""
+
+  # What a released attachment renders as: the picture, or — for a clip
+  # (issue #1914) — the player. One dispatch, so the display-state `case`
+  # above stays about state.
+  attr(:image, RemoteImage, required: true)
+  attr(:picture, :map, required: true, doc: "`Vutuv.RemoteMedia.picture/1` of the image")
+
+  defp remote_media(assigns) do
+    ~H"""
+    <.remote_video :if={RemoteImage.video?(@image)} image={@image} picture={@picture} />
+    <.remote_image :if={not RemoteImage.video?(@image)} picture={@picture} alt={@image.alt} />
+    """
+  end
+
+  # A clip from another network (issue #1914): the cover we fetched and judged
+  # as the poster, the clip itself played straight from its server on a tap —
+  # nothing of it is cached here (up to 99 MB a post on Mastodon), and
+  # `preload="none"` means a reader who does not play it costs the poster and
+  # not a byte more. The play glyph and the sender's sensitive flag are the
+  # same ones a member's own clip and a remote picture wear.
+  attr(:image, RemoteImage, required: true)
+  attr(:picture, :map, required: true)
+
+  defp remote_video(assigns) do
+    poster = if RemoteImage.released?(assigns.image), do: assigns.picture
+    assigns = assign(assigns, :poster, poster && (poster.lite || poster.src))
+
+    ~H"""
+    <figure data-remote-video={@image.id} data-video-figure class="relative">
+      <div class="relative overflow-hidden rounded-lg bg-slate-950">
+        <video
+          controls
+          preload="none"
+          playsinline
+          poster={@poster}
+          src={@image.source_uri}
+          width={@image.width}
+          height={@image.height}
+          aria-label={@image.alt || gettext("Video")}
+          data-video-player
+          class="block max-h-96 w-full"
+        >
+        </video>
+        <span
+          data-video-overlay
+          aria-hidden="true"
+          class="pointer-events-none absolute inset-0 flex items-center justify-center"
+        >
+          <span class="flex h-14 w-14 items-center justify-center rounded-full bg-slate-900/70 text-white shadow-lg">
+            <svg viewBox="0 0 24 24" fill="currentColor" class="ml-1 h-7 w-7" aria-hidden="true">
+              <path d="M8 5.14v13.72a1 1 0 0 0 1.5.86l11-6.86a1 1 0 0 0 0-1.72l-11-6.86A1 1 0 0 0 8 5.14z" />
+            </svg>
+          </span>
+        </span>
+      </div>
+      <figcaption :if={@image.alt} class="sr-only">{@image.alt}</figcaption>
+    </figure>
+    """
+  end
 
   attr(:picture, :map, required: true, doc: "`Vutuv.RemoteMedia.picture/1` of the image")
   attr(:alt, :string, default: nil)
@@ -3810,6 +3874,11 @@ defmodule VutuvWeb.PostComponents do
               <% end %>
             </div>
 
+            <%!-- The clip (issue #1912): the same player in both modes — on the
+            feed card too, since a tap plays it in place and nothing loads
+            before that tap. --%>
+            <.post_video :if={@video} video={@video} />
+
             <%!-- The book/film review card (the post's structured sidecar,
             Vutuv.Posts.PostReview): cover or kind glyph, title, creator, year
             and the shop/IMDb link. Rendered in both modes, outside the clamp,
@@ -4962,6 +5031,11 @@ defmodule VutuvWeb.PostComponents do
            card_assigns.link_screenshot != nil)
     )
   end
+
+  # The post's clip when it is loaded, else nil — never a `NotLoaded` that a
+  # template would trip over.
+  defp card_video(%Post{video: %PostVideo{} = video}), do: video
+  defp card_video(_post), do: nil
 
   # Whether to render the author's amber progress panel. It keys on the
   # post-level flag rather than on the individual pictures, so it cannot

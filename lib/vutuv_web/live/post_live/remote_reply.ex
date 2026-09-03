@@ -30,6 +30,9 @@ defmodule VutuvWeb.PostLive.RemoteReply do
   alias VutuvWeb.Live.InitAssigns
 
   on_mount({VutuvWeb.Live.InitAssigns, :require_login})
+  # The composer here takes a clip; its progress arrives through this hook
+  # (issue #1911).
+  on_mount(VutuvWeb.Live.VideoProgress)
 
   @impl true
   def mount(%{"id" => id}, _session, socket) do

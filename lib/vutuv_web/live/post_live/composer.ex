@@ -79,10 +79,15 @@ defmodule VutuvWeb.PostLive.Composer do
   alias Vutuv.Posts.Post
   alias Vutuv.Posts.PostDraft
   alias Vutuv.Posts.PostImage
+  alias Vutuv.Posts.PostVideo
   alias Vutuv.Prefs
   alias Vutuv.Uploads.Spec
+  alias Vutuv.Videos
   alias VutuvWeb.ErrorHelpers
+  alias VutuvWeb.Live.VideoProgress
   alias VutuvWeb.PostComponents
+
+  import VutuvWeb.VideoComponents, only: [video_tile: 1, stage_line: 1, clock: 1]
 
   @presets ~w(public followers connections only_me custom)
 
@@ -92,6 +97,21 @@ defmodule VutuvWeb.PostLive.Composer do
   # needs a handler for it.
   @impl true
   def update(%{save_draft: true}, socket), do: {:ok, persist_draft(socket)}
+
+  # The clip moved a step (issue #1911): the host LiveView's hook
+  # (`VutuvWeb.Live.VideoProgress`) forwards every `{:post_video, …}` for the
+  # clip this composer registered. A percent is patched in place; a stage,
+  # a verdict or a cover change re-reads the row, which is where the frames
+  # and the strip come from.
+  def update(%{video_event: %{id: id} = summary}, socket) do
+    case socket.assigns[:video] do
+      %PostVideo{id: ^id} = video ->
+        {:ok, assign(socket, :video, Videos.apply_summary(video, summary))}
+
+      _other ->
+        {:ok, socket}
+    end
+  end
 
   def update(assigns, socket) do
     socket =
@@ -168,6 +188,10 @@ defmodule VutuvWeb.PostLive.Composer do
     |> assign(:gallery_open?, false)
     |> assign(:tags_value, tags_value(post))
     |> assign(:images, images)
+    # The clip (issue #1907): an edited post's own, read-only but for its alt
+    # text; a new post's arrives through the upload below.
+    |> assign(:video, post_video(post))
+    |> assign(:video_uploads?, video_uploads?(post))
     # The per-photo settings the composer is editing (issue #1104), keyed by
     # image id. Held in the socket rather than in form fields: the two switches
     # reveal follow-up controls, and an unchecked checkbox submits nothing — so
@@ -217,7 +241,36 @@ defmodule VutuvWeb.PostLive.Composer do
       auto_upload: true,
       progress: &handle_progress/3
     )
+    # One clip per post, up to the installation's cap (the length is checked
+    # after ffprobe, on the server). Always allowed, so the template can rely
+    # on `@uploads.video`; only the picker asks whether the feature is on.
+    |> allow_upload(:video,
+      accept: Videos.extension_whitelist(),
+      max_entries: 1,
+      max_file_size: Videos.max_filesize(),
+      auto_upload: true,
+      progress: &handle_progress/3
+    )
     |> restore_draft()
+  end
+
+  defp post_video(%Post{video: %PostVideo{} = video}), do: video
+  defp post_video(_post), do: nil
+
+  # Whether this composer offers the picker at all: the feature is on, ffmpeg
+  # is there, and this is a new post — a clip is never swapped on an edit.
+  defp video_uploads?(nil), do: Videos.enabled?()
+  defp video_uploads?(_post), do: false
+
+  # Which clip this composer holds, told to the host so its hook forwards that
+  # clip's progress here (`VutuvWeb.Live.VideoProgress`); `nil` withdraws the
+  # registration. Only a new post's composer says so — its hosts carry the
+  # hook — an edited post's clip is done and moves no more.
+  defp assign_video(socket, video) do
+    if socket.assigns.post == nil,
+      do: VideoProgress.register(socket.assigns.id, video && video.id)
+
+    assign(socket, :video, video)
   end
 
   ## Drafts (issue #1148)
@@ -293,6 +346,8 @@ defmodule VutuvWeb.PostLive.Composer do
       |> assign(:body, draft.body)
       |> assign(:tags_value, draft.tags)
       |> assign(:images, images)
+      # Same re-check for the clip: the author's own, still unattached.
+      |> assign_video(Videos.pending_video(assigns.current_user, draft.video_id))
       |> assign(:photos, photo_state_from_draft(draft, images))
       |> assign(:license, PhotoLicense.cast(draft.license || assigns.license))
       |> assign(:language, Post.cast_language(draft.language) || assigns.language)
@@ -369,6 +424,7 @@ defmodule VutuvWeb.PostLive.Composer do
         "license" => assigns.license,
         "language" => assigns.language,
         "image_ids" => Enum.map(assigns.images, & &1.id),
+        "video_id" => assigns.video && assigns.video.id,
         "photos" => Map.new(assigns.photos, fn {id, settings} -> {id, stringify(settings)} end),
         "layout" => assigns.layout,
         "fill?" => assigns.fill?
@@ -681,6 +737,7 @@ defmodule VutuvWeb.PostLive.Composer do
       |> assign(:restored_draft?, false)
       |> adopt_recovered_images(params["image_ids"])
       |> merge_photo_texts(payload["photo"])
+      |> update_video_alt(payload["video"])
       |> sweep_rejected_uploads()
 
     socket =
@@ -912,6 +969,38 @@ defmodule VutuvWeb.PostLive.Composer do
     {:noreply, cancel_upload(socket, :images, ref)}
   end
 
+  def handle_event("cancel-video-upload", %{"ref" => ref}, socket) do
+    {:noreply, cancel_upload(socket, :video, ref)}
+  end
+
+  # The clip goes, files and all — a new post's only; an edited post keeps
+  # its clip, and the button is not offered there.
+  def handle_event("remove-video", _params, socket) do
+    case socket.assigns.video do
+      %PostVideo{post_id: nil} = video -> Videos.delete_pending_video(video)
+      _other -> :ok
+    end
+
+    {:noreply, socket |> assign_video(nil) |> assign(:error, nil) |> schedule_draft_save()}
+  end
+
+  # The author picked a still from the strip as the cover (issue #1909).
+  def handle_event("video-cover", %{"frame" => frame_id}, socket) do
+    case socket.assigns.video do
+      %PostVideo{} = video ->
+        case Videos.choose_cover(video, frame_id) do
+          {:ok, updated} ->
+            {:noreply, assign(socket, :video, %{updated | frames: video.frames})}
+
+          {:error, _} ->
+            {:noreply, assign(socket, :error, gettext("That frame could not be used."))}
+        end
+
+      nil ->
+        {:noreply, socket}
+    end
+  end
+
   # Discarding is undoable (issue #1893). It used to delete the pending rows
   # and their files on the spot, which made a mis-tap final — so it now stashes
   # what was on screen and clears the form, and the notice that follows offers
@@ -1010,9 +1099,92 @@ defmodule VutuvWeb.PostLive.Composer do
       fill: socket.assigns.fill?
     }
 
-    socket.assigns
-    |> save_post(attrs)
-    |> handle_save_result(socket)
+    save_with_video(socket, attrs)
+  end
+
+  # A post with a clip (issue #1910) is created only once the clip is ready;
+  # until then the composer's submission waits as a pending post the feed
+  # shows as a card, and the composer clears as if it had posted. A refused
+  # clip has to be removed first — the text is not lost, the button next to
+  # the tile says so.
+  defp save_with_video(%{assigns: %{video: nil}} = socket, attrs),
+    do: socket.assigns |> save_post(attrs) |> handle_save_result(socket)
+
+  # An edit: the clip stays as it is; its alt text is written on blur by
+  # `update_video_alt/2`, like a new post's.
+  defp save_with_video(%{assigns: %{video: %PostVideo{post_id: post_id}}} = socket, attrs)
+       when is_binary(post_id),
+       do: socket.assigns |> save_post(attrs) |> handle_save_result(socket)
+
+  defp save_with_video(%{assigns: %{video: %PostVideo{} = video}} = socket, attrs) do
+    video = Videos.get_video(video.id) || video
+
+    cond do
+      PostVideo.ready?(video) ->
+        socket.assigns
+        |> save_post(Map.put(attrs, :video_id, video.id))
+        |> handle_save_result(socket)
+
+      PostVideo.refused?(video) ->
+        {:noreply,
+         assign(
+           socket,
+           :error,
+           gettext("Remove the refused video to post the text without it.")
+         )}
+
+      true ->
+        {kind, context} = post_context(socket.assigns)
+        user = socket.assigns.current_user
+
+        case Videos.create_pending_post(user, video, kind, context, attrs) do
+          {:ok, pending} -> handle_pending_result(pending, socket)
+          {:error, reason} -> {:noreply, assign(socket, :error, save_error_message(reason))}
+        end
+    end
+  end
+
+  # Which of the five create paths this composer is, in the vocabulary
+  # `Vutuv.Posts.create_in_context/4` takes — for a post saved now and for one
+  # stored to wait on its clip alike.
+  #
+  # An answer to a reply from another network writes the sidecar that carries
+  # it out to that network and holds the federation gates (issue #1070); an
+  # answer to a followed account's post (issue #1165) is a top-level post with
+  # the same sidecar; a reply is personal even while writing as an organization
+  # (a page cannot answer anything until issue #1336 gives it a reading side),
+  # which is why the organization clause sits below it; and the publisher role
+  # is re-checked inside `create_organization_post/3`, so a withdrawn publisher
+  # cannot publish through a composer they still have open.
+  defp post_context(%{remote_note: %Note{} = note}), do: {"remote_reply", %{note: note}}
+
+  defp post_context(%{remote_post: %RemotePost{} = post}),
+    do: {"remote_post_reply", %{remote_post: post}}
+
+  defp post_context(%{parent: %Post{} = parent}), do: {"reply", %{parent: parent}}
+
+  defp post_context(%{acting_as: %Organization{} = organization}),
+    do: {"organization_post", %{organization: organization}}
+
+  defp post_context(_assigns), do: {"post", %{}}
+
+  # The submission is stored; the composer behaves as after a post. The feed
+  # draws the waiting card from the broadcast the store just sent, and every
+  # other host goes where it would have gone — the app bar's chip leads back
+  # to the feed, where the card is.
+  defp handle_pending_result(_pending, socket) do
+    socket = drop_draft(socket)
+
+    cond do
+      socket.assigns[:remote_note] || socket.assigns[:remote_post] ->
+        {:noreply, push_navigate(socket, to: ~p"/feed")}
+
+      socket.assigns.parent ->
+        {:noreply, push_navigate(socket, to: Posts.path(socket.assigns.parent))}
+
+      true ->
+        {:noreply, socket |> reset_composer() |> assign(:pending_notice?, true)}
+    end
   end
 
   # Anything the author has already put into the composer by hand. Attached
@@ -1020,7 +1192,9 @@ defmodule VutuvWeb.PostLive.Composer do
   # back through `adopt_recovered_images/2`, so a photos-only draft is worth
   # re-opening the feed composer for.
   defp drafting?(assigns),
-    do: assigns.body != "" or assigns.tags_value != "" or assigns.images != []
+    do:
+      assigns.body != "" or assigns.tags_value != "" or assigns.images != [] or
+        assigns.video != nil
 
   # Re-adopts photos LiveView form recovery hands back after a reconnect: the
   # composer's socket state died with the old socket, but the pending rows
@@ -1096,33 +1270,13 @@ defmodule VutuvWeb.PostLive.Composer do
   # LiveView — and the organization page's composer is that same shape again.
   defp feed_composer?(assigns), do: assigns.host == :feed
 
-  # Answering a reply from another network goes through its own context function:
-  # it writes the sidecar that carries the answer out to that network, and it
-  # holds the federation gates (issue #1070).
-  defp save_post(%{post: nil, remote_note: %Note{} = note, current_user: author}, attrs),
-    do: Posts.create_remote_reply(author, note, attrs)
+  # A new post takes one of the five create paths (`post_context/1`); an edit
+  # is an update.
+  defp save_post(%{post: nil, current_user: author} = assigns, attrs) do
+    {kind, context} = post_context(assigns)
+    Posts.create_in_context(author, kind, context, attrs)
+  end
 
-  # Answering a post by a followed account (issue #1165). Not a reply to
-  # anything here — the thing answered lives on another server — so what this
-  # creates is a top-level post carrying the same sidecar.
-  defp save_post(%{post: nil, remote_post: %RemotePost{} = post, current_user: author}, attrs),
-    do: Posts.create_remote_post_reply(author, post, attrs)
-
-  defp save_post(%{post: nil, parent: %Post{} = parent, current_user: author}, attrs),
-    do: Posts.create_reply(author, parent, attrs)
-
-  # Writing as an organization (issue #1335). Below the reply clauses on
-  # purpose: a reply is always personal, because an organization cannot answer
-  # anything until issue #1336 gives it a reading side. The role is re-checked
-  # inside `create_organization_post/3`, so a withdrawn publisher cannot publish
-  # through a composer they still have open.
-  defp save_post(
-         %{post: nil, acting_as: %Organization{} = organization, current_user: author},
-         attrs
-       ),
-       do: Posts.create_organization_post(organization, author, attrs)
-
-  defp save_post(%{post: nil, current_user: author}, attrs), do: Posts.create_post(author, attrs)
   defp save_post(%{post: post}, attrs), do: Posts.update_post(post, attrs)
 
   defp handle_save_result({:ok, post}, socket) do
@@ -1181,6 +1335,7 @@ defmodule VutuvWeb.PostLive.Composer do
       body: socket.assigns.body,
       tags_value: socket.assigns.tags_value,
       images: socket.assigns.images,
+      video: socket.assigns.video,
       photos: socket.assigns.photos,
       layout: socket.assigns.layout,
       fill?: socket.assigns.fill?,
@@ -1198,6 +1353,7 @@ defmodule VutuvWeb.PostLive.Composer do
     |> update(:editor_seed, &(&1 + 1))
     |> assign(:tags_value, stash.tags_value)
     |> assign(:images, stash.images)
+    |> assign_video(stash.video)
     |> assign(:photos, stash.photos)
     |> assign(:layout, stash.layout)
     |> assign(:fill?, stash.fill?)
@@ -1218,6 +1374,7 @@ defmodule VutuvWeb.PostLive.Composer do
     |> update(:editor_seed, &(&1 + 1))
     |> assign(:tags_value, "")
     |> assign(:images, [])
+    |> assign_video(nil)
     |> assign(:photos, %{})
     |> assign(:open_photo, nil)
     |> assign(:layout, nil)
@@ -1245,6 +1402,9 @@ defmodule VutuvWeb.PostLive.Composer do
 
   defp save_error_message(:invalid_images),
     do: gettext("One of the images could not be attached.")
+
+  defp save_error_message(:invalid_video),
+    do: gettext("The video could not be attached.")
 
   defp save_error_message(reason) when reason in [:restricted, :not_visible],
     do: gettext("You can no longer reply to this post.")
@@ -1287,31 +1447,80 @@ defmodule VutuvWeb.PostLive.Composer do
   # transient upload row, so a multi-photo selection looked like files just
   # vanished. Cancel them and say which file was refused and why, durably.
   defp sweep_rejected_uploads(socket) do
-    rejected =
-      Enum.filter(
-        socket.assigns.uploads.images.entries,
-        &(upload_errors(socket.assigns.uploads.images, &1) != [])
-      )
+    socket
+    |> sweep_rejected_uploads(:images)
+    |> sweep_rejected_uploads(:video)
+  end
 
-    case rejected do
+  defp sweep_rejected_uploads(socket, name) do
+    upload = Map.fetch!(socket.assigns.uploads, name)
+
+    case Enum.filter(upload.entries, &(upload_errors(upload, &1) != [])) do
       [] ->
         socket
 
       rejected ->
         messages =
           Enum.map_join(rejected, " ", fn entry ->
-            reason =
-              socket.assigns.uploads.images
-              |> upload_errors(entry)
-              |> List.first()
-              |> upload_error_message()
-
+            reason = upload |> upload_errors(entry) |> List.first() |> upload_error_message(name)
             "#{entry.client_name}: #{reason}"
           end)
 
         rejected
-        |> Enum.reduce(socket, &cancel_upload(&2, :images, &1.ref))
+        |> Enum.reduce(socket, &cancel_upload(&2, name, &1.ref))
         |> assign(:error, messages)
+    end
+  end
+
+  # The clip's alt text rides the form as `video[alt]` and is written on blur
+  # (`phx-debounce`), so a keystroke never costs a row write.
+  defp update_video_alt(socket, %{"alt" => alt}) when is_binary(alt) do
+    case socket.assigns.video do
+      %PostVideo{alt: current} = video when current != alt ->
+        case Videos.update_alt(video, alt) do
+          {:ok, updated} -> assign(socket, :video, %{updated | frames: video.frames})
+          {:error, _} -> socket
+        end
+
+      _other ->
+        socket
+    end
+  end
+
+  defp update_video_alt(socket, _none), do: socket
+
+  defp video_error_message(:too_long),
+    do:
+      gettext("The video is longer than %{seconds} seconds.",
+        seconds: Videos.max_duration_seconds()
+      )
+
+  defp video_error_message(:too_large),
+    do: gettext("File is larger than %{mb} MB.", mb: div(Videos.max_filesize(), 1_000_000))
+
+  defp video_error_message(:disabled), do: gettext("Videos cannot be uploaded here.")
+  defp video_error_message(_reason), do: gettext("That file could not be processed.")
+
+  # The clip landed (issue #1907): keep it, probe it, and start the pipeline
+  # while the author is still writing. The length is only known now, so a
+  # clip over the cap is refused here, with the cap in the message.
+  defp handle_progress(:video, entry, socket) do
+    if entry.done? do
+      result =
+        consume_uploaded_entry(socket, entry, fn %{path: path} ->
+          {:ok, Videos.create_pending_video(socket.assigns.current_user, path, entry.client_name)}
+        end)
+
+      case result do
+        {:ok, video} ->
+          {:noreply,
+           socket |> assign_video(video) |> assign(:error, nil) |> schedule_draft_save()}
+
+        {:error, reason} ->
+          {:noreply, assign(socket, :error, video_error_message(reason))}
+      end
+    else
+      {:noreply, socket}
     end
   end
 
@@ -1788,6 +1997,31 @@ defmodule VutuvWeb.PostLive.Composer do
             </p>
           </div>
 
+          <%!-- The clip on its way up (issue #1907): a 500 MB file takes a
+          while over the socket, and the bar is the only thing saying so. --%>
+          <div
+            :for={entry <- @uploads.video.entries}
+            id={"#{@id}-video-upload"}
+            class="mt-2 flex items-center gap-3 text-sm text-slate-600 dark:text-slate-400"
+          >
+            <span class="truncate">🎬 {entry.client_name}</span>
+            <progress value={entry.progress} max="100" class="h-2 flex-1">{entry.progress}%</progress>
+            <button
+              type="button"
+              phx-click="cancel-video-upload"
+              phx-value-ref={entry.ref}
+              phx-target={@myself}
+              aria-label={gettext("Cancel upload")}
+            >
+              ✕
+            </button>
+            <p :for={err <- upload_errors(@uploads.video, entry)} class="text-red-600">
+              {upload_error_message(err, :video)}
+            </p>
+          </div>
+
+          <.video_block :if={@video} id={@id} video={@video} editing?={@post != nil} myself={@myself} />
+
           <.gallery_sheet
             :if={@gallery_open? and @images != []}
             bento={@bento}
@@ -1852,6 +2086,12 @@ defmodule VutuvWeb.PostLive.Composer do
             class="mt-3 flex flex-wrap items-center gap-x-3 gap-y-2"
           >
             <.add_photos_picker :if={@images == []} id={@id} upload={@uploads.images} />
+            <.add_video_picker
+              :if={@video_uploads? and @video == nil}
+              id={@id}
+              upload={@uploads.video}
+              uploading?={@uploads.video.entries != []}
+            />
 
             <%!-- The author's declaration of what language this post is
             written in (issue #1489, Mastodon's model): preset to the UI
@@ -1925,7 +2165,7 @@ defmodule VutuvWeb.PostLive.Composer do
               <.button
                 type="submit"
                 class="whitespace-nowrap px-6"
-                disabled={@uploads.images.entries != []}
+                disabled={@uploads.images.entries != [] or @uploads.video.entries != []}
                 phx-disable-with={gettext("Saving…")}
               >
                 <%!-- The button names the author while writing as an
@@ -2177,15 +2417,137 @@ defmodule VutuvWeb.PostLive.Composer do
   # pill (`Feed.pending_label/1`, which refuses the same swap), the short form
   # here is a complete name for the control, so nothing has to be kept back for
   # a screen reader.
+
+  # The clip's picker, beside the photos' (issue #1907): one file, and only
+  # while there is none — a post carries at most one clip.
+  # The file input stays in the DOM while the clip is on its way up (the
+  # progress row above says so): LiveView drives the upload through that
+  # input, and removing it mid-flight cancels the upload. Only the label
+  # steps out of sight.
+  attr(:id, :string, required: true)
+  attr(:upload, :any, required: true)
+  attr(:uploading?, :boolean, default: false)
+
+  defp add_video_picker(assigns) do
+    ~H"""
+    <label id={"#{@id}-add-video"} class={[picker_label_class(), @uploading? && "sr-only"]}>
+      🎬 <span class="sm:hidden">{gettext("Video")}</span>
+      <span class="hidden sm:inline">{gettext("Add video")}</span>
+      <.live_file_input upload={@upload} class="sr-only" />
+    </label>
+    """
+  end
+
+  # The clip in the composer (issues #1907, #1909, #1911): the tile with its
+  # stage, the strip of stills to pick the cover from once the frames exist,
+  # the alt text, and the way to take it out again. The stage line moves by
+  # itself — the host forwards every step of the pipeline here.
+  attr(:id, :string, required: true)
+  attr(:video, PostVideo, required: true)
+  attr(:editing?, :boolean, required: true)
+  attr(:myself, :any, required: true)
+
+  defp video_block(assigns) do
+    assigns =
+      assigns
+      |> assign(:refused?, PostVideo.refused?(assigns.video))
+      |> assign(:frames, if(is_list(assigns.video.frames), do: assigns.video.frames, else: []))
+
+    ~H"""
+    <div id={"#{@id}-video"} class="mt-3" data-composer-video={@video.id}>
+      <div class="sm:flex sm:items-start sm:gap-4">
+        <.video_tile video={@video} class="w-full sm:w-64 sm:shrink-0" />
+        <div class="mt-2 min-w-0 flex-1 sm:mt-0">
+          <.stage_line
+            :if={not @editing?}
+            video={@video}
+            class={[
+              "text-sm",
+              (@refused? && "font-semibold text-red-700 dark:text-red-300") ||
+                "text-slate-700 dark:text-slate-200"
+            ]}
+          />
+          <p :if={@refused? and not @editing?} class="mt-1 text-xs text-slate-600 dark:text-slate-400">
+            {gettext("Remove it to post the text without it, or pick another file.")}
+          </p>
+          <p :if={not @refused? and not @editing? and not PostVideo.ready?(@video)} class="mt-1 text-xs text-slate-600 dark:text-slate-400">
+            {gettext("You can post now — the post appears as soon as the video is ready.")}
+          </p>
+
+          <label :if={not @refused?} class="mt-2 block text-xs font-semibold text-slate-600 dark:text-slate-400">
+            {gettext("Video description")}
+            <input
+              type="text"
+              name="video[alt]"
+              value={@video.alt}
+              maxlength="255"
+              phx-debounce="blur"
+              placeholder={gettext("What is in the video, for people who cannot watch it")}
+              class={["mt-1", input_class()]}
+            />
+          </label>
+
+          <%!-- A plain button in the kit's quiet-red recipe: `<.button>` does
+          not pass `phx-target`, and this one has to reach the component. --%>
+          <button
+            :if={not @editing?}
+            type="button"
+            phx-click="remove-video"
+            phx-target={@myself}
+            data-remove-video
+            class={["mt-2", button_class("danger-ghost")]}
+          >
+            {gettext("Remove video")}
+          </button>
+        </div>
+      </div>
+
+      <%!-- The strip (issue #1909): every still the check looks at, the cover
+      marked; a tap on another makes it the cover. Stills are author-only on
+      the proxy and never cached. --%>
+      <div :if={@frames != [] and not @refused? and not @editing?} class="mt-3">
+        <p class="mb-1.5 text-xs text-slate-600 dark:text-slate-400">
+          {gettext("Tap a frame to make it the cover.")}
+        </p>
+        <div class="flex gap-2 overflow-x-auto pb-1" data-video-frames>
+          <button
+            :for={frame <- @frames}
+            type="button"
+            phx-click="video-cover"
+            phx-value-frame={frame.id}
+            phx-target={@myself}
+            data-video-frame={frame.position}
+            data-video-cover={to_string(frame.id == @video.cover_frame_id)}
+            aria-pressed={to_string(frame.id == @video.cover_frame_id)}
+            title={clock(frame.seconds)}
+            class={[
+              "relative w-24 shrink-0 overflow-hidden rounded-md ring-2",
+              (frame.id == @video.cover_frame_id && "ring-brand-500") ||
+                "ring-transparent hover:ring-slate-300 dark:hover:ring-slate-600"
+            ]}
+          >
+            <img src={PostVideo.frame_url(@video, frame)} alt="" loading="lazy" class="block aspect-video w-full object-cover" />
+            <span class="absolute bottom-1 left-1 rounded bg-slate-900/70 px-1 text-[10px] font-semibold tabular-nums text-white">
+              {clock(frame.seconds)}
+            </span>
+          </button>
+        </div>
+      </div>
+    </div>
+    """
+  end
+
+  # The two pickers side by side share one look, so they cannot drift apart.
+  defp picker_label_class,
+    do:
+      "inline-flex h-10 mb-0 shrink-0 cursor-pointer items-center gap-1.5 whitespace-nowrap rounded-lg bg-slate-100 px-3 text-sm font-semibold text-slate-700 hover:bg-slate-200 dark:bg-slate-800 dark:text-slate-200 dark:hover:bg-slate-700"
+
   attr(:id, :string, required: true)
   attr(:upload, :any, required: true)
 
   defp add_photos_picker(assigns) do
     ~H"""
-    <label
-      id={"#{@id}-add-photos"}
-      class="inline-flex h-10 mb-0 shrink-0 cursor-pointer items-center gap-1.5 whitespace-nowrap rounded-lg bg-slate-100 px-3 text-sm font-semibold text-slate-700 hover:bg-slate-200 dark:bg-slate-800 dark:text-slate-200 dark:hover:bg-slate-700"
-    >
+    <label id={"#{@id}-add-photos"} class={picker_label_class()}>
       📷 <span class="sm:hidden">{gettext("Photos")}</span>
       <span class="hidden sm:inline">{gettext("Add photos")}</span>
       <.live_file_input upload={@upload} class="sr-only" />
@@ -2855,16 +3217,28 @@ defmodule VutuvWeb.PostLive.Composer do
     """
   end
 
-  defp upload_error_message(:too_large) do
+  defp upload_error_message(reason), do: upload_error_message(reason, :images)
+
+  defp upload_error_message(:too_large, :video) do
+    gettext("File is larger than %{mb} MB.", mb: div(Videos.max_filesize(), 1_000_000))
+  end
+
+  defp upload_error_message(:too_large, _images) do
     gettext("File is larger than %{mb} MB.", mb: div(Posts.max_image_filesize(), 1_000_000))
   end
 
-  defp upload_error_message(:not_accepted) do
+  defp upload_error_message(:not_accepted, :video) do
+    gettext("File type not supported (allowed: %{types}).",
+      types: Enum.join(Videos.extension_whitelist(), ", ")
+    )
+  end
+
+  defp upload_error_message(:not_accepted, _images) do
     gettext("File type not supported (allowed: %{types}).",
       types: Enum.join(Vutuv.PostImageStore.extension_whitelist(), ", ")
     )
   end
 
-  defp upload_error_message(:too_many_files), do: gettext("Too many files.")
-  defp upload_error_message(_), do: gettext("Upload failed.")
+  defp upload_error_message(:too_many_files, _name), do: gettext("Too many files.")
+  defp upload_error_message(_, _name), do: gettext("Upload failed.")
 end

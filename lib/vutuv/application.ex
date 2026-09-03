@@ -143,6 +143,7 @@ defmodule Vutuv.Application do
         optional_child(:post_screenshot_worker, Vutuv.Posts.ScreenshotWorker) ++
         optional_child(:organization_screenshot_worker, Vutuv.Organizations.ScreenshotWorker) ++
         optional_child(:image_scan_worker, Vutuv.Moderation.ImageScanWorker) ++
+        optional_child(:video_pipeline, Vutuv.Videos.Pipeline) ++
         optional_child(:translation_worker, Vutuv.Translations.Worker) ++
         optional_child(:reference_check_worker, Vutuv.References.CheckWorker) ++
         optional_child(:reference_skill_refresher, Vutuv.References.SkillRefresher) ++

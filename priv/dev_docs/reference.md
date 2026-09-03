@@ -314,6 +314,33 @@ not attached to a post within 24 hours is swept;
 image bytes always go through the audience-checking proxy, like on the
 website.
 
+### POST /me/post_videos
+
+Scope: `posts:write`. Upload one video (multipart, the file in the `video`
+field, optional `alt`): the answer is **202** with the clip's state, because
+the server converts and checks it first (about a minute for a two-minute
+clip). Poll `GET /me/post_videos/:id` until `ready` is `true`, then attach it
+via `video_id`; a post naming a clip that is not ready yet is refused with
+422:
+
+```bash
+VIDEO_ID=$(auth -X POST $API/me/post_videos \
+  -F "video=@talk.mp4" -F "alt=My lightning talk" | jq -r .id)
+
+until auth $API/me/post_videos/$VIDEO_ID | jq -e .ready > /dev/null; do sleep 5; done
+
+auth -X POST $API/posts \
+  -H "Content-Type: application/json" \
+  -d "{\"body\": \"Slides in the first minute\", \"video_id\": \"$VIDEO_ID\"}"
+```
+
+MP4/MOV/WebM, at most 500 MB and two minutes by default (both per
+installation; `refused` in the state means the AI check or the conversion
+refused it). One video per post. An upload that is not attached within 24
+hours is swept; `DELETE /me/post_videos/:id` removes it at once. The post's
+`video` carries the H.264 file's URL, the cover and the length; the served
+bytes go through the audience-checking proxy like the images.
+
 ### PATCH /posts/:id · DELETE /posts/:id
 
 Scope: `posts:write`, own posts only. A post is editable for 30 minutes

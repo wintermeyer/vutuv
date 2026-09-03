@@ -1532,6 +1532,9 @@ on-the-fly `og.jpg` and the download filename.
 
 Legacy `…/feed.webp` URLs in old post bodies keep resolving.
 
+A post can also carry one **video** (issue #1906): its own pipeline, its own
+waiting card and its own proxy, all in [video.md](video.md).
+
 ## Photo posts (issue #1104)
 
 Not a second kind of post — the same post, showing its pictures properly.

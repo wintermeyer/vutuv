@@ -55,6 +55,9 @@ defmodule Vutuv.Posts.PostDraft do
     field(:license, :string)
     field(:language, :string)
     field(:image_ids, {:array, :binary_id}, default: [])
+    # The clip the composer holds (issue #1906), re-checked on restore the way
+    # the image ids are (`Vutuv.Videos.pending_video/2`).
+    belongs_to(:video, Vutuv.Posts.PostVideo)
     field(:photos, :map, default: %{})
     # The chosen bento arrangement (Vutuv.Posts.GalleryLayout); nil = auto.
     field(:layout, :string)
@@ -77,7 +80,17 @@ defmodule Vutuv.Posts.PostDraft do
   """
   def changeset(draft, attrs) do
     draft
-    |> cast(attrs, [:body, :tags, :license, :language, :image_ids, :photos, :layout, :fill?])
+    |> cast(attrs, [
+      :body,
+      :tags,
+      :license,
+      :language,
+      :image_ids,
+      :video_id,
+      :photos,
+      :layout,
+      :fill?
+    ])
     |> validate_length(:body, max: Post.max_body_length())
     |> validate_length(:tags, max: @max_tags_length)
   end
@@ -88,6 +101,6 @@ defmodule Vutuv.Posts.PostDraft do
   @doc "Whether this draft holds anything worth restoring."
   def any_content?(%__MODULE__{} = draft) do
     String.trim(draft.body) != "" or String.trim(draft.tags) != "" or
-      draft.image_ids != []
+      draft.image_ids != [] or draft.video_id != nil
   end
 end

@@ -1,0 +1,166 @@
+defmodule VutuvWeb.PostVideoController do
+  @moduledoc """
+  The authorizing video proxy (issue #1912): every byte of a post's clip is
+  served through here, so the post's audience guards its video the way
+  `VutuvWeb.PostImageController` guards its pictures. An unattached clip is
+  its uploader's alone; denied and unknown tokens are both 404.
+
+  ## Byte ranges
+
+  A `<video>` element does not download a file, it asks for pieces of it —
+  Safari opens with `Range: bytes=0-1` and refuses to play at all from a
+  server that answers 200 to that. So this proxy answers ranges itself
+  (`206 Partial Content`, `Content-Range`, `Accept-Ranges`), with
+  `Plug.Conn.send_file/5`'s offset and length doing the work and no byte of
+  the file passing through the VM. In the X-Accel serving mode nginx handles
+  the ranges on its own.
+
+  ## What resolves
+
+  Only the names in `Vutuv.PostVideoStore.served_files/0` — the renditions
+  and the two covers — plus `cover.jpg`, derived on the fly for link
+  scrapers, and the author-only `frame-NN.jpg` stills the composer's cover
+  strip shows. The original resolves on no path.
+  """
+
+  use VutuvWeb, :controller
+
+  alias Vutuv.Accounts.User
+  alias Vutuv.Posts.PostVideo
+  alias Vutuv.PostVideoStore
+  alias Vutuv.Videos
+  alias VutuvWeb.ImageProxy
+  alias VutuvWeb.RemoteMediaToken
+
+  @served PostVideoStore.served_files()
+
+  def show(conn, %{"token" => token, "file" => file} = params) do
+    with what when not is_nil(what) <- parse(file),
+         %PostVideo{} = video <- Videos.get_video_by_token(token),
+         {source, viewer} <- reader(conn, params, token),
+         true <- source != :capability or what in @served,
+         true <- Videos.visible_to?(video, viewer) do
+      serve(conn, video, viewer, what)
+    else
+      _ -> ImageProxy.not_found(conn)
+    end
+  end
+
+  # A browser brings the session; a phone app's player brings the capability
+  # the Mastodon adapter minted for exactly this clip (`VutuvWeb.RemoteMediaToken`).
+  defp reader(conn, params, video_token) do
+    with nil <- conn.assigns[:current_user],
+         %User{} = member <-
+           params[RemoteMediaToken.param()]
+           |> RemoteMediaToken.post_video_viewer(video_token)
+           |> RemoteMediaToken.holder() do
+      {:capability, member}
+    else
+      %User{} = member -> {:session, member}
+      _nothing_brought -> {:anonymous, nil}
+    end
+  end
+
+  defp parse("cover.jpg"), do: :og
+
+  defp parse("frame-" <> rest) do
+    case Integer.parse(rest) do
+      {position, ".jpg"} when position >= 0 -> {:frame, position}
+      _ -> nil
+    end
+  end
+
+  defp parse(file) when file in @served, do: file
+  defp parse(_file), do: nil
+
+  # The cover as JPEG for link scrapers: generated in the app, so sent
+  # directly in both serving modes.
+  defp serve(conn, video, _viewer, :og) do
+    with %{position: position} <- Videos.cover_frame(video),
+         {:ok, jpeg} <- PostVideoStore.og_jpeg(video.token, position) do
+      conn
+      |> ImageProxy.put_cache_control()
+      |> put_resp_content_type("image/jpeg", nil)
+      |> send_resp(200, jpeg)
+    else
+      _ -> ImageProxy.not_found(conn)
+    end
+  end
+
+  # A still of the strip: the author's alone (an admin's too), never cached —
+  # a frame the check refuses is deleted, and must not outlive that anywhere.
+  # The pixelated preview's shape exactly: a private file under `no-store`.
+  defp serve(conn, video, viewer, {:frame, position}) do
+    path = PostVideoStore.frame_path(video.token, position)
+    own? = Videos.owner_or_admin?(video, viewer) and File.exists?(path)
+    ImageProxy.serve_pixelated(conn, if(own?, do: path))
+  end
+
+  # The renditions and the covers through the shared serving switch (X-Accel
+  # or `send_file`); what differs is the send, which answers byte ranges.
+  defp serve(conn, video, _viewer, file) do
+    ImageProxy.serve(conn, file,
+      accel_path: &PostVideoStore.accel_path(video.token, &1),
+      version_path: &PostVideoStore.served_path(video.token, &1),
+      send: &send_ranged/2
+    )
+  end
+
+  ## Ranges
+
+  defp send_ranged(conn, path) do
+    size = File.stat!(path).size
+    conn = put_resp_header(conn, "accept-ranges", "bytes")
+
+    case range(conn, size) do
+      :whole ->
+        send_file(conn, 200, path)
+
+      {:ok, first, last} ->
+        conn
+        |> put_resp_header("content-range", "bytes #{first}-#{last}/#{size}")
+        |> send_file(206, path, first, last - first + 1)
+
+      :unsatisfiable ->
+        conn
+        |> put_resp_header("content-range", "bytes */#{size}")
+        |> send_resp(416, "")
+    end
+  end
+
+  # One range of the three shapes HTTP allows (`bytes=a-b`, `bytes=a-`,
+  # `bytes=-n`); a header this does not understand is served whole, which is
+  # what the spec asks. Only the first range of a list is honoured — no
+  # browser's player sends more.
+  defp range(conn, size) do
+    case get_req_header(conn, "range") do
+      ["bytes=" <> spec] -> parse_range(spec |> String.split(",") |> hd() |> String.trim(), size)
+      _ -> :whole
+    end
+  end
+
+  defp parse_range(spec, size) do
+    case String.split(spec, "-", parts: 2) do
+      ["", suffix] -> suffix_range(Integer.parse(suffix), size)
+      [first, ""] -> open_range(Integer.parse(first), size)
+      [first, last] -> closed_range(Integer.parse(first), Integer.parse(last), size)
+      _ -> :whole
+    end
+  end
+
+  # `bytes=-n`: the last n bytes.
+  defp suffix_range({n, ""}, size) when n > 0, do: {:ok, max(size - n, 0), size - 1}
+  defp suffix_range(_parsed, _size), do: :whole
+
+  # `bytes=a-`: from a to the end.
+  defp open_range({first, ""}, size) when first < size, do: {:ok, first, size - 1}
+  defp open_range({_first, ""}, _size), do: :unsatisfiable
+  defp open_range(_parsed, _size), do: :whole
+
+  # `bytes=a-b`, clipped to the file.
+  defp closed_range({first, ""}, {last, ""}, size) when first <= last and first < size,
+    do: {:ok, first, min(last, size - 1)}
+
+  defp closed_range({first, ""}, {last, ""}, _size) when first <= last, do: :unsatisfiable
+  defp closed_range(_first, _last, _size), do: :whole
+end

@@ -144,12 +144,14 @@ and featuring a hashtag needs a vutuv concept, since the tags on a profile carry
 other members' endorsements and an "unfeature" that dropped them would throw
 away somebody else's vouch.
 
-Status creation accepts public text posts with photos. Organization posts are
+Status creation accepts public text posts with photos and one video (issue
+#1915, [video.md](video.md): the upload answers 202, the media endpoint 206
+until the clip is converted and checked, and a status naming it too early is
+refused with 422 and Mastodon's own sentence). Organization posts are
 top-level, matching vutuv's existing organization post model. Polls and
 non-public visibility need explicit Mastodon mappings before they can be
 *written*; the adapter rejects an unsupported visibility instead of silently
-publishing something broader. There is no video anywhere in vutuv, so there is
-nothing to map there.
+publishing something broader.
 
 **Reading** does report audience, though. vutuv has no visibility column — a
 post is public until it carries a `PostDenial`, and any denial at all closes it
