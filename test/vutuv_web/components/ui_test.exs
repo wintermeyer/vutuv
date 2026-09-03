@@ -49,6 +49,21 @@ defmodule VutuvWeb.UITest do
     end
   end
 
+  describe "capped_count/2" do
+    test "reads as the plain count below the ceiling" do
+      assert UI.capped_count(3, 50) == "3"
+      assert UI.capped_count(49, 50) == "49"
+    end
+
+    test "says the ceiling was reached, because the figure is a floor there" do
+      assert UI.capped_count(50, 50) == "50+"
+    end
+
+    test "is the plain count with no ceiling" do
+      assert UI.capped_count(1_200, nil) == "1K"
+    end
+  end
+
   describe "delimited_count/1" do
     test "shows small numbers without a separator" do
       assert UI.delimited_count(0) == "0"

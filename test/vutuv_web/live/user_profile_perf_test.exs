@@ -80,7 +80,13 @@ defmodule VutuvWeb.UserProfilePerfTest do
       assert html_response(conn, 200) =~ "handoff post"
 
       # ...then the connect takes it: only the socket's own auth and the
-      # shell's badge queries remain.
+      # shell's badge queries remain. **Most of the bound is the Feed badge**
+      # (`Posts.unread_feed_count/1`): it asks the ten feed sources, in the cheap
+      # `:marks` shape, on every page a member opens away from their feed, and
+      # measured here it is 11 of the 19 — 8 without it. That is the deliberate
+      # trade (a badge counted from the sources cannot drift from the timeline),
+      # and the assertion below is still about the handoff, since the consumed
+      # stash costs 20 more on top.
       {{:ok, _view, hit_html}, hit} =
         Vutuv.QueryCounter.count_queries_global(fn -> live(conn) end)
 
@@ -93,7 +99,7 @@ defmodule VutuvWeb.UserProfilePerfTest do
 
       assert miss_html =~ "handoff post"
 
-      assert hit <= 15, "handoff-hit connect ran #{hit} queries; the handoff was not used"
+      assert hit <= 24, "handoff-hit connect ran #{hit} queries; the handoff was not used"
 
       assert miss >= hit + 20,
              "consumed-stash connect ran #{miss} vs hit #{hit}; full-load fallback missing?"

@@ -210,6 +210,11 @@ defmodule VutuvWeb.PostLive.Feed do
 
     if connected?(socket) do
       Vutuv.Activity.subscribe(user.id)
+      # Being here is what reading the feed means, so the shell's "Feed" badge
+      # empties — including in this member's other open tabs, which learn of it
+      # over the `:feed_read` broadcast. After the subscribe, so this socket
+      # simply ignores its own message rather than racing it.
+      Posts.mark_feed_read(user)
       # Refresh the Berlin-day-relative post stamps ("09:50 Uhr" -> "Gestern,
       # 09:50 Uhr") the moment the German day rolls over at midnight.
       Vutuv.DayClock.subscribe()
@@ -1495,6 +1500,13 @@ defmodule VutuvWeb.PostLive.Feed do
       socket.assigns.current_user.id,
       for(%{post: %{id: post_id}} <- pending, do: post_id)
     )
+
+    # The same act, for the shell's "Feed" badge: what the pill was holding is
+    # now in front of the reader, so it is no longer waiting for them on a page
+    # they are not on. This is the second of the marker's two writers (the other
+    # is the mount), and the pill is the reason it is not simply every arrival:
+    # until the press, those posts were behind one.
+    Posts.mark_feed_read(socket.assigns.current_user)
 
     # Two ways to finish, and which one it is was decided when the posts arrived.
     #

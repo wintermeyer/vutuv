@@ -3,14 +3,18 @@ defmodule VutuvWeb.ShellLive do
   The app shell — the sticky top bar plus the mobile bottom tab bar. Rendered
   once and embedded in the `app` layout via `live_render` (sticky), so it
   persists across live navigation and carries the live unread badges (messages,
-  notifications) that update in real time from `Vutuv.Activity` (PubSub on
+  notifications, feed) that update in real time from `Vutuv.Activity` (PubSub on
   `"user:<id>"`).
 
   Uses `Phoenix.LiveView` directly (no `app` layout) to avoid wrapping itself.
-  Both badges are real unread counts: notifications via
+  All three badges are real unread counts: notifications via
   `Vutuv.Activity.unread_notification_count/1` (events newer than the user's
   read marker), messages via `Vutuv.Chat.unread_conversations_count/1`
-  (conversations holding unread messages).
+  (conversations holding unread messages), and the Feed nav item via
+  `Vutuv.Posts.unread_feed_count/1` (posts newer than the member's feed read
+  marker, which the feed writes when it is opened and when the reader reveals
+  what waited behind its pill). The feed badge is drawn only **away** from
+  /feed, where the timeline's own "new posts" pill already says the same thing.
   """
   use Phoenix.LiveView
 
@@ -24,6 +28,7 @@ defmodule VutuvWeb.ShellLive do
   import VutuvWeb.UI,
     only: [
       button: 1,
+      capped_count: 2,
       compact_count: 1,
       count_badge: 1,
       delimited_count: 1,
@@ -252,6 +257,13 @@ defmodule VutuvWeb.ShellLive do
     |> assign(:presence_hidden_ids, MapSet.new())
     |> assign(:messages_count, 0)
     |> assign(:notifications_count, 0)
+    # How many posts reached the feed while the member was elsewhere, and the
+    # ceiling its query counts to (`Vutuv.Posts.unread_feed_count/1`), which the
+    # badge needs in order to draw "50+" instead of a bare floor. Zero on the
+    # dead render like the other two, and zero for good on /feed itself, where
+    # the timeline's own pill owns this news (`recount_feed/1` asks `@path`).
+    |> assign(:feed_count, 0)
+    |> assign(:feed_cap, Posts.feed_unread_cap())
     # The posts waiting on a clip (issue #1911): none until the socket connects
     # and asks, like the badges.
     |> assign(:videos_in_progress, %{count: 0, progress: nil})
@@ -302,6 +314,13 @@ defmodule VutuvWeb.ShellLive do
   # render) and only for a logged-in member. When the shell mounts ON the
   # messages/notifications page itself that badge starts at zero (initial_count),
   # since the page's own read-broadcast can race the shell's subscribe.
+  # The three run one after another on purpose. They are independent reads and
+  # would fan out cleanly, but the feed count already spends four connections of
+  # its own inside `Vutuv.FeedPage.fetch_sources/3`, and production runs a pool
+  # of ten: three concurrent badges on top of that would let one page join hold
+  # six or seven, which is the shape `FeedPage`'s own concurrency comment refuses
+  # — one slow query then stalls the site rather than one request. Nobody waits
+  # on this either way; the document is already painted when the socket joins.
   defp maybe_start_counts(socket, %User{} = user, path) do
     if connected?(socket) do
       socket
@@ -324,6 +343,12 @@ defmodule VutuvWeb.ShellLive do
         :notifications_count,
         initial_count(path, "/notifications", user, &Activity.unread_notification_count/1)
       )
+      # What reached the feed since the member last read it — the struct clause
+      # again, for the same reason. `initial_count/4` returns zero on the feed
+      # itself and `recount_feed/1` keeps it there: ON /feed the badge is never
+      # drawn and no arrival recounts it, because the page's own "new posts"
+      # pill is already saying so, right beside the timeline it unfolds into.
+      |> assign(:feed_count, initial_count(path, "/feed", user, &Posts.unread_feed_count/1))
     else
       socket
     end
@@ -390,13 +415,17 @@ defmodule VutuvWeb.ShellLive do
   # The active nav item (the page being viewed) reads as the current location,
   # not a normal clickable link: brand-tinted, medium weight and no hover
   # affordance. The inactive item keeps the quiet slate link treatment.
-  defp nav_link_class(true),
-    do:
-      "rounded-md px-3 py-2 bg-brand-50 font-semibold text-brand-700 dark:bg-brand-900/40 dark:text-brand-100"
+  # `inline-flex` and a gap because the Feed item carries a badge beside its
+  # word: a text link would put the pill on the text baseline, half a line below
+  # the word's centre.
+  defp nav_link_class(active?),
+    do: ["inline-flex items-center gap-1.5 rounded-md px-3 py-2", nav_link_tone(active?)]
 
-  defp nav_link_class(false),
-    do:
-      "rounded-md px-3 py-2 text-slate-600 hover:bg-slate-100 dark:text-slate-300 dark:hover:bg-slate-800"
+  defp nav_link_tone(true),
+    do: "bg-brand-50 font-semibold text-brand-700 dark:bg-brand-900/40 dark:text-brand-100"
+
+  defp nav_link_tone(false),
+    do: "text-slate-600 hover:bg-slate-100 dark:text-slate-300 dark:hover:bg-slate-800"
 
   # Where the logo goes. Normally "home" ("/", which routes a logged-in member
   # to their feed), but ON the feed itself that would be a no-op round trip, so
@@ -455,24 +484,50 @@ defmodule VutuvWeb.ShellLive do
   # A new post reached this member's feed (Vutuv.Posts.create_post broadcasts
   # {:new_post, …} to the author *and* every follower). They may be reading
   # another page or another tab, so nudge the TabBadge hook to mark the browser
-  # tab. Skip a post the member wrote themselves — their own post must not badge
-  # their own tab. The hook only shows the "new posts" dot while the tab is
-  # backgrounded and clears it the moment they return, so feed posts (which have
-  # no read state) need no server-side unread tally.
+  # tab and count the arrival on the Feed nav item. Skip a post the member wrote
+  # themselves — their own post must not badge their own tab, and it is not news
+  # on the nav item either (`unread_feed_count/1` rejects it as well, so what
+  # this clause saves is the recount's queries, not the correctness).
   #
   # The dot says *that* something landed; `tab_teaser/3` below says what, for a
-  # few seconds, in the tab's own title (issue #1681).
+  # few seconds, in the tab's own title (issue #1681); the badge says how much
+  # is waiting, and unlike the dot it survives the reader walking through five
+  # pages, because it is counted from a marker rather than held in this socket.
   def handle_info({:new_post, %{author_id: author_id} = payload}, socket) do
     socket =
       if author_id == socket.assigns.user_id do
         socket
       else
         {_result, socket} = tab_teaser(socket, :vutuv, payload[:at])
-        push_event(socket, "tab:new_post", %{})
+        socket |> push_event("tab:new_post", %{}) |> recount_feed()
       end
 
     {:noreply, socket}
   end
+
+  # A repost reached the same recipients a fresh post does (the reposter's
+  # followers, and the reposter). It draws no teaser — the quote would be the
+  # reposted post's, which the tab title cannot say twice over — but it is a card
+  # arriving in the feed, so the badge counts it like any other. Their own
+  # repost, again, is not news to them.
+  def handle_info({:new_repost, %{reposter_id: reposter_id}}, socket) do
+    if reposter_id == socket.assigns.user_id,
+      do: {:noreply, socket},
+      else: {:noreply, recount_feed(socket)}
+  end
+
+  # A post was deleted (fanned out to the author's followers): recount, so the
+  # badge cannot keep promising a card the feed will no longer draw. The same
+  # reasoning as `:notifications_changed` on the bell — a tally that only ever
+  # goes up drifts the first time something is withdrawn, and only a full reload
+  # heals it.
+  def handle_info({:post_deleted, _payload}, socket), do: {:noreply, recount_feed(socket)}
+
+  # The member is reading their feed — here, or in another tab of theirs, which
+  # is the case this broadcast exists for. Nothing but the badge has to move:
+  # every recount re-reads the member (the id clause of `unread_feed_count/1`),
+  # so this socket cannot resurrect what the other tab just read.
+  def handle_info(:feed_read, socket), do: {:noreply, assign(socket, :feed_count, 0)}
 
   # Something landed through the fediverse (issue #1503): a followed account
   # posted or boosted, or somebody here passed a remote post on. The nudge
@@ -481,10 +536,15 @@ defmodule VutuvWeb.ShellLive do
   # so only their own sources can answer, and that is the lookup the teaser
   # makes anyway. The dot therefore rides on that answer instead of being
   # pushed blind. Every other subscriber of the member topic ignores this event.
+  #
+  # The badge asks those same sources itself (through the marker rather than
+  # through this stamp), so it is recounted whatever the teaser decided: a
+  # quieted teaser window is about how often the tab title may shout, and says
+  # nothing about whether a post arrived.
   def handle_info({:remote_feed_arrival, %{at: at}}, socket) do
     case tab_teaser(socket, :fediverse, at) do
-      {:opened, socket} -> {:noreply, push_event(socket, "tab:new_post", %{})}
-      {_other, socket} -> {:noreply, socket}
+      {:opened, socket} -> {:noreply, socket |> push_event("tab:new_post", %{}) |> recount_feed()}
+      {_other, socket} -> {:noreply, recount_feed(socket)}
     end
   end
 
@@ -577,6 +637,29 @@ defmodule VutuvWeb.ShellLive do
     |> push_badge()
   end
 
+  # Recomputed from the member's read marker rather than incremented, for the
+  # reason the two badges above give: an arrival is not proof that the reader may
+  # see the post (their mutes, the audience and their language filter all decide
+  # per reader, and only their own feed sources know), and a withdrawn post has
+  # to be able to take the figure back down.
+  #
+  # By id, never the socket's `%User{}`: that copy is as old as the mount, and
+  # both the marker and the filters the count reads off it move in the member's
+  # other tabs (see the id clause of `unread_feed_count/1`).
+  #
+  # No query at all on /feed and none for the anonymous shell: the first has the
+  # timeline's own pill, the second has no feed. It is deliberately NOT pushed to
+  # the browser tab's badge (`push_badge/1`) — that number is the count of things
+  # addressed to this member personally, and a busy feed would drown it.
+  defp recount_feed(%{assigns: %{user_id: user_id, path: path}} = socket)
+       when is_binary(user_id) do
+    if on_route?(path, "/feed"),
+      do: socket,
+      else: assign(socket, :feed_count, Posts.unread_feed_count(user_id))
+  end
+
+  defp recount_feed(socket), do: socket
+
   defp recount_new_members(socket),
     do: assign(socket, :new_members_today, Dashboard.registrations_today())
 
@@ -590,6 +673,20 @@ defmodule VutuvWeb.ShellLive do
       "%{formatted} new members today",
       count,
       formatted: delimited_count(count)
+    )
+  end
+
+  # The Feed badge's accessible name. It says "in your feed" because a bare "3
+  # new posts" beside the word Feed reads as a section heading rather than as
+  # news addressed to this reader — and it repeats the capped figure the badge
+  # draws (never a fuller one), so the two never disagree about the ceiling.
+  # `ngettext/4` binds the raw integer to %{count}, hence the %{formatted} one.
+  defp feed_new_label(count, cap) do
+    ngettext(
+      "%{formatted} new post in your feed",
+      "%{formatted} new posts in your feed",
+      count,
+      formatted: capped_count(count, cap)
     )
   end
 
@@ -1150,10 +1247,23 @@ defmodule VutuvWeb.ShellLive do
                 :if={@user_id}
                 href={~p"/feed"}
                 data-nav-item
+                data-feed-count={@feed_count > 0 && @feed_count}
                 aria-current={on_route?(@path, "/feed") && "page"}
                 class={nav_link_class(on_route?(@path, "/feed"))}
               >
                 {gettext("Feed")}
+                <%!-- How much arrived while the member was on this page or any
+                other, live over PubSub — the bell's badge one nav item over. The
+                digits are a glyph, so the sentence beside them is what a screen
+                reader gets ("Feed, 3 new posts in your feed") and the pill
+                itself is hidden from it: an `aria-label` on the link would have
+                replaced the visible word "Feed" instead of adding to it. --%>
+                <span :if={@feed_count > 0} class="sr-only">
+                  {feed_new_label(@feed_count, @feed_cap)}
+                </span>
+                <span :if={@feed_count > 0} aria-hidden="true">
+                  <.count_badge count={@feed_count} cap={@feed_cap} />
+                </span>
               </.link>
               <%!-- An explicit "Profile" item makes the member's own profile a
                    named, discoverable destination (the logo's deep-link on /feed
@@ -1457,7 +1567,15 @@ defmodule VutuvWeb.ShellLive do
           press). The arrow is the promise that it will: a control that behaves
           differently has to look different first, or the press reads as a
           reload. --%>
-          <.tab :let={active} href={~p"/feed"} label={gettext("Feed")} active={on_route?(@path, "/feed")} scroll_top>
+          <.tab
+            :let={active}
+            href={~p"/feed"}
+            label={gettext("Feed")}
+            count={@feed_count}
+            cap={@feed_cap}
+            active={on_route?(@path, "/feed")}
+            scroll_top
+          >
             <.icon_feed filled?={active} data-tab-icon="feed" />
             <.icon_scroll_top />
           </.tab>
@@ -1508,6 +1626,12 @@ defmodule VutuvWeb.ShellLive do
   attr(:href, :string, required: true)
   attr(:label, :string, required: true)
   attr(:count, :integer, default: 0)
+
+  attr(:cap, :integer,
+    default: nil,
+    doc: "the ceiling a capped count was counted to, so the badge can draw \"50+\""
+  )
+
   attr(:active, :boolean, default: false)
   attr(:scroll_top, :boolean, default: false)
   attr(:rest, :global)
@@ -1558,6 +1682,7 @@ defmodule VutuvWeb.ShellLive do
         {render_slot(@inner_block, @active)}
         <.count_badge
           count={@count}
+          cap={@cap}
           class="absolute -right-0.5 -top-0.5 ring-2 ring-white dark:ring-slate-900"
         />
       </span>
