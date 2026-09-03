@@ -60,6 +60,11 @@ defmodule VutuvWeb.ShellLive do
   alias VutuvWeb.PostTeaser
   alias VutuvWeb.Presence
 
+  # The half of an unread badge's placement that every counted item shares: the
+  # corner it hangs from and the ring that lifts it off whatever is behind. Read
+  # by `count_badge_class/1`, which adds the one thing that differs.
+  @count_badge_base "absolute -top-0.5 ring-2 ring-white dark:ring-slate-900"
+
   # How long one browser-tab frame really stands (issue #1681), which is what
   # the server's window has to be measured in — it is the only thing deciding
   # whether a second arrival still reaches a running animation as a count.
@@ -418,23 +423,31 @@ defmodule VutuvWeb.ShellLive do
   # `inline-flex` and a gap because the Feed item carries a badge beside its
   # word: a text link would put the pill on the text baseline, half a line below
   # the word's centre.
-  # `relative` so a badge can hang off the item's corner the way the bell's and
-  # the phone tab bar's do — one shape for an unread count across the whole
-  # chrome, rather than a second, inline one that only the worded items wear.
-  #
-  # An icon has slack a word does not: the bell is a 24px glyph in a 40px box,
-  # so a badge at its corner covers empty space, while "Feed" fills its pill and
-  # a badge at `-right-0.5` sat on the "d". Hence the item hangs its badge
-  # OUTSIDE its right edge (`-right-2`) and the nav's own gap carries the
-  # clearance — `gap-3`, measured: the badge ends 4px before the next item, and
-  # the word keeps 2px. The gap is the same at rest, so nothing moves when a
-  # count arrives; widening the item instead would have shifted every item to
-  # its right the moment somebody posted.
+  # `h-10` and not `py-2`, so a worded item is the same 40px box the icon
+  # buttons beside it are. That is what lets ONE badge offset serve the whole
+  # bar (`count_badge_class/1`): a badge is positioned from its item's top edge,
+  # so two items of different heights put their badges on two different lines —
+  # which is exactly how the Feed count came to sit 4px above the bell's. Every
+  # counted thing up here is now 40px tall, hung from the same corner, on one
+  # line. `relative` is what the badge hangs from.
   defp nav_link_class(active?),
-    do: [
-      "relative inline-flex items-center gap-1.5 rounded-md px-3 py-2",
-      nav_link_tone(active?)
-    ]
+    do: ["relative inline-flex h-10 items-center rounded-md px-3", nav_link_tone(active?)]
+
+  # Where an unread count hangs, for every item in the top bar and for the phone
+  # tab bar's glyphs — one definition, because four call sites spelling their own
+  # offsets is how they drifted apart in the first place. The vertical half is
+  # shared and is the whole point: same box height, same `-top-0.5`, one line.
+  #
+  # Only the horizontal differs, and that is the item's shape talking rather
+  # than a preference. A glyph is 24px inside a 40px box, so 8px of slack sits
+  # under a badge at `-right-0.5`; a word fills its pill, so the same offset put
+  # the badge on the "d" of "Feed" and cut it. A worded item therefore hangs its
+  # badge clear of the last letter, and the nav's own `gap-3` carries the
+  # clearance — measured: 2px to the word, 4px to the next item. Never buy that
+  # room with padding on the item: the width would change the moment somebody
+  # posted, and every item to its right would shift.
+  defp count_badge_class(:glyph), do: @count_badge_base <> " -right-0.5"
+  defp count_badge_class(:word), do: @count_badge_base <> " -right-2"
 
   defp nav_link_tone(true),
     do: "bg-brand-50 font-semibold text-brand-700 dark:bg-brand-900/40 dark:text-brand-100"
@@ -1283,11 +1296,7 @@ defmodule VutuvWeb.ShellLive do
                   {feed_new_label(@feed_count, @feed_cap)}
                 </span>
                 <span :if={@feed_count > 0} aria-hidden="true">
-                  <.count_badge
-                    count={@feed_count}
-                    cap={@feed_cap}
-                    class="absolute -right-2 -top-2 ring-2 ring-white dark:ring-slate-900"
-                  />
+                  <.count_badge count={@feed_count} cap={@feed_cap} class={count_badge_class(:word)} />
                 </span>
               </.link>
               <%!-- An explicit "Profile" item makes the member's own profile a
@@ -1442,7 +1451,7 @@ defmodule VutuvWeb.ShellLive do
                 <.icon_envelope />
                 <.count_badge
                   count={@messages_count}
-                  class="absolute -right-0.5 -top-0.5 ring-2 ring-white dark:ring-slate-900"
+                  class={count_badge_class(:glyph)}
                 />
               </.link>
               <.link
@@ -1454,7 +1463,7 @@ defmodule VutuvWeb.ShellLive do
                 <.icon_bell />
                 <.count_badge
                   count={@notifications_count}
-                  class="absolute -right-0.5 -top-0.5 ring-2 ring-white dark:ring-slate-900"
+                  class={count_badge_class(:glyph)}
                 />
               </.link>
               <%!-- The avatar opens the account menu (a native <details data-menu>,
@@ -1708,7 +1717,7 @@ defmodule VutuvWeb.ShellLive do
         <.count_badge
           count={@count}
           cap={@cap}
-          class="absolute -right-0.5 -top-0.5 ring-2 ring-white dark:ring-slate-900"
+          class={count_badge_class(:glyph)}
         />
       </span>
       <span class="text-[10px]">{@label}</span>
