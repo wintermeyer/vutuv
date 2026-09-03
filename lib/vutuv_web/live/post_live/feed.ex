@@ -3384,7 +3384,7 @@ defmodule VutuvWeb.PostLive.Feed do
           >
             {gettext("Nothing here yet. Follow people to fill your feed, or write your first post.")}
             <.link
-              navigate={~p"/listings/most_followed_users"}
+              navigate={~p"/system/members"}
               class="font-semibold text-brand-600 hover:text-brand-700 dark:text-brand-400 dark:hover:text-brand-300"
             >
               {gettext("Discover people to follow")}

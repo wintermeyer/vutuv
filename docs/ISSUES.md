@@ -44,26 +44,25 @@ it. Naming a code construct instead is what makes forty open issues unreadable.
 | Code construct | Surface |
 | --- | --- |
 | Give outbound links one owner for their `rel` attribute | Outbound links disagree about what the target site learns |
-| Share one refresh loop across the three snapshot caches | The who-to-follow lists each keep their own refresh timer |
+| Share one sweep loop across the three caches | Post bodies, hashtags and social feeds each expire on a timer of their own |
 | Implement featured hashtags, or stop advertising API version 6 | Mastodon clients offer featured hashtags that vutuv cannot serve |
 
-An internal change still has a surface. "The who-to-follow lists" is something
-you can picture; "the three snapshot caches" is not.
+An internal change still has a surface. "Post bodies, hashtags and social
+feeds" is something you can picture; "the three caches" is not.
 
 ## Two worked examples
 
 ### Internal, nobody outside the code notices
 
-> **The who-to-follow lists each keep their own refresh timer**
+> **Post bodies, hashtags and social feeds each expire on a timer of their own**
 >
-> The most-followed listing and the profile's who-to-follow suggestions each
-> cache their ranking behind a copy of the same thirty-line refresh timer, so
-> the next cached list will copy it a third time. I would extract one module
-> they share.
+> Three caches hold rendered post bodies, the hashtag lookup and the inline
+> social feeds, and each keeps its own copy of the same expiry sweep, so the
+> next cache will copy it a fourth time. I would extract one module they share.
 >
 > Members see nothing change. Nothing waits on it.
 >
-> Where: `Vutuv.Social.PopularUsers` and `Vutuv.Posts.TopPosters`
+> Where: `VutuvWeb.Markdown.Cache`, `Vutuv.Tags.LinkableCache` and `Vutuv.SocialFeed.Cache`
 
 ### A bug a member runs into
 

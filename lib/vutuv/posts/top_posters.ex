@@ -7,9 +7,9 @@ defmodule Vutuv.Posts.TopPosters do
   that the profile page used to run on every single mount (including every
   crawler's dead render), although the ranking is identical for every viewer
   and moves only as fast as posts and likes land. One GenServer owns the slow
-  path, exactly the `Vutuv.Social.PopularUsers` deal: it recomputes the pool
-  every few minutes into a `read_concurrency` ETS table, and readers take
-  their prefix from the snapshot with no database round trip. When the
+  path: it recomputes the pool every few minutes into a `read_concurrency` ETS
+  table, and readers take their prefix from the snapshot with no database round
+  trip. When the
   snapshot cannot answer (application boot, tests — the refresh timer is off
   under `config :vutuv, :refresh_top_posters, false` — or an unexpected
   window/limit), `top/2` returns `:miss` and `Posts.top_recent_posters/2`

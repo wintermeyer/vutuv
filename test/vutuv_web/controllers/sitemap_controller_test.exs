@@ -154,7 +154,6 @@ defmodule VutuvWeb.SitemapControllerTest do
       assert conn.resp_body =~ "<loc>#{@base}/</loc>"
       assert conn.resp_body =~ "<loc>#{@base}/community</loc>"
       assert conn.resp_body =~ "<loc>#{@base}/developers</loc>"
-      assert conn.resp_body =~ "<loc>#{@base}/listings/most_followed_users</loc>"
     end
   end
 

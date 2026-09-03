@@ -9,7 +9,6 @@ defmodule VutuvWeb.PageController do
   alias Vutuv.Prefs
   alias Vutuv.SourceRepo
   alias VutuvWeb.AgentDocs
-  alias VutuvWeb.AgentDocs.ListDocs
   alias VutuvWeb.ControllerHelpers
   alias VutuvWeb.LandingExperiment
   alias VutuvWeb.OpenGraph
@@ -51,34 +50,25 @@ defmodule VutuvWeb.PageController do
       |> User.changeset()
       |> Ecto.Changeset.put_assoc(:emails, [%Email{public?: true, email_type: "Personal"}])
 
-    prefetch = "/listings/most_followed_users"
-
     # The headline is under a split test (VutuvWeb.LandingExperiment): the
     # variant is drawn once per session and one view is counted with it.
     conn
     |> LandingExperiment.assign_variant()
-    |> render_landing(changeset: changeset, prefetch: prefetch)
+    |> render_landing(changeset: changeset)
   end
 
   # The one way to render the landing page, because it is rendered from two
   # actions: `index` and the rejected sign-up below, which shows the identical
-  # screen with the errors on it. Assigning the examples in `index` only left
-  # the rejected sign-up raising KeyError on the first assign the template
-  # reached, i.e. a 500 on every mistyped form.
+  # screen with the errors on it. Any assign the template grows belongs here and
+  # not in `index`, or the rejected sign-up raises KeyError on it — i.e. a 500 on
+  # every mistyped form, which is how that rule was learned.
   defp render_landing(conn, assigns) do
     # Every example on this page is a static screenshot in the template, so the
     # landing page loads nothing of its own. It used to show a wall of real
     # posts from a cached snapshot; that came out again because a socket and a
     # refresh query on the most requested page in the app were not worth what
     # the block added.
-    render(
-      conn,
-      "index.html",
-      Keyword.merge(
-        [prefetch: "/listings/most_followed_users"],
-        assigns
-      )
-    )
+    render(conn, "index.html", assigns)
   end
 
   def redirect_index(conn, _params) do
@@ -394,28 +384,6 @@ defmodule VutuvWeb.PageController do
     ControllerHelpers.render_pin_screen(conn)
   end
 
-  # Also served as Markdown / text / JSON via VutuvWeb.AgentDocs.ListDocs.
-  # Keep most_followed_users.html and the doc builder in sync
-  # (agent_docs_drift_test.exs).
-  def most_followed_users(conn, _params) do
-    users = Vutuv.Social.most_followed_users(1000)
-    work_info_by_id = VutuvWeb.UserHelpers.work_information_map(users, 60)
-    tags_by_id = VutuvWeb.UserHelpers.tag_summary_map(users, 4)
-
-    AgentDocs.respond(conn,
-      html: fn conn ->
-        render(conn, "most_followed_users.html",
-          page_title: gettext("Most Followed Users"),
-          users: users,
-          work_info_by_id: work_info_by_id,
-          tags_by_id: tags_by_id,
-          following_by_id: VutuvWeb.UserHelpers.following_map(conn.assigns[:current_user], users)
-        )
-      end,
-      doc: fn -> ListDocs.build_most_followed(users, work_info_by_id, tags_by_id) end
-    )
-  end
-
   @llms_txt """
   # vutuv
 
@@ -451,7 +419,6 @@ defmodule VutuvWeb.PageController do
     their full text); a single entry lives at `/<username>/<section>/<id-or-slug>`
   - `/<username>/tags/<tag>/endorsers` — everyone who endorses this member for that tag
   - `/tags/<tag>` — a tag and its most endorsed members
-  - `/listings/most_followed_users` — the most followed members
   - `/system/members` — the member directory: every member, filed by last-name
     initial at `/system/members/<a-z|other>`, plus a name search on the index
   - `/system/markdown` — what members may write in a post: the Markdown

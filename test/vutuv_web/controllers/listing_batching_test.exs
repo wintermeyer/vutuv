@@ -1,6 +1,6 @@
 defmodule VutuvWeb.ListingBatchingTest do
   @moduledoc """
-  Findings [43]/[44]: the listing pages and the profile right rail used to run
+  Findings [43]/[44]: the people lists and the profile right rail used to run
   the per-row current_job/1 chain and a per-row user_follows_user?/2 query
   through card_list / the rail. The controllers now batch both, passing
   work_info_by_id and following_by_id assigns. These tests assert the rendered
@@ -23,114 +23,6 @@ defmodule VutuvWeb.ListingBatchingTest do
     )
 
     user
-  end
-
-  describe "GET /listings/most_followed_users" do
-    test "renders each user's name and current-job line", %{conn: conn} do
-      alice = insert_activated_user(first_name: "Alice") |> with_job("Captain", "Acme")
-      bob = insert_activated_user(first_name: "Bob")
-      # Both need a visible follower to surface: the listing ranks members who
-      # have at least one, most followers first.
-      insert(:follow, follower: bob, followee: alice)
-      insert(:follow, follower: alice, followee: bob)
-
-      body = conn |> get(~p"/listings/most_followed_users") |> html_response(200)
-
-      assert body =~ "Alice"
-      assert body =~ "Bob"
-      # The batched work-info string is rendered for the user with a job.
-      assert body =~ "Captain @ Acme"
-    end
-
-    test "shows the explanatory note and a descriptive page title", %{conn: conn} do
-      body = conn |> get(~p"/listings/most_followed_users") |> html_response(200)
-
-      # The intro note explains why this is, for now, just a most-followed list.
-      assert body =~ "So for now"
-      assert body =~ "1,000 users with the most followers"
-
-      # The HTML <title> is no longer the bare site name.
-      assert body =~ ~r{<title[^>]*>[^<]*Most Followed Users[^<]*</title>}
-    end
-
-    test "lists a member's top tags linked to the tag page, with an overflow count",
-         %{conn: conn} do
-      fan = insert_activated_user(first_name: "Fan")
-      star = insert_activated_user(first_name: "Star")
-      # A follower so the star surfaces on the listing (it ranks members who
-      # have at least one visible follower).
-      insert(:follow, follower: fan, followee: star)
-
-      popular = insert(:tag)
-      popular_ut = insert(:user_tag, user: star, tag: popular)
-      # Endorse the popular tag so it ranks first among the member's tags.
-      insert(:user_tag_endorsement, user_tag: popular_ut, user: fan)
-
-      # Five more tags, so the member has six in all: four are shown, two overflow.
-      for n <- 1..5 do
-        insert(:user_tag, user: star, tag: insert(:tag, name: "Extra #{n}", slug: "extra_#{n}"))
-      end
-
-      body = conn |> get(~p"/listings/most_followed_users") |> html_response(200)
-
-      # The most endorsed tag is shown and links to its public tag page.
-      assert body =~ ~r{<a[^>]+href="/tags/#{popular.slug}"[^>]*>[^<]*#{popular.name}}
-      # Six tags total, only four shown, so two overflow into the "+N more" count.
-      assert body =~ "+2 more tags"
-    end
-
-    test "loading the tag summary keeps the query count constant", %{conn: conn} do
-      fan = insert_activated_user(first_name: "Fan")
-
-      tagged = fn n ->
-        u = insert_activated_user(first_name: "Tagged#{n}")
-        insert(:follow, follower: fan, followee: u)
-        ut = insert(:user_tag, user: u, tag: insert(:tag, name: "Tag#{n}"))
-        insert(:user_tag_endorsement, user_tag: ut, user: fan)
-      end
-
-      for n <- 1..10, do: tagged.(n)
-
-      conn_for = fn -> conn |> recycle() |> get(~p"/listings/most_followed_users") end
-      {_, few} = count_queries(fn -> conn_for.() end)
-
-      for n <- 11..25, do: tagged.(n)
-
-      {_, many} = count_queries(fn -> conn_for.() end)
-
-      # The per-user tag summary is one batched query, so adding tagged members
-      # must not grow the page's query count.
-      assert many <= few + 2,
-             "query count grew from #{few} to #{many}; the tag summary is not batched"
-    end
-
-    test "query count stays constant as the user count grows", %{conn: conn} do
-      # A shared follower so every listed member surfaces (the listing only
-      # ranks members with at least one visible follower).
-      fan = insert_activated_user(first_name: "Fan")
-
-      for n <- 1..15 do
-        u = insert_activated_user(first_name: "List#{n}") |> with_job("Eng#{n}", "Org#{n}")
-        insert(:follow, follower: fan, followee: u)
-      end
-
-      conn_for = fn -> conn |> recycle() |> get(~p"/listings/most_followed_users") end
-
-      {_, few} = count_queries(fn -> conn_for.() end)
-
-      for n <- 16..40 do
-        u = insert_activated_user(first_name: "List#{n}") |> with_job("Eng#{n}", "Org#{n}")
-        insert(:follow, follower: fan, followee: u)
-      end
-
-      {_, many} = count_queries(fn -> conn_for.() end)
-
-      # Adding 25 more users must not add ~75 queries (the old per-row cost).
-      # A tiny slack accommodates session/identity lookups that don't scale
-      # with the listing; the listing itself must not grow with row count.
-      assert many <= few + 2,
-             "query count grew from #{few} to #{many}; the listing is not batched"
-    end
   end
 
   describe "GET /:slug/followers and /:slug/following" do
@@ -238,8 +130,9 @@ defmodule VutuvWeb.ListingBatchingTest do
 
       insert(:follow, follower: viewer, followee: recommended)
 
-      # The profile being viewed; Social.most_followed_users/1 orders by
-      # follower count, so give the recommended user a follower to surface them.
+      # The profile being viewed; the rail draws from the window's recent
+      # posters, so give the recommended user a follower and a post to surface
+      # them.
       owner = insert_activated_user(first_name: "Owner")
       insert(:follow, follower: owner, followee: recommended)
 
@@ -255,9 +148,8 @@ defmodule VutuvWeb.ListingBatchingTest do
     test "never recommends the profile owner to themselves", %{conn: conn} do
       {conn, _viewer} = create_and_login_user(conn)
 
-      # The profile owner is the most-followed member, so the default
-      # most_followed_users/1 query would otherwise surface them at the top of
-      # their own "who to follow" rail.
+      # The profile owner is a well-followed member, so nothing but the
+      # explicit self-filter keeps them out of their own "who to follow" rail.
       owner = insert_activated_user(first_name: "Popular")
       insert(:follow, follower: insert_activated_user(), followee: owner)
       insert(:follow, follower: insert_activated_user(), followee: owner)

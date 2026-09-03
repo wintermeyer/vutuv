@@ -189,9 +189,6 @@ defmodule VutuvWeb.OpenGraph do
   defp page_copy(["developers" | _]),
     do: gettext("Developer documentation for the vutuv API.")
 
-  defp page_copy(["listings", "most_followed_users"]),
-    do: gettext("The most followed members on vutuv.")
-
   defp page_copy(["tags" | _]),
     do: gettext("Browse tags on vutuv and discover the members behind them.")
 

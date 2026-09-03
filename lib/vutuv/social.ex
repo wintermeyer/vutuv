@@ -23,7 +23,6 @@ defmodule Vutuv.Social do
   alias Vutuv.Social.Block
   alias Vutuv.Social.Follow
   alias Vutuv.Social.PastFollow
-  alias Vutuv.Social.PopularUsers
   alias Vutuv.Social.UserBookmark
   alias Vutuv.Social.UserLike
   alias Vutuv.UUIDv7
@@ -1043,32 +1042,6 @@ defmodule Vutuv.Social do
   end
 
   @doc """
-  The `limit` users with the most followers, ties broken by name. Backs both
-  the public listing page and the profile's default "who to follow" rail.
-
-  Applies the same visibility gate as search: unactivated accounts and
-  accounts hidden by moderation never surface. Selects only the columns the
-  listing rows render (`Vutuv.Accounts.User.listing_fields/0`), so the sort
-  does not drag every user column through it.
-
-  Ranks from the (small) `follows` table rather than grouping the whole users
-  table, so a member with no visible follower does not appear at all. On the
-  real data that is the same top-N as ranking everyone (the most-followed
-  members all have followers), but it replaces a full-table group-by with a
-  scan of the far smaller follows table.
-
-  Served from the `Vutuv.Social.PopularUsers` snapshot (refreshed every few
-  minutes) when available, so the hot paths never pay for the ranking scan;
-  a cache miss falls back to the direct query.
-  """
-  def most_followed_users(limit) do
-    case PopularUsers.top(limit) do
-      {:ok, users} -> users
-      :miss -> compute_most_followed(limit)
-    end
-  end
-
-  @doc """
   The newest members who really show a face, newest first — the pool the
   feed's "New here" welcome card draws its handful out of.
 
@@ -1092,7 +1065,7 @@ defmodule Vutuv.Social do
   Same visibility gate as every other people listing (unconfirmed and
   moderation-hidden accounts never surface) and the same narrow listing-row
   select. The viewer, their blocks and the people they already follow are
-  filtered at the call site, exactly as `most_followed_users/1`'s pool is.
+  filtered at the call site, the way every candidate pool here is.
   """
   def newest_members_with_avatar(limit) do
     Repo.all(
@@ -1136,45 +1109,6 @@ defmodule Vutuv.Social do
     |> Repo.all()
     |> Enum.reject(&MapSet.member?(blocked, &1.id))
     |> Enum.take(limit)
-  end
-
-  @doc """
-  The uncached ranking behind `most_followed_users/1` — one GROUP BY over
-  `follows`. Called by `Vutuv.Social.PopularUsers` on its refresh timer and
-  as the direct fallback while no snapshot exists; don't call it from
-  request paths.
-  """
-  def compute_most_followed(limit) do
-    # Count each followee's *visible* followers, so the ranking matches the
-    # follower_count/1 shown on each profile and can't be inflated by
-    # mass-registering never-activated follower accounts.
-    #
-    # That promise is why this counts pages too (issue #1336): the profile
-    # figure started counting them in v7.249.0, so an inner join to `users`
-    # here would have quietly ranked by a different number than the one beside
-    # each name. Same two LEFT joins and same gate per kind as
-    # `follower_count_query/1`.
-    follower_counts =
-      from(fl in Follow,
-        left_join: fr in User,
-        on: fr.id == fl.follower_id,
-        left_join: fo in Organization,
-        on: fo.id == fl.follower_organization_id,
-        where: visible_member(fr) or visible_page(fo),
-        group_by: fl.followee_id,
-        select: %{followee_id: fl.followee_id, count: count()}
-      )
-
-    Repo.all(
-      from(u in Vutuv.Accounts.User,
-        join: fc in subquery(follower_counts),
-        on: fc.followee_id == u.id,
-        where: account_confirmed_row(u) and not account_hidden_row(u),
-        order_by: [desc: fc.count, asc: u.first_name, asc: u.last_name],
-        limit: ^limit,
-        select: struct(u, ^User.listing_fields())
-      )
-    )
   end
 
   # ── Vernetzt = mutual follow (derived) ──

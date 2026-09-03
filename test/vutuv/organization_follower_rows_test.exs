@@ -140,14 +140,5 @@ defmodule Vutuv.OrganizationFollowerRowsTest do
       # must be left out rather than surface as a nil row.
       assert Social.followers_to_follow_back(member.id, 5) == []
     end
-
-    test "the most-followed listing still ranks members" do
-      member = insert(:activated_user)
-      person = insert(:activated_user)
-      {:ok, _} = Social.follow(person, member.id)
-      {_organization, _follow} = page_follows(member)
-
-      assert Enum.any?(Social.most_followed_users(10), &(&1.id == member.id))
-    end
   end
 end

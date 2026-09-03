@@ -723,7 +723,6 @@ defmodule VutuvWeb.Router do
     # everyone else gets the placeholder helper. Braces are invalid in
     # usernames, so no member can ever shadow it.
     get("/{{username}}", PageController, :newsletter_username_placeholder)
-    get("/listings/most_followed_users", PageController, :most_followed_users)
 
     # The public member directory: the A-Z overview plus one page per letter.
     # The crawl surface for search engines that follow links instead of
@@ -1049,8 +1048,9 @@ defmodule VutuvWeb.Router do
     post("/unsubscribe/:token", UnsubscribeController, :create)
   end
 
-  # Legacy URLs from before profiles moved to the root (and before the
-  # /sessions and /search_queries renames). GET-only 301s; see the controller.
+  # Retired public URLs: the scheme from before profiles moved to the root (and
+  # before the /sessions and /search_queries renames), plus pages that have gone
+  # away since. GET-only 301s; see the controller.
   scope "/", VutuvWeb do
     pipe_through(:browser)
 
@@ -1062,6 +1062,8 @@ defmodule VutuvWeb.Router do
     # The pre-2026 API's public vCard URL, which search engines still
     # remember; consolidates onto the profile's vCard sibling.
     get("/api/1.0/users/:slug/vcard", LegacyRedirectController, :api_vcard)
+    # The most-followed listing, retired in favour of /system/members.
+    get("/listings/most_followed_users", LegacyRedirectController, :most_followed_users)
   end
 
   # Incremental LiveView surface. `InitAssigns` assigns `:current_user` from the

@@ -1380,7 +1380,7 @@ defmodule VutuvWeb.UserProfileLive do
       # people, so the list closes with the social step. Its link jumps to the
       # "Who to follow" card, which the under-threshold owner view promotes to
       # the top of the rail; an installation with nobody to suggest falls back
-      # to the browsable most-followed listing instead of a dead anchor.
+      # to the browsable member directory instead of a dead anchor.
       %{
         # Deliberately no number in the label. "Follow 5 members" reads as a
         # quota to be served, and the figure is ours, not the member's. The
@@ -1388,8 +1388,7 @@ defmodule VutuvWeb.UserProfileLive do
         # reports real progress, which is the encouraging half of a count.
         label: gettext("Follow other members"),
         done: followee_count >= @discovery_follow_target,
-        href:
-          if(suggestions?, do: "#profile-who-to-follow", else: ~p"/listings/most_followed_users"),
+        href: if(suggestions?, do: "#profile-who-to-follow", else: ~p"/system/members"),
         hint: follow_step_hint(followee_count)
       }
     ]

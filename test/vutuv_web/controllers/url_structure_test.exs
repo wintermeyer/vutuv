@@ -2,9 +2,9 @@ defmodule VutuvWeb.UrlStructureTest do
   @moduledoc """
   Pins the root-level URL scheme: profiles live at /:slug (GitHub-style) with
   all per-user sub-pages under /:slug/..., while the legacy /users/:slug URLs,
-  /sessions/new and /search_queries/... 301 to their new homes. The catch-all
-  user scope sits last in the router, so every static route must keep winning
-  over a slug lookup.
+  /sessions/new, /search_queries/... and the retired most-followed listing 301
+  to their new homes. The catch-all user scope sits last in the router, so
+  every static route must keep winning over a slug lookup.
   """
   use VutuvWeb.ConnCase
 
@@ -105,6 +105,17 @@ defmodule VutuvWeb.UrlStructureTest do
     test "the legacy /search_queries URLs 301 to /search", %{conn: conn} do
       assert redirected_to(get(conn, "/search_queries/new"), 301) == "/search"
       assert redirected_to(get(conn, "/search_queries/elixir"), 301) == "/search?q=elixir"
+    end
+  end
+
+  describe "the retired most-followed listing" do
+    # The agent-format siblings ride along without a clause of their own:
+    # `AgentFormat.keep_extension/1` puts the requested extension back on any
+    # in-app redirect's location (pinned in agent_format_test.exs), and the
+    # directory serves every format (agent_docs_drift_test.exs). So the old
+    # .json URL lands on a document rather than on HTML.
+    test "/listings/most_followed_users 301s to the member directory", %{conn: conn} do
+      assert redirected_to(get(conn, "/listings/most_followed_users"), 301) == "/system/members"
     end
   end
 

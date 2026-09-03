@@ -337,7 +337,7 @@ checked — 1/5 done — and leads through photo → tagline (Kurzbeschreibung) 
 ein Gedanke zu #elixir") → **"Follow 5 members"**. The follow step shows the
 running count as its hint, ticks off live when the fifth follow happens on the
 page itself, and links to the "Who to follow" card — or, on an installation
-with nobody to suggest, to the most-followed listing.
+with nobody to suggest, to the member directory.
 
 While the owner follows fewer than five members
 (`UserProfileLive.@discovery_follow_target`), the profile also renders the
@@ -356,7 +356,7 @@ blocked). Follower totals deliberately play no part — they reward the past,
 while the card's promise is a feed with something in it, which only current,
 liked output can keep. Deliberately strict, so a thin card beats a padded
 one; an installation with no recent posts renders no card, and the checklist
-step then links to the most-followed listing instead.
+step then links to the member directory instead.
 
 Work experience is deliberately not on the checklist; its section card keeps its
 own add tile.

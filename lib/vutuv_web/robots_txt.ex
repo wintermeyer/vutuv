@@ -39,8 +39,9 @@ defmodule VutuvWeb.RobotsTxt do
     # redirect on it can never consolidate. So instead:
     #
     # 1. Redirects stay crawlable so their 301 can do its job: the old
-    #    /users/... URLs (-> /<slug>), /sessions/new (-> /login) and the
-    #    legacy /api/1.0/users/<slug>/vcard URLs (-> /<slug>.vcf).
+    #    /users/... URLs (-> /<slug>), /sessions/new (-> /login), the legacy
+    #    /api/1.0/users/<slug>/vcard URLs (-> /<slug>.vcf) and the retired
+    #    /listings/most_followed_users (-> /system/members).
     #
     # 2. Pages that must never surface in results carry a page-level
     #    `X-Robots-Tag: noindex` and stay crawlable precisely so that header
