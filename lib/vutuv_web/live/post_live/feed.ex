@@ -2160,8 +2160,19 @@ defmodule VutuvWeb.PostLive.Feed do
     cond do
       is_nil(entry) -> socket
       known_entry?(socket, entry) -> socket
-      true -> queue(socket, for_reader(entry, socket))
+      true -> place_arrival(socket, for_reader(entry, socket))
     end
+  end
+
+  # Where the arrival goes, which is the question `insert_entry/3` asks of every
+  # local one and this door used to skip: a row on top at now, the count alone
+  # while the reader is standing on a past day. What it costs to draw it there
+  # is not only a card belonging to another day sitting hidden in this day's
+  # stream — `queue/2` also says the timeline is no longer empty, which takes
+  # the day's own "nothing reached your feed on this day" card away and leaves
+  # the reader looking at a blank page.
+  defp place_arrival(socket, entry) do
+    if at_now?(socket.assigns), do: queue(socket, entry), else: count_away(socket, entry)
   end
 
   # A waiting post goes into the timeline **now**, hidden, and not when the
