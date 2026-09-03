@@ -435,7 +435,15 @@ defmodule VutuvWeb.SessionController do
   # or this one after the member has answered, gets nothing. It survives a
   # reload and a failed submit (both stay in this session), and the controller
   # drops it the moment the questions are done.
-  defp maybe_open_welcome(conn, true), do: put_session(conn, :welcome_pending, true)
+  # Opening it also CLEARS the step, because logging in keeps the session's
+  # contents (it renews the id, not the data): a browser where somebody signed
+  # up earlier and got as far as the last step still carries `:welcome_step`,
+  # and the next account created in it would open on that step and skip both
+  # questions. Found by walking two sign-ups through one browser, 2026-09-03.
+  defp maybe_open_welcome(conn, true) do
+    conn |> put_session(:welcome_pending, true) |> delete_session(:welcome_step)
+  end
+
   defp maybe_open_welcome(conn, false), do: conn
 
   # The welcome modal owns that first screen, and a toast behind its dimmed

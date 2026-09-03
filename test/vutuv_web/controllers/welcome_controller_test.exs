@@ -305,6 +305,27 @@ defmodule VutuvWeb.WelcomeControllerTest do
       assert reload(user).employment_status == "open"
     end
 
+    # Logging in renews the session id, not its contents, so a browser where
+    # somebody signed up before still carries their `:welcome_step`. Without
+    # clearing it the next account opens on whatever step that was — skipping
+    # both questions, silently. Found in the browser, not here (2026-09-03).
+    test "a second sign-up in the same browser starts at the first step", %{conn: conn} do
+      {conn, first} = register_and_confirm(conn)
+      # Walk the first member to the last step, then leave them there.
+      conn = to_job_step(conn, %{"city" => "Bremen"})
+      assert Repo.get!(User, first.id)
+
+      # No logout in between: that is how it happened (a second sign-up in a
+      # browser that was still signed in), and it is also the only way the key
+      # survives — logging out drops the session whole.
+      {conn, second} = register_and_confirm(conn)
+
+      body = conn |> get(~p"/#{second}") |> html_response(200)
+
+      assert body =~ ~s(name="address[city]")
+      refute body =~ ~s(name="user[employment_status]")
+    end
+
     test "it comes back to the page it was floating over", %{conn: conn} do
       {conn, _user} = register_and_confirm(conn)
 

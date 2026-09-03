@@ -317,7 +317,15 @@ config :vutuv, :composer_draft_debounce_ms, 5_000
 # Overridable per installation with WELCOME_SUGGESTIONS (see config/runtime.exs
 # and docs/ADMINS.md); an empty list anywhere drops the third step.
 config :vutuv, :welcome_suggestions, %{
-  "de" => ["@wintermeyer", "@tagesschau@ard.social", "@tazgetroete@mastodon.social"]
+  "de" => [
+    "@wintermeyer",
+    "@tagesschau@ard.social",
+    "@tazgetroete@mastodon.social",
+    "@heiseonline@social.heise.de",
+    "@bundestag@social.bund.de",
+    "@Bundesregierung@social.bund.de",
+    "@DeutscherWetterdienst@social.bund.de"
+  ]
 }
 
 # The global on/off switch for the daily text-ad system (see Vutuv.Ads).
