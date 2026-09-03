@@ -62,10 +62,29 @@ defmodule Vutuv.Videos do
 
   ## Configuration
 
-  @doc "Whether members can attach a video: the flag is on and ffmpeg is there."
+  @doc "Whether this installation has video at all: the flag is on and ffmpeg is there."
   def enabled?, do: flag?() and FFmpeg.available?()
 
   defp flag?, do: Keyword.get(config(), :enabled, true)
+
+  # Who may attach a clip: `:admins` (the default while the feature is new)
+  # or `:members` — `VIDEO_UPLOADERS`, docs/ADMINS.md.
+  defp uploaders, do: Keyword.get(config(), :uploaders, :admins)
+
+  @doc """
+  Whether this member may attach a clip: an admin always, anyone else once
+  the installation opens uploads. Playback is never gated.
+  """
+  def uploads_for?(%User{admin?: true}), do: enabled?()
+  def uploads_for?(%User{}), do: advertised?()
+  def uploads_for?(_anonymous), do: false
+
+  @doc """
+  Whether video is announced to anyone — the Mastodon instance answer, which
+  a client reads before it shows a video button — so only once every member
+  may upload.
+  """
+  def advertised?, do: enabled?() and uploaders() == :members
 
   def max_filesize, do: Keyword.fetch!(config(), :max_filesize)
   def max_duration_seconds, do: Keyword.fetch!(config(), :max_duration_seconds)
@@ -97,7 +116,7 @@ defmodule Vutuv.Videos do
   """
   def create_pending_video(%User{} = user, path, filename) do
     cond do
-      not enabled?() ->
+      not uploads_for?(user) ->
         {:error, :disabled}
 
       File.stat!(path).size > max_filesize() ->

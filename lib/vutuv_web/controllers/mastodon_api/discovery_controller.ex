@@ -132,10 +132,11 @@ defmodule VutuvWeb.MastodonApi.DiscoveryController do
       |> Enum.map(&MIME.from_path("x" <> &1))
       |> Enum.uniq()
 
-    # The clip containers too, where the installation takes video at all
-    # (issue #1915): a client reads this before it offers the camera roll's
-    # videos, so an installation without ffmpeg must not list them.
-    if Videos.enabled?(), do: images ++ Videos.mime_types(), else: images
+    # The clip containers too, where every member may upload one (issue
+    # #1915, `Vutuv.Videos.advertised?/0`): a client reads this before it
+    # offers the camera roll's videos, so an installation without ffmpeg, or
+    # one still trying video with its admins, must not list them.
+    if Videos.advertised?(), do: images ++ Videos.mime_types(), else: images
   end
 
   # Mastodon's three video figures (issue #1915). The size is the cap the
@@ -144,7 +145,7 @@ defmodule VutuvWeb.MastodonApi.DiscoveryController do
   # the frame rate and the pixel budget are what the pipeline accepts and
   # scales down from, a 4K clip at 60 fps.
   defp video_limits do
-    if Videos.enabled?() do
+    if Videos.advertised?() do
       %{
         video_size_limit: Videos.max_filesize(),
         video_frame_rate_limit: 60,

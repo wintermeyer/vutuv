@@ -54,4 +54,16 @@ defmodule Vutuv.VideoFixtures do
     System.find_executable("ffmpeg") ||
       raise "ffmpeg is not installed; the video tests need it (as production does)"
   end
+
+  @doc """
+  Sets one key of `:post_videos` for the rest of the test module (restored on
+  exit). The key is read by the pipeline, the composer and both APIs, so the
+  module must be `async: false`.
+  """
+  def put_video_config(key, value) do
+    Vutuv.WebPushHelpers.put_config(
+      :post_videos,
+      Keyword.put(Application.fetch_env!(:vutuv, :post_videos), key, value)
+    )
+  end
 end

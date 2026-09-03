@@ -23,7 +23,7 @@ defmodule VutuvWeb.PostVideoControllerTest do
     put_config(:uploads_dir_prefix, tmp)
     on_exit(fn -> File.rm_rf(tmp) end)
 
-    {author_conn, author} = create_and_login_user(conn)
+    {author_conn, author} = create_and_login_admin(conn)
     path = VideoFixtures.mp4_path()
     {:ok, video} = Videos.create_pending_video(author, path, Path.basename(path))
     :ok = Job.run(video.id)

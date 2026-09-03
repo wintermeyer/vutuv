@@ -316,7 +316,9 @@ website.
 
 ### POST /me/post_videos
 
-Scope: `posts:write`. Upload one video (multipart, the file in the `video`
+Scope: `posts:write`. Open to admins unless the installation sets
+`VIDEO_UPLOADERS=members`; any other account gets 422 "Videos are not
+accepted". Upload one video (multipart, the file in the `video`
 field, optional `alt`): the answer is **202** with the clip's state, because
 the server converts and checks it first (about a minute for a two-minute
 clip). Poll `GET /me/post_videos/:id` until `ready` is `true`, then attach it

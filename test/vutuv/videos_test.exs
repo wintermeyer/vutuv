@@ -32,7 +32,27 @@ defmodule Vutuv.VideosTest do
     put_config(:uploads_dir_prefix, tmp)
     on_exit(fn -> File.rm_rf(tmp) end)
 
-    %{user: insert_activated_user(), tmp: tmp}
+    # Uploads are for admins unless the installation opens them (`:uploaders`
+    # in `:post_videos`, VIDEO_UPLOADERS); the members here are admins, and
+    # the "who may upload" block below is where a plain member is tried.
+    %{user: insert_activated_user(admin?: true), tmp: tmp}
+  end
+
+  describe "who may upload" do
+    test "a member outside the audience is refused" do
+      member = insert_activated_user()
+
+      assert {:error, :disabled} =
+               Videos.create_pending_video(member, VideoFixtures.mp4_path(), "clip.mp4")
+    end
+
+    test "with VIDEO_UPLOADERS=members every member may" do
+      VideoFixtures.put_video_config(:uploaders, :members)
+      member = insert_activated_user()
+
+      assert {:ok, _video} =
+               Videos.create_pending_video(member, VideoFixtures.mp4_path(), "clip.mp4")
+    end
   end
 
   defp upload!(user, path \\ VideoFixtures.mp4_path()) do
@@ -56,20 +76,14 @@ defmodule Vutuv.VideosTest do
     end
 
     test "refuses a file over the size cap before reading it", %{user: user} do
-      put_config(
-        :post_videos,
-        Keyword.put(Application.get_env(:vutuv, :post_videos), :max_filesize, 10)
-      )
+      VideoFixtures.put_video_config(:max_filesize, 10)
 
       assert {:error, :too_large} =
                Videos.create_pending_video(user, VideoFixtures.mp4_path(), "tiny.mp4")
     end
 
     test "refuses a clip over the length cap after probing it", %{user: user} do
-      put_config(
-        :post_videos,
-        Keyword.put(Application.get_env(:vutuv, :post_videos), :max_duration_seconds, 2)
-      )
+      VideoFixtures.put_video_config(:max_duration_seconds, 2)
 
       assert {:error, :too_long} =
                Videos.create_pending_video(user, VideoFixtures.mp4_path(), "tiny.mp4")

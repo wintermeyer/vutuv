@@ -680,6 +680,9 @@ if config_env() == :prod do
          :post_videos,
          Keyword.merge(video_defaults,
            enabled: System.get_env("VIDEO_UPLOADS") != "false",
+           uploaders:
+             (System.get_env("VIDEO_UPLOADERS") == "members" && :members) ||
+               video_defaults[:uploaders],
            max_filesize:
              (video_env_int.("VIDEO_MAX_MB") && video_env_int.("VIDEO_MAX_MB") * 1_000_000) ||
                video_defaults[:max_filesize],

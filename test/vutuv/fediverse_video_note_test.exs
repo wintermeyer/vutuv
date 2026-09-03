@@ -23,7 +23,7 @@ defmodule Vutuv.FediverseVideoNoteTest do
     put_config(:uploads_dir_prefix, tmp)
     on_exit(fn -> File.rm_rf(tmp) end)
 
-    %{user: insert_activated_user(fediverse_followers?: true)}
+    %{user: insert_activated_user(fediverse_followers?: true, admin?: true)}
   end
 
   test "the Note carries the clip as a video/mp4 Document with icon and duration", %{user: user} do
