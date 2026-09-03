@@ -31,6 +31,11 @@ defmodule VutuvWeb.FeedDuplicateCardsTest do
   dropped out here at all, so the same set rides back down as `feed_page/2`'s
   `seen:`.
 
+  The **live arrival** is the third call, and it is keyed by the event rather
+  than by the subject — a boost of a post the reader already has a card for is
+  a different entry id — which is how the same empty card came back on
+  2026-09-03 with a "Reposted by" line over it.
+
   Not async: answering a note claims from `Vutuv.RateLimiter`, a shared ETS
   table the SQL sandbox does not roll back.
   """
@@ -43,6 +48,7 @@ defmodule VutuvWeb.FeedDuplicateCardsTest do
   alias Vutuv.Fediverse.Follow
   alias Vutuv.Fediverse.Note
   alias Vutuv.Fediverse.NoteRepost
+  alias Vutuv.Fediverse.PostBoost
   alias Vutuv.Fediverse.RemoteAccount
   alias Vutuv.Fediverse.RemotePost
   alias Vutuv.Posts
@@ -126,12 +132,7 @@ defmodule VutuvWeb.FeedDuplicateCardsTest do
   # `feed_page/2` calls (ten cards in the document, the rest in the fill), the
   # whole point of every test that uses it.
   defp two_pages!(user, remote) do
-    Repo.insert!(%Follow{
-      user_id: user.id,
-      remote_account_id: remote.remote_account_id,
-      state: "accepted",
-      follow_activity_id: "https://vutuv.test/#{user.id}/actor#follows/1"
-    })
+    follow_remote!(user, remote.remote_account_id)
 
     author = insert(:activated_user)
     follow!(user, author)
@@ -139,6 +140,32 @@ defmodule VutuvWeb.FeedDuplicateCardsTest do
     for i <- 1..12 do
       author |> create_post!(%{body: "Beitrag Nummer #{i}"}) |> backdate_post!(60 + i)
     end
+  end
+
+  # The reader following an account out there — what puts that account's own
+  # posts *and* the posts it boosts in their feed.
+  defp follow_remote!(user, account_id) do
+    Repo.insert!(%Follow{
+      user_id: user.id,
+      remote_account_id: account_id,
+      state: "accepted",
+      follow_activity_id: "https://vutuv.test/#{user.id}/actor#follows/#{account_id}"
+    })
+  end
+
+  # An account out there passing a cached post on, stamped now — the arrival
+  # that reaches an open feed over `{:remote_feed_arrival, …}`. The row comes
+  # back because the announcement has to carry *its* stamp: `newest_row/2` keeps
+  # the boost only while it is at least as new as the `at` the message names, so
+  # a fresh `utc_now` there would find nothing on any run where the second rolls
+  # over in between — and the test would pass with nothing having arrived.
+  defp boost!(account, %RemotePost{} = post) do
+    Repo.insert!(%PostBoost{
+      remote_account_id: account.id,
+      remote_post_id: post.id,
+      activity_id: "https://social.example/act/#{System.unique_integer([:positive])}",
+      announced_at: DateTime.utc_now(:second)
+    })
   end
 
   # How many cards a cached post got. `data-remote-post` rides every one of
@@ -323,5 +350,28 @@ defmodule VutuvWeb.FeedDuplicateCardsTest do
 
     assert cards_for(render(view), remote) == 1,
            "the fill must not draw a second card for a post already on screen"
+  end
+
+  test "a boost of a post already on screen arriving live", %{conn: conn} do
+    # The reported shape (2026-09-03). Two accounts out there: the reader
+    # follows the author, so the post is on screen when the second one boosts
+    # it two hours later — old enough that the boost, not the post, is what the
+    # arrival finds.
+    {conn, user} = reader(conn)
+
+    remote = cached_post("was da draussen steht", 7_200)
+    follow_remote!(user, remote.remote_account_id)
+
+    {:ok, view, html} = live(conn, ~p"/feed")
+    assert cards_for(html, remote) == 1
+
+    booster = remote_account()
+    follow_remote!(user, booster.id)
+    boost = boost!(booster, remote)
+
+    send(view.pid, {:remote_feed_arrival, %{at: DateTime.to_naive(boost.announced_at)}})
+
+    assert cards_for(render(view), remote) == 1,
+           "a boost must not draw a second card for a post already on screen"
   end
 end

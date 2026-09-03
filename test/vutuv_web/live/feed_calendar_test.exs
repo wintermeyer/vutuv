@@ -626,6 +626,38 @@ defmodule VutuvWeb.FeedCalendarTest do
       assert has_element?(view, "#show-new-posts")
     end
 
+    test "and neither does one from the other network", %{conn: conn} do
+      # The fediverse door is its own (`queue_remote_arrival/2`), and it used to
+      # skip the `at_now?` split every local arrival goes through: the row was
+      # streamed into the open day hidden, and — worse — the day's own "nothing
+      # reached you on this day" card went with it, since drawing a row says the
+      # timeline is not empty. The reader was left looking at a blank page.
+      {conn, user} = create_and_login_user(conn)
+
+      account = Vutuv.MastodonHelpers.remote_account()
+
+      Repo.insert!(%Vutuv.Fediverse.Follow{
+        user_id: user.id,
+        remote_account_id: account.id,
+        state: "accepted",
+        follow_activity_id: "https://vutuv.test/#{user.id}/actor#follows/#{account.id}"
+      })
+
+      post =
+        Vutuv.MastodonHelpers.cached_post(account, content_text: "Von woanders, gerade eben.")
+
+      {:ok, view, _html} = live(conn, ~p"/feed")
+      render_click(view, "cal-day", %{"date" => iso(days_ago(3))})
+
+      # Naive UTC, the shape `Vutuv.Fediverse.nudge_feeds/2` really broadcasts.
+      send(view.pid, {:remote_feed_arrival, %{at: DateTime.to_naive(post.published_at)}})
+
+      refute timeline(view) =~ "Von woanders, gerade eben."
+      assert render(view) =~ "Nothing reached your feed on"
+      # Still counted, like every other arrival that reaches a travelling reader.
+      assert has_element?(view, "#show-new-posts")
+    end
+
     test "writing a post takes the reader home to see it", %{conn: conn} do
       # Text that vanishes on submit reads as a post that was lost, so the
       # viewer's own post is the one arrival that ends the trip.
