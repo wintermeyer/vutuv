@@ -2404,7 +2404,7 @@ defmodule VutuvWeb.PostComponents do
             no JavaScript at all, because "this is covered for a reason" is not a
             promise to break on a slow bundle. --%>
             <%!-- Once for both halves: the blurred cover takes the lite where
-            there is one (a blur needs no detail, and never an HD control,
+            there is one (a blur needs no detail, and never an SD/HD switch,
             which would offer to sharpen what is covered), the picture behind
             it takes the pair. --%>
             <% picture = RemoteMedia.picture(image) %>
