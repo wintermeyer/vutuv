@@ -1,10 +1,12 @@
 defmodule VutuvWeb.WelcomeComponents do
   @moduledoc """
-  The one-time welcome questions (location + job search) and the two frames
-  they are shown in.
+  The one-time welcome questions — where you are, whether you are looking, who
+  to follow — and the two frames they are shown in.
 
-  `welcome_form/1` is the questions themselves — one `<form>`, two changesets,
-  posting to `/system/welcome`. It is rendered in two places and nowhere else:
+  `welcome_form/1` is **one step** of them, as a form posting to
+  `/system/welcome`; `Vutuv.Welcome` owns which steps a member gets and the
+  controller which one they are on. It is rendered in two places and nowhere
+  else:
 
     * `welcome_modal/1`, the frame a new member actually meets. It floats over
       the profile the registration PIN handed them, so the page underneath says
@@ -38,9 +40,16 @@ defmodule VutuvWeb.WelcomeComponents do
       visibility_options: 0
     ]
 
+  # The globe-badged tile every surface uses for an account from another
+  # network, so a suggestion here looks like the same thing it will look like
+  # in the feed.
+  import VutuvWeb.PostComponents, only: [remote_avatar: 1]
+
   alias Phoenix.HTML.Form
   alias Vutuv.Accounts.User
+  alias Vutuv.Fediverse.RemoteAccount
   alias Vutuv.Profiles.Address
+  alias Vutuv.Welcome
   alias VutuvWeb.AddressHTML
 
   @doc """
@@ -48,15 +57,27 @@ defmodule VutuvWeb.WelcomeComponents do
 
   Rendered by `root.html.heex` while `VutuvWeb.Plug.WelcomeModal` says this
   request is the one-shot window (a brand-new member, sent here by their
-  registration PIN, who has not answered or closed it yet). Both changesets are
-  built here, empty: the modal never renders errors — a rejected submit is
-  answered with the `/system/welcome` page.
+  registration PIN, who has not answered or closed it yet). That plug carries
+  only the cheap half — the session's step and the path to come back to — and
+  the step list and its suggestions are resolved **here**, at render time, so a
+  response that never renders the layout never pays for them (the `ad_banner`
+  arrangement, for the same reason).
+
+  Both changesets are built here, empty: the modal never renders errors — a
+  rejected submit is answered with the `/system/welcome` page.
   """
   attr(:user, User, required: true)
+  attr(:stored_step, :atom, default: nil, doc: "the `:welcome_step` session value, if any")
+  attr(:return_to, :string, default: nil, doc: "the path this window is floating over")
 
   def welcome_modal(assigns) do
+    window = Welcome.window(assigns.user, Gettext.get_locale(VutuvWeb.Gettext))
+
     assigns =
       assign(assigns,
+        steps: window.steps,
+        step: Welcome.current_step(window.steps, assigns.stored_step),
+        suggestions: window.suggestions,
         address_changeset: Address.welcome_changeset(%Address{}, %{}),
         # `change/1`, not `User.changeset/2`: the fields read their values off
         # the struct either way, and the full profile-form pipeline (69 cast
@@ -85,7 +106,14 @@ defmodule VutuvWeb.WelcomeComponents do
       symmetric (no pr-12 for the ✕): the first line is the short "Art der
       Adresse" legend, which ends far left of it in every locale. --%>
       <div class="relative max-h-[90dvh] w-full overflow-y-auto rounded-t-2xl bg-white p-6 shadow-xl ring-1 ring-slate-200 sm:max-w-lg sm:rounded-2xl dark:bg-slate-900 dark:ring-slate-800">
-        <.welcome_form address_changeset={@address_changeset} user_changeset={@user_changeset} />
+        <.welcome_form
+          address_changeset={@address_changeset}
+          user_changeset={@user_changeset}
+          steps={@steps}
+          step={@step}
+          suggestions={@suggestions}
+          return_to={@return_to}
+        />
 
         <%!-- After the form, so Enter in a text field still saves. --%>
         <button
@@ -108,22 +136,32 @@ defmodule VutuvWeb.WelcomeComponents do
   end
 
   @doc """
-  The questions: where you are, and whether you are looking.
+  One step of the questions, as a form that posts to `/system/welcome`.
 
-  Two groups, one `<form>`, two changesets — the address group posts as
-  `address[...]` (a real profile address through the lax
-  `Address.welcome_changeset/2`), the job group as `user[...]` (the issue #870
-  / #928 columns through the ordinary `User.changeset/2`). Both are optional,
-  and "Skip for now" saves nothing at all.
+  Which step is the caller's business (`Vutuv.Welcome` owns the list): the
+  location group posts as `address[...]` through the lax
+  `Address.welcome_changeset/2`, the job group as `user[...]` through the
+  ordinary `User.changeset/2`, and the suggested accounts as `follow[]`. Every
+  step is optional and **saves as it is left**, so the primary button reads
+  Weiter until the last one, where it reads Fertig.
   """
   attr(:address_changeset, Ecto.Changeset, required: true)
   attr(:user_changeset, Ecto.Changeset, required: true)
+  attr(:steps, :list, required: true, doc: "every step this member gets, in order")
+  attr(:step, :atom, required: true, doc: "the one to render now")
+  attr(:suggestions, :list, default: [], doc: "`Vutuv.Welcome` structs for the accounts step")
+
+  attr(:return_to, :string,
+    default: nil,
+    doc: "the page the window floats over, so answering a step does not navigate"
+  )
 
   def welcome_form(assigns) do
     ~H"""
     <% label_class = "block text-sm font-medium text-slate-900 dark:text-white" %>
     <% hint_class = "mt-1 text-sm text-slate-600 dark:text-slate-400" %>
     <% small_label_class = "block text-xs font-medium text-slate-600 dark:text-slate-400" %>
+    <% last? = @step == List.last(@steps) %>
     <.form
       :let={f}
       for={@address_changeset}
@@ -132,6 +170,7 @@ defmodule VutuvWeb.WelcomeComponents do
       id="welcome-form"
       class="space-y-6"
     >
+      <input :if={@return_to} type="hidden" name="return_to" value={@return_to} />
       <%!-- The job group is a second changeset in the same <form>: its inputs are
       built from their own form struct, so they post under user[...]. --%>
       <% uf = to_form(@user_changeset, as: :user) %>
@@ -140,12 +179,22 @@ defmodule VutuvWeb.WelcomeComponents do
         if @address_changeset.action, do: @address_changeset, else: @user_changeset
       } />
 
+      <%!-- How far along, in the one place a wizard that cannot go back owes
+      the reader an answer: how much is still coming. Muted and small — it is
+      chrome, not a headline. --%>
+      <p :if={length(@steps) > 1} class="text-xs font-semibold uppercase tracking-wide text-slate-500 dark:text-slate-400">
+        {gettext("Step %{current} of %{total}",
+          current: Enum.find_index(@steps, &(&1 == @step)) + 1,
+          total: length(@steps)
+        )}
+      </p>
+
       <%!-- Group 1: where you are. Deliberately coarse - no street, and any one
       of the three fields on its own is a complete answer. It opens straight on
       "Type of address" (Stefan, 2026-09-03): a group of address fields needs
       no headline saying they are address fields, and "Where are you?" read as
       an odd thing for a website to ask. --%>
-      <section class="space-y-4">
+      <section :if={@step == :location} class="space-y-4">
         <fieldset>
           <legend class="mb-1.5 text-sm font-semibold text-slate-700 dark:text-slate-300">
             {gettext("Type of address")}
@@ -191,10 +240,7 @@ defmodule VutuvWeb.WelcomeComponents do
       once a status is picked (the EmploymentVisibility enhancement in app.js,
       the same one the Basics form uses); with JS off the server-rendered state
       stands, so a member who is not looking never sees the extra fields. --%>
-      <section
-        class="space-y-4 border-t border-slate-200 pt-6 dark:border-slate-800"
-        data-employment-status-field
-      >
+      <section :if={@step == :job} class="space-y-4" data-employment-status-field>
         <h3 class="text-base font-bold text-slate-900 dark:text-white">
           {gettext("Are you looking for a job?")}
         </h3>
@@ -272,8 +318,57 @@ defmodule VutuvWeb.WelcomeComponents do
         </div>
       </section>
 
+      <%!-- Step 3: a feed with nothing in it is the first thing a new member
+      sees, and "find people to follow" is a chore. Three named accounts are
+      one tick each, ticked already, and every one of them can be unfollowed
+      from its own page. Which accounts is per installation and per locale —
+      see Vutuv.Welcome. The leading hidden field is what makes unticking
+      everything reach the server as an empty list. --%>
+      <section :if={@step == :accounts} class="space-y-4">
+        <h3 class="text-base font-bold text-slate-900 dark:text-white">
+          {gettext("Who do you want to follow?")}
+        </h3>
+        <p class={hint_class}>
+          {gettext(
+            "Your feed shows what the accounts you follow write. Here are a few to start with; you can unfollow any of them at any time."
+          )}
+        </p>
+
+        <input type="hidden" name="follow[]" value="" />
+        <ul class="space-y-1">
+          <li :for={suggestion <- @suggestions}>
+            <label class="flex items-center gap-3 rounded-xl p-2 hover:bg-slate-50 dark:hover:bg-slate-800">
+              <input
+                type="checkbox"
+                name="follow[]"
+                value={suggestion.address}
+                checked
+                class={checkbox_class()}
+              />
+              <.avatar :if={suggestion.user} user={suggestion.user} size="sm" />
+              <.remote_avatar
+                :if={is_nil(suggestion.user)}
+                initials={name_initials(Welcome.label(suggestion))}
+                src={suggestion.remote_account && RemoteAccount.avatar_url(suggestion.remote_account)}
+                size="sm"
+              />
+              <span class="min-w-0">
+                <span class="block truncate text-sm font-semibold text-slate-900 dark:text-white">
+                  {Welcome.label(suggestion)}
+                </span>
+                <span class="block truncate text-xs text-slate-600 dark:text-slate-400">
+                  {suggestion.handle}
+                </span>
+              </span>
+            </label>
+          </li>
+        </ul>
+      </section>
+
       <div class="flex flex-wrap items-center gap-3 border-t border-slate-200 pt-6 dark:border-slate-800">
-        <.button type="submit" id="welcome-save">{gettext("Save")}</.button>
+        <.button type="submit" id="welcome-save">
+          {if last?, do: gettext("Done"), else: gettext("Continue")}
+        </.button>
         <.button type="submit" variant="ghost" name="skip" value="1" id="welcome-skip" data-welcome-skip>
           {gettext("Skip for now")}
         </.button>

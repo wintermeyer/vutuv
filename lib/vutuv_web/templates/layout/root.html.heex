@@ -124,8 +124,13 @@
     it away while the member is answering it. Every way out of it — the ✕,
     "Skip for now", Esc, the backdrop — is the same skip submit, so closing the
     window is an answer and the server hears about it. --%>
-    <%= if assigns[:conn] && @conn.assigns[:welcome_modal] do %>
-      <.welcome_modal user={@conn.assigns.current_user} />
+    <% welcome = assigns[:conn] && @conn.assigns[:welcome_modal] %>
+    <%= if welcome do %>
+      <.welcome_modal
+        user={@conn.assigns.current_user}
+        stored_step={welcome.step}
+        return_to={welcome.return_to}
+      />
     <% end %>
   </body>
 </html>

@@ -178,6 +178,33 @@ if config_env() == :prod do
     config :vutuv, :operator_handle, operator_handle
   end
 
+  # Which accounts the welcome window's last step offers a brand-new member to
+  # follow, per locale (Vutuv.Welcome). One group per locale, groups separated
+  # by ";", addresses by ",":
+  #
+  #     WELCOME_SUGGESTIONS="de=@wintermeyer,@tagesschau@ard.social;en=@someone@example.org"
+  #
+  # `WELCOME_SUGGESTIONS=""` offers nothing anywhere, which drops that step and
+  # leaves a two-step window. Parsing is deliberately forgiving about spaces
+  # and empty groups: a typo here must not stop the release from booting.
+  if suggestions = System.get_env("WELCOME_SUGGESTIONS") do
+    config :vutuv,
+           :welcome_suggestions,
+           suggestions
+           |> String.split(";", trim: true)
+           |> Enum.map(&String.split(&1, "=", parts: 2))
+           |> Enum.flat_map(fn
+             [locale, addresses] ->
+               [{String.trim(locale), String.split(addresses, ",", trim: true)}]
+
+             _other ->
+               []
+           end)
+           |> Map.new(fn {locale, addresses} ->
+             {locale, addresses |> Enum.map(&String.trim/1) |> Enum.reject(&(&1 == ""))}
+           end)
+  end
+
   # How the fediverse directories name this installation (Vutuv.NodeInfo).
   if node_name = System.get_env("NODE_NAME") do
     config :vutuv, :node_name, node_name

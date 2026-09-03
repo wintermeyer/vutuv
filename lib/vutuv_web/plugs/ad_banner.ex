@@ -89,7 +89,7 @@ defmodule VutuvWeb.Plug.AdBanner do
   # WelcomeModal, which runs first): the strip would sit behind a dimmed
   # backdrop and still burn the visitor's hourly slot on a sighting they
   # cannot read. Same reasoning that keeps ads off the sign-up funnel.
-  defp welcome_modal?(conn), do: conn.assigns[:welcome_modal] == true
+  defp welcome_modal?(conn), do: not is_nil(conn.assigns[:welcome_modal])
 
   defp recently_seen?(conn) do
     case get_session(conn, :ad_seen_at) do

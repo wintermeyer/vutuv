@@ -1,35 +1,32 @@
 defmodule VutuvWeb.WelcomeController do
   @moduledoc """
-  The one-time welcome questions: where you are, and whether you are looking.
+  The one-time welcome questions: where you are, whether you are looking, and
+  who to follow.
 
   `/system/welcome` is where they are **answered** (the POST) and, as a page,
   where a rejected submit lands. Where a new member **meets** them is the modal
-  the app layout floats over their own profile right after the registration PIN
+  the layout floats over their own profile right after the registration PIN
   (`VutuvWeb.Plug.WelcomeModal`, `VutuvWeb.WelcomeComponents.welcome_modal/1`),
   so the site is visibly already theirs and the questions read as an offer they
-  can close. Closing that window is the same POST as "Skip for now".
+  can close.
 
   A fresh account arrives with a name, three tags and an email — nothing that
-  says *where* this person is or *whether they are looking*, the two facts the
-  rest of the site needs to be useful to them (the `ort:` people search, the
-  job board, a recruiter's saved search). Asking during sign-up would lengthen
-  the form that stands between a visitor and an account, so we ask **once**,
-  right after the registration PIN, on a page that is trivial to skip.
+  says *where* this person is, nothing that says *whether they are looking*,
+  and nothing at all in their feed. Asking during sign-up would lengthen the
+  form that stands between a visitor and an account, so we ask **once**, right
+  after the registration PIN, in a window that is trivial to close.
 
-  Two groups, one form:
+  **One step per screen, and the window only goes forward.** Each Weiter posts
+  here, saves that step's group on its own (`Accounts.save_welcome_location/2`,
+  `Accounts.save_welcome_job/2`, `Vutuv.Welcome.follow_suggested/2`), advances
+  the `:welcome_step` session key and sends the member back to the page they
+  were reading — so an address that has been typed is stored whatever becomes
+  of the rest, and there is no Back button to make that ambiguous.
+  `Vutuv.Welcome` owns the step list: the two questions, plus the suggested
+  accounts wherever the locale has any (German today).
 
-    * **Where you are** (no headline of its own, it opens on "Type of
-      address") — a Private/Work label, postal code, city, country.
-      Validation is deliberately lax (`Address.welcome_changeset/2`): any one
-      of the three is a complete answer and none of them is required. What is
-      filled in becomes an ordinary profile address, so it shows on the profile
-      and answers `ort:`/`city:` searches like every other address.
-    * **Are you looking for a job?** — the availability status and, revealed
-      only once a status is picked, the minimum salary expectation and the
-      preferred workplace form. These are the existing issue #870 / #928 fields
-      with their existing visibility defaults (status: signed-in members,
-      salary: nobody), so nothing this page stores is more public than what the
-      Basics form would store.
+  Closing at any point — the ✕, "Skip for now", Esc, the backdrop — stamps
+  `welcome_completed_at` and keeps whatever the earlier steps already saved.
 
   **It is one-shot.** Two things must agree, here and in the plug alike: the
   account has never finished it (`users.welcome_completed_at` is NULL) *and*
@@ -47,6 +44,9 @@ defmodule VutuvWeb.WelcomeController do
   alias Vutuv.Accounts
   alias Vutuv.Accounts.User
   alias Vutuv.Profiles.Address
+  alias Vutuv.Welcome
+  alias VutuvWeb.ControllerHelpers
+  alias VutuvWeb.Gettext, as: WebGettext
   alias VutuvWeb.Home
 
   plug(VutuvWeb.Plug.AuthUser)
@@ -66,15 +66,16 @@ defmodule VutuvWeb.WelcomeController do
     end
   end
 
-  # One POST for both buttons. "Skip" carries no data, so it lands in the same
-  # complete_welcome/2 with empty groups: the flag is stamped, nothing is saved.
+  # One POST for every button on every step. "Skip" and the ✕ carry no data and
+  # land in finish/3; anything else saves the step the SESSION says we are on,
+  # never the step the form claims, which is only the client's word for it.
   def create(conn, params) do
     user = conn.assigns[:user]
 
     cond do
       not open?(conn, user) -> redirect(conn, to: ~p"/#{user}")
-      params["skip"] -> save(conn, user, %{})
-      true -> save(conn, user, Map.take(params, ["address", "user"]))
+      params["skip"] -> finish(conn, user, params)
+      true -> advance(conn, user, params)
     end
   end
 
@@ -83,31 +84,82 @@ defmodule VutuvWeb.WelcomeController do
     Accounts.needs_welcome?(user) and get_session(conn, :welcome_pending) == true
   end
 
-  defp save(conn, user, params) do
-    case Accounts.complete_welcome(user, params) do
-      {:ok, updated} ->
-        # No toast: the member just answered two questions and lands on their
-        # own profile, where the completion checklist already says what is
-        # still missing. A greeting on top would be noise.
-        conn
-        # The one-shot key is spent: from here the URL redirects like any
-        # other visit.
-        |> delete_session(:welcome_pending)
-        |> redirect(to: Home.path(updated))
+  defp advance(conn, user, params) do
+    steps = Welcome.steps(user, locale())
+    step = Welcome.current_step(steps, get_session(conn, :welcome_step))
 
-      {:error, %{address: address_changeset, user: user_changeset}} ->
+    case save(user, step, params) do
+      {:ok, updated} ->
+        case Welcome.next_step(steps, step) do
+          :done -> finish(conn, updated, params)
+          next -> conn |> put_session(:welcome_step, next) |> back_to(updated, params)
+        end
+
+      {:error, changeset} ->
         conn
         |> put_status(:unprocessable_entity)
-        |> render_form(user, address_changeset, user_changeset)
+        |> render_step_error(user, step, changeset)
     end
   end
 
+  defp save(user, :location, params), do: Accounts.save_welcome_location(user, params["address"])
+  defp save(user, :job, params), do: Accounts.save_welcome_job(user, params["user"])
+
+  defp save(user, :accounts, params) do
+    Welcome.follow_suggested(user, List.wrap(params["follow"]))
+    {:ok, user}
+  end
+
+  defp finish(conn, user, params) do
+    case Accounts.complete_welcome(user) do
+      {:ok, updated} ->
+        # No toast: the member just answered a couple of questions and lands
+        # back on the page they were reading, where the profile's completion
+        # checklist already says what is still missing. A greeting on top of
+        # that would be noise.
+        conn
+        # The one-shot keys are spent: from here the URL redirects like any
+        # other visit and the modal is gone.
+        |> delete_session(:welcome_pending)
+        |> delete_session(:welcome_step)
+        |> back_to(updated, params)
+
+      {:error, _changeset} ->
+        redirect(conn, to: Home.path(user))
+    end
+  end
+
+  # Back to the page the window was floating over, so answering a step does not
+  # also navigate. Only a local path is ever followed: the value is the form's
+  # own hidden field, but it reaches us through the client either way.
+  defp back_to(conn, user, params) do
+    redirect(conn, to: ControllerHelpers.safe_return_to(params["return_to"]) || Home.path(user))
+  end
+
+  # A rejected step re-renders as a page, because a POST cannot re-open a modal
+  # over a page it does not render. Rare — the fields are lax and capped in the
+  # markup — and it is the same form, so the member sees what they typed with
+  # the one bad field marked.
+  defp render_step_error(conn, user, :location, changeset),
+    do: render_form(conn, user, changeset, User.changeset(user, %{}))
+
+  defp render_step_error(conn, user, _job, changeset),
+    do: render_form(conn, user, Address.welcome_changeset(%Address{}, %{}), changeset)
+
   defp render_form(conn, user, address_changeset, user_changeset) do
+    window = Welcome.window(user, locale())
+
     render(conn, "show.html",
       user: user,
       address_changeset: address_changeset,
       user_changeset: user_changeset,
+      steps: window.steps,
+      step: Welcome.current_step(window.steps, get_session(conn, :welcome_step)),
+      suggestions: window.suggestions,
+      return_to: nil,
       page_title: gettext("Welcome")
     )
   end
+
+  defp locale, do: Gettext.get_locale(WebGettext)
 end

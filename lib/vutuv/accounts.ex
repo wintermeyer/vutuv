@@ -1844,66 +1844,60 @@ defmodule Vutuv.Accounts do
   def needs_welcome?(%User{}), do: false
 
   @doc """
-  Saves the one-time welcome page and closes it for good.
+  Saves the **location** step of the welcome window (`Vutuv.Welcome`).
 
-  `params` may carry two independent groups, both entirely optional:
+  The coarse location (`description` = the Private/Work label, `zip_code`,
+  `city`, `country`), cast by the lax `Address.welcome_changeset/2`. A group
+  with no location at all (`Address.location_given?/1` false) inserts nothing
+  rather than failing: leaving it empty is a legitimate answer, not an error.
+  What is filled in becomes an ordinary profile address.
 
-    * `"address"` — the coarse location (`description` = the Private/Work
-      label, `zip_code`, `city`, `country`), cast by the lax
-      `Address.welcome_changeset/2`. A group with no location at all
-      (`Address.location_given?/1` false) inserts nothing rather than failing:
-      skipping is a legitimate answer, not an error.
-    * `"user"` — the job-search group (`employment_status`,
-      `desired_salary_min` + currency/period, `desired_workplace_types`), cast by
-      the ordinary `User.changeset/2`, so this page can never store a value the
-      profile's Basics form would reject.
-
-  Both, plus the `welcome_completed_at` stamp, are written in one transaction,
-  so there is no half-saved welcome. Passing no groups at all is how "Skip"
-  works: it just stamps the flag.
-
-  Returns `{:ok, user}` or `{:error, %{user: changeset, address: changeset}}` —
-  a map, because the page renders both forms and needs the errored one back
-  alongside the untouched other.
+  Saved **on its own**, the moment the member presses Weiter: the window only
+  goes forward, so what has been typed is kept whatever becomes of the rest of
+  it — a closed laptop after step one leaves the address behind, not nothing.
   """
-  def complete_welcome(%User{} = user, params \\ %{}) do
-    address_changeset =
+  def save_welcome_location(%User{} = user, params) do
+    changeset =
       user
       # New entries append to the owner's chosen order, like every other
       # address (position is set on the struct, never cast).
       |> Ecto.build_assoc(:addresses, position: Ordering.next_position(Address, user.id))
-      |> Address.welcome_changeset(Map.get(params, "address") || %{})
+      |> Address.welcome_changeset(params || %{})
 
-    user_changeset =
-      user
-      |> User.changeset(Map.get(params, "user") || %{})
-      |> Ecto.Changeset.put_change(
-        :welcome_completed_at,
-        NaiveDateTime.truncate(NaiveDateTime.utc_now(), :second)
-      )
-
-    Ecto.Multi.new()
-    |> Ecto.Multi.update(:user, user_changeset)
-    |> maybe_insert_welcome_address(address_changeset)
-    |> Repo.transaction()
-    |> case do
-      {:ok, %{user: updated}} ->
-        {:ok, updated}
-
-      {:error, :user, changeset, _changes} ->
-        {:error, %{user: changeset, address: address_changeset}}
-
-      {:error, :address, changeset, _changes} ->
-        {:error, %{user: user_changeset, address: changeset}}
+    if Address.location_given?(changeset) do
+      with {:ok, _address} <- Repo.insert(changeset), do: {:ok, user}
+    else
+      {:ok, user}
     end
   end
 
-  defp maybe_insert_welcome_address(multi, changeset) do
-    if Address.location_given?(changeset) do
-      Ecto.Multi.insert(multi, :address, changeset)
-    else
-      multi
-    end
+  @doc """
+  Saves the **job-search** step of the welcome window.
+
+  `employment_status`, `desired_salary_min` + currency/period and
+  `desired_workplace_types`, cast by the ordinary `User.changeset/2`, so the
+  window can never store a value the profile's Basics form would reject.
+  """
+  def save_welcome_job(%User{} = user, params) do
+    user
+    |> User.changeset(params || %{})
+    |> Repo.update()
+  end
+
+  @doc """
+  Closes the welcome window for good by stamping `users.welcome_completed_at`.
+
+  Every way out ends here — the last step's Fertig, "Skip for now", the ✕, Esc
+  and a click on the backdrop — so the questions are asked exactly once
+  whatever the member did with them, and whatever the earlier steps already
+  saved stays saved.
+  """
+  def complete_welcome(%User{} = user) do
+    user
+    |> Ecto.Changeset.change(
+      welcome_completed_at: NaiveDateTime.truncate(NaiveDateTime.utc_now(), :second)
+    )
+    |> Repo.update()
   end
 
   # ── Viewer-exclusion list (issue #938) ──

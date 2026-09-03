@@ -302,6 +302,24 @@ config :vutuv, :post_draft_retention_days, 30
 # uses).
 config :vutuv, :composer_draft_debounce_ms, 5_000
 
+# The accounts a brand-new member is offered to follow on the last step of the
+# welcome questions (Vutuv.Welcome), keyed by the locale the page renders in:
+# a fresh account follows nobody, so its feed is empty until it does, and three
+# named accounts are a shorter way out of that than "find people to follow".
+# Only German has a list today, so members in every other language get a
+# two-step window — an installation elsewhere fills in its own.
+#
+# Two spellings, both ordinary fediverse addresses (Vutuv.Fediverse.
+# follow_remote/2 resolves either): `@name` with no host is a member on THIS
+# installation, and one that does not exist here simply drops off the list, so
+# this default carries no vutuv.de assumption; `@name@host` is an account
+# somewhere else and is offered only to members who take part in the fediverse.
+# Overridable per installation with WELCOME_SUGGESTIONS (see config/runtime.exs
+# and docs/ADMINS.md); an empty list anywhere drops the third step.
+config :vutuv, :welcome_suggestions, %{
+  "de" => ["@wintermeyer", "@tagesschau@ard.social", "@tazgetroete@mastodon.social"]
+}
+
 # The global on/off switch for the daily text-ad system (see Vutuv.Ads).
 # Off for now: no banner serves, the public /ads flow and the admin review
 # dashboard 404. "ads" stays a reserved username slug either way, so the

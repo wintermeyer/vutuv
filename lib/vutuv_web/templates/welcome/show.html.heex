@@ -5,8 +5,8 @@ their profile and floats the same form over it as a modal (see
 VutuvWeb.WelcomeComponents.welcome_modal/1). The page is the frame for the two
 requests the modal cannot answer itself: a **rejected** submit, which needs the
 errors rendered somewhere, and a direct GET of the URL while the one-shot
-window is still open. It reuses <.auth_layout> so it continues the look of the
-sign-up and PIN screens. --%>
+window is still open. It shows the same step the window is on, and it reuses
+<.auth_layout> so it continues the look of the sign-up and PIN screens. --%>
 <.auth_layout
   title={welcome_title(@user)}
   subtitle={
@@ -15,5 +15,12 @@ sign-up and PIN screens. --%>
     )
   }
 >
-  <.welcome_form address_changeset={@address_changeset} user_changeset={@user_changeset} />
+  <.welcome_form
+    address_changeset={@address_changeset}
+    user_changeset={@user_changeset}
+    steps={@steps}
+    step={@step}
+    suggestions={@suggestions}
+    return_to={@return_to}
+  />
 </.auth_layout>

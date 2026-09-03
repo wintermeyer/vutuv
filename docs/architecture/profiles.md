@@ -222,8 +222,9 @@ JSON/XML).
 A fresh account arrives with a name, three tags and an email. Nothing says
 *where* this person is or *whether they are looking* — the two facts the `ort:`
 people search, the job board and a recruiter's saved search need to be useful to
-them. Asking during sign-up would lengthen the form standing between a visitor
-and an account, so we ask **once**, right after the registration PIN:
+them — and nothing at all is in their feed. Asking during sign-up would lengthen
+the form standing between a visitor and an account, so we ask **once**, right
+after the registration PIN, **one question per screen**:
 
 - **Where you are** — a Private/Work label plus postal code, city and country
   (no street). Validation is deliberately lax: `Address.welcome_changeset/2`
@@ -241,10 +242,36 @@ and an account, so we ask **once**, right after the registration PIN:
 - **Are you looking for a job?** — the availability status and, revealed by the
   same `[data-jobsearch-details]` enhancement the Basics form uses, the minimum
   salary expectation and the preferred workplace form. Cast by the ordinary
-  `User.changeset/2` with the existing visibility defaults, so the page can
+  `User.changeset/2` with the existing visibility defaults, so the window can
   never store something more public than the Basics form would.
+- **Who do you want to follow?** — two or three accounts, ticked, that put
+  something in the feed before the member goes looking (`Vutuv.Welcome`). Which
+  accounts is per installation *and* per locale: `:welcome_suggestions` /
+  `WELCOME_SUGGESTIONS` maps a locale to fediverse addresses, and only German
+  has a list today, which is what makes the window **three steps for a German
+  visitor and two for everybody else**. `@name` is a member here (followed with
+  `Fediverse.follow_local_member/2`, dropped where nobody has that username, so
+  the shipped `@wintermeyer` costs another installation nothing); `@name@host`
+  is an account elsewhere (`Fediverse.follow_remote/2`) and is offered **only to
+  a member who has a fediverse of their own** — without their sign-up opt-in, or
+  with federation off, the `Follow` could never leave, so the step lists none of
+  them rather than offering a tick that does nothing. What comes back from the
+  form is intersected with the configured list *and* resolved again, so no
+  hand-built POST can make this server follow an address of its choosing.
 
-**They are shown as a modal, not as a step.** The confirming PIN lands the
+**Each step saves as it is left, and there is no way back.** Weiter posts to
+`/system/welcome`, that step's group is written on its own
+(`Accounts.save_welcome_location/2`, `Accounts.save_welcome_job/2`,
+`Welcome.follow_suggested/2`), the `:welcome_step` session key advances and the
+member is redirected to the page they were reading. So an address that has been
+typed is stored whatever becomes of the rest — a closed laptop after step one
+leaves the address behind, not nothing — and no Back button makes that
+ambiguous. The step is read from the **session**, never from the form, so a
+submit cannot pick which group it writes. `welcome_completed_at` is stamped by
+the last step's Fertig and by every way of closing the window, and whatever the
+earlier steps saved stays saved.
+
+**They are shown as a modal, not as a page.** The confirming PIN lands the
 member on their own profile (`Home.path/1` like every other login), and
 `VutuvWeb.WelcomeComponents.welcome_modal/1` floats the questions over it — so
 the site behind the window says "you are in" and the questions read as an offer

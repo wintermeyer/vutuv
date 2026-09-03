@@ -37,7 +37,15 @@ defmodule VutuvWeb.Plug.WelcomeModal do
 
   def call(%Plug.Conn{method: "GET"} = conn, _opts) do
     if pending?(conn) and not welcome_page?(conn) and not AgentFormat.agent_format?(conn) do
-      assign(conn, :welcome_modal, true)
+      # Only the two cheap things a render cannot look up for itself: which
+      # step this session is on, and the path to come back to when the member
+      # answers it. What that step costs — the suggested accounts, and with
+      # them the step count — is resolved in the component, so a response that
+      # never renders the layout never pays for it.
+      assign(conn, :welcome_modal, %{
+        step: get_session(conn, :welcome_step),
+        return_to: conn.request_path
+      })
     else
       conn
     end

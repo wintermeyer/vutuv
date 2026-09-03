@@ -66,6 +66,13 @@ config :vutuv, :moderation_sweeper, false
 # outside. Vutuv.Webhooks.Deliverer.nudge/0 casts into the void then.
 config :vutuv, :webhook_deliverer, false
 config :vutuv, :fediverse_deliverer, false
+# No accounts suggested on the welcome window's last step, so every test sees
+# the two-step shape and no test can send a real WebFinger request by ticking a
+# box: the shipped German list names accounts on other servers, and
+# `Vutuv.Fediverse.follow_remote/2` would go and look them up. The suggestions
+# themselves are covered in `test/vutuv/welcome_test.exs`, which sets this key
+# to a local member and is `async: false` for exactly that reason.
+config :vutuv, :welcome_suggestions, %{}
 # The hourly remote-follower re-check would likewise touch the sandbox from
 # outside; tests call Vutuv.Fediverse.prune_due_followers/1 directly with a
 # stubbed HTTP layer.
