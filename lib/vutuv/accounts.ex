@@ -5,7 +5,7 @@ defmodule Vutuv.Accounts do
   """
 
   import Ecto.Query
-  import Vutuv.Moderation.Query, only: [account_confirmed_row: 1]
+  import Vutuv.Moderation.Query, only: [account_confirmed_row: 1, account_hidden_row: 1]
   import Vutuv.SearchText, only: [contains: 1, name_ilike: 3, normalize_search: 1]
   require Logger
 
@@ -2053,21 +2053,27 @@ defmodule Vutuv.Accounts do
   # listed `example.com` matches `eu.example.com` but never `notexample.com`;
   # validated domains carry no LIKE wildcards, so no escaping is needed.
   defp on_exclusion_list?(owner_id, viewer_id) do
-    Repo.exists?(
-      from(x in ViewerExclusion,
-        left_join: e in Email,
-        on:
-          e.user_id == ^viewer_id and
-            fragment(
-              "(lower(split_part(?, '@', 2)) = ? OR lower(split_part(?, '@', 2)) LIKE '%.' || ?)",
-              e.value,
-              x.domain,
-              e.value,
-              x.domain
-            ),
-        where: x.user_id == ^owner_id,
-        where: x.excluded_user_id == ^viewer_id or not is_nil(e.id)
-      )
+    Repo.exists?(exclusion_rows(viewer_id, dynamic([x], x.user_id == ^owner_id)))
+  end
+
+  # The rows that put `viewer_id` on somebody's #938 list — the one spelling of
+  # that membership, so the domain(+subdomain) rule lives in a single place.
+  # `owner_match` says WHOSE list: a pinned id for the per-pair predicate
+  # above, a correlated `parent_as/1` for the listing in `open_to_offers/2`.
+  defp exclusion_rows(viewer_id, owner_match) do
+    from(x in ViewerExclusion,
+      left_join: e in Email,
+      on:
+        e.user_id == ^viewer_id and
+          fragment(
+            "(lower(split_part(?, '@', 2)) = ? OR lower(split_part(?, '@', 2)) LIKE '%.' || ?)",
+            e.value,
+            x.domain,
+            e.value,
+            x.domain
+          ),
+      where: ^owner_match,
+      where: x.excluded_user_id == ^viewer_id or not is_nil(e.id)
     )
   end
 
@@ -2091,6 +2097,94 @@ defmodule Vutuv.Accounts do
       employment_status: status_base and not hidden?,
       salary: salary_base and not hidden?
     }
+  end
+
+  # How many available members `open_to_offers/2` draws unless told otherwise.
+  # The empty job board passes its own (`Vutuv.Jobs.board_reach/1`); this is the
+  # default for anything else that wants a glance at the set.
+  @available_shown 6
+
+  @doc """
+  The members who said they are available — `%{people: [%User{}], total:
+  integer}`, freshest signal first. The same #928 availability the profile
+  badge carries, read as a **listing**.
+
+  `viewer` decides what is on it, exactly as on a profile: an anonymous visitor
+  (nil) sees only the members open to `everyone`, a signed-in one also the
+  `members` ones, nobody sees `hidden`, and the #938 exclusion list is
+  subtracted last. Both gates run in SQL rather than over the loaded rows: a
+  list asks the exclusion question once per candidate, and the per-pair
+  predicate `viewer_excluded?/2` would be two queries each. The gate is pinned
+  to `User.employment_status_visible?/2` by
+  `test/vutuv/accounts/open_to_offers_test.exs`, so the SQL spelling and the
+  struct predicate cannot drift into two different answers.
+
+  `total` counts the whole gated set, not the returned page, and comes back
+  from the same query as the rows (`count(*) OVER ()`) — one round trip, and no
+  way for the headline number to disagree with what is under it. A count that
+  ignored the exclusion list would tell an excluded visitor that somebody is
+  looking and then show them nobody.
+
+  Opts: `:limit` (default #{@available_shown}). The rows carry the listing
+  fields plus the two the availability line reads, so a card needs no second
+  query.
+  """
+  def open_to_offers(viewer, opts \\ []) do
+    fields = User.listing_fields() ++ ~w(employment_status desired_workplace_types)a
+
+    rows =
+      available(viewer)
+      |> order_by([candidate: u], desc_nulls_last: u.employment_status_set_at, desc: u.id)
+      |> limit(^Keyword.get(opts, :limit, @available_shown))
+      |> select([candidate: u], {struct(u, ^fields), fragment("count(*) OVER ()")})
+      |> Repo.all()
+
+    %{people: Enum.map(rows, &elem(&1, 0)), total: gated_total(rows)}
+  end
+
+  # The window count rides on every row, so an empty page carries none — and an
+  # empty page means an empty set.
+  defp gated_total([]), do: 0
+  defp gated_total([{_person, total} | _rest]), do: total
+
+  # The listed, confirmed members carrying a status this viewer may see.
+  defp available(viewer) do
+    from(u in User,
+      as: :candidate,
+      where: account_confirmed_row(u) and not account_hidden_row(u),
+      where: not is_nil(u.employment_status)
+    )
+    |> availability_visible(viewer)
+    |> availability_not_excluded(viewer)
+  end
+
+  # The #928 three-way gate as SQL. A legacy NULL falls back to the "members"
+  # rule, like `User.employment_status_visible?/2`.
+  defp availability_visible(query, nil),
+    do: where(query, [candidate: u], u.employment_status_visibility == "everyone")
+
+  defp availability_visible(query, %User{}),
+    do:
+      where(
+        query,
+        [candidate: u],
+        is_nil(u.employment_status_visibility) or u.employment_status_visibility != "hidden"
+      )
+
+  # `viewer_excluded?/2`'s two halves as correlated NOT EXISTS: the block that
+  # implies exclusion, and the #938 list itself through `exclusion_rows/2` — the
+  # set answer to the question that predicate asks one owner at a time.
+  defp availability_not_excluded(query, nil), do: query
+
+  defp availability_not_excluded(query, %User{id: viewer_id}) do
+    blocked =
+      from(b in Block,
+        where: b.blocker_id == parent_as(:candidate).id and b.blocked_id == ^viewer_id
+      )
+
+    listed = exclusion_rows(viewer_id, dynamic([x], x.user_id == parent_as(:candidate).id))
+
+    where(query, not exists(subquery(blocked)) and not exists(subquery(listed)))
   end
 
   # Avatar/cover files are written to disk only AFTER the row commits, so a

@@ -10,6 +10,7 @@ defmodule Vutuv.Tags do
   """
 
   import Ecto.Query
+  import Vutuv.Moderation.Query, only: [account_confirmed_row: 1, account_hidden_row: 1]
 
   alias Vutuv.Accounts.User
   alias Vutuv.Keyset
@@ -125,7 +126,16 @@ defmodule Vutuv.Tags do
   """
   def canonical_tag_names([]), do: []
 
-  def canonical_tag_names(names) when is_list(names) do
+  def canonical_tag_names(names) when is_list(names),
+    do: names |> resolved_entries() |> Enum.map(&elem(&1, 1))
+
+  # `[{identity, display name}]` for the typed `names`, in typed order, with the
+  # duplicates resolution creates dropped. The identity is `{:tag, id}` for a
+  # name that resolves to a stored topic and `{:new, key}` for one about to
+  # become a tag — which is both what makes two spellings of one topic collapse
+  # and what a caller that has to look the topic up again reads
+  # (`member_counts_by_name/1`).
+  defp resolved_entries(names) do
     resolved = resolution_by_key(names)
 
     names
@@ -138,11 +148,10 @@ defmodule Vutuv.Tags do
       Map.get(resolved, key, {{:new, key}, name})
     end)
     |> Enum.uniq_by(&elem(&1, 0))
-    |> Enum.map(&elem(&1, 1))
   end
 
   # `{typed key => {identity, display name}}` for every name that matches a
-  # stored tag, both by lowercased name and by slug (the two things
+  # stored tag — the lookup behind `resolved_entries/1`, both by lowercased name and by slug (the two things
   # `Tag.find_by_value/1` matches on). The identity is the **canonical** tag's
   # id, which is what makes two different spellings of one topic collapse.
   defp resolution_by_key(names) do
@@ -455,6 +464,79 @@ defmodule Vutuv.Tags do
       select: struct(u, ^User.listing_fields())
     )
     |> Repo.all()
+  end
+
+  @doc """
+  How many **listed** members carry each of `tags` — `%{tag_id => count}`, tags
+  nobody holds simply absent.
+
+  Counts only members a tag page would actually show (confirmed, not
+  moderation-hidden), so a "N members" chip can never promise more than the
+  click delivers. That gate is the whole difference to `member_counts/1`, which
+  counts the rows themselves for the admin merge screen. A merge moves the
+  holders to the canonical tag (`Vutuv.Tags.Merge`), so counting by id needs no
+  alias folding.
+  """
+  def listed_member_counts([]), do: %{}
+
+  def listed_member_counts(tags) do
+    ids = Enum.map(tags, & &1.id)
+
+    from(ut in UserTag,
+      join: u in User,
+      on: u.id == ut.user_id,
+      where: ut.tag_id in ^ids and account_confirmed_row(u) and not account_hidden_row(u),
+      group_by: ut.tag_id,
+      select: {ut.tag_id, count(ut.id)}
+    )
+    |> Repo.all()
+    |> Map.new()
+  end
+
+  @doc """
+  The topics the most listed members carry — `[{%Tag{}, count}]`, biggest first.
+
+  What vutuv is about, said in the members' own words rather than an editor's:
+  the empty `/jobs` board offers it as the fields somebody hiring would find
+  here. Aliases are left out (an alias is another name for a topic already in
+  the list) and so are honor tags, which are admin-awarded badges rather than
+  something a member does.
+  """
+  def popular_member_tags(limit \\ 12) do
+    from(t in Tag.not_merged(),
+      join: ut in assoc(t, :user_tags),
+      join: u in User,
+      on: u.id == ut.user_id,
+      where: not t.honor? and account_confirmed_row(u) and not account_hidden_row(u),
+      group_by: t.id,
+      order_by: [desc: count(ut.id), asc: t.name],
+      limit: ^limit,
+      select: {t, count(ut.id)}
+    )
+    |> Repo.all()
+  end
+
+  @doc """
+  How many listed members carry each of the typed `names` — `[{name, count}]` in
+  typed order, a name nothing matches yet counting 0.
+
+  Resolution is `canonical_tag_names/1`'s: a spelling variant and an alternative
+  name both answer for the topic they name, and the duplicate that collapse
+  creates is dropped, so a poster who typed "ROR, Ruby on Rails" is told about
+  one topic rather than shown the same members twice.
+  """
+  def member_counts_by_name([]), do: []
+
+  def member_counts_by_name(names) when is_list(names) do
+    entries = resolved_entries(names)
+    counts = listed_member_counts(for {{:tag, id}, _name} <- entries, do: %Tag{id: id})
+
+    Enum.map(entries, fn {identity, name} ->
+      case identity do
+        {:tag, id} -> {name, Map.get(counts, id, 0)}
+        {:new, _key} -> {name, 0}
+      end
+    end)
   end
 
   @doc """

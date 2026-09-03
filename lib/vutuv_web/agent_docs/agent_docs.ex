@@ -310,6 +310,48 @@ defmodule VutuvWeb.AgentDocs do
   """
   def person_ref(identity), do: Vutuv.Identity.ref(identity)
 
+  @doc """
+  One person as a **listing entry**: the `person_ref/1` identity plus the muted
+  work line and, where the caller passes one, the tag sample the page shows
+  beside their name.
+
+  The shape the follower / following lists, the directory letter pages, the tag
+  page and the empty job board's available members all publish, so an agent
+  parses one thing wherever it meets a person in a list. `work_info_by_id` and
+  `tags_by_id` are the batched maps
+  (`VutuvWeb.UserHelpers.work_information_map/2` and `tag_summary_map/2`), so a
+  list of N people costs two queries rather than 2N. A caller with more to say
+  about a person merges its own keys onto the result — the job board adds the
+  availability it is about.
+  """
+  def person_entry(user, work_info_by_id, tags_by_id \\ %{}) do
+    user
+    |> person_ref()
+    |> Map.put(:work_info, blank_to_nil(work_info_by_id[user.id]))
+    |> put_tag_summary(tags_by_id[user.id])
+  end
+
+  # A member with no current job has an empty work line, and an absent fact is
+  # `null` in a document rather than "".
+  defp blank_to_nil(""), do: nil
+  defp blank_to_nil(value), do: value
+
+  # The tag sample, only where there is one: the connection and endorser lists
+  # show none, so their entries carry no `tags` key at all rather than an empty
+  # one.
+  defp put_tag_summary(person, nil), do: person
+  defp put_tag_summary(person, %{top: []}), do: person
+
+  defp put_tag_summary(person, %{top: top, total: total}) do
+    Map.put(person, :tags, %{
+      total: total,
+      top:
+        Enum.map(top, fn user_tag ->
+          %{name: user_tag.tag.name, url: abs_url("/tags/" <> user_tag.tag.slug)}
+        end)
+    })
+  end
+
   defp format_name(:md), do: :markdown
   defp format_name(:txt), do: :text
   defp format_name(:json), do: :json

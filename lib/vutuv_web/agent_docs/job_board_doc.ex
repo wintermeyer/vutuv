@@ -6,22 +6,74 @@ defmodule VutuvWeb.AgentDocs.JobBoardDoc do
   first, cursor-paginated. Each entry carries the structured location, salary
   and tag fields (`VutuvWeb.AgentDocs.JobPostingDoc.summary/1`) so an agent can
   filter client-side; a `next` link walks to the following page.
+
+  With no posting at all the HTML board shows the other side of the market
+  instead — the members who said they are available and the fields they carry —
+  so the document carries the same two facts under `open_to_offers` and
+  `fields`. An agent asked "is anybody hiring on vutuv?" then gets the honest
+  answer *and* the reason to look further, exactly like a reader.
   """
 
   use Gettext, backend: VutuvWeb.Gettext
 
   alias VutuvWeb.AgentDocs
   alias VutuvWeb.AgentDocs.JobPostingDoc
+  alias VutuvWeb.UserHelpers
 
-  def build(postings, next_cursor \\ nil) do
+  # Tags per available member, the same glance the HTML board shows beside a
+  # name (`VutuvWeb.JobBoardLive`); the whole list is on their tag page.
+  @tags_shown 3
+
+  @doc """
+  The board document. `reach` is the empty-board companion (`%{count:, people:,
+  fields:}` from `Vutuv.Jobs`/`Vutuv.Accounts`, anonymous view) or nil on a
+  board that has postings.
+  """
+  def build(postings, next_cursor \\ nil, reach \\ nil) do
     AgentDocs.doc_meta("job_board", "/jobs")
     |> Map.merge(%{
       title: gettext("Jobs"),
-      description: gettext("Open positions on vutuv, newest first."),
+      description: description(reach),
       count: length(postings),
       next: next_url(next_cursor),
       postings: Enum.map(postings, &JobPostingDoc.summary/1)
     })
+    |> put_reach(reach)
+  end
+
+  defp description(nil), do: gettext("Open positions on vutuv, newest first.")
+
+  defp description(_reach),
+    do:
+      gettext(
+        "No posting yet. Yours would be the first, and it would stand at the top on its own."
+      )
+
+  defp put_reach(doc, nil), do: doc
+
+  defp put_reach(doc, %{count: count, people: people, fields: fields}) do
+    work_info = UserHelpers.work_information_map(people, 45)
+    tags = UserHelpers.tag_summary_map(people, @tags_shown)
+
+    Map.merge(doc, %{
+      open_to_offers: %{
+        total: count,
+        people: Enum.map(people, &person_entry(&1, work_info, tags))
+      },
+      fields:
+        Enum.map(fields, fn {tag, members} ->
+          %{name: tag.name, url: AgentDocs.abs_url("/tags/" <> tag.slug), members: members}
+        end)
+    })
+  end
+
+  # The shared listing shape (`AgentDocs.person_entry/3`) plus the availability
+  # this document is about. Only members whose status is open to `everyone`
+  # reach it — `Vutuv.Jobs.board_reach/1` is asked with a nil viewer.
+  defp person_entry(user, work_info, tags) do
+    AgentDocs.person_entry(user, work_info, tags)
+    |> Map.put(:employment_status, user.employment_status)
+    |> Map.put(:desired_workplace_types, user.desired_workplace_types)
   end
 
   defp next_url(nil), do: nil

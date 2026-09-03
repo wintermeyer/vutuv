@@ -42,7 +42,14 @@ defmodule VutuvWeb.JobPostingController do
 
     page = Jobs.agent_board_page(cursor: cursor)
     next = if page.more?, do: ApiV2.encode_cursor(page.cursor)
-    AgentDocs.send_doc(conn, format, JobBoardDoc.build(page.entries, next))
+
+    # What the HTML board shows in place of a search form when there is nothing
+    # to search (`VutuvWeb.JobBoardLive`), in the anonymous view. A page with
+    # entries proves the board is not empty, so only an empty one pays for the
+    # corpus check.
+    reach = if page.entries == [], do: Jobs.board_reach(nil)
+
+    AgentDocs.send_doc(conn, format, JobBoardDoc.build(page.entries, next, reach))
   end
 
   def show(conn, %{"slug" => slug}) do

@@ -280,12 +280,14 @@ defmodule VutuvWeb.AgentDocs.Text do
     |> join_blocks()
   end
 
-  # The public job board (/jobs) — a listing of posting summaries.
+  # The public job board (/jobs) — a listing of posting summaries, or, with no
+  # posting at all, the two blocks the HTML board shows in its place.
   def render(%{type: "job_board"} = doc) do
     [
       heading(doc.title),
       doc.description,
       Enum.map_join(doc.postings, "\n\n", &job_summary/1),
+      board_reach(doc),
       doc.next && gettext("Next page: %{url}", url: doc.next),
       footer(doc)
     ]
@@ -747,6 +749,26 @@ defmodule VutuvWeb.AgentDocs.Text do
   defp thread_context_lines(post) do
     "  * #{post.published_on} #{post.author}: #{Markdown.entry_label(post)}\n    #{post.url}"
   end
+
+  # The empty board's companion blocks (see `VutuvWeb.AgentDocs.JobBoardDoc`):
+  # the members who said they are available, and the fields members carry.
+  defp board_reach(%{open_to_offers: available, fields: fields}) do
+    [
+      heading(gettext("Who you would reach")),
+      ngettext(
+        "One member has said they are available.",
+        "%{formatted} members have said they are available.",
+        available.total,
+        formatted: to_string(available.total)
+      ),
+      Enum.map(available.people, &person_line/1),
+      heading(gettext("What members here work on")),
+      Enum.map(fields, fn field -> "* #{field.name} (#{field.members})\n  #{field.url}" end)
+    ]
+    |> join_blocks()
+  end
+
+  defp board_reach(_doc), do: nil
 
   defp person_line(person, prefix \\ "* ") do
     work = if person.work_info, do: " — #{person.work_info}", else: ""

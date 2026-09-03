@@ -212,29 +212,6 @@ defmodule VutuvWeb.AgentDocs.ListDocs do
     })
   end
 
-  defp person_entry(user, work_info_by_id, tags_by_id \\ %{}) do
-    user
-    |> AgentDocs.person_ref()
-    |> Map.put(:work_info, presence(work_info_by_id[user.id]))
-    |> maybe_put_tags(tags_by_id[user.id])
-  end
-
-  # The follower / following lists and the directory's letter pages pass a tag
-  # summary; the connection and tag-endorser lists leave it nil so their person
-  # entries are unchanged.
-  defp maybe_put_tags(person, nil), do: person
-  defp maybe_put_tags(person, %{top: []}), do: person
-
-  defp maybe_put_tags(person, %{top: top, total: total}) do
-    Map.put(person, :tags, %{
-      total: total,
-      top:
-        Enum.map(top, fn user_tag ->
-          %{name: user_tag.tag.name, url: AgentDocs.abs_url("/tags/" <> user_tag.tag.slug)}
-        end)
-    })
-  end
-
-  defp presence(""), do: nil
-  defp presence(value), do: value
+  defp person_entry(user, work_info_by_id, tags_by_id \\ %{}),
+    do: AgentDocs.person_entry(user, work_info_by_id, tags_by_id)
 end
