@@ -89,7 +89,7 @@ defmodule VutuvWeb.AgentDocs.InvestorsDoc do
   """
   def purpose do
     gettext(
-      "This page is for potential investors. It says what vutuv is, where the network stands today, how it is meant to earn money one day, and from what size an investment is worth a conversation."
+      "This page is for potential investors. It says what vutuv is, where the network stands today, and how it is meant to earn money one day."
     )
   end
 

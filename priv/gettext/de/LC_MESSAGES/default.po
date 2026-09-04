@@ -2237,7 +2237,7 @@ msgstr "Beitrag erfolgreich gelöscht."
 #: lib/vutuv_web/live/post_live/saved.ex:520
 #: lib/vutuv_web/live/search_live.ex:348
 #: lib/vutuv_web/live/search_live.ex:832
-#: lib/vutuv_web/templates/company/investors.html.heex:30
+#: lib/vutuv_web/templates/company/investors.html.heex:39
 #: lib/vutuv_web/templates/settings/preferences.html.heex:275
 #: lib/vutuv_web/views/admin/report_html.ex:35
 #, elixir-autogen, elixir-format
@@ -2529,7 +2529,7 @@ msgstr "Nur öffentliche Beiträge können beantwortet werden."
 #: lib/vutuv_web/agent_docs/investors_doc.ex:71
 #: lib/vutuv_web/components/post_components.ex:422
 #: lib/vutuv_web/live/notification_live/index.ex:1348
-#: lib/vutuv_web/templates/company/investors.html.heex:31
+#: lib/vutuv_web/templates/company/investors.html.heex:40
 #, elixir-autogen, elixir-format
 msgid "Replies"
 msgstr "Antworten"
@@ -7153,7 +7153,7 @@ msgstr "Höchstalter"
 #: lib/vutuv_web/templates/admin/honor_tag/index.html.heex:45
 #: lib/vutuv_web/templates/admin/newsletter/show.html.heex:90
 #: lib/vutuv_web/templates/admin/user_pref/show.html.heex:9
-#: lib/vutuv_web/templates/company/investors.html.heex:20
+#: lib/vutuv_web/templates/company/investors.html.heex:29
 #, elixir-autogen, elixir-format
 msgid "Members"
 msgstr "Mitglieder"
@@ -23666,13 +23666,13 @@ msgid "A professional network that works without an account"
 msgstr "Ein Berufsnetzwerk, das ohne Konto funktioniert"
 
 #: lib/vutuv_web/agent_docs/investors_doc.ex:69
-#: lib/vutuv_web/templates/company/investors.html.heex:27
+#: lib/vutuv_web/templates/company/investors.html.heex:36
 #, elixir-autogen, elixir-format
 msgid "Active this half year"
 msgstr "Dieses Halbjahr aktiv"
 
 #: lib/vutuv_web/agent_docs/investors_doc.ex:68
-#: lib/vutuv_web/templates/company/investors.html.heex:22
+#: lib/vutuv_web/templates/company/investors.html.heex:31
 #, elixir-autogen, elixir-format
 msgid "Active this month"
 msgstr "Diesen Monat aktiv"
@@ -23682,13 +23682,13 @@ msgstr "Diesen Monat aktiv"
 msgid "Advertising instead of a paywall"
 msgstr "Anzeigen statt Bezahlschranke"
 
-#: lib/vutuv_web/templates/company/investors.html.heex:110
+#: lib/vutuv_web/templates/company/investors.html.heex:137
 #, elixir-autogen, elixir-format
 msgid "Create an account"
 msgstr "Konto anlegen"
 
 #: lib/vutuv_web/agent_docs/investors_doc.ex:72
-#: lib/vutuv_web/templates/company/investors.html.heex:33
+#: lib/vutuv_web/templates/company/investors.html.heex:42
 #, elixir-autogen, elixir-format
 msgid "Fediverse accounts"
 msgstr "Fediverse-Konten"
@@ -23698,7 +23698,7 @@ msgstr "Fediverse-Konten"
 msgid "Fediverse servers"
 msgstr "Fediverse-Server"
 
-#: lib/vutuv_web/templates/company/investors.html.heex:36
+#: lib/vutuv_web/templates/company/investors.html.heex:45
 #, elixir-autogen, elixir-format
 msgid "From %{formatted} server"
 msgid_plural "From %{formatted} servers"
@@ -23717,7 +23717,7 @@ msgstr "Investoren"
 msgid "Over these %{days} days %{total} people arrived, %{members} of them as members here."
 msgstr "In diesen %{days} Tagen sind %{total} Menschen dazugekommen, davon %{members} als Mitglieder hier."
 
-#: lib/vutuv_web/views/company_html.ex:64
+#: lib/vutuv_web/views/company_html.ex:71
 #, elixir-autogen, elixir-format
 msgid "People here per day over the last %{days} days"
 msgstr "Menschen hier pro Tag über die letzten %{days} Tage"
@@ -23733,26 +23733,26 @@ msgstr "Pressematerial: %{url}"
 msgid "Readable without an account"
 msgstr "Ohne Konto lesbar"
 
-#: lib/vutuv_web/templates/company/investors.html.heex:115
+#: lib/vutuv_web/templates/company/investors.html.heex:142
 #, elixir-autogen, elixir-format
 msgid "Send a message"
 msgstr "Nachricht schreiben"
 
-#: lib/vutuv_web/templates/company/investors.html.heex:24
+#: lib/vutuv_web/templates/company/investors.html.heex:33
 #, elixir-autogen, elixir-format
 msgid "Signed in within 30 days"
 msgstr "In den letzten 30 Tagen angemeldet"
 
 #: lib/vutuv_web/agent_docs/markdown.ex:375
 #: lib/vutuv_web/agent_docs/text.ex:349
-#: lib/vutuv_web/templates/company/investors.html.heex:17
+#: lib/vutuv_web/templates/company/investors.html.heex:19
 #, elixir-autogen, elixir-format
 msgid "Where we are"
 msgstr "Wo wir stehen"
 
 #: lib/vutuv_web/agent_docs/markdown.ex:382
 #: lib/vutuv_web/agent_docs/text.ex:356
-#: lib/vutuv_web/templates/company/investors.html.heex:66
+#: lib/vutuv_web/templates/company/investors.html.heex:82
 #, elixir-autogen, elixir-format
 msgid "Why this is worth building"
 msgstr "Warum sich das lohnt"
@@ -23765,7 +23765,7 @@ msgstr "Schreiben Sie hier: %{url}"
 
 #: lib/vutuv_web/agent_docs/markdown.ex:388
 #: lib/vutuv_web/agent_docs/text.ex:358
-#: lib/vutuv_web/templates/company/investors.html.heex:95
+#: lib/vutuv_web/templates/company/investors.html.heex:120
 #, elixir-autogen, elixir-format
 msgid "Write to me"
 msgstr "Schreiben Sie mir"
@@ -23775,7 +23775,7 @@ msgstr "Schreiben Sie mir"
 msgid "Write to me here, on vutuv. Creating an account takes a minute and costs nothing, and you will have seen the product before the first sentence about it."
 msgstr "Schreiben Sie mir hier, auf vutuv. Ein Konto anzulegen dauert eine Minute und kostet nichts, und Sie haben das Produkt gesehen, bevor der erste Satz darüber fällt."
 
-#: lib/vutuv_web/templates/company/investors.html.heex:98
+#: lib/vutuv_web/templates/company/investors.html.heex:125
 #, elixir-autogen, elixir-format
 msgid "My profile:"
 msgstr "Mein Profil:"
@@ -23791,17 +23791,12 @@ msgstr "Mein Profil: %{url}"
 msgid "Text ads are to carry the operation, which is why there is no premium tier and will not be one. Nothing is held back from somebody who will not pay for it, and a paid tier is the single thing that stops most people from ever starting. Leaving it out is what lets the network grow, and only a growing network makes the ads worth anything."
 msgstr "Den Betrieb sollen Textanzeigen tragen, deshalb gibt es keine Premium-Stufe und wird es auch keine geben. Niemandem wird etwas vorenthalten, weil er nicht dafür zahlt, und genau diese Bezahlstufe hält die meisten davon ab, überhaupt anzufangen. Sie wegzulassen lässt das Netzwerk wachsen, und erst ein wachsendes Netzwerk macht die Anzeigen etwas wert."
 
-#: lib/vutuv_web/agent_docs/investors_doc.ex:91
-#, elixir-autogen, elixir-format
-msgid "This page is for potential investors. It says what vutuv is, where the network stands today, how it is meant to earn money one day, and from what size an investment is worth a conversation."
-msgstr "Diese Seite richtet sich an potentielle Investoren. Sie sagt, was vutuv ist, wo das Netzwerk heute steht, womit es eines Tages Geld verdienen soll und ab welcher Summe sich ein Gespräch lohnt."
-
 #: lib/vutuv_web/agent_docs/investors_doc.ex:119
 #, elixir-autogen, elixir-format
 msgid "Fast pages win"
 msgstr "Schnelle Seiten gewinnen"
 
-#: lib/vutuv_web/templates/company/investors.html.heex:76
+#: lib/vutuv_web/templates/company/investors.html.heex:101
 #, elixir-autogen, elixir-format
 msgid "Source:"
 msgstr "Quelle:"
@@ -23841,3 +23836,8 @@ msgstr "%{members} Mitglieder + %{fediverse} Fediverse-Konten = %{total} Persone
 #, elixir-autogen, elixir-format
 msgid "That total is the number in the top bar. Nobody is counted twice: an account following five things here is one account, and a member who also follows from elsewhere is already in the first figure."
 msgstr "Diese Summe steht oben in der Navigationsleiste. Doppelt gezählt wird niemand: Ein Konto, das hier fünf Dingen folgt, ist ein Konto, und wer hier Mitglied ist und zusätzlich von außen folgt, steckt schon in der ersten Zahl."
+
+#: lib/vutuv_web/agent_docs/investors_doc.ex:91
+#, elixir-autogen, elixir-format
+msgid "This page is for potential investors. It says what vutuv is, where the network stands today, and how it is meant to earn money one day."
+msgstr "Diese Seite richtet sich an potentielle Investoren. Sie sagt, was vutuv ist, wo das Netzwerk heute steht und womit es eines Tages Geld verdienen soll."

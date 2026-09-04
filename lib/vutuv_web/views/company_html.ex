@@ -51,11 +51,18 @@ defmodule VutuvWeb.CompanyHTML do
   """
   attr(:series, :list, required: true)
 
+  attr(:class, :string, default: "", doc: "wrapper spacing, where the caller wants any")
+
+  attr(:height, :string,
+    default: "h-32",
+    doc: "how tall the plot is; taller where it stands beside the tiles rather than under them"
+  )
+
   def growth_curve(assigns) do
     assigns = assign(assigns, :geometry, curve_geometry(assigns.series))
 
     ~H"""
-    <figure :if={@geometry} class="mt-4">
+    <figure :if={@geometry} class={@class}>
       <svg
         viewBox="0 0 600 140"
         preserveAspectRatio="none"
@@ -63,7 +70,7 @@ defmodule VutuvWeb.CompanyHTML do
         aria-label={
           gettext("People here per day over the last %{days} days", days: @geometry.days)
         }
-        class="h-32 w-full"
+        class={["w-full", @height]}
       >
         <polygon points={@geometry.area} class="fill-brand-600/10 dark:fill-brand-400/10" />
         <%!-- `vector-effect` keeps the line an even 2px once the viewBox is
