@@ -94,16 +94,22 @@ finger-sized target instead of a word in a paragraph. --%>
       </div>
       <div>
         <h2 class={footer_heading_class}>{gettext("Company")}</h2>
-        <%!-- "Investors" and "Media Kit" stay English in every locale, the way
-              "vutuv" and "Fediverse" do: both pages are written in English only,
-              and the untranslated label is the warning that the language changes
-              on the other side of the click. --%>
+        <%!-- "Media Kit" stays English in every locale, the way "vutuv" and
+              "Fediverse" do: that page is written in English only, and the
+              untranslated label is the warning that the language changes on the
+              other side of the click. The investor page beside it is translated
+              now, so its label is too — an English word there would warn about
+              a change that no longer happens. --%>
         <%!-- The ad page 404s while `:ads_enabled` is off, which is how the
               software ships and, today, how vutuv.de runs. A footer entry
               pointing at a 404 is worse than no entry, the same reasoning
               /llms.txt applies to its own `/ads` line. --%>
         <ul class="mt-2">
-          <li><.link href={~p"/system/investors"} class={footer_link_class}>Investors</.link></li>
+          <li>
+            <.link href={~p"/system/investors"} class={footer_link_class}>
+              {gettext("Investors")}
+            </.link>
+          </li>
           <li><.link href={~p"/system/media-kit"} class={footer_link_class}>Media Kit</.link></li>
           <li :if={Vutuv.Ads.enabled?()}>
             <.link href={~p"/ads"} class={footer_link_class}>{gettext("Advertising")}</.link>

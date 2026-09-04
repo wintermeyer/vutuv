@@ -18,6 +18,14 @@ defmodule Vutuv.PeopleHistory.Snapshot do
     timestamps()
   end
 
+  @doc """
+  The day's people total, the figure the top bar shows: both halves added up.
+  Here rather than at each reader, so the curve and `PeopleHistory.growth/1`
+  cannot disagree about what "people" means.
+  """
+  def total(%__MODULE__{members: members, fediverse_accounts: fediverse}),
+    do: members + fediverse
+
   def changeset(%__MODULE__{} = snapshot, attrs) do
     snapshot
     |> cast(attrs, [:day, :members, :fediverse_accounts])

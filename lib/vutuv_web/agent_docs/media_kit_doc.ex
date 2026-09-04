@@ -198,10 +198,19 @@ defmodule VutuvWeb.AgentDocs.MediaKitDoc do
   end
 
   @doc """
-  Where a journalist writes to — the same operator contact the investor page
-  uses, so a third-party installation names its own operator.
+  Where a journalist writes to. The operator-notice recipient rather than a
+  literal address, so a third-party installation names its own operator and
+  never ours.
+
+  The investor page beside this one deliberately states no address at all: a
+  journalist on deadline needs one, an investor does not, and the address on a
+  page built to be read by strangers and machines is the one that gets
+  harvested.
   """
-  def press_contact, do: InvestorsDoc.contact_email()
+  def press_contact do
+    {_name, email} = Application.fetch_env!(:vutuv, :operator_recipient)
+    email
+  end
 
   @doc """
   The person behind that address. `:operator_recipient` carries the name beside
@@ -216,8 +225,12 @@ defmodule VutuvWeb.AgentDocs.MediaKitDoc do
   @doc """
   Their profile on this installation, for the contact details a media kit
   should not spell out itself (phone, messengers, other addresses), or `nil`.
-  Both company pages offer it, so it lives beside the address in
-  `InvestorsDoc`.
+
+  Built on `InvestorsDoc.contact_handle/0`, which answers only once the
+  configured handle really resolves to a member here — so an installation
+  running the shipped default renders no link rather than pointing a reader at
+  a stranger's profile on somebody else's site, and nobody leaves a dead link
+  behind by renaming their handle.
   """
   defdelegate press_contact_profile_url, to: InvestorsDoc, as: :contact_profile_url
 

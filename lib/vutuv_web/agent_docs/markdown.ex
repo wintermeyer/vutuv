@@ -363,25 +363,33 @@ defmodule VutuvWeb.AgentDocs.Markdown do
     |> join_blocks()
   end
 
-  # The two company pages are English in every locale (see
-  # VutuvWeb.CompanyController), so their renderings carry no gettext either.
+  # The investor page follows the reader's language (unlike the media kit below
+  # it, which is English in every locale), so its headings go through gettext
+  # like any other page. Every sentence of the argument comes out of the doc,
+  # which `InvestorsDoc` built in that same language.
   def render(%{type: "investors"} = doc) do
     [
       frontmatter(doc),
-      "# #{doc.title}",
+      "# #{doc.headline}",
       doc.description,
-      "## Contact",
-      [
-        "#{doc.operator.name}, #{doc.contact}",
-        doc.contact_profile_url && "More contact information: #{doc.contact_profile_url}"
-      ]
-      |> Enum.filter(&is_binary/1)
-      |> Enum.join("\n\n"),
-      "## Figures",
+      "## #{gettext("Where we are")}",
       Enum.map_join(InvestorsDoc.figure_rows(doc.figures), "\n", fn {label, value} ->
         "- #{label}: #{value}"
       end),
-      "Press material: #{doc.media_kit_url}"
+      doc.people_sum,
+      doc.counter_explainer,
+      doc.growth_sentence,
+      "## #{gettext("Why this is worth building")}",
+      Enum.map_join(doc.case_points, "\n\n", fn point ->
+        ["### #{point.title}", point.body, case_source(point.source)]
+        |> Enum.filter(&is_binary/1)
+        |> Enum.join("\n\n")
+      end),
+      doc.contact_handle && "## #{gettext("Write to me")}",
+      doc.contact_handle && doc.contact_note,
+      doc.contact_profile_url && gettext("My profile: %{url}", url: doc.contact_profile_url),
+      doc.contact_url && gettext("Write here: %{url}", url: doc.contact_url),
+      gettext("Press material: %{url}", url: doc.media_kit_url)
     ]
     |> join_blocks()
   end
@@ -426,6 +434,13 @@ defmodule VutuvWeb.AgentDocs.Markdown do
   # than among the people: a reader has to be able to tell a person from an
   # organization. Only the Following document carries the key, so every other
   # people list skips the block entirely.
+  # The citation under an investor-page claim that rests on somebody else's
+  # measurement. `nil` for the claims that stand on their own.
+  defp case_source(nil), do: nil
+
+  defp case_source(%{label: label, url: url}),
+    do: gettext("Source: %{source}", source: md_link(label, url))
+
   defp followed_organizations(%{organizations: [_ | _] = organizations}) do
     join_blocks([
       "## " <> gettext("Organizations"),

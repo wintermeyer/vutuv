@@ -1,56 +1,132 @@
-<%!-- English in every locale (see VutuvWeb.CompanyController), so the block
-carries its own lang and nothing here goes through gettext. --%>
-<div lang="en" class="mx-auto max-w-3xl space-y-6 py-6">
-  <%!-- The contact card carries the page's h1: it is the first heading, and an
-        investor page whose whole job is to start a conversation should open
-        with the way to start it. --%>
+<%!-- Unlike the media kit beside it, this page follows the reader's language
+      (see VutuvWeb.CompanyController), so it carries no `lang` of its own and
+      every sentence of its argument comes from VutuvWeb.AgentDocs.InvestorsDoc
+      — the one chokepoint the four agent formats render as well. --%>
+<div class="mx-auto max-w-5xl space-y-6 py-6">
   <.card>
     <h1 class="text-2xl font-bold text-slate-900 dark:text-white">
-      Contact {@press_contact_name}
+      {InvestorsDoc.headline()}
     </h1>
-    <p class="mt-3 text-lg text-slate-700 dark:text-slate-300">
-      Send me an email:
-      <a
-        href={"mailto:#{@facts_contact}"}
-        class="font-semibold break-all text-brand-600 hover:text-brand-700 dark:text-brand-400 dark:hover:text-brand-300"
-      >{@facts_contact}</a>
+    <p class="mt-3 max-w-2xl text-lg text-slate-700 dark:text-slate-300">
+      {InvestorsDoc.purpose()}
     </p>
-    <%!-- Rendered only where the configured handle resolves to a member of this
-          installation, so a third-party page links its own operator or nobody.
-          The address is the link text, as on the media kit. --%>
-    <p :if={@contact_profile_url} class="mt-2 text-slate-700 dark:text-slate-300">
-      More contact information on my profile
-      <a
-        href={@contact_profile_url}
-        class="font-semibold break-all text-brand-600 hover:text-brand-700 dark:text-brand-400 dark:hover:text-brand-300"
-      >{@contact_profile_url}</a>
+  </.card>
+
+  <%!-- The figures come before the argument: they are the one thing on this
+        page nobody has to take our word for, and a reader who does not believe
+        the numbers will not read the reasoning either. --%>
+  <.card>
+    <h2 class="text-xl font-bold text-slate-900 dark:text-white">{gettext("Where we are")}</h2>
+
+    <%!-- Two figures and the reading of them, in one row: the tiles sit side by
+          side at every width (two short figures need no full line each, not
+          even on a phone), and from `lg` up the explanation takes a third
+          column beside them instead of a paragraph underneath. Below that it
+          spans both tiles, which is where it was. --%>
+    <div class="mt-4 grid grid-cols-2 gap-4 lg:grid-cols-3">
+      <.figure_tile label={gettext("Members")} value={delimited_count(@facts.members)} />
+      <.figure_tile
+        label={gettext("Fediverse accounts")}
+        value={delimited_count(@facts.fediverse_accounts)}
+        note={
+          ngettext(
+            "From %{formatted} server",
+            "From %{formatted} servers",
+            @facts.fediverse_servers,
+            formatted: delimited_count(@facts.fediverse_servers)
+          )
+        }
+      />
+      <div class="col-span-2 min-w-0 lg:col-span-1">
+        <%!-- The arithmetic behind the figure in the top bar, beside the two
+              tiles it adds: investors have asked how that number comes about,
+              and the answer is an addition whose summands are right there.
+              `tabular-nums` so the digits line up as an equation rather than
+              as prose. --%>
+        <p class="tabular-nums font-semibold text-slate-900 dark:text-white">
+          {InvestorsDoc.people_sum(@facts)}
+        </p>
+        <p class="mt-1 text-sm text-slate-600 dark:text-slate-400">
+          {InvestorsDoc.counter_explainer()}
+        </p>
+      </div>
+    </div>
+
+    <.growth_curve series={@facts.series} class="mt-6" height="h-40 lg:h-56" />
+    <p :if={@growth_sentence} class="mt-2 text-sm text-slate-600 dark:text-slate-400">
+      {@growth_sentence}
     </p>
   </.card>
 
   <.card>
-    <h2 class="text-xl font-bold text-slate-900 dark:text-white">Where we are</h2>
-    <p class="mt-2 text-sm text-slate-600 dark:text-slate-400">
-      Read from the live database on every request, and published in the same figures at
-      <.link href={~p"/system/nodeinfo/2.1"} class="underline">/system/nodeinfo/2.1</.link>.
+    <h2 class="text-xl font-bold text-slate-900 dark:text-white">
+      {gettext("Why this is worth building")}
+    </h2>
+    <%!-- Four claims, so a 2x2 grid from `lg` up rather than a column of
+          full-width paragraphs: at this card's width a line of prose runs past
+          a comfortable measure, and the tiles halve it while giving each claim
+          a surface of its own, the same one the figures above sit on. The
+          citation is pinned to the bottom of its tile (`mt-auto`) so the four
+          of them line up across a row whatever the text above them does. --%>
+    <div class="mt-4 grid gap-4 lg:grid-cols-2">
+      <div
+        :for={point <- InvestorsDoc.case_points()}
+        class="flex flex-col rounded-xl bg-slate-50 p-4 dark:bg-slate-800/60"
+      >
+        <h3 class="font-semibold text-slate-900 dark:text-white">{point.title}</h3>
+        <p class="mt-1 text-slate-700 dark:text-slate-300">{point.body}</p>
+        <%!-- A claim that leans on somebody else's measurement names it and
+              links it: an investor checks a figure like this, and one they
+              cannot check reads as one we made up. --%>
+        <p :if={point.source} class="mt-auto pt-3 text-xs text-slate-600 dark:text-slate-400">
+          {gettext("Source:")}
+          <a
+            href={point.source.url}
+            rel="noopener noreferrer"
+            target="_blank"
+            class="font-semibold text-brand-600 hover:text-brand-700 dark:text-brand-400 dark:hover:text-brand-300"
+          >{point.source.label}</a>
+        </p>
+      </div>
+    </div>
+  </.card>
+
+  <%!-- No email address: an investor writes through vutuv, which keeps a
+        personal inbox off a page written to be read by strangers and machines.
+        The profile is linked, because somebody about to put six figures
+        somewhere wants to see who is on the other side first. Rendered only
+        where the configured handle really resolves to a member here, so a
+        third-party installation offers its own operator or stays silent. --%>
+  <.card :if={@contact_handle}>
+    <h2 class="text-xl font-bold text-slate-900 dark:text-white">{gettext("Write to me")}</h2>
+    <p class="mt-3 max-w-2xl text-slate-700 dark:text-slate-300">
+      {InvestorsDoc.contact_note()}
     </p>
-    <div class="mt-4 grid grid-cols-2 gap-3 sm:grid-cols-3">
-      <.figure_tile label="Members" value={en_count(@facts.members)} />
-      <.figure_tile
-        label="Active this month"
-        value={en_count(@facts.active_month)}
-        note="Signed in within 30 days"
-      />
-      <.figure_tile
-        label="Active this half year"
-        value={en_count(@facts.active_halfyear)}
-      />
-      <.figure_tile label="Posts" value={en_count(@facts.posts)} />
-      <.figure_tile label="Replies" value={en_count(@facts.replies)} />
-      <.figure_tile
-        label="Fediverse accounts"
-        value={en_count(@facts.fediverse_accounts)}
-        note={"From #{en_count(@facts.fediverse_servers)} servers"}
-      />
+    <%!-- The address gets a line of its own on a phone (`block sm:inline`):
+          behind the label it has half a line left and breaks mid-handle, which
+          reads as a typo rather than as a URL. `break-words` rather than
+          `break-all` for the same reason — it only splits a word when the word
+          alone is too long, so a URL that fits stays whole. --%>
+    <p :if={@contact_profile_url} class="mt-2 text-slate-700 dark:text-slate-300">
+      {gettext("My profile:")}
+      <a
+        href={@contact_profile_url}
+        class="block font-semibold break-words text-brand-600 hover:text-brand-700 sm:inline dark:text-brand-400 dark:hover:text-brand-300"
+      >{@contact_profile_url}</a>
+    </p>
+    <%!-- Which of the two leads depends on who is reading. A message needs a
+          session, so for a logged-out reader "Send a message" is a redirect to
+          the login form and a dead end for somebody who has no account yet:
+          they are offered the account first. A member gets the reverse, since
+          for them the message is one click and the other button is nothing. --%>
+    <div class="mt-4 flex flex-wrap gap-3">
+      <.button :if={is_nil(@current_user)} href={~p"/"}>{gettext("Create an account")}</.button>
+      <.button
+        href={~p"/messages/with/#{@contact_handle}"}
+        variant={if @current_user, do: "primary", else: "secondary"}
+      >
+        {gettext("Send a message")}
+      </.button>
     </div>
   </.card>
 </div>

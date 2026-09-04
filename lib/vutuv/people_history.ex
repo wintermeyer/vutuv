@@ -7,8 +7,13 @@ defmodule Vutuv.PeopleHistory do
 
   Two counts, not one, because they grow for different reasons: members arrive
   through sign-up on this installation, Fediverse accounts arrive by following
-  a member, a page or a tag from somewhere else entirely. A single "people"
-  line would hide which of the two is moving.
+  a member, a page or a tag from somewhere else entirely.
+
+  The curve itself draws their **sum**, the figure the top bar shows. Two bands
+  were tried and are not worth drawing: the member half is two orders of
+  magnitude larger, so on any shared scale the Fediverse half is a hairline
+  along the top. Which of the two moved is said in words under the chart
+  instead, out of `growth/1`.
 
   The first 30 days in the table are a reconstruction written by the creating
   migration and read a little low (deleted members and pruned followers can no
@@ -91,7 +96,7 @@ defmodule Vutuv.PeopleHistory do
       days: Date.diff(last.day, first.day),
       members: last.members - first.members,
       fediverse_accounts: last.fediverse_accounts - first.fediverse_accounts,
-      total: last.members + last.fediverse_accounts - (first.members + first.fediverse_accounts)
+      total: Snapshot.total(last) - Snapshot.total(first)
     }
   end
 end
