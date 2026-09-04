@@ -190,12 +190,14 @@ defmodule Vutuv.MastodonHelpers do
   writes when the thing announced is a member's own (`post_id` set,
   `remote_post_id` nil).
   """
-  def boost(%RemoteAccount{} = account, %Post{} = post) do
+  def boost(%RemoteAccount{} = account, %Post{} = post, attrs \\ []) do
     Repo.insert!(%PostBoost{
       remote_account_id: account.id,
       post_id: post.id,
       activity_id: "https://social.example/activities/#{unique_suffix()}",
-      announced_at: DateTime.utc_now(:second)
+      # Overridable so a test can place the boost against a follow's span
+      # (issue #1673): the feed reads the announce time, not the post's.
+      announced_at: attrs[:announced_at] || DateTime.utc_now(:second)
     })
   end
 

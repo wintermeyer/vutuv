@@ -47,35 +47,6 @@ defmodule Vutuv.FeedPastFollowsTest do
 
   defp feed_ids(viewer), do: Posts.feed_page(viewer).entries |> Enum.map(& &1.post.id)
 
-  # Follows and unfollows for real, then moves the recorded span to
-  # `started_ago .. ended_ago` seconds before now, so the test can put posts
-  # cleanly before, inside and after it.
-  defp followed_between!(viewer, author, started_ago, ended_ago) do
-    started_at = ago(started_ago)
-    follow!(viewer, author)
-
-    Repo.update_all(
-      from(f in Follow, where: f.follower_id == ^viewer.id and f.followee_id == ^author.id),
-      set: [inserted_at: started_at]
-    )
-
-    Social.unfollow!(viewer.id, Social.follow_id(viewer.id, author.id))
-
-    # Scoped to the span this call just wrote (its start is the follow's), so a
-    # test can lay down two spells of following without the second rewriting the
-    # first.
-    {1, nil} =
-      Repo.update_all(
-        from(w in PastFollow,
-          where: w.follower_id == ^viewer.id and w.followee_id == ^author.id,
-          where: w.started_at == ^started_at
-        ),
-        set: [ended_at: ago(ended_ago)]
-      )
-
-    :ok
-  end
-
   describe "recording the span" do
     test "an unfollow records when the follow began and when it ended" do
       viewer = user()

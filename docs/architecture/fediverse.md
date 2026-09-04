@@ -1571,7 +1571,18 @@ touched:
 
 Unfollowing sends a best-effort `Undo(Follow)` carrying the original activity id
 and deletes the row either way — it describes our member's intent, and they have
-withdrawn it. Switching federation off does that for every follow
+withdrawn it.
+
+It also writes a **span** (`Vutuv.Fediverse.PastFollow`, issue #1673): from when
+the follow began to the second it ended. Unfollowing means "stop sending me
+their posts", not "delete what I have already read", and without that record it
+meant both — worse here than on the vutuv side, because a cached copy is only
+held while somebody follows its author, so the unfollow deleted it outright.
+The span is read by the two remote feed sources and is a hold in
+`spare_held/1`, so the copies survive the purge; the module doc says what it
+does not record.
+
+Switching federation off does that for every follow
 (`drop_remote_follows/1`, the `drop_followers/1` symmetry), gated on
 `ever_federated?/1` rather than `federated?/1` for the reason revocation is: the
 withdrawal happens exactly when the switch is already off.
@@ -2149,8 +2160,9 @@ Retention is unchanged: a boosted copy lives under the ordinary six-month clock.
 What the boost buys it is the right to exist while **nobody here follows its
 author** — which is the normal case for a boost, and the reason the copy is here
 at all — so `purge_unfollowed_remote_posts/0` spares a post something still
-holds, exactly as it spares one a member reshared. An `Undo(Announce)` removes
-the boost row and nothing else; the post goes when nothing holds it any more.
+holds, exactly as it spares one a member reshared or one a past follow still
+covers. An `Undo(Announce)` removes the boost row and nothing else; the post
+goes when nothing holds it any more.
 
 ### When a followed account moves, dies or vanishes (issue #1168)
 
@@ -2288,8 +2300,9 @@ and which now carries an index for exactly this lookup.
 Any account, not only followed ones, which is what makes `fediverse_post_lookups`
 necessary: the copy usually has no follower holding it, and
 `purge_unfollowed_remote_posts/0` deletes precisely the copies nobody holds. It
-is the third exemption in `spare_held/1` beside a reshare (#1166) and a boost
-(#1167), under the same rule — it buys the right to live out the ordinary clock,
+is one of five exemptions in `spare_held/1`, beside a reshare (#1166), a boost
+(#1167), a quote (#1609) and an ended follow's span (#1673), under the same
+rule — it buys the right to live out the ordinary clock,
 never extra time, and `expires_at` counts from **receipt**, so an old post lives
 its full retention from the lookup rather than arriving already expired.
 
