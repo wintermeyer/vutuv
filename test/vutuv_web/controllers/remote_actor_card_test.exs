@@ -151,8 +151,8 @@ defmodule VutuvWeb.RemoteActorCardTest do
 
     assert html =~ "Anderes Netzwerk"
     assert html =~ "Folgen"
-    assert html =~ "Die Seite dieses Kontos hier"
-    assert html =~ "Original auf social.example/users/them ansehen"
+    assert html =~ "Kontoseite hier"
+    assert html =~ "Original ansehen"
   end
 
   # The one way off this site, and it used to say only that it was one. A reader
@@ -160,22 +160,27 @@ defmodule VutuvWeb.RemoteActorCardTest do
   # they would read a browser's status bar — and here that address is not
   # guessable from the card, since an actor URI need not be spelled like the
   # `@user@host` above it (`/users/them`, `/u/them`, `/profile/them`).
+  #
+  # On a line of its own since the address in the sentence wrapped the row onto
+  # three lines and made the quietest half of the card its tallest block.
   test "the way out names where it goes", %{conn: conn} do
     {conn, _user} = federating(conn)
     account()
 
     html = post(conn, ~p"/system/fediverse/actor_card", address: @address) |> html_response(200)
 
-    assert html =~ "View the original on social.example/users/them"
-    # And the label is only ever a label: the href stays the whole URL.
+    assert html =~ "View the original"
+
+    assert html =~
+             ~s(<span class="actor-card__link-address">social.example/users/them</span>)
+
+    # And the address is only ever a label: the href stays the whole URL.
     assert html =~ @actor
   end
 
-  # A scheme and a `www.` are noise every reader already knows, and dropping them
-  # buys the characters the account name needs. The cap was 32 for one afternoon,
-  # which is one character short of `social.heise.de/users/heiseonline` — so the
-  # part the reader is checking, the account's name, lost its last two letters on
-  # a card that had room for them. An ordinary actor URI reaches the whole way.
+  # A scheme and a `www.` are noise every reader already knows, and dropping
+  # them leaves the two parts a reader actually checks: which server, and whose
+  # account on it.
   #
   # `HTTPS://` is not a curiosity here: this string is a remote server's, not
   # ours, and a scheme left standing would spend eight characters saying that a
@@ -188,18 +193,19 @@ defmodule VutuvWeb.RemoteActorCardTest do
              "chaos.social/@feed"
   end
 
-  # Cut from the end and never from the front: the host leads the string and is
-  # the fact it is carrying, so it is the one part that may not be what goes.
-  # `…` says there is more behind the click.
-  test "an address too long for the card is cut, not wrapped across it" do
+  # Nothing cuts the address here any more: it arrives whole and the browser
+  # ends it where the card ends (`text-overflow: ellipsis` on its own line). It
+  # used to be pre-cut at 40 characters, a number measured against the sentence
+  # it was embedded in, and a count guessing at a width is wrong on the next
+  # screen. Cutting is still only ever from the END, which is the property this
+  # pins: the host leads the string and is the fact it is carrying.
+  test "a long address arrives whole, host first, for the browser to cut" do
     address =
       RemoteActorCardHTML.origin_address(
         "https://www.example.social/users/a-very-long-handle-indeed"
       )
 
-    assert String.starts_with?(address, "example.social/users/")
-    assert String.ends_with?(address, "…")
-    assert String.length(address) == 40
+    assert address == "example.social/users/a-very-long-handle-indeed"
   end
 
   test "a member without a Fediverse identity is told why, not shown a dead button", %{conn: conn} do
@@ -267,7 +273,7 @@ defmodule VutuvWeb.RemoteActorCardTest do
   # A self-description is what an account says about itself and settles nothing:
   # every account claims to be worth reading. What it last wrote, and how much
   # of it we hold, is the reader's actual evidence — so the card carries a count
-  # line and one preview, and the description shrinks to make room.
+  # line and the newest few posts, and the description shrinks to make room.
 
   test "it says how much of the account we hold and quotes the newest post", %{conn: conn} do
     {conn, _user} = federating(conn)
@@ -284,7 +290,110 @@ defmodule VutuvWeb.RemoteActorCardTest do
 
     assert html =~ "2 posts here"
     assert html =~ "Ein Zug fährt durch die Nacht."
-    refute html =~ "Der ältere."
+    # The older one comes along, folded away behind the expander: the card is
+    # the reader deciding whether to follow, and one post is a poor sample.
+    assert html =~ "Der ältere."
+    assert html =~ ~s(data-actor-more-posts)
+  end
+
+  # Only one post to show, so there is nothing to expand — a control that opens
+  # an empty drawer is worse than no control.
+  test "a single post grows no expander", %{conn: conn} do
+    {conn, _user} = federating(conn)
+    acc = account()
+
+    cached_post(acc, content_text: "Ein Zug fährt durch die Nacht.")
+
+    html = post(conn, ~p"/system/fediverse/actor_card", address: @address) |> html_response(200)
+
+    assert html =~ "Ein Zug fährt durch die Nacht."
+    refute html =~ ~s(data-actor-more-posts)
+  end
+
+  # The card opens over a post the reader is already looking at, and quoting
+  # that very post back at them under "Latest here" spends the card's most
+  # valuable line saying what is on the screen behind it. The one below moves
+  # up; the count and the clock stay the account's.
+  test "the post the reader has open is not quoted back at them", %{conn: conn} do
+    {conn, _user} = federating(conn)
+    acc = account()
+
+    cached_post(acc,
+      content_text: "Der ältere.",
+      published_at: DateTime.add(DateTime.utc_now(:second), -3600)
+    )
+
+    open = cached_post(acc, content_text: "Ein Zug fährt durch die Nacht.")
+
+    html =
+      post(conn, ~p"/system/fediverse/actor_card", address: @address, context: open.id)
+      |> html_response(200)
+
+    assert html =~ "2 posts here"
+    refute html =~ "Ein Zug fährt durch die Nacht."
+    assert html =~ "Der ältere."
+  end
+
+  # The one post we hold is the one behind the card: nothing left to quote, and
+  # the count line stays, because we do hold it.
+  test "a context that leaves nothing to quote leaves the count standing", %{conn: conn} do
+    {conn, _user} = federating(conn)
+    acc = account()
+
+    open = cached_post(acc, content_text: "Ein Zug fährt durch die Nacht.")
+
+    html =
+      post(conn, ~p"/system/fediverse/actor_card", address: @address, context: open.id)
+      |> html_response(200)
+
+    assert html =~ "1 post here"
+    refute html =~ ~s(data-actor-card-latest)
+  end
+
+  # The drawer is the other thing the reader has in front of them, and every act
+  # replaces the whole fragment — so without the flag travelling back, opening
+  # the older posts and then pressing Follow folds them away again.
+  test "an opened drawer is still open after a follow", %{conn: conn} do
+    {conn, _user} = federating(conn)
+    acc = account()
+    serve_actor()
+
+    cached_post(acc,
+      content_text: "Der ältere.",
+      published_at: DateTime.add(DateTime.utc_now(:second), -3600)
+    )
+
+    cached_post(acc, content_text: "Ein Zug fährt durch die Nacht.")
+
+    html =
+      post(conn, ~p"/system/fediverse/actor_card", address: @address)
+      |> html_response(200)
+
+    assert html =~ ~s(data-actor-more-posts hidden)
+
+    html =
+      post(conn, ~p"/system/fediverse/actor_card/follow", address: @address, expanded: "1")
+      |> html_response(200)
+
+    refute html =~ ~s(data-actor-more-posts hidden)
+    assert html =~ "is-open"
+  end
+
+  # The context rides along with every act, not only with the open: pressing
+  # Follow re-renders the whole card, and a quote that appears on that press is
+  # the card contradicting itself over one click.
+  test "the context survives a follow", %{conn: conn} do
+    {conn, _user} = federating(conn)
+    acc = account()
+    serve_actor()
+
+    open = cached_post(acc, content_text: "Ein Zug fährt durch die Nacht.")
+
+    html =
+      post(conn, ~p"/system/fediverse/actor_card/follow", address: @address, context: open.id)
+      |> html_response(200)
+
+    refute html =~ "Ein Zug fährt durch die Nacht."
   end
 
   # An account we hold nothing from must not grow an empty row saying so: "0
@@ -319,6 +428,55 @@ defmodule VutuvWeb.RemoteActorCardTest do
     assert html =~ "1 post here"
     refute html =~ "Alles über Krypto."
     refute html =~ ~s(data-actor-card-latest)
+  end
+
+  # The reader's second pass over a post, beside their filters: their own
+  # search-and-replace rules for this author (`Vutuv.PostRewrites`). The card is
+  # the fourth surface over these rows and was the only one skipping them, so a
+  # member who deletes a mirror's footer everywhere else read it here — and the
+  # filter below judged the text before the rule had run, which is the order
+  # `PostTeaser.record_line/4` exists to fix.
+  test "a quote is rewritten by the reader's rules for that account", %{conn: conn} do
+    {conn, user} = federating(conn)
+    acc = account()
+
+    {:ok, _rule} =
+      Vutuv.PostRewrites.create_rule(user, "@them@social.example", %{
+        pattern: " -- Gepostet über einen Bot"
+      })
+
+    cached_post(acc, content_text: "Ein Zug fährt durch die Nacht. -- Gepostet über einen Bot")
+
+    html = post(conn, ~p"/system/fediverse/actor_card", address: @address) |> html_response(200)
+
+    assert html =~ "Ein Zug fährt durch die Nacht."
+    refute html =~ "Gepostet über einen Bot"
+  end
+
+  # A post with nothing written on it — a photograph and no caption — has no
+  # line to be, and `PostTeaser.line/2` answers `""` rather than nil for it. A
+  # gate testing for nil lets it through, and it then spends one of the card's
+  # four quote slots on an empty box.
+  test "a post with no words at all is not quoted as an empty line", %{conn: conn} do
+    {conn, _user} = federating(conn)
+    acc = account()
+
+    # `""` and not nil: the helper's `attrs[:content_text] || "Von woanders."`
+    # would fill a nil in, and both spellings reach the gate the same way —
+    # `Posts.text/1` hands `line/2` an empty binary either way.
+    cached_post(acc,
+      content_text: "",
+      published_at: DateTime.add(DateTime.utc_now(:second), -60)
+    )
+
+    cached_post(acc, content_text: "Ein Zug fährt durch die Nacht.")
+
+    html = post(conn, ~p"/system/fediverse/actor_card", address: @address) |> html_response(200)
+
+    assert html =~ "2 posts here"
+    assert html =~ "Ein Zug fährt durch die Nacht."
+    # The wordless one would have been the only thing behind the expander.
+    refute html =~ ~s(data-actor-more-posts)
   end
 
   # A content warning is the author asking for a click before their words are

@@ -45,6 +45,13 @@ defmodule VutuvWeb.RemoteActorCardController do
   alias Vutuv.Fediverse
   alias Vutuv.Fediverse.RemoteAccount
   alias Vutuv.Fediverse.RemotePost
+  alias Vutuv.PostRewrites
+  alias VutuvWeb.PostTeaser
+
+  # How much of a quote the card ever shows: two clamped lines on the newest and
+  # one truncated line on each of the others, at 20rem. The default 200 shipped
+  # about twice this and CSS hid the rest.
+  @quote_length 120
 
   @doc """
   Who is `address`, and where do I stand with them.
@@ -159,11 +166,23 @@ defmodule VutuvWeb.RemoteActorCardController do
   # The one render. The follow is re-read from the database rather than taken
   # from whatever the act returned, so what the card draws is what is true — a
   # second tab that changed it is then not contradicted by this one.
+  #
+  # `context` and `expanded` come off `conn.params` rather than travelling
+  # through the four actions: both say what the reader has in front of them —
+  # which post is open *behind* the card, and whether they have opened its
+  # drawer — which is a fact about the request and not about the act. Every act
+  # re-renders the whole card, so anything the client does not send back is lost
+  # on the next press: a quote that appears only once Follow is pressed, or a
+  # drawer that folds itself away, is the card contradicting itself over one
+  # click.
   defp card(conn, address, account, error \\ nil) do
     viewer = conn.assigns[:current_user]
 
     summary =
-      (account && Fediverse.account_card_summary(account, viewer)) || %{count: 0, latest: nil}
+      (account && Fediverse.account_card_summary(account, viewer)) ||
+        %{count: 0, last_at: nil, posts: []}
+
+    quotes = quotes(summary.posts, account, viewer, conn.params["context"])
 
     render(conn, :card,
       address: address,
@@ -172,33 +191,74 @@ defmodule VutuvWeb.RemoteActorCardController do
       blocked_reason: Fediverse.follow_refusal(viewer),
       error: error,
       post_count: summary.count,
-      latest: preview(summary.latest, account, viewer),
+      last_at: summary.last_at,
+      # Split here rather than in the template: which quote is the headline and
+      # which are the sample is the same decision as which posts may be quoted
+      # at all, and that one is stated to be the controller's.
+      newest: List.first(quotes),
+      older: Enum.drop(quotes, 1),
+      expanded?: conn.params["expanded"] == "1",
       host_muted?: account && account.host in Fediverse.muted_hosts(viewer)
     )
   end
 
-  # Which post, if any, the card may quote. Three gates, and each one is a
-  # reader's decision this line would otherwise walk straight past.
+  # Which of the account's posts the card may quote, newest first, each with the
+  # one line it is shown as and whether it really is the account's latest.
   #
-  # A content warning is the author asking for a click before their words are
-  # read, so a preview that ignores it puts them on screen unasked —
-  # `RemotePost.warned?/1` and not a bare `sensitive` test, because the two
-  # arrive independently and a server that sets only `summary` still asked. A
-  # word the member muted is the same promise from the other side; the count
-  # line deliberately stays either way, because we do hold the post, they just
-  # do not want to read it here.
-  defp preview(nil, _account, _viewer), do: nil
+  # **The post the reader has open** is this card's own gate, and the only one
+  # that is not about permission: a card opened from the author line of a post
+  # quotes that post back at the reader as the freshest thing the account wrote,
+  # which spends its most valuable line saying what is on the screen behind it.
+  # Drop it and the next one moves up — the count and the clock stay the
+  # account's, because they are facts about the account and not about this card,
+  # and `latest?` is how the quote that moved up stops calling itself the latest.
+  #
+  # It comes first so that a card with nothing else to quote never asks the
+  # database for a filter set nobody then consults.
+  defp quotes(posts, account, viewer, context) do
+    posts
+    |> Enum.reject(&(&1.id == context))
+    |> quotable(account, viewer, List.first(posts))
+  end
 
-  defp preview(%RemotePost{} = post, account, viewer) do
-    # The author, put back where the filter looks for it: a rule scoped to an
+  defp quotable([], _account, _viewer, _newest), do: []
+
+  # The rest of the gates belong to the reader, and `PostTeaser.record_line/4`
+  # owns them — their search-and-replace rules first, then their content
+  # filters over what those left, then the one line. That order is not this
+  # module's to restate (reversed, a filter judges a line the reader was never
+  # going to see), and the card is the fourth surface over these same rows.
+  #
+  # A **content warning** stays here, because it is the author's decision rather
+  # than the reader's: it is the author asking for a click before their words
+  # are read, so a quote that ignores it puts them on screen unasked.
+  # `RemotePost.warned?/1` and not a bare `sensitive` test, because the two
+  # arrive independently and a server that sets only `summary` still asked. The
+  # count line deliberately stays whatever these drop, because we do hold the
+  # posts, the reader just may not be shown them here.
+  defp quotable(posts, account, viewer, newest) do
+    filters = ContentFilters.compile_for(viewer)
+    # One account, so one set of rules for every post on the card — the card is
+    # about that account, which is exactly what `author_rules/2` answers.
+    rewrites = PostRewrites.author_rules(viewer, account)
+
+    posts
+    # The author, put back where both passes look for it: a rule scoped to an
     # account asks `Posts.account_names/1` who wrote this, which loads the row
     # from the database when the association is not there. It is in hand — by
-    # construction this post is that account's.
-    post = %{post | remote_account: account}
+    # construction these posts are that account's.
+    |> Stream.map(fn %RemotePost{} = post -> %{post | remote_account: account} end)
+    |> Stream.reject(&RemotePost.warned?/1)
+    |> Stream.map(&quote_entry(&1, rewrites, filters, newest))
+    |> Stream.reject(&is_nil(&1.line))
+    |> Enum.take(Fediverse.card_quotes())
+  end
 
-    if RemotePost.warned?(post) or
-         ContentFilters.filtered(post, ContentFilters.compile_for(viewer)),
-       do: nil,
-       else: post
+  defp quote_entry(post, rewrites, filters, newest) do
+    %{
+      post: post,
+      line: PostTeaser.record_line(post, rewrites, filters, length: @quote_length),
+      latest?: newest != nil and post.id == newest.id
+    }
   end
 end
