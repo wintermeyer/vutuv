@@ -4025,15 +4025,41 @@ defmodule Vutuv.Fediverse do
     |> then(fn {posts, rest} -> {posts, rest != []} end)
   end
 
+  # How many of an account's newest posts the mention card quotes, and how many
+  # it fetches to fill them. Here rather than in the controller because the
+  # account page's own cap is here (`@account_page_posts`), so no caller has to
+  # know either number.
+  #
+  # The buffer is for what the card drops of its own accord: the post the reader
+  # already has open (one), and then a post its author marked sensitive, one the
+  # reader's filters hide, or one with no words to quote. Measured on the dev
+  # copy of production, 6,390 cached posts: 4 carry a content warning (0.14 %)
+  # and 32 no text at all (0.5 %), so three spare beyond the context drop is
+  # generous — an earlier 12 fetched eight rows (~6 KB) nothing could read.
+  @card_quotes 4
+  @card_candidates @card_quotes + 4
+
+  @doc "How many posts the mention card quotes, for the gates that fill them."
+  def card_quotes, do: @card_quotes
+
   @doc """
   What the mention card says about an account beyond its own words: how many of
-  its posts this installation holds **for this reader**, and the newest of them,
-  as `%{count: n, latest: post_or_nil}`.
+  its posts this installation holds **for this reader**, when the newest of them
+  arrived, and its newest few, as
+  `%{count: n, last_at: datetime_or_nil, posts: [post]}`.
 
   A self-description settles nothing — every account claims to be worth reading
   — so the card that opens from a `@user@host` in a sentence carries the
   reader's actual evidence instead: how much of this account is already here,
-  and the last thing it wrote.
+  and the last few things it wrote.
+
+  `count` and `last_at` describe the **account**, `posts` is the card's raw
+  material — and the two must not be derived from one another. The card drops
+  posts of its own accord (a content warning, the reader's filters, the very
+  post they have open behind the card), so an account that wrote a minute ago
+  would otherwise read as silent the moment its newest post is one the card may
+  not quote. `@card_candidates` above is more than the card shows, for the same
+  reason.
 
   Audience-scoped through the same `visible_account_posts/2` the account page's
   list uses. That sharing is the point rather than tidiness: this number is read
@@ -4041,25 +4067,29 @@ defmodule Vutuv.Fediverse do
   is a leak that looks like a feature, and one of the two widening its audience
   without the other is exactly how that happens.
 
-  One query, not two. `count(*) OVER ()` rides along with the row the card is
-  fetching anyway, which is both simpler and measurably cheaper than a separate
-  `Repo.aggregate/2`: on a table seeded to 50,000 posts across 200 accounts the
-  pair took 112–128 µs and this takes 80–84 µs, because it scans once instead of
-  scanning and then seeking. (An earlier version of this comment claimed the
-  separate count kept an index-only plan. It never had one —
-  `(remote_account_id, published_at)` does not carry `audience`, so the audience
-  test is a heap filter either way.)
+  One query, not two. `count(*) OVER ()` rides along with the rows the card is
+  fetching anyway — a window function is computed before `LIMIT`, so the count
+  stays the account's however few rows come back — which is both simpler and
+  measurably cheaper than a separate `Repo.aggregate/2`: on a table seeded to
+  50,000 posts across 200 accounts the pair took 112–128 µs and this takes 80–84
+  µs, because it scans once instead of scanning and then seeking. (An earlier
+  version of this comment claimed the separate count kept an index-only plan. It
+  never had one — `(remote_account_id, published_at)` does not carry `audience`,
+  so the audience test is a heap filter either way.)
   """
   def account_card_summary(%RemoteAccount{} = account, party) do
     from(p in visible_account_posts(account, party),
       order_by: [desc: p.published_at, desc: p.id],
-      limit: 1,
+      limit: @card_candidates,
       select: {p, fragment("count(*) OVER ()")}
     )
-    |> Repo.one()
+    |> Repo.all()
     |> case do
-      nil -> %{count: 0, latest: nil}
-      {latest, count} -> %{count: count, latest: latest}
+      [] ->
+        %{count: 0, last_at: nil, posts: []}
+
+      [{newest, count} | _] = rows ->
+        %{count: count, last_at: newest.published_at, posts: Enum.map(rows, &elem(&1, 0))}
     end
   end
 

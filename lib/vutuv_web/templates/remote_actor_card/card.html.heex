@@ -89,14 +89,18 @@ renders the same element. --%>
 
       `%{formatted}` and not `%{count}`: `ngettext/3` binds `%{count}` to the
       raw integer and a `count:` binding does not override it, so a formatted
-      number needs a placeholder of its own. --%>
+      number needs a placeholder of its own.
+
+      `@last_at` and not the newest quote's stamp: the clock is a fact about the
+      account, and the gates below drop quotes for reasons that have nothing to
+      do with when the account last wrote. An account that posted a minute ago
+      behind a content warning must not read as silent. It needs no `:if` of its
+      own — `published_at` is NOT NULL, so a count above zero is a stamp. --%>
       <p :if={@post_count > 0} class="actor-card__stats">
         {ngettext("%{formatted} post here", "%{formatted} posts here", @post_count,
           formatted: compact_count(@post_count)
         )}
-        <span :if={@latest}>
-          · {relative_time(@latest.published_at)}
-        </span>
+        · {relative_time(@last_at)}
       </p>
     </div>
   </div>
@@ -112,26 +116,83 @@ renders the same element. --%>
     {@account.summary}
   </p>
 
-  <%!-- The last thing they wrote, which is what actually answers "is this worth
-  following". Gated in the controller: a post its author marked sensitive and a
-  post the reader's own filters hide are both left out, and the count line above
-  stays either way. --%>
-  <%!-- `PostTeaser.plain_line/2` and not the raw body: it is the app's one owner
-  of a post in one line, so this quote skips what every other teaser skips (a
-  bare `RE: <url>` quote line, a hashtags-only post), shortens our own handles
-  and arrives already cut to length instead of shipping 10,000 characters for
-  CSS to hide. It answers nil for a post with no words at all — a photo without
-  a caption — which is why the box is gated on the line and not on the post. --%>
-  <% line = @latest && VutuvWeb.PostTeaser.plain_line(@latest) %>
-  <.link
-    :if={line}
-    href={remote_post_permalink(@latest, @current_user)}
-    data-actor-card-latest
-    class="actor-card__latest"
-  >
-    <span class="actor-card__latest-label">{gettext("Latest here")}</span>
-    <span class="actor-card__latest-text line-clamp-2">{line}</span>
-  </.link>
+  <%!-- The last few things they wrote, which is what actually answers "is this
+  worth following" — one post is a poor sample of an account, and the reader is
+  standing in front of a Follow button. The newest is quoted in two lines and
+  the rest wait behind an expander, so the card stays the size of a card until
+  somebody asks for more.
+
+  Which posts these are, and which of them is the headline, is the controller's
+  decision and not this template's: it drops the one the reader has open behind
+  the card, the ones their author marked sensitive and the ones the reader's own
+  filters hide, and hands over each survivor with the single line it is shown
+  as. The count line above stays whatever it drops.
+
+  **"Latest here" is a claim, so it is `latest?` and not the top of the list.**
+  Drop the account's newest post because the reader is looking at it, and the
+  one that moves up is not the latest — the stats line above still dates the one
+  that went. It then says when it was written, like every row below it. --%>
+  <div :if={@newest} class="actor-card__posts">
+    <.link
+      href={remote_post_permalink(@newest.post, @current_user)}
+      data-actor-card-latest
+      class="actor-card__latest"
+    >
+      <span class="actor-card__latest-label">
+        {if @newest.latest?,
+          do: gettext("Latest here"),
+          else: relative_time(@newest.post.published_at)}
+      </span>
+      <span class="actor-card__latest-text line-clamp-2">{@newest.line}</span>
+    </.link>
+
+    <%!-- The rest, rendered but folded away: they are three short strings the
+    card already has in hand, so a second request to read them would cost a
+    round trip to save nothing. `hidden` rather than a class, so a card whose
+    JavaScript never arrives still shows the newest and no dead control — and
+    `@expanded?`, so the drawer the reader opened is still open on the card that
+    comes back from pressing Follow. --%>
+    <div
+      :if={@older != []}
+      class="actor-card__older"
+      data-actor-more-posts
+      hidden={not @expanded?}
+    >
+      <%!-- One line each, with the age at the end rather than on a line of its
+      own: three stacked labels reading "2 days ago" under one another is the
+      shape of a list that says nothing, and it made the drawer twice the height
+      of the card it opens under. The newest post above keeps the two-line quote
+      — it is the headline, these are the sample. --%>
+      <.link
+        :for={entry <- @older}
+        href={remote_post_permalink(entry.post, @current_user)}
+        class="actor-card__older-row"
+      >
+        <span class="actor-card__older-text">{entry.line}</span>
+        <span class="actor-card__older-when">{relative_time(entry.post.published_at)}</span>
+      </.link>
+    </div>
+
+    <%!-- Two labels and one chevron, and CSS decides which label shows — the
+    same arrangement the follow button below uses, in the same `data-actor-`
+    namespace, and for the same reason: `mention_card.js` writes no sentences,
+    it adds a class. --%>
+    <button
+      :if={@older != []}
+      type="button"
+      data-actor-posts-toggle
+      aria-expanded={to_string(@expanded?)}
+      class={["actor-card__posts-toggle", @expanded? && "is-open"]}
+    >
+      <span data-actor-posts-closed>
+        {ngettext("%{formatted} older post", "%{formatted} older posts", length(@older),
+          formatted: compact_count(length(@older))
+        )}
+      </span>
+      <span data-actor-posts-open>{gettext("Show less")}</span>
+      <span class="actor-card__posts-chevron" aria-hidden="true">⌄</span>
+    </button>
+  </div>
 
   <%!-- Why nothing can be followed from here, in the vocabulary every other
   follow surface speaks: the standing refusal (this member has no Fediverse
@@ -230,29 +291,37 @@ renders the same element. --%>
     </button>
   </div>
 
-  <%!-- Both ways onward in one weight and one colour. They were blue and grey
-  before, which reads as a main way and a lesser one; they are neither. In the
-  sheet the same two become full-width list rows, where a thumb can hit them. --%>
+  <%!-- Both ways onward, as two rows of one weight and one colour. They were
+  blue and grey before, which reads as a main way and a lesser one; they are
+  neither. Rows on every screen, not only in the sheet: two links sharing a line
+  is a shape a 20rem card has no room for, and the one that leaves this site
+  carries an address that wrapped it onto a third line. --%>
   <div class="actor-card__links">
     <%!-- The page here first: it is the one that holds this account's cached
     posts, the mute switch and the whole self-description. --%>
     <.link :if={@account} href={~p"/system/fediverse/account/#{@account}"}>
-      {gettext("Their account page here")}
+      <span>{gettext("Their page here")}</span>
       <span class="actor-card__go" aria-hidden="true">›</span>
     </.link>
-    <%!-- And out to their server, named. "View the original" said only that
-    there was one; a reader about to leave this site for somebody else's reads
-    the address first, the way they would read a browser's status bar. It is not
-    guessable from the card either — an actor URI need not be spelled like the
-    `@user@host` above it (`/users/them`, `/u/them`, `/profile/them`). The name
-    is only a label: the `href` stays the whole URL.
+    <%!-- And out to their server, named — but named on a line of its own,
+    below the label and in the muted weight of a browser's status bar. Reading
+    the destination before leaving is what the address is for, and it was doing
+    that job in bold brand blue at the same size as the label, where its three
+    wrapped lines were the loudest thing on the card. It is not guessable from
+    the card either — an actor URI need not be spelled like the `@user@host`
+    above it (`/users/them`, `/u/them`, `/profile/them`) — so it stays; the
+    `href` is the whole URL either way, and CSS cuts what does not fit rather
+    than a character count guessing at the width.
 
     `:if={origin}` rather than a second wording for a card with no address at
     all: this used to render the sentence on an anchor carrying no `href`, which
     is a way out that goes nowhere. There is nothing to link to in that state —
     the account page above is gated on the same missing row. --%>
     <a :if={origin} href={origin} target="_blank" rel="nofollow noopener noreferrer">
-      {gettext("View the original on %{url}", url: origin_address(origin))}
+      <span class="actor-card__out">
+        <span>{gettext("View the original")}</span>
+        <span class="actor-card__link-address">{origin_address(origin)}</span>
+      </span>
       <span class="actor-card__go" aria-hidden="true">↗</span>
     </a>
   </div>

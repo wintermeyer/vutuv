@@ -338,27 +338,59 @@ LiveView can sit on either style.
   **who is this** (a `.actor-card__chip` carrying the globe and the host, then
   name, address and a two-line self-description), **is it worth it**
   (`.actor-card__stats` — how many of their posts we hold for *this* reader and
-  how recently, through `delimited_count/1` and `relative_time/1`; plus
-  `.actor-card__latest`, the newest one quoted in two lines, left out when its
-  author marked it sensitive or the reader's own filters hide it), and **what
+  how recently, through `compact_count/1` and `relative_time/1`; plus
+  `.actor-card__posts`, a stack of the newest four: the first quoted in two
+  lines under a "Latest here" label, the rest one line each with their age at
+  the end (`.actor-card__older-row`), folded away behind
+  `.actor-card__posts-toggle` and already in the fragment, so opening the drawer
+  asks the server for nothing. One post is a poor sample of an account when the
+  reader is standing in front of a Follow button, and three stacked labels
+  reading "2 days ago" are a list that says nothing — hence the split between a
+  quote and a row. Which posts survive is `Fediverse.account_card_summary/2`
+  (audience, the count, the clock, and `@card_quotes` + a buffer beside the
+  account page's own cap) and then the controller's reader gates, which are
+  `PostTeaser.record_line/4` — the reader's rewrite rules, then their filters
+  over what those left, then the line, never reordered — plus the two the card
+  owns: the author's content warning, and **the post the reader has open behind
+  the card**. That last one is the card's whole reason for a `context` param:
+  opened from a post's author line it otherwise quotes that very post back as
+  the freshest thing the account wrote, spending its best line on what is
+  already on the screen (`mention_card.js` reads it off the enclosing
+  `article[data-remote-post]` and sends it with every request, acts included,
+  alongside `expanded` — every act replaces the whole fragment, so a drawer the
+  reader opened folds itself away without it). The count and the clock stay the
+  account's whatever the stack drops, or a post behind a content warning would
+  make an account that wrote a minute ago read as silent; and the quote that
+  moves up when the context drop takes the newest one says **when** instead of
+  "Latest here", because that label is a claim and not a position), and **what
   now** (one `.actor-card__state-btn` that reads as the follow state and becomes
   the refusal in red on hover — never a status pill beside a loud Unfollow,
   which said the same thing twice and made the one unwanted act the loudest
-  control — a `.actor-card__more` ⋯ holding both mutes and the address, and
-  `.actor-card__links`, both ways onward in one weight — the one that leaves
-  this site **names where it goes** ("View the original on
-  chaos.social/@feed", `RemoteActorCardHTML.origin_address/1`, which borrows
-  both halves: `RemoteHtml.display_form/1` drops the scheme, the `www.` and a
+  control; its three modifiers are spelled by `state_btn_modifier/1` as
+  `--#{Follow.display_state(follow)}`, so `--accepted` / `--requested` /
+  `--moved` are the only names that can style it, and CSS calling the first one
+  `--following` left the commonest state of all unstyled from the day the card
+  shipped — an interpolated class name is invisible to grep, so
+  `actor_card_state_css_test.exs` reads the atoms off `display_state/1` and
+  fails the build when one of them has no colour in either theme — a
+  `.actor-card__more` ⋯ holding both mutes and the address, and
+  `.actor-card__links`, both ways onward in one weight, as **rows on every
+  screen**: two links sharing a line is a shape a 20rem card has no room for.
+  The one that leaves this site **names where it goes** ("View the original"
+  with `ard.social/users/tagesschau` under it in the muted weight of a browser's
+  status bar, `.actor-card__link-address`; `RemoteActorCardHTML.origin_address/1`
+  is `RemoteHtml.display_form/1`, which drops the scheme, the `www.` and a
   trailing slash — case-insensitively, since the string is a remote server's and
-  may well say `HTTPS://` — and `SocialFeed.Post.truncate/2` cuts it at 40, a
-  measurement of *this* card, so the host at the front can never be the part
-  that goes. An actor URI need not be spelled like the `@user@host` above it, so
-  the destination is not guessable from the card, and `overflow-wrap: anywhere`
-  is what lets an address with no spaces in it wrap rather than overflow).
+  may well say `HTTPS://`. Nothing cuts it in Elixir any more: a character count
+  measured against one card is wrong on the next screen, so `text-overflow:
+  ellipsis` ends it where the card ends, always from the END, since the host
+  leads the string and is the fact the line is carrying. An actor URI need not
+  be spelled like the `@user@host` above it, so the destination is not guessable
+  from the card).
   **One fragment serves
   both shapes**: `.actor-card--sheet` restyles it for the phone (grab bar,
   stacked full-width targets, the ⋯ menu in the flow rather than floating, the
-  links as full-width rows), and the only thing that cannot be CSS travels as an
+  two link rows given a thumb's worth of height), and the only thing that cannot be CSS travels as an
   attribute — a touch screen has no hover, so the follow button's first press
   asks with the server-written `data-actor-confirm` and the second one acts. The markup arrives from the server
   on every act (`VutuvWeb.RemoteActorCardController` +

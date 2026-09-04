@@ -1,8 +1,9 @@
 defmodule Vutuv.FediverseAccountCardSummaryTest do
   @moduledoc """
   What the mention card is allowed to say about an account beyond its own words:
-  how many of its posts this installation holds *for this reader*, and which one
-  is the newest (`Vutuv.Fediverse.account_card_summary/2`).
+  how many of its posts this installation holds *for this reader*, when the
+  newest of them arrived, and the newest few themselves
+  (`Vutuv.Fediverse.account_card_summary/2`).
 
   The interesting half is "for this reader". The count sits on a card that opens
   from a word in a sentence, so it is read as a fact about the account — which
@@ -38,12 +39,46 @@ defmodule Vutuv.FediverseAccountCardSummaryTest do
 
     newest = cached_post(account, content_text: "Der neueste.")
 
-    assert %{count: 2, latest: latest} = Fediverse.account_card_summary(account, user)
+    assert %{count: 2, posts: [latest, older]} = Fediverse.account_card_summary(account, user)
     assert latest.id == newest.id
+    assert older.content_text == "Der ältere."
+  end
+
+  # More than one, newest first, for the card's expander — and never more than
+  # the card can use, however much the account has written.
+  test "it hands back the newest few, newest first, capped" do
+    user = federating_member()
+    account = remote_account()
+    now = DateTime.utc_now(:second)
+
+    for hours <- 1..12 do
+      cached_post(account,
+        content_text: "Nummer #{hours}.",
+        published_at: DateTime.add(now, -hours * 3600)
+      )
+    end
+
+    assert %{count: 12, posts: posts} = Fediverse.account_card_summary(account, user)
+    assert length(posts) < 12
+    assert Enum.map(posts, & &1.content_text) |> Enum.take(2) == ["Nummer 1.", "Nummer 2."]
+  end
+
+  # The clock on the count line is the account's last word here, and not the
+  # last word the card ends up quoting: the gates that drop a quote (a content
+  # warning, the reader's own filters, the post they are already reading) must
+  # not make an account that posted a minute ago look silent.
+  test "the timestamp is the newest post's, quotable or not" do
+    user = federating_member()
+    account = remote_account()
+
+    newest = cached_post(account, content_text: "Nicht für jeden.", sensitive: true)
+
+    assert %{count: 1, last_at: last_at} = Fediverse.account_card_summary(account, user)
+    assert last_at == newest.published_at
   end
 
   test "an account we hold nothing from answers zero and no post" do
-    assert %{count: 0, latest: nil} =
+    assert %{count: 0, last_at: nil, posts: []} =
              Fediverse.account_card_summary(remote_account(), federating_member())
   end
 
@@ -59,12 +94,12 @@ defmodule Vutuv.FediverseAccountCardSummaryTest do
     cached_post(account, content_text: "Für alle.")
     restricted = cached_post(account, content_text: "Nur für Follower.", audience: "followers")
 
-    assert %{count: 1, latest: latest} = Fediverse.account_card_summary(account, stranger)
+    assert %{count: 1, posts: [latest]} = Fediverse.account_card_summary(account, stranger)
     assert latest.content_text == "Für alle."
 
     follow(follower, account, "accepted")
 
-    assert %{count: 2, latest: seen} = Fediverse.account_card_summary(account, follower)
+    assert %{count: 2, posts: [seen | _]} = Fediverse.account_card_summary(account, follower)
     assert seen.id == restricted.id
   end
 
@@ -77,7 +112,7 @@ defmodule Vutuv.FediverseAccountCardSummaryTest do
     follow(user, account, "requested")
     cached_post(account, content_text: "Nur für Follower.", audience: "followers")
 
-    assert %{count: 0, latest: nil} = Fediverse.account_card_summary(account, user)
+    assert %{count: 0, posts: []} = Fediverse.account_card_summary(account, user)
   end
 
   # A nil identity must answer "no accepted follow" rather than raise on a nil
@@ -90,7 +125,7 @@ defmodule Vutuv.FediverseAccountCardSummaryTest do
     cached_post(account, content_text: "Für alle.")
     cached_post(account, content_text: "Nur für Follower.", audience: "followers")
 
-    assert %{count: 1, latest: latest} = Fediverse.account_card_summary(account, nil)
+    assert %{count: 1, posts: [latest]} = Fediverse.account_card_summary(account, nil)
     assert latest.content_text == "Für alle."
   end
 end

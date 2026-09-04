@@ -196,6 +196,35 @@ defmodule VutuvWeb.PostTeaser do
   end
 
   @doc """
+  The same for a bare record rather than a feed entry: the one line `record`
+  is quoted as, as **this** reader would read it, or nil where they have muted
+  it or it has no words at all.
+
+  Same two passes in the same order as `quote_for/4` — the reader's
+  search-and-replace rules first, their content filters over what those left —
+  because reversed, a filter would judge a line the reader was never going to
+  see, and skipped, the quote carries the footer a mirror puts under every post
+  while every other surface deletes it. The mention card asks with the rules of
+  the one account it is about (`PostRewrites.author_rules/2`); a surface holding
+  records from several authors compiles once and passes the same map.
+
+  **nil for a wordless post**, which `line/2` answers as `""` — a photograph
+  with no caption has no line to be, and a caller that tests the line rather
+  than the post is the one that gets that right. It is a real state: 32 of the
+  6,390 cached posts on the dev copy carry no text.
+  """
+  def record_line(record, rewrites, filters, opts \\ []) do
+    record = PostRewrites.rewrite_with(record, rewrites)
+
+    with nil <- ContentFilters.filtered(record, filters),
+         line when line != "" <- plain_line(record, opts) do
+      line
+    else
+      _muted_or_wordless -> nil
+    end
+  end
+
+  @doc """
   The record a feed entry is about: a remote reply, a cached remote post, or the
   vutuv post itself.
 

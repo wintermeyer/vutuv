@@ -158,10 +158,36 @@ async function fetchCard(url, method, extra = "") {
   const resp = await request(url, {
     method,
     headers: { "content-type": "application/x-www-form-urlencoded" },
-    body: `address=${encodeURIComponent(anchor.dataset.remoteActor)}${extra}`,
+    body: `address=${encodeURIComponent(anchor.dataset.remoteActor)}${state()}${extra}`,
   })
   if (!resp.ok) throw new Error(`actor card ${resp.status}`)
   return resp.text()
+}
+
+// What the reader has in front of them, sent with every request: which post is
+// open behind the card, and whether they have opened its drawer of older posts.
+//
+// `context` is the post the handle they pressed sits inside
+// (`article[data-remote-post]`, written by the remote post card). The card
+// quotes the account's newest posts, and opened from a post's author line that
+// newest post is the one on the screen underneath it — so the server is told
+// which one to skip.
+//
+// `expanded` is read back out of the card's own DOM. Every act replaces the
+// whole fragment, so anything this side does not send back is lost on the next
+// press: without it, opening the drawer and then pressing Follow folds it away
+// again — the same "the card contradicts itself over one click" the context
+// param exists to prevent. Both are read fresh on every request rather than
+// remembered, which costs one `closest` and one `querySelector` and cannot go
+// stale.
+function state() {
+  const post = anchor.closest("[data-remote-post]")
+  const older = panel.querySelector("[data-actor-more-posts]")
+
+  return (
+    (post ? `&context=${encodeURIComponent(post.dataset.remotePost)}` : "") +
+    (older && !older.hidden ? "&expanded=1" : "")
+  )
 }
 
 // What each control on the card sends. The card is the only thing that knows
@@ -302,6 +328,24 @@ function toggleMenu(button) {
   place()
 }
 
+// The older posts, folded away under the newest one. They are already in the
+// fragment — four short strings the server had in hand — so this opens a drawer
+// rather than asking for anything, and `place()` re-runs because the card just
+// grew and may no longer fit below the word it belongs to.
+//
+// Which label the button wears is CSS's business, like the follow button's
+// three: this adds a class and writes no words.
+function togglePosts(button) {
+  const older = panel.querySelector("[data-actor-more-posts]")
+  if (!older) return
+
+  const opening = older.hidden
+  older.hidden = !opening
+  button.classList.toggle("is-open", opening)
+  button.setAttribute("aria-expanded", String(opening))
+  place()
+}
+
 // The address, for pasting into another client. Purely local: nothing here is a
 // question for the server. The confirmation is the button's own label for a
 // moment — a toast for something this small would outweigh it — and the word is
@@ -352,6 +396,12 @@ document.addEventListener("click", (e) => {
       if (copy) {
         e.preventDefault()
         return copyAddress(copy)
+      }
+
+      const posts = e.target.closest("[data-actor-posts-toggle]")
+      if (posts) {
+        e.preventDefault()
+        return togglePosts(posts)
       }
 
       const button = e.target.closest("[data-actor-act]")

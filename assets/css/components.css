@@ -3892,12 +3892,17 @@ html[data-feed-pull="busy"] .feed-pull__glyph {
   font-variant-numeric: tabular-nums;
 }
 
-/* The last thing they wrote: two lines, quoted, and a link to our copy of it.
+/* The last few things they wrote: a stack of quotes, each a link to our copy.
    The rule on the left is the quotation mark this does not spend a character
-   on. */
+   on, and the stack reads as one block because every entry wears it. */
+.actor-card__posts {
+  display: flex;
+  flex-direction: column;
+  gap: 0.3rem;
+  margin-top: 0.7rem;
+}
 .actor-card__latest {
   display: block;
-  margin-top: 0.7rem;
   padding: 0.45rem 0.6rem 0.5rem;
   border-left: 2px solid var(--color-brand-300);
   border-radius: 0.5rem;
@@ -3905,6 +3910,41 @@ html[data-feed-pull="busy"] .feed-pull__glyph {
   text-decoration: none;
 }
 .actor-card__latest:hover { background: #f1f5f9; }
+/* The older ones are the sample, not the headline: one line each, the age at
+   the end of it, and a paler rule, so the stack cannot compete with the post
+   above it. The age was a label on its own line for one afternoon, which put
+   three identical "2 days ago" under one another and doubled the drawer's
+   height for it. */
+.actor-card__older-row {
+  display: flex;
+  align-items: baseline;
+  gap: 0.5rem;
+  padding: 0.3rem 0.6rem 0.35rem;
+  border-left: 2px solid #e2e8f0;
+  border-radius: 0.5rem;
+  background: #f8fafc;
+  text-decoration: none;
+}
+.actor-card__older-row:hover { background: #f1f5f9; }
+/* One line, cut where the card ends. `min-width: 0` is what lets a flex item
+   shrink below its content at all — without it the row grows and the age is
+   pushed off the card instead. */
+.actor-card__older-text {
+  flex: 1 1 auto;
+  min-width: 0;
+  overflow: hidden;
+  color: #334155;
+  font-size: 0.8125rem;
+  line-height: 1.45;
+  text-overflow: ellipsis;
+  white-space: nowrap;
+}
+.actor-card__older-when {
+  flex: 0 0 auto;
+  color: #94a3b8;
+  font-size: 0.6875rem;
+  white-space: nowrap;
+}
 .actor-card__latest-label {
   display: block;
   color: #64748b;
@@ -3914,8 +3954,11 @@ html[data-feed-pull="busy"] .feed-pull__glyph {
   text-transform: uppercase;
 }
 /* The two-line clamp is `line-clamp-2` at the call site, like the
-   self-description two elements above it — one spelling of "cut this at two
-   lines" on this card, and the utility already carries the four properties. */
+   self-description above it — one spelling of "cut this at two lines" on this
+   card, and the utility already carries the four properties. The older rows
+   below cut differently (one line, ellipsis, an age beside them), which is why
+   they hand-roll it rather than reach for `line-clamp-1`: that utility makes
+   the span a `-webkit-box` and the flex row holding the age comes apart. */
 .actor-card__latest-text {
   display: block;
   margin-top: 0.1rem;
@@ -3924,6 +3967,37 @@ html[data-feed-pull="busy"] .feed-pull__glyph {
   line-height: 1.45;
   overflow-wrap: anywhere;
 }
+
+/* The expander under the stack: a quiet text control, because what it reveals
+   is context and not the card's business end. Two labels, one shown — the same
+   arrangement as the follow button, so the JS adds a class and writes no
+   words. */
+.actor-card__posts-toggle {
+  display: flex;
+  align-items: center;
+  gap: 0.3rem;
+  align-self: flex-start;
+  padding: 0.3rem 0.2rem;
+  border: 0;
+  background: transparent;
+  color: #64748b;
+  font-size: 0.78125rem;
+  font-weight: 600;
+  cursor: pointer;
+}
+.actor-card__posts-toggle:hover { color: #0f172a; }
+.actor-card__posts-toggle [data-actor-posts-open] { display: none; }
+.actor-card__posts-toggle.is-open [data-actor-posts-closed] { display: none; }
+.actor-card__posts-toggle.is-open [data-actor-posts-open] { display: inline; }
+.actor-card__posts-chevron {
+  line-height: 1;
+  transition: transform 120ms ease;
+}
+.actor-card__posts-toggle.is-open .actor-card__posts-chevron { transform: rotate(180deg); }
+/* `contents` so the rows are items of the stack above and share its gap; the
+   `hidden` attribute still hides them, because preflight's
+   `[hidden] { display: none !important }` outranks any normal declaration. */
+.actor-card__older { display: contents; }
 
 .actor-card__actions {
   display: flex;
@@ -3976,7 +4050,15 @@ html[data-feed-pull="busy"] .feed-pull__glyph {
   .actor-card__state-btn:focus-visible [data-actor-state-off] { display: inline; }
 }
 
-.actor-card__state-btn--following {
+/* The three modifiers are spelled by `RemoteActorCardHTML.state_btn_modifier/1`
+   as `--#{Follow.display_state(follow)}`, so their names are that function's
+   three atoms and nothing else. `--following` sat here instead of `--accepted`
+   from the day the card shipped, which left the commonest state of all — the
+   member already follows this account — as an unstyled button carrying the
+   card's own text colour, exactly where the reader looks to find out where they
+   stand. A modifier whose name is derived cannot be renamed on this side
+   alone. */
+.actor-card__state-btn--accepted {
   background: #ecfdf5;
   box-shadow: inset 0 0 0 1px #a7f3d0;
   color: #065f46;
@@ -4059,29 +4141,56 @@ html[data-feed-pull="busy"] .feed-pull__glyph {
 .actor-card__menu-icon { flex: 0 0 auto; width: 1rem; text-align: center; opacity: 0.7; }
 
 /* Both ways onward in one weight and one colour. They were blue and grey, which
-   reads as a main way and a lesser one; they are neither. */
+   reads as a main way and a lesser one; they are neither.
+
+   Rows on every screen, not only in the sheet: two links sharing a line is a
+   shape a 20rem card has no room for — the second of them names an address, and
+   an address that wraps turns the quietest half of the card into its tallest
+   block. As rows, the label leads and the chevron closes each line, which is
+   also what a thumb wants. */
 .actor-card__links {
   display: flex;
-  flex-wrap: wrap;
-  align-items: center;
-  gap: 0.3rem 0.9rem;
+  flex-direction: column;
   margin-top: 0.75rem;
-  padding-top: 0.65rem;
+  padding-top: 0.35rem;
   border-top: 1px solid #f1f5f9;
   font-size: 0.84375rem;
 }
 .actor-card__links a {
+  display: flex;
+  align-items: center;
+  justify-content: space-between;
+  gap: 0.5rem;
+  padding: 0.5rem 0.1rem;
   color: var(--color-brand-600);
   font-weight: 600;
   text-decoration: none;
-  /* The way out names its destination, and an address has no spaces to break
-     at. `anywhere` and not `break-word`: only the former lowers the box's
-     min-content width, which is what a flex item (the sheet form's rows) sizes
-     against — with `break-word` the row simply overflows instead. */
-  overflow-wrap: anywhere;
 }
+.actor-card__links a + a { border-top: 1px solid #f1f5f9; }
 .actor-card__links a:hover { text-decoration: underline; }
-.actor-card__go { opacity: 0.6; }
+.actor-card__go { flex: 0 0 auto; opacity: 0.6; }
+
+/* The way out, in two parts: what it does, and where it goes. The address sits
+   under the label in the muted weight of a browser's status bar — a reader
+   checks it before leaving, which is a glance and not a heading. */
+/* `min-width: 0` is the one declaration here that does work: it is what lets a
+   flex item shrink below its content, and without it the address pushes the row
+   wider instead of ending in an ellipsis. */
+.actor-card__out { min-width: 0; }
+/* One line, cut by the browser at whatever the card really is. Cut from the
+   END: the host leads the string and is the fact the line is carrying, so the
+   part naming which server can never be the part that goes. */
+.actor-card__link-address {
+  display: block;
+  overflow: hidden;
+  margin-top: 0.05rem;
+  color: #64748b;
+  font-size: 0.75rem;
+  font-weight: 400;
+  text-overflow: ellipsis;
+  white-space: nowrap;
+}
+.actor-card__links a:hover .actor-card__link-address { text-decoration: none; }
 
 /* The grab bar: only the sheet has one, and it says "swipe this away". */
 .actor-card__grab { display: none; }
@@ -4127,21 +4236,12 @@ html[data-feed-pull="busy"] .feed-pull__glyph {
   box-shadow: none;
 }
 .actor-card--sheet .actor-card__menu button { min-height: 2.75rem; }
-/* Full-width list rows with a chevron, rather than two text links sharing a
-   line: same two destinations, a thumb's worth of target each. */
-.actor-card--sheet .actor-card__links {
-  display: block;
-  padding-top: 0.25rem;
-}
+/* The two ways onward are rows on every screen now; the sheet only makes them
+   a thumb's worth of target. */
 .actor-card--sheet .actor-card__links a {
-  display: flex;
-  align-items: center;
-  justify-content: space-between;
-  padding: 0.75rem 0.1rem;
-  border-bottom: 1px solid #f1f5f9;
+  padding: 0.7rem 0.1rem;
   font-size: 0.875rem;
 }
-.actor-card--sheet .actor-card__links a:last-child { border-bottom: 0; }
 
 @media (prefers-color-scheme: dark) {
   .actor-card {
@@ -4163,10 +4263,16 @@ html[data-feed-pull="busy"] .feed-pull__glyph {
 
   .actor-card__latest { border-left-color: var(--color-brand-600); background: #16233b; }
   .actor-card__latest:hover { background: #1e293b; }
+  .actor-card__older-row { border-left-color: #334155; background: #16233b; }
+  .actor-card__older-row:hover { background: #1e293b; }
+  .actor-card__older-text { color: #cbd5e1; }
+  .actor-card__older-when { color: #64748b; }
   .actor-card__latest-label { color: #94a3b8; }
   .actor-card__latest-text { color: #cbd5e1; }
+  .actor-card__posts-toggle { color: #94a3b8; }
+  .actor-card__posts-toggle:hover { color: #e2e8f0; }
 
-  .actor-card__state-btn--following {
+  .actor-card__state-btn--accepted {
     background: rgb(6 78 59 / 0.35);
     box-shadow: inset 0 0 0 1px #065f46;
     color: #a7f3d0;
@@ -4202,7 +4308,8 @@ html[data-feed-pull="busy"] .feed-pull__glyph {
 
   .actor-card__links { border-top-color: #1e293b; }
   .actor-card__links a { color: var(--color-brand-300); }
-  .actor-card--sheet .actor-card__links a { border-bottom-color: #1e293b; }
+  .actor-card__links a + a { border-top-color: #1e293b; }
+  .actor-card__link-address { color: #94a3b8; }
   .actor-card--sheet .actor-card__grab { background: #334155; }
 }
 
