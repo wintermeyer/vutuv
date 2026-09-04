@@ -8,6 +8,9 @@ defmodule Vutuv.PostsHelpers do
   alias Vutuv.Posts.PostLike
   alias Vutuv.Posts.PostRepost
   alias Vutuv.Repo
+  alias Vutuv.Social
+  alias Vutuv.Social.Follow
+  alias Vutuv.Social.PastFollow
   alias Vutuv.ViewerClock
 
   @doc """
@@ -83,5 +86,39 @@ defmodule Vutuv.PostsHelpers do
   """
   def page_like!(post, page) do
     Repo.insert!(%PostLike{post_id: post.id, organization_id: page.id})
+  end
+
+  @doc """
+  `viewer` follows and unfollows `author` for real, then the recorded span
+  (issue #1673) is moved to `started_ago .. ended_ago` seconds before now, so
+  the test can put posts cleanly before, inside and after it.
+
+  Here rather than in a test file because both suites that read spans need it
+  and the subtlety is worth keeping in one place: the rewrite is scoped to the
+  span this call just wrote, so a test can lay down two spells of following
+  without the second rewriting the first.
+  """
+  def followed_between!(viewer, author, started_ago, ended_ago) do
+    started_at = NaiveDateTime.add(NaiveDateTime.utc_now(:second), -started_ago)
+    ended_at = NaiveDateTime.add(NaiveDateTime.utc_now(:second), -ended_ago)
+    Vutuv.Factory.follow!(viewer, author)
+
+    Repo.update_all(
+      from(f in Follow, where: f.follower_id == ^viewer.id and f.followee_id == ^author.id),
+      set: [inserted_at: started_at]
+    )
+
+    Social.unfollow!(viewer.id, Social.follow_id(viewer.id, author.id))
+
+    {1, nil} =
+      Repo.update_all(
+        from(w in PastFollow,
+          where: w.follower_id == ^viewer.id and w.followee_id == ^author.id,
+          where: w.started_at == ^started_at
+        ),
+        set: [ended_at: ended_at]
+      )
+
+    :ok
   end
 end

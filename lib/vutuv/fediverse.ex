@@ -66,6 +66,7 @@ defmodule Vutuv.Fediverse do
   alias Vutuv.Fediverse.NoteEvent
   alias Vutuv.Fediverse.NoteLike
   alias Vutuv.Fediverse.NoteRepost
+  alias Vutuv.Fediverse.PastFollow
   alias Vutuv.Fediverse.PostBoost
   alias Vutuv.Fediverse.PostDelivery
   alias Vutuv.Fediverse.PostLike
@@ -93,6 +94,11 @@ defmodule Vutuv.Fediverse do
   alias Vutuv.Repo
   alias Vutuv.SearchText
   alias Vutuv.Social
+  # The local twin of `Vutuv.Fediverse.PastFollow`, renamed because both
+  # answer the same question about a different kind of follow and this
+  # module asks both: a member here reshared what an account out there
+  # wrote, so who put it in the feed is a member's follow.
+  alias Vutuv.Social.PastFollow, as: PastMemberFollow
   alias Vutuv.SocialFeed.Http
   alias Vutuv.Tags
   alias Vutuv.Tags.Tag
@@ -1484,9 +1490,12 @@ defmodule Vutuv.Fediverse do
       follow ->
         undo_remote_follow(owner, follow)
         Repo.delete(follow)
+        # Before the purge below, which reads it: the span is what keeps the
+        # posts this follow already delivered (issue #1673).
+        record_past_remote_follow(follow)
         # The cached posts existed because somebody here followed the author
         # (issue #1161). If nobody does any more, they go now rather than at the
-        # next sweep.
+        # next sweep — bar the ones a span still holds.
         purge_unfollowed_remote_posts([follow.remote_account_id])
         :ok
     end
@@ -1510,6 +1519,32 @@ defmodule Vutuv.Fediverse do
       nil -> {:error, :not_found}
       follow -> unfollow_remote(owner, follow.id)
     end
+  end
+
+  # Remembers how long a follow was in force, so what it delivered stays in the
+  # member's feed after it ends (issue #1673) and the cached copies it delivered
+  # survive the purge. The member-facing unfollow above calls it and nothing
+  # else does — see `Vutuv.Fediverse.PastFollow` for why a muted follow and a
+  # page's follow record nothing.
+  defp record_past_remote_follow(%Follow{muted: true}), do: :ok
+  defp record_past_remote_follow(%Follow{user_id: nil}), do: :ok
+
+  defp record_past_remote_follow(%Follow{} = follow) do
+    changeset =
+      PastFollow.changeset(%PastFollow{}, %{
+        user_id: follow.user_id,
+        remote_account_id: follow.remote_account_id,
+        # The follow row's own clock, in UTC: `timestamps/0` is naive here and
+        # everything the span is compared against is not.
+        started_at: DateTime.from_naive!(follow.inserted_at, "Etc/UTC"),
+        ended_at: DateTime.utc_now(:second)
+      })
+
+    # A failed insert (the account deleted mid-request) must not turn an
+    # unfollow into a 500: the span is a reading convenience, the unfollow is
+    # the member's actual instruction and it has already happened.
+    _ = Repo.insert(changeset)
+    :ok
   end
 
   @doc """
@@ -2016,9 +2051,24 @@ defmodule Vutuv.Fediverse do
     drop_note_reposts(user)
 
     {count, _} = Repo.delete_all(from(f in Follow, where: f.user_id == ^user.id))
+    # And the spans of the follows they ended earlier (issue #1673). Somebody
+    # switching this off or leaving asked to be out of it, so a hold on a
+    # stranger's cached post kept in their name is the opposite of the request
+    # — and without this the purge below would spare what it is here to remove.
+    # The delete hands back the accounts it freed, which are exactly the ones
+    # the purge would otherwise never look at: the member has no follow of them
+    # left to name them with.
+    {_, spanned_account_ids} =
+      Repo.delete_all(
+        from(w in PastFollow, where: w.user_id == ^user.id, select: w.remote_account_id)
+      )
+
     # Their cached posts existed because this member followed their authors
     # (issue #1161); for the ones nobody else here follows, that reason is gone.
-    purge_unfollowed_remote_posts(Enum.map(follows, & &1.remote_account_id))
+    purge_unfollowed_remote_posts(
+      Enum.uniq(Enum.map(follows, & &1.remote_account_id) ++ spanned_account_ids)
+    )
+
     count
   end
 
@@ -3001,14 +3051,19 @@ defmodule Vutuv.Fediverse do
     end
   end
 
+  # What `follow_sets/1` tags a span row with in its union: the three real
+  # `Vutuv.Fediverse.Follow` states are requested, accepted and moved, so this
+  # can never collide with one.
+  @past_follow_state "past"
+
   def feed_remote_posts(viewer, fetch_n, cursor, opts \\ [])
 
   def feed_remote_posts(%User{} = viewer, fetch_n, cursor, opts) do
     if enabled?() do
-      case followed_account_ids_by_state(viewer) do
-        # Most members follow nobody out there; for them this source is one
-        # cheap lookup and no post query at all.
-        {[], []} ->
+      case follow_sets(viewer) do
+        # Most members follow nobody out there, and never did; for them this
+        # source is one cheap lookup and no post query at all.
+        {[], [], []} ->
           []
 
         follows ->
@@ -3021,23 +3076,75 @@ defmodule Vutuv.Fediverse do
     end
   end
 
-  # The viewer's non-muted remote follows, split by what each one is allowed to
-  # show: an **accepted** follow sees everything that account posts, a pending
-  # one only its open audiences.
+  # The three account sets that can put a row in this member's feed, and what
+  # each one may show: an **accepted** follow sees everything that account
+  # posts, a **pending** one only its open audiences, and an account only an
+  # ended follow's span stands for (issue #1673) those same open audiences,
+  # from inside the span. Read as constant id lists rather than left to a join,
+  # and that is the whole point of both sources' shape — see
+  # `remote_posts_query/4`.
   #
-  # Read as two id lists rather than left to a join, and that is the whole
-  # point of this source's shape — see `remote_posts_query/4`.
-  defp followed_account_ids_by_state(%User{id: viewer_id}) do
-    from(f in Follow,
-      where: f.user_id == ^viewer_id and f.muted == false,
-      select: {f.remote_account_id, f.state}
-    )
-    |> Repo.all()
-    |> Enum.split_with(fn {_id, state} -> state == "accepted" end)
-    |> then(fn {accepted, pending} ->
-      {Enum.map(accepted, &elem(&1, 0)), Enum.map(pending, &elem(&1, 0))}
-    end)
+  # **One** round trip for all three, and one for both sources: most members
+  # follow nobody out there and never did, and this is then the entire cost of
+  # the remote half of their feed (`fediverse_remote_posts_source_test.exs`
+  # pins it at a single lookup). The boost source used to run its own booster
+  # query, which was byte-for-byte the accepted half of this one.
+  defp follow_sets(%User{id: viewer_id}) do
+    live =
+      from(f in Follow,
+        where: f.user_id == ^viewer_id,
+        select: %{account_id: f.remote_account_id, state: f.state, muted: f.muted}
+      )
+
+    spans =
+      from(w in PastFollow,
+        where: w.user_id == ^viewer_id,
+        select: %{
+          account_id: w.remote_account_id,
+          state: type(^@past_follow_state, :string),
+          muted: type(^false, :boolean)
+        }
+      )
+
+    live |> union_all(^spans) |> Repo.all() |> split_follow_sets()
   end
+
+  # A **currently muted** account is dropped from all three sets, whatever its
+  # spans say: muting means "their posts leave my feed", retroactively, so a
+  # span from an earlier spell of following must not be a way back in. Settled
+  # here, in memory, rather than as a `NOT IN` subquery on every read.
+  defp split_follow_sets(rows) do
+    muted = for %{account_id: id, muted: true} <- rows, into: MapSet.new(), do: id
+    heard = Enum.reject(rows, &MapSet.member?(muted, &1.account_id))
+    {accepted, rest} = Enum.split_with(heard, &(&1.state == "accepted"))
+    {past, pending} = Enum.split_with(rest, &(&1.state == @past_follow_state))
+
+    {account_ids(accepted), account_ids(pending), account_ids(past)}
+  end
+
+  defp account_ids(rows), do: rows |> Enum.map(& &1.account_id) |> Enum.uniq()
+
+  # Whether an ended follow was in force at the moment the row in `binding`
+  # carries in `field` — a cached post's `published_at`, a boost's
+  # `announced_at`. With a viewer it is this member's own follow; without one
+  # it asks whether **anybody** here held that span, which is the question
+  # `spare_held/1` puts to a copy nobody follows the author of any more.
+  #
+  # The upper bound is **exclusive** on purpose: every timestamp involved has
+  # second resolution, and letting through something from the very second of
+  # the unfollow would break the promise the member just made themselves. One
+  # function for all three readings so that rule has a single place to drift
+  # from — the purge's copy is the one where a drift silently *deletes* posts.
+  defp inside_past_remote_follow(binding, field) do
+    from(w in PastFollow,
+      where: w.remote_account_id == field(parent_as(^binding), :remote_account_id),
+      where: field(parent_as(^binding), ^field) >= w.started_at,
+      where: field(parent_as(^binding), ^field) < w.ended_at
+    )
+  end
+
+  defp inside_past_remote_follow(viewer_id, binding, field),
+    do: where(inside_past_remote_follow(binding, field), [w], w.user_id == ^viewer_id)
 
   # A counter needs the id and the timestamp and nothing else, and here that
   # really is all the database sends: no preloads and a two-column `SELECT`.
@@ -3080,14 +3187,31 @@ defmodule Vutuv.Fediverse do
   # The rows are identical to the join's — `fediverse_follows` is unique on
   # `(user_id, remote_account_id)`, so the join could never duplicate or drop a
   # post either. `remote_posts_source_test.exs` pins that.
-  defp remote_posts_query(%User{} = viewer, {accepted, pending}, fetch_n, cursor) do
+  #
+  # An **ended** follow reaches this feed through the same array (issue #1673):
+  # its account is in it, and the second clause then asks the span whether this
+  # particular post was published while the follow was in force. So the scan
+  # stays bounded by a constant array and the span costs one index probe on the
+  # rows that array already let through — never a plan that has to consider
+  # every cached post. A span shows open audiences only: the follow is over, and
+  # a followers-only post was never for a stranger.
+  defp remote_posts_query(
+         %User{id: viewer_id} = viewer,
+         {accepted, pending, past},
+         fetch_n,
+         cursor
+       ) do
     from(p in RemotePost,
+      as: :post,
       join: a in RemoteAccount,
       as: :remote_account,
       on: a.id == p.remote_account_id,
+      where: p.remote_account_id in ^Enum.uniq(accepted ++ pending ++ past),
       where:
         p.remote_account_id in ^accepted or
-          (p.remote_account_id in ^pending and p.audience in ^RemotePost.open_audiences()),
+          (p.audience in ^RemotePost.open_audiences() and
+             (p.remote_account_id in ^pending or
+                exists(subquery(inside_past_remote_follow(viewer_id, :post, :published_at))))),
       order_by: [desc: p.published_at, desc: p.id],
       limit: ^fetch_n
     )
@@ -3114,6 +3238,7 @@ defmodule Vutuv.Fediverse do
   def feed_remote_reposts(%User{id: viewer_id} = viewer, fetch_n, cursor, opts) do
     if enabled?() do
       from(r in PostRepost,
+        as: :repost,
         join: p in RemotePost,
         as: :language_source,
         on: p.id == r.remote_post_id,
@@ -3151,22 +3276,44 @@ defmodule Vutuv.Fediverse do
   # suspended account must not be able to keep doing while its case is open.
   defp scope_resharer(query, viewer_id, :mine), do: where(query, [r], r.user_id == ^viewer_id)
 
-  defp scope_resharer(query, viewer_id, :others) do
-    where(
-      query,
-      [r, resharer: resharer],
-      r.user_id != ^viewer_id and r.user_id in subquery(unmuted_followees(viewer_id)) and
+  # A dynamic all the way down: Ecto only interpolates one at the *top level* of
+  # a `where`, so the whole clause is built as one rather than `and`-ed into a
+  # keyword query.
+  defp scope_resharer(query, viewer_id, :others),
+    do:
+      where(query, ^dynamic([repost: r], r.user_id != ^viewer_id and ^from_a_followee(viewer_id)))
+
+  defp scope_resharer(query, viewer_id, _both),
+    do:
+      where(query, ^dynamic([repost: r], r.user_id == ^viewer_id or ^from_a_followee(viewer_id)))
+
+  # Somebody else whose reshare reaches this reader: a member they follow now,
+  # or one whose follow had not ended yet when the reshare was made (issue
+  # #1673). The second half is the local rule this module has to know too —
+  # unfollowing a member here already leaves their own posts in the scrollback
+  # (`Vutuv.Posts` reads the same spans), so what they passed on from another
+  # network vanishing while those stay is the same bug one table over.
+  #
+  # Read against the reshare's own time, since that is when it was delivered,
+  # and against a **member's** span: `followee_organization_id` is never set on
+  # a row that matches, because only members press this button. Two subplans in
+  # the filter rather than a semi-join, which costs nothing worth measuring on
+  # tables holding 84 and 0 rows — revisit it there before here.
+  defp from_a_followee(viewer_id) do
+    dynamic(
+      [repost: r, resharer: resharer],
+      (r.user_id in subquery(unmuted_followees(viewer_id)) or
+         exists(subquery(carried_by_past_member_follow(viewer_id)))) and
         account_confirmed_row(resharer) and not account_hidden_row(resharer)
     )
   end
 
-  defp scope_resharer(query, viewer_id, _both) do
-    where(
-      query,
-      [r, resharer: resharer],
-      r.user_id == ^viewer_id or
-        (r.user_id in subquery(unmuted_followees(viewer_id)) and
-           account_confirmed_row(resharer) and not account_hidden_row(resharer))
+  defp carried_by_past_member_follow(viewer_id) do
+    from(w in PastMemberFollow,
+      where: w.follower_id == ^viewer_id,
+      where: w.followee_id == parent_as(:repost).user_id,
+      where: parent_as(:repost).inserted_at >= w.started_at,
+      where: parent_as(:repost).inserted_at < w.ended_at
     )
   end
 
@@ -3284,12 +3431,7 @@ defmodule Vutuv.Fediverse do
   #
   # So this is what makes that index earn its keep beyond the first ten cards.
   defp remote_boosts_query(%User{id: viewer_id} = viewer, fetch_n, cursor, opts) do
-    boosters =
-      from(f in Follow,
-        where: f.user_id == ^viewer_id and f.muted == false and f.state == "accepted",
-        select: f.remote_account_id
-      )
-      |> Repo.all()
+    {boosters, _pending, past_boosters} = follow_sets(viewer)
 
     # The author's own follow is consulted too, not only the booster's: a
     # reader who muted an account out there muted *them*, and somebody else
@@ -3301,6 +3443,7 @@ defmodule Vutuv.Fediverse do
       )
 
     from(b in PostBoost,
+      as: :boost,
       join: a in RemoteAccount,
       as: :remote_account,
       on: a.id == b.remote_account_id,
@@ -3313,7 +3456,13 @@ defmodule Vutuv.Fediverse do
       left_join: author in RemoteAccount,
       as: :boosted_author,
       on: author.id == rp.remote_account_id,
-      where: b.remote_account_id in ^boosters,
+      where: b.remote_account_id in ^Enum.uniq(boosters ++ past_boosters),
+      # What a follow passed on while it stood keeps standing after it ends
+      # (issue #1673), read against the boost's own clock — the sharing is what
+      # arrived, so the sharing is what the span is asked about.
+      where:
+        b.remote_account_id in ^boosters or
+          exists(subquery(inside_past_remote_follow(viewer_id, :boost, :announced_at))),
       where: is_nil(rp.id) or rp.remote_account_id not in subquery(muted_authors),
       order_by: [desc: b.announced_at, desc: b.id],
       limit: ^fetch_n,
@@ -3939,8 +4088,14 @@ defmodule Vutuv.Fediverse do
   #     for a quote, since the quoted author is usually a stranger here, and
   #     sweeping the copy would turn a card in somebody's feed back into a bare
   #     link while they are looking at it.
+  #   * a member here **used to follow** its author and the copy is from inside
+  #     that span (issue #1673) — the one hold that answers this function's own
+  #     question with "yes, somebody did". Unfollowing ends the future, not the
+  #     past, so the posts that had already reached a reader stay in their feed;
+  #     without this every one of them would be deleted by the very unfollow
+  #     that is supposed to leave them alone.
   #
-  # None of the four buys extra time: they only buy the right to live out the
+  # None of the five buys extra time: they only buy the right to live out the
   # ordinary clock instead of being swept the moment the last follower of the
   # author walks away. The `:post` alias comes from `spare_reposted/2`, which is
   # why the others are added on top of it rather than beside it.
@@ -3949,11 +4104,14 @@ defmodule Vutuv.Fediverse do
     looked_up = from(l in PostLookup, where: l.remote_post_id == parent_as(:post).id)
     quoted = from(q in RemotePost, where: q.quoted_post_id == parent_as(:post).id)
 
+    spanned = inside_past_remote_follow(:post, :published_at)
+
     query
     |> spare_reposted(RemotePost)
     |> where([p], not exists(boosted))
     |> where([p], not exists(looked_up))
     |> where([p], not exists(quoted))
+    |> where([p], not exists(spanned))
   end
 
   @doc """
@@ -8588,6 +8746,7 @@ defmodule Vutuv.Fediverse do
   def feed_remote_reply_reposts(%User{id: viewer_id} = viewer, fetch_n, cursor, opts) do
     if enabled?() do
       from(r in NoteRepost,
+        as: :repost,
         join: n in Note,
         as: :language_source,
         on: n.id == r.note_id,
