@@ -194,6 +194,16 @@ defmodule Vutuv.Fediverse.RemotePost do
   def open?(%__MODULE__{audience: audience}), do: audience in @open_audiences
 
   @doc """
+  Whether the author addressed it to the public collection outright — stricter
+  than `open?/1`, which also takes `unlisted` in. The twin of
+  `Vutuv.Fediverse.Note.public?/1`, and the column half of what a page open to
+  everyone may show (`Vutuv.Fediverse.publicly_readable_remote_post?/1` adds the
+  retention half).
+  """
+  def public?(%__MODULE__{audience: "public"}), do: true
+  def public?(%__MODULE__{}), do: false
+
+  @doc """
   Whether the author put the post behind a content warning, or marked it
   sensitive. Either one closes the lid: the card shows the warning (or a plain
   "sensitive" line) and reveals the text on a click, which is the one thing the

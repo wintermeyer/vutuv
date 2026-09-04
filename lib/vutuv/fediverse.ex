@@ -7820,6 +7820,40 @@ defmodule Vutuv.Fediverse do
         do: post.id
   end
 
+  @doc """
+  Whether a page open to **everyone** may show this cached post — the arm
+  `remote_post_readable?/2` deliberately does not have, because it answers for a
+  signed-in party and a public page has readers who are nobody.
+
+  Two halves, and both are already spelled in SQL by the two viewer-independent
+  public readers here (`Vutuv.Tags.Timeline.remote_posts_query/1` and
+  `recent_public_remote_posts/1`): outright `public` — never `unlisted`, whose
+  whole meaning is "keep me off discovery surfaces" — and still inside the
+  retention ceiling, which is the claim to hold somebody else's post at all, so
+  a row the sweep has not reached yet is not one to keep publishing.
+  """
+  def publicly_readable_remote_post?(%RemotePost{expires_at: %DateTime{} = expires} = post),
+    do: RemotePost.public?(post) and DateTime.after?(expires, DateTime.utc_now(:second))
+
+  def publicly_readable_remote_post?(_post), do: false
+
+  @doc """
+  The same for a page of them, and the function a **public surface** asks
+  instead of `readable_remote_post_ids/2`: an anonymous reader gets
+  `publicly_readable_remote_post?/1`, a signed-in one the ordinary answer,
+  their own accepted follow included. One call, so a caller serving both never
+  has to hold the difference itself.
+  """
+  def publicly_readable_remote_post_ids(posts, nil) do
+    for post <- posts,
+        publicly_readable_remote_post?(post),
+        into: MapSet.new(),
+        do: post.id
+  end
+
+  def publicly_readable_remote_post_ids(posts, party),
+    do: readable_remote_post_ids(posts, party)
+
   # Claims one slot from the member's hourly like budget. `:ok`, or
   # `{:error, :like_capped}`.
   #

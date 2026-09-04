@@ -670,9 +670,27 @@ defmodule VutuvWeb.AgentDocs.PostDoc do
     end
   end
 
+  # `text` is the same words the HTML page draws above the answer as a card, so
+  # it is here under the same gate: our copy of the post, and only while a page
+  # open to everyone may show it (`Fediverse.publicly_readable_remote_post?/1`).
+  # Without it the `.md` sibling of an answer would name the post and withhold
+  # what it says while the page beside it prints both — and the reply written
+  # from out there, four fields further down, has carried its text since #1069.
+  # The handle and the origin URI come off the sidecar either way: they outlive
+  # our copy, which is the whole reason that row keeps them.
   defp remote_in_reply_to(%{remote_reply_ref: %PostRemoteReply{} = ref})
-       when is_binary(ref.handle),
-       do: %{url: ref.in_reply_to_uri, author: ref.handle, network: "fediverse"}
+       when is_binary(ref.handle) do
+    %{url: ref.in_reply_to_uri, author: ref.handle, network: "fediverse"}
+    |> Map.merge(remote_parent_words(ref.remote_post))
+  end
 
   defp remote_in_reply_to(_post), do: nil
+
+  defp remote_parent_words(%RemotePost{} = parent) do
+    if Fediverse.publicly_readable_remote_post?(parent),
+      do: %{text: parent.content_text, content_warning: parent.summary},
+      else: %{}
+  end
+
+  defp remote_parent_words(_parent), do: %{}
 end

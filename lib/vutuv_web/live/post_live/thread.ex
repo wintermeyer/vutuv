@@ -5,6 +5,12 @@ defmodule VutuvWeb.PostLive.Thread do
   pattern: the controller keeps owning the URL, the agent-format negotiation
   and the page chrome; the socket owns the conversation card).
 
+  A conversation does not stop at the site's edge in either direction. The post
+  a member here answered on **another network** (issue #1165) is drawn above
+  their answer, the card the feed draws — until this, a permalink to that answer
+  showed a "Replying to @user@host" line and no way to what was being answered,
+  which is the half of the exchange the reader arrived for.
+
   Replies written on **other networks** (issues #1069 and #1071) are woven into
   the same conversation as ordinary siblings, in time order, wearing their own
   card (`VutuvWeb.PostComponents.remote_reply_card/1`); `Vutuv.Fediverse.list_notes/2`
@@ -55,12 +61,22 @@ defmodule VutuvWeb.PostLive.Thread do
   alias VutuvWeb.Live.InitAssigns
   alias VutuvWeb.Live.MountHandoff
   alias VutuvWeb.Live.PostTranslations
+  alias VutuvWeb.Live.RemoteImages
+  alias VutuvWeb.Live.RemotePostActions
   alias VutuvWeb.Live.RemoteReplyActions
   alias VutuvWeb.PostLive.ActionsComponent
 
   # The origin's like/repost figures on a card from another network tick
   # while this page is open (issue #1283). One line, no handler.
   on_mount(VutuvWeb.Live.RemoteCounts)
+
+  # And a picture on the cached post drawn above an answer (issue #1165)
+  # appears the moment there is something to show of it — the promise its
+  # waiting tile prints here as on every other surface. The hook's `:assigns`
+  # mode does not fit: those pictures ride the parent cards rather than an
+  # `@images` assign, so this host takes the bare subscription and writes the
+  # one `handle_info/2` that mode asks of it, below.
+  on_mount(RemoteImages)
 
   @impl true
   def mount(_params, session, socket) do
@@ -157,6 +173,24 @@ defmodule VutuvWeb.PostLive.Thread do
     {:noreply, take_down(socket, id, &RemoteReplyActions.report/2)}
   end
 
+  # The ⋯ menu of the cached post an answer here answers (issue #1165). Report
+  # deletes our copy, so the card has to leave; unfollowing may delete it too
+  # (nobody here follows the author any more), so both re-window. Mute keeps it,
+  # as it does on the cached post's own page: the reader asked to see less of
+  # that account in their feed, not to read this exchange with its first half
+  # missing.
+  def handle_event("report-remote-post", %{"id" => id}, socket) do
+    RemotePostActions.report(socket, id, &load_window/1)
+  end
+
+  def handle_event("mute-remote-account", %{"id" => account_id}, socket) do
+    RemotePostActions.mute(socket, account_id, & &1)
+  end
+
+  def handle_event("unfollow-remote-account", %{"id" => account_id}, socket) do
+    RemotePostActions.unfollow(socket, account_id, &load_window/1)
+  end
+
   @impl true
   def handle_event("translate", %{"kind" => kind, "id" => id}, socket) do
     case PostTranslations.request(socket.assigns.current_user, kind, id) do
@@ -216,6 +250,24 @@ defmodule VutuvWeb.PostLive.Thread do
     {:noreply, load_window(socket)}
   end
 
+  # A picture of the cached post drawn above an answer landed, or cleared the
+  # scan. `RemoteImages` speaks in feed entries, and the parents a feed entry
+  # nests are exactly this map (`Vutuv.Posts.remote_parents/2` builds both), so
+  # the page hands it an entry with nothing else on it and gets the timeline's
+  # own two steps: the cheap "not mine" test every open page needs — they all
+  # hear about every picture — and a re-read of that one card, rather than a
+  # whole re-window for a picture that changes nothing else on the page.
+  def handle_info({:remote_images_changed, %{remote_post_id: id}}, socket) do
+    entry = %{remote_parents: socket.assigns.remote_parents}
+
+    if RemoteImages.draws?(entry, id) do
+      entry = RemoteImages.restate_entry(entry, id, RemoteImages.pictures(id))
+      {:noreply, assign(socket, :remote_parents, entry.remote_parents)}
+    else
+      {:noreply, socket}
+    end
+  end
+
   def handle_info(_other, socket), do: {:noreply, socket}
 
   defp visible_focus(post_id, viewer) do
@@ -246,6 +298,7 @@ defmodule VutuvWeb.PostLive.Thread do
         |> assign(:focus, nil)
         |> assign(:likers, nil)
         |> assign(:remote_replies, %{})
+        |> assign(:remote_parents, %{})
         |> assign(:note_marks, Fediverse.mark_lookup([], nil))
 
       post ->
@@ -300,6 +353,7 @@ defmodule VutuvWeb.PostLive.Thread do
         |> assign(:window, window)
         |> assign(:focus, Enum.find(posts, &(&1.id == post.id)) || post)
         |> assign(:engagement, engagement)
+        |> assign(:remote_parents, Posts.remote_parents(posts, viewer))
         |> assign(:likers, likers(post, viewer, engagement[post.id]))
         |> assign(:viewer_follows, follows)
         |> assign(:remote_replies, remote)
@@ -417,12 +471,14 @@ defmodule VutuvWeb.PostLive.Thread do
       <%= cond do %>
         <% is_nil(@window) -> %>
           <div id="post-thread-gone"></div>
-        <% @window.mode == :all and @window.total == 1 and @remote_replies == %{} -> %>
+        <% @window.mode == :all and @window.total == 1 and @remote_replies == %{} and
+             @remote_parents == %{} -> %>
           <%!-- No conversation at all: the post stands alone as its own card.
           The author's Edit/Delete live in the card's own ⋯ menu. A post with no
-          vutuv replies but an answer from another network (issue #1069) is not
-          this case — it falls through to the conversation below, which is what
-          weaves that answer in. --%>
+          vutuv replies but an answer from another network (issue #1069), or one
+          that answers a post out there (issue #1165), is not this case — it
+          falls through to the conversation below, which is what weaves the one
+          in and draws the other above it. --%>
           <.post_card
             post={@focus}
             viewer={@current_user}
@@ -448,6 +504,7 @@ defmodule VutuvWeb.PostLive.Thread do
                 viewer_follows={@viewer_follows}
                 engagement={@engagement}
                 remote_replies={@remote_replies}
+                remote_parents={@remote_parents}
                 note_marks={@note_marks}
                 likers={@likers}
                 auto_scroll?={@auto_scroll?}
@@ -462,6 +519,7 @@ defmodule VutuvWeb.PostLive.Thread do
                 viewer_follows={@viewer_follows}
                 engagement={@engagement}
                 remote_replies={@remote_replies}
+                remote_parents={@remote_parents}
                 note_marks={@note_marks}
                 likers={@likers}
                 auto_scroll?={@auto_scroll?}
