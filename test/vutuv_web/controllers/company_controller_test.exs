@@ -121,15 +121,6 @@ defmodule VutuvWeb.CompanyControllerTest do
       end
     end
 
-    test "names the floor under a conversation, formatted", %{conn: conn} do
-      html = conn |> get(~p"/system/investors") |> html_response(200)
-
-      # Grouped, never a run-together 300000, and the reason beside it.
-      assert html =~ "300,000 Euro"
-      refute html =~ "300000"
-      assert html =~ "An investment conversation makes sense from"
-    end
-
     test "explains what the number in the top bar is made of", %{conn: conn} do
       # Investors have asked; that question is why the paragraph exists.
       html = conn |> get(~p"/system/investors") |> html_response(200)
@@ -144,8 +135,7 @@ defmodule VutuvWeb.CompanyControllerTest do
       for title <- [
             "Readable without an account",
             "Fast pages win",
-            "The market a heavy site never reaches",
-            "Small enough to stay cheap",
+            "The market behind the slow connection",
             "Advertising instead of a paywall"
           ] do
         assert html =~ title
@@ -217,8 +207,7 @@ defmodule VutuvWeb.CompanyControllerTest do
       assert html =~ "Diese Seite richtet sich an potentielle Investoren"
       assert html =~ "Ohne Konto lesbar"
       assert html =~ "Schnelle Seiten gewinnen"
-      assert html =~ "Der Markt, den eine schwere Seite nie erreicht"
-      assert html =~ "Klein genug, um günstig zu bleiben"
+      assert html =~ "Der Markt hinter der langsamen Leitung"
       assert html =~ "Quelle:"
       assert html =~ "Anzeigen statt Bezahlschranke"
       assert html =~ "Wo wir stehen"
@@ -230,23 +219,11 @@ defmodule VutuvWeb.CompanyControllerTest do
       refute html =~ "Readable without an account"
     end
 
-    test "groups and places the amount the German way", %{conn: conn} do
-      html = conn |> german() |> get(~p"/system/investors") |> html_response(200)
-
-      # The separators invert between locales, so "300,000" in a German sentence
-      # is misread as three hundred, not untidy. The currency is spelled rather
-      # than signed: the figure sits inside a sentence, not in a price list.
-      assert html =~ "300.000 Euro"
-      refute html =~ "300,000"
-    end
-
     test "serves its agent-format siblings", %{conn: conn} do
       json = conn |> get(~p"/system/investors" <> ".json") |> json_response(200)
 
       assert json["type"] == "investors"
       assert is_integer(json["figures"]["members"])
-      assert json["minimum"]["amount"] == 300_000
-      assert json["minimum"]["currency"] == "EUR"
       assert json["language"] == "en"
       # No address here either: an agent summarising this page for somebody
       # must not be the way the address gets out.
@@ -259,9 +236,6 @@ defmodule VutuvWeb.CompanyControllerTest do
 
       assert markdown =~ "# A professional network that works without an account"
       assert markdown =~ "### Readable without an account"
-      # The placeholder form never reaches a reader.
-      assert markdown =~ "300,000 Euro"
-      refute markdown =~ "{amount}"
     end
 
     test "the agent formats are translatable too, on ?lang=", %{conn: conn} do
@@ -276,7 +250,6 @@ defmodule VutuvWeb.CompanyControllerTest do
 
       assert markdown =~ "Ein Berufsnetzwerk, das ohne Konto funktioniert"
       assert markdown =~ "Warum sich das lohnt"
-      assert markdown =~ "300.000 Euro"
     end
   end
 

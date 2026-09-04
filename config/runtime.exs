@@ -178,26 +178,6 @@ if config_env() == :prod do
     config :vutuv, :operator_handle, operator_handle
   end
 
-  # The smallest investment /system/investors says it is worth talking about,
-  # and the currency it is stated in. `INVESTOR_MINIMUM=0` drops the block, for
-  # an installation that is not raising anything; anything unparseable is
-  # treated the same way rather than stopping the release from booting.
-  if minimum = System.get_env("INVESTOR_MINIMUM") do
-    # Bound first: `config :app, :key, case … do … end` parses the block as a
-    # fourth argument to config/3 and fails to compile.
-    amount =
-      case Integer.parse(String.trim(minimum)) do
-        {parsed, _rest} when parsed > 0 -> parsed
-        _other -> 0
-      end
-
-    config :vutuv, :investor_minimum, amount
-  end
-
-  if currency = System.get_env("INVESTOR_CURRENCY") do
-    config :vutuv, :investor_currency, String.trim(currency)
-  end
-
   # Which accounts the welcome window's last step offers a brand-new member to
   # follow, per locale (Vutuv.Welcome). One group per locale, groups separated
   # by ";", addresses by ",":

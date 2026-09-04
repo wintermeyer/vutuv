@@ -26,7 +26,6 @@ defmodule VutuvWeb.AgentDocs.InvestorsDoc do
   alias Vutuv.Fediverse
   alias Vutuv.NodeInfo
   alias Vutuv.PeopleHistory
-  alias Vutuv.Salary
   alias VutuvWeb.AgentDocs
   alias VutuvWeb.UI
 
@@ -112,7 +111,7 @@ defmodule VutuvWeb.AgentDocs.InvestorsDoc do
         title: gettext("Readable without an account"),
         body:
           gettext(
-            "LinkedIn shows a profile to whoever is logged in, and asks everybody else to sign up first. A profile there works for the people already inside and for nobody else. A vutuv profile is an ordinary public web page: a search engine indexes it, an AI agent reads it as Markdown, JSON or vCard, and a person who has never heard of us reads it without handing over an address first. That is why somebody arrives at all, and why a member puts their work here."
+            "LinkedIn shows a profile to whoever is logged in and asks everybody else to sign up first. Everybody who is inside knows the other half: you go looking for one person and get a feed, suggestions you did not ask for, and a note that the rest is behind Premium. A vutuv profile is an ordinary public web page: a search engine indexes it, an AI agent reads it as Markdown, JSON or vCard, and a person who has never heard of us reads it without handing over an address first. That is why somebody arrives at all, and why a member puts their work here."
           ),
         source: nil
       },
@@ -128,23 +127,15 @@ defmodule VutuvWeb.AgentDocs.InvestorsDoc do
         }
       },
       %{
-        title: gettext("The market a heavy site never reaches"),
+        title: gettext("The market behind the slow connection"),
         body:
           gettext(
-            "Networks are not equal, and neither are the markets on them: in 2025 the ITU counted 84% of people in high-income countries with access to 5G against 4% in low-income ones, and somebody online in a wealthy country moves nearly eight times as much mobile data as somebody in a poor one. A site that assumes a fast line is shut to most of them in practice. A vutuv page is lighter than a LinkedIn page to begin with, and a data-saving mode cuts its weight again for anybody on a thin or metered connection."
+            "Networks are not equal, and neither are the markets on them: in 2025 the ITU counted 84% of people in high-income countries with access to 5G against 4% in low-income ones, and somebody online in a wealthy country moves nearly eight times as much mobile data as somebody in a poor one. A site that assumes a fast line is shut to most of them in practice. A vutuv page loads less data than a LinkedIn page to begin with, and a data-saving mode cuts that again for anybody on a slow connection or paying by the megabyte."
           ),
         source: %{
           label: "ITU, Facts and Figures 2025",
           url: "https://www.itu.int/en/mediacentre/Pages/PR-2025-11-17-Facts-and-Figures.aspx"
         }
-      },
-      %{
-        title: gettext("Small enough to stay cheap"),
-        body:
-          gettext(
-            "The software is Elixir and Phoenix. One modest server goes a long way, and a very large installation scales out across several nodes. There is no floor of staff under the operation, so the cost side barely moves when the member count does. A network that is cheap to run does not have to squeeze the people on it."
-          ),
-        source: nil
       },
       %{
         title: gettext("Advertising instead of a paywall"),
@@ -170,19 +161,6 @@ defmodule VutuvWeb.AgentDocs.InvestorsDoc do
   end
 
   @doc """
-  The floor, as the one sentence the page says about it. `{amount}` stands
-  where the figure goes, so a translator can put it where their language wants
-  it; `minimum_sentence/0` fills it in for the agent formats.
-
-  One sentence and no reasoning beside it: whoever is above the line does not
-  need the arithmetic of a small round explained, and whoever is below it needs
-  the number, not a paragraph about why.
-  """
-  def minimum_reason do
-    gettext("An investment conversation makes sense from {amount} upwards.")
-  end
-
-  @doc """
   The operator's own profile on **this** installation, or `nil`.
 
   Built on `contact_handle/0`, so it exists exactly when that handle really
@@ -192,48 +170,6 @@ defmodule VutuvWeb.AgentDocs.InvestorsDoc do
   def contact_profile_url do
     if handle = contact_handle() do
       AgentDocs.abs_url("/" <> handle)
-    end
-  end
-
-  @doc """
-  The minimum written out: the digits grouped for the reader's locale and the
-  currency **spelled**, not signed (`300.000 Euro`), or `nil` where nothing is
-  being raised.
-
-  The word rather than the symbol because this figure lives inside a sentence
-  somebody reads aloud in a meeting, not in a price list. It stays after the
-  amount in every language, the way the pay line on a job posting writes money
-  (`Vutuv.Salary.range_label/5`). A currency with no name here keeps its ISO
-  code, which reads correctly in the same place ("300.000 CHF").
-  """
-  def minimum_text do
-    case minimum() do
-      %{amount: amount, currency: currency} ->
-        # A non-breaking space: the amount must not be split from its currency
-        # across a line break.
-        UI.delimited_count(amount) <> " " <> currency_name(currency)
-
-      nil ->
-        nil
-    end
-  end
-
-  # Spelled out, and translated: "US-Dollar" is not "US dollars". Anything not
-  # named here falls back to `Vutuv.Salary`, which answers with the symbol for
-  # the currencies it knows and the ISO code for the rest.
-  defp currency_name("EUR"), do: gettext("Euro")
-  defp currency_name("USD"), do: gettext("US dollars")
-  defp currency_name("GBP"), do: gettext("pounds")
-  defp currency_name("CHF"), do: gettext("Swiss francs")
-  defp currency_name(code), do: Salary.currency_symbol(code)
-
-  @doc """
-  `minimum_reason/0` with the amount filled in, for the agent formats, which
-  have nowhere to put a placeholder. `nil` where nothing is being raised.
-  """
-  def minimum_sentence do
-    if amount = minimum_text() do
-      String.replace(minimum_reason(), "{amount}", amount)
     end
   end
 
@@ -263,30 +199,6 @@ defmodule VutuvWeb.AgentDocs.InvestorsDoc do
     gettext(
       "Write to me here, on vutuv. Creating an account takes a minute and costs nothing, and you will have seen the product before the first sentence about it."
     )
-  end
-
-  @doc """
-  The smallest investment worth a conversation as `%{amount:, currency:}`, or
-  `nil` where this installation is raising nothing (`INVESTOR_MINIMUM=0`).
-
-  An amount and a currency code rather than a ready-made string, so the page
-  can group the digits the way the reader's own locale does.
-  """
-  def minimum do
-    amount = Application.get_env(:vutuv, :investor_minimum, 0)
-
-    if is_integer(amount) and amount > 0 do
-      %{amount: amount, currency: currency()}
-    end
-  end
-
-  # An empty string is a configured value, so `||` does not catch it, and an
-  # empty symbol would leave the amount trailing a stray space.
-  defp currency do
-    case Application.get_env(:vutuv, :investor_currency) do
-      code when is_binary(code) and code != "" -> code
-      _blank -> "EUR"
-    end
   end
 
   @doc """
@@ -328,11 +240,6 @@ defmodule VutuvWeb.AgentDocs.InvestorsDoc do
         source: nil
       },
       case_points: case_points(),
-      minimum: minimum(),
-      # The finished sentences, not the `{amount}` / `{nodeinfo}` placeholder
-      # forms: only the HTML has somewhere to put a placeholder, and a JSON
-      # reader handed one would have to know our template's private convention.
-      minimum_reason: minimum_sentence(),
       counter_explainer: counter_explainer(),
       contact_note: contact_note(),
       contact_handle: handle,

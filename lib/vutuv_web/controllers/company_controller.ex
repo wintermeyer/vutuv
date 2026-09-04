@@ -55,9 +55,6 @@ defmodule VutuvWeb.CompanyController do
         render(conn, "investors.html",
           page_title: gettext("Investors"),
           facts: facts,
-          # The formatted amount, not the struct: the template gates on it and
-          # prints it, and both readings should be the same value.
-          minimum: InvestorsDoc.minimum_text(),
           growth_sentence: InvestorsDoc.growth_sentence(facts.growth),
           contact_handle: InvestorsDoc.contact_handle(),
           contact_profile_url: InvestorsDoc.contact_profile_url()

@@ -823,21 +823,6 @@ config :vutuv, :source_url, "https://github.com/wintermeyer/vutuv"
 # costs a third-party installation nothing but silence. (OPERATOR_HANDLE)
 config :vutuv, :operator_handle, "wintermeyer"
 
-# The floor under which an investment conversation is not worth having, stated
-# on /system/investors so nobody spends a week on a talk that ends at this
-# number. A ticket costs the same notary appointment, shareholder agreement,
-# register entry and reporting duty whatever its size, so below the floor the
-# paperwork eats the money.
-#
-# An amount and a currency code rather than one ready-made string: the page
-# groups the digits for the reader's own locale ("300.000 €" / "€300,000"), and
-# a run-together 300000 in front of an investor is exactly the bug the house
-# number rule exists to prevent. An installation that is not raising anything
-# sets INVESTOR_MINIMUM=0, which drops the whole block from the page.
-# (INVESTOR_MINIMUM / INVESTOR_CURRENCY)
-config :vutuv, :investor_minimum, 300_000
-config :vutuv, :investor_currency, "EUR"
-
 # How this installation names and describes itself to the fediverse's directory
 # layer (`Vutuv.NodeInfo`, the /.well-known/nodeinfo document). FediDB,
 # the-federation.info and Fediverse Observer print these two strings beside the

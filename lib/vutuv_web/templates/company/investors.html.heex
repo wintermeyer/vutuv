@@ -53,19 +53,6 @@
     </p>
   </.card>
 
-  <%!-- Before the argument rather than after it: an enquiry that ends at this
-        number should end here, on the reader's own first minute, not after a
-        week of waiting for a polite no. The sentence IS the card, heading and
-        all: it is the whole thing this card has to say, and a heading over one
-        line would only say it twice. Rendered only where an installation is
-        actually raising (INVESTOR_MINIMUM). --%>
-  <.card :if={@minimum}>
-    <% {reason_pre, reason_post} = split_marker(InvestorsDoc.minimum_reason(), "{amount}") %>
-    <h2 class="text-xl font-bold text-slate-900 dark:text-white">
-      {reason_pre}{@minimum}{reason_post}
-    </h2>
-  </.card>
-
   <.card>
     <h2 class="text-xl font-bold text-slate-900 dark:text-white">
       {gettext("Why this is worth building")}

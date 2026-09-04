@@ -378,8 +378,6 @@ defmodule VutuvWeb.AgentDocs.Markdown do
       end),
       doc.growth_sentence,
       doc.counter_explainer,
-      doc.minimum && "## #{gettext("Minimum investment")}",
-      doc.minimum_reason,
       "## #{gettext("Why this is worth building")}",
       Enum.map_join(doc.case_points, "\n\n", fn point ->
         ["### #{point.title}", point.body, case_source(point.source)]

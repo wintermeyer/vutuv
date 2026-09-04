@@ -352,8 +352,6 @@ defmodule VutuvWeb.AgentDocs.Text do
       end),
       doc.growth_sentence,
       doc.counter_explainer,
-      doc.minimum && heading(gettext("Minimum investment")),
-      doc.minimum_reason,
       heading(gettext("Why this is worth building")),
       Enum.map(doc.case_points, &case_point_text/1),
       doc.contact_handle && heading(gettext("Write to me")),
