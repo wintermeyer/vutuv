@@ -167,14 +167,15 @@ defmodule VutuvWeb.RemoteActorCardController do
   # from whatever the act returned, so what the card draws is what is true — a
   # second tab that changed it is then not contradicted by this one.
   #
-  # `context` and `expanded` come off `conn.params` rather than travelling
-  # through the four actions: both say what the reader has in front of them —
-  # which post is open *behind* the card, and whether they have opened its
-  # drawer — which is a fact about the request and not about the act. Every act
-  # re-renders the whole card, so anything the client does not send back is lost
-  # on the next press: a quote that appears only once Follow is pressed, or a
-  # drawer that folds itself away, is the card contradicting itself over one
-  # click.
+  # `context`, `expanded` and `bio` come off `conn.params` rather than
+  # travelling through the four actions: all three say what the reader has in
+  # front of them — which post is open *behind* the card, whether they have
+  # opened its drawer of older posts, whether they have opened the whole
+  # self-description — which is a fact about the request and not about the act.
+  # Every act re-renders the whole card, so anything the client does not send
+  # back is lost on the next press: a quote that appears only once Follow is
+  # pressed, or a drawer that folds itself away, is the card contradicting
+  # itself over one click.
   defp card(conn, address, account, error \\ nil) do
     viewer = conn.assigns[:current_user]
 
@@ -198,6 +199,7 @@ defmodule VutuvWeb.RemoteActorCardController do
       newest: List.first(quotes),
       older: Enum.drop(quotes, 1),
       expanded?: conn.params["expanded"] == "1",
+      bio_open?: conn.params["bio"] == "1",
       host_muted?: account && account.host in Fediverse.muted_hosts(viewer)
     )
   end

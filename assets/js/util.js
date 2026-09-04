@@ -222,3 +222,38 @@ export const buttonPrimary = `${BUTTON_BASE} bg-brand-600 text-white hover:bg-br
 export const buttonSecondary =
   `${BUTTON_BASE} bg-slate-100 text-slate-700 ring-1 ring-slate-300 hover:bg-slate-200 ` +
   "dark:bg-slate-800 dark:text-slate-200 dark:ring-slate-600 dark:hover:bg-slate-700"
+
+// Whether a clamped block really cut anything — the one measurement behind
+// every "Read more" and every expand lid in the app.
+//
+// A CSS clamp is width- and font-dependent, so the server cannot know: the
+// answer is that the clamped body's full content height (scrollHeight) is
+// taller than its painted box (clientHeight), the +1 absorbing sub-pixel
+// rounding. Both the bottom fade (a mask on [data-clamp-body]) and the control
+// are then shown or hidden purely by the `is-clamped` class on the WRAPPER (see
+// the .post-preview and [data-remote-summary] rules in components.css) — the
+// control carries no competing `hidden`/`inline-block` display utilities, so
+// the cascade conflict that made "Read more" appear on every post (issue #880)
+// is structurally gone. Once the reader has expanded a preview (`is-expanded`)
+// we leave it alone: a later resize/font sweep must not re-clamp it out from
+// under them.
+//
+// It lives here rather than in app.js because the mention card is filled by
+// swapping HTML into a body-level panel, so nothing sweeps it and it has to ask
+// for the measurement itself.
+export function revealPreviewClamp(el) {
+  if (el.classList.contains("is-expanded")) return
+  const body = el.querySelector("[data-clamp-body]")
+  if (!body) return
+  // A body nothing is painting cannot be measured: both heights read 0, and the
+  // answer would come out as "nothing is cut". The fediverse account
+  // description hits this every time it is open, since the clamped copy is
+  // `group-open:hidden` while the full one shows.
+  if (body.clientHeight === 0) return
+  const clipped = body.scrollHeight > body.clientHeight + 1
+  // "We have looked", which is a different thing from "nothing is cut" — an
+  // element that was never measured (no JavaScript, or not yet run) must keep
+  // whatever the server rendered rather than be treated as uncut.
+  el.classList.add("is-measured")
+  el.classList.toggle("is-clamped", clipped)
+}

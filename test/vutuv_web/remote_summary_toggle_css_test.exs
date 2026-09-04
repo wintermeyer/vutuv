@@ -19,8 +19,18 @@ defmodule VutuvWeb.RemoteSummaryToggleCssTest do
   # shape that makes the browser's answer safe.
 
   @css Path.expand("../../assets/css/components.css", __DIR__)
-  @js Path.expand("../../assets/js/app.js", __DIR__)
-  @markup Path.expand("../../lib/vutuv_web/live/fediverse_account_live.ex", __DIR__)
+  # The measuring and the sweep that drives it live apart: `revealPreviewClamp`
+  # is in util.js, where the mention card can import it (its fragment is swapped
+  # into a body-level panel, so nothing sweeps it), and app.js keeps the page
+  # lifecycle that calls the sweep.
+  @js Path.expand("../../assets/js/util.js", __DIR__)
+  @sweep Path.expand("../../assets/js/app.js", __DIR__)
+  # Every wearer of the arrangement. A second one joined in the mention card,
+  # and the trap this test holds is per element, not per page.
+  @markup [
+    Path.expand("../../lib/vutuv_web/live/fediverse_account_live.ex", __DIR__),
+    Path.expand("../../lib/vutuv_web/templates/remote_actor_card/card.html.heex", __DIR__)
+  ]
 
   test "the toggle is hidden only once something has actually measured it" do
     css = File.read!(@css)
@@ -44,18 +54,21 @@ defmodule VutuvWeb.RemoteSummaryToggleCssTest do
            "an open <details> hides the clamped copy, so both heights read 0 — measuring " <>
              "that would answer 'uncut' and hide the Show less the reader needs"
 
-    assert js =~ "[data-post-preview], [data-remote-summary]",
+    assert File.read!(@sweep) =~ "[data-post-preview], [data-remote-summary]",
            "the sweep has to reach the account description, not only the post previews"
   end
 
-  test "the toggle wrapper declares no display of its own" do
-    markup = File.read!(@markup)
+  test "no wearer's toggle wrapper declares a display of its own" do
+    for path <- @markup do
+      markup = File.read!(path)
 
-    assert markup =~ "data-remote-summary-toggle",
-           "the two labels need one wrapper whose display the CSS can own"
+      assert markup =~ "data-remote-summary-toggle",
+             "#{path}: the two labels need one wrapper whose display the CSS can own"
 
-    refute markup =~ ~r/data-remote-summary-toggle[^>\n]*class=/,
-           "a display utility beside the state rule is the issue #880 trap: whichever CSS " <>
-             "is emitted last wins, silently"
+      refute markup =~ ~r/data-remote-summary-toggle[^>]*class=/,
+             "#{path}: a display utility beside the state rule is the issue #880 trap: " <>
+               "whichever CSS is emitted last wins, silently. Put the utilities on the " <>
+               "labels inside instead."
+    end
   end
 end

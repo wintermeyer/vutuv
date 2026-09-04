@@ -106,24 +106,59 @@ renders the same element. --%>
   </div>
 
   <%!-- A self-description can be 10,000 characters, and this card is 20rem
-  wide: two lines now rather than three, because the line below is worth more
-  than a third line of somebody introducing themselves. The account page carries
-  the whole of it, line breaks and all.
+  wide: three lines of it, and a lid over the rest — the shape the account page
+  wears for the same text, down to the marks the measuring reads. Three rather
+  than two because a bio cut after two lines is mostly the account's name said
+  again, and the fourth line the lid costs is one the reader chooses to spend.
 
-  **Both of those lines have to carry words, which is why this one is not
-  `whitespace-pre-line`.** With it, every break the author wrote costs one of
-  the two — and the first one always did, because HEEx hands the text over with
-  its own indentation in front of it, so the clamp spent its first line on the
-  newline before "B" and the reader got one line of self-description under a
-  blank one. A bio's own shape is worth something at full length and nothing at
-  two lines, so here it reads as running text and keeps its structure on the
-  account page. --%>
-  <p
+  **The clamped copy is deliberately not `whitespace-pre-line`.** With it, every
+  break the author wrote costs one of the three — and the first one always did,
+  because HEEx hands the text over with the template's own indentation in front
+  of it, so the clamp spent its first line on the newline before "B" and the
+  reader got one line of self-description under a blank one. Hence both
+  expressions here sitting against their tags. Clamped, a bio reads as running
+  text; opened, it gets its own shape back.
+
+  Whether the lid is offered at all is measured rather than decided here: the
+  cut is `-webkit-line-clamp`, so how many lines this really takes depends on
+  the reader's window and font. `revealPreviewClamp` answers on the wrapper —
+  `is-measured` once it has looked, `is-clamped` when something is genuinely
+  hidden — and unmeasured means the lid shows, so the enhancement can only ever
+  take away a control that does nothing, never the one that does something. --%>
+  <details
     :if={@account && @account.summary}
-    class="mb-0 mt-2 line-clamp-2 break-words text-sm leading-relaxed text-slate-700 dark:text-slate-300"
+    data-remote-summary
+    class="group mt-2"
+    open={@bio_open?}
   >
-    {@account.summary}
-  </p>
+    <%!-- The toggle sits ABOVE the text in both states, as it does on the
+    account page: one that trades places with the text jumps out from under the
+    cursor on every click, which is what issue #1268 reported. Its wrapper
+    carries NO class at all — `display` there is the stylesheet's, and a utility
+    beside a state rule is what made "Read more" appear on every post (issue
+    #880) — so the two labels wear the utilities instead. --%>
+    <summary class="list-none [&::-webkit-details-marker]:hidden">
+      <span data-remote-summary-toggle>
+        <span class="inline-flex min-h-10 items-center text-xs font-medium text-brand-600 group-open:hidden dark:text-brand-400">
+          {gettext("Show the whole description")}
+        </span>
+        <span class="hidden min-h-10 items-center text-xs font-medium text-brand-600 group-open:inline-flex dark:text-brand-400">
+          {gettext("Show less")}
+        </span>
+      </span>
+      <%!-- `post-clamp`, the app's one line clamp, at three lines rather than
+      the reader's post budget (`.actor-card__bio-clamp` sets it): a card is not
+      a timeline, and the same class carries every fix the clamp ever gets. --%>
+      <p
+        data-clamp-body
+        class="post-clamp actor-card__bio-clamp mb-0 break-words text-sm leading-relaxed text-slate-700 group-open:hidden dark:text-slate-300"
+      >{@account.summary}</p>
+    </summary>
+    <%!-- Opened, the whole thing — but inside its own scroll rather than at
+    whatever height it happens to be: this is a popover anchored to a word, and
+    a 10,000-character bio would push its Follow button off the screen. --%>
+    <p class="mb-0 max-h-44 overflow-y-auto overscroll-contain whitespace-pre-line break-words text-sm leading-relaxed text-slate-700 dark:text-slate-300">{@account.summary}</p>
+  </details>
 
   <%!-- The last few things they wrote, which is what actually answers "is this
   worth following" — one post is a poor sample of an account, and the reader is
