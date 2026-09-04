@@ -3893,8 +3893,18 @@ html[data-feed-pull="busy"] .feed-pull__glyph {
 }
 
 /* The last few things they wrote: a stack of quotes, each a link to our copy.
-   The rule on the left is the quotation mark this does not spend a character
-   on, and the stack reads as one block because every entry wears it. */
+   A tinted tile with a hairline around it, and the stack reads as one block
+   because every entry wears the same one.
+
+   It wore a brand-blue rule down its left edge first — the quotation mark the
+   block does not spend a character on. On a card that already carries a blue
+   handle, a blue Follow button and two blue links, a fourth blue thing pointing
+   sideways read as an accent nobody had put there on purpose (Stefan,
+   2026-09-04). What separates a quote from the self-description above it is the
+   tinted ground and the small label on top of it; neither needs a colour — and
+   for the same reason the headline and the older rows wear the same hairline
+   rather than two shades of one, since what ranks them is the label and the
+   position, not a tone nobody can see. */
 .actor-card__posts {
   display: flex;
   flex-direction: column;
@@ -3904,25 +3914,25 @@ html[data-feed-pull="busy"] .feed-pull__glyph {
 .actor-card__latest {
   display: block;
   padding: 0.45rem 0.6rem 0.5rem;
-  border-left: 2px solid var(--color-brand-300);
   border-radius: 0.5rem;
   background: #f8fafc;
+  box-shadow: inset 0 0 0 1px #e9eef4;
   text-decoration: none;
 }
 .actor-card__latest:hover { background: #f1f5f9; }
 /* The older ones are the sample, not the headline: one line each, the age at
-   the end of it, and a paler rule, so the stack cannot compete with the post
-   above it. The age was a label on its own line for one afternoon, which put
-   three identical "2 days ago" under one another and doubled the drawer's
+   the end of it, and no label above it, so the stack cannot compete with the
+   post above it. The age was a label on its own line for one afternoon, which
+   put three identical "2 days ago" under one another and doubled the drawer's
    height for it. */
 .actor-card__older-row {
   display: flex;
   align-items: baseline;
   gap: 0.5rem;
   padding: 0.3rem 0.6rem 0.35rem;
-  border-left: 2px solid #e2e8f0;
   border-radius: 0.5rem;
   background: #f8fafc;
+  box-shadow: inset 0 0 0 1px #e9eef4;
   text-decoration: none;
 }
 .actor-card__older-row:hover { background: #f1f5f9; }
@@ -4261,9 +4271,9 @@ html[data-feed-pull="busy"] .feed-pull__glyph {
   }
   .actor-card__stats { color: #94a3b8; }
 
-  .actor-card__latest { border-left-color: var(--color-brand-600); background: #16233b; }
+  .actor-card__latest { background: #16233b; box-shadow: inset 0 0 0 1px #1e2f4d; }
   .actor-card__latest:hover { background: #1e293b; }
-  .actor-card__older-row { border-left-color: #334155; background: #16233b; }
+  .actor-card__older-row { background: #16233b; box-shadow: inset 0 0 0 1px #1e2f4d; }
   .actor-card__older-row:hover { background: #1e293b; }
   .actor-card__older-text { color: #cbd5e1; }
   .actor-card__older-when { color: #64748b; }

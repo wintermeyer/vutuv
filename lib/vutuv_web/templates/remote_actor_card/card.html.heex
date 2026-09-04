@@ -108,10 +108,19 @@ renders the same element. --%>
   <%!-- A self-description can be 10,000 characters, and this card is 20rem
   wide: two lines now rather than three, because the line below is worth more
   than a third line of somebody introducing themselves. The account page carries
-  the whole of it. --%>
+  the whole of it, line breaks and all.
+
+  **Both of those lines have to carry words, which is why this one is not
+  `whitespace-pre-line`.** With it, every break the author wrote costs one of
+  the two — and the first one always did, because HEEx hands the text over with
+  its own indentation in front of it, so the clamp spent its first line on the
+  newline before "B" and the reader got one line of self-description under a
+  blank one. A bio's own shape is worth something at full length and nothing at
+  two lines, so here it reads as running text and keeps its structure on the
+  account page. --%>
   <p
     :if={@account && @account.summary}
-    class="mb-0 mt-3 line-clamp-2 whitespace-pre-line break-words text-sm leading-relaxed text-slate-700 dark:text-slate-300"
+    class="mb-0 mt-2 line-clamp-2 break-words text-sm leading-relaxed text-slate-700 dark:text-slate-300"
   >
     {@account.summary}
   </p>
