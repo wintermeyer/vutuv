@@ -37,6 +37,18 @@ defmodule VutuvWeb.ServiceWorkerTest do
       assert length(String.split(body, "cache.put")) == 2
     end
 
+    # The half of the Home Screen badge the page cannot reach (issue #1732):
+    # `TabBadge` writes the number from an open tab, and a push is what happens
+    # when there is none — so the worker has to put the count that came with it
+    # on the icon, or a message arriving overnight leaves last night's number
+    # standing.
+    test "puts the unread count that came with a push on the app icon", %{conn: conn} do
+      body = conn |> get("/sw.js") |> response(200)
+
+      assert body =~ "setAppBadge"
+      assert body =~ "payload.unread"
+    end
+
     # `no-cache` means "ask every time", not "do not store" — so without a
     # validator every one of those asks is a fresh 200 carrying the whole
     # commented file, and Chrome asks on navigation.

@@ -16,15 +16,18 @@ defmodule Vutuv.WebPush.Dispatcher do
   a subscription belongs to a browser, so "also when vutuv is closed" is a
   question each phone answers for itself.
 
-  The payload carries **no content** — the kind of thing that happened and
-  where it leads, never a word of what was written. The service worker draws a
-  generic line per kind in the member's own language, because what a push turns
-  into here is text on a lock screen, and the bell is one tap away.
+  The payload carries **no content** — the kind of thing that happened, where it
+  leads, and the member's own unread total for the icon. Never a word of what
+  was written: the service worker draws a generic line per kind in the member's
+  own language, because what a push turns into here is text on a lock screen,
+  and the bell is one tap away.
   """
 
   import Ecto.Query, only: [from: 2]
 
   alias Vutuv.Accounts.User
+  alias Vutuv.Activity
+  alias Vutuv.Chat
   alias Vutuv.Languages
   alias Vutuv.Repo
   alias Vutuv.WebPush
@@ -81,11 +84,39 @@ defmodule Vutuv.WebPush.Dispatcher do
   # rewritten author), so this runs N times for one reply and the difference is
   # not academic.
   defp fan_out(user_id, notification) do
-    user_id
-    |> devices()
-    |> Enum.each(fn {subscription, locale, param} ->
-      deliver(subscription, notification, locale, param)
-    end)
+    case devices(user_id) do
+      [] ->
+        :ok
+
+      devices ->
+        # Read once for the member, not once per device, and only where a device
+        # is really waiting — which is what keeps `badge_count/1`'s reads off
+        # every notification of every member who never installed the app.
+        unread = badge_count(user_id)
+
+        Enum.each(devices, fn {subscription, locale, param} ->
+          deliver(subscription, notification, locale, param, unread)
+        end)
+    end
+  end
+
+  @doc """
+  The number the installed app's icon carries, for a member whose app is shut.
+
+  The same two counts `VutuvWeb.ShellLive.push_badge/1` sends an open page (the
+  feed's own badge is deliberately not among them), read from the database here
+  because the page that holds them is precisely what a push exists in the
+  absence of.
+
+  **Never zero.** `Vutuv.Activity.notify/2` often runs inside the transaction
+  that produced the notification while this reads from another process, so the
+  row that caused this very push may not be visible yet — and a zero would take
+  the badge *off* at the moment something arrived, which is the one answer that
+  is certainly wrong. Being one short for a few seconds is not: the open app
+  recomputes the whole number the instant the member taps the icon.
+  """
+  def badge_count(user_id) do
+    max(Chat.unread_conversations_count(user_id) + Activity.unread_notification_count(user_id), 1)
   end
 
   # The member's own language, not a hardcoded "de", and their handle for the
@@ -104,10 +135,15 @@ defmodule Vutuv.WebPush.Dispatcher do
     end)
   end
 
-  defp deliver(subscription, notification, locale, param) do
+  defp deliver(subscription, notification, locale, param, unread) do
     payload = %{
       kind: notification[:kind],
       locale: locale,
+      # What goes on the Home Screen icon (issue #1732). It rides in the payload
+      # rather than being counted in the worker, because a service worker has no
+      # session and no database — and the Badging API can only be written, never
+      # read, so it cannot count for itself either.
+      unread: unread,
       # Where the row under the bell would take them — the post, the case, the
       # profile. A push is raised precisely when the member is NOT looking at
       # vutuv, so the notifications list is the one place that makes them hunt

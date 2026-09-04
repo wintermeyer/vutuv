@@ -52,6 +52,27 @@ front of the title cannot disagree. The call is guarded and never falls back:
 most browsers do not carry the API, and where they do the platform ignores the
 write outside an installed app.
 
+An open page is not the only moment that number moves, though, and on a phone it
+is the rarer one. **The service worker writes the badge too**, from the count
+`Vutuv.WebPush.Dispatcher.badge_count/1` puts in every push payload — otherwise a
+message arriving overnight raises a lock-screen line and leaves the icon at last
+night's number, since nothing is open to write it. It is read once per member per
+push, and only where a device is actually subscribed. Two properties of that
+count are load-bearing: it is the same two sources `push_badge/1` adds up (the
+feed's own badge is not among them), and it is **never zero** — `notify/2` often
+runs inside the transaction that produced the notification while the push task
+reads from another process, so the row behind this very push may not be visible
+yet, and a zero would take the badge off at the moment something arrived. Being
+one short until the app is opened is the cheaper mistake.
+
+**On iOS the badge appears only once notifications are allowed** (WebKit shows a
+badge on a Home Screen web app from 16.4, gated on that permission), and only for
+the copy on the Home Screen — the same site open in Safari has no icon to write
+to. So a member who never turned on "Also notify me on this device when vutuv is
+closed" under `/settings/notifications`, *inside the installed app*, sees no
+number however correct the count is. That switch is also what a push needs to
+exist at all, which is why the two questions have one answer.
+
 `#tab-badge` is therefore the one element in the shell **not** gated on the
 member: the logged-out shell renders it too and is pushed a zero, which is what
 takes a signed-out member's count off the Home Screen icon. `push_badge/1`
@@ -75,13 +96,8 @@ The rest is **install-dialog metadata**: `description`
 (`VutuvWeb.OpenGraph.default_description/0`, the same sentence the page carries
 as its `<meta name="description">`), `lang`, `dir`, `categories` and
 `display_override`. Still open on #1732: `share_target` (vutuv in Android's share
-sheet), `screenshots` (which earns a real install dialog instead of a thin
-strip), and the badge while the app is **closed** — `TabBadge` writes it only
-from an open page, so a message arriving overnight raises a lock-screen line and
-leaves the icon at last night's number. The service worker below is the half that
-knows, since it already branches on "no visible client"; a bare
-`self.navigator.setAppBadge()` there would earn the platform dot for free, an
-exact count needs `unread` in the push payload.
+sheet) and `screenshots` (which earns a real install dialog instead of a thin
+strip).
 
 ### The service worker and Web Push (issue #1729)
 

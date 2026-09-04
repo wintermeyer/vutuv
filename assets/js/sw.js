@@ -120,6 +120,28 @@ function line(kind, locale) {
   return strings[locale] || strings[CONFIG.fallbackLocale] || "vutuv"
 }
 
+// The number on the app icon while vutuv is closed (issue #1732). The page's
+// own hook writes it from an open tab, and a push is precisely the moment there
+// is no open tab — so the count comes with the payload (`Vutuv.WebPush.
+// Dispatcher.badge_count/1`) and this is the only thing that can put it there.
+// The API is write-only, so a worker could not count for itself even if it had
+// a session.
+//
+// On iOS the icon shows it only once notifications are allowed — which this
+// push already required — and elsewhere the platform ignores the write outside
+// an installed app. So it is guarded and never falls back, exactly like the
+// page's own copy in app.js.
+function setBadge(count) {
+  if (!self.navigator || !("setAppBadge" in self.navigator)) return
+
+  try {
+    const written = count > 0 ? self.navigator.setAppBadge(count) : self.navigator.clearAppBadge()
+    written?.catch(() => {})
+  } catch (_e) {
+    // A context that declares the API and refuses to use it.
+  }
+}
+
 self.addEventListener("push", (event) => {
   let payload = {}
   try {
@@ -142,6 +164,11 @@ self.addEventListener("push", (event) => {
       // this worker is for. Where both do fire, the shared tag collapses them
       // into one popup rather than stacking two.
       if (clients.some((client) => client.visibilityState === "visible")) return
+
+      // Under the same gate as the notification, and for the same reason: a
+      // visible page owns the badge through `TabBadge`, whose number is the one
+      // being looked at, while this one was counted before the push was sent.
+      if (typeof payload.unread === "number") setBadge(payload.unread)
 
       return self.registration.showNotification(line(kind, payload.locale), {
         tag: kind === "message" ? "vutuv-messages" : "vutuv-activity",
