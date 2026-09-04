@@ -70,7 +70,9 @@ defmodule VutuvWeb.LandingConfigurationTest do
       # whatever entry the placeholder now follows (the investor page), not on
       # the jobs line it followed when this was written.
       assert body =~ "`/jobs`"
-      assert body =~ "(English only)\n\nList pages paginate with `?page=N`."
+
+      assert body =~
+               "and how to write (`?lang=` for en, de, it)\n\nList pages paginate with `?page=N`."
     end
   end
 

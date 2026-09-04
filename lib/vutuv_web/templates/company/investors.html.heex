@@ -1,56 +1,112 @@
-<%!-- English in every locale (see VutuvWeb.CompanyController), so the block
-carries its own lang and nothing here goes through gettext. --%>
-<div lang="en" class="mx-auto max-w-3xl space-y-6 py-6">
-  <%!-- The contact card carries the page's h1: it is the first heading, and an
-        investor page whose whole job is to start a conversation should open
-        with the way to start it. --%>
+<%!-- Unlike the media kit beside it, this page follows the reader's language
+      (see VutuvWeb.CompanyController), so it carries no `lang` of its own and
+      every sentence of its argument comes from VutuvWeb.AgentDocs.InvestorsDoc
+      — the one chokepoint the four agent formats render as well. --%>
+<div class="mx-auto max-w-3xl space-y-6 py-6">
   <.card>
     <h1 class="text-2xl font-bold text-slate-900 dark:text-white">
-      Contact {@press_contact_name}
+      {InvestorsDoc.headline()}
     </h1>
-    <p class="mt-3 text-lg text-slate-700 dark:text-slate-300">
-      Send me an email:
-      <a
-        href={"mailto:#{@facts_contact}"}
-        class="font-semibold break-all text-brand-600 hover:text-brand-700 dark:text-brand-400 dark:hover:text-brand-300"
-      >{@facts_contact}</a>
-    </p>
-    <%!-- Rendered only where the configured handle resolves to a member of this
-          installation, so a third-party page links its own operator or nobody.
-          The address is the link text, as on the media kit. --%>
-    <p :if={@contact_profile_url} class="mt-2 text-slate-700 dark:text-slate-300">
-      More contact information on my profile
-      <a
-        href={@contact_profile_url}
-        class="font-semibold break-all text-brand-600 hover:text-brand-700 dark:text-brand-400 dark:hover:text-brand-300"
-      >{@contact_profile_url}</a>
+    <p class="mt-3 text-lg text-slate-700 dark:text-slate-300">{InvestorsDoc.purpose()}</p>
+  </.card>
+
+  <%!-- Second on the page, before the argument rather than after it: an
+        enquiry that ends at this number should end here, on the reader's own
+        first minute, not after a week of waiting for a polite no. Rendered
+        only where an installation is actually raising (INVESTOR_MINIMUM). --%>
+  <.card :if={@minimum}>
+    <h2 class="text-xl font-bold text-slate-900 dark:text-white">
+      {gettext("From %{amount} upwards", amount: @minimum)}
+    </h2>
+    <% {reason_pre, reason_post} = split_marker(InvestorsDoc.minimum_reason(), "{amount}") %>
+    <p class="mt-3 text-slate-700 dark:text-slate-300">
+      {reason_pre}<strong class="font-semibold text-slate-900 dark:text-white">{@minimum}</strong>{reason_post}
     </p>
   </.card>
 
   <.card>
-    <h2 class="text-xl font-bold text-slate-900 dark:text-white">Where we are</h2>
+    <h2 class="text-xl font-bold text-slate-900 dark:text-white">
+      {gettext("Why this is worth building")}
+    </h2>
+    <div class="mt-4 space-y-5">
+      <div :for={point <- InvestorsDoc.case_points()}>
+        <h3 class="font-semibold text-slate-900 dark:text-white">{point.title}</h3>
+        <p class="mt-1 text-slate-700 dark:text-slate-300">{point.body}</p>
+      </div>
+    </div>
+  </.card>
+
+  <.card>
+    <h2 class="text-xl font-bold text-slate-900 dark:text-white">{gettext("Where we are")}</h2>
+
+    <p class="mt-3 text-slate-700 dark:text-slate-300">{InvestorsDoc.counter_explainer()}</p>
+
+    <%!-- The NodeInfo document is the point of the sentence, so it is a link
+          and not a mention: a reader who does not follow it has only our word
+          for the numbers, which is exactly what the paragraph denies. --%>
+    <% {transparency_pre, transparency_post} =
+      split_marker(InvestorsDoc.transparency_note(), "{nodeinfo}") %>
     <p class="mt-2 text-sm text-slate-600 dark:text-slate-400">
-      Read from the live database on every request, and published in the same figures at
-      <.link href={~p"/system/nodeinfo/2.1"} class="underline">/system/nodeinfo/2.1</.link>.
+      {transparency_pre}<.link
+        href={~p"/system/nodeinfo/2.1"}
+        class="font-semibold text-brand-600 hover:text-brand-700 dark:text-brand-400 dark:hover:text-brand-300"
+      >/system/nodeinfo/2.1</.link>{transparency_post}
     </p>
+
     <div class="mt-4 grid grid-cols-2 gap-3 sm:grid-cols-3">
-      <.figure_tile label="Members" value={en_count(@facts.members)} />
+      <.figure_tile label={gettext("Members")} value={delimited_count(@facts.members)} />
       <.figure_tile
-        label="Active this month"
-        value={en_count(@facts.active_month)}
-        note="Signed in within 30 days"
+        label={gettext("Active this month")}
+        value={delimited_count(@facts.active_month)}
+        note={gettext("Signed in within 30 days")}
       />
       <.figure_tile
-        label="Active this half year"
-        value={en_count(@facts.active_halfyear)}
+        label={gettext("Active this half year")}
+        value={delimited_count(@facts.active_halfyear)}
       />
-      <.figure_tile label="Posts" value={en_count(@facts.posts)} />
-      <.figure_tile label="Replies" value={en_count(@facts.replies)} />
+      <.figure_tile label={gettext("Posts")} value={delimited_count(@facts.posts)} />
+      <.figure_tile label={gettext("Replies")} value={delimited_count(@facts.replies)} />
       <.figure_tile
-        label="Fediverse accounts"
-        value={en_count(@facts.fediverse_accounts)}
-        note={"From #{en_count(@facts.fediverse_servers)} servers"}
+        label={gettext("Fediverse accounts")}
+        value={delimited_count(@facts.fediverse_accounts)}
+        note={
+          ngettext(
+            "From %{formatted} server",
+            "From %{formatted} servers",
+            @facts.fediverse_servers,
+            formatted: delimited_count(@facts.fediverse_servers)
+          )
+        }
       />
+    </div>
+
+    <.growth_curve series={@facts.series} />
+    <p :if={@growth_sentence} class="mt-2 text-sm text-slate-600 dark:text-slate-400">
+      {@growth_sentence}
+    </p>
+  </.card>
+
+  <%!-- No address and no profile link: an investor writes through vutuv, which
+        keeps a personal inbox off a page written to be read by strangers and
+        machines. Rendered only where the configured handle really resolves to
+        a member here, so a third-party installation running the shipped
+        default offers its own operator or stays silent. --%>
+  <.card :if={@contact_handle}>
+    <h2 class="text-xl font-bold text-slate-900 dark:text-white">{gettext("Write to me")}</h2>
+    <p class="mt-3 text-slate-700 dark:text-slate-300">{InvestorsDoc.contact_note()}</p>
+    <%!-- Which of the two leads depends on who is reading. A message needs a
+          session, so for a logged-out reader "Send a message" is a redirect to
+          the login form and a dead end for somebody who has no account yet:
+          they are offered the account first. A member gets the reverse, since
+          for them the message is one click and the other button is nothing. --%>
+    <div class="mt-4 flex flex-wrap gap-3">
+      <.button :if={is_nil(@current_user)} href={~p"/"}>{gettext("Create an account")}</.button>
+      <.button
+        href={~p"/messages/with/#{@contact_handle}"}
+        variant={if @current_user, do: "primary", else: "secondary"}
+      >
+        {gettext("Send a message")}
+      </.button>
     </div>
   </.card>
 </div>

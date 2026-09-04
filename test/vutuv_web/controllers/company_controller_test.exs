@@ -1,17 +1,20 @@
 defmodule VutuvWeb.CompanyControllerTest do
   @moduledoc """
   The two company pages behind the footer's "Company" group, plus the footer
-  itself: that its groups render, that both pages stay English under a German
-  `Accept-Language` header, and that the investor page's figures are read from
-  the database rather than typed into the template.
+  itself: that its groups render, that the **media kit** stays English under a
+  German `Accept-Language` header while the **investor page** follows the
+  reader's language, that the investor page states no email address and no
+  profile URL, and that its figures are read from the database rather than
+  typed into the template.
   """
   use VutuvWeb.ConnCase, async: true
 
+  alias Vutuv.BerlinTime
+  alias Vutuv.PeopleHistory
   alias Vutuv.PeopleHistory.Snapshot
   alias Vutuv.Repo
   alias VutuvWeb.AgentDocs.InvestorsDoc
   alias VutuvWeb.AgentDocs.MediaKitDoc
-  alias VutuvWeb.CompanyHTML
 
   # The creating migration backfills 30 days, so the table is never empty even
   # in a fresh test database. Each test states its own history.
@@ -49,46 +52,108 @@ defmodule VutuvWeb.CompanyControllerTest do
       end
     end
 
-    test "carries the two new pages, labelled in English in the German footer", %{conn: conn} do
+    test "carries the two company pages, the media kit still labelled in English", %{conn: conn} do
       html = conn |> german() |> get(~p"/") |> html_response(200)
 
       assert html =~ ~s|href="/system/investors"|
       assert html =~ ~s|href="/system/media-kit"|
-      # The label stays English on purpose: it warns that the page is.
-      assert html =~ ">Investors<"
+      # The media kit's label stays English: it warns that the page is.
       assert html =~ ">Media Kit<"
+      # The investor page is translated now, so warning about a language change
+      # that no longer happens would be the wrong signal.
+      assert html =~ "Investoren"
+      refute html =~ ">Investors<"
     end
   end
 
   describe "GET /system/investors" do
-    test "opens with the way to start a conversation", %{conn: conn} do
+    test "opens on the claim, not on a contact card", %{conn: conn} do
       html = conn |> get(~p"/system/investors") |> html_response(200)
 
-      # The contact card carries the page's only h1.
       assert html =~ "<h1"
-      assert html =~ "Contact #{MediaKitDoc.press_contact_name()}"
-      assert html =~ ~s|href="mailto:#{MediaKitDoc.press_contact()}"|
+      assert html =~ "A professional network that works without an account"
       assert length(Regex.scan(~r{<h1[^>]*>}, html)) == 1
     end
 
-    test "points at the profile for the rest of the contact details", %{conn: conn} do
-      handle = Application.get_env(:vutuv, :operator_handle)
-      insert(:activated_user, username: handle)
-      url = InvestorsDoc.contact_profile_url()
+    test "states no email address and no profile URL", %{conn: conn} do
+      # The whole point of the rewrite: this page is read by strangers and
+      # machines, so the operator's own inbox and profile stay off it. The
+      # media kit still carries both, for a journalist on a deadline.
+      insert(:activated_user, username: Application.get_env(:vutuv, :operator_handle))
 
       html = conn |> get(~p"/system/investors") |> html_response(200)
 
-      assert html =~ "More contact information on my profile"
-      assert html =~ ~s|href="#{url}"|
-      assert html =~ ">#{url}</a>"
+      refute html =~ MediaKitDoc.press_contact()
+      refute html =~ "mailto:"
+      refute html =~ MediaKitDoc.press_contact_profile_url()
     end
 
-    test "points at no profile where that handle is nobody here", %{conn: conn} do
-      refute InvestorsDoc.contact_profile_url()
+    test "offers a message on this installation instead", %{conn: conn} do
+      handle = Application.get_env(:vutuv, :operator_handle)
+      insert(:activated_user, username: handle)
 
       html = conn |> get(~p"/system/investors") |> html_response(200)
 
-      refute html =~ "More contact information on my profile"
+      assert html =~ ~s|href="/messages/with/#{handle}"|
+      # And the way in for somebody who has no account yet.
+      assert html =~ "Create an account"
+    end
+
+    test "offers no contact at all where that handle is nobody here", %{conn: conn} do
+      # A third-party installation running the shipped default: it must render
+      # silence rather than point a reader at somebody on vutuv.de.
+      refute InvestorsDoc.contact_handle()
+
+      html = conn |> get(~p"/system/investors") |> html_response(200)
+
+      refute html =~ "/messages/with/"
+      refute html =~ "Write to me"
+
+      # And the agent formats keep the same silence. They used to print the
+      # invitation ("Write to me here, on vutuv…") with no heading above it and
+      # no address under it, because only the heading and the link were gated.
+      for extension <- [".md", ".txt"] do
+        body = conn |> get(~p"/system/investors" <> extension) |> response(200)
+
+        refute body =~ "Write to me"
+        refute body =~ "/messages/with/"
+      end
+    end
+
+    test "names the floor under a conversation, formatted", %{conn: conn} do
+      html = conn |> get(~p"/system/investors") |> html_response(200)
+
+      # Grouped, never a run-together 300000, and the reason beside it.
+      assert html =~ "300,000 €"
+      refute html =~ "300000"
+      assert html =~ "the notary appointment"
+    end
+
+    test "explains what the number in the top bar is made of", %{conn: conn} do
+      # Investors have asked; that question is why the paragraph exists.
+      html = conn |> get(~p"/system/investors") |> html_response(200)
+
+      assert html =~ "The number in the top bar adds up two groups"
+      assert html =~ "Nobody is counted twice"
+    end
+
+    test "points at the NodeInfo document the figures are also published in", %{conn: conn} do
+      html = conn |> get(~p"/system/investors") |> html_response(200)
+
+      assert html =~ ~s|href="/system/nodeinfo/2.1"|
+    end
+
+    test "makes the case against LinkedIn's sign-up wall", %{conn: conn} do
+      html = conn |> get(~p"/system/investors") |> html_response(200)
+
+      for title <- [
+            "Readable without an account",
+            "Fast enough for a thin line",
+            "Small enough to stay cheap",
+            "Advertising instead of a paywall"
+          ] do
+        assert html =~ title
+      end
     end
 
     test "states the live figures", %{conn: conn} do
@@ -103,19 +168,108 @@ defmodule VutuvWeb.CompanyControllerTest do
       assert html =~ ">2</p>"
     end
 
-    test "stays English under a German Accept-Language header", %{conn: conn} do
+    test "draws the growth curve from the daily snapshots", %{conn: conn} do
+      # The Berlin calendar day, which is what the recorder stamps.
+      today = BerlinTime.today()
+      PeopleHistory.record(Date.add(today, -2), %{members: 10, fediverse_accounts: 2})
+      PeopleHistory.record(Date.add(today, -1), %{members: 14, fediverse_accounts: 3})
+      PeopleHistory.record(today, %{members: 20, fediverse_accounts: 5})
+
+      html = conn |> get(~p"/system/investors") |> html_response(200)
+
+      assert html =~ "<polygon"
+      # 25 people on the last day against 12 on the first.
+      assert html =~ "13 people arrived"
+
+      # The reading of the curve is a sentence about the network, not about the
+      # drawing, so every format states it: an agent summarising this page
+      # otherwise hands somebody the standing counts and nothing about the
+      # movement, which is the half an investor came for.
+      markdown = conn |> get(~p"/system/investors" <> ".md") |> response(200)
+      assert markdown =~ "13 people arrived"
+    end
+
+    test "draws no curve for a series too short to be one", %{conn: conn} do
+      PeopleHistory.record(BerlinTime.today(), %{members: 10, fediverse_accounts: 2})
+
+      html = conn |> get(~p"/system/investors") |> html_response(200)
+
+      # An empty chart frame says less than no chart at all.
+      refute html =~ "<polygon"
+    end
+
+    test "renders in German on a German Accept-Language header", %{conn: conn} do
       html = conn |> german() |> get(~p"/system/investors") |> html_response(200)
 
-      assert html =~ ~s|lang="en"|
-      assert html =~ "Where we are"
+      # Asserted by name because `gettext.extract --merge` fuzzy-fills a new
+      # msgid with the translation of whatever it looks similar to and fails no
+      # build, so a German page can ship confident nonsense while every English
+      # assertion here stays green.
+      assert html =~ "Ein Berufsnetzwerk, das ohne Konto funktioniert"
+      assert html =~ "Diese Seite richtet sich an Investoren"
+      assert html =~ "Ohne Konto lesbar"
+      assert html =~ "Schnell genug für eine schmale Leitung"
+      assert html =~ "Klein genug, um günstig zu bleiben"
+      assert html =~ "Anzeigen statt Bezahlschranke"
+      assert html =~ "Wo wir stehen"
+      assert html =~ "Die Zahl oben in der Navigationsleiste"
+      assert html =~ "Mitglieder"
+
+      # The English page must not show through anywhere.
+      refute html =~ "Where we are"
+      refute html =~ "Readable without an account"
+    end
+
+    test "groups and places the amount the German way", %{conn: conn} do
+      html = conn |> german() |> get(~p"/system/investors") |> html_response(200)
+
+      # The separators invert between locales, so "300,000 €" in a German
+      # sentence is misread as three hundred, not untidy. The symbol sits after
+      # the amount in either language, the way this site writes money
+      # everywhere (see `Vutuv.Salary.range_label/5`).
+      assert html =~ "300.000 €"
+      refute html =~ "300,000 €"
     end
 
     test "serves its agent-format siblings", %{conn: conn} do
       json = conn |> get(~p"/system/investors" <> ".json") |> json_response(200)
 
       assert json["type"] == "investors"
-      assert json["contact"] == MediaKitDoc.press_contact()
       assert is_integer(json["figures"]["members"])
+      assert json["minimum"]["amount"] == 300_000
+      assert json["minimum"]["currency"] == "EUR"
+      assert json["language"] == "en"
+      # No address here either: an agent summarising this page for somebody
+      # must not be the way the address gets out.
+      refute json["contact"]
+      refute Jason.encode!(json) =~ MediaKitDoc.press_contact()
+    end
+
+    test "the Markdown sibling carries the argument, not only the counts", %{conn: conn} do
+      markdown = conn |> get(~p"/system/investors" <> ".md") |> response(200)
+
+      assert markdown =~ "# A professional network that works without an account"
+      assert markdown =~ "### Readable without an account"
+      # The placeholder forms never reach a reader.
+      assert markdown =~ "300,000 €"
+      refute markdown =~ "{amount}"
+      refute markdown =~ "{nodeinfo}"
+      assert markdown =~ "/system/nodeinfo/2.1"
+    end
+
+    test "the agent formats are translatable too, on ?lang=", %{conn: conn} do
+      # An agent document's content is deliberately locale-stable (English
+      # unless `?lang=` says otherwise, see `VutuvWeb.AgentDocs`), so a German
+      # `Accept-Language` header gets the English document plus a pointer to
+      # this URL. What matters here is that the pointer leads somewhere real.
+      hint = conn |> german() |> get(~p"/system/investors" <> ".md") |> response(200)
+      assert hint =~ "Diese Seite auf Deutsch"
+
+      markdown = conn |> get(~p"/system/investors" <> ".md?lang=de") |> response(200)
+
+      assert markdown =~ "Ein Berufsnetzwerk, das ohne Konto funktioniert"
+      assert markdown =~ "Warum sich das lohnt"
+      assert markdown =~ "300.000 €"
     end
   end
 
@@ -183,19 +337,6 @@ defmodule VutuvWeb.CompanyControllerTest do
 
       assert markdown =~ MediaKitDoc.boilerplate().short
       assert markdown =~ MediaKitDoc.press_contact()
-    end
-  end
-
-  describe "figures on an English-only page" do
-    test "are grouped the English way whatever locale the request carries" do
-      # Process-local, so this does not leak into a concurrent test.
-      Gettext.put_locale(VutuvWeb.Gettext, "de")
-
-      # The house formatter follows the request, which is right everywhere else
-      # and wrong inside an English sentence: "5.934" reads as five point nine
-      # three four to the reader this page is written for.
-      assert VutuvWeb.UI.delimited_count(5934) == "5.934"
-      assert CompanyHTML.en_count(5934) == "5,934"
     end
   end
 end
