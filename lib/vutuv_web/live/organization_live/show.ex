@@ -439,6 +439,13 @@ defmodule VutuvWeb.OrganizationLive.Show do
      |> update(:posts_offset, &(&1 + 1))}
   end
 
+  # The homepage capture moved (issue #1928): it landed, the AI gate released
+  # it, or a refusal took it away. The tile sits above the fold and is absent
+  # until there is something to show, so all three change the page's layout
+  # under whoever is reading it — one re-read answers each.
+  def handle_info({:organization_screenshot_changed, _id}, socket),
+    do: {:noreply, assign_screenshot(socket, socket.assigns.organization)}
+
   def handle_info(_message, socket), do: {:noreply, socket}
 
   # `primary_domain` is a %OrganizationDomain{} struct here (the assign holds the row

@@ -23,6 +23,7 @@ defmodule Vutuv.PageScreenshot do
 
   import Ecto.Query
 
+  alias Vutuv.Activity
   alias Vutuv.BrowserFrame
   alias Vutuv.Moderation.ImageScans
   alias Vutuv.PageScreenshot.Cdp
@@ -141,11 +142,15 @@ defmodule Vutuv.PageScreenshot do
   @doc """
   Captures the due links one after the other and returns how many it worked
   through — attempts, not successes, since a blocklisted page is neither. What
-  `Vutuv.PageScreenshot.Sweeper` runs; `opts` are `due/1`'s.
+  `Vutuv.PageScreenshot.Sweeper` runs; `opts` are `due/1`'s, plus `capture:`
+  for the per-link capture function (the seam the post and organization queues
+  already have — a test stubs it and everything after the browser runs for
+  real).
   """
   def capture_due(opts \\ []) do
     urls = due(opts)
-    Enum.each(urls, &generate_screenshot/1)
+    capture = Keyword.get(opts, :capture, &capture_and_frame/1)
+    Enum.each(urls, &generate_screenshot(&1, capture))
     length(urls)
   end
 
@@ -173,14 +178,18 @@ defmodule Vutuv.PageScreenshot do
   Safe to run from an unsupervised `Task` — all failures are logged, never
   raised.
   """
-  def generate_screenshot(%Url{id: id}) do
+  def generate_screenshot(%Url{} = url), do: generate_screenshot(url, &capture_and_frame/1)
+
+  # The capture step stays an argument for `capture_due/1`'s seam alone — the
+  # public entry point above keeps its one arity, since nothing else picks it.
+  defp generate_screenshot(%Url{id: id}, capture) do
     case Repo.get(Url, id) do
       nil -> :ok
-      url -> capture_store_and_flag(url)
+      url -> capture_store_and_flag(url, capture)
     end
   end
 
-  defp capture_store_and_flag(url) do
+  defp capture_store_and_flag(url, capture) do
     # Before the capture, not after, and on every outcome: this is `due/1`'s
     # clock, not a claim that anything was captured. A run that dies mid-way —
     # a Chromium crash, a deploy stopping the slot — must still move the link
@@ -188,7 +197,7 @@ defmodule Vutuv.PageScreenshot do
     # sorts oldest-first and spends every batch on itself forever.
     stamp_attempt(url)
 
-    case capture_and_frame(url) do
+    case capture.(url) do
       {:ok, framed_path} ->
         store(url, framed_path)
         File.rm(framed_path)
@@ -444,10 +453,32 @@ defmodule Vutuv.PageScreenshot do
     # not reach the public link card.
     with {:ok, updated} <- result do
       ImageScans.enqueue("url_screenshot", updated.id, updated.user_id, updated.screenshot)
+      # Announced whether or not the gate still holds it (issue #1928): a held
+      # capture draws its mosaic preview (issue #1720), so the capture landing
+      # is itself something to show, and the tile that has been grey since the
+      # member added the link can stop being grey.
+      announce(updated)
     end
 
     result
   end
+
+  @doc """
+  Tells whoever is drawing this link's preview tile that it moved — a capture
+  landed, the AI gate released it, or a refusal took it away.
+
+  One event for all three because they are one sentence to a reader: re-read
+  what you draw. The audience is the member's own topic, which is what a
+  profile page subscribes to (`VutuvWeb.UserProfileLive`), and the owner is
+  the only party a link's picture reaches — unlike a post's capture, which
+  fans out to every follower's feed.
+
+  `urls.user_id` is nullable and a link nobody owns reaches no profile, which
+  needs no clause of its own: `Activity.broadcast/2` is the chokepoint that
+  answers nil with `:ok`.
+  """
+  def announce(%Url{user_id: user_id, id: id}),
+    do: Activity.broadcast(user_id, {:link_screenshot_changed, %{url_id: id}})
 
   defp set_broken(url, value) do
     url

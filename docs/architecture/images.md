@@ -506,6 +506,20 @@ about it are deliberate:
   cards re-read again on the verdict. Announcing only the verdict meant nobody
   watching a feed ever saw a preview — the card was drawn a second before the
   download finished and kept its grey tile for the whole scan.
+- **Every surface that draws `<.link_thumb>` hears it** (issue #1928). The
+  component draws the same three states on four surfaces, and at first only a
+  post's card was told about any of them: a **profile's** Links card and an
+  **organization page's** homepage capture (which is absent until there is
+  something to show, so its arrival moves the page above the fold) both waited
+  for the next load. Each owner module owns the routing for its own rows —
+  `Vutuv.PageScreenshot.announce/1` broadcasts `{:link_screenshot_changed, …}`
+  on the link owner's activity topic, `Vutuv.Organizations.Screenshots.announce/1`
+  goes through `Organizations.broadcast_screenshot_changed/1` onto the page's —
+  and `Vutuv.Moderation.ImageSubjects` calls those rather than keeping a second
+  copy of who to tell. One event per kind for all three moments: a capture
+  landing, a release and a refusal are one sentence to a reader, *re-read what
+  you draw*. The `/:slug/links` index is a dead controller page and is
+  deliberately left out.
 
 Where it exists: post photos (`post_images/<token>/pixelated.avif`, served by
 the proxy at `pixelated.avif` — which redirects to the real picture once

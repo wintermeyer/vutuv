@@ -38,6 +38,7 @@ defmodule Vutuv.Organizations.Screenshots do
   import Ecto.Query
 
   alias Vutuv.Moderation.ImageScans
+  alias Vutuv.Organizations
   alias Vutuv.Organizations.Organization
   alias Vutuv.Organizations.OrganizationScreenshot
   alias Vutuv.Organizations.ScreenshotWorker
@@ -308,8 +309,26 @@ defmodule Vutuv.Organizations.Screenshots do
       ImageScans.enqueue("organization_screenshot", ready.id, nil, ready.screenshot)
     end
 
+    # Announced whether or not the gate still holds it (issue #1928). What a
+    # held capture draws is its mosaic preview, and on this page that is the
+    # difference between no tile at all and a tile — a layout change above the
+    # fold, which nobody should have to reload to get.
+    announce(ready)
+
     ready
   end
+
+  @doc """
+  Tells whoever is drawing this page's homepage capture that it moved — the
+  capture landed, the AI gate released it, or a refusal took it away.
+
+  One event for all three: they are one sentence to a reader (re-read what you
+  draw), and the page they reach is the organization's own
+  (`VutuvWeb.OrganizationLive.Show`), which is already listening on that topic
+  for its counters and its verification.
+  """
+  def announce(%OrganizationScreenshot{organization_id: id}),
+    do: Organizations.broadcast_screenshot_changed(id)
 
   defp mark_retry(%OrganizationScreenshot{} = job, reason) do
     attempts = job.attempts + 1

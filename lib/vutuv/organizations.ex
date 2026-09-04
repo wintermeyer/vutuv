@@ -1664,17 +1664,31 @@ defmodule Vutuv.Organizations do
   @doc "Subscribes to an organization's live counter topic."
   def subscribe(organization_id), do: Engagement.subscribe(organization_id, @engagement_cfg)
 
+  @doc """
+  Tells an open organization page that its homepage capture moved (issue
+  #1928) — `Vutuv.Organizations.Screenshots.announce/1` decides when, this
+  names the topic, the same split `broadcast_verified/1` follows.
+  """
+  def broadcast_screenshot_changed(organization_id),
+    do: broadcast_to_page(organization_id, {:organization_screenshot_changed, organization_id})
+
   # Tells an open page that the background pass finished its claim, so somebody
   # who published the record and left the tab sitting there watches it go live
   # instead of reloading to find out (issue #1466). Lives here rather than with
   # the pending pass above because `@engagement_cfg` owns the topic name.
-  defp broadcast_verified(%Organization{id: id}) do
-    Phoenix.PubSub.broadcast(
-      Vutuv.PubSub,
-      Engagement.topic(id, @engagement_cfg),
-      {:organization_verified, id}
-    )
-  end
+  defp broadcast_verified(%Organization{id: id}),
+    do: broadcast_to_page(id, {:organization_verified, id})
+
+  # The counter topic is where an open page already listens, so everything this
+  # module tells one goes out on it — named once, beside the `subscribe/1` that
+  # reads it.
+  defp broadcast_to_page(organization_id, message),
+    do:
+      Phoenix.PubSub.broadcast(
+        Vutuv.PubSub,
+        Engagement.topic(organization_id, @engagement_cfg),
+        message
+      )
 
   @doc """
   One page of the member's liked / bookmarked organizations for the `/bookmarks`
