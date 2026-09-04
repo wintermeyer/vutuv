@@ -231,7 +231,15 @@ defmodule VutuvWeb.CompanyControllerTest do
       # build, so a German page can ship confident nonsense while every English
       # assertion here stays green.
       assert html =~ "Ein Berufsnetzwerk, das ohne Konto funktioniert"
-      assert html =~ "Diese Seite richtet sich an potentielle Investoren"
+      # The whole sentence, not just its opening: a stale compiled catalogue
+      # answers a changed msgid with its previous translation, and a prefix
+      # match passes straight through that. `mix compile` does not always
+      # notice a rewritten `.po` — this shipped the dropped half-sentence for
+      # one round, green tests and all.
+      assert html =~
+               "Diese Seite richtet sich an potentielle Investoren. Sie sagt, was vutuv ist, " <>
+                 "wo das Netzwerk heute steht und womit es eines Tages Geld verdienen soll."
+
       assert html =~ "Ohne Konto lesbar"
       assert html =~ "Schnelle Seiten gewinnen"
       assert html =~ "Der Markt hinter der langsamen Leitung"
