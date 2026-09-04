@@ -196,6 +196,47 @@ html[data-nav-pressing] main {
   transition-delay: var(--press-pending-delay);
 }
 
+/* ---------- "You already did this" on the action bar ----------
+   The like and the bookmark answer that question with a shape: the glyph fills
+   in, and a filled heart is legible from across the room. The repost arrows
+   have no solid form to fill into — a filled loop is a blob — so for their
+   whole life the only difference between done and not done was the colour of
+   1.8px of stroke, in a bar whose links are brand blue anyway. On a phone, in
+   daylight, that is not a difference; it was reported as "sehr schwer zu
+   erkennen, ob man einen Post bereits ge-re-posted hat".
+
+   So a pressed repost fills its own padding: the glyph and its count sit in a
+   brand chip. Area of ink rather than hue, which is what the eye picks up
+   while scrolling past a column of cards — and what a bar of four identical
+   silhouettes needs, for the reason the phone tab bar fills its current tab.
+
+   It reads `aria-pressed` and nothing else, so it costs the optimistic press
+   no extra command and cannot fall out of step with the colour beside it: both
+   bars already toggle that attribute on the button (`toggle_js/4` /
+   `remote_toggle_js/4` in post_components.ex), and the refusal counter takes
+   the chip back with the node it discards. The absolute-state rule in that
+   file's comment applies here word for word.
+
+   Unlayered for the reason the press paint above is, and hover is why: the
+   buttons wear `hover:bg-slate-100` as a utility, so from `components.css`
+   this would lose the chip to a resting pointer whatever its specificity — the
+   reposted button would go grey under the cursor, which is the one place it
+   must not. **From out here it needs no `:hover` selector of its own**, and
+   adding one would only suggest it did: an unlayered normal declaration beats
+   every layered one, so one rule already answers both states. That is also why
+   there is no `--…-on-bg` custom property in the pattern of the block above —
+   that one exists because four bars name their own palette through one rule,
+   and here two rules hold the two values with no specificity to keep in step.
+
+   `save_toggle_class/1` in ui.ex paints the same chip for the profile's
+   bookmark/like pair and needs none of this, because it carries its hover
+   inside its own active branch. The action bar cannot: its hover sits in the
+   shared button base, and moving it into the toggled class pair would put two
+   more classes into every `toggle_class` payload on a page of 25 cards. */
+[data-tints-when-pressed][aria-pressed="true"] {
+  background-color: var(--color-brand-100);
+}
+
 /* ---------- The feed's waiting posts ----------
    A post that arrives while somebody is reading is drawn into the timeline at
    once and hidden by the plain `hidden` attribute, so "show me" is two attribute
@@ -339,5 +380,13 @@ html[data-nav-pressing] main {
     --press-on-bg: transparent;
     --press-on-fg: var(--color-brand-200);
     --press-off-fg: var(--color-slate-400);
+  }
+
+  /* `brand-800`, not the `brand-900` the tints above use: those sit on the
+     white top bar, this one on a `slate-900` card, and `brand-900` (#172554)
+     is four steps from that card — a chip nobody would see, which is the very
+     bug this paints over. */
+  [data-tints-when-pressed][aria-pressed="true"] {
+    background-color: var(--color-brand-800);
   }
 }

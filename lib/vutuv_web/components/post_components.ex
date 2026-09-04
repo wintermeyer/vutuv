@@ -1981,6 +1981,7 @@ defmodule VutuvWeb.PostComponents do
         <.icon_reply />
       </.remote_action_link>
 
+      <%!-- `tinted?` for the reason the local bar's repost carries it. --%>
       <.remote_action
         :if={@repost?}
         id={control_id(@id, "repost", @reset)}
@@ -1993,6 +1994,7 @@ defmodule VutuvWeb.PostComponents do
         off_label={gettext("Repost")}
         count={@shares}
         optimistic?={@standing_ok?}
+        tinted?
       >
         <.icon_repost />
       </.remote_action>
@@ -2042,6 +2044,14 @@ defmodule VutuvWeb.PostComponents do
   )
 
   attr(:filled?, :boolean, default: false, doc: "the glyph fills while active (heart, bookmark)")
+
+  attr(:tinted?, :boolean,
+    default: false,
+    doc:
+      "the button fills with a chip while active — the repost, whose glyph cannot fill. " <>
+        "The alternative to `filled?`, never its companion: one control, one on-signal"
+  )
+
   slot(:inner_block, required: true)
 
   defp remote_action(%{shown: shown} = assigns) when shown in [nil, false] do
@@ -2072,6 +2082,7 @@ defmodule VutuvWeb.PostComponents do
       data-awaits-server={!@optimistic? && "true"}
       data-count-steps
       data-fills-when-pressed={@filled? && "true"}
+      data-tints-when-pressed={@tinted? && "true"}
       class={[
         "inline-flex items-center gap-1.5 rounded-lg px-2 py-1 text-sm hover:bg-slate-100 dark:hover:bg-slate-800",
         # components.css colors bare `a, button` brand-600, which beats the
@@ -5737,6 +5748,9 @@ defmodule VutuvWeb.PostComponents do
         disabled={@engagement.restricted?}
       />
 
+      <%!-- `tinted?` is the one control that carries it: the heart and the
+      bookmark fill their glyph, and these arrows have no solid form to fill
+      into (app.css, "You already did this"). --%>
       <.action_button
         id={control_id(@id, "repost", @reset)}
         target={@target}
@@ -5746,6 +5760,7 @@ defmodule VutuvWeb.PostComponents do
         on_label={gettext("Undo repost")}
         off_label={gettext("Repost")}
         active_class="text-brand-600 dark:text-brand-300"
+        tinted?
         disabled={@engagement.restricted?}
         disabled_title={gettext("Only public posts can be reposted.")}
       >
@@ -6069,6 +6084,14 @@ defmodule VutuvWeb.PostComponents do
   attr(:off_label, :string, required: true, doc: "and while not")
   attr(:active_class, :string, required: true)
   attr(:filled?, :boolean, default: false, doc: "the glyph fills while active (heart, bookmark)")
+
+  attr(:tinted?, :boolean,
+    default: false,
+    doc:
+      "the button fills with a chip while active — the repost, whose glyph cannot fill. " <>
+        "The alternative to `filled?`, never its companion: one control, one on-signal"
+  )
+
   attr(:disabled, :boolean, default: false)
   attr(:disabled_title, :string, default: nil)
   slot(:icon, required: true)
@@ -6092,6 +6115,7 @@ defmodule VutuvWeb.PostComponents do
       title={if(@disabled, do: @disabled_title, else: @label)}
       data-count-steps
       data-fills-when-pressed={@filled? && "true"}
+      data-tints-when-pressed={@tinted? && "true"}
       class={[
         "inline-flex items-center gap-1.5 rounded-lg px-2 py-1 text-sm",
         @disabled && "cursor-not-allowed opacity-40",

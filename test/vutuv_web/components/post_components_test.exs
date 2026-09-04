@@ -1,7 +1,10 @@
 defmodule VutuvWeb.PostComponentsTest do
   use ExUnit.Case, async: true
 
+  import Phoenix.LiveViewTest, only: [rendered_to_string: 1]
+
   alias Vutuv.Accounts.User
+  alias VutuvWeb.HTMLHelpers
   alias VutuvWeb.PostComponents
 
   # Render the tab bar on its own. A function component needs `__changed__`
@@ -13,7 +16,7 @@ defmodule VutuvWeb.PostComponentsTest do
       |> Enum.into(%{active: "all", event: "filter", options: nil, rest: %{}})
       |> Map.put(:__changed__, nil)
 
-    Phoenix.LiveViewTest.rendered_to_string(PostComponents.post_filter_tabs(assigns))
+    rendered_to_string(PostComponents.post_filter_tabs(assigns))
   end
 
   describe "post_body_style/1" do
@@ -125,6 +128,97 @@ defmodule VutuvWeb.PostComponentsTest do
       html = tabs_html(active: "reposts", unseen: ["all", "reposts"])
 
       assert dots(html) == 1
+    end
+  end
+
+  describe "a done repost is visible on a phone" do
+    # The like and the bookmark say "you already did this" by filling their
+    # glyph. The repost arrows have no solid form to fill into, so their only
+    # difference between done and not done was the colour of 1.8px of stroke —
+    # in a bar whose links are brand blue anyway. Reported as exactly that, and
+    # the answer is a chip: a pressed repost fills its own padding.
+    #
+    # Nothing else fails when the marker quietly stops being drawn — the button
+    # renders, the colour still changes, the count is still right — which is
+    # what these two pin. The stylesheet half lives in `press_paint_css_test`,
+    # beside the app's other unlayered state paints.
+
+    defp actions_html(engagement) do
+      %{
+        __changed__: nil,
+        id: "post-actions-p1",
+        post_id: "p1",
+        engagement:
+          Enum.into(engagement, %{
+            author_id: "someone-else",
+            liked?: false,
+            reposted?: false,
+            bookmarked?: false,
+            restricted?: false,
+            likes: 0,
+            bookmarks: 0,
+            reposts: 0,
+            replies: 0
+          }),
+        viewer_id: "viewer",
+        acting_as_id: nil,
+        target: nil,
+        reset: 0
+      }
+      |> PostComponents.post_actions()
+      |> rendered_to_string()
+    end
+
+    defp remote_html do
+      %{
+        __changed__: nil,
+        id: "remote-actions-n1",
+        target: nil,
+        subject_id: "n1",
+        viewer: %User{id: "viewer"},
+        liked?: false,
+        reposted?: true,
+        bookmarked?: false,
+        standing_ok?: true,
+        reset: 0,
+        likes: nil,
+        shares: nil,
+        like?: true,
+        reply_to: "/posts/p1/reply",
+        repost?: true
+      }
+      |> PostComponents.remote_actions()
+      |> rendered_to_string()
+    end
+
+    # Read out of the parsed document rather than matched as a substring, so a
+    # claim about the chip is a claim about the one element the press paints —
+    # not about two attributes that merely share a bar.
+    defp tinted(html), do: HTMLHelpers.elements(html, "button[data-tints-when-pressed]")
+
+    test "both bars mark the repost, and only the repost" do
+      # One marker per bar: the heart and the bookmark already fill, and a chip
+      # on all four would make the bar louder without telling anybody anything
+      # they could not already see.
+      for html <- [actions_html([]), remote_html()] do
+        assert [button] = tinted(html)
+
+        assert LazyHTML.attribute(button, "phx-value-kind") ++
+                 LazyHTML.attribute(button, "phx-value-act") == ["repost"]
+      end
+    end
+
+    test "the chip is drawn from aria-pressed, which the optimistic press already toggles" do
+      # The press paints itself by flipping `aria-pressed` on the button
+      # (`toggle_js/4`), so a chip keyed on that attribute lands in the same
+      # frame as the colour and is taken back with the node the refusal counter
+      # discards. Keyed on anything else it would need its own JS command — and
+      # a command aimed at a child is the stash trap this bar was rewritten to
+      # avoid.
+      for {engagement, pressed} <- [{[reposted?: false], "false"}, {[reposted?: true], "true"}] do
+        assert [button] = tinted(actions_html(engagement))
+        assert LazyHTML.attribute(button, "aria-pressed") == [pressed]
+      end
     end
   end
 end

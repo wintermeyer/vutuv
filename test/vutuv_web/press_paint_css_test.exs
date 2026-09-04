@@ -68,10 +68,29 @@ defmodule VutuvWeb.PressPaintCssTest do
     for selector <- [
           ~s|[data-filter-bar="track"] [data-filter-tab]|,
           "[data-nav-bar] [data-nav-item]",
-          ~s|[data-nav-bar="tabs"] [data-nav-item]|
+          ~s|[data-nav-bar="tabs"] [data-nav-item]|,
+          # The action bar's pressed chip, the third state paint out here: a
+          # brand-100 block on a slate-900 card is the very thing it is meant to
+          # fix, so the dark step is not optional.
+          ~s|[data-tints-when-pressed][aria-pressed="true"]|
         ] do
       assert dark =~ selector, "#{selector} keeps its light palette in dark mode"
     end
+  end
+
+  # The third unlayered state paint, and the one whose placement is easiest to
+  # "tidy" into components.css — where it would read as if it applied and
+  # quietly lose the chip to a resting pointer, because the action-bar buttons
+  # carry `hover:bg-slate-100` as a utility and the utilities layer beats the
+  # components layer at any specificity. Which control wears it is asserted in
+  # `post_components_test.exs`; this is the half that has to be out here.
+  test "the action bar's pressed chip is unlayered, so no hover utility beats it" do
+    components = File.read!(Path.expand("../../assets/css/components.css", __DIR__))
+
+    refute components =~ "data-tints-when-pressed",
+           "from the components layer the chip loses to hover:bg-slate-100 whatever its specificity"
+
+    assert File.read!(@css) =~ ~s|[data-tints-when-pressed][aria-pressed="true"] {|
   end
 
   test "the nav press survives a patch of the shell it lives in" do
