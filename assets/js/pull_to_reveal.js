@@ -14,13 +14,24 @@
 // app has none, and Safari's reloads the whole page, a heavier answer than
 // the pill's. While the pull is ours the `touchmove` is cancelled, which is
 // what keeps the page from rubber-banding — and Safari from reloading — under
-// the drawn pull. A cancellable listener makes the browser wait for us on
-// every move, so it is added only once a touch qualifies (top of the page, a
-// pill waiting, no sheet open) and removed when the finger lifts; the ordinary
-// scroll of a page with nothing waiting never sees it. The call is made on the
-// FIRST move: a drag that starts upward is left to the browser untouched, and
-// once a browser has begun a scroll it ignores a later cancel, so there is no
-// deciding a few pixels in.
+// the drawn pull.
+//
+// That cancelling listener has to stand BEFORE the finger lands. WebKit works
+// out at `touchstart` whether a touch sequence may hold up the main thread,
+// and a listener handed over inside that handler is not part of the answer
+// (WebKit bug 184250, and 185656 for the moves that stay uncancellable after
+// its fix), so on an iPhone every move of the gesture arrived with
+// `cancelable: false`, the hook gave the touch back on the first one, and the
+// page just rubber-banded: nothing drawn, nothing revealed. Chrome runs the
+// same code correctly, which is what kept it hidden here.
+//
+// A cancellable listener makes the browser wait for us on every move, so it is
+// not left standing either: it follows the pill, the one condition that comes
+// from outside, and a pull with no pill waiting does nothing anyway. The
+// ordinary scroll of a timeline with nothing waiting therefore never sees it.
+// The call is made on the FIRST move: a drag that starts upward is left to the
+// browser untouched, and once a browser has begun a scroll it ignores a later
+// cancel, so there is no deciding a few pixels in.
 //
 // What it draws has to survive a LiveView patch, and the patch that takes the
 // pill away lands exactly during the hold. An inline style on the timeline
@@ -65,14 +76,14 @@ export const PullToReveal = {
       if (this.phase() || event.touches.length !== 1) return
       if (window.scrollY > 0 || !pill() || document.getElementById("band-sheet")) return
       this.startY = event.touches[0].clientY
-      document.addEventListener("touchmove", this.onMove, { passive: false })
     }
 
     this.onMove = (event) => {
+      if (this.startY === null) return
       const dy = event.touches[0].clientY - this.startY
 
       if (!this.phase()) {
-        if (dy <= 0 || window.scrollY > 0 || !event.cancelable) return this.disarm()
+        if (dy <= 0 || window.scrollY > 0 || !event.cancelable) return this.drop()
         this.setPhase("pulling")
         // 1px of pull per ms, scrubbed by hand below.
         this.scrub = this.body.animate([slide(0), slide(MAX_PULL)], {
@@ -89,7 +100,7 @@ export const PullToReveal = {
     this.onEnd = () => {
       if (this.startY === null) return
       const pulling = !!this.phase()
-      this.disarm()
+      this.drop()
       if (!pulling) return
       if (this.pull >= THRESHOLD) this.release()
       else this.settle()
@@ -98,6 +109,26 @@ export const PullToReveal = {
     document.addEventListener("touchstart", this.onStart, { passive: true })
     document.addEventListener("touchend", this.onEnd)
     document.addEventListener("touchcancel", this.onEnd)
+
+    // The pill arrives and leaves by patch, and both are this hook's business:
+    // its arrival is what arms the gesture, and its leaving is the "the reveal
+    // is through" that the hold waits for. One observer answers both, over the
+    // timeline, which is where both copies of the pill are rendered.
+    this.watch = new MutationObserver(() => this.sync())
+    this.watch.observe(this.body, { childList: true, subtree: true })
+    this.sync()
+  },
+
+  // Everything that follows the pill's presence, in one place. Registering the
+  // same listener twice is a no-op and so is removing one that is not there, so
+  // this needs no memory of what it did last time.
+  sync() {
+    const waiting = !!pill()
+
+    if (waiting) document.addEventListener("touchmove", this.onMove, { passive: false })
+    else document.removeEventListener("touchmove", this.onMove)
+
+    if (!waiting && this.phase() === "busy") this.settle()
   },
 
   phase() {
@@ -108,10 +139,11 @@ export const PullToReveal = {
     this.root.setAttribute(MARKER, phase)
   },
 
-  // The finger is gone (or never became a pull); stop making the browser wait.
-  disarm() {
+  // The finger is gone, or the drag was never ours: the touch goes back to the
+  // browser. The listener stays — taking it off mid-gesture would cost the
+  // next one its cancellable first move (see the note at the top).
+  drop() {
     this.startY = null
-    document.removeEventListener("touchmove", this.onMove)
   },
 
   draw(pull) {
@@ -139,29 +171,22 @@ export const PullToReveal = {
     this.setPhase("busy")
     this.ease(HOLD)
     pill()?.click()
-
-    // The patch that removes the pill is the "done" signal, with a cap for a
-    // server that never answers.
-    this.watch = new MutationObserver(() => {
-      if (!pill()) this.settle()
-    })
-    this.watch.observe(this.body, { childList: true, subtree: true })
+    // The patch that takes the pill away is the "done" signal (`sync`), and
+    // this is the cap for a server that never answers.
     this.cap = setTimeout(() => this.settle(), BUSY_CAP_MS)
   },
 
+  clearCap() {
+    clearTimeout(this.cap)
+    this.cap = null
+  },
+
   settle() {
-    this.stopWatching()
+    this.clearCap()
     this.setPhase("settling")
     this.ease(0)
     this.el.style.opacity = "0"
     this.scrub.onfinish = () => this.clear()
-  },
-
-  stopWatching() {
-    this.watch?.disconnect()
-    this.watch = null
-    clearTimeout(this.cap)
-    this.cap = null
   },
 
   clear() {
@@ -174,11 +199,14 @@ export const PullToReveal = {
   },
 
   destroyed() {
-    this.disarm()
+    this.drop()
+    this.clearCap()
+    this.watch?.disconnect()
+    this.watch = null
     document.removeEventListener("touchstart", this.onStart)
+    document.removeEventListener("touchmove", this.onMove)
     document.removeEventListener("touchend", this.onEnd)
     document.removeEventListener("touchcancel", this.onEnd)
-    this.stopWatching()
     this.clear()
   },
 }
