@@ -9,8 +9,26 @@ structured is stored. `VutuvWeb.Markdown` turns it into a profile link only at
 mean different people over time, and four concerns have to agree on *what
 counts as a mention*: rendering, existence validation, rename propagation and
 the notification below. They share one definition in **`Vutuv.Mentions`**,
-which owns the entity grammar (`entity_regex/0`, read back by
-`VutuvWeb.Markdown` so the renderer can never drift from it).
+which owns the entity grammar — the regex never leaves that module, and every
+reader asks it through `scan/1`, `replace/2` or `fediverse_address?/2`, each
+answering with a **named** form (`{:fediverse, user, host}`, `{:bluesky,
+handle}`, `{:local, handle}`, `{:hashtag, tag}`) rather than with a capture
+position (`leading_hashtag/1` is the fourth, for a caller asking of a *token*
+what `scan/1` asks of a body). That indirection was bought the hard way:
+`Regex.scan` truncates trailing unmatched groups, so a hit's meaning is where it
+sits, and adding the Bluesky form moved the local handle from group 3 to 4 and
+the hashtag from 4 to 5 through fifteen clause heads in two modules. The heads
+deciding "not this kind" are catch-alls, so a missed one keeps answering —
+wrongly, and without a crash to show for it.
+
+The rule that follows from it: **a second regex for the same question is the
+bug, not the shortcut.** `Vutuv.RemoteHtml` expanded the bare `@user` a remote
+server renders a mention as through a hand-rolled `[A-Za-z0-9_]` boundary whose
+comment claimed it mirrored this grammar. It did not — the shared one is
+Unicode-aware under `u` — so `café@ada` was rewritten to `café@ada@geno.social`,
+a mangled word the renderer then declined to link, and `@ada.bsky.social` to
+`@ada@geno.social.bsky.social`, a link to a host that does not exist. It asks
+`replace/2` now.
 
 What counts is decided by the **host**, not by the shape (issue #1560).
 `@ada` and `@ada@vutuv.de` name the same member: the second is the address

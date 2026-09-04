@@ -7,8 +7,9 @@ defmodule Vutuv.Mentions do
   (`VutuvWeb.Markdown`). Five concerns therefore have to agree on *what counts
   as a mention*, so they share one definition here:
 
-    * **Rendering** — `VutuvWeb.Markdown` links each local `@handle` and calls
-      `entity_regex/0` so the grammar can never drift from this module.
+    * **Rendering** — `VutuvWeb.Markdown` links each local `@handle` and reads
+      the grammar through `scan/1` and `replace/2`, so it can never drift from
+      this module and never has to know a capture position.
     * **Notification** — being named in a post is news, so `Vutuv.Posts`
       resolves a saved body through `mentioned_users/2` and reconciles the
       `post_mentions` rows behind the feed's `"mention"` kind. That table is
@@ -79,15 +80,15 @@ defmodule Vutuv.Mentions do
   alias Vutuv.Social
   alias Vutuv.Social.Follow
 
-  # The canonical `@`/`#` entity grammar. It lives here (not in the renderer) so
-  # rendering, validation and rewriting share ONE definition; `VutuvWeb.Markdown`
-  # reads it through `entity_regex/0`. The leading `@`/`#` must not sit
-  # mid-token — no email `a@b`, no `@@`, no `/path#frag` — hence the negative
-  # lookbehinds. The fediverse form is tried first, so `@a@b.social` is read as
-  # one whole address rather than the local member `@a` followed by loose text;
-  # the **host** then decides whose it is. Captures: 1 = fediverse
-  # user, 2 = fediverse host, 3 = Bluesky handle, 4 = local handle, 5 = hashtag
-  # (exactly one kind is set per hit).
+  # The canonical `@`/`#` entity grammar, and the only thing in the application
+  # that knows it. Rendering, validation and rewriting share ONE definition, and
+  # they reach it through `scan/1`, `replace/2` and `fediverse_address?/2` —
+  # never through the regex itself, so what a capture position means is
+  # `classify/1`'s business alone. The leading `@`/`#` must not sit mid-token —
+  # no email `a@b`, no `@@`, no `/path#frag` — hence the negative lookbehinds.
+  # The fediverse form is tried first, so `@a@b.social` is read as one whole
+  # address rather than the local member `@a` followed by loose text; the
+  # **host** then decides whose it is. Exactly one kind is set per hit.
   #
   # A **Bluesky** handle is the odd one out: `@hilwiller.bsky.social` writes the
   # whole account as a domain, with no second `@` to end a user part. Read by
@@ -185,8 +186,90 @@ defmodule Vutuv.Mentions do
   # keep, who still deserves to see which of them are real.
   @max_check_handles 50
 
-  @doc "The canonical entity regex, so the renderer shares this module's grammar."
-  def entity_regex, do: @entity
+  @typedoc """
+  One `@`/`#` entity, named by its form rather than by where its capture sat.
+
+  Every part comes back **as the body spelled it**: lowercasing, and the
+  question of which host is ours, belong to the caller.
+  """
+  @type entity ::
+          {:fediverse, String.t(), String.t()}
+          | {:bluesky, String.t()}
+          | {:local, String.t()}
+          | {:hashtag, String.t()}
+
+  @doc """
+  Every entity in `text`, in the order it was written.
+
+  This and `replace/2` are the whole public reading of the grammar, which is
+  why the regex itself no longer leaves this module — `classify/1` says why
+  that matters.
+
+  It reads one flat string and nothing else: skipping code spans
+  (`local_handles/1` and the renderer both do, for the same reason) and asking
+  whose a host is are the caller's decisions, and each has more than one right
+  answer — the renderer walks rendered HTML, this module walks Markdown source.
+  """
+  @spec scan(String.t()) :: [entity]
+  def scan(text) when is_binary(text) do
+    @entity
+    |> Regex.scan(text, capture: :all_but_first)
+    |> Enum.map(&classify/1)
+  end
+
+  @doc """
+  Rewrites every entity in `text` through `fun`, which is given the matched
+  text and its `t:entity/0` and answers with what should stand there.
+
+  The `Regex.replace/4` twin of `scan/1`: its function form is handed one
+  argument per capture group, so the arity — as much a fact about the grammar
+  as the group order — lives here rather than at three call sites.
+  """
+  @spec replace(String.t(), (String.t(), entity -> String.t())) :: String.t()
+  def replace(text, fun) when is_binary(text) and is_function(fun, 2) do
+    Regex.replace(@entity, text, fn whole, user, host, bluesky, handle, hashtag ->
+      fun.(whole, classify([user, host, bluesky, handle, hashtag]))
+    end)
+  end
+
+  @doc """
+  Whether `@user@host` is one whole fediverse address in this grammar.
+
+  For a caller holding the two halves rather than a body — `Vutuv.RemoteHtml`
+  expanding a shortened handle it read out of a remote page, which may only
+  write back an address the renderer will really link. Both charsets are
+  checked by the grammar itself, so a dotted Misskey user name answers false
+  here instead of becoming a plain word plus a broken half-link.
+  """
+  @spec fediverse_address?(String.t(), String.t()) :: boolean
+  def fediverse_address?(user, host) when is_binary(user) and is_binary(host) do
+    address = "@#{user}@#{host}"
+
+    case Regex.run(@entity, address) do
+      [^address | captures] -> match?({:fediverse, _, _}, classify(captures))
+      _ -> false
+    end
+  end
+
+  # The one place a capture position means something, and the reason `scan/1`
+  # and `replace/2` exist: `Regex.scan` truncates trailing unmatched groups, so
+  # a hit's meaning is *where it sits*. While every caller matched those
+  # positions itself, adding the Bluesky form moved the local handle from group
+  # 3 to 4 and the hashtag from 4 to 5 through fifteen clause heads in two
+  # modules — and the heads deciding "not this kind" are catch-alls, so a missed
+  # one goes on answering, wrongly and in silence.
+  #
+  # Ordered like the alternation, and every head takes `| _` because a hit is
+  # only as long as its last participating group. **No catch-all**: every
+  # alternative's capture is mandatory and non-empty, so a hit that reaches the
+  # end of this list is a new form somebody added without a head for it, and
+  # raising says so where answering `:none` would hide it.
+  defp classify([user, host | _]) when user != "" and host != "",
+    do: {:fediverse, user, host}
+
+  defp classify([_, _, bluesky | _]) when bluesky != "", do: {:bluesky, bluesky}
+  defp classify([_, _, _, handle | _]) when handle != "", do: {:local, handle}
+  defp classify([_, _, _, _, hashtag]) when hashtag != "", do: {:hashtag, hashtag}
 
   # A token that **opens** with a whole `#hashtag`, in the same alphabet
   # `@entity` reads. Split out so `VutuvWeb.Markdown.split_trailing_hashtags/1`
@@ -203,12 +286,21 @@ defmodule Vutuv.Mentions do
   @hashtag_prefix ~r"\A#([\p{L}\p{M}\p{Nd}_]+)"u
 
   @doc """
-  Matches a token that begins with one whole hashtag, capturing its name.
+  The hashtag a token **opens** with — `{:ok, name}`, or `:error` when it does
+  not open with one.
 
-  The token twin of `entity_regex/0`, for a caller deciding whether a *line*
-  is a row of hashtags rather than finding them inside prose.
+  The token twin of `scan/1`, for a caller deciding whether a *line* is a row
+  of hashtags rather than finding them inside prose. Like the rest of the
+  grammar it answers with the name, never with the regex, so the alphabet a
+  hashtag spans stays this module's business.
   """
-  def hashtag_prefix_regex, do: @hashtag_prefix
+  @spec leading_hashtag(String.t()) :: {:ok, String.t()} | :error
+  def leading_hashtag(token) when is_binary(token) do
+    case Regex.run(@hashtag_prefix, token, capture: :all_but_first) do
+      [name] -> {:ok, name}
+      nil -> :error
+    end
+  end
 
   @doc "How many distinct local accounts one post may mention."
   def max_post_mentions, do: @max_post_mentions
@@ -810,8 +902,9 @@ defmodule Vutuv.Mentions do
   ## Internals --------------------------------------------------------------
 
   defp scan_handles(chunk) do
-    @entity
-    |> Regex.scan(unescape_handle_chars(chunk), capture: :all_but_first)
+    chunk
+    |> unescape_handle_chars()
+    |> scan()
     |> Enum.flat_map(&handle_of/1)
   end
 
@@ -828,44 +921,40 @@ defmodule Vutuv.Mentions do
       else: chunk
   end
 
-  # `Regex.scan` truncates trailing unmatched groups, so a hit's length says
-  # which kind it is: fediverse `["user", "host"]`, Bluesky `["", "", "handle"]`,
-  # local `["", "", "", "handle"]`, hashtag `["", "", "", "", "hashtag"]`. A
-  # Bluesky handle names nobody here, so it falls through to the catch-all.
-  #
   # An address on our **own** host is the same member written out in full — the
   # spelling every remote server uses to name one of us, and the one the
   # renderer links to the profile — so it is a mention here too (issue #1560).
   # `local_host?/1` folds case, port and the `www.` alias, so every spelling of
   # this installation counts; our tag host is a different host and belongs to
-  # `hashtag_of/1`.
-  defp handle_of([user, host | _]) when user != "" and host != "" do
+  # `hashtag_of/1`. A Bluesky handle and a hashtag name nobody here and fall
+  # through to the catch-all.
+  defp handle_of({:fediverse, user, host}) do
     if Fediverse.local_host?(host), do: [String.downcase(user)], else: []
   end
 
-  defp handle_of([_, _, _bluesky, handle | _]) when handle != "", do: [String.downcase(handle)]
+  defp handle_of({:local, handle}), do: [String.downcase(handle)]
   defp handle_of(_), do: []
 
   defp scan_hashtags(chunk) do
-    @entity
-    |> Regex.scan(unescape_handle_chars(chunk), capture: :all_but_first)
+    chunk
+    |> unescape_handle_chars()
+    |> scan()
     |> Enum.flat_map(&hashtag_of/1)
   end
 
-  # Same truncation rule as `handle_of/1`: only a hashtag hit has a fifth
-  # group, so anything shorter is one of the three `@` forms — and the `@` form on
-  # our **tag** host is a topic of ours (`@php@tags.<our host>`, issue #1330),
-  # which the renderer links to `/tags/:slug` exactly like the `#php` that means
-  # the same thing. So it names a tag here too, and a post writing it is filed
-  # under that tag instead of pointing readers at a page it is not on.
+  # The `@` form on our **tag** host is a topic of ours (`@php@tags.<our host>`,
+  # issue #1330), which the renderer links to `/tags/:slug` exactly like the
+  # `#php` that means the same thing. So it names a tag here too, and a post
+  # writing it is filed under that tag instead of pointing readers at a page it
+  # is not on.
   #
   # Both heads answer with the spelling the body used; `hashtags/1` lowercases
   # for the lookups and `written_hashtags/1` keeps it for the mint.
-  defp hashtag_of([user, host | _]) when user != "" and host != "" do
+  defp hashtag_of({:fediverse, user, host}) do
     if Fediverse.tag_host?(host), do: [user], else: []
   end
 
-  defp hashtag_of([_, _, _, _, hashtag]) when hashtag != "", do: [hashtag]
+  defp hashtag_of({:hashtag, hashtag}), do: [hashtag]
   defp hashtag_of(_), do: []
 
   # Only the fediverse form on our own host has anything to shorten; a bare
@@ -892,20 +981,20 @@ defmodule Vutuv.Mentions do
   end
 
   defp shorten_addresses_in_text(text) do
-    Regex.replace(@entity, text, fn
-      whole, user, host, "", "", "" ->
-        if user != "" and Fediverse.local_host?(host), do: "@" <> user, else: whole
+    replace(text, fn
+      whole, {:fediverse, user, host} ->
+        if Fediverse.local_host?(host), do: "@" <> user, else: whole
 
-      whole, _user, _host, _bluesky, _handle, _hashtag ->
+      whole, _entity ->
         whole
     end)
   end
 
   defp rewrite_chunk(chunk, old_n, new_n, acc) do
     hits =
-      @entity
-      |> Regex.scan(chunk, capture: :all_but_first)
-      |> Enum.count(&local_match?(&1, old_n))
+      chunk
+      |> scan()
+      |> Enum.count(&names?(&1, old_n))
 
     if hits == 0 do
       {chunk, acc}
@@ -914,32 +1003,25 @@ defmodule Vutuv.Mentions do
     end
   end
 
+  # Which entities name the member being renamed is `handle_of/1`'s answer, the
+  # same one the mention scan reads — counting the hits with one rule and
+  # rewriting them with another is how a reported count and the text it claims
+  # to describe drift apart.
+  #
   # The host of an address on our own host is kept verbatim rather than
   # re-derived from the endpoint: the author wrote `www.` (or a shouted case)
   # for a reason, and only the handle is what the rename changed.
   defp replace_old_mentions(chunk, old_n, new_n) do
-    Regex.replace(@entity, chunk, fn
-      whole, "", "", "", handle, "" ->
-        if String.downcase(handle) == old_n, do: "@" <> new_n, else: whole
-
-      whole, user, host, "", "", "" ->
-        if local_handle_match?(user, host, old_n), do: "@#{new_n}@#{host}", else: whole
-
-      whole, _user, _host, _bluesky, _handle, _hashtag ->
-        whole
+    replace(chunk, fn whole, entity ->
+      case {names?(entity, old_n), entity} do
+        {true, {:fediverse, _user, host}} -> "@#{new_n}@#{host}"
+        {true, _local} -> "@" <> new_n
+        {false, _entity} -> whole
+      end
     end)
   end
 
-  defp local_match?([user, host | _], old_n) when user != "" and host != "",
-    do: local_handle_match?(user, host, old_n)
-
-  defp local_match?([_, _, _bluesky, handle | _], old_n) when handle != "",
-    do: String.downcase(handle) == old_n
-
-  defp local_match?(_, _), do: false
-
-  defp local_handle_match?(user, host, old_n),
-    do: String.downcase(user) == old_n and Fediverse.local_host?(host)
+  defp names?(entity, old_n), do: handle_of(entity) == [old_n]
 
   # Splits `text` into `{:text, _}` / `{:code, _}` chunks that rejoin exactly.
   defp chunks(text) do
