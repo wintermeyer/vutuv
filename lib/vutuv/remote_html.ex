@@ -54,12 +54,6 @@ defmodule Vutuv.RemoteHtml do
   alias Vutuv.Mentions
   alias Vutuv.SocialFeed.Post
 
-  # The bare `@user` short form a remote server renders a mention as. The
-  # boundaries mirror the shared entity grammar (`Vutuv.Mentions`): not
-  # mid-token (no email `a@b`, no URL `/@user`), and not the first half of an
-  # already-full `@user@host`.
-  @short_mention ~r{(?<![A-Za-z0-9_@/])@([A-Za-z0-9_]+)(?![A-Za-z0-9_@])}
-
   # A hostile server could park thousands of Mention tags on one delivery;
   # nothing real mentions more than a handful.
   @max_mention_tags 50
@@ -414,14 +408,23 @@ defmodule Vutuv.RemoteHtml do
     |> String.trim_trailing("/")
   end
 
+  # Only the **bare** `@user` form is a short mention to expand. Asking the
+  # shared grammar (`Mentions.replace/2`) rather than a local regex is what
+  # makes that true: a hand-rolled `[A-Za-z0-9_]` boundary called it one inside
+  # `café@ada` (the shared grammar's `\w` is Unicode-aware under `u`, so a
+  # combining mark or a CJK character is part of the word before the `@`) and in
+  # front of `@ada.bsky.social`, where the expansion wrote
+  # `@ada@geno.social.bsky.social` — a mangled word in the first case, a link to
+  # a host that does not exist in the second.
   defp expand_mentions(text, tags) do
     map = mention_map(tags)
 
     if map_size(map) == 0 or not String.contains?(text, "@") do
       text
     else
-      Regex.replace(@short_mention, text, fn whole, user ->
-        Map.get(map, String.downcase(user), whole)
+      Mentions.replace(text, fn
+        whole, {:local, user} -> Map.get(map, String.downcase(user), whole)
+        whole, _entity -> whole
       end)
     end
   end
@@ -449,7 +452,12 @@ defmodule Vutuv.RemoteHtml do
   defp mention_handle(%{"type" => "Mention", "name" => name, "href" => href})
        when is_binary(name) and is_binary(href) do
     with {user, host} <- split_mention(name, href),
-         true <- linkable?(user, host) do
+         # Only an expansion the renderer will actually link is worth writing
+         # into the text: the full handle must be one whole fediverse address in
+         # the shared grammar, which also validates both charsets — a dotted
+         # Misskey user name, say, would come out a plain word plus a broken
+         # half-link.
+         true <- Mentions.fediverse_address?(user, host) do
       [{user, host}]
     else
       _ -> []
@@ -484,19 +492,6 @@ defmodule Vutuv.RemoteHtml do
 
       _ ->
         nil
-    end
-  end
-
-  # Only an expansion the renderer will actually link is worth writing into the
-  # text: the full handle must match the shared entity grammar as one whole
-  # fediverse handle (which also validates both charsets — a dotted Misskey
-  # user name, say, would come out a plain word plus a broken half-link).
-  defp linkable?(user, host) do
-    handle = "@#{user}@#{host}"
-
-    case Regex.run(Mentions.entity_regex(), handle) do
-      [^handle, u, h | _] -> u != "" and h != ""
-      _ -> false
     end
   end
 

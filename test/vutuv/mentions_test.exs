@@ -3,6 +3,64 @@ defmodule Vutuv.MentionsTest do
 
   alias Vutuv.Mentions
 
+  # `scan/1` and `replace/2` are how every reader of the grammar asks what it
+  # found (see `classify/1` for why they exist). These four forms are the
+  # contract: nothing outside `Vutuv.Mentions` may know a capture position.
+  describe "scan/1" do
+    test "names what it found instead of where the capture sat" do
+      assert Mentions.scan("@ada@geno.social, @bob.bsky.social, @carl, #dora") == [
+               {:fediverse, "ada", "geno.social"},
+               {:bluesky, "bob.bsky.social"},
+               {:local, "carl"},
+               {:hashtag, "dora"}
+             ]
+    end
+
+    test "keeps the spelling the body used" do
+      assert Mentions.scan("@Ada@Geno.Social und #Berlin") == [
+               {:fediverse, "Ada", "Geno.Social"},
+               {:hashtag, "Berlin"}
+             ]
+    end
+
+    # Unlike `local_handles/1` this is the raw grammar over one string: which
+    # code spans to skip, and which host is ours, stay the caller's questions.
+    test "does not skip code spans by itself" do
+      assert Mentions.scan("type `@example`") == [{:local, "example"}]
+    end
+  end
+
+  describe "replace/2" do
+    test "hands each hit's text and form to the caller" do
+      rewritten =
+        Mentions.replace("hi @ada and @bob.bsky.social", fn whole, entity ->
+          case entity do
+            {:bluesky, handle} -> "[bsky:#{handle}]"
+            {:local, _handle} -> String.upcase(whole)
+          end
+        end)
+
+      assert rewritten == "hi @ADA and [bsky:bob.bsky.social]"
+    end
+  end
+
+  describe "fediverse_address?/2" do
+    test "answers for the two halves of an address the renderer will link" do
+      assert Mentions.fediverse_address?("ada", "geno.social")
+      assert Mentions.fediverse_address?("a_b", "x.de")
+      # our own host in any spelling is still one whole address
+      assert Mentions.fediverse_address?("ada", "WWW.Vutuv.DE")
+    end
+
+    test "refuses what the grammar would not read as one whole address" do
+      # a dotted user part — a Misskey name — would come out a plain word plus
+      # a broken half-link, which is the case this guard exists for
+      refute Mentions.fediverse_address?("a.b", "geno.social")
+      refute Mentions.fediverse_address?("ada", "vutuv.de:4000")
+      refute Mentions.fediverse_address?("ada", "localhost")
+    end
+  end
+
   describe "local_handles/1" do
     test "collects local @handles, lowercased and de-duplicated in order" do
       assert Mentions.local_handles("hi @Alice and @bob and @alice") == ["alice", "bob"]

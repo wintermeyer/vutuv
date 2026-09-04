@@ -77,19 +77,6 @@ defmodule VutuvWeb.Markdown do
   # into a `post-inline-image--*` modifier class — the served src stays clean.
   @image_alignments ~w(left right center)
 
-  # A fediverse handle `@user@host.tld`, a Bluesky handle `@name.bsky.social`, a
-  # local `@handle` mention, or a `#hashtag`. The grammar itself lives in
-  # `Vutuv.Mentions` (the single source shared by rendering, mention-existence
-  # validation and the rename rewrite), so it can never drift from what those
-  # paths detect. The leading `@`/`#` must not sit mid-token (no email `a@b`, no
-  # `/path#frag`); the fediverse form is tried **first**, so `@a@b.social` is
-  # read as one whole address rather than the member `@a` plus loose text, and
-  # the **host** then decides where it points; handles/tags match permissively
-  # and are validated against the DB by `linkify_entities/1`. Captures:
-  # 1 = fediverse user, 2 = fediverse host, 3 = Bluesky handle, 4 = local
-  # handle, 5 = hashtag (exactly one kind is set per hit).
-  @entity Mentions.entity_regex()
-
   # Inside these elements an entity is left as plain text (a handle/hashtag in a
   # code span/block is sample text, and we never nest a link inside a link).
   @entity_skip_tags ~w(a code pre)
@@ -434,7 +421,7 @@ defmodule VutuvWeb.Markdown do
   moving that into a chip row would fold a whole URL into a pill. The line
   stays in the body, where it read the way its author wrote it all along.
 
-  The grammar is `Vutuv.Mentions.hashtag_prefix_regex/0`, so a line splits on
+  The grammar is `Vutuv.Mentions.leading_hashtag/1`, so a line splits on
   exactly what the body's own `#hashtag` linking reads — `#München` is an
   ordinary German hashtag and a line holding one must split like any other.
   (It used to carry its own wider class, because the shared grammar was
@@ -476,12 +463,12 @@ defmodule VutuvWeb.Markdown do
     end
   end
 
-  # `Vutuv.Mentions` owns what a hashtag is; this asks it of a token that has to
-  # **begin** with one, rather than of a token that is nothing else. A tag row
-  # is typed by hand and glues things to its tags — tagesschau closes on
-  # `#FlughafenLeipzig/Halle` — and demanding the whole token be one hashtag
-  # left the entire line in the body as a run of blue words, chips and all.
-  @hashtag_prefix Mentions.hashtag_prefix_regex()
+  # `Vutuv.Mentions` owns what a hashtag is; `leading_hashtag/1` asks it of a
+  # token that has to **begin** with one, rather than of a token that is nothing
+  # else. A tag row is typed by hand and glues things to its tags — tagesschau
+  # closes on `#FlughafenLeipzig/Halle` — and demanding the whole token be one
+  # hashtag left the entire line in the body as a run of blue words, chips and
+  # all.
 
   # Where one tag ends and the next begins inside a single token. Authors run
   # them together (`#Nepal#Rockfall#FlashFlood`, `#oksh#mekofestival#…`), and
@@ -517,7 +504,7 @@ defmodule VutuvWeb.Markdown do
   # lines where their author put them.
   defp tags_in(token) do
     cond do
-      not Regex.match?(@hashtag_prefix, token) -> []
+      Mentions.leading_hashtag(token) == :error -> []
       String.contains?(token, "://") or String.contains?(token, "@") -> []
       true -> @glued_tags |> Regex.split(token, trim: true) |> Enum.flat_map(&tag_of/1)
     end
@@ -527,9 +514,9 @@ defmodule VutuvWeb.Markdown do
   # it and never deletes part of it; `name` is the tag that text names, which is
   # what the chip links and what the post was filed under.
   defp tag_of(segment) do
-    case Regex.run(@hashtag_prefix, segment, capture: :all_but_first) do
-      [name] -> [%{name: name, text: String.trim_leading(segment, "#")}]
-      nil -> []
+    case Mentions.leading_hashtag(segment) do
+      {:ok, name} -> [%{name: name, text: String.trim_leading(segment, "#")}]
+      :error -> []
     end
   end
 
@@ -1127,8 +1114,13 @@ defmodule VutuvWeb.Markdown do
   # Turns every `@handle` of an existing member into a same-tab link to their
   # profile (name in a `title` hover tooltip), every fully-qualified
   # `@user@host` fediverse handle into a **new-tab** link to that remote
-  # account, and every `#hashtag` of a non-empty tag into a link to its
-  # `/tags/:slug` page. Runs on the already-rendered, sanitized HTML (after
+  # account, every `@name.bsky.social` into one to that Bluesky account, and
+  # every `#hashtag` of a non-empty tag into a link to its `/tags/:slug` page.
+  # Which of the four a hit is comes from `Mentions.scan/1` and
+  # `Mentions.replace/2` — named, never a capture position — so what this
+  # renderer links cannot drift from what the mention validation and the rename
+  # rewrite detect; handles and tags match permissively there and are validated
+  # against the DB here. Runs on the already-rendered, sanitized HTML (after
   # `open_links_in_new_tab/1`, so the internal member/tag links stay same-tab
   # while the fediverse link sets its own `target="_blank"`), and only on text
   # that is **not** inside a `code`/`pre`/`a` element — an entity typed in code
@@ -1184,21 +1176,16 @@ defmodule VutuvWeb.Markdown do
   defp entity_candidates(tokens) do
     {mentions, local_mentions, hashtags, external?} =
       reduce_linkable_text(tokens, {[], [], [], false}, fn text, acc ->
-        @entity
-        |> Regex.scan(text, capture: :all_but_first)
-        |> Enum.reduce(acc, &collect_candidate/2)
+        text |> Mentions.scan() |> Enum.reduce(acc, &collect_candidate/2)
       end)
 
     {Enum.uniq(mentions), Enum.uniq(local_mentions), Enum.uniq(hashtags), external?}
   end
 
-  # `Regex.scan` truncates trailing unmatched groups, so each hit arrives at a
-  # different length: a fediverse handle as `["user", "host"]`, a Bluesky handle
-  # as `["", "", "handle"]`, a mention as `["", "", "", "handle"]`, a hashtag as
-  # `["", "", "", "", "hashtag"]`. Dispatch on which group is set. An address on
-  # somebody else's host needs no DB lookup, and neither does a Bluesky handle,
-  # so both only raise the `external?` flag — that keeps the token walk from
-  # being skipped for a body whose only entities point somewhere else.
+  # An address on somebody else's host needs no DB lookup, and neither does a
+  # Bluesky handle, so both only raise the `external?` flag — that keeps the
+  # token walk from being skipped for a body whose only entities point
+  # somewhere else.
   #
   # Two of our own hosts wear that same shape and neither leaves the site. Our
   # **tag host** (issue #1330): `@php@tags.<host>` is a topic of this
@@ -1208,8 +1195,7 @@ defmodule VutuvWeb.Markdown do
   # page of ours, so its user part is a handle and gets looked up like a bare
   # `@ada` — kept in its own list because it resolves even in `:hashtags_only`
   # mode, where a bare handle deliberately does not.
-  defp collect_candidate([user, host | _], {mentions, local, hashtags, _external?})
-       when user != "" and host != "" do
+  defp collect_candidate({:fediverse, user, host}, {mentions, local, hashtags, _external?}) do
     cond do
       Fediverse.tag_host?(host) -> {mentions, local, [String.downcase(user) | hashtags], true}
       Fediverse.local_host?(host) -> {mentions, [String.downcase(user) | local], hashtags, true}
@@ -1217,15 +1203,13 @@ defmodule VutuvWeb.Markdown do
     end
   end
 
-  defp collect_candidate([_, _, bluesky | _], {mentions, local, hashtags, _external?})
-       when bluesky != "",
-       do: {mentions, local, hashtags, true}
+  defp collect_candidate({:bluesky, _handle}, {mentions, local, hashtags, _external?}),
+    do: {mentions, local, hashtags, true}
 
-  defp collect_candidate([_, _, _, handle | _], {mentions, local, hashtags, external?})
-       when handle != "",
-       do: {[String.downcase(handle) | mentions], local, hashtags, external?}
+  defp collect_candidate({:local, handle}, {mentions, local, hashtags, external?}),
+    do: {[String.downcase(handle) | mentions], local, hashtags, external?}
 
-  defp collect_candidate([_, _, _, _, hashtag], {mentions, local, hashtags, external?}),
+  defp collect_candidate({:hashtag, hashtag}, {mentions, local, hashtags, external?}),
     do: {mentions, local, [String.downcase(hashtag) | hashtags], external?}
 
   # Walks the token stream, applying `fun` to every text token outside a
@@ -1271,17 +1255,17 @@ defmodule VutuvWeb.Markdown do
   defp skip_tag?(name), do: String.downcase(name) in @entity_skip_tags
 
   defp link_entities_in_text(text, bare_users, address_users, tags, form) do
-    Regex.replace(@entity, text, fn
-      whole, user, host, "", "", "" ->
+    Mentions.replace(text, fn
+      whole, {:fediverse, user, host} ->
         fediverse_link(whole, user, host, address_users, tags, form)
 
-      whole, "", "", bluesky, "", "" ->
-        bluesky_link(whole, bluesky)
+      whole, {:bluesky, handle} ->
+        bluesky_link(whole, handle)
 
-      whole, "", "", "", handle, "" ->
+      whole, {:local, handle} ->
         mention_link(whole, handle, bare_users, form)
 
-      whole, "", "", "", "", hashtag ->
+      whole, {:hashtag, hashtag} ->
         hashtag_link(whole, hashtag, tags)
     end)
   end

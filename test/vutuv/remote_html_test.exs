@@ -196,6 +196,24 @@ defmodule Vutuv.RemoteHtmlTest do
                "Mail an post@herrkaschke.de oder social.cologne/@herrkaschke"
     end
 
+    # Both of these were rewritten by a hand-rolled `[A-Za-z0-9_]` boundary that
+    # claimed to mirror the shared grammar and did not. They are the reason
+    # expansion asks `Vutuv.Mentions` now: an ASCII word-character class reads
+    # `café@ada` as a mention of `@ada` where the shared grammar (Unicode-aware
+    # under `u`) reads one word, and it stops at the dot of a Bluesky handle.
+    test "a word ending in a non-ASCII letter is not a mention boundary" do
+      tag = %{"type" => "Mention", "href" => "https://a.example/users/ada", "name" => "@ada"}
+
+      assert RemoteHtml.to_text("<p>café@ada</p>", nil, [tag]) == "café@ada"
+    end
+
+    test "a Bluesky handle is not a short mention to expand" do
+      tag = %{"type" => "Mention", "href" => "https://a.example/users/ada", "name" => "@ada"}
+
+      assert RemoteHtml.to_text("<p>@ada.bsky.social schreibt</p>", nil, [tag]) ==
+               "@ada.bsky.social schreibt"
+    end
+
     test "a shorter mention never chews up a longer handle beside it" do
       short = %{"type" => "Mention", "href" => "https://a.example/users/herr", "name" => "@herr"}
 
