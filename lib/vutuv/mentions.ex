@@ -86,8 +86,33 @@ defmodule Vutuv.Mentions do
   # lookbehinds. The fediverse form is tried first, so `@a@b.social` is read as
   # one whole address rather than the local member `@a` followed by loose text;
   # the **host** then decides whose it is. Captures: 1 = fediverse
-  # user, 2 = fediverse host, 3 = local handle, 4 = hashtag (exactly one kind is
-  # set per hit).
+  # user, 2 = fediverse host, 3 = Bluesky handle, 4 = local handle, 5 = hashtag
+  # (exactly one kind is set per hit).
+  #
+  # A **Bluesky** handle is the odd one out: `@hilwiller.bsky.social` writes the
+  # whole account as a domain, with no second `@` to end a user part. Read by
+  # the bare form it comes out as the member `@hilwiller` plus dead text — so a
+  # boosted post naming a Bluesky account linked whichever vutuv member holds
+  # that handle, and a member's own post naming one was refused with "the handle
+  # @hilwiller does not exist". It therefore has to be tried before the bare
+  # form, and only `*.bsky.social` counts: a handle on a custom domain
+  # (`@stefan.example.de`) is the same shape as an ordinary word before a
+  # sentence's abbreviation and cannot be told apart from one — measured over
+  # the 7,443 stored bodies of a production copy, a rule that took any dotted
+  # domain found one real handle and three plain words (`@rki.de`,
+  # `@dc.uba.ar`, `@stadt-bremerhaven.de`), each of which it would have sent to
+  # bsky.app.
+  #
+  # Three small parts carry their weight. The `(?i:…)` reads a shouted host,
+  # because the fallback is not "no link" but the bare form's link to whichever
+  # member holds that first label — a hostname is case-insensitive and getting
+  # it wrong points at a person. The trailing lookahead keeps
+  # `@a.bsky.socialize` out, and its `\.?` keeps `@a.bsky.social.de` out, while
+  # still leaving a full stop after the handle in the sentence where it belongs.
+  # And the label is bounded at a DNS label's 63 octets rather than left open:
+  # unbounded it walks back through the whole `@`-token before rejecting one,
+  # which cost 2.97× the reductions of the old grammar on a body-length run
+  # (5.28× on a hyphenated one) and is back at parity bounded.
   #
   # A preceding `/` blocks the **bare** and `#` forms only. `/@user` is the
   # Mastodon-web path to a profile, so a lone handle glued to a slash is far
@@ -110,7 +135,7 @@ defmodule Vutuv.Mentions do
   # also turns the `\w` in the two lookbehinds Unicode-aware, which is the
   # intended reading of "not mid-token": `Grüße@ada` is as much one word as
   # `Gruesse@ada`, and neither is a mention.
-  @entity ~r"(?<![\w@])@([A-Za-z0-9_]+)@([A-Za-z0-9](?:[A-Za-z0-9-]*[A-Za-z0-9])?(?:\.[A-Za-z0-9](?:[A-Za-z0-9-]*[A-Za-z0-9])?)+)|(?<![\w@/])@([A-Za-z0-9_]+)|(?<![\w#/&])#([\p{L}\p{M}\p{Nd}_]+)"u
+  @entity ~r"(?<![\w@])@([A-Za-z0-9_]+)@([A-Za-z0-9](?:[A-Za-z0-9-]*[A-Za-z0-9])?(?:\.[A-Za-z0-9](?:[A-Za-z0-9-]*[A-Za-z0-9])?)+)|(?<![\w@])@([A-Za-z0-9](?:[A-Za-z0-9-]{0,61}[A-Za-z0-9])?(?i:\.bsky\.social))(?!\.?[\w-])|(?<![\w@/])@([A-Za-z0-9_]+)|(?<![\w#/&])#([\p{L}\p{M}\p{Nd}_]+)"u
 
   # Code spans/blocks are skipped everywhere: a handle inside them is sample
   # text, never a link (the same call the renderer makes for `<code>`/`<pre>`).
@@ -804,8 +829,9 @@ defmodule Vutuv.Mentions do
   end
 
   # `Regex.scan` truncates trailing unmatched groups, so a hit's length says
-  # which kind it is: fediverse `["user", "host"]`, local `["", "", "handle"]`,
-  # hashtag `["", "", "", "hashtag"]`.
+  # which kind it is: fediverse `["user", "host"]`, Bluesky `["", "", "handle"]`,
+  # local `["", "", "", "handle"]`, hashtag `["", "", "", "", "hashtag"]`. A
+  # Bluesky handle names nobody here, so it falls through to the catch-all.
   #
   # An address on our **own** host is the same member written out in full — the
   # spelling every remote server uses to name one of us, and the one the
@@ -817,7 +843,7 @@ defmodule Vutuv.Mentions do
     if Fediverse.local_host?(host), do: [String.downcase(user)], else: []
   end
 
-  defp handle_of([_, _, handle | _]) when handle != "", do: [String.downcase(handle)]
+  defp handle_of([_, _, _bluesky, handle | _]) when handle != "", do: [String.downcase(handle)]
   defp handle_of(_), do: []
 
   defp scan_hashtags(chunk) do
@@ -826,8 +852,8 @@ defmodule Vutuv.Mentions do
     |> Enum.flat_map(&hashtag_of/1)
   end
 
-  # Same truncation rule as `handle_of/1`: only a hashtag hit has a fourth
-  # group, so anything shorter is one of the two `@` forms — and the `@` form on
+  # Same truncation rule as `handle_of/1`: only a hashtag hit has a fifth
+  # group, so anything shorter is one of the three `@` forms — and the `@` form on
   # our **tag** host is a topic of ours (`@php@tags.<our host>`, issue #1330),
   # which the renderer links to `/tags/:slug` exactly like the `#php` that means
   # the same thing. So it names a tag here too, and a post writing it is filed
@@ -839,7 +865,7 @@ defmodule Vutuv.Mentions do
     if Fediverse.tag_host?(host), do: [user], else: []
   end
 
-  defp hashtag_of([_, _, _, hashtag]) when hashtag != "", do: [hashtag]
+  defp hashtag_of([_, _, _, _, hashtag]) when hashtag != "", do: [hashtag]
   defp hashtag_of(_), do: []
 
   # Only the fediverse form on our own host has anything to shorten; a bare
@@ -867,10 +893,10 @@ defmodule Vutuv.Mentions do
 
   defp shorten_addresses_in_text(text) do
     Regex.replace(@entity, text, fn
-      whole, user, host, "", "" ->
+      whole, user, host, "", "", "" ->
         if user != "" and Fediverse.local_host?(host), do: "@" <> user, else: whole
 
-      whole, _user, _host, _handle, _hashtag ->
+      whole, _user, _host, _bluesky, _handle, _hashtag ->
         whole
     end)
   end
@@ -893,13 +919,13 @@ defmodule Vutuv.Mentions do
   # for a reason, and only the handle is what the rename changed.
   defp replace_old_mentions(chunk, old_n, new_n) do
     Regex.replace(@entity, chunk, fn
-      whole, "", "", handle, "" ->
+      whole, "", "", "", handle, "" ->
         if String.downcase(handle) == old_n, do: "@" <> new_n, else: whole
 
-      whole, user, host, "", "" ->
+      whole, user, host, "", "", "" ->
         if local_handle_match?(user, host, old_n), do: "@#{new_n}@#{host}", else: whole
 
-      whole, _user, _host, _handle, _hashtag ->
+      whole, _user, _host, _bluesky, _handle, _hashtag ->
         whole
     end)
   end
@@ -907,7 +933,7 @@ defmodule Vutuv.Mentions do
   defp local_match?([user, host | _], old_n) when user != "" and host != "",
     do: local_handle_match?(user, host, old_n)
 
-  defp local_match?([_, _, handle | _], old_n) when handle != "",
+  defp local_match?([_, _, _bluesky, handle | _], old_n) when handle != "",
     do: String.downcase(handle) == old_n
 
   defp local_match?(_, _), do: false

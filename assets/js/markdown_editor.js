@@ -440,9 +440,20 @@ const AT_BOUNDARY = String.raw`(?<![\p{L}\p{N}_@/])@`
 // address on OUR host (`@ada@vutuv.de`) is a real mention and the renderer links
 // it, but it goes unchipped here too — the client does not know which host is
 // ours, and a missing chip is the harmless direction.
+//
+// The third alternative is a **Bluesky** handle, `@hilwiller.bsky.social`, which
+// the server reads as one whole address that names nobody here. Without it the
+// run chips the `@hilwiller` in front of the dot, spends one of the five
+// mentions a post may carry and asks the server whether that member exists —
+// about a handle the renderer will not link. Its own trailing guard mirrors the
+// server's: `@a.bsky.socialize` is not a Bluesky handle, so there the chip is
+// right. The `i` flag is what reads a capitalised host (a hostname is
+// case-insensitive); it changes nothing else, every other class here already
+// spanning both cases.
 const MENTION_RUN = new RegExp(
-  `${AT_BOUNDARY}([A-Za-z0-9_]+)(?![A-Za-z0-9_]|@[A-Za-z0-9-]+\\.)`,
-  "gu"
+  `${AT_BOUNDARY}([A-Za-z0-9_]+)` +
+    String.raw`(?![A-Za-z0-9_]|@[A-Za-z0-9-]+\.|\.bsky\.social(?!\.?[\p{L}\p{N}_-]))`,
+  "giu"
 )
 
 // The half-typed mention the caret sits at the end of.

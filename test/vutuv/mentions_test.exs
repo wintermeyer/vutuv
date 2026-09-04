@@ -20,6 +20,14 @@ defmodule Vutuv.MentionsTest do
       assert Mentions.local_handles("say hi to @bob@geno.social") == []
     end
 
+    # A Bluesky handle is a whole domain behind the `@`, with no second `@` to
+    # end a user part — so the bare-handle form used to swallow its first label
+    # and report a mention of the vutuv member `@bob`, which is why a post
+    # naming a Bluesky account was refused as "the handle @bob does not exist".
+    test "a Bluesky handle is not a local mention" do
+      assert Mentions.local_handles("say hi to @bob.bsky.social") == []
+    end
+
     test "a #hashtag is not a mention" do
       assert Mentions.local_handles("#elixir is nice") == []
     end
@@ -87,6 +95,10 @@ defmodule Vutuv.MentionsTest do
     test "never touches emails, hashtags, other servers' addresses or code spans" do
       text = "mail bob@old.de, tag #old, boost @old@host.io, code `@old`"
       assert Mentions.rewrite(text, "old", "new") == {text, 0}
+    end
+
+    test "leaves a Bluesky handle that opens with the old name alone" do
+      assert Mentions.rewrite("@old.bsky.social", "old", "new") == {"@old.bsky.social", 0}
     end
 
     test "round-trips a code-only body byte-for-byte" do

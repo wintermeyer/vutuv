@@ -65,11 +65,32 @@ defmodule Vutuv.Bluesky do
       {:error, :transient}
   end
 
+  @doc """
+  Where a handle's account is read on the web: `https://bsky.app/profile/<handle>`.
+
+  The one place that address is written, and it fetches nothing — three
+  surfaces reach it. The profile card's link to a stored account
+  (`Vutuv.Profiles.SocialMediaAccount.url/1`, whose provider table therefore
+  lists no base for Bluesky), the `@name.bsky.social` a post or a message
+  mentions (`VutuvWeb.Markdown`, matching the same handle shape as part of the
+  entity grammar), and the post links this module builds below.
+
+  A leading `@` and a shouted spelling are taken off, because a stored account
+  is the one caller that can carry either: `normalize_handle/1` cleans what
+  goes *out to the network*, and a legacy row reaches the profile card without
+  passing it. A hostname is case-insensitive; bsky.app answers only the
+  lowercase form.
+  """
+  def profile_url(handle) when is_binary(handle) do
+    normalized = handle |> String.trim() |> String.trim_leading("@") |> String.downcase()
+    "https://bsky.app/profile/" <> normalized
+  end
+
   defp build_feed(handle, meta) do
     feed = %Feed{
       name: meta.name,
       handle: handle,
-      url: "https://bsky.app/profile/#{handle}",
+      url: profile_url(handle),
       avatar: nil,
       followers: meta.followers,
       posts: []
@@ -197,7 +218,7 @@ defmodule Vutuv.Bluesky do
          {:ok, created_at, _offset} <- DateTime.from_iso8601(created) do
       %Post{
         id: rkey,
-        url: "https://bsky.app/profile/#{handle}/post/#{rkey}",
+        url: profile_url(handle) <> "/post/" <> rkey,
         text: text,
         created_at: created_at
       }
