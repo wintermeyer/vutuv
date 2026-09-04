@@ -42,8 +42,11 @@ defmodule VutuvWeb.InvestorMinimumTest do
     html = conn |> get(~p"/system/investors") |> html_response(200)
 
     refute html =~ "Minimum investment"
-    refute html =~ "an investment starts at"
-    refute html =~ "€"
+    # Anchored on the sentence, not on the word "Euro": the speed claim beside
+    # it names "37 European and American brands", and that contains it.
+    refute html =~ "An investment conversation makes sense"
+    refute html =~ "300.000"
+    refute html =~ "300,000"
     # The rest of the page is untouched: an installation not raising anything
     # still wants to say what it is.
     assert html =~ "A professional network that works without an account"
@@ -67,18 +70,18 @@ defmodule VutuvWeb.InvestorMinimumTest do
 
     html = conn |> get(~p"/system/investors") |> html_response(200)
 
-    assert html =~ "250,000 $"
+    assert html =~ "250,000 US dollars"
   end
 
-  test "a currency with no symbol here keeps its ISO code", %{conn: conn} do
-    # It reads correctly beside the amount ("250.000 CHF"), which is why an
-    # unknown code is a fallback rather than a failure.
+  test "a currency with no name here keeps its ISO code", %{conn: conn} do
+    # A currency with no name here falls back to `Vutuv.Salary`, which answers
+    # with the ISO code — correct in the same place ("250,000 SEK").
     put_config(:investor_minimum, 250_000)
-    put_config(:investor_currency, "CHF")
+    put_config(:investor_currency, "SEK")
 
     html = conn |> get(~p"/system/investors") |> html_response(200)
 
-    assert html =~ "250,000 CHF"
+    assert html =~ "250,000 SEK"
   end
 
   test "an empty currency falls back instead of leaving a trailing space", %{conn: conn} do
@@ -89,6 +92,6 @@ defmodule VutuvWeb.InvestorMinimumTest do
 
     html = conn |> get(~p"/system/investors") |> html_response(200)
 
-    assert html =~ "250,000 €"
+    assert html =~ "250,000 Euro"
   end
 end

@@ -372,21 +372,23 @@ defmodule VutuvWeb.AgentDocs.Markdown do
       frontmatter(doc),
       "# #{doc.headline}",
       doc.description,
-      doc.minimum && "## #{gettext("Minimum investment")}",
-      doc.minimum_reason,
-      "## #{gettext("Why this is worth building")}",
-      Enum.map_join(doc.case_points, "\n\n", fn point ->
-        "### #{point.title}\n\n#{point.body}"
-      end),
       "## #{gettext("Where we are")}",
-      doc.counter_explainer,
-      doc.transparency_note,
       Enum.map_join(InvestorsDoc.figure_rows(doc.figures), "\n", fn {label, value} ->
         "- #{label}: #{value}"
       end),
       doc.growth_sentence,
+      doc.counter_explainer,
+      doc.minimum && "## #{gettext("Minimum investment")}",
+      doc.minimum_reason,
+      "## #{gettext("Why this is worth building")}",
+      Enum.map_join(doc.case_points, "\n\n", fn point ->
+        ["### #{point.title}", point.body, case_source(point.source)]
+        |> Enum.filter(&is_binary/1)
+        |> Enum.join("\n\n")
+      end),
       doc.contact_handle && "## #{gettext("Write to me")}",
       doc.contact_handle && doc.contact_note,
+      doc.contact_profile_url && gettext("My profile: %{url}", url: doc.contact_profile_url),
       doc.contact_url && gettext("Write here: %{url}", url: doc.contact_url),
       gettext("Press material: %{url}", url: doc.media_kit_url)
     ]
@@ -433,6 +435,13 @@ defmodule VutuvWeb.AgentDocs.Markdown do
   # than among the people: a reader has to be able to tell a person from an
   # organization. Only the Following document carries the key, so every other
   # people list skips the block entirely.
+  # The citation under an investor-page claim that rests on somebody else's
+  # measurement. `nil` for the claims that stand on their own.
+  defp case_source(nil), do: nil
+
+  defp case_source(%{label: label, url: url}),
+    do: gettext("Source: %{source}", source: md_link(label, url))
+
   defp followed_organizations(%{organizations: [_ | _] = organizations}) do
     join_blocks([
       "## " <> gettext("Organizations"),

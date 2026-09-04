@@ -232,11 +232,7 @@ defmodule VutuvWeb.AgentDocs.MediaKitDoc do
   a stranger's profile on somebody else's site, and nobody leaves a dead link
   behind by renaming their handle.
   """
-  def press_contact_profile_url do
-    if handle = InvestorsDoc.contact_handle() do
-      AgentDocs.abs_url("/" <> handle)
-    end
-  end
+  defdelegate press_contact_profile_url, to: InvestorsDoc, as: :contact_profile_url
 
   @doc "The media kit as a doc map."
   def build do

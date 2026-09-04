@@ -3,9 +3,8 @@ defmodule VutuvWeb.CompanyControllerTest do
   The two company pages behind the footer's "Company" group, plus the footer
   itself: that its groups render, that the **media kit** stays English under a
   German `Accept-Language` header while the **investor page** follows the
-  reader's language, that the investor page states no email address and no
-  profile URL, and that its figures are read from the database rather than
-  typed into the template.
+  reader's language, that the investor page states no email address, and that
+  its figures are read from the database rather than typed into the template.
   """
   use VutuvWeb.ConnCase, async: true
 
@@ -75,17 +74,18 @@ defmodule VutuvWeb.CompanyControllerTest do
       assert length(Regex.scan(~r{<h1[^>]*>}, html)) == 1
     end
 
-    test "states no email address and no profile URL", %{conn: conn} do
-      # The whole point of the rewrite: this page is read by strangers and
-      # machines, so the operator's own inbox and profile stay off it. The
-      # media kit still carries both, for a journalist on a deadline.
+    test "states no email address, but does link the profile", %{conn: conn} do
+      # The address stays off a page read by strangers and machines; the media
+      # kit still carries it, for a journalist on a deadline. The profile is a
+      # different matter: somebody about to put six figures somewhere wants to
+      # see who is on the other side.
       insert(:activated_user, username: Application.get_env(:vutuv, :operator_handle))
 
       html = conn |> get(~p"/system/investors") |> html_response(200)
 
       refute html =~ MediaKitDoc.press_contact()
       refute html =~ "mailto:"
-      refute html =~ MediaKitDoc.press_contact_profile_url()
+      assert html =~ ~s|href="#{InvestorsDoc.contact_profile_url()}"|
     end
 
     test "offers a message on this installation instead", %{conn: conn} do
@@ -117,6 +117,7 @@ defmodule VutuvWeb.CompanyControllerTest do
 
         refute body =~ "Write to me"
         refute body =~ "/messages/with/"
+        refute body =~ "My profile"
       end
     end
 
@@ -124,23 +125,17 @@ defmodule VutuvWeb.CompanyControllerTest do
       html = conn |> get(~p"/system/investors") |> html_response(200)
 
       # Grouped, never a run-together 300000, and the reason beside it.
-      assert html =~ "300,000 €"
+      assert html =~ "300,000 Euro"
       refute html =~ "300000"
-      assert html =~ "the notary appointment"
+      assert html =~ "An investment conversation makes sense from"
     end
 
     test "explains what the number in the top bar is made of", %{conn: conn} do
       # Investors have asked; that question is why the paragraph exists.
       html = conn |> get(~p"/system/investors") |> html_response(200)
 
-      assert html =~ "The number in the top bar adds up two groups"
+      assert html =~ "The number in the top bar counts the members here"
       assert html =~ "Nobody is counted twice"
-    end
-
-    test "points at the NodeInfo document the figures are also published in", %{conn: conn} do
-      html = conn |> get(~p"/system/investors") |> html_response(200)
-
-      assert html =~ ~s|href="/system/nodeinfo/2.1"|
     end
 
     test "makes the case against LinkedIn's sign-up wall", %{conn: conn} do
@@ -148,12 +143,25 @@ defmodule VutuvWeb.CompanyControllerTest do
 
       for title <- [
             "Readable without an account",
-            "Fast enough for a thin line",
+            "Fast pages win",
+            "The market a heavy site never reaches",
             "Small enough to stay cheap",
             "Advertising instead of a paywall"
           ] do
         assert html =~ title
       end
+    end
+
+    test "cites the measurements the speed and market claims lean on", %{conn: conn} do
+      # An investor checks a figure like this, and one they cannot check reads
+      # as one we made up. Asserted as links, not as prose: a named study with
+      # no way to reach it is the same dead end.
+      html = conn |> get(~p"/system/investors") |> html_response(200)
+
+      assert html =~ ~s|href="https://web.dev/case-studies/milliseconds-make-millions"|
+      assert html =~ "Milliseconds Make Millions"
+      assert html =~ "PR-2025-11-17-Facts-and-Figures.aspx"
+      assert html =~ "ITU, Facts and Figures 2025"
     end
 
     test "states the live figures", %{conn: conn} do
@@ -206,10 +214,12 @@ defmodule VutuvWeb.CompanyControllerTest do
       # build, so a German page can ship confident nonsense while every English
       # assertion here stays green.
       assert html =~ "Ein Berufsnetzwerk, das ohne Konto funktioniert"
-      assert html =~ "Diese Seite richtet sich an Investoren"
+      assert html =~ "Diese Seite richtet sich an potentielle Investoren"
       assert html =~ "Ohne Konto lesbar"
-      assert html =~ "Schnell genug für eine schmale Leitung"
+      assert html =~ "Schnelle Seiten gewinnen"
+      assert html =~ "Der Markt, den eine schwere Seite nie erreicht"
       assert html =~ "Klein genug, um günstig zu bleiben"
+      assert html =~ "Quelle:"
       assert html =~ "Anzeigen statt Bezahlschranke"
       assert html =~ "Wo wir stehen"
       assert html =~ "Die Zahl oben in der Navigationsleiste"
@@ -223,12 +233,11 @@ defmodule VutuvWeb.CompanyControllerTest do
     test "groups and places the amount the German way", %{conn: conn} do
       html = conn |> german() |> get(~p"/system/investors") |> html_response(200)
 
-      # The separators invert between locales, so "300,000 €" in a German
-      # sentence is misread as three hundred, not untidy. The symbol sits after
-      # the amount in either language, the way this site writes money
-      # everywhere (see `Vutuv.Salary.range_label/5`).
-      assert html =~ "300.000 €"
-      refute html =~ "300,000 €"
+      # The separators invert between locales, so "300,000" in a German sentence
+      # is misread as three hundred, not untidy. The currency is spelled rather
+      # than signed: the figure sits inside a sentence, not in a price list.
+      assert html =~ "300.000 Euro"
+      refute html =~ "300,000"
     end
 
     test "serves its agent-format siblings", %{conn: conn} do
@@ -250,11 +259,9 @@ defmodule VutuvWeb.CompanyControllerTest do
 
       assert markdown =~ "# A professional network that works without an account"
       assert markdown =~ "### Readable without an account"
-      # The placeholder forms never reach a reader.
-      assert markdown =~ "300,000 €"
+      # The placeholder form never reaches a reader.
+      assert markdown =~ "300,000 Euro"
       refute markdown =~ "{amount}"
-      refute markdown =~ "{nodeinfo}"
-      assert markdown =~ "/system/nodeinfo/2.1"
     end
 
     test "the agent formats are translatable too, on ?lang=", %{conn: conn} do
@@ -269,7 +276,7 @@ defmodule VutuvWeb.CompanyControllerTest do
 
       assert markdown =~ "Ein Berufsnetzwerk, das ohne Konto funktioniert"
       assert markdown =~ "Warum sich das lohnt"
-      assert markdown =~ "300.000 €"
+      assert markdown =~ "300.000 Euro"
     end
   end
 

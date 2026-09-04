@@ -12,9 +12,11 @@ defmodule VutuvWeb.AgentDocs.InvestorsDoc do
   (see `VutuvWeb.CompanyController`), so the labels here go through gettext and
   the doc reports the locale it was built in.
 
-  It states **no email address and no profile URL**. An investor writes through
-  vutuv itself, which is both the least spammable inbox we have and a minute
-  spent inside the product they are about to be told about.
+  It states **no email address**: an investor writes through vutuv itself,
+  which is both the least spammable inbox we have and a minute spent inside the
+  product they are about to be told about. The operator's profile here is
+  linked beside that, because somebody about to put six figures somewhere wants
+  to see who is on the other side first.
   """
 
   use Gettext, backend: VutuvWeb.Gettext
@@ -88,17 +90,21 @@ defmodule VutuvWeb.AgentDocs.InvestorsDoc do
   """
   def purpose do
     gettext(
-      "This page is for investors. It says what vutuv is, how it earns money, where the network stands today, and from what size an investment is worth a conversation."
+      "This page is for potential investors. It says what vutuv is, where the network stands today, how it is meant to earn money one day, and from what size an investment is worth a conversation."
     )
   end
 
   @doc """
-  The case, as an ordered list of `%{title:, body:}` in the reader's language.
+  The case, as an ordered list of `%{title:, body:, source:}` in the reader's
+  language, where `source` is `%{label:, url:}` or `nil`.
 
-  Deliberately link-free prose in one place rather than four paragraphs in the
-  template and four more in each renderer: the argument is the page, and a
+  Deliberately link-free prose in one place rather than five paragraphs in the
+  template and five more in each renderer: the argument is the page, and a
   version of it that only the HTML carries would leave every `.md` reader (an
   agent summarising us for somebody) with the figures and none of the reasoning.
+  A claim that rests on somebody else's measurement carries that measurement's
+  source beside it rather than inside the sentence, so every format can put the
+  citation where it belongs and the prose stays a paragraph.
   """
   def case_points do
     [
@@ -107,28 +113,46 @@ defmodule VutuvWeb.AgentDocs.InvestorsDoc do
         body:
           gettext(
             "LinkedIn shows a profile to whoever is logged in, and asks everybody else to sign up first. A profile there works for the people already inside and for nobody else. A vutuv profile is an ordinary public web page: a search engine indexes it, an AI agent reads it as Markdown, JSON or vCard, and a person who has never heard of us reads it without handing over an address first. That is why somebody arrives at all, and why a member puts their work here."
-          )
+          ),
+        source: nil
       },
       %{
-        title: gettext("Fast enough for a thin line"),
+        title: gettext("Fast pages win"),
         body:
           gettext(
-            "Pages here are delivered in milliseconds, and a data-saving mode cuts what each one weighs for anybody on a slow connection. That is not a matter of polish. It decides whether the site is usable at all in the markets where the next hundred million professionals are, and where a heavy network is effectively closed. Reaching them costs us a switch, not a second product."
-          )
+            "A page that answers in milliseconds is not a matter of polish, it decides whether somebody stays. Google had 55 and Deloitte measure that across 37 European and American brands and more than 30 million sessions: a tenth of a second faster raised conversions by 8.4% in retail and by 10.1% in travel. Our speed comes out of the architecture rather than an optimisation pass, so it is not something a competitor buys in a quarter."
+          ),
+        source: %{
+          label: "Milliseconds Make Millions, Google / 55 / Deloitte, 2020",
+          url: "https://web.dev/case-studies/milliseconds-make-millions"
+        }
+      },
+      %{
+        title: gettext("The market a heavy site never reaches"),
+        body:
+          gettext(
+            "Networks are not equal, and neither are the markets on them: in 2025 the ITU counted 84% of people in high-income countries with access to 5G against 4% in low-income ones, and 2.2 billion still offline. A site that assumes a fast line is shut to most of them in practice. vutuv has a data-saving mode that cuts what every page weighs, so the same product reaches somebody on a thin line. That market costs us a switch, not a second product."
+          ),
+        source: %{
+          label: "ITU, Facts and Figures 2025",
+          url: "https://www.itu.int/en/mediacentre/Pages/PR-2025-11-17-Facts-and-Figures.aspx"
+        }
       },
       %{
         title: gettext("Small enough to stay cheap"),
         body:
           gettext(
             "The software is Elixir and Phoenix. One modest server goes a long way, and a very large installation scales out across several nodes. There is no floor of staff under the operation, so the cost side barely moves when the member count does. A network that is cheap to run does not have to squeeze the people on it."
-          )
+          ),
+        source: nil
       },
       %{
         title: gettext("Advertising instead of a paywall"),
         body:
           gettext(
-            "Text ads pay for the operation, so there is no premium tier. Nothing is held back from somebody who will not pay for it, and a paid tier is the single thing that stops most people from ever starting. Leaving it out is what lets the network grow, and a growing network is what the ads are worth."
-          )
+            "Text ads are to carry the operation, which is why there is no premium tier and will not be one. Nothing is held back from somebody who will not pay for it, and a paid tier is the single thing that stops most people from ever starting. Leaving it out is what lets the network grow, and only a growing network makes the ads worth anything."
+          ),
+        source: nil
       }
     ]
   end
@@ -136,61 +160,72 @@ defmodule VutuvWeb.AgentDocs.InvestorsDoc do
   @doc """
   What the people total in the top bar is made of. Investors have asked, which
   is the whole reason it is written down: a figure nobody can decompose is a
-  figure nobody believes.
+  figure nobody believes. One sentence, because that is the whole answer —
+  `/system/members` spells out the rest for whoever wants it.
   """
   def counter_explainer do
     gettext(
-      "The number in the top bar adds up two groups: the members of this installation, and the accounts on other Fediverse servers that follow a member, a page or a topic here. Nobody is counted twice. An account following five things is one account, and somebody who is a member here is already in the first group."
+      "The number in the top bar counts the members here plus the Fediverse accounts that follow them. Nobody is counted twice."
     )
   end
 
   @doc """
-  Why the figures can be checked from outside, with a `{nodeinfo}` placeholder
-  where the URL belongs (`VutuvWeb.UI.split_marker/2` in the template, the
-  plain URL in the agent formats).
-  """
-  def transparency_note do
-    gettext(
-      "Every figure here is read from the database on each request, and the same figures are published under {nodeinfo}, the standard format Fediverse servers describe themselves in. So they are not a claim on a slide. Anybody can fetch them, including a server that has never spoken to us."
-    )
-  end
+  The floor, as the one sentence the page says about it. `{amount}` stands
+  where the figure goes, so a translator can put it where their language wants
+  it; `minimum_sentence/0` fills it in for the agent formats.
 
-  @doc """
-  Why the floor is where it is. `{amount}` stands where the figure goes, so a
-  translator can move it into the sentence their language wants; the HTML
-  splits on it (`VutuvWeb.UI.split_marker/2`) to set the figure in bold, and
-  `minimum_sentence/0` fills it in for the agent formats.
+  One sentence and no reasoning beside it: whoever is above the line does not
+  need the arithmetic of a small round explained, and whoever is below it needs
+  the number, not a paragraph about why.
   """
   def minimum_reason do
-    gettext(
-      "An investment starts at {amount}. Below that a round costs both sides more than it brings in: the notary appointment, the shareholder agreement, the register entry and the reporting duty that follows are the same work for a small ticket as for a large one. Saying so here spares the smaller enquiry a week of waiting for a no."
-    )
+    gettext("An investment conversation makes sense from {amount} upwards.")
   end
 
   @doc """
-  The minimum written as money: the digits grouped for the reader's locale
-  (`300.000 €` in German, `300,000 €` in English), or `nil` where nothing is
+  The operator's own profile on **this** installation, or `nil`.
+
+  Built on `contact_handle/0`, so it exists exactly when that handle really
+  resolves to a member here. `VutuvWeb.AgentDocs.MediaKitDoc` shows the same
+  link to a journalist.
+  """
+  def contact_profile_url do
+    if handle = contact_handle() do
+      AgentDocs.abs_url("/" <> handle)
+    end
+  end
+
+  @doc """
+  The minimum written out: the digits grouped for the reader's locale and the
+  currency **spelled**, not signed (`300.000 Euro`), or `nil` where nothing is
   being raised.
 
-  Symbol **after** the amount in every language, and the symbol itself out of
-  `Vutuv.Salary.currency_symbol/1`, because that is how this site already
-  writes money everywhere else — the pay line on every job posting reads
-  "60.000 € / Jahr" whatever the locale. English convention would put the
-  symbol first; two spellings of money on one site cost more than one slightly
-  un-English one. An unknown currency keeps its ISO code, which reads correctly
-  in the same arrangement ("300.000 CHF").
+  The word rather than the symbol because this figure lives inside a sentence
+  somebody reads aloud in a meeting, not in a price list. It stays after the
+  amount in every language, the way the pay line on a job posting writes money
+  (`Vutuv.Salary.range_label/5`). A currency with no name here keeps its ISO
+  code, which reads correctly in the same place ("300.000 CHF").
   """
   def minimum_text do
     case minimum() do
       %{amount: amount, currency: currency} ->
-        # A non-breaking space: the amount must not be split from its symbol
+        # A non-breaking space: the amount must not be split from its currency
         # across a line break.
-        UI.delimited_count(amount) <> " " <> Salary.currency_symbol(currency)
+        UI.delimited_count(amount) <> " " <> currency_name(currency)
 
       nil ->
         nil
     end
   end
+
+  # Spelled out, and translated: "US-Dollar" is not "US dollars". Anything not
+  # named here falls back to `Vutuv.Salary`, which answers with the symbol for
+  # the currencies it knows and the ISO code for the rest.
+  defp currency_name("EUR"), do: gettext("Euro")
+  defp currency_name("USD"), do: gettext("US dollars")
+  defp currency_name("GBP"), do: gettext("pounds")
+  defp currency_name("CHF"), do: gettext("Swiss francs")
+  defp currency_name(code), do: Salary.currency_symbol(code)
 
   @doc """
   `minimum_reason/0` with the amount filled in, for the agent formats, which
@@ -200,13 +235,6 @@ defmodule VutuvWeb.AgentDocs.InvestorsDoc do
     if amount = minimum_text() do
       String.replace(minimum_reason(), "{amount}", amount)
     end
-  end
-
-  @doc """
-  `transparency_note/0` with the NodeInfo URL filled in, for the agent formats.
-  """
-  def transparency_sentence do
-    String.replace(transparency_note(), "{nodeinfo}", AgentDocs.abs_url("/system/nodeinfo/2.1"))
   end
 
   @doc """
@@ -296,7 +324,8 @@ defmodule VutuvWeb.AgentDocs.InvestorsDoc do
       headline: headline(),
       operator: %{
         name: Application.fetch_env!(:vutuv, :operator_name),
-        url: Application.fetch_env!(:vutuv, :operator_url)
+        url: Application.fetch_env!(:vutuv, :operator_url),
+        source: nil
       },
       case_points: case_points(),
       minimum: minimum(),
@@ -305,16 +334,15 @@ defmodule VutuvWeb.AgentDocs.InvestorsDoc do
       # reader handed one would have to know our template's private convention.
       minimum_reason: minimum_sentence(),
       counter_explainer: counter_explainer(),
-      transparency_note: transparency_sentence(),
       contact_note: contact_note(),
       contact_handle: handle,
       contact_url: handle && AgentDocs.abs_url("/messages/with/" <> handle),
+      contact_profile_url: handle && AgentDocs.abs_url("/" <> handle),
       growth_sentence: growth_sentence(facts.growth),
       # The daily rows themselves are the chart's business; the doc carries the
       # reading of them.
       figures: Map.drop(facts, [:series, :growth]),
-      media_kit_url: AgentDocs.abs_url("/system/media-kit"),
-      nodeinfo_url: AgentDocs.abs_url("/system/nodeinfo/2.1")
+      media_kit_url: AgentDocs.abs_url("/system/media-kit")
     })
   end
 end

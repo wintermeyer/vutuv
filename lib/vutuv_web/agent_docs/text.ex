@@ -346,19 +346,19 @@ defmodule VutuvWeb.AgentDocs.Text do
     [
       heading(doc.headline),
       doc.description,
-      doc.minimum && heading(gettext("Minimum investment")),
-      doc.minimum_reason,
-      heading(gettext("Why this is worth building")),
-      Enum.map(doc.case_points, fn point -> "#{point.title}\n\n#{point.body}" end),
       heading(gettext("Where we are")),
-      doc.counter_explainer,
-      doc.transparency_note,
       Enum.map(InvestorsDoc.figure_rows(doc.figures), fn {label, value} ->
         "- #{label}: #{value}"
       end),
       doc.growth_sentence,
+      doc.counter_explainer,
+      doc.minimum && heading(gettext("Minimum investment")),
+      doc.minimum_reason,
+      heading(gettext("Why this is worth building")),
+      Enum.map(doc.case_points, &case_point_text/1),
       doc.contact_handle && heading(gettext("Write to me")),
       doc.contact_handle && doc.contact_note,
+      doc.contact_profile_url && gettext("My profile: %{url}", url: doc.contact_profile_url),
       doc.contact_url && gettext("Write here: %{url}", url: doc.contact_url),
       gettext("Press material: %{url}", url: doc.media_kit_url),
       footer(doc)
@@ -404,6 +404,16 @@ defmodule VutuvWeb.AgentDocs.Text do
   # The pages this member follows (issue #1336) — the plain-text twin of the
   # Markdown block, under their own heading so a reader can tell a person from
   # an organization. Absent on every other people list.
+  # One claim of the investor page's case, with the citation under it where the
+  # claim rests on somebody else's measurement.
+  defp case_point_text(%{source: nil} = point), do: "#{point.title}\n\n#{point.body}"
+
+  defp case_point_text(point) do
+    source = gettext("Source: %{source}", source: "#{point.source.label} (#{point.source.url})")
+
+    "#{point.title}\n\n#{point.body}\n\n#{source}"
+  end
+
   defp followed_organizations(%{organizations: [_ | _] = organizations}) do
     join_blocks([
       gettext("Organizations"),
