@@ -120,7 +120,7 @@ defmodule VutuvWeb.AgentDocs.InvestorsDoc do
         title: gettext("Fast pages win"),
         body:
           gettext(
-            "A page that answers in milliseconds is not a matter of polish, it decides whether somebody stays. Google had 55 and Deloitte measure that across 37 European and American brands and more than 30 million sessions: a tenth of a second faster raised conversions by 8.4% in retail and by 10.1% in travel. Our speed comes out of the architecture rather than an optimisation pass, so it is not something a competitor buys in a quarter."
+            "A page that answers in milliseconds is not a matter of polish, it decides whether somebody stays. Google had 55 and Deloitte measure that across 37 European and American brands and more than 30 million sessions: a tenth of a second faster raised conversions by 8.4% in retail and by 10.1% in travel."
           ),
         source: %{
           label: "Milliseconds Make Millions, Google / 55 / Deloitte, 2020",
@@ -131,7 +131,7 @@ defmodule VutuvWeb.AgentDocs.InvestorsDoc do
         title: gettext("The market a heavy site never reaches"),
         body:
           gettext(
-            "Networks are not equal, and neither are the markets on them: in 2025 the ITU counted 84% of people in high-income countries with access to 5G against 4% in low-income ones, and 2.2 billion still offline. A site that assumes a fast line is shut to most of them in practice. vutuv has a data-saving mode that cuts what every page weighs, so the same product reaches somebody on a thin line. That market costs us a switch, not a second product."
+            "Networks are not equal, and neither are the markets on them: in 2025 the ITU counted 84% of people in high-income countries with access to 5G against 4% in low-income ones, and somebody online in a wealthy country moves nearly eight times as much mobile data as somebody in a poor one. A site that assumes a fast line is shut to most of them in practice. A vutuv page is lighter than a LinkedIn page to begin with, and a data-saving mode cuts its weight again for anybody on a thin or metered connection."
           ),
         source: %{
           label: "ITU, Facts and Figures 2025",

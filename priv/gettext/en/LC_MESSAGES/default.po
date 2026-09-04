@@ -452,8 +452,8 @@ msgid "Middle Name"
 msgstr ""
 
 #: lib/vutuv_web/live/notification_live/index.ex:1351
-#: lib/vutuv_web/templates/remote_actor_card/card.html.heex:254
-#: lib/vutuv_web/templates/remote_actor_card/card.html.heex:262
+#: lib/vutuv_web/templates/remote_actor_card/card.html.heex:263
+#: lib/vutuv_web/templates/remote_actor_card/card.html.heex:271
 #, elixir-autogen
 msgid "More"
 msgstr ""
@@ -1665,7 +1665,7 @@ msgstr ""
 #: lib/vutuv_web/components/ui.ex:2955
 #: lib/vutuv_web/components/ui.ex:2971
 #: lib/vutuv_web/components/ui.ex:3033
-#: lib/vutuv_web/live/fediverse_account_live.ex:400
+#: lib/vutuv_web/live/fediverse_account_live.ex:402
 #: lib/vutuv_web/live/fediverse_following_live.ex:304
 #: lib/vutuv_web/live/fediverse_lookup_live.ex:312
 #: lib/vutuv_web/live/organization_live/following.ex:340
@@ -1673,7 +1673,7 @@ msgstr ""
 #: lib/vutuv_web/live/organization_live/show.ex:579
 #: lib/vutuv_web/live/organization_live/show.ex:616
 #: lib/vutuv_web/live/post_live/feed.ex:943
-#: lib/vutuv_web/templates/remote_actor_card/card.html.heex:241
+#: lib/vutuv_web/templates/remote_actor_card/card.html.heex:250
 #: lib/vutuv_web/templates/user/show.html.heex:1325
 #: lib/vutuv_web/views/user_html.ex:633
 #, elixir-autogen, elixir-format
@@ -2190,7 +2190,7 @@ msgstr ""
 #: lib/vutuv_web/controllers/user_controller.ex:76
 #: lib/vutuv_web/gettext_extraction_anchors.ex:107
 #: lib/vutuv_web/live/admin/dashboard_live.ex:172
-#: lib/vutuv_web/live/fediverse_account_live.ex:407
+#: lib/vutuv_web/live/fediverse_account_live.ex:409
 #: lib/vutuv_web/live/organization_live/show.ex:710
 #: lib/vutuv_web/live/post_live/saved.ex:520
 #: lib/vutuv_web/live/search_live.ex:348
@@ -2210,7 +2210,7 @@ msgstr ""
 
 #: lib/vutuv_web/components/post_components.ex:4118
 #: lib/vutuv_web/live/fediverse_account_live.ex:360
-#: lib/vutuv_web/templates/remote_actor_card/card.html.heex:192
+#: lib/vutuv_web/templates/remote_actor_card/card.html.heex:201
 #, elixir-autogen, elixir-format
 msgid "Show less"
 msgstr ""
@@ -6605,10 +6605,10 @@ msgstr ""
 #: lib/vutuv_web/components/post_components.ex:2697
 #: lib/vutuv_web/components/post_components.ex:3706
 #: lib/vutuv_web/components/ui.ex:3072
-#: lib/vutuv_web/live/fediverse_account_live.ex:394
+#: lib/vutuv_web/live/fediverse_account_live.ex:396
 #: lib/vutuv_web/live/organization_live/following.ex:385
 #: lib/vutuv_web/live/organization_live/following.ex:469
-#: lib/vutuv_web/templates/remote_actor_card/card.html.heex:276
+#: lib/vutuv_web/templates/remote_actor_card/card.html.heex:285
 #: lib/vutuv_web/templates/settings/filters.html.heex:81
 #: lib/vutuv_web/templates/user/show.html.heex:230
 #, elixir-autogen, elixir-format
@@ -6633,10 +6633,10 @@ msgstr ""
 
 #: lib/vutuv_web/components/post_components.ex:3706
 #: lib/vutuv_web/components/ui.ex:3071
-#: lib/vutuv_web/live/fediverse_account_live.ex:392
+#: lib/vutuv_web/live/fediverse_account_live.ex:394
 #: lib/vutuv_web/live/organization_live/following.ex:385
 #: lib/vutuv_web/live/organization_live/following.ex:469
-#: lib/vutuv_web/templates/remote_actor_card/card.html.heex:276
+#: lib/vutuv_web/templates/remote_actor_card/card.html.heex:285
 #: lib/vutuv_web/templates/settings/filters.html.heex:111
 #: lib/vutuv_web/templates/user/show.html.heex:230
 #, elixir-autogen, elixir-format
@@ -13604,7 +13604,7 @@ msgstr ""
 msgid "Film review"
 msgstr ""
 
-#: lib/vutuv_web/live/fediverse_account_live.ex:462
+#: lib/vutuv_web/live/fediverse_account_live.ex:464
 #: lib/vutuv_web/live/fediverse_lookup_live.ex:251
 #, elixir-autogen, elixir-format
 msgid "Look up"
@@ -15382,7 +15382,7 @@ msgstr ""
 #: lib/vutuv_web/components/post_components.ex:1399
 #: lib/vutuv_web/components/post_components.ex:1599
 #: lib/vutuv_web/components/post_components.ex:2987
-#: lib/vutuv_web/templates/remote_actor_card/card.html.heex:322
+#: lib/vutuv_web/templates/remote_actor_card/card.html.heex:331
 #, elixir-autogen, elixir-format
 msgid "View the original"
 msgstr ""
@@ -16476,7 +16476,7 @@ msgstr ""
 msgid "Photo details"
 msgstr ""
 
-#: lib/vutuv_web/live/fediverse_account_live.ex:468
+#: lib/vutuv_web/live/fediverse_account_live.ex:470
 #: lib/vutuv_web/live/fediverse_following_live.ex:60
 #: lib/vutuv_web/live/fediverse_following_live.ex:274
 #: lib/vutuv_web/live/fediverse_following_live.ex:287
@@ -16800,7 +16800,7 @@ msgstr ""
 msgid "Account on another network"
 msgstr ""
 
-#: lib/vutuv_web/live/fediverse_account_live.ex:452
+#: lib/vutuv_web/live/fediverse_account_live.ex:454
 #, elixir-autogen, elixir-format
 msgid "Look up another account"
 msgstr ""
@@ -16820,7 +16820,7 @@ msgstr ""
 msgid "Nothing here. vutuv only keeps an account's posts while somebody here follows it, and this page never fetches any."
 msgstr ""
 
-#: lib/vutuv_web/live/fediverse_account_live.ex:454
+#: lib/vutuv_web/live/fediverse_account_live.ex:456
 #, elixir-autogen, elixir-format
 msgid "Paste an address from Mastodon and friends to open its page here."
 msgstr ""
@@ -16830,7 +16830,7 @@ msgstr ""
 msgid "Show the whole description"
 msgstr ""
 
-#: lib/vutuv_web/live/fediverse_account_live.ex:437
+#: lib/vutuv_web/live/fediverse_account_live.ex:439
 #, elixir-autogen, elixir-format
 msgid "The most recent %{count} are shown. The rest are on their own server."
 msgstr ""
@@ -16840,7 +16840,7 @@ msgstr ""
 msgid "Unmuted. Their posts are back in your feed."
 msgstr ""
 
-#: lib/vutuv_web/live/fediverse_account_live.ex:447
+#: lib/vutuv_web/live/fediverse_account_live.ex:449
 #, elixir-autogen, elixir-format
 msgid "View their full profile on %{host}"
 msgstr ""
@@ -18045,7 +18045,7 @@ msgstr ""
 msgid "%{address} (whole website)"
 msgstr ""
 
-#: lib/vutuv_web/markdown.ex:381
+#: lib/vutuv_web/markdown.ex:385
 #, elixir-autogen, elixir-format
 msgid "Verified webpage of the author (%{address})"
 msgstr ""
@@ -22314,7 +22314,7 @@ msgid_plural "%{formatted} posts here"
 msgstr[0] ""
 msgstr[1] ""
 
-#: lib/vutuv_web/templates/remote_actor_card/card.html.heex:287
+#: lib/vutuv_web/templates/remote_actor_card/card.html.heex:296
 #, elixir-autogen, elixir-format
 msgid "Address copied"
 msgstr ""
@@ -22324,17 +22324,17 @@ msgstr ""
 msgid "Another network"
 msgstr ""
 
-#: lib/vutuv_web/templates/remote_actor_card/card.html.heex:290
+#: lib/vutuv_web/templates/remote_actor_card/card.html.heex:299
 #, elixir-autogen, elixir-format
 msgid "Copy address"
 msgstr ""
 
-#: lib/vutuv_web/templates/remote_actor_card/card.html.heex:143
+#: lib/vutuv_web/templates/remote_actor_card/card.html.heex:152
 #, elixir-autogen, elixir-format
 msgid "Latest here"
 msgstr ""
 
-#: lib/vutuv_web/templates/remote_actor_card/card.html.heex:282
+#: lib/vutuv_web/templates/remote_actor_card/card.html.heex:291
 #, elixir-autogen, elixir-format
 msgid "Mute %{host}"
 msgstr ""
@@ -22354,7 +22354,7 @@ msgstr ""
 msgid "Really withdraw?"
 msgstr ""
 
-#: lib/vutuv_web/templates/remote_actor_card/card.html.heex:281
+#: lib/vutuv_web/templates/remote_actor_card/card.html.heex:290
 #, elixir-autogen, elixir-format
 msgid "Unmute %{host}"
 msgstr ""
@@ -22855,14 +22855,14 @@ msgstr ""
 msgid "Your public posts then also appear on {mastodon}, for example."
 msgstr ""
 
-#: lib/vutuv_web/templates/remote_actor_card/card.html.heex:188
+#: lib/vutuv_web/templates/remote_actor_card/card.html.heex:197
 #, elixir-autogen, elixir-format
 msgid "%{formatted} older post"
 msgid_plural "%{formatted} older posts"
 msgstr[0] ""
 msgstr[1] ""
 
-#: lib/vutuv_web/templates/remote_actor_card/card.html.heex:303
+#: lib/vutuv_web/templates/remote_actor_card/card.html.heex:312
 #, elixir-autogen, elixir-format
 msgid "Their page here"
 msgstr ""
@@ -22912,7 +22912,7 @@ msgid_plural "From %{formatted} servers"
 msgstr[0] ""
 msgstr[1] ""
 
-#: lib/vutuv_web/agent_docs/investors_doc.ex:320
+#: lib/vutuv_web/agent_docs/investors_doc.ex:321
 #: lib/vutuv_web/controllers/company_controller.ex:56
 #: lib/vutuv_web/templates/layout/app.html.heex:110
 #, elixir-autogen, elixir-format, fuzzy
@@ -22930,7 +22930,7 @@ msgstr ""
 msgid "Minimum investment"
 msgstr ""
 
-#: lib/vutuv_web/agent_docs/investors_doc.ex:250
+#: lib/vutuv_web/agent_docs/investors_doc.ex:251
 #, elixir-autogen, elixir-format
 msgid "Over these %{days} days %{total} people arrived, %{members} of them as members here."
 msgstr ""
@@ -22998,7 +22998,7 @@ msgstr ""
 msgid "Write to me"
 msgstr ""
 
-#: lib/vutuv_web/agent_docs/investors_doc.ex:262
+#: lib/vutuv_web/agent_docs/investors_doc.ex:263
 #, elixir-autogen, elixir-format
 msgid "Write to me here, on vutuv. Creating an account takes a minute and costs nothing, and you will have seen the product before the first sentence about it."
 msgstr ""
@@ -23024,49 +23024,39 @@ msgstr ""
 msgid "This page is for potential investors. It says what vutuv is, where the network stands today, how it is meant to earn money one day, and from what size an investment is worth a conversation."
 msgstr ""
 
-#: lib/vutuv_web/agent_docs/investors_doc.ex:166
+#: lib/vutuv_web/agent_docs/investors_doc.ex:167
 #, elixir-autogen, elixir-format, fuzzy
 msgid "The number in the top bar counts the members here plus the Fediverse accounts that follow them. Nobody is counted twice."
 msgstr ""
 
-#: lib/vutuv_web/agent_docs/investors_doc.ex:181
+#: lib/vutuv_web/agent_docs/investors_doc.ex:182
 #, elixir-autogen, elixir-format
 msgid "An investment conversation makes sense from {amount} upwards."
 msgstr ""
 
-#: lib/vutuv_web/agent_docs/investors_doc.ex:223
+#: lib/vutuv_web/agent_docs/investors_doc.ex:224
 #, elixir-autogen, elixir-format
 msgid "Euro"
 msgstr ""
 
-#: lib/vutuv_web/agent_docs/investors_doc.ex:226
+#: lib/vutuv_web/agent_docs/investors_doc.ex:227
 #, elixir-autogen, elixir-format
 msgid "Swiss francs"
 msgstr ""
 
-#: lib/vutuv_web/agent_docs/investors_doc.ex:224
+#: lib/vutuv_web/agent_docs/investors_doc.ex:225
 #, elixir-autogen, elixir-format
 msgid "US dollars"
 msgstr ""
 
-#: lib/vutuv_web/agent_docs/investors_doc.ex:225
+#: lib/vutuv_web/agent_docs/investors_doc.ex:226
 #, elixir-autogen, elixir-format, fuzzy
 msgid "pounds"
-msgstr ""
-
-#: lib/vutuv_web/agent_docs/investors_doc.ex:122
-#, elixir-autogen, elixir-format
-msgid "A page that answers in milliseconds is not a matter of polish, it decides whether somebody stays. Google had 55 and Deloitte measure that across 37 European and American brands and more than 30 million sessions: a tenth of a second faster raised conversions by 8.4% in retail and by 10.1% in travel. Our speed comes out of the architecture rather than an optimisation pass, so it is not something a competitor buys in a quarter."
 msgstr ""
 
 #: lib/vutuv_web/agent_docs/investors_doc.ex:120
 #, elixir-autogen, elixir-format
 msgid "Fast pages win"
-msgstr ""
-
-#: lib/vutuv_web/agent_docs/investors_doc.ex:133
-#, elixir-autogen, elixir-format
-msgid "Networks are not equal, and neither are the markets on them: in 2025 the ITU counted 84% of people in high-income countries with access to 5G against 4% in low-income ones, and 2.2 billion still offline. A site that assumes a fast line is shut to most of them in practice. vutuv has a data-saving mode that cuts what every page weighs, so the same product reaches somebody on a thin line. That market costs us a switch, not a second product."
 msgstr ""
 
 #: lib/vutuv_web/templates/company/investors.html.heex:81
@@ -23083,4 +23073,14 @@ msgstr ""
 #: lib/vutuv_web/agent_docs/investors_doc.ex:131
 #, elixir-autogen, elixir-format
 msgid "The market a heavy site never reaches"
+msgstr ""
+
+#: lib/vutuv_web/agent_docs/investors_doc.ex:122
+#, elixir-autogen, elixir-format, fuzzy
+msgid "A page that answers in milliseconds is not a matter of polish, it decides whether somebody stays. Google had 55 and Deloitte measure that across 37 European and American brands and more than 30 million sessions: a tenth of a second faster raised conversions by 8.4% in retail and by 10.1% in travel."
+msgstr ""
+
+#: lib/vutuv_web/agent_docs/investors_doc.ex:133
+#, elixir-autogen, elixir-format, fuzzy
+msgid "Networks are not equal, and neither are the markets on them: in 2025 the ITU counted 84% of people in high-income countries with access to 5G against 4% in low-income ones, and somebody online in a wealthy country moves nearly eight times as much mobile data as somebody in a poor one. A site that assumes a fast line is shut to most of them in practice. A vutuv page is lighter than a LinkedIn page to begin with, and a data-saving mode cuts its weight again for anybody on a thin or metered connection."
 msgstr ""
