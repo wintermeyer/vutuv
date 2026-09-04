@@ -5,9 +5,11 @@ defmodule VutuvWeb.ShellFeedBadgeTest do
 
   The badge exists because the feed's own "new posts" pill only speaks while the
   reader is standing on /feed — walk over to a profile and everything that lands
-  is silent. So the two rules under test are that it counts **away** from the
-  feed and says nothing **on** it, and that a read in one tab empties it in the
-  others.
+  is silent. What it counts is the same figure on every page, /feed included:
+  posts that arrived and have not been put in front of the reader yet. So the
+  rules under test are that an arrival raises it wherever the member is, that
+  the press unfolding the pill takes it off again, and that a read in one tab
+  empties it in the others.
   """
   use VutuvWeb.ConnCase
 
@@ -64,18 +66,28 @@ defmodule VutuvWeb.ShellFeedBadgeTest do
     assert has_element?(view, @tab_badge, "1")
   end
 
-  test "says nothing on the feed itself, where the pill speaks", %{conn: conn} do
+  test "counts on the feed too, for as long as the pill is holding the posts", %{conn: conn} do
     reader = reader()
     author = followed_author(reader)
-    create_post!(author, %{body: "arrived while you were away"})
 
     {:ok, view, _html} = shell(conn, reader, "/feed")
 
+    # A shell mounting on /feed starts empty, and here that is the true figure
+    # rather than a rule: the page's own mount has just written the marker.
     refute has_element?(view, @feed_badge)
 
-    # And an arrival does not raise one either: the timeline is right there, so
-    # a badge on the nav item pointing at the page you are reading is noise.
-    announce(view, create_post!(author, %{body: "arrived while reading"}))
+    # Behind the pill is not in front of the reader, so the nav item says here
+    # what it would say on their profile — same source, same number.
+    create_post!(author, %{body: "arrived while reading the feed"})
+
+    assert has_element?(view, @feed_badge, "1")
+    assert has_element?(view, @tab_badge, "1")
+
+    # And it stops the moment they are shown: what the feed writes when the pill
+    # is unfolded (`feed_marks_read_test.exs` drives the press itself) empties
+    # the badge from here as well.
+    :ok = Posts.mark_feed_read(reader)
+
     refute has_element?(view, @feed_badge)
   end
 

@@ -19,6 +19,7 @@ defmodule VutuvWeb.FeedMarksReadTest do
   alias Vutuv.Posts
   alias Vutuv.Repo
   alias Vutuv.Social
+  alias Vutuv.ViewerClock
 
   defp followed_author(reader) do
     author = insert(:activated_user)
@@ -80,5 +81,48 @@ defmodule VutuvWeb.FeedMarksReadTest do
     render_click(view, "show-new")
 
     assert Posts.unread_feed_count(reload(user)) == 0
+  end
+
+  test "a source switch that puts the waiting posts on screen marks it read", %{conn: conn} do
+    {conn, user} = create_and_login_user(conn)
+    author = followed_author(user)
+
+    {:ok, view, _html} = live(conn, ~p"/feed")
+    user = read_a_minute_ago(user)
+
+    create_post!(author, %{body: "arrived while reading"})
+    assert render(view) =~ "data-show-new"
+
+    # What the filter band sends once it has written a source switch. The whole
+    # timeline is replaced by a fresh page of the live present, so what stood
+    # behind the pill is now at the top of it — shown without a press, and the
+    # pill it was counted by is gone. The second way posts reach the reader, and
+    # the marker has to move with it or the nav badge keeps promising them.
+    send(view.pid, {:filter_band, :changed, reload(user)})
+
+    refute render(view) =~ "data-show-new"
+    assert Posts.unread_feed_count(reload(user)) == 0
+  end
+
+  # The other direction of the same gate, and the one that would be silent: a
+  # travelling reader loads a fresh timeline too, and it clears the pill just as
+  # the source switch does — but it is drawing another day, so those posts have
+  # been discarded rather than shown. Marking them read here would empty the
+  # badge for posts nobody ever saw.
+  test "opening a day in the calendar leaves the waiting posts unread", %{conn: conn} do
+    {conn, user} = create_and_login_user(conn)
+    author = followed_author(user)
+
+    {:ok, view, _html} = live(conn, ~p"/feed")
+    user = read_a_minute_ago(user)
+
+    create_post!(author, %{body: "arrived while reading"})
+    assert render(view) =~ "data-show-new"
+
+    yesterday = Date.add(ViewerClock.today(), -1)
+    render_click(view, "cal-day", %{"date" => Date.to_iso8601(yesterday)})
+
+    refute render(view) =~ "data-show-new"
+    assert Posts.unread_feed_count(reload(user)) == 1
   end
 end

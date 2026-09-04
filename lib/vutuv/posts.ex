@@ -3325,12 +3325,16 @@ defmodule Vutuv.Posts do
   Move `user`'s feed read marker to now and tell their open shells, whose badge
   drops to zero.
 
-  Called when the feed is opened and whenever the reader reveals the arrivals
-  that waited behind the "new posts" pill — the two moments posts are actually
-  put in front of them. Deliberately **not** on every arrival while the feed is
+  Called when the feed is opened, whenever the reader reveals the arrivals that
+  waited behind the "new posts" pill, and whenever a fresh timeline of the live
+  present replaces the one holding that pill (a source switch in the band, the
+  way home from a day in the calendar) — the moments posts are actually put in
+  front of them. Deliberately **not** on every arrival while the feed is
   open, the way the notifications page marks its own: those posts are behind a
   press, not on screen, so the pill is what speaks for them — and it is still
-  speaking when the reader leaves the page without pressing it.
+  speaking when the reader leaves the page without pressing it. That is also
+  what lets the shell's badge count on /feed like anywhere else: while the
+  marker stands, the nav item and the pill are answering the same question.
 
   The wall clock rather than the newest entry's stamp: an entry landing in the
   same second stays unread, which `Vutuv.Activity.mark_notifications_read/1` has
