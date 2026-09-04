@@ -102,11 +102,16 @@
     <p class="mt-3 max-w-2xl text-slate-700 dark:text-slate-300">
       {InvestorsDoc.contact_note()}
     </p>
+    <%!-- The address gets a line of its own on a phone (`block sm:inline`):
+          behind the label it has half a line left and breaks mid-handle, which
+          reads as a typo rather than as a URL. `break-words` rather than
+          `break-all` for the same reason — it only splits a word when the word
+          alone is too long, so a URL that fits stays whole. --%>
     <p :if={@contact_profile_url} class="mt-2 text-slate-700 dark:text-slate-300">
       {gettext("My profile:")}
       <a
         href={@contact_profile_url}
-        class="font-semibold break-all text-brand-600 hover:text-brand-700 dark:text-brand-400 dark:hover:text-brand-300"
+        class="block font-semibold break-words text-brand-600 hover:text-brand-700 sm:inline dark:text-brand-400 dark:hover:text-brand-300"
       >{@contact_profile_url}</a>
     </p>
     <%!-- Which of the two leads depends on who is reading. A message needs a
