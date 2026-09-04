@@ -499,6 +499,19 @@ defmodule VutuvWeb.UserProfileLive do
     {:noreply, reload_posts(socket)}
   end
 
+  # A link's preview tile moved (issue #1928): the capture landed, the AI gate
+  # released it, or a refusal took it away. One event for all three, because
+  # the Links card answers each the same way — re-read the links and let
+  # `<.link_thumb>` pick the tile again.
+  #
+  # Deliberately not narrowed to the links already on screen: the card previews
+  # the top `preview_limit(:links)`, and the member who just added their first
+  # link is looking at a card that does not hold it yet — which is the very
+  # case this issue is about. The sweeper's batch is 5 every 5 minutes, so the
+  # re-read this occasionally spends on an unshown link is not worth the risk.
+  def handle_info({:link_screenshot_changed, _payload}, socket),
+    do: {:noreply, refresh_links(socket)}
+
   # The social feed cache answered a mount-time request (or a concurrent
   # visitor's fetch this page joined — single-flight): drop the account's
   # loading spinner and, on success, fold the feed into the mixed posts card.
@@ -658,6 +671,20 @@ defmodule VutuvWeb.UserProfileLive do
   defp refresh_tags(socket) do
     assign(socket, :user_tags, load_user_tags(socket.assigns.user))
   end
+
+  # The Links card's slice of the assigns. Re-preloaded with `links_query/0`
+  # rather than through `mount_profile/1`, which would re-read the whole profile
+  # and its twenty preloads to change one tile.
+  defp refresh_links(socket) do
+    user = Repo.preload(socket.assigns.user, [urls: links_query()], force: true)
+
+    assign(socket, :user, user)
+  end
+
+  # The Links card's preview, shared by the initial load and the live refresh so
+  # the two cannot drift — `refresh_social/1` is the cautionary tale, where the
+  # re-read's own copy of the follower limit has already fallen behind mount's.
+  defp links_query, do: Url.ordered() |> limit(^preview_limit(:links))
 
   defp load_user_tags(user) do
     user
@@ -1319,7 +1346,7 @@ defmodule VutuvWeb.UserProfileLive do
       # from the same rows, without a query per entry.
       job_references: {JobReference.public_scope(), :links},
       phone_numbers: PhoneNumber.ordered() |> limit(^preview_limit(:phone_numbers)),
-      urls: Url.ordered() |> limit(^preview_limit(:links)),
+      urls: links_query(),
       addresses: Address.ordered() |> limit(^preview_limit(:addresses)),
       inbound_follows: {Follow.latest(preview_limit(:followers), :follower), [:follower]},
       outbound_follows: {Follow.latest(preview_limit(:following), :followee), [:followee]}

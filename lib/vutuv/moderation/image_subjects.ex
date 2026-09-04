@@ -25,6 +25,8 @@ defmodule Vutuv.Moderation.ImageSubjects do
   alias Vutuv.Organizations.Organization
   alias Vutuv.Organizations.OrganizationImage
   alias Vutuv.Organizations.OrganizationScreenshot
+  alias Vutuv.Organizations.Screenshots, as: OrganizationScreenshots
+  alias Vutuv.PageScreenshot
   alias Vutuv.Posts.PostImage
   alias Vutuv.Posts.PostReview
   alias Vutuv.Posts.PostScreenshot
@@ -396,13 +398,17 @@ defmodule Vutuv.Moderation.ImageSubjects do
       from(u in Url,
         where:
           u.id == ^scan.subject_id and u.screenshot == ^scan.fingerprint and
-            u.screenshot_moderation == "pending"
+            u.screenshot_moderation == "pending",
+        # The released row rides back with the write; promoting the file and
+        # telling the tile both need it, and neither needs a second read.
+        select: u
       )
       |> Repo.update_all(set: [screenshot_moderation: "approved"])
 
     case flipped do
-      {1, _} ->
-        Vutuv.Screenshot.promote_from_quarantine(Repo.get!(Url, scan.subject_id))
+      {1, [%Url{} = url]} ->
+        Vutuv.Screenshot.promote_from_quarantine(url)
+        PageScreenshot.announce(url)
         :ok
 
       _ ->
@@ -436,16 +442,16 @@ defmodule Vutuv.Moderation.ImageSubjects do
       from(os in OrganizationScreenshot,
         where:
           os.id == ^scan.subject_id and os.screenshot == ^scan.fingerprint and
-            os.moderation == "pending"
+            os.moderation == "pending",
+        # Rides back with the write (see the Url branch).
+        select: os
       )
       |> Repo.update_all(set: [moderation: "approved"])
 
     case flipped do
-      {1, _} ->
-        Vutuv.Screenshot.promote_from_quarantine(
-          Repo.get!(OrganizationScreenshot, scan.subject_id)
-        )
-
+      {1, [%OrganizationScreenshot{} = capture]} ->
+        Vutuv.Screenshot.promote_from_quarantine(capture)
+        OrganizationScreenshots.announce(capture)
         :ok
 
       _ ->
@@ -592,7 +598,11 @@ defmodule Vutuv.Moderation.ImageSubjects do
 
   def apply_rejected(%ImageScan{kind: "url_screenshot"} = scan) do
     cleared =
-      from(u in Url, where: u.id == ^scan.subject_id and u.screenshot == ^scan.fingerprint)
+      from(u in Url,
+        where: u.id == ^scan.subject_id and u.screenshot == ^scan.fingerprint,
+        # Which tile to tell rides back with the write (see the Url branch above).
+        select: u
+      )
       # "rejected", not nil, the way the post branch below records it: the row
       # is the only memory of the verdict, and `Vutuv.PageScreenshot.due/1`
       # reads it to leave the link alone. Clearing it would put the page back
@@ -601,8 +611,9 @@ defmodule Vutuv.Moderation.ImageSubjects do
       |> Repo.update_all(set: [screenshot: nil, screenshot_moderation: "rejected"])
 
     case cleared do
-      {1, _} ->
+      {1, [%Url{} = cleared_row]} ->
         Vutuv.Screenshot.delete(%Url{id: scan.subject_id})
+        PageScreenshot.announce(cleared_row)
         :ok
 
       _ ->
@@ -649,7 +660,9 @@ defmodule Vutuv.Moderation.ImageSubjects do
   def apply_rejected(%ImageScan{kind: "organization_screenshot"} = scan) do
     cleared =
       from(os in OrganizationScreenshot,
-        where: os.id == ^scan.subject_id and os.screenshot == ^scan.fingerprint
+        where: os.id == ^scan.subject_id and os.screenshot == ^scan.fingerprint,
+        # Which page to tell rides along with the write (see the Url branch).
+        select: os
       )
       |> Repo.update_all(
         set: [
@@ -661,8 +674,9 @@ defmodule Vutuv.Moderation.ImageSubjects do
       )
 
     case cleared do
-      {1, _} ->
+      {1, [%OrganizationScreenshot{} = cleared_row]} ->
         Vutuv.Screenshot.delete(%OrganizationScreenshot{id: scan.subject_id})
+        OrganizationScreenshots.announce(cleared_row)
         :ok
 
       _ ->
