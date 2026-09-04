@@ -41,12 +41,38 @@
         <%!-- The arithmetic behind the figure in the top bar, beside the two
               tiles it adds: investors have asked how that number comes about,
               and the answer is an addition whose summands are right there.
-              `tabular-nums` so the digits line up as an equation rather than
-              as prose. --%>
-        <p class="tabular-nums font-semibold text-slate-900 dark:text-white">
-          {InvestorsDoc.people_sum(@facts)}
-        </p>
-        <p class="mt-1 text-sm text-slate-600 dark:text-slate-400">
+              Set as a written addition rather than as one line of prose — a
+              reader checking a sum reads it down the page, so the sign gets a
+              column of its own, `tabular-nums` puts every digit on the same
+              grid, and the rule over the last row does the work of the "=".
+              The label column takes the rest of the width (`1fr`) and wraps
+              instead of pushing the row sideways. --%>
+        <div class="grid grid-cols-[auto_1fr] items-baseline gap-x-3 tabular-nums">
+          <%= for row <- InvestorsDoc.people_sum_rows(@facts) do %>
+            <%!-- Sign and figure share ONE cell, so the rule over the last row
+                  runs under both of them instead of breaking into a stray dash
+                  beside the number. `justify-between` puts the sign at the left
+                  edge of the column and every figure flush right, which with
+                  `tabular-nums` is what lines the digits up. --%>
+            <span
+              data-sum-row={row.key}
+              class={[
+                "flex items-baseline justify-between gap-3 font-semibold text-slate-900 dark:text-white",
+                row.key == :total && "border-t border-slate-300 pt-1 dark:border-slate-600"
+              ]}
+            >
+              <span>{row.sign}</span>
+              <span>{row.value}</span>
+            </span>
+            <span class={[
+              "min-w-0 text-slate-700 dark:text-slate-300",
+              row.key == :total && "pt-1 font-semibold text-slate-900 dark:text-white"
+            ]}>
+              {row.label}
+            </span>
+          <% end %>
+        </div>
+        <p class="mt-2 text-sm text-slate-600 dark:text-slate-400">
           {InvestorsDoc.counter_explainer()}
         </p>
       </div>

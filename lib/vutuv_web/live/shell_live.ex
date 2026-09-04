@@ -49,6 +49,7 @@ defmodule VutuvWeb.ShellLive do
   alias Vutuv.DayClock
   alias Vutuv.Organizations
   alias Vutuv.PeopleCounter
+  alias Vutuv.PeopleHistory
   alias Vutuv.PostRewrites
   alias Vutuv.Posts
   alias Vutuv.Prefs
@@ -287,6 +288,13 @@ defmodule VutuvWeb.ShellLive do
     # socket connects. Zero (the sub-second before the counter's first reconcile
     # seeds the cell) renders nothing.
     |> assign(:people_count, PeopleCounter.counts())
+    # The same total over the last month as a thumbnail beside it, so the bar
+    # says which way the number is going and not only where it stands. Read
+    # from `:persistent_term` like the figure itself (`PeopleHistory.spark/0`),
+    # so neither render pays a query for it; `nil` until the counter's first
+    # reconcile has cached one, and on an installation too young to have a
+    # curve.
+    |> assign(:people_spark, PeopleHistory.spark())
     # False until the first broadcast: the figure's span is keyed on its value
     # (see .people-total__figure in components.css), so without this gate the
     # first render would look like an insert and every page load would open with
@@ -1381,6 +1389,45 @@ defmodule VutuvWeb.ShellLive do
               <span class={@user_id && "hidden lg:inline"}>
                 {people_total_word(@people_count.total)}
               </span>
+              <%!-- The shape of the last month, hairline-thin and in the pill's
+                    own colour at 60 %, so it reads as a movement beside the
+                    figure rather than as a chart in the chrome, and follows the
+                    pill from slate to brand on hover instead of holding a
+                    colour of its own. From `lg` only: below that the bar has
+                    about 72px to spare (see the width note above) and this
+                    would spend two thirds of it on decoration. `hidden` +
+                    `lg:inline` rather than `lg:block`, because the previous
+                    release's stylesheet has to be able to hide it: a tab open
+                    across a deploy gets this markup patched into a document
+                    whose bundle only carries the classes already in use. --%>
+              <svg
+                :if={@people_spark}
+                viewBox={@people_spark.view_box}
+                preserveAspectRatio="none"
+                role="img"
+                class="hidden h-4 w-12 shrink-0 opacity-60 lg:inline"
+              >
+                <%!-- The `<title>` is both the tooltip and, on a `role="img"`,
+                      the accessible name — so it says what the line is once
+                      rather than twice, in the sentence the big chart on
+                      /system/investors already labels itself with. --%>
+                <title>
+                  {gettext("People here per day over the last %{days} days",
+                    days: @people_spark.days
+                  )}
+                </title>
+                <%!-- `vector-effect` keeps the line an even hairline once the
+                      viewBox is stretched to those twelve pixels of bar. --%>
+                <polyline
+                  points={@people_spark.points}
+                  fill="none"
+                  stroke="currentColor"
+                  stroke-width="1.5"
+                  stroke-linecap="round"
+                  stroke-linejoin="round"
+                  vector-effect="non-scaling-stroke"
+                />
+              </svg>
             </.link>
           </div>
 

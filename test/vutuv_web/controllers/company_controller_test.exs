@@ -16,6 +16,7 @@ defmodule VutuvWeb.CompanyControllerTest do
   alias Vutuv.Repo
   alias VutuvWeb.AgentDocs.InvestorsDoc
   alias VutuvWeb.AgentDocs.MediaKitDoc
+  alias VutuvWeb.UI
 
   # The creating migration backfills 30 days, so the table is never empty even
   # in a fresh test database. Each test states its own history.
@@ -125,16 +126,41 @@ defmodule VutuvWeb.CompanyControllerTest do
 
     test "shows the arithmetic behind the number in the top bar", %{conn: conn} do
       # Investors have asked how that figure comes about, which is why the
-      # addition is spelled out rather than described.
+      # addition is spelled out rather than described. The HTML sets it as a
+      # written addition — three labelled rows and a rule over the last one —
+      # so the rows are asserted by name here rather than by their figures,
+      # which at three members are single digits any page would match.
       insert(:activated_user)
       insert(:activated_user)
       insert(:activated_user)
+
+      facts = InvestorsDoc.facts()
+      [_members, fediverse, total] = rows = InvestorsDoc.people_sum_rows(facts)
+
+      assert fediverse.sign == "+"
+      assert total.value == UI.delimited_count(facts.members + facts.fediverse_accounts)
 
       html = conn |> get(~p"/system/investors") |> html_response(200)
 
-      assert html =~ "3 members + 0 Fediverse accounts = 3 people"
-      assert html =~ "That total is the number in the top bar"
-      assert html =~ "Nobody is counted twice"
+      for row <- rows do
+        assert html =~ ~s|data-sum-row="#{row.key}"|
+        assert html =~ row.label
+      end
+
+      assert html =~ "A Fediverse account following several profiles here"
+
+      # The agent formats say the same arithmetic as one sentence, and every
+      # figure of the addition has to appear in it: the two shapes read the
+      # same `facts` map, so they cannot disagree about a number — but nothing
+      # stops one of them from growing a third summand alone.
+      sentence = InvestorsDoc.people_sum(facts)
+
+      for row <- rows do
+        assert sentence =~ row.value
+      end
+
+      markdown = conn |> get(~p"/system/investors" <> ".md") |> response(200)
+      assert markdown =~ "3 members + 0 Fediverse accounts = 3 people"
     end
 
     test "the two tiles it adds are the ones the top bar counts", %{conn: conn} do
@@ -152,8 +178,8 @@ defmodule VutuvWeb.CompanyControllerTest do
       assert facts.members == Accounts.count_users()
       assert facts.fediverse_accounts == Fediverse.distinct_follower_count()
 
-      html = conn |> get(~p"/system/investors") |> html_response(200)
-      assert html =~ "= #{facts.members + facts.fediverse_accounts} people"
+      markdown = conn |> get(~p"/system/investors" <> ".md") |> response(200)
+      assert markdown =~ "= #{facts.members + facts.fediverse_accounts} people"
     end
 
     test "makes the case against LinkedIn's sign-up wall", %{conn: conn} do
@@ -254,10 +280,10 @@ defmodule VutuvWeb.CompanyControllerTest do
       assert html =~ "Quelle:"
       assert html =~ "Anzeigen statt Bezahlschranke"
       assert html =~ "Wo wir stehen"
-      assert html =~ "Mitglieder + "
-      assert html =~ " = "
-      assert html =~ "Diese Summe steht oben in der Navigationsleiste"
       assert html =~ "Mitglieder"
+      assert html =~ "Fediverse-Konten"
+      assert html =~ "Personen"
+      assert html =~ "Ein Fediverse-Konto, das hier mehreren Profilen folgt"
 
       # The English page must not show through anywhere.
       refute html =~ "Where we are"
