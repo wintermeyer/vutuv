@@ -360,16 +360,18 @@ defmodule VutuvWeb.FediverseAccountLive do
                 {gettext("Show less")}
               </span>
             </span>
+            <%!-- Both expressions sit against their tags, with no line of
+            their own: `whitespace-pre-line` keeps every newline in the markup,
+            and HEEx hands the text over with the template's own indentation in
+            front of it, so an indented `{@account.summary}` opens the bio with
+            a blank line — and in the clamped half it is one of the few lines
+            the reader gets. --%>
             <p
               data-clamp-body
               class="post-clamp mb-0 whitespace-pre-line break-words text-sm leading-relaxed text-slate-700 group-open:hidden dark:text-slate-300"
-            >
-              {@account.summary}
-            </p>
+            >{@account.summary}</p>
           </summary>
-          <p class="mb-0 whitespace-pre-line break-words text-sm leading-relaxed text-slate-700 dark:text-slate-300">
-            {@account.summary}
-          </p>
+          <p class="mb-0 whitespace-pre-line break-words text-sm leading-relaxed text-slate-700 dark:text-slate-300">{@account.summary}</p>
         </details>
 
         <div class="mt-5">

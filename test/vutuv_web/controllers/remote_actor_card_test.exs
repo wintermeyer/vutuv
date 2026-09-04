@@ -92,6 +92,27 @@ defmodule VutuvWeb.RemoteActorCardTest do
     assert html =~ @actor
   end
 
+  # Calibrated against the template that shipped first: with
+  # `whitespace-pre-line` on this paragraph the two-line clamp spent its first
+  # line on the newline HEEx writes in front of an indented expression, so every
+  # card showed one line of self-description under one blank one. The bio's own
+  # line breaks are worth something at full length, on the account page, and
+  # nothing at two lines here.
+  test "the self-description is clamped as running text, so both lines carry words",
+       %{conn: conn} do
+    {conn, _user} = federating(conn)
+    account()
+
+    html = post(conn, ~p"/system/fediverse/actor_card", address: @address) |> html_response(200)
+
+    assert [summary] =
+             html |> elements("p") |> Enum.filter(&(LazyHTML.text(&1) =~ "Schreibt über Züge."))
+
+    assert [class] = LazyHTML.attribute(summary, "class")
+    assert class =~ "line-clamp-2"
+    refute class =~ "whitespace-pre-line"
+  end
+
   # The common case, and the reason the card is cheap: most accounts a member
   # meets in a post are already stored, because somebody here follows them or
   # something of theirs arrived. Calibrated by the stub, which fails the test if
