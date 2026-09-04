@@ -99,9 +99,13 @@ defmodule Vutuv.WebPush.DispatcherTest do
   end
 
   # The payload is what a lock screen is drawn from, so this is where "a push
-  # carries no content" is enforced. It names the kind and where the tap lands —
-  # never the actor, never a word of what was written.
-  test "the payload names the kind and the destination and nothing else" do
+  # carries no content" is enforced. It names the kind, where the tap lands and
+  # the count for the icon — never the actor, never a word of what was written.
+  #
+  # It reads the real plaintext (`decrypt_push/2`) rather than searching the
+  # ciphertext for a word: a body this test cannot open refutes every string it
+  # is handed, including the ones that are in there.
+  test "the payload names the kind, the destination and the count, and nothing else" do
     test = self()
 
     put_config(:web_push_req_options,
@@ -116,21 +120,66 @@ defmodule Vutuv.WebPush.DispatcherTest do
       if family == :inet, do: {:ok, [{93, 184, 216, 34}]}, else: {:error, :nxdomain}
     end)
 
-    user = member()
+    user = insert(:user, browser_notifications?: true)
+    subscriber = subscriber("https://push.example.com/#{user.id}")
+    {:ok, _} = Subscriptions.subscribe(user.id, subscriber.attrs, "Safari on iPhone")
 
     Dispatcher.dispatch(user.id, %{
       kind: "like",
       id: "like:1",
       actor_name: "Anna Müller",
-      text: "liked your post."
+      text: "liked your post.",
+      source_id: Vutuv.UUIDv7.generate()
     })
 
     assert_receive {:body, body}, @wait
-    # The body is aes128gcm, so nothing is legible in it either way; what this
-    # asserts is that the plaintext never carried the words in the first
-    # place — the encryption is not what is being relied on.
-    refute body =~ "Anna"
-    refute body =~ "liked your post"
+    payload = decrypt_push(body, subscriber)
+
+    assert %{"kind" => "like", "locale" => _, "url" => _, "unread" => 1} = payload
+    assert payload |> Map.keys() |> Enum.sort() == ["kind", "locale", "unread", "url"]
+    refute inspect(payload) =~ "Anna"
+    refute inspect(payload) =~ "liked your post"
+  end
+
+  # The number the Home Screen icon carries while vutuv is closed (issue #1732).
+  # The page's own hook can only write it from an open tab, which is exactly the
+  # tab a push exists because there is none of - so the count rides along in the
+  # payload and the service worker puts it on the icon.
+  describe "the count the icon shows" do
+    test "adds unread conversations to unread notifications" do
+      me = insert(:user)
+      other = insert(:user)
+
+      conversation = insert_conversation_between(other, me)
+      insert(:message, conversation: conversation, sender: other)
+      follow!(other, me)
+
+      assert Dispatcher.badge_count(me.id) == 2
+    end
+
+    # A second message in a conversation that is already unread does not move
+    # it: the badge counts conversations, the way the shell's own does.
+    test "counts a conversation once, however many messages are waiting" do
+      me = insert(:user)
+      other = insert(:user)
+
+      conversation = insert_conversation_between(other, me)
+      insert(:message, conversation: conversation, sender: other)
+      insert(:message, conversation: conversation, sender: other)
+
+      assert Dispatcher.badge_count(me.id) == 1
+    end
+
+    # `Activity.notify/2` often runs inside the transaction that produced the
+    # notification, and this count is read from another process - so the row
+    # that caused this very push may not be visible yet. Zero would then TAKE
+    # the badge off at the moment something arrived, which is the one answer
+    # that is certainly wrong; the open app corrects the number either way.
+    test "is never zero, even when the row behind it is not committed yet" do
+      me = insert(:user)
+
+      assert Dispatcher.badge_count(me.id) == 1
+    end
   end
 
   describe "a direct message" do

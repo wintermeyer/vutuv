@@ -26,6 +26,70 @@ defmodule Vutuv.WebPushHelpers do
     %{"endpoint" => endpoint, "p256dh" => @p256dh, "auth" => @auth}
   end
 
+  @curve :prime256v1
+
+  @doc """
+  A subscriber whose payloads a test can actually READ, as
+  `%{attrs:, public:, private:, auth:}`.
+
+  `p256dh/0` above is the RFC 8291 vector and its private half is not part of
+  it, so nothing sent to that subscription can ever be opened again — which is
+  why the payload test that used it could only assert that some word is absent
+  from a ciphertext, a thing that is true of every ciphertext. This mints a
+  fresh pair, and `decrypt_push/2` then reads the same bytes the browser hands
+  the service worker.
+  """
+  def subscriber(endpoint) do
+    {public, private} = :crypto.generate_key(:ecdh, @curve)
+    auth = :crypto.strong_rand_bytes(16)
+
+    %{
+      public: public,
+      private: private,
+      auth: auth,
+      attrs: %{
+        "endpoint" => endpoint,
+        "p256dh" => Base.url_encode64(public, padding: false),
+        "auth" => Base.url_encode64(auth, padding: false)
+      }
+    }
+  end
+
+  @doc """
+  The decoded payload of one `aes128gcm` push body (RFC 8291 §3.4) — the exact
+  mirror of `Vutuv.WebPush.encrypt/5`, kept here rather than in the app because
+  only a subscriber ever decrypts, and this installation never is one.
+  """
+  def decrypt_push(body, %{public: ua_public, private: ua_private, auth: auth}) do
+    <<salt::binary-16, _rs::unsigned-big-32, key_len::unsigned-8, rest::binary>> = body
+    <<as_public::binary-size(^key_len), sealed::binary>> = rest
+
+    shared = :crypto.compute_key(:ecdh, as_public, ua_private, @curve)
+    key_info = "WebPush: info" <> <<0>> <> ua_public <> as_public
+    ikm = hkdf(auth, shared, key_info, 32)
+    cek = hkdf(salt, ikm, "Content-Encoding: aes128gcm" <> <<0>>, 16)
+    nonce = hkdf(salt, ikm, "Content-Encoding: nonce" <> <<0>>, 12)
+
+    body_len = byte_size(sealed) - 16
+    <<ciphertext::binary-size(^body_len), tag::binary-16>> = sealed
+
+    padded = :crypto.crypto_one_time_aead(:aes_128_gcm, cek, nonce, ciphertext, <<>>, tag, false)
+
+    # 0x02 is the record delimiter of the last record, which is the only one.
+    plaintext_len = byte_size(padded) - 1
+    <<plaintext::binary-size(^plaintext_len), 2>> = padded
+
+    Jason.decode!(plaintext)
+  end
+
+  # RFC 5869 with the one-block expand every Web Push step needs; the same
+  # function `Vutuv.WebPush` keeps private.
+  defp hkdf(salt, ikm, info, length) do
+    prk = :crypto.mac(:hmac, :sha256, salt, ikm)
+    <<key::binary-size(^length), _rest::binary>> = :crypto.mac(:hmac, :sha256, prk, info <> <<1>>)
+    key
+  end
+
   @doc """
   Sets an application env for the test and restores it afterwards.
 
