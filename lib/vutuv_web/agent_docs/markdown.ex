@@ -1180,10 +1180,26 @@ defmodule VutuvWeb.AgentDocs.Markdown do
   defp in_reply_to_line(%{url: nil, author: author}),
     do: "> " <> gettext("In reply to a deleted post by %{name}.", name: author)
 
-  defp in_reply_to_line(%{url: url, author: author}) do
+  defp in_reply_to_line(%{url: url, author: author} = ref) do
     author_link = md_link(author, url)
-    "> " <> gettext("In reply to a post by %{name}.", name: author_link)
+    "> " <> gettext("In reply to a post by %{name}.", name: author_link) <> answered_words(ref)
   end
+
+  # The words of the post answered, when the document carries them — an answer
+  # to another network (issue #1165), whose HTML page draws that post as a card
+  # above the answer. Inside the same blockquote, so it cannot be read as this
+  # post's own body, and escaped as text like every other stranger's writing
+  # here: it must not be able to mint links in our document.
+  defp answered_words(%{content_warning: warning} = ref) when is_binary(warning) do
+    "\n>\n> " <> gettext("Content warning") <> ": " <> md_text(warning) <> answered_text(ref)
+  end
+
+  defp answered_words(ref), do: answered_text(ref)
+
+  defp answered_text(%{text: text}) when is_binary(text) and text != "",
+    do: "\n>\n" <> Enum.map_join(String.split(text, "\n"), "\n", &("> " <> md_text(&1)))
+
+  defp answered_text(_ref), do: ""
 
   defp tags_line([]), do: nil
   defp tags_line(tags), do: "Tags: " <> Enum.map_join(tags, ", ", &"##{&1}")

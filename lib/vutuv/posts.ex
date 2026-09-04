@@ -3713,9 +3713,8 @@ defmodule Vutuv.Posts do
   # answer with nothing to read above it used to be.
   #
   # It rides `remote_reply_ref`, already preloaded with its account
-  # (`post_preloads/0`), so this costs no lookup — only the same three batch
-  # reads a remote card needs anywhere (its pictures, the reader's marks, the
-  # reader's follow), run once for the page. `taken` keeps a post that already
+  # (`post_preloads/0`), so finding one costs no lookup; what it costs beyond
+  # that is `decorate_remote_parents/2` below. `taken` keeps a post that already
   # has a card **further up the feed** from getting a second one; a post whose
   # own row is on *this* page is not in it — that row steps aside instead, see
   # `settle_remote_cards/5`.
@@ -3727,40 +3726,79 @@ defmodule Vutuv.Posts do
           Vutuv.Fediverse.subject_key(parent) not in taken,
           do: %{post_id: post.id, remote_post: parent}
 
-    case Enum.uniq_by(parents, &parent_key/1) do
+    case decorate_remote_parents(parents, viewer) do
+      empty when empty == %{} -> entries
+      by_post -> Enum.map(entries, &claim_remote_parents(&1, by_post))
+    end
+  end
+
+  @doc """
+  The cached post each of these posts answers (issue #1165), as the card the
+  renderer draws above it: `%{post_id => card}`, and `%{}` where none of them
+  answers anything out there.
+
+  What `attach_remote_parents/3` builds for the feed, for a caller holding a
+  plain list of posts instead of feed entries — the permalink's conversation
+  (`VutuvWeb.PostLive.Thread`), which is the page a link to such an answer
+  lands on and was the one place that showed the answer without what it
+  answers.
+  """
+  def remote_parents(posts, viewer) do
+    parents =
+      for post <- posts,
+          %RemotePost{} = parent <- [remote_parent(post)],
+          do: %{post_id: post.id, remote_post: parent}
+
+    decorate_remote_parents(parents, viewer)
+  end
+
+  # The shared tail of both callers: one card per cached post, only the ones
+  # this reader may read, and the batch reads a remote card needs, run once for
+  # the page rather than once per card. Nothing to draw means no read at all.
+  #
+  # **One card per cached post per page**, the rule `dedupe_remote/1`,
+  # `collapse_reposts/1` and `attach_thread_notes/3` already hold for the other
+  # kinds — and here it is not about repetition. The card's action bar is a
+  # LiveComponent keyed by the cached post
+  # (`RemoteActionsComponent.dom_id(:remote_post, id)`), so a second card emits
+  # a duplicate LiveView id, which raises inside `render_pending_components/6`
+  # during the **static** render: the page 500s rather than degrading. Two
+  # members answering the same post out there is ordinary behaviour, and the
+  # first such pair in the database took /feed down for every reader who had
+  # both answers on one page (2026-08-28). So the deduped list decides where
+  # the card renders as well as which reads run: the answers that do not claim
+  # it keep their "Replying to …" line, which is what this feature replaced and
+  # still beats an error page.
+  defp decorate_remote_parents(parents, viewer) do
+    case parents |> Enum.uniq_by(&parent_key/1) |> readable_parents(viewer) do
       [] ->
-        entries
+        %{}
 
       unique ->
-        # **One card per cached post per page**, the rule `dedupe_remote/1`,
-        # `collapse_reposts/1` and `attach_thread_notes/3` already hold for the
-        # other kinds — and here it is not about repetition. The card's action
-        # bar is a LiveComponent keyed by the cached post
-        # (`RemoteActionsComponent.dom_id(:remote_post, id)`), so a second card
-        # emits a duplicate LiveView id, which raises inside
-        # `render_pending_components/6` during the **static** render: the page
-        # 500s rather than degrading. Two members answering the same post out
-        # there is ordinary behaviour, and the first such pair in the database
-        # took /feed down for every reader who had both answers on one page
-        # (2026-08-28).
-        #
-        # `unique` therefore decides where the card renders as well as which
-        # batch reads run, and the placement is built from the decorated list
-        # itself — the older version kept a second list to re-expand from, and
-        # a comment saying the repeats "must not pay for the batch reads, not
-        # the places they render" is exactly how the trap was rationalised.
-        # The answers that do not claim it keep their "Replying to …" line,
-        # which is what this feature replaced and still beats an error page.
-        by_post =
-          unique
-          |> attach_remote_images()
-          |> attach_remote_quotes()
-          |> attach_remote_follows(viewer)
-          |> attach_remote_likes(viewer)
-          |> Map.new(&{&1.post_id, &1})
-
-        Enum.map(entries, &claim_remote_parents(&1, by_post))
+        unique
+        |> attach_remote_images()
+        |> attach_remote_quotes()
+        |> attach_remote_follows(viewer)
+        |> attach_remote_likes(viewer)
+        |> Map.new(&{&1.post_id, &1})
     end
+  end
+
+  # Whose audience lets *this* reader see it — never the audience the answer's
+  # author had. Answering a followers-only post in public is refused
+  # (`Fediverse.check_remote_post_reply/2`), but an audience narrows *after* the
+  # answer often enough that the composer re-reads the row for exactly that, and
+  # a card drawn above a public answer would then hand the post to every reader
+  # of that answer. The permalink is a public page, so the question is
+  # `Fediverse.publicly_readable_remote_post_ids/2` rather than the signed-in
+  # one, and an open parent — nearly all of them — costs no query either way.
+  defp readable_parents(parents, viewer) do
+    readable =
+      parents
+      |> Enum.map(& &1.remote_post)
+      |> Vutuv.Fediverse.publicly_readable_remote_post_ids(viewer)
+
+    Enum.filter(parents, &MapSet.member?(readable, &1.remote_post.id))
   end
 
   defp parent_key(%{remote_post: post}), do: Vutuv.Fediverse.subject_key(post)

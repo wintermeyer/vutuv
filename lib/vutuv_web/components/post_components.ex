@@ -965,7 +965,18 @@ defmodule VutuvWeb.PostComponents do
       entry_id: assigns.entry_id
     }
 
-    (ancestors ++ [leaf])
+    assemble_conversation(ancestors ++ [leaf], assigns)
+  end
+
+  # The assembly order of a conversation, for both surfaces that build one: the
+  # reply tree, the "Replying to" banner on whatever ended up a root, the
+  # replies from other networks woven in among the siblings, and the cached post
+  # an answer answers hung above it. Four stages that have to be remembered
+  # together, which is why they are written once — the permalink was missing the
+  # last of them for exactly as long as the two callers each spelled the list
+  # out for themselves.
+  defp assemble_conversation(cards, assigns) do
+    cards
     |> Posts.thread_forest()
     |> banner_on_roots()
     |> weave_remote_replies(
@@ -3292,6 +3303,13 @@ defmodule VutuvWeb.PostComponents do
         "one card, never the replies around it"
   )
 
+  attr(:remote_parents, :map,
+    default: %{},
+    doc:
+      "`%{post_id => card}` (`Vutuv.Posts.remote_parents/2`) for a post here " <>
+        "that answers one out there (issue #1165) — drawn above it, the way the feed draws it"
+  )
+
   attr(:conn_or_socket, :any, required: true)
   attr(:translations, :map, default: nil)
 
@@ -3329,6 +3347,7 @@ defmodule VutuvWeb.PostComponents do
   attr(:remote_replies, :map, default: %{})
   attr(:note_marks, :any, default: nil)
   attr(:likers, :any, default: nil)
+  attr(:remote_parents, :map, default: %{}, doc: "as on `thread_conversation/1`")
   attr(:conn_or_socket, :any, required: true)
   attr(:translations, :map, default: nil)
 
@@ -3407,6 +3426,12 @@ defmodule VutuvWeb.PostComponents do
   # is the first card on the page, the one case where the focused post has no
   # context above it and the page must not jump on arrival.
   defp conversation_nodes(posts, top_id, assigns) do
+    # A post with the card it answers drawn above it is no longer the page's
+    # first card, so the focus scrolls into view like any other post with
+    # context over it. Decided once, here, rather than as a second condition
+    # every card then evaluates.
+    top_id = if is_map_key(assigns.remote_parents, top_id), do: nil, else: top_id
+
     posts
     |> Enum.map(fn post ->
       focus? = post.id == assigns.focus_id
@@ -3427,13 +3452,7 @@ defmodule VutuvWeb.PostComponents do
         scroll?: assigns.auto_scroll? and focus? and post.id != top_id
       }
     end)
-    |> Posts.thread_forest()
-    |> banner_on_roots()
-    |> weave_remote_replies(
-      assigns[:remote_replies] || %{},
-      assigns.viewer,
-      assigns[:note_marks] || fn _note -> nil end
-    )
+    |> assemble_conversation(assigns)
   end
 
   # Hangs the replies written on other networks (issue #1069) under the posts

@@ -816,8 +816,22 @@ defmodule VutuvWeb.AgentDocs.Text do
   defp in_reply_to_line(%{url: nil, author: author}),
     do: gettext("In reply to a deleted post by %{name}.", name: author)
 
-  defp in_reply_to_line(%{url: url, author: author}),
-    do: gettext("In reply to a post by %{name}.", name: author) <> " #{url}"
+  defp in_reply_to_line(%{url: url, author: author} = ref),
+    do:
+      gettext("In reply to a post by %{name}.", name: author) <> " #{url}" <> answered_words(ref)
+
+  # The words of the post answered, when the document carries them (issue
+  # #1165) — indented under the line naming its author, the way a reply from
+  # another network is indented under its own.
+  defp answered_words(%{content_warning: warning} = ref) when is_binary(warning),
+    do: "\n  " <> gettext("Content warning") <> ": #{warning}" <> answered_text(ref)
+
+  defp answered_words(ref), do: answered_text(ref)
+
+  defp answered_text(%{text: text}) when is_binary(text) and text != "",
+    do: "\n" <> indent_block(text, "  ")
+
+  defp answered_text(_ref), do: ""
 
   defp tags_line([]), do: nil
   defp tags_line(tags), do: "Tags: " <> Enum.join(tags, ", ")
