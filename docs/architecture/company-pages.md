@@ -69,6 +69,14 @@ They are the same figures `/system/nodeinfo/2.1` already publishes, plus the
 Fediverse reach (`Vutuv.Fediverse.distinct_follower_count/0` and
 `follower_host_count/0`).
 
+Beside the two figure tiles the page **spells the addition out**: members plus
+Fediverse accounts equals the total in the top bar, set as a written addition of
+three labelled rows (`InvestorsDoc.people_sum_rows/1`), because investors have
+asked how that number comes about and a figure nobody can decompose is a figure
+nobody believes. The agent-format siblings say the same arithmetic as one
+sentence (`people_sum/1`) — a column of digits has nothing to line up against in
+a text file. Both read the same `facts` map.
+
 The page is deliberately two cards: a contact card carrying the h1, and those
 figures. It once carried the whole pitch (positioning against LinkedIn, the
 gated-community argument, the cost base, a growth curve) and was cut back to
@@ -115,27 +123,35 @@ the table (a deliberate call, they are the same quantity counted as well as it
 can still be counted), but the migration's moduledoc says so, and so does this
 paragraph.
 
-### The curve (built, currently not on any page)
+### The curve, drawn twice
 
-`VutuvWeb.CompanyHTML.growth_chart/1`, plain server-rendered SVG. No chart
-library: the drawing is two paths and a few labels, and a JavaScript bundle for
-that would be paid for by every reader of every other page.
+`VutuvWeb.CompanyHTML.growth_curve/1` on the investor page, plain server-rendered
+SVG. No chart library: the drawing is one path, a wash under it and two labels,
+and a JavaScript bundle for that would be paid for by every reader of every
+other page.
 
-**The investor page dropped it on 2026-08-16 and nothing renders it today.** The
-component and its geometry tests stay, and the recorder keeps writing a row a
-day, on purpose: the snapshots cannot be recovered afterwards, so stopping now
-would mean the curve comes back with an empty past. Putting it back is one
-`<.growth_chart series={...} />`.
+**One line, the people total**, rather than a band per population: the member
+half is two orders of magnitude larger than the Fediverse half, so on any shared
+scale the smaller band is a hairline along the top and says nothing. Which half
+moved is said in words under the chart (`InvestorsDoc.growth_sentence/1`), where
+it can be said exactly.
 
-It is a filled area for the members here and a line above it for the people
-total, so the gap between the two *is* the Fediverse share. A second line
-against the same axis would lie flat on the floor (the two figures are two
-orders of magnitude apart), and giving it its own axis would suggest they are
-comparable in size.
+**The y-axis is the span the data covers, not zero to peak** — at four digits a
+month of growth is a couple of hundred people, and an axis from zero draws that
+as a solid block with a flat lid. A zoom like that is only honest where
+something says what it spans, so the chart names both ends underneath itself:
+the first and last figure, and the first and last day.
 
-**The y-axis starts at zero.** Both figures are running totals in the thousands
-that grow by a few a day, so an axis cropped to the data's own range turns a
-couple of percent into a mountain. On an investor page that is the one chart
-trick that must not be played, and `company_controller_test.exs` pins the
-scaling to coordinates rather than to a rendered path string, so a "nicer"
-axis cannot slip in unnoticed.
+The same line is drawn a second time, as a **thumbnail in the top bar** beside
+the people total (`VutuvWeb.ShellLive`), 48×16 pixels of the last 30 days. It
+has no room for those end figures, which is why it says only "rising" and leaves
+"how far" to the number it sits beside. Both drawings come through
+`Vutuv.PeopleHistory.curve_points/3`, so how this curve is drawn is decided in
+one place; only the box and what is built around the line differ.
+
+The thumbnail is read from `:persistent_term`, never from the table: the bar is
+on every page, so it has to cost what the figure beside it costs (two atomics
+reads). `Vutuv.PeopleCounter` refreshes it on the tick it already reconciles the
+member count with, and writes only when the shape changed. While nothing is
+cached — the sub-second after boot, an installation younger than two days, a
+span that never moved — the bar simply shows the number.

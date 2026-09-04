@@ -148,7 +148,11 @@ defmodule VutuvWeb.AgentDocs.InvestorsDoc do
 
   @doc """
   The sum in the top bar written out as the arithmetic it is: the two tiles it
-  adds and the figure they add up to.
+  adds and the figure they add up to, as one sentence for the agent formats.
+
+  The HTML sets the same three figures as a written addition
+  (`people_sum_rows/1`); both read them from the same `facts` map, so they
+  cannot disagree.
 
   Investors have asked how that number comes about, which is the whole reason
   it is spelled out — a figure nobody can decompose is a figure nobody
@@ -170,13 +174,52 @@ defmodule VutuvWeb.AgentDocs.InvestorsDoc do
   end
 
   @doc """
-  What that sum means, in the one sentence the equation above cannot say.
+  The three lines of the addition above, as an ordered list of
+  `%{key:, sign:, value:, label:}`: the two summands and the figure they add up
+  to, the last one keyed `:total`.
+
+  A stacked addition rather than a sentence, because that is how a person reads
+  an arithmetic they were about to check anyway — the digits line up under each
+  other and the rule replaces the "=". The agent formats keep the sentence
+  (`people_sum/1`), where a column of numbers has nothing to align against.
+  Both read the same `facts` map, so the two shapes cannot name different
+  figures; the test that says so is in `company_controller_test.exs`, because
+  only discipline keeps them naming the same **summands** if a third population
+  is ever added.
+
+  The labels are the tiles' own msgids on purpose: the addition stands beside
+  those tiles, and a row that called the same figure something else would read
+  as a different figure.
+  """
+  def people_sum_rows(facts) do
+    [
+      %{
+        key: :members,
+        sign: nil,
+        value: UI.delimited_count(facts.members),
+        label: gettext("Members")
+      },
+      %{
+        key: :fediverse,
+        sign: "+",
+        value: UI.delimited_count(facts.fediverse_accounts),
+        label: gettext("Fediverse accounts")
+      },
+      %{
+        key: :total,
+        sign: nil,
+        value: UI.delimited_count(facts.members + facts.fediverse_accounts),
+        label: gettext("People")
+      }
+    ]
+  end
+
+  @doc """
+  What that sum means, in the one sentence the addition above cannot say.
   `/system/members` spells out the rest for whoever wants it.
   """
   def counter_explainer do
-    gettext(
-      "That total is the number in the top bar. Nobody is counted twice: an account following five things here is one account, and a member who also follows from elsewhere is already in the first figure."
-    )
+    gettext("A Fediverse account following several profiles here still counts as one person.")
   end
 
   @doc """

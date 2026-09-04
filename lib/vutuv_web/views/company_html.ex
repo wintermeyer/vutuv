@@ -10,6 +10,7 @@ defmodule VutuvWeb.CompanyHTML do
   """
   use VutuvWeb, :html
 
+  alias Vutuv.PeopleHistory
   alias Vutuv.PeopleHistory.Snapshot
   alias Vutuv.ViewerClock
   alias VutuvWeb.AgentDocs.InvestorsDoc
@@ -104,32 +105,20 @@ defmodule VutuvWeb.CompanyHTML do
   # The line and the wash under it as SVG point lists, plus what the caption
   # needs. `nil` where there is nothing to draw.
   #
+  # The line itself comes from `Vutuv.PeopleHistory.curve_points/3`, which the
+  # top bar's thumbnail draws through as well — one decision about how this
+  # curve is drawn, in the module that owns the rows. What stays here is what
+  # only this chart has: the wash under the line and the two end figures.
+  #
   # One line, the people total the top bar shows, rather than the two stacked
   # bands the two columns invite: the member half is two orders of magnitude
   # larger than the Fediverse half, so on any shared scale the smaller band is a
   # hairline along the top and says nothing. Which half moved is in the sentence
   # under the chart instead, where it can be said in words.
-  defp curve_geometry(series) when length(series) < 2, do: nil
-
   defp curve_geometry(series) do
-    totals = Enum.map(series, &Snapshot.total/1)
-    {low, high} = Enum.min_max(totals)
-
-    if high > low do
-      # A margin above and below, so the line does not run along either edge.
-      margin = (high - low) * 0.15
-      bottom = low - margin
-      span = high + margin - bottom
-      steps = length(series) - 1
-
-      x = fn index -> index / steps * 600 end
-      y = fn value -> 140 - (value - bottom) / span * 140 end
-
-      line = Enum.map(Enum.with_index(totals), fn {total, i} -> {x.(i), y.(total)} end)
+    if line_points = PeopleHistory.curve_points(series, 600, 140) do
       first = List.first(series)
       last = List.last(series)
-
-      line_points = points(line)
 
       %{
         line: line_points,
@@ -139,15 +128,9 @@ defmodule VutuvWeb.CompanyHTML do
         days: Date.diff(last.day, first.day),
         first_day: ViewerClock.format(first.day, :short_date),
         last_day: ViewerClock.format(last.day, :short_date),
-        first_value: delimited_count(List.first(totals)),
-        last_value: delimited_count(List.last(totals))
+        first_value: delimited_count(Snapshot.total(first)),
+        last_value: delimited_count(Snapshot.total(last))
       }
     end
-  end
-
-  defp points(pairs) do
-    Enum.map_join(pairs, " ", fn {x, y} ->
-      :erlang.float_to_binary(x, decimals: 1) <> "," <> :erlang.float_to_binary(y, decimals: 1)
-    end)
   end
 end
