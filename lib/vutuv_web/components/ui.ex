@@ -5049,6 +5049,16 @@ defmodule VutuvWeb.UI do
            hint: gettext("Keep posts out of your feed"),
            terms: gettext("mute block hide filter keyword word tag feed")
          ),
+         # Beside its twin, not somewhere else in the map: the two answer one
+         # question — what do I not want to see — and a member who muted an
+         # account from a card looks for it wherever the muted words are.
+         row(:mutes, gettext("Muted accounts"), ~p"/settings/mutes",
+           hint: gettext("Accounts you have silenced, and whose reposts you hide"),
+           terms:
+             gettext(
+               "mute unmute hide account reposts boosts feed stumm stummschalten ausblenden konto"
+             )
+         ),
          row(:rewrites, gettext("Search & replace"), ~p"/settings/rewrites",
            hint: gettext("Rewrite what an account's posts say, for you alone"),
            terms: gettext("regex regular expression rewrite replace footer signature strip")

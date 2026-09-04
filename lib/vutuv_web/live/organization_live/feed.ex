@@ -122,9 +122,33 @@ defmodule VutuvWeb.OrganizationLive.Feed do
     RemotePostActions.report(socket, id, &drop_remote_entry(&1, id))
   end
 
+  # Muting is no longer gated on following the author, so the
+  # card's menu offers it wherever it is rendered and this page owes both
+  # events — an unhandled `phx-click` takes the LiveView down. The rows go the
+  # way a reported one does.
+  def handle_event("mute-remote-account", %{"id" => account_id}, socket) do
+    RemotePostActions.mute(socket, account_id, &drop_account_entries(&1, account_id))
+  end
+
+  def handle_event("mute-remote-reposts", %{"id" => account_id}, socket) do
+    RemotePostActions.mute_reposts(socket, account_id, &drop_boosted_entries(&1, account_id))
+  end
+
   defp drop_remote_entry(socket, remote_post_id) do
     update(socket, :entries, fn entries ->
       Enum.reject(entries, &(&1[:remote_post] && &1.remote_post.id == remote_post_id))
+    end)
+  end
+
+  defp drop_account_entries(socket, account_id) do
+    update(socket, :entries, fn entries ->
+      Enum.reject(entries, &(&1[:remote_post] && &1.remote_post.remote_account_id == account_id))
+    end)
+  end
+
+  defp drop_boosted_entries(socket, account_id) do
+    update(socket, :entries, fn entries ->
+      Enum.reject(entries, &(&1[:boosted_by] && &1.boosted_by.id == account_id))
     end)
   end
 

@@ -137,16 +137,22 @@ defmodule VutuvWeb.FediverseLookupLiveTest do
     assert has_element?(view, "[data-follow-state='requested']")
   end
 
-  test "muting is not offered for an account the member does not follow", %{conn: conn} do
+  test "muting is offered for an account the member does not follow", %{conn: conn} do
     serve()
-    {conn, _user} = federating(conn)
+    {conn, user} = federating(conn)
 
     {:ok, view, _html} = live(conn, ~p"/system/fediverse/lookup")
     view |> element("#lookup-form") |> render_submit(%{"url" => @display})
 
-    # A mute writes to a follow row that is not there, so the control would do
-    # nothing under a flash claiming it did.
-    refute has_element?(view, "[phx-click='mute-remote-account']")
+    # A mute is a row about the account rather than a flag on a follow, so it
+    # works on an account looked up by address — which is the only kind this
+    # page shows.
+    assert has_element?(view, "[phx-click='mute-remote-account']")
+
+    view |> element("[phx-click='mute-remote-account']") |> render_click()
+
+    account = Repo.get_by!(RemoteAccount, actor_uri: @author)
+    assert Vutuv.Mutes.scope_for(user, account) == :all
   end
 
   test "the heart works on the looked-up post", %{conn: conn} do

@@ -29,6 +29,7 @@ defmodule VutuvWeb.Live.RemotePostActions do
   import Phoenix.LiveView, only: [put_flash: 3]
 
   alias Vutuv.Fediverse
+  alias Vutuv.Mutes
 
   @doc """
   Handles a `"report-remote-post"` event for the cached post `id`, returning the
@@ -60,17 +61,64 @@ defmodule VutuvWeb.Live.RemotePostActions do
 
   @doc """
   Handles a `"mute-remote-account"` event for the account `id`: the private,
-  reversible "not this account today". The follow stays; its posts leave the
-  feed, so `on_muted` is where a surface takes the rows away.
+  reversible "not this account". Its posts leave the feed however they arrive —
+  its own, a boost, a member's reshare — so `on_muted` is where a surface takes
+  the rows away.
+
+  Works whether or not the reader follows the account: the mute is
+  a row about the account, and where there IS a follow `Vutuv.Mutes` sets its
+  flag too, so the account page and the following list agree with this menu. The
+  sentence differs for the same reason — telling somebody they still follow an
+  account they never followed is a confusing thing to read.
   """
   def mute(socket, account_id, on_muted) when is_function(on_muted, 1) do
-    :ok = Fediverse.set_remote_follow_mute(socket.assigns.current_user, account_id, true)
+    viewer = socket.assigns.current_user
 
-    {:noreply,
-     socket
-     |> put_flash(:info, gettext("Muted. You still follow them; their posts leave your feed."))
-     |> on_muted.()}
+    case Mutes.target("remote_account", account_id) do
+      nil ->
+        {:noreply, on_muted.(socket)}
+
+      account ->
+        following? = Fediverse.remote_follow_for(viewer, account) != nil
+        {:ok, _mute} = Mutes.mute(viewer, account, :all)
+
+        {:noreply,
+         socket
+         |> put_flash(:info, muted_message(following?))
+         |> on_muted.()}
+    end
   end
+
+  @doc """
+  Handles a `"mute-remote-reposts"` event for the account `id`: keep the
+  account, drop what it passes on.
+
+  The other half of the same complaint, and the one that names an account the
+  reader follows on purpose — a followed account that boosts the same stranger
+  every day is not an account they want to lose.
+  """
+  def mute_reposts(socket, account_id, on_muted) when is_function(on_muted, 1) do
+    case Mutes.target("remote_account", account_id) do
+      nil ->
+        {:noreply, on_muted.(socket)}
+
+      account ->
+        {:ok, _mute} = Mutes.mute(socket.assigns.current_user, account, :reposts)
+
+        {:noreply,
+         socket
+         |> put_flash(
+           :info,
+           gettext("Hidden. What they pass on stays out of your feed; their own posts do not.")
+         )
+         |> on_muted.()}
+    end
+  end
+
+  defp muted_message(true),
+    do: gettext("Muted. You still follow them; their posts leave your feed.")
+
+  defp muted_message(_not_following), do: gettext("Muted. Their posts leave your feed.")
 
   @doc """
   Handles an `"unfollow-remote-account"` event for the account `id`: the member

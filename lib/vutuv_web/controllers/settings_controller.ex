@@ -41,6 +41,7 @@ defmodule VutuvWeb.SettingsController do
   alias Vutuv.ContentFilters
   alias Vutuv.Credentials
   alias Vutuv.LoginCodes
+  alias Vutuv.Mutes
   alias Vutuv.Organizations
   alias Vutuv.Posts.AutoDeletion
   alias Vutuv.Prefs
@@ -50,6 +51,7 @@ defmodule VutuvWeb.SettingsController do
   alias Vutuv.ViewerClock
   alias Vutuv.WebPush
   alias Vutuv.WebPush.Subscriptions
+  alias VutuvWeb.ControllerHelpers
 
   # The hub: no forms of its own, just the grouped rows with per-section entry
   # counts. Each page sets its own :page_title so the browser tab / history
@@ -689,6 +691,72 @@ defmodule VutuvWeb.SettingsController do
     |> put_flash(:info, gettext("Filter removed."))
     |> redirect(to: ~p"/settings/filters")
   end
+
+  # Muted accounts: the other half of the same room. Muting is
+  # done where a member meets an account — a card's ⋯ menu, an account page —
+  # and this page is where they see every one of them at once and take one
+  # back. `Vutuv.Mutes.list_for_user/1` merges the two stores a mute can live
+  # in, so a follow's own mute and a row placed from a card read alike here.
+  def mutes(conn, _params) do
+    user = conn.assigns[:user]
+
+    render(conn, "mutes.html",
+      user: user,
+      mutes: Mutes.list_for_user(user),
+      page_title: gettext("Muted accounts")
+    )
+  end
+
+  # Posted from wherever a card is rendered, so it goes back where it came from
+  # rather than to a settings page nobody was on.
+  def create_mute(conn, %{"kind" => kind, "id" => id} = params) do
+    user = conn.assigns[:user]
+    scope = mute_scope(params["scope"])
+
+    case Mutes.target(kind, id) do
+      nil ->
+        conn
+        |> put_flash(:error, gettext("That account is gone."))
+        |> redirect(to: mute_return_to(params))
+
+      target ->
+        {:ok, _mute} = Mutes.mute(user, target, scope)
+
+        conn
+        |> put_flash(:info, muted_message(scope))
+        |> redirect(to: mute_return_to(params))
+    end
+  end
+
+  def delete_mute(conn, %{"kind" => kind, "id" => id} = params) do
+    user = conn.assigns[:user]
+
+    case Mutes.target(kind, id) do
+      nil ->
+        redirect(conn, to: mute_return_to(params))
+
+      target ->
+        :ok = Mutes.unmute(user, target)
+
+        conn
+        |> put_flash(:info, gettext("Unmuted. Their posts are back in your feed."))
+        |> redirect(to: mute_return_to(params))
+    end
+  end
+
+  # An unrecognised scope is the whole account rather than an error: the value
+  # comes off a menu item, and the narrower reading of a broken one would leave
+  # posts arriving that the member asked to stop.
+  defp mute_scope("reposts"), do: :reposts
+  defp mute_scope(_scope), do: :all
+
+  defp muted_message(:reposts),
+    do: gettext("Hidden. What they pass on stays out of your feed; their own posts do not.")
+
+  defp muted_message(_all), do: gettext("Muted. Their posts leave your feed.")
+
+  defp mute_return_to(params),
+    do: ControllerHelpers.safe_return_to(params["return_to"]) || ~p"/settings/mutes"
 
   defp render_filters(conn, changeset) do
     user = conn.assigns[:user]

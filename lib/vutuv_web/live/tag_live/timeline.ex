@@ -123,6 +123,20 @@ defmodule VutuvWeb.TagLive.Timeline do
     RemotePostActions.report(socket, id, &drop_remote_entry(&1, id))
   end
 
+  # Muting is no longer gated on following the author, so the
+  # card's menu offers it here — and this timeline is exactly where a reader
+  # meets an account nobody here follows. Both events are owed whether or not
+  # the reader ever presses them: an unhandled `phx-click` takes the LiveView
+  # down. A muted account's rows go; the page is re-read rather than each row
+  # hunted down, since a tag timeline can carry many of them.
+  def handle_event("mute-remote-account", %{"id" => account_id}, socket) do
+    RemotePostActions.mute(socket, account_id, &reload/1)
+  end
+
+  def handle_event("mute-remote-reposts", %{"id" => account_id}, socket) do
+    RemotePostActions.mute_reposts(socket, account_id, &reload/1)
+  end
+
   # A picture on a cached post moved (issues #1801, #1927): the tile the card is
   # showing becomes the mosaic preview, and then the picture, with no reload.
   # Every open page hears every one of these, so the cheap "is it even on this

@@ -2156,6 +2156,17 @@ The author's own account row is resolved too (their actor document fetched once,
 if we do not already hold them), because a card has to name who wrote the thing
 and an actor URI names nobody.
 
+The two ways a reader switches it off both sit on the boost card's ⋯ menu, and
+neither needs a follow of the boosted author (`Vutuv.Mutes`, see
+[social-graph.md](social-graph.md)): **Mute** silences that author wherever they
+turn up, and **Hide reposts** names the *booster* and drops only what they pass
+on, leaving their own posts where they are. The first is read by
+`muted_remote_authors/1` — the follow flags and the mute rows in one list, asked
+of the **author** rather than the account that carried the post, because a third
+party's boost is exactly the back door a mute must not leave open. The second is
+taken off the booster id lists in `remote_boosts_query/4`, which keeps that
+source on its recency index.
+
 Retention is unchanged: a boosted copy lives under the ordinary six-month clock.
 What the boost buys it is the right to exist while **nobody here follows its
 author** — which is the normal case for a boost, and the reason the copy is here

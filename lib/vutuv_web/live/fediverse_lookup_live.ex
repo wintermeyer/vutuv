@@ -130,6 +130,10 @@ defmodule VutuvWeb.FediverseLookupLive do
     RemotePostActions.mute(socket, account_id, &reread_follow/1)
   end
 
+  def handle_event("mute-remote-reposts", %{"id" => account_id}, socket) do
+    RemotePostActions.mute_reposts(socket, account_id, &reread_follow/1)
+  end
+
   def handle_event("unfollow-remote-account", %{"id" => account_id}, socket) do
     RemotePostActions.unfollow(socket, account_id, &reread_follow/1)
   end

@@ -480,7 +480,9 @@ cursor over independent fetchers). Three are local: own + followed authors'
 posts, their reposts, and — since issue #872 — posts carrying a **tag you follow**
 (`feed_tag_items/3`), from authors you do *not* already follow (so following a
 tag widens the feed with new voices without duplicating the follow path; muted
-and blocked authors stay out exactly as elsewhere). Following a tag lives in
+and blocked authors stay out exactly as elsewhere — `silenced_by/1` is the one
+list holding all three, blocks, muted follows and the `Vutuv.Mutes` rows for an
+account the reader never followed). Following a tag lives in
 `Vutuv.Tags` — see [social-graph.md](social-graph.md). The feed also carries the
 reload-free **"Tags you follow"** rail (chips + a `phx-click` ✕ unfollow). Three
 come from `Vutuv.Fediverse` — cached posts of accounts you follow out there
@@ -612,7 +614,9 @@ sources off:
   nobody finds `/settings/filters`.
 
 **Nothing in the band is a new mechanism.** A member checkbox writes
-`follows.muted`, a remote one `fediverse_follows.muted`, a word or tag writes a
+`follows.muted`, a remote one `fediverse_follows.muted` (the band lists accounts
+the member **follows**; silencing one they do not is `Vutuv.Mutes` and a card's
+⋯ menu, see [social-graph.md](social-graph.md)), a word or tag writes a
 `Vutuv.ContentFilters` row, and the two source rows write the very
 `users.feed_source` column the tabs wrote — which is why the tabs could be
 deleted without their state going with them. The one genuinely new switch is a

@@ -710,20 +710,22 @@ defmodule VutuvWeb.FeedRemotePostsTest do
       assert item =~ "Die Beiträge verschwinden aus Ihrem Feed."
     end
 
-    test "neither control shows on a post by an account the reader does not follow", %{conn: conn} do
+    test "mute shows without a follow, unfollow does not", %{conn: conn} do
       {conn, user} = create_and_login_user(conn)
       # Reshared by the member themselves (issue #1166): the card is in the feed
-      # without any follow behind it, and both controls would act on nothing.
+      # without any follow behind it.
       post = cached_post(insert(:activated_user, fediverse_followers?: true))
       Repo.insert!(%PostRepost{user_id: user.id, remote_post_id: post.id})
 
       {:ok, view, _html} = live(conn, ~p"/feed")
 
       assert has_element?(view, "[data-remote-post='#{post.id}']")
-      refute has_element?(view, "[phx-click='mute-remote-account']")
+      # Muting is a row about the account, so it needs no
+      # follow to hang on — and an account nobody here follows is exactly the
+      # one a reader wants gone.
+      assert has_element?(view, "[phx-click='mute-remote-account']")
+      # Unfollowing still acts on a follow, so it stays out where there is none.
       refute has_element?(view, "[phx-click='unfollow-remote-account']")
-      # The way to the original and the report control are not follow-shaped and
-      # stay.
       assert has_element?(view, "[phx-click='report-remote-post']")
     end
   end

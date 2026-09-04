@@ -46,6 +46,7 @@ defmodule VutuvWeb.FediverseAccountLive do
 
   alias Vutuv.Fediverse
   alias Vutuv.Fediverse.RemoteAccount
+  alias Vutuv.Mutes
   alias Vutuv.PostRewrites
   alias VutuvWeb.Live.InitAssigns
   alias VutuvWeb.Live.RemotePostActions
@@ -80,6 +81,10 @@ defmodule VutuvWeb.FediverseAccountLive do
          )
          |> assign(:blocked_reason, Fediverse.follow_refusal(viewer))
          |> assign(:follow, Fediverse.remote_follow_for(viewer, account))
+         # How far this reader has silenced the account, which is
+         # not the same question as whether they follow it: a mute needs no
+         # follow, and this page is where one is taken back.
+         |> assign(:mute_scope, Mutes.scope_for(viewer, account))
          # The reader's search-and-replace rules for this one account, read
          # once for the page: `load_posts/1` runs again on every follow event.
          |> assign(:rewrite_rules, PostRewrites.author_rules(viewer, account))
@@ -152,17 +157,24 @@ defmodule VutuvWeb.FediverseAccountLive do
   # this control existed the flash promising "you still follow them" described a
   # door that only opened one way. This page is where a muted account can still
   # be reached, so this is where the way back belongs.
+  # Through `Vutuv.Mutes` rather than the follow's own flag, so
+  # this page can silence an account nobody here follows — which is most of the
+  # accounts a reader ever lands on, since a page is reached from a boosted post
+  # as often as from a follow. It is also the one function that reads both
+  # stores, so the pill above and this button cannot disagree.
   def handle_event("toggle-mute", _params, socket) do
     account = socket.assigns.account
     viewer = socket.assigns.current_user
-    muted? = not socket.assigns.follow.muted
+    muted? = is_nil(socket.assigns.mute_scope)
 
-    :ok = Fediverse.set_remote_follow_mute(viewer, account.id, muted?)
+    if muted?,
+      do: {:ok, _mute} = Mutes.mute(viewer, account, :all),
+      else: :ok = Mutes.unmute(viewer, account)
 
     {:noreply,
      socket
      |> put_flash(:info, mute_message(muted?))
-     |> assign(:follow, Fediverse.remote_follow_for(viewer, account))}
+     |> reread_follow()}
   end
 
   # The two controls a cached post carries, handled here as well as on the feed:
@@ -178,6 +190,13 @@ defmodule VutuvWeb.FediverseAccountLive do
   # count on the card, because the real one lives on their server.
   def handle_event("mute-remote-account", %{"id" => account_id}, socket) do
     RemotePostActions.mute(socket, account_id, &reread_follow/1)
+  end
+
+  # "Keep the account, drop what it passes on", from the boost
+  # banner on one of its cards. The follow is untouched, so this page's own
+  # button and state pill stay as they are.
+  def handle_event("mute-remote-reposts", %{"id" => account_id}, socket) do
+    RemotePostActions.mute_reposts(socket, account_id, &load_posts/1)
   end
 
   # The card menu's Unfollow, which is this page's own button by another route —
@@ -236,19 +255,24 @@ defmodule VutuvWeb.FediverseAccountLive do
   # what the database says — a second tab that liked the same post is then not
   # contradicted by this one. `:flash` is an `{outcome, message}` the act
   # announces itself with, and only when that outcome really came back.
-  defp mute_message(true),
-    do: gettext("Muted. You still follow them; their posts leave your feed.")
+  # The sentence follows what is true for this reader: telling somebody they
+  # still follow an account they never followed is a confusing thing to read.
+  defp mute_message(true), do: gettext("Muted. Their posts leave your feed.")
 
   defp mute_message(false), do: gettext("Unmuted. Their posts are back in your feed.")
 
   # What the page draws is what the database says, so the follow is re-read
   # rather than nudged — a second tab that changed it is then not contradicted.
+  # The follow and the mute travel together: muting sets the follow's own flag
+  # where there is a follow, so re-reading one without the other leaves the pill
+  # and the button stating different things about the same account.
   defp reread_follow(socket) do
-    assign(
-      socket,
-      :follow,
-      Fediverse.remote_follow_for(socket.assigns.current_user, socket.assigns.account)
-    )
+    viewer = socket.assigns.current_user
+    account = socket.assigns.account
+
+    socket
+    |> assign(:follow, Fediverse.remote_follow_for(viewer, account))
+    |> assign(:mute_scope, Mutes.scope_for(viewer, account))
   end
 
   # Why the Posts card is empty, which is a different sentence in each case. The
@@ -311,14 +335,17 @@ defmodule VutuvWeb.FediverseAccountLive do
             controls made the row read as three unrelated widgets, and the same
             mistake is what retired the profile's old segmented follow pill —
             half of what looked like a control did nothing when pressed. --%>
-            <div :if={@follow} class="mt-2 flex flex-wrap items-center gap-2">
-              <.follow_state_pill follow={@follow} />
+            <div :if={@follow || @mute_scope} class="mt-2 flex flex-wrap items-center gap-2">
+              <.follow_state_pill :if={@follow} follow={@follow} />
+              <%!-- Read off `Vutuv.Mutes` rather than the follow's flag:
+              an account can be silenced without being followed, and then this
+              pill is the only thing on the page saying why it went quiet. --%>
               <.status_pill
-                :if={@follow.muted}
+                :if={@mute_scope}
                 tone="bg-slate-100 text-slate-700 ring-1 ring-slate-200 dark:bg-slate-800 dark:text-slate-300 dark:ring-slate-700"
                 data-follow-muted
               >
-                {gettext("Muted")}
+                {if @mute_scope == :reposts, do: gettext("Reposts hidden"), else: gettext("Muted")}
               </.status_pill>
             </div>
           </div>
@@ -382,25 +409,28 @@ defmodule VutuvWeb.FediverseAccountLive do
                   outranks the other and both wear the same calm variant. The
                   label is what differs, and it comes from the sibling page, so
                   "Requested" cannot mean two things. --%>
-            <div :if={@follow} class="flex flex-wrap items-center gap-2">
-              <.button id="unfollow" variant="secondary" phx-click="unfollow">
+            <div class="flex flex-wrap items-center gap-2">
+              <%!-- The primary act first, whichever direction it points in. --%>
+              <.button :if={is_nil(@follow)} id="follow" phx-click="follow">
+                {gettext("Follow")}
+              </.button>
+              <.button :if={@follow} id="unfollow" variant="secondary" phx-click="unfollow">
                 {end_follow_label(@follow)}
               </.button>
-              <%!-- The way back out of a mute. Muting from the feed removes the
-              account's posts, and with them the menu that muted it, so without
-              this the flash's "you still follow them" led nowhere. --%>
+              <%!-- The way back out of a mute, and the way in
+              as well for an account nobody here follows: muting from a card
+              removes that account's posts, and with them the menu that muted
+              it, so this page is where the switch has to live. Its state comes
+              from `Vutuv.Mutes`, which reads both stores — so it can never
+              contradict the pill beside the name. --%>
               <.button id="toggle-mute" variant="secondary" phx-click="toggle-mute">
-                <%= if @follow.muted do %>
+                <%= if @mute_scope do %>
                   {gettext("Unmute")}
                 <% else %>
                   {gettext("Mute")}
                 <% end %>
               </.button>
             </div>
-
-            <.button :if={is_nil(@follow)} id="follow" phx-click="follow">
-              {gettext("Follow")}
-            </.button>
           <% end %>
         </div>
       </.card>

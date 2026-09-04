@@ -173,6 +173,7 @@ defmodule Vutuv.Export do
       ad_bookings: ad_bookings(user),
       blocked_members: blocks(user),
       content_filters: content_filters(user),
+      muted_accounts: muted_accounts(user),
       post_rewrites: post_rewrites(user),
       # The account-activity log (issue #1087): the member's own record of what
       # changed on their account. Personal data by definition, so Art. 20 covers
@@ -249,6 +250,21 @@ defmodule Vutuv.Export do
         state: follow.state,
         muted: follow.muted,
         at: follow.inserted_at
+      }
+    end)
+  end
+
+  # The accounts the member has silenced (`Vutuv.Mutes`): owner-only data about
+  # other people, so it belongs in their export for the same reason the content
+  # filters do — and both stores, or the export would describe half a decision.
+  defp muted_accounts(user) do
+    Enum.map(Vutuv.Mutes.list_for_user(user), fn entry ->
+      %{
+        account: Vutuv.Mutes.handle(entry.target),
+        name: Vutuv.Mutes.display_name(entry.target),
+        kind: Vutuv.Mutes.kind(entry.target),
+        scope: entry.scope,
+        at: entry.at
       }
     end)
   end
