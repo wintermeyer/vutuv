@@ -28,6 +28,7 @@ defmodule VutuvWeb.Markdown do
 
   use Gettext, backend: VutuvWeb.Gettext
 
+  alias Vutuv.Bluesky
   alias Vutuv.Fediverse
   alias Vutuv.Fediverse.Handle
   alias Vutuv.Mentions
@@ -76,16 +77,17 @@ defmodule VutuvWeb.Markdown do
   # into a `post-inline-image--*` modifier class — the served src stays clean.
   @image_alignments ~w(left right center)
 
-  # A fediverse handle `@user@host.tld`, a local `@handle` mention, or a
-  # `#hashtag`. The grammar itself lives in `Vutuv.Mentions` (the single source
-  # shared by rendering, mention-existence validation and the rename rewrite),
-  # so it can never drift from what those paths detect. The leading `@`/`#` must
-  # not sit mid-token (no email `a@b`, no `/path#frag`); the fediverse form is
-  # tried **first**, so `@a@b.social` is read as one whole address rather than
-  # the member `@a` plus loose text, and the **host** then decides where it
-  # points; handles/tags match permissively and are validated against the
-  # DB by `linkify_entities/1`. Captures: 1 = fediverse user, 2 = fediverse
-  # host, 3 = local handle, 4 = hashtag (exactly one kind is set per hit).
+  # A fediverse handle `@user@host.tld`, a Bluesky handle `@name.bsky.social`, a
+  # local `@handle` mention, or a `#hashtag`. The grammar itself lives in
+  # `Vutuv.Mentions` (the single source shared by rendering, mention-existence
+  # validation and the rename rewrite), so it can never drift from what those
+  # paths detect. The leading `@`/`#` must not sit mid-token (no email `a@b`, no
+  # `/path#frag`); the fediverse form is tried **first**, so `@a@b.social` is
+  # read as one whole address rather than the member `@a` plus loose text, and
+  # the **host** then decides where it points; handles/tags match permissively
+  # and are validated against the DB by `linkify_entities/1`. Captures:
+  # 1 = fediverse user, 2 = fediverse host, 3 = Bluesky handle, 4 = local
+  # handle, 5 = hashtag (exactly one kind is set per hit).
   @entity Mentions.entity_regex()
 
   # Inside these elements an entity is left as plain text (a handle/hashtag in a
@@ -242,7 +244,9 @@ defmodule VutuvWeb.Markdown do
 
   It rewrites the `rel` the two link builders above have already written
   (`open_links_in_new_tab/1` for URLs in the body, `linkify_entities/2` for a
-  `@user@host` handle), so the marker cannot be forgotten on one of them. Links
+  `@user@host` or `@name.bsky.social` handle — both through
+  `outbound_mention_anchor/3`, which is what keeps this one literal true for
+  every outbound mention), so the marker cannot be forgotten on one of them. Links
   to **our own** pages carry no `rel` at all — a `#hashtag` resolves to
   `/tags/:slug`, an address on our own host to that member's profile — so they
   are left alone: nofollowing our own pages would throw away the internal
@@ -964,13 +968,16 @@ defmodule VutuvWeb.Markdown do
   end
 
   # Hosts whose display keeps more than one leading path directory, because
-  # their meaningful unit sits deeper: GitHub is `/:owner/:repo`, and the New
-  # York Times dates an article, `/:year/:month/:day/:desk/<headline>`, so one
-  # directory leaves a bare "nytimes.com/2026/…" that names nothing while four
-  # carry the date and the section. Every other host still collapses after the
-  # first directory. The host is matched whole, never by suffix: a subdomain is
-  # a different site with its own path shape.
-  @dirs_by_host %{"github.com" => 2, "nytimes.com" => 4}
+  # their meaningful unit sits deeper: GitHub is `/:owner/:repo`, Bluesky is
+  # `/profile/:handle` (one directory leaves "bsky.app/profile/…", which names
+  # nobody — the handle is the whole point of a link to an account or to one of
+  # its posts), and the New York Times dates an article,
+  # `/:year/:month/:day/:desk/<headline>`, so one directory leaves a bare
+  # "nytimes.com/2026/…" that names nothing while four carry the date and the
+  # section. Every other host still collapses after the first directory. The
+  # host is matched whole, never by suffix: a subdomain is a different site with
+  # its own path shape.
+  @dirs_by_host %{"github.com" => 2, "bsky.app" => 2, "nytimes.com" => 4}
 
   # This installation's own host keeps TWO (a vutuv profile section is
   # `/:slug/<section>`, so the section — `/tags`, `/work_experiences` — is worth
@@ -1147,7 +1154,7 @@ defmodule VutuvWeb.Markdown do
       {[], [], [], false} ->
         html
 
-      {mentions, local_mentions, hashtags, _fediverse?} ->
+      {mentions, local_mentions, hashtags, _external?} ->
         # `:hashtags_only` drops the **bare** handles — in remote content a
         # `@name` names an account over there, not the vutuv member who happens
         # to share the handle. A fully-qualified address on our own host has no
@@ -1175,22 +1182,23 @@ defmodule VutuvWeb.Markdown do
   # The unique, lowercased {handles, own-host handles, hashtags} sitting in
   # linkable text.
   defp entity_candidates(tokens) do
-    {mentions, local_mentions, hashtags, fediverse?} =
+    {mentions, local_mentions, hashtags, external?} =
       reduce_linkable_text(tokens, {[], [], [], false}, fn text, acc ->
         @entity
         |> Regex.scan(text, capture: :all_but_first)
         |> Enum.reduce(acc, &collect_candidate/2)
       end)
 
-    {Enum.uniq(mentions), Enum.uniq(local_mentions), Enum.uniq(hashtags), fediverse?}
+    {Enum.uniq(mentions), Enum.uniq(local_mentions), Enum.uniq(hashtags), external?}
   end
 
   # `Regex.scan` truncates trailing unmatched groups, so each hit arrives at a
-  # different length: a fediverse handle as `["user", "host"]`, a mention as
-  # `["", "", "handle"]`, a hashtag as `["", "", "", "hashtag"]`. Dispatch on
-  # which group is set. An address on somebody else's host needs no DB lookup,
-  # so it only raises the `fediverse?` flag — that keeps the token walk from
-  # being skipped for a body whose only entities are foreign addresses.
+  # different length: a fediverse handle as `["user", "host"]`, a Bluesky handle
+  # as `["", "", "handle"]`, a mention as `["", "", "", "handle"]`, a hashtag as
+  # `["", "", "", "", "hashtag"]`. Dispatch on which group is set. An address on
+  # somebody else's host needs no DB lookup, and neither does a Bluesky handle,
+  # so both only raise the `external?` flag — that keeps the token walk from
+  # being skipped for a body whose only entities point somewhere else.
   #
   # Two of our own hosts wear that same shape and neither leaves the site. Our
   # **tag host** (issue #1330): `@php@tags.<host>` is a topic of this
@@ -1200,7 +1208,7 @@ defmodule VutuvWeb.Markdown do
   # page of ours, so its user part is a handle and gets looked up like a bare
   # `@ada` — kept in its own list because it resolves even in `:hashtags_only`
   # mode, where a bare handle deliberately does not.
-  defp collect_candidate([user, host | _], {mentions, local, hashtags, _fediverse?})
+  defp collect_candidate([user, host | _], {mentions, local, hashtags, _external?})
        when user != "" and host != "" do
     cond do
       Fediverse.tag_host?(host) -> {mentions, local, [String.downcase(user) | hashtags], true}
@@ -1209,12 +1217,16 @@ defmodule VutuvWeb.Markdown do
     end
   end
 
-  defp collect_candidate([_, _, handle | _], {mentions, local, hashtags, fediverse?})
-       when handle != "",
-       do: {[String.downcase(handle) | mentions], local, hashtags, fediverse?}
+  defp collect_candidate([_, _, bluesky | _], {mentions, local, hashtags, _external?})
+       when bluesky != "",
+       do: {mentions, local, hashtags, true}
 
-  defp collect_candidate([_, _, _, hashtag], {mentions, local, hashtags, fediverse?}),
-    do: {mentions, local, [String.downcase(hashtag) | hashtags], fediverse?}
+  defp collect_candidate([_, _, _, handle | _], {mentions, local, hashtags, external?})
+       when handle != "",
+       do: {[String.downcase(handle) | mentions], local, hashtags, external?}
+
+  defp collect_candidate([_, _, _, _, hashtag], {mentions, local, hashtags, external?}),
+    do: {mentions, local, [String.downcase(hashtag) | hashtags], external?}
 
   # Walks the token stream, applying `fun` to every text token outside a
   # skip element and leaving tags and skipped text untouched.
@@ -1260,9 +1272,17 @@ defmodule VutuvWeb.Markdown do
 
   defp link_entities_in_text(text, bare_users, address_users, tags, form) do
     Regex.replace(@entity, text, fn
-      whole, user, host, "", "" -> fediverse_link(whole, user, host, address_users, tags, form)
-      whole, "", "", handle, "" -> mention_link(whole, handle, bare_users, form)
-      whole, "", "", "", hashtag -> hashtag_link(whole, hashtag, tags)
+      whole, user, host, "", "", "" ->
+        fediverse_link(whole, user, host, address_users, tags, form)
+
+      whole, "", "", bluesky, "", "" ->
+        bluesky_link(whole, bluesky)
+
+      whole, "", "", "", handle, "" ->
+        mention_link(whole, handle, bare_users, form)
+
+      whole, "", "", "", "", hashtag ->
+        hashtag_link(whole, hashtag, tags)
     end)
   end
 
@@ -1347,11 +1367,30 @@ defmodule VutuvWeb.Markdown do
   # somebody else's server, which sanitizes it away on arrival anyway. Per
   # mention, per follower inbox.
   defp remote_actor_link(user, host, form) do
-    href = Handle.web_profile_url(user, host)
     hook = if form == :local, do: ~s( data-remote-actor="#{user}@#{host}"), else: ""
 
+    outbound_mention_anchor(Handle.web_profile_url(user, host), "@#{user}@#{host}", hook)
+  end
+
+  # `@name.bsky.social` is an account on Bluesky, which is not the fediverse and
+  # has no `@user@host` form: the whole handle is a domain. It links straight to
+  # the account on bsky.app, and it carries **no** `data-remote-actor` hook —
+  # the mention card behind that attribute offers a Follow button, and Bluesky
+  # is not a network this installation can follow anybody on. The label is what
+  # the author typed, the href the lowercased handle.
+  defp bluesky_link(whole, handle),
+    do: outbound_mention_anchor(Bluesky.profile_url(handle), whole)
+
+  # One anchor for every mention that names an account somewhere else. It opens
+  # in a new tab like the rest of what leaves the site, and its `rel` is the
+  # literal `mark_foreign_links/1` rewrites to add `ugc nofollow` on a cached
+  # remote body — so a third outbound network spelling that string for itself is
+  # a third place it can drift and quietly stop being marked. Both callers pass
+  # a validated charset (`[A-Za-z0-9_]` / `[A-Za-z0-9.-]`), so nothing needs
+  # escaping here.
+  defp outbound_mention_anchor(href, label, hook \\ "") do
     ~s(<a href="#{href}" target="_blank" rel="noopener noreferrer" class="mention"#{hook}>) <>
-      ~s(@#{user}@#{host}</a>)
+      ~s(#{label}</a>)
   end
 
   # A bare `@ada` is the everyday spelling here and the wrong one everywhere

@@ -22,6 +22,18 @@ else's account and is never touched; `@php@tags.vutuv.de` is a topic of ours and
 joins `hashtags/1` instead (issue #1330); a handle inside a code span/block is
 sample text, not a mention (matching what the renderer links).
 
+A **Bluesky** handle is the one `@` form that answers to neither rule, because
+it has no host half to ask about: `@hilwiller.bsky.social` writes the whole
+account as a domain. Read by the bare form it came out as the vutuv member
+`@hilwiller` followed by dead text, so a boosted post naming a Bluesky account
+linked whoever holds that handle here, and a member's own post naming one was
+refused with "the handle @hilwiller does not exist". The grammar therefore tries
+it before the bare form and the renderer links it out to
+`Vutuv.Bluesky.profile_url/1` — bsky.app, new tab, no mention card, since
+Bluesky is not a network this installation can follow anybody on. Only
+`*.bsky.social` counts: a handle on a custom domain looks exactly like an
+ordinary word in front of an abbreviation.
+
 Before that, `local_handles/1` dropped every `@user@host` hit by design, and the
 renderer sent an address on our own host to `https://vutuv.de/@ada` — the
 Mastodon-web convention applied to a host that is not Mastodon, a path vutuv
@@ -137,7 +149,11 @@ Two consequences worth knowing:
   account, and chipping the `@ada` in front of it would claim a member of ours
   had been named. An address on our own host is a real mention and the renderer
   links it, but it goes unchipped too — the client does not know which host is
-  ours, and a missing chip is the harmless direction.
+  ours, and a missing chip is the harmless direction. It refuses a Bluesky
+  handle for the same reason, and nothing fails when the two copies drift: the
+  server counts zero mentions in `@hilwiller.bsky.social` while the composer
+  would chip `@hilwiller`, ask whether that member exists and spend one of the
+  five mentions a post may carry.
 
 Out of scope on purpose: completing a remote `@user@host` address. Only local
 mentions become `Mention` tags in the outgoing Note (`VutuvWeb.Fediverse.Docs`),

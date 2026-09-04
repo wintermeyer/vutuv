@@ -4,6 +4,7 @@ defmodule Vutuv.Profiles.SocialMediaAccount do
   use VutuvWeb, :model
 
   alias PhoenixHTMLHelpers.Link, as: HTMLLink
+  alias Vutuv.Bluesky
 
   schema "social_media_accounts" do
     field(:provider, :string)
@@ -100,13 +101,15 @@ defmodule Vutuv.Profiles.SocialMediaAccount do
 
   def split_self_hosted(_value), do: :error
 
-  # Providers whose profile URL is a fixed base plus the bare handle. Mastodon
-  # is deliberately absent: it is federated, so the instance is part of the
-  # handle and the link is built by mastodon_url/1 instead.
+  # Providers whose profile URL is a fixed base plus the bare handle. Two are
+  # deliberately absent. Mastodon is federated, so the instance is part of the
+  # handle and the link is built by mastodon_url/1 instead. Bluesky's base is
+  # owned by `Vutuv.Bluesky.profile_url/1`, because the same address is written
+  # by a second reader — a `@name.bsky.social` inside a post or a message
+  # (`VutuvWeb.Markdown`) — which has no account row to read a base from.
   base_urls = [
     {"Facebook", "http://facebook.com/"},
     {"Twitter", "http://twitter.com/"},
-    {"Bluesky", "https://bsky.app/profile/"},
     {"Instagram", "http://instagram.com/"},
     {"Youtube", "http://youtube.com/channel/"},
     {"Snapchat", nil},
@@ -401,6 +404,10 @@ defmodule Vutuv.Profiles.SocialMediaAccount do
   def social_media_link(%__MODULE__{provider: "Mastodon"} = account),
     do: HTMLLink.link(get_display(account), to: url(account))
 
+  # Bluesky's link, through the module that owns that address (see base_urls).
+  def social_media_link(%__MODULE__{provider: "Bluesky"} = account),
+    do: HTMLLink.link(get_display(account), to: url(account))
+
   # A self-hosted forge carries its own host too, so its link is built by
   # url/1 the same way (see @self_hosted_providers).
   def social_media_link(%__MODULE__{provider: provider} = account)
@@ -425,6 +432,7 @@ defmodule Vutuv.Profiles.SocialMediaAccount do
   # no canonical URL scheme, e.g. Snapchat) — the agent documents
   # (VutuvWeb.AgentDocs) need a string, not a rendered link.
   def url(%__MODULE__{provider: "Mastodon", value: value}), do: mastodon_url(value)
+  def url(%__MODULE__{provider: "Bluesky", value: value}), do: Bluesky.profile_url(value)
 
   def url(%__MODULE__{provider: provider, value: value})
       when provider in @self_hosted_providers,
