@@ -350,8 +350,9 @@ defmodule VutuvWeb.AgentDocs.Text do
       Enum.map(InvestorsDoc.figure_rows(doc.figures), fn {label, value} ->
         "- #{label}: #{value}"
       end),
-      doc.growth_sentence,
+      doc.people_sum,
       doc.counter_explainer,
+      doc.growth_sentence,
       heading(gettext("Why this is worth building")),
       Enum.map(doc.case_points, &case_point_text/1),
       doc.contact_handle && heading(gettext("Write to me")),

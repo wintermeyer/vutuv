@@ -8,7 +8,9 @@ defmodule VutuvWeb.CompanyControllerTest do
   """
   use VutuvWeb.ConnCase, async: true
 
+  alias Vutuv.Accounts
   alias Vutuv.BerlinTime
+  alias Vutuv.Fediverse
   alias Vutuv.PeopleHistory
   alias Vutuv.PeopleHistory.Snapshot
   alias Vutuv.Repo
@@ -121,12 +123,37 @@ defmodule VutuvWeb.CompanyControllerTest do
       end
     end
 
-    test "explains what the number in the top bar is made of", %{conn: conn} do
-      # Investors have asked; that question is why the paragraph exists.
+    test "shows the arithmetic behind the number in the top bar", %{conn: conn} do
+      # Investors have asked how that figure comes about, which is why the
+      # addition is spelled out rather than described.
+      insert(:activated_user)
+      insert(:activated_user)
+      insert(:activated_user)
+
       html = conn |> get(~p"/system/investors") |> html_response(200)
 
-      assert html =~ "The number in the top bar counts the members here"
+      assert html =~ "3 members + 0 Fediverse accounts = 3 people"
+      assert html =~ "That total is the number in the top bar"
       assert html =~ "Nobody is counted twice"
+    end
+
+    test "the two tiles it adds are the ones the top bar counts", %{conn: conn} do
+      # The equation is only honest if its summands are the very figures
+      # `Vutuv.PeopleCounter` adds up for the bar, so this pins the sources
+      # rather than the arithmetic. Asserted against those functions and not
+      # against `PeopleCounter.counts/0`: that reads a process-wide atomics
+      # cell the SQL sandbox never sees, so it answers 0 in a test and would
+      # make an async module depend on shared state.
+      insert(:activated_user)
+      insert(:activated_user)
+
+      facts = InvestorsDoc.facts()
+
+      assert facts.members == Accounts.count_users()
+      assert facts.fediverse_accounts == Fediverse.distinct_follower_count()
+
+      html = conn |> get(~p"/system/investors") |> html_response(200)
+      assert html =~ "= #{facts.members + facts.fediverse_accounts} people"
     end
 
     test "makes the case against LinkedIn's sign-up wall", %{conn: conn} do
@@ -211,7 +238,9 @@ defmodule VutuvWeb.CompanyControllerTest do
       assert html =~ "Quelle:"
       assert html =~ "Anzeigen statt Bezahlschranke"
       assert html =~ "Wo wir stehen"
-      assert html =~ "Die Zahl oben in der Navigationsleiste"
+      assert html =~ "Mitglieder + "
+      assert html =~ " = "
+      assert html =~ "Diese Summe steht oben in der Navigationsleiste"
       assert html =~ "Mitglieder"
 
       # The English page must not show through anywhere.

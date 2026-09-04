@@ -43,13 +43,21 @@
       />
     </div>
 
+    <%!-- The arithmetic behind the figure in the top bar, directly under the
+          two tiles it adds: investors have asked how that number comes about,
+          and the answer is an addition whose summands are already on the page.
+          `tabular-nums` so the digits line up as an equation rather than as
+          prose. --%>
+    <p class="mt-4 tabular-nums font-semibold text-slate-900 dark:text-white">
+      {InvestorsDoc.people_sum(@facts)}
+    </p>
+    <p class="mt-1 text-sm text-slate-600 dark:text-slate-400">
+      {InvestorsDoc.counter_explainer()}
+    </p>
+
     <.growth_curve series={@facts.series} />
     <p :if={@growth_sentence} class="mt-2 text-sm text-slate-600 dark:text-slate-400">
       {@growth_sentence}
-    </p>
-
-    <p class="mt-4 text-sm text-slate-600 dark:text-slate-400">
-      {InvestorsDoc.counter_explainer()}
     </p>
   </.card>
 

@@ -376,8 +376,9 @@ defmodule VutuvWeb.AgentDocs.Markdown do
       Enum.map_join(InvestorsDoc.figure_rows(doc.figures), "\n", fn {label, value} ->
         "- #{label}: #{value}"
       end),
-      doc.growth_sentence,
+      doc.people_sum,
       doc.counter_explainer,
+      doc.growth_sentence,
       "## #{gettext("Why this is worth building")}",
       Enum.map_join(doc.case_points, "\n\n", fn point ->
         ["### #{point.title}", point.body, case_source(point.source)]

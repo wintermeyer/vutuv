@@ -149,14 +149,35 @@ defmodule VutuvWeb.AgentDocs.InvestorsDoc do
   end
 
   @doc """
-  What the people total in the top bar is made of. Investors have asked, which
-  is the whole reason it is written down: a figure nobody can decompose is a
-  figure nobody believes. One sentence, because that is the whole answer —
+  The sum in the top bar written out as the arithmetic it is: the two tiles it
+  adds and the figure they add up to.
+
+  Investors have asked how that number comes about, which is the whole reason
+  it is spelled out — a figure nobody can decompose is a figure nobody
+  believes, and the two summands are on the same page as tiles anyway.
+
+  The equation always holds, and not by luck: the member tile reads
+  `Accounts.count_users/0` and the Fediverse tile the same distinct count over
+  `foreign_followers/0` that `Vutuv.PeopleCounter` adds up for the top bar. The
+  bar may lag this page by up to a minute, because it reads its cached cell
+  rather than the database.
+  """
+  def people_sum(facts) do
+    gettext(
+      "%{members} members + %{fediverse} Fediverse accounts = %{total} people",
+      members: UI.delimited_count(facts.members),
+      fediverse: UI.delimited_count(facts.fediverse_accounts),
+      total: UI.delimited_count(facts.members + facts.fediverse_accounts)
+    )
+  end
+
+  @doc """
+  What that sum means, in the one sentence the equation above cannot say.
   `/system/members` spells out the rest for whoever wants it.
   """
   def counter_explainer do
     gettext(
-      "The number in the top bar counts the members here plus the Fediverse accounts that follow them. Nobody is counted twice."
+      "That total is the number in the top bar. Nobody is counted twice: an account following five things here is one account, and a member who also follows from elsewhere is already in the first figure."
     )
   end
 
@@ -240,6 +261,7 @@ defmodule VutuvWeb.AgentDocs.InvestorsDoc do
         source: nil
       },
       case_points: case_points(),
+      people_sum: people_sum(facts),
       counter_explainer: counter_explainer(),
       contact_note: contact_note(),
       contact_handle: handle,
