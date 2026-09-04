@@ -3892,6 +3892,27 @@ html[data-feed-pull="busy"] .feed-pull__glyph {
   font-variant-numeric: tabular-nums;
 }
 
+/* What the account says about itself: three lines, and a lid over the rest —
+   the same `[data-remote-summary]` arrangement the account page wears for the
+   same text, so both are measured by `revealPreviewClamp` and both hide the lid
+   when nothing is cut. Three rather than two because a bio cut after two lines
+   is mostly the account's own name said again, and the fourth line the lid
+   costs is one the reader chooses to spend.
+
+   The clamping itself is `.post-clamp`, the app's one line clamp; all this adds
+   is the budget, because a 20rem card is not a timeline and the reader's own
+   per-breakpoint post preference has nothing to say about somebody else's bio.
+   Both breakpoints, so the phone's sheet cuts where the popover does.
+
+   Everything else the block needs — the marker off the `<summary>`, the
+   toggle's size, the opened copy's scroll box — is a utility at the call site.
+   The one thing that may never move there is the toggle wrapper's `display`,
+   which the `[data-remote-summary]` gate above owns (issue #880). */
+.actor-card__bio-clamp {
+  --post-clamp-desktop: 3;
+  --post-clamp-mobile: 3;
+}
+
 /* The last few things they wrote: a stack of quotes, each a link to our copy.
    A tinted tile with a hairline around it, and the stack reads as one block
    because every entry wears the same one.

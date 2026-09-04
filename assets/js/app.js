@@ -30,6 +30,7 @@ import {
   postJSON,
   request,
   reducedMotion,
+  revealPreviewClamp,
   savesData,
   sessionGet,
   sessionSet,
@@ -96,37 +97,6 @@ onReady(() => {
   const focus = document.querySelector("[data-thread-scroll]")
   if (focus) focus.scrollIntoView()
 })
-
-// Feed/profile post previews ship the whole body and clamp it to a few lines
-// via CSS. Reveal the "Read more" affordance only when the body is really cut —
-// i.e. the clamped body overflows, which the server can't know since wrapping is
-// width- and font-dependent. A clamped element hides content exactly when its
-// full content height (scrollHeight) is taller than its painted box
-// (clientHeight); the +1 absorbs sub-pixel rounding.
-//
-// Both the bottom fade (a mask on [data-clamp-body]) and the control are shown
-// or hidden purely by this `is-clamped` class on the WRAPPER (see the
-// .post-preview rules in components.css) — the control carries no competing
-// `hidden`/`inline-block` display utilities, so the cascade conflict that made
-// "Read more" appear on every post (issue #880) is structurally gone. Once the
-// reader has expanded a preview (`is-expanded`) we leave it alone: a later
-// resize/font sweep must not re-clamp it out from under them.
-function revealPreviewClamp(el) {
-  if (el.classList.contains("is-expanded")) return
-  const body = el.querySelector("[data-clamp-body]")
-  if (!body) return
-  // A body nothing is painting cannot be measured: both heights read 0, and the
-  // answer would come out as "nothing is cut". The fediverse account
-  // description hits this every time it is open, since the clamped copy is
-  // `group-open:hidden` while the full one shows.
-  if (body.clientHeight === 0) return
-  const clipped = body.scrollHeight > body.clientHeight + 1
-  // "We have looked", which is a different thing from "nothing is cut" — an
-  // element that was never measured (no JavaScript, or not yet run) must keep
-  // whatever the server rendered rather than be treated as uncut.
-  el.classList.add("is-measured")
-  el.classList.toggle("is-clamped", clipped)
-}
 
 // Expand / collapse a clamped preview in place (the whole body is always in the
 // DOM). We animate the body's height between its clamped and full heights: measure both

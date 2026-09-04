@@ -93,24 +93,60 @@ defmodule VutuvWeb.RemoteActorCardTest do
   end
 
   # Calibrated against the template that shipped first: with
-  # `whitespace-pre-line` on this paragraph the two-line clamp spent its first
-  # line on the newline HEEx writes in front of an indented expression, so every
-  # card showed one line of self-description under one blank one. The bio's own
-  # line breaks are worth something at full length, on the account page, and
-  # nothing at two lines here.
-  test "the self-description is clamped as running text, so both lines carry words",
+  # `whitespace-pre-line` on this paragraph the clamp spent its first line on the
+  # newline HEEx writes in front of an indented expression, so every card showed
+  # one line of self-description under one blank one. Clamped, the bio reads as
+  # running text; opened, it gets its own line breaks back.
+  test "the clamped self-description is running text and the opened one keeps its breaks",
        %{conn: conn} do
     {conn, _user} = federating(conn)
     account()
 
     html = post(conn, ~p"/system/fediverse/actor_card", address: @address) |> html_response(200)
 
-    assert [summary] =
+    assert [clamped, full] =
              html |> elements("p") |> Enum.filter(&(LazyHTML.text(&1) =~ "Schreibt über Züge."))
 
-    assert [class] = LazyHTML.attribute(summary, "class")
-    assert class =~ "line-clamp-2"
-    refute class =~ "whitespace-pre-line"
+    assert [clamped_class] = LazyHTML.attribute(clamped, "class")
+    assert clamped_class =~ "actor-card__bio-clamp"
+    refute clamped_class =~ "whitespace-pre-line"
+
+    assert [full_class] = LazyHTML.attribute(full, "class")
+    assert full_class =~ "whitespace-pre-line"
+  end
+
+  # The lid over the rest, and the one thing this card cannot decide for itself:
+  # whether there IS a rest depends on the reader's window and font, so the
+  # markup ships the pair `revealPreviewClamp` measures on
+  # (`[data-remote-summary]` around a `[data-clamp-body]`) and JavaScript takes
+  # the toggle away when nothing is cut. Unmeasured has to mean "leave it open
+  # to open", or a long description with JavaScript off is truncated forever.
+  test "the rest of the self-description waits behind a lid", %{conn: conn} do
+    {conn, _user} = federating(conn)
+    account()
+
+    html = post(conn, ~p"/system/fediverse/actor_card", address: @address) |> html_response(200)
+
+    assert [details] = elements(html, "details[data-remote-summary]")
+    assert LazyHTML.attribute(details, "open") == []
+    assert html =~ ~s(data-clamp-body)
+    assert html =~ "Show the whole description"
+  end
+
+  # The lid is the other thing the reader has in front of them, and every act
+  # replaces the whole fragment — so without the flag travelling back, opening
+  # the description and then pressing Follow folds it away again.
+  test "an opened self-description is still open after a follow", %{conn: conn} do
+    {conn, _user} = federating(conn)
+    account()
+    serve_actor()
+
+    html =
+      post(conn, ~p"/system/fediverse/actor_card/follow", address: @address, bio: "1")
+      |> html_response(200)
+
+    assert [details] = elements(html, "details[data-remote-summary]")
+    assert LazyHTML.attribute(details, "open") != []
   end
 
   # The common case, and the reason the card is cheap: most accounts a member

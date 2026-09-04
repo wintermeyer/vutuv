@@ -28,7 +28,7 @@
 // LiveView root: a patch of the page underneath must not be able to take the
 // open card with it. That is also why the fragment carries no `phx-` link and
 // no fixed id (see the template).
-import { copyText, request } from "./util"
+import { copyText, request, revealPreviewClamp } from "./util"
 
 const CARD_URL = "/system/fediverse/actor_card"
 
@@ -78,8 +78,15 @@ function ensurePanel() {
   // Only from here on: a page where no mention is ever clicked should not carry
   // a capture-phase scroll listener, which every scrolling container on it
   // would otherwise feed.
-  window.addEventListener("scroll", reposition, { passive: true, capture: true })
+  window.addEventListener("scroll", onScroll, { passive: true, capture: true })
   window.addEventListener("resize", reposition, { passive: true })
+  // The self-description's lid is a native `<details>`, so opening it costs this
+  // file nothing — except that the card just changed height and may no longer
+  // fit below the word it belongs to. On the panel and not the document, for
+  // the same reason as the two above: every ⋯ menu and sensitive-image lid on
+  // the page is a `<details>` this has no business hearing about. Capture phase,
+  // because `toggle` does not bubble and so never reaches an ancestor otherwise.
+  panel.addEventListener("toggle", reposition, { capture: true })
 }
 
 function close() {
@@ -104,6 +111,19 @@ function reposition() {
     queued = false
     place()
   })
+}
+
+// Scrolling inside the card is not the card moving: the opened
+// self-description is a scroll box of its own, and following its every frame
+// would spend two forced layout reads to answer that the mention has not
+// budged. The page's own scroll targets the document, which is not in here.
+//
+// `instanceof Node` because `contains` takes a Node and nothing else: the page
+// scroll arrives with the document as its target, but anything dispatching one
+// at `window` would otherwise throw in here and take the repositioning with it.
+function onScroll(e) {
+  if (e.target instanceof Node && panel.contains(e.target)) return
+  reposition()
 }
 
 // Under the mention, and inside the window: flipped above the word when there
@@ -164,6 +184,36 @@ async function fetchCard(url, method, extra = "") {
   return resp.text()
 }
 
+// The self-description's lid, which two things ask about: the measurement below
+// and `state()`, which sends its position back with every act.
+const bioLid = () => panel.querySelector("[data-remote-summary]")
+
+// A fresh card in the panel, and everything that has to happen to it before the
+// reader sees it — in one place, because the three steps are one act and this
+// runs from both `open` and `act`.
+//
+// The measuring is the card's own to ask for. The self-description arrives
+// clamped to three lines, and whether there is anything behind that lid depends
+// on the reader's window and font; `revealPreviewClamp` and the
+// `is-measured` / `is-clamped` rules already answer that for the account page,
+// but nothing sweeps a fragment swapped into a body-level panel. It runs before
+// `place()`, since hiding a useless lid changes the height that decides where
+// the card sits.
+//
+// Unmeasured means the lid shows, so this can only ever take away a control
+// that does nothing. An OPEN lid is left alone: its clamped copy is hidden and
+// would measure as uncut, taking away the "Show less" the reader needs —
+// `revealPreviewClamp` bails on that by itself.
+function paint(html) {
+  panel.innerHTML = html
+
+  const bio = bioLid()
+  if (bio) revealPreviewClamp(bio)
+
+  place()
+  takeFocus()
+}
+
 // What the reader has in front of them, sent with every request: which post is
 // open behind the card, and whether they have opened its drawer of older posts.
 //
@@ -183,10 +233,12 @@ async function fetchCard(url, method, extra = "") {
 function state() {
   const post = anchor.closest("[data-remote-post]")
   const older = panel.querySelector("[data-actor-more-posts]")
+  const bio = bioLid()
 
   return (
     (post ? `&context=${encodeURIComponent(post.dataset.remotePost)}` : "") +
-    (older && !older.hidden ? "&expanded=1" : "")
+    (older && !older.hidden ? "&expanded=1" : "") +
+    (bio && bio.open ? "&bio=1" : "")
   )
 }
 
@@ -241,9 +293,7 @@ async function open(link) {
   place()
 
   try {
-    panel.innerHTML = await fetchCard(CARD_URL, "POST")
-    place()
-    takeFocus()
+    paint(await fetchCard(CARD_URL, "POST"))
   } catch (_e) {
     close()
     followTheLink(link)
@@ -260,9 +310,7 @@ async function act(button) {
   button.disabled = true
 
   try {
-    panel.innerHTML = await fetchCard(`${CARD_URL}${spec.path}`, spec.method, spec.extra || "")
-    place()
-    takeFocus()
+    paint(await fetchCard(`${CARD_URL}${spec.path}`, spec.method, spec.extra || ""))
   } catch (_e) {
     // Leave the card as it stands rather than inventing an outcome; the button
     // comes back, so the reader can try again.
@@ -447,3 +495,4 @@ document.addEventListener("click", (e) => {
 document.addEventListener("keydown", (e) => {
   if (e.key === "Escape") close()
 })
+
