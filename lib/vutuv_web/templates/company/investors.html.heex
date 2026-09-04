@@ -18,63 +18,44 @@
   <.card>
     <h2 class="text-xl font-bold text-slate-900 dark:text-white">{gettext("Where we are")}</h2>
 
-    <%!-- Two columns from `lg` up: the standing figures on the left, their
-          movement on the right, because that is the pair a reader compares and
-          stacking them puts a screen between the two. Below `lg` it collapses
-          to one column and the curve follows the tiles, which is the same
-          reading order. --%>
-    <div class="mt-4 grid gap-6 lg:grid-cols-2">
-      <div>
-        <div class="grid grid-cols-2 gap-3">
-          <.figure_tile label={gettext("Members")} value={delimited_count(@facts.members)} />
-          <.figure_tile
-            label={gettext("Active this month")}
-            value={delimited_count(@facts.active_month)}
-            note={gettext("Signed in within 30 days")}
-          />
-          <.figure_tile
-            label={gettext("Active this half year")}
-            value={delimited_count(@facts.active_halfyear)}
-          />
-          <.figure_tile label={gettext("Posts")} value={delimited_count(@facts.posts)} />
-          <.figure_tile label={gettext("Replies")} value={delimited_count(@facts.replies)} />
-          <.figure_tile
-            label={gettext("Fediverse accounts")}
-            value={delimited_count(@facts.fediverse_accounts)}
-            note={
-              ngettext(
-                "From %{formatted} server",
-                "From %{formatted} servers",
-                @facts.fediverse_servers,
-                formatted: delimited_count(@facts.fediverse_servers)
-              )
-            }
-          />
-        </div>
-
-        <%!-- The arithmetic behind the figure in the top bar, directly under
-              the two tiles it adds: investors have asked how that number comes
-              about, and the answer is an addition whose summands are already
-              on the page. `tabular-nums` so the digits line up as an equation
-              rather than as prose. --%>
-        <p class="mt-4 tabular-nums font-semibold text-slate-900 dark:text-white">
+    <%!-- Two figures and the reading of them, in one row: the tiles sit side by
+          side at every width (two short figures need no full line each, not
+          even on a phone), and from `lg` up the explanation takes a third
+          column beside them instead of a paragraph underneath. Below that it
+          spans both tiles, which is where it was. --%>
+    <div class="mt-4 grid grid-cols-2 gap-4 lg:grid-cols-3">
+      <.figure_tile label={gettext("Members")} value={delimited_count(@facts.members)} />
+      <.figure_tile
+        label={gettext("Fediverse accounts")}
+        value={delimited_count(@facts.fediverse_accounts)}
+        note={
+          ngettext(
+            "From %{formatted} server",
+            "From %{formatted} servers",
+            @facts.fediverse_servers,
+            formatted: delimited_count(@facts.fediverse_servers)
+          )
+        }
+      />
+      <div class="col-span-2 min-w-0 lg:col-span-1">
+        <%!-- The arithmetic behind the figure in the top bar, beside the two
+              tiles it adds: investors have asked how that number comes about,
+              and the answer is an addition whose summands are right there.
+              `tabular-nums` so the digits line up as an equation rather than
+              as prose. --%>
+        <p class="tabular-nums font-semibold text-slate-900 dark:text-white">
           {InvestorsDoc.people_sum(@facts)}
         </p>
         <p class="mt-1 text-sm text-slate-600 dark:text-slate-400">
           {InvestorsDoc.counter_explainer()}
         </p>
       </div>
-
-      <div>
-        <%!-- Taller here than it would be under the tiles: beside six of them
-              a 128px plot reads as a footnote rather than as the other half of
-              the pair. --%>
-        <.growth_curve series={@facts.series} height="h-32 lg:h-72" />
-        <p :if={@growth_sentence} class="mt-2 text-sm text-slate-600 dark:text-slate-400">
-          {@growth_sentence}
-        </p>
-      </div>
     </div>
+
+    <.growth_curve series={@facts.series} class="mt-6" height="h-40 lg:h-56" />
+    <p :if={@growth_sentence} class="mt-2 text-sm text-slate-600 dark:text-slate-400">
+      {@growth_sentence}
+    </p>
   </.card>
 
   <.card>

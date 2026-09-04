@@ -189,8 +189,16 @@ defmodule VutuvWeb.CompanyControllerTest do
 
       assert html =~ "Where we are"
       assert html =~ "Members"
+      assert html =~ "Fediverse accounts"
       # The figure tile really carries the count from the database.
       assert html =~ ">2</p>"
+
+      # Two figures and no dashboard: activity and post volume were here and
+      # answered a question nobody on this page asked. /system/nodeinfo/2.1
+      # still publishes them.
+      for gone <- ["Active this month", "Active this half year", "Posts", "Replies"] do
+        refute html =~ gone
+      end
     end
 
     test "draws the growth curve from the daily snapshots", %{conn: conn} do

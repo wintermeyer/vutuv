@@ -24,31 +24,33 @@ defmodule VutuvWeb.AgentDocs.InvestorsDoc do
   alias Vutuv.Accounts
   alias Vutuv.Accounts.User
   alias Vutuv.Fediverse
-  alias Vutuv.NodeInfo
   alias Vutuv.PeopleHistory
   alias VutuvWeb.AgentDocs
   alias VutuvWeb.UI
 
   @doc """
-  The public figures the investor page quotes, read live: the standing counts,
-  the daily `series` the curve is drawn from, and the `growth` over its span.
+  The public figures the investor page quotes, read live: the two counts the
+  people total adds up, the daily `series` the curve is drawn from, and the
+  `growth` over its span.
+
+  **Two counts and not seven.** Activity and post volume were here and read as
+  a dashboard: an investor asked what the number in the top bar is made of, and
+  the answer is these two. `/system/nodeinfo/2.1` still publishes the rest for
+  whoever wants it, which is also why `Accounts.count_users/0` is read directly
+  rather than through `NodeInfo.usage/0` — that one costs three more queries
+  for figures this page no longer shows.
 
   The series is loaded for every format although only the HTML draws a chart,
   because `growth/1` is derived from it and the **sentence** that reading turns
-  into goes into all five (`growth_sentence/1`). Standing counts say how big
+  into goes into all five (`growth_sentence/1`). The two counts say how big
   this is; the movement is the half an investor came for.
   """
   def facts do
-    usage = NodeInfo.usage()
     reach = Fediverse.follower_reach()
     series = PeopleHistory.series()
 
     %{
-      members: usage.users.total,
-      active_month: usage.users.active_month,
-      active_halfyear: usage.users.active_halfyear,
-      posts: usage.local_posts,
-      replies: usage.local_comments,
+      members: Accounts.count_users(),
       fediverse_accounts: reach.accounts,
       fediverse_servers: reach.hosts,
       series: series,
@@ -58,17 +60,13 @@ defmodule VutuvWeb.AgentDocs.InvestorsDoc do
 
   @doc """
   The figures as an ordered `{label, value}` list, so the `.md` and `.txt`
-  renderings name them identically. The HTML tiles are deliberately their own
-  arrangement (six tiles, the server count folded into a note on the seventh
-  figure), not a third copy of this list.
+  renderings name them identically. The HTML is deliberately its own
+  arrangement (two tiles, the server count folded into a note under the second),
+  not a third copy of this list.
   """
   def figure_rows(facts) do
     [
       {gettext("Members"), facts.members},
-      {gettext("Active this month"), facts.active_month},
-      {gettext("Active this half year"), facts.active_halfyear},
-      {gettext("Posts"), facts.posts},
-      {gettext("Replies"), facts.replies},
       {gettext("Fediverse accounts"), facts.fediverse_accounts},
       {gettext("Fediverse servers"), facts.fediverse_servers}
     ]

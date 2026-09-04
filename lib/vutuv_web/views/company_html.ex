@@ -26,7 +26,11 @@ defmodule VutuvWeb.CompanyHTML do
 
   def figure_tile(assigns) do
     ~H"""
-    <div class="rounded-xl bg-slate-50 p-4 dark:bg-slate-800/60">
+    <%!-- `min-w-0`: a grid item defaults to `min-width: auto`, so it refuses to
+          shrink below its longest word and pushes the whole row wider than the
+          screen. Two tiles side by side on a 390px phone is exactly where that
+          bites, and a page that scrolls sideways is a bug. --%>
+    <div class="min-w-0 rounded-xl bg-slate-50 p-4 dark:bg-slate-800/60">
       <p class="text-2xl font-bold text-slate-900 dark:text-white">{@value}</p>
       <p class="mt-1 text-xs font-semibold uppercase tracking-wide text-slate-600 dark:text-slate-400">
         {@label}
