@@ -73,14 +73,20 @@ defmodule VutuvWeb.FormSubmitSweepTest do
   end
 
   describe "the feed" do
-    test "sweeps its forms, rail cards unfolded", %{conn: conn} do
+    test "sweeps its forms, the filter panel open", %{conn: conn} do
       {conn, _user} = create_and_login_user(conn)
 
       {:ok, view, _html} = live(conn, ~p"/feed")
 
-      # The rail's add-field forms are what #1888 broke, and they are the three
-      # this page must always carry.
-      assert_forms_submittable(render(view), "/feed", min_forms: 3)
+      # The add-field forms are what #1888 broke. Two of the three left the
+      # rail for the filter panel, so the sweep opens it — a form nobody can
+      # submit is no better for having moved.
+      assert_forms_submittable(render(view), "/feed", min_forms: 1)
+
+      view
+      |> VutuvWeb.FeedRailHelpers.open_filter_panel()
+      |> render()
+      |> assert_forms_submittable("/feed with the filter panel open", min_forms: 3)
     end
   end
 

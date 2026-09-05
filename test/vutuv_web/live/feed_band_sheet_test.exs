@@ -2,11 +2,16 @@ defmodule VutuvWeb.PostLive.FeedBandSheetTest do
   @moduledoc """
   The band on a phone.
 
-  The rail the band normally lives in is `hidden md:block`, so without this
-  sheet a phone has no way to reach any of it — and since the source tabs are
-  gone, no way to look at one source alone at all. That is the whole point of
-  these tests: the button exists, it opens the three cards, and a switch inside
-  the sheet writes through the same contexts the rail's does.
+  The rail is `hidden md:block`, so without a way in from the timeline itself a
+  phone could reach none of it — and since the source tabs are gone, could not
+  look at one source alone at all. That is the whole point of these tests: the
+  button exists, it opens the same panel the desktop row opens, and a switch
+  inside it writes through the same contexts.
+
+  The sheet stopped being a shape of its own with the filter redesign: the
+  panel is one markup that lands as a sheet under `sm` and as a drawer above
+  it, because two answers to the same question is how only one of them ended up
+  findable.
   """
   use VutuvWeb.ConnCase, async: true
 
@@ -23,25 +28,25 @@ defmodule VutuvWeb.PostLive.FeedBandSheetTest do
     %{conn: conn, user: user, friend: friend}
   end
 
-  test "the filter button opens the sheet and closes it again", %{conn: conn} do
+  test "the filter button opens the panel and closes it again", %{conn: conn} do
     %{conn: conn} = with_friend(conn)
 
     {:ok, live, html} = live(conn, ~p"/feed")
 
     # Closed at mount, so a reader who never opens it pays none of its queries.
-    refute html =~ ~s(id="band-sheet")
+    refute html =~ ~s(id="filter-panel")
     assert has_element?(live, "#open-filter-sheet")
 
     html = live |> element("#open-filter-sheet") |> render_click()
 
-    assert html =~ ~s(id="band-sheet")
-    # All three cards, not just the sources one.
-    assert html =~ ~s(id="sheet-band")
-    assert html =~ ~s(id="sheet-band-words")
-    assert html =~ ~s(id="sheet-band-tags")
+    assert html =~ ~s(id="filter-panel")
+    # Both halves of the words tab, and the sources one a tab away.
+    assert html =~ ~s(id="filter-band-words")
+    assert html =~ ~s(id="filter-band-tags")
+    assert live |> element("#filter-tab-sources") |> render_click() =~ ~s(id="filter-band")
 
-    html = live |> element("#close-band-sheet") |> render_click()
-    refute html =~ ~s(id="band-sheet")
+    html = live |> element("#close-filter-panel") |> render_click()
+    refute html =~ ~s(id="filter-panel")
   end
 
   test "a rule added in the sheet reaches the member's own deny list", %{conn: conn} do
@@ -51,7 +56,7 @@ defmodule VutuvWeb.PostLive.FeedBandSheetTest do
     live |> element("#open-filter-sheet") |> render_click()
 
     live
-    |> element(~s(#sheet-band-words form))
+    |> element(~s(#filter-band-words form))
     |> render_submit(%{"pattern" => "Kryptowährung"})
 
     assert [%{kind: :keyword, pattern: "Kryptowährung"}] = ContentFilters.list_for_user(user)
@@ -65,9 +70,10 @@ defmodule VutuvWeb.PostLive.FeedBandSheetTest do
     assert has_element?(live, "#feed-posts [id*='#{post.id}']")
 
     live |> element("#open-filter-sheet") |> render_click()
+    live |> element("#filter-tab-sources") |> render_click()
 
     live
-    |> element(~s(#sheet-band input[phx-value-source="vutuv"]))
+    |> element(~s(#filter-band input[phx-value-source="vutuv"]))
     |> render_click()
 
     refute has_element?(live, "#feed-posts [id*='#{post.id}']")

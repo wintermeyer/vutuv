@@ -783,9 +783,11 @@ defmodule VutuvWeb.FeedRemotePostsTest do
 
       # One we do not carry is still shown, just not as a link to an empty page.
       assert has_element?(view, "#{card} span[data-remote-tag='Anschlag']")
-      # And the line itself is gone from the body.
+      # And the line itself is gone from the body. Read off the body, not the
+      # whole page: the ⋯ menu's hide list names the same tags on purpose, and
+      # a page-wide refute would call that a regression.
       refute has_element?(view, "#{card} .markdown a.hashtag")
-      refute render(view) =~ "##{tag.name}"
+      refute render(view) =~ "##{tag.name} #Anschlag"
       assert render(view) =~ "Kamen die Gespräche zu spät?"
     end
 

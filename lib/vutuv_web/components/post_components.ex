@@ -30,6 +30,7 @@ defmodule VutuvWeb.PostComponents do
 
   alias Phoenix.LiveView.JS
   alias Vutuv.Accounts.User
+  alias Vutuv.ContentFilters.ContentFilter
   alias Vutuv.Fediverse
   alias Vutuv.Fediverse.Handle
   alias Vutuv.Fediverse.Note
@@ -139,6 +140,12 @@ defmodule VutuvWeb.PostComponents do
   attr(:conn_or_socket, :any,
     required: true,
     doc: "@conn (dead pages) or @socket (LiveViews) — anchors the embedded live action bar"
+  )
+
+  attr(:hide_rules, :any,
+    default: nil,
+    doc:
+      "the viewer's own content filters (`Vutuv.ContentFilters.list_for_user/1`), which turns the ⋯ menu's hide list on. `nil` leaves it out — the list writes through `phx-click` events the surrounding LiveView has to handle, so only a page that does hands it over"
   )
 
   attr(:reposted_by, :any,
@@ -937,6 +944,7 @@ defmodule VutuvWeb.PostComponents do
   attr(:reposted_by, :any, default: nil)
   attr(:reposters, :any, default: nil)
   attr(:reposters_total, :integer, default: nil)
+  attr(:hide_rules, :any, default: nil, doc: "handed to <.post_card> — see there")
   attr(:entry_id, :string, default: nil)
   attr(:surface, :atom, default: :flat, values: [:card, :flat])
   attr(:conn_or_socket, :any, required: true)
@@ -971,6 +979,7 @@ defmodule VutuvWeb.PostComponents do
         reposted_by={@reposted_by}
         reposters={@reposters}
         reposters_total={@reposters_total}
+        hide_rules={@hide_rules}
         entry_id={@entry_id}
         surface={@surface}
         conn_or_socket={@conn_or_socket}
@@ -1925,6 +1934,15 @@ defmodule VutuvWeb.PostComponents do
   # `Markdown.split_trailing_hashtags/1`. The two differ exactly where a tag
   # row glues something to a tag, and showing `name` there would delete the
   # difference from the card.
+  # The tag names a remote post's own text closes with — what the chips under
+  # the card show, and so what a reader ticking one of them means.
+  defp hide_tag_names(nil), do: []
+
+  defp hide_tag_names(text) do
+    {_body, hashtags} = Markdown.split_trailing_hashtags(text)
+    hashtags |> Enum.map(& &1.name) |> Enum.uniq()
+  end
+
   defp remote_tag_chips([]), do: []
 
   defp remote_tag_chips(hashtags) do
@@ -2652,6 +2670,11 @@ defmodule VutuvWeb.PostComponents do
       "the viewer's like/repost/bookmark flags for this post when the host batched them; nil lets the bar load its own."
   )
 
+  attr(:hide_rules, :any,
+    default: nil,
+    doc: "the viewer's own content filters — turns the ⋯ menu's hide list on; see <.post_card>"
+  )
+
   attr(:reposted_by, :any,
     default: nil,
     doc: "the member whose reshare put this card in the reader's feed, or nil"
@@ -2701,6 +2724,10 @@ defmodule VutuvWeb.PostComponents do
       |> assign_remote_link_screenshot(post, assigns.images)
       |> assign(:permalink, remote_post_permalink(post, assigns.viewer))
       |> assign(:origin, RemotePost.origin(post))
+      # The hashtags this post closes with, for the ⋯ menu's hide list. The
+      # same split the body does, and the same names the chips under it wear —
+      # a reader who ticks `#news` here means the tag they can see.
+      |> assign(:hide_names, hide_tag_names(post.content_text))
       |> Map.put(:rewrite_link, rewrite_link(post, account, assigns.viewer))
 
     ~H"""
@@ -2828,6 +2855,19 @@ defmodule VutuvWeb.PostComponents do
                 >
                   {gettext("Report")}
                 </:item>
+                <%!-- The same hide list a member's post carries. Here the reach
+                has a third step, because a news house federates one story from a
+                dozen of its accounts: this handle, or every account on its
+                server. --%>
+                <:panel :if={@hide_rules}>
+                  <.hide_list
+                    id={@remote_post.id}
+                    rules={@hide_rules}
+                    handle={RemoteAccount.display_handle(@account)}
+                    server={@account.host}
+                    names={@hide_names}
+                  />
+                </:panel>
               </.card_menu>
             </:menu>
           </.remote_header>
@@ -3855,6 +3895,18 @@ defmodule VutuvWeb.PostComponents do
                 <:item href={~p"/reports/new?#{[type: "post", id: @post.id, return_to: @permalink]}"}>
                   {gettext("Report")}
                 </:item>
+                <%!-- What this post brings along that the reader may not want
+                again. The verb sits in the heading, so each row is only the
+                thing plus the reach — a tick and a select, which say the whole
+                sentence together: "#news, only from @golemde". --%>
+                <:panel :if={@hide_rules && @post.user}>
+                  <.hide_list
+                    id={@post.id}
+                    rules={@hide_rules}
+                    handle={"@" <> @post.user.username}
+                    names={Enum.map(@post.tags || [], &(&1.name || &1.slug))}
+                  />
+                </:panel>
               </.card_menu>
             </div>
           </div>
@@ -6359,5 +6411,148 @@ defmodule VutuvWeb.PostComponents do
       {compact_count(@count)}
     </span>
     """
+  end
+
+  @doc false
+  # The ⋯ menu's hide list (issue: the feed's filter redesign): one tick per tag
+  # the post carries, plus a field for a word the machine cannot guess.
+  #
+  # Two axes, one row. *What* is the tag or the word; *for whom* is the reach —
+  # every account, or only this one. They travel together because a reader who
+  # wants `#news` gone from one loud account but not from the whole timeline has
+  # to say both, and a menu that asked them one after the other made that two
+  # trips. The row is a `<form phx-change>`, so the tick and the select arrive
+  # in one event and an unticked box simply sends no `on` at all.
+  attr(:id, :string, required: true)
+  attr(:rules, :list, required: true)
+
+  attr(:handle, :string,
+    required: true,
+    doc: "the account this post came from, `@name` or `@name@host`"
+  )
+
+  attr(:server, :string, default: nil, doc: "its host, for the one scope wider than an account")
+  attr(:names, :list, required: true, doc: "the tags this post carries, as plain names")
+  attr(:example, :string, default: nil, doc: "a word from this post, as the field's placeholder")
+
+  defp hide_list(assigns) do
+    ~H"""
+    <div class="mt-1 border-t border-slate-100 pt-1 dark:border-slate-800">
+      <p class="px-4 pb-1 pt-2 text-[10px] font-semibold uppercase tracking-widest text-slate-400 dark:text-slate-500">
+        {gettext("Stop showing")}
+      </p>
+
+      <form
+        :for={name <- @names}
+        phx-change="hide-rule"
+        data-hide-rule={"tag:#{name}"}
+        data-post={@id}
+        class="flex min-h-11 items-center gap-2 rounded-lg px-3 py-1.5 hover:bg-slate-50 dark:hover:bg-slate-800"
+      >
+        <input type="hidden" name="kind" value="tag" />
+        <input type="hidden" name="pattern" value={name} />
+        <%!-- Which post this came from: the one the reader is acting on stays
+        open until they leave it, or the first tick would fold the card the
+        menu is standing on. --%>
+        <input type="hidden" name="post_id" value={@id} />
+        <input
+          type="checkbox"
+          id={"hide-#{@id}-#{name}"}
+          name="on"
+          value="1"
+          checked={hidden_rule(@rules, "tag", name, @handle, @server) != nil}
+          class="h-[18px] w-[18px] shrink-0 accent-brand-600"
+        />
+        <label
+          for={"hide-#{@id}-#{name}"}
+          class="min-w-0 flex-1 cursor-pointer truncate text-sm font-semibold text-slate-800 dark:text-slate-100"
+        >
+          #{name}
+        </label>
+        <.hide_scope_select
+          rule={hidden_rule(@rules, "tag", name, @handle, @server)}
+          handle={@handle}
+          server={@server}
+          label={name}
+        />
+      </form>
+
+      <%!-- Which word annoys somebody is not a thing a machine can offer a
+      list of, so this row stays a field. It carries the same reach select, so
+      the two ways in write the same shape of rule. --%>
+      <form
+        phx-submit="hide-word"
+        data-hide-word
+        data-post={@id}
+        class="flex flex-wrap items-center gap-2 px-3 py-2"
+      >
+        <input type="hidden" name="post_id" value={@id} />
+        <input
+          type="text"
+          name="pattern"
+          maxlength={ContentFilter.max_pattern()}
+          placeholder={@example || gettext("A word or phrase …")}
+          aria-label={gettext("A word or phrase …")}
+          class="min-h-9 w-full rounded-lg border border-slate-200 bg-white px-2.5 py-1.5 text-sm text-slate-900 dark:border-slate-700 dark:bg-slate-900 dark:text-slate-100"
+        />
+        <.hide_scope_select rule={nil} handle={@handle} server={@server} label={gettext("this word")} />
+        <button
+          type="submit"
+          class="min-h-9 shrink-0 rounded-lg bg-brand-600 px-3 text-sm font-semibold text-white hover:bg-brand-700"
+        >
+          {pgettext("filter rule", "Hide")}
+        </button>
+      </form>
+    </div>
+    """
+  end
+
+  # For whom a rule holds. `*` is every account — what the column has meant
+  # since before there was a UI for it — and the empty option value spells the
+  # same thing, so the handler never has to know about the sigil.
+  attr(:rule, :any, required: true)
+  attr(:handle, :string, required: true)
+  attr(:server, :string, default: nil)
+  attr(:label, :string, required: true)
+
+  defp hide_scope_select(assigns) do
+    ~H"""
+    <select
+      name="scope"
+      aria-label={gettext("For whom %{thing} is hidden", thing: @label)}
+      class="w-[6.5rem] min-w-0 shrink-0 rounded-lg border border-transparent bg-transparent py-1 pl-1 pr-0 text-xs text-slate-500 hover:border-slate-200 dark:text-slate-400 dark:hover:border-slate-700"
+    >
+      <option value="" selected={@rule == nil or ContentFilter.every_account?(@rule)}>
+        {gettext("everyone")}
+      </option>
+      <option value={@handle} selected={@rule != nil and @rule.account == @handle}>
+        {gettext("only %{handle}", handle: @handle)}
+      </option>
+      <%!-- One server's accounts at once (`*@social.heise.de`): a news house
+      federates the same story from a dozen of its accounts, so the rule that
+      silences one of its phrases belongs on the house, not on each handle. --%>
+      <option
+        :if={@server}
+        value={"*@" <> @server}
+        selected={@rule != nil and @rule.account == "*@" <> @server}
+      >
+        {gettext("only %{server}", server: @server)}
+      </option>
+    </select>
+    """
+  end
+
+  # The rule this row is about: same word, and a reach this row can express —
+  # every account, or this one. A rule aimed at somebody else's account says
+  # nothing about this post, and ticking the box for it would quietly rewrite a
+  # rule the reader made somewhere else.
+  defp hidden_rule(rules, kind, pattern, handle, server) do
+    reaches = [handle, server && "*@" <> server] |> Enum.reject(&is_nil/1)
+
+    Enum.find(rules, fn rule ->
+      to_string(rule.kind) == kind and
+        String.downcase(rule.pattern) == String.downcase(pattern) and
+        (ContentFilter.every_account?(rule) or rule.account in reaches)
+    end)
   end
 end

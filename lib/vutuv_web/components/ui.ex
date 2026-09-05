@@ -1871,6 +1871,8 @@ defmodule VutuvWeb.UI do
     )
   end
 
+  slot(:panel, doc: "free markup below the items — see the hide list under a post")
+
   def card_menu(assigns) do
     ~H"""
     <details data-menu class="relative" id={@id}>
@@ -1891,7 +1893,12 @@ defmodule VutuvWeb.UI do
       (`@user@mastodon.social`) fits a `hint` line at this width and starts
       losing its host below it, and a right-aligned 15rem panel still sits
       inside the narrowest phone. --%>
-      <div class="absolute right-0 z-20 mt-1 w-60 rounded-xl bg-white py-1 shadow-lg ring-1 ring-slate-200 dark:bg-slate-900 dark:ring-slate-700">
+      <div class={[
+        "absolute right-0 z-20 mt-1 rounded-xl bg-white py-1 shadow-lg ring-1 ring-slate-200 dark:bg-slate-900 dark:ring-slate-700",
+        # A panel holds rows with their own controls beside the label, which
+        # does not fit the width a menu of one-line items needs.
+        if(@panel == [], do: "w-60", else: "w-80")
+      ]}>
         <%!-- An item with `click` is a LiveView action (a phx-click <button>, no
         reload); otherwise it is a navigation / CSRF <.link>. Both wear the same
         item styling so one menu can mix them. --%>
@@ -1922,6 +1929,10 @@ defmodule VutuvWeb.UI do
             <.card_menu_item_body item={item} />
           </.link>
         <% end %>
+        <%!-- Anything that is not a row of one-line acts: the hide list under a
+        post lives here, because its rows carry a tick and a reach select and
+        would have to fight the item styling above. --%>
+        {render_slot(@panel)}
       </div>
     </details>
     """

@@ -43,6 +43,7 @@ defmodule VutuvWeb.PostLive.Feed do
   alias Vutuv.Accounts
   alias Vutuv.Activity
   alias Vutuv.ContentFilters
+  alias Vutuv.ContentFilters.ContentFilter
   alias Vutuv.Fediverse
   alias Vutuv.PostRewrites
   alias Vutuv.Posts
@@ -142,8 +143,13 @@ defmodule VutuvWeb.PostLive.Feed do
   # you rarely touch still has to be *findable*, and a heading is what makes it
   # findable — where the open card would only be a wall of checkboxes between
   # you and the next thing you actually read.
-  @rail_blocks ~w(followed_tags unread hidden_tags words newcomers sources)
-  @rail_collapsed ~w(hidden_tags sources)
+  # The rail's arrangeable cards. "sources", "words" and "hidden_tags" left
+  # it: filtering is one question, so it is one row (`#feed-filter-row`) and
+  # one panel behind it, and a member who filters nothing carries no card at
+  # all. `Posts.feed_rail/3` drops unknown names on read, so an arrangement
+  # stored before this simply loses the three entries.
+  @rail_blocks ~w(followed_tags unread newcomers)
+  @rail_collapsed ~w()
 
   @impl true
   # Rendered by VutuvWeb.NewsfeedController via `live_render` (off-router, so it
@@ -233,7 +239,11 @@ defmodule VutuvWeb.PostLive.Feed do
   defp feed_payload(user, remembered, day, limit) do
     # The member's private content filters (issue #940): compiled once, applied
     # to every page, and the set of posts they chose to reveal anyway.
-    compiled = ContentFilters.compile_for(user)
+    # Both shapes come out of ONE query: the compiled set is what a post is
+    # measured against, the raw list is what the ⋯ menu's ticks and the
+    # rail's count read.
+    rules = ContentFilters.list_for_user(user)
+    compiled = ContentFilters.compile(rules)
 
     # And their per-author search-and-replace rules, compiled the same way and
     # applied to every entry BEFORE the filters, so a filter reads the text the
@@ -272,6 +282,9 @@ defmodule VutuvWeb.PostLive.Feed do
 
     %{
       content_filters: compiled,
+      # The same rules uncompiled: the ⋯ menu's ticks and the rail's count read
+      # this list, and it costs no second query.
+      filter_rules: rules,
       post_rewrites: rewrites,
       more?: page.more?,
       # Spelled the way `Posts.feed_page/2` spells it, so this payload and a
@@ -312,6 +325,7 @@ defmodule VutuvWeb.PostLive.Feed do
     # read that straight off the one assign.
     |> assign(:post_translations, PostTranslations.initial_map(socket.assigns.current_user))
     |> assign(:content_filters, payload.content_filters)
+    |> assign(:filter_rules, payload.filter_rules)
     |> assign(:post_rewrites, payload.post_rewrites)
     |> assign(:revealed_filters, MapSet.new())
     |> assign(:page_title, gettext("Feed"))
@@ -352,11 +366,12 @@ defmodule VutuvWeb.PostLive.Feed do
     # way they left it rather than the default order and then rearranging it
     # once the socket connects.
     |> assign(:rail, Posts.feed_rail(socket.assigns.current_user, @rail_blocks, @rail_collapsed))
-    # The phone's filter sheet, closed at mount. Deliberately not remembered
-    # across a reconnect: a sheet is a thing the reader opened a moment ago and
-    # a rejoin that reopened it over their feed would be a patch nobody asked
-    # for. Everything it changes is written through and survives anyway.
-    |> assign(:band_sheet?, false)
+    # The filter panel, closed at mount: `nil`, or the tab it is open on
+    # (`:words` / `:sources`). Deliberately not remembered across a reconnect —
+    # a panel is a thing the reader opened a moment ago, and a rejoin that put
+    # it back over their feed would be a patch nobody asked for. Everything it
+    # changes is written through and survives anyway.
+    |> assign(:filter_panel, nil)
     # Bumped whenever follow/mute state changes OUTSIDE the filter band (the
     # remote card menu's mute and unfollow), so the band's gated sources card
     # re-reads its lists — its own writes force a reload themselves, and
@@ -1443,12 +1458,58 @@ defmodule VutuvWeb.PostLive.Feed do
     {:noreply, save_rail(socket, &%{&1 | removed: &1.removed -- [key]})}
   end
 
-  def handle_event("open-band", _params, socket) do
-    {:noreply, assign(socket, :band_sheet?, true)}
+  def handle_event("open-filter", params, socket) do
+    {:noreply, assign(socket, :filter_panel, filter_tab(params["tab"]))}
   end
 
-  def handle_event("close-band", _params, socket) do
-    {:noreply, assign(socket, :band_sheet?, false)}
+  def handle_event("close-filter", _params, socket) do
+    {:noreply, assign(socket, :filter_panel, nil)}
+  end
+
+  # One tick in a post's ⋯ menu. The row is a form, so the checkbox and the
+  # reach arrive together and the handler never has to remember which of the
+  # two the reader touched: an unticked box sends no `on` at all, and that
+  # absence is the whole event.
+  #
+  # A reach change is a rewrite, not a second rule — the pair (word, reach) is
+  # the unique key in `content_filters`, so leaving the old row behind would
+  # hide the same thing twice under two scopes.
+  def handle_event("hide-rule", %{"kind" => kind, "pattern" => pattern} = params, socket) do
+    user = socket.assigns.current_user
+    scope = params["scope"] || ""
+
+    Enum.each(matching_rules(socket, kind, pattern), &ContentFilters.delete_filter(user, &1.id))
+
+    if params["on"] in ~w(1 true on) do
+      ContentFilters.create_filter(user, %{
+        kind: kind,
+        pattern: pattern,
+        account: if(scope == "", do: ContentFilter.every_account(), else: scope)
+      })
+    end
+
+    {:noreply, refresh_after_rule_change(socket, params["post_id"])}
+  end
+
+  # The same, for a word the reader types rather than a tag the post carries:
+  # which words annoy somebody is not a thing a machine can offer a list of.
+  def handle_event("hide-word", %{"pattern" => pattern} = params, socket) do
+    user = socket.assigns.current_user
+    scope = params["scope"] || ""
+
+    case String.trim(pattern) do
+      "" ->
+        {:noreply, socket}
+
+      trimmed ->
+        ContentFilters.create_filter(user, %{
+          kind: :keyword,
+          pattern: trimmed,
+          account: if(scope == "", do: ContentFilter.every_account(), else: scope)
+        })
+
+        {:noreply, refresh_after_rule_change(socket, params["post_id"])}
+    end
   end
 
   def handle_event("show-new", _params, socket) do
@@ -1601,6 +1662,68 @@ defmodule VutuvWeb.PostLive.Feed do
   # It asks for the reader's own page size, like every other load here: the
   # switch is a page of this feed, and a member who set 50 means 50 whichever
   # control fetched them.
+  # The member's own rules, in both shapes, from one query: `content_filters`
+  # is what every row is measured against, `filter_rules` is the list the ⋯
+  # menu ticks against and the rail counts.
+  defp assign_filter_rules(socket, user) do
+    rules = ContentFilters.list_for_user(user)
+
+    socket
+    |> assign(:filter_rules, rules)
+    |> assign(:content_filters, ContentFilters.compile(rules))
+  end
+
+  defp reload_filter_rules(socket), do: assign_filter_rules(socket, socket.assigns.current_user)
+
+  # After a rule was written from the ⋯ menu: re-read the member's list and run
+  # the page against it, exactly as the panel's own writes do. A rule that
+  # leaves the post it hides on screen would be a rule the reader cannot trust.
+  # The post the reader is standing on stays open — a rule ticked in its own ⋯
+  # menu would otherwise fold the card the menu hangs off, mid-gesture, and
+  # take the rest of the list with it. Everything else on the page folds at
+  # once, which is the feedback that the rule did something.
+  defp refresh_after_rule_change(socket, post_id) do
+    socket
+    |> reveal_acted_post(post_id)
+    |> reload_filter_rules()
+    |> load_source_filter(socket.assigns.feed_filter)
+  end
+
+  defp reveal_acted_post(socket, nil), do: socket
+
+  defp reveal_acted_post(socket, post_id) do
+    # `filter_key/1` reads the record whichever kind of entry it is, so the
+    # same line covers a member's post and a cached remote one — and the
+    # remote card is where a tag list is longest, so it is the one that would
+    # hurt most to lose mid-tick.
+    case Enum.find(socket.assigns.entries, &(filter_key(&1) == post_id)) do
+      nil -> socket
+      entry -> update(socket, :revealed_filters, &MapSet.put(&1, filter_key(entry)))
+    end
+  end
+
+  # The rules that already say something about this word or tag, whatever their
+  # reach. Everything the ⋯ menu offers for one row, so switching the reach can
+  # take the old row away before writing the new one.
+  defp matching_rules(socket, kind, pattern) do
+    kind = to_string(kind)
+    pattern = String.downcase(pattern)
+
+    Enum.filter(socket.assigns.filter_rules, fn rule ->
+      to_string(rule.kind) == kind and String.downcase(rule.pattern) == pattern
+    end)
+  end
+
+  # Which half of the panel to open on. A tab name arrives from the browser, so
+  # anything unknown falls back to the words half rather than crashing the
+  # socket on a hand-edited payload.
+  defp filter_tab("sources"), do: :sources
+  defp filter_tab(_), do: :words
+
+  # What the rail's filter row says beside its heading, and the reason the row
+  # exists at all: with no rule there is no card, only a quiet line.
+  defp filter_rule_count(assigns), do: length(assigns.filter_rules)
+
   defp load_source_filter(socket, filter) do
     user = socket.assigns.current_user
     page = Posts.feed_page(user, limit: page_size(socket), filter: filter)
@@ -1956,7 +2079,7 @@ defmodule VutuvWeb.PostLive.Feed do
      # A word or tag rule changed too, and the compiled set is what every row
      # is measured against — recompiled here rather than at each call site, so
      # a rule added in the band cannot keep showing the post it hides.
-     |> assign(:content_filters, ContentFilters.compile_for(user))
+     |> assign_filter_rules(user)
      |> load_source_filter(Posts.remembered_feed_filter(user))}
   end
 
@@ -3181,7 +3304,7 @@ defmodule VutuvWeb.PostLive.Feed do
             <button
               type="button"
               id="open-filter-sheet"
-              phx-click="open-band"
+              phx-click="open-filter"
               aria-label={pgettext("feed filter sheet", "Filter")}
               class={[
                 "feed-filter inline-flex h-10 shrink-0 items-center justify-center rounded-full",
@@ -3317,6 +3440,7 @@ defmodule VutuvWeb.PostLive.Feed do
                     reposted_by={entry[:reposted_by]}
                     boosted_by={entry[:boosted_by]}
                     following?={entry[:following?] == true}
+                    hide_rules={@filter_rules}
                     viewer={@current_user}
                     translations={@post_translations}
                   />
@@ -3339,6 +3463,7 @@ defmodule VutuvWeb.PostLive.Feed do
                     reposted_by={entry.reposted_by}
                     reposters={entry[:reposters]}
                     reposters_total={entry[:reposters_total]}
+                    hide_rules={@filter_rules}
                     entry_id={entry.id}
                     conn_or_socket={@socket}
                     engagement={entry.engagement}
@@ -3480,6 +3605,32 @@ defmodule VutuvWeb.PostLive.Feed do
             today={@cal_today}
           />
 
+          <%!-- Filtering is one question, so it is one row — and only once
+          there is something to report. A member who hides nothing gets the
+          quiet line at the foot of the rail instead: three card frames and a
+          paragraph explaining a mechanism nobody asked for was what the old
+          shape charged them. Deliberately outside the arrangeable list, like
+          the calendar: it is a control, not a card to curate away, and putting
+          it in the stored order would let somebody hide the only way back. --%>
+          <button
+            :if={filter_rule_count(assigns) > 0}
+            type="button"
+            id="feed-filter-row"
+            phx-click="open-filter"
+            data-filter-count={filter_rule_count(assigns)}
+            class="flex w-full items-center gap-3 rounded-2xl bg-white p-4 text-left shadow-sm ring-1 ring-slate-200 hover:ring-brand-200 dark:bg-slate-900 dark:ring-slate-800 dark:hover:ring-brand-800"
+          >
+            <span class="min-w-0 flex-1 truncate text-xs font-bold uppercase tracking-wider text-slate-600 dark:text-slate-300">
+              {gettext("Hidden")}
+            </span>
+            <span class="shrink-0 text-xs tabular-nums text-slate-500 dark:text-slate-400">
+              {ngettext("%{formatted} rule", "%{formatted} rules", filter_rule_count(assigns),
+                formatted: delimited_count(filter_rule_count(assigns))
+              )}
+            </span>
+            <span aria-hidden="true" class="shrink-0 text-slate-400">›</span>
+          </button>
+
           <%!-- Every card is dragged by its own grip and the hook pushes the
           sequence they were dropped into. That sequence lists only what is on
           screen — half these cards are conditional — which is why
@@ -3517,52 +3668,6 @@ defmodule VutuvWeb.PostLive.Feed do
                       entries={@pending_posts}
                       total={pending_count(assigns)}
                       click={show_pending(assigns)}
-                    />
-                  </.rail_block>
-                <% "sources" -> %>
-                  <%!-- The filter band (the source tabs' successor): one
-                  timeline plus a switch per account, per fediverse server and
-                  per source. It writes through the same contexts the feed reads
-                  — `follows.muted`, `fediverse_follows.muted`,
-                  `users.feed_muted_hosts` and, for the two source rows, the very
-                  `users.feed_source` column the tabs used — and then hands the
-                  fresh member back here so the page is re-run against it.
-
-                  `entries` is passed for the word block's preview and the tag
-                  suggestions: both answer "what would this do to the feed in
-                  front of me", and that question can only be asked of the page
-                  actually on screen. --%>
-                  <.rail_block key="sources" title={rail_title("sources")} rail={@rail}>
-                    <.live_component
-                      module={VutuvWeb.PostLive.FilterBand}
-                      id="filter-band"
-                      block={:sources}
-                      current_user={@current_user}
-                      filter={@feed_filter}
-                      refresh={@band_refresh}
-                      entries={@entries}
-                    />
-                  </.rail_block>
-                <% "words" -> %>
-                  <.rail_block key="words" title={rail_title("words")} rail={@rail}>
-                    <.live_component
-                      module={VutuvWeb.PostLive.FilterBand}
-                      id="filter-band-words"
-                      block={:words}
-                      current_user={@current_user}
-                      filter={@feed_filter}
-                      entries={@entries}
-                    />
-                  </.rail_block>
-                <% "hidden_tags" -> %>
-                  <.rail_block key="hidden_tags" title={rail_title("hidden_tags")} rail={@rail}>
-                    <.live_component
-                      module={VutuvWeb.PostLive.FilterBand}
-                      id="filter-band-tags"
-                      block={:tags}
-                      current_user={@current_user}
-                      filter={@feed_filter}
-                      entries={@entries}
                     />
                   </.rail_block>
                 <% "followed_tags" -> %>
@@ -3635,90 +3740,138 @@ defmodule VutuvWeb.PostLive.Feed do
             </div>
           </div>
 
+          <%!-- The way in for somebody who has hidden nothing yet: one line,
+          no card. It is at the foot of the rail because that is where a reader
+          looks for what a column can do, and it says the act rather than the
+          noun — "Filter" alone never told anybody which way it cuts. --%>
+          <button
+            :if={filter_rule_count(assigns) == 0}
+            type="button"
+            id="feed-filter-link"
+            phx-click="open-filter"
+            class="inline-flex items-center gap-2 rounded-lg px-1 py-1 text-xs text-slate-500 hover:text-brand-600 dark:text-slate-400 dark:hover:text-brand-400"
+          >
+            <svg class="h-4 w-4" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.8" aria-hidden="true">
+              <path stroke-linecap="round" stroke-linejoin="round" d="M22 3H2l8 9.5V19l4 2v-8.5z" />
+            </svg>
+            {gettext("Hide something from your feed")}
+          </button>
+
           <.other_formats_card base_path="/feed" locale={@locale} id="feed-other-formats" />
         </aside>
       </div>
-      <%!-- The band on a phone. The rail is a desktop column and there is no
-      room for one under `md`, so the same three cards arrive as a sheet over
-      the feed — which is also the honest shape for them there: a reader opens
-      it to change something and closes it again, rather than living beside it.
+      <%!-- The filter panel: one room for everything that hides something,
+      opened from the rail's row (or from the phone's filter button) and shaped
+      by the width it lands in. On a phone it is the sheet the band always was;
+      from `sm` up it is a drawer on the right, which is the same gesture at a
+      desk. One markup, not two — the two halves used to be different answers
+      to the same question, and only one of them was findable.
 
       Rendered only while it is open, so the three components (and their
-      queries) cost nothing to a reader who never opens it. They carry their own
-      ids for that reason: the desktop rail is still in the DOM behind the sheet,
-      merely hidden by CSS, and two live components may not share one id.
-
-      No arranging controls here. The order, the folding and the putting away
-      are about a column that only exists on a desktop; on a phone the three
-      cards are simply the filter. --%>
+      queries) cost nothing to a reader who never opens it. --%>
       <div
-        :if={@band_sheet?}
-        id="band-sheet"
-        class="fixed inset-0 z-50 md:hidden"
-        phx-window-keydown="close-band"
+        :if={@filter_panel}
+        id="filter-panel"
+        class="fixed inset-0 z-50"
+        phx-window-keydown="close-filter"
         phx-key="escape"
       >
-        <div
-          class="absolute inset-0 bg-slate-900/40"
-          phx-click="close-band"
-          aria-hidden="true"
-        >
-        </div>
+        <div class="absolute inset-0 bg-slate-900/40" phx-click="close-filter" aria-hidden="true"></div>
         <div
           role="dialog"
           aria-modal="true"
-          aria-label={pgettext("feed filter sheet", "Filter")}
-          class="absolute inset-x-0 bottom-0 top-12 overflow-y-auto rounded-t-2xl bg-slate-50 p-4 pb-[calc(1rem+env(safe-area-inset-bottom))] dark:bg-slate-950"
+          aria-label={gettext("Hidden")}
+          class={[
+            "absolute inset-x-0 bottom-0 top-12 flex flex-col overflow-hidden rounded-t-2xl bg-white dark:bg-slate-900",
+            "sm:inset-y-0 sm:left-auto sm:right-0 sm:w-[30rem] sm:max-w-full sm:rounded-none sm:rounded-l-2xl"
+          ]}
         >
-          <div class="mb-4 flex items-center gap-3">
-            <h2 class="min-w-0 flex-1 truncate text-base font-semibold text-slate-900 dark:text-slate-100">
-              {pgettext("feed filter sheet", "Filter")}
-            </h2>
+          <div class="flex items-start gap-3 border-b border-slate-200 p-4 dark:border-slate-800">
+            <div class="min-w-0 flex-1">
+              <h2 class="truncate text-base font-semibold text-slate-900 dark:text-slate-100">
+                {gettext("Hidden")}
+              </h2>
+              <%!-- The heading says the noun, this line says what it does to a
+              post — the word "Filter" alone never told anybody which way it
+              cuts, which is why the room is not called that. --%>
+              <p class="mt-0.5 text-xs text-slate-500 dark:text-slate-400">
+                {gettext("Whatever these match is folded to a single line in your feed.")}
+              </p>
+            </div>
             <button
               type="button"
-              id="close-band-sheet"
-              phx-click="close-band"
-              class="inline-flex h-10 items-center rounded-full bg-brand-600 px-4 text-sm font-semibold text-white hover:bg-brand-700"
+              id="close-filter-panel"
+              phx-click="close-filter"
+              class="inline-flex h-10 shrink-0 items-center rounded-full bg-brand-600 px-4 text-sm font-semibold text-white hover:bg-brand-700"
             >
               {gettext("Done")}
             </button>
           </div>
 
-          <div class="space-y-4">
-            <.card>
-              <.section_title class="mb-1">{rail_title("sources")}</.section_title>
+          <div
+            role="tablist"
+            class="flex gap-1 border-b border-slate-200 px-3 py-2 dark:border-slate-800"
+          >
+            <button
+              :for={
+                {tab, label} <- [
+                  {:words, gettext("Words & tags")},
+                  {:sources, gettext("Sources")}
+                ]
+              }
+              type="button"
+              role="tab"
+              id={"filter-tab-#{tab}"}
+              phx-click="open-filter"
+              phx-value-tab={tab}
+              aria-selected={to_string(@filter_panel == tab)}
+              class={[
+                "rounded-lg px-3 py-2 text-sm",
+                if(@filter_panel == tab,
+                  do: "bg-brand-50 font-semibold text-brand-700 dark:bg-brand-900/40 dark:text-brand-100",
+                  else: "text-slate-500 hover:text-slate-800 dark:text-slate-400 dark:hover:text-slate-100"
+                )
+              ]}
+            >
+              {label}
+            </button>
+          </div>
+
+          <div class="flex-1 space-y-5 overflow-y-auto p-4 pb-[calc(1rem+env(safe-area-inset-bottom))]">
+            <%= if @filter_panel == :sources do %>
               <.live_component
                 module={VutuvWeb.PostLive.FilterBand}
-                id="sheet-band"
+                id="filter-band"
                 block={:sources}
                 current_user={@current_user}
                 filter={@feed_filter}
                 refresh={@band_refresh}
                 entries={@entries}
               />
-            </.card>
-            <.card>
-              <.section_title class="mb-1">{rail_title("words")}</.section_title>
-              <.live_component
-                module={VutuvWeb.PostLive.FilterBand}
-                id="sheet-band-words"
-                block={:words}
-                current_user={@current_user}
-                filter={@feed_filter}
-                entries={@entries}
-              />
-            </.card>
-            <.card>
-              <.section_title class="mb-1">{rail_title("hidden_tags")}</.section_title>
-              <.live_component
-                module={VutuvWeb.PostLive.FilterBand}
-                id="sheet-band-tags"
-                block={:tags}
-                current_user={@current_user}
-                filter={@feed_filter}
-                entries={@entries}
-              />
-            </.card>
+            <% else %>
+              <div>
+                <.section_title class="mb-2">{gettext("Hide words")}</.section_title>
+                <.live_component
+                  module={VutuvWeb.PostLive.FilterBand}
+                  id="filter-band-words"
+                  block={:words}
+                  current_user={@current_user}
+                  filter={@feed_filter}
+                  entries={@entries}
+                />
+              </div>
+              <div>
+                <.section_title class="mb-2">{gettext("Hide tags")}</.section_title>
+                <.live_component
+                  module={VutuvWeb.PostLive.FilterBand}
+                  id="filter-band-tags"
+                  block={:tags}
+                  current_user={@current_user}
+                  filter={@feed_filter}
+                  entries={@entries}
+                />
+              </div>
+            <% end %>
           </div>
         </div>
       </div>
