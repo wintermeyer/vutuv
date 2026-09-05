@@ -78,13 +78,23 @@ defmodule VutuvWeb.OutboundHandOffTest do
 
     test "a mailto waits for the click", %{conn: conn} do
       posting =
-        publish_job!(nil, %{"apply_kind" => "email", "apply_email" => "jobs@acme.example"})
+        publish_job!(nil, %{
+          "apply_kind" => "email",
+          "apply_email" => "jobs@acme.example",
+          "title" => "Senior Elixir Developer"
+        })
 
       conn = post(conn, ~p"/jobs/#{posting.slug}/apply")
 
       body = html_response(conn, 200)
       assert body =~ ~s|href="mailto:jobs@acme.example?subject=|
       assert body =~ "jobs@acme.example"
+
+      # A `mailto:` query is percent-encoded, not form-encoded (RFC 6068), so a
+      # `+` here is a literal plus the applicant would read in their subject
+      # line.
+      assert body =~ "Senior%20Elixir%20Developer"
+      refute body =~ "Senior+Elixir+Developer"
 
       # A browser hands a URL to an external program on a user gesture, not on
       # a page's say-so, so this one is a button and not a self-forward.

@@ -14,6 +14,7 @@ defmodule VutuvWeb.JobPostingController do
   use VutuvWeb, :controller
 
   alias Vutuv.Jobs
+  alias Vutuv.Mailto
   alias VutuvWeb.AgentDocs
   alias VutuvWeb.AgentDocs.JobBoardDoc
   alias VutuvWeb.AgentDocs.JobPostingDoc
@@ -113,11 +114,11 @@ defmodule VutuvWeb.JobPostingController do
   defp do_apply(conn, %{apply_kind: :email, apply_email: email} = posting, _viewer)
        when is_binary(email) do
     Jobs.increment_apply_click(posting)
-    subject = URI.encode_www_form(gettext("Application: %{title}", title: posting.title))
+    subject = gettext("Application: %{title}", title: posting.title)
 
     ControllerHelpers.hand_off(
       conn,
-      "mailto:#{email}?subject=#{subject}",
+      Mailto.to(email, subject),
       gettext("Your e-mail program opens with the subject filled in.")
     )
   end
