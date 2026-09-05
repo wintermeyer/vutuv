@@ -89,6 +89,29 @@ defmodule Vutuv.Prefs do
       values: ~w(original translate hide),
       group: :feed
     },
+    # How many posts one feed page holds: the arrival, every "Load more", a
+    # source switch and an opened calendar day all ask for this number.
+    #
+    # Ten because that is a screenful three or four times over, and because an
+    # arrival is a wait with nothing on screen yet — a card costs real server
+    # time (measured on production 2026-09-05: a ten-card /feed document ~188 ms
+    # against ~101 ms for the same page with none), so the default is what a
+    # reader needs rather than what they might eventually scroll to. The
+    # ceiling is 250 for the reader who would rather wait once than press a
+    # button twenty times; the floor is 5, below which the button IS the page.
+    #
+    # Its own group rather than `:feed`, because a group is what a reset link
+    # clears: /settings/feed_languages resets `:feed` wholesale, and a member
+    # putting their languages back to the site default must not silently lose
+    # the page size they chose somewhere else.
+    %Pref{
+      key: :feed_page_size,
+      type: :integer,
+      default: 10,
+      min: 5,
+      max: 250,
+      group: :feed_size
+    },
     # The same idea one surface further out (issue #1681): while the vutuv tab
     # sits in the background, a new post pages its first line through the
     # browser tab's title instead of only putting a dot there. Off leaves the
@@ -188,6 +211,9 @@ defmodule Vutuv.Prefs do
   def label(:feed_foreign_posts),
     do: Gettext.gettext(VutuvWeb.Gettext, "Posts in other languages")
 
+  def label(:feed_page_size),
+    do: Gettext.gettext(VutuvWeb.Gettext, "Posts loaded at once")
+
   def label(:low_bandwidth?), do: Gettext.gettext(VutuvWeb.Gettext, "Low-bandwidth mode")
 
   def label(:browser_tab_teaser?),
@@ -207,6 +233,13 @@ defmodule Vutuv.Prefs do
       Gettext.gettext(
         VutuvWeb.Gettext,
         "What your feed does with posts outside your chosen languages: show them as they are, translate them for you, or hide them. Posts that declare no language always show."
+      )
+
+  def hint(:feed_page_size),
+    do:
+      Gettext.gettext(
+        VutuvWeb.Gettext,
+        "How many posts your feed shows before the “Load more” button, and how many that button adds. More posts mean a longer wait for the page."
       )
 
   def hint(:low_bandwidth?),
@@ -271,6 +304,7 @@ defmodule Vutuv.Prefs do
   @doc "The human label of a pref group."
   def group_label(:post_display), do: Gettext.gettext(VutuvWeb.Gettext, "Posts")
   def group_label(:feed), do: Gettext.gettext(VutuvWeb.Gettext, "Feed")
+  def group_label(:feed_size), do: Gettext.gettext(VutuvWeb.Gettext, "Feed length")
   def group_label(:browser_tab), do: Gettext.gettext(VutuvWeb.Gettext, "Browser tab")
   def group_label(:bandwidth), do: Gettext.gettext(VutuvWeb.Gettext, "Bandwidth")
   def group_label(:privacy), do: Gettext.gettext(VutuvWeb.Gettext, "Privacy")
@@ -492,6 +526,32 @@ defmodule Vutuv.Prefs do
   composer's inline-image handler) and the key should be written down once.
   """
   def low_bandwidth?(user), do: get(user, :low_bandwidth?)
+
+  @doc """
+  How many posts one page of this member's feed holds.
+
+  A named predicate for the same reason as `low_bandwidth?/1`: the feed, its
+  size control and the agent-format siblings all ask, and a page size spelled
+  out at four call sites is a page size that drifts.
+  """
+  def feed_page_size(user), do: get(user, :feed_page_size)
+
+  # The sizes the two controls offer. Round numbers a reader picks from at a
+  # glance rather than a slider over 5..250: the question is "a screenful or the
+  # whole morning", not a precise count.
+  @feed_page_size_steps [10, 25, 50, 100, 250]
+
+  @doc """
+  The offered feed sizes, with `current` folded in when it is not one of them.
+
+  An admin may set any installation default inside the pref's bounds, so the
+  five round steps are not the whole value space. Showing a member on 20 only
+  the five would leave no chip marked and make the nearest press look like a
+  no-op — so the value they actually hold is always one of the choices.
+  """
+  def feed_page_size_steps(current) do
+    [current | @feed_page_size_steps] |> Enum.uniq() |> Enum.sort()
+  end
 
   @doc """
   Drop every boolean-pref param that is not ticked, so the column stays NULL.

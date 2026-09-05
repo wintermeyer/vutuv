@@ -157,12 +157,12 @@ defmodule VutuvWeb.FeedCalendarTest do
       # The lower bound has to survive pagination, or the second page walks
       # straight out of the day the reader opened.
       #
-      # Past `@day_full_limit` posts, or the day would arrive whole and there
+      # More than one page of them, or the day would arrive whole and there
       # would be no second page to get wrong.
       {conn, user} = create_and_login_user(conn)
       author = feed_with_history(user)
 
-      for n <- 1..120 do
+      for n <- 1..15 do
         post = PostsHelpers.create_post!(author, %{body: "day three post #{n}"})
         PostsHelpers.place_post_on_day!(post, days_ago(3), n)
       end
@@ -675,14 +675,18 @@ defmodule VutuvWeb.FeedCalendarTest do
   end
 
   describe "how much of a day loads" do
-    test "a small day arrives whole, with nothing left to load", %{conn: conn} do
-      # A day is a bounded thing the reader asked to see, not an endless
-      # timeline: paging through a quiet Tuesday ten posts at a time is
-      # busywork the feed can just do for them.
+    test "a day smaller than one page arrives whole, with nothing left to load",
+         %{conn: conn} do
+      # A day is a bounded thing the reader asked to see, so a quiet Tuesday
+      # comes with no "Load more" under it at all. The threshold is the reader's
+      # own page size (`Vutuv.Prefs`, ten by default) rather than a flat
+      # hundred: the limit is an upper bound, so a day this small still costs
+      # its own size, and the days above it are the ones a `?day=` link used to
+      # spend 300 to 850 ms rendering.
       {conn, user} = create_and_login_user(conn)
       author = feed_with_history(user)
 
-      for n <- 1..12 do
+      for n <- 1..6 do
         post = PostsHelpers.create_post!(author, %{body: "quiet day post #{n}"})
         PostsHelpers.place_post_on_day!(post, days_ago(3), n)
       end
@@ -691,7 +695,7 @@ defmodule VutuvWeb.FeedCalendarTest do
       render_click(view, "cal-day", %{"date" => iso(days_ago(3))})
 
       assert timeline(view) =~ "quiet day post 1"
-      assert timeline(view) =~ "quiet day post 12"
+      assert timeline(view) =~ "quiet day post 6"
       refute has_element?(view, "#load-more")
       refute has_element?(view, "#load-day-all")
     end
@@ -1120,27 +1124,32 @@ defmodule VutuvWeb.FeedCalendarTest do
 
   describe "the URL" do
     test "a day link is sized by the same rule a day click is", %{conn: conn} do
-      # A shared link and a press on the grid have to open the same thing. The
-      # mount cannot read the calendar's counts (they do not exist yet), so it
-      # pays for a single-day count rather than falling back to the arrival
-      # page size — which left a `?day=` link showing part of a small day with
-      # a "Load more" under it, where a click on the grid showed all of it.
+      # A shared link and a press on the grid have to open the same thing, and
+      # they used to be sized by two different rules — which left a `?day=` link
+      # showing part of a day with a "Load more" under it where a click on the
+      # grid showed all of it. One page size now answers for both, so the test
+      # compares the two paths rather than a number either of them happens to
+      # hold.
       {conn, user} = create_and_login_user(conn)
       author = feed_with_history(user)
 
-      # Sized to sit BETWEEN the arrival page (40) and the whole-day limit
-      # (100): fewer, and both rules would load the day whole and the test
+      # More than one page, or both paths would load the day whole and the test
       # would prove nothing.
-      for n <- 1..60 do
+      for n <- 1..25 do
         post = PostsHelpers.create_post!(author, %{body: "quiet day post #{n}"})
         PostsHelpers.place_post_on_day!(post, days_ago(3), n)
       end
 
-      {:ok, view, _html} = live(conn, ~p"/feed?day=#{iso(days_ago(3))}")
+      {:ok, linked, _html} = live(conn, ~p"/feed?day=#{iso(days_ago(3))}")
 
-      assert timeline(view) =~ "quiet day post 1"
-      assert timeline(view) =~ "quiet day post 60"
-      refute has_element?(view, "#load-more")
+      {:ok, clicked, _html} = live(conn, ~p"/feed")
+      render_click(clicked, "cal-day", %{"date" => iso(days_ago(3))})
+
+      for view <- [linked, clicked] do
+        assert timeline(view) =~ "quiet day post 1<"
+        refute timeline(view) =~ "quiet day post 25"
+        assert has_element?(view, "#load-more")
+      end
     end
 
     test "a day link opens that day with the calendar unfolded", %{conn: conn} do

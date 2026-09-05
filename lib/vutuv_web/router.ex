@@ -1626,6 +1626,11 @@ defmodule VutuvWeb.Router do
     get("/security", SettingsController, :security)
     get("/preferences", SettingsController, :preferences)
     get("/bandwidth", SettingsController, :bandwidth)
+    # How long the newsfeed is (default 10 posts, up to 250). Its own page
+    # beside the data-saving switch — both are the member deciding what a page
+    # costs them to load — and the chip row under the timeline is the other way
+    # to the same column.
+    get("/feed", SettingsController, :feed)
     get("/delete", SettingsController, :delete_account)
     get("/privacy", SettingsController, :privacy)
     put("/privacy", SettingsController, :update_privacy)
@@ -1706,6 +1711,9 @@ defmodule VutuvWeb.Router do
     put("/browser_tab", SettingsController, :update_browser_tab)
     patch("/browser_tab", SettingsController, :update_browser_tab)
     post("/browser_tab/reset", SettingsController, :reset_browser_tab)
+    put("/feed_page_size", SettingsController, :update_feed_page_size)
+    patch("/feed_page_size", SettingsController, :update_feed_page_size)
+    post("/feed_page_size/reset", SettingsController, :reset_feed_page_size)
     put("/low_bandwidth", SettingsController, :update_low_bandwidth)
     patch("/low_bandwidth", SettingsController, :update_low_bandwidth)
     post("/low_bandwidth/reset", SettingsController, :reset_low_bandwidth)

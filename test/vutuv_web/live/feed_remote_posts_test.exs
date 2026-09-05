@@ -546,7 +546,9 @@ defmodule VutuvWeb.FeedRemotePostsTest do
     # does not have.
     cached_post(user, %{published_at: DateTime.add(DateTime.utc_now(:second), -3600)})
 
-    for n <- 1..41, do: Vutuv.PostsHelpers.create_post!(user, %{"body" => "Mine #{n}."})
+    # More than one page of newer posts above it, so the arrival cannot reach
+    # it and the next "Load more" can.
+    for n <- 1..15, do: Vutuv.PostsHelpers.create_post!(user, %{"body" => "Mine #{n}."})
 
     {:ok, view, html} = live(conn, ~p"/feed")
 

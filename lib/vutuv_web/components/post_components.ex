@@ -698,6 +698,63 @@ defmodule VutuvWeb.PostComponents do
     """
   end
 
+  @doc """
+  **How long the feed is**, as a row of round numbers to press.
+
+  Numbers rather than a field to type in: the question is "a screenful or the
+  whole morning", not a precise count, and five choices answer it in one tap
+  where a spinner takes aim, drag and a keyboard. `Vutuv.Prefs` folds the
+  member's own value into the steps, so the row can never show nothing pressed —
+  an installation default that is not a round number becomes a sixth chip.
+
+  It wears `post_filter_tab_class/1`, the app's filter-tab recipe, because it is
+  the same gesture asking a different question: press one of a row, the list
+  below is replaced. `data-filter-tab` is what makes a press paint itself while
+  the new page is fetched (inside the feed's `data-filter-scope`; on the
+  settings page there is no list to dim and nothing happens). No filled track —
+  `slate-100` is the canvas colour and the feed's copy renders straight on it.
+
+  **Two surfaces, one row**: under the timeline it is a `phx-click` at the feed
+  LiveView, on /settings/feed a submit button carrying the value, and the only
+  thing that changes is those attributes. The `label` is what a screen reader
+  announces the group as, so both surfaces name it the same way whatever visible
+  text they put around it; the layout around the row is the call site's.
+
+  `role="group"`, not a `tablist`: these are toggle buttons carrying
+  `aria-pressed`, and a real tablist owes the reader arrow-key traversal — the
+  same call `post_filter_tabs/1` documents above.
+  """
+  attr(:current, :integer, required: true)
+  attr(:label, :string, required: true)
+  attr(:mode, :atom, values: [:click, :submit], required: true)
+  attr(:rest, :global, doc: "container attrs, e.g. an id for tests")
+
+  def page_size_chips(assigns) do
+    assigns = assign(assigns, :steps, Vutuv.Prefs.feed_page_size_steps(assigns.current))
+
+    ~H"""
+    <div class="flex flex-wrap gap-1 text-sm" role="group" aria-label={@label} {@rest}>
+      <%!-- A false attribute value renders nothing, so each mode carries only
+      its own two: the click one pushes at the LiveView, the submit one posts
+      the value through the form it sits in and works with no JavaScript. --%>
+      <button
+        :for={step <- @steps}
+        type={if @mode == :submit, do: "submit", else: "button"}
+        phx-click={@mode == :click && "feed-page-size"}
+        phx-value-size={@mode == :click && step}
+        name={@mode == :submit && "user[feed_page_size]"}
+        value={@mode == :submit && step}
+        data-page-size={step}
+        data-filter-tab={step}
+        aria-pressed={to_string(step == @current)}
+        class={post_filter_tab_class(step == @current)}
+      >
+        {delimited_count(step)}
+      </button>
+    </div>
+    """
+  end
+
   # The label in a span of its own, so the dot beside it has a sibling to sit
   # against rather than a bare text node.
   attr(:label, :string, required: true)
@@ -749,6 +806,9 @@ defmodule VutuvWeb.PostComponents do
   #     weight, far too loud for a row of filters.
   #
   # `py-2.5` keeps the tap target at 40px, the mobile-first floor.
+  #
+  # Two strips wear it: the filter tabs above and `page_size_chips/1` below,
+  # which asks a different question with the same gesture.
   defp post_filter_tab_class(true),
     do:
       "whitespace-nowrap rounded-lg bg-brand-100 px-3 py-2.5 font-semibold text-brand-700 dark:bg-brand-900/40 dark:text-brand-100"

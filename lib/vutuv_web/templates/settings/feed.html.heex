@@ -1,0 +1,60 @@
+<%!-- How long the newsfeed is: what one arrival carries, what "Load more"
+adds, and what a source switch or an opened calendar day asks for — the member
+owns the number, the installation sets what an untouched account gets
+(/admin/preferences).
+
+The same round numbers the control under the timeline offers, and the same
+gesture: press one, it is set — one component draws both
+(`PostComponents.page_size_chips/1`), so they cannot drift apart. No Save button
+beside them, because a single value with five choices has nothing to collect:
+pressing a number IS the save, and a two-step form here would be the one place
+in the app where this control behaves differently from its twin on /feed. --%>
+<.settings_shell user={@user} active={:feed_page_size} title={gettext("Posts in your feed")}>
+  <div class="space-y-6">
+    <.card>
+      <.section_title>{Vutuv.Prefs.label(:feed_page_size)}</.section_title>
+      <p id="feed-page-size-hint" class="mt-1 text-sm text-slate-600 dark:text-slate-400">
+        {Vutuv.Prefs.hint(:feed_page_size)}
+      </p>
+
+      <.form
+        :let={f}
+        for={@changeset}
+        action={~p"/settings/feed_page_size"}
+        id="feed-page-size-form"
+        class="mt-5"
+      >
+        <.form_error changeset={@changeset} />
+
+        <.page_size_chips
+          id="settings-page-size"
+          current={Vutuv.Prefs.feed_page_size(@user)}
+          label={Vutuv.Prefs.label(:feed_page_size)}
+          mode={:submit}
+        />
+
+        {error_tag(f, :feed_page_size)}
+      </.form>
+
+      <p class="mt-4 text-sm text-slate-600 dark:text-slate-400">
+        {gettext(
+          "You can change this under the feed itself as well, right below the “Load more” button."
+        )}
+      </p>
+    </.card>
+
+    <%!-- Back to inheriting the installation default — the shape the bandwidth
+    page's reset uses, outside the card and only once the member holds a value
+    of their own. --%>
+    <div :if={Vutuv.Prefs.customized_in_group?(@user, :feed_size)} class="-mt-3">
+      <.link
+        href={~p"/settings/feed_page_size/reset"}
+        method="post"
+        id="reset-feed-page-size"
+        class="text-sm font-semibold text-slate-600 hover:text-slate-800 dark:text-slate-400 dark:hover:text-slate-200"
+      >
+        {gettext("Reset to the site defaults")}
+      </.link>
+    </div>
+  </div>
+</.settings_shell>

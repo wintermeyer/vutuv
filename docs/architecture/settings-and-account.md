@@ -18,16 +18,21 @@ they cannot drift. If an editable area is not on it, it does not exist.
 | Profile | Basics & photos, Username, Experience, Education, Certificates & licenses, Language skills, Tags, Organizations |
 | Contact details | Email addresses, Phone numbers, Addresses, Websites & links, Social media profiles, Messengers |
 | Notifications & feed | Notifications, Muted words & tags, Search & replace, Feed languages, Tags you follow, Find your contacts, Saved searches |
-| Appearance | Language & display, Data-saving mode |
+| Appearance | Language & display, Posts in your feed, Data-saving mode |
 | Privacy | Visibility, Blocked members, Automatic post deletion, Fediverse |
 | Account | Sign-in & security, Account activity, Import, Export, Organizations, Apps & API, Delete account (red) |
 
 *Appearance* is the newest group and holds what vutuv looks and costs like
-to this member — the interface language, dates, maps and post display on one
-row, data-saving mode on the other — as opposed to what the site holds about
-them. *Language & display* used to sit under Account, which had reached its
-eight rows and left the data-saving switch nowhere to go but the feed group,
-where it was not about the feed.
+to this member — the interface language, dates, maps and post display on the
+first row, how long the feed is on the second, data-saving mode on the third —
+as opposed to what the site holds about them. *Language & display* used to sit
+under Account, which had reached its eight rows and left the data-saving switch
+nowhere to go but the feed group, where it was not about the feed. *Posts in
+your feed* (`Vutuv.Prefs`' `feed_page_size`, 10 by default and up to 250) landed
+here for the same arithmetic — "Notifications & feed" is at its eight rows — and
+it belongs beside data-saving mode anyway: both are the member deciding what a
+page costs them to load. The chip row under the timeline writes the same
+column, so most members never open this page.
 
 Each row is a map with `:key` (the sidebar's active state and the hub's entry
 counts), `:label`, `:path`, a `:hint` line saying what is inside, `:terms`
