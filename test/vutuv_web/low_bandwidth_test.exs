@@ -288,6 +288,27 @@ defmodule VutuvWeb.LowBandwidthTest do
     end
   end
 
+  # The magnifier (`VutuvWeb.UI.zoom_corner/1`) is the switch's neighbour on the
+  # same picture — the opposite corner of the same capture — and spells its
+  # classes out for the same render-cost reason. So it needs the same price
+  # paid: two corner controls on one picture that do not stand on one grey, or
+  # do not offer the same 40px target, read as two kinds of widget.
+  test "the magnifier stands on that ground too, and offers the same target" do
+    html = render_component(&VutuvWeb.UI.zoom_corner/1, label: "Bigger", src: "/x.avif")
+    chip = attribute_of(html, "[data-lightbox-photo]", "class")
+    pill = attribute_of(html, "[data-lightbox-photo] > span", "class")
+
+    for token <- String.split(VutuvWeb.UI.picture_chrome_class()) do
+      assert token in String.split(pill),
+             "the magnifier's pill has drifted off picture_chrome_class/0: #{token} is missing"
+    end
+
+    switch = render_component(&VutuvWeb.UI.quality_switch/1, label: "Load in HD")
+
+    assert "min-h-10" in String.split(chip)
+    assert "min-h-10" in String.split(attribute_of(switch, "[data-quality-switch]", "class"))
+  end
+
   defp attribute_of(html, selector, name) do
     html
     |> LazyHTML.from_fragment()

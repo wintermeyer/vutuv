@@ -1244,6 +1244,60 @@ defmodule VutuvWeb.UI do
   end
 
   @doc """
+  The magnifier that opens a page capture at full size, for the corner of a
+  picture whose own tap is already spoken for.
+
+  A post's link capture is a photograph of a web page shown at a third of the
+  column: the address bar and the headline are there, the page is not
+  readable. Tapping it goes to the page, which is right and which is exactly
+  why the enlargement cannot be the same tap — so it is a control of its own,
+  in the corner opposite `quality_switch/1`.
+
+  `src` is what the overlay opens, named by the store rather than read off the
+  page — `Vutuv.Screenshot.lightbox_url/1`, the twin of
+  `Vutuv.Posts.PostImage.lightbox_url/1`, so both halves of "what does the
+  lightbox show" are answered in one kind of place. For a capture that is the
+  thumb whichever mode the viewer is in, and the store's doc says why.
+
+  Like `quality_switch/1` a `role="button"` span rather than a `<button>` —
+  these pictures sit inside a link — and it shares that control's envelope:
+  the same `min-h-10` touch target, the same `absolute` corner, the same
+  chrome grey under the glyph, each spelled as a literal for the render cost
+  `picture_chrome_class/0` documents and each held to the switch by
+  `low_bandwidth_test.exs`. **Unlike** it, it belongs OUTSIDE the picture's
+  link: a capture's anchor is `aria-hidden` (the body's own autolink is the
+  real one), and a focusable control inside a hidden subtree is a tab stop no
+  screen reader can announce.
+
+  Whether it is on screen at rest is `.hover-reveal`'s business
+  (`components.css`, shared with the filter band's "Only"): where a pointer
+  can hover it waits for one, so a feed of captures stays calm; where none
+  can, it stays. That wants a `.hover-reveal-host` on the picture's own box.
+  """
+  attr(:label, :string, required: true, doc: "what a tap does, for the tooltip and the reader")
+  attr(:src, :string, required: true, doc: "the file the overlay opens")
+
+  def zoom_corner(assigns) do
+    ~H"""
+    <span
+      role="button"
+      tabindex="0"
+      aria-label={@label}
+      title={@label}
+      data-lightbox-photo="0"
+      data-photo-src={@src}
+      class="hover-reveal absolute right-0 top-0 inline-flex min-h-10 cursor-zoom-in items-center px-2"
+    >
+      <%!-- `picture_chrome_class/0`'s string, spelled out, exactly as the
+      quality switch's pill spells it and for the same reason. --%>
+      <span class="inline-flex items-center rounded-full bg-slate-900/75 p-1.5 text-xs font-semibold text-white">
+        <.icon_magnifier class="h-4 w-4" />
+      </span>
+    </span>
+    """
+  end
+
+  @doc """
   An `<img>` for a picture that has a lite version (`Vutuv.LowBandwidth`).
 
   `picture` is the `%{src:, lite:}` pair the stores answer
@@ -4822,6 +4876,25 @@ defmodule VutuvWeb.UI do
         stroke-linecap="round"
         stroke-linejoin="round"
         d="m16.862 4.487 1.687-1.688a1.875 1.875 0 1 1 2.652 2.652L10.582 16.07a4.5 4.5 0 0 1-1.897 1.13L6 18l.8-2.685a4.5 4.5 0 0 1 1.13-1.897l8.932-8.931Zm0 0L19.5 7.125"
+      />
+    </svg>
+    """
+  end
+
+  @doc """
+  The magnifying glass with a `+` in it: "see this bigger" — the search
+  glyph's cousin, and not to be confused with it. Two wearers: `zoom_corner/1`
+  and the profile header's avatar scrim.
+  """
+  attr(:class, :any, default: "h-5 w-5")
+
+  def icon_magnifier(assigns) do
+    ~H"""
+    <svg class={@class} fill="none" stroke="currentColor" stroke-width="1.8" viewBox="0 0 24 24" aria-hidden="true">
+      <path
+        stroke-linecap="round"
+        stroke-linejoin="round"
+        d="M21 21l-5.197-5.197m0 0A7.5 7.5 0 1 0 5.196 5.196a7.5 7.5 0 0 0 10.607 10.607ZM10.5 7.5v6m3-3h-6"
       />
     </svg>
     """

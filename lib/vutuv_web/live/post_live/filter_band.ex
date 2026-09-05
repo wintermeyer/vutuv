@@ -688,7 +688,7 @@ defmodule VutuvWeb.PostLive.FilterBand do
 
   defp source_row(assigns) do
     ~H"""
-    <div class="row-reveal-host flex items-center gap-2 py-1">
+    <div class="hover-reveal-host flex items-center gap-2 py-1">
       <.twist id={@source} open?={@open?} target={@target} />
       <%!-- `data-filter-tab` is what the press paint keys on (assets/css/app.css):
       switching a source reloads the timeline exactly as a tab press used to, so
@@ -740,7 +740,7 @@ defmodule VutuvWeb.PostLive.FilterBand do
   #
   # It sits directly after the name rather than past the count at the far edge,
   # and on a pointer device it only appears while the row is under the cursor
-  # (`.row-reveal`, components.css). Twenty rows each ending in the same word
+  # (`.hover-reveal`, components.css). Twenty rows each ending in the same word
   # read as a column of "Only", which is a lot of ink for a shortcut; beside the
   # name it is where the reader is already looking, and it is quiet until they
   # are looking at that row. On touch there is no hover to reveal it with, so it
@@ -763,7 +763,7 @@ defmodule VutuvWeb.PostLive.FilterBand do
       phx-value-key={@key}
       phx-target={@target}
       title={gettext("Show only %{source}", source: @label)}
-      class="row-reveal -my-1.5 shrink-0 rounded px-1.5 py-1.5 text-xs font-semibold text-slate-400 hover:text-brand-700 dark:text-slate-500 dark:hover:text-brand-300"
+      class="hover-reveal -my-1.5 shrink-0 rounded px-1.5 py-1.5 text-xs font-semibold text-slate-400 hover:text-brand-700 dark:text-slate-500 dark:hover:text-brand-300"
     >
       {gettext("Only")}
     </button>
@@ -783,7 +783,7 @@ defmodule VutuvWeb.PostLive.FilterBand do
 
   defp server_row(assigns) do
     ~H"""
-    <div class="row-reveal-host flex items-center gap-2 py-1">
+    <div class="hover-reveal-host flex items-center gap-2 py-1">
       <.twist id={@server.host} open?={@open?} target={@target} />
       <input
         type="checkbox"
@@ -815,7 +815,7 @@ defmodule VutuvWeb.PostLive.FilterBand do
 
   defp account_row(assigns) do
     ~H"""
-    <div class="row-reveal-host flex items-center gap-2 py-1">
+    <div class="hover-reveal-host flex items-center gap-2 py-1">
       <%!-- The checkbox carries its own name and its own touch target. It used
       to be labelled by the row's text, which cost nothing until that text
       became a link to the account: a link inside a `<label for>` both navigates

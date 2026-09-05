@@ -368,9 +368,7 @@ defmodule VutuvWeb.UserHTML do
       >
         <.profile_avatar_image user={@user} src={@src} alt="" />
         <span class="pointer-events-none absolute inset-0 z-20 flex items-center justify-center rounded-2xl bg-slate-900/45 text-white opacity-0 transition-opacity group-hover:opacity-100 group-focus-visible:opacity-100">
-          <svg class="h-7 w-7" fill="none" stroke="currentColor" stroke-width="1.8" viewBox="0 0 24 24">
-            <path stroke-linecap="round" stroke-linejoin="round" d="M21 21l-5.197-5.197m0 0A7.5 7.5 0 1 0 5.196 5.196a7.5 7.5 0 0 0 10.607 10.607ZM10.5 7.5v6m3-3h-6" />
-          </svg>
+          <.icon_magnifier class="h-7 w-7" />
         </span>
       </a>
     </.lightbox_gallery>

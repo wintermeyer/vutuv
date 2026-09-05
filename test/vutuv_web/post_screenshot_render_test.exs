@@ -45,7 +45,7 @@ defmodule VutuvWeb.PostScreenshotRenderTest do
       html = html_response(get(conn, Posts.path(post)), 200)
 
       # The float lives on the screenshot element itself ...
-      assert [tag] = Regex.run(~r/<a[^>]*data-link-screenshot[^>]*>/, html)
+      assert [tag] = Regex.run(~r/<div[^>]*data-link-screenshot[^>]*>/, html)
       assert tag =~ "float-right"
 
       # ... and inside the body container, ahead of the prose: a CSS float only
@@ -63,6 +63,28 @@ defmodule VutuvWeb.PostScreenshotRenderTest do
 
       html = html_response(get(conn, Posts.path(post)), 200)
       refute html =~ "data-link-screenshot"
+    end
+  end
+
+  describe "the magnifier" do
+    test "a ready capture offers one trigger, on the thumb, outside the link",
+         %{conn: conn} do
+      user = author()
+      post = post_with_screenshot(user, status: "ready", screenshot: "abcdef012345.avif")
+
+      html = html_response(get(conn, Posts.path(post)), 200)
+
+      assert html =~ "data-lightbox-gallery"
+      assert [_] = elements(html, "[data-lightbox-photo]")
+
+      # The server names the file, so the overlay never has to read it back off
+      # the page — which file it names is `screenshot_lightbox_url_test.exs`.
+      assert html =~ "data-photo-src"
+
+      # The anchor is a decorative duplicate of the body's link and is hidden
+      # from assistive tech; a focusable control inside it would be a tab stop
+      # no screen reader can announce.
+      assert [] = elements(html, "a[aria-hidden] [data-lightbox-photo]")
     end
   end
 
