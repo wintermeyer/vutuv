@@ -1154,6 +1154,42 @@ defmodule VutuvWeb.AgentDocsDriftTest do
     assert Jason.decode!(rendered.json)["type"] == "listing"
   end
 
+  test "post calendar overview and day page in every format", %{user: user} do
+    today = Vutuv.BerlinTime.today()
+    insert(:post, user: user, published_on: today, body: "A calendar entry worth indexing")
+
+    overview = formats_for("/system/posts")
+    assert_fact_everywhere(overview, "/system/posts/#{today.year}/#{today.month}")
+    assert Jason.decode!(overview.json)["type"] == "post_calendar"
+
+    day = formats_for("/system/posts/#{today.year}/#{today.month}/#{today.day}")
+    assert_fact_everywhere(day, "A calendar entry worth indexing")
+    assert_fact_everywhere(day, "Gradient")
+    assert Jason.decode!(day.json)["type"] == "post_calendar_day"
+  end
+
+  test "an opted-out author's post is named in every format and quoted in none" do
+    # The calendar lists the row so the day's count adds up, and drops the
+    # permalink and the first line — the whole point of the opt-out. A document
+    # that carried either would be the page's own restraint leaking out the
+    # side, which is exactly what this asserts across all four formats.
+    today = Vutuv.BerlinTime.today()
+    opted_out = insert_activated_user(last_name: "Optout", noindex?: true)
+    post = insert(:post, user: opted_out, published_on: today, body: "Words nobody may index")
+
+    rendered = formats_for("/system/posts/#{today.year}/#{today.month}/#{today.day}")
+
+    assert_fact_everywhere(rendered, "Optout")
+
+    for {format, body} <- rendered do
+      refute body =~ "Words nobody may index",
+             "an opted-out member's post was quoted in the #{format} version"
+
+      refute body =~ post.id,
+             "an opted-out member's post was linked in the #{format} version"
+    end
+  end
+
   test "every profile section page serves its facts in all formats", %{tag: tag} do
     facts = %{
       work_experiences: ["Bridge Engineer", "Span AG", "Building things"],

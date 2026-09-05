@@ -57,6 +57,20 @@ defprotocol Vutuv.Identity do
   """
   def hidden?(identity)
 
+  @doc """
+  Whether search engines and AI agents may index what this identity publishes:
+  a member who did not opt out (`noindex?`), a page that is publicly visible
+  and carries `seo?`. Hidden identities are never indexable, so this is
+  `hidden?/1` plus the opt-out.
+
+  The one answer to "is this open to crawlers", which `Vutuv.Sitemap` asks as
+  SQL and the post calendar (`Vutuv.PostCalendar`) asks per row when it decides
+  whether a post gets its permalink. It had three derivations before, and
+  `VutuvWeb.AgentDocs.PostDoc.robots_axes/2`'s docstring is the war story of
+  what happens when they disagree.
+  """
+  def indexable?(identity)
+
   @doc ~S|The identity's PubSub topic: `"user:<id>"` / `"organization:<id>"`.|
   def topic(identity)
 

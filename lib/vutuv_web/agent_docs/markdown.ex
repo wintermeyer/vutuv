@@ -337,6 +337,44 @@ defmodule VutuvWeb.AgentDocs.Markdown do
     |> join_blocks()
   end
 
+  # The post calendar's overview (/system/posts): the months that have posts.
+  def render(%{type: "post_calendar"} = doc) do
+    [
+      frontmatter(doc),
+      "# #{doc.title}",
+      doc.description,
+      Enum.map_join(doc.months, "\n", fn month ->
+        "- #{Calendar.strftime(month.date, "%Y-%m")} (#{month.count}): #{month.url}"
+      end)
+    ]
+    |> join_blocks()
+  end
+
+  # One month of it: the days that have posts.
+  def render(%{type: "post_calendar_month"} = doc) do
+    [
+      frontmatter(doc),
+      "# #{doc.title}",
+      doc.description,
+      Enum.map_join(doc.days, "\n", fn day ->
+        "- #{Date.to_iso8601(day.date)} (#{day.count}): #{day.url}"
+      end)
+    ]
+    |> join_blocks()
+  end
+
+  # One day of it. A post whose author is not open to search engines is named
+  # by its author alone — no link, no first line — exactly as on the page.
+  def render(%{type: "post_calendar_day"} = doc) do
+    [
+      frontmatter(doc),
+      "# #{doc.title}",
+      doc.description,
+      Enum.map_join(doc.posts, "\n", &calendar_post_line/1)
+    ]
+    |> join_blocks()
+  end
+
   # The /ads offer page (VutuvWeb.AgentDocs.AdsDoc). The rules and the facts
   # form one loose bullet list (blank-line separated, like every other list),
   # not several one-item lists.
@@ -430,10 +468,15 @@ defmodule VutuvWeb.AgentDocs.Markdown do
     |> join_blocks()
   end
 
-  # The pages this member follows (issue #1336), under their own heading rather
-  # than among the people: a reader has to be able to tell a person from an
-  # organization. Only the Following document carries the key, so every other
-  # people list skips the block entirely.
+  # One post of a calendar day. A row with no `url` is a post whose author is
+  # not open to search engines: the controller has already put the line saying
+  # so where the post's own words would be, so this only decides whether the
+  # line is a link.
+  defp calendar_post_line(%{url: nil} = post), do: "- #{post.author.name}: #{post.text}"
+
+  defp calendar_post_line(post),
+    do: "- #{post.author.name}: #{md_link(post.text, post.url)}"
+
   # The citation under an investor-page claim that rests on somebody else's
   # measurement. `nil` for the claims that stand on their own.
   defp case_source(nil), do: nil
@@ -441,6 +484,10 @@ defmodule VutuvWeb.AgentDocs.Markdown do
   defp case_source(%{label: label, url: url}),
     do: gettext("Source: %{source}", source: md_link(label, url))
 
+  # The pages this member follows (issue #1336), under their own heading rather
+  # than among the people: a reader has to be able to tell a person from an
+  # organization. Only the Following document carries the key, so every other
+  # people list skips the block entirely.
   defp followed_organizations(%{organizations: [_ | _] = organizations}) do
     join_blocks([
       "## " <> gettext("Organizations"),

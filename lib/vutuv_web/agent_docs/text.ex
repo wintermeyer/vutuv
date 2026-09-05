@@ -319,6 +319,43 @@ defmodule VutuvWeb.AgentDocs.Text do
     |> join_blocks()
   end
 
+  # The post calendar's overview (/system/posts): the months that have posts.
+  def render(%{type: "post_calendar"} = doc) do
+    [
+      heading(doc.title),
+      doc.description,
+      Enum.map(doc.months, fn month ->
+        "- #{Calendar.strftime(month.date, "%Y-%m")} (#{month.count}): #{month.url}"
+      end),
+      footer(doc)
+    ]
+    |> join_blocks()
+  end
+
+  # One month of it: the days that have posts.
+  def render(%{type: "post_calendar_month"} = doc) do
+    [
+      heading(doc.title),
+      doc.description,
+      Enum.map(doc.days, fn day ->
+        "- #{Date.to_iso8601(day.date)} (#{day.count}): #{day.url}"
+      end),
+      footer(doc)
+    ]
+    |> join_blocks()
+  end
+
+  # One day of it.
+  def render(%{type: "post_calendar_day"} = doc) do
+    [
+      heading(doc.title),
+      doc.description,
+      Enum.map(doc.posts, &calendar_post_line/1),
+      footer(doc)
+    ]
+    |> join_blocks()
+  end
+
   # The /ads offer page (VutuvWeb.AgentDocs.AdsDoc).
   def render(%{type: "advertising"} = doc) do
     [
@@ -400,9 +437,13 @@ defmodule VutuvWeb.AgentDocs.Text do
     |> join_blocks()
   end
 
-  # The pages this member follows (issue #1336) — the plain-text twin of the
-  # Markdown block, under their own heading so a reader can tell a person from
-  # an organization. Absent on every other people list.
+  # One post of a calendar day, the plain-text twin of the Markdown line: a row
+  # with no `url` is a post whose author is not open to search engines, and the
+  # line the controller put there already says so.
+  defp calendar_post_line(%{url: nil} = post), do: "- #{post.author.name}: #{post.text}"
+
+  defp calendar_post_line(post), do: "- #{post.author.name}: #{post.text} (#{post.url})"
+
   # One claim of the investor page's case, with the citation under it where the
   # claim rests on somebody else's measurement.
   defp case_point_text(%{source: nil} = point), do: "#{point.title}\n\n#{point.body}"
@@ -413,6 +454,9 @@ defmodule VutuvWeb.AgentDocs.Text do
     "#{point.title}\n\n#{point.body}\n\n#{source}"
   end
 
+  # The pages this member follows (issue #1336) — the plain-text twin of the
+  # Markdown block, under their own heading so a reader can tell a person from
+  # an organization. Absent on every other people list.
   defp followed_organizations(%{organizations: [_ | _] = organizations}) do
     join_blocks([
       gettext("Organizations"),

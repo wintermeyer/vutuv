@@ -292,6 +292,8 @@ defmodule Vutuv.Organizations.Organization do
 
     def hidden?(organization), do: not Vutuv.Organizations.public_visible?(organization)
 
+    def indexable?(organization), do: Vutuv.Organizations.indexable?(organization)
+
     def topic(organization), do: "organization:#{organization.id}"
 
     def ap_type(_organization), do: "Organization"

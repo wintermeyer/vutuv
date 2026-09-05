@@ -1,0 +1,52 @@
+<.page_header
+  title={@title}
+  crumbs={[
+    {gettext("Home"), ~p"/"},
+    {gettext("Post calendar"), ~p"/system/posts"},
+    {"#{month_name(@day.month)} #{@day.year}", ~p"/system/posts/#{@day.year}/#{@day.month}"},
+    viewer_date(@day)
+  ]}
+/>
+
+<div class="card-list">
+  <section class="card">
+    <p :if={@total > 0}>
+      {ngettext("One post", "%{formatted} posts", @total, formatted: delimited_count(@total))}
+    </p>
+
+    <%= if @entries == [] do %>
+      <p class="card__empty">{gettext("No posts on this day.")}</p>
+    <% else %>
+      <%!-- One row per post: who wrote it, then its first line as the link to
+      the post itself. A row with no `path` is a post whose author is not open
+      to search engines: it keeps its place so the day's count adds up, and its
+      line says that instead of quoting the post — neither this page nor a
+      crawler carries the post's own words past that choice. --%>
+      <ul class="mt-4 divide-y divide-slate-200 dark:divide-slate-800">
+        <li :for={entry <- @entries} class="py-3 first:pt-0 last:pb-0">
+          <p class="mb-0 text-sm">
+            <.link
+              href={author_path(entry)}
+              rel={!entry.path && "nofollow"}
+              class="font-semibold text-brand-600 hover:text-brand-700 dark:text-brand-400 dark:hover:text-brand-300"
+            >
+              {author_name(entry)}
+            </.link>
+          </p>
+
+          <p class="mb-0 mt-1 text-slate-800 dark:text-slate-200">
+            <%= if entry.path do %>
+              <.link href={entry.path} class="text-slate-800 dark:text-slate-200">
+                {entry.text}
+              </.link>
+            <% else %>
+              <span class="text-sm text-slate-600 dark:text-slate-400">{entry.text}</span>
+            <% end %>
+          </p>
+        </li>
+      </ul>
+    <% end %>
+
+    <.pager params={@conn.params} total={@total} per_page={@per_page} />
+  </section>
+</div>

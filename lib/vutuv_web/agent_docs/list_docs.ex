@@ -15,6 +15,7 @@ defmodule VutuvWeb.AgentDocs.ListDocs do
 
   use Gettext, backend: VutuvWeb.Gettext
 
+  alias Vutuv.Identity
   alias VutuvWeb.AgentDocs
   alias VutuvWeb.AgentDocs.JobPostingDoc
   alias VutuvWeb.AgentDocs.PostDoc
@@ -210,6 +211,94 @@ defmodule VutuvWeb.AgentDocs.ListDocs do
       total: total,
       people: Enum.map(people, &person_entry(&1, work_info_by_id, tags_by_id))
     })
+  end
+
+  @doc """
+  The post calendar's overview (`/system/posts`): every month that has posts,
+  with its count and its own URL.
+  """
+  def build_post_calendar_index(months, title, description) do
+    AgentDocs.doc_meta("post_calendar", "/system/posts")
+    |> Map.merge(%{
+      title: title,
+      # Title and description come from the controller, which hands the same two
+      # strings to the HTML page: like the directory's, the sentence carries no
+      # figure — the total rides its own field, where it is data.
+      description: description,
+      total: Enum.sum_by(months, & &1.count),
+      months:
+        Enum.map(months, fn %{year: year, month: month, count: count} ->
+          %{
+            date: Date.new!(year, month, 1),
+            count: count,
+            url: AgentDocs.abs_url("/system/posts/#{year}/#{month}")
+          }
+        end)
+    })
+  end
+
+  @doc """
+  One month of the post calendar (`/system/posts/:year/:month`): the days that
+  have posts, each with its count and its URL.
+
+  The title dates itself in ISO, `Post calendar · 2026-08`, where the page says
+  "Beiträge im August 2026": these documents render in English by default
+  (`VutuvWeb.AgentDocs`), and a German date shape inside an English title is the
+  one part of it a machine reader could misread. It is the shape the author
+  archive's own document already uses.
+  """
+  def build_post_calendar_month(%Date{} = month, counts) do
+    AgentDocs.doc_meta("post_calendar_month", "/system/posts/#{month.year}/#{month.month}")
+    |> Map.merge(%{
+      title: "#{gettext("Post calendar")} · #{Calendar.strftime(month, "%Y-%m")}",
+      description: gettext("The posts written that month, by day."),
+      year: month.year,
+      month: month.month,
+      total: counts |> Map.values() |> Enum.sum(),
+      days:
+        counts
+        |> Enum.sort_by(fn {date, _count} -> date end, Date)
+        |> Enum.map(fn {date, count} ->
+          %{
+            date: date,
+            count: count,
+            url: AgentDocs.abs_url("/system/posts/#{date.year}/#{date.month}/#{date.day}")
+          }
+        end)
+    })
+  end
+
+  @doc """
+  One day of the post calendar (`/system/posts/:year/:month/:day`).
+
+  The entries are the controller's own rows, so this document and the HTML page
+  name the same posts and link exactly the same ones. An entry whose author is
+  not open to search engines carries the author and no URL here as there — a
+  document quoting the post the page deliberately does not quote would be the
+  member's opt-out leaking out the side.
+  """
+  def build_post_calendar_day(%Date{} = date, entries, total) do
+    path = "/system/posts/#{date.year}/#{date.month}/#{date.day}"
+
+    AgentDocs.doc_meta("post_calendar_day", path)
+    |> Map.merge(%{
+      title: "#{gettext("Post calendar")} · #{Date.to_iso8601(date)}",
+      description: gettext("The posts written that day."),
+      date: date,
+      total: total,
+      posts: Enum.map(entries, &post_calendar_entry/1)
+    })
+  end
+
+  # `Identity.ref/1` is the one author object the API, the post JSON and every
+  # other agent doc carry, so a reader meets the same shape here; `url: nil` is
+  # what says the post is listed and not linked, the same nil the page reads.
+  defp post_calendar_entry(entry) do
+    %{
+      author: Identity.ref(entry.author),
+      url: entry.path && AgentDocs.abs_url(entry.path),
+      text: entry.text
+    }
   end
 
   defp person_entry(user, work_info_by_id, tags_by_id \\ %{}),
