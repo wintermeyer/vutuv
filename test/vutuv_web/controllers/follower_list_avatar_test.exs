@@ -27,6 +27,6 @@ defmodule VutuvWeb.FollowerListAvatarTest do
 
     html = conn |> get(~p"/#{user}/followers") |> html_response(200)
 
-    assert html =~ ~r/<img[^>]*data-avatar[^>]*avatars/
+    assert elements(html, ~s(img[data-avatar][src*="/avatars/"])) != []
   end
 end

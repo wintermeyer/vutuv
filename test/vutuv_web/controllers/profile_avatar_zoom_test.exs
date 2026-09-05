@@ -159,4 +159,62 @@ defmodule VutuvWeb.ProfileAvatarZoomTest do
       end
     end
   end
+
+  # Data-saving mode (`Vutuv.LowBandwidth`): the 96 CSS px header picture
+  # loads the 96 px thumb with the SD/HD switch, the 192 px medium a tap away —
+  # the same switch the cover above it wears. Lives here rather than in
+  # `low_bandwidth_test.exs` because the files have to be on disk in the temp
+  # tree this module owns.
+  describe "the profile picture in data-saving mode" do
+    test "loads the thumb behind an SD/HD switch, the medium a tap away", %{
+      conn: conn,
+      tmp: tmp
+    } do
+      {conn, viewer} = create_and_login_user(conn)
+      owner = with_avatar(insert_activated_user(), tmp, ~w(thumb medium))
+      thumb = "/avatars/#{owner.id}/#{owner.username}-thumb-#{@fingerprint}.avif"
+      medium = "/avatars/#{owner.id}/#{owner.username}-medium-#{@fingerprint}.avif"
+
+      # Outside the mode the header is the plain picture it always was: no
+      # wrapper, no switch, the 192 px version in the slot.
+      html = conn |> get(~p"/#{owner}") |> html_response(200)
+      assert header_avatar(html, "src") == medium
+      assert elements(html, "[data-hd-load]") == []
+
+      {:ok, _} = Repo.update(change(viewer, low_bandwidth?: true))
+
+      html = conn |> get(~p"/#{owner}") |> html_response(200)
+      assert header_avatar(html, "src") == thumb
+      assert header_avatar(html, "data-hd") == medium
+      assert length(elements(html, "[data-hd-load]")) == 1
+      assert text_of(html, "[data-quality-on]") == "SD"
+    end
+
+    test "the list avatars keep their thumb and get no switch", %{conn: conn, tmp: tmp} do
+      {conn, viewer} = create_and_login_user(conn)
+      {:ok, _} = Repo.update(change(viewer, low_bandwidth?: true))
+      owner = with_avatar(insert_activated_user(), tmp, ~w(thumb medium))
+      follower = with_avatar(insert_activated_user(), tmp, ~w(thumb medium))
+      {:ok, _} = Vutuv.Social.follow(follower, owner.id)
+
+      html = conn |> get(~p"/#{owner}") |> html_response(200)
+
+      # The follower row is a thumb slot: nothing cheaper exists, so the only
+      # switch on the page is the header's.
+      assert html =~ "/avatars/#{follower.id}/#{follower.username}-thumb-#{@fingerprint}.avif"
+      assert length(elements(html, "[data-hd-load]")) == 1
+    end
+  end
+
+  # An attribute of the header's `<img>`: the one carrying the
+  # `loading="eager"` the above-the-fold picture alone passes.
+  defp header_avatar(html, attribute) do
+    [value] =
+      html
+      |> LazyHTML.from_document()
+      |> LazyHTML.query(~s(img[data-avatar][loading="eager"]))
+      |> LazyHTML.attribute(attribute)
+
+    value
+  end
 end

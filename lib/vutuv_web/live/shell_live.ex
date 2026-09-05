@@ -79,10 +79,6 @@ defmodule VutuvWeb.ShellLive do
 
   @impl true
   def mount(_params, session, socket) do
-    # The shell mounts outside the `live_session` (embedded via live_render),
-    # so InitAssigns never runs for it — apply the session locale here.
-    VutuvWeb.LiveLocale.put_viewer(session)
-
     # When the shell mounts ON the messages/notifications page itself, that
     # badge starts at zero. Relying only on the page's read-broadcast races the
     # shell's subscribe on full page loads (the broadcast can fire first).
@@ -108,8 +104,17 @@ defmodule VutuvWeb.ShellLive do
         # `push_badge/1` here rather than in either clause: both need it, and the
         # anonymous one needs it most — its zero is the only thing that takes a
         # signed-out member's count off the Home Screen icon (see push_badge/1).
+        user = InitAssigns.session_user(session)
+        # The shell mounts outside the `live_session` (embedded via
+        # live_render), so InitAssigns never runs for it — apply the viewer's
+        # language, clock and mode here, and on the socket alone: the dead
+        # render runs in the request process the plug already resolved, at
+        # the top of the app layout, before the page body renders
+        # (`VutuvWeb.LiveLocale.put_viewer/2`).
+        VutuvWeb.LiveLocale.put_viewer(user, session)
+
         socket
-        |> mount_authenticated(InitAssigns.session_user(session), session, path)
+        |> mount_authenticated(user, session, path)
         |> push_badge()
       else
         # The throwaway dead render, authenticated by the HTTP request that built

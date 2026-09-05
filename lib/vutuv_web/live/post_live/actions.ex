@@ -39,12 +39,14 @@ defmodule VutuvWeb.PostLive.Actions do
   @impl true
   def mount(_params, session, socket) do
     post_id = session["post_id"]
-    VutuvWeb.LiveLocale.put_viewer(session)
 
     # Resolve the viewer from the session token on the connected socket only —
     # it is the one that subscribes and writes. The dead render stays anonymous
-    # (viewer_id nil) and renders from the threaded engagement.
-    viewer_id = if connected?(socket), do: session_viewer_id(session), else: nil
+    # (viewer_id nil) and renders from the threaded engagement. The language
+    # and clock too are the socket's own business: the dead render runs in
+    # the request process the plug already resolved
+    # (`VutuvWeb.LiveLocale.put_viewer/2`).
+    viewer_id = if connected?(socket), do: connected_viewer_id(session), else: nil
 
     # The post topic carries everything this bar needs: absolute counts for
     # every viewer, plus — when the actor is the viewer (`:by_user_id`) — the
@@ -66,9 +68,13 @@ defmodule VutuvWeb.PostLive.Actions do
   end
 
   # The token-resolved viewer id, or nil when the cookie's session token is
-  # missing / revoked / belongs to a suspended member.
-  defp session_viewer_id(session) do
-    case InitAssigns.session_user(session) do
+  # missing / revoked / belongs to a suspended member — with the viewer's
+  # language and clock applied to this socket on the way.
+  defp connected_viewer_id(session) do
+    user = InitAssigns.session_user(session)
+    VutuvWeb.LiveLocale.put_viewer(user, session)
+
+    case user do
       %User{id: id} -> id
       _ -> nil
     end

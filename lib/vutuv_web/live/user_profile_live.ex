@@ -29,6 +29,7 @@ defmodule VutuvWeb.UserProfileLive do
   alias Vutuv.Accounts.User
   alias Vutuv.Activity
   alias Vutuv.CodeStats
+  alias Vutuv.Concurrent
   alias Vutuv.Fediverse
   alias Vutuv.Fediverse.RemoteFollow
   alias Vutuv.Moderation
@@ -627,26 +628,25 @@ defmodule VutuvWeb.UserProfileLive do
   # work-info and follow-state maps those rows read). Reads current_user /
   # recommended_users off the socket, so set those before piping through here.
   #
-  # `opts` lets the mount hand in what it already resolved — `counts:` (from
-  # the one per-mount counts union) and `following:` (the hoisted follow-state
-  # map) — so the initial load re-queries neither; the social-graph refresh
-  # passes only fresh `counts:` and re-reads the follow map, which is exactly
-  # what just changed.
+  # `opts` lets the mount hand in what it already resolved side by side —
+  # `counts:`, `following:` (the hoisted follow-state map), `relationship:`
+  # and `work_info:` — so the initial load re-queries none of them; the
+  # social-graph refresh passes nothing and re-reads all four, which is
+  # exactly what just changed.
   defp put_social_assigns(socket, user, opts) do
     current_user = socket.assigns.current_user
 
     followers = Enum.map(user.inbound_follows, & &1.follower)
     followees = Enum.map(user.outbound_follows, & &1.followee)
-
-    preview_users =
-      Enum.uniq_by(socket.assigns.recommended_users ++ followers ++ followees, & &1.id)
+    preview_users = preview_users(user, socket.assigns.recommended_users)
 
     # The header's whole follow state derives from at most the two directional
     # follow edges (viewer→owner, owner→viewer), read together in one query.
-    rel = header_relationship(current_user, user)
+    rel = Keyword.get(opts, :relationship) || header_relationship(current_user, user)
 
     counts = Keyword.get(opts, :counts) || Social.social_counts(user)
     following = Keyword.get(opts, :following) || following_map(current_user, preview_users)
+    work_info = Keyword.get(opts, :work_info) || work_information_map(preview_users, 24)
 
     socket
     |> assign(:user, user)
@@ -662,8 +662,16 @@ defmodule VutuvWeb.UserProfileLive do
     |> assign(:header_follow_muted?, rel.follow_muted?)
     |> assign(:followers, followers)
     |> assign(:followees, followees)
-    |> assign(:work_info_by_id, work_information_map(preview_users, 24))
+    |> assign(:work_info_by_id, work_info)
     |> assign(:following_by_id, following)
+  end
+
+  # The members the preview rows draw — the "Who to follow" slate and the two
+  # follow previews — which the follow-state and work-info maps are keyed by.
+  defp preview_users(user, recommended_users) do
+    followers = Enum.map(user.inbound_follows, & &1.follower)
+    followees = Enum.map(user.outbound_follows, & &1.followee)
+    Enum.uniq_by(recommended_users ++ followers ++ followees, & &1.id)
   end
 
   # Re-read the visible tags (with their endorsers), so an endorse / unendorse
@@ -750,24 +758,22 @@ defmodule VutuvWeb.UserProfileLive do
     {entries, pinned_post && engagement[pinned_post.id]}
   end
 
+  defp profile_posts(user, viewer, filter, pinned_post) do
+    entries =
+      Vutuv.Posts.profile_posts(user, viewer, type: Vutuv.Posts.normalize_post_filter(filter))
+
+    if filter == "all", do: without_pinned(entries, pinned_post), else: entries
+  end
+
   # The Beiträge card shows the pinned post (issue #1110) in its own block above
   # the timeline, so the timeline leaves it out — one post, shown once. Only
   # under the unfiltered "All" tab: the filtered views are the plain timeline and
   # the pinned block is hidden there, so nothing would be missing. A repost entry
   # of the same post stays (it is a different timeline event).
-  defp profile_posts(user, viewer, filter, pinned_post) do
-    entries =
-      Vutuv.Posts.profile_posts(user, viewer, type: Vutuv.Posts.normalize_post_filter(filter))
+  defp without_pinned(entries, nil), do: entries
 
-    if filter == "all" and pinned_post do
-      Enum.reject(entries, &pinned_entry?(&1, pinned_post))
-    else
-      entries
-    end
-  end
-
-  defp pinned_entry?(%{post: %{id: id}, reposted_by: nil}, %{id: id}), do: true
-  defp pinned_entry?(_entry, _pinned_post), do: false
+  defp without_pinned(entries, %{id: id}),
+    do: Enum.reject(entries, &match?(%{post: %{id: ^id}, reposted_by: nil}, &1))
 
   # Re-fetch the shown posts in the reader's current filter and re-assign them:
   # the fresh list (new identity) re-renders the `:for` with no reload. The
@@ -854,10 +860,28 @@ defmodule VutuvWeb.UserProfileLive do
 
     owner? = !!(current_user && current_user.id == base_user.id)
 
-    # Every count the page renders — the nine section totals, the three social
-    # counts and the posts total — in ONE union query per mount (they were
-    # three separate round trips, the three most expensive queries on the page).
-    counts = profile_counts(base_user, current_user)
+    # Everything that needs nothing but the row and the viewer runs side by
+    # side (`Vutuv.Concurrent`): the section preloads, the Beiträge card's
+    # showcased post and timeline preview, and the five count statements
+    # (`count_loads/2`). They ran in a row, and the counts alone held the
+    # preloads back by 10–25 ms per mount; now the DB wait is the slowest of
+    # them, not the sum. The pin is taken out of the timeline afterwards
+    # (`without_pinned/2`) — read together, it is not known while the timeline
+    # runs — and one engagement read serves both.
+    [user, pinned_post, entries | count_rows] =
+      Concurrent.run([
+        fn -> preload_user_for_show(base_user, owner?) end,
+        fn -> Vutuv.Posts.pinned_post(base_user, current_user) end,
+        fn -> Vutuv.Posts.profile_posts(base_user, current_user, type: :all) end
+        | count_loads(base_user, current_user)
+      ])
+
+    {post_entries, pinned_engagement} =
+      entries
+      |> without_pinned(pinned_post)
+      |> attach_engagement(pinned_post, current_user)
+
+    counts = Map.new(Enum.concat(count_rows), fn %{kind: kind, total: total} -> {kind, total} end)
     totals = section_totals(counts)
     posts_total = Map.get(counts, "posts_total", 0)
 
@@ -866,8 +890,6 @@ defmodule VutuvWeb.UserProfileLive do
       followees: Map.get(counts, "followees", 0),
       connections: Map.get(counts, "connections", 0)
     }
-
-    user = preload_user_for_show(base_user, owner?)
 
     private_emails? = private_emails?(current_user, user)
 
@@ -901,27 +923,36 @@ defmodule VutuvWeb.UserProfileLive do
       |> suggestable(user, current_user, following)
       |> Enum.take(@recommended_count)
 
-    # The showcased post (issue #1110), scoped to this viewer: a pin that is
-    # restricted, frozen or gone simply isn't there. It renders above the
-    # timeline, which therefore leaves it out (see profile_posts/4).
-    pinned_post = Vutuv.Posts.pinned_post(user, current_user)
+    # The viewer-scoped reads left once the slate is known, side by side like
+    # the loads above: each is one small query, and in a row they were the
+    # page's last serial stretch. The two-line samples under each suggestion
+    # are drawn once with the slate itself — the rail's membership is fixed
+    # for the page view (a follow only flips that row's button), so re-drawing
+    # them on every refresh would cost a query to render the same lines. The
+    # owner's draft decides whether the folded composer opens
+    # (`ComposerPanel`); read here so it rides the `MountHandoff` and reaches
+    # the composer as `preloaded_draft` — the row /feed reads, same author,
+    # same empty context.
+    preview_users = preview_users(user, recommended_users)
 
-    {post_entries, pinned_engagement} =
-      user
-      |> profile_posts(current_user, "all", pinned_post)
-      |> attach_engagement(pinned_post, current_user)
+    [suggested_posts_by_id, viewer_block, user_saved, emails, relationship, work_info, draft] =
+      Concurrent.run([
+        fn -> Vutuv.Posts.recent_posts_by_authors(recommended_users, current_user) end,
+        fn -> viewer_block(current_user, user) end,
+        fn -> header_user_saved(current_user, user) end,
+        fn -> profile_emails(private_emails?, current_user, user) end,
+        fn -> header_relationship(current_user, user) end,
+        fn -> work_information_map(preview_users, 24) end,
+        fn -> owner? && Vutuv.Posts.get_draft(current_user) end
+      ])
 
     socket
     |> assign(:as_owner?, owner?)
-    # The owner's folded composer and the draft that decides whether it opens
-    # (`ComposerPanel`). Read here so it rides the `MountHandoff` and reaches
-    # the composer as `preloaded_draft`; it is the row /feed reads — same
-    # author, same empty context, the same unpublished post.
-    |> ComposerPanel.assign_draft(owner? && current_user)
+    |> ComposerPanel.open_for_draft(draft || nil)
     |> assign(:vcard_full?, private_emails?)
-    |> assign(:viewer_block, viewer_block(current_user, user))
-    |> assign(:user_saved, header_user_saved(current_user, user))
-    |> assign(:emails, profile_emails(private_emails?, current_user, user))
+    |> assign(:viewer_block, viewer_block)
+    |> assign(:user_saved, user_saved)
+    |> assign(:emails, emails)
     |> assign(:pinned_post, pinned_post)
     |> assign(:pinned_engagement, pinned_engagement)
     |> assign(:posts, post_entries)
@@ -955,21 +986,19 @@ defmodule VutuvWeb.UserProfileLive do
     # JSON-LD Person markup below.
     |> assign(:work_info, profile_headline(user, header_job, 60))
     |> assign(:recommended_users, recommended_users)
-    # The two-line samples under each suggestion. Drawn once with the slate
-    # itself: the rail's membership is fixed for the page view (a follow only
-    # flips that row's button), so re-drawing them on every refresh would cost
-    # a query to render the same lines.
-    |> assign(
-      :suggested_posts_by_id,
-      Vutuv.Posts.recent_posts_by_authors(recommended_users, current_user)
-    )
+    |> assign(:suggested_posts_by_id, suggested_posts_by_id)
     |> assign(:totals, totals)
     # Builds the social slice (counts, header pill state, follow previews); reads
     # :current_user / :recommended_users set above, so it goes last. The counts
-    # and the follow-state map were already resolved above (the counts union,
-    # the hoisted following_map), so the mount hands them in instead of
+    # and the follow-state map were already resolved above (the concurrent
+    # counts, the hoisted following_map), so the mount hands them in instead of
     # re-querying; the refresh path passes neither and queries fresh.
-    |> put_social_assigns(user, counts: social_counts, following: following)
+    |> put_social_assigns(user,
+      counts: social_counts,
+      following: following,
+      relationship: relationship,
+      work_info: work_info
+    )
     # The rail promotion and the checklist's follow step both read the followee
     # count put_social_assigns just computed. The promotion is deliberately set
     # only here, never on the social-graph refresh: the fifth follow, made from
@@ -1366,34 +1395,41 @@ defmodule VutuvWeb.UserProfileLive do
     |> preload(endorsements: ^UserTagEndorsement.visible_with_endorser())
   end
 
-  # Every count the profile renders, in ONE round trip: the nine section
-  # totals ("N total, showing 3"), the three social-graph counts
-  # (`Social.profile_count_queries/1`) and the viewer-scoped posts total
-  # (`Posts.author_timeline_count_query/2`) — a 13-arm union_all keyed back to
-  # a `kind => total` map. They used to run as three separate queries (and
-  # before that, as sixteen), which made counting the most expensive thing on
-  # the page after the preloads. Each arm returns exactly one row (0 when
-  # empty), so every kind is always present.
-  defp profile_counts(%User{id: uid} = user, viewer) do
-    [first | rest] =
-      [
-        section_count(UserTag, uid, "user_tags"),
-        section_count(WorkExperience, uid, "jobs"),
-        section_count(Education, uid, "educations"),
-        section_count(Language, uid, "languages"),
-        section_count(Qualification, uid, "qualifications"),
-        section_count(PhoneNumber, uid, "numbers"),
-        section_count(Messenger, uid, "messengers"),
-        section_count(Url, uid, "links"),
-        section_count(Address, uid, "addresses")
-      ] ++
-        Social.profile_count_queries(uid) ++
-        [Vutuv.Posts.author_timeline_count_query(user, viewer)]
+  # Every count the profile renders — the nine section totals ("N total,
+  # showing 3"), the three social-graph counts (`Social.profile_count_queries/1`)
+  # and the viewer-scoped posts total (`Posts.author_timeline_count_query/2`) —
+  # as loads for `Vutuv.Concurrent.run/1`, each answering rows of
+  # `%{kind:, total:}` (exactly one per kind, 0 when empty, so every kind is
+  # always present in the map `load_profile/1` folds them into).
+  #
+  # Five statements side by side, not one. They were a 13-arm union_all, which
+  # read as one round trip and was the slowest thing on the page: a plan that
+  # wide is re-planned for its first executions on every pool connection and
+  # lands on a Parallel Append whose worker launch is the cost, so it took
+  # 10–25 ms per mount on the production copy where its arms take 6 ms in a
+  # row and 1.8 ms side by side (2026-09-05). The nine section counts keep one
+  # union — nine index-only counts that plan in 0.4 ms — and every arm with a
+  # join is its own statement.
+  defp count_loads(%User{id: uid} = user, viewer) do
+    [first | rest] = [
+      section_count(UserTag, uid, "user_tags"),
+      section_count(WorkExperience, uid, "jobs"),
+      section_count(Education, uid, "educations"),
+      section_count(Language, uid, "languages"),
+      section_count(Qualification, uid, "qualifications"),
+      section_count(PhoneNumber, uid, "numbers"),
+      section_count(Messenger, uid, "messengers"),
+      section_count(Url, uid, "links"),
+      section_count(Address, uid, "addresses")
+    ]
 
-    rest
-    |> Enum.reduce(first, fn arm, acc -> union_all(acc, ^arm) end)
-    |> Repo.all()
-    |> Map.new(fn %{kind: kind, total: total} -> {kind, total} end)
+    sections = Enum.reduce(rest, first, fn arm, acc -> union_all(acc, ^arm) end)
+
+    [
+      sections,
+      Vutuv.Posts.author_timeline_count_query(user, viewer) | Social.profile_count_queries(uid)
+    ]
+    |> Enum.map(fn query -> fn -> Repo.all(query) end end)
   end
 
   # The section-totals map the template reads, from the combined counts.

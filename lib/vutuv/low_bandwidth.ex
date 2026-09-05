@@ -25,18 +25,21 @@ defmodule Vutuv.LowBandwidth do
       (`Vutuv.Posts.PostImage.picture/2`), a picture from another network
       (`Vutuv.RemoteMedia.picture/1`), a URL screenshot
       (`Vutuv.Screenshot.picture/1`) and a profile cover
-      (`Vutuv.Cover.picture/1`). Each answers `%{src:, lite:}`: the version
-      the page always showed and, only while this flag is on and the lite file
-      exists, the cheap one. `VutuvWeb.UI.picture/1` renders the pair as the
-      lite picture with the SD/HD switch that swaps the full one in on request.
+      (`Vutuv.Cover.picture/1`) — and the one avatar slot that has a cheaper
+      version already, the 96 CSS px profile picture, whose 192 px `medium`
+      has the 96 px `thumb` beside it (`Vutuv.Avatar.picture/1`). Each answers
+      `%{src:, lite:}`: the version the page always showed and, only while
+      this flag is on and the lite file exists, the cheap one.
+      `VutuvWeb.UI.picture/1` renders the pair as the lite picture with the
+      SD/HD switch that swaps the full one in on request.
     * the lightbox opens a post photo at `large` (1600 px) rather than `xl`
       (2560 px): `Vutuv.Posts.PostImage.lightbox_url/1`.
 
   Measured on the production copy (2026-09-02, medians): a post photo's
   `feed` version is 44 kB, its lite 12 kB; a screenshot 13 kB against 3 kB; a
-  cover 34 kB against 8 kB. Avatars stay as they are — the feed's 96 px avatar
-  is 1.7 kB, and a softer one would save a kilobyte a face while blurring
-  every name on the page.
+  cover 34 kB against 8 kB; the profile picture 6 kB against 2 kB. The list
+  avatars stay as they are — the feed's 96 px thumb is 1.7 kB, and a softer
+  one would save a kilobyte a face while blurring every name on the page.
 
   ## The cookie
 

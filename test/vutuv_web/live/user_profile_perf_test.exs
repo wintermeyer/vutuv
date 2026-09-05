@@ -25,8 +25,10 @@ defmodule VutuvWeb.UserProfilePerfTest do
     {:ok, _reply} = Posts.create_reply(user, parent, %{body: "answering myself"})
     {:ok, _} = Posts.create_post(user, %{body: "one more post"})
 
+    # Global: the Beiträge card loads in one of the mount's tasks, so the
+    # caller-filtered counter would report 0 whatever the card does.
     {conn, engagement_queries} =
-      Vutuv.QueryCounter.count_queries(
+      Vutuv.QueryCounter.count_queries_global(
         fn -> get(conn, ~p"/#{user.username}") end,
         matching: @engagement_query
       )
@@ -39,31 +41,41 @@ defmodule VutuvWeb.UserProfilePerfTest do
            "expected the profile to batch engagement into one query, got #{engagement_queries}"
   end
 
-  test "all profile counts run as one union query", %{conn: conn} do
+  # The counts run in the mount's own tasks, so these count across every
+  # process — which is why this module stays sync (see the describe below).
+  test "the profile's counts are five statements side by side, never one union", %{conn: conn} do
     {conn, user} = create_and_login_user(conn)
     {:ok, _} = Posts.create_post(user, %{body: "counted post"})
+    path = ~p"/#{user.username}"
 
-    # The merged counts union is the only statement that counts both a profile
-    # section (user_tags) and the social graph (follows) in one query; the
-    # section totals, the three social counts and the posts total used to be
-    # three separate round trips per mount.
-    {conn, union_queries} =
-      Vutuv.QueryCounter.count_queries(
-        fn -> get(conn, ~p"/#{user.username}") end,
+    # The 13-arm union that counted a profile section (user_tags) and the
+    # social graph (follows) in one statement is what this guards against: a
+    # plan that wide is re-planned per pool connection and lands on a Parallel
+    # Append, 10–25 ms per mount on the production copy (2026-09-05).
+    {conn, wide_union} =
+      Vutuv.QueryCounter.count_queries_global(fn -> get(conn, path) end,
         matching: ~r/FROM "user_tags"[\s\S]*UNION ALL[\s\S]*FROM "follows"/
       )
 
     assert html_response(conn, 200) =~ "counted post"
-    assert union_queries == 1
+    assert wide_union == 0
 
-    # And the standalone count shapes it replaced are gone from the mount.
-    {_conn, standalone_social_counts} =
-      Vutuv.QueryCounter.count_queries(
-        fn -> recycle(conn) |> get(~p"/#{user.username}") end,
-        matching: ~r/^SELECT count\(f0\."id"\) FROM "follows"/
+    # The nine section totals keep one union (index-only counts, 0.4 ms)...
+    {_conn, section_union} =
+      Vutuv.QueryCounter.count_queries_global(fn -> recycle(conn) |> get(path) end,
+        matching: ~r/FROM "user_tags"[\s\S]*UNION ALL[\s\S]*FROM "addresses"/
       )
 
-    assert standalone_social_counts == 0
+    assert section_union == 1
+
+    # ...and every arm with a join — the three social counts — is its own
+    # statement, so none of them can drag the others onto a parallel plan.
+    {_conn, social_counts} =
+      Vutuv.QueryCounter.count_queries_global(fn -> recycle(conn) |> get(path) end,
+        matching: ~r/^SELECT \$1::varchar, count\(f0\."id"\) FROM "follows"/
+      )
+
+    assert social_counts == 3
   end
 
   describe "dead-render → socket-mount handoff" do
@@ -127,12 +139,17 @@ defmodule VutuvWeb.UserProfilePerfTest do
     {:ok, first} = Posts.create_post(user, %{body: "post 1"})
     {:ok, _} = Posts.pin_to_profile(user, first)
 
-    {_, few} = Vutuv.QueryCounter.count_queries(fn -> get(conn, ~p"/#{user.username}") end)
+    # Global, like the engagement test above: the posts load in a task of the
+    # mount's, where a per-card query would be invisible to the caller-filtered
+    # counter and this test would pass whatever the card did.
+    {_, few} = Vutuv.QueryCounter.count_queries_global(fn -> get(conn, ~p"/#{user.username}") end)
 
     for n <- 2..5, do: {:ok, _} = Posts.create_post(user, %{body: "post #{n}"})
 
     {_, many} =
-      Vutuv.QueryCounter.count_queries(fn -> recycle(conn) |> get(~p"/#{user.username}") end)
+      Vutuv.QueryCounter.count_queries_global(fn ->
+        recycle(conn) |> get(~p"/#{user.username}")
+      end)
 
     assert many <= few + 1,
            "profile query count grew from #{few} to #{many}; engagement is not batched"

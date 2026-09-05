@@ -51,15 +51,18 @@ defmodule VutuvWeb.ReferenceCheckLive do
   #     host's card. Caught in the browser; no test would have seen it.
   #   * the session locale — a LiveView mounted outside the `live_session` gets
   #     no `LiveLocale` hook, so every gettext call in it falls back to English
-  #     while the page around it is German.
+  #     while the page around it is German. Applied on the socket alone: the
+  #     dead render runs in the request process the plug already resolved
+  #     (`VutuvWeb.LiveLocale.put_viewer/2`).
   @impl true
   def mount(_params, session, socket) do
     reference_id = session["job_reference_id"]
-    VutuvWeb.LiveLocale.put_viewer(session)
     socket = assign(socket, page_title: nil)
 
     if connected?(socket) do
-      mount_authenticated(reference_id, session, socket)
+      user = InitAssigns.session_user(session)
+      VutuvWeb.LiveLocale.put_viewer(user, session)
+      mount_authenticated(reference_id, user, socket)
     else
       # The throwaway dead render. Its own HTTP request was already
       # authenticated; the socket re-checks the token the moment it connects.
@@ -67,8 +70,8 @@ defmodule VutuvWeb.ReferenceCheckLive do
     end
   end
 
-  defp mount_authenticated(reference_id, session, socket) do
-    case InitAssigns.session_user(session) do
+  defp mount_authenticated(reference_id, user, socket) do
+    case user do
       nil ->
         {:ok, assign(socket, reference: nil, check: nil, viewer: nil, ready?: true),
          layout: false}

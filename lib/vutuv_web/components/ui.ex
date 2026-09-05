@@ -1264,7 +1264,7 @@ defmodule VutuvWeb.UI do
   """
   attr(:picture, :map, required: true, doc: "`%{src: full URL, lite: lite URL | nil}`")
   attr(:wrap_class, :any, default: nil, doc: "the lite wrapper's box, where it is not `block`")
-  attr(:rest, :global, include: ~w(alt width height loading fetchpriority))
+  attr(:rest, :global, include: ~w(alt width height loading fetchpriority decoding))
 
   def picture(%{picture: %{lite: nil}} = assigns) do
     ~H"""
@@ -3272,18 +3272,19 @@ defmodule VutuvWeb.UI do
     """
   end
 
+  # Through `picture/1`, so the 96 CSS px slot (`lg`) offers its lite to a
+  # viewer in data-saving mode: without a lite the picture component is the
+  # plain `<img>` this always rendered, so every other call site is untouched.
+  # The pair is derived in the attribute, not assigned, so change tracking
+  # keys it on `src` / `user` / `size` (the liveview rule on derived values).
+  # `shrink-0` on the lite wrapper, since it stands in for the `<img>` inside
+  # a flex row.
   defp avatar_inner(assigns) do
-    src =
-      assigns.src ||
-        (assigns.user && Vutuv.Avatar.display_url(assigns.user, avatar_url_size(assigns.size))) ||
-        @fallback_avatar
-
-    assigns = assign(assigns, :resolved_src, src)
-
     ~H"""
-    <img
+    <.picture
+      picture={avatar_picture(@src, @user, @size)}
+      wrap_class="shrink-0"
       data-avatar
-      src={@resolved_src}
       alt={@alt}
       loading={@loading}
       decoding="async"
@@ -3336,6 +3337,18 @@ defmodule VutuvWeb.UI do
   defp initials_text_size("sm"), do: "text-xs"
   defp initials_text_size("lg"), do: "text-3xl"
   defp initials_text_size(_), do: "text-base"
+
+  # Only the 96 CSS px slot asks the store for a lite: it is the one slot whose
+  # picture (192 px, for HiDPI) has a cheaper version, the 96 px thumb. `md`
+  # loads the same 192 px into 48 CSS px, where the thumb would be a full 2x
+  # already — a switch there would offer an "HD" nobody can see, on a picture
+  # a feed draws fifty times.
+  defp avatar_picture(nil, %{} = user, "lg"), do: Vutuv.Avatar.picture(user)
+
+  defp avatar_picture(nil, %{} = user, size),
+    do: %{src: Vutuv.Avatar.display_url(user, avatar_url_size(size)), lite: nil}
+
+  defp avatar_picture(src, _user, _size), do: %{src: src || @fallback_avatar, lite: nil}
 
   defp avatar_url_size(size) when size in ["2xs", "xs", "sm"], do: :thumb
   defp avatar_url_size(_), do: :medium

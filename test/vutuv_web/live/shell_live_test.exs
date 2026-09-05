@@ -333,9 +333,11 @@ defmodule VutuvWeb.ShellLiveTest do
     test "the Write tab reads Schreiben in German", %{conn: conn} do
       # A one-word msgid is the likeliest to be fuzzy-filled by a merge, and a
       # tab label is the least likely place anyone reads twice.
-      # The shell takes its locale from the session it is mounted with
-      # (`LiveLocale.put_viewer/2`), the way the layout hands it over.
-      user = stefan()
+      # The connected shell applies the member's own language
+      # (`LiveLocale.put_viewer/2`), the session's only for a visitor; the plug
+      # writes the member's into the session anyway, so the two never differ
+      # on a real page.
+      user = stefan(locale: "de")
 
       {:ok, view, _html} =
         live_isolated(conn, VutuvWeb.ShellLive, session: shell_session(user, %{"locale" => "de"}))
@@ -929,8 +931,11 @@ defmodule VutuvWeb.ShellLiveTest do
       {:ok, view, _html} = live_isolated(conn, VutuvWeb.ShellLive, session: session)
       assert has_element?(view, ~s(#{@pill}[title="1 new member today"]))
 
-      {:ok, german, _html} =
-        live_isolated(conn, VutuvWeb.ShellLive, session: Map.put(session, "locale", "de"))
+      # The member's own language, which the plug also writes into the session.
+      german_session =
+        shell_session(insert(:user, admin?: true, locale: "de"), %{"locale" => "de"})
+
+      {:ok, german, _html} = live_isolated(conn, VutuvWeb.ShellLive, session: german_session)
 
       assert has_element?(german, ~s(#{@pill}[title="1 neues Mitglied heute"]))
     end

@@ -29,24 +29,39 @@ beside the 800×528 `thumb`) and a profile cover (800 px beside the 1600 px
 `wide`), all at Q40. The sizes are measured, not chosen: over 40 real photos
 on the production copy, 640 px at Q40 is 21 % of the `feed` bytes (12 kB
 against 44 kB at the median) and the next steps down buy little more — the
-numbers sit beside `@lite_quality` in the Spec. Avatars have none: the 96 px
-thumb is 1.7 kB, and a softer one would blur every name on the page.
+numbers sit beside `@lite_quality` in the Spec. Avatars store no softer
+version: the 96 px thumb is 1.7 kB, and a Q40 one would blur every name on
+the page. The **profile picture** at the top of a profile is the one avatar
+slot that offers a lite anyway, out of the versions it already has: the slot
+is 96 CSS px and loads the 192 px `medium` for HiDPI screens, so the 96 px
+`thumb` is that same picture at 1x (`Vutuv.Avatar.picture/1`, asked by
+`VutuvWeb.UI.avatar/1` for the `lg` slot alone — 2 kB against 6 kB). No new
+file, no regeneration; a list avatar already loads the thumb and gets nothing.
 
 The mode is a **per-process flag**, not an argument: which version an `<img>`
 loads is decided deep inside a component that has no business being handed
 the viewer, so `Vutuv.LowBandwidth.on?/0` lives in the process dictionary
 beside the Gettext locale and the viewer clock and is written by the same two
-writers (`VutuvWeb.Plug.Locale`, `VutuvWeb.LiveLocale`). Each store answers
-one `picture/…` function — `Vutuv.Posts.PostImage.picture/2`,
+writers (`VutuvWeb.Plug.Locale`, `VutuvWeb.LiveLocale`). An embedded child
+applies it on its socket alone: the shell mounts in the request process at the
+top of the app layout, before the page body renders, and writing the anonymous
+default there is what handed every first paint of a LiveView page the
+full-size pictures until 2026-09-05 (the viewer clock paragraph in
+[settings-and-account.md](settings-and-account.md)). Each store answers one
+`picture/…` function — `Vutuv.Posts.PostImage.picture/2`,
 `Vutuv.RemoteMedia.picture/1`, `Vutuv.Screenshot.picture/1`,
-`Vutuv.Cover.picture/1` — returning `%{src:, lite:}`: the version the page
-always showed, and the lite only while the flag is on *and the file exists*.
-`VutuvWeb.UI.picture/1` renders the pair: without a lite it is the plain
-`<img>` it replaced, attribute for attribute; with one, the lite loads and the
-**SD/HD switch** in the corner swaps the full version in on tap (`app.js`,
-`[data-hd-load]`), leaving a `data-hd-loaded` mark the LiveSocket carries
-across every later patch so a like count ticking cannot blur the picture
-back. The lightbox opens `large` (1600 px) rather than `xl`
+`Vutuv.Cover.picture/1`, `Vutuv.Avatar.picture/1` — returning `%{src:, lite:}`:
+the version the page always showed, and the lite only while the flag is on
+*and the file exists*. `VutuvWeb.UI.picture/1` renders the pair: without a
+lite it is the plain `<img>` it replaced, attribute for attribute; with one,
+the lite loads and the **SD/HD switch** in the corner swaps the full version
+in on tap (`app.js`, `[data-hd-load]`), leaving a `data-hd-loaded` mark the
+LiveSocket carries across every later patch so a like count ticking cannot
+blur the picture back. Off that mark the switch hides — from `app.css`
+outside every cascade layer, because the switch wears an `inline-flex`
+utility and a layered `display: none` never beat it (the switch stayed on
+every picture whose HD had arrived for the two days it shipped that way).
+The lightbox opens `large` (1600 px) rather than `xl`
 (`PostImage.lightbox_url/1`).
 
 **A lite is never a broken picture, and never a blind URL.** Every store asks

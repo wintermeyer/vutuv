@@ -35,6 +35,7 @@ defmodule Vutuv.Avatar do
   the vCard export and `user_url/2`.
   """
 
+  alias Vutuv.LowBandwidth
   alias Vutuv.Uploads
   alias Vutuv.Uploads.Crop
   alias Vutuv.Uploads.Originals
@@ -135,10 +136,13 @@ defmodule Vutuv.Avatar do
   per profile render and buys the alternative to a two-deploy rollout: the
   avatar is simply not clickable yet, instead of being a link to a 404.
   """
-  def large_url(user) do
-    if Uploads.version_path({user.avatar, user}, :large, @config) do
-      url({user.avatar, user}, :large)
-    end
+  def large_url(user), do: on_disk_url(user, :large)
+
+  # The served URL of `version`, or nil while its file is not on disk — the
+  # answer both younger-than-the-rows versions need.
+  defp on_disk_url(user, version) do
+    if Uploads.version_path({user.avatar, user}, version, @config),
+      do: url({user.avatar, user}, version)
   end
 
   @doc """
@@ -155,6 +159,21 @@ defmodule Vutuv.Avatar do
   """
   def display_url(%{avatar: nil}, _version), do: @default_avatar
   def display_url(user, version), do: url({user.avatar, user}, version) || @default_avatar
+
+  @doc """
+  What the profile picture at the top of a profile loads for this viewer
+  (`VutuvWeb.UI.picture/1`): the 192 px `:medium` as `:src`, and as `:lite`
+  the 96 px `:thumb` while the viewer is in data-saving mode
+  (`Vutuv.LowBandwidth`) and the file is on disk. That slot is 96 CSS px and
+  loads 192 px for HiDPI screens, so the thumb is the same picture at 1x — a
+  third of the bytes, and the switch offers the sharp one. Which slot asks is
+  `VutuvWeb.UI.avatar/1`'s decision; every other slot loads the thumb
+  already. Asks the disk like `Vutuv.Cover.picture/1`: a version named
+  without looking is exactly the broken-picture case the lite rule rules out.
+  """
+  def picture(user) do
+    LowBandwidth.picture(display_url(user, :medium), fn -> on_disk_url(user, :thumb) end)
+  end
 
   @doc """
   The avatar as a base64 JPEG `data:` URI (used by the vCard export — contact

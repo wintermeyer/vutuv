@@ -10,8 +10,6 @@ defmodule VutuvWeb.AgentDocs.ProfileDoc do
   test (`agent_docs_drift_test.exs`) will remind you.
   """
 
-  import Ecto.Query, only: [union_all: 2]
-
   alias Vutuv.Accounts
   alias Vutuv.Accounts.User
   alias Vutuv.CodeStats
@@ -181,23 +179,23 @@ defmodule VutuvWeb.AgentDocs.ProfileDoc do
     |> maybe_include_photo(user, opts)
   end
 
-  # The four header counts in ONE round trip instead of four: the three
-  # social-graph arms (`Vutuv.Social.profile_count_queries/1`) plus the
-  # viewer-scoped posts arm (`Vutuv.Posts.author_timeline_count_query/2`) —
-  # the same tagged count queries the HTML profile folds into its per-mount
-  # union (`VutuvWeb.UserProfileLive.profile_counts/2`), so the numbers cannot
-  # drift from the page. The agent formats are a crawler-heavy surface, so the
-  # doc pays one counts query per request too. Each arm always returns exactly
-  # one row (0 when empty).
+  # The four header counts: the three social-graph arms
+  # (`Vutuv.Social.profile_count_queries/1`) plus the viewer-scoped posts arm
+  # (`Vutuv.Posts.author_timeline_count_query/2`) — the same tagged count
+  # queries the HTML profile runs (`VutuvWeb.UserProfileLive.count_loads/2`),
+  # so the numbers cannot drift from the page. Four statements side by side,
+  # not one union: the union's plan lands on a Parallel Append whose worker
+  # launch costs 5–10 ms a request on the production copy against 1.7 ms for
+  # the arms side by side (2026-09-05), and the agent formats are the
+  # crawler-heavy surface. Each arm always returns exactly one row (0 when
+  # empty).
   defp profile_counts(user, viewer) do
-    [first | rest] =
-      Vutuv.Social.profile_count_queries(user.id) ++
-        [Vutuv.Posts.author_timeline_count_query(user, viewer)]
-
     counts =
-      rest
-      |> Enum.reduce(first, fn arm, acc -> union_all(acc, ^arm) end)
-      |> Repo.all()
+      (Vutuv.Social.profile_count_queries(user.id) ++
+         [Vutuv.Posts.author_timeline_count_query(user, viewer)])
+      |> Enum.map(fn query -> fn -> Repo.all(query) end end)
+      |> Vutuv.Concurrent.run()
+      |> Enum.concat()
       |> Map.new(fn %{kind: kind, total: total} -> {kind, total} end)
 
     %{
