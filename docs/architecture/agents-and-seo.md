@@ -314,6 +314,59 @@ canonical URL name a different document every time.
 It lives under `/system/` — the one reserved word all future site pages share,
 so new pages stop burning root path words members could have as handles.
 
+## Post calendar (`/system/posts`)
+
+The same idea as the member directory, applied to the posts: a browsable
+archive by day, and the crawl surface for search engines that follow links
+rather than reading `/sitemap.xml`.
+
+It closes a real gap. Every public post permalink is in the sitemap, but until
+this page existed **nothing on the site linked to the post of somebody a
+visitor does not already follow** — the feed is login-only, the landing page
+shows screenshots instead of live posts, and a member's archive is reachable
+only once you are on their profile. A crawler that browses links met no post at
+all, and Google's own discovery of a post rested entirely on how often it
+re-fetched a sitemap child (see issue #1995 on the missing `<lastmod>`).
+
+Three levels, each bounded, so no page ever loads an unbounded row set:
+`/system/posts` is the overview of every month that has posts (a row per year,
+twelve tiles, muted where the month is empty), `/system/posts/:year/:month` is
+that month as a calendar grid whose days with posts are links (with prev/next
+links to the nearest month that has any, so the chain never dead-ends in a
+gap), and `/system/posts/:year/:month/:day` lists that day's posts, paginated
+at `Vutuv.PostCalendar.per_page/0` (50) like the directory's letter pages. From
+the footer, any post is three clicks away.
+
+`Vutuv.PostCalendar` holds two sets apart, the way `Vutuv.Directory` does.
+`listed_posts/0` is what the calendar **shows and counts**: readable by anybody
+(`Vutuv.Posts.scope_visible/2` with no viewer) and written by a confirmed
+member or a publicly visible page — left joins with an explicit branch per
+author kind, never an inner join to `users`, which would silently drop every
+post published in an organization's name.
+
+Narrower is the set whose **permalink is linked and whose first line is
+quoted**, and that question has one owner: **`Vutuv.Identity.indexable?/1`**,
+beside `hidden?/1` on the protocol, which answers it for a member (`noindex?`)
+and for a page (`seo?` plus public visibility) alike. `Vutuv.Sitemap` asks the
+same two flags as SQL, so the calendar can never link a post the sitemap
+withholds — a test asserts that pair directly, because it is the one thing
+about this page that would silently walk a crawler around a member's opt-out.
+A post whose author opted out keeps its row (the day's count would otherwise be
+short) and loses both the link and the quote. The agent-format siblings
+(`.md`/`.txt`/`.json`/`.xml`, `ListDocs.build_post_calendar_*`) are built from
+the controller's own rows, so a document can never quote what the page
+withholds; the drift test asserts both halves.
+
+One index carries all three pages: `posts(published_on, id)`. Without it the
+prev/next month lookup is a sequential scan of the whole archive, twice per
+month page (measured 312 shared buffers against 9).
+
+The day is `posts.published_on` (the German calendar day at insert time, never
+moved by an edit), the same column the author archive at
+`/:slug/posts/2026/03/17` files by, so a post sits under the same date in both
+places. Only the overview is in the sitemap; the month and day pages are what
+its links are for.
+
 ## Link previews (Open Graph)
 
 Every HTML page carries `og:*` + `twitter:card` tags derived in one chokepoint

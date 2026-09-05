@@ -1,0 +1,83 @@
+<.page_header
+  title={@title}
+  crumbs={[
+    {gettext("Home"), ~p"/"},
+    {gettext("Post calendar"), ~p"/system/posts"},
+    "#{month_name(@month.month)} #{@month.year}"
+  ]}
+/>
+
+<div class="card-list">
+  <section class="card">
+    <%!-- The month-to-month chain: each arrow steps to the nearest month that
+    has posts, so a gap in the archive is one click rather than a run of empty
+    pages, and a crawler can walk the whole history from either end. --%>
+    <nav
+      aria-label={gettext("Neighbouring months")}
+      class="flex items-center justify-between gap-2 text-sm"
+    >
+      <%= if @neighbours.previous do %>
+        <a
+          href={~p"/system/posts/#{@neighbours.previous.year}/#{@neighbours.previous.month}"}
+          rel="prev"
+          class="font-semibold text-brand-600 hover:text-brand-700 dark:text-brand-400 dark:hover:text-brand-300"
+        >
+          ‹ {month_name(@neighbours.previous.month)} {@neighbours.previous.year}
+        </a>
+      <% else %>
+        <span></span>
+      <% end %>
+
+      <%= if @neighbours.next do %>
+        <a
+          href={~p"/system/posts/#{@neighbours.next.year}/#{@neighbours.next.month}"}
+          rel="next"
+          class="font-semibold text-brand-600 hover:text-brand-700 dark:text-brand-400 dark:hover:text-brand-300"
+        >
+          {month_name(@neighbours.next.month)} {@neighbours.next.year} ›
+        </a>
+      <% else %>
+        <span></span>
+      <% end %>
+    </nav>
+
+    <%!-- The same seven headings every other calendar on the site draws
+    (`VutuvWeb.UI.weekday_initials/0`), already translated in every locale. --%>
+    <div class="mt-6 grid grid-cols-7 gap-1 text-center text-[10px] font-semibold uppercase tracking-wide text-slate-600 dark:text-slate-400">
+      <span :for={initial <- weekday_initials()}>{initial}</span>
+    </div>
+
+    <div class="mt-1 grid grid-cols-7 gap-1">
+      <%!-- A cell from a neighbouring month is drawn, never linked: the arrows
+      above lead there, and a link out of the grid would file the same day under
+      two months. --%>
+      <%= for cell <- month_grid(@month) do %>
+        <% count = if(cell.in_month?, do: Map.get(@counts, cell.date, 0), else: 0) %>
+        <.tile
+          square
+          faded={!cell.in_month?}
+          href={
+            if(count > 0,
+              do: ~p"/system/posts/#{cell.date.year}/#{cell.date.month}/#{cell.date.day}"
+            )
+          }
+          key={if(cell.in_month?, do: Date.to_iso8601(cell.date))}
+          count={count}
+          title={
+            if(count > 0,
+              do:
+                ngettext("One post", "%{formatted} posts", count,
+                  formatted: delimited_count(count)
+                )
+            )
+          }
+          label={to_string(cell.date.day)}
+        />
+      <% end %>
+    </div>
+
+    <p :if={Enum.empty?(@counts)} class="card__empty">
+      {gettext("No posts in this month yet.")}
+    </p>
+  </section>
+</div>

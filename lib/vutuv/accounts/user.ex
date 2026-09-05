@@ -1596,6 +1596,8 @@ defmodule Vutuv.Accounts.User do
 
     def hidden?(user), do: not Vutuv.Moderation.profile_visible_to?(user, nil)
 
+    def indexable?(user), do: not user.noindex? and not hidden?(user)
+
     def topic(user), do: "user:#{user.id}"
 
     def ap_type(_user), do: "Person"

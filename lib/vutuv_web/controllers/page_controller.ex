@@ -421,6 +421,8 @@ defmodule VutuvWeb.PageController do
   - `/tags/<tag>` — a tag and its most endorsed members
   - `/system/members` — the member directory: every member, filed by last-name
     initial at `/system/members/<a-z|other>`, plus a name search on the index
+  - `/system/posts` — the post calendar: every month that has posts, one month at
+    `/system/posts/<year>/<month>`, one day at `/system/posts/<year>/<month>/<day>`
   - `/system/markdown` — what members may write in a post: the Markdown
     reference, also raw at `/system/markdown.md` (`?lang=` for {{locales}})
   - `/system/mastodon` — how to reach this installation from a Mastodon-compatible

@@ -737,6 +737,16 @@ defmodule VutuvWeb.Router do
     get("/system/members", DirectoryController, :index)
     get("/system/members/:letter", DirectoryController, :show)
 
+    # The public post calendar: the same idea applied to the posts. Nothing on
+    # this site links to the post of somebody a visitor does not already follow
+    # — the feed is login-only and the landing page shows screenshots — so a
+    # crawler that follows links rather than reading /sitemap.xml never met one
+    # until this existed. Three levels, each bounded: months, then the days of
+    # one month, then one day's posts with a pager.
+    get("/system/posts", PostCalendarController, :index)
+    get("/system/posts/:year/:month", PostCalendarController, :month)
+    get("/system/posts/:year/:month/:day", PostCalendarController, :day)
+
     # How to format a post: the member-facing Markdown reference, in the
     # reader's language, with the raw file under `/system/markdown.md`. Public
     # (a member reads it before they have written anything) and under /system/

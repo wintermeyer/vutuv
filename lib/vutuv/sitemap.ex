@@ -14,6 +14,7 @@ defmodule Vutuv.Sitemap do
   """
 
   import Ecto.Query
+  import Vutuv.Moderation.Query, only: [account_confirmed_row: 1]
 
   alias Vutuv.Organizations.Organization
   alias Vutuv.Posts
@@ -35,6 +36,10 @@ defmodule Vutuv.Sitemap do
                   "/datenschutzerklaerung",
                   "/nutzungsbedingungen",
                   "/system/members",
+                  # The post calendar's overview only, like the member
+                  # directory above it: its month and day pages are reached by
+                  # following its links, which is the whole point of it.
+                  "/system/posts",
                   "/system/markdown",
                   "/organizations",
                   "/jobs",
@@ -177,11 +182,20 @@ defmodule Vutuv.Sitemap do
 
   # scope_visible(nil) already drops restricted posts, frozen posts and
   # moderation-hidden authors; the join adds the member-level conditions.
+  #
+  # The confirmed test is `account_confirmed_row/1`, the shared gate every
+  # listing query uses, and not a bare `u.email_confirmed?`: that one reads a
+  # legacy NULL as unconfirmed, so this sitemap advertised such a member's
+  # profile (`indexable_users/0` goes through `Directory`, which treats NULL as
+  # confirmed) while withholding every post they wrote. 33 members carry that
+  # NULL today and none of them has posted, so the two spellings differ by no
+  # rows at all — which is exactly why the one that agrees with the rest of the
+  # site is the one to keep.
   defp indexable_posts do
     Post
     |> Posts.scope_visible(nil)
     |> join(:inner, [p], u in assoc(p, :user))
-    |> where([p, u], u.email_confirmed? and not u.noindex?)
+    |> where([p, u], account_confirmed_row(u) and not u.noindex?)
   end
 
   # A post published in an organization's name (issue #1334) is public by

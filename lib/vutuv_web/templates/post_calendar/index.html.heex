@@ -1,0 +1,42 @@
+<.page_header
+  title={gettext("Post calendar")}
+  crumbs={[{gettext("Home"), ~p"/"}, gettext("Post calendar")]}
+/>
+
+<div class="card-list">
+  <section class="card">
+    <%!-- The page's one sentence, handed down by the controller so the agent
+    formats carry the same words. No figure: this is an index, and an index that
+    opens with a total reads as a statistics page. The counts ride the tiles as
+    `data-count` (invisible, and what the tests read) and the documents, where a
+    machine reader has no calendar in front of them. --%>
+    <p>{@description}</p>
+
+    <%= if @months == [] do %>
+      <p class="card__empty">{gettext("Nothing has been written here yet.")}</p>
+    <% else %>
+      <%!-- One row per year, twelve tiles each: a month with posts is a link,
+      an empty one a muted tile, so the year always shows whole. Two clicks
+      from here reach any day, three any post — which is what makes this the
+      crawl path the sitemap alone never was. --%>
+      <div :for={row <- year_rows(@months)} class="mt-6">
+        <h2 class="text-sm font-semibold uppercase tracking-wide text-slate-600 dark:text-slate-400">
+          {row.year}
+        </h2>
+
+        <nav
+          aria-label={gettext("Posts in %{year}", year: row.year)}
+          class="mt-2 grid grid-cols-3 gap-2 sm:grid-cols-6"
+        >
+          <.tile
+            :for={entry <- row.months}
+            href={if(entry.count > 0, do: ~p"/system/posts/#{row.year}/#{entry.month}")}
+            key={month_key(row.year, entry.month)}
+            count={entry.count}
+            label={month_name(entry.month)}
+          />
+        </nav>
+      </div>
+    <% end %>
+  </section>
+</div>
