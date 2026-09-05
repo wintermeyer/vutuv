@@ -139,15 +139,22 @@ defmodule VutuvWeb.ProfileEditAffordancesTest do
       refute checklist =~ "Follow other members"
     end
 
-    # Both profile-data steps lead to the page that actually holds the fields,
-    # not to the retired /:slug/edit URL that only redirects there.
-    test "the photo and tagline steps link into the settings form", %{conn: conn} do
+    # Both profile-data steps lead to the field that holds them, not to the top
+    # of the settings page and not to the retired /:slug/edit URL that only
+    # redirects there. The fragments are the ids the form carries.
+    test "the photo and tagline steps link to their field", %{conn: conn} do
       {conn, user} = create_and_login_user(conn)
 
       html = conn |> get(~p"/#{user}") |> html_response(200)
 
-      assert completion_html(html) =~ ~s(href="#{~p"/settings/profile"}")
+      assert completion_html(html) =~ ~s(href="#{~p"/settings/profile#avatar"}")
+      assert completion_html(html) =~ ~s(href="#{~p"/settings/profile#tagline"}")
       refute completion_html(html) =~ ~s(href="/#{user.username}/edit")
+
+      # The anchors really exist on the settings form, so neither jump is dead.
+      form = conn |> get(~p"/settings/profile") |> html_response(200)
+      assert elements(form, "#avatar") != []
+      assert elements(form, "#tagline") != []
     end
 
     # The import step is where a career entry comes from on this card; the

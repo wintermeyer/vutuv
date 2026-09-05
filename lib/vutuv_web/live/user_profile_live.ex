@@ -1454,16 +1454,18 @@ defmodule VutuvWeb.UserProfileLive do
       # Both land on /settings/profile, which is where the two fields actually
       # live. They used to point at /:slug/edit, the retired owner URL that only
       # redirects there — one wasted round trip, and a link that shows the old
-      # address in the status bar.
+      # address in the status bar. Each carries the fragment of its own field
+      # (the ids are in the form), so the step lands on the input rather than at
+      # the top of a page whose fields are several screens apart.
       %{
         label: gettext("Add a profile photo"),
         done: present?(user.avatar),
-        href: ~p"/settings/profile"
+        href: ~p"/settings/profile#avatar"
       },
       %{
         label: gettext("Add a tagline"),
         done: present?(user.headline),
-        href: ~p"/settings/profile"
+        href: ~p"/settings/profile#tagline"
       },
       # The importer is a step of its own, not a footer link under the card: it
       # is the one entry here that fills several profile sections in a single
