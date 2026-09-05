@@ -10,18 +10,25 @@ same reasoning, arrived at from the other direction. Borrowing it also means
 one inline stylesheet to keep in step with Direction A instead of two.
 
 Nothing here is per-member and nothing goes stale: no CSRF token, no session,
-no counts. --%>
+no counts. The operator's name and address are the one thing that is baked in
+at cache time, which is the same staleness the whole document already carries
+and a good deal fresher than the alternative of naming nobody.
+
+**It must not claim the reader is offline.** A navigation fails here for
+reasons this page cannot tell apart: no network, a captive portal, DNS, or our
+own server being down — the browser reports the same nothing for all of them.
+The old wording picked one ("until you are back online") and so was wrong
+exactly when the fault was ours, which is when somebody most needs to know
+where to write. The "Try again" button went with it: pressing it while there is
+still no network re-serves this very page, which tells the reader nothing they
+did not know a second ago. The brand wordmark above is the way back to the
+site, and it works the moment there is a network again. --%>
 <div class="error-page">
   <h1 class="error-page__title">{gettext("No connection")}</h1>
   <p class="error-page__hint">
     {gettext(
-      "vutuv needs the network for everything it shows, so there is nothing to read here until you are back online."
+      "This page could not be loaded. Whether that is your connection or our server cannot be told from here. Please try again in a few minutes."
     )}
   </p>
-  <%!-- A plain link, not history.back(): the page the member came from is the
-  one that failed to load, and a reload of THIS document goes through the
-  worker again and lands on the site the moment there is a network. --%>
-  <p class="error-page__actions">
-    <a href="/" class="button">{gettext("Try again")}</a>
-  </p>
+  <ErrorHTML.operator_contact />
 </div>

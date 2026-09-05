@@ -96,6 +96,7 @@ defmodule Vutuv.NodeInfo do
   alias Vutuv.Legal
   alias Vutuv.Legal.LegalPage
   alias Vutuv.Moderation.Query, as: ModerationQuery
+  alias Vutuv.Operator
   alias Vutuv.Posts
   alias Vutuv.Posts.Post
   alias Vutuv.Repo
@@ -174,7 +175,7 @@ defmodule Vutuv.NodeInfo do
   # the operator has actually written that page, because a link to a
   # "not published yet" placeholder is worse than no link.
   defp metadata do
-    {maintainer_name, maintainer_email} = Application.fetch_env!(:vutuv, :operator_recipient)
+    {maintainer_name, maintainer_email} = Operator.recipient()
 
     %{
       "nodeName" => Application.fetch_env!(:vutuv, :node_name),

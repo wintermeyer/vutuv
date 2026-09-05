@@ -61,6 +61,7 @@ defmodule Vutuv.WebPush do
 
   require Logger
 
+  alias Vutuv.Operator
   alias Vutuv.Repo
   alias Vutuv.Ssrf
   alias Vutuv.WebPush.Subscription
@@ -89,15 +90,10 @@ defmodule Vutuv.WebPush do
 
   # RFC 8292 wants a way to reach whoever runs this server, and a push service
   # is entitled to refuse a JWT without one — so the placeholder address this
-  # used to fall back to was worse than no default at all. `operator_email/0`
-  # is the adapter's own answer to "how do you reach whoever runs this", the
+  # used to fall back to was worse than no default at all. `Vutuv.Operator` is
+  # this installation's own answer to "how do you reach whoever runs this", the
   # one `security.txt` publishes.
-  defp subject, do: config(:vapid_subject) || "mailto:" <> operator_email()
-
-  defp operator_email do
-    {_name, email} = Application.fetch_env!(:vutuv, :operator_recipient)
-    email
-  end
+  defp subject, do: config(:vapid_subject) || Operator.contact_mailto()
 
   # Both halves or neither: an installation whose env carries a public key
   # without its private one would advertise a key it cannot sign with, and

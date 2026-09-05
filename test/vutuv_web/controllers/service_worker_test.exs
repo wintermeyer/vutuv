@@ -4,7 +4,9 @@ defmodule VutuvWeb.ServiceWorkerTest do
   offline page it keeps.
 
   `async: false` because the `/sw.js` group flips `:web_push_enabled`, which is
-  global and read by every push path in the app.
+  global and read by every push path in the app, and the offline group flips
+  `:operator_recipient`, which every operator notice, `security.txt`, NodeInfo
+  and the error pages read.
   """
   use VutuvWeb.ConnCase, async: false
 
@@ -142,7 +144,34 @@ defmodule VutuvWeb.ServiceWorkerTest do
         |> html_response(200)
 
       assert body =~ "Keine Verbindung"
+      assert body =~ "in ein paar Minuten"
       assert body =~ ~s|lang="de"|
+    end
+
+    # A navigation fails here for reasons the browser reports as one and the
+    # same nothing — no network, a captive portal, DNS, or our own server being
+    # down — so the page may not blame the reader's connection, and the retry
+    # button that re-served this very page is gone. Being the one page this app
+    # stores, it also carries no timestamp: a rendered one would be the minute
+    # the worker cached it, days before the failure it explains.
+    test "blames nobody, offers no dead retry, and quotes no stale time", %{conn: conn} do
+      body = conn |> get(~p"/system/offline") |> html_response(200)
+
+      assert body =~ "your connection or our server"
+      refute body =~ "Try again"
+      refute body =~ ~r/\d{4}-\d{2}-\d{2} \d{2}:\d{2} UTC/
+    end
+
+    # What it ends on instead is a person — from config, not from a name typed
+    # into a template, which is what flipping the key proves (this module is
+    # already `async: false`). The 500 card renders the same component.
+    test "names the operator of THIS installation", %{conn: conn} do
+      put_config(:operator_recipient, {"Ada Lovelace", "ada@example.org"})
+
+      body = conn |> get(~p"/system/offline") |> html_response(200)
+
+      assert body =~ "Ada Lovelace"
+      assert body =~ "mailto:ada@example.org"
     end
   end
 

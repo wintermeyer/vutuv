@@ -288,6 +288,14 @@ config :vutuv, :image_scan_reject_votes, 3
 # POST_EDIT_WINDOW_MINUTES (config/runtime.exs).
 config :vutuv, :post_edit_window_minutes, 30
 
+# How long installing a new version takes here, in minutes. The 500 page says
+# it, because the commonest reason a visitor meets that page is a deploy in
+# flight and "come back in a bit" is only useful with a number on it. Ours is a
+# blue/green deploy that builds, migrates and health-gates before the switch,
+# which is where the 10 comes from; another installation's pipeline is its own.
+# Runtime override: DEPLOY_MINUTES (config/runtime.exs).
+config :vutuv, :deploy_minutes, 10
+
 # How long the composer keeps a draft nobody has touched (issue #1148). A draft
 # is a convenience, not an archive: past this the composer would greet somebody
 # with half a sentence they have long forgotten writing, and it keeps the photos
@@ -796,8 +804,12 @@ config :vutuv, :ops_log_visibility, true
 config :vutuv, :appeal_reply_to, "sw@wintermeyer-consulting.de"
 
 # Who receives the operator notices (daily report, ad bookings, account-
-# deleted records) — never a member-facing address. Also the security.txt
-# contact. (OPERATOR_NAME / OPERATOR_EMAIL)
+# deleted records) — never the address mail is sent *from*. It is the public
+# contact, though: the security.txt contact, the NodeInfo maintainer, the media
+# kit's press contact, and the person the 500 and offline pages name (with a
+# mailto:) because they cannot say what went wrong. Use an address a human
+# reads. It is the *person*, distinct from :operator_name below, which is the
+# organization credited in the footer. (OPERATOR_NAME / OPERATOR_EMAIL)
 config :vutuv, :operator_recipient, {"Stefan Wintermeyer", "sw@wintermeyer-consulting.de"}
 
 # The operator credit in the site and email footers ("a service provided

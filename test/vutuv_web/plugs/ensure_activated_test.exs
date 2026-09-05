@@ -11,7 +11,7 @@ defmodule VutuvWeb.Plug.EnsureActivatedTest do
     conn = get(build_conn(), "/unactivated-user")
 
     assert conn.status == 404
-    assert conn.resp_body =~ ~r/not found/i
+    assert conn.resp_body =~ "This page does not exist"
   end
 
   # Issue #812: a real-but-withheld account must not masquerade as 404. A

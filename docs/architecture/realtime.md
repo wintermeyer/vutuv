@@ -117,8 +117,18 @@ stale CSRF token and whoever was signed in when it was stored, and the LiveView
 socket would join against a document the server never sent. Only `/assets/*`
 is cached (digested filenames, so immutable — and only where a digest manifest
 exists, never in dev), plus `/system/offline`, the one document this app keeps.
-That page renders **without a layout** for exactly that reason. Full offline is
-not a goal.
+That page borrows the **error layout** for exactly that reason: a whole
+self-contained document with its styling inlined, the same problem a rescued
+500 has. Full offline is not a goal.
+
+What it may say is bounded by the same staleness. A failed navigation is
+reported by the browser as one and the same nothing — no network, a captive
+portal, DNS, or our own server being down — so the page says it cannot tell
+which, asks the reader to come back in a few minutes, and ends on the operator
+(`Vutuv.Operator`, shared with the 500 card as
+`VutuvWeb.ErrorHTML.operator_contact/1`). It renders no timestamp, which would
+be the minute the worker stored it, and no retry button, which would re-serve
+this very page.
 
 `Vutuv.WebPush` is the lifted crypto and delivery — VAPID (RFC 8292) and
 `aes128gcm` (RFC 8291), no dependency, keys derived from `secret_key_base`.

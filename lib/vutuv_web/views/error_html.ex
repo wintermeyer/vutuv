@@ -23,7 +23,9 @@ defmodule VutuvWeb.ErrorHTML do
   use Phoenix.Component
   use Gettext, backend: VutuvWeb.Gettext
 
+  alias Vutuv.Operator
   alias Vutuv.SourceRepo
+  alias VutuvWeb.Endpoint
   alias VutuvWeb.PageHTML
 
   # A request the server could not read (issue #1227): a mangled multipart
@@ -48,15 +50,12 @@ defmodule VutuvWeb.ErrorHTML do
         {gettext("If this keeps happening, please tell us with a bug report at")}
         <a href={SourceRepo.issues_url()}>{SourceRepo.issues_label()}</a>.
       </p>
-      <%!-- The stamp is rendered, not just asked for: the member is the only
-      one who knows when it happened, and the operator's logs are the only
-      place the cause can be found. UTC and server-rendered plain text on
-      purpose - this page must work when the asset pipeline (and with it the
-      local-time rewriting JS) is exactly what broke. --%>
+      <%!-- Why the stamp is printed rather than asked for, and why in UTC:
+      see `utc_stamp/0`. --%>
       <p class="error-page__hint">
         {gettext(
           "The most helpful detail in such a report is the exact time of the error. Right now it is %{time}.",
-          time: Calendar.strftime(DateTime.utc_now(), "%Y-%m-%d %H:%M UTC")
+          time: utc_stamp()
         )}
       </p>
       <p class="error-page__actions">
@@ -66,11 +65,28 @@ defmodule VutuvWeb.ErrorHTML do
     """
   end
 
+  # The opposite of the 500 below, and the page has to say so: everything here
+  # works, the address is simply not one of ours. "Page not found" left the
+  # visitor unable to tell that from an outage — the same two words a browser
+  # shows when a site is down — so the card names what is fine, what is not,
+  # and the two ordinary reasons (an old link, a typo) before pointing home.
   def render("404.html", assigns) do
-    assigns
-    |> Map.new()
-    |> Map.merge(%{code: 404, message: gettext("Page not found")})
-    |> error_page()
+    assigns = Map.new(assigns)
+
+    ~H"""
+    <div class="error-page">
+      <p class="error-page__code">404</p>
+      <h1 class="error-page__title">{gettext("This page does not exist")}</h1>
+      <p class="error-page__hint">
+        {gettext(
+          "The site itself is running, this address just is not one of ours. The link is probably old, or it carries a typo."
+        )}
+      </p>
+      <p class="error-page__actions">
+        <a href="/" class="button">{gettext("Back to the start page")}</a>
+      </p>
+    </div>
+    """
   end
 
   def render("403.html", assigns) do
@@ -87,11 +103,39 @@ defmodule VutuvWeb.ErrorHTML do
     |> error_page()
   end
 
+  # The one error page that cannot say what happened: the request died where
+  # this page cannot see. What it *can* say is the shape of the two causes and
+  # how long each takes, which is the question the visitor actually has. The
+  # commonest one is not a bug at all but a deploy in flight, so the page names
+  # the wait (`:deploy_minutes`) rather than asking for patience in the
+  # abstract — and hands over what turns the other case into a report somebody
+  # can act on: who to write to, and the code and the minute to quote. What it
+  # replaced said "Pardon us! Something went wrong." and linked a bug tracker.
   def render("500.html", assigns) do
-    assigns
-    |> Map.new()
-    |> Map.merge(%{code: 500, message: gettext("Pardon us! Something went wrong.")})
-    |> error_page()
+    assigns = Map.new(assigns)
+
+    ~H"""
+    <div class="error-page">
+      <p class="error-page__code">500</p>
+      <h1 class="error-page__title">{gettext("This site is offline right now.")}</h1>
+      <p class="error-page__hint">
+        {gettext(
+          "That is either a fault in the software or a new version being installed. Either way the site is away only briefly."
+        )}
+      </p>
+      <p class="error-page__hint">
+        {ngettext(
+          "Installing a new version takes up to one minute.",
+          "Installing a new version takes up to %{count} minutes.",
+          deploy_minutes()
+        )}
+      </p>
+      <.operator_contact code={500} />
+      <p class="error-page__actions">
+        <a href="/" class="button">{gettext("Back to the start page")}</a>
+      </p>
+    </div>
+    """
   end
 
   # A withheld profile (issue #812): the account exists but is currently hidden
@@ -202,17 +246,89 @@ defmodule VutuvWeb.ErrorHTML do
     Phoenix.Controller.status_message_from_template(template)
   end
 
-  defp error_page(assigns) do
-    assigns = Map.put_new(assigns, :code, 404)
+  @doc """
+  Who to write to when the page cannot say what went wrong, and what to quote.
 
+  Shared by the 500 card and the service worker's offline page, which ask a
+  visitor the same thing from opposite sides: one knows the request reached us
+  and died, the other that it never arrived. Neither can tell how long it has
+  been that way, so both end on a person rather than on a retry button.
+
+  The name is the reader's link text and the address the `mailto:` behind it,
+  both from `Vutuv.Operator` — a third-party installation names its own
+  operator, never ours.
+  """
+  attr(:code, :integer,
+    default: nil,
+    doc: """
+    The status to quote in the report. `nil` on the offline page, which has
+    neither a status code nor a clock a reader could trust: it is served from
+    the service worker's cache, so a rendered timestamp would be the moment it
+    was stored, days before the failure it explains.
+    """
+  )
+
+  # The stamp is bound once because two things have to quote the same minute:
+  # the sentence the reader can copy, and the subject the mail client opens
+  # with.
+  def operator_contact(assigns) do
+    assigns = assign(assigns, :stamp, assigns.code && utc_stamp())
+
+    ~H"""
+    <p class="error-page__hint">{gettext("If it takes longer, please write to:")}</p>
+    <p class="error-page__hint">
+      <a href={Operator.contact_mailto(mail_subject(@code, @stamp))}>
+        {Operator.contact_name()}, {Operator.contact_email()}
+      </a>
+    </p>
+    <p :if={@stamp} class="error-page__hint">
+      {gettext("Please quote the error code %{code} and the time %{time}.",
+        code: @code,
+        time: @stamp
+      )}
+    </p>
+    """
+  end
+
+  defp mail_subject(nil, _stamp), do: gettext("%{host} cannot be reached", host: host())
+
+  defp mail_subject(code, stamp),
+    do: gettext("Error %{code} on %{host}, %{time}", code: code, host: host(), time: stamp)
+
+  # From config rather than `VutuvWeb.Endpoint.host/0`, whose persistent term
+  # **raises** when the endpoint is not up. That is exactly the state this page
+  # is the fallback for, and a raise inside `render_errors` drops Plug back to
+  # the bare "Internal Server Error" text — the page this card exists to
+  # replace. Every environment sets the key; reading it defensively costs
+  # nothing.
+  defp host do
+    :vutuv
+    |> Application.get_env(Endpoint, [])
+    |> Keyword.get(:url, [])
+    |> Keyword.get(:host)
+  end
+
+  # How long a deploy takes here. A per-installation value with a default of
+  # ours, not a number typed into a translation, or every other installation
+  # would promise a pipeline it does not run.
+  defp deploy_minutes, do: Application.get_env(:vutuv, :deploy_minutes, 10)
+
+  # Rendered, not merely asked for: the visitor is the only one who knows when
+  # it happened and the operator's log is the only place the cause is, so the
+  # minute that joins the two is printed rather than requested. UTC and
+  # server-rendered on purpose — an error page must work when the asset
+  # pipeline, and with it the local-time rewriting JS, is exactly what broke.
+  defp utc_stamp, do: Calendar.strftime(DateTime.utc_now(), "%Y-%m-%d %H:%M UTC")
+
+  # The plain card: a code and one sentence. What is left for it are the three
+  # refusals that need no explaining (403, 410, 413) — every page that has
+  # something to say beyond its own status line writes its own markup above.
+  # Its three callers all merge a `:code`, so there is no default here.
+  defp error_page(assigns) do
     ~H"""
     <div class="error-page">
       <p class="error-page__code">{@code}</p>
       <h1 class="error-page__title">{@message}</h1>
-      <p :if={@code == 500} class="error-page__hint">
-        {gettext("If you think this is a bug, please")}
-        <a href={SourceRepo.new_issue_url()}>{gettext("submit a bug report")}</a>.
-      </p>
       <p class="error-page__actions">
         <a href="/" class="button">{gettext("Back to the start page")}</a>
       </p>

@@ -988,42 +988,38 @@ msgstr ""
 msgid "http://www.example.com"
 msgstr ""
 
-#: lib/vutuv_web/views/error_html.ex:72
-#, elixir-autogen
-msgid "Page not found"
-msgstr ""
-
-#: lib/vutuv_web/views/error_html.ex:167
+#: lib/vutuv_web/views/error_html.ex:79
+#: lib/vutuv_web/views/error_html.ex:211
 #, elixir-autogen
 msgid "This page does not exist"
 msgstr ""
 
-#: lib/vutuv_web/views/error_html.ex:169
+#: lib/vutuv_web/views/error_html.ex:213
 #, elixir-autogen
 msgid "Mea culpa: we once sent this exact broken link in a newsletter. We are sorry!"
 msgstr ""
 
-#: lib/vutuv_web/views/error_html.ex:174
+#: lib/vutuv_web/views/error_html.ex:218
 #, elixir-autogen
 msgid "The word"
 msgstr ""
 
-#: lib/vutuv_web/views/error_html.ex:175
+#: lib/vutuv_web/views/error_html.ex:219
 #, elixir-autogen
 msgid "in this address is only a placeholder. Replace it with the actual username of the person whose profile you want to visit."
 msgstr ""
 
-#: lib/vutuv_web/views/error_html.ex:187
+#: lib/vutuv_web/views/error_html.ex:231
 #, elixir-autogen
 msgid "For example, this profile really exists:"
 msgstr ""
 
-#: lib/vutuv_web/views/error_html.ex:191
+#: lib/vutuv_web/views/error_html.ex:235
 #, elixir-autogen
 msgid "Do not know the username? Try the"
 msgstr ""
 
-#: lib/vutuv_web/views/error_html.ex:192
+#: lib/vutuv_web/views/error_html.ex:236
 #, elixir-autogen
 msgid "search page"
 msgstr ""
@@ -1032,7 +1028,7 @@ msgstr ""
 msgid "Pardon us! Something went wrong. If you think this is a bug, please %{link_open}submit a bug report."
 msgstr ""
 
-#: lib/vutuv_web/views/error_html.ex:79
+#: lib/vutuv_web/views/error_html.ex:95
 #, elixir-autogen
 msgid "You are not allowed to view this page."
 msgstr ""
@@ -1583,11 +1579,13 @@ msgstr ""
 msgid "Alerts"
 msgstr ""
 
-#: lib/vutuv_web/views/error_html.ex:63
-#: lib/vutuv_web/views/error_html.ex:111
-#: lib/vutuv_web/views/error_html.ex:148
-#: lib/vutuv_web/views/error_html.ex:195
-#: lib/vutuv_web/views/error_html.ex:217
+#: lib/vutuv_web/views/error_html.ex:62
+#: lib/vutuv_web/views/error_html.ex:86
+#: lib/vutuv_web/views/error_html.ex:135
+#: lib/vutuv_web/views/error_html.ex:155
+#: lib/vutuv_web/views/error_html.ex:192
+#: lib/vutuv_web/views/error_html.ex:239
+#: lib/vutuv_web/views/error_html.ex:333
 #, elixir-autogen, elixir-format
 msgid "Back to the start page"
 msgstr ""
@@ -1685,11 +1683,6 @@ msgstr ""
 msgid "Follow"
 msgstr ""
 
-#: lib/vutuv_web/views/error_html.ex:213
-#, elixir-autogen, elixir-format
-msgid "If you think this is a bug, please"
-msgstr ""
-
 #: lib/vutuv_web/templates/followee/index.html.heex:46
 #, elixir-autogen, elixir-format
 msgid "It doesn't look like you're following anyone yet. Open the profile of someone you know or find interesting and click the follow button!"
@@ -1774,11 +1767,6 @@ msgstr ""
 #: lib/vutuv_web/views/username_html.ex:66
 #, elixir-autogen, elixir-format
 msgid "PIN"
-msgstr ""
-
-#: lib/vutuv_web/views/error_html.ex:93
-#, elixir-autogen, elixir-format
-msgid "Pardon us! Something went wrong."
 msgstr ""
 
 #: lib/vutuv_web/live/admin/newsletter_broadcast_live.ex:130
@@ -1883,11 +1871,6 @@ msgstr[1] ""
 #: lib/vutuv_web/views/user_html.ex:515
 #, elixir-autogen, elixir-format
 msgid "following"
-msgstr ""
-
-#: lib/vutuv_web/views/error_html.ex:214
-#, elixir-autogen, elixir-format
-msgid "submit a bug report"
 msgstr ""
 
 #: lib/vutuv_web/notification_line.ex:82
@@ -4557,12 +4540,12 @@ msgstr ""
 msgid "Follows"
 msgstr ""
 
-#: lib/vutuv_web/views/error_html.ex:144
+#: lib/vutuv_web/views/error_html.ex:188
 #, elixir-autogen, elixir-format
 msgid "If you do not run this instance yourself, please contact the operator."
 msgstr ""
 
-#: lib/vutuv_web/views/error_html.ex:145
+#: lib/vutuv_web/views/error_html.ex:189
 #, elixir-autogen, elixir-format
 msgid "Legal notice"
 msgstr ""
@@ -4577,7 +4560,7 @@ msgstr ""
 msgid "Not following anyone yet."
 msgstr ""
 
-#: lib/vutuv_web/views/error_html.ex:136
+#: lib/vutuv_web/views/error_html.ex:180
 #, elixir-autogen, elixir-format
 msgid "This area is reserved for administrators."
 msgstr ""
@@ -8449,7 +8432,7 @@ msgstr ""
 msgid "That file is too large. Please upload a ZIP of at most 50 MB."
 msgstr ""
 
-#: lib/vutuv_web/views/error_html.ex:124
+#: lib/vutuv_web/views/error_html.ex:168
 #, elixir-autogen, elixir-format
 msgid "The file you sent is too large."
 msgstr ""
@@ -8521,7 +8504,7 @@ msgstr ""
 msgid "This profile is not offered as a Markdown, text, JSON or XML export."
 msgstr ""
 
-#: lib/vutuv_web/views/error_html.ex:138
+#: lib/vutuv_web/views/error_html.ex:182
 #, elixir-autogen, elixir-format
 msgid "Admin rights are granted by the operator of this vutuv instance, from the server's command line:"
 msgstr ""
@@ -14104,7 +14087,7 @@ msgid_plural "Show %{formatted} more replies"
 msgstr[0] ""
 msgstr[1] ""
 
-#: lib/vutuv_web/views/error_html.ex:86
+#: lib/vutuv_web/views/error_html.ex:102
 #, elixir-autogen, elixir-format
 msgid "This page is no longer available."
 msgstr ""
@@ -14114,7 +14097,7 @@ msgstr ""
 msgid "This post is part of a conversation with %{formatted} posts."
 msgstr ""
 
-#: lib/vutuv_web/views/error_html.ex:109
+#: lib/vutuv_web/views/error_html.ex:153
 #, elixir-autogen, elixir-format
 msgid "This profile is currently unavailable."
 msgstr ""
@@ -17454,22 +17437,22 @@ msgstr ""
 msgid "The single-key shortcuts pause while you type, and are off on phones and tablets."
 msgstr ""
 
-#: lib/vutuv_web/views/error_html.ex:45
+#: lib/vutuv_web/views/error_html.ex:47
 #, elixir-autogen, elixir-format
 msgid "Please go back, reload the page, and send the form again."
 msgstr ""
 
-#: lib/vutuv_web/views/error_html.ex:42
+#: lib/vutuv_web/views/error_html.ex:44
 #, elixir-autogen, elixir-format
 msgid "Your browser sent a request we could not read."
 msgstr ""
 
-#: lib/vutuv_web/views/error_html.ex:48
+#: lib/vutuv_web/views/error_html.ex:50
 #, elixir-autogen, elixir-format
 msgid "If this keeps happening, please tell us with a bug report at"
 msgstr ""
 
-#: lib/vutuv_web/views/error_html.ex:57
+#: lib/vutuv_web/views/error_html.ex:56
 #, elixir-autogen, elixir-format
 msgid "The most helpful detail in such a report is the exact time of the error. Right now it is %{time}."
 msgstr ""
@@ -18310,7 +18293,6 @@ msgid "There is no text to review yet. Upload the document or paste the text."
 msgstr ""
 
 #: lib/vutuv_web/live/reference_check_live.ex:352
-#: lib/vutuv_web/templates/service_worker/offline.html.heex:25
 #, elixir-autogen, elixir-format
 msgid "Try again"
 msgstr ""
@@ -21663,7 +21645,7 @@ msgid "New message on vutuv"
 msgstr ""
 
 #: lib/vutuv_web/controllers/service_worker_controller.ex:140
-#: lib/vutuv_web/templates/service_worker/offline.html.heex:15
+#: lib/vutuv_web/templates/service_worker/offline.html.heex:27
 #, elixir-autogen, elixir-format
 msgid "No connection"
 msgstr ""
@@ -21696,11 +21678,6 @@ msgstr ""
 #: lib/vutuv_web/templates/settings/notifications.html.heex:248
 #, elixir-autogen, elixir-format
 msgid "Unknown device"
-msgstr ""
-
-#: lib/vutuv_web/templates/service_worker/offline.html.heex:17
-#, elixir-autogen, elixir-format
-msgid "vutuv needs the network for everything it shows, so there is nothing to read here until you are back online."
 msgstr ""
 
 #: lib/vutuv_web/live/directory_search_live.ex:141
@@ -22915,7 +22892,7 @@ msgstr ""
 msgid "Over these %{days} days %{total} people arrived, %{members} of them as members here."
 msgstr ""
 
-#: lib/vutuv_web/views/company_html.ex:76
+#: lib/vutuv_web/views/company_html.ex:77
 #, elixir-autogen, elixir-format
 msgid "People here per day over the last %{days} days"
 msgstr ""
@@ -23306,4 +23283,51 @@ msgstr ""
 #: lib/vutuv_web/components/post_components.ex:6539
 #, elixir-autogen, elixir-format
 msgid "only %{server}"
+msgstr ""
+
+#: lib/vutuv_web/views/error_html.ex:293
+#, elixir-autogen, elixir-format
+msgid "%{host} cannot be reached"
+msgstr ""
+
+#: lib/vutuv_web/views/error_html.ex:296
+#, elixir-autogen, elixir-format
+msgid "Error %{code} on %{host}, %{time}"
+msgstr ""
+
+#: lib/vutuv_web/views/error_html.ex:285
+#, elixir-autogen, elixir-format
+msgid "Please quote the error code %{code} and the time %{time}."
+msgstr ""
+
+#: lib/vutuv_web/templates/service_worker/offline.html.heex:29
+#, elixir-autogen, elixir-format
+msgid "This page could not be loaded. Whether that is your connection or our server cannot be told from here. Please try again in a few minutes."
+msgstr ""
+
+#: lib/vutuv_web/views/error_html.ex:278
+#, elixir-autogen, elixir-format
+msgid "If it takes longer, please write to:"
+msgstr ""
+
+#: lib/vutuv_web/views/error_html.ex:127
+#, elixir-autogen, elixir-format
+msgid "Installing a new version takes up to one minute."
+msgid_plural "Installing a new version takes up to %{count} minutes."
+msgstr[0] ""
+msgstr[1] ""
+
+#: lib/vutuv_web/views/error_html.ex:122
+#, elixir-autogen, elixir-format
+msgid "That is either a fault in the software or a new version being installed. Either way the site is away only briefly."
+msgstr ""
+
+#: lib/vutuv_web/views/error_html.ex:120
+#, elixir-autogen, elixir-format
+msgid "This site is offline right now."
+msgstr ""
+
+#: lib/vutuv_web/views/error_html.ex:81
+#, elixir-autogen, elixir-format
+msgid "The site itself is running, this address just is not one of ours. The link is probably old, or it carries a typo."
 msgstr ""
