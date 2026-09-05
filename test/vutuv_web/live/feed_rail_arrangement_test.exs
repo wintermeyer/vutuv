@@ -24,7 +24,7 @@ defmodule VutuvWeb.PostLive.FeedRailArrangementTest do
   # what the caret's own `aria-expanded` says — so the test reads the same
   # attribute a screen reader does rather than guessing from the markup.
   defp folded(live) do
-    for key <- ~w(followed_tags unread hidden_tags words newcomers sources),
+    for key <- ~w(followed_tags unread newcomers),
         FeedRailHelpers.folded?(live, key),
         do: key
   end
@@ -46,20 +46,18 @@ defmodule VutuvWeb.PostLive.FeedRailArrangementTest do
       %{conn: conn} = with_tag(conn)
 
       {:ok, live, html} = live(conn, ~p"/feed")
-      assert ["followed_tags", "hidden_tags", "words", "newcomers", "sources"] = order(html)
+      assert ["followed_tags", "newcomers"] = order(html)
 
-      # The two switch panels ship folded to their heading; everything a reader
-      # actually reads ships open.
-      assert folded(live) == ~w(hidden_tags sources)
+      # Nothing ships folded any more: the two cards that did were the switch
+      # panels, and they left the rail for the filter panel.
+      assert folded(live) == []
 
       # What the browser pushes after a drop: the sequence of what was on
       # screen, which is exactly what the hook reads off the DOM.
-      render_hook(live, "rail-reorder", %{
-        "order" => ["newcomers", "followed_tags", "sources", "words", "hidden_tags"]
-      })
+      render_hook(live, "rail-reorder", %{"order" => ["newcomers", "followed_tags"]})
 
       {:ok, _live, html} = live(conn, ~p"/feed")
-      assert ["newcomers", "followed_tags", "sources", "words", "hidden_tags"] = order(html)
+      assert ["newcomers", "followed_tags"] = order(html)
     end
 
     # The rail is half conditional, so a drag only ever names the cards that
@@ -74,16 +72,12 @@ defmodule VutuvWeb.PostLive.FeedRailArrangementTest do
       {:ok, live, html} = live(conn, ~p"/feed")
       refute "unread" in order(html)
 
-      render_hook(live, "rail-reorder", %{
-        "order" => ["newcomers", "followed_tags", "words", "sources", "hidden_tags"]
-      })
+      render_hook(live, "rail-reorder", %{"order" => ["newcomers", "followed_tags"]})
 
       # "unread" keeps the second slot it holds in the shipped order, although
       # no drag could name it.
-      assert %{order: ["newcomers", "unread", "followed_tags", "words", "sources", "hidden_tags"]} =
-               Posts.feed_rail(Repo.reload!(user), ~w(
-                 followed_tags unread hidden_tags words newcomers sources
-               ))
+      assert %{order: ["newcomers", "unread", "followed_tags"]} =
+               Posts.feed_rail(Repo.reload!(user), ~w(followed_tags unread newcomers))
     end
   end
 

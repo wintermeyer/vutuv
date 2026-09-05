@@ -130,31 +130,18 @@ defmodule VutuvWeb.PostLive.FilterBandTest do
   end
 
   describe "an open card and the arriving page" do
-    # Why the dead render owes no list is written at `FilterBand.load/1`.
-    # Calibrated against the un-deferred code: there the dead render carries
-    # the search field and no skeleton, and both assertions go red.
-    test "the dead render shows a skeleton, the connected mount the list", %{conn: conn} do
-      %{conn: conn, user: user} = with_friend(conn)
-
-      {:ok, _} =
-        Posts.save_feed_rail(user, %{order: ["sources"], collapsed: [], removed: []})
-
-      conn = get(conn, ~p"/feed")
-      dead_html = html_response(conn, 200)
-
-      assert elements(dead_html, "#filter-band-skeleton") != []
-      assert elements(dead_html, ~s(#filter-band form[phx-change="search"])) == []
-
-      {:ok, _view, html} = live(conn)
-      assert elements(html, "#filter-band-skeleton") == []
-      assert elements(html, ~s(#filter-band form[phx-change="search"])) != []
-    end
-
-    test "the folded default gets no skeleton", %{conn: conn} do
+    # The card now lives behind the filter panel, which opens on an event — so
+    # nothing of it can reach a dead render at all, and the skeleton it used to
+    # show there has no page left to appear on. What is worth keeping from that
+    # pair is the claim underneath: the first paint of the feed carries none of
+    # the card's ~8 queries. Calibrated by rendering the panel with the page:
+    # the search field then shows up in the dead HTML and this goes red.
+    test "the first paint carries none of the card", %{conn: conn} do
       %{conn: conn} = with_friend(conn)
 
       dead_html = conn |> get(~p"/feed") |> html_response(200)
 
+      assert elements(dead_html, ~s(#filter-band form[phx-change="search"])) == []
       assert elements(dead_html, "#filter-band-skeleton") == []
     end
 
@@ -194,12 +181,11 @@ defmodule VutuvWeb.PostLive.FilterBandTest do
 
     test "the account row opens its card, the way its handle does on a post", %{conn: conn} do
       %{conn: conn, user: user} = with_friend(conn)
-      {:ok, _} = Posts.save_feed_rail(user, %{order: ["sources"], collapsed: [], removed: []})
       account = remote_account("social.example", "them")
       remote_follow(user, account)
 
       {:ok, view, _html} = live(conn, ~p"/feed")
-      view |> twist("social.example") |> render()
+      view |> unfold("sources") |> twist("social.example") |> render()
 
       # This list is where a reader scanning who fills their feed decides they
       # have had enough of somebody, and mute lives on the card — so the row
@@ -217,12 +203,11 @@ defmodule VutuvWeb.PostLive.FilterBandTest do
     # `bump_band_refresh/1` on the feed's handler: the row then stays checked.
     test "a remote mute from a card menu still refreshes the card", %{conn: conn} do
       %{conn: conn, user: user} = with_friend(conn)
-      {:ok, _} = Posts.save_feed_rail(user, %{order: ["sources"], collapsed: [], removed: []})
       account = remote_account("social.example", "them")
       remote_follow(user, account)
 
       {:ok, view, _html} = live(conn, ~p"/feed")
-      view |> twist("social.example") |> render()
+      view |> unfold("sources") |> twist("social.example") |> render()
 
       row = ~s(#filter-band-account-remote\\:#{account.id})
       assert has_element?(view, row <> "[checked]")
@@ -629,6 +614,8 @@ defmodule VutuvWeb.PostLive.FilterBandTest do
         |> put_req_header("accept-language", "de-DE,de;q=0.9")
         |> live(~p"/feed")
 
+      unfold(view, "words")
+
       assert has_element?(
                view,
                ~s(#filter-band-words form button[type="submit"]),
@@ -640,6 +627,7 @@ defmodule VutuvWeb.PostLive.FilterBandTest do
       %{conn: conn, user: user} = with_friend(conn)
 
       {:ok, view, _html} = live(conn, ~p"/feed")
+      unfold(view, "words")
 
       view
       |> element(~s(#filter-band-words form))
@@ -661,6 +649,7 @@ defmodule VutuvWeb.PostLive.FilterBandTest do
       {:ok, _} = Posts.create_post(friend, %{body: "Die Zeugnisanalyse läuft gut."})
 
       {:ok, view, _html} = live(conn, ~p"/feed")
+      unfold(view, "words")
 
       view
       |> element(~s(#filter-band-words form))
@@ -682,6 +671,7 @@ defmodule VutuvWeb.PostLive.FilterBandTest do
       %{conn: conn, user: user} = with_friend(conn)
 
       {:ok, view, _html} = live(conn, ~p"/feed")
+      unfold(view, "words")
 
       view
       |> form(~s(#filter-band-words form), %{
@@ -705,6 +695,7 @@ defmodule VutuvWeb.PostLive.FilterBandTest do
       {:ok, _} = Posts.create_post(friend, %{body: "Bitcoin steht wieder unter Druck"})
 
       {:ok, view, _html} = live(conn, ~p"/feed")
+      unfold(view, "words")
 
       view
       |> element(~s(#filter-band-words form))
@@ -741,6 +732,7 @@ defmodule VutuvWeb.PostLive.FilterBandTest do
       {:ok, _} = Posts.create_post(friend, %{body: "Bitcoin steht wieder unter Druck"})
 
       {:ok, view, _html} = live(conn, ~p"/feed")
+      unfold(view, "words")
 
       html =
         view
@@ -769,6 +761,7 @@ defmodule VutuvWeb.PostLive.FilterBandTest do
       {:ok, _} = Posts.create_reply(user, parent, %{body: "Sehe ich genauso."})
 
       {:ok, view, _html} = live(conn, ~p"/feed")
+      unfold(view, "words")
 
       view
       |> element(~s(#filter-band-words form))
@@ -784,6 +777,7 @@ defmodule VutuvWeb.PostLive.FilterBandTest do
       {:ok, _} = Posts.create_post(user, %{body: "Bitcoin steht wieder unter Druck"})
 
       {:ok, view, _html} = live(conn, ~p"/feed")
+      unfold(view, "words")
 
       html =
         view

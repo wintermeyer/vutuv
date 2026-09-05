@@ -27,15 +27,45 @@ defmodule VutuvWeb.FeedRailHelpers do
   end
 
   @doc """
-  Opens the rail card `key` if it is folded, and returns `live`.
+  Gets `live` to where the card `key` can be used, and returns `live`.
 
-  Two cards ship folded to their heading ("Sources" and "Hide tags"), so their
-  bodies are not in the DOM until somebody opens them — which is what a reader
-  does before touching a switch, and what a test has to do too.
+  For a rail card that is folded to its heading, that means unfolding it. For
+  the three that left the rail — sources, words and hidden tags now live in one
+  panel behind `#feed-filter-row` — it means opening that panel on the right
+  tab. Callers say which card they want to use, not where it currently lives,
+  so the move cost the test files nothing.
   """
+  def unfold(live, key) when key in ["sources", "words", "hidden_tags"] do
+    open_filter_panel(live, if(key == "sources", do: "sources", else: "words"))
+  end
+
   def unfold(live, key) do
     if folded?(live, key) do
       live |> element(~s(#rail-#{key} button[phx-click="rail-collapse"])) |> render_click()
+    end
+
+    live
+  end
+
+  @doc """
+  Opens the feed's filter panel and returns `live`.
+
+  The way in changes with the member: a row once something is hidden, a quiet
+  line while nothing is — so the helper takes whichever is on the page rather
+  than making every caller know which member it built.
+  """
+  def open_filter_panel(live, tab \\ "words") do
+    if has_element?(live, "#filter-panel") do
+      live |> element("#filter-tab-#{tab}") |> render_click()
+    else
+      entry =
+        if has_element?(live, "#feed-filter-row"),
+          do: "#feed-filter-row",
+          else: "#feed-filter-link"
+
+      live |> element(entry) |> render_click()
+      # The row opens on the words half; a caller after the sources half says so.
+      if tab != "words", do: live |> element("#filter-tab-#{tab}") |> render_click()
     end
 
     live
