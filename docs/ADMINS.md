@@ -299,6 +299,36 @@ enable `Plug.SSL`/`force_ssl`: the blue/green deploy's health gate curls
 `Plug.SSL` would redirect and break the deploy. HSTS therefore belongs here in
 the nginx TLS terminator, which every internet install already runs.
 
+### A page for the outage the app cannot answer itself
+
+vutuv renders its own 404 and 500 (`VutuvWeb.ErrorHTML`), and the 500 tells the
+visitor that a new version takes up to `DEPLOY_MINUTES` and who to write to if
+it takes longer. But the app can only render that page while it is running. When
+it answers nothing at all — both slots down, a crash loop, an OOM — nginx sends
+its own bare "502 Bad Gateway", which names nobody. Put a static file in front
+of that:
+
+```nginx
+    error_page 502 504 @offline;
+    location @offline {
+        root /var/www/vutuv-maintenance;
+        rewrite ^ /offline.html break;
+        add_header Retry-After 60 always;
+        add_header Cache-Control "no-store" always;
+    }
+```
+
+Write `offline.html` with its styling inlined and no reference to `/assets` —
+whatever is broken, this page must not need it — and say the same thing the 500
+card says, in your own operator's name. Do **not** turn on
+`proxy_intercept_errors`: a 500 or a 404 the app rendered itself is a page with
+words on it and must reach the reader untouched.
+
+A normal deploy never gets here, since the old slot keeps serving until the new
+one passes `/health`; this is for the unplanned outage. Planned downtime is a
+separate switch and deserves its own page — ours is a `maintenance.html` behind
+`error_page 503`, gated on a file an operator touches by hand.
+
 ### Static assets (optional, but worth it on a slow link)
 
 By default every `/assets/` request is proxied to the app, which serves the
