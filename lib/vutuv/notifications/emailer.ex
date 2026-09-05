@@ -33,6 +33,7 @@ defmodule Vutuv.Notifications.Emailer do
   alias Vutuv.Accounts.User
   alias Vutuv.Identity
   alias Vutuv.Notifications.Bounces
+  alias Vutuv.Operator
   alias Vutuv.Organizations.Organization
   alias Vutuv.Reports.DailyReport
   alias Vutuv.SavedSearches
@@ -55,10 +56,9 @@ defmodule Vutuv.Notifications.Emailer do
   defp from_domain, do: from_email() |> String.split("@") |> List.last()
 
   # The operator of this installation: receives the daily report, the ad
-  # bookings and the account-deleted notices — never a member-facing address.
-  # config :vutuv, :operator_recipient, overridable via OPERATOR_NAME /
-  # OPERATOR_EMAIL (config/runtime.exs).
-  defp operator_recipient, do: Application.fetch_env!(:vutuv, :operator_recipient)
+  # bookings and the account-deleted notices. Never a From, but a public
+  # contact — `Vutuv.Operator` owns it and lists where else it is shown.
+  defp operator_recipient, do: Operator.recipient()
 
   # Always-safe headers for every message.
   #

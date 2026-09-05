@@ -23,6 +23,7 @@ defmodule VutuvWeb.WellKnownController do
 
   alias Vutuv.Languages
   alias Vutuv.NodeInfo
+  alias Vutuv.Operator
   alias VutuvWeb.AgentDocs
 
   @external_resource "priv/agent_skills/SKILL.md"
@@ -100,10 +101,9 @@ defmodule VutuvWeb.WellKnownController do
 
   def security_txt(conn, _params) do
     expires = DateTime.utc_now() |> DateTime.add(180, :day) |> DateTime.truncate(:second)
-    {_name, operator_email} = Application.fetch_env!(:vutuv, :operator_recipient)
 
     body = """
-    Contact: mailto:#{operator_email}
+    Contact: #{Operator.contact_mailto()}
     Expires: #{DateTime.to_iso8601(expires)}
     Preferred-Languages: #{Enum.join(Languages.site_locales(), ", ")}
     Canonical: #{AgentDocs.abs_url("/.well-known/security.txt")}

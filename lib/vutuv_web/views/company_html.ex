@@ -10,6 +10,7 @@ defmodule VutuvWeb.CompanyHTML do
   """
   use VutuvWeb, :html
 
+  alias Vutuv.Operator
   alias Vutuv.PeopleHistory
   alias Vutuv.PeopleHistory.Snapshot
   alias Vutuv.ViewerClock

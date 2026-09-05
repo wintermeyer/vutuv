@@ -2,6 +2,7 @@ defmodule VutuvWeb.ErrorHTMLTest do
   use VutuvWeb.ConnCase, async: true
 
   alias Phoenix.HTML.Safe
+  alias Vutuv.Operator
   alias VutuvWeb.ErrorHTML
 
   defp render_to_string(template) do
@@ -14,8 +15,34 @@ defmodule VutuvWeb.ErrorHTMLTest do
     assert render_to_string("404.html") =~ "Page not found"
   end
 
+  # A 500 knows nothing about its own cause and cannot tell how long the site
+  # has been broken, so the page's whole job is to say that and hand the
+  # visitor a way to report it: who to write to, plus the code and the minute
+  # that let the operator find it in the log.
   test "render 500.html" do
-    assert render_to_string("500.html") =~ "Something went wrong."
+    body = render_to_string("500.html")
+
+    assert body =~ "broken right now"
+    assert body =~ "try again in a few minutes"
+    assert body =~ "quote the error code 500"
+    assert body =~ ~r/\d{4}-\d{2}-\d{2} \d{2}:\d{2} UTC/
+    # That the name comes from config rather than from a template is proved
+    # where the key can safely be flipped (`service_worker_test.exs`, sync).
+    assert body =~ "mailto:" <> Operator.contact_email()
+    # The subject arrives prefilled, so most people need copy nothing at all.
+    assert body =~ "subject=Error%20500%20on%20"
+  end
+
+  # The German render is the one real visitors get, and a fuzzy-filled .po
+  # would ship confident nonsense while every English assertion above stays
+  # green.
+  test "renders 500.html in German" do
+    Gettext.put_locale(VutuvWeb.Gettext, "de")
+    body = render_to_string("500.html")
+
+    assert body =~ "Störung"
+    assert body =~ "in ein paar Minuten"
+    assert body =~ "Fehlercode 500"
   end
 
   test "error pages link back home" do

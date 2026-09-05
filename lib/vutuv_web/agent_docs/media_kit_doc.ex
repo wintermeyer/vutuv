@@ -13,6 +13,7 @@ defmodule VutuvWeb.AgentDocs.MediaKitDoc do
   `VutuvWeb.CompanyController`).
   """
 
+  alias Vutuv.Operator
   alias Vutuv.SourceRepo
   alias VutuvWeb.AgentDocs
   alias VutuvWeb.AgentDocs.InvestorsDoc
@@ -207,20 +208,14 @@ defmodule VutuvWeb.AgentDocs.MediaKitDoc do
   page built to be read by strangers and machines is the one that gets
   harvested.
   """
-  def press_contact do
-    {_name, email} = Application.fetch_env!(:vutuv, :operator_recipient)
-    email
-  end
+  def press_contact, do: Operator.contact_email()
 
   @doc """
   The person behind that address. `:operator_recipient` carries the name beside
   the email, so naming them costs no second config key and a third-party
   installation names its own operator.
   """
-  def press_contact_name do
-    {name, _email} = Application.fetch_env!(:vutuv, :operator_recipient)
-    name
-  end
+  def press_contact_name, do: Operator.contact_name()
 
   @doc """
   Their profile on this installation, for the contact details a media kit

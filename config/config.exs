@@ -796,8 +796,12 @@ config :vutuv, :ops_log_visibility, true
 config :vutuv, :appeal_reply_to, "sw@wintermeyer-consulting.de"
 
 # Who receives the operator notices (daily report, ad bookings, account-
-# deleted records) — never a member-facing address. Also the security.txt
-# contact. (OPERATOR_NAME / OPERATOR_EMAIL)
+# deleted records) — never the address mail is sent *from*. It is the public
+# contact, though: the security.txt contact, the NodeInfo maintainer, the media
+# kit's press contact, and the person the 500 and offline pages name (with a
+# mailto:) because they cannot say what went wrong. Use an address a human
+# reads. It is the *person*, distinct from :operator_name below, which is the
+# organization credited in the footer. (OPERATOR_NAME / OPERATOR_EMAIL)
 config :vutuv, :operator_recipient, {"Stefan Wintermeyer", "sw@wintermeyer-consulting.de"}
 
 # The operator credit in the site and email footers ("a service provided

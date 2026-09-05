@@ -8,6 +8,7 @@ defmodule Vutuv.MastodonApi do
   """
 
   alias Vutuv.BuildInfo
+  alias Vutuv.Operator
   alias VutuvWeb.Endpoint
 
   @compatibility_version "4.4.0"
@@ -82,10 +83,7 @@ defmodule Vutuv.MastodonApi do
   publishes as the operator contact, from the operator-identity block in
   `config/config.exs` (env-overridable) rather than from a literal here.
   """
-  def operator_email do
-    {_name, email} = Application.fetch_env!(:vutuv, :operator_recipient)
-    email
-  end
+  def operator_email, do: Operator.contact_email()
 
   @doc """
   The handle of the member a client should be pointed at for this installation,
