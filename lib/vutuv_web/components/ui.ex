@@ -5116,6 +5116,19 @@ defmodule VutuvWeb.UI do
                "german english locale map font length hyphenation übersetzen sprache zeitzone timezone time zone utc datum date uhrzeit clock 24 hour datumsformat"
              )
          ),
+         # How long the feed is. Beside the data-saving switch rather than under
+         # "Notifications & feed", which is at its eight-row ceiling — and the
+         # two belong together anyway: both are the member deciding what a page
+         # costs them to load. The synonyms carry the words somebody actually
+         # types ("beiträge", "mehr laden"), so the hub's filter box finds it
+         # from the feed's own vocabulary.
+         row(:feed_page_size, gettext("Posts in your feed"), ~p"/settings/feed",
+           hint: gettext("How many load at once, and how many “Load more” adds"),
+           terms:
+             gettext(
+               "feed length page size posts number amount load more scroll paging seite länge anzahl beiträge nachladen mehr laden umfang"
+             )
+         ),
          row(:bandwidth, Vutuv.Prefs.label(:low_bandwidth?), ~p"/settings/bandwidth",
            hint: gettext("Smaller pictures and a plain composer on a slow connection"),
            terms:

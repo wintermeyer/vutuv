@@ -942,6 +942,40 @@ defmodule VutuvWeb.SettingsController do
     )
   end
 
+  # How long the newsfeed is (default 10, up to 250). Its own page under
+  # Appearance, for the reason the bandwidth switch beside it has one: the hub
+  # is the map, and a knob nobody can find by name might as well not exist. The
+  # chip row under the timeline writes the same column, so a member who never
+  # opens this page still has the setting — this is where somebody looks who
+  # went hunting for it, and it is the one of the two that can explain the
+  # trade in a sentence.
+  def feed(conn, _params) do
+    user = conn.assigns[:user]
+
+    render(conn, "feed.html",
+      user: user,
+      changeset: User.changeset(Prefs.with_effective(user)),
+      page_title: gettext("Posts in your feed")
+    )
+  end
+
+  def update_feed_page_size(conn, %{"user" => params}) do
+    save(
+      conn,
+      Map.take(params, ["feed_page_size"]),
+      "feed.html",
+      ~p"/settings/feed",
+      gettext("Feed settings saved."),
+      event: "preferences_changed"
+    )
+  end
+
+  def reset_feed_page_size(conn, _params) do
+    reset_prefs(conn, :feed_size, gettext("Feed length reset to the site default."),
+      redirect_to: ~p"/settings/feed"
+    )
+  end
+
   def reset_low_bandwidth(conn, _params) do
     reset_prefs(conn, :bandwidth, gettext("Bandwidth settings reset to the site defaults."),
       redirect_to: ~p"/settings/bandwidth"

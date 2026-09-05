@@ -85,6 +85,12 @@ defmodule VutuvWeb.GettextExtractionAnchors do
         "What your feed does with posts outside your chosen languages: show them as they are, translate them for you, or hide them. Posts that declare no language always show."
       ),
       gettext("Feed"),
+      # Vutuv.Prefs — how long the feed is
+      gettext("Feed length"),
+      gettext("Posts loaded at once"),
+      gettext(
+        "How many posts your feed shows before the “Load more” button, and how many that button adds. More posts mean a longer wait for the page."
+      ),
       # Vutuv.Prefs — the feed's tab ticker (issue #1668)
       gettext("Feed tabs"),
       gettext("Quote what arrives on the other tab"),

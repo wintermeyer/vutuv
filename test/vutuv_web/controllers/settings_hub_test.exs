@@ -120,7 +120,10 @@ defmodule VutuvWeb.SettingsHubTest do
       {"Appearance", appearance} =
         Enum.find(UI.settings_menu(user), fn {_name, rows} -> row in rows end)
 
-      assert Enum.map(appearance, & &1.key) == [:preferences, :bandwidth]
+      # The feed's length joined them, for the same reason: it is the member
+      # deciding what a page costs them to load, and "Notifications & feed" is
+      # at its eight-row ceiling.
+      assert Enum.map(appearance, & &1.key) == [:preferences, :feed_page_size, :bandwidth]
 
       needle = UI.settings_search_text(row)
 

@@ -341,43 +341,45 @@ whom being seen decides whether they come back. Following somebody here
 the click read as if it had undone something — and only a fresh draw retires
 them.
 
-**Three page sizes, and every difference is deliberate.** A mount loads **40**
-entries (`@first_page_size`), every "Load more" after it **20** (`@page_size`),
-and a source switch **10** (`@filter_page_size`). The arrival page is the one
-page nobody asked for, so it is the one that has to carry the reader past the
-first few scrolls without a round trip; an older page is fetched while they are
-still reading and can afford to be half of it; and a switch is a wait with
-nothing on screen at all, where twenty rendered cards are the bulk of the second
-it takes on a slow line, for a screen that holds three or four.
+**One page size, and the reader owns it.** The arrival, every "Load more", a
+source switch and an opened calendar day all ask for the same number:
+`Vutuv.Prefs.feed_page_size/1`, a member preference defaulting to **10** and
+bounded at 5 to 250, read once in `mount_feed/3` and parked on the socket
+(`page_size/1`), so nothing within one visit can disagree about it. It replaced
+four constants (40 for a mount, 20 for a "Load more", 10 for a switch, a flat
+100 for a calendar day), each with its own argument — and every one of those
+arguments was really an argument about *waiting*. A card costs real server time:
+**188 ms** for a ten-card `/feed` document against **101 ms** for the same page
+carrying none, measured on production on 2026-09-05 in a paired A/B of ten runs
+each (an earlier measurement on 2026-08-31, before the hashtag cache, put a card
+at ~10 ms). The only person who can weigh that wait against pressing a button
+again is the one doing both, so they set it — from the chip row under the
+timeline (`page_size_chips/1`, which stores the choice and reloads the timeline
+at the new length) or on `/settings/feed`.
 
-**The arrival is forty cards, but the HTML document carries ten**
-(`@first_render_size`), and the socket appends the other thirty as soon as it
-connects (`:fill_arrival`, which is `append_older_page/2` — the same act as
-pressing "Load more", so the dedup rule has one owner). Rendering a card costs
-about **10 ms** of server time on production, measured two ways on 2026-08-31 —
-a twelve-day regression across `?day=` volumes and a twenty-run paired A/B
-against an empty day, agreeing on 10.2 and 10.0 — so the forty were roughly
-400 ms of the ~660 ms the browser waited for its first byte, spent drawing
-thirty-seven cards below a fold that shows two or three. Ten is the same number
-`@filter_page_size` uses and for the reason written there: it is what a screen
-holding three or four cards needs in order not to run out. What changed is only
-that an *arrival* is now judged by the same standard as a switch.
+**The document carries the whole arrival, and nothing arrives behind the
+reader's back.** There is no socket fill: what a page holds is what was asked
+for, and what comes after it is asked for by pressing "Load more". (An earlier
+release split the arrival — forty cards, of which the HTML held ten and the
+socket appended thirty on connect — which is what the one number replaced.)
+`more?` comes from the same query in every case, so a page always knows whether
+there is more and the button below picks the rest up.
 
-This is **not** the lazy discovery rail of #1229, which was reverted the same
-day because content popping in where the reader was looking read as slowness:
-the fill lands below the tenth card, off-screen, and a reader who never scrolls
-never learns it happened. A fill is owed to the page that asked for it
-(`:owes_fill?`) and is dropped if the reader has meanwhile switched sources or
-opened a calendar day — appending an older page to a day would spill posts from
-before it into that day. `more?` comes
-from the same query in all three cases, so a short page still knows there is
-more and the button below picks the rest up. The `/feed.md|txt|json|xml`
-siblings take the arrival page as *their* page size, every page of them, and
-they read it off `Feed.first_page_size/0` rather than a mirrored constant. The
-**size** is all they share: the document is deliberately the whole feed, with no
-source filter applied, because it carries none of the switches the member has
-here and narrowing it by one they cannot see would hand an agent a document with
-no way to ask for the rest.
+**A calendar day is a page like any other.** It used to be fetched whole up to a
+hundred, on the argument that a day is a bounded thing the reader asked to see;
+since the limit is an upper bound, a day smaller than the reader's page still
+arrives whole, so that argument only ever reached the days between their number
+and a hundred — and those are exactly the ones that made a `/feed?day=` link
+cost 300 to 850 ms and 1.3 MB. "Load the whole day" (capped at `@day_all_limit`,
+1,000) is still under a busy one for the reader who wants all of it.
+
+The `/feed.md|txt|json|xml` siblings take that preference as *their* default page
+size, capped at the 100 an explicit `?limit=` is clamped to, so a member's
+browser setting cannot build a bigger document than any caller may request. The
+**size** is all they share with the HTML page: the document is deliberately the
+whole feed, with no source filter applied, because it carries none of the
+switches the member has here and narrowing it by one they cannot see would hand
+an agent a document with no way to ask for the rest.
 
 **A post that arrives while somebody is reading is a fourth page, of one.** It is
 drawn into the timeline at the moment it arrives (`queue/2` — the row on top, the

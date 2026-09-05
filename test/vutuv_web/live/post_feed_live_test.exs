@@ -1347,28 +1347,29 @@ defmodule VutuvWeb.PostFeedLiveTest do
     test "loads older posts on demand", %{conn: conn} do
       {conn, user} = create_and_login_user(conn)
 
-      for n <- 1..41, do: {:ok, _} = Posts.create_post(user, %{body: "post number #{n}"})
+      for n <- 1..21, do: {:ok, _} = Posts.create_post(user, %{body: "post number #{n}"})
 
       {:ok, live, html} = live(conn, ~p"/feed")
 
-      # The **document** carries a screenful (`@first_render_size`), because
-      # every card in it is server time the reader waits through before anything
-      # paints; the rest of the arrival follows over the socket. So the join
-      # holds the ten newest and not yet the eleventh.
-      assert html =~ "post number 41"
-      assert html =~ "post number 32<"
-      refute html =~ "post number 31<"
+      # The arrival is one page — the reader's own size, ten by default — and
+      # the whole of it is in the **document**, because every card in it is
+      # server time the reader waits through before anything paints. So the join
+      # holds the ten newest and not the eleventh.
+      assert html =~ "post number 21"
+      assert html =~ "post number 12<"
+      refute html =~ "post number 11<"
 
-      # …and the **arrival** is still forty, twenty per page after that: the
-      # first screenful is the one nobody asked for, so it is the one that has
-      # to last. By the time anybody has scrolled to the tenth card it is here.
-      filled = render(live)
-      assert filled =~ "post number 2<"
-      refute filled =~ "post number 1<"
+      # Nothing arrives behind the reader's back: what comes after the arrival
+      # is asked for by pressing the button.
+      refute render(live) =~ "post number 11<"
       assert has_element?(live, "#load-more")
 
       live |> element("#load-more") |> render_click()
-      assert render(live) =~ "post number 1"
+      assert render(live) =~ "post number 11<"
+      refute render(live) =~ "post number 1<"
+
+      live |> element("#load-more") |> render_click()
+      assert render(live) =~ "post number 1<"
       refute has_element?(live, "#load-more")
     end
   end

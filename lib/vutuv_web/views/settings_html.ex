@@ -13,6 +13,10 @@ defmodule VutuvWeb.SettingsHTML do
   import VutuvWeb.SavedSearchComponents,
     only: [cadence_options: 0, saved_search_kind_label: 1, saved_search_summary: 1]
 
+  # The feed's page-size chips, so the same control is the same markup on
+  # /settings/feed as it is under the timeline.
+  import VutuvWeb.PostComponents, only: [page_size_chips: 1]
+
   # The account-activity wording (issue #1087), so the recap on the security
   # page reads exactly like the full log at /settings/activity.
   import VutuvWeb.AccountEventText,

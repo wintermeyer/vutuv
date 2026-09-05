@@ -39,12 +39,15 @@ defmodule VutuvWeb.PostLive.Feed do
   import VutuvWeb.VideoComponents, only: [pending_video_post: 1]
 
   alias Phoenix.LiveView.JS
+  alias Vutuv.AccountEvents
+  alias Vutuv.Accounts
   alias Vutuv.Activity
   alias Vutuv.ContentFilters
   alias Vutuv.Fediverse
   alias Vutuv.PostRewrites
   alias Vutuv.Posts
   alias Vutuv.Posts.Post
+  alias Vutuv.Prefs
   alias Vutuv.Social
   alias Vutuv.Tags.UserTag
   alias Vutuv.Videos
@@ -72,55 +75,33 @@ defmodule VutuvWeb.PostLive.Feed do
   # listens and `handle_info({:remote_images_changed, …}, …)` does the redraw.
   on_mount(VutuvWeb.Live.RemoteImages)
 
-  # What a mount loads, and what every older page after it adds. The arrival
-  # page is deliberately double the rest: it is the one page nobody asked for,
-  # so it has to carry the reader past the first few scrolls without a round
-  # trip, while an older page is fetched while they are still reading and can
-  # afford to be half the size.
-  @first_page_size 40
-  # …and how many of them the **HTML document** carries. The rest arrive over
-  # the socket the moment it connects, appended below the fold, so an arrival
-  # still holds forty cards by the time anybody has scrolled to the tenth.
+  # How big a page of this feed is: the arrival, every "Load more", a source
+  # switch and a busy calendar day all ask for the same number, and the reader
+  # owns it (`Vutuv.Prefs.feed_page_size/1`, default 10, up to 250 — set under
+  # the timeline itself or on /settings/feed).
   #
-  # This is the split between what the reader waits for and what they merely
-  # get. Rendering a card is ~10 ms of server time on production (measured
-  # 2026-08-31 two ways: a twelve-day regression over `?day=` volumes and a
-  # paired A/B against an empty day, agreeing on 10.2 and 10.0), so the forty
-  # were about 400 ms of the ~660 ms the browser sat waiting for the first
-  # byte, to draw thirty-seven cards below a fold that shows two or three.
-  # Ten costs ~100 ms of that and fills the screen three times over.
+  # One number rather than the four different ones this used to hold, because
+  # every argument for the old spread was really an argument about *waiting*:
+  # a card costs real server time (measured on production 2026-09-05, paired
+  # A/B over ten runs each: a ten-card `/feed` document at 188 ms median
+  # against 101 ms for the same page carrying none), and the only person who
+  # can weigh a longer wait against fewer presses is the one doing both.
   #
-  # It is deliberately the same number as `@filter_page_size`, for the reason
-  # written there: ten is what a screen holding three or four cards needs to
-  # not run out. What is new is only that an *arrival* is now judged by the
-  # same standard as a switch — both are a wait with nothing on screen.
+  # It is also the whole document now. There is deliberately no fill over the
+  # socket behind the reader's back: the arrival is what was asked for, and
+  # what comes after it is asked for by pressing a button. (See `page_size/1`.)
+  # An opened calendar day is a page like any other, so it is that same number.
+  # It used to be a flat hundred, on the argument that a day is a bounded thing
+  # the reader asked to see and paging through a Tuesday is busywork — but the
+  # limit is an upper bound, so a day smaller than the reader's page still
+  # arrives whole, and the argument only ever reached the days between their
+  # number and a hundred. Those are exactly the ones that made a `/feed?day=`
+  # link cost 300 to 850 ms and 1.3 MB (measured on production 2026-09-05), and
+  # the reader has "Load the whole day" under them for when they want all of it.
   #
-  # Not a lazy rail (#1229, reverted the same day): nothing here pops in where
-  # the reader is looking. The fill lands below the tenth card, off-screen, and
-  # a reader who never scrolls never learns it happened.
-  @first_render_size 10
-  @page_size 20
-  # What a source switch loads (see `load_source_filter/2`) — deliberately
-  # smaller than either, because that press is a wait with nothing on screen to
-  # read while it lasts.
-  @filter_page_size 10
-  # What opening a *busy* calendar day loads (see `load_day/2`). Sized like a
-  # source switch and for the same reason: the reader is waiting on an empty
-  # column.
-  @travel_page_size 10
-  # A day with fewer entries than this is loaded whole on the first press, so
-  # the ordinary case has no "Load more" under it at all. A day is a bounded
-  # thing the reader asked to see, not an endless timeline, and paging through
-  # a Tuesday ten posts at a time is busywork the feed can just do for them.
-  #
-  # The number is an upper bound handed to `feed_page/2`, not a fetch of a
-  # hundred rows: a day holding three costs three. What decides which branch a
-  # day takes is the heatmap's own count for it, which is already on the socket
-  # (`@cal_counts`) — so knowing the day's size costs no query of its own.
-  @day_full_limit 100
-  # …and the ceiling on "load the whole day" for the days above that. Somebody
-  # opening a day with four thousand entries wants to read it, not to render it,
-  # so the button stops here and leaves "Load more" for the rest.
+  # The ceiling on that button. Somebody opening a day with four thousand
+  # entries wants to read it, not to render it, so it stops here and leaves
+  # "Load more" for the rest.
   @day_all_limit 1_000
   # "New here" rail: how many newcomers to greet, the size of the newest-members
   # pool they are drawn out of, how many of each one's tags the card shows, and
@@ -164,15 +145,6 @@ defmodule VutuvWeb.PostLive.Feed do
   @rail_blocks ~w(followed_tags unread hidden_tags words newcomers sources)
   @rail_collapsed ~w(hidden_tags sources)
 
-  @doc """
-  How many entries a `/feed` arrival carries.
-
-  Public because the agent-format siblings serve the same page
-  (`VutuvWeb.NewsfeedController`) and a number mirrored by hand across two
-  modules is a number that drifts.
-  """
-  def first_page_size, do: @first_page_size
-
   @impl true
   # Rendered by VutuvWeb.NewsfeedController via `live_render` (off-router, so it
   # can negotiate the agent-format siblings), exactly like UserProfileLive. An
@@ -194,11 +166,18 @@ defmodule VutuvWeb.PostLive.Feed do
   end
 
   defp mount_feed(socket, user, {day, open?}) do
+    # How big every page of this timeline is, theirs to change (see the
+    # `page_size/1` note above). Assigned before anything asks for a page, and
+    # kept on the socket so the dead render, the connected mount and every
+    # later press read one value.
+    size = Prefs.feed_page_size(user)
+
     # The author's posts still waiting on their clip (issue #1910), drawn as
     # cards above the timeline; the progress arrives over the video topic the
     # embedded mount subscribed to (`InitAssigns.assign_embedded/2`).
     socket =
       socket
+      |> assign(:feed_page_size, size)
       |> assign(:pending_video_posts, waiting_video_posts(user))
       # The folded composer's two events and three messages, and a clip's
       # progress on its way to the composer holding it.
@@ -229,20 +208,21 @@ defmodule VutuvWeb.PostLive.Feed do
       # (VutuvWeb.Live.MountHandoff); take it and skip re-running the same
       # queries. Any miss (expired, consumed, a reconnect) recomputes.
       case MountHandoff.take(user.id, {:feed, remembered, day}) do
-        # The dead render's short page (`@first_render_size`), so this mount
-        # owes the reader the rest of the arrival — see `:fill_arrival` below.
+        # The page the dead render computed seconds ago, whole: both renders ask
+        # for the same size, so the connected mount takes it as it is and owes
+        # the reader nothing further.
         {:ok, payload} ->
           apply_feed_payload(socket, payload, day, open?)
 
         # No stash to take (a reconnect, an expired one, a socket that arrived
-        # without a dead render): nothing has been drawn yet, so there is no
-        # short page to extend and this mount loads the whole arrival at once.
+        # without a dead render): nothing has been drawn yet, so this mount runs
+        # the queries itself.
         :error ->
-          payload = feed_payload(user, remembered, day, @first_page_size)
+          payload = feed_payload(user, remembered, day, size)
           apply_feed_payload(socket, payload, day, open?)
       end
     else
-      payload = feed_payload(user, remembered, day, @first_render_size)
+      payload = feed_payload(user, remembered, day, size)
       MountHandoff.stash(user.id, {:feed, remembered, day}, payload)
       apply_feed_payload(socket, payload, day, open?)
     end
@@ -275,14 +255,11 @@ defmodule VutuvWeb.PostLive.Feed do
     # and then re-streaming the day leaves both pages on the client, because a
     # stream reset in the same mount that populated it does not take.
     #
-    # A named day asks for the whole-day limit outright. That is an upper bound,
-    # so a quiet day still costs its own size; what it buys is not having to run
-    # the nine-source counter here purely to choose between two page sizes,
-    # which is the most expensive query on the page and was being run twice per
-    # arrival for one number.
+    # Its page is the reader's own size, like every other page here — and the
+    # limit is an upper bound, so a day holding three costs three.
     page =
       Posts.feed_page(user,
-        limit: if(day, do: @day_full_limit, else: limit),
+        limit: limit,
         cursor: FeedTimeTravel.day_cursor(day),
         filter: filter
       )
@@ -305,11 +282,6 @@ defmodule VutuvWeb.PostLive.Feed do
       # Which sources these entries were pulled for — what the band's two
       # source checkboxes show, and what a switch there changes.
       filter: filter,
-      # Whether this page is the dead render's short one and the arrival still
-      # owes the reader cards. Carried rather than inferred from the entry
-      # count: a genuinely short feed (a quiet day, a new member) also has
-      # fewer than `@first_render_size` entries and owes nothing.
-      partial?: limit < @first_page_size and page.more?,
       # The desktop rail renders WITH the page: it was lazy-loaded for one
       # release (v7.200.3) and the pop-in read as slowness, so it is eager
       # again — computed here once, riding the handoff to the connected mount.
@@ -408,39 +380,11 @@ defmodule VutuvWeb.PostLive.Feed do
     # (`put_timeline/3`), the entries themselves included. It sits here rather
     # than up with the other assigns because `watch_pending_photos/2` reads the
     # `:photo_watch` set above. The mount is the one of the three moments that
-    # does not REPLACE a timeline: it seeds the stream itself, and owes its fill
-    # to `fill_arrival/2` rather than clearing it.
+    # does not REPLACE a timeline: it seeds the stream itself.
     |> put_timeline(payload.entries, payload)
     |> stream_configure(:posts, dom_id: &"feed-#{&1.id}")
     |> stream(:posts, payload.entries)
-    |> fill_arrival(payload)
   end
-
-  # The rest of the arrival, once the document the reader is looking at has
-  # been drawn. The dead render carries `@first_render_size` cards so the page
-  # arrives; this asks for the remainder as soon as the socket is up, and it
-  # lands below the fold.
-  #
-  # A message to self rather than a load here: mount has to return before the
-  # stream exists on the client, and appending to a stream in the same mount
-  # that populated it does not take (the same trap the day-link arrival above
-  # documents for `reset:`).
-  defp fill_arrival(socket, %{partial?: true}) do
-    if connected?(socket) do
-      send(self(), :fill_arrival)
-      # What the fill is owed *for*. The message sits in the mailbox behind
-      # anything the reader does in the meantime, and by the time it is handled
-      # they may be looking at a different timeline — an opened calendar day is
-      # the one that matters, since appending an older page there would spill
-      # cards from before that day into it. So the fill is claimed rather than
-      # assumed, and every reset below drops the claim.
-      assign(socket, :owes_fill?, true)
-    else
-      assign(socket, :owes_fill?, false)
-    end
-  end
-
-  defp fill_arrival(socket, _whole_page), do: assign(socket, :owes_fill?, false)
 
   # Every post on the page whose photo is still with the AI image scan gets a
   # subscription to its own topic, so the placecard swaps itself for the picture
@@ -1202,7 +1146,27 @@ defmodule VutuvWeb.PostLive.Feed do
 
   @impl true
   def handle_event("load-more", _params, socket) do
-    {:noreply, append_older_page(socket, @page_size)}
+    {:noreply, append_older_page(socket, page_size(socket))}
+  end
+
+  # How long this feed is, changed from under it (the control beside "Load
+  # more"). It is a preference, so it is stored — the next arrival, on this
+  # device or another, is the length they picked — and it takes effect on the
+  # spot: the timeline is reloaded at the new size rather than left for the next
+  # visit, because a control that only promises something for later reads as
+  # broken. Pressing a bigger number therefore lengthens the page under the
+  # reader's thumb, pressing a smaller one shortens it.
+  #
+  # The registry owns the bounds, so a forged value is refused by `parse/2`
+  # and the press does nothing at all — no second copy of "5 to 250" here.
+  def handle_event("feed-page-size", %{"size" => raw}, socket) do
+    case Prefs.parse(Prefs.pref!(:feed_page_size), raw) do
+      {:ok, size} when size != socket.assigns.feed_page_size ->
+        {:noreply, socket |> store_page_size(size) |> reload_timeline()}
+
+      _unchanged_or_invalid ->
+        {:noreply, socket}
+    end
   end
 
   # Time travel (`VutuvWeb.Live.FeedTimeTravel`), all of it driven by the feed
@@ -1251,10 +1215,9 @@ defmodule VutuvWeb.PostLive.Feed do
        socket
        |> assign(:cal_metric, metric)
        # Counted here and not deferred, unlike every other way into the
-       # heatmap: `load_day/2` on the next line sizes its page from these
-       # counts (`day_limit/2`), and handing it an empty map would fetch and
-       # decorate the whole-day limit for a day it is about to learn is busy.
-       # Nothing is lost by waiting — this press reloads the timeline under the
+       # heatmap: the metric IS what these counts measure, so this press is
+       # about them and a deferred grid would answer it a beat late. Nothing is
+       # lost by counting now — the press reloads the timeline under the
        # calendar anyway, so it is not a press the reader watches do nothing.
        |> assign_calendar_counts()
        |> load_day(socket.assigns.cal_day)}
@@ -1541,21 +1504,8 @@ defmodule VutuvWeb.PostLive.Feed do
     end
   end
 
-  # Load the timeline for one source tab, replacing whatever is on screen
-  # (`reset: true`). The pending batch is dropped with it rather than
-  # re-filtered: the fresh page is newest-first from the top, so it already
-  # carries everything that was waiting behind the pill.
-  #
-  # **The smallest of the three pages** (`@filter_page_size`, a quarter of an
-  # arrival): a mount is a page load and pays for its page once, but a switch
-  # happens mid-visit and its rendered cards are the bulk of the second the
-  # member waits on a slow line — for a screen that holds three or four.
-  # `more?` comes from the same query, so the "Load more" button below picks the
-  # rest up at the full page size.
-  # One older page, appended below what is on screen. Shared by the "Load more"
-  # button and by the arrival's own fill (`:fill_arrival`), which is the same
-  # act — fetch from the cursor, drop what is already shown, append — and would
-  # otherwise be two copies of the dedup rule.
+  # One older page, appended below what is on screen: fetch from the cursor,
+  # drop what is already shown, append.
   defp append_older_page(socket, limit) do
     user = socket.assigns.current_user
     seen_remote = shown_remote_keys(socket.assigns.entries)
@@ -1635,19 +1585,25 @@ defmodule VutuvWeb.PostLive.Feed do
     |> auto_translate_entries(entries)
   end
 
-  # The same, for the two moments that throw an existing timeline away: the
-  # stream is reset rather than seeded, and a fill still on its way is owed to
-  # a page that is no longer on screen (see `fill_arrival/2`).
+  # The same, for the moments that throw an existing timeline away: the stream
+  # is reset rather than seeded, so nothing of the old one is kept.
   defp replace_timeline(socket, entries, page) do
     socket
     |> put_timeline(entries, page)
-    |> assign(:owes_fill?, false)
     |> stream(:posts, entries, reset: true)
   end
 
+  # Load the timeline for one source tab, replacing whatever is on screen
+  # (`reset: true`). The pending batch is dropped with it rather than
+  # re-filtered: the fresh page is newest-first from the top, so it already
+  # carries everything that was waiting behind the pill.
+  #
+  # It asks for the reader's own page size, like every other load here: the
+  # switch is a page of this feed, and a member who set 50 means 50 whichever
+  # control fetched them.
   defp load_source_filter(socket, filter) do
     user = socket.assigns.current_user
-    page = Posts.feed_page(user, limit: @filter_page_size, filter: filter)
+    page = Posts.feed_page(user, limit: page_size(socket), filter: filter)
 
     entries =
       page.entries
@@ -1656,6 +1612,42 @@ defmodule VutuvWeb.PostLive.Feed do
     socket
     |> assign(:feed_filter, filter)
     |> replace_timeline(entries, page)
+  end
+
+  # How big a page of this feed is — the reader's own number, off the socket
+  # rather than out of `Prefs` again, so the arrival, a "Load more", a source
+  # switch and an opened day cannot disagree within one visit.
+  defp page_size(socket), do: socket.assigns.feed_page_size
+
+  # Store the new size on the member and put it on the socket. Through the
+  # `Accounts.update_user/2` chokepoint like every other settings write, so the
+  # registry bounds are checked a second time and the member's own activity log
+  # hears about it (field names only, never values — issue #1087). A refused
+  # changeset leaves the socket alone, so the timeline reload below is over the
+  # size that is actually stored.
+  defp store_page_size(socket, size) do
+    case Accounts.update_user(socket.assigns.current_user, %{"feed_page_size" => size}) do
+      {:ok, user} ->
+        AccountEvents.record(user, "preferences_changed", details: %{fields: ["feed_page_size"]})
+
+        socket
+        |> assign(:current_user, user)
+        |> assign(:feed_page_size, size)
+
+      {:error, _changeset} ->
+        socket
+    end
+  end
+
+  # Fetch what the reader is looking at again, at whatever the page size now is.
+  # Two timelines can be on screen and each has its own loader, so this asks the
+  # same question the empty states and the amber paint ask (`at_now?/1`) rather
+  # than reloading the present over an opened day.
+  defp reload_timeline(socket) do
+    case socket.assigns.cal_day do
+      nil -> load_source_filter(socket, socket.assigns.feed_filter)
+      day -> load_day(socket, day)
+    end
   end
 
   # Whether the reader is looking at the live present. One way to leave it, the
@@ -1826,31 +1818,6 @@ defmodule VutuvWeb.PostLive.Feed do
   # the pill is "new since you got here", which is a claim about **now** and
   # says nothing on a timeline showing last Tuesday; and the return trip
   # reloads from the top anyway, so nothing is actually lost by dropping it.
-  # How big a page opening this day should ask for.
-  #
-  # A day the heatmap already knows to be small is fetched **whole**, so the
-  # ordinary case has no "Load more" under it at all — a day is a bounded thing
-  # the reader asked to see, not an endless timeline. Only the busy ones page.
-  # The limit is an upper bound, so a day holding three entries costs three
-  # however generous the number here is.
-  defp day_limit(_socket, nil), do: @travel_page_size
-
-  defp day_limit(socket, day),
-    do: day_page_limit(day_total(socket.assigns.cal_counts, day))
-
-  # The rule itself, in one place: a day the feed knows to be small arrives
-  # whole, a busy one pages.
-  #
-  # It answers for a day the heatmap has not counted yet, too: while the shading
-  # is still in flight (`defer_calendar_counts/1`) every day reads as 0 and
-  # therefore arrives whole. That is the same choice a `/feed?day=…` arrival
-  # makes outright (`feed_payload/3`) and for the same reason — running the
-  # month counter purely to pick between two page sizes costs more than the
-  # larger page does. A quiet day still costs its own size; a busy one opened
-  # inside that window pays a full page instead of a tenth of one.
-  defp day_page_limit(total) when total < @day_full_limit, do: @day_full_limit
-  defp day_page_limit(_total), do: @travel_page_size
-
   # The day's size, read straight off the heatmap counts, so knowing it costs no
   # query of its own.
   #
@@ -1867,7 +1834,7 @@ defmodule VutuvWeb.PostLive.Feed do
 
     page =
       Posts.feed_page(user,
-        limit: limit || day_limit(socket, day),
+        limit: limit || page_size(socket),
         cursor: FeedTimeTravel.day_cursor(day),
         filter: effective_filter(socket)
       )
@@ -1893,20 +1860,7 @@ defmodule VutuvWeb.PostLive.Feed do
     |> replace_timeline(entries, page)
   end
 
-  # The rest of the arrival, once the reader has the page (see `fill_arrival/2`).
-  # It is the same act as pressing "Load more", so it is the same code — the
-  # cards land at the end of the stream, below the fold, and the cursor and the
-  # "Load more" button move on exactly as if the reader had pressed it.
   @impl true
-  def handle_info(:fill_arrival, %{assigns: %{owes_fill?: true}} = socket) do
-    socket = assign(socket, :owes_fill?, false)
-    {:noreply, append_older_page(socket, @first_page_size - @first_render_size)}
-  end
-
-  # The reader moved on (a source switch, an opened day) before the fill was
-  # handled; that page is not the one this was owed for.
-  def handle_info(:fill_arrival, socket), do: {:noreply, socket}
-
   def handle_info({:new_post, %{post_id: post_id, author_id: author_id}}, socket) do
     post = Posts.get_post(post_id)
 
@@ -3464,6 +3418,30 @@ defmodule VutuvWeb.PostLive.Feed do
                 formatted: delimited_count(day_total(@cal_counts, @cal_day))
               )}
             </button>
+          </div>
+
+          <%!-- How long this feed is, right where the reader runs out of it.
+          Under "Load more" and not in the settings alone, because this is the
+          moment the question comes up: somebody who has pressed that button
+          three times is being told, by their own hand, that ten is too few for
+          them. The press stores the choice and reloads the timeline at the new
+          length, so the answer is on the screen rather than promised for the
+          next visit; /settings/feed is the same knob for anybody who goes
+          looking for it instead.
+
+          Shown only once there is a timeline to be long or short — over an
+          empty feed it would be a control for arranging nothing. --%>
+          <div
+            :if={!@empty?}
+            class="flex flex-wrap items-center justify-center gap-x-3 gap-y-1 pt-2"
+          >
+            <span class="text-sm text-slate-600 dark:text-slate-400">{gettext("Posts per page")}</span>
+            <.page_size_chips
+              id="feed-page-size"
+              current={@feed_page_size}
+              label={gettext("Posts per page")}
+              mode={:click}
+            />
           </div>
 
           <%!-- On mobile (where the desktop rail is hidden) the "Other formats"

@@ -541,16 +541,22 @@ defmodule VutuvWeb.FeedSourceTabsTest do
     end
   end
 
-  describe "a source switch on a slow line" do
+  describe "a source switch" do
     # Switching sources is one round trip, and until it lands the page shows
-    # exactly what it showed before. The page carries less over the wire for
-    # that reason, which is what this pins.
+    # exactly what it showed before. What it fetches is one page — the reader's
+    # own size (`Vutuv.Prefs`, ten by default), the same as every other load
+    # here, which is what this pins.
 
     # How many vutuv posts the timeline is showing (`stream_configure` ids
     # every row `feed-<entry id>`, and a member's post entry is `post-<uuid>`).
     defp rows(view), do: length(String.split(timeline(view), ~s(id="feed-post-))) - 1
 
-    test "a tab switch sends half a page, and the rest stays reachable", %{conn: conn} do
+    # …and how many entries of any kind. Counted by the stream marker LiveView
+    # puts on every row, not by the `feed-` id prefix, which the container
+    # holding them wears too.
+    defp entries(view), do: length(String.split(timeline(view), ~s(data-phx-stream=))) - 1
+
+    test "it fetches one page, and the rest stays reachable", %{conn: conn} do
       {conn, user} = create_and_login_user(conn)
       {author, _post} = followed_post(user, "post 1")
       for n <- 2..12, do: {:ok, _} = Posts.create_post(author, %{body: "post #{n}"})
@@ -558,19 +564,17 @@ defmodule VutuvWeb.FeedSourceTabsTest do
 
       {:ok, view, _html} = live(conn, ~p"/feed")
 
-      # A mount is a full page: all twelve, plus the cached remote one beside
-      # them.
-      assert rows(view) == 12
-      assert timeline(view) =~ "written out there"
+      # A mount is one page: ten entries, the cached remote post competing for
+      # those slots like any other.
+      assert entries(view) == 10
 
-      # A source switch is not. Twenty cards of rendered HTML is the bulk of the
-      # second the member waits, and a screen holds three or four.
+      # A switch is the same page and not a smaller one — one number decides how
+      # long this feed is, whichever control fetched it.
       switch(view, user, :vutuv)
       assert rows(view) == 10
 
-      # Which only works because the shorter page still knows there is more —
-      # `more?` comes from the same query, so the button is there and fills in
-      # the rest.
+      # Which only works because a page still knows there is more — `more?`
+      # comes from the same query, so the button is there and fetches the rest.
       assert has_element?(view, "#load-more")
       render_click(view, "load-more")
       assert rows(view) == 12

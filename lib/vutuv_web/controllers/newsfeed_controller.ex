@@ -18,6 +18,7 @@ defmodule VutuvWeb.NewsfeedController do
   use VutuvWeb, :controller
 
   alias Vutuv.Posts
+  alias Vutuv.Prefs
   alias VutuvWeb.AgentDocs
   alias VutuvWeb.AgentDocs.FeedDoc
   alias VutuvWeb.ApiV2
@@ -63,14 +64,24 @@ defmodule VutuvWeb.NewsfeedController do
         # erroring: the worst case is re-showing the latest posts.
         cursor = ApiV2.cursor_or_nil(params)
 
-        # One page of the document is one arrival on the HTML page
-        # (`Feed.first_page_size/0` rather than a mirrored constant — a number
-        # kept in step by a comment is a number that drifts). The size is all
-        # the two share: the document is deliberately the WHOLE feed, with no
-        # source filter, since it carries none of the switches the member has
-        # over there and narrowing it by one they cannot see here would leave an
-        # agent no way to ask for the rest.
-        page = Posts.feed_page(viewer, limit: Feed.first_page_size(), cursor: cursor)
+        # One page of the document is one arrival on the HTML page — the
+        # member's own `:feed_page_size` — and `?limit=` overrides it, the same
+        # knob every other machine-readable listing here answers to. The default
+        # follows the member so an agent inherits a sensible length without
+        # asking; the parameter is what keeps the document from changing size
+        # under a caller because somebody tapped a chip in a browser tab.
+        #
+        # The size is all the two share: the document is deliberately the WHOLE
+        # feed, with no source filter, since it carries none of the switches the
+        # member has over there and narrowing it by one they cannot see here
+        # would leave an agent no way to ask for the rest.
+        #
+        # Capped at what a caller is allowed to ask for, because a default is
+        # not a licence: `page_limit/2` clamps an explicit `?limit=` to 100 and
+        # would otherwise let a member on 250 build a bigger document by
+        # standing still than any agent can request. `?cursor=` carries the rest.
+        limit = ApiV2.page_limit(params, min(Prefs.feed_page_size(viewer), 100))
+        page = Posts.feed_page(viewer, limit: limit, cursor: cursor)
         AgentDocs.send_doc(conn, format, FeedDoc.build(viewer, page), cache: "private, no-store")
     end
   end

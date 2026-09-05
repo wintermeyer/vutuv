@@ -22,14 +22,13 @@ defmodule VutuvWeb.FeedDuplicateCardsTest do
   `Vutuv.Fediverse.subject_key/1` — the same identity the DOM id is built from,
   so the two cannot drift.
 
-  **And per feed, not per page.** An arrival is two `feed_page/2` calls (ten
-  cards in the document, the rest appended when the socket connects), so a
-  subject can hold a card in each without either call seeing the other. Two
-  renders raise nothing — they degrade, and a member's reshare read as an empty
-  card that way on 2026-09-01. `VutuvWeb.PostLive.Feed`'s `shown_remote_keys/1`
-  is where that rule lives and why; a card nested inside an entry cannot be
-  dropped out here at all, so the same set rides back down as `feed_page/2`'s
-  `seen:`.
+  **And per feed, not per page.** A visit is several `feed_page/2` calls (the
+  arrival, then one per "Load more"), so a subject can hold a card in each
+  without either call seeing the other. Two renders raise nothing — they
+  degrade, and a member's reshare read as an empty card that way on 2026-09-01.
+  `VutuvWeb.PostLive.Feed`'s `shown_remote_keys/1` is where that rule lives and
+  why; a card nested inside an entry cannot be dropped out here at all, so the
+  same set rides back down as `feed_page/2`'s `seen:`.
 
   The **live arrival** is the third call, and it is keyed by the event rather
   than by the subject — a boost of a post the reader already has a card for is
@@ -129,8 +128,8 @@ defmodule VutuvWeb.FeedDuplicateCardsTest do
 
   # The reader follows the account out there, and twelve posts sit between the
   # two things under test — which is what pushes them into different
-  # `feed_page/2` calls (ten cards in the document, the rest in the fill), the
-  # whole point of every test that uses it.
+  # `feed_page/2` calls (ten on the arrival, the rest on the next "Load more"),
+  # the whole point of every test that uses it.
   defp two_pages!(user, remote) do
     follow_remote!(user, remote.remote_account_id)
 
@@ -254,8 +253,8 @@ defmodule VutuvWeb.FeedDuplicateCardsTest do
   test "an answer's parent card and the post's own row across two pages", %{conn: conn} do
     # The reported shape (2026-09-01), and the one no `feed_page/2` call can see
     # by itself: the answer is the newest thing here, so it and its parent card
-    # are in the document's ten, while the post's own row is old enough to land
-    # in the fill. Both cards carry the same body id and the same action-bar
+    # are on the first page, while the post's own row is old enough to land on
+    # the next one. Both cards carry the same body id and the same action-bar
     # LiveComponent, so the second render moved the body into the lower card and
     # left the upper one a name with three hashtags under it.
     {conn, user} = reader(conn)
@@ -270,15 +269,15 @@ defmodule VutuvWeb.FeedDuplicateCardsTest do
 
     assert cards_for(html, remote) == 1
 
-    assert cards_for(render(view), remote) == 1,
-           "the fill must not draw a second card for a post already answered above"
+    assert cards_for(render_click(view, "load-more"), remote) == 1,
+           "an older page must not draw a second card for a post already answered above"
   end
 
   test "a post's own row above and an answer to it on the next page", %{conn: conn} do
     # The same pair the other way round, which the `seen:` half of the rule
-    # covers: the post's row is on screen and the answer arrives in the fill, so
-    # the answer keeps its "Replying to @handle" line rather than drawing the
-    # post a second card underneath it.
+    # covers: the post's row is on screen and the answer arrives on the next
+    # page, so the answer keeps its "Replying to @handle" line rather than
+    # drawing the post a second card underneath it.
     {conn, user} = reader(conn)
     remote = cached_post("was da draussen steht")
 
@@ -293,7 +292,7 @@ defmodule VutuvWeb.FeedDuplicateCardsTest do
 
     assert cards_for(html, remote) == 1
 
-    html = render(view)
+    html = render_click(view, "load-more")
     assert html =~ "meine Antwort darauf"
     assert cards_for(html, remote) == 1, "the answer must not draw a card the page already has"
   end
@@ -327,15 +326,15 @@ defmodule VutuvWeb.FeedDuplicateCardsTest do
     assert html =~ "mein Nachsatz"
   end
 
-  test "a reshared post does not come back as its own row in the arrival's fill",
+  test "a reshared post does not come back as its own row on an older page",
        %{conn: conn} do
     {conn, user} = reader(conn)
 
     # Published two hours ago, so the reader's own follow puts its direct
-    # entry at the bottom of the arrival — while the reshare of it is stamped
-    # now and sits at the top. The twelve posts between them are what pushes
-    # the two into different `feed_page/2` calls, which is the whole shape:
-    # each call dedupes itself and neither knows about the other.
+    # entry below the first page — while the reshare of it is stamped now and
+    # sits at the top. The twelve posts between them are what pushes the two
+    # into different `feed_page/2` calls, which is the whole shape: each call
+    # dedupes itself and neither knows about the other.
     remote = cached_post("was da draussen steht", 7_200)
 
     two_pages!(user, remote)
@@ -344,12 +343,12 @@ defmodule VutuvWeb.FeedDuplicateCardsTest do
 
     {:ok, view, html} = live(conn, ~p"/feed")
 
-    # The reshare is the newest thing here, so the document's ten cards hold
+    # The reshare is the newest thing here, so the first page's ten cards hold
     # it and the post's own entry is still below them.
     assert cards_for(html, remote) == 1
 
-    assert cards_for(render(view), remote) == 1,
-           "the fill must not draw a second card for a post already on screen"
+    assert cards_for(render_click(view, "load-more"), remote) == 1,
+           "an older page must not draw a second card for a post already on screen"
   end
 
   test "a boost of a post already on screen arriving live", %{conn: conn} do
