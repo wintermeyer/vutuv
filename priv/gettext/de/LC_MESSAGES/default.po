@@ -1001,46 +1001,42 @@ msgstr "+49 30 12345678"
 msgid "http://www.example.com"
 msgstr "https://www.example.com"
 
-#: lib/vutuv_web/views/error_html.ex:71
-#, elixir-autogen
-msgid "Page not found"
-msgstr "Seite nicht verfügbar"
-
-#: lib/vutuv_web/views/error_html.ex:194
+#: lib/vutuv_web/views/error_html.ex:79
+#: lib/vutuv_web/views/error_html.ex:211
 #, elixir-autogen
 msgid "This page does not exist"
 msgstr "Diese Seite gibt es nicht"
 
-#: lib/vutuv_web/views/error_html.ex:196
+#: lib/vutuv_web/views/error_html.ex:213
 #, elixir-autogen
 msgid "Mea culpa: we once sent this exact broken link in a newsletter. We are sorry!"
 msgstr ""
 "Mea culpa: Genau diesen kaputten Link haben wir einmal selbst in einem "
 "Rundbrief verschickt. Das tut uns leid!"
 
-#: lib/vutuv_web/views/error_html.ex:201
+#: lib/vutuv_web/views/error_html.ex:218
 #, elixir-autogen
 msgid "The word"
 msgstr "Das Wort"
 
-#: lib/vutuv_web/views/error_html.ex:202
+#: lib/vutuv_web/views/error_html.ex:219
 #, elixir-autogen
 msgid "in this address is only a placeholder. Replace it with the actual username of the person whose profile you want to visit."
 msgstr ""
 "in dieser Adresse ist nur ein Platzhalter. Ersetzen Sie ihn durch den "
 "tatsächlichen Benutzernamen der Person, deren Profil Sie besuchen möchten."
 
-#: lib/vutuv_web/views/error_html.ex:214
+#: lib/vutuv_web/views/error_html.ex:231
 #, elixir-autogen
 msgid "For example, this profile really exists:"
 msgstr "Dieses Profil gibt es zum Beispiel wirklich:"
 
-#: lib/vutuv_web/views/error_html.ex:218
+#: lib/vutuv_web/views/error_html.ex:235
 #, elixir-autogen
 msgid "Do not know the username? Try the"
 msgstr "Sie kennen den Benutzernamen nicht? Probieren Sie die"
 
-#: lib/vutuv_web/views/error_html.ex:219
+#: lib/vutuv_web/views/error_html.ex:236
 #, elixir-autogen
 msgid "search page"
 msgstr "Suchseite"
@@ -1051,7 +1047,7 @@ msgstr ""
 "Fehler! Irgendwas stimmt hier nicht. Wir würden uns über einen Bugreport "
 "unter %{link_open}freuen."
 
-#: lib/vutuv_web/views/error_html.ex:78
+#: lib/vutuv_web/views/error_html.ex:95
 #, elixir-autogen
 msgid "You are not allowed to view this page."
 msgstr "Diese Seite ist für Sie gesperrt."
@@ -1611,11 +1607,12 @@ msgid "Alerts"
 msgstr "Mitteilungen"
 
 #: lib/vutuv_web/views/error_html.ex:62
-#: lib/vutuv_web/views/error_html.ex:118
-#: lib/vutuv_web/views/error_html.ex:138
-#: lib/vutuv_web/views/error_html.ex:175
-#: lib/vutuv_web/views/error_html.ex:222
-#: lib/vutuv_web/views/error_html.ex:314
+#: lib/vutuv_web/views/error_html.ex:86
+#: lib/vutuv_web/views/error_html.ex:135
+#: lib/vutuv_web/views/error_html.ex:155
+#: lib/vutuv_web/views/error_html.ex:192
+#: lib/vutuv_web/views/error_html.ex:239
+#: lib/vutuv_web/views/error_html.ex:333
 #, elixir-autogen, elixir-format
 msgid "Back to the start page"
 msgstr "Zur Startseite"
@@ -4707,14 +4704,14 @@ msgstr "Mitglieder finden"
 msgid "Follows"
 msgstr "Folgt"
 
-#: lib/vutuv_web/views/error_html.ex:171
+#: lib/vutuv_web/views/error_html.ex:188
 #, elixir-autogen, elixir-format
 msgid "If you do not run this instance yourself, please contact the operator."
 msgstr ""
 "Wenn Sie diese Instanz nicht selbst betreiben, wenden Sie sich bitte an den "
 "Betreiber."
 
-#: lib/vutuv_web/views/error_html.ex:172
+#: lib/vutuv_web/views/error_html.ex:189
 #, elixir-autogen, elixir-format
 msgid "Legal notice"
 msgstr "Impressum"
@@ -4729,7 +4726,7 @@ msgstr "Noch keine Follower."
 msgid "Not following anyone yet."
 msgstr "Folgt noch niemandem."
 
-#: lib/vutuv_web/views/error_html.ex:163
+#: lib/vutuv_web/views/error_html.ex:180
 #, elixir-autogen, elixir-format
 msgid "This area is reserved for administrators."
 msgstr "Dieser Bereich ist Administratoren vorbehalten."
@@ -8831,7 +8828,7 @@ msgstr ""
 "Diese Datei ist zu groß. Bitte laden Sie eine ZIP-Datei mit höchstens 50 MB "
 "hoch."
 
-#: lib/vutuv_web/views/error_html.ex:151
+#: lib/vutuv_web/views/error_html.ex:168
 #, elixir-autogen, elixir-format
 msgid "The file you sent is too large."
 msgstr "Die gesendete Datei ist zu groß."
@@ -8908,7 +8905,7 @@ msgstr ""
 "Dieses Profil wird nicht als Markdown-, Text-, JSON- oder XML-Export "
 "angeboten."
 
-#: lib/vutuv_web/views/error_html.ex:165
+#: lib/vutuv_web/views/error_html.ex:182
 #, elixir-autogen, elixir-format
 msgid "Admin rights are granted by the operator of this vutuv instance, from the server's command line:"
 msgstr ""
@@ -14765,7 +14762,7 @@ msgid_plural "Show %{formatted} more replies"
 msgstr[0] "%{formatted} weitere Antwort anzeigen"
 msgstr[1] "%{formatted} weitere Antworten anzeigen"
 
-#: lib/vutuv_web/views/error_html.ex:85
+#: lib/vutuv_web/views/error_html.ex:102
 #, elixir-autogen, elixir-format
 msgid "This page is no longer available."
 msgstr "Diese Seite ist nicht mehr verfügbar."
@@ -14775,7 +14772,7 @@ msgstr "Diese Seite ist nicht mehr verfügbar."
 msgid "This post is part of a conversation with %{formatted} posts."
 msgstr "Dieser Beitrag ist Teil einer Unterhaltung mit %{formatted} Beiträgen."
 
-#: lib/vutuv_web/views/error_html.ex:136
+#: lib/vutuv_web/views/error_html.ex:153
 #, elixir-autogen, elixir-format
 msgid "This profile is currently unavailable."
 msgstr "Dieses Profil ist zurzeit nicht verfügbar."
@@ -24079,17 +24076,17 @@ msgstr "dieses Wort"
 msgid "only %{server}"
 msgstr "nur %{server}"
 
-#: lib/vutuv_web/views/error_html.ex:276
+#: lib/vutuv_web/views/error_html.ex:293
 #, elixir-autogen, elixir-format
 msgid "%{host} cannot be reached"
 msgstr "%{host} ist nicht erreichbar"
 
-#: lib/vutuv_web/views/error_html.ex:279
+#: lib/vutuv_web/views/error_html.ex:296
 #, elixir-autogen, elixir-format
 msgid "Error %{code} on %{host}, %{time}"
 msgstr "Fehler %{code} auf %{host}, %{time}"
 
-#: lib/vutuv_web/views/error_html.ex:268
+#: lib/vutuv_web/views/error_html.ex:285
 #, elixir-autogen, elixir-format
 msgid "Please quote the error code %{code} and the time %{time}."
 msgstr "Nennen Sie dabei bitte den Fehlercode %{code} und die Uhrzeit %{time}."
@@ -24099,24 +24096,29 @@ msgstr "Nennen Sie dabei bitte den Fehlercode %{code} und die Uhrzeit %{time}."
 msgid "This page could not be loaded. Whether that is your connection or our server cannot be told from here. Please try again in a few minutes."
 msgstr "Diese Seite konnte nicht geladen werden. Ob das an Ihrer Verbindung liegt oder an unserem Server, lässt sich von hier aus nicht sagen. Bitte versuchen Sie es in ein paar Minuten noch einmal."
 
-#: lib/vutuv_web/views/error_html.ex:261
+#: lib/vutuv_web/views/error_html.ex:278
 #, elixir-autogen, elixir-format
 msgid "If it takes longer, please write to:"
 msgstr "Dauert es länger, schreiben Sie bitte an:"
 
-#: lib/vutuv_web/views/error_html.ex:110
+#: lib/vutuv_web/views/error_html.ex:127
 #, elixir-autogen, elixir-format
 msgid "Installing a new version takes up to one minute."
 msgid_plural "Installing a new version takes up to %{count} minutes."
 msgstr[0] "Eine neue Version einzuspielen dauert bis zu einer Minute."
 msgstr[1] "Eine neue Version einzuspielen dauert bis zu %{count} Minuten."
 
-#: lib/vutuv_web/views/error_html.ex:105
+#: lib/vutuv_web/views/error_html.ex:122
 #, elixir-autogen, elixir-format
 msgid "That is either a fault in the software or a new version being installed. Either way the site is away only briefly."
 msgstr "Das ist entweder ein Fehler in der Software oder eine neue Version, die gerade eingespielt wird. In beiden Fällen ist die Website nur kurz weg."
 
-#: lib/vutuv_web/views/error_html.ex:103
+#: lib/vutuv_web/views/error_html.ex:120
 #, elixir-autogen, elixir-format
 msgid "This site is offline right now."
 msgstr "Diese Website ist gerade offline."
+
+#: lib/vutuv_web/views/error_html.ex:81
+#, elixir-autogen, elixir-format
+msgid "The site itself is running, this address just is not one of ours. The link is probably old, or it carries a typo."
+msgstr "Die Website läuft, nur diese Adresse gibt es hier nicht. Wahrscheinlich ist der Link alt oder enthält einen Tippfehler."

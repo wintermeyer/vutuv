@@ -19,8 +19,25 @@ defmodule VutuvWeb.ErrorHTMLTest do
     |> IO.iodata_to_binary()
   end
 
+  # A 404 is the opposite of the 500 and has to say so: nothing is broken, the
+  # address is simply not ours. "Page not found" alone is what a browser also
+  # shows when a site is down.
   test "renders 404.html" do
-    assert render_to_string("404.html") =~ "Page not found"
+    body = render_to_string("404.html")
+
+    assert body =~ "This page does not exist"
+    assert body =~ "site itself is running"
+    assert body =~ "carries a typo"
+    assert body =~ ~s(href="/")
+  end
+
+  test "renders 404.html in German" do
+    Gettext.put_locale(VutuvWeb.Gettext, "de")
+    body = render_to_string("404.html")
+
+    assert body =~ "Diese Seite gibt es nicht"
+    assert body =~ "Die Website läuft"
+    assert body =~ "Tippfehler"
   end
 
   # A 500 knows nothing about its own cause, so the page names the two shapes
@@ -71,8 +88,12 @@ defmodule VutuvWeb.ErrorHTMLTest do
     assert render_to_string("500.html") =~ "takes up to 25 minutes"
   end
 
-  test "error pages link back home" do
-    assert render_to_string("404.html") =~ ~s(href="/")
+  # The plain card the three refusals with nothing to explain still share.
+  test "renders 403.html" do
+    body = render_to_string("403.html")
+
+    assert body =~ "not allowed to view this page"
+    assert body =~ ~s(href="/")
   end
 
   # An upload beyond Plug.Parsers' multipart cap raises before any controller

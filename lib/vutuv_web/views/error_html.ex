@@ -65,11 +65,28 @@ defmodule VutuvWeb.ErrorHTML do
     """
   end
 
+  # The opposite of the 500 below, and the page has to say so: everything here
+  # works, the address is simply not one of ours. "Page not found" left the
+  # visitor unable to tell that from an outage — the same two words a browser
+  # shows when a site is down — so the card names what is fine, what is not,
+  # and the two ordinary reasons (an old link, a typo) before pointing home.
   def render("404.html", assigns) do
-    assigns
-    |> Map.new()
-    |> Map.merge(%{code: 404, message: gettext("Page not found")})
-    |> error_page()
+    assigns = Map.new(assigns)
+
+    ~H"""
+    <div class="error-page">
+      <p class="error-page__code">404</p>
+      <h1 class="error-page__title">{gettext("This page does not exist")}</h1>
+      <p class="error-page__hint">
+        {gettext(
+          "The site itself is running, this address just is not one of ours. The link is probably old, or it carries a typo."
+        )}
+      </p>
+      <p class="error-page__actions">
+        <a href="/" class="button">{gettext("Back to the start page")}</a>
+      </p>
+    </div>
+    """
   end
 
   def render("403.html", assigns) do
@@ -303,9 +320,11 @@ defmodule VutuvWeb.ErrorHTML do
   # pipeline, and with it the local-time rewriting JS, is exactly what broke.
   defp utc_stamp, do: Calendar.strftime(DateTime.utc_now(), "%Y-%m-%d %H:%M UTC")
 
+  # The plain card: a code and one sentence. What is left for it are the three
+  # refusals that need no explaining (403, 410, 413) — every page that has
+  # something to say beyond its own status line writes its own markup above.
+  # Its three callers all merge a `:code`, so there is no default here.
   defp error_page(assigns) do
-    assigns = Map.put_new(assigns, :code, 404)
-
     ~H"""
     <div class="error-page">
       <p class="error-page__code">{@code}</p>
