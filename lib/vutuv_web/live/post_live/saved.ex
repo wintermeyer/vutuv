@@ -241,6 +241,18 @@ defmodule VutuvWeb.PostLive.Saved do
     RemotePostActions.report(socket, id, &reload_page/1)
   end
 
+  # Muting is no longer gated on following the author, so the
+  # menu offers it here too and this page owes both events — an unhandled
+  # `phx-click` takes the LiveView down. A saved post stays saved: the member
+  # put it there on purpose, and the mute is about what arrives unasked.
+  def handle_event("mute-remote-account", %{"id" => account_id}, socket) do
+    RemotePostActions.mute(socket, account_id, &reload_page/1)
+  end
+
+  def handle_event("mute-remote-reposts", %{"id" => account_id}, socket) do
+    RemotePostActions.mute_reposts(socket, account_id, &reload_page/1)
+  end
+
   def handle_event("unsave-person", %{"id" => id}, socket) do
     case Vutuv.UUIDv7.cast_or_nil(id) do
       nil ->

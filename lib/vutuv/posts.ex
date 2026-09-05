@@ -1299,14 +1299,18 @@ defmodule Vutuv.Posts do
       language_allowed?(post, viewer)
   end
 
+  # Both stores, because this is the in-memory twin of the feed's own filter and
+  # the two must answer alike: a post whose author the reader silenced without
+  # ever following them would otherwise be counted behind the "new posts" pill
+  # and dropped by the very next load — which is the bug `reaches_feed?/2` was
+  # written to end.
   defp muted_author?(%Post{user_id: author_id}, %User{id: viewer_id})
-       when is_binary(author_id) do
-    Repo.exists?(
-      from(f in Follow,
-        where: f.follower_id == ^viewer_id and f.followee_id == ^author_id and f.muted
-      )
-    )
-  end
+       when is_binary(author_id),
+       do: Vutuv.Mutes.silenced?(viewer_id, :member, author_id)
+
+  defp muted_author?(%Post{organization_id: page_id}, %User{id: viewer_id})
+       when is_binary(page_id),
+       do: Vutuv.Mutes.silenced?(viewer_id, :organization, page_id)
 
   defp muted_author?(_post, _viewer), do: false
 
@@ -4222,7 +4226,17 @@ defmodule Vutuv.Posts do
       # is NULL, so every page's reshared post silently left the feed of anybody
       # who had ever blocked one single person — and stayed for everybody else,
       # since `NULL NOT IN (<empty>)` is true.
-      where: is_nil(p.user_id) or p.user_id not in subquery(blocked_either_way(viewer_id)),
+      #
+      # A muted author is in that list for the same reason: the
+      # reader silenced *them*, and a reshare is the back door that would carry
+      # them in anyway — which is the usual way a stranger's post arrives at
+      # all.
+      where: is_nil(p.user_id) or p.user_id not in subquery(silenced_by(viewer_id)),
+      where:
+        is_nil(p.organization_id) or
+          p.organization_id not in subquery(
+            Vutuv.Mutes.silenced_organization_ids(viewer_id, [:all])
+          ),
       order_by: [desc: r.inserted_at, desc: r.id],
       limit: ^fetch_n,
       select: {r.id, r.inserted_at, p, reposter, rp}
@@ -4316,10 +4330,19 @@ defmodule Vutuv.Posts do
     )
   end
 
-  # The blocked and the muted in one list, so a caller asks once. Both halves
+  # The blocked and the silenced in one list, so a caller asks once. Both halves
   # exclude NULLs at the source, which `NOT IN` needs.
+  #
+  # The silenced half is `Vutuv.Mutes`' own union — a muted follow **and** a
+  # mute of a member this reader never followed, which is where a stranger's
+  # post comes from in the first place (a reshare, a tag, an answer under the
+  # reader's own post). Asking that module rather than reading `follows.muted`
+  # here is what keeps the two stores from answering differently per source.
   defp silenced_by(viewer_id) do
-    union_all(blocked_either_way(viewer_id), ^muted_followees_of(viewer_id))
+    union_all(
+      blocked_either_way(viewer_id),
+      ^Vutuv.Mutes.silenced_member_ids(viewer_id, [:all])
+    )
   end
 
   # Why a reshare reaches this reader — the one thing that differs between the
@@ -4352,12 +4375,21 @@ defmodule Vutuv.Posts do
     )
   end
 
-  # Reshared by me, by somebody I follow, or by a page I follow (issue #1336).
+  # Reshared by me, by somebody I follow, or by a page I follow (issue #1336) —
+  # minus whoever's reshares the reader switched off, which is
+  # asked here rather than of `followees_of/1` because that list also answers
+  # "whose own posts belong in this feed", and a `:reposts` mute leaves those
+  # alone.
   defp repost_reaches_me(viewer_id) do
     dynamic(
       [_p, r],
-      r.user_id == ^viewer_id or r.user_id in subquery(followees_of(viewer_id)) or
-        r.organization_id in subquery(followed_organizations_of(viewer_id)) or
+      r.user_id == ^viewer_id or
+        (r.user_id in subquery(followees_of(viewer_id)) and
+           r.user_id not in subquery(Vutuv.Mutes.silenced_member_ids(viewer_id, [:reposts]))) or
+        (r.organization_id in subquery(followed_organizations_of(viewer_id)) and
+           r.organization_id not in subquery(
+             Vutuv.Mutes.silenced_organization_ids(viewer_id, [:reposts])
+           )) or
         exists(subquery(reshared_by_past_follow(viewer_id)))
     )
   end
@@ -4503,7 +4535,7 @@ defmodule Vutuv.Posts do
       is_nil(p.user_id) or
         (p.user_id != ^viewer_id and
            p.user_id not in subquery(all_followees_of(viewer_id)) and
-           p.user_id not in subquery(blocked_either_way(viewer_id)) and
+           p.user_id not in subquery(silenced_by(viewer_id)) and
            account_confirmed_row(u))
     )
   end
@@ -4518,7 +4550,10 @@ defmodule Vutuv.Posts do
       [post: p, tag_organization: o],
       is_nil(p.organization_id) or
         (organization_public_row(o) and
-           p.organization_id not in subquery(all_followed_organizations_of(viewer_id)))
+           p.organization_id not in subquery(all_followed_organizations_of(viewer_id)) and
+           p.organization_id not in subquery(
+             Vutuv.Mutes.silenced_organization_ids(viewer_id, [:all])
+           ))
     )
   end
 
@@ -5198,14 +5233,6 @@ defmodule Vutuv.Posts do
   defp all_followees_of(viewer_id) do
     from(c in Follow,
       where: c.follower_id == ^viewer_id and not is_nil(c.followee_id),
-      select: c.followee_id
-    )
-  end
-
-  # The people the viewer told us to keep quiet.
-  defp muted_followees_of(viewer_id) do
-    from(c in Follow,
-      where: c.follower_id == ^viewer_id and c.muted and not is_nil(c.followee_id),
       select: c.followee_id
     )
   end

@@ -93,6 +93,18 @@ defmodule VutuvWeb.PostLive.RemotePostReply do
     )
   end
 
+  # Muting is no longer gated on following the author, so the menu
+  # offers it on this page too and both events are owed — an unhandled
+  # `phx-click` takes the LiveView down. The reader stays where they are: they
+  # came here to write an answer, and muting is about what arrives unasked.
+  def handle_event("mute-remote-account", %{"id" => account_id}, socket) do
+    RemotePostActions.mute(socket, account_id, & &1)
+  end
+
+  def handle_event("mute-remote-reposts", %{"id" => account_id}, socket) do
+    RemotePostActions.mute_reposts(socket, account_id, & &1)
+  end
+
   @impl true
   def render(assigns) do
     ~H"""

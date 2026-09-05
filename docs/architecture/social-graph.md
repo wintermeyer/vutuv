@@ -43,6 +43,33 @@ single-column follows indexes were dropped as redundant prefixes.
 status but drops the followee's posts out of *your* feed — silent and
 one-directional, unlike a block.
 
+**Muting an account you do not follow** is the table beside it, `account_mutes`
+(`Vutuv.Mutes`): the account a reader wants gone is usually one they never
+followed — somebody they *do* follow keeps boosting or resharing it — and a flag
+on the follow edge has nowhere to live for that. A row names the reader, exactly
+one target (member, page, or remote account, CHECK-enforced) and a **scope**:
+
+* `:all` — nothing this account writes reaches the feed, whoever passes it on.
+* `:reposts` — only what it **passes on** is dropped; its own posts stay. This
+  is the scope that names an account the reader follows on purpose.
+
+Two stores now hold a mute, so exactly one function answers whether an account
+is silenced: `Mutes.scope_for/2` reads both, `mute/3` and `unmute/2` write both
+(a `:all` mute of a followed account sets the follow's flag too, so the account
+page, the following list and the feed band keep agreeing with the card menu).
+The feed reads the sets as **subqueries** rather than through that function, so
+a page costs no extra round trip — `muted_member_ids/2`,
+`muted_organization_ids/2` and `remote_mute_rows/1`, the last of which the
+fediverse follow-set lookup unions into the one query it already makes.
+
+Where it acts: every source that can carry a stranger's post — a boost, a
+member's reshare of a cached post or reply, the tag timeline, an answer under
+the reader's own post. Deliberately **not**: a conversation the reader opens
+themselves, their notifications, or the muted account's own page. A mute is
+about what arrives unasked; going and looking is asking. Muting happens on a
+card's ⋯ menu or an account page; `/settings/mutes` lists both stores together
+and is where one is taken back.
+
 Posts keep a **connections-only** audience that now resolves to "mutual
 followers" (see [posts-and-feed.md](posts-and-feed.md)).
 

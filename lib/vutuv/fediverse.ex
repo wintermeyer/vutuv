@@ -1680,10 +1680,25 @@ defmodule Vutuv.Fediverse do
         ),
         set: [muted: muted?, updated_at: NaiveDateTime.truncate(NaiveDateTime.utc_now(), :second)]
       )
+
+      forget_account_mute(party, account_id, muted?)
     end)
 
     :ok
   end
+
+  # Unmuting has to reach the **other** store too (`Vutuv.Mutes`): a mute is a
+  # row about an account since a reader can silence one they never followed, so
+  # a member may hold both — the row from a card's ⋯ menu, the flag from this
+  # switch — and lifting only the flag leaves the posts away with no switch left
+  # showing why. Muting needs no such call: this flag alone silences the
+  # account, and the row (if any) says the same thing.
+  defp forget_account_mute(_party, _account_id, true), do: :ok
+
+  defp forget_account_mute(%User{id: viewer_id}, account_id, false),
+    do: Vutuv.Mutes.forget_id(viewer_id, :remote_account, account_id)
+
+  defp forget_account_mute(_page, _account_id, false), do: :ok
 
   @doc """
   Flips the mute on the member's follow of one remote account, and answers with
@@ -1712,7 +1727,9 @@ defmodule Vutuv.Fediverse do
         )
         |> Repo.update_all([])
 
-      List.first(rows || [])
+      follow = List.first(rows || [])
+      if follow, do: forget_account_mute(party, account_id, follow.muted)
+      follow
     end)
   end
 
@@ -3106,13 +3123,29 @@ defmodule Vutuv.Fediverse do
         }
       )
 
-    live |> union_all(^spans) |> Repo.all() |> split_follow_sets()
+    # A whole-account mute rides the same lookup rather than a second round trip
+    # per feed page — and it rides it as what it is, a **muted** row: an account
+    # can be silenced here without a follow to hang the flag on, and everything
+    # below already knows what to do with a muted account. Only the whole-account
+    # scope; a repost mute leaves the account itself heard, so it is not this
+    # question and is asked where it bites (`remote_boosts_query/4`).
+    mutes = Vutuv.Mutes.silenced_remote_rows(viewer_id)
+
+    live
+    |> union_all(^spans)
+    |> union_all(^mutes)
+    |> Repo.all()
+    |> split_follow_sets()
   end
 
   # A **currently muted** account is dropped from all three sets, whatever its
   # spans say: muting means "their posts leave my feed", retroactively, so a
   # span from an earlier spell of following must not be a way back in. Settled
   # here, in memory, rather than as a `NOT IN` subquery on every read.
+  #
+  # A mute row arrives already marked `muted: true`, so it needs no arm of its
+  # own: it silences the account it names and, having no follow state, joins no
+  # set itself.
   defp split_follow_sets(rows) do
     muted = for %{account_id: id, muted: true} <- rows, into: MapSet.new(), do: id
     heard = Enum.reject(rows, &MapSet.member?(muted, &1.account_id))
@@ -3251,6 +3284,9 @@ defmodule Vutuv.Fediverse do
         # Only ever what the reposter could have shared: the audience gate is
         # the same one that let them press the button.
         where: p.audience in ^RemotePost.open_audiences(),
+        # And never an author this reader silenced: a member's reshare is the
+        # same back door a remote boost is.
+        where: p.remote_account_id not in subquery(muted_remote_authors(viewer_id)),
         order_by: [desc: r.inserted_at, desc: r.id],
         limit: ^fetch_n,
         preload: [remote_post: {p, [:screenshot, remote_account: a]}, user: reposter]
@@ -3317,6 +3353,27 @@ defmodule Vutuv.Fediverse do
     )
   end
 
+  # Every account out there whose words this reader has silenced, whichever
+  # store holds the answer (`Vutuv.Mutes` says why there are two).
+  #
+  # Asked of the **author** by every source where somebody else does the
+  # carrying — a boost, a member's reshare — not only of the account that
+  # carried it: a reader who muted an account muted *them*, and a third party
+  # passing their post on is exactly the back door that would undo it.
+  defp muted_remote_authors(viewer_id),
+    do: Vutuv.Mutes.silenced_remote_account_ids(viewer_id, [:all])
+
+  # The same accounts, spelled the way a cached **reply** names its author: a
+  # note carries `actor_uri` and no account id, so the mute has to be resolved
+  # to the address before it can be asked about one.
+  defp muted_remote_actor_uris(viewer_id) do
+    from(a in RemoteAccount,
+      where: a.id in subquery(muted_remote_authors(viewer_id)),
+      where: not is_nil(a.actor_uri),
+      select: a.actor_uri
+    )
+  end
+
   # The same rule the local feed uses: a muted follow keeps the relationship and
   # drops that member's posts out of this feed — including what they reshare.
   # The `not is_nil` is not decoration: since #1336 a followed **page** leaves
@@ -3325,10 +3382,18 @@ defmodule Vutuv.Fediverse do
   # list negated (`not in`) is false for every row, silently, which is how the
   # discovery rail emptied itself for anyone who followed a page. Guarding here
   # means the next caller cannot inherit that, whichever way it asks.
+  #
+  # A `:reposts` mute lands here rather than beside it: this list
+  # is only ever asked "whose **reshares** reach this reader", which is the one
+  # question that mute answers, so the member keeps every other source.
   defp unmuted_followees(viewer_id) do
     from(f in Vutuv.Social.Follow,
       where: f.follower_id == ^viewer_id and f.muted == false,
       where: not is_nil(f.followee_id),
+      where:
+        f.followee_id not in subquery(
+          Vutuv.Mutes.silenced_member_ids(viewer_id, [:all, :reposts])
+        ),
       select: f.followee_id
     )
   end
@@ -3433,14 +3498,24 @@ defmodule Vutuv.Fediverse do
   defp remote_boosts_query(%User{id: viewer_id} = viewer, fetch_n, cursor, opts) do
     {boosters, _pending, past_boosters} = follow_sets(viewer)
 
-    # The author's own follow is consulted too, not only the booster's: a
-    # reader who muted an account out there muted *them*, and somebody else
-    # passing their post on is exactly the back door that would undo it.
-    muted_authors =
-      from(f in Follow,
-        where: f.user_id == ^viewer_id and f.muted == true,
-        select: f.remote_account_id
-      )
+    # "Your own posts yes, what you pass on no": the account keeps every other
+    # source and loses this one. Read as a list and taken **off** the booster
+    # ids rather than added as a `NOT IN` on the query, because this source's
+    # whole shape is constant id lists — that is what keeps it on its recency
+    # index. One small indexed lookup, and for the reader who has muted nobody
+    # it is an empty list and no work at all.
+    reposts_muted = Vutuv.Mutes.silenced_ids(viewer_id, :remote_account, [:reposts])
+    boosters = boosters -- reposts_muted
+    past_boosters = past_boosters -- reposts_muted
+
+    # The members this reader silenced, for the boosts that carry a **vutuv**
+    # post: a boost carries one as often as a cached one, and a mute that
+    # stopped one kind and not the other is a mute nobody can explain. A list
+    # again, so an empty one costs the query nothing — where a `LEFT JOIN posts`
+    # plus subquery would be paid by every reader on every page, on the source
+    # whose comment above explains what a join costs it.
+    muted_members = Vutuv.Mutes.silenced_ids(viewer_id, :member, [:all])
+    muted_authors = muted_remote_authors(viewer_id)
 
     from(b in PostBoost,
       as: :boost,
@@ -3469,10 +3544,21 @@ defmodule Vutuv.Fediverse do
       preload: [remote_post: rp, post: :user]
     )
     |> boosts_of_kind(opts[:only])
+    |> reject_boosts_of_muted_members(muted_members)
     |> reject_muted_hosts(viewer)
     |> reject_muted_boosted_hosts(viewer)
     |> Vutuv.Posts.named_language_scope(Vutuv.Posts.feed_language_filter(viewer))
     |> utc_at_or_before(cursor, :announced_at)
+  end
+
+  # The boosted **vutuv** post's author, asked only of a reader who has silenced
+  # somebody here — which is almost nobody, and for the rest the clause is not
+  # added at all rather than evaluated per scanned boost.
+  defp reject_boosts_of_muted_members(query, []), do: query
+
+  defp reject_boosts_of_muted_members(query, ids) do
+    theirs = from(p in Vutuv.Posts.Post, where: p.user_id in ^ids, select: p.id)
+    where(query, [b], is_nil(b.post_id) or b.post_id not in subquery(theirs))
   end
 
   defp visible_boost_entries(query, viewer) do
@@ -8791,6 +8877,10 @@ defmodule Vutuv.Fediverse do
         # same one that let them press the button, re-asked here because a note's
         # audience can be narrowed by an upstream `Update` after the fact.
         where: n.audience == "public",
+        # A silenced author stays silenced when somebody here passes their reply
+        # on. A note names its author by `actor_uri` and carries no
+        # account id, so the mute is resolved to that spelling first.
+        where: n.actor_uri not in subquery(muted_remote_actor_uris(viewer_id)),
         order_by: [desc: r.inserted_at, desc: r.id],
         preload: [note: n, user: resharer]
       )

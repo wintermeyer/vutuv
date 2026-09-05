@@ -664,7 +664,12 @@ defmodule VutuvWeb.FeedRemotePostsTest do
 
     test "unfollowing asks first, then drops the follow and its posts", %{conn: conn} do
       {conn, user} = create_and_login_user(conn)
-      post = cached_post(user)
+      # Published **before** the follow began, so no past-follow span holds it
+      # (issue #1673): a span keeps what it delivered, and with the post stamped
+      # "now" this test passed or failed on whether the run happened to cross a
+      # second between the follow and the unfollow — green locally, red on CI.
+      # What it means to assert is the other case, the copy nothing holds.
+      post = cached_post(user, %{published_at: DateTime.add(DateTime.utc_now(:second), -3600)})
 
       {:ok, view, _html} = live(conn, ~p"/feed")
 
@@ -710,20 +715,22 @@ defmodule VutuvWeb.FeedRemotePostsTest do
       assert item =~ "Die Beiträge verschwinden aus Ihrem Feed."
     end
 
-    test "neither control shows on a post by an account the reader does not follow", %{conn: conn} do
+    test "mute shows without a follow, unfollow does not", %{conn: conn} do
       {conn, user} = create_and_login_user(conn)
       # Reshared by the member themselves (issue #1166): the card is in the feed
-      # without any follow behind it, and both controls would act on nothing.
+      # without any follow behind it.
       post = cached_post(insert(:activated_user, fediverse_followers?: true))
       Repo.insert!(%PostRepost{user_id: user.id, remote_post_id: post.id})
 
       {:ok, view, _html} = live(conn, ~p"/feed")
 
       assert has_element?(view, "[data-remote-post='#{post.id}']")
-      refute has_element?(view, "[phx-click='mute-remote-account']")
+      # Muting is a row about the account, so it needs no
+      # follow to hang on — and an account nobody here follows is exactly the
+      # one a reader wants gone.
+      assert has_element?(view, "[phx-click='mute-remote-account']")
+      # Unfollowing still acts on a follow, so it stays out where there is none.
       refute has_element?(view, "[phx-click='unfollow-remote-account']")
-      # The way to the original and the report control are not follow-shaped and
-      # stay.
       assert has_element?(view, "[phx-click='report-remote-post']")
     end
   end

@@ -39,6 +39,7 @@ defmodule VutuvWeb.PostComponents do
   alias Vutuv.Isbn
   alias Vutuv.Languages
   alias Vutuv.Moderation.ImageScans
+  alias Vutuv.Mutes
   alias Vutuv.Organizations.Organization
   alias Vutuv.PostRewrites
   alias Vutuv.Posts
@@ -2699,13 +2700,33 @@ defmodule VutuvWeb.PostComponents do
                 follow itself survives it. The handle rides the `hint` line
                 rather than the label: `@user@host` is longer on its own than
                 the menu is wide. --%>
+                <%!-- Not gated on the follow any more. The
+                account a reader wants gone is usually one they never followed:
+                somebody they DO follow keeps passing the same stranger on, and
+                while the mute lived on the follow edge there was nowhere to
+                hang it — leaving Report (which empties our one cached copy for
+                everybody) or unfollowing the messenger as the only ways out.
+                `Vutuv.Mutes` writes a row about the account instead. --%>
                 <:item
-                  :if={@following?}
                   click="mute-remote-account"
                   value={@account.id}
                   hint={RemoteAccount.display_handle(@account)}
                 >
                   {gettext("Mute")}
+                </:item>
+                <%!-- And the narrower complaint, on the line of the card that
+                caused it: the boost banner names an account the reader chose to
+                follow and would like to keep — it is the stream of other
+                people's posts arriving through them that is unwanted. So this
+                item silences what they pass on and leaves their own posts
+                alone. It names the booster, never the author above. --%>
+                <:item
+                  :if={@boosted_by}
+                  click="mute-remote-reposts"
+                  value={mute_target_id(@boosted_by)}
+                  hint={mute_target_handle(@boosted_by)}
+                >
+                  {gettext("Hide reposts")}
                 </:item>
                 <%!-- And the way out that lasts. Mute answers "not today";
                 somebody who is done with an account had to go and find its page
@@ -3024,6 +3045,17 @@ defmodule VutuvWeb.PostComponents do
   # costs no second lookup. Nil for a visitor and for an author nobody can
   # name, which is when there is no item. The three record kinds travel under
   # three parameter names because their ids live in three tables.
+  # The account that carried this post in, for the item that hides what it
+  # passes on. Nil-tolerant because the attribute expressions beside an `:if`
+  # are type-checked against an absent `boosted_by` all the same; everything
+  # else is `Vutuv.Mutes`', which is where "what is this account called" is
+  # answered for all three kinds at once.
+  defp mute_target_id(%{id: id}), do: id
+  defp mute_target_id(_none), do: nil
+
+  defp mute_target_handle(%{__struct__: _} = target), do: Mutes.handle(target)
+  defp mute_target_handle(_none), do: nil
+
   defp rewrite_link(_record, _author, nil), do: nil
 
   defp rewrite_link(record, author, _viewer) do
@@ -3723,6 +3755,36 @@ defmodule VutuvWeb.PostComponents do
                   hint={"@" <> @post.user.username}
                 >
                   {if @viewer_follow.muted?, do: gettext("Unmute"), else: gettext("Mute")}
+                </:item>
+                <%!-- The same act for an author the reader does NOT follow
+               , which is most of the strangers a feed carries:
+                somebody they follow reshared this, or it came in on a tag.
+                There is no follow edge to hang `muted` on, so it writes a row
+                about the account instead (`Vutuv.Mutes`), and the two clauses
+                are exclusive — one Mute item either way. --%>
+                <:item
+                  :if={!@viewer_follow && !@organization_author? && @post.user}
+                  href={
+                    ~p"/settings/mutes?#{[kind: "member", id: @post.user_id, return_to: @permalink]}"
+                  }
+                  method="post"
+                  hint={"@" <> @post.user.username}
+                >
+                  {gettext("Mute")}
+                </:item>
+                <%!-- And the narrower complaint, on the line that caused it:
+                the reshare banner names somebody the reader chose to follow and
+                wants to keep — it is the stream of other people's posts
+                arriving through them that is unwanted. Their own posts stay. --%>
+                <:item
+                  :if={@reposted_by}
+                  href={
+                    ~p"/settings/mutes?#{[kind: Mutes.kind(@reposted_by), id: @reposted_by.id, scope: "reposts", return_to: @permalink]}"
+                  }
+                  method="post"
+                  hint={mute_target_handle(@reposted_by)}
+                >
+                  {gettext("Hide reposts")}
                 </:item>
                 <%!-- The reader's own search-and-replace rules for this author
                 (`Vutuv.PostRewrites`): a link, not an event, so it works on a

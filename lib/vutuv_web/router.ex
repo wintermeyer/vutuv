@@ -1668,6 +1668,15 @@ defmodule VutuvWeb.Router do
     get("/filters", SettingsController, :filters)
     post("/filters", SettingsController, :create_filter)
     delete("/filters/:id", SettingsController, :delete_filter)
+
+    # Muted accounts: the same page one account over — who is
+    # silenced rather than what. Muting happens on a card or an account page;
+    # this is where a member sees the lot and takes one back. The two write
+    # routes are posted to from **anywhere** a card is rendered, which is why
+    # they carry their own `return_to` rather than redirecting here.
+    get("/mutes", SettingsController, :mutes)
+    post("/mutes", SettingsController, :create_mute)
+    delete("/mutes", SettingsController, :delete_mute)
     # The member's "Your organizations" hub: the organization pages they own or
     # help run, the explainer of how organizations work, and the add call to
     # action. The public browse directory stays at /organizations.

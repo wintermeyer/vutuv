@@ -1357,6 +1357,15 @@ defmodule VutuvWeb.PostLive.Feed do
     |> RemotePostActions.mute(account_id, &drop_remote_entries_of(&1, account_id))
   end
 
+  # "Keep the account, drop what it passes on", from the boost
+  # banner that carried the unwanted post in. Only the boosted rows go: the
+  # account's own posts are why the reader follows it.
+  def handle_event("mute-remote-reposts", %{"id" => account_id}, socket) do
+    socket
+    |> bump_band_refresh()
+    |> RemotePostActions.mute_reposts(account_id, &drop_boosted_entries_of(&1, account_id))
+  end
+
   # And the same menu's way out that lasts. The rows leave for the same reason —
   # they were here because of that follow — and the cached posts themselves go
   # with it once nobody here follows the account any more.
@@ -2802,6 +2811,16 @@ defmodule VutuvWeb.PostLive.Feed do
     |> Enum.reduce(socket, &drop_remote_entry(&2, &1.remote_post.id))
   end
 
+  # The rows this account **boosted**, and only those: the reader
+  # keeps following it, so its own posts stay where they are. A boost entry
+  # carries the booster in `boosted_by`, which is exactly the account the menu
+  # item named.
+  defp drop_boosted_entries_of(socket, account_id) do
+    socket.assigns.entries
+    |> Enum.filter(&(&1[:boosted_by] != nil and &1.boosted_by.id == account_id))
+    |> then(&drop_entries(socket, &1))
+  end
+
   # The band's sources card skips reloads the page does not owe it (the gate in
   # `VutuvWeb.PostLive.FilterBand.load/1`); this is how the page says it owes
   # one. Bumped BEFORE the act, so the assign rides whatever the act assigns.
@@ -2814,8 +2833,15 @@ defmodule VutuvWeb.PostLive.Feed do
     # (issue #1166, `remote-repost-<repost id>`) — and a report deletes the row
     # for everybody, so every row showing it has to go. Guessing the dom id
     # left the reshared copy on screen until the next reload.
-    going = Enum.filter(socket.assigns.entries, &remote_entry?(&1, remote_post_id))
+    socket
+    |> drop_entries(Enum.filter(socket.assigns.entries, &remote_entry?(&1, remote_post_id)))
+  end
 
+  # Taking a set of entries off the page: out of the list the page reasons with
+  # and out of the stream the browser holds, then the empty state re-asked. One
+  # function, because "which rows go" is the only thing its callers disagree
+  # about.
+  defp drop_entries(socket, going) do
     socket
     |> update(:entries, &(&1 -- going))
     |> then(fn socket ->

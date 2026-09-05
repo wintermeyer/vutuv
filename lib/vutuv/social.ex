@@ -434,19 +434,38 @@ defmodule Vutuv.Social do
   def toggle_follow_mute!(follower_id, follow_id) do
     follow = Repo.get_by!(Follow, id: follow_id, follower_id: follower_id)
 
-    follow
-    |> Follow.mute_changeset(%{muted: not follow.muted})
-    |> Repo.update!()
+    updated =
+      follow
+      |> Follow.mute_changeset(%{muted: not follow.muted})
+      |> Repo.update!()
+
+    forget_account_mute(follower_id, updated)
+    updated
+  end
+
+  # Unmuting here has to reach the **other** store too (`Vutuv.Mutes`): since a
+  # mute became a row about an account, a member can hold both — the row from a
+  # card's ⋯ menu, the flag from this switch — and lifting only the flag leaves
+  # the posts away with no switch left showing why. Muting needs no such call:
+  # this flag alone already silences the account.
+  defp forget_account_mute(_follower_id, %Follow{muted: true}), do: :ok
+
+  defp forget_account_mute(follower_id, %Follow{} = follow) do
+    Vutuv.Mutes.forget_id(follower_id, :member, follow.followee_id)
+    Vutuv.Mutes.forget_id(follower_id, :organization, follow.followee_organization_id)
   end
 
   @doc "Sets the mute flag on a member's existing local follow."
   def set_follow_mute(%User{id: follower_id}, followee, muted?) when is_boolean(muted?) do
     {column, followee_id} = followee_column(followee)
+    result = set_follow_mute(%{column => followee_id, follower_id: follower_id}, muted?)
 
-    set_follow_mute(
-      %{column => followee_id, follower_id: follower_id},
-      muted?
-    )
+    unless muted? do
+      kind = if column == :followee_id, do: :member, else: :organization
+      Vutuv.Mutes.forget_id(follower_id, kind, followee_id)
+    end
+
+    result
   end
 
   @doc "Sets the mute flag on an organization's existing local follow."

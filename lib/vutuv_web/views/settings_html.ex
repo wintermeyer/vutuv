@@ -27,6 +27,7 @@ defmodule VutuvWeb.SettingsHTML do
 
   alias Vutuv.Accounts.User
   alias Vutuv.ContentFilters.ContentFilter
+  alias Vutuv.Mutes
   alias Vutuv.SavedSearches
 
   embed_templates("../templates/settings/*")
@@ -55,6 +56,17 @@ defmodule VutuvWeb.SettingsHTML do
   defp auto_post_deletion_label(365), do: gettext("1 year")
   defp auto_post_deletion_label(730), do: gettext("2 years")
   defp auto_post_deletion_label(days), do: ngettext("%{count} day", "%{count} days", days)
+
+  @doc """
+  What is silenced, in the member's words.
+
+  A follow's own mute (`source: :follow`) reads the same as an `:all` row — it
+  is the same silence — with the difference named beside it, where it belongs:
+  what the member is looking for here is which accounts are quiet, not which
+  table says so.
+  """
+  def mute_scope_label(:reposts), do: gettext("Reposts only")
+  def mute_scope_label(_all), do: gettext("Everything")
 
   @doc "The human, localized label for a content filter's kind (issue #940)."
   def filter_kind_label(%{kind: :tag}), do: gettext("Tag")
