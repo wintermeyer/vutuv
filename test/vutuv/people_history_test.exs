@@ -5,9 +5,7 @@ defmodule Vutuv.PeopleHistoryTest do
   that the growth summary can only ever describe the rows the curve is drawn
   from.
   """
-  # Not async: the spark tests write the process-wide `:persistent_term` cache
-  # the top bar reads, which no sandbox transaction rolls back.
-  use Vutuv.DataCase, async: false
+  use Vutuv.DataCase, async: true
 
   alias Vutuv.BerlinTime
   alias Vutuv.Fediverse.Follower
@@ -102,7 +100,7 @@ defmodule Vutuv.PeopleHistoryTest do
     end
   end
 
-  describe "spark_geometry/1" do
+  describe "curve_points/3" do
     test "draws one point per day, rising up the box" do
       series = [
         %Snapshot{day: ~D[2026-07-01], members: 100, fediverse_accounts: 0},
@@ -110,76 +108,46 @@ defmodule Vutuv.PeopleHistoryTest do
         %Snapshot{day: ~D[2026-07-31], members: 200, fediverse_accounts: 0}
       ]
 
-      assert %{points: points, days: 30} = PeopleHistory.spark_geometry(series)
-
-      [{x_first, y_first}, {_, y_middle}, {x_last, y_last}] = parse(points)
+      [{x_first, y_first}, {_, y_middle}, {x_last, y_last}] =
+        series |> PeopleHistory.curve_points(600, 140) |> parse()
 
       # The line spans the box from edge to edge, and a rising total is drawn
       # rising: in SVG that means a FALLING y, since y counts down from the top.
       assert x_first == 0.0
-      assert x_last == 100.0
+      assert x_last == 600.0
       assert y_first > y_middle
       assert y_middle > y_last
 
       # It keeps a hair of air at both ends, or the stroke of a peak is cut in
       # half by the edge of the box.
       assert y_last > 0.0
-      assert y_first < 32.0
+      assert y_first < 140.0
     end
 
     test "draws nothing for a series that is not a line" do
-      # One day is no span, and a flat month is a dash at this size — which
-      # reads as a chart that failed to load rather than as a quiet month.
-      assert PeopleHistory.spark_geometry([]) == nil
-      assert PeopleHistory.spark_geometry([%Snapshot{day: ~D[2026-07-01], members: 1}]) == nil
+      # One day is no span, and a month that never moved is a flat lid: the
+      # chart renders nothing rather than a line saying nothing.
+      assert PeopleHistory.curve_points([], 600, 140) == nil
+
+      assert PeopleHistory.curve_points([%Snapshot{day: ~D[2026-07-01], members: 1}], 600, 140) ==
+               nil
 
       flat = [
         %Snapshot{day: ~D[2026-07-01], members: 100, fediverse_accounts: 5},
         %Snapshot{day: ~D[2026-07-31], members: 100, fediverse_accounts: 5}
       ]
 
-      assert PeopleHistory.spark_geometry(flat) == nil
+      assert PeopleHistory.curve_points(flat, 600, 140) == nil
     end
 
-    test "counts both populations, like the figure it sits beside" do
+    test "counts both populations, like the figure it is drawn beside" do
       series = [
         %Snapshot{day: ~D[2026-07-01], members: 100, fediverse_accounts: 0},
         %Snapshot{day: ~D[2026-07-31], members: 100, fediverse_accounts: 40}
       ]
 
       # Only the Fediverse half moved, and the line still has to show it.
-      assert PeopleHistory.spark_geometry(series)
-    end
-  end
-
-  describe "refresh_spark/0" do
-    setup do
-      on_exit(&PeopleHistory.clear_spark/0)
-    end
-
-    test "caches the thumbnail where the top bar can read it without a query" do
-      today = BerlinTime.today()
-      snapshot(Date.add(today, -2), 100, 0)
-      snapshot(Date.add(today, -1), 140, 0)
-      snapshot(today, 200, 0)
-
-      spark = PeopleHistory.refresh_spark()
-
-      assert %{points: _, days: 2} = spark
-      assert PeopleHistory.spark() == spark
-    end
-
-    test "forgets a cached thumbnail once there is no line left to draw" do
-      today = BerlinTime.today()
-      snapshot(Date.add(today, -1), 100, 0)
-      snapshot(today, 200, 0)
-
-      assert PeopleHistory.refresh_spark()
-
-      Repo.delete_all(Snapshot)
-
-      assert PeopleHistory.refresh_spark() == nil
-      assert PeopleHistory.spark() == nil
+      assert PeopleHistory.curve_points(series, 600, 140)
     end
   end
 

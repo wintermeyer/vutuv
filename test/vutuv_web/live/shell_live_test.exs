@@ -3,8 +3,6 @@ defmodule VutuvWeb.ShellLiveTest do
 
   import Phoenix.LiveViewTest
 
-  alias Vutuv.BerlinTime
-  alias Vutuv.PeopleHistory
   alias Vutuv.Sessions
 
   @bell_badge ~s(a[title="Notifications"] span.bg-accent)
@@ -1147,46 +1145,6 @@ defmodule VutuvWeb.ShellLiveTest do
       broadcast_total(0)
 
       assert has_element?(view, "#people-total-slot")
-    end
-  end
-
-  # The month behind the figure, so the bar says which way the number is going
-  # and not only where it stands.
-  describe "the growth thumbnail beside the people total" do
-    setup do
-      today = BerlinTime.today()
-
-      for {day, members} <- [{-2, 100}, {-1, 140}, {0, 200}] do
-        PeopleHistory.record(Date.add(today, day), %{members: members, fediverse_accounts: 0})
-      end
-
-      # The shell reads the cache, never the table: the bar is on every page, so
-      # the line beside the figure has to cost what the figure costs.
-      spark = PeopleHistory.refresh_spark()
-      on_exit(&PeopleHistory.clear_spark/0)
-
-      %{spark: spark}
-    end
-
-    test "draws the line in the pill", %{conn: conn, spark: spark} do
-      {:ok, view, _html} = live_isolated(conn, VutuvWeb.ShellLive, session: %{})
-
-      broadcast_total(60_123)
-
-      assert has_element?(view, ~s|#people-total svg polyline[points="#{spark.points}"]|)
-    end
-
-    test "waits for `lg`, in a class the previous release already ships", %{conn: conn} do
-      # Below `lg` the bar has about 72px to spare and this would spend two
-      # thirds of it on decoration. `hidden` + `lg:inline` rather than
-      # `lg:block`: a tab open across a deploy gets this markup patched into a
-      # document whose stylesheet only carries the classes already in use, and a
-      # rule it does not have cannot hide anything.
-      {:ok, view, _html} = live_isolated(conn, VutuvWeb.ShellLive, session: %{})
-
-      broadcast_total(60_123)
-
-      assert has_element?(view, "#people-total svg.hidden.lg\\:inline")
     end
   end
 end

@@ -105,10 +105,9 @@ defmodule VutuvWeb.CompanyHTML do
   # The line and the wash under it as SVG point lists, plus what the caption
   # needs. `nil` where there is nothing to draw.
   #
-  # The line itself comes from `Vutuv.PeopleHistory.curve_points/3`, which the
-  # top bar's thumbnail draws through as well — one decision about how this
-  # curve is drawn, in the module that owns the rows. What stays here is what
-  # only this chart has: the wash under the line and the two end figures.
+  # The line itself comes from `Vutuv.PeopleHistory.curve_points/3`, in the
+  # module that owns the rows; what stays here is what only this chart has, the
+  # wash under the line and the two end figures.
   #
   # One line, the people total the top bar shows, rather than the two stacked
   # bands the two columns invite: the member half is two orders of magnitude
