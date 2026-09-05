@@ -16,12 +16,18 @@ defmodule Vutuv.FeedPage do
       (the newsfeed, the API). The cursor is `%{at: timestamp, ids: [...]}` —
       the boundary timestamp plus every already-shown item id *at* that
       timestamp, and optionally `since:` — a **lower** bound that turns the walk
-      into a window (the feed calendar's one-day view). A source that honours
-      `at` but forgets `since` does not crash, it silently widens, so any new
-      source has to apply both. Timestamps have second precision, so several items (across
-      all sources) can tie at a page boundary; fetching `<= at` and rejecting
-      the seen ids means ties neither skip items nor repeat them. Treat the
-      cursor as opaque.
+      into a window (the feed calendar's one-day view), and `since_basis:` —
+      which of a source's clocks that window is measured on. `:arrival` asks the
+      two fediverse sources for the moment a row reached *us* rather than the
+      time its origin stamped on it minutes earlier
+      (`Vutuv.Fediverse.window_clock/3`); anything else, its absence included,
+      means the clock the source is ordered by. A source that honours `at` but
+      forgets `since` does not crash, it silently widens, so any new source has
+      to apply both — and one that forgets `since_basis` does not widen the
+      window but *moves* it, which is quieter still. Timestamps have second
+      precision, so several items (across all sources) can tie at a page
+      boundary; fetching `<= at` and rejecting the seen ids means ties neither
+      skip items nor repeat them. Treat the cursor as opaque.
     * `paginate_offset/3` — **offset**, for numbered pages you can jump
       between and link to (`/notifications?page=3`). There is no cursor to
       carry, so every source is fetched from the top and the merged list is
@@ -132,10 +138,13 @@ defmodule Vutuv.FeedPage do
     # at that timestamp along — they are still "already shown".
     carried = if prev && NaiveDateTime.compare(prev.at, at) == :eq, do: prev.ids, else: []
 
-    # A window's lower bound (`:since`, the feed calendar's day pick) belongs to
-    # the whole walk, not to one page, so it is carried rather than recomputed.
-    # Dropped here, "Load more" inside a single day would silently widen to
-    # every earlier day the moment the reader pressed it.
-    %{at: at, ids: carried ++ boundary_ids, since: prev && prev[:since]}
+    # A window (`:since` and the clock it is read on) belongs to the whole walk,
+    # not to one page, so it is carried rather than recomputed. Dropped here,
+    # "Load more" inside a single day would silently widen to every earlier day
+    # the moment the reader pressed it. Taken as one map so the two cannot come
+    # apart: a `since` that arrives without its basis does not widen the window,
+    # it moves it, page by page, with nothing on screen to show for it.
+    %{at: at, ids: carried ++ boundary_ids}
+    |> Map.merge(Map.take(prev || %{}, [:since, :since_basis]))
   end
 end

@@ -448,12 +448,18 @@ words. And **arrivals are counted, not cards**, exactly as the calendar's heatma
 counts them: the timeline folds a thread into one entry, so three can unfold into
 two cards. Collapsing only ever reduces, so the figure never undersells.
 
-`Posts.mark_feed_read/1` writes the marker at two moments, and the third one it
-skips is the design: **opening** the feed, and **revealing** what waited behind
-the pill. Not every arrival while the page is open — the notifications page marks
-its own arrivals read on the spot, but there the event *is* on screen as it
-lands, while these posts are behind a press. So a reader who was told and did not
-look keeps the count when they leave. The write broadcasts a bare `:feed_read`,
+`Posts.mark_feed_read/1` writes the marker whenever posts are actually put in
+front of the reader, and the moment it skips is the design. It writes on
+**opening** the feed, on **revealing** what waited behind the pill, and when a
+whole fresh timeline of the live present replaces the one that pill was standing
+on — a source switch in the band, the way home from a day in the calendar
+(`mark_shown_read/1` in the feed LiveView owns all three, which is why it is
+gated on the pill having held something and on the page being the present: an
+opened calendar day clears the pill too, and those posts have *not* been
+shown). It does **not** write on every arrival while the page is open — the
+notifications page marks its own arrivals read on the spot, but there the event
+*is* on screen as it lands, while these posts are behind a press. So a reader
+who was told and did not look keeps the count when they leave. The write broadcasts a bare `:feed_read`,
 like `:notifications_read`, and every open shell of that member empties its
 badge.
 
@@ -467,9 +473,33 @@ re-reads them (one `Repo.get` against the ten source queries it feeds) and the
 struct clause stays what a fresh mount uses. That is also why the broadcast
 needs no payload.
 
-On /feed itself the badge is never drawn and no arrival recounts it
-(`recount_feed/1` asks `@path`), which also means the page that pays for the
-pill pays for nothing else. The figure stops at **50** and the badge then reads "50+"
+**On /feed the badge counts too**, and it says the same figure the pill does,
+because both are asking whether the reader has been shown those posts: an
+arrival lands behind a press, the marker does not move, so it is waiting there
+exactly as it waits while they read a profile. That is what makes the nav item
+read the same on every page — a reader walking from the feed to a profile and
+back sees one number, not a count that appears when they leave. The badge is
+never drawn at a mount on /feed because the page has just written the marker
+(`initial_count/4` answers zero there without asking the ten sources); the price
+is that an arrival now recounts on /feed as well, which used to be the one page
+that paid nothing.
+
+**The window is read on the arrival clock, not on the origin's.** A post from
+another server carries two times: when it was written there (`published_at`, or
+`announced_at` for a boost) and when it reached us (`received_at`,
+`inserted_at`). The timeline orders by the first — that is the stamp the card
+wears — but the marker is our own wall clock, so the badge's lower bound asks
+the second (`since_basis: :arrival` in the cursor, resolved per source in
+`Vutuv.Fediverse.window_clock/3`). They are not close together: over a copy of
+production, 62% of cached posts arrived more than a minute after their stated
+publication and the median lag was 3m19s, so on the origin's clock a post
+delivered while the reader sat on /feed usually fell *outside* the window — the
+badge stayed at zero while the page's own pill was holding that very post, which
+is precisely the "the counter does not work" report. Boosts are the same shape
+and much tighter (median 2s). The calendar keeps the origin's clock, because
+"what does this day hold" is a question about the stamp.
+
+The figure stops at **50** and the badge then reads "50+"
 (`VutuvWeb.UI.capped_count/2`): measured on a copy of production for the member
 with the most follows (2,687 of them, a year of arrivals), the ten `LIMIT`s are
 the whole cost and the ceiling is nearly free — 7.5 ms at a cap of 9 against

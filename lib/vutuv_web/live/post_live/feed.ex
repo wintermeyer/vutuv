@@ -1527,13 +1527,11 @@ defmodule VutuvWeb.PostLive.Feed do
       for(%{post: %{id: post_id}} <- pending, do: post_id)
     )
 
-    # The same act, for the shell's "Feed" badge: what the pill was holding is
-    # now in front of the reader, so it is no longer waiting for them on a page
-    # they are not on. This is the second of the marker's two writers (the other
-    # is the mount), and the pill is the reason it is not simply every arrival:
-    # until the press, those posts were behind one.
-    Posts.mark_feed_read(socket.assigns.current_user)
-
+    # The shell's "Feed" badge is the other half of the same act, and it is
+    # `mark_shown_read/1`'s — one of the two branches below reaches it through
+    # `replace_timeline/3` and the other calls it itself, so the marker is
+    # written exactly once per press whichever way this ends.
+    #
     # Two ways to finish, and which one it is was decided when the posts arrived.
     #
     # Under the cap the rows are already on the page and the browser has already
@@ -1559,6 +1557,7 @@ defmodule VutuvWeb.PostLive.Feed do
     else
       {:noreply,
        socket
+       |> mark_shown_read()
        |> assign(:pending_posts, [])
        |> assign(:empty?, false)
        |> show_seam()}
@@ -1650,18 +1649,11 @@ defmodule VutuvWeb.PostLive.Feed do
   # is reset rather than seeded, so nothing of the old one is kept.
   defp replace_timeline(socket, entries, page) do
     socket
+    |> mark_shown_read()
     |> put_timeline(entries, page)
     |> stream(:posts, entries, reset: true)
   end
 
-  # Load the timeline for one source tab, replacing whatever is on screen
-  # (`reset: true`). The pending batch is dropped with it rather than
-  # re-filtered: the fresh page is newest-first from the top, so it already
-  # carries everything that was waiting behind the pill.
-  #
-  # It asks for the reader's own page size, like every other load here: the
-  # switch is a page of this feed, and a member who set 50 means 50 whichever
-  # control fetched them.
   # The member's own rules, in both shapes, from one query: `content_filters`
   # is what every row is measured against, `filter_rules` is the list the ⋯
   # menu ticks against and the rail counts.
@@ -1724,6 +1716,41 @@ defmodule VutuvWeb.PostLive.Feed do
   # exists at all: with no rule there is no card, only a quiet line.
   defp filter_rule_count(assigns), do: length(assigns.filter_rules)
 
+  # What the pill was holding is now in front of the reader, so the read marker
+  # moves (`Posts.mark_feed_read/1`) — and with it the shell's "Feed" badge,
+  # which counts against that marker on /feed exactly as it does on every other
+  # page. One owner, because the pill empties by three different routes: the
+  # press itself, a source switch in the band, and the way home from a day in the
+  # calendar. The last two replace the whole timeline with a fresh page of the
+  # present, which is newest-first from the top and therefore already carries
+  # what was waiting; without this the badge would go on promising posts that are
+  # on the screen.
+  #
+  # Two gates, and both separate showing from discarding. Nothing to mark when
+  # the pill was empty — a band switch with nothing waiting has shown the reader
+  # nothing new — and nothing shown while the timeline is drawing another day:
+  # opening one clears the pill too, but those posts belong to today, so they
+  # stay unread and the badge is the only thing left saying so.
+  #
+  # It deliberately does **not** do the bell's half (`Activity.mark_posts_seen/2`,
+  # which the press handler keeps): marking a notification seen is the reader
+  # choosing to look at exactly these posts, and a band switch is not that.
+  defp mark_shown_read(socket) do
+    if pending_count(socket.assigns) > 0 and at_now?(socket.assigns) do
+      Posts.mark_feed_read(socket.assigns.current_user)
+    end
+
+    socket
+  end
+
+  # Load the timeline for one source tab, replacing whatever is on screen
+  # (`reset: true`). The pending batch is dropped with it rather than
+  # re-filtered: the fresh page is newest-first from the top, so it already
+  # carries everything that was waiting behind the pill.
+  #
+  # It asks for the reader's own page size, like every other load here: the
+  # switch is a page of this feed, and a member who set 50 means 50 whichever
+  # control fetched them.
   defp load_source_filter(socket, filter) do
     user = socket.assigns.current_user
     page = Posts.feed_page(user, limit: page_size(socket), filter: filter)

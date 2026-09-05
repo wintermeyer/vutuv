@@ -3278,10 +3278,19 @@ defmodule Vutuv.Posts do
 
     # `>= since` is what the sources apply, and the marker is a second the member
     # has already seen, so the window opens the one after it.
+    #
+    # `since_basis: :arrival` is what makes that marker mean the same thing to
+    # every source. The marker is our own wall clock, and a local post is stamped
+    # by the same clock — but a post from another server carries the time it was
+    # written *there*, minutes before it reached us, so on that clock it falls
+    # outside the window and the badge stays at zero while the feed's own pill is
+    # holding it. `Vutuv.Fediverse.window_clock/3` owns that choice and the
+    # measurement behind it.
     cursor = %{
       at: NaiveDateTime.utc_now(:second),
       ids: [],
-      since: NaiveDateTime.add(viewer.feed_read_at, 1, :second)
+      since: NaiveDateTime.add(viewer.feed_read_at, 1, :second),
+      since_basis: :arrival
     }
 
     # Summed with no dedup, because the sources are disjoint **in the query**:
@@ -3294,8 +3303,7 @@ defmodule Vutuv.Posts do
     |> feed_sources(filter, :marks)
     |> Vutuv.FeedPage.fetch_sources(cap, cursor)
     |> Enum.concat()
-    |> Enum.reject(&own_feed_act?(&1, viewer_id))
-    |> length()
+    |> Enum.count(&(not own_feed_act?(&1, viewer_id)))
     |> min(cap)
   end
 
@@ -3325,12 +3333,16 @@ defmodule Vutuv.Posts do
   Move `user`'s feed read marker to now and tell their open shells, whose badge
   drops to zero.
 
-  Called when the feed is opened and whenever the reader reveals the arrivals
-  that waited behind the "new posts" pill — the two moments posts are actually
-  put in front of them. Deliberately **not** on every arrival while the feed is
+  Called when the feed is opened, whenever the reader reveals the arrivals that
+  waited behind the "new posts" pill, and whenever a fresh timeline of the live
+  present replaces the one holding that pill (a source switch in the band, the
+  way home from a day in the calendar) — the moments posts are actually put in
+  front of them. Deliberately **not** on every arrival while the feed is
   open, the way the notifications page marks its own: those posts are behind a
   press, not on screen, so the pill is what speaks for them — and it is still
-  speaking when the reader leaves the page without pressing it.
+  speaking when the reader leaves the page without pressing it. That is also
+  what lets the shell's badge count on /feed like anywhere else: while the
+  marker stands, the nav item and the pill are answering the same question.
 
   The wall clock rather than the newest entry's stamp: an entry landing in the
   same second stays unread, which `Vutuv.Activity.mark_notifications_read/1` has

@@ -13,8 +13,10 @@ defmodule VutuvWeb.ShellLive do
   (conversations holding unread messages), and the Feed nav item via
   `Vutuv.Posts.unread_feed_count/1` (posts newer than the member's feed read
   marker, which the feed writes when it is opened and when the reader reveals
-  what waited behind its pill). The feed badge is drawn only **away** from
-  /feed, where the timeline's own "new posts" pill already says the same thing.
+  what waited behind its pill). The feed badge counts the same figure on every
+  page, /feed included: what is waiting is what has not been put in front of the
+  reader yet, so the badge stands beside the timeline's own "new posts" pill and
+  the press that unfolds the pill empties both.
   """
   use Phoenix.LiveView
 
@@ -270,8 +272,9 @@ defmodule VutuvWeb.ShellLive do
     # How many posts reached the feed while the member was elsewhere, and the
     # ceiling its query counts to (`Vutuv.Posts.unread_feed_count/1`), which the
     # badge needs in order to draw "50+" instead of a bare floor. Zero on the
-    # dead render like the other two, and zero for good on /feed itself, where
-    # the timeline's own pill owns this news (`recount_feed/1` asks `@path`).
+    # dead render like the other two, and zero at a mount on /feed, where the
+    # page has just written the marker itself — everything that lands after that
+    # is counted there like anywhere else (`recount_feed/1`).
     |> assign(:feed_count, 0)
     |> assign(:feed_cap, Posts.feed_unread_cap())
     # The posts waiting on a clip (issue #1911): none until the socket connects
@@ -354,10 +357,11 @@ defmodule VutuvWeb.ShellLive do
         initial_count(path, "/notifications", user, &Activity.unread_notification_count/1)
       )
       # What reached the feed since the member last read it — the struct clause
-      # again, for the same reason. `initial_count/4` returns zero on the feed
-      # itself and `recount_feed/1` keeps it there: ON /feed the badge is never
-      # drawn and no arrival recounts it, because the page's own "new posts"
-      # pill is already saying so, right beside the timeline it unfolds into.
+      # again, for the same reason. `initial_count/4` answers zero on /feed, and
+      # there that is the true figure rather than a rule: the page's own mount
+      # has just written the marker (`Posts.mark_feed_read/1`), so the query
+      # would read ten sources to arrive at zero. Every arrival after it counts
+      # on that page like on any other (`recount_feed/1`).
       |> assign(:feed_count, initial_count(path, "/feed", user, &Posts.unread_feed_count/1))
     else
       socket
@@ -680,16 +684,19 @@ defmodule VutuvWeb.ShellLive do
   # both the marker and the filters the count reads off it move in the member's
   # other tabs (see the id clause of `unread_feed_count/1`).
   #
-  # No query at all on /feed and none for the anonymous shell: the first has the
-  # timeline's own pill, the second has no feed. It is deliberately NOT pushed to
-  # the browser tab's badge (`push_badge/1`) — that number is the count of things
-  # addressed to this member personally, and a busy feed would drown it.
-  defp recount_feed(%{assigns: %{user_id: user_id, path: path}} = socket)
-       when is_binary(user_id) do
-    if on_route?(path, "/feed"),
-      do: socket,
-      else: assign(socket, :feed_count, Posts.unread_feed_count(user_id))
-  end
+  # On /feed as well, and that is what the marker buys: a post behind the pill has
+  # not been put in front of the reader, so it is waiting there exactly as it
+  # waits while they read a profile, and the nav item reports the same figure on
+  # every page. The press that unfolds the pill writes the marker
+  # (`Posts.mark_feed_read/1`), so one act empties the pill and the badge
+  # together; the mount does the same, which is why `initial_count/4` still
+  # answers zero here without asking.
+  #
+  # No query for the anonymous shell: it has no feed. It is deliberately NOT
+  # pushed to the browser tab's badge (`push_badge/1`) — that number is the count
+  # of things addressed to this member personally, and a busy feed would drown it.
+  defp recount_feed(%{assigns: %{user_id: user_id}} = socket) when is_binary(user_id),
+    do: assign(socket, :feed_count, Posts.unread_feed_count(user_id))
 
   defp recount_feed(socket), do: socket
 

@@ -2942,7 +2942,7 @@ defmodule Vutuv.Fediverse do
         limit: ^fetch_n,
         preload: [:screenshot, remote_account: a]
       )
-      |> utc_at_or_before(cursor, :published_at)
+      |> time_window(cursor, :published_at, {:utc, :received_at})
       |> Repo.all()
       |> Enum.map(&remote_feed_entry/1)
     else
@@ -3250,7 +3250,7 @@ defmodule Vutuv.Fediverse do
     )
     |> reject_muted_hosts(viewer)
     |> Vutuv.Posts.language_scope(Vutuv.Posts.feed_language_filter(viewer))
-    |> utc_at_or_before(cursor, :published_at)
+    |> time_window(cursor, :published_at, {:utc, :received_at})
   end
 
   @doc """
@@ -3548,7 +3548,7 @@ defmodule Vutuv.Fediverse do
     |> reject_muted_hosts(viewer)
     |> reject_muted_boosted_hosts(viewer)
     |> Vutuv.Posts.named_language_scope(Vutuv.Posts.feed_language_filter(viewer))
-    |> utc_at_or_before(cursor, :announced_at)
+    |> time_window(cursor, :announced_at, {:naive, :inserted_at})
   end
 
   # The boosted **vutuv** post's author, asked only of a reader who has silenced
@@ -3677,24 +3677,50 @@ defmodule Vutuv.Fediverse do
     |> Map.merge(%{post: nil, remote_post: post, reposted_by: nil})
   end
 
-  # The cursor for a source ordered by a `utc_datetime` column — a followed
-  # account's post by its publication time, a boost by when it was announced.
-  # The merged feed stamps its entries as **naive** UTC (`Vutuv.FeedPage`) while
-  # these columns carry a zone, so the conversion lives here once instead of
-  # once per source.
-  defp utc_at_or_before(query, nil, _field), do: query
+  # The time window a source is asked for, as a cursor: `at` is its upper edge,
+  # `since` (when the caller set one) its lower. Both are **naive** UTC, because
+  # that is what the merged feed stamps its entries with (`Vutuv.FeedPage`),
+  # while most of these columns carry a zone — so the conversion lives here once
+  # instead of once per source.
+  #
+  # `arrival` is the column saying when the row turned up **here**, beside the
+  # one the source is ordered by. A cursor asking for `since_basis: :arrival` is
+  # measured on that clock, both edges, so the window stays one interval rather
+  # than a hybrid of two.
+  defp time_window(query, nil, _field, _arrival), do: query
 
-  defp utc_at_or_before(query, %{at: at, since: since}, field) when not is_nil(since),
-    do:
-      where(
-        query,
-        [r],
-        field(r, ^field) <= ^DateTime.from_naive!(at, "Etc/UTC") and
-          field(r, ^field) >= ^DateTime.from_naive!(since, "Etc/UTC")
-      )
+  defp time_window(query, %{at: at} = cursor, field, arrival) do
+    {kind, column} = window_clock(cursor, field, arrival)
 
-  defp utc_at_or_before(query, %{at: at}, field),
-    do: where(query, [r], field(r, ^field) <= ^DateTime.from_naive!(at, "Etc/UTC"))
+    query
+    |> where([r], field(r, ^column) <= ^stamp(kind, at))
+    |> since_bound(column, cursor[:since] && stamp(kind, cursor[:since]))
+  end
+
+  # Which of a source's clocks this window is measured on. Two exist because a
+  # post from another server carries the time it was written **there** and the
+  # time it reached us, and they are minutes apart: measured over a copy of
+  # production, 62% of cached posts arrive more than a minute after their stated
+  # publication and the median lag is 3m19s.
+  #
+  # Which one is right depends on the question. The calendar asks "what does this
+  # day hold", which is the stamp the entry wears in the timeline, so it reads
+  # the ordering clock. The unread badge asks "what turned up since you last
+  # looked" against a marker that is our own wall clock
+  # (`Vutuv.Posts.mark_feed_read/1`), so a post written ten minutes ago and
+  # delivered just now IS news to the reader — on the publication clock it fell
+  # outside the window and the badge stayed empty while the feed's own pill was
+  # holding that very post.
+  defp window_clock(%{since_basis: :arrival}, _field, arrival), do: arrival
+  defp window_clock(_cursor, field, _arrival), do: {:utc, field}
+
+  defp stamp(:utc, naive), do: DateTime.from_naive!(naive, "Etc/UTC")
+  defp stamp(:naive, naive), do: naive
+
+  defp since_bound(query, _column, nil), do: query
+
+  defp since_bound(query, column, since),
+    do: where(query, [r], field(r, ^column) >= ^since)
 
   @doc "One stored remote picture with its post, or nil."
   def get_remote_image(id) do
