@@ -3025,45 +3025,48 @@ html.lightbox-open { overflow: hidden; }
   user-select: none;
 }
 
-/* A per-row shortcut that only shows while the pointer is on the row, so a
-   list of twenty rows is not also a list of twenty of these. The filter band's
-   "Only" is the one user: it sits right after the name, where the reader is
-   already looking, instead of at the far edge past the count.
+/* A shortcut that only shows while the pointer is on the thing it belongs to,
+   so a list of twenty rows is not also a list of twenty of these. Two users,
+   which is why the pair is named after the gesture and not after a row: the
+   filter band's "Only", right after the name where the reader is already
+   looking rather than at the far edge past the count, and the magnifier in a
+   page capture's corner (`VutuvWeb.UI.zoom_corner/1`), where a feed carrying a
+   capture every few cards would otherwise stand a chip on all of them.
 
    The whole hiding lives inside `@media (hover: hover)`, and that is the load
-   -bearing part rather than a nicety: a phone reaches this same card through
-   the filter sheet, has no hover to reveal anything with, and would be left
-   with a control it can see no trace of. So the resting state is VISIBLE and
-   the desktop rule takes it away — never the other way round, which is the
-   shape that strands touch.
+   -bearing part rather than a nicety: a phone reaches the same filter card
+   through the feed's sheet and the same capture in its feed, has no hover to
+   reveal anything with, and would be left with a control it can see no trace
+   of. So the resting state is VISIBLE and the desktop rule takes it away —
+   never the other way round, which is the shape that strands touch.
 
    It hides with `opacity`, not `display`: the row must not reflow under the
    cursor when the word appears, and the count beside it must not jump. That
    also means the button is still hit-testable while invisible, hence the
    `pointer-events`, and still in the accessibility tree, which is what we want
    — a screen reader should hear the shortcut without having to hover for it.
-   Keyboard reaches it two ways: focus anywhere in the row reveals it, and the
+   Keyboard reaches it two ways: focus anywhere in the host reveals it, and the
    button's own :focus-visible does as well, for the tab that lands on it. */
-.row-reveal-host .row-reveal {
+.hover-reveal-host .hover-reveal {
   transition: opacity 120ms ease;
 }
 
 @media (hover: hover) {
-  .row-reveal-host .row-reveal {
+  .hover-reveal-host .hover-reveal {
     opacity: 0;
     pointer-events: none;
   }
 
-  .row-reveal-host:hover .row-reveal,
-  .row-reveal-host:focus-within .row-reveal,
-  .row-reveal-host .row-reveal:focus-visible {
+  .hover-reveal-host:hover .hover-reveal,
+  .hover-reveal-host:focus-within .hover-reveal,
+  .hover-reveal-host .hover-reveal:focus-visible {
     opacity: 1;
     pointer-events: auto;
   }
 }
 
 @media (prefers-reduced-motion: reduce) {
-  .row-reveal-host .row-reveal {
+  .hover-reveal-host .hover-reveal {
     transition: none;
   }
 }

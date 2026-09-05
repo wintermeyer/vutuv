@@ -9,14 +9,14 @@ defmodule VutuvWeb.FeedFilterLabelCssTest do
   # never removed — a word that blinks out while the date underneath is still
   # fading is two movements where the reader should see one.
   #
-  # A static source check in the spirit of `row_reveal_css_test` and
+  # A static source check in the spirit of `hover_reveal_css_test` and
   # `rail_drag_css_test`: it cannot measure a browser, but it holds the shape.
 
   @css Path.expand("../../assets/css/components.css", __DIR__)
   @feed Path.expand("../../lib/vutuv_web/live/post_live/feed.ex", __DIR__)
 
   # The whole block, from its first rule to the next commented one — the same
-  # slice `row_reveal_css_test` takes, and for its reason: ending at a neighbour
+  # slice `hover_reveal_css_test` takes, and for its reason: ending at a neighbour
   # named by class puts whatever gets written between the two inside it.
   defp block do
     [_, rest] = String.split(File.read!(@css), "\n.feed-filter {", parts: 2)

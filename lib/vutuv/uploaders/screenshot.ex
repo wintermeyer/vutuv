@@ -193,6 +193,22 @@ defmodule Vutuv.Screenshot do
   end
 
   @doc """
+  What the magnifier opens (`VutuvWeb.UI.zoom_corner/1`): the thumb, for a
+  viewer in data-saving mode as well.
+
+  `Vutuv.Posts.PostImage.lightbox_url/1` steps a *photo* down for such a
+  viewer, and the difference is that a photo has a step to take — its 2560 px
+  version exists for a screen they most likely do not hold. A capture has
+  none. Below the thumb there is only the 400×264 lite the card is already
+  showing, so opening that would paint the same bytes full screen and hand
+  back not one extra pixel: the tap that asked for detail would answer with
+  blur. The thumb is 13 kB against the lite's 3 kB (`Vutuv.Uploads.Spec`), and
+  it is spent only on the member who reached for the magnifier.
+  """
+  def lightbox_url({_screenshot, _scope} = file_and_scope),
+    do: url(file_and_scope, :thumb)
+
+  @doc """
   Every subject id whose quarantine directory still holds files. The entry
   point of the stranded-quarantine repair (issue #1443, see
   `Vutuv.Moderation.ImageSubjects.settle_stranded_quarantine/0`): reading the

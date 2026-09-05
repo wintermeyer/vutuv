@@ -1,12 +1,14 @@
-defmodule VutuvWeb.RowRevealCssTest do
+defmodule VutuvWeb.HoverRevealCssTest do
   use ExUnit.Case, async: true
 
-  # The filter band's "Only" is a per-row shortcut that shows while the pointer
-  # is on the row. Written the obvious way — a resting `opacity: 0` with a
-  # `:hover` rule to undo it — it is invisible forever on a phone, which reaches
-  # the very same card through the feed's filter sheet and has no hover to
-  # reveal anything with. So the resting state has to be VISIBLE and the hiding
-  # has to sit inside `@media (hover: hover)`, never the other way round.
+  # Two controls show only while the pointer is on the thing they belong to:
+  # the filter band's per-row "Only", and the magnifier in a page capture's
+  # corner. Written the obvious way — a resting `opacity: 0` with a `:hover`
+  # rule to undo it — both are invisible forever on a phone, which reaches the
+  # same filter card through the feed's sheet and the same capture in its feed,
+  # and has no hover to reveal anything with. So the resting state has to be
+  # VISIBLE and the hiding has to sit inside `@media (hover: hover)`, never the
+  # other way round.
   #
   # That inversion is easy to "tidy up" back into the broken shape, because the
   # broken shape is shorter and looks identical on the machine it is written on.
@@ -19,13 +21,13 @@ defmodule VutuvWeb.RowRevealCssTest do
 
   defp block do
     css = File.read!(@css)
-    [_, rest] = String.split(css, ".row-reveal-host .row-reveal {", parts: 2)
+    [_, rest] = String.split(css, ".hover-reveal-host .hover-reveal {", parts: 2)
     # Ends at the next commented block, not at a neighbour named by class: the
     # slice used to end at `.skeleton`, so the next block written between the
     # two was read as part of this one and failed a check about a rule it does
     # not contain (the feed calendar's `.feed-cal-slot`).
     [body, _] = String.split(rest, "\n/*", parts: 2)
-    ".row-reveal-host .row-reveal {" <> body
+    ".hover-reveal-host .hover-reveal {" <> body
   end
 
   test "the resting state is visible and only a hover-capable device hides it" do

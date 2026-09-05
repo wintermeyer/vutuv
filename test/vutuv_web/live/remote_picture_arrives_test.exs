@@ -135,7 +135,11 @@ defmodule VutuvWeb.RemotePictureArrivesTest do
 
     # The gate still has it, so what appears is the mosaic — which is the whole
     # point: there was nothing to show before, and this is something.
-    assert render(view) =~ "data-screenshot-pixelated"
+    html = render(view)
+    assert html =~ "data-screenshot-pixelated"
+    # And no magnifier on it: 64 cells of averaged colour is not a picture
+    # anybody wants larger (`VutuvWeb.UI.zoom_corner/1`).
+    refute html =~ "data-lightbox-photo"
     assert Repo.get_by!(PostScreenshot, remote_post_id: post.id).moderation == "pending"
   end
 

@@ -5819,46 +5819,71 @@ defmodule VutuvWeb.PostComponents do
   end
 
   # The link screenshot image, shared by the preview and full layouts — both
-  # float it beside the body. A decorative duplicate of the body's autolinked
-  # URL — `aria-hidden` + `tabindex=-1` so assistive tech and the tab order keep
-  # the one link in the prose — opening the page in a new tab. `class` positions
-  # it and sets the width.
+  # float it beside the body. The picture is a decorative duplicate of the
+  # body's autolinked URL — `aria-hidden` + `tabindex=-1` so assistive tech and
+  # the tab order keep the one link in the prose — opening the page in a new
+  # tab. `class` positions it and sets the width.
+  #
+  # A capture is a photograph of a web page drawn at a third of the column, so
+  # the address bar and the headline are all it can carry; `<.zoom_corner>`
+  # opens the picture on the lightbox's dark stage, where the 800px thumb the
+  # card scales down is legible. The tap on the picture itself stays the trip
+  # to the page, so the magnifier is a control of its own and sits OUTSIDE the
+  # anchor — a focusable control inside an `aria-hidden` subtree is a tab stop
+  # no screen reader can announce. A pixelated stand-in gets none: 64 cells of
+  # averaged colour is not a picture anybody wants larger. It keeps the gallery
+  # around it all the same, since the alternative is a second copy of the
+  # anchor for a state that lasts as long as one AI scan.
+  #
+  # The overlay carries no caption: `Vutuv.BrowserFrame` composites the address
+  # into the capture's own chrome bar, so a line under it would be a truncated
+  # copy of text drawn inside it — and building that line cost two `URI.parse`
+  # per card on every render, for a string only an opened overlay would read.
   attr(:screenshot, :any, required: true)
   attr(:pixelated_url, :any, default: nil, doc: "set while the AI scan holds the capture")
   attr(:class, :string, default: nil)
 
   defp link_screenshot_image(assigns) do
     ~H"""
-    <.link
-      href={@screenshot.url}
-      target="_blank"
-      rel="noopener"
-      aria-hidden="true"
-      tabindex="-1"
+    <.lightbox_gallery
       data-link-screenshot
-      class={@class}
+      class={["hover-reveal-host relative", @class]}
     >
-      <span :if={@pixelated_url} class="relative block" data-screenshot-pixelated>
-        <img
-          src={@pixelated_url}
+      <.link
+        href={@screenshot.url}
+        target="_blank"
+        rel="noopener"
+        aria-hidden="true"
+        tabindex="-1"
+        class="block"
+      >
+        <span :if={@pixelated_url} class="relative block" data-screenshot-pixelated>
+          <img
+            src={@pixelated_url}
+            width="400"
+            height="264"
+            loading="lazy"
+            alt=""
+            class="aspect-[400/264] w-full rounded-lg object-cover ring-1 ring-slate-200 dark:ring-slate-800"
+          />
+          <.checking_badge />
+        </span>
+        <.picture
+          :if={!@pixelated_url}
+          picture={Vutuv.Screenshot.picture({@screenshot.screenshot, @screenshot})}
           width="400"
           height="264"
           loading="lazy"
           alt=""
           class="aspect-[400/264] w-full rounded-lg object-cover ring-1 ring-slate-200 dark:ring-slate-800"
         />
-        <.checking_badge />
-      </span>
-      <.picture
+      </.link>
+      <.zoom_corner
         :if={!@pixelated_url}
-        picture={Vutuv.Screenshot.picture({@screenshot.screenshot, @screenshot})}
-        width="400"
-        height="264"
-        loading="lazy"
-        alt=""
-        class="aspect-[400/264] w-full rounded-lg object-cover ring-1 ring-slate-200 dark:ring-slate-800"
+        label={gettext("Show this screenshot larger")}
+        src={Vutuv.Screenshot.lightbox_url({@screenshot.screenshot, @screenshot})}
       />
-    </.link>
+    </.lightbox_gallery>
     """
   end
 
