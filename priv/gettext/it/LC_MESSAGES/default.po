@@ -1002,46 +1002,46 @@ msgstr "+39 06 12345678"
 msgid "http://www.example.com"
 msgstr "http://www.esempio.com"
 
-#: lib/vutuv_web/views/error_html.ex:73
+#: lib/vutuv_web/views/error_html.ex:71
 #, elixir-autogen
 msgid "Page not found"
 msgstr "Pagina non trovata"
 
-#: lib/vutuv_web/views/error_html.ex:191
+#: lib/vutuv_web/views/error_html.ex:194
 #, elixir-autogen
 msgid "This page does not exist"
 msgstr "Questa pagina non esiste"
 
-#: lib/vutuv_web/views/error_html.ex:193
+#: lib/vutuv_web/views/error_html.ex:196
 #, elixir-autogen
 msgid "Mea culpa: we once sent this exact broken link in a newsletter. We are sorry!"
 msgstr ""
 "Mea culpa: questo link errato lo abbiamo inviato noi in una newsletter. Ci "
 "dispiace."
 
-#: lib/vutuv_web/views/error_html.ex:198
+#: lib/vutuv_web/views/error_html.ex:201
 #, elixir-autogen
 msgid "The word"
 msgstr "La parola"
 
-#: lib/vutuv_web/views/error_html.ex:199
+#: lib/vutuv_web/views/error_html.ex:202
 #, elixir-autogen
 msgid "in this address is only a placeholder. Replace it with the actual username of the person whose profile you want to visit."
 msgstr ""
 "in questo indirizzo è solo un segnaposto. Lo sostituisca con il nome utente "
 "della persona di cui vuole vedere il profilo."
 
-#: lib/vutuv_web/views/error_html.ex:211
+#: lib/vutuv_web/views/error_html.ex:214
 #, elixir-autogen
 msgid "For example, this profile really exists:"
 msgstr "Ad esempio, questo profilo esiste davvero:"
 
-#: lib/vutuv_web/views/error_html.ex:215
+#: lib/vutuv_web/views/error_html.ex:218
 #, elixir-autogen
 msgid "Do not know the username? Try the"
 msgstr "Non conosce il nome utente? Provi la"
 
-#: lib/vutuv_web/views/error_html.ex:216
+#: lib/vutuv_web/views/error_html.ex:219
 #, elixir-autogen
 msgid "search page"
 msgstr "pagina di ricerca"
@@ -1052,7 +1052,7 @@ msgstr ""
 "Ci scusi, qualcosa è andato storto. Se pensa che sia un errore del "
 "programma, %{link_open}ce lo segnali."
 
-#: lib/vutuv_web/views/error_html.ex:80
+#: lib/vutuv_web/views/error_html.ex:78
 #, elixir-autogen
 msgid "You are not allowed to view this page."
 msgstr "Non ha i permessi per vedere questa pagina."
@@ -1073,22 +1073,22 @@ msgstr "Informazioni generali"
 msgid "Verify"
 msgstr "Verifica"
 
-#: lib/vutuv/notifications/emailer.ex:282
+#: lib/vutuv/notifications/emailer.ex:281
 #, elixir-autogen
 msgid "Confirm your account deletion"
 msgstr "Confermi l'eliminazione del Suo account"
 
-#: lib/vutuv/notifications/emailer.ex:276
+#: lib/vutuv/notifications/emailer.ex:275
 #, elixir-autogen
 msgid "Confirm your email"
 msgstr "Confermi il Suo indirizzo e-mail"
 
-#: lib/vutuv/notifications/emailer.ex:264
+#: lib/vutuv/notifications/emailer.ex:263
 #, elixir-autogen
 msgid "Confirm your vutuv account"
 msgstr "Confermi il Suo account vutuv"
 
-#: lib/vutuv/notifications/emailer.ex:270
+#: lib/vutuv/notifications/emailer.ex:269
 #, elixir-autogen
 msgid "Login to vutuv"
 msgstr "Accedi a vutuv"
@@ -1560,7 +1560,7 @@ msgstr "Vedi tag correlati"
 msgid "tag name"
 msgstr "nome del tag"
 
-#: lib/vutuv/notifications/emailer.ex:322
+#: lib/vutuv/notifications/emailer.ex:321
 #, elixir-autogen
 msgid "vutuv Account verified"
 msgstr "Account vutuv verificato"
@@ -1611,12 +1611,12 @@ msgstr "Pannello di amministrazione"
 msgid "Alerts"
 msgstr "Avvisi"
 
-#: lib/vutuv_web/views/error_html.ex:64
-#: lib/vutuv_web/views/error_html.ex:115
-#: lib/vutuv_web/views/error_html.ex:135
-#: lib/vutuv_web/views/error_html.ex:172
-#: lib/vutuv_web/views/error_html.ex:219
-#: lib/vutuv_web/views/error_html.ex:302
+#: lib/vutuv_web/views/error_html.ex:62
+#: lib/vutuv_web/views/error_html.ex:118
+#: lib/vutuv_web/views/error_html.ex:138
+#: lib/vutuv_web/views/error_html.ex:175
+#: lib/vutuv_web/views/error_html.ex:222
+#: lib/vutuv_web/views/error_html.ex:314
 #, elixir-autogen, elixir-format
 msgid "Back to the start page"
 msgstr "Torna alla pagina iniziale"
@@ -3579,42 +3579,42 @@ msgstr ""
 msgid "yes"
 msgstr "sì"
 
-#: lib/vutuv/notifications/emailer.ex:1004
+#: lib/vutuv/notifications/emailer.ex:1003
 #, elixir-autogen, elixir-format
 msgid "A warning for your vutuv account"
 msgstr "Un avvertimento per il Suo account vutuv"
 
-#: lib/vutuv/notifications/emailer.ex:1088
+#: lib/vutuv/notifications/emailer.ex:1087
 #, elixir-autogen, elixir-format
 msgid "Moderation: %{count} cases are waiting"
 msgstr "Moderazione: %{count} casi in attesa"
 
-#: lib/vutuv/notifications/emailer.ex:1066
+#: lib/vutuv/notifications/emailer.ex:1065
 #, elixir-autogen, elixir-format
 msgid "Moderation: a profile was reported"
 msgstr "Moderazione: un profilo è stato segnalato"
 
-#: lib/vutuv/notifications/emailer.ex:978
+#: lib/vutuv/notifications/emailer.ex:977
 #, elixir-autogen, elixir-format
 msgid "The content you reported was revised"
 msgstr "Il contenuto che ha segnalato è stato corretto"
 
-#: lib/vutuv/notifications/emailer.ex:971
+#: lib/vutuv/notifications/emailer.ex:970
 #, elixir-autogen, elixir-format
 msgid "Your content on vutuv is under review"
 msgstr "Un Suo contenuto su vutuv è in esame"
 
-#: lib/vutuv/notifications/emailer.ex:964
+#: lib/vutuv/notifications/emailer.ex:963
 #, elixir-autogen, elixir-format
 msgid "Your content on vutuv was reported and is hidden"
 msgstr "Un Suo contenuto su vutuv è stato segnalato ed è nascosto"
 
-#: lib/vutuv/notifications/emailer.ex:1018
+#: lib/vutuv/notifications/emailer.ex:1017
 #, elixir-autogen, elixir-format
 msgid "Your vutuv account has been deactivated"
 msgstr "Il Suo account vutuv è stato disattivato"
 
-#: lib/vutuv/notifications/emailer.ex:1011
+#: lib/vutuv/notifications/emailer.ex:1010
 #, elixir-autogen, elixir-format
 msgid "Your vutuv account is suspended"
 msgstr "Il Suo account vutuv è sospeso"
@@ -4718,12 +4718,12 @@ msgstr "Trova membri"
 msgid "Follows"
 msgstr "Segue"
 
-#: lib/vutuv_web/views/error_html.ex:168
+#: lib/vutuv_web/views/error_html.ex:171
 #, elixir-autogen, elixir-format
 msgid "If you do not run this instance yourself, please contact the operator."
 msgstr "Se non gestisce Lei questa installazione, contatti chi la gestisce."
 
-#: lib/vutuv_web/views/error_html.ex:169
+#: lib/vutuv_web/views/error_html.ex:172
 #, elixir-autogen, elixir-format
 msgid "Legal notice"
 msgstr "Note legali"
@@ -4738,7 +4738,7 @@ msgstr "Ancora nessun follower."
 msgid "Not following anyone yet."
 msgstr "Non segue ancora nessuno."
 
-#: lib/vutuv_web/views/error_html.ex:160
+#: lib/vutuv_web/views/error_html.ex:163
 #, elixir-autogen, elixir-format
 msgid "This area is reserved for administrators."
 msgstr "Quest'area è riservata agli amministratori."
@@ -5626,7 +5626,7 @@ msgstr "Navigazione a piè di pagina"
 msgid "View post"
 msgstr "Vedi il post"
 
-#: lib/vutuv/notifications/emailer.ex:314
+#: lib/vutuv/notifications/emailer.ex:313
 #, elixir-autogen, elixir-format
 msgid "Someone tried to register with your email address"
 msgstr "Qualcuno ha provato a registrarsi con il Suo indirizzo e-mail"
@@ -5818,12 +5818,12 @@ msgstr "ad esempio Dott. o Prof."
 msgid "e.g. Jr. or PhD"
 msgstr "ad esempio Jr. o PhD"
 
-#: lib/vutuv/notifications/emailer.ex:416
+#: lib/vutuv/notifications/emailer.ex:415
 #, elixir-autogen, elixir-format
 msgid "@%{slug} endorsed you on vutuv"
 msgstr "@%{slug} L'ha confermata su vutuv"
 
-#: lib/vutuv/notifications/emailer.ex:402
+#: lib/vutuv/notifications/emailer.ex:401
 #, elixir-autogen, elixir-format
 msgid "@%{slug} started following you on vutuv"
 msgstr "@%{slug} ha iniziato a seguirla su vutuv"
@@ -6068,7 +6068,7 @@ msgstr[1] "%{count} minuti fa"
 msgid "All other devices have been logged out."
 msgstr "Tutti gli altri dispositivi sono stati disconnessi."
 
-#: lib/vutuv/notifications/emailer.ex:718
+#: lib/vutuv/notifications/emailer.ex:717
 #, elixir-autogen, elixir-format
 msgid "Another session was already active on your account."
 msgstr "Sul Suo account era già attiva un'altra sessione."
@@ -6093,7 +6093,7 @@ msgstr "Disconnettere ogni dispositivo tranne questo?"
 msgid "Log this device out of your account?"
 msgstr "Disconnettere questo dispositivo dal Suo account?"
 
-#: lib/vutuv/notifications/emailer.ex:692
+#: lib/vutuv/notifications/emailer.ex:691
 #, elixir-autogen, elixir-format
 msgid "New sign-in to your vutuv account"
 msgstr "Nuovo accesso al Suo account vutuv"
@@ -6108,7 +6108,7 @@ msgstr "Dispositivi connessi"
 msgid "That device has been logged out."
 msgstr "Quel dispositivo è stato disconnesso."
 
-#: lib/vutuv/notifications/emailer.ex:721
+#: lib/vutuv/notifications/emailer.ex:720
 #, elixir-autogen, elixir-format
 msgid "The location looks different from where you usually sign in."
 msgstr "La posizione è diversa da quella da cui accede di solito."
@@ -6118,7 +6118,7 @@ msgstr "La posizione è diversa da quella da cui accede di solito."
 msgid "This device"
 msgstr "Questo dispositivo"
 
-#: lib/vutuv/notifications/emailer.ex:715
+#: lib/vutuv/notifications/emailer.ex:714
 #, elixir-autogen, elixir-format
 msgid "This is the first sign-in we have seen from this device or browser."
 msgstr "È il primo accesso che vediamo da questo dispositivo o browser."
@@ -8811,7 +8811,7 @@ msgstr ""
 msgid "That file is too large. Please upload a ZIP of at most 50 MB."
 msgstr "Il file è troppo grande. Carichi uno ZIP di al massimo 50 MB."
 
-#: lib/vutuv_web/views/error_html.ex:148
+#: lib/vutuv_web/views/error_html.ex:151
 #, elixir-autogen, elixir-format
 msgid "The file you sent is too large."
 msgstr "Il file che ha inviato è troppo grande."
@@ -8885,7 +8885,7 @@ msgstr ""
 "Questo profilo non è disponibile come esportazione Markdown, testo, JSON o "
 "XML."
 
-#: lib/vutuv_web/views/error_html.ex:162
+#: lib/vutuv_web/views/error_html.ex:165
 #, elixir-autogen, elixir-format
 msgid "Admin rights are granted by the operator of this vutuv instance, from the server's command line:"
 msgstr ""
@@ -12876,7 +12876,7 @@ msgstr "Pubblica"
 
 #: lib/vutuv/accounts/user.ex:1275
 #: lib/vutuv/jobs/job_posting.ex:166
-#: lib/vutuv/notifications/emailer.ex:566
+#: lib/vutuv/notifications/emailer.ex:565
 #: lib/vutuv_web/agent_docs/markdown.ex:532
 #: lib/vutuv_web/agent_docs/markdown.ex:534
 #: lib/vutuv_web/agent_docs/text.ex:547
@@ -13016,12 +13016,12 @@ msgstr "Modalità di lavoro"
 msgid "You already have the maximum number of published postings."
 msgstr "Ha già raggiunto il numero massimo di annunci pubblicati."
 
-#: lib/vutuv/notifications/emailer.ex:1034
+#: lib/vutuv/notifications/emailer.ex:1033
 #, elixir-autogen, elixir-format
 msgid "Your job posting on vutuv expires soon"
 msgstr "Il Suo annuncio di lavoro su vutuv scade a breve"
 
-#: lib/vutuv/notifications/emailer.ex:912
+#: lib/vutuv/notifications/emailer.ex:911
 #, elixir-autogen, elixir-format
 msgid "A domain of your organization page on vutuv is about to be dropped"
 msgstr ""
@@ -13046,12 +13046,12 @@ msgstr ""
 "dominio. La ripristini e controlli di nuovo, altrimenti il dominio perde la "
 "verifica."
 
-#: lib/vutuv/notifications/emailer.ex:909
+#: lib/vutuv/notifications/emailer.ex:908
 #, elixir-autogen, elixir-format
 msgid "Your organization page on vutuv is about to lose its verification"
 msgstr "La Sua pagina di organizzazione su vutuv sta per perdere la verifica"
 
-#: lib/vutuv/notifications/emailer.ex:955
+#: lib/vutuv/notifications/emailer.ex:954
 #, elixir-autogen, elixir-format
 msgid "Your organization page on vutuv is no longer public"
 msgstr "La Sua pagina di organizzazione su vutuv non è più pubblica"
@@ -13534,7 +13534,7 @@ msgstr "pagina di organizzazione verificata"
 msgid "—"
 msgstr "—"
 
-#: lib/vutuv/notifications/emailer.ex:515
+#: lib/vutuv/notifications/emailer.ex:514
 #, elixir-autogen, elixir-format
 msgid "%{count} new match for your saved searches"
 msgid_plural "%{count} new matches for your saved searches"
@@ -14688,7 +14688,7 @@ msgstr "Modalità di lavoro preferita"
 msgid "Availability"
 msgstr "Disponibilità"
 
-#: lib/vutuv/notifications/emailer.ex:996
+#: lib/vutuv/notifications/emailer.ex:995
 #, elixir-autogen, elixir-format
 msgid "An automated check removed an image from your vutuv account"
 msgstr "Un controllo automatico ha rimosso un'immagine dal Suo account vutuv"
@@ -14866,7 +14866,7 @@ msgid_plural "Show %{formatted} more replies"
 msgstr[0] "Mostra %{formatted} altra risposta"
 msgstr[1] "Mostra altre %{formatted} risposte"
 
-#: lib/vutuv_web/views/error_html.ex:87
+#: lib/vutuv_web/views/error_html.ex:85
 #, elixir-autogen, elixir-format
 msgid "This page is no longer available."
 msgstr "Questa pagina non è più disponibile."
@@ -14876,7 +14876,7 @@ msgstr "Questa pagina non è più disponibile."
 msgid "This post is part of a conversation with %{formatted} posts."
 msgstr "Questo post fa parte di una conversazione con %{formatted} post."
 
-#: lib/vutuv_web/views/error_html.ex:133
+#: lib/vutuv_web/views/error_html.ex:136
 #, elixir-autogen, elixir-format
 msgid "This profile is currently unavailable."
 msgstr "Questo profilo al momento non è disponibile."
@@ -16390,7 +16390,7 @@ msgstr "Confermi la modifica prima che rinominiamo il Suo account."
 msgid "This confirmation expired. Please start again."
 msgstr "Questa conferma è scaduta. Ricominci da capo."
 
-#: lib/vutuv/notifications/emailer.ex:296
+#: lib/vutuv/notifications/emailer.ex:295
 #, elixir-autogen, elixir-format
 msgid "Confirm your new username"
 msgstr "Confermi il Suo nuovo nome utente"
@@ -18553,24 +18553,24 @@ msgstr ""
 "Le scorciatoie a tasto singolo si sospendono mentre digita, e sono "
 "disattivate su telefoni e tablet."
 
-#: lib/vutuv_web/views/error_html.ex:46
+#: lib/vutuv_web/views/error_html.ex:47
 #, elixir-autogen, elixir-format
 msgid "Please go back, reload the page, and send the form again."
 msgstr "Torni indietro, ricarichi la pagina e invii di nuovo il modulo."
 
-#: lib/vutuv_web/views/error_html.ex:43
+#: lib/vutuv_web/views/error_html.ex:44
 #, elixir-autogen, elixir-format
 msgid "Your browser sent a request we could not read."
 msgstr ""
 "Il Suo browser ha inviato una richiesta che non siamo riusciti a leggere."
 
-#: lib/vutuv_web/views/error_html.ex:49
+#: lib/vutuv_web/views/error_html.ex:50
 #, elixir-autogen, elixir-format
 msgid "If this keeps happening, please tell us with a bug report at"
 msgstr ""
 "Se continua a succedere, ce lo segnali con una segnalazione di errore su"
 
-#: lib/vutuv_web/views/error_html.ex:58
+#: lib/vutuv_web/views/error_html.ex:56
 #, elixir-autogen, elixir-format
 msgid "The most helpful detail in such a report is the exact time of the error. Right now it is %{time}."
 msgstr ""
@@ -19823,7 +19823,7 @@ msgstr ""
 msgid "Your employment reference has been reviewed."
 msgstr "Il Suo attestato di lavoro è stato analizzato."
 
-#: lib/vutuv/notifications/emailer.ex:479
+#: lib/vutuv/notifications/emailer.ex:478
 #, elixir-autogen, elixir-format
 msgid "Your reference “%{title}” has been reviewed"
 msgstr "Il Suo attestato “%{title}” è stato analizzato"
@@ -19914,7 +19914,7 @@ msgstr ""
 "Carichi il PDF o la scansione. Ne estraiamo il testo, e l'analisi legge "
 "sempre quel testo, mai il file stesso."
 
-#: lib/vutuv/notifications/emailer.ex:460
+#: lib/vutuv/notifications/emailer.ex:459
 #, elixir-autogen, elixir-format
 msgid "%{count} new notification on vutuv"
 msgid_plural "%{count} new notifications on vutuv"
@@ -21321,7 +21321,7 @@ msgstr "Questa pagina non segue ancora nessuno su un'altra rete."
 msgid "Too many attempts for now. Try again later."
 msgstr "Per ora troppi tentativi. Riprovi più tardi."
 
-#: lib/vutuv/notifications/emailer.ex:352
+#: lib/vutuv/notifications/emailer.ex:351
 #, elixir-autogen, elixir-format
 msgid "New message from %{sender} on vutuv"
 msgstr "Nuovo messaggio da %{sender} su vutuv"
@@ -21739,7 +21739,7 @@ msgstr "Abbiamo scaricato questo indirizzo:"
 msgid "What is published there right now:"
 msgstr "Cosa è pubblicato lì in questo momento:"
 
-#: lib/vutuv/notifications/emailer.ex:935
+#: lib/vutuv/notifications/emailer.ex:934
 #, elixir-autogen, elixir-format
 msgid "Your organization page on vutuv is verified"
 msgstr "La Sua pagina di organizzazione su vutuv è verificata"
@@ -24486,7 +24486,7 @@ msgstr ""
 msgid "Over these %{days} days %{total} people arrived, %{members} of them as members here."
 msgstr ""
 
-#: lib/vutuv_web/views/company_html.ex:76
+#: lib/vutuv_web/views/company_html.ex:77
 #, elixir-autogen, elixir-format
 msgid "People here per day over the last %{days} days"
 msgstr ""
@@ -24879,37 +24879,44 @@ msgstr "questa parola"
 msgid "only %{server}"
 msgstr "solo %{server}"
 
-#: lib/vutuv_web/views/error_html.ex:282
+#: lib/vutuv_web/views/error_html.ex:276
 #, elixir-autogen, elixir-format
 msgid "%{host} cannot be reached"
 msgstr "%{host} non è raggiungibile"
 
-#: lib/vutuv_web/views/error_html.ex:286
+#: lib/vutuv_web/views/error_html.ex:279
 #, elixir-autogen, elixir-format
 msgid "Error %{code} on %{host}, %{time}"
 msgstr "Errore %{code} su %{host}, %{time}"
 
-#: lib/vutuv_web/views/error_html.ex:273
+#: lib/vutuv_web/views/error_html.ex:268
 #, elixir-autogen, elixir-format
 msgid "Please quote the error code %{code} and the time %{time}."
 msgstr "Indichi il codice di errore %{code} e l'ora %{time}."
-
-#: lib/vutuv_web/views/error_html.ex:106
-#, elixir-autogen, elixir-format
-msgid "Something on this site is broken right now."
-msgstr "In questo momento su questo sito c'è un guasto."
 
 #: lib/vutuv_web/templates/service_worker/offline.html.heex:29
 #, elixir-autogen, elixir-format
 msgid "This page could not be loaded. Whether that is your connection or our server cannot be told from here. Please try again in a few minutes."
 msgstr "Non è stato possibile caricare questa pagina. Da qui non si può stabilire se dipenda dalla sua connessione o dal nostro server. Riprovi tra qualche minuto."
 
-#: lib/vutuv_web/views/error_html.ex:109
+#: lib/vutuv_web/views/error_html.ex:261
 #, elixir-autogen, elixir-format
-msgid "We do not know yet what it is or how long it will last. Please try again in a few minutes."
-msgstr "Non sappiamo ancora di cosa si tratti né quanto durerà. Riprovi tra qualche minuto."
+msgid "If it takes longer, please write to:"
+msgstr "Se dura più a lungo, scriva a:"
 
-#: lib/vutuv_web/views/error_html.ex:262
+#: lib/vutuv_web/views/error_html.ex:110
 #, elixir-autogen, elixir-format
-msgid "If it does not come back, please write to:"
-msgstr "Se il problema persiste, scriva a:"
+msgid "Installing a new version takes up to one minute."
+msgid_plural "Installing a new version takes up to %{count} minutes."
+msgstr[0] "L'installazione di una nuova versione richiede fino a un minuto."
+msgstr[1] "L'installazione di una nuova versione richiede fino a %{count} minuti."
+
+#: lib/vutuv_web/views/error_html.ex:105
+#, elixir-autogen, elixir-format
+msgid "That is either a fault in the software or a new version being installed. Either way the site is away only briefly."
+msgstr "Si tratta di un errore nel software o di una nuova versione in corso di installazione. In entrambi i casi il sito manca solo per poco."
+
+#: lib/vutuv_web/views/error_html.ex:103
+#, elixir-autogen, elixir-format
+msgid "This site is offline right now."
+msgstr "Questo sito è offline in questo momento."

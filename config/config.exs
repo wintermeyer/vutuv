@@ -288,6 +288,14 @@ config :vutuv, :image_scan_reject_votes, 3
 # POST_EDIT_WINDOW_MINUTES (config/runtime.exs).
 config :vutuv, :post_edit_window_minutes, 30
 
+# How long installing a new version takes here, in minutes. The 500 page says
+# it, because the commonest reason a visitor meets that page is a deploy in
+# flight and "come back in a bit" is only useful with a number on it. Ours is a
+# blue/green deploy that builds, migrates and health-gates before the switch,
+# which is where the 10 comes from; another installation's pipeline is its own.
+# Runtime override: DEPLOY_MINUTES (config/runtime.exs).
+config :vutuv, :deploy_minutes, 10
+
 # How long the composer keeps a draft nobody has touched (issue #1148). A draft
 # is a convenience, not an archive: past this the composer would greet somebody
 # with half a sentence they have long forgotten writing, and it keeps the photos

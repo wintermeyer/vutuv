@@ -63,7 +63,7 @@ defmodule VutuvWeb.ErrorLayoutTest do
     body = render_error(500)
 
     assert body =~ "vutuv"
-    assert body =~ "broken right now"
+    assert body =~ "offline right now"
     assert body =~ ~s(href="/")
   end
 

@@ -115,6 +115,13 @@ if config_env() == :prod do
     config :vutuv, :post_edit_window_minutes, String.to_integer(minutes)
   end
 
+  # How long installing a new version takes here (default 10 minutes; see
+  # config/config.exs). The 500 page tells a visitor this number, so a slower
+  # pipeline should say so rather than promise ours.
+  if minutes = System.get_env("DEPLOY_MINUTES") do
+    config :vutuv, :deploy_minutes, String.to_integer(minutes)
+  end
+
   # How long an untouched composer draft is kept (default 30 days; see
   # config/config.exs). It is a retention promise, so your privacy page and this
   # value should agree.

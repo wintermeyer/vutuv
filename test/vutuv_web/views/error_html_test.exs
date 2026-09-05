@@ -1,5 +1,13 @@
 defmodule VutuvWeb.ErrorHTMLTest do
-  use VutuvWeb.ConnCase, async: true
+  @moduledoc """
+  The error cards themselves; `error_layout_test.exs` covers the document that
+  wraps them.
+
+  `async: false` because one test flips `:deploy_minutes`, which the sandbox
+  does not roll back and the 500 card reads on every render — including the one
+  `error_layout_test.exs` does. Nothing else in the app reads that key.
+  """
+  use VutuvWeb.ConnCase, async: false
 
   alias Phoenix.HTML.Safe
   alias Vutuv.Operator
@@ -15,15 +23,16 @@ defmodule VutuvWeb.ErrorHTMLTest do
     assert render_to_string("404.html") =~ "Page not found"
   end
 
-  # A 500 knows nothing about its own cause and cannot tell how long the site
-  # has been broken, so the page's whole job is to say that and hand the
-  # visitor a way to report it: who to write to, plus the code and the minute
-  # that let the operator find it in the log.
+  # A 500 knows nothing about its own cause, so the page names the two shapes
+  # it can have — a fault, or a deploy in flight — puts a number on the wait
+  # that follows from the second, and hands the visitor a way to report the
+  # first: who to write to, plus the code and the minute for the log.
   test "render 500.html" do
     body = render_to_string("500.html")
 
-    assert body =~ "broken right now"
-    assert body =~ "try again in a few minutes"
+    assert body =~ "offline right now"
+    assert body =~ "fault in the software or a new version being installed"
+    assert body =~ "takes up to 10 minutes"
     assert body =~ "quote the error code 500"
     assert body =~ ~r/\d{4}-\d{2}-\d{2} \d{2}:\d{2} UTC/
     # That the name comes from config rather than from a template is proved
@@ -40,9 +49,26 @@ defmodule VutuvWeb.ErrorHTMLTest do
     Gettext.put_locale(VutuvWeb.Gettext, "de")
     body = render_to_string("500.html")
 
-    assert body =~ "Störung"
-    assert body =~ "in ein paar Minuten"
+    assert body =~ "Diese Website ist gerade offline."
+    assert body =~ "Fehler in der Software"
+    assert body =~ "bis zu 10 Minuten"
     assert body =~ "Fehlercode 500"
+  end
+
+  # The deploy takes as long as it takes on THIS installation — a number typed
+  # into a translation would promise every other installation our pipeline.
+  test "the wait it names is the configured one" do
+    original = Application.fetch_env(:vutuv, :deploy_minutes)
+    Application.put_env(:vutuv, :deploy_minutes, 25)
+
+    on_exit(fn ->
+      case original do
+        {:ok, was} -> Application.put_env(:vutuv, :deploy_minutes, was)
+        :error -> Application.delete_env(:vutuv, :deploy_minutes)
+      end
+    end)
+
+    assert render_to_string("500.html") =~ "takes up to 25 minutes"
   end
 
   test "error pages link back home" do

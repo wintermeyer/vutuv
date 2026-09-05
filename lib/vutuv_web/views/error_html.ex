@@ -86,26 +86,31 @@ defmodule VutuvWeb.ErrorHTML do
     |> error_page()
   end
 
-  # The one error page that cannot say what happened. The request died where
-  # this page cannot see, so nothing here knows whether one request broke or
-  # the whole site, nor how long it has been that way — and "Pardon us!
-  # Something went wrong." plus a link into a bug tracker told a visitor none
-  # of that. Say what is knowable (there is a fault, we do not know how long),
-  # ask for the one thing that helps (come back later), and hand over what
-  # turns a dead end into a report somebody can act on: who to write to, and
-  # the code and the minute to quote.
+  # The one error page that cannot say what happened: the request died where
+  # this page cannot see. What it *can* say is the shape of the two causes and
+  # how long each takes, which is the question the visitor actually has. The
+  # commonest one is not a bug at all but a deploy in flight, so the page names
+  # the wait (`:deploy_minutes`) rather than asking for patience in the
+  # abstract — and hands over what turns the other case into a report somebody
+  # can act on: who to write to, and the code and the minute to quote. What it
+  # replaced said "Pardon us! Something went wrong." and linked a bug tracker.
   def render("500.html", assigns) do
     assigns = Map.new(assigns)
 
     ~H"""
     <div class="error-page">
       <p class="error-page__code">500</p>
-      <h1 class="error-page__title">
-        {gettext("Something on this site is broken right now.")}
-      </h1>
+      <h1 class="error-page__title">{gettext("This site is offline right now.")}</h1>
       <p class="error-page__hint">
         {gettext(
-          "We do not know yet what it is or how long it will last. Please try again in a few minutes."
+          "That is either a fault in the software or a new version being installed. Either way the site is away only briefly."
+        )}
+      </p>
+      <p class="error-page__hint">
+        {ngettext(
+          "Installing a new version takes up to one minute.",
+          "Installing a new version takes up to %{count} minutes.",
+          deploy_minutes()
         )}
       </p>
       <.operator_contact code={500} />
@@ -253,7 +258,7 @@ defmodule VutuvWeb.ErrorHTML do
     assigns = assign(assigns, :stamp, assigns.code && utc_stamp())
 
     ~H"""
-    <p class="error-page__hint">{gettext("If it does not come back, please write to:")}</p>
+    <p class="error-page__hint">{gettext("If it takes longer, please write to:")}</p>
     <p class="error-page__hint">
       <a href={Operator.contact_mailto(mail_subject(@code, @stamp))}>
         {Operator.contact_name()}, {Operator.contact_email()}
@@ -285,6 +290,11 @@ defmodule VutuvWeb.ErrorHTML do
     |> Keyword.get(:url, [])
     |> Keyword.get(:host)
   end
+
+  # How long a deploy takes here. A per-installation value with a default of
+  # ours, not a number typed into a translation, or every other installation
+  # would promise a pipeline it does not run.
+  defp deploy_minutes, do: Application.get_env(:vutuv, :deploy_minutes, 10)
 
   # Rendered, not merely asked for: the visitor is the only one who knows when
   # it happened and the operator's log is the only place the cause is, so the
