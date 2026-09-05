@@ -18,6 +18,7 @@ defmodule Vutuv.MastodonHelpers do
   alias Ecto.Changeset
   alias Vutuv.Accounts.User
   alias Vutuv.ApiAuth
+  alias Vutuv.Fediverse.Follow
   alias Vutuv.Fediverse.PostBoost
   alias Vutuv.Fediverse.RemoteAccount
   alias Vutuv.Fediverse.RemotePost
@@ -179,26 +180,60 @@ defmodule Vutuv.MastodonHelpers do
       # line picks by `published_at`, and two rows minted in the same second
       # would leave that pick to the id tiebreaker instead of to the test.
       published_at: attrs[:published_at] || now,
-      received_at: now,
+      # The other clock, overridable for the same kind of reason: a post from
+      # another server is written there and arrives here minutes later, and the
+      # unread badge reads the arrival while the timeline reads the stamp.
+      received_at: attrs[:received_at] || now,
       expires_at: DateTime.add(now, 86_400)
     })
     |> Repo.preload(:remote_account)
   end
 
   @doc """
-  That account passing one of **our** posts on — the row an inbound `Announce`
-  writes when the thing announced is a member's own (`post_id` set,
-  `remote_post_id` nil).
+  That account passing a post on — the row an inbound `Announce` writes.
+
+  Both halves of the boost source ride this one table and differ by which id is
+  set: **our** post (`post_id`, `remote_post_id` nil) is how a member gets
+  discovered out there, a cached remote one (`remote_post_id`, `post_id` nil) is
+  how the outside network's own conversation reaches a reader here.
   """
-  def boost(%RemoteAccount{} = account, %Post{} = post, attrs \\ []) do
-    Repo.insert!(%PostBoost{
+  def boost(account, post, attrs \\ [])
+
+  def boost(%RemoteAccount{} = account, %Post{} = post, attrs),
+    do: insert_boost(account, [post_id: post.id], attrs)
+
+  def boost(%RemoteAccount{} = account, %RemotePost{} = post, attrs),
+    do: insert_boost(account, [remote_post_id: post.id], attrs)
+
+  defp insert_boost(account, target, attrs) do
+    fields = [
       remote_account_id: account.id,
-      post_id: post.id,
       activity_id: "https://social.example/activities/#{unique_suffix()}",
       # Overridable so a test can place the boost against a follow's span
       # (issue #1673): the feed reads the announce time, not the post's.
       announced_at: attrs[:announced_at] || DateTime.utc_now(:second)
+    ]
+
+    Repo.insert!(struct!(PostBoost, fields ++ target))
+  end
+
+  @doc """
+  A member here following that account, accepted — what makes the account's
+  posts reach their feed.
+
+  Answers with the **account**, so `account = follow_account!(reader,
+  remote_account())` reads as what it is; the follow row itself is of no use to
+  a caller that only wanted the posts to arrive.
+  """
+  def follow_account!(%User{} = user, %RemoteAccount{} = account) do
+    Repo.insert!(%Follow{
+      user_id: user.id,
+      remote_account_id: account.id,
+      state: "accepted",
+      follow_activity_id: "https://vutuv.test/#{user.id}/actor#follows/#{account.id}"
     })
+
+    account
   end
 
   defp unique_suffix, do: System.unique_integer([:positive])

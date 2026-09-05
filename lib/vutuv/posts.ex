@@ -3278,10 +3278,19 @@ defmodule Vutuv.Posts do
 
     # `>= since` is what the sources apply, and the marker is a second the member
     # has already seen, so the window opens the one after it.
+    #
+    # `since_basis: :arrival` is what makes that marker mean the same thing to
+    # every source. The marker is our own wall clock, and a local post is stamped
+    # by the same clock — but a post from another server carries the time it was
+    # written *there*, minutes before it reached us, so on that clock it falls
+    # outside the window and the badge stays at zero while the feed's own pill is
+    # holding it. `Vutuv.Fediverse.window_clock/3` owns that choice and the
+    # measurement behind it.
     cursor = %{
       at: NaiveDateTime.utc_now(:second),
       ids: [],
-      since: NaiveDateTime.add(viewer.feed_read_at, 1, :second)
+      since: NaiveDateTime.add(viewer.feed_read_at, 1, :second),
+      since_basis: :arrival
     }
 
     # Summed with no dedup, because the sources are disjoint **in the query**:
@@ -3294,8 +3303,7 @@ defmodule Vutuv.Posts do
     |> feed_sources(filter, :marks)
     |> Vutuv.FeedPage.fetch_sources(cap, cursor)
     |> Enum.concat()
-    |> Enum.reject(&own_feed_act?(&1, viewer_id))
-    |> length()
+    |> Enum.count(&(not own_feed_act?(&1, viewer_id)))
     |> min(cap)
   end
 

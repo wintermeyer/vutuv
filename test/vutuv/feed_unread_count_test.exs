@@ -13,6 +13,7 @@ defmodule Vutuv.FeedUnreadCountTest do
   """
   use Vutuv.DataCase
 
+  import Vutuv.MastodonHelpers
   import Vutuv.PostsHelpers
 
   alias Vutuv.Posts
@@ -97,6 +98,54 @@ defmodule Vutuv.FeedUnreadCountTest do
     create_post!(insert(:activated_user), %{body: "found by its tag", tags: "Elixir"})
 
     assert Posts.unread_feed_count(reader) == 1
+  end
+
+  describe "a post from another server" do
+    # Such a post carries two clocks: the stamp its origin wrote, which the
+    # timeline orders by, and the moment it reached us. The badge asks what
+    # turned up since the reader last looked, against a marker that is our own
+    # wall clock — so it reads the second one
+    # (`Vutuv.Fediverse.window_clock/3`, which holds the measurement behind
+    # that). On the origin's clock the badge sat at zero while the feed's own
+    # pill was holding the very post. Calibrated by pointing the sources back at
+    # the origin's clock: each of these three goes red.
+
+    test "counts one that arrived after the marker, however old its own stamp" do
+      now = DateTime.utc_now(:second)
+      reader = reader()
+      account = follow_account!(reader, remote_account())
+
+      cached_post(account, published_at: DateTime.add(now, -600), received_at: now)
+
+      assert Posts.unread_feed_count(reader) == 1
+    end
+
+    test "counts a boost that reached us after the marker" do
+      now = DateTime.utc_now(:second)
+      reader = reader()
+      account = follow_account!(reader, remote_account())
+      post = cached_post(remote_account(), published_at: DateTime.add(now, -600))
+
+      # The boost source keeps its arrival in `inserted_at`, a naive column
+      # beside the zoned `announced_at` it is ordered by — so this is also the
+      # one test that runs the naive half of the window.
+      boost(account, post, announced_at: DateTime.add(now, -600))
+
+      assert Posts.unread_feed_count(reader) == 1
+    end
+
+    test "leaves out one that had already arrived, whatever its stamp says" do
+      now = DateTime.utc_now(:second)
+      reader = reader()
+      account = follow_account!(reader, remote_account())
+
+      # The mirror case, and the one that proves the window really moved to the
+      # arrival clock rather than accepting both: a post delivered before the
+      # reader last looked is not news, even when the origin dated it after.
+      cached_post(account, published_at: now, received_at: DateTime.add(now, -120))
+
+      assert Posts.unread_feed_count(reader) == 0
+    end
   end
 
   test "stops at the cap" do
