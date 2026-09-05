@@ -32,6 +32,7 @@ defmodule Vutuv.Notifications.Emailer do
   alias Vutuv.Accounts
   alias Vutuv.Accounts.User
   alias Vutuv.Identity
+  alias Vutuv.Mailto
   alias Vutuv.Notifications.Bounces
   alias Vutuv.Operator
   alias Vutuv.Organizations.Organization
@@ -51,7 +52,7 @@ defmodule Vutuv.Notifications.Emailer do
   defp from_email, do: from_address() |> elem(1)
 
   # One-click unsubscribe fallback; follows the configured From address.
-  defp unsubscribe_mailto, do: "mailto:#{from_email()}?subject=unsubscribe"
+  defp unsubscribe_mailto, do: Mailto.to(from_email(), "unsubscribe")
 
   defp from_domain, do: from_email() |> String.split("@") |> List.last()
 

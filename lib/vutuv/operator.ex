@@ -22,6 +22,8 @@ defmodule Vutuv.Operator do
   `name/0` here would hand the next author the wrong one of the two.
   """
 
+  alias Vutuv.Mailto
+
   @doc "The `{name, address}` pair, for anything that addresses an email."
   def recipient, do: Application.fetch_env!(:vutuv, :operator_recipient)
 
@@ -31,15 +33,6 @@ defmodule Vutuv.Operator do
   @doc "The address to write to."
   def contact_email, do: elem(recipient(), 1)
 
-  @doc """
-  A `mailto:` URL for that address, optionally with a prefilled subject.
-
-  The subject is percent-encoded rather than form-encoded: in a `mailto:` a
-  `+` is a literal plus and not a space (RFC 6068), so `URI.encode_query/1`
-  would hand the mail client a subject full of them.
-  """
-  def contact_mailto, do: "mailto:" <> contact_email()
-
-  def contact_mailto(subject),
-    do: contact_mailto() <> "?subject=" <> URI.encode(subject, &URI.char_unreserved?/1)
+  @doc "A `mailto:` for that address, optionally with a prefilled subject."
+  def contact_mailto(subject \\ nil), do: Mailto.to(contact_email(), subject)
 end
