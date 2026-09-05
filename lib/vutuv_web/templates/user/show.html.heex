@@ -377,9 +377,7 @@ the resulting ~200px rail width. --%>
     the onboarding window (the first hour after sign-up) while anything is still
     undone, and gone once every step is done or the owner closes it with the ×
     (which persists, so it stays gone); @show_completion? carries that gate (see
-    UserProfileLive). Each todo links straight to where it is done. The tag step
-    is already checked for anyone registered since the three-tag sign-up minimum,
-    so the list opens with visible progress. --%>
+    UserProfileLive). Each todo links straight to where it is done. --%>
     <section
       :if={@show_completion?}
       id="profile-completion"
@@ -416,10 +414,7 @@ the resulting ~200px rail width. --%>
         <div class="h-full rounded-full bg-brand-600 transition-all" style={"width: #{round(done_count / total * 100)}%"}></div>
       </div>
       <ul class="mt-4 space-y-2">
-        <%!-- items-start (not center): a step may carry a one-line hint under
-        its label, and the glyph should stay on the label line. text-sm lines
-        and the h-5 glyphs are both 20px, so the first lines still align. --%>
-        <li :for={step <- @completion_steps} class="flex items-start gap-3">
+        <li :for={step <- @completion_steps} class="flex items-center gap-3">
           <%= if step.done do %>
             <span class="flex h-5 w-5 shrink-0 items-center justify-center rounded-full bg-brand-600 text-white" aria-hidden="true">
               <svg class="h-3 w-3" fill="none" stroke="currentColor" stroke-width="3" viewBox="0 0 24 24">
@@ -429,43 +424,12 @@ the resulting ~200px rail width. --%>
             <span class="text-sm text-brand-700/50 line-through dark:text-brand-200/40">{step.label}</span>
           <% else %>
             <span class="h-5 w-5 shrink-0 rounded-full border-2 border-brand-300 dark:border-brand-700" aria-hidden="true"></span>
-            <span class="min-w-0">
-              <.link href={step.href} class="text-sm font-medium text-brand-800 hover:underline dark:text-brand-100">
-                {step.label}
-              </.link>
-              <%!-- The optional per-step nudge (the first-post topic borrowed
-              from the member's own tags) — quiet, muted, not a second link. --%>
-              <span :if={step[:hint]} class="block text-xs text-brand-700/70 dark:text-brand-200/60">
-                {step.hint}
-              </span>
-            </span>
+            <.link href={step.href} class="text-sm font-medium text-brand-800 hover:underline dark:text-brand-100">
+              {step.label}
+            </.link>
           <% end %>
         </li>
       </ul>
-
-      <%!-- A quiet link into the LinkedIn importer: the fastest way to fill
-      several of the steps above at once. Owner-only (it lives inside this
-      owner-only card) and part of the same onboarding push. --%>
-      <div class="mt-4 space-y-1 border-t border-brand-100 pt-4 dark:border-brand-900/50">
-        <.link
-          navigate={~p"/settings/import/linkedin"}
-          class="inline-flex items-center gap-1 text-sm font-semibold text-brand-800 hover:underline dark:text-brand-100"
-        >
-          {gettext("Import from LinkedIn")}
-          <span aria-hidden="true">→</span>
-        </.link>
-        <%!-- The other thing that same archive is good for (issue #1476), and
-        the fastest way through the "follow other members" step above: the
-        people you already know are better company than any suggestion we can
-        make on a member's first minute here. --%>
-        <.link
-          navigate={~p"/settings/import/linkedin/connections"}
-          class="flex items-center gap-1 text-sm font-semibold text-brand-800 hover:underline dark:text-brand-100"
-        >
-          {gettext("Find people you know from LinkedIn")}
-          <span aria-hidden="true">→</span>
-        </.link>
-      </div>
     </section>
 
     <%!-- Posts (latest visible to this viewer; the owner writes them right here,

@@ -226,10 +226,13 @@ defmodule VutuvWeb.UserHTML do
 
   def who_to_follow_card(assigns) do
     ~H"""
+    <%!-- The card's scroll-mt-24 went with the checklist's follow step: it
+    existed so that step's #profile-who-to-follow jump did not land under the
+    top bar, and nothing links to the anchor any more. --%>
     <.card
       :if={@recommended_users != []}
       id="profile-who-to-follow"
-      class={if(@promoted, do: "scroll-mt-24", else: "scroll-mt-24 order-1 md:order-none")}
+      class={if !@promoted, do: "order-1 md:order-none"}
       data-promoted={@promoted}
     >
       <.section_title class="mb-4">{gettext("Who to follow")}</.section_title>
