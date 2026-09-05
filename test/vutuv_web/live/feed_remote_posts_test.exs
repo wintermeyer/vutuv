@@ -664,7 +664,12 @@ defmodule VutuvWeb.FeedRemotePostsTest do
 
     test "unfollowing asks first, then drops the follow and its posts", %{conn: conn} do
       {conn, user} = create_and_login_user(conn)
-      post = cached_post(user)
+      # Published **before** the follow began, so no past-follow span holds it
+      # (issue #1673): a span keeps what it delivered, and with the post stamped
+      # "now" this test passed or failed on whether the run happened to cross a
+      # second between the follow and the unfollow — green locally, red on CI.
+      # What it means to assert is the other case, the copy nothing holds.
+      post = cached_post(user, %{published_at: DateTime.add(DateTime.utc_now(:second), -3600)})
 
       {:ok, view, _html} = live(conn, ~p"/feed")
 
