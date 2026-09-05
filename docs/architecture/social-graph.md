@@ -23,11 +23,19 @@ connection by unfollowing).
 The three profile-header counts come from the tagged count queries behind
 **`Social.social_counts/1`** (one union round trip; the single accessors
 `follower_count/1` / `followee_count/1` / `connection_count/1` share the same
-query builders, so the gates cannot drift). On a profile mount they do not
-even run alone: `Social.profile_count_queries/1` hands the three arms to
-`UserProfileLive.profile_counts/2`, which unions them with the nine section
-totals and the viewer-scoped posts total
-(`Posts.author_timeline_count_query/2`) into ONE counts query per mount.
+query builders, so the gates cannot drift). On a profile mount
+`Social.profile_count_queries/1` hands the three arms to
+`UserProfileLive.count_loads/2`, which runs each as its **own statement,
+side by side** with the nine section totals (those stay one union) and the
+viewer-scoped posts total (`Posts.author_timeline_count_query/2`). They were
+one 13-arm union per mount, which read as one round trip and cost 10–25 ms
+of it: a plan that wide is re-planned for its first executions on every pool
+connection and lands on a Parallel Append whose worker launch is the price
+(measured 2026-09-05 on the production copy — the union 9–13 ms, its arms
+in a row 6 ms, side by side 1.8 ms). The same mount runs the counts, the
+section preloads and the Beiträge card side by side as well
+(`load_profile/1`, through `Vutuv.Concurrent`, four at a time), which halved
+the profile's DB critical path.
 Two indexes carry the load: the covering visibility index
 `users_visible_covering_index` (`(id) INCLUDE (suspended_until)` on the
 public-visibility predicate) serves the counts' users gate index-only

@@ -237,6 +237,31 @@ html[data-nav-pressing] main {
   background-color: var(--color-brand-100);
 }
 
+/* ---------- Data-saving mode: what goes away once the bytes are spent ----------
+   `VutuvWeb.UI.picture/1` gives a viewer in data-saving mode the lite version
+   with `quality_switch/1` in the corner (`[data-hd-load]`); app.js swaps the
+   full version in on request and marks the <img> `data-hd-loaded`, and the
+   LiveSocket's onBeforeElUpdated carries that mark across every patch. The
+   switch hides OFF that mark rather than being removed, so a later server
+   render that puts it back finds it hidden by the same rule; why it hides
+   instead of flipping to HD is the component's own docstring. A clip's poster
+   (`VutuvWeb.VideoComponents.post_video/1`) works the same way twice: the
+   play glyph and the length chip go once app.js stamps `data-playing` on the
+   figure at the first play, and its switch goes off the same `data-hd-loaded`,
+   which lands on the figure there and on the <img> here.
+
+   Unlayered because every one of these elements wears a display utility
+   (`inline-flex`, `flex`) and a layered `display: none` loses to it whatever
+   its specificity — from components.css these three matched, were struck
+   through in DevTools and hid nothing (found 2026-09-05). The pulse while
+   the file is on its way stays in components.css; an animation has no
+   utility to beat. */
+[data-lite-picture] img[data-hd-loaded] ~ [data-quality-switch],
+[data-video-figure][data-hd-loaded] [data-quality-switch],
+[data-video-figure][data-playing] [data-video-overlay] {
+  display: none;
+}
+
 /* ---------- The feed's waiting posts ----------
    A post that arrives while somebody is reading is drawn into the timeline at
    once and hidden by the plain `hidden` attribute, so "show me" is two attribute

@@ -24,6 +24,19 @@ defmodule VutuvWeb.LiveLocale do
   mode to this process. Called without a user, the mode is the installation
   default — the same answer the plug gives a logged-out visitor — and the
   LiveViews that mount that way show no picture that has a lite version.
+
+  **An embedded child calls this on the socket alone, never on its dead
+  render.** The children the app layout embeds (`VutuvWeb.ShellLive` at its
+  top, `PostLive.Actions`, `SectionReorderLive`, `ReferenceCheckLive`) mount
+  in the request process on the dead render, before the page body's own
+  expressions run — layout dynamics evaluate in document order — and that
+  process already holds the plug's answer for the member whose page it is.
+  Resolving "nobody" there overwrote it: every first paint of a LiveView page
+  carried the installation's time zone and the full-size pictures, and only
+  the socket's re-render put the member's own zone and the lite versions in
+  (`live_locale_dead_render_test.exs`). A connected socket is a fresh process
+  and resolves for itself, as every routed LiveView does through
+  `VutuvWeb.Live.InitAssigns`.
   """
   def put_viewer(user \\ nil, session) do
     put_locale(user, session)

@@ -62,10 +62,6 @@ defmodule VutuvWeb.SectionReorderLive do
 
   @impl true
   def mount(_params, session, socket) do
-    # Embedded outside the live_session, so InitAssigns never runs — re-apply
-    # the session locale here or the tool falls back to English.
-    VutuvWeb.LiveLocale.put_viewer(session)
-
     # The authenticated owner is resolved from the cookie's session_token (the
     # same resolver ConfigureSession / Live.InitAssigns use), never a bare
     # user_id merged from the cookie or handed in through the curated map — so a
@@ -74,6 +70,12 @@ defmodule VutuvWeb.SectionReorderLive do
     # disconnected one must list the owner's entries with no JavaScript, and the
     # cookie's token is available there too (Static merges it under the session).
     user = InitAssigns.session_user(session)
+
+    # Embedded outside the live_session, so InitAssigns never runs — apply the
+    # viewer's language, clock and mode here or the tool falls back to English.
+    # On the socket alone: the dead render runs in the request process the
+    # plug already resolved (`VutuvWeb.LiveLocale.put_viewer/2`).
+    if connected?(socket), do: VutuvWeb.LiveLocale.put_viewer(user, session)
 
     socket =
       socket

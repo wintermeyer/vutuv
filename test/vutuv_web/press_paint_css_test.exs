@@ -93,6 +93,26 @@ defmodule VutuvWeb.PressPaintCssTest do
     assert File.read!(@css) =~ ~s|[data-tints-when-pressed][aria-pressed="true"] {|
   end
 
+  # The switch is `inline-flex`, the poster overlays `flex` / `inline-flex`,
+  # and from the components layer a `display: none` matched, was struck
+  # through in DevTools and hid nothing — for the two days the switch shipped
+  # that way, it stayed on every picture whose HD had arrived.
+  test "the data-saving switch and the poster overlays hide from outside every layer" do
+    components = File.read!(Path.expand("../../assets/css/components.css", __DIR__))
+    css = File.read!(@css)
+
+    for selector <- [
+          ~s|[data-lite-picture] img[data-hd-loaded] ~ [data-quality-switch]|,
+          ~s|[data-video-figure][data-hd-loaded] [data-quality-switch]|,
+          ~s|[data-video-figure][data-playing] [data-video-overlay]|
+        ] do
+      refute components =~ selector,
+             "#{selector} in the components layer loses to the element's own display utility"
+
+      assert css =~ selector, "#{selector} has to hide from app.css, outside every layer"
+    end
+  end
+
   test "the nav press survives a patch of the shell it lives in" do
     js = File.read!(@js)
 

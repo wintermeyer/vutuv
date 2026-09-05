@@ -376,7 +376,11 @@ defmodule VutuvWeb.UserHTML do
   end
 
   # The picture itself, identical in both branches so the link can never change
-  # how the header looks — only whether it opens.
+  # how the header looks — only whether it opens. It sits over the cover banner
+  # by tree order alone: its positioned wrappers (the lightbox link, the
+  # presence shell) follow the banner's frame and paint after it, so the <img>
+  # carries no z-index — one that did put the data-saving switch behind the
+  # face, and would put behind it anything else the picture ever wraps.
   attr(:user, :any, required: true)
   attr(:src, :any, required: true)
   attr(:alt, :string, required: true)
@@ -390,7 +394,7 @@ defmodule VutuvWeb.UserHTML do
       shape="square"
       loading="eager"
       alt={@alt}
-      class="relative z-10 shrink-0 ring-4 ring-white dark:ring-slate-900"
+      class="shrink-0 ring-4 ring-white dark:ring-slate-900"
       presence
     />
     """

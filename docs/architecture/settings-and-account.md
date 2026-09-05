@@ -241,6 +241,19 @@ value → for the region, the guess from their browser's `Accept-Language` → t
 installation default. That middle layer is what stops an *existing* member
 reading US-style stamps until they find the setting.
 
+**An embedded child applies the viewer state on its socket alone, never on
+its dead render.** The children the app layout embeds (`VutuvWeb.ShellLive`
+at its top, `PostLive.Actions`, `SectionReorderLive`, `ReferenceCheckLive`)
+mount on the dead render in the request process, before the page body's own
+expressions run — layout dynamics evaluate in document order — and used to
+resolve "nobody" there, writing the anonymous defaults over what the plug had
+resolved. Every first paint of a LiveView page then showed the installation's
+zone (and the full-size pictures, `Vutuv.LowBandwidth`), and only the socket's
+re-render put the member's own in: a New York member watched 14:00 flip to
+08:00 on every profile and feed load. Now each of them calls
+`LiveLocale.put_viewer/2` inside `connected?/1`, with the user it resolves for
+its socket anyway (`live_locale_dead_render_test.exs`).
+
 **A new account is stamped from the browser at sign-up, never asked.** The date
 region comes from `Accept-Language` on the same request; the time zone from a
 hidden field `assets/js/app.js` fills with

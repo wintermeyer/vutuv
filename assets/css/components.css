@@ -4344,21 +4344,15 @@ html[data-feed-pull="busy"] .feed-pull__glyph {
   .actor-card--sheet .actor-card__grab { background: #334155; }
 }
 
-/* ---------- Data-saving mode: the lite picture and its SD/HD switch ---------- */
-/* `VutuvWeb.UI.picture/1` gives a viewer in data-saving mode the lite version
-   with `quality_switch/1` in the corner (`[data-hd-load]`); app.js swaps the
-   full version in on request and marks the <img> `data-hd-loaded`, and the
-   LiveSocket's onBeforeElUpdated carries that mark across every patch. The
-   switch hides OFF that mark rather than being removed, so a later server
-   render that puts it back finds it hidden by the same rule. Why it hides
-   instead of flipping to HD is the component's own docstring. */
-[data-lite-picture] img[data-hd-loaded] ~ [data-quality-switch] { display: none; }
-
-/* The wait between the tap and the file's arrival. Keyed on the switch itself,
-   not on either surface's marker, so both wear one rule and a third surface
-   needs none; `> span` is the switch's own pill, the only child its root has.
-   The pill breathes with the skeleton's own keyframes (below), and under
-   `prefers-reduced-motion` it dims and holds. No colours, so no dark copy. */
+/* ---------- Data-saving mode: the SD/HD switch's wait ---------- */
+/* The switch itself hides once the full version has arrived, but that rule
+   lives in app.css outside every layer (it has a display utility to beat);
+   this is only the wait between the tap and the file's arrival. Keyed on the
+   switch itself, not on either surface's marker, so both wear one rule and a
+   third surface needs none; `> span` is the switch's own pill, the only child
+   its root has. The pill breathes with the skeleton's own keyframes (below),
+   and under `prefers-reduced-motion` it dims and holds. No colours, so no
+   dark copy. */
 [data-quality-switch][aria-busy="true"] > span {
   animation: skeleton-breathe 1s ease-in-out infinite;
 }
@@ -4373,13 +4367,3 @@ html[data-feed-pull="busy"] .feed-pull__glyph {
 /* Changing this file (or app.css @theme / lib/vutuv_web/components/ui.ex) is a
    design-language change — a PostToolUse hook reminds you to update
    .claude/rules/design.md so the design rule stays in sync. */
-
-/* ---------- Video on posts: the poster overlay and the SD/HD switch ---------- */
-/* `VutuvWeb.VideoComponents.post_video/1` lays the play glyph and the length
-   over the poster; app.js stamps `data-playing` on the figure at the first
-   play, and the native controls carry on from there. The mode's SD/HD switch
-   hides once app.js has swapped the full files in (`data-hd-loaded`) — the
-   mark lands on the figure here and on the <img> up there, which is the whole
-   difference; its pulse is the shared rule above. */
-[data-video-figure][data-playing] [data-video-overlay] { display: none; }
-[data-video-figure][data-hd-loaded] [data-quality-switch] { display: none; }

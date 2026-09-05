@@ -62,11 +62,16 @@ the resulting ~200px rail width. --%>
         data-cover-frame
       >
         <%= if cover.src do %>
+          <%!-- The banner is the largest thing above the fold, i.e. the page's
+          LCP candidate; `fetchpriority="high"` puts its request ahead of the
+          forty lazy list avatars and the stylesheet's own fetches instead of
+          leaving the browser to promote it after layout. --%>
           <.picture
             picture={cover}
             wrap_class="h-full w-full"
             alt={gettext("Cover photo of %{name}", name: full_name(@user))}
             class="h-full w-full object-cover"
+            fetchpriority="high"
           />
         <% else %>
           <div class="h-full w-full bg-gradient-to-r from-brand-700 to-brand-500"></div>

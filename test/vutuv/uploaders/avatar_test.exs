@@ -284,6 +284,45 @@ defmodule Vutuv.AvatarTest do
     end
   end
 
+  # The lite version (data-saving mode, `Vutuv.LowBandwidth`) of the 96 CSS px
+  # profile picture: the 96 px thumb, offered only when its file is there.
+  describe "picture/1" do
+    setup do
+      {:ok, user: %{@user | avatar: "selfie.jpg", avatar_fingerprint: @fingerprint}}
+    end
+
+    test "is the picture alone outside data-saving mode", %{user: user} do
+      Vutuv.LowBandwidth.put(false)
+
+      assert Vutuv.Avatar.picture(user) ==
+               %{src: "/avatars/7/john.doe-medium-#{@fingerprint}.avif", lite: nil}
+    end
+
+    test "offers the thumb as the lite in data-saving mode once its file exists", %{
+      tmp: tmp,
+      user: user
+    } do
+      Vutuv.LowBandwidth.put(true)
+      assert Vutuv.Avatar.picture(user).lite == nil
+
+      dir = Path.join(tmp, "avatars/7")
+      File.mkdir_p!(dir)
+      {:ok, img} = Image.new(20, 20, color: [1, 2, 3])
+      {:ok, _} = Image.write(img, Path.join(dir, "john.doe-thumb-#{@fingerprint}.avif"))
+
+      assert Vutuv.Avatar.picture(user) == %{
+               src: "/avatars/7/john.doe-medium-#{@fingerprint}.avif",
+               lite: "/avatars/7/john.doe-thumb-#{@fingerprint}.avif"
+             }
+    end
+
+    test "without an avatar the default tile has no lite either way" do
+      Vutuv.LowBandwidth.put(true)
+      %{src: src, lite: nil} = Vutuv.Avatar.picture(%{@user | avatar: nil})
+      assert String.starts_with?(src, "data:image/svg+xml,")
+    end
+  end
+
   describe "store/1" do
     setup do
       # A real 600x400 JPEG so libvips has something to resize.
