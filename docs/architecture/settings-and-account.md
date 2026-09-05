@@ -349,13 +349,19 @@ parsing and case-insensitive de-duplication the tag creation uses).
 
 After the confirmation PIN a fresh member lands on their own profile, where the
 **"Complete your profile" checklist** (owner-only, first hour after sign-up —
-`UserProfileLive.@onboarding_window_seconds`) opens with the tag step already
-checked — 1/5 done — and leads through photo → tagline (Kurzbeschreibung) →
-**first post** (suggesting a topic from the member's own tags, "Zum Beispiel
-ein Gedanke zu #elixir") → **"Follow 5 members"**. The follow step shows the
-running count as its hint, ticks off live when the fifth follow happens on the
-page itself, and links to the "Who to follow" card — or, on an installation
-with nobody to suggest, to the member directory.
+`UserProfileLive.@onboarding_window_seconds`) names three steps: photo →
+tagline (Kurzbeschreibung) → **"Import from LinkedIn"**. The import is the one
+step that fills several profile sections at once, which is why it is a step and
+not a link under the card; it counts as done once the profile carries a work
+experience or an education entry, so a member who types one in by hand is not
+left with a step they cannot finish.
+
+Three things are deliberately *not* on the list. A **tag** step, because
+sign-up already requires three tags, so it only ever arrived pre-checked. A
+**first post**, because it asks the one thing a member cannot do well in their
+first minute here, with nobody yet reading. And a **follow** step, because the
+promoted "Who to follow" card sits right beside the checklist with real faces
+on it, and a checkbox counting to five read as a quota.
 
 While the owner follows fewer than five members
 (`UserProfileLive.@discovery_follow_target`), the profile also renders the
@@ -373,11 +379,7 @@ then thinned by the per-viewer exclusions (owner, viewer, already-followed,
 blocked). Follower totals deliberately play no part — they reward the past,
 while the card's promise is a feed with something in it, which only current,
 liked output can keep. Deliberately strict, so a thin card beats a padded
-one; an installation with no recent posts renders no card, and the checklist
-step then links to the member directory instead.
-
-Work experience is deliberately not on the checklist; its section card keeps its
-own add tile.
+one; an installation with no recent posts renders no card.
 
 ## Username (@handle) changes
 

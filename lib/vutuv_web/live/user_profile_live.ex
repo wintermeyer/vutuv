@@ -612,14 +612,7 @@ defmodule VutuvWeb.UserProfileLive do
         force: true
       )
 
-    socket
-    |> put_social_assigns(user, [])
-    # The follow step is the one checklist item completable on this very page
-    # (the promoted rail's follow buttons), so re-derive the steps and the tick
-    # lands live. The checklist's visibility and the rail's promoted spot stay
-    # as mounted; recomputing them here would yank the panel (or the card)
-    # away under the member's cursor on the fifth follow.
-    |> refresh_completion_steps()
+    put_social_assigns(socket, user, [])
   end
 
   # The follow-graph slice of the assigns, shared by the initial load and the
@@ -818,8 +811,8 @@ defmodule VutuvWeb.UserProfileLive do
   # ── Initial load (ports UserController.show_html) ──
 
   # The discovery threshold: the owner's own profile leads the rail with the
-  # promoted "Who to follow" card (and the checklist carries a follow step)
-  # until they follow at least this many members. Below it their feed is too
+  # promoted "Who to follow" card until they follow at least this many members.
+  # Below it their feed is too
   # empty to be worth visiting (Home.path even keeps them on the profile), so
   # discovery outranks their own detail cards.
   @discovery_follow_target 5
@@ -946,6 +939,15 @@ defmodule VutuvWeb.UserProfileLive do
         fn -> owner? && Vutuv.Posts.get_draft(current_user) end
       ])
 
+    # The onboarding checklist is the owner's alone and expires with the
+    # onboarding window, so a visitor's view — nearly every view of this page —
+    # skips building it. What is left of the gate (is anything still undone?)
+    # is the list itself, below.
+    checklist =
+      if owner? and not user.onboarding_dismissed? and onboarding_window?(user),
+        do: completion_steps(user, totals),
+        else: []
+
     socket
     |> assign(:as_owner?, owner?)
     |> ComposerPanel.open_for_draft(draft || nil)
@@ -999,20 +1001,13 @@ defmodule VutuvWeb.UserProfileLive do
       relationship: relationship,
       work_info: work_info
     )
-    # The rail promotion and the checklist's follow step both read the followee
-    # count put_social_assigns just computed. The promotion is deliberately set
-    # only here, never on the social-graph refresh: the fifth follow, made from
-    # the promoted rail itself, must not teleport the card to the bottom of the
-    # page under the member's cursor. The next visit demotes it.
-    |> then(
-      &assign(
-        &1,
-        :promote_discovery?,
-        owner? and &1.assigns.followee_count < @discovery_follow_target
-      )
-    )
-    |> refresh_completion_steps()
-    |> then(&assign(&1, :show_completion?, show_completion?(&1.assigns)))
+    # The rail promotion is deliberately set only here, never on the
+    # social-graph refresh: the fifth follow, made from the promoted rail
+    # itself, must not teleport the card to the bottom of the page under the
+    # member's cursor. The next visit demotes it.
+    |> assign(:promote_discovery?, owner? and social_counts.followees < @discovery_follow_target)
+    |> assign(:completion_steps, checklist)
+    |> assign(:show_completion?, Enum.any?(checklist, &(not &1.done)))
     |> put_social_feed_assigns(user)
     |> put_code_stats_assigns(user)
     |> put_job_search_assigns(user)
@@ -1454,77 +1449,47 @@ defmodule VutuvWeb.UserProfileLive do
     )
   end
 
-  # Re-derive the checklist from the current assigns; called from the initial
-  # load and from the social-graph refresh (the follow step's count changes
-  # live). Reads :followee_count, so it must run after put_social_assigns.
-  defp refresh_completion_steps(socket) do
-    %{user: user, followee_count: followee_count} = socket.assigns
-
-    assign(
-      socket,
-      :completion_steps,
-      completion_steps(user, followee_count, socket.assigns.recommended_users != [])
-    )
-  end
-
-  defp show_completion?(%{as_owner?: owner?, user: user, completion_steps: steps}) do
-    owner? and not user.onboarding_dismissed? and
-      Enum.any?(steps, &(not &1.done)) and onboarding_window?(user)
-  end
-
-  defp completion_steps(user, followee_count, suggestions?) do
+  defp completion_steps(user, totals) do
     [
-      # Sign-up requires three tags, so this step arrives already checked: the
-      # checklist opens with visible progress instead of a wall of zeros
-      # (people finish lists they have visibly started). It stays actionable
-      # for tag-less accounts from before the minimum, in their
-      # dormant-return window.
-      %{label: gettext("Add a tag"), done: user.user_tags != [], href: ~p"/settings/tags/new"},
       # Both land on /settings/profile, which is where the two fields actually
       # live. They used to point at /:slug/edit, the retired owner URL that only
       # redirects there — one wasted round trip, and a link that shows the old
-      # address in the status bar.
+      # address in the status bar. Each carries the fragment of its own field
+      # (the ids are in the form), so the step lands on the input rather than at
+      # the top of a page whose fields are several screens apart.
       %{
         label: gettext("Add a profile photo"),
         done: present?(user.avatar),
-        href: ~p"/settings/profile"
+        href: ~p"/settings/profile#avatar"
       },
       %{
         label: gettext("Add a tagline"),
         done: present?(user.headline),
-        href: ~p"/settings/profile"
+        href: ~p"/settings/profile#tagline"
       },
+      # The importer is a step of its own, not a footer link under the card: it
+      # is the one entry here that fills several profile sections in a single
+      # go, so it belongs where the eye already is. Done once the profile
+      # carries a career entry, which is what the archive brings — typing one in
+      # by hand counts just as much, so nobody without a LinkedIn account is
+      # left with a step they cannot finish.
+      %{
+        label: gettext("Import from LinkedIn"),
+        done: totals.jobs > 0 or totals.educations > 0,
+        href: ~p"/settings/import/linkedin"
+      }
       # There is deliberately NO "write your first post" step. It asked the one
       # thing a member cannot do well on their first minute here — they have
       # nobody reading yet and nothing to answer — and it is the step a new
       # account is least likely to complete, so the list ended on a dead end.
       # Posting has its own permanent invitation at the top of the Posts card
       # and on the feed; it does not need a checkbox.
-      # vutuv runs on following: the feed stays empty until the member follows
-      # people, so the list closes with the social step. Its link jumps to the
-      # "Who to follow" card, which the under-threshold owner view promotes to
-      # the top of the rail; an installation with nobody to suggest falls back
-      # to the browsable member directory instead of a dead anchor.
-      %{
-        # Deliberately no number in the label. "Follow 5 members" reads as a
-        # quota to be served, and the figure is ours, not the member's. The
-        # threshold below still decides when the step is done; the hint under it
-        # reports real progress, which is the encouraging half of a count.
-        label: gettext("Follow other members"),
-        done: followee_count >= @discovery_follow_target,
-        href: if(suggestions?, do: "#profile-who-to-follow", else: ~p"/system/members"),
-        hint: follow_step_hint(followee_count)
-      }
+      # There is no tag step either (sign-up already requires three, so it
+      # arrived checked off and taught nothing) and no follow step: the
+      # promoted "Who to follow" card beside the checklist is the invitation,
+      # with real faces on it, and a checkbox counting to five read as a quota.
     ]
   end
-
-  # Progress under the follow step ("You already follow 2 members."): visible
-  # momentum once the count has started, nothing at zero (the label alone
-  # reads cleaner) and nothing once the step is done.
-  defp follow_step_hint(n) when n < 1 or n >= @discovery_follow_target, do: nil
-
-  defp follow_step_hint(n),
-    do: ngettext("You already follow one member.", "You already follow %{count} members.", n)
 
   defp present?(nil), do: false
   defp present?(value) when is_binary(value), do: String.trim(value) != ""
@@ -1533,7 +1498,7 @@ defmodule VutuvWeb.UserProfileLive do
   # The checklist is a brief, one-time post-registration nudge: it shows only
   # during the first hour after sign-up, then never again. A member who wants it
   # gone sooner closes it with the × (the dismiss_onboarding event sets
-  # users.onboarding_dismissed? for good — see the show_completion? gate above).
+  # users.onboarding_dismissed? for good — see the gate in load_profile/1).
   @onboarding_window_seconds 60 * 60
 
   defp onboarding_window?(user) do

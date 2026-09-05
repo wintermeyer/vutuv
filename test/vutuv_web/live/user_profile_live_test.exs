@@ -572,14 +572,12 @@ defmodule VutuvWeb.UserProfileLiveTest do
     end
   end
 
-  describe "onboarding checklist 'Add a tag' step (issue #845)" do
+  describe "the empty tag card's add tile (issue #845)" do
     test "links to the /settings/tags/new form, not the retired /:slug/tags/new", %{conn: conn} do
       {conn, owner} = create_and_login_user(conn)
 
-      # Strip the three registration tags so the step is incomplete: the
-      # checklist only renders a *link* for a not-done step. The account is
-      # freshly registered, so it is still inside the onboarding window and the
-      # checklist shows.
+      # Strip the three registration tags so the card is empty: the dashed add
+      # tile shows only then.
       Repo.delete_all(from(ut in Tags.UserTag, where: ut.user_id == ^owner.id))
 
       {:ok, view, _html} = live(conn, ~p"/#{owner}")
@@ -784,9 +782,10 @@ defmodule VutuvWeb.UserProfileLiveTest do
 
   describe "profile-completion checklist" do
     # The owner's onboarding nudge (first hour after sign-up) carries a × to
-    # close it for good and a link into the LinkedIn importer. The window and
-    # visibility rules are covered by the disconnected controller test; here we
-    # drive the connected socket's × click and the persisted effect.
+    # close it for good. Its steps never change over the socket, so the window,
+    # the visibility rules and the steps themselves are covered by the
+    # disconnected controller test; here we drive the × click and its persisted
+    # effect, which only the connected socket has.
 
     test "the × closes the checklist and persists the dismissal", %{conn: conn} do
       {conn, user} = create_and_login_user(conn)
@@ -802,17 +801,6 @@ defmodule VutuvWeb.UserProfileLiveTest do
       refute has_element?(view, "#profile-completion")
       # ...and persisted, so a reload never brings it back.
       assert Accounts.get_user(user.id).onboarding_dismissed?
-    end
-
-    test "the checklist links into the LinkedIn importer", %{conn: conn} do
-      {conn, user} = create_and_login_user(conn)
-
-      {:ok, view, _html} = live(conn, ~p"/#{user}")
-
-      assert has_element?(
-               view,
-               ~s(#profile-completion a[href="#{~p"/settings/import/linkedin"}"])
-             )
     end
   end
 
@@ -1018,18 +1006,14 @@ defmodule VutuvWeb.UserProfileLiveTest do
       refute has_element?(view, ~s(#{rail} a[href="/#{silent.username}"]))
     end
 
-    test "the fifth follow ticks the checklist live but leaves the card in place",
-         %{conn: conn} do
+    test "the fifth follow leaves the promoted card in place", %{conn: conn} do
       {conn, owner} = create_and_login_user(conn)
       candidate = suggest_to(owner, insert_activated_user())
       for _ <- 1..4, do: insert(:follow, follower: owner, followee: insert_activated_user())
 
       {:ok, view, _html} = live(conn, ~p"/#{owner}")
 
-      # Four follows: promoted, and the checklist's follow step is still a
-      # link (an undone step renders as a link, a done one as plain text).
       assert has_element?(view, ~s(#profile-who-to-follow[data-promoted]))
-      assert has_element?(view, ~s(#profile-completion a[href="#profile-who-to-follow"]))
 
       view
       |> element(
@@ -1037,44 +1021,10 @@ defmodule VutuvWeb.UserProfileLiveTest do
       )
       |> render_click()
 
-      # The step completed without a reload...
-      refute has_element?(view, ~s(#profile-completion a[href="#profile-who-to-follow"]))
-      assert render(view) =~ "Follow other members"
-      # ...but the promoted card stays where it is: recomputing the placement
-      # mid-click would teleport the rail away under the member's cursor. The
-      # next visit demotes it.
+      # The card stays where it is: recomputing the placement mid-click would
+      # teleport the rail away under the member's cursor. The next visit
+      # demotes it.
       assert has_element?(view, ~s(#profile-who-to-follow[data-promoted]))
-    end
-  end
-
-  describe "onboarding checklist follow step" do
-    test "links to the rail card and counts existing follows in its hint", %{conn: conn} do
-      {conn, owner} = create_and_login_user(conn)
-      suggest_to(owner, insert_activated_user())
-      for _ <- 1..2, do: insert(:follow, follower: owner, followee: insert_activated_user())
-
-      {:ok, view, _html} = live(conn, ~p"/#{owner}")
-
-      step = view |> element(~s(#profile-completion a[href="#profile-who-to-follow"])) |> render()
-      # The label names no number: the threshold is ours, not the member's,
-      # and "Follow 5 members" read as a quota. The hint below carries the
-      # real progress instead.
-      assert step =~ "Follow other members"
-      refute step =~ "5"
-      # The progress hint sits under the label once the count is started.
-      assert render(view) =~ "You already follow 2 members."
-    end
-
-    test "falls back to the most-followed listing when there is nobody to suggest",
-         %{conn: conn} do
-      {conn, owner} = create_and_login_user(conn)
-
-      {:ok, view, _html} = live(conn, ~p"/#{owner}")
-
-      # Alone on the installation: no rail card to jump to, so the step links
-      # to the browsable listing instead of a dead anchor.
-      refute has_element?(view, "#profile-who-to-follow")
-      assert has_element?(view, ~s(#profile-completion a[href="/system/members"]))
     end
   end
 

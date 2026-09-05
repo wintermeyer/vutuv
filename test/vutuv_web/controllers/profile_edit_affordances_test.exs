@@ -114,41 +114,51 @@ defmodule VutuvWeb.ProfileEditAffordancesTest do
   describe "profile completion checklist" do
     # The owner's onboarding nudge: a few high-impact steps, shown only while
     # something is still undone, and gone once the profile is complete. It is
-    # owner-only (a visitor never sees it). Since sign-up requires three tags,
-    # the tag step arrives already checked: the list opens at 1/5, visible
-    # progress instead of a wall of zeros.
+    # owner-only (a visitor never sees it).
 
-    test "a new owner sees the checklist with the tag step already done", %{conn: conn} do
+    test "a new owner sees the three steps", %{conn: conn} do
       {conn, user} = create_and_login_user(conn)
 
       html = conn |> get(~p"/#{user}") |> html_response(200)
       checklist = completion_text(html)
 
       assert checklist =~ "Complete your profile"
-      assert checklist =~ "Add a tag"
       assert checklist =~ "Add a profile photo"
       assert checklist =~ "Add a tagline"
-      assert checklist =~ "Follow other members"
+      assert checklist =~ "Import from LinkedIn"
+      assert checklist =~ "0/3"
       # No "write your first post" step: it asked the one thing a member cannot
       # do well in their first minute here, with nobody yet reading.
       refute checklist =~ "Write your first post"
-      # The registration tags already check the first step off.
-      assert checklist =~ "1/4"
+      # The tag step went: sign-up already requires three tags, so it arrived
+      # checked off and taught nothing. The follow step went with it — the
+      # "Who to follow" card beside the checklist is the better invitation.
+      # ("Add a tagline" contains the old tag step's label, so the tag step is
+      # refuted by where it led, not by its wording.)
+      refute completion_html(html) =~ ~p"/settings/tags/new"
+      refute checklist =~ "Follow other members"
     end
 
-    # Both profile-data steps lead to the page that actually holds the fields,
-    # not to the retired /:slug/edit URL that only redirects there.
-    test "the photo and tagline steps link into the settings form", %{conn: conn} do
+    # Both profile-data steps lead to the field that holds them, not to the top
+    # of the settings page and not to the retired /:slug/edit URL that only
+    # redirects there. The fragments are the ids the form carries.
+    test "the photo and tagline steps link to their field", %{conn: conn} do
       {conn, user} = create_and_login_user(conn)
 
       html = conn |> get(~p"/#{user}") |> html_response(200)
 
-      assert completion_html(html) =~ ~s(href="#{~p"/settings/profile"}")
+      assert completion_html(html) =~ ~s(href="#{~p"/settings/profile#avatar"}")
+      assert completion_html(html) =~ ~s(href="#{~p"/settings/profile#tagline"}")
       refute completion_html(html) =~ ~s(href="/#{user.username}/edit")
+
+      # The anchors really exist on the settings form, so neither jump is dead.
+      form = conn |> get(~p"/settings/profile") |> html_response(200)
+      assert elements(form, "#avatar") != []
+      assert elements(form, "#tagline") != []
     end
 
-    # The checklist leads to photo / tagline / following; work experience is
-    # deliberately not pushed there (its section card keeps its own add tile).
+    # The import step is where a career entry comes from on this card; the
+    # section's own "Add work experience" tile is not repeated here.
     test "the checklist does not push work experience", %{conn: conn} do
       {conn, user} = create_and_login_user(conn)
 
@@ -165,9 +175,9 @@ defmodule VutuvWeb.ProfileEditAffordancesTest do
       {:ok, user} =
         Repo.update(Ecto.Changeset.change(user, avatar: "me.jpg", headline: "Builder of things"))
 
-      # The follow step completes at five followed members — the label no longer
-      # says so, but the threshold is unchanged.
-      for _ <- 1..5, do: insert(:follow, follower: user, followee: insert_activated_user())
+      # The import step is done once the profile carries a career entry, which
+      # is what the importer fills — typing one by hand counts just as much.
+      insert(:work_experience, user: user)
 
       html = conn |> get(~p"/#{user}") |> html_response(200)
 
@@ -183,15 +193,19 @@ defmodule VutuvWeb.ProfileEditAffordancesTest do
       refute html =~ "Complete your profile"
     end
 
-    test "the checklist links to the LinkedIn importer", %{conn: conn} do
+    test "the LinkedIn importer is a step in the list", %{conn: conn} do
       {conn, user} = create_and_login_user(conn)
 
       html = conn |> get(~p"/#{user}") |> html_response(200)
 
-      # A little pitch plus a link straight into the LinkedIn data import, so a
-      # new member can fill several of the steps at once.
-      assert completion_text(html) =~ "LinkedIn"
-      assert completion_html(html) =~ ~p"/settings/import/linkedin"
+      # The import is a checklist step now, not a footer link under the card:
+      # it fills several sections at once and belongs among the other steps.
+      assert text_of(html, ~s(#profile-completion li a[href="#{~p"/settings/import/linkedin"}"])) ==
+               "Import from LinkedIn"
+
+      # The contacts importer stays on the "Who to follow" card, which is where
+      # somebody looking for people to follow already is.
+      refute completion_html(html) =~ ~p"/settings/import/linkedin/connections"
     end
 
     test "the checklist still shows just under an hour after sign-up", %{conn: conn} do
