@@ -123,7 +123,7 @@ the table (a deliberate call, they are the same quantity counted as well as it
 can still be counted), but the migration's moduledoc says so, and so does this
 paragraph.
 
-### The curve, drawn twice
+### The curve
 
 `VutuvWeb.CompanyHTML.growth_curve/1` on the investor page, plain server-rendered
 SVG. No chart library: the drawing is one path, a wash under it and two labels,
@@ -142,16 +142,10 @@ as a solid block with a flat lid. A zoom like that is only honest where
 something says what it spans, so the chart names both ends underneath itself:
 the first and last figure, and the first and last day.
 
-The same line is drawn a second time, as a **thumbnail in the top bar** beside
-the people total (`VutuvWeb.ShellLive`), 48×16 pixels of the last 30 days. It
-has no room for those end figures, which is why it says only "rising" and leaves
-"how far" to the number it sits beside. Both drawings come through
-`Vutuv.PeopleHistory.curve_points/3`, so how this curve is drawn is decided in
-one place; only the box and what is built around the line differ.
-
-The thumbnail is read from `:persistent_term`, never from the table: the bar is
-on every page, so it has to cost what the figure beside it costs (two atomics
-reads). `Vutuv.PeopleCounter` refreshes it on the tick it already reconciles the
-member count with, and writes only when the shape changed. While nothing is
-cached — the sub-second after boot, an installation younger than two days, a
-span that never moved — the bar simply shows the number.
+**The top bar showed this line as a 48×16 thumbnail for a day and does not any
+more** (shipped in #1992, taken out again on 2026-09-05: it read as odd in the
+chrome). What is left of it is worth keeping in mind before anyone tries again:
+at that size there is no room for the two end figures, so a zoomed axis has
+nothing to keep it honest, and a month in which nobody joined draws as a dash
+that reads like a broken image. The geometry stayed behind as
+`Vutuv.PeopleHistory.curve_points/3`, which the chart draws through.

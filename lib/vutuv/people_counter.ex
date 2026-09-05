@@ -48,13 +48,6 @@ defmodule Vutuv.PeopleCounter do
   So a new Fediverse follower shows up within a minute rather than instantly,
   and there is exactly one place that decides what the figure means.
 
-  The member reconcile carries one more errand, because it is about the same
-  figure: it refreshes the growth thumbnail the pill draws beside the number
-  (`Vutuv.PeopleHistory.refresh_spark/0`). Those rows move once a day, so all
-  but two of those reads find the shape unchanged and write nothing — a
-  thirty-row read beside a COUNT over the whole members table, and one place
-  that decides how fresh the bar is.
-
   `VutuvWeb.ShellLive` subscribes and re-renders the top bar's pill on each
   `{:people_count, %{members:, fediverse:, total:}}` message, so the number
   ticks up while the page is open.
@@ -63,7 +56,6 @@ defmodule Vutuv.PeopleCounter do
 
   alias Vutuv.Accounts
   alias Vutuv.Fediverse
-  alias Vutuv.PeopleHistory
 
   @pubsub Vutuv.PubSub
   @topic "people_count"
@@ -215,11 +207,6 @@ defmodule Vutuv.PeopleCounter do
 
   def handle_info(:reconcile, state) do
     :atomics.put(state.ref, @members, Accounts.count_users())
-    # The top bar's growth thumbnail rides this tick rather than a timer of its
-    # own: same two populations, same bar, and this way it is seeded by the
-    # boot reconcile and heals itself afterwards, where a nightly refresh would
-    # leave a fresh release with no line until 23:59.
-    PeopleHistory.refresh_spark()
     schedule(:reconcile, state.reconcile_interval)
     {:noreply, state}
   end
