@@ -1037,6 +1037,64 @@ defmodule VutuvWeb.UserHelpers do
 
   def email_greeting(_), do: "Hi"
 
+  @doc """
+  A stranger's text quoted into a `text/plain` email: hard-wrapped at 72
+  columns and every line prefixed with `"> "`.
+
+  The prefix is not decoration. A `text/plain` template does no escaping at
+  all, so an unmarked block of somebody else's writing can be shaped to read
+  as our own — a fake signature, a second link, a sentence that looks like it
+  came from vutuv. Prefixing every line means the reader can see where the
+  stranger's words start and stop. The only text quoted this way today is a
+  moderation report's note (issue #2010), which the changeset caps at
+  `Vutuv.Moderation.Report.max_note_length/0`.
+
+  Takes one note or a list of them; returns "" for nothing to quote.
+  """
+  @quote_width 72
+
+  def email_quoted_text(notes) when is_list(notes),
+    do: Enum.map_join(notes, "\n>\n", &email_quoted_text/1)
+
+  def email_quoted_text(nil), do: ""
+
+  def email_quoted_text(text) when is_binary(text) do
+    text
+    |> String.split(["\r\n", "\r", "\n"])
+    |> Enum.flat_map(&wrap_line/1)
+    |> Enum.map_join("\n", &quote_line/1)
+  end
+
+  # A blank line gets the bare marker, never `"> "`: a quote block ends at the
+  # first line without one, and mail clients that strip trailing whitespace
+  # would turn the space into exactly that.
+  defp quote_line(""), do: ">"
+  defp quote_line(line), do: "> " <> line
+
+  # Greedy wrap, counting characters rather than bytes — a note full of
+  # umlauts would otherwise wrap several columns short. A word longer than the
+  # width (a pasted URL) keeps its own line rather than being cut in half,
+  # which would break the link it names.
+  defp wrap_line(line) do
+    line
+    |> String.split(" ", trim: true)
+    |> Enum.reduce([], fn
+      word, [current | rest]
+      when is_binary(current) and is_binary(word) ->
+        if String.length(current) + 1 + String.length(word) <= @quote_width,
+          do: [current <> " " <> word | rest],
+          else: [word, current | rest]
+
+      word, [] ->
+        [word]
+    end)
+    |> Enum.reverse()
+    |> case do
+      [] -> [""]
+      lines -> lines
+    end
+  end
+
   # The name the neutral salutation greets: given name and surname, no
   # honorifics. "Hallo Max Meier" rather than "Hallo Max", because the German
   # UI addresses members as "Sie" throughout and a bare given name undercuts

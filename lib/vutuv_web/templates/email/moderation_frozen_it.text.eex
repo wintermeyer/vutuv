@@ -1,15 +1,43 @@
 <%= email_greeting(@user) %>,
 
-qualcuno ha segnalato un Suo contributo su vutuv. Per prudenza per ora è
-nascosto; nessun altro può vederlo.
+qualcuno ha segnalato un Suo contributo su vutuv. Nessuna persona lo ha
+esaminato prima: la segnalazione di un membro affidabile nasconde il
+contenuto segnalato automaticamente, nel momento in cui arriva. È quello che
+è successo qui; ora possono vederlo solo Lei e i nostri amministratori.
 
-Può risolvere da solo entro 72 ore:
+  Segnalato come: <%= @category_labels %>
+<%= if @notes != [] do %>
+Ecco cosa dice la segnalazione, con le parole di chi l'ha scritta. Chi sia
+stato non glielo diciamo mai:
+
+<%= email_quoted_text(@notes) %>
+<% else %>
+La segnalazione ha indicato quella categoria e nient'altro.
+<% end %><%= if @copyright_case do %>
+Questa è una contestazione legale, non una regola della casa: sostiene che
+l'opera non è Sua da pubblicare. A deciderlo è il diritto d'autore, quindi
+deve esaminarla un amministratore.
+<% else %>
+Il fondamento sono le nostre regole della comunità, a cui tutto su vutuv
+deve attenersi:
+
+<%= @url %>community
+<% end %>
+Ha 72 ore per risolvere da solo; dopo decidono i nostri amministratori:
 
 <%= @url %>moderation/cases/<%= @case_id %>
 
-Su quella pagina può eliminare il contenuto, modificarlo (una modifica lo rende
-subito di nuovo visibile) oppure dirci che il Suo contenuto è a posto. Se non
-avremo Sue notizie, ci daranno un'occhiata i nostri amministratori.
+Su quella pagina può:
+<%= if @edit_offer == :immediate do %>
+  * Modificare il contenuto. Dopo una modifica torna subito visibile.
+<% end %><%= if @edit_offer == :reviewed do %>
+  * Modificare il contenuto. I nostri amministratori esaminano poi la
+    revisione; fino ad allora resta nascosto.
+<% end %>
+  * Eliminarlo. Così la segnalazione è chiusa, senza altre domande.
+
+  * Dirci che il Suo contenuto è a posto. Resta nascosto finché un
+    amministratore non avrà deciso.
 
 <%= render "_signature_it.text" %>
 

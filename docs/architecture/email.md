@@ -70,6 +70,19 @@ layout, dark mode, and blocks like the PIN box, CTA button and key/value panel).
 The two formats are paired by a drift test, so an email added with only one
 fails the build.
 
+**Quoting somebody else's text.** A mail that carries what another person wrote
+has two blocks, and they are not interchangeable. `email_markdown/1` renders a
+member's own Markdown (an invitation note, a DM) with its links live.
+`email_quote/1` renders a *stranger's* plain text — today only a moderation
+report's note, shown to the member it accuses — escaped, unlinked and behind a
+left rule. The `text/plain` half of the latter goes through
+`VutuvWeb.UserHelpers.email_quoted_text/1`, which wraps at 72 characters and
+prefixes every line with `"> "`: a text template escapes nothing, so an unmarked
+block can be shaped to read as our own signature plus a second, fake link. A
+blank line inside the quote gets the bare `">"` — a quote block ends at the
+first line without a marker, and mail clients that strip trailing whitespace
+would turn `"> "` into exactly that.
+
 ## Opt-out and unsubscribe
 
 **Notification mail is opt-out**: the unread-message nudge respects

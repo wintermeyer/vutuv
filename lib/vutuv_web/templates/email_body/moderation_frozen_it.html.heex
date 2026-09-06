@@ -1,15 +1,46 @@
 <.email_layout preheader="Un Suo contenuto su vutuv è stato segnalato ed è nascosto" locale={@locale}>
   <.email_p>{email_greeting(@user)},</.email_p>
   <.email_p>
-    qualcuno ha segnalato un Suo contributo su vutuv. Per prudenza per ora è nascosto; nessun
-    altro può vederlo.
+    qualcuno ha segnalato un Suo contributo su vutuv. Nessuna persona lo ha esaminato prima: la
+    segnalazione di un membro affidabile nasconde il contenuto segnalato automaticamente, nel
+    momento in cui arriva. È quello che è successo qui; ora possono vederlo solo Lei e i nostri
+    amministratori.
   </.email_p>
-  <.email_p>Può risolvere da solo entro 72 ore:</.email_p>
-  <.email_button href={"#{@url}moderation/cases/#{@case_id}"}>Esamini la segnalazione</.email_button>
-  <.email_p>
-    Su quella pagina può eliminare il contenuto, modificarlo (una modifica lo rende subito di
-    nuovo visibile) oppure dirci che il Suo contenuto è a posto. Se non avremo Sue notizie, ci
-    daranno un'occhiata i nostri amministratori.
+  <.email_panel>
+    <.email_row label="Segnalato come">{@category_labels}</.email_row>
+  </.email_panel>
+  <.email_p :if={@notes != []}>
+    Ecco cosa dice la segnalazione, con le parole di chi l'ha scritta. Chi sia stato non glielo
+    diciamo mai:
   </.email_p>
+  <.email_quote :for={note <- @notes} text={note} />
+  <.email_p :if={@notes == []}>
+    La segnalazione ha indicato quella categoria e nient'altro.
+  </.email_p>
+  <.email_p :if={@copyright_case}>
+    Questa è una contestazione legale, non una regola della casa: sostiene che l'opera non è Sua
+    da pubblicare. A deciderlo è il diritto d'autore, quindi deve esaminarla un amministratore.
+  </.email_p>
+  <.email_p :if={!@copyright_case}>
+    Il fondamento sono
+    <.email_link href={"#{@url}community"}>le nostre regole della comunità</.email_link>, a cui
+    tutto su vutuv deve attenersi.
+  </.email_p>
+  <.email_p>Ha 72 ore per risolvere da solo; dopo decidono i nostri amministratori:</.email_p>
+  <.email_button href={"#{@url}moderation/cases/#{@case_id}"}>
+    Esamini la segnalazione
+  </.email_button>
+  <.email_p>Su quella pagina può:</.email_p>
+  <.email_list items={[
+    if(@edit_offer == :immediate,
+      do: "Modificare il contenuto. Dopo una modifica torna subito visibile."
+    ),
+    if(@edit_offer == :reviewed,
+      do:
+        "Modificare il contenuto. I nostri amministratori esaminano poi la revisione; fino ad allora resta nascosto."
+    ),
+    "Eliminarlo. Così la segnalazione è chiusa, senza altre domande.",
+    "Dirci che il Suo contenuto è a posto. Resta nascosto finché un amministratore non avrà deciso."
+  ]} />
   <.email_signature locale={@locale} />
 </.email_layout>

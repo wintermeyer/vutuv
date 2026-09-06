@@ -1,8 +1,32 @@
 <%= email_greeting(@user) %>,
 
-einer Ihrer Beiträge auf vutuv wurde gemeldet und ist verborgen,
-während unsere Admins den Fall prüfen. Sie müssen nichts weiter tun;
-wir melden uns mit dem Ergebnis.
+einer Ihrer Beiträge auf vutuv wurde gemeldet und ist verborgen, während
+unsere Admins den Fall prüfen. Kein Mensch hat ihn vorher angesehen: Die
+Meldung eines Mitglieds mit guter Bilanz verbirgt den gemeldeten Inhalt
+automatisch, sobald sie eintrifft.
+
+  Gemeldet als: <%= @category_labels %>
+<%= if @notes != [] do %>
+Das steht in der Meldung, mit den Worten der meldenden Person. Wer das war,
+sagen wir Ihnen nie:
+
+<%= email_quoted_text(@notes) %>
+<% else %>
+Die Meldung nannte diese Kategorie und sonst nichts.
+<% end %><%= if @copyright_case do %>
+Das ist eine rechtliche Beschwerde, keine Hausregel: Sie besagt, dass das
+Werk nicht Ihres ist, um es zu veröffentlichen. Darüber entscheidet das
+Urheberrecht.
+<% else %>
+Grundlage sind unsere Verhaltensregeln, an die sich alles auf vutuv halten
+muss:
+
+<%= @url %>community
+<% end %>
+Dieser Fall liegt bereits bei unseren Admins, eine Runde zum Selbstklären
+gibt es hier also nicht. Sie müssen nichts weiter tun: Wir melden uns mit
+dem Ergebnis, und wenn die Meldung unbegründet war, ist Ihr Inhalt wieder
+da.
 
 Den Fall finden Sie hier:
 

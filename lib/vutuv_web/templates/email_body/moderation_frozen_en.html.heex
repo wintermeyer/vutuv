@@ -1,14 +1,42 @@
 <.email_layout preheader="Your content on vutuv was reported and is hidden" locale={@locale}>
   <.email_p>{email_greeting(@user)},</.email_p>
   <.email_p>
-    someone reported one of your contributions on vutuv. To be on the safe side it is hidden for
-    now; nobody else can see it.
+    someone reported one of your contributions on vutuv. No person looked at it first: a report
+    from a member in good standing hides the reported content automatically, the moment it
+    arrives. That is what happened here, and only you and our admins can see it now.
   </.email_p>
-  <.email_p>You can settle this yourself within 72 hours:</.email_p>
+  <.email_panel>
+    <.email_row label="Reported as">{@category_labels}</.email_row>
+  </.email_panel>
+  <.email_p :if={@notes != []}>
+    What the report says, in the reporter's own words. We never tell you who reported:
+  </.email_p>
+  <.email_quote :for={note <- @notes} text={note} />
+  <.email_p :if={@notes == []}>
+    The report named that category and gave no further explanation.
+  </.email_p>
+  <.email_p :if={@copyright_case}>
+    This is a legal complaint, not a house-rule one: it says the work is not yours to publish.
+    Copyright law decides that question, so an admin has to look at it.
+  </.email_p>
+  <.email_p :if={!@copyright_case}>
+    The ground is
+    <.email_link href={"#{@url}community"}>our community guidelines</.email_link>, which
+    everything on vutuv has to keep to.
+  </.email_p>
+  <.email_p>You have 72 hours to settle this yourself; after that our admins decide:</.email_p>
   <.email_button href={"#{@url}moderation/cases/#{@case_id}"}>Review the report</.email_button>
-  <.email_p>
-    On that page you can delete the content, edit it (an edit makes it visible again right away),
-    or tell us that your content is fine. If we do not hear from you, our admins will take a look.
-  </.email_p>
+  <.email_p>On that page you can:</.email_p>
+  <.email_list items={[
+    if(@edit_offer == :immediate,
+      do: "Edit the content. An edit makes it visible again right away."
+    ),
+    if(@edit_offer == :reviewed,
+      do:
+        "Edit the content. One of our admins then looks at the revision, and it stays hidden until they have."
+    ),
+    "Delete it. That settles the report, no questions asked.",
+    "Tell us your content is fine. It stays hidden until one of our admins has ruled."
+  ]} />
   <.email_signature locale={@locale} />
 </.email_layout>

@@ -68,8 +68,12 @@ defmodule VutuvWeb.NotificationDigestText do
       when is_binary(old) and is_binary(new),
       do: gettext("@%{old} is now @%{new}.", old: old, new: new)
 
-  def line(%{kind: "moderation"}),
-    do: gettext("A moderation case on your account was updated.")
+  # The one kind that has no actor and is already a whole sentence, so the
+  # digest and the notifications page say the same thing (issue #2010): a
+  # member who reads the mail instead of opening the app is owed the category
+  # and the fact that the freeze was automatic, not "something was updated".
+  def line(%{kind: "moderation"} = item),
+    do: VutuvWeb.NotificationLine.notification_text(item)
 
   def line(%{kind: "image_rejected"}),
     do: gettext("One of your images was removed by the image review.")

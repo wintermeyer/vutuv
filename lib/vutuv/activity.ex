@@ -1746,18 +1746,31 @@ defmodule Vutuv.Activity do
   # actually told about is Moderation's rule, not ours — the query comes from
   # there so this feed cannot drift from the notify behavior.
   defp moderation_items(user_id, limit, cursor) do
-    Vutuv.Moderation.owner_notified_cases_query(user_id)
-    |> order_by([c], desc: c.inserted_at, desc: c.id)
-    |> limit(^limit)
-    |> select([c], {c.id, c.inserted_at, c.status})
-    |> at_or_before(cursor)
-    |> Repo.all()
-    |> Enum.map(fn {id, at, status} ->
+    rows =
+      Vutuv.Moderation.owner_notified_cases_query(user_id)
+      |> order_by([c], desc: c.inserted_at, desc: c.id)
+      |> limit(^limit)
+      |> select([c], {c.id, c.inserted_at, c.status})
+      |> at_or_before(cursor)
+      |> Repo.all()
+
+    # What was claimed, so the line can name it instead of saying only that
+    # something was reported. One query for the whole page, never one per row —
+    # and only for the still-hidden cases, since a settled case's line names
+    # the ruling instead and a member's feed keeps those forever.
+    categories =
+      rows
+      |> Enum.filter(fn {_id, _at, status} -> status in ~w(pending_owner flagged escalated) end)
+      |> Enum.map(&elem(&1, 0))
+      |> Vutuv.Moderation.notice_category_by_case()
+
+    Enum.map(rows, fn {id, at, status} ->
       %{
         id: event_id("moderation", id),
         kind: "moderation",
         at: at,
         case_id: id,
+        category: Map.get(categories, id),
         status: status
       }
     end)

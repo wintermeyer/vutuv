@@ -1,10 +1,32 @@
 <%= email_greeting(@user) %>,
 
 one of your contributions on vutuv was reported and is hidden while our
-admins review it. You do not need to do anything; we will let you know
-the outcome.
+admins review it. No person looked at it first: a report from a member in
+good standing hides the reported content automatically, the moment it
+arrives.
 
-You can see the case here:
+  Reported as: <%= @category_labels %>
+<%= if @notes != [] do %>
+What the report says, in the reporter's own words. We never tell you who
+reported:
+
+<%= email_quoted_text(@notes) %>
+<% else %>
+The report named that category and gave no further explanation.
+<% end %><%= if @copyright_case do %>
+This is a legal complaint, not a house-rule one: it says the work is not
+yours to publish. Copyright law decides that question.
+<% else %>
+The ground is our community guidelines, which everything on vutuv has to
+keep to:
+
+<%= @url %>community
+<% end %>
+This one is with our admins already, so there is no round in which you could
+settle it yourself. You do not need to do anything: we will tell you the
+outcome, and if they find the report unfounded your content comes back.
+
+You can follow the case here:
 
 <%= @url %>moderation/cases/<%= @case_id %>
 

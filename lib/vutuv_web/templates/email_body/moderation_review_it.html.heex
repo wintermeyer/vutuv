@@ -2,9 +2,34 @@
   <.email_p>{email_greeting(@user)},</.email_p>
   <.email_p>
     un Suo contributo su vutuv è stato segnalato ed è nascosto mentre i nostri amministratori lo
-    esaminano. Non deve fare nulla; Le comunicheremo l'esito.
+    esaminano. Nessuna persona lo ha esaminato prima: la segnalazione di un membro affidabile
+    nasconde il contenuto segnalato automaticamente, nel momento in cui arriva.
   </.email_p>
-  <.email_p>Può vedere il caso qui:</.email_p>
+  <.email_panel>
+    <.email_row label="Segnalato come">{@category_labels}</.email_row>
+  </.email_panel>
+  <.email_p :if={@notes != []}>
+    Ecco cosa dice la segnalazione, con le parole di chi l'ha scritta. Chi sia stato non glielo
+    diciamo mai:
+  </.email_p>
+  <.email_quote :for={note <- @notes} text={note} />
+  <.email_p :if={@notes == []}>
+    La segnalazione ha indicato quella categoria e nient'altro.
+  </.email_p>
+  <.email_p :if={@copyright_case}>
+    Questa è una contestazione legale, non una regola della casa: sostiene che l'opera non è Sua
+    da pubblicare. A deciderlo è il diritto d'autore.
+  </.email_p>
+  <.email_p :if={!@copyright_case}>
+    Il fondamento sono
+    <.email_link href={"#{@url}community"}>le nostre regole della comunità</.email_link>, a cui
+    tutto su vutuv deve attenersi.
+  </.email_p>
+  <.email_p>
+    Questo caso è già in mano ai nostri amministratori, quindi non c'è un giro in cui possa
+    risolverlo da solo. Non deve fare nulla: Le comunicheremo l'esito e, se la segnalazione
+    risulterà infondata, il Suo contenuto tornerà visibile.
+  </.email_p>
   <.email_button href={"#{@url}moderation/cases/#{@case_id}"}>Veda il caso</.email_button>
   <.email_signature locale={@locale} />
 </.email_layout>
