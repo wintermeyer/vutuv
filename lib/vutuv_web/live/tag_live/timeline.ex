@@ -137,6 +137,10 @@ defmodule VutuvWeb.TagLive.Timeline do
     RemotePostActions.mute_reposts(socket, account_id, &reload/1)
   end
 
+  def handle_event("mute-remote-reposts-of", %{"id" => account_id}, socket) do
+    RemotePostActions.mute_reposts_of(socket, account_id, &reload/1)
+  end
+
   # A picture on a cached post moved (issues #1801, #1927): the tile the card is
   # showing becomes the mosaic preview, and then the picture, with no reload.
   # Every open page hears every one of these, so the cheap "is it even on this

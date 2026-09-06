@@ -42,6 +42,7 @@ defmodule VutuvWeb.SettingsController do
   alias Vutuv.Credentials
   alias Vutuv.LoginCodes
   alias Vutuv.Mutes
+  alias Vutuv.Mutes.AccountMute
   alias Vutuv.Organizations
   alias Vutuv.Posts.AutoDeletion
   alias Vutuv.Prefs
@@ -52,6 +53,7 @@ defmodule VutuvWeb.SettingsController do
   alias Vutuv.WebPush
   alias Vutuv.WebPush.Subscriptions
   alias VutuvWeb.ControllerHelpers
+  alias VutuvWeb.MuteMessages
 
   # The hub: no forms of its own, just the grouped rows with per-section entry
   # counts. Each page sets its own :page_title so the browser tab / history
@@ -751,14 +753,12 @@ defmodule VutuvWeb.SettingsController do
 
   # An unrecognised scope is the whole account rather than an error: the value
   # comes off a menu item, and the narrower reading of a broken one would leave
-  # posts arriving that the member asked to stop.
-  defp mute_scope("reposts"), do: :reposts
-  defp mute_scope(_scope), do: :all
+  # posts arriving that the member asked to stop. Read off the schema's own
+  # vocabulary, so a new scope is spelled in one place rather than in a clause
+  # here as well.
+  defp mute_scope(scope), do: Enum.find(AccountMute.scopes(), :all, &(to_string(&1) == scope))
 
-  defp muted_message(:reposts),
-    do: gettext("Hidden. What they pass on stays out of your feed; their own posts do not.")
-
-  defp muted_message(_all), do: gettext("Muted. Their posts leave your feed.")
+  defp muted_message(scope), do: MuteMessages.flash(scope)
 
   defp mute_return_to(params),
     do: ControllerHelpers.safe_return_to(params["return_to"]) || ~p"/settings/mutes"

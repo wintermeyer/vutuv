@@ -134,6 +134,10 @@ defmodule VutuvWeb.OrganizationLive.Feed do
     RemotePostActions.mute_reposts(socket, account_id, &drop_boosted_entries(&1, account_id))
   end
 
+  def handle_event("mute-remote-reposts-of", %{"id" => account_id}, socket) do
+    RemotePostActions.mute_reposts_of(socket, account_id, &drop_carried_entries(&1, account_id))
+  end
+
   defp drop_remote_entry(socket, remote_post_id) do
     update(socket, :entries, fn entries ->
       Enum.reject(entries, &(&1[:remote_post] && &1.remote_post.id == remote_post_id))
@@ -149,6 +153,19 @@ defmodule VutuvWeb.OrganizationLive.Feed do
   defp drop_boosted_entries(socket, account_id) do
     update(socket, :entries, fn entries ->
       Enum.reject(entries, &(&1[:boosted_by] && &1.boosted_by.id == account_id))
+    end)
+  end
+
+  # The mirror image: rows where this account is the **author** and somebody
+  # else did the carrying — a boost or a member's reshare alike, since the query
+  # drops both on the next load. Its own rows stay, which is the whole
+  # difference to muting it outright.
+  defp drop_carried_entries(socket, account_id) do
+    update(socket, :entries, fn entries ->
+      Enum.reject(entries, fn entry ->
+        (entry[:boosted_by] || entry[:reposted_by]) && entry[:remote_post] &&
+          entry.remote_post.remote_account_id == account_id
+      end)
     end)
   end
 

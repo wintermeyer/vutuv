@@ -105,6 +105,10 @@ defmodule VutuvWeb.PostLive.RemotePostReply do
     RemotePostActions.mute_reposts(socket, account_id, & &1)
   end
 
+  def handle_event("mute-remote-reposts-of", %{"id" => account_id}, socket) do
+    RemotePostActions.mute_reposts_of(socket, account_id, & &1)
+  end
+
   @impl true
   def render(assigns) do
     ~H"""

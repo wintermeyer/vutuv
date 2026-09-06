@@ -39,28 +39,18 @@
         </div>
 
         <div class="flex shrink-0 flex-wrap items-center gap-2">
-          <%!-- The other scope, as one control: a member who muted a whole
+          <%!-- The other scopes, as controls: a member who muted a whole
           account because its reposts annoyed them wants the account back
           without hunting for one of its posts, and the other way round. --%>
           <.button
-            :if={mute.scope == :reposts}
+            :for={{scope, label} <- other_mute_scopes(mute.scope)}
             href={
-              ~p"/settings/mutes?#{[kind: Mutes.kind(mute.target), id: mute.target.id, scope: "all"]}"
+              ~p"/settings/mutes?#{[kind: Mutes.kind(mute.target), id: mute.target.id, scope: scope]}"
             }
             method="post"
             variant="secondary"
           >
-            {gettext("Mute everything")}
-          </.button>
-          <.button
-            :if={mute.scope == :all}
-            href={
-              ~p"/settings/mutes?#{[kind: Mutes.kind(mute.target), id: mute.target.id, scope: "reposts"]}"
-            }
-            method="post"
-            variant="secondary"
-          >
-            {gettext("Only hide reposts")}
+            {label}
           </.button>
           <.button
             href={~p"/settings/mutes?#{[kind: Mutes.kind(mute.target), id: mute.target.id]}"}

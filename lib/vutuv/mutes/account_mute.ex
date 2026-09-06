@@ -16,11 +16,16 @@ defmodule Vutuv.Mutes.AccountMute do
       This is the scope that names an account the reader follows: the complaint
       is not the account, it is the stream of somebody else's posts arriving
       through it.
+    * `:reposts_of` — the mirror image, and about the **author**: what other
+      people pass on *of this account* is dropped, while the account itself
+      keeps reaching whoever follows it. The complaint behind it is an account
+      the reader never followed and keeps meeting anyway, because half their
+      timeline boosts it — and switching one booster off leaves the next one.
   """
 
   use VutuvWeb, :model
 
-  @scopes [:all, :reposts]
+  @scopes [:all, :reposts, :reposts_of]
 
   schema "account_mutes" do
     belongs_to(:user, Vutuv.Accounts.User)
@@ -32,7 +37,7 @@ defmodule Vutuv.Mutes.AccountMute do
     timestamps()
   end
 
-  @doc "The scopes a mute can have (`:all`, `:reposts`)."
+  @doc "The scopes a mute can have (`:all`, `:reposts`, `:reposts_of`)."
   def scopes, do: @scopes
 
   @doc """

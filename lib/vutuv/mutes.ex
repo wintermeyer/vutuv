@@ -10,10 +10,14 @@ defmodule Vutuv.Mutes do
   a row about an **account**, and `account_mutes` is where one lives when there
   is no follow to hang it on.
 
-  Two scopes, because the two complaints are different. `:all` is "not this
+  Three scopes, because the complaints are different. `:all` is "not this
   account, ever, whoever passes them on". `:reposts` is "your own posts yes,
   what you pass on no" — the one that names an account the reader follows and
-  wants to keep.
+  wants to keep. `:reposts_of` is that one read from the other end, and about
+  the **author**: "you yes, but not when other people hand you around". It is
+  what a reader wants at a boost of an account they never followed — switching
+  the booster off only holds until the next member boosts the same account,
+  because the rule was written about the wrong side of the card.
 
   ## One question, one answer
 
@@ -54,8 +58,17 @@ defmodule Vutuv.Mutes do
   alias Vutuv.Social.Follow
   alias Vutuv.UUIDv7
 
+  @scopes AccountMute.scopes()
+
   @doc """
-  Silences `target` for `viewer` at `scope` (`:all` or `:reposts`).
+  Silences `target` for `viewer` at `scope` (`:all`, `:reposts` or
+  `:reposts_of`).
+
+  One row per reader and account, so the scopes are alternatives rather than
+  flags a reader collects: picking one replaces the last. That is what
+  `/settings/mutes` renders, and it is the trade the single row buys — the
+  reader who wants both narrow scopes at once wants `:all` minus the account's
+  own posts, which nobody has asked for.
 
   Idempotent, and a scope change is an update of the one row rather than a
   second one beside it. When the reader follows the target, the follow's own
@@ -64,7 +77,7 @@ defmodule Vutuv.Mutes do
   two disagreeing is how a member ends up muted in one place and loud in
   another.
   """
-  def mute(%User{} = viewer, target, scope \\ :all) when scope in [:all, :reposts] do
+  def mute(%User{} = viewer, target, scope \\ :all) when scope in @scopes do
     with {:ok, mute} <-
            %AccountMute{user_id: viewer.id}
            |> AccountMute.changeset(target, scope)
@@ -130,10 +143,11 @@ defmodule Vutuv.Mutes do
   def forget_id(_viewer_id, _kind, nil), do: :ok
 
   @doc """
-  How far `viewer` has silenced `target`: `:all`, `:reposts`, or `nil`.
+  How far `viewer` has silenced `target`: `:all`, `:reposts`, `:reposts_of`, or
+  `nil`.
 
   The one place that reads both stores. A follow's own mute is `:all` — it has
-  no scope of its own — and wins over a `:reposts` row, since the narrower
+  no scope of its own — and wins over either narrower row, since the narrower
   answer would be a lie about what the reader will see.
   """
   def scope_for(%User{} = viewer, target) do
@@ -206,6 +220,20 @@ defmodule Vutuv.Mutes do
     end
   end
 
+  @doc """
+  The scopes that silence an account **as the author of something somebody else
+  is passing on** — `:all` and `:reposts_of`.
+
+  Every source where a third party does the carrying asks for this list rather
+  than spelling the pair out: a boost, a member's reshare of a cached post, the
+  same of a reply, a boost carrying a vutuv post. They are four queries in two
+  modules, and a `:reposts_of` mute that held in three of them would be exactly
+  the silence a reader cannot explain. `:reposts` is deliberately not in it —
+  that one is about what the account itself hands on, which is a question about
+  the carrier, not the author.
+  """
+  def repost_author_scopes, do: [:all, :reposts_of]
+
   # The one shape all three share: which column carries the target, and which
   # scopes count. Written once with `field/2` rather than three times with a
   # column name, because the NULL guard has to be right in all of them.
@@ -223,8 +251,8 @@ defmodule Vutuv.Mutes do
   makes rather than paying a second round trip per feed page.
 
   They arrive marked `muted: true` — which is what they are — so nothing on the
-  other side needs an arm for them. A `:reposts` mute is deliberately absent:
-  it leaves the account itself heard, so it is not this question.
+  other side needs an arm for them. The two narrow scopes are deliberately
+  absent: both leave the account itself heard, so neither is this question.
   """
   def silenced_remote_rows(viewer_id) do
     from(m in AccountMute,
@@ -294,10 +322,25 @@ defmodule Vutuv.Mutes do
 
   The boost source is that caller: its whole shape is constant id lists, which
   is what keeps it on its recency index.
+
+  The **same union** the subquery versions answer with, not the table alone: it
+  read `account_mutes` by itself until 2026-09-06, so a member silenced through
+  the follow's own switch came back through a boost of their vutuv post — the
+  one shape this module exists to prevent, hidden here by the return type
+  rather than by the question.
   """
   def silenced_ids(viewer_id, kind, scopes) do
-    viewer_id |> muted_ids(column_for(kind), scopes) |> Repo.all()
+    viewer_id |> silenced_id_query(kind, scopes) |> Repo.all()
   end
+
+  defp silenced_id_query(viewer_id, :member, scopes),
+    do: silenced_member_ids(viewer_id, scopes)
+
+  defp silenced_id_query(viewer_id, :organization, scopes),
+    do: silenced_organization_ids(viewer_id, scopes)
+
+  defp silenced_id_query(viewer_id, :remote_account, scopes),
+    do: silenced_remote_account_ids(viewer_id, scopes)
 
   defp column_for(:member), do: :muted_user_id
   defp column_for(:organization), do: :muted_organization_id

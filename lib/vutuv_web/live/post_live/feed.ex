@@ -1344,6 +1344,15 @@ defmodule VutuvWeb.PostLive.Feed do
     |> RemotePostActions.mute_reposts(account_id, &drop_boosted_entries_of(&1, account_id))
   end
 
+  # "Keep the account, but not when other people hand it around": the same act
+  # about the author of the boosted post rather than about the booster. Only the
+  # carried rows go — a reader who follows the author keeps their own posts.
+  def handle_event("mute-remote-reposts-of", %{"id" => account_id}, socket) do
+    socket
+    |> bump_band_refresh()
+    |> RemotePostActions.mute_reposts_of(account_id, &drop_carried_entries_of(&1, account_id))
+  end
+
   # And the same menu's way out that lasts. The rows leave for the same reason —
   # they were here because of that follow — and the cached posts themselves go
   # with it once nobody here follows the account any more.
@@ -2709,7 +2718,7 @@ defmodule VutuvWeb.PostLive.Feed do
 
       # The same two gates a queued arrival passes at now: can this post reach
       # this reader at all, and did they switch its source off.
-      not Posts.reaches_feed?(entry.post, user) ->
+      not Posts.reaches_feed?(entry.post, user, arrival_via(entry)) ->
         {:noreply, socket}
 
       not view_accepts?(socket, entry, actor_id) ->
@@ -2725,6 +2734,14 @@ defmodule VutuvWeb.PostLive.Feed do
         {:noreply, count_away(socket, for_reader(entry, socket))}
     end
   end
+
+  # How this post is arriving, for the gate above. A repost entry carries its
+  # resharer, and that makes the author a second question: a reader can silence
+  # an account only for what other people pass on of it (`:reposts_of`), which
+  # is what the repost source's own query asks. Answering it here too is what
+  # keeps the pill from counting a card the next load drops.
+  defp arrival_via(%{reposted_by: %{}}), do: :repost
+  defp arrival_via(_from_the_author), do: nil
 
   # Waiting posts with no row on the page, because the page is showing another
   # day. The cap is `trim_pending/1`'s, so the valve has one owner: its
@@ -2763,13 +2780,13 @@ defmodule VutuvWeb.PostLive.Feed do
 
       # Does this post reach the reader at all — blocks, audience, mute and
       # their language filter, the in-memory twin of what the query decides
-      # (`Posts.reaches_feed?/2`).
+      # (`Posts.reaches_feed?/3`).
       #
       # It is asked FIRST, and the order is the whole correctness of the dot
       # below (issue #1503): the tab check used to come first and drop the
       # arrival, which cost nothing while the answer was "do nothing" and would
       # now light a tab for a post this reader is not allowed to read.
-      not Posts.reaches_feed?(entry.post, user) ->
+      not Posts.reaches_feed?(entry.post, user, arrival_via(entry)) ->
         {:noreply, socket}
 
       # A post nobody on this tab asked for must not be counted by the pill
@@ -2923,6 +2940,25 @@ defmodule VutuvWeb.PostLive.Feed do
     socket.assigns.entries
     |> Enum.filter(&(&1[:boosted_by] != nil and &1.boosted_by.id == account_id))
     |> then(&drop_entries(socket, &1))
+  end
+
+  # The mirror image, for the mute placed on the **author** of a boosted post:
+  # the rows somebody else is carrying of that account go, its own rows stay,
+  # since the reader may well follow it and only object to the handing around.
+  #
+  # Both carriers, not only the boost the menu was opened from: a member here
+  # reshares a cached post too (`reposted_by`), the query drops those rows on the
+  # next load, and a card the next load throws away is exactly what this pass
+  # exists to take off the page now.
+  defp drop_carried_entries_of(socket, account_id) do
+    socket.assigns.entries
+    |> Enum.filter(&carried_post_of?(&1, account_id))
+    |> then(&drop_entries(socket, &1))
+  end
+
+  defp carried_post_of?(entry, account_id) do
+    (entry[:boosted_by] != nil or entry[:reposted_by] != nil) and entry[:remote_post] != nil and
+      entry.remote_post.remote_account_id == account_id
   end
 
   # The band's sources card skips reloads the page does not owe it (the gate in

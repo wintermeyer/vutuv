@@ -60,6 +60,27 @@ one target (member, page, or remote account, CHECK-enforced) and a **scope**:
 * `:all` — nothing this account writes reaches the feed, whoever passes it on.
 * `:reposts` — only what it **passes on** is dropped; its own posts stay. This
   is the scope that names an account the reader follows on purpose.
+* `:reposts_of` — the same complaint about the **author**: what anybody passes
+  on *of* this account is dropped, its own posts stay. This is what a boost
+  banner actually raises — the account being handed around is one the reader
+  never chose, and silencing the messenger holds only until the next member
+  boosts the same account.
+
+The two narrow scopes are opposite ends of one card: `:reposts` names the
+account on the "Reposted by" line, `:reposts_of` the author under it.
+`Mutes.repost_author_scopes/0` is the pair every source asks for where somebody
+else does the carrying (`[:all, :reposts_of]`), so a fourth such query cannot
+read half the answer. One row per reader and account, so the three are
+alternatives rather than flags to collect — picking one replaces the last,
+which is what `/settings/mutes` renders.
+
+Adding the third scope surfaced two holes in the **boost** source, both of them
+the shape this module is built to prevent: `silenced_ids/3` read `account_mutes`
+alone where its subquery twins read the union, so a member silenced through the
+follow's own switch came back through a boost of their vutuv post; and the
+author check asked only about `posts.user_id`, so a **page's** post was carried
+in whatever the reader had muted (the nullable-pair trap of #1336, read from the
+owner side). Both are closed, with a calibrated test each.
 
 Two stores now hold a mute, so exactly one function answers whether an account
 is silenced: `Mutes.scope_for/2` reads both, `mute/3` and `unmute/2` write both
@@ -72,7 +93,9 @@ fediverse follow-set lookup unions into the one query it already makes.
 
 Where it acts: every source that can carry a stranger's post — a boost, a
 member's reshare of a cached post or reply, the tag timeline, an answer under
-the reader's own post. Deliberately **not**: a conversation the reader opens
+the reader's own post. The live arrival is asked the same question in memory
+(`Posts.reaches_feed?/3`, `via: :repost` for a reshare), or the "new posts" pill
+counts a card the next load throws away. Deliberately **not**: a conversation the reader opens
 themselves, their notifications, or the muted account's own page. A mute is
 about what arrives unasked; going and looking is asking. Muting happens on a
 card's ⋯ menu or an account page; `/settings/mutes` lists both stores together

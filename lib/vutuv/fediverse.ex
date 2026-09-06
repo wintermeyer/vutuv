@@ -3360,8 +3360,12 @@ defmodule Vutuv.Fediverse do
   # carrying — a boost, a member's reshare — not only of the account that
   # carried it: a reader who muted an account muted *them*, and a third party
   # passing their post on is exactly the back door that would undo it.
+  #
+  # `repost_author_scopes/0` and not `[:all]`, so the reader who wants only
+  # that back door shut (`:reposts_of`) is answered here too, in the same
+  # clause, rather than in a second one somebody has to remember to add.
   defp muted_remote_authors(viewer_id),
-    do: Vutuv.Mutes.silenced_remote_account_ids(viewer_id, [:all])
+    do: Vutuv.Mutes.silenced_remote_account_ids(viewer_id, Vutuv.Mutes.repost_author_scopes())
 
   # The same accounts, spelled the way a cached **reply** names its author: a
   # note carries `actor_uri` and no account id, so the mute has to be resolved
@@ -3514,7 +3518,13 @@ defmodule Vutuv.Fediverse do
     # again, so an empty one costs the query nothing — where a `LEFT JOIN posts`
     # plus subquery would be paid by every reader on every page, on the source
     # whose comment above explains what a join costs it.
-    muted_members = Vutuv.Mutes.silenced_ids(viewer_id, :member, [:all])
+    # Pages too, since #1336 made one an author: a boost of a page's post that
+    # ignored the mute on that page was the nullable-pair trap read from the
+    # other end — the same author question answered for one owner kind only.
+    muted_here =
+      Vutuv.Mutes.silenced_ids(viewer_id, :member, Vutuv.Mutes.repost_author_scopes()) ++
+        Vutuv.Mutes.silenced_ids(viewer_id, :organization, Vutuv.Mutes.repost_author_scopes())
+
     muted_authors = muted_remote_authors(viewer_id)
 
     from(b in PostBoost,
@@ -3544,7 +3554,7 @@ defmodule Vutuv.Fediverse do
       preload: [remote_post: rp, post: :user]
     )
     |> boosts_of_kind(opts[:only])
-    |> reject_boosts_of_muted_members(muted_members)
+    |> reject_boosts_of_muted_authors(muted_here)
     |> reject_muted_hosts(viewer)
     |> reject_muted_boosted_hosts(viewer)
     |> Vutuv.Posts.named_language_scope(Vutuv.Posts.feed_language_filter(viewer))
@@ -3554,10 +3564,20 @@ defmodule Vutuv.Fediverse do
   # The boosted **vutuv** post's author, asked only of a reader who has silenced
   # somebody here — which is almost nobody, and for the rest the clause is not
   # added at all rather than evaluated per scanned boost.
-  defp reject_boosts_of_muted_members(query, []), do: query
+  #
+  # One list holding both owner kinds, matched against both columns: a post
+  # names its author in `user_id` **or** in `organization_id`, and an id can
+  # only ever be in one of them, so asking about both costs the ids no
+  # ambiguity and closes the arm a page-authored post used to walk through.
+  defp reject_boosts_of_muted_authors(query, []), do: query
 
-  defp reject_boosts_of_muted_members(query, ids) do
-    theirs = from(p in Vutuv.Posts.Post, where: p.user_id in ^ids, select: p.id)
+  defp reject_boosts_of_muted_authors(query, ids) do
+    theirs =
+      from(p in Vutuv.Posts.Post,
+        where: p.user_id in ^ids or p.organization_id in ^ids,
+        select: p.id
+      )
+
     where(query, [b], is_nil(b.post_id) or b.post_id not in subquery(theirs))
   end
 
