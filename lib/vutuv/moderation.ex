@@ -433,7 +433,9 @@ defmodule Vutuv.Moderation do
     # changed since the first report.
     if is_nil(case_record.evidence_screenshot), do: EvidenceScreenshot.async_capture(case_record)
 
-    {updated, admins_told?} = apply_confirmed_notice(case_record, report, case_content(case_record))
+    {updated, admins_told?} =
+      apply_confirmed_notice(case_record, report, case_content(case_record))
+
     unless admins_told?, do: Notifier.admins_urgent(updated)
     report
   end
@@ -481,7 +483,8 @@ defmodule Vutuv.Moderation do
     # once its address is confirmed. Filtering here rather than in each tally
     # is the whole guard — an unconfirmed notice must not be able to freeze a
     # profile on its own or through the spam threshold.
-    reports = open |> Repo.preload(:reports) |> Map.fetch!(:reports) |> Enum.filter(&Report.effective?/1)
+    reports =
+      open |> Repo.preload(:reports) |> Map.fetch!(:reports) |> Enum.filter(&Report.effective?/1)
 
     # Trust for every reporter of this case in ONE grouped windowed query per
     # kind, then tally in memory — never one trusted_reporter?/1 aggregate per
@@ -1240,24 +1243,30 @@ defmodule Vutuv.Moderation do
           )
           |> Repo.all()
 
-        for report <- abusive_reports do
-          report
-          |> Ecto.Changeset.change(abusive?: true)
-          |> Repo.update!()
-
-          # An outside notifier (issue #2009) has no account to strike, and
-          # `issue_strike/4` matches on `%User{}` — so this would have raised
-          # rather than done nothing. The mark itself is the consequence there:
-          # `trusted_reporter_emails/1` reads it, and one abusive mark costs
-          # that address the instant freeze for a year.
-          if report.reporter, do: issue_strike(report.reporter, updated, "reporter", admin)
-        end
+        for report <- abusive_reports, do: mark_abusive(report, updated, admin)
 
         # An unfounded report must not leave the two accounts separated.
         restore_severed(updated, admin)
 
         {:ok, updated}
     end
+  end
+
+  # Records that one report was a deliberate weapon and, where there is an
+  # account behind it, strikes its reporter.
+  #
+  # An outside notifier (issue #2009) has none, and `issue_strike/4` matches on
+  # `%User{}` — so an unguarded call raised here rather than doing nothing. The
+  # mark itself is the consequence in that case: `trusted_reporter_emails/1`
+  # reads it, and one abusive mark costs that address the instant freeze for a
+  # year.
+  defp mark_abusive(%Report{} = report, %Case{} = case_record, %User{} = admin) do
+    report
+    |> Ecto.Changeset.change(abusive?: true)
+    |> Repo.update!()
+
+    if report.reporter, do: issue_strike(report.reporter, case_record, "reporter", admin)
+    :ok
   end
 
   @doc """

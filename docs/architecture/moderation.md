@@ -82,8 +82,10 @@ shown publicly.
 Reporters with a bad track record lose the instant freeze (their reports only
 flag for review), whole profiles freeze only on a **second** independent trusted
 report, and `/admin/moderation/reporters` shows every reporter's track record.
-A **picture** is the one type where the category decides instead of the reporter
-— see "Only a copyright notice hides a picture" below.
+A **picture** is the one type where the *category* also has a say: only a
+copyright notice may hide one at all, and a reporter in good standing is still
+what makes it happen — see "Only a copyright notice hides a picture" below.
+A report needs no account at all: see "The notice from outside" below.
 
 **Spam auto-defense:** distinct **spam-category** reports also freeze a whole
 profile pending admin review once enough pile up (`@spam_freeze_reporters`, 5),
@@ -182,13 +184,17 @@ The picture freeze first shipped on the ordinary trust ladder, and that was the
 wrong dial: `trusted_reporter?/1` says yes to an account created a minute ago,
 because nothing of theirs has been rejected yet. So a throwaway account took any
 member's avatar off every surface with its first ever report, and the owner then
-could not replace it. `Vutuv.Moderation.initial_status/3` now gives `%Image{}`
-its own clause, split by **category**:
+could not replace it. The split lives in
+**`Vutuv.Moderation.report_freezes?/2`** — the one predicate both ways into a
+freeze ask, and the one place a future author has to edit; `initial_status/3`
+has a single clause and does no pattern matching of its own. It answers whether
+a report of this category against this content type **may** hide it at all,
+never whether it does — trust still decides that:
 
-* **`copyright`** keeps the instant reach on the ordinary trust rule. It is the
-  legal notice the machinery exists for, `Report.changeset/3` already refuses it
-  without a written explanation and a good-faith declaration, and taking the
-  picture down promptly is the point.
+* **`copyright`** keeps the instant reach, and still only for a reporter in good
+  standing. It is the legal notice the machinery exists for, `Report.changeset/3`
+  already refuses it without a written explanation and a good-faith declaration,
+  and taking the picture down promptly is the point.
 * **`family` / `bullying` / `other`** — none of which requires so much as a note
   — open a `flagged` case and mail every admin (`:notify_admins_urgent`), leaving
   the picture where it is. That is exactly what a report against a whole profile
@@ -214,6 +220,89 @@ still on the profile — an admin ruling without knowing which is ruling blind.
 copy (or the still-served one, whenever a report only flagged the picture);
 both the owner's case page and the admin's render it from that one route.
 Without it an admin could not see what a copyright claim is about.
+
+## The notice from outside (issue #2009)
+
+A photographer who finds their work on a post here is not a member, and until
+this the only report form was behind `RequireLogin` — so the freeze that takes a
+reported post offline in seconds never fired for the one complaint that carries
+real liability, and the Impressum address was the whole mechanism.
+**`/system/report`** is the way in without an account
+(`VutuvWeb.PublicReportController`, linked from the footer's Legal group and
+from the Impressum page). It takes the address of the content, a category, the
+explanation, a name, an email and the good-faith declaration; all six are
+required, which is stricter than the in-app form, where only a copyright notice
+demands the last three (`Report.outside_changeset/3`). A member is identified by
+their account and answerable through it; a stranger is answerable only through
+what they wrote and the address they confirmed.
+
+**Nothing happens on the submit.** `Moderation.file_public_notice/2` opens (or
+joins) the case as `flagged` — in front of an admin, with the content left
+exactly where it is — and mails a receipt carrying a confirmation link
+(`Emailer.public_notice_receipt_email/1`). The freeze, the owner's notice and
+the urgent admin mail all wait for `confirm_public_notice/1`, which runs the
+ordinary decision the trust ladder would have made at file time. Until then the
+notice counts for **nothing anywhere**: `Report.effective?/1` is false, and
+`maybe_upgrade_case/4` filters its report list through it, so five unconfirmed
+submissions cannot trip the spam auto-defense and two cannot stand in for the
+two trusted reporters a profile freeze needs.
+
+**The confirmation is a POST, not the GET the link lands on.** A link scanner in
+a corporate mail gateway follows every URL in a message, and a GET that fires a
+takedown would hand somebody's notice to whichever software opened their mail
+first. The GET renders a page with one button; that button is the takedown. The
+claim is one `UPDATE … WHERE confirmed_at IS NULL`, so two clicks in flight
+cannot run the side effects twice.
+
+**The URL is resolved, not trusted.** `Vutuv.Moderation.ContentUrl` asks
+`Vutuv.Fediverse.local_path/1` whether the host is ours (which strips a leading
+`www.` on both sides) and reads the path segments, so the `www.` alias, a
+trailing slash, an appended `?utm_source=`, a fragment, a shouted host, plain
+`http` and a dev port all name the same page. A post is resolved **by the id in
+the path**, never by the handle beside it, which goes stale on a rename; a
+member also answers to a retired handle. Beyond the profile, the post permalink,
+the organization page and the job posting it resolves the two authorizing media
+proxies (`/post_images/…`, `/post_videos/…`) to the post that carries them, and
+the three addresses a profile picture has (`/avatars/<user id>/…`,
+`/covers/<user id>/…`, `/<handle>/avatar.jpg`). **Only content an anonymous
+visitor can already see resolves**, so the form is not an oracle for frozen,
+deleted, restricted or members-only content — "we could not find that page" is
+the honest answer for a typo and for a hidden post alike.
+
+Three things bound what a stranger can cause. The form is rate limited per
+client IP **and per address** (`VutuvWeb.RateLimit.check_public_notice/2`, 5 an
+hour each), so the receipt mail cannot be pointed at a third party's mailbox in
+bulk. A partial unique index on `(case_id, reporter_email)` gives one address
+one receipt per piece of content however often it submits — the member-side
+`(case_id, reporter_id)` index cannot do that job now the column is nullable,
+because `(case_id, NULL)` never conflicts with itself in Postgres. And the
+evidence screenshot fires on the **confirmation**, not the submit, so an
+unauthenticated form is not a button that launches headless Chromium.
+
+**`reporter_id` is nullable, and that touched every place assuming a user row.**
+`Report.reporter_email` / `reporter_name` stand beside it under a CHECK
+constraint that exactly one is set. `trusted_reporter?/1` takes a whole
+`%Report{}` on this path and reads the ladder by **confirmed address**
+(`trusted_reporter_emails/1`, the twin of `trusted_reporter_ids/1`); the
+profile-freeze tally collects ids and addresses in two named private functions
+(`member_reporter_ids/1`, `outside_reporter_emails/1`), because a nil in an
+`IN` list falls out of the query with no stats row and reads back as
+*trusted*. `report_stats/1` replaced `reporter_stats_map/1` on the admin case
+page and is keyed by **report id**, since looking a notice up by its nil
+reporter was a `KeyError` and a 500. `list_reporter_stats/0` is two grouped
+queries now — its inner join to `users` dropped every outside notice from the
+one screen whose job is showing who abuses the report button.
+`Notifier.reporters_content_revised/1` skips a report with no user row rather
+than raising in `deliver_to/2`, and `reject_case/3` marks an outside notice
+abusive without trying to strike an account that does not exist (the mark still
+costs that address its trust for a year). Severance never runs on this path:
+`moderation_severances.reporter_id` is a NOT NULL foreign key and stays one,
+and there is no tie to cut.
+
+Admins see the notifier's **name and address** on the case page, plus an
+"address not confirmed" badge while it is still pending; the owner of the
+reported content never sees either. Telling the outside notifier how the case
+ended is #2011's job — today they get the receipt and nothing after it.
 
 ## The statement of reasons (issue #2010)
 

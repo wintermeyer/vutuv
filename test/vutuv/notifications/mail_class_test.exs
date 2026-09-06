@@ -53,6 +53,10 @@ defmodule Vutuv.Notifications.MailClassTest do
     {:moderation_suspension_email, :transactional},
     {:moderation_deactivation_email, :transactional},
     {:moderation_admin_urgent_email, :transactional},
+    # The receipt for a notice filed at /system/report by somebody with no
+    # account here (issue #2009). Deliberately NOT :critical: an address a
+    # bounce marked undeliverable cannot follow a confirmation link either.
+    {:public_notice_receipt_email, :transactional},
     {:moderation_admin_digest_email, :transactional},
     {:image_rejected_email, :transactional},
     {:job_posting_expiry_reminder_email, :transactional},
@@ -337,6 +341,18 @@ defmodule Vutuv.Notifications.MailClassTest do
     }
 
     Emailer.moderation_admin_urgent_email(user(), @address, case_record)
+  end
+
+  defp build_mail(:public_notice_receipt_email) do
+    Emailer.public_notice_receipt_email(%{
+      name: "Rita Holder",
+      email: @address,
+      locale: "de",
+      type: "post",
+      category: "copyright",
+      content_url: "https://example.com/somebody/posts/1",
+      confirm_url: "https://example.com/system/report/confirm/token"
+    })
   end
 
   defp build_mail(:moderation_admin_digest_email),

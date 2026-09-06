@@ -59,6 +59,19 @@ set itself, possibly wrongly. The registration-attempt notice deliberately
 stays `:transactional` even though it is security mail, because a *third party*
 triggers it by typing somebody else's address into the sign-up form.
 
+**One mail is addressed to somebody with no account here**, the receipt for a
+notice filed at `/system/report` (`public_notice_receipt_email/1`, issue #2009).
+Three things follow from that and none is a detail. It is `:transactional`, not
+`:critical` — an address a bounce marked undeliverable cannot follow a
+confirmation link either, so exempting it from the suppression would buy
+nothing and spend the sender reputation a stranger's typo costs. Its locale
+comes from the sender's own browser at submit time, since there is no member row
+to read one from, and `email_greeting/1` takes a `%User{}` so the templates
+greet by the name that was typed instead. And it is the one mail a stranger can
+cause to be sent to an address they do not own, which is why the form behind it
+is rate limited per address as well as per IP, and why one address gets one
+receipt per piece of content (see `moderation.md`).
+
 ## Multipart bodies
 
 Every email goes out as **multipart** (`text/plain` + `text/html`). The text

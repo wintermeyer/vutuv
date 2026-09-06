@@ -71,9 +71,14 @@ defmodule VutuvWeb.PublicReportController do
   # gateway can follow.
   def confirm(conn, %{"token" => token}) do
     case Moderation.public_notice_state(token) do
-      :confirmed -> render(conn, "confirmed.html", page_title: gettext("Report confirmed"))
-      :pending -> render(conn, "confirm.html", token: token, page_title: gettext("Confirm your report"))
-      :unknown -> ControllerHelpers.render_error(conn, 404)
+      :confirmed ->
+        render(conn, "confirmed.html", page_title: gettext("Report confirmed"))
+
+      :pending ->
+        render(conn, "confirm.html", token: token, page_title: gettext("Confirm your report"))
+
+      :unknown ->
+        ControllerHelpers.render_error(conn, 404)
     end
   end
 
@@ -99,9 +104,7 @@ defmodule VutuvWeb.PublicReportController do
     case ContentUrl.resolve(url) do
       {:error, :foreign_host} ->
         error(conn, params, url, [
-          gettext(
-            "That address is not on this site. We can only act on content published here."
-          )
+          gettext("That address is not on this site. We can only act on content published here.")
         ])
 
       {:error, :not_found} ->
@@ -120,7 +123,11 @@ defmodule VutuvWeb.PublicReportController do
     case Moderation.file_public_notice(content, params) do
       {:ok, _case_record, token} ->
         deliver_receipt(conn, params, url, type, token)
-        render(conn, "sent.html", email: params["reporter_email"], page_title: gettext("Report sent"))
+
+        render(conn, "sent.html",
+          email: params["reporter_email"],
+          page_title: gettext("Report sent")
+        )
 
       {:error, :already_reported} ->
         error(conn, params, url, [

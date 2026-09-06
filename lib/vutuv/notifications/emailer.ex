@@ -39,9 +39,9 @@ defmodule Vutuv.Notifications.Emailer do
   alias Vutuv.Organizations.Organization
   alias Vutuv.Reports.DailyReport
   alias Vutuv.SavedSearches
+  alias VutuvWeb.Admin.ModerationHTML
   alias VutuvWeb.EmailComponents
   alias VutuvWeb.EmailText
-  alias VutuvWeb.Admin.ModerationHTML
   alias VutuvWeb.NotificationDigestText, as: DigestText
   alias VutuvWeb.Plug.Locale
   alias VutuvWeb.ReportHTML
