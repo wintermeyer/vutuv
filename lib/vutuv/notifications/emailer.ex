@@ -41,6 +41,7 @@ defmodule Vutuv.Notifications.Emailer do
   alias Vutuv.SavedSearches
   alias VutuvWeb.EmailComponents
   alias VutuvWeb.EmailText
+  alias VutuvWeb.Admin.ModerationHTML
   alias VutuvWeb.NotificationDigestText, as: DigestText
   alias VutuvWeb.Plug.Locale
   alias VutuvWeb.ReportHTML
@@ -1095,6 +1096,35 @@ defmodule Vutuv.Notifications.Emailer do
 
   defp appeal_reply_to, do: Application.fetch_env!(:vutuv, :appeal_reply_to)
 
+  @doc """
+  The receipt for a notice filed at `/system/report` by somebody who has no
+  account here (issue #2009).
+
+  Its whole job is the confirmation link: until it is followed the case only
+  sits `flagged` in the admin queue and nothing is hidden. That makes this the
+  one mail in the app addressed to an **address a stranger typed**, so two
+  things are deliberate. It is `:transactional`, not `:critical`, so a bounced
+  address is suppressed like any other — an address that cannot receive mail
+  cannot confirm anything either. And its locale is the one the sender's own
+  browser asked for, since there is no member row to read one from.
+  """
+  def public_notice_receipt_email(notice) do
+    locale = get_locale(notice.locale)
+
+    base_email()
+    |> put_class(:transactional)
+    |> to({notice.name, notice.email})
+    |> subject(in_locale(locale, fn -> gettext("Please confirm your report") end))
+    |> render_bodies("report_receipt", locale, %{
+      name: notice.name,
+      content_label: in_locale(locale, fn -> ModerationHTML.content_type_label(notice.type) end),
+      category_label: in_locale(locale, fn -> ReportHTML.category_label(notice.category) end),
+      content_url: notice.content_url,
+      confirm_url: notice.confirm_url,
+      url: public_url()
+    })
+  end
+
   @doc "Admin alert: a whole profile was reported (urgent, sent immediately)."
   # `case_record` arrives with owner + reports/reporters preloaded (see
   # `Vutuv.Moderation.Notifier.admins_urgent/1`): the mail carries the
@@ -1106,16 +1136,25 @@ defmodule Vutuv.Notifications.Emailer do
       |> Enum.sort_by(& &1.inserted_at, NaiveDateTime)
       |> List.last()
 
+    # What was reported, in the admin's language. The mail used to open with
+    # "a member profile was reported" for every case it is sent about, which
+    # has been wrong since a picture could be flagged (#2030) and is wrong for
+    # every post an outside notice names (#2009).
+    locale = get_locale(user.locale)
+
     assigns = %{
       case_id: case_record.id,
       owner_slug: case_record.owner.username,
+      content_label:
+        in_locale(locale, fn -> ModerationHTML.content_type_label(case_record.content_type) end),
+      profile?: case_record.content_type in ["user", "organization"],
       category_label: localized_category_label(report, user),
       note: report && presence(report.note),
       report_count: length(case_record.reports)
     }
 
     build_email(user, email, "moderation_admin_urgent", assigns, fn ->
-      gettext("Moderation: a profile was reported")
+      gettext("Moderation: something was reported")
     end)
   end
 

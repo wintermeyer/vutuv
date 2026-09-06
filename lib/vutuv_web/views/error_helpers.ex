@@ -9,6 +9,20 @@ defmodule VutuvWeb.ErrorHelpers do
   alias Phoenix.HTML.Form
 
   @doc """
+  Every message a rejected changeset carries, oldest first, translated.
+
+  For the two report forms, which have no per-field error slots and show
+  everything as one banner: `Vutuv.Moderation.Report`'s messages are whole
+  sentences addressed to the reporter, so nothing here has to guess one from a
+  field name. `errors` is newest-first, hence the reverse.
+  """
+  def changeset_messages(%Ecto.Changeset{errors: errors}) do
+    errors
+    |> Enum.reverse()
+    |> Enum.map(fn {_field, error} -> translate_error(error) end)
+  end
+
+  @doc """
   Generates tag for inlined form input errors.
 
   The span carries a stable `id` derived from the input's own id
@@ -127,6 +141,17 @@ defmodule VutuvWeb.ErrorHelpers do
         "Please tell us which work it is and where the original can be seen."
       ),
       dgettext_noop("errors", "Please confirm that you are making this claim in good faith."),
+      # Vutuv.Moderation.Report, the public notice form (issue #2009).
+      dgettext_noop("errors", "Please tell us your name."),
+      dgettext_noop("errors", "Please give us an email address."),
+      dgettext_noop("errors", "That does not look like an email address."),
+      dgettext_noop("errors", "That address is too long."),
+      dgettext_noop("errors", "Your name is too long."),
+      dgettext_noop(
+        "errors",
+        "Please tell us what is wrong with this content, in your own words."
+      ),
+      dgettext_noop("errors", "You already reported this."),
       # Vutuv.Posts, the post tag cap (issue #1237).
       dgettext_noop("errors", "Please use at most %{max} tags."),
       # Vutuv.Mentions, the per-post mention cap (anti-spam).

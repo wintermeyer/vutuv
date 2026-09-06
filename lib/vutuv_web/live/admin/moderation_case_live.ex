@@ -93,9 +93,6 @@ defmodule VutuvWeb.Admin.ModerationCaseLive do
   end
 
   defp assign_case(socket, case_record) do
-    stats_by_reporter =
-      Moderation.reporter_stats_map(Enum.map(case_record.reports, & &1.reporter_id))
-
     content = Moderation.case_content(case_record)
 
     socket
@@ -108,12 +105,10 @@ defmodule VutuvWeb.Admin.ModerationCaseLive do
       :severance_by_reporter,
       Map.new(Moderation.case_severances(case_record), &{&1.reporter_id, &1})
     )
-    |> assign(
-      :reporter_stats,
-      Map.new(case_record.reports, fn report ->
-        {report.id, Map.fetch!(stats_by_reporter, report.reporter_id)}
-      end)
-    )
+    # Keyed by the report, not by the reporter: since issue #2009 a case can
+    # carry both a member's report and an outside notice, and looking the
+    # second one up by its (nil) reporter id was a `KeyError` and a 500 here.
+    |> assign(:reporter_stats, Moderation.report_stats(case_record.reports))
   end
 
   # For message cases: the reported message in its conversation (the last few
@@ -309,9 +304,29 @@ defmodule VutuvWeb.Admin.ModerationCaseLive do
               <span class="inline-flex items-center rounded-lg bg-brand-50 px-2 py-0.5 text-xs font-medium text-brand-700 dark:bg-brand-900/40 dark:text-brand-100">
                 {category_label(report.category)}
               </span>
-              <a href={~p"/#{report.reporter}"} class="ml-1 font-semibold text-brand-600 hover:text-brand-700 dark:text-brand-400 dark:hover:text-brand-300">
+              <%!-- Who filed it. A member is an @handle; somebody without an
+                    account here is their name and the address they confirmed,
+                    which is what an admin needs to write back (issue #2009).
+                    The owner of the content never sees either. --%>
+              <a
+                :if={report.reporter}
+                href={~p"/#{report.reporter}"}
+                class="ml-1 font-semibold text-brand-600 hover:text-brand-700 dark:text-brand-400 dark:hover:text-brand-300"
+              >
                 @{report.reporter.username}
               </a>
+              <span :if={is_nil(report.reporter)} class="ml-1 font-semibold text-slate-900 dark:text-white">
+                {report.reporter_name}
+                <a href={"mailto:#{report.reporter_email}"} class="font-normal text-brand-600 hover:text-brand-700 dark:text-brand-400 dark:hover:text-brand-300">
+                  &lt;{report.reporter_email}&gt;
+                </a>
+              </span>
+              <span
+                :if={is_nil(report.reporter) and is_nil(report.confirmed_at)}
+                class="ml-1 inline-flex items-center rounded-lg bg-amber-50 px-2 py-0.5 text-xs font-medium text-amber-800 ring-1 ring-amber-200 dark:bg-amber-900/30 dark:text-amber-200 dark:ring-amber-900"
+              >
+                {gettext("address not confirmed")}
+              </span>
               <% stats = @reporter_stats[report.id] %>
               <span class="text-slate-600 dark:text-slate-400">
                 · {ngettext("%{count} report so far", "%{count} reports so far", stats.total)}, {gettext(
@@ -396,9 +411,20 @@ defmodule VutuvWeb.Admin.ModerationCaseLive do
             </p>
             <label :for={report <- @case.reports} class="mt-2 flex items-start gap-2 text-sm">
               <input type="checkbox" name="abusive_report_ids[]" value={report.id} class="mt-0.5" />
-              <span>
+              <%!-- A member is struck on the ladder for an abusive report; an
+                    outside notifier has no account to strike, so the mark
+                    only counts against the address's own trust (issue #2009).
+                    Two sentences, because promising a strike that cannot
+                    happen is worse than saying what does. --%>
+              <span :if={report.reporter}>
                 {gettext("The report by @%{slug} was a deliberate weapon (strikes the reporter)",
                   slug: report.reporter.username
+                )}
+              </span>
+              <span :if={is_nil(report.reporter)}>
+                {gettext(
+                  "The report by %{email} was a deliberate weapon (that address loses our trust)",
+                  email: report.reporter_email
                 )}
               </span>
             </label>

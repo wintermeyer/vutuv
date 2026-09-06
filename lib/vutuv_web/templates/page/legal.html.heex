@@ -20,4 +20,27 @@
       </p>
     <% end %>
   </.card>
+
+  <%!-- Somebody who finds their own work on this site looks for an address in
+        the Impressum, so the form that is faster than writing a letter belongs
+        beside it (issue #2009). Rendered here rather than written into the
+        page body, which is per-installation content an admin edits. --%>
+  <.card :if={@slug == "impressum"} class="mt-4">
+    <h2 class="font-bold text-slate-900 dark:text-white">
+      {gettext("Reporting content on this site")}
+    </h2>
+    <p class="mt-1 text-sm text-slate-600 dark:text-slate-400">
+      {gettext(
+        "Is content published here yours, or does it break the law? You can tell us without an account."
+      )}
+    </p>
+    <p class="mt-3">
+      <.link
+        href={~p"/system/report"}
+        class="font-semibold text-brand-600 hover:text-brand-700 dark:text-brand-400 dark:hover:text-brand-300"
+      >
+        {gettext("Report content")}
+      </.link>
+    </p>
+  </.card>
 </div>

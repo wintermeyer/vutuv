@@ -1,0 +1,18 @@
+<.email_layout preheader="Please confirm your report" locale={@locale}>
+  <.email_p>Hi {@name},</.email_p>
+  <.email_p>
+    we have your report. To have it acted on, please confirm this email address. Until you do, the
+    case sits untouched with our admins and nothing about the reported content changes.
+  </.email_p>
+  <.email_button href={@confirm_url}>Confirm the report</.email_button>
+  <.email_panel>
+    <.email_row label="Reported">{@content_label}</.email_row>
+    <.email_row label="Address">{@content_url}</.email_row>
+    <.email_row label="Reported as">{@category_label}</.email_row>
+  </.email_panel>
+  <.email_p>
+    If you did not send this report, simply ignore this email. Nothing happens without the
+    confirmation.
+  </.email_p>
+  <.email_signature locale={@locale} />
+</.email_layout>

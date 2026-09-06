@@ -45,11 +45,14 @@ defmodule VutuvWeb.Admin.ModerationHTML do
   def event_label("owner_removed"), do: gettext("Account removed")
   def event_label("strike_issued"), do: gettext("Strike issued")
   def event_label("evidence_captured"), do: gettext("Evidence screenshot captured")
+  def event_label("notice_filed"), do: gettext("Report filed from outside")
+  def event_label("notice_confirmed"), do: gettext("Outside reporter confirmed their address")
   def event_label(other), do: other
 
   # The small action-specific facts an event carries (JSONB, string keys).
-  def event_detail("report_filed", %{"category" => category}) when is_binary(category),
-    do: category_label(category)
+  def event_detail(action, %{"category" => category})
+      when is_binary(category) and action in ["report_filed", "notice_filed", "notice_confirmed"],
+      do: category_label(category)
 
   def event_detail("strike_issued", %{"level" => level, "role" => role}) do
     role_label =

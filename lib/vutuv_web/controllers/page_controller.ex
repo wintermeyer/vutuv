@@ -256,7 +256,11 @@ defmodule VutuvWeb.PageController do
   # stored in Vutuv.Legal. Legal copy itself is not translated; only the title
   # and the not-written-yet placeholder are.
   defp render_legal(conn, slug, title) do
-    render(conn, "legal.html", page: Vutuv.Legal.get_page(slug), page_title: title)
+    # The slug travels with the page so the Impressum can carry the notice-form
+    # link (issue #2009). It cannot live in the page body: that body is
+    # per-installation content an admin writes at /admin/legal, so a link put
+    # there would exist on this installation only.
+    render(conn, "legal.html", page: Vutuv.Legal.get_page(slug), slug: slug, page_title: title)
   end
 
   @doc """

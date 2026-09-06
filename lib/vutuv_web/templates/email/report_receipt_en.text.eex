@@ -1,0 +1,19 @@
+Hi <%= @name %>,
+
+we have your report. To have it acted on, please confirm this email address:
+
+<%= @confirm_url %>
+
+Until you do, the case sits untouched with our admins and nothing about the
+reported content changes.
+
+  Reported:     <%= @content_label %>
+  Address:      <%= @content_url %>
+  Reported as:  <%= @category_label %>
+
+If you did not send this report, simply ignore this email. Nothing happens
+without the confirmation.
+
+<%= render "_signature_en.text" %>
+
+<%= render "_footer.text" %>

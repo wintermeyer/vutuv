@@ -40,6 +40,12 @@ defmodule VutuvWeb.RateLimit do
   @probe_limit 20
   @probe_window_ms :timer.hours(1)
 
+  # The public notice form (issue #2009). See `check_public_notice/2` for why
+  # this one is tight rather than generous.
+  @notice_limit 5
+  @notice_confirm_limit 30
+  @notice_window_ms :timer.hours(1)
+
   @doc """
   Returns `:ok` when the request is within the limit for `event`, or
   `:rate_limited` once the per-IP or per-identity counter is exceeded. `extra` is
@@ -173,6 +179,36 @@ defmodule VutuvWeb.RateLimit do
   the member alone, since a LiveView has no conn to read a client address from.
   """
   def check_link_verify(user), do: check_link_verify(nil, user)
+
+  @doc """
+  Throttles the public notice form at `/system/report` (issue #2009):
+  #{@notice_limit} submissions per hour per client IP, and the same per
+  address.
+
+  It is the app's only unauthenticated endpoint that both **sends mail to an
+  address a stranger typed** and can end in content going offline, so the
+  budget is deliberately small — a rights holder filing several notices in one
+  sitting is well inside it, a script pointing the receipt mail at somebody
+  else's mailbox is not. The per-address half is what caps that amplification
+  across many different pieces of content; the unique index on
+  `(case_id, reporter_email)` caps it for one piece.
+  """
+  def check_public_notice(conn, email) do
+    check(conn, :public_notice, email, limit: @notice_limit, window_ms: @notice_window_ms)
+  end
+
+  @doc """
+  Throttles following a notice's confirmation link (#{@notice_confirm_limit} per
+  hour per IP). The token itself is ~165 bits, so this is not what stops a
+  guess; it stops a client that found one link from replaying the whole
+  confirmation path in a loop.
+  """
+  def check_public_notice_confirm(conn) do
+    check(conn, :public_notice_confirm, nil,
+      limit: @notice_confirm_limit,
+      window_ms: @notice_window_ms
+    )
+  end
 
   defp identity_keys(_event, nil), do: []
   defp identity_keys(event, extra), do: [{event, :id, hash_identity(extra)}]

@@ -41,12 +41,20 @@ defmodule Vutuv.Moderation.Notifier do
     mail_owner(case_record, &Emailer.moderation_review_email/3)
   end
 
-  @doc "Tell every reporter of the case that the owner revised the content."
+  @doc """
+  Tell every reporter of the case that the owner revised the content.
+
+  Members only. A report filed from the public form (issue #2009) has no
+  reporter row — `deliver_to/2` matches on `%User{}` and would raise, so the
+  nil is filtered out here rather than left to crash the owner's own edit.
+  Telling the outside notifier how their notice ended is #2011's job and needs
+  a mail this one is not (it is addressed to a member, in a member's locale).
+  """
   def reporters_content_revised(%Case{} = case_record) do
     case_record = Repo.preload(case_record, reports: :reporter)
 
-    for report <- case_record.reports do
-      deliver_to(report.reporter, &Emailer.moderation_revised_email/2)
+    for %{reporter: %User{} = reporter} <- case_record.reports do
+      deliver_to(reporter, &Emailer.moderation_revised_email/2)
     end
 
     :ok

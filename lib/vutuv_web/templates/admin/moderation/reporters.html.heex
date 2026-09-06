@@ -31,7 +31,12 @@
       </thead>
       <tbody>
         <tr :for={row <- @stats}>
-          <td><a href={~p"/#{row.reporter}"}>@{row.reporter.username}</a></td>
+          <%!-- A member, or an outside notifier by the address they confirmed
+                (issue #2009). Without the second half every public notice fell
+                out of this page, which is the one screen whose job is showing
+                who abuses the report button. --%>
+          <td :if={row.reporter}><a href={~p"/#{row.reporter}"}>@{row.reporter.username}</a></td>
+          <td :if={is_nil(row.reporter)}><a href={"mailto:#{row.email}"}>{row.email}</a></td>
           <td>{row.total}</td>
           <td>{row.rejected}</td>
           <td>{row.abusive}</td>
