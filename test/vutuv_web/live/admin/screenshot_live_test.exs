@@ -273,5 +273,57 @@ defmodule VutuvWeb.Admin.ScreenshotLiveTest do
       refute Repo.get(PostScreenshot, blocked.id)
       assert Repo.get(PostScreenshot, kept.id)
     end
+
+    test "an automatic entry says so and links to the capture that decided it", %{conn: conn} do
+      # An admin overruling the machine has to see what it saw; a line that
+      # looks exactly like a hand-written one gives them nothing to judge.
+      {:ok, entry} = automatic_entry()
+
+      {:ok, view, _html} = live(conn, ~p"/admin/screenshots?tab=blocklist")
+
+      assert has_element?(view, "#blocklist-evidence-#{entry.id}")
+      assert render(view) =~ "Automatic"
+      assert render(view) =~ "cookie dialog"
+    end
+
+    test "the evidence route streams the picture to an admin", %{conn: conn} do
+      {:ok, entry} = automatic_entry()
+
+      response = conn |> get(~p"/admin/screenshots/blocklist/#{entry.id}/evidence")
+
+      assert response.status == 200
+      assert Plug.Conn.get_resp_header(response, "content-type") == ["image/jpeg"]
+    end
+
+    test "the evidence route 404s for an entry that has no picture", %{conn: conn} do
+      {:ok, entry} = ScreenshotBlocklist.create_entry(%{"pattern" => "byhand.example"})
+
+      assert conn |> get(~p"/admin/screenshots/blocklist/#{entry.id}/evidence") |> response(404)
+    end
+  end
+
+  # A blocklist line as the page check writes it: source "ai", the model's
+  # sentence as the note, and a real picture in the evidence tree.
+  defp automatic_entry do
+    source = Path.join(System.tmp_dir!(), "evidence_#{System.unique_integer([:positive])}.jpg")
+    {:ok, img} = Image.new(400, 264, color: [10, 120, 200])
+    {:ok, _written} = Image.write(img, source)
+    on_exit(fn -> File.rm(source) end)
+
+    result =
+      ScreenshotBlocklist.block_host(
+        "walled.example",
+        "https://walled.example/news/1",
+        %{
+          obstruction: "consent",
+          coverage_percent: 70,
+          reason: "A cookie dialog covers the page."
+        },
+        source
+      )
+
+    {:ok, entry} = result
+    on_exit(fn -> File.rm(ScreenshotBlocklist.evidence_path(entry.evidence_file)) end)
+    result
   end
 end

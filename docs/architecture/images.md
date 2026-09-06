@@ -521,6 +521,50 @@ other subdomain is covered but `notheise.de` is not) or a URL
 (`example.com/news`, `example.com/*/private`, `https://example.com/story-1`,
 matched by whole path segments, with scheme, port, query and fragment ignored).
 
+### The list writes itself: `Vutuv.ScreenshotBlocklist.Vision`
+
+A hand-written list only ever holds the sites somebody noticed. The nine
+entries this installation had accumulated by 2026-09 missed zeit.de, faz.net,
+golem.de and sueddeutsche.de, each of which answers a capture with a
+full-screen consent-or-pay wall. So every fresh capture is judged, between the
+shot and the browser frame, by the same local Ollama vision model that
+moderates images (`:ollama_vision_model`, `:screenshot_page_check`), on one
+question: does this picture show the page, or something in front of it?
+
+The answer splits three ways, and the split is the whole design:
+
+| verdict | what it says | what happens |
+| --- | --- | --- |
+| `usable` | the page is visible | the capture is kept, the host is remembered as fine |
+| `consent` `ads` `login` `paywall` `captcha` | a property of the **site** | the host goes on the blocklist (`source: "ai"`, the model's sentence as the note, the capture copied into `screenshot_evidence/` as evidence) and the capture is discarded — `capture_framed/2` answers `{:error, :obstructed}`, which all three queues treat as permanent |
+| `error` `blank` | a property of this **attempt** | only the capture is discarded (`{:error, :unusable}`, transient, retried) — an unreachable host is not a reason to silence a site forever |
+
+`screenshot_page_checks` is the memory: one row per host with the verdict, the
+model's sentence, the judged URL and the model's name. A `usable` verdict
+stands for `recheck_after_days/0` (90), so the site behind 1,175 of this
+installation's 2,026 stored captures costs one inference rather than 1,175,
+and a site that adds a consent layer next quarter is still caught. An
+`unknown` row is the third state, and it exists for the sweeper-clock trap:
+a host whose picture cannot be decoded must still leave the due list, or an
+oldest-first queue spends every batch on the one item that can never finish.
+
+Two asymmetries against the image scan it borrows its machinery from. This
+check **fails open** — no verdict, no Ollama, an unparseable answer, and the
+capture is simply kept; the worst case is a cookie dialog in a preview for one
+more day, while a blocklist entry silences a whole site for every member. And
+a `blocked` answer is confirmed by `:screenshot_check_votes` independent
+opinions (all must agree) before it is acted on, while `usable` is believed on
+one, so the common path is exactly one inference.
+
+`Vutuv.ScreenshotBlocklist.Backfill` + `.Sweeper` do the same for the captures
+taken before any of this existed: per **host**, judging the stored thumb
+rather than shooting the page again, and purging the stale previews of a
+freshly blocked site. An admin removing an automatic entry
+(`/admin/screenshots?tab=blocklist`, where such lines are marked *Automatic*
+and link to their evidence through `/admin/screenshots/blocklist/:id/evidence`)
+records a `usable` verdict in the same step — otherwise the next capture would
+reach the same conclusion and put the line straight back.
+
 Nothing downstream depends on a screenshot existing: a post shows its plain
 link, a profile link renders `<.link_thumb>`'s tile naming the site instead
 of the "not created yet" placeholder, and an organization page drops its

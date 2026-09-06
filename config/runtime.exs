@@ -477,6 +477,19 @@ if config_env() == :prod do
     config :vutuv, :moderate_images, false
   end
 
+  # The link-preview page check: judges each capture on whether it shows the
+  # page or a consent/ad/login wall, and blocklists the site when it does not.
+  # SCREENSHOT_PAGE_CHECK=false switches it off (an installation whose Ollama
+  # should only do the safety scan); SCREENSHOT_CHECK_VOTES sets how many
+  # opinions must agree before a site is silenced.
+  if System.get_env("SCREENSHOT_PAGE_CHECK") == "false" do
+    config :vutuv, :screenshot_page_check, false
+  end
+
+  if votes = System.get_env("SCREENSHOT_CHECK_VOTES") do
+    config :vutuv, :screenshot_check_votes, String.to_integer(votes)
+  end
+
   if ollama_url = System.get_env("OLLAMA_URL") do
     config :vutuv, :ollama_url, ollama_url
   end

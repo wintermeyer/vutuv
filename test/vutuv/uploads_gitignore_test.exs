@@ -28,6 +28,7 @@ defmodule Vutuv.UploadsGitignoreTest do
     screenshots
     originals
     moderation_evidence
+    screenshot_evidence
     quarantine
     frozen
     qualification_documents

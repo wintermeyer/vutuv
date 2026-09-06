@@ -50,6 +50,9 @@ erl_crash.dump
 /screenshots
 /originals
 /moderation_evidence
+# the capture that caused an automatic screenshot-blocklist entry, kept as the
+# evidence an admin reviews before overruling it (never served statically)
+/screenshot_evidence
 /qualification_documents
 /job_reference_documents
 /organization_images

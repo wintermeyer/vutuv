@@ -30,6 +30,7 @@ defmodule Vutuv.PageScreenshot do
   alias Vutuv.Profiles.Url
   alias Vutuv.Repo
   alias Vutuv.ScreenshotBlocklist
+  alias Vutuv.ScreenshotBlocklist.Vision
   alias Vutuv.SocialFeed.Http
   alias Vutuv.Ssrf
   alias Vutuv.Ssrf.SocksProxy
@@ -209,6 +210,19 @@ defmodule Vutuv.PageScreenshot do
         # renders without a screenshot, which every surface handles.
         :ok
 
+      {:error, :obstructed} ->
+        # The page check just put this site on the blocklist because the shot
+        # was a consent or login wall: the `:blocklisted` outcome above, one
+        # capture later, and equally not a failure.
+        :ok
+
+      {:error, :unusable} ->
+        # The capture came back as an error or a blank page. Worth nothing to
+        # a reader, but a property of this attempt rather than of the site, so
+        # the row is left alone for the next run to try again.
+        Logger.info(failure_message(url, :unusable))
+        :error
+
       {:error, :internal_target = reason} ->
         # A permanent property of this URL and an expected policy outcome: an
         # SSRF-refused internal host (issue #777). Flag it so the bulk task
@@ -325,7 +339,13 @@ defmodule Vutuv.PageScreenshot do
         framed_path = tmp_path("frame", id, "webp")
 
         try do
+          # The page check sits between the shot and the frame, on the bare
+          # capture: a model judging what covers the page should see the page,
+          # not our browser drawing around it. It answers `:ok` for anything
+          # it cannot judge, so a capture is never lost to a check that could
+          # not run (`Vutuv.ScreenshotBlocklist.Vision`).
           with :ok <- capture(url_value, page_path, proxy_port: proxy_port, consent: true),
+               :ok <- Vision.review(url_value, page_path),
                {:ok, ^framed_path} <- BrowserFrame.wrap(page_path, url_value, framed_path) do
             {:ok, framed_path}
           end

@@ -764,7 +764,7 @@ msgstr ""
 msgid "Type of Number"
 msgstr ""
 
-#: lib/vutuv_web/live/admin/screenshot_live.ex:415
+#: lib/vutuv_web/live/admin/screenshot_live.ex:440
 #: lib/vutuv_web/templates/url/form_content.html.heex:5
 #: lib/vutuv_web/templates/url/show.html.heex:19
 #, elixir-autogen
@@ -2160,7 +2160,7 @@ msgstr ""
 msgid "People who don't follow me"
 msgstr ""
 
-#: lib/vutuv_web/live/admin/screenshot_live.ex:416
+#: lib/vutuv_web/live/admin/screenshot_live.ex:441
 #: lib/vutuv_web/live/post_live/composer.ex:2203
 #, elixir-autogen, elixir-format
 msgid "Post"
@@ -2205,7 +2205,7 @@ msgstr ""
 #: lib/vutuv_web/components/fediverse_components.ex:497
 #: lib/vutuv_web/components/job_exclusion_components.ex:189
 #: lib/vutuv_web/components/post_components.ex:1461
-#: lib/vutuv_web/live/admin/screenshot_live.ex:327
+#: lib/vutuv_web/live/admin/screenshot_live.ex:352
 #: lib/vutuv_web/live/admin/tag_merge_live.ex:711
 #: lib/vutuv_web/live/job_search_exclusions_live.ex:229
 #: lib/vutuv_web/live/organization_live/domains.ex:265
@@ -3281,7 +3281,7 @@ msgstr ""
 #: lib/vutuv_web/live/admin/job_live.ex:361
 #: lib/vutuv_web/live/admin/moderation_live.ex:53
 #: lib/vutuv_web/live/admin/organization_live.ex:246
-#: lib/vutuv_web/live/admin/screenshot_live.ex:414
+#: lib/vutuv_web/live/admin/screenshot_live.ex:439
 #: lib/vutuv_web/live/admin/user_live.ex:299
 #: lib/vutuv_web/templates/admin/account/index.html.heex:52
 #: lib/vutuv_web/templates/admin/ad/index.html.heex:59
@@ -3464,7 +3464,7 @@ msgstr ""
 msgid "A warning for your vutuv account"
 msgstr ""
 
-#: lib/vutuv/notifications/emailer.ex:1188
+#: lib/vutuv/notifications/emailer.ex:1197
 #, elixir-autogen, elixir-format
 msgid "Moderation: %{count} cases are waiting"
 msgstr ""
@@ -3880,8 +3880,8 @@ msgstr ""
 #: lib/vutuv_web/agent_docs/markdown.ex:152
 #: lib/vutuv_web/agent_docs/text.ex:104
 #: lib/vutuv_web/agent_docs/text.ex:138
-#: lib/vutuv_web/live/admin/screenshot_live.ex:380
-#: lib/vutuv_web/live/admin/screenshot_live.ex:389
+#: lib/vutuv_web/live/admin/screenshot_live.ex:405
+#: lib/vutuv_web/live/admin/screenshot_live.ex:414
 #: lib/vutuv_web/live/notification_live/index.ex:1538
 #: lib/vutuv_web/templates/post/show.html.heex:10
 #, elixir-autogen, elixir-format
@@ -5279,8 +5279,8 @@ msgstr ""
 msgid "Account menu"
 msgstr ""
 
-#: lib/vutuv_web/live/admin/screenshot_live.ex:310
-#: lib/vutuv_web/live/admin/screenshot_live.ex:420
+#: lib/vutuv_web/live/admin/screenshot_live.ex:311
+#: lib/vutuv_web/live/admin/screenshot_live.ex:445
 #: lib/vutuv_web/templates/layout/app.html.heex:169
 #, elixir-autogen, elixir-format
 msgid "Actions"
@@ -5914,7 +5914,7 @@ msgid "Add a passkey"
 msgstr ""
 
 #: lib/vutuv_web/live/admin/newsletter_group_live.ex:1109
-#: lib/vutuv_web/live/admin/screenshot_live.ex:309
+#: lib/vutuv_web/live/admin/screenshot_live.ex:310
 #: lib/vutuv_web/live/fediverse_following_live.ex:264
 #: lib/vutuv_web/views/settings_html.ex:372
 #, elixir-autogen, elixir-format
@@ -10604,22 +10604,22 @@ msgstr ""
 msgid "Auto-generated screenshots for single-link posts: watch the capture queue and browse the gallery of finished shots, each linked to its post."
 msgstr ""
 
-#: lib/vutuv_web/live/admin/screenshot_live.ex:353
+#: lib/vutuv_web/live/admin/screenshot_live.ex:378
 #, elixir-autogen, elixir-format
 msgid "Captured screenshots"
 msgstr ""
 
-#: lib/vutuv_web/live/admin/screenshot_live.ex:524
+#: lib/vutuv_web/live/admin/screenshot_live.ex:549
 #, elixir-autogen, elixir-format
 msgid "Capturing"
 msgstr ""
 
-#: lib/vutuv_web/live/admin/screenshot_live.ex:355
+#: lib/vutuv_web/live/admin/screenshot_live.ex:380
 #, elixir-autogen, elixir-format
 msgid "Every captured link screenshot, newest first. Each links to the page and its post."
 msgstr ""
 
-#: lib/vutuv_web/live/admin/screenshot_live.ex:526
+#: lib/vutuv_web/live/admin/screenshot_live.ex:551
 #, elixir-autogen, elixir-format
 msgid "Failed"
 msgstr ""
@@ -10631,12 +10631,12 @@ msgstr ""
 msgid "Gallery"
 msgstr ""
 
-#: lib/vutuv_web/live/admin/screenshot_live.ex:405
+#: lib/vutuv_web/live/admin/screenshot_live.ex:430
 #, elixir-autogen, elixir-format
 msgid "Jobs waiting, in flight, or given up. The worker retries transient failures with backoff and re-queues anything a restart left mid-capture."
 msgstr ""
 
-#: lib/vutuv_web/live/admin/screenshot_live.ex:418
+#: lib/vutuv_web/live/admin/screenshot_live.ex:443
 #, elixir-autogen, elixir-format
 msgid "Last error"
 msgstr ""
@@ -10649,7 +10649,7 @@ msgstr ""
 msgid "Link screenshots"
 msgstr ""
 
-#: lib/vutuv_web/live/admin/screenshot_live.ex:358
+#: lib/vutuv_web/live/admin/screenshot_live.ex:383
 #, elixir-autogen, elixir-format
 msgid "No screenshots captured yet."
 msgstr ""
@@ -10662,35 +10662,35 @@ msgstr ""
 #: lib/vutuv_web/live/admin/organization_live.ex:165
 #: lib/vutuv_web/live/admin/organization_live.ex:179
 #: lib/vutuv_web/live/admin/organization_live.ex:194
-#: lib/vutuv_web/live/admin/screenshot_live.ex:523
+#: lib/vutuv_web/live/admin/screenshot_live.ex:548
 #: lib/vutuv_web/live/organization_live/domains.ex:221
 #, elixir-autogen, elixir-format
 msgid "Pending"
 msgstr ""
 
 #: lib/vutuv_web/live/admin/screenshot_live.ex:191
-#: lib/vutuv_web/live/admin/screenshot_live.ex:403
+#: lib/vutuv_web/live/admin/screenshot_live.ex:428
 #, elixir-autogen, elixir-format
 msgid "Queue"
 msgstr ""
 
-#: lib/vutuv_web/live/admin/screenshot_live.ex:419
+#: lib/vutuv_web/live/admin/screenshot_live.ex:444
 #, elixir-autogen, elixir-format
 msgid "Queued"
 msgstr ""
 
 #: lib/vutuv_web/components/video_components.ex:214
-#: lib/vutuv_web/live/admin/screenshot_live.ex:525
+#: lib/vutuv_web/live/admin/screenshot_live.ex:550
 #, elixir-autogen, elixir-format
 msgid "Ready"
 msgstr ""
 
-#: lib/vutuv_web/live/admin/screenshot_live.ex:453
+#: lib/vutuv_web/live/admin/screenshot_live.ex:478
 #, elixir-autogen, elixir-format
 msgid "Retry"
 msgstr ""
 
-#: lib/vutuv_web/live/admin/screenshot_live.ex:451
+#: lib/vutuv_web/live/admin/screenshot_live.ex:476
 #, elixir-autogen, elixir-format
 msgid "Retrying…"
 msgstr ""
@@ -10700,7 +10700,7 @@ msgstr ""
 msgid "Screenshot job queued again."
 msgstr ""
 
-#: lib/vutuv_web/live/admin/screenshot_live.ex:408
+#: lib/vutuv_web/live/admin/screenshot_live.ex:433
 #, elixir-autogen, elixir-format
 msgid "The queue is empty."
 msgstr ""
@@ -10710,7 +10710,7 @@ msgstr ""
 msgid "This job cannot be queued again."
 msgstr ""
 
-#: lib/vutuv_web/live/admin/screenshot_live.ex:417
+#: lib/vutuv_web/live/admin/screenshot_live.ex:442
 #, elixir-autogen, elixir-format
 msgid "Tries"
 msgstr ""
@@ -17475,12 +17475,12 @@ msgstr ""
 msgid "%{pattern} is on the blocklist now."
 msgstr ""
 
-#: lib/vutuv_web/live/admin/screenshot_live.ex:481
+#: lib/vutuv_web/live/admin/screenshot_live.ex:506
 #, elixir-autogen, elixir-format
 msgid "* stands for exactly one path segment"
 msgstr ""
 
-#: lib/vutuv_web/live/admin/screenshot_live.ex:337
+#: lib/vutuv_web/live/admin/screenshot_live.ex:362
 #, elixir-autogen, elixir-format
 msgid "Adding an entry stops new captures, but a page captured before it stays on the profile or post that shows it, because nothing re-captures a link whose URL has not changed. This removes every stored screenshot of a page that is on the list today."
 msgstr ""
@@ -17517,17 +17517,17 @@ msgstr ""
 msgid "Pages this installation never screenshots. Some sites answer a headless capture with a cookie banner, a login wall or a bot check, so the picture shows the dialog instead of the page. Nothing else changes for a listed link: a post shows the plain link, and a profile link shows the site's name in place of a thumbnail."
 msgstr ""
 
-#: lib/vutuv_web/live/admin/screenshot_live.ex:324
+#: lib/vutuv_web/live/admin/screenshot_live.ex:349
 #, elixir-autogen, elixir-format
 msgid "Remove %{pattern} from the blocklist?"
 msgstr ""
 
-#: lib/vutuv_web/live/admin/screenshot_live.ex:347
+#: lib/vutuv_web/live/admin/screenshot_live.ex:372
 #, elixir-autogen, elixir-format
 msgid "Remove the stored screenshots of every blocklisted page?"
 msgstr ""
 
-#: lib/vutuv_web/live/admin/screenshot_live.ex:349
+#: lib/vutuv_web/live/admin/screenshot_live.ex:374
 #, elixir-autogen, elixir-format
 msgid "Remove them now"
 msgstr ""
@@ -17537,12 +17537,12 @@ msgstr ""
 msgid "Removed %{links} link screenshot(s) and %{posts} post screenshot(s)."
 msgstr ""
 
-#: lib/vutuv_web/live/admin/screenshot_live.ex:346
+#: lib/vutuv_web/live/admin/screenshot_live.ex:371
 #, elixir-autogen, elixir-format
 msgid "Removing…"
 msgstr ""
 
-#: lib/vutuv_web/live/admin/screenshot_live.ex:335
+#: lib/vutuv_web/live/admin/screenshot_live.ex:360
 #, elixir-autogen, elixir-format
 msgid "Screenshots taken earlier"
 msgstr ""
@@ -17572,22 +17572,22 @@ msgstr ""
 msgid "Why (optional)"
 msgstr ""
 
-#: lib/vutuv_web/live/admin/screenshot_live.ex:482
+#: lib/vutuv_web/live/admin/screenshot_live.ex:507
 #, elixir-autogen, elixir-format
 msgid "one page (the scheme is ignored)"
 msgstr ""
 
-#: lib/vutuv_web/live/admin/screenshot_live.ex:480
+#: lib/vutuv_web/live/admin/screenshot_live.ex:505
 #, elixir-autogen, elixir-format
 msgid "that path and everything below it"
 msgstr ""
 
-#: lib/vutuv_web/live/admin/screenshot_live.ex:479
+#: lib/vutuv_web/live/admin/screenshot_live.ex:504
 #, elixir-autogen, elixir-format
 msgid "the same rule spelled out"
 msgstr ""
 
-#: lib/vutuv_web/live/admin/screenshot_live.ex:478
+#: lib/vutuv_web/live/admin/screenshot_live.ex:503
 #, elixir-autogen, elixir-format
 msgid "the site: the domain, every subdomain, every path"
 msgstr ""
@@ -21946,6 +21946,7 @@ msgstr ""
 msgid "Nothing matches."
 msgstr ""
 
+#: lib/vutuv_web/live/admin/screenshot_live.ex:336
 #: lib/vutuv_web/live/post_live/composer.ex:1998
 #: lib/vutuv_web/live/post_live/composer.ex:2866
 #, elixir-autogen, elixir-format
@@ -23433,7 +23434,7 @@ msgstr ""
 msgid "Is content published here yours, or does it break the law? You can tell us without an account."
 msgstr ""
 
-#: lib/vutuv/notifications/emailer.ex:1168
+#: lib/vutuv/notifications/emailer.ex:1177
 #, elixir-autogen, elixir-format
 msgid "Moderation: something was reported"
 msgstr ""
@@ -23458,7 +23459,7 @@ msgstr ""
 msgid "Outside reporter confirmed their address"
 msgstr ""
 
-#: lib/vutuv/notifications/emailer.ex:1128
+#: lib/vutuv/notifications/emailer.ex:1136
 #: lib/vutuv_web/templates/public_report/sent.html.heex:4
 #, elixir-autogen, elixir-format
 msgid "Please confirm your report"
@@ -23616,4 +23617,24 @@ msgstr ""
 #: lib/vutuv_web/templates/public_report/expired.html.heex:4
 #, elixir-autogen, elixir-format
 msgid "This link has expired"
+msgstr ""
+
+#: lib/vutuv_web/live/admin/screenshot_live.ex:339
+#, elixir-autogen, elixir-format
+msgid "By hand"
+msgstr ""
+
+#: lib/vutuv_web/live/admin/screenshot_live.ex:327
+#, elixir-autogen, elixir-format
+msgid "See the capture that decided this"
+msgstr ""
+
+#: lib/vutuv_web/live/admin/screenshot_live.ex:309
+#, elixir-autogen, elixir-format
+msgid "Written by"
+msgstr ""
+
+#: lib/vutuv_web/live/admin/screenshot_live.ex:334
+#, elixir-autogen, elixir-format
+msgid "Written by the automatic page check, not by an admin"
 msgstr ""

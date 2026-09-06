@@ -129,6 +129,25 @@ config :vutuv, :moderate_images, true
 config :vutuv, :ollama_url, "http://localhost:11434"
 config :vutuv, :ollama_vision_model, "qwen3-vl:8b"
 
+# Whether a link-preview capture is also judged on whether it shows the PAGE
+# or something in front of it — a consent wall, an ad wall, a login wall, a
+# bot check (Vutuv.ScreenshotBlocklist.Vision). An unusable capture puts its
+# host on the screenshot blocklist with the model's reason and the picture as
+# evidence, which is what keeps that list from being hand-written.
+#
+# Deliberately its own switch, not part of :moderate_images: that one is a
+# safety gate that must never be off where members upload pictures, this one
+# is a quality filter an installation may not want to spend GPU time on. Both
+# share :ollama_url and :ollama_vision_model. Off = captures are stored as
+# they come and the blocklist stays what an admin writes.
+#
+# :screenshot_check_votes is how many opinions must agree before a site is
+# silenced (the first one is deterministic, the rest are independent draws).
+# 1 restores single-opinion behaviour. Runtime overrides:
+# SCREENSHOT_PAGE_CHECK, SCREENSHOT_CHECK_VOTES (config/runtime.exs).
+config :vutuv, :screenshot_page_check, true
+config :vutuv, :screenshot_check_votes, 3
+
 # How long a picture waiting for that verdict shows readers its **pixelated preview** —
 # a separately stored file, 32 cells across, never the picture behind a filter
 # (issue #1720, `Vutuv.Moderation.Pixelation`). A verdict normally lands in

@@ -57,7 +57,22 @@ defmodule Vutuv.ScreenshotBlocklist do
 
   alias Vutuv.Repo
   alias Vutuv.ScreenshotBlocklist.Cache
+  alias Vutuv.ScreenshotBlocklist.Check
   alias Vutuv.ScreenshotBlocklist.Entry
+
+  require Logger
+
+  # How long a `usable` verdict stands before the host is looked at again. A
+  # site adds a consent layer or an ad wall the day its business changes, so a
+  # verdict is a measurement with an age, not a permanent property — but at
+  # roughly five captures per host, re-asking every quarter costs a rounding
+  # error and keeps the list honest.
+  @recheck_after_days 90
+  # How long an `unknown` stands — the verdict that says the check itself could
+  # not answer. Short, because whatever was wrong may be gone tomorrow; not
+  # zero, because a host that is asked again on every capture pays the ballot
+  # every time.
+  @unknown_retry_days 1
 
   @doc """
   True when `url` matches an entry of the blocklist.
@@ -89,6 +104,9 @@ defmodule Vutuv.ScreenshotBlocklist do
   @doc "Loads one entry by id, raising when it is gone."
   def get_entry!(id), do: Repo.get!(Entry, id)
 
+  @doc "Loads one entry by id, or `nil` — what a route serving its evidence needs."
+  def get_entry(id), do: Repo.get(Entry, id)
+
   @doc "A changeset for the admin page's add form."
   def change_entry(%Entry{} = entry \\ %Entry{}, attrs \\ %{}) do
     Entry.changeset(entry, attrs)
@@ -106,8 +124,43 @@ defmodule Vutuv.ScreenshotBlocklist do
     |> announce()
   end
 
-  @doc "Removes an entry, so that site can be captured again."
-  def delete_entry(%Entry{} = entry), do: entry |> Repo.delete() |> announce()
+  @doc """
+  Removes an entry, so that site can be captured again.
+
+  Deleting an **automatic** entry is an admin overruling the model, so it also
+  records a `usable` verdict for that host, marked as theirs: without it the
+  next capture of the site would be judged again, reach the same conclusion,
+  and put the line straight back — the admin's decision has to outlive the
+  click, and a decision by a person does not expire the way a measurement
+  does.
+  """
+  def delete_entry(%Entry{} = entry) do
+    result = entry |> Repo.delete() |> announce()
+
+    with {:ok, _entry} <- result, "ai" <- entry.source do
+      if entry.evidence_file, do: File.rm(evidence_path(entry.evidence_file))
+      overrule(entry)
+    end
+
+    result
+  end
+
+  defp overrule(%Entry{pattern: pattern}) do
+    case parse(pattern) do
+      {host, _segments} ->
+        record_check(%{
+          host: host,
+          verdict: "usable",
+          source: "admin",
+          obstruction: "none",
+          coverage_percent: 0,
+          reason: "An admin removed the automatic blocklist entry for this site."
+        })
+
+      nil ->
+        :ok
+    end
+  end
 
   defp announce({:ok, _entry} = result) do
     Phoenix.PubSub.broadcast(Vutuv.PubSub, Cache.topic(), :blocklist_changed)
@@ -115,6 +168,192 @@ defmodule Vutuv.ScreenshotBlocklist do
   end
 
   defp announce(result), do: result
+
+  ## Page checks — the whitelist side
+
+  @doc "How long a `usable` verdict stands before its host is looked at again."
+  def recheck_after_days, do: @recheck_after_days
+
+  @doc """
+  The host an entry or a URL names, normalised the way patterns are (no
+  scheme, no `www.`, no port), or `nil` when there is no host to name.
+  """
+  def host_of(url) when is_binary(url) do
+    case parse(url) do
+      {host, _segments} -> host
+      nil -> nil
+    end
+  end
+
+  def host_of(_url), do: nil
+
+  @doc "The stored verdict for a host, or `nil` when it was never judged."
+  def get_check(host) when is_binary(host), do: Repo.get_by(Check, host: host)
+  def get_check(_host), do: nil
+
+  @doc """
+  True when this host was judged recently enough not to ask again — the
+  whitelist question, asked before a fresh capture is judged.
+
+  Every verdict answers it, not just `usable`, and each has its own age:
+
+    * a person's decision (`source: "admin"`) never expires. A measurement can
+      go stale; somebody's judgement about their own installation does not, and
+      an admin who removed an entry must not have the model put it back.
+    * `usable` stands for `recheck_after_days/0` — a site adds a consent layer
+      the day its business changes.
+    * `unknown` stands for a day. It means the check itself could not answer
+      (an undecodable picture, an outvoted suspicion), and without an age at
+      all such a host would pay the full ballot on **every** capture: the
+      busiest host here is captured over a hundred times a day.
+
+  A `blocked` verdict answers with its own re-check age too, but rarely gets
+  asked: the blocklist entry it wrote stops the capture before Chromium runs.
+  """
+  def judged_recently?(host) when is_binary(host), do: fresh?(get_check(host))
+  def judged_recently?(_host), do: false
+
+  @doc """
+  Whether a stored verdict is young enough to stand. Public because the
+  backfill asks it of rows it has already loaded.
+  """
+  def fresh?(nil), do: false
+  def fresh?(%Check{source: "admin"}), do: true
+
+  def fresh?(%Check{verdict: verdict, checked_at: checked_at}) do
+    age = DateTime.diff(DateTime.utc_now(), checked_at, :day)
+
+    case verdict do
+      "unknown" -> age < @unknown_retry_days
+      _usable_or_blocked -> age < @recheck_after_days
+    end
+  end
+
+  @doc """
+  Writes (or replaces) the verdict for one host. `checked_at` defaults to now,
+  which is what every caller but a test means.
+  """
+  def record_check(attrs) do
+    attrs =
+      attrs
+      |> Map.new()
+      |> Map.put_new(:checked_at, DateTime.utc_now(:second))
+
+    %Check{}
+    |> Check.changeset(attrs)
+    |> Repo.insert(
+      on_conflict: {:replace_all_except, [:id, :host, :inserted_at]},
+      conflict_target: :host
+    )
+  end
+
+  @doc """
+  Records what the page check saw: `verdict` is `"usable"`, `"blocked"` or
+  `"unknown"`, and the model's own fields come from the `verdict` map it
+  returned. One writer, so a new field on the row is one edit rather than one
+  per caller.
+  """
+  def record_verdict(host, url, verdict, answer) when is_binary(host) do
+    record_check(%{
+      host: host,
+      verdict: verdict,
+      source: "ai",
+      obstruction: Map.get(answer, :obstruction),
+      coverage_percent: Map.get(answer, :coverage_percent),
+      reason: Map.get(answer, :reason),
+      checked_url: url,
+      model: Vutuv.Ollama.vision_model()
+    })
+  end
+
+  @doc """
+  Records a `blocked` verdict **and** the blocklist entry that follows from
+  it: from now on this installation never captures that site, and the admin
+  page shows the model's reason beside the line.
+
+  `evidence_path` is the judged capture. It is copied into the private
+  evidence tree **after** the entry exists, under that entry's id, so an admin
+  reviewing the line sees the picture the verdict was formed on — and a second
+  capture of the same host, in flight while the first one won, leaves no
+  orphaned file behind: the unique index on `pattern` is the referee, not a
+  cache lookup. Nothing here raises; a failed copy costs the picture, not the
+  decision.
+
+  Returns `{:ok, entry}` or `{:ok, :already_blocked}`.
+  """
+  def block_host(host, url, verdict, evidence_path \\ nil) when is_binary(host) do
+    record_verdict(host, url, "blocked", verdict)
+
+    %Entry{}
+    |> Entry.auto_changeset(%{pattern: host, note: auto_note(verdict), source: "ai"})
+    |> Repo.insert()
+    |> announce()
+    |> attach_evidence(evidence_path)
+  end
+
+  defp attach_evidence({:ok, %Entry{} = entry}, evidence_path) do
+    case store_evidence(entry.id, evidence_path) do
+      nil -> {:ok, entry}
+      filename -> entry |> Ecto.Changeset.change(evidence_file: filename) |> Repo.update()
+    end
+  end
+
+  # The site was already on the list — an admin wrote it while this capture
+  # was in flight, or a second capture of the same host won the race. The
+  # verdict is recorded either way; there is nothing else to do.
+  defp attach_evidence({:error, _changeset}, _evidence_path), do: {:ok, :already_blocked}
+
+  # The line an admin reads in the list. The model's own sentence is the
+  # honest record of what it saw, and the obstruction word in front of it
+  # groups the entries at a glance.
+  defp auto_note(verdict) do
+    obstruction = Map.get(verdict, :obstruction) || "other"
+    reason = Map.get(verdict, :reason) || "no reason given"
+
+    String.slice("#{obstruction}: #{reason}", 0, 255)
+  end
+
+  @doc """
+  Deletes the stored captures of every page that is on the list today, across
+  all three queues, and returns the counts as
+  `%{links: n, posts: n, organizations: n}`.
+
+  Adding an entry only stops **new** captures — a link is re-captured when its
+  URL changes, and a page nobody re-posts keeps the consent-dialog picture it
+  got before the entry existed. Three callers need exactly this: the admin
+  button, the release task, and the sweeper after the page check has just
+  blocked a site. It lives here because forgetting one of the three is
+  invisible (the admin button did forget the organization queue until this
+  became one function).
+  """
+  def purge_captures do
+    %{
+      links: Vutuv.PageScreenshot.purge_blocklisted(),
+      posts: Vutuv.Posts.Screenshots.purge_blocklisted(),
+      organizations: Vutuv.Organizations.Screenshots.purge_blocklisted()
+    }
+  end
+
+  @doc "The absolute path of a stored evidence picture."
+  def evidence_path(filename) when is_binary(filename),
+    do: Path.join(Vutuv.Uploads.disk_dir("screenshot_evidence"), filename)
+
+  defp store_evidence(_id, nil), do: nil
+
+  defp store_evidence(id, source_path) do
+    extension = Path.extname(source_path)
+    filename = "#{id}#{extension}"
+    target = evidence_path(filename)
+
+    with :ok <- File.mkdir_p(Path.dirname(target)),
+         {:ok, _bytes} <- File.copy(source_path, target) do
+      filename
+    else
+      error ->
+        Logger.warning("screenshot evidence copy failed for #{id}: #{inspect(error)}")
+        nil
+    end
+  end
 
   ## Patterns
 

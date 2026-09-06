@@ -48,15 +48,9 @@ defmodule Vutuv.Moderation.Ollama do
   """
 
   alias Jason.OrderedObject
-  alias Vix.Vips.Operation
   alias Vutuv.Uploads.Spec
 
   @req_options_key :image_scan_req_options
-
-  # Longest edge sent to the model. ~900px is plenty for a safety verdict and
-  # keeps CPU inference fast; qwen3-vl's dynamic tiling handles it natively.
-  @scan_edge 896
-  @jpeg_quality 85
 
   @categories ~w(safe nudity sexual violence gore weapons drugs hate self_harm shocking other)
 
@@ -136,7 +130,7 @@ defmodule Vutuv.Moderation.Ollama do
   `Vutuv.Uploads.Spec.open_rotated_binary/1`.
   """
   def moderate_binary(bytes) when is_binary(bytes) do
-    with {:ok, jpeg} <- downscaled_jpeg(bytes) do
+    with {:ok, jpeg} <- Spec.vision_jpeg(bytes) do
       vote(jpeg)
     end
   end
@@ -207,24 +201,6 @@ defmodule Vutuv.Moderation.Ollama do
     Enum.find(ballot, & &1.safe?) || %{safe?: true, category: "safe", reason: nil}
   end
 
-  # Decode (pixel budget + EXIF autorotate), cap the longest edge, flatten any
-  # alpha (JPEG has none) and re-encode stripped. An image our own pipeline
-  # cannot decode cannot be judged -> image-class error.
-  defp downscaled_jpeg(bytes) do
-    with {:ok, rotated} <- Spec.open_rotated_binary(bytes),
-         {:ok, small} <- Image.thumbnail(rotated, "#{@scan_edge}x#{@scan_edge}", resize: :down),
-         {:ok, flat} <- flatten(small),
-         {:ok, jpeg} <- Operation.jpegsave_buffer(flat, keep: [], Q: @jpeg_quality) do
-      {:ok, jpeg}
-    else
-      _ -> {:error, {:image, :undecodable}}
-    end
-  end
-
-  defp flatten(image) do
-    if Image.has_alpha?(image), do: Image.flatten(image), else: {:ok, image}
-  end
-
   defp ask(jpeg, temperature) do
     body = %{
       model: model(),
@@ -290,7 +266,7 @@ defmodule Vutuv.Moderation.Ollama do
   defp reason(%{"reason" => reason}) when is_binary(reason), do: String.slice(reason, 0, 1000)
   defp reason(_verdict), do: nil
 
-  defp model, do: Application.get_env(:vutuv, :ollama_vision_model, "qwen3-vl:8b")
+  defp model, do: Vutuv.Ollama.vision_model()
 
   # How many opinions a suspected image gets, and how many of them must call
   # it unsafe before it is really deleted. Unanimous out of three by default:

@@ -208,4 +208,12 @@ defmodule Vutuv.Ollama do
 
   @doc "The default full timeout for the fallback instance."
   def default_timeout, do: Application.get_env(:vutuv, :ollama_timeout, 120_000)
+
+  @doc """
+  The vision model every image question on this installation is asked of: the
+  safety scan, the link-preview page check and the remote-avatar fetch. One
+  name, because a verdict stored by one of them records which model gave it
+  (`:ollama_vision_model`, `OLLAMA_VISION_MODEL`).
+  """
+  def vision_model, do: Application.get_env(:vutuv, :ollama_vision_model, "qwen3-vl:8b")
 end

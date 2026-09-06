@@ -118,6 +118,8 @@ Everything else has a default (the vutuv.de production value):
 | `VIDEO_CONCURRENCY` | `2` | How many clips are converted at once. Everything past that queues; the author sees "waiting in line" |
 | `FFMPEG_PATH` / `FFPROBE_PATH` | `ffmpeg` / `ffprobe` | The two binaries, if not on `$PATH` under those names |
 | `SCREENSHOT_BLOCKLIST` | – | Extra pages never to take a link-preview screenshot of, on top of the shipped `reddit.com` and `heise.de`. Comma-separated domains and/or URLs, copied into the blocklist table the first time you migrate; afterwards the live list is edited in the admin area (see "Screenshot blocklist" below) and this variable is inert. `SCREENSHOT_BLOCKED_HOSTS` is the older name and still works |
+| `SCREENSHOT_PAGE_CHECK` | `true` | Whether each link-preview capture is judged by the Ollama vision model on whether it shows the page or a consent / ad / login wall or a bot check, and the site blocklisted when it does not (see "The list mostly writes itself" below). `false` leaves the blocklist entirely hand-written — the setting for an installation without Ollama. Independent of `IMAGE_MODERATION_ENABLED`: that one is the safety gate, this one is a quality filter |
+| `SCREENSHOT_CHECK_VOTES` | `3` | How many opinions must agree before a site is blocklisted automatically. The first is deterministic, the rest are independent draws; a single dissent leaves the site alone. `1` acts on one opinion |
 | `SMTP_RELAY` | `127.0.0.1` | SMTP server |
 | `SMTP_PORT` | `25` | SMTP port |
 | `SMTP_USERNAME` | – | SMTP auth (empty = no auth) |
@@ -910,6 +912,37 @@ every page currently on the list; headless, that is
 Every installation starts with `reddit.com` and `heise.de`, plus whatever
 `SCREENSHOT_BLOCKLIST` held when you first migrated. Remove any of them here if
 they work fine for you.
+
+### The list mostly writes itself
+
+Keeping that list by hand does not scale past the sites you happen to notice:
+a page that answers a capture with a full-screen "accept advertising or
+subscribe" wall only reaches the list once somebody sees the useless preview
+and reports it. So each fresh capture is shown to the same local Ollama vision
+model that moderates images, with one question — does this picture show the
+page, or something in front of it?
+
+An answer of "a consent dialog, an ad wall, a login wall, a paywall or a bot
+check covers most of it" adds the **host** to the blocklist, marked
+*Automatic*, with the model's own sentence as the note and the capture itself
+kept as evidence: the note links to the picture that decided it. An answer of
+"an error page" or "an empty page" only throws that one capture away — a
+moment of network trouble is not a property of the site.
+
+Two things keep this cheap and safe. A host is judged **once** and the verdict
+stands for 90 days, so the site behind a thousand previews costs one look, and
+a site that adds a consent layer next quarter is noticed. And a "block" answer
+is only acted on when several independent opinions agree, because one wrong
+entry takes every preview of that site away from every member at once.
+
+You stay in charge: remove an automatic entry and the site is captured again —
+the removal is recorded as your decision, so the check will not put it straight
+back. A sweeper works through the captures taken before all this existed, so
+old consent-dialog pictures disappear on their own within a few passes.
+
+`SCREENSHOT_PAGE_CHECK=false` turns the whole thing off (an installation
+without Ollama, or one whose GPU should only do the safety scan); the blocklist
+then stays exactly what you write into it.
 
 ## "I didn't do anything!" — the account-activity log
 

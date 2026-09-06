@@ -252,6 +252,9 @@ defmodule Vutuv.Organizations.Screenshots do
   # now — is transient and retries with backoff until the cap.
   defp permanent_failure?(:internal_target), do: true
   defp permanent_failure?(:blocklisted), do: true
+  # The page check put this site on the blocklist (a consent or login wall),
+  # so a retry would be refused there anyway.
+  defp permanent_failure?(:obstructed), do: true
   defp permanent_failure?(:too_many_redirects), do: true
   defp permanent_failure?(:bad_redirect), do: true
   defp permanent_failure?(_reason), do: false

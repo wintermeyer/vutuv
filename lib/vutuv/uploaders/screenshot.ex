@@ -340,6 +340,25 @@ defmodule Vutuv.Screenshot do
   defp served_url(scope, filename),
     do: "/" |> Path.join(Path.join(storage_dir(scope), filename)) |> URI.encode()
 
+  @doc """
+  The absolute path of the stored thumb for `scope`, or `nil` when there is no
+  file for the hash the row carries. Used by the blocklist backfill, which
+  judges the captures this installation already stores rather than taking every
+  one of them again.
+
+  It resolves the name the same way a URL does (`served_filename/2`, AVIF
+  first, pre-AVIF `.webp` second), so the picture the model judges is the
+  picture a reader sees — a leftover file from an earlier hash is neither.
+  """
+  def stored_thumb_path(%{screenshot: screenshot} = scope) when is_binary(screenshot) do
+    case served_filename(scope, screenshot) do
+      nil -> nil
+      filename -> Path.join(disk_dir(scope), filename)
+    end
+  end
+
+  def stored_thumb_path(_scope), do: nil
+
   defp storage_dir(scope), do: "screenshots/#{scope.id}"
 
   defp disk_dir(scope), do: Vutuv.Uploads.disk_dir(storage_dir(scope))

@@ -430,6 +430,9 @@ defmodule Vutuv.Posts.Screenshots do
   # until the cap.
   defp permanent_failure?(:internal_target), do: true
   defp permanent_failure?(:blocklisted), do: true
+  # The page check saw a consent/login/ad wall and put the site on the
+  # blocklist: a retry would be refused by the blocklist anyway.
+  defp permanent_failure?(:obstructed), do: true
   defp permanent_failure?(:redirect), do: true
   defp permanent_failure?({:bad_status, _status}), do: true
   defp permanent_failure?(_reason), do: false
