@@ -415,3 +415,129 @@ html[data-nav-pressing] main {
     background-color: var(--color-brand-800);
   }
 }
+
+/* ---------- The feed's timeline runs edge to edge on a phone ----------
+
+   A 390px screen was spending 88px of its width before a post's first word:
+   16px of page gutter, 24px of card padding, 48px of avatar column. A timeline
+   is the page on a phone rather than a card on it, so below `md` this block
+   takes all three back and the body reads at 358px.
+
+   It is one block rather than a scatter of `max-md:` utilities because three of
+   these rules reach ACROSS elements and no utility can express them — the head
+   places children of a column it does not know the shape of, the rows carry the
+   padding their card gave up, and a picture breaks out of a row it may sit five
+   levels inside. The single-element geometry beside them (the card's own box,
+   the reply rail, hiding the connectors) could have been utilities and is here
+   so that "what the timeline does on a phone" is one thing to read; the markers
+   are attributes for the same reason, not because an unknown attribute degrades
+   any better than an unknown class (both leave the previous release's bundle
+   drawing today's inset card, which is the behaviour a tab open across a deploy
+   wants either way).
+
+   Unlayered, like the 16px block near the top of this file, because every
+   declaration has a utility on the same element to beat — `p-6` and
+   `rounded-2xl` on the card, `flex` on the head, `pl-7` on an answer — and
+   `components.css` sits in the `components` layer, which loses to the utilities
+   layer whatever its specificity.
+
+   `[data-timeline-flush]` is `<.card flush>`, which only the feed asks for, so
+   the same post card on a profile, a permalink, the saved hub or a tag timeline
+   keeps the inset reading it has today. The head and the rail are not scoped
+   under it: those are the card's own shape at this width, wherever it renders. */
+@media (width < 48rem) {
+  /* The gutter, once. It is `UI.gutter_class/0`'s expression — the page's own
+     1rem, widened to clear a display cutout (issue #1464) — and the card
+     cancels it with a margin so that a device reporting an inset is cancelled
+     as exactly as one reporting none. The two spellings have to move together;
+     `gutter_class/0`'s doc says so and `feed_edge_to_edge_test.exs` fails if
+     they drift. */
+  [data-timeline-flush] {
+    --flush-gutter-left: max(1rem, env(safe-area-inset-left));
+    --flush-gutter-right: max(1rem, env(safe-area-inset-right));
+    padding: 1rem 0;
+  }
+
+  /* The card, and anything inside it that breaks back out to the real edge of
+     the screen: a link screenshot, a fediverse photo, a member's single photo,
+     the mosaic of several, the tiles standing in for a photo the AI scan still
+     holds, a clip. Square, because a rounded corner cut off by the screen edge
+     reads as a rendering fault; the card's ring stays, and only its top and
+     bottom edges are still on screen to be seen. */
+  [data-timeline-flush],
+  [data-timeline-flush] [data-media-edge] {
+    margin-left: calc(-1 * var(--flush-gutter-left));
+    margin-right: calc(-1 * var(--flush-gutter-right));
+    border-radius: 0;
+  }
+
+  [data-timeline-flush] [data-media-edge] img,
+  [data-timeline-flush] [data-media-edge] > * {
+    border-radius: 0;
+  }
+
+  /* The side padding the card gave up, on each ROW, so the hairline between two
+     posts reaches both edges of the screen instead of stopping short of them. */
+  [data-timeline-flush] > [data-timeline-rows] > * {
+    padding-left: var(--flush-gutter-left);
+    padding-right: var(--flush-gutter-right);
+  }
+
+  /* An answer keeps its rail: a picture inside one stops at the rail rather
+     than being drawn over the single line that says this post is an answer. */
+  [data-timeline-flush] [data-thread-reply] [data-media-edge] {
+    margin-left: 0;
+    margin-right: 0;
+  }
+
+  /* The card head: two tracks, the avatar's own width and the rest. The column
+     beside it becomes `display: contents`, so what were its children are now
+     the grid's items — the header row (avatar, name, handle, server, stamp, ⋯)
+     stays beside the avatar and every sibling under it spans both tracks, which
+     is the 48px this whole block exists to reclaim. The row gap is 0 because
+     the head's `gap-3` is a flex gap that would otherwise open 12px between the
+     header and the body as well. */
+  [data-card-head] {
+    display: grid;
+    grid-template-columns: auto minmax(0, 1fr);
+    gap: 0 0.75rem;
+  }
+
+  [data-card-head] > [data-card-column] {
+    display: contents;
+  }
+
+  [data-card-head] > [data-card-column] > * {
+    grid-column: 1 / -1;
+  }
+
+  /* `min-width: 0` because a grid item refuses to shrink below its min-content,
+     and a remote handle runs to 255 characters with no space in it — exactly
+     the min-content that would otherwise scroll the page sideways. */
+  [data-card-head] > [data-card-column] > :first-child {
+    grid-column: 2;
+    min-width: 0;
+  }
+
+  /* An answer: a rail down its left instead of the connector curving out of the
+     avatar above it, which has no column to be drawn in any more. 14px of
+     indent per level rather than 28px, because the whole nesting has to fit a
+     phone. */
+  [data-thread-reply] {
+    border-left: 2px solid var(--color-slate-200);
+    padding-left: 0.875rem;
+  }
+
+  [data-thread-connector] {
+    display: none;
+  }
+}
+
+/* The rail's dark step. Its own width-scoped query rather than the file's dark
+   block at the end, which is not width-scoped: at desktop widths this element
+   has no border to colour. */
+@media (prefers-color-scheme: dark) and (width < 48rem) {
+  [data-thread-reply] {
+    border-left-color: var(--color-slate-700);
+  }
+}

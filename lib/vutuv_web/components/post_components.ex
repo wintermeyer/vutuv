@@ -389,14 +389,27 @@ defmodule VutuvWeb.PostComponents do
     doc: "wrap in a <.card>; false when the list is already inside one (the profile section)"
   )
 
+  attr(:flush, :boolean,
+    default: false,
+    doc:
+      "hand the card `flush` — the phone timeline that runs edge to edge (the feed). " <>
+        "A post list that is one card among others on its page stays inset."
+  )
+
   attr(:class, :string, default: nil, doc: "outer-wrapper utilities, e.g. mt-3 spacing")
   attr(:rest, :global)
   slot(:inner_block, required: true)
 
   def post_list(assigns) do
     ~H"""
-    <.card :if={@card} class={@class}>
-      <div class="divide-y divide-slate-100 dark:divide-slate-800" {@rest}>
+    <.card :if={@card} flush={@flush} class={@class}>
+      <%!-- `data-timeline-rows` names the rows container. In a flush card it is
+      where the side padding really lives — on each row rather than on the card,
+      so the hairline between two posts reaches both edges of a phone. Stamped
+      unconditionally, because the rule that reads it already requires a
+      `[data-timeline-flush]` ancestor and one fact gated twice is a fact whose
+      load-bearing half nobody can find. --%>
+      <div data-timeline-rows class="divide-y divide-slate-100 dark:divide-slate-800" {@rest}>
         {render_slot(@inner_block)}
       </div>
     </.card>
@@ -1121,18 +1134,33 @@ defmodule VutuvWeb.PostComponents do
   defp thread_chain(assigns) do
     # `@thread_indent_cap` is a module attribute, not an assign, so resolve the
     # "still indenting?" flag here — inside ~H, `@name` would mean assigns.name.
+    indent? = assigns.depth <= @thread_indent_cap
+
     assigns =
       assigns
-      |> assign(:indent?, assigns.depth <= @thread_indent_cap)
+      |> assign(:indent?, indent?)
+      # "This block is an indented answer" — the marker below and the indent
+      # class are the same fact, so it is worked out once per chain rather than
+      # per node inside the comprehension.
+      |> assign(:reply?, assigns.connected? and indent?)
       |> assign(:nodes, mark_last(assigns.nodes))
 
     ~H"""
+    <%!-- `data-thread-reply` marks an answer. Below `md` `app.css` swaps this
+    block's indent for a 2px rail down its left and takes the connectors away
+    (`data-thread-connector`): the card above now runs the full width of the
+    screen there, so a line curving out of its avatar would cross its text —
+    the avatar column those connectors are drawn in is gone. The rail says the
+    same thing in the 14px a phone can spare per level, and the attribute is
+    also what tells the stylesheet that a picture in here stops at the rail
+    rather than running on to the screen edge. --%>
     <div
       :for={{node, first?, last?} <- @nodes}
+      data-thread-reply={@reply?}
       class={[
         "relative",
         @connected? && "pt-3",
-        @connected? && @indent? && "pl-7",
+        @reply? && "pl-7",
         # Separate roots: not siblings in a conversation, so no connector.
         !@connected? && !first? && "pt-6"
       ]}
@@ -1159,26 +1187,35 @@ defmodule VutuvWeb.PostComponents do
       avatar with a short horizontal tick at that same 1.875rem. Capped depth
       puts the answer in the same column as its parent, so the connector is a
       straight vertical drop through the padding. --%>
+      <%!-- All four carry `data-thread-connector`: they are drawn in the avatar
+      column, and below `md` there is no avatar column to draw in — the rail on
+      the block itself is the phone's answer, and `app.css` takes these away
+      there. The dotted run above keeps its marker of its own and stays: it
+      sits on the avatar's own centre line, which a phone still has. --%>
       <span
         :if={@connected? && @indent? && last?}
+        data-thread-connector
         class="absolute left-[1.125rem] top-0 h-[1.875rem] w-2.5 rounded-bl-xl border-b-2 border-l-2 border-slate-200 dark:border-slate-700"
         aria-hidden="true"
       >
       </span>
       <span
         :if={@connected? && @indent? && !last?}
+        data-thread-connector
         class="absolute left-[1.125rem] top-0 h-full w-0.5 rounded-full bg-slate-200 dark:bg-slate-700"
         aria-hidden="true"
       >
       </span>
       <span
         :if={@connected? && @indent? && !last?}
+        data-thread-connector
         class="absolute left-[1.125rem] top-[1.875rem] h-0.5 w-2.5 rounded-full bg-slate-200 dark:bg-slate-700"
         aria-hidden="true"
       >
       </span>
       <span
         :if={@connected? && !@indent?}
+        data-thread-connector
         class="absolute left-[1.125rem] top-0 h-3 w-0.5 rounded-full bg-slate-200 dark:bg-slate-700"
         aria-hidden="true"
       >
@@ -1205,6 +1242,7 @@ defmodule VutuvWeb.PostComponents do
         elbows survived. An explicit height renders identically everywhere. --%>
         <span
           :if={node.children != []}
+          data-thread-connector
           class="absolute left-[1.125rem] top-9 h-[calc(100%-2.25rem)] w-0.5 rounded-full bg-slate-200 dark:bg-slate-700"
           aria-hidden="true"
         >
@@ -1395,10 +1433,12 @@ defmodule VutuvWeb.PostComponents do
         link={[navigate: ~p"/#{@reposted_by.username}"]}
         data-reshared-reply
       />
-      <div class="flex items-start gap-3">
+      <%!-- The head loses the avatar column below `md` — see the phone-timeline
+      block at the end of `app.css`. --%>
+      <div data-card-head class="flex items-start gap-3">
         <.remote_avatar initials={@initials} />
 
-        <div class="min-w-0 flex-1">
+        <div data-card-column class="min-w-0 flex-1">
           <.remote_header
             author={@author}
             handle={@handle}
@@ -2413,6 +2453,7 @@ defmodule VutuvWeb.PostComponents do
     <div
       :if={@images != []}
       data-remote-images={length(@images)}
+      data-media-edge
       class={[
         "mt-2 grid gap-2",
         length(@images) > 1 && "grid-cols-2"
@@ -2745,10 +2786,12 @@ defmodule VutuvWeb.PostComponents do
 
       <.boosted_banner :if={@boosted_by} account={@boosted_by} />
 
-      <div class="flex items-start gap-3">
+      <%!-- The head loses the avatar column below `md` — see the phone-timeline
+      block at the end of `app.css`. --%>
+      <div data-card-head class="flex items-start gap-3">
         <.remote_avatar initials={@initials} src={RemoteAccount.avatar_url(@account)} />
 
-        <div class="min-w-0 flex-1">
+        <div data-card-column class="min-w-0 flex-1">
           <%!-- The stamp is the author's own publication time, which is also
           what orders the feed: a post that reached us late must not read as
           newer than it is. --%>
@@ -3797,7 +3840,11 @@ defmodule VutuvWeb.PostComponents do
         <% nil -> %>
       <% end %>
 
-      <div class="flex items-start gap-3">
+      <%!-- `data-card-head` / `data-card-column`: below `md` the stylesheet
+      makes this row a two-track grid and the column `display: contents`, so
+      the header stays beside the avatar and everything under it starts at the
+      card's edge. See the phone-timeline block at the end of `app.css`. --%>
+      <div data-card-head class="flex items-start gap-3">
         <%!-- Decorative duplicate of the author-name link below; hidden from
         assistive tech and the tab order so the name link is the one profile
         link (otherwise the avatar link has no accessible name). --%>
@@ -3809,7 +3856,7 @@ defmodule VutuvWeb.PostComponents do
           <.avatar :if={!@organization_author?} user={@post.user} size="sm" presence />
         </.link>
 
-        <div class="min-w-0 flex-1">
+        <div data-card-column class="min-w-0 flex-1">
           <%!-- The ⋯ menu rides this header row (right-aligned via the name
           block's flex-1) so the body below spans the full content column. When
           the menu was a sibling of that column it narrowed it for its whole
@@ -4072,6 +4119,7 @@ defmodule VutuvWeb.PostComponents do
                 :if={length(@gallery) == 1}
                 href={@permalink}
                 aria-label={gettext("View post")}
+                data-media-edge
                 class="mt-3 block"
               >
                 <.single_feed_photo image={hd(@gallery)} />
@@ -4133,7 +4181,14 @@ defmodule VutuvWeb.PostComponents do
           by itself. The author instead sees the image (filtered in above) plus
           the amber progress panel below. --%>
           <div :if={@held_images != []} class="mt-3" data-image-placecards>
-            <div class={["grid gap-2", length(@held_images) > 1 && "grid-cols-2"]}>
+            <%!-- The grid and not the wrapper around it: the sentence below
+            stays inside the text's margins, and the tiles reach the edge like
+            the photos they stand in for — or a phone card would jump from
+            inset to full-bleed the moment the scan cleared. --%>
+            <div
+              data-media-edge
+              class={["grid gap-2", length(@held_images) > 1 && "grid-cols-2"]}
+            >
               <.held_photo :for={image <- @held_images} image={image} />
             </div>
             <%!-- The sentence sits under the grid and not inside every tile:
@@ -4609,6 +4664,7 @@ defmodule VutuvWeb.PostComponents do
       class="mt-3 grid gap-1 overflow-hidden rounded-lg"
       style={"aspect-ratio: #{@frame}; grid-template-columns: repeat(12, 1fr); grid-template-rows: repeat(6, 1fr); max-height: 44rem"}
       data-post-mosaic={length(@gallery)}
+      data-media-edge
     >
       <div
         :for={cell <- @cells}
@@ -5930,6 +5986,7 @@ defmodule VutuvWeb.PostComponents do
     ~H"""
     <.lightbox_gallery
       data-link-screenshot={@placement}
+      data-media-edge={@placement == :below}
       class={["hover-reveal-host relative", screenshot_placement_class(@placement), @class]}
     >
       <.link
