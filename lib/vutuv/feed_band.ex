@@ -101,8 +101,17 @@ defmodule Vutuv.FeedBand do
     from(f in Fediverse.Follow,
       join: a in RemoteAccount,
       on: a.id == f.remote_account_id,
+      # The thread-context condition rides the join rather than going through
+      # `RemotePost.timeline_scope/1`: a `where` on the outer side of a
+      # `left_join` turns it into an inner join, and an account with nothing
+      # recent would drop off the bar entirely. What it keeps out is the same
+      # thing — an answer somebody fetched is not one of this account's posts,
+      # and counting it would move the account up an order the reader reads as
+      # "who has been busy".
       left_join: p in RemotePost,
-      on: p.remote_account_id == a.id and p.published_at > ^utc_since(),
+      on:
+        p.remote_account_id == a.id and p.published_at > ^utc_since() and
+          p.thread_context == false,
       where: f.user_id == ^viewer.id,
       group_by: [a.id, f.muted],
       select: %{account: a, muted: f.muted, posts: count(p.id), last_at: max(p.published_at)}

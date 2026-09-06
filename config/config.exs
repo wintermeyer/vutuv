@@ -477,6 +477,41 @@ config :vutuv, :fediverse_counts_ladder, [
 config :vutuv, :fediverse_counts_batch, 60
 config :vutuv, :fediverse_counts_per_host, 10
 
+# The same ladder for the **answer** count, and it is deliberately much flatter.
+#
+# A like tally is a field in a document the ask above already fetched, so it
+# costs nothing extra. An answer tally is not served as a figure by anybody —
+# forty objects from our own cache were asked and not one of their servers put a
+# `totalItems` on `replies` — so it has to be counted by walking the collection,
+# and every walk is a request of its own. Riding the fine-grained ladder above
+# would therefore roughly double the traffic of a queue that is already behind.
+#
+# Four tiers, then never again: a quarter-hourly ask through the first hour,
+# hourly to six, six-hourly to two days. An answer arriving on a three-day-old
+# post is rare enough that the figure may stand.
+config :vutuv, :fediverse_replies_ladder, [
+  {60, 15},
+  {6 * 60, 60},
+  {48 * 60, 360}
+]
+
+# How many pages of 60 one count may walk before it gives up and says "at
+# least this many". Three is 180 answers, past which the exact figure is not
+# what anybody is reading.
+config :vutuv, :fediverse_replies_max_pages, 3
+
+# How many answers one "show the answers" click fetches, and the ceiling across
+# all the clicks on one card. Each answer is an object on some other server —
+# ten of them, four at a time, took a second against real hosts — so the first
+# number is a page and the second is where the page stops asking for more.
+config :vutuv, :fediverse_thread_page, 10
+config :vutuv, :fediverse_thread_max, 50
+
+# How many answers one member may pull in per hour, across every card. The
+# outbound budget the reply and follow paths have, for the one act here that
+# spends somebody else's bandwidth on a click.
+config :vutuv, :fediverse_thread_fetch_limit, 200
+
 # How long a post whose picture the AI image scan has not judged yet waits before
 # it federates anyway (issue #1070). The scan normally settles within seconds and
 # releases the post at once, so this is the CEILING, not the usual wait: it is

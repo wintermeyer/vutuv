@@ -301,6 +301,11 @@ defmodule Vutuv.Tags.Timeline do
         where: rp.audience == "public",
         where: rp.expires_at > ^DateTime.utc_now(:second)
       )
+      # Belt and braces on a public page: an answer fetched as thread context
+      # files no hashtags, so it should not be reachable through this join at
+      # all — but this page and the Mastodon hashtag timeline behind it are
+      # public, and "should not be reachable" is a weaker claim than a `where`.
+      |> RemotePost.timeline_scope()
     else
       from(rp in RemotePost, where: false)
     end

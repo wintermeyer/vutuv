@@ -200,7 +200,10 @@ defmodule VutuvWeb.FediversePostLiveTest do
       Phoenix.PubSub.broadcast(
         Vutuv.PubSub,
         Vutuv.Fediverse.counts_topic(),
-        {:fediverse_counts, :remote_post, post.id, %{likes: 40, shares: 5}}
+        # The whole map `Vutuv.Fediverse.counts/1` broadcasts, answer count
+        # included: the bar reads all three, and a hand-built two-key map here
+        # would only prove that this test knows less than the sender.
+        {:fediverse_counts, :remote_post, post.id, %{likes: 40, shares: 5, replies: nil}}
       )
 
       # The hook forwards with `send_update/2`, which LiveView applies on the

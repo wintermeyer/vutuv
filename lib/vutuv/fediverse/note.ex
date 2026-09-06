@@ -93,6 +93,13 @@ defmodule Vutuv.Fediverse.Note do
     field(:counts_checked_at, :utc_datetime)
     field(:counts_etag, :string)
     field(:counts_failures, :integer, default: 0)
+    field(:counts_absent, :boolean, default: false)
+
+    # And how many answered *this reply* out there — same columns, same clock,
+    # same reason for each of them as on `Vutuv.Fediverse.RemotePost`.
+    field(:replies_count, :integer)
+    field(:replies_checked_at, :utc_datetime)
+    field(:replies_failures, :integer, default: 0)
 
     # The stored account behind `actor_uri`, when we have one (issue #1162).
     # Virtual because a note is keyed to its author by URI, not by a foreign

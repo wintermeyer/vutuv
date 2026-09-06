@@ -2942,6 +2942,7 @@ defmodule Vutuv.Fediverse do
         limit: ^fetch_n,
         preload: [:screenshot, remote_account: a]
       )
+      |> RemotePost.timeline_scope()
       |> time_window(cursor, :published_at, {:utc, :received_at})
       |> Repo.all()
       |> Enum.map(&remote_feed_entry/1)
@@ -2975,6 +2976,7 @@ defmodule Vutuv.Fediverse do
         where: p.expires_at > ^DateTime.utc_now(:second),
         preload: [:screenshot, remote_account: a]
       )
+      |> RemotePost.timeline_scope()
       |> Keyset.scope(opts)
       |> Repo.all()
       |> Keyset.restore(opts)
@@ -3248,6 +3250,9 @@ defmodule Vutuv.Fediverse do
       order_by: [desc: p.published_at, desc: p.id],
       limit: ^fetch_n
     )
+    # An answer pulled in to read a thread is not this account's contribution to
+    # anybody's feed, however faithfully it is stored as one of its posts.
+    |> RemotePost.timeline_scope()
     |> reject_muted_hosts(viewer)
     |> Vutuv.Posts.language_scope(Vutuv.Posts.feed_language_filter(viewer))
     |> time_window(cursor, :published_at, {:utc, :received_at})
@@ -4244,6 +4249,24 @@ defmodule Vutuv.Fediverse do
     |> where([p], not exists(looked_up))
     |> where([p], not exists(quoted))
     |> where([p], not exists(spanned))
+    |> where([p], not exists(answering_a_held_post()))
+  end
+
+  # A sixth hold: this row answers a post that is still cached here, so somebody
+  # is reading the thread it belongs to. Nobody follows the author of a thread
+  # answer — that is what makes it an answer rather than feed material — so
+  # without this the purge would delete it out from under the reader who pressed
+  # for it, usually within the hour.
+  #
+  # Tied to the parent rather than to a row of its own (the shape a lookup uses)
+  # because the parent already is that row: the answer exists for it, and when
+  # it goes there is nothing left to hang the answer under. It buys no extra
+  # time either, the ceiling still applies.
+  defp answering_a_held_post do
+    from(parent in RemotePost,
+      where: parent.object_uri == parent_as(:post).in_reply_to_uri,
+      where: parent.id != parent_as(:post).id
+    )
   end
 
   @doc """
@@ -4402,6 +4425,9 @@ defmodule Vutuv.Fediverse do
       # fourth audience value cannot open here and close there.
       where: p.audience in ^RemotePost.open_audiences() or exists(accepted)
     )
+    # Same reason as the feed's: an answer somebody pulled in is not one of this
+    # account's posts, even though the row is shaped exactly like one.
+    |> RemotePost.timeline_scope()
   end
 
   # Nobody in particular follows nothing: the card is behind a login, but a nil
@@ -4529,7 +4555,7 @@ defmodule Vutuv.Fediverse do
 
   defp own_thread?(_object, _account), do: true
 
-  defp insert_remote_post(%RemoteAccount{} = account, object, audience) do
+  defp insert_remote_post(%RemoteAccount{} = account, object, audience, thread_context? \\ false) do
     received = DateTime.utc_now(:second)
 
     with uri when is_binary(uri) <- SearchText.normalize_search(object["id"]),
@@ -4553,23 +4579,49 @@ defmodule Vutuv.Fediverse do
         })
       )
       |> put_object_counts(object)
+      |> Ecto.Changeset.put_change(:thread_context, thread_context?)
       |> Repo.insert(on_conflict: :nothing, conflict_target: [:object_uri])
       |> stored_post(uri)
-      |> file_hashtags(object)
+      |> promote_thread_context(thread_context?)
+      |> file_hashtags(object, thread_context?)
     else
       _ -> :error
     end
   end
+
+  # A row first written as thread context, now arriving on a path that puts
+  # posts in front of people who did not ask for this one: a delivery from a
+  # followed account, a boost, a member's own URL lookup. It stops being context
+  # and becomes an ordinary cached post.
+  #
+  # The insert above cannot do this itself (`on_conflict: :nothing` writes
+  # nothing at all on a second arrival), and the direction matters: context is
+  # only ever *promoted*. Nothing demotes a post that reached a feed, or a
+  # member would watch a card disappear because somebody else opened a thread.
+  defp promote_thread_context({:exists, %RemotePost{thread_context: true} = post}, false) do
+    Repo.update_all(from(p in RemotePost, where: p.id == ^post.id),
+      set: [thread_context: false]
+    )
+
+    {:exists, %{post | thread_context: false}}
+  end
+
+  defp promote_thread_context(result, _thread_context?), do: result
 
   # File the post under the tags its hashtags name, so it reaches `/tags/:slug`
   # (`Vutuv.Fediverse.Hashtags`). Done here rather than at the three call sites,
   # so a fourth ingestion path cannot forget it — and only for the row **this**
   # delivery wrote: a redelivery (`{:exists, _}`) is the same post arriving once
   # per follower, already filed.
-  defp file_hashtags({:ok, %RemotePost{} = post}, object),
+  defp file_hashtags({:ok, %RemotePost{} = post}, object, false),
     do: {:ok, Hashtags.sync(post, object)}
 
-  defp file_hashtags(result, _object), do: result
+  # Thread context is filed under nothing. A tag page is a listing surface like
+  # the feed and the account page (`RemotePost.timeline_scope/1`), and the
+  # cheapest way to keep an answer off it is to never file the answer's
+  # hashtags in the first place — a `#Linux` in the third reply of a thread
+  # somebody read once is not what `/tags/linux` is for.
+  defp file_hashtags(result, _object, _thread_context?), do: result
 
   # Which row this delivery actually left behind, and whether it was *this*
   # delivery that wrote it.
@@ -7122,8 +7174,11 @@ defmodule Vutuv.Fediverse do
   stay distinguishable from "nobody liked it". The bar renders nothing for a
   `nil`; a `0` would be a claim we cannot make.
   """
-  def counts(%RemotePost{} = post), do: %{likes: post.likes_count, shares: post.shares_count}
-  def counts(%Note{} = note), do: %{likes: note.likes_count, shares: note.shares_count}
+  def counts(%RemotePost{} = post),
+    do: %{likes: post.likes_count, shares: post.shares_count, replies: post.replies_count}
+
+  def counts(%Note{} = note),
+    do: %{likes: note.likes_count, shares: note.shares_count, replies: note.replies_count}
 
   @doc """
   Asks the origins of every due object for their own figures, bounded per run
@@ -7225,7 +7280,11 @@ defmodule Vutuv.Fediverse do
   defp ask_counts(subject) do
     with true <- counts_askable?(subject),
          signer when not is_nil(signer) <- counts_signer(subject) do
-      apply_counts(subject, fetch_object(subject.object_uri, signer, subject.counts_etag))
+      apply_counts(
+        subject,
+        fetch_object(subject.object_uri, signer, subject.counts_etag),
+        signer
+      )
     else
       _ ->
         stamp_counts(subject, [])
@@ -7233,7 +7292,9 @@ defmodule Vutuv.Fediverse do
     end
   end
 
-  # Public and unlisted only — see `refresh_counts/1`.
+  # Public and unlisted only — see `refresh_counts/1`. An origin that serves no
+  # figures at all is filtered out one level up, in the due query, which is
+  # where it has to happen: skipping it here would leave it in the queue.
   defp counts_askable?(%RemotePost{} = post), do: RemotePost.open?(post)
   defp counts_askable?(%Note{} = note), do: Note.public?(note)
 
@@ -7310,25 +7371,399 @@ defmodule Vutuv.Fediverse do
     )
   end
 
-  defp apply_counts(subject, {:ok, doc, etag}) do
-    store_counts(subject, %{
-      likes_count: collection_total(doc["likes"]),
-      shares_count: collection_total(doc["shares"]),
-      counts_etag: truncate_etag(etag)
-    })
+  defp apply_counts(subject, {:ok, doc, etag}, signer) do
+    likes = collection_total(doc["likes"])
+    shares = collection_total(doc["shares"])
+
+    store_counts(
+      subject,
+      %{
+        likes_count: likes,
+        shares_count: shares,
+        counts_etag: truncate_etag(etag)
+      }
+      |> Map.merge(reply_count_attrs(subject, doc, signer))
+      |> Map.merge(absent_attrs(doc, likes, shares))
+    )
   end
 
   # The figures live in the body, so a `304` really does mean "nothing changed"
-  # — which is the whole reason the conditional GET is worth sending.
-  defp apply_counts(subject, {:not_modified, etag}),
+  # — which is the whole reason the conditional GET is worth sending. The answer
+  # count cannot ride a `304`: its figure is not in the body, it is counted by
+  # walking a collection, and that collection moves while the object does not.
+  defp apply_counts(subject, {:not_modified, etag}, _signer),
     do: store_counts(subject, %{counts_etag: truncate_etag(etag)})
 
   # Unreachable, a 429, a 5xx, a 404, a body we cannot read: a strike, and the
   # next ask is twice as far away. Nothing about the stored figures changes.
-  defp apply_counts(subject, _other) do
+  defp apply_counts(subject, _other, _signer) do
     stamp_counts(subject, counts_failures: subject.counts_failures + 1)
     :failed
   end
+
+  # A document that answered `200` and carries none of the three collections is
+  # a statement about the software on the other side, not about its health, so
+  # the object leaves the ladder without a strike. `flipboard.com` serves
+  # `likes`, `shares` and `replies` as `null` on every post, and 0 of the 1.478
+  # of them we hold has ever carried a figure.
+  #
+  # Only ever set, never cleared: an object we stop asking about cannot tell us
+  # it changed its mind. That costs nothing — the ladder ends after a week
+  # anyway — and it keeps this from oscillating on a server that omits the
+  # collections while a post is brand new.
+  defp absent_attrs(doc, likes, shares) do
+    if is_nil(likes) and is_nil(shares) and is_nil(doc["replies"]),
+      do: %{counts_absent: true},
+      else: %{}
+  end
+
+  ## The origin's own answer count (issue #1102's sibling for `replies`)
+  ##
+  ## Everything above reads a figure out of a document we already hold. This
+  ## one has to be counted, and that is the whole difference: forty objects
+  ## from this installation's own cache were asked before this was written and
+  ## **not one** of their servers put a `totalItems` on `replies`. Mastodon
+  ## serialises the collection as a first page of the author's own follow-ups
+  ## (embedded in the object, so free) and a second page of everybody else's
+  ## (`only_other_accounts=true`, 60 ids at a time, one request each).
+  ##
+  ## Counted that way the figure is exactly the one the origin shows its own
+  ## readers: against Mastodon's `replies_count` for five real threads it came
+  ## back 121/121, 51/51, 6/6, 2/2 and 21 against 22 (one answer deleted in
+  ## between).
+
+  # Consecutive failed walks after which the answer count is left as it stands.
+  @replies_max_strikes 4
+
+  @doc "The ladder for the answer count. See `counts_ladder/0` for the shape."
+  def replies_ladder, do: Application.get_env(:vutuv, :fediverse_replies_ladder, [])
+
+  @doc "How many pages of a `replies` collection one count may walk."
+  def replies_max_pages, do: Application.get_env(:vutuv, :fediverse_replies_max_pages, 3)
+
+  # Whether this ask should also count the answers, and the result of doing so.
+  # Empty when it is not due, which is the common case: the ladder above asks
+  # about a young post every five minutes, this one every fifteen at its
+  # busiest.
+  defp reply_count_attrs(subject, doc, signer) do
+    if replies_due?(subject, DateTime.utc_now(:second)),
+      do: walk_replies(subject, doc["replies"], signer),
+      else: %{}
+  end
+
+  # The clock is stamped on **every** outcome, the ones where there was nothing
+  # to count included (issue #1316): an object whose origin serves no `replies`
+  # collection would otherwise be due on every single ask for the rest of its
+  # week, and since this rides the ask above, that means walking a collection
+  # that does not exist over and over.
+  defp walk_replies(_subject, nil, _signer),
+    do: %{replies_checked_at: DateTime.utc_now(:second), replies_failures: 0}
+
+  defp walk_replies(subject, replies, signer) do
+    case collect_reply_pages(replies, signer, replies_max_pages()) do
+      {:ok, %{total: total, uris: uris}} ->
+        %{
+          replies_count: total || length(uris),
+          replies_checked_at: DateTime.utc_now(:second),
+          replies_failures: 0
+        }
+
+      :error ->
+        %{
+          replies_checked_at: DateTime.utc_now(:second),
+          replies_failures: (subject.replies_failures || 0) + 1
+        }
+    end
+  end
+
+  @doc """
+  Walks a `replies` collection and returns `%{total: n | nil, uris: [uri]}`.
+
+  One walk for both readers of it: the background count (which wants the
+  number) and a member's press (which wants the ids). They have to agree, or a
+  card would offer to show eleven answers and then find nine.
+
+  Mastodon's shape is the one to hold in mind: the collection's **first** page
+  is embedded in the object and lists the author's own follow-ups, and its
+  `next` is `?only_other_accounts=true`, which is where everybody else's answers
+  are, 60 ids to a page. So a typical count costs exactly one request beyond
+  the ask it rides on, and a typical thread is one page.
+
+  A `totalItems` is believed the moment one appears — no server we cache serves
+  it today, but the spec allows it, and counting past a figure the origin states
+  itself would be work for a worse answer.
+  """
+  def collect_reply_pages(collection, signer, pages, acc \\ [])
+
+  def collect_reply_pages(_collection, _signer, 0, acc),
+    do: {:ok, %{total: nil, uris: Enum.reverse(acc)}}
+
+  def collect_reply_pages(%{} = collection, signer, pages, acc) do
+    # `collection_total/1` is the same guarded read the like and repost figures
+    # go through, cap included — a `nil` here simply means the walk decides.
+    total = collection_total(collection)
+
+    case collection["first"] || collection["items"] || collection["orderedItems"] do
+      nil ->
+        {:ok, %{total: total, uris: Enum.reverse(acc)}}
+
+      _some ->
+        # The ids are walked for even when the origin states a total: a member
+        # pressing "show them" needs them either way, and the stated figure
+        # wins over the walk's own length.
+        case collect_reply_page(page_of(collection), signer, pages, acc) do
+          {:ok, walked} -> {:ok, %{walked | total: total || walked.total}}
+          :error when not is_nil(total) -> {:ok, %{total: total, uris: Enum.reverse(acc)}}
+          :error -> :error
+        end
+    end
+  end
+
+  # A collection given as a bare URI: one fetch, then the same walk.
+  #
+  # Every failure here is a failure, the `404` included. A page the collection
+  # itself named and the server will not serve is not the end of the list, and
+  # reading it as one is how a walk that reached nothing would store a
+  # confident `0` over a figure that was right — the collection is empty and
+  # the collection is unreachable have to stay different answers.
+  def collect_reply_pages(uri, signer, pages, acc) when is_binary(uri) do
+    case fetch_object(uri, signer, nil) do
+      {:ok, doc, _etag} -> collect_reply_pages(doc, signer, pages - 1, acc)
+      _other -> :error
+    end
+  end
+
+  def collect_reply_pages(_other, _signer, _pages, _acc), do: :error
+
+  # The first page of a collection, embedded (Mastodon) or named by URI.
+  defp page_of(%{"first" => first}) when not is_nil(first), do: first
+  defp page_of(%{} = collection), do: collection
+
+  defp collect_reply_page(page, signer, pages, acc) when is_binary(page) do
+    case fetch_object(page, signer, nil) do
+      {:ok, doc, _etag} -> collect_reply_page(doc, signer, pages, acc)
+      _other -> :error
+    end
+  end
+
+  defp collect_reply_page(%{} = page, signer, pages, acc) do
+    acc = Enum.reduce(page_items(page), acc, &[&1 | &2])
+
+    case page["next"] do
+      next when is_binary(next) and pages > 1 -> collect_reply_page(next, signer, pages - 1, acc)
+      _last_or_capped -> {:ok, %{total: nil, uris: Enum.reverse(acc)}}
+    end
+  end
+
+  defp collect_reply_page(_other, _signer, _pages, acc),
+    do: {:ok, %{total: nil, uris: Enum.reverse(acc)}}
+
+  # What a collection page lists, whichever of the two names it uses. Only the
+  # entries usable as an id: a page may list bare URIs or embed whole objects —
+  # Mastodon does both in one page, the remote answers as ids and its own as
+  # documents — and `activity_object_id/1` is this codebase's answer to that
+  # pair already.
+  defp page_items(%{} = page) do
+    (page["items"] || page["orderedItems"] || [])
+    |> List.wrap()
+    |> Enum.map(&activity_object_id/1)
+    |> Enum.filter(&is_binary/1)
+  end
+
+  # The ladder, in Elixir rather than SQL: this rides an ask that already
+  # selected its object, so there is nothing to query for.
+  defp replies_due?(subject, now) do
+    checked = subject.replies_checked_at
+
+    cond do
+      (subject.replies_failures || 0) >= @replies_max_strikes -> false
+      # Never counted, so counted once whatever its age — the same one-off the
+      # figures above get, and safe for the same reason: the clock is stamped
+      # on every outcome, so nothing can stay permanently due.
+      is_nil(checked) -> true
+      true -> reply_tier_due?(subject, checked, now)
+    end
+  end
+
+  defp reply_tier_due?(subject, checked, now) do
+    age = DateTime.diff(now, counts_age(subject), :second) / 60
+    waited = DateTime.diff(now, checked, :second) / 60
+    backoff = Integer.pow(2, subject.replies_failures || 0)
+
+    case Enum.find(replies_ladder(), fn {age_minutes, _interval} -> age <= age_minutes end) do
+      {_age_minutes, interval} -> waited >= interval * backoff
+      nil -> false
+    end
+  end
+
+  ## Reading the answers themselves
+  ##
+  ## The count above says how many people answered; this is what a member gets
+  ## when they press it. Two halves, and which one runs decides how the card
+  ## behaves: what we already hold is free and instant, what we do not costs one
+  ## request per answer to a server that is usually neither ours nor the
+  ## origin's (a thread of 60 answers on mastodon.social listed authors on nine
+  ## other hosts). So the stored half paints first and the fetch fills in behind
+  ## it.
+  ##
+  ## An answer is stored as an ordinary cached post, which is what gives it a
+  ## card, an action bar, a report path and the six-month ceiling for free. It
+  ## carries `thread_context` so the surfaces that list an **account's** posts
+  ## skip it (`RemotePost.timeline_scope/1`), and it is held for as long as the
+  ## post it answers is here (`spare_held/1`).
+
+  @doc "How many answers one press fetches."
+  def thread_page, do: Application.get_env(:vutuv, :fediverse_thread_page, 10)
+
+  @doc "How many answers one card will fetch across every press."
+  def thread_max, do: Application.get_env(:vutuv, :fediverse_thread_max, 50)
+
+  @doc "How many answers one member may pull in per hour, across every card."
+  def thread_fetch_limit, do: Application.get_env(:vutuv, :fediverse_thread_fetch_limit, 200)
+
+  @doc """
+  The answers to this object we already hold, oldest first.
+
+  Costs one indexed query and no network at all, so it is what a press paints
+  with before anything is fetched. Public audiences only — an answer stored
+  from somebody's followers-only stream is not ours to show a stranger — and
+  the reader's own muted hosts are dropped, the same gate their feed applies.
+  """
+  def stored_thread_replies(subject, viewer, opts \\ [])
+
+  def stored_thread_replies(%{object_uri: uri}, viewer, opts) when is_binary(uri) do
+    limit = Keyword.get(opts, :limit, thread_max())
+
+    from(p in RemotePost,
+      as: :post,
+      join: a in RemoteAccount,
+      as: :remote_account,
+      on: a.id == p.remote_account_id,
+      where: p.in_reply_to_uri == ^uri,
+      where: p.audience in ^RemotePost.open_audiences(),
+      order_by: [asc: p.published_at, asc: p.id],
+      limit: ^limit,
+      preload: [remote_account: a],
+      select: p
+    )
+    |> reject_muted_hosts(viewer)
+    |> Repo.all()
+  end
+
+  def stored_thread_replies(_subject, _viewer, _opts), do: []
+
+  @doc """
+  Fetches the next page of answers to `subject` from the servers that hold them.
+
+  Returns `{:ok, %{replies: [%RemotePost{}], pending: [uri], fetched: n}}`,
+  where `pending` is what is left for the next press — the caller keeps it, so
+  a second press walks no collection again. Or `{:error, reason}`:
+
+    * `:capped` — this member has pulled in their hour's worth of answers.
+    * `:unavailable` — the origin serves no `replies` collection, or would not
+      answer. Both are the same sentence to a reader: we cannot get them.
+
+  Nothing here is speculative. It runs on a member's press, never on a render,
+  and it is the one place in this subsystem that spends other people's
+  bandwidth on somebody's curiosity — hence the hourly budget, the page size,
+  and the ceiling on how far one card may go.
+  """
+  def fetch_thread_replies(viewer, subject, opts \\ [])
+
+  def fetch_thread_replies(%User{} = viewer, subject, opts) do
+    if enabled?(), do: do_fetch_thread_replies(viewer, subject, opts), else: {:error, :disabled}
+  end
+
+  def fetch_thread_replies(_viewer, _subject, _opts), do: {:error, :unavailable}
+
+  defp do_fetch_thread_replies(viewer, subject, opts) do
+    with :ok <- claim_thread_fetch(viewer),
+         signer when not is_nil(signer) <- thread_signer(viewer, subject),
+         {:ok, uris} <- thread_reply_uris(subject, signer, opts) do
+      {take, rest} = Enum.split(uris, thread_page())
+
+      replies =
+        take |> resolve_thread_replies(signer) |> Enum.filter(&readable_reply?(&1, viewer))
+
+      {:ok, %{replies: replies, pending: rest, fetched: length(take)}}
+    else
+      {:error, reason} -> {:error, reason}
+      nil -> {:error, :unavailable}
+    end
+  end
+
+  # What is left to fetch: the caller's leftovers from a previous press, or a
+  # fresh walk of the collection. The walk is capped at `thread_max/0` ids and
+  # at the same page count the background count uses — a thread with two
+  # thousand answers is read at its origin, not here.
+  defp thread_reply_uris(subject, signer, opts) do
+    case Keyword.get(opts, :pending) do
+      [_ | _] = pending -> {:ok, pending}
+      _none -> walk_thread_reply_uris(subject, signer)
+    end
+  end
+
+  defp walk_thread_reply_uris(subject, signer) do
+    with {:ok, doc, _etag} <- fetch_object(subject.object_uri, signer, nil),
+         replies when not is_nil(replies) <- doc["replies"],
+         {:ok, %{uris: uris}} <- collect_reply_pages(replies, signer, replies_max_pages()) do
+      {:ok, uris |> Enum.uniq() |> Enum.take(thread_max())}
+    else
+      _unavailable -> {:error, :unavailable}
+    end
+  end
+
+  defp claim_thread_fetch(%User{id: id}),
+    do: claim_outbound_budget(id, :fediverse_thread_fetch, thread_fetch_limit(), :capped)
+
+  # The member's own key where they have one, so the request says who is asking
+  # on an authorized-fetch server (six of ten hosts in one real thread answered
+  # `401` unsigned). A member who does not federate has none, and then this
+  # falls back to whoever the background count would have signed as — the same
+  # claim, made by the same installation, for the same object.
+  defp thread_signer(%User{} = viewer, subject), do: signer(viewer) || counts_signer(subject)
+
+  # Every id turned into a row: the ones already here for nothing, the rest
+  # fetched through the same fence a boost passes (`fetch_and_store_object/4`),
+  # four at a time.
+  defp resolve_thread_replies(uris, signer) do
+    stored = uris |> stored_by_uri() |> Map.new(&{&1.object_uri, &1})
+    missing = Enum.reject(uris, &Map.has_key?(stored, &1))
+
+    fetched =
+      missing
+      |> Task.async_stream(
+        fn uri ->
+          case fetch_and_store_object(uri, signer, false, true) do
+            {:ok, %RemotePost{} = post} -> post
+            _other -> nil
+          end
+        end,
+        max_concurrency: 4,
+        timeout: 20_000,
+        on_timeout: :kill_task
+      )
+      |> Enum.flat_map(fn
+        {:ok, %RemotePost{} = post} -> [post]
+        _other -> []
+      end)
+      # One preload for the whole page rather than one inside each task: the
+      # cards name their authors, and ten answers are ten accounts.
+      |> Repo.preload(:remote_account)
+      |> Map.new(&{&1.object_uri, &1})
+
+    # In the origin's own order, which is the order the thread was written in.
+    uris |> Enum.map(&(Map.get(stored, &1) || Map.get(fetched, &1))) |> Enum.reject(&is_nil/1)
+  end
+
+  defp stored_by_uri(uris) do
+    from(p in RemotePost, where: p.object_uri in ^uris, preload: [:remote_account]) |> Repo.all()
+  end
+
+  # The same gate every other read-side surface asks, plus the audience: an
+  # answer is shown only where its author addressed everybody.
+  defp readable_reply?(%RemotePost{} = post, viewer),
+    do: RemotePost.open?(post) and remote_post_readable?(post, viewer)
 
   # A `nil` is never written over a figure we already hold: it means the server
   # did not tell us this time, not that the number dropped to zero.
@@ -7509,6 +7944,15 @@ defmodule Vutuv.Fediverse do
   defp due_counts_query(schema, age_field, now, ladder, limit) do
     from(r in schema,
       where: r.counts_failures < @counts_max_strikes,
+      # The origins that serve no collection at all are not asked again, and
+      # this is the line that pays for the reply count below. On a copy of
+      # production one such host (flipboard.com) held 1.026 of the 2.627 objects
+      # on the ladder and had never answered with a figure of any kind, while
+      # 2.511 of those 2.627 were overdue — the median asked at 1,9 times its
+      # own interval, the p90 at ten. A batch of 60 every two minutes against
+      # 2.627 objects is one round every 87 minutes, so the five-minute tier at
+      # the head of the ladder was never anything but arithmetic.
+      where: not r.counts_absent,
       order_by: [
         asc_nulls_first: r.counts_checked_at,
         desc: field(r, ^age_field),
@@ -9328,7 +9772,7 @@ defmodule Vutuv.Fediverse do
   # `Event` with a `content` field is not a post. `own_object?/3` is what stops
   # a server speaking for anybody but itself, and the audience gate keeps a
   # followers-only post out entirely.
-  defp fetch_and_store_object(uri, key, quotes?) do
+  defp fetch_and_store_object(uri, key, quotes?, thread_context? \\ false) do
     with :ok <- claim_announce_fetch(uri),
          {:ok, doc} <- fetch_remote_note(uri, key),
          %{} = doc <- remote_post_object(doc),
@@ -9337,7 +9781,7 @@ defmodule Vutuv.Fediverse do
          false <- instance_blocked?(author_uri),
          audience when is_binary(audience) <- announced_audience(doc),
          %RemoteAccount{} = author <- announced_author_account(author_uri, key),
-         {:ok, post} <- insert_remote_post(author, doc, audience) do
+         {:ok, post} <- insert_remote_post(author, doc, audience, thread_context?) do
       {:ok, finish_stored_post(post, doc, quotes?)}
     else
       # Another delivery stored it while this one was fetching; the row is what
