@@ -72,6 +72,37 @@ defmodule VutuvWeb.SettingsMutesTest do
     assert Mutes.scope_for(user, doris) == :reposts
   end
 
+  test "the author scope is what the card's third item sends", %{conn: conn} do
+    {conn, user} = create_and_login_user(conn)
+    lilly = account("lilly")
+
+    conn =
+      post(conn, ~p"/settings/mutes", %{
+        "kind" => "remote_account",
+        "id" => lilly.id,
+        "scope" => "reposts_of"
+      })
+
+    assert redirected_to(conn) == ~p"/settings/mutes"
+    assert Mutes.scope_for(user, lilly) == :reposts_of
+  end
+
+  test "the page offers every other scope as a switch, whichever one is set", %{conn: conn} do
+    {conn, user} = create_and_login_user(conn)
+    lilly = account("lilly")
+    {:ok, _} = Mutes.mute(user, lilly, :reposts_of)
+
+    html = conn |> get(~p"/settings/mutes") |> html_response(200)
+
+    assert html =~ ~s(data-mute-scope="reposts_of")
+    # The two it is not, so a member can widen or narrow without going back to
+    # a card — the page is where an old mute is found again. The scope is the
+    # last parameter of the href, hence the closing quote in the needle.
+    assert html =~ ~s(scope=all")
+    assert html =~ ~s(scope=reposts")
+    refute html =~ ~s(scope=reposts_of")
+  end
+
   test "unmuting lifts a follow's own mute too", %{conn: conn} do
     {conn, user} = create_and_login_user(conn)
     followee = insert(:activated_user)

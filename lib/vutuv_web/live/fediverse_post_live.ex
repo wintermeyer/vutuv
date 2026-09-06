@@ -119,6 +119,10 @@ defmodule VutuvWeb.FediversePostLive do
     RemotePostActions.mute_reposts(socket, account_id, & &1)
   end
 
+  def handle_event("mute-remote-reposts-of", %{"id" => account_id}, socket) do
+    RemotePostActions.mute_reposts_of(socket, account_id, & &1)
+  end
+
   # Unfollowing takes the reason this page holds a copy at all with it, so like
   # a report it ends on the feed rather than on a page about a post that may no
   # longer be cached.

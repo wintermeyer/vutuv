@@ -2801,6 +2801,25 @@ defmodule VutuvWeb.PostComponents do
                 >
                   {gettext("Mute")}
                 </:item>
+                <%!-- The same complaint about the **author**, and the one a
+                boost usually raises: the account being handed around is one
+                the reader never chose, and silencing the messenger holds only
+                until the next account boosts them. This drops what anybody
+                passes on of them and leaves their own posts alone, so a reader
+                who follows them keeps reading them. --%>
+                <%!-- `@boosted_by || @reposted_by`: both carriers, because the
+                query drops both — a member here reshares a cached post as
+                readily as an account out there boosts one, and an item offered
+                on one card and not the other reads as a rule that only
+                sometimes applies. --%>
+                <:item
+                  :if={@boosted_by || @reposted_by}
+                  click="mute-remote-reposts-of"
+                  value={@account.id}
+                  hint={RemoteAccount.display_handle(@account)}
+                >
+                  {gettext("Hide when others repost them")}
+                </:item>
                 <%!-- And the narrower complaint, on the line of the card that
                 caused it: the boost banner names an account the reader chose to
                 follow and would like to keep — it is the stream of other
@@ -3155,6 +3174,27 @@ defmodule VutuvWeb.PostComponents do
 
   defp mute_target_handle(%{__struct__: _} = target), do: Mutes.handle(target)
   defp mute_target_handle(_none), do: nil
+
+  # Where the local card's menu posts a mute. Three items send the same request
+  # with a different scope, and each spelling out `kind`/`id`/`return_to` again
+  # is three places to forget the next thing the route learns — the same reason
+  # `Vutuv.Posts.path/1` owns a post's URL. Nil-tolerant like the two above,
+  # since an attribute beside an `:if` is evaluated all the same.
+  defp mute_path(%{__struct__: _} = target, scope, return_to) do
+    # The order is the URL's, not a preference: `scope` sits between the target
+    # and where the member came from, the way the three items spelled it out
+    # before this function held them.
+    params =
+      [kind: Mutes.kind(target), id: target.id] ++
+        scope_param(scope) ++ [return_to: return_to]
+
+    ~p"/settings/mutes?#{params}"
+  end
+
+  defp mute_path(_none, _scope, _return_to), do: nil
+
+  defp scope_param(:all), do: []
+  defp scope_param(scope), do: [scope: scope]
 
   defp rewrite_link(_record, _author, nil), do: nil
 
@@ -3864,13 +3904,23 @@ defmodule VutuvWeb.PostComponents do
                 are exclusive — one Mute item either way. --%>
                 <:item
                   :if={!@viewer_follow && !@organization_author? && @post.user}
-                  href={
-                    ~p"/settings/mutes?#{[kind: "member", id: @post.user_id, return_to: @permalink]}"
-                  }
+                  href={mute_path(@post.user, :all, @permalink)}
                   method="post"
-                  hint={"@" <> @post.user.username}
+                  hint={mute_target_handle(@post.user)}
                 >
                   {gettext("Mute")}
+                </:item>
+                <%!-- The same about the **author**, for the reader who does not
+                want this person handed to them by whoever passes them on next.
+                Their own posts stay, so it is not the whole-account mute above
+                and a reader who follows them keeps reading them. --%>
+                <:item
+                  :if={@reposted_by && !@organization_author? && @post.user}
+                  href={mute_path(@post.user, :reposts_of, @permalink)}
+                  method="post"
+                  hint={mute_target_handle(@post.user)}
+                >
+                  {gettext("Hide when others repost them")}
                 </:item>
                 <%!-- And the narrower complaint, on the line that caused it:
                 the reshare banner names somebody the reader chose to follow and
@@ -3878,9 +3928,7 @@ defmodule VutuvWeb.PostComponents do
                 arriving through them that is unwanted. Their own posts stay. --%>
                 <:item
                   :if={@reposted_by}
-                  href={
-                    ~p"/settings/mutes?#{[kind: Mutes.kind(@reposted_by), id: @reposted_by.id, scope: "reposts", return_to: @permalink]}"
-                  }
+                  href={mute_path(@reposted_by, :reposts, @permalink)}
                   method="post"
                   hint={mute_target_handle(@reposted_by)}
                 >

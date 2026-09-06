@@ -32,6 +32,7 @@ defmodule VutuvWeb.SettingsHTML do
   alias Vutuv.Accounts.User
   alias Vutuv.ContentFilters.ContentFilter
   alias Vutuv.Mutes
+  alias Vutuv.Mutes.AccountMute
   alias Vutuv.SavedSearches
 
   embed_templates("../templates/settings/*")
@@ -70,7 +71,31 @@ defmodule VutuvWeb.SettingsHTML do
   table says so.
   """
   def mute_scope_label(:reposts), do: gettext("Reposts only")
+  def mute_scope_label(:reposts_of), do: gettext("Reposts by other people only")
   def mute_scope_label(_all), do: gettext("Everything")
+
+  @doc """
+  The other two scopes a mute could have, as `{scope, label}` pairs for the
+  switches beside it.
+
+  Read from `Vutuv.Mutes.AccountMute.scopes/0` rather than written out, so a
+  fourth scope cannot appear in the vocabulary and be missing from the one page
+  that lets a member change one.
+  """
+  def other_mute_scopes(scope) do
+    AccountMute.scopes()
+    |> Enum.reject(&(&1 == scope))
+    |> Enum.map(&{&1, mute_scope_switch_label(&1)})
+  end
+
+  # What the button says, which is the act rather than the state above it. The
+  # last clause is the fail-safe the doc above promises: a scope added to the
+  # vocabulary and forgotten here reads as its own name rather than taking the
+  # page down with a FunctionClauseError.
+  defp mute_scope_switch_label(:all), do: gettext("Mute everything")
+  defp mute_scope_switch_label(:reposts), do: gettext("Only hide reposts")
+  defp mute_scope_switch_label(:reposts_of), do: gettext("Only hide what others repost")
+  defp mute_scope_switch_label(scope), do: to_string(scope)
 
   @doc "The human, localized label for a content filter's kind (issue #940)."
   def filter_kind_label(%{kind: :tag}), do: gettext("Tag")

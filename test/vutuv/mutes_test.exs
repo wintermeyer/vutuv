@@ -56,6 +56,17 @@ defmodule Vutuv.MutesTest do
     })
   end
 
+  # The other half of the same table: an account out there passing on a post
+  # written **here**, which is how a member gets read on another network.
+  defp boost_local(%RemoteAccount{} = booster, post, minutes_ago \\ 3) do
+    Repo.insert!(%PostBoost{
+      remote_account_id: booster.id,
+      post_id: post.id,
+      activity_id: "https://friendica.example/act/#{System.unique_integer([:positive])}",
+      announced_at: DateTime.add(DateTime.utc_now(:second), -minutes_ago * 60, :second)
+    })
+  end
+
   defp local_post(author, body) do
     Vutuv.PostsHelpers.create_post!(Repo.reload!(author), %{body: body})
   end
@@ -174,6 +185,156 @@ defmodule Vutuv.MutesTest do
       {:ok, _} = Mutes.mute(reader, stranger, :all)
 
       refute "Antwort vom Fremden" in feed_texts(reader)
+    end
+  end
+
+  describe "reposts of an account, whoever passes them on" do
+    test "what a followed account boosts of a silenced author stays out" do
+      reader = member()
+      doris = account("doris")
+      lilly = account("lilly")
+      follow(reader, doris)
+
+      boost(doris, cached(lilly, "Lillys Tagebuch"))
+      cached(doris, "Doris schreibt selbst")
+
+      assert "Lillys Tagebuch" in feed_texts(reader)
+
+      {:ok, _} = Mutes.mute(reader, lilly, :reposts_of)
+
+      texts = feed_texts(reader)
+      refute "Lillys Tagebuch" in texts
+      assert "Doris schreibt selbst" in texts
+    end
+
+    test "and the silenced author keeps speaking to whoever follows them" do
+      reader = member()
+      lilly = account("lilly")
+      follow(reader, lilly)
+
+      cached(lilly, "Lilly schreibt selbst")
+
+      {:ok, _} = Mutes.mute(reader, lilly, :reposts_of)
+
+      # The whole difference to `:all`: the account is still heard, only what
+      # other people pass on of it is not — so the follow's flag stays down.
+      assert "Lilly schreibt selbst" in feed_texts(reader)
+      assert Mutes.scope_for(reader, lilly) == :reposts_of
+      refute Repo.get_by!(Follow, user_id: reader.id, remote_account_id: lilly.id).muted
+    end
+
+    test "a second account passing the same author on is silenced too" do
+      reader = member()
+      doris = account("doris")
+      erna = account("erna")
+      lilly = account("lilly")
+      follow(reader, doris)
+      follow(reader, erna)
+
+      post = cached(lilly, "Lillys Tagebuch")
+      boost(doris, post, 4)
+      {:ok, _} = Mutes.mute(reader, lilly, :reposts_of)
+      boost(erna, post, 2)
+
+      refute "Lillys Tagebuch" in feed_texts(reader)
+    end
+
+    test "a member here is silenced the same way" do
+      reader = member()
+      resharer = member()
+      stranger = member()
+      {:ok, _} = Social.follow(reader, resharer.id)
+
+      :ok = Posts.repost_post(Repo.reload!(resharer), local_post(stranger, "Vom Fremden"))
+      local_post(resharer, "Eigener Beitrag")
+
+      assert "Vom Fremden" in feed_texts(reader)
+
+      {:ok, _} = Mutes.mute(reader, stranger, :reposts_of)
+
+      texts = feed_texts(reader)
+      refute "Vom Fremden" in texts
+      assert "Eigener Beitrag" in texts
+    end
+
+    test "and a member the reader follows keeps arriving with their own posts" do
+      reader = member()
+      author = member()
+      {:ok, _} = Social.follow(reader, author.id)
+
+      local_post(author, "Eigener Beitrag")
+
+      {:ok, _} = Mutes.mute(reader, author, :reposts_of)
+
+      assert "Eigener Beitrag" in feed_texts(reader)
+
+      refute Repo.get_by!(Vutuv.Social.Follow, follower_id: reader.id, followee_id: author.id).muted
+    end
+
+    test "a boost carrying a vutuv post reads the same rule" do
+      reader = member()
+      doris = account("doris")
+      author = member()
+      follow(reader, doris)
+
+      boost_local(doris, local_post(author, "Hier geschrieben"))
+
+      assert "Hier geschrieben" in feed_texts(reader)
+
+      {:ok, _} = Mutes.mute(reader, author, :reposts_of)
+
+      refute "Hier geschrieben" in feed_texts(reader)
+    end
+
+    test "a boost of a page's post reads it too" do
+      reader = member()
+      doris = account("doris")
+      follow(reader, doris)
+
+      # The page is built from the factory rather than through the domain
+      # check: that one flips a global config key, which would cost this whole
+      # file its `async: true`.
+      owner = insert(:activated_user)
+      page = insert(:organization)
+      {:ok, _} = Vutuv.Organizations.add_role(page, owner, "publisher", owner)
+      {:ok, post} = Posts.create_organization_post(page, owner, %{body: "Von der Seite"})
+
+      boost_local(doris, post)
+
+      assert "Von der Seite" in feed_texts(reader)
+
+      {:ok, _} = Mutes.mute(reader, page, :reposts_of)
+
+      refute "Von der Seite" in feed_texts(reader)
+    end
+
+    test "and a mute placed on the follow's own switch survives a boost" do
+      reader = member()
+      doris = account("doris")
+      followee = member()
+      follow(reader, doris)
+      {:ok, _} = Social.follow(reader, followee.id)
+      {:ok, _} = Social.set_follow_mute(reader, followee, true)
+
+      boost_local(doris, local_post(followee, "Vom Stummgeschalteten"))
+
+      # The follow's flag is the older of the two stores, and the boost source
+      # read only the newer one until 2026-09-06 — a mute the member had placed
+      # and could see, with the posts arriving anyway.
+      refute "Vom Stummgeschalteten" in feed_texts(reader)
+    end
+
+    test "a repost arriving live is not counted behind the pill either" do
+      reader = member()
+      stranger = member()
+      post = local_post(stranger, "Vom Fremden")
+
+      {:ok, _} = Mutes.mute(reader, stranger, :reposts_of)
+
+      # The in-memory twin of the queries above. Asked about the post on its
+      # own the answer is yes — this mute is about the carrying, not the author.
+      assert Posts.reaches_feed?(post, reader)
+      refute Posts.reaches_feed?(post, reader, :repost)
     end
   end
 

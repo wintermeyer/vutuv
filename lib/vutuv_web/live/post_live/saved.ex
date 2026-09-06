@@ -253,6 +253,10 @@ defmodule VutuvWeb.PostLive.Saved do
     RemotePostActions.mute_reposts(socket, account_id, &reload_page/1)
   end
 
+  def handle_event("mute-remote-reposts-of", %{"id" => account_id}, socket) do
+    RemotePostActions.mute_reposts_of(socket, account_id, &reload_page/1)
+  end
+
   def handle_event("unsave-person", %{"id" => id}, socket) do
     case Vutuv.UUIDv7.cast_or_nil(id) do
       nil ->

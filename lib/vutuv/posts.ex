@@ -1292,27 +1292,36 @@ defmodule Vutuv.Posts do
   decides which of two lists a post belongs in, not whether it reaches the
   reader at all, and an arrival for the other tab lights that tab's dot rather
   than being dropped (issue #1503).
+
+  `via` says how the post is arriving. `:repost` means somebody **passed it
+  on**, which is a second question about the author: a reader can silence an
+  account for that alone (`:reposts_of`), and the repost source's query does.
+  Without it the pill would count a reshare the very next load drops, which is
+  the disagreement this function exists to end.
   """
-  def reaches_feed?(%Post{} = post, %User{} = viewer) do
+  def reaches_feed?(%Post{} = post, %User{} = viewer, via \\ nil) do
     not Vutuv.Social.blocked_between?(viewer.id, post.user_id) and
-      visible_to?(post, viewer) and not muted_author?(post, viewer) and
+      visible_to?(post, viewer) and not muted_author?(post, viewer, author_scopes(via)) and
       language_allowed?(post, viewer)
   end
+
+  defp author_scopes(:repost), do: Vutuv.Mutes.repost_author_scopes()
+  defp author_scopes(_from_the_author), do: [:all]
 
   # Both stores, because this is the in-memory twin of the feed's own filter and
   # the two must answer alike: a post whose author the reader silenced without
   # ever following them would otherwise be counted behind the "new posts" pill
   # and dropped by the very next load — which is the bug `reaches_feed?/2` was
   # written to end.
-  defp muted_author?(%Post{user_id: author_id}, %User{id: viewer_id})
+  defp muted_author?(%Post{user_id: author_id}, %User{id: viewer_id}, scopes)
        when is_binary(author_id),
-       do: Vutuv.Mutes.silenced?(viewer_id, :member, author_id)
+       do: Vutuv.Mutes.silenced?(viewer_id, :member, author_id, scopes)
 
-  defp muted_author?(%Post{organization_id: page_id}, %User{id: viewer_id})
+  defp muted_author?(%Post{organization_id: page_id}, %User{id: viewer_id}, scopes)
        when is_binary(page_id),
-       do: Vutuv.Mutes.silenced?(viewer_id, :organization, page_id)
+       do: Vutuv.Mutes.silenced?(viewer_id, :organization, page_id, scopes)
 
-  defp muted_author?(_post, _viewer), do: false
+  defp muted_author?(_post, _viewer, _scopes), do: false
 
   # The `language_scope/2` clause, asked of one post: an undeclared language
   # never hides (the same NOT-IN/NULL lesson), and no filter means no question.
@@ -4242,12 +4251,16 @@ defmodule Vutuv.Posts do
       # A muted author is in that list for the same reason: the
       # reader silenced *them*, and a reshare is the back door that would carry
       # them in anyway — which is the usual way a stranger's post arrives at
-      # all.
-      where: is_nil(p.user_id) or p.user_id not in subquery(silenced_by(viewer_id)),
+      # all. Read at `repost_author_scopes/0`, the two scopes that speak about
+      # an author being handed around: `:all`, and the narrow `:reposts_of`
+      # that leaves the author's own posts in the feed and closes this door.
+      where:
+        is_nil(p.user_id) or
+          p.user_id not in subquery(silenced_by(viewer_id, Vutuv.Mutes.repost_author_scopes())),
       where:
         is_nil(p.organization_id) or
           p.organization_id not in subquery(
-            Vutuv.Mutes.silenced_organization_ids(viewer_id, [:all])
+            Vutuv.Mutes.silenced_organization_ids(viewer_id, Vutuv.Mutes.repost_author_scopes())
           ),
       order_by: [desc: r.inserted_at, desc: r.id],
       limit: ^fetch_n,
@@ -4350,10 +4363,14 @@ defmodule Vutuv.Posts do
   # post comes from in the first place (a reshare, a tag, an answer under the
   # reader's own post). Asking that module rather than reading `follows.muted`
   # here is what keeps the two stores from answering differently per source.
-  defp silenced_by(viewer_id) do
+  #
+  # `scopes` is `[:all]` for every source where the author is the one speaking.
+  # The repost source hands over `Vutuv.Mutes.repost_author_scopes/0` instead,
+  # because there the author is being handed around by somebody else.
+  defp silenced_by(viewer_id, scopes \\ [:all]) do
     union_all(
       blocked_either_way(viewer_id),
-      ^Vutuv.Mutes.silenced_member_ids(viewer_id, [:all])
+      ^Vutuv.Mutes.silenced_member_ids(viewer_id, scopes)
     )
   end
 

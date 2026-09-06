@@ -19,7 +19,7 @@ defmodule VutuvWeb.Live.RemotePostActions do
   error would be a lie about a request that succeeded. `unfollow/3` answers a
   follow that is already gone the same way, for the same reason.
 
-  A surface that renders the menu **must** handle all three events — an
+  A surface that renders the menu **must** handle every one of its events — an
   unhandled `phx-click` takes the LiveView down, so a card whose host forgot one
   is a button that kills the page.
   """
@@ -30,6 +30,7 @@ defmodule VutuvWeb.Live.RemotePostActions do
 
   alias Vutuv.Fediverse
   alias Vutuv.Mutes
+  alias VutuvWeb.MuteMessages
 
   @doc """
   Handles a `"report-remote-post"` event for the cached post `id`, returning the
@@ -97,20 +98,36 @@ defmodule VutuvWeb.Live.RemotePostActions do
   reader follows on purpose — a followed account that boosts the same stranger
   every day is not an account they want to lose.
   """
-  def mute_reposts(socket, account_id, on_muted) when is_function(on_muted, 1) do
+  def mute_reposts(socket, account_id, on_muted),
+    do: mute_at(socket, account_id, :reposts, on_muted)
+
+  @doc """
+  Handles a `"mute-remote-reposts-of"` event for the account `id`: the same
+  complaint read from the **author's** side — whatever anybody passes on of this
+  account stays out, while the account itself keeps reaching whoever follows it.
+
+  This is the one the boost banner leaves a reader wanting: the account they do
+  not want to meet is the one being handed around, and switching the booster off
+  only holds until the next member boosts the very same account.
+  """
+  def mute_reposts_of(socket, account_id, on_muted),
+    do: mute_at(socket, account_id, :reposts_of, on_muted)
+
+  # Both narrow scopes are the same act about a different side of the same card,
+  # so they are one function with the scope passed in: written twice, the copies
+  # differed by an atom and a sentence, which is two places for the next scope
+  # to be forgotten in.
+  defp mute_at(socket, account_id, scope, on_muted) when is_function(on_muted, 1) do
     case Mutes.target("remote_account", account_id) do
       nil ->
         {:noreply, on_muted.(socket)}
 
       account ->
-        {:ok, _mute} = Mutes.mute(socket.assigns.current_user, account, :reposts)
+        {:ok, _mute} = Mutes.mute(socket.assigns.current_user, account, scope)
 
         {:noreply,
          socket
-         |> put_flash(
-           :info,
-           gettext("Hidden. What they pass on stays out of your feed; their own posts do not.")
-         )
+         |> put_flash(:info, MuteMessages.flash(scope))
          |> on_muted.()}
     end
   end
@@ -118,7 +135,7 @@ defmodule VutuvWeb.Live.RemotePostActions do
   defp muted_message(true),
     do: gettext("Muted. You still follow them; their posts leave your feed.")
 
-  defp muted_message(_not_following), do: gettext("Muted. Their posts leave your feed.")
+  defp muted_message(_not_following), do: MuteMessages.flash(:all)
 
   @doc """
   Handles an `"unfollow-remote-account"` event for the account `id`: the member

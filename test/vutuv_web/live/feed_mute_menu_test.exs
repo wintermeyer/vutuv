@@ -150,4 +150,74 @@ defmodule VutuvWeb.FeedMuteMenuTest do
     # that was missing.
     assert has_element?(view, "[phx-click='mute-remote-account'][phx-value-id='#{lilly.id}']")
   end
+
+  # The third way out, and the one the boost banner really raises: it is the
+  # author being handed around that the reader is done with, and switching Doris
+  # off holds only until the next account boosts the same post.
+  test "hiding what others repost of the author takes the card and keeps the author", %{
+    conn: conn
+  } do
+    %{view: view, user: user, doris: doris, lilly: lilly} = boosted_feed(conn)
+
+    view
+    |> element("[phx-click='mute-remote-reposts-of'][phx-value-id='#{lilly.id}']")
+    |> render_click()
+
+    refute render(view) =~ "Lillys Tagebuch"
+    assert render(view) =~ "Doris schreibt selbst"
+    assert Mutes.scope_for(user, lilly) == :reposts_of
+    assert Mutes.scope_for(user, doris) == nil
+  end
+
+  test "that item names the author, not the booster", %{conn: conn} do
+    %{view: view, doris: doris, lilly: lilly} = boosted_feed(conn)
+
+    assert has_element?(view, "[phx-click='mute-remote-reposts-of'][phx-value-id='#{lilly.id}']")
+    refute has_element?(view, "[phx-click='mute-remote-reposts-of'][phx-value-id='#{doris.id}']")
+  end
+
+  # A one-word menu item is what `gettext.extract --merge` fuzzy-fills with the
+  # nearest thing it can find, and nothing fails the build over it — so the two
+  # repost items are asserted in German by name, where a swapped translation
+  # would have them both claim to act on the same account.
+  test "both repost items say in German which side they act on", %{conn: conn} do
+    {conn, user} = create_and_login_user(conn)
+    user |> Ecto.Changeset.change(%{locale: nil}) |> Repo.update!()
+
+    doris = account("doris")
+    lilly = account("lilly")
+    follow(user, doris)
+    boost(doris, cached_post(lilly, content_text: "Lillys Tagebuch"))
+
+    {:ok, view, _html} =
+      conn
+      |> recycle()
+      |> put_req_header("accept-language", "de-DE,de;q=0.9")
+      |> live(~p"/feed")
+
+    html = render(view)
+
+    assert html =~ "Ausblenden, wenn andere reposten"
+    assert html =~ "Reposts ausblenden"
+  end
+
+  test "a member's reshare offers it for the author too", %{conn: conn} do
+    {conn, user} = create_and_login_user(conn)
+    resharer = insert(:activated_user)
+    stranger = insert(:activated_user)
+    {:ok, _} = Vutuv.Social.follow(user, resharer.id)
+    post = Vutuv.PostsHelpers.create_post!(stranger, %{body: "Vom Fremden"})
+    :ok = Vutuv.Posts.repost_post(Repo.reload!(resharer), post)
+
+    {:ok, view, _html} = live(conn, ~p"/feed")
+
+    hide_carried =
+      href_for(render(view), "kind=member&amp;id=#{stranger.id}&amp;scope=reposts_of")
+
+    assert hide_carried, "the card offers no way to hide what others repost of the author"
+
+    conn = conn |> recycle() |> post(hide_carried)
+    assert redirected_to(conn) =~ "/"
+    assert Mutes.scope_for(user, stranger) == :reposts_of
+  end
 end

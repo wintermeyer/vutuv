@@ -199,6 +199,13 @@ defmodule VutuvWeb.FediverseAccountLive do
     RemotePostActions.mute_reposts(socket, account_id, &load_posts/1)
   end
 
+  # And the same about the author of a boosted card: what other accounts pass on
+  # of them goes, their own posts stay — including the ones this page lists,
+  # when the account it is about is the author.
+  def handle_event("mute-remote-reposts-of", %{"id" => account_id}, socket) do
+    RemotePostActions.mute_reposts_of(socket, account_id, &load_posts/1)
+  end
+
   # The card menu's Unfollow, which is this page's own button by another route —
   # so it ends in the same state: no follow, and the cached posts gone with it.
   def handle_event("unfollow-remote-account", %{"id" => account_id}, socket) do
