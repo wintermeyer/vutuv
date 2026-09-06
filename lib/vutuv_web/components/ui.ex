@@ -3632,6 +3632,13 @@ defmodule VutuvWeb.UI do
   """
   def relative_time(nil), do: gettext("unknown")
 
+  # A derived feed item's stamp comes off a `naive_datetime` column and is UTC
+  # by construction, the same reading `local_time/1` and `post_time/1` document.
+  # Here rather than at each call site, so a caller holding one does not write
+  # the conversion out again (the bell's preview did).
+  def relative_time(%NaiveDateTime{} = at),
+    do: at |> DateTime.from_naive!("Etc/UTC") |> relative_time()
+
   def relative_time(%DateTime{} = at) do
     seconds = DateTime.diff(DateTime.utc_now(), at, :second)
 

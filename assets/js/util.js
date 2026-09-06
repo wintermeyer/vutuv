@@ -114,6 +114,15 @@ export function postJSON(url, body) {
 export const reducedMotion = () =>
   window.matchMedia("(prefers-reduced-motion: reduce)").matches
 
+// Whether this device's pointer can hover at all — which is a question about the
+// input, not about how wide the window is: a touch laptop in a narrow window can
+// hover, a stylus tablet at 900px cannot. Gates every affordance that only
+// exists under a resting pointer (the remote-actor card's confirm step, the
+// bell's hover preview, whose close marks notifications read and must therefore
+// never fire from a tap). Deliberately NOT the `(pointer: fine)` pair
+// `keyboard_shortcuts.js` asks for — that one is about typing, not hovering.
+export const canHover = () => window.matchMedia("(hover: hover)").matches
+
 // A click that means "this link, here, now": nobody else has handled it and
 // no modifier turned it into "open elsewhere". The one test for every
 // document-level press interceptor (the nav press paint, the Feed tab's

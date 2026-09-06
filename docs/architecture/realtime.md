@@ -483,6 +483,53 @@ item name the same row. Opening /notifications deletes the member's dismissals:
 the marker now covers them, so the table only ever holds the exceptions that
 still matter.
 
+### The bell's hover preview
+
+Most of what the bell counts is worth knowing and not worth a trip: two people
+liked a post, somebody followed you. Reading that on /notifications costs a page
+load there and a page load back, so the number sat there being ignored. Resting
+the pointer on the bell drops a small panel under it instead — one round kind
+badge, who did what, how long ago, six of them at most and a "+N more" footer
+into the page — and **looking away marks them read**. The gesture says "I have
+seen this" as plainly as opening the page does, so it carries the same weight.
+
+The panel is `ShellLive`'s; only the gesture is the client's, because a hover is
+not something a LiveView binding can see. The `BellPreview` hook pushes
+`bell:preview` and `bell:preview_close` under three rules, each of which exists
+because the close *writes* something:
+
+* **A hovering pointer or nothing** (`matchMedia("(hover: hover)")`). On a touch
+  screen `mouseenter` fires on the tap that follows the link, so a member
+  walking to /notifications would empty the badge on the way and arrive at a page
+  with nothing marked new. The viewport width the bell is hidden below is a
+  different question, and a touch tablet answers it wrong.
+* **A dwell of 200 ms before opening.** The bell sits between four other icons,
+  and a pointer travelling to the avatar crosses it; until the dwell passes
+  nothing is asked of the server. The hook also reads `data-unread` off the
+  wrapper, so a bell with nothing behind it costs no round trip and no query.
+* **A grace period of 150 ms before closing**, for a pointer landing on a row.
+  The hook listens on the *wrapper*, not the link, so the panel hanging out of
+  it is a descendant and travelling into the list never leaves the subtree.
+
+**What arrives while the panel is open must survive it**, and that is the one
+thing `mark_notifications_read/1` cannot do: it sweeps the marker up to whatever
+the newest event is *at that moment*, so a like landing during the read would be
+marked read without ever having been shown. So `Activity.unread_notifications/2`
+hands the open the instant it is showing (`read_up_to`, the newest event there
+is — not the newest *unread* one, or a marker already past it would go back) and
+the close hands that same instant to `Activity.mark_notifications_read_up_to/2`.
+Everything after it is still new, and the badge says 1 the moment the pointer
+leaves. That marker only ever moves forward, so a second tab that opened
+/notifications in the meantime cannot be undone by a preview that started
+before it, and a marker that does not move broadcasts nothing.
+
+`unread_notifications/2` reads the feed where the badge counts with SQL, so it
+repeats the same three exclusions by hand — the read marker, `seen_post_ids/2`
+and `dismissed_event_ids/1` — or the panel and the number would disagree.
+Nothing is marked read by the close alone: the marker's own
+`:notifications_changed` broadcast is what recounts the badge, like every other
+change.
+
 ### The notifications page (2026-09 cards)
 
 `VutuvWeb.NotificationLive.Index` renders the derived feed as **cards under

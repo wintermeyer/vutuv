@@ -67,6 +67,9 @@ defmodule VutuvWeb.NotificationLive.Index do
     only: [
       cv_entry_label: 1,
       cv_entry_path: 2,
+      kind_classes: 1,
+      kind_glyph: 1,
+      kind_label: 1,
       notification_target: 2,
       notification_text: 1
     ]
@@ -321,9 +324,12 @@ defmodule VutuvWeb.NotificationLive.Index do
 
     feed = Activity.notifications_page(user.id, limit: @page_size, kinds: kinds, page: page)
 
+    # Rows the reader already dealt with out in the feed stay listed — the page
+    # is the log of what happened — they just stop rendering as new, so the
+    # list and the badge tell one story.
     {items, posts} =
       feed.entries
-      |> with_seen_flags(user, socket.assigns.dismissed)
+      |> then(&Activity.with_seen_flags(user.id, &1, socket.assigns.dismissed))
       |> with_post_previews(user)
 
     %{page: page, total: total, items: items, post_cards: post_cards(items, posts)}
@@ -333,28 +339,6 @@ defmodule VutuvWeb.NotificationLive.Index do
     socket
     |> assign(payload)
     |> assign_sections()
-  end
-
-  # Rows the reader has already dealt with out in the feed: they answered,
-  # liked, bookmarked or reposted the post the row is about, so
-  # `Vutuv.Activity.mark_post_seen/2` recorded it and the shell's badge stopped
-  # counting it. They stay listed — the page is the log of what happened — they
-  # just no longer render as new, so the list and the badge tell one story. One
-  # query per page.
-  defp with_seen_flags(entries, viewer, dismissed) do
-    seen =
-      entries
-      |> Enum.map(&Activity.subject_post_id/1)
-      |> Enum.reject(&is_nil/1)
-      |> then(&Activity.seen_post_ids(viewer.id, &1))
-
-    Enum.map(entries, fn entry ->
-      read? =
-        MapSet.member?(seen, Activity.subject_post_id(entry)) or
-          MapSet.member?(dismissed, entry[:id])
-
-      Map.put(entry, :seen?, read?)
-    end)
   end
 
   defp assign_sections(socket) do
@@ -1442,87 +1426,6 @@ defmodule VutuvWeb.NotificationLive.Index do
 
     gettext("Last 30 days: %{parts}", parts: Enum.join(parts, " · "))
   end
-
-  # ── Kind styling (badge colour + glyph + accessible label) ──
-
-  # Event kinds that share the brand badge colour, so the class string lives
-  # in one place.
-  @brand_kind_classes "bg-brand-50 text-brand-700 dark:bg-brand-900/40 dark:text-brand-100"
-  @brand_kinds ~w(follower reply thread mention connection report_protection organization_role handle_change cv_update fediverse_reply fediverse_reaction share)
-
-  defp kind_classes("endorsement"),
-    do: "bg-emerald-50 text-emerald-600 dark:bg-emerald-900/30 dark:text-emerald-300"
-
-  defp kind_classes("like"), do: "bg-accent/10 text-accent dark:bg-accent/20"
-
-  defp kind_classes("moderation"),
-    do: "bg-amber-50 text-amber-600 dark:bg-amber-900/30 dark:text-amber-200"
-
-  # The AI image scan removed an image — amber, like every moderation notice.
-  defp kind_classes("image_rejected"),
-    do: "bg-amber-50 text-amber-600 dark:bg-amber-900/30 dark:text-amber-200"
-
-  defp kind_classes(kind) when kind in @brand_kinds, do: @brand_kind_classes
-
-  defp kind_classes(_), do: "bg-slate-100 text-slate-500 dark:bg-slate-800 dark:text-slate-300"
-
-  defp kind_glyph("follower"), do: "+"
-  defp kind_glyph("endorsement"), do: "★"
-  defp kind_glyph("reply"), do: "↩"
-  # A reply elsewhere in a thread the recipient writes in.
-  defp kind_glyph("thread"), do: "⤷"
-  # Being named by @handle. Shares the glyph with the (rare, "More"-chip)
-  # handle-change kind: both are about a handle, and the badge's title/sr-only
-  # label tells them apart where the glyph alone would not.
-  defp kind_glyph("mention"), do: "@"
-  defp kind_glyph("like"), do: "♥"
-  # A re-share from another network (issue #1068): the arrows, since the line
-  # beside it names the verb and the globe already sits on the sharer's name.
-  defp kind_glyph("share"), do: "↻"
-  # A reply written on another network (issue #1069) — the same globe the
-  # post card's "from other networks" line uses, so one glyph means one thing.
-  defp kind_glyph("fediverse_reply"), do: "🌐"
-  # A reaction from out there of a kind that is neither a favourite nor a
-  # re-share — the globe, since "this came from another network" is the one
-  # thing the glyph has to say; the sentence beside it names the verb.
-  defp kind_glyph("fediverse_reaction"), do: "🌐"
-  # "connection" is the vernetzt (mutual-follow) event; the handshake glyph.
-  defp kind_glyph("connection"), do: "🤝"
-  defp kind_glyph("moderation"), do: "⚑"
-  defp kind_glyph("image_rejected"), do: "🖼"
-  defp kind_glyph("report_protection"), do: "🛡"
-  defp kind_glyph("organization_role"), do: "🏢"
-  defp kind_glyph("handle_change"), do: "@"
-  defp kind_glyph("cv_update"), do: "📄"
-  # The welcome note naming the member's own handle.
-  defp kind_glyph("username"), do: "👋"
-  # The finished AI reading of an Arbeitszeugnis. The magnifier, not a robot:
-  # what arrived is a close reading of wording, and the member is being told to
-  # go and read it.
-  defp kind_glyph("reference_check"), do: "🔍"
-  defp kind_glyph(_), do: "•"
-
-  # The accessible kind name (the badge's title + sr-only text). Translated
-  # like the row text; raw kind strings ("cv_update") must not leak to users.
-  defp kind_label("follower"), do: gettext("Follower")
-  defp kind_label("endorsement"), do: gettext("Endorsement")
-  defp kind_label("reply"), do: gettext("Reply")
-  defp kind_label("thread"), do: gettext("Thread reply")
-  defp kind_label("mention"), do: gettext("Mention")
-  defp kind_label("like"), do: gettext("Like")
-  defp kind_label("fediverse_reply"), do: gettext("Reply from another network")
-  defp kind_label("share"), do: gettext("Reaction from another network")
-  defp kind_label("fediverse_reaction"), do: gettext("Reaction from another network")
-  defp kind_label("connection"), do: gettext("Connection")
-  defp kind_label("moderation"), do: gettext("Moderation")
-  defp kind_label("image_rejected"), do: gettext("Image review")
-  defp kind_label("report_protection"), do: gettext("Report protection")
-  defp kind_label("organization_role"), do: gettext("Organization role")
-  defp kind_label("handle_change"), do: gettext("Handle change")
-  defp kind_label("cv_update"), do: gettext("CV update")
-  defp kind_label("username"), do: gettext("Username")
-  defp kind_label("reference_check"), do: gettext("Employment reference review")
-  defp kind_label(_), do: gettext("Activity")
 
   # ── A card line's vocabulary ──
 

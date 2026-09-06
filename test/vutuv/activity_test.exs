@@ -1094,6 +1094,125 @@ defmodule Vutuv.ActivityTest do
     end
   end
 
+  describe "unread_notifications/2 and mark_notifications_read_up_to/2" do
+    test "lists what the badge counts, newest first and capped at the limit" do
+      me = insert(:user)
+
+      for day <- 1..4 do
+        follow = insert(:follow, follower: insert(:user), followee: me)
+        backdate_connection(follow, %{~N[2024-03-01 12:00:00] | day: day})
+      end
+
+      preview = Activity.unread_notifications(me.id, 3)
+      stamps = Enum.map(preview.items, & &1.at)
+
+      assert length(preview.items) == 3
+      assert stamps == Enum.sort(stamps, {:desc, NaiveDateTime})
+      assert preview.read_up_to == ~N[2024-03-04 12:00:00]
+      assert Activity.unread_notification_count(me.id) == 4
+    end
+
+    test "leaves out what the member has already read" do
+      me = insert(:user)
+
+      old = insert(:follow, follower: insert(:user), followee: me)
+      backdate_connection(old, ~N[2024-03-01 12:00:00])
+      Activity.mark_notifications_read(me.id)
+
+      new = insert(:follow, follower: insert(:user), followee: me)
+      backdate_connection(new, ~N[2024-03-02 12:00:00])
+
+      preview = Activity.unread_notifications(me.id, 6)
+
+      assert [%{kind: "follower", at: ~N[2024-03-02 12:00:00]}] = preview.items
+      # The stamp that marks them read is the newest event there IS, not the
+      # newest unread one — otherwise a marker already past it would go back.
+      assert preview.read_up_to == ~N[2024-03-02 12:00:00]
+    end
+
+    test "what arrives while the panel is open is still unread when it closes" do
+      me = insert(:user)
+
+      shown = insert(:follow, follower: insert(:user), followee: me)
+      backdate_connection(shown, ~N[2024-03-01 12:00:00])
+
+      # The pointer comes to rest: the panel pins the instant it is showing.
+      preview = Activity.unread_notifications(me.id, 6)
+      assert length(preview.items) == 1
+
+      # …and a like lands while the member is reading it.
+      during = insert(:follow, follower: insert(:user), followee: me)
+      backdate_connection(during, ~N[2024-03-02 12:00:00])
+
+      # The pointer leaves. Only what was in the panel is read.
+      Activity.mark_notifications_read_up_to(me.id, preview.read_up_to)
+      assert Activity.unread_notification_count(me.id) == 1
+
+      # The calibration: the ordinary full read is what this must NOT do — it
+      # sweeps the marker to whatever is newest by then, arrival included.
+      Activity.mark_notifications_read(me.id)
+      assert Activity.unread_notification_count(me.id) == 0
+    end
+
+    test "leaves out a vernetzt pair the member closed themselves, exactly as the badge does" do
+      me = insert(:user)
+      mine = insert(:user)
+      theirs = insert(:user)
+
+      # Two vernetzt pairs, one closed from each side. `count_connections/3`
+      # counts only the one the OTHER person closed — a circle the member shut
+      # themselves is news to everybody except them. Both pairs are needed for
+      # this to bite: with only the self-closed one, the kind's count is zero
+      # and the preview never reads that source at all.
+      {:ok, _} = Vutuv.Social.follow(mine, me.id)
+      {:ok, _} = Vutuv.Social.follow(me, mine.id)
+      {:ok, _} = Vutuv.Social.follow(me, theirs.id)
+      {:ok, _} = Vutuv.Social.follow(theirs, me.id)
+
+      preview = Activity.unread_notifications(me.id, 20)
+      connections = Enum.filter(preview.items, &(&1.kind == "connection"))
+
+      assert length(connections) == 1
+      # The invariant worth pinning: under the cap, the panel lists exactly what
+      # the number counts. A row the badge left out makes the two disagree.
+      assert length(preview.items) == Activity.unread_notification_count(me.id)
+    end
+
+    test "the marker only ever moves forward" do
+      me = insert(:user)
+
+      follow = insert(:follow, follower: insert(:user), followee: me)
+      backdate_connection(follow, ~N[2024-03-05 12:00:00])
+
+      # Another tab read everything in the meantime; a preview that opened
+      # before it must not undo that.
+      Activity.mark_notifications_read(me.id)
+      Activity.mark_notifications_read_up_to(me.id, ~N[2024-01-01 12:00:00])
+
+      assert Activity.unread_notification_count(me.id) == 0
+    end
+
+    test "a marker that moves tells the member's other sessions, and one that does not stays quiet" do
+      me = insert(:user)
+      Activity.subscribe(me.id)
+
+      follow = insert(:follow, follower: insert(:user), followee: me)
+      backdate_connection(follow, ~N[2024-03-05 12:00:00])
+
+      Activity.mark_notifications_read_up_to(me.id, ~N[2024-03-05 12:00:00])
+      assert_receive :notifications_changed
+
+      Activity.mark_notifications_read_up_to(me.id, ~N[2024-03-05 12:00:00])
+      refute_receive :notifications_changed, 50
+    end
+
+    test "answers empty for a logged-out visitor and writes no marker for nil" do
+      assert Activity.unread_notifications(nil, 6) == %{items: [], read_up_to: nil}
+      assert Activity.mark_notifications_read_up_to(nil, ~N[2024-03-05 12:00:00]) == :ok
+      assert Activity.mark_notifications_read_up_to(Vutuv.UUIDv7.generate(), nil) == :ok
+    end
+  end
+
   # Test shorthand for the first page's entries.
   defp recent_notifications(user_id, limit \\ 50) do
     Activity.notifications_page(user_id, limit: limit).entries

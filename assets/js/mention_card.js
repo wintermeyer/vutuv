@@ -28,7 +28,7 @@
 // LiveView root: a patch of the page underneath must not be able to take the
 // open card with it. That is also why the fragment carries no `phx-` link and
 // no fixed id (see the template).
-import { copyText, request, revealPreviewClamp } from "./util"
+import { canHover, copyText, request, revealPreviewClamp } from "./util"
 
 const CARD_URL = "/system/fediverse/actor_card"
 
@@ -329,17 +329,15 @@ async function act(button) {
 // come back. The wording is the server's (`data-actor-confirm`) — this file
 // writes no sentences.
 //
-// `matchMedia("(hover: hover)")` and not `SHEET`: the question is whether this
-// input device can hover, which is not the same as how wide the window is. A
-// touch laptop asked to open the card in a narrow window gets a sheet and can
-// still hover; a stylus tablet at 900px gets a popover and cannot. The same
-// query gates the CSS half, so the two cannot disagree about which device this
-// is.
-const CAN_HOVER = window.matchMedia("(hover: hover)")
+// `canHover()` and not `SHEET`: the question is whether this input device can
+// hover, which is not the same as how wide the window is. A touch laptop asked
+// to open the card in a narrow window gets a sheet and can still hover; a
+// stylus tablet at 900px gets a popover and cannot. The same query gates the
+// CSS half, so the two cannot disagree about which device this is.
 
 function armed(button) {
   const asks = button.querySelector("[data-actor-state-confirm]")
-  if (!asks || CAN_HOVER.matches || button.classList.contains("is-confirming")) return false
+  if (!asks || canHover() || button.classList.contains("is-confirming")) return false
 
   button.classList.add("is-confirming")
   return true

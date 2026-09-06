@@ -8,12 +8,17 @@ defmodule VutuvWeb.NotificationLine do
   ("replied to your post."); the few with no actor - moderation, a rejected
   image, a finished reference check - are whole sentences.
 
-  Two surfaces share it, which is why it lives here rather than in either:
-  `VutuvWeb.NotificationLive.Index` (the page under the bell) and
-  `VutuvWeb.ShellLive`, which puts the same line into a **browser**
-  notification (issue #1249). A second copy would drift the moment a kind is
-  added, and the popup would quietly go back to the untranslated English
-  `:text` fallback.
+  Three surfaces share it, which is why it lives here rather than in any of
+  them: `VutuvWeb.NotificationLive.Index` (the page under the bell) and
+  `VutuvWeb.ShellLive` twice over — the **browser** notification it raises
+  (issue #1249) and the **hover preview** under the bell itself, which shows
+  the member what the badge's number stands for. A second copy would drift the
+  moment a kind is added, and the popup would quietly go back to the
+  untranslated English `:text` fallback.
+
+  `kind_glyph/1`, `kind_classes/1` and `kind_label/1` are here for the same
+  reason one step further: the preview draws the same little round badge the
+  page draws, so the vocabulary of what a kind looks like is one table too.
 
   `notification_target/2` lives here for the same reason and is the half that
   is easiest to leave behind: a popup is raised precisely when the member is
@@ -210,6 +215,95 @@ defmodule VutuvWeb.NotificationLine do
       "Your content was hidden automatically after a report. The case page says what you can do."
     )
   end
+
+  # Event kinds that share the brand badge colour, so the class string lives
+  # in one place.
+  @brand_kind_classes "bg-brand-50 text-brand-700 dark:bg-brand-900/40 dark:text-brand-100"
+  @brand_kinds ~w(follower reply thread mention connection report_protection organization_role handle_change cv_update fediverse_reply fediverse_reaction share)
+
+  @doc """
+  How one notification kind is *drawn*: the badge colour, the glyph inside it
+  and the accessible name that says in words what the glyph means.
+
+  Beside the wording above, because a surface that renders a notification needs
+  both halves and there is now a third of them (the bell's hover preview in
+  `VutuvWeb.ShellLive`, next to the notifications page and the browser popup).
+  A raw kind string ("cv_update") must never reach a reader, which is what
+  `kind_label/1` is for — it is the badge's `title` and its screen-reader text.
+  """
+  def kind_classes("endorsement"),
+    do: "bg-emerald-50 text-emerald-600 dark:bg-emerald-900/30 dark:text-emerald-300"
+
+  def kind_classes("like"), do: "bg-accent/10 text-accent dark:bg-accent/20"
+
+  def kind_classes("moderation"),
+    do: "bg-amber-50 text-amber-600 dark:bg-amber-900/30 dark:text-amber-200"
+
+  # The AI image scan removed an image — amber, like every moderation notice.
+  def kind_classes("image_rejected"),
+    do: "bg-amber-50 text-amber-600 dark:bg-amber-900/30 dark:text-amber-200"
+
+  def kind_classes(kind) when kind in @brand_kinds, do: @brand_kind_classes
+
+  def kind_classes(_), do: "bg-slate-100 text-slate-500 dark:bg-slate-800 dark:text-slate-300"
+
+  def kind_glyph("follower"), do: "+"
+  def kind_glyph("endorsement"), do: "★"
+  def kind_glyph("reply"), do: "↩"
+  # A reply elsewhere in a thread the recipient writes in.
+  def kind_glyph("thread"), do: "⤷"
+  # Being named by @handle. Shares the glyph with the (rare, "More"-chip)
+  # handle-change kind: both are about a handle, and the badge's title/sr-only
+  # label tells them apart where the glyph alone would not.
+  def kind_glyph("mention"), do: "@"
+  def kind_glyph("like"), do: "♥"
+  # A re-share from another network (issue #1068): the arrows, since the line
+  # beside it names the verb and the globe already sits on the sharer's name.
+  def kind_glyph("share"), do: "↻"
+  # A reply written on another network (issue #1069) — the same globe the
+  # post card's "from other networks" line uses, so one glyph means one thing.
+  def kind_glyph("fediverse_reply"), do: "🌐"
+  # A reaction from out there of a kind that is neither a favourite nor a
+  # re-share — the globe, since "this came from another network" is the one
+  # thing the glyph has to say; the sentence beside it names the verb.
+  def kind_glyph("fediverse_reaction"), do: "🌐"
+  # "connection" is the vernetzt (mutual-follow) event; the handshake glyph.
+  def kind_glyph("connection"), do: "🤝"
+  def kind_glyph("moderation"), do: "⚑"
+  def kind_glyph("image_rejected"), do: "🖼"
+  def kind_glyph("report_protection"), do: "🛡"
+  def kind_glyph("organization_role"), do: "🏢"
+  def kind_glyph("handle_change"), do: "@"
+  def kind_glyph("cv_update"), do: "📄"
+  # The welcome note naming the member's own handle.
+  def kind_glyph("username"), do: "👋"
+  # The finished AI reading of an Arbeitszeugnis. The magnifier, not a robot:
+  # what arrived is a close reading of wording, and the member is being told to
+  # go and read it.
+  def kind_glyph("reference_check"), do: "🔍"
+  def kind_glyph(_), do: "•"
+
+  # The accessible kind name (the badge's title + sr-only text). Translated
+  # like the row text; raw kind strings ("cv_update") must not leak to users.
+  def kind_label("follower"), do: gettext("Follower")
+  def kind_label("endorsement"), do: gettext("Endorsement")
+  def kind_label("reply"), do: gettext("Reply")
+  def kind_label("thread"), do: gettext("Thread reply")
+  def kind_label("mention"), do: gettext("Mention")
+  def kind_label("like"), do: gettext("Like")
+  def kind_label("fediverse_reply"), do: gettext("Reply from another network")
+  def kind_label("share"), do: gettext("Reaction from another network")
+  def kind_label("fediverse_reaction"), do: gettext("Reaction from another network")
+  def kind_label("connection"), do: gettext("Connection")
+  def kind_label("moderation"), do: gettext("Moderation")
+  def kind_label("image_rejected"), do: gettext("Image review")
+  def kind_label("report_protection"), do: gettext("Report protection")
+  def kind_label("organization_role"), do: gettext("Organization role")
+  def kind_label("handle_change"), do: gettext("Handle change")
+  def kind_label("cv_update"), do: gettext("CV update")
+  def kind_label("username"), do: gettext("Username")
+  def kind_label("reference_check"), do: gettext("Employment reference review")
+  def kind_label(_), do: gettext("Activity")
 
   @doc """
   The popup's two halves: an actor's name over their verb phrase.

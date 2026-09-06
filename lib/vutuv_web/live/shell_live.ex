@@ -39,7 +39,8 @@ defmodule VutuvWeb.ShellLive do
       icon_bookmark: 1,
       icon_pencil: 1,
       name_initials: 1,
-      presence_dot: 1
+      presence_dot: 1,
+      relative_time: 1
     ]
 
   import VutuvWeb.UserHelpers, only: [full_name: 1]
@@ -78,6 +79,11 @@ defmodule VutuvWeb.ShellLive do
   # 4.0 s and the title handed back at 6.0. Sizing the window at the requested
   # second instead closed it at 3 s, while the browser was still on frame two.
   @frame_ms 2_000
+
+  # How many events the bell's hover preview lists before it says "and N more"
+  # (see the handlers below). Enough for a day's likes on one post, short enough
+  # that the panel stays a glance rather than a second notifications page.
+  @preview_limit 6
 
   @impl true
   def mount(_params, session, socket) do
@@ -269,6 +275,10 @@ defmodule VutuvWeb.ShellLive do
     |> assign(:presence_hidden_ids, MapSet.new())
     |> assign(:messages_count, 0)
     |> assign(:notifications_count, 0)
+    # What the bell's number stands for, while the pointer rests on it (see the
+    # panel in render/1). Nil is closed, and closed is where every render that
+    # is not a hover starts — nothing asks the feed until somebody looks.
+    |> assign(:bell_preview, nil)
     # How many posts reached the feed while the member was elsewhere, and the
     # ceiling its query counts to (`Vutuv.Posts.unread_feed_count/1`), which the
     # badge needs in order to draw "50+" instead of a bare floor. Zero on the
@@ -870,6 +880,43 @@ defmodule VutuvWeb.ShellLive do
 
   def handle_event("notify:seen", _params, socket), do: {:noreply, socket}
 
+  ## ── The bell's hover preview (docs/architecture/realtime.md) ──
+  #
+  # Looking away is what marks these read, so the close *writes*: the gesture
+  # says "I have seen this" as plainly as opening /notifications does. What the
+  # doc explains and the code cannot show is why the instant is pinned at the
+  # **open** — `mark_notifications_read/1` would sweep the marker to whatever is
+  # newest by the time the pointer leaves, marking an arrival read that was
+  # never in the panel.
+  #
+  # An old document that predates the hook simply never asks (the capability
+  # handshake `tab:visibility` above describes), so no member meets a panel
+  # their bundle cannot draw.
+  def handle_event("bell:preview", _params, socket) do
+    preview = Activity.unread_notifications(socket.assigns.user_id, @preview_limit)
+
+    # Nothing unread by the time the query ran (the member read it in another
+    # tab, or engaged with the post out in the feed): no panel, and no marker
+    # either — closing a panel that never opened must not move anything.
+    {:noreply, assign(socket, :bell_preview, if(preview.items != [], do: preview))}
+  end
+
+  def handle_event("bell:preview_close", _params, %{assigns: %{bell_preview: nil}} = socket),
+    do: {:noreply, socket}
+
+  def handle_event("bell:preview_close", _params, socket) do
+    Activity.mark_notifications_read_up_to(
+      socket.assigns.user_id,
+      socket.assigns.bell_preview.read_up_to
+    )
+
+    # No recount here: the marker's own `:notifications_changed` broadcast comes
+    # back to this socket like every other change, so the badge is never set by
+    # hand and cannot drift from the feed (the same reasoning `notify:seen`
+    # above gives).
+    {:noreply, assign(socket, :bell_preview, nil)}
+  end
+
   # The TabBadge hook reports whether this browser tab is in the background, on
   # connect and on every change. The server needs the answer because the teaser
   # below costs a query: a member sitting in front of the page would pay it for
@@ -1466,18 +1513,38 @@ defmodule VutuvWeb.ShellLive do
                   class={count_badge_class(:glyph)}
                 />
               </.link>
-              <.link
-                href={~p"/notifications"}
-                data-nav-item
-                title={gettext("Notifications")}
-                class="relative hidden h-10 w-10 items-center justify-center rounded-full text-slate-500 hover:bg-slate-100 md:flex dark:text-slate-400 dark:hover:bg-slate-800"
+              <%!-- The bell, and under it the preview the pointer resting on it
+              opens. The wrapper is what the hook listens on — not the link —
+              so the panel hanging out of it is a descendant: the pointer
+              travelling from the glyph down into the list never leaves the
+              subtree, and there is nothing to close. It also carries the
+              breakpoint the link used to carry, and `data-unread` so the hook
+              can stay quiet while there is nothing to show. --%>
+              <div
+                id="bell-preview-host"
+                phx-hook="BellPreview"
+                data-unread={@notifications_count}
+                class="relative hidden md:block"
               >
-                <.icon_bell />
-                <.count_badge
+                <.link
+                  href={~p"/notifications"}
+                  data-nav-item
+                  title={gettext("Notifications")}
+                  class="relative flex h-10 w-10 items-center justify-center rounded-full text-slate-500 hover:bg-slate-100 dark:text-slate-400 dark:hover:bg-slate-800"
+                >
+                  <.icon_bell />
+                  <.count_badge
+                    count={@notifications_count}
+                    class={count_badge_class(:glyph)}
+                  />
+                </.link>
+                <.bell_preview
+                  :if={@bell_preview}
+                  preview={@bell_preview}
                   count={@notifications_count}
-                  class={count_badge_class(:glyph)}
+                  user_param={@user_param}
                 />
-              </.link>
+              </div>
               <%!-- The avatar opens the account menu (a native <details data-menu>,
               light-dismissed by app.js): the single, conventional home for every
               account/settings destination, so the whole surface is one click from
@@ -1502,7 +1569,7 @@ defmodule VutuvWeb.ShellLive do
                   <span class="sr-only">{gettext("Account menu")}</span>
                 </summary>
 
-                <div class="absolute right-0 z-20 mt-2 w-60 rounded-xl bg-white py-1 shadow-lg ring-1 ring-slate-200 dark:bg-slate-900 dark:ring-slate-700">
+                <div class={["absolute right-0 z-20 mt-2 w-60", menu_surface_class()]}>
                   <.link
                     href={~p"/#{@user_param}"}
                     data-self-profile
@@ -1669,6 +1736,102 @@ defmodule VutuvWeb.ShellLive do
     if is_integer(percent), do: "#{base} · #{percent} %", else: base
   end
 
+  attr(:preview, :map, required: true)
+  attr(:count, :integer, required: true)
+  attr(:user_param, :string, required: true)
+
+  # What the bell's number stands for, in the smallest form that still answers
+  # it: one round kind badge, who did what, and how long ago. No teasers and no
+  # unfolding — a second notifications page hanging off the bar would move the
+  # trip rather than save it. Every row is still a link, so the one item that IS
+  # worth opening stays one click away.
+  #
+  # The gap under the bell is `pt-2` on the positioned wrapper rather than a
+  # margin on the card: padding belongs to the hover area, a margin does not,
+  # and an 8px dead strip that closes the panel mid-reach is the classic way a
+  # menu like this becomes unusable.
+  defp bell_preview(assigns) do
+    assigns =
+      assigns
+      |> Map.put(:more, max(assigns.count - length(assigns.preview.items), 0))
+      |> Map.put(:rows, Enum.map(assigns.preview.items, &preview_row(&1, assigns.user_param)))
+
+    ~H"""
+    <div id="bell-preview" class="absolute right-0 top-full z-20 w-80 pt-2">
+      <div class={menu_surface_class()}>
+        <ul
+          class="divide-y divide-slate-100 dark:divide-slate-800"
+          aria-label={gettext("New notifications")}
+        >
+          <li :for={row <- @rows} data-bell-preview-item>
+            <.link
+              href={row.href}
+              class="flex items-start gap-2.5 px-4 py-2.5 hover:bg-slate-50 dark:hover:bg-slate-800"
+            >
+              <span
+                class={[
+                  "mt-0.5 flex h-6 w-6 shrink-0 items-center justify-center rounded-full text-xs font-bold",
+                  NotificationLine.kind_classes(row.kind)
+                ]}
+                aria-hidden="true"
+              >
+                {NotificationLine.kind_glyph(row.kind)}
+              </span>
+              <span class="min-w-0 flex-1">
+                <%!-- Name and verb phrase read as one sentence, so they share
+                one clamp; `line-clamp-2` brings its own `display`, which is
+                why no block utility sits beside it. A kind with no actor is a
+                whole sentence and gets no bold half. --%>
+                <span class="line-clamp-2 text-sm leading-snug text-slate-800 dark:text-slate-100">
+                  <span class="sr-only">{NotificationLine.kind_label(row.kind)}:</span>
+                  <span class={row.body && "font-semibold"}>{row.title}</span>
+                  {row.body}
+                </span>
+                <span class="mt-0.5 block text-xs text-slate-500 dark:text-slate-400">
+                  {relative_time(row.at)}
+                </span>
+              </span>
+            </.link>
+          </li>
+        </ul>
+
+        <%!-- The panel is a glance, not the page, so it says outright when it
+        is holding some back — the same "+N more" line, msgid and formatter the
+        post card and the job list already use for the same sentence. --%>
+        <.link
+          href={~p"/notifications"}
+          data-bell-preview-all
+          class="flex items-center justify-between gap-2 border-t border-slate-100 px-4 py-2.5 text-sm font-semibold text-brand-700 hover:bg-slate-50 dark:border-slate-800 dark:text-brand-400 dark:hover:bg-slate-800"
+        >
+          <span>{gettext("All notifications")} ›</span>
+          <span
+            :if={@more > 0}
+            data-bell-preview-more
+            class="font-medium text-slate-500 dark:text-slate-400"
+          >
+            {gettext("+%{count} more", count: compact_count(@more))}
+          </span>
+        </.link>
+      </div>
+    </div>
+    """
+  end
+
+  # One row's presentation, so the markup above carries no lookups: the same
+  # name-over-verb-phrase split the browser notification uses, and the same
+  # `notification_url/2` destination that a popup lands on.
+  defp preview_row(item, viewer) do
+    {title, body} = NotificationLine.title_and_body(item)
+
+    %{
+      kind: item.kind,
+      title: title,
+      body: body,
+      at: item[:at],
+      href: NotificationLine.notification_url(item, viewer)
+    }
+  end
+
   attr(:href, :string, required: true)
   attr(:label, :string, required: true)
   attr(:count, :integer, default: 0)
@@ -1735,6 +1898,13 @@ defmodule VutuvWeb.ShellLive do
       <span class="text-[10px]">{@label}</span>
     </.link>
     """
+  end
+
+  # The card a dropdown in this bar is drawn on, shared by the account menu and
+  # the bell's preview. Positioning and width stay at the call site; what is
+  # here is the surface, so a radius or dark-mode tweak lands on both.
+  defp menu_surface_class do
+    "rounded-xl bg-white py-1 shadow-lg ring-1 ring-slate-200 dark:bg-slate-900 dark:ring-slate-700"
   end
 
   # Shared classes for an avatar account-menu item — mirrors the card_menu
