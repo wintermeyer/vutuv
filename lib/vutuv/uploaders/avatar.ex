@@ -44,6 +44,10 @@ defmodule Vutuv.Avatar do
   @config %{
     spec_key: :avatar,
     prefix: "avatars",
+    # This image's kind in the shared `images` table (`Vutuv.Images`), declared
+    # rather than derived from `spec_key`: the two strings coincide today and
+    # nothing says they must.
+    kind: "avatar",
     default_version: :medium,
     # The user column holding this image's content fingerprint. When set, the
     # served filename embeds the handle + fingerprint (`<username>-<version>-<fp>.avif`)

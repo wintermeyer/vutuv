@@ -14,6 +14,7 @@ defmodule Vutuv.Uploads do
 
   require Logger
 
+  alias Vutuv.Images
   alias Vutuv.Moderation.ImageScans
   alias Vutuv.Repo
   alias Vutuv.Uploads.Crop
@@ -41,13 +42,17 @@ defmodule Vutuv.Uploads do
     * `:crop_field` — the scope field holding the persisted crop string that
       `regenerate/3` re-applies (`:avatar_crop` / `:cover_crop`); absent for
       uploaders without a user-chosen crop
+    * `:kind` — this image's kind in the shared `images` table
+      (`Vutuv.Images`), declared beside `:fingerprint_field` because the
+      re-derive has to keep that row naming the same bytes
   """
   @type uploader_config :: %{
           required(:spec_key) => atom(),
           required(:prefix) => String.t(),
           required(:default_version) => atom(),
           optional(:fingerprint_field) => atom(),
-          optional(:crop_field) => atom()
+          optional(:crop_field) => atom(),
+          optional(:kind) => String.t()
         }
 
   @doc """
@@ -424,10 +429,22 @@ defmodule Vutuv.Uploads do
     end
   end
 
+  # A re-derive writes a fresh fingerprint onto the member row, so the picture's
+  # row in the shared `images` table (issue #2013) has to name the same bytes.
+  # Keyed on the pointer the member row already holds, so a picture that has no
+  # row yet — every one uploaded before that table, until #2014's backfill —
+  # costs no statement, and creating one is not a side effect of a deploy.
   defp persist_fingerprint(user, fingerprint, config) do
-    user
-    |> Ecto.Changeset.change(%{config.fingerprint_field => fingerprint})
-    |> Repo.update()
+    with {:ok, saved} <-
+           user
+           |> Ecto.Changeset.change(%{config.fingerprint_field => fingerprint})
+           |> Repo.update() do
+      saved
+      |> Map.get(Images.pointer_field(config.kind))
+      |> Images.sync_fingerprint(fingerprint)
+
+      {:ok, saved}
+    end
   end
 
   defp dry_run_fingerprinted(user, storage_dir, dir, fingerprint, config) do

@@ -128,6 +128,17 @@ severances, owner self-service, escalations, rulings, strikes, `owner_removed`)
 rendered as the History timeline on the admin case page, and the urgent admin
 email names the profile, category and reporter's note instead of just a link.
 
+**A picture is not yet reportable on its own**, and the groundwork for that is
+in place: since issue #2013 a profile picture and a cover are rows in the
+shared `images` table (`Vutuv.Images`, see `images.md`) carrying a token a
+report form can name and a `frozen_at` a case can set, instead of four columns
+on the member row. Nothing reads either yet — `fetch_content/2` still knows
+only `post`, `message`, `user`, `organization` and `job_posting`, and a frozen
+profile still keeps its pictures online because nginx serves them straight off
+disk. #2012 adds the `image` report type and the freeze, whose off switch is
+moving every size and the original into the quarantine tree nginx has no
+location for.
+
 ## The statement of reasons (issue #2010)
 
 A member whose content goes dark is owed more than "something of yours was

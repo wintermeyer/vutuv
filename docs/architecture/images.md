@@ -222,6 +222,55 @@ them); once the scheme is confirmed healthy in production, `mix
 vutuv.images.sweep_legacy` (`Vutuv.Release.sweep_legacy_images()`) deletes the
 legacy files — a deliberate, manual step, never part of the deploy
 
+## The shared `images` table (issue #2013)
+
+A post photo has been a row of its own for a long time — a token, an AI gate
+verdict, a parent a report can take offline. A member's profile picture and
+cover were four columns on the member row each (`avatar` /
+`avatar_fingerprint` / `avatar_crop` / `avatar_moderation`, and the cover
+four), so every moderation answer about a picture had to be written once per
+kind, and a stolen profile picture could only be reported as the whole
+profile.
+
+`Vutuv.Images` is where that ends. One row per picture: `kind`, the owner,
+an unguessable `token`, the three columns describing the stored file
+(`file` / `fingerprint` / `crop`), the gate's `moderation` verdict, and
+`frozen_at` for a copyright case (#2012 writes it; a freeze moves files and
+never deletes them).
+
+This release is the **expand** half and is deliberately additive. An upload
+writes the row *and* keeps filling all four member-row columns, which stay the
+source of truth every URL builder and every display gate reads; the member row
+only gains a pointer (`users.avatar_image_id` / `cover_image_id`). Nothing
+about how a picture is stored or served moved — an avatar URL is byte for byte
+the one it was, which matters because other servers hold it in their copy of
+our ActivityPub actor document, search engines hold it, and sent mail holds
+it. #2014 backfills the pictures uploaded before this and drops the columns a
+deploy later; #2015 moves the remaining kinds in.
+
+Five places write the pair, and they are the only ones that touch the
+member-row columns at all: `Vutuv.Accounts.store_pending_image/6` (upload — it
+mints a fresh token, because a token names the bytes and a re-upload should
+leave a report pointing at nothing rather than quietly at the new picture),
+`ImageSubjects.apply_approved/1`, `apply_rejected/1` and `cleanup_canceled/1`
+(the gate's verdict and its cancel), and `Vutuv.Uploads.regenerate/3` for the
+fingerprint a re-derive produces. That last one keys on the pointer the member
+row already holds, so a picture with no row yet costs no statement and the
+regeneration pass never *creates* one — that is #2014's backfill, not a side
+effect of a deploy.
+
+**How a kind is served is a property of the kind, not a column**
+(`Vutuv.Images.serving/1`). `:static` means the derived files sit in a public
+tree nginx serves straight off disk, nothing asks this application for
+permission, and the only off switch is moving the bytes out of that tree —
+the quarantine tree the AI gate already uses
+(`Vutuv.Uploads.quarantine_dir/1`), which nginx has no location for. `:proxy`
+means every byte goes through a controller that authorizes the reader first,
+so the row is the off switch. Avatars and covers are `:static`; the kinds
+#2015 brings are mostly `:proxy`. It raises for a kind nobody has declared,
+because a picture that inherits a default is one nobody knows how to take
+offline.
+
 ## URL screenshots
 
 URL screenshots are rendered by local headless Chromium, wrapped in a browser

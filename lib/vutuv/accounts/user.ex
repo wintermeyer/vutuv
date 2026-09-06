@@ -176,6 +176,15 @@ defmodule Vutuv.Accounts.User do
     # Set programmatically with the image columns, never cast from params.
     field(:avatar_moderation, :string)
     field(:cover_moderation, :string)
+
+    # The member's rows in the shared `images` table (issue #2013), where a
+    # picture also carries a token a report can name and a `frozen_at` a
+    # copyright case can set. Written beside the eight columns above, which
+    # stay the source of truth for every URL and every display gate until
+    # #2014 has backfilled the pictures uploaded before this and dropped them.
+    belongs_to(:avatar_image, Vutuv.Images.Image)
+    belongs_to(:cover_image, Vutuv.Images.Image)
+
     field(:username, :string)
     # The member's original legacy handle (the dotted / over-length import),
     # preserved before Accounts.normalize_legacy_usernames/0 rewrote :username

@@ -19,6 +19,7 @@ defmodule Vutuv.Moderation.ImageSubjects do
   alias Vutuv.Fediverse
   alias Vutuv.Fediverse.RemoteAccount
   alias Vutuv.Fediverse.RemoteImage
+  alias Vutuv.Images
   alias Vutuv.JobReferenceDocument
   alias Vutuv.Jobs.JobPostingImage
   alias Vutuv.Moderation.ImageScan
@@ -351,6 +352,7 @@ defmodule Vutuv.Moderation.ImageSubjects do
 
     case flipped do
       {1, _} ->
+        Images.mark_moderation(scan.subject_id, scan.kind, scan.fingerprint, "approved")
         config.module.promote_from_quarantine(Repo.get!(User, scan.subject_id))
         broadcast(scan, :approved)
         :ok
@@ -564,10 +566,11 @@ defmodule Vutuv.Moderation.ImageSubjects do
       from(u in User,
         where: u.id == ^scan.subject_id and field(u, ^config.fingerprint) == ^scan.fingerprint
       )
-      |> Repo.update_all(set: clear_profile_columns(config))
+      |> Repo.update_all(set: clear_profile_columns(config, scan.kind))
 
     case cleared do
       {1, _} ->
+        Images.forget_profile_image(scan.subject_id, scan.kind)
         config.module.delete(%User{id: scan.subject_id})
         broadcast(scan, :rejected)
         :ok
@@ -872,13 +875,19 @@ defmodule Vutuv.Moderation.ImageSubjects do
   def cleanup_canceled(%ImageScan{kind: kind} = scan) when is_map_key(@profile_images, kind) do
     config = @profile_images[kind]
 
-    from(u in User,
-      where:
-        u.id == ^scan.subject_id and
-          field(u, ^config.fingerprint) == ^scan.fingerprint and
-          field(u, ^config.moderation) == "pending"
-    )
-    |> Repo.update_all(set: clear_profile_columns(config))
+    cleared =
+      from(u in User,
+        where:
+          u.id == ^scan.subject_id and
+            field(u, ^config.fingerprint) == ^scan.fingerprint and
+            field(u, ^config.moderation) == "pending"
+      )
+      |> Repo.update_all(set: clear_profile_columns(config, scan.kind))
+
+    # Only when this scan's own picture was the one cleared — the common case
+    # here is a stale cancel that matches nothing, and a delete then would take
+    # out the row of a picture uploaded since.
+    if match?({1, _}, cleared), do: Images.forget_profile_image(scan.subject_id, scan.kind)
 
     :ok
   end
@@ -893,14 +902,18 @@ defmodule Vutuv.Moderation.ImageSubjects do
 
   def cleanup_canceled(%ImageScan{}), do: :ok
 
-  # The four profile-image columns (file, fingerprint, crop, moderation) reset to
-  # nil when a scan rejects the image or cancels a pending one.
-  defp clear_profile_columns(config),
+  # The four profile-image columns (file, fingerprint, crop, moderation) and the
+  # pointer at the shared `images` row reset to nil when a scan rejects the
+  # image or cancels a pending one. The row itself is deleted beside this
+  # (`Vutuv.Images.forget_profile_image/2`): "there is a row" and "there is a
+  # picture" stay the same statement.
+  defp clear_profile_columns(config, kind),
     do: [
       {config.file, nil},
       {config.fingerprint, nil},
       {config.crop, nil},
-      {config.moderation, nil}
+      {config.moderation, nil},
+      {Images.pointer_field(kind), nil}
     ]
 
   # Every document column resets when a scan rejects the proof document; the
