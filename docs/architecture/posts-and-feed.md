@@ -2023,13 +2023,24 @@ Capture is **DRY** with the profile-link previews: `Vutuv.PageScreenshot`
 thumb with the `/images/screenshot.png` fallback). Everything is gated by the
 `:generate_screenshots` flag (air-gapped installs queue nothing).
 
-`VutuvWeb.PostComponents` **floats** a ready screenshot to the body's top right
-(`float-right w-2/5 sm:w-1/3`) and the text wraps around it — the same reading in
-the feed/profile preview and on the permalink, so a single-link post looks like
-itself everywhere. The preview additionally needs the float-wrap body clamp
-(`link_screenshot_layout?/2` → `.post-clamp--wrap`, since `-webkit-line-clamp`
-cannot wrap around a float); full mode has no clamp and simply renders the
-screenshot as the body div's first child. On capture the worker broadcasts
+`VutuvWeb.PostComponents` renders a ready screenshot **twice**, one copy per
+side of the `lg` breakpoint (`link_screenshot_image/1`, `placement:`; the
+comment there says why two elements, and why `lg` rather than the clamp's
+`md`). From `lg` up the `:beside` copy **floats** to the body's top right
+(`lg:w-1/3`) and the text wraps around it — the same reading in the
+feed/profile preview and on the permalink, so a single-link post looks like
+itself everywhere. Below `lg` that copy is display:none and the `:below` copy
+stands full-width under the text and its tags, ahead of the action bar, where a
+photo would. The card resolves the capture's URLs once for both copies
+(`screenshot_slot/1`), since each resolution stats the disk. The preview
+additionally needs the float-wrap body clamp (`link_screenshot_layout?/2` →
+`.post-clamp--wrap`, since `-webkit-line-clamp` cannot wrap around a float);
+full mode has no clamp and simply renders the float as the body div's first
+child. Each copy carries its own magnifier (`<.zoom_corner>`), which opens the
+800px thumb in the lightbox; there a tap on the picture toggles it to 1:1,
+panned by scrolling, because on a phone the fitted overlay is no wider than
+the card it was opened from (`assets/js/lightbox.js`, `.lightbox.is-zoomed`).
+On capture the worker broadcasts
 `{:post_screenshot_ready, …}` to the author's + followers' activity topics, so an
 open feed/profile upgrades the card with no reload. Admins watch the queue and
 browse the gallery (each shot linked to its post, paginated) at

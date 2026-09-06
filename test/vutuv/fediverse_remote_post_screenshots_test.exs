@@ -13,6 +13,7 @@ defmodule Vutuv.FediverseRemotePostScreenshotsTest do
   use Vutuv.DataCase, async: false
 
   import Phoenix.LiveViewTest
+  import VutuvWeb.HTMLHelpers, only: [elements: 2]
 
   alias Vutuv.Fediverse
   alias Vutuv.Fediverse.Follow
@@ -414,7 +415,23 @@ defmodule Vutuv.FediverseRemotePostScreenshotsTest do
       # `post-clamp--wrap` is the body saying it switched to the height clamp a
       # float needs (`-webkit-line-clamp` cannot wrap around one).
       assert [_before, clamped] = String.split(html, "post-clamp--wrap", parts: 2)
-      assert clamped =~ ~r/data-link-screenshot.*Read/s
+      assert clamped =~ ~r/data-link-screenshot="beside".*Read/s
+    end
+
+    test "on a phone the shot leaves the clamp and stands under the tags" do
+      post = recorded_post()
+      make_ready(job_of(post))
+
+      html = card(post)
+
+      # A second, full-width copy follows the whole preview — after the "Read
+      # more" control, so a long body's cut can never take the picture away
+      # with the text, and after the tag row, where a post's pictures stand.
+      # (Which copy shows at which width is `post_screenshot_render_test`'s.)
+      assert [_before, clamped] = String.split(html, "post-clamp--wrap", parts: 2)
+      assert [_, after_more] = String.split(clamped, "data-read-more", parts: 2)
+      assert after_more =~ ~s(data-link-screenshot="below")
+      assert [_beside, _below] = elements(html, "[data-link-screenshot]")
     end
 
     test "an unreleased or missing capture renders nothing" do

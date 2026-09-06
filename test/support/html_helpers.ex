@@ -43,6 +43,15 @@ defmodule VutuvWeb.HTMLHelpers do
   end
 
   @doc """
+  One attribute of a parsed element (an item out of `elements/2`), `""` when
+  the element does not carry it — so a class-list assertion reads the same
+  whether the attribute is there or not, instead of raising on `hd([])`.
+  """
+  def attribute(element, name) do
+    element |> LazyHTML.attribute(name) |> List.first() || ""
+  end
+
+  @doc """
   The visible text of the first element matching `selector`, whitespace
   trimmed.
 

@@ -21,6 +21,8 @@ let current = 0
 let lastFocus = null
 let labels = {}
 
+const q = (sel) => overlay.querySelector(sel)
+
 // The overlay's own wording, rendered by the server onto the gallery so it is
 // translated like everything else on the page.
 function applyLabels(gallery) {
@@ -31,9 +33,9 @@ function applyLabels(gallery) {
     download: gallery.dataset.labelDownload || "",
   }
 
-  overlay.querySelector("[data-lb-close]").setAttribute("aria-label", labels.close)
-  overlay.querySelector("[data-lb-prev]").setAttribute("aria-label", labels.prev)
-  overlay.querySelector("[data-lb-next]").setAttribute("aria-label", labels.next)
+  q("[data-lb-close]").setAttribute("aria-label", labels.close)
+  q("[data-lb-prev]").setAttribute("aria-label", labels.prev)
+  q("[data-lb-next]").setAttribute("aria-label", labels.next)
 }
 
 // One overlay for the whole page, built lazily on the first open. The markup
@@ -72,12 +74,16 @@ function build() {
     if (e.target.closest("[data-lb-close]")) return close()
     if (e.target.closest("[data-lb-prev]")) return step(-1)
     if (e.target.closest("[data-lb-next]")) return step(1)
+    // A tap on the picture toggles fitted and 1:1 (`.lightbox.is-zoomed`). A
+    // scroll-drag never reaches here: the browser fires no click after a drag.
+    if (e.target.closest("[data-lb-image]")) return toggleZoom()
     // A click on the backdrop (not on the picture or its caption block) closes,
     // which is what every viewer expects of a full-screen overlay.
     if (!e.target.closest(".lightbox__stage")) close()
   })
 
   // Swipe, so a phone gets the same navigation the arrow keys give a desktop.
+  // Not while zoomed: a horizontal drag is then the pan.
   let startX = null
   overlay.addEventListener("touchstart", (e) => (startX = e.touches[0].clientX), { passive: true })
   overlay.addEventListener(
@@ -85,13 +91,38 @@ function build() {
     (e) => {
       if (startX === null) return
       const dx = e.changedTouches[0].clientX - startX
-      if (Math.abs(dx) > 50) step(dx < 0 ? 1 : -1)
+      if (Math.abs(dx) > 50 && !overlay.classList.contains("is-zoomed")) step(dx < 0 ? 1 : -1)
       startX = null
     },
     { passive: true }
   )
 
+  // Whether a tap would show more than the fit does is measured once the
+  // picture is there, and again when the viewport changes under an open
+  // overlay (a phone turning over); the class is what the toggle and the
+  // cursor both read.
+  q("[data-lb-image]").addEventListener("load", measureFit)
+  window.addEventListener("resize", () => {
+    if (!overlay.hidden && !overlay.classList.contains("is-zoomed")) measureFit()
+  })
+
   return overlay
+}
+
+// `.lightbox--zoomable`: the fit had to scale the picture down, so 1:1 shows
+// more. Measured on the fitted picture only — zoomed, it is its own size.
+function measureFit() {
+  const image = q("[data-lb-image]")
+  overlay.classList.toggle("lightbox--zoomable", image.naturalWidth > image.clientWidth + 1)
+}
+
+function toggleZoom() {
+  if (overlay.classList.contains("is-zoomed")) return overlay.classList.remove("is-zoomed")
+  if (!overlay.classList.contains("lightbox--zoomable")) return
+  overlay.classList.add("is-zoomed")
+  // The stage starts at its top-left corner, where a capture's address bar and
+  // headline are.
+  q(".lightbox__stage").scrollTo(0, 0)
 }
 
 function show(index) {
@@ -99,8 +130,10 @@ function show(index) {
   if (!photo) return
   current = index
 
-  const q = (sel) => overlay.querySelector(sel)
   const image = q("[data-lb-image]")
+  // Every photo starts fitted; the zoom is the reader's answer to one picture,
+  // not a mode the overlay stays in.
+  overlay.classList.remove("is-zoomed", "lightbox--zoomable")
   image.src = photo.dataset.photoSrc || photo.href
   image.alt = photo.dataset.photoAlt || ""
 
@@ -148,7 +181,7 @@ function open(gallery, index) {
   // The page behind must not scroll while the overlay owns the screen.
   document.documentElement.classList.add("lightbox-open")
   show(index)
-  overlay.querySelector("[data-lb-close]").focus()
+  q("[data-lb-close]").focus()
 }
 
 function close() {

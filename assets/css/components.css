@@ -2921,6 +2921,25 @@ html.lightbox-open { overflow: hidden; }
   object-fit: contain;
   border-radius: 0.5rem;
 }
+/* Zoomed (a tap on the picture, lightbox.js): the stage becomes the scroller
+   and the picture takes its natural size, so a phone can read a link capture
+   the fit had scaled to the width of the card it came from. `--zoomable` is
+   the script's word for "the fit is smaller than the file", which is what
+   makes the tap worth a zoom-in cursor. `align-items: flex-start` is
+   load-bearing: a centred flex item wider than its box overflows on BOTH
+   sides, and the left half can never be scrolled into view. */
+.lightbox--zoomable .lightbox__image { cursor: zoom-in; }
+.lightbox.is-zoomed .lightbox__stage {
+  overflow: auto;
+  align-items: flex-start;
+  width: 100%;
+  height: 100%;
+}
+.lightbox.is-zoomed .lightbox__image {
+  max-width: none;
+  max-height: none;
+  cursor: zoom-out;
+}
 .lightbox__meta {
   max-width: 44rem;
   text-align: center;

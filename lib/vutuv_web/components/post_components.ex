@@ -2895,11 +2895,7 @@ defmodule VutuvWeb.PostComponents do
             body_style={@body_style}
           >
             <:float :if={@link_screenshot}>
-              <.link_screenshot_image
-                screenshot={@link_screenshot}
-                pixelated_url={@screenshot_pixelated}
-                class="float-right mb-1 ml-4 mt-1.5 w-2/5 sm:w-1/3"
-              />
+              <.link_screenshot_image shot={@link_screenshot} placement={:beside} class="lg:mt-1.5" />
             </:float>
           </.remote_body>
 
@@ -2911,6 +2907,10 @@ defmodule VutuvWeb.PostComponents do
           />
 
           <.quoted_post :if={RemotePost.quoting?(@remote_post)} remote_post={@remote_post} />
+
+          <%!-- The phone's copy of the capture, where the post's pictures
+          stand (a card has one or the other, never both). --%>
+          <.link_screenshot_image :if={@link_screenshot} shot={@link_screenshot} placement={:below} />
 
           <.remote_post_images images={@images} />
 
@@ -3933,7 +3933,8 @@ defmodule VutuvWeb.PostComponents do
               keeps everything after this div below the float. The link screenshot
               floats here too, ahead of the prose (a float only wraps what follows
               it) — the same beside-the-text reading as the preview, at the same
-              width. --%>
+              width — and on a phone stands full-width under the tags instead,
+              as the second element after the body. --%>
               <div
                 :if={@mode == :full and @post.body != ""}
                 data-post-body
@@ -3943,9 +3944,8 @@ defmodule VutuvWeb.PostComponents do
               >
                 <.link_screenshot_image
                   :if={@link_screenshot}
-                  screenshot={@link_screenshot}
-                  pixelated_url={@screenshot_pixelated}
-                  class="float-right mb-1 ml-4 w-2/5 sm:w-1/3"
+                  shot={@link_screenshot}
+                  placement={:beside}
                 />
                 {@body_html}
                 <.post_tags :if={@tags_in_body?} tags={@post.tags} mode={@mode} />
@@ -3988,7 +3988,8 @@ defmodule VutuvWeb.PostComponents do
             <% @link_screenshot_layout? -> %>
               <%!-- A single-URL, image-less post: the link-page screenshot floats
               to the top-right and the body wraps around it, same as the square
-              image above. --%>
+              image above — and on a phone stands full-width under the whole
+              preview, tags and "Read more" included, where a photo would. --%>
               <.preview_body
                 body_id={@body_id}
                 body_html={@body_html}
@@ -3999,11 +4000,7 @@ defmodule VutuvWeb.PostComponents do
                 wrap
               >
                 <:float>
-                  <.link_screenshot_image
-                    screenshot={@link_screenshot}
-                    pixelated_url={@screenshot_pixelated}
-                    class="float-right mb-1 ml-4 w-2/5 sm:w-1/3"
-                  />
+                  <.link_screenshot_image shot={@link_screenshot} placement={:beside} />
                 </:float>
               </.preview_body>
             <% @mode == :preview -> %>
@@ -4055,6 +4052,11 @@ defmodule VutuvWeb.PostComponents do
               so on every picture in the app would be noise. --%>
               <.photo_license_line :if={@gallery != []} license={@post.license} />
               <% end %>
+
+              <%!-- The phone's copy of the capture, in both modes, where the
+              post's pictures stand (a capture and a picture never share a
+              card, so the branches above draw nothing in front of it). --%>
+              <.link_screenshot_image :if={@link_screenshot} shot={@link_screenshot} placement={:below} />
             </div>
 
             <%!-- The clip (issue #1912): the same player in both modes — on the
@@ -5374,36 +5376,52 @@ defmodule VutuvWeb.PostComponents do
   # %PostScreenshot{} when the post has no image attachments, else nil. The plain
   # map patterns guard un-preloaded associations — a bare has_one/has_many is an
   # %Ecto.Association.NotLoaded{}, which matches neither `[]` nor `%PostScreenshot{}`.
-  # The auto link screenshot (a ready %PostScreenshot{} for an image-less
-  # single-URL post, else nil), the pixelated preview standing in for it while
-  # the AI scan is out, and whether the preview lays it beside the text (3/4
-  # body, 1/4 screenshot). One helper because it is one question asked once —
-  # it used to be asked three times per card, each answer costing a clock read
-  # and a `File.exists?`.
+  # The auto link screenshot slot (`screenshot_slot/1`, nil for an image-less
+  # single-URL post with nothing to draw) and whether the preview lays it
+  # beside the text (3/4 body, 1/4 screenshot). One helper because it is one
+  # question asked once — it used to be asked three times per card, each
+  # answer costing a clock read and a `File.exists?`.
   defp assign_link_screenshot(card_assigns, post, mode) do
-    {screenshot, pixelated} = link_screenshot(post)
+    slot = link_screenshot(post)
 
     card_assigns
-    |> assign(:link_screenshot, screenshot)
-    |> assign(:screenshot_pixelated, pixelated)
-    |> assign(:link_screenshot_layout?, screenshot != nil and mode == :preview)
+    |> assign(:link_screenshot, slot)
+    |> assign(:link_screenshot_layout?, slot != nil and mode == :preview)
   end
 
-  # `{screenshot_or_nil, pixelated_url_or_nil}` — the capture this card shows and,
-  # while the AI scan is still out on it, the preview standing in its place
-  # (issue #1720). A held capture with no preview keeps the old behaviour: no
-  # slot at all, which on a link card reads as "no preview" rather than as a
-  # hole.
+  # The capture this card shows, or nil. The plain map pattern guards an
+  # un-preloaded association — a bare has_one/has_many is an
+  # %Ecto.Association.NotLoaded{}, which matches neither `[]` nor
+  # `%PostScreenshot{}`.
   defp link_screenshot(%{images: [], screenshot: %PostScreenshot{} = ps}),
     do: screenshot_slot(ps)
 
-  defp link_screenshot(_post), do: {nil, nil}
+  defp link_screenshot(_post), do: nil
 
+  # What `link_screenshot_image/1` draws: the ready capture with its two URLs,
+  # or — while the AI scan is still out on it — the pixelated preview standing
+  # in its place (issue #1720). A held capture with no preview keeps the old
+  # behaviour: no slot at all, which on a link card reads as "no preview"
+  # rather than as a hole. The URLs are resolved HERE, once per card, because
+  # `Vutuv.Screenshot.picture/1` and `lightbox_url/1` each stat the disk and
+  # the card draws the picture twice (one copy per placement).
   defp screenshot_slot(%PostScreenshot{} = ps) do
     cond do
-      PostScreenshot.ready?(ps) -> {ps, nil}
-      url = Vutuv.Screenshot.pixelated_url(ps) -> {ps, url}
-      true -> {nil, nil}
+      PostScreenshot.ready?(ps) ->
+        file = {ps.screenshot, ps}
+
+        %{
+          screenshot: ps,
+          pixelated_url: nil,
+          picture: Vutuv.Screenshot.picture(file),
+          lightbox_url: Vutuv.Screenshot.lightbox_url(file)
+        }
+
+      url = Vutuv.Screenshot.pixelated_url(ps) ->
+        %{screenshot: ps, pixelated_url: url, picture: nil, lightbox_url: nil}
+
+      true ->
+        nil
     end
   end
 
@@ -5413,18 +5431,14 @@ defmodule VutuvWeb.PostComponents do
   # re-check guards a row from before an edit and, via the struct pattern, a
   # caller that did not preload `:screenshot` (NotLoaded matches nothing).
   defp assign_remote_link_screenshot(card_assigns, post, images) do
-    {screenshot, pixelated} = remote_link_screenshot(post, images)
-
-    card_assigns
-    |> assign(:link_screenshot, screenshot)
-    |> assign(:screenshot_pixelated, pixelated)
+    assign(card_assigns, :link_screenshot, remote_link_screenshot(post, images))
   end
 
   defp remote_link_screenshot(%{screenshot: %PostScreenshot{} = ps} = post, []) do
-    if RemotePost.warned?(post), do: {nil, nil}, else: screenshot_slot(ps)
+    if RemotePost.warned?(post), do: nil, else: screenshot_slot(ps)
   end
 
-  defp remote_link_screenshot(_post, _images), do: {nil, nil}
+  defp remote_link_screenshot(_post, _images), do: nil
 
   # The post's review sidecar, nil when absent — and nil for a nested parent
   # card whose preload chain didn't carry it (NotLoaded must not crash).
@@ -5818,48 +5832,69 @@ defmodule VutuvWeb.PostComponents do
     |> Enum.join(" · ")
   end
 
-  # The link screenshot image, shared by the preview and full layouts — both
-  # float it beside the body. The picture is a decorative duplicate of the
-  # body's autolinked URL — `aria-hidden` + `tabindex=-1` so assistive tech and
-  # the tab order keep the one link in the prose — opening the page in a new
-  # tab. `class` positions it and sets the width.
+  # The link screenshot image, shared by the preview and full layouts. The
+  # picture is a decorative duplicate of the body's autolinked URL —
+  # `aria-hidden` + `tabindex=-1` so assistive tech and the tab order keep the
+  # one link in the prose — opening the page in a new tab. `shot` is the card's
+  # `screenshot_slot/1`, which resolved the URLs once for both copies.
   #
-  # A capture is a photograph of a web page drawn at a third of the column, so
-  # the address bar and the headline are all it can carry; `<.zoom_corner>`
-  # opens the picture on the lightbox's dark stage, where the 800px thumb the
-  # card scales down is legible. The tap on the picture itself stays the trip
-  # to the page, so the magnifier is a control of its own and sits OUTSIDE the
-  # anchor — a focusable control inside an `aria-hidden` subtree is a tab stop
-  # no screen reader can announce. A pixelated stand-in gets none: 64 cells of
-  # averaged colour is not a picture anybody wants larger. It keeps the gallery
-  # around it all the same, since the alternative is a second copy of the
-  # anchor for a state that lasts as long as one AI scan.
+  # It has two placements, one per side of the `lg` breakpoint, and a card
+  # renders BOTH: `:beside` floats a third of the column wide from `lg` up and
+  # is display:none below it; `:below` stands full-width under the text and
+  # its tags, where a photo would, and is display:none from `lg` up. Two
+  # elements because no stylesheet can move one between the two spots: the
+  # float has to be the clamp block's first child (a float wraps only what
+  # follows it, and outside the clamp box it narrows the box instead of being
+  # wrapped), and the full-width copy has to be OUTSIDE that block, or a long
+  # body's cut takes the picture away with the text. On a phone the float was
+  # two fifths of a 360px column — a 140px thumbnail nobody could read, with the
+  # SD/HD switch covering most of it (Stefan, 2026-09-06). The hidden copy costs
+  # no bytes: `loading="lazy"` never fetches an image that is display:none.
+  # `class` adds what the placement leaves open (the remote card's top margin).
+  #
+  # `lg` rather than the clamp's `md`, because this is a question about the
+  # COLUMN, not the phone: the page grid opens its rail at `md`, which leaves
+  # a portrait tablet a ~430px post column and a third of that is the same
+  # 140px thumbnail again. Only from `lg` is the column ~600px wide and the
+  # float the ~200px it is on a desktop.
+  #
+  # A capture is a photograph of a web page, so even at column width the small
+  # print in it is not legible; `<.zoom_corner>` opens the picture on the
+  # lightbox's dark stage, where the 800px thumb the card scales down can be
+  # looked at 1:1 (a tap on the stage toggles it, see lightbox.js). The tap on
+  # the picture itself stays the trip to the page, so the magnifier is a
+  # control of its own and sits OUTSIDE the anchor — a focusable control inside
+  # an `aria-hidden` subtree is a tab stop no screen reader can announce. A
+  # pixelated stand-in gets none: 64 cells of averaged colour is not a picture
+  # anybody wants larger. It keeps the gallery around it all the same, since
+  # the alternative is a second copy of the anchor for a state that lasts as
+  # long as one AI scan.
   #
   # The overlay carries no caption: `Vutuv.BrowserFrame` composites the address
   # into the capture's own chrome bar, so a line under it would be a truncated
   # copy of text drawn inside it — and building that line cost two `URI.parse`
   # per card on every render, for a string only an opened overlay would read.
-  attr(:screenshot, :any, required: true)
-  attr(:pixelated_url, :any, default: nil, doc: "set while the AI scan holds the capture")
+  attr(:shot, :map, required: true, doc: "the card's `screenshot_slot/1`")
+  attr(:placement, :atom, required: true, values: [:beside, :below])
   attr(:class, :string, default: nil)
 
   defp link_screenshot_image(assigns) do
     ~H"""
     <.lightbox_gallery
-      data-link-screenshot
-      class={["hover-reveal-host relative", @class]}
+      data-link-screenshot={@placement}
+      class={["hover-reveal-host relative", screenshot_placement_class(@placement), @class]}
     >
       <.link
-        href={@screenshot.url}
+        href={@shot.screenshot.url}
         target="_blank"
         rel="noopener"
         aria-hidden="true"
         tabindex="-1"
         class="block"
       >
-        <span :if={@pixelated_url} class="relative block" data-screenshot-pixelated>
+        <span :if={@shot.pixelated_url} class="relative block" data-screenshot-pixelated>
           <img
-            src={@pixelated_url}
+            src={@shot.pixelated_url}
             width="400"
             height="264"
             loading="lazy"
@@ -5869,8 +5904,8 @@ defmodule VutuvWeb.PostComponents do
           <.checking_badge />
         </span>
         <.picture
-          :if={!@pixelated_url}
-          picture={Vutuv.Screenshot.picture({@screenshot.screenshot, @screenshot})}
+          :if={@shot.picture}
+          picture={@shot.picture}
           width="400"
           height="264"
           loading="lazy"
@@ -5879,13 +5914,19 @@ defmodule VutuvWeb.PostComponents do
         />
       </.link>
       <.zoom_corner
-        :if={!@pixelated_url}
+        :if={@shot.lightbox_url}
         label={gettext("Show this screenshot larger")}
-        src={Vutuv.Screenshot.lightbox_url({@screenshot.screenshot, @screenshot})}
+        src={@shot.lightbox_url}
       />
     </.lightbox_gallery>
     """
   end
+
+  # Both halves hinge on the same `lg`, so a card never shows two captures or none.
+  defp screenshot_placement_class(:beside),
+    do: "hidden lg:float-right lg:mb-1 lg:ml-4 lg:block lg:w-1/3"
+
+  defp screenshot_placement_class(:below), do: "mt-3 lg:hidden"
 
   @doc """
   Author-facing label for a post-denial wildcard — the one wording for "who
