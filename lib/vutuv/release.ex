@@ -8,10 +8,9 @@ defmodule Vutuv.Release do
   """
   alias Vutuv.Images.Backfill
   alias Vutuv.Moderation.ImageScans
-  alias Vutuv.Organizations.Screenshots, as: OrganizationScreenshots
-  alias Vutuv.PageScreenshot
   alias Vutuv.Posts.ReviewCovers
   alias Vutuv.Posts.Screenshots
+  alias Vutuv.ScreenshotBlocklist
   alias Vutuv.Translations
   alias Vutuv.Uploads.LegacyRelabel
   alias Vutuv.Uploads.LegacySweeper
@@ -281,13 +280,7 @@ defmodule Vutuv.Release do
     [repo] = repos()
 
     {:ok, counts, _apps} =
-      Ecto.Migrator.with_repo(repo, fn _repo ->
-        %{
-          links: PageScreenshot.purge_blocklisted(),
-          posts: Screenshots.purge_blocklisted(),
-          organizations: OrganizationScreenshots.purge_blocklisted()
-        }
-      end)
+      Ecto.Migrator.with_repo(repo, fn _repo -> ScreenshotBlocklist.purge_captures() end)
 
     IO.puts(
       "purge_blocklisted_screenshots: #{counts.links} profile link(s), " <>

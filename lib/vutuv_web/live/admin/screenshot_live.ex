@@ -28,7 +28,6 @@ defmodule VutuvWeb.Admin.ScreenshotLive do
   alias Vutuv.Fediverse.RemoteAccount
   alias Vutuv.Fediverse.RemotePost
   alias Vutuv.Organizations.Organization
-  alias Vutuv.PageScreenshot
   alias Vutuv.Posts
   alias Vutuv.Posts.Screenshots
   alias Vutuv.Posts.ScreenshotWorker
@@ -130,16 +129,17 @@ defmodule VutuvWeb.Admin.ScreenshotLive do
   end
 
   def handle_event("purge", _params, socket) do
-    links = PageScreenshot.purge_blocklisted()
-    posts = Screenshots.purge_blocklisted()
+    # All three queues, through the one function that knows there are three —
+    # this button used to skip the organization homepages.
+    counts = ScreenshotBlocklist.purge_captures()
 
     {:noreply,
      socket
      |> put_flash(
        :info,
        gettext("Removed %{links} link screenshot(s) and %{posts} post screenshot(s).",
-         links: links,
-         posts: posts
+         links: counts.links + counts.organizations,
+         posts: counts.posts
        )
      )
      |> reload()}
@@ -306,6 +306,7 @@ defmodule VutuvWeb.Admin.ScreenshotLive do
                   <tr>
                     <th>{gettext("Domain or URL")}</th>
                     <th>{gettext("Note")}</th>
+                    <th>{gettext("Written by")}</th>
                     <th>{gettext("Added")}</th>
                     <th><span class="sr-only">{gettext("Actions")}</span></th>
                   </tr>
@@ -313,7 +314,31 @@ defmodule VutuvWeb.Admin.ScreenshotLive do
                 <tbody>
                   <tr :for={entry <- @entries} id={"blocklist-entry-#{entry.id}"}>
                     <td class="breakwrap font-semibold">{entry.pattern}</td>
-                    <td class="breakwrap text-slate-600 dark:text-slate-400">{entry.note}</td>
+                    <td class="breakwrap text-slate-600 dark:text-slate-400">
+                      {entry.note}
+                      <a
+                        :if={entry.evidence_file}
+                        href={~p"/admin/screenshots/blocklist/#{entry.id}/evidence"}
+                        target="_blank"
+                        rel="noopener"
+                        class="link block text-xs"
+                        id={"blocklist-evidence-#{entry.id}"}
+                      >
+                        {gettext("See the capture that decided this")}
+                      </a>
+                    </td>
+                    <td>
+                      <span
+                        :if={entry.source == "ai"}
+                        class="chip"
+                        title={gettext("Written by the automatic page check, not by an admin")}
+                      >
+                        {gettext("Automatic")}
+                      </span>
+                      <span :if={entry.source != "ai"} class="text-slate-600 dark:text-slate-400">
+                        {gettext("By hand")}
+                      </span>
+                    </td>
                     <td><.local_time at={entry.inserted_at} id={"blocklist-added-#{entry.id}"} /></td>
                     <td>
                       <.button

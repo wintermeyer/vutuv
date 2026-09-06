@@ -58,6 +58,12 @@ defmodule Vutuv.Uploads.Spec do
   @pixelated_width 960
   @pixelated_quality 50
 
+  # What a local vision model is shown (`vision_jpeg/1`): ~900px is plenty for
+  # a safety verdict or a "what covers this page" verdict, and it keeps CPU
+  # inference fast; qwen3-vl's dynamic tiling handles it natively.
+  @vision_edge 896
+  @vision_quality 85
+
   # The **lite** version a picture gets beside its display version, for a
   # viewer in data-saving mode (`Vutuv.LowBandwidth`): the same picture at
   # roughly its 1x CSS size and a lower quality. Measured on the production
@@ -374,6 +380,39 @@ defmodule Vutuv.Uploads.Spec do
       edge when edge > 0 -> svg_raster_size() / edge
       _ -> 1.0
     end
+  end
+
+  @doc """
+  The picture as a local vision model wants it: decoded from **bytes** (the
+  pixel budget and EXIF autorotation come along), capped at #{896}px on the
+  longest edge, alpha flattened because JPEG has none, and re-encoded with the
+  metadata stripped.
+
+  Bytes rather than a path on purpose: libvips caches file loads by name, and a
+  stored original lives at a fixed path a re-upload overwrites in place, so a
+  path decode would hand the model the *previous* picture.
+
+  Both askers share it — the safety scan (`Vutuv.Moderation.Ollama`) and the
+  link-preview page check (`Vutuv.ScreenshotBlocklist.Vision`) — so the size,
+  the quality and above all the stripping are decided once. Returns
+  `{:error, {:image, :undecodable}}` for anything our own pipeline cannot open,
+  which is the error class both queues treat as "this picture, not the
+  service".
+  """
+  def vision_jpeg(bytes) when is_binary(bytes) do
+    with {:ok, rotated} <- open_rotated_binary(bytes),
+         {:ok, small} <-
+           Image.thumbnail(rotated, "#{@vision_edge}x#{@vision_edge}", resize: :down),
+         {:ok, flat} <- flatten_alpha(small),
+         {:ok, jpeg} <- Operation.jpegsave_buffer(flat, keep: [], Q: @vision_quality) do
+      {:ok, jpeg}
+    else
+      _undecodable -> {:error, {:image, :undecodable}}
+    end
+  end
+
+  defp flatten_alpha(image) do
+    if Image.has_alpha?(image), do: Image.flatten(image), else: {:ok, image}
   end
 
   @doc """

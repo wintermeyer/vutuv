@@ -20,13 +20,47 @@ defmodule Vutuv.ScreenshotBlocklist.Entry do
   schema "screenshot_blocklist_entries" do
     field(:pattern, :string)
     field(:note, :string)
+    # "manual" (an admin wrote this line) or "ai" (a capture of that site was
+    # judged unusable). The admin page shows the difference, because a machine
+    # entry is one an admin may want to overrule, and `evidence_file` names
+    # the very picture that caused it (in the private evidence tree, served
+    # only through the admin route).
+    field(:source, :string, default: "manual")
+    field(:evidence_file, :string)
 
     timestamps()
   end
 
+  @sources ~w(manual ai)
+
+  @doc "Where an entry came from: an admin, or the automatic page check."
+  def sources, do: @sources
+
+  @doc """
+  The admin form's changeset: an admin writes a pattern and a note, nothing
+  else. `source` and `evidence_file` are not castable here — they say where a
+  line came from, which is not a form field but a fact about the writer.
+  """
   def changeset(%__MODULE__{} = entry, attrs) do
     entry
     |> cast(attrs, [:pattern, :note])
+    |> shared_validations()
+  end
+
+  @doc """
+  The changeset for a line the page check writes: same rules, plus the source
+  and the stored evidence picture.
+  """
+  def auto_changeset(%__MODULE__{} = entry, attrs) do
+    entry
+    |> cast(attrs, [:pattern, :note, :source, :evidence_file])
+    |> validate_inclusion(:source, @sources)
+    |> validate_length(:evidence_file, max: @max_length)
+    |> shared_validations()
+  end
+
+  defp shared_validations(changeset) do
+    changeset
     |> update_change(:pattern, &normalize/1)
     |> validate_required([:pattern])
     |> validate_length(:pattern, max: @max_length)

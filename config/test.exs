@@ -109,6 +109,10 @@ config :vutuv, :organization_screenshot_worker, false
 # (sandbox rule). ImageScanWorker.nudge/0 casts into the void then.
 config :vutuv, :moderate_images, false
 config :vutuv, :image_scan_worker, false
+# The link-preview page check is off for the same reason: no test should reach
+# for Ollama. Its own tests flip :screenshot_page_check on and inject a `plug:`
+# responder through :screenshot_check_req_options.
+config :vutuv, :screenshot_page_check, false
 # Translations are ON in tests so the request/display paths are exercised;
 # the queue tests drain via Translations.deliver_due/1 with a stubbed
 # translator, and the polling worker stays off (sandbox rule) — its nudge/0

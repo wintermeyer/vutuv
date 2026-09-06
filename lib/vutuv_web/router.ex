@@ -1258,6 +1258,11 @@ defmodule VutuvWeb.Router do
     # uphold/reject POSTs that are the no-JS / scriptable fallback for the rulings.
     # /reporters and /:id/evidence are defined before the live `/moderation/:id`
     # (earlier scope wins) so the literal/suffixed segments still match first.
+    # The capture behind an automatic screenshot-blocklist entry. The
+    # screenshot_evidence/ tree has no static mount either, so this is the only
+    # way to it; the blocklist tab links each machine-written line at it.
+    get("/screenshots/blocklist/:id/evidence", ScreenshotController, :evidence)
+
     get("/moderation/reporters", ModerationController, :reporters)
     get("/moderation/:id/evidence", ModerationController, :evidence)
     post("/moderation/:id/uphold", ModerationController, :uphold)
