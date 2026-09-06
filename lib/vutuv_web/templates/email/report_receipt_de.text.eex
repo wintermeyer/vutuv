@@ -1,4 +1,4 @@
-Hallo <%= @name %>,
+<%= @greeting %>,
 
 wir haben Ihre Meldung erhalten. Damit sie bearbeitet wird, bestätigen Sie
 bitte diese E-Mail-Adresse:

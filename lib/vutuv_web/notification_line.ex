@@ -142,6 +142,28 @@ defmodule VutuvWeb.NotificationLine do
     )
   end
 
+  # How a case this member reported ended (issue #2011). No actor, like every
+  # other moderation line: naming the owner of the reported content would tell
+  # a reporter something about somebody else's account. The wording matches the
+  # mail's four endings; `upheld` deliberately does not claim the content was
+  # removed, because an upheld profile case ends in a strike and a visible
+  # profile (see `Vutuv.Moderation.reporter_outcome/1`).
+  def notification_text(%{kind: "report_outcome"} = n) do
+    case n[:outcome] do
+      "removed" ->
+        gettext("The content you reported was deleted; the case is closed.")
+
+      "revised" ->
+        gettext("The owner revised the content you reported; it is visible again.")
+
+      "upheld" ->
+        gettext("A person read your report and upheld it. Thank you.")
+
+      _ ->
+        gettext("A person read your report and did not uphold it; the content stays.")
+    end
+  end
+
   # Reporter protection: the actor is the *reported* member, rendered as
   # @handle by the actor line; the text explains the both-ways pause and
   # that an unfounded ruling undoes it.
@@ -220,6 +242,7 @@ defmodule VutuvWeb.NotificationLine do
   # in one place.
   @brand_kind_classes "bg-brand-50 text-brand-700 dark:bg-brand-800/60 dark:text-brand-100"
   @brand_kinds ~w(follower reply thread mention connection report_protection organization_role handle_change cv_update fediverse_reply fediverse_reaction share)
+  @moderation_kinds ~w(moderation image_rejected report_outcome)
 
   @doc """
   How one notification kind is *drawn*: the badge colour, the glyph inside it
@@ -236,11 +259,10 @@ defmodule VutuvWeb.NotificationLine do
 
   def kind_classes("like"), do: "bg-accent/10 text-accent dark:bg-accent/20"
 
-  def kind_classes("moderation"),
-    do: "bg-amber-50 text-amber-600 dark:bg-amber-900/30 dark:text-amber-200"
-
-  # The AI image scan removed an image — amber, like every moderation notice.
-  def kind_classes("image_rejected"),
+  # Amber is the app's moderation colour: a case on the member's own content, an
+  # image the AI scan removed, and a ruling on something they reported all read
+  # as the same kind of news.
+  def kind_classes(kind) when kind in @moderation_kinds,
     do: "bg-amber-50 text-amber-600 dark:bg-amber-900/30 dark:text-amber-200"
 
   def kind_classes(kind) when kind in @brand_kinds, do: @brand_kind_classes
@@ -269,7 +291,9 @@ defmodule VutuvWeb.NotificationLine do
   def kind_glyph("fediverse_reaction"), do: "🌐"
   # "connection" is the vernetzt (mutual-follow) event; the handshake glyph.
   def kind_glyph("connection"), do: "🤝"
-  def kind_glyph("moderation"), do: "⚑"
+  # The flag: raised against this member's content, or raised by them and now
+  # answered. The badge's title tells the two apart where the glyph cannot.
+  def kind_glyph(kind) when kind in ["moderation", "report_outcome"], do: "⚑"
   def kind_glyph("image_rejected"), do: "🖼"
   def kind_glyph("report_protection"), do: "🛡"
   def kind_glyph("organization_role"), do: "🏢"
@@ -297,6 +321,7 @@ defmodule VutuvWeb.NotificationLine do
   def kind_label("connection"), do: gettext("Connection")
   def kind_label("moderation"), do: gettext("Moderation")
   def kind_label("image_rejected"), do: gettext("Image review")
+  def kind_label("report_outcome"), do: gettext("Report decision")
   def kind_label("report_protection"), do: gettext("Report protection")
   def kind_label("organization_role"), do: gettext("Organization role")
   def kind_label("handle_change"), do: gettext("Handle change")
@@ -413,6 +438,11 @@ defmodule VutuvWeb.NotificationLine do
   # The username note carries its own two links inside the sentence
   # (username_line/1), so the row itself must not be one.
   def notification_target(%{kind: "username"}, _viewer), do: nil
+
+  # A ruling on a report has no page for the *reporter*: the case page belongs
+  # to the owner and the admins (`ModerationCaseController.authorize/2`), and
+  # the content it was about may be gone. The sentence is the whole thing.
+  def notification_target(%{kind: "report_outcome"}, _viewer), do: nil
 
   # Straight to the report the member has been waiting for.
   def notification_target(%{kind: "reference_check"} = n, viewer) do

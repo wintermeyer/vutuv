@@ -483,9 +483,10 @@ defmodule Vutuv.ModerationPublicNoticeTest do
       assert Moderation.reporter_stats_map([nil]) == %{}
     end
 
-    # Calibration: `Notifier.reporters_content_revised/1`'s `deliver_to/2`
-    # matches on `%User{}`, so before the nil was filtered out this raised a
-    # FunctionClauseError and took the owner's own edit down with it.
+    # Calibration: the reporters' notice used to hand every report to a
+    # `deliver_to/2` matching on `%User{}`, so a nil reporter raised a
+    # FunctionClauseError and took the owner's own edit down with it. It
+    # branches on the column now (`Notifier.reporters_case_closed/1`).
     test "the owner's edit does not crash on a reporter with no user row", %{
       post: post,
       case: case_record

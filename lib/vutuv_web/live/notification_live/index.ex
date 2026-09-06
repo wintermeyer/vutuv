@@ -119,9 +119,8 @@ defmodule VutuvWeb.NotificationLive.Index do
     "replies" => ~w(reply thread mention fediverse_reply),
     "reactions" => ~w(like fediverse_reaction),
     "people" => ~w(follower connection endorsement),
-    "other" =>
-      ~w(organization_role moderation image_rejected report_protection handle_change cv_update
-         username reference_check)
+    "other" => ~w(organization_role moderation image_rejected report_outcome report_protection
+         handle_change cv_update username reference_check)
   }
 
   @doc false

@@ -1,0 +1,24 @@
+<.email_layout preheader={@preheader} locale={@locale}>
+  <.email_p>{@greeting},</.email_p>
+  <.email_p>thank you for your report. The case is closed, and this is how it ended:</.email_p>
+  <.email_p :if={@outcome == "removed"}>
+    The owner deleted the content you reported. It is no longer on vutuv.
+  </.email_p>
+  <.email_p :if={@outcome == "revised"}>
+    The owner revised the content you reported, and it is visible again. If you still believe it
+    breaks our community guidelines, you can report it once more; it will then go straight to our
+    admins.
+  </.email_p>
+  <.email_p :if={@outcome == "upheld"}>
+    Somebody on our team read your report and upheld it. We have taken the steps that follow from
+    that. What any of them mean for the account behind the content stays between that person and
+    us.
+  </.email_p>
+  <.email_p :if={@outcome == "not_upheld"}>
+    Somebody on our team read your report and did not uphold it. The content you reported stays
+    where it is. That is not a judgement on you: reporting it was the right thing to do, even when
+    the answer goes the other way.
+  </.email_p>
+  <.email_p>You will not hear from us about this case again.</.email_p>
+  <.email_signature locale={@locale} />
+</.email_layout>

@@ -59,6 +59,16 @@ defmodule Vutuv.Moderation.Report do
     field(:confirmation_expires_at, :naive_datetime)
     field(:confirmed_at, :naive_datetime)
 
+    # The language the notice was filed in. There is no member row to read one
+    # from, and the outcome mail (issue #2011) is built inside whichever admin's
+    # request settled the case, so without this a German photographer would be
+    # answered in the ruling admin's language.
+    field(:reporter_locale, :string)
+
+    # The claim that makes "each reporter hears once" true, and the in-app
+    # entry's timestamp — see `Vutuv.Moderation.Notifier.reporters_case_closed/1`.
+    field(:outcome_notified_at, :naive_datetime)
+
     timestamps()
   end
 
@@ -102,6 +112,25 @@ defmodule Vutuv.Moderation.Report do
   """
   def effective(query) do
     from(r in query, where: not is_nil(r.reporter_id) or not is_nil(r.confirmed_at))
+  end
+
+  @doc """
+  The reports on this case that still owe their reporter the decision notice
+  (issue #2011): effective, not marked abusive, not told yet.
+
+  Two of those three are decisions rather than bookkeeping. An **unconfirmed**
+  notice is left out because nobody proved they can read that address: the
+  receipt is the one mail it earns, and answering an unverified claim would both
+  confirm to a stranger that the content exists and mail an address that never
+  asked us for anything. An **abusive** report is left out because an admin has
+  just ruled it a deliberate weapon — the notice exists so a good-faith reporter
+  stops checking the URL, and a member marked abusive is already hearing about
+  it through the strike ladder.
+  """
+  def awaiting_outcome(case_id) do
+    from(r in effective(__MODULE__),
+      where: r.case_id == ^case_id and is_nil(r.outcome_notified_at) and r.abusive? == false
+    )
   end
 
   @doc "The report categories offered for a given content type (wire string)."

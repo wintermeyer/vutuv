@@ -354,6 +354,13 @@ defmodule Vutuv.Activity do
     |> select([s], %{ts: max(s.inserted_at)})
   end
 
+  # Stamped when the notice went out, not when the report was filed — so a
+  # report that has waited a week for a ruling is news on the day it is ruled.
+  defp report_outcome_max(user_id) do
+    Vutuv.Moderation.reporter_outcome_query(user_id)
+    |> select([r], %{ts: max(r.outcome_notified_at)})
+  end
+
   # MAX skips NULLs, so rows not (yet) restored contribute nothing here.
   defp severance_restore_max(user_id) do
     Vutuv.Moderation.reporter_severances_query(user_id)
@@ -547,6 +554,7 @@ defmodule Vutuv.Activity do
   # so they are kept as they were rather than normalised.
   defp id_prefix("organization_role"), do: "organization-role"
   defp id_prefix("image_rejected"), do: "image-rejected"
+  defp id_prefix("report_outcome"), do: "report-outcome"
   defp id_prefix("report_protection"), do: "report-protection"
   defp id_prefix("report_protection_restored"), do: "report-protection-restored"
   defp id_prefix("handle_change"), do: "handle-change"
@@ -1215,6 +1223,14 @@ defmodule Vutuv.Activity do
         items: &image_rejected_items(user_id, &1, &2),
         counts: [count_image_rejections(user_id, read_at)],
         dismiss: [{"image_rejected", :id}]
+      },
+      %{
+        kind: "report_outcome",
+        email_pref: nil,
+        max_arms: [report_outcome_max(user_id)],
+        items: &report_outcome_items(user_id, &1, &2),
+        counts: [count_report_outcomes(user_id, read_at)],
+        dismiss: [{"report_outcome", :id}]
       },
       %{
         kind: "report_protection",
@@ -1941,6 +1957,34 @@ defmodule Vutuv.Activity do
     end)
   end
 
+  # How a case the member reported ended (issue #2011). Derived from the report
+  # row the notice was stamped on, so the line under the bell and the mail can
+  # only say the same thing — and so it survives the live push. No actor: a
+  # ruling is ours, and naming the owner of the reported content would tell a
+  # reporter something about somebody else's account.
+  defp report_outcome_items(user_id, limit, cursor) do
+    Vutuv.Moderation.reporter_outcome_query(user_id)
+    |> join(:inner, [r], c in Vutuv.Moderation.Case, on: c.id == r.case_id)
+    |> order_by([r], desc: r.outcome_notified_at, desc: r.id)
+    |> limit(^limit)
+    |> at_or_before_notified(cursor)
+    |> select([r, c], {r.id, r.outcome_notified_at, c.status})
+    |> Repo.all()
+    |> Enum.map(fn {id, at, status} ->
+      %{
+        id: event_id("report_outcome", id),
+        kind: "report_outcome",
+        at: at,
+        outcome: Vutuv.Moderation.reporter_outcome(status)
+      }
+    end)
+  end
+
+  defp at_or_before_notified(query, nil), do: query
+
+  defp at_or_before_notified(query, %{at: at}),
+    do: where(query, [r], r.outcome_notified_at <= ^at)
+
   # The reporter-protection entries: one when a report severed the
   # relationship to the reported member, a second when a rejected case
   # restored it. Both derive from the same severance row (Moderation owns the
@@ -2350,6 +2394,16 @@ defmodule Vutuv.Activity do
     ImageScans.rejected_scans_query(user_id)
     |> select([s], %{count: count()})
     |> since(read_at)
+  end
+
+  # `since/2` compares `inserted_at`, which here is when the report was filed;
+  # the event is the notice, so this bounds on its own column.
+  defp count_report_outcomes(user_id, read_at) do
+    query =
+      Vutuv.Moderation.reporter_outcome_query(user_id)
+      |> select([r], %{count: count()})
+
+    if read_at, do: where(query, [r], r.outcome_notified_at > ^read_at), else: query
   end
 
   defp count_severances(user_id, read_at) do

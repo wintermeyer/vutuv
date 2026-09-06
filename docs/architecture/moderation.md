@@ -332,17 +332,18 @@ page and is keyed by **report id**, since looking a notice up by its nil
 reporter was a `KeyError` and a 500. `list_reporter_stats/0` is two grouped
 queries now — its inner join to `users` dropped every outside notice from the
 one screen whose job is showing who abuses the report button.
-`Notifier.reporters_content_revised/1` skips a report with no user row rather
-than raising in `deliver_to/2`, and `reject_case/3` marks an outside notice
-abusive without trying to strike an account that does not exist (the mark still
-costs that address its trust for a year). Severance never runs on this path:
+`Notifier.reporters_case_closed/2` branches on the column rather than on a
+preloaded `%User{}`, so an outside notice gets its own mail instead of raising
+in `deliver_to/2`, and `reject_case/3` marks an outside notice abusive without
+trying to strike an account that does not exist (the mark still costs that
+address its trust for a year). Severance never runs on this path:
 `moderation_severances.reporter_id` is a NOT NULL foreign key and stays one,
 and there is no tie to cut.
 
 Admins see the notifier's **name and address** on the case page, plus an
 "address not confirmed" badge while it is still pending; the owner of the
-reported content never sees either. Telling the outside notifier how the case
-ended is #2011's job — today they get the receipt and nothing after it.
+reported content never sees either. How the case ended reaches them through the
+decision notice below.
 
 ## The statement of reasons (issue #2010)
 
@@ -396,6 +397,57 @@ ends in one place** (`UserHelpers.split_lines/1`, PCRE's `\R` with the `u`
 modifier), because a break the reader's client honours but our split does not
 puts the rest of the note outside the marker — see `email.md` for why the rule
 is written as the effect rather than as a list of `\r\n`, `\r` and `\n`.
+
+## The decision notice (issue #2011)
+
+The mirror of the statement of reasons: the owner is owed the claim, and
+whoever made it is owed the ruling. Until this, only an owner's *edit* told a
+reporter anything — an admin upholding or rejecting, and the owner deleting,
+said nothing at all — so somebody who reported a post went back to the URL for
+days and eventually filed the same notice again. This is what the Digital
+Services Act asks for (Art. 16); the reporter-facing text never says so.
+
+`Notifier.reporters_case_closed/2` is the one place it happens, and all five
+ways a case can close call it: `uphold_case/2`, `reject_case/3`, the owner's
+delete (`content_deleted/1`), the owner's edit (`resolve_edited/2`) and the
+erasing `remove_owner/4`. A member gets an in-app entry **and** a mail, an
+outside notifier gets the mail alone. What it names is
+`Moderation.reporter_outcome/1`'s word for the ending, and the four are not the
+statuses renamed: `"upheld"` is deliberately not `"removed"`, because an upheld
+case removes a picture, leaves a post frozen as evidence, and puts a **profile**
+back with its owner on the strike ladder — telling that reporter the content was
+removed would be false. It says what happened to the *content* and never what
+happened to the account behind it: a warning, a suspension or nothing visible at
+all is between that member and us, the same asymmetry that keeps the reporter's
+name off the owner's case page.
+
+**Exactly once is a claim, not a convention.** One `UPDATE` both picks the
+reports that still owe their reporter a notice and stamps
+`moderation_reports.outcome_notified_at`, and only the rows it returns are
+delivered to — so a second close, a retry, or two admins ruling in the same
+instant find nothing left to claim. Every value the mail needs is read off that
+returned row before the delivery task is spawned, because `remove_owner/4` on
+`:delete` erases the case and its reports while the mail is still in flight, and
+a task that went looking for the row again would find nothing and quietly send
+nothing. That deletion is also why the reporters are told **before** the account
+goes, and why on that one path their in-app entry disappears with the row while
+their mail stands.
+
+**Two reporters are deliberately left out**, and `Report.awaiting_outcome/1`
+holds both. An **unconfirmed** outside notice is not answered: nobody proved
+they can read that address, the receipt is the one mail it earns, and a decision
+notice to an unverified claim would confirm to a stranger that the content
+exists. A report an admin marked **abusive** is not answered either: the notice
+exists so a good-faith reporter stops checking the URL, and a member just called
+a deliberate weapon is already hearing about it through the strike ladder.
+
+The in-app entry is the `report_outcome` kind in `Vutuv.Activity`'s registry,
+derived from the stamped report row through
+`Moderation.reporter_outcome_query/1` — so the line under the bell and the mail
+read the same ending, and a case closed without anybody being told has no line
+either. It carries no actor and links nowhere: the case page belongs to the
+owner and the admins (`ModerationCaseController.authorize/2`), and the content
+may be gone.
 
 ## Admin-initiated freeze (`/admin/accounts`, issue #812)
 
