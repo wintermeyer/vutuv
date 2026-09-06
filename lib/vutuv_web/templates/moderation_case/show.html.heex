@@ -38,8 +38,16 @@
           :if={@case.content_type == "post" and @content}
           class="flex items-center justify-between gap-4 rounded-lg border border-slate-200 p-3 dark:border-slate-700"
         >
+          <%!-- A rewrite does not answer "this work is not yours to publish",
+                so a copyright case must not promise the post comes straight
+                back — an admin checks the revision first. --%>
           <p class="text-sm text-slate-600 dark:text-slate-400">
-            {gettext("Fix it. An edited post is visible again immediately.")}
+            {if Moderation.copyright_case?(@case),
+              do:
+                gettext(
+                  "Fix it. One of our admins then looks at the revision; the post stays hidden until they have."
+                ),
+              else: gettext("Fix it. An edited post is visible again immediately.")}
           </p>
           <.button variant="secondary" href={~p"/posts/#{@case.content_id}/edit"}>
             {gettext("Edit")}

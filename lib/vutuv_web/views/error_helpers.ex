@@ -119,6 +119,14 @@ defmodule VutuvWeb.ErrorHelpers do
       # Vutuv.Tags.Tag, a name of punctuation only.
       dgettext_noop("errors", "must not be only punctuation"),
       dgettext_noop("errors", "\"%{tag}\" is only punctuation, not a tag."),
+      # Vutuv.Moderation.Report, the report form's one error banner (issue #2008).
+      dgettext_noop("errors", "Please pick a category."),
+      dgettext_noop("errors", "Your note is too long."),
+      dgettext_noop(
+        "errors",
+        "Please tell us which work it is and where the original can be seen."
+      ),
+      dgettext_noop("errors", "Please confirm that you are making this claim in good faith."),
       # Vutuv.Posts, the post tag cap (issue #1237).
       dgettext_noop("errors", "Please use at most %{max} tags."),
       # Vutuv.Mentions, the per-post mention cap (anti-spam).

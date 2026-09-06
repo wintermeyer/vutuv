@@ -5,11 +5,11 @@ defmodule VutuvWeb.ModerationCaseControllerTest do
   alias Vutuv.Moderation.Case
 
   # The logged-in member owns a reported (frozen) post with an open case.
-  defp owner_with_case(conn) do
+  defp owner_with_case(conn, attrs \\ %{"category" => "family"}) do
     {conn, owner} = create_and_login_user(conn)
     post = insert(:post, user: owner)
     reporter = insert(:activated_user)
-    {:ok, case_record} = Moderation.report_content(reporter, post, %{"category" => "family"})
+    {:ok, case_record} = Moderation.report_content(reporter, post, attrs)
     {conn, owner, post, case_record}
   end
 
@@ -38,6 +38,24 @@ defmodule VutuvWeb.ModerationCaseControllerTest do
       assert response =~ ~p"/moderation/cases/#{case_record.id}/dispute"
       assert response =~ ~p"/moderation/cases/#{case_record.id}/delete_content"
       assert response =~ ~p"/posts/#{case_record.content_id}/edit"
+    end
+
+    test "a copyright case keeps delete and dispute but drops the edit promise", %{conn: conn} do
+      {conn, _owner, _post, case_record} =
+        owner_with_case(conn, %{
+          "category" => "copyright",
+          "note" => "The photo is mine, the original is at example.com/photo",
+          "good_faith?" => "true"
+        })
+
+      response = conn |> get(~p"/moderation/cases/#{case_record.id}") |> html_response(200)
+
+      assert response =~ ~p"/moderation/cases/#{case_record.id}/dispute"
+      assert response =~ ~p"/moderation/cases/#{case_record.id}/delete_content"
+      # The edit is still offered, but it no longer promises the post back.
+      assert response =~ ~p"/posts/#{case_record.content_id}/edit"
+      refute response =~ "An edited post is visible again immediately."
+      assert response =~ "stays hidden until they have"
     end
 
     test "another member gets a 404", %{conn: conn} do

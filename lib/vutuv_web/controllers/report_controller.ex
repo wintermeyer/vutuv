@@ -13,8 +13,10 @@ defmodule VutuvWeb.ReportController do
   alias Vutuv.Accounts.User
   alias Vutuv.Chat
   alias Vutuv.Moderation
+  alias Vutuv.Moderation.Report
   alias Vutuv.Posts
   alias VutuvWeb.ControllerHelpers
+  alias VutuvWeb.ErrorHelpers
 
   def new(conn, %{"type" => type, "id" => id} = params) do
     case Moderation.fetch_content(type, id) do
@@ -25,7 +27,11 @@ defmodule VutuvWeb.ReportController do
         reporter = conn.assigns[:current_user]
 
         if Moderation.can_report?(reporter, content) do
-          render_report_form(conn, reporter, content, type, id, params)
+          render_report_form(conn, reporter, content,
+            content_type: type,
+            content_id: id,
+            return_to: ControllerHelpers.safe_return_to(params["return_to"])
+          )
         else
           # Mirror create's authorization: never preview content the reporter
           # has no right to see (a private DM, a restricted post).
@@ -36,20 +42,23 @@ defmodule VutuvWeb.ReportController do
 
   def new(conn, _params), do: ControllerHelpers.render_error(conn, 404)
 
-  defp render_report_form(conn, reporter, content, type, id, params) do
+  defp render_report_form(conn, reporter, content, assigns) do
     # A reporter tied to the owner must understand BEFORE sending that
     # the report separates the two of them (and thereby de-facto reveals
     # who reported). Strangers keep the plain anonymity promise.
     severs = Moderation.would_sever_relationship?(reporter, content)
 
-    render(conn, "new.html",
+    defaults = [
       page_title: gettext("Report content"),
-      content_type: type,
-      content_id: id,
       preview: preview(content),
       severed_owner: if(severs, do: Moderation.content_owner(content)),
-      return_to: ControllerHelpers.safe_return_to(params["return_to"])
-    )
+      # The form is sticky through the report itself, so a rejected submission
+      # comes back the way the reporter left it.
+      report: %Report{},
+      errors: []
+    ]
+
+    render(conn, "new.html", Keyword.merge(defaults, assigns))
   end
 
   def create(conn, %{"report" => %{"type" => type, "id" => id} = report_params}) do
@@ -83,15 +92,33 @@ defmodule VutuvWeb.ReportController do
           {:error, :not_allowed} ->
             ControllerHelpers.render_error(conn, 404)
 
-          {:error, %Ecto.Changeset{}} ->
+          # Back to the form rather than a redirect + flash: a copyright notice
+          # carries a written explanation the reporter must not lose to a
+          # missing checkbox.
+          {:error, %Ecto.Changeset{} = changeset} ->
             conn
-            |> put_flash(:error, gettext("Please pick a category."))
-            |> redirect(to: ~p"/reports/new?type=#{type}&id=#{id}")
+            |> put_status(:unprocessable_entity)
+            |> render_report_form(reporter, content,
+              content_type: type,
+              content_id: id,
+              return_to: return_to,
+              report: Ecto.Changeset.apply_changes(changeset),
+              errors: report_errors(changeset)
+            )
         end
     end
   end
 
   def create(conn, _params), do: ControllerHelpers.render_error(conn, 404)
+
+  # Everything the reporter has to change, in their words. `Report`'s changeset
+  # writes whole sentences, so nothing here has to guess one from a field name;
+  # `errors` is newest-first, hence the reverse.
+  defp report_errors(%Ecto.Changeset{errors: errors}) do
+    errors
+    |> Enum.reverse()
+    |> Enum.map(fn {_field, error} -> ErrorHelpers.translate_error(error) end)
+  end
 
   # The reporter's confirmation. A whole-profile report (the spam case) says the
   # moderators have been notified and will review the account, so reporting no

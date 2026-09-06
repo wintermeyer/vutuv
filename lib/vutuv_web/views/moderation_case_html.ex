@@ -2,6 +2,7 @@ defmodule VutuvWeb.ModerationCaseHTML do
   @moduledoc false
   use VutuvWeb, :html
 
+  alias Vutuv.Moderation
   alias Vutuv.Moderation.Case
 
   embed_templates("../templates/moderation_case/*")
