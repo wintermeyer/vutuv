@@ -122,6 +122,51 @@ defmodule VutuvWeb.ReportControllerTest do
              |> html_response(200)
     end
 
+    test "offers the copyright notice with its good-faith box", %{conn: conn, post: post} do
+      {conn, _me} = create_and_login_user(conn)
+
+      response =
+        conn |> get(~p"/reports/new?type=post&id=#{post.id}") |> html_response(200)
+
+      assert response =~ ~s(value="copyright")
+      assert response =~ "without the rights holder&#39;s permission"
+      # The declaration and the "which work, where is the original" prompt are
+      # in the markup and revealed by CSS, so the form needs no JavaScript.
+      assert response =~ ~s(name="report[good_faith?]")
+      assert response =~ "report-good-faith"
+      assert response =~ "where can the original be seen"
+    end
+
+    test "a private message report does not offer it", %{conn: conn} do
+      {conn, me} = create_and_login_user(conn)
+      alice = insert_activated_user()
+      me = Repo.get!(Vutuv.Accounts.User, me.id)
+      conversation = insert_conversation_between(alice, me)
+      message = insert(:message, conversation: conversation, sender: alice)
+
+      response =
+        conn |> get(~p"/reports/new?type=message&id=#{message.id}") |> html_response(200)
+
+      # Nothing was published, so there is nothing to have taken down.
+      refute response =~ ~s(value="copyright")
+      refute response =~ "report-good-faith"
+    end
+
+    test "renders the copyright option in German", %{conn: conn, post: post} do
+      {conn, _me} = create_and_login_user(conn)
+
+      response =
+        conn
+        |> recycle()
+        |> put_req_header("accept-language", "de-DE,de;q=0.9")
+        |> get(~p"/reports/new?type=post&id=#{post.id}")
+        |> html_response(200)
+
+      assert response =~ "ohne Erlaubnis"
+      assert response =~ "nach bestem Wissen"
+      assert response =~ "Um welches Werk geht es"
+    end
+
     test "a reporter tied to the open case still reaches the form", %{conn: conn} do
       {conn, reporter} = create_and_login_user(conn)
       author = insert_activated_user()
@@ -202,6 +247,70 @@ defmodule VutuvWeb.ReportControllerTest do
              |> response(404)
 
       assert Repo.aggregate(Case, :count) == cases_before
+    end
+
+    test "an incomplete copyright notice comes back with the note intact", %{
+      conn: conn,
+      post: post
+    } do
+      {conn, _me} = create_and_login_user(conn)
+      note = "The photo is mine, the original is at example.com/photo"
+
+      conn =
+        post(conn, ~p"/reports", %{
+          "report" => %{
+            "type" => "post",
+            "id" => post.id,
+            "category" => "copyright",
+            "note" => note
+          }
+        })
+
+      # A redirect + flash would throw the written explanation away, which is
+      # the one thing a copyright notice cannot afford to lose.
+      response = html_response(conn, 422)
+      assert response =~ "good faith"
+      assert response =~ note
+      assert Repo.aggregate(Case, :count) == 0
+      refute Repo.get!(Vutuv.Posts.Post, post.id).frozen_at
+    end
+
+    test "says in German what is missing", %{conn: conn, post: post} do
+      {conn, _me} = create_and_login_user(conn)
+
+      response =
+        conn
+        |> recycle()
+        |> put_req_header("accept-language", "de-DE,de;q=0.9")
+        |> post(~p"/reports", %{
+          "report" => %{"type" => "post", "id" => post.id, "category" => "copyright"}
+        })
+        |> html_response(422)
+
+      # Both messages live in errors.po, reached through the extraction anchors
+      # in VutuvWeb.ErrorHelpers - an untranslated banner would read English
+      # here while every other line on the page is German.
+      assert response =~ "Bitte sagen Sie uns, um welches Werk es geht"
+      assert response =~ "nach bestem Wissen"
+    end
+
+    test "a complete copyright notice files the case", %{conn: conn, post: post} do
+      {conn, _me} = create_and_login_user(conn)
+
+      conn =
+        post(conn, ~p"/reports", %{
+          "report" => %{
+            "type" => "post",
+            "id" => post.id,
+            "category" => "copyright",
+            "note" => "The photo is mine, the original is at example.com/photo",
+            "good_faith?" => "true"
+          }
+        })
+
+      assert Phoenix.Flash.get(conn.assigns.flash, :info) =~ "Thank you"
+      assert %Case{status: "pending_owner"} = Repo.one(Case)
+      assert Repo.get!(Vutuv.Posts.Post, post.id).frozen_at
     end
 
     test "reporting your own content is refused", %{conn: conn} do

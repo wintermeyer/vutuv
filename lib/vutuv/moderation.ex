@@ -10,6 +10,13 @@ defmodule Vutuv.Moderation do
   (escalates to the admin queue). Silence for #{72} hours escalates too, so
   admins only ever see disputes, ignored cases, re-reports and profile cases.
 
+  A **copyright** complaint is the exception to the last two sentences: it is a
+  legal notice, so it sits in the admin queue from the moment it is filed
+  (`list_queue/0`) and an owner's edit does not settle it — it escalates
+  instead (`content_edited/1`). Delete and dispute work as they do everywhere
+  else. `Vutuv.Moderation.Report` refuses the category without the explanation
+  and the reporter's good-faith declaration.
+
   Reports from reporters with a bad track record (`trusted_reporter?/1`)
   never freeze anything; they only flag the content for admin review. Whole
   profiles are never frozen by a single report — that takes a second,
@@ -81,6 +88,10 @@ defmodule Vutuv.Moderation do
   # issue a second strike. Mirrors Case.open_statuses/0 as a compile-time list
   # usable in guards.
   @open_statuses Case.open_statuses()
+
+  # The statuses that put a case in front of an admin on their own. A copyright
+  # case joins the queue from any open status — see queue_query/0.
+  @queue_statuses ~w(escalated flagged)
 
   ## Reporting
 
@@ -563,25 +574,49 @@ defmodule Vutuv.Moderation do
   revised. A later re-report of the same content skips self-service and goes
   straight to the admins (see `report_content/3`). Edits during an escalated
   case change nothing — the case is with the admins.
+
+  A copyright complaint is the exception: the claim is that the work was never
+  the owner's to publish, and no rewrite settles that. The edit is recorded,
+  the content stays hidden and the case escalates for a human to check.
   """
   def content_edited(content) do
     case open_case_for(content) do
       %Case{status: "pending_owner"} = case_record ->
-        unfreeze_content(content)
+        # The reports are needed either way — to read the category here, and by
+        # the reporters' notice on the ordinary branch — so load them once.
+        case_record = Repo.preload(case_record, reports: :reporter)
 
-        updated =
-          update_case!(case_record, %{
-            status: "resolved_edited",
-            resolved_at: NaiveDateTime.utc_now(:second)
-          })
-
-        log(updated, nil, "content_edited")
-        Notifier.reporters_content_revised(updated)
-        :ok
+        if copyright_case?(case_record),
+          do: hand_edit_to_admins(case_record),
+          else: resolve_edited(content, case_record)
 
       _ ->
         :ok
     end
+  end
+
+  defp resolve_edited(content, %Case{} = case_record) do
+    unfreeze_content(content)
+
+    updated =
+      update_case!(case_record, %{
+        status: "resolved_edited",
+        resolved_at: NaiveDateTime.utc_now(:second)
+      })
+
+    log(updated, nil, "content_edited")
+    Notifier.reporters_content_revised(updated)
+    :ok
+  end
+
+  # No unfreeze and no "revised" notice: the reporters' claim is about the
+  # work, not about its wording. The case was already in the queue, so this
+  # only moves it to the front of it, with the edit in the History timeline
+  # the admin reads.
+  defp hand_edit_to_admins(%Case{} = case_record) do
+    updated = update_case!(case_record, case_params("escalated"))
+    log(updated, nil, "content_edited")
+    :ok
   end
 
   @doc """
@@ -611,21 +646,48 @@ defmodule Vutuv.Moderation do
 
   @doc "The admin queue: escalated cases first (oldest first), then flagged."
   def list_queue do
-    from(c in Case,
-      where: c.status in ["escalated", "flagged"],
-      order_by: [
-        asc: fragment("CASE WHEN ? = 'escalated' THEN 0 ELSE 1 END", c.status),
-        asc: c.inserted_at
-      ],
-      preload: [:owner, reports: :reporter]
+    queue_query()
+    |> order_by([c],
+      asc: fragment("CASE WHEN ? = 'escalated' THEN 0 ELSE 1 END", c.status),
+      asc: c.inserted_at
     )
+    |> preload([:owner, reports: :reporter])
     |> Repo.all()
   end
 
   @doc "How many cases wait for an admin (the badge + digest number)."
   def open_queue_count do
-    Repo.aggregate(from(c in Case, where: c.status in ["escalated", "flagged"]), :count)
+    Repo.aggregate(queue_query(), :count)
   end
+
+  # An ordinary frozen case spends its first 72 hours with its owner and only
+  # reaches an admin if the deadline passes or the owner disputes. A copyright
+  # complaint is a legal notice and cannot wait that long, so it joins the queue
+  # in any open status while the owner keeps their self-service window.
+  defp queue_query do
+    from(c in Case,
+      as: :case,
+      where: c.status in ^@open_statuses,
+      where:
+        c.status in ^@queue_statuses or
+          exists(subquery(where(copyright_reports(), [r], r.case_id == parent_as(:case).id)))
+    )
+  end
+
+  defp copyright_reports do
+    from(r in Report, where: r.category == ^Report.copyright_category())
+  end
+
+  @doc """
+  Whether this case carries a copyright complaint. Takes the preloaded reports
+  if they are there and looks them up if they are not, so the answer never
+  depends on whether the caller remembered a preload.
+  """
+  def copyright_case?(%Case{reports: reports}) when is_list(reports),
+    do: Enum.any?(reports, &Report.copyright?/1)
+
+  def copyright_case?(%Case{id: case_id}),
+    do: Repo.exists?(where(copyright_reports(), [r], r.case_id == ^case_id))
 
   @doc """
   How many open cases (any open status: frozen-pending-owner, flagged or

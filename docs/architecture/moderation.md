@@ -3,9 +3,9 @@
 Any member can report a post, a private message, a whole profile, a verified
 organization page or a job posting (quiet "Report" affordances on every post
 card, message bubble, profile footer, organization page and job posting;
-categories: not family-friendly, bullying/harassment, spam, other — a job
-posting instead offers *misleading job ad* / spam / other, gated per content
-type in `Report.categories_for/1`).
+categories: not family-friendly, bullying/harassment, spam, **copyright**, other
+— a job posting instead offers *misleading job ad* / spam / copyright / other,
+gated per content type in `Report.categories_for/1`).
 
 The same freeze → case → strike machinery covers every content type; `frozen_at`
 lives on the reported row and its context's visibility chokepoint reads it. For
@@ -25,8 +25,41 @@ escalates).
 
 Silence for 72h escalates too (`Vutuv.Moderation.Sweeper`), so the admin queue
 at `/admin/moderation` (a LiveView; the case page rules reload-free and drops
-back to the queue) only carries disputes, ignored cases, re-reports and profile
-cases.
+back to the queue) only carries disputes, ignored cases, re-reports, profile
+cases — and every open copyright case (see below).
+
+## The copyright notice (issue #2008)
+
+"Uses a text, photo or video without the rights holder's permission" is offered
+on every report form **except** the private-message one — nothing was published
+there, so there is nothing for a rights holder to have taken down. It is the one
+category that is a *legal* notice rather than a house-rule complaint, and three
+things follow from that.
+
+**It is only accepted complete.** `Report.changeset/3` requires the note (which
+work, where the original can be seen) and a good-faith declaration whenever the
+category is `copyright`. The declaration is a **virtual** field, not a column:
+the changeset refuses the category without it, so a stored copyright report *is*
+the record that it was made, and a column would be a second copy free to drift.
+The check sits in the changeset rather than in the controller, so the Mastodon
+report API cannot file half a notice either (it has no field for the
+declaration, so it cannot file one at all — a client sending that category gets
+a 422).
+
+**It is in the admin queue from the moment it is filed.** The trust ladder is
+untouched — a trusted reporter still freezes the content and still leaves the
+owner their 72h self-service window, an untrusted one still only flags — but
+`Moderation.list_queue/0` and `open_queue_count/0` also take an open case with
+a copyright report in any status, `pending_owner` included, via an `EXISTS`
+on the reports (`queue_query/0`).
+
+**An edit no longer settles it.** For every other category the owner's edit
+unfreezes the content and closes the case; for a copyright case
+`Moderation.content_edited/1` keeps the freeze, logs the edit and escalates, so
+a human decides whether the revision removed the work. Delete and dispute are
+unchanged. The owner's case page says so (`ModerationCaseHTML.copyright?/1`
+picks the wording); the *email* still describes the generic edit, which issue
+#2010 rewrites.
 
 Admin rulings are one click: **uphold** (owner gets a strike: warning → one-week
 suspension → permanent deactivation; strikes expire after 12 months) or
