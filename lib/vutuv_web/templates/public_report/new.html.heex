@@ -1,0 +1,158 @@
+<div class="mx-auto max-w-xl py-6">
+  <.card>
+    <h1 class="text-xl font-bold text-slate-900 dark:text-white">
+      {gettext("Report content on this site")}
+    </h1>
+    <p class="mt-1 text-sm text-slate-600 dark:text-slate-400">
+      {gettext(
+        "You do not need an account. Tell us which page is the problem and what is wrong with it, and our admins will look at it."
+      )}
+    </p>
+    <p class="mt-2 text-sm text-slate-600 dark:text-slate-400">
+      {gettext(
+        "We will send you an email with a confirmation link. Nothing happens until you follow it - your report reaches our admins, and the reported content stays exactly where it is."
+      )}
+    </p>
+
+    <.error_banner :if={@errors != []} id="notice-error" class="mt-4">
+      {Enum.join(@errors, " ")}
+    </.error_banner>
+
+    <form id="notice-form" action={~p"/system/report"} method="post" class="mt-5">
+      <input type="hidden" name="_csrf_token" value={get_csrf_token()} />
+
+      <label class="block">
+        <span class="text-sm font-semibold text-slate-700 dark:text-slate-300">
+          {gettext("Address of the page")}
+        </span>
+        <span class="block text-sm text-slate-600 dark:text-slate-400">
+          {gettext(
+            "The post, picture, video, profile, page or job posting you are reporting. Copy it out of your browser's address bar."
+          )}
+        </span>
+        <input
+          type="text"
+          name="report[url]"
+          value={@url}
+          inputmode="url"
+          autocomplete="off"
+          required
+          class={[input_class(), "mt-1"]}
+        />
+      </label>
+
+      <fieldset class="mt-5 space-y-2">
+        <legend class="text-sm font-semibold text-slate-700 dark:text-slate-300">
+          {gettext("Why are you reporting this?")}
+        </legend>
+        <label
+          :for={category <- @categories}
+          class="flex cursor-pointer items-start gap-3 rounded-lg border border-slate-200 p-3 transition hover:border-brand-400 has-checked:border-brand-500 has-checked:bg-brand-50 dark:border-slate-700 dark:hover:border-brand-500 dark:has-checked:bg-brand-900/30"
+        >
+          <input
+            type="radio"
+            name="report[category]"
+            value={category}
+            checked={@report.category == category}
+            required
+            class="mt-1 accent-brand-600"
+          />
+          <span>
+            <span class="block font-semibold text-slate-900 dark:text-white">
+              {category_label(category)}
+            </span>
+            <span class="block text-sm text-slate-600 dark:text-slate-400">
+              {category_hint(category)}
+            </span>
+          </span>
+        </label>
+      </fieldset>
+
+      <label class="mt-5 block">
+        <span class="text-sm font-semibold text-slate-700 dark:text-slate-300">
+          {gettext("What is wrong with it?")}
+        </span>
+        <span class="block text-sm text-slate-600 dark:text-slate-400">
+          {gettext(
+            "For a copyright claim: which work it is, and where the original can be seen."
+          )}
+        </span>
+        <textarea
+          name="report[note]"
+          rows="4"
+          required
+          maxlength={Vutuv.Moderation.Report.max_note_length()}
+          class={[input_class(), "mt-1 resize-y"]}
+        >{@report.note}</textarea>
+      </label>
+
+      <div class="mt-5 grid gap-4 sm:grid-cols-2">
+        <label class="block">
+          <span class="text-sm font-semibold text-slate-700 dark:text-slate-300">
+            {gettext("Your name")}
+          </span>
+          <input
+            type="text"
+            name="report[reporter_name]"
+            value={@report.reporter_name}
+            autocomplete="name"
+            required
+            class={[input_class(), "mt-1"]}
+          />
+        </label>
+        <label class="block">
+          <span class="text-sm font-semibold text-slate-700 dark:text-slate-300">
+            {gettext("Your email address")}
+          </span>
+          <input
+            type="email"
+            name="report[reporter_email]"
+            value={@report.reporter_email}
+            autocomplete="email"
+            required
+            class={[input_class(), "mt-1"]}
+          />
+        </label>
+      </div>
+
+      <p class="mt-2 text-xs text-slate-600 dark:text-slate-400">
+        {gettext(
+          "Our admins see your name and address so they can come back to you. The owner of the reported content never does."
+        )}
+      </p>
+
+      <label
+        id="notice-good-faith"
+        class="mt-5 flex cursor-pointer items-start gap-3 rounded-lg border border-slate-200 p-3 dark:border-slate-700"
+      >
+        <input
+          type="checkbox"
+          name="report[good_faith?]"
+          value="true"
+          checked={@report.good_faith?}
+          required
+          class="mt-1 accent-brand-600"
+        />
+        <span class="text-sm text-slate-600 dark:text-slate-400">
+          {gettext(
+            "I declare in good faith that what I describe here is true and that this use is authorized neither by the rights holder nor by law."
+          )}
+        </span>
+      </label>
+
+      <p class="mt-3 text-xs text-slate-600 dark:text-slate-400">
+        {gettext("Please report honestly. Reporting to harm someone breaks our")}
+        <a
+          href={~p"/community"}
+          class="font-semibold text-brand-600 hover:text-brand-700 dark:text-brand-400 dark:hover:text-brand-300"
+        >
+          {gettext("community guidelines")}
+        </a>.
+      </p>
+
+      <div class="mt-6 flex items-center justify-end">
+        <.button type="submit">{gettext("Send report")}</.button>
+      </div>
+    </form>
+  </.card>
+</div>

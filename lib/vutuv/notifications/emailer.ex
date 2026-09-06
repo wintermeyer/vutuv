@@ -45,6 +45,7 @@ defmodule Vutuv.Notifications.Emailer do
   alias VutuvWeb.Plug.Locale
   alias VutuvWeb.ReportHTML
   alias VutuvWeb.SavedSearchToken
+  alias VutuvWeb.UserHelpers
 
   # The visible From ({name, address}) on every message. Per-installation:
   # config :vutuv, :mailer_from, overridable at boot via MAILER_FROM_NAME /
@@ -347,7 +348,7 @@ defmodule Vutuv.Notifications.Emailer do
 
     base_email()
     |> put_class(:notification)
-    |> to({VutuvWeb.UserHelpers.name_for_email_to_field(user), email})
+    |> to({UserHelpers.name_for_email_to_field(user), email})
     |> unsubscribe_headers(unsubscribe_url)
     |> subject(
       recipient_subject(locale, fn ->
@@ -521,7 +522,7 @@ defmodule Vutuv.Notifications.Emailer do
 
     base_email()
     |> put_class(:bulk)
-    |> to({VutuvWeb.UserHelpers.name_for_email_to_field(user), email})
+    |> to({UserHelpers.name_for_email_to_field(user), email})
     |> unsubscribe_headers(unsubscribe_url)
     |> subject(recipient_subject(locale, fn -> saved_search_subject(rendered) end))
     |> render_bodies("saved_search_alert", locale, %{
@@ -620,7 +621,7 @@ defmodule Vutuv.Notifications.Emailer do
 
     base_email()
     |> put_class(:notification)
-    |> to({VutuvWeb.UserHelpers.name_for_email_to_field(user), email})
+    |> to({UserHelpers.name_for_email_to_field(user), email})
     |> unsubscribe_headers(unsubscribe_url)
     |> subject(recipient_subject(locale, subject_fun))
     |> render_bodies(
@@ -1095,6 +1096,55 @@ defmodule Vutuv.Notifications.Emailer do
 
   defp appeal_reply_to, do: Application.fetch_env!(:vutuv, :appeal_reply_to)
 
+  @doc """
+  The receipt for a notice filed at `/system/report` by somebody who has no
+  account here (issue #2009).
+
+  Its whole job is the confirmation link: until it is followed the case only
+  sits `flagged` in the admin queue and nothing is hidden. That makes this the
+  one mail in the app addressed to an **address a stranger typed**, so three
+  things are deliberate. It is `:transactional`, not `:critical`, so a bounced
+  address is suppressed like any other — an address that cannot receive mail
+  cannot confirm anything either. Its locale is the one the sender's own
+  browser asked for, since there is no member row to read one from.
+
+  And the two values the sender controls — their name and the address they
+  pasted — pass `UserHelpers.single_line/1` here, at the last gate before the
+  wire. The name is already one line by the time it is stored
+  (`Report.outside_changeset/3`), so this is the second lock rather than the
+  only one; the pasted URL has no such column and needs this one. A text
+  template escapes nothing, so a value that keeps its line breaks writes whole
+  sentences of its own above ours in a message this installation signs — which
+  is `#2019`'s lesson one level up.
+
+  **Both are capped as well as flattened**, and the cap is the second half of
+  the same defence rather than tidiness: one line is what stops a value posing
+  as a paragraph of ours, a length is what stops it filling the line it is on.
+  Nobody's name is 80 characters, and a mail is not a place to echo a kilobyte
+  of URL somebody typed.
+  """
+  @notice_name_chars 80
+  @notice_url_chars 500
+
+  def public_notice_receipt_email(notice) do
+    locale = get_locale(notice.locale)
+    name = notice.name |> UserHelpers.single_line() |> String.slice(0, @notice_name_chars)
+
+    base_email()
+    |> put_class(:transactional)
+    |> to({name, notice.email})
+    |> subject(in_locale(locale, fn -> gettext("Please confirm your report") end))
+    |> render_bodies("report_receipt", locale, %{
+      name: name,
+      content_label: in_locale(locale, fn -> ReportHTML.content_type_label(notice.type) end),
+      category_label: in_locale(locale, fn -> ReportHTML.category_label(notice.category) end),
+      content_url:
+        notice.content_url |> UserHelpers.single_line() |> String.slice(0, @notice_url_chars),
+      confirm_url: notice.confirm_url,
+      url: public_url()
+    })
+  end
+
   @doc "Admin alert: a whole profile was reported (urgent, sent immediately)."
   # `case_record` arrives with owner + reports/reporters preloaded (see
   # `Vutuv.Moderation.Notifier.admins_urgent/1`): the mail carries the
@@ -1106,16 +1156,25 @@ defmodule Vutuv.Notifications.Emailer do
       |> Enum.sort_by(& &1.inserted_at, NaiveDateTime)
       |> List.last()
 
+    # What was reported, in the admin's language. The mail used to open with
+    # "a member profile was reported" for every case it is sent about, which
+    # has been wrong since a picture could be flagged (#2030) and is wrong for
+    # every post an outside notice names (#2009).
+    locale = get_locale(user.locale)
+
     assigns = %{
       case_id: case_record.id,
       owner_slug: case_record.owner.username,
+      content_label:
+        in_locale(locale, fn -> ReportHTML.content_type_label(case_record.content_type) end),
+      profile?: case_record.content_type in ["user", "organization"],
       category_label: localized_category_label(report, user),
       note: report && presence(report.note),
       report_count: length(case_record.reports)
     }
 
     build_email(user, email, "moderation_admin_urgent", assigns, fn ->
-      gettext("Moderation: a profile was reported")
+      gettext("Moderation: something was reported")
     end)
   end
 
@@ -1163,7 +1222,7 @@ defmodule Vutuv.Notifications.Emailer do
 
     base_email()
     |> put_class(:transactional)
-    |> to({VutuvWeb.UserHelpers.name_for_email_to_field(user), email})
+    |> to({UserHelpers.name_for_email_to_field(user), email})
     |> subject(recipient_subject(locale, subject_fun))
     |> render_bodies(
       template_base,

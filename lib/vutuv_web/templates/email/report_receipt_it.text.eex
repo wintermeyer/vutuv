@@ -1,0 +1,20 @@
+Salve <%= @name %>,
+
+abbiamo ricevuto la Sua segnalazione. Per farla esaminare, confermi questo
+indirizzo e-mail:
+
+<%= @confirm_url %>
+
+Fino ad allora il caso resta in attesa presso i nostri amministratori e nulla
+cambia per il contenuto segnalato.
+
+  Segnalato:       <%= @content_label %>
+  Indirizzo:       <%= @content_url %>
+  Segnalato come:  <%= @category_label %>
+
+Se non ha inviato Lei questa segnalazione, ignori pure questa e-mail. Senza
+conferma non accade nulla.
+
+<%= render "_signature_it.text" %>
+
+<%= render "_footer.text" %>

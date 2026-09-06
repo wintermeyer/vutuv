@@ -1,10 +1,11 @@
-<.email_layout preheader="Moderation: ein Profil wurde gemeldet" locale={@locale}>
+<.email_layout preheader="Moderation: ein Inhalt wurde gemeldet" locale={@locale}>
   <.email_p>{email_greeting(@user)},</.email_p>
   <.email_p>
-    ein Mitgliedsprofil wurde gemeldet. Profil-Meldungen sind dringend: eine zweite unabhängige
-    Meldung friert das gesamte Profil ein.
+    ein Inhalt wurde gemeldet und wartet auf eine Entscheidung.<span :if={@profile?}>
+      Profil-Meldungen sind dringend: eine zweite unabhängige Meldung friert das gesamte Profil ein.</span>
   </.email_p>
   <.email_panel>
+    <.email_row label="Gemeldet">{@content_label}</.email_row>
     <.email_row label="Profil">@{@owner_slug}</.email_row>
     <.email_row label="Gemeldet als">{@category_label}</.email_row>
     <.email_row label="Meldungen">{@report_count}</.email_row>

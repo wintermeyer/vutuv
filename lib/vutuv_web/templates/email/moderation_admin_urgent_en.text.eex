@@ -1,8 +1,9 @@
 <%= email_greeting(@user) %>,
 
-a member profile was reported. Profile reports are urgent: a second
-independent report freezes the whole profile.
+something was reported and is waiting for a decision.<%= if @profile? do %> Profile reports are
+urgent: a second independent report freezes the whole profile.<% end %>
 
+  Reported:     <%= @content_label %>
   Profile:      @<%= @owner_slug %> (<%= @url %><%= @owner_slug %>)
   Reported as:  <%= @category_label %>
   Reports:      <%= @report_count %><%= if @note do %>

@@ -1,10 +1,11 @@
-<.email_layout preheader="Moderation: a profile was reported" locale={@locale}>
+<.email_layout preheader="Moderation: something was reported" locale={@locale}>
   <.email_p>{email_greeting(@user)},</.email_p>
   <.email_p>
-    a member profile was reported. Profile reports are urgent: a second independent report freezes
-    the whole profile.
+    something was reported and is waiting for a decision.<span :if={@profile?}>
+      Profile reports are urgent: a second independent report freezes the whole profile.</span>
   </.email_p>
   <.email_panel>
+    <.email_row label="Reported">{@content_label}</.email_row>
     <.email_row label="Profile">@{@owner_slug}</.email_row>
     <.email_row label="Reported as">{@category_label}</.email_row>
     <.email_row label="Reports">{@report_count}</.email_row>

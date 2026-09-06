@@ -1088,13 +1088,18 @@ defmodule Vutuv.ModerationTest do
       report!(reporter, owner, %{"category" => "bullying", "note" => "harasses me in DMs"})
 
       email =
-        Enum.find(flush_emails(), &(&1.subject =~ "profile")) ||
+        Enum.find(flush_emails(), &(&1.subject =~ "Moderation:")) ||
           flunk("no urgent admin email was sent")
 
       assert email.text_body =~ "@#{owner.username}"
       assert email.text_body =~ "Bullying or harassment"
       assert email.text_body =~ "harasses me in DMs"
       assert email.text_body =~ "admin/moderation/"
+      # It names what was reported: this mail is sent for a picture and, since
+      # issue #2009, for an outside notice about a post too, so its old
+      # "a member profile was reported" opening was wrong more often than right.
+      assert email.text_body =~ "Reported:     Profile"
+      assert email.text_body =~ "a second independent report freezes the whole profile"
     end
   end
 end

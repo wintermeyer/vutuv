@@ -1,11 +1,12 @@
 <%= email_greeting(@user) %>,
 
-è stato segnalato il profilo di un membro. Le segnalazioni sui profili sono
-urgenti: una seconda segnalazione indipendente blocca l'intero profilo.
+un contenuto è stato segnalato ed è in attesa di una decisione.<%= if @profile? do %> Le segnalazioni
+sui profili sono urgenti: una seconda segnalazione indipendente blocca l'intero profilo.<% end %>
 
-  Profilo:            @<%= @owner_slug %> (<%= @url %><%= @owner_slug %>)
-  Segnalato come:     <%= @category_label %>
-  Segnalazioni:       <%= @report_count %><%= if @note do %>
+  Segnalato:           <%= @content_label %>
+  Profilo:             @<%= @owner_slug %> (<%= @url %><%= @owner_slug %>)
+  Segnalato come:      <%= @category_label %>
+  Segnalazioni:        <%= @report_count %><%= if @note do %>
   Nota del segnalante: <%= @note %><% end %>
 
 Esamini il caso:

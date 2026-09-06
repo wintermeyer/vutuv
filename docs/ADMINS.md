@@ -1208,6 +1208,38 @@ independently report the same profile as **spam**, it is automatically frozen
 pending your review. The nightly operator report lists the day's spam
 deactivations. A spam mark is never shown publicly.
 
+### Reports from people who have no account
+
+A rights holder who finds their own photograph on a post here is usually not a
+member, so **`/system/report`** takes a report without a login. The page is
+linked from the site footer and from your Impressum, needs no configuration and
+is on every installation. Whoever files one gives their name and an email
+address; they get a receipt with a confirmation link, and **until they follow it
+nothing happens** — the case sits in your queue marked *flagged*, the content
+stays where it is, and you get no urgent mail. Once confirmed, the report is
+treated exactly like a member's: it can freeze the content, the owner is told,
+and the urgent mail reaches you.
+
+Two things differ on such a case. You see the notifier's **name and email
+address** on the case page, so you can write back — the owner of the reported
+content never does, exactly as a member's report stays anonymous to them. And
+marking it abusive costs that **address** its standing (it stops earning the
+instant freeze for a year) rather than striking an account, since there is none;
+`/admin/moderation/reporters` lists such addresses beside the members.
+
+The form is throttled at five submissions an hour per visitor and per **mailbox**
+— `name+anything@` and, at Gmail, dotted spellings all count as the one inbox —
+so nobody can point the receipt mail at somebody else's mailbox in bulk, and one
+mailbox gets one receipt per piece of content however often it submits. Neither
+limit is configurable; if a genuine rights holder hits it, they will be able to
+continue an hour later.
+
+A confirmation link is good for **seven days**. Past that it stops working, the
+page tells the sender to file the report again, and the housekeeping sweep drops
+the unconfirmed row — so an abandoned notice does not sit in your queue for ever
+as a case nothing can be decided about. Nothing is lost: a notice nobody
+confirmed never counted for anything.
+
 ### When the image scan gets it wrong
 
 A member writes in that their picture was removed for no reason (their mail

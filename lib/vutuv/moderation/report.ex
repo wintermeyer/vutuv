@@ -3,6 +3,8 @@ defmodule Vutuv.Moderation.Report do
 
   use VutuvWeb, :model
 
+  alias VutuvWeb.UserHelpers
+
   @copyright "copyright"
   @categories ~w(family bullying spam copyright other)
   # A private message is not published, so there is nothing for a rights holder
@@ -30,7 +32,32 @@ defmodule Vutuv.Moderation.Report do
     field(:good_faith?, :boolean, virtual: true, default: false)
 
     belongs_to(:case, Vutuv.Moderation.Case)
+    # Nullable since issue #2009: a rights holder without an account files
+    # through `/system/report` and is identified by a confirmed address
+    # instead. Exactly one of the two is set (a CHECK constraint, not a
+    # convention).
     belongs_to(:reporter, Vutuv.Accounts.User)
+
+    # The outside notifier. Stored in the clear, because an admin has to be
+    # able to write back; shown to admins only, never to the owner of the
+    # reported content.
+    field(:reporter_email, :string)
+    field(:reporter_name, :string)
+
+    # The same address reduced to the mailbox it really is
+    # (`canonical_email/1`). It carries the uniqueness, so a `+tag` cannot buy
+    # a second notice about one piece of content, while the column above keeps
+    # the spelling an admin has to reply to.
+    field(:reporter_email_key, :string)
+
+    # The receipt mail's confirmation link. Until it is followed the notice
+    # counts for nothing (`effective?/1`): the case sits `flagged` in the admin
+    # queue and nothing is hidden. Past the deadline it counts for nothing ever
+    # again — a link that never dies is a takedown anybody can set off a year
+    # later out of a forwarded mail.
+    field(:confirmation_hash, :string)
+    field(:confirmation_expires_at, :naive_datetime)
+    field(:confirmed_at, :naive_datetime)
 
     timestamps()
   end
@@ -54,6 +81,29 @@ defmodule Vutuv.Moderation.Report do
   """
   def max_note_length, do: @max_note_length
 
+  @doc """
+  Whether this report counts for anything yet.
+
+  A member's report always does. An **outside** notice only does once its
+  address has been confirmed — before that it is a stranger's unverified claim,
+  and every tally that can hide content (the trust ladder, the profile-freeze
+  count, the spam auto-defense) filters on this. Without it five unconfirmed
+  submissions would freeze any profile, which is the abuse a public form buys
+  if nobody says no.
+  """
+  def effective?(%__MODULE__{reporter_id: id}) when is_binary(id), do: true
+  def effective?(%__MODULE__{confirmed_at: %NaiveDateTime{}}), do: true
+  def effective?(%__MODULE__{}), do: false
+
+  @doc """
+  The same rule as a query scope, so the three places that count reports in SQL
+  cannot spell it differently from `effective?/1`. A member's report has no
+  `confirmed_at` and needs none; an outside notice must have one.
+  """
+  def effective(query) do
+    from(r in query, where: not is_nil(r.reporter_id) or not is_nil(r.confirmed_at))
+  end
+
   @doc "The report categories offered for a given content type (wire string)."
   def categories_for("job_posting"), do: @job_categories
   def categories_for("image"), do: @image_categories
@@ -70,8 +120,16 @@ defmodule Vutuv.Moderation.Report do
   report form has no per-field error slots and shows them as one banner. They
   are extracted for translation through
   `VutuvWeb.ErrorHelpers.__error_message_extraction_anchors__/0`.
+
+  `full_notice?: true` demands the explanation and the good-faith declaration
+  for **every** category rather than only for `copyright` — what the public
+  form asks (see `outside_changeset/3`). It is an option here rather than a
+  second pass at the call site so that "which report has to be complete" keeps
+  one owner; stacking a second `validate_required(:note)` on top of this one
+  gave a copyright notice its demand twice, in two different wordings, in a
+  banner that joins every message into one line.
   """
-  def changeset(report, params \\ %{}, content_type \\ nil) do
+  def changeset(report, params \\ %{}, content_type \\ nil, opts \\ []) do
     pick_one = "Please pick a category."
 
     report
@@ -80,8 +138,90 @@ defmodule Vutuv.Moderation.Report do
     |> validate_required([:category], message: pick_one)
     |> validate_inclusion(:category, categories_for(content_type), message: pick_one)
     |> validate_length(:note, max: @max_note_length, message: "Your note is too long.")
-    |> validate_copyright_notice()
+    |> validate_full_notice(Keyword.get(opts, :full_notice?, false))
     |> unique_constraint([:case_id, :reporter_id])
+  end
+
+  @doc """
+  A report filed through the public form at `/system/report` by somebody who
+  has no account here (issue #2009).
+
+  Three things are stricter than for a member. Every category needs the written
+  explanation and the good-faith declaration, not only `copyright`: a member is
+  identified by their account and answerable through it, a stranger is
+  answerable only through what they wrote and the address they confirmed. And
+  the name and the address are required, because the notice is worth nothing to
+  an admin without a way back to the person who sent it.
+  """
+  def outside_changeset(report, params, content_type) do
+    report
+    |> changeset(params, content_type, full_notice?: true)
+    |> cast(params, [:reporter_name, :reporter_email])
+    # Collapsed to ONE line where it is written, not where it is rendered. The
+    # name is the only stranger-controlled string this app puts into running
+    # text in a mail it signs, and a value carrying a line break wrote whole
+    # sentences of its own above our copy and the real confirmation link. Doing
+    # it here means no later surface has to remember — see
+    # `VutuvWeb.UserHelpers.single_line/1` for why the rule is the effect.
+    |> update_change(:reporter_name, &UserHelpers.single_line/1)
+    |> update_change(:reporter_email, fn value -> value |> String.trim() |> String.downcase() end)
+    |> validate_required([:reporter_name], message: "Please tell us your name.")
+    |> validate_required([:reporter_email], message: "Please give us an email address.")
+    |> validate_format(:reporter_email, ~r/^[^\s@]+@[^\s@]+\.[^\s@]+$/,
+      message: "That does not look like an email address."
+    )
+    # The RFC 5321 address cap, inside the varchar(255) column: an oversized
+    # value must be a changeset error, never a raised Postgres 22001.
+    |> validate_length(:reporter_email, max: 254, message: "That address is too long.")
+    |> validate_length(:reporter_name, max: 255, message: "Your name is too long.")
+    |> put_email_key()
+    |> unique_constraint(:reporter_email,
+      name: :moderation_reports_case_reporter_email_index,
+      message: "You already reported this."
+    )
+    |> unique_constraint(:reporter_email,
+      name: :moderation_reports_case_reporter_email_key_index,
+      message: "You already reported this."
+    )
+  end
+
+  defp put_email_key(changeset) do
+    case get_change(changeset, :reporter_email) do
+      nil -> changeset
+      email -> put_change(changeset, :reporter_email_key, canonical_email(email))
+    end
+  end
+
+  @doc """
+  The mailbox an address really names, for counting rather than for writing to.
+
+  Two spellings reach one inbox at practically every provider: a `+tag` suffix
+  is stripped by all of them, and Gmail additionally ignores dots in the local
+  part. Both were undercutting the two caps the public notice form leans on —
+  the per-address rate limit and the one-notice-per-content unique index — so
+  `victim+1@`, `victim+2@` and, at Gmail, `v.ictim@` each bought a fresh budget
+  and a fresh row.
+
+  Dots are folded **only** for Gmail, and that asymmetry is the point: it is
+  documented behaviour there and nowhere else, so folding them everywhere would
+  merge two different people at a provider that treats them as distinct. The
+  result is never mailed to and never shown; `reporter_email` keeps the
+  spelling an admin replies to.
+  """
+  def canonical_email(email) when is_binary(email) do
+    case email |> String.trim() |> String.downcase() |> String.split("@", parts: 2) do
+      [local, domain] -> strip_tag(local, domain) <> "@" <> domain
+      _ -> email
+    end
+  end
+
+  def canonical_email(other), do: other
+
+  @gmail_domains ~w(gmail.com googlemail.com)
+
+  defp strip_tag(local, domain) do
+    local = local |> String.split("+", parts: 2) |> hd()
+    if domain in @gmail_domains, do: String.replace(local, ".", ""), else: local
   end
 
   # A copyright complaint only means something as a complete notice: which work
@@ -89,17 +229,26 @@ defmodule Vutuv.Moderation.Report do
   # declaration that the use really is unauthorized. Both are checked here, at
   # the one place every report passes, so no route can file half a notice and
   # still get the freeze and the admin queue that the category buys.
-  defp validate_copyright_notice(changeset) do
-    if copyright?(get_field(changeset, :category)) do
+  #
+  # `always?` widens the same demand to every category, which is what the
+  # public form asks of a stranger (issue #2009).
+  defp validate_full_notice(changeset, always?) do
+    copyright? = copyright?(get_field(changeset, :category))
+
+    if always? or copyright? do
       changeset
-      |> validate_required([:note],
-        message: "Please tell us which work it is and where the original can be seen."
-      )
+      |> validate_required([:note], message: missing_note_message(copyright?))
       |> validate_good_faith()
     else
       changeset
     end
   end
+
+  defp missing_note_message(true),
+    do: "Please tell us which work it is and where the original can be seen."
+
+  defp missing_note_message(false),
+    do: "Please tell us what is wrong with this content, in your own words."
 
   # Spelled out rather than `validate_acceptance/3`, which only fires when the
   # parameter is present — and an unticked checkbox sends nothing at all.

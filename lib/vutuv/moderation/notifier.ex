@@ -26,27 +26,38 @@ defmodule Vutuv.Moderation.Notifier do
 
   Both owner notices carry the statement of reasons (issue #2010), so the
   reports come along — `:reports` alone, never `reports: :reporter`: a report
-  is anonymous, and a surface cannot leak what it was never handed.
+  is anonymous, and a surface cannot leak what it was never handed. And only
+  the **effective** ones (`Moderation.effective_reports/0`), so a notice whose
+  address nobody has confirmed is not even loaded into a mail that quotes a
+  stranger's words to the member they accuse.
   """
   def owner_content_frozen(%Case{} = case_record) do
-    case_record = Repo.preload(case_record, :reports)
+    case_record = Repo.preload(case_record, reports: Moderation.effective_reports())
     push_owner(case_record)
     mail_owner(case_record, &Emailer.moderation_frozen_email/3)
   end
 
   @doc "The owner's content was frozen and is with the admins (no self-service)."
   def owner_under_review(%Case{} = case_record) do
-    case_record = Repo.preload(case_record, :reports)
+    case_record = Repo.preload(case_record, reports: Moderation.effective_reports())
     push_owner(case_record)
     mail_owner(case_record, &Emailer.moderation_review_email/3)
   end
 
-  @doc "Tell every reporter of the case that the owner revised the content."
+  @doc """
+  Tell every reporter of the case that the owner revised the content.
+
+  Members only. A report filed from the public form (issue #2009) has no
+  reporter row — `deliver_to/2` matches on `%User{}` and would raise, so the
+  nil is filtered out here rather than left to crash the owner's own edit.
+  Telling the outside notifier how their notice ended is #2011's job and needs
+  a mail this one is not (it is addressed to a member, in a member's locale).
+  """
   def reporters_content_revised(%Case{} = case_record) do
     case_record = Repo.preload(case_record, reports: :reporter)
 
-    for report <- case_record.reports do
-      deliver_to(report.reporter, &Emailer.moderation_revised_email/2)
+    for %{reporter: %User{} = reporter} <- case_record.reports do
+      deliver_to(reporter, &Emailer.moderation_revised_email/2)
     end
 
     :ok

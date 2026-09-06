@@ -17,10 +17,20 @@ defmodule Vutuv.Moderation do
   else. `Vutuv.Moderation.Report` refuses the category without the explanation
   and the reporter's good-faith declaration.
 
+  A rights holder is usually **not a member** (issue #2009), so the same
+  machinery is also reachable without an account, from `/system/report`:
+  `file_public_notice/2` opens (or joins) the case as `flagged` and nothing
+  else happens until the notifier follows the confirmation link in the receipt
+  mail. `confirm_public_notice/1` is where the ordinary decision then runs —
+  the freeze, the owner's notice, the urgent admin mail. Until then the notice
+  counts for nothing anywhere (`Vutuv.Moderation.Report.effective?/1`), which
+  is what stops five unconfirmed submissions from freezing a profile.
+
   Reports from reporters with a bad track record (`trusted_reporter?/1`)
   never freeze anything; they only flag the content for admin review. Whole
   profiles are never frozen by a single report — that takes a second,
-  independent trusted reporter.
+  independent trusted reporter. An outside notifier climbs the same ladder by
+  their **confirmed address** instead of by a user id.
 
   A **picture** is the one type where the category decides instead of the
   reporter (issue #2030): only a copyright notice takes it offline, house-rule
@@ -75,6 +85,7 @@ defmodule Vutuv.Moderation do
   alias Vutuv.Posts.Post
   alias Vutuv.Repo
   alias Vutuv.SearchText
+  alias Vutuv.Token
 
   @owner_deadline_hours 72
   @strike_ttl_days 365
@@ -90,6 +101,14 @@ defmodule Vutuv.Moderation do
   # own profile, admins are notified, reject_case restores everything and can
   # strike the brigaders' reports as abusive).
   @spam_freeze_reporters 5
+
+  # How long a public notice's confirmation link is good for (issue #2009). A
+  # link that never expires is a takedown anybody holding a forwarded copy of
+  # that mail can set off a year later, and an unconfirmed row that is never
+  # swept keeps a `flagged` case in the admin queue for ever. Long enough that
+  # somebody who reads their mail on Monday is not locked out of their own
+  # complaint.
+  @notice_confirmation_days 7
 
   # The statuses an admin ruling may still act on; once a case is resolved
   # (upheld/rejected/resolved_*) a second ruling must be a no-op so it cannot
@@ -178,17 +197,10 @@ defmodule Vutuv.Moderation do
     category = Ecto.Changeset.get_field(report_changeset, :category)
     {status, effects} = initial_status(reporter, content, category)
 
-    case_changeset =
-      %Case{
-        content_type: content_type(content),
-        content_id: content_id(content),
-        owner_id: owner_id(content),
-        content_snapshot: snapshot(content)
-      }
-      |> Case.changeset(case_params(status))
+    case_changeset = new_case_changeset(content, status)
 
     case insert_case_with_report(case_changeset, report_changeset) do
-      {:ok, case_record} ->
+      {:ok, {case_record, _report}} ->
         finish_new_case(case_record, reporter, content, category, effects)
 
       # Lost the race: a concurrent first-report already opened the case, so join
@@ -205,6 +217,19 @@ defmodule Vutuv.Moderation do
     end
   end
 
+  # A brand-new case for this content, at the status its first report earns.
+  # Both ways in (a member's report, an outside notice) open a case the same
+  # way; only when the decision runs differs.
+  defp new_case_changeset(content, status) do
+    %Case{
+      content_type: content_type(content),
+      content_id: content_id(content),
+      owner_id: owner_id(content),
+      content_snapshot: snapshot(content)
+    }
+    |> Case.changeset(case_params(status))
+  end
+
   # The case + its first report in one transaction. A case insert can only fail
   # on the partial-unique open-case index (all its other fields are set
   # programmatically), so any case-insert error is the concurrent-first-report
@@ -218,9 +243,12 @@ defmodule Vutuv.Moderation do
     end)
   end
 
+  # Both rows come back, because the public path has to build its receipt mail
+  # from the report as it was **stored** rather than from the values that were
+  # typed.
   defp insert_first_report(case_record, report_changeset) do
     case Repo.insert(Ecto.Changeset.put_change(report_changeset, :case_id, case_record.id)) do
-      {:ok, _report} -> case_record
+      {:ok, report} -> {case_record, report}
       {:error, changeset} -> Repo.rollback(changeset)
     end
   end
@@ -263,6 +291,223 @@ defmodule Vutuv.Moderation do
     end
   end
 
+  ## The public notice (issue #2009)
+
+  @doc """
+  Files a report against `content` from somebody who has **no account here**.
+
+  `attrs` carries the same `"category"` / `"note"` / `"good_faith?"` a member's
+  report does, plus `"reporter_name"` and `"reporter_email"`; all five are
+  required (`Report.outside_changeset/3`).
+
+  Nothing is hidden and nobody is mailed about it yet. The case is opened (or
+  joined) as `flagged`, which puts it in front of an admin and leaves the
+  content exactly where it is; the decision the trust ladder would make waits
+  for `confirm_public_notice/1`. Returns `{:ok, case, report, token}` — the
+  token belongs in the receipt mail and is stored only as its SHA-256, and the
+  **report** comes back because that mail must be built from the row as it was
+  stored rather than from the values that were typed — or
+  `{:error, :not_allowed | :already_reported | changeset}`.
+  """
+  def file_public_notice(content, attrs) do
+    if owner_id(content) == nil do
+      {:error, :not_allowed}
+    else
+      token = Token.random_token()
+
+      changeset =
+        %Report{
+          confirmation_hash: Token.hash_token(token),
+          confirmation_expires_at:
+            NaiveDateTime.add(NaiveDateTime.utc_now(:second), @notice_confirmation_days * 86_400)
+        }
+        |> Report.outside_changeset(attrs, content_type(content))
+
+      case open_case_for(content) do
+        nil -> open_notice_case(content, changeset, token)
+        open -> join_notice_case(open, changeset, token)
+      end
+    end
+  end
+
+  defp open_notice_case(content, report_changeset, token) do
+    case_changeset = new_case_changeset(content, "flagged")
+
+    case insert_case_with_report(case_changeset, report_changeset) do
+      {:ok, {case_record, report}} ->
+        # Actor nil: an outside notifier has no user row to name in the log,
+        # and the report row itself carries who it was.
+        log(case_record, nil, "notice_filed", %{"category" => report.category})
+        {:ok, case_record, report, token}
+
+      # Lost the race with a concurrent first report: the winner committed, so
+      # the case is there to join now.
+      {:error, :open_conflict} ->
+        case open_case_for(content) do
+          nil -> {:error, :not_allowed}
+          open -> join_notice_case(open, report_changeset, token)
+        end
+
+      {:error, changeset} ->
+        {:error, changeset}
+    end
+  end
+
+  defp join_notice_case(%Case{} = open, report_changeset, token) do
+    changeset = Ecto.Changeset.put_change(report_changeset, :case_id, open.id)
+
+    case Repo.insert(changeset) do
+      {:ok, report} ->
+        log(open, nil, "notice_filed", %{"category" => report.category})
+        {:ok, open, report, token}
+
+      {:error, %Ecto.Changeset{errors: errors} = changeset} ->
+        if Keyword.has_key?(errors, :reporter_email),
+          do: {:error, :already_reported},
+          else: {:error, changeset}
+    end
+  end
+
+  @doc """
+  What the confirmation link's landing page is looking at: `:pending`,
+  `:confirmed`, `:expired` or `:unknown`. A read, so the GET the link lands on
+  changes nothing — the confirmation itself is the POST behind the button
+  there.
+  """
+  def public_notice_state(token) when is_binary(token) and token != "" do
+    # A tuple of two booleans, not the columns themselves: `select:
+    # r.confirmed_at` answers `nil` for "no such token" and for "not confirmed
+    # yet" alike, which are two of the answers this function exists to tell
+    # apart.
+    case Repo.one(
+           from(r in Report,
+             where: r.confirmation_hash == ^Token.hash_token(token),
+             select:
+               {not is_nil(r.confirmed_at),
+                r.confirmation_expires_at < ^NaiveDateTime.utc_now(:second)}
+           )
+         ) do
+      nil -> :unknown
+      {true, _expired?} -> :confirmed
+      {false, true} -> :expired
+      {false, false} -> :pending
+    end
+  end
+
+  def public_notice_state(_token), do: :unknown
+
+  @doc """
+  Follows the confirmation link from an outside notice's receipt mail.
+
+  This is the moment the notice becomes real: the address is now known to
+  belong to whoever typed it, so the report starts counting
+  (`Report.effective?/1`), the ordinary decision runs — freeze where the
+  category and the trust ladder allow one, tell the owner — and the admins get
+  the urgent mail either way.
+
+  Returns `{:ok, :confirmed, report}`, `{:ok, :already_confirmed, report}` (a
+  second click is not an error), `{:error, :expired}` past the link's
+  #{@notice_confirmation_days}-day deadline, or `{:error, :invalid}`.
+  Deliberately claimed with one `UPDATE ... WHERE confirmed_at IS NULL AND
+  confirmation_expires_at > now`, so two clicks in flight cannot run the side
+  effects twice and a dead link cannot run them at all.
+  """
+  def confirm_public_notice(token) when is_binary(token) and token != "" do
+    case claim_notice_confirmation(Token.hash_token(token)) do
+      nil ->
+        {:error, :invalid}
+
+      {:expired, _report} ->
+        {:error, :expired}
+
+      {:already_confirmed, report} ->
+        {:ok, :already_confirmed, report}
+
+      {:confirmed, report} ->
+        finish_confirmed_notice(report)
+        {:ok, :confirmed, report}
+    end
+  end
+
+  def confirm_public_notice(_token), do: {:error, :invalid}
+
+  defp claim_notice_confirmation(hash) do
+    now = NaiveDateTime.utc_now(:second)
+
+    {_count, rows} =
+      from(r in Report,
+        where: r.confirmation_hash == ^hash and is_nil(r.confirmed_at),
+        where: r.confirmation_expires_at > ^now,
+        select: r
+      )
+      |> Repo.update_all(set: [confirmed_at: now, updated_at: now])
+
+    case rows do
+      [report] ->
+        {:confirmed, report}
+
+      # Nothing claimed: either the token names no row, or the row is already
+      # confirmed, or its deadline has passed. Which of the three decides what
+      # the page says, so ask rather than collapsing them into one error.
+      [] ->
+        case Repo.one(from(r in Report, where: r.confirmation_hash == ^hash)) do
+          nil -> nil
+          %Report{confirmed_at: %NaiveDateTime{}} = report -> {:already_confirmed, report}
+          report -> {:expired, report}
+        end
+    end
+  end
+
+  defp finish_confirmed_notice(%Report{} = report) do
+    case_record = Repo.get!(Case, report.case_id)
+    log(case_record, nil, "notice_confirmed", %{"category" => report.category})
+
+    # The evidence shot waits for the confirmation rather than riding the
+    # submit: it launches headless Chromium, and an unauthenticated form must
+    # not be a button that does that. Only when the case has none yet — a
+    # notice joining a member's case must not re-shoot a page that already
+    # changed since the first report.
+    if is_nil(case_record.evidence_screenshot), do: EvidenceScreenshot.async_capture(case_record)
+
+    {updated, admins_told?} = apply_confirmed_notice(case_record, report)
+    unless admins_told?, do: Notifier.admins_urgent(updated)
+    :ok
+  end
+
+  # The decision the submit deferred, applied to the case the notice already
+  # opened. Returns the (possibly upgraded) case and whether the upgrade path
+  # already mailed the admins, so the urgent mail is sent exactly once.
+  #
+  # Content deleted in the meantime has nothing to freeze, and a case already
+  # frozen, escalated or resolved took its decision without this notice; both
+  # leave the case as it stands, and the admins are still told.
+  defp apply_confirmed_notice(%Case{status: "flagged"} = case_record, report) do
+    case case_content(case_record) do
+      nil -> {case_record, false}
+      content -> decide_confirmed_notice(case_record, report, content)
+    end
+  end
+
+  defp apply_confirmed_notice(case_record, _report), do: {case_record, false}
+
+  defp decide_confirmed_notice(case_record, report, content) do
+    case initial_status(report, content, report.category) do
+      # This notice on its own hides nothing. The profile tally may still fire
+      # (a second confirmed notice, or the spam threshold), and that path mails
+      # the admins itself.
+      {"flagged", _effects} ->
+        {:ok, updated} = maybe_upgrade_case(case_record, report, content, report.category)
+        {updated, updated.status != case_record.status}
+
+      # `do_flagged_upgrade/4` freezes on its own, so the `:freeze` effect
+      # `initial_status/3` returns is already accounted for here; what it takes
+      # is the notification list.
+      {status, effects} ->
+        {:ok, updated} = do_flagged_upgrade(case_record, content, status, effects)
+        {updated, false}
+    end
+  end
+
   # A new report can upgrade an open case: a trusted report freezes a
   # so-far-only-flagged post/message, and the second trusted reporter
   # freezes a whole profile. Exposed (@doc false) only so the concurrency
@@ -275,17 +520,24 @@ defmodule Vutuv.Moderation do
         _category
       )
       when type in ["user", "organization"] do
-    reports = Repo.preload(open, :reports).reports
+    # Only reports that count: a member's always does, an outside notice only
+    # once its address is confirmed. Filtering here rather than in each tally
+    # is the whole guard — an unconfirmed notice must not be able to freeze a
+    # profile on its own or through the spam threshold.
+    reports =
+      open |> Repo.preload(:reports) |> Map.fetch!(:reports) |> Enum.filter(&Report.effective?/1)
 
-    # Trust for every reporter of this case in ONE grouped windowed query, then
-    # tally in memory — never one trusted_reporter?/1 aggregate per report (N+1).
-    trusted_ids = trusted_reporter_ids(Enum.map(reports, & &1.reporter_id))
-    trusted = Enum.count(reports, &MapSet.member?(trusted_ids, &1.reporter_id))
+    # Trust for every reporter of this case in ONE grouped windowed query per
+    # kind, then tally in memory — never one trusted_reporter?/1 aggregate per
+    # report (N+1).
+    trusted = trusted_report_count(reports)
 
     # The spam auto-defense: enough distinct spam reports freeze the profile even
     # from untrusted reporters. Counting is a plain in-memory tally over the
-    # already-loaded reports (the (case_id, reporter_id) unique index guarantees
-    # distinct reporters).
+    # already-loaded reports; distinctness comes from the two unique indexes on
+    # the reports table, `(case_id, reporter_id)` for members and
+    # `(case_id, reporter_email)` for outside notifiers — the second exists
+    # because `(case_id, NULL)` never conflicts with itself in Postgres.
     spam = Enum.count(reports, &(&1.category == "spam"))
 
     if trusted >= @profile_freeze_reporters or spam >= @spam_freeze_reporters do
@@ -426,40 +678,96 @@ defmodule Vutuv.Moderation do
   end
 
   @doc """
-  Whether this member's reports are taken at face value (instant freeze) or
+  Whether this reporter's reports are taken at face value (instant freeze) or
   only flag content for admin review. Within the last year: any report an
   admin marked abusive kills trust, as do #{@rejected_reports_to_lose_trust}
   reports that admins rejected.
+
+  Takes a `%User{}` for a member, or a whole `%Report{}` — which is how the
+  outside path asks it (issue #2009): a member's report is judged by their user
+  id, a confirmed outside notice by its address, and an unconfirmed one is
+  never trusted, nothing having verified that the person who typed the address
+  can read it.
   """
+  def trusted_reporter?(reporter)
+
   def trusted_reporter?(%User{id: user_id}) do
     MapSet.member?(trusted_reporter_ids([user_id]), user_id)
   end
 
-  # The subset of `reporter_ids` whose reports are trusted (`trusted?/2`),
-  # computed in one grouped windowed query (the COUNT(*) FILTER shape
-  # `list_reporter_stats/0` uses) so a profile-freeze check never runs a
-  # per-reporter aggregate (N+1). A reporter with no resolved-in-window report
-  # has no row and defaults to {0, 0} — trusted, exactly like
-  # `trusted_reporter?/1` returns for an empty aggregate.
-  defp trusted_reporter_ids(reporter_ids) do
+  def trusted_reporter?(%Report{reporter_id: user_id}) when is_binary(user_id),
+    do: MapSet.member?(trusted_reporter_ids([user_id]), user_id)
+
+  def trusted_reporter?(%Report{confirmed_at: %NaiveDateTime{}, reporter_email: email})
+      when is_binary(email),
+      do: MapSet.member?(trusted_reporter_emails([email]), email)
+
+  def trusted_reporter?(%Report{}), do: false
+
+  # How many of `reports` come from a reporter in good standing — two grouped
+  # queries, one per kind of reporter, never one aggregate per report.
+  #
+  # The reporter ids and the addresses are collected in NAMED functions rather
+  # than inline, because this is the list that must never carry a nil: the
+  # column is nullable now, and `r.reporter_id in (NULL, …)` is never true for
+  # a NULL row, so a nil that slipped through would fall out of the query with
+  # no stats row at all and read back as {0, 0} — i.e. as *trusted*. Two
+  # unconfirmed strangers would then have frozen any profile.
+  defp trusted_report_count(reports) do
+    trusted_ids = reports |> member_reporter_ids() |> trusted_reporter_ids()
+    trusted_emails = reports |> outside_reporter_emails() |> trusted_reporter_emails()
+
+    Enum.count(reports, fn
+      %Report{reporter_id: id} when is_binary(id) -> MapSet.member?(trusted_ids, id)
+      %Report{reporter_email: email} -> MapSet.member?(trusted_emails, email)
+    end)
+  end
+
+  defp member_reporter_ids(reports) do
+    for %Report{reporter_id: id} <- reports, is_binary(id), do: id
+  end
+
+  defp outside_reporter_emails(reports) do
+    for %Report{reporter_id: nil, reporter_email: email} <- reports, is_binary(email), do: email
+  end
+
+  defp trusted_reporter_ids(reporter_ids), do: trusted_reporters(:reporter_id, reporter_ids)
+  defp trusted_reporter_emails(emails), do: trusted_reporters(:reporter_email, emails)
+
+  # The subset of `keys` whose reports are trusted (`trusted?/2`), computed in
+  # one grouped windowed query (the COUNT(*) FILTER shape `list_reporter_stats/0`
+  # uses) so a profile-freeze check never runs a per-reporter aggregate (N+1). A
+  # reporter with no resolved-in-window report has no row and defaults to
+  # {0, 0} — trusted, exactly like `trusted_reporter?/1` returns for an empty
+  # aggregate.
+  #
+  # `column` is the id or the address (issue #2009): a member is judged by their
+  # user row, an outside notifier by the address they confirmed. Only
+  # `effective` reports count either way, which for a member is every one of
+  # them and for a notifier only a confirmed one — an unconfirmed notice has
+  # neither earned trust nor lost any.
+  defp trusted_reporters(_column, []), do: MapSet.new()
+
+  defp trusted_reporters(column, keys) do
     stats =
       from(r in Report,
         join: c in assoc(r, :case),
-        where: r.reporter_id in ^reporter_ids,
+        where: field(r, ^column) in ^keys,
         where: c.resolved_at > ^trust_window_start(),
-        group_by: r.reporter_id,
+        group_by: field(r, ^column),
         select: {
-          r.reporter_id,
+          field(r, ^column),
           fragment("COUNT(*) FILTER (WHERE ?)", r.abusive?),
           fragment("COUNT(*) FILTER (WHERE ? = 'rejected')", c.status)
         }
       )
+      |> Report.effective()
       |> Repo.all()
-      |> Map.new(fn {id, abusive, rejected} -> {id, {abusive, rejected}} end)
+      |> Map.new(fn {key, abusive, rejected} -> {key, {abusive, rejected}} end)
 
-    reporter_ids
-    |> Enum.filter(fn id ->
-      {abusive, rejected} = Map.get(stats, id, {0, 0})
+    keys
+    |> Enum.filter(fn key ->
+      {abusive, rejected} = Map.get(stats, key, {0, 0})
       trusted?(abusive, rejected)
     end)
     |> MapSet.new()
@@ -691,6 +999,55 @@ defmodule Vutuv.Moderation do
     length(ids)
   end
 
+  @doc """
+  Drops every public notice whose confirmation deadline has passed without
+  anybody following the link, and resolves the cases that were only standing
+  because of one. Returns the number of notices deleted. Called by the sweeper.
+
+  Without it an unconfirmed notice is a permanent `flagged` row in the admin
+  queue that nothing can ever act on: it counts for nothing
+  (`Report.effective?/1`), its link no longer works, and no ruling makes sense
+  on a claim nobody stood behind. A case that still holds another report keeps
+  standing; one left with none is settled `rejected`, which is what "nobody
+  ever confirmed this" means and what puts the content back if anything about
+  it had moved.
+  """
+  def sweep_expired_notices do
+    now = NaiveDateTime.utc_now(:second)
+
+    {_count, case_ids} =
+      from(r in Report,
+        where: is_nil(r.confirmed_at) and r.confirmation_expires_at < ^now,
+        select: r.case_id
+      )
+      |> Repo.delete_all()
+
+    for case_id <- Enum.uniq(case_ids), do: settle_abandoned_case(case_id)
+    length(case_ids)
+  end
+
+  # A case whose last report was an expired notice. Only ever reached from the
+  # sweep above, and only for a case that is still open — an admin who ruled in
+  # the meantime keeps their ruling.
+  defp settle_abandoned_case(case_id) do
+    with %Case{status: status} = case_record when status in @open_statuses <-
+           Repo.get(Case, case_id),
+         false <- Repo.exists?(from(r in Report, where: r.case_id == ^case_id)) do
+      if content = case_content(case_record), do: unfreeze_content(content)
+
+      updated =
+        update_case!(case_record, %{
+          status: "rejected",
+          resolved_at: NaiveDateTime.utc_now(:second)
+        })
+
+      log(updated, nil, "notice_expired")
+      :ok
+    else
+      _ -> :ok
+    end
+  end
+
   ## Admin queue + rulings
 
   @doc "The admin queue: escalated cases first (oldest first), then flagged."
@@ -731,12 +1088,24 @@ defmodule Vutuv.Moderation do
   Whether this case carries a copyright complaint. Takes the preloaded reports
   if they are there and looks them up if they are not, so the answer never
   depends on whether the caller remembered a preload.
+
+  Only **effective** reports count, and the filter is inside both clauses
+  rather than at the call sites, because this answer decides what the owner may
+  do with their own content: `owner_edit_offer/2` turns an edit from
+  "immediate" into "reviewed" on it, and `content_edited/1` escalates instead
+  of unfreezing. An unconfirmed notice from a stranger was enough to take a
+  member's self-service away — the case page is the one surface that must still
+  see a pending notice, and it reads the reports itself.
   """
   def copyright_case?(%Case{reports: reports}) when is_list(reports),
-    do: Enum.any?(reports, &Report.copyright?/1)
+    do: reports |> Enum.filter(&Report.effective?/1) |> Enum.any?(&Report.copyright?/1)
 
-  def copyright_case?(%Case{id: case_id}),
-    do: Repo.exists?(where(copyright_reports(), [r], r.case_id == ^case_id))
+  def copyright_case?(%Case{id: case_id}) do
+    copyright_reports()
+    |> where([r], r.case_id == ^case_id)
+    |> Report.effective()
+    |> Repo.exists?()
+  end
 
   @doc """
   The statement of reasons the owner of hidden content is owed (issue #2010):
@@ -750,9 +1119,19 @@ defmodule Vutuv.Moderation do
 
   All three surfaces that carry the notice (the case page, the owner's email
   and the in-app line) read it here, so they cannot drift apart.
+
+  Only **effective** reports are in it, filtered inside rather than by each
+  caller: this is the map that quotes a reporter's words to the member they
+  accuse, and an unconfirmed notice is a stranger's unverified claim that
+  nothing about the case has acted on. The DB clause preloads through
+  `effective_reports/0`, so the text is not even loaded.
   """
   def owner_notice(%Case{reports: reports}) when is_list(reports) do
-    ordered = Enum.sort_by(reports, & &1.inserted_at, {:desc, NaiveDateTime})
+    ordered =
+      reports
+      |> Enum.filter(&Report.effective?/1)
+      |> Enum.sort_by(& &1.inserted_at, {:desc, NaiveDateTime})
+
     categories = ordered |> Enum.map(& &1.category) |> Enum.uniq()
 
     %{
@@ -764,7 +1143,18 @@ defmodule Vutuv.Moderation do
   end
 
   def owner_notice(%Case{} = case_record),
-    do: case_record |> Repo.preload(:reports) |> owner_notice()
+    do: case_record |> Repo.preload(reports: effective_reports()) |> owner_notice()
+
+  @doc """
+  The preload to use wherever a case's reports drive what happens to the
+  content or reach its owner — `Repo.preload(case, reports: effective_reports())`.
+
+  The plain `:reports` preload stays right for the two admin surfaces, which
+  have to see a notice whose address nobody has confirmed yet; everything else
+  wants this one, so a stranger's unverified words cannot be loaded into a mail
+  or a decision by whoever forgot.
+  """
+  def effective_reports, do: Report.effective(Report)
 
   @doc """
   What the owner's self-service round offers as an *edit*, as one value the
@@ -808,6 +1198,7 @@ defmodule Vutuv.Moderation do
       order_by: [desc: r.inserted_at],
       select: {r.case_id, r.category}
     )
+    |> Report.effective()
     |> Repo.all()
     |> Enum.group_by(&elem(&1, 0), &elem(&1, 1))
     |> Map.new(fn {case_id, categories} -> {case_id, leading_category(categories)} end)
@@ -956,19 +1347,30 @@ defmodule Vutuv.Moderation do
           )
           |> Repo.all()
 
-        for report <- abusive_reports do
-          report
-          |> Ecto.Changeset.change(abusive?: true)
-          |> Repo.update!()
-
-          issue_strike(report.reporter, updated, "reporter", admin)
-        end
+        for report <- abusive_reports, do: mark_abusive(report, updated, admin)
 
         # An unfounded report must not leave the two accounts separated.
         restore_severed(updated, admin)
 
         {:ok, updated}
     end
+  end
+
+  # Records that one report was a deliberate weapon and, where there is an
+  # account behind it, strikes its reporter.
+  #
+  # An outside notifier (issue #2009) has none, and `issue_strike/4` matches on
+  # `%User{}` — so an unguarded call raised here rather than doing nothing. The
+  # mark itself is the consequence in that case: `trusted_reporter_emails/1`
+  # reads it, and one abusive mark costs that address the instant freeze for a
+  # year.
+  defp mark_abusive(%Report{} = report, %Case{} = case_record, %User{} = admin) do
+    report
+    |> Ecto.Changeset.change(abusive?: true)
+    |> Repo.update!()
+
+    if report.reporter, do: issue_strike(report.reporter, case_record, "reporter", admin)
+    :ok
   end
 
   @doc """
@@ -1084,6 +1486,10 @@ defmodule Vutuv.Moderation do
   # Reporting an organization page must not cut the reporter's personal ties to the
   # member who happens to have claimed it: severance is a between-people
   # protection, meaningless for a business page.
+  # Only ever called for a member's report. An outside notifier has no account,
+  # so there is no tie to cut and no `moderation_severances` row to write —
+  # that table's `reporter_id` is a NOT NULL foreign key to `users` and stays
+  # one, which is why the public path deliberately does not reach here.
   defp sever_relationship(%Case{content_type: "organization"}, %User{}), do: :ok
 
   defp sever_relationship(%Case{} = case_record, %User{} = reporter) do
@@ -1312,43 +1718,120 @@ defmodule Vutuv.Moderation do
   numbers an admin sees next to each report).
   """
   def reporter_stats_map(reporter_ids) do
+    # A nil in this list is not merely useless (`r.reporter_id in (NULL, …)` is
+    # never true for a NULL row): the caller then looks the answer up by nil and
+    # gets nothing back. Dropped here so no caller has to remember.
+    stats_map(:reporter_id, Enum.filter(reporter_ids, &is_binary/1))
+  end
+
+  @doc """
+  The track record behind each of `reports`, keyed by **report id**:
+  `%{report_id => %{total:, rejected:, abusive:}}`.
+
+  The admin case page's shape, and the reason it is keyed by the report rather
+  than by the reporter: a case can now carry both a member's report and an
+  outside notice, and those are counted in two different tables' worth of rows
+  (by user id, by confirmed address). Keying by the reporter meant looking one
+  up by `nil`, which is a `KeyError` and a 500 on the case page.
+  """
+  def report_stats(reports) when is_list(reports) do
+    by_id = reports |> member_reporter_ids() |> reporter_stats_map()
+    by_email = reports |> outside_reporter_emails() |> outside_stats_map()
+    empty = %{total: 0, rejected: 0, abusive: 0}
+
+    Map.new(reports, fn
+      %Report{id: id, reporter_id: user_id} when is_binary(user_id) ->
+        {id, Map.get(by_id, user_id, empty)}
+
+      %Report{id: id, reporter_email: email} ->
+        {id, Map.get(by_email, email, empty)}
+    end)
+  end
+
+  defp outside_stats_map(emails), do: stats_map(:reporter_email, emails)
+
+  # The all-time counts an admin sees beside a report, keyed by whichever column
+  # names its reporter — the user id for a member, the confirmed address for an
+  # outside notifier (issue #2009).
+  defp stats_map(_column, []), do: %{}
+
+  defp stats_map(column, keys) do
     from(r in Report,
       join: c in assoc(r, :case),
-      where: r.reporter_id in ^reporter_ids,
-      group_by: r.reporter_id,
+      where: field(r, ^column) in ^keys,
+      group_by: field(r, ^column),
       select:
-        {r.reporter_id,
+        {field(r, ^column),
          %{
            total: count(r.id),
            rejected: fragment("COUNT(*) FILTER (WHERE ? = 'rejected')", c.status),
            abusive: fragment("COUNT(*) FILTER (WHERE ?)", r.abusive?)
          }}
     )
+    |> Report.effective()
     |> Repo.all()
     |> Map.new()
   end
 
   @doc """
-  The misuse dashboard: every member who has filed a report, with their track
-  record and current trust standing, worst offenders first. The trusted flag
-  is computed from the same windowed counts `trusted_reporter?/1` uses, in
-  the one grouped query (no per-row lookups).
+  The misuse dashboard: everyone who has filed a report, with their track
+  record and current trust standing, worst offenders first. Each row carries
+  either a `:reporter` (a member) or an `:email` (an outside notifier, issue
+  #2009), never both.
+
+  Two grouped queries rather than one, because the two kinds group on different
+  columns. Widening the old single query was the alternative and the wrong one:
+  it inner-joins `users` on `reporter_id`, so **every** outside notice fell out
+  of this page silently — the one screen whose job is to show who abuses the
+  report button would not have seen the abuse a public form makes possible.
   """
   def list_reporter_stats do
-    window_start = trust_window_start()
+    (member_reporter_stats() ++ outside_reporter_stats())
+    |> Enum.map(fn row ->
+      # Both kinds of key on every row, so a template never has to know which
+      # query a row came from.
+      %{reporter: nil, email: nil}
+      |> Map.merge(row)
+      |> Map.put(:trusted, trusted?(row.recent_abusive, row.recent_rejected))
+      |> Map.drop([:recent_rejected, :recent_abusive])
+    end)
+    |> Enum.sort_by(&{-&1.abusive, -&1.rejected, -&1.total})
+  end
 
+  defp member_reporter_stats do
     from(r in Report,
       join: c in assoc(r, :case),
       join: u in User,
       on: u.id == r.reporter_id,
       group_by: u.id,
-      order_by: [
-        desc: fragment("COUNT(*) FILTER (WHERE ?)", r.abusive?),
-        desc: fragment("COUNT(*) FILTER (WHERE ? = 'rejected')", c.status),
-        desc: count(r.id)
-      ],
-      select: %{
-        reporter: u,
+      select: %{reporter: u}
+    )
+    |> with_track_record()
+    |> Repo.all()
+  end
+
+  # Confirmed notices only: an unconfirmed one is a stranger's unverified claim
+  # and has neither earned trust nor lost any, exactly as in
+  # `trusted_reporters/2`.
+  defp outside_reporter_stats do
+    from(r in Report,
+      join: c in assoc(r, :case),
+      where: not is_nil(r.reporter_email) and not is_nil(r.confirmed_at),
+      group_by: r.reporter_email,
+      select: %{email: r.reporter_email}
+    )
+    |> with_track_record()
+    |> Repo.all()
+  end
+
+  # The five figures a track record is, merged onto whichever key the caller
+  # grouped by. Written once because the two windowed `COUNT(*) FILTER` blocks
+  # are the part that would drift.
+  defp with_track_record(query) do
+    window_start = trust_window_start()
+
+    from([r, c] in query,
+      select_merge: %{
         total: count(r.id),
         rejected: fragment("COUNT(*) FILTER (WHERE ? = 'rejected')", c.status),
         abusive: fragment("COUNT(*) FILTER (WHERE ?)", r.abusive?),
@@ -1368,12 +1851,6 @@ defmodule Vutuv.Moderation do
           )
       }
     )
-    |> Repo.all()
-    |> Enum.map(fn row ->
-      row
-      |> Map.put(:trusted, trusted?(row.recent_abusive, row.recent_rejected))
-      |> Map.drop([:recent_rejected, :recent_abusive])
-    end)
   end
 
   ## Account gates
@@ -1546,12 +2023,17 @@ defmodule Vutuv.Moderation do
 
   ## Content plumbing
 
-  defp content_type(%Post{}), do: "post"
-  defp content_type(%Message{}), do: "message"
-  defp content_type(%User{}), do: "user"
-  defp content_type(%Organization{}), do: "organization"
-  defp content_type(%JobPosting{}), do: "job_posting"
-  defp content_type(%Image{}), do: "image"
+  @doc """
+  The wire string for a reportable row — the inverse of `fetch_content/2`.
+  Public because the notice form resolves a pasted URL to a row and then needs
+  to know which categories that row offers.
+  """
+  def content_type(%Post{}), do: "post"
+  def content_type(%Message{}), do: "message"
+  def content_type(%User{}), do: "user"
+  def content_type(%Organization{}), do: "organization"
+  def content_type(%JobPosting{}), do: "job_posting"
+  def content_type(%Image{}), do: "image"
 
   defp content_id(%{id: id}), do: id
 

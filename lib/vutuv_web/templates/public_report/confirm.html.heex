@@ -1,0 +1,21 @@
+<div class="mx-auto max-w-xl py-6">
+  <.card>
+    <h1 class="text-xl font-bold text-slate-900 dark:text-white">
+      {gettext("Confirm your report")}
+    </h1>
+    <p class="mt-2 text-sm text-slate-600 dark:text-slate-400">
+      {gettext(
+        "One more click and your report goes to our admins. Depending on what you reported, the content is hidden right away while they look at it."
+      )}
+    </p>
+
+    <%!-- A POST, not the GET the link landed on: a link scanner in a mail
+          gateway follows every URL in an email, and a takedown must not be
+          something somebody else's software can set off by opening the
+          message. --%>
+    <form action={~p"/system/report/confirm/#{@token}"} method="post" class="mt-6">
+      <input type="hidden" name="_csrf_token" value={get_csrf_token()} />
+      <.button type="submit">{gettext("Confirm the report")}</.button>
+    </form>
+  </.card>
+</div>

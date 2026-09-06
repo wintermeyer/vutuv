@@ -1,0 +1,19 @@
+<.email_layout preheader="Bitte bestätigen Sie Ihre Meldung" locale={@locale}>
+  <.email_p>Hallo {@name},</.email_p>
+  <.email_p>
+    wir haben Ihre Meldung erhalten. Damit sie bearbeitet wird, bestätigen Sie bitte diese
+    E-Mail-Adresse. Bis Sie das tun, liegt der Fall unbearbeitet bei unseren Admins und am
+    gemeldeten Inhalt ändert sich nichts.
+  </.email_p>
+  <.email_button href={@confirm_url}>Meldung bestätigen</.email_button>
+  <.email_panel>
+    <.email_row label="Gemeldet">{@content_label}</.email_row>
+    <.email_row label="Adresse">{@content_url}</.email_row>
+    <.email_row label="Gemeldet als">{@category_label}</.email_row>
+  </.email_panel>
+  <.email_p>
+    Wenn Sie diese Meldung nicht abgeschickt haben, ignorieren Sie diese E-Mail einfach. Ohne
+    Bestätigung passiert nichts.
+  </.email_p>
+  <.email_signature locale={@locale} />
+</.email_layout>

@@ -1,0 +1,19 @@
+<.email_layout preheader="Confermi la Sua segnalazione" locale={@locale}>
+  <.email_p>Salve {@name},</.email_p>
+  <.email_p>
+    abbiamo ricevuto la Sua segnalazione. Per farla esaminare, confermi questo indirizzo e-mail.
+    Fino ad allora il caso resta in attesa presso i nostri amministratori e nulla cambia per il
+    contenuto segnalato.
+  </.email_p>
+  <.email_button href={@confirm_url}>Confermare la segnalazione</.email_button>
+  <.email_panel>
+    <.email_row label="Segnalato">{@content_label}</.email_row>
+    <.email_row label="Indirizzo">{@content_url}</.email_row>
+    <.email_row label="Segnalato come">{@category_label}</.email_row>
+  </.email_panel>
+  <.email_p>
+    Se non ha inviato Lei questa segnalazione, ignori pure questa e-mail. Senza conferma non
+    accade nulla.
+  </.email_p>
+  <.email_signature locale={@locale} />
+</.email_layout>

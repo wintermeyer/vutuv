@@ -1,0 +1,18 @@
+<div class="mx-auto max-w-xl py-6">
+  <.card>
+    <h1 class="text-xl font-bold text-slate-900 dark:text-white">
+      {gettext("Please confirm your report")}
+    </h1>
+    <p class="mt-2 text-sm text-slate-600 dark:text-slate-400">
+      {gettext("We have sent an email to %{email}.", email: @email)}
+    </p>
+    <p class="mt-2 text-sm text-slate-600 dark:text-slate-400">
+      {gettext(
+        "Follow the link in it and your report goes to our admins. Until then nothing about the reported content changes."
+      )}
+    </p>
+    <p class="mt-2 text-sm text-slate-600 dark:text-slate-400">
+      {gettext("No email? Please check your spam folder.")}
+    </p>
+  </.card>
+</div>

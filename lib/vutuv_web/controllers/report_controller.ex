@@ -109,22 +109,13 @@ defmodule VutuvWeb.ReportController do
               content_id: id,
               return_to: return_to,
               report: Ecto.Changeset.apply_changes(changeset),
-              errors: report_errors(changeset)
+              errors: ErrorHelpers.changeset_messages(changeset)
             )
         end
     end
   end
 
   def create(conn, _params), do: ControllerHelpers.render_error(conn, 404)
-
-  # Everything the reporter has to change, in their words. `Report`'s changeset
-  # writes whole sentences, so nothing here has to guess one from a field name;
-  # `errors` is newest-first, hence the reverse.
-  defp report_errors(%Ecto.Changeset{errors: errors}) do
-    errors
-    |> Enum.reverse()
-    |> Enum.map(fn {_field, error} -> ErrorHelpers.translate_error(error) end)
-  end
 
   # The reporter's confirmation. A whole-profile report (the spam case) says the
   # moderators have been notified and will review the account, so reporting no

@@ -10,7 +10,11 @@ defmodule Vutuv.Moderation.Sweeper do
       (`Vutuv.Images.reconcile_holds/0`). A copyright freeze moves files, and a
       deploy that stops the slot between two renames leaves the job unfinished
       with nothing in a log to say so — so the row's `frozen_at` is the record
-      and this is the thing that acts on it.
+      and this is the thing that acts on it;
+    * drops public notices nobody confirmed inside their week
+      (`Vutuv.Moderation.sweep_expired_notices/0`, issue #2009). Such a row
+      counts for nothing and its link no longer works, so left alone it is a
+      `flagged` case in the admin queue that nothing can ever act on.
 
   The "digest already sent today" marker is in-memory, so a restart on a
   digest day can repeat the mail once - harmless, admins can take a second
@@ -47,6 +51,11 @@ defmodule Vutuv.Moderation.Sweeper do
     end
 
     Images.reconcile_holds()
+
+    case Moderation.sweep_expired_notices() do
+      0 -> :ok
+      count -> Logger.info("Dropped #{count} unconfirmed report notice(s) past their deadline")
+    end
 
     state = maybe_send_digest(state)
     schedule()

@@ -35,6 +35,24 @@ defmodule VutuvWeb.ReportHTML do
 
   def category_hint(_), do: gettext("Tell us more in the note below.")
 
+  @doc """
+  The human name of a reportable content type, in the viewer's locale — the
+  single home of this mapping, beside `category_label/1`, for the same reason:
+  the admin queue, the admin case page, the urgent admin mail and the receipt a
+  rights holder gets (issue #2009) must not name the same thing differently.
+
+  Each carries a `pgettext` context. Without one, "Post" shares a msgid with the
+  composer's verb and with the screenshot admin's, and the German for those is
+  "Posten" — which is what the receipt mail said a rights holder had reported.
+  """
+  def content_type_label("post"), do: pgettext("content type", "Post")
+  def content_type_label("message"), do: pgettext("content type", "Private message")
+  def content_type_label("user"), do: pgettext("content type", "Profile")
+  def content_type_label("organization"), do: pgettext("content type", "Organization page")
+  def content_type_label("job_posting"), do: pgettext("content type", "Job posting")
+  def content_type_label("image"), do: pgettext("content type", "Picture")
+  def content_type_label(other), do: other
+
   @doc "Whether this content type's form carries the copyright notice at all."
   def copyright_offered?(content_type),
     do: Report.copyright_category() in Report.categories_for(content_type)

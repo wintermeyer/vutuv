@@ -1,0 +1,20 @@
+Hallo <%= @name %>,
+
+wir haben Ihre Meldung erhalten. Damit sie bearbeitet wird, bestätigen Sie
+bitte diese E-Mail-Adresse:
+
+<%= @confirm_url %>
+
+Bis Sie das tun, liegt der Fall unbearbeitet bei unseren Admins und am
+gemeldeten Inhalt ändert sich nichts.
+
+  Gemeldet:      <%= @content_label %>
+  Adresse:       <%= @content_url %>
+  Gemeldet als:  <%= @category_label %>
+
+Wenn Sie diese Meldung nicht abgeschickt haben, ignorieren Sie diese E-Mail
+einfach. Ohne Bestätigung passiert nichts.
+
+<%= render "_signature_de.text" %>
+
+<%= render "_footer.text" %>

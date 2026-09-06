@@ -124,6 +124,11 @@ finger-sized target instead of a word in a paragraph. --%>
           <li><.link href={~p"/datenschutzerklaerung"} class={footer_link_class}>{gettext("Datenschutzerklärung")}</.link></li>
           <li><.link href={~p"/nutzungsbedingungen"} class={footer_link_class}>{gettext("Nutzungsbedingungen")}</.link></li>
           <li><.link href={~p"/community"} class={footer_link_class}>{gettext("Community guidelines")}</.link></li>
+          <%!-- The way in for somebody who has no account here (issue #2009):
+                a rights holder who finds their photograph on a post. Under
+                Legal rather than beside the in-app Report affordances,
+                because that is where a person who is not a member looks. --%>
+          <li><.link href={~p"/system/report"} class={footer_link_class}>{gettext("Report content")}</.link></li>
         </ul>
       </div>
     </nav>

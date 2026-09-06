@@ -971,6 +971,17 @@ defmodule VutuvWeb.Router do
     # The community guidelines every moderation email and report form links to.
     get("/community", PageController, :community)
 
+    # The notice form for people without an account (issue #2009): a rights
+    # holder who finds their work here, linked from the footer and the
+    # Impressum. Under /system/ like every other new site page. The
+    # confirmation link in the receipt mail lands on the GET, which only shows
+    # a button — the POST behind it is what fires the takedown, so a mail
+    # gateway's link scanner cannot confirm somebody's notice for them.
+    get("/system/report", PublicReportController, :new)
+    post("/system/report", PublicReportController, :create)
+    get("/system/report/confirm/:token", PublicReportController, :confirm)
+    post("/system/report/confirm/:token", PublicReportController, :confirm_submit)
+
     # The footer's "Company" pages. English only, and under /system/ so neither
     # burns a root word a member could hold as a handle.
     get("/system/investors", CompanyController, :investors)

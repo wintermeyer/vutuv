@@ -1085,6 +1085,34 @@ defmodule VutuvWeb.UserHelpers do
   """
   def split_lines(text) when is_binary(text), do: Regex.split(~r/\R/u, text)
 
+  @doc """
+  A stranger's short field as **one line**, whatever they typed into it.
+
+  The companion to `split_lines/1` and the same rule read the other way: where
+  that one marks every line of a quote, this one refuses to have more than one.
+  A field that is rendered as running text rather than quoted — a name on a
+  greeting line — has no marker to protect it, so a value carrying a line break
+  writes whole sentences of its own into a mail this installation signs. That
+  is not hypothetical: `reporter_name` on the public notice form (issue #2009)
+  put "Jetzt bestaetigen: https://evil.example/verify" above our own copy and
+  the real confirmation link, in a DKIM-signed message from us.
+
+  Every break `split_lines/1` recognises becomes a space, runs of whitespace
+  collapse, and the result is trimmed — so it is the *effect* that is named
+  here (a name occupies one line), not the handful of characters somebody
+  thought of. Enforce it where such a value is **written**, so no later surface
+  has to remember: `Vutuv.Moderation.Report.outside_changeset/3` does.
+  """
+  def single_line(text) when is_binary(text) do
+    text
+    |> split_lines()
+    |> Enum.join(" ")
+    |> String.replace(~r/\s+/u, " ")
+    |> String.trim()
+  end
+
+  def single_line(other), do: other
+
   # A blank line gets the bare marker, never `"> "`: a quote block ends at the
   # first line without one, and mail clients that strip trailing whitespace
   # would turn the space into exactly that.
