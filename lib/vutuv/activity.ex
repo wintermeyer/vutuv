@@ -100,6 +100,145 @@ defmodule Vutuv.Activity do
     broadcast(user_id, :notifications_read)
   end
 
+  @doc """
+  Move the read marker forward to `at` and no further — everything up to that
+  instant has been seen, whatever arrived afterwards has not.
+
+  The bell's hover preview (`VutuvWeb.ShellLive`) is what needs the "and no
+  further": it shows the member the events behind the number and empties the
+  badge when they look away, but a like that lands *while* they are reading the
+  panel was never in it and has to come back as a fresh 1. So the caller pins
+  the instant when it opens the panel and hands it back here on close, rather
+  than letting `mark_notifications_read/1` sweep the marker up to whatever the
+  newest event is by then.
+
+  This writer only ever moves the marker **forward** (the `where` refuses an
+  older stamp), so a second tab that opened /notifications in the meantime
+  cannot be undone by a preview that started before it. That is a promise about
+  this function, not about the column — `mark_notifications_read/1` still sets
+  it outright. Per-event dismissals are left alone,
+  unlike the full read above: this marker covers only part of what they hold
+  out of the tally, and one that is now redundant costs a row, not a wrong
+  count. A marker that does not move broadcasts nothing.
+  """
+  def mark_notifications_read_up_to(nil, _at), do: :ok
+  def mark_notifications_read_up_to(_user_id, nil), do: :ok
+
+  def mark_notifications_read_up_to(user_id, at) do
+    at = naive_second(at)
+
+    {moved, _} =
+      Repo.update_all(
+        from(u in User,
+          where: u.id == ^user_id,
+          where: is_nil(u.notifications_read_at) or u.notifications_read_at < ^at
+        ),
+        set: [notifications_read_at: at]
+      )
+
+    if moved > 0, do: broadcast(user_id, :notifications_changed), else: :ok
+  end
+
+  # The column is a naive_datetime and the event tables keep whole seconds, so a
+  # finer stamp would be rounded on the way in and never compare equal again.
+  defp naive_second(%DateTime{} = at), do: at |> DateTime.to_naive() |> naive_second()
+  defp naive_second(%NaiveDateTime{} = at), do: NaiveDateTime.truncate(at, :second)
+
+  @doc """
+  The events the bell's number stands for: the unread ones, newest first, at
+  most `limit` of them — plus `read_up_to`, the instant that marks exactly
+  these read.
+
+  The badge counts with SQL and this reads the feed, so the two can only agree
+  if the same exclusions apply here: an event older than the read marker, one
+  about a post the member has already engaged with (`mark_post_seen/2`), one
+  they dismissed from a browser notification (`mark_notification_seen/3`) and a
+  vernetzt pair they closed themselves are all read. The marker is re-read
+  rather than taken from a `%User{}` a caller is holding, for the reason
+  `unread_notification_count/1`'s id clause gives: the shell's copy is as old
+  as its mount and the marker moves in the member's other tabs.
+
+  `read_up_to` is a stamp off an entry the panel actually looked at, so it can
+  never mark read something nobody was shown; a member with nothing unread gets
+  `nil` and no marker is written at all.
+  """
+  def unread_notifications(nil, _limit), do: %{items: [], read_up_to: nil}
+
+  def unread_notifications(user_id, limit) do
+    read_at = notifications_read_at(user_id)
+
+    case unread_kinds(user_id, read_at) do
+      [] -> %{items: [], read_up_to: nil}
+      kinds -> unread_notifications(user_id, limit, read_at, kinds)
+    end
+  end
+
+  defp unread_notifications(user_id, limit, read_at, kinds) do
+    %{entries: entries} = notifications_page(user_id, limit: limit, kinds: kinds)
+    flagged = with_seen_flags(user_id, entries, dismissed_event_ids(user_id))
+
+    %{
+      items: Enum.filter(flagged, &unread_item?(&1, read_at)),
+      # An item the panel really could have shown, deliberately rather than
+      # `latest_event_at/1`: the two agree, and where they ever stopped
+      # agreeing this is the one that cannot mark read something nobody saw.
+      read_up_to: entries |> List.first(%{}) |> Map.get(:at)
+    }
+  end
+
+  # Which kinds have anything unread, from the badge's own one-query tally. The
+  # feed is read for those alone, because the full fan-out is a source query per
+  # registry kind — eighteen of them, four connections at a time — and a hover
+  # that turns out to be one like has no business paying it. This handler hangs
+  # off a shell mounted on every page, so connections held is the budget here,
+  # not milliseconds (`Vutuv.Concurrent` makes the same argument).
+  defp unread_kinds(user_id, read_at) do
+    kinds()
+    |> Map.new(&{&1, [&1]})
+    |> then(&unread_counts_by(user_id, read_at, &1))
+    |> Enum.filter(fn {_kind, count} -> count > 0 end)
+    |> Enum.map(fn {kind, _count} -> kind end)
+  end
+
+  # The three exclusions `total_count/4` expresses in SQL, over an item: older
+  # than the marker, one of the per-post/per-event exceptions (`:seen?`), or a
+  # vernetzt pair the member closed themselves — which is news to everybody
+  # except them, so `count_connections/3` leaves it out of the tally too.
+  defp unread_item?(item, read_at) do
+    after?(item[:at], read_at) and item[:seen?] != true and item[:self_triggered?] != true
+  end
+
+  @doc """
+  Flag each entry `:seen?` — the per-post (`mark_post_seen/2`) and per-event
+  (`mark_notification_seen/3`) exceptions that make an event read although the
+  read marker still sits behind it. `dismissed` is `dismissed_event_ids/1`,
+  passed in because a page loads it once and holds it. One query for the batch.
+
+  Shared so the notifications page and the bell's preview cannot answer "has
+  this been dealt with" differently — the page renders such a row as read while
+  the preview leaves it out, and both readings come from here.
+  """
+  def with_seen_flags(user_id, entries, dismissed) do
+    seen =
+      entries
+      |> Enum.map(&subject_post_id/1)
+      |> Enum.reject(&is_nil/1)
+      |> then(&seen_post_ids(user_id, &1))
+
+    Enum.map(entries, fn entry ->
+      read? =
+        MapSet.member?(seen, subject_post_id(entry)) or MapSet.member?(dismissed, entry[:id])
+
+      Map.put(entry, :seen?, read?)
+    end)
+  end
+
+  # The member's read marker. Re-read rather than taken off a `%User{}` a caller
+  # is holding, for the reason `unread_notification_count/1`'s id clause gives:
+  # a socket's copy is as old as its mount and the marker moves in other tabs.
+  defp notifications_read_at(user_id),
+    do: Repo.one(from(u in User, where: u.id == ^user_id, select: u.notifications_read_at))
+
   # The read marker is the timestamp of the newest feed event the user has seen,
   # not the wall clock. The event tables only keep second precision, and unread
   # counting uses a strict `>`, so a wall-clock marker would swallow any event
@@ -1178,10 +1317,8 @@ defmodule Vutuv.Activity do
   def unread_notification_count(%User{id: user_id, notifications_read_at: read_at}),
     do: total_count(user_id, read_at, nil, true)
 
-  def unread_notification_count(user_id) do
-    read_at = Repo.one(from(u in User, where: u.id == ^user_id, select: u.notifications_read_at))
-    total_count(user_id, read_at, nil, true)
-  end
+  def unread_notification_count(user_id),
+    do: total_count(user_id, notifications_read_at(user_id), nil, true)
 
   @doc """
   `unread_notification_count/1` split by named kind groups — `groups` is
@@ -1192,7 +1329,13 @@ defmodule Vutuv.Activity do
   whole feed. A group whose kinds count nothing answers 0.
   """
   def unread_notification_counts(%User{id: user_id, notifications_read_at: read_at}, groups)
-      when is_map(groups) do
+      when is_map(groups),
+      do: unread_counts_by(user_id, read_at, groups)
+
+  # By id and marker rather than the struct, so a caller that has just read the
+  # marker itself (the bell's preview) can ask the same question without
+  # loading a `%User{}` it has no other use for.
+  defp unread_counts_by(user_id, read_at, groups) do
     arms =
       for spec <- kind_specs(user_id, read_at, true),
           {count, dismiss} <- Enum.zip(spec.counts, spec.dismiss),

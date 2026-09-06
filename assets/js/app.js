@@ -19,6 +19,7 @@ import { openPhotoCropper } from "./photo_crop"
 import {
   b64urlToBuf,
   bindEscape,
+  canHover,
   cancelIdle,
   copyText,
   csrfToken,
@@ -1380,6 +1381,64 @@ const Hooks = {
       window.removeEventListener("vutuv:tab-teaser", this.onPreview)
       if (this.teaserTimer) clearTimeout(this.teaserTimer)
       if (this.observer) this.observer.disconnect()
+    },
+  },
+  // The bell's hover preview (docs/architecture/realtime.md, which has the why
+  // for all three rules below). The panel is ShellLive's; this hook owns only
+  // when it opens and closes, because a hover is not something a LiveView
+  // binding can see — and each rule exists because the close MARKS THOSE EVENTS
+  // READ. This is not a tooltip that costs nothing to raise.
+  //
+  //   (1) a hovering pointer or nothing — a tap is not a hover, and on a touch
+  //       screen `mouseenter` fires on the way to the link;
+  //   (2) a dwell, so crossing the bar on the way to the avatar is not resting;
+  //   (3) a grace period, for a pointer landing on a row.
+  //
+  // Reading `data-unread` keeps a bell with nothing behind it silent: no round
+  // trip, no query, and no empty box under an empty badge.
+  BellPreview: {
+    mounted() {
+      if (!canHover()) return
+
+      this.open = false
+      this.arm = () => this.armOpen()
+      this.disarm = () => this.armClose()
+
+      // Focus and blur alongside the pointer, so a keyboard reaches the same
+      // panel by tabbing to the bell. `focusin`/`focusout` rather than
+      // focus/blur: they bubble, so focus moving into a row inside the panel
+      // is the subtree keeping focus, not leaving it.
+      this.el.addEventListener("mouseenter", this.arm)
+      this.el.addEventListener("mouseleave", this.disarm)
+      this.el.addEventListener("focusin", this.arm)
+      this.el.addEventListener("focusout", this.disarm)
+    },
+    armOpen() {
+      clearTimeout(this.closeTimer)
+      if (this.open) return
+
+      this.openTimer = setTimeout(() => {
+        if (this.open || !(Number(this.el.dataset.unread) > 0)) return
+        this.open = true
+        this.pushEvent("bell:preview")
+      }, 200)
+    },
+    armClose() {
+      clearTimeout(this.openTimer)
+      if (!this.open) return
+
+      this.closeTimer = setTimeout(() => {
+        this.open = false
+        this.pushEvent("bell:preview_close")
+      }, 150)
+    },
+    destroyed() {
+      clearTimeout(this.openTimer)
+      clearTimeout(this.closeTimer)
+      this.el.removeEventListener("mouseenter", this.arm)
+      this.el.removeEventListener("mouseleave", this.disarm)
+      this.el.removeEventListener("focusin", this.arm)
+      this.el.removeEventListener("focusout", this.disarm)
     },
   },
   // Browser notifications (issue #1249): a popup for activity that arrives while
