@@ -1,24 +1,24 @@
 defmodule VutuvWeb.LandingPageTest do
   @moduledoc """
-  The logged-out landing page's marketing copy: the hero's import pill, and the
-  examples block under the sign-up form with its static screenshots of a
-  profile, of the CV builder and of the Arbeitszeugnis review, the feature list,
-  and the data-protection promises.
+  The logged-out landing page's marketing copy: the hero's three claims, and
+  the two blocks under the sign-up form — six promises anybody can read without
+  knowing a technical word, then one short section for the technically minded.
 
-  Every example on the page is a picture, which is why this file is all render
-  assertions and holds no fixtures. A wall of real, current posts used to sit
-  between the profile block and the Fediverse block, with a context
-  (`Vutuv.Landing`), a snapshot cache and an embedded LiveView behind it; it was
-  removed for what it cost on the most requested page in the app, and the tests
-  that covered its ranking, its windows and its carousel went with it.
+  This file is all render assertions and holds no fixtures: nothing under the
+  form depends on a member or a post. Two earlier shapes of that block are
+  gone and asserted against below, because both are recurring ideas: a wall of
+  real, current posts behind a cached snapshot and an embedded LiveView, and
+  four fanned screenshot decks of a profile, the CV builder, the Arbeitszeugnis
+  review and the Fediverse feed. The wall cost a socket on the most requested
+  page in the app; the decks, with the three product sections around them,
+  made the page a feature catalogue nobody outside the project read to the end
+  (Stefan, 2026-09-06).
 
   Anything that depends on an installation switch lives in
   `VutuvWeb.LandingConfigurationTest` instead, which is `async: false` because
   it flips global application env.
   """
   use VutuvWeb.ConnCase, async: true
-
-  alias VutuvWeb.PageHTML
 
   defp landing(conn), do: conn |> get(~p"/") |> html_response(200)
 
@@ -29,17 +29,7 @@ defmodule VutuvWeb.LandingPageTest do
     conn |> put_req_header("accept-language", "de-DE,de") |> landing()
   end
 
-  # Every <img> of a screenshot deck, as whole tags.
-  #
-  # Matching whole tags rather than splitting on "<img": a split fragment runs
-  # up to the NEXT img, which once swallowed a following <picture>'s AVIF source
-  # and counted one screenshot too many.
-  defp shot_tags(html) do
-    ~r|<img[^>]*>|
-    |> Regex.scan(html)
-    |> List.flatten()
-    |> Enum.filter(&String.contains?(&1, "/images/landing-"))
-  end
+  defp at(html, marker), do: :binary.match(html, marker) |> elem(0)
 
   describe "the landing page" do
     # The three claims beside the quote: whoever agrees that LinkedIn is
@@ -70,171 +60,168 @@ defmodule VutuvWeb.LandingPageTest do
       refute html =~ ~s(href="/import/linkedin")
     end
 
-    # Static pictures, not live rows: nobody has to agree to being on the front
-    # page, and there is no member whose rename or departure could break it.
-    test "shows the profile screenshots", %{conn: conn} do
-      html = landing(conn)
+    # The six promises, each a card with a title and a sentence or two, and
+    # every one of them readable by somebody who has never heard the word
+    # "Fediverse". Asserted as German literals for the reason the hero test is,
+    # and by name, so a seventh card or a renamed one is a decision and not a
+    # drift.
+    test "makes six promises anybody can read", %{conn: conn} do
+      html = landing_de(conn)
 
-      assert html =~ "data-profile-shots"
-      assert html =~ "/images/landing-profile-overview.avif"
-      assert html =~ "/images/landing-profile-cv.avif"
-      assert html =~ "/images/landing-profile-links.avif"
+      assert html =~ "Was vutuv anders macht"
+
+      for key <- ~w(organizations family fast simple leave data) do
+        assert length(elements(html, "[data-landing-promise=#{key}]")) == 1
+      end
+
+      assert length(elements(html, "[data-landing-promise]")) == 6
+
+      assert html =~ "Menschen und Organisationen"
+      assert html =~ "Für Familie und Arbeitsplatz geeignet"
+      assert html =~ "Schnell, auch bei schlechtem Netz"
+      # Not "Einfach" alone: the hero's "Einfacher Profilimport." contains it.
+      assert html =~ "vutuv richtet sich an jeden."
+      assert html =~ "Ausprobieren, und gehen, wenn Sie wollen"
+      assert html =~ "Ihre Daten bleiben hier"
+
+      # Fast is the claim; the data-saving mode is what backs it for somebody
+      # on a poor connection, named by the same word the sign-up box and
+      # /settings/bandwidth use, so the reader recognizes the switch later.
+      assert html =~ "Datensparmodus"
     end
 
-    # The fan is a marketing gesture and a phone has no room for it: three
-    # tilted cards at 390px would be three unreadable slivers. Every tilt,
-    # overlap and stacking class therefore has to be md:-scoped.
-    test "the fanned deck stays a plain stack below md", %{conn: conn} do
+    # The order a person has to follow and nobody explains: your own account
+    # first, then a page for the organization, then the colleagues who help
+    # run it. Three numbered steps drawn as a row, and the organization is not
+    # only a company.
+    test "spells out the person-then-organization order as three steps", %{conn: conn} do
+      html = landing_de(conn)
+
+      assert html =~ "Sie legen als Person Ihr eigenes Konto an."
+      assert html =~ "Eingeloggt legen Sie dann die Seite Ihrer Organisation an"
+      assert html =~ "Behörde oder jede andere Gruppe"
+      assert html =~ "Kollegen dazu"
+
+      steps = elements(html, "ol[data-landing-steps] li")
+      assert length(steps) == 3
+      assert Enum.map(steps, &text_of(&1 |> LazyHTML.to_html(), "span")) == ~w(1 2 3)
+    end
+
+    # The bento (Stefan's pick of seven, 2026-09-06): the organization tile is
+    # the wide one, the data tile the tall dark one, and the pictogram is on
+    # every tile. Asserted on the grid classes because that is the whole
+    # difference between this and six equal cards.
+    test "lays the six out as a bento with the organization tile widest", %{conn: conn} do
       html = landing(conn)
 
-      # Matched generically and counted against the catalog, so a new deck is
-      # covered the moment it is added rather than when somebody remembers to
-      # extend a regex here.
-      decks =
-        Regex.scan(~r/<div\s+data-([a-z]+)-shots\s+class="([^"]+)"/, html,
-          capture: :all_but_first
-        )
+      [org] = elements(html, "[data-landing-promise=organizations]")
+      assert attribute(org, "class") =~ "md:col-span-4"
+      assert attribute(org, "class") =~ "bg-brand-50"
 
-      assert Enum.map(decks, fn [key, _] -> String.to_existing_atom(key) end) ==
-               PageHTML.shot_decks()
+      [data] = elements(html, "[data-landing-promise=data]")
+      assert attribute(data, "class") =~ "md:row-span-2"
+      assert attribute(data, "class") =~ "bg-brand-900"
 
-      assert Enum.all?(decks, fn [_, d] -> not (d =~ ~r/(^|\s)(flex-row|justify-center)/) end)
+      assert length(elements(html, "[data-landing-promise] [data-promise-icon] svg")) == 6
+    end
 
-      figures =
-        html
-        |> String.split("<figure")
-        |> Enum.filter(&String.contains?(&1, "/images/landing-"))
+    # The family-friendly promise is the house rules, a page anybody can open,
+    # in the community page's own words. Deliberately NOT the picture scan:
+    # it runs, but "every picture is checked before anyone sees it" is a
+    # guarantee this page must not give (Stefan, 2026-09-06).
+    test "says what family-friendly means and links the house rules", %{conn: conn} do
+      html = landing_de(conn)
 
-      for figure <- figures,
-          [classes] = Regex.run(~r/class="([^"]+)"/, figure, capture: :all_but_first),
-          klass <- String.split(classes),
-          klass =~ ~r/rotate|^-?m[lrbt]-|^z-/ do
-        assert String.starts_with?(klass, "md:"),
-               "#{klass} tilts or overlaps the deck on a phone too"
+      assert html =~ "Zwölfjährigen"
+      assert html =~ ~s(href="/community")
+      refute html =~ "wird geprüft"
+    end
+
+    # Both directions of the try-it-and-leave promise, and the check behind the
+    # second: deletion cascades the addresses away, so the door really is open
+    # again (add_cascade_deletes_on_user_associations).
+    test "promises the way out as plainly as the way in", %{conn: conn} do
+      html = landing_de(conn)
+
+      assert html =~ "löschen Sie es selbst"
+      assert html =~ "Niemand fragt, warum"
+      assert html =~ "jederzeit wieder willkommen"
+    end
+
+    # Three of the four data claims are properties of the software and hold on
+    # every installation; where the servers stand is the operator's alone and
+    # is covered in the configuration test.
+    test "says what happens to the data, in plain words", %{conn: conn} do
+      html = landing_de(conn)
+
+      assert html =~ "eigenen Servern in Deutschland"
+      assert html =~ "keiner fremden Cloud"
+      assert html =~ "Keine Cookies von Dritten"
+      assert html =~ "ein einziges Cookie"
+    end
+
+    # The technical section: last, always visible, four lines. Whoever does not
+    # care is long past it at the form; whoever does gets the Fediverse, the
+    # source code, the machine formats and the sign-in options in one place,
+    # with the links that let them check.
+    test "closes with one section for the technically minded", %{conn: conn} do
+      html = landing_de(conn)
+
+      assert html =~ "data-landing-technical"
+      assert html =~ "Für Technikinteressierte"
+      assert html =~ "Mit oder ohne Fediverse"
+      assert html =~ "Mastodon"
+      assert html =~ "Open Source"
+      assert html =~ "MIT-Lizenz"
+      assert html =~ "Lesbar für Maschinen"
+      assert html =~ "Anmelden ohne Passwort"
+      assert html =~ "Passkey"
+
+      assert html =~ ~s(href="/developers")
+      assert html =~ ~s(href="/llms.txt")
+      assert html =~ Vutuv.SourceRepo.url()
+    end
+
+    # The page's argument, in order: the form, then what anybody can read, then
+    # what only some people want to know. A technical line above a plain one
+    # is exactly what puts a non-technical visitor to sleep.
+    test "the form comes first, the promises next, the technical section last", %{conn: conn} do
+      html = landing(conn)
+
+      assert at(html, "registration-form") < at(html, "data-landing-promises")
+      assert at(html, "data-landing-promises") < at(html, "data-landing-technical")
+    end
+
+    # Nothing technical leaks into the block for everybody: the words that
+    # need a definition live in the technical section only.
+    test "keeps the technical vocabulary out of the promises", %{conn: conn} do
+      promises = conn |> landing_de() |> text_of("[data-landing-promises]")
+
+      for word <- [
+            "Fediverse",
+            "Mastodon",
+            "Markdown",
+            "JSON",
+            "API",
+            "Open Source",
+            "Passkey",
+            "MIT-"
+          ] do
+        refute promises =~ word, "#{word} is in the promises block, not the technical one"
       end
     end
 
-    # Both halves of the promise: the checklist you decide with, and the
-    # document that comes out of it.
-    test "shows the CV builder and the CV it produces", %{conn: conn} do
+    # The screenshot decks and the three product sections that carried them
+    # are gone and stay gone (the moduledoc says why).
+    test "shows no screenshots and no product sections", %{conn: conn} do
       html = landing_de(conn)
 
-      assert html =~ "data-career-shots"
-      assert html =~ "/images/landing-cv-builder.avif"
-      assert html =~ "/images/landing-cv-print.avif"
-      assert html =~ "Ihr Lebenslauf, fertig zum Verschicken"
-      assert html =~ "JSON Resume"
-    end
-
-    test "shows the employment-reference review", %{conn: conn} do
-      html = landing_de(conn)
-
-      assert html =~ "data-reference-shots"
-      assert html =~ "/images/landing-reference-list.avif"
-      assert html =~ "/images/landing-reference-check.avif"
-      assert html =~ "Was in Ihrem Arbeitszeugnis wirklich steht"
-    end
-
-    # The two closing lines of that section, and the reason it is a section of
-    # its own. The first is quoted from the feature page so the two surfaces
-    # cannot state the storage promise differently; the second is the boundary
-    # the analysis prompt itself enforces (§ 2 RDG), so the front page must not
-    # promise past it.
-    test "says where the reference stays and what the review is not", %{conn: conn} do
-      html = landing_de(conn)
-
-      # Asserted as the rendered German literal, not by calling
-      # `check_location_heading/0` here: gettext's locale is per process, and
-      # the test process is not the one that rendered the request, so the call
-      # would answer in English and pass for the wrong reason.
-      assert html =~ "Ihr Zeugnis bleibt auf unseren Servern in"
-      assert html =~ "eigener Hardware"
-      assert html =~ "keine Rechtsberatung"
-    end
-
-    # The Fediverse is the one thing nobody arrives already understanding, so it
-    # gets its own section: the feed receiving posts from other networks, and
-    # the page where a member subscribes to an account out there.
-    test "explains how people talk to each other, in both directions", %{conn: conn} do
-      html = landing(conn)
-
-      assert html =~ "data-communication-shots"
-      assert html =~ "/images/landing-feed-fediverse.avif"
-      assert html =~ "/images/landing-fediverse-following.avif"
-    end
-
-    # Three of the four promises are properties of the software and hold on every
-    # installation; the fourth is the operator's alone.
-    test "closes with the data-protection promises", %{conn: conn} do
-      html = landing_de(conn)
-
-      assert html =~ "Fair und transparent"
-      assert html =~ "eigenen Servern in Deutschland"
-      assert html =~ "Keine Cookies von Dritten"
-      assert html =~ "Ihre Daten bleiben Ihnen"
-      assert html =~ "Jederzeit wieder gehen"
-      # Checkable, not a nicety: deletion cascades the addresses away, so the
-      # door really is open again.
-      assert html =~ "gerne wiederkommen"
-      # The card that backs the other four: they are claims, this is the check.
-      assert html =~ "Open Source"
-      assert html =~ "wie vutuv genau funktioniert"
-    end
-
-    # The page's argument, in order: this is what a profile looks like, this is
-    # what you get out of one, and here is how far it reaches. The two
-    # application sections sit that high on purpose, because they answer "what
-    # do I get", which is the question a visitor decides on.
-    test "the sections run in the catalog's order, features last", %{conn: conn} do
-      html = landing(conn)
-
-      at = fn marker -> :binary.match(html, marker) |> elem(0) end
-      positions = Enum.map(PageHTML.shot_decks(), &at.("data-#{&1}-shots"))
-
-      assert positions == Enum.sort(positions)
-      assert List.last(positions) < at.("data-landing-features")
-    end
-
-    # AVIF only, by decision: a second format to keep pre-16.4 Safari served was
-    # judged not worth the second set of files. Nine large images below the fold
-    # of the busiest page in the app, so each is lazy and carries its own size
-    # (the decks do not share one aspect ratio) and nothing shifts on load.
-    test "every screenshot is a lazy, self-sizing AVIF with a real alt", %{conn: conn} do
-      html = landing(conn)
-      shots = shot_tags(html)
-
-      assert length(shots) == 9
-      assert Regex.scan(~r|src="/images/landing-[a-z-]+\.avif"|, html) |> length() == 9
-      refute html =~ "landing-profile-overview.webp"
-      refute html =~ "<picture>"
-
-      assert Enum.all?(shots, &String.contains?(&1, ~s(loading="lazy")))
-      assert Enum.all?(shots, fn shot -> shot =~ ~r/width="\d+"/ and shot =~ ~r/height="\d+"/ end)
-      # An alt of substance, not a filename: for a reader who cannot see the
-      # picture these blocks are nothing but their alt text.
-      assert Enum.all?(shots, fn shot -> shot =~ ~r/alt="[^"]{60,}"/ end)
-    end
-
-    # `priv/static/` is gitignored, so a new screenshot renders perfectly in dev
-    # and 404s in production unless somebody remembered `git add -f`. Nobody
-    # should have to: this walks the catalog the page renders from and asks git.
-    # It caught all four new shots of the Arbeitszeugnis/CV blocks.
-    test "every screenshot in the catalog is in the git index" do
-      tracked =
-        System.cmd("git", ["ls-files", "priv/static/images"], cd: File.cwd!())
-        |> elem(0)
-        |> String.split("\n", trim: true)
-        |> MapSet.new()
-
-      missing =
-        PageHTML.shot_decks()
-        |> Enum.flat_map(&PageHTML.shot_list/1)
-        |> Enum.map(fn shot -> "priv/static" <> (shot.src |> String.split("?") |> hd()) end)
-        |> Enum.reject(&MapSet.member?(tracked, &1))
-
-      assert missing == [],
-             "these landing screenshots are not tracked by git and will 404 in " <>
-               "production: #{Enum.join(missing, ", ")} (fix with `git add -f`)"
+      refute html =~ "/images/landing-"
+      refute html =~ "-shots"
+      refute html =~ "Arbeitszeugnis"
+      refute html =~ "Lebenslauf, fertig"
+      refute html =~ "JSON Resume"
+      refute html =~ "Was vutuv kann"
     end
 
     # The wall of real posts was removed for what it cost: a LiveView per visit
@@ -249,72 +236,31 @@ defmodule VutuvWeb.LandingPageTest do
       refute html =~ "post-carousel"
     end
 
-    # The installability rule: nothing on this page needs configuring, and a
-    # brand-new installation with no members and no posts still gets the
-    # screenshots and the feature list rather than a hole. The feature list is
-    # our own copy, so it depends on no member at all.
-    test "renders its own copy on a brand-new installation", %{conn: conn} do
-      html = landing(conn)
-
-      assert html =~ "data-profile-shots"
-      assert html =~ "data-landing-features"
-      assert html =~ "CV download"
-    end
-
     # The landing page is rendered from two actions: `index`, and the rejected
     # sign-up, which shows the identical screen with the errors on it. Assigning
     # the examples in `index` alone 500ed every mistyped form.
-    test "a rejected sign-up re-renders the page with its examples", %{conn: conn} do
+    test "a rejected sign-up re-renders the page with its blocks", %{conn: conn} do
       html =
         conn
         |> post(~p"/new_registration", user: %{"first_name" => "No Email"})
         |> html_response(422)
 
-      assert html =~ "data-profile-shots"
-      assert html =~ "data-career-shots"
-      assert html =~ "data-landing-features"
-    end
-
-    test "the sign-up form still comes first", %{conn: conn} do
-      html = landing(conn)
-
-      form_at = :binary.match(html, "registration-form") |> elem(0)
-      features_at = :binary.match(html, "data-landing-features") |> elem(0)
-
-      assert form_at < features_at
+      assert html =~ "data-landing-promises"
+      assert html =~ "data-landing-technical"
     end
   end
 
   describe "German rendering" do
-    test "the section headings are German", %{conn: conn} do
+    # The short labels are the ones `gettext.extract --merge` fuzzy-fills with
+    # something unrelated ("Job applications" once came back as "Ihre
+    # Anwendungen", i.e. software), so the two headings the other tests do not
+    # already assert by name are asserted here.
+    test "the remaining headings are German", %{conn: conn} do
       html = landing_de(conn)
 
-      assert html =~ "So sieht ein Profil auf vutuv aus"
-      assert html =~ "Beiträge, Nachrichten und das Fediverse gleich dazu"
-      # The word itself and a network people have heard of, both by name.
-      assert html =~ "Fediverse"
-      assert html =~ "Mastodon"
-      # The part people need to read: it is a choice, made at sign-up and
-      # reversible, not something that happens to them.
-      # Not just "you choose" but the choice named as what it is, so somebody
-      # who wants no Fediverse at all reads that it is on offer.
-      assert html =~ "mit oder ohne Fediverse"
-      assert html =~ "bei der Anmeldung"
-      assert html =~ "in den Einstellungen ändern"
-      assert html =~ "Was vutuv kann"
-      assert html =~ "Selbst hosten"
-    end
-
-    # The two eyebrows of the sections added with the CV and Arbeitszeugnis
-    # blocks. Both are single words, which is exactly the shape
-    # `gettext.extract --merge` fuzzy-fills with something unrelated: "Job
-    # applications" first came back as "Ihre Anwendungen", i.e. software.
-    test "the new section labels are German", %{conn: conn} do
-      html = landing_de(conn)
-
-      assert html =~ "Bewerbungsunterlagen"
-      assert html =~ "Arbeitszeugnis"
-      refute html =~ "Ihre Anwendungen"
+      assert html =~ "Wenn Sie es genau wissen wollen"
+      assert html =~ "Neugierig? Schauen Sie sich einmal das Profil vom vutuv-Gründer"
+      assert html =~ "Mit oder ohne eigenen vutuv-Account."
     end
   end
 end
