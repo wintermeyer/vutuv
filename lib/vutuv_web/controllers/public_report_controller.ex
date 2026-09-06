@@ -26,7 +26,11 @@ defmodule VutuvWeb.PublicReportController do
   * **It is not an existence oracle.** `Vutuv.Moderation.ContentUrl` resolves
     only what an anonymous visitor can already see, so "we could not find that
     page" is the honest answer for a typo, a deleted post, a frozen profile and
-    a members-only job posting alike.
+    a members-only job posting alike. One consequence is worth knowing: content
+    an earlier notice already froze cannot be reported again, and answers the
+    same way. That is the right end of the trade — it is off the site and its
+    case is with the admins — but it is why a second rights holder is told
+    "not found" rather than "already reported".
   * **The confirmation is a POST**, not the GET the link lands on. A link
     scanner in a corporate mail gateway follows every URL in an email, and a
     GET that fires a takedown would hand the confirmation to whoever's software
@@ -108,9 +112,7 @@ defmodule VutuvWeb.PublicReportController do
         ])
 
       {:error, :not_found} ->
-        error(conn, params, url, [
-          gettext("We could not find that page. Please check the address.")
-        ])
+        not_found(conn, params, url)
 
       {:ok, content} ->
         file(conn, params, url, content)
@@ -137,9 +139,7 @@ defmodule VutuvWeb.PublicReportController do
         ])
 
       {:error, :not_allowed} ->
-        error(conn, params, url, [
-          gettext("We could not find that page. Please check the address.")
-        ])
+        not_found(conn, params, url)
 
       # The category list narrows to what the resolved content type actually
       # offers, so a mismatch ("spam" on a picture) explains itself: the
@@ -148,7 +148,7 @@ defmodule VutuvWeb.PublicReportController do
         conn
         |> put_status(:unprocessable_entity)
         |> render_form(
-          Ecto.Changeset.apply_changes(changeset),
+          struct_from(params),
           url,
           Report.categories_for(type),
           ErrorHelpers.changeset_messages(changeset)
@@ -156,8 +156,15 @@ defmodule VutuvWeb.PublicReportController do
     end
   end
 
+  # Off the request, like every other mail this app sends: production talks
+  # real SMTP with retries, and this is the one endpoint a stranger can hold
+  # open without an account.
+  #
+  # The locale is read HERE and travels in the map, because it is per-process
+  # state the spawned task does not inherit — read inside the closure it would
+  # quietly send every receipt in English.
   defp deliver_receipt(conn, params, url, type, token) do
-    Emailer.public_notice_receipt_email(%{
+    notice = %{
       name: params["reporter_name"],
       email: params["reporter_email"],
       locale: Gettext.get_locale(VutuvWeb.Gettext),
@@ -165,8 +172,18 @@ defmodule VutuvWeb.PublicReportController do
       category: params["category"],
       content_url: url,
       confirm_url: url(conn, ~p"/system/report/confirm/#{token}")
-    })
-    |> Emailer.deliver()
+    }
+
+    Emailer.deliver_async(fn ->
+      notice |> Emailer.public_notice_receipt_email() |> Emailer.deliver()
+    end)
+  end
+
+  # The one answer for a typo, a deleted post, a frozen profile and a
+  # members-only job posting alike — see the moduledoc on why they must not be
+  # distinguishable.
+  defp not_found(conn, params, url) do
+    error(conn, params, url, [gettext("We could not find that page. Please check the address.")])
   end
 
   defp error(conn, params, url, messages) do

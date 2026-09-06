@@ -25,6 +25,8 @@ defmodule Vutuv.Moderation.ContentUrl do
   comes back `{:error, :not_found}`, which is the same answer a typo gets.
   """
 
+  import Ecto.Query
+
   alias Vutuv.Accounts.User
   alias Vutuv.Fediverse
   alias Vutuv.Images
@@ -33,6 +35,7 @@ defmodule Vutuv.Moderation.ContentUrl do
   alias Vutuv.Organizations
   alias Vutuv.Posts
   alias Vutuv.Repo
+  alias Vutuv.UUIDv7
   alias Vutuv.Videos
 
   @doc """
@@ -44,13 +47,22 @@ defmodule Vutuv.Moderation.ContentUrl do
   `{:error, :not_found}` for anything else.
   """
   def resolve(url) when is_binary(url) do
-    case Fediverse.local_path(String.trim(url)) do
+    case url |> String.trim() |> with_scheme() |> Fediverse.local_path() do
       nil -> {:error, :foreign_host}
       segments -> found(from_segments(segments))
     end
   end
 
   def resolve(_url), do: {:error, :not_found}
+
+  # A scheme-less paste is one more spelling of the same page, and the browser
+  # bar is not the only place an address is copied from. `URI.parse/1` cannot
+  # be asked whether one is missing — it reads `vutuv.de/wintermeyer` as the
+  # scheme `vutuv.de` with no host at all — so the test is on the two schemes
+  # our own URLs ever carry.
+  defp with_scheme(url) do
+    if url =~ ~r{^https?://}i, do: url, else: "https://" <> url
+  end
 
   defp found(nil), do: {:error, :not_found}
   defp found(content), do: {:ok, content}
@@ -63,19 +75,11 @@ defmodule Vutuv.Moderation.ContentUrl do
   # The authorizing media proxies. Right-clicking a photo or a video in a post
   # copies one of these, and what is reportable is the post that carries it —
   # the freeze takes the post down with its media.
-  defp from_segments(["post_images", token, _version]) do
-    case Posts.get_image_by_token(token) do
-      %{post_id: post_id} when is_binary(post_id) -> visible_post(post_id)
-      _ -> nil
-    end
-  end
+  defp from_segments(["post_images", token, _version]),
+    do: post_of(Posts.get_image_by_token(token))
 
-  defp from_segments(["post_videos", token, _file]) do
-    case Videos.get_video_by_token(token) do
-      %{post_id: post_id} when is_binary(post_id) -> visible_post(post_id)
-      _ -> nil
-    end
-  end
+  defp from_segments(["post_videos", token, _file]),
+    do: post_of(Videos.get_video_by_token(token))
 
   # A profile picture or cover, by the three addresses one has. The served
   # files sit in an id-scoped public tree (`/avatars/<user id>/…`), which is
@@ -83,26 +87,34 @@ defmodule Vutuv.Moderation.ContentUrl do
   # scraper-friendly JPEG a link preview shows.
   defp from_segments(["avatars", user_id | _rest]), do: visible_image(user_id, "avatar")
   defp from_segments(["covers", user_id | _rest]), do: visible_image(user_id, "cover")
+  defp from_segments([handle, "avatar.jpg"]), do: visible_image(visible_user(handle), "avatar")
 
-  defp from_segments([handle, "avatar.jpg"]) do
-    case visible_user(handle) do
-      %User{} = user -> visible_image(user.id, "avatar")
-      _ -> nil
-    end
-  end
+  defp from_segments(["organizations", slug]),
+    do: ok_or_nil(Organizations.fetch_visible_organization(slug, nil))
 
-  defp from_segments(["organizations", slug]), do: visible_organization_by_slug(slug)
-  defp from_segments(["jobs", slug]), do: visible_job_posting(slug)
+  defp from_segments(["jobs", slug]), do: ok_or_nil(Jobs.fetch_visible_job_posting(slug, nil))
 
   # A bare handle is a member's profile, or — since members and pages share one
-  # handle namespace — a page that claimed that root word.
-  defp from_segments([handle]), do: visible_user(handle) || visible_organization(handle)
+  # handle namespace — a page that claimed that root word. The two live in two
+  # columns (`slug` above, `username` here), hence two lookups.
+  defp from_segments([handle]) do
+    visible_user(handle) ||
+      ok_or_nil(Organizations.fetch_visible_organization_by_username(handle, nil))
+  end
 
   # A deeper path under a member's handle (a section page, a list) still names
   # that member, which is the reportable thing there.
   defp from_segments([handle | _rest]), do: visible_user(handle)
 
   defp from_segments(_segments), do: nil
+
+  defp ok_or_nil({:ok, record}), do: record
+  defp ok_or_nil(_), do: nil
+
+  defp post_of(%{post_id: post_id}) when is_binary(post_id), do: visible_post(post_id)
+  defp post_of(_), do: nil
+
+  defp visible_post(nil), do: nil
 
   defp visible_post(id) do
     with post when not is_nil(post) <- Moderation.fetch_content("post", id),
@@ -114,7 +126,8 @@ defmodule Vutuv.Moderation.ContentUrl do
   end
 
   # The handle a member holds today, or the retired one they used to answer to
-  # — a pasted URL is often older than the rename.
+  # — a pasted URL is often older than the rename. One query, because the miss
+  # is the common case: an organization handle and every typo fall through here.
   defp visible_user(handle) do
     with %User{} = user <- lookup_user(handle),
          true <- Moderation.profile_visible_to?(user, nil) do
@@ -125,32 +138,13 @@ defmodule Vutuv.Moderation.ContentUrl do
   end
 
   defp lookup_user(handle) do
-    Repo.get_by(User, username: handle) || Repo.get_by(User, legacy_username: handle)
-  end
-
-  # `/organizations/:slug` names a page by its slug; a bare root word names it
-  # by the handle it claimed. Two columns, two lookups.
-  defp visible_organization_by_slug(slug) do
-    case Organizations.fetch_visible_organization(slug, nil) do
-      {:ok, organization} -> organization
-      {:error, :not_found} -> nil
-    end
-  end
-
-  defp visible_organization(handle) do
-    case Organizations.fetch_visible_organization_by_username(handle, nil) do
-      {:ok, organization} -> organization
-      {:error, :not_found} -> nil
-    end
-  end
-
-  defp visible_job_posting(slug) do
-    with posting when not is_nil(posting) <- Jobs.get_job_posting_by_slug(slug),
-         true <- Jobs.visible_to?(posting, nil) do
-      posting
-    else
-      _ -> nil
-    end
+    Repo.one(
+      from(u in User,
+        where: u.username == ^handle or u.legacy_username == ^handle,
+        order_by: [asc: fragment("CASE WHEN ? = ? THEN 0 ELSE 1 END", u.username, ^handle)],
+        limit: 1
+      )
+    )
   end
 
   # A picture resolves only while it is the one on the profile: `profile_image/2`
@@ -158,15 +152,23 @@ defmodule Vutuv.Moderation.ContentUrl do
   # reachable through the address the old file had. A picture another case
   # already holds is not offered either — it is off the site, and reporting it
   # again would say the notice did something it did not.
-  defp visible_image(user_id, kind) do
-    with true <- Vutuv.UUIDv7.cast_or_nil(user_id) != nil,
-         %User{} = owner <- Repo.get(User, user_id),
-         true <- Moderation.profile_visible_to?(owner, nil),
-         image when not is_nil(image) <- Images.profile_image(owner.id, kind),
-         true <- is_nil(image.frozen_at) do
-      image
-    else
+  defp visible_image(nil, _kind), do: nil
+
+  defp visible_image(%User{} = owner, kind) do
+    case Images.profile_image(owner.id, kind) do
+      %{frozen_at: nil} = image -> image
       _ -> nil
+    end
+  end
+
+  defp visible_image(user_id, kind) when is_binary(user_id) do
+    UUIDv7.with_cast(user_id, fn uuid -> visible_image(visible_user_by_id(uuid), kind) end)
+  end
+
+  defp visible_user_by_id(id) do
+    case Repo.get(User, id) do
+      %User{} = user -> if Moderation.profile_visible_to?(user, nil), do: user
+      nil -> nil
     end
   end
 end

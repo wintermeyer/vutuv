@@ -84,6 +84,15 @@ defmodule Vutuv.Moderation.Report do
   def effective?(%__MODULE__{confirmed_at: %NaiveDateTime{}}), do: true
   def effective?(%__MODULE__{}), do: false
 
+  @doc """
+  The same rule as a query scope, so the three places that count reports in SQL
+  cannot spell it differently from `effective?/1`. A member's report has no
+  `confirmed_at` and needs none; an outside notice must have one.
+  """
+  def effective(query) do
+    from(r in query, where: not is_nil(r.reporter_id) or not is_nil(r.confirmed_at))
+  end
+
   @doc "The report categories offered for a given content type (wire string)."
   def categories_for("job_posting"), do: @job_categories
   def categories_for("image"), do: @image_categories
@@ -100,8 +109,16 @@ defmodule Vutuv.Moderation.Report do
   report form has no per-field error slots and shows them as one banner. They
   are extracted for translation through
   `VutuvWeb.ErrorHelpers.__error_message_extraction_anchors__/0`.
+
+  `full_notice?: true` demands the explanation and the good-faith declaration
+  for **every** category rather than only for `copyright` — what the public
+  form asks (see `outside_changeset/3`). It is an option here rather than a
+  second pass at the call site so that "which report has to be complete" keeps
+  one owner; stacking a second `validate_required(:note)` on top of this one
+  gave a copyright notice its demand twice, in two different wordings, in a
+  banner that joins every message into one line.
   """
-  def changeset(report, params \\ %{}, content_type \\ nil) do
+  def changeset(report, params \\ %{}, content_type \\ nil, opts \\ []) do
     pick_one = "Please pick a category."
 
     report
@@ -110,7 +127,7 @@ defmodule Vutuv.Moderation.Report do
     |> validate_required([:category], message: pick_one)
     |> validate_inclusion(:category, categories_for(content_type), message: pick_one)
     |> validate_length(:note, max: @max_note_length, message: "Your note is too long.")
-    |> validate_copyright_notice()
+    |> validate_full_notice(Keyword.get(opts, :full_notice?, false))
     |> unique_constraint([:case_id, :reporter_id])
   end
 
@@ -127,7 +144,7 @@ defmodule Vutuv.Moderation.Report do
   """
   def outside_changeset(report, params, content_type) do
     report
-    |> changeset(params, content_type)
+    |> changeset(params, content_type, full_notice?: true)
     |> cast(params, [:reporter_name, :reporter_email])
     |> update_change(:reporter_name, &String.trim/1)
     |> update_change(:reporter_email, fn value -> value |> String.trim() |> String.downcase() end)
@@ -140,10 +157,6 @@ defmodule Vutuv.Moderation.Report do
     # value must be a changeset error, never a raised Postgres 22001.
     |> validate_length(:reporter_email, max: 254, message: "That address is too long.")
     |> validate_length(:reporter_name, max: 255, message: "Your name is too long.")
-    |> validate_required([:note],
-      message: "Please tell us what is wrong with this content, in your own words."
-    )
-    |> validate_good_faith()
     |> unique_constraint(:reporter_email,
       name: :moderation_reports_case_reporter_email_index,
       message: "You already reported this."
@@ -155,17 +168,26 @@ defmodule Vutuv.Moderation.Report do
   # declaration that the use really is unauthorized. Both are checked here, at
   # the one place every report passes, so no route can file half a notice and
   # still get the freeze and the admin queue that the category buys.
-  defp validate_copyright_notice(changeset) do
-    if copyright?(get_field(changeset, :category)) do
+  #
+  # `always?` widens the same demand to every category, which is what the
+  # public form asks of a stranger (issue #2009).
+  defp validate_full_notice(changeset, always?) do
+    copyright? = copyright?(get_field(changeset, :category))
+
+    if always? or copyright? do
       changeset
-      |> validate_required([:note],
-        message: "Please tell us which work it is and where the original can be seen."
-      )
+      |> validate_required([:note], message: missing_note_message(copyright?))
       |> validate_good_faith()
     else
       changeset
     end
   end
+
+  defp missing_note_message(true),
+    do: "Please tell us which work it is and where the original can be seen."
+
+  defp missing_note_message(false),
+    do: "Please tell us what is wrong with this content, in your own words."
 
   # Spelled out rather than `validate_acceptance/3`, which only fires when the
   # parameter is present — and an unticked checkbox sends nothing at all.

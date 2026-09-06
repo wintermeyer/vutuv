@@ -189,14 +189,7 @@ defmodule Vutuv.Moderation do
     category = Ecto.Changeset.get_field(report_changeset, :category)
     {status, effects} = initial_status(reporter, content, category)
 
-    case_changeset =
-      %Case{
-        content_type: content_type(content),
-        content_id: content_id(content),
-        owner_id: owner_id(content),
-        content_snapshot: snapshot(content)
-      }
-      |> Case.changeset(case_params(status))
+    case_changeset = new_case_changeset(content, status)
 
     case insert_case_with_report(case_changeset, report_changeset) do
       {:ok, case_record} ->
@@ -214,6 +207,19 @@ defmodule Vutuv.Moderation do
       {:error, changeset} ->
         {:error, changeset}
     end
+  end
+
+  # A brand-new case for this content, at the status its first report earns.
+  # Both ways in (a member's report, an outside notice) open a case the same
+  # way; only when the decision runs differs.
+  defp new_case_changeset(content, status) do
+    %Case{
+      content_type: content_type(content),
+      content_id: content_id(content),
+      owner_id: owner_id(content),
+      content_snapshot: snapshot(content)
+    }
+    |> Case.changeset(case_params(status))
   end
 
   # The case + its first report in one transaction. A case insert can only fail
@@ -308,14 +314,7 @@ defmodule Vutuv.Moderation do
   end
 
   defp open_notice_case(content, report_changeset, token) do
-    case_changeset =
-      %Case{
-        content_type: content_type(content),
-        content_id: content_id(content),
-        owner_id: owner_id(content),
-        content_snapshot: snapshot(content)
-      }
-      |> Case.changeset(case_params("flagged"))
+    case_changeset = new_case_changeset(content, "flagged")
 
     case insert_case_with_report(case_changeset, report_changeset) do
       {:ok, case_record} ->
@@ -359,18 +358,18 @@ defmodule Vutuv.Moderation do
   nothing — the confirmation itself is the POST behind the button there.
   """
   def public_notice_state(token) when is_binary(token) and token != "" do
-    # A tuple, not the bare column: `select: r.confirmed_at` answers `nil` for
-    # "no such token" and for "not confirmed yet" alike, which are the two
+    # A boolean, not the column itself: `select: r.confirmed_at` answers `nil`
+    # for "no such token" and for "not confirmed yet" alike, which are the two
     # answers this function exists to tell apart.
     case Repo.one(
            from(r in Report,
              where: r.confirmation_hash == ^Token.hash_token(token),
-             select: {r.id, r.confirmed_at}
+             select: not is_nil(r.confirmed_at)
            )
          ) do
       nil -> :unknown
-      {_id, %NaiveDateTime{}} -> :confirmed
-      {_id, nil} -> :pending
+      true -> :confirmed
+      false -> :pending
     end
   end
 
@@ -392,9 +391,15 @@ defmodule Vutuv.Moderation do
   """
   def confirm_public_notice(token) when is_binary(token) and token != "" do
     case claim_notice_confirmation(Token.hash_token(token)) do
-      nil -> {:error, :invalid}
-      {:already_confirmed, report} -> {:ok, :already_confirmed, report}
-      {:confirmed, report} -> {:ok, :confirmed, finish_confirmed_notice(report)}
+      nil ->
+        {:error, :invalid}
+
+      {:already_confirmed, report} ->
+        {:ok, :already_confirmed, report}
+
+      {:confirmed, report} ->
+        finish_confirmed_notice(report)
+        {:ok, :confirmed, report}
     end
   end
 
@@ -433,22 +438,28 @@ defmodule Vutuv.Moderation do
     # changed since the first report.
     if is_nil(case_record.evidence_screenshot), do: EvidenceScreenshot.async_capture(case_record)
 
-    {updated, admins_told?} =
-      apply_confirmed_notice(case_record, report, case_content(case_record))
-
+    {updated, admins_told?} = apply_confirmed_notice(case_record, report)
     unless admins_told?, do: Notifier.admins_urgent(updated)
-    report
+    :ok
   end
 
   # The decision the submit deferred, applied to the case the notice already
   # opened. Returns the (possibly upgraded) case and whether the upgrade path
   # already mailed the admins, so the urgent mail is sent exactly once.
   #
-  # Content that has been deleted in the meantime has nothing to freeze; the
-  # case still stands and the admins are still told.
-  defp apply_confirmed_notice(case_record, _report, nil), do: {case_record, false}
+  # Content deleted in the meantime has nothing to freeze, and a case already
+  # frozen, escalated or resolved took its decision without this notice; both
+  # leave the case as it stands, and the admins are still told.
+  defp apply_confirmed_notice(%Case{status: "flagged"} = case_record, report) do
+    case case_content(case_record) do
+      nil -> {case_record, false}
+      content -> decide_confirmed_notice(case_record, report, content)
+    end
+  end
 
-  defp apply_confirmed_notice(%Case{status: "flagged"} = case_record, report, content) do
+  defp apply_confirmed_notice(case_record, _report), do: {case_record, false}
+
+  defp decide_confirmed_notice(case_record, report, content) do
     case initial_status(report, content, report.category) do
       # This notice on its own hides nothing. The profile tally may still fire
       # (a second confirmed notice, or the spam threshold), and that path mails
@@ -457,15 +468,14 @@ defmodule Vutuv.Moderation do
         {:ok, updated} = maybe_upgrade_case(case_record, report, content, report.category)
         {updated, updated.status != case_record.status}
 
+      # `do_flagged_upgrade/4` freezes on its own, so the `:freeze` effect
+      # `initial_status/3` returns is already accounted for here; what it takes
+      # is the notification list.
       {status, effects} ->
-        {:ok, updated} = do_flagged_upgrade(case_record, content, status, effects -- [:freeze])
+        {:ok, updated} = do_flagged_upgrade(case_record, content, status, effects)
         {updated, false}
     end
   end
-
-  # Already frozen, escalated or resolved by something else: the decision was
-  # taken without this notice and a confirmation does not re-take it.
-  defp apply_confirmed_notice(case_record, _report, _content), do: {case_record, false}
 
   # A new report can upgrade an open case: a trusted report freezes a
   # so-far-only-flagged post/message, and the second trusted reporter
@@ -690,63 +700,43 @@ defmodule Vutuv.Moderation do
     for %Report{reporter_id: nil, reporter_email: email} <- reports, is_binary(email), do: email
   end
 
-  # The subset of `reporter_ids` whose reports are trusted (`trusted?/2`),
-  # computed in one grouped windowed query (the COUNT(*) FILTER shape
-  # `list_reporter_stats/0` uses) so a profile-freeze check never runs a
-  # per-reporter aggregate (N+1). A reporter with no resolved-in-window report
-  # has no row and defaults to {0, 0} — trusted, exactly like
-  # `trusted_reporter?/1` returns for an empty aggregate.
-  defp trusted_reporter_ids([]), do: MapSet.new()
+  defp trusted_reporter_ids(reporter_ids), do: trusted_reporters(:reporter_id, reporter_ids)
+  defp trusted_reporter_emails(emails), do: trusted_reporters(:reporter_email, emails)
 
-  defp trusted_reporter_ids(reporter_ids) do
+  # The subset of `keys` whose reports are trusted (`trusted?/2`), computed in
+  # one grouped windowed query (the COUNT(*) FILTER shape `list_reporter_stats/0`
+  # uses) so a profile-freeze check never runs a per-reporter aggregate (N+1). A
+  # reporter with no resolved-in-window report has no row and defaults to
+  # {0, 0} — trusted, exactly like `trusted_reporter?/1` returns for an empty
+  # aggregate.
+  #
+  # `column` is the id or the address (issue #2009): a member is judged by their
+  # user row, an outside notifier by the address they confirmed. Only
+  # `effective` reports count either way, which for a member is every one of
+  # them and for a notifier only a confirmed one — an unconfirmed notice has
+  # neither earned trust nor lost any.
+  defp trusted_reporters(_column, []), do: MapSet.new()
+
+  defp trusted_reporters(column, keys) do
     stats =
       from(r in Report,
         join: c in assoc(r, :case),
-        where: r.reporter_id in ^reporter_ids,
+        where: field(r, ^column) in ^keys,
         where: c.resolved_at > ^trust_window_start(),
-        group_by: r.reporter_id,
+        group_by: field(r, ^column),
         select: {
-          r.reporter_id,
+          field(r, ^column),
           fragment("COUNT(*) FILTER (WHERE ?)", r.abusive?),
           fragment("COUNT(*) FILTER (WHERE ? = 'rejected')", c.status)
         }
       )
+      |> Report.effective()
       |> Repo.all()
-      |> Map.new(fn {id, abusive, rejected} -> {id, {abusive, rejected}} end)
+      |> Map.new(fn {key, abusive, rejected} -> {key, {abusive, rejected}} end)
 
-    reporter_ids
-    |> Enum.filter(fn id ->
-      {abusive, rejected} = Map.get(stats, id, {0, 0})
-      trusted?(abusive, rejected)
-    end)
-    |> MapSet.new()
-  end
-
-  # The address twin of `trusted_reporter_ids/1` (issue #2009). Only
-  # **confirmed** notices are counted, on both sides of the ladder: an
-  # unconfirmed one has neither earned trust nor lost any.
-  defp trusted_reporter_emails([]), do: MapSet.new()
-
-  defp trusted_reporter_emails(emails) do
-    stats =
-      from(r in Report,
-        join: c in assoc(r, :case),
-        where: r.reporter_email in ^emails,
-        where: not is_nil(r.confirmed_at),
-        where: c.resolved_at > ^trust_window_start(),
-        group_by: r.reporter_email,
-        select: {
-          r.reporter_email,
-          fragment("COUNT(*) FILTER (WHERE ?)", r.abusive?),
-          fragment("COUNT(*) FILTER (WHERE ? = 'rejected')", c.status)
-        }
-      )
-      |> Repo.all()
-      |> Map.new(fn {email, abusive, rejected} -> {email, {abusive, rejected}} end)
-
-    emails
-    |> Enum.filter(fn email ->
-      {abusive, rejected} = Map.get(stats, email, {0, 0})
+    keys
+    |> Enum.filter(fn key ->
+      {abusive, rejected} = Map.get(stats, key, {0, 0})
       trusted?(abusive, rejected)
     end)
     |> MapSet.new()
@@ -1617,22 +1607,7 @@ defmodule Vutuv.Moderation do
     # A nil in this list is not merely useless (`r.reporter_id in (NULL, …)` is
     # never true for a NULL row): the caller then looks the answer up by nil and
     # gets nothing back. Dropped here so no caller has to remember.
-    ids = Enum.filter(reporter_ids, &is_binary/1)
-
-    from(r in Report,
-      join: c in assoc(r, :case),
-      where: r.reporter_id in ^ids,
-      group_by: r.reporter_id,
-      select:
-        {r.reporter_id,
-         %{
-           total: count(r.id),
-           rejected: fragment("COUNT(*) FILTER (WHERE ? = 'rejected')", c.status),
-           abusive: fragment("COUNT(*) FILTER (WHERE ?)", r.abusive?)
-         }}
-    )
-    |> Repo.all()
-    |> Map.new()
+    stats_map(:reporter_id, Enum.filter(reporter_ids, &is_binary/1))
   end
 
   @doc """
@@ -1659,24 +1634,27 @@ defmodule Vutuv.Moderation do
     end)
   end
 
-  # The address twin of `reporter_stats_map/1`. Confirmed notices only, for the
-  # same reason the trust ladder counts only those.
-  defp outside_stats_map([]), do: %{}
+  defp outside_stats_map(emails), do: stats_map(:reporter_email, emails)
 
-  defp outside_stats_map(emails) do
+  # The all-time counts an admin sees beside a report, keyed by whichever column
+  # names its reporter — the user id for a member, the confirmed address for an
+  # outside notifier (issue #2009).
+  defp stats_map(_column, []), do: %{}
+
+  defp stats_map(column, keys) do
     from(r in Report,
       join: c in assoc(r, :case),
-      where: r.reporter_email in ^emails,
-      where: not is_nil(r.confirmed_at),
-      group_by: r.reporter_email,
+      where: field(r, ^column) in ^keys,
+      group_by: field(r, ^column),
       select:
-        {r.reporter_email,
+        {field(r, ^column),
          %{
            total: count(r.id),
            rejected: fragment("COUNT(*) FILTER (WHERE ? = 'rejected')", c.status),
            abusive: fragment("COUNT(*) FILTER (WHERE ?)", r.abusive?)
          }}
     )
+    |> Report.effective()
     |> Repo.all()
     |> Map.new()
   end
@@ -1696,7 +1674,10 @@ defmodule Vutuv.Moderation do
   def list_reporter_stats do
     (member_reporter_stats() ++ outside_reporter_stats())
     |> Enum.map(fn row ->
-      row
+      # Both kinds of key on every row, so a template never has to know which
+      # query a row came from.
+      %{reporter: nil, email: nil}
+      |> Map.merge(row)
       |> Map.put(:trusted, trusted?(row.recent_abusive, row.recent_rejected))
       |> Map.drop([:recent_rejected, :recent_abusive])
     end)
@@ -1704,50 +1685,39 @@ defmodule Vutuv.Moderation do
   end
 
   defp member_reporter_stats do
-    window_start = trust_window_start()
-
     from(r in Report,
       join: c in assoc(r, :case),
       join: u in User,
       on: u.id == r.reporter_id,
       group_by: u.id,
-      select: %{
-        reporter: u,
-        total: count(r.id),
-        rejected: fragment("COUNT(*) FILTER (WHERE ? = 'rejected')", c.status),
-        abusive: fragment("COUNT(*) FILTER (WHERE ?)", r.abusive?),
-        recent_rejected:
-          fragment(
-            "COUNT(*) FILTER (WHERE ? = 'rejected' AND ? > ?)",
-            c.status,
-            c.resolved_at,
-            type(^window_start, :naive_datetime)
-          ),
-        recent_abusive:
-          fragment(
-            "COUNT(*) FILTER (WHERE ? AND ? > ?)",
-            r.abusive?,
-            c.resolved_at,
-            type(^window_start, :naive_datetime)
-          )
-      }
+      select: %{reporter: u}
     )
+    |> with_track_record()
     |> Repo.all()
-    |> Enum.map(&Map.put(&1, :email, nil))
   end
 
   # Confirmed notices only: an unconfirmed one is a stranger's unverified claim
   # and has neither earned trust nor lost any, exactly as in
-  # `trusted_reporter_emails/1`.
+  # `trusted_reporters/2`.
   defp outside_reporter_stats do
-    window_start = trust_window_start()
-
     from(r in Report,
       join: c in assoc(r, :case),
       where: not is_nil(r.reporter_email) and not is_nil(r.confirmed_at),
       group_by: r.reporter_email,
-      select: %{
-        email: r.reporter_email,
+      select: %{email: r.reporter_email}
+    )
+    |> with_track_record()
+    |> Repo.all()
+  end
+
+  # The five figures a track record is, merged onto whichever key the caller
+  # grouped by. Written once because the two windowed `COUNT(*) FILTER` blocks
+  # are the part that would drift.
+  defp with_track_record(query) do
+    window_start = trust_window_start()
+
+    from([r, c] in query,
+      select_merge: %{
         total: count(r.id),
         rejected: fragment("COUNT(*) FILTER (WHERE ? = 'rejected')", c.status),
         abusive: fragment("COUNT(*) FILTER (WHERE ?)", r.abusive?),
@@ -1767,8 +1737,6 @@ defmodule Vutuv.Moderation do
           )
       }
     )
-    |> Repo.all()
-    |> Enum.map(&Map.put(&1, :reporter, nil))
   end
 
   ## Account gates

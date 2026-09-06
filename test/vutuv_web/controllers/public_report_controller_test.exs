@@ -26,23 +26,20 @@ defmodule VutuvWeb.PublicReportControllerTest do
   defp post_url(post), do: VutuvWeb.Endpoint.url() <> Vutuv.Posts.path(post)
 
   defp params(url, attrs \\ %{}) do
-    Map.merge(
-      %{
-        "report" =>
-          Map.merge(
-            %{
-              "url" => url,
-              "category" => "copyright",
-              "note" => "That photograph is mine; the original is at example.com/photo",
-              "reporter_name" => "Rita Holder",
-              "reporter_email" => "rita@example.com",
-              "good_faith?" => "true"
-            },
-            attrs
-          )
-      },
-      %{}
-    )
+    %{
+      "report" =>
+        Map.merge(
+          %{
+            "url" => url,
+            "category" => "copyright",
+            "note" => "That photograph is mine; the original is at example.com/photo",
+            "reporter_name" => "Rita Holder",
+            "reporter_email" => "rita@example.com",
+            "good_faith?" => "true"
+          },
+          attrs
+        )
+    }
   end
 
   defp submit(conn, url, attrs \\ %{}) do
@@ -100,6 +97,9 @@ defmodule VutuvWeb.PublicReportControllerTest do
         "http://" <> host <> path,
         "https://www." <> host <> path,
         "https://" <> String.upcase(host) <> path,
+        # No scheme at all: an address copied out of a link's text rather than
+        # out of the browser bar.
+        host <> path,
         "  " <> base <> "  "
       ]
 

@@ -21,7 +21,8 @@ defmodule VutuvWeb.Admin.ModerationCaseLive do
       content_type_label: 1,
       category_label: 1,
       event_label: 1,
-      event_detail: 2
+      event_detail: 2,
+      reporter_identity: 1
     ]
 
   alias Vutuv.{Chat, Moderation}
@@ -304,29 +305,10 @@ defmodule VutuvWeb.Admin.ModerationCaseLive do
               <span class="inline-flex items-center rounded-lg bg-brand-50 px-2 py-0.5 text-xs font-medium text-brand-700 dark:bg-brand-900/40 dark:text-brand-100">
                 {category_label(report.category)}
               </span>
-              <%!-- Who filed it. A member is an @handle; somebody without an
-                    account here is their name and the address they confirmed,
-                    which is what an admin needs to write back (issue #2009).
-                    The owner of the content never sees either. --%>
-              <a
-                :if={report.reporter}
-                href={~p"/#{report.reporter}"}
-                class="ml-1 font-semibold text-brand-600 hover:text-brand-700 dark:text-brand-400 dark:hover:text-brand-300"
-              >
-                @{report.reporter.username}
-              </a>
-              <span :if={is_nil(report.reporter)} class="ml-1 font-semibold text-slate-900 dark:text-white">
-                {report.reporter_name}
-                <a href={"mailto:#{report.reporter_email}"} class="font-normal text-brand-600 hover:text-brand-700 dark:text-brand-400 dark:hover:text-brand-300">
-                  &lt;{report.reporter_email}&gt;
-                </a>
-              </span>
-              <span
-                :if={is_nil(report.reporter) and is_nil(report.confirmed_at)}
-                class="ml-1 inline-flex items-center rounded-lg bg-amber-50 px-2 py-0.5 text-xs font-medium text-amber-800 ring-1 ring-amber-200 dark:bg-amber-900/30 dark:text-amber-200 dark:ring-amber-900"
-              >
-                {gettext("address not confirmed")}
-              </span>
+              <%!-- Who filed it: a member's @handle, or an outside notifier's
+                    name and address, which is what an admin needs to write
+                    back (issue #2009). The owner of the content sees neither. --%>
+              <.reporter_identity report={report} />
               <% stats = @reporter_stats[report.id] %>
               <span class="text-slate-600 dark:text-slate-400">
                 · {ngettext("%{count} report so far", "%{count} reports so far", stats.total)}, {gettext(
@@ -416,12 +398,12 @@ defmodule VutuvWeb.Admin.ModerationCaseLive do
                     only counts against the address's own trust (issue #2009).
                     Two sentences, because promising a strike that cannot
                     happen is worse than saying what does. --%>
-              <span :if={report.reporter}>
+              <span :if={report.reporter_id}>
                 {gettext("The report by @%{slug} was a deliberate weapon (strikes the reporter)",
                   slug: report.reporter.username
                 )}
               </span>
-              <span :if={is_nil(report.reporter)}>
+              <span :if={is_nil(report.reporter_id)}>
                 {gettext(
                   "The report by %{email} was a deliberate weapon (that address loses our trust)",
                   email: report.reporter_email

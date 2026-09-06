@@ -39,7 +39,6 @@ defmodule Vutuv.Notifications.Emailer do
   alias Vutuv.Organizations.Organization
   alias Vutuv.Reports.DailyReport
   alias Vutuv.SavedSearches
-  alias VutuvWeb.Admin.ModerationHTML
   alias VutuvWeb.EmailComponents
   alias VutuvWeb.EmailText
   alias VutuvWeb.NotificationDigestText, as: DigestText
@@ -1117,7 +1116,7 @@ defmodule Vutuv.Notifications.Emailer do
     |> subject(in_locale(locale, fn -> gettext("Please confirm your report") end))
     |> render_bodies("report_receipt", locale, %{
       name: notice.name,
-      content_label: in_locale(locale, fn -> ModerationHTML.content_type_label(notice.type) end),
+      content_label: in_locale(locale, fn -> ReportHTML.content_type_label(notice.type) end),
       category_label: in_locale(locale, fn -> ReportHTML.category_label(notice.category) end),
       content_url: notice.content_url,
       confirm_url: notice.confirm_url,
@@ -1146,7 +1145,7 @@ defmodule Vutuv.Notifications.Emailer do
       case_id: case_record.id,
       owner_slug: case_record.owner.username,
       content_label:
-        in_locale(locale, fn -> ModerationHTML.content_type_label(case_record.content_type) end),
+        in_locale(locale, fn -> ReportHTML.content_type_label(case_record.content_type) end),
       profile?: case_record.content_type in ["user", "organization"],
       category_label: localized_category_label(report, user),
       note: report && presence(report.note),

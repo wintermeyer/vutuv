@@ -4404,7 +4404,33 @@ defmodule VutuvWeb.UI do
 
   def form_error(assigns) do
     ~H"""
-    <div :if={@changeset.action && @changeset.errors != []} class="alert alert-danger" role="alert">
+    <.error_banner :if={@changeset.action && @changeset.errors != []}>
+      {gettext("Please check the fields marked in red.")}
+    </.error_banner>
+    """
+  end
+
+  @doc """
+  The bare red alert strip `form_error/1` renders, for a form that has its own
+  sentence to put in it.
+
+  Both report forms do: `Vutuv.Moderation.Report` writes whole sentences
+  addressed to the reporter, and neither form has per-field error slots, so
+  they show everything as one banner. Its markup — the `role="alert"`, the
+  warning triangle, the `components.css` classes — lives here so the three
+  copies cannot drift.
+  """
+  attr(:id, :string, default: nil)
+  attr(:class, :string, default: nil)
+  slot(:inner_block, required: true)
+
+  def error_banner(assigns) do
+    ~H"""
+    <%!-- The class is joined here rather than handed over as a list: HEEx
+          renders `class={["a", nil]}` as `class="a "`, and a stray trailing
+          space in the one banner every form shows is the kind of drift a
+          markup guard notices and a reader does not. --%>
+    <div id={@id} class={Enum.join(Enum.reject(["alert alert-danger", @class], &is_nil/1), " ")} role="alert">
       <svg class="alert__icon" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" aria-hidden="true">
         <path
           stroke-linecap="round"
@@ -4412,7 +4438,7 @@ defmodule VutuvWeb.UI do
           d="M12 9v4m0 4h.01M10.29 3.86 1.82 18a2 2 0 0 0 1.71 3h16.94a2 2 0 0 0 1.71-3L13.71 3.86a2 2 0 0 0-3.42 0Z"
         />
       </svg>
-      <p>{gettext("Please check the fields marked in red.")}</p>
+      <p>{render_slot(@inner_block)}</p>
     </div>
     """
   end
