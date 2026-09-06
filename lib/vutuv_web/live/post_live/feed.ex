@@ -3446,9 +3446,16 @@ defmodule VutuvWeb.PostLive.Feed do
           <%!-- `NewMarks` (app.js) watches this container's own children for
           the unread dots the pill's command stamps on them, and takes each one
           off once the reader has looked at that card. --%>
+          <%!-- `flush`: on a phone this list IS the page, so it runs edge to
+          edge (`UI.card/1`, and the phone-timeline block at the end of
+          `app.css`). The other carded post lists — the saved hub, a tag
+          timeline, the posts archive — could ask for it too and deliberately do
+          not yet: this is the timeline a member spends their day in, and it is
+          the one Stefan looked at. --%>
           <.post_list
             :if={!@empty?}
             id="feed-posts"
+            flush
             phx-update="stream"
             phx-hook="NewMarks"
             data-filter-list

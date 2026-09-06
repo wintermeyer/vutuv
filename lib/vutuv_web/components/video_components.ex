@@ -65,6 +65,7 @@ defmodule VutuvWeb.VideoComponents do
       class={["mt-3", @class]}
       data-post-video={@video.id}
       data-video-figure
+      data-media-edge
       data-hd-sources={@hd_sources}
     >
       <div

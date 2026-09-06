@@ -73,6 +73,13 @@ defmodule VutuvWeb.UI do
   Used by the containers that carry the reading width: the top bar's inner
   track, `<main>` and the footer's content column. A container that is already
   inside one of those needs nothing — the insets do not stack.
+
+  **One container cancels it instead**, the feed's flush timeline card, which
+  negates this expression in the phone-timeline block at the end of `app.css`
+  to reach the edge of the screen. The two spellings have to move together —
+  change the gutter here and the card would negate the old amount, leaving the
+  timeline a few pixels off one edge on every phone. `feed_edge_to_edge_test.exs`
+  fails when they drift.
   """
   def gutter_class do
     "pl-[max(1rem,env(safe-area-inset-left))] pr-[max(1rem,env(safe-area-inset-right))]"
@@ -1031,14 +1038,41 @@ defmodule VutuvWeb.UI do
     """
   end
 
-  @doc "The Direction A card surface (white, rounded, ring, soft shadow; dark-aware)."
+  @doc """
+  The Direction A card surface (white, rounded, ring, soft shadow; dark-aware).
+
+  `flush` is for the one card a phone reader spends the most time in, the feed's
+  timeline: below `md` it gives up the page gutter and takes it back as its own
+  padding, so the card reaches both edges of the screen while the text keeps its
+  distance from them. A 390px phone spends 32px of its width on the gutter and
+  another 48px on this card's `p-6`; a timeline is the page rather than a card
+  on it, so both are worth reclaiming there and neither is worth a thought from
+  `md` up, where the card sits in a column beside a rail again.
+
+  Square corners and no side ring come with it — a rounded corner cut off by the
+  screen edge reads as a rendering fault — and the top/bottom ring stays, which
+  is what still says "one surface" once the sides are gone.
+
+  **It changes no class.** `flush` sets one attribute, `data-timeline-flush`,
+  and the geometry hangs off it in the phone-timeline block at the end of
+  `app.css`, which is also where the reasoning lives: the card cancels the
+  gutter, hands its side padding to each **row** (so the hairline between two
+  posts runs the whole width of the screen), and squares its corners.
+  """
   attr(:class, :string, default: nil)
+
+  attr(:flush, :boolean,
+    default: false,
+    doc: "run edge to edge below `md` — see above; an ordinary card is never flush"
+  )
+
   attr(:rest, :global)
   slot(:inner_block, required: true)
 
   def card(assigns) do
     ~H"""
     <section
+      data-timeline-flush={@flush}
       class={[
         "rounded-2xl bg-white p-6 shadow-sm ring-1 ring-slate-200 dark:bg-slate-900 dark:ring-slate-800",
         @class
