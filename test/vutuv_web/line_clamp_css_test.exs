@@ -27,6 +27,8 @@ defmodule VutuvWeb.LineClampCssTest do
   # come out right in every engine.
 
   @components_css Path.expand("../../assets/css/components.css", __DIR__)
+  # The measurement the state classes below come from.
+  @clamp_js Path.expand("../../assets/js/util.js", __DIR__)
 
   @clamps [
     %{
@@ -275,5 +277,61 @@ defmodule VutuvWeb.LineClampCssTest do
     assert decls =~ ~r/transparent\s*\)/,
            "the mask must reach FULLY transparent at the box edge — that is what hides " <>
              "the half-line a height clamp slices off"
+  end
+
+  # ---------- A cut nobody would want offered ----------
+  #
+  # `revealPreviewClamp` (assets/js/util.js) has three answers, not two: a cut
+  # worth offering (`is-clamped`), no cut at all (neither class), and a cut whose
+  # collapsed card is no shorter than the whole one (`is-uncut`). That third one
+  # shipped after a member's post carried a "Weiterlesen" whose entire hidden
+  # remainder was the last ten pixels of a sentence — on a card TALLER than the
+  # uncut post, because in the wrap/media variants the control takes a line of
+  # its own and the tag chips move below the block.
+  #
+  # What `is-uncut` has to do is the part that breaks silently: a cut we decline
+  # to offer must come OFF the body. A variant that kept its box while the
+  # control stayed hidden would swallow those last lines with no way to reveal
+  # them, which is strictly worse than the "Read more" we declined. Both states
+  # therefore share one selector list, so the two cannot drift apart — the same
+  # lesson as the shared `.notif-clamp` / `.teaser-clamp` rules above.
+
+  defp clamp_releases(state) do
+    Enum.filter(rules(), fn {sel, decls} ->
+      sel =~ state and (decls =~ ~r/line-clamp:\s*unset/ or decls =~ ~r/max-height:\s*none/)
+    end)
+  end
+
+  # The clamp variants a rule names (`post-clamp`, `post-clamp--wrap`, …).
+  defp clamp_variants(selector) do
+    ~r/post-clamp(?:--[a-z]+)?/ |> Regex.scan(selector) |> List.flatten() |> Enum.uniq()
+  end
+
+  test "every clamp an expanded preview drops is also dropped for a declined cut" do
+    expanded = clamp_releases("is-expanded")
+    uncut = clamp_releases("is-uncut")
+
+    assert expanded != [], "components.css must unclamp a preview the reader expanded"
+
+    assert uncut != [],
+           "components.css must unclamp a preview whose cut the measurement declined " <>
+             "(`is-uncut`), or the box keeps swallowing those lines with no control left"
+
+    released = uncut |> Enum.flat_map(fn {sel, _} -> clamp_variants(sel) end) |> Enum.uniq()
+
+    for {selector, _} <- expanded, variant <- clamp_variants(selector) do
+      assert variant in released,
+             "`.#{variant}` comes off for an expanded preview but not for a declined cut, " <>
+               "so a cut nobody was offered would hide that text for good"
+    end
+  end
+
+  # The measurement is the CSS's only trigger, and the browser is the only place
+  # it can really be tested — so this holds the one thing that is checkable from
+  # here: that the class those rules wait for is actually handed out.
+  test "the measurement hands back the declined-cut state the stylesheet waits for" do
+    assert File.read!(@clamp_js) =~ ~s|classList.toggle("is-uncut"|,
+           "revealPreviewClamp must give the third answer, or the `.is-uncut` rules in " <>
+             "components.css are dead and every short cut is offered again"
   end
 end

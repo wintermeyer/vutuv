@@ -1810,11 +1810,22 @@ div.footnotes li:target {
   mask-image: linear-gradient(to bottom, #000 calc(100% - 2.5em), transparent);
 }
 
-/* Reader expanded a non-truncated preview: drop the line clamp and show the
-   whole body. Two-class specificity beats `.post-clamp`, so this wins. The
-   height transition itself is JS-driven (app.js measures the clamped and full
-   heights and animates between them); this rule is the resting expanded state. */
-.post-preview.is-expanded .post-clamp {
+/* Reader expanded a non-truncated preview, or the measurement declined to offer
+   a cut that would not have made the card shorter (`is-uncut`, see
+   `worthCutting` in util.js — a cut nobody is offered must come OFF, or the box
+   swallows those last lines with no control left to reveal them): drop the line
+   clamp and show the whole body. Two-class specificity beats `.post-clamp`, so
+   this wins. The height transition itself is JS-driven (app.js measures the
+   clamped and full heights and animates between them); this rule is the resting
+   expanded state.
+
+   The two states share one selector list on purpose, here and for the height
+   clamps below: they say the same thing, and this file's own history is that a
+   clamp split across two rule sets breaks in one of them (the note above
+   `.notif-clamp`). `is-uncut` is not `.post-preview`-scoped — the fediverse
+   account description and the mention card's bio wear it too. */
+.post-preview.is-expanded .post-clamp,
+.is-uncut .post-clamp {
   display: block;
   overflow: visible;
   -webkit-line-clamp: unset;
@@ -1916,7 +1927,9 @@ div.footnotes li:target {
   }
 }
 .post-preview.is-expanded .post-clamp--wrap,
-.post-preview.is-expanded .post-clamp--media {
+.post-preview.is-expanded .post-clamp--media,
+.is-uncut .post-clamp--wrap,
+.is-uncut .post-clamp--media {
   max-height: none;
   overflow: visible;
 }

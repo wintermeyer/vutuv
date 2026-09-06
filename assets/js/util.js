@@ -223,8 +223,9 @@ export const buttonSecondary =
   `${BUTTON_BASE} bg-slate-100 text-slate-700 ring-1 ring-slate-300 hover:bg-slate-200 ` +
   "dark:bg-slate-800 dark:text-slate-200 dark:ring-slate-600 dark:hover:bg-slate-700"
 
-// Whether a clamped block really cut anything — the one measurement behind
-// every "Read more" and every expand lid in the app.
+// Whether a clamped block really cut anything, and whether that cut is worth
+// offering — the one measurement behind every "Read more" and every expand lid
+// in the app.
 //
 // A CSS clamp is width- and font-dependent, so the server cannot know: the
 // answer is that the clamped body's full content height (scrollHeight) is
@@ -238,6 +239,11 @@ export const buttonSecondary =
 // we leave it alone: a later resize/font sweep must not re-clamp it out from
 // under them.
 //
+// There are three answers, not two: a cut worth offering (`is-clamped`), no cut
+// at all (neither class), and a cut not worth what it costs (`is-uncut`, which
+// takes the clamp off and shows the whole body with no control — see
+// `worthCutting` below).
+//
 // It lives here rather than in app.js because the mention card is filled by
 // swapping HTML into a body-level panel, so nothing sweeps it and it has to ask
 // for the measurement itself.
@@ -245,15 +251,89 @@ export function revealPreviewClamp(el) {
   if (el.classList.contains("is-expanded")) return
   const body = el.querySelector("[data-clamp-body]")
   if (!body) return
+
+  // Measure the collapsed arrangement, because that is the one we would be
+  // offering: `is-uncut` off, so a body we let through last time is clamped
+  // again (left on, it measures as uncut and the answer could never come back),
+  // and `is-clamped` on, so the stylesheet puts every state-toggled part where a
+  // cut puts it — the chips row that rides INSIDE a wrap/media body moves below
+  // the block, and the control takes a line there. That row cannot simply live
+  // outside the clamp: the box is the flow-root containing the float, and a row
+  // in an overflow box of its own would sit BESIDE the picture instead of under
+  // it. So the row's placement is an output of this measurement while the
+  // measurement reads a box the row is in, and the way out of that circle is to
+  // ask the stylesheet for the collapsed state rather than to teach this
+  // function which children to subtract.
+  const wasUncut = el.classList.contains("is-uncut")
+  const wasClamped = el.classList.contains("is-clamped")
+  el.classList.remove("is-uncut")
+  el.classList.add("is-clamped")
+
   // A body nothing is painting cannot be measured: both heights read 0, and the
   // answer would come out as "nothing is cut". The fediverse account
   // description hits this every time it is open, since the clamped copy is
-  // `group-open:hidden` while the full one shows.
-  if (body.clientHeight === 0) return
-  const clipped = body.scrollHeight > body.clientHeight + 1
+  // `group-open:hidden` while the full one shows. Put back what we found and
+  // leave the answer to the pass that sees it painted.
+  if (body.clientHeight === 0) {
+    el.classList.toggle("is-uncut", wasUncut)
+    el.classList.toggle("is-clamped", wasClamped)
+    return
+  }
+
   // "We have looked", which is a different thing from "nothing is cut" — an
   // element that was never measured (no JavaScript, or not yet run) must keep
-  // whatever the server rendered rather than be treated as uncut.
+  // whatever the server rendered rather than be treated as uncut. It is stamped
+  // BEFORE the weighing below, because a control's own visibility can hang on it
+  // (the remote-summary lid hides its toggle once measured and uncut), and a
+  // first pass that had not stamped it yet would weigh a taller card than every
+  // later pass and answer differently.
   el.classList.add("is-measured")
-  el.classList.toggle("is-clamped", clipped)
+
+  const clipped = body.scrollHeight > body.clientHeight + 1
+  const worth = clipped && worthCutting(el, body)
+
+  el.classList.toggle("is-clamped", worth)
+  // A cut we decline to offer has to come OFF the body, not merely go
+  // unannounced: the box would otherwise keep swallowing those last lines with
+  // no control left to reveal them (the `.is-uncut` rules in components.css).
+  el.classList.toggle("is-uncut", clipped && !worth)
+}
+
+// What the reader would click to undo a cut, in both spellings the two clamps
+// that offer one use. A clamp with neither is not making an offer at all.
+const CLAMP_CONTROLS = "[data-post-expand], [data-remote-summary-toggle]"
+
+// Whether cutting this preview is worth offering, asked as the only question
+// that decides it: is the cut card SHORTER than the whole one, by more than the
+// control the reader has to click to get the rest back?
+//
+// Nothing here guesses at line counts, and it comes out right per variant for
+// free. In the wrap/media variants collapsing ADDS height — the control takes a
+// line of its own and the chips row moves below the block — so a cut hiding a
+// line or two makes the card TALLER, which is what a member reported: a
+// "Weiterlesen" under a post whose entire hidden remainder was the last ten
+// pixels of a sentence, on a card taller than the uncut one.
+//
+// A clamp with no control is not an offer and has no trade to weigh, so its cut
+// stands: the /notifications quotes and the "Who to follow" teasers cut to a
+// fixed budget, and `is-clamped` is what paints the "…" that says so.
+//
+// Called with the element already put into its collapsed state (see above).
+function worthCutting(el, body) {
+  const control = el.querySelector(CLAMP_CONTROLS)
+  if (!control) return true
+
+  // A cut hiding more than the box shows is past any doubt, and skipping the
+  // second measurement there keeps a whole-page sweep to one layout flush per
+  // card for the long posts that are the common case.
+  if (body.scrollHeight - body.clientHeight > body.clientHeight) return true
+
+  const collapsed = el.offsetHeight
+  el.classList.remove("is-clamped")
+  el.classList.add("is-uncut")
+  const whole = el.offsetHeight
+  el.classList.add("is-clamped")
+  el.classList.remove("is-uncut")
+
+  return whole - collapsed > control.offsetHeight
 }
