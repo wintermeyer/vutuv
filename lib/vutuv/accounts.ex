@@ -26,6 +26,7 @@ defmodule Vutuv.Accounts do
   alias Vutuv.Deliverability
   alias Vutuv.Handles
   alias Vutuv.Identity
+  alias Vutuv.Images
   alias Vutuv.LoginCodes
   alias Vutuv.Mentions
   alias Vutuv.Moderation
@@ -2218,15 +2219,31 @@ defmodule Vutuv.Accounts do
     # The moderation state is set in the same UPDATE: a fresh upload starts in
     # limbo ("pending" — files in quarantine, placeholder for everyone but the
     # owner) until the AI scan releases or deletes it (Vutuv.Moderation.ImageScans).
+    #
+    # Since issue #2013 the same picture is also a row in the shared `images`
+    # table, written first so the member row can point at it in the one UPDATE.
+    # Nothing else moves: the four columns keep serving every URL and every
+    # display gate, and this release writes both (#2014 is the contract half).
+    kind = scan_kind(field)
+    moderation = ImageScans.initial_state()
+
     with {:ok, file_name, fingerprint} <- store.({upload, user}, crop),
-         attrs = %{
+         image_attrs = %{
+           file: file_name,
+           fingerprint: fingerprint,
+           crop: crop,
+           moderation: moderation
+         },
+         {:ok, image} <- Images.put_profile_image(user, kind, image_attrs),
+         user_attrs = %{
            field => file_name,
            fingerprint_field(field) => fingerprint,
            crop_field => crop,
-           moderation_field(field) => ImageScans.initial_state()
+           moderation_field(field) => moderation,
+           Images.pointer_field(kind) => image.id
          },
-         {:ok, saved} <- user |> Ecto.Changeset.change(attrs) |> Repo.update() do
-      ImageScans.enqueue(scan_kind(field), saved.id, saved.id, fingerprint)
+         {:ok, saved} <- user |> Ecto.Changeset.change(user_attrs) |> Repo.update() do
+      ImageScans.enqueue(kind, saved.id, saved.id, fingerprint)
       saved
     else
       _ ->

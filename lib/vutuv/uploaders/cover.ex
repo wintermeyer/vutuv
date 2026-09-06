@@ -31,6 +31,8 @@ defmodule Vutuv.Cover do
   @config %{
     spec_key: :cover,
     prefix: "covers",
+    # This image's kind in the shared `images` table (`Vutuv.Images`).
+    kind: "cover",
     default_version: :wide,
     # See Vutuv.Avatar's @config: the user column holding this image's content
     # fingerprint, baked into `<username>-<version>-<fp>.avif` when set.
