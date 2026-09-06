@@ -183,12 +183,12 @@ defmodule Vutuv.ModerationTest do
 
       # First reporter wins the atomic claim: one freeze, one content_frozen
       # log row, one owner notification.
-      assert {:ok, first} = Moderation.maybe_upgrade_case(flagged, trusted_b, post)
+      assert {:ok, first} = Moderation.maybe_upgrade_case(flagged, trusted_b, post, "bullying")
       assert first.status == "pending_owner"
 
       # Second reporter holds the same stale flagged struct and loses the claim,
       # so it must NOT freeze/log/notify a second time.
-      assert {:ok, second} = Moderation.maybe_upgrade_case(flagged, trusted_c, post)
+      assert {:ok, second} = Moderation.maybe_upgrade_case(flagged, trusted_c, post, "bullying")
       assert second.status == "pending_owner"
 
       frozen_events =

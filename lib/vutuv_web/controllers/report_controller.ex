@@ -133,14 +133,7 @@ defmodule VutuvWeb.ReportController do
   # if the report turns out unfounded. (The same explanation lands in their
   # notifications feed, which outlives the flash.)
   defp report_received_flash(case_record, reporter) do
-    base =
-      if case_record.content_type == "user" do
-        gettext(
-          "Thank you for your report. Our moderators have been notified and will review this account."
-        )
-      else
-        gettext("Thank you for your report. We take it from here.")
-      end
+    base = report_received_sentence(case_record)
 
     if Moderation.severed_for?(case_record.id, reporter.id) do
       base <>
@@ -151,6 +144,26 @@ defmodule VutuvWeb.ReportController do
     else
       base
     end
+  end
+
+  # A report that visibly changes nothing has to say so, or it feels inert. That
+  # is a whole profile, and since issue #2030 also a picture reported under the
+  # house rules: only a copyright notice takes a picture offline on the spot, so
+  # a "flagged" picture case is one where nothing moved.
+  defp report_received_sentence(%{content_type: "user"}) do
+    gettext(
+      "Thank you for your report. Our moderators have been notified and will review this account."
+    )
+  end
+
+  defp report_received_sentence(%{content_type: "image", status: "flagged"}) do
+    gettext(
+      "Thank you for your report. Our moderators have been notified and will review this picture."
+    )
+  end
+
+  defp report_received_sentence(_case_record) do
+    gettext("Thank you for your report. We take it from here.")
   end
 
   # A short quote of what is being reported, so the reporter can double-check

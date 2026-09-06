@@ -22,6 +22,12 @@ defmodule Vutuv.Moderation do
   profiles are never frozen by a single report — that takes a second,
   independent trusted reporter.
 
+  A **picture** is the one type where the category decides instead of the
+  reporter (issue #2030): only a copyright notice takes it offline, house-rule
+  complaints put it in front of an admin with the picture left where it is.
+  Trust would decide nothing here, because a minutes-old account counts as
+  trusted until a report of theirs has been rejected.
+
   Admin rulings: `uphold_case/2` confirms the violation and strikes the owner
   (warn → one-week suspension → permanent deactivation, strikes expire after
   a year); `reject_case/3` unfreezes and optionally marks reports as abusive,
@@ -164,7 +170,13 @@ defmodule Vutuv.Moderation do
     report_changeset =
       Report.changeset(%Report{reporter_id: reporter.id}, attrs, content_type(content))
 
-    {status, effects} = initial_status(reporter, content)
+    # Read off the changeset rather than out of `attrs`, so the answer does not
+    # depend on whether the caller passed string or atom keys. A crafted
+    # category buys nothing: the freeze runs only after the report insert
+    # commits, and `Report.changeset/3` refuses a copyright notice without its
+    # explanation and good-faith declaration.
+    category = Ecto.Changeset.get_field(report_changeset, :category)
+    {status, effects} = initial_status(reporter, content, category)
 
     case_changeset =
       %Case{
@@ -177,7 +189,7 @@ defmodule Vutuv.Moderation do
 
     case insert_case_with_report(case_changeset, report_changeset) do
       {:ok, case_record} ->
-        finish_new_case(case_record, reporter, content, attrs, effects)
+        finish_new_case(case_record, reporter, content, category, effects)
 
       # Lost the race: a concurrent first-report already opened the case, so join
       # it instead of 500ing the losing reporter (the conflict means the winner
@@ -213,8 +225,8 @@ defmodule Vutuv.Moderation do
     end
   end
 
-  defp finish_new_case(case_record, reporter, content, attrs, effects) do
-    log(case_record, reporter, "report_filed", %{"category" => attrs["category"]})
+  defp finish_new_case(case_record, reporter, content, category, effects) do
+    log(case_record, reporter, "report_filed", %{"category" => category})
 
     if :freeze in effects do
       freeze_content(content)
@@ -238,9 +250,9 @@ defmodule Vutuv.Moderation do
       )
 
     case Repo.insert(report_changeset) do
-      {:ok, _report} ->
-        log(open, reporter, "report_filed", %{"category" => attrs["category"]})
-        result = maybe_upgrade_case(open, reporter, content)
+      {:ok, report} ->
+        log(open, reporter, "report_filed", %{"category" => report.category})
+        result = maybe_upgrade_case(open, reporter, content, report.category)
         sever_relationship(open, reporter)
         result
 
@@ -259,7 +271,8 @@ defmodule Vutuv.Moderation do
   def maybe_upgrade_case(
         %Case{content_type: type, status: "flagged"} = open,
         _reporter,
-        content
+        content,
+        _category
       )
       when type in ["user", "organization"] do
     reports = Repo.preload(open, :reports).reports
@@ -282,15 +295,20 @@ defmodule Vutuv.Moderation do
     end
   end
 
-  def maybe_upgrade_case(%Case{status: "flagged"} = open, reporter, content) do
-    if trusted_reporter?(reporter) do
+  def maybe_upgrade_case(
+        %Case{content_type: type, status: "flagged"} = open,
+        reporter,
+        content,
+        category
+      ) do
+    if report_freezes?(type, category) and trusted_reporter?(reporter) do
       do_flagged_upgrade(open, content, "pending_owner", [:notify_owner_frozen])
     else
       {:ok, open}
     end
   end
 
-  def maybe_upgrade_case(open, _reporter, _content), do: {:ok, open}
+  def maybe_upgrade_case(open, _reporter, _content, _category), do: {:ok, open}
 
   defp do_flagged_upgrade(open, content, new_status, effects) do
     case claim_flagged_upgrade(open, new_status) do
@@ -326,21 +344,42 @@ defmodule Vutuv.Moderation do
     end
   end
 
-  # The initial case status plus the side effects it implies.
-  defp initial_status(_reporter, %User{}) do
-    # Whole profiles are the nuclear option: the first report never freezes,
-    # it lands in the admin queue marked urgent. See maybe_upgrade_case/3.
-    {"flagged", [:notify_admins_urgent]}
+  # The initial case status plus the side effects it implies. What a report can
+  # never hide lands in the admin queue marked urgent instead.
+  defp initial_status(reporter, content, category) do
+    if report_freezes?(content_type(content), category) do
+      trust_based_status(reporter, content)
+    else
+      {"flagged", [:notify_admins_urgent]}
+    end
   end
 
-  # An organization page is profile-style: a first report never freezes a verified
-  # business page, it goes to the admin queue; a second trusted reporter (or the
-  # spam threshold) freezes it in maybe_upgrade_case/3.
-  defp initial_status(_reporter, %Organization{}) do
-    {"flagged", [:notify_admins_urgent]}
-  end
+  # Whether a report of this category against this content type may take it
+  # offline at all — asked once here and once in `maybe_upgrade_case/4`, so the
+  # two ways into a freeze cannot answer it differently. It says *may*: a report
+  # that passes here still has to come from a reporter in good standing.
+  #
+  # Whole profiles are the nuclear option, so the first report never freezes one;
+  # that takes a second trusted reporter (or the spam threshold) in
+  # `maybe_upgrade_case/4`. An organization page is profile-style for the same
+  # reason.
+  defp report_freezes?(type, _category) when type in ["user", "organization"], do: false
 
-  defp initial_status(reporter, content) do
+  # A picture is the third thing a single report does not hide, and here the
+  # category decides rather than the reporter (issue #2030). `trusted_reporter?/1`
+  # trusts an account created a minute ago — nothing of theirs has been rejected
+  # yet — so before this split one throwaway account took any member's avatar off
+  # every surface with its first ever report, and two of them would have done it
+  # through the upgrade path. A copyright notice keeps the instant reach: it is
+  # the legal claim the machinery was built for and the only category that
+  # already demands a written explanation and a good-faith declaration. A
+  # house-rule complaint goes in front of an admin instead, with the picture left
+  # where it is, exactly as a report against a whole profile does.
+  defp report_freezes?("image", category), do: Report.copyright?(category)
+
+  defp report_freezes?(_type, _category), do: true
+
+  defp trust_based_status(reporter, content) do
     cond do
       previously_self_resolved?(content) ->
         # The owner already used their one self-service round on this content;

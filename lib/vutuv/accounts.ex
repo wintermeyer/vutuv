@@ -2263,8 +2263,16 @@ defmodule Vutuv.Accounts do
            crop_field => crop,
            moderation_field(field) => moderation
          },
-         {:ok, saved} <- store_image_pair(user, kind, image_attrs, user_attrs) do
+         {:ok, {saved, image}} <- store_image_pair(user, kind, image_attrs, user_attrs) do
       ImageScans.enqueue(kind, saved.id, saved.id, fingerprint)
+
+      # A picture whose case only flagged it may be replaced (the guard above is
+      # about the takedown hold, and a flagged case moved nothing), and this
+      # upload has just overwritten the very bytes that were reported. So the
+      # replacement settles the case the way the owner's own "remove it" does:
+      # left open, an admin's ruling — which for a picture is the one ruling that
+      # *deletes* — would land on whatever the member put there afterwards.
+      Moderation.content_deleted(image)
       saved
     else
       _ ->
@@ -2275,13 +2283,15 @@ defmodule Vutuv.Accounts do
 
   # The image row and the member row, or neither. The row goes first so the
   # member row can point at it in the one UPDATE; the transaction is what makes
-  # that order safe.
+  # that order safe. Both come back out: the caller settles an open case on the
+  # picture row this upload just overwrote, and re-reading it would be a fourth
+  # read of one row in the same request.
   defp store_image_pair(user, kind, image_attrs, user_attrs) do
     Repo.transaction(fn ->
       with {:ok, image} <- Images.put_profile_image(user, kind, image_attrs),
            attrs = Map.put(user_attrs, Images.pointer_field(kind), image.id),
            {:ok, saved} <- user |> Ecto.Changeset.change(attrs) |> Repo.update() do
-        saved
+        {saved, image}
       else
         {:error, reason} -> Repo.rollback(reason)
       end

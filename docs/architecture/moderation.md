@@ -82,6 +82,8 @@ shown publicly.
 Reporters with a bad track record lose the instant freeze (their reports only
 flag for review), whole profiles freeze only on a **second** independent trusted
 report, and `/admin/moderation/reporters` shows every reporter's track record.
+A **picture** is the one type where the category decides instead of the reporter
+— see "Only a copyright notice hides a picture" below.
 
 **Spam auto-defense:** distinct **spam-category** reports also freeze a whole
 profile pending admin review once enough pile up (`@spam_freeze_reporters`, 5),
@@ -166,13 +168,52 @@ auto-defense counts it.
 refuses the upsert and the profile form says why, because one row per member
 per kind means a replacement would move the open case onto bytes nobody
 reported. `frozen_at` is deliberately **not** in that upsert's replace list for
-the same reason.
+the same reason. The refusal reads `frozen_at`, so it is about the **hold** and
+not about the case: a picture a house-rule report only flagged can be replaced,
+and that replacement overwrites the reported bytes, so
+`Vutuv.Accounts.store_new_image/7` settles the open case as `resolved_deleted`
+(the same outcome the owner's own "remove it" reaches). Otherwise an admin's
+ruling — which for a picture is the one ruling that *deletes* — would land on
+whatever the member put there afterwards.
+
+### Only a copyright notice hides a picture (issue #2030)
+
+The picture freeze first shipped on the ordinary trust ladder, and that was the
+wrong dial: `trusted_reporter?/1` says yes to an account created a minute ago,
+because nothing of theirs has been rejected yet. So a throwaway account took any
+member's avatar off every surface with its first ever report, and the owner then
+could not replace it. `Vutuv.Moderation.initial_status/3` now gives `%Image{}`
+its own clause, split by **category**:
+
+* **`copyright`** keeps the instant reach on the ordinary trust rule. It is the
+  legal notice the machinery exists for, `Report.changeset/3` already refuses it
+  without a written explanation and a good-faith declaration, and taking the
+  picture down promptly is the point.
+* **`family` / `bullying` / `other`** — none of which requires so much as a note
+  — open a `flagged` case and mail every admin (`:notify_admins_urgent`), leaving
+  the picture where it is. That is exactly what a report against a whole profile
+  already does, and a `flagged` case is in the admin queue by definition
+  (`@queue_statuses`).
+
+`maybe_upgrade_case/4` carries the same split on the other way in, so a second
+house-rule report does not hide the picture either — two throwaway accounts are
+barely more work than one — while a copyright notice joining an already-flagged
+case freezes it on arrival. The owner is **not** notified for a flagged case, as
+for every other flag-only case: nothing of theirs moved.
+
+Two surfaces say which case they are in. The reporter's flash reads "our
+moderators have been notified and will review this picture" when nothing was
+hidden (the profile-report wording, which exists so a report that visibly
+changes nothing does not feel inert) and the ordinary "we take it from here"
+when the picture went offline. The admin case page reads the row's `frozen_at`
+and either promises that rejecting puts every file back, or says the picture is
+still on the profile — an admin ruling without knowing which is ruling blind.
 
 **The reported picture is only visible on the case pages.** `GET
 /moderation/cases/:id/image` authorizes owner-or-admin and streams the held
-copy (or the still-served one, when an untrusted reporter only flagged the
-picture); both the owner's case page and the admin's render it from that one
-route. Without it an admin could not see what a copyright claim is about.
+copy (or the still-served one, whenever a report only flagged the picture);
+both the owner's case page and the admin's render it from that one route.
+Without it an admin could not see what a copyright claim is about.
 
 ## The statement of reasons (issue #2010)
 
