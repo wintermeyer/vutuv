@@ -1698,7 +1698,8 @@ defmodule VutuvWeb.Router do
     get("/organizations", SettingsController, :organizations)
     # The developer hub: connected apps, personal API tokens, and the one
     # switch that belongs with them — whether a Mastodon-compatible app may
-    # sign in to this account at all.
+    # sign in to this account at all. The OAuth consent screen posts that
+    # switch here too, with a `return_to` back to the request it was on.
     get("/apps", SettingsController, :apps)
     put("/apps", SettingsController, :update_apps)
     patch("/apps", SettingsController, :update_apps)

@@ -32,9 +32,7 @@
     </p>
 
     <.form for={%{}} action={~p"/oauth/authorize"} class="mt-6">
-      <%= for key <- ~w(response_type client_id redirect_uri scope state code_challenge code_challenge_method) do %>
-        <input :if={@params[key]} type="hidden" name={key} value={@params[key]} />
-      <% end %>
+      <input :for={{key, value} <- @authorize_params} type="hidden" name={key} value={value} />
       <%!-- This page's own consent: however often it is submitted, it yields
             one authorization code (issue #1561, `Vutuv.ApiAuth.OAuth`). --%>
       <input type="hidden" name="consent_nonce" value={@consent_nonce} />
@@ -66,24 +64,58 @@
         value={hd(@identities).value}
       />
 
-      <p :if={@identities == []} class="mb-5 text-sm text-red-700 dark:text-red-300">
-        {gettext("Mastodon client access is disabled for every identity available to you.")}
-      </p>
+      <%!-- The member's Mastodon-app switch is off, and no page of theirs
+            offers an identity either. The button below presses that switch
+            from here (it belongs to the settings form under this one) and the
+            page comes back to this request with Allow live; the settings link
+            stays beside it for whoever wants to read up first. --%>
+      <div :if={@identities == []} class="mb-5 text-sm">
+        <p class="text-red-700 dark:text-red-300">
+          {gettext("Mastodon client access is disabled for every identity available to you.")}
+        </p>
+        <p class="mt-2 text-slate-600 dark:text-slate-400">
+          {gettext("Turn it on for your account and %{app} can be connected right here.",
+            app: @request.app.name
+          )}
+          <.link
+            navigate={~p"/settings/apps"}
+            class="font-semibold text-brand-600 hover:text-brand-700 dark:text-brand-400 dark:hover:text-brand-300"
+          >
+            {gettext("Open the app settings")} ›
+          </.link>
+        </p>
+      </div>
 
       <div class="flex gap-3">
         <.button
+          :if={@identities != []}
           type="submit"
           name="decision"
           value="allow"
           id="oauth-allow"
-          disabled={@identities == []}
         >
           {gettext("Allow access")}
+        </.button>
+        <.button :if={@identities == []} type="submit" form="oauth-enable-apps" id="oauth-enable">
+          {gettext("Turn on for my account")}
         </.button>
         <.button type="submit" name="decision" value="deny" id="oauth-deny" variant="secondary">
           {gettext("Deny")}
         </.button>
       </div>
+    </.form>
+
+    <%!-- The switch's form: the settings page's own save, a sibling rather
+          than a child because forms do not nest. --%>
+    <.form
+      :if={@identities == []}
+      for={%{}}
+      action={~p"/settings/apps"}
+      method="put"
+      id="oauth-enable-apps"
+    >
+      <input type="hidden" name="user[mastodon_clients?]" value="true" />
+      <input type="hidden" name="return_to" value={@return_to} />
     </.form>
   </section>
 </div>

@@ -32,6 +32,10 @@ defmodule VutuvWeb.OauthController do
 
   @oob_redirect "urn:ietf:wg:oauth:2.0:oob"
 
+  # The request as the app sent it, carried by the consent form so that its
+  # POST lands on the request the page showed.
+  @authorize_keys ~w(response_type client_id redirect_uri scope state code_challenge code_challenge_method)
+
   # ── Consent (browser pipeline) ──
 
   def authorize(conn, params) do
@@ -42,11 +46,17 @@ defmodule VutuvWeb.OauthController do
 
           # The consent screen owns the form, so its policy is the one the
           # browser checks the POST's redirect against.
+          #
+          # `return_to` is this very request, for the member whose Mastodon-app
+          # switch is off: the screen offers the switch itself (posted to the
+          # settings page, which owns it), and a settings detour that did not
+          # come back here would lose the app's flow.
           conn
           |> ContentSecurityPolicy.allow_form_action(request.redirect_uri)
           |> render("authorize.html",
             request: request,
-            params: params,
+            authorize_params: Map.take(params, @authorize_keys),
+            return_to: current_path(conn),
             identities: identities,
             consent_scopes: consent_scopes(request, identities),
             consent_nonce: OAuth.new_consent_nonce()
