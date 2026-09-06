@@ -12,11 +12,33 @@ defmodule Vutuv.ModerationStatementOfReasonsTest do
 
   use Vutuv.DataCase, async: false
 
+  import Phoenix.LiveViewTest, only: [render_component: 2]
+
   alias Vutuv.Moderation
+  alias Vutuv.Notifications.Emailer
+  alias VutuvWeb.EmailComponents
   alias VutuvWeb.NotificationDigestText, as: DigestText
   alias VutuvWeb.NotificationLine
+  alias VutuvWeb.UserHelpers
 
   @note "The photo is mine. The original is at example.com/hafen.jpg, shot 2019."
+
+  # Every character a line-breaking renderer treats as a mandatory break. Named
+  # here rather than inline so the two quoting halves are held to the same set.
+  @line_breaks [
+    {"LF", "\n"},
+    {"CR", "\r"},
+    {"CRLF", "\r\n"},
+    {"VT", <<0x0B>>},
+    {"FF", <<0x0C>>},
+    {"NEL", <<0xC2, 0x85>>},
+    {"LS", <<0xE2, 0x80, 0xA8>>},
+    {"PS", <<0xE2, 0x80, 0xA9>>}
+  ]
+
+  # U+2028 LINE SEPARATOR: invisible in a report form, a mandatory break in
+  # Gmail, Apple Mail and Thunderbird.
+  @line_separator <<0xE2, 0x80, 0xA8>>
 
   setup do
     owner = insert(:activated_user)
@@ -154,6 +176,29 @@ defmodule Vutuv.ModerationStatementOfReasonsTest do
       refute email.html_body =~ "<a href=\"http://evil.example/login\""
     end
 
+    test "a break the mail client honours cannot smuggle an unquoted line", %{
+      owner: owner,
+      reporter: reporter
+    } do
+      post = insert(:post, user: owner)
+
+      # Nothing strips control characters from a note on the way in
+      # (`Report.changeset/3` trims and length-caps, no more), so the quoter is
+      # the only thing standing between a member in good standing and a forged
+      # vutuv signature inside a DKIM-signed vutuv mail — on a site where
+      # signing in means clicking a mailed PIN.
+      crafted =
+        "The photo is mine." <>
+          @line_separator <> "Regards, the vutuv team. Sign in: http://evil.example/login"
+
+      report!(reporter, post, %{"category" => "spam", "note" => crafted})
+
+      email = owner_email("reported")
+
+      assert email.text_body =~ "> Regards, the vutuv team."
+      refute email.text_body =~ @line_separator
+    end
+
     test "an ordinary case still promises the edit brings the post back", %{
       owner: owner,
       reporter: reporter
@@ -200,6 +245,43 @@ defmodule Vutuv.ModerationStatementOfReasonsTest do
       assert squish(email.text_body) =~ "Leave me alone."
       refute squish(email.text_body) =~ "Edit the content"
       assert squish(email.text_body) =~ "Delete it"
+    end
+  end
+
+  describe "quoting a stranger's text" do
+    test "every mandatory line break starts a fresh quoted line" do
+      for {name, break} <- @line_breaks do
+        quoted = UserHelpers.email_quoted_text("before" <> break <> "after")
+
+        assert quoted == "> before\n> after",
+               "#{name} did not start a new quoted line; got #{inspect(quoted)}"
+      end
+    end
+
+    test "a character that only looks like whitespace does not break the line" do
+      # U+00A0 NO-BREAK SPACE is the near miss: a renderer keeps it on the line,
+      # so splitting on it would put a "> " where the reader sees none.
+      assert UserHelpers.email_quoted_text("before" <> <<0xC2, 0xA0>> <> "after") ==
+               "> before" <> <<0xC2, 0xA0>> <> "after"
+    end
+
+    test "a blank line keeps the bare marker" do
+      assert UserHelpers.email_quoted_text("one\n\ntwo") == "> one\n>\n> two"
+    end
+
+    test "the HTML half breaks on the same set" do
+      for {name, break} <- @line_breaks do
+        html =
+          render_component(&EmailComponents.email_quote/1, text: "before" <> break <> "after")
+
+        # What follows "before" must be our own break, not the stranger's
+        # character: the template's own markup carries newlines, so asking
+        # whether the break survived anywhere in the output proves nothing.
+        [_head, tail] = String.split(html, "before", parts: 2)
+
+        assert String.starts_with?(tail, "<br"),
+               "#{name} did not become a line break in the HTML quote; got #{inspect(String.slice(tail, 0, 20))}"
+      end
     end
   end
 
@@ -269,6 +351,19 @@ defmodule Vutuv.ModerationStatementOfReasonsTest do
       item = %{kind: "moderation", category: "spam", case_id: "x"}
 
       assert DigestText.line(item) == NotificationLine.notification_text(item)
+    end
+
+    test "and its subject is cut to a subject's length" do
+      # Naming the category made this line long enough to be a bad subject:
+      # a digest of exactly one notification uses the line itself.
+      user = insert(:activated_user, locale: "de")
+      item = %{kind: "moderation", category: "copyright", case_id: "x"}
+
+      email = Emailer.notification_digest_email("owner@example.com", user, [item], 0)
+
+      assert String.length(email.subject) <= 80
+      refute String.ends_with?(email.subject, " ")
+      assert email.subject =~ "Nach einer Meldung automatisch verborgen"
     end
   end
 end

@@ -455,11 +455,32 @@ defmodule Vutuv.Notifications.Emailer do
   # Named in the subject when there is one thing to say, counted when there are
   # several: "3 neue Mitteilungen" tells a member nothing they cannot see in
   # the app's badge, while the single line often saves them the trip.
-  defp digest_subject([line], 0), do: line
+  defp digest_subject([line], 0), do: shorten_subject(line)
 
   defp digest_subject(lines, more) do
     count = length(lines) + more
     ngettext("%{count} new notification on vutuv", "%{count} new notifications on vutuv", count)
+  end
+
+  # A line is written for a list row, where it may wrap over two lines and lose
+  # nothing; a subject is cut by the reader's client at around seventy
+  # characters, and one that runs past that reads as spam. So the cap lives
+  # here, on the surface that has it, rather than every kind's sentence being
+  # kept short enough to double as a subject — the moderation line grew to
+  # ~160 German characters the moment it started naming the reported category
+  # (issue #2010), and any other kind can grow the same way. Cut back to a word
+  # boundary so the subject never ends mid-word.
+  @subject_max 78
+
+  defp shorten_subject(line) do
+    if String.length(line) <= @subject_max do
+      line
+    else
+      line
+      |> String.slice(0, @subject_max)
+      |> String.replace(~r/\s+\S*$/u, "")
+      |> Kernel.<>("…")
+    end
   end
 
   @doc """

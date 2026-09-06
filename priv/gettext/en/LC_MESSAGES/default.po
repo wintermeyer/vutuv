@@ -23386,7 +23386,7 @@ msgid "No person made this decision: a report from a member in good standing hid
 msgstr ""
 
 #: lib/vutuv_web/templates/moderation_case/show.html.heex:67
-#, elixir-autogen, elixir-format, fuzzy
+#, elixir-autogen, elixir-format
 msgid "Nobody else can see it right now. You have 72 hours to settle this yourself; after that our admins decide. Here is what you can do:"
 msgstr ""
 
@@ -23396,7 +23396,7 @@ msgid "Our community guidelines, which everything on vutuv has to keep to."
 msgstr ""
 
 #: lib/vutuv_web/templates/moderation_case/show.html.heex:41
-#, elixir-autogen, elixir-format, fuzzy
+#, elixir-autogen, elixir-format
 msgid "The ground"
 msgstr ""
 

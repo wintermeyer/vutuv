@@ -1047,7 +1047,9 @@ defmodule VutuvWeb.UserHelpers do
   came from vutuv. Prefixing every line means the reader can see where the
   stranger's words start and stop. The only text quoted this way today is a
   moderation report's note (issue #2010), which the changeset caps at
-  `Vutuv.Moderation.Report.max_note_length/0`.
+  `Vutuv.Moderation.Report.max_note_length/0` and otherwise passes through
+  untouched — no control character is stripped on the way in, so "what counts
+  as a line" is decided here and nowhere else (`split_lines/1`).
 
   Takes one note or a list of them; returns "" for nothing to quote.
   """
@@ -1060,10 +1062,28 @@ defmodule VutuvWeb.UserHelpers do
 
   def email_quoted_text(text) when is_binary(text) do
     text
-    |> String.split(["\r\n", "\r", "\n"])
+    |> split_lines()
     |> Enum.flat_map(&wrap_line/1)
     |> Enum.map_join("\n", &quote_line/1)
   end
+
+  @doc """
+  Splits a stranger's text wherever a *renderer* will start a new line.
+
+  The rule is the effect, not a list of the spellings anyone happens to think
+  of: `\\R` is PCRE's closed set of mandatory line breaks, which is the set
+  UAX #14 gives a mail client. Enumerating `\\r\\n`, `\\r` and `\\n` instead
+  leaves VT, FF, NEL (U+0085), LINE SEPARATOR (U+2028) and PARAGRAPH SEPARATOR
+  (U+2029) inside what this code calls one line — invisible in a form, a real
+  break in Gmail, Apple Mail and Thunderbird — so everything after one arrives
+  without whatever marker the caller puts on each line. The `u` modifier is
+  load-bearing rather than decorative: without it `\\R` stops at NEL and the two
+  separators pass straight through.
+
+  Both halves of a quoted mail split here, so the `text/plain` prefix and the
+  HTML `<br>` can never disagree about where a line ends.
+  """
+  def split_lines(text) when is_binary(text), do: Regex.split(~r/\R/u, text)
 
   # A blank line gets the bare marker, never `"> "`: a quote block ends at the
   # first line without one, and mail clients that strip trailing whitespace

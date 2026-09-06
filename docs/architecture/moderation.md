@@ -173,9 +173,13 @@ The reporter's note is a stranger's text shown to the accused member. The HTML
 half renders it through `EmailComponents.email_quote/1`, which escapes it and
 does **not** turn it into Markdown or links — a clickable link out of an
 accusation is a phishing seat. The `text/plain` half has no escaping at all, so
-`UserHelpers.email_quoted_text/1` wraps it at 72 columns and prefixes every line
-with `"> "`: without that, a crafted note can be shaped to read as our own
-signature followed by a second, fake link.
+`UserHelpers.email_quoted_text/1` wraps it at 72 characters and prefixes every
+line with `"> "`: without that, a crafted note can be shaped to read as our own
+signature followed by a second, fake link. **Both halves decide where a line
+ends in one place** (`UserHelpers.split_lines/1`, PCRE's `\R` with the `u`
+modifier), because a break the reader's client honours but our split does not
+puts the rest of the note outside the marker — see `email.md` for why the rule
+is written as the effect rather than as a list of `\r\n`, `\r` and `\n`.
 
 ## Admin-initiated freeze (`/admin/accounts`, issue #812)
 

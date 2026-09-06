@@ -83,6 +83,28 @@ blank line inside the quote gets the bare `">"` — a quote block ends at the
 first line without a marker, and mail clients that strip trailing whitespace
 would turn `"> "` into exactly that.
 
+**Both halves ask `UserHelpers.split_lines/1` where a line ends, and it is
+written as the effect rather than as a list of spellings.** `Regex.split(~r/\R/u,
+text)` is PCRE's closed set of mandatory line breaks, which is the set UAX #14
+gives a mail client. Enumerating `\r\n`, `\r` and `\n` — the obvious spelling,
+and what shipped first — leaves VT, FF, NEL (U+0085), LINE SEPARATOR (U+2028)
+and PARAGRAPH SEPARATOR (U+2029) inside one "line": invisible in a form, a real
+break in Gmail, Apple Mail and Thunderbird, so everything after one arrives
+**without** the `"> "` that is the whole safeguard. Nothing strips control
+characters from a report note on the way in, so this split is the only thing
+standing between a member in good standing and a forged vutuv signature with a
+sign-in link inside a DKIM-signed vutuv mail — on a site where signing in means
+clicking a mailed PIN. The `u` modifier is load-bearing: without it `\R` stops
+short of NEL and the two separators.
+
+**A digest subject is capped** (`Emailer.shorten_subject/1`, 78 characters, cut
+back to a word boundary). A digest of exactly one notification uses that
+notification's own line as the subject, and a line is written for a list row
+where it may wrap: the moderation line runs to 163 German characters once it
+names the reported category. The cap sits on the subject, which is the surface
+with the hard limit, rather than every kind's sentence being kept short enough
+to double as one.
+
 ## Opt-out and unsubscribe
 
 **Notification mail is opt-out**: the unread-message nudge respects

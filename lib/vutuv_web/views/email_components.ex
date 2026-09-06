@@ -254,12 +254,14 @@ defmodule VutuvWeb.EmailComponents do
   to them at the worst possible moment, so a clickable link out of it would be
   a phishing seat. HEEx escapes the text and the rule marks where the
   stranger's words start and stop; the `text/plain` half of the same mail gets
-  `VutuvWeb.UserHelpers.email_quoted_text/1`.
+  `VutuvWeb.UserHelpers.email_quoted_text/1`. Both halves ask
+  `UserHelpers.split_lines/1` where a line ends, so a break the reader's client
+  honours is one this markup drew rather than one it let through.
   """
   attr(:text, :string, required: true)
 
   def email_quote(assigns) do
-    assigns = assign(assigns, :lines, String.split(assigns.text, ["\r\n", "\r", "\n"]))
+    assigns = assign(assigns, :lines, split_lines(assigns.text))
 
     ~H"""
     <.quote_box rule="#94a3b8">
