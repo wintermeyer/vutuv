@@ -21,6 +21,7 @@ defmodule Vutuv.ScreenshotBlocklist.VisionTest do
     Repo.delete_all(ScreenshotBlocklist.Entry)
     Repo.delete_all(ScreenshotBlocklist.Check)
     put_config(:screenshot_page_check, true)
+    clean_evidence()
     on_exit(fn -> Application.delete_env(:vutuv, :screenshot_check_req_options) end)
     {:ok, image: jpeg_fixture()}
   end
@@ -305,5 +306,21 @@ defmodule Vutuv.ScreenshotBlocklist.VisionTest do
     {:ok, _written} = Image.write(img, src)
     on_exit(fn -> File.rm(src) end)
     src
+  end
+
+  # The evidence tree is real disk, and the SQL sandbox does not roll a file
+  # back: without this every run of this file leaves its pictures in the
+  # checkout. Only what this test created is removed, never a neighbour's.
+  defp clean_evidence do
+    dir = Path.dirname(ScreenshotBlocklist.evidence_path("probe"))
+    before = if File.dir?(dir), do: MapSet.new(File.ls!(dir)), else: MapSet.new()
+
+    on_exit(fn -> remove_new_files(dir, before) end)
+  end
+
+  defp remove_new_files(dir, before) do
+    for name <- (File.dir?(dir) && File.ls!(dir)) || [],
+        not MapSet.member?(before, name),
+        do: File.rm(Path.join(dir, name))
   end
 end
