@@ -869,7 +869,7 @@ defmodule VutuvWeb.UI do
             {gettext("Resend PIN")}
           </button>
         </.form>
-        <span aria-hidden="true" class="text-slate-300 dark:text-slate-600">&middot;</span>
+        <span aria-hidden="true" class="text-slate-300 dark:text-slate-500">&middot;</span>
         <%!-- The same action either way: it drops the pending-identity cookie,
               which is what frees the landing page from the PIN screen. Only the
               label differs, because what the member is leaving differs. At
@@ -1593,7 +1593,7 @@ defmodule VutuvWeb.UI do
 
   # The small format chip shared by <.other_formats_card> and <.cv_card>.
   defp format_chip_class do
-    "inline-flex items-center rounded-md bg-slate-100 px-2.5 py-1 text-xs font-medium text-slate-600 transition hover:bg-brand-50 hover:text-brand-700 dark:bg-slate-800 dark:text-slate-300 dark:hover:bg-brand-900/30 dark:hover:text-brand-200"
+    "inline-flex items-center rounded-md bg-slate-100 px-2.5 py-1 text-xs font-medium text-slate-600 transition hover:bg-brand-50 hover:text-brand-700 dark:bg-slate-800 dark:text-slate-300 dark:hover:bg-brand-800/30 dark:hover:text-brand-200"
   end
 
   @doc """
@@ -1637,7 +1637,7 @@ defmodule VutuvWeb.UI do
       class={[
         "inline-flex min-h-10 shrink-0 items-center justify-center gap-1.5 rounded-full border px-3.5 text-xs font-semibold transition-colors",
         "border-slate-300 text-slate-600 hover:border-brand-300 hover:bg-brand-50 hover:text-brand-700 dark:hover:text-brand-300",
-        "dark:border-slate-700 dark:text-slate-400 dark:hover:border-brand-500 dark:hover:bg-brand-900/30 dark:hover:text-brand-200",
+        "dark:border-slate-700 dark:text-slate-400 dark:hover:border-brand-500 dark:hover:bg-brand-800/30 dark:hover:text-brand-200",
         @class
       ]}
     >
@@ -2082,7 +2082,7 @@ defmodule VutuvWeb.UI do
   attr(:rest, :global)
   slot(:inner_block, required: true)
 
-  @empty_add_class "flex items-center justify-center gap-2 rounded-xl border-2 border-dashed border-slate-200 px-4 py-4 text-sm font-semibold text-slate-500 transition hover:border-brand-400 hover:bg-brand-50 hover:text-brand-700 dark:border-slate-700 dark:text-slate-400 dark:hover:border-brand-500 dark:hover:bg-brand-900/20 dark:hover:text-brand-300"
+  @empty_add_class "flex items-center justify-center gap-2 rounded-xl border-2 border-dashed border-slate-200 px-4 py-4 text-sm font-semibold text-slate-500 transition hover:border-brand-400 hover:bg-brand-50 hover:text-brand-700 dark:border-slate-700 dark:text-slate-400 dark:hover:border-brand-500 dark:hover:bg-brand-800/25 dark:hover:text-brand-300"
 
   def empty_add(assigns) do
     assigns = assign(assigns, :base_class, @empty_add_class)
@@ -2128,7 +2128,7 @@ defmodule VutuvWeb.UI do
       :if={@navigate || @href}
       navigate={@navigate}
       href={@href}
-      class={[chip_class(@size), "hover:bg-brand-100 dark:hover:bg-brand-900/70", @class]}
+      class={[chip_class(@size), "hover:bg-brand-100 dark:hover:bg-brand-800/80", @class]}
       {@rest}
     >
       {render_slot(@inner_block)}
@@ -2150,11 +2150,11 @@ defmodule VutuvWeb.UI do
 
   def chip_class("sm"),
     do:
-      "inline-flex items-center gap-1 rounded-md bg-brand-50 px-2 py-0.5 text-xs font-medium text-brand-700 dark:bg-brand-900/40 dark:text-brand-100"
+      "inline-flex items-center gap-1 rounded-md bg-brand-50 px-2 py-0.5 text-xs font-medium text-brand-700 dark:bg-brand-800/60 dark:text-brand-100"
 
   def chip_class(_md),
     do:
-      "inline-flex items-center gap-2 rounded-lg bg-brand-50 px-3 py-1.5 text-sm font-medium text-brand-700 dark:bg-brand-900/40 dark:text-brand-100"
+      "inline-flex items-center gap-2 rounded-lg bg-brand-50 px-3 py-1.5 text-sm font-medium text-brand-700 dark:bg-brand-800/60 dark:text-brand-100"
 
   @doc """
   The member's **employment-status badge** (issue #870): a small brand-tint
@@ -2195,7 +2195,7 @@ defmodule VutuvWeb.UI do
     <span
       :if={@label}
       class={[
-        "inline-flex items-center whitespace-nowrap rounded-full bg-brand-50 px-2.5 py-0.5 text-xs font-semibold text-brand-700 ring-1 ring-brand-100 dark:bg-brand-900/40 dark:text-brand-100 dark:ring-brand-900/60",
+        "inline-flex items-center whitespace-nowrap rounded-full bg-brand-50 px-2.5 py-0.5 text-xs font-semibold text-brand-700 ring-1 ring-brand-100 dark:bg-brand-800/60 dark:text-brand-100 dark:ring-brand-900/60",
         @class
       ]}
       data-employment-status={@status}
@@ -2280,7 +2280,7 @@ defmodule VutuvWeb.UI do
       |> assign(:roster_active?, !honor? && (others != [] || endorsed?))
 
     ~H"""
-    <div class="group relative inline-flex items-center gap-1.5 rounded-lg bg-brand-50 px-3 py-1.5 text-sm font-medium hover:z-30 focus-within:z-30 dark:bg-brand-900/40">
+    <div class="group relative inline-flex items-center gap-1.5 rounded-lg bg-brand-50 px-3 py-1.5 text-sm font-medium hover:z-30 focus-within:z-30 dark:bg-brand-800/60">
       <.link
         navigate={~p"/#{@user}/tags/#{@user_tag}"}
         class="inline-flex items-center gap-1 text-brand-700 hover:underline dark:text-brand-100"
@@ -2523,7 +2523,7 @@ defmodule VutuvWeb.UI do
       <span
         class={[
           @class,
-          "flex items-center justify-center rounded-2xl bg-brand-50 font-bold text-brand-700 dark:bg-brand-900/40 dark:text-brand-100"
+          "flex items-center justify-center rounded-2xl bg-brand-50 font-bold text-brand-700 dark:bg-brand-800/60 dark:text-brand-100"
         ]}
         aria-hidden="true"
       >
@@ -2966,7 +2966,7 @@ defmodule VutuvWeb.UI do
       if active? do
         "border-brand-600 bg-brand-600 text-white"
       else
-        "border-slate-300 bg-white text-slate-700 hover:border-brand-300 hover:bg-brand-50 hover:text-brand-700 dark:border-slate-700 dark:bg-slate-900 dark:text-slate-200 dark:hover:border-brand-500 dark:hover:bg-brand-900/30 dark:hover:text-brand-200"
+        "border-slate-300 bg-white text-slate-700 hover:border-brand-300 hover:bg-brand-50 hover:text-brand-700 dark:border-slate-700 dark:bg-slate-900 dark:text-slate-200 dark:hover:border-brand-500 dark:hover:bg-brand-800/30 dark:hover:text-brand-200"
       end
   end
 
@@ -3087,7 +3087,7 @@ defmodule VutuvWeb.UI do
 
   defp text_follow_class(:follow),
     do:
-      "ml-auto self-start inline-flex shrink-0 items-center justify-center gap-1 min-w-[5.5rem] rounded-full border px-3 py-1 text-xs font-semibold transition-colors border-brand-600 text-brand-700 hover:bg-brand-50 dark:border-brand-500 dark:text-brand-400 dark:hover:bg-brand-900"
+      "ml-auto self-start inline-flex shrink-0 items-center justify-center gap-1 min-w-[5.5rem] rounded-full border px-3 py-1 text-xs font-semibold transition-colors border-brand-600 text-brand-700 hover:bg-brand-50 dark:border-brand-500 dark:text-brand-400 dark:hover:bg-brand-800/40"
 
   # The label inside the "Following" pill: the resting "Following" swaps to a red
   # "Unfollow" on hover/focus (CSS group-hover, no JS), so the pill states what
@@ -3143,7 +3143,7 @@ defmodule VutuvWeb.UI do
 
   defp tag_follow_class(:follow),
     do:
-      "inline-flex shrink-0 items-center justify-center gap-1 rounded-full border px-3 py-1.5 text-xs font-semibold transition-colors border-brand-600 text-brand-700 hover:bg-brand-50 dark:border-brand-500 dark:text-brand-400 dark:hover:bg-brand-900"
+      "inline-flex shrink-0 items-center justify-center gap-1 rounded-full border px-3 py-1.5 text-xs font-semibold transition-colors border-brand-600 text-brand-700 hover:bg-brand-50 dark:border-brand-500 dark:text-brand-400 dark:hover:bg-brand-800/40"
 
   @doc """
   The **mute / unmute** toggle for a follow you own — silences the followee's
@@ -3193,7 +3193,7 @@ defmodule VutuvWeb.UI do
 
     state =
       if active? do
-        "text-brand-600 bg-brand-50 ring-brand-200 hover:bg-brand-100 dark:text-brand-300 dark:bg-brand-900/30 dark:ring-brand-900/50"
+        "text-brand-600 bg-brand-50 ring-brand-200 hover:bg-brand-100 dark:text-brand-300 dark:bg-brand-800/30 dark:ring-brand-900/50"
       else
         "text-slate-500 ring-slate-200 hover:bg-slate-50 hover:text-slate-700 dark:text-slate-400 dark:ring-slate-700 dark:hover:bg-slate-800"
       end
@@ -3363,7 +3363,7 @@ defmodule VutuvWeb.UI do
       class={[
         avatar_size(@size),
         if(@shape == "square", do: "rounded-2xl", else: "rounded-full"),
-        "inline-flex shrink-0 select-none items-center justify-center bg-brand-100 font-semibold text-brand-700 dark:bg-brand-900/40 dark:text-brand-100",
+        "inline-flex shrink-0 select-none items-center justify-center bg-brand-100 font-semibold text-brand-700 dark:bg-brand-800/60 dark:text-brand-100",
         initials_text_size(@size),
         @class
       ]}
@@ -3712,7 +3712,7 @@ defmodule VutuvWeb.UI do
     <div
       :if={@secret}
       class={[
-        "rounded-lg bg-brand-50 p-4 ring-1 ring-brand-200 dark:bg-brand-900/40 dark:ring-brand-800",
+        "rounded-lg bg-brand-50 p-4 ring-1 ring-brand-200 dark:bg-brand-800/60 dark:ring-brand-800",
         @class
       ]}
       data-secret-once={@key}
@@ -5514,7 +5514,7 @@ defmodule VutuvWeb.UI do
       "text-red-600 hover:bg-red-50 hover:text-red-700 dark:text-red-400 dark:hover:bg-red-900/30"
 
   defp sidebar_link_class(key, key),
-    do: "bg-brand-50 font-semibold text-brand-800 dark:bg-brand-900/40 dark:text-brand-100"
+    do: "bg-brand-50 font-semibold text-brand-800 dark:bg-brand-800/60 dark:text-brand-100"
 
   defp sidebar_link_class(_key, _active),
     do:

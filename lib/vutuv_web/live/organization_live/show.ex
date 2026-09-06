@@ -609,7 +609,7 @@ defmodule VutuvWeb.OrganizationLive.Show do
                         do:
                           "border-slate-300 text-slate-700 hover:border-rose-300 hover:bg-rose-50 hover:text-rose-700 dark:border-slate-600 dark:text-slate-200 dark:hover:border-rose-500/60 dark:hover:bg-rose-950/40 dark:hover:text-rose-300",
                         else:
-                          "border-brand-600 text-brand-700 hover:bg-brand-50 dark:border-brand-400 dark:text-brand-300 dark:hover:bg-brand-900/40"
+                          "border-brand-600 text-brand-700 hover:bg-brand-50 dark:border-brand-400 dark:text-brand-300 dark:hover:bg-brand-800/40"
                       )
                     ]}
                   >
@@ -815,7 +815,7 @@ defmodule VutuvWeb.OrganizationLive.Show do
                     {UserHelpers.full_name(person.user)}
                   </a>
                   <p class="truncate text-sm text-slate-600 dark:text-slate-400">
-                    {person.title}<span :if={not person.current?} class="text-slate-500 dark:text-slate-500">
+                    {person.title}<span :if={not person.current?} class="text-slate-500 dark:text-slate-400">
                       · {gettext("Former")}</span>
                   </p>
                 </div>
@@ -1020,7 +1020,7 @@ defmodule VutuvWeb.OrganizationLive.Show do
         the record below to whoever runs their website and finish here later. --%>
         <p
           :if={@verification_enabled?}
-          class="mt-4 rounded-lg bg-brand-50 p-4 text-sm text-slate-700 ring-1 ring-brand-100 dark:bg-brand-900/30 dark:text-slate-300 dark:ring-brand-900/50"
+          class="mt-4 rounded-lg bg-brand-50 p-4 text-sm text-slate-700 ring-1 ring-brand-100 dark:bg-brand-800/30 dark:text-slate-300 dark:ring-brand-900/50"
         >
           {gettext("These steps are technical. If you don't manage %{domain} yourself, copy the record or file shown below and send it to your IT team or whoever runs your website. Once they have added it, come back here and press Verify now.", domain: @primary_domain.domain)}
         </p>

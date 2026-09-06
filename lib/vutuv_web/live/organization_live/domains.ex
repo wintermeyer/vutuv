@@ -208,7 +208,7 @@ defmodule VutuvWeb.OrganizationLive.Domains do
         <li :for={domain <- @domains} id={"domain-#{domain.id}"} class="rounded-2xl bg-white p-5 shadow-sm ring-1 ring-slate-200 dark:bg-slate-900 dark:ring-slate-800">
           <div class="flex flex-wrap items-center gap-2">
             <span class="font-mono text-sm font-semibold text-slate-900 dark:text-slate-100">{domain.domain}</span>
-            <span :if={domain.primary?} class="rounded-full bg-brand-50 px-2 py-0.5 text-xs font-semibold text-brand-700 dark:bg-brand-900/40 dark:text-brand-100">
+            <span :if={domain.primary?} class="rounded-full bg-brand-50 px-2 py-0.5 text-xs font-semibold text-brand-700 dark:bg-brand-800/60 dark:text-brand-100">
               {gettext("Primary")}
             </span>
             <span :if={domain.verified_at && !domain.grace_deadline_at} class="rounded-full bg-emerald-50 px-2 py-0.5 text-xs font-semibold text-emerald-700 dark:bg-emerald-900/30 dark:text-emerald-200">

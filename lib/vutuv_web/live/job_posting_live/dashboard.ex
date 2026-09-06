@@ -109,7 +109,7 @@ defmodule VutuvWeb.JobPostingLive.Dashboard do
           class={[
             "rounded-lg px-3 py-1.5 text-sm font-medium",
             if(@tab == status,
-              do: "bg-brand-50 text-brand-700 dark:bg-brand-900/40 dark:text-brand-100",
+              do: "bg-brand-50 text-brand-700 dark:bg-brand-800/60 dark:text-brand-100",
               else: "text-slate-600 hover:text-slate-800 dark:text-slate-400"
             )
           ]}

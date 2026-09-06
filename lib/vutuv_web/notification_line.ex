@@ -218,7 +218,7 @@ defmodule VutuvWeb.NotificationLine do
 
   # Event kinds that share the brand badge colour, so the class string lives
   # in one place.
-  @brand_kind_classes "bg-brand-50 text-brand-700 dark:bg-brand-900/40 dark:text-brand-100"
+  @brand_kind_classes "bg-brand-50 text-brand-700 dark:bg-brand-800/60 dark:text-brand-100"
   @brand_kinds ~w(follower reply thread mention connection report_protection organization_role handle_change cv_update fediverse_reply fediverse_reaction share)
 
   @doc """

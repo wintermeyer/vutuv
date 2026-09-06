@@ -341,7 +341,7 @@ defmodule VutuvWeb.JobBoardLive do
             :for={slug <- tag_slugs(@params)}
             navigate={~p"/jobs?#{drop_tag(@params, slug)}"}
             data-active-tag={slug}
-            class="inline-flex items-center gap-1 rounded-lg bg-brand-50 px-2.5 py-1 font-medium text-brand-700 dark:bg-brand-900/40 dark:text-brand-100"
+            class="inline-flex items-center gap-1 rounded-lg bg-brand-50 px-2.5 py-1 font-medium text-brand-700 dark:bg-brand-800/60 dark:text-brand-100"
           >
             {slug} <span aria-hidden="true">✕</span>
           </.link>

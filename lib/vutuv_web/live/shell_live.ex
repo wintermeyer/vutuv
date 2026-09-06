@@ -469,7 +469,7 @@ defmodule VutuvWeb.ShellLive do
   defp count_badge_class(:word), do: @count_badge_base <> " -right-2"
 
   defp nav_link_tone(true),
-    do: "bg-brand-50 font-semibold text-brand-700 dark:bg-brand-900/40 dark:text-brand-100"
+    do: "bg-brand-50 font-semibold text-brand-700 dark:bg-brand-800/60 dark:text-brand-100"
 
   defp nav_link_tone(false),
     do: "text-slate-600 hover:bg-slate-100 dark:text-slate-300 dark:hover:bg-slate-800"
@@ -1234,7 +1234,7 @@ defmodule VutuvWeb.ShellLive do
           :if={@browser_notifications?}
           hidden
           data-notify-prompt
-          class="border-b border-brand-100 bg-brand-50 dark:border-brand-900/60 dark:bg-brand-900/30"
+          class="border-b border-brand-100 bg-brand-50 dark:border-brand-900/60 dark:bg-brand-800/30"
         >
           <div class={[
             "mx-auto flex max-w-6xl flex-wrap items-center gap-x-3 gap-y-2 py-2 text-sm",
@@ -1477,7 +1477,7 @@ defmodule VutuvWeb.ShellLive do
               href={~p"/admin"}
               title={new_members_label(@new_members_today)}
               aria-label={new_members_label(@new_members_today)}
-              class="inline-flex items-center gap-1 rounded-full bg-brand-50 px-3 py-1 text-sm font-semibold text-brand-700 hover:bg-brand-100 dark:bg-brand-900/40 dark:text-brand-100 dark:hover:bg-brand-900/70"
+              class="inline-flex items-center gap-1 rounded-full bg-brand-50 px-3 py-1 text-sm font-semibold text-brand-700 hover:bg-brand-100 dark:bg-brand-800/60 dark:text-brand-100 dark:hover:bg-brand-800/80"
             >
               <.icon_user_plus />
               <span class="tabular-nums">{compact_count(@new_members_today)}</span>

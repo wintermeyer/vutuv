@@ -385,9 +385,13 @@ html[data-nav-pressing] main {
    dark rule — a brand-50 pill in a dark bar, from a stylesheet that reads as
    if it handled dark mode. */
 @media (prefers-color-scheme: dark) {
+  /* `brand-800` at 60%, the app's one dark-mode tint. `brand-900` is what this
+     used to mix and it drew nothing: at #172554 it is level with `slate-800`
+     and 3.4 L* off a `slate-900` card, so the pressed tab read as a label with
+     no pill under it. See `dark_tint_contrast_test.exs` for the measurement. */
   [data-filter-tab],
   [data-nav-item] {
-    --press-on-bg: color-mix(in oklab, var(--color-brand-900) 40%, transparent);
+    --press-on-bg: color-mix(in oklab, var(--color-brand-800) 60%, transparent);
     --press-on-fg: var(--color-brand-100);
     --press-off-fg: var(--color-slate-400);
   }
@@ -397,7 +401,7 @@ html[data-nav-pressing] main {
   }
 
   [data-nav-bar] [data-nav-item] {
-    --press-on-bg: color-mix(in oklab, var(--color-brand-900) 40%, transparent);
+    --press-on-bg: color-mix(in oklab, var(--color-brand-800) 60%, transparent);
     --press-off-fg: var(--color-slate-300);
   }
 
@@ -407,10 +411,11 @@ html[data-nav-pressing] main {
     --press-off-fg: var(--color-slate-400);
   }
 
-  /* `brand-800`, not the `brand-900` the tints above use: those sit on the
-     white top bar, this one on a `slate-900` card, and `brand-900` (#172554)
-     is four steps from that card — a chip nobody would see, which is the very
-     bug this paints over. */
+  /* Full-strength `brand-800`, where the tints above stop at 60%: this one has
+     to read as a chip on a card at a glance, in the middle of an action bar
+     whose links are brand blue anyway. It was the first place to learn that
+     `brand-900` is "a chip nobody would see" on a `slate-900` card; the rest of
+     the app has that lesson now too. */
   [data-tints-when-pressed][aria-pressed="true"] {
     background-color: var(--color-brand-800);
   }

@@ -436,7 +436,7 @@ defmodule VutuvWeb.PostLive.FilterBand do
 
   defp filter_chip(assigns) do
     ~H"""
-    <span class="inline-flex max-w-full items-center gap-1 rounded-lg bg-brand-50 py-1 pl-3 pr-1.5 text-sm font-medium text-brand-700 dark:bg-brand-900/40 dark:text-brand-100">
+    <span class="inline-flex max-w-full items-center gap-1 rounded-lg bg-brand-50 py-1 pl-3 pr-1.5 text-sm font-medium text-brand-700 dark:bg-brand-800/60 dark:text-brand-100">
       <%!-- The scope under the word rather than beside it: a chip is already as
       wide as the card, and a rule reads "this word" first and "from these" second. --%>
       <span class="flex min-w-0 flex-col">
@@ -509,7 +509,7 @@ defmodule VutuvWeb.PostLive.FilterBand do
         >
           {gettext("Select all")}
         </button>
-        <span class="text-slate-300 dark:text-slate-600">|</span>
+        <span class="text-slate-300 dark:text-slate-500">|</span>
         <button
           type="button"
           phx-click="no-servers"
@@ -763,7 +763,7 @@ defmodule VutuvWeb.PostLive.FilterBand do
       phx-value-key={@key}
       phx-target={@target}
       title={gettext("Show only %{source}", source: @label)}
-      class="hover-reveal -my-1.5 shrink-0 rounded px-1.5 py-1.5 text-xs font-semibold text-slate-400 hover:text-brand-700 dark:text-slate-500 dark:hover:text-brand-300"
+      class="hover-reveal -my-1.5 shrink-0 rounded px-1.5 py-1.5 text-xs font-semibold text-slate-400 hover:text-brand-700 dark:text-slate-400 dark:hover:text-brand-300"
     >
       {gettext("Only")}
     </button>

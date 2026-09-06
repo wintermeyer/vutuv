@@ -32,7 +32,7 @@ defmodule VutuvWeb.Admin.MemberBadges do
 
   @doc "The pill colour classes for a badge `tone`."
   def badge_class(:admin),
-    do: "bg-brand-100 text-brand-700 dark:bg-brand-900/40 dark:text-brand-100"
+    do: "bg-brand-100 text-brand-700 dark:bg-brand-800/60 dark:text-brand-100"
 
   def badge_class(:verified),
     do: "bg-emerald-100 text-emerald-700 dark:bg-emerald-900/40 dark:text-emerald-200"

@@ -193,7 +193,7 @@ defmodule VutuvWeb.PostLive.FeedCalendar do
       this site ships. --%>
       <div
         :if={@open?}
-        class="mt-3 grid grid-cols-7 gap-1 text-center text-[10px] font-semibold uppercase text-slate-400 dark:text-slate-500"
+        class="mt-3 grid grid-cols-7 gap-1 text-center text-[10px] font-semibold uppercase text-slate-400 dark:text-slate-400"
       >
         <span :for={initial <- weekday_initials()}>{initial}</span>
       </div>

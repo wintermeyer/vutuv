@@ -746,7 +746,7 @@ defmodule VutuvWeb.PostLive.Feed do
           data-reorder-handle
           aria-label={gettext("Move %{card}", card: @title)}
           title={gettext("Drag, or use the arrow keys")}
-          class="rail-handle -ml-1 flex h-6 w-4 shrink-0 items-center justify-center rounded text-slate-300 hover:text-slate-500 focus-visible:outline-2 focus-visible:outline-brand-500 dark:text-slate-600 dark:hover:text-slate-400"
+          class="rail-handle -ml-1 flex h-6 w-4 shrink-0 items-center justify-center rounded text-slate-300 hover:text-slate-500 focus-visible:outline-2 focus-visible:outline-brand-500 dark:text-slate-500 dark:hover:text-slate-300"
         >
           <span aria-hidden="true">⠿</span>
         </button>
@@ -872,7 +872,7 @@ defmodule VutuvWeb.PostLive.Feed do
       <span
         :for={tag <- @tags}
         id={"followed-tag-#{tag.id}"}
-        class="inline-flex max-w-full items-center gap-1 rounded-lg bg-brand-50 py-1 pl-3 pr-1.5 text-sm font-medium text-brand-700 dark:bg-brand-900/40 dark:text-brand-100"
+        class="inline-flex max-w-full items-center gap-1 rounded-lg bg-brand-50 py-1 pl-3 pr-1.5 text-sm font-medium text-brand-700 dark:bg-brand-800/60 dark:text-brand-100"
       >
         <%!-- No leading "#", on the chip or in the ✕'s accessible name. The chip
         is already inside a card named after tags, and the two cards beside it
@@ -2409,7 +2409,7 @@ defmodule VutuvWeb.PostLive.Feed do
         type="button"
         data-show-new
         phx-click={show_pending(assigns)}
-        class="mx-auto flex h-10 w-full max-w-full items-center gap-2 rounded-full bg-brand-50 px-4 text-sm font-semibold text-brand-700 shadow-sm hover:bg-brand-100 sm:w-auto dark:bg-brand-900/40 dark:text-brand-100 dark:hover:bg-brand-900/70"
+        class="mx-auto flex h-10 w-full max-w-full items-center gap-2 rounded-full bg-brand-50 px-4 text-sm font-semibold text-brand-700 shadow-sm hover:bg-brand-100 sm:w-auto dark:bg-brand-800/60 dark:text-brand-100 dark:hover:bg-brand-800/80"
       >
         <span class="shrink-0 tabular-nums">
           <%!-- An sr-only span and not an `aria-label` on the button: the label
@@ -3898,7 +3898,7 @@ defmodule VutuvWeb.PostLive.Feed do
               class={[
                 "rounded-lg px-3 py-2 text-sm",
                 if(@filter_panel == tab,
-                  do: "bg-brand-50 font-semibold text-brand-700 dark:bg-brand-900/40 dark:text-brand-100",
+                  do: "bg-brand-50 font-semibold text-brand-700 dark:bg-brand-800/60 dark:text-brand-100",
                   else: "text-slate-500 hover:text-slate-800 dark:text-slate-400 dark:hover:text-slate-100"
                 )
               ]}

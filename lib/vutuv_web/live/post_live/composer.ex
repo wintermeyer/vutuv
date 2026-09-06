@@ -1730,7 +1730,7 @@ defmodule VutuvWeb.PostLive.Composer do
             :if={@restored_draft?}
             id={"#{@id}-restored"}
             data-draft-restored
-            class="mb-3 flex flex-wrap items-center justify-between gap-2 rounded-lg bg-brand-50 px-3 py-2 text-sm text-brand-800 dark:bg-brand-900/40 dark:text-brand-100"
+            class="mb-3 flex flex-wrap items-center justify-between gap-2 rounded-lg bg-brand-50 px-3 py-2 text-sm text-brand-800 dark:bg-brand-800/60 dark:text-brand-100"
           >
             <span>{gettext("Picked up where you left off.")}</span>
             <button
@@ -2266,7 +2266,7 @@ defmodule VutuvWeb.PostLive.Composer do
             <div :if={@denied_users != []} class="mt-3 flex flex-wrap gap-2">
               <span
                 :for={user <- @denied_users}
-                class="inline-flex items-center gap-2 rounded-lg bg-brand-50 px-3 py-1.5 text-sm font-medium text-brand-700 dark:bg-brand-900/40 dark:text-brand-100"
+                class="inline-flex items-center gap-2 rounded-lg bg-brand-50 px-3 py-1.5 text-sm font-medium text-brand-700 dark:bg-brand-800/60 dark:text-brand-100"
               >
                 {full_name(user)}
                 <button
@@ -2859,7 +2859,7 @@ defmodule VutuvWeb.PostLive.Composer do
           class={[
             "h-10 shrink-0 rounded-lg px-3 text-sm font-semibold ring-1",
             (is_nil(@layout) &&
-               "bg-brand-50 text-brand-700 ring-2 ring-brand-500 dark:bg-brand-900/40 dark:text-brand-100") ||
+               "bg-brand-50 text-brand-700 ring-2 ring-brand-500 dark:bg-brand-800/60 dark:text-brand-100") ||
               "text-slate-700 ring-slate-300 hover:bg-slate-100 dark:text-slate-200 dark:ring-slate-700 dark:hover:bg-slate-800"
           ]}
         >
@@ -2879,7 +2879,7 @@ defmodule VutuvWeb.PostLive.Composer do
           class={[
             "h-10 w-14 shrink-0 rounded-lg p-1.5",
             (@layout == variant.name &&
-               "bg-brand-50 ring-2 ring-brand-500 dark:bg-brand-900/40") ||
+               "bg-brand-50 ring-2 ring-brand-500 dark:bg-brand-800/60") ||
               "ring-1 ring-slate-300 hover:bg-slate-100 dark:ring-slate-700 dark:hover:bg-slate-800"
           ]}
         >
@@ -2913,7 +2913,7 @@ defmodule VutuvWeb.PostLive.Composer do
           class={[
             "h-10 shrink-0 rounded-lg px-3 text-sm font-semibold",
             (!@fill? &&
-               "bg-brand-50 text-brand-700 ring-2 ring-brand-500 dark:bg-brand-900/40 dark:text-brand-100") ||
+               "bg-brand-50 text-brand-700 ring-2 ring-brand-500 dark:bg-brand-800/60 dark:text-brand-100") ||
               "text-slate-700 ring-1 ring-slate-300 hover:bg-slate-100 dark:text-slate-200 dark:ring-slate-700 dark:hover:bg-slate-800"
           ]}
         >
@@ -2929,7 +2929,7 @@ defmodule VutuvWeb.PostLive.Composer do
           class={[
             "h-10 shrink-0 rounded-lg px-3 text-sm font-semibold",
             (@fill? &&
-               "bg-brand-50 text-brand-700 ring-2 ring-brand-500 dark:bg-brand-900/40 dark:text-brand-100") ||
+               "bg-brand-50 text-brand-700 ring-2 ring-brand-500 dark:bg-brand-800/60 dark:text-brand-100") ||
               "text-slate-700 ring-1 ring-slate-300 hover:bg-slate-100 dark:text-slate-200 dark:ring-slate-700 dark:hover:bg-slate-800"
           ]}
         >

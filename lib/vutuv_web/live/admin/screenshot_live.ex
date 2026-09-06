@@ -534,7 +534,7 @@ defmodule VutuvWeb.Admin.ScreenshotLive do
     do: "bg-slate-100 text-slate-700 dark:bg-slate-800 dark:text-slate-200"
 
   defp status_badge_class("capturing"),
-    do: "bg-brand-100 text-brand-700 dark:bg-brand-900/40 dark:text-brand-100"
+    do: "bg-brand-100 text-brand-700 dark:bg-brand-800/60 dark:text-brand-100"
 
   defp status_badge_class("ready"),
     do: "bg-emerald-100 text-emerald-800 dark:bg-emerald-900/40 dark:text-emerald-200"

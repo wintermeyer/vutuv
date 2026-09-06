@@ -261,7 +261,7 @@ defmodule VutuvWeb.JobPostingLive.Show do
             "inline-flex items-center rounded-lg px-3 py-1.5 text-sm font-medium",
             if(MapSet.member?(@matching, tag.slug),
               do: "bg-emerald-100 text-emerald-800 ring-1 ring-emerald-300 dark:bg-emerald-900/40 dark:text-emerald-100",
-              else: "bg-brand-50 text-brand-700 dark:bg-brand-900/40 dark:text-brand-100"
+              else: "bg-brand-50 text-brand-700 dark:bg-brand-800/60 dark:text-brand-100"
             )
           ]}
         >
