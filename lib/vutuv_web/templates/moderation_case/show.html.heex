@@ -9,10 +9,44 @@
       {status_line(@case)}
     </p>
 
+    <%!-- Nobody weighed this up: the freeze is what a report from a member in
+          good standing does on arrival, and a member owed a statement of
+          reasons is owed that fact first. --%>
+    <p :if={@case.status in ~w(pending_owner escalated)} class="mt-3 text-sm text-slate-600 dark:text-slate-400">
+      {gettext(
+        "No person made this decision: a report from a member in good standing hides the reported content automatically, the moment it arrives."
+      )}
+    </p>
+
     <dl class="mt-4 space-y-3 text-sm">
       <div>
         <dt class="font-semibold text-slate-700 dark:text-slate-300">{gettext("Reported as")}</dt>
-        <dd class="text-slate-600 dark:text-slate-400">{category_names(@case)}</dd>
+        <dd class="text-slate-600 dark:text-slate-400">{category_names(@notice)}</dd>
+      </div>
+      <div :if={@notice.notes != []}>
+        <dt class="font-semibold text-slate-700 dark:text-slate-300">
+          {gettext("What the report says")}
+        </dt>
+        <dd>
+          <%!-- A stranger's words. `{...}` escapes; never raw/1 here. --%>
+          <blockquote
+            :for={note <- @notice.notes}
+            class="mt-1 whitespace-pre-line rounded-lg bg-slate-50 p-3 text-slate-600 ring-1 ring-slate-200 dark:bg-slate-800 dark:text-slate-300 dark:ring-slate-700"
+          >
+            {note}
+          </blockquote>
+        </dd>
+      </div>
+      <div>
+        <dt class="font-semibold text-slate-700 dark:text-slate-300">{gettext("The ground")}</dt>
+        <dd class="text-slate-600 dark:text-slate-400">
+          {if @notice.copyright?,
+            do:
+              gettext(
+                "Copyright law. This complaint says the work is not yours to publish, which is a legal question rather than a house rule."
+              ),
+            else: gettext("Our community guidelines, which everything on vutuv has to keep to.")}
+        </dd>
       </div>
       <div :if={@case.content_snapshot not in [nil, ""]}>
         <dt class="font-semibold text-slate-700 dark:text-slate-300">
@@ -28,21 +62,25 @@
 
     <%= if @case.status == "pending_owner" do %>
       <p class="mt-5 text-sm text-slate-600 dark:text-slate-400">
+        <%!-- Not "three ways out": a reported message or job posting has no
+              edit button, so the count would be wrong for them. --%>
         {gettext(
-          "Nobody else can see it right now. You have 72 hours to settle this yourself; after that our admins decide. Three ways out:"
+          "Nobody else can see it right now. You have 72 hours to settle this yourself; after that our admins decide. Here is what you can do:"
         )}
       </p>
 
       <div class="mt-4 space-y-3">
+        <%!-- A rewrite does not answer "this work is not yours to publish", so
+              a copyright case must not promise the post comes straight back —
+              an admin checks the revision first. Which of the two it is (and
+              whether an edit is offered at all) is `owner_edit_offer/2`'s
+              answer, the same one the email renders. --%>
         <div
-          :if={@case.content_type == "post" and @content}
+          :if={@edit_offer != :none}
           class="flex items-center justify-between gap-4 rounded-lg border border-slate-200 p-3 dark:border-slate-700"
         >
-          <%!-- A rewrite does not answer "this work is not yours to publish",
-                so a copyright case must not promise the post comes straight
-                back — an admin checks the revision first. --%>
           <p class="text-sm text-slate-600 dark:text-slate-400">
-            {if Moderation.copyright_case?(@case),
+            {if @edit_offer == :reviewed,
               do:
                 gettext(
                   "Fix it. One of our admins then looks at the revision; the post stays hidden until they have."

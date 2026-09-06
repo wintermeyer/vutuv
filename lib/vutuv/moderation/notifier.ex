@@ -16,20 +16,28 @@ defmodule Vutuv.Moderation.Notifier do
 
   import Ecto.Query
 
-  alias Vutuv.{Accounts, Activity, Repo}
+  alias Vutuv.{Accounts, Activity, Moderation, Repo}
   alias Vutuv.Accounts.User
   alias Vutuv.Moderation.Case
   alias Vutuv.Notifications.Emailer
 
-  @doc "The owner's content was frozen; they can delete, edit or dispute."
+  @doc """
+  The owner's content was frozen; they can delete, edit or dispute.
+
+  Both owner notices carry the statement of reasons (issue #2010), so the
+  reports come along — `:reports` alone, never `reports: :reporter`: a report
+  is anonymous, and a surface cannot leak what it was never handed.
+  """
   def owner_content_frozen(%Case{} = case_record) do
-    push_owner(case_record, "One of your contributions was reported and is hidden for now.")
+    case_record = Repo.preload(case_record, :reports)
+    push_owner(case_record)
     mail_owner(case_record, &Emailer.moderation_frozen_email/3)
   end
 
   @doc "The owner's content was frozen and is with the admins (no self-service)."
   def owner_under_review(%Case{} = case_record) do
-    push_owner(case_record, "One of your contributions is hidden while our admins review it.")
+    case_record = Repo.preload(case_record, :reports)
+    push_owner(case_record)
     mail_owner(case_record, &Emailer.moderation_review_email/3)
   end
 
@@ -113,10 +121,15 @@ defmodule Vutuv.Moderation.Notifier do
 
   def admins_digest(_), do: :ok
 
-  defp push_owner(%Case{} = case_record, text) do
+  # The live push carries the same category the persisted row will
+  # (`Vutuv.Activity.moderation_items/3` reads it back from the reports), so
+  # the popup and the row under the bell say the same thing. No `:text` — the
+  # moderation branch of `VutuvWeb.NotificationLine.notification_text/1` writes
+  # the sentence from the category and the status, in the reader's language.
+  defp push_owner(%Case{} = case_record) do
     Activity.notify(case_record.owner_id, %{
       kind: "moderation",
-      text: text,
+      category: Moderation.owner_notice(case_record).category,
       case_id: case_record.id,
       source_id: case_record.id,
       at: DateTime.utc_now()

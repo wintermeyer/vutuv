@@ -26,10 +26,16 @@ defmodule VutuvWeb.ModerationCaseController do
   def show(conn, %{"id" => id}) do
     with %Case{} = case_record <- Moderation.get_case_with_details(id),
          :ok <- authorize(conn, case_record) do
+      content = Moderation.case_content(case_record)
+
       render(conn, "show.html",
         page_title: gettext("Reported content"),
         case: case_record,
-        content: Moderation.case_content(case_record)
+        # What was claimed, in the reporters' words, and on what ground — the
+        # same statement of reasons the owner's email carries (issue #2010).
+        notice: Moderation.owner_notice(case_record),
+        edit_offer: Moderation.owner_edit_offer(case_record, content),
+        content: content
       )
     else
       _ -> ControllerHelpers.render_error(conn, 404)

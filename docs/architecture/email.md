@@ -70,6 +70,41 @@ layout, dark mode, and blocks like the PIN box, CTA button and key/value panel).
 The two formats are paired by a drift test, so an email added with only one
 fails the build.
 
+**Quoting somebody else's text.** A mail that carries what another person wrote
+has two blocks, and they are not interchangeable. `email_markdown/1` renders a
+member's own Markdown (an invitation note, a DM) with its links live.
+`email_quote/1` renders a *stranger's* plain text — today only a moderation
+report's note, shown to the member it accuses — escaped, unlinked and behind a
+left rule. The `text/plain` half of the latter goes through
+`VutuvWeb.UserHelpers.email_quoted_text/1`, which wraps at 72 characters and
+prefixes every line with `"> "`: a text template escapes nothing, so an unmarked
+block can be shaped to read as our own signature plus a second, fake link. A
+blank line inside the quote gets the bare `">"` — a quote block ends at the
+first line without a marker, and mail clients that strip trailing whitespace
+would turn `"> "` into exactly that.
+
+**Both halves ask `UserHelpers.split_lines/1` where a line ends, and it is
+written as the effect rather than as a list of spellings.** `Regex.split(~r/\R/u,
+text)` is PCRE's closed set of mandatory line breaks, which is the set UAX #14
+gives a mail client. Enumerating `\r\n`, `\r` and `\n` — the obvious spelling,
+and what shipped first — leaves VT, FF, NEL (U+0085), LINE SEPARATOR (U+2028)
+and PARAGRAPH SEPARATOR (U+2029) inside one "line": invisible in a form, a real
+break in Gmail, Apple Mail and Thunderbird, so everything after one arrives
+**without** the `"> "` that is the whole safeguard. Nothing strips control
+characters from a report note on the way in, so this split is the only thing
+standing between a member in good standing and a forged vutuv signature with a
+sign-in link inside a DKIM-signed vutuv mail — on a site where signing in means
+clicking a mailed PIN. The `u` modifier is load-bearing: without it `\R` stops
+short of NEL and the two separators.
+
+**A digest subject is capped** (`Emailer.shorten_subject/1`, 78 characters, cut
+back to a word boundary). A digest of exactly one notification uses that
+notification's own line as the subject, and a line is written for a list row
+where it may wrap: the moderation line runs to 163 German characters once it
+names the reported category. The cap sits on the subject, which is the surface
+with the hard limit, rather than every kind's sentence being kept short enough
+to double as one.
+
 ## Opt-out and unsubscribe
 
 **Notification mail is opt-out**: the unread-message nudge respects

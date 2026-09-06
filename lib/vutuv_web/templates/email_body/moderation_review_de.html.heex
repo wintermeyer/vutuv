@@ -1,10 +1,33 @@
 <.email_layout preheader="Ihr Inhalt auf vutuv wird geprüft" locale={@locale}>
   <.email_p>{email_greeting(@user)},</.email_p>
   <.email_p>
-    einer Ihrer Beiträge auf vutuv wurde gemeldet und ist verborgen, während unsere Admins den Fall
-    prüfen. Sie müssen nichts weiter tun; wir melden uns mit dem Ergebnis.
+    einer Ihrer Beiträge auf vutuv wurde gemeldet und ist verborgen, während unsere Admins den
+    Fall prüfen. Kein Mensch hat ihn vorher angesehen: Die Meldung eines Mitglieds mit guter
+    Bilanz verbirgt den gemeldeten Inhalt automatisch, sobald sie eintrifft.
   </.email_p>
-  <.email_p>Den Fall finden Sie hier:</.email_p>
+  <.email_panel>
+    <.email_row label="Gemeldet als">{@category_labels}</.email_row>
+  </.email_panel>
+  <.email_p :if={@notes != []}>
+    Das steht in der Meldung, mit den Worten der meldenden Person. Wer das war, sagen wir Ihnen
+    nie:
+  </.email_p>
+  <.email_quote :for={note <- @notes} text={note} />
+  <.email_p :if={@notes == []}>Die Meldung nannte diese Kategorie und sonst nichts.</.email_p>
+  <.email_p :if={@copyright_case}>
+    Das ist eine rechtliche Beschwerde, keine Hausregel: Sie besagt, dass das Werk nicht Ihres
+    ist, um es zu veröffentlichen. Darüber entscheidet das Urheberrecht.
+  </.email_p>
+  <.email_p :if={!@copyright_case}>
+    Grundlage sind
+    <.email_link href={"#{@url}community"}>unsere Verhaltensregeln</.email_link>, an die sich
+    alles auf vutuv halten muss.
+  </.email_p>
+  <.email_p>
+    Dieser Fall liegt bereits bei unseren Admins, eine Runde zum Selbstklären gibt es hier also
+    nicht. Sie müssen nichts weiter tun: Wir melden uns mit dem Ergebnis, und wenn die Meldung
+    unbegründet war, ist Ihr Inhalt wieder da.
+  </.email_p>
   <.email_button href={"#{@url}moderation/cases/#{@case_id}"}>Fall ansehen</.email_button>
   <.email_signature locale={@locale} />
 </.email_layout>

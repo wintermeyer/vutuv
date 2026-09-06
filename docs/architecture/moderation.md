@@ -57,9 +57,8 @@ on the reports (`queue_query/0`).
 unfreezes the content and closes the case; for a copyright case
 `Moderation.content_edited/1` keeps the freeze, logs the edit and escalates, so
 a human decides whether the revision removed the work. Delete and dispute are
-unchanged. The owner's case page says so (`ModerationCaseHTML.copyright?/1`
-picks the wording); the *email* still describes the generic edit, which issue
-#2010 rewrites.
+unchanged. The case page and the owner's email both say so, because both read
+`Moderation.owner_notice/1` (see below).
 
 Admin rulings are one click: **uphold** (owner gets a strike: warning → one-week
 suspension → permanent deactivation; strikes expire after 12 months) or
@@ -128,6 +127,59 @@ Every case carries an **audit log** (`moderation_events`: reports, freezes,
 severances, owner self-service, escalations, rulings, strikes, `owner_removed`)
 rendered as the History timeline on the admin case page, and the urgent admin
 email names the profile, category and reporter's note instead of just a link.
+
+## The statement of reasons (issue #2010)
+
+A member whose content goes dark is owed more than "something of yours was
+reported". Three surfaces carry the same five facts — the category, the
+reporter's explanation **quoted** (never who wrote it), that the hiding was
+**automatic** rather than a person's decision, the ground (the house rules, or
+the law), and the options that case really has, with the 72-hour deadline where
+there is one. This is what the Digital Services Act calls a statement of reasons
+(Art. 17); the member-facing text never says so.
+
+`Moderation.owner_notice/1` is the one place all three read: it returns the
+deduplicated `categories` (most recent report first), the `category` to name
+where there is room for only one, the reporters' `notes`, and `copyright?`.
+The reporter is deliberately not in the map — a surface cannot leak what it
+was never handed. The three surfaces are
+
+- the case page `/moderation/cases/:id`, which the controller hands the notice
+  as `@notice`;
+- the owner's email (`moderation_frozen_*` and `moderation_review_*`, three
+  locales × two formats), built by `Emailer.statement_of_reasons/2`;
+- the in-app line, which names the category and the automatic freeze and links
+  to the case page (`NotificationLine.notification_text/1`; the category is
+  read back per page by `Moderation.notice_category_by_case/1`, one query, not
+  one per row — and only for a case that is still hidden, since a settled one's
+  line names the ruling). The **digest mail** delegates this one kind to that
+  same function, so a member who reads the mail instead of opening the app is
+  told the same thing.
+
+Two things the mail must not get wrong. **The options are the options that case
+actually has**, and `Moderation.owner_edit_offer/2` answers that as one value
+(`:immediate` / `:reviewed` / `:none`) rather than as two booleans each of the
+seven rendering places recombines: only a post has an editor behind the case
+page's button, so a reported message or job posting gets delete and dispute,
+and a **copyright** case is never promised that an edit makes the content
+visible again — an admin looks at the revision first. (`owner_edit_offer/1` is
+the same answer for the email, which does not already hold the content and
+reads the database only when the type could have an editor at all.) And the
+**review** mail (an escalated case: a re-report after a self-service round, or
+a frozen profile) promises no 72-hour window and no self-service, because there
+is none.
+
+The reporter's note is a stranger's text shown to the accused member. The HTML
+half renders it through `EmailComponents.email_quote/1`, which escapes it and
+does **not** turn it into Markdown or links — a clickable link out of an
+accusation is a phishing seat. The `text/plain` half has no escaping at all, so
+`UserHelpers.email_quoted_text/1` wraps it at 72 characters and prefixes every
+line with `"> "`: without that, a crafted note can be shaped to read as our own
+signature followed by a second, fake link. **Both halves decide where a line
+ends in one place** (`UserHelpers.split_lines/1`, PCRE's `\R` with the `u`
+modifier), because a break the reader's client honours but our split does not
+puts the rest of the note outside the marker — see `email.md` for why the rule
+is written as the effect rather than as a list of `\r\n`, `\r` and `\n`.
 
 ## Admin-initiated freeze (`/admin/accounts`, issue #812)
 

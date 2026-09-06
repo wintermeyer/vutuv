@@ -33,6 +33,7 @@ defmodule Vutuv.Notifications.Emailer do
   alias Vutuv.Accounts.User
   alias Vutuv.Identity
   alias Vutuv.Mailto
+  alias Vutuv.Moderation
   alias Vutuv.Notifications.Bounces
   alias Vutuv.Operator
   alias Vutuv.Organizations.Organization
@@ -42,6 +43,7 @@ defmodule Vutuv.Notifications.Emailer do
   alias VutuvWeb.EmailText
   alias VutuvWeb.NotificationDigestText, as: DigestText
   alias VutuvWeb.Plug.Locale
+  alias VutuvWeb.ReportHTML
   alias VutuvWeb.SavedSearchToken
 
   # The visible From ({name, address}) on every message. Per-installation:
@@ -453,11 +455,32 @@ defmodule Vutuv.Notifications.Emailer do
   # Named in the subject when there is one thing to say, counted when there are
   # several: "3 neue Mitteilungen" tells a member nothing they cannot see in
   # the app's badge, while the single line often saves them the trip.
-  defp digest_subject([line], 0), do: line
+  defp digest_subject([line], 0), do: shorten_subject(line)
 
   defp digest_subject(lines, more) do
     count = length(lines) + more
     ngettext("%{count} new notification on vutuv", "%{count} new notifications on vutuv", count)
+  end
+
+  # A line is written for a list row, where it may wrap over two lines and lose
+  # nothing; a subject is cut by the reader's client at around seventy
+  # characters, and one that runs past that reads as spam. So the cap lives
+  # here, on the surface that has it, rather than every kind's sentence being
+  # kept short enough to double as a subject — the moderation line grew to
+  # ~160 German characters the moment it started naming the reported category
+  # (issue #2010), and any other kind can grow the same way. Cut back to a word
+  # boundary so the subject never ends mid-word.
+  @subject_max 78
+
+  defp shorten_subject(line) do
+    if String.length(line) <= @subject_max do
+      line
+    else
+      line
+      |> String.slice(0, @subject_max)
+      |> String.replace(~r/\s+\S*$/u, "")
+      |> Kernel.<>("…")
+    end
   end
 
   @doc """
@@ -960,16 +983,45 @@ defmodule Vutuv.Notifications.Emailer do
 
   @doc "Owner notice: content frozen, please delete / edit / dispute within 72h."
   def moderation_frozen_email(user, email, case_record) do
-    build_email(user, email, "moderation_frozen", %{case_id: case_record.id}, fn ->
+    # The edit option is the one fact the review mail has no use for, so it is
+    # added here — and `owner_edit_offer/1` only reads the database when the
+    # content type could have an editor at all.
+    assigns =
+      user
+      |> statement_of_reasons(case_record)
+      |> Map.put(:edit_offer, Moderation.owner_edit_offer(case_record))
+
+    build_email(user, email, "moderation_frozen", assigns, fn ->
       gettext("Your content on vutuv was reported and is hidden")
     end)
   end
 
   @doc "Owner notice: content frozen and with the admins (no self-service round)."
   def moderation_review_email(user, email, case_record) do
-    build_email(user, email, "moderation_review", %{case_id: case_record.id}, fn ->
+    build_email(user, email, "moderation_review", statement_of_reasons(user, case_record), fn ->
       gettext("Your content on vutuv is under review")
     end)
+  end
+
+  # What the owner of hidden content is owed (issue #2010): what was claimed,
+  # in the reporters' own words, and on what ground. `Vutuv.Moderation` owns
+  # every answer, so the mail cannot claim something the case page does not.
+  # The labels are joined here, in the *recipient's* language — the body
+  # template is picked by their locale, and the ambient one is the sender's.
+  defp statement_of_reasons(user, case_record) do
+    notice = Moderation.owner_notice(case_record)
+
+    labels =
+      in_locale(get_locale(user.locale), fn ->
+        Enum.map_join(notice.categories, ", ", &ReportHTML.category_label/1)
+      end)
+
+    %{
+      case_id: case_record.id,
+      category_labels: labels,
+      notes: notice.notes,
+      copyright_case: notice.copyright?
+    }
   end
 
   @doc "Reporter notice: the content they reported was revised by its owner."
@@ -1072,9 +1124,7 @@ defmodule Vutuv.Notifications.Emailer do
   defp localized_category_label(nil, _user), do: nil
 
   defp localized_category_label(report, user) do
-    in_locale(get_locale(user.locale), fn ->
-      VutuvWeb.ReportHTML.category_label(report.category)
-    end)
+    in_locale(get_locale(user.locale), fn -> ReportHTML.category_label(report.category) end)
   end
 
   defp presence(nil), do: nil

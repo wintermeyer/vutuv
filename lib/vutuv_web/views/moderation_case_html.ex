@@ -2,7 +2,6 @@ defmodule VutuvWeb.ModerationCaseHTML do
   @moduledoc false
   use VutuvWeb, :html
 
-  alias Vutuv.Moderation
   alias Vutuv.Moderation.Case
 
   embed_templates("../templates/moderation_case/*")
@@ -29,11 +28,11 @@ defmodule VutuvWeb.ModerationCaseHTML do
   def status_line(%Case{status: "rejected"}),
     do: gettext("An admin dismissed the report. The content is visible again.")
 
-  @doc "The reported categories of a case, deduplicated, human-readable."
-  def category_names(%Case{reports: reports}) when is_list(reports) do
-    reports
-    |> Enum.map(&VutuvWeb.ReportHTML.category_label(&1.category))
-    |> Enum.uniq()
-    |> Enum.join(", ")
-  end
+  @doc """
+  The reported categories, human-readable. Takes the statement of reasons
+  (`Vutuv.Moderation.owner_notice/1`) rather than the case, so the page and
+  the owner's email name the same categories in the same order.
+  """
+  def category_names(%{categories: categories}),
+    do: Enum.map_join(categories, ", ", &VutuvWeb.ReportHTML.category_label/1)
 end

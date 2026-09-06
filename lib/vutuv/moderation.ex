@@ -690,6 +690,86 @@ defmodule Vutuv.Moderation do
     do: Repo.exists?(where(copyright_reports(), [r], r.case_id == ^case_id))
 
   @doc """
+  The statement of reasons the owner of hidden content is owed (issue #2010):
+  what was claimed, in the words the reporters typed, and on what ground.
+
+  `categories` are the wire strings, deduplicated, most recent report first;
+  `notes` are the explanations, blanks dropped; `copyright?` says whether the
+  ground is the law rather than the house rules. The reporter is deliberately
+  not in the map — reports are anonymous, and a surface cannot leak what it
+  was never handed.
+
+  All three surfaces that carry the notice (the case page, the owner's email
+  and the in-app line) read it here, so they cannot drift apart.
+  """
+  def owner_notice(%Case{reports: reports}) when is_list(reports) do
+    ordered = Enum.sort_by(reports, & &1.inserted_at, {:desc, NaiveDateTime})
+    categories = ordered |> Enum.map(& &1.category) |> Enum.uniq()
+
+    %{
+      categories: categories,
+      category: leading_category(categories),
+      notes: ordered |> Enum.map(& &1.note) |> Enum.reject(&(&1 in [nil, ""])),
+      copyright?: Enum.any?(categories, &Report.copyright?/1)
+    }
+  end
+
+  def owner_notice(%Case{} = case_record),
+    do: case_record |> Repo.preload(:reports) |> owner_notice()
+
+  @doc """
+  What the owner's self-service round offers as an *edit*, as one value the
+  surfaces render instead of deriving: `:immediate` (an edit brings the content
+  straight back), `:reviewed` (a copyright claim, so an admin looks at the
+  revision and the content stays hidden until they have) or `:none`.
+
+  Only a post has an editor behind the case page's button, so a reported
+  message or job posting is offered delete and dispute alone. Answered here
+  rather than recombined from two booleans in each of the seven places that
+  render the options, so no locale can promise a copyright case its content
+  back.
+  """
+  def owner_edit_offer(%Case{content_type: "post"} = case_record, %Post{}),
+    do: if(copyright_case?(case_record), do: :reviewed, else: :immediate)
+
+  def owner_edit_offer(%Case{}, _content), do: :none
+
+  @doc """
+  The same answer for a caller that does not already hold the content — the
+  email path. Looks the post up only when the type could have an editor at all.
+  """
+  def owner_edit_offer(%Case{content_type: "post"} = case_record),
+    do: owner_edit_offer(case_record, case_content(case_record))
+
+  def owner_edit_offer(%Case{}), do: :none
+
+  @doc """
+  The one category to name per case id — what the in-app notification line, the
+  one place with room for a single word, says was claimed. Returns a
+  `case_id => category` map; a case whose reports are gone is absent.
+  """
+  def notice_category_by_case([]), do: %{}
+
+  def notice_category_by_case(case_ids) when is_list(case_ids) do
+    # Ordered in SQL, and `Enum.group_by/3` keeps that order inside each group,
+    # so `leading_category/1` sees the same "most recent first" list the
+    # single-case `owner_notice/1` builds.
+    from(r in Report,
+      where: r.case_id in ^case_ids,
+      order_by: [desc: r.inserted_at],
+      select: {r.case_id, r.category}
+    )
+    |> Repo.all()
+    |> Enum.group_by(&elem(&1, 0), &elem(&1, 1))
+    |> Map.new(fn {case_id, categories} -> {case_id, leading_category(categories)} end)
+  end
+
+  # A copyright notice wins over anything else on the same case — it is the one
+  # with legal weight — otherwise the most recent report speaks.
+  defp leading_category(categories),
+    do: Enum.find(categories, &Report.copyright?/1) || List.first(categories)
+
+  @doc """
   How many open cases (any open status: frozen-pending-owner, flagged or
   escalated) exist for a content type — the per-area tile figure (e.g. the
   `/admin/jobs` "open job-related moderation cases" count for `"job_posting"`).

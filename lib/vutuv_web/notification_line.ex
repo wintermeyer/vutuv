@@ -119,7 +119,7 @@ defmodule VutuvWeb.NotificationLine do
       "rejected" -> gettext("A report about your content was dismissed; it is visible again.")
       "resolved_edited" -> gettext("You revised reported content; the case is closed.")
       "resolved_deleted" -> gettext("You deleted reported content; the case is closed.")
-      _ -> gettext("Your content was reported and is hidden while the report is handled.")
+      _ -> content_hidden_text(n[:category])
     end
   end
 
@@ -193,6 +193,23 @@ defmodule VutuvWeb.NotificationLine do
   # the generic line is the honest floor. `VutuvWeb.NotificationDigestText`
   # makes the same promise for the digest mail.
   def notification_text(n), do: n[:text] || gettext("Something new happened on your account.")
+
+  # The line the owner reads the moment their content goes dark. It names what
+  # was claimed and says outright that no person decided it, because "your
+  # content was reported" leaves both open; the rest of the statement of
+  # reasons (the reporter's own words, the ground, the options) is on the case
+  # page the line links to.
+  defp content_hidden_text(category) when is_binary(category) do
+    gettext("Hidden automatically after a report: %{reason}. The case page says what you can do.",
+      reason: VutuvWeb.ReportHTML.category_label(category)
+    )
+  end
+
+  defp content_hidden_text(_missing) do
+    gettext(
+      "Your content was hidden automatically after a report. The case page says what you can do."
+    )
+  end
 
   @doc """
   The popup's two halves: an actor's name over their verb phrase.

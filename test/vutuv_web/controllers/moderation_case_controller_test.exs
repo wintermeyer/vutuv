@@ -58,6 +58,67 @@ defmodule VutuvWeb.ModerationCaseControllerTest do
       assert response =~ "stays hidden until they have"
     end
 
+    test "carries the statement of reasons: the words, the ground, the deadline", %{conn: conn} do
+      {conn, _owner, _post, case_record} =
+        owner_with_case(conn, %{
+          "category" => "bullying",
+          "note" => "This names my colleague and calls her a liar."
+        })
+
+      response = conn |> get(~p"/moderation/cases/#{case_record.id}") |> html_response(200)
+
+      assert response =~ "This names my colleague and calls her a liar."
+      assert response =~ "No person made this decision"
+      assert response =~ "Our community guidelines"
+      assert response =~ "72 hours"
+    end
+
+    test "a copyright case names the law as the ground", %{conn: conn} do
+      {conn, _owner, _post, case_record} =
+        owner_with_case(conn, %{
+          "category" => "copyright",
+          "note" => "The photo is mine, the original is at example.com/photo",
+          "good_faith?" => "true"
+        })
+
+      response = conn |> get(~p"/moderation/cases/#{case_record.id}") |> html_response(200)
+
+      assert response =~ "Copyright law."
+      refute response =~ "Our community guidelines, which everything"
+    end
+
+    test "a reported message is not offered an edit it does not have", %{conn: conn} do
+      {conn, owner} = create_and_login_user(conn)
+      other = insert(:activated_user)
+      conversation = insert_conversation_between(owner, other)
+      message = insert(:message, conversation: conversation, sender: owner)
+
+      {:ok, case_record} =
+        Moderation.report_content(other, message, %{"category" => "bullying", "note" => "Stop."})
+
+      response = conn |> get(~p"/moderation/cases/#{case_record.id}") |> html_response(200)
+
+      assert response =~ "Stop."
+      assert response =~ ~p"/moderation/cases/#{case_record.id}/delete_content"
+      refute response =~ "/edit"
+    end
+
+    test "reads in German for a German member", %{conn: conn} do
+      {conn, owner, _post, case_record} = owner_with_case(conn, %{"category" => "spam"})
+      owner |> Ecto.Changeset.change(locale: "de") |> Repo.update!()
+
+      response =
+        conn
+        |> recycle()
+        |> put_req_header("accept-language", "de-DE,de")
+        |> get(~p"/moderation/cases/#{case_record.id}")
+        |> html_response(200)
+
+      assert response =~ "Diese Entscheidung hat kein Mensch getroffen"
+      assert response =~ "Grundlage"
+      assert response =~ "Unsere Verhaltensregeln"
+    end
+
     test "another member gets a 404", %{conn: conn} do
       {_conn, _owner, _post, case_record} = owner_with_case(conn)
 

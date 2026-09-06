@@ -2,8 +2,8 @@ defmodule VutuvWeb.EmailComponents do
   @moduledoc """
   The shared HTML-email framework: one `email_layout/1` chrome plus a small set
   of inline-styled building blocks (`email_p`, `email_pin`, `email_button`,
-  `email_panel`/`email_row`, `email_markdown`, `email_list`, `email_divider`,
-  `email_muted`, `email_signature`). Every HTML email body
+  `email_panel`/`email_row`, `email_markdown`, `email_quote`, `email_list`,
+  `email_divider`, `email_muted`, `email_signature`). Every HTML email body
   (`lib/vutuv_web/templates/email_body/`) composes these, so the look and feel
   is defined in exactly one place.
 
@@ -239,11 +239,50 @@ defmodule VutuvWeb.EmailComponents do
     assigns = assign(assigns, :html, EmailMarkdown.render(assigns.body))
 
     ~H"""
-    <table role="presentation" width="100%" cellpadding="0" cellspacing="0" border="0" class="email-panel" style="margin:0 0 20px;background:#f8fafc;border:1px solid #e2e8f0;border-left:4px solid #1d4ed8;border-radius:8px;">
+    <.quote_box rule="#1d4ed8">
+      <div class="email-msg">{@html}</div>
+    </.quote_box>
+    """
+  end
+
+  @doc """
+  A stranger's plain text, quoted behind a left rule.
+
+  Unlike `email_markdown/1` this renders the characters as they were typed: no
+  Markdown, no links. The one text quoted this way is a moderation report's
+  note (issue #2010) — written by somebody the reader has never met and shown
+  to them at the worst possible moment, so a clickable link out of it would be
+  a phishing seat. HEEx escapes the text and the rule marks where the
+  stranger's words start and stop; the `text/plain` half of the same mail gets
+  `VutuvWeb.UserHelpers.email_quoted_text/1`. Both halves ask
+  `UserHelpers.split_lines/1` where a line ends, so a break the reader's client
+  honours is one this markup drew rather than one it let through.
+  """
+  attr(:text, :string, required: true)
+
+  def email_quote(assigns) do
+    assigns = assign(assigns, :lines, split_lines(assigns.text))
+
+    ~H"""
+    <.quote_box rule="#94a3b8">
+      <%!-- A <br> per line rather than `white-space: pre-wrap`, which Outlook's
+            Word engine ignores — the one place a member reads an accusation is
+            the wrong place to lose the writer's line breaks. --%>
+      <span :for={line <- @lines}>{line}<br /></span>
+    </.quote_box>
+    """
+  end
+
+  # The panel both quote blocks sit in: same chrome, different left rule. One
+  # copy, so the two never disagree inside a single mail.
+  attr(:rule, :string, required: true)
+  slot(:inner_block, required: true)
+
+  defp quote_box(assigns) do
+    ~H"""
+    <table role="presentation" width="100%" cellpadding="0" cellspacing="0" border="0" class="email-panel" style={"margin:0 0 20px;background:#f8fafc;border:1px solid #e2e8f0;border-left:4px solid #{@rule};border-radius:8px;"}>
       <tr>
-        <td class="email-text" style={markdown_quote_style()}>
-          <div class="email-msg">{@html}</div>
-        </td>
+        <td class="email-text" style={markdown_quote_style()}>{render_slot(@inner_block)}</td>
       </tr>
     </table>
     """
@@ -266,6 +305,11 @@ defmodule VutuvWeb.EmailComponents do
   attr(:items, :list, required: true)
 
   def email_list(assigns) do
+    # Nils are dropped here rather than by each caller: a list whose entries are
+    # conditional (the moderation notice's options) is otherwise wrapped in an
+    # `Enum.reject` in every locale file that renders it.
+    assigns = assign(assigns, :items, Enum.reject(assigns.items, &is_nil/1))
+
     ~H"""
     <ul class="email-text" style={list_style()}>
       <li :for={item <- @items} style="margin:0 0 6px;">{item}</li>

@@ -1,10 +1,34 @@
 <.email_layout preheader="Your content on vutuv is under review" locale={@locale}>
   <.email_p>{email_greeting(@user)},</.email_p>
   <.email_p>
-    one of your contributions on vutuv was reported and is hidden while our admins review it. You
-    do not need to do anything; we will let you know the outcome.
+    one of your contributions on vutuv was reported and is hidden while our admins review it. No
+    person looked at it first: a report from a member in good standing hides the reported content
+    automatically, the moment it arrives.
   </.email_p>
-  <.email_p>You can see the case here:</.email_p>
+  <.email_panel>
+    <.email_row label="Reported as">{@category_labels}</.email_row>
+  </.email_panel>
+  <.email_p :if={@notes != []}>
+    What the report says, in the reporter's own words. We never tell you who reported:
+  </.email_p>
+  <.email_quote :for={note <- @notes} text={note} />
+  <.email_p :if={@notes == []}>
+    The report named that category and gave no further explanation.
+  </.email_p>
+  <.email_p :if={@copyright_case}>
+    This is a legal complaint, not a house-rule one: it says the work is not yours to publish.
+    Copyright law decides that question.
+  </.email_p>
+  <.email_p :if={!@copyright_case}>
+    The ground is
+    <.email_link href={"#{@url}community"}>our community guidelines</.email_link>, which
+    everything on vutuv has to keep to.
+  </.email_p>
+  <.email_p>
+    This one is with our admins already, so there is no round in which you could settle it
+    yourself. You do not need to do anything: we will tell you the outcome, and if they find the
+    report unfounded your content comes back.
+  </.email_p>
   <.email_button href={"#{@url}moderation/cases/#{@case_id}"}>See the case</.email_button>
   <.email_signature locale={@locale} />
 </.email_layout>
