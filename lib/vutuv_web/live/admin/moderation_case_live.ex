@@ -235,10 +235,20 @@ defmodule VutuvWeb.Admin.ModerationCaseLive do
             alt={@case.content_snapshot}
             class="mt-1 max-h-[480px]"
           />
+          <%!-- Whether the picture is still on the profile decides what the two
+                rulings do, and an admin has to know which case they are in:
+                only a copyright notice takes one offline before a ruling
+                (issue #2030). Read off the row's own column. --%>
           <p class="mt-1 text-xs text-slate-600 dark:text-slate-400">
-            {gettext(
-              "Upholding the case deletes it, the private original included. Rejecting it puts every file back where it was."
-            )}
+            {if @content.frozen_at,
+              do:
+                gettext(
+                  "Upholding the case deletes it, the private original included. Rejecting it puts every file back where it was."
+                ),
+              else:
+                gettext(
+                  "This picture is still on the profile: only a copyright notice takes one offline before a ruling. Upholding the case deletes it, the private original included."
+                )}
           </p>
         </div>
 

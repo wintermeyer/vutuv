@@ -3,15 +3,37 @@
     <h1 class="text-xl font-bold text-slate-900 dark:text-white">
       {gettext("Report this content")}
     </h1>
-    <p :if={is_nil(@severed_owner)} class="mt-1 text-sm text-slate-600 dark:text-slate-400">
-      {gettext(
-        "Your report is anonymous. If it checks out, the content is hidden right away and the owner is asked to fix it."
-      )}
+    <%!-- A picture is the one type where the promise below is not true of every
+          category: only a copyright notice takes one offline on the spot, the
+          house-rule complaints go to an admin with the picture left in place
+          (issue #2030). The reveal machinery further down cannot help — it keys
+          on the copyright radio inside the form, and this sentence stands above
+          it — so the picture form says both halves up front. --%>
+    <p
+      :if={is_nil(@severed_owner)}
+      id="report-intro"
+      class="mt-1 text-sm text-slate-600 dark:text-slate-400"
+    >
+      <%= if @content_type == "image" do %>
+        {gettext(
+          "Your report is anonymous. A picture goes offline right away for a copyright notice; every other report goes to our admins with the picture left where it is."
+        )}
+      <% else %>
+        {gettext(
+          "Your report is anonymous. If it checks out, the content is hidden right away and the owner is asked to fix it."
+        )}
+      <% end %>
     </p>
-    <p :if={@severed_owner} class="mt-1 text-sm text-slate-600 dark:text-slate-400">
-      {gettext(
-        "If your report checks out, the content is hidden right away and the owner is asked to fix it."
-      )}
+    <p :if={@severed_owner} id="report-intro" class="mt-1 text-sm text-slate-600 dark:text-slate-400">
+      <%= if @content_type == "image" do %>
+        {gettext(
+          "A picture goes offline right away for a copyright notice; every other report goes to our admins with the picture left where it is."
+        )}
+      <% else %>
+        {gettext(
+          "If your report checks out, the content is hidden right away and the owner is asked to fix it."
+        )}
+      <% end %>
     </p>
 
     <%!-- The reporter is tied to the owner: spell out the separation, the

@@ -39,6 +39,7 @@ defmodule Vutuv.ModerationImageTakedownTest do
     reporter = insert(:activated_user)
     insert(:email, user: reporter)
     admin = insert(:activated_user, admin?: true)
+    insert(:email, user: admin)
 
     {:ok, owner} = Accounts.update_user(owner, %{avatar: jpeg_upload()})
 
@@ -86,6 +87,15 @@ defmodule Vutuv.ModerationImageTakedownTest do
   defp held_files(root, image), do: Path.wildcard(Path.join([root, "frozen", image.id, "**"]))
 
   defp avatar_image(user), do: Images.profile_image(user.id, "avatar")
+
+  # Whether one of the emails delivered so far went to this member.
+  defp assert_mailed(%User{} = user) do
+    address = Accounts.first_email_value(user)
+    recipients = Enum.flat_map(flush_emails(), fn email -> Enum.map(email.to, &elem(&1, 1)) end)
+
+    assert address in recipients,
+           "no email to #{address}; got #{inspect(recipients)}"
+  end
 
   describe "reporting a profile picture" do
     test "the freeze moves every file into the hold and the reject brings them all back",
@@ -184,6 +194,91 @@ defmodule Vutuv.ModerationImageTakedownTest do
 
       assert Path.join([tmp, "frozen", image.id, "served", "leftover-medium-deadbeef.avif"])
              |> File.exists?()
+    end
+  end
+
+  describe "which report takes a picture offline (issue #2030)" do
+    # The freeze is calibrated to the category, not to the reporter's standing.
+    # `trusted_reporter?/1` says yes to an account created a minute ago —
+    # nothing of theirs has been rejected yet — so before this split one
+    # throwaway account took any member's avatar off every surface with its
+    # first ever report.
+    test "a house-rule report leaves the picture where it is and puts the case in the queue",
+         %{tmp: tmp, owner: owner, reporter: reporter, admin: admin} do
+      image = avatar_image(owner)
+      before = tree(tmp)
+
+      {:ok, case_record} =
+        Moderation.report_content(reporter, image, %{"category" => "bullying"})
+
+      assert case_record.status == "flagged"
+      assert Repo.get!(ImageRow, image.id).frozen_at == nil
+
+      # Not one byte moved, and the profile still shows the picture.
+      assert tree(tmp) == before
+      assert held_files(tmp, image) == []
+      assert reload(owner).avatar == "selfie.jpg"
+
+      # An admin has it in front of them all the same.
+      assert case_record.id in Enum.map(Moderation.list_queue(), & &1.id)
+      assert_mailed(admin)
+    end
+
+    test "a second house-rule report does not hide it either",
+         %{tmp: tmp, owner: owner, reporter: reporter} do
+      image = avatar_image(owner)
+      other = insert(:activated_user)
+
+      {:ok, _first} = Moderation.report_content(reporter, image, %{"category" => "family"})
+      {:ok, second} = Moderation.report_content(other, image, %{"category" => "bullying"})
+
+      assert second.status == "flagged"
+      assert Repo.get!(ImageRow, image.id).frozen_at == nil
+      assert served_files(tmp, owner) != []
+    end
+
+    test "a copyright notice still takes it offline on the spot",
+         %{tmp: tmp, owner: owner, reporter: reporter} do
+      image = avatar_image(owner)
+
+      {:ok, case_record} = Moderation.report_content(reporter, image, notice())
+
+      assert case_record.status == "pending_owner"
+      assert Repo.get!(ImageRow, image.id).frozen_at
+      assert served_files(tmp, owner) == []
+    end
+
+    # A copyright notice joining a case a house-rule report opened is still a
+    # legal notice, so it freezes the picture the moment it arrives.
+    test "a copyright notice on an already-flagged case freezes it",
+         %{tmp: tmp, owner: owner, reporter: reporter} do
+      image = avatar_image(owner)
+      rights_holder = insert(:activated_user)
+
+      {:ok, _flagged} = Moderation.report_content(reporter, image, %{"category" => "other"})
+      {:ok, upgraded} = Moderation.report_content(rights_holder, image, notice())
+
+      assert upgraded.status == "pending_owner"
+      assert Repo.get!(ImageRow, image.id).frozen_at
+      assert served_files(tmp, owner) == []
+    end
+
+    # The refusal is about the hold, not about the case: nothing was moved, so
+    # there is nothing a replacement could strand.
+    test "the owner can replace a picture that was only flagged",
+         %{owner: owner, reporter: reporter} do
+      image = avatar_image(owner)
+      {:ok, case_record} = Moderation.report_content(reporter, image, %{"category" => "family"})
+
+      {:ok, replaced} = Accounts.update_user(reload(owner), %{avatar: jpeg_upload("other.jpg")})
+
+      assert replaced.avatar == "other.jpg"
+      assert Repo.get!(ImageRow, image.id).file == "other.jpg"
+
+      # And the case is settled with them: the reported bytes are gone, so
+      # leaving it open would point an admin's ruling at a picture nobody
+      # reported.
+      assert Repo.get!(Moderation.Case, case_record.id).status == "resolved_deleted"
     end
   end
 
