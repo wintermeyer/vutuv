@@ -443,8 +443,9 @@ html[data-nav-pressing] main {
 
    `[data-timeline-flush]` is `<.card flush>`, which only the feed asks for, so
    the same post card on a profile, a permalink, the saved hub or a tag timeline
-   keeps the inset reading it has today. The head and the rail are not scoped
-   under it: those are the card's own shape at this width, wherever it renders. */
+   keeps the inset reading it has today. The head is not scoped under it: that
+   is the card's own shape at this width, wherever it renders — except in a
+   conversation, which keeps the avatar column everywhere (the last rules). */
 @media (width < 48rem) {
   /* The gutter, once. It is `UI.gutter_class/0`'s expression — the page's own
      1rem, widened to clear a display cutout (issue #1464) — and the card
@@ -483,13 +484,6 @@ html[data-nav-pressing] main {
     padding-right: var(--flush-gutter-right);
   }
 
-  /* An answer keeps its rail: a picture inside one stops at the rail rather
-     than being drawn over the single line that says this post is an answer. */
-  [data-timeline-flush] [data-thread-reply] [data-media-edge] {
-    margin-left: 0;
-    margin-right: 0;
-  }
-
   /* The card head: two tracks, the avatar's own width and the rest. The column
      beside it becomes `display: contents`, so what were its children are now
      the grid's items — the header row (avatar, name, handle, server, stamp, ⋯)
@@ -519,25 +513,39 @@ html[data-nav-pressing] main {
     min-width: 0;
   }
 
-  /* An answer: a rail down its left instead of the connector curving out of the
-     avatar above it, which has no column to be drawn in any more. 14px of
-     indent per level rather than 28px, because the whole nesting has to fit a
-     phone. */
-  [data-thread-reply] {
-    border-left: 2px solid var(--color-slate-200);
-    padding-left: 0.875rem;
+  /* A conversation is the one card that keeps the avatar column here, and with
+     it everything a conversation is read by: the connector curving out of an
+     avatar into the answer below it, and how far from the left a reply sits.
+     Neither survives cards whose text starts at the screen edge, so a thread
+     reads on a phone exactly as it does on a desktop.
+
+     Two shapes reach it. `[data-conversation]` is a thread rendered as one
+     (`thread_chain/1` marks its roots), and `:has([data-thread-replies])` is a
+     lone remote card whose reader has just unfolded the answers from the server
+     that holds them — that one cannot be an attribute on the card, because the
+     unfolding re-renders the action bar inside it and never the card itself, so
+     the stylesheet reads the answers' own arrival instead. */
+  [data-conversation] [data-card-head],
+  [data-card-head]:has([data-thread-replies]) {
+    display: flex;
   }
 
-  [data-thread-connector] {
-    display: none;
+  [data-conversation] [data-card-head] > [data-card-column],
+  [data-card-head]:has([data-thread-replies]) > [data-card-column] {
+    display: block;
   }
-}
 
-/* The rail's dark step. Its own width-scoped query rather than the file's dark
-   block at the end, which is not width-scoped: at desktop widths this element
-   has no border to colour. */
-@media (prefers-color-scheme: dark) and (width < 48rem) {
-  [data-thread-reply] {
-    border-left-color: var(--color-slate-700);
+  /* And its pictures keep the card's inset, or a full-bleed photograph would
+     sit under text indented 48px from it. `--radius-lg` is what `rounded-lg`
+     compiles to, which is the radius these wrappers carry as a utility. */
+  [data-conversation] [data-media-edge],
+  [data-conversation] [data-media-edge] img,
+  [data-conversation] [data-media-edge] > *,
+  [data-card-head]:has([data-thread-replies]) [data-media-edge],
+  [data-card-head]:has([data-thread-replies]) [data-media-edge] img,
+  [data-card-head]:has([data-thread-replies]) [data-media-edge] > * {
+    margin-left: 0;
+    margin-right: 0;
+    border-radius: var(--radius-lg);
   }
 }

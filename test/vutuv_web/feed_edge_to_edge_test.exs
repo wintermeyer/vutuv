@@ -10,6 +10,15 @@ defmodule VutuvWeb.FeedEdgeToEdgeTest do
   header row keeps the avatar beside it while everything under it starts at the
   card's left edge, and a picture breaks back out to the real edge.
 
+  **A conversation is the exception and keeps the avatar column**, on a phone as
+  everywhere else: the connectors are drawn in that column and a reply is read
+  by how far from the left it sits, and neither survives cards whose text starts
+  at the screen edge. Two shapes reach it — a thread rendered as one
+  (`data-conversation`) and a lone remote card whose answers the reader has just
+  unfolded, which the stylesheet recognises by the answers themselves
+  (`:has([data-thread-replies])`) because unfolding re-renders the action bar
+  inside the card and never the card.
+
   All of it hangs off `data-` markers in the markup and one `@media (width <
   48rem)` block at the end of `app.css`, so this file checks the two ends of
   that contract: the markers are where the selectors expect them, and the
@@ -49,13 +58,27 @@ defmodule VutuvWeb.FeedEdgeToEdgeTest do
                "head grid's own items. The rule is written `[data-card-head] > " <>
                "[data-card-column]`, so the two have to stay parent and child."
 
-      assert has_element?(live, "#feed-posts [data-thread-reply]"),
-             "An answer takes a 2px rail below `md`, where the avatar column the " <>
-               "connectors are drawn in is gone."
+      assert has_element?(live, "#feed-posts [data-conversation] [data-card-head]"),
+             "A conversation marks its roots, and that is what takes the full-width card " <>
+               "back off every card in it — the connectors are drawn in the avatar column " <>
+               "and a reply is read by how far from the left it sits, so a thread keeps " <>
+               "the reading it has on a desktop."
+    end
 
-      assert has_element?(live, "#feed-posts [data-thread-reply] [data-thread-connector]"),
-             "The connectors keep a marker of their own: the stylesheet takes them away " <>
-               "below `md` rather than the markup dropping them, so a desktop is untouched."
+    test "a lone post is not marked as a conversation", %{conn: conn} do
+      {conn, user} = create_and_login_user(conn)
+      friend = insert(:activated_user)
+      insert(:follow, follower: user, followee: friend)
+      {:ok, _post} = Posts.create_post(friend, %{body: "Ein Beitrag ohne Antworten."})
+
+      {:ok, live, _html} = live(conn, ~p"/feed")
+
+      assert has_element?(live, "#feed-posts [data-card-head]")
+
+      refute has_element?(live, "#feed-posts [data-conversation]"),
+             "Without answers there is no conversation to read, so the card takes the " <>
+               "whole width. A lone card that happens to come through `thread_chain/1` " <>
+               "must not be marked either — it would read as an answer to nothing."
     end
   end
 
@@ -88,9 +111,9 @@ defmodule VutuvWeb.FeedEdgeToEdgeTest do
             "[data-timeline-flush] > [data-timeline-rows] > * {",
             "[data-card-head] {",
             "[data-card-head] > [data-card-column] {",
-            "[data-thread-reply] {",
-            "[data-thread-connector] {",
-            "[data-timeline-flush] [data-thread-reply] [data-media-edge] {"
+            "[data-conversation] [data-card-head],",
+            "[data-card-head]:has([data-thread-replies]) {",
+            "[data-conversation] [data-card-head] > [data-card-column],"
           ] do
         assert String.contains?(css, selector),
                "`assets/css/app.css` has lost the rule for `#{selector}`. The phone " <>
@@ -123,14 +146,13 @@ defmodule VutuvWeb.FeedEdgeToEdgeTest do
                "`app.css`, unlayered."
     end
 
-    test "the rail has a dark step" do
-      assert String.contains?(
-               app_css(),
-               "@media (prefers-color-scheme: dark) and (width < 48rem) {"
-             ),
-             "`slate-200` on a `slate-900` card is not a line anybody can see. The rail's " <>
-               "dark colour needs its own width-scoped query: the file's dark block at the " <>
-               "end is not width-scoped, and at desktop widths there is no rail to colour."
+    test "unfolded fediverse answers put their card back into its avatar column" do
+      assert app_css() =~
+               ~r/\[data-card-head\]:has\(\[data-thread-replies\]\) \{\s*display: flex;/,
+             "A remote card whose answers the reader unfolds becomes a conversation, and " <>
+               "the answers under it (`thread_replies/1`) are drawn in the avatar column. " <>
+               "The card cannot say so itself — unfolding re-renders the action bar inside " <>
+               "it and never the card — so the stylesheet reads the answers' arrival."
     end
 
     test "negates the page gutter the rest of the app pads with" do
@@ -184,8 +206,8 @@ defmodule VutuvWeb.FeedEdgeToEdgeTest do
   end
 
   # A reader, somebody they follow, and a conversation on the page: one post
-  # with one answer, which is what draws a head, a column, a rail and a
-  # connector in one render.
+  # with one answer, which is what draws a head, a column and a conversation
+  # marker in one render.
   defp feed_with_a_conversation(conn) do
     {conn, user} = create_and_login_user(conn)
     friend = insert(:activated_user)

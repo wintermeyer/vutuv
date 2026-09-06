@@ -1134,33 +1134,29 @@ defmodule VutuvWeb.PostComponents do
   defp thread_chain(assigns) do
     # `@thread_indent_cap` is a module attribute, not an assign, so resolve the
     # "still indenting?" flag here — inside ~H, `@name` would mean assigns.name.
-    indent? = assigns.depth <= @thread_indent_cap
-
     assigns =
       assigns
-      |> assign(:indent?, indent?)
-      # "This block is an indented answer" — the marker below and the indent
-      # class are the same fact, so it is worked out once per chain rather than
-      # per node inside the comprehension.
-      |> assign(:reply?, assigns.connected? and indent?)
+      |> assign(:indent?, assigns.depth <= @thread_indent_cap)
+      |> assign(:conversation?, assigns.depth == 0 and conversation?(assigns.nodes))
       |> assign(:nodes, mark_last(assigns.nodes))
 
     ~H"""
-    <%!-- `data-thread-reply` marks an answer. Below `md` `app.css` swaps this
-    block's indent for a 2px rail down its left and takes the connectors away
-    (`data-thread-connector`): the card above now runs the full width of the
-    screen there, so a line curving out of its avatar would cross its text —
-    the avatar column those connectors are drawn in is gone. The rail says the
-    same thing in the 14px a phone can spare per level, and the attribute is
-    also what tells the stylesheet that a picture in here stops at the rail
-    rather than running on to the screen edge. --%>
+    <%!-- `data-conversation` on the roots of a real conversation, and on those
+    alone. It is what takes the phone's full-width card back off these cards
+    (`app.css`): the connectors below are drawn in the avatar column, a nested
+    reply is read by how far it sits from the left, and neither survives a card
+    whose text starts at the screen edge — so a conversation keeps the reading
+    it has always had, on a phone as everywhere else. Only at depth 0, because
+    the nested chains render inside this element and the rule is a descendant
+    one; only for more than one card, because a lone card that happens to come
+    through here is not a conversation and should not read as one. --%>
     <div
       :for={{node, first?, last?} <- @nodes}
-      data-thread-reply={@reply?}
+      data-conversation={@conversation?}
       class={[
         "relative",
         @connected? && "pt-3",
-        @reply? && "pl-7",
+        @connected? && @indent? && "pl-7",
         # Separate roots: not siblings in a conversation, so no connector.
         !@connected? && !first? && "pt-6"
       ]}
@@ -1187,35 +1183,26 @@ defmodule VutuvWeb.PostComponents do
       avatar with a short horizontal tick at that same 1.875rem. Capped depth
       puts the answer in the same column as its parent, so the connector is a
       straight vertical drop through the padding. --%>
-      <%!-- All four carry `data-thread-connector`: they are drawn in the avatar
-      column, and below `md` there is no avatar column to draw in — the rail on
-      the block itself is the phone's answer, and `app.css` takes these away
-      there. The dotted run above keeps its marker of its own and stays: it
-      sits on the avatar's own centre line, which a phone still has. --%>
       <span
         :if={@connected? && @indent? && last?}
-        data-thread-connector
         class="absolute left-[1.125rem] top-0 h-[1.875rem] w-2.5 rounded-bl-xl border-b-2 border-l-2 border-slate-200 dark:border-slate-700"
         aria-hidden="true"
       >
       </span>
       <span
         :if={@connected? && @indent? && !last?}
-        data-thread-connector
         class="absolute left-[1.125rem] top-0 h-full w-0.5 rounded-full bg-slate-200 dark:bg-slate-700"
         aria-hidden="true"
       >
       </span>
       <span
         :if={@connected? && @indent? && !last?}
-        data-thread-connector
         class="absolute left-[1.125rem] top-[1.875rem] h-0.5 w-2.5 rounded-full bg-slate-200 dark:bg-slate-700"
         aria-hidden="true"
       >
       </span>
       <span
         :if={@connected? && !@indent?}
-        data-thread-connector
         class="absolute left-[1.125rem] top-0 h-3 w-0.5 rounded-full bg-slate-200 dark:bg-slate-700"
         aria-hidden="true"
       >
@@ -1242,8 +1229,7 @@ defmodule VutuvWeb.PostComponents do
         elbows survived. An explicit height renders identically everywhere. --%>
         <span
           :if={node.children != []}
-          data-thread-connector
-          class="absolute left-[1.125rem] top-9 h-[calc(100%-2.25rem)] w-0.5 rounded-full bg-slate-200 dark:bg-slate-700"
+            class="absolute left-[1.125rem] top-9 h-[calc(100%-2.25rem)] w-0.5 rounded-full bg-slate-200 dark:bg-slate-700"
           aria-hidden="true"
         >
         </span>
@@ -3687,6 +3673,14 @@ defmodule VutuvWeb.PostComponents do
   # parent is off the page.
   defp reply_banner?(node, connected?, indent?) do
     Map.get(node, :show_reply_banner, false) or (connected? and not indent?)
+  end
+
+  # Whether these roots really are a conversation and not one card that happened
+  # to take the chain's branch — `post_thread_entry/1` reaches it for a remote
+  # parent or a woven remote reply that then turns out not to be there. A lone
+  # card must not read as an answer to something.
+  defp conversation?(nodes) do
+    length(nodes) > 1 or Enum.any?(nodes, &(&1.children != []))
   end
 
   # Each node paired with whether it is the first and the last of its siblings —
