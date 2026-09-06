@@ -6,10 +6,12 @@ defmodule Vutuv.Images.BackfillTest do
 
   Not async: `check/1` reads the disk, so the module holds the global
   `:uploads_dir_prefix` down for its lifetime (`Vutuv.Uploads.disk_dir/1` and
-  every uploader read it).
+  every uploader read it), and the operator-output tests below un-silence the
+  equally global `:regenerator_quiet` that the three uploads mix tasks read.
   """
   use Vutuv.DataCase, async: false
 
+  import ExUnit.CaptureIO
   import Vutuv.WebPushHelpers, only: [put_config: 2]
 
   alias Vutuv.Accounts
@@ -306,6 +308,80 @@ defmodule Vutuv.Images.BackfillTest do
       %{kinds: %{"avatar" => result}, ok?: ok?} = Backfill.check(only: "avatar")
       assert ok?, "a pending picture lives in the quarantine tree, not the served one"
       assert result.missing_file.count == 0
+    end
+  end
+
+  # The half that a rehearsal driving `Backfill.run/1` and `check/1` directly
+  # never touches, and the half the operator actually meets. The first version
+  # of it lived in the mix task, went out of step with what `check/1` returns,
+  # and crashed on every single invocation — while the release path printed
+  # nothing at all and exited 0 with 1,678 mismatches outstanding.
+  describe "what the operator sees" do
+    setup do
+      put_config(:regenerator_quiet, false)
+      :ok
+    end
+
+    test "the check names what is wrong, with the member behind it" do
+      user = legacy_avatar()
+
+      output = capture_io(fn -> assert %{ok?: false} = Backfill.check(only: "avatar") end)
+
+      assert output =~ "avatar: 1 picture(s), 0 row(s)"
+      assert output =~ "1 without a row"
+      assert output =~ "without a row: #{user.id}"
+      assert output =~ "MISMATCH"
+      refute output =~ "Safe to cut"
+    end
+
+    test "and says it is safe to cut once everything is in order" do
+      user = insert(:activated_user)
+      insert(:email, user: user)
+      {:ok, _user} = Accounts.update_user(user, %{avatar: jpeg_upload()})
+      capture_io(fn -> Backfill.run(only: "avatar") end)
+
+      output = capture_io(fn -> assert %{ok?: true} = Backfill.check(only: "avatar") end)
+
+      assert output =~ "avatar: 1 picture(s), 1 row(s)"
+      assert output =~ "0 without a row"
+      assert output =~ "0 with no file on disk"
+      assert output =~ "Safe to cut"
+      refute output =~ "MISMATCH"
+    end
+
+    test "a long list of ids is capped and says how many there really are" do
+      for _ <- 1..12, do: legacy_avatar()
+
+      output = capture_io(fn -> Backfill.check(only: "avatar") end)
+
+      assert output =~ "12 without a row"
+      assert output =~ "… (12 total)"
+
+      assert length(String.split(Regex.run(~r/without a row: (.+) …/, output) |> Enum.at(1))) ==
+               10
+    end
+
+    test "the mix task reconciles and succeeds when everything is in order" do
+      user = insert(:activated_user)
+      insert(:email, user: user)
+      {:ok, user} = Accounts.update_user(user, %{avatar: jpeg_upload()})
+      Repo.delete_all(from(i in ImageRow, where: i.user_id == ^user.id))
+
+      capture_io(fn ->
+        assert %{ok?: true} = Mix.Tasks.Vutuv.Images.Backfill.run([])
+      end)
+
+      assert Images.profile_image(user.id, "avatar")
+    end
+
+    test "the mix task fails the command when something is outstanding" do
+      legacy_avatar()
+
+      capture_io(fn ->
+        assert_raise Mix.Error, ~r/check failed/, fn ->
+          Mix.Tasks.Vutuv.Images.Backfill.run(["--check"])
+        end
+      end)
     end
   end
 end

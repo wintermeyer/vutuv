@@ -154,10 +154,15 @@ defmodule Vutuv.Release do
 
   @doc """
   Counts every member picture against its row and its file on disk, writing
-  nothing. The gate on the deploy that drops the member row's four columns per
-  kind: read it, and cut only when `ok?` is true.
+  nothing, and prints what it found. The gate on the deploy that drops the
+  member row's four columns per kind:
 
       bin/vutuv eval "Vutuv.Release.check_image_rows()"
+
+  **Raises when anything is outstanding**, so the command's exit status is the
+  gate and a deploy script can stand on it. A silent success is the one answer
+  this must never give by accident: a check that says nothing reads exactly
+  like a clean bill of health.
   """
   def check_image_rows(opts \\ []) do
     load_app()
@@ -166,6 +171,10 @@ defmodule Vutuv.Release do
 
     {:ok, summary, _apps} =
       Ecto.Migrator.with_repo(repo, fn _repo -> Backfill.check(opts) end)
+
+    unless summary.ok? do
+      raise "images backfill check failed — see the mismatches above"
+    end
 
     summary
   end

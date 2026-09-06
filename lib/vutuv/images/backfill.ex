@@ -114,10 +114,57 @@ defmodule Vutuv.Images.Backfill do
       otherwise). The backfill cannot repair this one — it predates the table
       and the bytes are simply gone — but the cut must not happen with it
       unread.
+
+  It **prints what it found** on the way out, through the same log as `run/1`.
+  Both operator paths (`mix vutuv.images.backfill --check` and `bin/vutuv eval
+  "Vutuv.Release.check_image_rows()"`) then say the same thing without either
+  of them owning a copy of the formatting — the first version put that half in
+  the mix task alone, where it went out of step with this map's shape and
+  crashed on every call while the release path printed nothing at all.
   """
   def check(opts \\ []) do
     kinds = for kind <- selected_kinds(opts), into: %{}, do: {kind, check_kind(kind)}
+
     %{kinds: kinds, ok?: Enum.all?(kinds, fn {_kind, result} -> result.ok? end)}
+    |> tap(&report/1)
+  end
+
+  # The classes in the order an operator wants to read them, with the words
+  # that say what each one means.
+  @labels [
+    missing_row: "without a row",
+    mismatched_row: "disagreeing with the member row",
+    missing_pointer: "not pointed at",
+    missing_file: "with no file on disk",
+    orphan_row: "orphan row(s)"
+  ]
+
+  defp report(%{kinds: kinds, ok?: ok?}) do
+    for {kind, result} <- kinds do
+      log(
+        "#{kind}: #{result.pictures} picture(s), #{result.rows} row(s) — " <>
+          Enum.map_join(@labels, ", ", fn {class, label} ->
+            "#{Map.fetch!(result, class).count} #{label}"
+          end)
+      )
+
+      for {class, label} <- @labels, Map.fetch!(result, class).count > 0 do
+        log("  #{label}: #{sample_line(Map.fetch!(result, class))}")
+      end
+    end
+
+    log(
+      if ok?,
+        do: "Every member picture has its row and its file. Safe to cut.",
+        else: "MISMATCH — do not drop the member row's image columns yet."
+    )
+  end
+
+  # The count above is the number that matters; a handful of ids is what makes
+  # it actionable, and printing 1,700 of them buries the count.
+  defp sample_line(%{count: count, sample: sample}) do
+    shown = Enum.take(sample, 10)
+    Enum.join(shown, " ") <> if(count > length(shown), do: " … (#{count} total)", else: "")
   end
 
   defp selected_kinds(opts) do

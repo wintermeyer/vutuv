@@ -697,11 +697,14 @@ Run on the server, against the release:
   again if it is interrupted (a deploy stopping the slot mid-run leaves every
   member it reached already correct).
 - `bin/vutuv eval "Vutuv.Release.check_image_rows()"` — counts every member
-  picture against its row and against its file on disk, writing nothing. Run it
-  after the backfill and read `ok?`: a `false` names the members behind each
-  mismatch, and a picture whose file is missing is the one the backfill cannot
-  repair. This is the gate on the later upgrade that removes the member row's
-  own image columns — do not take that upgrade with a mismatch outstanding.
+  picture against its row and against its file on disk, writing nothing. It
+  prints one line per kind, names the members behind each mismatch, and
+  **fails the command** when anything is outstanding, so a deploy script can
+  stand on its exit status. A picture whose file is missing is the one class
+  the backfill cannot repair. This is the gate on the later upgrade that
+  removes the member row's own image columns — do not take that upgrade with a
+  mismatch outstanding. `mix vutuv.images.backfill --check` is the same check
+  in a source checkout, and a plain `mix vutuv.images.backfill` ends with it.
 - `bin/vutuv eval 'Vutuv.Release.promote_admin("handle-or-email")'` — grants
   admin rights.
 

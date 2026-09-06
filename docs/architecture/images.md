@@ -296,12 +296,19 @@ no half-pair, and the second run created the other 1,438 and corrected none).
 `from: "<user id>"` resumes from a progress line instead of re-reading the
 table.
 
-`Backfill.check/1` (`mix vutuv.images.backfill --check`) is the gate before the
+`Backfill.check/1` (`mix vutuv.images.backfill --check`, or
+`bin/vutuv eval "Vutuv.Release.check_image_rows()"`) is the gate before the
 cut: it counts every member picture against its row *and* against its file on
 disk — the quarantine tree while the picture is `"pending"`, the served tree
-otherwise — and answers `ok?: false` with the member ids behind each class of
-mismatch. A missing file is the one class the backfill cannot repair; it
-predates the table and wants a human before the columns go.
+otherwise — prints one line per kind plus the members behind each class of
+mismatch, and **fails the command** when anything is outstanding. Both of
+those come from `check/1` itself rather than from either entry point, because
+the first version put the printing in the mix task alone: it fell out of step
+with the shape `check/1` returns and crashed on every invocation, while the
+release path printed nothing and exited 0 with 1,678 mismatches — which reads
+exactly like a clean bill of health. A missing file is the one class the
+backfill cannot repair; it predates the table and wants a human before the
+columns go.
 
 **The columns go two deploys later, not one.** The order is: this deploy ships
 the backfill (the columns still serve everything), the operator runs it and
