@@ -2029,6 +2029,86 @@ The tag page's "most liked" order reads these figures too
 (`Vutuv.Tags.Timeline`), which is why the note that used to apologise for
 parking every fediverse post at the bottom of that order is gone.
 
+**An origin that serves none of the three collections leaves the ladder after
+one ask** (`counts_absent`), without a strike: the server answered, and answered
+correctly, with a document that carries no figures — a property of its software,
+not of its health. The column earns its place by what it costs not to have.
+Measured on a copy of production: flipboard.com held **1.026 of the 2.627**
+objects on the ladder (39 %) and had answered **0 of its 1.478** stored posts
+with a figure of any kind, while **2.511 of those 2.627** objects were overdue,
+the median asked at 1,9 times its own interval and the p90 at ten times. A batch
+of 60 every two minutes against 2.627 objects is one full round every 87
+minutes, so the five-minute tier at the head of the ladder was arithmetic and
+nothing else.
+
+### How many answered it, and reading those answers
+
+The third figure on that bar, and it is not like the other two.
+
+`likes` and `shares` arrive as a `totalItems` in a document the ask already
+fetched, so they are free. `replies` is not: forty objects from this
+installation's own cache were asked before this was built and **not one** of
+their servers put a `totalItems` on that collection. Mastodon serialises
+`replies` as a Collection whose **first page is embedded in the object** and
+carries the author's own follow-ups, and whose `next`
+(`?only_other_accounts=true`) carries everybody else's, 60 ids to a page. So the
+figure is **counted**, and counting costs a request.
+
+Counted that way it is exactly the figure the origin shows its own readers.
+Against Mastodon's `replies_count` for five real threads: 121/121, 51/51, 6/6,
+2/2, and 21 against 22 (one answer deleted between the two reads).
+
+- **Its own, much flatter ladder** (`:fediverse_replies_ladder`): quarter hourly
+  through the first hour, hourly to six, six-hourly to two days, then never. It
+  rides the like ask rather than running a sweep of its own, so a count costs one
+  page fetch and no second object fetch — and a `304` on the object cannot carry
+  it, because the answer figure is not in that body.
+- **Three pages and no further** (`:fediverse_replies_max_pages`): 180 answers,
+  past which the exact figure is not what anybody is reading.
+- **Every failure is a failure, the `404` included.** A page the collection
+  itself named and the server will not serve is not the end of the list, and
+  reading it as one would write a confident `0` over a figure that was right.
+- **The clock is stamped on every outcome**, including "this origin serves no
+  `replies` at all" — the issue #1316 rule, and here it matters twice over,
+  since an object that stayed due would walk a collection that does not exist on
+  every single ask for the rest of its week.
+
+Pressing the figure unfolds the answers under the card
+(`VutuvWeb.PostComponents.thread_replies/1`, handled by the action bar itself so
+all seven hosts get it at once). The control is **two targets in one slot**: the
+glyph leads to the answering page, the number beside it opens the thread, and
+they keep their own padding plus a `gap-2` so a thumb lands on the one it aimed
+at.
+
+What we already hold is painted at once from one indexed query
+(`stored_thread_replies/3`); the fetch behind it runs in `start_async` and gets
+`:fediverse_thread_page` answers at a time, four at a time, to a ceiling of
+`:fediverse_thread_max` per card and `:fediverse_thread_fetch_limit` per member
+per hour. Ten answers from ten different servers took **one second** against
+real hosts, and six of those ten refused an unsigned request — which is why the
+fetch signs, with the reader's own key where they have one and otherwise with
+whoever the background count would have signed as.
+
+**An answer is stored as an ordinary cached post** (`fetch_and_store_object/4`,
+the same fence a boost passes), which is what gives it a card, an action bar, a
+report path and the six-month ceiling for nothing. Two things follow from that:
+
+- It carries **`thread_context`**, and `RemotePost.timeline_scope/1` is what the
+  feed and the account page narrow by. Without it the feature would quietly
+  rewrite people's feeds: a delivered reply is only ever stored when it
+  continues a thread of the **same** account (`own_thread?/2`), so an answer by
+  somebody a member follows has never been feed material here, and fetching one
+  as thread context would drop it into that member's feed at its own old
+  timestamp, days back. Its hashtags are not filed either, which is what keeps
+  it off the tag pages. A later ordinary arrival (a delivery, a boost, a lookup)
+  **promotes** the row; nothing demotes one, or a card would vanish from a feed
+  because somebody else opened a thread.
+- It is **held for as long as the post it answers** (the sixth hold in
+  `spare_held/1`). Nobody follows the author of a thread answer — that is what
+  makes it an answer rather than feed material — so the purge would otherwise
+  delete it out from under the reader who pressed for it, usually within the
+  hour. It buys no extra time: the ceiling still applies.
+
 ### Answering one of their posts (issue #1165)
 
 The `Vutuv.Posts.PostRemoteReply` sidecar generalized rather than a second table

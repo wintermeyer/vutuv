@@ -2061,6 +2061,20 @@ defmodule VutuvWeb.PostComponents do
   attr(:reply_to, :any, default: nil, doc: "the answering page's path, or nil/false for none")
   attr(:repost?, :boolean, default: false)
 
+  attr(:replies, :integer,
+    default: nil,
+    doc:
+      "how many answered it out there; nil where the origin serves no `replies` collection, and then the bar shows no figure rather than a `0` it would be inventing"
+  )
+
+  attr(:replies_open?, :boolean, default: false, doc: "the answers are unfolded under this card")
+
+  attr(:replies_expandable?, :boolean,
+    default: true,
+    doc:
+      "whether the figure is a button. False on a card that is itself inside an unfolded thread, so answers do not nest, and on a dead page where the press would do nothing"
+  )
+
   def remote_actions(assigns) do
     ~H"""
     <%!-- The local action bar's own geometry, deliberately to the pixel
@@ -2100,16 +2114,23 @@ defmodule VutuvWeb.PostComponents do
         <.icon_heart filled?={@liked?} />
       </.remote_action>
 
-      <%!-- A link, not a toggle: answering opens its own page, which is where a
-      member who does not federate yet is told so before they type. --%>
-      <.remote_action_link
+      <%!-- Two targets in one slot, and the gap between them is the design.
+      The glyph is a link — answering opens its own page, which is where a
+      member who does not federate yet is told so before they type — and the
+      figure beside it is a button that unfolds the answers under the card. The
+      alternative was a "show 7 answers" line of its own under the bar, which
+      reads as a second bar; putting the act on the number is what a reader
+      already expects from every other figure up here. What it costs is the
+      chance of hitting the wrong one, so the two keep their own padding and
+      sit a further `gap-2` apart. --%>
+      <.remote_reply_control
         href={@reply_to}
         subject_id={@subject_id}
-        label={gettext("Reply")}
-        shown={@reply_to}
-      >
-        <.icon_reply />
-      </.remote_action_link>
+        target={@target}
+        count={@replies}
+        open?={@replies_open?}
+        expandable?={@replies_expandable?}
+      />
 
       <%!-- `tinted?` for the reason the local bar's repost carries it. --%>
       <.remote_action
@@ -2297,6 +2318,222 @@ defmodule VutuvWeb.PostComponents do
   # appears after something was actually refused.
   def control_id(base, kind, 0), do: "#{base}-#{kind}"
   def control_id(base, kind, reset), do: "#{base}-#{kind}-r#{reset}"
+
+  # The answering slot: a glyph that leads to the answering page, and beside it
+  # the origin's own answer figure, which unfolds the answers where the reader
+  # is standing.
+  #
+  # Two separate targets, which is the one thing to keep about this control. A
+  # single button doing both would have to guess, and the two acts are not
+  # neighbours in meaning: one is "I want to say something", the other is "I
+  # want to read what was said". They keep their own padding and a `gap-2`
+  # between them so a thumb lands on the one it aimed at.
+  attr(:href, :any, required: true)
+  attr(:subject_id, :string, required: true)
+  attr(:target, :any, required: true)
+  attr(:count, :integer, default: nil)
+  attr(:open?, :boolean, default: false)
+  attr(:expandable?, :boolean, default: true)
+
+  # A post whose author narrowed its audience: nothing to answer and nothing to
+  # unfold, so the slot is held open and gives up both its glyph and its figure.
+  defp remote_reply_control(%{href: href} = assigns) when href in [nil, false] do
+    ~H"""
+    <span aria-hidden="true" class="inline-flex px-2 py-1"><span class="h-5 w-5"></span></span>
+    """
+  end
+
+  defp remote_reply_control(assigns) do
+    assigns =
+      assigns
+      |> assign(:figure?, is_integer(assigns.count) and assigns.count > 0)
+      |> assign(:idle_class, @idle_action_class)
+
+    ~H"""
+    <div class="inline-flex items-center gap-2">
+      <.remote_action_link href={@href} subject_id={@subject_id} label={gettext("Reply")}>
+        <.icon_reply />
+      </.remote_action_link>
+
+      <%!-- No figure at all where the origin serves none, and none for a post
+      nobody answered: an empty thread has nothing to unfold, and a `0` that
+      opens onto nothing is a promise the card cannot keep. Inside an unfolded
+      thread the same figure renders as plain text — a reader still wants to
+      know that seven people answered this one, it just does not open a thread
+      within a thread. --%>
+      <button
+        :if={@figure? && @expandable?}
+        type="button"
+        phx-click="replies"
+        phx-target={@target}
+        aria-expanded={to_string(@open?)}
+        aria-label={
+          ngettext("Show the one answer", "Show the %{count} answers", @count, count: @count)
+        }
+        title={ngettext("Show the one answer", "Show the %{count} answers", @count, count: @count)}
+        data-remote-replies={@subject_id}
+        class={[
+          "inline-flex items-center rounded-lg px-2 py-1 text-sm font-medium tabular-nums",
+          "hover:bg-slate-100 dark:hover:bg-slate-800",
+          if(@open?, do: "text-brand-600 dark:text-brand-300", else: @idle_class)
+        ]}
+      >
+        {compact_count(@count)}
+      </button>
+
+      <span
+        :if={@figure? && !@expandable?}
+        class={["px-1 text-sm font-medium tabular-nums", @idle_class]}
+      >{compact_count(@count)}</span>
+    </div>
+    """
+  end
+
+  @doc """
+  What the reader gets when they press that figure: the answers, under the card
+  they belong to.
+
+  Rendered by the action bar itself rather than by each of the seven hosts that
+  draw these cards — the bar already owns the press, and a thread that only
+  unfolded on some of those pages is the copy-per-host problem that bar exists
+  to end.
+
+  Three states in one component, because they are one thing to a reader: what
+  we already hold (painted at once, no network), what is still arriving (the
+  line at the bottom), and what could not be got at all.
+  """
+  attr(:replies, :list, required: true)
+  attr(:viewer, :any, default: nil)
+  attr(:loading?, :boolean, default: false)
+  attr(:more?, :boolean, default: false, doc: "there are further answers to fetch")
+  attr(:notice, :any, default: nil, doc: "why there is nothing (or nothing more) to show")
+  attr(:target, :any, required: true)
+
+  def thread_replies(assigns) do
+    assigns =
+      assigns
+      # The reader's own marks for the whole thread in three queries, not three
+      # per card: each answer's bar would otherwise load its own, in the socket
+      # process, ten cards deep. The same batching every host that draws many
+      # of these cards already does.
+      |> assign(:marks, thread_marks(assigns.viewer, assigns.replies))
+      # And their line budget once rather than per card per render.
+      |> assign(:body_style, post_body_style(User.post_prefs(assigns.viewer)))
+
+    ~H"""
+    <%!-- The left rule is the thread: it says these cards hang under the one
+    above, which is the same thing the conversation view says with an indent. --%>
+    <div
+      class="mt-3 space-y-4 border-l-2 border-slate-200 pl-3 dark:border-slate-700"
+      data-thread-replies
+    >
+      <.thread_reply_card
+        :for={reply <- @replies}
+        reply={reply}
+        viewer={@viewer}
+        body_style={@body_style}
+        marks={Map.get(@marks, reply.id)}
+      />
+
+      <p :if={@loading?} class="text-sm text-slate-500 dark:text-slate-400" role="status">
+        {gettext("Fetching the answers from the servers that hold them…")}
+      </p>
+
+      <p :if={@notice} class="text-sm text-slate-600 dark:text-slate-400" role="status">
+        {@notice}
+      </p>
+
+      <button
+        :if={@more? && !@loading?}
+        type="button"
+        phx-click="more-replies"
+        phx-target={@target}
+        data-thread-more
+        class="text-sm font-semibold text-brand-600 hover:text-brand-700 dark:text-brand-400 dark:hover:text-brand-300"
+      >
+        {gettext("Show more answers")}
+      </button>
+    </div>
+    """
+  end
+
+  # The three marks for a whole unfolded thread, keyed by answer id — the shape
+  # the action bar takes as `marks`.
+  defp thread_marks(nil, _replies), do: %{}
+  defp thread_marks(_viewer, []), do: %{}
+
+  defp thread_marks(viewer, replies) do
+    liked = Fediverse.liked_ids(viewer, replies)
+    reposted = Fediverse.reposted_ids(viewer, replies)
+    bookmarked = Fediverse.bookmarked_ids(viewer, replies)
+
+    Map.new(replies, fn reply ->
+      {reply.id,
+       %{
+         liked?: MapSet.member?(liked, reply.id),
+         reposted?: MapSet.member?(reposted, reply.id),
+         bookmarked?: MapSet.member?(bookmarked, reply.id)
+       }}
+    end)
+  end
+
+  # One answer inside an unfolded thread. The remote skin's own four pieces, in
+  # the order every card from another network wears them, with two things left
+  # out on purpose: the ⋯ menu (this card is not in anybody's feed, and the
+  # report path belongs where the copy is kept) and the reply figure's press,
+  # so a thread cannot unfold inside a thread.
+  attr(:reply, :any, required: true)
+  attr(:viewer, :any, default: nil)
+  attr(:body_style, :any, default: nil)
+  attr(:marks, :any, default: nil, doc: "this answer's like/repost/bookmark flags, batched above")
+
+  defp thread_reply_card(assigns) do
+    account = assigns.reply.remote_account
+
+    assigns =
+      assigns
+      |> assign(:account, account)
+      |> assign(:initials, remote_initials(account))
+
+    ~H"""
+    <article data-thread-reply={@reply.id}>
+      <div class="flex items-start gap-3">
+        <.remote_avatar initials={@initials} src={RemoteAccount.avatar_url(@account)} />
+
+        <div class="min-w-0 flex-1">
+          <.remote_header
+            author={RemoteAccount.label(@account)}
+            handle={RemoteAccount.display_handle(@account)}
+            actor_uri={@account.actor_uri}
+            at={@reply.published_at}
+            network={@account.host}
+            account_id={@account.id}
+            origin={RemotePost.origin(@reply)}
+          />
+
+          <.remote_body
+            warning={RemotePost.warned?(@reply) && @reply.summary}
+            text={@reply.content_text}
+            lang={@reply.language}
+            mode={:preview}
+            body_id={"thread-reply-body-#{@reply.id}"}
+            body_style={@body_style}
+          />
+
+          <.live_component
+            :if={@viewer}
+            module={RemoteActionsComponent}
+            id={RemoteActionsComponent.dom_id(@reply)}
+            subject={@reply}
+            viewer={@viewer}
+            marks={@marks}
+            nested?={true}
+          />
+        </div>
+      </div>
+    </article>
+    """
+  end
 
   # The answering control: the same slot and the same look, but a link.
   attr(:href, :any, required: true)

@@ -109,6 +109,31 @@ defmodule Vutuv.Fediverse.RemotePost do
     field(:counts_etag, :string)
     field(:counts_failures, :integer, default: 0)
 
+    # The origin serves none of the three collections, so it is off the ladder
+    # for good. Set once from a document that answered `200` and carried no
+    # figures at all, which is a fact about that server's software rather than
+    # about its health — hence a flag and not a strike.
+    field(:counts_absent, :boolean, default: false)
+
+    # How many answered it out there, on its own flatter clock beside the two
+    # above (`Vutuv.Fediverse.refresh_counts/1`). Its own columns because the
+    # figure is **counted**, not read: no server we cache serves a `totalItems`
+    # on `replies`, so where a like tally is a field in a document we already
+    # hold, an answer tally is a page fetch of its own — one per 60 answers,
+    # capped, on a ladder that asks a handful of times rather than ninety.
+    #
+    # Null is not zero here either: `replies` is MAY in the spec and some
+    # software (flipboard.com, 19 % of what we cache) serves none of it.
+    field(:replies_count, :integer)
+    field(:replies_checked_at, :utc_datetime)
+    field(:replies_failures, :integer, default: 0)
+
+    # This row exists because a member opened a thread, not because anybody
+    # follows its author. Everything else about it is an ordinary cached post;
+    # what the flag buys is that the surfaces which list **an account's** posts
+    # (the feed, the account page) skip it. See `timeline_scope/1`.
+    field(:thread_context, :boolean, default: false)
+
     # What this post quotes (issue #1609), and whether we may draw it as a card.
     #
     # `quote_uri` is what the author's server said they quoted — the canonical
@@ -192,6 +217,21 @@ defmodule Vutuv.Fediverse.RemotePost do
   audience.
   """
   def open?(%__MODULE__{audience: audience}), do: audience in @open_audiences
+
+  @doc """
+  Narrows a query to the rows that belong on a surface listing **an account's**
+  posts: the feed and the account page, and not an answer somebody pulled in to
+  read a thread.
+
+  One function rather than a `where` at each call site, because the two sides of
+  this have to agree exactly. A thread answer is stored as an ordinary cached
+  post so it can carry a card, an action bar and a report path; the price is
+  that it is now indistinguishable in the tables from a post that arrived
+  because its author is followed. This is where the difference is spelled out,
+  and `fediverse_thread_replies_test.exs` walks every listing surface through
+  it.
+  """
+  def timeline_scope(query), do: Ecto.Query.where(query, [p], not p.thread_context)
 
   @doc """
   Whether the author addressed it to the public collection outright — stricter

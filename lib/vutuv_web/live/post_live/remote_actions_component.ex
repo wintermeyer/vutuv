@@ -41,7 +41,8 @@ defmodule VutuvWeb.PostLive.RemoteActionsComponent do
   """
   use VutuvWeb, :live_component
 
-  import VutuvWeb.PostComponents, only: [remote_actions: 1, like_refusal_message: 2]
+  import VutuvWeb.PostComponents,
+    only: [remote_actions: 1, like_refusal_message: 2, thread_replies: 1]
 
   alias Vutuv.Fediverse
   alias Vutuv.Fediverse.Note
@@ -99,6 +100,13 @@ defmodule VutuvWeb.PostLive.RemoteActionsComponent do
      # `assign_new` like the marks below: a host re-render must not undo the
      # figure this bar has already nudged for the reader's own press.
      |> assign_new(:counts, fn -> Fediverse.counts(assigns.subject) end)
+     # A card inside an unfolded thread does not unfold a thread of its own.
+     |> assign(:nested?, assigns[:nested?] == true)
+     |> assign_new(:replies_open?, fn -> false end)
+     |> assign_new(:replies, fn -> [] end)
+     |> assign_new(:replies_pending, fn -> [] end)
+     |> assign_new(:replies_loading?, fn -> false end)
+     |> assign_new(:replies_notice, fn -> nil end)
      # `assign_new`, like the local bar: the first pass takes what the host
      # batched (or loads its own), and later host re-renders keep the copy this
      # bar may have toggled since — re-applying a stale preload would undo the
@@ -120,7 +128,38 @@ defmodule VutuvWeb.PostLive.RemoteActionsComponent do
 
   defp marked?(ids, subject), do: MapSet.member?(ids, subject.id)
 
+  # The reader pressed the answer figure. What we already hold is painted at
+  # once — it costs one indexed query and no network — and the fetch that fills
+  # in the rest runs behind it, because it is a request per answer to servers
+  # that are usually neither ours nor the origin's. A press while the thread is
+  # open folds it again.
   @impl true
+  def handle_event("replies", _params, %{assigns: %{replies_open?: true}} = socket),
+    do: {:noreply, assign(socket, :replies_open?, false)}
+
+  def handle_event("replies", _params, socket) do
+    %{subject: subject, viewer: viewer, counts: counts} = socket.assigns
+    stored = Fediverse.stored_thread_replies(subject, viewer, limit: Fediverse.thread_page())
+
+    socket =
+      socket
+      |> assign(:replies_open?, true)
+      |> assign(:replies, stored)
+      |> assign(:replies_notice, nil)
+
+    # A second press on a card whose answers are all here already asks nobody
+    # anything. The figure is the origin's own, so "as many as it said" is the
+    # honest test for having them all — a page reopened while reading is the
+    # commonest press there is, and it must not spend somebody's server time.
+    if complete?(stored, counts.replies),
+      do: {:noreply, assign(socket, :replies_pending, [])},
+      else: {:noreply, load_replies(socket, [])}
+  end
+
+  def handle_event("more-replies", _params, socket) do
+    {:noreply, load_replies(socket, socket.assigns.replies_pending)}
+  end
+
   def handle_event("toggle", %{"act" => act}, socket) do
     %{subject: subject, viewer: viewer, marks: marks} = socket.assigns
     on? = Map.fetch!(marks, flag(act))
@@ -142,6 +181,88 @@ defmodule VutuvWeb.PostLive.RemoteActionsComponent do
         {:noreply, socket |> refusal(reason, subject) |> ActionBar.take_paint_back(true)}
     end
   end
+
+  defp complete?(stored, count) when is_integer(count), do: length(stored) >= count
+  defp complete?(_stored, _count), do: false
+
+  # The fetch itself, off the socket's own process: a card in a feed of twenty
+  # must not hold up the page while a stranger's server thinks about it, and
+  # `Fediverse.fetch_thread_replies/3` talks to one server per answer.
+  defp load_replies(socket, pending) do
+    %{subject: subject, viewer: viewer} = socket.assigns
+
+    socket
+    |> assign(:replies_loading?, true)
+    |> start_async(:thread_replies, fn ->
+      Fediverse.fetch_thread_replies(viewer, subject, pending: pending)
+    end)
+  end
+
+  @impl true
+  def handle_async(:thread_replies, {:ok, {:ok, page}}, socket) do
+    # In the origin's own order and without repeats: the stored half painted
+    # first, and the fetch answers with the same rows plus what it went to get.
+    replies =
+      (socket.assigns.replies ++ page.replies)
+      |> Enum.uniq_by(& &1.id)
+
+    {:noreply,
+     socket
+     |> assign(:replies, replies)
+     |> assign(:replies_pending, page.pending)
+     |> assign(:replies_loading?, false)
+     |> assign(
+       :replies_notice,
+       thread_notice(replies, page.pending, socket.assigns.counts.replies)
+     )}
+  end
+
+  def handle_async(:thread_replies, {:ok, {:error, reason}}, socket) do
+    {:noreply,
+     socket
+     |> assign(:replies_loading?, false)
+     |> assign(:replies_notice, thread_refusal(reason, socket.assigns.replies))}
+  end
+
+  # The task itself died (a timeout, a crash). The same sentence as a refusal:
+  # what a reader can do about it is identical, which is come back later.
+  def handle_async(:thread_replies, {:exit, _reason}, socket) do
+    {:noreply,
+     socket
+     |> assign(:replies_loading?, false)
+     |> assign(:replies_notice, thread_refusal(:unavailable, socket.assigns.replies))}
+  end
+
+  # A thread whose answers we could reach and which turned out to hold none the
+  # reader may see: everything in it was addressed to followers, or came from an
+  # instance this installation blocks. Silence would read as a broken button.
+  defp thread_notice([], _pending, _count),
+    do: gettext("Nothing here we are allowed to show you.")
+
+  # Fewer cards than the figure promised, and nothing left to press for. The
+  # gap is ordinary and it is not ours: an answer may have been deleted since
+  # the count, or its server may not answer us at all — one of six in the first
+  # real thread this was tried on came from an instance that refused the
+  # request. The figure is the origin's own and stays as it is; what would be
+  # wrong is letting the reader count the cards and wonder.
+  defp thread_notice(replies, [], count) when is_integer(count) do
+    if length(replies) < count,
+      do: gettext("Not every answer could be fetched. The rest are on the origin server."),
+      else: nil
+  end
+
+  defp thread_notice(_replies, _pending, _count), do: nil
+
+  defp thread_refusal(:capped, _replies),
+    do: gettext("That is enough answers fetched for one hour. Try again later.")
+
+  # With something on screen already, the sentence is about the rest; with
+  # nothing, it is about the whole thread.
+  defp thread_refusal(_reason, []),
+    do: gettext("The answers could not be fetched from the servers that hold them.")
+
+  defp thread_refusal(_reason, _replies),
+    do: gettext("The rest could not be fetched right now.")
 
   # A refusal, and for the one a member can do something about, the way there
   # (issue #1349). A sentence that names a setting and then leaves them to find
@@ -241,6 +362,10 @@ defmodule VutuvWeb.PostLive.RemoteActionsComponent do
 
     ~H"""
     <div>
+      <%!-- `replies_expandable?` says only whether this card may unfold a
+      thread of its own: false inside one, so answers do not nest. Whether the
+      figure is there at all, and whether there is an answering path beside it,
+      the control works out from the post itself. --%>
       <.remote_actions
         id={@id}
         target={@myself}
@@ -253,9 +378,22 @@ defmodule VutuvWeb.PostLive.RemoteActionsComponent do
         bookmarked?={@marks.bookmarked?}
         likes={@counts.likes}
         shares={@counts.shares}
+        replies={@counts.replies}
+        replies_open?={@replies_open?}
+        replies_expandable?={!@nested?}
         like?={@offer.like?}
         reply_to={@offer.reply_to}
         repost?={@offer.repost?}
+      />
+
+      <.thread_replies
+        :if={@replies_open?}
+        replies={@replies}
+        viewer={@viewer}
+        loading?={@replies_loading?}
+        more?={@replies_pending != []}
+        notice={@replies_notice}
+        target={@myself}
       />
       <%!-- Beside the control that refused, in the reader's own words. The one
       refusal a member can act on says what to do about it; the rest say only
