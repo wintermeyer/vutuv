@@ -336,7 +336,7 @@ defmodule Vutuv.AvatarTest do
     test "writes fingerprinted AVIF versions publicly and the original privately",
          %{tmp: tmp, src: src} do
       upload = %Plug.Upload{filename: "selfie.jpg", path: src, content_type: "image/jpeg"}
-      assert {:ok, "selfie.jpg", fp} = Vutuv.Avatar.store({upload, @user})
+      assert {:ok, "selfie.jpg", fp, _} = Vutuv.Avatar.store({upload, @user})
       assert fp =~ ~r/\A[0-9a-f]{12}\z/
 
       dir = Path.join(tmp, "avatars/7")
@@ -350,7 +350,7 @@ defmodule Vutuv.AvatarTest do
 
     test "the returned fingerprint is what url/2 then serves (write == URL)", %{src: src} do
       upload = %Plug.Upload{filename: "selfie.jpg", path: src, content_type: "image/jpeg"}
-      assert {:ok, file_name, fp} = Vutuv.Avatar.store({upload, @user})
+      assert {:ok, file_name, fp, _} = Vutuv.Avatar.store({upload, @user})
       stored = %{@user | avatar: file_name, avatar_fingerprint: fp}
 
       assert Vutuv.Avatar.url({file_name, stored}, :medium) ==
@@ -360,14 +360,14 @@ defmodule Vutuv.AvatarTest do
     test "a re-upload clears the prior fingerprinted versions (no accumulation)",
          %{tmp: tmp, src: src} do
       upload = %Plug.Upload{filename: "selfie.jpg", path: src, content_type: "image/jpeg"}
-      assert {:ok, _, _fp1} = Vutuv.Avatar.store({upload, @user})
+      assert {:ok, _, _fp1, _} = Vutuv.Avatar.store({upload, @user})
 
       png = Path.join(System.tmp_dir!(), "src_#{System.unique_integer([:positive])}.png")
       {:ok, img} = Image.new(400, 400, color: [9, 9, 9])
       {:ok, _} = Image.write(img, png)
       on_exit(fn -> File.rm(png) end)
       upload2 = %Plug.Upload{filename: "new.png", path: png, content_type: "image/png"}
-      assert {:ok, _, fp2} = Vutuv.Avatar.store({upload2, @user})
+      assert {:ok, _, fp2, _} = Vutuv.Avatar.store({upload2, @user})
 
       # Exactly the versions of the latest upload remain — read from the spec,
       # so adding one (the `:large` of issue #1528) does not read as accumulation.
@@ -382,21 +382,21 @@ defmodule Vutuv.AvatarTest do
       src: src
     } do
       upload = %Plug.Upload{filename: "selfie.jpg", path: src, content_type: "image/jpeg"}
-      assert {:ok, _, _} = Vutuv.Avatar.store({upload, @user})
+      assert {:ok, _, _, _} = Vutuv.Avatar.store({upload, @user})
 
       png = Path.join(System.tmp_dir!(), "src_#{System.unique_integer([:positive])}.png")
       {:ok, img} = Image.new(300, 300, color: [1, 2, 3])
       {:ok, _} = Image.write(img, png)
       on_exit(fn -> File.rm(png) end)
       upload2 = %Plug.Upload{filename: "new.png", path: png, content_type: "image/png"}
-      assert {:ok, _, _} = Vutuv.Avatar.store({upload2, @user})
+      assert {:ok, _, _, _} = Vutuv.Avatar.store({upload2, @user})
 
       assert File.ls!(Path.join(tmp, "originals/avatars/7")) == ["original.png"]
     end
 
     test "thumb/medium are cropped to the Spec dimensions", %{tmp: tmp, src: src} do
       upload = %Plug.Upload{filename: "selfie.jpg", path: src, content_type: "image/jpeg"}
-      assert {:ok, _, fp} = Vutuv.Avatar.store({upload, @user})
+      assert {:ok, _, fp, _} = Vutuv.Avatar.store({upload, @user})
 
       dir = Path.join(tmp, "avatars/7")
       assert dimensions(Path.join(dir, "john.doe-thumb-#{fp}.avif")) == {96, 96}
@@ -416,7 +416,7 @@ defmodule Vutuv.AvatarTest do
       on_exit(fn -> File.rm(src) end)
 
       upload = %Plug.Upload{filename: "selfie.jpg", path: src, content_type: "image/jpeg"}
-      assert {:ok, _, fp} = Vutuv.Avatar.store({upload, @user})
+      assert {:ok, _, fp, _} = Vutuv.Avatar.store({upload, @user})
 
       {:ok, stored} = Image.open(Path.join(tmp, "avatars/7/john.doe-thumb-#{fp}.avif"))
       {:ok, fields} = VipsImage.header_field_names(stored)

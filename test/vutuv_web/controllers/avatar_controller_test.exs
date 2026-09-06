@@ -43,7 +43,7 @@ defmodule VutuvWeb.AvatarControllerTest do
     on_exit(fn -> File.rm(src) end)
 
     upload = %Plug.Upload{filename: "selfie.jpg", path: src, content_type: "image/jpeg"}
-    {:ok, stored, fingerprint} = Vutuv.Avatar.store({upload, user})
+    {:ok, stored, fingerprint, _moderation} = Vutuv.Avatar.store({upload, user})
 
     user
     |> Ecto.Changeset.change(avatar: stored, avatar_fingerprint: fingerprint)

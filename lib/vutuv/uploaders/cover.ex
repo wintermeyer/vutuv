@@ -47,9 +47,10 @@ defmodule Vutuv.Cover do
   @doc """
   Stores every cover version for `{upload, user}`, cropping the served banner
   to `crop` (a `"x,y,w,h"` string or `nil` for the full-width default; see
-  `Vutuv.Uploads.Crop`) and returns `{:ok, original_file_name, fingerprint}`
-  (kept in the `:cover_photo` / `:cover_fingerprint` columns; the crop is folded
-  into the fingerprint), or `{:error, :invalid_file}` when the
+  `Vutuv.Uploads.Crop`) and returns
+  `{:ok, original_file_name, fingerprint, moderation}` (kept in the
+  `:cover_photo` / `:cover_fingerprint` / `:cover_moderation` columns; the crop
+  is folded into the fingerprint), or `{:error, :invalid_file}` when the
   extension is not whitelisted or the file cannot be decoded as an image.
   """
   def store({%Plug.Upload{}, _scope} = upload_and_scope, crop \\ nil) do
@@ -77,8 +78,17 @@ defmodule Vutuv.Cover do
   The quarantined version's on-disk path while the cover waits in moderation
   limbo — the owner-only preview (`VutuvWeb.PendingImageController`).
   """
-  def pending_preview_path(user, version) do
+  def pending_preview_path(user, version \\ @config.default_version) do
     Uploads.quarantine_version_path(user, version, @config)
+  end
+
+  @doc """
+  The served version's on-disk path, or `nil` when the file the row names is
+  not there — the cover's half of `Vutuv.Images.Backfill.check/1`. See
+  `Vutuv.Avatar.stored_path/2`.
+  """
+  def stored_path(user, version \\ @config.default_version) do
+    Uploads.version_path({user.cover_photo, user}, version, @config)
   end
 
   @doc """

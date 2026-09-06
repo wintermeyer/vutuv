@@ -6,6 +6,7 @@ defmodule Vutuv.Release do
 
       bin/vutuv eval "Vutuv.Release.migrate()"
   """
+  alias Vutuv.Images.Backfill
   alias Vutuv.Moderation.ImageScans
   alias Vutuv.Organizations.Screenshots, as: OrganizationScreenshots
   alias Vutuv.PageScreenshot
@@ -125,6 +126,55 @@ defmodule Vutuv.Release do
 
     {:ok, summary, _apps} =
       Ecto.Migrator.with_repo(repo, fn _repo -> LegacySweeper.run(opts) end)
+
+    summary
+  end
+
+  @doc """
+  Brings every profile picture and cover uploaded before the shared `images`
+  table into it, and corrects any row that disagrees with the member's own
+  columns (see `Vutuv.Images.Backfill`). Moves no file and changes no URL, so
+  it is safe while the app serves traffic and safe to run again after an
+  interruption:
+
+      bin/vutuv eval "Vutuv.Release.backfill_image_rows()"
+      bin/vutuv eval "Vutuv.Release.backfill_image_rows(dry_run: true)"
+      bin/vutuv eval "Vutuv.Release.backfill_image_rows(only: \\"cover\\")"
+  """
+  def backfill_image_rows(opts \\ []) do
+    load_app()
+
+    [repo] = repos()
+
+    {:ok, summary, _apps} =
+      Ecto.Migrator.with_repo(repo, fn _repo -> Backfill.run(opts) end)
+
+    summary
+  end
+
+  @doc """
+  Counts every member picture against its row and its file on disk, writing
+  nothing, and prints what it found. The gate on the deploy that drops the
+  member row's four columns per kind:
+
+      bin/vutuv eval "Vutuv.Release.check_image_rows()"
+
+  **Raises when anything is outstanding**, so the command's exit status is the
+  gate and a deploy script can stand on it. A silent success is the one answer
+  this must never give by accident: a check that says nothing reads exactly
+  like a clean bill of health.
+  """
+  def check_image_rows(opts \\ []) do
+    load_app()
+
+    [repo] = repos()
+
+    {:ok, summary, _apps} =
+      Ecto.Migrator.with_repo(repo, fn _repo -> Backfill.check(opts) end)
+
+    unless summary.ok? do
+      raise "images backfill check failed — see the mismatches above"
+    end
 
     summary
   end

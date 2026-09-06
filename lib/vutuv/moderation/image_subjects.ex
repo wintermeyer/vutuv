@@ -46,24 +46,11 @@ defmodule Vutuv.Moderation.ImageSubjects do
   alias Vutuv.Videos
 
   # The avatar/cover twins differ only in their column names + uploader module.
-  @profile_images %{
-    "avatar" => %{
-      file: :avatar,
-      fingerprint: :avatar_fingerprint,
-      crop: :avatar_crop,
-      moderation: :avatar_moderation,
-      module: Vutuv.Avatar,
-      prefix: "avatars"
-    },
-    "cover" => %{
-      file: :cover_photo,
-      fingerprint: :cover_fingerprint,
-      crop: :cover_crop,
-      moderation: :cover_moderation,
-      module: Vutuv.Cover,
-      prefix: "covers"
-    }
-  }
+  # Which member-row column holds what, read from the one module that owns
+  # those names (`Vutuv.Images.member_columns/0`) rather than spelled a second
+  # time here: the contract half of #2013 drops all four per kind, and a second
+  # copy is a second place to remember.
+  @profile_images Vutuv.Images.member_columns()
 
   @gallery_images %{
     # `pixelated: true` marks the one gallery kind a stranger meets while the
@@ -566,7 +553,7 @@ defmodule Vutuv.Moderation.ImageSubjects do
       from(u in User,
         where: u.id == ^scan.subject_id and field(u, ^config.fingerprint) == ^scan.fingerprint
       )
-      |> Repo.update_all(set: clear_profile_columns(config, scan.kind))
+      |> Repo.update_all(set: clear_profile_columns(config))
 
     case cleared do
       {1, _} ->
@@ -882,7 +869,7 @@ defmodule Vutuv.Moderation.ImageSubjects do
             field(u, ^config.fingerprint) == ^scan.fingerprint and
             field(u, ^config.moderation) == "pending"
       )
-      |> Repo.update_all(set: clear_profile_columns(config, scan.kind))
+      |> Repo.update_all(set: clear_profile_columns(config))
 
     # Only when this scan's own picture was the one cleared — the common case
     # here is a stale cancel that matches nothing, and a delete then would take
@@ -907,13 +894,13 @@ defmodule Vutuv.Moderation.ImageSubjects do
   # image or cancels a pending one. The row itself is deleted beside this
   # (`Vutuv.Images.forget_profile_image/2`): "there is a row" and "there is a
   # picture" stay the same statement.
-  defp clear_profile_columns(config, kind),
+  defp clear_profile_columns(config),
     do: [
       {config.file, nil},
       {config.fingerprint, nil},
       {config.crop, nil},
       {config.moderation, nil},
-      {Images.pointer_field(kind), nil}
+      {config.pointer, nil}
     ]
 
   # Every document column resets when a scan rejects the proof document; the

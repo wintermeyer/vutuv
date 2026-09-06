@@ -66,9 +66,10 @@ defmodule Vutuv.Avatar do
   @doc """
   Stores every avatar version for `{upload, user}`, cropping the served
   versions to `crop` (a `"x,y,w,h"` string or `nil` for the centered default;
-  see `Vutuv.Uploads.Crop`) and returns `{:ok, original_file_name, fingerprint}`
-  (kept in the `:avatar` / `:avatar_fingerprint` columns; the crop is folded
-  into the fingerprint), or `{:error, :invalid_file}` when the
+  see `Vutuv.Uploads.Crop`) and returns
+  `{:ok, original_file_name, fingerprint, moderation}` (kept in the `:avatar` /
+  `:avatar_fingerprint` / `:avatar_moderation` columns; the crop is folded into
+  the fingerprint), or `{:error, :invalid_file}` when the
   extension is not whitelisted **or the file cannot be decoded as an image**
   (corrupt/truncated uploads used to crash the request with a `MatchError`).
   """
@@ -104,8 +105,18 @@ defmodule Vutuv.Avatar do
   The quarantined version's on-disk path while the avatar waits in moderation
   limbo — the owner-only preview (`VutuvWeb.PendingImageController`).
   """
-  def pending_preview_path(user, version) do
+  def pending_preview_path(user, version \\ @config.default_version) do
     Uploads.quarantine_version_path(user, version, @config)
+  end
+
+  @doc """
+  The served version's on-disk path, or `nil` when the file the row names is
+  not there. Whichever of the three naming schemes the row is on
+  (`Vutuv.Uploads.version_path/3` resolves them). What
+  `Vutuv.Images.Backfill.check/1` asks before the contract cut.
+  """
+  def stored_path(user, version \\ @config.default_version) do
+    Uploads.version_path({user.avatar, user}, version, @config)
   end
 
   @doc """

@@ -238,15 +238,19 @@ an unguessable `token`, the three columns describing the stored file
 `frozen_at` for a copyright case (#2012 writes it; a freeze moves files and
 never deletes them).
 
-This release is the **expand** half and is deliberately additive. An upload
-writes the row *and* keeps filling all four member-row columns, which stay the
-source of truth every URL builder and every display gate reads; the member row
-only gains a pointer (`users.avatar_image_id` / `cover_image_id`). Nothing
-about how a picture is stored or served moved — an avatar URL is byte for byte
-the one it was, which matters because other servers hold it in their copy of
-our ActivityPub actor document, search engines hold it, and sent mail holds
-it. #2014 backfills the pictures uploaded before this and drops the columns a
-deploy later; #2015 moves the remaining kinds in.
+The table arrived **additively**. An upload writes the row *and* keeps filling
+all four member-row columns, which stay the source of truth every URL builder
+and every display gate reads; the member row only gains a pointer
+(`users.avatar_image_id` / `cover_image_id`). Nothing about how a picture is
+stored or served moved — an avatar URL is byte for byte the one it was, which
+matters because other servers hold it in their copy of our ActivityPub actor
+document, search engines hold it, and sent mail holds it. #2015 moves the
+remaining kinds in.
+
+Which member-row column holds what is written **once**, in
+`Vutuv.Images.member_columns/0`; `Vutuv.Moderation.ImageSubjects` and
+`Vutuv.Images.Backfill` read it from there, so the deploy that drops those
+columns has one list to delete rather than four copies to find.
 
 Five places write the pair, and they are the only ones that touch the
 member-row columns at all: `Vutuv.Accounts.store_pending_image/6` (upload — it
@@ -256,8 +260,63 @@ leave a report pointing at nothing rather than quietly at the new picture),
 (the gate's verdict and its cancel), and `Vutuv.Uploads.regenerate/3` for the
 fingerprint a re-derive produces. That last one keys on the pointer the member
 row already holds, so a picture with no row yet costs no statement and the
-regeneration pass never *creates* one — that is #2014's backfill, not a side
+regeneration pass never *creates* one — that is the backfill's job, not a side
 effect of a deploy.
+
+The upload writes its pair in **one transaction**. Apart they could
+half-commit: `Uploads.store/4` has already replaced the served files by then,
+so a failure between the two writes (a pool timeout, a slot dying in the
+blue/green switch, a `StaleEntryError`) left the row naming the new picture,
+the member row still naming the old file whose bytes were gone, and no scan
+queued to take the row out of `"pending"` — with a success flash on the way
+back. For the same reason `:moderate_images` is read once per upload and handed
+to `Uploads.store/4`, so the state the row records and the tree the bytes land
+in cannot disagree.
+
+### Bringing the older pictures in (issue #2014)
+
+`Vutuv.Images.Backfill` is the contract half — `mix vutuv.images.backfill`, or
+`bin/vutuv eval "Vutuv.Release.backfill_image_rows()"` on a release. It moves
+no file and changes no URL, so the previous release keeps serving unchanged
+while it runs.
+
+It **reconciles**, it does not insert-where-missing: for every member it
+compares `file`, `fingerprint`, `crop` and `moderation` against the row and
+corrects the row where they differ (with a fresh token when the picture itself
+changed), creates one where there is none, and deletes a row whose member has
+no picture of that kind any more. Insert-where-missing would skip exactly the
+members a half-committed upload had already given a wrong row — the ones whose
+truth the column drop is about to destroy.
+
+Work is a keyset scan over `users.id` with one transaction per member and no
+state in memory, so a run a deploy kills mid-flight is simply run again: every
+member it reached is already right and reports `unchanged` (rehearsed on the
+production copy: `kill -9` at 309 of 1,747 pictures left 309 complete pairs and
+no half-pair, and the second run created the other 1,438 and corrected none).
+`from: "<user id>"` resumes from a progress line instead of re-reading the
+table.
+
+`Backfill.check/1` (`mix vutuv.images.backfill --check`, or
+`bin/vutuv eval "Vutuv.Release.check_image_rows()"`) is the gate before the
+cut: it counts every member picture against its row *and* against its file on
+disk — the quarantine tree while the picture is `"pending"`, the served tree
+otherwise — prints one line per kind plus the members behind each class of
+mismatch, and **fails the command** when anything is outstanding. Both of
+those come from `check/1` itself rather than from either entry point, because
+the first version put the printing in the mix task alone: it fell out of step
+with the shape `check/1` returns and crashed on every invocation, while the
+release path printed nothing and exited 0 with 1,678 mismatches — which reads
+exactly like a clean bill of health. A missing file is the one class the
+backfill cannot repair; it predates the table and wants a human before the
+columns go.
+
+**The columns go two deploys later, not one.** The order is: this deploy ships
+the backfill (the columns still serve everything), the operator runs it and
+reads the check; a later deploy moves every URL builder and display gate onto
+the row; and only the deploy after *that* carries the migration dropping
+`avatar` / `avatar_fingerprint` / `avatar_crop` / `avatar_moderation` and the
+cover four. Each step is N-1 safe on its own, and no two can be merged: a
+migration may only drop what the *currently deployed* release no longer reads.
 
 **How a kind is served is a property of the kind, not a column**
 (`Vutuv.Images.serving/1`). `:static` means the derived files sit in a public

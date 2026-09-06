@@ -690,12 +690,28 @@ Run on the server, against the release:
   cannot re-derive them; this is their equivalent after an upgrade that
   changes the cover size. Needs outbound network and `FETCH_BOOK_METADATA=true`,
   and paces itself (3s per cover) to stay inside Open Library's rate limit.
+- `bin/vutuv eval "Vutuv.Release.backfill_image_rows()"` — brings every profile
+  picture and cover uploaded before the shared `images` table into it, and
+  corrects any row that disagrees with the member's own columns. Moves no file
+  and changes no URL, so it is safe while the app serves traffic; safe to run
+  again if it is interrupted (a deploy stopping the slot mid-run leaves every
+  member it reached already correct).
+- `bin/vutuv eval "Vutuv.Release.check_image_rows()"` — counts every member
+  picture against its row and against its file on disk, writing nothing. It
+  prints one line per kind, names the members behind each mismatch, and
+  **fails the command** when anything is outstanding, so a deploy script can
+  stand on its exit status. A picture whose file is missing is the one class
+  the backfill cannot repair. This is the gate on the later upgrade that
+  removes the member row's own image columns — do not take that upgrade with a
+  mismatch outstanding. `mix vutuv.images.backfill --check` is the same check
+  in a source checkout, and a plain `mix vutuv.images.backfill` ends with it.
 - `bin/vutuv eval 'Vutuv.Release.promote_admin("handle-or-email")'` — grants
   admin rights.
 
 (In a source checkout the same exist as `mix vutuv.images.regenerate` /
-`mix vutuv.review_covers.refresh` / `mix vutuv.admin.promote`; URL screenshots
-can be re-rendered with `mix urls.create_screenshots`.)
+`mix vutuv.images.backfill` / `mix vutuv.review_covers.refresh` /
+`mix vutuv.admin.promote`; URL screenshots can be re-rendered with
+`mix urls.create_screenshots`.)
 
 ### Watch the tables for bloat after a mass rewrite
 
