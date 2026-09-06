@@ -12,6 +12,8 @@ defmodule VutuvWeb.ReportController do
 
   alias Vutuv.Accounts.User
   alias Vutuv.Chat
+  alias Vutuv.Images
+  alias Vutuv.Images.Image
   alias Vutuv.Moderation
   alias Vutuv.Moderation.Report
   alias Vutuv.Posts
@@ -51,6 +53,10 @@ defmodule VutuvWeb.ReportController do
     defaults = [
       page_title: gettext("Report content"),
       preview: preview(content),
+      # A picture is the one reportable thing whose preview cannot be a
+      # sentence: a rights holder has to see WHICH picture this is before they
+      # send a legal notice about it.
+      preview_image: preview_image(content),
       severed_owner: if(severs, do: Moderation.content_owner(content)),
       # The form is sticky through the report itself, so a rejected submission
       # comes back the way the reporter left it.
@@ -159,6 +165,16 @@ defmodule VutuvWeb.ReportController do
     do: "#{organization.name} - #{organization.city}"
 
   defp preview(%Vutuv.Jobs.JobPosting{} = posting), do: clip(posting.title)
+
+  defp preview(%Image{kind: "cover"}), do: gettext("Cover photo")
+  defp preview(%Image{}), do: gettext("Profile picture")
+
+  # The picture itself, for the report form — through `Vutuv.Images`, which
+  # owns kind → uploader, so a picture already held by another case (or still
+  # in the AI gate) shows the silhouette here too rather than a URL nothing
+  # answers.
+  defp preview_image(%Image{} = image), do: Images.preview_url(image)
+  defp preview_image(_content), do: nil
 
   defp clip(nil), do: ""
 

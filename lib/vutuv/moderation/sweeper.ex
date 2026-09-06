@@ -5,7 +5,12 @@ defmodule Vutuv.Moderation.Sweeper do
     * escalates `pending_owner` cases whose 72h self-service deadline has
       passed into the admin queue (`Vutuv.Moderation.escalate_overdue/0`);
     * once a day (the first sweep after #{7}:00 UTC) sends the admin digest
-      email when cases are waiting (`Vutuv.Moderation.Notifier.admins_digest/1`).
+      email when cases are waiting (`Vutuv.Moderation.Notifier.admins_digest/1`);
+    * finishes any half-done picture freeze or restore
+      (`Vutuv.Images.reconcile_holds/0`). A copyright freeze moves files, and a
+      deploy that stops the slot between two renames leaves the job unfinished
+      with nothing in a log to say so — so the row's `frozen_at` is the record
+      and this is the thing that acts on it.
 
   The "digest already sent today" marker is in-memory, so a restart on a
   digest day can repeat the mail once - harmless, admins can take a second
@@ -17,6 +22,7 @@ defmodule Vutuv.Moderation.Sweeper do
 
   require Logger
 
+  alias Vutuv.Images
   alias Vutuv.Moderation
   alias Vutuv.Moderation.Notifier
 
@@ -39,6 +45,8 @@ defmodule Vutuv.Moderation.Sweeper do
       0 -> :ok
       count -> Logger.info("Escalated #{count} overdue moderation case(s) to the admin queue")
     end
+
+    Images.reconcile_holds()
 
     state = maybe_send_digest(state)
     schedule()

@@ -1,0 +1,217 @@
+defmodule Vutuv.ModerationImageTakedownTest do
+  @moduledoc """
+  A profile picture is reportable in its own right (issue #2012).
+
+  The whole point of the type is that a freeze **moves** bytes instead of
+  deleting them: every derived version and the private original leave the trees
+  a reader can reach for a hold nginx has no location for, the profile falls
+  back to the silhouette, a rejected case puts every file back byte for byte at
+  the same path, and only an upheld case deletes anything.
+
+  So the assertions here are mostly about the disk: a fingerprint of the whole
+  upload tree taken before the report has to come back identical after the
+  reject.
+  """
+
+  # Not async: flips the global :uploads_dir_prefix.
+  use Vutuv.DataCase, async: false
+
+  import Vutuv.WebPushHelpers, only: [put_config: 2]
+
+  alias Vutuv.Accounts
+  alias Vutuv.Accounts.User
+  alias Vutuv.Images
+  alias Vutuv.Images.Backfill
+  alias Vutuv.Images.Image, as: ImageRow
+  alias Vutuv.Moderation
+  alias Vutuv.Moderation.Report
+  alias Vutuv.Repo
+
+  setup do
+    tmp =
+      Path.join(System.tmp_dir!(), "vutuv_image_takedown_#{System.unique_integer([:positive])}")
+
+    put_config(:uploads_dir_prefix, tmp)
+    on_exit(fn -> File.rm_rf(tmp) end)
+
+    owner = insert(:activated_user)
+    insert(:email, user: owner)
+    reporter = insert(:activated_user)
+    insert(:email, user: reporter)
+    admin = insert(:activated_user, admin?: true)
+
+    {:ok, owner} = Accounts.update_user(owner, %{avatar: jpeg_upload()})
+
+    {:ok, tmp: tmp, owner: owner, reporter: reporter, admin: admin}
+  end
+
+  defp jpeg_upload(name \\ "selfie.jpg", color \\ [10, 120, 200]) do
+    src = Path.join(System.tmp_dir!(), "takedown_src_#{System.unique_integer([:positive])}.jpg")
+    {:ok, img} = Image.new(300, 200, color: color)
+    {:ok, _} = Image.write(img, src)
+    on_exit(fn -> File.rm(src) end)
+    %Plug.Upload{filename: name, path: src, content_type: "image/jpeg"}
+  end
+
+  defp reload(user), do: Repo.get!(User, user.id)
+
+  defp notice(attrs \\ %{}) do
+    Map.merge(
+      %{
+        "category" => "copyright",
+        "note" => "That is my photograph, the original is at example.com/photo",
+        "good_faith?" => "true"
+      },
+      attrs
+    )
+  end
+
+  # Every file under the uploads root, as `relative path => sha256`. The whole
+  # round trip is one comparison of two of these: same paths, same bytes.
+  defp tree(root) do
+    root
+    |> Path.join("**")
+    |> Path.wildcard()
+    |> Enum.reject(&File.dir?/1)
+    |> Map.new(fn path ->
+      {Path.relative_to(path, root), :crypto.hash(:sha256, File.read!(path))}
+    end)
+  end
+
+  defp served_files(root, user), do: Path.wildcard(Path.join([root, "avatars", user.id, "*"]))
+
+  defp originals(root, user),
+    do: Path.wildcard(Path.join([root, "originals/avatars", user.id, "*"]))
+
+  defp held_files(root, image), do: Path.wildcard(Path.join([root, "frozen", image.id, "**"]))
+
+  defp avatar_image(user), do: Images.profile_image(user.id, "avatar")
+
+  describe "reporting a profile picture" do
+    test "the freeze moves every file into the hold and the reject brings them all back",
+         %{tmp: tmp, owner: owner, reporter: reporter, admin: admin} do
+      image = avatar_image(owner)
+      before = tree(tmp)
+      url_before = Vutuv.Avatar.display_url(owner, :medium)
+
+      assert served_files(tmp, owner) != []
+      assert originals(tmp, owner) != []
+
+      {:ok, case_record} = Moderation.report_content(reporter, image, notice())
+
+      assert case_record.content_type == "image"
+      assert case_record.content_id == image.id
+      assert case_record.owner_id == owner.id
+
+      # Nothing is deleted: the bytes are all still there, just out of reach.
+      assert Repo.get!(ImageRow, image.id).frozen_at
+      assert served_files(tmp, owner) == []
+      assert originals(tmp, owner) == []
+      assert length(held_files(tmp, image) |> Enum.reject(&File.dir?/1)) == map_size(before)
+
+      # And the profile shows the silhouette meanwhile.
+      frozen_owner = reload(owner)
+      assert frozen_owner.avatar == nil
+      assert frozen_owner.avatar_fingerprint == nil
+      assert String.starts_with?(Vutuv.Avatar.display_url(frozen_owner, :medium), "data:image/")
+
+      {:ok, _} = Moderation.reject_case(case_record, admin)
+
+      # Byte for byte, at the same paths, so the old URL works again.
+      assert tree(tmp) == before
+      assert Repo.get!(ImageRow, image.id).frozen_at == nil
+
+      restored = reload(owner)
+      assert restored.avatar == "selfie.jpg"
+      assert restored.avatar_fingerprint == owner.avatar_fingerprint
+      assert Vutuv.Avatar.display_url(restored, :medium) == url_before
+    end
+
+    test "an upheld case deletes the copies, the original included",
+         %{tmp: tmp, owner: owner, reporter: reporter, admin: admin} do
+      image = avatar_image(owner)
+      {:ok, case_record} = Moderation.report_content(reporter, image, notice())
+
+      {:ok, _} = Moderation.uphold_case(case_record, admin)
+
+      assert tree(tmp) == %{}
+      assert avatar_image(owner) == nil
+      assert reload(owner).avatar == nil
+    end
+
+    test "the owner's self-service is remove, and it settles the case",
+         %{tmp: tmp, owner: owner, reporter: reporter} do
+      image = avatar_image(owner)
+      {:ok, case_record} = Moderation.report_content(reporter, image, notice())
+
+      assert :ok = Moderation.delete_reported_content(case_record, owner)
+
+      assert tree(tmp) == %{}
+      assert avatar_image(owner) == nil
+      assert Repo.get!(Moderation.Case, case_record.id).status == "resolved_deleted"
+    end
+
+    test "a frozen picture cannot be replaced by a fresh upload",
+         %{owner: owner, reporter: reporter} do
+      image = avatar_image(owner)
+      {:ok, _case} = Moderation.report_content(reporter, image, notice())
+
+      {:ok, unchanged} = Accounts.update_user(reload(owner), %{avatar: jpeg_upload("other.jpg")})
+
+      # The freeze survives the re-upload, and so does the frozen picture's row:
+      # replacing it would move the case onto bytes nobody reported.
+      assert unchanged.avatar == nil
+      row = Repo.get!(ImageRow, image.id)
+      assert row.frozen_at
+      assert row.file == "selfie.jpg"
+      assert row.token == image.token
+    end
+
+    test "an interrupted freeze is finished by the reconcile pass",
+         %{tmp: tmp, owner: owner, reporter: reporter} do
+      image = avatar_image(owner)
+      {:ok, _case} = Moderation.report_content(reporter, image, notice())
+
+      # A deploy killed the slot between the two halves of the move: the stamp
+      # is written, some bytes are still in the served tree.
+      stray = Path.join([tmp, "avatars", owner.id, "leftover-medium-deadbeef.avif"])
+      File.mkdir_p!(Path.dirname(stray))
+      File.write!(stray, "left behind")
+
+      assert :ok = Images.reconcile_holds()
+
+      assert served_files(tmp, owner) == []
+
+      assert Path.join([tmp, "frozen", image.id, "served", "leftover-medium-deadbeef.avif"])
+             |> File.exists?()
+    end
+  end
+
+  describe "the picture-row bookkeeping" do
+    # A frozen picture's member columns are empty on purpose, which is exactly
+    # what the backfill calls an orphan row — and the row is the only record of
+    # what the case is about and what an unfreeze has to write back.
+    test "the backfill leaves a frozen row standing", %{owner: owner, reporter: reporter} do
+      image = avatar_image(owner)
+      {:ok, _case} = Moderation.report_content(reporter, image, notice())
+
+      assert %{"avatar" => tally} = Backfill.run(only: "avatar")
+      assert tally.dropped == 0
+      assert Repo.get(ImageRow, image.id)
+      assert Backfill.check(only: "avatar").kinds["avatar"].orphan_row.count == 0
+    end
+  end
+
+  describe "the report form" do
+    test "an image may be reported for copyright" do
+      assert "copyright" in Report.categories_for("image")
+    end
+
+    test "a picture nobody owns is not reportable", %{reporter: reporter} do
+      # The kinds #2015 brings have no member owner, so there is nobody to
+      # strike and nothing to freeze.
+      orphan = %ImageRow{id: Vutuv.UUIDv7.generate(), kind: "avatar", user_id: nil}
+      refute Moderation.can_report?(reporter, orphan)
+    end
+  end
+end

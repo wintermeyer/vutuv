@@ -28,6 +28,7 @@ defmodule VutuvWeb.Admin.ModerationHTML do
   def content_type_label("user"), do: gettext("Profile")
   def content_type_label("organization"), do: gettext("Organization page")
   def content_type_label("job_posting"), do: gettext("Job posting")
+  def content_type_label("image"), do: gettext("Picture")
   def content_type_label(other), do: other
 
   # The audit-log line for one moderation event (see Vutuv.Moderation.Event).

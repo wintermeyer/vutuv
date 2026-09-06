@@ -11,6 +11,13 @@ defmodule Vutuv.Moderation.Report do
   @message_categories @categories -- [@copyright]
   # Job postings get a specific first category; "family"/"bullying" rarely apply.
   @job_categories ~w(misleading_job spam copyright other)
+  # A profile picture or cover (issue #2012). Copyright is the point of the
+  # type, and a picture can as easily be the family-friendliness or the
+  # harassment complaint. Spam is left out deliberately: an advert as a profile
+  # picture is a complaint about the account, and that report — which the spam
+  # auto-defense counts towards freezing a whole profile — belongs on the
+  # profile, not on one of its pictures.
+  @image_categories ~w(family bullying copyright other)
   @max_note_length 2_000
 
   schema "moderation_reports" do
@@ -49,6 +56,7 @@ defmodule Vutuv.Moderation.Report do
 
   @doc "The report categories offered for a given content type (wire string)."
   def categories_for("job_posting"), do: @job_categories
+  def categories_for("image"), do: @image_categories
   def categories_for("message"), do: @message_categories
   def categories_for(_type), do: @categories
 

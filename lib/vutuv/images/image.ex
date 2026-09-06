@@ -35,15 +35,20 @@ defmodule Vutuv.Images.Image do
   end
 
   @doc """
-  Every field here is written by the pipeline that stored the file, never by a
-  form, so the only length worth validating is `file`: it is the upload's own
-  name, which a member chooses, and an over-long one would otherwise raise
-  Postgres 22001 on a path no form guards. The rest are minted here and bounded
-  by construction, in varchar(255) columns.
+  Only the four columns describing the stored file are cast. `kind`, `user_id`,
+  `token` and `frozen_at` are set programmatically — on the struct by
+  `Vutuv.Images.put_profile_image/3`, in an `update_all` by
+  `Vutuv.Images.freeze/1` — and casting them would mean a report form standing
+  next to this code could hand over a `frozen_at` or somebody else's `user_id`.
+
+  Of the four, `file` is the only one worth a length validation: it is the
+  upload's own name, which a member chooses, and an over-long one would
+  otherwise raise Postgres 22001 on a path no form guards. The others are
+  derived here and bounded by construction, in varchar(255) columns.
   """
   def changeset(image, attrs) do
     image
-    |> cast(attrs, [:kind, :user_id, :token, :file, :fingerprint, :crop, :moderation, :frozen_at])
+    |> cast(attrs, [:file, :fingerprint, :crop, :moderation])
     |> validate_required([:kind, :token])
     |> validate_length(:file, max: 255)
     |> unique_constraint(:token)

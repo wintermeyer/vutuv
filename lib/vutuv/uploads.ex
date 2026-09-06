@@ -23,6 +23,9 @@ defmodule Vutuv.Uploads do
 
   @extension_whitelist ~w(.jpg .jpeg .png)
 
+  # The takedown hold's root, under `uploads_dir_prefix/0` (see `hold_dir/1`).
+  @hold_root "frozen"
+
   # Length (hex chars) of the content fingerprint baked into served filenames.
   # 12 hex = 48 bits — collision-safe within a single id-scoped directory
   # (one image's versions), which is all that shares a dir.
@@ -84,6 +87,119 @@ defmodule Vutuv.Uploads do
   """
   def quarantine_dir(storage_dir) when is_binary(storage_dir) do
     disk_dir(Path.join("quarantine", storage_dir))
+  end
+
+  @doc """
+  The **takedown hold** of one picture: `frozen/<image id>`, with a
+  subdirectory per tree the files came out of (`served/`, `original/`,
+  `quarantine/`). Like the quarantine tree it is a tree nginx has no location
+  for, so a byte in here is unreachable by URL; unlike it, it is keyed by the
+  `Vutuv.Images` row rather than by the storage dir, and moving a file into it
+  is reversible (`Vutuv.Images.freeze/1`, issue #2012).
+
+  A root of its own rather than a corner of `quarantine/`: both holds move
+  *everything* in a directory, so sharing one tree would mean the AI gate's
+  release handing a frozen picture back to the world (and a freeze swallowing
+  a picture waiting for a verdict).
+  """
+  def hold_dir(image_id) when is_binary(image_id), do: disk_dir(Path.join(@hold_root, image_id))
+
+  @doc """
+  Every hold on disk, by image id. One `readdir` of a tree that is empty on
+  almost every installation, and the record `Vutuv.Images.reconcile_holds/0`
+  reads to find work a dying slot left half-done — the hold layout is written
+  here and nowhere else.
+  """
+  def held_image_ids do
+    case File.ls(disk_dir(@hold_root)) do
+      {:ok, ids} -> ids
+      {:error, _reason} -> []
+    end
+  end
+
+  # Which tree each slot of a hold came from, so `release/3` puts every file
+  # back where it was rather than flattening three trees into one.
+  defp hold_slots(storage_dir) do
+    %{
+      "served" => disk_dir(storage_dir),
+      "original" => Originals.dir(storage_dir),
+      "quarantine" => quarantine_dir(storage_dir)
+    }
+  end
+
+  @doc """
+  Moves every stored file of `scope` — derived versions, the private original
+  and anything still in AI quarantine — into the hold of `image_id`.
+
+  **Restartable by construction.** Each file is moved on its own with an atomic
+  rename, so an interruption leaves every file whole on one side or the other
+  and never a copy on both; running it again moves whatever is left. That is
+  what `Vutuv.Images.reconcile_holds/0` does, and it is why the row is stamped
+  `frozen_at` *before* this runs: the stamp is the record of the intent, and
+  the move is the part that may need a second attempt.
+  """
+  def hold(image_id, scope, config) do
+    storage_dir = storage_dir(scope, config)
+
+    for {slot, source} <- hold_slots(storage_dir),
+        do: move_all(source, Path.join(hold_dir(image_id), slot))
+
+    :ok
+  end
+
+  @doc """
+  The other direction: every file in the hold of `image_id` goes back to the
+  tree it came from, at the name it had. The (now empty) hold is left standing
+  — `Vutuv.Images.unfreeze/1` removes it only once the member row names the
+  files again, so an interruption is still visible as a hold to finish.
+  """
+  def release(image_id, scope, config) do
+    storage_dir = storage_dir(scope, config)
+
+    for {slot, target} <- hold_slots(storage_dir),
+        do: move_all(Path.join(hold_dir(image_id), slot), target)
+
+    :ok
+  end
+
+  @doc "Deletes the hold of `image_id` and everything in it. A no-op when there is none."
+  def purge_hold(image_id) when is_binary(image_id) do
+    File.rm_rf(hold_dir(image_id))
+    :ok
+  end
+
+  @doc """
+  The on-disk path of one held derived version, for the authorized preview the
+  case pages show (`VutuvWeb.ModerationCaseController.image/2`). Matched by
+  version and fingerprint rather than rebuilt from the handle, because a member
+  who renames while their picture is held keeps the old handle in the file
+  name. `nil` when there is none.
+  """
+  def held_version_path(image_id, version, fingerprint)
+      when is_binary(image_id) and is_binary(fingerprint) do
+    image_id
+    |> hold_dir()
+    # Every slot, not just `served/`: a picture frozen while the AI gate still
+    # had it keeps its versions under `quarantine/`.
+    |> Path.join("*/*-#{version}-#{fingerprint}#{Spec.served_ext()}")
+    |> Path.wildcard()
+    |> List.first()
+  end
+
+  def held_version_path(_image_id, _version, _fingerprint), do: nil
+
+  # One directory's files, moved one atomic rename at a time. Nothing recurses:
+  # every tree an uploader writes is flat.
+  defp move_all(from, to) do
+    case Path.wildcard(Path.join(from, "*")) do
+      [] ->
+        :ok
+
+      files ->
+        File.mkdir_p!(to)
+        for file <- files, do: File.rename!(file, Path.join(to, Path.basename(file)))
+        :ok
+    end
   end
 
   @doc """
@@ -188,14 +304,10 @@ defmodule Vutuv.Uploads do
     qdir = quarantine_dir(storage_dir)
     dir = disk_dir(storage_dir)
 
-    case Path.wildcard(Path.join(qdir, "*")) do
-      [] ->
-        :ok
-
-      files ->
-        File.mkdir_p!(dir)
-        clear_public_versions(dir)
-        for file <- files, do: File.rename!(file, Path.join(dir, Path.basename(file)))
+    unless Path.wildcard(Path.join(qdir, "*")) == [] do
+      File.mkdir_p!(dir)
+      clear_public_versions(dir)
+      move_all(qdir, dir)
     end
 
     File.rm_rf(qdir)

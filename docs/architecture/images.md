@@ -330,6 +330,44 @@ so the row is the off switch. Avatars and covers are `:static`; the kinds
 because a picture that inherits a default is one nobody knows how to take
 offline.
 
+### The takedown hold (issue #2012)
+
+A copyright freeze **moves** a picture, it never deletes one, and the tree it
+moves into is `frozen/<image id>/`, keyed by the `images` row rather than by
+the storage dir (`Vutuv.Uploads.hold_dir/1`). Inside it, one subdirectory per
+tree the files came out of — `served/`, `original/`, `quarantine/` — so a
+release puts every file back where it was under the name it had, and the URL
+comes back unchanged. Like the quarantine tree, nginx has no `location` for it,
+so a byte in there is unreachable however a display helper is fixed later; a
+root of its own rather than a corner of `quarantine/`, because both holds move
+*everything* in a directory and sharing one tree would mean the AI gate's
+release handing a frozen picture back to the world.
+
+`Vutuv.Images.freeze/1` and `unfreeze/1` are the two halves, `purge/1` the
+deletion an upheld case (or the owner's own "remove it") performs. What each
+one does to the member row, and why clearing those four columns is what a
+reader notices, is in [moderation.md](moderation.md).
+
+**A half-finished move is finished by itself.** The row's `frozen_at` is the
+*intent* and the disk is the state, so the stamp is written before the first
+file moves and the hold is removed only after the member row names the files
+again — either way a slot that dies mid-move leaves work that is still visible
+as work. `Vutuv.Images.reconcile_holds/0` re-asserts it in both directions
+(`Vutuv.Moderation.Sweeper`, every 15 minutes): a frozen picture gets its
+member columns cleared again and whatever is left of it moved into the hold, a
+hold whose row is no longer frozen is released, and a hold whose row is gone —
+an upheld case interrupted between the two — is deleted. Every step is the same
+idempotent function the request path runs, so a second pass over finished work
+writes nothing, and each file travels by its own atomic rename, so no file is
+ever in two places at once. The window is fifteen minutes and that is
+deliberate: the columns are cleared in one statement first, so an interrupted
+freeze has already taken the picture off every page and only a direct URL to a
+not-yet-moved file still answers.
+
+**`Vutuv.Images.Backfill` skips a frozen row.** Its member columns are *meant*
+to be empty, so the orphan sweep would otherwise delete the only record of what
+the case is about and what an unfreeze has to write back.
+
 ## URL screenshots
 
 URL screenshots are rendered by local headless Chromium, wrapped in a browser

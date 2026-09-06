@@ -48,6 +48,8 @@ defmodule Vutuv.Moderation do
   alias Vutuv.Chat.{Message, Participant}
   alias Vutuv.Fediverse
   alias Vutuv.Identity
+  alias Vutuv.Images
+  alias Vutuv.Images.Image
   alias Vutuv.Jobs.JobPosting
 
   alias Vutuv.Moderation.{
@@ -542,6 +544,14 @@ defmodule Vutuv.Moderation do
             # the same path an organic delete takes.
             {:ok, _} = Vutuv.Jobs.delete_job_posting(posting)
             :ok
+
+          # "Remove it" for a picture: the copies and the private original go,
+          # held or not (a report that only flagged the picture never moved
+          # anything). There is no edit offer to sit beside this — a picture
+          # cannot be revised, only taken down or disputed.
+          %Image{} = image ->
+            :ok = Images.purge(image)
+            content_deleted(image)
         end
     end
   end
@@ -825,7 +835,7 @@ defmodule Vutuv.Moderation do
         # leaves the profile visible again, a suspension/deactivation hides
         # everything anyway. Frozen posts/messages stay frozen as evidence. A
         # organization case unfreezes the page (the strike lands on its owner member).
-        unfreeze_on_uphold(case_record)
+        settle_content_on_uphold(case_record)
 
         owner =
           case case_record.owner do
@@ -840,18 +850,29 @@ defmodule Vutuv.Moderation do
     end
   end
 
-  defp unfreeze_on_uphold(%Case{content_type: "user", owner_id: owner_id}) do
+  defp settle_content_on_uphold(%Case{content_type: "user", owner_id: owner_id}) do
     set_user_moderation!(owner_id, frozen_at: nil)
   end
 
-  defp unfreeze_on_uphold(%Case{content_type: "organization"} = case_record) do
+  defp settle_content_on_uphold(%Case{content_type: "organization"} = case_record) do
     case case_content(case_record) do
       %Organization{} = organization -> unfreeze_content(organization)
       _ -> :ok
     end
   end
 
-  defp unfreeze_on_uphold(_case_record), do: :ok
+  # An upheld picture is the one content type the ruling itself removes. A post
+  # stays frozen as evidence, but the whole claim about a picture is that these
+  # bytes may not be here, so the held copies and the private original go
+  # (issue #2012). The case keeps its snapshot and its history.
+  defp settle_content_on_uphold(%Case{content_type: "image"} = case_record) do
+    case case_content(case_record) do
+      %Image{} = image -> Images.purge(image)
+      _ -> :ok
+    end
+  end
+
+  defp settle_content_on_uphold(_case_record), do: :ok
 
   # Atomically transitions a still-open case to its resolved status, claiming
   # it for exactly one caller. The `status in @open_statuses` WHERE makes a
@@ -1491,6 +1512,7 @@ defmodule Vutuv.Moderation do
   defp content_type(%User{}), do: "user"
   defp content_type(%Organization{}), do: "organization"
   defp content_type(%JobPosting{}), do: "job_posting"
+  defp content_type(%Image{}), do: "image"
 
   defp content_id(%{id: id}), do: id
 
@@ -1514,6 +1536,10 @@ defmodule Vutuv.Moderation do
   # only for admin freeze.
   defp owner_id(%Organization{created_by_user_id: user_id}), do: user_id
   defp owner_id(%JobPosting{user_id: user_id}), do: user_id
+  # A picture with no member owner is one of the kinds #2015 brings into the
+  # table (a post photo, an organization logo). There is nobody to strike and
+  # no member row to clear, so `can_report?/2` refuses it rather than guessing.
+  defp owner_id(%Image{user_id: user_id}), do: user_id
 
   defp snapshot(%Post{body: body}), do: body
   defp snapshot(%Message{body: body}), do: body
@@ -1529,6 +1555,10 @@ defmodule Vutuv.Moderation do
     |> Enum.reject(&(&1 in [nil, ""]))
     |> Enum.join("\n")
   end
+
+  # A picture has no text, so the snapshot names which picture it was — the
+  # case pages show the picture itself through the authorized preview.
+  defp snapshot(%Image{} = image), do: image.file || image.kind
 
   defp snapshot(%Organization{} = organization) do
     [organization.name, organization.city]
@@ -1550,9 +1580,18 @@ defmodule Vutuv.Moderation do
 
   defp reportable_by?(_reporter, %User{}), do: true
   defp reportable_by?(_reporter, %Organization{}), do: true
+  # A profile picture is as public as the profile it sits on, and a rights
+  # holder reporting one is exactly the stranger this type exists for.
+  defp reportable_by?(_reporter, %Image{}), do: true
 
   defp reportable_by?(reporter, %JobPosting{} = posting),
     do: Vutuv.Jobs.visible_to?(posting, reporter)
+
+  # A picture's freeze is a file move, not a column write: every size and the
+  # private original leave the trees a reader can reach for the hold nginx has
+  # no location for, and the profile falls back to the silhouette meanwhile
+  # (`Vutuv.Images.freeze/1`, issue #2012).
+  defp freeze_content(%Image{} = image), do: Images.freeze(image)
 
   defp freeze_content(content) do
     set_frozen_at(content, NaiveDateTime.utc_now(:second))
@@ -1570,6 +1609,8 @@ defmodule Vutuv.Moderation do
     if match?(%Post{}, content), do: Fediverse.revoke_post(content)
     :ok
   end
+
+  defp unfreeze_content(%Image{} = image), do: Images.unfreeze(image)
 
   defp unfreeze_content(content) do
     set_frozen_at(content, nil)
@@ -1635,5 +1676,6 @@ defmodule Vutuv.Moderation do
   defp content_schema("user"), do: User
   defp content_schema("organization"), do: Organization
   defp content_schema("job_posting"), do: JobPosting
+  defp content_schema("image"), do: Image
   defp content_schema(_), do: nil
 end

@@ -102,6 +102,15 @@ defmodule Vutuv.Avatar do
   def promote_from_quarantine(user), do: Uploads.promote_from_quarantine(user, @config)
 
   @doc """
+  Moves every avatar file of `user` into the takedown hold of `image_id`, and
+  back — the off switch of a copyright freeze (`Vutuv.Images.freeze/1`, issue
+  #2012). See `Vutuv.Uploads.hold/3`.
+  """
+  def hold(image_id, user), do: Uploads.hold(image_id, user, @config)
+
+  def release(image_id, user), do: Uploads.release(image_id, user, @config)
+
+  @doc """
   The quarantined version's on-disk path while the avatar waits in moderation
   limbo — the owner-only preview (`VutuvWeb.PendingImageController`).
   """

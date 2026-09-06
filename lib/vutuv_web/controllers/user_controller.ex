@@ -11,6 +11,7 @@ defmodule VutuvWeb.UserController do
   alias Vutuv.Accounts
   alias Vutuv.Accounts.User
   alias Vutuv.Fediverse
+  alias Vutuv.Images
   alias Vutuv.Notifications.Emailer
   alias Vutuv.Profiles.SocialMediaAccount
   alias VutuvWeb.AgentDocs
@@ -205,6 +206,7 @@ defmodule VutuvWeb.UserController do
   def update(conn, %{"user" => user_params} = params) do
     user = conn.assigns[:user]
     user_params = clear_birthdate_if_requested(user_params, params)
+    frozen_kinds = frozen_upload_kinds(user, user_params)
 
     # Go through Accounts.update_user/2 so the people-search index is rebuilt
     # from the changeset's final field values, not the raw params. The old local
@@ -223,6 +225,7 @@ defmodule VutuvWeb.UserController do
 
         conn
         |> save_flash(user, updated)
+        |> frozen_upload_flash(frozen_kinds)
         |> redirect(to: ~p"/#{updated}")
 
       {:error, changeset} ->
@@ -278,6 +281,45 @@ defmodule VutuvWeb.UserController do
 
   defp save_flash(conn, _before, _after) do
     put_flash(conn, :info, gettext("User updated successfully."))
+  end
+
+  # Which of the two pictures this submit tried to replace while a copyright
+  # case holds it. `Vutuv.Accounts.store_pending_image/6` refuses those uploads
+  # before a byte is written (issue #2012); without this the member would get a
+  # plain "saved" and no picture, which reads as the site losing their upload.
+  # Which param carries which kind is read from `Vutuv.Images.member_columns/0`
+  # rather than spelled again here.
+  defp frozen_upload_kinds(user, user_params) do
+    for {kind, cols} <- Images.member_columns(),
+        match?(%Plug.Upload{}, user_params[to_string(cols.file)]),
+        Images.frozen?(user.id, kind),
+        do: kind
+  end
+
+  defp frozen_upload_flash(conn, []), do: conn
+
+  # One whole sentence per shape rather than fragments joined with a space:
+  # German word order does not survive a join.
+  defp frozen_upload_flash(conn, kinds) do
+    put_flash(conn, :error, frozen_upload_sentence(Enum.sort(kinds)))
+  end
+
+  defp frozen_upload_sentence(["avatar", "cover"]) do
+    gettext(
+      "Neither your profile picture nor your cover photo was replaced: a report about them is still open. Open the case to remove the picture or to say that it is yours."
+    )
+  end
+
+  defp frozen_upload_sentence(["cover"]) do
+    gettext(
+      "Your cover photo was not replaced: a report about it is still open. Open the case to remove the picture or to say that it is yours."
+    )
+  end
+
+  defp frozen_upload_sentence(_avatar) do
+    gettext(
+      "Your profile picture was not replaced: a report about it is still open. Open the case to remove the picture or to say that it is yours."
+    )
   end
 
   # Step 1: mail a PIN and render the PIN-entry form. Nothing is deleted yet.

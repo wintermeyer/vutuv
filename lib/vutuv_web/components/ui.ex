@@ -4015,6 +4015,31 @@ defmodule VutuvWeb.UI do
   end
 
   @doc """
+  The **reported picture** on a moderation case page (issue #2012), for the
+  owner's page and the admin's alike — one `<img>`, one route, so the two can
+  never point at different bytes. A copyright freeze moves every size out of
+  the trees nginx serves, so `/moderation/cases/:id/image` (owner or admin) is
+  the only place it is reachable at all. `class` sets the per-surface height.
+
+  Guard visibility (`:if={@case.content_type == "image" && @content}`) at the
+  call site, the way `frozen_banner/1` is guarded.
+  """
+  attr(:case_id, :string, required: true)
+  attr(:alt, :string, default: nil)
+  attr(:class, :any, default: nil)
+
+  def reported_picture(assigns) do
+    ~H"""
+    <img
+      id="case-image"
+      src={~p"/moderation/cases/#{@case_id}/image"}
+      alt={@alt}
+      class={["w-auto rounded-lg ring-1 ring-slate-200 dark:ring-slate-700", @class]}
+    />
+    """
+  end
+
+  @doc """
   A **status pill**: the shape is fixed, the colour is not. `tone` is the tint
   the host picked for this row — "frozen" is amber wherever it appears, and only
   the host knows what frozen means for its records.

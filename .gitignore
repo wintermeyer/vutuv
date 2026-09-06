@@ -60,6 +60,10 @@ erl_crash.dump
 # the AI-moderation limbo twin of the served trees (Vutuv.Uploads.quarantine_dir/1)
 /quarantine
 
+# the takedown hold a copyright freeze moves a picture into, keyed by its
+# `images` row (Vutuv.Uploads.hold_dir/1) - one subtree per source tree
+/frozen
+
 # OS X stuff
 #
 .DS_Store

@@ -160,16 +160,22 @@ defmodule VutuvWeb.Fediverse.Docs do
       # advertised, even with nothing pinned: the collection is then simply
       # empty, and an actor that only sometimes names the field would make the
       # profile a remote server renders depend on when it last fetched.
-      "featured" => featured_url(user),
-      "icon" => %{
-        "type" => "Image",
-        "mediaType" => "image/jpeg",
-        "url" => "#{base()}/#{user.username}/avatar.jpg"
-      }
+      "featured" => featured_url(user)
     })
+    |> put_icon(user)
     |> put_also_known_as(user)
     |> put_moved_to(user)
   end
+
+  # The picture, named only while there is one. It used to be advertised
+  # unconditionally, so every member without a profile picture — and every
+  # member whose picture a copyright freeze has taken offline (issue #2012) —
+  # handed remote servers a URL that answers 404. A picture that is gone has to
+  # be gone from the actor document too, or the takedown is a local fiction.
+  defp put_icon(doc, %{avatar: avatar} = user) when is_binary(avatar),
+    do: Map.put(doc, "icon", icon("#{base()}/#{user.username}/avatar.jpg"))
+
+  defp put_icon(doc, _user), do: doc
 
   @doc """
   A **topic's** actor document (issue #1330): AP type `Group`, which is what
@@ -301,13 +307,11 @@ defmodule VutuvWeb.Fediverse.Docs do
   # else, so naming it unconditionally would advertise a 404.
   defp put_organization_icon(doc, %Organization{logo: nil}), do: doc
 
-  defp put_organization_icon(doc, %Organization{} = organization) do
-    Map.put(doc, "icon", %{
-      "type" => "Image",
-      "mediaType" => "image/jpeg",
-      "url" => "#{base()}/organizations/#{organization.slug}/avatar.jpg"
-    })
-  end
+  defp put_organization_icon(doc, %Organization{} = organization),
+    do: Map.put(doc, "icon", icon("#{base()}/organizations/#{organization.slug}/avatar.jpg"))
+
+  # The one `Image` object both actor documents advertise their picture as.
+  defp icon(url), do: %{"type" => "Image", "mediaType" => "image/jpeg", "url" => url}
 
   # The accounts the member is migrating *from* (issue #986). Rendered only
   # when set: a remote server that moves followers here checks that its origin
