@@ -53,13 +53,67 @@ defmodule Vutuv.Images do
       is a picture nobody knows how to take offline.\
       """)
 
+  # Which member-row column holds what for a profile picture, plus the uploader
+  # that owns its files. The one place these names are written: the backfill
+  # (`Vutuv.Images.Backfill`), `Vutuv.Moderation.ImageSubjects` and
+  # `Vutuv.Accounts` all read them from here, so the contract deploy that drops
+  # the four columns per kind has one list to delete rather than four copies to
+  # find.
+  @profile_columns %{
+    "avatar" => %{
+      file: :avatar,
+      fingerprint: :avatar_fingerprint,
+      crop: :avatar_crop,
+      moderation: :avatar_moderation,
+      pointer: :avatar_image_id,
+      module: Vutuv.Avatar,
+      prefix: "avatars"
+    },
+    "cover" => %{
+      file: :cover_photo,
+      fingerprint: :cover_fingerprint,
+      crop: :cover_crop,
+      moderation: :cover_moderation,
+      pointer: :cover_image_id,
+      module: Vutuv.Cover,
+      prefix: "covers"
+    }
+  }
+
+  @doc """
+  The member-row columns this kind still lives in, keyed by what each holds
+  (`:file`, `:fingerprint`, `:crop`, `:moderation`, `:pointer`), plus the
+  `:module` that owns the files and its on-disk `:prefix`.
+  """
+  def member_columns, do: @profile_columns
+  def member_columns(kind) when is_map_key(@profile_columns, kind), do: @profile_columns[kind]
+
   @doc """
   The member-row column pointing at this kind's row. The one place that name is
   written; `Vutuv.Accounts`, `Vutuv.Uploads` and
   `Vutuv.Moderation.ImageSubjects` all read it from here.
   """
-  def pointer_field("avatar"), do: :avatar_image_id
-  def pointer_field("cover"), do: :cover_image_id
+  def pointer_field(kind) when is_map_key(@profile_columns, kind),
+    do: @profile_columns[kind].pointer
+
+  @doc """
+  Where this member's picture of that kind actually is on disk right now, or
+  `nil` when the row names a file that is not there.
+
+  Asks the uploader rather than rebuilding a path: an unmoderated picture sits
+  in the served tree under whichever of the three naming schemes its row is on
+  (fingerprinted, stable-legacy, name-derived), and one still `"pending"` sits
+  in the quarantine tree instead. `Vutuv.Images.Backfill.check/1` is what needs
+  the distinction — "the row is right" and "the bytes are there" are two
+  different questions and the cut before #2012 needs both answered.
+  """
+  def stored_path(%User{} = user, kind) when is_map_key(@profile_columns, kind) do
+    config = @profile_columns[kind]
+
+    if Map.get(user, config.moderation) == "pending",
+      do: config.module.pending_preview_path(user),
+      else: config.module.stored_path(user)
+  end
 
   @doc """
   Records the picture a member just uploaded, replacing whatever row that

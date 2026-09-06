@@ -378,7 +378,7 @@ defmodule Vutuv.Uploads.RegeneratorTest do
     user = insert(:user, first_name: "Ada", last_name: "King", avatar: "fresh.jpg")
     src = jpeg!(Path.join(tmp, "fresh.jpg"))
     upload = %Plug.Upload{filename: "fresh.jpg", path: src, content_type: "image/jpeg"}
-    {:ok, "fresh.jpg", fp} = Vutuv.Avatar.store({upload, user})
+    {:ok, "fresh.jpg", fp, _} = Vutuv.Avatar.store({upload, user})
     # Mirror what Accounts.store_pending_image persists after the store.
     {:ok, _user} = user |> Ecto.Changeset.change(%{avatar_fingerprint: fp}) |> Repo.update()
 

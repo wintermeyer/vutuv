@@ -103,11 +103,18 @@ defmodule Vutuv.Uploads do
 
   @doc """
   Stores every derived version for `{upload, scope}` per `config` and returns
-  `{:ok, original_file_name, fingerprint}` — the verbatim upload name and the
-  content fingerprint (`sha256(original)[0..#{@hash_length - 1}]`) the caller
-  keeps in its columns — or `{:error, :invalid_file}` when the extension is not
+  `{:ok, original_file_name, fingerprint, moderation}` — the verbatim upload
+  name, the content fingerprint (`sha256(original)[0..#{@hash_length - 1}]`)
+  and the moderation state the bytes were actually stored under, all three for
+  the caller's columns — or `{:error, :invalid_file}` when the extension is not
   whitelisted **or the file cannot be decoded as an image** (corrupt/truncated
   uploads used to crash the request with a `MatchError`).
+
+  The moderation state comes back rather than being read a second time by the
+  caller: this function is where `:moderate_images` decides which tree the
+  bytes land in, so it is also where the state the row records is decided —
+  one read, and the two can never disagree. `nil` for an uploader with no
+  moderation column.
 
   The served files are written under the fingerprinted scheme-B name
   `<handle>-<version>-<fingerprint>.avif`, so a fresh upload is immediately on
@@ -118,6 +125,7 @@ defmodule Vutuv.Uploads do
   prior versions cleared, the new ones written, and the original copied
   (privately). Clearing prior versions keeps exactly one image set per dir, so a
   re-upload never accumulates stale fingerprinted/legacy files.
+
   """
   def store({%Plug.Upload{} = upload, scope}, config, crop \\ nil) do
     if valid_extension?(upload.filename) do
@@ -134,7 +142,8 @@ defmodule Vutuv.Uploads do
       # moves the files into the served dir (approve) or removes everything
       # (reject). The old public image is cleared only after the new derive
       # succeeded, so a corrupt upload never costs the current image.
-      target_dir = if quarantined?(config), do: quarantine_dir(storage_dir), else: dir
+      moderation = initial_moderation(config)
+      target_dir = if moderation == "pending", do: quarantine_dir(storage_dir), else: dir
       File.mkdir_p!(target_dir)
 
       with {:ok, rotated} <- Spec.open_rotated(upload.path),
@@ -143,7 +152,7 @@ defmodule Vutuv.Uploads do
            :ok <- write_derived_versions(cropped, target_dir, scope, fingerprint, config),
            :ok <- clear_displaced_versions(target_dir, dir),
            :ok <- Originals.store(storage_dir, upload.path, ext) do
-        {:ok, upload.filename, fingerprint}
+        {:ok, upload.filename, fingerprint, moderation}
       else
         {:error, _reason} -> {:error, :invalid_file}
       end
@@ -158,10 +167,12 @@ defmodule Vutuv.Uploads do
   defp clear_displaced_versions(dir, dir), do: :ok
   defp clear_displaced_versions(_target_dir, dir), do: clear_public_versions(dir)
 
-  # Whether this uploader's fresh files belong in the quarantine tree: it has
-  # a moderation state column and AI image moderation is on.
-  defp quarantined?(config) do
-    Map.has_key?(config, :moderation_field) and ImageScans.enabled?()
+  # The state this uploader's fresh files start in — the **single** read of
+  # `:moderate_images` per store. "pending" puts the bytes in the quarantine
+  # tree and is what the caller writes onto its row; nil is an uploader with no
+  # moderation column, which has neither.
+  defp initial_moderation(config) do
+    if Map.has_key?(config, :moderation_field), do: ImageScans.initial_state()
   end
 
   @doc """

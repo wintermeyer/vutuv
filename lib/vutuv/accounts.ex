@@ -2221,28 +2221,33 @@ defmodule Vutuv.Accounts do
     # owner) until the AI scan releases or deletes it (Vutuv.Moderation.ImageScans).
     #
     # Since issue #2013 the same picture is also a row in the shared `images`
-    # table, written first so the member row can point at it in the one UPDATE.
-    # Nothing else moves: the four columns keep serving every URL and every
-    # display gate, and this release writes both (#2014 is the contract half).
+    # table, and since #2014 the two writes are **one transaction**. Apart they
+    # could half-commit: the row named the new picture, the member row still
+    # named the old file whose bytes the store had just replaced, no scan was
+    # ever queued to take the row out of "pending", and the member got a success
+    # flash. Nothing else moves: the four columns keep serving every URL and
+    # every display gate, and this release writes both (#2014's backfill brings
+    # the older pictures in; the columns go a deploy later).
+    #
+    # The moderation state comes back from the store rather than being read a
+    # second time here: the store is where `:moderate_images` decided which tree
+    # the bytes went into, so the row records the state that actually happened.
     kind = scan_kind(field)
-    moderation = ImageScans.initial_state()
 
-    with {:ok, file_name, fingerprint} <- store.({upload, user}, crop),
+    with {:ok, file_name, fingerprint, moderation} <- store.({upload, user}, crop),
          image_attrs = %{
            file: file_name,
            fingerprint: fingerprint,
            crop: crop,
            moderation: moderation
          },
-         {:ok, image} <- Images.put_profile_image(user, kind, image_attrs),
          user_attrs = %{
            field => file_name,
            fingerprint_field(field) => fingerprint,
            crop_field => crop,
-           moderation_field(field) => moderation,
-           Images.pointer_field(kind) => image.id
+           moderation_field(field) => moderation
          },
-         {:ok, saved} <- user |> Ecto.Changeset.change(user_attrs) |> Repo.update() do
+         {:ok, saved} <- store_image_pair(user, kind, image_attrs, user_attrs) do
       ImageScans.enqueue(kind, saved.id, saved.id, fingerprint)
       saved
     else
@@ -2250,6 +2255,21 @@ defmodule Vutuv.Accounts do
         Logger.warning("#{field} store failed for user ##{user.id}")
         user
     end
+  end
+
+  # The image row and the member row, or neither. The row goes first so the
+  # member row can point at it in the one UPDATE; the transaction is what makes
+  # that order safe.
+  defp store_image_pair(user, kind, image_attrs, user_attrs) do
+    Repo.transaction(fn ->
+      with {:ok, image} <- Images.put_profile_image(user, kind, image_attrs),
+           attrs = Map.put(user_attrs, Images.pointer_field(kind), image.id),
+           {:ok, saved} <- user |> Ecto.Changeset.change(attrs) |> Repo.update() do
+        saved
+      else
+        {:error, reason} -> Repo.rollback(reason)
+      end
+    end)
   end
 
   defp fingerprint_field(:avatar), do: :avatar_fingerprint

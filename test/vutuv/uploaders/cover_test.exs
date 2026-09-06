@@ -199,7 +199,7 @@ defmodule Vutuv.CoverTest do
       src: src
     } do
       upload = %Plug.Upload{filename: "banner.jpg", path: src, content_type: "image/jpeg"}
-      assert {:ok, "banner.jpg", fp} = Vutuv.Cover.store({upload, @user})
+      assert {:ok, "banner.jpg", fp, _} = Vutuv.Cover.store({upload, @user})
       assert fp =~ ~r/\A[0-9a-f]{12}\z/
 
       dir = Path.join(tmp, "covers/7")
@@ -215,7 +215,7 @@ defmodule Vutuv.CoverTest do
       src: src
     } do
       upload = %Plug.Upload{filename: "banner.jpg", path: src, content_type: "image/jpeg"}
-      assert {:ok, _, fp} = Vutuv.Cover.store({upload, @user})
+      assert {:ok, _, fp, _} = Vutuv.Cover.store({upload, @user})
 
       # Source is 1200 wide (< 1600), so it is not upscaled; aspect ratio holds.
       {w, h} = dimensions(Path.join(tmp, "covers/7/john.doe-wide-#{fp}.avif"))
@@ -236,7 +236,7 @@ defmodule Vutuv.CoverTest do
       on_exit(fn -> File.rm(src) end)
 
       upload = %Plug.Upload{filename: "banner.jpg", path: src, content_type: "image/jpeg"}
-      assert {:ok, _, fp} = Vutuv.Cover.store({upload, @user})
+      assert {:ok, _, fp, _} = Vutuv.Cover.store({upload, @user})
 
       {:ok, stored} = Image.open(Path.join(tmp, "covers/7/john.doe-wide-#{fp}.avif"))
       {:ok, fields} = VipsImage.header_field_names(stored)

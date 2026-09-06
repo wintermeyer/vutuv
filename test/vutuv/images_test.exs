@@ -16,8 +16,11 @@ defmodule Vutuv.ImagesTest do
   alias Vutuv.Accounts
   alias Vutuv.Accounts.User
   alias Vutuv.Images
+  alias Vutuv.Images.Backfill
   alias Vutuv.Images.Image, as: ImageRow
+  alias Vutuv.Moderation.ImageScan
   alias Vutuv.Moderation.ImageScans
+  alias Vutuv.Moderation.ImageSubjects
   alias Vutuv.Repo
 
   @safe {:ok, %{safe?: true, category: "safe"}}
@@ -168,6 +171,46 @@ defmodule Vutuv.ImagesTest do
       assert user.avatar_image_id == nil
       assert Images.profile_image(user.id, "avatar") == nil
     end
+
+    # A cancel arrives when the scanned bytes are gone. The two cases have to be
+    # told apart by whether this scan's own picture was the one cleared: a
+    # cancel for a picture that has since been replaced matches nothing, and
+    # deleting the row then would take out the *replacement's* row — a live
+    # picture with no row at all, which the backfill would then have to repair.
+    test "a cancel for the picture that is still current drops the row", %{user: user} do
+      {:ok, user} = Accounts.update_user(user, %{avatar: jpeg_upload()})
+      assert Images.profile_image(user.id, "avatar")
+
+      ImageSubjects.cleanup_canceled(%ImageScan{
+        kind: "avatar",
+        subject_id: user.id,
+        fingerprint: user.avatar_fingerprint
+      })
+
+      assert reload(user).avatar == nil
+      assert Images.profile_image(user.id, "avatar") == nil
+    end
+
+    test "a stale cancel leaves the picture uploaded since alone", %{user: user} do
+      {:ok, first} = Accounts.update_user(user, %{avatar: jpeg_upload("first.jpg")})
+      stale_fingerprint = first.avatar_fingerprint
+
+      {:ok, second} =
+        Accounts.update_user(reload(first), %{avatar: jpeg_upload("second.jpg", [9, 9, 9])})
+
+      refute second.avatar_fingerprint == stale_fingerprint
+
+      ImageSubjects.cleanup_canceled(%ImageScan{
+        kind: "avatar",
+        subject_id: user.id,
+        fingerprint: stale_fingerprint
+      })
+
+      assert reload(user).avatar == "second.jpg"
+      image = Images.profile_image(user.id, "avatar")
+      assert image.file == "second.jpg"
+      assert image.fingerprint == second.avatar_fingerprint
+    end
   end
 
   describe "a re-derive keeps the row's fingerprint in step" do
@@ -179,6 +222,56 @@ defmodule Vutuv.ImagesTest do
 
       user = reload(user)
       assert Images.profile_image(user.id, "avatar").fingerprint == user.avatar_fingerprint
+    end
+
+    # The case that actually needs `Images.sync_fingerprint/2`: a picture still
+    # on the pre-fingerprint scheme, whose row #2014's backfill created with a
+    # nil fingerprint. The deploy's regeneration pass computes one for the first
+    # time and writes it onto the member row — and the row has to follow, or the
+    # contract deploy drops the only column that named those bytes.
+    #
+    # Re-deriving an *already* fingerprinted picture cannot show this: the hash
+    # is over the original plus the crop, so it comes back identical and the row
+    # already agrees with or without the sync.
+    test "a picture that gets its first fingerprint carries the row along", %{user: user} do
+      {:ok, user} = Accounts.update_user(user, %{avatar: jpeg_upload()})
+
+      # Put it back on the legacy scheme, the way every pre-#2013 row looks.
+      Repo.update_all(from(u in User, where: u.id == ^user.id),
+        set: [avatar_fingerprint: nil, avatar_image_id: nil]
+      )
+
+      Repo.delete_all(from(i in ImageRow, where: i.user_id == ^user.id))
+      Backfill.run(only: "avatar")
+
+      assert Images.profile_image(user.id, "avatar").fingerprint == nil
+
+      assert :ok = Vutuv.Avatar.regenerate(reload(user))
+
+      user = reload(user)
+      assert is_binary(user.avatar_fingerprint)
+      assert Images.profile_image(user.id, "avatar").fingerprint == user.avatar_fingerprint
+    end
+  end
+
+  describe "the upload writes both rows or neither" do
+    # The half-commit this transaction exists to prevent: the row named the new
+    # picture, the member row still named the old file whose bytes the store had
+    # just replaced, and no scan was ever queued to take the row out of
+    # "pending". A check constraint stands in for the production causes (a pool
+    # timeout, a slot dying in the blue/green switch, a `StaleEntryError`) —
+    # they all reach `Repo.update` as a raise, not as `{:error, changeset}`.
+    test "a member-row failure takes the image row with it", %{user: user} do
+      Repo.query!(
+        "ALTER TABLE users ADD CONSTRAINT test_avatar_boom CHECK (avatar <> 'boom.jpg')"
+      )
+
+      assert_raise Ecto.ConstraintError, fn ->
+        Accounts.update_user(user, %{avatar: jpeg_upload("boom.jpg")})
+      end
+
+      assert Images.profile_image(user.id, "avatar") == nil
+      assert Repo.aggregate(ImageRow, :count) == 0
     end
   end
 
