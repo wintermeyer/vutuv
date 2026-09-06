@@ -224,6 +224,24 @@ defmodule VutuvWeb.Admin.ModerationCaseLive do
           {@case.content_snapshot || gettext("(no text)")}
         </blockquote>
 
+        <%!-- The reported picture. A freeze moves every size and the original
+              out of the trees nginx serves (issue #2012), so this authorized
+              route is the only way to see what the case is about — and without
+              it a copyright claim cannot be ruled on at all. --%>
+        <div :if={@case.content_type == "image" && @content}>
+          <p class="mt-4 text-sm font-semibold">{gettext("The reported picture")}</p>
+          <.reported_picture
+            case_id={@case.id}
+            alt={@case.content_snapshot}
+            class="mt-1 max-h-[480px]"
+          />
+          <p class="mt-1 text-xs text-slate-600 dark:text-slate-400">
+            {gettext(
+              "Upholding the case deletes it, the private original included. Rejecting it puts every file back where it was."
+            )}
+          </p>
+        </div>
+
         <div :if={@case.evidence_screenshot}>
           <p class="mt-4 text-sm font-semibold">{gettext("Screenshot at report time")}</p>
           <div class="mt-1 max-h-[480px] overflow-auto rounded-lg ring-1 ring-slate-200 dark:ring-slate-700">

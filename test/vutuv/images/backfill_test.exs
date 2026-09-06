@@ -131,11 +131,8 @@ defmodule Vutuv.Images.BackfillTest do
       user = legacy_avatar()
 
       {:ok, stale} =
-        %ImageRow{}
+        %ImageRow{kind: "avatar", user_id: user.id, token: "token-of-the-lost-upload"}
         |> ImageRow.changeset(%{
-          kind: "avatar",
-          user_id: user.id,
-          token: "token-of-the-lost-upload",
           file: "never-landed.jpg",
           fingerprint: "ffffffffffff",
           moderation: "pending"

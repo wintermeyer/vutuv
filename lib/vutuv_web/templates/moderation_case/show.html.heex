@@ -53,7 +53,19 @@
           {gettext("The content in question")}
         </dt>
         <dd>
-          <blockquote class="mt-1 rounded-lg bg-slate-50 p-3 text-slate-600 ring-1 ring-slate-200 dark:bg-slate-800 dark:text-slate-300 dark:ring-slate-700">
+          <%!-- A reported picture is out of every tree nginx serves while the
+                case runs, so the only way to look at it is the case's own
+                authorized route (issue #2012). --%>
+          <.reported_picture
+            :if={@case.content_type == "image" && @content}
+            case_id={@case.id}
+            alt={@case.content_snapshot}
+            class="mt-1 max-h-64"
+          />
+          <blockquote
+            :if={@case.content_type != "image"}
+            class="mt-1 rounded-lg bg-slate-50 p-3 text-slate-600 ring-1 ring-slate-200 dark:bg-slate-800 dark:text-slate-300 dark:ring-slate-700"
+          >
             {@case.content_snapshot}
           </blockquote>
         </dd>

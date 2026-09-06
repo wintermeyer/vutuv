@@ -1034,6 +1034,9 @@ defmodule VutuvWeb.Router do
     # The owner's side of a moderation case: the case page with the
     # delete / edit / "my content is fine" self-service actions.
     get("/moderation/cases", ModerationCaseController, :index)
+    # The reported picture itself, for the owner's case page and the admin's
+    # (see the action: a frozen picture is out of every served tree).
+    get("/moderation/cases/:id/image", ModerationCaseController, :image)
     get("/moderation/cases/:id", ModerationCaseController, :show)
     post("/moderation/cases/:id/dispute", ModerationCaseController, :dispute)
     post("/moderation/cases/:id/delete_content", ModerationCaseController, :delete_content)

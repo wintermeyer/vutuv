@@ -285,18 +285,25 @@ defmodule Vutuv.Images.Backfill do
   defp mend(:mismatched_row, user, row, _kind, cols) do
     desired = desired(user, cols)
 
-    attrs =
-      if row.fingerprint == desired.fingerprint and row.file == desired.file,
-        do: desired,
-        else: Map.put(desired, :token, Uploads.gen_token())
-
-    with {:ok, image} <- row |> Image.changeset(attrs) |> Repo.update(),
+    with {:ok, image} <-
+           row
+           |> Image.changeset(desired)
+           |> remint_token(row, desired)
+           |> Repo.update(),
          do: point_at(user, cols, image.id)
   end
 
   # The row is right and only the member row's pointer is not — the shape a
   # half-committed upload leaves behind.
   defp mend(:missing_pointer, user, row, _kind, cols), do: point_at(user, cols, row.id)
+
+  # `token` is set programmatically, never cast, so the fresh one is put on the
+  # changeset here rather than smuggled in through the attrs.
+  defp remint_token(changeset, row, desired) do
+    if row.fingerprint == desired.fingerprint and row.file == desired.file,
+      do: changeset,
+      else: Ecto.Changeset.put_change(changeset, :token, Uploads.gen_token())
+  end
 
   defp point_at(user, cols, image_id) do
     from(u in User, where: u.id == ^user.id)
@@ -355,7 +362,14 @@ defmodule Vutuv.Images.Backfill do
         where: u.id == parent_as(:image).user_id and is_nil(field(u, ^cols.file))
       )
 
-    from(i in Image, as: :image, where: i.kind == ^kind and exists(subquery(ownerless)))
+    # A frozen picture is *meant* to have empty member columns — that is how a
+    # copyright freeze hides it (#2012) — and the row is the only record of
+    # what the case is about and what an unfreeze has to write back. So it is
+    # not an orphan, here or in the check's count.
+    from(i in Image,
+      as: :image,
+      where: i.kind == ^kind and is_nil(i.frozen_at) and exists(subquery(ownerless))
+    )
   end
 
   ## Check

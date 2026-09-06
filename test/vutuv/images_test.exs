@@ -296,12 +296,8 @@ defmodule Vutuv.ImagesTest do
       taken = Images.profile_image(user.id, "avatar").token
 
       assert {:error, changeset} =
-               %ImageRow{}
-               |> ImageRow.changeset(%{
-                 "kind" => "avatar",
-                 "user_id" => other.id,
-                 "token" => taken
-               })
+               %ImageRow{kind: "avatar", user_id: other.id, token: taken}
+               |> ImageRow.changeset(%{})
                |> Repo.insert()
 
       assert "has already been taken" in errors_on(changeset).token
@@ -309,8 +305,8 @@ defmodule Vutuv.ImagesTest do
 
     test "a profile kind without an owner is refused by the database" do
       assert {:error, changeset} =
-               %ImageRow{}
-               |> ImageRow.changeset(%{"kind" => "avatar", "token" => Vutuv.Uploads.gen_token()})
+               %ImageRow{kind: "avatar", token: Vutuv.Uploads.gen_token()}
+               |> ImageRow.changeset(%{})
                |> Repo.insert()
 
       assert errors_on(changeset)[:user_id]
@@ -318,13 +314,28 @@ defmodule Vutuv.ImagesTest do
 
     test "an over-long file name is refused rather than raising 22001" do
       changeset =
-        ImageRow.changeset(%ImageRow{}, %{
-          "kind" => "avatar",
-          "token" => "t",
+        ImageRow.changeset(%ImageRow{kind: "avatar", token: "t"}, %{
           "file" => String.duplicate("a", 256)
         })
 
       assert errors_on(changeset)[:file]
+    end
+
+    # Issue #2012 puts a report form next to this schema, so the fields the
+    # pipeline sets are no longer castable: a crafted POST that reached the
+    # changeset could otherwise hand over somebody else's `user_id`, a `token`
+    # naming another picture, or a `frozen_at` lifting a takedown.
+    test "the fields the pipeline sets are not castable", %{user: user} do
+      changeset =
+        ImageRow.changeset(%ImageRow{kind: "avatar", user_id: user.id, token: "t"}, %{
+          "kind" => "cover",
+          "user_id" => Vutuv.UUIDv7.generate(),
+          "token" => "stolen",
+          "frozen_at" => nil,
+          "file" => "ok.jpg"
+        })
+
+      assert changeset.changes == %{file: "ok.jpg"}
     end
   end
 end

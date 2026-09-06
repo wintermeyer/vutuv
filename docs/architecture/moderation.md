@@ -1,8 +1,9 @@
 # Moderation (family-friendly by design)
 
-Any member can report a post, a private message, a whole profile, a verified
-organization page or a job posting (quiet "Report" affordances on every post
-card, message bubble, profile footer, organization page and job posting;
+Any member can report a post, a private message, a whole profile, a profile
+picture or cover, a verified organization page or a job posting (quiet "Report"
+affordances on every post card, message bubble, profile footer, organization
+page and job posting;
 categories: not family-friendly, bullying/harassment, spam, **copyright**, other
 — a job posting instead offers *misleading job ad* / spam / copyright / other,
 gated per content type in `Report.categories_for/1`).
@@ -128,16 +129,50 @@ severances, owner self-service, escalations, rulings, strikes, `owner_removed`)
 rendered as the History timeline on the admin case page, and the urgent admin
 email names the profile, category and reporter's note instead of just a link.
 
-**A picture is not yet reportable on its own**, and the groundwork for that is
-in place: since issue #2013 a profile picture and a cover are rows in the
-shared `images` table (`Vutuv.Images`, see `images.md`) carrying a token a
-report form can name and a `frozen_at` a case can set, instead of four columns
-on the member row. Nothing reads either yet — `fetch_content/2` still knows
-only `post`, `message`, `user`, `organization` and `job_posting`, and a frozen
-profile still keeps its pictures online because nginx serves them straight off
-disk. #2012 adds the `image` report type and the freeze, whose off switch is
-moving every size and the original into the quarantine tree nginx has no
-location for.
+## A picture is reportable on its own (issue #2012)
+
+A stolen profile picture used to be reportable only as the whole profile, which
+a single report never hides — and even a frozen profile kept its pictures
+online, because nginx serves those files straight off disk. `image` is the
+report type for the picture itself: `fetch_content/2` resolves it through
+`Vutuv.Images.Image`, the `images` row #2013 gave every profile picture and
+cover, and the ⋯ menu on a profile offers "Report the profile picture" beside
+the profile's own Report whenever that picture has a row.
+
+**Its freeze is a file move, not a column write.** `Vutuv.Images.freeze/1`
+stamps `frozen_at`, clears the member row's four columns for that kind, and
+moves every derived version, the private original and anything still in AI
+quarantine into the picture's **takedown hold** — see the hold section in
+[images.md](images.md) for what that tree is and why an interrupted move is
+finished by itself. Clearing the columns is the half a reader notices: the
+member row is still what every URL builder and every display gate reads (#2027
+moves them onto the row), and "no picture of that kind" is the one answer all
+of them already agree on, so the profile, the cards, the vCard, the
+link-preview JPEG and the ActivityPub icon all fall back at once. Nothing is
+lost by clearing them — the row holds the same four values and the unfreeze
+writes them back.
+
+**Rejecting the case restores the picture byte for byte**, at the same paths,
+so the old URL works again; **upholding it deletes** the held copies and the
+private original, which is the one content type an admin ruling removes (a
+post stays frozen as evidence). The owner's self-service is **remove or
+dispute** — there is no edit, because a picture cannot be revised. `image`
+reports offer *not family-friendly*, *bullying*, **copyright** and *other*;
+spam is deliberately left out, because an advert as a profile picture is a
+complaint about the account and belongs on the profile, where the spam
+auto-defense counts it.
+
+**While a picture is held it cannot be replaced.** `put_profile_image/3`
+refuses the upsert and the profile form says why, because one row per member
+per kind means a replacement would move the open case onto bytes nobody
+reported. `frozen_at` is deliberately **not** in that upsert's replace list for
+the same reason.
+
+**The reported picture is only visible on the case pages.** `GET
+/moderation/cases/:id/image` authorizes owner-or-admin and streams the held
+copy (or the still-served one, when an untrusted reporter only flagged the
+picture); both the owner's case page and the admin's render it from that one
+route. Without it an admin could not see what a copyright claim is about.
 
 ## The statement of reasons (issue #2010)
 

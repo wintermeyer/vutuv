@@ -240,6 +240,25 @@ the resulting ~200px rail width. --%>
               is what nobody reaches for often (Report) and what should not be
               one tap away (Block). --%>
               <:item id="report-profile" href={report_path}>{gettext("Report")}</:item>
+              <%!-- A picture is reportable in its own right (issue #2012), so a
+              rights holder does not have to report the whole profile to get a
+              stolen photo taken down. Shown only for a picture that has a row
+              in the shared `images` table — the member row's own pointer, so
+              it costs no query. --%>
+              <:item
+                :if={@user.avatar && @user.avatar_image_id}
+                id="report-avatar"
+                href={image_report_path(@user, @user.avatar_image_id)}
+              >
+                {gettext("Report the profile picture")}
+              </:item>
+              <:item
+                :if={@user.cover_photo && @user.cover_image_id}
+                id="report-cover"
+                href={image_report_path(@user, @user.cover_image_id)}
+              >
+                {gettext("Report the cover photo")}
+              </:item>
               <:item id="block-user" click="block_user" confirm={block_confirm} danger>
                 {gettext("Block")}
               </:item>

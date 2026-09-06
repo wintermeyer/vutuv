@@ -10,8 +10,11 @@ defmodule VutuvWeb.ModerationCaseController do
 
   plug(VutuvWeb.Plug.RequireLogin)
 
+  alias Vutuv.Images
+  alias Vutuv.Images.Image
   alias Vutuv.Moderation
   alias Vutuv.Moderation.Case
+  alias Vutuv.Repo
   alias VutuvWeb.ControllerHelpers
 
   def index(conn, _params) do
@@ -37,6 +40,35 @@ defmodule VutuvWeb.ModerationCaseController do
         edit_offer: Moderation.owner_edit_offer(case_record, content),
         content: content
       )
+    else
+      _ -> ControllerHelpers.render_error(conn, 404)
+    end
+  end
+
+  @doc """
+  The reported picture itself, for the two case pages — the owner's and the
+  admin's — which is why it lives here rather than under `/admin`: one route,
+  one authorization (`authorize/2`, owner or admin), one `<img src>` in both
+  templates.
+
+  A frozen picture is out of every tree nginx serves, so this is the **only**
+  way to look at it, and an admin who cannot see it cannot rule on a copyright
+  claim. It reads the hold first and falls back to the served tree for a
+  picture that was reported but not frozen (an untrusted reporter only flags
+  it). Anything else — another content type, a picture whose bytes are gone
+  with an upheld case — is a 404.
+  """
+  def image(conn, %{"id" => id}) do
+    with %Case{content_type: "image"} = case_record <- Repo.get(Case, id),
+         :ok <- authorize(conn, case_record),
+         %Image{} = image <- Moderation.case_content(case_record),
+         path when is_binary(path) <- Images.bytes_path(image) do
+      conn
+      # Never cached, anywhere: these are the bytes a takedown is about, and a
+      # copy in a proxy would outlive the freeze that moved them.
+      |> put_resp_header("cache-control", "private, no-store")
+      |> put_resp_content_type(MIME.from_path(path), nil)
+      |> send_file(200, path)
     else
       _ -> ControllerHelpers.render_error(conn, 404)
     end

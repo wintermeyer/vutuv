@@ -11,7 +11,7 @@ defmodule VutuvWeb.Fediverse.DocsTest do
 
   describe "actor/2" do
     test "renders a Person with inbox, followers and the public key" do
-      user = insert(:activated_user, headline: "Grüße aus <Koblenz>")
+      user = insert(:activated_user, headline: "Grüße aus <Koblenz>", avatar: "selfie.jpg")
       {:ok, actor} = Fediverse.ensure_actor(user)
 
       doc = Docs.actor(user, actor)
@@ -29,6 +29,16 @@ defmodule VutuvWeb.Fediverse.DocsTest do
       assert doc["summary"] =~ "&lt;Koblenz&gt;"
       # The avatar rides as the scraper-friendly square JPEG.
       assert doc["icon"]["url"] == "#{base()}/#{user.username}/avatar.jpg"
+    end
+
+    # It used to be named unconditionally, so every member without a picture
+    # handed remote servers a URL that answers 404 — and a picture a copyright
+    # freeze has taken offline (issue #2012) would have stayed advertised.
+    test "names no picture for a member who has none" do
+      user = insert(:activated_user)
+      {:ok, actor} = Fediverse.ensure_actor(user)
+
+      refute Map.has_key?(Docs.actor(user, actor), "icon")
     end
 
     test "renders alsoKnownAs only when the member listed origin accounts (#986)" do

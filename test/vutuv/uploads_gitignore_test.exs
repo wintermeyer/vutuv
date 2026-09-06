@@ -16,7 +16,8 @@ defmodule Vutuv.UploadsGitignoreTest do
   use ExUnit.Case, async: true
 
   # The served storage-dir roots of every uploader in `lib/vutuv/uploaders/`,
-  # plus the moderation-evidence and AI-moderation quarantine trees. Each is a
+  # plus the moderation-evidence tree, the AI-moderation quarantine tree and
+  # the copyright freeze's takedown hold (`Vutuv.Uploads.hold_dir/1`). Each is a
   # top-level directory written under `:uploads_dir_prefix` (empty in dev/test).
   @upload_trees ~w(
     avatars
@@ -28,6 +29,7 @@ defmodule Vutuv.UploadsGitignoreTest do
     originals
     moderation_evidence
     quarantine
+    frozen
     qualification_documents
     job_reference_documents
     organization_images

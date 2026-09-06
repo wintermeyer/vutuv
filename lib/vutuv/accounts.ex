@@ -2234,6 +2234,22 @@ defmodule Vutuv.Accounts do
     # the bytes went into, so the row records the state that actually happened.
     kind = scan_kind(field)
 
+    if Images.frozen?(user.id, kind) do
+      # A copyright case holds this picture (issue #2012). Replacing it would
+      # move the open case onto bytes nobody reported, so the upload is refused
+      # here — before `store/2` writes anything — and the form says why
+      # (`VutuvWeb.UserController.update/2`). The member's way out is the case
+      # page: remove the picture, or dispute the report.
+      Logger.warning("#{field} upload refused for user ##{user.id}: the picture is frozen")
+      user
+    else
+      store_new_image(user, field, crop_field, upload, crop, store, kind)
+    end
+  end
+
+  # The upload's own two writes, split off so the frozen guard above reads as
+  # one sentence rather than wrapping this whole `with` in an else branch.
+  defp store_new_image(user, field, crop_field, upload, crop, store, kind) do
     with {:ok, file_name, fingerprint, moderation} <- store.({upload, user}, crop),
          image_attrs = %{
            file: file_name,

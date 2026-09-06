@@ -38,6 +38,16 @@
       </p>
     </div>
 
+    <%!-- A picture cannot be quoted, so the report form shows it. Small and
+          boxed like the text preview it stands in for: this is "is this the
+          right thing?", not a viewer. --%>
+    <img
+      :if={@preview_image}
+      src={@preview_image}
+      alt={@preview}
+      class="mt-4 max-h-48 w-auto rounded-lg ring-1 ring-slate-200 dark:ring-slate-700"
+    />
+
     <blockquote
       :if={@preview != ""}
       class="mt-4 rounded-lg bg-slate-50 p-3 text-sm text-slate-600 ring-1 ring-slate-200 dark:bg-slate-800 dark:text-slate-300 dark:ring-slate-700"

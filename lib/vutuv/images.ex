@@ -35,8 +35,10 @@ defmodule Vutuv.Images do
 
     * `:static` — the derived files sit in a public tree nginx serves straight
       off disk, so nothing asks this application for permission and the only
-      off switch is moving the bytes out of that tree (the quarantine tree the
-      AI gate already uses, `Vutuv.Uploads.quarantine_dir/1`).
+      off switch is moving the bytes out of that tree: the quarantine tree
+      while the AI gate has not ruled (`Vutuv.Uploads.quarantine_dir/1`), the
+      takedown hold while a copyright case runs
+      (`Vutuv.Uploads.hold_dir/1`, `freeze/1` below).
     * `:proxy` — every byte goes through a controller that authorizes the
       reader first, so the row is the off switch.
 
@@ -67,7 +69,11 @@ defmodule Vutuv.Images do
       moderation: :avatar_moderation,
       pointer: :avatar_image_id,
       module: Vutuv.Avatar,
-      prefix: "avatars"
+      prefix: "avatars",
+      # The version a human is shown this kind at — the report form and the two
+      # case pages. Per kind here rather than branched at those call sites,
+      # which is what `@profile_columns` is for.
+      preview: :medium
     },
     "cover" => %{
       file: :cover_photo,
@@ -76,14 +82,16 @@ defmodule Vutuv.Images do
       moderation: :cover_moderation,
       pointer: :cover_image_id,
       module: Vutuv.Cover,
-      prefix: "covers"
+      prefix: "covers",
+      preview: :wide
     }
   }
 
   @doc """
   The member-row columns this kind still lives in, keyed by what each holds
   (`:file`, `:fingerprint`, `:crop`, `:moderation`, `:pointer`), plus the
-  `:module` that owns the files and its on-disk `:prefix`.
+  `:module` that owns the files, its on-disk `:prefix` and the `:preview`
+  version a human is shown it at.
   """
   def member_columns, do: @profile_columns
   def member_columns(kind) when is_map_key(@profile_columns, kind), do: @profile_columns[kind]
@@ -107,12 +115,50 @@ defmodule Vutuv.Images do
   the distinction — "the row is right" and "the bytes are there" are two
   different questions and the cut before #2012 needs both answered.
   """
-  def stored_path(%User{} = user, kind) when is_map_key(@profile_columns, kind) do
+  def stored_path(user, kind, version \\ nil)
+
+  def stored_path(%User{} = user, kind, version) when is_map_key(@profile_columns, kind) do
     config = @profile_columns[kind]
+    version = version || config.preview
 
     if Map.get(user, config.moderation) == "pending",
-      do: config.module.pending_preview_path(user),
-      else: config.module.stored_path(user)
+      do: config.module.pending_preview_path(user, version),
+      else: config.module.stored_path(user, version)
+  end
+
+  @doc """
+  Where this picture's bytes are **right now**, wherever that is: the takedown
+  hold while a copyright case holds it (`Vutuv.Uploads.hold_dir/1`), otherwise
+  the tree its member row points at. `nil` when neither has them.
+
+  The one answer the two case pages need — a frozen picture is out of every
+  tree nginx serves, so an admin ruling on a copyright claim can see it only
+  through this.
+  """
+  def bytes_path(%Image{} = image, version \\ nil) do
+    config = @profile_columns[image.kind]
+    version = version || config.preview
+
+    case Uploads.held_version_path(image.id, version, image.fingerprint) do
+      path when is_binary(path) ->
+        path
+
+      nil ->
+        with %User{} = owner <- owner(image),
+             do: stored_path(owner, image.kind, version)
+    end
+  end
+
+  @doc """
+  What a reader is shown for this picture — the same URL the profile renders,
+  so a picture already held by another case (or still in the AI gate) shows the
+  silhouette here too rather than a URL nothing answers. For the report form.
+  """
+  def preview_url(%Image{} = image) do
+    config = @profile_columns[image.kind]
+
+    with %User{} = owner <- owner(image),
+         do: config.module.display_url(owner, config.preview)
   end
 
   @doc """
@@ -126,15 +172,37 @@ defmodule Vutuv.Images do
   at the new one.
   """
   def put_profile_image(%User{} = user, kind, attrs) when kind in @kinds do
-    attrs = Map.merge(attrs, %{kind: kind, user_id: user.id, token: Uploads.gen_token()})
+    if frozen?(user.id, kind) do
+      {:error, :frozen}
+    else
+      %Image{kind: kind, user_id: user.id, token: Uploads.gen_token()}
+      |> Image.changeset(attrs)
+      # `frozen_at` is deliberately NOT in the replace list: a freeze is a
+      # takedown, and a re-upload must not be able to lift one. The guard above
+      # is the readable half of the same rule — this list is what would quietly
+      # undo it if somebody added the column to it.
+      |> Repo.insert(
+        on_conflict: {:replace, [:token, :file, :fingerprint, :crop, :moderation, :updated_at]},
+        conflict_target: {:unsafe_fragment, "(user_id, kind) WHERE kind IN ('avatar', 'cover')"},
+        returning: [:id]
+      )
+    end
+  end
 
-    %Image{}
-    |> Image.changeset(attrs)
-    |> Repo.insert(
-      on_conflict: {:replace, [:token, :file, :fingerprint, :crop, :moderation, :updated_at]},
-      conflict_target: {:unsafe_fragment, "(user_id, kind) WHERE kind IN ('avatar', 'cover')"},
-      returning: [:id]
-    )
+  @doc """
+  Whether this member's picture of that kind is held by a copyright freeze.
+
+  Asked at three layers on purpose, and each one is load-bearing:
+  `VutuvWeb.UserController.update/2` asks before the write so the form can say
+  *why* it refused rather than dropping the upload silently,
+  `Vutuv.Accounts.store_pending_image/6` asks before `store/3` writes a byte,
+  and `put_profile_image/3` refuses the row itself — the row's four columns are
+  what `unfreeze/1` restores from, so overwriting them would leave nothing to
+  put back. Three index probes on a path that spends hundreds of milliseconds
+  encoding AVIFs.
+  """
+  def frozen?(user_id, kind) when kind in @kinds do
+    Repo.exists?(from(i in profile_query(user_id, kind), where: not is_nil(i.frozen_at)))
   end
 
   @doc "The member's row for this kind, or nil."
@@ -184,6 +252,201 @@ defmodule Vutuv.Images do
     user_id |> profile_query(kind) |> Repo.delete_all()
     :ok
   end
+
+  ## The copyright freeze (issue #2012)
+
+  @doc """
+  Takes this picture offline without deleting a byte of it: the row is stamped
+  `frozen_at`, the member row's four columns for that kind are cleared, and
+  every file moves into the hold (`Vutuv.Uploads.hold/3`).
+
+  Clearing the member columns is what a reader notices. Every URL builder and
+  every display gate still reads them (#2027 moves them onto the row), and
+  "this member has no picture of that kind" is the one answer all of them
+  already agree on — `Vutuv.Avatar.display_url/2` returns the silhouette, the
+  vCard and the link-preview JPEG return nothing, the actor document drops its
+  icon. Leaving them set and only moving the files would have given some sixty
+  render sites a broken image instead.
+
+  Nothing is lost by clearing them, because the row holds the same four values:
+  `unfreeze/1` writes them back.
+
+  **Order matters.** The stamp goes first: it is the record that this picture is
+  meant to be held, so a slot that dies mid-move leaves a picture that is
+  already invisible and a job `reconcile_holds/0` finishes. The other order
+  would leave files in a hold that nothing knows to bring back.
+  """
+  def freeze(%Image{} = image) do
+    # `is_nil(frozen_at)` so a second pass — `reconcile_holds/0` finishing an
+    # interrupted move — re-asserts the freeze without moving the moment it
+    # happened, which is what the case and the statement of reasons quote.
+    {_count, _} =
+      Repo.update_all(from(i in Image, where: i.id == ^image.id and is_nil(i.frozen_at)),
+        set: [frozen_at: now(), updated_at: now()]
+      )
+
+    hide_from_member_row(image)
+
+    with %User{} = user <- owner(image),
+         do: @profile_columns[image.kind].module.hold(image.id, user)
+
+    :ok
+  end
+
+  @doc """
+  Puts a frozen picture back exactly where it was: every file returns to the
+  tree it came from under the name it had, the member row gets its four columns
+  back from the row, and the hold is removed.
+
+  The URL therefore comes back unchanged, which is the point — other servers,
+  search engines and sent mail all hold it. The one case where the bytes cannot
+  simply move back is a member who renamed while their picture was held (the
+  handle is baked into the served file name), so the same self-heal
+  `Vutuv.Uploads.promote_from_quarantine/2` uses runs afterwards and re-derives
+  from the original under the current handle.
+
+  Idempotent, and safe to run again after an interruption: the hold is removed
+  only once the member row names the files again, so a half-finished restore is
+  still a hold for `reconcile_holds/0` to find.
+  """
+  def unfreeze(%Image{} = image) do
+    {_count, _} =
+      Repo.update_all(from(i in Image, where: i.id == ^image.id),
+        set: [frozen_at: nil, updated_at: now()]
+      )
+
+    with %User{} = user <- owner(image) do
+      config = @profile_columns[image.kind]
+      config.module.release(image.id, user)
+
+      show_on_member_row(image)
+      config.module.regenerate(Repo.get!(User, user.id))
+    end
+
+    Uploads.purge_hold(image.id)
+    :ok
+  end
+
+  @doc """
+  Deletes this picture for good — every derived version, the private original
+  and the held copies — and forgets the row. What an upheld copyright case does,
+  and what the owner's own "remove it" does.
+
+  The member row is cleared first, so an interruption can only ever leave files
+  nothing points at (which `reconcile_holds/0` collects), never a member row
+  naming files that are gone.
+  """
+  def purge(%Image{} = image) do
+    case owner(image) do
+      %User{} = user ->
+        config = @profile_columns[image.kind]
+        hide_from_member_row(image)
+        # By id rather than through `forget_profile_image/2`, its (user_id,
+        # kind) twin, so the kinds #2015 brings — which have no member owner —
+        # take the same path.
+        Repo.delete_all(from(i in Image, where: i.id == ^image.id))
+        config.module.delete(user)
+
+      nil ->
+        Repo.delete_all(from(i in Image, where: i.id == ^image.id))
+    end
+
+    Uploads.purge_hold(image.id)
+    :ok
+  end
+
+  @doc """
+  Finishes every move a dying slot left half-done, in both directions — the
+  standing job behind `freeze/1` and `unfreeze/1`, run by
+  `Vutuv.Moderation.Sweeper` every 15 minutes.
+
+  The row's `frozen_at` is the intent and the disk is the state, so this reads
+  the intent and re-asserts it: a frozen picture has its member columns cleared
+  again and whatever is left of it moved into the hold, a hold whose row is no
+  longer frozen is released, and a hold whose row is gone (an upheld case
+  interrupted between the two) is deleted. Every step is the same idempotent
+  function the request path runs, so a second pass over finished work writes
+  nothing.
+  """
+  def reconcile_holds do
+    # Preloaded, so re-asserting a freeze costs no lookup per picture.
+    frozen = Repo.all(from(i in Image, where: not is_nil(i.frozen_at), preload: :user))
+    for image <- frozen, do: freeze(image)
+
+    frozen_ids = MapSet.new(frozen, & &1.id)
+    leftover = Enum.reject(Uploads.held_image_ids(), &MapSet.member?(frozen_ids, &1))
+
+    release_leftover_holds(leftover)
+
+    :ok
+  end
+
+  # A hold whose row is no longer frozen goes back; a hold whose row is gone
+  # (an upheld case interrupted between the two) is deleted. One query for the
+  # lot, however many there are.
+  defp release_leftover_holds([]), do: :ok
+
+  defp release_leftover_holds(image_ids) do
+    rows = Repo.all(from(i in Image, where: i.id in ^image_ids, preload: :user))
+    for image <- rows, do: unfreeze(image)
+
+    known = MapSet.new(rows, & &1.id)
+    for id <- image_ids, not MapSet.member?(known, id), do: Uploads.purge_hold(id)
+
+    :ok
+  end
+
+  # The same four columns
+  # `Vutuv.Moderation.ImageSubjects.clear_profile_columns/1` clears for a
+  # rejected picture, minus the pointer: this row is still the member's picture
+  # of that kind, it is only being held, and the pointer is how the case and
+  # `unfreeze/1` find it again.
+  #
+  # Guarded on the file column, so a converged freeze — `reconcile_holds/0`
+  # passing over work that is already done — matches no row and writes nothing.
+  # Every reader is gated on that column, so a half-cleared row is invisible
+  # either way.
+  defp hide_from_member_row(%Image{user_id: user_id, kind: kind}) do
+    config = @profile_columns[kind]
+
+    Repo.update_all(
+      from(u in User, where: u.id == ^user_id and not is_nil(field(u, ^config.file))),
+      set: [
+        {config.file, nil},
+        {config.fingerprint, nil},
+        {config.crop, nil},
+        {config.moderation, nil}
+      ]
+    )
+
+    :ok
+  end
+
+  # The pointer is deliberately left alone by both halves: it is true while the
+  # picture is held (that row IS the member's picture), and a deleted row
+  # nilifies it by itself.
+  defp show_on_member_row(%Image{kind: kind} = image) do
+    config = @profile_columns[kind]
+
+    Repo.update_all(from(u in User, where: u.id == ^image.user_id),
+      set: [
+        {config.file, image.file},
+        {config.fingerprint, image.fingerprint},
+        {config.crop, image.crop},
+        {config.moderation, image.moderation},
+        {config.pointer, image.id}
+      ]
+    )
+
+    :ok
+  end
+
+  # Takes the preload when it is there and looks the member up when it is not:
+  # half the callers hand over a bare row straight from a query, and an answer
+  # that depends on whether somebody remembered a preload is not an answer.
+  defp owner(%Image{user: %User{} = user}), do: user
+  defp owner(%Image{user_id: user_id}) when is_binary(user_id), do: Repo.get(User, user_id)
+  defp owner(%Image{}), do: nil
 
   defp profile_query(user_id, kind),
     do: from(i in Image, where: i.user_id == ^user_id and i.kind == ^kind)
