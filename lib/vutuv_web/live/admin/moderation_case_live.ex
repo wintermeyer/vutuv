@@ -302,7 +302,7 @@ defmodule VutuvWeb.Admin.ModerationCaseLive do
         <ul class="mt-3 space-y-3">
           <li :for={report <- @case.reports} class="text-sm">
             <p>
-              <span class="inline-flex items-center rounded-lg bg-brand-50 px-2 py-0.5 text-xs font-medium text-brand-700 dark:bg-brand-900/40 dark:text-brand-100">
+              <span class="inline-flex items-center rounded-lg bg-brand-50 px-2 py-0.5 text-xs font-medium text-brand-700 dark:bg-brand-800/60 dark:text-brand-100">
                 {category_label(report.category)}
               </span>
               <%!-- Who filed it: a member's @handle, or an outside notifier's

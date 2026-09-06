@@ -281,7 +281,7 @@ defmodule VutuvWeb.PageHTML do
     do:
       "rounded-2xl bg-white p-6 shadow-sm ring-1 ring-slate-200 dark:bg-slate-900 dark:ring-slate-800"
 
-  defp tile_class(:tint), do: "rounded-2xl bg-brand-50 p-6 dark:bg-brand-900/40"
+  defp tile_class(:tint), do: "rounded-2xl bg-brand-50 p-6 dark:bg-brand-800/60"
 
   defp tile_class(:dark),
     do: "flex flex-col rounded-2xl bg-brand-900 p-6 text-white dark:bg-brand-800"
@@ -294,7 +294,7 @@ defmodule VutuvWeb.PageHTML do
       case tone do
         :dark -> "bg-white/15 text-white"
         :accent -> "bg-accent/15 text-accent-dark"
-        _ -> "bg-brand-100 text-brand-700 dark:bg-brand-900/60 dark:text-brand-200"
+        _ -> "bg-brand-100 text-brand-700 dark:bg-brand-800/60 dark:text-brand-200"
       end
     ]
   end

@@ -931,7 +931,7 @@ defmodule VutuvWeb.Admin.NewsletterGroupLive do
             </div>
           </div>
 
-          <div class="rounded-lg bg-brand-50 p-4 dark:bg-brand-900/30">
+          <div class="rounded-lg bg-brand-50 p-4 dark:bg-brand-800/30">
             <p class="text-sm text-slate-700 dark:text-slate-200">
               {gettext("Members matching")}:
               <strong class="text-lg" id="match-count">{delimited_count(@match_count)}</strong>
@@ -1035,7 +1035,7 @@ defmodule VutuvWeb.Admin.NewsletterGroupLive do
           </div>
 
           <div :if={@mode == :accounts} class="space-y-4">
-            <div class="rounded-lg bg-brand-50 p-4 dark:bg-brand-900/30">
+            <div class="rounded-lg bg-brand-50 p-4 dark:bg-brand-800/30">
               <p class="text-sm text-slate-700 dark:text-slate-200">
                 {gettext("Accounts in this audience")}:
                 <strong class="text-lg" id="account-count">{delimited_count(@match_count)}</strong>

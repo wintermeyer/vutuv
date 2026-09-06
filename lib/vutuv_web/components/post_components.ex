@@ -831,7 +831,7 @@ defmodule VutuvWeb.PostComponents do
   # which asks a different question with the same gesture.
   defp post_filter_tab_class(true),
     do:
-      "whitespace-nowrap rounded-lg bg-brand-100 px-3 py-2.5 font-semibold text-brand-700 dark:bg-brand-900/40 dark:text-brand-100"
+      "whitespace-nowrap rounded-lg bg-brand-100 px-3 py-2.5 font-semibold text-brand-700 dark:bg-brand-800/60 dark:text-brand-100"
 
   defp post_filter_tab_class(false),
     do:
@@ -1217,7 +1217,7 @@ defmodule VutuvWeb.PostComponents do
           # (avatar columns, elbows) is untouched; z-0 opens a stacking
           # context so -z-10 stays in front of the page card's background.
           Map.get(node, :focus?) &&
-            "z-0 scroll-mt-24 before:absolute before:-inset-x-3 before:-inset-y-2 before:-z-10 before:rounded-xl before:bg-brand-50/70 before:ring-1 before:ring-brand-200 before:content-[''] dark:before:bg-brand-900/20 dark:before:ring-brand-800"
+            "z-0 scroll-mt-24 before:absolute before:-inset-x-3 before:-inset-y-2 before:-z-10 before:rounded-xl before:bg-brand-50/70 before:ring-1 before:ring-brand-200 before:content-[''] dark:before:bg-brand-800/25 dark:before:ring-brand-800"
         ]}
       >
         <%!-- Drops from this avatar's bottom (top-9) to the card's bottom; the
@@ -3604,7 +3604,7 @@ defmodule VutuvWeb.PostComponents do
           the page is that nobody publishes to another network by accident. --%>
           <p
             data-remote-reply-notice
-            class="rounded-lg bg-brand-50 px-4 py-3 text-sm text-brand-800 dark:bg-brand-900/30 dark:text-brand-100"
+            class="rounded-lg bg-brand-50 px-4 py-3 text-sm text-brand-800 dark:bg-brand-800/30 dark:text-brand-100"
           >
             {gettext(
               "Your answer goes to %{handle} on their own server and to your Fediverse followers. It is a public post on vutuv as well.",
@@ -5843,7 +5843,7 @@ defmodule VutuvWeb.PostComponents do
           <span
             :if={!@cover_url}
             aria-hidden="true"
-            class="flex aspect-[2/3] w-16 items-center justify-center rounded-lg bg-brand-50 text-2xl dark:bg-brand-900/40"
+            class="flex aspect-[2/3] w-16 items-center justify-center rounded-lg bg-brand-50 text-2xl dark:bg-brand-800/60"
           >
             {if @review.kind == "movie", do: "🎬", else: "📖"}
           </span>
@@ -6448,8 +6448,11 @@ defmodule VutuvWeb.PostComponents do
         <span aria-hidden="true">🌐</span>
         <span>{gettext("From other networks")}</span>
         <%!-- slate-200/700, a step off the row's own hover tint, so the pill
-              stays a pill while the summary is hovered or open. --%>
-        <span class="rounded-full bg-slate-200 px-1.5 text-xs font-semibold tabular-nums dark:bg-slate-700">
+              stays a pill while the summary is hovered or open. The dark text
+              step is the pill's own: the row's inherited `slate-400` reads 3.9
+              against `slate-700`, under AA, because the pill is lighter than
+              the card the row was coloured for. --%>
+        <span class="rounded-full bg-slate-200 px-1.5 text-xs font-semibold tabular-nums dark:bg-slate-700 dark:text-slate-200">
           {compact_count(@total)}
         </span>
         <svg
@@ -6840,7 +6843,7 @@ defmodule VutuvWeb.PostComponents do
   defp hide_list(assigns) do
     ~H"""
     <div class="mt-1 border-t border-slate-100 pt-1 dark:border-slate-800">
-      <p class="px-4 pb-1 pt-2 text-[10px] font-semibold uppercase tracking-widest text-slate-400 dark:text-slate-500">
+      <p class="px-4 pb-1 pt-2 text-[10px] font-semibold uppercase tracking-widest text-slate-400 dark:text-slate-400">
         {gettext("Stop showing")}
       </p>
 

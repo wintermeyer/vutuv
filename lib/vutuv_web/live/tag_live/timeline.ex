@@ -320,7 +320,7 @@ defmodule VutuvWeb.TagLive.Timeline do
           <span
             :if={active_filters(assigns) > 0}
             data-active-filters
-            class="rounded-full bg-brand-50 px-2 py-0.5 text-xs font-semibold text-brand-700 dark:bg-brand-900/40 dark:text-brand-100"
+            class="rounded-full bg-brand-50 px-2 py-0.5 text-xs font-semibold text-brand-700 dark:bg-brand-800/60 dark:text-brand-100"
           >
             {gettext("%{formatted} active", formatted: compact_count(active_filters(assigns)))}
           </span>

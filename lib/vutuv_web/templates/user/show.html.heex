@@ -400,7 +400,7 @@ the resulting ~200px rail width. --%>
     <section
       :if={@show_completion?}
       id="profile-completion"
-      class="rounded-2xl bg-brand-50 p-6 ring-1 ring-brand-100 dark:bg-brand-900/30 dark:ring-brand-900/50"
+      class="rounded-2xl bg-brand-50 p-6 ring-1 ring-brand-100 dark:bg-brand-800/30 dark:ring-brand-900/50"
     >
       <% done_count = Enum.count(@completion_steps, & &1.done) %>
       <% total = Enum.count(@completion_steps) %>
@@ -418,7 +418,7 @@ the resulting ~200px rail width. --%>
             phx-click="dismiss_onboarding"
             aria-label={gettext("Dismiss")}
             title={gettext("Dismiss")}
-            class="-mr-1.5 flex h-7 w-7 shrink-0 items-center justify-center rounded-full text-brand-700/70 transition hover:bg-brand-100 hover:text-brand-800 dark:text-brand-200/70 dark:hover:bg-brand-900/50 dark:hover:text-brand-100"
+            class="-mr-1.5 flex h-7 w-7 shrink-0 items-center justify-center rounded-full text-brand-700/70 transition hover:bg-brand-100 hover:text-brand-800 dark:text-brand-200/70 dark:hover:bg-brand-800/60 dark:hover:text-brand-100"
           >
             <svg class="h-4 w-4" fill="none" stroke="currentColor" stroke-width="2.5" viewBox="0 0 24 24" aria-hidden="true">
               <path stroke-linecap="round" stroke-linejoin="round" d="M6 18 18 6M6 6l12 12" />
@@ -429,7 +429,7 @@ the resulting ~200px rail width. --%>
       <p class="mt-1 text-sm text-brand-700/80 dark:text-brand-200/80">
         {gettext("A few quick steps so people can find and recognize you.")}
       </p>
-      <div class="mt-3 h-1.5 overflow-hidden rounded-full bg-brand-100 dark:bg-brand-900/50">
+      <div class="mt-3 h-1.5 overflow-hidden rounded-full bg-brand-100 dark:bg-brand-800/40">
         <div class="h-full rounded-full bg-brand-600 transition-all" style={"width: #{round(done_count / total * 100)}%"}></div>
       </div>
       <ul class="mt-4 space-y-2">
@@ -518,7 +518,7 @@ the resulting ~200px rail width. --%>
         :if={@pinned_post && @post_filter == "all"}
         id="pinned-post"
         data-pinned-post={@pinned_post.id}
-        class="mb-4 rounded-xl bg-brand-50/70 p-4 ring-1 ring-brand-100 dark:bg-brand-900/20 dark:ring-brand-900"
+        class="mb-4 rounded-xl bg-brand-50/70 p-4 ring-1 ring-brand-100 dark:bg-brand-800/25 dark:ring-brand-900"
       >
         <.post_card
           post={@pinned_post}
@@ -1247,7 +1247,7 @@ the resulting ~200px rail width. --%>
         >
           {gettext("Manage emails")}
         </.link>
-        <span :if={show_email_manage and show_phone_link} aria-hidden="true" class="text-slate-300 dark:text-slate-600">·</span>
+        <span :if={show_email_manage and show_phone_link} aria-hidden="true" class="text-slate-300 dark:text-slate-500">·</span>
         <.link
           :if={show_phone_link}
           href={if @totals.numbers > phone_preview, do: ~p"/#{@user}/phone_numbers", else: ~p"/settings/phone_numbers"}

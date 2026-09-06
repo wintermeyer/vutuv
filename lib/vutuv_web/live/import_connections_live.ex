@@ -603,7 +603,7 @@ defmodule VutuvWeb.ImportConnectionsLive do
         <p :if={@work_line} class="mb-0 truncate text-sm text-slate-600 dark:text-slate-400">
           {@work_line}
         </p>
-        <p class="mb-0 truncate text-xs text-slate-500 dark:text-slate-500">{evidence(@match.via)}</p>
+        <p class="mb-0 truncate text-xs text-slate-500 dark:text-slate-400">{evidence(@match.via)}</p>
       </div>
       <.follow_button
         variant="text"

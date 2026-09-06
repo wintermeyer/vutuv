@@ -747,7 +747,7 @@ defmodule VutuvWeb.NotificationLive.Index do
       class={[
         "rounded-2xl bg-white px-4 py-3 shadow-sm ring-1 ring-slate-200 dark:bg-slate-900 dark:ring-slate-800 sm:px-5",
         @class,
-        @group.unread? && "bg-brand-50/60 dark:bg-brand-900/15"
+        @group.unread? && "bg-brand-50/60 dark:bg-brand-800/25"
       ]}
     >
       {render_slot(@inner_block)}
@@ -1396,7 +1396,11 @@ defmodule VutuvWeb.NotificationLive.Index do
       |> assign(:clock, ViewerClock.format(utc, :time))
 
     ~H"""
-    <time datetime={@datetime} title={@title} class="text-xs tabular-nums text-slate-500">
+    <time
+      datetime={@datetime}
+      title={@title}
+      class="text-xs tabular-nums text-slate-500 dark:text-slate-400"
+    >
       {@clock}
     </time>
     """

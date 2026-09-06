@@ -330,7 +330,7 @@ defmodule VutuvWeb.CVLive do
                 class={[
                   "inline-flex items-center gap-1.5 rounded-lg px-3 py-1.5 text-sm font-medium",
                   if(shown?(@hide, skill.id),
-                    do: "bg-brand-50 text-brand-700 dark:bg-brand-900/40 dark:text-brand-100",
+                    do: "bg-brand-50 text-brand-700 dark:bg-brand-800/60 dark:text-brand-100",
                     else: "bg-slate-100 text-slate-500 line-through dark:bg-slate-800 dark:text-slate-400"
                   )
                 ]}

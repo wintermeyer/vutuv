@@ -52,7 +52,7 @@ defmodule VutuvWeb.LanguageHTML do
     ~H"""
     <span
       class={[
-        "inline-flex cursor-help items-center bg-brand-50 text-xs font-medium text-brand-700 dark:bg-brand-900/40 dark:text-brand-100",
+        "inline-flex cursor-help items-center bg-brand-50 text-xs font-medium text-brand-700 dark:bg-brand-800/60 dark:text-brand-100",
         proficiency_pill_size(@size),
         @class
       ]}

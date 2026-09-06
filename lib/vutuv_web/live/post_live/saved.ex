@@ -747,7 +747,7 @@ defmodule VutuvWeb.PostLive.Saved do
       aria-current={@active? && "page"}
       class={[
         "rounded-lg px-3 py-1.5",
-        @active? && "bg-brand-50 text-brand-700 dark:bg-brand-900/40 dark:text-brand-100",
+        @active? && "bg-brand-50 text-brand-700 dark:bg-brand-800/60 dark:text-brand-100",
         !@active? &&
           "text-slate-500 hover:bg-slate-100 dark:text-slate-400 dark:hover:bg-slate-800"
       ]}
@@ -809,7 +809,7 @@ defmodule VutuvWeb.PostLive.Saved do
         phx-value-id={@person.id}
         title={remove_label(@kind)}
         aria-label={remove_label(@kind)}
-        class="inline-flex h-9 w-9 shrink-0 items-center justify-center rounded-lg text-brand-600 ring-1 ring-inset ring-brand-200 transition hover:bg-brand-50 dark:text-brand-300 dark:ring-brand-900/50 dark:hover:bg-brand-900/30"
+        class="inline-flex h-9 w-9 shrink-0 items-center justify-center rounded-lg text-brand-600 ring-1 ring-inset ring-brand-200 transition hover:bg-brand-50 dark:text-brand-300 dark:ring-brand-900/50 dark:hover:bg-brand-800/30"
       >
         <.icon_heart :if={@kind == :likes} filled?={true} class="h-5 w-5" />
         <.icon_bookmark :if={@kind == :bookmarks} filled?={true} class="h-5 w-5" />

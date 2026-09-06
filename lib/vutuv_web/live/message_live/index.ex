@@ -688,7 +688,7 @@ defmodule VutuvWeb.MessageLive.Index do
               class={[
                 "flex items-center gap-3 px-4 py-3 hover:bg-slate-50 dark:hover:bg-slate-800",
                 @conversation && @conversation.id == entry.conversation.id &&
-                  "bg-brand-50 dark:bg-brand-900/30"
+                  "bg-brand-50 dark:bg-brand-800/30"
               ]}
             >
               <span class="relative shrink-0">
@@ -830,7 +830,7 @@ defmodule VutuvWeb.MessageLive.Index do
               navigate={~p"/reports/new?#{[type: "message", id: m.id, return_to: "/messages/#{m.conversation_id}"]}"}
               title={gettext("Report this message")}
               aria-label={gettext("Report this message")}
-              class="text-xs text-slate-400 opacity-60 transition group-hover:opacity-100 hover:text-red-600 focus:opacity-100 dark:text-slate-600 dark:hover:text-red-400"
+              class="text-xs text-slate-400 opacity-60 transition group-hover:opacity-100 hover:text-red-600 focus:opacity-100 dark:text-slate-500 dark:hover:text-red-400"
             >
               ⚑
             </.link>

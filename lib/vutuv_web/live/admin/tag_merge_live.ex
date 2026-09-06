@@ -525,7 +525,7 @@ defmodule VutuvWeb.Admin.TagMergeLive do
                 <button
                   type="button"
                   id={"add-#{result.tag.id}"}
-                  class="w-full rounded-lg px-3 py-2 text-left hover:bg-brand-50 dark:hover:bg-brand-900/40"
+                  class="w-full rounded-lg px-3 py-2 text-left hover:bg-brand-50 dark:hover:bg-brand-800/40"
                   phx-click="add"
                   phx-value-id={result.tag.id}
                 >
@@ -562,7 +562,7 @@ defmodule VutuvWeb.Admin.TagMergeLive do
                 id={"basket-#{tag.id}"}
                 class={[
                   "flex items-start gap-3 rounded-lg px-3 py-2",
-                  tag.id == @keeper_id && "bg-brand-50 dark:bg-brand-900/40"
+                  tag.id == @keeper_id && "bg-brand-50 dark:bg-brand-800/60"
                 ]}
               >
                 <label class="flex min-w-0 grow cursor-pointer items-start gap-3">

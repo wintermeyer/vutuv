@@ -38,7 +38,7 @@ defmodule VutuvWeb.PostCalendarHTML do
       class={[
         tile_shape(@square),
         "font-semibold text-brand-700 ring-1 ring-slate-200",
-        "hover:bg-brand-50 dark:text-brand-100 dark:ring-slate-800 dark:hover:bg-brand-900/40"
+        "hover:bg-brand-50 dark:text-brand-100 dark:ring-slate-800 dark:hover:bg-brand-800/40"
       ]}
     >
       {@label}

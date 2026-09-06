@@ -51,7 +51,7 @@ defmodule VutuvWeb.Admin.AdminHTML do
         <span class={[
           "flex h-11 w-11 items-center justify-center rounded-xl",
           @attention && "bg-accent/10 text-accent",
-          !@attention && "bg-brand-50 text-brand-700 dark:bg-brand-900/40 dark:text-brand-200"
+          !@attention && "bg-brand-50 text-brand-700 dark:bg-brand-800/60 dark:text-brand-200"
         ]}>
           <.section_icon name={@icon} />
         </span>
@@ -95,7 +95,7 @@ defmodule VutuvWeb.Admin.AdminHTML do
           "flex h-11 w-11 items-center justify-center rounded-xl transition",
           @attention && "bg-accent/10 text-accent",
           !@attention &&
-            "bg-brand-50 text-brand-700 group-hover:bg-brand-100 dark:bg-brand-900/40 dark:text-brand-200 dark:group-hover:bg-brand-900/70"
+            "bg-brand-50 text-brand-700 group-hover:bg-brand-100 dark:bg-brand-800/60 dark:text-brand-200 dark:group-hover:bg-brand-800/80"
         ]}>
           <.section_icon name={@icon} />
         </span>

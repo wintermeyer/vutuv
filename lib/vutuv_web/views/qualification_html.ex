@@ -191,7 +191,7 @@ defmodule VutuvWeb.QualificationHTML do
   # signal, slate for a calm past fact, amber for moderation limbo (never for a
   # past fact — amber is reserved for moderation).
   defp pill_tone(:brand),
-    do: "bg-brand-50 text-brand-700 dark:bg-brand-900/40 dark:text-brand-100"
+    do: "bg-brand-50 text-brand-700 dark:bg-brand-800/60 dark:text-brand-100"
 
   defp pill_tone(:positive),
     do: "bg-emerald-50 text-emerald-700 dark:bg-emerald-900/30 dark:text-emerald-300"

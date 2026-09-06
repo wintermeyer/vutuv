@@ -92,7 +92,7 @@ defmodule VutuvWeb.TagHTML do
     ~H"""
     <.card id="tag-fediverse" class={@class}>
       <div class="flex items-start gap-3">
-        <span class="mt-0.5 shrink-0 rounded-lg bg-brand-50 p-2 text-brand-700 dark:bg-brand-900/40 dark:text-brand-100">
+        <span class="mt-0.5 shrink-0 rounded-lg bg-brand-50 p-2 text-brand-700 dark:bg-brand-800/60 dark:text-brand-100">
           <.detail_icon name="globe" class="h-5 w-5" />
         </span>
         <div class="min-w-0 flex-1">

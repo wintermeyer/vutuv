@@ -100,7 +100,7 @@ defmodule VutuvWeb.OrganizationLive.New do
       <%!-- Non-technical members were lost by the bare "prove control of the
       domain" line: they did not know why verification exists or that it is a
       job for whoever runs their website. This box answers both before the form. --%>
-      <div class="mt-4 space-y-4 rounded-2xl bg-brand-50 p-5 text-sm ring-1 ring-brand-100 dark:bg-brand-900/30 dark:ring-brand-900/50">
+      <div class="mt-4 space-y-4 rounded-2xl bg-brand-50 p-5 text-sm ring-1 ring-brand-100 dark:bg-brand-800/30 dark:ring-brand-900/50">
         <div>
           <h2 class="font-semibold text-slate-900 dark:text-slate-100">
             {gettext("Why we ask you to verify")}

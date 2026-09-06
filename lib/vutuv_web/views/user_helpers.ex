@@ -484,7 +484,7 @@ defmodule VutuvWeb.UserHelpers do
         :if={@pinned_id != @entry.id}
         href={headline_pin_path(@kind, @entry)}
         method="put"
-        class="inline-flex items-center gap-1 rounded-full border border-brand-600 px-3 py-1 text-xs font-semibold text-brand-600 hover:bg-brand-50 dark:border-brand-400 dark:text-brand-400 dark:hover:bg-brand-900/40"
+        class="inline-flex items-center gap-1 rounded-full border border-brand-600 px-3 py-1 text-xs font-semibold text-brand-600 hover:bg-brand-50 dark:border-brand-400 dark:text-brand-400 dark:hover:bg-brand-800/40"
       >
         <.pin_star class="h-4 w-4" />
         {gettext("Show at top of profile")}

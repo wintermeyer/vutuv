@@ -3420,7 +3420,7 @@ html[data-feed-pull="busy"] .feed-pull__glyph {
 
   /* The same breath one surface down. The trough looks after itself (the cell's
      own `dark:bg-slate-800`); the peak is `heat_level_class(1)`'s
-     `dark:bg-brand-900/50` written out, half-alpha and all — at full strength
+     `dark:bg-brand-800/40` written out, half-alpha and all — at full strength
      it would be a step the scale never paints. */
   .heatmap[aria-busy="true"] .heatmap-day {
     --heatmap-waiting-peak: color-mix(in oklab, var(--color-brand-900) 50%, transparent);
@@ -3441,7 +3441,9 @@ html[data-feed-pull="busy"] .feed-pull__glyph {
   a, button { color: #60a5fa; }
   .profile-header__info h1 { color: #f1f5f9; }
   .profile-header__info h2 { color: #94a3b8; }
-  .breadcrumbs { color: #64748b; }
+  /* `slate-400`, not the `slate-500` this used to be: on the page canvas that
+     read 4.2:1, just under AA, and the trail is prose rather than a glyph. */
+  .breadcrumbs { color: #94a3b8; }
   .breadcrumbs a { color: #94a3b8; }
   .breadcrumbs a:hover { color: #60a5fa; }
   /* `.card-list .card` must be listed too: legacy gives it `background:#fff`
