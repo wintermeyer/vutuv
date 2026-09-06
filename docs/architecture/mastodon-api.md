@@ -886,4 +886,13 @@ is invalid", which sends a member looking for a mistake in their own text.
   on the next request. Because it ships off, both pages have to name the address
   a member types (from `Endpoint.host()`, never a literal) and link
   `/system/mastodon`; the adapter was otherwise undiscoverable from inside the
-  product, which is a worse failure than a missing endpoint.
+  product, which is a worse failure than a missing endpoint. The consent screen
+  is the other place a member meets the switch, usually for the first time: an
+  app sends them to `/oauth/authorize` with the switch still off, and a page
+  that only says "disabled" and points at the settings loses the app's flow on
+  the detour. So it offers the switch itself: a second form on the page posts
+  the settings page's own save (`PUT /settings/apps`, which takes a `return_to`
+  the way the mute routes do) and comes back to the same request with Allow
+  live, so there is one writer of the switch and of its
+  `mastodon_clients_changed` event; the settings link stays beside it. Only the
+  member's own switch: a page's stays its owner's decision, taken on the page.

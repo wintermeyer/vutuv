@@ -190,12 +190,17 @@ defmodule VutuvWeb.SettingsController do
   # to **this** account. A member who wants one does not necessarily want the
   # other, and the Fediverse page is where somebody goes who has already
   # decided about federation.
-  def update_apps(conn, %{"user" => params}) do
+  #
+  # The OAuth consent screen posts the switch here too, with a `return_to`
+  # back to the request it was on: a member usually meets the switch there,
+  # sent by the app with it still off, and a detour to this page would lose
+  # the app's flow. Validated like the mute routes' `return_to`.
+  def update_apps(conn, %{"user" => user_params} = params) do
     save(
       conn,
-      Map.take(params, ["mastodon_clients?"]),
+      Map.take(user_params, ["mastodon_clients?"]),
       "apps.html",
-      ~p"/settings/apps",
+      ControllerHelpers.safe_return_to(params["return_to"]) || ~p"/settings/apps",
       gettext("App settings saved."),
       event: "mastodon_clients_changed"
     )
