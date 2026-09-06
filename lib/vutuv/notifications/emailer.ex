@@ -45,6 +45,7 @@ defmodule Vutuv.Notifications.Emailer do
   alias VutuvWeb.Plug.Locale
   alias VutuvWeb.ReportHTML
   alias VutuvWeb.SavedSearchToken
+  alias VutuvWeb.UserHelpers
 
   # The visible From ({name, address}) on every message. Per-installation:
   # config :vutuv, :mailer_from, overridable at boot via MAILER_FROM_NAME /
@@ -347,7 +348,7 @@ defmodule Vutuv.Notifications.Emailer do
 
     base_email()
     |> put_class(:notification)
-    |> to({VutuvWeb.UserHelpers.name_for_email_to_field(user), email})
+    |> to({UserHelpers.name_for_email_to_field(user), email})
     |> unsubscribe_headers(unsubscribe_url)
     |> subject(
       recipient_subject(locale, fn ->
@@ -521,7 +522,7 @@ defmodule Vutuv.Notifications.Emailer do
 
     base_email()
     |> put_class(:bulk)
-    |> to({VutuvWeb.UserHelpers.name_for_email_to_field(user), email})
+    |> to({UserHelpers.name_for_email_to_field(user), email})
     |> unsubscribe_headers(unsubscribe_url)
     |> subject(recipient_subject(locale, fn -> saved_search_subject(rendered) end))
     |> render_bodies("saved_search_alert", locale, %{
@@ -620,7 +621,7 @@ defmodule Vutuv.Notifications.Emailer do
 
     base_email()
     |> put_class(:notification)
-    |> to({VutuvWeb.UserHelpers.name_for_email_to_field(user), email})
+    |> to({UserHelpers.name_for_email_to_field(user), email})
     |> unsubscribe_headers(unsubscribe_url)
     |> subject(recipient_subject(locale, subject_fun))
     |> render_bodies(
@@ -1101,24 +1102,44 @@ defmodule Vutuv.Notifications.Emailer do
 
   Its whole job is the confirmation link: until it is followed the case only
   sits `flagged` in the admin queue and nothing is hidden. That makes this the
-  one mail in the app addressed to an **address a stranger typed**, so two
+  one mail in the app addressed to an **address a stranger typed**, so three
   things are deliberate. It is `:transactional`, not `:critical`, so a bounced
   address is suppressed like any other — an address that cannot receive mail
-  cannot confirm anything either. And its locale is the one the sender's own
+  cannot confirm anything either. Its locale is the one the sender's own
   browser asked for, since there is no member row to read one from.
+
+  And the two values the sender controls — their name and the address they
+  pasted — pass `UserHelpers.single_line/1` here, at the last gate before the
+  wire. The name is already one line by the time it is stored
+  (`Report.outside_changeset/3`), so this is the second lock rather than the
+  only one; the pasted URL has no such column and needs this one. A text
+  template escapes nothing, so a value that keeps its line breaks writes whole
+  sentences of its own above ours in a message this installation signs — which
+  is `#2019`'s lesson one level up.
+
+  **Both are capped as well as flattened**, and the cap is the second half of
+  the same defence rather than tidiness: one line is what stops a value posing
+  as a paragraph of ours, a length is what stops it filling the line it is on.
+  Nobody's name is 80 characters, and a mail is not a place to echo a kilobyte
+  of URL somebody typed.
   """
+  @notice_name_chars 80
+  @notice_url_chars 500
+
   def public_notice_receipt_email(notice) do
     locale = get_locale(notice.locale)
+    name = notice.name |> UserHelpers.single_line() |> String.slice(0, @notice_name_chars)
 
     base_email()
     |> put_class(:transactional)
-    |> to({notice.name, notice.email})
+    |> to({name, notice.email})
     |> subject(in_locale(locale, fn -> gettext("Please confirm your report") end))
     |> render_bodies("report_receipt", locale, %{
-      name: notice.name,
+      name: name,
       content_label: in_locale(locale, fn -> ReportHTML.content_type_label(notice.type) end),
       category_label: in_locale(locale, fn -> ReportHTML.category_label(notice.category) end),
-      content_url: notice.content_url,
+      content_url:
+        notice.content_url |> UserHelpers.single_line() |> String.slice(0, @notice_url_chars),
       confirm_url: notice.confirm_url,
       url: public_url()
     })
@@ -1201,7 +1222,7 @@ defmodule Vutuv.Notifications.Emailer do
 
     base_email()
     |> put_class(:transactional)
-    |> to({VutuvWeb.UserHelpers.name_for_email_to_field(user), email})
+    |> to({UserHelpers.name_for_email_to_field(user), email})
     |> subject(recipient_subject(locale, subject_fun))
     |> render_bodies(
       template_base,

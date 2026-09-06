@@ -241,11 +241,29 @@ joins) the case as `flagged` — in front of an admin, with the content left
 exactly where it is — and mails a receipt carrying a confirmation link
 (`Emailer.public_notice_receipt_email/1`). The freeze, the owner's notice and
 the urgent admin mail all wait for `confirm_public_notice/1`, which runs the
-ordinary decision the trust ladder would have made at file time. Until then the
-notice counts for **nothing anywhere**: `Report.effective?/1` is false, and
-`maybe_upgrade_case/4` filters its report list through it, so five unconfirmed
-submissions cannot trip the spam auto-defense and two cannot stand in for the
-two trusted reporters a profile freeze needs.
+ordinary decision the trust ladder would have made at file time. The link is
+good for **seven days** (`confirmation_expires_at`, checked inside the claiming
+`UPDATE`); past that it confirms nothing, the page says so, and the sweeper
+deletes the row and settles a case that was standing only because of it — a
+link that never dies is a takedown anybody holding a forwarded copy of that
+mail can set off a year later.
+
+**Until it is followed the notice counts for nothing anywhere**, and "anywhere"
+is the whole claim. `Report.effective?/1` is the rule and `Report.effective/1`
+its query twin, so the SQL and the Elixir cannot spell it differently. Six
+readers ask: `maybe_upgrade_case/4` (so five unconfirmed submissions cannot trip
+the spam auto-defense and two cannot stand in for the two trusted reporters a
+profile freeze needs), `trusted_reporters/2` and `stats_map/2`, and — found by
+review, not by us — `copyright_case?/1`, `owner_notice/1` and
+`notice_category_by_case/1`. Those last three are the ones that hurt: without
+the filter an unconfirmed stranger turned an ordinary spam case into a
+*copyright* case, which put their 2,000 characters on the owner's own case page
+and in the owner's mail, and took the owner's self-service away — their edit
+escalated instead of lifting the freeze. So the filter sits **inside** each of
+those functions rather than at their call sites, and every owner-facing preload
+goes through `Moderation.effective_reports/0`; the two admin surfaces keep the
+plain `:reports` preload, because an admin has to see a notice whose address
+nobody has confirmed yet (it is badged as such).
 
 **The confirmation is a POST, not the GET the link lands on.** A link scanner in
 a corporate mail gateway follows every URL in a message, and a GET that fires a
@@ -269,15 +287,37 @@ visitor can already see resolves**, so the form is not an oracle for frozen,
 deleted, restricted or members-only content — "we could not find that page" is
 the honest answer for a typo and for a hidden post alike.
 
-Three things bound what a stranger can cause. The form is rate limited per
-client IP **and per address** (`VutuvWeb.RateLimit.check_public_notice/2`, 5 an
-hour each), so the receipt mail cannot be pointed at a third party's mailbox in
-bulk. A partial unique index on `(case_id, reporter_email)` gives one address
-one receipt per piece of content however often it submits — the member-side
+Four things bound what a stranger can cause. The form is rate limited per client
+IP **and per mailbox** (`VutuvWeb.RateLimit.check_public_notice/2`, 5 an hour
+each), so the receipt mail cannot be pointed at a third party's inbox in bulk. A
+partial unique index on `(case_id, reporter_email_key)` gives one mailbox one
+receipt per piece of content however often it submits — the member-side
 `(case_id, reporter_id)` index cannot do that job now the column is nullable,
-because `(case_id, NULL)` never conflicts with itself in Postgres. And the
-evidence screenshot fires on the **confirmation**, not the submit, so an
-unauthenticated form is not a button that launches headless Chromium.
+because `(case_id, NULL)` never conflicts with itself in Postgres. **Both of
+those count the mailbox, not the spelling**: `Report.canonical_email/1` strips a
+`+tag` everywhere and dots at Gmail, since `victim+1@`, `victim+2@` and
+`v.ictim@gmail.com` are one inbox and each was buying a fresh budget and a fresh
+row. Dots are folded for Gmail alone, deliberately — everywhere else they are
+significant and folding them would merge two different people. `reporter_email`
+keeps the spelling an admin replies to; `reporter_email_key` carries the
+counting. And the evidence screenshot fires on the **confirmation**, not the
+submit, so an unauthenticated form is not a button that launches headless
+Chromium.
+
+**The receipt mail is built from the stored report, never from the values that
+were typed**, and that is two bugs in one rule. An address pasted with a
+trailing space stored fine (the changeset trims), was mailed raw, and the
+`Emailer.deliver/1` chokepoint dropped it as malformed — so the page said the
+mail had gone, none had, and the honest second attempt was refused as a
+duplicate: the complaint was dead and could not be filed again. And
+`reporter_name` reached a `.text.eex` body, which escapes nothing, still
+carrying its line breaks, so a stranger controlled the recipient **and**
+multi-line running text at the top of a DKIM-signed message from this
+installation. The name is now collapsed to one line where it is **written**
+(`UserHelpers.single_line/1` in `Report.outside_changeset/3`), so no later
+surface has to remember, and the mail builder applies the same rule to the
+pasted URL, which has no column to be cleaned in. That is `#2019`'s lesson one
+level up: a stranger's text in a signed mail.
 
 **`reporter_id` is nullable, and that touched every place assuming a user row.**
 `Report.reporter_email` / `reporter_name` stand beside it under a CHECK

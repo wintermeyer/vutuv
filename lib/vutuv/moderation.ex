@@ -102,6 +102,14 @@ defmodule Vutuv.Moderation do
   # strike the brigaders' reports as abusive).
   @spam_freeze_reporters 5
 
+  # How long a public notice's confirmation link is good for (issue #2009). A
+  # link that never expires is a takedown anybody holding a forwarded copy of
+  # that mail can set off a year later, and an unconfirmed row that is never
+  # swept keeps a `flagged` case in the admin queue for ever. Long enough that
+  # somebody who reads their mail on Monday is not locked out of their own
+  # complaint.
+  @notice_confirmation_days 7
+
   # The statuses an admin ruling may still act on; once a case is resolved
   # (upheld/rejected/resolved_*) a second ruling must be a no-op so it cannot
   # issue a second strike. Mirrors Case.open_statuses/0 as a compile-time list
@@ -192,7 +200,7 @@ defmodule Vutuv.Moderation do
     case_changeset = new_case_changeset(content, status)
 
     case insert_case_with_report(case_changeset, report_changeset) do
-      {:ok, case_record} ->
+      {:ok, {case_record, _report}} ->
         finish_new_case(case_record, reporter, content, category, effects)
 
       # Lost the race: a concurrent first-report already opened the case, so join
@@ -235,9 +243,12 @@ defmodule Vutuv.Moderation do
     end)
   end
 
+  # Both rows come back, because the public path has to build its receipt mail
+  # from the report as it was **stored** rather than from the values that were
+  # typed.
   defp insert_first_report(case_record, report_changeset) do
     case Repo.insert(Ecto.Changeset.put_change(report_changeset, :case_id, case_record.id)) do
-      {:ok, _report} -> case_record
+      {:ok, report} -> {case_record, report}
       {:error, changeset} -> Repo.rollback(changeset)
     end
   end
@@ -292,8 +303,10 @@ defmodule Vutuv.Moderation do
   Nothing is hidden and nobody is mailed about it yet. The case is opened (or
   joined) as `flagged`, which puts it in front of an admin and leaves the
   content exactly where it is; the decision the trust ladder would make waits
-  for `confirm_public_notice/1`. Returns `{:ok, case, token}` — the token
-  belongs in the receipt mail and is stored only as its SHA-256 — or
+  for `confirm_public_notice/1`. Returns `{:ok, case, report, token}` — the
+  token belongs in the receipt mail and is stored only as its SHA-256, and the
+  **report** comes back because that mail must be built from the row as it was
+  stored rather than from the values that were typed — or
   `{:error, :not_allowed | :already_reported | changeset}`.
   """
   def file_public_notice(content, attrs) do
@@ -303,7 +316,11 @@ defmodule Vutuv.Moderation do
       token = Token.random_token()
 
       changeset =
-        %Report{confirmation_hash: Token.hash_token(token)}
+        %Report{
+          confirmation_hash: Token.hash_token(token),
+          confirmation_expires_at:
+            NaiveDateTime.add(NaiveDateTime.utc_now(:second), @notice_confirmation_days * 86_400)
+        }
         |> Report.outside_changeset(attrs, content_type(content))
 
       case open_case_for(content) do
@@ -317,12 +334,11 @@ defmodule Vutuv.Moderation do
     case_changeset = new_case_changeset(content, "flagged")
 
     case insert_case_with_report(case_changeset, report_changeset) do
-      {:ok, case_record} ->
+      {:ok, {case_record, report}} ->
         # Actor nil: an outside notifier has no user row to name in the log,
         # and the report row itself carries who it was.
-        category = Ecto.Changeset.get_field(report_changeset, :category)
-        log(case_record, nil, "notice_filed", %{"category" => category})
-        {:ok, case_record, token}
+        log(case_record, nil, "notice_filed", %{"category" => report.category})
+        {:ok, case_record, report, token}
 
       # Lost the race with a concurrent first report: the winner committed, so
       # the case is there to join now.
@@ -343,7 +359,7 @@ defmodule Vutuv.Moderation do
     case Repo.insert(changeset) do
       {:ok, report} ->
         log(open, nil, "notice_filed", %{"category" => report.category})
-        {:ok, open, token}
+        {:ok, open, report, token}
 
       {:error, %Ecto.Changeset{errors: errors} = changeset} ->
         if Keyword.has_key?(errors, :reporter_email),
@@ -354,22 +370,27 @@ defmodule Vutuv.Moderation do
 
   @doc """
   What the confirmation link's landing page is looking at: `:pending`,
-  `:confirmed` or `:unknown`. A read, so the GET the link lands on changes
-  nothing — the confirmation itself is the POST behind the button there.
+  `:confirmed`, `:expired` or `:unknown`. A read, so the GET the link lands on
+  changes nothing — the confirmation itself is the POST behind the button
+  there.
   """
   def public_notice_state(token) when is_binary(token) and token != "" do
-    # A boolean, not the column itself: `select: r.confirmed_at` answers `nil`
-    # for "no such token" and for "not confirmed yet" alike, which are the two
-    # answers this function exists to tell apart.
+    # A tuple of two booleans, not the columns themselves: `select:
+    # r.confirmed_at` answers `nil` for "no such token" and for "not confirmed
+    # yet" alike, which are two of the answers this function exists to tell
+    # apart.
     case Repo.one(
            from(r in Report,
              where: r.confirmation_hash == ^Token.hash_token(token),
-             select: not is_nil(r.confirmed_at)
+             select:
+               {not is_nil(r.confirmed_at),
+                r.confirmation_expires_at < ^NaiveDateTime.utc_now(:second)}
            )
          ) do
       nil -> :unknown
-      true -> :confirmed
-      false -> :pending
+      {true, _expired?} -> :confirmed
+      {false, true} -> :expired
+      {false, false} -> :pending
     end
   end
 
@@ -385,14 +406,19 @@ defmodule Vutuv.Moderation do
   the urgent mail either way.
 
   Returns `{:ok, :confirmed, report}`, `{:ok, :already_confirmed, report}` (a
-  second click is not an error) or `{:error, :invalid}`. Deliberately claimed
-  with one `UPDATE ... WHERE confirmed_at IS NULL`, so two clicks in flight
-  cannot run the side effects twice.
+  second click is not an error), `{:error, :expired}` past the link's
+  #{@notice_confirmation_days}-day deadline, or `{:error, :invalid}`.
+  Deliberately claimed with one `UPDATE ... WHERE confirmed_at IS NULL AND
+  confirmation_expires_at > now`, so two clicks in flight cannot run the side
+  effects twice and a dead link cannot run them at all.
   """
   def confirm_public_notice(token) when is_binary(token) and token != "" do
     case claim_notice_confirmation(Token.hash_token(token)) do
       nil ->
         {:error, :invalid}
+
+      {:expired, _report} ->
+        {:error, :expired}
 
       {:already_confirmed, report} ->
         {:ok, :already_confirmed, report}
@@ -411,6 +437,7 @@ defmodule Vutuv.Moderation do
     {_count, rows} =
       from(r in Report,
         where: r.confirmation_hash == ^hash and is_nil(r.confirmed_at),
+        where: r.confirmation_expires_at > ^now,
         select: r
       )
       |> Repo.update_all(set: [confirmed_at: now, updated_at: now])
@@ -419,10 +446,14 @@ defmodule Vutuv.Moderation do
       [report] ->
         {:confirmed, report}
 
+      # Nothing claimed: either the token names no row, or the row is already
+      # confirmed, or its deadline has passed. Which of the three decides what
+      # the page says, so ask rather than collapsing them into one error.
       [] ->
         case Repo.one(from(r in Report, where: r.confirmation_hash == ^hash)) do
           nil -> nil
-          report -> {:already_confirmed, report}
+          %Report{confirmed_at: %NaiveDateTime{}} = report -> {:already_confirmed, report}
+          report -> {:expired, report}
         end
     end
   end
@@ -968,6 +999,55 @@ defmodule Vutuv.Moderation do
     length(ids)
   end
 
+  @doc """
+  Drops every public notice whose confirmation deadline has passed without
+  anybody following the link, and resolves the cases that were only standing
+  because of one. Returns the number of notices deleted. Called by the sweeper.
+
+  Without it an unconfirmed notice is a permanent `flagged` row in the admin
+  queue that nothing can ever act on: it counts for nothing
+  (`Report.effective?/1`), its link no longer works, and no ruling makes sense
+  on a claim nobody stood behind. A case that still holds another report keeps
+  standing; one left with none is settled `rejected`, which is what "nobody
+  ever confirmed this" means and what puts the content back if anything about
+  it had moved.
+  """
+  def sweep_expired_notices do
+    now = NaiveDateTime.utc_now(:second)
+
+    {_count, case_ids} =
+      from(r in Report,
+        where: is_nil(r.confirmed_at) and r.confirmation_expires_at < ^now,
+        select: r.case_id
+      )
+      |> Repo.delete_all()
+
+    for case_id <- Enum.uniq(case_ids), do: settle_abandoned_case(case_id)
+    length(case_ids)
+  end
+
+  # A case whose last report was an expired notice. Only ever reached from the
+  # sweep above, and only for a case that is still open — an admin who ruled in
+  # the meantime keeps their ruling.
+  defp settle_abandoned_case(case_id) do
+    with %Case{status: status} = case_record when status in @open_statuses <-
+           Repo.get(Case, case_id),
+         false <- Repo.exists?(from(r in Report, where: r.case_id == ^case_id)) do
+      if content = case_content(case_record), do: unfreeze_content(content)
+
+      updated =
+        update_case!(case_record, %{
+          status: "rejected",
+          resolved_at: NaiveDateTime.utc_now(:second)
+        })
+
+      log(updated, nil, "notice_expired")
+      :ok
+    else
+      _ -> :ok
+    end
+  end
+
   ## Admin queue + rulings
 
   @doc "The admin queue: escalated cases first (oldest first), then flagged."
@@ -1008,12 +1088,24 @@ defmodule Vutuv.Moderation do
   Whether this case carries a copyright complaint. Takes the preloaded reports
   if they are there and looks them up if they are not, so the answer never
   depends on whether the caller remembered a preload.
+
+  Only **effective** reports count, and the filter is inside both clauses
+  rather than at the call sites, because this answer decides what the owner may
+  do with their own content: `owner_edit_offer/2` turns an edit from
+  "immediate" into "reviewed" on it, and `content_edited/1` escalates instead
+  of unfreezing. An unconfirmed notice from a stranger was enough to take a
+  member's self-service away — the case page is the one surface that must still
+  see a pending notice, and it reads the reports itself.
   """
   def copyright_case?(%Case{reports: reports}) when is_list(reports),
-    do: Enum.any?(reports, &Report.copyright?/1)
+    do: reports |> Enum.filter(&Report.effective?/1) |> Enum.any?(&Report.copyright?/1)
 
-  def copyright_case?(%Case{id: case_id}),
-    do: Repo.exists?(where(copyright_reports(), [r], r.case_id == ^case_id))
+  def copyright_case?(%Case{id: case_id}) do
+    copyright_reports()
+    |> where([r], r.case_id == ^case_id)
+    |> Report.effective()
+    |> Repo.exists?()
+  end
 
   @doc """
   The statement of reasons the owner of hidden content is owed (issue #2010):
@@ -1027,9 +1119,19 @@ defmodule Vutuv.Moderation do
 
   All three surfaces that carry the notice (the case page, the owner's email
   and the in-app line) read it here, so they cannot drift apart.
+
+  Only **effective** reports are in it, filtered inside rather than by each
+  caller: this is the map that quotes a reporter's words to the member they
+  accuse, and an unconfirmed notice is a stranger's unverified claim that
+  nothing about the case has acted on. The DB clause preloads through
+  `effective_reports/0`, so the text is not even loaded.
   """
   def owner_notice(%Case{reports: reports}) when is_list(reports) do
-    ordered = Enum.sort_by(reports, & &1.inserted_at, {:desc, NaiveDateTime})
+    ordered =
+      reports
+      |> Enum.filter(&Report.effective?/1)
+      |> Enum.sort_by(& &1.inserted_at, {:desc, NaiveDateTime})
+
     categories = ordered |> Enum.map(& &1.category) |> Enum.uniq()
 
     %{
@@ -1041,7 +1143,18 @@ defmodule Vutuv.Moderation do
   end
 
   def owner_notice(%Case{} = case_record),
-    do: case_record |> Repo.preload(:reports) |> owner_notice()
+    do: case_record |> Repo.preload(reports: effective_reports()) |> owner_notice()
+
+  @doc """
+  The preload to use wherever a case's reports drive what happens to the
+  content or reach its owner — `Repo.preload(case, reports: effective_reports())`.
+
+  The plain `:reports` preload stays right for the two admin surfaces, which
+  have to see a notice whose address nobody has confirmed yet; everything else
+  wants this one, so a stranger's unverified words cannot be loaded into a mail
+  or a decision by whoever forgot.
+  """
+  def effective_reports, do: Report.effective(Report)
 
   @doc """
   What the owner's self-service round offers as an *edit*, as one value the
@@ -1085,6 +1198,7 @@ defmodule Vutuv.Moderation do
       order_by: [desc: r.inserted_at],
       select: {r.case_id, r.category}
     )
+    |> Report.effective()
     |> Repo.all()
     |> Enum.group_by(&elem(&1, 0), &elem(&1, 1))
     |> Map.new(fn {case_id, categories} -> {case_id, leading_category(categories)} end)

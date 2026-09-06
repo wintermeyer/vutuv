@@ -3,6 +3,8 @@ defmodule Vutuv.Moderation.Report do
 
   use VutuvWeb, :model
 
+  alias VutuvWeb.UserHelpers
+
   @copyright "copyright"
   @categories ~w(family bullying spam copyright other)
   # A private message is not published, so there is nothing for a rights holder
@@ -42,10 +44,19 @@ defmodule Vutuv.Moderation.Report do
     field(:reporter_email, :string)
     field(:reporter_name, :string)
 
+    # The same address reduced to the mailbox it really is
+    # (`canonical_email/1`). It carries the uniqueness, so a `+tag` cannot buy
+    # a second notice about one piece of content, while the column above keeps
+    # the spelling an admin has to reply to.
+    field(:reporter_email_key, :string)
+
     # The receipt mail's confirmation link. Until it is followed the notice
     # counts for nothing (`effective?/1`): the case sits `flagged` in the admin
-    # queue and nothing is hidden.
+    # queue and nothing is hidden. Past the deadline it counts for nothing ever
+    # again — a link that never dies is a takedown anybody can set off a year
+    # later out of a forwarded mail.
     field(:confirmation_hash, :string)
+    field(:confirmation_expires_at, :naive_datetime)
     field(:confirmed_at, :naive_datetime)
 
     timestamps()
@@ -146,7 +157,13 @@ defmodule Vutuv.Moderation.Report do
     report
     |> changeset(params, content_type, full_notice?: true)
     |> cast(params, [:reporter_name, :reporter_email])
-    |> update_change(:reporter_name, &String.trim/1)
+    # Collapsed to ONE line where it is written, not where it is rendered. The
+    # name is the only stranger-controlled string this app puts into running
+    # text in a mail it signs, and a value carrying a line break wrote whole
+    # sentences of its own above our copy and the real confirmation link. Doing
+    # it here means no later surface has to remember — see
+    # `VutuvWeb.UserHelpers.single_line/1` for why the rule is the effect.
+    |> update_change(:reporter_name, &UserHelpers.single_line/1)
     |> update_change(:reporter_email, fn value -> value |> String.trim() |> String.downcase() end)
     |> validate_required([:reporter_name], message: "Please tell us your name.")
     |> validate_required([:reporter_email], message: "Please give us an email address.")
@@ -157,10 +174,54 @@ defmodule Vutuv.Moderation.Report do
     # value must be a changeset error, never a raised Postgres 22001.
     |> validate_length(:reporter_email, max: 254, message: "That address is too long.")
     |> validate_length(:reporter_name, max: 255, message: "Your name is too long.")
+    |> put_email_key()
     |> unique_constraint(:reporter_email,
       name: :moderation_reports_case_reporter_email_index,
       message: "You already reported this."
     )
+    |> unique_constraint(:reporter_email,
+      name: :moderation_reports_case_reporter_email_key_index,
+      message: "You already reported this."
+    )
+  end
+
+  defp put_email_key(changeset) do
+    case get_change(changeset, :reporter_email) do
+      nil -> changeset
+      email -> put_change(changeset, :reporter_email_key, canonical_email(email))
+    end
+  end
+
+  @doc """
+  The mailbox an address really names, for counting rather than for writing to.
+
+  Two spellings reach one inbox at practically every provider: a `+tag` suffix
+  is stripped by all of them, and Gmail additionally ignores dots in the local
+  part. Both were undercutting the two caps the public notice form leans on —
+  the per-address rate limit and the one-notice-per-content unique index — so
+  `victim+1@`, `victim+2@` and, at Gmail, `v.ictim@` each bought a fresh budget
+  and a fresh row.
+
+  Dots are folded **only** for Gmail, and that asymmetry is the point: it is
+  documented behaviour there and nowhere else, so folding them everywhere would
+  merge two different people at a provider that treats them as distinct. The
+  result is never mailed to and never shown; `reporter_email` keeps the
+  spelling an admin replies to.
+  """
+  def canonical_email(email) when is_binary(email) do
+    case email |> String.trim() |> String.downcase() |> String.split("@", parts: 2) do
+      [local, domain] -> strip_tag(local, domain) <> "@" <> domain
+      _ -> email
+    end
+  end
+
+  def canonical_email(other), do: other
+
+  @gmail_domains ~w(gmail.com googlemail.com)
+
+  defp strip_tag(local, domain) do
+    local = local |> String.split("+", parts: 2) |> hd()
+    if domain in @gmail_domains, do: String.replace(local, ".", ""), else: local
   end
 
   # A copyright complaint only means something as a complete notice: which work

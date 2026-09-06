@@ -8,8 +8,11 @@ defmodule Vutuv.ModerationPublicNoticeTest do
 
   use Vutuv.DataCase, async: true
 
+  import Ecto.Query
+
   alias Vutuv.Moderation
   alias Vutuv.Moderation.{Case, Report}
+  alias Vutuv.Notifications.Emailer
 
   setup do
     owner = insert(:activated_user)
@@ -31,8 +34,21 @@ defmodule Vutuv.ModerationPublicNoticeTest do
   end
 
   defp file!(content, attrs \\ %{}) do
-    {:ok, case_record, token} = Moderation.file_public_notice(content, notice(attrs))
+    {:ok, case_record, _report, token} = Moderation.file_public_notice(content, notice(attrs))
     {case_record, token}
+  end
+
+  # Backdates the notice's deadline rather than travelling the clock: the
+  # column is the deadline, so this is exactly the state a week's silence
+  # leaves behind.
+  defp expire!(token) do
+    {1, _} =
+      Repo.update_all(
+        from(r in Report, where: r.confirmation_hash == ^Vutuv.Token.hash_token(token)),
+        set: [confirmation_expires_at: NaiveDateTime.add(NaiveDateTime.utc_now(:second), -60)]
+      )
+
+    :ok
   end
 
   # A picture row without the upload behind it: these tests never move a byte
@@ -218,7 +234,7 @@ defmodule Vutuv.ModerationPublicNoticeTest do
 
     test "unconfirmed spam notices do not trip the spam auto-defense", %{owner: owner} do
       for n <- 1..4 do
-        {:ok, _case_record, _token} =
+        {:ok, _case_record, _report, _token} =
           Moderation.file_public_notice(
             owner,
             notice(%{"category" => "spam", "reporter_email" => "brigade#{n}@example.com"})
@@ -243,6 +259,160 @@ defmodule Vutuv.ModerationPublicNoticeTest do
 
       {:ok, :confirmed, _} = Moderation.confirm_public_notice(token_b)
       assert Repo.get!(Vutuv.Accounts.User, owner.id).frozen_at
+    end
+  end
+
+  describe "an unconfirmed notice reaches nothing the owner sees or can do" do
+    setup %{owner: owner} do
+      post = insert(:post, user: owner)
+      member = insert(:activated_user)
+      insert(:email, user: member)
+      # A member's ordinary spam report freezes the post and starts the 72-hour
+      # self-service window.
+      {:ok, case_record} = Moderation.report_content(member, post, %{"category" => "spam"})
+
+      {_case_record, _token} =
+        file!(post, %{"note" => "A stranger's unverified 2,000 characters."})
+
+      {:ok, %{post: post, case: Repo.get!(Case, case_record.id)}}
+    end
+
+    # Calibration: drop the `Report.effective?/1` filter inside
+    # `copyright_case?/1` and this goes red — an unconfirmed notice turned the
+    # case into a copyright case, so an edit escalated instead of unfreezing
+    # and a member lost their own self-service to a stranger who never proved
+    # they can read their mail.
+    test "the owner's edit still lifts the freeze", %{post: post, case: case_record} do
+      refute Moderation.copyright_case?(case_record)
+      assert Moderation.owner_edit_offer(case_record, post) == :immediate
+
+      assert :ok == Moderation.content_edited(post)
+      assert Repo.get!(Case, case_record.id).status == "resolved_edited"
+      assert is_nil(Repo.get!(Vutuv.Posts.Post, post.id).frozen_at)
+    end
+
+    # Calibration: drop the filter inside `owner_notice/1` and the stranger's
+    # note appears in the list this map hands to the case page and the owner's
+    # mail.
+    test "the statement of reasons does not quote it", %{case: case_record} do
+      notice = Moderation.owner_notice(case_record)
+
+      assert notice.categories == ["spam"]
+      refute notice.copyright?
+      refute Enum.any?(notice.notes, &(&1 =~ "unverified"))
+    end
+
+    test "the in-app line names the member's category, not the stranger's", %{
+      case: case_record
+    } do
+      assert Moderation.notice_category_by_case([case_record.id]) == %{case_record.id => "spam"}
+    end
+  end
+
+  describe "the confirmation link expires" do
+    test "a dead link confirms nothing and says so", %{owner: owner} do
+      post = insert(:post, user: owner)
+      {_case_record, token} = file!(post)
+      expire!(token)
+
+      assert Moderation.public_notice_state(token) == :expired
+      assert {:error, :expired} = Moderation.confirm_public_notice(token)
+      assert is_nil(Repo.get!(Vutuv.Posts.Post, post.id).frozen_at)
+    end
+
+    test "the sweep drops it and settles the case it was holding open", %{owner: owner} do
+      post = insert(:post, user: owner)
+      {case_record, token} = file!(post)
+      expire!(token)
+
+      assert Moderation.sweep_expired_notices() == 1
+      assert Repo.aggregate(Report, :count) == 0
+      assert Repo.get!(Case, case_record.id).status == "rejected"
+    end
+
+    test "a case another report still holds keeps standing", %{owner: owner} do
+      post = insert(:post, user: owner)
+      member = insert(:activated_user)
+      insert(:email, user: member)
+      {:ok, case_record} = Moderation.report_content(member, post, %{"category" => "spam"})
+      {_case_record, token} = file!(post)
+      expire!(token)
+
+      assert Moderation.sweep_expired_notices() == 1
+      assert Repo.get!(Case, case_record.id).status == "pending_owner"
+      assert Repo.aggregate(Report, :count) == 1
+    end
+  end
+
+  describe "one mailbox is one reporter" do
+    test "a +tag cannot buy a second notice about the same content", %{owner: owner} do
+      post = insert(:post, user: owner)
+      {_case_record, _token} = file!(post, %{"reporter_email" => "rita+one@example.com"})
+
+      assert {:error, :already_reported} =
+               Moderation.file_public_notice(
+                 post,
+                 notice(%{"reporter_email" => "rita+two@example.com"})
+               )
+    end
+
+    test "a Gmail dot cannot either, and a dot elsewhere is a different person" do
+      assert Report.canonical_email("R.i.ta+work@Gmail.com") == "rita@gmail.com"
+      assert Report.canonical_email("rita+work@googlemail.com") == "rita@googlemail.com"
+      # Every other provider treats dots as significant, so folding them there
+      # would merge two people who are not the same.
+      assert Report.canonical_email("r.ita@example.com") == "r.ita@example.com"
+      assert Report.canonical_email("rita+tag@example.com") == "rita@example.com"
+    end
+
+    test "the address is stored as it was typed, so an admin can write back", %{owner: owner} do
+      post = insert(:post, user: owner)
+      {case_record, _token} = file!(post, %{"reporter_email" => "Rita+Work@Example.com"})
+
+      [report] = Repo.preload(case_record, :reports).reports
+      assert report.reporter_email == "rita+work@example.com"
+      assert report.reporter_email_key == "rita@example.com"
+    end
+  end
+
+  describe "a stranger's name is one line" do
+    # Calibration: take `UserHelpers.single_line/1` out of
+    # `outside_changeset/3` and this goes red — the name reached a `.text.eex`
+    # body, which escapes nothing, so the mail opened with the attacker's own
+    # sentences above ours and above the real confirmation link.
+    test "line breaks in the name are collapsed before they are stored", %{owner: owner} do
+      post = insert(:post, user: owner)
+
+      {case_record, _token} =
+        file!(post, %{
+          "reporter_name" =>
+            "Rita\nWARNING: your account closes in 24 hours.\r\nConfirm: https://evil.example/verify"
+        })
+
+      [report] = Repo.preload(case_record, :reports).reports
+      refute report.reporter_name =~ ~r/\R/u
+      assert report.reporter_name =~ "Rita"
+    end
+
+    # The other half of the same defence: one line stops the value posing as a
+    # paragraph of ours, the cap stops it filling the line it is on.
+    test "the receipt mail caps the greeting name" do
+      long = String.duplicate("a", 200)
+
+      email =
+        Emailer.public_notice_receipt_email(%{
+          name: long,
+          email: "rita@example.com",
+          locale: "de",
+          type: "post",
+          category: "copyright",
+          content_url: "https://example.com/" <> String.duplicate("b", 900),
+          confirm_url: "https://example.com/system/report/confirm/token"
+        })
+
+      [{to_name, _address}] = email.to
+      assert String.length(to_name) == 80
+      assert String.length(email.text_body) < 1_500
     end
   end
 

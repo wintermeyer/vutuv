@@ -53,7 +53,12 @@ defmodule VutuvWeb.PublicReportController do
 
   def create(conn, %{"report" => params}) when is_map(params) do
     url = params |> Map.get("url", "") |> to_string() |> String.trim()
-    email = params |> Map.get("reporter_email", "") |> to_string()
+
+    # The budget is counted against the **mailbox**, not the spelling: a `+tag`
+    # (and a dot at Gmail) otherwise buys a fresh bucket per submission while
+    # every one of them lands in the same inbox, which is exactly the
+    # amplification the per-address half exists to stop.
+    email = params |> Map.get("reporter_email", "") |> to_string() |> Report.canonical_email()
 
     case RateLimit.check_public_notice(conn, email) do
       :rate_limited ->
@@ -81,6 +86,14 @@ defmodule VutuvWeb.PublicReportController do
       :pending ->
         render(conn, "confirm.html", token: token, page_title: gettext("Confirm your report"))
 
+      # Named rather than folded into the 404: somebody holding a link a week
+      # old has to be told to send the notice again, not that their address was
+      # wrong.
+      :expired ->
+        conn
+        |> put_status(:gone)
+        |> render("expired.html", page_title: gettext("This link has expired"))
+
       :unknown ->
         ControllerHelpers.render_error(conn, 404)
     end
@@ -97,6 +110,11 @@ defmodule VutuvWeb.PublicReportController do
         case Moderation.confirm_public_notice(token) do
           {:ok, _state, _report} ->
             render(conn, "confirmed.html", page_title: gettext("Report confirmed"))
+
+          {:error, :expired} ->
+            conn
+            |> put_status(:gone)
+            |> render("expired.html", page_title: gettext("This link has expired"))
 
           {:error, :invalid} ->
             ControllerHelpers.render_error(conn, 404)
@@ -123,11 +141,11 @@ defmodule VutuvWeb.PublicReportController do
     type = Moderation.content_type(content)
 
     case Moderation.file_public_notice(content, params) do
-      {:ok, _case_record, token} ->
-        deliver_receipt(conn, params, url, type, token)
+      {:ok, _case_record, report, token} ->
+        deliver_receipt(conn, report, url, type, token)
 
         render(conn, "sent.html",
-          email: params["reporter_email"],
+          email: report.reporter_email,
           page_title: gettext("Report sent")
         )
 
@@ -156,20 +174,26 @@ defmodule VutuvWeb.PublicReportController do
     end
   end
 
+  # Built from the **stored report**, never from the values that were typed.
+  # The changeset trims and downcases the address and collapses the name to one
+  # line, so the row is the only version of them that is safe to hand to a
+  # mailer: a pasted address with a trailing space stored fine, was mailed raw,
+  # and the chokepoint dropped it as malformed — the page said the mail had
+  # gone, none had, and the honest retry was refused as a duplicate. That
+  # complaint was simply dead.
+  #
   # Off the request, like every other mail this app sends: production talks
   # real SMTP with retries, and this is the one endpoint a stranger can hold
-  # open without an account.
-  #
-  # The locale is read HERE and travels in the map, because it is per-process
-  # state the spawned task does not inherit — read inside the closure it would
-  # quietly send every receipt in English.
-  defp deliver_receipt(conn, params, url, type, token) do
+  # open without an account. The locale is read HERE and travels in the map,
+  # because it is per-process state the spawned task does not inherit — read
+  # inside the closure it would quietly send every receipt in English.
+  defp deliver_receipt(conn, report, url, type, token) do
     notice = %{
-      name: params["reporter_name"],
-      email: params["reporter_email"],
+      name: report.reporter_name,
+      email: report.reporter_email,
       locale: Gettext.get_locale(VutuvWeb.Gettext),
       type: type,
-      category: params["category"],
+      category: report.category,
       content_url: url,
       confirm_url: url(conn, ~p"/system/report/confirm/#{token}")
     }

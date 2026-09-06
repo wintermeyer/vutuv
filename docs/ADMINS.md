@@ -1227,11 +1227,18 @@ marking it abusive costs that **address** its standing (it stops earning the
 instant freeze for a year) rather than striking an account, since there is none;
 `/admin/moderation/reporters` lists such addresses beside the members.
 
-The form is throttled at five submissions an hour per visitor and per address,
+The form is throttled at five submissions an hour per visitor and per **mailbox**
+— `name+anything@` and, at Gmail, dotted spellings all count as the one inbox —
 so nobody can point the receipt mail at somebody else's mailbox in bulk, and one
-address gets one receipt per piece of content however often it submits. Neither
+mailbox gets one receipt per piece of content however often it submits. Neither
 limit is configurable; if a genuine rights holder hits it, they will be able to
 continue an hour later.
+
+A confirmation link is good for **seven days**. Past that it stops working, the
+page tells the sender to file the report again, and the housekeeping sweep drops
+the unconfirmed row — so an abandoned notice does not sit in your queue for ever
+as a case nothing can be decided about. Nothing is lost: a notice nobody
+confirmed never counted for anything.
 
 ### When the image scan gets it wrong
 

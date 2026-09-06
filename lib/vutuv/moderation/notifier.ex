@@ -26,17 +26,20 @@ defmodule Vutuv.Moderation.Notifier do
 
   Both owner notices carry the statement of reasons (issue #2010), so the
   reports come along — `:reports` alone, never `reports: :reporter`: a report
-  is anonymous, and a surface cannot leak what it was never handed.
+  is anonymous, and a surface cannot leak what it was never handed. And only
+  the **effective** ones (`Moderation.effective_reports/0`), so a notice whose
+  address nobody has confirmed is not even loaded into a mail that quotes a
+  stranger's words to the member they accuse.
   """
   def owner_content_frozen(%Case{} = case_record) do
-    case_record = Repo.preload(case_record, :reports)
+    case_record = Repo.preload(case_record, reports: Moderation.effective_reports())
     push_owner(case_record)
     mail_owner(case_record, &Emailer.moderation_frozen_email/3)
   end
 
   @doc "The owner's content was frozen and is with the admins (no self-service)."
   def owner_under_review(%Case{} = case_record) do
-    case_record = Repo.preload(case_record, :reports)
+    case_record = Repo.preload(case_record, reports: Moderation.effective_reports())
     push_owner(case_record)
     mail_owner(case_record, &Emailer.moderation_review_email/3)
   end

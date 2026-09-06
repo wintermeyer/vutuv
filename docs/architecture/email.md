@@ -69,8 +69,23 @@ comes from the sender's own browser at submit time, since there is no member row
 to read one from, and `email_greeting/1` takes a `%User{}` so the templates
 greet by the name that was typed instead. And it is the one mail a stranger can
 cause to be sent to an address they do not own, which is why the form behind it
-is rate limited per address as well as per IP, and why one address gets one
+is rate limited per mailbox as well as per IP, and why one mailbox gets one
 receipt per piece of content (see `moderation.md`).
+
+**It is built from the stored report, never from the values that were typed.**
+Two bugs came out of the version that was not. A pasted address with a trailing
+space stored fine (the changeset trims) and was mailed raw, so `deliver/1`
+dropped it as malformed while the page said the mail had gone — and the honest
+second attempt was refused as a duplicate, leaving the complaint dead. And the
+sender's name reached the `.text.eex` body still carrying its line breaks — a
+text template escapes nothing — so a stranger wrote multi-line running text
+above our own copy and above the real confirmation link, in a message this
+installation signs. The name is collapsed to one line by
+`UserHelpers.single_line/1` where it is **stored**, and this builder applies the
+same rule again to the name and to the pasted URL, as the last gate before the
+wire. Whenever a value somebody else typed reaches a text body, ask which of the
+two treatments it needs — quoted through `email_quote/1` /
+`email_quoted_text/1`, or held to one line — and never neither.
 
 ## Multipart bodies
 

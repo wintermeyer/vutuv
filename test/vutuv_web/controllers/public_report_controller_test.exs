@@ -180,6 +180,25 @@ defmodule VutuvWeb.PublicReportControllerTest do
       conn = get(conn, ~p"/system/report/confirm/#{Vutuv.Token.random_token()}")
       assert conn.status == 404
     end
+
+    # Told apart from the 404 on purpose: somebody holding a week-old link has
+    # to be sent back to the form, not left thinking their address was wrong.
+    test "an expired link says so and offers the form again", %{conn: conn, link: link} do
+      Repo.update_all(Report,
+        set: [confirmation_expires_at: NaiveDateTime.add(NaiveDateTime.utc_now(:second), -60)]
+      )
+
+      html =
+        conn
+        |> recycle()
+        |> put_req_header("accept-language", "de-DE,de")
+        |> get(link)
+        |> html_response(410)
+
+      assert html =~ "Dieser Link ist abgelaufen"
+      assert html =~ "Meldung erneut senden"
+      assert html =~ ~s(href="/system/report")
+    end
   end
 
   describe "what a script gets" do

@@ -84,6 +84,10 @@ defmodule VutuvWeb.Admin.ModerationHTML do
   def event_label("evidence_captured"), do: gettext("Evidence screenshot captured")
   def event_label("notice_filed"), do: gettext("Report filed from outside")
   def event_label("notice_confirmed"), do: gettext("Outside reporter confirmed their address")
+
+  def event_label("notice_expired"),
+    do: gettext("Report dropped: the address was never confirmed")
+
   def event_label(other), do: other
 
   # The small action-specific facts an event carries (JSONB, string keys).
