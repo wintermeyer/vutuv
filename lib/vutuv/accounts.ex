@@ -2232,9 +2232,14 @@ defmodule Vutuv.Accounts do
     # The moderation state comes back from the store rather than being read a
     # second time here: the store is where `:moderate_images` decided which tree
     # the bytes went into, so the row records the state that actually happened.
-    kind = scan_kind(field)
 
-    if Images.frozen?(user.id, kind) do
+    # One read of the row this upload is about to overwrite, answering both
+    # questions below: whether a takedown holds the picture, and which bytes a
+    # report about it named.
+    kind = scan_kind(field)
+    current = Images.profile_image(user.id, kind)
+
+    if current && current.frozen_at do
       # A copyright case holds this picture (issue #2012). Replacing it would
       # move the open case onto bytes nobody reported, so the upload is refused
       # here — before `store/2` writes anything — and the form says why
@@ -2243,13 +2248,16 @@ defmodule Vutuv.Accounts do
       Logger.warning("#{field} upload refused for user ##{user.id}: the picture is frozen")
       user
     else
-      store_new_image(user, field, crop_field, upload, crop, store, kind)
+      reported = current && current.fingerprint
+      store_new_image(user, field, crop_field, upload, crop, store, kind, reported)
     end
   end
 
   # The upload's own two writes, split off so the frozen guard above reads as
   # one sentence rather than wrapping this whole `with` in an else branch.
-  defp store_new_image(user, field, crop_field, upload, crop, store, kind) do
+  # `reported` is the fingerprint the row carried before this upload, or nil for
+  # a first picture.
+  defp store_new_image(user, field, crop_field, upload, crop, store, kind, reported) do
     with {:ok, file_name, fingerprint, moderation} <- store.({upload, user}, crop),
          image_attrs = %{
            file: file_name,
@@ -2267,12 +2275,18 @@ defmodule Vutuv.Accounts do
       ImageScans.enqueue(kind, saved.id, saved.id, fingerprint)
 
       # A picture whose case only flagged it may be replaced (the guard above is
-      # about the takedown hold, and a flagged case moved nothing), and this
-      # upload has just overwritten the very bytes that were reported. So the
-      # replacement settles the case the way the owner's own "remove it" does:
-      # left open, an admin's ruling — which for a picture is the one ruling that
-      # *deletes* — would land on whatever the member put there afterwards.
-      Moderation.content_deleted(image)
+      # about the takedown hold, and a flagged case moved nothing), and such an
+      # upload overwrites the very bytes that were reported. So the replacement
+      # settles the case the way the owner's own "remove it" does: left open, an
+      # admin's ruling — which for a picture is the one ruling that *deletes* —
+      # would land on whatever the member put there afterwards.
+      #
+      # But only a replacement. Uploading the same file again overwrites the
+      # reported bytes with themselves, and settling on that was a way to make a
+      # complaint vanish from the admin queue at no cost to the owner (issue
+      # #2035). The fingerprint answers it, crop and all
+      # (`Vutuv.Uploads.content_hash/2`).
+      if fingerprint != reported, do: Moderation.content_deleted(image)
       saved
     else
       _ ->

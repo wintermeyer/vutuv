@@ -192,14 +192,16 @@ defmodule Vutuv.Images do
   @doc """
   Whether this member's picture of that kind is held by a copyright freeze.
 
-  Asked at three layers on purpose, and each one is load-bearing:
-  `VutuvWeb.UserController.update/2` asks before the write so the form can say
-  *why* it refused rather than dropping the upload silently,
-  `Vutuv.Accounts.store_pending_image/6` asks before `store/3` writes a byte,
-  and `put_profile_image/3` refuses the row itself — the row's four columns are
-  what `unfreeze/1` restores from, so overwriting them would leave nothing to
-  put back. Three index probes on a path that spends hundreds of milliseconds
-  encoding AVIFs.
+  The question is asked at three layers on purpose, and each one is
+  load-bearing: `VutuvWeb.UserController.update/2` asks before the write so the
+  form can say *why* it refused rather than dropping the upload silently,
+  `Vutuv.Accounts.store_pending_image/6` asks before `store/3` writes a byte —
+  reading `frozen_at` off `profile_image/2` rather than calling this, since it
+  needs the row anyway to know which bytes an open case named (issue #2035) —
+  and `put_profile_image/3` refuses the row itself, because the row's four
+  columns are what `unfreeze/1` restores from, so overwriting them would leave
+  nothing to put back. Two index probes and one row read, on a path that spends
+  hundreds of milliseconds encoding AVIFs.
   """
   def frozen?(user_id, kind) when kind in @kinds do
     Repo.exists?(from(i in profile_query(user_id, kind), where: not is_nil(i.frozen_at)))
