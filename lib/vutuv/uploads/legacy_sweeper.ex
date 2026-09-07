@@ -17,10 +17,7 @@ defmodule Vutuv.Uploads.LegacySweeper do
   `%{avatars: %{rows: 10, files_removed: 32, skipped: 1}, covers: %{…}}`.
   """
 
-  import Ecto.Query
-
-  alias Vutuv.Accounts.User
-  alias Vutuv.Repo
+  alias Vutuv.Images
 
   @types ~w(avatars covers)a
 
@@ -68,8 +65,11 @@ defmodule Vutuv.Uploads.LegacySweeper do
   defp sweep(:avatars, user, opts), do: Vutuv.Avatar.sweep_legacy(user, opts)
   defp sweep(:covers, user, opts), do: Vutuv.Cover.sweep_legacy(user, opts)
 
-  defp rows(:avatars), do: Repo.all(from(u in User, where: not is_nil(u.avatar_fingerprint)))
-  defp rows(:covers), do: Repo.all(from(u in User, where: not is_nil(u.cover_fingerprint)))
+  # Every member with a picture of that kind, the row preloaded;
+  # `Vutuv.Uploads.sweep_legacy/3` reads the fingerprint off it and leaves a
+  # picture without one entirely alone.
+  defp rows(:avatars), do: Images.members_with_picture("avatar")
+  defp rows(:covers), do: Images.members_with_picture("cover")
 
   # The quiet-flag logic lives once in Vutuv.Uploads.log/1.
   defp log(message), do: Vutuv.Uploads.log(message)

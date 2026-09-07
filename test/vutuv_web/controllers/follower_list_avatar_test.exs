@@ -1,6 +1,8 @@
 defmodule VutuvWeb.FollowerListAvatarTest do
   use VutuvWeb.ConnCase
 
+  alias Vutuv.ImageHelpers
+
   # The shared user card list (followers / following / search results /
   # most-followed) used to put `Vutuv.Avatar.display_url/2` straight into an
   # <img>, so a user without a picture got the light-grey default-avatar SVG —
@@ -22,7 +24,7 @@ defmodule VutuvWeb.FollowerListAvatarTest do
 
   test "a follower with a picture keeps a real <img> avatar", %{conn: conn} do
     user = insert_activated_user()
-    follower = insert_activated_user(avatar: "photo.jpg")
+    follower = ImageHelpers.with_image_rows(insert_activated_user(avatar: "photo.jpg"))
     follow!(follower, user)
 
     html = conn |> get(~p"/#{user}/followers") |> html_response(200)

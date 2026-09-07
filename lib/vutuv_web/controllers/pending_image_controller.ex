@@ -39,13 +39,20 @@ defmodule VutuvWeb.PendingImageController do
     end
   end
 
-  defp pending_path(user, "avatar", version) do
-    if user.avatar_moderation == "pending",
-      do: Vutuv.Avatar.pending_preview_path(user, String.to_existing_atom(version))
+  # The picture's row is read once and handed on as the preload the uploader
+  # would otherwise look up again (issue #2027).
+  defp pending_path(user, kind, version) do
+    case Vutuv.Images.member_image(user, kind) do
+      %Vutuv.Images.Image{moderation: "pending"} = image ->
+        user
+        |> Map.put(Vutuv.Images.member_columns(kind).assoc, image)
+        |> preview_path(kind, String.to_existing_atom(version))
+
+      _not_pending ->
+        nil
+    end
   end
 
-  defp pending_path(user, "cover", version) do
-    if user.cover_moderation == "pending",
-      do: Vutuv.Cover.pending_preview_path(user, String.to_existing_atom(version))
-  end
+  defp preview_path(user, "avatar", version), do: Vutuv.Avatar.pending_preview_path(user, version)
+  defp preview_path(user, "cover", version), do: Vutuv.Cover.pending_preview_path(user, version)
 end

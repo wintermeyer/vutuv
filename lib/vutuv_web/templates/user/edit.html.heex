@@ -20,7 +20,7 @@ lands here). --%>
         long settings page; scroll-mt keeps the sticky top bar off it. --%>
         <div id="avatar" class="scroll-mt-24">
           <%= label f, :avatar, gettext("Avatar"), class: "block text-sm font-medium text-slate-900 dark:text-white" %>
-          <% avatar_pending? = @user.avatar_moderation == "pending" %>
+          <% avatar_pending? = Vutuv.Images.pending?(@user, "avatar") %>
           <div class="mt-2 flex items-center gap-3">
             <.avatar
               user={@user}
@@ -53,7 +53,11 @@ lands here). --%>
               crop_cancel: gettext("Cancel"),
               crop_zoom: gettext("Zoom")
             ] %>
-          <%= hidden_input f, :avatar_crop, id: "user_avatar_crop" %>
+          <%!-- The stored crop, off the picture's own row (#2027); the crop
+                dialog overwrites it before a submit that carries a new file. --%>
+          <%= hidden_input f, :avatar_crop,
+            id: "user_avatar_crop",
+            value: Vutuv.Images.crop(@user, "avatar") %>
           <% {avatar_w, avatar_h} = recommended_avatar_size() %>
           <p class="mt-1 text-xs text-slate-600 dark:text-slate-400">
             {gettext("Recommended: square, at least %{width} × %{height} pixels.",
@@ -94,7 +98,7 @@ lands here). --%>
         covering it after the jump. --%>
         <div id="cover" class="scroll-mt-24">
           <%= label f, :cover_photo, gettext("Cover photo"), class: "block text-sm font-medium text-slate-900 dark:text-white" %>
-          <% cover_pending? = @user.cover_moderation == "pending" %>
+          <% cover_pending? = Vutuv.Images.pending?(@user, "cover") %>
           <% cover_url =
             if cover_pending?,
               do: ~p"/settings/pending_image/cover/wide",
@@ -133,7 +137,9 @@ lands here). --%>
               crop_cancel: gettext("Cancel"),
               crop_zoom: gettext("Zoom")
             ] %>
-          <%= hidden_input f, :cover_crop, id: "user_cover_crop" %>
+          <%= hidden_input f, :cover_crop,
+            id: "user_cover_crop",
+            value: Vutuv.Images.crop(@user, "cover") %>
           <% {cover_w, cover_h} = recommended_cover_size() %>
           <p class="mt-1 text-xs text-slate-600 dark:text-slate-400">
             {gettext("Recommended: %{width} × %{height} pixels (%{ratio}).",

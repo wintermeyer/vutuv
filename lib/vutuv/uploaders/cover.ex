@@ -25,6 +25,7 @@ defmodule Vutuv.Cover do
   (`@config`).
   """
 
+  alias Vutuv.Images
   alias Vutuv.LowBandwidth
   alias Vutuv.Uploads
 
@@ -34,14 +35,10 @@ defmodule Vutuv.Cover do
     # This image's kind in the shared `images` table (`Vutuv.Images`).
     kind: "cover",
     default_version: :wide,
-    # See Vutuv.Avatar's @config: the user column holding this image's content
-    # fingerprint, baked into `<username>-<version>-<fp>.avif` when set.
+    # See Vutuv.Avatar's @config: a member-row column the write half still
+    # fills, not one anything reads, and the AI gate's screening flag.
     fingerprint_field: :cover_fingerprint,
-    crop_field: :cover_crop,
-    # AI moderation state column: "pending" holds fresh uploads in the
-    # quarantine tree and makes every URL helper answer "no image"
-    # (Vutuv.Moderation.ImageScans).
-    moderation_field: :cover_moderation
+    moderated: true
   }
 
   @doc """
@@ -64,7 +61,7 @@ defmodule Vutuv.Cover do
   `Vutuv.Uploads.Regenerator`.
   """
   def regenerate(user, opts \\ []) do
-    Uploads.regenerate(user, opts, @config)
+    Uploads.regenerate(pair(user), opts, @config)
   end
 
   @doc """
@@ -72,7 +69,8 @@ defmodule Vutuv.Cover do
   see `Vutuv.Uploads.promote_from_quarantine/2`. Called by the moderation
   verdict (`Vutuv.Moderation.ImageSubjects`).
   """
-  def promote_from_quarantine(user), do: Uploads.promote_from_quarantine(user, @config)
+  def promote_from_quarantine(user),
+    do: Uploads.promote_from_quarantine(pair(user), @config)
 
   @doc """
   Moves every cover file of `user` into the takedown hold of `image_id`, and
@@ -88,7 +86,7 @@ defmodule Vutuv.Cover do
   limbo — the owner-only preview (`VutuvWeb.PendingImageController`).
   """
   def pending_preview_path(user, version \\ @config.default_version) do
-    Uploads.quarantine_version_path(user, version, @config)
+    Uploads.quarantine_version_path(pair(user), version, @config)
   end
 
   @doc """
@@ -97,37 +95,42 @@ defmodule Vutuv.Cover do
   `Vutuv.Avatar.stored_path/2`.
   """
   def stored_path(user, version \\ @config.default_version) do
-    Uploads.version_path({user.cover_photo, user}, version, @config)
+    Uploads.version_path(pair(user), version, @config)
   end
 
   @doc """
   Re-derives the cover under the user's current handle after a username change.
   See `Vutuv.Uploads.reslug/2` and `Accounts.update_username/2`.
   """
-  def reslug(user), do: Uploads.reslug(user, @config)
+  def reslug(user), do: Uploads.reslug(pair(user), @config)
 
   @doc """
   Removes the legacy cover files once the row is on the fingerprinted scheme —
   the contract half of the migration. See `Vutuv.Uploads.sweep_legacy/3` and
   `mix vutuv.images.sweep_legacy`.
   """
-  def sweep_legacy(user, opts \\ []), do: Uploads.sweep_legacy(user, opts, @config)
+  def sweep_legacy(user, opts \\ []),
+    do: Uploads.sweep_legacy(pair(user), opts, @config)
 
   @doc """
-  Root-relative, URI-encoded URL for a given `{cover_photo, user}` and served
-  version. Returns `nil` when the user has no cover photo or for `:original`
-  (the original is never URL-addressable).
+  Root-relative, URI-encoded URL of this member's cover at that version, or
+  `nil` when there is nothing a reader may fetch: no cover, one the AI gate
+  still holds, one a copyright case froze, or `:original`.
+
+  The one function that owns this URL. Built from the picture's row in the
+  shared `images` table since #2027; the member row's four columns are still
+  written, but nothing reads them.
   """
-  def url(file_and_scope, version \\ @config.default_version) do
-    Uploads.url(file_and_scope, version, @config)
+  def url(user, version \\ @config.default_version) do
+    Uploads.url(pair(user), version, @config)
   end
 
   @doc """
-  The value templates put in an `<img src>`, or `nil` when the user has no cover
-  photo (so the caller can fall back to the gradient banner).
+  The polymorphic name `Vutuv.Images.preview_url/1` calls on either uploader.
+  The same answer as `url/2`; `Vutuv.Avatar`'s falls back to the silhouette,
+  this one leaves the caller its gradient.
   """
-  def display_url(%{cover_photo: nil}, _version), do: nil
-  def display_url(user, version), do: url({user.cover_photo, user}, version)
+  def display_url(user, version), do: url(user, version)
 
   @doc """
   What the profile header loads for this viewer (`VutuvWeb.UI.picture/1`):
@@ -143,15 +146,24 @@ defmodule Vutuv.Cover do
   broken banner on every profile in between.
   """
   def picture(user) do
-    LowBandwidth.picture(display_url(user, :wide), fn -> lite_url(user) end)
+    image = image(user)
+
+    LowBandwidth.picture(
+      Uploads.url({image, user}, @config.default_version, @config),
+      fn -> lite_url(image, user) end
+    )
   end
 
-  defp lite_url(%{cover_photo: nil}), do: nil
-
-  defp lite_url(user) do
-    if Uploads.version_path({user.cover_photo, user}, :lite, @config),
-      do: url({user.cover_photo, user}, :lite)
+  defp lite_url(image, user) do
+    if Uploads.version_path({image, user}, :lite, @config),
+      do: Uploads.url({image, user}, :lite, @config)
   end
+
+  # This member's cover row, and what the shared pipeline takes: the row beside
+  # the member it belongs to. See `Vutuv.Avatar`'s twins.
+  defp image(user), do: Images.member_image(user, @config.kind)
+
+  defp pair(user), do: {image(user), user}
 
   @doc """
   Removes the user's cover-photo files — the served version and the private

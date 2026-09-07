@@ -7,10 +7,14 @@ defmodule Vutuv.Moderation.ImageSubjects do
   releases it (`apply_approved/1`) and how an unsafe verdict deletes it
   (`apply_rejected/1`).
 
-  Every state flip is an atomic, guarded `update_all`: the WHERE re-checks
-  the asset still holds the scanned bytes (fingerprint columns for assets
-  that change in place; gallery rows are immutable), so a verdict that lost a
-  race against a re-upload returns `:stale` and touches nothing.
+  Every state flip is guarded on the asset still holding the scanned bytes
+  (fingerprint columns for assets that change in place; gallery rows are
+  immutable), so a verdict that lost a race against a re-upload returns
+  `:stale` and touches nothing. For a **profile picture** that guard sits on
+  the picture's row in the shared `images` table since #2027, because that row
+  is what every reader consults; the member row's copy of the four columns
+  follows in a second statement, unguarded, and goes with the deploy that drops
+  them. Every other kind is still the single atomic `update_all`.
   """
 
   import Ecto.Query
@@ -142,8 +146,9 @@ defmodule Vutuv.Moderation.ImageSubjects do
     config = @profile_images[kind]
 
     with %User{} = user <- Repo.get(User, scan.subject_id),
-         true <- Map.get(user, config.file) != nil,
-         true <- Map.get(user, config.fingerprint) == scan.fingerprint do
+         %Images.Image{} = image <- Images.member_image(user, kind),
+         true <- image.file != nil,
+         true <- image.fingerprint == scan.fingerprint do
       # Fresh uploads have an original (and quarantine files while pending);
       # the served-file fallback covers legacy rows from before originals
       # were kept, so the backfill can judge them too.
@@ -328,23 +333,18 @@ defmodule Vutuv.Moderation.ImageSubjects do
   def apply_approved(%ImageScan{kind: kind} = scan) when is_map_key(@profile_images, kind) do
     config = @profile_images[kind]
 
-    flipped =
-      from(u in User,
-        where:
-          u.id == ^scan.subject_id and
-            field(u, ^config.fingerprint) == ^scan.fingerprint and
-            field(u, ^config.moderation) == "pending"
-      )
-      |> Repo.update_all(set: [{config.moderation, "approved"}])
-
-    case flipped do
-      {1, _} ->
-        Images.mark_moderation(scan.subject_id, scan.kind, scan.fingerprint, "approved")
+    # The picture's row carries the guard now (issue #2027): it is what every
+    # reader consults, so a verdict that lost a race against a re-upload has to
+    # be refused there. The member row's copy follows unguarded, because the
+    # row above already answered the same question about the same bytes.
+    case Images.mark_moderation(scan.subject_id, scan.kind, scan.fingerprint, "approved") do
+      :ok ->
+        sync_member_row(scan.subject_id, [{config.moderation, "approved"}])
         config.module.promote_from_quarantine(Repo.get!(User, scan.subject_id))
         broadcast(scan, :approved)
         :ok
 
-      _ ->
+      :stale ->
         :stale
     end
   end
@@ -549,20 +549,17 @@ defmodule Vutuv.Moderation.ImageSubjects do
   def apply_rejected(%ImageScan{kind: kind} = scan) when is_map_key(@profile_images, kind) do
     config = @profile_images[kind]
 
-    cleared =
-      from(u in User,
-        where: u.id == ^scan.subject_id and field(u, ^config.fingerprint) == ^scan.fingerprint
-      )
-      |> Repo.update_all(set: clear_profile_columns(config))
-
-    case cleared do
-      {1, _} ->
-        Images.forget_profile_image(scan.subject_id, scan.kind)
+    # Same order as the approve above: the row is the guard, the member row's
+    # four columns follow. An interruption between the two can only leave a
+    # member row naming a picture no reader can find, never the other way round.
+    case Images.discard_profile_image(scan.subject_id, scan.kind, scan.fingerprint) do
+      :ok ->
+        sync_member_row(scan.subject_id, clear_profile_columns(config))
         config.module.delete(%User{id: scan.subject_id})
         broadcast(scan, :rejected)
         :ok
 
-      _ ->
+      :stale ->
         :stale
     end
   end
@@ -862,19 +859,13 @@ defmodule Vutuv.Moderation.ImageSubjects do
   def cleanup_canceled(%ImageScan{kind: kind} = scan) when is_map_key(@profile_images, kind) do
     config = @profile_images[kind]
 
-    cleared =
-      from(u in User,
-        where:
-          u.id == ^scan.subject_id and
-            field(u, ^config.fingerprint) == ^scan.fingerprint and
-            field(u, ^config.moderation) == "pending"
-      )
-      |> Repo.update_all(set: clear_profile_columns(config))
-
-    # Only when this scan's own picture was the one cleared — the common case
-    # here is a stale cancel that matches nothing, and a delete then would take
-    # out the row of a picture uploaded since.
-    if match?({1, _}, cleared), do: Images.forget_profile_image(scan.subject_id, scan.kind)
+    # Only when this scan's own picture is still the one waiting — the common
+    # case here is a stale cancel that matches nothing, and clearing then would
+    # take out a picture uploaded since. The row answers that (issue #2027),
+    # and the member row's copy follows only once it has.
+    with :ok <- Images.discard_pending_image(scan.subject_id, scan.kind, scan.fingerprint) do
+      sync_member_row(scan.subject_id, clear_profile_columns(config))
+    end
 
     :ok
   end
@@ -889,11 +880,20 @@ defmodule Vutuv.Moderation.ImageSubjects do
 
   def cleanup_canceled(%ImageScan{}), do: :ok
 
+  # The member row's copy of a profile picture's four columns, kept in step
+  # with the row the verdict already decided on. Written here in one place, so
+  # the deploy that drops those columns deletes one function rather than
+  # hunting three `update_all`s (issue #2027).
+  defp sync_member_row(user_id, sets) do
+    from(u in User, where: u.id == ^user_id) |> Repo.update_all(set: sets)
+    :ok
+  end
+
   # The four profile-image columns (file, fingerprint, crop, moderation) and the
   # pointer at the shared `images` row reset to nil when a scan rejects the
-  # image or cancels a pending one. The row itself is deleted beside this
-  # (`Vutuv.Images.forget_profile_image/2`): "there is a row" and "there is a
-  # picture" stay the same statement.
+  # image or cancels a pending one. The row itself is deleted **before** this,
+  # by `Vutuv.Images.discard_profile_image/3`, which is also the guard: "there
+  # is a row" and "there is a picture" stay the same statement.
   defp clear_profile_columns(config),
     do: [
       {config.file, nil},
@@ -1038,13 +1038,15 @@ defmodule Vutuv.Moderation.ImageSubjects do
   end
 
   defp profile_stranded(kind) do
-    config = @profile_images[kind]
+    pointer = @profile_images[kind].pointer
 
     from(u in User,
       as: :subject,
-      where: field(u, ^config.moderation) == "pending",
+      join: i in Images.Image,
+      on: i.id == field(u, ^pointer),
+      where: i.moderation == "pending",
       where: not exists(open_scan_exists(kind)),
-      select: {u.id, field(u, ^config.fingerprint)}
+      select: {u.id, i.fingerprint}
     )
     |> Repo.all()
     |> Enum.map(fn {id, fingerprint} -> {kind, id, id, fingerprint} end)

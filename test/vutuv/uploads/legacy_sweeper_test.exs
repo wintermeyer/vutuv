@@ -9,6 +9,11 @@ defmodule Vutuv.Uploads.LegacySweeperTest do
   use Vutuv.DataCase, async: false
 
   import Vutuv.Factory
+  # Since #2027 a picture IS its row in the shared `images` table: this sweeper
+  # picks its rows by the member row's pointer at one and reads the fingerprint
+  # off the row, so a fixture that sets only `users.avatar` is a member with no
+  # picture at all.
+  import Vutuv.ImageHelpers
 
   alias Vutuv.Uploads.LegacySweeper
   alias Vutuv.Uploads.Spec
@@ -47,6 +52,7 @@ defmodule Vutuv.Uploads.LegacySweeperTest do
   defp migrated_avatar!(tmp, fp \\ "abc123abc123") do
     user = insert(:user, first_name: "Ada", last_name: "King", avatar: "selfie.jpg")
     {:ok, user} = user |> Ecto.Changeset.change(avatar_fingerprint: fp) |> Repo.update()
+    user = with_image_rows(user)
     dir = Path.join(tmp, "avatars/#{user.id}")
 
     for version <- @avatar_versions do
@@ -77,12 +83,19 @@ defmodule Vutuv.Uploads.LegacySweeperTest do
     assert length(File.ls!(dir)) == length(@avatar_versions) + 2
   end
 
-  test "never visits a row still on the legacy scheme (nil fingerprint)", %{tmp: tmp} do
-    user = insert(:user, first_name: "Ada", last_name: "King", avatar: "selfie.jpg")
+  # Since #2027 the query picks every member with a picture and the fingerprint
+  # is read off its row, so a legacy-scheme picture is loaded and then refused
+  # inside `Vutuv.Uploads.sweep_legacy/3` — it counts as skipped rather than
+  # being filtered out before the sweeper ever sees it. What must not move is
+  # the file: nothing is removed, either way.
+  test "never strips a row still on the legacy scheme (nil fingerprint)", %{tmp: tmp} do
+    user =
+      with_image_rows(insert(:user, first_name: "Ada", last_name: "King", avatar: "selfie.jpg"))
+
     dir = Path.join(tmp, "avatars/#{user.id}")
     touch!(Path.join(dir, "Ada King_thumb.jpg"))
 
-    assert %{avatars: %{rows: 0, files_removed: 0, skipped: 0}} =
+    assert %{avatars: %{rows: 0, files_removed: 0, skipped: 1}} =
              LegacySweeper.run(only: :avatars)
 
     assert File.exists?(Path.join(dir, "Ada King_thumb.jpg"))
@@ -91,7 +104,8 @@ defmodule Vutuv.Uploads.LegacySweeperTest do
   test "leaves a half-migrated row (current versions missing) untouched", %{tmp: tmp} do
     fp = "abc123abc123"
     user = insert(:user, first_name: "Ada", last_name: "King", avatar: "selfie.jpg")
-    {:ok, _} = user |> Ecto.Changeset.change(avatar_fingerprint: fp) |> Repo.update()
+    {:ok, user} = user |> Ecto.Changeset.change(avatar_fingerprint: fp) |> Repo.update()
+    _user = with_image_rows(user)
     dir = Path.join(tmp, "avatars/#{user.id}")
     # Only the legacy file exists; the current fingerprinted versions are absent,
     # so stripping the legacy file would leave the row with nothing.

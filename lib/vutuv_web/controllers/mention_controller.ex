@@ -72,16 +72,11 @@ defmodule VutuvWeb.MentionController do
     }
   end
 
-  # `display_url/2` answers the inline-data placeholder for a member with no
-  # picture (and for one whose avatar is still in moderation limbo); the row
-  # wants a real URL or nothing, because the editor draws the initials tile
+  # `url/2` is already "a real URL or nothing" — nil for a member with no
+  # picture, for one the AI gate still holds and for one a copyright case froze
+  # — which is what the row wants, because the editor draws the initials tile
   # itself rather than a data URI it cannot size.
-  defp avatar_url(%User{} = user) do
-    case Avatar.display_url(user, :thumb) do
-      "data:" <> _placeholder -> nil
-      url -> url
-    end
-  end
+  defp avatar_url(%User{} = user), do: Avatar.url(user, :thumb)
 
   defp avatar_url(%Organization{logo: nil}), do: nil
 

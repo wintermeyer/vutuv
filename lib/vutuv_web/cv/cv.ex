@@ -453,8 +453,6 @@ defmodule VutuvWeb.CV do
 
   # Only a real derived JPEG makes it into the CV — the silhouette
   # placeholder Avatar.binary/2 falls back to has no place on a Lebenslauf.
-  defp photo(%{avatar: nil}, _opts), do: nil
-
   defp photo(user, opts) do
     if Keyword.get(opts, :photo, false) do
       case Vutuv.Avatar.binary(user, :medium) do

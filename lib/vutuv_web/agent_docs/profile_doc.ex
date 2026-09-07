@@ -277,13 +277,13 @@ defmodule VutuvWeb.AgentDocs.ProfileDoc do
   end
 
   @doc """
-  The member's absolute avatar URL, or nil when only the inline-data
-  placeholder exists. Public because the JSON-LD Person (`VutuvWeb.JsonLd`)
-  shares it — the markup must mirror the doc.
+  The member's absolute avatar URL, or nil when there is no picture a reader
+  may fetch. Public because the JSON-LD Person (`VutuvWeb.JsonLd`) shares it —
+  the markup must mirror the doc.
   """
   def avatar_url(user) do
-    case Vutuv.Avatar.display_url(user, :medium) do
-      "data:" <> _ -> nil
+    case Vutuv.Avatar.url(user, :medium) do
+      nil -> nil
       "/" <> _ = path -> AgentDocs.abs_url(path)
       url -> url
     end

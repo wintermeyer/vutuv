@@ -16,6 +16,8 @@ defmodule Vutuv.Social do
 
   alias Vutuv.AccountEvents
   alias Vutuv.Accounts.User
+  alias Vutuv.Images
+  alias Vutuv.Images.Image
   alias Vutuv.Keyset
   alias Vutuv.Organizations.Organization
   alias Vutuv.Pages
@@ -781,7 +783,10 @@ defmodule Vutuv.Social do
       end
 
     query = Follow.latest(100, person) |> Pages.paginate(params, total)
-    user = Repo.preload(user, [{assoc, {query, [person]}}])
+    # `{person, :avatar_image}`: the row each listed member's avatar URL is
+    # built from (#2027), batched into the same page rather than one lookup per
+    # row.
+    user = Repo.preload(user, [{assoc, {query, [{person, :avatar_image}]}}])
 
     %{
       user: user,
@@ -1087,16 +1092,18 @@ defmodule Vutuv.Social do
   filtered at the call site, the way every candidate pool here is.
   """
   def newest_members_with_avatar(limit) do
-    Repo.all(
-      from(u in User,
-        where: account_confirmed_row(u) and not account_hidden_row(u),
-        where: not is_nil(u.avatar),
-        where: is_nil(u.avatar_moderation) or u.avatar_moderation == "approved",
-        order_by: [desc: u.id],
-        limit: ^limit,
-        select: struct(u, ^User.listing_fields())
-      )
+    from(u in User,
+      join: i in Image,
+      on: i.id == u.avatar_image_id,
+      where: account_confirmed_row(u) and not account_hidden_row(u),
+      where: is_nil(i.moderation) or i.moderation == "approved",
+      where: is_nil(i.frozen_at),
+      order_by: [desc: u.id],
+      limit: ^limit,
+      select: struct(u, ^User.listing_fields()),
+      preload: [avatar_image: i]
     )
+    |> Repo.all()
   end
 
   @doc """
@@ -1620,6 +1627,7 @@ defmodule Vutuv.Social do
       |> ordered_connections_query()
       |> Pages.paginate(params, total)
       |> Repo.all()
+      |> preload_row_avatars()
 
     %{user: user, connections: connections, total: total}
   end
@@ -1641,6 +1649,14 @@ defmodule Vutuv.Social do
   # The mutual-follow set ordered newest-pair-first and shaped into the
   # `%{user:, follow_id:, muted?:}` rows both the full list and the paginated
   # connections page render.
+  # The picture row of every member on a page of `%{user: …}` rows, in one
+  # read. `/:slug/connections` is public, crawlable and 250 rows deep, so a
+  # lookup per row is what this exists to prevent (issue #2027).
+  defp preload_row_avatars(rows) do
+    preloaded = rows |> Enum.map(& &1.user) |> Images.preload_avatars()
+    Enum.zip_with(rows, preloaded, &%{&1 | user: &2})
+  end
+
   defp ordered_connections_query(user_id) do
     mutual_follows_query(user_id)
     |> order_by([out, back], desc: fragment("GREATEST(?, ?)", out.id, back.id))

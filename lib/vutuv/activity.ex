@@ -47,6 +47,7 @@ defmodule Vutuv.Activity do
   alias Vutuv.Fediverse.Note
   alias Vutuv.Fediverse.Reaction
   alias Vutuv.Identity
+  alias Vutuv.Images
   alias Vutuv.MastodonApi.PushDispatcher
   alias Vutuv.Moderation.ImageScans
   alias Vutuv.Organizations.Organization
@@ -1447,6 +1448,7 @@ defmodule Vutuv.Activity do
     |> order_by([e], desc: e.at, desc: e.id)
     |> select([e, f, o], {e.id, e.at, struct(f, ^User.listing_fields()), o})
     |> Repo.all()
+    |> preload_actor_avatars(2)
     |> Enum.map(fn {id, at, follower, organization} ->
       actor_item(event_id("follower", id), "follower", at, follower || organization)
     end)
@@ -1465,6 +1467,7 @@ defmodule Vutuv.Activity do
     )
     |> at_or_before(cursor)
     |> Repo.all()
+    |> preload_actor_avatars(2)
     |> Enum.map(fn {id, at, endorser, tag_name} ->
       event_id("endorsement", id)
       |> actor_item("endorsement", at, endorser)
@@ -1527,6 +1530,7 @@ defmodule Vutuv.Activity do
       }
     )
     |> Repo.all()
+    |> preload_actor_avatars(:friend)
     |> Enum.map(fn %{id: id, at: at, friend: friend, self_closed: self_closed} ->
       event_id("connection", id)
       |> actor_item("connection", at, friend)
@@ -1548,6 +1552,7 @@ defmodule Vutuv.Activity do
     )
     |> at_or_before(cursor)
     |> Repo.all()
+    |> preload_actor_avatars(2)
     |> Enum.map(fn {id, at, replier, parent_post_id, reply_post_id} ->
       event_id("reply", id)
       |> actor_item("reply", at, replier)
@@ -1575,6 +1580,7 @@ defmodule Vutuv.Activity do
     )
     |> at_or_before(cursor)
     |> Repo.all()
+    |> preload_actor_avatars(2)
     |> Enum.map(fn {id, at, replier, root_post_id, reply_post_id} ->
       event_id("thread", id)
       |> actor_item("thread", at, replier)
@@ -1610,6 +1616,7 @@ defmodule Vutuv.Activity do
     )
     |> at_or_before(cursor)
     |> Repo.all()
+    |> preload_actor_avatars(2)
     |> Enum.map(fn {id, at, author, organization, post_id} ->
       actor = mention_actor(author, organization)
 
@@ -1869,6 +1876,7 @@ defmodule Vutuv.Activity do
     )
     |> at_or_before(cursor)
     |> Repo.all()
+    |> preload_actor_avatars(2)
     |> Enum.map(fn {id, at, liker, page, post_id} ->
       event_id("like", id)
       |> actor_item("like", at, liker || page)
@@ -1894,6 +1902,7 @@ defmodule Vutuv.Activity do
     )
     |> at_or_before(cursor)
     |> Repo.all()
+    |> preload_actor_avatars(2)
     |> Enum.map(fn {id, at, granter, role, name, slug} ->
       event_id("organization_role", id)
       |> actor_item("organization_role", at, granter)
@@ -1999,6 +2008,7 @@ defmodule Vutuv.Activity do
       |> at_or_before(cursor)
       |> select([s, u], {s.id, s.inserted_at, struct(u, ^User.listing_fields())})
       |> Repo.all()
+      |> preload_actor_avatars(2)
       |> Enum.map(fn {id, at, reported} ->
         protection_item(event_id("report_protection", id), "severed", at, reported)
       end)
@@ -2012,6 +2022,7 @@ defmodule Vutuv.Activity do
       |> restored_at_or_before(cursor)
       |> select([s, u], {s.id, s.restored_at, struct(u, ^User.listing_fields())})
       |> Repo.all()
+      |> preload_actor_avatars(2)
       |> Enum.map(fn {id, at, reported} ->
         protection_item(event_id("report_protection_restored", id), "restored", at, reported)
       end)
@@ -2037,6 +2048,7 @@ defmodule Vutuv.Activity do
     )
     |> at_or_before(cursor)
     |> Repo.all()
+    |> preload_actor_avatars(2)
     |> Enum.map(fn {id, at, actor, old_handle, new_handle, post_ids} ->
       event_id("handle_change", id)
       |> actor_item("handle_change", at, actor)
@@ -2054,6 +2066,7 @@ defmodule Vutuv.Activity do
   defp cv_update_items(user_id, limit, cursor) do
     user_id
     |> CvUpdates.page(limit, cursor)
+    |> preload_actor_avatars(:author)
     |> Enum.map(fn %{author: author} = group ->
       group
       |> Map.delete(:author)
@@ -2163,6 +2176,48 @@ defmodule Vutuv.Activity do
 
   defp actor_item(id, kind, at, actor) do
     Map.merge(actor_fields(actor), %{id: id, kind: kind, at: at})
+  end
+
+  # The picture row of every member a source's rows name, in one read, before
+  # the items are built. Each source fetches `offset + limit + 1` rows and
+  # `Vutuv.FeedPage` then merges the sources and keeps `limit` of them, so an
+  # avatar resolved on the way past is work thrown away for about nine rows in
+  # ten: page 1 of /notifications builds some 612 items to show 50, and
+  # `Vutuv.Images.member_image/2` answered each one with its own primary-key
+  # lookup (issue #2027).
+  #
+  # Only a `%User{}` that points at a picture is worth loading. Everybody else
+  # on these rows (a page, a remote actor, a member with no picture, the
+  # all-nil `%User{}` a missed LEFT join yields) costs no query either way and
+  # rides through untouched. `index` reads the actor out of a row tuple, `key`
+  # out of a row map, and each actor goes back on its own row by id.
+  defp preload_actor_avatars(rows, index) when is_integer(index),
+    do: put_actor_avatars(rows, &elem(&1, index), &put_elem(&1, index, &2))
+
+  defp preload_actor_avatars(rows, key) when is_atom(key),
+    do: put_actor_avatars(rows, &Map.fetch!(&1, key), &Map.put(&1, key, &2))
+
+  defp put_actor_avatars(rows, get, put) do
+    by_id =
+      rows
+      |> Enum.map(get)
+      |> Enum.filter(&match?(%User{avatar_image_id: id} when is_binary(id), &1))
+      |> Images.preload_avatars()
+      |> Map.new(&{&1.id, &1})
+
+    put_preloaded(rows, by_id, get, put)
+  end
+
+  # Nothing on this page had a picture, so there is nothing to put back.
+  defp put_preloaded(rows, by_id, _get, _put) when map_size(by_id) == 0, do: rows
+
+  defp put_preloaded(rows, by_id, get, put) do
+    Enum.map(rows, fn row ->
+      case get.(row) do
+        %User{id: id} = actor -> put.(row, Map.get(by_id, id, actor))
+        _no_member -> row
+      end
+    end)
   end
 
   # The actor half for somebody on **another** network (issue #1069). They have
@@ -2448,14 +2503,11 @@ defmodule Vutuv.Activity do
   defp actor_param(%Organization{slug: slug}), do: slug
   defp actor_param(_), do: nil
 
-  # nil (not the default-placeholder URL) when the actor has no picture, so
-  # the notifications page renders its colored kind glyph instead of a grey
-  # anonymous image.
-  defp actor_avatar(%User{avatar: nil}), do: nil
-  # An avatar in AI-moderation limbo renders like none (the kind glyph), not
-  # as the grey placeholder display_url would fall back to.
-  defp actor_avatar(%User{avatar_moderation: "pending"}), do: nil
-  defp actor_avatar(%User{} = user), do: Vutuv.Avatar.display_url(user, :thumb)
+  # nil (not the default-placeholder URL) when there is no picture a reader
+  # may see, so the notifications page renders its colored kind glyph instead
+  # of a grey anonymous image. `url/2` is already exactly that answer: no
+  # picture, one the AI gate still holds, one a copyright case froze.
+  defp actor_avatar(%User{} = user), do: Vutuv.Avatar.url(user, :thumb)
   # nil for an organization: the notifications page then draws its coloured kind
   # glyph, which is honest, where a member's avatar helper would not know how to
   # find a page's logo anyway.

@@ -572,11 +572,18 @@ defmodule Vutuv.Accounts.User do
   so their group-by doesn't drag all user columns through aggregate and sort.
   """
   def listing_fields do
-    # :avatar_fingerprint is loaded so listing-rendered avatars build the
-    # fingerprinted URL `<username>-<version>-<fp>.avif` (see Vutuv.Uploads).
-    # :updated_at is still loaded for rows not yet migrated to that scheme: their
-    # avatar falls back to the legacy `?v=#{phash2(updated_at)}` cache-buster, so
-    # a re-uploaded thumbnail doesn't keep serving the cached old image.
+    # :avatar_image_id is the pointer at the picture's row in the shared
+    # `images` table, which is where every avatar URL is built from since
+    # #2027. Leave it out and a whole listing page loses its pictures at once,
+    # since `Vutuv.Images.member_image/2` has nothing to look the row up by.
+    # :avatar and :avatar_fingerprint stay beside it to feed that function's
+    # **bridge**, the fallback that reads a picture off the member row for a
+    # member the backfill has not reached; they go with the bridge and with the
+    # column writes, in the deploy before the migration.
+    # :updated_at is still loaded for rows not yet on the fingerprinted scheme:
+    # their avatar falls back to the legacy `?v=#{phash2(updated_at)}`
+    # cache-buster, so a re-uploaded thumbnail doesn't keep serving the cached
+    # old image.
     # :profile_work_experience_id is loaded so a listing row's work line reflects
     # a member's pinned profile job title (issue #833) via work_information_map/2,
     # not just the automatic heuristic.
@@ -584,7 +591,7 @@ defmodule Vutuv.Accounts.User do
     # `rel="nofollow"` for a member who opted out of search engines
     # (VutuvWeb.UserHelpers.profile_rel/1). Left out, the struct would carry the
     # schema default `false` and the link would silently fail open.
-    ~w(id first_name last_name honorific_prefix honorific_suffix username avatar avatar_fingerprint updated_at profile_work_experience_id noindex?)a
+    ~w(id first_name last_name honorific_prefix honorific_suffix username avatar_image_id avatar avatar_fingerprint updated_at profile_work_experience_id noindex?)a
   end
 
   # :username is deliberately NOT here: the username is unique, rate-limited
@@ -1612,7 +1619,7 @@ defmodule Vutuv.Accounts.User do
 
     def path(user), do: "/" <> user.username
 
-    def image(user), do: user.avatar
+    def image(user), do: Vutuv.Images.shown_file(user, "avatar")
 
     def hidden?(user), do: not Vutuv.Moderation.profile_visible_to?(user, nil)
 

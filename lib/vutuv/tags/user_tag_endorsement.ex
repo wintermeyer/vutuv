@@ -45,6 +45,8 @@ defmodule Vutuv.Tags.UserTagEndorsement do
   proof on the profile Tags card — without an extra query per endorsement.
   """
   def visible_with_endorser(query \\ __MODULE__) do
-    from([e, u] in visible(query), preload: [user: u])
+    # The endorser's avatar row rides along: `/:slug/tags` draws up to fifteen
+    # tags of seven faces each, so one lookup per face is a hundred queries.
+    from([e, u] in visible(query), preload: [user: {u, :avatar_image}])
   end
 end

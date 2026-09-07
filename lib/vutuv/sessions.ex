@@ -86,12 +86,19 @@ defmodule Vutuv.Sessions do
   The active (not revoked) session for `raw_token`, or `nil` when the token is
   missing, unknown, or revoked. The owner preloaded, so the plug can apply the
   same suspension/deactivation gate it applies to a freshly loaded user.
+
+  The owner's avatar row rides along in the same query (issue #2027): the top
+  bar draws that face on every page and every socket connect, so resolving it
+  afterwards would be one extra round trip on the most-travelled path in the
+  app. A `left_join`, so a member without a picture still gets their session.
   """
   def active_session(token) when is_binary(token) do
     Repo.one(
       from(s in UserSession,
+        join: u in assoc(s, :user),
+        left_join: ai in assoc(u, :avatar_image),
         where: s.token_hash == ^hash_token(token) and is_nil(s.revoked_at),
-        preload: [:user]
+        preload: [user: {u, avatar_image: ai}]
       )
     )
   end

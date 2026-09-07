@@ -14,9 +14,15 @@ defmodule Vutuv.AvatarTest do
   name-derived `<First Last>_thumb.avif`) keep resolving through a transitional
   fallback until `Vutuv.Uploads.Regenerator` has re-derived them under the
   stable name.
+
+  Every URL here is built from the picture's row in the shared `images` table
+  (`Vutuv.Images`, issue #2027), so each test hangs a row on the member struct
+  with `Vutuv.ImageHelpers.put_image/3` instead of setting a member column.
   """
   # Not async: these tests set the global `:uploads_dir_prefix` application env.
   use ExUnit.Case, async: false
+
+  import Vutuv.ImageHelpers
 
   alias Vix.Vips.Image, as: VipsImage
   alias Vix.Vips.MutableImage
@@ -37,10 +43,10 @@ defmodule Vutuv.AvatarTest do
   # `Vutuv.Uploads.served_url/4`. Constant here because `@user.updated_at` is.
   @v "?v=#{:erlang.phash2(~N[2024-03-02 10:20:30])}"
 
-  # A stand-in content fingerprint (sha256(original)[0..11]) for scheme B: when a
-  # user carries one, the served filename bakes in the handle + fingerprint and
-  # the URL drops the `?v=` (Vutuv.Uploads). 12 lowercase hex chars, like the
-  # real thing and like Vutuv.Screenshot.
+  # A stand-in content fingerprint (sha256(original)[0..11]) for scheme B: when
+  # the picture's row carries one, the served filename bakes in the handle +
+  # fingerprint and the URL drops the `?v=` (Vutuv.Uploads). 12 lowercase hex
+  # chars, like the real thing and like Vutuv.Screenshot.
   @fingerprint "1a2b3c4d5e6f"
 
   setup do
@@ -61,35 +67,35 @@ defmodule Vutuv.AvatarTest do
 
   describe "url/2 (the contract nginx + templates depend on)" do
     test "builds the stable, id-scoped version path with the served .avif extension" do
-      assert Vutuv.Avatar.url({"selfie.jpg", @user}, :thumb) ==
+      assert Vutuv.Avatar.url(avatar(@user, file: "selfie.jpg"), :thumb) ==
                "/avatars/7/avatar_thumb.avif" <> @v
 
-      assert Vutuv.Avatar.url({"selfie.jpg", @user}, :medium) ==
+      assert Vutuv.Avatar.url(avatar(@user, file: "selfie.jpg"), :medium) ==
                "/avatars/7/avatar_medium.avif" <> @v
     end
 
     test "the served filename does not embed the display name, so a rename keeps it (issue #773)" do
       renamed = %{@user | first_name: "Jane", last_name: "Smith"}
 
-      assert Vutuv.Avatar.url({"selfie.jpg", renamed}, :thumb) ==
+      assert Vutuv.Avatar.url(avatar(renamed, file: "selfie.jpg"), :thumb) ==
                "/avatars/7/avatar_thumb.avif" <> @v
     end
 
     test "the stored filename's extension does not leak into served URLs" do
-      assert Vutuv.Avatar.url({"selfie.PNG", @user}, :medium) ==
+      assert Vutuv.Avatar.url(avatar(@user, file: "selfie.PNG"), :medium) ==
                "/avatars/7/avatar_medium.avif" <> @v
     end
 
     test "the original is not URL-addressable" do
-      assert Vutuv.Avatar.url({"selfie.jpg", @user}, :original) == nil
+      assert Vutuv.Avatar.url(avatar(@user, file: "selfie.jpg"), :original) == nil
     end
 
     test "returns nil when there is no avatar" do
-      assert Vutuv.Avatar.url({nil, @user}, :thumb) == nil
+      assert Vutuv.Avatar.url(without_image(@user, "avatar"), :thumb) == nil
     end
 
     test "default version is :medium" do
-      assert Vutuv.Avatar.url({"selfie.jpg", @user}) ==
+      assert Vutuv.Avatar.url(avatar(@user, file: "selfie.jpg")) ==
                "/avatars/7/avatar_medium.avif" <> @v
     end
 
@@ -99,75 +105,74 @@ defmodule Vutuv.AvatarTest do
       {:ok, img} = Image.new(20, 20, color: [1, 2, 3])
       {:ok, _} = Image.write(img, Path.join(dir, "John Doe_thumb.jpg"))
 
-      assert Vutuv.Avatar.url({"selfie.jpg?63876543210", @user}, :thumb) ==
+      assert Vutuv.Avatar.url(avatar(@user, file: "selfie.jpg?63876543210"), :thumb) ==
                "/avatars/7/John%20Doe_thumb.jpg" <> @v
 
       # The name-derived .avif wins over the pre-AVIF legacy file.
       {:ok, _} = Image.write(img, Path.join(dir, "John Doe_thumb.avif"))
 
-      assert Vutuv.Avatar.url({"selfie.jpg?63876543210", @user}, :thumb) ==
+      assert Vutuv.Avatar.url(avatar(@user, file: "selfie.jpg?63876543210"), :thumb) ==
                "/avatars/7/John%20Doe_thumb.avif" <> @v
 
       # ...and once the regenerator has written the stable id-scoped file, that
       # wins over every name-derived legacy file (issue #773).
       {:ok, _} = Image.write(img, Path.join(dir, "avatar_thumb.avif"))
 
-      assert Vutuv.Avatar.url({"selfie.jpg?63876543210", @user}, :thumb) ==
+      assert Vutuv.Avatar.url(avatar(@user, file: "selfie.jpg?63876543210"), :thumb) ==
                "/avatars/7/avatar_thumb.avif" <> @v
     end
   end
 
   describe "cache-busting (a re-upload must not keep showing the cached image)" do
     test "appends a ?v= token derived from the scope's updated_at" do
-      assert Vutuv.Avatar.url({"selfie.jpg", @user}, :medium) ==
+      assert Vutuv.Avatar.url(avatar(@user, file: "selfie.jpg"), :medium) ==
                "/avatars/7/avatar_medium.avif?v=#{:erlang.phash2(@user.updated_at)}"
     end
 
     test "the token changes when updated_at changes (so the URL does too)" do
       touched = %{@user | updated_at: ~N[2024-03-02 10:20:31]}
 
-      refute Vutuv.Avatar.url({"selfie.jpg", touched}, :medium) ==
-               Vutuv.Avatar.url({"selfie.jpg", @user}, :medium)
+      refute Vutuv.Avatar.url(avatar(touched, file: "selfie.jpg"), :medium) ==
+               Vutuv.Avatar.url(avatar(@user, file: "selfie.jpg"), :medium)
     end
 
     test "the token is stable for an unchanged updated_at (URL stays cacheable)" do
-      assert Vutuv.Avatar.url({"selfie.jpg", @user}, :medium) ==
-               Vutuv.Avatar.url({"selfie.jpg", @user}, :medium)
+      assert Vutuv.Avatar.url(avatar(@user, file: "selfie.jpg"), :medium) ==
+               Vutuv.Avatar.url(avatar(@user, file: "selfie.jpg"), :medium)
     end
 
     test "no token when the scope carries no updated_at (e.g. an unpersisted struct)" do
-      assert Vutuv.Avatar.url({"selfie.jpg", %{@user | updated_at: nil}}, :medium) ==
+      assert Vutuv.Avatar.url(avatar(%{@user | updated_at: nil}, file: "selfie.jpg"), :medium) ==
                "/avatars/7/avatar_medium.avif"
     end
   end
 
   describe "fingerprinted URL (scheme B: handle + content hash in the filename)" do
     setup do
-      {:ok, user: %{@user | avatar: "selfie.jpg", avatar_fingerprint: @fingerprint}}
+      {:ok, user: avatar(@user, file: "selfie.jpg", fingerprint: @fingerprint)}
     end
 
     test "bakes <handle>-<version>-<fingerprint>.avif and drops the ?v= query", %{user: user} do
-      assert Vutuv.Avatar.url({"selfie.jpg", user}, :medium) ==
+      assert Vutuv.Avatar.url(user, :medium) ==
                "/avatars/7/john.doe-medium-#{@fingerprint}.avif"
 
-      assert Vutuv.Avatar.url({"selfie.jpg", user}, :thumb) ==
+      assert Vutuv.Avatar.url(user, :thumb) ==
                "/avatars/7/john.doe-thumb-#{@fingerprint}.avif"
 
-      refute Vutuv.Avatar.url({"selfie.jpg", user}, :medium) =~ "?"
+      refute Vutuv.Avatar.url(user, :medium) =~ "?"
     end
 
     test "the download filename moves with the handle when the slug changes", %{user: user} do
       renamed = %{user | username: "jane.smith"}
 
-      assert Vutuv.Avatar.url({"selfie.jpg", renamed}, :medium) ==
+      assert Vutuv.Avatar.url(renamed, :medium) ==
                "/avatars/7/jane.smith-medium-#{@fingerprint}.avif"
     end
 
     test "a new fingerprint changes the URL (the cache-buster lives in the name)", %{user: user} do
-      reuploaded = %{user | avatar_fingerprint: "ffffffffffff"}
+      reuploaded = avatar(@user, file: "selfie.jpg", fingerprint: "ffffffffffff")
 
-      refute Vutuv.Avatar.url({"selfie.jpg", reuploaded}, :medium) ==
-               Vutuv.Avatar.url({"selfie.jpg", user}, :medium)
+      refute Vutuv.Avatar.url(reuploaded, :medium) == Vutuv.Avatar.url(user, :medium)
     end
 
     test "display_url/2 emits the fingerprinted URL", %{user: user} do
@@ -175,25 +180,20 @@ defmodule Vutuv.AvatarTest do
                "/avatars/7/john.doe-medium-#{@fingerprint}.avif"
     end
 
-    test "a nil fingerprint still serves the legacy ?v= URL (row not yet migrated)" do
-      assert Vutuv.Avatar.url({"selfie.jpg", @user}, :medium) ==
+    test "a picture row with no fingerprint still serves the legacy ?v= URL (not yet migrated)" do
+      assert Vutuv.Avatar.url(avatar(@user, file: "selfie.jpg"), :medium) ==
                "/avatars/7/avatar_medium.avif" <> @v
     end
   end
 
-  test "user_url/2 reads the avatar field off the user" do
-    user = %{@user | avatar: "selfie.jpg"}
-    assert Vutuv.Avatar.user_url(user, :medium) == "/avatars/7/avatar_medium.avif" <> @v
-  end
-
   describe "binary/2 (base64 JPEG used by the vCard export)" do
     test "returns the default SVG data URI when the user has no avatar" do
-      data = Vutuv.Avatar.binary(%{@user | avatar: nil}, :thumb)
+      data = Vutuv.Avatar.binary(without_image(@user, "avatar"), :thumb)
       assert String.starts_with?(data, "data:image/svg+xml,")
     end
 
     test "returns the default SVG when the original is missing on disk" do
-      data = Vutuv.Avatar.binary(%{@user | avatar: "missing.jpg"}, :thumb)
+      data = Vutuv.Avatar.binary(avatar(@user, file: "missing.jpg"), :thumb)
       assert String.starts_with?(data, "data:image/svg+xml,")
     end
 
@@ -204,7 +204,7 @@ defmodule Vutuv.AvatarTest do
       {:ok, _} = Image.write(img, Path.join(dir, "original.jpg"))
 
       assert "data:image/jpeg;base64," <> data =
-               Vutuv.Avatar.binary(%{@user | avatar: "orig.jpg"}, :thumb)
+               Vutuv.Avatar.binary(avatar(@user, file: "orig.jpg"), :thumb)
 
       assert {:ok, _} = Base.decode64(data)
     end
@@ -216,7 +216,7 @@ defmodule Vutuv.AvatarTest do
       {:ok, _} = Image.write(img, Path.join(dir, "original.png"))
 
       assert "data:image/jpeg;base64," <> _ =
-               Vutuv.Avatar.binary(%{@user | avatar: "orig.png"}, :thumb)
+               Vutuv.Avatar.binary(avatar(@user, file: "orig.png"), :thumb)
     end
 
     test "the derived JPEG carries no EXIF from the original", %{tmp: tmp} do
@@ -232,7 +232,7 @@ defmodule Vutuv.AvatarTest do
       {:ok, _} = Image.write(tagged, Path.join(dir, "original.jpg"))
 
       assert "data:image/jpeg;base64," <> data =
-               Vutuv.Avatar.binary(%{@user | avatar: "orig.jpg"}, :thumb)
+               Vutuv.Avatar.binary(avatar(@user, file: "orig.jpg"), :thumb)
 
       {:ok, jpeg} = data |> Base.decode64!() |> Image.from_binary()
       {:ok, fields} = VipsImage.header_field_names(jpeg)
@@ -247,7 +247,7 @@ defmodule Vutuv.AvatarTest do
       {:ok, img} = Image.new(600, 400, color: [10, 120, 200])
       {:ok, _} = Image.write(img, Path.join(dir, "original.jpg"))
 
-      assert {:ok, data} = Vutuv.Avatar.og_jpeg(%{@user | avatar: "orig.jpg"})
+      assert {:ok, data} = Vutuv.Avatar.og_jpeg(avatar(@user, file: "orig.jpg"))
       {:ok, jpeg} = Image.from_binary(data)
       size = Vutuv.Avatar.og_size()
       assert {Image.width(jpeg), Image.height(jpeg)} == {size, size}
@@ -261,25 +261,25 @@ defmodule Vutuv.AvatarTest do
       {:ok, img} = Image.new(192, 192, color: [10, 120, 200])
       {:ok, _} = Image.write(img, Path.join(dir, "John Doe_medium.avif"))
 
-      assert {:ok, data} = Vutuv.Avatar.og_jpeg(%{@user | avatar: "selfie.jpg"})
+      assert {:ok, data} = Vutuv.Avatar.og_jpeg(avatar(@user, file: "selfie.jpg"))
       {:ok, jpeg} = Image.from_binary(data)
       assert Image.width(jpeg) == Vutuv.Avatar.og_size()
     end
 
     test ":error without an avatar or with nothing usable on disk" do
-      assert Vutuv.Avatar.og_jpeg(%{@user | avatar: nil}) == :error
-      assert Vutuv.Avatar.og_jpeg(%{@user | avatar: "missing.jpg"}) == :error
+      assert Vutuv.Avatar.og_jpeg(without_image(@user, "avatar")) == :error
+      assert Vutuv.Avatar.og_jpeg(avatar(@user, file: "missing.jpg")) == :error
     end
   end
 
   describe "display_url/2 (what templates put in <img src>)" do
     test "returns the nginx-served URL when the user has an avatar" do
-      user = %{@user | avatar: "selfie.jpg"}
+      user = avatar(@user, file: "selfie.jpg")
       assert Vutuv.Avatar.display_url(user, :medium) == "/avatars/7/avatar_medium.avif" <> @v
     end
 
     test "falls back to the default SVG when the user has no avatar" do
-      data = Vutuv.Avatar.display_url(%{@user | avatar: nil}, :thumb)
+      data = Vutuv.Avatar.display_url(without_image(@user, "avatar"), :thumb)
       assert String.starts_with?(data, "data:image/svg+xml,")
     end
   end
@@ -288,7 +288,7 @@ defmodule Vutuv.AvatarTest do
   # profile picture: the 96 px thumb, offered only when its file is there.
   describe "picture/1" do
     setup do
-      {:ok, user: %{@user | avatar: "selfie.jpg", avatar_fingerprint: @fingerprint}}
+      {:ok, user: avatar(@user, file: "selfie.jpg", fingerprint: @fingerprint)}
     end
 
     test "is the picture alone outside data-saving mode", %{user: user} do
@@ -316,9 +316,19 @@ defmodule Vutuv.AvatarTest do
              }
     end
 
-    test "without an avatar the default tile has no lite either way" do
+    # A member with no picture at all is now told apart from one nobody may see:
+    # the row answers since #2027, so this one has no `src` and the caller draws
+    # its initials tile, while the silhouette stays for a picture on hold.
+    test "without an avatar there is nothing to show, and no lite either way" do
       Vutuv.LowBandwidth.put(true)
-      %{src: src, lite: nil} = Vutuv.Avatar.picture(%{@user | avatar: nil})
+      assert Vutuv.Avatar.picture(without_image(@user, "avatar")) == %{src: nil, lite: nil}
+    end
+
+    test "an avatar the AI gate still holds shows the silhouette, and no lite" do
+      Vutuv.LowBandwidth.put(true)
+      held = avatar(@user, file: "selfie.jpg", fingerprint: @fingerprint, moderation: "pending")
+
+      assert %{src: src, lite: nil} = Vutuv.Avatar.picture(held)
       assert String.starts_with?(src, "data:image/svg+xml,")
     end
   end
@@ -351,10 +361,9 @@ defmodule Vutuv.AvatarTest do
     test "the returned fingerprint is what url/2 then serves (write == URL)", %{src: src} do
       upload = %Plug.Upload{filename: "selfie.jpg", path: src, content_type: "image/jpeg"}
       assert {:ok, file_name, fp, _} = Vutuv.Avatar.store({upload, @user})
-      stored = %{@user | avatar: file_name, avatar_fingerprint: fp}
+      stored = avatar(@user, file: file_name, fingerprint: fp)
 
-      assert Vutuv.Avatar.url({file_name, stored}, :medium) ==
-               "/avatars/7/john.doe-medium-#{fp}.avif"
+      assert Vutuv.Avatar.url(stored, :medium) == "/avatars/7/john.doe-medium-#{fp}.avif"
     end
 
     test "a re-upload clears the prior fingerprinted versions (no accumulation)",
@@ -451,6 +460,11 @@ defmodule Vutuv.AvatarTest do
       assert {"is not a valid image", _} = changeset.errors[:avatar]
     end
   end
+
+  # This member with an avatar row hung on the struct, which is what every URL
+  # builder reads since #2027 (`Vutuv.Images.member_image/2`). No database:
+  # nothing here inserts a member.
+  defp avatar(user, attrs), do: put_image(user, "avatar", attrs)
 
   defp dimensions(path) do
     {:ok, img} = Image.open(path)

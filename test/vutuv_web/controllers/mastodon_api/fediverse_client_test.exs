@@ -23,6 +23,7 @@ defmodule VutuvWeb.MastodonApi.FediverseClientTest do
 
   alias Vutuv.Fediverse.PostBoost
   alias Vutuv.Fediverse.RemoteAccount
+  alias Vutuv.ImageHelpers
   alias Vutuv.MastodonApi
   alias Vutuv.MastodonApi.Presenter
   alias Vutuv.Posts
@@ -177,7 +178,9 @@ defmodule VutuvWeb.MastodonApi.FediverseClientTest do
 
   describe "a profile header" do
     test "is the member's cover photo, not the installation's icon", %{conn: conn} do
-      user = insert(:activated_user, cover_photo: "cover.avif", cover_moderation: "approved")
+      user =
+        insert(:activated_user, cover_photo: "cover.avif", cover_moderation: "approved")
+        |> ImageHelpers.with_image_rows()
 
       account =
         conn

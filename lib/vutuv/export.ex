@@ -18,6 +18,7 @@ defmodule Vutuv.Export do
   alias Vutuv.Fediverse.Note
   alias Vutuv.Fediverse.RemoteAccount
   alias Vutuv.Fediverse.RemotePost
+  alias Vutuv.Images
   alias Vutuv.Jobs.{JobPostingBookmark, JobPostingLike}
   alias Vutuv.Organizations.{OrganizationBookmark, OrganizationLike}
   alias Vutuv.Posts.{Post, PostBookmark, PostDraft, PostLike, PostRepost}
@@ -362,8 +363,8 @@ defmodule Vutuv.Export do
       email_on_follower: user.email_on_follower?,
       cv_update_notifications: user.cv_update_notifications?,
       identity_verified: user.identity_verified?,
-      avatar_file: user.avatar,
-      cover_photo_file: user.cover_photo,
+      avatar_file: Images.shown_file(user, "avatar"),
+      cover_photo_file: Images.shown_file(user, "cover"),
       registered_at: user.inserted_at
     }
   end

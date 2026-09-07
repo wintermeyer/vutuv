@@ -128,15 +128,16 @@ defmodule Vutuv.ImagesTest do
         })
 
       # The one shape other servers, Google and sent mail already hold:
-      # /avatars/<user id>/<handle>-<version>-<fingerprint>.avif — built from
-      # the member row's own columns, with the images row playing no part.
-      assert Vutuv.Avatar.url({user.avatar, user}, :medium) ==
+      # /avatars/<user id>/<handle>-<version>-<fingerprint>.avif. Since #2027
+      # the picture's row is what builds it — the string is byte-for-byte the
+      # one the member row's own columns produced, which is the whole point.
+      assert Vutuv.Avatar.url(user, :medium) ==
                "/avatars/#{user.id}/#{user.username}-medium-#{user.avatar_fingerprint}.avif"
 
       assert Vutuv.Avatar.display_url(user, :thumb) ==
                "/avatars/#{user.id}/#{user.username}-thumb-#{user.avatar_fingerprint}.avif"
 
-      assert Vutuv.Cover.url({user.cover_photo, user}, :wide) ==
+      assert Vutuv.Cover.url(user, :wide) ==
                "/covers/#{user.id}/#{user.username}-wide-#{user.cover_fingerprint}.avif"
     end
   end

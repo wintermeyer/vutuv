@@ -3,6 +3,8 @@ defmodule VutuvWeb.ProfileEditAffordancesTest do
 
   import Vutuv.Factory
 
+  alias Vutuv.ImageHelpers
+
   # The owner's add affordance is one visible "Add" button in each section's
   # card header (a <.add_action> brand link to the new-entry form, carrying a
   # data-add-action hook) — the same look and spot as the management pages, so
@@ -174,6 +176,10 @@ defmodule VutuvWeb.ProfileEditAffordancesTest do
 
       {:ok, user} =
         Repo.update(Ecto.Changeset.change(user, avatar: "me.jpg", headline: "Builder of things"))
+
+      # The picture step is done once the picture has its row in `images`,
+      # which is what the checklist reads since #2027.
+      user = ImageHelpers.with_image_rows(user)
 
       # The import step is done once the profile carries a career entry, which
       # is what the importer fills — typing one by hand counts just as much.

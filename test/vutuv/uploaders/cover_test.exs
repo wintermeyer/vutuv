@@ -5,9 +5,15 @@ defmodule Vutuv.CoverTest do
   id-scoped `covers/<user.id>/cover_<version>.avif` (nginx `location /covers/`),
   which a rename never orphans (issue #773); the uploaded original is kept
   privately at `originals/covers/<user.id>/original<ext>` and is never served.
+
+  Every URL here is built from the picture's row in the shared `images` table
+  (`Vutuv.Images`, issue #2027), so each test hangs a row on the member struct
+  with `Vutuv.ImageHelpers.put_image/3` instead of setting a member column.
   """
   # Not async: these tests set the global `:uploads_dir_prefix` application env.
   use ExUnit.Case, async: false
+
+  import Vutuv.ImageHelpers
 
   alias Vix.Vips.Image, as: VipsImage
   alias Vix.Vips.MutableImage
@@ -26,8 +32,9 @@ defmodule Vutuv.CoverTest do
   # 30-day browser/nginx cache. See `Vutuv.Uploads.served_url/4`.
   @v "?v=#{:erlang.phash2(~N[2024-03-02 10:20:30])}"
 
-  # A stand-in content fingerprint for scheme B (see Vutuv.Uploads): when set,
-  # the served filename bakes in the handle + fingerprint and the URL drops `?v=`.
+  # A stand-in content fingerprint for scheme B (see Vutuv.Uploads): when the
+  # picture's row carries one, the served filename bakes in the handle +
+  # fingerprint and the URL drops `?v=`.
   @fingerprint "1a2b3c4d5e6f"
 
   setup do
@@ -48,41 +55,43 @@ defmodule Vutuv.CoverTest do
 
   describe "url/2 (the contract nginx + templates depend on)" do
     test "builds the stable, id-scoped version path with the served .avif extension" do
-      assert Vutuv.Cover.url({"banner.jpg", @user}, :wide) ==
+      assert Vutuv.Cover.url(cover(@user, file: "banner.jpg"), :wide) ==
                "/covers/7/cover_wide.avif" <> @v
     end
 
     test "the served filename does not embed the display name, so a rename keeps it (issue #773)" do
       renamed = %{@user | first_name: "Jane", last_name: "Smith"}
 
-      assert Vutuv.Cover.url({"banner.jpg", renamed}, :wide) ==
+      assert Vutuv.Cover.url(cover(renamed, file: "banner.jpg"), :wide) ==
                "/covers/7/cover_wide.avif" <> @v
     end
 
     test "the stored filename's extension does not leak into served URLs" do
-      assert Vutuv.Cover.url({"banner.PNG", @user}, :wide) ==
+      assert Vutuv.Cover.url(cover(@user, file: "banner.PNG"), :wide) ==
                "/covers/7/cover_wide.avif" <> @v
     end
 
     test "the original is not URL-addressable" do
-      assert Vutuv.Cover.url({"banner.jpg", @user}, :original) == nil
+      assert Vutuv.Cover.url(cover(@user, file: "banner.jpg"), :original) == nil
     end
 
     test "returns nil when there is no cover photo" do
-      assert Vutuv.Cover.url({nil, @user}, :wide) == nil
+      assert Vutuv.Cover.url(without_image(@user, "cover"), :wide) == nil
     end
 
     test "default version is :wide" do
-      assert Vutuv.Cover.url({"banner.jpg", @user}) == "/covers/7/cover_wide.avif" <> @v
+      assert Vutuv.Cover.url(cover(@user, file: "banner.jpg")) ==
+               "/covers/7/cover_wide.avif" <> @v
     end
 
     test "appends a cache-busting ?v= token that changes with updated_at" do
       touched = %{@user | updated_at: ~N[2024-03-02 10:20:31]}
 
-      assert Vutuv.Cover.url({"banner.jpg", @user}, :wide) =~ "/covers/7/cover_wide.avif?v="
+      assert Vutuv.Cover.url(cover(@user, file: "banner.jpg"), :wide) =~
+               "/covers/7/cover_wide.avif?v="
 
-      refute Vutuv.Cover.url({"banner.jpg", touched}, :wide) ==
-               Vutuv.Cover.url({"banner.jpg", @user}, :wide)
+      refute Vutuv.Cover.url(cover(touched, file: "banner.jpg"), :wide) ==
+               Vutuv.Cover.url(cover(@user, file: "banner.jpg"), :wide)
     end
 
     test "falls back to a not-yet-regenerated legacy file (incl. ?timestamp suffix)", %{tmp: tmp} do
@@ -91,19 +100,19 @@ defmodule Vutuv.CoverTest do
       {:ok, img} = Image.new(20, 20, color: [1, 2, 3])
       {:ok, _} = Image.write(img, Path.join(dir, "John Doe_wide.jpg"))
 
-      assert Vutuv.Cover.url({"banner.jpg?63876543210", @user}, :wide) ==
+      assert Vutuv.Cover.url(cover(@user, file: "banner.jpg?63876543210"), :wide) ==
                "/covers/7/John%20Doe_wide.jpg" <> @v
 
       # The name-derived .avif wins over the pre-AVIF legacy file.
       {:ok, _} = Image.write(img, Path.join(dir, "John Doe_wide.avif"))
 
-      assert Vutuv.Cover.url({"banner.jpg?63876543210", @user}, :wide) ==
+      assert Vutuv.Cover.url(cover(@user, file: "banner.jpg?63876543210"), :wide) ==
                "/covers/7/John%20Doe_wide.avif" <> @v
 
       # ...and the stable id-scoped file wins over every name-derived file (#773).
       {:ok, _} = Image.write(img, Path.join(dir, "cover_wide.avif"))
 
-      assert Vutuv.Cover.url({"banner.jpg?63876543210", @user}, :wide) ==
+      assert Vutuv.Cover.url(cover(@user, file: "banner.jpg?63876543210"), :wide) ==
                "/covers/7/cover_wide.avif" <> @v
     end
   end
@@ -113,7 +122,7 @@ defmodule Vutuv.CoverTest do
   # lite existed keeps showing its banner rather than a broken one.
   describe "picture/1" do
     setup do
-      {:ok, user: %{@user | cover_photo: "banner.jpg", cover_fingerprint: @fingerprint}}
+      {:ok, user: cover(@user, file: "banner.jpg", fingerprint: @fingerprint)}
     end
 
     test "is the banner alone outside data-saving mode", %{user: user} do
@@ -140,26 +149,25 @@ defmodule Vutuv.CoverTest do
 
     test "without a cover there is nothing to offer either way" do
       Vutuv.LowBandwidth.put(true)
-      assert Vutuv.Cover.picture(@user) == %{src: nil, lite: nil}
+      assert Vutuv.Cover.picture(without_image(@user, "cover")) == %{src: nil, lite: nil}
     end
   end
 
   describe "fingerprinted URL (scheme B: handle + content hash in the filename)" do
     setup do
-      {:ok, user: %{@user | cover_photo: "banner.jpg", cover_fingerprint: @fingerprint}}
+      {:ok, user: cover(@user, file: "banner.jpg", fingerprint: @fingerprint)}
     end
 
     test "bakes <handle>-wide-<fingerprint>.avif and drops the ?v= query", %{user: user} do
-      assert Vutuv.Cover.url({"banner.jpg", user}, :wide) ==
-               "/covers/7/john.doe-wide-#{@fingerprint}.avif"
+      assert Vutuv.Cover.url(user, :wide) == "/covers/7/john.doe-wide-#{@fingerprint}.avif"
 
-      refute Vutuv.Cover.url({"banner.jpg", user}, :wide) =~ "?"
+      refute Vutuv.Cover.url(user, :wide) =~ "?"
     end
 
     test "the download filename moves with the handle when the slug changes", %{user: user} do
       renamed = %{user | username: "jane.smith"}
 
-      assert Vutuv.Cover.url({"banner.jpg", renamed}, :wide) ==
+      assert Vutuv.Cover.url(renamed, :wide) ==
                "/covers/7/jane.smith-wide-#{@fingerprint}.avif"
     end
 
@@ -168,19 +176,20 @@ defmodule Vutuv.CoverTest do
                "/covers/7/john.doe-wide-#{@fingerprint}.avif"
     end
 
-    test "a nil fingerprint still serves the legacy ?v= URL (row not yet migrated)" do
-      assert Vutuv.Cover.url({"banner.jpg", @user}, :wide) == "/covers/7/cover_wide.avif" <> @v
+    test "a picture row with no fingerprint still serves the legacy ?v= URL (not yet migrated)" do
+      assert Vutuv.Cover.url(cover(@user, file: "banner.jpg"), :wide) ==
+               "/covers/7/cover_wide.avif" <> @v
     end
   end
 
   describe "display_url/2 (what the profile puts in <img src>)" do
     test "returns the nginx-served URL when the user has a cover photo" do
-      user = %{@user | cover_photo: "banner.jpg"}
+      user = cover(@user, file: "banner.jpg")
       assert Vutuv.Cover.display_url(user, :wide) == "/covers/7/cover_wide.avif" <> @v
     end
 
     test "returns nil when the user has no cover photo (gradient fallback)" do
-      assert Vutuv.Cover.display_url(%{@user | cover_photo: nil}, :wide) == nil
+      assert Vutuv.Cover.display_url(without_image(@user, "cover"), :wide) == nil
     end
   end
 
@@ -271,6 +280,11 @@ defmodule Vutuv.CoverTest do
       assert {"is not a valid image", _} = changeset.errors[:cover_photo]
     end
   end
+
+  # This member with a cover row hung on the struct, which is what every URL
+  # builder reads since #2027 (`Vutuv.Images.member_image/2`). No database:
+  # nothing here inserts a member.
+  defp cover(user, attrs), do: put_image(user, "cover", attrs)
 
   defp dimensions(path) do
     {:ok, img} = Image.open(path)

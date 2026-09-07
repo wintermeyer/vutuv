@@ -25,7 +25,7 @@ defmodule Vutuv.Images.Backfill do
 
   A row whose member has no picture of that kind any more is deleted: "there is
   a row" and "there is a picture" are the same statement (the same reason
-  `Vutuv.Images.forget_profile_image/2` deletes rather than blanks).
+  `Vutuv.Images.discard_profile_image/3` deletes rather than blanks).
 
   `classify/3` is what decides which of those a member is, and `run/1` and
   `check/1` both go through it — otherwise the gate would be answering a
@@ -339,7 +339,7 @@ defmodule Vutuv.Images.Backfill do
   end
 
   # A row whose member has no picture of that kind any more, deleted in one
-  # statement (`Vutuv.Images.forget_profile_image/2` is its single-row twin on
+  # statement (`Vutuv.Images.discard_profile_image/3` is its single-row twin on
   # the moderation path). The member row's pointer follows by itself
   # (`on_delete: :nilify_all`).
   defp drop_orphans(tally, kind, cols, opts) do
@@ -392,12 +392,21 @@ defmodule Vutuv.Images.Backfill do
       acc
       |> Map.update!(:pictures, &(&1 + 1))
       |> flag(classify(user, row, cols), user.id)
-      |> flag(file_verdict(user, kind), user.id)
+      |> flag(file_verdict(user, row, kind), user.id)
     end)
     |> finish_check()
   end
 
-  defp file_verdict(user, kind) do
+  # A member with no row yet is already named as `:missing_row`, and since
+  # #2027 the path is resolved from that row — so asking here too would report
+  # every un-backfilled member twice and call the second reading a missing file.
+  defp file_verdict(_user, nil, _kind), do: :ok
+
+  defp file_verdict(user, row, kind) do
+    # The row is in hand, so hand it over as the preload `member_image/2` would
+    # otherwise look up: one query per member over the whole table, for nothing.
+    user = Map.put(user, Images.member_columns(kind).assoc, row)
+
     if is_nil(Images.stored_path(user, kind)), do: :missing_file, else: :ok
   end
 

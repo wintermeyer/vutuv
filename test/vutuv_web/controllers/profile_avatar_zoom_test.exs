@@ -13,6 +13,7 @@ defmodule VutuvWeb.ProfileAvatarZoomTest do
   """
   use VutuvWeb.ConnCase, async: false
 
+  alias Vutuv.ImageHelpers
   alias Vutuv.Uploads.Spec
 
   @fingerprint "abc123def456"
@@ -36,11 +37,17 @@ defmodule VutuvWeb.ProfileAvatarZoomTest do
 
   # A member with an avatar whose derived files are exactly `versions` — which
   # is how a row looks between the deploy that adds a version and the
-  # regeneration that derives it.
-  defp with_avatar(user, tmp, versions) do
+  # regeneration that derives it. Writes both halves an upload writes: the
+  # member row's columns and the picture's row in `images`, which is what every
+  # URL builder reads.
+  defp with_avatar(user, tmp, versions, moderation \\ nil) do
     {:ok, user} =
       Repo.update(
-        change(user, avatar: "me.png", avatar_fingerprint: @fingerprint, avatar_moderation: nil)
+        change(user,
+          avatar: "me.png",
+          avatar_fingerprint: @fingerprint,
+          avatar_moderation: moderation
+        )
       )
 
     dir = Path.join(tmp, "avatars/#{user.id}")
@@ -50,7 +57,7 @@ defmodule VutuvWeb.ProfileAvatarZoomTest do
       File.write!(Path.join(dir, "#{user.username}-#{version}-#{@fingerprint}.avif"), "avif")
     end
 
-    user
+    ImageHelpers.with_image_rows(user)
   end
 
   defp zoom_link(html) do
@@ -112,9 +119,7 @@ defmodule VutuvWeb.ProfileAvatarZoomTest do
       tmp: tmp
     } do
       {conn, user} = create_and_login_user(conn)
-      user = with_avatar(user, tmp, [])
-
-      {:ok, user} = Repo.update(change(user, avatar_moderation: "pending"))
+      user = with_avatar(user, tmp, [], "pending")
 
       quarantine = Path.join(tmp, "quarantine/avatars/#{user.id}")
       File.mkdir_p!(quarantine)
@@ -138,8 +143,7 @@ defmodule VutuvWeb.ProfileAvatarZoomTest do
       tmp: tmp
     } do
       {conn, user} = create_and_login_user(conn)
-      user = with_avatar(user, tmp, [])
-      {:ok, user} = Repo.update(change(user, avatar_moderation: "pending"))
+      user = with_avatar(user, tmp, [], "pending")
 
       quarantine = Path.join(tmp, "quarantine/avatars/#{user.id}")
       File.mkdir_p!(quarantine)

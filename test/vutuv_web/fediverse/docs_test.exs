@@ -5,13 +5,17 @@ defmodule VutuvWeb.Fediverse.DocsTest do
   use Vutuv.DataCase, async: true
 
   alias Vutuv.Fediverse
+  alias Vutuv.ImageHelpers
   alias VutuvWeb.Fediverse.Docs
 
   defp base, do: VutuvWeb.Endpoint.url()
 
   describe "actor/2" do
     test "renders a Person with inbox, followers and the public key" do
-      user = insert(:activated_user, headline: "Grüße aus <Koblenz>", avatar: "selfie.jpg")
+      user =
+        insert(:activated_user, headline: "Grüße aus <Koblenz>", avatar: "selfie.jpg")
+        |> ImageHelpers.with_image_rows()
+
       {:ok, actor} = Fediverse.ensure_actor(user)
 
       doc = Docs.actor(user, actor)

@@ -211,7 +211,7 @@ defmodule VutuvWeb.ShellLive do
     |> assign(:user_name, full_name(user))
     |> assign(:user_initials, name_initials(user))
     |> assign(:user_param, Phoenix.Param.to_param(user))
-    |> assign(:user_avatar, Vutuv.Avatar.user_url(user, :thumb))
+    |> assign(:user_avatar, Vutuv.Avatar.url(user, :thumb))
     |> assign(:user_admin?, user.admin?)
     |> assign_shell_defaults(path)
     |> assign(:browser_notifications?, user.browser_notifications?)

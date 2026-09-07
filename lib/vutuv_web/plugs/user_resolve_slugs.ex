@@ -44,9 +44,12 @@ defmodule VutuvWeb.Plug.UserResolveSlug do
         miss(conn, slug, opts)
 
       user ->
+        # Both picture rows come along, because every avatar and cover URL on a
+        # profile-scoped page is built from them since #2027 — two batched
+        # queries here instead of one lookup per render site.
         conn
         |> Plug.Conn.assign(:user_id, user.id)
-        |> Plug.Conn.assign(:user, user)
+        |> Plug.Conn.assign(:user, Vutuv.Images.preload_member_images(user))
     end
   end
 

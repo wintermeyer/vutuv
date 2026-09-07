@@ -45,7 +45,12 @@ defmodule VutuvWeb.VCardControllerTest do
 
     # Record the uploaded avatar and place the original where Vutuv.Avatar
     # derives the vCard JPEG from: <prefix>/originals/avatars/<id>/original.jpg
-    user = user |> Ecto.Changeset.change(avatar: "selfie.jpg") |> Repo.update!()
+    user =
+      user
+      |> Ecto.Changeset.change(avatar: "selfie.jpg")
+      |> Repo.update!()
+      |> Vutuv.ImageHelpers.with_image_rows()
+
     dir = Path.join(tmp, "originals/avatars/#{user.id}")
     File.mkdir_p!(dir)
     {:ok, img} = Image.new(300, 200, color: [1, 2, 3])
