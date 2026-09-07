@@ -209,4 +209,47 @@ defmodule VutuvWeb.ThreadRepliesLiveTest do
     assert html =~ "Nimm Mint."
     refute has_element?(view, ~s{[data-remote-replies="#{answer.id}"]})
   end
+
+  test "every answer is tied into the line coming down from the card it answers", %{conn: conn} do
+    {conn, user} = login_de(conn)
+    acc = account()
+    follow(user, acc)
+    post = cached_post(acc, %{replies_count: 2})
+    one = stored_answer(post, "Nimm Mint.")
+    two = stored_answer(post, "Oder Salbei.")
+
+    {:ok, view, _html} = open_page(conn, post)
+    view |> element(~s{[data-remote-replies="#{post.id}"]}) |> render_click()
+    render_async(view)
+
+    # A connector inside each answer, not two of them somewhere on the page.
+    # Without them the thread is a rule standing beside the cards, touching
+    # neither the card above nor the answers.
+    for answer <- [one, two] do
+      assert has_element?(view, ~s{[data-thread-reply="#{answer.id}"] [data-thread-tick]})
+    end
+  end
+
+  test "the answers are drawn in the avatar column of the card above them", %{conn: conn} do
+    {conn, user} = login_de(conn)
+    acc = account()
+    follow(user, acc)
+    post = cached_post(acc, %{replies_count: 1})
+    stored_answer(post, "Nimm Mint.")
+
+    {:ok, view, _html} = open_page(conn, post)
+    view |> element(~s{[data-remote-replies="#{post.id}"]}) |> render_click()
+    render_async(view)
+
+    # The block sits inside the card's text column, so it has to pull back over
+    # the avatar column (36px avatar + 12px gap) before its connectors can be
+    # drawn in the column the card's own line comes down in.
+    assert has_element?(view, "[data-thread-replies].-ml-12"),
+           "The answers must reclaim the avatar column, or the thread line hangs " <>
+             "between two columns and connects neither."
+
+    refute has_element?(view, "[data-thread-replies].border-l-2"),
+           "The thread is drawn as a line out of the avatar above and a connector " <>
+             "into each answer, not as a rule on the block's own left edge."
+  end
 end
