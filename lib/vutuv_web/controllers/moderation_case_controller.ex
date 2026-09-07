@@ -14,7 +14,6 @@ defmodule VutuvWeb.ModerationCaseController do
   alias Vutuv.Images.Image
   alias Vutuv.Moderation
   alias Vutuv.Moderation.Case
-  alias Vutuv.Repo
   alias VutuvWeb.ControllerHelpers
 
   def index(conn, _params) do
@@ -59,7 +58,7 @@ defmodule VutuvWeb.ModerationCaseController do
   with an upheld case — is a 404.
   """
   def image(conn, %{"id" => id}) do
-    with %Case{content_type: "image"} = case_record <- Repo.get(Case, id),
+    with %Case{content_type: "image"} = case_record <- Moderation.get_case(id),
          :ok <- authorize(conn, case_record),
          %Image{} = image <- Moderation.case_content(case_record),
          path when is_binary(path) <- Images.bytes_path(image) do

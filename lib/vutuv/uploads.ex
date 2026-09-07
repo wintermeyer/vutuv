@@ -20,6 +20,7 @@ defmodule Vutuv.Uploads do
   alias Vutuv.Uploads.Crop
   alias Vutuv.Uploads.Originals
   alias Vutuv.Uploads.Spec
+  alias Vutuv.UUIDv7
 
   @extension_whitelist ~w(.jpg .jpeg .png)
 
@@ -110,16 +111,26 @@ defmodule Vutuv.Uploads do
   def hold_dir(image_id) when is_binary(image_id), do: disk_dir(Path.join(@hold_root, image_id))
 
   @doc """
-  Every hold on disk, by image id. One `readdir` of a tree that is empty on
-  almost every installation, and the record `Vutuv.Images.reconcile_holds/0`
-  reads to find work a dying slot left half-done — the hold layout is written
-  here and nowhere else.
+  Every hold on disk, by image id — the record `Vutuv.Images.reconcile_holds/0`
+  reads to find work a dying slot left half-done. One `readdir` of a tree that
+  is empty on almost every installation, plus a `stat` per hold; the hold layout
+  is written here and nowhere else.
+
+  A hold is a **directory named by an image id**, and only those come back:
+  anything else in that root reaches `where: i.id in ^ids`, which raises rather
+  than matching nothing, and takes the whole pass with it (issue #2031).
   """
   def held_image_ids do
-    case File.ls(disk_dir(@hold_root)) do
-      {:ok, ids} -> ids
+    root = disk_dir(@hold_root)
+
+    case File.ls(root) do
+      {:ok, entries} -> Enum.filter(entries, &hold?(root, &1))
       {:error, _reason} -> []
     end
+  end
+
+  defp hold?(root, entry) do
+    UUIDv7.cast_or_nil(entry) != nil and File.dir?(Path.join(root, entry))
   end
 
   # Which tree each slot of a hold came from, so `release/3` puts every file
@@ -175,23 +186,35 @@ defmodule Vutuv.Uploads do
 
   @doc """
   The on-disk path of one held derived version, for the authorized preview the
-  case pages show (`VutuvWeb.ModerationCaseController.image/2`). Matched by
-  version and fingerprint rather than rebuilt from the handle, because a member
-  who renames while their picture is held keeps the old handle in the file
-  name. `nil` when there is none.
+  case pages show (`VutuvWeb.ModerationCaseController.image/2`). `nil` when
+  there is none.
+
+  The hold's twin of `version_path/3`, and deliberately not a call to it: a
+  member who renames while their picture is held keeps the old handle in the
+  file name, and no scope reaches here to rebuild it from, so this matches what
+  is on disk instead. Both schemes, because a hold has to answer for whichever
+  one the picture was stored under — the fingerprinted name first, then the
+  legacy one a row that never reached a fingerprint carries. Missing the second
+  drew a broken image on the case page for those pictures, and an admin who
+  cannot see a picture cannot rule on the claim about it (issue #2031).
   """
-  def held_version_path(image_id, version, fingerprint)
-      when is_binary(image_id) and is_binary(fingerprint) do
-    image_id
-    |> hold_dir()
-    # Every slot, not just `served/`: a picture frozen while the AI gate still
-    # had it keeps its versions under `quarantine/`.
-    |> Path.join("*/*-#{version}-#{fingerprint}#{Spec.served_ext()}")
-    |> Path.wildcard()
-    |> List.first()
+  def held_version_path(image_id, version, fingerprint) when is_binary(image_id) do
+    dir = hold_dir(image_id)
+
+    fingerprinted =
+      is_binary(fingerprint) && first_match(dir, fingerprinted_glob(version, fingerprint))
+
+    fingerprinted || first_match(dir, legacy_version_glob(version))
   end
 
   def held_version_path(_image_id, _version, _fingerprint), do: nil
+
+  # Every slot, not just `served/`: a picture frozen while the AI gate still had
+  # it keeps its versions under `quarantine/`. The private original stays out of
+  # reach — it is never shown to anybody, and neither glob matches its
+  # `original<ext>` name.
+  defp first_match(dir, glob),
+    do: dir |> Path.join("*/#{glob}") |> Path.wildcard() |> List.first()
 
   # One directory's files, moved one atomic rename at a time. Nothing recurses:
   # every tree an uploader writes is flat.
@@ -693,6 +716,14 @@ defmodule Vutuv.Uploads do
     "#{handle(scope, config)}-#{version}-#{fp}#{Spec.served_ext()}"
   end
 
+  # The same name with the handle left open, for a tree where nothing can say
+  # what the handle is: a takedown hold keeps the name the picture had when it
+  # was frozen, which a rename since then has made stale. Beside the builder on
+  # purpose — change one and the other has to change with it, or
+  # `held_version_path/3` stops finding the file and the case page goes back to
+  # drawing a broken image.
+  defp fingerprinted_glob(version, fp), do: "*-#{version}-#{fp}#{Spec.served_ext()}"
+
   defp fingerprinted_url(scope, version, fp, config) do
     "/"
     |> Path.join(storage_dir(scope, config))
@@ -781,6 +812,15 @@ defmodule Vutuv.Uploads do
   # so a rename can never orphan it and an unsanitized name can never escape the
   # directory (both #773).
   defp version_filename(config, version, ext), do: "#{config.spec_key}_#{version}#{ext}"
+
+  # Both pre-fingerprint names at once — the stable `avatar_<version>.avif`
+  # above and the pre-#773 `<First Last>_<version>.<ext>` of
+  # `legacy_name_filename/4` — for the takedown hold, which has neither the
+  # scope nor the config those two build from. The `_<version>.` in the middle
+  # is what tells them from a fingerprinted name (`-<version>-`) and from the
+  # private `original<ext>`. Beside the builders, so a change to the scheme
+  # meets its glob.
+  defp legacy_version_glob(version), do: "*_#{version}.*"
 
   defp extname(value) when is_binary(value) do
     value

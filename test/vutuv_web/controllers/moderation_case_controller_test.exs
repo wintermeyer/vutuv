@@ -138,6 +138,20 @@ defmodule VutuvWeb.ModerationCaseControllerTest do
     end
   end
 
+  describe "image" do
+    # Every neighbouring action resolves the id through
+    # `Vutuv.UUIDv7.with_cast/2`, so a typo in the URL is a miss. This one read
+    # it straight, where a malformed id raises `Ecto.Query.CastError` — a 400
+    # and an exception in the log for what is plainly a wrong address
+    # (issue #2031).
+    test "a malformed case id is a 404, like every other action", %{conn: conn} do
+      {conn, _owner, _post, _case} = owner_with_case(conn)
+
+      conn = get(conn, "/moderation/cases/not-a-uuid/image")
+      assert html_response(conn, 404)
+    end
+  end
+
   describe "dispute" do
     test "escalates the case and keeps the content frozen", %{conn: conn} do
       {conn, _owner, post, case_record} = owner_with_case(conn)
