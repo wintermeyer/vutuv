@@ -1764,8 +1764,13 @@ defmodule VutuvWeb.ShellLive do
           aria-label={gettext("New notifications")}
         >
           <li :for={row <- @rows} data-bell-preview-item>
+            <%!-- The row names the one event it stands for, so the hook can
+            hand it back before the click takes the member off this page: the
+            close that would otherwise have marked it read never arrives. --%>
             <.link
               href={row.href}
+              data-seen-kind={row.dismiss[:kind]}
+              data-seen-source-id={row.dismiss[:source_id]}
               class="flex items-start gap-2.5 px-4 py-2.5 hover:bg-slate-50 dark:hover:bg-slate-800"
             >
               <span
@@ -1828,7 +1833,8 @@ defmodule VutuvWeb.ShellLive do
       title: title,
       body: body,
       at: item[:at],
-      href: NotificationLine.notification_url(item, viewer)
+      href: NotificationLine.notification_url(item, viewer),
+      dismiss: Activity.dismiss_ref(item)
     }
   end
 

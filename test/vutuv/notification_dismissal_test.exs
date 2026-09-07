@@ -95,13 +95,30 @@ defmodule Vutuv.NotificationDismissalTest do
 
         notification = pushed(me, act)
         ref = Activity.dismiss_ref(notification)
+        item = item_of_kind(me.id, kind)
 
         assert %{kind: ^kind} = ref,
                "the #{kind} push carries no dismissable reference"
 
-        assert Activity.event_id(ref.kind, ref.source_id) == item_of_kind(me.id, kind).id,
+        assert Activity.event_id(ref.kind, ref.source_id) == item.id,
                "the #{kind} push and its feed item name different rows"
+
+        # The bell's preview panel lists *feed* items, and clicking one makes
+        # the same statement as clicking the popup — but a feed item carries no
+        # `:source_id`, only the event id it was built from. So the reference
+        # has to come back out of that id, and be the one the push made.
+        assert Activity.dismiss_ref(item) == ref,
+               "the #{kind} feed item names a different row than its push"
       end
+    end
+
+    test "an id one kind's prefix can read out of another's is refused" do
+      # `report-protection` really is a prefix of `report-protection-restored`,
+      # so the severed half must not read the restore half's id as a row of its
+      # own — it would dismiss the wrong one of the pair.
+      restored = Activity.event_id("report_protection_restored", Vutuv.UUIDv7.generate())
+
+      refute Activity.dismiss_ref(%{kind: "report_protection", status: "severed", id: restored})
     end
   end
 
