@@ -1,8 +1,9 @@
 defmodule Vutuv.ImageHelpers do
   @moduledoc """
-  A member's profile picture as both halves the application always writes: the
-  four columns on the member row and the row in the shared `images` table
-  (`Vutuv.Images`).
+  A picture as both halves the application always writes into the shared
+  `images` table (`Vutuv.Images`): for a member's profile picture, the four
+  columns on the member row plus the row here; for a gallery picture, its own
+  row plus the mirror `mirror_row/2` finds.
 
   Since #2027 every URL builder and every display gate reads the row, so a test
   that sets only `users.avatar` describes a member with no picture — a state no
@@ -78,4 +79,17 @@ defmodule Vutuv.ImageHelpers do
     |> Map.put(cols.assoc, nil)
     |> Map.put(cols.pointer, nil)
   end
+
+  @doc """
+  The `images` row standing beside a gallery picture (#2015), or `nil` — looked
+  up the way the application joins the two, on the `token` both carry rather
+  than on an id. Takes the picture's own row or its token.
+
+  One helper for every gallery kind, so #2052, #2053 and #2054's tests do not
+  each write the same `Repo.get_by/2`.
+  """
+  def mirror_row(kind, %{token: token}), do: mirror_row(kind, token)
+
+  def mirror_row(kind, token) when is_binary(token),
+    do: Repo.get_by(Image, token: token, kind: kind)
 end

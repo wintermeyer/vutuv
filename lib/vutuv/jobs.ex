@@ -37,6 +37,7 @@ defmodule Vutuv.Jobs do
   alias Vutuv.Countries
   alias Vutuv.Engagement
   alias Vutuv.Geo
+  alias Vutuv.Images
   alias Vutuv.Jobs.Exclusions
   alias Vutuv.Jobs.JobPosting
   alias Vutuv.Jobs.JobPostingBookmark
@@ -587,6 +588,12 @@ defmodule Vutuv.Jobs do
 
   # --- images (post_images pattern) -----------------------------------------
 
+  # This gallery's name in the shared `images` table, in `Vutuv.Images.kinds/0`
+  # and in `Vutuv.Moderation.ImageScans` — one string for all three. Since
+  # #2054 every write below keeps a row there in step with the row here; the
+  # deploy that retires this table retires the double write with it.
+  @image_kind "job_posting_image"
+
   @doc "Creates a pending image (job_posting_id nil) from an upload, or `{:error, reason}`."
   def create_pending_image(%User{} = user, path, filename) do
     size = File.stat!(path).size
@@ -605,28 +612,40 @@ defmodule Vutuv.Jobs do
 
   # Fresh images start in AI-moderation limbo (owner-only, placecard for
   # everyone else) until the scan releases or deletes them.
+  #
+  # `Images.write_mirrored/2` writes the row here and its mirror in the shared
+  # `images` table in one transaction (issue #2054), and hands back exactly
+  # what `Repo.insert/1` would have.
   defp insert_scanned_image(user, token, meta) do
     insert =
-      %JobPostingImage{
-        user_id: user.id,
-        token: token,
-        moderation: ImageScans.initial_state()
-      }
-      |> Ecto.Changeset.change(meta)
-      |> Repo.insert()
+      Images.write_mirrored(@image_kind, fn ->
+        %JobPostingImage{
+          user_id: user.id,
+          token: token,
+          moderation: ImageScans.initial_state()
+        }
+        |> Ecto.Changeset.change(meta)
+        |> Repo.insert()
+      end)
 
     with {:ok, image} <- insert do
-      ImageScans.enqueue("job_posting_image", image.id, user.id)
+      ImageScans.enqueue(@image_kind, image.id, user.id)
       {:ok, image}
     end
   end
 
   def update_image_alt(%JobPostingImage{} = image, alt) do
-    image |> JobPostingImage.alt_changeset(%{"alt" => alt}) |> Repo.update()
+    Images.write_mirrored(@image_kind, fn ->
+      image |> JobPostingImage.alt_changeset(%{"alt" => alt}) |> Repo.update()
+    end)
   end
 
+  # Row, mirror, files — in that order, so an interruption can only ever leave
+  # something behind that a sweep collects (an orphan mirror row, then orphan
+  # files), never a row naming bytes that are gone.
   def delete_pending_image(%JobPostingImage{job_posting_id: nil, token: token} = image) do
     Repo.delete(image)
+    :ok = Images.forget(@image_kind, [token])
     Vutuv.JobPostingImageStore.delete(token)
     :ok
   end
@@ -652,11 +671,25 @@ defmodule Vutuv.Jobs do
 
   # Attach the chosen pending images to the posting; delete + purge those the
   # editor removed.
+  #
+  # This runs after the save rather than inside it, as it always has, so a slot
+  # dying mid-way is a real case — and each half leaves something the backfill
+  # names rather than something invisible: an attach that never reached its
+  # mirror is a `mismatched_row` (the parent disagrees), a prune that never
+  # reached `forget/2` is an `orphan_row` (no picture behind the token).
+  # `mix vutuv.images.backfill --only job_posting_image` repairs both.
   defp attach_images(%JobPosting{} = posting, %User{id: user_id}, keep_ids) do
-    from(i in JobPostingImage,
-      where: i.id in ^keep_ids and i.user_id == ^user_id and is_nil(i.job_posting_id)
-    )
-    |> Repo.update_all(set: [job_posting_id: posting.id])
+    # RETURNING the attached rows, so the mirror learns the new parent from the
+    # same statement rather than reading them back: ten pictures still cost one
+    # UPDATE and one upsert, never one of each per picture.
+    {_count, attached} =
+      from(i in JobPostingImage,
+        where: i.id in ^keep_ids and i.user_id == ^user_id and is_nil(i.job_posting_id),
+        select: i
+      )
+      |> Repo.update_all(set: [job_posting_id: posting.id])
+
+    :ok = Images.mirror(@image_kind, attached)
 
     # RETURNING the tokens in the same DELETE, so the predicate is written once
     # and there is no separate SELECT (Enum.each over [] is a no-op).
@@ -667,6 +700,7 @@ defmodule Vutuv.Jobs do
       )
       |> Repo.delete_all()
 
+    :ok = Images.forget(@image_kind, tokens)
     Enum.each(tokens, &Vutuv.JobPostingImageStore.delete/1)
     :ok
   end
@@ -682,6 +716,7 @@ defmodule Vutuv.Jobs do
       )
       |> Repo.delete_all()
 
+    :ok = Images.forget(@image_kind, tokens)
     Enum.each(tokens, &Vutuv.JobPostingImageStore.delete/1)
     count
   end
@@ -786,6 +821,11 @@ defmodule Vutuv.Jobs do
   @doc """
   Deletes a posting: purges its image files (the DB cascade drops the rows and
   every like/bookmark) and settles any open moderation case.
+
+  The mirror rows in `images` go with the same cascade — `images.job_posting_id`
+  carries the posting's `on_delete: :delete_all` exactly as this table's own
+  column does — so there is nothing to forget by hand here, and the same is
+  true of `Vutuv.Accounts.delete_user/1` through `images.user_id`.
   """
   def delete_job_posting(%JobPosting{} = posting) do
     tokens = image_tokens(posting.id)

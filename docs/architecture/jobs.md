@@ -38,6 +38,24 @@ through the authorizing `/job_posting_images/:token/:version` proxy, purged with
 the posting), and `job_posting_likes` / `job_posting_bookmarks` (the shared
 Engagement building block, both cascading on posting or user deletion).
 
+**`job_posting_images` is on its way out** (issues #2015 / #2054). Since that
+release every write to it also writes a row in the shared `images` table with
+`kind: "job_posting_image"`, joined on the `token` both carry, so a picture can
+eventually be taken offline on its own by the copyright freeze rather than only
+with the whole posting. Nothing reads the new row yet: the proxy, the edit form
+and the AI gate all still work off this table, and every URL is unchanged. The
+double write is `Vutuv.Images.write_mirrored/2` (the upload and the alt edit,
+each atomic with its own write), `Vutuv.Images.mirror/2` (the attach on save)
+and `Vutuv.Images.forget/2` (`delete_pending_image/1`, the prune on save,
+`sweep_pending_images/1`) — plus `Vutuv.Moderation.ImageSubjects` for the
+gate's verdict. A deleted posting or member needs no call
+(`images.job_posting_id` and `images.user_id` cascade). **If you add a column
+here, add it to `Vutuv.Images.mirror_source/1` and to `images` in a migration**,
+or the mirror will not carry it and the deploy that retires this table loses
+it; a drift test in `test/vutuv/images/job_posting_images_test.exs` compares
+the two and fails the build. The reasoning and the order of the remaining
+deploys are in [images.md](images.md).
+
 ## Lifecycle
 
 ```

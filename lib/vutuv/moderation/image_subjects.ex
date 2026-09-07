@@ -361,17 +361,30 @@ defmodule Vutuv.Moderation.ImageSubjects do
     drop_pixelated(config, scan.subject_id)
 
     flipped =
-      from(i in config.schema, where: i.id == ^scan.subject_id and i.moderation == "pending")
+      from(i in config.schema,
+        where: i.id == ^scan.subject_id and i.moderation == "pending",
+        # The released row rides back with the write, the way the screenshot
+        # branch below already takes it: the mirror in the shared `images`
+        # table needs the token, and reading the row again for it would be a
+        # second statement per verdict.
+        select: i
+      )
       |> Repo.update_all(set: [moderation: "approved"])
 
     case flipped do
-      {1, _} ->
+      {1, [image]} ->
         # A released organization logo also flips the `organizations.logo`
         # pointer (the old logo kept showing during limbo).
         if kind == "organization_image" do
           {:ok, _organization} =
             Vutuv.Organizations.release_logo(Repo.get!(OrganizationImage, scan.subject_id))
         end
+
+        # The AI gate's half of the double write #2015 is doing one kind at a
+        # time: a kind that has moved into the shared `images` table keeps its
+        # row in step here, one that has not is passed over. The next kind's
+        # release is a line in `Vutuv.Images` and nothing here.
+        if Images.mirrored?(kind), do: :ok = Images.mirror(kind, image)
 
         settle_post_federation(kind, scan.subject_id)
         broadcast(scan, :approved)
@@ -574,6 +587,7 @@ defmodule Vutuv.Moderation.ImageSubjects do
       image ->
         config.store.delete(image.token)
         Repo.delete(image, allow_stale: true)
+        if Images.mirrored?(kind), do: :ok = Images.forget(kind, [image.token])
         clear_gallery_references(kind, image)
         # A rejected picture settles the post just as an approved one does: it
         # federates now, without the picture, which is what vetting first means.

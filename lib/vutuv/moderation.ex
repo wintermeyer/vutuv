@@ -2165,7 +2165,14 @@ defmodule Vutuv.Moderation do
   defp reportable_by?(_reporter, %Organization{}), do: true
   # A profile picture is as public as the profile it sits on, and a rights
   # holder reporting one is exactly the stranger this type exists for.
-  defp reportable_by?(_reporter, %Image{}), do: true
+  #
+  # Only a picture whose takedown is actually wired, though. #2015 moves the
+  # gallery kinds into `images` one release at a time, and the expand half
+  # gives them a row before `Vutuv.Images.freeze/1` has a clause for them — a
+  # case opened on such a row would raise the moment an admin upheld it. Those
+  # keep the affordance they had before the row existed: reporting the post,
+  # the posting or the page the picture sits on.
+  defp reportable_by?(_reporter, %Image{} = image), do: Images.takedown_ready?(image)
 
   defp reportable_by?(reporter, %JobPosting{} = posting),
     do: Vutuv.Jobs.visible_to?(posting, reporter)

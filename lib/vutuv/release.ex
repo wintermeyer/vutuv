@@ -130,15 +130,17 @@ defmodule Vutuv.Release do
   end
 
   @doc """
-  Brings every profile picture and cover uploaded before the shared `images`
-  table into it, and corrects any row that disagrees with the member's own
-  columns (see `Vutuv.Images.Backfill`). Moves no file and changes no URL, so
-  it is safe while the app serves traffic and safe to run again after an
-  interruption:
+  Brings every picture uploaded before the shared `images` table into it, and
+  corrects any row that disagrees with the picture's own columns (see
+  `Vutuv.Images.Backfill`). Covers profile pictures and covers (#2013/#2014)
+  and the kinds that still keep a table of their own — a job-posting picture
+  since #2054. Moves no file and changes no URL, so it is safe while the app
+  serves traffic and safe to run again after an interruption:
 
       bin/vutuv eval "Vutuv.Release.backfill_image_rows()"
       bin/vutuv eval "Vutuv.Release.backfill_image_rows(dry_run: true)"
       bin/vutuv eval "Vutuv.Release.backfill_image_rows(only: \\"cover\\")"
+      bin/vutuv eval "Vutuv.Release.backfill_image_rows(only: \\"job_posting_image\\")"
   """
   def backfill_image_rows(opts \\ []) do
     load_app()
@@ -152,9 +154,10 @@ defmodule Vutuv.Release do
   end
 
   @doc """
-  Counts every member picture against its row and its file on disk, writing
-  nothing, and prints what it found. The gate on the deploy that drops the
-  member row's four columns per kind:
+  Counts every picture against its row and its file on disk, writing nothing,
+  and prints what it found. The gate on the deploy that drops the member row's
+  four columns per kind, and on the one that retires a gallery kind's own
+  table:
 
       bin/vutuv eval "Vutuv.Release.check_image_rows()"
 

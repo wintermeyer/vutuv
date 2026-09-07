@@ -5,17 +5,28 @@ defmodule Vutuv.Images do
   and what is contract, and what a member row still holds meanwhile — is in
   `docs/architecture/images.md`.
 
-  The invariant this module carries: **this release writes both and reads the
-  row, falling back to the columns when there is no row yet.** A picture is a
-  row here *and* the four columns it has always lived in on the member row;
-  every write still fills both, and since #2027 the row is what every URL
-  builder and every display gate reads (`member_image/2`). Its third answer,
-  the **bridge**, reads those columns for a picture the backfill has not
-  reached, so taking this release before running `mix vutuv.images.backfill`
-  cannot blank every face on the site. Bridge and column writes go together, in
-  the deploy before the migration — which is the only order a blue/green switch
-  allows, since a migration may drop only what the *currently deployed* release
-  has stopped reading.
+  Two kinds of picture live here, at two different stages of the same move.
+
+  **A profile picture and cover: this release writes both and reads the row**,
+  falling back to the columns when there is no row yet. Such a picture is a row
+  here *and* the four columns it has always lived in on the member row; every
+  write still fills both, and since #2027 the row is what every URL builder and
+  every display gate reads (`member_image/2`). Its third answer, the **bridge**,
+  reads those columns for a picture the backfill has not reached, so taking this
+  release before running `mix vutuv.images.backfill` cannot blank every face on
+  the site. Bridge and column writes go together, in the deploy before the
+  migration — which is the only order a blue/green switch allows, since a
+  migration may drop only what the *currently deployed* release has stopped
+  reading.
+
+  **A gallery picture (#2015, a job-posting picture first in #2054): this
+  release writes both and reads the old table.** Its truth is still its own row
+  — the proxy, the form and the AI gate all work off that — and the row here is
+  a mirror, written by `mirror/2` and dropped by `forget/2`, joined on the
+  `token` both carry rather than by a pointer. Nothing here reads it yet, which
+  is why `freeze/1` raises for one and `takedown_ready?/1` answers false: a case
+  opened on a row nobody consults would take nothing offline. Moving the readers
+  across, and only then retiring the old table, is the deploy after.
 
   `serving/1` is the second thing here that is not a column: how a kind reaches
   a reader decides what its off switch is, and a kind nobody has declared
@@ -29,13 +40,70 @@ defmodule Vutuv.Images do
   alias Vutuv.Repo
   alias Vutuv.Uploads
 
-  # The kinds that have a row today. `Vutuv.Moderation.ImageScans` uses the
-  # same two strings for its scan kinds, so a scan row and an image row name
-  # the same thing. #2015 brings the rest.
-  @kinds ~w(avatar cover)
+  # The two kinds that live *only* here: a member's profile picture and cover,
+  # whose truth is still the four columns on the member row beside them.
+  # `Vutuv.Moderation.ImageScans` uses the same strings for its scan kinds, so
+  # a scan row and an image row name the same thing.
+  @profile_kinds ~w(avatar cover)
+
+  # Every kind that has a row in this table. Written out rather than derived
+  # from `@mirrored` below, because a contract release **deletes** an entry
+  # there — at which point that kind lives here and nowhere else, so dropping
+  # it from this list would be exactly backwards.
+  @kinds ~w(avatar cover job_posting_image)
+
+  # Of those, the kinds whose truth is still a table of their own, and
+  # everything about the copy: which columns it carries, where the source rows
+  # are, and the store that knows where their files are. One registry, so a
+  # kind cannot be mirrored by one half of the system and invisible to the
+  # other — `Vutuv.Images.Backfill` reads its whole source from here.
+  #
+  # The column names are identical on both sides, so the copy is a per-field
+  # `Map.fetch!/2` rather than a translation table: a name listed here that the
+  # source schema does not have raises instead of quietly writing nothing. The
+  # other direction — a column added to the source table and not to this list —
+  # nothing can see, so the drift test in `job_posting_images_test.exs`
+  # compares the two and fails the build on it.
+  #
+  # An entry goes when that kind's contract release retires its old table,
+  # together with the double write; `takedown_ready?/1` below flips with it.
+  # #2052 (post photos) and #2053 (organization images) add one entry each;
+  # #2055 (review covers) does **not** — a review's cover is columns on the
+  # review row with no token and no table, which is the `@profile_columns`
+  # shape below, not this one.
+  @mirrored %{
+    "job_posting_image" => %{
+      fields: ~w(
+        token user_id job_posting_id alt position width height content_type size_bytes moderation
+      )a,
+      schema: Vutuv.Jobs.JobPostingImage,
+      store: Vutuv.JobPostingImageStore,
+      # The version the backfill's file probe asks the store for.
+      preview: "thumb"
+    }
+  }
 
   @doc "The image kinds that live in this table today."
   def kinds, do: @kinds
+
+  @doc """
+  Whether this kind still lives in a table of its own that this release mirrors
+  into `images` — what the generic moderation paths ask before writing the
+  second copy, so a kind #2015 has not reached yet is passed over rather than
+  mirrored into nothing.
+  """
+  def mirrored?(kind) when is_binary(kind), do: is_map_key(@mirrored, kind)
+
+  @doc "The kinds `mirrored?/1` answers true for."
+  def mirrored_kinds, do: @mirrored |> Map.keys() |> Enum.sort()
+
+  @doc """
+  Everything the mirror of a kind is made of: the `:fields` it copies, the
+  `:schema` the source rows live in, the `:store` that owns their files and the
+  `:preview` version a file probe asks for. `Vutuv.Images.Backfill` builds its
+  whole source from this, so there is no second per-kind list to keep in step.
+  """
+  def mirror_source(kind) when is_map_key(@mirrored, kind), do: @mirrored[kind]
 
   @doc """
   How this kind reaches a reader.
@@ -52,7 +120,13 @@ defmodule Vutuv.Images do
   Raises for an undeclared kind: a picture that inherits a default is one
   nobody knows how to take offline.
   """
-  def serving(kind) when kind in @kinds, do: :static
+  def serving(kind) when kind in @profile_kinds, do: :static
+
+  # Every byte of a job-posting picture already goes through
+  # `VutuvWeb.JobPostingImageController`, which asks whether the reader may see
+  # the posting — so the row is the off switch, and this release changes
+  # nothing about how one is served.
+  def serving("job_posting_image"), do: :proxy
 
   def serving(kind),
     do:
@@ -367,7 +441,7 @@ defmodule Vutuv.Images do
   report that named the old picture should point at nothing rather than quietly
   at the new one.
   """
-  def put_profile_image(%User{} = user, kind, attrs) when kind in @kinds do
+  def put_profile_image(%User{} = user, kind, attrs) when kind in @profile_kinds do
     if frozen?(user.id, kind) do
       {:error, :frozen}
     else
@@ -399,12 +473,12 @@ defmodule Vutuv.Images do
   nothing to put back. Two index probes and one row read, on a path that spends
   hundreds of milliseconds encoding AVIFs.
   """
-  def frozen?(user_id, kind) when kind in @kinds do
+  def frozen?(user_id, kind) when kind in @profile_kinds do
     Repo.exists?(from(i in profile_query(user_id, kind), where: not is_nil(i.frozen_at)))
   end
 
   @doc "The member's row for this kind, or nil."
-  def profile_image(user_id, kind) when kind in @kinds,
+  def profile_image(user_id, kind) when kind in @profile_kinds,
     do: Repo.one(profile_query(user_id, kind))
 
   @doc """
@@ -417,7 +491,7 @@ defmodule Vutuv.Images do
   Ecto), so it is answered as "no such picture".
   """
   def mark_moderation(user_id, kind, fingerprint, state)
-      when kind in @kinds and is_binary(fingerprint) do
+      when kind in @profile_kinds and is_binary(fingerprint) do
     {count, _} =
       user_id
       |> profile_query(kind)
@@ -447,7 +521,7 @@ defmodule Vutuv.Images do
     do: discard(user_id, kind, fingerprint, moderation: "pending")
 
   defp discard(user_id, kind, fingerprint, filters)
-       when kind in @kinds and is_binary(fingerprint) do
+       when kind in @profile_kinds and is_binary(fingerprint) do
     query =
       profile_query(user_id, kind)
       |> where([i], i.fingerprint == ^fingerprint)
@@ -477,6 +551,134 @@ defmodule Vutuv.Images do
 
   def sync_fingerprint(nil, _fingerprint), do: :ok
 
+  ## The gallery kinds (issue #2015, this one #2054)
+
+  @doc """
+  Runs a write against a gallery picture's own table and mirrors the row it
+  produces, in one transaction — the door every double-write call site goes
+  through. `fun` returns what `Repo.insert/1` and `Repo.update/1` return, and
+  the caller meets the same `{:ok, row}` / `{:error, changeset}` it always did.
+
+  Together or not at all, for the reason the profile upload gives: by the time
+  a picture's row is written its files are already on disk, so a failure
+  between the two writes would leave a picture that exists everywhere except in
+  the table the copyright freeze reads.
+  """
+  def write_mirrored(kind, fun) when is_map_key(@mirrored, kind) and is_function(fun, 0) do
+    Repo.transaction(fn ->
+      case fun.() do
+        {:ok, row} ->
+          :ok = mirror(kind, row)
+          row
+
+        {:error, changeset} ->
+          Repo.rollback(changeset)
+      end
+    end)
+  end
+
+  @doc """
+  Writes (or rewrites) the row that stands beside a gallery picture's own row —
+  the **expand** half of moving a kind in here. Takes one source row or a list
+  of them, and copies the columns `mirror_source/1` names, which are spelled
+  the same on both sides.
+
+  **The join key is the `token`, not a pointer.** #2013 added
+  `users.avatar_image_id` because a member row had no stable handle of its own;
+  a gallery row has carried one from the start, `images.token` has been unique
+  across the whole table since #2013 for exactly this, and a gallery token is
+  minted once and never re-minted (a re-upload is a new row). So this is an
+  upsert on the token: it is idempotent, it is what makes the backfill and the
+  request path the same function, and this kind has no `missing_pointer` class
+  to reconcile.
+
+  One statement however many rows are handed over, so the editor saving ten
+  pictures costs one upsert rather than ten. `Repo.insert_all/3` autogenerates
+  neither the id nor the timestamps, so both are minted here — `Vutuv.UUIDv7`,
+  like every id in this system.
+
+  **`kind`, `id`, `inserted_at` and `frozen_at` are deliberately not in the
+  replace list.** The first three identify the row and the last is a takedown:
+  a mirror that runs on every ordinary write must never be able to lift one,
+  the same rule `put_profile_image/3` states for a profile picture.
+
+  The source row's own changeset is the validation, and this must not add a
+  stricter one: every column here has the type and the bound of the column it
+  copies (`alt` and `content_type` are varchar(255) on both sides), so a value
+  the source accepted fits, and a mirror that could refuse what the source
+  stored would turn a saved picture into a failed upload.
+  """
+  def mirror(kind, source_or_sources) when is_map_key(@mirrored, kind) do
+    fields = @mirrored[kind].fields
+    now = now()
+
+    entries =
+      for source <- List.wrap(source_or_sources) do
+        fields
+        |> Map.new(&{&1, Map.fetch!(source, &1)})
+        |> Map.merge(%{
+          id: Vutuv.UUIDv7.generate(),
+          kind: kind,
+          inserted_at: now,
+          updated_at: now
+        })
+      end
+
+    Repo.insert_all(Image, entries,
+      on_conflict: {:replace, [:updated_at | fields -- [:token]]},
+      conflict_target: :token
+    )
+
+    :ok
+  end
+
+  @doc """
+  Forgets the rows behind these tokens — the other half of the double write,
+  called wherever the gallery's own row and its files are deleted (a discarded
+  upload, a picture the editor removed on save, the pending sweep, a rejected
+  scan). One statement, and a no-op for an empty list.
+
+  A posting or a member that is deleted needs no call: `images.job_posting_id`
+  and `images.user_id` both cascade, exactly as the gallery table's own columns
+  do.
+  """
+  def forget(_kind, []), do: :ok
+
+  def forget(kind, tokens) when is_map_key(@mirrored, kind) and is_list(tokens) do
+    Repo.delete_all(from(i in Image, where: i.kind == ^kind and i.token in ^tokens))
+    :ok
+  end
+
+  @doc """
+  Whether a copyright case can act on this picture at all — what
+  `Vutuv.Moderation` asks before letting a report name it.
+
+  A gallery kind that has only just arrived here (#2054 and its siblings ship
+  the **expand** half: the row exists, every URL and every gate still reads the
+  old table) has no takedown path yet, and `freeze/1` below has no clause for
+  it. Answering "yes" would open a case whose uphold raises, so a report is
+  refused until the kind's own contract release wires the freeze — which is all
+  there was before the row existed.
+
+  Derived from `mirrored?/1` rather than listed a second time, so the two
+  cannot drift: "this picture's truth is still elsewhere" and "nothing here can
+  take it offline" are one fact, and the contract release that deletes the
+  mirror entry flips both at once.
+  """
+  def takedown_ready?(%Image{kind: kind}), do: kind in @kinds and not mirrored?(kind)
+
+  # A kind whose row exists but whose freeze does not. Loud rather than
+  # half-done: the alternative is a stamped `frozen_at` no reader consults and
+  # files nothing moved, which reads from the case page exactly like a
+  # completed takedown.
+  defp no_takedown_path!(%Image{kind: kind}, action) do
+    raise ArgumentError, """
+    cannot #{action} an image of kind #{inspect(kind)}: this release mirrors it \
+    into the images table but no reader consults the row yet, so nothing would \
+    go offline. Wire the kind's freeze before letting a case reach it.\
+    """
+  end
+
   ## The copyright freeze (issue #2012)
 
   @doc """
@@ -501,7 +703,7 @@ defmodule Vutuv.Images do
   already invisible and a job `reconcile_holds/0` finishes. The other order
   would leave files in a hold that nothing knows to bring back.
   """
-  def freeze(%Image{} = image) do
+  def freeze(%Image{kind: kind} = image) when kind in @profile_kinds do
     # `is_nil(frozen_at)` so a second pass — `reconcile_holds/0` finishing an
     # interrupted move — re-asserts the freeze without moving the moment it
     # happened, which is what the case and the statement of reasons quote.
@@ -517,6 +719,8 @@ defmodule Vutuv.Images do
 
     :ok
   end
+
+  def freeze(%Image{} = image), do: no_takedown_path!(image, "freeze")
 
   @doc """
   Puts a frozen picture back exactly where it was: every file returns to the
@@ -534,7 +738,7 @@ defmodule Vutuv.Images do
   only once the member row names the files again, so a half-finished restore is
   still a hold for `reconcile_holds/0` to find.
   """
-  def unfreeze(%Image{} = image) do
+  def unfreeze(%Image{kind: kind} = image) when kind in @profile_kinds do
     {_count, _} =
       Repo.update_all(from(i in Image, where: i.id == ^image.id),
         set: [frozen_at: nil, updated_at: now()]
@@ -552,6 +756,8 @@ defmodule Vutuv.Images do
     :ok
   end
 
+  def unfreeze(%Image{} = image), do: no_takedown_path!(image, "unfreeze")
+
   @doc """
   Deletes this picture for good — every derived version, the private original
   and the held copies — and forgets the row. What an upheld copyright case does,
@@ -561,7 +767,7 @@ defmodule Vutuv.Images do
   nothing points at (which `reconcile_holds/0` collects), never a member row
   naming files that are gone.
   """
-  def purge(%Image{} = image) do
+  def purge(%Image{kind: kind} = image) when kind in @profile_kinds do
     case owner(image) do
       %User{} = user ->
         config = @profile_columns[image.kind]
@@ -578,6 +784,8 @@ defmodule Vutuv.Images do
     Uploads.purge_hold(image.id)
     :ok
   end
+
+  def purge(%Image{} = image), do: no_takedown_path!(image, "purge")
 
   @doc """
   Finishes every move a dying slot left half-done, in both directions — the
