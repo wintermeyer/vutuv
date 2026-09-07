@@ -2432,6 +2432,10 @@ defmodule VutuvWeb.PostComponents do
       |> assign(:marks, thread_marks(assigns.viewer, assigns.replies))
       # And their line budget once rather than per card per render.
       |> assign(:body_style, post_body_style(User.post_prefs(assigns.viewer)))
+      # Which answer, if any, ends the thread: the rows below (still fetching,
+      # a notice, "show more") mean the conversation is still open and the line
+      # is meant to run down to them, so then no answer closes it.
+      |> assign(:closing_id, closing_answer_id(assigns))
 
     ~H"""
     <%!-- The thread is the same drawing the conversation view makes: a line
@@ -2452,6 +2456,7 @@ defmodule VutuvWeb.PostComponents do
         viewer={@viewer}
         body_style={@body_style}
         marks={Map.get(@marks, reply.id)}
+        closes?={reply.id == @closing_id}
       />
 
       <%!-- The lines that are not answers keep the answers' indent, so the
@@ -2493,6 +2498,19 @@ defmodule VutuvWeb.PostComponents do
     """
   end
 
+  # The answer that ends the thread, and so has to close the line coming down
+  # into it — `nil` while anything is rendered after the answers, because the
+  # line running on down to a "show more" button or a notice is what says the
+  # conversation has not ended there. These three clauses name the three rows
+  # `thread_replies/1` renders under the answers, so a fourth row added there
+  # has to be named here too, or the line closes above something that is still
+  # hanging under it — this bug in mirror image.
+  defp closing_answer_id(%{loading?: true}), do: nil
+  defp closing_answer_id(%{more?: true}), do: nil
+  defp closing_answer_id(%{notice: notice}) when not is_nil(notice), do: nil
+  defp closing_answer_id(%{replies: []}), do: nil
+  defp closing_answer_id(%{replies: replies}), do: List.last(replies).id
+
   # The three marks for a whole unfolded thread, keyed by answer id — the shape
   # the action bar takes as `marks`.
   defp thread_marks(nil, _replies), do: %{}
@@ -2523,6 +2541,11 @@ defmodule VutuvWeb.PostComponents do
   attr(:body_style, :any, default: nil)
   attr(:marks, :any, default: nil, doc: "this answer's like/repost/bookmark flags, batched above")
 
+  attr(:closes?, :boolean,
+    default: false,
+    doc: "this answer ends the thread, so the line stops at it instead of running past"
+  )
+
   defp thread_reply_card(assigns) do
     account = assigns.reply.remote_account
 
@@ -2533,11 +2556,43 @@ defmodule VutuvWeb.PostComponents do
 
     ~H"""
     <article data-thread-reply={@reply.id} class="relative pl-7">
+      <%!-- The line's tail, in the card's own ground: the run above belongs to
+      the answers before this one, everything below this avatar is this answer's
+      own body and the line has no business there — it ended in mid-air under
+      the last answer until this. It has to be covered rather than shortened
+      because the stylesheet draws that line from the answered avatar down to
+      the bottom of the card and cannot know where the last answer starts;
+      nothing in CSS reaches from the one edge to the other. Ground colour is
+      the card's, the same `bg-white dark:bg-slate-900` the avatar's globe badge
+      punches its own hole with — a card on any other ground would wear this as
+      a stripe down its last answer, which is why `thread_replies_last_test.exs`
+      reads the two back off the rendered page and compares them. The one that
+      could bite is the permalink's brand tint above: it is painted behind a
+      focused card, and `focus?` reaches no remote node today. `h-[calc(100%-…)]`
+      and not `bottom-0`, the iOS collapse the connectors everywhere else
+      avoid. --%>
+      <span
+        :if={@closes?}
+        data-thread-tail
+        class="absolute left-[1.125rem] top-[1.25rem] h-[calc(100%-1.25rem)] w-0.5 bg-white dark:bg-slate-900"
+        aria-hidden="true"
+      >
+      </span>
       <%!-- The elbow out of the thread's line into this answer's avatar: 10px
       from the line's column to the card's left edge, at the avatar's vertical
       centre. `left` measures from the padding box, so the `pl-7` beside it
-      moves the card and not the elbow. --%>
+      moves the card and not the elbow. The answer that ends the thread curves
+      into its avatar instead of tapping the line in passing, the way the last
+      card of a conversation does (`thread_chain/1`). --%>
       <span
+        :if={@closes?}
+        data-thread-tick
+        class="absolute left-[1.125rem] top-0 h-[1.25rem] w-2.5 rounded-bl-xl border-b-2 border-l-2 border-slate-200 dark:border-slate-700"
+        aria-hidden="true"
+      >
+      </span>
+      <span
+        :if={!@closes?}
         data-thread-tick
         class="absolute left-[1.125rem] top-[1.125rem] h-0.5 w-2.5 rounded-full bg-slate-200 dark:bg-slate-700"
         aria-hidden="true"

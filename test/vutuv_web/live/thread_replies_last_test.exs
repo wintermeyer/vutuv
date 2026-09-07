@@ -158,4 +158,47 @@ defmodule VutuvWeb.ThreadRepliesLastTest do
            "The refusal notice belongs above the answers: below them it is one " <>
              "more row the thread's line runs down past."
   end
+
+  # The `bg-` tokens of a class list — what an element paints its ground in.
+  defp ground(element) do
+    element
+    |> attribute("class")
+    |> String.split()
+    |> Enum.filter(&String.starts_with?(&1, ["bg-", "dark:bg-"]))
+    |> Enum.sort()
+  end
+
+  test "the cover under the last answer is the card's own ground", %{conn: conn} do
+    {conn, user} = login_de(conn)
+    acc = account()
+    follow(user, acc)
+    post = cached_post(acc, %{replies_count: 1})
+    stored_answer(post, "Nimm Mint.")
+
+    {:ok, view, _html} = live(conn, ~p"/system/fediverse/post/#{post.id}")
+    view |> element(~s{[data-remote-replies="#{post.id}"]}) |> render_click()
+    html = render_async(view)
+
+    # The line is drawn to the bottom of the card and the last answer covers
+    # what is left of it below its avatar. That cover is a full-height strip
+    # down the answer's whole body, so it is only invisible while it is painted
+    # in the very colour the card is: the two are separate literals in separate
+    # files, and a card surface retinted without this one wears a white gutter
+    # beside a member's photograph. Read off the page rather than out of the
+    # source, so what is compared is the ground that is actually painted.
+    [cover] = elements(html, "[data-thread-tail]")
+
+    card =
+      html
+      |> elements("section:has([data-thread-tail])")
+      |> Enum.filter(&(ground(&1) != []))
+      |> List.last()
+
+    assert card, "No element around the cover paints a ground — this test cannot see one."
+
+    assert ground(cover) == ground(card),
+           "The cover has to be painted in the card's own ground, or it is a " <>
+             "stripe down the last answer. Card: #{inspect(ground(card))}, " <>
+             "cover: #{inspect(ground(cover))}."
+  end
 end

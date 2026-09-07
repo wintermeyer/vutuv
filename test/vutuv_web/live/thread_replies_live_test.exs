@@ -230,6 +230,57 @@ defmodule VutuvWeb.ThreadRepliesLiveTest do
     end
   end
 
+  test "the line stops at the last answer instead of running past it", %{conn: conn} do
+    {conn, user} = login_de(conn)
+    acc = account()
+    follow(user, acc)
+    post = cached_post(acc, %{replies_count: 2})
+    one = stored_answer(post, "Nimm Mint.")
+    two = stored_answer(post, "Oder Salbei.")
+
+    {:ok, view, _html} = open_page(conn, post)
+    view |> element(~s{[data-remote-replies="#{post.id}"]}) |> render_click()
+    render_async(view)
+
+    # The stylesheet draws the line to the bottom of the card, which is one
+    # avatar too far: the last answer's own body hangs below the avatar the
+    # line is aiming for. The last answer covers that tail itself and curves
+    # into its avatar; without it the line ends in mid-air under the thread.
+    assert has_element?(view, ~s{[data-thread-reply="#{two.id}"] [data-thread-tail]})
+
+    assert has_element?(
+             view,
+             ~s{[data-thread-reply="#{two.id}"] [data-thread-tick].rounded-bl-xl}
+           )
+
+    # And only the last one: an answer with answers under it is passed by.
+    refute has_element?(view, ~s{[data-thread-reply="#{one.id}"] [data-thread-tail]})
+
+    refute has_element?(
+             view,
+             ~s{[data-thread-reply="#{one.id}"] [data-thread-tick].rounded-bl-xl}
+           )
+  end
+
+  test "an answer followed by a notice does not close the line", %{conn: conn} do
+    {conn, user} = login_de(conn)
+    acc = account()
+    follow(user, acc)
+    post = cached_post(acc, %{replies_count: 3})
+    answer = stored_answer(post, "Nimm Mint.")
+
+    {:ok, view, _html} = open_page(conn, post)
+    view |> element(~s{[data-remote-replies="#{post.id}"]}) |> render_click()
+
+    render_async(view)
+
+    # Two of the three answers could not be got, and the line runs down to the
+    # row that says so — the conversation has not ended at this answer, so
+    # nothing here may close it.
+    assert has_element?(view, ~s{[data-thread-replies] p[role="status"]})
+    refute has_element?(view, ~s{[data-thread-reply="#{answer.id}"] [data-thread-tail]})
+  end
+
   test "the answers are drawn in the avatar column of the card above them", %{conn: conn} do
     {conn, user} = login_de(conn)
     acc = account()

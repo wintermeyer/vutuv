@@ -575,6 +575,12 @@ html[data-nav-pressing] main {
    `thread_replies_last_test.exs` fails the build if anything is put after
    them.
 
+   That is one avatar too far, and no length here can shorten it: the last
+   answer's own body hangs below the avatar this line is aiming for, and no CSS
+   length reaches from this box's top edge to a descendant's. So the last
+   answer closes the line itself — `thread_reply_card/1` draws the cover and
+   the elbow, and says why.
+
    Unlayered like the rest of this file. */
 [data-card-head]:has([data-thread-replies]) {
   position: relative;
