@@ -11,11 +11,17 @@ defmodule Vutuv.RemoteHtml do
 
     * `<script>` and `<style>` elements go **with their contents**,
     * `<br>` and `</p>` become the line breaks that carried the meaning,
+    * the whitespace **between** two tags is kept in a shape the strip can
+      carry (`keep_space_between_tags/1`) — without it a mention and the link
+      after it arrive as one word,
     * every remaining tag is stripped (`HtmlSanitizeEx.strip_tags/1`), so there
       is no allowlist to get wrong and nothing to render `raw`,
     * HTML entities are decoded exactly **once** (`decode_entities/1`),
     * the sending server's own **custom-emoji shortcodes** go out with it
-      (`strip_shortcodes/1`), and
+      (`strip_shortcodes/1`),
+    * a web address that runs straight out of the word before it gets its space
+      back (`space_before_glued_url/1`), for the deliveries that arrive with no
+      separator of their own, and
     * the result is clamped, so one hostile delivery cannot park a novel.
 
   The script/style pass matters because `strip_tags/1` removes the *tags* and
@@ -119,12 +125,14 @@ defmodule Vutuv.RemoteHtml do
     |> restore_cut_links()
     |> String.replace(~r{<br\s*/?>}i, "\n")
     |> String.replace(~r{</p>}i, "\n\n")
+    |> keep_space_between_tags()
     |> defuse_wide_charrefs()
     |> HtmlSanitizeEx.strip_tags()
     |> scrub_nul()
     |> decode_entities()
     |> String.trim()
     |> strip_shortcodes()
+    |> space_before_glued_url()
     |> expand_mentions(tags)
     |> clamp(max)
   end
@@ -144,6 +152,48 @@ defmodule Vutuv.RemoteHtml do
   # cutting.
   defp clamp_input(html) when byte_size(html) <= @max_input, do: html
   defp clamp_input(html), do: String.byte_slice(html, 0, @max_input)
+
+  # Whitespace sitting between two tags, in a shape the strip below is able to
+  # carry through.
+  #
+  # `:mochiweb_html.parse/1` — the parser under `strip_tags/1` — **drops a text
+  # node that is nothing but whitespace**, so `</a> <a>` arrives as one word.
+  # `HtmlSanitizeEx` knows and works around it, but its `before_parse/1` names
+  # three shapes only: a newline straight after the `>`, a run of spaces alone,
+  # a run of tabs alone. Anything mixed matches none of them and is lost.
+  #
+  # Which would be a rare corner, except that **our own `<br>` rule writes the
+  # mixed shape**: Mastodon separates a mention from the link after it as
+  # `</span> <br /><a`, the line above turns that into `</span> \n<a`, and a
+  # space followed by a newline is exactly what falls through. That is how
+  # `Kommentar @tazgetroete https://taz.de/…` reached a card as the single
+  # unlinkable word `@tazgetroetehttps://taz.de/…` — with the mention left
+  # short as well, since `expand_mentions/2` no longer saw one either.
+  #
+  # The rewrite aims squarely at those three shapes, so the run comes out as its
+  # own newlines (a paragraph gap has to survive; the layout spaces around it
+  # mean nothing in plain text) or, carrying none, as a single space. **Only a
+  # run that is already there** is touched: two tags with nothing between them
+  # must keep joining, or the URL Mastodon spreads over three `<span>`s would
+  # come apart. The mixed run a sending server writes itself is the other half
+  # of the same class and gets the same repair, which is why this is not simply
+  # a narrower `<br>` rule.
+  #
+  # No `u` flag: `\s`, `<` and `>` are ASCII, so the match is the same byte for
+  # byte, and the flag makes the scan validate the whole document as UTF-8 for
+  # nothing — 37 µs against 6 µs on an ordinary status. Counting the newlines
+  # with `:binary.matches/2` rather than a second regex is the other measured
+  # third of it: over 88 KB of gaps, 14.5 ms against 4.0 ms.
+  @inter_tag_space ~r/(?<=>)\s+(?=<)/
+
+  defp keep_space_between_tags(html) do
+    Regex.replace(@inter_tag_space, html, fn run ->
+      case :binary.matches(run, "\n") do
+        [] -> " "
+        newlines -> String.duplicate("\n", length(newlines))
+      end
+    end)
+  end
 
   @doc """
   `text` — already plain, not HTML — with its custom-emoji shortcodes taken out
@@ -406,6 +456,51 @@ defmodule Vutuv.RemoteHtml do
     |> String.replace(~r{\Ahttps?://}i, "")
     |> String.replace_prefix("www.", "")
     |> String.trim_trailing("/")
+  end
+
+  @doc """
+  `text` — already plain — with a space put back in front of a web address that
+  runs straight out of the word before it.
+
+  The net under `keep_space_between_tags/1`: that one repairs the separator
+  **this** code was losing, and this one repairs a delivery that arrived with
+  none. Some servers really do send `#linux<a href="https://flathub.org/…">`
+  with nothing between the two, and the result is unreadable in the same way —
+  a word nobody can click, a mention nothing expands, and one enormous token in
+  the search index.
+
+  A scheme is what makes it decidable: no word in any language runs into
+  `https://`, so a letter or a digit immediately before one is a missing space
+  and nothing else. Everything else in front of a scheme is left exactly as it
+  stands, because the shapes that legitimately carry one are all punctuation —
+  `(https://…)`, `?url=https://…`, `web.archive.org/web/2020/https://…` — and
+  a space written into those breaks a real address. Measured over the 8,764
+  cached fediverse posts in the dev copy of production: 44 rows matched, all 44
+  of them this bug, none of them a false positive.
+
+  Public because `Vutuv.Fediverse.space_stored_glued_urls/0` runs it over the
+  rows written before it existed, and a backfill that spelled the rule a second
+  time in SQL would be a second rule.
+  """
+  # The mirror of the markdown autolinker's own boundary
+  # (`VutuvWeb.Markdown.autolink_bare_urls/1` refuses to link a scheme behind a
+  # word character), which is why the glued address rendered as prose in the
+  # first place. The two belong together: relax one and the other has to know.
+  # `~r/…/` and not the file's usual `~r{…}`: that sigil ends at the first `}`,
+  # which here is the one closing `\p{L}`.
+  @glued_url ~r/(?<=[\p{L}\p{N}])(?=https?:\/\/)/iu
+
+  def space_before_glued_url(text) when is_binary(text) do
+    # Almost every post carries no address at all, and the gate spares those the
+    # `u`-flagged scan of the whole text (0.2 µs against 1.7 µs). `:binary.match`
+    # rather than the `Regex.match?` gate two steps above use: there a whole
+    # split/join pipeline sits behind the question, while `String.replace/3`
+    # already hands back the subject itself when nothing matches.
+    if :binary.match(text, "://") == :nomatch do
+      text
+    else
+      String.replace(text, @glued_url, " ")
+    end
   end
 
   # Only the **bare** `@user` form is a short mention to expand. Asking the

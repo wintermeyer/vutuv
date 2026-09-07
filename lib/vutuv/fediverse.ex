@@ -2765,33 +2765,55 @@ defmodule Vutuv.Fediverse do
   `translations.source_sha256` keys it to the exact source string, so it stops
   matching and the post is translated again from the cleaned text.
   """
-  def strip_stored_shortcodes do
+  # Every shortcode contains a colon, so the prefilter is a cheap superset of
+  # the grammar rather than a restatement of it.
+  def strip_stored_shortcodes,
+    do: rewrite_stored_text("%:%", &RemoteHtml.strip_shortcodes/1)
+
+  @doc """
+  Puts the space back in front of a web address that runs straight out of the
+  word before it, in the remote text already stored, and reports how many
+  values it rewrote.
+
+  The sibling of `strip_stored_shortcodes/0` above, run once from its own
+  migration and for the same reason: `Vutuv.RemoteHtml.to_text/3` writes the
+  separator on the way in from that release on, but a cached post is never
+  re-read from its origin, so `@tazgetroetehttps://taz.de/…` would stay one
+  unlinkable word until it aged out.
+  """
+  def space_stored_glued_urls,
+    do: rewrite_stored_text("%://%", &RemoteHtml.space_before_glued_url/1)
+
+  # The shared backfill under both: every column `remote_text/3` writes, read
+  # through a `LIKE` superset of what `repair` could possibly change, and
+  # rewritten by `repair` itself — the same function the inbox runs, so the
+  # grammar is never transcribed into SQL a second time. Reading the matches at
+  # once is bounded by what these tables are: a cache the six-month retention
+  # keeps small. A NULL never matches `LIKE`, so an empty summary is skipped
+  # without a clause of its own.
+  defp rewrite_stored_text(prefilter, repair) do
     for {schema, fields} <- @remote_text_columns, field <- fields, reduce: 0 do
-      total -> total + strip_stored_shortcodes(schema, field)
+      total -> total + rewrite_stored_column(schema, field, prefilter, repair)
     end
   end
 
-  defp strip_stored_shortcodes(schema, field) do
-    # Every shortcode contains a colon, so this narrows the read to a cheap
-    # superset of the grammar rather than restating it — the grammar itself
-    # runs in Elixir below and decides. Reading the matches at once is bounded
-    # by what these tables are: a cache the six-month retention keeps small.
+  defp rewrite_stored_column(schema, field, prefilter, repair) do
     schema
-    |> where([r], like(field(r, ^field), "%:%"))
+    |> where([r], like(field(r, ^field), ^prefilter))
     |> select([r], {r.id, field(r, ^field)})
     |> Repo.all()
-    |> Enum.count(fn {id, text} -> strip_stored_value(schema, field, id, text) end)
+    |> Enum.count(fn {id, text} -> rewrite_stored_value(schema, field, id, text, repair) end)
   end
 
-  defp strip_stored_value(schema, field, id, text) do
-    case RemoteHtml.strip_shortcodes(text) do
+  defp rewrite_stored_value(schema, field, id, text, repair) do
+    case repair.(text) do
       ^text ->
         false
 
-      stripped ->
+      rewritten ->
         schema
         |> where([r], r.id == ^id)
-        |> Repo.update_all(set: [{field, stripped}])
+        |> Repo.update_all(set: [{field, rewritten}])
 
         true
     end

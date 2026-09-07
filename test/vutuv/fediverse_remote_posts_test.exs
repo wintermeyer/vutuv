@@ -407,6 +407,44 @@ defmodule Vutuv.FediverseRemotePostsTest do
     end
   end
 
+  describe "space_stored_glued_urls/0 (the backfill the migration runs)" do
+    test "cleans every column remote_text/3 writes, and leaves a real address alone" do
+      acc = account()
+
+      {1, _} =
+        Repo.update_all(RemoteAccount |> where([a], a.id == ^acc.id),
+          set: [summary: "Mehr bei @riffreporterhttps://riffreporter.de/x"]
+        )
+
+      follow(member(), acc)
+      assert :ok = Fediverse.record_remote_post(create_activity(), @actor)
+      post = Repo.get_by!(RemotePost, object_uri: "https://social.example/posts/1")
+
+      # Written the way rows already in the database were: past the changeset,
+      # with the separator the strip had eaten still missing.
+      {1, _} =
+        Repo.update_all(RemotePost |> where([p], p.id == ^post.id),
+          set: [
+            content_text: "#linuxhttps://flathub.org/apps",
+            summary: "https://web.archive.org/web/2020/https://taz.de/x"
+          ]
+        )
+
+      # One value on the post and one on the account. The post's summary holds
+      # an address inside an address, which is not this bug and must not move.
+      assert Fediverse.space_stored_glued_urls() == 2
+
+      post = Repo.reload!(post)
+      assert post.content_text == "#linux https://flathub.org/apps"
+      assert post.summary == "https://web.archive.org/web/2020/https://taz.de/x"
+
+      assert Repo.reload!(acc).summary == "Mehr bei @riffreporter https://riffreporter.de/x"
+
+      # Idempotent: a second pass has nothing left to do.
+      assert Fediverse.space_stored_glued_urls() == 0
+    end
+  end
+
   describe "upstream edits and withdrawals" do
     setup do
       user = member()
