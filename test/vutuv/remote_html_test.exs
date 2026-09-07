@@ -373,7 +373,8 @@ defmodule Vutuv.RemoteHtmlTest do
       # The shape that always worked, and the reason nobody noticed the one
       # above: Mastodon hides the ends of the URL rather than cutting them, so
       # the strip reassembles it. `fediverse_remote_post_screenshots_test.exs`
-      # leans on this too.
+      # leans on this too — and so does `keep_space_between_tags/1`, which is
+      # why no blanket separator may be written at a tag boundary.
       html =
         ~s(<a href="https://blog.example/entry"><span class="invisible">https://</span>) <>
           ~s(<span class="ellipsis">blog.example</span><span class="invisible">/entry</span></a>)
@@ -405,6 +406,80 @@ defmodule Vutuv.RemoteHtmlTest do
       html = ~s|<a href="javascript:alert(1)//example.org">javascript:alert…</a>|
 
       refute RemoteHtml.to_text(html) =~ "alert(1)"
+    end
+  end
+
+  describe "the whitespace between two tags is not swallowed" do
+    # The real shape, taken off social.anoxinon.de: a mention, a space, a
+    # `<br />`, then the link. What reached the card was
+    # `@tazgetroetehttps://taz.de/…` — one unlinkable word, with the mention
+    # left short as well, because a `@user` running into a URL is no longer a
+    # mention the expansion recognises.
+    @mention_then_link ~s(<p>Mein Kommentar ) <>
+                         ~s(<span class="h-card" translate="no">) <>
+                         ~s(<a href="https://mastodon.social/@tazgetroete" class="u-url mention">) <>
+                         ~s(@<span>tazgetroete</span></a></span> <br />) <>
+                         ~s(<a href="https://taz.de/Wohnungspolitik/!6207331/" target="_blank">) <>
+                         ~s(<span class="invisible">https://</span>) <>
+                         ~s(<span class="ellipsis">taz.de/Wohnungspolitik</span>) <>
+                         ~s(<span class="invisible">/!6207331/</span></a></p>)
+
+    @taz_tag %{
+      "type" => "Mention",
+      "name" => "@tazgetroete@mastodon.social",
+      "href" => "https://mastodon.social/@tazgetroete"
+    }
+
+    test "a mention before a line break stays a mention" do
+      assert RemoteHtml.to_text(@mention_then_link, nil, [@taz_tag]) ==
+               "Mein Kommentar @tazgetroete@mastodon.social\nhttps://taz.de/Wohnungspolitik/!6207331/"
+    end
+
+    test "a run mixing a space and a newline still separates two elements" do
+      # The runs `keep_space_between_tags/1` exists for: neither spaces alone,
+      # nor tabs alone, nor a newline straight after the `>`.
+      assert RemoteHtml.to_text("<b>eins</b> \n<b>zwei</b>") == "eins\nzwei"
+      assert RemoteHtml.to_text("<b>eins</b>  \n  <b>zwei</b>") == "eins\nzwei"
+      assert RemoteHtml.to_text("<b>eins</b> \t<b>zwei</b>") == "eins zwei"
+    end
+
+    test "the shapes that already worked keep working" do
+      assert RemoteHtml.to_text("<b>eins</b> <b>zwei</b>") == "eins zwei"
+      assert RemoteHtml.to_text("<b>eins</b>\n<b>zwei</b>") == "eins\nzwei"
+      assert RemoteHtml.to_text("<b>eins</b>\n\n<b>zwei</b>") == "eins\n\nzwei"
+    end
+  end
+
+  describe "a URL glued to the word before it gets its space back" do
+    test "a letter or a digit in front of the scheme is a missing separator" do
+      assert RemoteHtml.to_text("<p>#linuxhttps://flathub.org/apps</p>") ==
+               "#linux https://flathub.org/apps"
+
+      assert RemoteHtml.to_text("<p>Kommentar @tazhttp://taz.de/x</p>") ==
+               "Kommentar @taz http://taz.de/x"
+    end
+
+    test "the mention in front of it becomes a mention again" do
+      tag = %{
+        "type" => "Mention",
+        "name" => "@taz@mastodon.social",
+        "href" => "https://mastodon.social/@taz"
+      }
+
+      assert RemoteHtml.to_text("<p>Kommentar @tazhttps://taz.de/x</p>", nil, [tag]) ==
+               "Kommentar @taz@mastodon.social https://taz.de/x"
+    end
+
+    test "an address inside another address is left alone" do
+      # None of these is a word running into a scheme, and each is a real
+      # address a space would break.
+      assert RemoteHtml.to_text("<p>https://web.archive.org/web/2020/https://taz.de/x</p>") ==
+               "https://web.archive.org/web/2020/https://taz.de/x"
+
+      assert RemoteHtml.to_text("<p>https://example.org/r?url=https://taz.de/x</p>") ==
+               "https://example.org/r?url=https://taz.de/x"
+
+      assert RemoteHtml.to_text("<p>(https://taz.de/x)</p>") == "(https://taz.de/x)"
     end
   end
 end
