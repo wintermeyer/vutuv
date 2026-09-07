@@ -10,6 +10,7 @@ defmodule VutuvWeb.NotificationLiveTest do
   alias Vutuv.ImageHelpers
   alias Vutuv.Prefs
   alias Vutuv.Prefs.Cache
+  alias Vutuv.ViewerClock
 
   # Install `overrides` as the cached installation defaults for one test (the
   # Cache GenServer is off in tests, so put_defaults/1 alone would not show).
@@ -907,10 +908,10 @@ defmodule VutuvWeb.NotificationLiveTest do
 
       # Oldest of the three, yet its unanswered reply puts it on top.
       open = insert(:post, user: user, body: "The open one")
-      backdate_post(open, NaiveDateTime.add(NaiveDateTime.utc_now(:second), -3600))
+      backdate_post(open, an_hour_ago_today())
       pending = insert(:post, user: insert(:user), body: "a reply waiting for me")
       insert(:post_reply, post: pending, parent_post: open, parent_author: user)
-      backdate_reply(pending, NaiveDateTime.add(NaiveDateTime.utc_now(:second), -3600))
+      backdate_reply(pending, an_hour_ago_today())
 
       html = render_the_page(conn)
 
@@ -1877,6 +1878,26 @@ defmodule VutuvWeb.NotificationLiveTest do
       from(c in Vutuv.Social.Follow, where: c.id == ^id),
       set: [inserted_at: at]
     )
+  end
+
+  # An hour ago, but never before the start of the **viewer's** day.
+  #
+  # These cards are grouped by `Vutuv.ViewerClock.today()`, not by UTC, and the
+  # installation's zone runs ahead of UTC — so between 22:00 and 23:00 UTC in
+  # summer a flat `utc_now() - 3600` lands on yesterday's page and an ordering
+  # assertion is then comparing two different days. That is not a flake anybody
+  # can reproduce on demand: it fails for exactly one hour a night and passes
+  # again by itself, which is what the standing rule about wall-clock tests is
+  # about. The clamp leaves a one-second window at midnight itself, where the
+  # card is a second old rather than an hour, and that is still today's page.
+  defp an_hour_ago_today do
+    now = NaiveDateTime.utc_now(:second)
+    {start_of_day, _end_of_day} = ViewerClock.day_window(ViewerClock.today())
+
+    an_hour_ago = NaiveDateTime.add(now, -3600)
+
+    [Enum.max([an_hour_ago, start_of_day], NaiveDateTime), NaiveDateTime.add(now, -1)]
+    |> Enum.min(NaiveDateTime)
   end
 
   defp backdate_post(%Vutuv.Posts.Post{id: id}, at) do
