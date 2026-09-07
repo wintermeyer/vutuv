@@ -1,8 +1,6 @@
-<.auth_layout title={founder_quote(@landing_variant)}>
+<% founder_quote = founder_quote() %>
+<.auth_layout title={founder_quote}>
   <:headline>
-    <%!-- Two headlines are under test (VutuvWeb.LandingExperiment); this
-          visitor keeps the one their session was assigned. --%>
-    <% founder_quote = founder_quote(@landing_variant) %>
     <% founder_name = "Stefan Wintermeyer" %>
     <% founder_role = gettext("Founder of vutuv") %>
     <%!-- Founder hero: the whole quote in one heading at a single size, then a
@@ -38,8 +36,8 @@
   <:hero>
     <%!-- What the quote provokes, answered in three lines: somebody who agrees
           that LinkedIn is annoying wants to know what they lose by leaving, what
-          they have to retype, and what it will cost them later. The strings and
-          the reason they are split in two live in `hero_points/1`. --%>
+          they have to retype, and what it will cost them later. The strings
+          live in `hero_points/1`. --%>
     <.hero_points />
   </:hero>
   <h2 class="text-xl font-bold text-slate-900 dark:text-white">

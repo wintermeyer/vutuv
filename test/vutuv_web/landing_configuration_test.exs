@@ -11,10 +11,9 @@ defmodule VutuvWeb.LandingConfigurationTest do
   `Vutuv.Fediverse.enabled?/0`, which the tag timeline, the feed source tabs and
   the sign-up form all consult.
 
-  async: false, like `VutuvWeb.LandingExperimentDisabledTest` and
-  `VutuvWeb.AdsDisabledTest`: every test here flips a global application env
-  that the SQL sandbox does not roll back, so it must not run beside a test
-  that reads the same flag. That is not theory — `:fediverse_enabled` is read
+  async: false, like `VutuvWeb.AdsDisabledTest`: every test here flips a global
+  application env that the SQL sandbox does not roll back, so it must not run
+  beside a test that reads the same flag. That is not theory — `:fediverse_enabled` is read
   by `Vutuv.Tags.Timeline.remote_posts_query/1`, and with these tests left in
   an async module the tag timeline's fediverse total intermittently came back
   as 0 while this file happened to have federation switched off.

@@ -33,7 +33,6 @@ installing and operating vutuv in [Running your own vutuv](../ADMINS.md).
 | [video.md](video.md) | video on posts: the ffmpeg pipeline and its resumable job, the AI check over the stills, the post that waits for its clip, the player and the range-answering proxy, what federates and what the Mastodon API says |
 | [admin.md](admin.md) | the admin panel: live dashboard, member browser, account deletion, newsletter & audiences, daily report |
 | [ads.md](ads.md) | the daily text ad: booking, review, serving |
-| [experiments.md](experiments.md) | split tests on public copy: the landing-page headline test, per-variant counters, how the winner is called |
 | [company-pages.md](company-pages.md) | the site footer, the English `/system/investors` and `/system/media-kit` pages, brand assets, and the daily head-count history behind the growth curve |
 | [api.md](api.md) | `/api/2.0`: personal access tokens, OAuth 2, webhooks, developer docs |
 | [mastodon-api.md](mastodon-api.md) | the Mastodon-compatible client API on `mastodon.<PHX_HOST>`: what phone clients can do, and what they cannot yet |
