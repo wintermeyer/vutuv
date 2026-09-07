@@ -25,8 +25,10 @@ defmodule Vutuv.Images do
   a mirror, written by `mirror/2` and dropped by `forget/2`, joined on the
   `token` both carry rather than by a pointer. Nothing here reads it yet, which
   is why `freeze/1` raises for one and `takedown_ready?/1` answers false: a case
-  opened on a row nobody consults would take nothing offline. Moving the readers
-  across, and only then retiring the old table, is the deploy after.
+  opened on a row nobody consults would take nothing offline. **Such a kind
+  moves in three releases**: the mirror, then the one that moves the readers and
+  wires the takedown, then the migration that retires the old table.
+  `docs/architecture/images.md` spells the three out.
 
   `serving/1` is the second thing here that is not a column: how a kind reaches
   a reader decides what its off switch is, and a kind nobody has declared
@@ -66,7 +68,9 @@ defmodule Vutuv.Images do
   # compares the two and fails the build on it.
   #
   # An entry goes when that kind's contract release retires its old table,
-  # together with the double write; `takedown_ready?/1` below flips with it.
+  # together with the double write. It does **not** take the report gate with
+  # it: that reads `@takedown` below, which the release before that one, the one
+  # that moves the readers and wires the takedown, is what extends.
   # #2052 (post photos) and #2053 (organization images) add one entry each;
   # #2055 (review covers) does **not** — a review's cover is columns on the
   # review row with no token and no table, which is the `@profile_columns`
@@ -649,33 +653,44 @@ defmodule Vutuv.Images do
     :ok
   end
 
+  # Which takedown a kind gets, and (by the presence of a key) whether it has
+  # one at all. `takedown_ready?/1` and the three functions below all guard on
+  # `is_map_key(@takedown, kind)`, so the gate that lets a report name a picture
+  # and the code that takes it offline read one map and cannot answer
+  # differently. A kind arrives here in the same change as its strategy's
+  # clauses (issue #2057).
+  #
+  # The gate used to be derived from `@mirrored` instead, and the two agreed by
+  # arithmetic rather than by meaning: that entry is what a **contract** release
+  # deletes, so the gate would have opened on the deploy that retires a kind's
+  # old table whether or not anything had wired that kind's freeze, and the
+  # first report accepted on it would have raised in front of the admin who
+  # upheld it.
+  @takedown Map.new(@profile_kinds, &{&1, :profile})
+
   @doc """
   Whether a copyright case can act on this picture at all — what
   `Vutuv.Moderation` asks before letting a report name it.
 
-  A gallery kind that has only just arrived here (#2054 and its siblings ship
-  the **expand** half: the row exists, every URL and every gate still reads the
-  old table) has no takedown path yet, and `freeze/1` below has no clause for
-  it. Answering "yes" would open a case whose uphold raises, so a report is
-  refused until the kind's own contract release wires the freeze — which is all
-  there was before the row existed.
-
-  Derived from `mirrored?/1` rather than listed a second time, so the two
-  cannot drift: "this picture's truth is still elsewhere" and "nothing here can
-  take it offline" are one fact, and the contract release that deletes the
-  mirror entry flips both at once.
+  True for exactly the kinds `freeze/1` below can act on (`@takedown`), because
+  that is the fact the gate needs: a report accepted on a kind nothing can take
+  offline opens a case whose uphold raises. A gallery kind that has only just
+  arrived here (#2054 and its siblings ship the **expand** half: the row exists,
+  every URL and every gate still reads the old table) is therefore refused until
+  the release that wires its takedown, which leaves it the affordance it had
+  before the row existed: reporting the posting or the page the picture sits on.
   """
-  def takedown_ready?(%Image{kind: kind}), do: kind in @kinds and not mirrored?(kind)
+  def takedown_ready?(%Image{kind: kind}), do: is_map_key(@takedown, kind)
 
-  # A kind whose row exists but whose freeze does not. Loud rather than
+  # A kind whose row exists but whose takedown does not. Loud rather than
   # half-done: the alternative is a stamped `frozen_at` no reader consults and
   # files nothing moved, which reads from the case page exactly like a
   # completed takedown.
   defp no_takedown_path!(%Image{kind: kind}, action) do
     raise ArgumentError, """
-    cannot #{action} an image of kind #{inspect(kind)}: this release mirrors it \
-    into the images table but no reader consults the row yet, so nothing would \
-    go offline. Wire the kind's freeze before letting a case reach it.\
+    cannot #{action} an image of kind #{inspect(kind)}: nothing here can take a \
+    picture of that kind offline, so nothing would go offline. Give the kind a \
+    strategy in Vutuv.Images' @takedown before letting a case reach it.\
     """
   end
 
@@ -703,7 +718,14 @@ defmodule Vutuv.Images do
   already invisible and a job `reconcile_holds/0` finishes. The other order
   would leave files in a hold that nothing knows to bring back.
   """
-  def freeze(%Image{kind: kind} = image) when kind in @profile_kinds do
+  def freeze(%Image{kind: kind} = image) when is_map_key(@takedown, kind),
+    do: freeze_by(@takedown[kind], image)
+
+  def freeze(%Image{} = image), do: no_takedown_path!(image, "freeze")
+
+  # The profile strategy: the files are served straight off disk (`serving/1`
+  # answers `:static`), so taking the picture offline means moving them.
+  defp freeze_by(:profile, %Image{} = image) do
     # `is_nil(frozen_at)` so a second pass — `reconcile_holds/0` finishing an
     # interrupted move — re-asserts the freeze without moving the moment it
     # happened, which is what the case and the statement of reasons quote.
@@ -719,8 +741,6 @@ defmodule Vutuv.Images do
 
     :ok
   end
-
-  def freeze(%Image{} = image), do: no_takedown_path!(image, "freeze")
 
   @doc """
   Puts a frozen picture back exactly where it was: every file returns to the
@@ -738,7 +758,12 @@ defmodule Vutuv.Images do
   only once the member row names the files again, so a half-finished restore is
   still a hold for `reconcile_holds/0` to find.
   """
-  def unfreeze(%Image{kind: kind} = image) when kind in @profile_kinds do
+  def unfreeze(%Image{kind: kind} = image) when is_map_key(@takedown, kind),
+    do: unfreeze_by(@takedown[kind], image)
+
+  def unfreeze(%Image{} = image), do: no_takedown_path!(image, "unfreeze")
+
+  defp unfreeze_by(:profile, %Image{} = image) do
     {_count, _} =
       Repo.update_all(from(i in Image, where: i.id == ^image.id),
         set: [frozen_at: nil, updated_at: now()]
@@ -756,8 +781,6 @@ defmodule Vutuv.Images do
     :ok
   end
 
-  def unfreeze(%Image{} = image), do: no_takedown_path!(image, "unfreeze")
-
   @doc """
   Deletes this picture for good — every derived version, the private original
   and the held copies — and forgets the row. What an upheld copyright case does,
@@ -767,7 +790,12 @@ defmodule Vutuv.Images do
   nothing points at (which `reconcile_holds/0` collects), never a member row
   naming files that are gone.
   """
-  def purge(%Image{kind: kind} = image) when kind in @profile_kinds do
+  def purge(%Image{kind: kind} = image) when is_map_key(@takedown, kind),
+    do: purge_by(@takedown[kind], image)
+
+  def purge(%Image{} = image), do: no_takedown_path!(image, "purge")
+
+  defp purge_by(:profile, %Image{} = image) do
     case owner(image) do
       %User{} = user ->
         config = @profile_columns[image.kind]
@@ -784,8 +812,6 @@ defmodule Vutuv.Images do
     Uploads.purge_hold(image.id)
     :ok
   end
-
-  def purge(%Image{} = image), do: no_takedown_path!(image, "purge")
 
   @doc """
   Finishes every move a dying slot left half-done, in both directions — the

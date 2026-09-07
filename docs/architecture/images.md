@@ -345,8 +345,9 @@ that already knows.
 `bin/vutuv eval "Vutuv.Release.check_image_rows()"`) is the gate before the
 cut: it counts every picture against its row *and* against its file on
 disk — the quarantine tree while the picture is `"pending"`, the served tree
-otherwise — prints one line per kind plus the members behind each class of
-mismatch, and **fails the command** when anything is outstanding. Both of
+otherwise — prints one line per kind plus a bounded sample of the ids behind
+each class of mismatch (`Backfill.check/1`'s own doc names what each class is
+sampled by), and **fails the command** when anything is outstanding. Both of
 those come from `check/1` itself rather than from either entry point, because
 the first version put the printing in the mix task alone: it fell out of step
 with the shape `check/1` returns and crashed on every invocation, while the
@@ -421,9 +422,9 @@ default is one nobody knows how to take offline.
 
 A post photo, an organization image, a job-posting picture and a review cover
 each kept a table and an uploader of their own, so the `image` report type and
-the freeze knew one kind only. They move in one release per kind, smallest
-first — a **job-posting picture** went first (#2054) precisely to settle the
-shape.
+the freeze knew one kind only. They move one kind at a time and three releases
+per kind (the sequence is spelled out below), smallest first — a **job-posting
+picture** went first (#2054) precisely to settle the shape.
 
 **Three of the four are the same shape; the review cover is not.** A post
 photo, an organization image and a job-posting picture each have a row of their
@@ -432,7 +433,9 @@ is `cover` / `cover_status` / `cover_moderation` **columns on the review row**
 with no token and no table of its own (`Vutuv.Posts.PostReview`), which is the
 profile picture's shape, not this one — #2055 lands on `member_columns/0`'s side
 of the fence, and `Vutuv.Images.Backfill`'s `%{cols: …}` source is what it
-extends. What #2052 and #2053 copy from here is everything below.
+extends. One thing it does share with the three: a report cannot name one of
+its pictures until the kind has a strategy in `Vutuv.Images`'s `@takedown`.
+What #2052 and #2053 copy from here is everything below.
 
 **The token is the join key, not a pointer.** #2013 added
 `users.avatar_image_id` because a member row had no stable handle of its own;
@@ -500,17 +503,36 @@ it, and `Vutuv.Moderation` refuses a report that names one
 (`Vutuv.Images.takedown_ready?/1`), because a case opened on a row nothing
 consults would go through an uphold that takes nothing offline. A member
 reports the posting instead, which is all there was before the row existed.
+That gate reads `@takedown`, the map naming which kinds have a takedown at all,
+so it turns yes in step 2 below and not a moment earlier (issue #2057).
 
-**Retiring `job_posting_images` is not this release.** It is the deploy after,
-and it has to remove the double write in the same step — the mirror, the
-`forget/2` calls, the `@gallery_sources` entry in the backfill and
-`Vutuv.Images.mirrored?/1`'s answer — because a migration may drop only what
-the currently deployed release has stopped using. Before it: run
-`mix vutuv.images.backfill --only job_posting_image` and read the check. The
-release in between is the one that moves the proxy, the form and the freeze
-onto the row, which is what makes the old table unread in the first place; and
-that release, not this one, is where the kind decides whether it wants a
-**bridge** the way `member_image/2` has one.
+**A gallery kind moves in three releases, and #2054 was the first.** Each is
+N-1 safe on its own and no two can be merged; this milestone has already paid
+for an off-by-one in that count once, in #2027.
+
+1. **Expand**: what #2054 shipped for `job_posting_image`. Every path that
+   touches the picture writes and drops the `images` row beside the old one,
+   while every reader, and the truth, stay in `job_posting_images`. Nothing
+   here can take such a picture offline yet: `freeze/1` raises for the row and
+   a report cannot name it. Between this release and the next, an operator runs
+   `mix vutuv.images.backfill --only <kind>` and reads its check; after step 2
+   the two copies can no longer be compared, so this is the last chance.
+2. **Move the readers, the writes and the takedown onto the row.** The proxy,
+   the edit form and the AI gate read the `images` row, and the context writes
+   that row directly, so the mirror goes out in the same change: the
+   `write_mirrored/2`, `mirror/2` and `forget/2` calls and the kind's entry in
+   `@mirrored` (`Vutuv.Images.mirror_source/1`, `mirrored?/1`). *The backfill
+   needs nothing removed*, at this step or any other: `Backfill.kinds/0` is
+   `Vutuv.Images.mirrored_kinds/0` plus the profile kinds, and every gallery
+   source builds itself from `mirror_source/1`, so it holds no per-kind list of
+   its own. The kind also gets its takedown here: a strategy in `@takedown` and
+   the `freeze`/`unfreeze`/`purge` clauses that go with it, which is what opens
+   the report form on these pictures. No migration in this release: the old
+   table is still standing and the release one step back is still reading and
+   writing it.
+3. **Contract**: the migration that drops `job_posting_images`, and nothing
+   else. Step 2 is what stopped using the table, and step 2 is what serves
+   while this migration runs.
 
 **This kind needs no bridge.** #2027 needed one because it moved every reader
 onto the row in the same deploy as the row's first appearance, so a picture the

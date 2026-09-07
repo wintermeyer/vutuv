@@ -143,6 +143,16 @@ report type for the picture itself: `fetch_content/2` resolves it through
 cover, and the ⋯ menu on a profile offers "Report the profile picture" beside
 the profile's own Report whenever that picture has a row.
 
+**Only a picture the freeze can act on may be reported** (issue #2057). A row
+in `images` is no longer proof of that: #2015 is moving four more picture kinds
+into the table one at a time, and each arrives with a row a release before
+anything can take it offline. So `reportable_by?/2` asks
+`Vutuv.Images.takedown_ready?/1`, which reads the same `@takedown` map the
+freeze itself dispatches on; the three releases of a kind's move are in
+[images.md](images.md). A kind it refuses keeps the affordance it had before
+its row existed: the member reports the post, the posting or the page the
+picture sits on.
+
 **Its freeze is a file move, not a column write.** `Vutuv.Images.freeze/1`
 stamps `frozen_at`, clears the member row's four columns for that kind, and
 moves every derived version, the private original and anything still in AI

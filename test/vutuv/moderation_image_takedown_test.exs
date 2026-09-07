@@ -56,6 +56,8 @@ defmodule Vutuv.ModerationImageTakedownTest do
 
   defp reload(user), do: Repo.get!(User, user.id)
 
+  defp reload_row(%ImageRow{id: id}), do: Repo.get(ImageRow, id)
+
   defp notice(attrs \\ %{}) do
     Map.merge(
       %{
@@ -348,6 +350,65 @@ defmodule Vutuv.ModerationImageTakedownTest do
 
       assert cropped.avatar_fingerprint != owner.avatar_fingerprint
       assert Repo.get!(Moderation.Case, case_record.id).status == "resolved_deleted"
+    end
+  end
+
+  # `Images.takedown_ready?/1` decides whether a report may name a picture, and
+  # the freeze is what accepting one eventually runs — so a kind the gate admits
+  # and the freeze cannot act on is an error page in front of the admin who
+  # upholds the case. Both tests split `Images.kinds()` by the gate rather than
+  # naming today's three, so a kind that joins the table has to answer for
+  # itself (issue #2057).
+  describe "the gate and the takedown answer one question (issue #2057)" do
+    setup %{owner: owner} do
+      {:ok, owner} = Accounts.update_user(owner, %{cover_photo: jpeg_upload("wide.jpg")})
+
+      {ready, refused} =
+        Enum.split_with(Images.kinds(), &Images.takedown_ready?(%ImageRow{kind: &1}))
+
+      {:ok, owner: owner, ready: ready, refused: refused}
+    end
+
+    test "every kind it admits really freezes, unfreezes and purges",
+         %{owner: owner, ready: ready} do
+      # Real pictures, because "the takedown can act on it" is a claim about
+      # files moving, not about a clause existing.
+      real = Map.new(~w(avatar cover), &{&1, Images.profile_image(owner.id, &1)})
+
+      for kind <- ready do
+        row = Map.get(real, kind)
+
+        assert row,
+               "#{kind} is takedown-ready but nothing here takes one offline. Either " <>
+                 "it has no strategy in Vutuv.Images' @takedown, and then the gate " <>
+                 "must not admit it, or it has one and this test needs a real " <>
+                 "picture of that kind."
+
+        assert :ok = Images.freeze(row)
+        assert reload_row(row).frozen_at
+
+        assert :ok = Images.unfreeze(reload_row(row))
+        refute reload_row(row).frozen_at
+
+        assert :ok = Images.purge(reload_row(row))
+        refute reload_row(row)
+      end
+    end
+
+    test "every kind it refuses is refused by all three, loudly",
+         %{owner: owner, refused: refused} do
+      for kind <- refused do
+        # No row is needed: the guard refuses before anything is read.
+        row = %ImageRow{id: Vutuv.UUIDv7.generate(), kind: kind, user_id: owner.id}
+
+        for {action, fun} <- [
+              {"freeze", &Images.freeze/1},
+              {"unfreeze", &Images.unfreeze/1},
+              {"purge", &Images.purge/1}
+            ] do
+          assert_raise ArgumentError, ~r/cannot #{action} an image of kind/, fn -> fun.(row) end
+        end
+      end
     end
   end
 
