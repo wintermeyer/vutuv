@@ -10,7 +10,6 @@ defmodule VutuvWeb.PageController do
   alias Vutuv.SourceRepo
   alias VutuvWeb.AgentDocs
   alias VutuvWeb.ControllerHelpers
-  alias VutuvWeb.LandingExperiment
   alias VutuvWeb.OpenGraph
   alias VutuvWeb.Plug.Locale
   alias VutuvWeb.RateLimit
@@ -50,11 +49,7 @@ defmodule VutuvWeb.PageController do
       |> User.changeset()
       |> Ecto.Changeset.put_assoc(:emails, [%Email{public?: true, email_type: "Personal"}])
 
-    # The headline is under a split test (VutuvWeb.LandingExperiment): the
-    # variant is drawn once per session and one view is counted with it.
-    conn
-    |> LandingExperiment.assign_variant()
-    |> render_landing(changeset: changeset)
+    render_landing(conn, changeset: changeset)
   end
 
   # The one way to render the landing page, because it is rendered from two
@@ -314,11 +309,7 @@ defmodule VutuvWeb.PageController do
 
     case Vutuv.Accounts.register_user(conn, user_params) do
       {:ok, _user} ->
-        # Credit the headline this visitor was shown. The variant stays in the
-        # session, so the PIN that follows can be credited too.
-        conn
-        |> LandingExperiment.record_signup()
-        |> handle_post_registration_login(email)
+        handle_post_registration_login(conn, email)
 
       {:error, changeset} ->
         if Vutuv.Accounts.email_already_taken?(changeset) do
@@ -328,10 +319,7 @@ defmodule VutuvWeb.PageController do
           # "has already been taken" error here would be an enumeration oracle.
           handle_existing_email_registration(conn, email)
         else
-          # The same landing page again, so the same headline: assign the
-          # session's variant without counting a second view for it.
           conn
-          |> LandingExperiment.assign_variant_without_view()
           |> put_status(:unprocessable_entity)
           |> render_landing(changeset: changeset)
         end

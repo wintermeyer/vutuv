@@ -32,6 +32,21 @@ defmodule VutuvWeb.LandingPageTest do
   defp at(html, marker), do: :binary.match(html, marker) |> elem(0)
 
   describe "the landing page" do
+    # The one founder quote. It used to be a split test between this and a
+    # warmer invitation ("Genervt von LinkedIn? Dann mal herein in die gute
+    # Stube."), which Stefan ended in favour of the dry one (2026-09-07); the
+    # rotation and everything that counted it are gone with it. Asserted in
+    # both languages because a missing msgstr renders the English msgid on the
+    # German page, which is invisible to an English-only check.
+    test "carries one headline, the same one for everybody", %{conn: conn} do
+      html = landing_de(conn)
+
+      assert html =~ "„LinkedIn nervt. vutuv nicht.“"
+      refute html =~ "gute Stube"
+
+      assert landing(build_conn()) =~ "LinkedIn is annoying. vutuv is not."
+    end
+
     # The three claims beside the quote: whoever agrees that LinkedIn is
     # annoying wants to know what they have to retype, how it feels, and what it
     # will cost them later. Asserted as the rendered German literals for the
@@ -39,19 +54,18 @@ defmodule VutuvWeb.LandingPageTest do
     # msgstr shows up perfectly in an English render, and the short ones
     # ("Schnell.") are the likeliest to be fuzzy-matched.
     #
-    # Two of them carry a reason; "Schnell." does not, since its own only
-    # restated it. Both spellings are refused below because the way that
-    # sentence would come back is the English one: an empty `msgstr` reads as
-    # untranslated, and gettext then renders the msgid on the German page.
+    # Three claims and nothing else: the explaining half-sentences two of them
+    # carried are refused below (Stefan, 2026-09-07), because a claim that
+    # needs a second sentence to stand up is not a claim.
     test "the hero lists what a LinkedIn refugee gets", %{conn: conn} do
       html = landing_de(conn)
 
-      assert html =~ "Einfacher Profilimport."
-      assert html =~ "Ihr LinkedIn-Profil kann mitkommen."
+      assert html =~ "Einfacher LinkedIn-Profil-Import."
       assert html =~ "Schnell."
       assert html =~ "Keine bezahlten Premium-Accounts."
-      assert html =~ "Das will doch eh keiner."
 
+      refute html =~ "Ihr LinkedIn-Profil kann mitkommen."
+      refute html =~ "Das will doch eh keiner."
       refute html =~ "rattenschnell"
       refute html =~ "ridiculously fast"
 
@@ -79,7 +93,8 @@ defmodule VutuvWeb.LandingPageTest do
       assert html =~ "Menschen und Organisationen"
       assert html =~ "Für Familie und Arbeitsplatz geeignet"
       assert html =~ "Schnell, auch bei schlechtem Netz"
-      # Not "Einfach" alone: the hero's "Einfacher Profilimport." contains it.
+      # Not "Einfach" alone: the hero's "Einfacher LinkedIn-Profil-Import."
+      # contains it.
       assert html =~ "vutuv richtet sich an jeden."
       assert html =~ "Ausprobieren, und gehen, wenn Sie wollen"
       assert html =~ "Ihre Daten bleiben hier"

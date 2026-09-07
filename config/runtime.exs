@@ -244,14 +244,6 @@ if config_env() == :prod do
     vapid_private_key: System.get_env("VAPID_PRIVATE_KEY"),
     vapid_subject: System.get_env("VAPID_SUBJECT")
 
-  # The landing-page headline split test (Vutuv.Experiments).
-  # LANDING_HEADLINE_EXPERIMENT=false shows every visitor the default headline
-  # and counts nothing — for an installation that does not want its start page
-  # to vary, or that has replaced the copy anyway.
-  if System.get_env("LANDING_HEADLINE_EXPERIMENT") == "false" do
-    config :vutuv, :landing_headline_experiment, false
-  end
-
   # The profile the start page offers as "try it out" beside the screenshots.
   # The compiled default points at a member of the reference installation, which
   # is the useful answer while you have no filled-in profile of your own; point

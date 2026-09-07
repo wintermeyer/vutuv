@@ -360,16 +360,6 @@ config :vutuv, :welcome_suggestions, %{
 # handle is kept free for when the system is switched back on.
 config :vutuv, :ads_enabled, false
 
-# The split test on the logged-out landing page's founder quote
-# (see Vutuv.Experiments): each visitor gets one of two headlines at random
-# and the views, sign-ups and PIN confirmations are counted per variant, so
-# the copy is decided by what people do rather than by taste. Off = every
-# visitor sees Experiments.default_landing_variant/0 and nothing is counted,
-# which is what an installation that has no interest in our marketing copy
-# wants. Runtime override: LANDING_HEADLINE_EXPERIMENT=false
-# (config/runtime.exs). Only aggregate counters are stored, never a visitor.
-config :vutuv, :landing_headline_experiment, true
-
 # Where this installation's data physically lives, named on the start page's
 # privacy section ("on our own servers in Deutschland, not in somebody else's
 # cloud"). Empty drops that whole claim and leaves only the three promises the

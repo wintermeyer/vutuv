@@ -17,38 +17,26 @@ defmodule VutuvWeb.PageHTML do
   embed_templates("../templates/page/*")
 
   @doc """
-  The founder quote at the top of the logged-out landing page, in the variant
-  this visitor was assigned (`Vutuv.Experiments`).
+  The founder quote at the top of the logged-out landing page.
 
-  Both are one short question plus an answer, so the hero's typography holds
-  either. An unknown key falls back to the default variant, which is what an
-  installation with the split test switched off always renders.
+  One sentence about LinkedIn, one about us. It won a split test against a
+  warmer, wordier invitation, and on 2026-09-07 the rotation came out with the
+  loser, so the page says one thing to everybody now.
   """
-  def founder_quote("knapp") do
+  def founder_quote do
     gettext("“LinkedIn is annoying. vutuv is not.”")
-  end
-
-  def founder_quote(_stube) do
-    gettext("“Tired of LinkedIn? Then come on in and make yourself at home.”")
   end
 
   @doc """
   The three claims under the founder quote, inside the hero panel.
 
-  Each is a short claim, and each may carry the reason it is not filler. Both
-  halves are their own `gettext` call: the claim is set in white and the reason
-  in `brand-100`, so a translator gets two whole sentences rather than one
-  sentence cut in half. Two of the three are properties of the software and hold
-  on every installation; the import is a feature of this codebase, so all three
-  survive a third-party install without the operator having to promise anything.
+  One line each, with nothing behind it: the half-sentence two of them used to
+  carry to explain themselves came out with the headline test, because a claim
+  that needs propping up is not a claim.
 
-  **The reason is optional, and "Fast." is the one that has none.** A reason
-  that only restates its claim ("Fast." — "vutuv is ridiculously fast.") is the
-  filler the other two avoid, and the empty `msgstr` that would seem to remove
-  it is a trap: gettext reads an empty translation as *untranslated* and falls
-  back to the msgid, so blanking it in the catalog would have put the English
-  sentence on the German page. A claim with no reason therefore drops the whole
-  span rather than rendering an empty one.
+  Two of the three are properties of the software and hold on every
+  installation; the import is a feature of this codebase, so all three survive
+  a third-party install without the operator having to promise anything.
 
   Deliberately not links. `/import/linkedin` needs an account, so a logged-out
   click would trade the sign-up form beside them for a login screen.
@@ -58,12 +46,9 @@ defmodule VutuvWeb.PageHTML do
 
     ~H"""
     <ul data-hero-points class="mt-8 space-y-2.5">
-      <li :for={{claim, reason} <- @points} class="flex gap-2.5 text-sm leading-snug">
+      <li :for={claim <- @points} class="flex gap-2.5 text-sm leading-snug">
         <span aria-hidden="true" class="shrink-0 font-bold text-brand-200">✓</span>
-        <span>
-          <span class="font-semibold text-white">{claim}</span>
-          <span :if={reason} class="text-brand-100">{reason}</span>
-        </span>
+        <span class="font-semibold text-white">{claim}</span>
       </li>
     </ul>
     """
@@ -71,9 +56,9 @@ defmodule VutuvWeb.PageHTML do
 
   defp hero_point_list do
     [
-      {gettext("Easy profile import."), gettext("Your LinkedIn profile can come along.")},
-      {gettext("Fast."), nil},
-      {gettext("No paid premium accounts."), gettext("Nobody wants those anyway.")}
+      gettext("Easy LinkedIn profile import."),
+      gettext("Fast."),
+      gettext("No paid premium accounts.")
     ]
   end
 
