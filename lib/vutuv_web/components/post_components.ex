@@ -1629,16 +1629,29 @@ defmodule VutuvWeb.PostComponents do
   # `ard.social` are one address read in two parts, and splitting them around
   # the name made the eye assemble it backwards.
   #
-  # Four things wrap in that row and on a phone they do not all fit, so the
+  # The chip and the stamp travel as **one** wrapping item (`data-remote-meta`),
+  # because as an item of its own the stamp was both the narrowest and the last
+  # — so it was what the wrap pushed down, and a phone spent a whole line of the
+  # card head on "07:33 Uhr" (Stefan, 2026-09-07). Bound to the chip it either
+  # shares the chip's line or moves down with it, which is two lines instead of
+  # three on the feed at 390px. The handle is deliberately **not** in that group:
+  # binding all three fits more often still, but it leaves the chip as the only
+  # thing that can give way, and the host then truncates on most cards
+  # ("climatejustice.gl…"). Losing the name of the other server costs more than
+  # a line does. Inside the group the stamp is `shrink-0` and the chip gives way
+  # (`network_chip_class/0`), so if the group alone outgrows the line it is the
+  # host that shortens, never the time.
+  #
+  # Three things wrap in that row and on a phone they do not all fit, so the
   # `gap-y` is load-bearing: `gap-x-2` sets no vertical gap at all, and a
   # wrapped pill then sits hard against the line above it, which is how issue
   # #1284 was reported. For the same reason there is **no `·` before the
   # stamp** any more: with the handle and the stamp in one span it separated
-  # them, but as four independent flex items a wrapped line began with a lonely
+  # them, but as independent flex items a wrapped line began with a lonely
   # dot that read as a bullet. The gap does that work now, exactly as on a
   # member's post card, whose header has never carried one.
-  # `feed_remote_posts_test.exs` fails the build if the order changes or the
-  # row loses its `gap-y`.
+  # `feed_remote_posts_test.exs` fails the build if the order changes, if the
+  # chip and the stamp come apart, or if the row loses its `gap-y`.
   defp remote_header(assigns) do
     ~H"""
     <div class="flex items-start gap-2">
@@ -1656,26 +1669,28 @@ defmodule VutuvWeb.PostComponents do
           title={@handle}
           class="min-w-0 break-all text-xs hover:text-brand-700 dark:hover:text-brand-300 sm:break-normal"
         >{Handle.short(@handle)}</.link>
-        <%!-- Where this came from, up here where the eye lands, not in a line
-        under the text. A reply card can carry that line because it is visibly
-        indented under a member's post; in a flat feed that context is gone, and
-        a reader must not have to finish the post before learning it is not a
-        member's. --%>
-        <.remote_network_chip :if={@network} network={@network} origin={@origin} />
-        <span data-remote-stamp class="text-xs text-slate-600 dark:text-slate-400">
-          <%!-- The stamp is the way to this post's own page here, exactly as on a
-          member's card. Only where we have such a page: a reply from another
-          network has none, and a reader who is not signed in cannot open the one
-          a cached post has. --%>
-          <.link
-            :if={@permalink}
-            navigate={@permalink}
-            data-remote-permalink
-            class="hover:text-brand-700 dark:hover:text-brand-300"
-          >
-            <.post_time at={@at} />
-          </.link>
-          <.post_time :if={!@permalink} at={@at} />
+        <span data-remote-meta class="flex min-w-0 items-baseline gap-x-2">
+          <%!-- Where this came from, up here where the eye lands, not in a line
+          under the text. A reply card can carry that line because it is visibly
+          indented under a member's post; in a flat feed that context is gone, and
+          a reader must not have to finish the post before learning it is not a
+          member's. --%>
+          <.remote_network_chip :if={@network} network={@network} origin={@origin} />
+          <span data-remote-stamp class="shrink-0 text-xs text-slate-600 dark:text-slate-400">
+            <%!-- The stamp is the way to this post's own page here, exactly as on a
+            member's card. Only where we have such a page: a reply from another
+            network has none, and a reader who is not signed in cannot open the one
+            a cached post has. --%>
+            <.link
+              :if={@permalink}
+              navigate={@permalink}
+              data-remote-permalink
+              class="hover:text-brand-700 dark:hover:text-brand-300"
+            >
+              <.post_time at={@at} />
+            </.link>
+            <.post_time :if={!@permalink} at={@at} />
+          </span>
         </span>
       </div>
       {render_slot(@menu)}
@@ -1727,9 +1742,15 @@ defmodule VutuvWeb.PostComponents do
   read on top of a post that already carries this chip for the same host, and
   two spellings of "this is from another network" on one screen is one of them
   going stale the next time the other is touched.
+
+  `min-w-0` beside `max-w-full` is what makes the pill the thing that gives way
+  when its row runs out of width: a flex item refuses to shrink below its
+  min-content without it, and every spelling of this chip puts `truncate` on the
+  host label expecting exactly that. It is here rather than at the call sites so
+  the next one starts with the behaviour instead of rediscovering it.
   """
   def network_chip_class do
-    "inline-flex max-w-full items-center gap-1 rounded-full bg-slate-100 px-2 py-0.5 text-[11px] font-medium text-slate-600 dark:bg-slate-800 dark:text-slate-300"
+    "inline-flex min-w-0 max-w-full items-center gap-1 rounded-full bg-slate-100 px-2 py-0.5 text-[11px] font-medium text-slate-600 dark:bg-slate-800 dark:text-slate-300"
   end
 
   # The lock line. The same glyph a restricted vutuv post wears, so "not
@@ -4093,7 +4114,11 @@ defmodule VutuvWeb.PostComponents do
           the menu was a sibling of that column it narrowed it for its whole
           height, and the body text wrapped early at the menu's left edge. --%>
           <div class="flex items-start gap-2">
-            <div class="flex min-w-0 flex-1 flex-wrap items-baseline gap-x-2">
+            <%!-- `gap-y` for the reason the remote head carries one: `gap-x-2`
+            sets no vertical gap at all, so a name long enough to wrap this row
+            put the line below hard against it (issue #1284, fixed there and
+            missed here). --%>
+            <div class="flex min-w-0 flex-1 flex-wrap items-baseline gap-x-2 gap-y-1">
               <.link
                 href={@author_path}
                 class="font-semibold text-slate-900 hover:text-brand-700 dark:hover:text-brand-300 dark:text-white"
