@@ -23,6 +23,7 @@ defmodule Vutuv.Organizations do
   alias Vutuv.Engagement
   alias Vutuv.Fediverse
   alias Vutuv.Handles
+  alias Vutuv.Images
   alias Vutuv.Moderation.ImageScans
   alias Vutuv.Notifications.Emailer
   alias Vutuv.Organizations.Organization
@@ -49,6 +50,13 @@ defmodule Vutuv.Organizations do
   # It has to be an attribute rather than a call because `add_role/4` guards on
   # it, and a guard cannot call a remote function.
   @roles OrganizationRole.roles()
+
+  # This context's kind in the shared `images` table (#2053). At the top rather
+  # than beside the image section 2,100 lines below: an attribute read above
+  # where it is set is `nil`, and the symptom is a `FunctionClauseError` inside
+  # `Vutuv.Images.mirror/2` with the whole registry printed at you, which reads
+  # like a missing entry.
+  @image_kind "organization_image"
 
   # Slugs that would shadow a /organizations/<word> route.
   @reserved_slugs ~w(new)
@@ -2221,22 +2229,28 @@ defmodule Vutuv.Organizations do
         # renders an unreleased byte or a broken image.
         moderation = ImageScans.initial_state()
 
+        # Row and mirror together or not at all (#2053): by the time this runs
+        # the files are already on disk, so a failure between the two writes
+        # would leave a picture that exists everywhere except in the table the
+        # copyright freeze reads.
         {:ok, image} =
-          Repo.insert(%OrganizationImage{
-            organization_id: organization.id,
-            user_id: user.id,
-            token: token,
-            width: meta.width,
-            height: meta.height,
-            content_type: meta.content_type,
-            size_bytes: meta.size_bytes,
-            moderation: moderation
-          })
+          Images.write_mirrored(@image_kind, fn ->
+            Repo.insert(%OrganizationImage{
+              organization_id: organization.id,
+              user_id: user.id,
+              token: token,
+              width: meta.width,
+              height: meta.height,
+              content_type: meta.content_type,
+              size_bytes: meta.size_bytes,
+              moderation: moderation
+            })
+          end)
 
         if moderation == "approved" do
           release_logo(image)
         else
-          ImageScans.enqueue("organization_image", image.id, user.id)
+          ImageScans.enqueue(@image_kind, image.id, user.id)
           {:pending, organization}
         end
 
@@ -2278,6 +2292,10 @@ defmodule Vutuv.Organizations do
         where: i.token == ^token and i.organization_id == ^organization_id
       )
     )
+
+    # The other half of the double write (#2053). Keyed on the token both rows
+    # carry, so it is a no-op when the delete above matched nothing.
+    :ok = Images.forget(@image_kind, [token])
 
     Vutuv.OrganizationImageStore.delete(token)
   end

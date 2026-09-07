@@ -414,7 +414,8 @@ the quarantine tree the AI gate already uses
 (`Vutuv.Uploads.quarantine_dir/1`), which nginx has no location for. `:proxy`
 means every byte goes through a controller that authorizes the reader first,
 so the row is the off switch. Avatars and covers are `:static`, a job-posting
-picture is `:proxy`; the remaining kinds #2015 brings are mostly `:proxy` too.
+picture, a post photo and an organization image are `:proxy`; the review
+cover #2015 still has to bring will be too.
 It raises for a kind nobody has declared, because a picture that inherits a
 default is one nobody knows how to take offline.
 
@@ -424,8 +425,9 @@ A post photo, an organization image, a job-posting picture and a review cover
 each kept a table and an uploader of their own, so the `image` report type and
 the freeze knew one kind only. They move one kind at a time and three releases
 per kind (the sequence is spelled out below), smallest first — a **job-posting
-picture** went first (#2054) precisely to settle the shape, and the **post
-photo** followed (#2052) as the largest of them.
+picture** went first (#2054) precisely to settle the shape, the **post photo**
+followed (#2052) as the largest of them, and the **organization image** third
+(#2053) as the one whose owner is not a member.
 
 **Three of the four are the same shape; the review cover is not.** A post
 photo, an organization image and a job-posting picture each have a row of their
@@ -436,7 +438,6 @@ profile picture's shape, not this one — #2055 lands on `member_columns/0`'s si
 of the fence, and `Vutuv.Images.Backfill`'s `%{cols: …}` source is what it
 extends. One thing it does share with the three: a report cannot name one of
 its pictures until the kind has a strategy in `Vutuv.Images`'s `@takedown`.
-What #2053 copies from here is everything below.
 
 **The token is the join key, not a pointer.** #2013 added
 `users.avatar_image_id` because a member row had no stable handle of its own;
@@ -479,6 +480,57 @@ notation they are rendered in. And the four flags are `NOT NULL DEFAULT false`
 on `post_images` but plain nullable booleans here: an avatar row has no opinion
 about a camera panel, and NULL is how it says so.
 
+**The organization image is the same shape with a different owner (#2053).**
+It added only two columns, because the six every gallery row shares were
+already here at exactly the types `organization_images` holds them at. What it
+did have to answer is *who owns a page's picture*, and the answer is not the
+member who uploaded it. `organization_images.user_id` is nullable and
+`ON DELETE SET NULL` on purpose — a page's logo outlives the account that
+uploaded it, which is why `Vutuv.Accounts.delete_user/1` deliberately does not
+collect these files the way it collects a member's own. `images.user_id` means
+the opposite: a member owner, `ON DELETE CASCADE`, and NOT NULL for every kind
+in `images_profile_kind_has_owner`. Copying the uploader into it would
+therefore have deleted a page's logo row the day its uploader closed their
+account — silently, and only the release that *reads* that row would have
+noticed, by drawing the page with no logo. Calibrated by putting the uploader
+in `user_id` once and watching the test go red with the mirror row gone.
+
+So this kind's owner column is **`organization_id`** (nullable, partially
+indexed, cascading like the other two parents), the uploader rides in
+**`uploader_user_id`** with its source's `ON DELETE SET NULL`, and `user_id`
+stays empty for the kind under a check constraint of its own,
+`images_organization_kind_has_no_member_owner`. That constraint is not
+decoration: `mirror/2` writes through `insert_all`, so nothing else stands
+between a future author who "fixes" the empty `user_id` and the cascade. It is
+also why this kind does **not** join `images_profile_kind_has_owner` — an
+organization is not a member, and that list means "names a member".
+
+`uploader_user_id` is the one column in the whole registry whose name differs
+on the two sides, so `@mirrored` carries a `:renamed` map for it and
+`Vutuv.Images.mirror_attrs/2` is the single place a field is read off a source
+row — the copy and the backfill's "has it drifted" comparison both go through
+it, because a `Map.take/2` on the source would have skipped the renamed column
+in silence and called a drifted uploader "already right". The pairs are
+resolved once at compile time, so neither the attach loop nor the backfill
+looks a rename up per row.
+
+One thing the three stores did not agree on: `Vutuv.OrganizationImageStore`'s
+`version_path/2` took a bare token while the other two take the gallery row, so
+every caller that walked the kinds generically kept a clause for it. That store
+now answers either, and the clause is gone from both callers — the only change
+this release makes under `lib/vutuv/uploaders`, and a pure addition.
+
+**What step 2 needs to know about this kind.** An organization cannot be
+struck, warned or suspended the way a member can, so the profile strategy in
+`@takedown` does not simply point at it: freezing a page's logo means moving
+its files out of the proxy's reach and clearing `organizations.logo`, and the
+notice goes to the page's owners (`Vutuv.Organizations.owners/1`), not to
+`images.user_id`, which is empty. The uploader is what
+`Vutuv.Moderation.ImageScans.privileged_viewer?/2` and the "an unattached
+upload is visible to its uploader" branch of
+`Vutuv.Organizations.image_visible_to?/2` read today, and both will have to
+read `uploader_user_id` rather than `user_id` when they move onto the row.
+
 **One column stays behind, and it has a consequence for step 2: `inserted_at`.**
 The mirror stamps its own (`mirror/2` mints the row), which for a photo
 uploaded from #2052 on agrees with the photo's to the second — but a
@@ -519,8 +571,9 @@ sweep, and the AI gate's approve and reject in
 `Vutuv.Moderation.ImageSubjects` — which asks `Vutuv.Images.mirrored?/1` first,
 so the next kind's release is one entry in `Vutuv.Images` and nothing there. A
 deleted parent or member needs no call: `images.job_posting_id`,
-`images.post_id` and `images.user_id` cascade exactly as the gallery table's own
-columns do. **The `frozen_at` column is deliberately outside the upsert's
+`images.post_id`, `images.organization_id` and `images.user_id` cascade and
+`images.uploader_user_id` nilifies, exactly as the gallery table's own columns
+do — including the one that deliberately does not cascade. **The `frozen_at` column is deliberately outside the upsert's
 replace list**, so an ordinary write can never lift a takedown.
 
 **What an interruption leaves, and it differs by kind.** For a job-posting
@@ -534,18 +587,26 @@ transaction (`attach_images!/2` and `apply_update!/3`), so the mirror rides
 along in it and an interrupted save leaves neither half. The one write outside
 a transaction there is the pending sweep, which deletes row, mirror and files
 in that order — an interruption leaves an orphan mirror row, then orphan files,
-never a row naming bytes that are gone.
+never a row naming bytes that are gone. **An organization image has one
+window**, the same shape: `store_logo/4` writes row and mirror in one
+transaction, but the displaced logo is purged in three statements (old row, old
+mirror, files), so a slot dying between the first two leaves an `orphan_row`
+and between the second and third leaves orphan files. Both are what the
+backfill and `Vutuv.Uploads`' sweeps already name.
 
 **Nothing reads the new row yet, and that is the whole of the expand half.**
 Every URL is the one it was (`/job_posting_images/<token>/<version>.avif`,
-`/post_images/<token>/<version>.avif` and the photo's `og.jpg`, `original.orig`
-and pixelated siblings), the authorizing proxies still work off the old tables
-(`VutuvWeb.JobPostingImageController`, `VutuvWeb.PostImageController`), and the
-forms, the feed, the API and the agent documents still render from
-`posting.images` and `post.images` — so no render path pays a query for the
-mirror, which matters most on a feed that draws many photos at once. No file
-under `lib/vutuv_web`, `lib/vutuv/uploads` or `lib/vutuv/uploaders` changed for
-either kind. The consequence to know: `Vutuv.Images.freeze/1`,
+`/post_images/<token>/<version>.avif`, `/organization_images/<token>/<version>.avif`
+and the photo's `og.jpg`, `original.orig` and pixelated siblings), the
+authorizing proxies still work off the old tables
+(`VutuvWeb.JobPostingImageController`, `VutuvWeb.PostImageController`,
+`VutuvWeb.OrganizationImageController`), and the forms, the feed, the API and
+the agent documents still render from `posting.images`, `post.images` and
+`organizations.logo` — so no render path pays a query for the mirror, which
+matters most on a feed that draws many photos at once. No file under
+`lib/vutuv_web` or `lib/vutuv/uploads` changed for any of the three, and the
+one change under `lib/vutuv/uploaders` is the extra `version_path/2` clause
+described above, which takes nothing away. The consequence to know: `Vutuv.Images.freeze/1`,
 `unfreeze/1` and `purge/1` **raise** for such a row rather than half-hiding
 it, and `Vutuv.Moderation` refuses a report that names one
 (`Vutuv.Images.takedown_ready?/1`), because a case opened on a row nothing
@@ -555,12 +616,12 @@ That gate reads `@takedown`, the map naming which kinds have a takedown at all,
 so it turns yes in step 2 below and not a moment earlier (issue #2057).
 
 **A gallery kind moves in three releases.** #2054 was the first for
-`job_posting_image` and #2052 the first for `post_image`. Each is N-1 safe on
-its own and no two can be merged; this milestone has already paid for an
-off-by-one in that count once, in #2027.
+`job_posting_image`, #2052 for `post_image` and #2053 for
+`organization_image`. Each is N-1 safe on its own and no two can be merged;
+this milestone has already paid for an off-by-one in that count once, in #2027.
 
-1. **Expand**: what #2054 shipped for `job_posting_image` and #2052 for
-   `post_image`. Every path that touches the picture writes and drops the
+1. **Expand**: what #2054 shipped for `job_posting_image`, #2052 for
+   `post_image` and #2053 for `organization_image`. Every path that touches the picture writes and drops the
    `images` row beside the old one, while every reader, and the truth, stay in
    the kind's own table. Nothing here can take such a picture offline yet:
    `freeze/1` raises for the row and a report cannot name it. Between this

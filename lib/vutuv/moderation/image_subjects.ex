@@ -172,7 +172,7 @@ defmodule Vutuv.Moderation.ImageSubjects do
       image ->
         first_existing([
           Originals.path("#{config.prefix}/#{image.token}"),
-          config.store.version_path(image_path_arg(kind, image), "large")
+          config.store.version_path(image, "large")
         ])
     end
   end
@@ -282,11 +282,6 @@ defmodule Vutuv.Moderation.ImageSubjects do
       _ -> :gone
     end
   end
-
-  # The organization store's version_path takes the bare token, the other two
-  # take the struct.
-  defp image_path_arg("organization_image", image), do: image.token
-  defp image_path_arg(_kind, image), do: image
 
   defp screenshot_source(scope_id) do
     first_existing([

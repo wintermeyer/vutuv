@@ -15,6 +15,7 @@ defmodule Vutuv.OrganizationImageStore do
   is shared with `Vutuv.PostImageStore`.
   """
 
+  alias Vutuv.Organizations.OrganizationImage
   alias Vutuv.Uploads.Originals
   alias Vutuv.Uploads.Spec
 
@@ -114,7 +115,19 @@ defmodule Vutuv.OrganizationImageStore do
   @doc "The served version names (drives the proxy's URL whitelist)."
   def versions, do: @versions
 
-  @doc "Absolute on-disk path of a served version, or `nil` when missing."
+  @doc """
+  Absolute on-disk path of a served version, or `nil` when missing.
+
+  Takes the row or its bare token. The row clause is what makes this store
+  answer the same call as `Vutuv.PostImageStore` and
+  `Vutuv.JobPostingImageStore`, which take only the row: without it every
+  caller that walks the gallery kinds generically had to remember that this one
+  is different, and both `Vutuv.Images.Backfill` and
+  `Vutuv.Moderation.ImageSubjects` kept a clause for it (#2053).
+  """
+  def version_path(%OrganizationImage{token: token}, version),
+    do: version_path(token, version)
+
   def version_path(token, version) when is_binary(token) and version in @versions do
     avif = Path.join(dir(token), "#{version}#{Spec.served_ext()}")
     if File.exists?(avif), do: avif

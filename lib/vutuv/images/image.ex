@@ -19,11 +19,19 @@ defmodule Vutuv.Images.Image do
 
     # The parent a gallery picture belongs to. Nil for a profile picture, and
     # nil for a picture whose parent has not been saved yet — a posting image
-    # in the job editor, a photo in the composer. One column per parent kind,
-    # as #2013's migration asked for; the organization adds hers when she moves
-    # (#2053).
+    # in the job editor, a photo in the composer, a description picture in the
+    # organization editor. One column per parent kind, as #2013's migration
+    # asked for.
     belongs_to(:job_posting, Vutuv.Jobs.JobPosting)
     belongs_to(:post, Vutuv.Posts.Post)
+    belongs_to(:organization, Vutuv.Organizations.Organization)
+
+    # Who uploaded an organization image — **not** who owns it (#2053). The
+    # page owns its logo, which is why `organization_images.user_id` is
+    # `ON DELETE SET NULL` and this column copies that: a page keeps its
+    # picture when the member who uploaded it closes their account, while
+    # `user_id` above cascades and is empty for this kind by check constraint.
+    belongs_to(:uploader, Vutuv.Accounts.User, foreign_key: :uploader_user_id)
 
     field(:token, :string)
 
@@ -42,9 +50,9 @@ defmodule Vutuv.Images.Image do
     field(:frozen_at, :naive_datetime)
 
     # What a gallery row holds besides the above, copied column for column from
-    # the table it mirrors (`job_posting_images` and `post_images` today;
-    # `organization_images` carries the same six under the same names). Nil for
-    # a profile picture, which has none of them.
+    # the table it mirrors — `job_posting_images`, `post_images` and
+    # `organization_images` all carry these six under the same names. Nil for a
+    # profile picture, which has none of them.
     field(:alt, :string)
     field(:position, :integer)
     field(:width, :integer)
