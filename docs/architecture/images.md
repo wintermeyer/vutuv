@@ -325,9 +325,25 @@ no half-pair, and the second run created the other 1,438 and corrected none).
 `from: "<user id>"` resumes from a progress line instead of re-reading the
 table.
 
+Since #2054 the same two commands cover the gallery kinds as well.
+`Vutuv.Images.Backfill` has exactly two shapes — `%{cols: …}`, the truth in
+columns on a parent row joined by a pointer, and `%{gallery: …}`, the truth in
+a row of the picture's own joined by its token — and everything around them
+(the keyset walk, the classes, the repair, the sample, the printing, both
+operator paths) is shared. A gallery source builds itself from
+`Vutuv.Images.mirror_source/1`, so adding a kind touches nothing in the
+backfill at all; its repair is the same `mirror/2` upsert the request path
+writes, so create and correct are one statement and need no transaction; and
+it reports no `missing_pointer`, which the report leaves out rather than
+printing as a zero. The one thing to check when the next kind arrives is the
+store's `version_path/2` signature: `Vutuv.PostImageStore` and
+`Vutuv.JobPostingImageStore` take the row, `Vutuv.OrganizationImageStore` takes
+the token, and `Vutuv.Moderation.ImageSubjects.image_path_arg/2` is the adapter
+that already knows.
+
 `Backfill.check/1` (`mix vutuv.images.backfill --check`, or
 `bin/vutuv eval "Vutuv.Release.check_image_rows()"`) is the gate before the
-cut: it counts every member picture against its row *and* against its file on
+cut: it counts every picture against its row *and* against its file on
 disk — the quarantine tree while the picture is `"pending"`, the served tree
 otherwise — prints one line per kind plus the members behind each class of
 mismatch, and **fails the command** when anything is outstanding. Both of
@@ -396,10 +412,115 @@ permission, and the only off switch is moving the bytes out of that tree —
 the quarantine tree the AI gate already uses
 (`Vutuv.Uploads.quarantine_dir/1`), which nginx has no location for. `:proxy`
 means every byte goes through a controller that authorizes the reader first,
-so the row is the off switch. Avatars and covers are `:static`; the kinds
-#2015 brings are mostly `:proxy`. It raises for a kind nobody has declared,
-because a picture that inherits a default is one nobody knows how to take
-offline.
+so the row is the off switch. Avatars and covers are `:static`, a job-posting
+picture is `:proxy`; the remaining kinds #2015 brings are mostly `:proxy` too.
+It raises for a kind nobody has declared, because a picture that inherits a
+default is one nobody knows how to take offline.
+
+### The gallery kinds (issue #2015)
+
+A post photo, an organization image, a job-posting picture and a review cover
+each kept a table and an uploader of their own, so the `image` report type and
+the freeze knew one kind only. They move in one release per kind, smallest
+first — a **job-posting picture** went first (#2054) precisely to settle the
+shape.
+
+**Three of the four are the same shape; the review cover is not.** A post
+photo, an organization image and a job-posting picture each have a row of their
+own with a `token`, so they move as *gallery* pictures, below. A review's cover
+is `cover` / `cover_status` / `cover_moderation` **columns on the review row**
+with no token and no table of its own (`Vutuv.Posts.PostReview`), which is the
+profile picture's shape, not this one — #2055 lands on `member_columns/0`'s side
+of the fence, and `Vutuv.Images.Backfill`'s `%{cols: …}` source is what it
+extends. What #2052 and #2053 copy from here is everything below.
+
+**The token is the join key, not a pointer.** #2013 added
+`users.avatar_image_id` because a member row had no stable handle of its own;
+a gallery row has carried a `token` from the start, `images.token` has been
+unique across the whole table since #2013 for exactly this, and a gallery token
+is minted once and never re-minted (a re-upload is a different row). So the
+`images` row simply repeats the token, there is no reverse pointer to keep in
+step, and this kind has no `missing_pointer` class in the check. It also means
+the contract deploy drops the old table outright rather than a column at a
+time.
+
+**One kind's own column, six shared ones.** `images` gained `job_posting_id`
+(nullable — a posting image is uploaded before the posting is saved, and no
+other kind has a posting) plus `alt`, `position`, `width`, `height`,
+`content_type` and `size_bytes`, taken with the types `job_posting_images`
+holds them at (`alt` and `content_type` varchar(255), the rest plain
+`integer`). `post_images` and `organization_images` carry those same six under
+the same names, so #2052 and #2053 add their own parent column plus whatever
+they hold beyond the six — a post photo also brings `caption`, `crop`, seven
+EXIF columns and its download flags. The `images_profile_kind_has_owner` check
+constraint was **extended** rather than the nullable `user_id` widened, which is
+what #2013's migration asked for; the parent index is **partial**
+(`WHERE job_posting_id IS NOT NULL`), because every other kind's row is NULL
+there and the waste would multiply by four — Postgres proves `IS NOT NULL` from
+the cascade's strict `= $1` and uses it (measured: 16 kB against 48 kB).
+
+**The double write is one upsert and one delete.**
+`Vutuv.Images.mirror/2` takes one gallery row or a list of them and upserts on
+the token — one statement however many, so saving ten pictures costs one — and
+`Vutuv.Images.forget/2` deletes by token. `Vutuv.Images.write_mirrored/2` pairs
+a write with its mirror in one transaction, which is the door a context's own
+insert and update go through. `Vutuv.Images.mirror_source/1` is the **one**
+per-kind registry — the copied columns, the source schema, the store — so a
+kind cannot be mirrored on the request path and invisible to the backfill,
+whose check would otherwise print *"Safe to cut"* for a kind it never looked
+at. The names are identical on both sides, so the copy is a per-field
+`Map.fetch!/2`: a listed name the source lacks raises. The other direction — a
+column added to `job_posting_images` and never listed — nothing can see, so a
+drift test compares the schema against the list and fails the build.
+
+Every place that writes a job-posting picture goes through one of those: the
+upload and the alt edit (`write_mirrored/2`), the attach and detach on save,
+the pending sweep, and the AI gate's approve and reject in
+`Vutuv.Moderation.ImageSubjects` — which asks `Vutuv.Images.mirrored?/1` first,
+so the next kind's release is one entry in `Vutuv.Images` and nothing there. A
+deleted posting or member needs no call: `images.job_posting_id` and
+`images.user_id` cascade exactly as the gallery table's own columns do. **The
+`frozen_at` column is deliberately outside the upsert's replace list**, so an
+ordinary write can never lift a takedown.
+
+**What an interruption leaves.** The upload and the alt edit are atomic. The
+attach-and-prune on save is not, and never was — it runs after the save — so a
+slot dying between an attach and its mirror leaves a `mismatched_row` (the
+parent disagrees) and one between a prune and its `forget/2` leaves an
+`orphan_row`. Both are classes the backfill names and repairs; neither is
+invisible.
+
+**Nothing reads the new row yet, and that is the whole of the expand half.**
+Every URL is the one it was (`/job_posting_images/<token>/<version>.avif`),
+`VutuvWeb.JobPostingImageController` still authorizes off `job_posting_images`,
+and the edit form still renders from `posting.images` — so no render path pays
+a query for the mirror. The consequence to know: `Vutuv.Images.freeze/1`,
+`unfreeze/1` and `purge/1` **raise** for such a row rather than half-hiding
+it, and `Vutuv.Moderation` refuses a report that names one
+(`Vutuv.Images.takedown_ready?/1`), because a case opened on a row nothing
+consults would go through an uphold that takes nothing offline. A member
+reports the posting instead, which is all there was before the row existed.
+
+**Retiring `job_posting_images` is not this release.** It is the deploy after,
+and it has to remove the double write in the same step — the mirror, the
+`forget/2` calls, the `@gallery_sources` entry in the backfill and
+`Vutuv.Images.mirrored?/1`'s answer — because a migration may drop only what
+the currently deployed release has stopped using. Before it: run
+`mix vutuv.images.backfill --only job_posting_image` and read the check. The
+release in between is the one that moves the proxy, the form and the freeze
+onto the row, which is what makes the old table unread in the first place; and
+that release, not this one, is where the kind decides whether it wants a
+**bridge** the way `member_image/2` has one.
+
+**This kind needs no bridge.** #2027 needed one because it moved every reader
+onto the row in the same deploy as the row's first appearance, so a picture the
+backfill had not reached would have rendered as no picture at all. Here no
+reader has moved: a job-posting picture with no mirror row is served exactly as
+before, by its own table, so an installation that never runs the backfill sees
+nothing change. The bridge question belongs to the release that moves the
+readers, and it will have a simpler answer than #2027's — the old row *is* the
+picture, so the fallback is a lookup in the table it is about to leave rather
+than four columns read as a row.
 
 ### The takedown hold (issue #2012)
 

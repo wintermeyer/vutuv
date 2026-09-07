@@ -1,14 +1,16 @@
 defmodule Vutuv.Images.Backfill do
   @moduledoc """
-  Brings every profile picture and cover that existed before the shared
-  `images` table into it — the **contract** half of issue #2013, in the same
+  Brings every picture that existed before the shared `images` table into it —
+  the **contract** half of issue #2013 for a profile picture and cover, and of
+  #2015 for the kinds that still keep a table of their own — in the same
   expand/contract shape the fingerprint migration used
   (`Vutuv.Uploads.Regenerator` expand, `Vutuv.Uploads.LegacySweeper` contract).
 
-  It **moves no file and changes no URL.** The four member-row columns stay the
-  source of truth every URL builder and every display gate reads; this only
-  copies what they say into a row and points the member row at it, so the
-  previous release keeps serving unchanged through the whole deploy window.
+  It **moves no file and changes no URL.** Whatever a picture already lives in
+  stays the source of truth every URL builder and every display gate reads —
+  four member-row columns for a profile picture, its own gallery row for the
+  rest — and this only copies what that says into a row, so the previous
+  release keeps serving unchanged through the whole deploy window.
 
   ## Reconcile, not insert-where-missing
 
@@ -27,33 +29,60 @@ defmodule Vutuv.Images.Backfill do
   a row" and "there is a picture" are the same statement (the same reason
   `Vutuv.Images.discard_profile_image/3` deletes rather than blanks).
 
-  `classify/3` is what decides which of those a member is, and `run/1` and
+  `classify/3` is what decides which of those a picture is, and `run/1` and
   `check/1` both go through it — otherwise the gate would be answering a
   slightly different question from the repair it gates.
 
   ## Interrupted halfway
 
   Nothing here is a queue and nothing holds state in memory. Work is a keyset
-  scan over `users.id` with **one transaction per member**, and each member's
-  outcome depends only on that member's own columns — so a run killed
-  mid-flight (a deploy stopping the slot, `Ctrl-C`) leaves every member it
-  reached already correct and every member it did not reach exactly as before.
-  **Simply run it again**: the members already done cost no write and report
-  `unchanged`. `from: "<user id>"` picks up where a log line left off when
+  scan over the source table's `id` with **one transaction per picture**, and
+  each picture's outcome depends only on its own columns — so a run killed
+  mid-flight (a deploy stopping the slot, `Ctrl-C`) leaves every picture it
+  reached already correct and every picture it did not reach exactly as before.
+  **Simply run it again**: the ones already done cost no write and report
+  `unchanged`. `from: "<id>"` picks up where a log line left off when
   re-reading the whole table is not wanted, and `check/1` — which reads no
   state the run holds — is what says whether anything is still outstanding.
 
-  Per member rather than per batch on purpose: one bad row then fails alone and
-  the run carries on. It is a one-shot job over the pictures an installation
-  has (1,747 on vutuv.de), so the writes are not batched and no index is added
-  for it; the reads are `@batch` members at a time.
+  Per picture rather than per batch on purpose: one bad row then fails alone
+  and the run carries on. It is a one-shot job over the pictures an
+  installation has (1,747 on vutuv.de), so the writes are not batched and no
+  index is added for it; the reads are `@batch` at a time.
 
   ## The check before the cut
 
-  `check/1` counts every member picture against its row *and* against its file
-  on disk, and answers `ok?: false` with a bounded sample of the member ids
-  behind each class of mismatch. That is the gate on the deploy that drops the
-  columns: run it, read it, and only cut when it is green.
+  `check/1` counts every picture against its row *and* against its file on
+  disk, and answers `ok?: false` with a bounded sample of the ids behind each
+  class of mismatch. That is the gate on the deploy that drops the columns (or
+  retires a gallery kind's table): run it, read it, and only cut when it is
+  green.
+
+  ## Two shapes, one machine (issue #2015)
+
+  `source/1` is the only per-kind thing here, and it has two shapes:
+
+    * `%{cols: …}` — the truth is columns on a **parent row** (a member's
+      avatar and cover today; a review's cover when #2055 lands, which is this
+      shape and not the other one), joined by a pointer.
+    * `%{gallery: …}` — the truth is a **row of the picture's own**, joined by
+      the `token` both sides carry. A job-posting picture since #2054, post
+      photos and organization images to follow.
+
+  Everything around them is shared: the keyset walk, the class vocabulary, the
+  repair, the sample, the printing and both operator commands. A gallery kind
+  has no `missing_pointer` class — there is no pointer to lose — and a source
+  names the classes it can produce, so the report never prints a zero for a
+  class that kind cannot have.
+
+  **A gallery kind adds nothing here at all**: `source/1` builds itself from
+  `Vutuv.Images.mirror_source/1`, which is the one registry, so a kind cannot
+  be mirrored on the request path and invisible to this pass. The one thing to
+  check when the next kind arrives is the store's `version_path/2` signature —
+  `Vutuv.PostImageStore` and `Vutuv.JobPostingImageStore` take the row,
+  `Vutuv.OrganizationImageStore` takes the token, and
+  `Vutuv.Moderation.ImageSubjects.image_path_arg/2` is the adapter that already
+  knows.
   """
 
   import Ecto.Query
@@ -79,41 +108,55 @@ defmodule Vutuv.Images.Backfill do
   # never on presence.
   @copied [:file, :fingerprint, :crop, :moderation]
 
-  @classes [:missing_row, :mismatched_row, :missing_pointer, :missing_file, :orphan_row]
-
-  @doc "The profile-image kinds this backfill covers."
-  def kinds, do: Images.member_columns() |> Map.keys() |> Enum.sort()
+  # Which classes each shape can report. Written out rather than derived from
+  # each other, so the list reads as what a kind of that shape can be wrong in
+  # rather than as an arithmetic on another list.
+  @member_classes [:missing_row, :mismatched_row, :missing_pointer, :missing_file, :orphan_row]
+  @gallery_classes [:missing_row, :mismatched_row, :missing_file, :orphan_row]
 
   @doc """
-  Reconciles every member's picture with its row.
+  The image kinds this backfill covers: the profile kinds, plus the kinds whose
+  own table is still the truth (`Vutuv.Images.mirrored_kinds/0`).
 
-  Options: `only: "avatar" | "cover"`, `dry_run: true` (report, write nothing),
-  `from: "<user id>"` (resume the keyset scan above that id).
+  Derived, never listed here. A second per-kind list would let a kind be
+  mirrored on the request path and invisible to this one, and the failure is
+  the worst shape there is: the check would print *"Every picture has its row
+  and its file. Safe to cut."* for a kind it never looked at.
+  """
+  def kinds, do: Enum.sort(Map.keys(Images.member_columns()) ++ Images.mirrored_kinds())
+
+  @doc """
+  Reconciles every picture with its row.
+
+  Options: `only: "<kind>"` (one of `kinds/0`), `dry_run: true` (report, write
+  nothing), `from: "<id>"` (resume the keyset scan above that id — a member id
+  for a profile kind, a gallery row id for the rest).
 
   Returns `%{"avatar" => %{pictures: n, created: n, corrected: n, unchanged: n,
-  dropped: n, failed: n}, "cover" => …}`.
+  dropped: n, failed: n}, "cover" => …}`, one entry per kind.
   """
   def run(opts \\ []) do
     for kind <- selected_kinds(opts), into: %{}, do: {kind, run_kind(kind, opts)}
   end
 
   @doc """
-  Counts every member picture against its row and its file on disk, without
-  writing anything. Same `only:` option as `run/1`.
+  Counts every picture against its row and its file on disk, without writing
+  anything. Same `only:` option as `run/1`.
 
   Returns `%{kinds: %{"avatar" => …}, ok?: boolean}`, where each kind carries a
-  `%{count: n, sample: [user id]}` per class of mismatch:
+  `%{count: n, sample: [id]}` per class of mismatch it can have — a class the
+  kind cannot have is simply not a key:
 
     * `missing_row` — a picture with no row at all (the backfill has not run)
-    * `mismatched_row` — a row that disagrees with the member's own columns
-    * `missing_pointer` — a row the member row does not point at
-    * `orphan_row` — a row whose member has no picture of that kind any more
-      (sampled by row id, not member id)
-    * `missing_file` — the file the member row names is not on disk (in the
-      quarantine tree while the picture is `"pending"`, in the served tree
-      otherwise). The backfill cannot repair this one — it predates the table
-      and the bytes are simply gone — but the cut must not happen with it
-      unread.
+    * `mismatched_row` — a row that disagrees with the picture's own columns
+    * `missing_pointer` — a row the member row does not point at (profile
+      kinds only; a gallery picture is joined on its token and has no pointer)
+    * `orphan_row` — a row whose picture is gone (sampled by row id)
+    * `missing_file` — the file the row names is not on disk (in the quarantine
+      tree while a profile picture is `"pending"`, in the served tree
+      otherwise; a gallery picture's proxy serves straight out of its token
+      directory). The backfill cannot repair this one — the bytes are simply
+      gone — but the cut must not happen with it unread.
 
   It **prints what it found** on the way out, through the same log as `run/1`.
   Both operator paths (`mix vutuv.images.backfill --check` and `bin/vutuv eval
@@ -133,7 +176,7 @@ defmodule Vutuv.Images.Backfill do
   # that say what each one means.
   @labels [
     missing_row: "without a row",
-    mismatched_row: "disagreeing with the member row",
+    mismatched_row: "disagreeing with the source row",
     missing_pointer: "not pointed at",
     missing_file: "with no file on disk",
     orphan_row: "orphan row(s)"
@@ -141,22 +184,26 @@ defmodule Vutuv.Images.Backfill do
 
   defp report(%{kinds: kinds, ok?: ok?}) do
     for {kind, result} <- kinds do
+      # A result carries a key only for the classes its kind can have, which is
+      # what decides the line this prints.
+      labels = Enum.filter(@labels, fn {class, _label} -> Map.has_key?(result, class) end)
+
       log(
         "#{kind}: #{result.pictures} picture(s), #{result.rows} row(s) — " <>
-          Enum.map_join(@labels, ", ", fn {class, label} ->
+          Enum.map_join(labels, ", ", fn {class, label} ->
             "#{Map.fetch!(result, class).count} #{label}"
           end)
       )
 
-      for {class, label} <- @labels, Map.fetch!(result, class).count > 0 do
+      for {class, label} <- labels, Map.fetch!(result, class).count > 0 do
         log("  #{label}: #{sample_line(Map.fetch!(result, class))}")
       end
     end
 
     log(
       if ok?,
-        do: "Every member picture has its row and its file. Safe to cut.",
-        else: "MISMATCH — do not drop the member row's image columns yet."
+        do: "Every picture has its row and its file. Safe to cut.",
+        else: "MISMATCH — do not retire the old image columns or tables yet."
     )
   end
 
@@ -174,15 +221,48 @@ defmodule Vutuv.Images.Backfill do
     end
   end
 
-  ## What is wrong with this member, if anything
+  ## The source a kind is reconciled from
+
+  # One map per kind, naming where the pictures are and which classes that kind
+  # can report. Everything below dispatches on its shape — `%{cols: …}` for a
+  # profile picture whose truth is four member-row columns, `%{gallery: …}` for
+  # a picture whose truth is a row in a table of its own — and nothing below is
+  # written twice.
+  defp source(kind) do
+    if Images.mirrored?(kind) do
+      gallery = Images.mirror_source(kind)
+
+      %{
+        kind: kind,
+        classes: @gallery_classes,
+        # Which columns are compared. `token` is the join key, so it is equal
+        # by construction and comparing it would only ever say "no".
+        gallery: Map.put(gallery, :compared, gallery.fields -- [:token])
+      }
+    else
+      %{kind: kind, classes: @member_classes, cols: Images.member_columns(kind)}
+    end
+  end
+
+  ## What is wrong with this picture, if anything
 
   # The one place that decides. `run/1` repairs what this names and `check/1`
   # reports it, so a class added here can never be invisible to the gate.
-  defp classify(user, row, cols) do
+  defp classify(%{cols: cols}, user, row) do
     cond do
       is_nil(row) -> :missing_row
       drifted?(row, desired(user, cols)) -> :mismatched_row
       Map.get(user, cols.pointer) != row.id -> :missing_pointer
+      true -> :ok
+    end
+  end
+
+  # No pointer to lose: the token both rows carry is the join key, and the row
+  # was found by it.
+  defp classify(%{gallery: gallery}, gallery_row, row) do
+    cond do
+      is_nil(row) -> :missing_row
+      drifted?(row, Map.take(gallery_row, gallery.compared)) -> :mismatched_row
       true -> :ok
     end
   end
@@ -195,7 +275,7 @@ defmodule Vutuv.Images.Backfill do
   ## Reconcile
 
   defp run_kind(kind, opts) do
-    cols = Images.member_columns(kind)
+    source = source(kind)
     tally = %{pictures: 0, created: 0, corrected: 0, unchanged: 0, dropped: 0, failed: 0}
 
     log("#{kind}: reconciling#{if opts[:dry_run], do: " — dry run", else: ""}")
@@ -206,17 +286,16 @@ defmodule Vutuv.Images.Backfill do
 
     tally
     |> each_batch(
-      kind,
-      cols,
+      source,
       Keyword.get(opts, :from),
-      fn {user, row}, acc ->
+      fn {picture, row}, acc ->
         acc
         |> bump(:pictures)
-        |> bump(repair(classify(user, row, cols), user, row, kind, cols, opts))
+        |> bump(repair(source, classify(source, picture, row), picture, row, opts))
       end,
       on_batch
     )
-    |> drop_orphans(kind, cols, opts)
+    |> drop_orphans(source, opts)
     |> tap(fn t ->
       log(
         "#{kind}: #{t.pictures} picture(s) — #{t.created} row(s) created, " <>
@@ -226,23 +305,23 @@ defmodule Vutuv.Images.Backfill do
     end)
   end
 
-  # The keyset walk both halves share. One SELECT per batch carries the member
-  # and its row together, so a member that is already right costs no second
-  # statement.
-  defp each_batch(acc, kind, cols, cursor, fun, on_batch \\ fn _id -> :ok end) do
-    case Repo.all(batch_query(kind, cols, cursor)) do
+  # The keyset walk every kind and both halves share. One SELECT per batch
+  # carries the picture and its row together, so a picture that is already
+  # right costs no second statement.
+  defp each_batch(acc, source, cursor, fun, on_batch \\ fn _id -> :ok end) do
+    case Repo.all(batch_query(source, cursor)) do
       [] ->
         acc
 
       rows ->
         acc = Enum.reduce(rows, acc, fun)
-        {last_user, _row} = List.last(rows)
-        on_batch.(last_user.id)
-        each_batch(acc, kind, cols, last_user.id, fun, on_batch)
+        {last, _row} = List.last(rows)
+        on_batch.(last.id)
+        each_batch(acc, source, last.id, fun, on_batch)
     end
   end
 
-  defp batch_query(kind, cols, cursor) do
+  defp batch_query(%{kind: kind, cols: cols}, cursor) do
     query =
       from(u in User,
         left_join: i in Image,
@@ -256,21 +335,37 @@ defmodule Vutuv.Images.Backfill do
     if cursor, do: where(query, [u], u.id > ^cursor), else: query
   end
 
-  defp repair(:ok, _user, _row, _kind, _cols, _opts), do: :unchanged
+  # The join is on the token, which is unique in both tables — so this is the
+  # same one-SELECT-per-batch shape, and the gallery row it carries is exactly
+  # what `Vutuv.Images.mirror/2` takes.
+  defp batch_query(%{kind: kind, gallery: gallery}, cursor) do
+    query =
+      from(g in gallery.schema,
+        left_join: i in Image,
+        on: i.token == g.token and i.kind == ^kind,
+        order_by: [asc: g.id],
+        limit: @batch,
+        select: {g, i}
+      )
 
-  defp repair(verdict, user, row, kind, cols, opts) do
+    if cursor, do: where(query, [g], g.id > ^cursor), else: query
+  end
+
+  defp repair(_source, :ok, _picture, _row, _opts), do: :unchanged
+
+  defp repair(source, verdict, picture, row, opts) do
     outcome = if verdict == :missing_row, do: :created, else: :corrected
 
     if opts[:dry_run],
       do: outcome,
-      else: write(user, cols, outcome, fn -> mend(verdict, user, row, kind, cols) end)
+      else: write(source, picture, outcome, fn -> mend(source, verdict, picture, row) end)
   end
 
   # A create goes through `Images.put_profile_image/3`, the same function the
   # upload path uses: it mints the fresh token and carries the upsert against
   # the partial unique index, so a row an upload writes between this batch's
   # SELECT and this write converges instead of failing.
-  defp mend(:missing_row, user, _row, kind, cols) do
+  defp mend(%{kind: kind, cols: cols}, :missing_row, user, _row) do
     with {:ok, image} <- Images.put_profile_image(user, kind, desired(user, cols)),
          do: point_at(user, cols, image.id)
   end
@@ -282,7 +377,7 @@ defmodule Vutuv.Images.Backfill do
   # only, because a token names the bytes: a row corrected back to a different
   # file must not keep a handle that named the other one, and a row whose
   # moderation state alone drifted must not lose the handle it has.
-  defp mend(:mismatched_row, user, row, _kind, cols) do
+  defp mend(%{cols: cols}, :mismatched_row, user, row) do
     desired = desired(user, cols)
 
     with {:ok, image} <-
@@ -295,7 +390,18 @@ defmodule Vutuv.Images.Backfill do
 
   # The row is right and only the member row's pointer is not — the shape a
   # half-committed upload leaves behind.
-  defp mend(:missing_pointer, user, row, _kind, cols), do: point_at(user, cols, row.id)
+  defp mend(%{cols: cols}, :missing_pointer, user, row), do: point_at(user, cols, row.id)
+
+  # A gallery picture has one repair for both verdicts, and it is the same
+  # upsert the request path writes: `Vutuv.Images.mirror/2` keys on the token,
+  # so creating the row that was never written and correcting one that drifted
+  # are the same statement. The token is never re-minted here — for a gallery
+  # picture it is minted once at upload and a re-upload is a different row, so
+  # there is no "the bytes changed under the handle" case to answer.
+  defp mend(%{kind: kind, gallery: _}, verdict, gallery_row, _row)
+       when verdict in [:missing_row, :mismatched_row] do
+    Images.mirror(kind, gallery_row)
+  end
 
   # `token` is set programmatically, never cast, so the fresh one is put on the
   # changeset here rather than smuggled in through the attrs.
@@ -312,108 +418,138 @@ defmodule Vutuv.Images.Backfill do
     :ok
   end
 
-  # Row and pointer move together or not at all, so an interrupted run can
-  # never leave the pair the upload path used to be able to leave. A member the
-  # database refuses is logged and counted, never fatal to the run.
-  defp write(user, cols, outcome, fun) do
-    result =
-      Repo.transaction(fn ->
-        case fun.() do
-          :ok -> :ok
-          {:error, reason} -> Repo.rollback(reason)
-        end
-      end)
-
-    case result do
-      {:ok, :ok} ->
-        outcome
-
-      {:error, reason} ->
-        log("  FAIL #{cols.file} #{user.id}: #{inspect(reason)}")
-        :failed
+  # A picture the database refuses is logged and counted, never fatal to the
+  # run.
+  defp write(source, picture, outcome, fun) do
+    case attempt(source, fun) do
+      :ok -> outcome
+      {:error, reason} -> failed(source, picture, reason)
     end
   rescue
-    exception ->
-      log("  FAIL #{cols.file} #{user.id}: #{inspect(exception)}")
-      :failed
+    exception -> failed(source, picture, exception)
   end
 
-  # A row whose member has no picture of that kind any more, deleted in one
-  # statement (`Vutuv.Images.discard_profile_image/3` is its single-row twin on
-  # the moderation path). The member row's pointer follows by itself
-  # (`on_delete: :nilify_all`).
-  defp drop_orphans(tally, kind, cols, opts) do
+  # A profile repair writes the row **and** the member row's pointer, so the two
+  # move together or not at all — that half-committed pair is the very thing
+  # this backfill exists to mend. A gallery repair is one idempotent upsert, so
+  # a transaction around it would be a BEGIN and a COMMIT buying nothing.
+  defp attempt(%{cols: _}, fun) do
+    case Repo.transaction(fn -> or_rollback(fun.()) end) do
+      {:ok, :ok} -> :ok
+      {:error, reason} -> {:error, reason}
+    end
+  end
+
+  defp attempt(%{gallery: _}, fun), do: fun.()
+
+  defp or_rollback(:ok), do: :ok
+  defp or_rollback({:error, reason}), do: Repo.rollback(reason)
+
+  defp failed(source, picture, reason) do
+    log("  FAIL #{source.kind} #{picture.id}: #{inspect(reason)}")
+    :failed
+  end
+
+  # A row whose picture is gone, deleted in one statement
+  # (`Vutuv.Images.discard_profile_image/3` and `Vutuv.Images.forget/2` are its
+  # single-row twins on the request path). A member row's pointer follows by
+  # itself (`on_delete: :nilify_all`); a gallery row has no pointer to clear.
+  defp drop_orphans(tally, source, opts) do
     dropped =
       if opts[:dry_run] do
-        Repo.aggregate(orphan_query(kind, cols), :count)
+        Repo.aggregate(orphan_query(source), :count)
       else
-        {count, _} = Repo.delete_all(orphan_query(kind, cols))
+        {count, _} = Repo.delete_all(orphan_query(source))
         count
       end
 
     %{tally | dropped: tally.dropped + dropped}
   end
 
-  # Deletable as it stands: `delete_all` takes a join-free query, so the "has
-  # this member still got a picture" half is a correlated subquery.
-  defp orphan_query(kind, cols) do
+  # Deletable as it stands: `delete_all` takes a join-free query, so the "is
+  # there still a picture" half is a correlated subquery.
+  #
+  # A frozen picture is *meant* to look gone from the old side — that is how a
+  # copyright freeze hides a profile picture (#2012), by clearing the member
+  # row — and the row is the only record of what the case is about and what an
+  # unfreeze has to write back. So it is never an orphan, here or in the
+  # check's count.
+  defp orphan_query(%{kind: kind, cols: cols}) do
     ownerless =
       from(u in User,
         where: u.id == parent_as(:image).user_id and is_nil(field(u, ^cols.file))
       )
 
-    # A frozen picture is *meant* to have empty member columns — that is how a
-    # copyright freeze hides it (#2012) — and the row is the only record of
-    # what the case is about and what an unfreeze has to write back. So it is
-    # not an orphan, here or in the check's count.
     from(i in Image,
       as: :image,
       where: i.kind == ^kind and is_nil(i.frozen_at) and exists(subquery(ownerless))
     )
   end
 
+  defp orphan_query(%{kind: kind, gallery: gallery}) do
+    still_there = from(g in gallery.schema, where: g.token == parent_as(:image).token)
+
+    from(i in Image,
+      as: :image,
+      where: i.kind == ^kind and is_nil(i.frozen_at) and not exists(subquery(still_there))
+    )
+  end
+
   ## Check
 
   defp check_kind(kind) do
-    cols = Images.member_columns(kind)
+    source = source(kind)
 
-    empty = %{
-      pictures: 0,
-      rows: Repo.aggregate(from(i in Image, where: i.kind == ^kind), :count),
-      missing_row: blank(),
-      mismatched_row: blank(),
-      missing_pointer: blank(),
-      missing_file: blank(),
-      orphan_row: orphan_class(kind, cols)
-    }
+    # Only the classes this kind can have, so `report/1` prints no zero for a
+    # class it cannot — a gallery picture has no pointer to lose, and a line
+    # saying "0 not pointed at" would invite somebody to go looking for one.
+    empty =
+      source.classes
+      |> Map.new(&{&1, blank()})
+      |> Map.merge(%{
+        pictures: 0,
+        rows: Repo.aggregate(from(i in Image, where: i.kind == ^kind), :count),
+        orphan_row: orphan_class(source)
+      })
 
     empty
-    |> each_batch(kind, cols, nil, fn {user, row}, acc ->
+    |> each_batch(source, nil, fn {picture, row}, acc ->
       acc
       |> Map.update!(:pictures, &(&1 + 1))
-      |> flag(classify(user, row, cols), user.id)
-      |> flag(file_verdict(user, row, kind), user.id)
+      |> flag(classify(source, picture, row), picture.id)
+      |> flag(file_verdict(source, picture, row), picture.id)
     end)
-    |> finish_check()
+    |> finish_check(source)
   end
 
-  # A member with no row yet is already named as `:missing_row`, and since
-  # #2027 the path is resolved from that row — so asking here too would report
-  # every un-backfilled member twice and call the second reading a missing file.
-  defp file_verdict(_user, nil, _kind), do: :ok
+  # A picture with no row yet is already named as `:missing_row`, and since
+  # #2027 the profile path is resolved from that row — so asking here too would
+  # report every un-backfilled member twice and call the second reading a
+  # missing file.
+  defp file_verdict(_source, _picture, nil), do: :ok
 
-  defp file_verdict(user, row, kind) do
+  defp file_verdict(%{kind: kind, cols: cols}, user, row) do
     # The row is in hand, so hand it over as the preload `member_image/2` would
     # otherwise look up: one query per member over the whole table, for nothing.
-    user = Map.put(user, Images.member_columns(kind).assoc, row)
+    user = Map.put(user, cols.assoc, row)
 
     if is_nil(Images.stored_path(user, kind)), do: :missing_file, else: :ok
   end
 
+  # A gallery picture is served through its own proxy off its own token, so the
+  # store answers straight from the row already in hand. No quarantine branch:
+  # these kinds never had one — the proxy is what holds a picture back while
+  # the AI gate runs, not a second tree.
+  defp file_verdict(%{gallery: gallery}, gallery_row, _row) do
+    if is_nil(gallery.store.version_path(gallery_row, gallery.preview)),
+      do: :missing_file,
+      else: :ok
+  end
+
   defp blank, do: %{count: 0, sample: []}
 
-  defp orphan_class(kind, cols) do
-    query = orphan_query(kind, cols)
+  defp orphan_class(source) do
+    query = orphan_query(source)
 
     %{
       count: Repo.aggregate(query, :count),
@@ -429,8 +565,8 @@ defmodule Vutuv.Images.Backfill do
     end)
   end
 
-  defp finish_check(result),
-    do: Map.put(result, :ok?, Enum.all?(@classes, &(Map.fetch!(result, &1).count == 0)))
+  defp finish_check(result, source),
+    do: Map.put(result, :ok?, Enum.all?(source.classes, &(Map.fetch!(result, &1).count == 0)))
 
   ## Shared
 

@@ -19,7 +19,12 @@ defmodule Vutuv.Images.BackfillTest do
   alias Vutuv.Images
   alias Vutuv.Images.Backfill
   alias Vutuv.Images.Image, as: ImageRow
+  alias Vutuv.Jobs.JobPostingImage
   alias Vutuv.Repo
+  alias Vutuv.Uploads
+  alias Vutuv.Uploads.Spec
+
+  @kind "job_posting_image"
 
   setup do
     tmp =
@@ -48,6 +53,19 @@ defmodule Vutuv.Images.BackfillTest do
   end
 
   defp reload(user), do: Repo.get!(User, user.id)
+
+  # A job-posting picture from before the mirror existed: its own row and its
+  # files on disk, nothing in `images`. The factory writes no files, so the
+  # served thumb the check probes for is written here.
+  defp stored_job_posting_image(attrs \\ []) do
+    picture = insert(:job_posting_image, attrs)
+    dir = Uploads.disk_dir(Path.join("job_posting_images", picture.token))
+    File.mkdir_p!(dir)
+    File.write!(Path.join(dir, "thumb#{Spec.served_ext()}"), "not really an avif")
+    picture
+  end
+
+  defp job_posting_row(picture), do: Vutuv.ImageHelpers.mirror_row(@kind, picture)
 
   defp jpeg_upload(name \\ "selfie.jpg") do
     src = Path.join(System.tmp_dir!(), "backfill_src_#{System.unique_integer([:positive])}.jpg")
@@ -217,6 +235,137 @@ defmodule Vutuv.Images.BackfillTest do
       assert Images.profile_image(user.id, "avatar").file == "old.jpg"
       assert Images.profile_image(user.id, "cover").file == "banner.jpg"
       assert reload(user).cover_image_id == Images.profile_image(user.id, "cover").id
+    end
+  end
+
+  describe "a gallery kind: the job-posting picture (issue #2054)" do
+    test "one that predates the mirror arrives with every column" do
+      picture = stored_job_posting_image()
+
+      assert %{"job_posting_image" => tally} = Backfill.run(only: @kind)
+      assert tally.pictures == 1
+      assert tally.created == 1
+
+      assert %ImageRow{} = row = job_posting_row(picture)
+      assert row.kind == @kind
+      assert row.user_id == picture.user_id
+      assert row.alt == picture.alt
+      assert row.width == picture.width
+      assert row.height == picture.height
+      assert row.content_type == picture.content_type
+      assert row.size_bytes == picture.size_bytes
+      assert row.moderation == picture.moderation
+    end
+
+    test "running it again changes nothing" do
+      stored_job_posting_image()
+      Backfill.run(only: @kind)
+
+      assert %{"job_posting_image" => tally} = Backfill.run(only: @kind)
+      assert tally.unchanged == 1
+      assert tally.created == 0
+      assert tally.corrected == 0
+    end
+
+    test "a row that drifted is corrected, and keeps its token" do
+      picture = stored_job_posting_image()
+      Backfill.run(only: @kind)
+      before = job_posting_row(picture)
+
+      Repo.update_all(from(i in ImageRow, where: i.id == ^before.id),
+        set: [alt: "stale", moderation: "pending"]
+      )
+
+      assert %{"job_posting_image" => tally} = Backfill.run(only: @kind)
+      assert tally.corrected == 1
+      assert tally.created == 0
+
+      after_run = job_posting_row(picture)
+      assert after_run.id == before.id
+      assert after_run.token == before.token
+      assert after_run.alt == picture.alt
+      assert after_run.moderation == picture.moderation
+    end
+
+    test "a row whose picture is gone is dropped" do
+      picture = stored_job_posting_image()
+      Backfill.run(only: @kind)
+      Repo.delete_all(from(i in JobPostingImage, where: i.id == ^picture.id))
+
+      assert %{"job_posting_image" => tally} = Backfill.run(only: @kind)
+      assert tally.dropped == 1
+      refute job_posting_row(picture)
+    end
+
+    # The proof is not that the first pass finished — it is that the second one
+    # finishes exactly the rest and touches nothing it already did.
+    test "a second run after an interruption finishes exactly the rest" do
+      [first, second] =
+        Enum.sort_by([stored_job_posting_image(), stored_job_posting_image()], & &1.id)
+
+      assert %{"job_posting_image" => %{created: 1}} =
+               Backfill.run(only: @kind, from: first.id)
+
+      refute job_posting_row(first)
+      assert job_posting_row(second)
+
+      assert %{"job_posting_image" => tally} = Backfill.run(only: @kind)
+      assert tally.created == 1
+      assert tally.unchanged == 1
+      assert tally.corrected == 0
+      assert job_posting_row(first)
+      assert Repo.aggregate(from(i in ImageRow, where: i.kind == ^@kind), :count) == 2
+    end
+
+    test "the check names the pictures with no row, and goes quiet once they have one" do
+      picture = stored_job_posting_image()
+
+      assert %{kinds: %{"job_posting_image" => before}, ok?: false} =
+               Backfill.check(only: @kind)
+
+      assert before.missing_row.count == 1
+      assert before.missing_row.sample == [picture.id]
+      assert before.missing_file.count == 0
+
+      Backfill.run(only: @kind)
+
+      assert %{ok?: true} = Backfill.check(only: @kind)
+    end
+
+    test "a picture whose file is gone is named and never repaired away" do
+      picture = stored_job_posting_image()
+      File.rm_rf!(Vutuv.Uploads.disk_dir(Path.join("job_posting_images", picture.token)))
+      Backfill.run(only: @kind)
+
+      assert %{kinds: %{"job_posting_image" => result}, ok?: false} =
+               Backfill.check(only: @kind)
+
+      assert result.missing_file.count == 1
+      assert result.missing_row.count == 0
+      assert job_posting_row(picture)
+    end
+
+    test "the report says nothing about a pointer this kind never had" do
+      put_config(:regenerator_quiet, false)
+      stored_job_posting_image()
+
+      output = capture_io(fn -> Backfill.check(only: @kind) end)
+
+      assert output =~ "job_posting_image: 1 picture(s), 0 row(s)"
+      assert output =~ "1 without a row"
+      refute output =~ "not pointed at"
+    end
+
+    test "the mix task takes the kind by name" do
+      put_config(:regenerator_quiet, false)
+      picture = stored_job_posting_image()
+
+      capture_io(fn ->
+        assert %{ok?: true} =
+                 Mix.Tasks.Vutuv.Images.Backfill.run(["--only", "job_posting_image"])
+      end)
+
+      assert job_posting_row(picture)
     end
   end
 

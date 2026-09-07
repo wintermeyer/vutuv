@@ -1,21 +1,26 @@
 defmodule Mix.Tasks.Vutuv.Images.Backfill do
-  @shortdoc "Brings every existing profile picture and cover into the images table"
+  @shortdoc "Brings every existing picture into the shared images table"
 
   @moduledoc """
-  Reconciles every member's profile picture and cover with its row in the
-  shared `images` table — the **contract** half of issue #2013. See
-  `Vutuv.Images.Backfill`.
+  Reconciles every picture with its row in the shared `images` table — the
+  **contract** half of issue #2013 for profile pictures and covers, and of
+  #2015 for the kinds that still keep a table of their own (a job-posting
+  picture since #2054). See `Vutuv.Images.Backfill`.
 
-      mix vutuv.images.backfill              # reconcile, then check
+      mix vutuv.images.backfill              # reconcile every kind, then check
       mix vutuv.images.backfill --dry-run    # report what would change
       mix vutuv.images.backfill --check      # check only, write nothing
       mix vutuv.images.backfill --only cover
+      mix vutuv.images.backfill --only job_posting_image
       mix vutuv.images.backfill --from 019f0000-0000-7000-8000-000000000000
 
-  Moves no file and changes no URL: the four member-row columns stay the source
-  of truth, and this copies what they say into a row. Idempotent — a run that
-  is interrupted (a deploy stopping the slot) is simply run again, and every
-  member it already reached reports `unchanged`.
+  Moves no file and changes no URL: what a picture already lives in stays the
+  source of truth (four member-row columns for a profile picture, its own row
+  for a gallery one), and this copies what it says into a row. Idempotent — a
+  run that is interrupted (a deploy stopping the slot) is simply run again, and
+  every picture it already reached reports `unchanged`. `--from` is a member id
+  for a profile kind and a gallery row id for the rest, so pair it with
+  `--only`.
 
   Every run ends with the check, which prints what it found and **fails the
   command only when something is outstanding** — that non-zero exit is the gate

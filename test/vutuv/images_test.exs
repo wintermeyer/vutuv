@@ -280,7 +280,7 @@ defmodule Vutuv.ImagesTest do
     test "avatars and covers are served straight off disk" do
       assert Images.serving("avatar") == :static
       assert Images.serving("cover") == :static
-      assert Images.kinds() == ~w(avatar cover)
+      assert Images.kinds() == ~w(avatar cover job_posting_image)
     end
 
     test "an undeclared kind raises rather than inheriting a default" do
