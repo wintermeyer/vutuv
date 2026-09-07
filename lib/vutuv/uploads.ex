@@ -31,6 +31,11 @@ defmodule Vutuv.Uploads do
   # (one image's versions), which is all that shares a dir.
   @hash_length 12
 
+  # Every column an upload's own file name is written into is varchar(255):
+  # `users.avatar`, `users.cover_photo` and `images.file`. See
+  # `max_stored_file_name/0`.
+  @max_stored_file_name 255
+
   @typedoc """
   Per-uploader layout passed to the shared `store/3`, `url/3` and
   `regenerate/3` pipeline (`Vutuv.Avatar` and `Vutuv.Cover` differ only in
@@ -219,8 +224,9 @@ defmodule Vutuv.Uploads do
 
   @doc """
   Stores every derived version for `{upload, scope}` per `config` and returns
-  `{:ok, original_file_name, fingerprint, moderation}` — the verbatim upload
-  name, the content fingerprint (`sha256(original)[0..#{@hash_length - 1}]`)
+  `{:ok, original_file_name, fingerprint, moderation}` — the upload's own name
+  (cut to `max_stored_file_name/0`), the content
+  fingerprint (`sha256(original)[0..#{@hash_length - 1}]`)
   and the moderation state the bytes were actually stored under, all three for
   the caller's columns — or `{:error, :invalid_file}` when the extension is not
   whitelisted **or the file cannot be decoded as an image** (corrupt/truncated
@@ -268,7 +274,7 @@ defmodule Vutuv.Uploads do
            :ok <- write_derived_versions(cropped, target_dir, scope, fingerprint, config),
            :ok <- clear_displaced_versions(target_dir, dir),
            :ok <- Originals.store(storage_dir, upload.path, ext) do
-        {:ok, upload.filename, fingerprint, moderation}
+        {:ok, stored_file_name(upload.filename), fingerprint, moderation}
       else
         {:error, _reason} -> {:error, :invalid_file}
       end
@@ -276,6 +282,57 @@ defmodule Vutuv.Uploads do
       {:error, :invalid_file}
     end
   end
+
+  # The upload's own name, cut to what its columns hold, extension kept.
+  #
+  # A name comes off a phone or a scanner, not out of a form, and nothing
+  # resolves a file through it — the served name is
+  # `<handle>-<version>-<fingerprint>.avif`, the private original is
+  # `original<ext>` — so it is bookkeeping. That is why an over-long one is cut
+  # rather than refused: turning a good picture away over its *name* refuses it
+  # for something that is not about the picture (issue #2025).
+  defp stored_file_name(filename) when is_binary(filename) do
+    ext = Path.extname(filename)
+    keep = @max_stored_file_name - code_points(ext)
+
+    cond do
+      code_points(filename) <= @max_stored_file_name -> filename
+      # A name that is nearly all extension leaves no room to keep it.
+      keep < 1 -> cut_to_code_points(filename, @max_stored_file_name)
+      true -> cut_to_code_points(filename, keep) <> ext
+    end
+  end
+
+  # Measured and cut in **code points**, because that is what varchar(255)
+  # counts, while `String.length/1` counts graphemes — and the two differ on
+  # exactly the names this site gets. macOS hands over decomposed (NFD) names,
+  # where every `ä` is one grapheme and two code points, so a 200-character
+  # German name is 400 code points and still raises Postgres 22001. Cut on a
+  # grapheme boundary all the same, so the result never ends in an orphaned
+  # combining accent.
+  defp cut_to_code_points(string, max) do
+    string
+    |> String.graphemes()
+    |> Enum.reduce_while({[], 0}, fn grapheme, {kept, used} ->
+      used = used + code_points(grapheme)
+      if used <= max, do: {:cont, {[grapheme | kept], used}}, else: {:halt, {kept, used}}
+    end)
+    |> elem(0)
+    |> Enum.reverse()
+    |> Enum.join()
+  end
+
+  defp code_points(string), do: string |> String.to_charlist() |> length()
+
+  @doc """
+  How much of an upload's own file name is kept — the width of every column it
+  is written into (`users.avatar`, `users.cover_photo`, `images.file`), in
+  characters.
+
+  Read by `Vutuv.Images.Image.changeset/2` as well, so the cutter and the
+  validation guarding the same write cannot drift apart.
+  """
+  def max_stored_file_name, do: @max_stored_file_name
 
   # Quarantine-first uploads clear the old public image only after the new
   # derive succeeded (limbo shows the placeholder, per spec); the classic
