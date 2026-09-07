@@ -88,6 +88,31 @@ defmodule Vutuv.ModerationImageTakedownTest do
 
   defp avatar_image(user), do: Images.profile_image(user.id, "avatar")
 
+  # A member whose avatar predates the fingerprinted file name: the row names
+  # the upload, the files on disk carry the stable legacy name
+  # (`avatar_<version>.avif`) and no fingerprint column is set. The backfill is
+  # what gives it its `images` row, exactly as it did in production.
+  defp legacy_avatar_owner(root) do
+    user = insert(:activated_user, avatar: "Image703.jpg?63659747708", avatar_fingerprint: nil)
+    insert(:email, user: user)
+
+    dir = Path.join([root, "avatars", user.id])
+    File.mkdir_p!(dir)
+
+    for version <- ~w(thumb medium large),
+        do: File.write!(Path.join(dir, "avatar_#{version}.avif"), "legacy #{version} bytes")
+
+    File.mkdir_p!(Path.join([root, "originals/avatars", user.id]))
+
+    File.write!(
+      Path.join([root, "originals/avatars", user.id, "original.jpg"]),
+      "legacy original"
+    )
+
+    Backfill.run(only: "avatar")
+    user
+  end
+
   # Whether one of the emails delivered so far went to this member.
   defp assert_mailed(%User{} = user) do
     address = Accounts.first_email_value(user)
@@ -294,6 +319,55 @@ defmodule Vutuv.ModerationImageTakedownTest do
       assert tally.dropped == 0
       assert Repo.get(ImageRow, image.id)
       assert Backfill.check(only: "avatar").kinds["avatar"].orphan_row.count == 0
+    end
+  end
+
+  describe "looking at a held picture (issue #2031)" do
+    # An admin ruling on a copyright claim has to see the picture, and a freeze
+    # has moved it out of every tree nginx serves — so `bytes_path/2` is the
+    # only way there. It looked for the fingerprinted file name alone, which a
+    # picture stored before that scheme does not have: the fallback then asked
+    # the member row, which the freeze had just cleared, and the case page drew
+    # a broken image. One picture of 1,747 on the current data is on the old
+    # scheme, so an admin meets this rarely and cannot place it when they do.
+    test "a picture on the pre-fingerprint naming scheme is found in the hold",
+         %{tmp: tmp, owner: owner, reporter: reporter} do
+      legacy = legacy_avatar_owner(tmp)
+      image = avatar_image(legacy)
+
+      assert image.fingerprint == nil
+
+      {:ok, _case} = Moderation.report_content(reporter, image, notice())
+
+      path = Images.bytes_path(image)
+      assert is_binary(path), "no path for a held picture on the legacy scheme"
+      assert File.exists?(path)
+      assert File.read!(path) == "legacy medium bytes"
+
+      # And the fingerprinted case still works, so the fallback did not take
+      # the precise answer's place.
+      current = avatar_image(owner)
+      {:ok, _} = Moderation.report_content(reporter, current, notice())
+      assert Images.bytes_path(current) |> File.exists?()
+    end
+
+    # `held_image_ids/0` handed every directory entry on as an image id, and a
+    # non-UUID in `where: i.id in ^ids` raises — so one stray file in the hold
+    # root killed the whole reconcile pass, every fifteen minutes, with the
+    # sweeper's later steps never running.
+    test "a stray entry in the hold root does not stop the reconcile pass",
+         %{tmp: tmp, owner: owner, reporter: reporter} do
+      image = avatar_image(owner)
+      {:ok, _case} = Moderation.report_content(reporter, image, notice())
+
+      # The freeze above created the hold root; this lands beside the real hold.
+      File.write!(Path.join([tmp, "frozen", ".DS_Store"]), "not an image id")
+
+      assert :ok = Images.reconcile_holds()
+
+      # The real hold is untouched, and the freeze still stands.
+      assert Repo.get!(ImageRow, image.id).frozen_at
+      assert held_files(tmp, image) != []
     end
   end
 

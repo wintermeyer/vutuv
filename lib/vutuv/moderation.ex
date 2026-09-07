@@ -803,6 +803,20 @@ defmodule Vutuv.Moderation do
     end)
   end
 
+  @doc """
+  The case row on its own, no preloads. Same contract as
+  `get_case_with_details/1` — raw params id in, nil on garbage input or no such
+  case — for the one page that needs the row and nothing hanging off it
+  (`VutuvWeb.ModerationCaseController.image/2`, which only asks what content
+  type the case is about).
+
+  Beside its fuller twin rather than a `Repo.get` in the controller: "a raw id
+  becomes a case, or nothing" is one rule, and a controller spelling it itself
+  read the id straight, where a malformed one raises rather than missing —
+  a 400 and an exception in the log for a wrong address (issue #2031).
+  """
+  def get_case(id), do: Vutuv.UUIDv7.with_cast(id, &Repo.get(Case, &1))
+
   @doc "The open case for this content item, if any."
   def open_case_for(content) do
     from(c in Case,
