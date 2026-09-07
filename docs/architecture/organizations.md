@@ -635,6 +635,21 @@ rows survive their uploader deleting their account (`user_id` nilifies), so a
 logo never breaks. The description is untrusted Markdown, rendered like posts
 (`VutuvWeb.Markdown`, images stripped).
 
+Since #2053 every such row also has a **mirror row in the shared `images`
+table**, joined on the `token` both carry and written by the same paths that
+write the picture (`store_logo/4` through `Vutuv.Images.write_mirrored/2`, the
+purge through `Vutuv.Images.forget/2`, the AI gate's verdict through
+`Vutuv.Moderation.ImageSubjects`). Nothing reads it yet — every URL, the proxy
+and `image_visible_to?/2` still work off `organization_images` — and a
+copyright report still cannot name one, because this kind has no takedown
+strategy until the next release. What is worth knowing here is that the "the
+page owns it, the member only uploaded it" rule survived the copy: the mirror's
+owner column is `organization_id`, the uploader sits in `uploader_user_id` with
+the same `ON DELETE SET NULL`, and a check constraint keeps the member-owner
+column `user_id` empty for this kind, because it cascades. The whole move,
+including what the release that wires the takedown has to answer for a page
+that cannot be struck, is in [images.md](images.md).
+
 ## The homepage screenshot
 
 The page shows a picture of the website it names — a "Website" card at the top

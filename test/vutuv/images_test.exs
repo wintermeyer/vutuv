@@ -280,22 +280,22 @@ defmodule Vutuv.ImagesTest do
     test "avatars and covers are served straight off disk" do
       assert Images.serving("avatar") == :static
       assert Images.serving("cover") == :static
-      assert Images.kinds() == ~w(avatar cover job_posting_image post_image)
+      assert Images.kinds() == ~w(avatar cover job_posting_image organization_image post_image)
     end
 
-    # Both gallery kinds that have moved go through an authorizing proxy, so
-    # the row is their off switch rather than the tree the bytes sit in.
-    test "a job-posting picture and a post photo go through their proxy" do
+    # Every gallery kind that has moved goes through an authorizing proxy, so
+    # the row is its off switch rather than the tree the bytes sit in.
+    test "the gallery kinds go through their proxy" do
       assert Images.serving("job_posting_image") == :proxy
+      assert Images.serving("organization_image") == :proxy
       assert Images.serving("post_image") == :proxy
     end
 
-    # An organization image is the next kind #2015 brings (#2053); until it
-    # arrives, asking about it is asking about a picture nobody could take
-    # offline.
+    # A review's cover is the last kind #2015 brings (#2055); until it arrives,
+    # asking about it is asking about a picture nobody could take offline.
     test "an undeclared kind raises rather than inheriting a default" do
       assert_raise ArgumentError, ~r/no serving strategy declared/, fn ->
-        Images.serving("organization_image")
+        Images.serving("review_cover")
       end
     end
   end
@@ -333,13 +333,18 @@ defmodule Vutuv.ImagesTest do
         source = Images.mirror_source(kind)
         excluded = Map.get(@not_mirrored, kind, @not_mirrored.default)
         columns = source.schema.__schema__(:fields)
+        # Read back to the *source* column each field is copied from, so the
+        # one renamed column (`organization_images.user_id` into
+        # `images.uploader_user_id`) is still checked in the direction that
+        # matters: a column on the old table that nothing carries across.
+        mirrored = Images.mirror_columns(kind)
 
-        assert Enum.sort(columns) == Enum.sort(source.fields ++ excluded),
+        assert Enum.sort(columns) == Enum.sort(mirrored ++ excluded),
                """
                #{inspect(source.schema)} and its mirror have drifted.
 
                columns:  #{inspect(Enum.sort(columns))}
-               mirrored: #{inspect(Enum.sort(source.fields))}
+               mirrored: #{inspect(Enum.sort(mirrored))}
                excluded: #{inspect(Enum.sort(excluded))}
 
                Add the column to `Vutuv.Images`' `@mirrored` entry for

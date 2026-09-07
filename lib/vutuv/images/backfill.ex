@@ -66,8 +66,8 @@ defmodule Vutuv.Images.Backfill do
       avatar and cover today; a review's cover when #2055 lands, which is this
       shape and not the other one), joined by a pointer.
     * `%{gallery: …}` — the truth is a **row of the picture's own**, joined by
-      the `token` both sides carry. A job-posting picture since #2054 and a
-      post photo since #2052; organization images to follow.
+      the `token` both sides carry. A job-posting picture since #2054, a post
+      photo since #2052 and an organization image since #2053.
 
   Everything around them is shared: the keyset walk, the class vocabulary, the
   repair, the sample, the printing and both operator commands. A gallery kind
@@ -75,15 +75,17 @@ defmodule Vutuv.Images.Backfill do
   names the classes it can produce, so the report never prints a zero for a
   class that kind cannot have.
 
-  **A gallery kind adds nothing here at all** — #2052 added not a line:
-  `source/1` builds itself from `Vutuv.Images.mirror_source/1`, which is the one
-  registry, so a kind cannot be mirrored on the request path and invisible to
-  this pass. The one thing to
-  check when the next kind arrives is the store's `version_path/2` signature —
-  `Vutuv.PostImageStore` and `Vutuv.JobPostingImageStore` take the row,
-  `Vutuv.OrganizationImageStore` takes the token, and
-  `Vutuv.Moderation.ImageSubjects.image_path_arg/2` is the adapter that already
-  knows.
+  **A gallery kind adds no per-kind branch here** — `source/1` builds itself
+  from `Vutuv.Images.mirror_source/1`, which is the one registry, so a kind
+  cannot be mirrored on the request path and invisible to this pass. #2052
+  added not a line; #2053 changed one, and it is shared rather than per-kind:
+  an organization image is the first source with a column spelled differently
+  on the two sides, so the desired values come from
+  `Vutuv.Images.mirror_attrs/2` — the same function the mirror writes through —
+  rather than a `Map.take/2` on the source row, which would have skipped that
+  column in silence. Its store took the token rather than the row; that
+  difference is gone, `Vutuv.OrganizationImageStore.version_path/2` now answers
+  either.
   """
 
   import Ecto.Query
@@ -233,13 +235,7 @@ defmodule Vutuv.Images.Backfill do
     if Images.mirrored?(kind) do
       gallery = Images.mirror_source(kind)
 
-      %{
-        kind: kind,
-        classes: @gallery_classes,
-        # Which columns are compared. `token` is the join key, so it is equal
-        # by construction and comparing it would only ever say "no".
-        gallery: Map.put(gallery, :compared, gallery.fields -- [:token])
-      }
+      %{kind: kind, classes: @gallery_classes, gallery: gallery}
     else
       %{kind: kind, classes: @member_classes, cols: Images.member_columns(kind)}
     end
@@ -260,13 +256,25 @@ defmodule Vutuv.Images.Backfill do
 
   # No pointer to lose: the token both rows carry is the join key, and the row
   # was found by it.
-  defp classify(%{gallery: gallery}, gallery_row, row) do
+  #
+  # The desired values come from `Vutuv.Images.mirror_attrs/2`, the same
+  # function the mirror writes through, rather than a `Map.take/2` on the source
+  # row: one column is spelled differently on the two sides
+  # (`organization_images.user_id` is `images.uploader_user_id`), and `Map.take`
+  # would silently drop it — so a drifted uploader would read as "already
+  # right" here and be repaired by nothing.
+  defp classify(%{kind: kind, gallery: _gallery}, gallery_row, row) do
     cond do
       is_nil(row) -> :missing_row
-      drifted?(row, Map.take(gallery_row, gallery.compared)) -> :mismatched_row
+      drifted?(row, desired_mirror(kind, gallery_row)) -> :mismatched_row
       true -> :ok
     end
   end
+
+  # `token` is the join key, so it is equal by construction and comparing it
+  # would only ever say "no".
+  defp desired_mirror(kind, gallery_row),
+    do: kind |> Images.mirror_attrs(gallery_row) |> Map.delete(:token)
 
   defp desired(user, cols),
     do: Map.new(@copied, fn field -> {field, Map.get(user, cols[field])} end)

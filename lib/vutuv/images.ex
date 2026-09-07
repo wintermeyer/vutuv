@@ -19,8 +19,8 @@ defmodule Vutuv.Images do
   migration may drop only what the *currently deployed* release has stopped
   reading.
 
-  **A gallery picture (#2015, a job-posting picture first in #2054, a post
-  photo in #2052): this
+  **A gallery picture (#2015: a job-posting picture first in #2054, a post
+  photo in #2052, an organization image in #2053): this
   release writes both and reads the old table.** Its truth is still its own row
   — the proxy, the form and the AI gate all work off that — and the row here is
   a mirror, written by `mirror/2` and dropped by `forget/2`, joined on the
@@ -53,16 +53,17 @@ defmodule Vutuv.Images do
   # from `@mirrored` below, because a contract release **deletes** an entry
   # there — at which point that kind lives here and nowhere else, so dropping
   # it from this list would be exactly backwards.
-  @kinds ~w(avatar cover job_posting_image post_image)
+  @kinds ~w(avatar cover job_posting_image organization_image post_image)
 
   # Of those, the kinds every byte of which already goes through a controller
   # that authorizes the reader first (`VutuvWeb.JobPostingImageController` asks
   # whether the reader may see the posting, `VutuvWeb.PostImageController`
-  # whether they may see the post) — so the row is the off switch, and #2015's
+  # whether they may see the post, `VutuvWeb.OrganizationImageController`
+  # whether they may see the page) — so the row is the off switch, and #2015's
   # expand releases change nothing about how one is served. Written out rather
   # than derived from `@mirrored`, because a kind keeps its serving strategy
   # after the contract release deletes it from there. See `serving/1`.
-  @proxy_kinds ~w(job_posting_image post_image)
+  @proxy_kinds ~w(job_posting_image organization_image post_image)
 
   # Of those, the kinds whose truth is still a table of their own, and
   # everything about the copy: which columns it carries, where the source rows
@@ -70,11 +71,16 @@ defmodule Vutuv.Images do
   # kind cannot be mirrored by one half of the system and invisible to the
   # other — `Vutuv.Images.Backfill` reads its whole source from here.
   #
-  # The column names are identical on both sides, so the copy is a per-field
-  # `Map.fetch!/2` rather than a translation table: a name listed here that the
-  # source schema does not have raises instead of quietly writing nothing. The
-  # other direction — a column added to a source table and not to this list —
-  # nothing can see, so a drift test in `images_test.exs` compares the two for
+  # The column names are identical on both sides wherever they can be, so the
+  # copy is a per-field `Map.fetch!/2` rather than a translation table: a name
+  # listed here that the source schema does not have raises instead of quietly
+  # writing nothing. The one exception is spelled out in a `:renamed` map, and
+  # `mirror_columns/1` is what reads a field back to the column it comes from —
+  # both the copy and the backfill's comparison go through `mirror_attrs/2`, so
+  # a rename cannot be honoured by one and skipped by the other.
+  #
+  # The other direction — a column added to a source table and not to this list
+  # — nothing can see, so a drift test in `images_test.exs` compares the two for
   # every kind here and fails the build on it, which also means a kind added
   # below is covered the day its entry lands.
   #
@@ -82,9 +88,9 @@ defmodule Vutuv.Images do
   # together with the double write. It does **not** take the report gate with
   # it: that reads `@takedown` below, which the release before that one, the one
   # that moves the readers and wires the takedown, is what extends.
-  # #2053 (organization images) adds one entry; #2055 (review covers) does
-  # **not** — a review's cover is columns on the review row with no token and
-  # no table, which is the `@profile_columns` shape below, not this one.
+  # #2055 (review covers) adds **no** entry — a review's cover is columns on the
+  # review row with no token and no table, which is the `@profile_columns` shape
+  # below, not this one.
   @mirrored %{
     "job_posting_image" => %{
       fields: ~w(
@@ -93,6 +99,31 @@ defmodule Vutuv.Images do
       schema: Vutuv.Jobs.JobPostingImage,
       store: Vutuv.JobPostingImageStore,
       # The version the backfill's file probe asks the store for.
+      preview: "thumb"
+    },
+    # The picture on an organization page — a logo today, a cover and the
+    # description gallery on the same table (#2053). It carries the six every
+    # gallery row has and nothing else, so this entry adds no column type
+    # question at all; what it does add is an **owner** that is not a member.
+    #
+    # `organization_images.user_id` is the *uploader*, nullable and
+    # `ON DELETE SET NULL`, because a page's logo outlives the account that
+    # uploaded it. `images.user_id` means the opposite — a member owner, with
+    # `ON DELETE CASCADE` — so copying one into the other would delete a page's
+    # logo row the day its uploader leaves. The owner here is
+    # `organization_id`; the uploader rides in `uploader_user_id`, whose
+    # `ON DELETE SET NULL` matches its source, and `user_id` stays empty by
+    # check constraint (`images_organization_kind_has_no_member_owner`).
+    "organization_image" => %{
+      fields: ~w(
+        token organization_id uploader_user_id alt position width height
+        content_type size_bytes moderation
+      )a,
+      # The only column in the whole registry whose name differs on the two
+      # sides, and the reason is above: on `images` this fact is not `user_id`.
+      renamed: %{uploader_user_id: :user_id},
+      schema: Vutuv.Organizations.OrganizationImage,
+      store: Vutuv.OrganizationImageStore,
       preview: "thumb"
     },
     # The largest of the four (#2052). Almost every column of `post_images` is
@@ -138,6 +169,35 @@ defmodule Vutuv.Images do
   whole source from this, so there is no second per-kind list to keep in step.
   """
   def mirror_source(kind) when is_map_key(@mirrored, kind), do: @mirrored[kind]
+
+  # Each kind's copy resolved once, at compile time: `{images column, source
+  # column}` per field, identical names except where the entry's `:renamed` map
+  # says otherwise. Doing it here rather than per row means the attach loop and
+  # the backfill's row-by-row comparison never look a rename up again.
+  @mirror_pairs Map.new(@mirrored, fn {kind, config} ->
+                  renamed = Map.get(config, :renamed, %{})
+                  {kind, Enum.map(config.fields, &{&1, Map.get(renamed, &1, &1)})}
+                end)
+
+  @doc """
+  The source column each field of `mirror_source/1`'s `:fields` is copied from,
+  in the same order — the same name everywhere except where that entry's
+  `:renamed` map says otherwise. What the drift test compares the source schema
+  against, so a renamed column is still checked in the direction that matters:
+  a column added to a source table and never mirrored.
+  """
+  def mirror_columns(kind) when is_map_key(@mirror_pairs, kind),
+    do: Enum.map(@mirror_pairs[kind], &elem(&1, 1))
+
+  @doc """
+  The mirror row this source row becomes, as a plain map of `images` column to
+  value — the one place a field is read off the source, so `mirror/2`'s copy and
+  `Vutuv.Images.Backfill`'s "has it drifted" comparison cannot answer
+  differently about a renamed column.
+  """
+  def mirror_attrs(kind, source) when is_map_key(@mirror_pairs, kind) do
+    Map.new(@mirror_pairs[kind], fn {field, column} -> {field, Map.fetch!(source, column)} end)
+  end
 
   @doc """
   How this kind reaches a reader.
@@ -610,8 +670,9 @@ defmodule Vutuv.Images do
   @doc """
   Writes (or rewrites) the row that stands beside a gallery picture's own row —
   the **expand** half of moving a kind in here. Takes one source row or a list
-  of them, and copies the columns `mirror_source/1` names, which are spelled
-  the same on both sides.
+  of them, and copies the columns `mirror_source/1` names through
+  `mirror_attrs/2`, which is where the one renamed column
+  (`organization_images.user_id` into `uploader_user_id`) is resolved.
 
   **The join key is the `token`, not a pointer.** #2013 added
   `users.avatar_image_id` because a member row had no stable handle of its own;
@@ -644,8 +705,8 @@ defmodule Vutuv.Images do
 
     entries =
       for source <- List.wrap(source_or_sources) do
-        fields
-        |> Map.new(&{&1, Map.fetch!(source, &1)})
+        kind
+        |> mirror_attrs(source)
         |> Map.merge(%{
           id: Vutuv.UUIDv7.generate(),
           kind: kind,
@@ -669,8 +730,10 @@ defmodule Vutuv.Images do
   scan). One statement, and a no-op for an empty list.
 
   A parent or a member that is deleted needs no call: `images.job_posting_id`,
-  `images.post_id` and `images.user_id` all cascade, exactly as the gallery
-  table's own columns do.
+  `images.post_id`, `images.organization_id` and `images.user_id` all cascade,
+  and `images.uploader_user_id` nilifies — exactly as the gallery table's own
+  columns do, including the one that deliberately does not cascade, so a page
+  keeps its logo when the member who uploaded it closes their account.
   """
   def forget(_kind, []), do: :ok
 
