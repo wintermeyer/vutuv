@@ -583,8 +583,8 @@ defmodule VutuvWeb.FeedRemotePostsTest do
     # chip sits between the handle and the stamp rather than beside the name
     # (Stefan, 2026-08-01): the handle and the server are one address read in
     # two parts, so they belong next to each other.
-    assert has_element?(view, "[data-remote-handle] + [data-remote-network]")
-    assert has_element?(view, "[data-remote-network] + [data-remote-stamp]")
+    assert has_element?(view, "[data-remote-handle] + [data-remote-meta]")
+    assert has_element?(view, "[data-remote-meta] > [data-remote-network] + [data-remote-stamp]")
 
     # And whenever it wraps, the lines are set apart. `gap-x-2` alone left a
     # wrapped row with literally zero vertical gap, which put the pill hard
@@ -592,6 +592,16 @@ defmodule VutuvWeb.FeedRemotePostsTest do
     header = view |> element("[data-remote-header]") |> render()
     assert [opening_tag] = Regex.run(~r/^<div[^>]*>/, header)
     assert opening_tag =~ "gap-y-"
+
+    # The chip and the stamp are one wrapping item, so the stamp can never be
+    # pushed onto a line of its own — see `remote_header/1` for why the handle
+    # is deliberately left out of that group. Read as a class list rather than
+    # a substring: `=~ "flex"` also matches `flex-col`, which would stack the
+    # stamp under the chip and still pass.
+    classes = header |> elements("[data-remote-meta]") |> hd() |> attribute("class")
+    assert "flex" in String.split(classes)
+    refute "flex-wrap" in String.split(classes)
+    refute "flex-col" in String.split(classes)
   end
 
   # The handle in the header asks "who is this", and until now the answer was a
