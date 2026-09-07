@@ -2080,6 +2080,18 @@ glyph leads to the answering page, the number beside it opens the thread, and
 they keep their own padding plus a `gap-2` so a thumb lands on the one it aimed
 at.
 
+The answers are drawn as a thread, in the same language the conversation view
+uses: a line down out of the answered avatar, an elbow into each answer's. It
+takes two halves, because the block sits deep in the card's text column while
+the line has to span the whole card body — `thread_replies/1` reclaims the
+avatar column and draws the elbows, `app.css` draws the line off
+`:has([data-thread-replies])`, since unfolding re-renders the action bar and
+never the card. One consequence reaches back into the templates: the line is
+drawn to the bottom of the card, so **nothing may render after the answers** —
+the bar's refusal notice and a reply card's provenance footer both moved above
+for it, held there by `thread_replies_last_test.exs`. The full geometry is in
+`.claude/rules/design.md`.
+
 What we already hold is painted at once from one indexed query
 (`stored_thread_replies/3`); the fetch behind it runs in `start_async` and gets
 `:fediverse_thread_page` answers at a time, four at a time, to a ceiling of

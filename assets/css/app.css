@@ -554,3 +554,45 @@ html[data-nav-pressing] main {
     border-radius: var(--radius-lg);
   }
 }
+
+/* ---------- The line from a card into the answers unfolded under it ----------
+
+   The upper half of the thread `thread_replies/1` draws: the drop from the
+   answered avatar down to the answers, which spans the whole card body and so
+   belongs to no element that component can reach. It is a stylesheet rule for
+   the reason the phone block above is one — unfolding re-renders the action
+   bar inside the card and never the card, so the answers' own arrival is what
+   says the line is wanted.
+
+   `1.125rem` is the avatar's centre (`h-9`) and `2.25rem` its lower edge, the
+   column every connector in the app is drawn on. The height is an explicit
+   `calc(100% - top)` and NOT `top` + `bottom: 0`, which computes to the same
+   box everywhere except iOS/mobile Safari, where an empty absolutely
+   positioned element sized only by `top`/`bottom` collapses to zero — the same
+   trap that once took the whole conversation line off phones (see the drop in
+   `thread_chain/1`). It therefore ends where the card ends, which is where the
+   answers end: `remote_actions_component.ex` renders them last, and
+   `thread_replies_last_test.exs` fails the build if anything is put after
+   them.
+
+   Unlayered like the rest of this file. */
+[data-card-head]:has([data-thread-replies]) {
+  position: relative;
+}
+
+[data-card-head]:has([data-thread-replies])::before {
+  content: "";
+  position: absolute;
+  left: 1.125rem;
+  top: 2.25rem;
+  height: calc(100% - 2.25rem);
+  width: 2px;
+  border-radius: 9999px;
+  background: var(--color-slate-200);
+}
+
+@media (prefers-color-scheme: dark) {
+  [data-card-head]:has([data-thread-replies])::before {
+    background: var(--color-slate-700);
+  }
+}

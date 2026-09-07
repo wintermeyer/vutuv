@@ -1487,6 +1487,14 @@ defmodule VutuvWeb.PostComponents do
             subject_id={@note.id}
           />
 
+          <%!-- Where this reply came from, then what the reader can do with it.
+          The provenance line reads with the body it belongs to, and it has to
+          stay above the bar for a second reason: pressing the bar's answer
+          figure unfolds a thread whose line is drawn to the bottom of the card
+          (`app.css`), so a footer under it is something that line runs on past.
+          `thread_replies_last_test.exs` fails the build if the two swap back. --%>
+          <.remote_footer host={@host} origin={@origin} label={gettext("View the original")} />
+
           <%!-- The card's acts, in the open under the body where a reader
           looks for them (issues #1270, #1275, #1276). The bar owns its own
           state and its own events, so this card — and every host that renders
@@ -1502,8 +1510,6 @@ defmodule VutuvWeb.PostComponents do
             viewer={@viewer}
             marks={@marks}
           />
-
-          <.remote_footer host={@host} origin={@origin} label={gettext("View the original")} />
         </div>
       </div>
     </article>
@@ -2428,12 +2434,18 @@ defmodule VutuvWeb.PostComponents do
       |> assign(:body_style, post_body_style(User.post_prefs(assigns.viewer)))
 
     ~H"""
-    <%!-- The left rule is the thread: it says these cards hang under the one
-    above, which is the same thing the conversation view says with an indent. --%>
-    <div
-      class="mt-3 space-y-4 border-l-2 border-slate-200 pl-3 dark:border-slate-700"
-      data-thread-replies
-    >
+    <%!-- The thread is the same drawing the conversation view makes: a line
+    down out of the answered avatar, an elbow into each answer's avatar. This
+    block draws the elbows; the line above them spans the card body, which no
+    element here reaches, so `app.css` draws that half off
+    `:has([data-thread-replies])` — the reasons are there.
+
+    What this side owns is the column. The action bar renders this block, and
+    it sits 48px to the right of the avatar the line comes from, so `-ml-12`
+    reclaims that width before a connector can land in the right column;
+    `left-[1.125rem]` under it is then the avatar's own centre, as everywhere
+    else in the app. --%>
+    <div class="mt-3 -ml-12 space-y-4" data-thread-replies>
       <.thread_reply_card
         :for={reply <- @replies}
         reply={reply}
@@ -2442,11 +2454,28 @@ defmodule VutuvWeb.PostComponents do
         marks={Map.get(@marks, reply.id)}
       />
 
-      <p :if={@loading?} class="text-sm text-slate-500 dark:text-slate-400" role="status">
+      <%!-- The lines that are not answers keep the answers' indent, so the
+      thread reads as running down to them: while they are there the
+      conversation is still open, and the line ending at them says so. The two
+      `<p>`s take `last:mb-0` and not a plain `mb-0` — `components.css` gives
+      every `p` a 15px bottom margin, which escapes this block and leaves the
+      line hanging that far past its last row, but `mb-0` would also beat the
+      `space-y-4` above (Tailwind writes that at specificity 0) and glue a
+      notice to the button under it. The button takes `ml-7`, not `pl-7`:
+      padding there would widen what the reader is clicking. --%>
+      <p
+        :if={@loading?}
+        class="pl-7 text-sm text-slate-500 last:mb-0 dark:text-slate-400"
+        role="status"
+      >
         {gettext("Fetching the answers from the servers that hold them…")}
       </p>
 
-      <p :if={@notice} class="text-sm text-slate-600 dark:text-slate-400" role="status">
+      <p
+        :if={@notice}
+        class="pl-7 text-sm text-slate-600 last:mb-0 dark:text-slate-400"
+        role="status"
+      >
         {@notice}
       </p>
 
@@ -2456,7 +2485,7 @@ defmodule VutuvWeb.PostComponents do
         phx-click="more-replies"
         phx-target={@target}
         data-thread-more
-        class="text-sm font-semibold text-brand-600 hover:text-brand-700 dark:text-brand-400 dark:hover:text-brand-300"
+        class="ml-7 text-sm font-semibold text-brand-600 hover:text-brand-700 dark:text-brand-400 dark:hover:text-brand-300"
       >
         {gettext("Show more answers")}
       </button>
@@ -2503,7 +2532,18 @@ defmodule VutuvWeb.PostComponents do
       |> assign(:initials, remote_initials(account))
 
     ~H"""
-    <article data-thread-reply={@reply.id}>
+    <article data-thread-reply={@reply.id} class="relative pl-7">
+      <%!-- The elbow out of the thread's line into this answer's avatar: 10px
+      from the line's column to the card's left edge, at the avatar's vertical
+      centre. `left` measures from the padding box, so the `pl-7` beside it
+      moves the card and not the elbow. --%>
+      <span
+        data-thread-tick
+        class="absolute left-[1.125rem] top-[1.125rem] h-0.5 w-2.5 rounded-full bg-slate-200 dark:bg-slate-700"
+        aria-hidden="true"
+      >
+      </span>
+
       <div class="flex items-start gap-3">
         <.remote_avatar initials={@initials} src={RemoteAccount.avatar_url(@account)} />
 

@@ -146,6 +146,22 @@ defmodule VutuvWeb.FeedEdgeToEdgeTest do
                "`app.css`, unlayered."
     end
 
+    test "the line the unfolded answers hang from comes out of the card's own avatar" do
+      assert app_css() =~ ~r/\[data-card-head\]:has\(\[data-thread-replies\]\)::before \{/,
+             "The card cannot render this line itself — unfolding re-renders the action " <>
+               "bar inside it and never the card — so the stylesheet draws it, from the " <>
+               "bottom of the avatar down into the answers. Without it the thread starts " <>
+               "in mid-air under the action bar, attached to nothing."
+
+      assert app_css() =~
+               ~r/\[data-card-head\]:has\(\[data-thread-replies\]\)::before \{[^}]*height: calc\(100% - 2\.25rem\)/,
+             "The drop needs an explicit height, never `top` + `bottom: 0`: an empty " <>
+               "absolutely positioned box sized only by those two collapses to zero on " <>
+               "iOS/mobile Safari, which is how the conversation's own line once vanished " <>
+               "from phones — and a phone is exactly where the block above keeps the " <>
+               "avatar column for this line to run in."
+    end
+
     test "unfolded fediverse answers put their card back into its avatar column" do
       assert app_css() =~
                ~r/\[data-card-head\]:has\(\[data-thread-replies\]\) \{\s*display: flex;/,

@@ -386,20 +386,17 @@ defmodule VutuvWeb.PostLive.RemoteActionsComponent do
         repost?={@offer.repost?}
       />
 
-      <.thread_replies
-        :if={@replies_open?}
-        replies={@replies}
-        viewer={@viewer}
-        loading?={@replies_loading?}
-        more?={@replies_pending != []}
-        notice={@replies_notice}
-        target={@myself}
-      />
       <%!-- Beside the control that refused, in the reader's own words. The one
       refusal a member can act on says what to do about it; the rest say only
       that it did not work (`like_refusal_message/2`). `text-sm`, not the
       quieter `text-xs` a confirmation would take: this line is the whole answer
-      for the reader who gets it, and it carries the link they need to hit. --%>
+      for the reader who gets it, and it carries the link they need to hit.
+
+      It sits **above** the answers, and not only because it explains the bar
+      right over it: the thread's line is drawn to the bottom of the card
+      (`app.css`), so anything rendered after the answers is something that line
+      runs on past. `thread_replies_last_test.exs` fails the build if this moves
+      back down. --%>
       <p
         :if={@notice}
         role="status"
@@ -413,6 +410,16 @@ defmodule VutuvWeb.PostLive.RemoteActionsComponent do
           class="font-semibold text-brand-600 underline underline-offset-2 hover:text-brand-700 dark:text-brand-400 dark:hover:text-brand-300"
         >{gettext("Fediverse settings")}</.link>{@notice_post}
       </p>
+
+      <.thread_replies
+        :if={@replies_open?}
+        replies={@replies}
+        viewer={@viewer}
+        loading?={@replies_loading?}
+        more?={@replies_pending != []}
+        notice={@replies_notice}
+        target={@myself}
+      />
     </div>
     """
   end
