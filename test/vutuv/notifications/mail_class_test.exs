@@ -48,7 +48,7 @@ defmodule Vutuv.Notifications.MailClassTest do
     {:organization_page_unverified_email, :transactional},
     {:moderation_frozen_email, :transactional},
     {:moderation_review_email, :transactional},
-    {:moderation_revised_email, :transactional},
+    {:moderation_outcome_email, :transactional},
     {:moderation_warning_email, :transactional},
     {:moderation_suspension_email, :transactional},
     {:moderation_deactivation_email, :transactional},
@@ -57,6 +57,9 @@ defmodule Vutuv.Notifications.MailClassTest do
     # account here (issue #2009). Deliberately NOT :critical: an address a
     # bounce marked undeliverable cannot follow a confirmation link either.
     {:public_notice_receipt_email, :transactional},
+    # How the case ended, to that same address (issue #2011): transactional for
+    # the same reason, and it only ever goes to an address already confirmed.
+    {:public_notice_outcome_email, :transactional},
     {:moderation_admin_digest_email, :transactional},
     {:image_rejected_email, :transactional},
     {:job_posting_expiry_reminder_email, :transactional},
@@ -313,8 +316,8 @@ defmodule Vutuv.Notifications.MailClassTest do
   defp build_mail(:moderation_review_email),
     do: Emailer.moderation_review_email(user(), @address, moderation_case())
 
-  defp build_mail(:moderation_revised_email),
-    do: Emailer.moderation_revised_email(user(), @address)
+  defp build_mail(:moderation_outcome_email),
+    do: Emailer.moderation_outcome_email(user(), @address, "upheld")
 
   defp build_mail(:moderation_warning_email),
     do: Emailer.moderation_warning_email(user(), @address)
@@ -352,6 +355,15 @@ defmodule Vutuv.Notifications.MailClassTest do
       category: "copyright",
       content_url: "https://example.com/somebody/posts/1",
       confirm_url: "https://example.com/system/report/confirm/token"
+    })
+  end
+
+  defp build_mail(:public_notice_outcome_email) do
+    Emailer.public_notice_outcome_email(%{
+      name: "Rita Holder",
+      email: @address,
+      locale: "de",
+      outcome: "not_upheld"
     })
   end
 

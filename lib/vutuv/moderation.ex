@@ -309,7 +309,7 @@ defmodule Vutuv.Moderation do
   stored rather than from the values that were typed — or
   `{:error, :not_allowed | :already_reported | changeset}`.
   """
-  def file_public_notice(content, attrs) do
+  def file_public_notice(content, attrs, locale \\ nil) do
     if owner_id(content) == nil do
       {:error, :not_allowed}
     else
@@ -319,7 +319,13 @@ defmodule Vutuv.Moderation do
         %Report{
           confirmation_hash: Token.hash_token(token),
           confirmation_expires_at:
-            NaiveDateTime.add(NaiveDateTime.utc_now(:second), @notice_confirmation_days * 86_400)
+            NaiveDateTime.add(NaiveDateTime.utc_now(:second), @notice_confirmation_days * 86_400),
+          # The language this notice is filed in, stored because both mails
+          # about it are built later — the outcome one (issue #2011) inside
+          # whichever admin's request settles the case, with no member row to
+          # read a locale from. It is the caller's fact, not this context's: a
+          # request locale is per-process web state.
+          reporter_locale: locale
         }
         |> Report.outside_changeset(attrs, content_type(content))
 
@@ -921,9 +927,17 @@ defmodule Vutuv.Moderation do
           })
 
         log(updated, nil, "content_deleted")
+        Notifier.reporters_case_closed(updated)
         :ok
     end
   end
+
+  @doc """
+  What a reporter is told a closed case ended in — `Case.reporter_outcome/1`,
+  re-exported here because `Vutuv.Moderation` is the context every caller
+  outside this directory already talks to.
+  """
+  defdelegate reporter_outcome(status), to: Case
 
   @doc """
   The owner edited reported content while its case was still in their court:
@@ -939,9 +953,10 @@ defmodule Vutuv.Moderation do
   def content_edited(content) do
     case open_case_for(content) do
       %Case{status: "pending_owner"} = case_record ->
-        # The reports are needed either way — to read the category here, and by
-        # the reporters' notice on the ordinary branch — so load them once.
-        case_record = Repo.preload(case_record, reports: :reporter)
+        # `copyright_case?/1` reads them; nothing else here does. `:reports`
+        # alone, never `reports: :reporter` — a report is anonymous, and the
+        # reporters' notice looks itself up from the case id.
+        case_record = Repo.preload(case_record, :reports)
 
         if copyright_case?(case_record),
           do: hand_edit_to_admins(case_record),
@@ -962,7 +977,7 @@ defmodule Vutuv.Moderation do
       })
 
     log(updated, nil, "content_edited")
-    Notifier.reporters_content_revised(updated)
+    Notifier.reporters_case_closed(updated)
     :ok
   end
 
@@ -1275,6 +1290,7 @@ defmodule Vutuv.Moderation do
 
         log(updated, admin, "upheld")
         issue_strike(owner, updated, "owner", admin)
+        Notifier.reporters_case_closed(updated)
 
         {:ok, updated}
     end
@@ -1349,6 +1365,11 @@ defmodule Vutuv.Moderation do
 
         for report <- abusive_reports, do: mark_abusive(report, updated, admin)
 
+        # After the abusive marks, never before: `Report.awaiting_outcome/1`
+        # reads that column, and a reporter an admin has just called a weapon
+        # is not owed a polite decision notice on top of their strike.
+        Notifier.reporters_case_closed(updated)
+
         # An unfounded report must not leave the two accounts separated.
         restore_severed(updated, admin)
 
@@ -1401,6 +1422,7 @@ defmodule Vutuv.Moderation do
         owner = Repo.get!(User, case_record.owner_id)
         set_user_moderation!(owner.id, deactivated_at: now, moderation_reason: reason)
         log(updated, admin, "owner_removed", %{"action" => "deactivate", "reason" => reason})
+        Notifier.reporters_case_closed(updated)
         # A removal that does not come back gets the same actor `Delete` a real
         # account deletion sends (issue #1102), or the member keeps federating
         # from every server that follows them. `410 Gone` stays reserved for the
@@ -1415,7 +1437,14 @@ defmodule Vutuv.Moderation do
       :already_resolved ->
         {:error, :not_open}
 
-      {:ok, _updated} ->
+      {:ok, updated} ->
+        # The reporters are told **first**, because the deletion below takes
+        # this case and its reports with it (owner FK on_delete: :delete_all)
+        # and there would be nobody left to look up. Their mail stands; their
+        # in-app entry is derived from the report row, so it goes with it —
+        # the accepted price of a ruling that erases its own evidence.
+        Notifier.reporters_case_closed(updated)
+
         # No case-side audit line: admin_delete_user erases the account and, with
         # it, this case and its events (owner FK on_delete: :delete_all), so any
         # event would be deleted the same instant. The operator record email from
@@ -1671,6 +1700,25 @@ defmodule Vutuv.Moderation do
   """
   def reporter_severances_query(user_id) do
     from(s in Severance, where: s.reporter_id == ^user_id)
+  end
+
+  @doc """
+  Every decision notice this member has been sent as a **reporter** (issue
+  #2011). `Vutuv.Activity` derives the `report_outcome` entries from it.
+
+  Keyed on `outcome_notified_at` rather than on the case's status, for the
+  reason `reporter_severances_query/1` lives here too: the in-app line must say
+  exactly what the mail said, so both read the one row that records the notice
+  went out. A closed case nobody was told about (an unconfirmed notice, an
+  abusive report) therefore has no line either.
+
+  It carries **no join to the case**: two of its three readers are on the
+  notification-badge path, which every page render runs, and Postgres never
+  eliminates an inner join for a column nobody selected. The one reader that
+  needs the ending joins for itself.
+  """
+  def reporter_outcome_query(user_id) do
+    from(r in Report, where: r.reporter_id == ^user_id and not is_nil(r.outcome_notified_at))
   end
 
   @doc "The case's severances (what reporting cut), for the admin case page."

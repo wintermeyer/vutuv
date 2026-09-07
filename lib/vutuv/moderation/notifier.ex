@@ -18,7 +18,7 @@ defmodule Vutuv.Moderation.Notifier do
 
   alias Vutuv.{Accounts, Activity, Moderation, Repo}
   alias Vutuv.Accounts.User
-  alias Vutuv.Moderation.Case
+  alias Vutuv.Moderation.{Case, Report}
   alias Vutuv.Notifications.Emailer
 
   @doc """
@@ -45,23 +45,108 @@ defmodule Vutuv.Moderation.Notifier do
   end
 
   @doc """
-  Tell every reporter of the case that the owner revised the content.
+  Tell every reporter of a closed case how it ended — each of them once
+  (issue #2011).
 
-  Members only. A report filed from the public form (issue #2009) has no
-  reporter row — `deliver_to/2` matches on `%User{}` and would raise, so the
-  nil is filtered out here rather than left to crash the owner's own edit.
-  Telling the outside notifier how their notice ended is #2011's job and needs
-  a mail this one is not (it is addressed to a member, in a member's locale).
+  All five ways a case closes call this (`uphold_case/2`, `reject_case/3`, the
+  owner's delete, the owner's edit, the erasing `remove_owner/4`), because a
+  reporter who hears nothing goes back to the URL for days and files the notice
+  again. What they are told is read off the case's own status
+  (`Moderation.reporter_outcome/1`), never passed in, so a caller cannot state
+  an ending the row does not have; a case that is not closed is a no-op.
+
+  **Exactly once is a claim, not a convention.** The one `UPDATE` below both
+  picks the reports that still owe their reporter a notice and stamps them, in
+  a single statement, so a second close, a retry, or two admins ruling at the
+  same instant find no rows left and mail nobody twice; only the rows that
+  statement returns are delivered to. And every value the delivery needs is
+  read *here*, before any task is spawned — a case can be erased with its
+  account (`remove_owner/4` on `:delete`) while the mail is still in flight, and
+  a task that went looking for the row again would find nothing and quietly send
+  nothing.
+
+  Who is left out — an unconfirmed outside notice, an abusive report — is
+  `Report.awaiting_outcome/1`'s decision, spelled once there.
   """
-  def reporters_content_revised(%Case{} = case_record) do
-    case_record = Repo.preload(case_record, reports: :reporter)
+  def reporters_case_closed(%Case{} = case_record) do
+    deliver_outcomes(case_record, Case.reporter_outcome(case_record.status))
+  end
 
-    for %{reporter: %User{} = reporter} <- case_record.reports do
-      deliver_to(reporter, &Emailer.moderation_revised_email/2)
-    end
+  # Still open: nothing to tell anybody, and nothing claimed.
+  defp deliver_outcomes(_case_record, nil), do: :ok
+
+  defp deliver_outcomes(%Case{} = case_record, outcome) do
+    now = NaiveDateTime.utc_now(:second)
+
+    {_count, reports} =
+      case_record.id
+      |> Report.awaiting_outcome()
+      |> select(
+        [r],
+        struct(r, [:id, :reporter_id, :reporter_email, :reporter_name, :reporter_locale])
+      )
+      |> Repo.update_all(set: [outcome_notified_at: now, updated_at: now])
+
+    reporters = reporters_by_id(reports)
+
+    for report <- reports, do: deliver_outcome(report, reporters, outcome)
 
     :ok
   end
+
+  # One query for every member reporter on the case, not one per report: a
+  # popular post collects dozens, and this runs inside the ruling request.
+  defp reporters_by_id(reports) do
+    ids = for %Report{reporter_id: id} <- reports, is_binary(id), do: id
+
+    if ids == [] do
+      %{}
+    else
+      from(u in User, where: u.id in ^ids)
+      |> Repo.all()
+      |> Map.new(&{&1.id, &1})
+    end
+  end
+
+  # A member reporter: the in-app entry (derived from the row this stamped, so
+  # the push and the persisted line are the same event) plus the mail.
+  defp deliver_outcome(%Report{reporter_id: reporter_id} = report, reporters, outcome)
+       when is_binary(reporter_id) do
+    Activity.notify(reporter_id, %{
+      kind: "report_outcome",
+      outcome: outcome,
+      source_id: report.id,
+      at: DateTime.utc_now()
+    })
+
+    case Map.get(reporters, reporter_id) do
+      nil ->
+        :ok
+
+      reporter ->
+        deliver_to(reporter, fn user, email ->
+          Emailer.moderation_outcome_email(user, email, outcome)
+        end)
+    end
+  end
+
+  # An outside notifier (issue #2009): no account, so no in-app anything, and
+  # the name and language ride the report row.
+  defp deliver_outcome(%Report{reporter_email: address} = report, _reporters, outcome)
+       when is_binary(address) do
+    notice = %{
+      name: report.reporter_name,
+      email: address,
+      locale: report.reporter_locale,
+      outcome: outcome
+    }
+
+    Emailer.deliver_async(fn ->
+      notice |> Emailer.public_notice_outcome_email() |> Emailer.deliver()
+    end)
+  end
+
+  defp deliver_outcome(_report, _reporters, _outcome), do: :ok
 
   @doc """
   The AI image scan rejected and deleted one of the member's images

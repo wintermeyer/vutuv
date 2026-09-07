@@ -1147,6 +1147,31 @@ defmodule VutuvWeb.UserHelpers do
   # honorifics. "Hallo Max Meier" rather than "Hallo Max", because the German
   # UI addresses members as "Sie" throughout and a bare given name undercuts
   # that; and rather than "Hallo Meier", which is not how anyone is addressed.
+  @doc """
+  The same opener for somebody who has **no member row**: the two mails about a
+  notice filed at `/system/report` (issues #2009 and #2011), addressed to a name
+  a stranger typed and to the language they filed in.
+
+  It lives beside `email_greeting/1` for that function's own reason — the words
+  are literals, dispatched on the recipient's language rather than on the
+  process locale — and so that "how does a vutuv mail open" has one home rather
+  than one per template. There is no honorific: we have a name and nothing else,
+  not a surname, not a salutation.
+  """
+  def stranger_greeting(locale, name) do
+    word =
+      case locale do
+        "de" -> "Hallo"
+        "it" -> "Salve"
+        _ -> "Hi"
+      end
+
+    case present(name) do
+      nil -> word
+      name -> "#{word} #{name}"
+    end
+  end
+
   defp neutral_greeting(word, %User{} = user) do
     case present(Enum.join(Enum.reject([user.first_name, user.last_name], &blank?/1), " ")) do
       nil -> word

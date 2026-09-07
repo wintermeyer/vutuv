@@ -1,4 +1,4 @@
-Salve <%= @name %>,
+<%= @greeting %>,
 
 abbiamo ricevuto la Sua segnalazione. Per farla esaminare, confermi questo
 indirizzo e-mail:

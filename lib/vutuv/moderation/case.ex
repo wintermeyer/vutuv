@@ -43,6 +43,27 @@ defmodule Vutuv.Moderation.Case do
 
   def open_statuses, do: @open_statuses
 
+  @doc """
+  What a reporter is told a closed case ended in: `"removed"`, `"revised"`,
+  `"upheld"`, `"not_upheld"` — or nil while it is still open (issue #2011).
+
+  It lives beside `@statuses` because it has to track that list: a status added
+  above and not answered here falls into the nil clause and quietly tells nobody
+  anything.
+
+  The four are not the statuses renamed. `"upheld"` is deliberately *not*
+  "removed", because an upheld case does not always remove anything: a picture
+  is purged, a post stays frozen as evidence, and an upheld **profile** case
+  unfreezes the profile and lands on the strike ladder instead — telling that
+  reporter the content was removed would be false. So the notice says the report
+  was upheld and stops there, which is true in all three.
+  """
+  def reporter_outcome("resolved_deleted"), do: "removed"
+  def reporter_outcome("resolved_edited"), do: "revised"
+  def reporter_outcome("upheld"), do: "upheld"
+  def reporter_outcome("rejected"), do: "not_upheld"
+  def reporter_outcome(_status), do: nil
+
   def changeset(case_record, params \\ %{}) do
     case_record
     |> cast(params, [

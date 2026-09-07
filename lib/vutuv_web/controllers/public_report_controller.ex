@@ -140,7 +140,13 @@ defmodule VutuvWeb.PublicReportController do
   defp file(conn, params, url, content) do
     type = Moderation.content_type(content)
 
-    case Moderation.file_public_notice(content, params) do
+    # The locale is read here, not in the context: it is per-process web state,
+    # and the row keeps it so both mails about this notice — the receipt below
+    # and the ruling much later (issue #2011) — are written in the language it
+    # was filed in.
+    locale = Gettext.get_locale(VutuvWeb.Gettext)
+
+    case Moderation.file_public_notice(content, params, locale) do
       {:ok, _case_record, report, token} ->
         deliver_receipt(conn, report, url, type, token)
 
@@ -184,14 +190,14 @@ defmodule VutuvWeb.PublicReportController do
   #
   # Off the request, like every other mail this app sends: production talks
   # real SMTP with retries, and this is the one endpoint a stranger can hold
-  # open without an account. The locale is read HERE and travels in the map,
-  # because it is per-process state the spawned task does not inherit — read
+  # open without an account. Every value travels in the map, the locale off the
+  # stored row — per-process state the spawned task does not inherit, so read
   # inside the closure it would quietly send every receipt in English.
   defp deliver_receipt(conn, report, url, type, token) do
     notice = %{
       name: report.reporter_name,
       email: report.reporter_email,
-      locale: Gettext.get_locale(VutuvWeb.Gettext),
+      locale: report.reporter_locale,
       type: type,
       category: report.category,
       content_url: url,

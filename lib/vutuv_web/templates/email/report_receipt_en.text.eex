@@ -1,4 +1,4 @@
-Hi <%= @name %>,
+<%= @greeting %>,
 
 we have your report. To have it acted on, please confirm this email address:
 

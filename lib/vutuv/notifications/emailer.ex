@@ -1025,11 +1025,47 @@ defmodule Vutuv.Notifications.Emailer do
     }
   end
 
-  @doc "Reporter notice: the content they reported was revised by its owner."
-  def moderation_revised_email(user, email) do
-    build_email(user, email, "moderation_revised", %{}, fn ->
-      gettext("The content you reported was revised")
-    end)
+  @doc """
+  Reporter notice: how the case they reported ended (issue #2011).
+
+  One template for all four endings, because they are one message with four
+  last paragraphs. The body branches on `outcome` (`"removed"` / `"revised"` /
+  `"upheld"` / `"not_upheld"`, the value `Vutuv.Moderation.Case.reporter_outcome/1`
+  derives from the case status), and the same subject doubles as the preheader,
+  so the two cannot state different endings.
+
+  It says what happened to the *content* and never what happened to the account
+  behind it: an upheld case may end in a warning, a suspension or nothing
+  visible at all, and that is between that member and us. It is the mirror of
+  the statement of reasons (#2010), which tells the owner what was claimed and
+  never who claimed it.
+
+  `public_notice_outcome_email/1` is the same message for somebody with no
+  member row; both funnel into the one template through `outcome_assigns/2`.
+  """
+  def moderation_outcome_email(user, email, outcome) do
+    locale = get_locale(user.locale)
+
+    assigns =
+      outcome
+      |> outcome_assigns(locale)
+      |> Map.put(:greeting, UserHelpers.email_greeting(user))
+
+    build_email(user, email, "moderation_outcome", assigns, fn -> outcome_subject(outcome) end)
+  end
+
+  # The subject says the ending outright: this mail exists so somebody stops
+  # reloading the URL, and a subject line they have to open to understand
+  # would not do that.
+  defp outcome_subject("removed"), do: gettext("The content you reported was deleted")
+  defp outcome_subject("revised"), do: gettext("The content you reported was revised")
+  defp outcome_subject("upheld"), do: gettext("Your report was upheld")
+  defp outcome_subject(_not_upheld), do: gettext("Your report was not upheld")
+
+  # The preheader is the subject: four endings would otherwise be spelled a
+  # second time, per locale, inside three HEEx attributes.
+  defp outcome_assigns(outcome, locale) do
+    %{outcome: outcome, preheader: in_locale(locale, fn -> outcome_subject(outcome) end)}
   end
 
   @doc """
@@ -1127,22 +1163,59 @@ defmodule Vutuv.Notifications.Emailer do
   @notice_url_chars 500
 
   def public_notice_receipt_email(notice) do
+    notice_email(notice, "report_receipt", fn -> gettext("Please confirm your report") end, fn
+      locale ->
+        %{
+          content_label: in_locale(locale, fn -> ReportHTML.content_type_label(notice.type) end),
+          category_label: in_locale(locale, fn -> ReportHTML.category_label(notice.category) end),
+          content_url:
+            notice.content_url |> UserHelpers.single_line() |> String.slice(0, @notice_url_chars),
+          confirm_url: notice.confirm_url
+        }
+    end)
+  end
+
+  @doc """
+  How the case ended, for an outside notifier (issue #2011) — the same message
+  `moderation_outcome_email/3` sends a member, addressed to somebody with no
+  member row: the recipient's name and language come off the stored report.
+
+  Only a **confirmed** notice is ever answered (`Report.awaiting_outcome/1`
+  decides that), so this is never the first mail to an address a stranger typed;
+  the receipt above was.
+  """
+  def public_notice_outcome_email(notice) do
+    notice_email(
+      notice,
+      "moderation_outcome",
+      fn -> outcome_subject(notice.outcome) end,
+      &outcome_assigns(notice.outcome, &1)
+    )
+  end
+
+  # The envelope both notice mails share, and the one place the hardening on a
+  # stranger's name lives: flattened to one line and capped, at the last gate
+  # before the wire, for the reason the docstring above gives. `assigns_fun`
+  # takes the resolved locale, because both bodies pre-render labels in it.
+  defp notice_email(notice, template_base, subject_fun, assigns_fun) do
     locale = get_locale(notice.locale)
     name = notice.name |> UserHelpers.single_line() |> String.slice(0, @notice_name_chars)
+
+    assigns =
+      locale
+      |> assigns_fun.()
+      |> Map.merge(%{
+        user: nil,
+        name: name,
+        greeting: UserHelpers.stranger_greeting(locale, name),
+        url: public_url()
+      })
 
     base_email()
     |> put_class(:transactional)
     |> to({name, notice.email})
-    |> subject(in_locale(locale, fn -> gettext("Please confirm your report") end))
-    |> render_bodies("report_receipt", locale, %{
-      name: name,
-      content_label: in_locale(locale, fn -> ReportHTML.content_type_label(notice.type) end),
-      category_label: in_locale(locale, fn -> ReportHTML.category_label(notice.category) end),
-      content_url:
-        notice.content_url |> UserHelpers.single_line() |> String.slice(0, @notice_url_chars),
-      confirm_url: notice.confirm_url,
-      url: public_url()
-    })
+    |> subject(in_locale(locale, subject_fun))
+    |> render_bodies(template_base, locale, assigns)
   end
 
   @doc "Admin alert: a whole profile was reported (urgent, sent immediately)."
