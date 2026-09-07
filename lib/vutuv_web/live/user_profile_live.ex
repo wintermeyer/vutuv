@@ -480,15 +480,16 @@ defmodule VutuvWeb.UserProfileLive do
            :user,
            Map.merge(
              socket.assigns.user,
-             Map.take(user, [
-               :avatar,
-               :avatar_fingerprint,
-               :avatar_crop,
-               :avatar_moderation,
-               :cover_photo,
-               :cover_fingerprint,
-               :cover_crop,
-               :cover_moderation,
+             # The picture's row is what every reader consults now (#2027), so
+             # the pointer and the row itself are what has to travel; the four
+             # columns per kind would change nothing on the page.
+             user
+             |> Vutuv.Images.preload_member_images()
+             |> Map.take([
+               :avatar_image_id,
+               :avatar_image,
+               :cover_image_id,
+               :cover_image,
                :updated_at
              ])
            )
@@ -838,7 +839,9 @@ defmodule VutuvWeb.UserProfileLive do
   # controller that already answers 403/410 for the withheld cases, so there is
   # no half-page to draw here — the socket simply does not serve one.
   defp subject!(profile_user_id, viewer) do
-    user = Repo.get!(User, profile_user_id)
+    # The two picture rows come with it: every avatar and cover URL this page
+    # draws is built from them (#2027), and the header alone asks four times.
+    user = User |> Repo.get!(profile_user_id) |> Vutuv.Images.preload_member_images()
 
     if Moderation.profile_visible_to?(user, viewer) do
       user
@@ -1459,7 +1462,7 @@ defmodule VutuvWeb.UserProfileLive do
       # the top of a page whose fields are several screens apart.
       %{
         label: gettext("Add a profile photo"),
-        done: present?(user.avatar),
+        done: Vutuv.Images.member_image(user, "avatar") != nil,
         href: ~p"/settings/profile#avatar"
       },
       %{

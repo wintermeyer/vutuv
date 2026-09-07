@@ -11,6 +11,10 @@ defmodule Vutuv.Uploads.RegeneratorTest do
   use Vutuv.DataCase, async: false
 
   import Vutuv.Factory
+  # Since #2027 a picture IS its row in the shared `images` table, and this tool
+  # picks its rows by the member row's pointer at one — so a fixture that sets
+  # only `users.avatar` describes a member with no picture, and no run visits it.
+  import Vutuv.ImageHelpers
 
   alias Vutuv.Uploads.Regenerator
   alias Vutuv.Uploads.Spec
@@ -43,7 +47,9 @@ defmodule Vutuv.Uploads.RegeneratorTest do
   # Waffle-era 512px `_large`, which current code never serves — and the
   # original sitting in the public tree.
   defp legacy_avatar_user!(tmp) do
-    user = insert(:user, first_name: "Ada", last_name: "King", avatar: "selfie.jpg")
+    user =
+      with_image_rows(insert(:user, first_name: "Ada", last_name: "King", avatar: "selfie.jpg"))
+
     dir = Path.join(tmp, "avatars/#{user.id}")
     jpeg!(Path.join(dir, "Ada King_thumb.jpg"))
     jpeg!(Path.join(dir, "Ada King_medium.jpg"))
@@ -100,7 +106,9 @@ defmodule Vutuv.Uploads.RegeneratorTest do
     end
 
     test "skips a row whose original is missing without touching its files", %{tmp: tmp} do
-      user = insert(:user, first_name: "Ada", last_name: "King", avatar: "selfie.jpg")
+      user =
+        with_image_rows(insert(:user, first_name: "Ada", last_name: "King", avatar: "selfie.jpg"))
+
       dir = Path.join(tmp, "avatars/#{user.id}")
       jpeg!(Path.join(dir, "Ada King_thumb.jpg"))
 
@@ -127,7 +135,9 @@ defmodule Vutuv.Uploads.RegeneratorTest do
     end
 
     test "an already-AVIF row (original already private) is migrated in place", %{tmp: tmp} do
-      user = insert(:user, first_name: "Ada", last_name: "King", avatar: "selfie.jpg")
+      user =
+        with_image_rows(insert(:user, first_name: "Ada", last_name: "King", avatar: "selfie.jpg"))
+
       jpeg!(Path.join(tmp, "originals/avatars/#{user.id}/original.jpg"))
 
       summary = Regenerator.run(only: :avatars)
@@ -146,7 +156,11 @@ defmodule Vutuv.Uploads.RegeneratorTest do
 
   describe "covers" do
     test "migrates to the fingerprinted wide version, keeps legacy", %{tmp: tmp} do
-      user = insert(:user, first_name: "Ada", last_name: "King", cover_photo: "banner.jpg")
+      user =
+        with_image_rows(
+          insert(:user, first_name: "Ada", last_name: "King", cover_photo: "banner.jpg")
+        )
+
       dir = Path.join(tmp, "covers/#{user.id}")
       jpeg!(Path.join(dir, "Ada King_wide.jpg"))
       jpeg!(Path.join(dir, "Ada King_original.jpg"), width: 1800, height: 600)
@@ -364,7 +378,9 @@ defmodule Vutuv.Uploads.RegeneratorTest do
   end
 
   test "a corrupt original counts as failed, not crashed", %{tmp: tmp} do
-    user = insert(:user, first_name: "Ada", last_name: "King", avatar: "selfie.jpg")
+    user =
+      with_image_rows(insert(:user, first_name: "Ada", last_name: "King", avatar: "selfie.jpg"))
+
     path = Path.join(tmp, "originals/avatars/#{user.id}/original.jpg")
     File.mkdir_p!(Path.dirname(path))
     File.write!(path, "not actually a jpeg")
@@ -379,8 +395,10 @@ defmodule Vutuv.Uploads.RegeneratorTest do
     src = jpeg!(Path.join(tmp, "fresh.jpg"))
     upload = %Plug.Upload{filename: "fresh.jpg", path: src, content_type: "image/jpeg"}
     {:ok, "fresh.jpg", fp, _} = Vutuv.Avatar.store({upload, user})
-    # Mirror what Accounts.store_pending_image persists after the store.
-    {:ok, _user} = user |> Ecto.Changeset.change(%{avatar_fingerprint: fp}) |> Repo.update()
+    # Mirror both halves Accounts.store_pending_image persists after the store:
+    # the member row's fingerprint and the picture's own row.
+    {:ok, user} = user |> Ecto.Changeset.change(%{avatar_fingerprint: fp}) |> Repo.update()
+    _user = with_image_rows(user)
 
     summary = Regenerator.run(only: :avatars)
 

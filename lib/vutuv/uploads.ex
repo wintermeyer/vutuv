@@ -10,11 +10,19 @@ defmodule Vutuv.Uploads do
   Directory orientation for new readers: `lib/vutuv/uploads/` (this context)
   is the shared pipeline; `lib/vutuv/uploaders/` holds the per-asset-type
   modules (avatar, cover, post image, screenshot) that configure it.
+
+  For a profile picture the avatar/cover half of this pipeline takes
+  `{image, scope}` — the picture's row in the shared `images` table
+  (`Vutuv.Images.member_image/2`, resolved once by the uploader) beside whose
+  it is. Since #2027 that row is where the file name, the fingerprint, the crop
+  and the moderation verdict are read from; the member row's four columns per
+  kind are still written but no longer read, and go a deploy later.
   """
 
   require Logger
 
   alias Vutuv.Images
+  alias Vutuv.Images.Image
   alias Vutuv.Moderation.ImageScans
   alias Vutuv.Repo
   alias Vutuv.Uploads.Crop
@@ -45,22 +53,24 @@ defmodule Vutuv.Uploads do
     * `:spec_key` — the `Vutuv.Uploads.Spec.versions/1` key (`:avatar | :cover`)
     * `:prefix` — the served-tree storage prefix (`"avatars"` / `"covers"`)
     * `:default_version` — the version `url/3` serves when none is given
-    * `:fingerprint_field` — the scope field holding this image's content
-      fingerprint (`:avatar_fingerprint` / `:cover_fingerprint`); absent for
-      uploaders not on the fingerprinted scheme
-    * `:crop_field` — the scope field holding the persisted crop string that
-      `regenerate/3` re-applies (`:avatar_crop` / `:cover_crop`); absent for
-      uploaders without a user-chosen crop
     * `:kind` — this image's kind in the shared `images` table
-      (`Vutuv.Images`), declared beside `:fingerprint_field` because the
-      re-derive has to keep that row naming the same bytes
+      (`Vutuv.Images`). Since #2027 the row of that kind is what every function
+      here reads the picture's `file` / `fingerprint` / `crop` / `moderation`
+      from; the caller resolves it once (`Vutuv.Images.member_image/2`) and
+      hands it in as `{image, scope}`
+    * `:fingerprint_field` — the **member-row column** a re-derive writes the
+      fresh fingerprint back into (`:avatar_fingerprint` /
+      `:cover_fingerprint`). A write, not a read: both copies stay in step
+      until the column drop
+    * `:moderated` — whether the AI image gate screens this kind, which decides
+      the tree a fresh upload's bytes land in
   """
   @type uploader_config :: %{
           required(:spec_key) => atom(),
           required(:prefix) => String.t(),
           required(:default_version) => atom(),
           optional(:fingerprint_field) => atom(),
-          optional(:crop_field) => atom(),
+          optional(:moderated) => boolean(),
           optional(:kind) => String.t()
         }
 
@@ -368,7 +378,7 @@ defmodule Vutuv.Uploads do
   # tree and is what the caller writes onto its row; nil is an uploader with no
   # moderation column, which has neither.
   defp initial_moderation(config) do
-    if Map.has_key?(config, :moderation_field), do: ImageScans.initial_state()
+    if Map.get(config, :moderated, false), do: ImageScans.initial_state()
   end
 
   @doc """
@@ -379,7 +389,7 @@ defmodule Vutuv.Uploads do
   (e.g. a username change while the image waited in limbo). Idempotent — an
   empty quarantine with converged served files is a no-op.
   """
-  def promote_from_quarantine(scope, config) do
+  def promote_from_quarantine({image, scope}, config) do
     storage_dir = storage_dir(scope, config)
     qdir = quarantine_dir(storage_dir)
     dir = disk_dir(storage_dir)
@@ -393,7 +403,7 @@ defmodule Vutuv.Uploads do
     File.rm_rf(qdir)
 
     # Converged rows return :unchanged here (cheap file-exists checks).
-    case regenerate(scope, [], config) do
+    case regenerate({image, scope}, [], config) do
       {:error, reason} -> Logger.warning("promote self-heal failed: #{inspect(reason)}")
       _ -> :ok
     end
@@ -438,20 +448,20 @@ defmodule Vutuv.Uploads do
   def valid_upload?(_), do: false
 
   @doc """
-  Root-relative, URI-encoded URL for a given `{file, scope}` and served
-  version per `config`. Returns `nil` when the user has no file or for
-  `:original` (the original is never URL-addressable).
+  Root-relative, URI-encoded URL for a given `{image, scope}` and served
+  version per `config` — `image` being the picture's row in the shared
+  `images` table (`Vutuv.Images.member_image/2`), or `nil` for a member with no
+  picture of that kind.
+
+  `nil` whenever there is nothing a reader may fetch: no picture, a picture the
+  AI gate still holds, a picture a copyright case froze, or `:original` (the
+  private original is never URL-addressable).
   """
-  def url({file, scope}, version, config) do
+  def url({image, scope}, version, config) do
     cond do
-      is_nil(file) -> nil
       version == :original -> nil
-      # Moderation limbo: to the world this image does not exist (the files
-      # are in quarantine anyway — nginx could not serve them). The owner's
-      # own preview goes through the authenticated pending-image route, never
-      # through here.
-      held_in_limbo?(scope, config) -> nil
-      true -> served_url(file, scope, version, config)
+      not servable?(image) -> nil
+      true -> served_url(image, scope, version, config)
     end
   end
 
@@ -462,40 +472,37 @@ defmodule Vutuv.Uploads do
   when no private original was kept (legacy uploads predate the kept
   originals).
   """
-  def version_path({file, scope}, version, config) do
-    if file do
-      dir = disk_dir(storage_dir(scope, config))
+  def version_path({%Image{} = image, scope}, version, config) do
+    dir = disk_dir(storage_dir(scope, config))
 
-      name =
-        case fingerprint(scope, config) do
-          nil -> served_filename(scope, version, file, config)
-          fp -> fingerprinted_filename(scope, version, fp, config)
-        end
+    name =
+      case image.fingerprint do
+        nil -> served_filename(scope, version, image.file, config)
+        fp -> fingerprinted_filename(scope, version, fp, config)
+      end
 
-      path = Path.join(dir, name)
-      if File.exists?(path), do: path
-    end
+    path = Path.join(dir, name)
+    if File.exists?(path), do: path
   end
+
+  def version_path({nil, _scope}, _version, _config), do: nil
 
   @doc """
   The on-disk path of a **quarantined** derived version — the owner's limbo
   preview (`VutuvWeb.PendingImageController`); nobody else ever sees these
   bytes. `nil` when absent.
   """
-  def quarantine_version_path(scope, version, config) do
-    case fingerprint(scope, config) do
-      nil ->
-        nil
+  def quarantine_version_path({%Image{fingerprint: fp}, scope}, version, config)
+      when is_binary(fp) do
+    path =
+      storage_dir(scope, config)
+      |> quarantine_dir()
+      |> Path.join(fingerprinted_filename(scope, version, fp, config))
 
-      fp ->
-        path =
-          storage_dir(scope, config)
-          |> quarantine_dir()
-          |> Path.join(fingerprinted_filename(scope, version, fp, config))
-
-        if File.exists?(path), do: path
-    end
+    if File.exists?(path), do: path
   end
+
+  def quarantine_version_path(_image_and_scope, _version, _config), do: nil
 
   @doc """
   Migrates one avatar/cover row to the fingerprinted scheme (or re-derives a row
@@ -513,15 +520,17 @@ defmodule Vutuv.Uploads do
   Returns `:ok` (migrated/re-derived), `:unchanged` (already converged),
   `{:skipped, :missing_original}` (files left untouched) or `{:error, reason}`.
   """
-  def regenerate(user, opts, config) do
+  def regenerate({image, user}, opts, config) do
     storage_dir = storage_dir(user, config)
     dir = disk_dir(storage_dir)
-    fingerprint = Map.get(user, config.fingerprint_field)
+    fingerprint = image && image.fingerprint
 
     cond do
-      # An image still in moderation limbo must never be materialized into
-      # the served tree — its files live in quarantine until the verdict.
-      held_in_limbo?(user, config) ->
+      # Nothing to re-derive, or nothing that MAY be re-derived: a picture the
+      # AI gate still holds lives in the quarantine tree and one a copyright
+      # case froze lives in the takedown hold, and writing fresh versions into
+      # the served tree would hand either of them back to the world.
+      not servable?(image) ->
         :unchanged
 
       opts[:dry_run] ->
@@ -532,7 +541,7 @@ defmodule Vutuv.Uploads do
         :unchanged
 
       true ->
-        migrate_to_fingerprinted(user, storage_dir, dir, config)
+        migrate_to_fingerprinted(image, user, storage_dir, dir, config)
     end
   end
 
@@ -543,9 +552,9 @@ defmodule Vutuv.Uploads do
   username-based). Works off the private original, so it never depends on the
   old-handle files still being present. See `Accounts.update_username/2`.
   """
-  def reslug(user, config) do
-    if Map.get(user, config.fingerprint_field) do
-      regenerate(user, [force: true], config)
+  def reslug({image, user}, config) do
+    if image && image.fingerprint do
+      regenerate({image, user}, [force: true], config)
     else
       :unchanged
     end
@@ -564,12 +573,15 @@ defmodule Vutuv.Uploads do
   `dry_run: true` reports without deleting. Returns `{:swept, names}`,
   `{:dry_run, names}` or `:unchanged`.
   """
-  def sweep_legacy(user, opts, config) do
-    fingerprint = Map.get(user, config.fingerprint_field)
+  def sweep_legacy({image, user}, opts, config) do
+    fingerprint = image && image.fingerprint
     dir = disk_dir(storage_dir(user, config))
 
     cond do
       is_nil(fingerprint) -> :unchanged
+      # A held picture's files are not in the served tree at all, so there is
+      # nothing here to call stale — and nothing to prove the scheme by.
+      not servable?(image) -> :unchanged
       not fingerprint_converged?(user, dir, fingerprint, config) -> :unchanged
       true -> remove_stale_files(user, dir, fingerprint, opts, config)
     end
@@ -607,7 +619,7 @@ defmodule Vutuv.Uploads do
     end)
   end
 
-  defp migrate_to_fingerprinted(user, storage_dir, dir, config) do
+  defp migrate_to_fingerprinted(image, user, storage_dir, dir, config) do
     case Originals.adopt(storage_dir, [Path.join(dir, "*_original.*")]) do
       nil ->
         {:skipped, :missing_original}
@@ -617,35 +629,32 @@ defmodule Vutuv.Uploads do
         # Re-apply the user's persisted crop so a re-derive from the kept
         # original never silently un-crops the served versions. The crop is
         # folded into the fingerprint (as it was at store time), so the
-        # recomputed fingerprint matches the persisted column and the migration
-        # stays idempotent. A nil crop_field (uploaders without a crop) is a
-        # no-op centered derive, byte-identical to the pre-crop behaviour.
-        crop = crop_for(user, config)
+        # recomputed fingerprint matches the stored one and the migration stays
+        # idempotent. A nil crop is a no-op centered derive, byte-identical to
+        # the pre-crop behaviour.
+        crop = image.crop
         fingerprint = content_hash(original, crop)
 
         with {:ok, rotated} <- Spec.open_rotated(original),
              {:ok, cropped} <- Crop.apply_to(rotated, Crop.parse(crop)),
              :ok <- write_derived_versions(cropped, dir, user, fingerprint, config),
-             {:ok, _user} <- persist_fingerprint(user, fingerprint, config) do
+             {:ok, _user} <- persist_fingerprint(image, user, fingerprint, config) do
           :ok
         end
     end
   end
 
-  # A re-derive writes a fresh fingerprint onto the member row, so the picture's
-  # row in the shared `images` table (issue #2013) has to name the same bytes.
-  # Keyed on the pointer the member row already holds, so a picture that has no
-  # row yet — every one uploaded before that table, until #2014's backfill —
-  # costs no statement, and creating one is not a side effect of a deploy.
-  defp persist_fingerprint(user, fingerprint, config) do
+  # A re-derive writes a fresh fingerprint onto both halves: the picture's row
+  # in the shared `images` table, which is what every URL is built from, and the
+  # member row's column, which the release one step back is still serving from.
+  # The row is the one the re-derive just read, so there is always one to
+  # update, and creating one is never a side effect of a deploy.
+  defp persist_fingerprint(image, user, fingerprint, config) do
     with {:ok, saved} <-
            user
            |> Ecto.Changeset.change(%{config.fingerprint_field => fingerprint})
            |> Repo.update() do
-      saved
-      |> Map.get(Images.pointer_field(config.kind))
-      |> Images.sync_fingerprint(fingerprint)
-
+      Images.sync_fingerprint(image.id, fingerprint)
       {:ok, saved}
     end
   end
@@ -658,19 +667,12 @@ defmodule Vutuv.Uploads do
     end
   end
 
-  defp crop_for(scope, config) do
-    case Map.get(config, :crop_field) do
-      nil -> nil
-      field -> Map.get(scope, field)
-    end
-  end
-
-  defp held_in_limbo?(scope, config) do
-    case Map.get(config, :moderation_field) do
-      nil -> false
-      field -> Map.get(scope, field) == "pending"
-    end
-  end
+  # Whether there is a picture here a reader may fetch. The rule belongs to
+  # `Vutuv.Images` — it is about `moderation` and `frozen_at`, not about files —
+  # so it is stated there and only asked here. Before #2027 it was three
+  # separate reads of the member row, and clearing those columns is what made a
+  # frozen picture disappear; now `frozen_at` is the off switch itself.
+  defp servable?(image), do: Images.servable?(image)
 
   @doc """
   Removes every stored file for `scope` per `config`: both the served tree
@@ -699,9 +701,9 @@ defmodule Vutuv.Uploads do
   #     so it serves exactly as before. The migration (Vutuv.Uploads.Regenerator)
   #     flips a row from legacy to fingerprinted by writing the new files and
   #     setting the column; nothing here changes until it does.
-  defp served_url(file, scope, version, config) do
-    case fingerprint(scope, config) do
-      nil -> legacy_served_url(file, scope, version, config)
+  defp served_url(%Image{} = image, scope, version, config) do
+    case image.fingerprint do
+      nil -> legacy_served_url(image.file, scope, version, config)
       fp -> fingerprinted_url(scope, version, fp, config)
     end
   end
@@ -732,16 +734,6 @@ defmodule Vutuv.Uploads do
   end
 
   defp handle(scope, config), do: Map.get(scope, :username) || to_string(config.spec_key)
-
-  # The fingerprint stored on the scope for this asset (`:avatar_fingerprint` /
-  # `:cover_fingerprint`), or nil when the row predates scheme B or the config
-  # opts out (`:fingerprint_field` absent).
-  defp fingerprint(scope, config) do
-    case Map.get(config, :fingerprint_field) do
-      nil -> nil
-      field -> Map.get(scope, field)
-    end
-  end
 
   defp legacy_served_url(file, scope, version, config) do
     local_path =

@@ -696,7 +696,9 @@ Run on the server, against the release:
   corrects any row that disagrees with the member's own columns. Moves no file
   and changes no URL, so it is safe while the app serves traffic; safe to run
   again if it is interrupted (a deploy stopping the slot mid-run leaves every
-  member it reached already correct).
+  member it reached already correct). **Run it once before upgrading past the
+  release that moved every avatar and cover URL onto those rows** (issue
+  #2027): from there on a picture with no row is a picture nobody can see.
 - `bin/vutuv eval "Vutuv.Release.check_image_rows()"` — counts every member
   picture against its row and against its file on disk, writing nothing. It
   prints one line per kind, names the members behind each mismatch, and

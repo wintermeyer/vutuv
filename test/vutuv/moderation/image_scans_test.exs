@@ -99,7 +99,7 @@ defmodule Vutuv.Moderation.ImageScansTest do
       refute Path.wildcard(Path.join(tmp, "quarantine/avatars/#{user.id}/*")) == []
 
       # Every public rendering answers "no image".
-      assert Vutuv.Avatar.url({user.avatar, user}, :medium) == nil
+      assert Vutuv.Avatar.url(user, :medium) == nil
       assert Vutuv.Avatar.display_url(user, :medium) =~ "data:image/svg+xml"
       assert Vutuv.Avatar.og_jpeg(user) == :error
       assert Vutuv.Avatar.binary(user, :thumb) =~ "data:image/svg+xml"
@@ -166,7 +166,7 @@ defmodule Vutuv.Moderation.ImageScansTest do
       # Quarantine emptied, served tree populated, URL live again.
       assert Path.wildcard(Path.join(tmp, "quarantine/avatars/#{user.id}/*")) == []
       refute Path.wildcard(Path.join(tmp, "avatars/#{user.id}/*")) == []
-      assert Vutuv.Avatar.url({user.avatar, user}, :medium) =~ "/avatars/#{user.id}/"
+      assert Vutuv.Avatar.url(user, :medium) =~ "/avatars/#{user.id}/"
 
       scan = Repo.one!(from(s in ImageScan, where: s.subject_id == ^user.id))
       assert scan.status == "approved"
@@ -438,7 +438,7 @@ defmodule Vutuv.Moderation.ImageScansTest do
       {:ok, user} = Accounts.update_user(user, %{cover_photo: jpeg_upload()})
       assert user.cover_moderation == "pending"
       assert open_scan("cover", user.id)
-      assert Vutuv.Cover.url({user.cover_photo, user}, :wide) == nil
+      assert Vutuv.Cover.url(user, :wide) == nil
     end
 
     test "job posting image", %{user: user} do

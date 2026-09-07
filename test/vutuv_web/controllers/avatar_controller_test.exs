@@ -9,6 +9,7 @@ defmodule VutuvWeb.AvatarControllerTest do
 
   alias Vix.Vips.Image, as: VipsImage
   alias Vix.Vips.MutableImage
+  alias Vutuv.ImageHelpers
 
   setup %{conn: conn} do
     tmp = Path.join(System.tmp_dir!(), "vutuv_og_avatar_#{System.unique_integer([:positive])}")
@@ -26,8 +27,9 @@ defmodule VutuvWeb.AvatarControllerTest do
     {:ok, conn: conn, tmp: tmp}
   end
 
-  # A member with a really stored avatar (original on disk + DB column set),
-  # uploaded from a generated JPEG carrying an EXIF tag.
+  # A member with a really stored avatar (original on disk + the picture's row,
+  # which is what every URL builder reads), uploaded from a generated JPEG
+  # carrying an EXIF tag.
   defp member_with_avatar do
     user = insert_activated_user(first_name: "Ava")
 
@@ -48,6 +50,7 @@ defmodule VutuvWeb.AvatarControllerTest do
     user
     |> Ecto.Changeset.change(avatar: stored, avatar_fingerprint: fingerprint)
     |> Repo.update!()
+    |> ImageHelpers.with_image_rows()
   end
 
   test "serves the avatar as a square, metadata-free JPEG", %{conn: conn} do
@@ -76,7 +79,13 @@ defmodule VutuvWeb.AvatarControllerTest do
 
     assert get(conn, "/nobody_here/avatar.jpg").status == 404
 
-    sleepy = insert_activated_user(email_confirmed?: false, avatar: "selfie.jpg")
+    # A picture and its row, so the 404 is the unactivated account being
+    # withheld rather than a member who simply has nothing to serve.
+    sleepy =
+      [email_confirmed?: false, avatar: "selfie.jpg", avatar_fingerprint: "1a2b3c4d5e6f"]
+      |> insert_activated_user()
+      |> Vutuv.ImageHelpers.with_image_rows()
+
     assert get(conn, "/#{sleepy.username}/avatar.jpg").status == 404
   end
 

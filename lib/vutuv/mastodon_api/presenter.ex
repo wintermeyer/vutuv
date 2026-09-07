@@ -629,15 +629,14 @@ defmodule Vutuv.MastodonApi.Presenter do
       Plug.HTML.html_escape(address) <> "</a>"
   end
 
-  # The AI image gate is not re-asked here: `Vutuv.Uploads.url/3` answers "no
-  # image" for a picture still in moderation limbo (the file waits in
-  # quarantine), so a pending avatar already comes back as the `data:` default
-  # and a pending cover as nil — the same chokepoint every website surface
-  # reads, and the stand-in falls out of it.
+  # The AI image gate is not re-asked here: `Vutuv.Avatar.url/2` answers nil for
+  # a picture still in moderation limbo (the file waits in quarantine) and for
+  # one a copyright case froze, the same chokepoint every website surface reads,
+  # so the stand-in falls out of it.
   defp user_avatar(user) do
-    case Avatar.display_url(user, :thumb) do
+    case Avatar.url(user, :thumb) do
       "/" <> _path = relative -> MastodonApi.main_url(relative)
-      "data:" <> _placeholder -> fallback_avatar()
+      nil -> fallback_avatar()
       absolute -> absolute
     end
   end

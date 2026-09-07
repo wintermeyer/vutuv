@@ -11,6 +11,7 @@ defmodule VutuvWeb.OpenGraphTest do
   import Vutuv.OrganizationsHelpers
   import Vutuv.PostsHelpers
 
+  alias Vutuv.ImageHelpers
   alias Vutuv.Organizations
   alias Vutuv.Posts
   alias VutuvWeb.OpenGraph
@@ -138,6 +139,7 @@ defmodule VutuvWeb.OpenGraphTest do
           last_name: "Tester",
           avatar: "selfie.jpg"
         )
+        |> ImageHelpers.with_image_rows()
 
       insert(:work_experience, user: user, title: "Developer", organization: "Acme Corp")
 
@@ -231,7 +233,10 @@ defmodule VutuvWeb.OpenGraphTest do
 
   describe "post pages" do
     test "a public post previews as an article with its first line", %{conn: conn} do
-      author = insert_activated_user(first_name: "Paula", avatar: "selfie.jpg")
+      author =
+        insert_activated_user(first_name: "Paula", avatar: "selfie.jpg")
+        |> ImageHelpers.with_image_rows()
+
       post = create_post!(author, %{"body" => "Hello preview world, this is the first line."})
 
       html = conn |> get(Posts.path(post)) |> html_response(200)
@@ -244,7 +249,10 @@ defmodule VutuvWeb.OpenGraphTest do
     end
 
     test "a post with images previews its first image instead of the avatar", %{conn: conn} do
-      author = insert_activated_user(first_name: "Painter", avatar: "selfie.jpg")
+      author =
+        insert_activated_user(first_name: "Painter", avatar: "selfie.jpg")
+        |> ImageHelpers.with_image_rows()
+
       post = create_post!(author, %{"body" => "look at this"})
 
       # Position decides "first", not insertion order.
@@ -271,7 +279,7 @@ defmodule VutuvWeb.OpenGraphTest do
     end
 
     test "a restricted post's image stays out of the preview", %{conn: conn} do
-      author = insert_activated_user(avatar: "selfie.jpg")
+      author = insert_activated_user(avatar: "selfie.jpg") |> ImageHelpers.with_image_rows()
 
       post =
         create_post!(author, %{

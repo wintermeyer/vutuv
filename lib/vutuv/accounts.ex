@@ -2225,9 +2225,9 @@ defmodule Vutuv.Accounts do
     # could half-commit: the row named the new picture, the member row still
     # named the old file whose bytes the store had just replaced, no scan was
     # ever queued to take the row out of "pending", and the member got a success
-    # flash. Nothing else moves: the four columns keep serving every URL and
-    # every display gate, and this release writes both (#2014's backfill brings
-    # the older pictures in; the columns go a deploy later).
+    # flash. Since #2027 the row is also what every URL and every display gate
+    # reads; the four columns are written for the release one step back, which
+    # is still serving from them, and go with the migration that drops them.
     #
     # The moderation state comes back from the store rather than being read a
     # second time here: the store is where `:moderate_images` decided which tree
@@ -2689,10 +2689,11 @@ defmodule Vutuv.Accounts do
     "updated" => :updated_at
   }
 
-  # The columns a member-browser row needs: the listing fields (avatar, name
-  # parts, slug) plus the timestamps and the status flags the table renders.
+  # The columns a member-browser row needs: the listing fields (the pointer at
+  # the avatar's row in the shared `images` table, name parts, slug) plus the
+  # timestamps and the status flags the table renders.
   @admin_listing_fields ~w(id first_name last_name honorific_prefix honorific_suffix username
-    avatar avatar_fingerprint updated_at inserted_at email_confirmed? admin?
+    avatar_image_id updated_at inserted_at email_confirmed? admin?
     identity_verified? frozen_at suspended_until deactivated_at unreachable_at
     moderation_reason)a
 
@@ -2747,6 +2748,7 @@ defmodule Vutuv.Accounts do
     |> select([u], struct(u, ^@admin_listing_fields))
     |> Pages.paginate(params, total, per_page)
     |> Repo.all()
+    |> Images.preload_member_images()
   end
 
   defp admin_users_base(filters) do

@@ -211,10 +211,12 @@ The handle makes a downloaded file carry the username; the fingerprint makes the
 URL immutable, so it needs no `?v=` cache-buster and the **existing** nginx
 `alias` serves it directly (no rewrite).
 
-The fingerprint is stored in `users.avatar_fingerprint` / `cover_fingerprint`; a
-username change re-derives the files under the new handle. A row with no
-fingerprint has not been migrated yet and serves the legacy
-`avatar_<version>.avif?v=...` URL unchanged.
+The fingerprint is read off the picture's row in the shared `images` table
+(`images.fingerprint`, since #2027); a username change re-derives the files
+under the new handle. A picture with no fingerprint has not been migrated to
+this scheme yet and serves the legacy `avatar_<version>.avif?v=...` URL
+unchanged — one member on the production copy is still in that state, which is
+why "no fingerprint" must never be read as "no picture".
 
 The migration is **expand/contract**: the regenerator writes the new files and
 **keeps** the legacy ones (so the previous release and a rollback keep serving
@@ -239,13 +241,39 @@ an unguessable `token`, the three columns describing the stored file
 never deletes them).
 
 The table arrived **additively**. An upload writes the row *and* keeps filling
-all four member-row columns, which stay the source of truth every URL builder
-and every display gate reads; the member row only gains a pointer
+all four member-row columns; the member row gained a pointer
 (`users.avatar_image_id` / `cover_image_id`). Nothing about how a picture is
 stored or served moved — an avatar URL is byte for byte the one it was, which
 matters because other servers hold it in their copy of our ActivityPub actor
 document, search engines hold it, and sent mail holds it. #2015 moves the
 remaining kinds in.
+
+**Since #2027 the row is what every reader consults**, and the four columns per
+kind are dead weight the deploy after that one drops. `Vutuv.Images.member_image/2`
+is the one door: it takes the `belongs_to` when a caller preloaded it and falls
+back to one primary-key lookup on the pointer when nobody did, and answers `nil`
+— at no cost — for the 72 % of members who have no picture at all. Everything
+downstream reads that row: `Vutuv.Uploads` takes it as `{image, scope}` in place
+of the old `{file, scope}`, so `url/3`, `version_path/3`, `regenerate/3`,
+`reslug/2` and `sweep_legacy/3` never look at the member row again;
+`Vutuv.Avatar` and `Vutuv.Cover` resolve it once per call and hand it down.
+
+**Two things follow from that.** A **frozen** picture is now hidden by
+`frozen_at` rather than by the cleared columns (the freeze still clears them,
+because the previous release is still serving from them during the blue/green
+window) — `Vutuv.Images.shown_image/2` is the reader's door for that, and it
+answers `nil`, so a held picture draws the initials tile exactly as a member
+who never uploaded one does. A picture the AI gate merely holds is not that
+case: it keeps the grey silhouette, because it is coming back. And a
+**listing** query has to carry the pointer:
+`Vutuv.Accounts.User.listing_fields/0` selects `:avatar_image_id` instead of
+the two columns it used to, or a whole page of members would lose its pictures
+at once.
+
+**An installation must run the backfill before taking this release.** Nothing
+reads the columns any more, so a picture with no row is a picture nobody can
+see. `bin/vutuv eval "Vutuv.Release.check_image_rows()"` is the gate, and it
+was already the gate for the column drop.
 
 Which member-row column holds what is written **once**, in
 `Vutuv.Images.member_columns/0`; `Vutuv.Moderation.ImageSubjects` and
@@ -310,13 +338,26 @@ exactly like a clean bill of health. A missing file is the one class the
 backfill cannot repair; it predates the table and wants a human before the
 columns go.
 
-**The columns go two deploys later, not one.** The order is: this deploy ships
-the backfill (the columns still serve everything), the operator runs it and
-reads the check; a later deploy moves every URL builder and display gate onto
-the row; and only the deploy after *that* carries the migration dropping
+**The columns go two deploys later, not one**, and two of the three have
+shipped. The order is: #2014 shipped the backfill (the columns still served
+everything), the operator ran it and read the check; **#2027 moved every URL
+builder and display gate onto the row** and is the release this document
+describes; and only the deploy after *that* carries the migration dropping
 `avatar` / `avatar_fingerprint` / `avatar_crop` / `avatar_moderation` and the
 cover four. Each step is N-1 safe on its own, and no two can be merged: a
 migration may only drop what the *currently deployed* release no longer reads.
+
+**What the drop deploy can now assume.** Nothing outside `Vutuv.Images.Backfill`
+reads the four columns per kind. What still *writes* them, and therefore goes
+with the migration, is `Vutuv.Accounts.store_new_image/8`'s `user_attrs`,
+`Vutuv.Uploads.regenerate/3`'s `persist_fingerprint/4` (and the
+`:fingerprint_field` in both uploader `@config`s), `Vutuv.Images`'
+`hide_from_member_row/1` and `show_on_member_row/1` — the freeze's two halves,
+which the drop deletes outright — and
+`Vutuv.Moderation.ImageSubjects.clear_profile_columns/1` with its two callers'
+member-row writes. `Vutuv.Images.member_columns/0` is the one list of the
+names. The backfill itself is what the drop retires: it exists to compare the
+two copies, and after the cut there is one.
 
 **How a kind is served is a property of the kind, not a column**
 (`Vutuv.Images.serving/1`). `:static` means the derived files sit in a public
@@ -345,8 +386,11 @@ release handing a frozen picture back to the world.
 
 `Vutuv.Images.freeze/1` and `unfreeze/1` are the two halves, `purge/1` the
 deletion an upheld case (or the owner's own "remove it") performs. What each
-one does to the member row, and why clearing those four columns is what a
-reader notices, is in [moderation.md](moderation.md).
+one does to the member row is in [moderation.md](moderation.md). Since #2027 it
+is `frozen_at` itself that a reader notices — `Vutuv.Images.shown_image/2`
+answers `nil` for a held picture — and the member row's four columns are still
+cleared beside it so the release one step back, which is serving from those
+columns while the blue/green switch runs, hides the picture too.
 
 **A half-finished move is finished by itself.** The row's `frozen_at` is the
 *intent* and the disk is the state, so the stamp is written before the first

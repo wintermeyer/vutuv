@@ -23,6 +23,7 @@ defmodule Vutuv.Chat do
   alias Vutuv.Accounts.User
   alias Vutuv.Activity
   alias Vutuv.Chat.{Conversation, Message, Participant}
+  alias Vutuv.Images
   alias Vutuv.Notifications.Emailer
   alias Vutuv.Organizations
   alias Vutuv.Organizations.Organization
@@ -755,6 +756,10 @@ defmodule Vutuv.Chat do
   defp listing_users_by_id(ids) do
     from(u in User, where: u.id in ^ids, select: struct(u, ^User.listing_fields()))
     |> Repo.all()
+    # The picture rows in the same batched shape as everything else here: the
+    # sidebar is unpaged, so a member with three hundred conversations would
+    # otherwise pay one lookup per row (issue #2027).
+    |> Images.preload_avatars()
     |> Map.new(&{&1.id, &1})
   end
 

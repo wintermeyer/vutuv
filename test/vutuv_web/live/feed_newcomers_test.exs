@@ -15,15 +15,20 @@ defmodule VutuvWeb.PostLive.FeedNewcomersTest do
 
   import Phoenix.LiveViewTest
 
+  alias Vutuv.ImageHelpers
   alias Vutuv.Repo
   alias Vutuv.Social
   alias Vutuv.Tags.UserTag
 
   # A member the card may draw: confirmed, with an avatar no scan is holding.
   # Newest-first ordering is by the UUID v7 primary key, so insertion order is
-  # registration order and no `inserted_at` juggling is needed.
+  # registration order and no `inserted_at` juggling is needed. The picture is
+  # the row in `images` as well as the member row's own columns, because the
+  # card's query joins that row (#2027).
   defp newcomer(attrs \\ []) do
-    insert(:activated_user, Keyword.put_new(attrs, :avatar, "selfie.jpg"))
+    :activated_user
+    |> insert(Keyword.put_new(attrs, :avatar, "selfie.jpg"))
+    |> ImageHelpers.with_image_rows()
   end
 
   # `count` tags on `user`, answering with their slugs — what the rendered chips
@@ -77,7 +82,12 @@ defmodule VutuvWeb.PostLive.FeedNewcomersTest do
 
     test "leaves out the viewer, the already-followed and the blocked", %{conn: conn} do
       {conn, me} = create_and_login_user(conn)
-      me = me |> Ecto.Changeset.change(avatar: "mine.jpg") |> Repo.update!()
+
+      me =
+        me
+        |> Ecto.Changeset.change(avatar: "mine.jpg")
+        |> Repo.update!()
+        |> ImageHelpers.with_image_rows()
 
       followed = newcomer()
       blocked = newcomer()

@@ -982,7 +982,11 @@ defmodule VutuvWeb.UserControllerTest do
     refute html =~ "Current cover photo"
 
     # Once a cover photo exists, it is shown above the upload field.
-    {:ok, _} = user |> Ecto.Changeset.change(cover_photo: "cover.avif") |> Repo.update()
+    user
+    |> Ecto.Changeset.change(cover_photo: "cover.avif")
+    |> Repo.update!()
+    |> Vutuv.ImageHelpers.with_image_rows()
+
     html = conn |> recycle() |> get(~p"/settings/profile") |> html_response(200)
     assert html =~ "Current cover photo"
   end

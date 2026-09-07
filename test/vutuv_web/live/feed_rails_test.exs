@@ -11,6 +11,7 @@ defmodule VutuvWeb.PostLive.FeedRailsTest do
 
   import Phoenix.LiveViewTest
 
+  alias Vutuv.ImageHelpers
   alias Vutuv.Posts
   alias Vutuv.Tags
 
@@ -19,8 +20,13 @@ defmodule VutuvWeb.PostLive.FeedRailsTest do
     Tags.follow_tag(user, tag)
 
     # One newcomer for the welcome card — it only greets members who show a
-    # face.
-    newbie = insert(:activated_user, first_name: "New", last_name: "Face", avatar: "selfie.jpg")
+    # face, and a face is the picture's row in `images` (#2027), not just the
+    # member row's columns.
+    newbie =
+      :activated_user
+      |> insert(first_name: "New", last_name: "Face", avatar: "selfie.jpg")
+      |> ImageHelpers.with_image_rows()
+
     {:ok, post} = Posts.create_post(newbie, %{body: "hello from a new face"})
 
     %{tag: tag, newbie: newbie, post: post}

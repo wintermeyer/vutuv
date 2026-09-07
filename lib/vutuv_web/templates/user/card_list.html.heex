@@ -26,13 +26,15 @@ shows the name the way its owner writes it. --%>
       <% rel = profile_rel(user) %>
       <div class="profile-image">
         <%= link to: ~p"/#{user}", rel: rel do %>
-          <%!-- src is passed for users with a picture so the row keeps the
-                small :thumb version; without one, <.avatar> renders the
-                initials tile instead of the light-grey default image (a
-                bright white circle in dark mode). --%>
+          <%!-- src is passed so the row keeps the small :thumb version,
+                which this 48px slot would otherwise load as the 192px
+                :medium. `Vutuv.Avatar.src/2` answers nil for a member with no picture
+                at all, and <.avatar> then renders the initials tile instead
+                of the light-grey default image (a bright white circle in
+                dark mode). --%>
           <.avatar
             user={user}
-            src={user.avatar && Vutuv.Avatar.display_url(user, :thumb)}
+            src={Vutuv.Avatar.src(user, :thumb)}
             size="md"
             alt={"Avatar of #{full_name(user)}"}
             presence

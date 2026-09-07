@@ -460,12 +460,17 @@ defmodule VutuvWeb.OpenGraph do
   defp image_alt(_post_image, %{organization: %Organization{name: name}}), do: name
   defp image_alt(_post_image, _ca), do: SiteName.get()
 
-  defp member_image(%{user: %User{avatar: avatar} = user}) when not is_nil(avatar) do
-    square_image(
-      abs_url("/#{user.username}/avatar.jpg"),
-      Vutuv.Avatar.og_size(),
-      UserHelpers.full_name(user)
-    )
+  # Named only while `/:slug/avatar.jpg` actually answers — `Vutuv.Avatar.url/2`
+  # is nil for a member with no picture, one the AI gate still holds and one a
+  # copyright case froze — so a scraper is never sent to a 404.
+  defp member_image(%{user: %User{} = user}) do
+    if Vutuv.Avatar.url(user, :medium) do
+      square_image(
+        abs_url("/#{user.username}/avatar.jpg"),
+        Vutuv.Avatar.og_size(),
+        UserHelpers.full_name(user)
+      )
+    end
   end
 
   defp member_image(_ca), do: nil

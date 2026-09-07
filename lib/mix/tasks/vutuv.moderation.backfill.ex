@@ -58,15 +58,17 @@ defmodule Mix.Tasks.Vutuv.Moderation.Backfill do
       {"avatars",
        Repo.all(
          from(u in User,
-           where: not is_nil(u.avatar),
-           select: {"avatar", u.id, u.id, u.avatar_fingerprint}
+           join: i in Image,
+           on: i.id == u.avatar_image_id,
+           select: {"avatar", u.id, u.id, i.fingerprint}
          )
        )},
       {"covers",
        Repo.all(
          from(u in User,
-           where: not is_nil(u.cover_photo),
-           select: {"cover", u.id, u.id, u.cover_fingerprint}
+           join: i in Image,
+           on: i.id == u.cover_image_id,
+           select: {"cover", u.id, u.id, i.fingerprint}
          )
        )},
       {"post images",

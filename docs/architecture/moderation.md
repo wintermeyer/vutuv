@@ -148,13 +148,16 @@ stamps `frozen_at`, clears the member row's four columns for that kind, and
 moves every derived version, the private original and anything still in AI
 quarantine into the picture's **takedown hold** — see the hold section in
 [images.md](images.md) for what that tree is and why an interrupted move is
-finished by itself. Clearing the columns is the half a reader notices: the
-member row is still what every URL builder and every display gate reads (#2027
-moves them onto the row), and "no picture of that kind" is the one answer all
-of them already agree on, so the profile, the cards, the vCard, the
-link-preview JPEG and the ActivityPub icon all fall back at once. Nothing is
-lost by clearing them — the row holds the same four values and the unfreeze
-writes them back.
+finished by itself. **`frozen_at` is the half a reader notices**: since #2027
+every URL builder and every display gate resolves the picture through
+`Vutuv.Images`, whose `servable?/1` and `shown_image/2` both answer "nothing
+here" for a stamped row, so the
+profile, the cards, the vCard, the link-preview JPEG and the ActivityPub icon
+all fall back at once and the header draws the initials tile a member with no
+picture gets. The four columns are cleared beside it because the release one
+step back is still serving from them while the blue/green switch runs; they go
+with the migration that drops them. Nothing is lost either way — the row holds
+the same four values and the unfreeze writes them back.
 
 **Rejecting the case restores the picture byte for byte**, at the same paths,
 so the old URL works again; **upholding it deletes** the held copies and the

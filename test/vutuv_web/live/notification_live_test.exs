@@ -7,6 +7,7 @@ defmodule VutuvWeb.NotificationLiveTest do
   import Phoenix.LiveViewTest
   import Vutuv.PostsHelpers
 
+  alias Vutuv.ImageHelpers
   alias Vutuv.Prefs
   alias Vutuv.Prefs.Cache
 
@@ -141,7 +142,9 @@ defmodule VutuvWeb.NotificationLiveTest do
       {conn, user} = create_and_login_user(conn)
 
       follower =
-        insert(:user, first_name: "Grace", last_name: "Hopper", avatar: "grace.jpg")
+        :user
+        |> insert(first_name: "Grace", last_name: "Hopper", avatar: "grace.jpg")
+        |> ImageHelpers.with_image_rows()
 
       insert(:follow, follower: follower, followee: user)
 
@@ -155,7 +158,9 @@ defmodule VutuvWeb.NotificationLiveTest do
       {conn, user} = create_and_login_user(conn)
 
       follower =
-        insert(:user, first_name: "Grace", last_name: "Hopper", avatar: "grace.jpg")
+        :user
+        |> insert(first_name: "Grace", last_name: "Hopper", avatar: "grace.jpg")
+        |> ImageHelpers.with_image_rows()
 
       insert(:follow, follower: follower, followee: user)
 

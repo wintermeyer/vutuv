@@ -172,10 +172,11 @@ defmodule VutuvWeb.Fediverse.Docs do
   # member whose picture a copyright freeze has taken offline (issue #2012) —
   # handed remote servers a URL that answers 404. A picture that is gone has to
   # be gone from the actor document too, or the takedown is a local fiction.
-  defp put_icon(doc, %{avatar: avatar} = user) when is_binary(avatar),
-    do: Map.put(doc, "icon", icon("#{base()}/#{user.username}/avatar.jpg"))
-
-  defp put_icon(doc, _user), do: doc
+  defp put_icon(doc, user) do
+    if Vutuv.Avatar.url(user, :medium),
+      do: Map.put(doc, "icon", icon("#{base()}/#{user.username}/avatar.jpg")),
+      else: doc
+  end
 
   @doc """
   A **topic's** actor document (issue #1330): AP type `Group`, which is what

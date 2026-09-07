@@ -6452,7 +6452,12 @@ defmodule Vutuv.Posts do
   # with fifty links still ships only the handful they proved — and ordered,
   # because an un-ordered multi-row preload comes back in whatever order
   # Postgres likes (id order is creation order, ids being UUID v7).
-  defp verified_links_preload, do: VerifiedLinks.preload_spec()
+  # The author's links plus the two rows their pictures are built from since
+  # #2027: one more batched query per page, never one per card. The cover is
+  # here for the Mastodon API's account object, which carries a header image
+  # and renders one account per status.
+  defp verified_links_preload,
+    do: [:avatar_image, :cover_image | VerifiedLinks.preload_spec()]
 
   @doc """
   The root-relative permalink path, e.g.

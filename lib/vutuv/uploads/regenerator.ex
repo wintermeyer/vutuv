@@ -34,7 +34,7 @@ defmodule Vutuv.Uploads.Regenerator do
 
   import Ecto.Query
 
-  alias Vutuv.Accounts.User
+  alias Vutuv.Images
   alias Vutuv.Organizations.OrganizationScreenshot
   alias Vutuv.Posts.PostImage
   alias Vutuv.Posts.PostScreenshot
@@ -182,8 +182,11 @@ defmodule Vutuv.Uploads.Regenerator do
     end
   end
 
-  defp rows(:avatars), do: Repo.all(from(u in User, where: not is_nil(u.avatar)))
-  defp rows(:covers), do: Repo.all(from(u in User, where: not is_nil(u.cover_photo)))
+  # Every member holding a picture of that kind, with the row the re-derive
+  # reads preloaded — `Vutuv.Images.members_with_picture/1` owns that query, so
+  # a whole-table pass costs one statement rather than one per member (#2027).
+  defp rows(:avatars), do: Images.members_with_picture("avatar")
+  defp rows(:covers), do: Images.members_with_picture("cover")
   # Every scope `Vutuv.Screenshot` stores under `screenshots/<id>`: a profile
   # link, a post's link and an organization's homepage. Listing only the
   # first left the other two on the old Spec for good — a member's feed is

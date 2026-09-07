@@ -29,6 +29,7 @@ defmodule Vutuv.Directory do
   import Vutuv.SearchText, only: [cap: 1, contains: 1, normalize_search: 1]
 
   alias Vutuv.Accounts.User
+  alias Vutuv.Images
   alias Vutuv.Pages
   alias Vutuv.Repo
 
@@ -270,7 +271,10 @@ defmodule Vutuv.Directory do
   defp page_with_total([]), do: %{users: [], total: 0}
 
   defp page_with_total([{_user, total} | _rest] = rows),
-    do: %{users: Enum.map(rows, &elem(&1, 0)), total: total}
+    do: %{
+      users: rows |> Enum.map(&elem(&1, 0)) |> Images.preload_member_images(),
+      total: total
+    }
 
   # "Zabel, Anna" before "Zabel, Zoe", with the id (creation order, UUID v7) as
   # the tiebreaker. One definition for the letter pages and the search, so a
@@ -343,6 +347,7 @@ defmodule Vutuv.Directory do
       |> filed_order()
       |> Pages.paginate(params, total, @per_page)
       |> Repo.all()
+      |> Images.preload_member_images()
 
     %{users: users, total: total}
   end

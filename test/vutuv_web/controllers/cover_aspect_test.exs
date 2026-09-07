@@ -1,6 +1,7 @@
 defmodule VutuvWeb.CoverAspectTest do
   use VutuvWeb.ConnCase, async: true
 
+  alias Vutuv.ImageHelpers
   alias Vutuv.Uploads.Spec
   alias VutuvWeb.UI
 
@@ -12,13 +13,16 @@ defmodule VutuvWeb.CoverAspectTest do
   # frames (`data-crop-aspect`) and what every rendered cover box is shaped like
   # (`UI.cover_aspect_class/0`).
 
+  # A member with a cover, written the way an upload writes one: the member
+  # row's columns and the picture's row in `images`, which is what every URL
+  # builder reads since #2027.
   defp with_cover(user) do
     {:ok, user} =
       Repo.update(
         Ecto.Changeset.change(user, cover_photo: "cover.jpg", cover_fingerprint: "abc123")
       )
 
-    user
+    ImageHelpers.with_image_rows(user)
   end
 
   # The tag carrying `marker`, so an assertion about one box cannot be satisfied

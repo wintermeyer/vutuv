@@ -6,6 +6,7 @@ defmodule Vutuv.IdentityTest do
   import Vutuv.Identity.Query
 
   alias Vutuv.Identity
+  alias Vutuv.ImageHelpers
   alias Vutuv.Posts.Post
 
   describe "Identity protocol, User" do
@@ -31,7 +32,7 @@ defmodule Vutuv.IdentityTest do
     end
 
     test "image, topic and ap_type" do
-      user = insert(:user, avatar: "some-token")
+      user = insert(:user, avatar: "some-token") |> ImageHelpers.with_image_rows()
 
       assert Identity.image(user) == "some-token"
       assert Identity.topic(user) == "user:#{user.id}"

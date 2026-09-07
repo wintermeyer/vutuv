@@ -8,6 +8,10 @@ defmodule Vutuv.UploadsIntegrationTest do
   use Vutuv.DataCase, async: false
 
   import Vutuv.Factory
+  # Since #2027 every URL builder reads the picture's row in the shared `images`
+  # table, so a fixture that fabricates a legacy member row has to write the row
+  # its own columns already name.
+  import Vutuv.ImageHelpers
 
   alias Vutuv.Accounts.User
   alias Vutuv.Profiles.Url
@@ -34,7 +38,11 @@ defmodule Vutuv.UploadsIntegrationTest do
   test "a legacy avatar value with a ?timestamp suffix still resolves", %{tmp: tmp} do
     # Simulate a row written by the old Waffle.Ecto type, whose derived file
     # is still the pre-AVIF .jpg on disk.
-    user = insert(:user, avatar: "selfie.jpg?63876543210", first_name: "Ada", last_name: "King")
+    user =
+      with_image_rows(
+        insert(:user, avatar: "selfie.jpg?63876543210", first_name: "Ada", last_name: "King")
+      )
+
     dir = Path.join(tmp, "avatars/#{user.id}")
     File.mkdir_p!(dir)
     {:ok, img} = Image.new(20, 20, color: [1, 2, 3])
@@ -47,7 +55,7 @@ defmodule Vutuv.UploadsIntegrationTest do
 
     # ...and the URL ignores the legacy timestamp, falling back to the
     # not-yet-regenerated legacy file (plus the cache-busting ?v= token).
-    assert Vutuv.Avatar.url({reloaded.avatar, reloaded}, :thumb) ==
+    assert Vutuv.Avatar.url(reloaded, :thumb) ==
              "/avatars/#{user.id}/Ada%20King_thumb.jpg?v=#{:erlang.phash2(reloaded.updated_at)}"
   end
 
@@ -120,7 +128,7 @@ defmodule Vutuv.UploadsIntegrationTest do
     # URL the app now emits points at a file that exists.
     assert File.exists?(Path.join(tmp, "avatars/#{renamed.id}/ada_new_handle-medium-#{fp}.avif"))
 
-    assert Vutuv.Avatar.url({renamed.avatar, renamed}, :medium) ==
+    assert Vutuv.Avatar.url(renamed, :medium) ==
              "/avatars/#{renamed.id}/ada_new_handle-medium-#{fp}.avif"
   end
 
@@ -263,7 +271,7 @@ defmodule Vutuv.UploadsIntegrationTest do
   end
 
   test "the vCard embeds a real avatar as a JPEG PHOTO line", %{tmp: tmp} do
-    user = insert(:user, first_name: "Ada", last_name: "King", avatar: "me.jpg")
+    user = with_image_rows(insert(:user, first_name: "Ada", last_name: "King", avatar: "me.jpg"))
     dir = Path.join(tmp, "originals/avatars/#{user.id}")
     File.mkdir_p!(dir)
     {:ok, img} = Image.new(300, 200, color: [10, 120, 200])

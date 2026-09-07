@@ -3,6 +3,7 @@ defmodule VutuvWeb.ShellLiveTest do
 
   import Phoenix.LiveViewTest
 
+  alias Vutuv.ImageHelpers
   alias Vutuv.Sessions
 
   @bell_badge ~s(a[title="Notifications"] span.bg-accent)
@@ -180,7 +181,7 @@ defmodule VutuvWeb.ShellLiveTest do
   end
 
   test "shows the user's avatar in the top bar when they have one", %{conn: conn} do
-    user = stefan(avatar: "me.jpg")
+    user = ImageHelpers.with_image_rows(stefan(avatar: "me.jpg"))
     {:ok, view, _html} = live_isolated(conn, VutuvWeb.ShellLive, session: shell_session(user))
 
     assert has_element?(view, ~s(summary[title="Stefan Wintermeyer"] img))
@@ -248,6 +249,8 @@ defmodule VutuvWeb.ShellLiveTest do
 
     {:ok, user} =
       Vutuv.Repo.update(Ecto.Changeset.change(user, avatar: "me.jpg"))
+
+    user = ImageHelpers.with_image_rows(user)
 
     # The search page renders no avatars of its own, so the only avatar URL in
     # the response is the one the shell chrome puts in the top bar.

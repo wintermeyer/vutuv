@@ -13,6 +13,7 @@ defmodule VutuvWeb.PostLive.FeedRailArrangementTest do
 
   import Phoenix.LiveViewTest
 
+  alias Vutuv.ImageHelpers
   alias Vutuv.Posts
   alias VutuvWeb.FeedRailHelpers
 
@@ -35,8 +36,11 @@ defmodule VutuvWeb.PostLive.FeedRailArrangementTest do
     Vutuv.Tags.follow_tag(user, tag)
     # The "New here" card greets only members who show a face, and it is the
     # first block in the shipped order — without one the order under test is
-    # missing its head.
-    insert(:activated_user, first_name: "New", last_name: "Face", avatar: "selfie.jpg")
+    # missing its head. A face is the picture's row in `images` (#2027), so the
+    # member row's columns alone would leave the card empty.
+    :activated_user
+    |> insert(first_name: "New", last_name: "Face", avatar: "selfie.jpg")
+    |> ImageHelpers.with_image_rows()
 
     %{conn: conn, user: user}
   end

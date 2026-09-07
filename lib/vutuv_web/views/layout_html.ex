@@ -288,7 +288,7 @@ defmodule VutuvWeb.LayoutHTML do
           # display name can't leak into the initials.
           "user_initials" => name_initials(user),
           "user_param" => Phoenix.Param.to_param(user),
-          "user_avatar" => Vutuv.Avatar.user_url(user, :thumb),
+          "user_avatar" => Vutuv.Avatar.url(user, :thumb),
           "user_admin?" => user.admin?,
           "show_online" => user.show_online_status?,
           # The identity they are speaking as (issue #1335), for the throwaway

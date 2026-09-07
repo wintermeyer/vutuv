@@ -42,7 +42,7 @@ the resulting ~200px rail width. --%>
       <%!-- AI-moderation limbo: the owner previews their pending cover through
       the authenticated quarantine route (plus the amber pill); everyone else
       sees the brand gradient until the scan releases it. --%>
-      <% cover_pending? = @as_owner? and @user.cover_moderation == "pending" %>
+      <% cover_pending? = @as_owner? and Vutuv.Images.pending?(@user, "cover") %>
       <%!-- `Vutuv.Cover.picture/1` carries the lite version for a viewer in
             data-saving mode beside the banner; the owner's quarantine preview
             has no lite and never needs one. --%>
@@ -125,12 +125,18 @@ the resulting ~200px rail width. --%>
         <% saved_present? = not is_nil(@user_saved) %>
         <% report_path = ~p"/reports/new?#{[type: "user", id: @user.id, return_to: "/#{@user.username}"]}" %>
         <% block_confirm = VutuvWeb.BlockText.confirm(@user.username) %>
+        <%!-- A picture is reportable in its own right (issue #2012), so a rights
+        holder does not have to report the whole profile to get a stolen photo
+        taken down. Only a picture a reader can actually see: `shown_image/2`
+        resolves the row once, and its id is what the form names. --%>
+        <% reportable_avatar = Vutuv.Images.shown_image(@user, "avatar") %>
+        <% reportable_cover = Vutuv.Images.shown_image(@user, "cover") %>
         <%!-- The action cluster is pinned to the right of the avatar row
         (ml-auto), one short row. It now holds only the follow pill: the ⋯ menu
         moved down to the name row, so the pill gets the full width beside the
         avatar to breathe, below the cover, rather than riding up into the cover
         banner. (Owner sees Edit profile; a blocker sees Unblock.) --%>
-        <% avatar_pending? = @as_owner? and @user.avatar_moderation == "pending" %>
+        <% avatar_pending? = @as_owner? and Vutuv.Images.pending?(@user, "avatar") %>
         <div class="-mt-12 flex items-end gap-4">
           <%!-- The picture, and — once the 1024px `:large` version exists —
           the click that opens it in the photo lightbox (issue #1528).
@@ -240,22 +246,17 @@ the resulting ~200px rail width. --%>
               is what nobody reaches for often (Report) and what should not be
               one tap away (Block). --%>
               <:item id="report-profile" href={report_path}>{gettext("Report")}</:item>
-              <%!-- A picture is reportable in its own right (issue #2012), so a
-              rights holder does not have to report the whole profile to get a
-              stolen photo taken down. Shown only for a picture that has a row
-              in the shared `images` table — the member row's own pointer, so
-              it costs no query. --%>
               <:item
-                :if={@user.avatar && @user.avatar_image_id}
+                :if={reportable_avatar}
                 id="report-avatar"
-                href={image_report_path(@user, @user.avatar_image_id)}
+                href={image_report_path(@user, reportable_avatar.id)}
               >
                 {gettext("Report the profile picture")}
               </:item>
               <:item
-                :if={@user.cover_photo && @user.cover_image_id}
+                :if={reportable_cover}
                 id="report-cover"
-                href={image_report_path(@user, @user.cover_image_id)}
+                href={image_report_path(@user, reportable_cover.id)}
               >
                 {gettext("Report the cover photo")}
               </:item>
@@ -1423,7 +1424,7 @@ the resulting ~200px rail width. --%>
             >
               <.avatar
                 src={entry.feed.avatar}
-                user={%{avatar: nil, first_name: entry.feed.name, last_name: nil}}
+                user={%{first_name: entry.feed.name, last_name: nil}}
                 size="sm"
                 alt=""
               />

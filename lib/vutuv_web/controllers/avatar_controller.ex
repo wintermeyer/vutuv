@@ -29,9 +29,10 @@ defmodule VutuvWeb.AvatarController do
 
   def show(conn, %{"slug" => slug}) do
     bytes =
-      with %User{avatar: avatar} = user when not is_nil(avatar) <-
-             Repo.get_by(User, username: slug),
+      with %User{} = user <- Repo.get_by(User, username: slug),
            true <- Moderation.profile_visible_to?(user, nil) do
+        # `og_jpeg/1` answers `:error` for a member with no picture and for one
+        # nobody may see, so there is nothing left here to pre-check.
         Avatar.og_jpeg(user)
       end
 

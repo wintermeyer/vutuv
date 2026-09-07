@@ -3348,10 +3348,24 @@ defmodule VutuvWeb.UI do
     """
   end
 
+  # The picture is resolved once, here, and the two bodies below read its
+  # answer: resolving the picture costs one lookup of the member's row in
+  # the shared `images` table (none at all when the association is preloaded,
+  # and none for a member with no picture), so asking it twice would double
+  # that on every avatar a page draws.
+  defp avatar_inner(assigns) do
+    assigns
+    |> assign(:picture, avatar_picture(assigns.src, assigns.user, assigns.size))
+    |> avatar_body()
+  end
+
   # A user without a picture gets an initials tile (matching the shell's
   # top-bar avatar) instead of the anonymous placeholder image — initials
-  # tell people apart in lists, a shared grey silhouette does not.
-  defp avatar_inner(%{src: nil, user: %{avatar: nil} = user} = assigns) do
+  # tell people apart in lists, a shared grey silhouette does not. A `nil`
+  # `src` is that case and only that case: a picture the AI gate or a
+  # copyright case is holding still renders the silhouette below, exactly as
+  # it did while the member row carried the distinction.
+  defp avatar_body(%{picture: %{src: nil}, user: user} = assigns) do
     assigns = assign(assigns, :initials, name_initials(user))
 
     ~H"""
@@ -3374,14 +3388,12 @@ defmodule VutuvWeb.UI do
   # Through `picture/1`, so the 96 CSS px slot (`lg`) offers its lite to a
   # viewer in data-saving mode: without a lite the picture component is the
   # plain `<img>` this always rendered, so every other call site is untouched.
-  # The pair is derived in the attribute, not assigned, so change tracking
-  # keys it on `src` / `user` / `size` (the liveview rule on derived values).
   # `shrink-0` on the lite wrapper, since it stands in for the `<img>` inside
   # a flex row.
-  defp avatar_inner(assigns) do
+  defp avatar_body(assigns) do
     ~H"""
     <.picture
-      picture={avatar_picture(@src, @user, @size)}
+      picture={@picture}
       wrap_class="shrink-0"
       data-avatar
       alt={@alt}
@@ -3445,7 +3457,7 @@ defmodule VutuvWeb.UI do
   defp avatar_picture(nil, %{} = user, "lg"), do: Vutuv.Avatar.picture(user)
 
   defp avatar_picture(nil, %{} = user, size),
-    do: %{src: Vutuv.Avatar.display_url(user, avatar_url_size(size)), lite: nil}
+    do: %{src: Vutuv.Avatar.src(user, avatar_url_size(size)), lite: nil}
 
   defp avatar_picture(src, _user, _size), do: %{src: src || @fallback_avatar, lite: nil}
 
