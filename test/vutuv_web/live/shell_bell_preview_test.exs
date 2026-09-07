@@ -59,6 +59,31 @@ defmodule VutuvWeb.ShellBellPreviewTest do
     assert has_element?(view, @bell_badge, "1")
   end
 
+  test "opening one row takes that event off the badge and leaves the rest", %{conn: conn} do
+    # Clicking a row takes the member off this page, so the close event the
+    # pointer would have sent never arrives — the row has to say for itself
+    # which event it stands for, and the hook hands that back before it
+    # navigates.
+    user = insert(:user)
+    follower_event(user, ~N[2024-03-01 12:00:00])
+    opened = follower_event(user, ~N[2024-03-02 12:00:00])
+
+    {:ok, view, _html} = shell(conn, user)
+    render_hook(view, "bell:preview", %{})
+
+    assert has_element?(
+             view,
+             ~s(a[data-seen-kind="follower"][data-seen-source-id="#{opened.id}"])
+           )
+
+    render_hook(view, "notify:seen", %{"kind" => "follower", "source_id" => opened.id})
+
+    # By one, not to zero: the older follow was on the panel too and nobody
+    # opened it.
+    assert has_element?(view, @bell_badge, "1")
+    assert Activity.unread_notification_count(user.id) == 1
+  end
+
   test "moving the pointer away marks exactly what was shown as read", %{conn: conn} do
     user = insert(:user)
     follower_event(user, ~N[2024-03-01 12:00:00])

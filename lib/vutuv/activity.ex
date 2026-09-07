@@ -523,18 +523,39 @@ defmodule Vutuv.Activity do
   `%{kind: kind, source_id: id}`, or nil for an event the tally cannot single
   out again.
 
-  The browser notification carries this back when the member clicks it, so the
-  kind vocabulary stays here rather than being spelled again in the shell.
+  The browser notification carries this back when the member clicks it, and so
+  does a row of the bell's preview panel, so the kind vocabulary stays here
+  rather than being spelled again in the shell.
+
+  Takes a live push and a derived feed item alike: the push names its row
+  outright, the feed item carries only the event id it was built with.
   """
   def dismiss_ref(%{kind: kind} = notification) do
     kind = dismiss_kind(kind, notification)
-    source_id = notification[:source_id]
+    source_id = dismiss_source_id(kind, notification)
 
     if kind in dismissable_kinds() and is_binary(source_id),
       do: %{kind: kind, source_id: source_id}
   end
 
   def dismiss_ref(_notification), do: nil
+
+  # The feed item's half: `event_id/2` run backwards, which is why the two can
+  # only agree. The cast is what refuses an id this kind did not compose — one
+  # prefix really is a prefix of another (`report-protection` of
+  # `report-protection-restored`), so the severed kind would otherwise read the
+  # restore half's id as `restored-<uuid>` and dismiss the wrong event.
+  defp dismiss_source_id(_kind, %{source_id: source_id}) when is_binary(source_id),
+    do: source_id
+
+  defp dismiss_source_id(kind, %{id: id}) when is_binary(id) do
+    case String.split(id, id_prefix(kind) <> "-", parts: 2) do
+      ["", source_id] -> if match?({:ok, _}, Vutuv.UUIDv7.cast(source_id)), do: source_id
+      _ -> nil
+    end
+  end
+
+  defp dismiss_source_id(_kind, _notification), do: nil
 
   # The severance row behind `report_protection` produces two events at
   # different times, so the pair (kind, source_id) needs the family to tell
@@ -569,11 +590,28 @@ defmodule Vutuv.Activity do
   but `cv_update`, plus the second name `report_protection` needs for its
   restore half. A kind cannot end up storing dismissals the tally then ignores,
   because both answers come from the same declaration.
+
+  Reading it costs 1,433 reductions, because `kind_specs/1` builds 38 Ecto
+  queries and 18 closures to hand back eighteen strings that never change. That
+  was affordable once per pushed notification and is not once per rendered row
+  of the bell's panel, so the answer is computed on the first call and kept in
+  `:persistent_term` (the `VutuvWeb.OgCard` arrangement): the registry stays the
+  single declaration, it is just read from once per node.
   """
   def dismissable_kinds do
-    for spec <- kind_specs(Vutuv.UUIDv7.generate()),
-        {kind, _shape} <- spec.dismiss,
-        do: kind
+    case :persistent_term.get({__MODULE__, :dismissable_kinds}, nil) do
+      nil ->
+        kinds =
+          for spec <- kind_specs(Vutuv.UUIDv7.generate()),
+              {kind, _shape} <- spec.dismiss,
+              do: kind
+
+        :persistent_term.put({__MODULE__, :dismissable_kinds}, kinds)
+        kinds
+
+      kinds ->
+        kinds
+    end
   end
 
   @doc """

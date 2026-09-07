@@ -492,6 +492,7 @@ the pointer on the bell drops a small panel under it instead — one round kind
 badge, who did what, how long ago, six of them at most and a "+N more" footer
 into the page — and **looking away marks them read**. The gesture says "I have
 seen this" as plainly as opening the page does, so it carries the same weight.
+Opening one of the rows says it about that one event; both gestures are below.
 
 The panel is `ShellLive`'s; only the gesture is the client's, because a hover is
 not something a LiveView binding can see. The `BellPreview` hook pushes
@@ -529,6 +530,20 @@ and `dismissed_event_ids/1` — or the panel and the number would disagree.
 Nothing is marked read by the close alone: the marker's own
 `:notifications_changed` broadcast is what recounts the badge, like every other
 change.
+
+**Opening a row is the second gesture, and it reads exactly one event.** The
+click takes the member off this page, so the close never fires and the badge
+would otherwise stand at what it said before — the number pointing at something
+they were just shown and then followed. So each row carries the reference of the
+event it stands for (`Activity.dismiss_ref/1` again, this time off a derived feed
+item, which knows only the id `event_id/2` composed for it), and the hook hands
+that back through the same `notify:seen` the browser popup uses before assigning
+`location.href`: the badge drops **by one**, not to zero, since the rest of the
+panel was shown and not opened. Navigation waits for the server's reply, with a
+700 ms timer taking the member to the page anyway when the socket is slow or
+already gone — a push in flight dies with the socket the navigation tears down.
+A modified click (a second tab) leaves the panel standing under the pointer, so
+that one is left to the close as before.
 
 ### The notifications page (2026-09 cards)
 

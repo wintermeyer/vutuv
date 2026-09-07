@@ -551,6 +551,29 @@ document.addEventListener("click", (event) => {
   if (event.target.closest("[data-notify-allow]")) requestNotifyPermission()
 })
 
+// Telling the server "I have seen this one event" on the way to `url`. The
+// server has to hear it BEFORE the tab navigates: leaving tears the socket down
+// and a push in flight goes with it. So navigation waits for the reply - and
+// for a socket that is slow or already gone, a short timer takes the member to
+// the page anyway. Whichever comes first wins; `done` is what keeps them from
+// being sent twice.
+//
+// Both ways out of one notification share it: clicking the browser popup, and
+// clicking a row of the bell's preview panel.
+function acknowledgeSeen(hook, ack, url) {
+  let done = false
+  const go = () => {
+    if (done) return
+    done = true
+    if (url) window.location.href = url
+  }
+
+  if (!ack) return go()
+
+  hook.pushEvent("notify:seen", ack, go)
+  window.setTimeout(go, 700)
+}
+
 // -- Service worker and Web Push (issue #1729) -----------------------------
 //
 // What the section above does works only while a vutuv page is open: a
@@ -1412,6 +1435,32 @@ const Hooks = {
       this.el.addEventListener("mouseleave", this.disarm)
       this.el.addEventListener("focusin", this.arm)
       this.el.addEventListener("focusout", this.disarm)
+
+      this.onRowClick = (event) => this.rowClicked(event)
+      this.el.addEventListener("click", this.onRowClick)
+    },
+    // Opening a row is reading that one event — and the close that marks the
+    // panel read never arrives, because the page is already leaving. So the row
+    // hands its own reference back first (the same acknowledgement the popup
+    // makes), and the badge drops by one rather than to zero.
+    //
+    // A modified click opens the row in a second tab and leaves this panel
+    // standing under the pointer, so its close is still coming and there is
+    // nothing to do here.
+    rowClicked(event) {
+      if (!plainClick(event)) return
+
+      const link = event.target.closest("a[data-seen-kind]")
+      if (!link) return
+
+      event.preventDefault()
+
+      const ack = {
+        kind: link.dataset.seenKind,
+        source_id: link.dataset.seenSourceId,
+      }
+
+      acknowledgeSeen(this, ack, link.href)
     },
     armOpen() {
       clearTimeout(this.closeTimer)
@@ -1439,6 +1488,7 @@ const Hooks = {
       this.el.removeEventListener("mouseleave", this.disarm)
       this.el.removeEventListener("focusin", this.arm)
       this.el.removeEventListener("focusout", this.disarm)
+      this.el.removeEventListener("click", this.onRowClick)
     },
   },
   // Browser notifications (issue #1249): a popup for activity that arrives while
@@ -1550,35 +1600,15 @@ const Hooks = {
       notification.onclick = () => {
         window.focus()
         notification.close()
-        this.acknowledge(ack, () => {
-          if (url) window.location.href = url
-        })
+        // Clicking a popup means the member has seen that one event, so the
+        // bell should drop it and keep the rest.
+        acknowledgeSeen(this, ack, url)
       }
 
       // Only ever fired for a test: it is what tells the settings card that a
       // popup really was constructed, so the card can stop waiting instead of
       // leaving the member to guess whether anything happened.
       if (test) window.dispatchEvent(new CustomEvent("vutuv:notify-shown"))
-    },
-    // Clicking a popup means the member has seen that one event, so the bell
-    // should drop it and keep the rest. The server needs to hear that BEFORE
-    // the tab navigates: assigning `location.href` tears the socket down, and
-    // a push in flight would go with it. So navigation waits for the server's
-    // reply - and for a socket that is slow or already gone, a short timer
-    // takes them to the page anyway. Whichever comes first wins; `done` is
-    // what keeps the member from being sent twice.
-    acknowledge(ack, then) {
-      if (!ack) return then()
-
-      let done = false
-      const go = () => {
-        if (done) return
-        done = true
-        then()
-      }
-
-      this.pushEvent("notify:seen", ack, go)
-      window.setTimeout(go, 700)
     },
   },
   // The admin member browser (VutuvWeb.Admin.UserLive) pages in place over the
