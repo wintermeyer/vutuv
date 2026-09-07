@@ -11,6 +11,8 @@ defmodule Vutuv.Images.Image do
 
   use VutuvWeb, :model
 
+  alias Vutuv.Uploads
+
   schema "images" do
     field(:kind, :string)
     belongs_to(:user, Vutuv.Accounts.User)
@@ -45,12 +47,17 @@ defmodule Vutuv.Images.Image do
   upload's own name, which a member chooses, and an over-long one would
   otherwise raise Postgres 22001 on a path no form guards. The others are
   derived here and bounded by construction, in varchar(255) columns.
+
+  The bound comes from `Vutuv.Uploads.max_stored_file_name/0`, which is also
+  what the uploader cuts the name to, so this validation and the cut guarding
+  the same write cannot drift apart. It is the second line, not the first: the
+  cut is what a member actually meets (issue #2025).
   """
   def changeset(image, attrs) do
     image
     |> cast(attrs, [:file, :fingerprint, :crop, :moderation])
     |> validate_required([:kind, :token])
-    |> validate_length(:file, max: 255)
+    |> validate_length(:file, max: Uploads.max_stored_file_name())
     |> unique_constraint(:token)
     |> unique_constraint(:kind, name: :images_member_profile_kind_index)
     |> check_constraint(:user_id, name: :images_profile_kind_has_owner)

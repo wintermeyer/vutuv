@@ -156,6 +156,72 @@ defmodule Vutuv.UploadsIntegrationTest do
     assert File.exists?(Path.join(tmp, "originals/covers/#{user.id}/original.png"))
   end
 
+  # Issue #2025. `users.avatar`, `users.cover_photo` and `images.file` are all
+  # varchar(255) and the name comes straight off the member's phone or camera.
+  # Before #2022 an over-long one raised Postgres 22001 and threw the member
+  # onto an error page; after it the image row's own length validation caught it
+  # first, the whole picture save was abandoned behind a `Logger.warning` — and
+  # the member got a **success** flash for a picture that never changed.
+  test "a file name past the column length is shortened, not dropped", %{tmp: tmp} do
+    user = insert(:user, first_name: "Ada", last_name: "King")
+    long = String.duplicate("a", 300) <> ".png"
+    upload = %Plug.Upload{filename: long, path: png_fixture(), content_type: "image/png"}
+
+    assert {:ok, updated} = Vutuv.Accounts.update_user(user, %{avatar: upload})
+
+    # The picture is really there — its absence is what the bug was.
+    assert updated.avatar_fingerprint =~ ~r/\A[0-9a-f]{12}\z/
+
+    assert File.exists?(
+             Path.join(
+               tmp,
+               "avatars/#{user.id}/#{updated.username}-thumb-#{updated.avatar_fingerprint}.avif"
+             )
+           )
+
+    # Shortened to fit, and the extension survives: it is what the name is for.
+    assert String.length(updated.avatar) == 255
+    assert String.ends_with?(updated.avatar, ".png")
+
+    # Both writes get the same name, so neither can overflow its column.
+    assert Vutuv.Images.profile_image(user.id, "avatar").file == updated.avatar
+  end
+
+  # The other column, through the other uploader.
+  test "a long cover photo name is shortened the same way" do
+    user = insert(:user, first_name: "Ada", last_name: "King")
+    long = String.duplicate("b", 300) <> ".png"
+    upload = %Plug.Upload{filename: long, path: png_fixture(), content_type: "image/png"}
+
+    assert {:ok, updated} = Vutuv.Accounts.update_user(user, %{cover_photo: upload})
+
+    assert updated.cover_fingerprint =~ ~r/\A[0-9a-f]{12}\z/
+    assert String.length(updated.cover_photo) == 255
+    assert String.ends_with?(updated.cover_photo, ".png")
+  end
+
+  # varchar(255) counts code points; `String.length/1` counts graphemes. macOS
+  # hands over decomposed (NFD) file names, so a German one is one grapheme and
+  # two code points per umlaut — 200 such graphemes are 400 code points, which
+  # Postgres refuses with 22001 (verified against the dev database) while every
+  # grapheme-based measure calls the name short enough.
+  test "a German file name is measured the way the column measures it" do
+    user = insert(:user, first_name: "Ada", last_name: "King")
+    long = :unicode.characters_to_nfd_binary(String.duplicate("ä", 200)) <> ".png"
+    upload = %Plug.Upload{filename: long, path: png_fixture(), content_type: "image/png"}
+
+    assert {:ok, updated} = Vutuv.Accounts.update_user(user, %{avatar: upload})
+
+    assert updated.avatar_fingerprint =~ ~r/\A[0-9a-f]{12}\z/
+    assert code_points(updated.avatar) <= 255
+    assert String.ends_with?(updated.avatar, ".png")
+
+    # Cut on a grapheme boundary: every kept character is still a whole "ä"
+    # (letter plus combining diaeresis), never a stranded accent.
+    base = String.replace_suffix(updated.avatar, ".png", "")
+    assert code_points(base) == 2 * String.length(base)
+  end
+
   test "an invalid cover photo extension is rejected with a changeset error" do
     user = insert(:user)
     upload = %Plug.Upload{filename: "evil.gif", path: png_fixture(), content_type: "image/gif"}
@@ -222,6 +288,8 @@ defmodule Vutuv.UploadsIntegrationTest do
     |> ProfileDoc.build(include_photo: true)
     |> VCard.render()
   end
+
+  defp code_points(string), do: string |> String.to_charlist() |> length()
 
   defp png_fixture(opts \\ []) do
     {:ok, img} = Image.new(300, 200, color: opts[:color] || [10, 120, 200])
