@@ -25,6 +25,7 @@ defmodule Vutuv.Images.BackfillTest do
   alias Vutuv.Uploads.Spec
 
   @kind "job_posting_image"
+  @post_kind "post_image"
 
   setup do
     tmp =
@@ -66,6 +67,18 @@ defmodule Vutuv.Images.BackfillTest do
   end
 
   defp job_posting_row(picture), do: Vutuv.ImageHelpers.mirror_row(@kind, picture)
+
+  # The same for a post photo (#2052), which is the same shape carrying far
+  # more columns — a caption, a crop, the camera facts and three switches.
+  defp stored_post_image(attrs \\ []) do
+    picture = insert(:post_image, attrs)
+    dir = Uploads.disk_dir(Path.join("post_images", picture.token))
+    File.mkdir_p!(dir)
+    File.write!(Path.join(dir, "thumb#{Spec.served_ext()}"), "not really an avif")
+    picture
+  end
+
+  defp post_image_row(picture), do: Vutuv.ImageHelpers.mirror_row(@post_kind, picture)
 
   defp jpeg_upload(name \\ "selfie.jpg") do
     src = Path.join(System.tmp_dir!(), "backfill_src_#{System.unique_integer([:positive])}.jpg")
@@ -366,6 +379,89 @@ defmodule Vutuv.Images.BackfillTest do
       end)
 
       assert job_posting_row(picture)
+    end
+  end
+
+  # The machinery above is the machinery here — a gallery source builds itself
+  # from `Vutuv.Images.mirror_source/1`, so the post photo added no line to
+  # `Vutuv.Images.Backfill`. What is worth its own tests is the part the second
+  # kind could get wrong on its own: the registry entry reaching this pass at
+  # all, and the columns no other kind has surviving the copy.
+  describe "a gallery kind: the post photo (issue #2052)" do
+    test "it is one of the kinds a bare run walks" do
+      assert @post_kind in Backfill.kinds()
+    end
+
+    test "one that predates the mirror arrives with the columns no other kind has" do
+      picture =
+        stored_post_image(
+          alt: "Ein Feld im Abendlicht",
+          caption: "Am letzten Morgen in Lissabon",
+          crop: "0.0000,0.0000,0.5000,0.5000",
+          camera: "Fujifilm X-T5",
+          lens: "XF 35mm F1.4 R",
+          focal_length: "35 mm",
+          aperture: "f/1.4",
+          shutter: "1/250 s",
+          iso: 400,
+          taken_at: ~N[2026-08-01 06:14:00],
+          has_gps: true,
+          show_camera_info: true,
+          download_original: true
+        )
+
+      assert %{@post_kind => tally} = Backfill.run(only: @post_kind)
+      assert tally.pictures == 1
+      assert tally.created == 1
+
+      assert %ImageRow{} = row = post_image_row(picture)
+      assert row.kind == @post_kind
+      assert row.user_id == picture.user_id
+      assert row.post_id == picture.post_id
+      assert row.caption == picture.caption
+      assert row.crop == picture.crop
+      assert row.camera == picture.camera
+      assert row.lens == picture.lens
+      assert row.focal_length == picture.focal_length
+      assert row.aperture == picture.aperture
+      assert row.shutter == picture.shutter
+      assert row.iso == picture.iso
+      assert row.taken_at == picture.taken_at
+      assert row.has_gps == true
+      assert row.show_camera_info == true
+      assert row.download_original == true
+      assert row.download_exact == false
+    end
+
+    test "a row whose caption drifted is corrected, and keeps its token" do
+      picture = stored_post_image(caption: "Am letzten Morgen in Lissabon")
+      Backfill.run(only: @post_kind)
+      before = post_image_row(picture)
+
+      Repo.update_all(from(i in ImageRow, where: i.id == ^before.id),
+        set: [caption: "stale", has_gps: true]
+      )
+
+      assert %{@post_kind => tally} = Backfill.run(only: @post_kind)
+      assert tally.corrected == 1
+
+      after_run = post_image_row(picture)
+      assert after_run.token == before.token
+      assert after_run.caption == picture.caption
+      assert after_run.has_gps == false
+    end
+
+    test "the check names the photos with no row, and goes quiet once they have one" do
+      picture = stored_post_image()
+
+      assert %{kinds: %{@post_kind => before}, ok?: false} = Backfill.check(only: @post_kind)
+      assert before.missing_row.count == 1
+      assert before.missing_row.sample == [picture.id]
+      assert before.missing_file.count == 0
+
+      Backfill.run(only: @post_kind)
+
+      assert %{ok?: true} = Backfill.check(only: @post_kind)
     end
   end
 

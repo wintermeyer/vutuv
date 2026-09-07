@@ -1669,6 +1669,16 @@ on-the-fly `og.jpg` and the download filename.
 
 Legacy `…/feed.webp` URLs in old post bodies keep resolving.
 
+Since #2052 every `post_images` row also has a **mirror row in the shared
+`images` table**, joined on the `token` both carry and written by every path
+that touches a photo (`Vutuv.Images.write_mirrored/2`, `mirror/2`, `forget/2`
+from `Vutuv.Posts`). Nothing above reads it yet: this is the expand half of the
+three-release move #2015 is making one kind at a time, so every URL, the proxy
+and the audience check are unchanged, and a copyright report still cannot name
+a photo on its own. What the mirror carries, why almost every column of
+`post_images` is in it and what the release that moves the readers has to
+watch for are in the "gallery kinds" section of [images.md](images.md).
+
 A post can also carry one **video** (issue #1906): its own pipeline, its own
 waiting card and its own proxy, all in [video.md](video.md).
 

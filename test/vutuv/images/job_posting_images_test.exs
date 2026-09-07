@@ -168,49 +168,6 @@ defmodule Vutuv.Images.JobPostingImagesTest do
     end
   end
 
-  describe "the mirror carries the whole picture" do
-    # The mirror copies by name, and `Map.fetch!/2` makes a name listed in
-    # `Vutuv.Images` that the source does not have raise. The other direction —
-    # a column added to `job_posting_images` and never listed — nothing can
-    # see: the mirror simply would not carry it, and the backfill's own
-    # comparison reads the same list, so it would agree that all is well. This
-    # is what notices, and the deploy that retires the old table is what it
-    # protects: a column nobody mirrored is a column that is lost then.
-    #
-    # A column that genuinely belongs to the old row alone goes on the
-    # exclusion list below, with the reason.
-    test "every column of the gallery row is mirrored, or excluded on purpose" do
-      not_mirrored = [
-        # The two rows are separate records with separate lifetimes; the mirror
-        # mints a UUID v7 of its own and stamps its own timestamps.
-        :id,
-        :inserted_at,
-        :updated_at
-      ]
-
-      source = Vutuv.Images.mirror_source(@kind)
-      columns = source.schema.__schema__(:fields)
-
-      assert Enum.sort(columns) == Enum.sort(source.fields ++ not_mirrored),
-             """
-             `job_posting_images` and the mirror have drifted.
-
-             columns:  #{inspect(Enum.sort(columns))}
-             mirrored: #{inspect(Enum.sort(source.fields))}
-             excluded: #{inspect(Enum.sort(not_mirrored))}
-
-             Add the column to `Vutuv.Images`' mirror entry (and to the
-             `images` table in a migration), or to `not_mirrored` here with the
-             reason it belongs to the old row alone.
-             """
-    end
-
-    test "and every mirrored name is a column of the images row too" do
-      source = Vutuv.Images.mirror_source(@kind)
-      assert source.fields -- ImageRow.__schema__(:fields) == []
-    end
-  end
-
   describe "nothing about serving moved" do
     test "the URL is the one it always was", %{tmp: tmp} do
       user = poster_fixture()

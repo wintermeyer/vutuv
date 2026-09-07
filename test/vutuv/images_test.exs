@@ -280,12 +280,80 @@ defmodule Vutuv.ImagesTest do
     test "avatars and covers are served straight off disk" do
       assert Images.serving("avatar") == :static
       assert Images.serving("cover") == :static
-      assert Images.kinds() == ~w(avatar cover job_posting_image)
+      assert Images.kinds() == ~w(avatar cover job_posting_image post_image)
     end
 
+    # Both gallery kinds that have moved go through an authorizing proxy, so
+    # the row is their off switch rather than the tree the bytes sit in.
+    test "a job-posting picture and a post photo go through their proxy" do
+      assert Images.serving("job_posting_image") == :proxy
+      assert Images.serving("post_image") == :proxy
+    end
+
+    # An organization image is the next kind #2015 brings (#2053); until it
+    # arrives, asking about it is asking about a picture nobody could take
+    # offline.
     test "an undeclared kind raises rather than inheriting a default" do
       assert_raise ArgumentError, ~r/no serving strategy declared/, fn ->
-        Images.serving("post_image")
+        Images.serving("organization_image")
+      end
+    end
+  end
+
+  describe "the mirror registry against the tables it copies (issue #2015)" do
+    # The copy is a per-field `Map.fetch!/2`, so a name listed in `@mirrored`
+    # that the source lacks raises the moment anything mirrors. The other
+    # direction — a column added to a gallery table and never listed — nothing
+    # can see: the mirror simply would not carry it, and the backfill's own
+    # comparison reads the same list, so it would agree that all is well. The
+    # deploy that retires the old table is what would lose it, and this is what
+    # notices.
+    #
+    # Written over `mirrored_kinds/0` rather than once per kind, so the kinds
+    # still to come (#2053) are covered the day their entry lands rather than
+    # the day somebody remembers to copy a test.
+    #
+    # A column that genuinely belongs to the old row alone goes in the map
+    # below, with the reason.
+    @not_mirrored %{
+      # The two rows are separate records with separate lifetimes: the mirror
+      # mints a UUID v7 of its own and stamps its own timestamps.
+      #
+      # For a post photo `inserted_at` is the one exclusion with a consequence.
+      # The pixelated stand-in's window is measured from the photo's upload
+      # (`Vutuv.Posts.image_pixelated_url/1`), and a backfilled mirror row's
+      # stamp says when the backfill ran — so the release that moves the
+      # readers has to take that time from the photo. See
+      # `docs/architecture/images.md`.
+      default: [:id, :inserted_at, :updated_at]
+    }
+
+    test "every column of a mirrored table is copied, or excluded on purpose" do
+      for kind <- Images.mirrored_kinds() do
+        source = Images.mirror_source(kind)
+        excluded = Map.get(@not_mirrored, kind, @not_mirrored.default)
+        columns = source.schema.__schema__(:fields)
+
+        assert Enum.sort(columns) == Enum.sort(source.fields ++ excluded),
+               """
+               #{inspect(source.schema)} and its mirror have drifted.
+
+               columns:  #{inspect(Enum.sort(columns))}
+               mirrored: #{inspect(Enum.sort(source.fields))}
+               excluded: #{inspect(Enum.sort(excluded))}
+
+               Add the column to `Vutuv.Images`' `@mirrored` entry for
+               #{inspect(kind)} (and to the `images` table in a migration), or
+               to `@not_mirrored` here with the reason it belongs to the old
+               row alone.
+               """
+      end
+    end
+
+    test "and every mirrored name is a column of the images row too" do
+      for kind <- Images.mirrored_kinds() do
+        assert Images.mirror_source(kind).fields -- ImageRow.__schema__(:fields) == [],
+               "#{kind} names a column the images row does not have"
       end
     end
   end
