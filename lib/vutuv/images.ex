@@ -19,7 +19,8 @@ defmodule Vutuv.Images do
   migration may drop only what the *currently deployed* release has stopped
   reading.
 
-  **A gallery picture (#2015, a job-posting picture first in #2054): this
+  **A gallery picture (#2015, a job-posting picture first in #2054, a post
+  photo in #2052): this
   release writes both and reads the old table.** Its truth is still its own row
   — the proxy, the form and the AI gate all work off that — and the row here is
   a mirror, written by `mirror/2` and dropped by `forget/2`, joined on the
@@ -52,7 +53,16 @@ defmodule Vutuv.Images do
   # from `@mirrored` below, because a contract release **deletes** an entry
   # there — at which point that kind lives here and nowhere else, so dropping
   # it from this list would be exactly backwards.
-  @kinds ~w(avatar cover job_posting_image)
+  @kinds ~w(avatar cover job_posting_image post_image)
+
+  # Of those, the kinds every byte of which already goes through a controller
+  # that authorizes the reader first (`VutuvWeb.JobPostingImageController` asks
+  # whether the reader may see the posting, `VutuvWeb.PostImageController`
+  # whether they may see the post) — so the row is the off switch, and #2015's
+  # expand releases change nothing about how one is served. Written out rather
+  # than derived from `@mirrored`, because a kind keeps its serving strategy
+  # after the contract release deletes it from there. See `serving/1`.
+  @proxy_kinds ~w(job_posting_image post_image)
 
   # Of those, the kinds whose truth is still a table of their own, and
   # everything about the copy: which columns it carries, where the source rows
@@ -63,18 +73,18 @@ defmodule Vutuv.Images do
   # The column names are identical on both sides, so the copy is a per-field
   # `Map.fetch!/2` rather than a translation table: a name listed here that the
   # source schema does not have raises instead of quietly writing nothing. The
-  # other direction — a column added to the source table and not to this list —
-  # nothing can see, so the drift test in `job_posting_images_test.exs`
-  # compares the two and fails the build on it.
+  # other direction — a column added to a source table and not to this list —
+  # nothing can see, so a drift test in `images_test.exs` compares the two for
+  # every kind here and fails the build on it, which also means a kind added
+  # below is covered the day its entry lands.
   #
   # An entry goes when that kind's contract release retires its old table,
   # together with the double write. It does **not** take the report gate with
   # it: that reads `@takedown` below, which the release before that one, the one
   # that moves the readers and wires the takedown, is what extends.
-  # #2052 (post photos) and #2053 (organization images) add one entry each;
-  # #2055 (review covers) does **not** — a review's cover is columns on the
-  # review row with no token and no table, which is the `@profile_columns`
-  # shape below, not this one.
+  # #2053 (organization images) adds one entry; #2055 (review covers) does
+  # **not** — a review's cover is columns on the review row with no token and
+  # no table, which is the `@profile_columns` shape below, not this one.
   @mirrored %{
     "job_posting_image" => %{
       fields: ~w(
@@ -83,6 +93,26 @@ defmodule Vutuv.Images do
       schema: Vutuv.Jobs.JobPostingImage,
       store: Vutuv.JobPostingImageStore,
       # The version the backfill's file probe asks the store for.
+      preview: "thumb"
+    },
+    # The largest of the four (#2052). Almost every column of `post_images` is
+    # here, because the third release drops that table and the second adds no
+    # migration — a column left out now is a column lost then. `crop` is not
+    # new: a profile picture's crop rectangle column holds exactly what a
+    # photo's does. What stays behind is `inserted_at`, and the release that
+    # moves the readers has to answer for it; the reasoning and the one reader
+    # that cares are in `docs/architecture/images.md`.
+    "post_image" => %{
+      fields: ~w(
+        token user_id post_id alt caption position width height content_type size_bytes crop
+        camera lens focal_length aperture shutter iso taken_at has_gps
+        show_camera_info download_original download_exact moderation
+      )a,
+      schema: Vutuv.Posts.PostImage,
+      store: Vutuv.PostImageStore,
+      # `thumb` is derived for every stored photo and is the smallest of them;
+      # `lite` and `xl` are deliberately not, because both are allowed to be
+      # missing on a picture the regeneration has not reached.
       preview: "thumb"
     }
   }
@@ -126,11 +156,7 @@ defmodule Vutuv.Images do
   """
   def serving(kind) when kind in @profile_kinds, do: :static
 
-  # Every byte of a job-posting picture already goes through
-  # `VutuvWeb.JobPostingImageController`, which asks whether the reader may see
-  # the posting — so the row is the off switch, and this release changes
-  # nothing about how one is served.
-  def serving("job_posting_image"), do: :proxy
+  def serving(kind) when kind in @proxy_kinds, do: :proxy
 
   def serving(kind),
     do:
@@ -642,9 +668,9 @@ defmodule Vutuv.Images do
   upload, a picture the editor removed on save, the pending sweep, a rejected
   scan). One statement, and a no-op for an empty list.
 
-  A posting or a member that is deleted needs no call: `images.job_posting_id`
-  and `images.user_id` both cascade, exactly as the gallery table's own columns
-  do.
+  A parent or a member that is deleted needs no call: `images.job_posting_id`,
+  `images.post_id` and `images.user_id` all cascade, exactly as the gallery
+  table's own columns do.
   """
   def forget(_kind, []), do: :ok
 

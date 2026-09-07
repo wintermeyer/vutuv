@@ -66,8 +66,8 @@ defmodule Vutuv.Images.Backfill do
       avatar and cover today; a review's cover when #2055 lands, which is this
       shape and not the other one), joined by a pointer.
     * `%{gallery: …}` — the truth is a **row of the picture's own**, joined by
-      the `token` both sides carry. A job-posting picture since #2054, post
-      photos and organization images to follow.
+      the `token` both sides carry. A job-posting picture since #2054 and a
+      post photo since #2052; organization images to follow.
 
   Everything around them is shared: the keyset walk, the class vocabulary, the
   repair, the sample, the printing and both operator commands. A gallery kind
@@ -75,9 +75,10 @@ defmodule Vutuv.Images.Backfill do
   names the classes it can produce, so the report never prints a zero for a
   class that kind cannot have.
 
-  **A gallery kind adds nothing here at all**: `source/1` builds itself from
-  `Vutuv.Images.mirror_source/1`, which is the one registry, so a kind cannot
-  be mirrored on the request path and invisible to this pass. The one thing to
+  **A gallery kind adds nothing here at all** — #2052 added not a line:
+  `source/1` builds itself from `Vutuv.Images.mirror_source/1`, which is the one
+  registry, so a kind cannot be mirrored on the request path and invisible to
+  this pass. The one thing to
   check when the next kind arrives is the store's `version_path/2` signature —
   `Vutuv.PostImageStore` and `Vutuv.JobPostingImageStore` take the row,
   `Vutuv.OrganizationImageStore` takes the token, and

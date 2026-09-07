@@ -18,10 +18,12 @@ defmodule Vutuv.Images.Image do
     belongs_to(:user, Vutuv.Accounts.User)
 
     # The parent a gallery picture belongs to. Nil for a profile picture, and
-    # nil for a posting image whose posting has not been saved yet. One column
-    # per parent kind, as #2013's migration asked for; the post and the
-    # organization add theirs when they move (#2052, #2053).
+    # nil for a picture whose parent has not been saved yet — a posting image
+    # in the job editor, a photo in the composer. One column per parent kind,
+    # as #2013's migration asked for; the organization adds hers when she moves
+    # (#2053).
     belongs_to(:job_posting, Vutuv.Jobs.JobPosting)
+    belongs_to(:post, Vutuv.Posts.Post)
 
     field(:token, :string)
 
@@ -40,15 +42,34 @@ defmodule Vutuv.Images.Image do
     field(:frozen_at, :naive_datetime)
 
     # What a gallery row holds besides the above, copied column for column from
-    # the table it mirrors (`job_posting_images` today; `post_images` and
-    # `organization_images` carry the same six under the same names). Nil for a
-    # profile picture, which has none of them.
+    # the table it mirrors (`job_posting_images` and `post_images` today;
+    # `organization_images` carries the same six under the same names). Nil for
+    # a profile picture, which has none of them.
     field(:alt, :string)
     field(:position, :integer)
     field(:width, :integer)
     field(:height, :integer)
     field(:content_type, :string)
     field(:size_bytes, :integer)
+
+    # Picture attributes the post photo brought in (#2052) and the kinds that
+    # have them share, the way `crop` above is shared: the caption shown under
+    # the picture, the whitelisted camera facts `Vutuv.Uploads.Exif` parses at
+    # upload, the fact (never the coordinates) that the upload carried a
+    # location, and the author's three per-photo switches. Nil on a row of a
+    # kind that has no such thing.
+    field(:caption, :string)
+    field(:camera, :string)
+    field(:lens, :string)
+    field(:focal_length, :string)
+    field(:aperture, :string)
+    field(:shutter, :string)
+    field(:iso, :integer)
+    field(:taken_at, :naive_datetime)
+    field(:has_gps, :boolean)
+    field(:show_camera_info, :boolean)
+    field(:download_original, :boolean)
+    field(:download_exact, :boolean)
 
     timestamps()
   end

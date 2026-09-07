@@ -62,6 +62,7 @@ defmodule Vutuv.Posts do
   alias Vutuv.Fediverse.PostRepost, as: FediversePostRepost
   alias Vutuv.Fediverse.RemoteAccount
   alias Vutuv.Fediverse.RemotePost
+  alias Vutuv.Images
   alias Vutuv.Keyset
   alias Vutuv.Mentions
   alias Vutuv.Moderation.ImageScans
@@ -153,6 +154,16 @@ defmodule Vutuv.Posts do
   @thread_skeleton_limit 1000
   @pending_max_age_hours 24
   @max_tags 5
+
+  # A post photo's name in the shared `images` table, in `Vutuv.Images.kinds/0`
+  # and in `Vutuv.Moderation.ImageScans` — one string for all three. Since
+  # #2052 every write to `post_images` keeps a row there in step with the row
+  # here (the "Images" section below); the deploy that moves the readers onto
+  # that row retires the double write. Declared up here because the first use
+  # is `attach_images!/2`, far above that section — a module attribute read
+  # before it is set is `nil`.
+  @image_kind "post_image"
+
   # How many likers the permalink names before the rest fold into the avatar
   # stack's `+N` chip (issue #1233). The same cap the row and the agent-format
   # siblings use, so both name the same people.
@@ -607,6 +618,10 @@ defmodule Vutuv.Posts do
       {:ok, updated} ->
         if removed != [] do
           Repo.delete_all(from(i in PostImage, where: i.id in ^Enum.map(removed, & &1.id)))
+          # The mirror rows go with them, in the same transaction and in one
+          # statement. The files follow only after the commit (`run_update/3`),
+          # so a rolled-back edit still has both rows and both files.
+          :ok = Images.forget(@image_kind, Enum.map(removed, & &1.token))
         end
 
         attach_images!(updated, image_ids)
@@ -622,6 +637,11 @@ defmodule Vutuv.Posts do
   `{:post_deleted, …}` to the author's followers' feeds and the post's topic
   (so feed entries drop and action bars empty). When the post was a reply, its
   parent's fresh reply count is re-broadcast.
+
+  The mirror rows in `images` go with the same cascade — `images.post_id`
+  carries the post's `on_delete: :delete_all` exactly as `post_images.post_id`
+  does — so there is nothing to forget by hand here, and the same is true of
+  `Vutuv.Accounts.delete_user/1` through `images.user_id`.
   """
   def delete_post(%Post{} = post) do
     # `:remote_reply_ref` is loaded before the delete on purpose: the sidecar row
@@ -907,25 +927,37 @@ defmodule Vutuv.Posts do
     now = NaiveDateTime.utc_now(:second)
     uploader_id = post.user_id || post.acting_user_id
 
-    image_ids
-    |> Enum.with_index()
-    |> Enum.each(fn {id, position} ->
-      # Belt and braces for a post that somehow names neither: rolling back
-      # beats handing the same nil to the query below.
-      if is_nil(uploader_id), do: Repo.rollback(:invalid_images)
+    attached =
+      image_ids
+      |> Enum.with_index()
+      |> Enum.map(fn {id, position} ->
+        # Belt and braces for a post that somehow names neither: rolling back
+        # beats handing the same nil to the query below.
+        if is_nil(uploader_id), do: Repo.rollback(:invalid_images)
 
-      {count, _} =
-        Repo.update_all(
-          from(i in PostImage,
-            where:
-              i.id == ^id and i.user_id == ^uploader_id and
-                (is_nil(i.post_id) or i.post_id == ^post.id)
-          ),
-          set: [post_id: post.id, position: position, updated_at: now]
-        )
+        # RETURNING the attached row, so the mirror learns the new parent and
+        # position from the same statement rather than reading them back.
+        updated =
+          Repo.update_all(
+            from(i in PostImage,
+              where:
+                i.id == ^id and i.user_id == ^uploader_id and
+                  (is_nil(i.post_id) or i.post_id == ^post.id),
+              select: i
+            ),
+            set: [post_id: post.id, position: position, updated_at: now]
+          )
 
-      if count != 1, do: Repo.rollback(:invalid_images)
-    end)
+        case updated do
+          {1, [image]} -> image
+          _none_or_many -> Repo.rollback(:invalid_images)
+        end
+      end)
+
+    # One upsert for the whole gallery, however many photos it holds — a post
+    # with ten pictures costs one statement here, not ten. Inside the caller's
+    # transaction, so an interrupted save leaves neither half.
+    :ok = Images.mirror(@image_kind, attached)
   end
 
   # Claims the clip for the post (issue #1906) the way the images are claimed:
@@ -6532,24 +6564,38 @@ defmodule Vutuv.Posts do
 
   # Fresh images start in AI-moderation limbo (owner-only, placecard for
   # everyone else) until the scan releases or deletes them.
+  #
+  # `Images.write_mirrored/2` writes the row here and its mirror in the shared
+  # `images` table in one transaction (issue #2052), and hands back exactly
+  # what `Repo.insert/1` would have.
   defp insert_scanned_image(user, token, meta) do
     insert =
-      %PostImage{
-        user_id: user.id,
-        token: token,
-        moderation: ImageScans.initial_state()
-      }
-      |> Ecto.Changeset.change(meta)
-      |> Repo.insert()
+      Images.write_mirrored(@image_kind, fn ->
+        %PostImage{
+          user_id: user.id,
+          token: token,
+          moderation: ImageScans.initial_state()
+        }
+        |> Ecto.Changeset.change(meta)
+        |> Repo.insert()
+      end)
 
     with {:ok, image} <- insert do
-      ImageScans.enqueue("post_image", image.id, user.id)
+      ImageScans.enqueue(@image_kind, image.id, user.id)
       {:ok, image}
     end
   end
 
+  # Every edit to a photo's row goes through here: the update and its mirror in
+  # the shared `images` table, in one transaction (issue #2052). Named rather
+  # than spelled at each of the three call sites, so "an edit writes both rows"
+  # has one place to read and one place for the release that retires the
+  # double write to delete.
+  defp mirrored_update(changeset),
+    do: Images.write_mirrored(@image_kind, fn -> Repo.update(changeset) end)
+
   def update_image_alt(%PostImage{} = image, alt) do
-    image |> PostImage.alt_changeset(%{alt: alt}) |> Repo.update()
+    image |> PostImage.alt_changeset(%{alt: alt}) |> mirrored_update()
   end
 
   @doc """
@@ -6592,11 +6638,14 @@ defmodule Vutuv.Posts do
   the cleaned label.
   """
   def update_image_settings(%PostImage{} = image, params) do
+    # The changeset is built before the transaction opens: both guards below
+    # stat the stored original, and disk I/O inside a transaction holds a
+    # connection open for it.
     image
     |> PostImage.settings_changeset(params)
     |> force_exact_when_uncleanable(image)
     |> block_exact_when_cropped(image)
-    |> Repo.update()
+    |> mirrored_update()
   end
 
   defp force_exact_when_uncleanable(changeset, image) do
@@ -6638,10 +6687,12 @@ defmodule Vutuv.Posts do
 
     case PostImageStore.apply_crop(image, crop) do
       {:ok, dimensions} ->
+        # The served frame, the dimensions that describe it and the exact-file
+        # download that has to go with them move together into both rows.
         image
         |> Ecto.Changeset.change(Map.put(dimensions, :crop, crop))
         |> drop_exact_for_crop(crop)
-        |> Repo.update()
+        |> mirrored_update()
 
       {:error, _reason} = error ->
         error
@@ -6742,7 +6793,14 @@ defmodule Vutuv.Posts do
     {count, _} =
       Repo.delete_all(from(i in PostImage, where: i.id == ^image.id and is_nil(i.post_id)))
 
-    if count == 1, do: PostImageStore.delete(image.token)
+    if count == 1 do
+      # Row, mirror, files — in that order, so an interruption can only ever
+      # leave something a sweep collects (an orphan mirror row, then orphan
+      # files), never a row naming bytes that are gone.
+      :ok = Images.forget(@image_kind, [image.token])
+      PostImageStore.delete(image.token)
+    end
+
     count == 1
   end
 

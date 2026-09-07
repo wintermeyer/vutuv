@@ -5,13 +5,14 @@ defmodule Mix.Tasks.Vutuv.Images.Backfill do
   Reconciles every picture with its row in the shared `images` table — the
   **contract** half of issue #2013 for profile pictures and covers, and of
   #2015 for the kinds that still keep a table of their own (a job-posting
-  picture since #2054). See `Vutuv.Images.Backfill`.
+  picture since #2054, a post photo since #2052). See `Vutuv.Images.Backfill`.
 
       mix vutuv.images.backfill              # reconcile every kind, then check
       mix vutuv.images.backfill --dry-run    # report what would change
       mix vutuv.images.backfill --check      # check only, write nothing
       mix vutuv.images.backfill --only cover
       mix vutuv.images.backfill --only job_posting_image
+      mix vutuv.images.backfill --only post_image
       mix vutuv.images.backfill --from 019f0000-0000-7000-8000-000000000000
 
   Moves no file and changes no URL: what a picture already lives in stays the

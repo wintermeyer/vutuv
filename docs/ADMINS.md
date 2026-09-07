@@ -698,7 +698,8 @@ Run on the server, against the release:
   interrupted (a deploy stopping the slot mid-run leaves every picture it
   reached already correct). It covers profile pictures and covers, and the
   kinds that still keep a table of their own — a job-posting picture since the
-  release that added `--only job_posting_image`. The release that moved every
+  release that added `--only job_posting_image`, a post photo since the one
+  that added `--only post_image`. The release that moved every
   avatar and cover URL onto those rows (issue #2027) does **not** require it —
   a picture with no row is still served from the member's own columns — but run
   it before the upgrade after that one, which removes that fallback. Until it

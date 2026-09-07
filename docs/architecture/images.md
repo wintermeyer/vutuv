@@ -424,7 +424,8 @@ A post photo, an organization image, a job-posting picture and a review cover
 each kept a table and an uploader of their own, so the `image` report type and
 the freeze knew one kind only. They move one kind at a time and three releases
 per kind (the sequence is spelled out below), smallest first — a **job-posting
-picture** went first (#2054) precisely to settle the shape.
+picture** went first (#2054) precisely to settle the shape, and the **post
+photo** followed (#2052) as the largest of them.
 
 **Three of the four are the same shape; the review cover is not.** A post
 photo, an organization image and a job-posting picture each have a row of their
@@ -435,7 +436,7 @@ profile picture's shape, not this one — #2055 lands on `member_columns/0`'s si
 of the fence, and `Vutuv.Images.Backfill`'s `%{cols: …}` source is what it
 extends. One thing it does share with the three: a report cannot name one of
 its pictures until the kind has a strategy in `Vutuv.Images`'s `@takedown`.
-What #2052 and #2053 copy from here is everything below.
+What #2053 copies from here is everything below.
 
 **The token is the join key, not a pointer.** #2013 added
 `users.avatar_image_id` because a member row had no stable handle of its own;
@@ -453,19 +454,52 @@ other kind has a posting) plus `alt`, `position`, `width`, `height`,
 `content_type` and `size_bytes`, taken with the types `job_posting_images`
 holds them at (`alt` and `content_type` varchar(255), the rest plain
 `integer`). `post_images` and `organization_images` carry those same six under
-the same names, so #2052 and #2053 add their own parent column plus whatever
-they hold beyond the six — a post photo also brings `caption`, `crop`, seven
-EXIF columns and its download flags. The `images_profile_kind_has_owner` check
+the same names, so each further kind adds only its own parent column plus
+whatever it holds beyond the six. The `images_profile_kind_has_owner` check
 constraint was **extended** rather than the nullable `user_id` widened, which is
 what #2013's migration asked for; the parent index is **partial**
 (`WHERE job_posting_id IS NOT NULL`), because every other kind's row is NULL
 there and the waste would multiply by four — Postgres proves `IS NOT NULL` from
 the cascade's strict `= $1` and uses it (measured: 16 kB against 48 kB).
 
+**The post photo is the same shape carrying much more (#2052).** It added
+`post_id` (nullable and partially indexed, like the posting's) and thirteen
+columns of its own: `caption`, the seven camera facts, `has_gps` and the
+author's three switches. `crop` is not among them — a profile picture's crop
+rectangle column holds exactly what a photo's does. **Almost every column of
+`post_images` is mirrored, and the reason is the third release rather than this
+one**: it drops that table, the second adds no migration, so a column left out
+now is a column lost then. Three types are worth naming. `caption` is `:text`
+on both sides, because a photographer's note runs to 1,000 characters through
+the composer and a varchar(255) copy would raise Postgres 22001 from
+`Vutuv.Images.mirror/2` — on the *write* path, where no changeset validation
+stands between the member and the error. The camera facts are display
+primitives in varchar(255) (`f/1.4`, `1/250 s`, `35 mm`), because that is the
+notation they are rendered in. And the four flags are `NOT NULL DEFAULT false`
+on `post_images` but plain nullable booleans here: an avatar row has no opinion
+about a camera panel, and NULL is how it says so.
+
+**One column stays behind, and it has a consequence for step 2: `inserted_at`.**
+The mirror stamps its own (`mirror/2` mints the row), which for a photo
+uploaded from #2052 on agrees with the photo's to the second — but a
+*backfilled* row's says when the backfill ran. The one reader that cares is the
+pixelated stand-in the AI gate shows while a picture waits:
+`Vutuv.Posts.image_pixelated_url/1` measures its window
+(`Vutuv.Moderation.Pixelation.window_seconds/0`) from the **upload** time, and a
+row that claims to be minutes old when the photo is months old would put an
+expired mosaic back on the page. So the release that moves the readers has to
+take that time from the photo rather than from the mirror — either by carrying
+`inserted_at` through `mirror/2` for this kind, or by leaving the window on the
+old row until the table goes. Nothing today reads it, which is why it is
+written down here rather than fixed there.
+
 **The double write is one upsert and one delete.**
 `Vutuv.Images.mirror/2` takes one gallery row or a list of them and upserts on
 the token — one statement however many, so saving ten pictures costs one — and
-`Vutuv.Images.forget/2` deletes by token. `Vutuv.Images.write_mirrored/2` pairs
+`Vutuv.Images.forget/2` deletes by token. The attach path is where the list
+form earns itself: `Vutuv.Posts.attach_images!/2` claims each photo with its
+own `UPDATE … RETURNING`, because each carries a different `position`, then
+hands the whole gallery to one upsert. `Vutuv.Images.write_mirrored/2` pairs
 a write with its mirror in one transaction, which is the door a context's own
 insert and update go through. `Vutuv.Images.mirror_source/1` is the **one**
 per-kind registry — the copied columns, the source schema, the store — so a
@@ -473,31 +507,45 @@ kind cannot be mirrored on the request path and invisible to the backfill,
 whose check would otherwise print *"Safe to cut"* for a kind it never looked
 at. The names are identical on both sides, so the copy is a per-field
 `Map.fetch!/2`: a listed name the source lacks raises. The other direction — a
-column added to `job_posting_images` and never listed — nothing can see, so a
-drift test compares the schema against the list and fails the build.
+column added to a mirrored table and never listed — nothing can see, so a
+drift test over every mirrored kind compares each schema against its list and
+fails the build, which also covers the kinds still to come the day their entry
+lands.
 
-Every place that writes a job-posting picture goes through one of those: the
-upload and the alt edit (`write_mirrored/2`), the attach and detach on save,
-the pending sweep, and the AI gate's approve and reject in
+Every place that writes such a picture goes through one of those: the upload
+and every edit (`write_mirrored/2` — for a photo that is the alt text, the
+per-photo panel and the crop), the attach and detach on save, the pending
+sweep, and the AI gate's approve and reject in
 `Vutuv.Moderation.ImageSubjects` — which asks `Vutuv.Images.mirrored?/1` first,
 so the next kind's release is one entry in `Vutuv.Images` and nothing there. A
-deleted posting or member needs no call: `images.job_posting_id` and
-`images.user_id` cascade exactly as the gallery table's own columns do. **The
-`frozen_at` column is deliberately outside the upsert's replace list**, so an
-ordinary write can never lift a takedown.
+deleted parent or member needs no call: `images.job_posting_id`,
+`images.post_id` and `images.user_id` cascade exactly as the gallery table's own
+columns do. **The `frozen_at` column is deliberately outside the upsert's
+replace list**, so an ordinary write can never lift a takedown.
 
-**What an interruption leaves.** The upload and the alt edit are atomic. The
-attach-and-prune on save is not, and never was — it runs after the save — so a
-slot dying between an attach and its mirror leaves a `mismatched_row` (the
-parent disagrees) and one between a prune and its `forget/2` leaves an
-`orphan_row`. Both are classes the backfill names and repairs; neither is
-invisible.
+**What an interruption leaves, and it differs by kind.** For a job-posting
+picture the upload and the alt edit are atomic, but the attach-and-prune on
+save is not and never was — it runs after the save — so a slot dying between an
+attach and its mirror leaves a `mismatched_row` (the parent disagrees) and one
+between a prune and its `forget/2` leaves an `orphan_row`. Both are classes the
+backfill names and repairs; neither is invisible. **A post photo has neither
+window**: `Vutuv.Posts` claims and prunes its photos *inside* the save
+transaction (`attach_images!/2` and `apply_update!/3`), so the mirror rides
+along in it and an interrupted save leaves neither half. The one write outside
+a transaction there is the pending sweep, which deletes row, mirror and files
+in that order — an interruption leaves an orphan mirror row, then orphan files,
+never a row naming bytes that are gone.
 
 **Nothing reads the new row yet, and that is the whole of the expand half.**
-Every URL is the one it was (`/job_posting_images/<token>/<version>.avif`),
-`VutuvWeb.JobPostingImageController` still authorizes off `job_posting_images`,
-and the edit form still renders from `posting.images` — so no render path pays
-a query for the mirror. The consequence to know: `Vutuv.Images.freeze/1`,
+Every URL is the one it was (`/job_posting_images/<token>/<version>.avif`,
+`/post_images/<token>/<version>.avif` and the photo's `og.jpg`, `original.orig`
+and pixelated siblings), the authorizing proxies still work off the old tables
+(`VutuvWeb.JobPostingImageController`, `VutuvWeb.PostImageController`), and the
+forms, the feed, the API and the agent documents still render from
+`posting.images` and `post.images` — so no render path pays a query for the
+mirror, which matters most on a feed that draws many photos at once. No file
+under `lib/vutuv_web`, `lib/vutuv/uploads` or `lib/vutuv/uploaders` changed for
+either kind. The consequence to know: `Vutuv.Images.freeze/1`,
 `unfreeze/1` and `purge/1` **raise** for such a row rather than half-hiding
 it, and `Vutuv.Moderation` refuses a report that names one
 (`Vutuv.Images.takedown_ready?/1`), because a case opened on a row nothing
@@ -506,15 +554,17 @@ reports the posting instead, which is all there was before the row existed.
 That gate reads `@takedown`, the map naming which kinds have a takedown at all,
 so it turns yes in step 2 below and not a moment earlier (issue #2057).
 
-**A gallery kind moves in three releases, and #2054 was the first.** Each is
-N-1 safe on its own and no two can be merged; this milestone has already paid
-for an off-by-one in that count once, in #2027.
+**A gallery kind moves in three releases.** #2054 was the first for
+`job_posting_image` and #2052 the first for `post_image`. Each is N-1 safe on
+its own and no two can be merged; this milestone has already paid for an
+off-by-one in that count once, in #2027.
 
-1. **Expand**: what #2054 shipped for `job_posting_image`. Every path that
-   touches the picture writes and drops the `images` row beside the old one,
-   while every reader, and the truth, stay in `job_posting_images`. Nothing
-   here can take such a picture offline yet: `freeze/1` raises for the row and
-   a report cannot name it. Between this release and the next, an operator runs
+1. **Expand**: what #2054 shipped for `job_posting_image` and #2052 for
+   `post_image`. Every path that touches the picture writes and drops the
+   `images` row beside the old one, while every reader, and the truth, stay in
+   the kind's own table. Nothing here can take such a picture offline yet:
+   `freeze/1` raises for the row and a report cannot name it. Between this
+   release and the next, an operator runs
    `mix vutuv.images.backfill --only <kind>` and reads its check; after step 2
    the two copies can no longer be compared, so this is the last chance.
 2. **Move the readers, the writes and the takedown onto the row.** The proxy,
@@ -530,14 +580,14 @@ for an off-by-one in that count once, in #2027.
    the report form on these pictures. No migration in this release: the old
    table is still standing and the release one step back is still reading and
    writing it.
-3. **Contract**: the migration that drops `job_posting_images`, and nothing
+3. **Contract**: the migration that drops the kind's own table, and nothing
    else. Step 2 is what stopped using the table, and step 2 is what serves
    while this migration runs.
 
-**This kind needs no bridge.** #2027 needed one because it moved every reader
-onto the row in the same deploy as the row's first appearance, so a picture the
-backfill had not reached would have rendered as no picture at all. Here no
-reader has moved: a job-posting picture with no mirror row is served exactly as
+**No expand release needs a bridge.** #2027 needed one because it moved every
+reader onto the row in the same deploy as the row's first appearance, so a
+picture the backfill had not reached would have rendered as no picture at all.
+Here no reader has moved: a picture with no mirror row is served exactly as
 before, by its own table, so an installation that never runs the backfill sees
 nothing change. The bridge question belongs to the release that moves the
 readers, and it will have a simpler answer than #2027's — the old row *is* the
