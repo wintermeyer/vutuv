@@ -173,10 +173,25 @@ reported. `frozen_at` is deliberately **not** in that upsert's replace list for
 the same reason. The refusal reads `frozen_at`, so it is about the **hold** and
 not about the case: a picture a house-rule report only flagged can be replaced,
 and that replacement overwrites the reported bytes, so
-`Vutuv.Accounts.store_new_image/7` settles the open case as `resolved_deleted`
+`Vutuv.Accounts.store_new_image/8` settles the open case as `resolved_deleted`
 (the same outcome the owner's own "remove it" reaches). Otherwise an admin's
 ruling — which for a picture is the one ruling that *deletes* — would land on
 whatever the member put there afterwards.
+
+**Only if the bytes really changed** (issue #2035). That settle first shipped on
+the upload itself, and re-uploading the **same file** then closed the case,
+dropped it out of the admin queue and told the reporters it was resolved — a
+door out of a complaint that cost the owner nothing, in the categories (`family`,
+`bullying`, `other`) where nothing was hidden in the first place, and equally in
+the window a copyright notice from outside spends `flagged` while its notifier
+has not confirmed it yet. So `store_new_image/8` reads the row's fingerprint
+**before** the upsert replaces it and settles the case only when the new one
+differs. The fingerprint is `sha256(original <> crop)`
+(`Vutuv.Uploads.content_hash/2`), so a re-crop of the same original counts — the
+picture everyone sees really is a different one — while the same file uploaded
+again does not, and the case stays exactly where it was. Nothing is said to the
+member about it: the case never promised that replacing the picture settles it,
+and their upload succeeded.
 
 ### Only a copyright notice hides a picture (issue #2030)
 

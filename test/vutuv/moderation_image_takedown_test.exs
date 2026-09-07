@@ -295,14 +295,58 @@ defmodule Vutuv.ModerationImageTakedownTest do
       image = avatar_image(owner)
       {:ok, case_record} = Moderation.report_content(reporter, image, %{"category" => "family"})
 
-      {:ok, replaced} = Accounts.update_user(reload(owner), %{avatar: jpeg_upload("other.jpg")})
+      # A different colour, not just a different name: `jpeg_upload/2` encodes
+      # deterministically, so a rename alone is the byte-identical re-upload of
+      # the test below.
+      {:ok, replaced} =
+        Accounts.update_user(reload(owner), %{avatar: jpeg_upload("other.jpg", [220, 60, 30])})
 
       assert replaced.avatar == "other.jpg"
       assert Repo.get!(ImageRow, image.id).file == "other.jpg"
+      assert replaced.avatar_fingerprint != owner.avatar_fingerprint
 
       # And the case is settled with them: the reported bytes are gone, so
       # leaving it open would point an admin's ruling at a picture nobody
       # reported.
+      assert Repo.get!(Moderation.Case, case_record.id).status == "resolved_deleted"
+    end
+
+    # Issue #2035: the settle above is earned by the bytes changing, not by an
+    # upload happening. Putting the very same file back replaced nothing, so it
+    # must not close the report — that was a way to make a complaint disappear
+    # without an admin ever seeing it, and it cost the owner nothing.
+    test "re-uploading the identical picture does not settle the case",
+         %{owner: owner, reporter: reporter} do
+      image = avatar_image(owner)
+      {:ok, case_record} = Moderation.report_content(reporter, image, %{"category" => "family"})
+      queue_before = Moderation.open_queue_count()
+
+      {:ok, same} = Accounts.update_user(reload(owner), %{avatar: jpeg_upload()})
+
+      # Same file in, same fingerprint out: the row still names the bytes the
+      # report is about.
+      assert same.avatar_fingerprint == owner.avatar_fingerprint
+      assert Repo.get!(ImageRow, image.id).fingerprint == owner.avatar_fingerprint
+
+      assert Repo.get!(Moderation.Case, case_record.id).status == "flagged"
+      assert Moderation.open_queue_count() == queue_before
+    end
+
+    # The crop is folded into the fingerprint, so a re-crop of the same original
+    # is a different served picture — and everybody who follows the report's
+    # link now sees different bytes.
+    test "re-cropping the same original counts as a replacement",
+         %{owner: owner, reporter: reporter} do
+      image = avatar_image(owner)
+      {:ok, case_record} = Moderation.report_content(reporter, image, %{"category" => "family"})
+
+      {:ok, cropped} =
+        Accounts.update_user(reload(owner), %{
+          "avatar" => jpeg_upload(),
+          "avatar_crop" => "0.25,0,0.5,1"
+        })
+
+      assert cropped.avatar_fingerprint != owner.avatar_fingerprint
       assert Repo.get!(Moderation.Case, case_record.id).status == "resolved_deleted"
     end
   end
