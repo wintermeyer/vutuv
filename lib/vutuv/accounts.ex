@@ -2690,10 +2690,12 @@ defmodule Vutuv.Accounts do
   }
 
   # The columns a member-browser row needs: the listing fields (the pointer at
-  # the avatar's row in the shared `images` table, name parts, slug) plus the
-  # timestamps and the status flags the table renders.
+  # the avatar's row in the shared `images` table, plus the two columns
+  # `Vutuv.Images.member_image/2`'s bridge reads for a member the backfill has
+  # not reached, name parts, slug) plus the timestamps and the status flags the
+  # table renders.
   @admin_listing_fields ~w(id first_name last_name honorific_prefix honorific_suffix username
-    avatar_image_id updated_at inserted_at email_confirmed? admin?
+    avatar_image_id avatar avatar_fingerprint updated_at inserted_at email_confirmed? admin?
     identity_verified? frozen_at suspended_until deactivated_at unreachable_at
     moderation_reason)a
 

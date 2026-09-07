@@ -647,8 +647,9 @@ defmodule Vutuv.Uploads do
   # A re-derive writes a fresh fingerprint onto both halves: the picture's row
   # in the shared `images` table, which is what every URL is built from, and the
   # member row's column, which the release one step back is still serving from.
-  # The row is the one the re-derive just read, so there is always one to
-  # update, and creating one is never a side effect of a deploy.
+  # A picture the backfill has not reached has no row (it came through
+  # `Vutuv.Images.member_image/2`'s bridge, whose id is nil), so it costs no
+  # statement there — creating one is never a side effect of a deploy.
   defp persist_fingerprint(image, user, fingerprint, config) do
     with {:ok, saved} <-
            user

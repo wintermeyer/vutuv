@@ -127,10 +127,14 @@ the resulting ~200px rail width. --%>
         <% block_confirm = VutuvWeb.BlockText.confirm(@user.username) %>
         <%!-- A picture is reportable in its own right (issue #2012), so a rights
         holder does not have to report the whole profile to get a stolen photo
-        taken down. Only a picture a reader can actually see: `shown_image/2`
-        resolves the row once, and its id is what the form names. --%>
-        <% reportable_avatar = Vutuv.Images.shown_image(@user, "avatar") %>
-        <% reportable_cover = Vutuv.Images.shown_image(@user, "cover") %>
+        taken down. Only a picture a reader can actually see, and only one with
+        a real row: the form names a picture by its id, and
+        `Vutuv.Images.member_image/2`'s bridge answers with an unsaved row
+        (`id: nil`) for a member the backfill has not reached. Those keep the
+        profile's own Report above, which is where a picture could be reported
+        before #2012 anyway. --%>
+        <% reportable_avatar = Vutuv.Images.reportable_image(@user, "avatar") %>
+        <% reportable_cover = Vutuv.Images.reportable_image(@user, "cover") %>
         <%!-- The action cluster is pinned to the right of the avatar row
         (ml-auto), one short row. It now holds only the follow pill: the ⋯ menu
         moved down to the name row, so the pill gets the full width beside the

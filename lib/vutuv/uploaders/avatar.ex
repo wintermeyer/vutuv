@@ -10,12 +10,14 @@ defmodule Vutuv.Avatar do
 
       <uploads_dir_prefix>/avatars/<user.id>/<username>-<version>-<fingerprint>.avif
 
-  The fingerprint (`sha256(original)[0..11]`) is stored in `:avatar_fingerprint`;
-  the on-disk filename equals the URL's last segment, so the existing nginx
-  `alias` serves it directly (no rewrite). A row with no fingerprint has not been
-  migrated to this scheme yet and falls back to the legacy
-  `avatar_<version>.avif?v=...` URL (see `Vutuv.Uploads`); a username change
-  re-derives the files under the new handle (`reslug/1`).
+  The fingerprint (`sha256(original)[0..11]`) is read off the picture's row in
+  the shared `images` table (`Vutuv.Images.member_image/2`, since #2027) and
+  still written to `:avatar_fingerprint` beside it; the on-disk filename equals
+  the URL's last segment, so the existing nginx `alias` serves it directly (no
+  rewrite). A picture with no fingerprint has not been migrated to this scheme
+  yet and falls back to the legacy `avatar_<version>.avif?v=...` URL (see
+  `Vutuv.Uploads`); a username change re-derives the files under the new handle
+  (`reslug/1`).
 
   The uploaded **original** is kept verbatim (format + metadata) so better
   formats can be re-derived later (`Vutuv.Uploads.Regenerator`), but in a
@@ -32,7 +34,7 @@ defmodule Vutuv.Avatar do
   The store/serve/url/regenerate pipeline is shared with `Vutuv.Cover` and
   lives in `Vutuv.Uploads`; this module supplies the avatar layout (`@config`)
   and the avatar-only extras: the default inline-SVG fallback, `binary/2` for
-  the vCard export and `user_url/2`.
+  the vCard export and `og_jpeg/1` for the link-preview endpoint.
   """
 
   alias Vutuv.Images

@@ -219,6 +219,74 @@ defmodule Vutuv.Images.ReaderMoveTest do
     end
   end
 
+  describe "a member the backfill has not reached" do
+    # The bridge (`Vutuv.Images.member_image/2`). Nothing enforces that an
+    # operator ran `mix vutuv.images.backfill` before taking this release — it
+    # is not in `scripts/deploy.sh`, not in boot, not in `/health` — so a
+    # picture with no row has to keep working off the member row's own columns.
+    # Without the bridge every one of these answers "no picture", silently.
+    setup %{user: user} do
+      user = with_avatar(user)
+      fingerprint = user.avatar_fingerprint
+
+      # Exactly the state an un-backfilled installation is in: the columns are
+      # filled, the row and the pointer are not.
+      {1, _} = Repo.delete_all(from(i in Images.Image, where: i.user_id == ^user.id))
+
+      {1, _} =
+        Repo.update_all(from(u in User, where: u.id == ^user.id),
+          set: [avatar_image_id: nil]
+        )
+
+      {:ok, user: Repo.get!(User, user.id), fingerprint: fingerprint}
+    end
+
+    test "still gets their avatar, at the address it always had", ctx do
+      %{user: user, fingerprint: fingerprint} = ctx
+
+      assert Vutuv.Avatar.url(user, :medium) ==
+               "/avatars/#{user.id}/#{user.username}-medium-#{fingerprint}.avif"
+
+      assert Vutuv.Avatar.picture(user).src == Vutuv.Avatar.url(user, :medium)
+      assert Vutuv.Avatar.src(user, :thumb) == Vutuv.Avatar.url(user, :thumb)
+      assert {:ok, <<0xFF, 0xD8, _rest::binary>>} = Vutuv.Avatar.og_jpeg(user)
+      assert Images.shown_file(user, "avatar") == "selfie.jpg"
+    end
+
+    test "the actor document still advertises the icon", %{user: user} do
+      {:ok, actor} = Vutuv.Fediverse.ensure_actor(user)
+
+      assert Docs.actor(user, actor)["icon"]["url"] ==
+               "#{VutuvWeb.Endpoint.url()}/#{user.username}/avatar.jpg"
+    end
+
+    # The one thing the bridge cannot answer: a report names a picture by its
+    # row id, and a bridged picture has none. It falls back to reporting the
+    # whole profile until the backfill runs.
+    test "cannot be reported on its own, having no row to name", %{user: user} do
+      assert %Images.Image{id: nil} = Images.member_image(user, "avatar")
+      assert Images.reportable_image(user, "avatar") == nil
+    end
+
+    # The narrow listing select has to carry what the bridge reads, or a whole
+    # page of members loses its faces while single-member pages keep theirs.
+    # Asserted against the URL string rather than against another call that
+    # would go nil in the same breath.
+    test "a listing row bridges too, so a whole page keeps its faces", ctx do
+      %{user: user, fingerprint: fingerprint} = ctx
+
+      row =
+        Repo.one!(
+          from(u in User, where: u.id == ^user.id, select: struct(u, ^User.listing_fields()))
+        )
+
+      assert row.avatar_image_id == nil
+
+      assert Vutuv.Avatar.src(row, :thumb) ==
+               "/avatars/#{user.id}/#{user.username}-thumb-#{fingerprint}.avif"
+    end
+  end
+
   describe "a listing row" do
     # Listing queries select a narrow struct (`User.listing_fields/0`), so the
     # pointer has to be in that list or a whole page of members loses its

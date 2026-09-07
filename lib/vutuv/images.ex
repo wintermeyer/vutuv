@@ -5,13 +5,17 @@ defmodule Vutuv.Images do
   and what is contract, and what a member row still holds meanwhile — is in
   `docs/architecture/images.md`.
 
-  The invariant this module carries: **this release writes both and reads one.**
-  A picture is a row here *and* the four columns it has always lived in on the
-  member row; every write still fills both, and since #2027 the row is what
-  every URL builder and every display gate reads (`member_image/2`). The
-  columns are dead weight the deploy after this one drops — which is the only
-  order a blue/green switch allows, since a migration may drop only what the
-  *currently deployed* release has stopped reading.
+  The invariant this module carries: **this release writes both and reads the
+  row, falling back to the columns when there is no row yet.** A picture is a
+  row here *and* the four columns it has always lived in on the member row;
+  every write still fills both, and since #2027 the row is what every URL
+  builder and every display gate reads (`member_image/2`). Its third answer,
+  the **bridge**, reads those columns for a picture the backfill has not
+  reached, so taking this release before running `mix vutuv.images.backfill`
+  cannot blank every face on the site. Bridge and column writes go together, in
+  the deploy before the migration — which is the only order a blue/green switch
+  allows, since a migration may drop only what the *currently deployed* release
+  has stopped reading.
 
   `serving/1` is the second thing here that is not a column: how a kind reaches
   a reader decides what its off switch is, and a kind nobody has declared
@@ -114,36 +118,76 @@ defmodule Vutuv.Images do
 
   @doc """
   This member's picture of `kind` as its row — **the** source every URL builder
-  and every display gate reads since #2027, so the member row's four columns
-  per kind are dead weight the next deploy can drop.
+  and every display gate reads since #2027, and the one place that resolution
+  happens.
 
-  Takes the `belongs_to` when a caller preloaded it and falls back to one
-  primary-key lookup on the pointer when nobody did: half the callers hand over
+  Three answers, in order. The `belongs_to` when a caller preloaded it; one
+  primary-key lookup on the pointer when nobody did (half the callers hand over
   a bare row straight from a query, and a picture that depends on whether
-  somebody remembered a preload is not an answer. The pointer is a plain column
-  on the member row and is **not** one of the four going away, so a listing
-  select that carries it (`Vutuv.Accounts.User.listing_fields/0`) resolves
-  without a join.
+  somebody remembered a preload is not an answer); and, when there is no row at
+  all, **the member row's own four columns, read as if they were one**.
+
+  That third answer is `bridge/2`, and it is the reason this release does not
+  depend on `mix vutuv.images.backfill` having been run. Without it a member
+  whose picture predates the `images` table would render as a member with no
+  picture — no avatar, no `og:image`, no ActivityPub icon, no vCard photo —
+  silently, with nothing in the log and nothing failing, and the deploy that
+  ships these readers would take every face on the site down until an operator
+  happened to run a manual command. Nothing enforces that command: it is not in
+  `scripts/deploy.sh`, not in boot, not in `/health`. So the columns, which this
+  release still writes anyway, stand in.
+
+  **The bridge is temporary and belongs to the same deploy as the writes.** The
+  order is: this release, then the backfill with a green
+  `Vutuv.Release.check_image_rows/0`, then the release that drops both the
+  bridge and the column writes, then the migration. See
+  `docs/architecture/images.md`.
 
   `nil` for a member with no picture of that kind, which costs no query at all —
-  the commonest answer by a wide margin (28 % of the members on the production
-  copy have a profile picture).
+  the commonest answer by a wide margin (72 % of the members on the production
+  copy have none).
 
   Accepts any map, so the render kit's `<.avatar user={…}>` can pass whatever a
-  page handed it; a map that carries neither the association nor the pointer is
-  simply a member without a picture.
+  page handed it; a map that carries none of the three is simply a member
+  without a picture.
   """
   def member_image(user, kind) when is_map_key(@profile_columns, kind) do
     config = @profile_columns[kind]
 
     case Map.get(user, config.assoc) do
       %Image{} = image -> image
-      _not_loaded -> lookup_image(Map.get(user, config.pointer))
+      _none -> lookup_image(Map.get(user, config.pointer)) || bridge(user, kind, config)
     end
   end
 
   defp lookup_image(id) when is_binary(id), do: Repo.get(Image, id)
   defp lookup_image(_id), do: nil
+
+  # A picture the backfill has not reached, read off the member row as the row
+  # it will become. Unsaved on purpose, and its `id` is therefore nil: a caller
+  # that needs a real row — the report form, which names a picture by its id —
+  # has to ask for one rather than trust this. Everything that only wants to
+  # *show* the picture reads the same four values either way, which is what
+  # makes the deploy order-independent.
+  #
+  # `frozen_at` is nil because a freeze writes the row first and only a row can
+  # carry one; a member with no row has no case against their picture.
+  defp bridge(user, kind, config) do
+    case Map.get(user, config.file) do
+      nil ->
+        nil
+
+      file ->
+        %Image{
+          kind: kind,
+          user_id: Map.get(user, :id),
+          file: file,
+          fingerprint: Map.get(user, config.fingerprint),
+          crop: Map.get(user, config.crop),
+          moderation: Map.get(user, config.moderation)
+        }
+    end
+  end
 
   @doc """
   Preloads the avatar row on a member or a list of members, so a page that
@@ -208,6 +252,20 @@ defmodule Vutuv.Images do
     case member_image(user, kind) do
       %Image{frozen_at: nil} = image -> image
       _none_or_frozen -> nil
+    end
+  end
+
+  @doc """
+  The same, narrowed to a picture that can be **named** from outside: the report
+  form addresses a picture by its row id, and `member_image/2`'s bridge answers
+  with an unsaved row for a member the backfill has not reached. Such a picture
+  falls back to reporting the whole profile, which is the only thing that was
+  available before #2012 anyway; the backfill turns the affordance on.
+  """
+  def reportable_image(user, kind) when is_map_key(@profile_columns, kind) do
+    case shown_image(user, kind) do
+      %Image{id: id} = image when is_binary(id) -> image
+      _bridged_or_none -> nil
     end
   end
 
@@ -406,8 +464,9 @@ defmodule Vutuv.Images do
   @doc """
   Keeps the row's fingerprint in step when `Vutuv.Uploads.regenerate/3`
   re-derives a picture and writes a new one onto the member row. Takes the id
-  of the row the re-derive read from, so there is always one; the nil clause is
-  defensive.
+  of the row the re-derive read from, which is `nil` for a picture the backfill
+  has not reached (`member_image/2`'s bridge) — such a picture has no row to
+  keep in step, so that costs no statement.
   """
   def sync_fingerprint(image_id, fingerprint) when is_binary(image_id) do
     from(i in Image, where: i.id == ^image_id)

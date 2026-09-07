@@ -265,15 +265,16 @@ window) — `Vutuv.Images.shown_image/2` is the reader's door for that, and it
 answers `nil`, so a held picture draws the initials tile exactly as a member
 who never uploaded one does. A picture the AI gate merely holds is not that
 case: it keeps the grey silhouette, because it is coming back. And a
-**listing** query has to carry the pointer:
-`Vutuv.Accounts.User.listing_fields/0` selects `:avatar_image_id` instead of
-the two columns it used to, or a whole page of members would lose its pictures
-at once.
+**listing** query has to carry the pointer *and* the two columns the bridge
+reads: `Vutuv.Accounts.User.listing_fields/0` selects `:avatar_image_id`
+beside `:avatar` and `:avatar_fingerprint`, or a whole page of members would
+lose its pictures at once.
 
-**An installation must run the backfill before taking this release.** Nothing
-reads the columns any more, so a picture with no row is a picture nobody can
-see. `bin/vutuv eval "Vutuv.Release.check_image_rows()"` is the gate, and it
-was already the gate for the column drop.
+**Taking this release does not require the backfill to have been run** — see
+the bridge under "The columns go in four steps" below. Run it all the same,
+and read `bin/vutuv eval "Vutuv.Release.check_image_rows()"`: it is the gate on
+the deploy that removes the bridge and the column writes, and until it is green
+a picture with no row is one nobody can report on its own.
 
 Which member-row column holds what is written **once**, in
 `Vutuv.Images.member_columns/0`; `Vutuv.Moderation.ImageSubjects` and
@@ -338,18 +339,47 @@ exactly like a clean bill of health. A missing file is the one class the
 backfill cannot repair; it predates the table and wants a human before the
 columns go.
 
-**The columns go two deploys later, not one**, and two of the three have
-shipped. The order is: #2014 shipped the backfill (the columns still served
-everything), the operator ran it and read the check; **#2027 moved every URL
-builder and display gate onto the row** and is the release this document
-describes; and only the deploy after *that* carries the migration dropping
-`avatar` / `avatar_fingerprint` / `avatar_crop` / `avatar_moderation` and the
-cover four. Each step is N-1 safe on its own, and no two can be merged: a
-migration may only drop what the *currently deployed* release no longer reads.
+**The columns go in four steps, and the order does not depend on an operator
+remembering anything.** #2014 shipped the backfill (the columns still served
+everything); **#2027 moved every URL builder and display gate onto the row**,
+which is the release this document describes; an operator then runs
+`mix vutuv.images.backfill` and reads its check; the deploy after that drops
+both the **bridge** (below) and the writes that keep the columns filled; and
+only the deploy after *that* carries the migration dropping `avatar` /
+`avatar_fingerprint` / `avatar_crop` / `avatar_moderation` and the cover four.
+Each step is N-1 safe on its own, and no two can be merged: a migration may
+only drop what the *currently deployed* release no longer reads.
 
-**What the drop deploy can now assume.** Nothing outside `Vutuv.Images.Backfill`
-reads the four columns per kind. What still *writes* them, and therefore goes
-with the migration, is `Vutuv.Accounts.store_new_image/8`'s `user_attrs`,
+**The bridge is what makes the middle two commute.** `Vutuv.Images.member_image/2`
+answers in three steps: the preloaded association, then a lookup on the
+pointer, then — when there is no row at all — the member row's own four
+columns, read as the row they will become (`bridge/3`, an unsaved `%Image{}`).
+Without it, taking the #2027 release before running the backfill would render
+**every** picture that predates the `images` table as no picture: initials
+instead of a face, no `og:image`, no ActivityPub icon, no vCard photo,
+`avatar_file: nil` in the GDPR export. Silently — nothing raises, nothing
+logs, and the deploy's own `regenerate_images` step would walk 0 rows and
+report success. Nothing enforces the backfill: it is not in
+`scripts/deploy.sh`, not in boot, not in `/health`. So the columns, which this
+release writes anyway, stand in until the deploy that removes both.
+
+Two things follow. `Vutuv.Accounts.User.listing_fields/0` and
+`Vutuv.Accounts`' `@admin_listing_fields` carry `:avatar` and
+`:avatar_fingerprint` beside the pointer, because a narrow select that omits
+them leaves the bridge nothing to read and a whole page loses its faces at
+once. And a **bridged picture cannot be reported on its own**: the report form
+names a picture by its row id and an unsaved row has none, so
+`Images.reportable_image/2` answers nil and the profile's own Report stands in
+until the backfill runs — which is all there was before #2012 anyway.
+
+**What the drop deploy can now assume.** No *reader* consults the four columns
+per kind. Three deliberate exceptions read them and go with the cut:
+`Vutuv.Images.Backfill`, which exists to compare the two copies;
+`Vutuv.Images.member_image/2`'s bridge; and
+`Vutuv.Images.hide_from_member_row/1`, whose `not is_nil(field(u, ^config.file))`
+is a convergence guard on its own write, not a display gate. What *writes* them,
+and therefore goes with the migration, is
+`Vutuv.Accounts.store_new_image/8`'s `user_attrs`,
 `Vutuv.Uploads.regenerate/3`'s `persist_fingerprint/4` (and the
 `:fingerprint_field` in both uploader `@config`s), `Vutuv.Images`'
 `hide_from_member_row/1` and `show_on_member_row/1` — the freeze's two halves,

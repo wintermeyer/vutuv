@@ -576,6 +576,10 @@ defmodule Vutuv.Accounts.User do
     # `images` table, which is where every avatar URL is built from since
     # #2027. Leave it out and a whole listing page loses its pictures at once,
     # since `Vutuv.Images.member_image/2` has nothing to look the row up by.
+    # :avatar and :avatar_fingerprint stay beside it to feed that function's
+    # **bridge**, the fallback that reads a picture off the member row for a
+    # member the backfill has not reached; they go with the bridge and with the
+    # column writes, in the deploy before the migration.
     # :updated_at is still loaded for rows not yet on the fingerprinted scheme:
     # their avatar falls back to the legacy `?v=#{phash2(updated_at)}`
     # cache-buster, so a re-uploaded thumbnail doesn't keep serving the cached
@@ -587,7 +591,7 @@ defmodule Vutuv.Accounts.User do
     # `rel="nofollow"` for a member who opted out of search engines
     # (VutuvWeb.UserHelpers.profile_rel/1). Left out, the struct would carry the
     # schema default `false` and the link would silently fail open.
-    ~w(id first_name last_name honorific_prefix honorific_suffix username avatar_image_id updated_at profile_work_experience_id noindex?)a
+    ~w(id first_name last_name honorific_prefix honorific_suffix username avatar_image_id avatar avatar_fingerprint updated_at profile_work_experience_id noindex?)a
   end
 
   # :username is deliberately NOT here: the username is unique, rate-limited
