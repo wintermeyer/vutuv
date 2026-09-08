@@ -23,6 +23,7 @@ import {
   cancelIdle,
   copyText,
   csrfToken,
+  keyActivates,
   localGet,
   localSet,
   onReady,
@@ -221,14 +222,12 @@ document.addEventListener(
   true,
 )
 
-// A key event targets the focused element, and only the control itself is
-// focusable — no ancestor walk on every Space typed into a composer.
+// The switch is a span, so the keyboard reaches it only through `keyActivates`
+// (util.js, which says why the three controls in that spot share the question).
 document.addEventListener(
   "keydown",
   (e) => {
-    if ((e.key === "Enter" || e.key === " ") && e.target.matches?.("[data-hd-load]")) {
-      onHdControl(e.target, e)
-    }
+    if (keyActivates(e, "[data-hd-load]")) onHdControl(e.target, e)
   },
   true,
 )
@@ -3691,7 +3690,7 @@ document.addEventListener(
 document.addEventListener(
   "keydown",
   (e) => {
-    if ((e.key === "Enter" || e.key === " ") && e.target.matches?.("[data-video-hd]")) {
+    if (keyActivates(e, "[data-video-hd]")) {
       e.preventDefault()
       loadFullVideo(e.target)
     }

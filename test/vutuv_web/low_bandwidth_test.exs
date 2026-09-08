@@ -294,7 +294,7 @@ defmodule VutuvWeb.LowBandwidthTest do
   # paid: two corner controls on one picture that do not stand on one grey, or
   # do not offer the same 40px target, read as two kinds of widget.
   test "the magnifier stands on that ground too, and offers the same target" do
-    html = render_component(&VutuvWeb.UI.zoom_corner/1, label: "Bigger", src: "/x.avif")
+    html = render_component(&VutuvWeb.UI.zoom_corner/1, label: "Bigger", photo: %{src: "/x.avif"})
     chip = attribute_of(html, "[data-lightbox-photo]", "class")
     pill = attribute_of(html, "[data-lightbox-photo] > span", "class")
 

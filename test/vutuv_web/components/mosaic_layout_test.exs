@@ -73,6 +73,34 @@ defmodule VutuvWeb.MosaicLayoutTest do
     end
   end
 
+  describe "the magnifier's corner" do
+    # The corner is one control for the whole mosaic and sits at its top right,
+    # so the photo it opens has to be the one under it. On most arrangements
+    # that is not the hero, which takes the left-hand or the top tile — opening
+    # photo 1 from a corner lying on photo 2 is the bug this pins.
+    for count <- 2..5 do
+      test "#{count} photos: names the tile that holds the grid's top-right cell" do
+        for gallery <- [
+              List.duplicate(landscape(), unquote(count)),
+              List.duplicate(portrait(), unquote(count))
+            ] do
+          layout = PostComponents.mosaic_layout(gallery)
+          index = PostComponents.mosaic_corner_index(layout.cells)
+          cell = Enum.find(layout.cells, &(&1.index == index))
+
+          assert {1, @cols} in area_cells(cell.area),
+                 "the corner opens photo #{index + 1}, whose tile does not cover the top right"
+        end
+      end
+    end
+
+    test "a lone tile is its own corner" do
+      layout = PostComponents.mosaic_layout([landscape()])
+
+      assert PostComponents.mosaic_corner_index(layout.cells) == 0
+    end
+  end
+
   describe "the hero" do
     test "is the first photo and gets the largest tile" do
       hero = photo(4000, 3000)
