@@ -446,11 +446,13 @@ html[data-nav-pressing] main {
    `components.css` sits in the `components` layer, which loses to the utilities
    layer whatever its specificity.
 
-   `[data-timeline-flush]` is `<.card flush>`, which only the feed asks for, so
-   the same post card on a profile, a permalink, the saved hub or a tag timeline
-   keeps the inset reading it has today. The head is not scoped under it: that
-   is the card's own shape at this width, wherever it renders — except in a
-   conversation, which keeps the avatar column everywhere (the last rules). */
+   `[data-timeline-flush]` is `<.card flush>`, which the two timelines a reader
+   arrives *at* ask for — the feed and a post's own page — so the same post card
+   in a section beside other cards (a profile's Posts, the saved hub, a tag
+   timeline, the archive) keeps the inset reading it has today. The head is not
+   scoped under it: that is the card's own shape at this width, wherever it
+   renders — except in a conversation, which keeps the avatar column everywhere
+   (the last rules). */
 @media (width < 48rem) {
   /* The gutter, once. It is `UI.gutter_class/0`'s expression — the page's own
      1rem, widened to clear a display cutout (issue #1464) — and the card
@@ -538,6 +540,50 @@ html[data-nav-pressing] main {
   [data-conversation] [data-card-head] > [data-card-column],
   [data-card-head]:has([data-thread-replies]) > [data-card-column] {
     display: block;
+    container-type: inline-size;
+  }
+
+  /* The action bar is four controls of a fixed size spread by
+     `justify-between`, and the column under a nested reply is not: every level
+     of a conversation takes 28px off it and the avatar column another 48. So
+     the bar reaches a width it cannot give back, `justify-between` has nothing
+     left to spread, and the last control — the bookmark — is pushed out over
+     the card's own border while the page scrolls sideways with it. Measured on
+     a 375px phone at the third level: 207px of column for a bar wanting 227,
+     and two-digit counters are enough to do it at 360px, three-digit ones at
+     393px.
+
+     No indent policy fixes it, because the avatar column alone is 48px of the
+     shortfall — which is also why the `container-type` above is on the one
+     column that keeps that avatar. So the bar's own column is the container,
+     and where it is narrower than the bar needs, three lengths halve: the
+     controls' side padding, the bar's `-mx-2` that cancels it (or the outer
+     glyphs would step off the column's edges), and the gap between them. No
+     glyph moves and nothing is hidden; only the pill around each one tightens.
+
+     The padding names the controls rather than the bar's children, because one
+     of them is not a control: the remote bar's answer slot is a wrapper holding
+     a link and its figure (`remote_reply_control/1`), and padding *that* adds
+     8px to the very row this is trying to shorten.
+
+     16rem is where the roomiest bar (a counter on all four controls) stops
+     fitting; above it nothing changes, which is every card at the top level.
+     The floor under both is `flex-wrap` on the bar itself, and it is on the
+     markup rather than in here because it is not a phone rule: three-digit
+     counters on a 375px screen overflow a bar 15px at the SECOND level, where
+     this block leaves the padding alone (measured; the page scrolled 7px
+     sideways). It costs nothing while the row fits, and a bookmark on a second
+     line is a layout where a bookmark over the border is a fault. */
+  @container (width < 16rem) {
+    [data-action-bar] {
+      margin-inline: -0.25rem;
+      gap: 0.25rem;
+    }
+
+    [data-action-bar] :is(a, button),
+    [data-action-bar] > span {
+      padding-inline: 0.25rem;
+    }
   }
 
   /* And its pictures keep the card's inset, or a full-bleed photograph would

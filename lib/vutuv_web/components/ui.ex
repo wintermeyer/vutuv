@@ -1041,13 +1041,15 @@ defmodule VutuvWeb.UI do
   @doc """
   The Direction A card surface (white, rounded, ring, soft shadow; dark-aware).
 
-  `flush` is for the one card a phone reader spends the most time in, the feed's
-  timeline: below `md` it gives up the page gutter and takes it back as its own
-  padding, so the card reaches both edges of the screen while the text keeps its
-  distance from them. A 390px phone spends 32px of its width on the gutter and
-  another 48px on this card's `p-6`; a timeline is the page rather than a card
-  on it, so both are worth reclaiming there and neither is worth a thought from
-  `md` up, where the card sits in a column beside a rail again.
+  `flush` is for a card a phone reader arrives *at* rather than one they read
+  beside others — the feed's timeline and a post's own page: below `md` it gives
+  up the page gutter and takes it back as its own padding, so the card reaches
+  both edges of the screen while the text keeps its distance from them. A 390px
+  phone spends 32px of its width on the gutter and another 48px on this card's
+  `p-6`; a timeline is the page rather than a card on it, so both are worth
+  reclaiming there and neither is worth a thought from `md` up, where the card
+  sits in a column beside a rail again. Those 40px are also what keeps a deeply
+  nested reply's action bar inside the card — see the phone block in `app.css`.
 
   Square corners and no side ring come with it — a rounded corner cut off by the
   screen edge reads as a rendering fault — and the top/bottom ring stays, which
