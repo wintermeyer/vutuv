@@ -30,7 +30,11 @@ defmodule VutuvWeb.PublicReportController do
     an earlier notice already froze cannot be reported again, and answers the
     same way. That is the right end of the trade — it is off the site and its
     case is with the admins — but it is why a second rights holder is told
-    "not found" rather than "already reported".
+    "not found" rather than "already reported". What it does say apart is one
+    of **our own pages** (`/impressum`, the house rules, the member
+    directory): a correct address carrying nobody's content, which the router
+    can answer without telling anybody anything a visitor cannot fetch for
+    themselves.
   * **The confirmation is a POST**, not the GET the link lands on. A link
     scanner in a corporate mail gateway follows every URL in an email, and a
     GET that fires a takedown would hand the confirmation to whoever's software
@@ -127,6 +131,18 @@ defmodule VutuvWeb.PublicReportController do
       {:error, :foreign_host} ->
         error(conn, params, url, [
           gettext("That address is not on this site. We can only act on content published here.")
+        ])
+
+      # A correct address that names one of our own pages. Told apart from the
+      # miss below on purpose (issue #2068): "we could not find that page"
+      # about `/impressum` sends a rights holder off to re-check a link that
+      # was right all along, in the first minute of the one complaint that
+      # carries real liability.
+      {:error, :not_reportable} ->
+        error(conn, params, url, [
+          gettext(
+            "That address is one of our own pages, not content somebody published here, so there is nothing on it we could act on. Please paste the address of the post, picture, video, profile or job posting itself."
+          )
         ])
 
       {:error, :not_found} ->

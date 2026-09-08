@@ -42,10 +42,18 @@
         <dt class="font-semibold text-slate-900 dark:text-white">
           {gettext("Publish only what you hold the rights to")}
         </dt>
+        <%!-- "here" was plain text, so the one paragraph that invites a rights
+              holder to report sent them looking for the form (issue #2068).
+              The marker carries the link where each language wants it. --%>
+        <% {rights_pre, rights_post} =
+          split_marker(
+            gettext(
+              "Texts, photos and videos belong to whoever made them. Post your own work, or work you have permission to use. A rights holder can report content here without an account, through {form}; such a complaint is decided by one of our admins, and an edit does not settle it."
+            ),
+            "{form}"
+          ) %>
         <dd class="mt-1 text-sm text-slate-600 dark:text-slate-400">
-          {gettext(
-            "Texts, photos and videos belong to whoever made them. Post your own work, or work you have permission to use. A rights holder can report content here, and such a complaint is decided by one of our admins - an edit does not settle it."
-          )}
+          {rights_pre}<a href={~p"/system/report"} class={link_class()}>{gettext("the report form")}</a>{rights_post}
         </dd>
       </div>
       <div>

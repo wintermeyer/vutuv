@@ -22,11 +22,16 @@ defmodule Vutuv.Moderation.ContentUrl do
   unauthenticated, so answering "that URL exists" for anything else would make
   it an oracle for frozen, deleted, restricted and members-only content —
   something the same visitor cannot learn by fetching the URL. Everything else
-  comes back `{:error, :not_found}`, which is the same answer a typo gets.
+  comes back `{:error, :not_found}`, which is the same answer a typo gets — one
+  exception, `{:error, :not_reportable}` for a page of the site itself, is
+  decided by the router alone and reads no row, so it can tell nobody anything
+  (issue #2068).
   """
 
   import Ecto.Query
 
+  alias Phoenix.Router, as: PhoenixRouter
+  alias Vutuv.Accounts.ReservedSlugs
   alias Vutuv.Accounts.User
   alias Vutuv.Fediverse
   alias Vutuv.Images
@@ -37,19 +42,28 @@ defmodule Vutuv.Moderation.ContentUrl do
   alias Vutuv.Repo
   alias Vutuv.UUIDv7
   alias Vutuv.Videos
+  alias VutuvWeb.Endpoint
+  alias VutuvWeb.Router
+
+  @reserved ReservedSlugs.list()
 
   @doc """
   Resolves `url` to the content row it names.
 
-  `{:ok, content}` for a reportable, publicly visible row; `{:error,
-  :foreign_host}` when the address belongs to another server (worth its own
-  message: the notifier has to be told we can only act on what is here);
-  `{:error, :not_found}` for anything else.
+  `{:ok, content}` for a reportable, publicly visible row, and three misses a
+  notifier has to be able to tell apart (issue #2068):
+
+  * `{:error, :foreign_host}` — the address belongs to another server, so we
+    can only say we do not host it.
+  * `{:error, :not_reportable}` — one of **our own pages**, which is a correct
+    address carrying nobody's content.
+  * `{:error, :not_found}` — everything else, and only here is "we could not
+    find it" true.
   """
   def resolve(url) when is_binary(url) do
     case url |> String.trim() |> with_scheme() |> Fediverse.local_path() do
       nil -> {:error, :foreign_host}
-      segments -> found(from_segments(segments))
+      segments -> found(from_segments(segments), segments)
     end
   end
 
@@ -64,13 +78,43 @@ defmodule Vutuv.Moderation.ContentUrl do
     if url =~ ~r{^https?://}i, do: url, else: "https://" <> url
   end
 
-  defp found(nil), do: {:error, :not_found}
-  defp found(content), do: {:ok, content}
+  # `nil` is "I know this shape and there is nothing there" — a typo, a deleted
+  # post, a hidden one — and stays the miss. `:no_content_shape` is "this is
+  # not an address content lives at", which is the only case allowed to ask
+  # whether the site itself has a page there.
+  defp found(:no_content_shape, segments), do: site_page(segments)
+  defp found(nil, _segments), do: {:error, :not_found}
+  defp found(content, _segments), do: {:ok, content}
+
+  # The address names no member's and no page's content, so the last question
+  # is whether it is a page of the **site** — the Impressum, the house rules,
+  # the member directory. The router answers it, and the discriminator is the
+  # matched route's **first** segment: a literal one is a fixed address of this
+  # installation, a dynamic one is where a handle stands (so a reserved word
+  # nobody routed, `/stefan`, keeps the answer a typo gets). Nothing here reads
+  # the database, so no address can learn anything from it that fetching the
+  # URL would not already tell. `Endpoint.host/0` rather than the pasted host:
+  # `local_path/1` has already ruled the address ours, `www.` and all.
+  defp site_page(segments) do
+    case PhoenixRouter.route_info(Router, "GET", segments, Endpoint.host()) do
+      %{route: route} ->
+        if fixed_address?(route), do: {:error, :not_reportable}, else: {:error, :not_found}
+
+      :error ->
+        {:error, :not_found}
+    end
+  end
+
+  defp fixed_address?(route) do
+    case String.split(route, "/", trim: true) do
+      [first | _] -> not String.starts_with?(first, [":", "*"])
+      [] -> true
+    end
+  end
 
   # A member's post and a page's post. Both by id: the handle or the slug in
   # front of it is only how the URL was spelled on the day it was copied.
   defp from_segments(["organizations", _slug, "posts", id]), do: visible_post(id)
-  defp from_segments([_handle, "posts", id]), do: visible_post(id)
 
   # The authorizing media proxies. Right-clicking a photo or a video in a post
   # copies one of these, and what is reportable is the post that carries it —
@@ -81,18 +125,30 @@ defmodule Vutuv.Moderation.ContentUrl do
   defp from_segments(["post_videos", token, _file]),
     do: post_of(Videos.get_video_by_token(token))
 
-  # A profile picture or cover, by the three addresses one has. The served
-  # files sit in an id-scoped public tree (`/avatars/<user id>/…`), which is
-  # what a "copy image address" hands over; `/<handle>/avatar.jpg` is the
-  # scraper-friendly JPEG a link preview shows.
+  # A profile picture or cover, by two of the three addresses one has. The
+  # served files sit in an id-scoped public tree (`/avatars/<user id>/…`),
+  # which is what a "copy image address" hands over; the third spelling,
+  # `/<handle>/avatar.jpg`, is below the reserved-word clause because its first
+  # segment is a handle.
   defp from_segments(["avatars", user_id | _rest]), do: visible_image(user_id, "avatar")
   defp from_segments(["covers", user_id | _rest]), do: visible_image(user_id, "cover")
-  defp from_segments([handle, "avatar.jpg"]), do: visible_image(visible_user(handle), "avatar")
 
   defp from_segments(["organizations", slug]),
     do: ok_or_nil(Organizations.fetch_visible_organization(slug, nil))
 
   defp from_segments(["jobs", slug]), do: ok_or_nil(Jobs.fetch_visible_job_posting(slug, nil))
+
+  # A reserved word is never a handle — keeping the URL root claimable is the
+  # whole purpose of that list, and `reserved_slugs_router_test.exs` keeps it in
+  # step with the router. So the clauses below, which all read their first
+  # segment as somebody's handle, must not claim these paths: `/system/members/w`
+  # read as "the member `system`, missing" is what put every site page deeper
+  # than one segment into the typo bucket (issue #2068). Placed after the
+  # content shapes above, which start with a reserved word themselves.
+  defp from_segments([first | _]) when first in @reserved, do: :no_content_shape
+
+  defp from_segments([handle, "avatar.jpg"]), do: visible_image(visible_user(handle), "avatar")
+  defp from_segments([_handle, "posts", id]), do: visible_post(id)
 
   # A bare handle is a member's profile, or — since members and pages share one
   # handle namespace — a page that claimed that root word. The two live in two
@@ -106,7 +162,8 @@ defmodule Vutuv.Moderation.ContentUrl do
   # that member, which is the reportable thing there.
   defp from_segments([handle | _rest]), do: visible_user(handle)
 
-  defp from_segments(_segments), do: nil
+  # The site root, which is a page of ours like any other.
+  defp from_segments([]), do: :no_content_shape
 
   defp ok_or_nil({:ok, record}), do: record
   defp ok_or_nil(_), do: nil

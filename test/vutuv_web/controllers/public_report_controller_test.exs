@@ -72,6 +72,39 @@ defmodule VutuvWeb.PublicReportControllerTest do
       assert conn |> get(~p"/impressum") |> html_response(200) =~ ~s(href="/system/report")
     end
 
+    # Issue #2068: the house rules invited rights holders to report "here" and
+    # left the word as plain text, with the only link to the form down in the
+    # footer's Legal group — which is why asserting on the whole page above
+    # passed while the sentence itself led nowhere.
+    test "is linked from the sentence in the house rules that invites it", %{conn: conn} do
+      html =
+        conn
+        |> put_req_header("accept-language", "de-DE,de")
+        |> get(~p"/community")
+        |> html_response(200)
+
+      assert html =~
+               ~r{ohne Konto melden, über <a[^>]+href="/system/report"[^>]*>das Meldeformular</a>}
+    end
+
+    # What a rights holder reads before typing anything, in the language they
+    # read it in. The form used to promise that following the link is what
+    # leaves the content in place, and the house-rules link sat beside the
+    # sentence rather than inside it, so the full stop rendered a space away
+    # ("Community-Richtlinien .").
+    test "says what the confirmation link does, and closes its own sentences", %{conn: conn} do
+      html =
+        conn
+        |> put_req_header("accept-language", "de-DE,de")
+        |> get(~p"/system/report")
+        |> html_response(200)
+
+      assert html =~ "Ihre Meldung liegt sofort bei unseren Admins"
+      assert html =~ "bis Sie dem Link folgen, ändert sich am gemeldeten Inhalt nichts"
+      assert html =~ ~r{>Community-Richtlinien</a>\.}
+      refute html =~ ~r{Community-Richtlinien\s+</a>}
+    end
+
     # The form's own rendered action, not a path the test knows: a Save button
     # posting to a retired URL is exactly what shipped once here.
     test "submits to the URL it renders", %{conn: conn, post: post} do
@@ -123,6 +156,54 @@ defmodule VutuvWeb.PublicReportControllerTest do
       conn = submit(conn, VutuvWeb.Endpoint.url() <> "/no-such-handle")
 
       assert html_response(conn, 422) =~ "could not find that page"
+    end
+
+    # Issue #2068: `/impressum` is a perfectly correct address, and being told
+    # we could not find it sends a rights holder back to re-check a link that
+    # was right all along. A page of the site itself is its own answer — and
+    # the two-and-three-segment ones count, which is why the discriminator is
+    # the matched route's first segment rather than "no `:param` anywhere".
+    test "one of our own pages is neither reportable nor missing", %{conn: conn} do
+      for path <- [
+            "/impressum",
+            "/community",
+            "/system/members",
+            "/system/members/w",
+            "/system/posts/2026/09"
+          ] do
+        conn = submit(conn, VutuvWeb.Endpoint.url() <> path)
+        html = html_response(conn, 422)
+
+        assert html =~ "one of our own pages", "#{path} should be named as a page of ours"
+        refute html =~ "could not find that page"
+      end
+    end
+
+    # The same answer in the language a German rights holder reads it in, and
+    # the short middle clause too: a fuzzy merge is likeliest exactly there.
+    test "and says so in German", %{conn: conn} do
+      html =
+        conn
+        |> put_req_header("accept-language", "de-DE,de")
+        |> submit(VutuvWeb.Endpoint.url() <> "/impressum")
+        |> html_response(422)
+
+      assert html =~ "gehört zu einer unserer eigenen Seiten"
+      assert html =~ "wogegen wir vorgehen könnten"
+      refute html =~ "konnten diese Seite nicht finden"
+    end
+
+    # The distinction must not cost the anti-oracle rule anything. `/stefan` is
+    # the interesting one: a reserved word, so it never reaches a handle
+    # lookup, but nothing routes it either — it is a name still to be claimed,
+    # not a page of ours.
+    test "an address where a handle would stand still gets the answer a typo gets", %{conn: conn} do
+      for path <- ["/no-such-handle/tags", "/stefan"] do
+        conn = submit(conn, VutuvWeb.Endpoint.url() <> path)
+
+        assert html_response(conn, 422) =~ "could not find that page",
+               "#{path} must not be named a page of ours"
+      end
     end
 
     # The anti-oracle rule: a frozen post is not public, so the form must not
@@ -245,6 +326,30 @@ defmodule VutuvWeb.PublicReportControllerTest do
       [email | _] = flush_emails()
       assert email.subject == "Bitte bestätigen Sie Ihre Meldung"
       assert email.text_body =~ "wir haben Ihre Meldung erhalten"
+    end
+
+    # The page and the receipt used to disagree about the one fact a notifier
+    # acts on: the page said the admins see the case only after the
+    # confirmation, the mail said it is already with them. The mail was right
+    # — `file_public_notice/3` opens the case `flagged`, which is a queue
+    # status — so the page had to move.
+    test "the sent page and the receipt mail agree about when the admins see it", %{
+      conn: conn,
+      post: post
+    } do
+      conn = put_req_header(conn, "accept-language", "de-DE,de")
+      html = conn |> submit(post_url(post)) |> html_response(200)
+
+      assert html =~ "Ihre Meldung liegt bereits bei unseren Admins"
+      assert html =~ "bis dahin ändert sich am gemeldeten Inhalt nichts"
+
+      [email | _] = flush_emails()
+      assert email.text_body =~ "liegt der Fall unbearbeitet bei unseren Admins"
+
+      # And it is true: the case is in the admin queue before anybody has
+      # followed the link.
+      assert Moderation.open_case_for(post).status == "flagged"
+      assert Enum.any?(Moderation.list_queue(), &(&1.id == Moderation.open_case_for(post).id))
     end
   end
 end

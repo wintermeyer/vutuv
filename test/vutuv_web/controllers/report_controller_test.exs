@@ -167,6 +167,34 @@ defmodule VutuvWeb.ReportControllerTest do
       assert response =~ "Um welches Werk geht es"
     end
 
+    # Issue #2068: the two forms promised the same thing in two wordings — the
+    # public one added "that my statements are correct", the member one did
+    # not — while a single column (`good_faith_declared_at`, issue #2069)
+    # records what was declared. One column, one meaning, one sentence.
+    test "declares good faith in the same words the public form uses", %{conn: conn, post: post} do
+      {conn, _me} = create_and_login_user(conn)
+
+      member =
+        conn
+        |> recycle()
+        |> put_req_header("accept-language", "de-DE,de")
+        |> get(~p"/reports/new?type=post&id=#{post.id}")
+        |> html_response(200)
+
+      outsider =
+        build_conn()
+        |> put_req_header("accept-language", "de-DE,de")
+        |> get(~p"/system/report")
+        |> html_response(200)
+
+      declaration =
+        "Ich versichere nach bestem Wissen, dass meine Angaben zutreffen und dass diese " <>
+          "Nutzung weder vom Rechteinhaber noch vom Gesetz gedeckt ist."
+
+      assert member =~ declaration
+      assert outsider =~ declaration
+    end
+
     test "a reporter tied to the open case still reaches the form", %{conn: conn} do
       {conn, reporter} = create_and_login_user(conn)
       author = insert_activated_user()
