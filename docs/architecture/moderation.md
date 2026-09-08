@@ -39,13 +39,24 @@ things follow from that.
 
 **It is only accepted complete.** `Report.changeset/3` requires the note (which
 work, where the original can be seen) and a good-faith declaration whenever the
-category is `copyright`. The declaration is a **virtual** field, not a column:
-the changeset refuses the category without it, so a stored copyright report *is*
-the record that it was made, and a column would be a second copy free to drift.
-The check sits in the changeset rather than in the controller, so the Mastodon
-report API cannot file half a notice either (it has no field for the
-declaration, so it cannot file one at all — a client sending that category gets
-a 422).
+category is `copyright`. The check sits in the changeset rather than in the
+controller, so the Mastodon report API cannot file half a notice either (it has
+no field for the declaration, so it cannot file one at all — a client sending
+that category gets a 422).
+
+**And the declaration is kept** (issue #2069). It was a virtual field only, on
+the argument that a stored copyright report *is* the record that it was made —
+which stopped being true the moment the public form (#2009) began demanding the
+same declaration of **every** category, so the category answers a different
+question than "was this declared?". It is now `moderation_reports.good_faith_declared_at`,
+stamped by `Report.changeset/4` wherever the box was ticked (not only where it
+was demanded), so the column has one meaning on every report however it was
+filed. A timestamp rather than a boolean, like every other fact this table
+records about a report; nil means no declaration on file, and rows filed before
+the column existed stay nil rather than being backfilled into evidence nobody
+recorded. The admin case page shows it beside the report's category chip
+("in gutem Glauben erklärt"), which is the surface a rights holder's notice has
+to be readable on.
 
 **It is in the admin queue from the moment it is filed.** The trust ladder is
 untouched — a trusted reporter still freezes the content and still leaves the
@@ -150,6 +161,15 @@ Every case carries an **audit log** (`moderation_events`: reports, freezes,
 severances, owner self-service, escalations, rulings, strikes, `owner_removed`)
 rendered as the History timeline on the admin case page, and the urgent admin
 email names the profile, category and reporter's note instead of just a link.
+
+**Every instant on that page is one an admin can read.** The header printed the
+report time and the owner's 72h deadline as bare `Calendar.strftime` stamps in
+universal time, two hours behind the same moments in the History timeline
+directly beneath — which renders through `<.local_time>` like everything else in
+the app — so an admin reading a deadline off the header was two hours wrong, in
+the direction that makes them act too late (issue #2069). All three header
+stamps are `<.local_time>` now: the admin's own zone when they have set one,
+their browser's otherwise, in their date shape.
 
 ## A picture is reportable on its own (issue #2012)
 
@@ -515,13 +535,56 @@ body: a replacement is a **revision** (`Moderation.content_replaced/1`,
 `resolved_edited`), which also spends the owner's one self-service round on that
 picture, as it should.
 
-That second bug is what `Moderation.consistent_outcome?/2` now guards. The
-subject comes from the case status and the fate paragraph from a measurement —
-**two sources on purpose**, one saying who decided and what they did, the other
-what the content is now — and exactly two of the four endings make a claim
-about the content in their own subject, so each of those has exactly one fate
-that agrees with it. A path that closes a case without settling the content the
-way its status claims is a test failure now, not a mail.
+That second bug is what `Moderation.consistent_outcome?/2` guards. The subject
+comes from the case status and the fate paragraph from a measurement — **two
+sources on purpose**, one saying who decided and what they did, the other what
+the content is now — and exactly two of the four endings make a claim about the
+content in their own subject, so each of those has exactly one fate that agrees
+with it.
+
+**It is asked in `Notifier.deliver_or_refuse/4`, where the letter's two halves
+meet** (issue #2071). For its first weeks it was called from a test alone, and
+that test handed it the fate it expected rather than the one the system produced
+— so it compared a sentence with itself and would have passed whatever the code
+did. A tenth closing path proved it: a caller reaching for the public
+`content_deleted/1` on content that is merely frozen closes the case
+`resolved_deleted`, whose subject says the content was deleted, over a measured
+fate of `:hidden`. When the guard fires **nothing is sent** — a letter that
+contradicts itself is worse for its reader than none, and this one is a legal
+notice — and the claim the stamping `UPDATE` staked is **handed back**, because
+leaving `outcome_notified_at` set would record that these reporters were told,
+which is false. `Logger.error` names the case, its status, both halves and how
+many reporters are owed. The regression test walks that tenth path through the
+public API rather than asserting on the predicate, so it sees what the system
+produced.
+
+**It belongs at the mail, and moving it into the close path would be worse.**
+The two sources are answering different questions — the status says what
+somebody *did*, the fate says how the content *stands* — so the close path has
+nothing to repair. A guard there could only refuse the *close*, which turns a
+wording bug into a failed member action on content they have already changed.
+The remedy for a fired guard is always a source change in whichever caller
+picked the wrong status, which is exactly what #2067 was, twice: `resolved_edited`
+for a replaced picture, and `fate: :removed` stated by the account deletion.
+Detecting it earlier would not change that.
+
+**Refusing is right; refusing for ever is not.** An operator reading a log is
+not a recovery plan, and the record already exists — `Report.awaiting_outcome/1`
+still says these reporters are owed a notice. What is missing is anything that
+comes back to such a row, which is **#2073**. Until then a fired guard is
+silence for that reporter, and the wrong *ending* still stands too: the status,
+its `resolved_at`, the History entry and, on `resolved_edited`, the owner's
+spent self-service round.
+
+**A guard here is a refusal to speak, so it must name the contradiction and not
+a hair more.** `"revised"` rules out only `:removed`: the subject says the owner
+rewrote the content, and the sole fate calling that a lie is one saying the
+content is gone. Demanding `:visible` instead looked tighter and refused a true
+letter on a live path — `account_hidden?/1` counts `frozen_at` and
+`unreachable_at`, neither of which blocks signing in, so an owner hidden by an
+**unrelated** case can still edit or replace reported content and close
+`resolved_edited` over a measured `:hidden`. Two true sentences, one refused
+notice, and that reporter heard nothing at all (caught in review on PR #2072).
 
 **Exactly once is a claim, not a convention.** One `UPDATE` both picks the
 reports that still owe their reporter a notice and stamps

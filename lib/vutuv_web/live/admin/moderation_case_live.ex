@@ -25,8 +25,21 @@ defmodule VutuvWeb.Admin.ModerationCaseLive do
       reporter_identity: 1
     ]
 
-  alias Vutuv.{Chat, Moderation}
+  alias Vutuv.{Chat, Moderation, ViewerClock}
   alias Vutuv.Moderation.Case
+
+  # The two chips a report line wears — its category, and the declaration it was
+  # filed with (issue #2069). One recipe so the pair cannot drift apart into two
+  # shapes on one row; the tint is all that differs.
+  defp report_chip_class(tone) do
+    [
+      "inline-flex items-center rounded-lg px-2 py-0.5 text-xs font-medium",
+      case tone do
+        :brand -> "bg-brand-50 text-brand-700 dark:bg-brand-800/60 dark:text-brand-100"
+        :slate -> "bg-slate-100 text-slate-700 dark:bg-slate-700 dark:text-slate-200"
+      end
+    ]
+  end
 
   @impl true
   def mount(%{"id" => id}, _session, socket) do
@@ -171,20 +184,21 @@ defmodule VutuvWeb.Admin.ModerationCaseLive do
                 {status_badge(@case)}
               </span>
             </p>
+            <%!-- Bare `Calendar.strftime` stamps in UTC until issue #2069, two
+                  hours behind the same three moments in the history further
+                  down this very page — and an admin reads the owner's deadline
+                  off here, not out of the log. `<.local_time>` is the one
+                  rendering of an instant a person reads: the admin's own zone
+                  when they picked one, their browser's otherwise. --%>
             <p class="mt-1 text-slate-600 dark:text-slate-400">
-              {gettext("Reported on %{date}",
-                date: Calendar.strftime(@case.inserted_at, "%Y-%m-%d %H:%M")
-              )}
+              {gettext("Reported")}: <.local_time at={@case.inserted_at} id="case-reported-at" />
             </p>
             <p :if={@case.owner_deadline_at} class="text-slate-600 dark:text-slate-400">
-              {gettext("Owner deadline: %{date}",
-                date: Calendar.strftime(@case.owner_deadline_at, "%Y-%m-%d %H:%M")
-              )}
+              {gettext("Owner deadline")}:
+              <.local_time at={@case.owner_deadline_at} id="case-deadline-at" />
             </p>
             <p :if={@case.escalated_at} class="text-slate-600 dark:text-slate-400">
-              {gettext("Escalated on %{date}",
-                date: Calendar.strftime(@case.escalated_at, "%Y-%m-%d %H:%M")
-              )}
+              {gettext("Escalated")}: <.local_time at={@case.escalated_at} id="case-escalated-at" />
             </p>
           </div>
         </div>
@@ -313,8 +327,13 @@ defmodule VutuvWeb.Admin.ModerationCaseLive do
         <ul class="mt-3 space-y-3">
           <li :for={report <- @case.reports} class="text-sm">
             <p>
-              <span class="inline-flex items-center rounded-lg bg-brand-50 px-2 py-0.5 text-xs font-medium text-brand-700 dark:bg-brand-800/60 dark:text-brand-100">
-                {category_label(report.category)}
+              <span class={report_chip_class(:brand)}>{category_label(report.category)}</span>
+              <%!-- The declaration the notice was only accepted with, which no
+                    surface could show until issue #2069. Absent on a report
+                    filed before the column existed, which is honest: it was
+                    never recorded. --%>
+              <span :if={report.good_faith_declared_at} class={report_chip_class(:slate)}>
+                {gettext("declared in good faith")}
               </span>
               <%!-- Who filed it: a member's @handle, or an outside notifier's
                     name and address, which is what an admin needs to write
@@ -335,8 +354,14 @@ defmodule VutuvWeb.Admin.ModerationCaseLive do
             <% severance = @severance_by_reporter[report.reporter_id] %>
             <p :if={severance} class="mt-1 text-xs text-slate-600 dark:text-slate-400">
               <%= if severance.restored_at do %>
+                <%!-- The date in the admin's own clock, not UTC: this line sits
+                      between a header and a History timeline that both read in
+                      it, and near midnight a bare stamp names the wrong day.
+                      `ViewerClock.format/2` rather than `<.local_time>`
+                      because the stamp is inside the sentence — splitting it
+                      into a label would cost the sentence its grammar. --%>
                 {gettext("The protective separation from the owner was lifted on %{date}.",
-                  date: Calendar.strftime(severance.restored_at, "%Y-%m-%d")
+                  date: ViewerClock.format(severance.restored_at, :date)
                 )}
               <% else %>
                 {gettext(

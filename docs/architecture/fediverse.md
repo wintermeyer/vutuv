@@ -912,6 +912,17 @@ None of this is a guarantee. Remote deletion is advisory by protocol and always
 will be, so the UI never claims a copy is gone — but every takedown now at least
 asks.
 
+**A frozen post is out of the count as well as out of the collections**
+(issue #2069). `Vutuv.Fediverse.public_post_count/1` and its page twin
+`organization_public_post_count/1` are what the count-only `outbox` reports, and
+they filtered a member's audience denials and nothing else — so an author whose
+only post a takedown had hidden still answered `"totalItems": 1` to every server
+that asked, while the note itself 404ed. It is the one number about a hidden
+post that still left the building: the neighbouring `featured_posts/1` already
+serves the anonymous public view, and NodeInfo's `localPosts` counts through
+`Posts.scope_visible/2`, so the outbox was the one surface that disagreed with
+the rest. Both counts now exclude `posts.frozen_at`.
+
 ## Leaving: 410 Gone, and saying so first
 
 Switching the opt-in off used to make every actor endpoint answer `404`, which

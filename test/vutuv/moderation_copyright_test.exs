@@ -84,8 +84,25 @@ defmodule Vutuv.ModerationCopyrightTest do
     test "neither is demanded of the other categories", %{owner: owner, reporter: reporter} do
       post = insert(:post, user: owner)
 
-      assert {:ok, %Case{}} =
+      assert {:ok, %Case{} = case_record} =
                Moderation.report_content(reporter, post, %{"category" => "spam"})
+
+      # And nothing is recorded where nothing was declared (issue #2069).
+      assert Repo.get_by!(Report, case_id: case_record.id).good_faith_declared_at == nil
+    end
+
+    # The declaration is part of what makes a notice a notice, so it is kept
+    # rather than validated and dropped (issue #2069). The category cannot
+    # stand in for it: the public form demands the same declaration of every
+    # category, so "this is a copyright report" answers a different question.
+    test "keeps the declaration that was made", %{owner: owner, reporter: reporter} do
+      post = insert(:post, user: owner)
+
+      assert {:ok, %Case{} = case_record} =
+               Moderation.report_content(reporter, post, complete_notice())
+
+      assert %NaiveDateTime{} =
+               Repo.get_by!(Report, case_id: case_record.id).good_faith_declared_at
     end
   end
 

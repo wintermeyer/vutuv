@@ -16,11 +16,11 @@ defmodule Vutuv.ModerationNoticeWordingTest do
 
   use Vutuv.DataCase, async: false
 
+  import ExUnit.CaptureLog, only: [capture_log: 1]
   import Vutuv.WebPushHelpers, only: [put_config: 2]
 
   alias Vutuv.{Accounts, Activity, Moderation}
-  alias Vutuv.Moderation.{Case, Notifier, Report}
-  alias Vutuv.Notifications.Emailer
+  alias Vutuv.Moderation.{Case, Report}
 
   @note "Das Foto ist meins, das Original steht auf example.com/hafen.jpg"
 
@@ -45,25 +45,22 @@ defmodule Vutuv.ModerationNoticeWordingTest do
     reporter
   end
 
-  # One closing path, checked the way a reader meets it: the sentence about the
-  # content, and that it does not contradict the subject its ending produced.
-  defp assert_notice(address, outcome, fate_sentence) do
-    email = mail_to(address)
-
-    for body <- bodies(email) do
+  # One closing path, checked the way a reader meets it: the sentence the notice
+  # makes about the content.
+  #
+  # It used to end by mapping that sentence back to a fate and asserting
+  # `consistent_outcome?/2` on it — two literals from the call site compared
+  # with each other, which is the "compares a sentence with itself" shape
+  # issue #2071 is about. Since `deliver_or_refuse/4` now refuses to send a
+  # contradicting pair at all, a notice that arrives is consistent by
+  # construction and the assertion could no longer fail. What it claimed to
+  # cover is covered for real below, twice: the exhaustive table over the
+  # predicate, and the tenth path driven through the public API.
+  defp assert_notice(address, fate_sentence) do
+    for body <- bodies(mail_to(address)) do
       assert body =~ fate_sentence,
              "the notice does not say #{inspect(fate_sentence)}"
     end
-
-    fate =
-      case fate_sentence do
-        "Der gemeldete Inhalt ist gelöscht." -> :removed
-        "Der gemeldete Inhalt ist auf vutuv nicht mehr zu sehen." -> :hidden
-        "Der gemeldete Inhalt ist auf vutuv weiterhin zu sehen." -> :visible
-      end
-
-    assert Moderation.consistent_outcome?(outcome, fate),
-           "the subject for #{outcome} and the body's #{inspect(fate)} disagree"
   end
 
   defp uploads_dir do
@@ -396,7 +393,7 @@ defmodule Vutuv.ModerationNoticeWordingTest do
 
       :ok = Moderation.delete_reported_content(case_record, owner)
 
-      assert_notice("melder@example.com", "removed", "Der gemeldete Inhalt ist gelöscht.")
+      assert_notice("melder@example.com", "Der gemeldete Inhalt ist gelöscht.")
     end
 
     test "the owner editing a reported post says it is visible", %{owner: owner} do
@@ -409,7 +406,6 @@ defmodule Vutuv.ModerationNoticeWordingTest do
 
       assert_notice(
         "melder@example.com",
-        "revised",
         "Der gemeldete Inhalt ist auf vutuv weiterhin zu sehen."
       )
     end
@@ -427,7 +423,6 @@ defmodule Vutuv.ModerationNoticeWordingTest do
 
       assert_notice(
         "melder@example.com",
-        "upheld",
         "Der gemeldete Inhalt ist auf vutuv weiterhin zu sehen."
       )
     end
@@ -445,15 +440,14 @@ defmodule Vutuv.ModerationNoticeWordingTest do
 
       assert_notice(
         "melder@example.com",
-        "upheld",
         "Der gemeldete Inhalt ist auf vutuv nicht mehr zu sehen."
       )
     end
 
     # The invariant that would have caught both above, so a tenth path cannot
     # ship the contradiction: only two of the four endings make a claim about
-    # the content in their own subject, and each has exactly one fate that
-    # agrees with it.
+    # the content in their own subject, and a fate that denies that claim
+    # cannot ride beneath it.
     test "no closing path lets the subject and the fate disagree" do
       for {status, fate} <- [
             {"resolved_deleted", :removed},
@@ -467,11 +461,76 @@ defmodule Vutuv.ModerationNoticeWordingTest do
       refute Moderation.consistent_outcome?("removed", :hidden)
       refute Moderation.consistent_outcome?("revised", :removed)
 
+      # "Revised" rules out only `:removed`. A rewritten piece of content that
+      # is hidden because its OWNER is hidden makes two true sentences, and the
+      # test below walks that path for real — this pin is what stops the
+      # predicate from quietly tightening back to `== :visible`.
+      assert Moderation.consistent_outcome?("revised", :hidden)
+
       # The two admin rulings claim nothing about the content in their subject,
       # so every fate is honest beside them.
       for outcome <- ["upheld", "not_upheld"], fate <- [:removed, :hidden, :visible] do
         assert Moderation.consistent_outcome?(outcome, fate)
       end
+    end
+
+    # The guard's own failure mode, and the one the reviewer of PR #2072 found:
+    # a refusal to speak is as wrong as a lie when the letter would have been
+    # true. `account_hidden?/1` counts `frozen_at` and `unreachable_at`, and
+    # neither blocks signing in, so an owner hidden by an unrelated case still
+    # edits their reported post — `resolved_edited` over a measured `:hidden`.
+    test "an owner hidden by another case still gets their reporter answered", %{owner: owner} do
+      post = insert(:post, user: owner)
+      reporter = de_reporter()
+      {:ok, case_record} = Moderation.report_content(reporter, post, %{"category" => "bullying"})
+
+      # Hidden by something else entirely: a deliverability freeze, which does
+      # not stop them logging in and rewriting the post.
+      Repo.update_all(
+        from(u in Vutuv.Accounts.User, where: u.id == ^owner.id),
+        set: [unreachable_at: NaiveDateTime.utc_now(:second)]
+      )
+
+      flush_emails()
+
+      :ok = Moderation.content_edited(Repo.reload!(post))
+
+      assert Moderation.reported_content_fate(Repo.reload!(case_record)) == :hidden
+
+      assert_notice(
+        "melder@example.com",
+        "Der gemeldete Inhalt ist auf vutuv nicht mehr zu sehen."
+      )
+
+      refute Repo.exists?(Report.awaiting_outcome(case_record.id)),
+             "the reporter was answered, so nothing is still owed"
+    end
+
+    # The tenth path, and the reason the invariant above proved nothing: it
+    # hands `consistent_outcome?/2` the fate it expects, so it compares a
+    # sentence with itself. Here the *system* produces both halves — a caller
+    # reaching for the public `content_deleted/1` on a post that is merely
+    # frozen, which is the closing path a reviewer wrote and watched send
+    # "…wurde gelöscht" over "…nicht mehr zu sehen" (issue #2071).
+    test "a contradicting ending sends no notice, loudly", %{owner: owner} do
+      post = insert(:post, user: owner)
+      reporter = de_reporter()
+
+      {:ok, case_record} = Moderation.report_content(reporter, post, %{"category" => "bullying"})
+      assert Repo.reload!(post).frozen_at
+      flush_emails()
+
+      log = capture_log(fn -> :ok = Moderation.content_deleted(post) end)
+
+      assert log =~ "consistent_outcome?"
+      assert log =~ case_record.id
+
+      assert flush_emails() == [],
+             "a notice went out whose subject and body disagree about the content"
+
+      # And not silently: the claim is handed back, so the reports still owe
+      # their reporter a notice rather than being stamped as answered.
+      assert Repo.exists?(Report.awaiting_outcome(case_record.id))
     end
   end
 
