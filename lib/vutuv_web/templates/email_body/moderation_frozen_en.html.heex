@@ -1,10 +1,10 @@
 <.email_layout preheader="Your content on vutuv was reported and is hidden" locale={@locale}>
   <.email_p>{email_greeting(@user)},</.email_p>
   <.email_p>
-    someone reported one of your contributions on vutuv. No person looked at it first: a report
-    from a member in good standing hides the reported content automatically, the moment it
-    arrives. That is what happened here, and only you and our admins can see it now.
+    {@content_intro} No person looked at the reported content first, and only you and our admins
+    can see it now.
   </.email_p>
+  <.email_p>{@standing_sentence} That is what happened here.</.email_p>
   <.email_panel>
     <.email_row label="Reported as">{@category_labels}</.email_row>
   </.email_panel>
@@ -35,7 +35,7 @@
       do:
         "Edit the content. One of our admins then looks at the revision, and it stays hidden until they have."
     ),
-    "Delete it. That settles the report, no questions asked.",
+    "Delete the content. That settles the report, no questions asked.",
     "Tell us your content is fine. It stays hidden until one of our admins has ruled."
   ]} />
   <.email_signature locale={@locale} />

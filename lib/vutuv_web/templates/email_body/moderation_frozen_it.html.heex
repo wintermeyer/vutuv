@@ -1,11 +1,10 @@
 <.email_layout preheader="Un Suo contenuto su vutuv è stato segnalato ed è nascosto" locale={@locale}>
   <.email_p>{email_greeting(@user)},</.email_p>
   <.email_p>
-    qualcuno ha segnalato un Suo contributo su vutuv. Nessuna persona lo ha esaminato prima: la
-    segnalazione di un membro affidabile nasconde il contenuto segnalato automaticamente, nel
-    momento in cui arriva. È quello che è successo qui; ora possono vederlo solo Lei e i nostri
-    amministratori.
+    {@content_intro} Nessuna persona ha esaminato prima il contenuto segnalato; ora possono
+    vederlo solo Lei e i nostri amministratori.
   </.email_p>
+  <.email_p>{@standing_sentence} È quello che è successo qui.</.email_p>
   <.email_panel>
     <.email_row label="Segnalato come">{@category_labels}</.email_row>
   </.email_panel>
@@ -39,7 +38,7 @@
       do:
         "Modificare il contenuto. I nostri amministratori esaminano poi la revisione; fino ad allora resta nascosto."
     ),
-    "Eliminarlo. Così la segnalazione è chiusa, senza altre domande.",
+    "Eliminare il contenuto. Così la segnalazione è chiusa, senza altre domande.",
     "Dirci che il Suo contenuto è a posto. Resta nascosto finché un amministratore non avrà deciso."
   ]} />
   <.email_signature locale={@locale} />

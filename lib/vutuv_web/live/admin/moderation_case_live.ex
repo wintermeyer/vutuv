@@ -234,17 +234,28 @@ defmodule VutuvWeb.Admin.ModerationCaseLive do
           <%!-- Whether the picture is still on the profile decides what the two
                 rulings do, and an admin has to know which case they are in:
                 only a copyright notice takes one offline before a ruling
-                (issue #2030). Read off the row's own column. --%>
+                (issue #2030). Read off the row's own column.
+
+                A copyright notice whose address nobody has confirmed hides
+                nothing either (`Report.effective?/1`), and the two-branch
+                version then explained a copyright case with "only a copyright
+                notice takes one offline" — telling the admin the opposite of
+                what the queue is waiting for (issue #2067). --%>
           <p class="mt-1 text-xs text-slate-600 dark:text-slate-400">
-            {if @content.frozen_at,
-              do:
-                gettext(
+            <%= cond do %>
+              <% @content.frozen_at -> %>
+                {gettext(
                   "Upholding the case deletes it, the private original included. Rejecting it puts every file back where it was."
-                ),
-              else:
-                gettext(
+                )}
+              <% Moderation.pending_copyright_notice?(@case) -> %>
+                {gettext(
+                  "This picture is still on the profile: the address behind the copyright notice is not confirmed yet, so nothing has been hidden. Upholding the case deletes it, the private original included."
+                )}
+              <% true -> %>
+                {gettext(
                   "This picture is still on the profile: only a copyright notice takes one offline before a ruling. Upholding the case deletes it, the private original included."
                 )}
+            <% end %>
           </p>
         </div>
 
@@ -370,10 +381,30 @@ defmodule VutuvWeb.Admin.ModerationCaseLive do
 
         <div class="mt-3 grid gap-4 md:grid-cols-2">
           <div class="rounded-lg border border-red-200 p-4 dark:border-red-900">
+            <%!-- What upholding does to the content is not one sentence: it
+                  deletes a picture, leaves a frozen post frozen, leaves a
+                  flagged one where it is, and puts a frozen profile back. The
+                  panel claimed "the content stays hidden" on all four
+                  (issue #2067). --%>
             <p class="text-sm text-slate-600 dark:text-slate-400">
-              {gettext(
-                "The report is justified. The content stays hidden and the owner gets a strike (warn, suspend, deactivate)."
-              )}
+              <%= case Moderation.uphold_content_effect(@case, @content) do %>
+                <% :deleted -> %>
+                  {gettext(
+                    "The report is justified. The reported picture is deleted, the private original included, and the owner gets a strike (warn, suspend, deactivate)."
+                  )}
+                <% :stays_hidden -> %>
+                  {gettext(
+                    "The report is justified. The content stays hidden and the owner gets a strike (warn, suspend, deactivate)."
+                  )}
+                <% :unhidden -> %>
+                  {gettext(
+                    "The report is justified. The content becomes visible again - the consequence here is the strike (warn, suspend, deactivate)."
+                  )}
+                <% :untouched -> %>
+                  {gettext(
+                    "The report is justified. The content is not hidden and upholding does not hide it; the owner gets a strike (warn, suspend, deactivate)."
+                  )}
+              <% end %>
             </p>
             <button type="button" class="button button--danger mt-3" id="uphold-case" phx-click="uphold">
               {gettext("Uphold the report")}

@@ -38,6 +38,7 @@ defmodule Vutuv.Activity do
   """
   import Ecto.Query
   import Vutuv.Identity.Query, only: [join_party: 3, shown_party: 2]
+  import Vutuv.Moderation.Query, only: [case_event_at: 1]
 
   alias Vutuv.Accounts.HandleChangeNotification
   alias Vutuv.Accounts.User
@@ -342,7 +343,7 @@ defmodule Vutuv.Activity do
 
   defp moderation_max(user_id) do
     Vutuv.Moderation.owner_notified_cases_query(user_id)
-    |> select([c], %{ts: max(c.inserted_at)})
+    |> select([c], %{ts: max(case_event_at(c))})
   end
 
   defp image_rejected_max(user_id) do
@@ -1954,10 +1955,10 @@ defmodule Vutuv.Activity do
   defp moderation_items(user_id, limit, cursor) do
     rows =
       Vutuv.Moderation.owner_notified_cases_query(user_id)
-      |> order_by([c], desc: c.inserted_at, desc: c.id)
+      |> order_by([c], desc: case_event_at(c), desc: c.id)
       |> limit(^limit)
-      |> select([c], {c.id, c.inserted_at, c.status})
-      |> at_or_before(cursor)
+      |> select([c], {c.id, case_event_at(c), c.status})
+      |> at_or_before_case_event(cursor)
       |> Repo.all()
 
     # What was claimed, so the line can name it instead of saying only that
@@ -2026,6 +2027,16 @@ defmodule Vutuv.Activity do
       }
     end)
   end
+
+  # The keyset and unread twins of `case_event_at/1`: the same expression the
+  # ordering uses, or a page boundary and a badge land in the wrong place.
+  defp at_or_before_case_event(query, nil), do: query
+
+  defp at_or_before_case_event(query, %{at: at}),
+    do: where(query, [c], case_event_at(c) <= ^at)
+
+  defp since_case_event(query, nil), do: query
+  defp since_case_event(query, read_at), do: where(query, [c], case_event_at(c) > ^read_at)
 
   defp at_or_before_notified(query, nil), do: query
 
@@ -2477,10 +2488,13 @@ defmodule Vutuv.Activity do
     from(group in subquery(CvUpdates.count_query(user_id, read_at)), select: %{count: count()})
   end
 
+  # `since/2` compares `inserted_at`, which here is when the report arrived; the
+  # event is what the row says now, so this bounds on the same expression the
+  # items and the max do (issue #2067).
   defp count_moderation(user_id, read_at) do
     Vutuv.Moderation.owner_notified_cases_query(user_id)
     |> select([c], %{count: count()})
-    |> since(read_at)
+    |> since_case_event(read_at)
   end
 
   defp count_image_rejections(user_id, read_at) do

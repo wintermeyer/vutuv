@@ -87,9 +87,18 @@ defmodule Vutuv.Moderation.Notifier do
       )
       |> Repo.update_all(set: [outcome_notified_at: now, updated_at: now])
 
-    reporters = reporters_by_id(reports)
+    if reports != [] do
+      # What became of the content, read **here**: the ruling has already
+      # settled it (purged a picture, unfrozen a profile, left a post frozen)
+      # and the delivery tasks run later, on a row `remove_owner/4` may by then
+      # have erased. Once per case rather than per reporter, and only once the
+      # `UPDATE` above says somebody is actually owed a notice — a second close
+      # or a retry claims no rows and must not pay for a lookup nothing reads.
+      fate = Moderation.reported_content_fate(case_record)
+      reporters = reporters_by_id(reports)
 
-    for report <- reports, do: deliver_outcome(report, reporters, outcome)
+      for report <- reports, do: deliver_outcome(report, reporters, outcome, fate)
+    end
 
     :ok
   end
@@ -110,7 +119,7 @@ defmodule Vutuv.Moderation.Notifier do
 
   # A member reporter: the in-app entry (derived from the row this stamped, so
   # the push and the persisted line are the same event) plus the mail.
-  defp deliver_outcome(%Report{reporter_id: reporter_id} = report, reporters, outcome)
+  defp deliver_outcome(%Report{reporter_id: reporter_id} = report, reporters, outcome, fate)
        when is_binary(reporter_id) do
     Activity.notify(reporter_id, %{
       kind: "report_outcome",
@@ -125,20 +134,21 @@ defmodule Vutuv.Moderation.Notifier do
 
       reporter ->
         deliver_to(reporter, fn user, email ->
-          Emailer.moderation_outcome_email(user, email, outcome)
+          Emailer.moderation_outcome_email(user, email, outcome, fate)
         end)
     end
   end
 
   # An outside notifier (issue #2009): no account, so no in-app anything, and
   # the name and language ride the report row.
-  defp deliver_outcome(%Report{reporter_email: address} = report, _reporters, outcome)
+  defp deliver_outcome(%Report{reporter_email: address} = report, _reporters, outcome, fate)
        when is_binary(address) do
     notice = %{
       name: report.reporter_name,
       email: address,
       locale: report.reporter_locale,
-      outcome: outcome
+      outcome: outcome,
+      fate: fate
     }
 
     Emailer.deliver_async(fn ->
@@ -146,7 +156,7 @@ defmodule Vutuv.Moderation.Notifier do
     end)
   end
 
-  defp deliver_outcome(_report, _reporters, _outcome), do: :ok
+  defp deliver_outcome(_report, _reporters, _outcome, _fate), do: :ok
 
   @doc """
   The AI image scan rejected and deleted one of the member's images
@@ -172,9 +182,13 @@ defmodule Vutuv.Moderation.Notifier do
     end
   end
 
-  @doc "Strike 1: a formal warning."
-  def strike_warning(%User{} = user) do
-    deliver_to(user, &Emailer.moderation_warning_email/2)
+  @doc """
+  Strike 1: a formal warning, naming the ground the ruling rested on
+  (`:copyright` or `:community`) — the same ground the owner's case page named
+  when the content was first hidden (issue #2067).
+  """
+  def strike_warning(%User{} = user, ground) do
+    deliver_to(user, fn user, email -> Emailer.moderation_warning_email(user, email, ground) end)
   end
 
   @doc "Strike 2: a temporary suspension."

@@ -1,10 +1,13 @@
 <%= email_greeting(@user) %>,
 
-our admins reviewed a report about content of yours and found that it
+<%= if @copyright_case do %>our admins reviewed a report about content of yours and upheld it: the
+content infringes somebody else's copyright. That is a legal question, not
+a house rule.
+<% else %>our admins reviewed a report about content of yours and found that it
 breaks our community guidelines:
 
 <%= @url %>community
-
+<% end %>
 This is a formal warning, the first of three steps. A second confirmed
 violation suspends your account for a week; a third deactivates it for
 good. Warnings expire after twelve months.

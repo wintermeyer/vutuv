@@ -1,9 +1,10 @@
 <%= email_greeting(@user) %>,
 
-one of your contributions on vutuv was reported and is hidden while our
-admins review it. No person looked at it first: a report from a member in
-good standing hides the reported content automatically, the moment it
-arrives.
+<%= email_wrapped_text(@content_intro) %>
+The reported content stays hidden until our admins have looked at the case;
+no person looked at it first.
+
+<%= email_wrapped_text(@standing_sentence) %>
 
   Reported as: <%= @category_labels %>
 <%= if @notes != [] do %>

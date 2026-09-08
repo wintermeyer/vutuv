@@ -105,6 +105,24 @@ layout, dark mode, and blocks like the PIN box, CTA button and key/value panel).
 The two formats are paired by a drift test, so an email added with only one
 fails the build.
 
+**A body is written per locale, so a fact it needs must arrive as an assign —
+and a noun that inflects arrives as a whole sentence.** The two owner mails
+opened with "one of your posts was reported" for every content type, because the
+type was never handed to them: a member whose profile picture had been taken
+offline went looking through posts that were all still there (issue #2067).
+Naming the type is not a matter of dropping `content_type_label/1` into a frame,
+because German gives each kind its own gender and article (der Beitrag, das
+Bild, die Nachricht, die Seite, die Stellenanzeige) and a profile is not "one of
+your" anything — and a sentence built from translated fragments is exactly what
+this project forbids. So `VutuvWeb.ReportHTML.content_reported_sentence/1` is
+**one whole translatable sentence per type**, pre-rendered in the recipient's
+locale (`in_locale/2`, like the category labels beside it), and everything after
+it in the body says "the reported content", which has one gender in each locale.
+The same shape answers two more facts a body cannot derive: whether an account
+here is behind the report (`from_member`, or the mail invents a member for an
+anonymous outside notice) and what became of the content
+(`content_fate`) — see `moderation.md`.
+
 **Quoting somebody else's text.** A mail that carries what another person wrote
 has two blocks, and they are not interchangeable. `email_markdown/1` renders a
 member's own Markdown (an invitation note, a DM) with its links live.

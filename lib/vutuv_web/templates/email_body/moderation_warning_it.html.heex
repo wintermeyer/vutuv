@@ -1,10 +1,17 @@
 <.email_layout preheader="Un avvertimento per il Suo account vutuv" locale={@locale}>
   <.email_p>{email_greeting(@user)},</.email_p>
-  <.email_p>
+  <.email_p :if={@copyright_case}>
+    i nostri amministratori hanno esaminato una segnalazione su un Suo contenuto e le hanno dato
+    ragione: il contenuto viola il diritto d'autore altrui. È una questione legale, non una regola
+    della casa.
+  </.email_p>
+  <.email_p :if={!@copyright_case}>
     i nostri amministratori hanno esaminato una segnalazione su un Suo contenuto e hanno rilevato
     che viola le nostre regole della community:
   </.email_p>
-  <.email_button href={"#{@url}community"}>Le nostre regole della community</.email_button>
+  <.email_button :if={!@copyright_case} href={"#{@url}community"}>
+    Le nostre regole della community
+  </.email_button>
   <.email_p>
     Questo è un avvertimento formale, il primo di tre passi. Una seconda violazione confermata
     sospende il Suo account per una settimana; una terza lo disattiva definitivamente. Gli

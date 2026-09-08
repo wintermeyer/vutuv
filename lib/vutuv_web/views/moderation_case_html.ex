@@ -22,11 +22,24 @@ defmodule VutuvWeb.ModerationCaseHTML do
   def status_line(%Case{status: "resolved_edited"}),
     do: gettext("Settled: you revised the content and it is visible again.")
 
-  def status_line(%Case{status: "upheld"}),
-    do: gettext("An admin confirmed the report. The content stays hidden.")
+  # These two said what became of the content as well — "the content stays
+  # hidden", "the content is visible again" — and neither is a function of the
+  # status: an upheld picture case deletes, an upheld post stays frozen, an
+  # upheld profile comes back on the strike ladder (issue #2067). They name the
+  # ruling now; `content_fate_line/1` below is the sentence beside them, its own
+  # paragraph rather than a second half glued on, because two translated halves
+  # of one sentence is the shape this project forbids.
+  def status_line(%Case{status: "upheld"}), do: gettext("An admin confirmed the report.")
+  def status_line(%Case{status: "rejected"}), do: gettext("An admin dismissed the report.")
 
-  def status_line(%Case{status: "rejected"}),
-    do: gettext("An admin dismissed the report. The content is visible again.")
+  @doc """
+  What became of the content, for a settled case — the owner's half of what
+  `Moderation.reported_content_fate/1` tells the reporter, so the two sides of
+  one case cannot describe it differently.
+  """
+  def content_fate_line(:removed), do: gettext("The content is deleted.")
+  def content_fate_line(:hidden), do: gettext("The content stays hidden.")
+  def content_fate_line(:visible), do: gettext("The content is visible again.")
 
   @doc """
   The reported categories, human-readable. Takes the statement of reasons

@@ -7,15 +7,25 @@
     <p class="mt-2 flex items-start gap-2 rounded-lg bg-amber-50 p-3 text-sm font-medium text-amber-800 ring-1 ring-amber-200 dark:bg-amber-900/30 dark:text-amber-200 dark:ring-amber-900">
       <span aria-hidden="true">⚑</span>
       {status_line(@case)}
+      <span :if={@content_fate}>{content_fate_line(@content_fate)}</span>
     </p>
 
-    <%!-- Nobody weighed this up: the freeze is what a report from a member in
+    <%!-- Nobody weighed this up: the freeze is what a report from a reporter in
           good standing does on arrival, and a member owed a statement of
-          reasons is owed that fact first. --%>
+          reasons is owed that fact first. The word "member" is only true when
+          one of the reports really came from an account here — an outside
+          notice (issue #2009) has nobody behind it to name, and saying it
+          anyway pointed the owner at the wrong people (issue #2067). --%>
     <p :if={@case.status in ~w(pending_owner escalated)} class="mt-3 text-sm text-slate-600 dark:text-slate-400">
-      {gettext(
-        "No person made this decision: a report from a member in good standing hides the reported content automatically, the moment it arrives."
-      )}
+      {if @notice.from_member?,
+        do:
+          gettext(
+            "No person made this decision: a report from a member in good standing hides the reported content automatically, the moment it arrives."
+          ),
+        else:
+          gettext(
+            "No person made this decision: a report from somebody with a good record hides the reported content automatically, the moment it arrives."
+          )}
     </p>
 
     <dl class="mt-4 space-y-3 text-sm">

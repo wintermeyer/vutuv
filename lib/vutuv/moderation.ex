@@ -1137,6 +1137,87 @@ defmodule Vutuv.Moderation do
   end
 
   @doc """
+  Whether a copyright notice was filed on this case but **counts for nothing
+  yet** — an outside notice whose address nobody has confirmed
+  (`Report.effective?/1`).
+
+  It exists because that state reads on the admin case page as its own
+  opposite: the picture is still on the profile, `copyright_case?/1` says no,
+  and the page then explained the picture with "only a copyright notice takes
+  one offline before a ruling" — on a case whose category is copyright. The
+  reason is the unconfirmed address, and only this predicate can tell the two
+  apart. Takes the case with its **plain** `:reports` preload, which is what
+  the two admin surfaces carry.
+  """
+  def pending_copyright_notice?(%Case{reports: reports} = case_record) when is_list(reports),
+    do: Enum.any?(reports, &Report.copyright?/1) and not copyright_case?(case_record)
+
+  def pending_copyright_notice?(%Case{} = case_record),
+    do: case_record |> Repo.preload(:reports) |> pending_copyright_notice?()
+
+  @doc """
+  What became of the reported content itself, for the notice its reporter is
+  owed (issues #2011/#2067): `:removed`, `:hidden` or `:visible`.
+
+  **Measured after the ruling settled the content**, never derived from the
+  case status — one `"upheld"` ends three different ways (a picture is purged,
+  a post stays frozen as evidence, a profile comes back with its owner on the
+  strike ladder), and the sweeping "we have taken the necessary steps" the mail
+  used to send instead is exactly the sentence that made the notice worthless.
+  Every caller runs after `settle_content_on_uphold/1` or `unfreeze_content/1`,
+  so what it reads is the answer.
+
+  A hidden owner hides everything they own, so a suspended or deactivated
+  account counts as `:hidden` even when the content row itself was never
+  frozen — otherwise the account removal an admin has just carried out would be
+  reported to the reporter as "still visible".
+  """
+  def reported_content_fate(%Case{} = case_record) do
+    case case_content(case_record) do
+      nil -> :removed
+      content -> if content_hidden?(case_record, content), do: :hidden, else: :visible
+    end
+  end
+
+  # A profile case's content *is* its owner (`owner_id/1` on a `%User{}` returns
+  # its own id), so reading the row a second time would be the same row —
+  # and `account_hidden?/1` already tests `frozen_at`.
+  defp content_hidden?(%Case{owner_id: id}, %User{id: id} = owner), do: account_hidden?(owner)
+
+  defp content_hidden?(%Case{}, %{frozen_at: %NaiveDateTime{}}), do: true
+
+  defp content_hidden?(%Case{owner_id: owner_id}, _content) do
+    case Repo.get(User, owner_id) do
+      nil -> true
+      owner -> account_hidden?(owner)
+    end
+  end
+
+  @doc """
+  What upholding this case would do to the content, for the admin about to
+  rule: `:deleted`, `:stays_hidden`, `:untouched` or `:unhidden`.
+
+  The decision panel promised "the content stays hidden" on every case, which
+  is true for a frozen post and false for the three other shapes an open case
+  has: a picture is deleted by the ruling whether or not it was ever hidden, a
+  flagged post was never hidden in the first place, and an upheld **profile**
+  case unfreezes the profile because the consequence there is the strike.
+
+  It is the *description* of what `settle_content_on_uphold/1` does, so the two
+  clause lists have to move together; content that is gone falls through to
+  `:untouched`, which is the honest answer for a ruling that no longer has
+  anything to act on.
+  """
+  def uphold_content_effect(%Case{content_type: "image"}, _content), do: :deleted
+
+  def uphold_content_effect(%Case{content_type: type}, %{frozen_at: %NaiveDateTime{}})
+      when type in ["user", "organization"],
+      do: :unhidden
+
+  def uphold_content_effect(%Case{}, %{frozen_at: %NaiveDateTime{}}), do: :stays_hidden
+  def uphold_content_effect(%Case{}, _content), do: :untouched
+
+  @doc """
   The statement of reasons the owner of hidden content is owed (issue #2010):
   what was claimed, in the words the reporters typed, and on what ground.
 
@@ -1145,6 +1226,14 @@ defmodule Vutuv.Moderation do
   ground is the law rather than the house rules. The reporter is deliberately
   not in the map — reports are anonymous, and a surface cannot leak what it
   was never handed.
+
+  `from_member?` is the one thing about the reporter the owner does get, and
+  only because the alternative was a lie: both owner surfaces explained the
+  automatic freeze as "a report from a **member** in good standing", which for
+  an outside notice (issue #2009) names somebody who does not exist and points
+  the owner at the wrong people. It says whether *any* effective report on this
+  case has an account here, never which one, so a case a member and a stranger
+  both reported keeps the member wording it has earned.
 
   All three surfaces that carry the notice (the case page, the owner's email
   and the in-app line) read it here, so they cannot drift apart.
@@ -1167,7 +1256,8 @@ defmodule Vutuv.Moderation do
       categories: categories,
       category: leading_category(categories),
       notes: ordered |> Enum.map(& &1.note) |> Enum.reject(&(&1 in [nil, ""])),
-      copyright?: Enum.any?(categories, &Report.copyright?/1)
+      copyright?: Enum.any?(categories, &Report.copyright?/1),
+      from_member?: Enum.any?(ordered, &is_binary(&1.reporter_id))
     }
   end
 
@@ -1495,20 +1585,36 @@ defmodule Vutuv.Moderation do
     |> Repo.insert!()
 
     log(case_record, admin, "strike_issued", %{"role" => role, "level" => level})
-    apply_ladder(user, level, now)
+    apply_ladder(user, level, now, case_record, role)
   end
 
-  defp apply_ladder(user, 1, _now) do
-    Notifier.strike_warning(user)
+  # What the warning names as the ground it rests on. The case page tells the
+  # owner of a copyright case outright that this is the law and not a house
+  # rule; the warning that followed cited the community guidelines and linked
+  # them, so the two letters about one case disagreed (issue #2067). Asked
+  # inside the level-1 clause, because it costs a query on a case struct that
+  # carries no reports and only the warning has a use for the answer — the two
+  # rungs above it are about a ladder, not about one case.
+  #
+  # Only the **owner** can be struck on a copyright ground. A reporter's strike
+  # is for weaponising the report button, which is a house rule whatever the
+  # case underneath it was about.
+  defp strike_ground(%Case{} = case_record, "owner"),
+    do: if(copyright_case?(case_record), do: :copyright, else: :community)
+
+  defp strike_ground(%Case{}, _role), do: :community
+
+  defp apply_ladder(user, 1, _now, case_record, role) do
+    Notifier.strike_warning(user, strike_ground(case_record, role))
   end
 
-  defp apply_ladder(user, 2, now) do
+  defp apply_ladder(user, 2, now, _case_record, _role) do
     until = NaiveDateTime.add(now, @suspension_days * 86_400)
     set_user_moderation!(user.id, suspended_until: until)
     Notifier.suspension(user, until)
   end
 
-  defp apply_ladder(user, _level, now) do
+  defp apply_ladder(user, _level, now, _case_record, _role) do
     set_user_moderation!(user.id, deactivated_at: now)
     Notifier.deactivation(user)
     # The third strike is permanent, so it federates like the admin's own

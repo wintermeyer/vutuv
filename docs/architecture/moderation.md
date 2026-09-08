@@ -67,6 +67,24 @@ suspension → permanent deactivation; strikes expire after 12 months) or
 *abusive* strike the **reporter** on the same ladder — reporting-as-a-weapon is
 treated as bullying).
 
+Two things the ruling has to carry rather than assume. **The warning names the
+ground the case page named**: the owner of a copyright case is told outright
+that this is the law and not a house rule, and the warning that followed said
+their content broke the community guidelines and linked them, so the two letters
+about one case disagreed (issue #2067). `strike_ground/2` reads
+`copyright_case?/1` and hands the mail `:copyright` or `:community` — for the
+**owner** only, because a reporter's strike is for weaponising the report
+button, which is a house rule whatever the case underneath was about. And
+**what upholding does to the content is not one sentence**: the decision panel
+promised "the content stays hidden" on every case, which is true for a frozen
+post and false for the other three shapes an open case has, so
+`uphold_content_effect/2` answers `:deleted` (a picture, hidden or not),
+`:stays_hidden`, `:unhidden` (a profile or a page, where the consequence is the
+strike) or `:untouched` (a flagged case that never hid anything). Beside it,
+`pending_copyright_notice?/1` is what lets the picture caption tell the two
+reasons a copyright case has not hidden anything apart — the category, or an
+address nobody has confirmed yet.
+
 For a clear-cut spam or abuse account the case page also offers a decisive
 **remove** ruling (`Vutuv.Moderation.remove_owner/4`) that skips the warn-first
 ladder: **deactivate** stamps an internal `users.moderation_reason` (`"spam"`),
@@ -360,7 +378,7 @@ page and is keyed by **report id**, since looking a notice up by its nil
 reporter was a `KeyError` and a 500. `list_reporter_stats/0` is two grouped
 queries now — its inner join to `users` dropped every outside notice from the
 one screen whose job is showing who abuses the report button.
-`Notifier.reporters_case_closed/2` branches on the column rather than on a
+`Notifier.reporters_case_closed/1` branches on the column rather than on a
 preloaded `%User{}`, so an outside notice gets its own mail instead of raising
 in `deliver_to/2`, and `reject_case/3` marks an outside notice abusive without
 trying to strike an account that does not exist (the mark still costs that
@@ -385,9 +403,15 @@ there is one. This is what the Digital Services Act calls a statement of reasons
 
 `Moderation.owner_notice/1` is the one place all three read: it returns the
 deduplicated `categories` (most recent report first), the `category` to name
-where there is room for only one, the reporters' `notes`, and `copyright?`.
-The reporter is deliberately not in the map — a surface cannot leak what it
-was never handed. The three surfaces are
+where there is room for only one, the reporters' `notes`, `copyright?`, and
+`from_member?`. The reporter is deliberately not in the map — a surface cannot
+leak what it was never handed. `from_member?` is the one thing about them that
+does travel, and only because the alternative was a lie: both surfaces explained
+the automatic freeze as "a report from a **member** in good standing", which for
+an outside notice (issue #2009) names somebody who has no account here and
+points the owner at the wrong people (issue #2067). It says whether *any*
+effective report on the case has a user row, never which one, so a case a member
+and a stranger both reported keeps the member wording. The three surfaces are
 
 - the case page `/moderation/cases/:id`, which the controller hands the notice
   as `@notice`;
@@ -401,8 +425,25 @@ was never handed. The three surfaces are
   same function, so a member who reads the mail instead of opening the app is
   told the same thing.
 
-Two things the mail must not get wrong. **The options are the options that case
-actually has**, and `Moderation.owner_edit_offer/2` answers that as one value
+That third surface is **one row per case, rewritten in place**, so its time has
+to be the time of what the row currently *says*. It was the case's
+`inserted_at`, the moment the report arrived, so a ruling days later kept the
+row where it had always been, with the hour of the complaint on it, and the
+member was never told their content had come back (issue #2067). Every reader of
+the `moderation` kind in `Vutuv.Activity` — the ordering, the keyset cursor, the
+`max` and the unread count — now asks `coalesce(resolved_at, inserted_at)`
+through one macro, or the cursor and the ordering stop agreeing. It is the
+answer `report_outcome` gives one kind over: stamp the event, not the trigger.
+
+**The mail names what was actually reported**, which the body cannot derive from
+a per-locale template: `VutuvWeb.ReportHTML.content_reported_sentence/1` gives
+it one whole sentence per content type, pre-rendered in the recipient's language
+beside the category labels. It is a sentence rather than a noun in a frame
+because German inflects each kind differently — see `email.md` for why that is
+the shape and not a placeholder.
+
+Two more things the mail must not get wrong. **The options are the options that
+case actually has**, and `Moderation.owner_edit_offer/2` answers that as one value
 (`:immediate` / `:reviewed` / `:none`) rather than as two booleans each of the
 seven rendering places recombines: only a post has an editor behind the case
 page's button, so a reported message or job posting gets delete and dispute,
@@ -435,7 +476,7 @@ said nothing at all — so somebody who reported a post went back to the URL for
 days and eventually filed the same notice again. This is what the Digital
 Services Act asks for (Art. 16); the reporter-facing text never says so.
 
-`Notifier.reporters_case_closed/2` is the one place it happens, and all five
+`Notifier.reporters_case_closed/1` is the one place it happens, and all five
 ways a case can close call it: `uphold_case/2`, `reject_case/3`, the owner's
 delete (`content_deleted/1`), the owner's edit (`resolve_edited/2`) and the
 erasing `remove_owner/4`. A member gets an in-app entry **and** a mail, an
@@ -448,6 +489,21 @@ removed would be false. It says what happened to the *content* and never what
 happened to the account behind it: a warning, a suspension or nothing visible at
 all is between that member and us, the same asymmetry that keeps the reporter's
 name off the owner's case page.
+
+**What happened to the content is measured, not derived from the ending.**
+Because those four words cannot carry it, the upheld letter said only "we have
+taken the necessary steps" and told the one person it is addressed to nothing at
+all — a promise this issue made and did not keep (fixed in #2067).
+`Moderation.reported_content_fate/1` answers `:removed`, `:hidden` or `:visible`
+by **looking**, after the ruling has settled the content and before any delivery
+task is spawned: the row is gone, or it is frozen, or its owner is hidden and
+takes everything they own with them (`account_hidden?/1` — otherwise the account
+removal an admin has just carried out reads to the reporter as "still visible").
+It is read once per closing case and travels to both builders as `content_fate`,
+so a member and an outside notifier are told the same thing. On the one path
+that erases the case with its account, the fate is read while the content still
+exists, so it says "no longer visible" about content that is about to be
+deleted; that is the same trade the ordering there already makes.
 
 **Exactly once is a claim, not a convention.** One `UPDATE` both picks the
 reports that still owe their reporter a notice and stamps

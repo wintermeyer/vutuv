@@ -1,10 +1,10 @@
 <.email_layout preheader="Ihr Inhalt auf vutuv wird geprüft" locale={@locale}>
   <.email_p>{email_greeting(@user)},</.email_p>
   <.email_p>
-    einer Ihrer Beiträge auf vutuv wurde gemeldet und ist verborgen, während unsere Admins den
-    Fall prüfen. Kein Mensch hat ihn vorher angesehen: Die Meldung eines Mitglieds mit guter
-    Bilanz verbirgt den gemeldeten Inhalt automatisch, sobald sie eintrifft.
+    {@content_intro} Bis unsere Admins den Fall geprüft haben, ist der gemeldete Inhalt verborgen;
+    kein Mensch hat ihn vorher angesehen.
   </.email_p>
+  <.email_p>{@standing_sentence}</.email_p>
   <.email_panel>
     <.email_row label="Gemeldet als">{@category_labels}</.email_row>
   </.email_panel>

@@ -501,7 +501,9 @@ defmodule Vutuv.Notifications.EmailerTest do
       user = insert(:user, locale: "en")
 
       # A moderation mail that does not invite a reply.
-      assert Emailer.moderation_warning_email(user, "warned@example.com").reply_to == nil
+      assert Emailer.moderation_warning_email(user, "warned@example.com", :community).reply_to ==
+               nil
+
       # A plain transactional mail.
       assert Emailer.login_email(@pin, "login@example.com", user).reply_to == nil
     end
@@ -696,7 +698,7 @@ defmodule Vutuv.Notifications.EmailerTest do
 
     test "a moderation email has the shared HTML chrome" do
       user = insert(:user, locale: "en")
-      html = Emailer.moderation_warning_email(user, "warned@example.com").html_body
+      html = Emailer.moderation_warning_email(user, "warned@example.com", :community).html_body
 
       assert html =~ "vutuv"
       assert html =~ "Wintermeyer Consulting"

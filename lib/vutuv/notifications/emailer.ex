@@ -1011,15 +1011,30 @@ defmodule Vutuv.Notifications.Emailer do
   # template is picked by their locale, and the ambient one is the sender's.
   defp statement_of_reasons(user, case_record) do
     notice = Moderation.owner_notice(case_record)
+    locale = get_locale(user.locale)
 
-    labels =
-      in_locale(get_locale(user.locale), fn ->
-        Enum.map_join(notice.categories, ", ", &ReportHTML.category_label/1)
+    # Two sentences that cannot be assembled from parts, so each arrives whole.
+    # The **opening** names what was reported, and German gives each kind its
+    # own gender (der Beitrag, das Bild, die Nachricht, die Seite, die
+    # Stellenanzeige), so every one of them is one translatable sentence rather
+    # than a noun dropped into a frame — until this, a frozen profile picture
+    # was announced as a post and the member went looking through posts that
+    # were all still there (issue #2067). Everything after it says "the reported
+    # content", which is one gender in every locale. The **standing** sentence
+    # differs by one noun between a member's report and an outside notice, which
+    # is exactly why it is one string and not a branch in twelve templates.
+    {labels, intro, standing} =
+      in_locale(locale, fn ->
+        {Enum.map_join(notice.categories, ", ", &ReportHTML.category_label/1),
+         ReportHTML.content_reported_sentence(case_record.content_type),
+         ReportHTML.reporter_standing_sentence(notice.from_member?)}
       end)
 
     %{
       case_id: case_record.id,
       category_labels: labels,
+      content_intro: intro,
+      standing_sentence: standing,
       notes: notice.notes,
       copyright_case: notice.copyright?
     }
@@ -1040,15 +1055,22 @@ defmodule Vutuv.Notifications.Emailer do
   the statement of reasons (#2010), which tells the owner what was claimed and
   never who claimed it.
 
+  `fate` is what became of the content — `:removed`, `:hidden` or `:visible`,
+  measured by `Moderation.reported_content_fate/1` after the ruling settled it.
+  The four endings alone could not carry it: an upheld case purges a picture,
+  leaves a post frozen and puts a profile back, so the upheld letter said "we
+  have taken the necessary steps" and told the one person it is addressed to
+  nothing at all (issue #2067).
+
   `public_notice_outcome_email/1` is the same message for somebody with no
-  member row; both funnel into the one template through `outcome_assigns/2`.
+  member row; both funnel into the one template through `outcome_assigns/3`.
   """
-  def moderation_outcome_email(user, email, outcome) do
+  def moderation_outcome_email(user, email, outcome, fate) do
     locale = get_locale(user.locale)
 
     assigns =
       outcome
-      |> outcome_assigns(locale)
+      |> outcome_assigns(fate, locale)
       |> Map.put(:greeting, UserHelpers.email_greeting(user))
 
     build_email(user, email, "moderation_outcome", assigns, fn -> outcome_subject(outcome) end)
@@ -1064,8 +1086,12 @@ defmodule Vutuv.Notifications.Emailer do
 
   # The preheader is the subject: four endings would otherwise be spelled a
   # second time, per locale, inside three HEEx attributes.
-  defp outcome_assigns(outcome, locale) do
-    %{outcome: outcome, preheader: in_locale(locale, fn -> outcome_subject(outcome) end)}
+  defp outcome_assigns(outcome, fate, locale) do
+    %{
+      outcome: outcome,
+      content_fate: fate,
+      preheader: in_locale(locale, fn -> outcome_subject(outcome) end)
+    }
   end
 
   @doc """
@@ -1087,9 +1113,17 @@ defmodule Vutuv.Notifications.Emailer do
     |> with_appeal_reply_to()
   end
 
-  @doc "Strike 1: the formal warning."
-  def moderation_warning_email(user, email) do
-    build_email(user, email, "moderation_warning", %{}, fn ->
+  @doc """
+  Strike 1: the formal warning, on the ground the ruling rested on —
+  `:copyright` or `:community`.
+
+  It has to be told: the case page tells the owner of a copyright case outright
+  that this is a legal complaint and not a house rule, and this letter then
+  said their content broke the community guidelines and linked them, so the two
+  mails about one case named two different grounds (issue #2067).
+  """
+  def moderation_warning_email(user, email, ground) do
+    build_email(user, email, "moderation_warning", %{copyright_case: ground == :copyright}, fn ->
       gettext("A warning for your vutuv account")
     end)
   end
@@ -1189,7 +1223,7 @@ defmodule Vutuv.Notifications.Emailer do
       notice,
       "moderation_outcome",
       fn -> outcome_subject(notice.outcome) end,
-      &outcome_assigns(notice.outcome, &1)
+      &outcome_assigns(notice.outcome, notice.fate, &1)
     )
   end
 

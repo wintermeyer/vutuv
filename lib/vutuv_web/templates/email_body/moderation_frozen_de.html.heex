@@ -1,11 +1,10 @@
 <.email_layout preheader="Ihr Inhalt auf vutuv wurde gemeldet und ist verborgen" locale={@locale}>
   <.email_p>{email_greeting(@user)},</.email_p>
   <.email_p>
-    einer Ihrer Beiträge auf vutuv wurde gemeldet. Kein Mensch hat ihn vorher angesehen: Die
-    Meldung eines Mitglieds mit guter Bilanz verbirgt den gemeldeten Inhalt automatisch, sobald
-    sie eintrifft. Genau das ist hier passiert; sehen können ihn jetzt nur noch Sie und unsere
-    Admins.
+    {@content_intro} Kein Mensch hat den gemeldeten Inhalt vorher angesehen; sehen können ihn
+    jetzt nur noch Sie und unsere Admins.
   </.email_p>
+  <.email_p>{@standing_sentence} Genau das ist hier passiert.</.email_p>
   <.email_panel>
     <.email_row label="Gemeldet als">{@category_labels}</.email_row>
   </.email_panel>
@@ -38,7 +37,7 @@
       do:
         "Den Inhalt bearbeiten. Unsere Admins sehen sich die Überarbeitung dann an; bis dahin bleibt er verborgen."
     ),
-    "Ihn löschen. Damit ist die Meldung erledigt, ohne Rückfragen.",
+    "Den Inhalt löschen. Damit ist die Meldung erledigt, ohne Rückfragen.",
     "Uns mitteilen, dass Ihr Inhalt in Ordnung ist. Er bleibt dann verborgen, bis eine unserer Admins entschieden hat."
   ]} />
   <.email_signature locale={@locale} />

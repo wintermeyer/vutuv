@@ -1,10 +1,10 @@
 <.email_layout preheader="Un Suo contenuto su vutuv è in esame" locale={@locale}>
   <.email_p>{email_greeting(@user)},</.email_p>
   <.email_p>
-    un Suo contributo su vutuv è stato segnalato ed è nascosto mentre i nostri amministratori lo
-    esaminano. Nessuna persona lo ha esaminato prima: la segnalazione di un membro affidabile
-    nasconde il contenuto segnalato automaticamente, nel momento in cui arriva.
+    {@content_intro} Il contenuto segnalato resta nascosto finché i nostri amministratori non
+    avranno esaminato il caso; nessuna persona lo ha esaminato prima.
   </.email_p>
+  <.email_p>{@standing_sentence}</.email_p>
   <.email_panel>
     <.email_row label="Segnalato come">{@category_labels}</.email_row>
   </.email_panel>

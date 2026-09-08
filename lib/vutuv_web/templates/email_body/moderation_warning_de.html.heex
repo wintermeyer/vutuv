@@ -1,10 +1,16 @@
 <.email_layout preheader="Eine Verwarnung für Ihr vutuv-Konto" locale={@locale}>
   <.email_p>{email_greeting(@user)},</.email_p>
-  <.email_p>
+  <.email_p :if={@copyright_case}>
+    unsere Admins haben eine Meldung zu einem Ihrer Inhalte geprüft und ihr stattgegeben: Der
+    Inhalt verletzt fremde Urheberrechte. Das ist eine rechtliche Frage, keine Hausregel.
+  </.email_p>
+  <.email_p :if={!@copyright_case}>
     unsere Admins haben eine Meldung zu einem Ihrer Inhalte geprüft und festgestellt, dass er gegen
     unsere Community-Richtlinien verstößt:
   </.email_p>
-  <.email_button href={"#{@url}community"}>Unsere Community-Richtlinien</.email_button>
+  <.email_button :if={!@copyright_case} href={"#{@url}community"}>
+    Unsere Community-Richtlinien
+  </.email_button>
   <.email_p>
     Dies ist eine formelle Verwarnung, die erste von drei Stufen. Ein zweiter bestätigter Verstoß
     sperrt Ihr Konto für eine Woche, ein dritter deaktiviert es endgültig. Verwarnungen verfallen
