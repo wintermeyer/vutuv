@@ -558,14 +558,33 @@ many reporters are owed. The regression test walks that tenth path through the
 public API rather than asserting on the predicate, so it sees what the system
 produced.
 
-**What that guard is not.** Nothing re-drives the un-claimed rows:
-`Report.awaiting_outcome/1` has one reader, no sweeper wakes it, and a closed
-case cannot re-enter `settle_case/3` — so a fired guard is permanent silence for
-that reporter, traded against a letter that lies. The wrong *ending* is also
-still written: the status, its `resolved_at`, the History entry and (on
-`resolved_edited`) the owner's spent self-service round all stand. The deeper
-fix is to refuse the contradicting ending in the close path itself, where the
-letter would then never have two halves to disagree about.
+**It belongs at the mail, and moving it into the close path would be worse.**
+The two sources are answering different questions — the status says what
+somebody *did*, the fate says how the content *stands* — so the close path has
+nothing to repair. A guard there could only refuse the *close*, which turns a
+wording bug into a failed member action on content they have already changed.
+The remedy for a fired guard is always a source change in whichever caller
+picked the wrong status, which is exactly what #2067 was, twice: `resolved_edited`
+for a replaced picture, and `fate: :removed` stated by the account deletion.
+Detecting it earlier would not change that.
+
+**Refusing is right; refusing for ever is not.** An operator reading a log is
+not a recovery plan, and the record already exists — `Report.awaiting_outcome/1`
+still says these reporters are owed a notice. What is missing is anything that
+comes back to such a row, which is **#2073**. Until then a fired guard is
+silence for that reporter, and the wrong *ending* still stands too: the status,
+its `resolved_at`, the History entry and, on `resolved_edited`, the owner's
+spent self-service round.
+
+**A guard here is a refusal to speak, so it must name the contradiction and not
+a hair more.** `"revised"` rules out only `:removed`: the subject says the owner
+rewrote the content, and the sole fate calling that a lie is one saying the
+content is gone. Demanding `:visible` instead looked tighter and refused a true
+letter on a live path — `account_hidden?/1` counts `frozen_at` and
+`unreachable_at`, neither of which blocks signing in, so an owner hidden by an
+**unrelated** case can still edit or replace reported content and close
+`resolved_edited` over a measured `:hidden`. Two true sentences, one refused
+notice, and that reporter heard nothing at all (caught in review on PR #2072).
 
 **Exactly once is a claim, not a convention.** One `UPDATE` both picks the
 reports that still owe their reporter a notice and stamps

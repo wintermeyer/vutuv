@@ -70,6 +70,25 @@ defmodule VutuvWeb.Admin.ModerationCaseHeaderTest do
     do: conn |> german() |> get(~p"/admin/moderation/#{id}") |> html_response(200)
 
   describe "the header clock" do
+    # Both labels are new msgids, and `gettext.extract --merge` fuzzy-filled
+    # this exact pair: "Reported" came back as "Melder" (the reporter, the
+    # other party entirely) and "Owner deadline" still carried the retired
+    # `%{date}`. A short label is the likeliest to be fuzzy-matched and the
+    # least likely to be noticed, so both are pinned by name — a timestamp
+    # assertion beside them would stay green through either mistranslation.
+    test "names both stamps in German", context do
+      case_record = copyright_case!(context)
+      pin_clock!(case_record)
+
+      html = show(context.conn, case_record)
+
+      assert html =~ "Gemeldet:"
+      assert html =~ "Frist des Besitzers:"
+
+      refute html =~ "Melder:"
+      refute html =~ "%{date}"
+    end
+
     test "reads in the admin's own zone, like the history beneath it", context do
       case_record = copyright_case!(context)
       pin_clock!(case_record)

@@ -134,13 +134,21 @@ defmodule Vutuv.Moderation.Notifier do
   # worse for the person reading it than silence, and this is a legal notice.
   # **The claim goes back**: leaving `outcome_notified_at` stamped would record
   # in the database that these reporters were told, which is false, and
-  # `Report.awaiting_outcome/1` is what any later answer has to read. Be clear
-  # about what that does and does not buy — nothing re-drives it. That query
-  # has one reader (`deliver_outcomes/3`), no sweeper wakes it, and a closed
-  # case cannot re-enter `settle_case/3`, so in practice a fired guard is
-  # permanent silence for that reporter. The row stays honest and the log is
-  # what an operator acts on; the deeper fix is to refuse the contradicting
-  # *ending* rather than the letter, in the close path itself.
+  # `Report.awaiting_outcome/1` is what any later answer has to read. Nothing
+  # re-drives it yet, so until issue #2073 a fired guard is silence for that
+  # reporter; the row stays honest and the log is what an operator acts on.
+  #
+  # It stays here rather than moving into the close path. The status says what
+  # somebody *did* and the fate how the content *stands*, so closing cannot be
+  # repaired: a guard there could only refuse the close, turning a wording bug
+  # into a failed member action on content they have already changed. The
+  # remedy is always a source change in the caller that picked the wrong
+  # status, which is what #2067 was, twice.
+  #
+  # And because refusing is refusing to *speak*, the predicate must name the
+  # contradiction and nothing more — see `Moderation.consistent_outcome?/2`,
+  # which refused a true letter for as long as it read "revised" as demanding
+  # `:visible`.
   defp refuse_contradicting_notice(%Case{} = case_record, reports, outcome, fate) do
     ids = Enum.map(reports, & &1.id)
 

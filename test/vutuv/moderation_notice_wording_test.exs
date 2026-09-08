@@ -446,8 +446,8 @@ defmodule Vutuv.ModerationNoticeWordingTest do
 
     # The invariant that would have caught both above, so a tenth path cannot
     # ship the contradiction: only two of the four endings make a claim about
-    # the content in their own subject, and each has exactly one fate that
-    # agrees with it.
+    # the content in their own subject, and a fate that denies that claim
+    # cannot ride beneath it.
     test "no closing path lets the subject and the fate disagree" do
       for {status, fate} <- [
             {"resolved_deleted", :removed},
@@ -461,11 +461,49 @@ defmodule Vutuv.ModerationNoticeWordingTest do
       refute Moderation.consistent_outcome?("removed", :hidden)
       refute Moderation.consistent_outcome?("revised", :removed)
 
+      # "Revised" rules out only `:removed`. A rewritten piece of content that
+      # is hidden because its OWNER is hidden makes two true sentences, and the
+      # test below walks that path for real — this pin is what stops the
+      # predicate from quietly tightening back to `== :visible`.
+      assert Moderation.consistent_outcome?("revised", :hidden)
+
       # The two admin rulings claim nothing about the content in their subject,
       # so every fate is honest beside them.
       for outcome <- ["upheld", "not_upheld"], fate <- [:removed, :hidden, :visible] do
         assert Moderation.consistent_outcome?(outcome, fate)
       end
+    end
+
+    # The guard's own failure mode, and the one the reviewer of PR #2072 found:
+    # a refusal to speak is as wrong as a lie when the letter would have been
+    # true. `account_hidden?/1` counts `frozen_at` and `unreachable_at`, and
+    # neither blocks signing in, so an owner hidden by an unrelated case still
+    # edits their reported post — `resolved_edited` over a measured `:hidden`.
+    test "an owner hidden by another case still gets their reporter answered", %{owner: owner} do
+      post = insert(:post, user: owner)
+      reporter = de_reporter()
+      {:ok, case_record} = Moderation.report_content(reporter, post, %{"category" => "bullying"})
+
+      # Hidden by something else entirely: a deliverability freeze, which does
+      # not stop them logging in and rewriting the post.
+      Repo.update_all(
+        from(u in Vutuv.Accounts.User, where: u.id == ^owner.id),
+        set: [unreachable_at: NaiveDateTime.utc_now(:second)]
+      )
+
+      flush_emails()
+
+      :ok = Moderation.content_edited(Repo.reload!(post))
+
+      assert Moderation.reported_content_fate(Repo.reload!(case_record)) == :hidden
+
+      assert_notice(
+        "melder@example.com",
+        "Der gemeldete Inhalt ist auf vutuv nicht mehr zu sehen."
+      )
+
+      refute Repo.exists?(Report.awaiting_outcome(case_record.id)),
+             "the reporter was answered, so nothing is still owed"
     end
 
     # The tenth path, and the reason the invariant above proved nothing: it

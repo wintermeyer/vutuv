@@ -978,18 +978,31 @@ defmodule Vutuv.Moderation do
   Whether an ending and a measured fate can stand in the same notice.
 
   Two of the four endings make a claim about the content in their own **subject
-  line** — "the content you reported was deleted", "…was revised" — so exactly
-  one fate agrees with each. The two admin rulings claim nothing about the
-  content there, so any fate reads honestly beside them.
+  line** — "the content you reported was deleted", "…was revised" — so a fate
+  that denies that claim cannot ride beneath it. The two admin rulings claim
+  nothing about the content there, so any fate reads honestly beside them.
 
   It exists because the subject comes from the case status and the body's last
   paragraph from a measurement, and those are two sources: a path that closes a
   case without settling the content the way its status claims puts two
   sentences about one case into one mail that disagree. That is not
   hypothetical — replacing a flagged picture did exactly that.
+
+  **"Revised" rules out only `:removed`, not everything but `:visible`.** The
+  subject says the owner rewrote the content, and the only fate that calls that
+  a lie is one saying the content is gone. `:hidden` beside it is two true
+  sentences, and it is a state a live path reaches: `account_hidden?/1` counts
+  `frozen_at` and `unreachable_at`, neither of which blocks signing in, so an
+  owner hidden by an **unrelated** case can still edit or replace their reported
+  content — closing `resolved_edited` over a measured `:hidden`. Demanding
+  `:visible` there refused a notice that was owed and true, and left that
+  reporter with nothing at all (issue #2071). Watch this against
+  `Notifier.deliver_or_refuse/4`: a guard here is a refusal to *speak*, so
+  making it stricter than the contradiction it names costs a reporter their
+  answer.
   """
   def consistent_outcome?("removed", fate), do: fate == :removed
-  def consistent_outcome?("revised", fate), do: fate == :visible
+  def consistent_outcome?("revised", fate), do: fate != :removed
   def consistent_outcome?(_upheld_or_not, _fate), do: true
 
   @doc """
