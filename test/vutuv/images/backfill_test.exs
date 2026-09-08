@@ -20,12 +20,15 @@ defmodule Vutuv.Images.BackfillTest do
   alias Vutuv.Images.Backfill
   alias Vutuv.Images.Image, as: ImageRow
   alias Vutuv.Jobs.JobPostingImage
+  alias Vutuv.Posts.PostReview
   alias Vutuv.Repo
+  alias Vutuv.ReviewCover
   alias Vutuv.Uploads
   alias Vutuv.Uploads.Spec
 
   @kind "job_posting_image"
   @post_kind "post_image"
+  @review_kind "review_cover"
 
   setup do
     tmp =
@@ -79,6 +82,25 @@ defmodule Vutuv.Images.BackfillTest do
   end
 
   defp post_image_row(picture), do: Vutuv.ImageHelpers.mirror_row(@post_kind, picture)
+
+  # A book review whose cover was fetched before the row existed: the two
+  # columns on the review row and the one served version on disk. Not a
+  # gallery picture — there is no token and no table of its own, so the join
+  # is `images.post_review_id` and `mirror_row/2` cannot find it.
+  defp stored_review_cover(attrs \\ []) do
+    review = insert(:post_review, Keyword.merge([cover: "1a2b3c4d5e6f.jpg"], attrs))
+    dir = Uploads.disk_dir(Path.join("review_covers", review.id))
+    File.mkdir_p!(dir)
+    # Named through the uploader, so the fixture cannot outlive the convention.
+    File.write!(
+      Path.join(dir, ReviewCover.version_name(review) <> Spec.served_ext()),
+      "not really an avif"
+    )
+
+    review
+  end
+
+  defp review_cover_row(review), do: Vutuv.ImageHelpers.review_cover_row(review)
 
   defp jpeg_upload(name \\ "selfie.jpg") do
     src = Path.join(System.tmp_dir!(), "backfill_src_#{System.unique_integer([:positive])}.jpg")
@@ -462,6 +484,116 @@ defmodule Vutuv.Images.BackfillTest do
       Backfill.run(only: @post_kind)
 
       assert %{ok?: true} = Backfill.check(only: @post_kind)
+    end
+  end
+
+  # The fourth kind is the odd one (#2055): its truth is columns on the review
+  # row, so it walks the `%{cols: …}` half of this module — the same half the
+  # avatar walks — with a different parent, a different join column and no
+  # pointer at all.
+  describe "a column kind that is not a member: the review cover (issue #2055)" do
+    test "it is one of the kinds a bare run walks" do
+      assert @review_kind in Backfill.kinds()
+    end
+
+    test "one that predates the row arrives with a token nobody had to mint" do
+      review = stored_review_cover(cover_moderation: "approved")
+
+      assert %{@review_kind => tally} = Backfill.run(only: @review_kind)
+      assert tally.pictures == 1
+      assert tally.created == 1
+
+      assert %ImageRow{} = row = review_cover_row(review)
+      assert row.kind == @review_kind
+      assert row.post_review_id == review.id
+      assert row.file == review.cover
+      assert row.moderation == "approved"
+      # No member owner, and nothing to fill it from: the picture is a
+      # publisher's and the post under it may have no member author.
+      assert row.user_id == nil
+      assert is_binary(row.token)
+    end
+
+    test "running it again changes nothing" do
+      stored_review_cover()
+      Backfill.run(only: @review_kind)
+
+      assert %{@review_kind => tally} = Backfill.run(only: @review_kind)
+      assert tally.unchanged == 1
+      assert tally.created == 0
+      assert tally.corrected == 0
+    end
+
+    test "a row whose verdict drifted is corrected, and keeps its token" do
+      review = stored_review_cover(cover_moderation: "approved")
+      Backfill.run(only: @review_kind)
+      before = review_cover_row(review)
+
+      Repo.update_all(from(i in ImageRow, where: i.id == ^before.id),
+        set: [moderation: "pending"]
+      )
+
+      assert %{@review_kind => tally} = Backfill.run(only: @review_kind)
+      assert tally.corrected == 1
+
+      after_run = review_cover_row(review)
+      assert after_run.moderation == "approved"
+      # The bytes did not change, so the handle that names them must not.
+      assert after_run.token == before.token
+    end
+
+    test "a row naming other bytes is corrected with a fresh token" do
+      review = stored_review_cover()
+      Backfill.run(only: @review_kind)
+      before = review_cover_row(review)
+
+      Repo.update_all(from(i in ImageRow, where: i.id == ^before.id), set: [file: "older.jpg"])
+
+      assert %{@review_kind => tally} = Backfill.run(only: @review_kind)
+      assert tally.corrected == 1
+
+      after_run = review_cover_row(review)
+      assert after_run.file == review.cover
+      assert after_run.token != before.token
+    end
+
+    test "a row whose review lost its cover is dropped" do
+      review = stored_review_cover()
+      Backfill.run(only: @review_kind)
+      assert review_cover_row(review)
+
+      Repo.update_all(from(r in PostReview, where: r.id == ^review.id), set: [cover: nil])
+
+      assert %{@review_kind => tally} = Backfill.run(only: @review_kind)
+      assert tally.dropped == 1
+      assert review_cover_row(review) == nil
+    end
+
+    test "the check names the covers with no row, and says nothing about a pointer" do
+      review = stored_review_cover()
+
+      assert %{kinds: %{@review_kind => before}, ok?: false} = Backfill.check(only: @review_kind)
+      assert before.missing_row.count == 1
+      assert before.missing_row.sample == [review.id]
+      assert before.missing_file.count == 0
+      # A review row keeps no pointer back at the picture, so the report must
+      # not invite anybody to go looking for one.
+      refute Map.has_key?(before, :missing_pointer)
+
+      Backfill.run(only: @review_kind)
+
+      assert %{ok?: true} = Backfill.check(only: @review_kind)
+    end
+
+    test "a cover whose file is gone is named and never repaired away" do
+      review = stored_review_cover()
+      File.rm_rf!(Uploads.disk_dir(Path.join("review_covers", review.id)))
+
+      Backfill.run(only: @review_kind)
+
+      assert %{kinds: %{@review_kind => result}, ok?: false} = Backfill.check(only: @review_kind)
+      assert result.missing_file.count == 1
+      assert result.missing_row.count == 0
     end
   end
 

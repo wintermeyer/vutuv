@@ -92,4 +92,13 @@ defmodule Vutuv.ImageHelpers do
 
   def mirror_row(kind, token) when is_binary(token),
     do: Repo.get_by(Image, token: token, kind: kind)
+
+  @doc """
+  The `images` row standing beside a book review's fetched cover (#2055), or
+  `nil`. Not `mirror_row/2`: a review's cover has no token of its own, so the
+  two sides are joined on `images.post_review_id` — the parent column, which
+  is also the key.
+  """
+  def review_cover_row(%{id: id}) when is_binary(id),
+    do: Repo.get_by(Image, post_review_id: id, kind: "review_cover")
 end

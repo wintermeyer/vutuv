@@ -517,17 +517,31 @@ defmodule Vutuv.Moderation.ImageSubjects do
   end
 
   def apply_approved(%ImageScan{kind: "review_cover"} = scan) do
-    flipped =
-      from(r in PostReview,
-        where:
-          r.id == ^scan.subject_id and r.cover == ^scan.fingerprint and
-            r.cover_moderation == "pending"
-      )
-      |> Repo.update_all(set: [cover_moderation: "approved"])
+    {:ok, released} =
+      Repo.transaction(fn ->
+        # `select: r` rather than a second statement: the flipped row is what
+        # the mirror copies and what the two announcements below address.
+        from(r in PostReview,
+          where:
+            r.id == ^scan.subject_id and r.cover == ^scan.fingerprint and
+              r.cover_moderation == "pending",
+          select: r
+        )
+        |> Repo.update_all(set: [cover_moderation: "approved"])
+        |> case do
+          {1, [review]} ->
+            # The mirror row (#2055) takes the same verdict in the same
+            # transaction as the flip it copies.
+            :ok = Images.sync_review_cover(review)
+            review
 
-    case flipped do
-      {1, _} ->
-        review = Repo.get!(PostReview, scan.subject_id)
+          _stale ->
+            nil
+        end
+      end)
+
+    case released do
+      %PostReview{} = review ->
         # The card upgrade was held back at fetch time; the cover is only
         # announced once it is released (no quarantine move — covers are
         # served through the authorizing proxy, which checks this state).
@@ -750,22 +764,33 @@ defmodule Vutuv.Moderation.ImageSubjects do
   end
 
   def apply_rejected(%ImageScan{kind: "review_cover"} = scan) do
-    cleared =
-      from(r in PostReview, where: r.id == ^scan.subject_id and r.cover == ^scan.fingerprint)
-      |> Repo.update_all(set: [cover: nil, cover_status: "failed", cover_moderation: nil])
+    {:ok, cleared} =
+      Repo.transaction(fn ->
+        from(r in PostReview,
+          where: r.id == ^scan.subject_id and r.cover == ^scan.fingerprint,
+          select: r
+        )
+        |> Repo.update_all(set: [cover: nil, cover_status: "failed", cover_moderation: nil])
+        |> case do
+          {1, [review]} ->
+            # The review keeps no file, so it keeps no row either (#2055) — in
+            # the same transaction, before any byte is deleted below.
+            :ok = Images.sync_review_cover(review)
+            review
+
+          _stale ->
+            nil
+        end
+      end)
 
     case cleared do
-      {1, _} ->
-        Vutuv.ReviewCover.delete_files(%PostReview{id: scan.subject_id})
+      %PostReview{post_id: post_id} = review ->
+        Vutuv.ReviewCover.delete_files(review)
         # The cover is settled (as gone), so a post held for it federates now.
-        case Repo.get(PostReview, scan.subject_id) do
-          %PostReview{post_id: post_id} -> Fediverse.images_settled(post_id)
-          nil -> :ok
-        end
-
+        Fediverse.images_settled(post_id)
         :ok
 
-      _ ->
+      nil ->
         :stale
     end
   end

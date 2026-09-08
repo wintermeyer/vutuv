@@ -8,9 +8,9 @@ defmodule Vutuv.Images.Backfill do
 
   It **moves no file and changes no URL.** Whatever a picture already lives in
   stays the source of truth every URL builder and every display gate reads —
-  four member-row columns for a profile picture, its own gallery row for the
-  rest — and this only copies what that says into a row, so the previous
-  release keeps serving unchanged through the whole deploy window.
+  columns on a parent row for a profile picture and a review cover, its own
+  gallery row for the rest — and this only copies what that says into a row, so
+  the previous release keeps serving unchanged through the whole deploy window.
 
   ## Reconcile, not insert-where-missing
 
@@ -62,30 +62,33 @@ defmodule Vutuv.Images.Backfill do
 
   `source/1` is the only per-kind thing here, and it has two shapes:
 
-    * `%{cols: …}` — the truth is columns on a **parent row** (a member's
-      avatar and cover today; a review's cover when #2055 lands, which is this
-      shape and not the other one), joined by a pointer.
+    * `%{cols: …}` — the truth is columns on a **parent row**, joined by the
+      `images` column naming that parent. A member's avatar and cover, and
+      since #2055 a review's cover, which is this shape and not the other one.
+      Read whole from `Vutuv.Images.column_source/1`.
     * `%{gallery: …}` — the truth is a **row of the picture's own**, joined by
       the `token` both sides carry. A job-posting picture since #2054, a post
-      photo since #2052 and an organization image since #2053.
+      photo since #2052 and an organization image since #2053. Read whole from
+      `Vutuv.Images.mirror_source/1`.
 
   Everything around them is shared: the keyset walk, the class vocabulary, the
-  repair, the sample, the printing and both operator commands. A gallery kind
-  has no `missing_pointer` class — there is no pointer to lose — and a source
-  names the classes it can produce, so the report never prints a zero for a
-  class that kind cannot have.
+  repair, the sample, the printing and both operator commands. `missing_pointer`
+  is the one class a source has to earn — only a parent that keeps a pointer
+  back at the row can lose one — so the report never prints a zero for a class
+  that kind cannot have.
 
-  **A gallery kind adds no per-kind branch here** — `source/1` builds itself
-  from `Vutuv.Images.mirror_source/1`, which is the one registry, so a kind
-  cannot be mirrored on the request path and invisible to this pass. #2052
-  added not a line; #2053 changed one, and it is shared rather than per-kind:
-  an organization image is the first source with a column spelled differently
-  on the two sides, so the desired values come from
-  `Vutuv.Images.mirror_attrs/2` — the same function the mirror writes through —
+  **A kind adds no per-kind branch here.** Both registries carry what this pass
+  needs: which columns are copied, the schema, the store, and (for a parent
+  with no pointer) the function that repairs one row. So a kind cannot be
+  written on the request path and be invisible to this pass, and no clause here
+  matches a schema module. #2052 added not a line; #2053 changed one, shared
+  rather than per-kind — an organization image is the first source with a
+  column spelled differently on the two sides, so the desired values come from
+  `Vutuv.Images.mirror_attrs/2`, the same function the mirror writes through,
   rather than a `Map.take/2` on the source row, which would have skipped that
-  column in silence. Its store took the token rather than the row; that
-  difference is gone, `Vutuv.OrganizationImageStore.version_path/2` now answers
-  either.
+  column in silence. #2055 gave the column shape the same treatment:
+  `Vutuv.Images.column_attrs/2` is the twin, so the write and the comparison
+  read one list there too.
   """
 
   import Ecto.Query
@@ -106,16 +109,12 @@ defmodule Vutuv.Images.Backfill do
   # what the operator needs, a sample is what makes it actionable.
   @sample 100
 
-  # The four the member row holds and the row copies. `:crop` and `:moderation`
-  # are legitimately nil on old rows, so a comparison has to be on equality,
-  # never on presence.
-  @copied [:file, :fingerprint, :crop, :moderation]
-
-  # Which classes each shape can report. Written out rather than derived from
-  # each other, so the list reads as what a kind of that shape can be wrong in
-  # rather than as an arithmetic on another list.
-  @member_classes [:missing_row, :mismatched_row, :missing_pointer, :missing_file, :orphan_row]
-  @gallery_classes [:missing_row, :mismatched_row, :missing_file, :orphan_row]
+  # What a picture of any shape can be wrong in. `missing_pointer` is the one
+  # class that is not universal: it belongs to a parent that keeps a pointer
+  # back at the row — a member row does (`users.avatar_image_id`, #2013), a
+  # review row and a gallery row do not — so `source/1` appends it per source
+  # rather than a second list repeating these four.
+  @classes [:missing_row, :mismatched_row, :missing_file, :orphan_row]
 
   @doc """
   The image kinds this backfill covers: the profile kinds, plus the kinds whose
@@ -126,7 +125,7 @@ defmodule Vutuv.Images.Backfill do
   the worst shape there is: the check would print *"Every picture has its row
   and its file. Safe to cut."* for a kind it never looked at.
   """
-  def kinds, do: Enum.sort(Map.keys(Images.member_columns()) ++ Images.mirrored_kinds())
+  def kinds, do: Enum.sort(Images.column_kinds() ++ Images.mirrored_kinds())
 
   @doc """
   Reconciles every picture with its row.
@@ -233,23 +232,26 @@ defmodule Vutuv.Images.Backfill do
   # written twice.
   defp source(kind) do
     if Images.mirrored?(kind) do
-      gallery = Images.mirror_source(kind)
-
-      %{kind: kind, classes: @gallery_classes, gallery: gallery}
+      %{kind: kind, classes: @classes, gallery: Images.mirror_source(kind)}
     else
-      %{kind: kind, classes: @member_classes, cols: Images.member_columns(kind)}
+      cols = Images.column_source(kind)
+
+      %{kind: kind, classes: @classes ++ pointer_class(cols), cols: cols}
     end
   end
+
+  defp pointer_class(%{pointer: _}), do: [:missing_pointer]
+  defp pointer_class(_cols), do: []
 
   ## What is wrong with this picture, if anything
 
   # The one place that decides. `run/1` repairs what this names and `check/1`
   # reports it, so a class added here can never be invisible to the gate.
-  defp classify(%{cols: cols}, user, row) do
+  defp classify(%{kind: kind, cols: cols}, parent, row) do
     cond do
       is_nil(row) -> :missing_row
-      drifted?(row, desired(user, cols)) -> :mismatched_row
-      Map.get(user, cols.pointer) != row.id -> :missing_pointer
+      drifted?(row, Images.column_attrs(kind, parent)) -> :mismatched_row
+      pointer_lost?(cols, parent, row) -> :missing_pointer
       true -> :ok
     end
   end
@@ -271,13 +273,16 @@ defmodule Vutuv.Images.Backfill do
     end
   end
 
+  # Only a parent that keeps a pointer can lose one. A review row has none:
+  # `images.post_review_id` is the join key itself, so a row that was found is
+  # a row that is pointed at.
+  defp pointer_lost?(%{pointer: pointer}, parent, row), do: Map.get(parent, pointer) != row.id
+  defp pointer_lost?(_cols, _parent, _row), do: false
+
   # `token` is the join key, so it is equal by construction and comparing it
   # would only ever say "no".
   defp desired_mirror(kind, gallery_row),
     do: kind |> Images.mirror_attrs(gallery_row) |> Map.delete(:token)
-
-  defp desired(user, cols),
-    do: Map.new(@copied, fn field -> {field, Map.get(user, cols[field])} end)
 
   defp drifted?(row, desired), do: Enum.any?(desired, fn {f, v} -> Map.get(row, f) != v end)
 
@@ -330,18 +335,21 @@ defmodule Vutuv.Images.Backfill do
     end
   end
 
+  # The parent is a member row for a profile picture and a review row for a
+  # review cover, and the join is the `images` column naming it — the same
+  # shape either way, which is what `Vutuv.Images.column_source/1` is for.
   defp batch_query(%{kind: kind, cols: cols}, cursor) do
     query =
-      from(u in User,
+      from(p in cols.schema,
         left_join: i in Image,
-        on: i.user_id == u.id and i.kind == ^kind,
-        where: not is_nil(field(u, ^cols.file)),
-        order_by: [asc: u.id],
+        on: field(i, ^cols.owner) == p.id and i.kind == ^kind,
+        where: not is_nil(field(p, ^cols.copied.file)),
+        order_by: [asc: p.id],
         limit: @batch,
-        select: {u, i}
+        select: {p, i}
       )
 
-    if cursor, do: where(query, [u], u.id > ^cursor), else: query
+    if cursor, do: where(query, [p], p.id > ^cursor), else: query
   end
 
   # The join is on the token, which is unique in both tables — so this is the
@@ -374,8 +382,20 @@ defmodule Vutuv.Images.Backfill do
   # upload path uses: it mints the fresh token and carries the upsert against
   # the partial unique index, so a row an upload writes between this batch's
   # SELECT and this write converges instead of failing.
-  defp mend(%{kind: kind, cols: cols}, :missing_row, user, _row) do
-    with {:ok, image} <- Images.put_profile_image(user, kind, desired(user, cols)),
+  # A parent that carries its own repair has one for both verdicts, and it is
+  # the same statement the request path writes: for a review cover that is
+  # `Vutuv.Images.sync_review_cover/1`, which upserts on `post_review_id` and
+  # re-mints the token only when the bytes it names changed — the same rule
+  # `remint_token/3` states below, decided in SQL because two fetches can reach
+  # it at once. Read off the source rather than matched on the parent schema,
+  # so a second such kind is a registry entry rather than another clause here.
+  defp mend(%{cols: %{sync: {module, fun}}}, verdict, parent, _row)
+       when verdict in [:missing_row, :mismatched_row] do
+    apply(module, fun, [parent])
+  end
+
+  defp mend(%{kind: kind, cols: %{pointer: _} = cols}, :missing_row, user, _row) do
+    with {:ok, image} <- Images.put_profile_image(user, kind, Images.column_attrs(kind, user)),
          do: point_at(user, cols, image.id)
   end
 
@@ -386,8 +406,8 @@ defmodule Vutuv.Images.Backfill do
   # only, because a token names the bytes: a row corrected back to a different
   # file must not keep a handle that named the other one, and a row whose
   # moderation state alone drifted must not lose the handle it has.
-  defp mend(%{cols: cols}, :mismatched_row, user, row) do
-    desired = desired(user, cols)
+  defp mend(%{kind: kind, cols: %{pointer: _} = cols}, :mismatched_row, user, row) do
+    desired = Images.column_attrs(kind, user)
 
     with {:ok, image} <-
            row
@@ -399,7 +419,8 @@ defmodule Vutuv.Images.Backfill do
 
   # The row is right and only the member row's pointer is not — the shape a
   # half-committed upload leaves behind.
-  defp mend(%{cols: cols}, :missing_pointer, user, row), do: point_at(user, cols, row.id)
+  defp mend(%{cols: %{pointer: _} = cols}, :missing_pointer, user, row),
+    do: point_at(user, cols, row.id)
 
   # A gallery picture has one repair for both verdicts, and it is the same
   # upsert the request path writes: `Vutuv.Images.mirror/2` keys on the token,
@@ -440,16 +461,18 @@ defmodule Vutuv.Images.Backfill do
 
   # A profile repair writes the row **and** the member row's pointer, so the two
   # move together or not at all — that half-committed pair is the very thing
-  # this backfill exists to mend. A gallery repair is one idempotent upsert, so
-  # a transaction around it would be a BEGIN and a COMMIT buying nothing.
-  defp attempt(%{cols: _}, fun) do
+  # this backfill exists to mend. Everything else (a gallery mirror, a review
+  # cover) is one idempotent upsert, and a transaction around it would be a
+  # BEGIN and a COMMIT buying nothing — so the pointer is what decides, not the
+  # shape.
+  defp attempt(%{cols: %{pointer: _}}, fun) do
     case Repo.transaction(fn -> or_rollback(fun.()) end) do
       {:ok, :ok} -> :ok
       {:error, reason} -> {:error, reason}
     end
   end
 
-  defp attempt(%{gallery: _}, fun), do: fun.()
+  defp attempt(_source, fun), do: fun.()
 
   defp or_rollback(:ok), do: :ok
   defp or_rollback({:error, reason}), do: Repo.rollback(reason)
@@ -485,8 +508,9 @@ defmodule Vutuv.Images.Backfill do
   # check's count.
   defp orphan_query(%{kind: kind, cols: cols}) do
     ownerless =
-      from(u in User,
-        where: u.id == parent_as(:image).user_id and is_nil(field(u, ^cols.file))
+      from(p in cols.schema,
+        where:
+          p.id == field(parent_as(:image), ^cols.owner) and is_nil(field(p, ^cols.copied.file))
       )
 
     from(i in Image,
@@ -536,6 +560,14 @@ defmodule Vutuv.Images.Backfill do
   # report every un-backfilled member twice and call the second reading a
   # missing file.
   defp file_verdict(_source, _picture, nil), do: :ok
+
+  # A column kind with a store of its own answers from the parent row already
+  # in hand: a review cover is served through its own proxy off the review's
+  # id, and the version segment is the fingerprinted name the `cover` column
+  # yields. No quarantine branch — this kind never had one, the proxy is what
+  # holds a cover back while the AI gate runs.
+  defp file_verdict(%{cols: %{store: store}}, parent, _row),
+    do: if(is_nil(store.stored_path(parent)), do: :missing_file, else: :ok)
 
   defp file_verdict(%{kind: kind, cols: cols}, user, row) do
     # The row is in hand, so hand it over as the preload `member_image/2` would

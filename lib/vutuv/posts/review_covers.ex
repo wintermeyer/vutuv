@@ -18,12 +18,20 @@ defmodule Vutuv.Posts.ReviewCovers do
   AI-moderation gate like any upload: stored `pending`
   (`Vutuv.Moderation.ImageScans`), served through the authorizing proxy only
   once released, deleted on rejection (`Vutuv.Moderation.ImageSubjects`).
+
+  Since #2055 a stored cover is also a row in the shared `images` table, so a
+  copyright case has something to act on. The review row stays the truth and
+  nothing here reads the mirror; `Vutuv.Images.sync_review_cover/1` is the one
+  door, called wherever `cover` or `cover_moderation` changes — here, in
+  `Vutuv.Moderation.ImageSubjects`' two verdicts, and in `Vutuv.Posts` when an
+  edit drops the cover.
   """
 
   import Ecto.Query
 
   alias Vutuv.AudiobookLength
   alias Vutuv.BookMetadata
+  alias Vutuv.Images
   alias Vutuv.Moderation.ImageScans
   alias Vutuv.Posts.Post
   alias Vutuv.Posts.PostReview
@@ -198,7 +206,7 @@ defmodule Vutuv.Posts.ReviewCovers do
   defp announce_stored(review, file) do
     moderation = ImageScans.initial_state()
 
-    case mark(review, cover: file, cover_status: "ready", cover_moderation: moderation) do
+    case store_cover(review, file, moderation) do
       :ok when moderation == "approved" ->
         # Open feeds/profiles re-render the card with the cover.
         Vutuv.Posts.broadcast_review_cover_ready(review.post_id)
@@ -215,6 +223,26 @@ defmodule Vutuv.Posts.ReviewCovers do
         ReviewCover.delete_files(review)
         :ok
     end
+  end
+
+  # The review row and its row in the shared `images` table, together or not
+  # at all (issue #2055). The files are already on disk by the time this runs,
+  # so writing them apart could leave a cover the copyright freeze cannot see
+  # — the same reason a profile upload writes its pair in one transaction.
+  # `sync_review_cover/1` is handed the review as it stands *after* the mark,
+  # which is the row this just wrote.
+  defp store_cover(%PostReview{} = review, file, moderation) do
+    set = [cover: file, cover_status: "ready", cover_moderation: moderation]
+
+    {:ok, outcome} =
+      Repo.transaction(fn ->
+        with :ok <- mark(review, set) do
+          :ok = Images.sync_review_cover(struct(review, set))
+          :ok
+        end
+      end)
+
+    outcome
   end
 
   # Atomically updates the review iff it still carries the fetched ISBN

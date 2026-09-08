@@ -19,6 +19,13 @@ defmodule Vutuv.Images do
   migration may drop only what the *currently deployed* release has stopped
   reading.
 
+  **A review's cover (#2055, the last of #2015): this release writes both and
+  reads the review row.** Its truth is `cover` / `cover_status` /
+  `cover_moderation` on `post_reviews` — columns on a parent row, the profile
+  shape rather than the gallery one, so it joins on `images.post_review_id`
+  and `sync_review_cover/1` is its one door. Nobody uploaded it, so it has no
+  member owner and a check constraint says so.
+
   **A gallery picture (#2015: a job-posting picture first in #2054, a post
   photo in #2052, an organization image in #2053): this
   release writes both and reads the old table.** Its truth is still its own row
@@ -53,17 +60,20 @@ defmodule Vutuv.Images do
   # from `@mirrored` below, because a contract release **deletes** an entry
   # there — at which point that kind lives here and nowhere else, so dropping
   # it from this list would be exactly backwards.
-  @kinds ~w(avatar cover job_posting_image organization_image post_image)
+  @kinds ~w(avatar cover job_posting_image organization_image post_image review_cover)
 
   # Of those, the kinds every byte of which already goes through a controller
   # that authorizes the reader first (`VutuvWeb.JobPostingImageController` asks
   # whether the reader may see the posting, `VutuvWeb.PostImageController`
   # whether they may see the post, `VutuvWeb.OrganizationImageController`
-  # whether they may see the page) — so the row is the off switch, and #2015's
-  # expand releases change nothing about how one is served. Written out rather
-  # than derived from `@mirrored`, because a kind keeps its serving strategy
-  # after the contract release deletes it from there. See `serving/1`.
-  @proxy_kinds ~w(job_posting_image organization_image post_image)
+  # whether they may see the page, `VutuvWeb.ReviewCoverController` whether
+  # they may see the post the review sits on) — so the row is the off switch,
+  # and #2015's expand releases change nothing about how one is served.
+  # Written out rather than derived from `@mirrored`, because a kind keeps its
+  # serving strategy after the contract release deletes it from there — and
+  # because the review cover is in no such registry at all: it is the
+  # parent-column shape below, not the gallery one.
+  @proxy_kinds ~w(job_posting_image organization_image post_image review_cover)
 
   # Of those, the kinds whose truth is still a table of their own, and
   # everything about the copy: which columns it carries, where the source rows
@@ -89,7 +99,7 @@ defmodule Vutuv.Images do
   # it: that reads `@takedown` below, which the release before that one, the one
   # that moves the readers and wires the takedown, is what extends.
   # #2055 (review covers) adds **no** entry — a review's cover is columns on the
-  # review row with no token and no table, which is the `@profile_columns` shape
+  # review row with no token and no table, which is the `@column_sources` shape
   # below, not this one.
   @mirrored %{
     "job_posting_image" => %{
@@ -271,6 +281,106 @@ defmodule Vutuv.Images do
   """
   def member_columns, do: @profile_columns
   def member_columns(kind) when is_map_key(@profile_columns, kind), do: @profile_columns[kind]
+
+  # Every kind whose truth is still **columns on a parent row** rather than a
+  # table of its own, in one shape whatever the parent is. Two parents today:
+  # a member row (avatar, cover — the four columns above) and a review row
+  # (`review_cover`, #2055).
+  #
+  #   * `:schema` — where the parent rows are.
+  #   * `:owner`  — the `images` column naming the parent. It is what the
+  #     mirror is joined on, and what the delete cascades through.
+  #   * `:copied` — `images` column to parent column, the whole of the copy.
+  #   * `:pointer` / `:assoc` — the parent's own pointer back at the row, for
+  #     a parent that had no stable handle of its own (#2013 added
+  #     `users.avatar_image_id` for exactly that). **Absent for a review**: a
+  #     review row has an id and at most one cover, so `post_review_id` is
+  #     already a well-defined join key and there is no second copy of the
+  #     link to keep in step — and therefore no `missing_pointer` class in
+  #     `Vutuv.Images.Backfill`.
+  #
+  # Derived from `@profile_columns` above rather than written out beside it,
+  # so the two cannot say different things about an avatar.
+  #
+  # **A review cover has no member owner, and that is a constraint, not a
+  # convention.** Nobody here uploaded it: it is a publisher's picture fetched
+  # from Open Library beside a review (`Vutuv.Posts.ReviewCovers`), so a
+  # refusal notifies nobody the way it does for an upload. `images.user_id`
+  # means a member *owner* and is `ON DELETE CASCADE`, so naming the reviewer
+  # there would arm a deletion on somebody else's picture — and the post under
+  # the review need not have a member author at all, since an organization
+  # publishes reviews too and `posts.user_id` is NULL for those. The review
+  # owns it, `images_review_kind_owned_by_review` holds that shape in the
+  # database, and this kind is deliberately **not** in
+  # `images_profile_kind_has_owner`.
+  @column_sources @profile_columns
+                  |> Map.new(fn {kind, config} ->
+                    {kind,
+                     Map.merge(
+                       %{
+                         schema: User,
+                         owner: :user_id,
+                         # Taken rather than re-assigned key by key, so a
+                         # transposition (`fingerprint: config.crop`) cannot
+                         # compile in the one map whose whole purpose is that
+                         # the two cannot disagree.
+                         copied: Map.take(config, [:file, :fingerprint, :crop, :moderation])
+                       },
+                       Map.take(config, [:pointer, :assoc])
+                     )}
+                  end)
+                  |> Map.put("review_cover", %{
+                    schema: Vutuv.Posts.PostReview,
+                    owner: :post_review_id,
+                    # `post_reviews.cover` and `cover_moderation` are
+                    # varchar(255), the types `file` and `moderation` already
+                    # are. `cover_status` stays behind on purpose: it is the
+                    # *fetch* lifecycle (none → pending → ready/failed) and
+                    # there is no picture at all while it is not "ready", so
+                    # the row's existence already says everything a mirrored
+                    # copy could. `fingerprint` stays empty for the same
+                    # reason in reverse — the content hash is *inside* `cover`
+                    # (`Vutuv.ReviewCover.version_name/1` reads it back out),
+                    # and a second column holding it would be one fact in two
+                    # places. Both are written down in
+                    # `docs/architecture/images.md` for the release that moves
+                    # the readers.
+                    copied: %{file: :cover, moderation: :cover_moderation},
+                    # This parent keeps no pointer back at the row — a review
+                    # has one cover and `post_review_id` is already a
+                    # well-defined join key — so it carries its own repair
+                    # instead, the way a gallery source carries its `:store`.
+                    # `Vutuv.Images.Backfill` reads both from here rather than
+                    # branching on the parent, so a second such kind is an
+                    # entry rather than three more clauses.
+                    sync: {__MODULE__, :sync_review_cover},
+                    store: Vutuv.ReviewCover
+                  })
+
+  @doc """
+  Where a kind whose truth is still columns on a **parent row** keeps them, in
+  one shape whatever the parent is — the member row for a profile picture and
+  a cover, the review row for a review cover (#2055).
+  `Vutuv.Images.Backfill` reads its whole `%{cols: …}` source from here.
+  """
+  def column_source(kind) when is_map_key(@column_sources, kind), do: @column_sources[kind]
+
+  @doc "The kinds `column_source/1` answers for."
+  def column_kinds, do: Map.keys(@column_sources)
+
+  @doc """
+  The row this parent row becomes, as a plain map of `images` column to value —
+  the `column_source/1` twin of `mirror_attrs/2`, and for the same reason: the
+  write and `Vutuv.Images.Backfill`'s "has it drifted" comparison have to read
+  one list. A column added to a source's `:copied` map that only one of them
+  honoured would leave the backfill correcting a row forever with a statement
+  that never writes the column.
+  """
+  def column_attrs(kind, parent) when is_map_key(@column_sources, kind) do
+    Map.new(@column_sources[kind].copied, fn {field, column} ->
+      {field, Map.fetch!(parent, column)}
+    end)
+  end
 
   @doc """
   The member-row column pointing at this kind's row. The one place that name is
@@ -740,6 +850,101 @@ defmodule Vutuv.Images do
   def forget(kind, tokens) when is_map_key(@mirrored, kind) and is_list(tokens) do
     Repo.delete_all(from(i in Image, where: i.kind == ^kind and i.token in ^tokens))
     :ok
+  end
+
+  ## The review cover (issue #2015, this one #2055)
+
+  @review_kind "review_cover"
+
+  @doc """
+  Brings the row beside a book review's fetched cover into step with the review
+  row — the **one door** for this kind, so creating the row, correcting it and
+  dropping it are the same call on the request path and in
+  `Vutuv.Images.Backfill`. That collapse is what #2054 got out of `mirror/2`
+  for the gallery kinds; here it also removes the question of which of the
+  three a caller is in, because `post_reviews.cover` is the whole state: a
+  review that names a file has a row, a review that names none has none.
+
+  Takes the review row **as it stands after the write** (any map carrying
+  `:id`, `:cover` and `:cover_moderation` will do), so every caller hands over
+  what it just saved rather than re-reading it.
+
+  **The join is `post_review_id`, not a token.** A review's cover is columns on
+  the review row with nothing unguessable of its own, so the token is minted
+  here — and re-minted only when the bytes change, because a token names the
+  bytes: after a re-fetch, a report that named the old cover should point at
+  nothing rather than quietly at the new picture. One statement decides that,
+  so two slots racing on the same review cannot both win.
+
+  `frozen_at` and `inserted_at` are deliberately outside the conflict update:
+  the first is a takedown an ordinary write must never lift, the second
+  identifies the row.
+  """
+  def sync_review_cover(%{id: id, cover: nil}) when is_binary(id) do
+    Repo.delete_all(from(i in Image, where: i.kind == @review_kind and i.post_review_id == ^id))
+
+    :ok
+  end
+
+  def sync_review_cover(%{id: id, cover: cover} = review)
+      when is_binary(id) and is_binary(cover) do
+    now = now()
+
+    entry =
+      @review_kind
+      |> column_attrs(review)
+      |> Map.merge(%{
+        id: Vutuv.UUIDv7.generate(),
+        kind: @review_kind,
+        post_review_id: id,
+        token: Uploads.gen_token(),
+        inserted_at: now,
+        updated_at: now
+      })
+
+    Repo.insert_all(Image, [entry],
+      on_conflict: review_cover_conflict(),
+      conflict_target: {:unsafe_fragment, "(post_review_id) WHERE post_review_id IS NOT NULL"}
+    )
+
+    :ok
+  end
+
+  # The columns the conflict update below replaces. `fragment/1` takes a
+  # literal, so this list cannot be built from the registry at run time — but a
+  # column added to `:copied` and forgotten here would be written on insert and
+  # skipped on update, which the backfill would meet as a row it "corrects"
+  # forever with a statement that never touches the column. So the two are
+  # compared at compile time instead, and disagreeing fails the build.
+  @review_replaced [:file, :moderation]
+
+  if Enum.sort(@review_replaced) != Enum.sort(Map.keys(@column_sources["review_cover"].copied)) do
+    raise """
+    Vutuv.Images: the review cover's @review_replaced list and the :copied map \
+    in @column_sources have drifted. Every copied column has to appear in \
+    review_cover_conflict/0's `set`, or an existing row never receives it.\
+    """
+  end
+
+  # A `{:replace, …}` list cannot say "only when the bytes changed", and the
+  # alternative — read the row, compare, then write — is two statements with a
+  # race between them on a path two fetches can reach at once.
+  defp review_cover_conflict do
+    from(i in Image,
+      update: [
+        set: [
+          file: fragment("EXCLUDED.file"),
+          moderation: fragment("EXCLUDED.moderation"),
+          token:
+            fragment(
+              "CASE WHEN ? IS DISTINCT FROM EXCLUDED.file THEN EXCLUDED.token ELSE ? END",
+              i.file,
+              i.token
+            ),
+          updated_at: fragment("EXCLUDED.updated_at")
+        ]
+      ]
+    )
   end
 
   # Which takedown a kind gets, and (by the presence of a key) whether it has

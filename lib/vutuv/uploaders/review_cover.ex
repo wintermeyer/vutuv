@@ -67,6 +67,14 @@ defmodule Vutuv.ReviewCover do
   end
 
   @doc """
+  Where this review's stored cover actually is on disk, or `nil` when the
+  `cover` column names a file that is not there — the twin of
+  `Vutuv.Images.stored_path/3` for a review, so a caller that only wants to
+  know whether the bytes exist does not have to name the version itself.
+  """
+  def stored_path(review), do: version_path(review, version_name(review))
+
+  @doc """
   The path nginx would resolve for X-Accel serving. The default install
   serves covers via `send_file` (`:post_image_serving`), like post images.
   """
