@@ -1068,6 +1068,24 @@ defmodule VutuvWeb.UserHelpers do
   end
 
   @doc """
+  A sentence a `*.text.eex` body interpolates, folded to the same 72 columns the
+  hand-written prose around it keeps.
+
+  A text template is written at a fixed measure; a sentence that arrives as an
+  assign is one long line inside it, and the paragraph reads as ragged as the
+  wrap it broke. The quoter above already knows where to fold, so this is that
+  half of it without the `"> "` marker — the same width, so the two cannot drift.
+  """
+  def email_wrapped_text(nil), do: ""
+
+  def email_wrapped_text(text) when is_binary(text) do
+    text
+    |> split_lines()
+    |> Enum.flat_map(&wrap_line/1)
+    |> Enum.join("\n")
+  end
+
+  @doc """
   Splits a stranger's text wherever a *renderer* will start a new line.
 
   The rule is the effect, not a list of the spellings anyone happens to think

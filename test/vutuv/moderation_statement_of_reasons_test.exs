@@ -244,7 +244,7 @@ defmodule Vutuv.ModerationStatementOfReasonsTest do
 
       assert squish(email.text_body) =~ "Leave me alone."
       refute squish(email.text_body) =~ "Edit the content"
-      assert squish(email.text_body) =~ "Delete it"
+      assert squish(email.text_body) =~ "Delete the content"
     end
   end
 

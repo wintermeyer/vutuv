@@ -37,12 +37,24 @@ defmodule VutuvWeb.ModerationCaseController do
         # same statement of reasons the owner's email carries (issue #2010).
         notice: Moderation.owner_notice(case_record),
         edit_offer: Moderation.owner_edit_offer(case_record, content),
+        # What became of the content, for a settled case only — the same
+        # measured answer its reporter is mailed (issue #2067), so the two
+        # sides of one case cannot describe it differently.
+        content_fate: settled_content_fate(case_record),
         content: content
       )
     else
       _ -> ControllerHelpers.render_error(conn, 404)
     end
   end
+
+  # Only the two admin rulings: the owner's own delete and edit already say what
+  # became of the content, because they are what became of it.
+  defp settled_content_fate(%Case{status: status} = case_record)
+       when status in ~w(upheld rejected),
+       do: Moderation.reported_content_fate(case_record)
+
+  defp settled_content_fate(%Case{}), do: nil
 
   @doc """
   The reported picture itself, for the two case pages — the owner's and the

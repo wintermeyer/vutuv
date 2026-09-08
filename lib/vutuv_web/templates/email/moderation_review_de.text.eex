@@ -1,9 +1,10 @@
 <%= email_greeting(@user) %>,
 
-einer Ihrer Beiträge auf vutuv wurde gemeldet und ist verborgen, während
-unsere Admins den Fall prüfen. Kein Mensch hat ihn vorher angesehen: Die
-Meldung eines Mitglieds mit guter Bilanz verbirgt den gemeldeten Inhalt
-automatisch, sobald sie eintrifft.
+<%= email_wrapped_text(@content_intro) %>
+Bis unsere Admins den Fall geprüft haben, ist der gemeldete Inhalt
+verborgen; kein Mensch hat ihn vorher angesehen.
+
+<%= email_wrapped_text(@standing_sentence) %>
 
   Gemeldet als: <%= @category_labels %>
 <%= if @notes != [] do %>

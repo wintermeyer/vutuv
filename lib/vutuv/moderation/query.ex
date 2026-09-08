@@ -4,7 +4,34 @@ defmodule Vutuv.Moderation.Query do
   twin of `Vutuv.Moderation.account_hidden?/1`. `Vutuv.Posts.scope_visible/2`
   and `Vutuv.Search` both build on it, so a future hidden state (or a changed
   suspension boundary) is one edit here plus the struct predicate.
+
+  It also holds `case_event_at/1`, the one expression for when a moderation case
+  last said something to its owner.
   """
+
+  @doc """
+  When this case last said something to its owner: the ruling if there is one,
+  otherwise the moment the report arrived.
+
+  The owner's notification list is **one row per case, rewritten in place**, so
+  its time has to be the time of what the row currently says. It was the case's
+  `inserted_at`, so a ruling days later kept the row where it had always been,
+  with the hour of the complaint on it, and the member was never told their
+  content had come back (issue #2067) — the answer `moderation_reports`'
+  `outcome_notified_at` gives one kind over: stamp the event, not the trigger.
+
+  It lives here rather than beside its readers because ordering, keyset cursor,
+  `max` and unread count must all ask the identical expression or the cursor and
+  the ordering stop agreeing. Use inside `order_by:` / `where:` / `select:` on a
+  `moderation_cases` binding after `import Vutuv.Moderation.Query`.
+
+  Deliberately **not** `coalesce(resolved_at, escalated_at, inserted_at)`: a
+  member disputing their own case escalates it, and a row rising to the top of
+  their notifications because of their own click is noise, not news.
+  """
+  defmacro case_event_at(c) do
+    quote do: coalesce(unquote(c).resolved_at, unquote(c).inserted_at)
+  end
 
   @doc """
   True when the account behind `user_id` (a column reference) is hidden:

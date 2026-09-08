@@ -53,6 +53,65 @@ defmodule VutuvWeb.ReportHTML do
   def content_type_label("image"), do: pgettext("content type", "Picture")
   def content_type_label(other), do: other
 
+  @doc """
+  The opening sentence of the mail that tells a member their content was
+  reported — one whole sentence per content type, in the recipient's locale.
+
+  It is a sentence and not a noun in a frame, because German gives each kind
+  its own gender and its own article (der Beitrag, das Bild, die Nachricht, die
+  Seite, die Stellenanzeige) and a profile is not "one of your" anything. Both
+  owner mails opened with the post wording for every type until issue #2067, so
+  a member whose profile picture had been taken offline was told a post of
+  theirs was hidden and went looking through posts that were all still there.
+
+  It reads lower-case and ends in a full stop: it follows the greeting's comma,
+  which is how a German letter continues and how these templates are written.
+  Everything after it in the body says "the reported content", so this is the
+  only sentence the type reaches.
+  """
+  def content_reported_sentence("post"),
+    do: gettext("somebody reported one of your posts on vutuv.")
+
+  def content_reported_sentence("image"),
+    do: gettext("somebody reported one of your pictures on vutuv.")
+
+  def content_reported_sentence("message"),
+    do: gettext("somebody reported one of your private messages on vutuv.")
+
+  def content_reported_sentence("job_posting"),
+    do: gettext("somebody reported one of your job postings on vutuv.")
+
+  def content_reported_sentence("organization"),
+    do: gettext("somebody reported one of your pages on vutuv.")
+
+  def content_reported_sentence("user"),
+    do: gettext("somebody reported your profile on vutuv.")
+
+  def content_reported_sentence(_other),
+    do: gettext("somebody reported something of yours on vutuv.")
+
+  @doc """
+  Why the content is already hidden, for the owner mails: whoever reported it
+  had a clean record, and that is the whole decision.
+
+  Both mails said "a report from a **member** in good standing", which for an
+  outside notice (issue #2009) names somebody who has no account here and points
+  the owner at the wrong people (issue #2067). One sentence per shape, handed to
+  the six templates as an assign, because the difference is one noun and
+  branching it in each locale of each mail is twelve copies to keep in step.
+  """
+  def reporter_standing_sentence(true),
+    do:
+      gettext(
+        "A report from a member in good standing hides the reported content automatically, the moment it arrives."
+      )
+
+  def reporter_standing_sentence(_outside),
+    do:
+      gettext(
+        "A report from somebody with a good record hides the reported content automatically, the moment it arrives."
+      )
+
   @doc "Whether this content type's form carries the copyright notice at all."
   def copyright_offered?(content_type),
     do: Report.copyright_category() in Report.categories_for(content_type)

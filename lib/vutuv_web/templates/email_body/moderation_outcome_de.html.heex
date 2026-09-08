@@ -4,22 +4,29 @@
     danke für Ihre Meldung. Der Fall ist abgeschlossen, und das ist dabei herausgekommen:
   </.email_p>
   <.email_p :if={@outcome == "removed"}>
-    Der Besitzer hat den gemeldeten Inhalt gelöscht. Auf vutuv ist er damit nicht mehr zu sehen.
+    Der Besitzer hat den gemeldeten Inhalt gelöscht.
   </.email_p>
   <.email_p :if={@outcome == "revised"}>
-    Der Besitzer hat den gemeldeten Inhalt überarbeitet; er ist wieder sichtbar. Wenn Sie
-    weiterhin der Meinung sind, dass er gegen unsere Community-Richtlinien verstößt, können Sie
-    ihn erneut melden. Der Fall geht dann direkt an unsere Admins.
+    Der Besitzer hat den gemeldeten Inhalt überarbeitet. Wenn Sie weiterhin der Meinung sind, dass
+    er gegen unsere Community-Richtlinien verstößt, können Sie ihn erneut melden. Der Fall geht
+    dann direkt an unsere Admins.
   </.email_p>
   <.email_p :if={@outcome == "upheld"}>
-    Ein Mensch aus unserem Team hat sich Ihre Meldung angesehen und ihr stattgegeben. Wir haben
-    die nötigen Schritte unternommen. Was davon das Konto hinter dem Inhalt betrifft, sagen wir
-    Ihnen nicht; das bleibt zwischen dieser Person und uns.
+    Ein Mensch aus unserem Team hat sich Ihre Meldung angesehen und ihr stattgegeben. Was das für
+    das Konto hinter dem Inhalt bedeutet, sagen wir Ihnen nicht; das bleibt zwischen dieser Person
+    und uns.
   </.email_p>
   <.email_p :if={@outcome == "not_upheld"}>
-    Ein Mensch aus unserem Team hat sich Ihre Meldung angesehen und ihr nicht stattgegeben. Der
-    gemeldete Inhalt bleibt deshalb, wo er ist. Das ist keine Aussage über Sie: Melden war
-    richtig, auch wenn am Ende eine andere Entscheidung steht.
+    Ein Mensch aus unserem Team hat sich Ihre Meldung angesehen und ihr nicht stattgegeben. Das
+    ist keine Aussage über Sie: Melden war richtig, auch wenn am Ende eine andere Entscheidung
+    steht.
+  </.email_p>
+  <.email_p :if={@content_fate == :removed}>Der gemeldete Inhalt ist gelöscht.</.email_p>
+  <.email_p :if={@content_fate == :hidden}>
+    Der gemeldete Inhalt ist auf vutuv nicht mehr zu sehen.
+  </.email_p>
+  <.email_p :if={@content_fate == :visible}>
+    Der gemeldete Inhalt ist auf vutuv weiterhin zu sehen.
   </.email_p>
   <.email_p>Von uns kommt zu diesem Fall nichts mehr.</.email_p>
   <.email_signature locale={@locale} />

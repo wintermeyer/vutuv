@@ -2,21 +2,25 @@
 
 grazie per la Sua segnalazione. Il caso è chiuso, ed ecco com'è andata:
 <%= if @outcome == "removed" do %>
-Il proprietario ha cancellato il contenuto che ha segnalato. Su vutuv non è
-più visibile.
+Il proprietario ha cancellato il contenuto che ha segnalato.
 <% end %><%= if @outcome == "revised" do %>
-Il proprietario ha corretto il contenuto che ha segnalato, ed è di nuovo
-visibile. Se ritiene ancora che violi le nostre regole della community, può
-segnalarlo un'altra volta; andrà allora direttamente ai nostri
-amministratori.
+Il proprietario ha corretto il contenuto che ha segnalato. Se ritiene ancora
+che violi le nostre regole della community, può segnalarlo un'altra volta;
+andrà allora direttamente ai nostri amministratori.
 <% end %><%= if @outcome == "upheld" do %>
 Una persona del nostro team ha esaminato la Sua segnalazione e le ha dato
-ragione. Abbiamo preso i provvedimenti necessari. Che cosa significhino per
-l'account dietro al contenuto resta tra quella persona e noi.
+ragione. Che cosa significhi per l'account dietro al contenuto resta tra
+quella persona e noi.
 <% end %><%= if @outcome == "not_upheld" do %>
 Una persona del nostro team ha esaminato la Sua segnalazione e non le ha dato
-ragione. Il contenuto segnalato resta dov'è. Non è un giudizio su di Lei:
-segnalare è stato giusto, anche quando la decisione va in un'altra direzione.
+ragione. Non è un giudizio su di Lei: segnalare è stato giusto, anche quando
+la decisione va in un'altra direzione.
+<% end %><%= if @content_fate == :removed do %>
+Il contenuto segnalato è stato eliminato.
+<% end %><%= if @content_fate == :hidden do %>
+Il contenuto segnalato non è più visibile su vutuv.
+<% end %><%= if @content_fate == :visible do %>
+Il contenuto segnalato è ancora visibile su vutuv.
 <% end %>
 Non Le scriveremo più a proposito di questo caso.
 

@@ -2277,16 +2277,22 @@ defmodule Vutuv.Accounts do
       # A picture whose case only flagged it may be replaced (the guard above is
       # about the takedown hold, and a flagged case moved nothing), and such an
       # upload overwrites the very bytes that were reported. So the replacement
-      # settles the case the way the owner's own "remove it" does: left open, an
-      # admin's ruling — which for a picture is the one ruling that *deletes* —
-      # would land on whatever the member put there afterwards.
+      # settles the case: left open, an admin's ruling — which for a picture is
+      # the one ruling that *deletes* — would land on whatever the member put
+      # there afterwards.
+      #
+      # It settles as a **revision**, not as a deletion. The row keeps its id
+      # (issue #2035), so the reported bytes are gone while a picture the
+      # reporter can still see stands in their place; closing it the way the
+      # owner's own "remove it" does made their notice contradict itself — the
+      # subject said deleted and the body said still visible (issue #2067).
       #
       # But only a replacement. Uploading the same file again overwrites the
       # reported bytes with themselves, and settling on that was a way to make a
       # complaint vanish from the admin queue at no cost to the owner (issue
       # #2035). The fingerprint answers it, crop and all
       # (`Vutuv.Uploads.content_hash/2`).
-      if fingerprint != reported, do: Moderation.content_deleted(image)
+      if fingerprint != reported, do: Moderation.content_replaced(image)
       saved
     else
       _ ->

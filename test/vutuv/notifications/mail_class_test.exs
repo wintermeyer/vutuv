@@ -119,7 +119,7 @@ defmodule Vutuv.Notifications.MailClassTest do
     end
 
     test "a dead address stops transactional mail", %{user: user} do
-      assert Emailer.moderation_warning_email(user, "dead@example.com")
+      assert Emailer.moderation_warning_email(user, "dead@example.com", :community)
              |> Emailer.deliver() == :suppressed
     end
 
@@ -317,10 +317,10 @@ defmodule Vutuv.Notifications.MailClassTest do
     do: Emailer.moderation_review_email(user(), @address, moderation_case())
 
   defp build_mail(:moderation_outcome_email),
-    do: Emailer.moderation_outcome_email(user(), @address, "upheld")
+    do: Emailer.moderation_outcome_email(user(), @address, "upheld", :hidden)
 
   defp build_mail(:moderation_warning_email),
-    do: Emailer.moderation_warning_email(user(), @address)
+    do: Emailer.moderation_warning_email(user(), @address, :community)
 
   defp build_mail(:moderation_suspension_email),
     do: Emailer.moderation_suspension_email(user(), @address, ~N[2026-09-01 00:00:00])
@@ -363,7 +363,8 @@ defmodule Vutuv.Notifications.MailClassTest do
       name: "Rita Holder",
       email: @address,
       locale: "de",
-      outcome: "not_upheld"
+      outcome: "not_upheld",
+      fate: :visible
     })
   end
 
