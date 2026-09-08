@@ -203,4 +203,28 @@ defmodule VutuvWeb.OrganizationFediverseActorWebTest do
     # least be a route, not a 404 from the router.
     assert json["inbox"] =~ "/organizations/#{page.slug}/actor/inbox"
   end
+
+  # The member twin of this is in `VutuvWeb.FediverseControllerTest`; a page's
+  # posts are frozen through the very same `posts.frozen_at` column, so the
+  # count had the very same hole (issue #2069).
+  test "the outbox stops counting a post a takedown froze (#2069)", %{conn: conn} do
+    page = federating_page()
+    post = insert(:post, user: nil, organization: page)
+
+    total = fn ->
+      conn
+      |> ap()
+      |> get(~p"/organizations/#{page.slug}/actor/outbox")
+      |> json_response(200)
+      |> Map.fetch!("totalItems")
+    end
+
+    assert total.() == 1
+
+    post
+    |> Ecto.Changeset.change(%{frozen_at: NaiveDateTime.utc_now(:second)})
+    |> Repo.update!()
+
+    assert total.() == 0
+  end
 end

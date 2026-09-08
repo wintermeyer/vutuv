@@ -2879,13 +2879,13 @@ msgstr[0] ""
 msgstr[1] ""
 
 #: lib/vutuv_web/live/admin/job_live.ex:335
-#: lib/vutuv_web/live/admin/moderation_case_live.ex:301
+#: lib/vutuv_web/live/admin/moderation_case_live.ex:302
 #: lib/vutuv_web/templates/moderation_evidence/show.html.heex:33
 #, elixir-autogen, elixir-format
 msgid "(deleted account)"
 msgstr ""
 
-#: lib/vutuv_web/live/admin/moderation_case_live.ex:220
+#: lib/vutuv_web/live/admin/moderation_case_live.ex:221
 #: lib/vutuv_web/templates/moderation_case/index.html.heex:19
 #, elixir-autogen, elixir-format
 msgid "(no text)"
@@ -2931,7 +2931,7 @@ msgstr ""
 msgid "Confirmed violations follow three steps: a warning, then a one-week suspension, then permanent deactivation. Strikes expire after twelve months."
 msgstr ""
 
-#: lib/vutuv_web/live/admin/moderation_case_live.ex:287
+#: lib/vutuv_web/live/admin/moderation_case_live.ex:288
 #, elixir-autogen, elixir-format
 msgid "Conversation context (the reported message last)"
 msgstr ""
@@ -2941,7 +2941,7 @@ msgstr ""
 msgid "Criticize ideas, never people. Demeaning, threatening or repeatedly unwanted messages get accounts suspended - in public posts and in private messages alike."
 msgstr ""
 
-#: lib/vutuv_web/live/admin/moderation_case_live.ex:279
+#: lib/vutuv_web/live/admin/moderation_case_live.ex:280
 #, elixir-autogen, elixir-format
 msgid "Current version (edited since the report)"
 msgstr ""
@@ -2956,6 +2956,7 @@ msgstr ""
 msgid "Deleted. The report is settled, no further steps needed."
 msgstr ""
 
+#: lib/vutuv_web/live/admin/moderation_case_live.ex:188
 #: lib/vutuv_web/views/admin/moderation_html.ex:9
 #, elixir-autogen, elixir-format
 msgid "Escalated"
@@ -3116,7 +3117,7 @@ msgstr ""
 msgid "Profile"
 msgstr ""
 
-#: lib/vutuv_web/live/admin/moderation_case_live.ex:445
+#: lib/vutuv_web/live/admin/moderation_case_live.ex:458
 #, elixir-autogen, elixir-format
 msgid "Reject the report"
 msgstr ""
@@ -3208,7 +3209,7 @@ msgstr ""
 msgid "Reporter track records"
 msgstr ""
 
-#: lib/vutuv_web/live/admin/moderation_case_live.ex:311
+#: lib/vutuv_web/live/admin/moderation_case_live.ex:312
 #: lib/vutuv_web/live/admin/moderation_live.ex:57
 #: lib/vutuv_web/templates/admin/moderation/reporters.html.heex:26
 #, elixir-autogen, elixir-format
@@ -3313,12 +3314,12 @@ msgstr ""
 msgid "The queue is empty - the self-service flow settled everything."
 msgstr ""
 
-#: lib/vutuv_web/live/admin/moderation_case_live.ex:433
+#: lib/vutuv_web/live/admin/moderation_case_live.ex:446
 #, elixir-autogen, elixir-format
 msgid "The report by @%{slug} was a deliberate weapon (strikes the reporter)"
 msgstr ""
 
-#: lib/vutuv_web/live/admin/moderation_case_live.ex:396
+#: lib/vutuv_web/live/admin/moderation_case_live.ex:409
 #, elixir-autogen, elixir-format
 msgid "The report is justified. The content stays hidden and the owner gets a strike (warn, suspend, deactivate)."
 msgstr ""
@@ -3365,7 +3366,7 @@ msgstr ""
 msgid "Unwanted advertising, fraud or fake activity."
 msgstr ""
 
-#: lib/vutuv_web/live/admin/moderation_case_live.ex:410
+#: lib/vutuv_web/live/admin/moderation_case_live.ex:423
 #, elixir-autogen, elixir-format
 msgid "Uphold the report"
 msgstr ""
@@ -3539,14 +3540,14 @@ msgstr ""
 msgid "%{count} follows"
 msgstr ""
 
-#: lib/vutuv_web/live/admin/moderation_case_live.ex:325
+#: lib/vutuv_web/live/admin/moderation_case_live.ex:338
 #, elixir-autogen, elixir-format
 msgid "%{count} report so far"
 msgid_plural "%{count} reports so far"
 msgstr[0] ""
 msgstr[1] ""
 
-#: lib/vutuv_web/live/admin/moderation_case_live.ex:325
+#: lib/vutuv_web/live/admin/moderation_case_live.ex:338
 #, elixir-autogen, elixir-format
 msgid "%{rejected} rejected, %{abusive} abusive"
 msgstr ""
@@ -3566,7 +3567,7 @@ msgstr ""
 msgid "Content frozen"
 msgstr ""
 
-#: lib/vutuv_web/live/admin/moderation_case_live.ex:380
+#: lib/vutuv_web/live/admin/moderation_case_live.ex:393
 #, elixir-autogen, elixir-format
 msgid "Decision"
 msgstr ""
@@ -3576,22 +3577,17 @@ msgstr ""
 msgid "Escalated - the 72h deadline passed"
 msgstr ""
 
-#: lib/vutuv_web/live/admin/moderation_case_live.ex:185
-#, elixir-autogen, elixir-format
-msgid "Escalated on %{date}"
-msgstr ""
-
-#: lib/vutuv_web/live/admin/moderation_case_live.ex:195
+#: lib/vutuv_web/live/admin/moderation_case_live.ex:196
 #, elixir-autogen, elixir-format
 msgid "Evidence"
 msgstr ""
 
-#: lib/vutuv_web/live/admin/moderation_case_live.ex:353
+#: lib/vutuv_web/live/admin/moderation_case_live.ex:366
 #, elixir-autogen, elixir-format
 msgid "History"
 msgstr ""
 
-#: lib/vutuv_web/live/admin/moderation_case_live.ex:205
+#: lib/vutuv_web/live/admin/moderation_case_live.ex:206
 #, elixir-autogen, elixir-format
 msgid "Open the profile"
 msgstr ""
@@ -3599,11 +3595,6 @@ msgstr ""
 #: lib/vutuv_web/notification_line.ex:173
 #, elixir-autogen, elixir-format
 msgid "Our admins found your report unfounded; the paused connection between you two is restored."
-msgstr ""
-
-#: lib/vutuv_web/live/admin/moderation_case_live.ex:180
-#, elixir-autogen, elixir-format
-msgid "Owner deadline: %{date}"
 msgstr ""
 
 #: lib/vutuv_web/views/admin/moderation_html.ex:76
@@ -3636,12 +3627,7 @@ msgstr ""
 msgid "Report upheld"
 msgstr ""
 
-#: lib/vutuv_web/live/admin/moderation_case_live.ex:175
-#, elixir-autogen, elixir-format
-msgid "Reported on %{date}"
-msgstr ""
-
-#: lib/vutuv_web/live/admin/moderation_case_live.ex:342
+#: lib/vutuv_web/live/admin/moderation_case_live.ex:355
 #, elixir-autogen, elixir-format
 msgid "Reporter and owner are separated since this report (connection, follows, messages)."
 msgstr ""
@@ -3671,17 +3657,17 @@ msgstr ""
 msgid "Strike issued"
 msgstr ""
 
-#: lib/vutuv_web/live/admin/moderation_case_live.ex:338
+#: lib/vutuv_web/live/admin/moderation_case_live.ex:351
 #, elixir-autogen, elixir-format
 msgid "The protective separation from the owner was lifted on %{date}."
 msgstr ""
 
-#: lib/vutuv_web/live/admin/moderation_case_live.ex:421
+#: lib/vutuv_web/live/admin/moderation_case_live.ex:434
 #, elixir-autogen, elixir-format
 msgid "The report is unfounded. The content becomes visible again, any protective separation is lifted, and the rejection counts against each reporter's trust."
 msgstr ""
 
-#: lib/vutuv_web/live/admin/moderation_case_live.ex:199
+#: lib/vutuv_web/live/admin/moderation_case_live.ex:200
 #, elixir-autogen, elixir-format
 msgid "The whole profile was reported. Judge the profile itself - the snapshot below only preserves the name at report time."
 msgstr ""
@@ -3721,7 +3707,7 @@ msgstr ""
 msgid "messages"
 msgstr ""
 
-#: lib/vutuv_web/live/admin/moderation_case_live.ex:356
+#: lib/vutuv_web/live/admin/moderation_case_live.ex:369
 #, elixir-autogen, elixir-format
 msgid "No history recorded - this case predates the audit log."
 msgstr ""
@@ -3756,7 +3742,7 @@ msgstr ""
 msgid "Evidence screenshot captured"
 msgstr ""
 
-#: lib/vutuv_web/live/admin/moderation_case_live.ex:268
+#: lib/vutuv_web/live/admin/moderation_case_live.ex:269
 #, elixir-autogen, elixir-format
 msgid "Evidence screenshot captured when the report was filed"
 msgstr ""
@@ -3766,7 +3752,7 @@ msgstr ""
 msgid "Moderation evidence - reported private message with context"
 msgstr ""
 
-#: lib/vutuv_web/live/admin/moderation_case_live.ex:263
+#: lib/vutuv_web/live/admin/moderation_case_live.ex:264
 #, elixir-autogen, elixir-format
 msgid "Screenshot at report time"
 msgstr ""
@@ -3776,7 +3762,7 @@ msgstr ""
 msgid "reported message"
 msgstr ""
 
-#: lib/vutuv_web/live/admin/moderation_case_live.ex:274
+#: lib/vutuv_web/live/admin/moderation_case_live.ex:275
 #, elixir-autogen, elixir-format
 msgid "Scroll inside the frame, or click to open the full image."
 msgstr ""
@@ -5218,7 +5204,7 @@ msgstr ""
 
 #: lib/vutuv_web/components/ui.ex:5397
 #: lib/vutuv_web/controllers/settings_controller.ex:161
-#: lib/vutuv_web/live/admin/moderation_case_live.ex:488
+#: lib/vutuv_web/live/admin/moderation_case_live.ex:501
 #: lib/vutuv_web/live/admin/user_delete_live.ex:33
 #: lib/vutuv_web/live/admin/user_delete_live.ex:103
 #: lib/vutuv_web/live/admin/user_delete_live.ex:104
@@ -9796,7 +9782,7 @@ msgstr ""
 msgid "Accounts removed as spam"
 msgstr ""
 
-#: lib/vutuv_web/live/admin/moderation_case_live.ex:455
+#: lib/vutuv_web/live/admin/moderation_case_live.ex:468
 #, elixir-autogen, elixir-format
 msgid "Clear-cut spam or abuse?"
 msgstr ""
@@ -9806,22 +9792,22 @@ msgstr ""
 msgid "Could not restore this member."
 msgstr ""
 
-#: lib/vutuv_web/live/admin/moderation_case_live.ex:470
+#: lib/vutuv_web/live/admin/moderation_case_live.ex:483
 #, elixir-autogen, elixir-format
 msgid "Deactivate @%{slug} and mark the account as spam?"
 msgstr ""
 
-#: lib/vutuv_web/live/admin/moderation_case_live.ex:473
+#: lib/vutuv_web/live/admin/moderation_case_live.ex:486
 #, elixir-autogen, elixir-format
 msgid "Deactivate account"
 msgstr ""
 
-#: lib/vutuv_web/live/admin/moderation_case_live.ex:482
+#: lib/vutuv_web/live/admin/moderation_case_live.ex:495
 #, elixir-autogen, elixir-format
 msgid "Permanently DELETE @%{slug} and everything they posted? This cannot be undone."
 msgstr ""
 
-#: lib/vutuv_web/live/admin/moderation_case_live.ex:458
+#: lib/vutuv_web/live/admin/moderation_case_live.ex:471
 #, elixir-autogen, elixir-format
 msgid "Remove the account outright, skipping the warning ladder. Deactivating marks it as spam and is reversible from the member browser; deleting is permanent."
 msgstr ""
@@ -12745,7 +12731,7 @@ msgstr ""
 msgid "Open reports"
 msgstr ""
 
-#: lib/vutuv_web/live/admin/moderation_case_live.ex:215
+#: lib/vutuv_web/live/admin/moderation_case_live.ex:216
 #, elixir-autogen, elixir-format
 msgid "Open the job posting"
 msgstr ""
@@ -23154,12 +23140,12 @@ msgstr ""
 msgid "Report the profile picture"
 msgstr ""
 
-#: lib/vutuv_web/live/admin/moderation_case_live.ex:228
+#: lib/vutuv_web/live/admin/moderation_case_live.ex:229
 #, elixir-autogen, elixir-format
 msgid "The reported picture"
 msgstr ""
 
-#: lib/vutuv_web/live/admin/moderation_case_live.ex:247
+#: lib/vutuv_web/live/admin/moderation_case_live.ex:248
 #, elixir-autogen, elixir-format
 msgid "Upholding the case deletes it, the private original included. Rejecting it puts every file back where it was."
 msgstr ""
@@ -23227,7 +23213,7 @@ msgstr ""
 msgid "Thank you for your report. Our moderators have been notified and will review this picture."
 msgstr ""
 
-#: lib/vutuv_web/live/admin/moderation_case_live.ex:255
+#: lib/vutuv_web/live/admin/moderation_case_live.ex:256
 #, elixir-autogen, elixir-format
 msgid "This picture is still on the profile: only a copyright notice takes one offline before a ruling. Upholding the case deletes it, the private original included."
 msgstr ""
@@ -23351,7 +23337,7 @@ msgstr ""
 msgid "The post, picture, video, profile, page or job posting you are reporting. Copy it out of your browser's address bar."
 msgstr ""
 
-#: lib/vutuv_web/live/admin/moderation_case_live.ex:438
+#: lib/vutuv_web/live/admin/moderation_case_live.ex:451
 #, elixir-autogen, elixir-format
 msgid "The report by %{email} was a deliberate weapon (that address loses our trust)"
 msgstr ""
@@ -23534,22 +23520,22 @@ msgstr ""
 msgid "No person made this decision: a report from somebody with a good record hides the reported content automatically, the moment it arrives."
 msgstr ""
 
-#: lib/vutuv_web/live/admin/moderation_case_live.ex:400
+#: lib/vutuv_web/live/admin/moderation_case_live.ex:413
 #, elixir-autogen, elixir-format
 msgid "The report is justified. The content becomes visible again - the consequence here is the strike (warn, suspend, deactivate)."
 msgstr ""
 
-#: lib/vutuv_web/live/admin/moderation_case_live.ex:404
+#: lib/vutuv_web/live/admin/moderation_case_live.ex:417
 #, elixir-autogen, elixir-format
 msgid "The report is justified. The content is not hidden and upholding does not hide it; the owner gets a strike (warn, suspend, deactivate)."
 msgstr ""
 
-#: lib/vutuv_web/live/admin/moderation_case_live.ex:392
+#: lib/vutuv_web/live/admin/moderation_case_live.ex:405
 #, elixir-autogen, elixir-format
 msgid "The report is justified. The reported picture is deleted, the private original included, and the owner gets a strike (warn, suspend, deactivate)."
 msgstr ""
 
-#: lib/vutuv_web/live/admin/moderation_case_live.ex:251
+#: lib/vutuv_web/live/admin/moderation_case_live.ex:252
 #, elixir-autogen, elixir-format
 msgid "This picture is still on the profile: the address behind the copyright notice is not confirmed yet, so nothing has been hidden. Upholding the case deletes it, the private original included."
 msgstr ""
@@ -23627,4 +23613,19 @@ msgstr ""
 #: lib/vutuv_web/views/admin/moderation_html.ex:79
 #, elixir-autogen, elixir-format
 msgid "Owner replaced the content"
+msgstr ""
+
+#: lib/vutuv_web/live/admin/moderation_case_live.ex:184
+#, elixir-autogen, elixir-format
+msgid "Owner deadline"
+msgstr ""
+
+#: lib/vutuv_web/live/admin/moderation_case_live.ex:181
+#, elixir-autogen, elixir-format
+msgid "Reported"
+msgstr ""
+
+#: lib/vutuv_web/live/admin/moderation_case_live.ex:330
+#, elixir-autogen, elixir-format
+msgid "declared in good faith"
 msgstr ""

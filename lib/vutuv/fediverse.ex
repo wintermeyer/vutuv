@@ -85,7 +85,6 @@ defmodule Vutuv.Fediverse do
   alias Vutuv.Pages
   alias Vutuv.Posts
   alias Vutuv.Posts.Post
-  alias Vutuv.Posts.PostDenial
   alias Vutuv.Posts.PostRemoteReply
   alias Vutuv.Posts.Screenshots
   alias Vutuv.RateLimiter
@@ -967,27 +966,45 @@ defmodule Vutuv.Fediverse do
     )
   end
 
-  @doc "How many public posts the member has (the outbox totalItems)."
+  @doc """
+  How many public posts the member has (the outbox totalItems).
+
+  `Posts.scope_visible/2` with the **anonymous** viewer, which is the SQL twin
+  of the `visible_to?(post, nil)` gate deciding whether the note itself is
+  served — so the count and the notes it counts answer one question, by
+  mechanism rather than by two spellings that happen to agree (issue #2069).
+
+  They did not agree. This filtered audience denials and nothing else, so an
+  author whose only post a takedown had frozen still told every server that
+  asked `"totalItems": 1` while the note 404ed: the one number about a hidden
+  post that still left the building, with `featured_posts/1` right below it
+  already serving the anonymous view. Spelling the missing half by hand would
+  have left the same trap for the next rule, and one was already sitting in
+  it — `federated?/1` does not test `unreachable_at`, so an opted-in member
+  whose address has died keeps their outbox served while every note 404s, and
+  only `scope_visible/2` (through `Moderation.account_hidden?/1`) knows it.
+
+  Costs the correlated `account_hidden` subplan `Posts` documents. An outbox
+  fetch is an occasional request from another server, not a feed render.
+  """
   def public_post_count(%User{id: user_id}) do
-    Repo.aggregate(
-      from(p in Post,
-        as: :post,
-        where: p.user_id == ^user_id,
-        where: not exists(from(d in PostDenial, where: d.post_id == parent_as(:post).id))
-      ),
-      :count
-    )
+    from(p in Post, where: p.user_id == ^user_id)
+    |> Posts.scope_visible(nil)
+    |> Repo.aggregate(:count)
   end
 
   @doc """
   How many posts a **page** has published (issue #1334) — what its `outbox`
   collection reports.
 
-  No denial check, unlike the member twin: an organization post carries no
-  audience by construction, so every one of them is public.
+  `Posts.count_organization_posts/2` owns the question ("how many of this
+  page's posts may this viewer see") and the Mastodon API's `statuses_count`
+  already asks it; the anonymous viewer is the outbox's. That is also where the
+  freeze belongs: this counted every row, frozen ones included, until
+  issue #2069.
   """
-  def organization_public_post_count(%Organization{id: id}),
-    do: Repo.aggregate(from(p in Post, where: p.organization_id == ^id), :count)
+  def organization_public_post_count(%Organization{} = organization),
+    do: Posts.count_organization_posts(organization, nil)
 
   @doc """
   What the `featured` collection holds (issue #1110): the member's pinned post

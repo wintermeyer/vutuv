@@ -26,10 +26,26 @@ defmodule Vutuv.Moderation.Report do
     field(:category, :string)
     field(:note, :string)
     field(:abusive?, :boolean, default: false)
-    # Deliberately not stored: the changeset refuses the copyright category
-    # without it, so a stored copyright report IS the record that the
-    # declaration was made.
+    # What the form binds to. The stored half is the column below.
     field(:good_faith?, :boolean, virtual: true, default: false)
+
+    # When the notifier declared that the use is licensed neither by the rights
+    # holder nor by law. Stored since issue #2069, because the declaration is
+    # part of what makes a notice a notice (DSA Art. 16(2)(d)) and was until
+    # then validated and dropped — nothing on the case, in the queue or
+    # anywhere else recorded that it had been made. The category cannot stand
+    # in for it: the public form demands the same declaration for **every**
+    # category (issue #2009), so "this is a copyright report" answers a
+    # different question.
+    #
+    # A timestamp rather than a boolean, though it can only ever hold this
+    # row's own `inserted_at`: the fact has exactly two states, made and not on
+    # file, because the changeset refuses a report that needed the declaration
+    # and did not carry one — there is no "declined". A nullable boolean would
+    # spell those two states with three, and nothing would ever write the
+    # third. Nil on a report filed before the column existed, and deliberately
+    # not backfilled: it would be invented evidence.
+    field(:good_faith_declared_at, :naive_datetime)
 
     belongs_to(:case, Vutuv.Moderation.Case)
     # Nullable since issue #2009: a rights holder without an account files
@@ -168,7 +184,18 @@ defmodule Vutuv.Moderation.Report do
     |> validate_inclusion(:category, categories_for(content_type), message: pick_one)
     |> validate_length(:note, max: @max_note_length, message: "Your note is too long.")
     |> validate_full_notice(Keyword.get(opts, :full_notice?, false))
+    |> record_good_faith()
     |> unique_constraint([:case_id, :reporter_id])
+  end
+
+  # The declaration as a stored fact rather than a passing validation
+  # (issue #2069). Stamped whenever it was ticked, not only where it was
+  # demanded, so the column answers one question — "was this declared?" — for
+  # every report, however it was filed.
+  defp record_good_faith(changeset) do
+    if get_field(changeset, :good_faith?),
+      do: put_change(changeset, :good_faith_declared_at, NaiveDateTime.utc_now(:second)),
+      else: changeset
   end
 
   @doc """

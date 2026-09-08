@@ -25,6 +25,15 @@ defmodule VutuvWeb.FediverseControllerTest do
 
   defp host, do: VutuvWeb.Endpoint.host()
 
+  defp outbox_total(conn, user) do
+    conn
+    |> recycle()
+    |> get("/#{user.username}/actor/outbox")
+    |> Map.fetch!(:resp_body)
+    |> Jason.decode!()
+    |> Map.fetch!("totalItems")
+  end
+
   defp stub_remote_actor(pub_pem, extra \\ %{}) do
     doc =
       Jason.encode!(
@@ -305,6 +314,50 @@ defmodule VutuvWeb.FediverseControllerTest do
         conn |> recycle() |> get("/#{user.username}/actor/outbox") |> Map.fetch!(:resp_body)
 
       assert Jason.decode!(outbox)["type"] == "OrderedCollection"
+    end
+
+    # The count is what a hidden post still told other servers while its own
+    # note 404ed (issue #2069). Driven through the real takedown rather than a
+    # hand-set column, because the seam that disagreed is Moderation's freeze
+    # against this count.
+    test "the outbox stops counting a post a takedown froze (#2069)", %{conn: conn} do
+      user = federated_user()
+      post = insert(:post, user: user)
+
+      assert outbox_total(conn, user) == 1
+
+      reporter = insert(:activated_user)
+      insert(:email, user: reporter)
+
+      {:ok, _case} =
+        Vutuv.Moderation.report_content(reporter, post, %{
+          "category" => "copyright",
+          "note" => "Der Text ist meiner, das Original steht auf example.com/text.",
+          "good_faith?" => "true"
+        })
+
+      assert Repo.reload!(post).frozen_at
+      assert outbox_total(conn, user) == 0
+    end
+
+    # The trap one column over, and the reason the count goes through
+    # `Posts.scope_visible/2` rather than naming the freeze by hand:
+    # `federated?/1` does not test `unreachable_at`, so a member whose address
+    # has died keeps their outbox served while every note 404s.
+    test "nor a post whose author's account is hidden (#2069)", %{conn: conn} do
+      user = federated_user()
+      insert(:post, user: user)
+
+      assert outbox_total(conn, user) == 1
+
+      user
+      |> Ecto.Changeset.change(%{unreachable_at: NaiveDateTime.utc_now(:second)})
+      |> Repo.update!()
+
+      assert Fediverse.federated?(Repo.reload!(user)),
+             "the outbox is still served, which is what makes the count reachable"
+
+      assert outbox_total(conn, user) == 0
     end
 
     test "advertises the following collection, count-only and accepted-only (#1160)", %{

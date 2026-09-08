@@ -16,6 +16,8 @@ defmodule Vutuv.Moderation.Notifier do
 
   import Ecto.Query
 
+  require Logger
+
   alias Vutuv.{Accounts, Activity, Moderation, Repo}
   alias Vutuv.Accounts.User
   alias Vutuv.Moderation.{Case, Report}
@@ -73,6 +75,12 @@ defmodule Vutuv.Moderation.Notifier do
   erases the case, so reading the content then answers "still here" about
   something that is gone a line later. Every other path settles the content
   first and lets `Moderation.reported_content_fate/1` look.
+
+  The subject and the closing paragraph come from those two different sources,
+  so before anything is sent `Moderation.consistent_outcome?/2` is asked
+  whether they can stand in one letter (issue #2071). If they cannot, nothing
+  goes out, the claim is given back so no row falsely reads as answered, and
+  the log says so — see `refuse_contradicting_notice/4`.
   """
   def reporters_case_closed(%Case{} = case_record, opts \\ []) do
     deliver_outcomes(case_record, Case.reporter_outcome(case_record.status), opts[:fate])
@@ -93,20 +101,57 @@ defmodule Vutuv.Moderation.Notifier do
       )
       |> Repo.update_all(set: [outcome_notified_at: now, updated_at: now])
 
-    if reports != [] do
-      # What became of the content, read **here**: the ruling has already
-      # settled it (purged a picture, unfrozen a profile, left a post frozen)
-      # and the delivery tasks run later, on a row `remove_owner/4` may by then
-      # have erased. Once per case rather than per reporter, and only once the
-      # `UPDATE` above says somebody is actually owed a notice — a second close
-      # or a retry claims no rows and must not pay for a lookup nothing reads.
-      fate = stated_fate || Moderation.reported_content_fate(case_record)
+    if reports != [], do: deliver_or_refuse(case_record, reports, outcome, stated_fate)
+
+    :ok
+  end
+
+  # What became of the content, read **here**: the ruling has already settled it
+  # (purged a picture, unfrozen a profile, left a post frozen) and the delivery
+  # tasks run later, on a row `remove_owner/4` may by then have erased. Once per
+  # case rather than per reporter, and only once the `UPDATE` above says
+  # somebody is actually owed a notice — a second close or a retry claims no
+  # rows and must not pay for a lookup nothing reads.
+  defp deliver_or_refuse(%Case{} = case_record, reports, outcome, stated_fate) do
+    fate = stated_fate || Moderation.reported_content_fate(case_record)
+
+    if Moderation.consistent_outcome?(outcome, fate) do
       reporters = reporters_by_id(reports)
 
       for report <- reports, do: deliver_outcome(report, reporters, outcome, fate)
+    else
+      refuse_contradicting_notice(case_record, reports, outcome, fate)
     end
+  end
 
-    :ok
+  # The letter's two halves meet here, so this is where the rule against them
+  # contradicting each other is asked (issue #2071). It had existed since #2067
+  # and only tests ever called it — with the fate they expected rather than the
+  # one the system produced, so it compared a sentence with itself.
+  #
+  # What it does when it fires is two decisions. **No mail**: a subject saying
+  # the content was deleted over a paragraph saying it is merely hidden is
+  # worse for the person reading it than silence, and this is a legal notice.
+  # **The claim goes back**: leaving `outcome_notified_at` stamped would record
+  # in the database that these reporters were told, which is false, and
+  # `Report.awaiting_outcome/1` is what any later answer has to read. Be clear
+  # about what that does and does not buy — nothing re-drives it. That query
+  # has one reader (`deliver_outcomes/3`), no sweeper wakes it, and a closed
+  # case cannot re-enter `settle_case/3`, so in practice a fired guard is
+  # permanent silence for that reporter. The row stays honest and the log is
+  # what an operator acts on; the deeper fix is to refuse the contradicting
+  # *ending* rather than the letter, in the close path itself.
+  defp refuse_contradicting_notice(%Case{} = case_record, reports, outcome, fate) do
+    ids = Enum.map(reports, & &1.id)
+
+    Repo.update_all(from(r in Report, where: r.id in ^ids), set: [outcome_notified_at: nil])
+
+    Logger.error(
+      "moderation: no decision notice sent for case #{case_record.id} " <>
+        "(status #{case_record.status}) - the ending #{inspect(outcome)} and the content's " <>
+        "measured fate #{inspect(fate)} contradict each other " <>
+        "(Vutuv.Moderation.consistent_outcome?/2). #{length(ids)} reporter(s) still owed one."
+    )
   end
 
   # One query for every member reporter on the case, not one per report: a
