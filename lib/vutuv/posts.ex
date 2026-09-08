@@ -625,12 +625,35 @@ defmodule Vutuv.Posts do
         end
 
         attach_images!(updated, image_ids)
+        sync_review_cover!(updated)
         updated
 
       {:error, changeset} ->
         Repo.rollback(changeset)
     end
   end
+
+  # An edit can only ever *take* a review's cover away: `PostReview`'s
+  # changeset clears `cover` when the ISBN changes or goes, and nothing on
+  # this path can set one — the cover is fetched off the request path
+  # afterwards. So the mirror row (#2055) follows here, inside the same
+  # transaction as the write that dropped the cover. `create_post/2` needs no
+  # such call: a review that has just been inserted cannot have a row yet.
+  #
+  # The cover columns are **read back** rather than taken off the struct in
+  # hand. A caller that preloaded the post before the cover was fetched holds
+  # `cover: nil`, and `change(cover: nil)` on such a struct records no change
+  # at all — so the review keeps its file in the database while the struct
+  # says otherwise, and syncing from the struct would drop the row of a
+  # picture that is still there.
+  defp sync_review_cover!(%Post{review: %PostReview{id: id}}) do
+    case Repo.get(PostReview, id) do
+      nil -> :ok
+      review -> :ok = Images.sync_review_cover(review)
+    end
+  end
+
+  defp sync_review_cover!(%Post{}), do: :ok
 
   @doc """
   Deletes a post including its image files, and tells open clients it is gone:
@@ -661,7 +684,7 @@ defmodule Vutuv.Posts do
         if post.screenshot, do: Screenshots.delete(post.screenshot)
         # Same for a book review's fetched cover files.
         if post.review, do: ReviewCovers.delete_files(post.review)
-        broadcast_post_deleted(post.id, deletion_recipients(post))
+        broadcast_post_deleted(post.id, post_audience(post))
         if parent_id, do: broadcast_reply_count(parent_id)
         # Deleting reported content settles its moderation case.
         Vutuv.Moderation.content_deleted(deleted)
@@ -7274,8 +7297,20 @@ defmodule Vutuv.Posts do
       nil ->
         :ok
 
-      %Post{user_id: author_id} ->
-        broadcast_to_followers(author_id, {event_name, %{post_id: post_id, author_id: author_id}})
+      %Post{} = post ->
+        # Through `post_audience/1`, the one function that answers "whose feed
+        # does this post reach", rather than the member query: a post published
+        # in an organization's name has **no member author**, and handing that
+        # nil to `follower_ids/1` raised (`where: x == ^nil` is not a silent
+        # no-op), so a page's link screenshot and its book cover both died on
+        # announcing themselves — the cover inside
+        # `Vutuv.Posts.ReviewCovers`' own rescue, which then wrote the review
+        # off as `failed`. Both consumers read `post_id` alone.
+        post
+        |> post_audience()
+        |> broadcast_each({event_name, %{post_id: post_id, author_id: post.user_id}})
+
+        :ok
     end
   end
 
@@ -7554,15 +7589,17 @@ defmodule Vutuv.Posts do
     Enum.each(recipient_ids, &Vutuv.Activity.broadcast(&1, event))
   end
 
-  # Whose open feed has to drop this entry. A member's post reaches them and
-  # their followers; an organization post reaches the people who follow the
-  # **page** (issue #1336) — it never sat in the publishers' own feeds, so
-  # there is nobody else to tell. Without this clause a nil author matched
-  # neither head and deleting an organization post raised (issue #1334).
-  defp deletion_recipients(%Post{organization_id: id}) when is_binary(id),
+  # Whose open feed this post reaches — what a deletion has to tell, and what
+  # an attachment that finished loading (a link screenshot, a book cover) has
+  # to tell too. A member's post reaches them and their followers; an
+  # organization post reaches the people who follow the **page** (issue #1336)
+  # — it never sat in the publishers' own feeds, so there is nobody else to
+  # tell. Without the first clause a nil author matched neither head and
+  # deleting an organization post raised (issue #1334).
+  defp post_audience(%Post{organization_id: id}) when is_binary(id),
     do: organization_follower_ids(id)
 
-  defp deletion_recipients(%Post{user_id: user_id}),
+  defp post_audience(%Post{user_id: user_id}),
     do: [user_id | follower_ids(user_id)]
 
   defp organization_follower_ids(organization_id) do

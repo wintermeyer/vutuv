@@ -26,6 +26,12 @@ defmodule Vutuv.Images.Image do
     belongs_to(:post, Vutuv.Posts.Post)
     belongs_to(:organization, Vutuv.Organizations.Organization)
 
+    # The review a fetched book cover belongs to (#2055). Unlike the three
+    # above this one is also the **join key**: a review's cover is columns on
+    # the review row with no token of its own, so there is nothing else to
+    # match the two sides on. Exactly one cover per review, by unique index.
+    belongs_to(:post_review, Vutuv.Posts.PostReview)
+
     # Who uploaded an organization image — **not** who owns it (#2053). The
     # page owns its logo, which is why `organization_images.user_id` is
     # `ON DELETE SET NULL` and this column copies that: a page keeps its

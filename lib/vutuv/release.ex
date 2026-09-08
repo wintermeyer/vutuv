@@ -133,8 +133,9 @@ defmodule Vutuv.Release do
   Brings every picture uploaded before the shared `images` table into it, and
   corrects any row that disagrees with the picture's own columns (see
   `Vutuv.Images.Backfill`). Covers profile pictures and covers (#2013/#2014)
-  and the kinds that still keep a table of their own — a job-posting picture
-  since #2054, a post photo since #2052. Moves no file and changes no URL, so
+  and the kinds #2015 brought in — a job-posting picture since #2054, a post
+  photo since #2052, an organization image since #2053 and a book review's
+  cover since #2055. Moves no file and changes no URL, so
   it is safe while the app serves traffic and safe to run again after an
   interruption:
 
@@ -143,6 +144,8 @@ defmodule Vutuv.Release do
       bin/vutuv eval "Vutuv.Release.backfill_image_rows(only: \\"cover\\")"
       bin/vutuv eval "Vutuv.Release.backfill_image_rows(only: \\"job_posting_image\\")"
       bin/vutuv eval "Vutuv.Release.backfill_image_rows(only: \\"post_image\\")"
+      bin/vutuv eval "Vutuv.Release.backfill_image_rows(only: \\"organization_image\\")"
+      bin/vutuv eval "Vutuv.Release.backfill_image_rows(only: \\"review_cover\\")"
   """
   def backfill_image_rows(opts \\ []) do
     load_app()

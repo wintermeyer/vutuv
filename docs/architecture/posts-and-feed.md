@@ -2188,6 +2188,16 @@ checked per request, content-fingerprinted filename, so an outdated cover URL
 stops resolving). Files live under `review_covers/<review.id>/`
 (`Vutuv.ReviewCover`); post deletion and account deletion purge them.
 
+Since #2055 a stored cover also has a row in the shared `images` table, so a
+copyright case has something to act on — the expand half of #2015's last kind,
+described in the "review cover" section of [images.md](images.md). The review
+row stays the truth and no reader here has moved; `cover` and
+`cover_moderation` are mirrored, `cover_status` deliberately is not (it says
+whether a *fetch* is due, and the row's existence already says whether a
+picture exists), and the picture has no member owner at all — a publisher's
+artwork is not the reviewer's, and a page's review post has no member author
+to name.
+
 A cover is the one image vutuv holds that is **not ours**: publisher artwork,
 quoted at thumbnail size beside a review (§ 51 UrhG). Open Library passes the
 images through and grants no rights to them, so the pipeline is built to keep

@@ -21,6 +21,7 @@ defmodule Vutuv.ImagesTest do
   alias Vutuv.Moderation.ImageScan
   alias Vutuv.Moderation.ImageScans
   alias Vutuv.Moderation.ImageSubjects
+  alias Vutuv.Posts.PostReview
   alias Vutuv.Repo
 
   @safe {:ok, %{safe?: true, category: "safe"}}
@@ -280,22 +281,32 @@ defmodule Vutuv.ImagesTest do
     test "avatars and covers are served straight off disk" do
       assert Images.serving("avatar") == :static
       assert Images.serving("cover") == :static
-      assert Images.kinds() == ~w(avatar cover job_posting_image organization_image post_image)
+
+      assert Images.kinds() ==
+               ~w(avatar cover job_posting_image organization_image post_image review_cover)
     end
 
-    # Every gallery kind that has moved goes through an authorizing proxy, so
-    # the row is its off switch rather than the tree the bytes sit in.
-    test "the gallery kinds go through their proxy" do
+    # Every kind that has moved goes through an authorizing proxy, so the row
+    # is its off switch rather than the tree the bytes sit in.
+    test "the kinds #2015 brought go through their proxy" do
       assert Images.serving("job_posting_image") == :proxy
       assert Images.serving("organization_image") == :proxy
       assert Images.serving("post_image") == :proxy
+      assert Images.serving("review_cover") == :proxy
     end
 
-    # A review's cover is the last kind #2015 brings (#2055); until it arrives,
-    # asking about it is asking about a picture nobody could take offline.
+    # #2055 was the last of the four, so there is no un-moved kind left to
+    # point at here. The claim was never about a *pending* kind anyway: it is
+    # that a name nobody declared raises instead of inheriting a strategy, so
+    # the example is a name that is deliberately not a kind — and the second
+    # assertion is what keeps it that way, since the day somebody declares it
+    # this test would otherwise start proving nothing.
     test "an undeclared kind raises rather than inheriting a default" do
+      undeclared = "poster"
+      refute undeclared in Images.kinds()
+
       assert_raise ArgumentError, ~r/no serving strategy declared/, fn ->
-        Images.serving("review_cover")
+        Images.serving(undeclared)
       end
     end
   end
@@ -360,6 +371,52 @@ defmodule Vutuv.ImagesTest do
         assert Images.mirror_source(kind).fields -- ImageRow.__schema__(:fields) == [],
                "#{kind} names a column the images row does not have"
       end
+    end
+
+    # The review cover is in no mirror registry — it is columns on a parent
+    # row (#2055) — so the loop above cannot see it, and the whole review row
+    # is the wrong thing to compare against: fifteen of its seventeen columns
+    # describe the *review*, not its picture, and a drift test that listed
+    # them all would fire on every new review field and be rubber-stamped.
+    #
+    # What is worth pinning is narrower and exact: every `cover*` column of
+    # `post_reviews` is either copied into the row or excluded on purpose. A
+    # future `cover_source_url` or `cover_alt` then has to answer for itself
+    # before the release that drops these columns loses it.
+    # The **fetch** lifecycle (none → pending → ready/failed), not a fact about
+    # a stored picture: while it is anything but "ready" there is no cover at
+    # all, so the row's existence already says what a copy would. It stays on
+    # the review row when the other two go.
+    @cover_columns_kept [:cover_status]
+
+    test "every cover column of a review is copied or kept back on purpose" do
+      copied = Images.column_source("review_cover").copied
+
+      cover_columns =
+        PostReview.__schema__(:fields)
+        |> Enum.filter(&String.starts_with?(Atom.to_string(&1), "cover"))
+
+      assert Enum.sort(cover_columns) ==
+               Enum.sort(Map.values(copied) ++ @cover_columns_kept),
+             """
+             post_reviews' cover columns and the review cover's row have drifted.
+
+             columns: #{inspect(Enum.sort(cover_columns))}
+             copied:  #{inspect(Enum.sort(Map.values(copied)))}
+             kept:    #{inspect(@cover_columns_kept)}
+
+             Add the column to `Vutuv.Images`' `@column_sources` entry for
+             "review_cover" (and to `images` in a migration), or to
+             `@cover_columns_kept` here with the reason it belongs to the
+             review row alone.
+             """
+    end
+
+    test "and every copied name is a column of the images row too" do
+      copied = Map.keys(Images.column_source("review_cover").copied)
+
+      assert copied -- ImageRow.__schema__(:fields) == [],
+             "review_cover names a column the images row does not have"
     end
   end
 
