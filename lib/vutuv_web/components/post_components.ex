@@ -2763,8 +2763,9 @@ defmodule VutuvWeb.PostComponents do
   **Unreleased ones reach here too.** `Vutuv.Fediverse.list_remote_images/1`
   deliberately does not filter on the AI gate (this doc claimed the opposite
   until issue #1801, while the waiting tile below was already the proof), so
-  `RemoteImage.released?/1` is asked here, per picture, and the tile is what a
-  reader gets meanwhile.
+  `RemoteImage.display_state/1` is asked here, per picture: one still on its
+  way gets the tile meanwhile, and one that is not coming at all is dropped,
+  grid and all where it was the post's only picture.
 
   The gate is one of two independent conditions, and the second is this
   component's own: a picture its **author** flagged sensitive, or one under
@@ -2778,52 +2779,45 @@ defmodule VutuvWeb.PostComponents do
   unlabelled image is honest, a made-up label is not.
   """
   def remote_post_images(assigns) do
-    # Only the pictures that are really still being looked at. A picture that is
-    # not coming is `not released?` too, and counting it here is what put the
-    # "our AI is looking at it" line under cards whose picture had been refused
-    # three weeks earlier (issue #1803).
+    # The state per picture, asked once — and this is where a picture that is
+    # **not coming** leaves the card altogether. It used to hold a grey
+    # "Picture unavailable" tile, on the reasoning that a post from another
+    # network can be a photograph and nothing else, so a card with a silent
+    # hole in it reads as broken. What that produced is a hole with a label on
+    # it: a card naming a picture nobody will ever show the reader, for a
+    # reason that is not theirs to have (a moderation verdict, or somebody
+    # else's server having a bad week). The post stands on its text instead,
+    # exactly as it would had its author attached nothing.
+    #
+    # Asking "is it coming at all" before "is it still being checked" is still
+    # the order that matters (issue #1803) — that order lives in
+    # `display_state/1`, beside the columns it reads.
+    shown =
+      for image <- assigns.images,
+          state = RemoteImage.display_state(image),
+          state != :unavailable,
+          do: {state, image}
+
+    # Only the pictures that are really still being looked at — a refused one
+    # counted here is what put the "our AI is looking at it" line under cards
+    # whose picture had been turned down three weeks earlier.
     assigns =
-      assign(
-        assigns,
-        :held_count,
-        Enum.count(assigns.images, &(RemoteImage.display_state(&1) == :waiting))
-      )
+      assign(assigns, shown: shown, held_count: Enum.count(shown, &match?({:waiting, _}, &1)))
 
     ~H"""
     <div
-      :if={@images != []}
-      data-remote-images={length(@images)}
+      :if={@shown != []}
+      data-remote-images={length(@shown)}
       data-media-edge
       class={[
         "mt-2 grid gap-2",
-        length(@images) > 1 && "grid-cols-2"
+        length(@shown) > 1 && "grid-cols-2"
       ]}
     >
-      <div :for={image <- @images} class="overflow-hidden rounded-lg">
-        <%!-- One `case` over `RemoteImage.display_state/1` rather than a chain
-        of `if`s, because the ORDER is the thing that was wrong (issue #1803):
-        "is it still being checked" answers yes for a picture that was refused
-        three weeks ago, so it may only be asked once "is it coming at all" has
-        said yes. That order lives beside the columns it reads, not here. --%>
-        <%= case RemoteImage.display_state(image) do %>
-          <% :unavailable -> %>
-            <%!-- The picture is not coming: the AI gate refused it, or its bytes
-            never arrived and `Vutuv.Fediverse.MediaRefetcher` has stopped
-            asking. It kept the waiting tile below until then, so a card promised
-            a check that had finished weeks earlier — on some rows since
-            2026-08-03. No hourglass and no explanation of *why*: one is a
-            moderation decision that is not the reader's argument to have, the
-            other is somebody else's server having a bad week, and from where the
-            reader sits both are the same fact. The tile stays rather than
-            vanishing, because a post from another network can be a photograph
-            and nothing else, and a card with a silent hole in it reads as
-            broken. --%>
-            <div
-              data-remote-image-unavailable
-              class="flex min-h-24 items-center justify-center rounded-lg bg-slate-100 px-3 py-6 text-center text-xs text-slate-500 dark:bg-slate-800 dark:text-slate-400"
-            >
-              <span>{gettext("Picture unavailable")}</span>
-            </div>
+      <div :for={{state, image} <- @shown} class="overflow-hidden rounded-lg">
+        <%!-- Three states, and `:unavailable` is not among them: it never
+        reaches the grid (see above). --%>
+        <%= case state do %>
           <% :waiting -> %>
             <%!-- Recorded, not shown: still downloading from its own server, or
             still with the AI gate. Once the bytes are here the tile is the
