@@ -2862,7 +2862,7 @@ msgstr "Solo testo"
 msgid "This post is for the connections of %{name}"
 msgstr "Questo post è per i collegamenti di %{name}"
 
-#: lib/vutuv_web/views/admin/moderation_html.ex:126
+#: lib/vutuv_web/views/admin/moderation_html.ex:127
 #: lib/vutuv_web/views/user_html.ex:536
 #, elixir-autogen, elixir-format
 msgid "connection"
@@ -3633,7 +3633,7 @@ msgstr ""
 "Ha esaurito tutte le %{limit} modifiche del nome utente degli ultimi %{days}"
 " giorni."
 
-#: lib/vutuv_web/views/admin/moderation_html.ex:127
+#: lib/vutuv_web/views/admin/moderation_html.ex:128
 #, elixir-autogen, elixir-format
 msgid "%{count} follows"
 msgstr "%{count} follow"
@@ -3670,7 +3670,7 @@ msgstr "Contenuto bloccato"
 msgid "Decision"
 msgstr "Decisione"
 
-#: lib/vutuv_web/views/admin/moderation_html.ex:79
+#: lib/vutuv_web/views/admin/moderation_html.ex:80
 #, elixir-autogen, elixir-format
 msgid "Escalated - the 72h deadline passed"
 msgstr "Inoltrato: sono passate le 72 ore"
@@ -3727,12 +3727,12 @@ msgstr "Segnalazione inviata"
 msgid "Report protection"
 msgstr "Protezione dopo la segnalazione"
 
-#: lib/vutuv_web/views/admin/moderation_html.ex:81
+#: lib/vutuv_web/views/admin/moderation_html.ex:82
 #, elixir-autogen, elixir-format
 msgid "Report rejected"
 msgstr "Segnalazione respinta"
 
-#: lib/vutuv_web/views/admin/moderation_html.ex:80
+#: lib/vutuv_web/views/admin/moderation_html.ex:81
 #, elixir-autogen, elixir-format
 msgid "Report upheld"
 msgstr "Segnalazione accolta"
@@ -3769,7 +3769,7 @@ msgstr "Chiuso con una modifica"
 msgid "Settled by deletion"
 msgstr "Chiuso con l'eliminazione"
 
-#: lib/vutuv_web/views/admin/moderation_html.ex:83
+#: lib/vutuv_web/views/admin/moderation_html.ex:84
 #, elixir-autogen, elixir-format
 msgid "Strike issued"
 msgstr "Richiamo assegnato"
@@ -3813,22 +3813,22 @@ msgstr ""
 "contatto in nessuna delle due direzioni. Se i nostri amministratori "
 "riterranno la segnalazione infondata, la sospensione verrà annullata."
 
-#: lib/vutuv_web/views/admin/moderation_html.ex:101
+#: lib/vutuv_web/views/admin/moderation_html.ex:102
 #, elixir-autogen, elixir-format
 msgid "for the owner"
 msgstr "per il proprietario"
 
-#: lib/vutuv_web/views/admin/moderation_html.ex:102
+#: lib/vutuv_web/views/admin/moderation_html.ex:103
 #, elixir-autogen, elixir-format
 msgid "for the reporter"
 msgstr "per il segnalante"
 
-#: lib/vutuv_web/views/admin/moderation_html.ex:106
+#: lib/vutuv_web/views/admin/moderation_html.ex:107
 #, elixir-autogen, elixir-format
 msgid "level %{level}, %{role}"
 msgstr "livello %{level}, %{role}"
 
-#: lib/vutuv_web/views/admin/moderation_html.ex:128
+#: lib/vutuv_web/views/admin/moderation_html.ex:129
 #, elixir-autogen, elixir-format
 msgid "messages"
 msgstr "messaggi"
@@ -3874,7 +3874,7 @@ msgstr ""
 msgid "Case %{id}, captured %{at} UTC"
 msgstr "Caso %{id}, acquisito il %{at} UTC"
 
-#: lib/vutuv_web/views/admin/moderation_html.ex:84
+#: lib/vutuv_web/views/admin/moderation_html.ex:85
 #, elixir-autogen, elixir-format
 msgid "Evidence screenshot captured"
 msgstr "Screenshot di prova acquisito"
@@ -10190,7 +10190,7 @@ msgstr "Cerchi i tag"
 msgid "name or slug"
 msgstr "nome o slug"
 
-#: lib/vutuv_web/views/admin/moderation_html.ex:121
+#: lib/vutuv_web/views/admin/moderation_html.ex:122
 #, elixir-autogen, elixir-format
 msgid "%{action} (%{reason})"
 msgstr "%{action} (%{reason})"
@@ -10213,7 +10213,7 @@ msgstr ""
 msgid "Account deleted."
 msgstr "Account eliminato."
 
-#: lib/vutuv_web/views/admin/moderation_html.ex:82
+#: lib/vutuv_web/views/admin/moderation_html.ex:83
 #, elixir-autogen, elixir-format
 msgid "Account removed"
 msgstr "Account rimosso"
@@ -10291,12 +10291,12 @@ msgstr ""
 "esamineranno questo account."
 
 #: lib/vutuv_web/views/admin/account_html.ex:78
-#: lib/vutuv_web/views/admin/moderation_html.ex:114
+#: lib/vutuv_web/views/admin/moderation_html.ex:115
 #, elixir-autogen, elixir-format
 msgid "deactivated"
 msgstr "disattivato"
 
-#: lib/vutuv_web/views/admin/moderation_html.ex:115
+#: lib/vutuv_web/views/admin/moderation_html.ex:116
 #, elixir-autogen, elixir-format
 msgid "deleted"
 msgstr "eliminato"
@@ -24811,7 +24811,7 @@ msgstr "Ancora un clic e la Sua segnalazione arriva ai nostri amministratori. A 
 msgid "Our admins see your name and address so they can come back to you. The owner of the reported content never does."
 msgstr "I nostri amministratori vedono il Suo nome e il Suo indirizzo per poterLa ricontattare. Chi ha pubblicato il contenuto segnalato non li vede mai."
 
-#: lib/vutuv_web/views/admin/moderation_html.ex:86
+#: lib/vutuv_web/views/admin/moderation_html.ex:87
 #, elixir-autogen, elixir-format
 msgid "Outside reporter confirmed their address"
 msgstr "Il segnalante esterno ha confermato il proprio indirizzo"
@@ -24833,7 +24833,7 @@ msgstr "Segnalazione confermata"
 msgid "Report content on this site"
 msgstr "Segnalare un contenuto di questo sito"
 
-#: lib/vutuv_web/views/admin/moderation_html.ex:85
+#: lib/vutuv_web/views/admin/moderation_html.ex:86
 #, elixir-autogen, elixir-format
 msgid "Report filed from outside"
 msgstr "Segnalazione ricevuta dall'esterno"
@@ -24959,7 +24959,7 @@ msgstr "Profilo"
 msgid "A confirmation link is good for one week. Yours has run out, so your report never reached our admins and nothing about the reported content changed."
 msgstr "Un link di conferma vale una settimana. Il Suo è scaduto, quindi la Sua segnalazione non è mai arrivata ai nostri amministratori e nulla è cambiato per il contenuto segnalato."
 
-#: lib/vutuv_web/views/admin/moderation_html.ex:89
+#: lib/vutuv_web/views/admin/moderation_html.ex:90
 #, elixir-autogen, elixir-format
 msgid "Report dropped: the address was never confirmed"
 msgstr "Segnalazione scartata: l'indirizzo non è mai stato confermato"
@@ -25135,3 +25135,8 @@ msgstr "Il contenuto è di nuovo visibile."
 #, elixir-autogen, elixir-format
 msgid "The content stays hidden."
 msgstr "Il contenuto resta nascosto."
+
+#: lib/vutuv_web/views/admin/moderation_html.ex:79
+#, elixir-autogen, elixir-format
+msgid "Owner replaced the content"
+msgstr "Il proprietario ha sostituito il contenuto"

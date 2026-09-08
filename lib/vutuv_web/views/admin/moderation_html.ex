@@ -76,6 +76,7 @@ defmodule VutuvWeb.Admin.ModerationHTML do
   def event_label("owner_disputed"), do: gettext("Owner disputed the report")
   def event_label("content_edited"), do: gettext("Owner edited the content")
   def event_label("content_deleted"), do: gettext("Content deleted")
+  def event_label("content_replaced"), do: gettext("Owner replaced the content")
   def event_label("escalated_deadline"), do: gettext("Escalated - the 72h deadline passed")
   def event_label("upheld"), do: gettext("Report upheld")
   def event_label("rejected"), do: gettext("Report rejected")

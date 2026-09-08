@@ -2809,7 +2809,7 @@ msgstr ""
 msgid "This post is for the connections of %{name}"
 msgstr ""
 
-#: lib/vutuv_web/views/admin/moderation_html.ex:126
+#: lib/vutuv_web/views/admin/moderation_html.ex:127
 #: lib/vutuv_web/views/user_html.ex:536
 #, elixir-autogen, elixir-format
 msgid "connection"
@@ -3532,7 +3532,7 @@ msgstr ""
 msgid "You have used all %{limit} username changes of the last %{days} days."
 msgstr ""
 
-#: lib/vutuv_web/views/admin/moderation_html.ex:127
+#: lib/vutuv_web/views/admin/moderation_html.ex:128
 #, elixir-autogen, elixir-format
 msgid "%{count} follows"
 msgstr ""
@@ -3569,7 +3569,7 @@ msgstr ""
 msgid "Decision"
 msgstr ""
 
-#: lib/vutuv_web/views/admin/moderation_html.ex:79
+#: lib/vutuv_web/views/admin/moderation_html.ex:80
 #, elixir-autogen, elixir-format
 msgid "Escalated - the 72h deadline passed"
 msgstr ""
@@ -3624,12 +3624,12 @@ msgstr ""
 msgid "Report protection"
 msgstr ""
 
-#: lib/vutuv_web/views/admin/moderation_html.ex:81
+#: lib/vutuv_web/views/admin/moderation_html.ex:82
 #, elixir-autogen, elixir-format
 msgid "Report rejected"
 msgstr ""
 
-#: lib/vutuv_web/views/admin/moderation_html.ex:80
+#: lib/vutuv_web/views/admin/moderation_html.ex:81
 #, elixir-autogen, elixir-format
 msgid "Report upheld"
 msgstr ""
@@ -3664,7 +3664,7 @@ msgstr ""
 msgid "Settled by deletion"
 msgstr ""
 
-#: lib/vutuv_web/views/admin/moderation_html.ex:83
+#: lib/vutuv_web/views/admin/moderation_html.ex:84
 #, elixir-autogen, elixir-format
 msgid "Strike issued"
 msgstr ""
@@ -3699,22 +3699,22 @@ msgstr ""
 msgid "Your report paused the connection between you two - no contact in either direction for now. If our admins find the report unfounded, this is undone."
 msgstr ""
 
-#: lib/vutuv_web/views/admin/moderation_html.ex:101
+#: lib/vutuv_web/views/admin/moderation_html.ex:102
 #, elixir-autogen, elixir-format
 msgid "for the owner"
 msgstr ""
 
-#: lib/vutuv_web/views/admin/moderation_html.ex:102
+#: lib/vutuv_web/views/admin/moderation_html.ex:103
 #, elixir-autogen, elixir-format
 msgid "for the reporter"
 msgstr ""
 
-#: lib/vutuv_web/views/admin/moderation_html.ex:106
+#: lib/vutuv_web/views/admin/moderation_html.ex:107
 #, elixir-autogen, elixir-format
 msgid "level %{level}, %{role}"
 msgstr ""
 
-#: lib/vutuv_web/views/admin/moderation_html.ex:128
+#: lib/vutuv_web/views/admin/moderation_html.ex:129
 #, elixir-autogen, elixir-format
 msgid "messages"
 msgstr ""
@@ -3749,7 +3749,7 @@ msgstr ""
 msgid "Case %{id}, captured %{at} UTC"
 msgstr ""
 
-#: lib/vutuv_web/views/admin/moderation_html.ex:84
+#: lib/vutuv_web/views/admin/moderation_html.ex:85
 #, elixir-autogen, elixir-format
 msgid "Evidence screenshot captured"
 msgstr ""
@@ -9758,7 +9758,7 @@ msgstr ""
 msgid "name or slug"
 msgstr ""
 
-#: lib/vutuv_web/views/admin/moderation_html.ex:121
+#: lib/vutuv_web/views/admin/moderation_html.ex:122
 #, elixir-autogen, elixir-format
 msgid "%{action} (%{reason})"
 msgstr ""
@@ -9779,7 +9779,7 @@ msgstr ""
 msgid "Account deleted."
 msgstr ""
 
-#: lib/vutuv_web/views/admin/moderation_html.ex:82
+#: lib/vutuv_web/views/admin/moderation_html.ex:83
 #, elixir-autogen, elixir-format
 msgid "Account removed"
 msgstr ""
@@ -9850,12 +9850,12 @@ msgid "Thank you for your report. Our moderators have been notified and will rev
 msgstr ""
 
 #: lib/vutuv_web/views/admin/account_html.ex:78
-#: lib/vutuv_web/views/admin/moderation_html.ex:114
+#: lib/vutuv_web/views/admin/moderation_html.ex:115
 #, elixir-autogen, elixir-format
 msgid "deactivated"
 msgstr ""
 
-#: lib/vutuv_web/views/admin/moderation_html.ex:115
+#: lib/vutuv_web/views/admin/moderation_html.ex:116
 #, elixir-autogen, elixir-format
 msgid "deleted"
 msgstr ""
@@ -23297,7 +23297,7 @@ msgstr ""
 msgid "Our admins see your name and address so they can come back to you. The owner of the reported content never does."
 msgstr ""
 
-#: lib/vutuv_web/views/admin/moderation_html.ex:86
+#: lib/vutuv_web/views/admin/moderation_html.ex:87
 #, elixir-autogen, elixir-format
 msgid "Outside reporter confirmed their address"
 msgstr ""
@@ -23319,7 +23319,7 @@ msgstr ""
 msgid "Report content on this site"
 msgstr ""
 
-#: lib/vutuv_web/views/admin/moderation_html.ex:85
+#: lib/vutuv_web/views/admin/moderation_html.ex:86
 #, elixir-autogen, elixir-format, fuzzy
 msgid "Report filed from outside"
 msgstr ""
@@ -23445,7 +23445,7 @@ msgstr ""
 msgid "A confirmation link is good for one week. Yours has run out, so your report never reached our admins and nothing about the reported content changed."
 msgstr ""
 
-#: lib/vutuv_web/views/admin/moderation_html.ex:89
+#: lib/vutuv_web/views/admin/moderation_html.ex:90
 #, elixir-autogen, elixir-format
 msgid "Report dropped: the address was never confirmed"
 msgstr ""
@@ -23620,4 +23620,9 @@ msgstr ""
 #: lib/vutuv_web/views/moderation_case_html.ex:41
 #, elixir-autogen, elixir-format
 msgid "The content stays hidden."
+msgstr ""
+
+#: lib/vutuv_web/views/admin/moderation_html.ex:79
+#, elixir-autogen, elixir-format
+msgid "Owner replaced the content"
 msgstr ""

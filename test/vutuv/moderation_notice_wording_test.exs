@@ -39,6 +39,33 @@ defmodule Vutuv.ModerationNoticeWordingTest do
     reporter
   end
 
+  defp de_reporter do
+    reporter = insert(:activated_user, locale: "de")
+    insert(:email, user: reporter, value: "melder@example.com")
+    reporter
+  end
+
+  # One closing path, checked the way a reader meets it: the sentence about the
+  # content, and that it does not contradict the subject its ending produced.
+  defp assert_notice(address, outcome, fate_sentence) do
+    email = mail_to(address)
+
+    for body <- bodies(email) do
+      assert body =~ fate_sentence,
+             "the notice does not say #{inspect(fate_sentence)}"
+    end
+
+    fate =
+      case fate_sentence do
+        "Der gemeldete Inhalt ist gelöscht." -> :removed
+        "Der gemeldete Inhalt ist auf vutuv nicht mehr zu sehen." -> :hidden
+        "Der gemeldete Inhalt ist auf vutuv weiterhin zu sehen." -> :visible
+      end
+
+    assert Moderation.consistent_outcome?(outcome, fate),
+           "the subject for #{outcome} and the body's #{inspect(fate)} disagree"
+  end
+
   defp uploads_dir do
     tmp =
       Path.join(System.tmp_dir!(), "vutuv_notice_wording_#{System.unique_integer([:positive])}")
@@ -48,9 +75,11 @@ defmodule Vutuv.ModerationNoticeWordingTest do
     tmp
   end
 
-  defp jpeg_upload do
+  # The colour is the fingerprint: a replacement only settles a case when the
+  # bytes really differ (issue #2035).
+  defp jpeg_upload(color \\ [10, 120, 200]) do
     src = Path.join(System.tmp_dir!(), "notice_src_#{System.unique_integer([:positive])}.jpg")
-    {:ok, img} = Image.new(120, 90, color: [10, 120, 200])
+    {:ok, img} = Image.new(120, 90, color: color)
     {:ok, _} = Image.write(img, src)
     on_exit(fn -> File.rm(src) end)
     %Plug.Upload{filename: "selfie.jpg", path: src, content_type: "image/jpeg"}
@@ -82,6 +111,16 @@ defmodule Vutuv.ModerationNoticeWordingTest do
   defp mail(fragment) do
     Enum.find(flush_emails(), &(&1.subject =~ fragment)) ||
       flunk("no email whose subject matches #{inspect(fragment)}")
+  end
+
+  # By recipient, not by subject: the four outcome subjects have no word in
+  # common (a deleted content's subject never says "Meldung"), and picking the
+  # mail by what it is expected to say would hide the very disagreement these
+  # tests are about.
+  defp mail_to(address) do
+    Enum.find(flush_emails(), fn email ->
+      Enum.any?(email.to, fn {_name, to} -> to == address end)
+    end) || flunk("no email addressed to #{address}")
   end
 
   # Both halves of one mail, whitespace flattened. The HTML body wraps a
@@ -283,6 +322,156 @@ defmodule Vutuv.ModerationNoticeWordingTest do
       assert Moderation.reported_content_fate(case_record) == :hidden
       {:ok, upheld} = Moderation.uphold_case(case_record, admin)
       assert Moderation.reported_content_fate(upheld) == :removed
+    end
+  end
+
+  # The two paths that close a case where the content cannot simply be looked
+  # at afterwards: one erases the row that would answer, the other leaves a row
+  # standing whose bytes are somebody else's. Measuring blind said the friendly
+  # thing on both, which is worse than the silence they had before (issue
+  # #2067, first repair round).
+  describe "a closing path whose content cannot be measured afterwards" do
+    test "deleting the account tells the notifier the content is gone", %{
+      owner: owner,
+      admin: admin
+    } do
+      post = insert(:post, user: owner)
+
+      {:ok, _case, report, token} = Moderation.file_public_notice(post, outside_notice(), "de")
+      {:ok, :confirmed, _report} = Moderation.confirm_public_notice(token)
+      flush_emails()
+
+      {:ok, :deleted} =
+        Moderation.remove_owner(Repo.get!(Case, report.case_id), admin, :delete, "spam")
+
+      for body <- bodies(mail_to("rita@example.com")) do
+        refute body =~ "weiterhin zu sehen",
+               "the account and its post are being deleted, and the rights holder is told " <>
+                 "the content is still on vutuv"
+
+        refute body =~ "nicht mehr zu sehen",
+               "the account and its post are being deleted, and the rights holder is told " <>
+                 "only that the content is hidden"
+
+        assert body =~ "Der gemeldete Inhalt ist gelöscht."
+      end
+    end
+
+    test "replacing a flagged picture reads as revised, not as deleted", %{owner: owner} do
+      {owner, image} = avatar_image(owner)
+      reporter = insert(:activated_user, locale: "de")
+      insert(:email, user: reporter, value: "melder@example.com")
+
+      # A house-rule report on a picture only flags it (issue #2030), so the
+      # owner may still replace it — and since #2035 the row keeps its id.
+      {:ok, %Case{status: "flagged"}} =
+        Moderation.report_content(reporter, image, %{"category" => "family"})
+
+      flush_emails()
+      {:ok, _owner} = Accounts.update_user(owner, %{avatar: jpeg_upload([220, 40, 40])})
+
+      email = mail_to("melder@example.com")
+
+      refute email.subject =~ "gelöscht",
+             "the reported picture was replaced, not deleted, and the subject says deleted"
+
+      for body <- bodies(email) do
+        refute body =~ "Der Besitzer hat den gemeldeten Inhalt gelöscht.",
+               "the reported picture was replaced, not deleted"
+
+        assert body =~ "Der Besitzer hat den gemeldeten Inhalt überarbeitet."
+        assert body =~ "Der gemeldete Inhalt ist auf vutuv weiterhin zu sehen."
+      end
+    end
+
+    # The four closing paths the two describes above do not reach, so all nine
+    # are walked rather than sampled — which is how these two got through:
+    # coverage that follows the states somebody thought of stops at the states
+    # somebody thought of.
+    test "the owner deleting the reported content says it is deleted", %{owner: owner} do
+      post = insert(:post, user: owner)
+      reporter = de_reporter()
+      {:ok, case_record} = Moderation.report_content(reporter, post, %{"category" => "bullying"})
+      flush_emails()
+
+      :ok = Moderation.delete_reported_content(case_record, owner)
+
+      assert_notice("melder@example.com", "removed", "Der gemeldete Inhalt ist gelöscht.")
+    end
+
+    test "the owner editing a reported post says it is visible", %{owner: owner} do
+      post = insert(:post, user: owner)
+      reporter = de_reporter()
+      {:ok, _case} = Moderation.report_content(reporter, post, %{"category" => "bullying"})
+      flush_emails()
+
+      :ok = Moderation.content_edited(Repo.reload!(post))
+
+      assert_notice(
+        "melder@example.com",
+        "revised",
+        "Der gemeldete Inhalt ist auf vutuv weiterhin zu sehen."
+      )
+    end
+
+    test "an upheld profile case says the profile is back", %{owner: owner, admin: admin} do
+      reporter = de_reporter()
+      second = member_reporter()
+
+      {:ok, _case} = Moderation.report_content(reporter, owner, %{"category" => "bullying"})
+      {:ok, case_record} = Moderation.report_content(second, owner, %{"category" => "bullying"})
+      assert case_record.status == "escalated"
+      flush_emails()
+
+      {:ok, _} = Moderation.uphold_case(case_record, admin)
+
+      assert_notice(
+        "melder@example.com",
+        "upheld",
+        "Der gemeldete Inhalt ist auf vutuv weiterhin zu sehen."
+      )
+    end
+
+    test "deactivating the account says the content is not visible", %{
+      owner: owner,
+      admin: admin
+    } do
+      post = insert(:post, user: owner)
+      reporter = de_reporter()
+      {:ok, case_record} = Moderation.report_content(reporter, post, %{"category" => "bullying"})
+      flush_emails()
+
+      {:ok, _} = Moderation.remove_owner(case_record, admin, :deactivate, "spam")
+
+      assert_notice(
+        "melder@example.com",
+        "upheld",
+        "Der gemeldete Inhalt ist auf vutuv nicht mehr zu sehen."
+      )
+    end
+
+    # The invariant that would have caught both above, so a tenth path cannot
+    # ship the contradiction: only two of the four endings make a claim about
+    # the content in their own subject, and each has exactly one fate that
+    # agrees with it.
+    test "no closing path lets the subject and the fate disagree" do
+      for {status, fate} <- [
+            {"resolved_deleted", :removed},
+            {"resolved_edited", :visible}
+          ] do
+        assert Moderation.consistent_outcome?(Case.reporter_outcome(status), fate),
+               "#{status} must end in #{inspect(fate)}"
+      end
+
+      refute Moderation.consistent_outcome?("removed", :visible)
+      refute Moderation.consistent_outcome?("removed", :hidden)
+      refute Moderation.consistent_outcome?("revised", :removed)
+
+      # The two admin rulings claim nothing about the content in their subject,
+      # so every fate is honest beside them.
+      for outcome <- ["upheld", "not_upheld"], fate <- [:removed, :hidden, :visible] do
+        assert Moderation.consistent_outcome?(outcome, fate)
+      end
     end
   end
 

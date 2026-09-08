@@ -500,10 +500,28 @@ task is spawned: the row is gone, or it is frozen, or its owner is hidden and
 takes everything they own with them (`account_hidden?/1` — otherwise the account
 removal an admin has just carried out reads to the reporter as "still visible").
 It is read once per closing case and travels to both builders as `content_fate`,
-so a member and an outside notifier are told the same thing. On the one path
-that erases the case with its account, the fate is read while the content still
-exists, so it says "no longer visible" about content that is about to be
-deleted; that is the same trade the ordering there already makes.
+so a member and an outside notifier are told the same thing.
+
+**Two closing paths cannot be measured, and both said the friendly thing until
+they were fixed.** `remove_owner/4` on `:delete` has to tell the reporters
+*before* it erases the case, so a measurement there answers "still on vutuv"
+about an account that is gone a line later; it is the one caller that passes
+`fate: :removed` to `Notifier.reporters_case_closed/2`, stated by the call that
+makes it true. And **replacing** a flagged picture leaves the row standing with
+its id (issue #2035) and somebody else's bytes in it, so a measurement answers
+"still visible" — while the case, closed as `resolved_deleted`, put "was
+deleted" in the subject. That one is fixed at the source rather than in the
+body: a replacement is a **revision** (`Moderation.content_replaced/1`,
+`resolved_edited`), which also spends the owner's one self-service round on that
+picture, as it should.
+
+That second bug is what `Moderation.consistent_outcome?/2` now guards. The
+subject comes from the case status and the fate paragraph from a measurement —
+**two sources on purpose**, one saying who decided and what they did, the other
+what the content is now — and exactly two of the four endings make a claim
+about the content in their own subject, so each of those has exactly one fate
+that agrees with it. A path that closes a case without settling the content the
+way its status claims is a test failure now, not a mail.
 
 **Exactly once is a claim, not a convention.** One `UPDATE` both picks the
 reports that still owe their reporter a notice and stamps

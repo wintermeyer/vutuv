@@ -929,6 +929,10 @@ defmodule Vutuv.Moderation do
   case without admin work.
   """
   def content_deleted(content) do
+    settle_case(content, "resolved_deleted", "content_deleted")
+  end
+
+  defp settle_case(content, status, action) do
     case open_case_for(content) do
       nil ->
         :ok
@@ -936,14 +940,31 @@ defmodule Vutuv.Moderation do
       case_record ->
         updated =
           update_case!(case_record, %{
-            status: "resolved_deleted",
+            status: status,
             resolved_at: NaiveDateTime.utc_now(:second)
           })
 
-        log(updated, nil, "content_deleted")
+        log(updated, nil, action)
         Notifier.reporters_case_closed(updated)
         :ok
     end
+  end
+
+  @doc """
+  Closes the open case (if any) because the owner **replaced** the reported
+  content with something else of their own.
+
+  Today only a picture can be replaced in place: since issue #2035 the row
+  keeps its id when new bytes arrive, so the reported bytes are gone while the
+  row — and a picture the reporter can still see — remains. That is a revision,
+  not a deletion, and calling `content_deleted/1` for it made the notice
+  contradict itself: the subject said the content had been deleted and the body
+  said it was still on vutuv (issue #2067). It also earns the owner's one
+  self-service round on that content (`previously_self_resolved?/1` reads
+  `"resolved_edited"`), which is right — they have used it.
+  """
+  def content_replaced(content) do
+    settle_case(content, "resolved_edited", "content_replaced")
   end
 
   @doc """
@@ -952,6 +973,24 @@ defmodule Vutuv.Moderation do
   outside this directory already talks to.
   """
   defdelegate reporter_outcome(status), to: Case
+
+  @doc """
+  Whether an ending and a measured fate can stand in the same notice.
+
+  Two of the four endings make a claim about the content in their own **subject
+  line** — "the content you reported was deleted", "…was revised" — so exactly
+  one fate agrees with each. The two admin rulings claim nothing about the
+  content there, so any fate reads honestly beside them.
+
+  It exists because the subject comes from the case status and the body's last
+  paragraph from a measurement, and those are two sources: a path that closes a
+  case without settling the content the way its status claims puts two
+  sentences about one case into one mail that disagree. That is not
+  hypothetical — replacing a flagged picture did exactly that.
+  """
+  def consistent_outcome?("removed", fate), do: fate == :removed
+  def consistent_outcome?("revised", fate), do: fate == :visible
+  def consistent_outcome?(_upheld_or_not, _fate), do: true
 
   @doc """
   The owner edited reported content while its case was still in their court:
@@ -1547,7 +1586,14 @@ defmodule Vutuv.Moderation do
         # and there would be nobody left to look up. Their mail stands; their
         # in-app entry is derived from the report row, so it goes with it —
         # the accepted price of a ruling that erases its own evidence.
-        Notifier.reporters_case_closed(updated)
+        #
+        # This is the one path that states its fate instead of measuring it,
+        # and the ordering above is exactly why: read now, the content is still
+        # there and answers `:visible` or `:hidden`, so the rights holder was
+        # told it is on vutuv seconds before it stopped being (issue #2067).
+        # It is stated by the call that makes it true on the next line, not by
+        # a caller guessing — everything this account owns goes with it.
+        Notifier.reporters_case_closed(updated, fate: :removed)
 
         # No case-side audit line: admin_delete_user erases the account and, with
         # it, this case and its events (owner FK on_delete: :delete_all), so any

@@ -67,15 +67,21 @@ defmodule Vutuv.Moderation.Notifier do
 
   Who is left out — an unconfirmed outside notice, an abusive report — is
   `Report.awaiting_outcome/1`'s decision, spelled once there.
+
+  `:fate` overrides the measurement for the **one** caller that cannot be
+  measured: `remove_owner/4` on `:delete` has to tell the reporters before it
+  erases the case, so reading the content then answers "still here" about
+  something that is gone a line later. Every other path settles the content
+  first and lets `Moderation.reported_content_fate/1` look.
   """
-  def reporters_case_closed(%Case{} = case_record) do
-    deliver_outcomes(case_record, Case.reporter_outcome(case_record.status))
+  def reporters_case_closed(%Case{} = case_record, opts \\ []) do
+    deliver_outcomes(case_record, Case.reporter_outcome(case_record.status), opts[:fate])
   end
 
   # Still open: nothing to tell anybody, and nothing claimed.
-  defp deliver_outcomes(_case_record, nil), do: :ok
+  defp deliver_outcomes(_case_record, nil, _fate), do: :ok
 
-  defp deliver_outcomes(%Case{} = case_record, outcome) do
+  defp deliver_outcomes(%Case{} = case_record, outcome, stated_fate) do
     now = NaiveDateTime.utc_now(:second)
 
     {_count, reports} =
@@ -94,7 +100,7 @@ defmodule Vutuv.Moderation.Notifier do
       # have erased. Once per case rather than per reporter, and only once the
       # `UPDATE` above says somebody is actually owed a notice — a second close
       # or a retry claims no rows and must not pay for a lookup nothing reads.
-      fate = Moderation.reported_content_fate(case_record)
+      fate = stated_fate || Moderation.reported_content_fate(case_record)
       reporters = reporters_by_id(reports)
 
       for report <- reports, do: deliver_outcome(report, reporters, outcome, fate)

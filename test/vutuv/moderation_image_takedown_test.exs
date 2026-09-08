@@ -309,8 +309,11 @@ defmodule Vutuv.ModerationImageTakedownTest do
 
       # And the case is settled with them: the reported bytes are gone, so
       # leaving it open would point an admin's ruling at a picture nobody
-      # reported.
-      assert Repo.get!(Moderation.Case, case_record.id).status == "resolved_deleted"
+      # reported. As a **revision**, not a deletion (issue #2067): the row keeps
+      # its id and a picture the reporter can still see stands in its place, so
+      # closing it as `resolved_deleted` put "was deleted" in their notice's
+      # subject and "still visible" in its body.
+      assert Repo.get!(Moderation.Case, case_record.id).status == "resolved_edited"
     end
 
     # Issue #2035: the settle above is earned by the bytes changing, not by an
@@ -349,7 +352,7 @@ defmodule Vutuv.ModerationImageTakedownTest do
         })
 
       assert cropped.avatar_fingerprint != owner.avatar_fingerprint
-      assert Repo.get!(Moderation.Case, case_record.id).status == "resolved_deleted"
+      assert Repo.get!(Moderation.Case, case_record.id).status == "resolved_edited"
     end
   end
 

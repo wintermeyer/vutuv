@@ -2855,7 +2855,7 @@ msgstr "Nur Text"
 msgid "This post is for the connections of %{name}"
 msgstr "Dieser Beitrag ist für die Vernetzungen von %{name}"
 
-#: lib/vutuv_web/views/admin/moderation_html.ex:126
+#: lib/vutuv_web/views/admin/moderation_html.ex:127
 #: lib/vutuv_web/views/user_html.ex:536
 #, elixir-autogen, elixir-format
 msgid "connection"
@@ -3628,7 +3628,7 @@ msgstr ""
 "Sie haben alle %{limit} Namensänderungen der letzten %{days} Tage "
 "aufgebraucht."
 
-#: lib/vutuv_web/views/admin/moderation_html.ex:127
+#: lib/vutuv_web/views/admin/moderation_html.ex:128
 #, elixir-autogen, elixir-format
 msgid "%{count} follows"
 msgstr "%{count} Follows"
@@ -3665,7 +3665,7 @@ msgstr "Inhalt eingefroren"
 msgid "Decision"
 msgstr "Entscheidung"
 
-#: lib/vutuv_web/views/admin/moderation_html.ex:79
+#: lib/vutuv_web/views/admin/moderation_html.ex:80
 #, elixir-autogen, elixir-format
 msgid "Escalated - the 72h deadline passed"
 msgstr "Eskaliert - die 72h-Frist ist abgelaufen"
@@ -3722,12 +3722,12 @@ msgstr "Meldung eingegangen"
 msgid "Report protection"
 msgstr "Schutz nach Meldung"
 
-#: lib/vutuv_web/views/admin/moderation_html.ex:81
+#: lib/vutuv_web/views/admin/moderation_html.ex:82
 #, elixir-autogen, elixir-format
 msgid "Report rejected"
 msgstr "Meldung abgelehnt"
 
-#: lib/vutuv_web/views/admin/moderation_html.ex:80
+#: lib/vutuv_web/views/admin/moderation_html.ex:81
 #, elixir-autogen, elixir-format
 msgid "Report upheld"
 msgstr "Meldung bestätigt"
@@ -3764,7 +3764,7 @@ msgstr "Durch Bearbeitung erledigt"
 msgid "Settled by deletion"
 msgstr "Durch Löschung erledigt"
 
-#: lib/vutuv_web/views/admin/moderation_html.ex:83
+#: lib/vutuv_web/views/admin/moderation_html.ex:84
 #, elixir-autogen, elixir-format
 msgid "Strike issued"
 msgstr "Verwarnungspunkt vergeben"
@@ -3807,22 +3807,22 @@ msgstr ""
 "kein Kontakt in beide Richtungen. Stufen unsere Admins die Meldung als "
 "unbegründet ein, wird das rückgängig gemacht."
 
-#: lib/vutuv_web/views/admin/moderation_html.ex:101
+#: lib/vutuv_web/views/admin/moderation_html.ex:102
 #, elixir-autogen, elixir-format
 msgid "for the owner"
 msgstr "für den Besitzer"
 
-#: lib/vutuv_web/views/admin/moderation_html.ex:102
+#: lib/vutuv_web/views/admin/moderation_html.ex:103
 #, elixir-autogen, elixir-format
 msgid "for the reporter"
 msgstr "für den Melder"
 
-#: lib/vutuv_web/views/admin/moderation_html.ex:106
+#: lib/vutuv_web/views/admin/moderation_html.ex:107
 #, elixir-autogen, elixir-format
 msgid "level %{level}, %{role}"
 msgstr "Stufe %{level}, %{role}"
 
-#: lib/vutuv_web/views/admin/moderation_html.ex:128
+#: lib/vutuv_web/views/admin/moderation_html.ex:129
 #, elixir-autogen, elixir-format
 msgid "messages"
 msgstr "Nachrichten"
@@ -3866,7 +3866,7 @@ msgstr ""
 msgid "Case %{id}, captured %{at} UTC"
 msgstr "Fall %{id}, aufgenommen %{at} UTC"
 
-#: lib/vutuv_web/views/admin/moderation_html.ex:84
+#: lib/vutuv_web/views/admin/moderation_html.ex:85
 #, elixir-autogen, elixir-format
 msgid "Evidence screenshot captured"
 msgstr "Beweis-Screenshot aufgenommen"
@@ -10223,7 +10223,7 @@ msgstr "Tags durchsuchen"
 msgid "name or slug"
 msgstr "Name oder Slug"
 
-#: lib/vutuv_web/views/admin/moderation_html.ex:121
+#: lib/vutuv_web/views/admin/moderation_html.ex:122
 #, elixir-autogen, elixir-format
 msgid "%{action} (%{reason})"
 msgstr "%{action} (%{reason})"
@@ -10246,7 +10246,7 @@ msgstr ""
 msgid "Account deleted."
 msgstr "Konto gelöscht."
 
-#: lib/vutuv_web/views/admin/moderation_html.ex:82
+#: lib/vutuv_web/views/admin/moderation_html.ex:83
 #, elixir-autogen, elixir-format
 msgid "Account removed"
 msgstr "Konto entfernt"
@@ -10325,12 +10325,12 @@ msgstr ""
 "dieses Konto."
 
 #: lib/vutuv_web/views/admin/account_html.ex:78
-#: lib/vutuv_web/views/admin/moderation_html.ex:114
+#: lib/vutuv_web/views/admin/moderation_html.ex:115
 #, elixir-autogen, elixir-format
 msgid "deactivated"
 msgstr "deaktiviert"
 
-#: lib/vutuv_web/views/admin/moderation_html.ex:115
+#: lib/vutuv_web/views/admin/moderation_html.ex:116
 #, elixir-autogen, elixir-format
 msgid "deleted"
 msgstr "gelöscht"
@@ -24132,7 +24132,7 @@ msgstr "Noch ein Klick, dann geht Ihre Meldung an unsere Admins. Je nachdem, was
 msgid "Our admins see your name and address so they can come back to you. The owner of the reported content never does."
 msgstr "Unsere Admins sehen Ihren Namen und Ihre Adresse, um sich bei Ihnen melden zu können. Wem der gemeldete Inhalt gehört, erfährt beides nie."
 
-#: lib/vutuv_web/views/admin/moderation_html.ex:86
+#: lib/vutuv_web/views/admin/moderation_html.ex:87
 #, elixir-autogen, elixir-format
 msgid "Outside reporter confirmed their address"
 msgstr "Externer Melder hat seine Adresse bestätigt"
@@ -24154,7 +24154,7 @@ msgstr "Meldung bestätigt"
 msgid "Report content on this site"
 msgstr "Inhalt auf dieser Seite melden"
 
-#: lib/vutuv_web/views/admin/moderation_html.ex:85
+#: lib/vutuv_web/views/admin/moderation_html.ex:86
 #, elixir-autogen, elixir-format
 msgid "Report filed from outside"
 msgstr "Meldung von außerhalb eingegangen"
@@ -24280,7 +24280,7 @@ msgstr "Profil"
 msgid "A confirmation link is good for one week. Yours has run out, so your report never reached our admins and nothing about the reported content changed."
 msgstr "Ein Bestätigungslink gilt eine Woche. Ihrer ist abgelaufen, deshalb hat Ihre Meldung unsere Admins nie erreicht und am gemeldeten Inhalt hat sich nichts geändert."
 
-#: lib/vutuv_web/views/admin/moderation_html.ex:89
+#: lib/vutuv_web/views/admin/moderation_html.ex:90
 #, elixir-autogen, elixir-format
 msgid "Report dropped: the address was never confirmed"
 msgstr "Meldung verworfen: die Adresse wurde nie bestätigt"
@@ -24456,3 +24456,8 @@ msgstr "Der Inhalt ist wieder sichtbar."
 #, elixir-autogen, elixir-format
 msgid "The content stays hidden."
 msgstr "Der Inhalt bleibt verborgen."
+
+#: lib/vutuv_web/views/admin/moderation_html.ex:79
+#, elixir-autogen, elixir-format
+msgid "Owner replaced the content"
+msgstr "Besitzer hat den Inhalt ersetzt"
