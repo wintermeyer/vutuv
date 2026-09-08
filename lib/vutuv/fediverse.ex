@@ -3823,9 +3823,13 @@ defmodule Vutuv.Fediverse do
   whether bytes reach a reader is `RemoteImage.released?/1`, at the point of
   rendering and again in the proxy, so a row here is not a permission. What the
   unreleased rows buy is the card being able to say "a picture is on its way"
-  instead of rendering nothing: a post from another network can be a photograph
-  and nothing else, and such a post with its picture silently missing is not a
-  quiet card, it is a broken one.
+  instead of rendering nothing.
+
+  A row that is not coming at all buys nothing, and the card drops it (see
+  `VutuvWeb.PostComponents.remote_post_images/1`); it stays in this list
+  because the surfaces that ask "does this post carry attachments" — the link
+  capture on the card and in `Vutuv.Posts.Screenshots` — mean the author's
+  attachments, not the ones we managed to keep.
   """
   def list_remote_images([]), do: %{}
 

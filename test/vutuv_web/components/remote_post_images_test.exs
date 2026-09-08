@@ -1,6 +1,7 @@
 defmodule VutuvWeb.RemotePostImagesTest do
   @moduledoc """
-  What a cached post's picture says while it is still held back.
+  What a cached post's picture says while it is still held back — and what it
+  says once it is not coming at all, which is nothing.
 
   The tile stands in for a picture that is recorded but not released: the file
   may still be coming from its own server, and the AI gate has not cleared it.
@@ -8,6 +9,14 @@ defmodule VutuvWeb.RemotePostImagesTest do
   wait the reader is not actually waiting for. The wording is asserted by name
   and in German, because a short string is exactly the kind a `gettext.extract
   --merge` fuzzy-fills with somebody else's translation.
+
+  A picture that is **not** coming leaves the grid entirely: no tile, no
+  "Picture unavailable", and no grid at all where it was the only one. Both
+  halves are asserted, because the state that must vanish and the state that
+  must stay look identical in the data. There is no German twin of that
+  assertion: the msgid is gone from the catalogs, so a reverted fix would print
+  the English string and a `refute` on "Bild nicht verfügbar" could never go
+  red.
 
   The line **under** the grid is asserted here too. A pixelated preview carries
   a corner badge, and two blocky tiles under a stranger's post with nothing but
@@ -34,22 +43,23 @@ defmodule VutuvWeb.RemotePostImagesTest do
   defp gone_picture(attrs \\ [moderation: "rejected"]),
     do: struct(%RemoteImage{file: nil, moderation: "pending"}, attrs)
 
-  test "a picture that is not coming stops claiming a check is running" do
+  test "a picture that is not coming is not drawn at all" do
     html = render_tile([gone_picture()])
 
-    assert html =~ "data-remote-image-unavailable"
-    assert html =~ "Picture unavailable"
-    # The old lie, on some production rows since 2026-08-03.
+    # Not a grey tile saying so, and — it was the post's only picture — not
+    # even the grid that would have held one.
+    refute html =~ "data-remote-image-unavailable"
+    refute html =~ "Picture unavailable"
+    refute html =~ "data-remote-images"
+    # The older lie, on some production rows since 2026-08-03.
     refute html =~ "data-remote-image-pending"
     refute html =~ "Picture is being checked"
-    # ...and no line under the grid promising the AI will be through shortly.
-    refute html =~ "data-remote-images-checking"
   end
 
   test "a rejection written before the state existed reads the same" do
     # `apply_rejected/1` used to leave `moderation` null, which is how the four
     # oldest such rows on production are stored.
-    assert render_tile([gone_picture(moderation: nil)]) =~ "data-remote-image-unavailable"
+    refute render_tile([gone_picture(moderation: nil)]) =~ "data-remote-images"
   end
 
   test "a download that used up its tries reads the same" do
@@ -57,21 +67,19 @@ defmodule VutuvWeb.RemotePostImagesTest do
     # gate never saw this picture, the refetcher simply stopped asking.
     spent = gone_picture(fetch_failures: RemoteImage.max_fetch_failures())
 
-    assert render_tile([spent]) =~ "data-remote-image-unavailable"
-  end
-
-  test "German says it too" do
-    Gettext.put_locale(VutuvWeb.Gettext, "de")
-
-    assert render_tile([gone_picture()]) =~ "Bild nicht verfügbar"
+    refute render_tile([spent]) =~ "data-remote-images"
   end
 
   test "a picture still waiting is not confused with one that is gone" do
     html = render_tile([held_picture(), gone_picture()])
 
     assert html =~ "data-remote-image-pending"
-    assert html =~ "data-remote-image-unavailable"
-    # One of the two is really being checked, and the line counts only that one.
+    refute html =~ "data-remote-image-unavailable"
+    # The grid holds the one picture there still is, so the pair does not lay
+    # itself out as two columns with an empty one.
+    assert html =~ ~s(data-remote-images="1")
+    refute html =~ "grid-cols-2"
+    # And that one is really being checked, so the line counts it.
     assert html =~ ~s(data-remote-images-checking="1")
   end
 

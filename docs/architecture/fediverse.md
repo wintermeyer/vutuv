@@ -1829,7 +1829,7 @@ requests *ever* and then leaves the queue, so the total is bounded without one,
 and a cap over an already-sorted, already-capped batch is the amplifier that
 starves the healthy rows behind one blocked host.
 
-**A picture that is not coming says so**, and it takes two columns to know,
+**A picture that is not coming leaves the card**, and it takes two columns to know,
 because the two answers come from different places. `moderation` is the
 **gate's**: a rejection now writes `"rejected"` where it used to write `nil`.
 `fetch_failures` is the **download's**, and the terminal fetch state is
@@ -1838,16 +1838,20 @@ vision model records every picture `"approved"` on the spot
 (`ImageScans.initial_state/0`), so a failed download there carries an approval
 and no file, and a terminal state kept in `moderation` would have missed that
 whole class of installation. `RemoteImage.unavailable?/1` reads both (the old
-nulls included) and the card renders a quiet "Bild nicht verfügbar" tile instead
-of the hourglass. `display_state/1` beside it owns the order the questions have
-to be asked in, which is what the call site kept getting wrong. That is the half of the bug a reader actually saw: a null
-`moderation` beside a null `file` was indistinguishable from a picture nobody
-had judged yet, so cards went on promising a check that had finished — or had
-never been possible — weeks earlier. The tile stays rather than vanishing, for
-the reason the waiting tile does: a post from another network can be a
-photograph and nothing else. It says nothing about *why*, because one reason is
-a moderation decision that is not the reader's argument to have and the other is
-somebody else's server having a bad week.
+nulls included) and the card drops such a picture entirely — no tile, no grid
+where it was the post's only one. `display_state/1` beside it owns the order the
+questions have to be asked in, which is what the call site kept getting wrong.
+That is the half of the bug a reader actually saw: a null `moderation` beside a
+null `file` was indistinguishable from a picture nobody had judged yet, so cards
+went on promising a check that had finished — or had never been possible — weeks
+earlier. It first became a grey "Bild nicht verfügbar" tile, on the reasoning
+that a post from another network can be a photograph and nothing else; that
+turned the hole into a hole with a label on it, naming a picture the reader can
+never see for a reason that is not theirs to have (a moderation decision, or
+somebody else's server having a bad week). Now the post simply stands on its
+text, as it would had its author attached nothing — 11 of the 1,222 cached
+pictures on the dev copy are in that state, across 10 posts, every one of which
+has a body.
 
 **A remote account's avatar is deliberately left out**, though it is the other
 ownerless kind and just as silent: an unreleased avatar renders as the account's
