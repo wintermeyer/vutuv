@@ -13,7 +13,7 @@
 // links are plain hrefs to the full-size image, which is what they were before
 // the lightbox existed.
 
-import { onReady, once } from "./util"
+import { keyActivates, onReady, once } from "./util"
 
 let overlay = null
 let photos = []
@@ -175,7 +175,11 @@ function text(el, value) {
 function open(gallery, index) {
   build()
   applyLabels(gallery)
-  photos = [...gallery.querySelectorAll("[data-lightbox-photo]")]
+  // What the gallery HOLDS is every element that describes a photo, which is
+  // not the same set as what OPENS it: the bento mosaic's tiles describe their
+  // photos and are not controls (the tile's own tap opens the post), and the
+  // magnifier over them is a control that describes nothing.
+  photos = [...gallery.querySelectorAll("[data-photo-src]")]
   lastFocus = document.activeElement
   overlay.hidden = false
   // The page behind must not scroll while the overlay owns the screen.
@@ -199,6 +203,16 @@ function step(delta) {
   show((current + delta + photos.length) % photos.length)
 }
 
+// Open the gallery a control belongs to, at the photo it names. Shared by the
+// click and the keyboard, and it swallows the event only once it really has a
+// gallery — a stray `data-lightbox-photo` outside one keeps its default.
+function openFrom(control, event) {
+  const gallery = control.closest("[data-lightbox-gallery]")
+  if (!gallery) return
+  event.preventDefault()
+  open(gallery, Number(control.dataset.lightboxPhoto) || 0)
+}
+
 onReady(() => {
   // `onReady` re-runs after every LiveView navigation, so these two *document*
   // listeners have to be guarded or they stack up: after k patches a single
@@ -212,13 +226,16 @@ onReady(() => {
     // Let a modified click do what the browser would: open the full image in a
     // new tab. The href is a real URL precisely so that still works.
     if (e.metaKey || e.ctrlKey || e.shiftKey || e.button !== 0) return
-    const gallery = link.closest("[data-lightbox-gallery]")
-    if (!gallery) return
-    e.preventDefault()
-    open(gallery, Number(link.dataset.lightboxPhoto) || 0)
+    openFrom(link, e)
   })
 
   document.addEventListener("keydown", (e) => {
+    // Opening it: the magnifier corners are `role="button"` spans (they stand
+    // over pictures that are themselves links), so the keyboard reaches them
+    // only through `keyActivates` — see util.js. This sits ahead of the keys
+    // below because the overlay is shut when a corner is pressed.
+    if (keyActivates(e, "[data-lightbox-photo][role=button]")) return openFrom(e.target, e)
+
     if (!overlay || overlay.hidden) return
     if (e.key === "Escape") close()
     else if (e.key === "ArrowLeft") step(-1)

@@ -1278,20 +1278,29 @@ defmodule VutuvWeb.UI do
   end
 
   @doc """
-  The magnifier that opens a page capture at full size, for the corner of a
-  picture whose own tap is already spoken for.
+  The magnifier that opens a picture at full size, for the corner of a picture
+  whose own tap is already spoken for.
 
-  A post's link capture is a photograph of a web page shown at a third of the
-  column: the address bar and the headline are there, the page is not
-  readable. Tapping it goes to the page, which is right and which is exactly
-  why the enlargement cannot be the same tap — so it is a control of its own,
-  in the corner opposite `quality_switch/1`.
+  Two pictures are in that position, and for the same reason. A post's link
+  capture is a photograph of a web page shown at a third of the column: the
+  address bar and the headline are there, the page is not readable. A photo on
+  a feed card is bounded by the card, and tapping it opens the post. Both taps
+  are right, and both are exactly why the enlargement cannot be the same tap —
+  so it is a control of its own, in the corner opposite `quality_switch/1`.
 
-  `src` is what the overlay opens, named by the store rather than read off the
-  page — `Vutuv.Screenshot.lightbox_url/1`, the twin of
-  `Vutuv.Posts.PostImage.lightbox_url/1`, so both halves of "what does the
-  lightbox show" are answered in one kind of place. For a capture that is the
-  thumb whichever mode the viewer is in, and the store's doc says why.
+  **`data-lightbox-photo` opens, `data-photo-*` describes** (`lightbox.js`):
+  `index` says which photo of the gallery the overlay starts at, and every
+  element in that gallery carrying a `data-photo-src` is one of its photos. A
+  corner that is its gallery's only photo describes it too, and takes that
+  photo's facts in `photo`; one standing over several photos that describe
+  themselves (the bento mosaic's tiles) takes no `photo` and names the tile it
+  covers with `index` instead.
+
+  What the overlay opens is named by the store rather than read off the page —
+  `Vutuv.Screenshot.lightbox_url/1` and `Vutuv.Posts.PostImage.lightbox_url/1`,
+  so both halves of "what does the lightbox show" are answered in one kind of
+  place. For a capture that is the thumb whichever mode the viewer is in, and
+  the store's doc says why.
 
   Like `quality_switch/1` a `role="button"` span rather than a `<button>` —
   these pictures sit inside a link — and it shares that control's envelope:
@@ -1309,7 +1318,13 @@ defmodule VutuvWeb.UI do
   can, it stays. That wants a `.hover-reveal-host` on the picture's own box.
   """
   attr(:label, :string, required: true, doc: "what a tap does, for the tooltip and the reader")
-  attr(:src, :string, required: true, doc: "the file the overlay opens")
+  attr(:index, :integer, default: 0, doc: "which photo of its gallery the overlay opens at")
+
+  attr(:photo, :map,
+    default: %{},
+    doc:
+      "the photo's facts (`VutuvWeb.PostComponents.photo_data/4`), where this corner is the one describing it; empty where the gallery's other elements do"
+  )
 
   def zoom_corner(assigns) do
     ~H"""
@@ -1318,8 +1333,15 @@ defmodule VutuvWeb.UI do
       tabindex="0"
       aria-label={@label}
       title={@label}
-      data-lightbox-photo="0"
-      data-photo-src={@src}
+      data-lightbox-photo={@index}
+      data-photo-src={@photo[:src]}
+      data-photo-alt={@photo[:alt]}
+      data-photo-caption={@photo[:caption]}
+      data-photo-camera={@photo[:camera]}
+      data-photo-download={@photo[:download]}
+      data-photo-license={@photo[:license]}
+      data-photo-license-url={@photo[:license_url]}
+      data-photo-position={@photo[:position]}
       class="hover-reveal absolute right-0 top-0 inline-flex min-h-10 cursor-zoom-in items-center px-2"
     >
       <%!-- `picture_chrome_class/0`'s string, spelled out, exactly as the

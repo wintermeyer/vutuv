@@ -130,6 +130,18 @@ export const canHover = () => window.matchMedia("(hover: hover)").matches
 export const plainClick = (event) =>
   !(event.defaultPrevented || event.metaKey || event.ctrlKey || event.shiftKey || event.altKey)
 
+// The keyboard half of a `role="button"` span: those get no click from Enter or
+// Space, so every one of them is a tab stop that does nothing until some
+// document listener answers the key itself. Three controls sit in that spot —
+// the SD/HD switch on a picture and on a clip, and the magnifier corner — all
+// of them spans because they stand inside a link. A key event targets the
+// focused element and only the control is focusable, so this matches rather
+// than walking ancestors on every Space typed into a composer. What each
+// listener then does with the event (which phase, whether to stop it) stays
+// theirs; only the question is shared.
+export const keyActivates = (event, selector) =>
+  (event.key === "Enter" || event.key === " ") && event.target.matches?.(selector)
+
 // base64url <-> ArrayBuffer. Two browser APIs in this app speak ArrayBuffers
 // while the wire carries unpadded base64url strings: WebAuthn's
 // create/get ceremony (webauthn.js) and `pushManager.subscribe`'s

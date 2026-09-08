@@ -4415,20 +4415,22 @@ defmodule VutuvWeb.PostComponents do
                 wrap
               >
                 <:float>
-                  <.link
-                    href={@permalink}
-                    aria-label={gettext("View post")}
-                    class="float-right mb-1 ml-4 w-2/5 sm:w-1/3"
-                  >
-                    <.picture
-                      picture={PostImage.picture(hd(@gallery))}
-                      alt={hd(@gallery).alt}
-                      width={hd(@gallery).width}
-                      height={hd(@gallery).height}
-                      loading="lazy"
-                      class="w-full rounded-lg ring-1 ring-slate-200 dark:ring-slate-800"
-                    />
-                  </.link>
+                  <%!-- The float is the gallery's, not the anchor's, so the
+                  magnifier in its corner sits on the picture — and outside the
+                  link, where a control belongs. --%>
+                  <.lightbox_gallery class="hover-reveal-host relative float-right mb-1 ml-4 w-2/5 sm:w-1/3">
+                    <.link href={@permalink} aria-label={gettext("View post")} class="block">
+                      <.picture
+                        picture={PostImage.picture(hd(@gallery))}
+                        alt={photo_alt(hd(@gallery))}
+                        width={hd(@gallery).width}
+                        height={hd(@gallery).height}
+                        loading="lazy"
+                        class="w-full rounded-lg ring-1 ring-slate-200 dark:ring-slate-800"
+                      />
+                    </.link>
+                    <.photo_zoom_corner image={hd(@gallery)} license={@post.license} />
+                  </.lightbox_gallery>
                 </:float>
               </.preview_body>
             <% @link_screenshot_layout? -> %>
@@ -4466,15 +4468,12 @@ defmodule VutuvWeb.PostComponents do
               ordinary shape renders uncropped below) — see
               `<.single_feed_photo>`. Multiple images tile through the shared
               `post_gallery` as the bento mosaic. --%>
-              <.link
+              <.single_feed_photo
                 :if={length(@gallery) == 1}
-                href={@permalink}
-                aria-label={gettext("View post")}
-                data-media-edge
-                class="mt-3 block"
-              >
-                <.single_feed_photo image={hd(@gallery)} />
-              </.link>
+                image={hd(@gallery)}
+                permalink={@permalink}
+                license={@post.license}
+              />
               <.post_gallery
                 :if={length(@gallery) > 1}
                 gallery={@gallery}
@@ -4945,7 +4944,7 @@ defmodule VutuvWeb.PostComponents do
           index={index}
           count={length(@gallery)}
           license={@license}
-          class="block"
+          class="block cursor-zoom-in"
         >
           <.picture
             picture={PostImage.picture(image)}
@@ -4992,8 +4991,13 @@ defmodule VutuvWeb.PostComponents do
       beyond fold into a `+N` on the last one, and the whole block is capped,
       so a photo essay costs the same timeline height as a snapshot.
 
-  Every tile opens the post; the photos themselves are shown whole on the
-  permalink, which is where the lightbox lives.
+  Every tile opens the post, and one magnifier over the set opens the lightbox
+  instead — a tile cannot carry a control of its own, sitting inside that one
+  anchor. So **the tiles describe the photos and the corner opens them**:
+  `lightbox.js` reads a gallery's photos off the `data-photo-src` each tile
+  carries, which is what lets the overlay's arrows step through the whole set
+  the card is showing rather than one picture out of it. The photos themselves
+  are shown whole on the permalink.
   """
   # No `:global` rest attr on purpose: `post_gallery/1` delegates here with its
   # own assigns, and a global would collect its `mode` and `license` and emit
@@ -5002,48 +5006,78 @@ defmodule VutuvWeb.PostComponents do
   attr(:permalink, :string, required: true)
   attr(:layout, :string, default: nil)
   attr(:fill, :boolean, default: false)
+  attr(:license, :string, default: nil)
 
   def mosaic(assigns) do
     layout = mosaic_layout(assigns.gallery, assigns.layout)
+    shown = length(layout.cells)
 
-    assigns = assigns |> assign(:cells, layout.cells) |> assign(:frame, layout.aspect)
+    cells =
+      Enum.map(layout.cells, fn cell ->
+        Map.put(cell, :photo, photo_data(cell.image, cell.index, shown, assigns.license))
+      end)
+
+    assigns =
+      assigns
+      |> assign(:cells, cells)
+      |> assign(:shown, shown)
+      |> assign(:corner_index, mosaic_corner_index(layout.cells))
+      |> assign(:frame, layout.aspect)
 
     ~H"""
-    <.link
-      href={@permalink}
-      aria-label={gettext("View post")}
-      class="mt-3 grid gap-1 overflow-hidden rounded-lg"
-      style={"aspect-ratio: #{@frame}; grid-template-columns: repeat(12, 1fr); grid-template-rows: repeat(6, 1fr); max-height: 44rem"}
-      data-post-mosaic={length(@gallery)}
-      data-media-edge
-    >
-      <div
-        :for={cell <- @cells}
-        class="relative overflow-hidden bg-slate-100 ring-1 ring-slate-200 dark:bg-slate-800 dark:ring-slate-800"
-        style={"grid-area: #{cell.area}"}
+    <.lightbox_gallery class="hover-reveal-host relative mt-3" data-media-edge>
+      <.link
+        href={@permalink}
+        aria-label={gettext("View post")}
+        class="grid gap-1 overflow-hidden rounded-lg"
+        style={"aspect-ratio: #{@frame}; grid-template-columns: repeat(12, 1fr); grid-template-rows: repeat(6, 1fr); max-height: 44rem"}
+        data-post-mosaic={length(@gallery)}
       >
-        <%!-- Whole photos by default: object-contain letterboxes a photo
-        inside its tile instead of cropping it — nobody's picture loses its
-        edges unless the author switched the tiles to "filled". --%>
-        <.picture
-          picture={PostImage.picture(cell.image)}
-          wrap_class="h-full w-full"
-          alt={photo_alt(cell.image)}
-          loading="lazy"
-          class={["h-full w-full", (@fill && "object-cover") || "object-contain"]}
-        />
-        <%!-- The overflow badge sits on the last visible tile and dims it, so
-        the count reads as "there are more behind this" rather than as a label
-        stuck on one particular photo. --%>
-        <span
-          :if={cell.more > 0}
-          class="absolute inset-0 flex items-center justify-center bg-slate-900/55 text-2xl font-semibold text-white"
-          data-mosaic-more
+        <%!-- The tile is a photo of this gallery, not a control: the overlay
+        reads it, the click that opens the overlay is the corner below. The
+        names are spelled out rather than spread from `photo_data/4`'s map so
+        they stay in this template's statics — see that function. --%>
+        <div
+          :for={cell <- @cells}
+          class="relative overflow-hidden bg-slate-100 ring-1 ring-slate-200 dark:bg-slate-800 dark:ring-slate-800"
+          style={"grid-area: #{cell.area}"}
+          data-photo-src={cell.photo.src}
+          data-photo-alt={cell.photo.alt}
+          data-photo-caption={cell.photo.caption}
+          data-photo-camera={cell.photo.camera}
+          data-photo-download={cell.photo.download}
+          data-photo-license={cell.photo.license}
+          data-photo-license-url={cell.photo.license_url}
+          data-photo-position={cell.photo.position}
         >
-          +{compact_count(cell.more)}
-        </span>
-      </div>
-    </.link>
+          <%!-- Whole photos by default: object-contain letterboxes a photo
+          inside its tile instead of cropping it — nobody's picture loses its
+          edges unless the author switched the tiles to "filled". --%>
+          <.picture
+            picture={PostImage.picture(cell.image)}
+            wrap_class="h-full w-full"
+            alt={photo_alt(cell.image)}
+            loading="lazy"
+            class={["h-full w-full", (@fill && "object-cover") || "object-contain"]}
+          />
+          <%!-- The overflow badge sits on the last visible tile and dims it, so
+          the count reads as "there are more behind this" rather than as a label
+          stuck on one particular photo. --%>
+          <span
+            :if={cell.more > 0}
+            class="absolute inset-0 flex items-center justify-center bg-slate-900/55 text-2xl font-semibold text-white"
+            data-mosaic-more
+          >
+            +{compact_count(cell.more)}
+          </span>
+        </div>
+      </.link>
+      <%!-- It names no photo of its own: the tiles do, and a `data-photo-src`
+      here would put one picture into the overlay twice. What it does name is
+      the tile it lies on (`mosaic_corner_index/1`), not the hero — on most
+      arrangements those are two different photos. --%>
+      <.zoom_corner label={gettext("Show these photos larger")} index={@corner_index} />
+    </.lightbox_gallery>
     """
   end
 
@@ -5079,10 +5113,38 @@ defmodule VutuvWeb.PostComponents do
       |> Enum.zip(areas)
       |> Enum.with_index()
       |> Enum.map(fn {{image, area}, index} ->
-        %{image: image, area: area, more: if(index == length(shown) - 1, do: more, else: 0)}
+        %{
+          image: image,
+          area: area,
+          index: index,
+          more: if(index == length(shown) - 1, do: more, else: 0)
+        }
       end)
 
     %{aspect: aspect, cells: cells}
+  end
+
+  @doc """
+  Which tile of a mosaic the magnifier in its top-right corner sits over.
+
+  The corner is one control for the whole set (a tile cannot host its own,
+  being inside the mosaic's single anchor), so the photo it opens has to be the
+  photo underneath it — on most arrangements the hero is on the *left*, and
+  opening photo 1 from a corner lying on photo 2 reads as the wrong picture.
+  The tile that holds the grid's top-right cell is the one whose `grid-area`
+  (`row-start / col-start / row-end / col-end`) starts on row 1 and ends at
+  column 13, the right edge of the shared 12-column grid.
+
+  Public for `mosaic_layout_test.exs`; falls back to the first photo for an
+  arrangement where no tile answers, which none of the shipped ones do.
+  """
+  def mosaic_corner_index(cells) do
+    Enum.find_value(cells, 0, fn cell ->
+      case String.split(cell.area, " / ") do
+        ["1", _col_start, _row_end, "13"] -> cell.index
+        _ -> nil
+      end
+    end)
   end
 
   # The arrangements live in `Vutuv.Posts.GalleryLayout` — a named catalog on
@@ -5109,13 +5171,45 @@ defmodule VutuvWeb.PostComponents do
   end
 
   @doc """
+  What the lightbox needs to know about one photo: the picture it opens, the
+  caption, the camera panel, the download and the license.
+
+  The overlay reads all of it off the page rather than being fed a second copy
+  (`lightbox.js`), and three kinds of element carry it: the permalink's anchor
+  (`lightbox_link/1`, which opens the overlay itself), a preview card's
+  magnifier (`VutuvWeb.UI.zoom_corner/1`, where the picture's own tap is spoken
+  for), and a mosaic tile, which describes its photo without being a control at
+  all. The values are answered here; **each of those three spells the
+  `data-photo-*` names out in its own markup**, because a literal attribute
+  name is hoisted into the template's statics while a map spread would send all
+  eight of them down the wire on every render — measured at +875 bytes per
+  mosaic card.
+
+  `count` is how many photos the gallery this one belongs to holds, which on a
+  mosaic is the tiles it shows rather than the post's whole set: the overlay
+  can only step through what is on the page.
+  """
+  def photo_data(%PostImage{} = image, index, count, license) do
+    %{
+      src: PostImage.lightbox_url(image),
+      alt: photo_alt(image),
+      caption: image.caption,
+      camera: PostImage.show_camera_info?(image) && camera_line(image),
+      download: PostImage.download_url(image),
+      license: license && license_label(license),
+      license_url: license && PhotoLicense.url(license),
+      position: gettext("Photo %{n} of %{total}", n: index + 1, total: count)
+    }
+  end
+
+  @doc """
   One photo as a lightbox-opening link.
 
-  With JavaScript the `data-photo-*` attributes are all the overlay needs to
-  render the picture, its caption, the camera panel, the download and the
-  license — so the lightbox reads the page rather than being fed a second
-  copy of the data. Without JavaScript the same element is a plain link to
-  the full-size image, which is what it was before the lightbox existed.
+  Without JavaScript the same element is a plain link to the full-size image,
+  which is what it was before the lightbox existed. It is the one place a
+  photo's own tap opens the overlay — the permalink, the page that IS the
+  photos — so it wears the `zoom-in` cursor a preview card's magnifier wears
+  and needs no magnifier of its own.
   """
   attr(:image, :any, required: true)
   attr(:index, :integer, required: true)
@@ -5126,27 +5220,45 @@ defmodule VutuvWeb.PostComponents do
 
   def lightbox_link(assigns) do
     assigns =
-      assigns
-      |> assign(:camera, PostImage.show_camera_info?(assigns.image) && camera_line(assigns.image))
-      |> assign(:download, PostImage.download_url(assigns.image))
-      |> assign(:src, PostImage.lightbox_url(assigns.image))
+      assign(
+        assigns,
+        :photo,
+        photo_data(assigns.image, assigns.index, assigns.count, assigns.license)
+      )
 
     ~H"""
     <a
-      href={@src}
+      href={@photo.src}
       class={@class}
       data-lightbox-photo={@index}
-      data-photo-src={@src}
-      data-photo-alt={photo_alt(@image)}
-      data-photo-caption={@image.caption}
-      data-photo-camera={@camera}
-      data-photo-download={@download}
-      data-photo-license={@license && license_label(@license)}
-      data-photo-license-url={@license && PhotoLicense.url(@license)}
-      data-photo-position={gettext("Photo %{n} of %{total}", n: @index + 1, total: @count)}
+      data-photo-src={@photo.src}
+      data-photo-alt={@photo.alt}
+      data-photo-caption={@photo.caption}
+      data-photo-camera={@photo.camera}
+      data-photo-download={@photo.download}
+      data-photo-license={@photo.license}
+      data-photo-license-url={@photo.license_url}
+      data-photo-position={@photo.position}
     >
       {render_slot(@inner_block)}
     </a>
+    """
+  end
+
+  # The magnifier over the two preview layouts that show a single photo — the
+  # lone photo and the floated squarish one. It describes that photo as well as
+  # opening it, since a card showing one picture has nothing else in its gallery
+  # to describe it; the mosaic's corner is `zoom_corner/1` directly, its tiles
+  # being the description.
+  attr(:image, :any, required: true)
+  attr(:license, :string, default: nil)
+
+  defp photo_zoom_corner(assigns) do
+    ~H"""
+    <.zoom_corner
+      label={gettext("Show this photo larger")}
+      photo={photo_data(@image, 0, 1, @license)}
+    />
     """
   end
 
@@ -5216,7 +5328,8 @@ defmodule VutuvWeb.PostComponents do
   end
 
   @doc """
-  The lone photo on a feed card, fitted per `feed_photo_fit/1`.
+  The lone photo on a feed card, fitted per `feed_photo_fit/1`, under the link
+  to its post and the magnifier that enlarges it instead.
 
   A whole photo is bounded by **height**, not width: `max-h` with an auto
   width lets the browser scale it down until it fits, so a portrait keeps its
@@ -5224,33 +5337,54 @@ defmodule VutuvWeb.PostComponents do
   a thousand pixels down the timeline. A cropped one fills the width in a
   fixed frame, where `object-cover` is the right tool because the crop is the
   point.
+
+  The magnifier is positioned against a **box of its own inside** the gallery,
+  which in the whole case shrinks to the picture (`w-fit`): against the full
+  column it would hang in the air beside a portrait rather than on it. That
+  box cannot be the gallery, because the gallery is what carries
+  `data-media-edge` — on a phone the feed pulls that element out to the screen
+  edges with negative margins, which beat the `mx-auto` a shrunken box centres
+  itself with (`app.css`, unlayered), and a portrait would slide off the left
+  edge.
   """
   attr(:image, :any, required: true)
+  attr(:permalink, :string, required: true)
+  attr(:license, :string, default: nil)
 
   def single_feed_photo(assigns) do
     assigns = assign(assigns, :fit, feed_photo_fit(assigns.image))
 
     ~H"""
-    <.picture
-      :if={@fit == :whole}
-      picture={PostImage.picture(@image)}
-      wrap_class="mx-auto w-fit max-w-full"
-      alt={photo_alt(@image)}
-      width={@image.width}
-      height={@image.height}
-      loading="lazy"
-      class="mx-auto max-h-[32rem] w-auto max-w-full rounded-lg ring-1 ring-slate-200 dark:ring-slate-800"
-      data-photo-fit="whole"
-    />
-    <.picture
-      :if={@fit != :whole}
-      picture={PostImage.picture(@image)}
-      alt={photo_alt(@image)}
-      loading="lazy"
-      style={"aspect-ratio: #{elem(@fit, 1)}"}
-      class="w-full rounded-lg object-cover ring-1 ring-slate-200 dark:ring-slate-800"
-      data-photo-fit="crop"
-    />
+    <.lightbox_gallery data-media-edge class="mt-3 block">
+      <div class={[
+        "hover-reveal-host relative",
+        @fit == :whole && "mx-auto w-fit max-w-full"
+      ]}>
+        <.link href={@permalink} aria-label={gettext("View post")} class="block">
+          <.picture
+            :if={@fit == :whole}
+            picture={PostImage.picture(@image)}
+            wrap_class="mx-auto w-fit max-w-full"
+            alt={photo_alt(@image)}
+            width={@image.width}
+            height={@image.height}
+            loading="lazy"
+            class="mx-auto max-h-[32rem] w-auto max-w-full rounded-lg ring-1 ring-slate-200 dark:ring-slate-800"
+            data-photo-fit="whole"
+          />
+          <.picture
+            :if={@fit != :whole}
+            picture={PostImage.picture(@image)}
+            alt={photo_alt(@image)}
+            loading="lazy"
+            style={"aspect-ratio: #{elem(@fit, 1)}"}
+            class="w-full rounded-lg object-cover ring-1 ring-slate-200 dark:ring-slate-800"
+            data-photo-fit="crop"
+          />
+        </.link>
+        <.photo_zoom_corner image={@image} license={@license} />
+      </div>
+    </.lightbox_gallery>
     """
   end
 
@@ -6372,7 +6506,7 @@ defmodule VutuvWeb.PostComponents do
       <.zoom_corner
         :if={@shot.lightbox_url}
         label={gettext("Show this screenshot larger")}
-        src={@shot.lightbox_url}
+        photo={%{src: @shot.lightbox_url}}
       />
     </.lightbox_gallery>
     """
