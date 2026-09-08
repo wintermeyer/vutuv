@@ -56,7 +56,12 @@ records about a report; nil means no declaration on file, and rows filed before
 the column existed stay nil rather than being backfilled into evidence nobody
 recorded. The admin case page shows it beside the report's category chip
 ("in gutem Glauben erklärt"), which is the surface a rights holder's notice has
-to be readable on.
+to be readable on. **And both forms word it identically** (issue #2068): the
+public one used to add "that my statements are correct" and the member one did
+not, which is two promises behind one column. It is one function component now,
+`ReportHTML.good_faith_declaration/1`, beside `honest_reporting_note/1` — the
+same channel `category_label/1` already travels, so the two forms cannot drift
+apart again rather than being watched for drift.
 
 **It is in the admin queue from the moment it is filed.** The trust ladder is
 untouched — a trusted reporter still freezes the content and still leaves the
@@ -127,7 +132,10 @@ brigaders' reports abusive).
 Suspended/deactivated accounts cannot log in and disappear from feeds, profiles
 and search.
 
-House rules live at `/community`.
+House rules live at `/community`, and the rule about publishing only what you
+hold the rights to links `/system/report` from the sentence that invites a
+rights holder to use it — that word was plain text until issue #2068, with the
+only way to the form sitting in the footer's Legal group.
 
 **Reporting someone also separates the two accounts on the spot** (before any
 second report or admin ruling): connection and follows are removed and the 1:1
@@ -302,9 +310,10 @@ demands the last three (`Report.outside_changeset/3`). A member is identified by
 their account and answerable through it; a stranger is answerable only through
 what they wrote and the address they confirmed.
 
-**Nothing happens on the submit.** `Moderation.file_public_notice/2` opens (or
-joins) the case as `flagged` — in front of an admin, with the content left
-exactly where it is — and mails a receipt carrying a confirmation link
+**The case is in front of an admin from the submit; nothing is hidden until
+the confirmation.** `Moderation.file_public_notice/2` opens (or joins) the case
+as `flagged`, which is a queue status, and mails a receipt carrying a
+confirmation link
 (`Emailer.public_notice_receipt_email/1`). The freeze, the owner's notice and
 the urgent admin mail all wait for `confirm_public_notice/1`, which runs the
 ordinary decision the trust ladder would have made at file time. The link is
@@ -352,6 +361,26 @@ the three addresses a profile picture has (`/avatars/<user id>/…`,
 visitor can already see resolves**, so the form is not an oracle for frozen,
 deleted, restricted or members-only content — "we could not find that page" is
 the honest answer for a typo and for a hidden post alike.
+
+**A miss has three shapes and the notifier is told which** (issue #2068).
+Answering "we could not find that page" about `/impressum` — an address that is
+perfectly correct — sends a rights holder off to re-check a link that was right
+all along, in the first minute of the one complaint that carries real
+liability. So `resolve/1` answers `:foreign_host` (another server), then
+`:not_reportable` (a page of the **site**: the Impressum, the house rules, the
+member directory), and only then `:not_found`. Two questions decide the middle
+one and both are asked without reading a row, which is what keeps the
+anti-oracle rule intact. **Is the first path segment a reserved slug?** A
+handle can never be one, so `from_segments/1` answers `:no_content_shape`
+rather than letting its two greedy handle clauses read `/system/members/w` as
+"the member `system`, missing" — that misreading is why every site page deeper
+than one segment sat in the typo bucket. **And does the router put a fixed
+address there?** `route_info/4` (asked about `Endpoint.host/0`, since
+`local_path/1` has already ruled the address ours) matching a route whose
+**first** segment is literal means a page of this installation;
+`/system/members/:letter` and `/system/posts/:year/:month` qualify, while
+`/:slug` does not — so a reserved word nobody routed, `/stefan`, is a name
+still to be claimed and keeps the answer a typo gets.
 
 Four things bound what a stranger can cause. The form is rate limited per client
 IP **and per mailbox** (`VutuvWeb.RateLimit.check_public_notice/2`, 5 an hour

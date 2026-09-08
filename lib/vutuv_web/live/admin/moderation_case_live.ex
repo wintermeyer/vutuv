@@ -348,8 +348,12 @@ defmodule VutuvWeb.Admin.ModerationCaseLive do
                 )}
               </span>
             </p>
+            <%!-- The quotation marks are the translation's, like everywhere
+                  else in the app: hardcoded here, they opened German and
+                  closed ASCII on a page that renders in three languages
+                  (issue #2068). --%>
             <p :if={report.note not in [nil, ""]} class="mt-1 text-slate-600 dark:text-slate-400">
-              „{report.note}"
+              {gettext("“%{note}”", note: report.note)}
             </p>
             <% severance = @severance_by_reporter[report.reporter_id] %>
             <p :if={severance} class="mt-1 text-xs text-slate-600 dark:text-slate-400">

@@ -3,8 +3,75 @@ defmodule VutuvWeb.ReportHTML do
   use VutuvWeb, :html
 
   alias Vutuv.Moderation.Report
+  alias VutuvWeb.PageHTML
 
   embed_templates("../templates/report/*")
+
+  @doc """
+  The good-faith declaration, on both report forms.
+
+  One home rather than two copies of the sentence: a single column records that
+  it was made (`good_faith_declared_at`, issue #2069), so it may not mean two
+  things depending on which form filed it — and it did, until issue #2068. The
+  member form reveals it by CSS when the copyright category is picked and does
+  not demand it for the others, hence `class` and `required`.
+  """
+  attr(:id, :string, required: true)
+  attr(:class, :string, default: "")
+  attr(:checked, :boolean, default: false)
+  attr(:required, :boolean, default: false)
+
+  def good_faith_declaration(assigns) do
+    ~H"""
+    <label
+      id={@id}
+      class={[
+        "cursor-pointer items-start gap-3 rounded-lg border border-slate-200 p-3 dark:border-slate-700",
+        @class
+      ]}
+    >
+      <input
+        type="checkbox"
+        name="report[good_faith?]"
+        value="true"
+        checked={@checked}
+        required={@required}
+        class="mt-1 accent-brand-600"
+      />
+      <span class="text-sm text-slate-600 dark:text-slate-400">
+        {gettext(
+          "I declare in good faith that what I describe here is true and that this use is authorized neither by the rights holder nor by law."
+        )}
+      </span>
+    </label>
+    """
+  end
+
+  @doc """
+  The line under both report forms that links the house rules.
+
+  The link is a `{guidelines}` marker inside the sentence rather than a label
+  glued to its end, so German and English can each place it — and so the full
+  stop cannot pick up the template's indentation and render a space away from
+  the word ("Community-Richtlinien .", issue #2068).
+  """
+  def honest_reporting_note(assigns) do
+    {pre, post} =
+      split_marker(
+        gettext("Please report honestly. Reporting to harm someone breaks our {guidelines}."),
+        "{guidelines}"
+      )
+
+    assigns = assign(assigns, pre: pre, post: post)
+
+    ~H"""
+    <p class="mt-3 text-xs text-slate-600 dark:text-slate-400">
+      {@pre}<a href={~p"/community"} class={PageHTML.link_class()}>{gettext(
+        "community guidelines"
+      )}</a>{@post}
+    </p>
+    """
+  end
 
   @doc """
   The human name of a report category, in the viewer's locale — the single

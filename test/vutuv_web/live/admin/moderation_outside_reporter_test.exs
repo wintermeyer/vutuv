@@ -59,6 +59,22 @@ defmodule VutuvWeb.Admin.ModerationOutsideReporterTest do
       refute html =~ "was a deliberate weapon (strikes the reporter)"
     end
 
+    # The notice was quoted with a German opening mark and an ASCII closing
+    # one, hardcoded, on a page that renders in three languages (issue #2068).
+    # The quotes are the translation's now, like everywhere else in the app.
+    test "quotes the notice with the marks the reader's language uses", %{conn: conn, post: post} do
+      {case_record, _token} = file!(post)
+
+      assert conn |> get(~p"/admin/moderation/#{case_record.id}") |> html_response(200) =~
+               "“That photograph is mine.”"
+
+      assert conn
+             |> recycle()
+             |> put_req_header("accept-language", "de-DE,de")
+             |> get(~p"/admin/moderation/#{case_record.id}")
+             |> html_response(200) =~ "„That photograph is mine.“"
+    end
+
     test "renders a confirmed notice beside a member's own report", %{
       conn: conn,
       post: post

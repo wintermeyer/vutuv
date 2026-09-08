@@ -7,8 +7,11 @@
       {gettext("We have sent an email to %{email}.", email: @email)}
     </p>
     <p class="mt-2 text-sm text-slate-600 dark:text-slate-400">
+      <%!-- The case is `flagged` from the submit, which is a queue status, so
+            the admins have it before anybody clicks anything — the receipt
+            mail said so and this page said the opposite (issue #2068). --%>
       {gettext(
-        "Follow the link in it and your report goes to our admins. Until then nothing about the reported content changes."
+        "Your report is already with our admins. Follow the link in that email to confirm your address; until you do, nothing about the reported content changes."
       )}
     </p>
     <p class="mt-2 text-sm text-slate-600 dark:text-slate-400">
