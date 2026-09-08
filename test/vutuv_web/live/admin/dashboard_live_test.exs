@@ -28,6 +28,20 @@ defmodule VutuvWeb.Admin.DashboardLiveTest do
   defp mount_dashboard(session),
     do: live_isolated(build_conn(), VutuvWeb.Admin.DashboardLive, session: session)
 
+  # Tracks `user` on the global presence topic and returns once `view` has
+  # really processed the resulting diff. We subscribe here too so the wait is
+  # deterministic: seeing the broadcast ourselves means the dashboard has it
+  # queued, and `:sys.get_state/1` then flushes its mailbox.
+  defp bring_online(view, user) do
+    Presence.subscribe_online()
+    agent = start_supervised!({Agent, fn -> :ok end}, id: {:presence, user.id})
+    {:ok, _ref} = Presence.track_user(agent, user.id)
+
+    assert_receive %Broadcast{event: "presence_diff"}
+    _ = :sys.get_state(view.pid)
+    :ok
+  end
+
   describe "embedded on the admin home page" do
     test "the admin home renders the live dashboard at the top", %{conn: conn} do
       {conn, _admin} = create_and_login_admin(conn)
@@ -91,18 +105,8 @@ defmodule VutuvWeb.Admin.DashboardLiveTest do
 
       assert has_element?(view, "#stat-online", "0")
 
-      # Subscribe here too so we can wait for the join diff deterministically.
-      Presence.subscribe_online()
-
       # A member comes online: a live process tracks them on the presence topic.
-      online = insert(:user)
-      agent = start_supervised!({Agent, fn -> :ok end})
-      {:ok, _ref} = Presence.track_user(agent, online.id)
-
-      # Once we have seen the diff, the dashboard has it queued too; flush its
-      # mailbox so it has processed the same broadcast before we assert.
-      assert_receive %Broadcast{event: "presence_diff"}
-      _ = :sys.get_state(view.pid)
+      bring_online(view, insert(:user))
 
       assert has_element?(view, "#stat-online", "1")
     end
@@ -112,14 +116,8 @@ defmodule VutuvWeb.Admin.DashboardLiveTest do
 
       assert has_element?(view, "#online-members", "Nobody is online right now")
 
-      Presence.subscribe_online()
-
       online = insert(:user)
-      agent = start_supervised!({Agent, fn -> :ok end})
-      {:ok, _ref} = Presence.track_user(agent, online.id)
-
-      assert_receive %Broadcast{event: "presence_diff"}
-      _ = :sys.get_state(view.pid)
+      bring_online(view, online)
 
       assert has_element?(view, "#online-members a[href='/#{online.username}']")
     end
@@ -179,6 +177,91 @@ defmodule VutuvWeb.Admin.DashboardLiveTest do
 
       assert has_element?(view, "#stat-gender [data-gender=female]", "—")
       refute render(view) =~ "0%"
+    end
+
+    # ── The admin's own relationship to the listed members ──────────────────
+    #
+    # The two cards are where an admin meets the people who just signed up, so
+    # each row carries the follow pill and, when it applies, the chip that says
+    # the member follows them back. Both are keyed on `phx-value-*` and
+    # `data-profile-relationship` rather than on a translated word, which is the
+    # steadier probe.
+
+    test "a member the admin does not follow gets a Follow pill", %{session: session} do
+      member = insert(:user, email_confirmed?: true)
+
+      {:ok, view, _html} = mount_dashboard(session)
+
+      assert has_element?(view, "#newest-members button[phx-value-followee='#{member.id}']")
+      refute has_element?(view, "#newest-members [data-profile-relationship]")
+    end
+
+    test "the pill follows the member over the socket, with no reload", %{
+      admin: admin,
+      session: session
+    } do
+      member = insert(:user, email_confirmed?: true)
+
+      {:ok, view, _html} = mount_dashboard(session)
+
+      view
+      |> element("#newest-members button[phx-value-followee='#{member.id}']")
+      |> render_click()
+
+      assert Vutuv.Social.user_follows_user?(admin.id, member.id)
+
+      # The pill has flipped to its "Following" state, which is the unfollow
+      # half: it now carries the edge id rather than the followee id.
+      follow_id = Vutuv.Social.follow_id(admin.id, member.id)
+      assert has_element?(view, "#newest-members button[phx-value-id='#{follow_id}']")
+      refute has_element?(view, "#newest-members button[phx-value-followee='#{member.id}']")
+    end
+
+    test "the same pill takes the follow back", %{admin: admin, session: session} do
+      member = insert(:user, email_confirmed?: true)
+      follow = follow!(admin, member)
+
+      {:ok, view, _html} = mount_dashboard(session)
+
+      view
+      |> element("#newest-members button[phx-value-id='#{follow.id}']")
+      |> render_click()
+
+      refute Vutuv.Social.user_follows_user?(admin.id, member.id)
+      assert has_element?(view, "#newest-members button[phx-value-followee='#{member.id}']")
+    end
+
+    # The whole point of the chip: an admin greeting today's sign-ups can see at
+    # a glance which of them already came to them.
+    test "a member who follows the admin is marked, and a mutual follow reads as connected", %{
+      admin: admin,
+      session: session
+    } do
+      inbound = insert(:user, email_confirmed?: true)
+      mutual = insert(:user, email_confirmed?: true)
+      follow!(inbound, admin)
+      connect!(admin, mutual)
+
+      {:ok, view, _html} = mount_dashboard(session)
+
+      assert has_element?(view, "#newest-members [data-profile-relationship=inbound]")
+      assert has_element?(view, "#newest-members [data-profile-relationship=mutual]")
+
+      # The one-way inbound follow is still an offer to take up, the mutual one
+      # is not.
+      assert has_element?(view, "#newest-members button[phx-value-followee='#{inbound.id}']")
+      refute has_element?(view, "#newest-members button[phx-value-followee='#{mutual.id}']")
+    end
+
+    # The admin is in the "currently online" list themselves — they are reading
+    # the page. A pill there would be a control that cannot do anything.
+    test "the admin's own row carries no follow pill", %{admin: admin, session: session} do
+      {:ok, view, _html} = mount_dashboard(session)
+
+      bring_online(view, admin)
+
+      assert has_element?(view, "#online-members a[href='/#{admin.username}']")
+      refute has_element?(view, "#online-members button[phx-value-followee='#{admin.id}']")
     end
 
     # The admin's own stored locale is what decides, not the request's — the

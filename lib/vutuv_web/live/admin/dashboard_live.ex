@@ -11,7 +11,14 @@ defmodule VutuvWeb.Admin.DashboardLive do
   landed today versus yesterday, with the timestamp of the last post and
   message. The "currently online" and "new members" cards also list the newest
   ten members behind each figure, each a link straight to that profile, so an
-  admin can eyeball who is online or who just joined without searching. The
+  admin can eyeball who is online or who just joined without searching.
+
+  Every one of those rows also carries the admin's **own** relationship to that
+  member: the follow / unfollow pill every listing row on the site wears, plus
+  the emerald chip that says when the member follows the admin back. Both are
+  read for the whole list in two queries and toggled over the socket, so
+  greeting the twenty-two people who signed up today is twenty-two clicks on
+  the page an admin already has open rather than twenty-two profile visits. The
   "online now" figure and its list update the instant a member connects or
   disconnects (they ride the `VutuvWeb.Presence` diffs, in-memory, no database);
   the database figures refresh on a gentle timer.
@@ -31,11 +38,15 @@ defmodule VutuvWeb.Admin.DashboardLive do
 
   use Gettext, backend: VutuvWeb.Gettext
 
-  import VutuvWeb.UI, only: [avatar: 1, card: 1, local_time: 1, delimited_count: 1]
-  import VutuvWeb.UserHelpers, only: [full_name: 1]
+  import VutuvWeb.UI,
+    only: [avatar: 1, card: 1, local_time: 1, delimited_count: 1, follow_button: 1]
+
+  import VutuvWeb.UserHelpers, only: [full_name: 1, following_map: 2]
+  import VutuvWeb.UserHTML, only: [profile_relationship_chip: 1]
 
   alias Vutuv.Accounts.User
   alias Vutuv.Dashboard
+  alias Vutuv.Social
   alias VutuvWeb.Live.InitAssigns
   alias VutuvWeb.Presence
 
@@ -48,7 +59,10 @@ defmodule VutuvWeb.Admin.DashboardLive do
   def mount(_params, session, socket) do
     # The shared preamble for an off-router child: resolves the viewer from the
     # cookie's session token and applies their locale and clock.
-    socket = InitAssigns.assign_embedded(socket, session)
+    socket =
+      socket
+      |> InitAssigns.assign_embedded(session)
+      |> assign(following_by_id: %{}, follows_me: MapSet.new(), relationship_ids: [])
 
     cond do
       # The throwaway dead render: the HTTP request that produced it already
@@ -75,19 +89,26 @@ defmodule VutuvWeb.Admin.DashboardLive do
     |> assign_snapshot()
     |> assign_newest_members()
     |> assign(:gender_breakdown, Dashboard.gender_breakdown())
+    |> assign_relationships()
   end
 
   @impl true
   def handle_info(:refresh, socket) do
     schedule_refresh()
-    {:noreply, socket |> assign_online() |> assign_snapshot() |> assign_newest_members()}
+
+    {:noreply,
+     socket
+     |> assign_online()
+     |> assign_snapshot()
+     |> assign_newest_members()
+     |> assign_relationships()}
   end
 
   # A member connected or disconnected somewhere: re-read the in-memory online
   # set so the "online now" count and its member list are always current. The
   # newest-members list can't change on presence, so it waits for the timer.
   def handle_info(%Phoenix.Socket.Broadcast{event: "presence_diff"}, socket),
-    do: {:noreply, assign_online(socket)}
+    do: {:noreply, socket |> assign_online() |> assign_relationships()}
 
   def handle_info(_other, socket), do: {:noreply, socket}
 
@@ -108,6 +129,74 @@ defmodule VutuvWeb.Admin.DashboardLive do
   defp assign_newest_members(socket),
     do: assign(socket, :newest_members, Dashboard.newest_members())
 
+  # ── The admin's own relationship to the people in the two lists ────────────
+
+  # The follow pill on a row, the site's ordinary follow reached from here: the
+  # same two events `VutuvWeb.PostLive.Feed` and the profile fire, refusals and
+  # all (see `Social.follow/2`).
+  @impl true
+  def handle_event(_event, _params, %{assigns: %{current_user: nil}} = socket),
+    do: {:noreply, socket}
+
+  def handle_event("follow", %{"followee" => followee_id}, socket) do
+    Social.follow(socket.assigns.current_user, followee_id)
+    {:noreply, assign_following(socket)}
+  end
+
+  # Scoped to the viewer by `unfollow!/2`, so a tampered id can only ever drop
+  # an edge the admin owns.
+  def handle_event("unfollow", %{"id" => follow_id}, socket) do
+    Social.unfollow!(socket.assigns.current_user.id, follow_id)
+    {:noreply, assign_following(socket)}
+  end
+
+  # Both directions for the whole page: the admin's outbound edges (the pill,
+  # and the id an unfollow needs) and the ids of the members who follow the
+  # admin (the chip).
+  #
+  # Guarded on the id list rather than run on every pass, because a presence
+  # diff is site-wide socket churn — `ShellLive` tracks on every page — while
+  # who is in these two lists changes far more rarely. The dead render pays for
+  # it too: it is thrown away, but without it every row paints a "Follow" pill
+  # that flips the moment the socket connects.
+  defp assign_relationships(socket) do
+    members = listed_members(socket)
+
+    if Enum.map(members, & &1.id) == socket.assigns.relationship_ids,
+      do: socket,
+      else: load_relationships(socket, members)
+  end
+
+  # After the admin's own follow or unfollow. Only the outbound half is re-read:
+  # the admin writing their own edge cannot change who follows *them*, so asking
+  # again would be a query per click that can only ever answer the same thing.
+  defp assign_following(socket) do
+    members = listed_members(socket)
+    assign(socket, :following_by_id, following_map(socket.assigns.current_user, members))
+  end
+
+  # Both lists, in id order so the result doubles as the guard's cache key, and
+  # without the admin's own row: they are in the "currently online" list because
+  # they are reading this page, and nobody follows themselves.
+  defp listed_members(socket) do
+    (socket.assigns.online_members ++ socket.assigns.newest_members)
+    |> Enum.uniq_by(& &1.id)
+    |> Enum.reject(&(&1.id == socket.assigns.current_user_id))
+    |> Enum.sort_by(& &1.id)
+  end
+
+  # `following_map/2` is the app's one batched "which of these do I follow", and
+  # its `%{followee_id => follow_id}` is the shape every other people listing
+  # binds to `following_by_id`. Both helpers answer empty for a nil viewer.
+  defp load_relationships(socket, members) do
+    ids = Enum.map(members, & &1.id)
+
+    socket
+    |> assign(:following_by_id, following_map(socket.assigns.current_user, members))
+    |> assign(:follows_me, Social.inbound_follower_ids(socket.assigns.current_user_id, ids))
+    |> assign(:relationship_ids, ids)
+  end
+
   @impl true
   def render(assigns) do
     ~H"""
@@ -121,7 +210,10 @@ defmodule VutuvWeb.Admin.DashboardLive do
         </span>
       </div>
 
-      <div class="grid gap-4 sm:grid-cols-2">
+      <%!-- `grid-cols-1` is load-bearing below `sm`, not a spelling of the
+      default: an implicit track is min-content sized, so the widest member row
+      pushed the card past a 375px phone. See `mobile_overflow_test.exs`. --%>
+      <div class="grid grid-cols-1 gap-4 sm:grid-cols-2">
         <.card>
           <div class="flex items-center justify-between">
             <p class="text-xs font-bold uppercase tracking-wider text-slate-500 dark:text-slate-400">
@@ -146,6 +238,9 @@ defmodule VutuvWeb.Admin.DashboardLive do
             id="online-members"
             members={@online_members}
             empty={gettext("Nobody is online right now.")}
+            current_user_id={@current_user_id}
+            following_by_id={@following_by_id}
+            follows_me={@follows_me}
           />
         </.card>
 
@@ -161,12 +256,15 @@ defmodule VutuvWeb.Admin.DashboardLive do
               id="newest-members"
               members={@newest_members}
               empty={gettext("No members yet.")}
+              current_user_id={@current_user_id}
+              following_by_id={@following_by_id}
+              follows_me={@follows_me}
             />
           </:extra>
         </.stat_tile>
       </div>
 
-      <div class="mt-4 grid gap-4 sm:grid-cols-2">
+      <div class="mt-4 grid grid-cols-1 gap-4 sm:grid-cols-2">
         <.stat_tile
           id="stat-posts"
           title={gettext("Posts")}
@@ -241,9 +339,18 @@ defmodule VutuvWeb.Admin.DashboardLive do
   # that navigates straight to that profile, so an admin can eyeball who is
   # online or who just signed up without searching. Falls back to a muted empty
   # line. Newest first (the caller orders the list).
+  #
+  # Each row also carries the admin's own side of the relationship, split the
+  # way `.claude/rules/design.md` asks: **an act is a button, a status is not**.
+  # The follow pill takes the action column on the right; the "follows you" /
+  # "connected" chip takes a line of its own under the handle, because sharing
+  # the handle's line cut it to "@nah…" on a 375px phone.
   attr(:id, :string, required: true)
   attr(:members, :list, required: true)
   attr(:empty, :string, required: true)
+  attr(:current_user_id, :any, required: true)
+  attr(:following_by_id, :map, required: true)
+  attr(:follows_me, MapSet, required: true)
 
   def member_list(assigns) do
     ~H"""
@@ -253,10 +360,10 @@ defmodule VutuvWeb.Admin.DashboardLive do
       role="list"
       class="mt-4 space-y-1 border-t border-slate-100 pt-3 dark:border-slate-800"
     >
-      <li :for={member <- @members}>
+      <li :for={member <- @members} class="flex items-center gap-2">
         <.link
           navigate={~p"/#{member}"}
-          class="group flex items-center gap-3 rounded-lg p-1.5 hover:bg-slate-50 dark:hover:bg-slate-800/60"
+          class="group flex min-w-0 flex-1 items-start gap-3 rounded-lg p-1.5 hover:bg-slate-50 dark:hover:bg-slate-800/60"
         >
           <.avatar user={member} size="sm" />
           <span class="min-w-0 flex-1">
@@ -266,8 +373,22 @@ defmodule VutuvWeb.Admin.DashboardLive do
             <span class="block truncate text-xs text-slate-600 dark:text-slate-400">
               @{member.username}
             </span>
+            <span :if={MapSet.member?(@follows_me, member.id)} class="mt-1 flex">
+              <.profile_relationship_chip
+                follow_id={Map.get(@following_by_id, member.id)}
+                follows_viewer?={true}
+              />
+            </span>
           </span>
         </.link>
+        <.follow_button
+          :if={@current_user_id && member.id != @current_user_id}
+          variant="text"
+          live?
+          follower_id={@current_user_id}
+          followee_id={member.id}
+          follow_id={Map.get(@following_by_id, member.id)}
+        />
       </li>
     </ul>
     <p
