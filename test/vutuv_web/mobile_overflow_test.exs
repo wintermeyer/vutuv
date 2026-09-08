@@ -50,6 +50,34 @@ defmodule VutuvWeb.MobileOverflowTest do
     end
   end
 
+  # The same bug, fixed from the other side. `min-w-0` above is the *item* fix
+  # and needs a class attribute to land on; where the grid item is a component
+  # that passes no class through to its own root (`<.stat_tile>` wrapping
+  # `<.card>` on the admin dashboard), the fix goes on the *track* instead:
+  # spelling the single column out as `grid-cols-1` makes Tailwind emit
+  # `minmax(0, 1fr)`, which is exactly the shape `md:grid-cols-*` gets for free
+  # above the breakpoint. It reads like a no-op — the column is single either
+  # way — which is why deleting it is the plausible mistake this test exists to
+  # catch. Measured on the admin dashboard at 375px: 41px of overflow without
+  # it, 0 with.
+  @explicit_single_tracks [
+    {"live/admin/dashboard_live.ex", "sm:grid-cols-2"}
+  ]
+
+  test "a grid whose items carry no min-w-0 spells its single column out" do
+    for {file, breakpoint} <- @explicit_single_tracks do
+      content = File.read!(Path.join(@web, file))
+
+      for class <- Regex.scan(~r/class="([^"]*#{Regex.escape(breakpoint)}[^"]*)"/, content),
+          [_, class] = class do
+        assert String.contains?(class, "grid-cols-1"),
+               "#{file}: the grid \"#{class}\" leaves its single column implicit, so " <>
+                 "below the breakpoint it is min-content sized and the widest row " <>
+                 "pushes the card past a 375px phone. Spell it `grid-cols-1`."
+      end
+    end
+  end
+
   test "components.css lets rendered Markdown break long unbreakable tokens" do
     # A long unbreakable token (a pasted URL, a long word) in a post body has
     # `overflow-wrap: normal` by default and overflows its column on a phone

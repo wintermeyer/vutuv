@@ -1066,6 +1066,27 @@ defmodule Vutuv.Social do
   end
 
   @doc """
+  The mirror of `follow_edges/2`: which of `follower_ids` follow `user_id`, as a
+  `MapSet` of their ids. One query for a whole list, so a row that wants to say
+  "follows you" never asks on its own.
+
+  Ids only, no edge: the inbound edge belongs to the other member, so nothing
+  here may act on it — the viewer can mute or drop their *own* follow, never
+  somebody else's. Empty set for no viewer or no candidates.
+  """
+  def inbound_follower_ids(nil, _follower_ids), do: MapSet.new()
+  def inbound_follower_ids(_user_id, []), do: MapSet.new()
+
+  def inbound_follower_ids(user_id, follower_ids) do
+    from(c in Follow,
+      where: c.followee_id == ^user_id and c.follower_id in ^follower_ids,
+      select: c.follower_id
+    )
+    |> Repo.all()
+    |> MapSet.new()
+  end
+
+  @doc """
   The newest members who really show a face, newest first — the pool the
   feed's "New here" welcome card draws its handful out of.
 
