@@ -3448,10 +3448,10 @@ defmodule VutuvWeb.PostLive.Feed do
           off once the reader has looked at that card. --%>
           <%!-- `flush`: on a phone this list IS the page, so it runs edge to
           edge (`UI.card/1`, and the phone-timeline block at the end of
-          `app.css`). The other carded post lists — the saved hub, a tag
-          timeline, the posts archive — could ask for it too and deliberately do
-          not yet: this is the timeline a member spends their day in, and it is
-          the one Stefan looked at. --%>
+          `app.css`). A post's own page asks for it too, being the other
+          timeline a reader arrives at. The lists that are a section beside
+          other cards — the saved hub, a tag timeline, the posts archive —
+          could and deliberately still do not. --%>
           <.post_list
             :if={!@empty?}
             id="feed-posts"

@@ -46,9 +46,9 @@ defmodule VutuvWeb.PostLive.Thread do
   use Phoenix.LiveView
 
   import VutuvWeb.PostComponents,
-    only: [post_card: 1, thread_conversation: 1, thread_window_conversation: 1]
+    only: [post_card: 1, post_list: 1, thread_conversation: 1, thread_window_conversation: 1]
 
-  import VutuvWeb.UI, only: [card: 1, delimited_count: 1]
+  import VutuvWeb.UI, only: [delimited_count: 1]
 
   use Gettext, backend: VutuvWeb.Gettext
 
@@ -479,55 +479,67 @@ defmodule VutuvWeb.PostLive.Thread do
           that answers a post out there (issue #1165), is not this case — it
           falls through to the conversation below, which is what weaves the one
           in and draws the other above it. --%>
-          <.post_card
-            post={@focus}
-            viewer={@current_user}
-            viewer_follow={@viewer_follows[@focus.user_id]}
-            engagement={@engagement[@focus.id]}
-            likers={@likers}
-            mode={:full}
-            conn_or_socket={@socket}
-            translations={@post_translations}
-          />
+          <.post_list flush id="post-single">
+            <div>
+              <.post_card
+                post={@focus}
+                viewer={@current_user}
+                viewer_follow={@viewer_follows[@focus.user_id]}
+                engagement={@engagement[@focus.id]}
+                likers={@likers}
+                mode={:full}
+                surface={:flat}
+                conn_or_socket={@socket}
+                translations={@post_translations}
+              />
+            </div>
+          </.post_list>
         <% true -> %>
           <%!-- The conversation (issue #1006), rendered like a feed thread
           row: connector lines between the cards, the permalinked post the
           tinted full-mode card; with context above it, app.js scrolls it into
           view on arrival ([data-thread-scroll]). A big conversation opens as
           a window around the post and grows over the expanders. --%>
-          <.card id="post-thread">
-            <%= if @window.mode == :all do %>
-              <.thread_conversation
-                posts={@window.posts}
-                focus_id={@focus.id}
-                viewer={@current_user}
-                viewer_follows={@viewer_follows}
-                engagement={@engagement}
-                remote_replies={@remote_replies}
-                remote_parents={@remote_parents}
-                note_marks={@note_marks}
-                likers={@likers}
-                auto_scroll?={@auto_scroll?}
-                conn_or_socket={@socket}
-                translations={@post_translations}
-              />
-            <% else %>
-              <.thread_window_conversation
-                window={@window}
-                focus_id={@focus.id}
-                viewer={@current_user}
-                viewer_follows={@viewer_follows}
-                engagement={@engagement}
-                remote_replies={@remote_replies}
-                remote_parents={@remote_parents}
-                note_marks={@note_marks}
-                likers={@likers}
-                auto_scroll?={@auto_scroll?}
-                conn_or_socket={@socket}
-                translations={@post_translations}
-              />
-            <% end %>
-          </.card>
+          <%!-- `flush` is the feed's phone timeline, and this page is one too
+          (`UI.card/1` says what it does). What is this call site's own: the
+          whole conversation is ONE row, or the `divide-y` would draw a hairline
+          between two roots of the same thread, and the row carries no padding
+          class because a single row has none to carry. --%>
+          <.post_list flush id="post-thread">
+            <div>
+              <%= if @window.mode == :all do %>
+                <.thread_conversation
+                  posts={@window.posts}
+                  focus_id={@focus.id}
+                  viewer={@current_user}
+                  viewer_follows={@viewer_follows}
+                  engagement={@engagement}
+                  remote_replies={@remote_replies}
+                  remote_parents={@remote_parents}
+                  note_marks={@note_marks}
+                  likers={@likers}
+                  auto_scroll?={@auto_scroll?}
+                  conn_or_socket={@socket}
+                  translations={@post_translations}
+                />
+              <% else %>
+                <.thread_window_conversation
+                  window={@window}
+                  focus_id={@focus.id}
+                  viewer={@current_user}
+                  viewer_follows={@viewer_follows}
+                  engagement={@engagement}
+                  remote_replies={@remote_replies}
+                  remote_parents={@remote_parents}
+                  note_marks={@note_marks}
+                  likers={@likers}
+                  auto_scroll?={@auto_scroll?}
+                  conn_or_socket={@socket}
+                  translations={@post_translations}
+                />
+              <% end %>
+            </div>
+          </.post_list>
           <p
             :if={@window.mode == :window and @window.rest > 0 and @window.root}
             class="mt-3 px-2 text-sm text-slate-600 dark:text-slate-400"

@@ -392,8 +392,8 @@ defmodule VutuvWeb.PostComponents do
   attr(:flush, :boolean,
     default: false,
     doc:
-      "hand the card `flush` — the phone timeline that runs edge to edge (the feed). " <>
-        "A post list that is one card among others on its page stays inset."
+      "hand the card `flush` — the phone timeline that runs edge to edge (the feed, and " <>
+        "a post's own page). A post list that is one card among others on its page stays inset."
   )
 
   attr(:class, :string, default: nil, doc: "outer-wrapper utilities, e.g. mt-3 spacing")
@@ -2100,7 +2100,8 @@ defmodule VutuvWeb.PostComponents do
     exactly that: "das soll alles einheitlich sein". --%>
     <div
       :if={@viewer}
-      class="-mx-2 mt-3 flex items-center justify-between gap-2 text-slate-600 dark:text-slate-400"
+      data-action-bar
+      class="-mx-2 mt-3 flex flex-wrap items-center justify-between gap-2 text-slate-600 dark:text-slate-400"
     >
       <%!-- The heart and the reshare carry a number, and it is the **origin's
       own**, not a tally of what happened to pass through this installation
@@ -6577,10 +6578,13 @@ defmodule VutuvWeb.PostComponents do
     ~H"""
     <%!-- justify-between spreads the four controls across the column's full
           width (X-style); -mx-2 cancels the outer buttons' px-2 so the first
-          and last glyphs line up with the column edges. --%>
+          and last glyphs line up with the column edges. `data-action-bar` is
+          how the phone block in `app.css` tightens the row where a nested
+          reply leaves it no room — see there. --%>
     <div
       :if={@engagement}
-      class="-mx-2 mt-3 flex items-center justify-between gap-2 text-slate-600 dark:text-slate-400"
+      data-action-bar
+      class="-mx-2 mt-3 flex flex-wrap items-center justify-between gap-2 text-slate-600 dark:text-slate-400"
     >
       <.like_control
         id={control_id(@id, "like", @reset)}

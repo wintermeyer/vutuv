@@ -28,10 +28,18 @@ defmodule VutuvWeb.FeedEdgeToEdgeTest do
   would pass on a stylesheet that had lost the rules and kept the explanation.
 
   The scope is the other half. `data-timeline-flush` is `<.card flush>`, which
-  only `/feed` asks for; the carded post lists that are *not* the feed (the
-  posts archive, the saved hub, a tag timeline) keep the inset reading, and the
+  the two timelines a reader arrives *at* ask for — `/feed` and a post's own
+  page — while the carded post lists that are a section among others (the posts
+  archive, the saved hub, a tag timeline) keep the inset reading, and the
   archive is what the scope test renders — a profile's Posts section would pass
   either way, being `card={false}` and inset under any rule.
+
+  The action bar is the last piece and the one a reader reported: four controls
+  of a fixed size in a column that every level of a conversation narrows, which
+  on the inset post page pushed the bookmark out over the card's own border.
+  The page going flush gave back the 40px that report was about; the bar's own
+  container query is what keeps the next narrow phone or three-digit counter
+  from doing it again.
   """
   use VutuvWeb.ConnCase, async: true
 
@@ -82,8 +90,34 @@ defmodule VutuvWeb.FeedEdgeToEdgeTest do
     end
   end
 
+  describe "a post's own page" do
+    test "runs edge to edge too, alone or in a conversation", %{conn: conn} do
+      author = insert(:activated_user)
+      {:ok, alone} = Posts.create_post(author, %{body: "Ein Beitrag ohne Antworten."})
+      {:ok, answered} = Posts.create_post(author, %{body: "Der Beitrag mit einer Antwort."})
+      {:ok, _reply} = Posts.create_reply(author, answered, %{body: "Und die Antwort darauf."})
+
+      for post <- [alone, answered] do
+        html = conn |> get(Posts.path(post)) |> html_response(200)
+
+        # The two markers in that order and nothing but attributes between
+        # them: the rules place by `[data-timeline-flush] > [data-timeline-rows]
+        # > *`, so the row has to be the card's own child — two markers loose in
+        # one document would pass a bare `=~` and style nothing.
+        assert html =~ ~r/data-timeline-flush[^<>]*>\s*<[^<>]*data-timeline-rows/,
+               "A single post is the page on a phone the same way the feed is, so it runs " <>
+                 "to both edges of the screen, its side padding on the row rather than on " <>
+                 "the card. The 40px it gets back (gutter plus card padding) is also what " <>
+                 "keeps a deeply nested reply's action bar inside the card instead of " <>
+                 "pushing its bookmark over the border."
+      end
+    end
+  end
+
   describe "scope" do
-    test "a carded post list that is not the feed stays inset", %{conn: conn} do
+    test "a carded post list that is neither the feed nor a post's page stays inset", %{
+      conn: conn
+    } do
       {conn, user} = create_and_login_user(conn)
       {:ok, _post} = Posts.create_post(user, %{body: "Im Archiv."})
 
@@ -97,8 +131,10 @@ defmodule VutuvWeb.FeedEdgeToEdgeTest do
              "The card's own shape is the same everywhere — only the surface differs."
 
       refute html =~ "data-timeline-flush",
-             "Only the feed's timeline runs edge to edge. Everything else keeps the inset " <>
-               "card, because there the card shape is what says where the section ends."
+             "The two timelines a reader arrives *at* run edge to edge — the feed and a " <>
+               "post's own page. A listing beside other cards on its page (the archive, " <>
+               "the saved hub, a tag timeline) keeps the inset card, because there the " <>
+               "card shape is what says where the section ends."
     end
   end
 
@@ -120,6 +156,44 @@ defmodule VutuvWeb.FeedEdgeToEdgeTest do
                  "timeline is one block of attribute-keyed rules, and the markup carries " <>
                  "the marker either way — a missing rule is silent."
       end
+    end
+
+    test "lets a squeezed action bar tighten instead of walking out of the card" do
+      css = app_css()
+
+      assert css =~
+               ~r/\[data-conversation\] \[data-card-head\] > \[data-card-column\],[^{]*\{[^}]*container-type: inline-size/,
+             "The bar's own column is the container the tightening asks about, and it is " <>
+               "the conversation's column because that is the one that keeps the 48px " <>
+               "avatar the shortfall is made of. Without `container-type` the query below " <>
+               "resolves against nothing and never matches — silently."
+
+      assert css =~ ~r/@container \(width < 16rem\) \{/,
+             "Four fixed controls in a column every level of nesting narrows: past the " <>
+               "second level the bookmark was pushed over the card's border and the page " <>
+               "scrolled sideways with it. Below 16rem the controls give up half their " <>
+               "side padding."
+
+      assert css =~ ~r/\[data-action-bar\] \{[^}]*margin-inline: -0\.25rem/ and
+               css =~ ~r/\[data-action-bar\] :is\(a, button\),[^{]*\{\s*padding-inline: 0\.25rem/,
+             "Both halves move together: the buttons' `px-2` and the bar's `-mx-2` that " <>
+               "cancels it, so the outer glyphs stay on the column's edges. Tighten one " <>
+               "alone and the first and last glyph step off the card — and name the " <>
+               "controls rather than the bar's children, one of which is the remote bar's " <>
+               "answer wrapper, where padding *adds* 8px to the row being shortened."
+
+      source = File.read!(@components)
+
+      assert count(source, ~s|data-action-bar\n|) == 2,
+             "Both action bars — a member's post and a post from another network — carry " <>
+               "the marker the rules above place by, and only those two. Counted on its " <>
+               "own line so the paragraph that explains it is not mistaken for a third."
+
+      assert count(source, "flex flex-wrap items-center justify-between") == 2,
+             "`flex-wrap` is the floor under the tightening, and it is not a phone rule: " <>
+               "three-digit counters on a 375px screen overflow a bar by 15px at the " <>
+               "SECOND level, where the block above leaves the padding alone, and the " <>
+               "page scrolls sideways with it. It costs nothing while the row fits."
     end
 
     test "places the header row beside the avatar and everything else across both tracks" do
