@@ -481,7 +481,9 @@ defmodule VutuvWeb.AgentFormatTest do
       conn = get(build_conn(), "/agent_tester")
       html = html_response(conn, 200)
 
-      assert get_resp_header(conn, "vary") == ["accept"]
+      # `user-agent` beside it: the profile's link-preview picture differs
+      # for LinkedIn's scraper (VutuvWeb.Plug.PreviewScraper).
+      assert get_resp_header(conn, "vary") == ["accept, user-agent"]
       assert html =~ ~s(rel="alternate" type="text/markdown" href="/agent_tester.md")
       assert html =~ ~s(rel="alternate" type="application/json" href="/agent_tester.json")
       assert html =~ ~s(rel="alternate" type="application/xml" href="/agent_tester.xml")

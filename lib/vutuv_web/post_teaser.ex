@@ -151,6 +151,34 @@ defmodule VutuvWeb.PostTeaser do
   def plain_line(post, opts), do: teaser(post, &fold/1, opts)
 
   @doc """
+  The opening of the **whole** body as plain text, paragraph breaks kept, at
+  most `:length` characters (200 by default) — for the surfaces that show
+  more than one line of a post: the link-preview description under a title
+  that already carries the first line, and the generated preview card, which
+  draws the first six lines. Where `line/2` picks one line and skips the
+  skippable ones, this keeps the order the author wrote; a post that opens
+  with a quoted URL or a hashtag line shows it, as the post itself does.
+
+  Sliced before the Markdown pipeline runs, like `teaser/3`: markup only ever
+  adds characters, so four times the cap of source always yields more plain
+  text than the cap keeps, and a 10k body is not parsed to throw 9,800 away.
+  """
+  def opening(post, opts \\ []) do
+    limit = Keyword.get(opts, :length, @length)
+
+    case Posts.text(post) do
+      body when is_binary(body) ->
+        body
+        |> String.slice(0, limit * 4)
+        |> Markdown.to_plain_text()
+        |> String.slice(0, limit)
+
+      _no_text ->
+        ""
+    end
+  end
+
+  @doc """
   What a post calls itself in a list of posts: the author's name and the
   publication date. The `<title>` of `/:slug/posts/:id` and of
   `/organizations/:slug/posts/:id`, the heading a shared link previews with

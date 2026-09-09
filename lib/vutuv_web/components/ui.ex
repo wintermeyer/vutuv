@@ -3633,6 +3633,19 @@ defmodule VutuvWeb.UI do
   def month_name(12), do: gettext("December")
 
   @doc """
+  A date with its month spelled out, in the reader's language: "September 9,
+  2026", German "9. September 2026". For the one place a bare numeric date
+  would leave the reader guessing which number is the day.
+  """
+  def long_date(%Date{} = date) do
+    gettext("%{month} %{day}, %{year}",
+      month: month_name(date.month),
+      day: date.day,
+      year: date.year
+    )
+  end
+
+  @doc """
   The two-letter names of the weekdays, Monday first — the column headings of
   any calendar grid.
 

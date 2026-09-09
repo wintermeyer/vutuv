@@ -163,8 +163,29 @@ defmodule VutuvWeb.Fediverse.Docs do
       "featured" => featured_url(user)
     })
     |> put_icon(user)
+    |> put_attribution_domains()
     |> put_also_known_as(user)
     |> put_moved_to(user)
+  end
+
+  # The `toot:` term for `attributionDomains`, the way Mastodon's own actor
+  # documents declare it.
+  @attribution_context %{
+    "toot" => "http://joinmastodon.org/ns#",
+    "attributionDomains" => %{"@id" => "toot:attributionDomains", "@type" => "@id"}
+  }
+
+  # Which sites may name this member as the author of a page: this one, in
+  # both its spellings. Mastodon 4.3+ honours a page's `fediverse:creator` tag
+  # (`VutuvWeb.OpenGraph.creator/1`) only when the page's host is on the
+  # named actor's list, and draws a "More from …" follow line on the preview
+  # card when it is. Without this the tag is read and ignored, silently.
+  defp put_attribution_domains(doc) do
+    apex = String.replace_prefix(VutuvWeb.Endpoint.host(), "www.", "")
+
+    doc
+    |> Map.update!("@context", &(&1 ++ [@attribution_context]))
+    |> Map.put("attributionDomains", [apex, "www." <> apex])
   end
 
   # The picture, named only while there is one. It used to be advertised

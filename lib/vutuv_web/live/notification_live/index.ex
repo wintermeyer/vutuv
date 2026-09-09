@@ -1371,11 +1371,7 @@ defmodule VutuvWeb.NotificationLive.Index do
         gettext("Yesterday")
 
       true ->
-        gettext("%{month} %{day}, %{year}",
-          month: month_name(day.month),
-          day: day.day,
-          year: day.year
-        )
+        long_date(day)
     end
   end
 

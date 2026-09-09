@@ -33,6 +33,10 @@ defmodule VutuvWeb.Fediverse.DocsTest do
       assert doc["summary"] =~ "&lt;Koblenz&gt;"
       # The avatar rides as the scraper-friendly square JPEG.
       assert doc["icon"]["url"] == "#{base()}/#{user.username}/avatar.jpg"
+      # This site may name the member as a page's author (`fediverse:creator`),
+      # in both spellings of the host, with the term declared in the context.
+      assert doc["attributionDomains"] == ["localhost", "www.localhost"]
+      assert %{"toot" => _, "attributionDomains" => _} = List.last(doc["@context"])
     end
 
     # It used to be named unconditionally, so every member without a picture

@@ -25,7 +25,12 @@ Related documents: [README](../README.md) (overview) ·
 - **Erlang and Elixir** to build the release — install via
   [mise](https://mise.jdx.dev/) (`mise install` reads the pinned versions from
   `.tool-versions`).
-- **libvips** for image processing (`apt-get install libvips-dev`).
+- **libvips** for image processing (`apt-get install libvips-dev`). The Debian
+  build includes Pango, which draws the text on the generated link-preview
+  cards (the picture LinkedIn, X, WhatsApp and the others show for a shared
+  profile or post). The cards use **Inter** when the host has it
+  (`apt-get install fonts-inter`, optional) and the system's sans-serif
+  otherwise; nothing breaks without it, the type just looks different.
 - **Chromium** (optional) — only for URL screenshots and moderation evidence
   screenshots. Without it those features quietly do nothing.
 - **poppler-utils** (optional, `apt-get install poppler-utils`) — renders the

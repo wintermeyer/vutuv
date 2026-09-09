@@ -41,6 +41,9 @@ defmodule VutuvWeb.Router do
     # than trusted from the session.
     plug(Plugs.ActingAs)
     plug(Plugs.Locale)
+    # Which link-preview scraper is asking, for the one whose feed wants a
+    # square picture (VutuvWeb.OpenGraph).
+    plug(Plugs.PreviewScraper)
     # The one-time welcome questions, floating over the page a brand-new
     # member's registration PIN landed them on. Before the ad plug, which
     # stands down while they are open.
@@ -647,6 +650,12 @@ defmodule VutuvWeb.Router do
     # readability — the paths differ in length and cannot collide.
     get("/organizations/:slug/avatar.jpg", OrganizationAvatarController, :show)
     get("/:slug/avatar.jpg", AvatarController, :show)
+    # The generated 1200×630 cards a member's pages and posts name as their
+    # og:image (VutuvWeb.OgImage): the wide shape every platform renders
+    # large, where the square avatar got the thumbnail beside the title.
+    get("/:slug/og.png", OgImageController, :profile)
+    get("/:slug/posts/:id/og.png", OgImageController, :post)
+    get("/:slug/posts/:id/og-square.png", OgImageController, :post_square)
     # Agent-skills discovery (Cloudflare draft) + security.txt (RFC 9116).
     get("/.well-known/agent-skills/index.json", WellKnownController, :agent_skills_index)
     get("/.well-known/agent-skills/vutuv/SKILL.md", WellKnownController, :agent_skill)

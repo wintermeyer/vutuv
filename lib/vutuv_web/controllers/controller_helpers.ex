@@ -315,28 +315,33 @@ defmodule VutuvWeb.ControllerHelpers do
   end
 
   @doc """
-  Answers an `avatar.jpg` request with the derived bytes, or with the plain
-  404 every failure shares.
+  Answers a link-preview image request with the derived bytes, or with the
+  plain 404 every failure shares.
 
-  The two endpoints (`/:slug/avatar.jpg` for a member, `/organizations/:slug/avatar.jpg`
-  for a page) differ only in the lookup and its visibility gate; the answer is
-  the same both ways, and both halves of it are decisions rather than details:
-  the cache lifetime keeps repeat scraper traffic off libvips, and the
-  featureless plain-text 404 is what makes an unknown slug, a missing picture
-  and a page nobody may see indistinguishable from outside.
+  The scraper-image endpoints (`/:slug/avatar.jpg` for a member,
+  `/organizations/:slug/avatar.jpg` for a page, the generated `og.png` cards
+  of `VutuvWeb.OgImageController`) differ only in the lookup and its
+  visibility gate; the answer is the same for all of them, and both halves of
+  it are decisions rather than details: the cache lifetime keeps repeat
+  scraper traffic off libvips, and the featureless plain-text 404 is what
+  makes an unknown slug, a missing picture and a page nobody may see
+  indistinguishable from outside.
   """
-  def send_og_jpeg(%Conn{} = conn, {:ok, jpeg}) do
+  def send_og_image(%Conn{} = conn, {:ok, bytes}, content_type) do
     conn
-    |> Conn.put_resp_content_type("image/jpeg", nil)
+    |> Conn.put_resp_content_type(content_type, nil)
     |> Conn.put_resp_header("cache-control", "public, max-age=86400")
-    |> Conn.send_resp(200, jpeg)
+    |> Conn.send_resp(200, bytes)
   end
 
-  def send_og_jpeg(%Conn{} = conn, _missing) do
+  def send_og_image(%Conn{} = conn, _missing, _content_type) do
     conn
     |> Conn.put_resp_content_type("text/plain")
     |> Conn.send_resp(404, "Not Found")
   end
+
+  @doc "`send_og_image/3` for the JPEG avatar endpoints."
+  def send_og_jpeg(%Conn{} = conn, result), do: send_og_image(conn, result, "image/jpeg")
 
   @doc """
   Renders the bare `VutuvWeb.ErrorHTML` 403/404 page and halts: the one shape

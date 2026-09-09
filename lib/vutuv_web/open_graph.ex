@@ -7,9 +7,15 @@ defmodule VutuvWeb.OpenGraph do
 
     * a page about a member (`:user` — the profile, its sections, their
       posts): the member's name as title, their work info and follower
-      count as description, their avatar as image. The avatar is linked as `/:slug/avatar.jpg`
-      (`VutuvWeb.AvatarController`) because preview scrapers don't decode
-      the AVIF the site serves itself.
+      count as description, their **generated card** as image
+      (`/:slug/og.png`, `VutuvWeb.OgImage`: face, name, headline and tags in
+      one 1200×630 picture, the shape every platform draws large). The one
+      exception is LinkedIn's scraper, whose organic feed draws every link as
+      a small square cut from the middle of the picture (since 2024, whatever
+      the size): it gets the square avatar, `/:slug/avatar.jpg`
+      (`VutuvWeb.AvatarController`, a JPEG because preview scrapers don't
+      decode the AVIF the site serves itself), or the brand card when the
+      member has none.
     * a page about an organization (`:organization` — the page itself and
       the posts published in its name): its name as title, its own
       description as description, its logo as image. The logo is linked as
@@ -17,17 +23,22 @@ defmodule VutuvWeb.OpenGraph do
       (`VutuvWeb.OrganizationAvatarController`), the square JPEG twin of the
       member endpoint above, and only while the page is publicly visible —
       that endpoint refuses it otherwise.
-    * a visible, unrestricted post additionally previews its first line,
-      its publication date and — when it has images — its first image
-      (`/post_images/<token>/og.jpg`, the proxy's on-the-fly JPEG);
-      restricted posts and teasers never put the body or an image into
-      a tag. Whose post it is decides only the *fallback* picture (avatar
-      or logo), so a member's post and a page's post preview alike.
+    * a visible, unrestricted post titles as "Author: first line…" (on
+      LinkedIn and X the title is all the text a card carries), describes
+      itself with the opening of its body, carries its publication date and
+      previews — when it has images — its first image
+      (`/post_images/<token>/og.jpg`, the proxy's on-the-fly JPEG), else, for
+      a member's post, its own generated card (`<permalink>/og.png`: the
+      author and the opening lines in the picture itself), else the author's
+      picture as above; restricted posts and teasers never put the body or an
+      image into a tag. A page's post has no generated card yet and falls
+      back to the page's logo.
     * everything else: the site description and the generated brand card
       (`VutuvWeb.OgCard`).
 
   The plain `<meta name="description">` renders `description/1` too, so
-  the two can never disagree.
+  the two can never disagree. `creator/1` adds `fediverse:creator` for a
+  federating member, which Mastodon turns into a "More from …" follow line.
 
   **Who names the subject.** These assigns reach here two ways: a plug or a
   controller render assign (`:user` from `VutuvWeb.Plug.UserResolveSlug`,
@@ -49,6 +60,8 @@ defmodule VutuvWeb.OpenGraph do
   use Gettext, backend: VutuvWeb.Gettext
 
   alias Vutuv.Accounts.User
+  alias Vutuv.Fediverse
+  alias Vutuv.Moderation
   alias Vutuv.OrganizationImageStore
   alias Vutuv.Organizations
   alias Vutuv.Organizations.Organization
@@ -57,8 +70,11 @@ defmodule VutuvWeb.OpenGraph do
   alias Vutuv.Posts.PostImage
   alias Vutuv.Posts.PostVideo
   alias Vutuv.SiteName
+  alias Vutuv.SocialFeed
+  alias VutuvWeb.Fediverse.Docs
   alias VutuvWeb.Markdown
   alias VutuvWeb.OgCard
+  alias VutuvWeb.OgImage
   alias VutuvWeb.PostTeaser
   alias VutuvWeb.UI
   alias VutuvWeb.UserHelpers
@@ -70,10 +86,60 @@ defmodule VutuvWeb.OpenGraph do
     [
       {"og:site_name", SiteName.get()},
       {"og:type", type(ca)},
-      {"og:title", VutuvWeb.LayoutHTML.page_title(assigns) || SiteName.get()},
+      {"og:title", title(assigns)},
       {"og:description", description(assigns)},
       {"og:locale", og_locale(assigns)}
-    ] ++ url_tags(assigns) ++ article_tags(ca) ++ profile_tags(ca) ++ image_tags(image(ca))
+    ] ++
+      url_tags(assigns) ++ article_tags(ca) ++ profile_tags(ca) ++ image_tags(image(ca))
+  end
+
+  @doc """
+  The link-preview heading. A post page leads with its author and the post's
+  first line — "René Oelke: „… zunächst nur in den USA.“" — because on
+  LinkedIn and X the title is the only text a card carries at all, and the
+  page title ("René Oelke · 2026-09-09") told a reader nothing about the
+  post. Every other page shares its `<title>`.
+  """
+  def title(assigns) do
+    post_title(conn_assigns(assigns)) || VutuvWeb.LayoutHTML.page_title(assigns) ||
+      SiteName.get()
+  end
+
+  # The first line of a quotable post, cut on a word boundary at @title_excerpt
+  # characters, behind the author's name. A post with no words (a photograph)
+  # falls through to the page title.
+  @title_excerpt 90
+
+  defp post_title(%{post: %Post{} = post} = ca) do
+    with true <- quotable?(post),
+         line when line != "" <- PostTeaser.plain_line(post, length: @title_excerpt + 1),
+         name when is_binary(name) <- author_name(ca) do
+      "#{name}: #{SocialFeed.Post.truncate(line, @title_excerpt)}"
+    else
+      _ -> nil
+    end
+  end
+
+  defp post_title(_ca), do: nil
+
+  # The page's own subject, which for a post is its author (the controller
+  # and the embedding LiveViews name it beside the post; see the moduledoc).
+  defp author_name(%{user: %User{} = user}), do: UserHelpers.full_name(user)
+  defp author_name(%{organization: %Organization{name: name}}), do: name
+  defp author_name(_ca), do: nil
+
+  @doc """
+  The `fediverse:creator` value for this page — the member's Fediverse
+  address (`@handle@host`) on their profile and their posts — or nil.
+  Mastodon 4.3+ renders it as a "More from …" byline with a follow link on
+  the preview card, once the member's actor lists this host among its
+  `attributionDomains`. Only a federating member has an address to name.
+  """
+  def creator(assigns) do
+    case conn_assigns(assigns) do
+      %{user: %User{} = user} -> if Fediverse.federated?(user), do: "@" <> Docs.acct(user)
+      _ca -> nil
+    end
   end
 
   # The og:type=profile structured properties — the member behind the page,
@@ -281,9 +347,14 @@ defmodule VutuvWeb.OpenGraph do
   defp type(_ca), do: "website"
 
   # Only a post page names a `:post`; the teaser page names none at all, so it
-  # falls through to the author's info like any other page about them.
+  # falls through to the author's info like any other page about them. The
+  # opening of the whole body, not its first line alone: Bluesky, Mastodon,
+  # Slack and Facebook draw the description under the title, and after a
+  # one-line title the next 200 characters are what tease the post.
   defp post_excerpt(%{post: %Post{} = post}) do
-    if quotable?(post), do: PostTeaser.line(post)
+    if quotable?(post) do
+      post |> PostTeaser.opening() |> String.replace(~r/\s*\n\s*/u, " ")
+    end
   end
 
   defp post_excerpt(_ca), do: nil
@@ -336,14 +407,17 @@ defmodule VutuvWeb.OpenGraph do
 
   defp organization_info(_ca), do: nil
 
-  # The member's follower count as a localized, compacted phrase ("3 followers",
-  # "1.2K followers"), matching the count shown in the profile header. Empty
-  # when the count is absent (a non-profile page) or zero, so a profile with no
-  # followers and no work info falls through to the site pitch like before.
-  defp follower_detail(count) when is_integer(count) and count > 0,
+  @doc """
+  The member's follower count as a localized, compacted phrase ("3 followers",
+  "1.2K followers"), matching the count shown in the profile header. Empty
+  when the count is absent (a non-profile page) or zero, so a profile with no
+  followers and no work info falls through to the site pitch like before.
+  Shared with the generated profile card (`VutuvWeb.OgImageController`).
+  """
+  def follower_detail(count) when is_integer(count) and count > 0,
     do: "#{UI.compact_count(count)} #{ngettext("follower", "followers", count)}"
 
-  defp follower_detail(_count), do: ""
+  def follower_detail(_count), do: ""
 
   # Every locale this installation serves, not just German: `:locale` is already
   # one of `Languages.site_locales/0` by the time it reaches here, and the same
@@ -387,18 +461,42 @@ defmodule VutuvWeb.OpenGraph do
 
   defp article_tags(_ca), do: []
 
-  # Image priority: an unrestricted post's first image, else the member's
-  # avatar or the organization's logo, else the brand card. A restricted post's
-  # images must stay out of the tags like its body does.
+  # Image priority: an unrestricted post's first image, else its generated
+  # card (a member's post only, see `VutuvWeb.OgImageController`), else the
+  # member's card or the organization's logo, else the brand card. A
+  # restricted post's images must stay out of the tags like its body does.
   defp image(%{post: %Post{} = post} = ca) do
-    case quotable?(post) && (first_image(post) || post_video(post)) do
-      %PostImage{} = post_image -> post_image_entry(post_image, ca)
-      %PostVideo{} = video -> video_cover_entry(video, ca)
-      _no_image -> author_image(ca)
+    if quotable?(post) do
+      case first_image(post) || post_video(post) do
+        %PostImage{} = post_image -> post_image_entry(post_image, ca)
+        %PostVideo{} = video -> video_cover_entry(video, ca)
+        nil -> post_card(post, ca) || author_image(ca)
+      end
+    else
+      author_image(ca)
     end
   end
 
   defp image(ca), do: author_image(ca)
+
+  # A quotable member's post (`image/1` asked) previews as its own card: author,
+  # headline and the opening lines in the picture itself, which is all X shows
+  # of a link. The
+  # LinkedIn scraper (`:square_preview?`, `VutuvWeb.Plug.PreviewScraper`) gets
+  # the square post card instead — its feed cuts a square from the middle of
+  # whatever it is given, and a square drawn as one carries the face and the
+  # first lines where the middle of the wide card is a strip of headline.
+  defp post_card(%Post{organization_id: nil} = post, %{user: %User{} = user} = ca) do
+    if Moderation.profile_visible_to?(user, nil) do
+      name = UserHelpers.full_name(user)
+
+      if ca[:square_preview?],
+        do: square_card(abs_url(Posts.path(post) <> "/og-square.png"), name),
+        else: wide_card(abs_url(Posts.path(post) <> "/og.png"), name)
+    end
+  end
+
+  defp post_card(_post, _ca), do: nil
 
   # A post with a clip and no photo previews with the clip's cover (issue
   # #1906): the same JPEG the Fediverse attachment names as its icon.
@@ -425,7 +523,7 @@ defmodule VutuvWeb.OpenGraph do
 
   defp video_cover_dimensions(%PostVideo{width: width, height: height}), do: {width, height}
 
-  # Whoever the page is about, as a picture: the member's avatar, else the
+  # Whoever the page is about, as a picture: the member's card, else the
   # organization's logo, else the brand card.
   defp author_image(ca), do: member_image(ca) || organization_image(ca) || brand_card()
 
@@ -460,20 +558,58 @@ defmodule VutuvWeb.OpenGraph do
   defp image_alt(_post_image, %{organization: %Organization{name: name}}), do: name
   defp image_alt(_post_image, _ca), do: SiteName.get()
 
-  # Named only while `/:slug/avatar.jpg` actually answers — `Vutuv.Avatar.url/2`
-  # is nil for a member with no picture, one the AI gate still holds and one a
-  # copyright case froze — so a scraper is never sent to a 404.
-  defp member_image(%{user: %User{} = user}) do
-    if Vutuv.Avatar.url(user, :medium) do
-      square_image(
-        abs_url("/#{user.username}/avatar.jpg"),
-        Vutuv.Avatar.og_size(),
-        UserHelpers.full_name(user)
-      )
+  # A member's pages preview as their generated card (`/:slug/og.png`): name,
+  # headline, tags and face in one wide picture, for every member the public
+  # may see — with or without a picture of their own. The LinkedIn scraper
+  # (`:square_preview?`) keeps the square avatar, named only while
+  # `/:slug/avatar.jpg` actually answers — `Vutuv.Avatar.url/2` is nil for a
+  # member with no picture, one the AI gate still holds and one a copyright
+  # case froze — so a scraper is never sent to a 404; without a face it falls
+  # through to the brand card, whose middle is the wordmark.
+  defp member_image(%{user: %User{} = user} = ca) do
+    cond do
+      not Moderation.profile_visible_to?(user, nil) ->
+        nil
+
+      ca[:square_preview?] ->
+        if Vutuv.Avatar.url(user, :medium) do
+          square_image(
+            abs_url("/#{user.username}/avatar.jpg"),
+            Vutuv.Avatar.og_size(),
+            UserHelpers.full_name(user)
+          )
+        end
+
+      true ->
+        wide_card(abs_url("/#{user.username}/og.png"), UserHelpers.full_name(user))
     end
   end
 
   defp member_image(_ca), do: nil
+
+  # A generated card: the wide PNG, which every platform but LinkedIn draws
+  # large (`summary_large_image`).
+  defp wide_card(url, alt) do
+    %{
+      url: url,
+      width: OgImage.width(),
+      height: OgImage.height(),
+      type: "image/png",
+      alt: alt,
+      card: "summary_large_image"
+    }
+  end
+
+  # The square post card, for the one feed that cuts a square anyway.
+  defp square_card(url, alt),
+    do: %{
+      url: url,
+      width: OgImage.square(),
+      height: OgImage.square(),
+      type: "image/png",
+      alt: alt,
+      card: "summary"
+    }
 
   # The page's logo, through the same scraper-friendly JPEG endpoint the actor
   # document names (`VutuvWeb.OrganizationAvatarController`). That endpoint
