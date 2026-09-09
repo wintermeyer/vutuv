@@ -22,9 +22,11 @@ defmodule Vutuv.Export do
   alias Vutuv.Jobs.{JobPostingBookmark, JobPostingLike}
   alias Vutuv.Organizations.{OrganizationBookmark, OrganizationLike}
   alias Vutuv.Posts.{Post, PostBookmark, PostDraft, PostLike, PostRepost}
+  alias Vutuv.PressKit
   alias Vutuv.Repo
   alias Vutuv.Social.{Block, Follow, UserBookmark, UserLike}
   alias Vutuv.Tags.UserTagEndorsement
+  alias VutuvWeb.Endpoint
 
   # 2: "connections" became a derived mutual follow (not a stored table) and the
   #    connection-request email opt-in was removed.
@@ -42,7 +44,9 @@ defmodule Vutuv.Export do
   #    `follower_organizations` and `following_organizations`. Their own keys
   #    rather than rows in `followers` / `following`, which carry a `username` a
   #    page need never have claimed.
-  @schema_version 9
+  # 10: the member's press kit (issue #2085) — the photos and logo variants they
+  #    offer for download, each with the address the file itself is at.
+  @schema_version 10
 
   def build(%User{} = user) do
     user =
@@ -199,8 +203,37 @@ defmodule Vutuv.Export do
       # What they liked on other networks (issues #1164 and #1270). Unambiguously
       # their own data — an act of theirs, recorded here — so Art. 20 covers it,
       # the same way the saved_* sections above are covered.
-      fediverse_likes: fediverse_likes(user)
+      fediverse_likes: fediverse_likes(user),
+      # The member's press kit (issues #2083/#2085) — the first section where
+      # the file itself is the point, so each entry carries the address it can
+      # be fetched from rather than only the row's columns. Only their **own**
+      # kit: a picture they uploaded for a page belongs to the page, which is
+      # the whole reason the uploader rides in a column of its own.
+      press_kit: press_kit(user)
     }
+  end
+
+  defp press_kit(user) do
+    Enum.map(PressKit.photos(user) ++ PressKit.logos(user), fn image ->
+      %{
+        kind: PressKit.shelf_name(image),
+        position: image.position,
+        label: image.alt,
+        credit: image.credit,
+        caption: image.caption,
+        rights_confirmed_at: image.rights_confirmed_at,
+        width: image.width,
+        height: image.height,
+        size_bytes: image.size_bytes,
+        content_type: image.content_type,
+        added_at: image.inserted_at,
+        # Absolute, unlike the file *names* the profile section carries: this
+        # JSON is downloaded and kept, so an address that only resolves against
+        # a host the reader has to remember is not an address. The job export
+        # builds its URLs the same way.
+        download_url: Endpoint.url() <> PressKit.download_url(image)
+      }
+    end)
   end
 
   # Posts by accounts the member follows and replies written under vutuv posts,

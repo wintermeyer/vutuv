@@ -62,6 +62,7 @@ defmodule Vutuv.PressKit do
   alias Vutuv.Images.Image
   alias Vutuv.Moderation.ImageScans
   alias Vutuv.Moderation.Pixelation
+  alias Vutuv.Ordering
   alias Vutuv.Organizations
   alias Vutuv.Organizations.Organization
   alias Vutuv.PressKitStore
@@ -108,15 +109,22 @@ defmodule Vutuv.PressKit do
   ## Reading ------------------------------------------------------------------
 
   @doc "The owner's press photos, in the order they are shown (the first is the hero)."
-  def photos(owner), do: shelf(owner, false)
+  def photos(owner), do: shelf_rows(owner, false)
 
   @doc "The owner's logo variants, in the order they are shown."
-  def logos(owner), do: shelf(owner, true)
+  def logos(owner), do: shelf_rows(owner, true)
 
   @doc "How many pictures the owner has on that shelf."
-  def count(owner, logo?) when is_boolean(logo?) do
-    Repo.aggregate(from(i in owned(owner), where: i.logo == ^logo?), :count)
-  end
+  def count(owner, logo?) when is_boolean(logo?),
+    do: owner |> shelf(logo?) |> Repo.aggregate(:count)
+
+  @doc """
+  A shelf's own word, the one token the DOM, the event names and the data
+  export all use for it — so the two spellings of "photo or logo" cannot drift.
+  """
+  def shelf_name(true), do: "logo"
+  def shelf_name(false), do: "photo"
+  def shelf_name(%Image{} = image), do: shelf_name(Image.logo?(image))
 
   @doc """
   The picture behind a proxy token, or `nil`. Narrowed to this kind, so a token
@@ -126,6 +134,44 @@ defmodule Vutuv.PressKit do
     do: Repo.get_by(Image, kind: @kind, token: token)
 
   def get_by_token(_token), do: nil
+
+  @doc """
+  Whether `viewer` may **write** `owner`'s press kit: upload into it, edit a
+  caption, reorder a shelf, delete a picture.
+
+  The one statement of that rule, and until #2085 there was none at all —
+  `create/4` shipped in #2083 with no production caller and simply trusted
+  whoever called it. Every write this module offers takes the viewer and asks it
+  (`create/4`, `update/3`, `reorder/4`, `move/5`); `delete/1` is the exception
+  and deliberately so, because the AI gate's refusal calls it too and has no
+  viewer at all — the surface that offers a member a Remove button is what
+  resolves the row.
+
+  **Ask it per event, never once at mount.** A role that was withdrawn has to
+  bite on the next action rather than the next login, which is the same reason
+  `Vutuv.Organizations.acting_organization/2` re-reads it. #2087's page editor
+  must gate its entry point on this and **not** on `Organizations.can_manage?/2`
+  (the page's usual manage-menu gate): that one also counts the member who
+  claimed the page, whether or not they still hold a role, and writing a press
+  kit follows the roles.
+
+  A member's press kit is theirs alone. A page's belongs to the people who may
+  speak for it: an **owner** (who runs the page) or a **publisher** (who
+  publishes in its name) — the pair #2087's editor is reachable by. Both come
+  from one `Organizations.role_powers/2` read rather than two predicates, since
+  this is asked on every write. An admin is deliberately **not** here, though
+  `visible_to?/2` lets them look: moderating a picture is `Vutuv.Moderation`'s
+  job and goes through the freeze, and no admin anywhere in vutuv edits a
+  member's own data in their name.
+  """
+  def manageable_by?(%User{id: id}, %User{id: id}), do: true
+
+  def manageable_by?(%Organization{} = organization, %User{} = viewer) do
+    powers = Organizations.role_powers(organization, viewer)
+    powers.owner? or powers.publisher?
+  end
+
+  def manageable_by?(_owner, _viewer), do: false
 
   @doc """
   Whether `viewer` may fetch this picture's bytes — the one statement of that
@@ -296,9 +342,11 @@ defmodule Vutuv.PressKit do
   a row that fails to insert afterwards takes its files with it, so the reverse
   cannot happen either.
 
-  `{:error, changeset}` for a form problem, `{:error, :too_large}`,
-  `{:error, :too_many}` or `{:error, :invalid_file}` for the three the form
-  cannot see.
+  `{:error, changeset}` for a form problem, `{:error, :forbidden}` when this
+  uploader may not write this owner's kit (`manageable_by?/2`), and
+  `{:error, :too_large}`, `{:error, :too_many}` or `{:error, :invalid_file}`
+  for the three the form cannot see. The authorization is asked **first**, so a
+  refused upload never so much as measures the file.
   """
   def create(owner, %User{} = uploader, {path, filename}, attrs) do
     token = Uploads.gen_token()
@@ -310,11 +358,85 @@ defmodule Vutuv.PressKit do
 
     logo? = changeset |> Ecto.Changeset.apply_changes() |> Image.logo?()
 
-    with :ok <- validate_form(changeset),
+    with :ok <- authorize(owner, uploader),
+         :ok <- validate_form(changeset),
          :ok <- validate_size(path),
          {:ok, position} <- take_slot(owner, logo?),
          {:ok, meta} <- PressKitStore.store(path, filename, token, logo?) do
       insert(changeset, position, meta, token)
+    end
+  end
+
+  @doc """
+  Edits one stored picture's label, credit and caption — the only three columns
+  a form may write once the file is on disk (`Image.press_kit_update_changeset/2`
+  says which are missing and why).
+
+  Takes the row rather than an owner and an id, because the surface has already
+  resolved it out of that owner's own shelves, which is a stronger answer than a
+  predicate — a foreign id is not refused, it is never found. `viewer` is asked
+  all the same, so the rule holds for a surface that resolves rows some other
+  way.
+  """
+  def update(%Image{kind: @kind} = image, %User{} = viewer, attrs) do
+    with :ok <- authorize(owner(image), viewer) do
+      image
+      |> Image.press_kit_update_changeset(attrs)
+      |> Repo.update()
+    end
+  end
+
+  @doc """
+  Persists a drag-and-drop order for one shelf as positions **0..n-1**, over
+  exactly the pictures that owner has on it.
+
+  Not `Vutuv.Ordering.reorder/3`, which is the profile sections' own face on the
+  same tool: that one scopes to a schema's `user_id`, and a press picture's
+  owner is a member **or** a page, on one of two shelves. The shared halves are
+  `Ordering.arrange/2` (reading an untrusted payload), `Ordering.ordered_ids/1`
+  and `Ordering.persist_order/3`, which takes the scope as a query and the first
+  position as an argument — 0 here, because `create/4` has handed out `count` as
+  the next position since #2083 and `download_name/2` reads `position + 1`, so
+  renumbering from 1 would rename the hero's file.
+  """
+  def reorder(owner, %User{} = viewer, logo?, submitted_ids)
+      when is_boolean(logo?) and is_list(submitted_ids) do
+    with :ok <- authorize(owner, viewer) do
+      ids = owner |> shelf(logo?) |> Ordering.ordered_ids()
+      persist_order(owner, logo?, Ordering.arrange(ids, submitted_ids))
+    end
+  end
+
+  @doc """
+  Nudges one picture a single step along its shelf — the arrow buttons, which
+  are the reorder path on a phone, where no native drag event exists. An
+  out-of-range move is a no-op, as is an id that is not on this shelf.
+  """
+  def move(owner, %User{} = viewer, logo?, id, direction)
+      when is_boolean(logo?) and direction in [:up, :down] do
+    with :ok <- authorize(owner, viewer) do
+      ids = owner |> shelf(logo?) |> Ordering.ordered_ids()
+      persist_order(owner, logo?, Ordering.swap(ids, id, direction))
+    end
+  end
+
+  @doc """
+  The credit to offer the next upload, read off a shelf the caller already
+  holds — the last picture on it that carries one, or `nil`. A photographer's
+  line is set once and then holds for every picture of that session.
+
+  Takes the list rather than the owner so the page that has just loaded both
+  shelves pays no second query for it; per shelf because a photo's credit names
+  whoever took it and a logo's whoever drew it, and offering one as the other is
+  worse than offering nothing.
+  """
+  def last_credit(images) when is_list(images) do
+    images
+    |> Enum.reject(&(&1.credit in [nil, ""]))
+    |> List.last()
+    |> case do
+      nil -> nil
+      image -> image.credit
     end
   end
 
@@ -363,15 +485,15 @@ defmodule Vutuv.PressKit do
 
   ## ---------------------------------------------------------------------------
 
-  defp shelf(owner, logo?) do
-    from(i in owned(owner),
-      where: i.logo == ^logo?,
-      # `position` is what the owner arranged; the id breaks a tie, and since
-      # ids are UUID v7 that is upload order rather than a coin toss.
-      order_by: [asc: i.position, asc: i.id]
-    )
-    |> Repo.all()
-  end
+  # One shelf of one owner, as a query — the scope everything about a shelf is
+  # written against: the listing, the ids a reorder rearranges, and the rows a
+  # renumber may touch.
+  defp shelf(owner, logo?), do: from(i in owned(owner), where: i.logo == ^logo?)
+
+  # `position` is what the owner arranged; the id breaks a tie, and since ids are
+  # UUID v7 that is upload order rather than a coin toss.
+  defp shelf_rows(owner, logo?),
+    do: owner |> shelf(logo?) |> Ordering.by_position() |> Repo.all()
 
   # `party_is/2` rather than a clause per owner kind: it is the one SQL spelling
   # of "this row's member-or-page pair names this party" (#1416), so a call site
@@ -394,7 +516,15 @@ defmodule Vutuv.PressKit do
   defp scan_owner_id(%Image{user_id: id}) when is_binary(id), do: id
   defp scan_owner_id(%Image{uploader_user_id: id}), do: id
 
+  defp authorize(owner, uploader),
+    do: if(manageable_by?(owner, uploader), do: :ok, else: {:error, :forbidden})
+
   defp validate_form(changeset), do: if(changeset.valid?, do: :ok, else: {:error, changeset})
+
+  # Positions 0..n-1, each write scoped to the owner **and** the shelf, so a
+  # stray id cannot renumber a picture that is not on this list.
+  defp persist_order(owner, logo?, ordered_ids),
+    do: Ordering.persist_order(shelf(owner, logo?), ordered_ids, 0)
 
   defp validate_size(path) do
     if File.stat!(path).size > max_filesize(), do: {:error, :too_large}, else: :ok
