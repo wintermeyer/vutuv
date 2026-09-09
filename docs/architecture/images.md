@@ -889,11 +889,11 @@ it, and rides into `create/4` as the changeset's `rights_confirmed` — one rule
 in the place that already owns it. An edit afterwards goes through
 `Image.press_kit_update_changeset/2`, which casts only `alt`, `credit` and
 `caption`: `logo` would move a picture between shelves past the other one's cap
-and format whitelist, `position` belongs to `PressKit.reorder/3`, and
+and format whitelist, `position` belongs to `PressKit.reorder/4`, and
 `rights_confirmed` would re-give a release that was already given — so
 `confirm_rights/1` keeps the original stamp on that path.
 
-`PressKit.reorder/3` and `move/4` number a shelf **0..n-1**, not 1..n like
+`PressKit.reorder/4` and `move/5` number a shelf **0..n-1**, not 1..n like
 `Vutuv.Ordering`: a download is named from `position + 1`
 (`PressKit.download_name/2`), so the hero has to sit at 0. What the two do share
 — reading an untrusted drag payload, and swapping one row with its neighbour —

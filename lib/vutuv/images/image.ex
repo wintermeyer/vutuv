@@ -195,7 +195,7 @@ defmodule Vutuv.Images.Image do
   re-give a release that was already given; the timestamp records **when the
   file was released**, not when its caption was last touched, so
   `confirm_rights/1` below keeps the original stamp on this path. And
-  `position` is the editor's to write through `Vutuv.PressKit.reorder/3`, never
+  `position` is the editor's to write through `Vutuv.PressKit.reorder/4`, never
   a form's — a form that could name its own would bump another picture out of
   the hero slot.
 

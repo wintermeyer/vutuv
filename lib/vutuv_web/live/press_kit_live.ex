@@ -188,7 +188,7 @@ defmodule VutuvWeb.PressKitLive do
     end
   end
 
-  # The drag hook pushes the whole order. Trust nothing in it: `PressKit.reorder/3`
+  # The drag hook pushes the whole order. Trust nothing in it: `PressKit.reorder/4`
   # keeps only ids that are on this member's own shelf and appends whatever the
   # client left out, so a stale or forged payload can rearrange the shelf but
   # never bring a foreign picture onto it.
