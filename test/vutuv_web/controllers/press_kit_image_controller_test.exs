@@ -17,6 +17,7 @@ defmodule VutuvWeb.PressKitImageControllerTest do
 
   import Vutuv.WebPushHelpers, only: [put_config: 2]
 
+  alias Vutuv.Images
   alias Vutuv.PressKit
   alias Vutuv.Repo
 
@@ -178,6 +179,57 @@ defmodule VutuvWeb.PressKitImageControllerTest do
       Repo.update!(Ecto.Changeset.change(photo, kind: "post_image"))
 
       assert get(anonymous(), PressKit.url(photo, "large")).status == 404
+    end
+  end
+
+  describe "while the AI check is looking (issue #2084)" do
+    test "a stranger gets the stand-in and nothing else", %{owner: owner, tmp: tmp} do
+      photo = photo!(owner, tmp)
+
+      assert url = PressKit.pixelated_url(photo)
+      conn = get(anonymous(), url)
+
+      assert conn.status == 200
+      assert get_resp_header(conn, "content-type") == ["image/avif"]
+      # The real picture takes this URL within seconds, so no cache may keep it.
+      assert get_resp_header(conn, "cache-control") == ["private, no-store"]
+
+      # And the picture itself stays shut until the verdict clears it.
+      assert get(anonymous(), PressKit.url(photo, "large")).status == 404
+    end
+
+    test "the stand-in hands the URL back once the picture is released",
+         %{owner: owner, tmp: tmp} do
+      photo = photo!(owner, tmp)
+      url = PressKit.pixelated_url(photo)
+      released = release!(photo)
+
+      # A page drawn before the verdict keeps a stand-in URL in it; it must land
+      # on the picture rather than on a 404 for a file that was just deleted.
+      conn = get(anonymous(), url)
+      assert redirected_to(conn) == PressKit.url(released, "large")
+      assert PressKit.pixelated_url(Repo.reload!(released)) == nil
+    end
+
+    test "a frozen picture has no stand-in either", %{owner: owner, tmp: tmp} do
+      # A takedown has to read exactly like a picture that was never there, and
+      # a mosaic of the picture is still the picture.
+      photo = photo!(owner, tmp)
+      url = PressKit.pixelated_url(photo)
+      :ok = Images.freeze(photo)
+
+      assert get(anonymous(), url).status == 404
+      assert PressKit.pixelated_url(Repo.reload!(photo)) == nil
+    end
+
+    test "a logo waits behind a stand-in cut from its rasterisation",
+         %{owner: owner, tmp: tmp} do
+      # The scan judges the raster an SVG is turned into, so the same door gives
+      # the stand-in its pixels — a vector logo is not exempt from the wait.
+      logo = svg_logo!(owner, tmp)
+
+      assert url = PressKit.pixelated_url(logo)
+      assert get(anonymous(), url).status == 200
     end
   end
 end

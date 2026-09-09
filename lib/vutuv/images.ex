@@ -47,6 +47,7 @@ defmodule Vutuv.Images do
 
   alias Vutuv.Accounts.User
   alias Vutuv.Images.Image
+  alias Vutuv.PressKitStore
   alias Vutuv.Repo
   alias Vutuv.Uploads
 
@@ -963,13 +964,26 @@ defmodule Vutuv.Images do
   # differently. A kind arrives here in the same change as its strategy's
   # clauses (issue #2057).
   #
+  # It is also the "how every byte of this kind is deleted" registry, not only
+  # the copyright gate: `purge/1` is what an upheld case runs *and* what an
+  # owner's own "remove it" runs (`Vutuv.PressKit.delete/1`), so a kind without
+  # an entry has no delete path either.
+  #
   # The gate used to be derived from `@mirrored` instead, and the two agreed by
   # arithmetic rather than by meaning: that entry is what a **contract** release
   # deletes, so the gate would have opened on the deploy that retires a kind's
   # old table whether or not anything had wired that kind's freeze, and the
   # first report accepted on it would have raised in front of the admin who
   # upheld it.
-  @takedown Map.new(@profile_kinds, &{&1, :profile})
+  #
+  # `press_kit` (issue #2084) arrives with a strategy of its own rather than
+  # pointing at `:profile`: there is no member row to clear (a page's press
+  # picture has no member owner at all) and its files are keyed by the row's
+  # token rather than by a member scope. A picture published *for
+  # redistribution* is the likeliest of all of them to draw a copyright notice,
+  # which is why the kind gets its takedown in the same release as its scan
+  # rather than one later.
+  @takedown @profile_kinds |> Map.new(&{&1, :profile}) |> Map.put("press_kit", :press_kit)
 
   @doc """
   Whether a copyright case can act on this picture at all — what
@@ -1021,27 +1035,41 @@ defmodule Vutuv.Images do
   already invisible and a job `reconcile_holds/0` finishes. The other order
   would leave files in a hold that nothing knows to bring back.
   """
-  def freeze(%Image{kind: kind} = image) when is_map_key(@takedown, kind),
-    do: freeze_by(@takedown[kind], image)
+  def freeze(%Image{kind: kind} = image) when is_map_key(@takedown, kind) do
+    # The stamp is the same statement whatever the strategy is, so it is here
+    # rather than copied into each of them. `is_nil(frozen_at)` so a second pass
+    # — `reconcile_holds/0` finishing an interrupted move — re-asserts the
+    # freeze without moving the moment it happened, which is what the case and
+    # the statement of reasons quote.
+    {_count, _} =
+      Repo.update_all(from(i in Image, where: i.id == ^image.id and is_nil(i.frozen_at)),
+        set: [frozen_at: now(), updated_at: now()]
+      )
+
+    freeze_by(@takedown[kind], image)
+  end
 
   def freeze(%Image{} = image), do: no_takedown_path!(image, "freeze")
 
   # The profile strategy: the files are served straight off disk (`serving/1`
   # answers `:static`), so taking the picture offline means moving them.
   defp freeze_by(:profile, %Image{} = image) do
-    # `is_nil(frozen_at)` so a second pass — `reconcile_holds/0` finishing an
-    # interrupted move — re-asserts the freeze without moving the moment it
-    # happened, which is what the case and the statement of reasons quote.
-    {_count, _} =
-      Repo.update_all(from(i in Image, where: i.id == ^image.id and is_nil(i.frozen_at)),
-        set: [frozen_at: now(), updated_at: now()]
-      )
-
     hide_from_member_row(image)
 
     with %User{} = user <- owner(image),
          do: @profile_columns[image.kind].module.hold(image.id, user)
 
+    :ok
+  end
+
+  # The press-kit strategy. Every byte already goes through an authorizing
+  # proxy, so `frozen_at` alone takes the picture off every page and out of
+  # every download (`Vutuv.PressKit.visible_to?/2` refuses a stamped row to
+  # everybody, its owner and an admin included) — the file move is what makes
+  # the hold a *hold* rather than a flag, so an upheld case has the bytes to
+  # delete and a rejected one has them to put back.
+  defp freeze_by(:press_kit, %Image{} = image) do
+    PressKitStore.hold(image)
     :ok
   end
 
@@ -1061,17 +1089,26 @@ defmodule Vutuv.Images do
   only once the member row names the files again, so a half-finished restore is
   still a hold for `reconcile_holds/0` to find.
   """
-  def unfreeze(%Image{kind: kind} = image) when is_map_key(@takedown, kind),
-    do: unfreeze_by(@takedown[kind], image)
-
-  def unfreeze(%Image{} = image), do: no_takedown_path!(image, "unfreeze")
-
-  defp unfreeze_by(:profile, %Image{} = image) do
+  def unfreeze(%Image{kind: kind} = image) when is_map_key(@takedown, kind) do
+    # Cleared before the strategy runs, and the hold removed after it: an
+    # interruption in between then leaves a row that is no longer frozen beside
+    # a hold nothing has emptied, which `reconcile_holds/0` reads as an
+    # unfinished release and finishes. The other order would leave a frozen row
+    # with its files already back, which that same pass would dutifully freeze
+    # again.
     {_count, _} =
       Repo.update_all(from(i in Image, where: i.id == ^image.id),
         set: [frozen_at: nil, updated_at: now()]
       )
 
+    unfreeze_by(@takedown[kind], image)
+    Uploads.purge_hold(image.id)
+    :ok
+  end
+
+  def unfreeze(%Image{} = image), do: no_takedown_path!(image, "unfreeze")
+
+  defp unfreeze_by(:profile, %Image{} = image) do
     with %User{} = user <- owner(image) do
       config = @profile_columns[image.kind]
       config.module.release(image.id, user)
@@ -1080,7 +1117,11 @@ defmodule Vutuv.Images do
       config.module.regenerate(Repo.get!(User, user.id))
     end
 
-    Uploads.purge_hold(image.id)
+    :ok
+  end
+
+  defp unfreeze_by(:press_kit, %Image{} = image) do
+    PressKitStore.release(image)
     :ok
   end
 
@@ -1093,8 +1134,11 @@ defmodule Vutuv.Images do
   nothing points at (which `reconcile_holds/0` collects), never a member row
   naming files that are gone.
   """
-  def purge(%Image{kind: kind} = image) when is_map_key(@takedown, kind),
-    do: purge_by(@takedown[kind], image)
+  def purge(%Image{kind: kind} = image) when is_map_key(@takedown, kind) do
+    purge_by(@takedown[kind], image)
+    Uploads.purge_hold(image.id)
+    :ok
+  end
 
   def purge(%Image{} = image), do: no_takedown_path!(image, "purge")
 
@@ -1112,7 +1156,15 @@ defmodule Vutuv.Images do
         Repo.delete_all(from(i in Image, where: i.id == ^image.id))
     end
 
-    Uploads.purge_hold(image.id)
+    :ok
+  end
+
+  # The row first and the files after, which is the order an interruption can
+  # survive: it leaves files nothing points at (collected by
+  # `reconcile_holds/0`) rather than a row naming files that are gone.
+  defp purge_by(:press_kit, %Image{} = image) do
+    Repo.delete_all(from(i in Image, where: i.id == ^image.id))
+    PressKitStore.delete(image.token)
     :ok
   end
 

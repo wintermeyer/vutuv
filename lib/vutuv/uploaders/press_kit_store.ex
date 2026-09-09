@@ -39,6 +39,7 @@ defmodule Vutuv.PressKitStore do
   """
 
   alias Vutuv.Images.Image, as: ImageRow
+  alias Vutuv.Moderation.Pixelation
   alias Vutuv.Uploads.Originals
   alias Vutuv.Uploads.Spec
 
@@ -103,6 +104,13 @@ defmodule Vutuv.PressKitStore do
   defp write_versions(path, ext, dir, token, logo?) do
     with {:ok, rotated} <- Spec.open_rotated(path),
          :ok <- write_derived_versions(rotated, dir, logo?) do
+      # The stand-in a stranger meets while the model looks at this picture
+      # (issue #1720). Deliberately outside `write_derived_versions/3`, which
+      # the Regenerator also drives: a mosaic is not a version of the picture,
+      # it is the temporary absence of one. A vector logo gets one too — it is
+      # cut from the rasterisation `open_rotated/1` already made, which is the
+      # same door the scan judges it through.
+      Pixelation.write_if_enabled(rotated, dir)
       :ok = Originals.store(storage_dir(token), path, ext)
 
       {:ok,
@@ -155,6 +163,32 @@ defmodule Vutuv.PressKitStore do
   end
 
   def version_path(_token, _version), do: nil
+
+  @doc """
+  Where this picture's stand-in lives (`Vutuv.Moderation.Pixelation`). The path
+  is built whether or not the file is there — `Pixelation.stands_in?/2` is what
+  asks that, because a missing stand-in is an ordinary state (a settled scan, a
+  swept leftover, an installation with the preview switched off). Same contract
+  as `Vutuv.PostImageStore.pixelated_path/1`, so the two cannot drift.
+  """
+  def pixelated_path(token) when is_binary(token), do: Pixelation.path(dir(token))
+
+  @doc """
+  Drops the stand-in once the scan has settled. Approval and rejection both end
+  the wait it stood in for; a rejection takes the whole directory anyway, which
+  makes this the approval's job.
+  """
+  def delete_pixelated(token) when is_binary(token), do: Pixelation.clear(dir(token))
+
+  @doc """
+  Moves every stored file of this picture into its takedown hold, and back
+  (`Vutuv.Images.freeze/1` and `unfreeze/1`, issue #2012). Keyed by the row's id
+  like every other hold, while the files themselves are keyed by the token —
+  which is why these take the row rather than a token.
+  """
+  def hold(%ImageRow{id: id, token: token}), do: Vutuv.Uploads.hold(id, storage_dir(token))
+
+  def release(%ImageRow{id: id, token: token}), do: Vutuv.Uploads.release(id, storage_dir(token))
 
   @doc "The X-Accel-Redirect target for a served version, for the mode that uses it."
   def accel_path(token, version) when is_binary(token) and version in @all_versions do

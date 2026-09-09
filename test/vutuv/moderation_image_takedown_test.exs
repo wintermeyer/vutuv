@@ -25,6 +25,7 @@ defmodule Vutuv.ModerationImageTakedownTest do
   alias Vutuv.Images.Image, as: ImageRow
   alias Vutuv.Moderation
   alias Vutuv.Moderation.Report
+  alias Vutuv.PressKit
   alias Vutuv.Repo
 
   setup do
@@ -57,6 +58,20 @@ defmodule Vutuv.ModerationImageTakedownTest do
   defp reload(user), do: Repo.get!(User, user.id)
 
   defp reload_row(%ImageRow{id: id}), do: Repo.get(ImageRow, id)
+
+  # A press picture (issue #2084): the third kind the gate admits, and the one
+  # whose files are keyed by the row's own token rather than by a member scope.
+  # `PressKit.create/4` takes the `{path, filename}` pair the socket upload hands
+  # over, so the shared fixture's `%Plug.Upload{}` is unwrapped rather than
+  # rebuilt.
+  defp press_picture(owner) do
+    %Plug.Upload{path: src} = jpeg_upload("press.jpg", [40, 90, 30])
+
+    {:ok, image} =
+      PressKit.create(owner, owner, {src, "press.jpg"}, %{"rights_confirmed" => "true"})
+
+    image
+  end
 
   defp notice(attrs \\ %{}) do
     Map.merge(
@@ -376,7 +391,10 @@ defmodule Vutuv.ModerationImageTakedownTest do
          %{owner: owner, ready: ready} do
       # Real pictures, because "the takedown can act on it" is a claim about
       # files moving, not about a clause existing.
-      real = Map.new(~w(avatar cover), &{&1, Images.profile_image(owner.id, &1)})
+      real =
+        ~w(avatar cover)
+        |> Map.new(&{&1, Images.profile_image(owner.id, &1)})
+        |> Map.put("press_kit", press_picture(owner))
 
       for kind <- ready do
         row = Map.get(real, kind)
