@@ -57,6 +57,8 @@ erl_crash.dump
 /job_reference_documents
 /organization_images
 /job_posting_images
+# press photos and logo variants offered for download (Vutuv.PressKitStore)
+/press_kit
 # pictures fetched from other networks (Vutuv.RemoteMedia): a followed
 # account's avatar and its posts' attachments
 /remote_media

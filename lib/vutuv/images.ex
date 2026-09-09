@@ -60,7 +60,11 @@ defmodule Vutuv.Images do
   # from `@mirrored` below, because a contract release **deletes** an entry
   # there — at which point that kind lives here and nowhere else, so dropping
   # it from this list would be exactly backwards.
-  @kinds ~w(avatar cover job_posting_image organization_image post_image review_cover)
+  # `press_kit` (#2083) is the first kind that is **born** here: every other one
+  # arrived as a mirror of a table of its own or as columns on a parent row, so
+  # it is also the first with no source to keep in step, no backfill class and
+  # no contract release. `Vutuv.PressKit` is its context.
+  @kinds ~w(avatar cover job_posting_image organization_image post_image press_kit review_cover)
 
   # Of those, the kinds every byte of which already goes through a controller
   # that authorizes the reader first (`VutuvWeb.JobPostingImageController` asks
@@ -73,7 +77,12 @@ defmodule Vutuv.Images do
   # serving strategy after the contract release deletes it from there — and
   # because the review cover is in no such registry at all: it is the
   # parent-column shape below, not the gallery one.
-  @proxy_kinds ~w(job_posting_image organization_image post_image review_cover)
+  #
+  # `press_kit` (`VutuvWeb.PressKitImageController` asks whether the reader may
+  # see the picture, `Vutuv.PressKit.visible_to?/2`) is in no registry but this
+  # one: it has no old table and no parent row, so `images` **is** its truth
+  # from the first row.
+  @proxy_kinds ~w(job_posting_image organization_image post_image press_kit review_cover)
 
   # Of those, the kinds whose truth is still a table of their own, and
   # everything about the copy: which columns it carries, where the source rows

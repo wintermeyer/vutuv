@@ -43,7 +43,7 @@ defmodule Vutuv.Uploads.Regenerator do
   alias Vutuv.Repo
   alias Vutuv.Uploads.Originals
 
-  @types ~w(avatars covers screenshots post_images job_posting_images qualification_documents job_reference_documents organization_images)a
+  @types ~w(avatars covers screenshots post_images job_posting_images qualification_documents job_reference_documents organization_images press_kit)a
 
   # Where each public tree may still hold an original-pattern file (the
   # pre-private-tree layouts). Scanned by the final orphan pass.
@@ -146,6 +146,12 @@ defmodule Vutuv.Uploads.Regenerator do
   defp do_regenerate(:organization_images, image, opts),
     do: Vutuv.OrganizationImageStore.regenerate(image.token, opts)
 
+  # Press photos and logo variants (#2083). Registered the day the store exists,
+  # rather than a release later: an uploader missing from this list is a tree a
+  # Spec change silently never reaches, while the tool reports success — which is
+  # what had happened to every organization logo and every Arbeitszeugnis.
+  defp do_regenerate(:press_kit, image, opts), do: Vutuv.PressKitStore.regenerate(image, opts)
+
   # Originals that no DB row claims must still never stay publicly
   # downloadable: move them into the private tree. Derived files of unknown
   # rows are left alone — nothing serves them, and deleting data without a
@@ -208,9 +214,22 @@ defmodule Vutuv.Uploads.Regenerator do
 
   defp rows(:organization_images), do: Repo.all(Vutuv.Organizations.OrganizationImage)
 
+  # The one type whose rows share a table with every other picture in the system,
+  # so the scan is filtered rather than a whole table, and only the three columns
+  # `Vutuv.PressKitStore.regenerate/2` reads come back.
+  defp rows(:press_kit) do
+    Repo.all(
+      from(i in Vutuv.Images.Image,
+        where: i.kind == ^Vutuv.PressKit.kind(),
+        select: [:id, :token, :logo]
+      )
+    )
+  end
+
   defp row_id(:post_images, image), do: image.token
   defp row_id(:job_posting_images, image), do: image.token
   defp row_id(:organization_images, image), do: image.token
+  defp row_id(:press_kit, image), do: image.token
   defp row_id(_type, row), do: row.id
 
   # Operator stdout progress (mix task / `bin/vutuv eval`); the quiet-flag logic

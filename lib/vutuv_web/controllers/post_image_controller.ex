@@ -156,27 +156,15 @@ defmodule VutuvWeb.PostImageController do
   #     stripped yields none rather than the untouched original — the promise
   #     fails closed, see `Vutuv.PostImageStore.download_file/1`);
   #   * `attachment`, not `inline`: this is a file handed over, and it is the
-  #     one response on this proxy that should not render in the tab.
-  #
-  # It deliberately does not go through `ImageProxy.serve/3`: that helper's
-  # X-Accel branch resolves paths inside the *served* versions location, and
-  # the original must never become reachable there.
+  #     one response on this proxy that should not render in the tab. That last
+  #     part is `ImageProxy.hand_over/3`, shared with the press-kit proxy, which
+  #     also explains why it is not `ImageProxy.serve/3`.
   defp serve(conn, %{download_original: false}, :download), do: ImageProxy.not_found(conn)
 
   defp serve(conn, image, :download) do
     case Vutuv.PostImageStore.download_file(image) do
-      nil ->
-        ImageProxy.not_found(conn)
-
-      {path, ext} ->
-        conn
-        |> ImageProxy.put_cache_control()
-        |> put_resp_content_type(MIME.from_path(path), nil)
-        |> put_resp_header(
-          "content-disposition",
-          ~s(attachment; filename="#{filename(image, ext)}")
-        )
-        |> send_file(200, path)
+      nil -> ImageProxy.not_found(conn)
+      {path, ext} -> ImageProxy.hand_over(conn, path, filename(image, ext))
     end
   end
 

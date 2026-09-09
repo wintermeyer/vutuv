@@ -85,6 +85,23 @@ defmodule Vutuv.Images.Image do
     field(:download_original, :boolean)
     field(:download_exact, :boolean)
 
+    # What a press-kit picture adds (#2083, `Vutuv.PressKit`): the credit line
+    # shown beside it, when its uploader confirmed they hold the rights and
+    # release it for editorial use, and which of the two shelves it is on —
+    # `false` a press photo, `true` a logo variant. Nil on every other kind,
+    # which has no opinion about any of the three; two check constraints make
+    # the last two NOT NULL for this kind alone.
+    field(:credit, :string)
+    field(:rights_confirmed_at, :naive_datetime)
+    field(:logo, :boolean)
+
+    # The rights confirmation as the uploader gives it — a tick, not a
+    # timestamp. `press_kit_changeset/2` stamps `rights_confirmed_at` from it,
+    # the way `Vutuv.Profiles.Qualification` stamps `document_consented_at` from
+    # `document_consent`: the moment is ours to record, never the form's to
+    # send.
+    field(:rights_confirmed, :boolean, virtual: true)
+
     timestamps()
   end
 
@@ -114,5 +131,69 @@ defmodule Vutuv.Images.Image do
     |> unique_constraint(:kind, name: :images_member_profile_kind_index)
     |> check_constraint(:user_id, name: :images_profile_kind_has_owner)
     |> foreign_key_constraint(:user_id)
+  end
+
+  # How long a press caption may be. **Deliberately not**
+  # `Vutuv.Posts.PostImage.max_caption_length/0` (1,000), although both write the
+  # same `:text` column: a post photo's caption is a line under a picture in a
+  # timeline, while a press caption is what a journalist reads instead of asking
+  # — who took it, where, at what event, what may be cropped. This is the
+  # work-experience description's cap, which is the field issue #2083 names as
+  # its model. Two caps on one column is fine as long as each surface's owns
+  # one; two spellings of the same cap would not be.
+  @press_caption_length 10_000
+
+  @doc "Whether this row is a press **logo variant** rather than a press photo."
+  def logo?(%__MODULE__{logo: logo}), do: logo == true
+
+  @doc "The longest press caption `press_kit_changeset/2` accepts."
+  def max_press_caption_length, do: @press_caption_length
+
+  @doc """
+  A press photo or a logo variant (#2083). The one kind whose row is written
+  here directly rather than copied from a table of its own, so this is the only
+  validation standing between a member's form and the column.
+
+  `kind`, `token`, the owner columns and `position` are set by
+  `Vutuv.PressKit` and deliberately not cast: a form that could name its own
+  `user_id` could hang a picture on somebody else's profile, and one that could
+  name its own `position` could bump another member's hero out of first place.
+
+  **The rights confirmation is the gate, not a field.** Nothing may be stored
+  without it — it is what allows the file to be handed out at all — so the
+  virtual tick is required to be `true` and the timestamp is stamped here.
+  Re-editing a caption later keeps the original stamp: `rights_confirmed_at`
+  records when the release was given, not when the row was last touched.
+
+  The three length bounds are the columns': `credit` and `alt` are varchar(255),
+  and an over-long value raises Postgres 22001 rather than a form error, since
+  Ecto does not enforce a column limit. `file` is not among them because it is
+  not cast either — a press picture keeps no copy of the upload's own name at
+  all, its download being named after the owner's handle
+  (`Vutuv.PressKit.download_name/2`), so the column stays NULL for this kind.
+  """
+  def press_kit_changeset(image, attrs) do
+    image
+    |> cast(attrs, [:alt, :caption, :credit, :logo, :rights_confirmed])
+    |> validate_required([:kind, :token, :logo])
+    |> validate_length(:credit, max: 255)
+    |> validate_length(:alt, max: 255)
+    |> validate_length(:caption, max: @press_caption_length)
+    |> confirm_rights()
+    |> unique_constraint(:token)
+    |> check_constraint(:user_id, name: :images_press_kit_has_one_owner)
+    |> check_constraint(:logo, name: :images_press_kit_declared)
+  end
+
+  # Only `Vutuv.PressKit.create/4` calls this, always on a fresh row, so the tick
+  # is simply required. The edit path #2085 adds will want a second branch here
+  # keeping an existing `rights_confirmed_at` rather than restamping it — that
+  # branch belongs in the change that can reach it.
+  defp confirm_rights(changeset) do
+    if get_change(changeset, :rights_confirmed) == true do
+      put_change(changeset, :rights_confirmed_at, NaiveDateTime.utc_now(:second))
+    else
+      add_error(changeset, :rights_confirmed, "must be confirmed")
+    end
   end
 end

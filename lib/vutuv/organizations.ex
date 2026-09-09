@@ -2331,6 +2331,13 @@ defmodule Vutuv.Organizations do
     tokens = image_tokens(organization.id)
     logo_cover = Enum.reject([organization.logo, organization.cover], &is_nil/1)
 
+    # The page's press kit (issue #2083). Its rows cascade on
+    # `images.organization_id` like every other picture the page owns, and like
+    # every other picture the files on disk do not — and unlike the logo, whose
+    # token is on the row above, a press picture is named only by its own row,
+    # so this has to be read before the delete.
+    press_kit_tokens = Vutuv.PressKit.tokens(organization)
+
     # Read the screenshot job before the delete: the DB cascade drops the row,
     # and after that nothing names the files on disk any more.
     screenshot = Screenshots.for_organization(organization)
@@ -2340,6 +2347,7 @@ defmodule Vutuv.Organizations do
       # DB cascade already dropped the rows).
       Vutuv.Moderation.content_deleted(organization)
       for token <- Enum.uniq(tokens ++ logo_cover), do: Vutuv.OrganizationImageStore.delete(token)
+      Enum.each(press_kit_tokens, &Vutuv.PressKitStore.delete/1)
       if screenshot, do: Screenshots.delete_files(screenshot)
       {:ok, organization}
     end
