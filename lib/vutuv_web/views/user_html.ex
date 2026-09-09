@@ -17,6 +17,15 @@ defmodule VutuvWeb.UserHTML do
       remote_post_card: 1
     ]
 
+  import VutuvWeb.PressKitComponents,
+    only: [
+      press_any?: 1,
+      press_logos: 1,
+      press_photos: 1,
+      press_rights: 1,
+      press_total: 1
+    ]
+
   import VutuvWeb.UserHelpers
 
   alias Vutuv.CodeStats

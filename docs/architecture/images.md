@@ -902,6 +902,40 @@ section of `Vutuv.Export` (schema version 10), each entry carrying the address
 the file itself is at; the pictures they uploaded *for a page* are deliberately
 absent, since those belong to the page.
 
+**Where a reader meets one (issue #2086).** `PressKit.public_shelves/2` reads
+both shelves in one query and hands back `%{photos:, logos:}` with the owner
+already on every row, so nothing downstream pays a lookup per picture. A row is
+on those lists when the viewer may see it **or** when the stand-in may stand
+where it is (`showable?/2`); a frozen one is on neither, for anybody.
+
+Two surfaces draw them, both in `VutuvWeb.PressKitComponents`: the **Press card**
+on the profile, below Links, and the section page **`/:slug/press`**
+(`VutuvWeb.PressKitController`). The card lays the photos out with
+`VutuvWeb.PostComponents.mosaic_layout/2` — the post gallery's own geometry,
+which now reads `width`/`height` through `Vutuv.Images.orientation/1` and so
+knows nothing about post photos — and the logos as a row of tiles; the page
+shows every picture whole with its caption, credit, dimensions, file size
+(`VutuvWeb.UI.file_size/1`, one decimal between 1 and 10 MB, locale decimal
+separator) and a download. A logo is drawn on **white in both themes**, because
+nothing stores which ground a variant was made for; the section page repeats it
+on a dark ground beside it, so a reversed mark is visible somewhere. The
+lightbox reads a `data-photo-credit` off the tile beside the fields it already
+knew (`assets/js/lightbox.js`).
+
+**`/:slug/press` is the one page under a member's slug that is not noindexed.**
+Every other section page goes through the router's `:user_pipe` and its
+`NoIndex` because it shows personal data; a press kit is published in order to
+be found, so the route sits outside that pipeline, declares the pipeline's other
+three plugs itself, carries the member's own `noindex?`/`noai?`, is listed in the
+sitemap (`Vutuv.Sitemap.press_entries/1`, gated on
+`PressKit.public_query/0`) and publishes a schema.org `CollectionPage` whose
+`associatedMedia` are `ImageObject`s with `creditText`, `copyrightNotice`,
+`license` and `acquireLicensePage` — the four properties image search reads to
+call a picture licensable (`VutuvWeb.JsonLd.press_kit_page/3`). Its agent-format
+siblings are `VutuvWeb.AgentDocs.PressKitDoc`, and the profile document carries
+the same entries under `press_kit`; both list the **released** pictures only,
+since a document that names a file must name one that can be fetched.
+
 ### The takedown hold (issue #2012)
 
 A copyright freeze **moves** a picture, it never deletes one, and the tree it

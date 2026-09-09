@@ -7,9 +7,9 @@ defmodule VutuvWeb.FeedSeamClassAvailabilityTest do
   *previous* release's stylesheet. So a class that only this line uses is a
   class that document cannot draw — the v7.347.0 ticker again, which arrived as
   an unstyled paragraph across the tab bar. `.claude/rules/design.md` states the
-  check ("grep the tree for it unprefixed") and this file runs it, because the
-  seam is exactly the kind of line somebody restyles without reading the comment
-  above it.
+  check ("grep the tree for it unprefixed") and `VutuvWeb.ClassAvailability`
+  runs it, because the seam is exactly the kind of line somebody restyles
+  without reading the comment above it.
 
   The approximation to know: a class another line introduced *in the same
   deploy* passes here and is still absent from the old bundle. It is the cheap
@@ -17,16 +17,12 @@ defmodule VutuvWeb.FeedSeamClassAvailabilityTest do
   """
   use ExUnit.Case, async: true
 
+  alias VutuvWeb.ClassAvailability
+
   @seam_file "lib/vutuv_web/live/post_live/feed.ex"
 
   test "every class the seam draws with also ships elsewhere in the tree" do
-    seam = seam_markup()
-    tree = tree_without_seam(seam)
-
-    orphans =
-      seam
-      |> classes()
-      |> Enum.reject(&used_in?(&1, tree))
+    orphans = ClassAvailability.orphans([seam_markup()], &classes/1)
 
     assert orphans == [],
            "These classes appear only in the feed's `visit_seam/1`, so the previous\n" <>
@@ -61,49 +57,5 @@ defmodule VutuvWeb.FeedSeamClassAvailabilityTest do
     |> Regex.scan(markup)
     |> Enum.flat_map(fn [_, list] -> String.split(list) end)
     |> Enum.uniq()
-  end
-
-  # Every file the browser could get a class from, read and stripped **once** —
-  # the shape the sibling guards use (`brand_link_dark_mode_test.exs`), and here
-  # it matters more than there: the needles are a list, so walking the tree per
-  # class re-read 59 MB of an 8 MB tree and cost 5× the runtime. Only the seam's
-  # own file needs the seam cut out of it.
-  defp tree_without_seam(seam) do
-    ["lib/**/*.ex", "lib/**/*.heex", "assets/js/**/*.js"]
-    |> Enum.flat_map(&Path.wildcard/1)
-    |> Enum.map(fn
-      @seam_file -> @seam_file |> File.read!() |> String.replace(seam, "") |> markup_only()
-      path -> path |> File.read!() |> markup_only()
-    end)
-  end
-
-  # **Bare, and a substring match is not bare.** `bg-brand-200` lives in this
-  # tree only as `hover:bg-brand-200`, which Tailwind emits as
-  # `.hover\\:bg-brand-200:hover` — a selector no unhovered element can use, and
-  # the very shade the seam's comment says it had to avoid. So the occurrence
-  # has to stand alone: nothing that could be a variant prefix or a longer class
-  # on either side of it. (First draft of this test used `String.contains?/2`
-  # and happily passed that exact class.)
-  defp used_in?(class, tree) do
-    pattern = ~r/(?<![\w:.\/\[\]-])#{Regex.escape(class)}(?![\w:.\/\[\]-])/
-
-    Enum.any?(tree, &String.match?(&1, pattern))
-  end
-
-  # A class *written about* is not a class shipped. `feed.ex`'s own comment
-  # names `bg-brand-200` three times while explaining why the seam must not use
-  # it — which is what the second draft of this test read as proof that it was
-  # available. So comments come out before the match: `#` lines (Elixir) and
-  # `<%!-- --%>` blocks (HEEx).
-  #
-  # Backticked prose does **not** come out, though a `@moduledoc` can name a
-  # class that way. Stripping code spans took `assets/js/mention_picker.js` with
-  # it, where a one-line template literal is the file's only class assignment —
-  # and deleting real markup makes this test fail on a class that does ship,
-  # which is the worse of the two wrong answers.
-  defp markup_only(source) do
-    source
-    |> String.replace(~r/<%!--.*?--%>/s, "")
-    |> String.replace(~r/^\s*#.*$/m, "")
   end
 end

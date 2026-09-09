@@ -409,6 +409,9 @@ defmodule VutuvWeb.PageController do
     `messengers`, `addresses`, `phone_numbers`, `emails` (public addresses only),
     `tags`, `job_references` (Arbeitszeugnisse the member chose to publish, with
     their full text); a single entry lives at `/<username>/<section>/<id-or-slug>`
+  - `/<username>/press` — the member's press kit: press photos and logo variants
+    offered for editorial use, each with its credit, dimensions, file size and a
+    direct download of the print-quality original
   - `/<username>/tags/<tag>/endorsers` — everyone who endorses this member for that tag
   - `/tags/<tag>` — a tag and its most endorsed members
   - `/system/members` — the member directory: every member, filed by last-name

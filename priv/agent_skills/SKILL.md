@@ -32,6 +32,8 @@ pointing back at the canonical HTML page. Respect `Content-Signal` and
 - `/<username>/followers`, `/following`, `/connections` — people lists
 - `/<username>/<section>` — profile sections: `work_experiences`, `links`,
   `social_media_accounts`, `addresses`, `phone_numbers`, `emails`, `tags`
+- `/<username>/press` — press photos and logos offered for editorial use, each
+  with its credit and a download of the print-quality original
 - `/tags/<tag>` — a tag and its most endorsed members
 - `/search?q=<query>` — member search (HTML)
 

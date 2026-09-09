@@ -173,6 +173,10 @@ defmodule VutuvWeb.AgentDocsDriftTest do
 
     post = create_post!(user, %{"body" => "Suspension bridges are underrated."})
 
+    # A press picture (issue #2086): the profile card names its credit and its
+    # label, so the profile document's `press_kit` list has to name them too.
+    Vutuv.ImageHelpers.put_press_picture(user, alt: "Portraitfoto", credit: "Foto: Rea")
+
     %{user: user, tag: tag, follower: follower, post: post}
   end
 
@@ -289,6 +293,10 @@ defmodule VutuvWeb.AgentDocsDriftTest do
       "t.me/gretachats",
       "+49 30 5550100",
       "Berlin",
+      # the press kit (issue #2086): the card names the photo's label and its
+      # credit, so the profile document lists them beside the links
+      "Portraitfoto",
+      "Foto: Rea",
       # the Fediverse address: the profile card shows it to a visitor arriving
       # from Mastodon and friends, md/txt as a fact line, JSON/XML structured
       Docs.handle(user),

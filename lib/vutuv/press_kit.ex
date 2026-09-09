@@ -52,6 +52,8 @@ defmodule Vutuv.PressKit do
   redistribution is the likeliest of all of them to draw a notice.
   """
 
+  use Gettext, backend: VutuvWeb.Gettext
+
   import Ecto.Query, warn: false
   import Vutuv.Identity.Query, only: [party_is: 2]
 
@@ -60,6 +62,7 @@ defmodule Vutuv.PressKit do
   alias Vutuv.Identity.Query
   alias Vutuv.Images
   alias Vutuv.Images.Image
+  alias Vutuv.LowBandwidth
   alias Vutuv.Moderation.ImageScans
   alias Vutuv.Moderation.Pixelation
   alias Vutuv.Ordering
@@ -117,6 +120,91 @@ defmodule Vutuv.PressKit do
   @doc "How many pictures the owner has on that shelf."
   def count(owner, logo?) when is_boolean(logo?),
     do: owner |> shelf(logo?) |> Repo.aggregate(:count)
+
+  @doc """
+  One owner's press kit as the two shelves a public surface draws
+  (`%{photos: [...], logos: [...]}`, each in the owner's own order, the first
+  photo the hero) — the profile card and the section page of #2086, and #2087's
+  page twin.
+
+  **One query for both shelves**, not one per shelf: the caps are ten and five,
+  so the whole kit is at most fifteen rows and the split is cheaper in memory
+  than a second round trip on a page that already makes several.
+
+  Every row comes back with its owner set on the association, because the owner
+  is the argument — so `visible_to?/2`, `pixelated_url/1` and `download_name/2`
+  each cost nothing per picture rather than one `Repo.get/2`.
+
+  A picture is on the list when this viewer may see it **or** when the stand-in
+  may stand where it is (#2084): a stranger meets the pixelated tile while the
+  AI check runs and the owner meets the real picture, which is what
+  `showable?/2` states once for both surfaces. A frozen picture is on neither
+  list, for anybody, because a takedown has to read like a picture that was
+  never there.
+  """
+  def public_shelves(owner, viewer) do
+    owner
+    |> owned()
+    |> Ordering.by_position()
+    |> Repo.all()
+    |> Enum.map(&put_owner(&1, owner))
+    |> Enum.filter(&showable?(&1, viewer))
+    |> split()
+  end
+
+  @doc """
+  Whether a public surface draws this picture at all — the real one, or the
+  pixelated stand-in in its place.
+
+  The one statement of "is there a tile here", so the card, the section page and
+  the agent documents cannot answer it three ways. Which of the two a reader
+  gets is `visible_to?/2` again at the tile itself.
+  """
+  def showable?(%Image{kind: @kind} = image, viewer),
+    do: visible_to?(image, viewer) or pixelated_visible?(image)
+
+  def showable?(_image, _viewer), do: false
+
+  @doc """
+  The **released** shelves: `%{photos:, logos:}` of the pictures the AI gate has
+  let out, in the owner's order.
+
+  What a *document* is built from (`VutuvWeb.AgentDocs.PressKitDoc`, the profile
+  document's `press_kit` list) and what the page's schema.org markup names,
+  because a document that offers a file must offer one that can be fetched — a
+  picture still in the queue answers 404 at every one of its addresses. The HTML
+  page is the other question and asks `public_shelves/2`, which keeps the
+  waiting pictures and stands in for them.
+  """
+  def published_shelves(owner) do
+    owner |> owned() |> released() |> Ordering.by_position() |> Repo.all() |> split()
+  end
+
+  @doc """
+  The press-kit rows a crawler may meet, table-wide: released by the AI gate and
+  not frozen. What `Vutuv.Sitemap.press_entries/1` asks of the whole table.
+
+  The rule is `Vutuv.Moderation.ImageScans.released?/1`'s plus the freeze — not
+  `Vutuv.Images.servable?/1`'s, which only excludes `"pending"` and would
+  therefore serve a rejected row. `released/1` below is the one SQL spelling
+  here; `Vutuv.Social.newest_members_with_avatar/1` carries its own copy of the
+  same pair for the avatar strip, which is worth folding the day a third one
+  appears.
+  """
+  def public_query, do: released(from(i in Image, where: i.kind == ^@kind))
+
+  @doc """
+  The two robots axes for an owner's press page: `{noindex?, noai?}`.
+
+  A press kit is published in order to be found, so the page carries the
+  **owner's own** opt-outs rather than the blanket refusal every other
+  profile sub-page wears. Stated once here because the controller sets the
+  header from it and the agent documents stamp their `Content-Signal` from it,
+  and `VutuvWeb.AgentDocs.PostDoc.robots_axes/2`'s docstring is the war story of
+  what happens when two such derivations disagree.
+  """
+  def robots_axes(%User{} = user), do: {user.noindex?, user.noai?}
+  def robots_axes(%Organization{} = organization), do: {not organization.seo?, false}
 
   @doc """
   A shelf's own word, the one token the DOM, the event names and the data
@@ -254,6 +342,14 @@ defmodule Vutuv.PressKit do
 
   defp owner(%Image{}), do: nil
 
+  # The owner a whole shelf was read for, put on every row of it: the caller
+  # already holds the record, so `owner/1` below never has to go and fetch it
+  # fifteen times over.
+  defp put_owner(%Image{} = image, %User{} = owner), do: %{image | user: owner}
+
+  defp put_owner(%Image{} = image, %Organization{} = owner),
+    do: %{image | organization: owner}
+
   ## URLs ---------------------------------------------------------------------
 
   @doc """
@@ -267,6 +363,40 @@ defmodule Vutuv.PressKit do
   also why this kind needs no `Vutuv.Accounts.ReservedSlugs` entry.
   """
   def url(%Image{} = image, version), do: address(image, "#{version}.avif")
+
+  @doc """
+  What a page loads for this viewer (`VutuvWeb.UI.picture/1`), the twin of
+  `Vutuv.Posts.PostImage.picture/1`: a photo's `feed` version, with the 640 px
+  `lite` in its place while the viewer is in data-saving mode and that file is
+  on disk. Asked of the disk rather than blind, because the proxy caches every
+  version for a year as immutable and a lite URL answered with the feed bytes
+  would stay the feed for that year.
+
+  A **logo** has no such pair — nothing crops a wordmark and its two versions
+  are 320 and 1200 px — so it loads its `thumb` for everybody.
+  """
+  def picture(%Image{logo: true} = image), do: %{src: url(image, "thumb"), lite: nil}
+
+  def picture(%Image{} = image),
+    do: LowBandwidth.picture(url(image, "feed"), fn -> lite_url(image) end)
+
+  defp lite_url(%Image{} = image) do
+    if PressKitStore.version_path(image.token, "lite"), do: url(image, "lite")
+  end
+
+  @doc """
+  The version the lightbox opens: a photo's `xl` (2560 px), or `large` for a
+  viewer in data-saving mode — on the phone screen such a viewer most likely
+  holds, 1600 px is already more than the picture's own size. A logo's biggest
+  is `large`, so that is what it opens at.
+  """
+  def lightbox_url(%Image{} = image) do
+    cond do
+      Image.logo?(image) -> url(image, "large")
+      LowBandwidth.on?() -> url(image, "large")
+      true -> url(image, "xl")
+    end
+  end
 
   @doc "The URL the file itself is handed over at: the cleaned photo, or a logo's vector."
   def download_url(%Image{} = image), do: address(image, "download.orig")
@@ -298,6 +428,28 @@ defmodule Vutuv.PressKit do
   # hand-built copy at a call site is a place the next one has to be remembered
   # again.
   defp address(%Image{token: token}, file), do: "/system/press_kit/#{token}/#{file}"
+
+  @doc """
+  Where this owner's press kit is published: `/ada.king/press` for a member, the
+  page's canonical path plus `/press` for a page — `Vutuv.Identity.path/1` plus
+  one segment, so the next owner kind is remembered in the one place that
+  already knows about owner kinds.
+
+  For everything holding an owner rather than a route: the doc's canonical URL,
+  the schema.org block, and #2087's page twin. The profile template keeps its
+  verified `~p` sigil, which is a compile-time check this cannot give it.
+  """
+  def page_path(owner), do: Identity.path(owner) <> "/press"
+
+  @doc """
+  The one sentence under which every press picture is offered.
+
+  A property of the kit rather than of a page: the card and the section page
+  show it, the lightbox states it as the picture's licence, the schema.org
+  `usageInfo` carries it and the agent documents publish it as `rights` — five
+  surfaces, one wording.
+  """
+  def rights_line, do: gettext("Free for editorial use with credit.")
 
   @doc """
   The name the downloaded file arrives under, e.g. `ada_king-press-1.jpg` or
@@ -489,6 +641,21 @@ defmodule Vutuv.PressKit do
   # written against: the listing, the ids a reorder rearranges, and the rows a
   # renumber may touch.
   defp shelf(owner, logo?), do: from(i in owned(owner), where: i.logo == ^logo?)
+
+  # "The AI gate let this out and no copyright case took it away", in SQL. One
+  # spelling, so `public_query/0` and `published_shelves/1` cannot drift.
+  defp released(query) do
+    from(i in query,
+      where: is_nil(i.frozen_at) and (is_nil(i.moderation) or i.moderation == "approved")
+    )
+  end
+
+  # One list of rows as the two shelves a surface draws. `split_with/2` puts the
+  # matching side first, and the matching side here is the logos.
+  defp split(images) do
+    {logos, photos} = Enum.split_with(images, &Image.logo?/1)
+    %{photos: photos, logos: logos}
+  end
 
   # `position` is what the owner arranged; the id breaks a tie, and since ids are
   # UUID v7 that is upload order rather than a coin toss.

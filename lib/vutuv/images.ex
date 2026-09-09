@@ -501,6 +501,38 @@ defmodule Vutuv.Images do
   def servable?(nil), do: false
 
   @doc """
+  A stored picture's aspect ratio (width / height), or `1.0` where the
+  dimensions are missing.
+
+  Structural on purpose — it reads the two columns **every** stored picture
+  carries, whatever row it lives on — because the bento mosaic
+  (`VutuvWeb.PostComponents.mosaic_layout/2`) now lays out two kinds of
+  picture: a `%Vutuv.Posts.PostImage{}` and a press-kit `%Image{}` (#2086).
+  The shape of a picture is not a fact about which table it is in.
+  """
+  def aspect(%{width: width, height: height})
+      when is_integer(width) and is_integer(height) and width > 0 and height > 0,
+      do: width / height
+
+  def aspect(_picture), do: 1.0
+
+  @doc """
+  `:portrait`, `:landscape` or `:square` — the coarse shape the mosaic picks its
+  arrangement from. The 5:4 / 4:5 envelope is the post card's "roughly square"
+  rule, and it is stated **once** here so two kinds of picture cannot be called
+  two different shapes.
+  """
+  def orientation(picture) do
+    ratio = aspect(picture)
+
+    cond do
+      ratio > 1.25 -> :landscape
+      ratio < 0.8 -> :portrait
+      true -> :square
+    end
+  end
+
+  @doc """
   The upload's own file name as far as a reader is told about it, or `nil` for
   a member with no picture of that kind and for one a copyright case holds.
   """

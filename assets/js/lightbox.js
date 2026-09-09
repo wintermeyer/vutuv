@@ -8,10 +8,10 @@
 // links only carry the data it reads.
 //
 // Everything it shows comes off the clicked link's data-photo-* attributes, so
-// there is one copy of the caption, the camera line, the download and the
-// licence: the ones the page already rendered. With JavaScript off the same
-// links are plain hrefs to the full-size image, which is what they were before
-// the lightbox existed.
+// there is one copy of the caption, the credit, the camera line, the download
+// and the licence: the ones the page already rendered. With JavaScript off the
+// same links are plain hrefs to the full-size image, which is what they were
+// before the lightbox existed.
 
 import { keyActivates, onReady, once } from "./util"
 
@@ -59,6 +59,7 @@ function build() {
       <img class="lightbox__image" data-lb-image alt="" />
       <figcaption class="lightbox__meta">
         <p class="lightbox__caption" data-lb-caption></p>
+        <p class="lightbox__camera" data-lb-credit></p>
         <p class="lightbox__camera" data-lb-camera></p>
         <p class="lightbox__footer">
           <span class="lightbox__position" data-lb-position></span>
@@ -138,6 +139,12 @@ function show(index) {
   image.alt = photo.dataset.photoAlt || ""
 
   text(q("[data-lb-caption]"), photo.dataset.photoCaption)
+  // The credit line of a press picture (issue #2086): who to name when it is
+  // printed, which is the condition the licence line below states. It reuses
+  // the camera line's muted style rather than bringing one of its own — the
+  // two never appear on the same picture, a post photo has no credit and a
+  // press photo no camera panel.
+  text(q("[data-lb-credit]"), photo.dataset.photoCredit)
   text(q("[data-lb-camera]"), photo.dataset.photoCamera)
   text(q("[data-lb-position]"), photos.length > 1 ? photo.dataset.photoPosition : "")
 

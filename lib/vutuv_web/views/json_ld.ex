@@ -23,6 +23,7 @@ defmodule VutuvWeb.JsonLd do
 
   import Phoenix.HTML, only: [raw: 1]
 
+  alias Vutuv.Identity
   alias Vutuv.Jobs
   alias Vutuv.Jobs.JobPosting
   alias Vutuv.Languages
@@ -33,6 +34,7 @@ defmodule VutuvWeb.JsonLd do
   alias Vutuv.Posts.PhotoLicense
   alias Vutuv.Posts.PostImage
   alias Vutuv.Posts.PostReview
+  alias Vutuv.PressKit
   alias Vutuv.Profiles.SocialMediaAccount
   alias Vutuv.SiteName
   alias Vutuv.Tags.Tag
@@ -409,6 +411,63 @@ defmodule VutuvWeb.JsonLd do
         "url" => VutuvWeb.Endpoint.url(),
         "name" => SiteName.get()
       }
+    })
+  end
+
+  @doc """
+  A press kit (`/:slug/press`) as a schema.org `CollectionPage` whose
+  `associatedMedia` are the pictures — each an `ImageObject` carrying
+  `creditText`, `copyrightNotice`, `license` and `acquireLicensePage`
+  (issue #2086, folded in from #2088).
+
+  Those four are the properties image search reads to mark a result as
+  **licensable**, which is the whole point of publishing a press kit: a
+  journalist searching for a printable picture of somebody should find the file
+  they may print rather than a 200-pixel avatar. `license` and
+  `acquireLicensePage` are both this page, because this page is where the terms
+  are written and where the file is handed over.
+
+  Gate at the call site, like the profile's Person block: markup describing a
+  collection to a crawler we have just asked to drop the page contradicts
+  itself. `pictures` are the released ones only — a picture the AI gate still
+  holds has no `contentUrl` a crawler could fetch.
+  """
+  def press_kit_page(owner, pictures, rights) do
+    url = AgentDocs.abs_url(PressKit.page_path(owner))
+    name = Identity.display_name(owner)
+
+    compact(%{
+      "@context" => "https://schema.org",
+      "@type" => "CollectionPage",
+      "@id" => url,
+      "url" => url,
+      "name" => name,
+      "about" => %{"@type" => "Thing", "name" => name},
+      "license" => url,
+      "associatedMedia" => Enum.map(pictures, &press_image_object(&1, name, url, rights))
+    })
+  end
+
+  defp press_image_object(image, credit_holder, page_url, rights) do
+    compact(%{
+      "@type" => "ImageObject",
+      "contentUrl" => absolute(PressKit.url(image, "large")),
+      "thumbnailUrl" => absolute(PressKit.url(image, "thumb")),
+      "width" => image.width,
+      "height" => image.height,
+      "caption" => image.caption,
+      "description" => image.alt,
+      "encodingFormat" => image.content_type,
+      "contentSize" => image.size_bytes && Integer.to_string(image.size_bytes),
+      # The credit line the owner typed is the one a reuser must print; where
+      # they typed none, the owner's own name is who to credit.
+      "creditText" => image.credit || credit_holder,
+      "copyrightNotice" => image.credit || credit_holder,
+      # The terms are prose on this page rather than a deed at some URL, so the
+      # sentence rides along as well as the page that states it.
+      "usageInfo" => rights,
+      "license" => page_url,
+      "acquireLicensePage" => page_url
     })
   end
 

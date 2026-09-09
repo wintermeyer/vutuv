@@ -59,6 +59,7 @@ defmodule VutuvWeb.AgentDocs.Markdown do
         Enum.map(doc.languages, &entry_line("languages", &1))
       ),
       section(gettext("Links"), Enum.map(doc.links, &entry_line("links", &1))),
+      section(gettext("Press"), Enum.map(doc.press_kit, &press_picture_line/1)),
       section(gettext("Contact"), Enum.map(doc.emails, &entry_line("emails", &1))),
       section(
         gettext("Profiles"),
@@ -99,6 +100,20 @@ defmodule VutuvWeb.AgentDocs.Markdown do
       frontmatter(doc),
       "# #{doc.title}",
       entry_line(section, entry)
+    ]
+    |> join_blocks()
+  end
+
+  # A member's or a page's press kit (#2086). Deliberately above the section
+  # clauses' shape rather than inside it: two shelves, no per-entry page, and a
+  # picture is a file rather than a record.
+  def render(%{type: "press_kit"} = doc) do
+    [
+      frontmatter(doc),
+      "# #{doc.title}",
+      doc.rights,
+      section(gettext("Press photos"), Enum.map(doc.photos, &press_picture_line/1)),
+      section(gettext("Logo variants"), Enum.map(doc.logos, &press_picture_line/1))
     ]
     |> join_blocks()
   end
@@ -1516,6 +1531,38 @@ defmodule VutuvWeb.AgentDocs.Markdown do
     |> Enum.join("\n\n")
   end
 
+  # One press picture: what it is, then the lines a journalist acts on — who to
+  # credit, how big the file is and where it is (#2086). The caption is the
+  # member's own Markdown and passes through as it stands, indented **four**
+  # columns rather than two because it hangs off a nested list item: a
+  # continuation paragraph at the wrong indent breaks out of the list, which is
+  # the same trap issue #926 fixed one level up.
+  defp press_picture_line(picture) do
+    [
+      "- " <> md_link(picture[:label] || gettext("Press picture"), picture.download_url),
+      picture[:credit] && "  - " <> gettext("Credit: %{credit}", credit: picture.credit),
+      "  - " <> press_picture_size(picture),
+      picture[:png_download_url] &&
+        "  - " <> md_link(gettext("PNG version"), picture.png_download_url),
+      picture[:caption] && "  - " <> indent_item_body(md_text(picture.caption), "    ")
+    ]
+    |> Enum.reject(&is_nil/1)
+    |> Enum.join("\n")
+  end
+
+  @doc false
+  # The two facts that decide whether a journalist downloads a picture, from the
+  # fields both renderers already hold — the doc map carries the numbers, not a
+  # rendered line, so nothing in `VutuvWeb.AgentDocs` depends on a component.
+  def press_picture_size(picture) do
+    [
+      picture[:width] && picture[:height] && "#{picture.width} × #{picture.height}",
+      picture[:size_bytes] && VutuvWeb.UI.file_size(picture.size_bytes)
+    ]
+    |> Enum.reject(&is_nil/1)
+    |> Enum.join(" · ")
+  end
+
   defp section(_title, []), do: nil
   # A blank line between items (a "loose" CommonMark list) so every entry gets
   # the same vertical rhythm — the one a multi-paragraph entry already forces
@@ -1531,22 +1578,23 @@ defmodule VutuvWeb.AgentDocs.Markdown do
 
   # A `- ` list item whose content (a work/education description) runs to
   # several paragraphs: the first line rides the marker, every later line is
-  # indented two columns (the marker width) so the whole thing stays one list
+  # indented by `pad` (the marker width, two columns for a top-level item and
+  # four for one nested inside another) so the whole thing stays one list
   # item instead of the continuation paragraphs breaking out to the left margin
   # (issue #926). Blank lines stay truly empty (no trailing spaces), and CRLF /
   # CR line endings normalize to LF so the indent lands on real line breaks.
-  defp indent_item_body(text) do
+  defp indent_item_body(text, pad \\ "  ") do
     case text
          |> String.replace("\r\n", "\n")
          |> String.replace("\r", "\n")
          |> String.split("\n") do
       [single] -> single
-      [first | rest] -> Enum.join([first | Enum.map(rest, &indent_line/1)], "\n")
+      [first | rest] -> Enum.join([first | Enum.map(rest, &indent_line(&1, pad))], "\n")
     end
   end
 
-  defp indent_line(""), do: ""
-  defp indent_line(line), do: "  " <> line
+  defp indent_line("", _pad), do: ""
+  defp indent_line(line, pad), do: pad <> line
 
   # A YAML double-quoted scalar: escape backslash and double-quote, fold
   # newlines/tabs to spaces. (inspect/1 was wrong here — it emits `\#{` for a
