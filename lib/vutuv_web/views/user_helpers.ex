@@ -937,6 +937,8 @@ defmodule VutuvWeb.UserHelpers do
 
   def image_kind_label("post_video_frame", "de"), do: "ein Video aus einem Ihrer Beiträge"
 
+  def image_kind_label("press_kit", "de"), do: "ein Bild aus Ihrem Pressebereich"
+
   def image_kind_label(_kind, "de"), do: "ein Bild"
   def image_kind_label("avatar", "it"), do: "la Sua immagine del profilo"
   def image_kind_label("cover", "it"), do: "la Sua immagine di copertina"
@@ -956,6 +958,8 @@ defmodule VutuvWeb.UserHelpers do
 
   def image_kind_label("post_video_frame", "it"), do: "un video di uno dei Suoi post"
 
+  def image_kind_label("press_kit", "it"), do: "un'immagine dalla Sua sezione stampa"
+
   def image_kind_label(_kind, "it"), do: "un'immagine"
   def image_kind_label("avatar", _locale), do: "your profile picture"
   def image_kind_label("cover", _locale), do: "your cover photo"
@@ -972,6 +976,8 @@ defmodule VutuvWeb.UserHelpers do
     do: "an uploaded employment reference"
 
   def image_kind_label("post_video_frame", _locale), do: "a video from one of your posts"
+
+  def image_kind_label("press_kit", _locale), do: "a picture from your press section"
 
   def image_kind_label(_kind, _locale), do: "an image"
 

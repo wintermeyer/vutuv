@@ -55,7 +55,8 @@ defmodule Vutuv.Moderation.ImageScans do
   # content, so they get the notice. Machine captures (link screenshots) are
   # our artifact of a third-party page — silently showing no preview is the
   # same UX as a failed capture, so no notice.
-  @notify_kinds ~w(avatar cover post_image job_posting_image organization_image post_video_frame)
+  @notify_kinds ~w(avatar cover post_image job_posting_image organization_image post_video_frame
+                   press_kit)
 
   ## Gate + lifecycle API (what the storing contexts use)
 

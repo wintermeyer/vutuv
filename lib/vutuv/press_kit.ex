@@ -38,13 +38,18 @@ defmodule Vutuv.PressKit do
   picture the page owns, which is why the database refuses it
   (`images_press_kit_has_one_owner`).
 
-  ## Born pending
+  ## Born pending, and how it gets out (issue #2084)
 
   A fresh row starts at `Vutuv.Moderation.ImageScans.initial_state/0`, so on an
-  installation with the AI gate on it is `"pending"` and `visible_to?/2` shows
-  it to its owner alone until a verdict releases it. Nothing here enqueues that
-  scan yet — #2084 wires the scan, the pixelated stand-in and the takedown, and
-  `Vutuv.Images.takedown_ready?/1` answers false for this kind until it does.
+  installation with the AI gate on it is `"pending"`, `visible_to?/2` shows it
+  to its owner alone, and `create/4` queues the scan that has to clear it. Until
+  a verdict lands a stranger gets the **pixelated stand-in** (`pixelated_url/1`)
+  rather than nothing, for the window `Vutuv.Moderation.Pixelation` measures
+  from the upload — this row *is* the upload, so `inserted_at` is the honest
+  clock and no mirror row can lie about it. A rejection wipes every byte and
+  tells whoever uploaded it; a copyright case can freeze one from the first day
+  it exists (`Vutuv.Images.freeze/1`), because a picture published for
+  redistribution is the likeliest of all of them to draw a notice.
   """
 
   import Ecto.Query, warn: false
@@ -56,6 +61,7 @@ defmodule Vutuv.PressKit do
   alias Vutuv.Images
   alias Vutuv.Images.Image
   alias Vutuv.Moderation.ImageScans
+  alias Vutuv.Moderation.Pixelation
   alias Vutuv.Organizations
   alias Vutuv.Organizations.Organization
   alias Vutuv.PressKitStore
@@ -150,7 +156,35 @@ defmodule Vutuv.PressKit do
 
   def visible_to?(_image, _viewer), do: false
 
-  defp public?(owner, image), do: not Identity.hidden?(owner) and Images.servable?(image)
+  @doc """
+  Whether the **pixelated stand-in** may be fetched — which is the mirror image
+  of `visible_to?/2`: it answers for exactly the picture that one refuses
+  because the AI gate has not released it yet.
+
+  No viewer argument, deliberately. A press kit is a public section of a public
+  profile, so there is no reader-specific question left once the owner is
+  visible; what there is, is a *frozen* picture, and a takedown has to read like
+  a picture that was never there — stand-in included.
+
+  The cheap half is asked first on purpose: a released picture — every picture,
+  a few seconds after it is uploaded — answers `false` here without touching the
+  database, so the proxy's `or` costs one owner lookup rather than two.
+  """
+  def pixelated_visible?(%Image{kind: @kind, frozen_at: nil} = image),
+    do: not ImageScans.released?(image.moderation) and owner_visible?(image)
+
+  def pixelated_visible?(_image), do: false
+
+  defp public?(owner, image), do: owner_visible?(owner) and Images.servable?(image)
+
+  defp owner_visible?(%Image{} = image) do
+    case owner(image) do
+      nil -> false
+      owner -> owner_visible?(owner)
+    end
+  end
+
+  defp owner_visible?(owner), do: not Identity.hidden?(owner)
 
   defp privileged?(_owner, %User{admin?: true}), do: true
   defp privileged?(%User{id: id}, %User{id: id}), do: true
@@ -186,13 +220,38 @@ defmodule Vutuv.PressKit do
   again — the remote-media proxy set that pattern and this follows it, which is
   also why this kind needs no `Vutuv.Accounts.ReservedSlugs` entry.
   """
-  def url(%Image{token: token}, version), do: "/system/press_kit/#{token}/#{version}.avif"
+  def url(%Image{} = image, version), do: address(image, "#{version}.avif")
 
   @doc "The URL the file itself is handed over at: the cleaned photo, or a logo's vector."
-  def download_url(%Image{token: token}), do: "/system/press_kit/#{token}/download.orig"
+  def download_url(%Image{} = image), do: address(image, "download.orig")
 
   @doc "The URL of a logo variant's PNG rendering, beside its vector."
-  def png_download_url(%Image{token: token}), do: "/system/press_kit/#{token}/download.png"
+  def png_download_url(%Image{} = image), do: address(image, "download.png")
+
+  @doc """
+  The URL of the pixelated stand-in, or `nil` when there is nothing standing in
+  right now: the picture is released or frozen, the window has run out, the file
+  was never written (an installation with the preview off) or the reader is in
+  data-saving mode. A caller that gets `nil` draws the "being checked" tile.
+
+  The window is measured from `inserted_at`, and this row **is** the upload —
+  the one thing the mirrored kinds cannot say, since their `images` row is
+  minted by the mirror and a backfilled one claims to be minutes old.
+
+  Once per rendered picture, so a page drawing a whole shelf should hand over
+  rows with `:user` or `:organization` preloaded — `owner/1` takes the preload
+  when it is there and looks the owner up per picture when it is not.
+  """
+  def pixelated_url(%Image{} = image) do
+    if pixelated_visible?(image) and
+         Pixelation.stands_in?(PressKitStore.pixelated_path(image.token), image.inserted_at),
+       do: address(image, Pixelation.filename())
+  end
+
+  # One owner of the proxy's path shape. Four addresses hang off it, and a
+  # hand-built copy at a call site is a place the next one has to be remembered
+  # again.
+  defp address(%Image{token: token}, file), do: "/system/press_kit/#{token}/#{file}"
 
   @doc """
   The name the downloaded file arrives under, e.g. `ada_king-press-1.jpg` or
@@ -260,15 +319,36 @@ defmodule Vutuv.PressKit do
   end
 
   @doc """
-  Removes a press picture: the row first, then every file. That order is the one
-  an interruption can survive — it leaves files nothing points at rather than a
-  row naming files that are gone.
+  Releases a press picture the AI gate cleared, and answers `:stale` when the row
+  is no longer the one that was waiting (deleted meanwhile, or already settled by
+  a verdict that got there first).
+
+  Here rather than in `Vutuv.Moderation.ImageSubjects` so that the shared
+  `images` table keeps one writer per kind — the refusal beside it already goes
+  through `delete/1`.
   """
-  def delete(%Image{kind: @kind} = image) do
-    Repo.delete_all(from(i in Image, where: i.id == ^image.id))
-    PressKitStore.delete(image.token)
-    :ok
+  def release(image_id) when is_binary(image_id) do
+    from(i in Image,
+      where: i.id == ^image_id and i.kind == ^@kind and i.moderation == "pending"
+    )
+    |> Repo.update_all(set: [moderation: "approved", updated_at: NaiveDateTime.utc_now(:second)])
+    |> case do
+      {1, _} -> :ok
+      _none -> :stale
+    end
   end
+
+  @doc """
+  Removes a press picture: the row first, then every file, then any takedown
+  hold. That order is the one an interruption can survive — it leaves files
+  nothing points at rather than a row naming files that are gone.
+
+  One path with the upheld copyright case, not two: `Vutuv.Images.purge/1`
+  gates on the same `@takedown` entry that lets a case name this kind at all,
+  and while the kind had no entry (#2083) this had to be its own copy. The
+  refused AI verdict takes it too, so "the files are gone" is one function.
+  """
+  def delete(%Image{kind: @kind} = image), do: Images.purge(image)
 
   @doc """
   Every press-kit token this **owner** holds — what `Vutuv.Accounts.delete_user/1`
@@ -307,6 +387,13 @@ defmodule Vutuv.PressKit do
   defp owner_columns(%Organization{} = owner, %User{id: uploader_id}),
     do: %{organization_id: Query.organization_side(owner), uploader_user_id: uploader_id}
 
+  # Who a rejection is told about. A member owns their own kit; a page's row
+  # leaves `user_id` empty by constraint, so the scan takes the **uploader** —
+  # the colleague whose file was refused, and the only member the row names at
+  # all. It is what an organization logo's scan already does.
+  defp scan_owner_id(%Image{user_id: id}) when is_binary(id), do: id
+  defp scan_owner_id(%Image{uploader_user_id: id}), do: id
+
   defp validate_form(changeset), do: if(changeset.valid?, do: :ok, else: {:error, changeset})
 
   defp validate_size(path) do
@@ -337,6 +424,7 @@ defmodule Vutuv.PressKit do
     |> Repo.insert()
     |> case do
       {:ok, image} ->
+        ImageScans.enqueue(@kind, image.id, scan_owner_id(image))
         {:ok, image}
 
       {:error, changeset} ->

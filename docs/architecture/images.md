@@ -79,7 +79,7 @@ once — screenshots included, a few minutes after the traffic switch.
 
 The **pixelated preview** of a picture still being checked is the one thing
 the mode drops entirely rather than shrinks: `Pixelation.stands_in?/2` answers
-false for a viewer in the mode, so the three renderers that ask fall back to
+false for a viewer in the mode, so every renderer that asks falls back to
 the grey hourglass tile they already have for installations without previews.
 The preview is 64 blocks blown up to 960 px and costs about what the finished
 picture's lite does (13 kB against 12 kB on one photo), for the minutes a scan
@@ -755,8 +755,10 @@ pixelated window must take its time from the photo rather than the mirror's
 directory and `file` for the version segment, while **`cover_status` stays on
 the review row** — it says whether a fetch is due, not whether a picture
 exists, and `ReviewCovers.reconcile/1` and `refresh_all/1` both select on it.
-No kind's takedown is written yet: `@takedown` is still profile-only, so all
-four are refused by `takedown_ready?/1` until the release that wires them.
+None of the four has its takedown written yet: `@takedown` holds the two profile
+kinds and `press_kit` (which was born on the row and got its freeze with its
+scan, #2084), so all four mirrored kinds stay refused by `takedown_ready?/1`
+until the release that wires them.
 
 What **step 3** drops: `job_posting_images`, `post_images` and
 `organization_images` outright, and `post_reviews.cover` +
@@ -833,14 +835,43 @@ root segment permanently burns a handle, and this kind therefore needs no
 `send_file` rather than the X-Accel handoff (`:post_image_serving`), so a new
 kind of proxied picture costs no nginx change.
 
-**Born pending, and not yet scanned.** A fresh row starts at
+**Born pending, and how it gets out (issue #2084).** A fresh row starts at
 `Vutuv.Moderation.ImageScans.initial_state/0`, so with the AI gate on it is
 `"pending"` and `PressKit.visible_to?/2` shows it to its owner alone — for a
 page, to every member of its staff, since a colleague has to be able to see what
-is being checked. Nothing enqueues that scan yet and
-`Vutuv.Images.takedown_ready?/1` answers false for the kind, so a report may not
-name one: the scan, the pixelated stand-in and the freeze are #2084's, and the
-report gate #2089's.
+is being checked. `PressKit.create/4` queues the scan that clears it, and a
+stranger meanwhile gets the **pixelated stand-in** at
+`/system/press_kit/<token>/pixelated.avif` (`PressKit.pixelated_url/1`), whose
+window is measured from the row's own `inserted_at` — this kind is born on
+`images`, so that timestamp *is* the upload and no mirror can lie about it. Once
+released the stand-in URL redirects to `large` rather than 404ing, so a page
+drawn seconds before the verdict never shows a broken image. A rejection runs
+`PressKit.delete/1` (row, versions, original, stand-in, hold) and tells whoever
+uploaded it — `images.user_id` for a member's own kit, `uploader_user_id` for a
+page's, the same choice an organization logo's scan makes, because that is the
+member whose file was refused.
+
+Its scan clauses in `Vutuv.Moderation.ImageSubjects` are its own rather than an
+entry in the `@gallery_images` registry: those three kinds are still mirrors of
+a source table, so every generic step there (`Repo.get(schema, id)`,
+`Images.mirrored?/1`, the post's federation settle) either means nothing here or
+would reach a row of another kind. One trap the drift repair had to learn:
+`press_kit_stranded/0` skips a **frozen** row. Its files are in the hold, so
+`source/1` answers `:gone`, the scan cancels, the row stays `pending` and the
+next pass queues it again — for ever, at the front of an oldest-first queue.
+
+**The takedown is wired from the first release** (`@takedown`'s `:press_kit`
+strategy), so `takedown_ready?/1` answers true and a copyright case may name a
+press picture — a picture published *for redistribution* is the likeliest of all
+of them to draw a notice. A freeze stamps `frozen_at` and moves every file into
+the hold; `PressKit.visible_to?/2` then refuses the row to everybody, its owner
+and an admin included, and the download answers 404. One gap is left for the
+report sub-issue (#2089): `Vutuv.Moderation`'s `owner_id/1` reads `%Image{}`'s
+`user_id` only, so a **page's** press picture has no case owner and
+`can_report?/2` refuses it. The organization-*post* clause beside it already
+answers the same question with `organizations.created_by_user_id` (the member
+who carries the strike ladder), and that is the answer to copy — `Case.owner_id`
+is one `users` FK, which `Organizations.owners/1`'s list cannot fill.
 
 ### The takedown hold (issue #2012)
 
@@ -1248,7 +1279,10 @@ link screenshots and organization homepage captures
 (`screenshots/<id>/pixelated-<hash>.avif`, in the *served* tree
 while the thumb itself waits in quarantine) and pictures cached from other
 networks (`remote_media/posts/<id>/pixelated-<hash>.avif` — the fingerprinted
-name shape, for the two kinds whose directory outlives the picture in it). Not
+name shape, for the two kinds whose directory outlives the picture in it) and
+press pictures (`press_kit/<token>/pixelated.avif`, served at
+`/system/press_kit/<token>/pixelated.avif`, which redirects to `large` once
+released — a logo included, cut from the rasterisation the scan judges). Not
 avatars and covers, whose initials tile is the better placeholder at 36 pixels,
 and not organization or job-posting images, which no page shows to a stranger
 while they wait. The response is `ImageProxy.serve_pixelated/2`, the deliberate

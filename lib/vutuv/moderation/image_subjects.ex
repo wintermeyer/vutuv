@@ -39,6 +39,8 @@ defmodule Vutuv.Moderation.ImageSubjects do
   alias Vutuv.Posts.PostVideoFrame
   alias Vutuv.Posts.Screenshots
   alias Vutuv.PostVideoStore
+  alias Vutuv.PressKit
+  alias Vutuv.PressKitStore
   alias Vutuv.Profiles.Qualification
   alias Vutuv.Profiles.Url
   alias Vutuv.QualificationDocument
@@ -55,6 +57,8 @@ defmodule Vutuv.Moderation.ImageSubjects do
   # time here: the contract half of #2013 drops all four per kind, and a second
   # copy is a second place to remember.
   @profile_images Vutuv.Images.member_columns()
+
+  @press_kit "press_kit"
 
   @gallery_images %{
     # `pixelated: true` marks the one gallery kind a stranger meets while the
@@ -232,6 +236,31 @@ defmodule Vutuv.Moderation.ImageSubjects do
       first_existing([PostVideoStore.frame_path(video.token, frame.position)])
     else
       _ -> :gone
+    end
+  end
+
+  # A press photo or a logo variant (issue #2084). Its row lives on `images`
+  # itself rather than in a table of its own, so it is deliberately not in
+  # `@gallery_images` above — that map is a registry of *mirror* kinds, and every
+  # generic step it drives is a mirror step (`Repo.get(schema, id)` on a table
+  # holding one kind, `Images.mirrored?/1`, the post's federation settle), none
+  # of which means anything here. Immutable once stored (nothing edits the bytes, only the
+  # caption beside them), so no fingerprint guard: the row's own existence is
+  # the guard, and a re-upload is a new row with a new token.
+  #
+  # The original is what the model judges, which for a vector logo means the
+  # rasterisation `Vutuv.Uploads.Spec.open_rotated/1` makes — the same door the
+  # served versions came through, so nothing is released that was not looked at.
+  def source(%ImageScan{kind: @press_kit} = scan) do
+    case press_kit_row(scan.subject_id) do
+      nil ->
+        :gone
+
+      image ->
+        first_existing([
+          PressKitStore.original_path(image.token),
+          PressKitStore.version_path(image.token, "large")
+        ])
     end
   end
 
@@ -563,6 +592,20 @@ defmodule Vutuv.Moderation.ImageSubjects do
     end
   end
 
+  # A press picture that passed. Stand-in first, then the flip, for the reason
+  # the gallery branch above states: of the two orders only this one's leftover
+  # is harmless. `Vutuv.PressKit.release/1` owns the write, so the shared
+  # `images` table keeps one writer per kind, and it answers `:stale` for a row
+  # that is no longer the one that was waiting.
+  def apply_approved(%ImageScan{kind: @press_kit} = scan) do
+    drop_press_kit_pixelated(scan.subject_id)
+
+    with :ok <- PressKit.release(scan.subject_id) do
+      broadcast(scan, :approved)
+      :ok
+    end
+  end
+
   @doc """
   Deletes the rejected image on the spot: files (served, quarantined and the
   private original — nothing unsafe stays at rest) and the asset's
@@ -804,6 +847,22 @@ defmodule Vutuv.Moderation.ImageSubjects do
     end
   end
 
+  # A refused press picture: `Vutuv.PressKit.delete/1`, which is the owner's own
+  # "remove it" — row, every derived version, the private original, the
+  # stand-in and any hold. Nothing unsafe stays at rest, and the scan row is
+  # left as the only record of what was deleted.
+  def apply_rejected(%ImageScan{kind: @press_kit} = scan) do
+    case press_kit_row(scan.subject_id) do
+      nil ->
+        :stale
+
+      image ->
+        :ok = PressKit.delete(image)
+        broadcast(scan, :rejected)
+        :ok
+    end
+  end
+
   # The one write behind both remote-picture verdicts (issue #1163): flip the
   # moderation column, guarded on the fingerprint so a verdict can never touch
   # bytes that changed under it. `clear_file: true` also drops the reference, so
@@ -1041,6 +1100,7 @@ defmodule Vutuv.Moderation.ImageSubjects do
       gallery_stranded("post_image") ++
       gallery_stranded("job_posting_image") ++
       gallery_stranded("organization_image") ++
+      press_kit_stranded() ++
       post_screenshot_stranded() ++
       review_cover_stranded() ++
       video_frame_stranded() ++
@@ -1097,6 +1157,27 @@ defmodule Vutuv.Moderation.ImageSubjects do
     )
     |> Repo.all()
     |> Enum.map(fn {id, owner_id} -> {kind, id, owner_id, nil} end)
+  end
+
+  # A press picture waiting on a scan nobody queued. Its owner is whichever half
+  # of the member-or-page pair the row names — a page's row leaves `user_id`
+  # empty, so without the coalesce the re-enqueued scan would have nobody to
+  # tell about a rejection.
+  #
+  # **A frozen row is not stranded.** Its files are in the takedown hold, so
+  # `source/1` answers `:gone`, the scan cancels, the row stays `pending` and
+  # the next pass queues it again — for ever, on a picture that is offline by
+  # decision rather than by drift, and at the front of every batch because the
+  # queue is oldest-first.
+  defp press_kit_stranded do
+    from(i in Images.Image,
+      as: :subject,
+      where: i.kind == ^@press_kit and i.moderation == "pending" and is_nil(i.frozen_at),
+      where: not exists(open_scan_exists(@press_kit)),
+      select: {i.id, coalesce(i.user_id, i.uploader_user_id)}
+    )
+    |> Repo.all()
+    |> Enum.map(fn {id, owner_id} -> {@press_kit, id, owner_id, nil} end)
   end
 
   defp flat_stranded(kind) do
@@ -1167,6 +1248,21 @@ defmodule Vutuv.Moderation.ImageSubjects do
   end
 
   defp drop_pixelated(_config, _subject_id), do: :ok
+
+  # The press kit's twin of the above: the row is read by id because the flip
+  # below has none in hand, and a picture already gone (a delete that raced the
+  # verdict) simply has nothing to drop.
+  defp drop_press_kit_pixelated(subject_id) do
+    case press_kit_row(subject_id) do
+      nil -> :ok
+      image -> PressKitStore.delete_pixelated(image.token)
+    end
+  end
+
+  # Narrowed to the kind, so a scan can never read — or write over — a row of
+  # another one that happens to share the id.
+  defp press_kit_row(subject_id),
+    do: Repo.get_by(Images.Image, id: subject_id, kind: @press_kit)
 
   defp broadcast(%ImageScan{} = scan, verdict) do
     Vutuv.Activity.broadcast(

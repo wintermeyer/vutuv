@@ -364,12 +364,18 @@ defmodule Vutuv.Uploads.Spec do
 
   # Whether SVG markup is something we are willing to hand to the renderer.
   #
-  # A rasterised SVG never reaches a browser here — every proxy serves the
-  # derived AVIF versions only — so this is not an XSS gate but a *renderer*
-  # gate: the XML parser runs on our server, on markup a member (or a remote
-  # server) chose, and left alone it will expand entities and follow references
-  # while rendering. So it has to be readable text, must carry none of
-  # `@svg_forbidden`, and may not point a reference at the network or the disk.
+  # No page here ever *renders* an SVG: every proxy shows the derived AVIF
+  # versions, and the one route by which a vector leaves at all — a press logo's
+  # `download.orig` (#2083) — hands it over as an `attachment` under `nosniff`,
+  # so the browser saves it rather than executing it on our origin. This is
+  # therefore not an XSS gate but a *renderer* gate: the XML parser runs on our
+  # server, on markup a member (or a remote server) chose, and left alone it
+  # will expand entities and follow references while rendering. So it has to be
+  # readable text, must carry none of `@svg_forbidden`, and may not point a
+  # reference at the network or the disk.
+  #
+  # That download is also why the vetting matters twice over: the markup a
+  # journalist saves is the markup this predicate cleared, unchanged.
   #
   # Deliberately narrower than "contains no URL". Every SVG an editor exports
   # names URLs that are never fetched — the `xmlns` namespaces, and the RDF /

@@ -29,10 +29,14 @@ defmodule Vutuv.Moderation.ImageScan do
   #
   # `post_video_frame` is one still of a post's clip (issue #1908): a clip is
   # judged frame by frame, and one refused frame refuses the whole clip.
+  #
+  # `press_kit` (issue #2084) is a press photo or a logo variant. Its owner may
+  # be a page rather than a member, so `owner_user_id` carries whoever uploaded
+  # it — the person whose file was refused, and the only one there is to tell.
   @kinds ~w(avatar cover post_image job_posting_image organization_image
             url_screenshot post_screenshot organization_screenshot review_cover
             qualification_document job_reference_document remote_post_image
-            remote_avatar post_video_frame)
+            remote_avatar post_video_frame press_kit)
   @statuses ~w(pending scanning approved rejected canceled)
   @open_statuses ~w(pending scanning)
 

@@ -153,9 +153,16 @@ defmodule Vutuv.Uploads do
     }
   end
 
+  @doc "The `{scope, config}` twin of `hold/2`, for an uploader keyed that way."
+  def hold(image_id, scope, config), do: hold(image_id, storage_dir(scope, config))
+
   @doc """
-  Moves every stored file of `scope` — derived versions, the private original
-  and anything still in AI quarantine — into the hold of `image_id`.
+  Moves every stored file under `storage_dir` — derived versions, the private
+  original and anything still in AI quarantine — into the hold of `image_id`.
+
+  The directory is the primitive, because the loop and `hold_slots/1` never
+  wanted anything else: a profile picture's tree is `<prefix>/<member id>` and a
+  press picture's is `press_kit/<token>`, with no scope to derive it from.
 
   **Restartable by construction.** Each file is moved on its own with an atomic
   rename, so an interruption leaves every file whole on one side or the other
@@ -164,24 +171,23 @@ defmodule Vutuv.Uploads do
   `frozen_at` *before* this runs: the stamp is the record of the intent, and
   the move is the part that may need a second attempt.
   """
-  def hold(image_id, scope, config) do
-    storage_dir = storage_dir(scope, config)
-
+  def hold(image_id, storage_dir) when is_binary(storage_dir) do
     for {slot, source} <- hold_slots(storage_dir),
         do: move_all(source, Path.join(hold_dir(image_id), slot))
 
     :ok
   end
 
+  @doc "The `{scope, config}` twin of `release/2`, for an uploader keyed that way."
+  def release(image_id, scope, config), do: release(image_id, storage_dir(scope, config))
+
   @doc """
   The other direction: every file in the hold of `image_id` goes back to the
   tree it came from, at the name it had. The (now empty) hold is left standing
-  — `Vutuv.Images.unfreeze/1` removes it only once the member row names the
-  files again, so an interruption is still visible as a hold to finish.
+  — `Vutuv.Images.unfreeze/1` removes it only once the picture is reachable
+  again, so an interruption is still visible as a hold to finish.
   """
-  def release(image_id, scope, config) do
-    storage_dir = storage_dir(scope, config)
-
+  def release(image_id, storage_dir) when is_binary(storage_dir) do
     for {slot, target} <- hold_slots(storage_dir),
         do: move_all(Path.join(hold_dir(image_id), slot), target)
 

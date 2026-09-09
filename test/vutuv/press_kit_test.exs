@@ -100,15 +100,16 @@ defmodule Vutuv.PressKitTest do
       assert File.exists?(Path.join(dir, "large.avif"))
     end
 
-    test "the kind is declared, proxied, and has no takedown yet", %{owner: owner, tmp: tmp} do
+    test "the kind is declared, proxied and takeable offline", %{owner: owner, tmp: tmp} do
       assert @kind in Images.kinds()
       assert Images.serving(@kind) == :proxy
       refute Images.mirrored?(@kind)
 
       {:ok, photo} = add_photo(owner, owner, tmp)
-      # #2084 wires the freeze; until then the report gate must refuse the kind
-      # rather than open a case whose uphold raises.
-      refute Images.takedown_ready?(photo)
+      # The report gate refuses a kind nothing can take offline, because such a
+      # case raises the moment an admin upholds it. #2084 gave this one its
+      # freeze in the same release as its scan.
+      assert Images.takedown_ready?(photo)
     end
 
     test "an upload without the rights confirmation is refused", %{owner: owner, tmp: tmp} do
