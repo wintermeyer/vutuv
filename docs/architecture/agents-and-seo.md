@@ -373,10 +373,38 @@ Every HTML page carries `og:*` + `twitter:card` tags derived in one chokepoint
 (`VutuvWeb.OpenGraph`, rendered by the root layout; the plain description meta
 shares the same derivation).
 
-Pages about a member preview their name, work info and avatar — served as a
-scraper-friendly square JPEG at `/:slug/avatar.jpg`
-(`VutuvWeb.AvatarController`; preview scrapers don't decode the site's AVIF),
-derived on the fly from the kept original, metadata-stripped.
+Pages about a member preview their name and work info, and as picture their
+**generated card** at `/:slug/og.png` (`VutuvWeb.OgImage`, served by
+`VutuvWeb.OgImageController`): a 1200×630 PNG with the face, the name, the
+headline, up to two rows of tags and the follower line, drawn with libvips and
+Pango — no Chromium, and no SVG loader either, the round avatar and the pills
+are masks computed from pixel coordinates. It replaced the square avatar as
+`og:image` because a square picture gets the *small* card on every platform
+(a thumbnail beside the title on Facebook, the `summary` card on X, a
+thumbnail on Slack and Signal), and the wide 1.91:1 shape is the one they all
+draw large. On X the picture is the whole card — since 2024 it shows nothing
+but the image, a tiny title overlay and the domain — so the card carries the
+words. The card's few words (followers, member since, the date) are in the
+member's own locale, one file for everybody who shares the link. The typeface
+is the first of a family list fontconfig finds (Inter when installed, else the
+platform sans), and the line metrics are measured at render time, never
+assumed. Every card renders from the anonymous public view, and a withheld
+profile answers a plain 404 like `/:slug/avatar.jpg` does.
+
+**LinkedIn is the exception, on purpose.** Its organic feed has drawn every
+shared link as a small square cut from the middle of the picture since 2024,
+whatever the picture's size (large cards are for sponsored posts only), so the
+wide card would arrive there as a strip of headline. `VutuvWeb.Plug.PreviewScraper`
+recognises its scraper (`LinkedInBot`) and assigns `:square_preview?`, on which
+`OpenGraph` names a square instead: the avatar (`/:slug/avatar.jpg`) for a
+profile, and for a post the **square post card** at
+`<permalink>/og-square.png` (`OgImage.square_png/1`: face, name and the first
+four lines in type large enough to survive a ninefold reduction — LinkedIn
+shows the square at about 128 px on a desktop and 80 px in its app). The plug
+also merges `user-agent` into the `Vary` header of every HTML response, so a
+cache between us and the scrapers never hands X the LinkedIn tag set; the
+agent-format siblings carry no preview tags and are left alone. The square
+avatar endpoint stays what the ActivityPub actor's `icon` points at.
 
 Pages about an **organization** preview the same way (issue #1581): the page's
 name as title, its own description flattened out of its Markdown as
@@ -388,13 +416,27 @@ both kinds of account page; a page that has claimed a root handle carries it as
 `profile:username`, and no page ever gets the `profile:first_name` /
 `profile:last_name` properties that only describe a person.
 
-Public posts preview as articles with their teaser line, date and first image
+Public posts preview as articles. The `og:title` is "Author: first line…"
+(`OpenGraph.title/1`; the `<title>` keeps its "Author · date" form) because on
+LinkedIn and X the title is all the text a card carries, and the
+`og:description` is the opening of the whole body (`PostTeaser.opening/2`, 200
+characters, paragraph breaks folded), which Bluesky, Mastodon, Slack and
+Facebook draw under the title. The picture is the post's first image
 (`/post_images/<token>/og.jpg`, derived on the fly by the authorizing proxy, so
-audience changes keep guarding it); restricted posts and teasers never leak the
-body or an image. That holds for a post published in an organization's name
-(`/organizations/:slug/posts/:id`) exactly as for a member's — whose post it is
-decides only the *fallback* picture: the post's own first image, else the
-author's avatar or the page's logo, else the brand card.
+audience changes keep guarding it), else — for a member's post — its own
+**generated card** at `<permalink>/og.png` (author, headline and the first six
+lines in the largest of three sizes that fits), else the author's card or the
+page's logo, else the brand card. Restricted posts and teasers never leak the
+body or an image, and the card endpoints refuse them too. A post published in
+an organization's name (`/organizations/:slug/posts/:id`) has no generated
+card yet and falls back to the page's logo.
+
+A federating member's pages also carry `<meta name="fediverse:creator">` with
+their `@handle@host` (`OpenGraph.creator/1`), which Mastodon 4.3+ turns into a
+"More from …" line with a follow button on the preview card — but only once
+the member's actor document lists this host under `attributionDomains`
+(`VutuvWeb.Fediverse.Docs.actor/2` names the apex and its `www.` spelling);
+without that line Mastodon reads the tag and ignores it.
 
 **One module decides which line that is.** `VutuvWeb.PostTeaser.line/2` — and
 its flattened twin `plain_line/2` — is the single owner of the app's one-line
