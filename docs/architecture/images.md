@@ -96,10 +96,10 @@ Pending gallery uploads (a composer that was never submitted) are swept after a
 day by `Vutuv.Posts.PendingImageSweeper`, which cleans **both** the post and the
 job-posting galleries (rows and files).
 
-### SVG (organization logos)
+### SVG (organization logos, press logos)
 
-An **organization logo** may also be uploaded as SVG — the one picture members
-usually hold as a vector. `Vutuv.Uploads.Spec` rasterises it on the way in (at
+An **organization logo** or a **press-kit logo variant** (#2083) may also be
+uploaded as SVG — the one picture members usually hold as a vector. `Vutuv.Uploads.Spec` rasterises it on the way in (at
 `svg_raster_size/0`, the widest version an organization image is stored at); the
 served versions are AVIF like every other picture, and the SVG stays behind as
 the original.
@@ -109,7 +109,17 @@ is the upload's temporary file, which has no extension, and libvips picks its
 loader by content anyway — so a `.png` full of SVG markup renders as SVG
 whatever the whitelist believed. The opening bytes decide instead.
 
-*The renderer is what is protected, not the browser.* No SVG is ever served, so
+*The press logo is the one SVG that leaves again, and only as a file.* A press
+kit exists to be redistributed, so a designer's vector has to be downloadable —
+`Vutuv.PressKitStore.download_file/1` hands out the stored original, and
+`VutuvWeb.PressKitImageController` sends it as an `attachment` (`nosniff` comes
+with the `:browser` pipeline), never inline. That distinction is the whole
+safety argument: an SVG rendered inline on our own origin is a script on our own
+origin, while one saved to disk is a file. Beside it `png_download_file/1`
+offers the same mark rasterised, for whoever cannot use a vector.
+
+*The renderer is what is protected, not the browser.* No SVG is ever rendered by
+a browser on our origin, so
 this is not an XSS question: the XML parser runs on our machine, on markup a
 member — or a remote server — chose, and it will expand entities (XXE, billion
 laughs) and follow references while rendering. The gate refuses a DOCTYPE,
@@ -764,6 +774,73 @@ old row *is* the picture, so the fallback is a lookup in the table it is about
 to leave rather than four columns read as a row. For the review cover the
 fallback is simpler still: the review row is already in hand wherever its cover
 is rendered.
+
+### The press kit, the one kind born here (issue #2083)
+
+A **press photo** and a **logo variant** are one kind, `press_kit`, and they are
+the first pictures whose only home is this table. Every kind before them arrived
+as a mirror of a table of its own (#2015) or as columns on a parent row (#2055),
+so `press_kit` has no source to keep in step, no backfill class, no bridge and
+no contract release: `Vutuv.PressKit` writes the row, `Vutuv.PressKitStore` the
+files, and that is all there is.
+
+**Three columns are new** — `credit` (the line beside the picture, varchar(255)),
+`rights_confirmed_at` (when the uploader confirmed they hold the rights and
+release the file for editorial use with the credit shown) and `logo` (which of
+the two shelves the row is on). Everything else it needs was already here:
+`token`, `moderation`, `frozen_at`, the six a gallery row carries, `caption`
+(`:text` since #2052, which is what a Markdown caption naming the photographer's
+handle wants) and the `user_id` / `organization_id` / `uploader_user_id` trio
+#2053 built.
+
+**One shelf per row, one owner per row, and the database says both.**
+`images_press_kit_declared` makes `logo` and `rights_confirmed_at` NOT NULL for
+this kind alone — a NULL `logo` would put the row on neither shelf, invisible to
+both queries with nothing raising, and a missing confirmation would leave a file
+offered for download that nobody said may be downloaded.
+`images_press_kit_has_one_owner` requires exactly one of `user_id` and
+`organization_id`: a member's press kit is theirs and cascades with the account,
+a page's belongs to the page and outlives the colleague who uploaded it, so
+naming both would arm the member cascade on a picture the page owns. That is
+#2053's rule restated for a kind that can be owned either way.
+
+**Why a `logo` flag and not a second kind.** Everything the rest of the system
+asks about a picture — owner, token, moderation, takedown, which proxy — is
+identical for the two, and a second kind would have to be registered a second
+time in every list the moderation and report sub-issues extend. What differs is
+only what each shelf may hold and how many, which is a column and two config
+keys.
+
+**What a photo may be is decided by the metadata stripper**, not by what libvips
+can decode: JPEG, PNG and WebP, exactly the containers
+`Vutuv.Uploads.MetadataStrip` can take apart. HEIC is deliberately absent even on
+a build that can decode it, because the stripper answers `:unsupported` for it
+and a press photo nobody can clean is a press photo that leaks a GPS fix. The
+download is therefore always the **cleaned original** — the same pixels, every
+metadata block removed, cached beside the original — and there is no
+"exact file" choice the way a post photo has one (`download_exact`): a picture
+published for redistribution should not be the one place a camera serial number
+leaves.
+
+**Serving.** `press_kit/<token>/…` for the derived AVIF versions,
+`originals/press_kit/<token>/` for the upload and the two files derived from it
+(`cleaned.<ext>`, `download.png`), and every byte through
+`VutuvWeb.PressKitImageController` at `/system/press_kit/:token/:version`.
+Under `/system/` rather than a root word of its own, like the remote-media proxy
+and unlike the older `/post_images` ones — profiles own the URL root, so a new
+root segment permanently burns a handle, and this kind therefore needs no
+`Vutuv.Accounts.ReservedSlugs` entry. Production serves proxied images with
+`send_file` rather than the X-Accel handoff (`:post_image_serving`), so a new
+kind of proxied picture costs no nginx change.
+
+**Born pending, and not yet scanned.** A fresh row starts at
+`Vutuv.Moderation.ImageScans.initial_state/0`, so with the AI gate on it is
+`"pending"` and `PressKit.visible_to?/2` shows it to its owner alone — for a
+page, to every member of its staff, since a colleague has to be able to see what
+is being checked. Nothing enqueues that scan yet and
+`Vutuv.Images.takedown_ready?/1` answers false for the kind, so a report may not
+name one: the scan, the pixelated stand-in and the freeze are #2084's, and the
+report gate #2089's.
 
 ### The takedown hold (issue #2012)
 

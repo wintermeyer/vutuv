@@ -958,6 +958,13 @@ defmodule VutuvWeb.Router do
     get("/system/remote_media/posts/:id/:version", RemoteMediaController, :post_image)
     get("/system/remote_media/avatars/:id/:version", RemoteMediaController, :avatar)
 
+    # The authorizing press-kit proxy (issue #2083): the display versions of a
+    # press photo or logo variant, plus the two addresses the file itself is
+    # handed over at. Under `/system/` like the remote-media proxy above, so it
+    # burns no root word a member could otherwise claim as a handle — which is
+    # also why this kind adds no ReservedSlugs entry.
+    get("/system/press_kit/:token/:version", PressKitImageController, :show)
+
     # Post deletion (the permalink lives in the profile scope below; "posts"
     # is in ReservedSlugs).
     delete("/posts/:id", PostController, :delete)

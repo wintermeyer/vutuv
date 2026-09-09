@@ -97,6 +97,27 @@ defmodule Vutuv.Uploads.Spec do
     %{name: :large, fit: {:box_down, 1600}, quality: 58}
   ]
 
+  # The sizes a **photograph shown in a timeline** is stored at, named twice
+  # below for the same reason the page list above is: a post photo and a press
+  # photo are the same picture in the same two slots, and a copy of the list is
+  # a place a quality change reaches one of them only.
+  #
+  # thumb: square feed-grid / mosaic cell; feed: single-image feed width;
+  # large: the permalink gallery; xl: the lightbox.
+  #
+  # `xl` exists because on a photo post the picture *is* the content
+  # (issue #1104): 1600px is a fine page image and a soft one filling a
+  # 4K screen, which is exactly what the lightbox does. It is the one
+  # version sized for looking at rather than for a layout slot, so it is
+  # also the only one worth its extra bytes — nothing else requests it.
+  @photo_versions [
+    %{name: :thumb, fit: {:crop, 320, 320, :center}, quality: 58},
+    %{name: :lite, fit: {:box_down, 640}, quality: @lite_quality},
+    %{name: :feed, fit: {:box_down, 1200}, quality: 58},
+    %{name: :large, fit: {:box_down, 1600}, quality: 58},
+    %{name: :xl, fit: {:box_down, 2560}, quality: 60}
+  ]
+
   @specs %{
     avatar: [
       %{name: :thumb, fit: {:crop, 96, 96, :center}, quality: 62},
@@ -147,24 +168,27 @@ defmodule Vutuv.Uploads.Spec do
     remote_avatar: [
       %{name: :image, fit: {:crop, 192, 192, :center}, quality: 62}
     ],
-    post_image: [
-      # thumb: square feed-grid / mosaic cell; feed: single-image feed width;
-      # large: the permalink gallery; xl: the lightbox.
-      #
-      # `xl` exists because on a photo post the picture *is* the content
-      # (issue #1104): 1600px is a fine page image and a soft one filling a
-      # 4K screen, which is exactly what the lightbox does. It is the one
-      # version sized for looking at rather than for a layout slot, so it is
-      # also the only one worth its extra bytes — nothing else requests it.
-      %{name: :thumb, fit: {:crop, 320, 320, :center}, quality: 58},
-      %{name: :lite, fit: {:box_down, 640}, quality: @lite_quality},
-      %{name: :feed, fit: {:box_down, 1200}, quality: 58},
-      %{name: :large, fit: {:box_down, 1600}, quality: 58},
-      %{name: :xl, fit: {:box_down, 2560}, quality: 60}
-    ],
+    post_image: @photo_versions,
     # Job-posting gallery images: same sizes as post images.
     job_posting_image: @page_image_versions,
     organization_image: @page_image_versions,
+    # A press photo (issue #2083) is shown in the same two places a post photo
+    # is — a mosaic tile and the lightbox — so it takes the same list rather
+    # than a copy of it, the way the two page-picture types share one above.
+    # What is *not* here is the file a journalist downloads: that is the cleaned
+    # original at its own resolution (`Vutuv.PressKitStore`), never a derived
+    # version, which is the whole point of the section.
+    press_kit: @photo_versions,
+    # A press logo variant. Two sizes and **no crop of any kind**: a wordmark is
+    # wide and a square thumb would cut it in half, which is exactly what the
+    # press card must not do to the mark it is handing out. `box_down` also
+    # keeps a small vector export from being upscaled into a blur. Quality is
+    # the avatar's rather than the photo's, because flat colour and hard edges
+    # are where AVIF blocking shows.
+    press_kit_logo: [
+      %{name: :thumb, fit: {:box_down, 320}, quality: 62},
+      %{name: :large, fit: {:box_down, 1200}, quality: 62}
+    ],
     # The proof document on a certificate/license (Vutuv.QualificationDocument):
     # one aspect-preserving thumbnail (typically a portrait A4 scan), displayed
     # up to ~256px wide — the full document is a click away.
@@ -283,11 +307,15 @@ defmodule Vutuv.Uploads.Spec do
 
   @doc """
   The long edge an SVG is rasterised at: the widest version an organization
-  image is stored at, since that is the only type whose whitelist takes one.
-  Read off the version table rather than written out, so a resolution change
-  there moves the raster size with it. Every `fit` downscales from here and
-  none upscales — a type with a bigger version (post `xl` is 2560) starting to
-  take SVGs would want this widened.
+  image is stored at. Read off the version table rather than written out, so a
+  resolution change there moves the raster size with it. Every `fit` downscales
+  from here and none upscales — a type with a bigger version (post `xl` is 2560)
+  starting to take SVGs would want this widened.
+
+  Two types take an SVG today, the organization image and the press logo
+  (#2083), and this covers both: the press logo's widest version is 1200 and
+  the PNG rendering its download hands out is derived from the same raster, so
+  nothing there asks for more pixels than this.
   """
   def svg_raster_size, do: max_width(:organization_image)
 
@@ -434,6 +462,25 @@ defmodule Vutuv.Uploads.Spec do
     with {:ok, rotated} <- open_rotated(path),
          {:ok, shaped} <- shape.(rotated),
          {:ok, data} <- Operation.jpegsave_buffer(shaped, keep: [], Q: 80) do
+      {:ok, data}
+    else
+      _ -> :error
+    end
+  end
+
+  @doc """
+  The file at `path` as **PNG**, metadata-free — `og_jpeg/2`'s twin for a
+  picture that is handed *over* rather than scraped, and the reason no store
+  writes its own `pngsave`: `keep: []` is a privacy rule, not a setting, and it
+  was already written out in three uploaders each free to forget it.
+
+  An SVG is rasterised on the way through (`open_rotated/1`, at
+  `svg_raster_size/0`), which is what a press-kit vector logo's PNG download is
+  (#2083). `:error` when the file cannot be decoded, so a caller fails closed.
+  """
+  def raster_png(path) when is_binary(path) do
+    with {:ok, rotated} <- open_rotated(path),
+         {:ok, data} <- Operation.pngsave_buffer(rotated, keep: []) do
       {:ok, data}
     else
       _ -> :error

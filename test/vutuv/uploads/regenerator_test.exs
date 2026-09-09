@@ -362,7 +362,8 @@ defmodule Vutuv.Uploads.RegeneratorTest do
     # the first had a written, documented `regenerate/2` that nobody called, the
     # second had no hook at all — so a Spec change never reached an
     # Arbeitszeugnis thumbnail or an organization logo, while this tool reported
-    # success on every other tree.
+    # success on every other tree. `:press_kit` (#2083) was registered in the
+    # same change as its store, which is the point of the coverage test below.
     assert Map.keys(summary) |> Enum.sort() ==
              [
                :avatars,
@@ -372,6 +373,7 @@ defmodule Vutuv.Uploads.RegeneratorTest do
                :organization_images,
                :orphan_originals,
                :post_images,
+               :press_kit,
                :qualification_documents,
                :screenshots
              ]
@@ -427,7 +429,8 @@ defmodule Vutuv.Uploads.RegeneratorTest do
         "job_posting_image_store" => :job_posting_images,
         "qualification_document" => :qualification_documents,
         "job_reference_document" => :job_reference_documents,
-        "organization_image_store" => :organization_images
+        "organization_image_store" => :organization_images,
+        "press_kit_store" => :press_kit
       }
 
       types = Regenerator.types()

@@ -35,6 +35,7 @@ defmodule Vutuv.UploadsGitignoreTest do
     job_reference_documents
     organization_images
     job_posting_images
+    press_kit
     remote_media
   )
 

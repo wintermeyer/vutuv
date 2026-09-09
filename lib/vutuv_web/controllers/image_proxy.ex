@@ -101,6 +101,27 @@ defmodule VutuvWeb.ImageProxy do
     |> send_file(200, path)
   end
 
+  @doc """
+  Hands a **file** over rather than a version of a picture: the immutable cache
+  header, the content type read off the path, `content-disposition: attachment`
+  under `filename`, and the bytes.
+
+  Deliberately not `serve/3`. That helper's X-Accel branch resolves paths inside
+  the *served* versions location, and every file that leaves this way lives in
+  the private originals tree, which nginx must never learn to resolve. It is
+  here rather than in each proxy because two of them now hand a file over — the
+  post photo's author-enabled download (#1104) and the press kit's, which is a
+  whole section built on it (#2083) — and the next header must not land in only
+  one of them.
+  """
+  def hand_over(conn, path, filename) do
+    conn
+    |> put_cache_control()
+    |> put_resp_content_type(MIME.from_path(path), nil)
+    |> put_resp_header("content-disposition", ~s(attachment; filename="#{filename}"))
+    |> send_file(200, path)
+  end
+
   @doc "The uniform 404 — denied and unknown tokens are indistinguishable by design."
   def not_found(conn), do: VutuvWeb.ControllerHelpers.render_error(conn, 404)
 end

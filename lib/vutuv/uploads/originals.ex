@@ -15,7 +15,14 @@ defmodule Vutuv.Uploads.Originals do
   filename (that is column metadata, not a path) — and there is exactly one
   original per storage dir: a re-upload clears the stale one first, whatever
   its extension.
+
+  Two files may sit **beside** an original rather than under the served
+  versions: a copy derived from it that must not become reachable by URL
+  construction. `cleaned_copy/3` below writes the first of them; the other is a
+  store's own (`Vutuv.PostImageStore`'s cropped download and crop workbench).
   """
+
+  alias Vutuv.Uploads.MetadataStrip
 
   @doc """
   Copies the uploaded file at `source_path` to the private original location
@@ -81,6 +88,56 @@ defmodule Vutuv.Uploads.Originals do
   def delete(storage_dir) do
     File.rm_rf(dir(storage_dir))
     :ok
+  end
+
+  @doc """
+  The **cleaned copy** of a kept original, as `{path, ext}`: the same pixels
+  with every metadata block removed (`Vutuv.Uploads.MetadataStrip`), derived
+  once on first request and cached beside the original as `cleaned<ext>`.
+
+  **It fails closed.** A container the stripper cannot take apart yields `nil`
+  rather than the untouched file, because the whole point of offering a cleaned
+  copy is the promise that the file carries nothing but the picture, and falling
+  back to the upload would break exactly that promise while looking like it
+  worked.
+
+  Written here rather than in each store because both places that hand a
+  full-resolution file over make the same promise — the post photo's
+  author-enabled download (#1104) and the press kit's, which is a whole section
+  built on it (#2083) — and a fix to either the fail-closed rule or the atomic
+  publish must not reach only one of them.
+  """
+  def cleaned_copy(storage_dir, original, ext) do
+    dest = Path.join(dir(storage_dir), "cleaned#{ext}")
+
+    cond do
+      File.exists?(dest) -> {dest, ext}
+      # A fast path only: `strip/2` sniffs the bytes and answers `:unsupported`
+      # for these containers anyway, but reading a 30 MB press photo to find
+      # that out is what this skips.
+      not MetadataStrip.supported?(ext) -> nil
+      true -> write_cleaned(original, dest, ext)
+    end
+  end
+
+  defp write_cleaned(original, dest, ext) do
+    case MetadataStrip.strip(original, ext) do
+      :unsupported -> nil
+      bytes -> {publish(dest, bytes), ext}
+    end
+  end
+
+  @doc """
+  Writes `bytes` to `dest` in the private tree and returns the path — beside the
+  target and renamed, so two concurrent downloads can never serve a half-written
+  file. Every derivative cached next to an original goes through this.
+  """
+  def publish(dest, bytes) do
+    File.mkdir_p!(Path.dirname(dest))
+    temp = "#{dest}.#{System.unique_integer([:positive])}"
+    File.write!(temp, bytes)
+    File.rename!(temp, dest)
+    dest
   end
 
   @doc "The absolute private directory for `storage_dir`."

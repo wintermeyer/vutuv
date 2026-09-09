@@ -376,31 +376,8 @@ defmodule Vutuv.PostImageStore do
 
   defp download_file(%PostImage{download_exact: true}, original, ext), do: {original, ext}
 
-  defp download_file(%PostImage{token: token}, original, ext) do
-    cleaned = cleaned_path(token, ext)
-
-    cond do
-      File.exists?(cleaned) -> {cleaned, ext}
-      not MetadataStrip.supported?(ext) -> nil
-      true -> write_cleaned(original, cleaned, ext)
-    end
-  end
-
-  defp write_cleaned(original, cleaned, ext) do
-    case MetadataStrip.strip(original, ext) do
-      :unsupported ->
-        nil
-
-      bytes ->
-        File.mkdir_p!(Path.dirname(cleaned))
-        # Write beside the target and rename, so two concurrent downloads can
-        # never serve a half-written file.
-        temp = "#{cleaned}.#{System.unique_integer([:positive])}"
-        File.write!(temp, bytes)
-        File.rename!(temp, cleaned)
-        {cleaned, ext}
-    end
-  end
+  defp download_file(%PostImage{token: token}, original, ext),
+    do: Originals.cleaned_copy(storage_dir(token), original, ext)
 
   # The full-resolution cropped download, derived once and cached in the
   # private originals tree (like the cleaned copy). JPEG on purpose: it is a
@@ -422,13 +399,7 @@ defmodule Vutuv.PostImageStore do
          {:ok, cropped} <- Crop.apply_to(rotated, Crop.parse(crop)),
          {:ok, data} <-
            Operation.jpegsave_buffer(cropped, keep: [], Q: @cropped_download_quality) do
-      File.mkdir_p!(Path.dirname(dest))
-      # Write beside the target and rename, so two concurrent downloads can
-      # never serve a half-written file (the cleaned copy's pattern).
-      temp = "#{dest}.#{System.unique_integer([:positive])}"
-      File.write!(temp, data)
-      File.rename!(temp, dest)
-      {dest, ".jpg"}
+      {Originals.publish(dest, data), ".jpg"}
     else
       _ -> nil
     end
@@ -478,14 +449,6 @@ defmodule Vutuv.PostImageStore do
       nil -> false
       original -> PostImage.cropped?(image) or MetadataStrip.supported?(Path.extname(original))
     end
-  end
-
-  # The cleaned copy lives in the private originals tree, not beside the
-  # served versions: that directory has no static mount and no nginx alias, so
-  # the file can only ever leave through the authorizing proxy. (It would also
-  # be swept by the regenerator's stale glob if it sat with the versions.)
-  defp cleaned_path(token, ext) do
-    Path.join(Originals.dir(storage_dir(token)), "cleaned#{ext}")
   end
 
   # Everything cached beside the original that merely *describes* it: the

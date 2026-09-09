@@ -851,6 +851,12 @@ defmodule Vutuv.Accounts do
     # postings/account, but their on-disk files would be orphaned otherwise.
     job_image_tokens = Vutuv.Jobs.image_tokens_for_user(user.id)
 
+    # The user's own press kit (issue #2083): the rows cascade on
+    # `images.user_id`, the files do not. Only the ones they *own* — a press
+    # picture they uploaded for a page belongs to the page and stays, which is
+    # why `images.uploader_user_id` nilifies instead of cascading.
+    press_kit_tokens = Vutuv.PressKit.tokens(user)
+
     # The user's link previews: the urls rows cascade with the account, but
     # their screenshot files (keyed by url id) would be orphaned otherwise.
     # Only the id is needed — Screenshot.delete/1 keys its dirs off it.
@@ -957,6 +963,7 @@ defmodule Vutuv.Accounts do
     Enum.each(image_tokens, &Vutuv.PostImageStore.delete/1)
     Enum.each(video_tokens, &Vutuv.PostVideoStore.delete/1)
     Enum.each(job_image_tokens, &Vutuv.JobPostingImageStore.delete/1)
+    Enum.each(press_kit_tokens, &Vutuv.PressKitStore.delete/1)
     Enum.each(url_ids, &Vutuv.Screenshot.delete/1)
     Enum.each(screenshot_ids, &Vutuv.Screenshot.delete/1)
     Enum.each(review_ids, &Vutuv.ReviewCover.delete_files/1)

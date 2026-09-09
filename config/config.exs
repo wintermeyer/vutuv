@@ -743,6 +743,21 @@ config :vutuv, :job_posting_images, max_filesize: 6_000_000, max_per_post: 10
 # generous cap here would mostly collect 20 MB screenshots of one.
 config :vutuv, :organization_images, max_filesize: 4_000_000
 
+# The press kit a member or a page offers for download (Vutuv.PressKit, issue
+# #2083). The one place on vutuv where the *original* is what leaves, so the
+# budget is the largest here: 30 MB is a full-frame RAW exported as JPEG, which
+# is the file a photographer actually hands over, and refusing it would defeat
+# the feature. It stays under the endpoint's 64 MB multipart limit; the website
+# uploads over the LiveView socket, so nginx's client_max_body_size only matters
+# to an installation that adds an HTTP route of its own.
+#
+# The two counts are per shelf and per owner: ten photos are enough for a
+# portrait, a working shot and a handful of situations while still being a set a
+# journalist can look through, and five logo variants cover the light, dark,
+# monochrome and square marks a design manual names, with one spare.
+# Runtime overrides: PRESS_KIT_MAX_MB, PRESS_KIT_MAX_PHOTOS, PRESS_KIT_MAX_LOGOS.
+config :vutuv, :press_kit, max_filesize: 30_000_000, max_photos: 10, max_logos: 5
+
 # Job postings (Vutuv.Jobs, milestone 11).
 #   * default_runtime_days — how long a published posting stays live before it
 #     auto-expires. Flat, no renewals: a still-open role gets a fresh posting.
