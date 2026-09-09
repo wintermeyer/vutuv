@@ -57,6 +57,7 @@ defmodule VutuvWeb.UserProfileLive do
   alias VutuvWeb.Live.MountHandoff
   alias VutuvWeb.Live.PostTranslations
   alias VutuvWeb.Live.VideoProgress
+  alias VutuvWeb.WorkExperienceHTML
 
   # The controller embeds this LiveView with `live_render/3` (not a `live/3`
   # router route), so `VutuvWeb.Live.InitAssigns` cannot be the on_mount: it
@@ -969,11 +970,15 @@ defmodule VutuvWeb.UserProfileLive do
     |> assign(:post_filter, "all")
     |> assign(:post_filter_total, posts_total)
     |> assign(:user_tags, user.user_tags)
-    # The whole history: the Experience card clusters it and previews up to
-    # WorkExperienceHTML.profile_preview_limit/0 roles. Clustering must see every
-    # role so a truncated employer still shows its true total tenure (a preview
-    # cut inside an organization must not report only the shown roles' years).
+    # The whole history: the Experience card clusters it and previews each CV
+    # category on its own cap. Clustering must see every role so a truncated
+    # employer still shows its true total tenure (a preview cut inside an
+    # organization must not report only the shown roles' years), and the "N more
+    # entries" note counts what the cut left out. The card's groups are built
+    # here rather than in the template so the profile's frequent patches (a
+    # follow, a like, a PubSub count) do not re-cluster the whole CV each time.
     |> assign(:work_experience, user.work_experiences)
+    |> assign(:experience_groups, WorkExperienceHTML.profile_groups(user.work_experiences))
     |> assign(:education, user.educations)
     |> assign(:languages, user.languages)
     # Expired-credential hiding (issue #859) is already applied in the preload
@@ -1316,12 +1321,11 @@ defmodule VutuvWeb.UserProfileLive do
   # THE single source of the per-section preview caps: preload_user_for_show/2
   # limits its preloads with it and user/show.html.heex reads the same numbers
   # for its `preview={...}` / "more than the preview" checks, so the queries
-  # and the template can never disagree. :experience rides along too — its
-  # preload is deliberately unlimited (see below) and the cap is applied
-  # in memory by WorkExperienceHTML.grouped_clusters/3, reached through the
-  # delegating WorkExperienceHTML.profile_preview_limit/0.
+  # and the template can never disagree. Experience is deliberately absent: one
+  # number cannot say how much of a CV to show, since the jobs and the Ehrenämter
+  # are capped apart (WorkExperienceHTML.profile_groups/1), so its preload stays
+  # unlimited and the cut happens in memory.
   @preview_limits %{
-    experience: 10,
     educations: 3,
     languages: 6,
     qualifications: 8,
@@ -1347,8 +1351,8 @@ defmodule VutuvWeb.UserProfileLive do
       user_tags: user_tags_query(),
       # Deliberately unlimited: the header-job pick must see every role (a
       # pinned one can sit outside the newest three; see load_profile). The
-      # Experience card takes its preview_limit(:experience) top roles in
-      # memory; rows per member are few.
+      # Experience card applies its per-category caps in memory; rows per member
+      # are few.
       # display_preloads: the verified organization page (issue #931) and the
       # cited credential (issue #858) ride along for the Experience card.
       work_experiences:

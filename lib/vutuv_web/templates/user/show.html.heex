@@ -660,35 +660,44 @@ the resulting ~200px rail width. --%>
       length, so the gaps stay legible) ranks the blocks by how long they ran.
       Work experiences arrive newest-first (WorkExperience.order_by_date) and,
       like the section page, split into the CV categories (issue #840) under
-      their own headings once a non-employment entry exists. The block markup is
-      shared with the section page via `experience_block/1`; the preview keeps it
-      tight (no descriptions, no owner controls). --%>
-      <div
-        :for={
-          {kind, blocks} <-
-            VutuvWeb.WorkExperienceHTML.grouped_clusters(
-              @work_experience,
-              :compact,
-              VutuvWeb.WorkExperienceHTML.profile_preview_limit()
-            )
-        }
-        class="mt-6 first:mt-0"
-      >
-        <h3
-          :if={VutuvWeb.WorkExperienceHTML.show_kind_headings?(@work_experience)}
-          class="mb-3 text-xs font-semibold uppercase tracking-wide text-slate-500 dark:text-slate-400"
-        >
-          {VutuvWeb.WorkExperienceHTML.kind_label(kind)}
+      their own headings once a non-employment entry exists. Each category is
+      capped on its own (`profile_groups/1`), so a long list of Ehrenämter can
+      never push the jobs — what a business network is read for — off the card.
+      The block markup is shared with the section page via `experience_block/1`;
+      the preview keeps it tight (no descriptions, no owner controls). --%>
+      <div :for={group <- @experience_groups} class="mt-6 first:mt-0">
+        <%!-- The heading is a link because it names the part of the CV a reader
+              wants more of: on a member with many roles it is the shortest way
+              from "Berufserfahrung" to the whole list. It stays a quiet caption
+              like every other section title, so it names its own colour — the
+              legacy `a { color: brand-600 }` beats a colour merely inherited
+              from the h3 and would paint these two headings brand blue. --%>
+        <h3 :if={VutuvWeb.WorkExperienceHTML.show_kind_headings?(@work_experience)} class="mb-3">
+          <.link
+            href={~p"/#{@user}/work_experiences"}
+            class="text-xs font-semibold uppercase tracking-wide text-slate-500 hover:text-brand-700 dark:text-slate-400 dark:hover:text-brand-300"
+          >
+            {VutuvWeb.WorkExperienceHTML.kind_label(group.kind)}
+          </.link>
         </h3>
         <%!-- The published Zeugnisse, keyed by the CV entry each documents, so
               a role can name its reference the way it already names the
               qualification it was earned with. Built from the references this
               page loaded, which are the published ones only. --%>
         <VutuvWeb.WorkExperienceHTML.experience_block
-          :for={block <- blocks}
+          :for={block <- group.blocks}
           block={block}
           user={@user}
           references={VutuvWeb.JobReferenceHTML.references_by_subject(@job_references)}
+        />
+
+        <%!-- What the cap left out, in this category's own words: how many roles
+              and which years they cover, so a reader can tell a cut-off decade
+              of jobs from a couple of recent ones. --%>
+        <VutuvWeb.WorkExperienceHTML.experience_more
+          :if={group.hidden}
+          user={@user}
+          hidden={group.hidden}
         />
       </div>
 
@@ -696,7 +705,7 @@ the resulting ~200px rail width. --%>
         href={~p"/#{@user}/work_experiences"}
         manage_href={~p"/settings/work_experiences"}
         total={@totals.jobs}
-        preview={VutuvWeb.WorkExperienceHTML.profile_preview_limit()}
+        preview={Enum.sum_by(@experience_groups, & &1.shown)}
         owner={@as_owner?}
       />
     </.card>
