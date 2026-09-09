@@ -449,7 +449,10 @@ defmodule VutuvWeb.MarkdownEditorTest do
   # picker or any other server-driven rewrite.
   @seedless %{
     "lib/vutuv_web/live/organization_live/edit.ex" => "seeded at mount, saves navigate away",
-    "lib/vutuv_web/live/job_posting_live/form.ex" => "seeded at mount, saves navigate away"
+    "lib/vutuv_web/live/job_posting_live/form.ex" => "seeded at mount, saves navigate away",
+    "lib/vutuv_web/live/press_kit_live.ex" =>
+      "the editor sits inside the open tile's :if and carries that picture's id, " <>
+        "so it is unmounted and re-created rather than patched; a save closes the panel"
   }
 
   test "every markdown_editor call site passes a re-seed token, or is exempt by name" do

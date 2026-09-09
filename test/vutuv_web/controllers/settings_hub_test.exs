@@ -45,9 +45,13 @@ defmodule VutuvWeb.SettingsHubTest do
       refute "More" in names
       refute "Other" in names
 
-      # A group you have to scroll is a group you scan instead of read.
+      # A group you have to scroll is a group you scan instead of read. Nine
+      # rather than eight since the press kit joined Profile (issue #2085):
+      # every other group either names a different subject or is full itself,
+      # and filing the one row a member will hunt for under a heading it does
+      # not belong to is exactly the failure this bound exists to prevent.
       for {name, rows} <- menu do
-        assert length(rows) <= 8, "#{name} has #{length(rows)} rows, more than a glance holds"
+        assert length(rows) <= 9, "#{name} has #{length(rows)} rows, more than a glance holds"
         assert rows != []
       end
     end

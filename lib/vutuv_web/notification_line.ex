@@ -423,7 +423,8 @@ defmodule VutuvWeb.NotificationLine do
   end
 
   # A removed avatar/cover leads to the photos form (upload a new one), a
-  # removed qualification proof to the credentials editor; other rejected
+  # removed qualification proof to the credentials editor, a refused press
+  # picture to the press kit it was refused from (issue #2085); other rejected
   # images have no page left to open.
   def notification_target(%{kind: "image_rejected"} = n, viewer) do
     cond do
@@ -431,6 +432,13 @@ defmodule VutuvWeb.NotificationLine do
       n[:image_kind] in ["avatar", "cover"] -> ~p"/settings/profile"
       n[:image_kind] == "qualification_document" -> ~p"/settings/qualifications"
       n[:image_kind] == "job_reference_document" -> ~p"/settings/job_references"
+      # The member's own press kit. A picture refused from a **page's** kit
+      # names its uploader too and lands them here rather than on the page —
+      # the row is deleted by then and the notification carries only the kind,
+      # so nothing left can tell the two apart. A real page one click from the
+      # right one beats the unclickable line #2084 left behind; #2087 owns the
+      # page's editor.
+      n[:image_kind] == "press_kit" -> ~p"/settings/press"
       true -> nil
     end
   end

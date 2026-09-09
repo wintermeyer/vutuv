@@ -176,24 +176,68 @@ defmodule Vutuv.Images.Image do
     image
     |> cast(attrs, [:alt, :caption, :credit, :logo, :rights_confirmed])
     |> validate_required([:kind, :token, :logo])
-    |> validate_length(:credit, max: 255)
-    |> validate_length(:alt, max: 255)
-    |> validate_length(:caption, max: @press_caption_length)
+    |> press_bounds()
     |> confirm_rights()
     |> unique_constraint(:token)
     |> check_constraint(:user_id, name: :images_press_kit_has_one_owner)
     |> check_constraint(:logo, name: :images_press_kit_declared)
   end
 
-  # Only `Vutuv.PressKit.create/4` calls this, always on a fresh row, so the tick
-  # is simply required. The edit path #2085 adds will want a second branch here
-  # keeping an existing `rights_confirmed_at` rather than restamping it — that
-  # branch belongs in the change that can reach it.
+  @doc """
+  The **edit** of a press picture that is already stored (#2085): its label, its
+  credit and its caption, and nothing else.
+
+  Three columns are deliberately missing from the cast, and each absence is a
+  rule rather than an oversight. `logo` would move the picture between the two
+  shelves, past the cap the other one is counted against and past the format
+  whitelist it was stored under — a JPEG would arrive on the logo shelf, where
+  every reader expects a vector or a PNG. `rights_confirmed` would let an edit
+  re-give a release that was already given; the timestamp records **when the
+  file was released**, not when its caption was last touched, so
+  `confirm_rights/1` below keeps the original stamp on this path. And
+  `position` is the editor's to write through `Vutuv.PressKit.reorder/3`, never
+  a form's — a form that could name its own would bump another picture out of
+  the hero slot.
+
+  The three bounds are the columns' own, exactly as on the create path: Ecto
+  does not enforce a column limit, so an over-long value would otherwise raise
+  Postgres 22001 — here on a plain Save, which is a 500 on a form submit.
+  """
+  def press_kit_update_changeset(image, attrs) do
+    image
+    |> cast(attrs, [:alt, :caption, :credit])
+    |> press_bounds()
+    |> confirm_rights()
+  end
+
+  # The three columns' own limits, in one place for both press changesets: Ecto
+  # does not enforce a column limit, so an over-long value raises Postgres 22001
+  # rather than a form error, and two copies of the bound would mean one of them
+  # keeps a widened column's old number.
+  defp press_bounds(changeset) do
+    changeset
+    |> validate_length(:credit, max: 255)
+    |> validate_length(:alt, max: 255)
+    |> validate_length(:caption, max: @press_caption_length)
+  end
+
+  # Two branches, and the order matters. A **fresh** row is stored only against
+  # the tick, which is what allows the file to be handed out at all — and it
+  # reaches the third branch rather than the second because `PressKit.create/4`
+  # starts from a blank `%Image{}`, which has no stamp to keep. An **edit** of a
+  # row that already carries one keeps it: the release was given once, at
+  # upload, and re-stamping it on every caption fix would erase the one fact the
+  # column exists to record.
   defp confirm_rights(changeset) do
-    if get_change(changeset, :rights_confirmed) == true do
-      put_change(changeset, :rights_confirmed_at, NaiveDateTime.utc_now(:second))
-    else
-      add_error(changeset, :rights_confirmed, "must be confirmed")
+    cond do
+      get_change(changeset, :rights_confirmed) == true ->
+        put_change(changeset, :rights_confirmed_at, NaiveDateTime.utc_now(:second))
+
+      not is_nil(get_field(changeset, :rights_confirmed_at)) ->
+        changeset
+
+      true ->
+        add_error(changeset, :rights_confirmed, "must be confirmed")
     end
   end
 end

@@ -1233,6 +1233,12 @@ defmodule VutuvWeb.Router do
       # other. A LiveView because the result is a long list to search, filter,
       # page and follow from — none of which should cost a reload.
       live("/import/linkedin/connections", ImportConnectionsLive, :index)
+
+      # The member's press kit (issue #2085): the photos and logo variants a
+      # journalist may download. A LiveView because the files travel over the
+      # socket and the order is the page's other job — the first photo is the
+      # hero, and a reload per move is absurd.
+      live("/press", PressKitLive, :index)
     end
   end
 

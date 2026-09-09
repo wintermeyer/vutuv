@@ -873,6 +873,35 @@ answers the same question with `organizations.created_by_user_id` (the member
 who carries the strike ladder), and that is the answer to copy — `Case.owner_id`
 is one `users` FK, which `Organizations.owners/1`'s list cannot fill.
 
+**Who may write one (issue #2085).** `PressKit.manageable_by?/2` is the single
+statement of that rule and `create/4` asks it before it measures a byte: a
+member's press kit is theirs alone, a page's belongs to an **owner** or a
+**publisher** of the page (the pair #2087's editor is reachable by). An admin is
+deliberately not among them although `visible_to?/2` lets them look — moderating
+a picture goes through the freeze, and no admin here edits a member's own data
+in their name. The editor is `VutuvWeb.PressKitLive` at `/settings/press`, a
+routed LiveView in the `:default` live_session (so the viewer is resolved from
+the cookie's `session_token`, never a bare `session["user_id"]`); every write it
+performs resolves the picture out of the signed-in member's **own** shelves
+rather than by the id the client sent, so a forged id is not merely refused, it
+is never found. The rights tick arms the file picker rather than sitting beside
+it, and rides into `create/4` as the changeset's `rights_confirmed` — one rule,
+in the place that already owns it. An edit afterwards goes through
+`Image.press_kit_update_changeset/2`, which casts only `alt`, `credit` and
+`caption`: `logo` would move a picture between shelves past the other one's cap
+and format whitelist, `position` belongs to `PressKit.reorder/3`, and
+`rights_confirmed` would re-give a release that was already given — so
+`confirm_rights/1` keeps the original stamp on that path.
+
+`PressKit.reorder/3` and `move/4` number a shelf **0..n-1**, not 1..n like
+`Vutuv.Ordering`: a download is named from `position + 1`
+(`PressKit.download_name/2`), so the hero has to sit at 0. What the two do share
+— reading an untrusted drag payload, and swapping one row with its neighbour —
+is `Ordering.arrange/2` and `Ordering.swap/3`. A member's press kit is also a
+section of `Vutuv.Export` (schema version 10), each entry carrying the address
+the file itself is at; the pictures they uploaded *for a page* are deliberately
+absent, since those belong to the page.
+
 ### The takedown hold (issue #2012)
 
 A copyright freeze **moves** a picture, it never deletes one, and the tree it
