@@ -36,6 +36,14 @@ defmodule VutuvWeb.PressKitControllerTest do
 
   defp de(conn), do: put_req_header(conn, "accept-language", "de-DE,de;q=0.9")
 
+  # The `associatedMedia` of the page's schema.org block, decoded.
+  defp json_ld_media(html) do
+    ~r|<script[^>]*type="application/ld\+json"[^>]*>(.*?)</script>|s
+    |> Regex.scan(html)
+    |> Enum.map(&(&1 |> List.last() |> Jason.decode!()))
+    |> Enum.find_value([], &(&1["@type"] == "CollectionPage" && &1["associatedMedia"]))
+  end
+
   describe "the Press card on the profile" do
     test "shows the photos, the logos and the rights line", %{conn: conn, user: user} do
       put_press_picture(user, alt: "Am Schreibtisch", credit: "Foto: Rea Fotografin")
@@ -248,6 +256,23 @@ defmodule VutuvWeb.PressKitControllerTest do
       assert html =~ ~s("copyrightNotice": "Foto: Rea Fotografin")
       assert html =~ "acquireLicensePage"
       assert html =~ "/presse.person/press"
+    end
+
+    test "the markup names the same pictures whoever is looking", %{conn: conn} do
+      {owner_conn, owner} = create_and_login_user(conn)
+      put_press_picture(owner, position: 0)
+      pending = put_press_picture(owner, position: 1, moderation: "pending")
+
+      # The owner's own page shows them the picture the AI gate still holds, so
+      # `views/2` calls it visible — but the markup speaks to a crawler, which is
+      # always anonymous and would fetch a 404.
+      html = owner_conn |> get(~p"/#{owner}/press") |> html_response(200)
+
+      # Read the block rather than grepping the page: `JsonLd.script/1` encodes
+      # with `escape: :html_safe`, so every `/` in it is `\/` and a `refute` on
+      # a bare URL passes without ever matching anything.
+      assert [media] = json_ld_media(html)
+      refute media["contentUrl"] =~ pending.token
     end
 
     test "a member with pictures is in the sitemap, one without is not", %{conn: conn, user: user} do

@@ -300,10 +300,14 @@ defmodule VutuvWeb.PressKitComponents do
 
   @doc """
   The pictures of these views a **crawler** may be told about: the released
-  ones. What the page's schema.org block names, and never viewer-dependent —
-  the markup describes the page to a machine, which is always anonymous, so an
-  owner looking at their own page must not publish a `contentUrl` that answers
-  404 to everybody else.
+  ones. What the page's schema.org block names.
+
+  **Hand it the anonymous views** (`views(images, nil)`), never the reader's: the
+  markup describes the page to a machine, which is always anonymous, and an owner
+  or an admin is shown a picture the AI gate still holds — publishing its
+  `contentUrl` here would name an address that answers 404 to everybody else.
+  Viewer-dependence is the failure mode, so the caller's `nil` is the whole
+  guard.
   """
   def public_pictures(views), do: for(%{held: false, image: image} <- views, do: image)
 

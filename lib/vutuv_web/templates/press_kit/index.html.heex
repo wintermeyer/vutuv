@@ -15,10 +15,13 @@ the licensing properties image search reads. --%>
 
 <% photos = views(@shelves.photos, @current_user) %>
 <% logos = views(@shelves.logos, @current_user) %>
-<%!-- The markup describes the page to a crawler, so it names the released
-pictures whoever is reading, and only for an owner search engines may index at
-all (`Vutuv.Identity.indexable?/1`, the one answer to that question). --%>
-<% pictures = public_pictures(photos ++ logos) %>
+<%!-- The markup describes the page to a crawler, so it is built from the
+**anonymous** views rather than from this reader's — an owner (or an admin) sees
+a picture the AI gate still holds, and naming its `contentUrl` here would
+publish an address that answers 404 to everybody else. Only for an owner search
+engines may index at all (`Vutuv.Identity.indexable?/1`, the one answer to that
+question). --%>
+<% pictures = public_pictures(views(@shelves.photos ++ @shelves.logos, nil)) %>
 <JsonLd.script
   :if={Vutuv.Identity.indexable?(@user) and pictures != []}
   data={JsonLd.press_kit_page(@user, pictures, Vutuv.PressKit.rights_line())}
