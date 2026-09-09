@@ -27,24 +27,30 @@ defmodule Vutuv.Profiles.LinkBadges do
   @handle_token "__HANDLE__"
   @handle_placeholder "your-handle"
 
-  @icon_path "/images/brand/vutuv-mark.svg"
-  @icon_size 28
-
   @doc "The stand-in handle an anonymous reader sees in every snippet."
   def handle_placeholder, do: @handle_placeholder
 
   @doc """
-  The badge images, each `%{name:, note:, path:, width:, height:, dark_plate?:}`.
+  The badge images, each
+  `%{name:, note:, path:, width:, height:, dark_plate?:, wordmark?:}`.
 
-  `dark_plate?` says whether a preview needs a dark surface behind it, and it is
-  a field rather than a guess at the filename because getting it wrong is
-  invisible in code and obvious on screen: a badge drawn on the very colour it
-  is made of has no edge, so it reads as loose glyphs rather than as a badge.
+  Both flags are **fields rather than guesses** at a filename or a shape, for
+  the same reason: getting either wrong is invisible in code and obvious on
+  screen. `dark_plate?` says a preview needs a dark surface, because a badge
+  drawn on the very colour it is made of has no edge and reads as loose glyphs.
+  `wordmark?` says the file spells "vutuv" across itself, which is what
+  `link_badges_test.exs` checks against the brand wordmark; reading that off
+  "wider than it is tall" would hold today by layout accident and drop a stacked
+  badge out of the check silently.
 
-  The icon mark is deliberately **not** in this list. It is already a brand
-  asset the media kit offers (`MediaKitDoc.assets/0`), and one file under two
-  names in two catalogs is two notes that drift; the icon snippet below points
-  at that same file.
+  The **icon** is the square one, for the row of brand icons a homepage usually
+  has. It is a file of its own rather than the mark plus a corner radius at the
+  call site, because the tile beside it offers a **download**: a member who
+  saves the file has nowhere to put a radius. What it duplicates is not
+  `vutuv-mark.svg` (a sharp square) but the rounded square already inside both
+  badge files, down to that square's own `rx` — three drawings of one logo in
+  one grid must round the same. It keeps the mark's proportions too: a link icon
+  drawn differently from the app icon is two logos, not one.
   """
   def badges do
     [
@@ -54,7 +60,8 @@ defmodule Vutuv.Profiles.LinkBadges do
         path: "/images/brand/vutuv-badge.svg",
         width: 130,
         height: 40,
-        dark_plate?: false
+        dark_plate?: false,
+        wordmark?: true
       },
       %{
         name: "Badge, dark",
@@ -62,7 +69,20 @@ defmodule Vutuv.Profiles.LinkBadges do
         path: "/images/brand/vutuv-badge-dark.svg",
         width: 130,
         height: 40,
-        dark_plate?: true
+        dark_plate?: true,
+        wordmark?: true
+      },
+      %{
+        name: "Icon, rounded",
+        note:
+          "Square, for a row of icons beside Facebook, LinkedIn and the rest. " <>
+            "For an avatar or a favicon take the sharp-cornered icon mark above.",
+        path: "/images/brand/vutuv-icon.svg",
+        # 40px: a touch target on a phone, and a common size for such a row.
+        width: 40,
+        height: 40,
+        dark_plate?: false,
+        wordmark?: false
       }
     ]
   end
@@ -110,6 +130,7 @@ defmodule Vutuv.Profiles.LinkBadges do
   defp raw_snippets do
     badge = badge("Badge")
     dark = badge("Badge, dark")
+    icon = badge("Icon, rounded")
 
     [
       %{
@@ -123,13 +144,15 @@ defmodule Vutuv.Profiles.LinkBadges do
       },
       %{
         key: "icon",
-        name: "An icon",
-        note: "For a row of social icons beside the others.",
+        name: "A square icon",
+        note:
+          "For the row of icons beside Facebook, LinkedIn and the rest. " <>
+            "The corners are rounded in the file, so it needs no CSS; add " <>
+            "border-radius:50% if your row is round.",
         language: "html",
         code: """
         <a href="#{profile_url()}" rel="me" title="vutuv">
-          <img src="#{asset_url(@icon_path)}" alt="vutuv"
-               width="#{@icon_size}" height="#{@icon_size}" style="border-radius:6px">
+          #{img(icon)}
         </a>\
         """
       },
@@ -168,8 +191,7 @@ defmodule Vutuv.Profiles.LinkBadges do
            style="display:inline-flex;align-items:center;gap:8px;padding:9px 14px;
                   border-radius:8px;background:#2563EB;color:#fff;text-decoration:none;
                   font:600 14px/1 system-ui,sans-serif">
-          <img src="#{asset_url(@icon_path)}" alt="" width="18" height="18"
-               style="border-radius:4px">
+          <img src="#{asset_url(icon.path)}" alt="" width="18" height="18">
           #{@handle_token} on vutuv
         </a>\
         """

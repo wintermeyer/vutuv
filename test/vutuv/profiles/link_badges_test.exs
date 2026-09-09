@@ -1,13 +1,13 @@
 defmodule Vutuv.Profiles.LinkBadgesTest do
   @moduledoc """
-  The catalog a member links their own homepage from, and the two badge files it
+  The catalog a member links their own homepage from, and the badge files it
   hands out.
 
   The verification half — that every HTML snippet carries the exact `rel="me"`
   back-link `Vutuv.Profiles.LinkVerification` goes looking for — is asserted in
   `company_controller_test.exs`, where it reads them back through the real
-  parser. What is here is the half a rendering test cannot see: that the badge
-  files still draw the brand.
+  parser. What is here is the half a rendering test cannot see: that the three
+  badge files still draw the brand, at the shape their snippets claim.
   """
   use ExUnit.Case, async: true
 
@@ -33,14 +33,22 @@ defmodule Vutuv.Profiles.LinkBadgesTest do
     # inlines the wordmark's five letters and the mark's "v". That copy is
     # forced; what is not forced is that nothing notices when the brand is
     # redrawn and the badges keep the old shapes. This is that notice.
+    #
+    # Which files spell "vutuv" across themselves is the catalog's own
+    # `wordmark?`, not a guess from the shape: "wider than it is tall" holds for
+    # today's badges by layout accident, and a stacked badge would drop out of
+    # this check without a word.
     test "still draw the same wordmark the brand asset does" do
       wordmark = paths("vutuv-wordmark.svg")
       assert length(wordmark) == 5
 
-      for badge <- LinkBadges.badges() do
+      spelled = Enum.filter(LinkBadges.badges(), & &1.wordmark?)
+      assert spelled != []
+
+      for badge <- spelled do
         file = Path.basename(badge.path)
 
-        assert badge.path |> Path.basename() |> paths() |> Enum.take(-5) == wordmark,
+        assert file |> paths() |> Enum.take(-5) == wordmark,
                "#{file} no longer carries the wordmark from vutuv-wordmark.svg — " <>
                  "rebuild it from the brand files rather than editing it by hand"
       end
@@ -56,14 +64,21 @@ defmodule Vutuv.Profiles.LinkBadgesTest do
     end
 
     # The badge's own `width`/`height` are what the snippets write into their
-    # `<img>`, so a file redrawn at another size would hand out an `<img>` that
-    # stretches it on somebody else's page.
-    test "are drawn at the size the snippets claim" do
+    # `<img>`, so a file whose shape stops matching them is handed out stretched
+    # on somebody else's page. The **ratio** is what has to agree, not the
+    # numbers: a badge is drawn 1:1 with its box while the square icon is a 512
+    # px artboard shown at 40.
+    test "are drawn at the shape the snippets claim" do
       for badge <- LinkBadges.badges() do
         svg = File.read!(Path.join(@brand, Path.basename(badge.path)))
 
-        assert svg =~ ~s|viewBox="0 0 #{badge.width} #{badge.height}"|,
-               "#{badge.path} is not #{badge.width}x#{badge.height}, which its snippets claim"
+        assert [w, h] = Regex.run(~r/viewBox="0 0 (\d+) (\d+)"/, svg, capture: :all_but_first),
+               "#{badge.path} has no plain `viewBox=\"0 0 w h\"` to read its shape from"
+
+        # Cross-multiplied, so the comparison is exact and needs no tolerance.
+        assert String.to_integer(w) * badge.height == String.to_integer(h) * badge.width,
+               "#{badge.path} is drawn #{w}x#{h}, which the <img> at " <>
+                 "#{badge.width}x#{badge.height} would stretch"
       end
     end
   end
