@@ -8,6 +8,18 @@ sibling hand a journalist the same words. --%>
       Everything you need to write about vutuv: boilerplate in three lengths, the logo,
       the colours, screenshots, and a person to ask.
     </p>
+    <%!-- Members read this page for one thing, and it is not the boilerplate.
+          The sign-post is here rather than a section further down being moved
+          up, because a journalist arriving on a media kit should still meet the
+          media kit first. --%>
+    <p class="mt-2 text-sm text-slate-600 dark:text-slate-400">
+      Putting vutuv on your own homepage instead?
+      <a
+        href="#link-to-your-profile"
+        class="font-semibold text-brand-600 hover:text-brand-700 dark:text-brand-400 dark:hover:text-brand-300"
+      >Badges and snippets for your profile</a>
+      are further down.
+    </p>
   </.card>
 
   <%!-- The same page as Markdown / text / JSON / XML. It earns its place at the
@@ -53,34 +65,89 @@ sibling hand a journalist the same words. --%>
       Right-click to save, or open the file and take it from there.
     </p>
     <ul class="mt-4 grid gap-4 sm:grid-cols-2">
-      <li
+      <%!-- The white wordmark is the one that needs a dark plate: on the light
+            one it is invisible. --%>
+      <.asset_tile
         :for={asset <- @assets}
-        class="rounded-xl ring-1 ring-slate-200 dark:ring-slate-800"
-      >
-        <%!-- The white wordmark needs a dark plate or it is invisible on the
-              card; the others sit on the light one. --%>
-        <div class={[
-          "flex h-28 items-center justify-center rounded-t-xl p-4",
-          if(String.contains?(asset.path, "white"),
-            do: "bg-slate-900",
-            else: "bg-slate-50 dark:bg-slate-800/60"
-          )
-        ]}>
-          <img src={asset.path} alt={asset.name} class="max-h-16 max-w-full" />
-        </div>
-        <div class="p-4">
-          <p class="font-semibold text-slate-900 dark:text-white">{asset.name}</p>
-          <p class="mt-1 text-sm text-slate-600 dark:text-slate-400">{asset.note}</p>
-          <a
-            href={asset.path}
-            download
-            class="mt-2 inline-block text-sm font-semibold text-brand-600 hover:text-brand-700 dark:text-brand-400 dark:hover:text-brand-300"
-          >
-            Download {asset.kind}
-          </a>
-        </div>
-      </li>
+        name={asset.name}
+        note={asset.note}
+        path={asset.path}
+        label={"Download #{asset.kind}"}
+        dark_plate?={String.contains?(asset.path, "white")}
+      />
     </ul>
+  </.card>
+
+  <%!-- The one card here a member reads rather than a journalist: "how do I put
+        vutuv on my own homepage" is the question that arrives most often, and
+        the answer is a brand asset like any other. `data-link-badges` is the
+        anchor for link_badges.js, which rewrites every snippet below when the
+        handle field changes; with no JavaScript the snippets still carry the
+        handle the server filled in. --%>
+  <.card id="link-to-your-profile" data-link-badges data-handle={@handle}>
+    <h2 class="text-xl font-bold text-slate-900 dark:text-white">Link to your profile</h2>
+    <p class="mt-2 text-sm text-slate-600 dark:text-slate-400">
+      Your profile is a plain public page, so any link reaches it. These are the ready-made
+      ones.
+      <span :if={@link_verification?}>
+        Every HTML snippet carries <code class="text-xs">rel="me"</code>, which is also how
+        vutuv checks that a page is really yours: add the link, then press Verify on the
+        webpage in your profile and it earns the verified mark.
+      </span>
+    </p>
+
+    <%!-- The handle field is progressive enhancement, not a form: it posts
+          nowhere and only rewrites the text below it. Type rather than search,
+          because the member reading this page is usually the one whose handle
+          it is, and a signed-in one never has to touch it at all. --%>
+    <div class="mt-4 flex flex-wrap items-center gap-2" data-handle-field hidden>
+      <label for="badge-handle" class="text-sm font-semibold text-slate-900 dark:text-white">
+        Your handle
+      </label>
+      <%!-- `min-w-0` beside `flex-1`: a flex item refuses to shrink below its
+            intrinsic width without it, and `input_class/0` opens with `w-full`,
+            so the field would push the label off a narrow phone. --%>
+      <input
+        type="text"
+        id="badge-handle"
+        value={@handle}
+        spellcheck="false"
+        autocapitalize="none"
+        autocomplete="off"
+        class={[input_class(), "min-w-0 flex-1"]}
+      />
+    </div>
+
+    <ul class="mt-5 grid gap-4 sm:grid-cols-2">
+      <.asset_tile
+        :for={badge <- @badges}
+        name={badge.name}
+        note={badge.note}
+        path={badge.path}
+        label="Download SVG"
+        dark_plate?={badge.dark_plate?}
+        plate_height="h-20"
+        width={badge.width}
+        height={badge.height}
+      />
+    </ul>
+
+    <div class="mt-6 space-y-5">
+      <%!-- `data-snippet` on the wrapper holds the un-filled template; the
+            <code> inside holds the finished one, so the shared copy button
+            (which reads textContent) always copies what is on screen. --%>
+      <div :for={snippet <- @link_snippets} data-snippet={snippet.template}>
+        <p class="font-semibold text-slate-900 dark:text-white">{snippet.name}</p>
+        <p class="mt-1 text-sm text-slate-600 dark:text-slate-400">{snippet.note}</p>
+        <.copy_field id={"snippet-#{snippet.key}"} variant="block" class="mt-2">{snippet.code}</.copy_field>
+      </div>
+    </div>
+
+    <p class="mt-5 text-sm text-slate-600 dark:text-slate-400">
+      The images are served from here, which means our server sees a request from every
+      reader of your page. Download the file and host it yourself if you would rather it
+      did not.
+    </p>
   </.card>
 
   <.card>

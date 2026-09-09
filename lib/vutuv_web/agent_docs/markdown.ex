@@ -447,6 +447,10 @@ defmodule VutuvWeb.AgentDocs.Markdown do
       |> Enum.map_join("\n", fn {label, value} -> "- #{label}: #{value}" end),
       "## Brand assets",
       Enum.map_join(doc.assets, "\n", &"- #{md_link(&1.name, &1.url)} (#{&1.kind}) - #{&1.note}"),
+      "## Link to your profile",
+      doc.link_intro,
+      Enum.map_join(doc.link_badges, "\n", &"- #{md_link(&1.name, &1.url)} - #{&1.note}"),
+      Enum.map_join(doc.link_snippets, "\n\n", &link_snippet_md/1),
       "## Colours",
       Enum.map_join(doc.colors, "\n", &"- #{&1.name} `#{&1.hex}` - #{&1.note}"),
       "## Typography",
@@ -466,6 +470,14 @@ defmodule VutuvWeb.AgentDocs.Markdown do
       |> Enum.map_join("\n", &("- " <> &1))
     ]
     |> join_blocks()
+  end
+
+  # One media-kit link snippet: its name, what it is for, then the code in a
+  # fence tagged with its language, so a reader — and the language model that is
+  # the likeliest fetcher of this document — can tell the Markdown one from the
+  # five HTML ones without reading them.
+  defp link_snippet_md(snippet) do
+    "### #{snippet.name}\n\n#{snippet.note}\n\n```#{snippet.language}\n#{snippet.code}\n```"
   end
 
   # One post of a calendar day. A row with no `url` is a post whose author is

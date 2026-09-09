@@ -13,7 +13,10 @@ defmodule VutuvWeb.CompanyControllerTest do
   alias Vutuv.Fediverse
   alias Vutuv.PeopleHistory
   alias Vutuv.PeopleHistory.Snapshot
+  alias Vutuv.Profiles.LinkBadges
+  alias Vutuv.Profiles.LinkVerification
   alias Vutuv.Repo
+  alias Vutuv.WebVerification
   alias VutuvWeb.AgentDocs.InvestorsDoc
   alias VutuvWeb.AgentDocs.MediaKitDoc
   alias VutuvWeb.UI
@@ -373,8 +376,9 @@ defmodule VutuvWeb.CompanyControllerTest do
       refute html =~ "Phone, messengers and everything else"
     end
 
-    test "every asset and screenshot it offers is really served", %{conn: conn} do
-      for %{path: path} <- MediaKitDoc.assets() ++ MediaKitDoc.screenshots() do
+    test "every asset, badge and screenshot it offers is really served", %{conn: conn} do
+      for %{path: path} <-
+            MediaKitDoc.assets() ++ MediaKitDoc.badges() ++ MediaKitDoc.screenshots() do
         assert File.exists?(Path.join("priv/static", path)),
                "#{path} is offered on the media kit but not in priv/static"
 
@@ -388,6 +392,57 @@ defmodule VutuvWeb.CompanyControllerTest do
 
       assert markdown =~ MediaKitDoc.boilerplate().short
       assert markdown =~ MediaKitDoc.press_contact()
+    end
+  end
+
+  describe "the link-to-your-profile snippets" do
+    test "a visitor gets the placeholder handle, not somebody else's", %{conn: conn} do
+      html = conn |> get(~p"/system/media-kit") |> html_response(200)
+
+      assert html =~ "Link to your profile"
+      assert html =~ LinkVerification.profile_url(LinkBadges.handle_placeholder())
+    end
+
+    test "a signed-in member gets their own handle filled in", %{conn: conn} do
+      {conn, user} = create_and_login_user(conn)
+      html = conn |> get(~p"/system/media-kit") |> html_response(200)
+
+      assert html =~ LinkVerification.profile_url(user.username)
+      # The placeholder survives only inside the `data-snippet` templates the
+      # handle field rewrites — never as an address the member would copy.
+      refute html =~ ">#{LinkVerification.profile_url(LinkBadges.handle_placeholder())}<"
+    end
+
+    # The calibration that matters: the link a member pastes on their own page
+    # has to be the one `Vutuv.Profiles.LinkVerification` goes looking for. Both
+    # sides now derive it from `profile_url/1`, so this pins the promise rather
+    # than two independent spellings — a snippet that grew a trailing slash or a
+    # `/profile/` prefix of its own would verify nothing and say so nowhere.
+    # Read through `rel_me_hrefs/1`, the same parser that reads the member's own
+    # page, rather than by matching the string we just wrote.
+    test "the HTML snippets carry exactly the back-link the verification wants" do
+      user = insert(:activated_user, username: "linkable")
+
+      html_snippets =
+        user.username
+        |> LinkBadges.snippets()
+        |> Enum.reject(&(&1.language == "markdown"))
+
+      html = Enum.map_join(html_snippets, "\n", & &1.code)
+
+      hrefs = WebVerification.rel_me_hrefs(html)
+      [profile_url] = LinkVerification.profile_urls(user)
+
+      # Every one of them, not just the first: a badge that links without
+      # `rel="me"` is a badge that quietly does half the job.
+      assert Enum.count(hrefs, &(&1 == profile_url)) == length(html_snippets)
+    end
+
+    test "the Markdown sibling hands out the snippets too", %{conn: conn} do
+      markdown = conn |> get(~p"/system/media-kit" <> ".md") |> response(200)
+
+      assert markdown =~ "Link to your profile"
+      assert markdown =~ LinkVerification.profile_url(LinkBadges.handle_placeholder())
     end
   end
 end

@@ -59,6 +59,15 @@ export function savesData() {
   )
 }
 
+// A typed handle, normalized the way the server does it: trim, drop a leading
+// "@", lower-case. Shared by the account-deletion gate (which compares what was
+// typed against the member's own username) and the media kit's badge field
+// (where an upper-cased handle would build a profile URL that the rel="me"
+// verification then fails to match).
+export function normalizeHandle(value) {
+  return value.trim().replace(/^@+/, "").toLowerCase()
+}
+
 // "Wire this element exactly once" guard. Returns true the first time it sees
 // `el` under `key` (and marks it), false every time after, so a re-scan from
 // onReady() can't attach a duplicate listener.

@@ -14,6 +14,7 @@ defmodule VutuvWeb.AgentDocs.MediaKitDoc do
   """
 
   alias Vutuv.Operator
+  alias Vutuv.Profiles.LinkBadges
   alias Vutuv.SourceRepo
   alias VutuvWeb.AgentDocs
   alias VutuvWeb.AgentDocs.InvestorsDoc
@@ -137,6 +138,19 @@ defmodule VutuvWeb.AgentDocs.MediaKitDoc do
     ]
   end
 
+  @doc """
+  The badges and copy-and-paste snippets a member links their own homepage with.
+
+  Delegated rather than defined here: every HTML snippet carries `rel="me"`,
+  which is the back-link `Vutuv.Profiles.LinkVerification` goes looking for, so
+  the catalog is a verification rule and lives with the rule
+  (`Vutuv.Profiles.LinkBadges`). This module only shows it.
+  """
+  defdelegate badges, to: LinkBadges
+  defdelegate link_snippets(handle \\ handle_placeholder()), to: LinkBadges, as: :snippets
+  defdelegate handle_placeholder, to: LinkBadges
+  defdelegate link_intro, to: LinkBadges, as: :intro
+
   @doc "The brand colours, as `{name, hex, note}`."
   def colors do
     [
@@ -240,6 +254,16 @@ defmodule VutuvWeb.AgentDocs.MediaKitDoc do
       facts: Map.new(facts()),
       assets: Enum.map(assets(), &Map.put(&1, :url, AgentDocs.abs_url(&1.path))),
       colors: Enum.map(colors(), fn {name, hex, note} -> %{name: name, hex: hex, note: note} end),
+      # The anonymous view, like every other doc: the placeholder handle rather
+      # than a reader's own. The HTML page fills in the signed-in member's, which
+      # is the one difference between it and its siblings here.
+      handle_placeholder: handle_placeholder(),
+      link_intro: link_intro(),
+      link_badges: Enum.map(badges(), &Map.put(&1, :url, AgentDocs.abs_url(&1.path))),
+      # `template` is the un-filled twin the media kit's handle field rewrites in
+      # the browser; a document has no such field, so it carries the finished
+      # snippet only.
+      link_snippets: Enum.map(link_snippets(), &Map.delete(&1, :template)),
       typography:
         Enum.map(typography(), fn {role, name, note} ->
           %{role: role, name: name, note: note}

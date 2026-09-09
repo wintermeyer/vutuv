@@ -8,6 +8,7 @@ defmodule VutuvWeb.UrlVerificationTest do
 
   import Vutuv.Factory
 
+  alias Vutuv.Profiles.LinkBadges
   alias Vutuv.Profiles.Url
   alias Vutuv.Repo
 
@@ -117,9 +118,20 @@ defmodule VutuvWeb.UrlVerificationTest do
       assert html =~ ~s(id="verify-dns")
       assert html =~ ~s(id="verify-well_known")
 
-      # The rel=me snippet points back at this member's own profile.
+      # The rel=me snippet points back at this member's own profile — and it is
+      # the very snippet the media kit hands out (`Vutuv.Profiles.LinkBadges`),
+      # not a second hand-built copy that can drift from it. The page used to
+      # spell its own; a member who then took a badge from the media kit got a
+      # differently-shaped line for the same job.
       assert html =~ "rel=&quot;me&quot;"
       assert html =~ "#{VutuvWeb.Endpoint.url()}/#{user.username}"
+
+      snippet = user.username |> LinkBadges.snippets() |> Enum.find(&(&1.key == "text"))
+      assert html =~ Phoenix.HTML.html_escape(snippet.code) |> Phoenix.HTML.safe_to_string()
+
+      # And it is offered with the Copy button every other value a member is
+      # meant to hand out gets.
+      assert html =~ ~s(data-copy-target="rel-me-snippet")
 
       # The DNS instructions name the host and the CNAME-safe alternate name, so
       # a member whose host is a CNAME knows where to publish the record (#947).

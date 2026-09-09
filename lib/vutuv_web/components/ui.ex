@@ -3793,6 +3793,13 @@ defmodule VutuvWeb.UI do
   the copy contract lives in one place either way — the surface is all that
   changes.
 
+  `variant="block"` is that same surface for a value that is several lines of
+  **code** rather than one line of value — the media kit's badge snippets.
+  It owns the whole difference as one decision: monospace, `whitespace-pre-wrap`
+  so the snippet's own line breaks survive, and the button lifted to the first
+  line, because a centered button in a six-line block sits in the middle of the
+  code. `code_class` and `wrap` are the box's knobs and do not apply.
+
   In a `box` the button is a full `min-h-10` touch target and the row centers on
   it; `inline` keeps the compact button, because a meta line has no room for a
   40px control and carries the value as prose the reader can select anyway.
@@ -3801,9 +3808,9 @@ defmodule VutuvWeb.UI do
 
   attr(:variant, :string,
     default: "box",
-    values: ~w(box inline),
+    values: ~w(box inline block),
     doc:
-      "`box` is the tinted field a card gives a value of its own; `inline` drops the surface so the value can ride a meta line beside other facts"
+      "`box` is the tinted field a card gives a value of its own; `inline` drops the surface so the value can ride a meta line beside other facts; `block` is the same surface for a value that runs to several lines of code"
   )
 
   attr(:class, :any, default: nil)
@@ -3822,18 +3829,21 @@ defmodule VutuvWeb.UI do
   def copy_field(assigns) do
     ~H"""
     <div class={[
-      @variant == "box" &&
-        "flex items-center gap-2 rounded-lg bg-slate-50 px-3 py-2 ring-1 ring-slate-200 dark:bg-slate-800/50 dark:ring-slate-700",
+      @variant in ~w(box block) &&
+        "flex gap-2 rounded-lg bg-slate-50 px-3 py-2 ring-1 ring-slate-200 dark:bg-slate-800/50 dark:ring-slate-700",
+      @variant == "box" && "items-center",
+      @variant == "block" && "items-start",
       @variant == "inline" && "inline-flex max-w-full items-center gap-1.5 align-middle",
-      @class || (@variant == "box" && "mt-3")
+      @class || (@variant in ~w(box block) && "mt-3")
     ]}>
       <code
         id={@id}
         class={[
           "min-w-0 flex-1 select-all text-slate-800 dark:text-slate-100",
-          @wrap == "anywhere" && "break-all",
-          @wrap == "words" && "break-words",
-          @code_class
+          @variant == "block" && "whitespace-pre-wrap break-words font-mono text-xs",
+          @variant != "block" && @wrap == "anywhere" && "break-all",
+          @variant != "block" && @wrap == "words" && "break-words",
+          @variant != "block" && @code_class
         ]}
       >{render_slot(@inner_block)}</code>
       <button
@@ -3845,7 +3855,7 @@ defmodule VutuvWeb.UI do
         data-label-copied={gettext("Copied")}
         class={[
           "shrink-0 rounded-md bg-white text-xs font-semibold text-slate-700 ring-1 ring-slate-200 hover:bg-slate-100 dark:bg-slate-800 dark:text-slate-200 dark:ring-slate-700 dark:hover:bg-slate-700",
-          @variant == "box" && "inline-flex min-h-10 items-center px-3",
+          @variant in ~w(box block) && "inline-flex min-h-10 items-center px-3",
           @variant == "inline" && "px-2 py-1"
         ]}
       >
