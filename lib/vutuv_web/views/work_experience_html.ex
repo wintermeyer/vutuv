@@ -5,7 +5,6 @@ defmodule VutuvWeb.WorkExperienceHTML do
 
   alias Vutuv.Organizations
   alias Vutuv.Profiles.WorkExperience
-  alias VutuvWeb.UserProfileLive
 
   @doc """
   The `{label, value}` options for the start/end month selects on the
@@ -90,14 +89,17 @@ defmodule VutuvWeb.WorkExperienceHTML do
   largest circle; and short internships still can't inflate past a decade-long
   job because the whole list is measured before any grouping.
 
-  `limit` caps the number of **displayed** roles (nil = no cap, the full CV page;
-  the profile preview passes `profile_preview_limit/0`). Always pass the member's
-  **whole** work history and let `limit` do the trimming — the block aggregates
+  `caps` is a `%{kind => cap}` map of how many **displayed** roles each category
+  keeps (a kind it does not name is uncapped, so `%{}` is the full CV page).
+  Per category and never one shared budget: a shared budget is spent
+  newest-first, so a member whose newest rows are all Ehrenämter saw two jobs
+  and eight of them. Always pass the member's **whole** work history and let the
+  cap do the trimming — the block aggregates
   (tenure, span, circle) are built from every role at an employer *before* the
   cut, so a truncated organization still reports its true total (a member with 3 roles
   over 9 years at one employer keeps "9 years" even when the cut shows only 2).
   """
-  def grouped_clusters(work_experiences, label_style \\ :years, limit \\ nil) do
+  def grouped_clusters(work_experiences, label_style \\ :years, caps \\ %{}) do
     indexed_circles =
       work_experiences
       |> circle_durations(label_style)
@@ -119,22 +121,105 @@ defmodule VutuvWeb.WorkExperienceHTML do
       end)
       |> Enum.sort_by(&elem(&1, 0))
       |> Enum.map(&elem(&1, 1))
-      |> take_roles(limit)
 
     groups = Enum.group_by(built, & &1.kind)
-    for kind <- WorkExperience.kinds(), kind_blocks = groups[kind], do: {kind, kind_blocks}
+
+    for kind <- WorkExperience.kinds(),
+        kind_blocks = groups[kind],
+        do: {kind, take_roles(kind_blocks, caps[kind])}
+  end
+
+  # What a business network is read for is the paid work, so employment and
+  # self-employment preview generously while an internship, an Ehrenamt or a
+  # hobby keeps a short taste with a link to the rest. Per category, never one
+  # shared budget: with 7 jobs and 13 Ehrenämter sharing a budget of 10 spent
+  # newest-first, tim_lueck's profile showed two jobs (2026-09).
+  @preview_caps Map.new(WorkExperience.kinds(), fn
+                  kind when kind in ~w(employment self_employed) -> {kind, 8}
+                  kind -> {kind, 3}
+                end)
+
+  @doc """
+  The profile Experience card's groups, in display order: one entry per non-empty
+  CV category with its capped timeline `:blocks`, the number of roles those hold
+  (`:shown`, what the card's footer measures itself against) and, where the cap
+  cut something, a `:hidden` note saying how many roles it left out and which
+  years they cover (`nil` when the category fits).
+
+  That note is what turns a truncated category into a usable pointer — "9 more
+  entries (1994 - 2015)" beside a link to the full CV beats a list that simply
+  stops. Its `:years` is `nil` when not one hidden role carries a year; nothing
+  is invented to fill the phrase.
+  """
+  def profile_groups(work_experiences) do
+    by_kind = Map.new(WorkExperience.group_by_kind(work_experiences))
+
+    for {kind, blocks} <- grouped_clusters(work_experiences, :compact, @preview_caps) do
+      shown = Enum.sum_by(blocks, &length(&1.roles))
+      # `take_roles/2` cuts a category's roles from the back and keeps their
+      # order, so the hidden ones are exactly what a drop of that many leaves.
+      hidden = by_kind |> Map.fetch!(kind) |> Enum.drop(shown)
+
+      %{kind: kind, blocks: blocks, shown: shown, hidden: hidden_note(hidden)}
+    end
+  end
+
+  defp hidden_note([]), do: nil
+  defp hidden_note(entries), do: %{count: length(entries), years: hidden_years(entries)}
+
+  # The span the hidden roles cover, through the same labeller the rail's own
+  # date column uses: "1994 - 2015", a lone "2003" when they all sit in one
+  # year, and running to "Present" while one of them is still going.
+  defp hidden_years(entries) do
+    years =
+      entries |> Enum.flat_map(&[&1.start_year, &1.end_year]) |> Enum.reject(&is_nil/1)
+
+    ongoing? = Enum.any?(entries, &(&1.start_year && is_nil(&1.end_year)))
+
+    if years != [] do
+      last = unless ongoing?, do: Enum.max(years)
+
+      duration_with_detail(nil, Enum.min(years), nil, last).label
+      |> IO.iodata_to_binary()
+    end
   end
 
   @doc """
-  How many roles the profile Experience card previews before truncating with an
-  "Alle anzeigen" link; the section page (`/:slug/work_experiences`) shows all.
-  Shared by the preview call and the `manage_footer` "View All" threshold so the
-  two can never disagree. The number itself lives in the profile's per-section
-  cap map (`VutuvWeb.UserProfileLive.preview_limit/1`) with every other
-  section's — this stays the view-side accessor the template and the
-  `grouped_clusters/3` docs point at.
+  The line under a category the profile preview truncated: how many roles the
+  cap left out, the years they cover, and the way to the whole CV. It rides the
+  timeline's own grid, so it lines up under the role titles above it rather than
+  opening a second margin.
   """
-  def profile_preview_limit, do: UserProfileLive.preview_limit(:experience)
+  attr(:user, :any, required: true)
+  attr(:hidden, :map, required: true)
+
+  def experience_more(assigns) do
+    ~H"""
+    <div class="grid grid-cols-[6.5rem_1fr] gap-3">
+      <.link
+        href={~p"/#{@user}/work_experiences"}
+        class="col-start-2 border-l border-transparent pl-5 text-sm font-semibold text-brand-600 hover:text-brand-700 dark:text-brand-400 dark:hover:text-brand-300"
+      >
+        <%= if @hidden.years do %>
+          {ngettext(
+            "One more entry (%{years})",
+            "%{formatted} more entries (%{years})",
+            @hidden.count,
+            formatted: compact_count(@hidden.count),
+            years: @hidden.years
+          )}
+        <% else %>
+          {ngettext(
+            "One more entry",
+            "%{formatted} more entries",
+            @hidden.count,
+            formatted: compact_count(@hidden.count)
+          )}
+        <% end %>
+      </.link>
+    </div>
+    """
+  end
 
   # Cap the number of *displayed* roles at `limit` (nil = no cap), truncating the
   # block that straddles the cap and dropping the blocks past it. A truncated

@@ -12,6 +12,22 @@ defmodule VutuvWeb.WorkExperienceHTMLTest do
     struct(WorkExperience, Map.merge(%{title: "Role", organization: "Org"}, Map.new(attrs)))
   end
 
+  # The shape of tim_lueck's CV (2026-09): a handful of jobs, twice as many
+  # Ehrenämter, and the newest rows of all are Ehrenämter. Under one shared
+  # budget spent newest-first the card showed 2 jobs and 8 Ehrenämter — a
+  # business network reading as a club directory. Each category has its own cap.
+  defp mixed_cv do
+    volunteers =
+      for year <- [2026, 2026, 2026, 2022, 2022, 2021, 2021, 2014, 2010, 2010, 1994, 1994],
+          do: job(kind: "volunteer", organization: "Verein #{year}", start_year: year)
+
+    jobs =
+      for year <- [2023, 2002, 2021, 2016, 2009, 2004, 1998],
+          do: job(kind: "employment", organization: "Firma #{year}", start_year: year)
+
+    Enum.sort_by(volunteers ++ jobs, & &1.start_year, :desc)
+  end
+
   describe "circle_durations/1" do
     test "labels roles by whole years, sub-year as <1, undated as blank" do
       [long, short, undated] =
@@ -319,7 +335,7 @@ defmodule VutuvWeb.WorkExperienceHTMLTest do
     end
   end
 
-  describe "grouped_clusters/3 display limit" do
+  describe "grouped_clusters/3 per-category caps" do
     test "caps the shown roles but keeps each employer's full tenure" do
       # x-ion (1 role) + 2 of Open-Xchange's 3 roles fit under a 3-role cap; the
       # third OX role is cut, but the block must still report the whole 9-year,
@@ -355,7 +371,7 @@ defmodule VutuvWeb.WorkExperienceHTMLTest do
             )
           ],
           :compact,
-          3
+          %{"employment" => 3}
         )
 
       refute x_ion.multi?
@@ -365,7 +381,7 @@ defmodule VutuvWeb.WorkExperienceHTMLTest do
       assert IO.iodata_to_binary(ox.span.label) == "2016 - 2025"
     end
 
-    test "a limit at or above the role count shows every role" do
+    test "a cap at or above the category's role count shows every role" do
       [{"employment", blocks}] =
         WorkExperienceHTML.grouped_clusters(
           [
@@ -373,10 +389,76 @@ defmodule VutuvWeb.WorkExperienceHTMLTest do
             job(title: "B", organization: "Beta", start_year: 2020, end_year: 2022)
           ],
           :compact,
-          10
+          %{"employment" => 10}
         )
 
       assert Enum.flat_map(blocks, & &1.roles) |> length() == 2
+    end
+  end
+
+  describe "profile_groups/1" do
+    test "the jobs keep their own cap however many Ehrenämter sit above them" do
+      [employment, volunteer] = WorkExperienceHTML.profile_groups(mixed_cv())
+
+      assert employment.kind == "employment"
+      assert employment.blocks |> Enum.flat_map(& &1.roles) |> length() == 7
+      assert employment.hidden == nil
+
+      assert volunteer.kind == "volunteer"
+      assert volunteer.blocks |> Enum.flat_map(& &1.roles) |> length() == 3
+      assert volunteer.hidden.count == 9
+    end
+
+    test "the hidden count names the years it covers, ongoing rows running to Present" do
+      %{hidden: hidden} =
+        [
+          job(kind: "volunteer", organization: "A", start_year: 2020, end_year: 2021),
+          job(kind: "volunteer", organization: "B", start_year: 2018, end_year: 2019),
+          job(kind: "volunteer", organization: "C", start_year: 2016, end_year: 2017),
+          job(kind: "volunteer", organization: "D", start_year: 2014, end_year: 2015),
+          job(kind: "volunteer", organization: "E", start_year: 1994, end_year: 1996)
+        ]
+        |> WorkExperienceHTML.profile_groups()
+        |> hd()
+
+      assert hidden.count == 2
+      assert hidden.years == "1994 - 2015"
+
+      %{hidden: ongoing} =
+        [
+          job(kind: "internship", organization: "A", start_year: 2020, end_year: 2021),
+          job(kind: "internship", organization: "B", start_year: 2018, end_year: 2019),
+          job(kind: "internship", organization: "C", start_year: 2016, end_year: 2017),
+          job(kind: "internship", organization: "D", start_year: 2001)
+        ]
+        |> WorkExperienceHTML.profile_groups()
+        |> hd()
+
+      assert ongoing.count == 1
+      assert ongoing.years == "2001 - Present"
+    end
+
+    test "undated hidden entries are counted without inventing a year span" do
+      %{hidden: hidden} =
+        [
+          job(kind: "volunteer", organization: "A", start_year: 2020),
+          job(kind: "volunteer", organization: "B", start_year: 2018),
+          job(kind: "volunteer", organization: "C", start_year: 2016),
+          job(kind: "volunteer", organization: "D")
+        ]
+        |> WorkExperienceHTML.profile_groups()
+        |> hd()
+
+      assert hidden.count == 1
+      assert hidden.years == nil
+    end
+
+    test "a category inside its cap has nothing hidden" do
+      [%{hidden: nil}] =
+        WorkExperienceHTML.profile_groups([
+          job(organization: "Acme", start_year: 2022, end_year: 2024),
+          job(organization: "Beta", start_year: 2020, end_year: 2022)
+        ])
     end
   end
 
