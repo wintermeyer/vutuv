@@ -286,27 +286,20 @@ defmodule Vutuv.Posts.PostImage do
   missing. What the bento mosaic lays out from
   (`VutuvWeb.PostComponents.mosaic/1`), so a portrait photo lands in a
   portrait cell rather than being cropped into a landscape one.
-  """
-  def aspect(%__MODULE__{width: width, height: height})
-      when is_integer(width) and is_integer(height) and width > 0 and height > 0,
-      do: width / height
 
-  def aspect(%__MODULE__{}), do: 1.0
+  The rule itself is `Vutuv.Images.aspect/1`: the mosaic lays out press-kit
+  pictures too since #2086, and a shape read off `width` / `height` is the same
+  answer whichever table the row is on.
+  """
+  defdelegate aspect(image), to: Vutuv.Images
 
   @doc """
   `:portrait`, `:landscape` or `:square` — the coarse shape the pixelated preview picks
   its layout from. The 5:4 / 4:5 envelope matches the post card's existing
-  "roughly square" rule, so one photo is called the same shape by both.
+  "roughly square" rule, so one photo is called the same shape by both — and,
+  since it lives in `Vutuv.Images.orientation/1`, by the press-kit mosaic too.
   """
-  def orientation(%__MODULE__{} = image) do
-    ratio = aspect(image)
-
-    cond do
-      ratio > 1.25 -> :landscape
-      ratio < 0.8 -> :portrait
-      true -> :square
-    end
-  end
+  defdelegate orientation(image), to: Vutuv.Images
 
   defp token_prefix(token), do: "/post_images/#{token}/"
 end

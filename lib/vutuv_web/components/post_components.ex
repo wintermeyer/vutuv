@@ -37,6 +37,7 @@ defmodule VutuvWeb.PostComponents do
   alias Vutuv.Fediverse.RemoteAccount
   alias Vutuv.Fediverse.RemoteImage
   alias Vutuv.Fediverse.RemotePost
+  alias Vutuv.Images
   alias Vutuv.Isbn
   alias Vutuv.Languages
   alias Vutuv.Moderation.ImageScans
@@ -5094,12 +5095,18 @@ defmodule VutuvWeb.PostComponents do
   Public so `mosaic_layout_test.exs` can check the geometry directly — the
   arrangement is the feature, and it is much easier to get wrong than to see
   wrong.
+
+  **The geometry knows nothing about post photos.** It reads `width` / `height`
+  through `Vutuv.Images.orientation/1`, so the press-kit card (#2086) lays its
+  photos out with this same function rather than with a second copy of the
+  arrangements; only the tiles' markup differs, because the two kinds of
+  picture live behind different proxies.
   """
   def mosaic_layout(gallery, layout \\ nil) do
     shown = Enum.take(gallery, @mosaic_tiles)
     more = length(gallery) - length(shown)
     hero = List.first(shown)
-    tall? = hero && PostImage.orientation(hero) == :portrait
+    tall? = hero && Images.orientation(hero) == :portrait
 
     {aspect, areas} = mosaic_shape(length(shown), tall?, layout)
 

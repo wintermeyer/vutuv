@@ -3587,6 +3587,43 @@ defmodule VutuvWeb.UI do
   def megabyte_label(bytes) when is_integer(bytes), do: "#{div(bytes, 1_000_000)} MB"
 
   @doc """
+  A **stored** file's size as a person reads it: `"2,4 MB"` under German,
+  `"2.4 MB"` under English, `"640 kB"` below a megabyte, and a plural byte count
+  below a kilobyte.
+
+  Deliberately not `megabyte_label/1`, which truncates to whole megabytes
+  because it labels an upload *budget*: a real 2.4 MB press photo would read
+  "2 MB" through it and a 640 kB one "0 MB". A press photo's size is what a
+  journalist checks before downloading it, so it is the one number here that has
+  to be right rather than round.
+
+  One decimal only between 1 and 10 MB, where the fraction still says something;
+  past that the digit is noise on a file nobody measures that finely. **The
+  decimal separator inverts between locales** (German writes 2,4 and groups
+  thousands with the dot), so the wrong one is misread rather than untidy — the
+  same rule `delimited_count/1` follows, from the same source of truth.
+  """
+  def file_size(bytes) when is_integer(bytes) and bytes >= 10_000_000,
+    do: megabyte_label(bytes)
+
+  def file_size(bytes) when is_integer(bytes) and bytes >= 1_000_000,
+    do: one_decimal(bytes / 1_000_000) <> " MB"
+
+  def file_size(bytes) when is_integer(bytes) and bytes >= 1_000,
+    do: "#{div(bytes, 1_000)} kB"
+
+  # Under a kilobyte the number needs no separator at all, so the raw integer
+  # `ngettext/3` binds to `%{count}` is exactly right here — the one place in
+  # the app where that binding is not the trap it usually is.
+  def file_size(bytes) when is_integer(bytes) and bytes >= 0,
+    do: ngettext("%{count} byte", "%{count} bytes", bytes)
+
+  defp one_decimal(float) do
+    {_group, decimal} = number_separators()
+    String.replace(:erlang.float_to_binary(float, decimals: 1), ".", decimal)
+  end
+
+  @doc """
   The formats an extension whitelist accepts, as a member-readable list
   (`~w(.jpg .jpeg .png)` -> `"JPEG, PNG"`).
 
@@ -3678,10 +3715,7 @@ defmodule VutuvWeb.UI do
   the landing page. Grouping separator follows the active Gettext locale.
   """
   def delimited_count(n) when is_integer(n) do
-    # German and Italian group thousands with a dot (60.023), English with a
-    # comma (60,023). The separators invert between locales, so the wrong one
-    # is misread rather than untidy.
-    separator = if Gettext.get_locale(VutuvWeb.Gettext) in ~w(de it), do: ".", else: ","
+    {separator, _decimal} = number_separators()
 
     digits =
       n
@@ -3694,6 +3728,14 @@ defmodule VutuvWeb.UI do
       |> String.reverse()
 
     if n < 0, do: "-" <> digits, else: digits
+  end
+
+  # German and Italian group thousands with a dot and write the decimal with a
+  # comma (60.023 / 2,4); English inverts both. They invert **together**, so
+  # they are one answer rather than two lists to keep in step — the wrong one is
+  # misread rather than untidy.
+  defp number_separators do
+    if Gettext.get_locale(VutuvWeb.Gettext) in ~w(de it), do: {".", ","}, else: {",", "."}
   end
 
   @doc """

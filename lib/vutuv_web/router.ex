@@ -2087,5 +2087,14 @@ defmodule VutuvWeb.Router do
     get("/:slug/posts/:id", PostController, :show)
     get("/:slug/posts/:year/:month", PostController, :index)
     get("/:slug/posts/:year/:month/:day", PostController, :index)
+
+    # The press kit (issue #2086) — outside the `resources` block above on
+    # purpose, so it does NOT take `:user_pipe`'s `NoIndex`. Every other
+    # per-member sub-page is kept out of search results because it shows
+    # personal data; a press kit exists to be found, carries the member's own
+    # opt-outs instead, and is in the sitemap. The controller declares the other
+    # three plugs of that pipeline itself, exactly as `UserController` does for
+    # the profile — the other crawlable page under a member's slug.
+    get("/:slug/press", PressKitController, :index)
   end
 end

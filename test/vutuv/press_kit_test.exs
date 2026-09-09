@@ -73,6 +73,14 @@ defmodule Vutuv.PressKitTest do
     %{"credit" => "Foto: Ada King", "caption" => "Am Schreibtisch", "rights_confirmed" => "true"}
   end
 
+  defp logo_attrs, do: Map.merge(base_attrs(), %{"logo" => "true"})
+
+  # The AI verdict, straight on the rows: these tests are about what the shelves
+  # answer once a picture is out, not about the queue that lets it out (#2084).
+  defp release(images) do
+    Enum.each(images, &Repo.update!(Ecto.Changeset.change(&1, moderation: "approved")))
+  end
+
   describe "a press photo is a row on the shared images table (issue #2083)" do
     test "it is born pending, owned by the member, with its files under its token",
          %{owner: owner, tmp: tmp} do
@@ -319,6 +327,78 @@ defmodule Vutuv.PressKitTest do
       refute PressKit.visible_to?(released, nil)
       # Its team still sees it — they are the people who have to deal with it.
       assert PressKit.visible_to?(released, owner)
+    end
+  end
+
+  describe "the two shelves a public surface draws (issue #2086)" do
+    test "both come back in one read, ordered, with the owner already on them",
+         %{owner: owner, tmp: tmp} do
+      {:ok, hero} = add_photo(owner, owner, tmp)
+      {:ok, second} = add_photo(owner, owner, tmp)
+      {:ok, logo} = PressKit.create(owner, owner, svg_file(tmp), logo_attrs())
+
+      release([hero, second, logo])
+
+      shelves = PressKit.public_shelves(owner, nil)
+
+      assert Enum.map(shelves.photos, & &1.id) == [hero.id, second.id]
+      assert Enum.map(shelves.logos, & &1.id) == [logo.id]
+
+      # The owner rides along, so nothing on the page pays a lookup per picture.
+      assert Enum.all?(shelves.photos, &(&1.user.id == owner.id))
+      assert PressKit.download_name(hd(shelves.photos), ".jpg") =~ owner.username
+    end
+
+    test "a stranger keeps a pending picture on the shelf, a frozen one never",
+         %{owner: owner, tmp: tmp} do
+      {:ok, pending} = add_photo(owner, owner, tmp)
+      {:ok, frozen} = add_photo(owner, owner, tmp)
+
+      release([frozen])
+      Images.freeze(Repo.get!(ImageRow, frozen.id))
+
+      # Pending: the stranger meets the pixelated stand-in, so the tile stays.
+      assert Enum.map(PressKit.public_shelves(owner, nil).photos, & &1.id) == [pending.id]
+      assert PressKit.showable?(pending, nil)
+      refute PressKit.visible_to?(pending, nil)
+
+      # Frozen: gone for everybody, the owner included.
+      assert Enum.map(PressKit.public_shelves(owner, owner).photos, & &1.id) == [pending.id]
+    end
+
+    test "a page's shelf reads the same way", %{owner: owner, tmp: tmp} do
+      organization = active_organization_for(owner)
+      {:ok, photo} = add_photo(organization, owner, tmp)
+      release([photo])
+
+      shelves = PressKit.public_shelves(organization, nil)
+
+      assert Enum.map(shelves.photos, & &1.id) == [photo.id]
+      assert hd(shelves.photos).organization.id == organization.id
+    end
+
+    test "one function owns the page's address", %{owner: owner} do
+      organization = active_organization_for(owner)
+
+      assert PressKit.page_path(owner) == "/#{owner.username}/press"
+
+      assert PressKit.page_path(organization) ==
+               Vutuv.Organizations.canonical_path(organization) <> "/press"
+    end
+
+    test "the crawlable scope is the released, unfrozen rows", %{owner: owner, tmp: tmp} do
+      {:ok, pending} = add_photo(owner, owner, tmp)
+      {:ok, released} = add_photo(owner, owner, tmp)
+      {:ok, frozen} = add_photo(owner, owner, tmp)
+
+      release([released, frozen])
+      Images.freeze(Repo.get!(ImageRow, frozen.id))
+
+      ids = Repo.all(from(i in PressKit.public_query(), select: i.id))
+
+      assert released.id in ids
+      refute pending.id in ids
+      refute frozen.id in ids
     end
   end
 

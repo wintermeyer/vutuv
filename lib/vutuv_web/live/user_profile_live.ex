@@ -34,6 +34,7 @@ defmodule VutuvWeb.UserProfileLive do
   alias Vutuv.Fediverse.RemoteFollow
   alias Vutuv.Moderation
   alias Vutuv.Organizations.Organization
+  alias Vutuv.PressKit
   alias Vutuv.Profiles.Address
   alias Vutuv.Profiles.Education
   alias Vutuv.Profiles.Language
@@ -866,11 +867,16 @@ defmodule VutuvWeb.UserProfileLive do
     # them, not the sum. The pin is taken out of the timeline afterwards
     # (`without_pinned/2`) — read together, it is not known while the timeline
     # runs — and one engagement read serves both.
-    [user, pinned_post, entries | count_rows] =
+    [user, pinned_post, entries, press | count_rows] =
       Concurrent.run([
         fn -> preload_user_for_show(base_user, owner?) end,
         fn -> Vutuv.Posts.pinned_post(base_user, current_user) end,
-        fn -> Vutuv.Posts.profile_posts(base_user, current_user, type: :all) end
+        fn -> Vutuv.Posts.profile_posts(base_user, current_user, type: :all) end,
+        # The press kit (#2086). Not a preload and not a count arm: both shelves
+        # come back in one read (fifteen rows at the caps), and the card needs
+        # the rows themselves rather than a number — a pending picture is drawn
+        # for its owner and stood in for by a pixelated tile for everybody else.
+        fn -> PressKit.public_shelves(base_user, current_user) end
         | count_loads(base_user, current_user)
       ])
 
@@ -999,6 +1005,7 @@ defmodule VutuvWeb.UserProfileLive do
     |> assign(:work_info, profile_headline(user, header_job, 60))
     |> assign(:recommended_users, recommended_users)
     |> assign(:suggested_posts_by_id, suggested_posts_by_id)
+    |> assign(:press, press)
     |> assign(:totals, totals)
     # Builds the social slice (counts, header pill state, follow previews); reads
     # :current_user / :recommended_users set above, so it goes last. The counts

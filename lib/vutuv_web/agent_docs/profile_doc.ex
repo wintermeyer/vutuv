@@ -16,6 +16,7 @@ defmodule VutuvWeb.AgentDocs.ProfileDoc do
   alias Vutuv.Fediverse
   alias Vutuv.Fediverse.RemoteAccount
   alias Vutuv.Fediverse.RemotePost
+  alias Vutuv.PressKit
   alias Vutuv.Profiles.Address
   alias Vutuv.Profiles.Education
   alias Vutuv.Profiles.Language
@@ -30,6 +31,7 @@ defmodule VutuvWeb.AgentDocs.ProfileDoc do
   alias Vutuv.Tags.UserTag
   alias VutuvWeb.AgentDocs
   alias VutuvWeb.AgentDocs.PostDoc
+  alias VutuvWeb.AgentDocs.PressKitDoc
   alias VutuvWeb.AgentDocs.SectionDocs
   alias VutuvWeb.Fediverse.Docs
   alias VutuvWeb.PostTeaser
@@ -150,6 +152,11 @@ defmodule VutuvWeb.AgentDocs.ProfileDoc do
       job_references: Enum.map(user.job_references, &SectionDocs.job_reference_entry(&1, user)),
       languages: SectionDocs.language_entries(user.languages),
       links: Enum.map(user.urls, &SectionDocs.link_entry/1),
+      # The press kit the profile card shows (issue #2086), whole rather than
+      # capped: a member offers at most fifteen pictures, and an agent asked to
+      # find a printable photo of somebody should not have to fetch a second
+      # page for it. The full page is `/<username>/press`.
+      press_kit: press_kit_entries(user),
       emails: Enum.map(emails, &SectionDocs.email_entry/1),
       phone_numbers: Enum.map(user.phone_numbers, &SectionDocs.phone_entry/1),
       addresses: Enum.map(user.addresses, &SectionDocs.address_entry/1),
@@ -222,6 +229,16 @@ defmodule VutuvWeb.AgentDocs.ProfileDoc do
       :day_month -> %{base | birthday_month_day: Calendar.strftime(user.birthdate, "%m-%d")}
       :none -> base
     end
+  end
+
+  # A read rather than a preload: press pictures are rows on the shared `images`
+  # table with no association off `users` (see `Vutuv.PressKit`). The released
+  # ones only, like the press page's own document — a document that names a file
+  # must name one that can be fetched — and the two shelves are rejoined here
+  # because the profile lists them as one set, the way its card shows them.
+  defp press_kit_entries(user) do
+    shelves = PressKit.published_shelves(user)
+    PressKitDoc.entries(shelves.photos ++ shelves.logos)
   end
 
   # The same associations the profile page preloads (user_controller.ex),

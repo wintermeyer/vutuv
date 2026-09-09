@@ -54,6 +54,7 @@ defmodule VutuvWeb.AgentDocs.Text do
         Enum.map(doc.languages, &entry_line("languages", &1))
       ),
       section(gettext("Links"), Enum.map(doc.links, &entry_line("links", &1))),
+      section(gettext("Press"), Enum.map(doc.press_kit, &press_picture_lines/1)),
       section(gettext("Contact"), Enum.map(doc.emails, &entry_line("emails", &1))),
       section(
         gettext("Profiles"),
@@ -397,6 +398,18 @@ defmodule VutuvWeb.AgentDocs.Text do
       doc.contact_profile_url && gettext("My profile: %{url}", url: doc.contact_profile_url),
       doc.contact_url && gettext("Write here: %{url}", url: doc.contact_url),
       gettext("Press material: %{url}", url: doc.media_kit_url),
+      footer(doc)
+    ]
+    |> join_blocks()
+  end
+
+  # A member's or a page's press kit (#2086), the Markdown renderer's twin.
+  def render(%{type: "press_kit"} = doc) do
+    [
+      heading(doc.title),
+      doc.rights,
+      section(gettext("Press photos"), Enum.map(doc.photos, &press_picture_lines/1)),
+      section(gettext("Logo variants"), Enum.map(doc.logos, &press_picture_lines/1)),
       footer(doc)
     ]
     |> join_blocks()
@@ -960,6 +973,22 @@ defmodule VutuvWeb.AgentDocs.Text do
     text
     |> String.split("\n")
     |> Enum.map_join("\n", &(pad <> &1))
+  end
+
+  # One press picture as plain lines: the file first, because the file is what
+  # the reader came for. A caption may run to several paragraphs, so it is
+  # indented as a block rather than only on its first line.
+  defp press_picture_lines(picture) do
+    [
+      "- " <> (picture[:label] || gettext("Press picture")),
+      "  " <> picture.download_url,
+      picture[:png_download_url] && "  " <> picture.png_download_url,
+      picture[:credit] && "  " <> gettext("Credit: %{credit}", credit: picture.credit),
+      "  " <> Markdown.press_picture_size(picture),
+      picture[:caption] && indent_block(picture.caption, "  ")
+    ]
+    |> Enum.reject(&is_nil/1)
+    |> Enum.join("\n")
   end
 
   defp section(_title, []), do: nil

@@ -19,6 +19,7 @@ defmodule Vutuv.Sitemap do
   alias Vutuv.Organizations.Organization
   alias Vutuv.Posts
   alias Vutuv.Posts.Post
+  alias Vutuv.PressKit
   alias Vutuv.Repo
   alias Vutuv.Tags
 
@@ -74,7 +75,8 @@ defmodule Vutuv.Sitemap do
       tags: chunks(Repo.aggregate(Tags.indexable_tags_query(), :count)),
       organizations: chunks(Repo.aggregate(indexable_organizations(), :count)),
       organization_posts: chunks(Repo.aggregate(indexable_organization_posts(), :count)),
-      jobs: chunks(Repo.aggregate(indexable_jobs(), :count))
+      jobs: chunks(Repo.aggregate(indexable_jobs(), :count)),
+      press: chunks(Repo.aggregate(indexable_press_users(), :count))
     }
   end
 
@@ -86,6 +88,27 @@ defmodule Vutuv.Sitemap do
     |> select([u], {u.username, u.updated_at})
     |> Repo.all()
     |> Enum.map(fn {slug, updated_at} -> {"/" <> slug, NaiveDateTime.to_date(updated_at)} end)
+  end
+
+  @doc """
+  `{path, lastmod_date}` entries of one press chunk (1-based): the press page of
+  every crawlable member who actually offers a picture (issue #2086).
+
+  The one profile **sub**-page in the sitemap, and deliberately so: every other
+  one is noindexed because it shows personal data, while a press kit is
+  published in order to be found — the pictures carry schema.org licensing
+  markup that image search reads, and a page nothing points at is not crawled.
+  `lastmod` is the member's own, which is what the other member entries use.
+  """
+  def press_entries(chunk) do
+    indexable_press_users()
+    |> order_by([u], u.id)
+    |> window(chunk)
+    |> select([u], {u.username, u.updated_at})
+    |> Repo.all()
+    |> Enum.map(fn {slug, updated_at} ->
+      {"/#{slug}/press", NaiveDateTime.to_date(updated_at)}
+    end)
   end
 
   @doc "`{path, lastmod_date}` entries of one posts chunk (1-based)."
@@ -179,6 +202,22 @@ defmodule Vutuv.Sitemap do
   # lists an opted-out member for people to find and marks their row
   # `rel="nofollow"`, while this set still leaves them out.
   defp indexable_users, do: Vutuv.Directory.indexable_users()
+
+  # A crawlable member who has at least one press picture a crawler can fetch.
+  # The "which pictures count" half is `Vutuv.PressKit.public_query/0`, so the
+  # sitemap and the page cannot disagree about what is published.
+  #
+  # An `IN` over the owner ids rather than a join: a member with ten photos must
+  # be one row here, and a join would list their press page ten times. The
+  # explicit `not is_nil(user_id)` is the nullable-pair rule — a page's press
+  # picture leaves that column empty, and a NULL in this list is a row that
+  # belongs on `/organizations/<slug>/press` (issue #2087), not here.
+  defp indexable_press_users do
+    owner_ids =
+      from(i in PressKit.public_query(), where: not is_nil(i.user_id), select: i.user_id)
+
+    where(indexable_users(), [u], u.id in subquery(owner_ids))
+  end
 
   # scope_visible(nil) already drops restricted posts, frozen posts and
   # moderation-hidden authors; the join adds the member-level conditions.

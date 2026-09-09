@@ -1,0 +1,49 @@
+<%!-- The public press page: every picture whole, with the two facts a
+journalist checks before downloading and a finger-sized download beside them.
+Unlike the other section pages this one is crawlable on purpose — see
+`VutuvWeb.PressKitController` — so it carries schema.org ImageObject markup with
+the licensing properties image search reads. --%>
+<.page_header
+  title={gettext("Press photos and logos of %{name}", name: full_name(@user))}
+  manage_to={same_user?(@user, @current_user) && ~p"/settings/press"}
+  crumbs={[
+    gettext("Users"),
+    {full_name(@user), ~p"/#{@user}"},
+    gettext("Press")
+  ]}
+/>
+
+<% photos = views(@shelves.photos, @current_user) %>
+<% logos = views(@shelves.logos, @current_user) %>
+<%!-- The markup describes the page to a crawler, so it names the released
+pictures whoever is reading, and only for an owner search engines may index at
+all (`Vutuv.Identity.indexable?/1`, the one answer to that question). --%>
+<% pictures = public_pictures(photos ++ logos) %>
+<JsonLd.script
+  :if={Vutuv.Identity.indexable?(@user) and pictures != []}
+  data={JsonLd.press_kit_page(@user, pictures, Vutuv.PressKit.rights_line())}
+/>
+
+<.card_section empty={@shelves.photos == [] and @shelves.logos == []}>
+  <p class="mb-6 text-sm text-slate-600 dark:text-slate-400">
+    {gettext(
+      "These pictures are offered for editorial use. Use them freely in reporting, and print the credit shown with each one."
+    )}
+  </p>
+
+  <section :if={@shelves.photos != []}>
+    <.section_title class="mb-2">{gettext("Press photos")}</.section_title>
+    <.lightbox_gallery>
+      <ul class="mb-8 list-none divide-y divide-slate-100 pl-0 dark:divide-slate-800">
+        <.press_photo_entry :for={view <- photos} view={view} />
+      </ul>
+    </.lightbox_gallery>
+  </section>
+
+  <section :if={@shelves.logos != []}>
+    <.section_title class="mb-2">{gettext("Logo variants")}</.section_title>
+    <ul class="list-none divide-y divide-slate-100 pl-0 dark:divide-slate-800">
+      <.press_logo_entry :for={view <- logos} view={view} />
+    </ul>
+  </section>
+</.card_section>

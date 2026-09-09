@@ -101,4 +101,35 @@ defmodule Vutuv.ImageHelpers do
   """
   def review_cover_row(%{id: id}) when is_binary(id),
     do: Repo.get_by(Image, post_review_id: id, kind: "review_cover")
+
+  @doc """
+  An inserted press-kit picture (#2083) for a member, with the columns a stored
+  one carries. `attrs` override any of them — `:logo`, `:position`,
+  `:moderation`, `:alt`, `:credit`, `:caption`, `:content_type`, `:size_bytes`.
+
+  Inserted rather than uploaded on purpose: the surfaces that read a press kit
+  (#2086's card, its section page and their agent documents) build proxy URLs
+  and read columns, and none of them opens a file. `Vutuv.PressKitTest` is where
+  the upload path itself is exercised, through `Vutuv.PressKit.create/4`.
+  """
+  def put_press_picture(%User{} = user, attrs \\ []) do
+    Repo.insert!(
+      struct!(
+        %Image{
+          kind: "press_kit",
+          token: Vutuv.Uploads.gen_token(),
+          user_id: user.id,
+          logo: false,
+          moderation: "approved",
+          position: 0,
+          width: 3000,
+          height: 2000,
+          content_type: "image/jpeg",
+          size_bytes: 2_400_000,
+          rights_confirmed_at: NaiveDateTime.utc_now(:second)
+        },
+        attrs
+      )
+    )
+  end
 end
