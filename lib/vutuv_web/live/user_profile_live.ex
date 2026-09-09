@@ -51,6 +51,7 @@ defmodule VutuvWeb.UserProfileLive do
   alias Vutuv.Tags
   alias Vutuv.Tags.UserTag
   alias Vutuv.Tags.UserTagEndorsement
+  alias VutuvWeb.EducationHTML
   alias VutuvWeb.Fediverse.Docs
   alias VutuvWeb.Live.ComposerPanel
   alias VutuvWeb.Live.InitAssigns
@@ -980,6 +981,7 @@ defmodule VutuvWeb.UserProfileLive do
     |> assign(:work_experience, user.work_experiences)
     |> assign(:experience_groups, WorkExperienceHTML.profile_groups(user.work_experiences))
     |> assign(:education, user.educations)
+    |> assign(:education_groups, EducationHTML.profile_groups(user.educations))
     |> assign(:languages, user.languages)
     # Expired-credential hiding (issue #859) is already applied in the preload
     # via Qualification.visible_to(owner?): a visitor gets only valid entries,
@@ -1321,12 +1323,12 @@ defmodule VutuvWeb.UserProfileLive do
   # THE single source of the per-section preview caps: preload_user_for_show/2
   # limits its preloads with it and user/show.html.heex reads the same numbers
   # for its `preview={...}` / "more than the preview" checks, so the queries
-  # and the template can never disagree. Experience is deliberately absent: one
-  # number cannot say how much of a CV to show, since the jobs and the Ehrenämter
-  # are capped apart (WorkExperienceHTML.profile_groups/1), so its preload stays
-  # unlimited and the cut happens in memory.
+  # and the template can never disagree. The two CV sections are deliberately
+  # absent: one number cannot say how much of a CV to show, since each category
+  # is capped on its own (`WorkExperienceHTML.profile_groups/1` and
+  # `EducationHTML.profile_groups/1`), so both preloads stay unlimited and the
+  # cut happens in memory — a cut before the grouping drops whole categories.
   @preview_limits %{
-    educations: 3,
     languages: 6,
     qualifications: 8,
     phone_numbers: 3,
@@ -1357,9 +1359,11 @@ defmodule VutuvWeb.UserProfileLive do
       # cited credential (issue #858) ride along for the Experience card.
       work_experiences:
         {WorkExperience.order_by_date(WorkExperience), WorkExperience.display_preloads()},
-      educations:
-        from(e in Education, limit: ^preview_limit(:educations))
-        |> Education.order_by_date(),
+      # Unlimited for the same two reasons the work history is: the header line
+      # resolves a pinned education from this list (profile_headline/3, issue
+      # #882), which a SQL cut could hide, and the card caps each CV category on
+      # its own in memory — a cut before the grouping drops whole categories.
+      educations: Education.order_by_date(Education),
       languages: Language.ordered() |> limit(^preview_limit(:languages)),
       # visible_to(owner?) hides expired credentials from visitors in SQL (the
       # same scope the section page, CV and agent docs use), so the card renders

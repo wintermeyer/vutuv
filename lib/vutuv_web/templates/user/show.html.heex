@@ -694,9 +694,9 @@ the resulting ~200px rail width. --%>
         <%!-- What the cap left out, in this category's own words: how many roles
               and which years they cover, so a reader can tell a cut-off decade
               of jobs from a couple of recent ones. --%>
-        <VutuvWeb.WorkExperienceHTML.experience_more
+        <VutuvWeb.WorkExperienceHTML.cv_more
           :if={group.hidden}
-          user={@user}
+          href={~p"/#{@user}/work_experiences"}
           hidden={group.hidden}
         />
       </div>
@@ -721,19 +721,22 @@ the resulting ~200px rail width. --%>
       <%!-- A year-led date range on the left, the degree/school on a rail.
       Entries arrive newest-first (Education.order_by_date) and, like the
       section page, split into the CV categories (issue #849) under their own
-      headings once a non-university entry exists. --%>
-      <div
-        :for={{kind, entries} <- VutuvWeb.EducationHTML.group_by_kind(@education)}
-        class="mt-6 first:mt-0"
-      >
-        <h3
-          :if={VutuvWeb.EducationHTML.show_kind_headings?(@education)}
-          class="mb-3 text-xs font-semibold uppercase tracking-wide text-slate-500 dark:text-slate-400"
-        >
-          {VutuvWeb.EducationHTML.kind_label(kind)}
+      headings once a non-university entry exists. Each category is capped on
+      its own (`profile_groups/1`), so a member whose newest rows are all
+      Hochschulbildung keeps their Ausbildung on the card. --%>
+      <div :for={group <- @education_groups} class="mt-6 first:mt-0">
+        <%!-- Linked for the same reason the Experience headings are: the
+              category name is what a reader wanting more of it reaches for. --%>
+        <h3 :if={VutuvWeb.EducationHTML.show_kind_headings?(@education)} class="mb-3">
+          <.link
+            href={~p"/#{@user}/educations"}
+            class="text-xs font-semibold uppercase tracking-wide text-slate-500 hover:text-brand-700 dark:text-slate-400 dark:hover:text-brand-300"
+          >
+            {VutuvWeb.EducationHTML.kind_label(group.kind)}
+          </.link>
         </h3>
         <div
-          :for={edu <- entries}
+          :for={edu <- group.entries}
           class="grid grid-cols-[6.5rem_1fr] items-start gap-3"
         >
           <div class="pt-0.5 text-right text-xs font-semibold leading-tight text-slate-600 dark:text-slate-400 tabular-nums">
@@ -756,13 +759,19 @@ the resulting ~200px rail width. --%>
             </p>
           </div>
         </div>
+
+        <VutuvWeb.WorkExperienceHTML.cv_more
+          :if={group.hidden}
+          href={~p"/#{@user}/educations"}
+          hidden={group.hidden}
+        />
       </div>
 
       <.manage_footer
         href={~p"/#{@user}/educations"}
         manage_href={~p"/settings/educations"}
         total={@totals.educations}
-        preview={VutuvWeb.UserProfileLive.preview_limit(:educations)}
+        preview={Enum.sum_by(@education_groups, & &1.shown)}
         owner={@as_owner?}
       />
     </.card>
@@ -1624,14 +1633,16 @@ the resulting ~200px rail width. --%>
 
 <JsonLd.script data={JsonLd.breadcrumbs(@user)} />
 <%!-- Markup mirrors the page (schema.org accuracy rule): a noindexed
-member's profile carries no Person entity. --%>
+member's profile carries no Person entity, and `alumniOf` is fed the entries the
+Ausbildung card really shows rather than the whole preload — the preview caps
+each CV category now, so @education holds every row. --%>
 <JsonLd.script
   :if={not @user.noindex?}
   data={
     JsonLd.person(@user, @header_job, @user_tags, @user.social_media_accounts, %{
       followers: @follower_count,
       posts: @posts_total,
-      educations: @education,
+      educations: Enum.flat_map(@education_groups, & &1.entries),
       languages: @languages,
       qualifications: @qualifications,
       addresses: @user.addresses,
