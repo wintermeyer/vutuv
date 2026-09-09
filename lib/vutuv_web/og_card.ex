@@ -35,6 +35,8 @@ defmodule VutuvWeb.OgCard do
       Image.write(logo, out)
   """
 
+  alias Vix.Vips.Image, as: Vimage
+
   @width 1200
   @height 630
   @logo_width 560
@@ -89,10 +91,40 @@ defmodule VutuvWeb.OgCard do
   # Load the pre-rasterized white wordmark (white letters on transparent,
   # tightly cropped) and size it for the card. Only the PNG loader is used, so
   # this never depends on the librsvg loader being on the libvips path.
-  defp white_wordmark do
+  defp white_wordmark, do: white_wordmark(@logo_width)
+
+  defp white_wordmark(width) do
     path =
       Path.join(Application.app_dir(:vutuv, "priv"), "static/images/vutuv-wordmark-white.png")
 
-    Image.thumbnail(path, @logo_width)
+    Image.thumbnail(path, width)
+  end
+
+  @doc """
+  The wordmark `width` px wide in any `color` (a CSS hex), as an RGBA image
+  with the letters' own alpha — the same asset as the brand card, recoloured
+  through it, so a logo change lands on every generated card at once. Built
+  once per size and colour and kept in `:persistent_term`, materialised, so a
+  card render pays no file read for it.
+  """
+  def wordmark(width, color) do
+    key = {__MODULE__, :wordmark, width, color}
+
+    case :persistent_term.get(key, nil) do
+      nil ->
+        with {:ok, white} <- white_wordmark(width),
+             {_rgb, alpha} when not is_nil(alpha) <- Image.split_alpha(white),
+             {:ok, fill} <- Image.new(Image.width(white), Image.height(white), color: color),
+             {:ok, mark} <- Image.add_alpha(fill, alpha),
+             {:ok, mark} <- Vimage.copy_memory(mark) do
+          :persistent_term.put(key, mark)
+          {:ok, mark}
+        else
+          _ -> :error
+        end
+
+      mark ->
+        {:ok, mark}
+    end
   end
 end

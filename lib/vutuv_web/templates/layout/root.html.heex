@@ -29,6 +29,11 @@
       content={content}
     />
     <meta name="twitter:card" content={OpenGraph.twitter_card(assigns)} />
+    <%!-- Mastodon 4.3+ draws a "More from …" byline with a follow link on the
+    card of a page whose author it can name (VutuvWeb.OpenGraph.creator/1). --%>
+    <%= if creator = OpenGraph.creator(assigns) do %>
+      <meta name="fediverse:creator" content={creator} />
+    <% end %>
     <%!-- Explicit canonical URL, shared one-for-one with og:url
     (VutuvWeb.OpenGraph.canonical_url/1): the request path without volatile
     query params (?lang, ?page), so search engines and AI crawlers index one

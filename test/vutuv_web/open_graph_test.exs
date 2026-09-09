@@ -132,7 +132,7 @@ defmodule VutuvWeb.OpenGraphTest do
   end
 
   describe "profile pages" do
-    test "a member previews with name, work info and avatar", %{conn: conn} do
+    test "a member previews with name, work info and their generated card", %{conn: conn} do
       user =
         insert_activated_user(
           first_name: "Greta",
@@ -152,14 +152,80 @@ defmodule VutuvWeb.OpenGraphTest do
       assert title(html) == "Greta Tester · Developer @ Acme Corp - vutuv"
       assert og(html, "og:description") =~ "Acme Corp"
       assert og(html, "og:url") == @base <> "/#{user.username}"
-      assert og(html, "og:image") == @base <> "/#{user.username}/avatar.jpg"
-      assert og(html, "og:image:width") == "512"
-      assert og(html, "og:image:type") == "image/jpeg"
-      assert html =~ ~s(<meta name="twitter:card" content="summary")
+      # The wide generated card (VutuvWeb.OgImage), the one shape every
+      # platform draws large — the square avatar got the thumbnail beside the
+      # title everywhere.
+      assert og(html, "og:image") == @base <> "/#{user.username}/og.png"
+      assert og(html, "og:image:width") == "1200"
+      assert og(html, "og:image:height") == "630"
+      assert og(html, "og:image:type") == "image/png"
+      assert og(html, "og:image:alt") == "Greta Tester"
+      assert html =~ ~s(<meta name="twitter:card" content="summary_large_image")
       # The og:type=profile structured properties, so scrapers get the parts.
       assert og(html, "profile:first_name") == "Greta"
       assert og(html, "profile:last_name") == "Tester"
       assert og(html, "profile:username") == user.username
+    end
+
+    # LinkedIn's organic feed has drawn every link as a small square cut from
+    # the middle of the picture since 2024, whatever its size — so for its
+    # scraper the face is the better thumbnail than a slice of the card.
+    test "LinkedIn's scraper gets the square avatar instead", %{conn: conn} do
+      user =
+        insert_activated_user(first_name: "Greta", avatar: "selfie.jpg")
+        |> ImageHelpers.with_image_rows()
+
+      html =
+        conn
+        |> put_req_header(
+          "user-agent",
+          "LinkedInBot/1.0 (compatible; Mozilla/5.0; Apache-HttpClient +http://www.linkedin.com)"
+        )
+        |> get(~p"/#{user}")
+        |> html_response(200)
+
+      assert og(html, "og:image") == @base <> "/#{user.username}/avatar.jpg"
+      assert og(html, "og:image:width") == "512"
+      assert html =~ ~s(<meta name="twitter:card" content="summary")
+    end
+
+    # The answer differs by user agent, so the URL has to say so to any cache
+    # between us and the scrapers — on every response, not only LinkedIn's.
+    test "every page declares that it varies by user agent", %{conn: conn} do
+      user = insert_activated_user(first_name: "Greta")
+
+      vary = conn |> get(~p"/#{user}") |> get_resp_header("vary")
+
+      assert Enum.any?(vary, &(&1 =~ ~r/user-agent/i))
+    end
+
+    test "a member without an avatar still gets their card (LinkedIn the brand card)",
+         %{conn: conn} do
+      user = insert_activated_user(first_name: "Bare")
+
+      html = conn |> get(~p"/#{user}") |> html_response(200)
+      assert og(html, "og:image") == @base <> "/#{user.username}/og.png"
+
+      linkedin =
+        conn
+        |> put_req_header("user-agent", "LinkedInBot/1.0")
+        |> get(~p"/#{user}")
+        |> html_response(200)
+
+      assert og(linkedin, "og:image") == @base <> "/og-card.png"
+    end
+
+    test "a federating member is named as the fediverse:creator, others are not",
+         %{conn: conn} do
+      federating = insert_activated_user(fediverse_followers?: true)
+      plain = insert_activated_user()
+
+      html = conn |> get(~p"/#{federating}") |> html_response(200)
+
+      assert html =~
+               ~s(<meta name="fediverse:creator" content="@#{federating.username}@localhost">)
+
+      refute conn |> get(~p"/#{plain}") |> html_response(200) =~ "fediverse:creator"
     end
 
     test "a member without work info titles with their headline instead", %{conn: conn} do
@@ -182,14 +248,6 @@ defmodule VutuvWeb.OpenGraphTest do
 
       assert og(html, "og:title") == "Bare Name"
       assert title(html) == "Bare Name - vutuv"
-    end
-
-    test "a member without an avatar falls back to the brand card", %{conn: conn} do
-      user = insert_activated_user(first_name: "Bare")
-
-      html = conn |> get(~p"/#{user}") |> html_response(200)
-
-      assert og(html, "og:image") == @base <> "/og-card.png"
     end
 
     test "a member without work info or tags gets the site description, never an empty one",
@@ -232,20 +290,70 @@ defmodule VutuvWeb.OpenGraphTest do
   end
 
   describe "post pages" do
-    test "a public post previews as an article with its first line", %{conn: conn} do
+    test "a public post previews as an article: author + first line, opening, its card",
+         %{conn: conn} do
       author =
-        insert_activated_user(first_name: "Paula", avatar: "selfie.jpg")
+        insert_activated_user(first_name: "Paula", last_name: "Post", avatar: "selfie.jpg")
         |> ImageHelpers.with_image_rows()
 
-      post = create_post!(author, %{"body" => "Hello preview world, this is the first line."})
+      post =
+        create_post!(author, %{
+          "body" => "Hello preview world, this is the first line.\n\nAnd a second paragraph."
+        })
 
       html = conn |> get(Posts.path(post)) |> html_response(200)
 
       assert og(html, "og:type") == "article"
-      assert og(html, "og:description") =~ "Hello preview world"
+      # LinkedIn and X show nothing but the title, so it names the author and
+      # the post's first line — the page title ("Paula Post · <date>") said
+      # nothing about the post. The <title> itself is unchanged.
+      assert og(html, "og:title") == "Paula Post: Hello preview world, this is the first line."
+      assert title(html) == "Paula Post · #{Date.to_iso8601(post.published_on)} - vutuv"
+      # The description carries the opening of the whole body, not the first
+      # line alone.
+      assert og(html, "og:description") =~ "first line. And a second paragraph."
       assert og(html, "article:published_time") == Date.to_iso8601(post.published_on)
-      # The author's avatar gives the preview a face.
-      assert og(html, "og:image") == @base <> "/#{author.username}/avatar.jpg"
+      # The post's own generated card: author, headline and the opening lines
+      # in the picture itself.
+      assert og(html, "og:image") == @base <> Posts.path(post) <> "/og.png"
+      assert og(html, "og:image:width") == "1200"
+      assert og(html, "og:image:type") == "image/png"
+      assert html =~ ~s(<meta name="twitter:card" content="summary_large_image")
+    end
+
+    test "a long first line is cut on a word boundary in the title", %{conn: conn} do
+      author = insert_activated_user(first_name: "Paula", last_name: "Post")
+      words = Enum.map_join(1..40, " ", &"word#{&1}")
+      post = create_post!(author, %{"body" => words})
+
+      title = conn |> get(Posts.path(post)) |> html_response(200) |> og("og:title")
+
+      assert String.starts_with?(title, "Paula Post: word1 word2")
+      assert String.ends_with?(title, "…")
+      refute title =~ "word40"
+      assert String.length(title) <= String.length("Paula Post: ") + 91
+    end
+
+    # LinkedIn's feed cuts a square from the middle of whatever it is given, so
+    # its scraper is handed a square drawn as one: face, name and the first
+    # lines in very large type (`VutuvWeb.OgImage.square_png/1`).
+    test "LinkedIn's scraper gets the square post card", %{conn: conn} do
+      author =
+        insert_activated_user(first_name: "Paula", avatar: "selfie.jpg")
+        |> ImageHelpers.with_image_rows()
+
+      post = create_post!(author, %{"body" => "Hello preview world."})
+
+      html =
+        conn
+        |> put_req_header("user-agent", "LinkedInBot/1.0")
+        |> get(Posts.path(post))
+        |> html_response(200)
+
+      assert og(html, "og:image") == @base <> Posts.path(post) <> "/og-square.png"
+      assert og(html, "og:image:width") == "1200"
+      assert og(html, "og:image:height") == "1200"
+      assert html =~ ~s(<meta name="twitter:card" content="summary")
     end
 
     test "a post with images previews its first image instead of the avatar", %{conn: conn} do
@@ -488,9 +596,10 @@ defmodule VutuvWeb.OpenGraphTest do
       assert og(html, "og:description") =~ "hiring three developers"
       refute og(html, "og:description") =~ "Verified organization pages"
       assert og(html, "article:published_time") == Date.to_iso8601(post.published_on)
-      # The title distinguishes the post from the page it was published on.
-      assert og(html, "og:title") == "Acme GmbH · #{Date.to_iso8601(post.published_on)}"
-      # No picture of its own, so the page behind it gives the card a face.
+      # The title names the page and the post's first line.
+      assert og(html, "og:title") == "Acme GmbH: We are hiring three developers."
+      # No picture of its own, so the page behind it gives the card a face —
+      # a page's post has no generated card yet.
       assert og(html, "og:image") ==
                @base <> "/organizations/#{organization.slug}/avatar.jpg"
 
