@@ -19,6 +19,54 @@ defmodule VutuvWeb.CompanyHTML do
   embed_templates("../templates/company/*")
 
   @doc """
+  One downloadable brand file on the media kit: the picture on a plate, its name
+  and note, and a download link.
+
+  One component for both catalogs on that page — the brand assets and the link
+  badges — because the two were the same twenty-five lines twice, and had
+  already grown two different answers to "does this need a dark plate?".
+
+  `dark_plate?` is that answer, and it is the caller's to give rather than
+  something guessed from the filename. The one dark plate is **slate-700**, not
+  slate-900: the white wordmark shows on either, but the dark badge is itself
+  slate-900 and loses its edge on it, reading as loose glyphs rather than as a
+  badge. `plate_height` differs because a badge is 40px tall and a wordmark
+  fills whatever it is given.
+  """
+  attr(:name, :string, required: true)
+  attr(:note, :string, required: true)
+  attr(:path, :string, required: true)
+  attr(:label, :string, required: true, doc: ~S|the download link's text ("Download SVG")|)
+  attr(:dark_plate?, :boolean, default: false)
+  attr(:plate_height, :string, default: "h-28")
+  attr(:rest, :global, doc: "width/height for a picture drawn at its own size")
+
+  def asset_tile(assigns) do
+    ~H"""
+    <li class="rounded-xl ring-1 ring-slate-200 dark:ring-slate-800">
+      <div class={[
+        "flex items-center justify-center rounded-t-xl p-4",
+        @plate_height,
+        if(@dark_plate?, do: "bg-slate-700", else: "bg-slate-50 dark:bg-slate-800/60")
+      ]}>
+        <img src={@path} alt={@name} class="max-h-16 max-w-full" {@rest} />
+      </div>
+      <div class="p-4">
+        <p class="font-semibold text-slate-900 dark:text-white">{@name}</p>
+        <p class="mt-1 text-sm text-slate-600 dark:text-slate-400">{@note}</p>
+        <a
+          href={@path}
+          download
+          class="mt-2 inline-block text-sm font-semibold text-brand-600 hover:text-brand-700 dark:text-brand-400 dark:hover:text-brand-300"
+        >
+          {@label}
+        </a>
+      </div>
+    </li>
+    """
+  end
+
+  @doc """
   One of the investor page's figure tiles. Kept beside the page's other shared
   bits rather than in the template so every figure is grouped the same way.
   """

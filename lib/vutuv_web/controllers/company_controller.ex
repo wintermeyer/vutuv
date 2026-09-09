@@ -32,6 +32,7 @@ defmodule VutuvWeb.CompanyController do
   """
   use VutuvWeb, :controller
 
+  alias Vutuv.Profiles.LinkVerification
   alias VutuvWeb.AgentDocs
   alias VutuvWeb.AgentDocs.InvestorsDoc
   alias VutuvWeb.AgentDocs.MediaKitDoc
@@ -64,8 +65,18 @@ defmodule VutuvWeb.CompanyController do
     )
   end
 
-  @doc "The media kit: boilerplate, facts, brand assets, screenshots, contact."
+  @doc """
+  The media kit: boilerplate, facts, brand assets, badges, screenshots, contact.
+
+  The one assign that is not the same for everybody is `handle`: a signed-in
+  member gets their own, so the badge snippets are ready to copy rather than
+  ready to edit. Everyone else — and every agent-format sibling, which is by
+  definition the anonymous view — gets the placeholder, which the handle field
+  on the page rewrites without a reload.
+  """
   def media_kit(conn, _params) do
+    handle = handle(conn)
+
     AgentDocs.respond(conn,
       html: fn conn ->
         render(conn, "media_kit.html",
@@ -73,6 +84,10 @@ defmodule VutuvWeb.CompanyController do
           boilerplate: MediaKitDoc.boilerplate(),
           facts: MediaKitDoc.facts(),
           assets: MediaKitDoc.assets(),
+          handle: handle,
+          badges: MediaKitDoc.badges(),
+          link_snippets: MediaKitDoc.link_snippets(handle),
+          link_verification?: LinkVerification.enabled?(),
           colors: MediaKitDoc.colors(),
           typography: MediaKitDoc.typography(),
           screenshots: MediaKitDoc.screenshots(),
@@ -85,5 +100,12 @@ defmodule VutuvWeb.CompanyController do
       end,
       doc: fn -> MediaKitDoc.build() end
     )
+  end
+
+  defp handle(conn) do
+    case conn.assigns[:current_user] do
+      %{username: username} -> username
+      _ -> MediaKitDoc.handle_placeholder()
+    end
   end
 end

@@ -426,7 +426,9 @@ defmodule VutuvWeb.PageController do
   - `/jobs` — the public job board: open positions, filterable, newest first
   - `/jobs/<slug>` — a job posting: role, location, pay range, tags and how to apply
   - `/system/media-kit` — press material: boilerplate in three lengths, logo files,
-    colours, screenshots and the press contact (English only, whatever `?lang=` says)
+    colours, screenshots, the badges and copy-and-paste snippets a member links
+    their own profile with, and the press contact (English only, whatever
+    `?lang=` says)
   - `/system/investors` — the case for investing here, the smallest investment
     worth a conversation, how many members, posts and Fediverse accounts this
     installation has, and how to write (`?lang=` for {{locales}})

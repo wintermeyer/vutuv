@@ -45,9 +45,18 @@ defmodule Vutuv.Profiles.LinkVerification do
   The canonical profile URL(s) a `rel="me"` back-link must point at. Derived
   from the endpoint host (installability-safe — never a literal vutuv.de).
   """
-  def profile_urls(%User{username: username}) do
-    [VutuvWeb.Endpoint.url() <> "/" <> username]
-  end
+  def profile_urls(%User{username: username}), do: [profile_url(username)]
+
+  @doc """
+  The one address a back-link has to carry, for a bare handle.
+
+  The same string `profile_urls/1` looks for, said from the side that hands it
+  out: `Vutuv.Profiles.LinkBadges` builds every copy-and-paste badge around it,
+  so the badge a member pastes and the back-link this module goes looking for
+  cannot drift apart. Widening what counts as a profile address (a `www.`
+  spelling, an `/@handle` form) belongs here, where both sides read it.
+  """
+  def profile_url(handle) when is_binary(handle), do: VutuvWeb.Endpoint.url() <> "/" <> handle
 
   @doc """
   Ensures the link carries a `verification_token` (needed for the DNS /

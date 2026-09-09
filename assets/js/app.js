@@ -26,6 +26,7 @@ import {
   keyActivates,
   localGet,
   localSet,
+  normalizeHandle,
   onReady,
   once,
   plainClick,
@@ -63,6 +64,9 @@ import { PullToReveal } from "./pull_to_reveal"
 // button, instead of leaving the site for their server (self-contained; its
 // panel lives on <body>, outside every LiveView root. See mention_card.js).
 import "./mention_card"
+// The media kit's "Link to your profile" card: a handle field that rewrites the
+// badge snippets (self-contained; see link_badges.js).
+import "./link_badges"
 
 // LiveSocket drives the incremental LiveView shell (live unread badges, the
 // notifications/messages pages, presence). The CSRF token is rendered into the
@@ -2875,21 +2879,17 @@ onReady(setupSelectAll)
 // enhancement only: with JS off the red button stays clickable and the server
 // re-checks the username (UserController.delete), so this just disables the
 // button until the field matches, sparing a needless round-trip. The match is
-// normalized the same way the server does it: trim, drop a leading "@",
-// lower-case.
-function normalizeUsername(value) {
-  return value.trim().replace(/^@+/, "").toLowerCase()
-}
+// normalized by `normalizeHandle` from util.js, the same way the server does it.
 
 function wireDeleteGate(form) {
   if (!once(form, "deleteGate")) return
   const input = form.querySelector("[data-delete-gate-input]")
   const submit = form.querySelector("[data-delete-gate-submit]")
-  const expected = normalizeUsername(form.dataset.username || "")
+  const expected = normalizeHandle(form.dataset.username || "")
   if (!input || !submit || !expected) return
 
   const sync = () => {
-    submit.disabled = normalizeUsername(input.value) !== expected
+    submit.disabled = normalizeHandle(input.value) !== expected
   }
 
   input.addEventListener("input", sync)

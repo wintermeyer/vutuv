@@ -1,5 +1,6 @@
 defmodule VutuvWeb.UrlController do
   use VutuvWeb, :controller
+  alias Vutuv.Profiles.LinkBadges
   alias Vutuv.Profiles.LinkVerification
   alias Vutuv.Profiles.Url
   alias VutuvWeb.AgentDocs
@@ -181,7 +182,14 @@ defmodule VutuvWeb.UrlController do
     render(conn, "verify.html",
       url: url,
       enabled?: LinkVerification.enabled?(),
-      profile_url: LinkVerification.profile_urls(conn.assigns[:user]) |> List.first(),
+      profile_url: LinkVerification.profile_url(conn.assigns[:user].username),
+      # The same catalog the media kit shows (`Vutuv.Profiles.LinkBadges`),
+      # filled with this member's handle: the line they need is here, where they
+      # are mid-proof, rather than only on a press page they have no reason to
+      # read. The plain link is the one that belongs beside the instruction; the
+      # badges are one link away.
+      link_snippet:
+        LinkBadges.snippets(conn.assigns[:user].username) |> Enum.find(&(&1.key == "text")),
       host: URI.parse(url.value).host,
       dns_value: LinkVerification.dns_txt_value(url),
       dns_challenge_name: LinkVerification.dns_challenge_name(url),

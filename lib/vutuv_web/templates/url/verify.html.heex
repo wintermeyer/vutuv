@@ -31,12 +31,16 @@ success the link earns the verified mark shown on the profile + section pages. -
     <p class="text-sm text-slate-700 dark:text-slate-300">
       {gettext("Add a link back to your profile on your page, marked rel=\"me\":")}
     </p>
-    <code
-      phx-no-curly-interpolation
-      class="block overflow-x-auto rounded bg-white px-3 py-2 font-mono text-xs text-slate-900 ring-1 ring-slate-200 dark:bg-slate-900 dark:text-slate-100 dark:ring-slate-700"
-    ><%= ~s(<a rel="me" href="#{@profile_url}">vutuv</a>) %></code>
+    <%!-- The snippet comes from `Vutuv.Profiles.LinkBadges`, the catalog that
+          also feeds the media kit, so the line a member is told to paste here
+          and the badge they can paste from there are one string. --%>
+    <.copy_field id="rel-me-snippet" variant="block" class="mt-0">{@link_snippet.code}</.copy_field>
     <p class="text-xs text-slate-600 dark:text-slate-400">
       {gettext("The link text can be anything. A hidden <link rel=\"me\"> in the page head works too.")}
+      <.link
+        href={~p"/system/media-kit#link-to-your-profile"}
+        class="font-semibold text-brand-600 hover:text-brand-700 dark:text-brand-400 dark:hover:text-brand-300"
+      >{gettext("Ready-made buttons and badges")}</.link>
     </p>
     <.verify_form url={@url} method="rel_me" label={gettext("Verify via back-link")} report={@check_report} />
   </.card>
