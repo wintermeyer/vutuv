@@ -164,10 +164,16 @@ defmodule VutuvWeb.WorkExperienceHTML do
     end
   end
 
-  defp hidden_note([]), do: nil
-  defp hidden_note(entries), do: %{count: length(entries), years: hidden_years(entries)}
+  @doc """
+  What a profile card's per-category cap left out: `%{count:, years:}`, or `nil`
+  when the category fits. Shared with the Education card (`VutuvWeb.EducationHTML`)
+  — both CV sections ask the same question of the same two year columns, and the
+  answer is rendered by the same `cv_more/1` below.
+  """
+  def hidden_note([]), do: nil
+  def hidden_note(entries), do: %{count: length(entries), years: hidden_years(entries)}
 
-  # The span the hidden roles cover, through the same labeller the rail's own
+  # The span the hidden entries cover, through the same labeller the rail's own
   # date column uses: "1994 - 2015", a lone "2003" when they all sit in one
   # year, and running to "Present" while one of them is still going.
   defp hidden_years(entries) do
@@ -185,19 +191,21 @@ defmodule VutuvWeb.WorkExperienceHTML do
   end
 
   @doc """
-  The line under a category the profile preview truncated: how many roles the
-  cap left out, the years they cover, and the way to the whole CV. It rides the
-  timeline's own grid, so it lines up under the role titles above it rather than
-  opening a second margin.
+  The line under a CV category the profile preview truncated: how many entries
+  the cap left out, the years they cover, and the way to the full section. It
+  rides the timeline's own grid, so it lines up under the entry titles above it
+  rather than opening a second margin — which is also why it lives here beside
+  `experience_block/1` and is shared with the Education card rather than being
+  hand-copied into the profile template.
   """
-  attr(:user, :any, required: true)
+  attr(:href, :any, required: true)
   attr(:hidden, :map, required: true)
 
-  def experience_more(assigns) do
+  def cv_more(assigns) do
     ~H"""
     <div class="grid grid-cols-[6.5rem_1fr] gap-3">
       <.link
-        href={~p"/#{@user}/work_experiences"}
+        href={@href}
         class="col-start-2 border-l border-transparent pl-5 text-sm font-semibold text-brand-600 hover:text-brand-700 dark:text-brand-400 dark:hover:text-brand-300"
       >
         <%= if @hidden.years do %>
