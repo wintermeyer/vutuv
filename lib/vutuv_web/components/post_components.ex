@@ -7143,14 +7143,16 @@ defmodule VutuvWeb.PostComponents do
 
       <%!-- Which word annoys somebody is not a thing a machine can offer a
       list of, so this row stays a field. It carries the same reach select, so
-      the two ways in write the same shape of rule. --%>
+      the two ways in write the same shape of rule.
+
+      Unlike the ticks above it sends no `post_id`: a word takes this post down
+      with every other one it matches, so there is nothing to hold open. --%>
       <form
         phx-submit="hide-word"
         data-hide-word
         data-post={@id}
         class="flex flex-wrap items-center gap-2 px-3 py-2"
       >
-        <input type="hidden" name="post_id" value={@id} />
         <input
           type="text"
           name="pattern"
