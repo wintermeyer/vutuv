@@ -108,7 +108,7 @@ defmodule Vutuv.Sitemap do
     |> select([u], {u.username, u.updated_at})
     |> Repo.all()
     |> Enum.map(fn {slug, updated_at} ->
-      {"/#{slug}/press", NaiveDateTime.to_date(updated_at)}
+      {"/#{slug}/media-kit", NaiveDateTime.to_date(updated_at)}
     end)
   end
 
@@ -129,7 +129,7 @@ defmodule Vutuv.Sitemap do
     |> select([o], {o.slug, o.updated_at})
     |> Repo.all()
     |> Enum.map(fn {slug, updated_at} ->
-      {"/organizations/#{slug}/press", NaiveDateTime.to_date(updated_at)}
+      {"/organizations/#{slug}/media-kit", NaiveDateTime.to_date(updated_at)}
     end)
   end
 
@@ -233,7 +233,7 @@ defmodule Vutuv.Sitemap do
   # be one row here, and a join would list their press page ten times. The
   # explicit `not is_nil(user_id)` is the nullable-pair rule — a page's press
   # picture leaves that column empty, and a NULL in this list is a row that
-  # belongs on `/organizations/<slug>/press` (issue #2087), not here.
+  # belongs on `/organizations/<slug>/media-kit` (issue #2087), not here.
   defp indexable_press_users do
     owner_ids =
       from(i in PressKit.public_query(), where: not is_nil(i.user_id), select: i.user_id)

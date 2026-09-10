@@ -438,7 +438,7 @@ defmodule VutuvWeb.NotificationLine do
       # so nothing left can tell the two apart. A real page one click from the
       # right one beats the unclickable line #2084 left behind; #2087 owns the
       # page's editor.
-      n[:image_kind] == "press_kit" -> ~p"/settings/press"
+      n[:image_kind] == "press_kit" -> ~p"/settings/media-kit"
       true -> nil
     end
   end

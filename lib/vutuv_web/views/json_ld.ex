@@ -415,7 +415,7 @@ defmodule VutuvWeb.JsonLd do
   end
 
   @doc """
-  A press kit (`/:slug/press`) as a schema.org `CollectionPage` whose
+  A Media Kit (`/:slug/media-kit`) as a schema.org `CollectionPage` whose
   `associatedMedia` are the pictures — each an `ImageObject` carrying
   `creditText`, `copyrightNotice`, `license` and `acquireLicensePage`
   (issue #2086, folded in from #2088).

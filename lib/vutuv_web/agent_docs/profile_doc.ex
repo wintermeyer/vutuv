@@ -155,7 +155,7 @@ defmodule VutuvWeb.AgentDocs.ProfileDoc do
       # The press kit the profile card shows (issue #2086), whole rather than
       # capped: a member offers at most fifteen pictures, and an agent asked to
       # find a printable photo of somebody should not have to fetch a second
-      # page for it. The full page is `/<username>/press`.
+      # page for it. The full page is `/<username>/media-kit`.
       press_kit: press_kit_entries(user),
       emails: Enum.map(emails, &SectionDocs.email_entry/1),
       phone_numbers: Enum.map(user.phone_numbers, &SectionDocs.phone_entry/1),

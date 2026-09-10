@@ -743,7 +743,7 @@ config :vutuv, :job_posting_images, max_filesize: 6_000_000, max_per_post: 10
 # generous cap here would mostly collect 20 MB screenshots of one.
 config :vutuv, :organization_images, max_filesize: 4_000_000
 
-# The press kit a member or a page offers for download (Vutuv.PressKit, issue
+# The Media Kit a member or a page offers for download (Vutuv.PressKit, issue
 # #2083). The one place on vutuv where the *original* is what leaves, so the
 # budget is the largest here: 30 MB is a full-frame RAW exported as JPEG, which
 # is the file a photographer actually hands over, and refusing it would defeat
@@ -755,7 +755,7 @@ config :vutuv, :organization_images, max_filesize: 4_000_000
 # portrait, a working shot and a handful of situations while still being a set a
 # journalist can look through, and five logo variants cover the light, dark,
 # monochrome and square marks a design manual names, with one spare.
-# Runtime overrides: PRESS_KIT_MAX_MB, PRESS_KIT_MAX_PHOTOS, PRESS_KIT_MAX_LOGOS.
+# Runtime overrides: MEDIA_KIT_MAX_MB, MEDIA_KIT_MAX_PHOTOS, MEDIA_KIT_MAX_LOGOS.
 config :vutuv, :press_kit, max_filesize: 30_000_000, max_photos: 10, max_logos: 5
 
 # Job postings (Vutuv.Jobs, milestone 11).

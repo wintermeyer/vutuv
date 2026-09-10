@@ -165,7 +165,7 @@ defmodule VutuvWeb.OrganizationLive.Show do
         %{
           show?: PressKit.manageable_by_powers?(powers),
           id: "organization-manage-press",
-          label: gettext("Press"),
+          label: gettext("Media Kit"),
           path: PressKit.editor_path(organization)
         },
         %{show?: owner?, id: nil, label: gettext("Team"), path: ~p"/organizations/#{slug}/roles"},

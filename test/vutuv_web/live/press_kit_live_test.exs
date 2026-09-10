@@ -1,6 +1,6 @@
 defmodule VutuvWeb.PressKitLiveTest do
   @moduledoc """
-  The member's press-kit editor (`/settings/press`, issue #2085) — the first
+  The member's Media Kit editor (`/settings/media-kit`, issue #2085) — the first
   production caller of `Vutuv.PressKit.create/4`, and therefore the place the
   kind's write authorization is first asked at all.
 
@@ -53,7 +53,7 @@ defmodule VutuvWeb.PressKitLiveTest do
     image
   end
 
-  defp open(conn), do: live(conn, ~p"/settings/press")
+  defp open(conn), do: live(conn, ~p"/settings/media-kit")
 
   # Arms a shelf's rights tick the way the member does — the checkbox is in the
   # add form and its change event is what the picker's `disabled` reads.
@@ -172,7 +172,7 @@ defmodule VutuvWeb.PressKitLiveTest do
     test "the settings hub links to it, and that link opens the page", %{conn: conn} do
       hub = get(conn, ~p"/settings")
 
-      assert html_response(hub, 200) =~ ~s(href="/settings/press")
+      assert html_response(hub, 200) =~ ~s(href="/settings/media-kit")
 
       # The rendered link, not the route we happen to know: a hub row pointing
       # at a retired URL is exactly the failure /settings/privacy shipped.
@@ -591,7 +591,7 @@ defmodule VutuvWeb.PressKitLiveTest do
     test "a refused press picture's notice opens the press kit", %{user: user} do
       notice = %{kind: "image_rejected", image_kind: "press_kit", category: "nudity"}
 
-      assert VutuvWeb.NotificationLine.notification_target(notice, user) == "/settings/press"
+      assert VutuvWeb.NotificationLine.notification_target(notice, user) == "/settings/media-kit"
     end
   end
 
@@ -833,7 +833,8 @@ defmodule VutuvWeb.PressKitLiveTest do
 
       {:ok, _live, html} = open(conn)
 
-      assert html =~ "Pressefotos &amp; Logos"
+      assert html =~ "Media Kit"
+      assert html =~ "Pressefotos"
       assert html =~ "Logo-Varianten"
       assert html =~ "Bildnachweis"
       assert html =~ "Entfernen"

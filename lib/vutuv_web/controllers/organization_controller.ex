@@ -180,7 +180,7 @@ defmodule VutuvWeb.OrganizationController do
 
   @doc """
   The page's press-kit editor (issue #2087): `VutuvWeb.PressKitLive`, the very
-  editor `/settings/press` is, mounted with the page as the owner and the
+  editor `/settings/media-kit` is, mounted with the page as the owner and the
   signed-in member as the one acting.
 
   Gated on `Vutuv.PressKit.manageable_by?/2` — its **owners and publishers** —

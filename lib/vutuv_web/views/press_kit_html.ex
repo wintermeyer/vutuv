@@ -1,7 +1,7 @@
 defmodule VutuvWeb.PressKitHTML do
   @moduledoc """
-  The public press page — `/:slug/press` for a member (issue #2086) and
-  `/organizations/:slug/press` for a page (issue #2087). Everything it draws is
+  The public Media Kit page — `/:slug/media-kit` for a member (issue #2086)
+  and `/organizations/:slug/media-kit` for a page (issue #2087). Everything it draws is
   `VutuvWeb.PressKitComponents`, shared with the profile card and the page's
   card; what lives here is the one template and the three things about it that
   differ per owner kind — its title, its breadcrumb trail and where its owner
@@ -25,11 +25,11 @@ defmodule VutuvWeb.PressKitHTML do
   The page's `<title>`: the owner's name and the section, in the one shape
   every other public sub-page wears.
   """
-  def press_page_title(owner), do: UserHelpers.member_page_title(owner, gettext("Press"))
+  def press_page_title(owner), do: UserHelpers.member_page_title(owner, gettext("Media Kit"))
 
   @doc "The page's heading, which names its owner rather than a bare category."
   def press_heading(owner),
-    do: gettext("Press photos and logos of %{name}", name: Identity.display_name(owner))
+    do: gettext("Media Kit of %{name}", name: Identity.display_name(owner))
 
   @doc """
   The breadcrumb trail: the owner's own listing, the owner, this page.
@@ -43,7 +43,7 @@ defmodule VutuvWeb.PressKitHTML do
     do: [
       owner_listing(owner),
       {Identity.display_name(owner), Identity.path(owner)},
-      gettext("Press")
+      gettext("Media Kit")
     ]
 
   defp owner_listing(%Organization{}), do: gettext("Organizations")

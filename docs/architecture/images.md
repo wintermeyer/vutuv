@@ -777,7 +777,31 @@ to leave rather than four columns read as a row. For the review cover the
 fallback is simpler still: the review row is already in hand wherever its cover
 is rendered.
 
-### The press kit, the one kind born here (issue #2083)
+### The Media Kit, the one kind born here (issue #2083)
+
+**The surface is called the Media Kit and the stored thing is still called
+`press_kit`** (issue #2100). The rename moved everything a member, a journalist
+or an operator reads — the three URLs (`/:slug/media-kit`,
+`/settings/media-kit`, `/organizations/:slug/media-kit`, each old address
+keeping a 301 in `VutuvWeb.LegacyRedirectController`), every label, the
+`/llms.txt` lines, the sitemap paths and the three env vars, which are now
+`MEDIA_KIT_MAX_MB` / `_MAX_PHOTOS` / `_MAX_LOGOS`. It deliberately moved
+**nothing that is stored or served by path**: `images.kind` is still
+`"press_kit"`, the files still live under `press_kit/<token>/` and
+`originals/press_kit/<token>/`, the proxy is still `/system/press_kit/:token/…`
+and the X-Accel location still `/internal_press_kit/`. Two further **published**
+names stayed with them, both held by crawlers and agents: the sitemap chunk
+types `press` / `organization_press`, which are the child sitemap URLs
+`/sitemaps/press-1.xml`, and the documents' `type: "press_kit"`, which is the
+`.json` sibling's type field and the `.xml` root element — and which is what
+tells them apart from vutuv's own `/system/media-kit`, typed `media_kit`.
+Production deploys are
+blue/green, so the previous release keeps reading that column and resolving
+those paths while the new one boots; renaming any of them is an expand/contract
+job over two deploys, and the nginx location is not ours to move at all. The
+Elixir modules keep the `PressKit` name with the column they own — and
+`VutuvWeb.AgentDocs.MediaKitDoc` is already taken by vutuv's own
+`/system/media-kit`, which this rename does not touch.
 
 A **press photo** and a **logo variant** are one kind, `press_kit`, and they are
 the first pictures whose only home is this table. Every kind before them arrived
@@ -879,7 +903,7 @@ member's press kit is theirs alone, a page's belongs to an **owner** or a
 **publisher** of the page (the pair #2087's editor is reachable by). An admin is
 deliberately not among them although `visible_to?/2` lets them look — moderating
 a picture goes through the freeze, and no admin here edits a member's own data
-in their name. The editor is `VutuvWeb.PressKitLive` at `/settings/press`, a
+in their name. The editor is `VutuvWeb.PressKitLive` at `/settings/media-kit`, a
 routed LiveView in the `:default` live_session (so the viewer is resolved from
 the cookie's `session_token`, never a bare `session["user_id"]`); every write it
 performs resolves the picture out of the signed-in member's **own** shelves
@@ -909,7 +933,7 @@ on those lists when the viewer may see it **or** when the stand-in may stand
 where it is (`showable?/2`); a frozen one is on neither, for anybody.
 
 Two surfaces draw them, both in `VutuvWeb.PressKitComponents`: the **Press card**
-on the profile, below Links, and the section page **`/:slug/press`**
+on the profile, below Links, and the section page **`/:slug/media-kit`**
 (`VutuvWeb.PressKitController`). The card lays the photos out with
 `VutuvWeb.PostComponents.mosaic_layout/2` — the post gallery's own geometry,
 which now reads `width`/`height` through `Vutuv.Images.orientation/1` and so
@@ -922,7 +946,7 @@ on a dark ground beside it, so a reversed mark is visible somewhere. The
 lightbox reads a `data-photo-credit` off the tile beside the fields it already
 knew (`assets/js/lightbox.js`).
 
-**`/:slug/press` is the one page under a member's slug that is not noindexed.**
+**`/:slug/media-kit` is the one page under a member's slug that is not noindexed.**
 Every other section page goes through the router's `:user_pipe` and its
 `NoIndex` because it shows personal data; a press kit is published in order to
 be found, so the route sits outside that pipeline, declares the pipeline's other
@@ -941,10 +965,10 @@ section page, the documents, the schema.org block and the sitemap entry are the
 same code with an organization as the owner — `PressKitComponents.press_card/1`
 (lifted out of the profile template when the page needed the second copy),
 `VutuvWeb.PressKitController.organization/2`, `PressKitDoc.build/2`. Three things
-are the page's own. **The URL is built from the slug**, `/organizations/:slug/press`
+are the page's own. **The URL is built from the slug**, `/organizations/:slug/media-kit`
 (`PressKit.page_path/1`), not from a claimed root handle: that handle dispatches
 the bare `/:slug` alone, so `Identity.path/1 <> "/press"` answered an address that
-404ed. The **editor** is `/organizations/:slug/press/edit` — the same
+404ed. The **editor** is `/organizations/:slug/media-kit/edit` — the same
 `VutuvWeb.PressKitLive`, embedded by `OrganizationController.press/2` instead of
 routed, so it resolves the viewer with `InitAssigns.assign_embedded/2` and
 re-asks `manageable_by?/2` on the socket (`OrganizationLive.ManageGate`) rather

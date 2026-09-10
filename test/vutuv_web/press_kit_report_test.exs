@@ -48,7 +48,7 @@ defmodule VutuvWeb.PressKitReportTest do
     } do
       image = put_press_picture(owner)
 
-      html = conn |> get(~p"/#{owner}/press") |> html_response(200)
+      html = conn |> get(~p"/#{owner}/media-kit") |> html_response(200)
 
       assert html =~ "data-press-report"
       assert html =~ "/system/report?url="
@@ -61,7 +61,7 @@ defmodule VutuvWeb.PressKitReportTest do
       image = put_press_picture(owner)
       {conn, _reader} = create_and_login_user(conn)
 
-      html = conn |> get(~p"/#{owner}/press") |> html_response(200)
+      html = conn |> get(~p"/#{owner}/media-kit") |> html_response(200)
 
       assert html =~ "/reports/new?"
       assert html =~ "id=#{image.id}"
@@ -72,7 +72,7 @@ defmodule VutuvWeb.PressKitReportTest do
       {conn, owner} = as_owner(conn)
       put_press_picture(owner)
 
-      html = conn |> get(~p"/#{owner}/press") |> html_response(200)
+      html = conn |> get(~p"/#{owner}/media-kit") |> html_response(200)
 
       refute html =~ "data-press-report"
     end
@@ -80,7 +80,7 @@ defmodule VutuvWeb.PressKitReportTest do
     test "offers nothing on a picture the AI gate is still holding", %{conn: conn, owner: owner} do
       put_press_picture(owner, moderation: "pending")
 
-      html = conn |> get(~p"/#{owner}/press") |> html_response(200)
+      html = conn |> get(~p"/#{owner}/media-kit") |> html_response(200)
 
       refute html =~ "data-press-report"
     end
@@ -88,7 +88,7 @@ defmodule VutuvWeb.PressKitReportTest do
     test "a logo variant carries it too", %{conn: conn, owner: owner} do
       put_press_picture(owner, logo: true, alt: "Wortmarke, hell")
 
-      html = conn |> get(~p"/#{owner}/press") |> html_response(200)
+      html = conn |> get(~p"/#{owner}/media-kit") |> html_response(200)
 
       assert html =~ "data-press-report"
     end
@@ -96,7 +96,7 @@ defmodule VutuvWeb.PressKitReportTest do
     test "the lightbox is told where to report the photo", %{conn: conn, owner: owner} do
       put_press_picture(owner)
 
-      html = conn |> get(~p"/#{owner}/press") |> html_response(200)
+      html = conn |> get(~p"/#{owner}/media-kit") |> html_response(200)
 
       assert html =~ "data-photo-report"
       assert html =~ "data-label-report"
@@ -105,7 +105,7 @@ defmodule VutuvWeb.PressKitReportTest do
     test "says it in German", %{conn: conn, owner: owner} do
       put_press_picture(owner)
 
-      html = conn |> de() |> get(~p"/#{owner}/press") |> html_response(200)
+      html = conn |> de() |> get(~p"/#{owner}/media-kit") |> html_response(200)
 
       assert html =~ "Dieses Bild melden"
     end

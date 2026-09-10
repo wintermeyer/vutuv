@@ -1,7 +1,7 @@
 defmodule VutuvWeb.PressKitController do
   @moduledoc """
-  The page that hands a journalist the files — `/:slug/press` for a member
-  (issue #2086) and `/organizations/:slug/press` for a page (issue #2087):
+  The page that hands a journalist the files — `/:slug/media-kit` for a member
+  (issue #2086) and `/organizations/:slug/media-kit` for a page (issue #2087):
   every press photo whole, with its caption, credit, dimensions, file size and
   a download, and every logo variant with its vector and its PNG.
 
