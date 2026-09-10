@@ -218,7 +218,10 @@ host; `Ssrf.vetted_address/1` with the connection **pinned** to the vetted IP
 via `Http.get_pinned/4`, the hostname riding along in SNI, the certificate check
 and the `Host` header, so no second lookup is left for DNS rebinding to answer
 differently; and `Tag.hashtag_name/1`, which refuses a name that reduces to
-nothing.
+nothing. That connection is opened and closed for the one request, which is
+what bounds it: handing `Req` a per-host `connect_options` instead starts a
+`Finch` instance per distinct hostname and never reaps it, and which hostnames
+appear is decided by what members type into a follow's sources.
 
 What bounds the table is `EXTERNAL_TAG_POST_CAPS` (twenty posts per tag, its
 servers sharing those slots, ten thousand rows overall) plus `prune/0`, which

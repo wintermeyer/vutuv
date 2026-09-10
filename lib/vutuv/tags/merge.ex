@@ -56,7 +56,21 @@ defmodule Vutuv.Tags.Merge do
     {"tag_follows", "user_id"},
     {"job_posting_tags", "job_posting_id"},
     {"fediverse_post_tags", "remote_post_id"},
-    {"newsletter_groups", nil}
+    {"newsletter_groups", nil},
+    # The followed tag's pull from other servers (#2126). The schedule is unique
+    # per `(tag_id, source)`, so `source` is exactly the column that must not
+    # collide when two spellings of a topic named the same server.
+    {"external_tag_fetches", "source"},
+    # The posts are unique per `(tag_id, source, remote_id)`, and this mechanism
+    # keys on one column, so it takes the narrower half: a row whose `remote_id`
+    # the canonical already holds is dropped rather than moved. That is
+    # conservative in the safe direction — a moved row can then never collide,
+    # since anything sharing `(source, remote_id)` with the canonical was
+    # dropped — at the price of occasionally dropping a post two different
+    # servers happened to give the same id. These are cached copies with a cap
+    # over them, and `drop_leftovers/6` captures every dropped row for the
+    # revert, so nothing is lost either way.
+    {"external_tag_posts", "remote_id"}
   ]
 
   @doc """

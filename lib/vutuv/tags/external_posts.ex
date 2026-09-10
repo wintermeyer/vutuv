@@ -118,8 +118,15 @@ defmodule Vutuv.Tags.ExternalPosts do
     now = DateTime.utc_now(:second)
 
     # More candidates than the batch, because the per-server budget below
-    # removes rows: taking exactly `limit` from SQL would let one busy server
-    # shrink the run instead of sharing it.
+    # removes rows: with a plain `LIMIT limit`, a server holding the first
+    # `limit` due pairs would fill the candidate list on its own, the budget
+    # would cut it to `per_host`, and **another** server's due pair — sitting
+    # just past the cut — would never be looked at at all. The over-fetch is
+    # what lets that pair into the list.
+    #
+    # It does not make the run bigger than what is due: where only one server
+    # has pairs at all, a `per_host` of 2 serves 2, and that is the answer the
+    # budget exists to give.
     now
     |> due_query(limit * 4)
     |> Repo.all()
@@ -181,41 +188,86 @@ defmodule Vutuv.Tags.ExternalPosts do
 
   `{:ok, stored}` when the server answered (storing nothing is an ordinary
   answer), `{:skip, reason}` when the pair cannot be asked at all, and
-  `{:error, reason}` when the remote side failed.
+  `{:error, reason}` when the remote side failed — `:crashed` when the work
+  raised or exited, which is a strike like any other failure, because from the
+  scheduler's side an answer nobody could record is a failed ask.
   """
-  def fetch_source(%{tag_id: tag_id, tag_name: tag_name, source: source} = row) do
+  def fetch_source(%{source: source} = row) do
     schedule = schedule_of(row)
+    outcome = ask(row)
 
-    case ExternalTagClient.fetch(source, tag_name) do
-      {:ok, posts} ->
-        stored = store(tag_id, posts)
-        interval = next_interval(schedule.interval_seconds, stored)
+    # The clock is stamped **after** the outcome is in hand and can no longer be
+    # thrown away by the work, and its own failure is caught rather than raised:
+    # a pass that stops here would leave every pair behind it unstamped, holding
+    # the front of the queue under `asc_nulls_first` and re-tried into the same
+    # failure on every later run. That is #1316's shape widened from one wedged
+    # pair to the whole fetcher.
+    guard("clock for #{source}", fn -> stamp_outcome(schedule, outcome, source) end)
 
-        stamp(schedule, interval, %{
-          interval_seconds: interval,
-          strikes: 0,
-          last_outcome: if(stored > 0, do: "stored", else: "empty")
-        })
+    outcome
+  end
 
-        {:ok, stored}
-
-      {:error, reason} when reason in @skips ->
-        Logger.debug("external tag fetch skipped: #{source} (#{reason})")
-        # Nothing about the pair moved, so the interval it had is the interval
-        # it keeps; the ceiling is simply how long before anybody looks again.
-        stamp(schedule, cadence()[:max_seconds], %{last_outcome: "skipped"})
-        {:skip, reason}
-
-      {:error, reason} ->
-        strikes = schedule.strikes + 1
-
-        stamp(schedule, backoff(schedule.interval_seconds, strikes), %{
-          strikes: strikes,
-          last_outcome: "failed"
-        })
-
-        {:error, reason}
+  # The ask and the store, with everything they can throw turned into an
+  # ordinary outcome. The client rescues what it can see, but the store is
+  # outside it and a stranger's server writes half of what goes into that
+  # insert — so `:crashed` is a strike like any other failure, because from the
+  # scheduler's side an answer nobody could record is a failed ask.
+  defp ask(%{tag_id: tag_id, tag_name: tag_name, source: source}) do
+    case guard(source, fn -> ExternalTagClient.fetch(source, tag_name) end) do
+      {:ok, {:ok, posts}} -> {:ok, guarded_store(tag_id, posts, source)}
+      {:ok, {:error, reason}} when reason in @skips -> {:skip, reason}
+      {:ok, {:error, reason}} -> {:error, reason}
+      :crashed -> {:error, :crashed}
     end
+  end
+
+  defp guarded_store(tag_id, posts, source) do
+    case guard("store for #{source}", fn -> store(tag_id, posts) end) do
+      {:ok, stored} -> stored
+      :crashed -> 0
+    end
+  end
+
+  defp stamp_outcome(schedule, {:ok, stored}, _source) do
+    interval = next_interval(schedule.interval_seconds, stored)
+
+    stamp(schedule, interval, %{
+      interval_seconds: interval,
+      strikes: 0,
+      last_outcome: if(stored > 0, do: "stored", else: "empty")
+    })
+  end
+
+  defp stamp_outcome(schedule, {:skip, reason}, source) do
+    Logger.debug("external tag fetch skipped: #{source} (#{reason})")
+    # Nothing about the pair moved, so the interval it had is the interval it
+    # keeps; the ceiling is simply how long before anybody looks again.
+    stamp(schedule, cadence()[:max_seconds], %{last_outcome: "skipped"})
+  end
+
+  defp stamp_outcome(schedule, {:error, _reason}, _source) do
+    strikes = schedule.strikes + 1
+
+    stamp(schedule, backoff(schedule.interval_seconds, strikes), %{
+      strikes: strikes,
+      last_outcome: "failed"
+    })
+  end
+
+  # One guard for the three places a pair's work can throw, so the difference
+  # between them is what each does with `:crashed` rather than four log strings
+  # to keep in step. `{:ok, value}` or `:crashed` — never the value bare, or a
+  # function legitimately answering `:crashed` could not be told apart.
+  defp guard(what, fun) do
+    {:ok, fun.()}
+  rescue
+    error ->
+      Logger.error("External tag fetch raised (#{what}): #{Exception.message(error)}")
+      :crashed
+  catch
+    kind, value ->
+      Logger.error("External tag fetch exited (#{what}): #{inspect({kind, value})}")
+      :crashed
   end
 
   # The due query carried the pair's schedule along, so there is nothing to look

@@ -20,6 +20,8 @@ defmodule Vutuv.Tags.ExternalPostsTest do
   alias Vutuv.Tags.ExternalFetch
   alias Vutuv.Tags.ExternalPost
   alias Vutuv.Tags.ExternalPosts
+  alias Vutuv.Tags.Merge
+  alias Vutuv.Tags.Tag
   alias Vutuv.Tags.TagFollow
 
   @source "mastodon.example"
@@ -142,6 +144,41 @@ defmodule Vutuv.Tags.ExternalPostsTest do
       assert %ExternalFetch{strikes: 1, checked_at: %DateTime{}} = fetch_row(tag)
     end
 
+    test "one pair blowing up neither stops the pass nor leaves anything unstamped" do
+      # The amplifier under every other clock rule here. An unguarded raise
+      # aborts the whole `Enum.map`, so *nothing* is stamped — not even the
+      # healthy pair, which then keeps its nil schedule, sits at the front under
+      # `asc_nulls_first` and is re-tried into the same raise on every run.
+      # #1316's shape widened from one wedged pair to the entire fetcher.
+      broken = followed_tag()
+      healthy = followed_tag()
+      test_pid = self()
+      broken_path = "/api/v1/timelines/tag/#{Tag.hashtag_name(broken.name)}"
+
+      put_config(:external_tag_req_options,
+        plug: fn conn ->
+          send(
+            test_pid,
+            {:req, conn.host, conn.request_path, conn.query_string, conn.req_headers}
+          )
+
+          if conn.request_path == broken_path do
+            exit(:boom)
+          else
+            conn
+            |> Plug.Conn.put_resp_content_type("application/json")
+            |> Plug.Conn.send_resp(200, Jason.encode!([status()]))
+          end
+        end
+      )
+
+      assert %{failed: 1, stored: 1} = ExternalPosts.fetch_due()
+
+      assert %ExternalFetch{checked_at: %DateTime{}, strikes: 1} = fetch_row(broken)
+      assert %ExternalFetch{checked_at: %DateTime{}, strikes: 0} = fetch_row(healthy)
+      assert ExternalPosts.due_sources(10) == []
+    end
+
     test "a successful fetch clears the strikes" do
       tag = followed_tag()
       stub_tag_timeline([])
@@ -241,6 +278,49 @@ defmodule Vutuv.Tags.ExternalPostsTest do
       assert length(due) == 3
       assert Enum.count(due, &(&1.source == @source)) == 2
       assert Enum.count(due, &(&1.source == @other_source)) == 1
+    end
+
+    test "lets a second server's pair in past a first server that fills the batch" do
+      # What the over-fetch is actually for. With a plain `LIMIT 4` the first
+      # server takes every candidate slot, the budget cuts it to 2, and the
+      # other server's pair — sitting just past the cut — is never looked at.
+      put_config(:external_tag_fetch_budget, batch: 4, per_host: 2)
+      for _ <- 1..8, do: followed_tag()
+      _elsewhere = followed_tag(@other_source)
+
+      due = ExternalPosts.due_sources(4)
+
+      assert Enum.count(due, &(&1.source == @source)) == 2
+      assert Enum.count(due, &(&1.source == @other_source)) == 1
+    end
+
+    test "serves fewer than the batch when only one server has pairs, and that is right" do
+      # The comment used to claim the over-fetch stops a busy server shrinking
+      # the run. It does not, and must not: no amount of over-fetching invents
+      # pairs on servers nobody follows, and the budget is there precisely to
+      # stop one server being asked four times in one pass.
+      put_config(:external_tag_fetch_budget, batch: 4, per_host: 2)
+      for _ <- 1..8, do: followed_tag()
+
+      assert length(ExternalPosts.due_sources(4)) == 2
+    end
+  end
+
+  describe "a tag merge" do
+    test "takes the pulled posts and the schedule with it" do
+      alias_tag = followed_tag()
+      canonical = insert(:tag)
+      stub_tag_timeline([status()])
+      ExternalPosts.fetch_due()
+
+      assert %{moved: moved} = Merge.preview(alias_tag, canonical)
+      assert moved["external_tag_posts"] == 1
+      assert moved["external_tag_fetches"] == 1
+
+      assert {:ok, _merge} = Merge.merge(alias_tag, canonical)
+
+      assert Repo.one!(from(p in ExternalPost, select: p.tag_id)) == canonical.id
+      assert Repo.one!(from(f in ExternalFetch, select: f.tag_id)) == canonical.id
     end
   end
 

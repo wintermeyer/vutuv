@@ -59,11 +59,21 @@ defmodule Vutuv.Repo.Migrations.CreateExternalTagPosts do
       # Plain text, clamped by the client. Never HTML, never a picture.
       add(:text, :text, null: false)
 
-      add(:author_name, :string)
-      add(:author_acct, :string)
+      # `:text` too, and for the same reason, taking the type from the columns
+      # they copy — `fediverse_followers.name` and `.handle`, text because a
+      # remote display identity is not ours to bound either. They were
+      # varchar(255) for one review round, which is a Postgres 22001 waiting on
+      # the fetch path: `validate_length` counts **graphemes** and varchar
+      # counts codepoints, so 100 ZWJ emoji pass a `max: 255` check as 100 and
+      # arrive at the column as 700.
+      add(:author_name, :text)
+      add(:author_acct, :text)
 
       # Declared by the sending server, so knowing what language this is costs
-      # no model call.
+      # no model call. Bounded, unlike a name, because it is a token rather than
+      # somebody's chosen spelling of themselves — and the changeset caps it in
+      # **bytes**, which in UTF-8 can never be fewer than the codepoints the
+      # column counts.
       add(:language, :string)
 
       add(:published_at, :utc_datetime, null: false)

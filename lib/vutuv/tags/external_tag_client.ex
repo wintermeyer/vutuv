@@ -45,6 +45,7 @@ defmodule Vutuv.Tags.ExternalTagClient do
   alias Vutuv.RemoteHtml
   alias Vutuv.SocialFeed.Http
   alias Vutuv.SocialFeed.Post
+  alias Vutuv.Tags.ExternalPost
   alias Vutuv.Tags.Tag
 
   # The application-env seam tests stub HTTP through — its own key, so a test
@@ -62,6 +63,12 @@ defmodule Vutuv.Tags.ExternalTagClient do
   @future_tolerance_seconds 300
 
   @public ~w(public unlisted)
+
+  # What a stored display identity may take up, read off the schema so the clamp
+  # and the column's own guard cannot drift apart.
+  @max_display ExternalPost.max_display()
+  @max_id ExternalPost.max_id()
+  @max_language ExternalPost.max_language()
 
   @doc """
   The newest usable statuses `source` carries for `tag_name`, as maps ready for
@@ -167,18 +174,24 @@ defmodule Vutuv.Tags.ExternalTagClient do
   end
 
   defp to_post(status, source, host, now, blocked) do
-    with true <- showable?(status),
+    # `host` is nil when the status names no author we can parse. That is the
+    # degraded path, and it fails **closed**: `MapSet.member?(blocked, nil)` is
+    # simply false, so without this guard an unparseable author would walk past
+    # the operator's blocklist rather than be refused by it.
+    with true <- is_binary(host),
+         true <- showable?(status),
          false <- MapSet.member?(blocked, host),
          text when text != "" <- text_of(status),
          url when is_binary(url) <- permalink(status),
          id when is_binary(id) <- remote_id(status),
+         language when is_nil(language) or is_binary(language) <- language(status),
          {:ok, published_at} <- published_at(status, now) do
       %{
         source: source,
         remote_id: id,
         url: url,
         text: text,
-        language: Post.presence(status["language"]),
+        language: language,
         published_at: published_at
       }
       |> Map.merge(author(status))
@@ -208,9 +221,24 @@ defmodule Vutuv.Tags.ExternalTagClient do
     if ChangesetHelpers.web_url?(status["url"]), do: status["url"]
   end
 
-  defp remote_id(%{"id" => id}) when is_binary(id), do: id
+  # An id is a token, not prose: one longer than the column holds is not a
+  # status we can file, so it goes rather than being cut to a value that names
+  # something else. Measured in bytes, the unit the column's own guard uses.
+  defp remote_id(%{"id" => id}) when is_binary(id), do: bounded(id, @max_id)
   defp remote_id(%{"id" => id}) when is_integer(id), do: Integer.to_string(id)
   defp remote_id(_status), do: nil
+
+  # Same for the declared language: a value this long is not a language code,
+  # and guessing at one would be worse than storing none.
+  defp language(status) do
+    case Post.presence(status["language"]) do
+      nil -> nil
+      value -> bounded(value, @max_language)
+    end
+  end
+
+  defp bounded(value, max) when byte_size(value) <= max, do: value
+  defp bounded(_value, _max), do: nil
 
   defp published_at(status, now) do
     with created when is_binary(created) <- status["created_at"],
@@ -223,17 +251,45 @@ defmodule Vutuv.Tags.ExternalTagClient do
     end
   end
 
+  # A display identity is somebody's chosen spelling of themselves, so it is
+  # **clamped, never refused**: dropping a stranger's post because their name is
+  # long would be the wrong answer, and `Handle.display_name/1` normalises
+  # whitespace and shortcodes but does not bound anything — an ordinary ZWJ
+  # emoji name is a handful of graphemes and hundreds of codepoints.
   defp author(status) do
     case status["account"] do
       %{} = account ->
         %{
-          author_name: Handle.display_name(account["display_name"]),
-          author_acct: Post.presence(account["acct"]),
+          author_name: account["display_name"] |> Handle.display_name() |> clamp_display(),
+          author_acct: account["acct"] |> Post.presence() |> clamp_display(),
           author_url: if(ChangesetHelpers.web_url?(account["url"]), do: account["url"])
         }
 
       _ ->
         %{}
     end
+  end
+
+  # Cut to the byte budget the column is measured against, but **on a grapheme
+  # boundary**: slicing at the byte would end a ZWJ family emoji — the very
+  # thing this exists for — on a dangling joiner, the glitch
+  # `Post.truncate/2` goes out of its way to avoid.
+  defp clamp_display(nil), do: nil
+
+  defp clamp_display(value) when byte_size(value) <= @max_display, do: value
+
+  defp clamp_display(value) do
+    value
+    |> String.graphemes()
+    |> Enum.reduce_while({[], 0}, fn grapheme, {kept, bytes} ->
+      grown = bytes + byte_size(grapheme)
+
+      if grown <= @max_display,
+        do: {:cont, {[grapheme | kept], grown}},
+        else: {:halt, {kept, bytes}}
+    end)
+    |> elem(0)
+    |> Enum.reverse()
+    |> Enum.join()
   end
 end

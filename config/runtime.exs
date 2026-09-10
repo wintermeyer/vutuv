@@ -391,35 +391,83 @@ if config_env() == :prod do
     config :vutuv, :fetch_external_tag_posts, false
   end
 
-  # The pace of that pull as `target:min:max` — posts aimed at between two
-  # fetches, then the floor and the ceiling in **minutes**. The shipped value is
-  # "5:10:180". The floor decides how often a stranger's server hears from this
-  # installation, so an operator who wants to be a quieter neighbour raises it.
-  if cadence = System.get_env("EXTERNAL_TAG_CADENCE") do
-    [target, min, max] = String.split(String.trim(cadence), ":", parts: 3)
+  # Reads N colon-separated whole numbers, or nil when the variable is unset or
+  # unreadable — see the note below for why nothing here is allowed to raise.
+  external_tag_numbers = fn value, count, name ->
+    parts = value |> to_string() |> String.trim() |> String.split(":", parts: count)
 
-    config :vutuv, :external_tag_cadence,
-      target: String.to_integer(String.trim(target)),
-      min_seconds: String.to_integer(String.trim(min)) * 60,
-      max_seconds: String.to_integer(String.trim(max)) * 60
+    numbers =
+      Enum.reduce_while(parts, [], fn part, acc ->
+        case Integer.parse(String.trim(part)) do
+          {number, ""} when number > 0 -> {:cont, acc ++ [number]}
+          _unreadable -> {:halt, nil}
+        end
+      end)
+
+    cond do
+      is_nil(value) ->
+        nil
+
+      is_list(numbers) and length(numbers) == count ->
+        numbers
+
+      true ->
+        IO.warn("#{name}=#{value} is not #{count} positive numbers; keeping the default")
+        nil
+    end
+  end
+
+  # The three colon-separated knobs of that pull. Colons rather than commas
+  # because `FEDIVERSE_COUNTS_LADDER` already spells a pair of numbers
+  # `age:interval` in this file, and the comma is what separates whole entries
+  # there — so a comma here would read as "another one of these".
+  #
+  # Each is parsed leniently on purpose. A typo in an operator's `.env` must
+  # cost them the setting, not the installation: a hard `[a, b] = String.split`
+  # raises a `MatchError` **at boot**, before anything is listening, and the
+  # whole site fails to start over one wrong character. Anything unreadable
+  # leaves the shipped default standing and says so on the console, which is the
+  # only place a boot can speak.
+  #
+  # The pace, `target:min:max` — posts aimed at between two fetches, then the
+  # floor and the ceiling in **minutes**, shipped as "5:10:180". The floor
+  # decides how often a stranger's server hears from this installation, so an
+  # operator who wants to be a quieter neighbour raises it.
+  case external_tag_numbers.(System.get_env("EXTERNAL_TAG_CADENCE"), 3, "EXTERNAL_TAG_CADENCE") do
+    [target, min, max] ->
+      config :vutuv, :external_tag_cadence,
+        target: target,
+        min_seconds: min * 60,
+        max_seconds: max * 60
+
+    nil ->
+      :ok
   end
 
   # What bounds the table, as `per_tag:total`.
-  if caps = System.get_env("EXTERNAL_TAG_POST_CAPS") do
-    [per_tag, total] = String.split(String.trim(caps), ":", parts: 2)
+  case external_tag_numbers.(
+         System.get_env("EXTERNAL_TAG_POST_CAPS"),
+         2,
+         "EXTERNAL_TAG_POST_CAPS"
+       ) do
+    [per_tag, total] ->
+      config :vutuv, :external_tag_post_caps, per_tag: per_tag, total: total
 
-    config :vutuv, :external_tag_post_caps,
-      per_tag: String.to_integer(String.trim(per_tag)),
-      total: String.to_integer(String.trim(total))
+    nil ->
+      :ok
   end
 
   # The ceilings on one run, as `batch:per_host`.
-  if budget = System.get_env("EXTERNAL_TAG_FETCH_BUDGET") do
-    [batch, per_host] = String.split(String.trim(budget), ":", parts: 2)
+  case external_tag_numbers.(
+         System.get_env("EXTERNAL_TAG_FETCH_BUDGET"),
+         2,
+         "EXTERNAL_TAG_FETCH_BUDGET"
+       ) do
+    [batch, per_host] ->
+      config :vutuv, :external_tag_fetch_budget, batch: batch, per_host: per_host
 
-    config :vutuv, :external_tag_fetch_budget,
-      batch: String.to_integer(String.trim(batch)),
-      per_host: String.to_integer(String.trim(per_host))
+    nil ->
+      :ok
   end
 
   # How much the release writes to the system log. `config/prod.exs` compiles in
