@@ -36,7 +36,7 @@ defmodule Vutuv.Moderation.ImageScan do
   @kinds ~w(avatar cover post_image job_posting_image organization_image
             url_screenshot post_screenshot organization_screenshot review_cover
             qualification_document job_reference_document remote_post_image
-            remote_avatar post_video_frame press_kit)
+            remote_avatar post_video_frame press_kit attachment_page)
   @statuses ~w(pending scanning approved rejected canceled)
   @open_statuses ~w(pending scanning)
 

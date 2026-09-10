@@ -1029,6 +1029,29 @@ literal `**` in the one place a journalist pastes from is a rendering fault.
 `text`) rather than three keys, so a kit with only a medium one renders in every
 format without a branch, and `agent_docs_drift_test.exs` holds the four siblings
 to the HTML page.
+### A file's preview page (issue #2105)
+
+The second kind born on this table, and the first with a **non-picture parent**:
+`attachment_page` is one rendered page of a file somebody attached to a post,
+parented by `attachment_id` and ordered by `position`, with a partial unique
+index on the pair. `Vutuv.Attachments.Pages` writes the row and
+`Vutuv.AttachmentStore` the files, under the *file's* token
+(`attachments/<token>/pages/<n>/`) rather than the row's — which is why
+`Pages.bytes_path/2` is the one function that owns a page's path. It reuses
+`token`, `moderation`, `position`, the four `width`/`height`/`content_type`/
+`size_bytes` columns and nothing else; the only schema change it needs is the
+`attachment_id` column itself.
+
+Two things are deliberately **not** wired, and both are the same decision.
+There is no `@takedown` entry, so `takedown_ready?/1` answers false and
+`bytes_path/1`/`preview_url/1` on this module answer `nil` — because that map is
+also what `Vutuv.Moderation.reportable_by?/2`'s catch-all `%Image{}` clause
+reads, and a kind added to it becomes reportable by anyone who can name a row
+id, with no visibility check, on a page that may belong to a file no post has
+claimed yet. Reporting a file is #2109, and the strategy and the visibility
+clause belong in one change. Consequently the AI gate's refusal path does not go
+through `purge/1`: `Pages.discard/1` deletes the row and the page's files
+itself, and leaves the file they were rendered from alone.
 
 ### The takedown hold (issue #2012)
 

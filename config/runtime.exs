@@ -807,8 +807,14 @@ if config_env() == :prod do
            daily_budget: env_mb.("ATTACHMENT_DAILY_MB") || attachment_defaults[:daily_budget],
            monthly_budget:
              env_mb.("ATTACHMENT_MONTHLY_MB") || attachment_defaults[:monthly_budget],
+           preview_pages:
+             env_int.("ATTACHMENT_PREVIEW_PAGES") || attachment_defaults[:preview_pages],
+           render_concurrency:
+             env_int.("ATTACHMENT_RENDER_CONCURRENCY") ||
+               attachment_defaults[:render_concurrency],
            pdfinfo: System.get_env("PDFINFO_PATH") || attachment_defaults[:pdfinfo],
-           pdfdetach: System.get_env("PDFDETACH_PATH") || attachment_defaults[:pdfdetach]
+           pdfdetach: System.get_env("PDFDETACH_PATH") || attachment_defaults[:pdfdetach],
+           pdftoppm: System.get_env("PDFTOPPM_PATH") || attachment_defaults[:pdftoppm]
          )
 
   # Post images are auth-proxied: the app checks the post's audience, then

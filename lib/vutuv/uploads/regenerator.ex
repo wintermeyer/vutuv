@@ -34,6 +34,7 @@ defmodule Vutuv.Uploads.Regenerator do
 
   import Ecto.Query
 
+  alias Vutuv.Attachments.Pages
   alias Vutuv.Images
   alias Vutuv.Organizations.OrganizationScreenshot
   alias Vutuv.Posts.PostImage
@@ -43,7 +44,7 @@ defmodule Vutuv.Uploads.Regenerator do
   alias Vutuv.Repo
   alias Vutuv.Uploads.Originals
 
-  @types ~w(avatars covers screenshots post_images job_posting_images qualification_documents job_reference_documents organization_images press_kit)a
+  @types ~w(avatars covers screenshots post_images job_posting_images qualification_documents job_reference_documents organization_images press_kit attachment_pages)a
 
   # Where each public tree may still hold an original-pattern file (the
   # pre-private-tree layouts). Scanned by the final orphan pass.
@@ -152,6 +153,13 @@ defmodule Vutuv.Uploads.Regenerator do
   # what had happened to every organization logo and every Arbeitszeugnis.
   defp do_regenerate(:press_kit, image, opts), do: Vutuv.PressKitStore.regenerate(image, opts)
 
+  # A file's preview pages (#2105). The only type here with no stored original
+  # of its own: a page is re-rendered from the **file** it came from (poppler or
+  # Chromium runs again) and then re-derived, so a Spec change reaches it like
+  # any other picture. `{:skipped, :missing_original}` when the file is gone.
+  defp do_regenerate(:attachment_pages, page, opts),
+    do: Pages.regenerate(page, opts)
+
   # Originals that no DB row claims must still never stay publicly
   # downloadable: move them into the private tree. Derived files of unknown
   # rows are left alone — nothing serves them, and deleting data without a
@@ -226,10 +234,22 @@ defmodule Vutuv.Uploads.Regenerator do
     )
   end
 
+  # Every stored preview page, filtered out of the shared picture table the way
+  # the press-kit rows are, and only the columns the re-render reads.
+  defp rows(:attachment_pages) do
+    Repo.all(
+      from(i in Vutuv.Images.Image,
+        where: i.kind == ^Pages.kind(),
+        select: [:id, :kind, :token, :position, :attachment_id]
+      )
+    )
+  end
+
   defp row_id(:post_images, image), do: image.token
   defp row_id(:job_posting_images, image), do: image.token
   defp row_id(:organization_images, image), do: image.token
   defp row_id(:press_kit, image), do: image.token
+  defp row_id(:attachment_pages, page), do: page.token
   defp row_id(_type, row), do: row.id
 
   # Operator stdout progress (mix task / `bin/vutuv eval`); the quiet-flag logic

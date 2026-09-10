@@ -283,7 +283,8 @@ defmodule Vutuv.ImagesTest do
       assert Images.serving("cover") == :static
 
       assert Images.kinds() ==
-               ~w(avatar cover job_posting_image organization_image post_image press_kit review_cover)
+               ~w(attachment_page avatar cover job_posting_image organization_image post_image
+                  press_kit review_cover)
     end
 
     # Every kind that has moved goes through an authorizing proxy, so the row
@@ -296,6 +297,9 @@ defmodule Vutuv.ImagesTest do
       # Born on this table rather than moved into it (#2083), and proxied for
       # the same reason: the row is what decides who may fetch the bytes.
       assert Images.serving("press_kit") == :proxy
+      # The second kind born here (#2105): a file's rendered preview page,
+      # stored in a tree nginx has no location for, proxied by #2108.
+      assert Images.serving("attachment_page") == :proxy
     end
 
     # #2055 was the last of the four, so there is no un-moved kind left to

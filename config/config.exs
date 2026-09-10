@@ -778,6 +778,14 @@ config :vutuv, :press_kit, max_filesize: 30_000_000, max_photos: 10, max_logos: 
 # them; admins have none. `pdfinfo` comes from poppler-utils, the package
 # `pdftoppm` (qualification proofs) already asks for — without it PDFs are not
 # offered at all, and text and Markdown carry on.
+#
+# `preview_pages` is how many of a file's first pages are rendered as pictures
+# under the post (issue #2105): three is enough to tell a paper from a price
+# list, five is the ceiling the code clamps to, and 0 turns previews off for an
+# installation that wants none. A PDF page is rendered by `pdftoppm` (the same
+# poppler-utils package as `pdfinfo` above); a text or Markdown file is drawn
+# by the headless Chromium the screenshot pipeline already runs, and where
+# neither is on the box the file simply has no preview.
 config :vutuv, :attachments,
   enabled: true,
   uploaders: :admins,
@@ -785,8 +793,11 @@ config :vutuv, :attachments,
   max_per_post: 5,
   daily_budget: 100_000_000,
   monthly_budget: 500_000_000,
+  preview_pages: 3,
+  render_concurrency: 1,
   pdfinfo: "pdfinfo",
-  pdfdetach: "pdfdetach"
+  pdfdetach: "pdfdetach",
+  pdftoppm: "pdftoppm"
 
 # Job postings (Vutuv.Jobs, milestone 11).
 #   * default_runtime_days — how long a published posting stays live before it

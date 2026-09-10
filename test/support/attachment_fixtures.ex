@@ -147,6 +147,15 @@ defmodule Vutuv.AttachmentFixtures do
     write(dir, "invoice.pdf", "PK\x05\x06" <> :binary.copy(<<0>>, 18))
   end
 
+  @doc """
+  A PDF with `count` real pages, each numbered — what #2105's preview
+  rendering is measured against, since the cap only shows on a file that has
+  more pages than the installation renders.
+  """
+  def multi_page_pdf(dir, count) when is_integer(count) and count > 0 do
+    write(dir, "multi-#{count}.pdf", multi_page(count))
+  end
+
   @doc "A plain text file."
   def text_file(dir, body \\ "Just some notes.\nOn two lines.\n"),
     do: write(dir, "notes.txt", body)
@@ -227,6 +236,35 @@ defmodule Vutuv.AttachmentFixtures do
   defp page(_kind) do
     "<< /Type /Page /Parent 2 0 R /MediaBox [0 0 612 792] /Contents 4 0 R " <>
       "/Resources << /Font << /F1 5 0 R >> >> >>"
+  end
+
+  # A document of `count` pages, each with its own content stream saying which
+  # page it is, so a rendered preview can be told from its neighbours. Object
+  # numbers: 1 catalog, 2 the page tree, 3 the shared font, then a page and a
+  # content object per page.
+  defp multi_page(count) do
+    pages = for index <- 0..(count - 1), do: {4 + index * 2, 5 + index * 2}
+    kids = Enum.map_join(pages, " ", fn {page, _content} -> "#{page} 0 R" end)
+
+    page_objects =
+      Enum.flat_map(Enum.with_index(pages, 1), fn {{page, content}, number} ->
+        text = "BT /F1 96 Tf 72 400 Td (#{number}) Tj ET"
+
+        [
+          {page,
+           "<< /Type /Page /Parent 2 0 R /MediaBox [0 0 612 792] /Contents #{content} 0 R " <>
+             "/Resources << /Font << /F1 3 0 R >> >> >>"},
+          {content, "<< /Length #{byte_size(text)} >>\nstream\n#{text}\nendstream"}
+        ]
+      end)
+
+    build(
+      [
+        {1, "<< /Type /Catalog /Pages 2 0 R >>"},
+        {2, "<< /Type /Pages /Kids [#{kids}] /Count #{count} >>"},
+        {3, "<< /Type /Font /Subtype /Type1 /BaseFont /Helvetica >>"}
+      ] ++ page_objects
+    )
   end
 
   defp catalog(:plain), do: {"<< /Type /Catalog /Pages 2 0 R >>", []}

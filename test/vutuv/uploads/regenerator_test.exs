@@ -362,10 +362,12 @@ defmodule Vutuv.Uploads.RegeneratorTest do
     # the first had a written, documented `regenerate/2` that nobody called, the
     # second had no hook at all — so a Spec change never reached an
     # Arbeitszeugnis thumbnail or an organization logo, while this tool reported
-    # success on every other tree. `:press_kit` (#2083) was registered in the
-    # same change as its store, which is the point of the coverage test below.
+    # success on every other tree. `:press_kit` (#2083) and `:attachment_pages`
+    # (#2105) were each registered in the same change as their store, which is
+    # the point of the coverage test below.
     assert Map.keys(summary) |> Enum.sort() ==
              [
+               :attachment_pages,
                :avatars,
                :covers,
                :job_posting_images,

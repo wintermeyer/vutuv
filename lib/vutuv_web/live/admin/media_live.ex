@@ -252,6 +252,7 @@ defmodule VutuvWeb.Admin.MediaLive do
   defp kind_label("video_conversion"), do: gettext("Video conversion")
   defp kind_label("screenshot"), do: gettext("Link screenshot")
   defp kind_label("attachment_intake"), do: gettext("File check")
+  defp kind_label("attachment_pages"), do: gettext("File preview pages")
   defp kind_label(other), do: other
 
   # What the step worked on: the subject's kind, and enough of its id to tell

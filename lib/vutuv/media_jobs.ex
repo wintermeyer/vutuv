@@ -52,7 +52,7 @@ defmodule Vutuv.MediaJobs do
   # What may open a row. A closed vocabulary rather than a free string, so a
   # typo at a call site shows up as a missing row here instead of as a second
   # kind nobody can filter by.
-  @kinds ~w(image_scan video_conversion screenshot attachment_intake)
+  @kinds ~w(image_scan video_conversion screenshot attachment_intake attachment_pages)
 
   # The columns the table can be sorted by — every column it shows.
   @sort_columns ~w(started member kind outcome duration)

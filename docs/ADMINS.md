@@ -31,8 +31,10 @@ Related documents: [README](../README.md) (overview) ·
   profile or post). The cards use **Inter** when the host has it
   (`apt-get install fonts-inter`, optional) and the system's sans-serif
   otherwise; nothing breaks without it, the type just looks different.
-- **Chromium** (optional) — only for URL screenshots and moderation evidence
-  screenshots. Without it those features quietly do nothing.
+- **Chromium** (optional) — URL screenshots, moderation evidence screenshots,
+  and the preview page a text or Markdown file attached to a post is drawn as.
+  Without it those features quietly do nothing: a text file keeps its chip and
+  simply shows no preview.
 - **poppler-utils** (optional, `apt-get install poppler-utils`) — renders the
   first page of PDF proof documents that members can attach to their
   certificates & licenses. Without `pdftoppm` on `$PATH`, PDF uploads are
@@ -42,6 +44,9 @@ Related documents: [README](../README.md) (overview) ·
   (encrypted, carrying a program, carrying another file). Without them **PDF
   attachments are not offered at all** — the composer's picker does not accept
   `.pdf` and the server refuses one — while text and Markdown files carry on.
+  `pdftoppm` renders the preview pages shown under a post's file as well
+  (`ATTACHMENT_PREVIEW_PAGES`); without it a PDF is still accepted and simply
+  shows no preview.
   A check that cannot run is never treated as a check that passed.
 - **ffmpeg** (optional, `apt-get install ffmpeg`) — video on posts: converts
   a member's clip into the files browsers play and pulls the stills the AI
@@ -133,7 +138,9 @@ Everything else has a default (the vutuv.de production value):
 | `ATTACHMENTS_PER_POST` | `5` | How many files one post may carry |
 | `ATTACHMENT_DAILY_MB` | `100` | How much a member may upload in **any 24 hours**, in megabytes. The window rolls rather than resetting at midnight, so there is no hour at which twice the allowance fits. Counted as *accepted uploads*: deleting a file does not give the megabytes back, which is what stops an upload-and-delete loop from filling your disk. Admins have no allowance |
 | `ATTACHMENT_MONTHLY_MB` | `500` | The same over any 30 days |
-| `PDFINFO_PATH` / `PDFDETACH_PATH` | `pdfinfo` / `pdfdetach` | The two poppler binaries the PDF check runs, if not on `$PATH` under those names. Missing either one means PDFs are not offered (see the dependency list above) |
+| `ATTACHMENT_PREVIEW_PAGES` | `3` | How many of a file's first pages are shown as pictures under the post. `0` turns previews off; more than `5` is treated as `5`. A PDF page is rendered by `pdftoppm`, a text or Markdown file by the headless Chromium the link previews use — where neither is installed the file simply shows no preview, and nothing else changes |
+| `ATTACHMENT_RENDER_CONCURRENCY` | `1` | How many files have their preview pages rendered at once. Everything past that queues. Raise it on a machine with cores to spare |
+| `PDFINFO_PATH` / `PDFDETACH_PATH` / `PDFTOPPM_PATH` | `pdfinfo` / `pdfdetach` / `pdftoppm` | The three poppler binaries — the first two run the PDF check, the third renders preview pages — if not on `$PATH` under those names. Missing either of the first two means PDFs are not offered (see the dependency list above); missing the third only means no preview pages |
 | `SCREENSHOT_BLOCKLIST` | – | Extra pages never to take a link-preview screenshot of, on top of the shipped `reddit.com` and `heise.de`. Comma-separated domains and/or URLs, copied into the blocklist table the first time you migrate; afterwards the live list is edited in the admin area (see "Screenshot blocklist" below) and this variable is inert. `SCREENSHOT_BLOCKED_HOSTS` is the older name and still works |
 | `SCREENSHOT_PAGE_CHECK` | `true` | Whether each link-preview capture is judged by the Ollama vision model on whether it shows the page or a consent / ad / login wall or a bot check, and the site blocklisted when it does not (see "The list mostly writes itself" below). `false` leaves the blocklist entirely hand-written — the setting for an installation without Ollama. Independent of `IMAGE_MODERATION_ENABLED`: that one is the safety gate, this one is a quality filter |
 | `SCREENSHOT_CHECK_VOTES` | `3` | How many opinions must agree before a site is blocklisted automatically. The first is deterministic, the rest are independent draws; a single dissent leaves the site alone. `1` acts on one opinion |
@@ -626,7 +633,10 @@ vutuv runs fine without internet access:
   virus scanner behind it — the short format whitelist (PDF, plain text,
   Markdown) and that check are the defence — so an installation that would
   rather take no files at all sets `ATTACHMENT_UPLOADS=false`, and one that
-  wants text files but not PDFs simply leaves poppler-utils uninstalled.
+  wants text files but not PDFs simply leaves poppler-utils uninstalled. The
+  preview pages under a file are local too — poppler for a PDF, and for a text
+  file a headless Chromium launched with name resolution switched off, so a
+  Markdown image reference cannot make the server fetch anything.
 - Set `FETCH_BOOK_METADATA=false`: the cover fetch and the
   page-count/publisher lookup behind book-review posts call Open Library, and
   an audiobook's running time is read from a library catalogue (`DNB_SRU_URL`).

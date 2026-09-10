@@ -43,6 +43,7 @@ defmodule Vutuv.Attachments do
   alias Vutuv.Accounts.User
   alias Vutuv.Attachments.Attachment
   alias Vutuv.Attachments.Format
+  alias Vutuv.Attachments.PagePipeline
   alias Vutuv.Attachments.Upload
   alias Vutuv.AttachmentStore
   alias Vutuv.MediaJobs
@@ -161,6 +162,11 @@ defmodule Vutuv.Attachments do
     case insert do
       {:ok, attachment} ->
         record_upload!(user, size)
+        # The preview pages (#2105) are rendered in the background, not here:
+        # poppler and Chromium both take seconds, and the composer's socket
+        # already waits for the PDF gate. The pipeline would find the row at
+        # its next poll anyway — this only saves the wait.
+        PagePipeline.nudge()
         {:ok, attachment}
 
       {:error, _changeset} = error ->

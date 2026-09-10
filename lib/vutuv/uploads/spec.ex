@@ -168,6 +168,24 @@ defmodule Vutuv.Uploads.Spec do
     remote_avatar: [
       %{name: :image, fit: {:crop, 192, 192, :center}, quality: 62}
     ],
+    # A rendered preview page of an uploaded file (issue #2105): a page of a
+    # PDF, or a text/Markdown file drawn as a page. Three sizes and **no crop
+    # of any kind**, for the reason the press logo below gives in the same
+    # words: a square thumb would cut a portrait page in half, and half a page
+    # is not a preview of the page.
+    #
+    # There is deliberately no `xl`. On a photo post the picture is the content
+    # and 2560px is what a 4K lightbox wants; a page is a raster of text, its
+    # `large` long edge lands on the 1600 px cap (`Vutuv.Attachments.PageRender`
+    # renders at 150 dpi, so an A4 or letter page arrives just above it), and
+    # the file itself is one click away as a download (#2108) — which is what
+    # somebody who wants to *read* it will take. The extra encode is the most
+    # expensive of the set and would be paid on every page of every file.
+    attachment_page: [
+      %{name: :thumb, fit: {:box_down, 480}, quality: 58},
+      %{name: :lite, fit: {:box_down, 640}, quality: @lite_quality},
+      %{name: :large, fit: {:box_down, 1600}, quality: 58}
+    ],
     post_image: @photo_versions,
     # Job-posting gallery images: same sizes as post images.
     job_posting_image: @page_image_versions,
