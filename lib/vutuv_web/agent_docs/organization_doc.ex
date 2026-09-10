@@ -17,8 +17,10 @@ defmodule VutuvWeb.AgentDocs.OrganizationDoc do
   alias Vutuv.Organizations.Organization
   alias Vutuv.Posts
   alias Vutuv.Posts.Post
+  alias Vutuv.PressKit
   alias VutuvWeb.AgentDocs
   alias VutuvWeb.AgentDocs.JobPostingDoc
+  alias VutuvWeb.AgentDocs.PressKitDoc
   alias VutuvWeb.Fediverse.Docs
   alias VutuvWeb.UserHelpers
 
@@ -83,12 +85,25 @@ defmodule VutuvWeb.AgentDocs.OrganizationDoc do
       # asked with a nil viewer, so a post still held by moderation is absent
       # here even though the page's own publishers see it in the HTML.
       posts: Enum.map(posts, &post_entry/1),
+      # The page's press kit (issue #2087), the twin of the profile document's
+      # own `press_kit` list: the card is on the HTML page, so the document
+      # names the same pictures. The **released** ones only, like every press
+      # document — one that names a file must name one that can be fetched.
+      press_kit: press_kit_entries(organization),
       # The page's Fediverse address, the same fact its card shows (nil unless
       # it federates). It belongs in the doc for the reason the whole system
       # exists: an agent reading the `.md` should be able to say where to follow
       # this page, and it is the one address here that is not a vutuv URL.
       fediverse: fediverse_entry(organization)
     })
+  end
+
+  # A read rather than a preload: press pictures are rows on the shared `images`
+  # table with no association off `organizations` (see `Vutuv.PressKit`), and the
+  # two shelves are rejoined here because the card shows them as one set.
+  defp press_kit_entries(organization) do
+    shelves = PressKit.published_shelves(organization)
+    PressKitDoc.entries(shelves.photos ++ shelves.logos)
   end
 
   # No `moved_to` arm, unlike `ProfileDoc`: a page cannot move its account

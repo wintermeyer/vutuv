@@ -20,6 +20,7 @@ defmodule VutuvWeb.OrganizationComponents do
   alias Vutuv.Countries
   alias Vutuv.Organizations
   alias Vutuv.Organizations.Organization
+  alias Vutuv.PressKit
 
   attr(:domain, :string, required: true)
 
@@ -251,6 +252,14 @@ defmodule VutuvWeb.OrganizationComponents do
         </.manage_tab>
         <.manage_tab active={@active == :exclusions} navigate={"/organizations/#{@organization.slug}/exclusions"}>
           {gettext("Job exclusions")}
+        </.manage_tab>
+        <%!-- The page's press kit (issue #2087). Owners and publishers, which is
+        `Vutuv.PressKit`'s own rule read off the powers this header already has:
+        the material a page hands the press out with is part of speaking for it,
+        and it is the one manage page a publisher reaches without holding an
+        administrative role. --%>
+        <.manage_tab :if={PressKit.manageable_by_powers?(@powers)} active={@active == :press} navigate={PressKit.editor_path(@organization)}>
+          {gettext("Press")}
         </.manage_tab>
         <%!-- What happened to the page (issue #1336). Open to the whole team,
         not only its publishers: this is news ABOUT the page rather than

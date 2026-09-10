@@ -650,6 +650,19 @@ column `user_id` empty for this kind, because it cascades. The whole move,
 including what the release that wires the takedown has to answer for a page
 that cannot be struck, is in [images.md](images.md).
 
+Beside the logo a page keeps a **press kit** (#2087): press photos and logo
+variants a journalist downloads, on a card below the open positions and on
+`/organizations/:slug/press`. Its editor is `/organizations/:slug/press/edit`,
+on the manage tab bar, and it is the one manage page a **publisher** reaches
+without holding an administrative role — the material a page hands the press is
+part of speaking for it (`Vutuv.PressKit.manageable_by?/2`, owners and
+publishers, deliberately not `can_manage?/2`, which also counts whoever claimed
+the page). The rows belong to the page: `organization_id` owns them and the
+colleague who uploaded one only rides in `uploader_user_id`, so a press photo
+outlives their account exactly as the logo does. Where the page's own logo is a
+vector it is one press away from being the first variant. The whole kind is in
+[images.md](images.md).
+
 ## The homepage screenshot
 
 The page shows a picture of the website it names — a "Website" card at the top

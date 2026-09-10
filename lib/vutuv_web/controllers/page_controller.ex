@@ -426,6 +426,9 @@ defmodule VutuvWeb.PageController do
   - `/organizations` — the verified organization directory; one organization at `/organizations/<slug>`
   - `/organizations/<slug>/posts/<id>` — a post published in an organization's own
     name; the organization is the author, so there is no member behind it to look up
+  - `/organizations/<slug>/press` — the organization's press kit: the same press
+    photos and logo variants a member offers, kept by the page's team and offered
+    for editorial use with the credit shown
   - `/jobs` — the public job board: open positions, filterable, newest first
   - `/jobs/<slug>` — a job posting: role, location, pay range, tags and how to apply
   - `/system/media-kit` — press material: boilerplate in three lengths, logo files,

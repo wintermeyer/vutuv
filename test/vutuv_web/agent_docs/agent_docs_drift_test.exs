@@ -1508,6 +1508,19 @@ defmodule VutuvWeb.AgentDocsDriftTest do
     assert_fact_everywhere(rendered, "/petra_people")
   end
 
+  test "an organization page's press kit appears in every format" do
+    organization = insert(:organization, name: "Press Verified AG", slug: "press-verified")
+
+    Vutuv.ImageHelpers.put_press_picture(organization,
+      alt: "Vor dem Werk",
+      credit: "Foto: Rea Fotografin"
+    )
+
+    rendered = formats_for("/organizations/press-verified")
+    assert_fact_everywhere(rendered, "Vor dem Werk")
+    assert_fact_everywhere(rendered, "Foto: Rea Fotografin")
+  end
+
   test "an organization's kind (Art) appears in every format" do
     insert(:organization,
       name: "City Hall",

@@ -15,6 +15,7 @@ defmodule Vutuv.ImageHelpers do
   alias Vutuv.Accounts.User
   alias Vutuv.Images
   alias Vutuv.Images.Image
+  alias Vutuv.Organizations.Organization
   alias Vutuv.Repo
 
   alias Vutuv.UUIDv7
@@ -103,22 +104,35 @@ defmodule Vutuv.ImageHelpers do
     do: Repo.get_by(Image, post_review_id: id, kind: "review_cover")
 
   @doc """
-  An inserted press-kit picture (#2083) for a member, with the columns a stored
-  one carries. `attrs` override any of them — `:logo`, `:position`,
-  `:moderation`, `:alt`, `:credit`, `:caption`, `:content_type`, `:size_bytes`.
+  An inserted press-kit picture (#2083) for a member **or a page** (#2087), with
+  the columns a stored one carries. `attrs` override any of them — `:logo`,
+  `:position`, `:moderation`, `:alt`, `:credit`, `:caption`, `:content_type`,
+  `:size_bytes`, and for a page `:uploader_user_id`.
+
+  The owner column follows the owner argument, because the two are a nullable
+  pair the database refuses to see both halves of
+  (`images_press_kit_has_one_owner`): a member's picture names `user_id`, a
+  page's names `organization_id` and leaves `user_id` empty.
 
   Inserted rather than uploaded on purpose: the surfaces that read a press kit
   (#2086's card, its section page and their agent documents) build proxy URLs
   and read columns, and none of them opens a file. `Vutuv.PressKitTest` is where
   the upload path itself is exercised, through `Vutuv.PressKit.create/4`.
   """
-  def put_press_picture(%User{} = user, attrs \\ []) do
+  def put_press_picture(owner, attrs \\ [])
+
+  def put_press_picture(%User{} = user, attrs),
+    do: insert_press_picture([user_id: user.id] ++ attrs)
+
+  def put_press_picture(%Organization{} = organization, attrs),
+    do: insert_press_picture([organization_id: organization.id] ++ attrs)
+
+  defp insert_press_picture(attrs) do
     Repo.insert!(
       struct!(
         %Image{
           kind: "press_kit",
           token: Vutuv.Uploads.gen_token(),
-          user_id: user.id,
           logo: false,
           moderation: "approved",
           position: 0,

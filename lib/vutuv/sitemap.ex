@@ -76,7 +76,8 @@ defmodule Vutuv.Sitemap do
       organizations: chunks(Repo.aggregate(indexable_organizations(), :count)),
       organization_posts: chunks(Repo.aggregate(indexable_organization_posts(), :count)),
       jobs: chunks(Repo.aggregate(indexable_jobs(), :count)),
-      press: chunks(Repo.aggregate(indexable_press_users(), :count))
+      press: chunks(Repo.aggregate(indexable_press_users(), :count)),
+      organization_press: chunks(Repo.aggregate(indexable_press_organizations(), :count))
     }
   end
 
@@ -108,6 +109,27 @@ defmodule Vutuv.Sitemap do
     |> Repo.all()
     |> Enum.map(fn {slug, updated_at} ->
       {"/#{slug}/press", NaiveDateTime.to_date(updated_at)}
+    end)
+  end
+
+  @doc """
+  `{path, lastmod_date}` entries of one organization-press chunk (1-based): the
+  press page of every crawlable page that actually offers a picture (#2087).
+
+  Its own type rather than a widened `press_entries/1`, for the reason
+  `organization_post_entries/1` is its own: that one is scoped to
+  `indexable_users/0` and reads a member's handle for the URL, and a page has
+  neither — its URL is built from the slug and its indexability is its `seo?`
+  flag. `lastmod` is the page's own, matching its directory entry.
+  """
+  def organization_press_entries(chunk) do
+    indexable_press_organizations()
+    |> order_by([o], o.id)
+    |> window(chunk)
+    |> select([o], {o.slug, o.updated_at})
+    |> Repo.all()
+    |> Enum.map(fn {slug, updated_at} ->
+      {"/organizations/#{slug}/press", NaiveDateTime.to_date(updated_at)}
     end)
   end
 
@@ -217,6 +239,21 @@ defmodule Vutuv.Sitemap do
       from(i in PressKit.public_query(), where: not is_nil(i.user_id), select: i.user_id)
 
     where(indexable_users(), [u], u.id in subquery(owner_ids))
+  end
+
+  # The page twin (#2087), and the other half of that nullable pair: a picture
+  # whose `organization_id` is set names a page's press section. Same `IN` over
+  # owner ids for the same reason — one row per page, however many pictures it
+  # offers — and the same explicit `not is_nil`, which here keeps a *member's*
+  # rows out.
+  defp indexable_press_organizations do
+    owner_ids =
+      from(i in PressKit.public_query(),
+        where: not is_nil(i.organization_id),
+        select: i.organization_id
+      )
+
+    where(indexable_organizations(), [o], o.id in subquery(owner_ids))
   end
 
   # scope_visible(nil) already drops restricted posts, frozen posts and

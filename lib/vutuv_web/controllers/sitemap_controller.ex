@@ -20,7 +20,8 @@ defmodule VutuvWeb.SitemapController do
     "organizations" => &Sitemap.organization_entries/1,
     "organization_posts" => &Sitemap.organization_post_entries/1,
     "jobs" => &Sitemap.job_entries/1,
-    "press" => &Sitemap.press_entries/1
+    "press" => &Sitemap.press_entries/1,
+    "organization_press" => &Sitemap.organization_press_entries/1
   }
 
   def index(conn, _params) do

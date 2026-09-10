@@ -254,6 +254,7 @@ defmodule VutuvWeb.AgentDocs.Text do
       |> Enum.filter(&is_binary/1),
       organization_people(doc),
       organization_open_positions(doc),
+      section(gettext("Press"), Enum.map(doc[:press_kit] || [], &press_picture_lines/1)),
       footer(doc)
     ]
     |> join_blocks()

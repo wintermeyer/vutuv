@@ -983,30 +983,13 @@ the resulting ~200px rail width. --%>
     tree (press_card_class_availability_test.exs holds it to that), because this
     card is streamed by a LiveView into documents still holding the previous
     release's stylesheet after a deploy. --%>
-    <.card :if={press_any?(@press) or @as_owner?} id="profile-press">
-      <.section_header title={gettext("Press")} />
-      <.empty_add :if={@as_owner? and not press_any?(@press)} href={~p"/settings/press"}>
-        {gettext("Add press photos")}
-      </.empty_add>
-      <div :if={press_any?(@press)} class="space-y-4">
-        <.press_photos
-          :if={@press.photos != []}
-          photos={@press.photos}
-          viewer={@current_user}
-          href={~p"/#{@user}/press"}
-        />
-        <.press_logos :if={@press.logos != []} logos={@press.logos} viewer={@current_user} />
-        <.press_rights />
-      </div>
-      <%!-- Not `<.manage_footer>`: that one hides the "View All" link until a
-      card shows less than it holds, and here the section page is not a longer
-      list of the same thing — it is where the files are handed over, so every
-      visitor needs it whatever the count. The owner's bridge to /settings/press
-      is the "Manage" link in that page's own header. --%>
-      <.card_footer_link :if={press_any?(@press)} href={~p"/#{@user}/press"}>
-        {gettext("All press material")} ({compact_count(press_total(@press))})
-      </.card_footer_link>
-    </.card>
+    <.press_card
+      id="profile-press"
+      owner={@user}
+      press={@press}
+      viewer={@current_user}
+      manage_href={@as_owner? && Vutuv.PressKit.editor_path(@user)}
+    />
 
     <%!-- Follower / following previews (latest 3 each, full lists behind "View All").
     Side by side in two columns on sm+, stacked on mobile. `order-1` drops the
