@@ -2,10 +2,10 @@
 
 A post can carry files as well as photos and a clip: PDF, plain text and
 Markdown to begin with (milestone #2102). This document covers the part that
-exists today — how a file gets in — and grows as the rest of the milestone
-lands: the preview pages (#2105), the post that waits for them (#2106), what
-a post shows and hands out (#2108), reports and copyright (#2109), messages
-(#2110).
+exists today — how a file gets in and how its preview pages are rendered — and
+grows as the rest of the milestone lands: the post that waits for them (#2106),
+what a post shows and hands out (#2108), reports and copyright (#2109),
+messages (#2110).
 
 ## One chokepoint
 
@@ -67,6 +67,10 @@ removed, and the private tree's promise — this is exactly what the member sent
 byte will go through an authorizing proxy (#2108). Both are gitignored, and
 `test/vutuv/uploads_gitignore_test.exs` fails the build if that slips.
 
+A file's preview pages (#2105) live under the same two roots —
+`attachments/<token>/pages/<n>/` — so they need **no new upload tree** and
+nothing new in `.gitignore` or that test.
+
 ## The budget
 
 Two rolling windows per member, 24 hours and 30 days, counted from
@@ -87,7 +91,9 @@ Everything is per installation, read in `config/runtime.exs` with the
 `config/config.exs` values as defaults, and documented in the env-var table in
 [ADMINS.md](../ADMINS.md): `ATTACHMENT_UPLOADS`, `ATTACHMENT_UPLOADERS`,
 `ATTACHMENT_MAX_MB`, `ATTACHMENTS_PER_POST`, `ATTACHMENT_DAILY_MB`,
-`ATTACHMENT_MONTHLY_MB`, `PDFINFO_PATH`, `PDFDETACH_PATH`.
+`ATTACHMENT_MONTHLY_MB`, `ATTACHMENT_PREVIEW_PAGES`,
+`ATTACHMENT_RENDER_CONCURRENCY`, `PDFINFO_PATH`, `PDFDETACH_PATH`,
+`PDFTOPPM_PATH`.
 
 `ATTACHMENT_UPLOADERS` is `admins` while the milestone is being built, the way
 video was introduced: a post cannot show or hand out its files until #2106 and
@@ -102,9 +108,96 @@ later reader cannot write its own `is_nil/1` pair and get one of them wrong —
 an inner join to `posts` would silently drop every message's file, and a
 `NOT IN` over these ids without an `is_nil/1` branch is false for every row.
 
+## The preview pages
+
+`Vutuv.Attachments.Pages` renders the first pages of a file as pictures, so a
+reader can tell what it is without downloading it: three by default
+(`ATTACHMENT_PREVIEW_PAGES`), five at most, none at zero.
+
+**A PDF page is rendered by `pdftoppm`, not by libvips.** The issue asked for
+libvips' Poppler loader, and that loader is not in this application: `vix`
+generates its `Vix.Vips.Operation` functions from the operation table of the
+libvips it links, and the precompiled one it ships (8.17.1) has no PDF loader
+at all — `pdfload/1` is undefined rather than failing, and `otool -L` on the
+bundled library shows no poppler. The Homebrew `vips` CLI on the same machine
+*does* list `pdfload`, which is what makes the claim look true from outside.
+`pdftoppm` is what this project already renders PDF pages with in three other
+places, ships in the same package as the `pdfinfo` the gate needs, and CI
+already installs it.
+
+A **text or Markdown** file is rendered as one page: the document goes through
+`VutuvWeb.Markdown.render/1` (or a `<pre>` for plain text) and headless
+Chromium photographs it, through the raw `Vutuv.PageScreenshot.capture/3` that
+moderation evidence already uses. One page, not three, because a text file has
+no pagination of its own — what is captured is the first screenful, and slicing
+a README into three would produce two pictures of nothing in particular.
+
+That page's content is a member's file, so it is rendered **offline twice
+over**: the document carries `Content-Security-Policy: default-src 'none'` and
+the browser is launched with `--host-resolver-rules=MAP * ~NOTFOUND`
+(`offline: true`). Either alone would stop a Markdown image reference from
+making this server fetch an address the member chose; neither alone fails
+closed.
+
+### Each page is a picture
+
+A rendered page is a row on the shared `images` table of kind
+`attachment_page`, parented by `attachment_id` and ordered by `position` — the
+second kind **born** on that table (`Vutuv.PressKit` was the first), stored
+under the file's own token at
+`attachments/<token>/pages/<position>/<version>.avif`.
+
+What that gets it, and what it does not, is worth being exact about, because
+five of the six behaviours are per-kind lists rather than generic machinery:
+
+* the **AI scan** reaches it because `attachment_page` is in
+  `Vutuv.Moderation.ImageScan.kinds/0` and has a clause each in
+  `ImageSubjects`' `source/1`, `apply_approved/1`, `apply_rejected/1` and
+  `stranded_pending/0`;
+* the **pixelated wait** because `AttachmentStore.store_page/3` writes the
+  stand-in;
+* the **lite version** because `Vutuv.Uploads.Spec` declares one for
+  `:attachment_page` (which has no `xl` — the file itself is what somebody who
+  wants to *read* it takes);
+* the **regenerator** because `Vutuv.Uploads.Regenerator` names it in four
+  places — and it is the one type there with no stored original, so a
+  regeneration really re-runs poppler or Chromium;
+* the **lightbox** genuinely is generic;
+* the **copyright freeze does not reach it yet, deliberately.** Adding a kind
+  to `Vutuv.Images`' `@takedown` map makes it reportable by anyone who can name
+  a row id, with no visibility check at all — and a preview page can belong to
+  a file no post has claimed. #2109 wires the strategy and the visibility clause
+  in one change; until then `takedown_ready?/1` answers false and nothing offers
+  a report button for a page.
+
+A refused page has its row and its derived sizes deleted and **the file left
+alone**: the model judged the picture we derived, not the upload.
+
+### Surviving a deploy
+
+Rendering takes seconds to tens of seconds, so a blue/green deploy stops the
+slot in the middle of it. The recovery is `Vutuv.Videos`' shape: the row
+carries the state (`stage`), each finished page has its own row so a resumed
+render skips it, the due list is a query (`Pages.due/1`) and a claim is a
+compare-and-set on `attachments.worked_at`, so two slots cannot render the same
+file. `attachments_test`'s sibling kills the render mid-loop and asserts the
+sweeper finishes exactly the rest.
+
+`stage` always reaches a terminal value — `ready` (however many pages, zero
+included) or `failed` — **including the outcomes where nothing could be done**:
+previews switched off, or a host with neither `pdftoppm` nor Chromium. A file
+that could not be worked on and stayed due would hold the front of every
+oldest-first batch for ever. A strike (`render_attempts`, three of them) is
+taken only when the renderer itself ran and failed.
+
+The consequence to know: a file uploaded on a host with no renderer is settled
+`ready` with no pages and is **not** re-rendered if poppler is installed later.
+`mix vutuv.regenerate` re-derives existing pages, not missing ones.
+
 ## The media job
 
-The intake writes one `Vutuv.MediaJobs` row of kind `attachment_intake`, so
+The intake writes one `Vutuv.MediaJobs` row of kind `attachment_intake`, and
+the page rendering one of kind `attachment_pages` per file, so
 `/admin/media` shows it beside the photo scans and video conversions. A
 refusal is a **finished** job with the reason in `detail` — the pipeline did
 its work and the answer was no; only a step that could not be run at all is

@@ -32,6 +32,11 @@ defmodule Vutuv.Images.Image do
     # match the two sides on. Exactly one cover per review, by unique index.
     belongs_to(:post_review, Vutuv.Posts.PostReview)
 
+    # The file a rendered preview page belongs to (#2105). Like the review
+    # above it is the join key as well as the parent: a page is named by its
+    # file and its `position`, and the two together are unique.
+    belongs_to(:attachment, Vutuv.Attachments.Attachment)
+
     # Who uploaded an organization image — **not** who owns it (#2053). The
     # page owns its logo, which is why `organization_images.user_id` is
     # `ON DELETE SET NULL` and this column copies that: a page keeps its

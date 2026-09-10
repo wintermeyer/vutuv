@@ -20,6 +20,7 @@ defmodule Vutuv.Moderation.ImageSubjects do
   import Ecto.Query
 
   alias Vutuv.Accounts.User
+  alias Vutuv.Attachments.Pages
   alias Vutuv.Fediverse
   alias Vutuv.Fediverse.RemoteAccount
   alias Vutuv.Fediverse.RemoteImage
@@ -59,6 +60,7 @@ defmodule Vutuv.Moderation.ImageSubjects do
   @profile_images Vutuv.Images.member_columns()
 
   @press_kit "press_kit"
+  @attachment_page "attachment_page"
 
   @gallery_images %{
     # `pixelated: true` marks the one gallery kind a stranger meets while the
@@ -261,6 +263,18 @@ defmodule Vutuv.Moderation.ImageSubjects do
           PressKitStore.original_path(image.token),
           PressKitStore.version_path(image.token, "large")
         ])
+    end
+  end
+
+  # A file's preview page (issue #2105). There is no private original behind
+  # one — the *file* is the original and it is kept verbatim — so what the
+  # model judges is the largest derived size, which is also what a reader is
+  # shown. `Vutuv.Attachments.Pages.bytes_path/2` owns that path, because a
+  # page lives under its **file's** token rather than its own.
+  def source(%ImageScan{kind: @attachment_page} = scan) do
+    case Pages.get_page(scan.subject_id) do
+      nil -> :gone
+      page -> first_existing([Pages.bytes_path(page)])
     end
   end
 
@@ -606,6 +620,24 @@ defmodule Vutuv.Moderation.ImageSubjects do
     end
   end
 
+  # A file's preview page (#2105). Same order and same reasoning as the press
+  # picture above: the stand-in goes first, then the one guarded flip that owns
+  # this kind's row.
+  def apply_approved(%ImageScan{kind: @attachment_page} = scan) do
+    case Pages.get_page(scan.subject_id) do
+      nil ->
+        :stale
+
+      page ->
+        Pages.drop_pixelated(page)
+
+        with :ok <- Pages.release(page.id) do
+          broadcast(scan, :approved)
+          :ok
+        end
+    end
+  end
+
   @doc """
   Deletes the rejected image on the spot: files (served, quarantined and the
   private original — nothing unsafe stays at rest) and the asset's
@@ -863,6 +895,24 @@ defmodule Vutuv.Moderation.ImageSubjects do
     end
   end
 
+  # A refused preview page: the row and every derived size go, and **the file
+  # they were rendered from stays**. The model judged the picture we made, not
+  # the upload — what happens to a file whose contents are refused is the
+  # upload gate's question (`Vutuv.Uploads.PdfGate`), and deleting a member's
+  # document on a verdict about one rendered page would be a far larger claim
+  # than the scan makes.
+  def apply_rejected(%ImageScan{kind: @attachment_page} = scan) do
+    case Pages.get_page(scan.subject_id) do
+      nil ->
+        :stale
+
+      page ->
+        :ok = Pages.discard(page)
+        broadcast(scan, :rejected)
+        :ok
+    end
+  end
+
   # The one write behind both remote-picture verdicts (issue #1163): flip the
   # moderation column, guarded on the fingerprint so a verdict can never touch
   # bytes that changed under it. `clear_file: true` also drops the reference, so
@@ -1101,6 +1151,7 @@ defmodule Vutuv.Moderation.ImageSubjects do
       gallery_stranded("job_posting_image") ++
       gallery_stranded("organization_image") ++
       press_kit_stranded() ++
+      attachment_page_stranded() ++
       post_screenshot_stranded() ++
       review_cover_stranded() ++
       video_frame_stranded() ++
@@ -1178,6 +1229,25 @@ defmodule Vutuv.Moderation.ImageSubjects do
     )
     |> Repo.all()
     |> Enum.map(fn {id, owner_id} -> {@press_kit, id, owner_id, nil} end)
+  end
+
+  # A preview page waiting on a scan nobody queued — the render writes the row
+  # and enqueues the scan in two statements, so a slot that dies between them
+  # leaves exactly this. Owned by whoever uploaded the file.
+  #
+  # No `frozen_at` clause, unlike the press picture above: a page has no
+  # takedown strategy yet (#2109), so nothing can freeze one and a stamped row
+  # cannot exist. When #2109 wires it, this query needs the same guard for the
+  # same reason.
+  defp attachment_page_stranded do
+    from(i in Images.Image,
+      as: :subject,
+      where: i.kind == ^@attachment_page and i.moderation == "pending",
+      where: not exists(open_scan_exists(@attachment_page)),
+      select: {i.id, i.user_id}
+    )
+    |> Repo.all()
+    |> Enum.map(fn {id, owner_id} -> {@attachment_page, id, owner_id, nil} end)
   end
 
   defp flat_stranded(kind) do

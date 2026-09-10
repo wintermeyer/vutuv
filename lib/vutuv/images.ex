@@ -66,7 +66,11 @@ defmodule Vutuv.Images do
   # arrived as a mirror of a table of its own or as columns on a parent row, so
   # it is also the first with no source to keep in step, no backfill class and
   # no contract release. `Vutuv.PressKit` is its context.
-  @kinds ~w(avatar cover job_posting_image organization_image post_image press_kit review_cover)
+  # `attachment_page` (#2105) is the second, and its context is
+  # `Vutuv.Attachments.Pages`: one row per rendered preview page of an uploaded
+  # file, parented by `attachment_id` and ordered by `position`.
+  @kinds ~w(attachment_page avatar cover job_posting_image organization_image post_image
+            press_kit review_cover)
 
   # Of those, the kinds every byte of which already goes through a controller
   # that authorizes the reader first (`VutuvWeb.JobPostingImageController` asks
@@ -83,8 +87,11 @@ defmodule Vutuv.Images do
   # `press_kit` (`VutuvWeb.PressKitImageController` asks whether the reader may
   # see the picture, `Vutuv.PressKit.visible_to?/2`) is in no registry but this
   # one: it has no old table and no parent row, so `images` **is** its truth
-  # from the first row.
-  @proxy_kinds ~w(job_posting_image organization_image post_image press_kit review_cover)
+  # from the first row. `attachment_page` (#2105) is the same shape: a file's
+  # preview pages are stored under the file's own token in a tree nginx has no
+  # location for, and #2108 puts the authorizing proxy in front of them.
+  @proxy_kinds ~w(attachment_page job_posting_image organization_image post_image press_kit
+                  review_cover)
 
   # Of those, the kinds whose truth is still a table of their own, and
   # everything about the copy: which columns it carries, where the source rows

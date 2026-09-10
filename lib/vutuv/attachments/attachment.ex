@@ -25,9 +25,12 @@ defmodule Vutuv.Attachments.Attachment do
     * **`page_count`** — `pdfinfo`'s answer for a PDF, `nil` for text. What
       #2105 renders its preview pages from.
     * **`token`** — the URL key and the on-disk directory name, never the id.
-    * **`stage`** — where the pipeline is. Today `stored` the moment the file
-      lands, which is the column's default; #2105 puts the page rendering
-      between that and `ready`, and is what will first write it.
+    * **`stage`** — where the pipeline is. `stored` the moment the file lands
+      (the column's default), `rendering` while a slot is making its preview
+      pages, then `ready` — however many pages that turned out to be, zero
+      included — or `failed` when the renderer could not do it. The last two
+      are terminal, and that is what takes the row out of the render pipeline's
+      due query (`Vutuv.Attachments.Pages`, #2105).
   """
 
   use VutuvWeb, :model
@@ -51,6 +54,13 @@ defmodule Vutuv.Attachments.Attachment do
     field(:page_count, :integer)
 
     field(:stage, :string, default: "stored")
+
+    # The render pipeline's own two columns (#2105). `worked_at` is the claim
+    # heartbeat a compare-and-set is done on, so two slots of a deploy overlap
+    # cannot render the same file; `render_attempts` counts only the passes
+    # where the renderer itself failed.
+    field(:worked_at, :utc_datetime)
+    field(:render_attempts, :integer, default: 0)
 
     timestamps()
   end

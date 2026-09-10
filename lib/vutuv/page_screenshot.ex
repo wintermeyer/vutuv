@@ -609,8 +609,22 @@ defmodule Vutuv.PageScreenshot do
       "--force-device-scale-factor=1",
       "--user-agent=#{Http.user_agent()}",
       "--window-size=#{width},#{height}"
-    ] ++ proxy_args(Keyword.get(opts, :proxy_port))
+    ] ++ proxy_args(Keyword.get(opts, :proxy_port)) ++ offline_args(Keyword.get(opts, :offline))
   end
+
+  # `offline: true` — for a capture of a **local** document whose content came
+  # from a member (`Vutuv.Attachments.PageRender`, issue #2105). Chromium's own
+  # documented recipe for "resolve nothing": every name fails, so a stylesheet
+  # link or a Markdown image in the file cannot make this server fetch an
+  # address the member chose. The document also carries
+  # `default-src 'none'`; this is the half that does not depend on the page.
+  #
+  # No `--proxy-bypass-list=<-loopback>` beside it, unlike the vetting proxy
+  # above: an IP literal is the one thing this cannot stop, and closing that
+  # too means running the SOCKS proxy, which is a network control for a render
+  # that wants no network at all.
+  defp offline_args(true), do: ["--host-resolver-rules=MAP * ~NOTFOUND"]
+  defp offline_args(_off), do: []
 
   defp proxy_args(nil), do: []
 

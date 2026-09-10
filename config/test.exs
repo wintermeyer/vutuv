@@ -18,6 +18,10 @@ config :vutuv, :sweep_post_drafts, false
 # Vutuv.Videos.Job.run/1 directly on tiny clips. Videos.Pipeline.nudge/0 casts
 # into the void then.
 config :vutuv, :video_pipeline, false
+# The same for a file's preview pages (issue #2105): a polling GenServer that
+# would claim rows from outside the sandbox and shell out to poppler or
+# Chromium. Tests drive Vutuv.Attachments.Pages.render/1 and sweep/1 directly.
+config :vutuv, :attachment_pipeline, false
 # The composer's draft autosave (issue #1148) normally waits for a pause in the
 # typing. Zero means it writes as part of the `validate` that changed something,
 # so a test can assert on the stored draft right after `render_change` instead

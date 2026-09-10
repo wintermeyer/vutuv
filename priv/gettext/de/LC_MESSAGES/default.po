@@ -7683,7 +7683,7 @@ msgstr ""
 "der Versand läuft weiter."
 
 #: lib/vutuv_web/components/welcome_components.ex:362
-#: lib/vutuv_web/live/admin/media_live.ex:269
+#: lib/vutuv_web/live/admin/media_live.ex:270
 #: lib/vutuv_web/live/admin/newsletter_broadcast_live.ex:174
 #: lib/vutuv_web/live/post_live/feed.ex:3888
 #: lib/vutuv_web/live/post_rewrites_live.ex:447
@@ -11168,7 +11168,7 @@ msgstr ""
 "Jeder aufgenommene Link-Screenshot, neueste zuerst. Jeder verlinkt auf die "
 "Seite und den zugehörigen Beitrag."
 
-#: lib/vutuv_web/live/admin/media_live.ex:270
+#: lib/vutuv_web/live/admin/media_live.ex:271
 #: lib/vutuv_web/live/admin/screenshot_live.ex:551
 #, elixir-autogen, elixir-format
 msgid "Failed"
@@ -24871,7 +24871,7 @@ msgstr "Ergebnis"
 msgid "Photo scan"
 msgstr "Fotoprüfung"
 
-#: lib/vutuv_web/live/admin/media_live.ex:271
+#: lib/vutuv_web/live/admin/media_live.ex:272
 #, elixir-autogen, elixir-format
 msgid "Running"
 msgstr "Läuft"
@@ -25137,3 +25137,8 @@ msgstr "Zwei Sätze, die in eine Bildunterschrift passen."
 #, elixir-autogen, elixir-format
 msgid "Write"
 msgstr "Schreiben"
+
+#: lib/vutuv_web/live/admin/media_live.ex:255
+#, elixir-autogen, elixir-format
+msgid "File preview pages"
+msgstr "Dateivorschau"

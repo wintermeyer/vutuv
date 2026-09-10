@@ -7384,7 +7384,7 @@ msgid "This updates on its own. You can leave this page; the send keeps running.
 msgstr ""
 
 #: lib/vutuv_web/components/welcome_components.ex:362
-#: lib/vutuv_web/live/admin/media_live.ex:269
+#: lib/vutuv_web/live/admin/media_live.ex:270
 #: lib/vutuv_web/live/admin/newsletter_broadcast_live.ex:174
 #: lib/vutuv_web/live/post_live/feed.ex:3888
 #: lib/vutuv_web/live/post_rewrites_live.ex:447
@@ -10611,7 +10611,7 @@ msgstr ""
 msgid "Every captured link screenshot, newest first. Each links to the page and its post."
 msgstr ""
 
-#: lib/vutuv_web/live/admin/media_live.ex:270
+#: lib/vutuv_web/live/admin/media_live.ex:271
 #: lib/vutuv_web/live/admin/screenshot_live.ex:551
 #, elixir-autogen, elixir-format
 msgid "Failed"
@@ -24038,7 +24038,7 @@ msgstr ""
 msgid "Photo scan"
 msgstr ""
 
-#: lib/vutuv_web/live/admin/media_live.ex:271
+#: lib/vutuv_web/live/admin/media_live.ex:272
 #, elixir-autogen, elixir-format
 msgid "Running"
 msgstr ""
@@ -24303,4 +24303,9 @@ msgstr ""
 #: lib/vutuv_web/live/press_kit_live.ex:641
 #, elixir-autogen, elixir-format
 msgid "Write"
+msgstr ""
+
+#: lib/vutuv_web/live/admin/media_live.ex:255
+#, elixir-autogen, elixir-format
+msgid "File preview pages"
 msgstr ""

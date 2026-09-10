@@ -7668,7 +7668,7 @@ msgid "This updates on its own. You can leave this page; the send keeps running.
 msgstr "Si aggiorna da sola. Può lasciare questa pagina: l'invio prosegue."
 
 #: lib/vutuv_web/components/welcome_components.ex:362
-#: lib/vutuv_web/live/admin/media_live.ex:269
+#: lib/vutuv_web/live/admin/media_live.ex:270
 #: lib/vutuv_web/live/admin/newsletter_broadcast_live.ex:174
 #: lib/vutuv_web/live/post_live/feed.ex:3888
 #: lib/vutuv_web/live/post_rewrites_live.ex:447
@@ -11134,7 +11134,7 @@ msgstr ""
 "Ogni screenshot di link acquisito, dal più recente. Ciascuno rimanda alla "
 "pagina e al relativo post."
 
-#: lib/vutuv_web/live/admin/media_live.ex:270
+#: lib/vutuv_web/live/admin/media_live.ex:271
 #: lib/vutuv_web/live/admin/screenshot_live.ex:551
 #, elixir-autogen, elixir-format
 msgid "Failed"
@@ -25549,7 +25549,7 @@ msgstr "Esito"
 msgid "Photo scan"
 msgstr "Controllo delle foto"
 
-#: lib/vutuv_web/live/admin/media_live.ex:271
+#: lib/vutuv_web/live/admin/media_live.ex:272
 #, elixir-autogen, elixir-format
 msgid "Running"
 msgstr "In corso"
@@ -25815,3 +25815,8 @@ msgstr "Due frasi che entrano in una didascalia."
 #, elixir-autogen, elixir-format
 msgid "Write"
 msgstr "Scrivi"
+
+#: lib/vutuv_web/live/admin/media_live.ex:255
+#, elixir-autogen, elixir-format
+msgid "File preview pages"
+msgstr "Anteprima file"
