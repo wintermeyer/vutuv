@@ -52,7 +52,9 @@ defmodule VutuvWeb.PressKitController do
       html: fn conn -> render_press(conn, user) end,
       # The released shelves, deliberately: a document that offers a file must
       # offer one that can be fetched, whoever asks.
-      doc: fn -> PressKitDoc.build(user, PressKit.published_shelves(user)) end
+      doc: fn ->
+        PressKitDoc.build(user, PressKit.published_shelves(user), PressKit.bio(user))
+      end
     )
   end
 
@@ -90,7 +92,11 @@ defmodule VutuvWeb.PressKitController do
       AgentDocs.send_doc(
         conn,
         format,
-        PressKitDoc.build(organization, PressKit.published_shelves(organization))
+        PressKitDoc.build(
+          organization,
+          PressKit.published_shelves(organization),
+          PressKit.bio(organization)
+        )
       )
     else
       ControllerHelpers.render_error(conn, 404)
@@ -105,6 +111,9 @@ defmodule VutuvWeb.PressKitController do
     |> render("index.html",
       owner: owner,
       shelves: PressKit.public_shelves(owner, conn.assigns[:current_user]),
+      # The three written bios (issue #2101). Public whoever asks: unlike a
+      # picture, a bio passes through no AI gate and has nothing to hold back.
+      bio: PressKit.bio(owner),
       page_title: PressKitHTML.press_page_title(owner)
     )
   end

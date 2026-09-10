@@ -1508,6 +1508,27 @@ defmodule VutuvWeb.AgentDocsDriftTest do
     assert_fact_everywhere(rendered, "/petra_people")
   end
 
+  test "a member's Media Kit bios appear in every format (issue #2101)" do
+    user =
+      insert_activated_user(username: "bio_drift", first_name: "Bea", last_name: "Biografin")
+
+    {:ok, _bio} =
+      Vutuv.PressKit.save_bio(user, user, %{
+        "short" => "Bea Biografin baut Brücken.",
+        "medium" => "Bea Biografin baut Brücken und schreibt darüber.",
+        "long" => "Bea Biografin baut Brücken, seit sie denken kann."
+      })
+
+    rendered = formats_for("/bio_drift/media-kit")
+
+    # The label a reader picks by, and one sentence out of each length: a bio in
+    # the HTML and not in the `.md` is exactly the drift this file exists for.
+    assert_fact_everywhere(rendered, "Short version")
+    assert_fact_everywhere(rendered, "baut Brücken.")
+    assert_fact_everywhere(rendered, "schreibt darüber")
+    assert_fact_everywhere(rendered, "seit sie denken kann")
+  end
+
   test "an organization page's press kit appears in every format" do
     organization = insert(:organization, name: "Press Verified AG", slug: "press-verified")
 

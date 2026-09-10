@@ -33,8 +33,13 @@ defmodule VutuvWeb.AgentDocs.PressKitDoc do
   @doc """
   The press page as a doc map. `shelves` is `Vutuv.PressKit.published_shelves/1`'s
   answer — the released pictures, which is the set a document may name at all.
+  `bio` is `Vutuv.PressKit.bio/1`'s, the three lengths the owner wrote.
+
+  Both are **arguments** rather than reads of this module's own: the HTML page
+  needs the same two, and a builder that fetched them again would make an agent
+  format cost two queries the page has already paid for.
   """
-  def build(owner, shelves) do
+  def build(owner, shelves, bio) do
     name = Identity.display_name(owner)
     photos = entries(shelves.photos)
     logos = entries(shelves.logos)
@@ -53,6 +58,12 @@ defmodule VutuvWeb.AgentDocs.PressKitDoc do
       owner: AgentDocs.person_ref(owner),
       rights: PressKit.rights_line(),
       total: length(photos) + length(logos),
+      # The bios the owner wrote (issue #2101) — a **list** rather than three
+      # keys, so a kit with only a medium one renders without a branch anywhere
+      # and every format keeps the order the page shows. The text is the
+      # Markdown source: an agent reading a `.md` document wants the marks, and
+      # a `@handle` in it names an account it can go and fetch.
+      bios: PressKit.bio_entries(bio),
       photos: photos,
       logos: logos
     })

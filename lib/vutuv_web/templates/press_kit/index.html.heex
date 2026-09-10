@@ -26,8 +26,17 @@ question for a member and for a page alike). --%>
   data={JsonLd.press_kit_page(@owner, pictures, Vutuv.PressKit.rights_line())}
 />
 
-<.card_section empty={@shelves.photos == [] and @shelves.logos == []}>
-  <p class="mb-6 text-sm text-slate-600 dark:text-slate-400">
+<% pictures? = @shelves.photos != [] or @shelves.logos != [] %>
+<% bios? = Vutuv.PressKit.any_bio?(@bio) %>
+<.card_section empty={not pictures? and not bios?}>
+  <%!-- The written bios first (#2101): a journalist reads about the person,
+  then picks a picture of them. --%>
+  <.press_bios :if={bios?} owner={@owner} bio={@bio} />
+
+  <%!-- The rights sentence belongs to the pictures, so it waits until there
+  are some — a kit that is three bios and no photo would otherwise open on a
+  promise about files it does not offer. --%>
+  <p :if={pictures?} class="mb-6 text-sm text-slate-600 dark:text-slate-400">
     {gettext(
       "These pictures are offered for editorial use. Use them freely in reporting, and print the credit shown with each one."
     )}

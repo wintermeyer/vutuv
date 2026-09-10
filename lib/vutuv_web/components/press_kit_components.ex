@@ -64,6 +64,7 @@ defmodule VutuvWeb.PressKitComponents do
 
   import VutuvWeb.UI
 
+  alias Vutuv.Identity
   alias Vutuv.Images.Image
   alias Vutuv.Moderation
   alias Vutuv.PressKit
@@ -236,6 +237,56 @@ defmodule VutuvWeb.PressKitComponents do
         </span>
       </li>
     </ul>
+    """
+  end
+
+  @doc """
+  The written bios (issue #2101) at the head of the section page: the lengths
+  the owner wrote, each rendered as prose with a Copy beside its heading.
+
+  **Rendered, and copied flat.** The stored value is Markdown exactly as a post
+  body is, so `<.markdown_prose>` draws it and a `@handle` in it becomes a link
+  to that profile — and notifies nobody, because linking and notifying are two
+  different steps and nothing here runs the second one. What the Copy button
+  puts on the clipboard is `Vutuv.Markdown.to_plain_text/1`'s answer instead: a
+  journalist pastes a bio into an article, where a literal `**` is a rendering
+  fault, which is the same reason the lightbox flattens a caption.
+
+  A length nobody wrote is absent rather than empty, and a kit with no bio at
+  all draws nothing — the caller asks `Vutuv.PressKit.any_bio?/1`.
+  """
+  attr(:owner, :any, required: true)
+  attr(:bio, :any, required: true, doc: "a `%Vutuv.PressKit.Bio{}`")
+
+  def press_bios(assigns) do
+    # `Map.put/3` and not `assign/3`: this is derived per render and carries no
+    # change mark of its own, so tracking it would re-send the whole section.
+    assigns = Map.put(assigns, :entries, PressKit.bio_entries(assigns.bio))
+
+    ~H"""
+    <section class="mb-8" data-press-bios>
+      <.section_title class="mb-2">
+        {gettext("About %{name}", name: Identity.display_name(@owner))}
+      </.section_title>
+      <p class="mb-4 text-sm text-slate-600 dark:text-slate-400">
+        {gettext("Take whichever length fits the space you have. Each one stands on its own.")}
+      </p>
+
+      <div class="space-y-6">
+        <div :for={entry <- @entries} data-press-bio={entry.length}>
+          <div class="flex flex-wrap items-center justify-between gap-2">
+            <h3 class="m-0 text-xs font-semibold uppercase tracking-wide text-slate-600 dark:text-slate-400">
+              {entry.label}
+            </h3>
+            <.copy_button text={Markdown.to_plain_text(entry.text)} />
+          </div>
+          <.markdown_prose
+            text={entry.text}
+            class="mt-1 text-sm text-slate-700 dark:text-slate-300"
+          />
+        </div>
+      </div>
+    </section>
     """
   end
 

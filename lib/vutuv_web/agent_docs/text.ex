@@ -409,6 +409,7 @@ defmodule VutuvWeb.AgentDocs.Text do
     [
       heading(doc.title),
       doc.rights,
+      section(gettext("About %{name}", name: doc.owner.name), Enum.map(doc.bios, &bio_lines/1)),
       section(gettext("Press photos"), Enum.map(doc.photos, &press_picture_lines/1)),
       section(gettext("Logo variants"), Enum.map(doc.logos, &press_picture_lines/1)),
       footer(doc)
@@ -979,6 +980,11 @@ defmodule VutuvWeb.AgentDocs.Text do
   # One press picture as plain lines: the file first, because the file is what
   # the reader came for. A caption may run to several paragraphs, so it is
   # indented as a block rather than only on its first line.
+  # One written bio (#2101). Flush left and un-indented, unlike the caption
+  # below it: this is the block a journalist marks and copies, and an indent
+  # would come along with it.
+  defp bio_lines(bio), do: "#{bio.label}\n#{bio.text}\n"
+
   defp press_picture_lines(picture) do
     [
       "- " <> (picture[:label] || gettext("Press picture")),
