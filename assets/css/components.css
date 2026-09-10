@@ -2911,6 +2911,12 @@ body.mde-fullscreen-lock { overflow: hidden; }
   justify-content: center;
   padding: 1rem;
   background: rgb(2 6 23 / 0.94);
+  /* The arrows' own geometry, named once: the phone rule below has to keep the
+     stage clear of them, and a constant there would be right only for a device
+     reporting no bottom inset (measured: an iPhone home indicator's 34px turned
+     8px of clearance into a 10px overlap). */
+  --lb-nav-size: 3rem;
+  --lb-nav-inset: max(1rem, env(safe-area-inset-bottom));
 }
 .lightbox[hidden] { display: none; }
 /* Freeze the page behind the overlay: without this a touch drag scrolls the
@@ -2921,16 +2927,58 @@ html.lightbox-open { overflow: hidden; }
   display: flex;
   flex-direction: column;
   align-items: center;
+  /* `safe center`, never a bare `center`. Zoomed, this box is the scroller, and
+     content centred in a scroller overflows on BOTH sides — the leading half
+     then sits outside the scrollable region and no amount of scrolling reaches
+     it (measured: an 800×3000 picture starting 1203px above the stage's top
+     edge). It is the same trap `align-items: flex-start` guards on the other
+     axis below; `safe` says "centre it while it fits, start it when it does
+     not", which is what a scroller needs. */
+  justify-content: safe center;
   gap: 0.75rem;
   max-width: min(100%, 1600px);
-  max-height: 100%;
+  /* A definite height, not the `max-height: 100%` this used to carry (issue
+     #2139). Only against a definite box does a percentage inside resolve: a
+     height the browser is still working out from its own content answers every
+     percentage in it with `auto`, which is why the picture below kept its full
+     size and lay over the caption until the stage stopped being content-sized. */
+  height: 100%;
   margin: 0;
+}
+/* The picture takes the room the caption leaves it, rather than a strip guessed
+   in advance (issue #2139). It used to be capped at `calc(100vh - 9rem)`, which
+   is a bet on how tall a caption block will be — and a caption is exactly the
+   thing whose height nobody knows, so a described photo pushed the footer, and
+   with it the way to report the picture, under the bottom edge of a window that
+   scrolls nothing (measured: the Report link's bottom edge at 968px in a 900px
+   window). The frame is the flex item that gives way (`min-height: 0`, without
+   which no flex item ever goes below its content), and the picture is bounded by
+   the frame — both constraints on one replaced element, which is what keeps the
+   aspect ratio while the box changes. */
+.lightbox__frame {
+  display: flex;
+  /* `1 1 0%`, so the frame's height comes from the stage rather than from the
+     picture inside it — see the stage above. It takes whatever the caption
+     block leaves, which is the whole fix. `max-content` then hands back what a
+     small picture does not want, so the two go on reading as one centred group
+     instead of a photograph stranded above a caption pinned to the bottom edge. */
+  flex: 1 1 0%;
+  max-height: max-content;
+  /* `align-items: center` and not the flex default: `stretch` would set the
+     picture's height from the frame and leave its width at the file's own, so
+     `object-fit` would letterbox a correct picture inside a wrong box (measured:
+     a 560×900 portrait drawn as a 560×718 element) — and `measureFit` reads that
+     box's width to decide whether a tap is worth a zoom. Centred, the picture
+     keeps `auto` on both axes and meets `max-width`/`max-height` as a replaced
+     element, which is the one sizing rule that holds the ratio. */
+  align-items: center;
+  justify-content: center;
+  align-self: stretch;
+  min-height: 0;
 }
 .lightbox__image {
   max-width: 100%;
-  /* Leave room for the caption block below, so a tall photo never pushes the
-     licence and download line off the bottom of the screen. */
-  max-height: calc(100vh - 9rem);
+  max-height: 100%;
   object-fit: contain;
   border-radius: 0.5rem;
 }
@@ -2948,15 +2996,51 @@ html.lightbox-open { overflow: hidden; }
   width: 100%;
   height: 100%;
 }
+.lightbox.is-zoomed .lightbox__frame {
+  flex: none;
+  justify-content: flex-start;
+}
 .lightbox.is-zoomed .lightbox__image {
   max-width: none;
   max-height: none;
   cursor: zoom-out;
 }
+/* Zoomed, the frame is the picture's own size and therefore larger than the
+   stage, so every pixel of negative free space lands on the caption block — and
+   a block that may shrink shrinks to nothing. Measured: the block clipped to a
+   height of 0, taking the caption and the credit line with it, while the footer,
+   which may not shrink, survived. The credit is the condition the licence
+   states, so it is not decoration; zoomed the block keeps its full size and the
+   stage scrolls past it like everything else. */
+.lightbox.is-zoomed .lightbox__meta {
+  flex: none;
+  max-height: none;
+}
+/* The caption block never takes more than a bit over a third of the stage: a
+   press caption may run to 10,000 characters
+   (`Vutuv.Images.Image.max_press_caption_length/0`), and no caption may be the
+   reason a rights holder cannot reach the Report line under it. The ceiling is
+   a percentage of the stage rather than a slice of the viewport — the stage is
+   the window less the overlay's padding, so a `vh` here would read 45 % on a
+   390×844 phone and 52 % in landscape, drifting widest exactly where the room
+   is scarcest. */
 .lightbox__meta {
+  display: flex;
+  flex: 0 1 auto;
+  flex-direction: column;
+  min-height: 0;
+  max-height: 40%;
   max-width: 44rem;
   text-align: center;
   color: #e2e8f0;
+}
+/* Inside that ceiling the words give way and the footer does not, so the
+   licence, the download and the way to report the picture stay on screen while
+   the caption scrolls. */
+.lightbox__text {
+  flex: 1 1 auto;
+  min-height: 0;
+  overflow-y: auto;
 }
 .lightbox__caption { margin: 0; font-size: 0.9375rem; }
 .lightbox__camera {
@@ -2969,12 +3053,23 @@ html.lightbox-open { overflow: hidden; }
 }
 .lightbox__footer {
   display: flex;
+  flex: none;
   flex-wrap: wrap;
+  align-items: center;
   justify-content: center;
   gap: 0.25rem 1rem;
   margin: 0.5rem 0 0;
   font-size: 0.8125rem;
   color: #94a3b8;
+}
+/* Finger-sized, all three of them: this row is the only place a phone can take
+   the licence, the file or the complaint, and a 21px line of text is not a
+   target a thumb hits. The size is the app's one button height, so the quiet
+   look is unchanged and only the box around it grew. */
+.lightbox__footer a {
+  display: inline-flex;
+  align-items: center;
+  min-height: 2.5rem;
 }
 /* The licence, and beside it the quiet way out for a rights holder who disputes
    it (issue #2089): one weight for both, and never the download's — one act is
@@ -3025,8 +3120,8 @@ html.lightbox-open { overflow: hidden; }
 }
 .lightbox__nav {
   top: 50%;
-  width: 3rem;
-  height: 3rem;
+  width: var(--lb-nav-size);
+  height: var(--lb-nav-size);
   font-size: 2rem;
   line-height: 1;
   transform: translateY(-50%);
@@ -3037,10 +3132,13 @@ html.lightbox-open { overflow: hidden; }
 
 /* On a phone the arrows would sit on top of the picture, so they move to the
    bottom corners where a thumb reaches them anyway — above the home
-   indicator, whose strip belongs to the system's own swipe. */
+   indicator, whose strip belongs to the system's own swipe. The stage keeps
+   clear of that row by leaving it as padding, rather than by shortening the
+   picture: a fixed subtraction is the guess #2139 was about, and the arrows
+   are a known height. */
 @media (width < 40rem) {
-  .lightbox__nav { top: auto; bottom: max(1rem, env(safe-area-inset-bottom)); transform: none; }
-  .lightbox__image { max-height: calc(100vh - 12rem); }
+  .lightbox { padding-bottom: calc(var(--lb-nav-inset) + var(--lb-nav-size) + 0.5rem); }
+  .lightbox__nav { top: auto; bottom: var(--lb-nav-inset); transform: none; }
 }
 
 /* The post composer's whole-form drop zone. LiveView stamps
