@@ -81,6 +81,7 @@ defmodule VutuvWeb.PressKitLive do
   alias Vutuv.Organizations.Organization
   alias Vutuv.PressKit
   alias Vutuv.PressKitStore
+  alias Vutuv.Uploads
   alias VutuvWeb.ErrorHelpers
   alias VutuvWeb.Live.InitAssigns
   alias VutuvWeb.OrganizationLive.ManageGate
@@ -144,6 +145,10 @@ defmodule VutuvWeb.PressKitLive do
       # own moment. A reconnect is safe: the tick and the credit sit in a form
       # with a `phx-change`, which LiveView's form recovery replays on rejoin.
       |> assign(:armed, %{false => false, true => false})
+      # Which slot each picked file is on its way to, per shelf and by upload
+      # ref (issue #2141). Not rendered; see `note_slots/2` for why the pick
+      # order has to be written down the moment a file is seen.
+      |> assign(:slots, %{false => %{}, true => %{}})
       # Which ground the logo tiles stand on. A white wordmark is invisible on
       # white, so the shelf that holds one lets the owner look at it on the
       # background it was drawn for. A preview only — nothing about it is stored.
@@ -206,8 +211,7 @@ defmodule VutuvWeb.PressKitLive do
   end
 
   def handle_event("cancel-upload", %{"ref" => ref} = params, socket) do
-    name = if shelf_param(params), do: :logo, else: :photo
-    {:noreply, cancel_upload(socket, name, ref)}
+    {:noreply, cancel_upload(socket, params |> shelf_param() |> upload_name(), ref)}
   end
 
   def handle_event("open", %{"id" => id}, socket) do
@@ -417,10 +421,55 @@ defmodule VutuvWeb.PressKitLive do
 
   defp count_of(bio, length), do: PressKit.bio_word_count(Map.fetch!(bio, length))
 
-  # `auto_upload: true`, so this runs the moment the last chunk lands.
+  # `auto_upload: true`, so this runs on every chunk and stores on the last one.
   defp handle_progress(name, entry, socket) when name in [:photo, :logo] do
-    if entry.done?, do: store(socket, entry, name == :logo), else: {:noreply, socket}
+    logo? = name == :logo
+    socket = note_slots(socket, logo?)
+
+    if entry.done?, do: store(socket, entry, logo?), else: {:noreply, socket}
   end
+
+  # The order the member picked, written down the first time each file is seen
+  # (issue #2141).
+  #
+  # Ten photos go up **in parallel** and the position used to be taken when one
+  # landed, which is the order their sizes decide rather than the order they
+  # were picked: a pick of portrait, p2, p3, p4 with a 16 MB portrait came back
+  # p2, p4, p3, portrait, so the hero the member deliberately picked first got
+  # the last slot on a shelf whose own line says the first photo is the one
+  # shown first.
+  #
+  # `@uploads.<shelf>.entries` **is** the file picker's order, and it stays that
+  # order until an entry is consumed — which only `store/3` below does, and only
+  # after this has run. So the first sight of a ref is its rank. Refs that have
+  # left the list (stored, cancelled) are dropped here rather than in a cleanup
+  # of their own, and a second pick made while the first is still climbing takes
+  # the slots behind the ones already reserved.
+  defp note_slots(socket, logo?) do
+    refs = Enum.map(socket.assigns.uploads[upload_name(logo?)].entries, & &1.ref)
+    known = Map.take(socket.assigns.slots[logo?], refs)
+
+    # Past the last slot **taken**, which is not the same as past the last row:
+    # a shelf of one picture at position 5 has one row, and a floor of 1 lets a
+    # file picked later be handed a slot a file picked earlier is still climbing
+    # towards, since the first free slot at or after a low floor can overtake
+    # one at or after a high one. `PressKit.take_slot/3` is what keeps two
+    # pictures off one slot — a floor is a wish, and only the shelf knows what
+    # is free — so what is left here is purely the order.
+    taken = Enum.map(shelf_images(socket, logo?), &(&1.position || 0))
+    next = Enum.max([-1 | taken ++ Map.values(known)]) + 1
+
+    slots =
+      refs
+      |> Enum.reject(&Map.has_key?(known, &1))
+      |> Enum.with_index(next)
+      |> Enum.into(known)
+
+    put_in_shelf(socket, :slots, logo?, slots)
+  end
+
+  defp shelf_images(socket, true), do: socket.assigns.logos
+  defp shelf_images(socket, false), do: socket.assigns.photos
 
   defp store(socket, entry, logo?) do
     # The tick rides in as the changeset's own `rights_confirmed`, rather than
@@ -437,7 +486,8 @@ defmodule VutuvWeb.PressKitLive do
            socket.assigns.owner,
            socket.assigns.current_user,
            {path, entry.client_name},
-           attrs
+           attrs,
+           position: socket.assigns.slots[logo?][entry.ref]
          )}
       end)
 
@@ -829,6 +879,38 @@ defmodule VutuvWeb.PressKitLive do
           else: gettext("No press photo here yet.")}
       </p>
 
+      <%!-- Said once for the shelf rather than louder on each tile (#2144). Ten
+      fresh pictures wear ten identical grey badges and nothing else, which
+      reads as ten failed uploads — so the sentence the badge was missing is
+      what a stranger meets meanwhile, and that nobody has to do anything.
+      Amber, the hourglass and a `role="status"`, because this is the same wait
+      the post composer's author panel already describes
+      (`VutuvWeb.PostComponents.photo_check_progress/1`) and the app says
+      "we are looking at your picture" in one voice. **No estimate of how long**,
+      deliberately: `image_scans` stamps `scanned_at` and no start, so nothing
+      here measures a duration to promise — and no "N of M done" either, since
+      this page learns of a verdict only on its next event and a count that sat
+      still would read as stuck. --%>
+      <div
+        :if={Enum.any?(@images, &pending?/1)}
+        data-press-pending={PressKit.shelf_name(@logo?)}
+        class="mt-3 flex items-start gap-2 rounded-lg bg-amber-50 px-3 py-2 text-xs text-amber-800 ring-1 ring-amber-200 dark:bg-amber-900/30 dark:text-amber-200 dark:ring-amber-800"
+        role="status"
+        aria-live="polite"
+      >
+        <.hourglass class="mt-0.5 h-4 w-4" />
+        <span>
+          <span class="font-semibold">
+            {gettext("A picture still being checked is not public yet.")}
+          </span>
+          <span class="mt-0.5 block">
+            {gettext(
+              "A visitor sees a pixelated stand-in in its place and can download nothing. The mark goes by itself when the check is through."
+            )}
+          </span>
+        </span>
+      </div>
+
       <ul
         :if={@images != []}
         id={"press-order-#{PressKit.shelf_name(@logo?)}"}
@@ -1172,6 +1254,21 @@ defmodule VutuvWeb.PressKitLive do
 
       <.upload_problems upload={@upload} />
 
+      <%!-- "That file type is not allowed." is the whole answer a member gets
+      for dropping a photo on the logo shelf, or an SVG on the photo shelf, and
+      the shelf that would have taken it is on the same page (#2144). Offered
+      only where the other shelf really does take this format — a PDF is
+      refused by both, and pointing at a second refusal is worse than none. --%>
+      <p
+        :if={wrong_shelf?(@upload, @logo?)}
+        data-press-wrong-shelf={@shelf}
+        class="text-xs text-slate-600 dark:text-slate-400"
+      >
+        {if @logo?,
+          do: gettext("Press photos, further up this page, take this format."),
+          else: gettext("Logo variants, further down this page, take this format.")}
+      </p>
+
       <div
         :for={entry <- @upload.entries}
         class="flex items-center gap-3 text-sm text-slate-600 dark:text-slate-400"
@@ -1251,12 +1348,36 @@ defmodule VutuvWeb.PressKitLive do
   defp shelf_max(true), do: PressKit.max_logos()
   defp shelf_max(false), do: PressKit.max_photos()
 
+  # A shelf's `allow_upload/3` name, beside `shelf_name/1` and `shelf_max/1`:
+  # three call sites ask it, and a hand-written `if` at each was already two.
+  defp upload_name(true), do: :logo
+  defp upload_name(false), do: :photo
+
   # A logo's `thumb` is scaled down whole; a photo's is a square crop, so its
   # tile takes `lite` — the cheap version, which is what this page's ten tiles
   # should cost on the phone they are uploaded from.
   defp tile_version(image), do: if(Image.logo?(image), do: "thumb", else: "lite")
 
   defp pending?(image), do: not ImageScans.released?(image.moderation)
+
+  # Whether a file this shelf refused is one the other shelf takes. Asked
+  # through `Uploads.valid_extension?/2`, which is the very predicate
+  # `PressKitStore.store/4` will run on the file once it is dropped where it
+  # belongs — a second spelling of "does this extension count" is how an offer
+  # comes to promise a format the other box then refuses.
+  # `upload.errors` first, because it is `[]` for every one of the ~100 progress
+  # ticks a climbing file costs and this is asked on each of them: a shelf with
+  # nothing refused answers without building the other one's whitelist.
+  defp wrong_shelf?(%{errors: []}, _logo?), do: false
+
+  defp wrong_shelf?(upload, logo?) do
+    elsewhere = PressKitStore.extension_whitelist(not logo?)
+
+    Enum.any?(upload.entries, fn entry ->
+      :not_accepted in upload_errors(upload, entry) and
+        Uploads.valid_extension?(entry.client_name, elsewhere)
+    end)
+  end
 
   defp tile_title(image), do: PressKit.title(image)
 end

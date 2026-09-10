@@ -762,8 +762,20 @@ defmodule Vutuv.PressKit do
   `{:error, :too_large}`, `{:error, :too_many}` or `{:error, :invalid_file}`
   for the three the form cannot see. The authorization is asked **first**, so a
   refused upload never so much as measures the file.
+
+  `opts` takes `:position`, **the slot this picture was picked for** — which is
+  not the same as the end of the shelf whenever several files are in flight at
+  once, because they finish in the order their sizes decide and the biggest one
+  finishes last (issue #2141). A caller that knows the pick order says so; one
+  that does not gets the front of the shelf and lands behind whatever is there.
+
+  It is a **floor and not an answer**: the picture takes the first slot free at
+  or after it, or the lowest free slot there is, and the only refusal is a shelf
+  with no room at all. A caller holds a snapshot of one moment and two of them
+  may hold the same one, so a slot it names may be taken or may be past a gap a
+  delete left; `take_slot/3` says why that has to be the shelf's decision.
   """
-  def create(owner, %User{} = uploader, {path, filename}, attrs) do
+  def create(owner, %User{} = uploader, {path, filename}, attrs, opts \\ []) do
     token = Uploads.gen_token()
 
     changeset =
@@ -776,7 +788,7 @@ defmodule Vutuv.PressKit do
     with :ok <- authorize(owner, uploader),
          :ok <- validate_form(changeset),
          :ok <- validate_size(path),
-         {:ok, position} <- take_slot(owner, logo?),
+         {:ok, position} <- take_slot(owner, logo?, opts[:position]),
          {:ok, meta} <- PressKitStore.store(path, filename, token, logo?) do
       insert(changeset, position, meta, token)
     end
@@ -1034,16 +1046,39 @@ defmodule Vutuv.PressKit do
     if File.stat!(path).size > max_filesize(), do: {:error, :too_large}, else: :ok
   end
 
-  # The room on the shelf and the position the new picture takes are the same
-  # count, so they are one query rather than two. Two uploads racing can land on
-  # the same position; #2085's editor is what reorders them, and the id
-  # tiebreaker in `shelf/2` keeps the order stable meanwhile.
-  defp take_slot(owner, logo?) do
-    used = count(owner, logo?)
+  # **A reserved slot is a floor, never an answer**, and the shelf itself
+  # decides. `wanted` comes from one socket's snapshot of one moment, so it is
+  # a wish about order and nothing more: two tabs of the same member both wish
+  # for 0, and a shelf whose row at 3 was just deleted has nine rows and a
+  # highest position of 9, which wishes for 10. Reading the wish as the answer
+  # gave the first case two pictures one slot (two files called
+  # `<handle>-press-1.jpg`) and the second a refusal saying "no more than 10
+  # press photos" under a counter reading "9 of 10" — a sentence the product
+  # could not honour, on the commonest edit a shelf gets.
+  #
+  # So the room is the only refusal (`used >= cap`), and the slot is the first
+  # one **free** at or after the floor, falling back to the lowest free slot
+  # there is. A batch keeps its order, because each picture's floor is its own
+  # pick position and the ones before it are either already there or still
+  # climbing towards slots below it; a delete's gap is filled by the next
+  # upload; and the second tab is handed 1 rather than a copy of 0. Since
+  # `used < cap` there is always a free slot under the cap for the fallback to
+  # find.
+  defp take_slot(owner, logo?, wanted) do
     cap = if logo?, do: max_logos(), else: max_photos()
+    positions = owner |> shelf(logo?) |> select([i], i.position) |> Repo.all()
 
-    if used < cap, do: {:ok, used}, else: {:error, :too_many}
+    if length(positions) >= cap,
+      do: {:error, :too_many},
+      else: {:ok, free_slot(MapSet.new(positions), wanted || 0, cap)}
   end
+
+  defp free_slot(taken, floor, cap) do
+    first_free(taken, floor, cap) || first_free(taken, 0, cap)
+  end
+
+  defp first_free(taken, from, cap),
+    do: Enum.find(from..(cap - 1)//1, &(&1 not in taken))
 
   defp insert(changeset, position, meta, token) do
     changeset

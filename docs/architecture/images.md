@@ -929,11 +929,43 @@ and format whitelist, `position` belongs to `PressKit.reorder/4`, and
 `rights_confirmed` would re-give a release that was already given — so
 `confirm_rights/1` keeps the original stamp on that path.
 
+A shelf holding a picture the AI gate has not released yet says **once, above
+the tiles**, that a visitor meets the pixelated stand-in meanwhile and that the
+mark clears itself: ten fresh pictures wear ten identical grey badges and
+nothing else, which reads as ten failed uploads (issue #2144). Nothing there
+estimates how long the check takes, because nothing measures it — `image_scans`
+records `scanned_at` and no start, so the only bounded numbers in the whole path
+are `ImageScanWorker`'s 15 s poll (a fresh row is nudged, so it does not wait
+for one), the Ollama call's 120 s timeout and the stand-in's own hour. A file a
+shelf refuses points at the other shelf underneath the refusal, but only where
+that shelf's whitelist really takes the format — a PDF is refused by both, and
+pointing at a second refusal is worse than pointing nowhere.
+
 `PressKit.reorder/4` and `move/5` number a shelf **0..n-1**, not 1..n like
 `Vutuv.Ordering`: a download is named from `position + 1`
 (`PressKit.download_name/2`), so the hero has to sit at 0. What the two do share
 — reading an untrusted drag payload, and swapping one row with its neighbour —
-is `Ordering.arrange/2` and `Ordering.swap/3`. A member's press kit is also a
+is `Ordering.arrange/2` and `Ordering.swap/3`. A **new** picture's position is
+the slot it was picked for rather than the shelf's row count when it lands
+(`create/5`'s `:position`, issue #2141): several files climb in parallel and
+finish in the order their sizes decide, so counting at completion time handed
+the hero a member deliberately picked first the *last* slot, under a line saying
+the first photo is the one shown first. `VutuvWeb.PressKitLive` writes each
+upload ref's rank down the first time it sees the entry list, which is the file
+picker's own order and stays that order until an entry is consumed. **That rank
+is a floor and not an answer**: it comes from one socket's snapshot of one
+moment, so two tabs of the same member both wish for slot 0, and a shelf whose
+row at 3 was just deleted has nine rows, a highest position of nine and
+therefore wishes for ten. Reading a wish as the answer gave the first case two
+downloads called `<handle>-press-1.jpg` and the second a refusal reading "no
+more than 10 press photos" under a counter reading "9 of 10". So `take_slot/3`
+takes the first slot **free** at or after the floor, falls back to the lowest
+free slot there is, and refuses only a shelf with no room at all — pick order
+kept, a delete's gap filled by the next upload, the second tab handed 1.
+Positions are still sparse while a batch is climbing (the hero holds 0 and lands
+last) and after a cancelled entry, so a shelf can skip a download number
+(`press-1`, `press-2`, `press-4`) until a reorder renumbers it. A member's
+press kit is also a
 section of `Vutuv.Export` (schema version 10), each entry carrying the address
 the file itself is at; the pictures they uploaded *for a page* are deliberately
 absent, since those belong to the page.
