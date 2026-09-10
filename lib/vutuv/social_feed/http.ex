@@ -30,13 +30,81 @@ defmodule Vutuv.SocialFeed.Http do
   override single options (the GitHub client swaps the headers for its
   API-versioned, optionally token-carrying set); the env seam still wins, so
   tests always intercept.
+
+  `:headers` and `:connect_options` are merged **per key** rather than replaced,
+  because both hold shared settings a client has no business dropping: a client
+  adding one header would otherwise lose `user-agent` and introduce this
+  installation to a stranger's server as an anonymous HTTP library, and one
+  adding `hostname` would lose the connect timeout. That trap was already known
+  and only survivable by hand — `Vutuv.CodeStats.GitHub` restates
+  `Http.user_agent/0` inside its own header list for exactly this reason.
   """
   def get(url, options_key, extra \\ []) do
     url
     |> base_options()
-    |> Keyword.merge(extra)
-    |> Keyword.merge(Application.get_env(:vutuv, options_key, []))
+    |> deep_merge(extra)
+    |> deep_merge(Application.get_env(:vutuv, options_key, []))
     |> Req.get()
+  end
+
+  @doc """
+  A GET **pinned to the address the host was vetted at**, for a client reading a
+  URL somebody else chose.
+
+  `Vutuv.Ssrf.resolves_to_internal?/1` only *checks* the host, and the client
+  then hands `Req` the hostname to look up a second time — a lookup that can
+  answer with an internal address (DNS rebinding), the TOCTOU
+  `Vutuv.Ssrf`'s own moduledoc calls out. Here the request is dialled at exactly
+  the IP `vetted_address/1` approved, and the hostname rides along in
+  `connect_options[:hostname]`, which `Mint` uses for SNI, for certificate
+  verification and for the `Host` header — so there is no second lookup to
+  poison, and the remote server still sees the virtual host it is asked about.
+
+  `path` is everything after the authority, already escaped. Answers
+  `{:error, :internal | :unresolvable}` when the host does not survive the vet.
+  """
+  def get_pinned(host, path, options_key, extra \\ []) do
+    case Vutuv.Ssrf.vetted_address(host) do
+      {:ok, address} ->
+        get("https://#{authority(address)}#{path}", options_key, pin(host, extra))
+
+      {:error, reason} ->
+        {:error, reason}
+    end
+  end
+
+  @doc """
+  The options that pin a request to a vetted address: the hostname `Mint` must
+  use, and the `Host` header written out beside it. Public so the pin can be
+  asserted on directly — it is a security decision, not an implementation
+  detail.
+  """
+  def pin(host, extra \\ []) do
+    deep_merge([connect_options: [hostname: host], headers: [{"host", host}]], extra)
+  end
+
+  # An IPv6 literal needs its brackets back before it can be a URL authority,
+  # and `Req` reads exactly that shape to decide it must dial over IPv6.
+  defp authority(address) do
+    literal = address |> :inet.ntoa() |> to_string()
+
+    if String.contains?(literal, ":"), do: "[#{literal}]", else: literal
+  end
+
+  # Keyword options replace, except the two that carry shared settings: those
+  # are merged key by key, so `extra` overrides what it names and keeps the rest.
+  defp deep_merge(options, extra) do
+    Keyword.merge(options, extra, fn
+      :headers, base, override -> merge_headers(base, override)
+      :connect_options, base, override -> Keyword.merge(base, override)
+      _key, _base, override -> override
+    end)
+  end
+
+  defp merge_headers(base, override) do
+    named = Enum.map(override, fn {name, _value} -> String.downcase(name) end)
+
+    Enum.reject(base, fn {name, _value} -> String.downcase(name) in named end) ++ override
   end
 
   @doc """

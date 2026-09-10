@@ -648,6 +648,37 @@ config :vutuv, :markdown_cache, true
 config :vutuv, :fetch_mastodon_posts, true
 config :vutuv, :fetch_bluesky_posts, true
 
+# The posts a followed tag pulls from the other servers it names (issue #2126).
+# Off = nothing is ever asked and the standing job does not even start — the
+# switch for installations that must not call out (intranets), and the reason a
+# follow's sources still cost nothing there. Tests turn it off and stub HTTP via
+# :external_tag_req_options. Runtime override: FETCH_EXTERNAL_TAG_POSTS=false.
+config :vutuv, :fetch_external_tag_posts, true
+
+# How often one (tag, server) pair is asked, as a pace that finds itself: a pass
+# aims at `target` new posts between two fetches, so more than that arrived and
+# the wait halves, none arrived and it doubles, always inside the floor and the
+# ceiling. A tag in the middle of a news event settles at ten minutes and a
+# quiet local one drifts out to three hours, with no list of "busy tags" for
+# anybody to maintain. The floor is the neighbourly number here — it decides how
+# often a stranger's server hears from this installation.
+# Runtime override: EXTERNAL_TAG_CADENCE="5:10:180" (target:min:max, minutes).
+config :vutuv, :external_tag_cadence, target: 5, min_seconds: 600, max_seconds: 10_800
+
+# What bounds the table: posts kept for one tag (its servers share those slots,
+# newest wins) and rows in the whole table. Nothing here is a copy anybody here
+# wrote, so it is a cache with two ceilings rather than an archive — and a pair
+# nobody follows any more loses its posts with the follow.
+config :vutuv, :external_tag_post_caps, per_tag: 20, total: 10_000
+
+# The ceilings on one fetch run: pairs in total, and how many of them may belong
+# to one server. The per-server half is the neighbourly one — twenty busy tags
+# naming one popular server must not spend its rate limit in a single run — and
+# it is only safe because every outcome moves the pair's clock, so what it holds
+# back is what the next run serves first. Runtime override:
+# EXTERNAL_TAG_FETCH_BUDGET="20:5".
+config :vutuv, :external_tag_fetch_budget, batch: 20, per_host: 5
+
 # Wall-clock ceiling for a single newsletter send (test or broadcast). gen_smtp
 # bounds only its *connect* with the :timeout option; each per-response read
 # uses a hardcoded, non-configurable 20-minute timeout, so a black-holing relay

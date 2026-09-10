@@ -2651,6 +2651,23 @@ revokes silently keeps its card until the post expires. It reuses the clock
 above: `quote_checked_at` is where a recheck records that it looked, and its due
 query is the same query widened to the rows that did resolve.
 
+## A followed tag's other servers (issue #2126)
+
+Everything above this line is ActivityPub. The pull behind a followed tag's
+other servers is not, and that is the point: a hashtag has no inbox to
+subscribe to, so each named server is asked for its public tag timeline over the
+Mastodon-compatible REST API instead, and what comes back is text and a link,
+never a picture. It lives with the sources it reads from, in
+[social-graph.md](social-graph.md#reading-those-servers-issue-2126).
+
+Two things there are this document's: the operator blocklist decides those
+fetches too, at fetch time, so blocking a server stops the pull from it even for
+members who named it earlier — and it drops a status whose *author* lives on a
+blocked host, however it was relayed. And `Vutuv.Tags.Tag.hashtag_name/1`, which
+names the timeline this installation asks for, is the same function that names
+the `Hashtag` objects an outgoing note carries, so the two directions of one
+conversation cannot drift apart.
+
 ## Saying this installation exists: NodeInfo (issue #1448)
 
 Everything above is federation between servers that already know about each

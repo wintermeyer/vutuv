@@ -384,6 +384,44 @@ if config_env() == :prod do
     config :vutuv, :fediverse_counts_per_host, String.to_integer(String.trim(per_host))
   end
 
+  # The posts a followed tag pulls from the other servers it names (issue
+  # #2126). FETCH_EXTERNAL_TAG_POSTS=false asks nobody anything and does not
+  # start the job at all — what is already stored keeps rendering.
+  if System.get_env("FETCH_EXTERNAL_TAG_POSTS") == "false" do
+    config :vutuv, :fetch_external_tag_posts, false
+  end
+
+  # The pace of that pull as `target:min:max` — posts aimed at between two
+  # fetches, then the floor and the ceiling in **minutes**. The shipped value is
+  # "5:10:180". The floor decides how often a stranger's server hears from this
+  # installation, so an operator who wants to be a quieter neighbour raises it.
+  if cadence = System.get_env("EXTERNAL_TAG_CADENCE") do
+    [target, min, max] = String.split(String.trim(cadence), ":", parts: 3)
+
+    config :vutuv, :external_tag_cadence,
+      target: String.to_integer(String.trim(target)),
+      min_seconds: String.to_integer(String.trim(min)) * 60,
+      max_seconds: String.to_integer(String.trim(max)) * 60
+  end
+
+  # What bounds the table, as `per_tag:total`.
+  if caps = System.get_env("EXTERNAL_TAG_POST_CAPS") do
+    [per_tag, total] = String.split(String.trim(caps), ":", parts: 2)
+
+    config :vutuv, :external_tag_post_caps,
+      per_tag: String.to_integer(String.trim(per_tag)),
+      total: String.to_integer(String.trim(total))
+  end
+
+  # The ceilings on one run, as `batch:per_host`.
+  if budget = System.get_env("EXTERNAL_TAG_FETCH_BUDGET") do
+    [batch, per_host] = String.split(String.trim(budget), ":", parts: 2)
+
+    config :vutuv, :external_tag_fetch_budget,
+      batch: String.to_integer(String.trim(batch)),
+      per_host: String.to_integer(String.trim(per_host))
+  end
+
   # How much the release writes to the system log. `config/prod.exs` compiles in
   # `:error`, which is quiet enough to run on and too quiet to debug on: at that
   # level nearly every `Logger.warning` in the app goes, and the request logger

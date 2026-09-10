@@ -1312,27 +1312,45 @@ defmodule Vutuv.Tags do
 
   The local source is left out, so every `source` in the answer is a hostname a
   fetcher can ask. Member follows and page follows count alike — the pair is
-  wanted, whoever wants it.
+  wanted, whoever wants it. An alternative name for a topic is left out too: a
+  merge moves its follows to the canonical tag, so asking a server about the
+  alias would file the answer under a page nobody reads.
   """
   def wanted_tag_sources do
+    wanted_tag_sources_query()
+    |> order_by([source: s], desc: count(s.id), asc: s.source)
+    |> Repo.all()
+  end
+
+  @doc """
+  The same question as a **composable** query, with `:source`, `:follow` and
+  `:tag` as named bindings and no ordering of its own.
+
+  One definition, because the fetcher asks it twice over: once to pick the pairs
+  that are due (`Vutuv.Tags.ExternalPosts.due_sources/1` adds the schedule join,
+  the due filter and its own order on top) and once as the list above. A second
+  hand-written copy of this join is how the local-source rule, the page-follow
+  count and the merged-tag exclusion drift apart.
+  """
+  def wanted_tag_sources_query do
     local = local_tag_follow_source()
 
-    Repo.all(
-      from(s in TagFollowSource,
-        join: tf in TagFollow,
-        on: tf.id == s.tag_follow_id,
-        join: t in Tag,
-        on: t.id == tf.tag_id,
-        where: s.source != ^local,
-        group_by: [s.source, t.id, t.name],
-        order_by: [desc: count(s.id), asc: s.source],
-        select: %{
-          source: s.source,
-          tag_id: t.id,
-          tag_name: t.name,
-          follow_count: count(s.id)
-        }
-      )
+    from(s in TagFollowSource,
+      as: :source,
+      join: tf in TagFollow,
+      as: :follow,
+      on: tf.id == s.tag_follow_id,
+      join: t in Tag,
+      as: :tag,
+      on: t.id == tf.tag_id,
+      where: s.source != ^local and is_nil(t.merged_into_id),
+      group_by: [s.source, t.id, t.name],
+      select: %{
+        source: s.source,
+        tag_id: t.id,
+        tag_name: t.name,
+        follow_count: count(s.id)
+      }
     )
   end
 
