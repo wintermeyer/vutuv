@@ -508,6 +508,20 @@ defmodule VutuvWeb.PressKitComponents do
   # kit is published for people to take, and the one act nobody should have to
   # hunt for still must not sit at the same weight as the act the page exists
   # for.
+  #
+  # Quiet is about weight, not about size (issue #2139): as a bare run of text
+  # in a `text-xs` line the link measured 15 px tall beside the 40 px download
+  # button on the same card, which is not a target a thumb hits. `inline-flex`
+  # + `min-h-10` gives it the app's one control height while every visible
+  # thing about it — the type size, the muted colour, the underline — stays
+  # exactly as it was; the line box grows around it and the baseline it shares
+  # with the facts does not move.
+  #
+  # It is the one item on this line with **no** `·` in front of it, and that is
+  # the same change: an `inline-flex` box cannot break in the middle, so on a
+  # phone it drops to a line of its own — and the separator stayed behind,
+  # ending the facts line on a dangling dot. A control is not a word in the
+  # sentence, so it takes a gap rather than punctuation.
   attr(:image, :any, required: true)
   attr(:report, :any, default: nil)
 
@@ -522,11 +536,10 @@ defmodule VutuvWeb.PressKitComponents do
       <span :if={present?(@image.credit)} data-press-credit>{@image.credit}</span>
       <span :if={present?(@image.credit)} aria-hidden="true">·</span>
       <span data-press-facts>{facts_line(@image)}</span>
-      <span :if={@report} aria-hidden="true">·</span>
       <a
         :if={@report}
         href={@report}
-        class="underline underline-offset-2 hover:text-slate-700 dark:hover:text-slate-200"
+        class="ml-2 inline-flex min-h-10 items-center underline underline-offset-2 hover:text-slate-700 dark:hover:text-slate-200"
         data-press-report
       >
         {gettext("Report this picture")}

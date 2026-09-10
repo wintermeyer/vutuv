@@ -44,6 +44,14 @@ function applyLabels(gallery) {
 // written through textContent or a URL property below, never spliced into
 // HTML. Its own chrome labels come from the gallery's data attributes, because
 // the server is the only place that knows the reader's language.
+//
+// Two of the elements below are there for the stage's arithmetic rather than
+// for anything they show (issue #2139). `.lightbox__frame` is the box the
+// picture is measured against, so the picture can give room back to a caption
+// instead of being capped at a strip guessed in advance; `.lightbox__text` is
+// the part that scrolls when a caption is longer than the screen, which is why
+// the footer — the licence, the download and the way to report the picture —
+// is its sibling and not inside it.
 function build() {
   if (overlay) return overlay
 
@@ -57,11 +65,15 @@ function build() {
     <button type="button" class="lightbox__nav lightbox__nav--prev" data-lb-prev>&#8249;</button>
     <button type="button" class="lightbox__nav lightbox__nav--next" data-lb-next>&#8250;</button>
     <figure class="lightbox__stage">
-      <img class="lightbox__image" data-lb-image alt="" />
+      <div class="lightbox__frame">
+        <img class="lightbox__image" data-lb-image alt="" />
+      </div>
       <figcaption class="lightbox__meta">
-        <p class="lightbox__caption" data-lb-caption></p>
-        <p class="lightbox__camera" data-lb-credit></p>
-        <p class="lightbox__camera" data-lb-camera></p>
+        <div class="lightbox__text">
+          <p class="lightbox__caption" data-lb-caption></p>
+          <p class="lightbox__camera" data-lb-credit></p>
+          <p class="lightbox__camera" data-lb-camera></p>
+        </div>
         <p class="lightbox__footer">
           <span class="lightbox__position" data-lb-position></span>
           <a class="lightbox__license" data-lb-license target="_blank" rel="license noopener"></a>
