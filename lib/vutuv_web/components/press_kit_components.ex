@@ -1,13 +1,14 @@
 defmodule VutuvWeb.PressKitComponents do
   @moduledoc """
-  What a member's or a page's press kit looks like on a **public** surface
-  (issue #2086): the card below Links on the profile, and the section page at
-  `/:slug/press` that hands the files out.
+  What a member's or a page's press kit looks like on a **public** surface: the
+  card below Links on the profile (#2086) and below the open positions on an
+  organization page (#2087), and the section page that hands the files out.
 
-  Its own module rather than more of `VutuvWeb.UI` because #2087 draws exactly
-  the same two shelves on an organization page, and the one thing that differs
-  there is the owner it is handed — so everything here takes pictures and a
-  viewer and nothing else.
+  Its own module rather than more of `VutuvWeb.UI` because both owner kinds draw
+  exactly the same two shelves, and the one thing that differs is the owner they
+  are handed — so everything here takes pictures and a viewer and nothing else.
+  The whole card is `press_card/1`, which #2087 lifted out of
+  `templates/user/show.html.heex` when the page needed the second copy.
 
   ## What the card shows and what opens
 
@@ -15,10 +16,13 @@ defmodule VutuvWeb.PressKitComponents do
   `VutuvWeb.PostComponents.mosaic_layout/2` answers the geometry — hero first, a
   frame chosen from the hero's own shape, at most five tiles and a `+N` on the
   last — so the arrangements themselves are stated once for both. The grid's
-  *markup* is still written twice, and knowingly: folding it into a shared
-  component with a cell slot is the right move once #2087 makes a third caller
-  and there is a second press surface to prove the shape against, and until then
-  it would be a refactor of the app's hottest markup for one new page.
+  *markup* is still written twice, and knowingly. #2086 expected #2087 to be the
+  third caller that pays for folding it into a shared component with a cell
+  slot; it is not one. A page's card is this module's own `press_photos/1` at a
+  second **call site**, not a third copy of the markup, so the count of copies
+  is still two and the refactor of the app's hottest markup still has one
+  surface to prove itself on. Leave it until a genuinely different grid needs
+  the same geometry.
 
   A tile **describes** its photo and the magnifier in the corner **opens** it —
   the split `assets/js/lightbox.js` reads, and the reason a tile can sit inside
@@ -64,6 +68,57 @@ defmodule VutuvWeb.PressKitComponents do
   alias Vutuv.PressKit
   alias VutuvWeb.Markdown
   alias VutuvWeb.PostComponents
+
+  @doc """
+  The whole **Press card**: the photo mosaic, the logo row, the rights line and
+  the footer link to the section page — on a member's profile below Links, and
+  on a page below its open positions.
+
+  `manage_href` is the editor (`Vutuv.PressKit.editor_path/1`) when this viewer
+  may write the kit and `nil` when they may not, which is the only thing the two
+  surfaces disagree about: it decides whether an empty kit shows the card at all
+  and what the dashed add tile links to. Every other difference lives in the
+  owner, and `page_path/1` answers it.
+  """
+  attr(:id, :string, required: true)
+  attr(:owner, :any, required: true, doc: "the member or the page whose kit this is")
+  attr(:press, :map, required: true, doc: "`Vutuv.PressKit.public_shelves/2`'s answer")
+  attr(:viewer, :any, default: nil)
+  attr(:manage_href, :any, default: nil)
+
+  def press_card(assigns) do
+    # `Map.put/3`, not `assign/3`: a card's owner cannot change without a fresh
+    # mount, so the key needs no change mark and the attributes reading it stay
+    # separately tracked.
+    assigns = Map.put(assigns, :href, PressKit.page_path(assigns.owner))
+
+    ~H"""
+    <.card :if={press_any?(@press) or @manage_href} id={@id}>
+      <.section_header title={gettext("Press")} />
+      <.empty_add :if={@manage_href && not press_any?(@press)} href={@manage_href}>
+        {gettext("Add press photos")}
+      </.empty_add>
+      <div :if={press_any?(@press)} class="space-y-4">
+        <.press_photos
+          :if={@press.photos != []}
+          photos={@press.photos}
+          viewer={@viewer}
+          href={@href}
+        />
+        <.press_logos :if={@press.logos != []} logos={@press.logos} viewer={@viewer} />
+        <.press_rights />
+      </div>
+      <%!-- Not `<.manage_footer>`: that one hides the "View All" link until a
+      card shows less than it holds, and here the section page is not a longer
+      list of the same thing — it is where the files are handed over, so every
+      visitor needs it whatever the count. The owner's bridge to the editor is
+      the "Manage" link in that page's own header. --%>
+      <.card_footer_link :if={press_any?(@press)} href={@href}>
+        {gettext("All press material")} ({compact_count(press_total(@press))})
+      </.card_footer_link>
+    </.card>
+    """
+  end
 
   @doc """
   How many press pictures this kit holds altogether — both shelves, since the

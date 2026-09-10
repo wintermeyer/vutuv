@@ -936,6 +936,32 @@ siblings are `VutuvWeb.AgentDocs.PressKitDoc`, and the profile document carries
 the same entries under `press_kit`; both list the **released** pictures only,
 since a document that names a file must name one that can be fetched.
 
+**A page has the same section, kept by its team (issue #2087).** The card, the
+section page, the documents, the schema.org block and the sitemap entry are the
+same code with an organization as the owner — `PressKitComponents.press_card/1`
+(lifted out of the profile template when the page needed the second copy),
+`VutuvWeb.PressKitController.organization/2`, `PressKitDoc.build/2`. Three things
+are the page's own. **The URL is built from the slug**, `/organizations/:slug/press`
+(`PressKit.page_path/1`), not from a claimed root handle: that handle dispatches
+the bare `/:slug` alone, so `Identity.path/1 <> "/press"` answered an address that
+404ed. The **editor** is `/organizations/:slug/press/edit` — the same
+`VutuvWeb.PressKitLive`, embedded by `OrganizationController.press/2` instead of
+routed, so it resolves the viewer with `InitAssigns.assign_embedded/2` and
+re-asks `manageable_by?/2` on the socket (`OrganizationLive.ManageGate`) rather
+than trusting the signed `organization_id`; it is on the manage tab bar and in
+the page's own manage strip, for an owner or a publisher. And a page may take
+**its own logo** onto the logo shelf with one press (`PressKit.adopt_page_logo/3`)
+where that logo is a **vector** — `File.cp!` through the ordinary `create/4`, so
+the page's original stays where it is and the copy meets the same cap, whitelist,
+rights stamp and scan; a raster logo is not offered, since the file the page
+uploaded is already the screen-sized copy and would be a print promise it cannot
+keep.
+
+The sentences whose German addresses the reader as the owner ("Ihr Logo", "über
+Sie schreibt") get **their own msgids** for the page's editor rather than sharing
+the member's: `gettext.extract --merge` fuzzy-filled all three with exactly that
+member-voiced German, which is the trap `docs/architecture/i18n.md` records.
+
 ### The takedown hold (issue #2012)
 
 A copyright freeze **moves** a picture, it never deletes one, and the tree it

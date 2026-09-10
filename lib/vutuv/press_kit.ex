@@ -66,6 +66,7 @@ defmodule Vutuv.PressKit do
   alias Vutuv.Moderation.ImageScans
   alias Vutuv.Moderation.Pixelation
   alias Vutuv.Ordering
+  alias Vutuv.OrganizationImageStore
   alias Vutuv.Organizations
   alias Vutuv.Organizations.Organization
   alias Vutuv.PressKitStore
@@ -116,6 +117,21 @@ defmodule Vutuv.PressKit do
 
   @doc "The owner's logo variants, in the order they are shown."
   def logos(owner), do: shelf_rows(owner, true)
+
+  @doc """
+  Both shelves of one owner's kit **whatever their moderation state** —
+  `%{photos:, logos:}`, each in the owner's own order. What the editor lists,
+  which is the one surface that shows a picture the AI gate is still holding as
+  itself rather than as a stand-in.
+
+  One query for both, for `public_shelves/2`'s reason: the caps are ten and five,
+  so the whole kit is at most fifteen rows and the split is cheaper in memory
+  than a second round trip — and the editor reloads them after every save,
+  delete, move, reorder and upload.
+  """
+  def shelves(owner) do
+    owner |> owned() |> Ordering.by_position() |> Repo.all() |> split()
+  end
 
   @doc "How many pictures the owner has on that shelf."
   def count(owner, logo?) when is_boolean(logo?),
@@ -254,12 +270,21 @@ defmodule Vutuv.PressKit do
   """
   def manageable_by?(%User{id: id}, %User{id: id}), do: true
 
-  def manageable_by?(%Organization{} = organization, %User{} = viewer) do
-    powers = Organizations.role_powers(organization, viewer)
-    powers.owner? or powers.publisher?
-  end
+  def manageable_by?(%Organization{} = organization, %User{} = viewer),
+    do: organization |> Organizations.role_powers(viewer) |> manageable_by_powers?()
 
   def manageable_by?(_owner, _viewer), do: false
+
+  @doc """
+  The same rule, read off a `Vutuv.Organizations.role_powers/2` answer somebody
+  already holds — for the page itself, which consolidated five permission reads
+  into that one and must not grow a sixth to ask this.
+
+  Public so the rule keeps one home: `manageable_by?/2` is this function plus
+  the read.
+  """
+  def manageable_by_powers?(%{owner?: owner?, publisher?: publisher?}),
+    do: owner? or publisher?
 
   @doc """
   Whether `viewer` may fetch this picture's bytes — the one statement of that
@@ -430,16 +455,35 @@ defmodule Vutuv.PressKit do
   defp address(%Image{token: token}, file), do: "/system/press_kit/#{token}/#{file}"
 
   @doc """
-  Where this owner's press kit is published: `/ada.king/press` for a member, the
-  page's canonical path plus `/press` for a page — `Vutuv.Identity.path/1` plus
-  one segment, so the next owner kind is remembered in the one place that
-  already knows about owner kinds.
+  Where this owner's press kit is published: `/ada.king/press` for a member,
+  `/organizations/acme/press` for a page.
 
   For everything holding an owner rather than a route: the doc's canonical URL,
-  the schema.org block, and #2087's page twin. The profile template keeps its
-  verified `~p` sigil, which is a compile-time check this cannot give it.
+  the schema.org block, the card's footer link and the sitemap entry.
+
+  **A page is addressed by its slug here, not by its root handle**, which is
+  where this deviates from `Vutuv.Identity.path/1`. A page that claimed a root
+  handle is canonical at `/acme`, but that handle dispatches the **bare**
+  `/:slug` page alone (`VutuvWeb.Plug.UserResolveSlug`, `dispatch_organization:
+  true` on that one route) — every sub-page of a page lives under
+  `/organizations/:slug/`, exactly as its post permalinks do, and #2086 shipped
+  `Identity.path/1 <> "/press"` here, which answered `/acme/press` for such a
+  page and 404ed.
   """
+  def page_path(%Organization{slug: slug}), do: "/organizations/#{slug}/press"
   def page_path(owner), do: Identity.path(owner) <> "/press"
+
+  @doc """
+  Where this kit is **edited**: `/settings/press` for a member (#2085), the
+  page's own editor for a page (#2087).
+
+  The second path this kind owns, and it needs one owner for the same reason the
+  first does — four surfaces link to it (the section page's "Manage" bridge, the
+  card's add tile, the page's manage menu and the editor's own trail), and a
+  member's editor carries no slug at all while a page's does.
+  """
+  def editor_path(%Organization{slug: slug}), do: "/organizations/#{slug}/press/edit"
+  def editor_path(%User{}), do: "/settings/press"
 
   @doc """
   The one sentence under which every press picture is offered.
@@ -520,6 +564,57 @@ defmodule Vutuv.PressKit do
   end
 
   @doc """
+  The page's own logo file, when it is one the logo shelf could take as a
+  variant: the absolute path of the stored original, or `nil` (#2087).
+
+  **A vector only, deliberately.** A press logo is offered for print, and what a
+  page uploaded as a raster is already the screen-sized copy
+  `Vutuv.OrganizationImageStore` derived from it — handing a journalist a 512 px
+  PNG under the word "logo" is worse than handing them nothing, and it is what
+  the page's own tile already shows. A vector is the one case where the file the
+  page uploaded **is** the printable one, which is why #2082 asked for the
+  one-click offer on exactly that case.
+
+  It asks the disk rather than the row's `content_type`, because the disk is
+  what `adopt_page_logo/3` will copy: an installation restored from a snapshot
+  carries no `originals/` tree, and a button offering a file that is not there
+  would fail on the press instead of never appearing.
+  """
+  def page_logo_source(%Organization{logo: token}) when is_binary(token) do
+    path = OrganizationImageStore.original_path(token)
+
+    if path && Path.extname(path) == ".svg", do: path
+  end
+
+  def page_logo_source(_owner), do: nil
+
+  @doc """
+  Copies that logo onto the page's logo shelf as one more variant — the
+  one-click adoption, which is `create/4` with the page's own file standing in
+  for the upload.
+
+  Through `create/4` and nothing else, so it inherits every rule a picked file
+  meets: the authorization, the shelf cap, the whitelist, the rights stamp and
+  the AI scan. `attrs` are the add form's, the rights tick included — the page
+  holds this file, but releasing it for editorial use with a credit is still a
+  decision somebody makes rather than one adoption may imply.
+  """
+  def adopt_page_logo(%Organization{} = organization, %User{} = viewer, attrs) do
+    case page_logo_source(organization) do
+      nil ->
+        {:error, :invalid_file}
+
+      path ->
+        create(organization, viewer, {path, Path.basename(path)}, Map.put(attrs, "logo", true))
+    end
+  end
+
+  # A member's kit has no page logo to adopt, and the editor offers the button
+  # on a page alone — but the event arrives from a client, so the clause that
+  # cannot happen answers rather than raising.
+  def adopt_page_logo(_owner, _viewer, _attrs), do: {:error, :forbidden}
+
+  @doc """
   Edits one stored picture's label, credit and caption — the only three columns
   a form may write once the file is on disk (`Image.press_kit_update_changeset/2`
   says which are missing and why).
@@ -591,6 +686,29 @@ defmodule Vutuv.PressKit do
       image -> image.credit
     end
   end
+
+  @doc """
+  What the editor's credit field is **offered** ready-filled with: the last
+  picture on that shelf where there is one (`last_credit/1`), and the owner's
+  own name where there is not.
+
+  The fallback is the whole point. A press picture with no credit is one a
+  journalist may not print, and until now a first-time member met an empty field
+  — the shelf they were filling had nothing to copy a line from. The name is
+  right far more often than blank is: most members are photographed by somebody
+  they can name, and the ones who took the picture themselves are named
+  correctly by it.
+
+  The **owner's** name, never the uploader's: a page's press kit belongs to the
+  page, and the colleague who uploads for it is not who the credit names.
+
+  A default, not a value. It is rendered into an ordinary editable input and
+  nothing writes it at save time, so a member who clears the field stores an
+  empty credit — the field says what will be stored, which is the only way a
+  prefill can be honest.
+  """
+  def credit_default(owner, images) when is_list(images),
+    do: last_credit(images) || Identity.display_name(owner)
 
   @doc """
   Releases a press picture the AI gate cleared, and answers `:stale` when the row

@@ -20,6 +20,7 @@ defmodule VutuvWeb.OrganizationController do
   alias Vutuv.Pages
   alias Vutuv.Posts
   alias Vutuv.Posts.Post
+  alias Vutuv.PressKit
   alias Vutuv.Repo
   alias VutuvWeb.AgentDocs
   alias VutuvWeb.AgentDocs.OrganizationDoc
@@ -176,6 +177,20 @@ defmodule VutuvWeb.OrganizationController do
   """
   def apps(conn, %{"slug" => slug}),
     do: manage(conn, slug, VutuvWeb.OrganizationLive.Apps, &Organizations.owner?/2)
+
+  @doc """
+  The page's press-kit editor (issue #2087): `VutuvWeb.PressKitLive`, the very
+  editor `/settings/press` is, mounted with the page as the owner and the
+  signed-in member as the one acting.
+
+  Gated on `Vutuv.PressKit.manageable_by?/2` — its **owners and publishers** —
+  and deliberately not on `Organizations.can_manage?/2` like the tabs beside it:
+  that one also counts the member who claimed the page whether or not they still
+  hold a role, and writing a press kit follows the roles. The LiveView re-asks
+  the same predicate on the socket (`VutuvWeb.OrganizationLive.ManageGate`).
+  """
+  def press(conn, %{"slug" => slug}),
+    do: manage(conn, slug, VutuvWeb.PressKitLive, &PressKit.manageable_by?/2)
 
   def exclusions(conn, %{"slug" => slug}),
     do: manage(conn, slug, VutuvWeb.OrganizationLive.Exclusions, &Organizations.can_manage?/2)

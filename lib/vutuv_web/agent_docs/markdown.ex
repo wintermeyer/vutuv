@@ -283,7 +283,11 @@ defmodule VutuvWeb.AgentDocs.Markdown do
       |> Enum.filter(&is_binary/1)
       |> Enum.join("\n"),
       organization_people(doc),
-      organization_open_positions(doc)
+      organization_open_positions(doc),
+      # The page's press kit (#2087), written by the same line builder the
+      # profile document uses, so a press picture reads the same whoever offers
+      # it.
+      section(gettext("Press"), Enum.map(doc[:press_kit] || [], &press_picture_line/1))
     ]
     |> join_blocks()
   end

@@ -1,16 +1,15 @@
-<%!-- The public press page: every picture whole, with the two facts a
-journalist checks before downloading and a finger-sized download beside them.
-Unlike the other section pages this one is crawlable on purpose — see
-`VutuvWeb.PressKitController` — so it carries schema.org ImageObject markup with
-the licensing properties image search reads. --%>
+<%!-- The public press page of a member (#2086) or a page (#2087): every picture
+whole, with the two facts a journalist checks before downloading and a
+finger-sized download beside them. Nothing here asks which kind of owner it is
+drawing — the shelves, the components and the paths all take one — so the two
+surfaces cannot drift apart. Unlike the other section pages this one is
+crawlable on purpose (see `VutuvWeb.PressKitController`), so it carries
+schema.org ImageObject markup with the licensing properties image search
+reads. --%>
 <.page_header
-  title={gettext("Press photos and logos of %{name}", name: full_name(@user))}
-  manage_to={same_user?(@user, @current_user) && ~p"/settings/press"}
-  crumbs={[
-    gettext("Users"),
-    {full_name(@user), ~p"/#{@user}"},
-    gettext("Press")
-  ]}
+  title={press_heading(@owner)}
+  manage_to={press_manage_to(@owner, @current_user)}
+  crumbs={press_crumbs(@owner)}
 />
 
 <% photos = views(@shelves.photos, @current_user) %>
@@ -20,11 +19,11 @@ the licensing properties image search reads. --%>
 a picture the AI gate still holds, and naming its `contentUrl` here would
 publish an address that answers 404 to everybody else. Only for an owner search
 engines may index at all (`Vutuv.Identity.indexable?/1`, the one answer to that
-question). --%>
+question for a member and for a page alike). --%>
 <% pictures = public_pictures(views(@shelves.photos ++ @shelves.logos, nil)) %>
 <JsonLd.script
-  :if={Vutuv.Identity.indexable?(@user) and pictures != []}
-  data={JsonLd.press_kit_page(@user, pictures, Vutuv.PressKit.rights_line())}
+  :if={Vutuv.Identity.indexable?(@owner) and pictures != []}
+  data={JsonLd.press_kit_page(@owner, pictures, Vutuv.PressKit.rights_line())}
 />
 
 <.card_section empty={@shelves.photos == [] and @shelves.logos == []}>

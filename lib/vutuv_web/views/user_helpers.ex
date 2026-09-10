@@ -531,8 +531,13 @@ defmodule VutuvWeb.UserHelpers do
   pages all fell back to the member's name, so a member's own subpages
   competed with `/:slug` for the same title in search results
   (profile_subpage_titles_test.exs).
+
+  It names the owner through `Vutuv.Identity.display_name/1` (which is all
+  `full_name/1` does), so a page's sub-page can wear the same shape — the press
+  page is served for both owner kinds (#2087) and there must not be a second
+  spelling of this separator.
   """
-  def member_page_title(user, label), do: "#{full_name(user)} · #{label}"
+  def member_page_title(owner, label), do: "#{Vutuv.Identity.display_name(owner)} · #{label}"
 
   def work_information_string(user, len \\ 256)
 

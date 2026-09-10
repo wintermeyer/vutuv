@@ -8,20 +8,21 @@ defmodule VutuvWeb.PressCardClassAvailabilityTest do
   class only this card uses is a class that document cannot draw.
 
   `VutuvWeb.ClassAvailability` runs the check and explains the method; what is
-  here is the two places the press markup lives and how it spells its classes.
-  It covers the section page's markup as well — that page is a dead render and
-  could not be caught out this way, but one bound over the whole module means
-  nobody has to work out which half of it is safe.
+  here is where the press markup lives and how it spells its classes. Since
+  #2087 that is one file: the card was lifted out of the profile template into
+  `press_card/1` when an organization page needed the same one. It covers the
+  section page's markup as well — that page is a dead render and could not be
+  caught out this way, but one bound over the whole module means nobody has to
+  work out which half of it is safe.
   """
   use ExUnit.Case, async: true
 
   alias VutuvWeb.ClassAvailability
 
   @components "lib/vutuv_web/components/press_kit_components.ex"
-  @profile "lib/vutuv_web/templates/user/show.html.heex"
 
   test "every class the press surfaces draw with also ships elsewhere in the tree" do
-    own = [File.read!(@components), card_markup()]
+    own = [File.read!(@components)]
 
     # A vacuous run is this guard's own failure mode: an extractor that reads
     # none of the markup vouches for nothing while passing. The card and the two
@@ -37,17 +38,6 @@ defmodule VutuvWeb.PressCardClassAvailabilityTest do
              "release's stylesheet has no rule for them and a profile tab open across\n" <>
              "a deploy draws the Press card unstyled. Pick a class the tree already\n" <>
              "uses bare:\n" <> Enum.join(orphans, "\n")
-  end
-
-  # The `<.card :if={press_any?…}>` block of the profile template, from its
-  # opening tag to its close. It says so rather than raising a `MatchError` on
-  # nil: renaming that card is the likeliest way to break this guard, and "no
-  # match of right hand side value: nil" names neither.
-  defp card_markup do
-    case Regex.run(~r/(<\.card :if=\{press_any\?.*?<\/\.card>)/s, File.read!(@profile)) do
-      [_, markup] -> markup
-      nil -> flunk("no `<.card :if={press_any?…}>` block in #{@profile}")
-    end
   end
 
   # Both spellings this codebase uses: the literal attribute and the list form.

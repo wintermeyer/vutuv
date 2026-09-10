@@ -1,9 +1,27 @@
 defmodule VutuvWeb.PressKitLive do
   @moduledoc """
-  The member's press-kit editor (`GET /settings/press`, issue #2085): the two
-  shelves `Vutuv.PressKit` holds — up to ten press photos and a handful of logo
-  variants — with the upload, the credit, the caption, the order and the
-  delete.
+  The press-kit editor: the two shelves `Vutuv.PressKit` holds — up to ten press
+  photos and a handful of logo variants — with the upload, the credit, the
+  caption, the order and the delete.
+
+  ## Two hosts, one editor
+
+  A member's own kit is at `GET /settings/press` (issue #2085), routed inside the
+  `:default` live_session, where `VutuvWeb.Live.InitAssigns` has already resolved
+  the viewer and `:settings_pipe` has already turned an anonymous request away.
+  A **page's** kit is at `GET /organizations/:slug/press/edit` (issue #2087),
+  embedded by `VutuvWeb.OrganizationController` — off the router, so no
+  `on_mount` hook runs at all and `mount/3` resolves the viewer itself
+  (`InitAssigns.assign_embedded/2`) and re-asks the role on the socket
+  (`VutuvWeb.OrganizationLive.ManageGate`), because the `organization_id` in the
+  curated session map is signed, not encrypted, and outlives a withdrawn role.
+
+  What that split costs is exactly two things: the chrome (the settings shell
+  against the page's manage tab bar) and the handful of sentences whose German
+  addresses the reader as the owner — `Vutuv.PressKit` itself has taken an owner
+  since #2083, so the shelves, the events and the writes are the same code for
+  both. Two assigns keep it honest: `:owner` is whose kit this is, `:current_user`
+  the member acting, and every write passes both.
 
   ## The authorization, which is this page's real subject
 
@@ -22,9 +40,9 @@ defmodule VutuvWeb.PressKitLive do
   The signed-in member comes from `VutuvWeb.Live.InitAssigns`, i.e. from the
   cookie's `session_token`, never a bare `session["user_id"]` (#1034/#1036).
 
-  A **page's** press kit is not edited here — that is #2087's surface, on the
-  page's own manage menu — but the rule it needs is already written:
-  `manageable_by?/2` answers for an owner or a publisher of the page.
+  `manageable_by?/2` is what the page's editor is gated on as well — an owner or
+  a publisher — asked by the controller for the request, by `ManageGate` for the
+  socket, and by every write for the event.
 
   ## Why a LiveView, and why one editor at a time
 
@@ -55,27 +73,67 @@ defmodule VutuvWeb.PressKitLive do
 
   use VutuvWeb, :live_view
 
+  import VutuvWeb.OrganizationComponents, only: [manage_header: 1]
+
+  alias Vutuv.Accounts.User
   alias Vutuv.Images.Image
   alias Vutuv.Moderation.ImageScans
+  alias Vutuv.Organizations.Organization
   alias Vutuv.PressKit
   alias Vutuv.PressKitStore
   alias VutuvWeb.ErrorHelpers
-
-  on_mount({VutuvWeb.Live.InitAssigns, :require_login})
+  alias VutuvWeb.Live.InitAssigns
+  alias VutuvWeb.OrganizationLive.ManageGate
 
   @impl true
-  def mount(_params, _session, socket) do
-    # `:user` is the press kit's **owner** and `:current_user` the member acting
-    # — the same person on this page, and deliberately named apart, because
-    # #2087's editor differs from this one in exactly that: there the owner is
-    # the page and the viewer one of its staff. `store/3` already passes them as
-    # two arguments for that reason.
-    user = socket.assigns.current_user
+  def mount(_params, session, socket) do
+    if session["organization_id"],
+      do: mount_page(socket, session),
+      else: mount_member(socket)
+  end
 
+  # The routed half. `Live.InitAssigns` has already resolved the viewer from the
+  # session token, and `:settings_pipe` has already refused the anonymous
+  # request that produced this page — the redirect below is the socket's own
+  # copy of that refusal, which used to be the module's `:require_login`
+  # on_mount and cannot be one any more: a hook reading `current_user` raises on
+  # the embedded mount, where nothing has assigned it yet.
+  defp mount_member(socket) do
+    case socket.assigns[:current_user] do
+      %User{} = user ->
+        {:ok, editor(socket, user)}
+
+      _anonymous ->
+        {:ok,
+         socket
+         |> put_flash(:error, gettext("You must be logged in to access that page"))
+         |> redirect(to: ~p"/login")}
+    end
+  end
+
+  # The embedded half (#2087). The viewer comes from the cookie's session token
+  # like everywhere else, and the role is re-asked here rather than trusted from
+  # the controller's signed map — `ManageGate` says why, and takes the very
+  # predicate the controller passed.
+  defp mount_page(socket, session) do
+    socket = InitAssigns.assign_embedded(socket, session)
+
+    case ManageGate.allow(socket, session, &PressKit.manageable_by?/2) do
+      {:ok, organization} -> {:ok, editor(socket, organization)}
+      {:refused, socket} -> {:ok, socket}
+    end
+  end
+
+  # Everything below this line is the same editor for both owners: `:owner` is
+  # whose kit it is, `:current_user` the member acting. They are the same person
+  # on `/settings/press` and deliberately named apart, because on a page's
+  # editor they are not — `PressKit.create/4` has taken them as two arguments
+  # since #2083 for exactly that reason.
+  defp editor(socket, owner) do
     socket =
       socket
       |> assign(:page_title, gettext("Press photos & logos"))
-      |> assign(:user, user)
+      |> assign(:owner, owner)
       # Which tile's edit panel is open; nil = none, which is the whole page for
       # somebody who came here only to upload.
       |> assign(:open, nil)
@@ -91,32 +149,39 @@ defmodule VutuvWeb.PressKitLive do
       # background it was drawn for. A preview only — nothing about it is stored.
       |> assign(:logo_ground, "light")
       |> assign(:error, nil)
+      # Whether the page's own logo may be taken onto the logo shelf (#2087).
+      # Once, here, and not in the shelf's markup: the answer is a `Path.wildcard`
+      # on disk, it cannot change from this page (a page's logo is uploaded on
+      # its Edit form), and an attribute in a component call is rebuilt whenever
+      # any assign that call reads changes — which for the add form is every
+      # debounced keystroke in the credit field and every upload chunk.
+      |> assign(:adopt_logo?, PressKit.page_logo_source(owner) != nil)
       |> load_shelves()
 
-    {:ok,
-     socket
-     # The credit the next upload carries, offered ready-filled from the last
-     # picture on that shelf and editable before the file is picked. Read off
-     # the shelves `load_shelves/1` has just loaded rather than queried again.
-     |> assign(:credits, %{
-       false => PressKit.last_credit(socket.assigns.photos) || "",
-       true => PressKit.last_credit(socket.assigns.logos) || ""
-     })
-     |> allow_upload(:photo,
-       accept: PressKitStore.photo_extensions(),
-       max_entries: PressKit.max_photos(),
-       max_file_size: PressKit.max_filesize(),
-       auto_upload: true,
-       progress: &handle_progress/3
-     )
-     |> allow_upload(:logo,
-       accept: PressKitStore.logo_extensions(),
-       max_entries: PressKit.max_logos(),
-       max_file_size: PressKit.max_filesize(),
-       auto_upload: true,
-       progress: &handle_progress/3
-     )
-     |> load_shelves()}
+    socket
+    # The credit the next upload carries, offered ready-filled and editable
+    # before the file is picked: the last picture on that shelf, or the owner's
+    # own name where the shelf is empty (`PressKit.credit_default/2` says why).
+    # Read off the shelves `load_shelves/1` has just loaded rather than queried
+    # again.
+    |> assign(:credits, %{
+      false => PressKit.credit_default(owner, socket.assigns.photos),
+      true => PressKit.credit_default(owner, socket.assigns.logos)
+    })
+    |> allow_upload(:photo,
+      accept: PressKitStore.photo_extensions(),
+      max_entries: PressKit.max_photos(),
+      max_file_size: PressKit.max_filesize(),
+      auto_upload: true,
+      progress: &handle_progress/3
+    )
+    |> allow_upload(:logo,
+      accept: PressKitStore.logo_extensions(),
+      max_entries: PressKit.max_logos(),
+      max_file_size: PressKit.max_filesize(),
+      auto_upload: true,
+      progress: &handle_progress/3
+    )
   end
 
   ## Events
@@ -183,7 +248,7 @@ defmodule VutuvWeb.PressKitLive do
       image ->
         direction = if dir == "up", do: :up, else: :down
         viewer = socket.assigns.current_user
-        PressKit.move(socket.assigns.user, viewer, Image.logo?(image), id, direction)
+        PressKit.move(socket.assigns.owner, viewer, Image.logo?(image), id, direction)
         {:noreply, load_shelves(socket)}
     end
   end
@@ -201,6 +266,15 @@ defmodule VutuvWeb.PressKitLive do
   def handle_event("logo_ground", %{"ground" => ground}, socket) when ground in ~w(light dark),
     do: {:noreply, assign(socket, :logo_ground, ground)}
 
+  # The page's own logo onto its logo shelf (#2087). Nothing about it is a
+  # shortcut past `create/4`: the same authorization, cap, whitelist, rights
+  # stamp and AI scan, with the stored file standing in for the picked one.
+  def handle_event("adopt_logo", _params, socket) do
+    socket.assigns.owner
+    |> PressKit.adopt_page_logo(socket.assigns.current_user, shelf_attrs(socket, true))
+    |> then(&stored(socket, &1, true))
+  end
+
   # A form with a `phx-change` and no submit still submits on Return, and the
   # credit input is one Return away from the drop zone on a phone keyboard.
   # Named rather than a catch-all: a catch-all also swallows a renamed event,
@@ -210,7 +284,7 @@ defmodule VutuvWeb.PressKitLive do
   ## Writing
 
   defp reorder(socket, logo?, order) do
-    PressKit.reorder(socket.assigns.user, socket.assigns.current_user, logo?, order)
+    PressKit.reorder(socket.assigns.owner, socket.assigns.current_user, logo?, order)
     load_shelves(socket)
   end
 
@@ -222,12 +296,15 @@ defmodule VutuvWeb.PressKitLive do
     Enum.find(socket.assigns.photos ++ socket.assigns.logos, &(&1.id == id))
   end
 
+  # One query for both shelves, not one per shelf: this runs on mount and again
+  # after every save, delete, move, reorder and upload, and the whole kit is at
+  # most fifteen rows.
   defp load_shelves(socket) do
-    user = socket.assigns.user
+    shelves = PressKit.shelves(socket.assigns.owner)
 
     socket
-    |> assign(:photos, PressKit.photos(user))
-    |> assign(:logos, PressKit.logos(user))
+    |> assign(:photos, shelves.photos)
+    |> assign(:logos, shelves.logos)
   end
 
   # `auto_upload: true`, so this runs the moment the last chunk lands.
@@ -241,31 +318,38 @@ defmodule VutuvWeb.PressKitLive do
     # meets, and the changeset is what a crafted client meets. One rule, in the
     # place that already owns it, instead of a copy on this page that nothing
     # could reach to test.
-    attrs = %{
-      "logo" => logo?,
-      "credit" => credit(socket, logo?),
-      "rights_confirmed" => socket.assigns.armed[logo?]
-    }
+    attrs = shelf_attrs(socket, logo?)
 
     result =
       consume_uploaded_entry(socket, entry, fn %{path: path} ->
         {:ok,
          PressKit.create(
-           socket.assigns.user,
+           socket.assigns.owner,
            socket.assigns.current_user,
            {path, entry.client_name},
            attrs
          )}
       end)
 
-    case result do
-      {:ok, _image} ->
-        {:noreply, socket |> assign(:error, nil) |> load_shelves()}
-
-      {:error, reason} ->
-        {:noreply, assign(socket, :error, store_error(reason, logo?))}
-    end
+    stored(socket, result, logo?)
   end
+
+  # What the add form is holding for one shelf, as changeset attrs — the upload
+  # and the page-logo adoption write the same three.
+  defp shelf_attrs(socket, logo?) do
+    %{
+      "logo" => logo?,
+      "credit" => credit(socket, logo?),
+      "rights_confirmed" => socket.assigns.armed[logo?]
+    }
+  end
+
+  # What either way of adding a picture does with the answer.
+  defp stored(socket, {:ok, _image}, _logo?),
+    do: {:noreply, socket |> assign(:error, nil) |> load_shelves()}
+
+  defp stored(socket, {:error, reason}, logo?),
+    do: {:noreply, assign(socket, :error, store_error(reason, logo?))}
 
   defp store_error(:too_many, true),
     do: gettext("No more than %{max} logo variants.", max: compact_count(PressKit.max_logos()))
@@ -318,7 +402,67 @@ defmodule VutuvWeb.PressKitLive do
   @impl true
   def render(assigns) do
     ~H"""
-    <.settings_shell user={@user} active={:press} title={gettext("Press photos & logos")}>
+    <.editor_chrome owner={@owner} viewer={@current_user} title={@page_title}>
+      <.error_banner :if={@error} id="press-error">{@error}</.error_banner>
+
+      <.shelf
+        owner={@owner}
+        viewer={@current_user}
+        logo?={false}
+        images={@photos}
+        upload={@uploads.photo}
+        armed?={@armed[false]}
+        credit={@credits[false]}
+        open={@open}
+      />
+
+      <.shelf
+        owner={@owner}
+        viewer={@current_user}
+        logo?={true}
+        images={@logos}
+        upload={@uploads.logo}
+        armed?={@armed[true]}
+        credit={@credits[true]}
+        open={@open}
+        logo_ground={@logo_ground}
+        adopt_logo?={@adopt_logo?}
+      />
+    </.editor_chrome>
+    """
+  end
+
+  # The one thing the two hosts do not share: where this editor sits, and the
+  # one sentence that says what the shelves are for — which cannot be shared,
+  # because the German of the member's version addresses the reader as the owner
+  # ("Ihr Logo") and a page's team is not the page.
+  attr(:owner, :any, required: true)
+  attr(:viewer, :any, required: true)
+  attr(:title, :string, required: true)
+  slot(:inner_block, required: true)
+
+  defp editor_chrome(%{owner: %Organization{}} = assigns) do
+    ~H"""
+    <div class="mx-auto max-w-2xl py-6">
+      <.manage_header organization={@owner} active={:press} viewer={@viewer} />
+
+      <h1 class="text-2xl font-bold text-slate-900 dark:text-slate-100">{@title}</h1>
+      <p class="mt-1 text-sm text-slate-600 dark:text-slate-400">
+        {gettext(
+          "What a journalist writing about this page may download: photos in print quality and its logo as a file. Everything here is public and free for editorial use as long as the credit is shown."
+        )}
+      </p>
+
+      <div class="mt-6 space-y-6">
+        {render_slot(@inner_block)}
+      </div>
+    </div>
+    """
+  end
+
+  defp editor_chrome(assigns) do
+    ~H"""
+    <.settings_shell user={@owner} active={:press} title={@title}>
       <div class="space-y-6">
         <.card>
           <p class="text-sm text-slate-600 dark:text-slate-400">
@@ -328,34 +472,14 @@ defmodule VutuvWeb.PressKitLive do
           </p>
         </.card>
 
-        <.error_banner :if={@error} id="press-error">{@error}</.error_banner>
-
-        <.shelf
-          user={@user}
-          logo?={false}
-          images={@photos}
-          upload={@uploads.photo}
-          armed?={@armed[false]}
-          credit={@credits[false]}
-          open={@open}
-        />
-
-        <.shelf
-          user={@user}
-          logo?={true}
-          images={@logos}
-          upload={@uploads.logo}
-          armed?={@armed[true]}
-          credit={@credits[true]}
-          open={@open}
-          logo_ground={@logo_ground}
-        />
+        {render_slot(@inner_block)}
       </div>
     </.settings_shell>
     """
   end
 
-  attr(:user, :any, required: true)
+  attr(:owner, :any, required: true)
+  attr(:viewer, :any, required: true)
   attr(:logo?, :boolean, required: true)
   attr(:images, :list, required: true)
   attr(:upload, :any, required: true)
@@ -367,6 +491,10 @@ defmodule VutuvWeb.PressKitLive do
   # tiles' comprehension — a comprehension tracks no per-entry change, so
   # pressing Light/Dark would otherwise re-send every photo tile's dynamics too.
   attr(:logo_ground, :string, default: "light")
+
+  # Likewise only the logo shelf can adopt anything, and the answer is read from
+  # disk once at mount (`editor/2`), never from this markup.
+  attr(:adopt_logo?, :boolean, default: false)
 
   defp shelf(assigns) do
     # `assign/3` and deliberately not `Map.put/3`: the count changes with every
@@ -396,15 +524,7 @@ defmodule VutuvWeb.PressKitLive do
       </div>
 
       <p class="mt-1 text-sm text-slate-600 dark:text-slate-400">
-        {if @logo?,
-          do:
-            gettext(
-              "Your logo as a file, one tile per variant. A vector (SVG) is what a printer asks for; a PNG is what everybody else can open."
-            ),
-          else:
-            gettext(
-              "The first photo is the one shown first. Drag a tile, or use the arrows, to change the order."
-            )}
+        {if @logo?, do: logo_shelf_hint(@owner), else: photo_shelf_hint()}
       </p>
 
       <%!-- The light/dark switch, on the logo shelf alone: a white wordmark on
@@ -440,7 +560,8 @@ defmodule VutuvWeb.PressKitLive do
       >
         <.tile
           :for={{image, index} <- Enum.with_index(@images)}
-          user={@user}
+          owner={@owner}
+          viewer={@viewer}
           image={image}
           index={index}
           last?={index == @count - 1}
@@ -455,6 +576,7 @@ defmodule VutuvWeb.PressKitLive do
         upload={@upload}
         armed?={@armed?}
         credit={@credit}
+        adopt_logo?={@adopt_logo?}
       />
 
       <p
@@ -468,7 +590,8 @@ defmodule VutuvWeb.PressKitLive do
     """
   end
 
-  attr(:user, :any, required: true)
+  attr(:owner, :any, required: true)
+  attr(:viewer, :any, required: true)
   attr(:image, :any, required: true)
   attr(:index, :integer, required: true)
   attr(:last?, :boolean, required: true)
@@ -577,7 +700,7 @@ defmodule VutuvWeb.PressKitLive do
           variant="danger-ghost"
           phx-click="delete"
           phx-value-id={@image.id}
-          data-confirm={gettext("Remove this picture from your press kit?")}
+          data-confirm={remove_confirm(@owner)}
         >
           {gettext("Remove")}
         </.button>
@@ -639,7 +762,7 @@ defmodule VutuvWeb.PressKitLive do
             <.markdown_editor
               id={"press-caption-#{@image.id}"}
               name="picture[caption]"
-              user={@user}
+              user={@viewer}
               value={@image.caption || ""}
               label={gettext("Caption")}
               placeholder={gettext("Who took it, where, and what may be cropped.")}
@@ -665,6 +788,7 @@ defmodule VutuvWeb.PressKitLive do
   attr(:upload, :any, required: true)
   attr(:armed?, :boolean, required: true)
   attr(:credit, :string, required: true)
+  attr(:adopt_logo?, :boolean, default: false)
 
   defp add_form(assigns) do
     assigns = Map.put(assigns, :shelf, PressKit.shelf_name(assigns.logo?))
@@ -746,6 +870,28 @@ defmodule VutuvWeb.PressKitLive do
         <.live_file_input upload={@upload} disabled={not @armed?} class="sr-only" />
       </label>
 
+      <%!-- The page's own logo, taken onto the shelf with one press (#2087),
+      offered only where that file is a vector — a raster logo on this page is
+      already the screen-sized copy, and offering it for print would be a
+      promise the file cannot keep. It is armed by the very tick beside it
+      rather than skipping the gate: the page holds the file, but releasing it
+      for editorial use is still somebody's decision, and one rule beats a
+      second one that only this button knows about. --%>
+      <div :if={@adopt_logo?} class="space-y-1">
+        <.button
+          type="button"
+          id="press-adopt-logo"
+          variant="secondary"
+          phx-click="adopt_logo"
+          disabled={not @armed?}
+        >
+          {gettext("Use the page's own logo")}
+        </.button>
+        <p class="text-xs text-slate-600 dark:text-slate-400">
+          {gettext("Copies the vector file this page's logo was uploaded as onto this shelf.")}
+        </p>
+      </div>
+
       <.upload_problems upload={@upload} />
 
       <div
@@ -793,6 +939,36 @@ defmodule VutuvWeb.PressKitLive do
   end
 
   ## View helpers
+
+  # The three sentences that cannot be one msgid: their German addresses the
+  # reader as the owner of what it describes ("Ihr Logo", "Ihrem Pressebereich"),
+  # and a page's team is not the page. A msgid is a key rather than a phrase, so
+  # a different voice gets one of its own instead of a translation that fits
+  # neither.
+  defp logo_shelf_hint(%Organization{}) do
+    gettext(
+      "The page's logo as a file, one tile per variant. A vector (SVG) is what a printer asks for; a PNG is what everybody else can open."
+    )
+  end
+
+  defp logo_shelf_hint(_owner) do
+    gettext(
+      "Your logo as a file, one tile per variant. A vector (SVG) is what a printer asks for; a PNG is what everybody else can open."
+    )
+  end
+
+  # The photo shelf's is about the order rather than about whose pictures they
+  # are, so both hosts say it.
+  defp photo_shelf_hint do
+    gettext(
+      "The first photo is the one shown first. Drag a tile, or use the arrows, to change the order."
+    )
+  end
+
+  defp remove_confirm(%Organization{}),
+    do: gettext("Remove this picture from this page's press kit?")
+
+  defp remove_confirm(_owner), do: gettext("Remove this picture from your press kit?")
 
   defp shelf_max(true), do: PressKit.max_logos()
   defp shelf_max(false), do: PressKit.max_photos()

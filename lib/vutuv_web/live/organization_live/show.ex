@@ -19,6 +19,7 @@ defmodule VutuvWeb.OrganizationLive.Show do
   import VutuvWeb.FediverseComponents, only: [follow_us_from_elsewhere: 1]
   import VutuvWeb.JobComponents, only: [job_card: 1]
   import VutuvWeb.PostComponents, only: [post_card: 1, post_list: 1, post_row_class: 0]
+  import VutuvWeb.PressKitComponents, only: [press_card: 1]
 
   alias Vutuv.Countries
   alias Vutuv.Fediverse
@@ -27,6 +28,7 @@ defmodule VutuvWeb.OrganizationLive.Show do
   alias Vutuv.Organizations.Organization
   alias Vutuv.Organizations.Screenshots
   alias Vutuv.Posts
+  alias Vutuv.PressKit
   alias Vutuv.Social
   alias VutuvWeb.Fediverse.Docs
   alias VutuvWeb.JsonLd
@@ -141,16 +143,30 @@ defmodule VutuvWeb.OrganizationLive.Show do
   # pasted blocks of markup, because the comment beside them asks for exactly
   # that: they are a hand-kept copy of the manage pages' tab bar, so adding the
   # fifth should be adding a row.
-  defp manage_links(organization, can_edit?, owner?) do
+  # Takes the whole `role_powers/2` answer rather than a boolean per row: the
+  # list grows a row per release, and three adjacent booleans at the call site
+  # are three that can be passed in the wrong order with nothing to warn — the
+  # hazard `<.manage_header>`'s own docstring records having retired.
+  defp manage_links(organization, powers) do
     slug = organization.slug
+    owner? = powers.owner?
 
     Enum.filter(
       [
         %{
-          show?: can_edit?,
+          show?: powers.can_edit?,
           id: nil,
           label: gettext("Edit"),
           path: ~p"/organizations/#{slug}/edit"
+        },
+        # Beside Team and Domains rather than behind Edit: a press kit is the
+        # page's own material, and it is the one manage page a **publisher**
+        # reaches without holding an administrative role at all (#2087).
+        %{
+          show?: PressKit.manageable_by_powers?(powers),
+          id: "organization-manage-press",
+          label: gettext("Press"),
+          path: PressKit.editor_path(organization)
         },
         %{show?: owner?, id: nil, label: gettext("Team"), path: ~p"/organizations/#{slug}/roles"},
         %{
@@ -206,6 +222,13 @@ defmodule VutuvWeb.OrganizationLive.Show do
     # its own grant, so `role_powers/2` reads it from the role list on its own
     # rather than deriving it from the two above.
     |> assign(:publisher?, powers.publisher?)
+    # Who may write the page's press kit (#2087): its owners and its publishers,
+    # read off the `role_powers/2` answer above rather than asked again — the
+    # rule itself stays `Vutuv.PressKit`'s, which is what the editor and the
+    # section page's Manage bridge ask.
+    |> assign(:powers, powers)
+    |> assign(:manage_press?, PressKit.manageable_by_powers?(powers))
+    |> assign(:press, PressKit.public_shelves(organization, viewer))
     # Following a page (issue #1336): a private subscription that pulls its
     # posts into your feed. No approval and no notification — a page has no
     # inbox to be told, the same way following a member needs no permission.
@@ -672,7 +695,7 @@ defmodule VutuvWeb.OrganizationLive.Show do
               label makes that gap louder, since a heading reads as an
               inventory where a trailing row of links did not. --%>
               <div
-                :if={@can_edit? or @owner?}
+                :if={@can_edit? or @owner? or @manage_press?}
                 class="mt-4 border-t border-slate-100 pt-3 dark:border-slate-800"
               >
                 <%!-- The label takes a line of its own rather than leading
@@ -684,7 +707,7 @@ defmodule VutuvWeb.OrganizationLive.Show do
                 <.section_title class="text-xs">{gettext("Page management")}</.section_title>
                 <div class="mt-2 flex flex-wrap items-center gap-x-4 gap-y-2 text-sm">
                   <.link
-                    :for={link <- manage_links(@organization, @can_edit?, @owner?)}
+                    :for={link <- manage_links(@organization, @powers)}
                     id={link.id}
                     navigate={link.path}
                     class="font-semibold text-brand-600 hover:text-brand-700 dark:text-brand-400 dark:hover:text-brand-300"
@@ -842,6 +865,20 @@ defmodule VutuvWeb.OrganizationLive.Show do
               </.button>
             </div>
           </section>
+
+          <%!-- Press (issue #2087): the page's own card, the same one a member's
+          profile carries — the photos as the bento mosaic, the logo variants
+          beside them, and the section page where the files are handed over. It
+          sits below the open positions and above Subscribe: a journalist looking
+          for a printable picture is not the visitor the page opens with, and
+          Subscribe stays the "take me with you" footer. --%>
+          <.press_card
+            id="organization-press"
+            owner={@organization}
+            press={@press}
+            viewer={@current_user}
+            manage_href={@manage_press? && PressKit.editor_path(@organization)}
+          />
 
           <%!-- Subscribe: the one card that answers "how do I follow this page
           without a vutuv account", with both ways to do it. Same card, same

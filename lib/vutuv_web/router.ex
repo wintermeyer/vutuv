@@ -798,6 +798,16 @@ defmodule VutuvWeb.Router do
     # /:slug agent-format catch-all.
     get("/organizations/:slug/roles", OrganizationController, :roles)
     get("/organizations/:slug/domains", OrganizationController, :domains)
+    # The page's press section (issue #2087), the twin of a member's
+    # `/:slug/press`: the public page that hands the files over, and the editor
+    # its owners and publishers reach from the manage menu. Under the page's
+    # **slug** rather than its root handle, like every other sub-page of a page
+    # — the handle dispatches the bare `/:slug` only (`Vutuv.PressKit.page_path/1`
+    # says so once, for every caller that holds an owner rather than a route).
+    # The public one is a `PressKitController` action so the press page has one
+    # home for both owner kinds, agent-format siblings included.
+    get("/organizations/:slug/press", PressKitController, :organization)
+    get("/organizations/:slug/press/edit", OrganizationController, :press)
     # The role-holder standing job-exclusion default (issue #939), live_render
     # like roles/domains. Inherited by every posting attributed to the organization.
     get("/organizations/:slug/exclusions", OrganizationController, :exclusions)

@@ -97,6 +97,55 @@ defmodule VutuvWeb.PressKitLiveTest do
 
   defp ids(images), do: Enum.map(images, & &1.id)
 
+  ## A page's editor (#2087)
+
+  defp open_page_editor(conn, organization), do: live(conn, PressKit.editor_path(organization))
+
+  # A second member of the page's team, signed in — the colleague whose view of
+  # a picture somebody else uploaded is what #2087's gate is about. Its own
+  # `build_conn/0`, because this module's setup already signed a member in on
+  # the test's conn and a sent conn cannot make a second request.
+  defp member_with_role(organization, role, granted_by) do
+    # The page's own verification mail is already in this process's mailbox and
+    # `sent_pin/0` reads the oldest `{:email, _}` it finds, so the login below
+    # would read a message with no PIN in it.
+    _ = flush_emails()
+    {member_conn, member} = create_and_login_user(fresh_conn())
+    {:ok, _} = Vutuv.Organizations.add_role(organization, member, role, granted_by)
+    {member_conn, member}
+  end
+
+  # What `VutuvWeb.ConnCase`'s own setup hands each test, built again for a
+  # second member.
+  defp fresh_conn, do: build_conn() |> Plug.Test.init_test_session(%{})
+
+  # The page's own logo, as a vector — the file the one-click adoption copies.
+  defp with_svg_logo(organization, owner, tmp) do
+    path = Path.join(tmp, "mark-#{System.unique_integer([:positive])}.svg")
+
+    File.write!(path, """
+    <svg xmlns="http://www.w3.org/2000/svg" width="240" height="80" viewBox="0 0 240 80">
+      <rect width="240" height="80" fill="#0a5" />
+      <circle cx="60" cy="40" r="24" fill="#fff" />
+    </svg>
+    """)
+
+    store_logo!(organization, owner, path, "mark.svg")
+  end
+
+  defp with_png_logo(organization, owner, tmp) do
+    path = Path.join(tmp, "mark-#{System.unique_integer([:positive])}.png")
+    {:ok, img} = Image.new(240, 80, color: [0, 170, 85])
+    {:ok, _} = Image.write(img, path)
+
+    store_logo!(organization, owner, path, "mark.png")
+  end
+
+  defp store_logo!(organization, owner, path, filename) do
+    {:ok, _organization} = Vutuv.Organizations.store_logo(organization, owner, path, filename)
+    Repo.reload!(organization)
+  end
+
   describe "the page" do
     test "lists the member's own press photos", %{conn: conn, user: user, tmp: tmp} do
       photo = add_photo!(user, tmp, %{"caption" => "Am Schreibtisch"})
@@ -287,6 +336,37 @@ defmodule VutuvWeb.PressKitLiveTest do
       {:ok, _live, html} = open(conn)
 
       assert html =~ ~s(value="Foto: Grace Hopper")
+    end
+
+    test "an empty shelf offers the member's own name instead of an empty field", %{
+      conn: conn,
+      user: user
+    } do
+      {:ok, live, _html} = open(conn)
+
+      name = Vutuv.Identity.display_name(user)
+
+      # Both shelves: a member with nothing on either meets their own name twice
+      # rather than two empty fields.
+      assert has_element?(live, "#press-new-credit-photo[value='#{name}']")
+      assert has_element?(live, "#press-new-credit-logo[value='#{name}']")
+    end
+
+    test "it stays a default: a cleared field stores an empty credit", %{
+      conn: conn,
+      user: user,
+      tmp: tmp
+    } do
+      {:ok, live, _html} = open(conn)
+
+      live
+      |> form("#press-add-photo", %{"shelf" => "photo", "rights" => "on", "credit" => ""})
+      |> render_change()
+
+      upload_photo(live, tmp)
+
+      assert [photo] = PressKit.photos(user)
+      assert photo.credit in [nil, ""]
     end
   end
 
@@ -499,6 +579,184 @@ defmodule VutuvWeb.PressKitLiveTest do
       notice = %{kind: "image_rejected", image_kind: "press_kit", category: "nudity"}
 
       assert VutuvWeb.NotificationLine.notification_target(notice, user) == "/settings/press"
+    end
+  end
+
+  describe "a page's press kit editor" do
+    setup %{conn: conn, user: user} do
+      put_config(:verify_organization_domains, true)
+      organization = active_organization_for(user)
+
+      {:ok, conn: conn, organization: organization, owner: user}
+    end
+
+    test "its owner opens it, and the page's manage menu points there", %{
+      conn: conn,
+      organization: organization
+    } do
+      {:ok, _live, html} = open_page_editor(conn, organization)
+
+      assert html =~ ~s(data-press-shelf="photo")
+      assert html =~ ~s(data-press-shelf="logo")
+
+      page = conn |> get(~p"/organizations/#{organization.slug}") |> html_response(200)
+      assert page =~ "organization-manage-press"
+      assert page =~ PressKit.editor_path(organization)
+    end
+
+    test "a publisher opens it and writes the page's kit, an outsider gets nothing", %{
+      organization: organization,
+      owner: owner,
+      tmp: tmp
+    } do
+      {publisher_conn, publisher} = member_with_role(organization, "publisher", owner)
+      _ = flush_emails()
+      {outsider_conn, _outsider} = create_and_login_user(fresh_conn())
+
+      {:ok, live, _html} = open_page_editor(publisher_conn, organization)
+
+      live
+      |> confirm_rights("photo", "Foto: Rea Fotografin")
+      |> upload_photo(tmp)
+
+      assert [photo] = PressKit.photos(organization)
+      # The row is the page's; the colleague who uploaded it is only recorded,
+      # which is what keeps it when their account goes (#2087).
+      assert photo.organization_id == organization.id
+      assert is_nil(photo.user_id)
+      assert photo.uploader_user_id == publisher.id
+
+      assert outsider_conn |> get(PressKit.editor_path(organization)) |> html_response(404)
+    end
+
+    test "a role that is neither owner nor publisher is refused", %{
+      organization: organization,
+      owner: owner
+    } do
+      {recruiter_conn, _recruiter} = member_with_role(organization, "recruiter", owner)
+
+      assert recruiter_conn |> get(PressKit.editor_path(organization)) |> html_response(404)
+    end
+
+    test "a picture waiting for the AI check is on every team member's editor", %{
+      conn: conn,
+      organization: organization,
+      owner: owner,
+      tmp: tmp
+    } do
+      # Uploaded by one colleague…
+      {publisher_conn, _publisher} = member_with_role(organization, "publisher", owner)
+      put_config(:moderate_images, true)
+      {:ok, live, _html} = open_page_editor(publisher_conn, organization)
+
+      live
+      |> confirm_rights("photo", "Foto: Rea Fotografin")
+      |> upload_photo(tmp)
+
+      assert [photo] = PressKit.photos(organization)
+      assert photo.moderation == "pending"
+
+      # …and looked at by another, who has to be able to see what is being
+      # checked. The editor lists the **page's** shelf, not the uploader's.
+      {:ok, _other_live, html} = open_page_editor(conn, organization)
+
+      assert html =~ "data-press-picture=\"#{photo.id}\""
+      assert html =~ "Being checked"
+    end
+
+    test "the page's own vector logo is one press away, and the file it copies stays", %{
+      conn: conn,
+      organization: organization,
+      owner: owner,
+      tmp: tmp
+    } do
+      organization = with_svg_logo(organization, owner, tmp)
+      source = Vutuv.OrganizationImageStore.original_path(organization.logo)
+
+      {:ok, live, _html} = open_page_editor(conn, organization)
+
+      # Armed by the shelf's own rights tick, like the picker beside it.
+      assert has_element?(live, "#press-adopt-logo[disabled]")
+
+      live
+      |> confirm_rights("logo", "Logo: Acme GmbH")
+      |> element("#press-adopt-logo")
+      |> render_click()
+
+      assert [logo] = PressKit.logos(organization)
+      assert logo.content_type == "image/svg+xml"
+      assert logo.organization_id == organization.id
+      assert logo.rights_confirmed_at
+
+      # Copied, never moved: the page's own logo must still be there.
+      assert File.exists?(source)
+    end
+
+    test "the credit field offers the page's name, not the uploading member's", %{
+      organization: organization,
+      owner: owner
+    } do
+      {publisher_conn, publisher} = member_with_role(organization, "publisher", owner)
+
+      {:ok, live, _html} = open_page_editor(publisher_conn, organization)
+
+      # The kit belongs to the page, so the credit it offers names the page —
+      # the colleague uploading for it is not who a journalist must print. The
+      # refute is on the field, not on the page: the member's own name is in the
+      # chrome of every page they are signed in to.
+      assert has_element?(live, "#press-new-credit-photo[value='#{organization.name}']")
+
+      refute has_element?(
+               live,
+               "#press-new-credit-photo[value='#{Vutuv.Identity.display_name(publisher)}']"
+             )
+    end
+
+    test "a raster logo is not offered, since its file is not the printable one", %{
+      conn: conn,
+      organization: organization,
+      owner: owner,
+      tmp: tmp
+    } do
+      organization = with_png_logo(organization, owner, tmp)
+
+      {:ok, live, _html} = open_page_editor(conn, organization)
+
+      refute has_element?(live, "#press-adopt-logo")
+    end
+
+    test "a page with no logo at all is offered nothing", %{
+      conn: conn,
+      organization: organization
+    } do
+      {:ok, live, _html} = open_page_editor(conn, organization)
+
+      refute has_element?(live, "#press-adopt-logo")
+    end
+
+    test "the page says the German words, in the page's own voice", %{
+      conn: conn,
+      organization: organization,
+      owner: owner,
+      tmp: tmp
+    } do
+      organization = with_svg_logo(organization, owner, tmp)
+      conn = conn |> recycle() |> put_req_header("accept-language", "de-DE,de")
+
+      {:ok, _live, html} = open_page_editor(conn, organization)
+
+      # The shelves and their gate, in German…
+      assert html =~ "Pressefotos"
+      assert html =~ "Logo-Varianten"
+      assert html =~ "Rechte"
+      # …and the two sentences that had to leave the member's msgid behind,
+      # because its German addresses the reader as the owner ("Ihr Logo",
+      # "über Sie schreibt") and a page's team is not the page. Both were
+      # fuzzy-filled with exactly that member-voiced German by
+      # `gettext.extract --merge`, which is why they are asserted by name.
+      assert html =~ "Was eine Redaktion, die über diese Seite schreibt"
+      assert html =~ "Das Logo dieser Seite als Datei"
+      assert html =~ "Logo dieser Seite verwenden"
     end
   end
 
