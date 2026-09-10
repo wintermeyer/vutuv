@@ -793,11 +793,44 @@ defmodule VutuvWeb.Markdown do
   # `map_outside_code/2` keeps a code fence's line continuations (`curl \`)
   # verbatim, and the lookbehind keeps an escaped backslash (`\\`) at a line end,
   # which is a literal character and not a break.
+  #
+  # The **last** line of a block is the second half of the same bug, and it does
+  # not respell: CommonMark reads a trailing backslash there as a literal
+  # character rather than a break (there is no next line to break to), so
+  # re-opening such a post in the composer parses it as text and re-saving
+  # escapes it to `\\` — which every later render then shows as a visible `\`
+  # at the end of the paragraph (reported 2026-09-10 on an edited post; the
+  # first save read clean, the edit is what made the character). Neither
+  # spelling means anything at a block end, so drop the whole run there rather
+  # than respell it. Measured over the 887 stored bodies of the 2026-09-08
+  # production copy: 29 carry a block-ending backslash, none carry a
+  # deliberately escaped one, so this deletes no character anybody typed.
+  #
+  # A backslash run with a blank line after it ends its block; anything else on
+  # a line end is an interior break, where the break is real. The end of the
+  # whole text is a block end too, and is judged on the JOINED result rather
+  # than per chunk: `split_code_regions/1` cuts at an inline code span as well,
+  # so a chunk's end is not the text's end — a real break whose next line
+  # happens to open with `code` would lose it.
+  @block_end_backslash ~r/\\+(?=[ \t]*\r?\n[ \t]*\r?\n)/
+  @interior_break ~r/(?<!\\)\\(\r?\n)/
+  @text_end_backslash ~r/\\+(?=[ \t]*(?:\r?\n[ \t]*)*\z)/
+
   defp normalize_hard_breaks(text) do
-    if String.contains?(text, "\\"), do: map_outside_code(text, &hard_break_chunk/1), else: text
+    if String.contains?(text, "\\") do
+      text
+      |> map_outside_code(&hard_break_chunk/1)
+      |> String.replace(@text_end_backslash, "")
+    else
+      text
+    end
   end
 
-  defp hard_break_chunk(chunk), do: Regex.replace(~r/(?<!\\)\\(\r?\n)/, chunk, "  \\1")
+  defp hard_break_chunk(chunk) do
+    chunk
+    |> String.replace(@block_end_backslash, "")
+    |> String.replace(@interior_break, "  \\1")
+  end
 
   @doc """
   Render a feed preview: the Markdown source is cut at a block boundary

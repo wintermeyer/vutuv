@@ -203,6 +203,32 @@ defmodule VutuvWeb.MarkdownTest do
       # is the one place that backslash is content rather than an editor artifact.
       assert render("```\ncurl \\\n  https://example.com\n```") =~ "curl \\"
     end
+
+    test "a break on the last line of a block leaves no character behind" do
+      # The second half of the same bug, and the one that survives a round trip:
+      # CommonMark makes no break at the end of a paragraph, so a backslash
+      # there is a literal character. Re-opening the post in the composer parses
+      # it as text and re-saving escapes it to `\\` — which is what a member's
+      # edited post showed as a stray `\` at the end of a paragraph (2026-09-10).
+      # Both spellings mean nothing at a block end, so neither may show.
+      refute render("Ein Satz.\\\n\nWeiter unten.") =~ "\\"
+      refute render("Ein Satz.\\\\\n\nWeiter unten.") =~ "\\"
+      refute render("Der letzte Satz.\\\\") =~ "\\"
+
+      # …and the break the writer really made is untouched.
+      assert render("Ein Satz.\\\\\n\nWeiter unten.") =~ "Ein Satz."
+      assert render("line one\\\nline two") =~ "<br"
+    end
+
+    test "keeps an escaped backslash that ends a line inside a paragraph" do
+      # Not a block end: another line of the same paragraph follows, so this is
+      # the deliberate literal character the `\\` spelling exists for.
+      assert render("C:\\\\\nweiter im Absatz") =~ "C:\\"
+    end
+
+    test "leaves a fenced block's last-line backslash alone" do
+      assert render("```\ncurl https://example.com \\\n```") =~ "\\"
+    end
   end
 
   describe "post line breaks (breaks: false)" do
@@ -228,6 +254,13 @@ defmodule VutuvWeb.MarkdownTest do
       # Milkdown serializes a real in-paragraph break as a trailing backslash, so
       # a post written with a deliberate line break keeps it even with breaks off.
       assert post("line one\\\nline two") =~ "<br"
+    end
+
+    test "a break survives a next line that opens with inline code" do
+      # `split_code_regions/1` cuts at an inline code span too, so the chunk
+      # before it ends where the code begins — which looks exactly like the end
+      # of the text unless the block-end rule is judged on the whole body.
+      assert post("Nutze das:\\\n`--verbose` schaltet mehr Ausgabe an") =~ "<br"
     end
 
     test "a blank line still starts a new paragraph" do
