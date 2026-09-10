@@ -141,7 +141,8 @@ defmodule Vutuv.UploadsIntegrationTest do
              |> User.changeset(%{avatar: upload})
              |> Repo.update()
 
-    assert "is not a valid image" in errors_on(changeset).avatar
+    assert [refusal] = errors_on(changeset).avatar
+    assert refusal =~ "We cannot read this file."
   end
 
   test "uploading a cover photo stores the file name and writes files to disk", %{tmp: tmp} do
@@ -239,7 +240,8 @@ defmodule Vutuv.UploadsIntegrationTest do
              |> User.changeset(%{cover_photo: upload})
              |> Repo.update()
 
-    assert "is not a valid image" in errors_on(changeset).cover_photo
+    assert [refusal] = errors_on(changeset).cover_photo
+    assert refusal =~ "We cannot read this file."
   end
 
   test "a legacy screenshot value resolves and uploads store a fingerprint", %{tmp: tmp} do

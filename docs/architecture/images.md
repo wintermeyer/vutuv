@@ -96,6 +96,18 @@ Pending gallery uploads (a composer that was never submitted) are swept after a
 day by `Vutuv.Posts.PendingImageSweeper`, which cleans **both** the post and the
 job-posting galleries (rows and files).
 
+### What a profile picture may be
+
+`Vutuv.Uploads.extension_whitelist/0` delegates to the post photo's list, and
+`max_filesize/0` reads `:profile_images` from the config. Both feed the `accept`
+attribute, the hint under the field and the two refusals in
+`Vutuv.Accounts.User`, so nothing states a rule the server does not enforce.
+
+Until then it was the narrowest whitelist on the site — JPEG and PNG at 2 MB
+against a post photo's WebP and HEIC at 50 MB — so the first upload a new member
+ever makes was the one most likely to be refused, and the refusal named neither
+the formats nor the cap.
+
 ### SVG (organization logos, press logos)
 
 An **organization logo** or a **press-kit logo variant** (#2083) may also be

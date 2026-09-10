@@ -457,7 +457,9 @@ defmodule Vutuv.AvatarTest do
       changeset = User.changeset(@user, %{"avatar" => upload})
 
       refute changeset.valid?
-      assert {"is not a valid image", _} = changeset.errors[:avatar]
+
+      assert {"We cannot read this file. Please upload one of these formats: %{formats}.", _} =
+               changeset.errors[:avatar]
     end
   end
 

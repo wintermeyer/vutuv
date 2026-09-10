@@ -9,7 +9,9 @@ defmodule Vutuv.Accounts.User do
   alias Vutuv.Mentions
   alias Vutuv.Prefs
   alias Vutuv.Tags.Tag
+  alias Vutuv.Uploads
   alias Vutuv.WebAddress
+  alias VutuvWeb.UI
   @derive {Phoenix.Param, key: :username}
 
   # How a job-seeking member wants to work. Deliberately the same three values
@@ -776,8 +778,6 @@ defmodule Vutuv.Accounts.User do
     do:
       ~w(notification_emails? email_on_endorsement? email_on_follower? email_on_reference_check? newsletter_emails? saved_search_emails?)a
 
-  @max_image_filesize Application.compile_env!(:vutuv, [VutuvWeb.Endpoint, :max_image_filesize])
-
   # Deliberately does NOT cast :emails: an address is an identity that must be
   # PIN-verified before it is attached (EmailController.create/confirm, issue
   # #759). Only registration_changeset/2 accepts the initial address, which the
@@ -1219,7 +1219,7 @@ defmodule Vutuv.Accounts.User do
     do: validate_avatar(changeset, %{"avatar" => avatar})
 
   defp validate_avatar(changeset, %{"avatar" => %Plug.Upload{} = upload}),
-    do: validate_image_upload(changeset, :avatar, upload, "Avatar")
+    do: validate_image_upload(changeset, :avatar, upload)
 
   defp validate_avatar(changeset, _params), do: changeset
 
@@ -1227,21 +1227,38 @@ defmodule Vutuv.Accounts.User do
     do: validate_cover_photo(changeset, %{"cover_photo" => cover_photo})
 
   defp validate_cover_photo(changeset, %{"cover_photo" => %Plug.Upload{} = upload}),
-    do: validate_image_upload(changeset, :cover_photo, upload, "Cover photo")
+    do: validate_image_upload(changeset, :cover_photo, upload)
 
   defp validate_cover_photo(changeset, _params), do: changeset
 
-  defp validate_image_upload(changeset, field, %Plug.Upload{} = upload, label) do
+  # Both refusals say what to do next, and both are translated (the anchors in
+  # VutuvWeb.ErrorHelpers put the msgids into errors.pot). The pair they
+  # replace — "Avatar filesize is greater than 2MB" and a bare "is not a valid
+  # image" — reached a German member in English, named neither the formats nor
+  # the real cap, and sat directly above the gravatar.com button, which is why
+  # the dead end read as "you need a Gravatar account to have a picture here".
+  # The size sentence is the one `VutuvWeb.UI.upload_problem_message/2` already
+  # gives a LiveView upload, word for word, so the site refuses an oversized
+  # file the same way wherever it is dropped.
+  defp validate_image_upload(changeset, field, %Plug.Upload{} = upload) do
+    cap = Uploads.max_filesize()
+
     cond do
-      File.stat!(upload.path).size > @max_image_filesize ->
+      File.stat!(upload.path).size > cap ->
         add_error(
           changeset,
           field,
-          "#{label} filesize is greater than 2MB. Please upload a smaller image."
+          "That file is larger than %{limit}. Please upload a smaller one.",
+          limit: UI.megabyte_label(cap)
         )
 
-      not Vutuv.Uploads.valid_upload?(upload) ->
-        add_error(changeset, field, "is not a valid image")
+      not Uploads.valid_upload?(upload) ->
+        add_error(
+          changeset,
+          field,
+          "We cannot read this file. Please upload one of these formats: %{formats}.",
+          formats: UI.format_list(Uploads.extension_whitelist())
+        )
 
       true ->
         changeset

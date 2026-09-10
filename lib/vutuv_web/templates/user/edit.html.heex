@@ -11,6 +11,18 @@ lands here). --%>
 
     <.card>
       <.section_title>{gettext("Photos")}</.section_title>
+      <%!-- What the box takes, said once for both pictures. The accept list is
+      the whitelist itself and not "image/*": with the wide one the picker
+      happily offered a HEIC or a TIFF the server then refused after the upload,
+      which on a phone is a minute of somebody's uplink spent on a dead end.
+      Both halves are derived — an installation whose libvips decodes HEIC
+      accepts more, and the cap is a config value. --%>
+      <% picture_accept = Enum.join(Vutuv.Uploads.extension_whitelist(), ",") %>
+      <% picture_limits =
+        gettext("%{formats}, up to %{limit}",
+          formats: format_list(Vutuv.Uploads.extension_whitelist()),
+          limit: megabyte_label(Vutuv.Uploads.max_filesize())
+        ) %>
       <div class="mt-4 grid gap-5 sm:grid-cols-2">
         <%!-- Avatar: preview the current avatar (the real photo, or the initials
         tile visitors currently see) above the upload, so the owner sees what
@@ -42,7 +54,7 @@ lands here). --%>
             </span>
           </div>
           <%= file_input f, :avatar,
-            accept: "image/*",
+            accept: picture_accept,
             class: "mt-3 block w-full text-sm text-slate-600 file:mr-3 file:rounded-lg file:border-0 file:bg-brand-50 file:px-3 file:py-2 file:text-sm file:font-semibold file:text-brand-700 hover:file:bg-brand-100 dark:text-slate-300 dark:file:bg-brand-800/60 dark:file:text-brand-100",
             data: [
               crop_target: "user_avatar_crop",
@@ -59,6 +71,7 @@ lands here). --%>
             id: "user_avatar_crop",
             value: Vutuv.Images.crop(@user, "avatar") %>
           <% {avatar_w, avatar_h} = recommended_avatar_size() %>
+          <p class="mt-1 text-xs text-slate-600 dark:text-slate-400">{picture_limits}</p>
           <p class="mt-1 text-xs text-slate-600 dark:text-slate-400">
             {gettext("Recommended: square, at least %{width} × %{height} pixels.",
               width: delimited_count(avatar_w),
@@ -126,7 +139,7 @@ lands here). --%>
             </figcaption>
           </figure>
           <%= file_input f, :cover_photo,
-            accept: "image/*",
+            accept: picture_accept,
             class: "mt-3 block w-full text-sm text-slate-600 file:mr-3 file:rounded-lg file:border-0 file:bg-brand-50 file:px-3 file:py-2 file:text-sm file:font-semibold file:text-brand-700 hover:file:bg-brand-100 dark:text-slate-300 dark:file:bg-brand-800/60 dark:file:text-brand-100",
             data: [
               crop_target: "user_cover_crop",
@@ -141,6 +154,7 @@ lands here). --%>
             id: "user_cover_crop",
             value: Vutuv.Images.crop(@user, "cover") %>
           <% {cover_w, cover_h} = recommended_cover_size() %>
+          <p class="mt-1 text-xs text-slate-600 dark:text-slate-400">{picture_limits}</p>
           <p class="mt-1 text-xs text-slate-600 dark:text-slate-400">
             {gettext("Recommended: %{width} × %{height} pixels (%{ratio}).",
               width: delimited_count(cover_w),
