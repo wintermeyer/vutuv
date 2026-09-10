@@ -79,6 +79,7 @@ defmodule VutuvWeb.PostLive.Composer do
   alias Vutuv.Organizations.Organization
   alias Vutuv.Posts
   alias Vutuv.Posts.GalleryLayout
+  alias Vutuv.Posts.Pending
   alias Vutuv.Posts.PhotoLicense
   alias Vutuv.Posts.Post
   alias Vutuv.Posts.PostDraft
@@ -91,6 +92,7 @@ defmodule VutuvWeb.PostLive.Composer do
   alias VutuvWeb.Live.VideoProgress
   alias VutuvWeb.PostComponents
 
+  import VutuvWeb.PendingPostComponents, only: [file_label: 1, file_tone: 1]
   import VutuvWeb.VideoComponents, only: [video_tile: 1, stage_line: 1, clock: 1]
 
   @presets ~w(public followers connections only_me custom)
@@ -1162,33 +1164,29 @@ defmodule VutuvWeb.PostLive.Composer do
       fill: socket.assigns.fill?
     }
 
-    save_with_video(socket, attrs)
+    save_with_media(socket, attrs)
   end
 
-  # A post with a clip (issue #1910) is created only once the clip is ready;
-  # until then the composer's submission waits as a pending post the feed
-  # shows as a card, and the composer clears as if it had posted. A refused
-  # clip has to be removed first — the text is not lost, the button next to
-  # the tile says so.
-  defp save_with_video(%{assigns: %{video: nil}} = socket, attrs),
+  # A post whose media are not finished (issues #1910, #2106) is created only
+  # once they are; until then the composer's submission waits as a pending post
+  # the feed shows as a card, and the composer clears as if it had posted. A
+  # refused clip has to be removed first — the text is not lost, the button
+  # next to the tile says so.
+  defp save_with_media(%{assigns: %{video: nil, attachments: []}} = socket, attrs),
     do: socket.assigns |> save_post(attrs) |> handle_save_result(socket)
 
-  # An edit: the clip stays as it is; its alt text is written on blur by
-  # `update_video_alt/2`, like a new post's.
-  defp save_with_video(%{assigns: %{video: %PostVideo{post_id: post_id}}} = socket, attrs)
+  # An edit: the media stay as they are; the clip's alt text is written on blur
+  # by `update_video_alt/2`, like a new post's.
+  defp save_with_media(%{assigns: %{video: %PostVideo{post_id: post_id}}} = socket, attrs)
        when is_binary(post_id),
        do: socket.assigns |> save_post(attrs) |> handle_save_result(socket)
 
-  defp save_with_video(%{assigns: %{video: %PostVideo{} = video}} = socket, attrs) do
-    video = Videos.get_video(video.id) || video
+  defp save_with_media(%{assigns: %{video: video}} = socket, attrs) do
+    video = video && (Videos.get_video(video.id) || video)
+    files = reload_attachments(socket.assigns.current_user, socket.assigns.attachments)
 
     cond do
-      PostVideo.ready?(video) ->
-        socket.assigns
-        |> save_post(Map.put(attrs, :video_id, video.id))
-        |> handle_save_result(socket)
-
-      PostVideo.refused?(video) ->
+      video && PostVideo.refused?(video) ->
         {:noreply,
          assign(
            socket,
@@ -1196,16 +1194,44 @@ defmodule VutuvWeb.PostLive.Composer do
            gettext("Remove the refused video to post the text without it.")
          )}
 
-      true ->
-        {kind, context} = post_context(socket.assigns)
-        user = socket.assigns.current_user
+      media_ready?(video, files) ->
+        socket.assigns
+        |> save_post(with_media_ids(attrs, video, files))
+        |> handle_save_result(socket)
 
-        case Videos.create_pending_post(user, video, kind, context, attrs) do
-          {:ok, pending} -> handle_pending_result(pending, socket)
-          {:error, reason} -> {:noreply, assign(socket, :error, save_error_message(reason))}
-        end
+      true ->
+        park(socket, attrs, video, files)
     end
   end
+
+  # Nothing left to wait for: the clip converted and checked, every file
+  # rendered and every preview page past the AI check. `Vutuv.Posts.Pending`
+  # owns that question, so the composer and the publisher cannot disagree
+  # about what "done" means.
+  defp media_ready?(video, files) do
+    (is_nil(video) or PostVideo.ready?(video)) and Pending.files_done?(files)
+  end
+
+  defp with_media_ids(attrs, video, files) do
+    attrs
+    |> Map.put(:attachment_ids, Enum.map(files, & &1.id))
+    |> then(fn attrs -> if video, do: Map.put(attrs, :video_id, video.id), else: attrs end)
+  end
+
+  defp park(socket, attrs, video, files) do
+    {kind, context} = post_context(socket.assigns)
+    user = socket.assigns.current_user
+
+    case Pending.create(user, kind, context, attrs, video: video, attachments: files) do
+      {:ok, pending} -> handle_pending_result(pending, socket)
+      {:error, reason} -> {:noreply, assign(socket, :error, save_error_message(reason))}
+    end
+  end
+
+  # The rows as they stand now: a render or a verdict may have landed while the
+  # author was writing, and the socket's copies are from upload time.
+  defp reload_attachments(user, attachments),
+    do: Attachments.pending_for(user, Enum.map(attachments, & &1.id))
 
   # Which of the five create paths this composer is, in the vocabulary
   # `Vutuv.Posts.create_in_context/4` takes — for a post saved now and for one
@@ -2783,10 +2809,18 @@ defmodule VutuvWeb.PostLive.Composer do
       <span
         :for={attachment <- @attachments}
         class="inline-flex max-w-full items-center gap-2 rounded-lg border border-slate-200 py-1 pl-3 pr-1 text-sm text-slate-700 dark:border-slate-700 dark:text-slate-200"
+        data-attachment-chip={attachment.id}
+        data-file-state={Pending.file_state(attachment)}
       >
         <span class="truncate">📎 {attachment.file_name}</span>
         <span class="shrink-0 text-xs text-slate-500 dark:text-slate-400">
           {file_size(attachment.size_bytes)}
+        </span>
+        <%!-- Where the server is with this file (issue #2106). The author is
+        about to press Post, so it says whether that will publish now or
+        park the text — "being prepared" is not decoration here. --%>
+        <span class={["shrink-0 text-xs", file_tone(Pending.file_state(attachment))]}>
+          {file_label(Pending.file_state(attachment))}
         </span>
         <button
           type="button"

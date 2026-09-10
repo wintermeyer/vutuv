@@ -70,6 +70,7 @@ defmodule Vutuv.Attachments.Pages do
   alias Vutuv.MediaJobs
   alias Vutuv.Moderation.ImageScans
   alias Vutuv.Moderation.Pixelation
+  alias Vutuv.Posts.Pending
   alias Vutuv.Repo
   alias Vutuv.Uploads
   alias Vutuv.UUIDv7
@@ -126,6 +127,13 @@ defmodule Vutuv.Attachments.Pages do
   defp config, do: Application.fetch_env!(:vutuv, :attachments)
 
   ## Reading
+
+  @doc """
+  How many pages this file's render is aiming for — what the author's waiting
+  card counts against to say "rendering page 2 of 3" (issue #2106).
+  """
+  def wanted_count(%Attachment{} = attachment),
+    do: length(wanted_positions(attachment))
 
   @doc "This file's preview pages, first page first."
   def list(%Attachment{id: id}), do: Repo.all(page_query(id))
@@ -196,6 +204,39 @@ defmodule Vutuv.Attachments.Pages do
     Repo.delete_all(from(i in Image, where: i.id == ^page.id))
     if token, do: AttachmentStore.delete_page(token, page.position)
     :ok
+  end
+
+  @doc """
+  A page cleared the AI check: the file may now be everything a post was
+  waiting for (issue #2106), so the author's surfaces are told and the waiting
+  post is published if this was the last thing.
+  """
+  def page_settled(%Image{kind: @kind} = page) do
+    case attachment_of(page) do
+      nil ->
+        :ok
+
+      attachment ->
+        Pending.broadcast_attachment(attachment)
+        Pending.media_changed(:attachment, attachment.id)
+        :ok
+    end
+  end
+
+  @doc """
+  A page was refused by the AI check. The **file** is not deleted — that is the
+  upload gate's question — but a post waiting on it stops waiting and its
+  author is offered the two ways out (issue #2106).
+  """
+  def page_refused(%Image{kind: @kind} = page) do
+    case attachment_of(page) do
+      nil ->
+        :ok
+
+      attachment ->
+        Vutuv.Attachments.refuse(attachment)
+        :ok
+    end
   end
 
   @doc "Drops the pixelated stand-in a verdict has ended the wait for."
@@ -457,7 +498,17 @@ defmodule Vutuv.Attachments.Pages do
       set: [stage: "ready", worked_at: nil]
     )
 
-    %{attachment | stage: "ready", worked_at: nil}
+    finished(%{attachment | stage: "ready", worked_at: nil})
+  end
+
+  # A terminal stage is the moment a post waiting on this file may be able to
+  # go out (issue #2106) — every page it will ever get now has a row, and the
+  # only thing left is the verdicts on them. Told rather than polled, so the
+  # post appears the second it can.
+  defp finished(%Attachment{} = attachment) do
+    Pending.broadcast_attachment(attachment)
+    Pending.media_changed(:attachment, attachment.id)
+    attachment
   end
 
   defp strike(%Attachment{} = attachment, job, reason) do
@@ -469,7 +520,7 @@ defmodule Vutuv.Attachments.Pages do
         "attachment pages gave up attachment=#{attachment.id} reason=#{inspect(reason)}"
       )
 
-      write_strike(attachment, attempts, stage: "failed", worked_at: nil)
+      finished(write_strike(attachment, attempts, stage: "failed", worked_at: nil))
     else
       # The claim stamp is deliberately left where `start_render/1` put it. It
       # is the *scheduler's* clock, not a claim that the work happened, so the
@@ -518,6 +569,7 @@ defmodule Vutuv.Attachments.Pages do
     end
   end
 
+  defp attachment_of(%Image{attachment: %Attachment{} = attachment}), do: attachment
   defp attachment_of(%Image{attachment_id: id}) when is_binary(id), do: Repo.get(Attachment, id)
   defp attachment_of(%Image{}), do: nil
 end

@@ -99,7 +99,7 @@ defmodule Vutuv.Posts.Post do
 
     # The clip (issue #1906), at most one. It only ever hangs off a post once it
     # is ready: a post with a clip is not created before that
-    # (`Vutuv.Posts.PendingVideoPost`).
+    # (`Vutuv.Posts.PendingPost`).
     has_one(:video, Vutuv.Posts.PostVideo)
 
     # The auto-generated link screenshot: present iff this post carried a single

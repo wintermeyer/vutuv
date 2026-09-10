@@ -16,7 +16,8 @@ defmodule VutuvWeb.VideoComposerTest do
   import Vutuv.WebPushHelpers, only: [put_config: 2]
 
   alias Vutuv.Posts
-  alias Vutuv.Posts.PendingVideoPost
+  alias Vutuv.Posts.Pending
+  alias Vutuv.Posts.PendingPost
   alias Vutuv.Posts.PostVideo
   alias Vutuv.Repo
   alias Vutuv.VideoFixtures
@@ -118,16 +119,16 @@ defmodule VutuvWeb.VideoComposerTest do
     |> form("#composer-form", post: %{body: "Watch my talk", tags: ""})
     |> render_submit()
 
-    assert [%PendingVideoPost{status: "waiting"} = pending] = Videos.pending_posts_for(user)
+    assert [%PendingPost{status: "waiting"} = pending] = Pending.waiting_for(user)
     assert pending.video_id == video.id
     assert pending.attrs["body"] == "Watch my talk"
 
     # The composer cleared, the waiting card is on the feed.
     html = render(live)
-    assert html =~ ~s(data-pending-video-post="#{pending.id}")
+    assert html =~ ~s(data-pending-post="#{pending.id}")
     assert html =~ "Watch my talk"
     assert html =~ "Your post appears as soon as the video is ready"
-    assert has_element?(live, "[data-cancel-pending-video]")
+    assert has_element?(live, "[data-cancel-pending-post]")
     refute html =~ ~s(data-composer-video="#{video.id}")
 
     # No post yet.
@@ -137,23 +138,23 @@ defmodule VutuvWeb.VideoComposerTest do
     {:ok, shell, _} =
       live_isolated(build_conn(), VutuvWeb.ShellLive, session: shell_session(user))
 
-    assert render(shell) =~ ~s(data-videos-in-progress="1")
+    assert render(shell) =~ ~s(data-media-in-progress="1")
 
     # The clip finishes: the post is published, the card goes, the chip goes.
     :ok = Job.run(video.id)
-    published = Repo.get!(PendingVideoPost, pending.id)
+    published = Repo.get!(PendingPost, pending.id)
     assert published.status == "published"
     post = Posts.get_post(published.post_id)
     assert post.body == "Watch my talk"
     assert post.video.id == video.id
 
     html = render(live)
-    refute html =~ ~s(data-pending-video-post="#{pending.id}")
+    refute html =~ ~s(data-pending-post="#{pending.id}")
     assert html =~ ~s(data-post-video="#{video.id}")
     assert html =~ ~s(<video)
     assert html =~ PostVideo.url(video, "h264.mp4")
 
-    refute render(shell) =~ "data-videos-in-progress"
+    refute render(shell) =~ "data-media-in-progress"
   end
 
   test "a ready clip posts at once, with the player on the card", %{conn: conn, user: user} do
@@ -165,7 +166,7 @@ defmodule VutuvWeb.VideoComposerTest do
     |> form("#composer-form", post: %{body: "", tags: ""})
     |> render_submit()
 
-    assert Videos.pending_posts_for(user) == []
+    assert Pending.waiting_for(user) == []
     [post] = author_posts(user)
     assert post.video.id == video.id
     assert render(live) =~ ~s(data-post-video="#{video.id}")
@@ -212,21 +213,21 @@ defmodule VutuvWeb.VideoComposerTest do
     |> form("#composer-form", post: %{body: "Text stays", tags: ""})
     |> render_submit()
 
-    [pending] = Videos.pending_posts_for(user)
+    [pending] = Pending.waiting_for(user)
     # The check refuses it.
     Videos.frame_rejected(refused_frame!(video))
 
     html = render(live)
     assert html =~ ~s(data-pending-status="refused")
     assert html =~ "refused this video"
-    assert has_element?(live, "[data-publish-without-video]")
+    assert has_element?(live, "[data-publish-without-refused]")
 
-    live |> element("[data-publish-without-video]") |> render_click()
-    assert Repo.get!(PendingVideoPost, pending.id).status == "published"
+    live |> element("[data-publish-without-refused]") |> render_click()
+    assert Repo.get!(PendingPost, pending.id).status == "published"
     [post] = author_posts(user)
     assert post.body == "Text stays"
     assert post.video == nil
-    refute render(live) =~ ~s(data-pending-video-post="#{pending.id}")
+    refute render(live) =~ ~s(data-pending-post="#{pending.id}")
   end
 
   test "the waiting card can be cancelled", %{conn: conn, user: user} do
@@ -237,12 +238,12 @@ defmodule VutuvWeb.VideoComposerTest do
     |> form("#composer-form", post: %{body: "Never mind", tags: ""})
     |> render_submit()
 
-    [pending] = Videos.pending_posts_for(user)
-    live |> element("[data-cancel-pending-video]") |> render_click()
+    [pending] = Pending.waiting_for(user)
+    live |> element("[data-cancel-pending-post]") |> render_click()
 
-    assert Repo.get!(PendingVideoPost, pending.id).status == "canceled"
+    assert Repo.get!(PendingPost, pending.id).status == "canceled"
     assert Repo.get(PostVideo, video.id) == nil
-    refute render(live) =~ ~s(data-pending-video-post="#{pending.id}")
+    refute render(live) =~ ~s(data-pending-post="#{pending.id}")
   end
 
   # The progress reaches the composer in two hops — the host's hook, then a

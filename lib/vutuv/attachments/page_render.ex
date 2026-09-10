@@ -33,13 +33,24 @@ defmodule Vutuv.Attachments.PageRender do
   files) nor routed through the SSRF proxy (there is no host to vet in a
   `file://` URL).
 
-  **The page is rendered offline, twice over.** Its content is a member's file,
-  so a Markdown image or a stylesheet reference would otherwise make this
-  server fetch an address the member chose — a beacon at best. The document
-  carries `Content-Security-Policy: default-src 'none'`, which Chromium
-  enforces on every subresource, and the browser is launched with
-  `offline: true`, which fails every name resolution. Either alone would do;
-  neither alone fails closed.
+  **The page is rendered offline**, because its content is a member's file: a
+  Markdown image or a stylesheet reference would otherwise make this server
+  fetch an address the member chose — a beacon at best. The document carries
+  `Content-Security-Policy: default-src 'none'`, which Chromium enforces on
+  every **subresource**, and the browser is launched with `offline: true`,
+  which fails every name resolution.
+
+  Both of those stop a *subresource*, and neither covers **top-level
+  navigation**: CSP has no directive for it here and a `file://` URL asks no
+  resolver anything, so a document carrying
+  `<meta http-equiv="refresh" content="0;url=file:///etc/passwd">` would
+  navigate and be photographed. What actually keeps that out of a member's file
+  is one layer up — `VutuvWeb.Markdown.render/1` escapes every `<` before
+  Earmark sees it, then sanitizes, then strips `<img>` — so nothing a member
+  writes can become a tag at all. Which is why loosening that Markdown pipeline
+  (raw HTML pass-through, a different renderer) is a change to *this* module's
+  threat model as much as to the post body's, and would need a navigation
+  answer of its own before it shipped.
   """
 
   alias Vutuv.Attachments.Attachment

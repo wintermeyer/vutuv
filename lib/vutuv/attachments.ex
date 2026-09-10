@@ -47,6 +47,7 @@ defmodule Vutuv.Attachments do
   alias Vutuv.Attachments.Upload
   alias Vutuv.AttachmentStore
   alias Vutuv.MediaJobs
+  alias Vutuv.Posts.Pending
   alias Vutuv.Repo
   alias Vutuv.Uploads.PdfGate
 
@@ -289,9 +290,45 @@ defmodule Vutuv.Attachments do
       from(a in Attachment,
         where: a.user_id == ^user_id and a.id in ^ids,
         where: is_nil(a.post_id) and is_nil(a.message_id),
+        # A file a waiting post already holds (#2106) is not the composer's to
+        # pick up again: re-adopting it would put the same file under two
+        # posts, and the first of them to publish would take it.
+        where: is_nil(a.pending_post_id),
         order_by: [asc: a.inserted_at]
       )
       |> Repo.all()
+    end
+  end
+
+  @doc "The files a waiting post holds, in upload order (issue #2106)."
+  def for_pending_post(%{id: pending_post_id}) do
+    from(a in Attachment,
+      where: a.pending_post_id == ^pending_post_id,
+      order_by: [asc: a.inserted_at]
+    )
+    |> Repo.all()
+  end
+
+  @doc """
+  Records that the AI check refused one of this file's preview pages (#2106).
+  The **file** is untouched — what happens to a file whose contents are refused
+  is the upload gate's question — but the post waiting on it stops waiting,
+  because the page the verdict deleted is never coming back. Idempotent: the
+  first verdict is the one that counts.
+  """
+  def refuse(%Attachment{} = attachment) do
+    now = DateTime.utc_now(:second)
+
+    {count, _} =
+      from(a in Attachment, where: a.id == ^attachment.id and is_nil(a.refused_at))
+      |> Repo.update_all(set: [refused_at: now, updated_at: NaiveDateTime.utc_now(:second)])
+
+    if count == 1 do
+      refused = %{attachment | refused_at: now}
+      Pending.broadcast_attachment(refused)
+      refused
+    else
+      attachment
     end
   end
 
@@ -323,8 +360,20 @@ defmodule Vutuv.Attachments do
 
     rows =
       from(a in Attachment,
+        as: :attachment,
         where: is_nil(a.post_id) and is_nil(a.message_id),
-        where: a.inserted_at <= ^cutoff
+        where: a.inserted_at <= ^cutoff,
+        # Not a file a post is still waiting on (#2106). A render that took a
+        # day, or an author who has not yet answered a refusal, must not have
+        # the file deleted out from under the text.
+        where:
+          not exists(
+            from(p in Vutuv.Posts.PendingPost,
+              where:
+                p.id == parent_as(:attachment).pending_post_id and
+                  p.status in ["waiting", "publishing"]
+            )
+          )
       )
       |> Repo.all()
 

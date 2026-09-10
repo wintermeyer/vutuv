@@ -58,6 +58,7 @@ defmodule Vutuv.Posts do
 
   alias Ecto.Association.NotLoaded
   alias Vutuv.Accounts.User
+  alias Vutuv.Attachments.Attachment
   alias Vutuv.Fediverse.Note
   alias Vutuv.Fediverse.PostRepost, as: FediversePostRepost
   alias Vutuv.Fediverse.RemoteAccount
@@ -202,6 +203,9 @@ defmodule Vutuv.Posts do
       `max_tags_per_post/0` distinct ones fail the changeset on `:tags`
       rather than being dropped, issue #1237)
     * `:image_ids` — pending image ids of the author, in display order
+    * `:attachment_ids` — pending file ids of the author (issue #2106); a post
+      that carries one is published by `Vutuv.Posts.Publisher` rather than by
+      the composer, so these only ever arrive from a waiting row
 
   Returns `{:ok, post}` (preloaded), `{:error, changeset}`,
   `{:error, :invalid_denials}`, `{:error, :invalid_images}` or
@@ -269,13 +273,12 @@ defmodule Vutuv.Posts do
   end
 
   defp do_create_organization_post(organization, acting_user, attrs) do
-    image_ids = parse_ids(fetch(attrs, :image_ids) || [])
-    video_id = parse_id(fetch(attrs, :video_id))
+    media = media_ids(attrs)
     seed = %Post{organization_id: organization.id, acting_user_id: acting_user.id}
 
-    with :ok <- check_image_count(image_ids),
-         {:ok, changeset} <- build_changeset(seed, attrs, [], image_ids, video_id) do
-      case insert_post(changeset, image_ids, nil, nil, video_id) do
+    with :ok <- check_image_count(media.images),
+         {:ok, changeset} <- build_changeset(seed, attrs, [], media) do
+      case insert_post(changeset, media, nil, nil) do
         {:ok, post} ->
           post = preload_post(post)
           broadcast_new_post(post)
@@ -383,13 +386,12 @@ defmodule Vutuv.Posts do
   # and carrying the sidecar `remote_target` writes instead). Everything after
   # the insert is the same act either way, so it is written once here.
   defp do_create_post(%User{} = author, attrs, denials, remote_target) do
-    image_ids = parse_ids(fetch(attrs, :image_ids) || [])
-    video_id = parse_id(fetch(attrs, :video_id))
+    media = media_ids(attrs)
 
-    with :ok <- check_image_count(image_ids),
+    with :ok <- check_image_count(media.images),
          {:ok, changeset} <-
-           build_changeset(%Post{user_id: author.id}, attrs, denials, image_ids, video_id) do
-      case insert_post(changeset, image_ids, nil, remote_target, video_id) do
+           build_changeset(%Post{user_id: author.id}, attrs, denials, media) do
+      case insert_post(changeset, media, nil, remote_target) do
         {:ok, post} ->
           post = preload_post(post)
           broadcast_new_post(post)
@@ -415,18 +417,17 @@ defmodule Vutuv.Posts do
   end
 
   defp do_create_reply(%User{} = author, %Post{} = parent, attrs, note) do
-    image_ids = parse_ids(fetch(attrs, :image_ids) || [])
-    video_id = parse_id(fetch(attrs, :video_id))
+    media = media_ids(attrs)
 
     with :ok <- check_reply_allowed(author, parent),
-         :ok <- check_image_count(image_ids),
+         :ok <- check_image_count(media.images),
          # A reply has no audience of its own: it inherits the parent's, which
          # check_reply_allowed already constrains to public. Any denials in the
          # params are dropped, so the public reply count and the parent-author
          # notification only ever concern content the author can see (issue #774).
          {:ok, changeset} <-
-           build_changeset(%Post{user_id: author.id}, attrs, [], image_ids, video_id) do
-      case insert_post(changeset, image_ids, parent, note, video_id) do
+           build_changeset(%Post{user_id: author.id}, attrs, [], media) do
+      case insert_post(changeset, media, parent, note) do
         {:ok, post} ->
           post = preload_post(post)
           # Answering a post is the clearest possible proof of having read it,
@@ -533,15 +534,19 @@ defmodule Vutuv.Posts do
   def update_post(%Post{} = post, attrs) do
     post = Repo.preload(post, [:denials, :post_tags, :post_hashtags, :images, :review, :video])
     image_ids = parse_ids(fetch(attrs, :image_ids) || [])
-    # An edit never changes the clip; it only has to know there is one, so a
-    # video-only post can keep its empty body.
-    video_id = post.video && post.video.id
+    # An edit never changes the clip or the files; it only has to know there
+    # are some, so a media-only post can keep its empty body.
+    media = %{
+      images: image_ids,
+      video: post.video && post.video.id,
+      attachments: attachment_ids_of(post)
+    }
 
     with :ok <- check_edit_open(post),
          {:ok, denials} <- normalize_denials(post.user_id, fetch(attrs, :denials) || []),
          :ok <- check_visibility_lock(post, denials),
          :ok <- check_image_count(image_ids),
-         {:ok, changeset} <- build_changeset(post, attrs, denials, image_ids, video_id) do
+         {:ok, changeset} <- build_changeset(post, attrs, denials, media) do
       removed = Enum.reject(post.images, &(&1.id in image_ids))
       run_update(changeset, removed, image_ids)
     end
@@ -700,7 +705,7 @@ defmodule Vutuv.Posts do
 
   # Body + denials + tags + review in one changeset; images attach separately
   # (they are pre-existing rows, not nested params).
-  defp build_changeset(post_or_struct, attrs, denials, image_ids, video_id) do
+  defp build_changeset(post_or_struct, attrs, denials, media) do
     tag_values = attrs |> fetch(:tags) |> parse_tag_values()
     # Over the cap the post does not save at all, so nothing is minted for it
     # either — by the chip row **or** by the body's hashtags: find-or-create runs
@@ -710,12 +715,13 @@ defmodule Vutuv.Posts do
 
     changeset =
       post_or_struct
+      |> put_minted_id(attrs)
       |> Post.changeset(post_params(attrs))
       |> Ecto.Changeset.put_assoc(:denials, Enum.map(denials, &struct(PostDenial, &1)))
       |> Ecto.Changeset.put_assoc(:post_tags, Enum.map(tag_ids, &%PostTag{tag_id: &1}))
       |> put_body_hashtags(tag_ids, keepable?)
       |> put_review(post_or_struct, fetch(attrs, :review))
-      |> require_content(image_ids, video_id)
+      |> require_content(media)
       |> validate_tag_count(tag_values)
 
     if changeset.valid?, do: {:ok, changeset}, else: {:error, changeset}
@@ -834,10 +840,11 @@ defmodule Vutuv.Posts do
     do: Ecto.Changeset.add_error(changeset, :review, "is invalid")
 
   # A post needs words, a picture or a clip — any one of the three.
-  defp require_content(changeset, image_ids, video_id) do
+  defp require_content(changeset, media) do
     body = Ecto.Changeset.get_field(changeset, :body) || ""
 
-    if String.trim(body) == "" and image_ids == [] and is_nil(video_id) do
+    if String.trim(body) == "" and media.images == [] and is_nil(media.video) and
+         media.attachments == [] do
       Ecto.Changeset.add_error(changeset, :body, "can't be blank")
     else
       changeset
@@ -849,15 +856,16 @@ defmodule Vutuv.Posts do
   # claims and — for a reply — the PostReply row (plus, when it answers another
   # network, the PostRemoteReply sidecar) in one transaction, so post and
   # references land (or roll back) together.
-  defp insert_post(changeset, image_ids, parent, remote_target, video_id) do
+  defp insert_post(changeset, media, parent, remote_target) do
     Repo.transaction(fn ->
       changeset
       |> Ecto.Changeset.change(published_on: Vutuv.BerlinTime.today())
       |> Repo.insert()
       |> case do
         {:ok, post} ->
-          attach_images!(post, image_ids)
-          attach_video!(post, video_id)
+          attach_images!(post, media.images)
+          attach_video!(post, media.video)
+          attach_attachments!(post, media.attachments)
           insert_reply_ref!(post, parent)
           insert_remote_reply_ref!(post, remote_target)
           mark_images_pending!(post)
@@ -985,7 +993,7 @@ defmodule Vutuv.Posts do
 
   # Claims the clip for the post (issue #1906) the way the images are claimed:
   # the uploader's own, still unattached, and **ready** — a post never carries a
-  # clip that is still being converted or checked (`Vutuv.Posts.PendingVideoPost`
+  # clip that is still being converted or checked (`Vutuv.Posts.PendingPost`
   # holds the text until then), so a tampered or premature id rolls the whole
   # insert back.
   defp attach_video!(_post, nil), do: :ok
@@ -1006,6 +1014,73 @@ defmodule Vutuv.Posts do
 
     if count != 1, do: Repo.rollback(:invalid_video)
   end
+
+  # Claims the files for the post (issue #2106). Same guard as the images: the
+  # uploader's own rows, claimed by nobody yet. `pending_post_id` is cleared in
+  # the same statement — the reservation that kept the daily sweep and a
+  # re-mounted composer off the file has done its job the moment the post owns
+  # it, and a row that kept both would answer two different questions about who
+  # holds it.
+  defp attach_attachments!(_post, []), do: :ok
+
+  defp attach_attachments!(%Post{} = post, attachment_ids) do
+    uploader_id = post.user_id || post.acting_user_id
+    if is_nil(uploader_id), do: Repo.rollback(:invalid_attachments)
+
+    {count, _} =
+      Repo.update_all(
+        from(a in Attachment,
+          where:
+            a.id in ^attachment_ids and a.user_id == ^uploader_id and is_nil(a.post_id) and
+              is_nil(a.message_id)
+        ),
+        set: [
+          post_id: post.id,
+          pending_post_id: nil,
+          updated_at: NaiveDateTime.utc_now(:second)
+        ]
+      )
+
+    if count != length(attachment_ids), do: Repo.rollback(:invalid_attachments)
+  end
+
+  # The files a post already carries — what an edit hands back to
+  # `require_content/2` so a files-only post keeps its empty body.
+  defp attachment_ids_of(%Post{id: id}),
+    do: Repo.all(from(a in Attachment, where: a.post_id == ^id, select: a.id))
+
+  # Everything a create path claims besides the text, in one map so the two
+  # functions that need all of it take one argument rather than four.
+  defp media_ids(attrs) do
+    %{
+      images: parse_ids(fetch(attrs, :image_ids) || []),
+      video: parse_id(fetch(attrs, :video_id)),
+      attachments: parse_ids(fetch(attrs, :attachment_ids) || [])
+    }
+  end
+
+  # The id a waiting post minted for itself before this create path ran (issue
+  # #2106). Writing it here rather than letting Ecto autogenerate is what makes
+  # a resumed publish idempotent: a slot killed between this insert and the
+  # bookkeeping is recognised by the post already existing under that id,
+  # instead of writing the member's post a second time. Ignored for every
+  # ordinary create and for an edit (the struct already has an id).
+  #
+  # `Map.get/2` with an **atom** key, deliberately, and never `fetch/2`: every
+  # other attr here is read either way because a form sends strings, and an
+  # attrs map is very often a whole `params` map — `POST /api/2.0/posts/:id/
+  # replies` passes one whose `"id"` is the **parent's**, so a string-key read
+  # inserted the reply under the parent's own id and raised `posts_pkey`. Phoenix
+  # params are string-keyed throughout, so an atom key is a door no request can
+  # reach; `Vutuv.Posts.Publisher` is the one caller that opens it.
+  defp put_minted_id(%Post{id: nil} = seed, attrs) do
+    case Vutuv.UUIDv7.cast_or_nil(Map.get(attrs, :minted_post_id)) do
+      nil -> seed
+      id -> %{seed | id: id}
+    end
+  end
+
+  defp put_minted_id(post_or_struct, _attrs), do: post_or_struct
 
   # Sets the flag inside the insert transaction (issue #1104), so the struct the
   # caller gets back already knows a photo of its own is still being checked —

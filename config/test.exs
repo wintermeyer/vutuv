@@ -22,6 +22,11 @@ config :vutuv, :video_pipeline, false
 # would claim rows from outside the sandbox and shell out to poppler or
 # Chromium. Tests drive Vutuv.Attachments.Pages.render/1 and sweep/1 directly.
 config :vutuv, :attachment_pipeline, false
+
+# The waiting-post backstop (#2106) — the tests call `Vutuv.Posts.Pending.sweep/1`
+# themselves, and a sweeper running beside them would publish a row a test is
+# about to assert is still waiting.
+config :vutuv, :pending_sweeper, false
 # The composer's draft autosave (issue #1148) normally waits for a pause in the
 # typing. Zero means it writes as part of the `validate` that changed something,
 # so a test can assert on the stored draft right after `render_change` instead

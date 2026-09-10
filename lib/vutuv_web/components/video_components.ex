@@ -1,11 +1,13 @@
 defmodule VutuvWeb.VideoComponents do
   @moduledoc """
   Everything a page draws for a post's clip (issue #1906): the player on the
-  card, the tile the composer and the waiting card share, the waiting card
-  itself, and the words for where the pipeline is.
+  card, the tile the composer and the waiting card share, and the words for
+  where the conversion is.
 
-  One module, so the four surfaces that show the same clip cannot describe
-  it in four vocabularies.
+  One module, so the surfaces that show the same clip cannot describe it in
+  four vocabularies. The waiting **post** is `VutuvWeb.PendingPostComponents`
+  since #2106 — a clip is one of the things such a post waits for, and the
+  card stopped being about video.
   """
 
   use Phoenix.Component
@@ -14,14 +16,11 @@ defmodule VutuvWeb.VideoComponents do
   import VutuvWeb.UI,
     only: [
       hourglass: 1,
-      card: 1,
-      button: 1,
       picture: 1,
       picture_badge_class: 0,
       quality_switch: 1
     ]
 
-  alias Phoenix.LiveView.JS
   alias Vutuv.Posts.PostVideo
   alias Vutuv.Videos
 
@@ -219,71 +218,6 @@ defmodule VutuvWeb.VideoComponents do
   def stage_text(%PostVideo{stage: "rejected"}), do: gettext("Our AI check refused this video.")
   def stage_text(%PostVideo{stage: "failed"}), do: gettext("This video could not be converted.")
   def stage_text(%PostVideo{}), do: ""
-
-  ## The waiting card (issues #1910, #1911)
-
-  @doc """
-  The author's own post while it waits for its clip, in their feed: the
-  text, the tile with the stage, the length rounded up to whole minutes, and
-  a way out — cancel while it works, publish without the video or drop it
-  once the clip was refused. The host handles the three events.
-  """
-  attr(:pending, Vutuv.Posts.PendingVideoPost, required: true)
-  attr(:body_html, :any, required: true, doc: "the rendered text")
-
-  def pending_video_post(assigns) do
-    video = assigns.pending.video
-
-    assigns =
-      assigns
-      |> assign(:video, video)
-      |> assign(:refused?, video == nil or PostVideo.refused?(video))
-
-    ~H"""
-    <.card class="mt-3" data-pending-video-post={@pending.id} data-pending-status={(@refused? && "refused") || "working"}>
-      <p class="flex items-center gap-2 text-sm font-semibold text-slate-900 dark:text-slate-100">
-        <.hourglass :if={!@refused?} class="h-4 w-4 text-amber-600 dark:text-amber-400" />
-        {if @refused?,
-          do: gettext("This post is still waiting for you"),
-          else: gettext("Your post appears as soon as the video is ready")}
-      </p>
-      <div :if={@body_html} class="markdown markdown--post mt-2 text-slate-800 dark:text-slate-200">
-        {@body_html}
-      </div>
-      <div :if={@video} class="mt-3 sm:flex sm:items-start sm:gap-4">
-        <.video_tile video={@video} class="w-full sm:w-64 sm:shrink-0" />
-        <div class="mt-2 min-w-0 sm:mt-0">
-          <.stage_line video={@video} class="text-sm text-slate-700 dark:text-slate-200" />
-          <p class="mt-1 text-xs text-slate-600 dark:text-slate-400">
-            {gettext("About %{minutes} min of video", minutes: minutes_up(@video))}
-          </p>
-        </div>
-      </div>
-      <p :if={!@video} class="mt-2 text-sm text-red-700 dark:text-red-300">
-        {gettext("The video is gone.")}
-      </p>
-      <div class="mt-3 flex flex-wrap gap-2">
-        <.button
-          :if={@refused?}
-          type="button"
-          phx-click="publish-without-video"
-          phx-value-id={@pending.id}
-          data-publish-without-video
-        >
-          {gettext("Post without the video")}
-        </.button>
-        <.button
-          type="button"
-          variant="danger-ghost"
-          phx-click={JS.push("cancel-pending-video", value: %{id: @pending.id})}
-          data-cancel-pending-video
-        >
-          {if @refused?, do: gettext("Delete this post"), else: gettext("Cancel")}
-        </.button>
-      </div>
-    </.card>
-    """
-  end
 
   ## Words and numbers
 

@@ -633,7 +633,9 @@ defmodule Vutuv.Moderation.ImageSubjects do
 
         with :ok <- Pages.release(page.id) do
           broadcast(scan, :approved)
-          :ok
+          # The post waiting on this file may have been waiting for exactly
+          # this verdict (issue #2106).
+          Pages.page_settled(page)
         end
     end
   end
@@ -909,7 +911,10 @@ defmodule Vutuv.Moderation.ImageSubjects do
       page ->
         :ok = Pages.discard(page)
         broadcast(scan, :rejected)
-        :ok
+        # The page is gone for good, so a post waiting on this file stops
+        # waiting: its author is offered the text without the file, or neither
+        # (issue #2106).
+        Pages.page_refused(page)
     end
   end
 
