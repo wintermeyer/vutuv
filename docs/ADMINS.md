@@ -37,7 +37,12 @@ Related documents: [README](../README.md) (overview) ·
   first page of PDF proof documents that members can attach to their
   certificates & licenses. Without `pdftoppm` on `$PATH`, PDF uploads are
   refused with a clear message ("please upload an image instead"); image
-  proofs keep working.
+  proofs keep working. The same package carries `pdfinfo` and `pdfdetach`,
+  which are what decide whether a PDF attached to a post is safe to publish
+  (encrypted, carrying a program, carrying another file). Without them **PDF
+  attachments are not offered at all** — the composer's picker does not accept
+  `.pdf` and the server refuses one — while text and Markdown files carry on.
+  A check that cannot run is never treated as a check that passed.
 - **ffmpeg** (optional, `apt-get install ffmpeg`) — video on posts: converts
   a member's clip into the files browsers play and pulls the stills the AI
   check looks at. Debian's build carries `libx264` and `libsvtav1`; without
@@ -122,6 +127,13 @@ Everything else has a default (the vutuv.de production value):
 | `VIDEO_THREADS` | `4` | The thread cap every ffmpeg run gets. Raise it on a big idle machine, lower it where the web server shares few cores |
 | `VIDEO_CONCURRENCY` | `2` | How many clips are converted at once. Everything past that queues; the author sees "waiting in line" |
 | `FFMPEG_PATH` / `FFPROBE_PATH` | `ffmpeg` / `ffprobe` | The two binaries, if not on `$PATH` under those names |
+| `ATTACHMENT_UPLOADS` | `true` | `false` turns files on posts off entirely: no picker in the composer, and the server refuses one. For an installation that wants text and pictures and nothing that can carry code |
+| `ATTACHMENT_UPLOADERS` | `admins` | Who may attach a file. `admins` while the feature is being built — a post cannot show or hand out its files yet — `members` opens it to everyone once it can |
+| `ATTACHMENT_MAX_MB` | `20` | The largest file a member may attach, in megabytes. 20 MB is a scanned twenty-page contract or a deck with pictures in it |
+| `ATTACHMENTS_PER_POST` | `5` | How many files one post may carry |
+| `ATTACHMENT_DAILY_MB` | `100` | How much a member may upload in **any 24 hours**, in megabytes. The window rolls rather than resetting at midnight, so there is no hour at which twice the allowance fits. Counted as *accepted uploads*: deleting a file does not give the megabytes back, which is what stops an upload-and-delete loop from filling your disk. Admins have no allowance |
+| `ATTACHMENT_MONTHLY_MB` | `500` | The same over any 30 days |
+| `PDFINFO_PATH` / `PDFDETACH_PATH` | `pdfinfo` / `pdfdetach` | The two poppler binaries the PDF check runs, if not on `$PATH` under those names. Missing either one means PDFs are not offered (see the dependency list above) |
 | `SCREENSHOT_BLOCKLIST` | – | Extra pages never to take a link-preview screenshot of, on top of the shipped `reddit.com` and `heise.de`. Comma-separated domains and/or URLs, copied into the blocklist table the first time you migrate; afterwards the live list is edited in the admin area (see "Screenshot blocklist" below) and this variable is inert. `SCREENSHOT_BLOCKED_HOSTS` is the older name and still works |
 | `SCREENSHOT_PAGE_CHECK` | `true` | Whether each link-preview capture is judged by the Ollama vision model on whether it shows the page or a consent / ad / login wall or a bot check, and the site blocklisted when it does not (see "The list mostly writes itself" below). `false` leaves the blocklist entirely hand-written — the setting for an installation without Ollama. Independent of `IMAGE_MODERATION_ENABLED`: that one is the safety gate, this one is a quality filter |
 | `SCREENSHOT_CHECK_VOTES` | `3` | How many opinions must agree before a site is blocklisted automatically. The first is deterministic, the rest are independent draws; a single dissent leaves the site alone. `1` acts on one opinion |
@@ -609,6 +621,12 @@ vutuv runs fine without internet access:
   AI check over the stills is the same local Ollama the photos use. Leave
   `ffmpeg` uninstalled (or set `VIDEO_UPLOADS=false`) if the installation
   should not take clips at all.
+- Files on posts need nothing from the internet either: the format is read
+  from the bytes and the PDF check is poppler, running locally. There is no
+  virus scanner behind it — the short format whitelist (PDF, plain text,
+  Markdown) and that check are the defence — so an installation that would
+  rather take no files at all sets `ATTACHMENT_UPLOADS=false`, and one that
+  wants text files but not PDFs simply leaves poppler-utils uninstalled.
 - Set `FETCH_BOOK_METADATA=false`: the cover fetch and the
   page-count/publisher lookup behind book-review posts call Open Library, and
   an audiobook's running time is read from a library catalogue (`DNB_SRU_URL`).

@@ -37,6 +37,7 @@ defmodule Vutuv.UploadsGitignoreTest do
     job_posting_images
     press_kit
     remote_media
+    attachments
   )
 
   test "no member upload artifact is tracked in git" do
