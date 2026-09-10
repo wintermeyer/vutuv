@@ -125,6 +125,7 @@ defmodule Vutuv.Application do
           Vutuv.Accounts.UnconfirmedRegistrationSweeper
         ) ++
         optional_child(:sweep_account_events, Vutuv.AccountEvents.Sweeper) ++
+        optional_child(:sweep_media_jobs, Vutuv.MediaJobs.Sweeper) ++
         optional_child(:sweep_api_auth, Vutuv.ApiAuth.Sweeper) ++
         optional_child(:send_unread_message_emails, Vutuv.Chat.UnreadNotifier) ++
         optional_child(:send_notification_digest_emails, Vutuv.Activity.DigestNotifier) ++

@@ -199,6 +199,18 @@ per-IP rate limiter and the security email only ever see the proxy hop. --%>
       )}
     </.admin_card>
 
+    <.admin_card
+      icon="image"
+      title={gettext("Media jobs")}
+      href={~p"/admin/media"}
+      id="admin-media-link"
+      cta={gettext("Open the media job log")}
+    >
+      {gettext(
+        "Every step the photo scan, the video conversion and the screenshot capture have run, past and still running, with how long each took and how it ended."
+      )}
+    </.admin_card>
+
     <%!-- Its own card, not a line in the one above: the whole card is a single
     link, so a second destination needs a second card — and a site that
     screenshots as a cookie banner is a task an admin comes here to solve, not

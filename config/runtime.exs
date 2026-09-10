@@ -424,6 +424,14 @@ if config_env() == :prod do
     config :vutuv, :account_event_retention_days, String.to_integer(String.trim(days))
   end
 
+  # How long the media-job log at /admin/media keeps a row (issue #2103). It is
+  # operational data, not personal data, and it takes a row per pipeline step on
+  # every upload — so the question is how far back an operator wants to look at
+  # a queue, not how long something may be kept. 90 days is what vutuv.de runs.
+  if days = System.get_env("MEDIA_JOB_RETENTION_DAYS") do
+    config :vutuv, :media_job_retention_days, String.to_integer(String.trim(days))
+  end
+
   # Book metadata + covers for post reviews come keyless from Open Library.
   # FETCH_BOOK_METADATA=false turns every such fetch off (intranets); the
   # review panel then has no lookup button and covers stay empty.

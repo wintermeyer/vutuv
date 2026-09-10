@@ -41,6 +41,7 @@ defmodule Vutuv.Posts.Screenshots do
 
   alias Vutuv.Fediverse
   alias Vutuv.Fediverse.RemotePost
+  alias Vutuv.MediaJobs
   alias Vutuv.Moderation.ImageScans
   alias Vutuv.Posts.Post
   alias Vutuv.Posts.PostScreenshot
@@ -411,11 +412,26 @@ defmodule Vutuv.Posts.Screenshots do
   defp process(%PostScreenshot{} = job, capture) do
     job = mark_capturing(job)
 
+    # The media-job row (issue #2103) wraps the capture itself, which is the
+    # Chromium run an operator asks about. A retryable failure still closes its
+    # row as failed: the next attempt is its own job, and a row per attempt is
+    # what makes "this URL has failed nine times" visible.
+    media_job =
+      MediaJobs.start("screenshot",
+        subject_type: "post_screenshot",
+        subject_id: job.id,
+        user_id: owner_user_id(job),
+        post_id: job.post_id
+      )
+
     case capture.(job) do
       {:ok, %{screenshot: file, width: width, height: height}} ->
+        MediaJobs.finish(media_job, detail: "captured")
         mark_ready(job, file, width, height)
 
       {:error, reason} ->
+        MediaJobs.fail(media_job, reason)
+
         if permanent_failure?(reason),
           do: mark_failed(job, reason),
           else: mark_retry(job, reason)
@@ -639,8 +655,12 @@ defmodule Vutuv.Posts.Screenshots do
   # The AI scan's owning member: the post's author, or nobody for a remote
   # post's capture (the same ownerless shape the "remote_post_image" and
   # "remote_avatar" scans use).
+  # One column, not the whole post: the body alone can be kilobytes, and this
+  # is now also read at the *start* of a capture (for the media-job row).
   defp owner_user_id(%PostScreenshot{post_id: nil}), do: nil
-  defp owner_user_id(%PostScreenshot{post_id: post_id}), do: Repo.get!(Post, post_id).user_id
+
+  defp owner_user_id(%PostScreenshot{post_id: post_id}),
+    do: Repo.one(from(p in Post, where: p.id == ^post_id, select: p.user_id))
 
   defp mark_retry(%PostScreenshot{} = job, reason) do
     attempts = job.attempts + 1

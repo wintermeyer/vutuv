@@ -33,6 +33,7 @@ defmodule Vutuv.Moderation.ImageScans do
   require Logger
 
   alias Vutuv.Accounts.User
+  alias Vutuv.MediaJobs
   alias Vutuv.Moderation.ImageScan
   alias Vutuv.Moderation.ImageScanWorker
   alias Vutuv.Moderation.ImageSubjects
@@ -206,12 +207,36 @@ defmodule Vutuv.Moderation.ImageScans do
     end
   end
 
+  # The model call is the slow part and the one an operator asks about, so the
+  # media-job row (issue #2103) is opened around exactly it: everything before
+  # is a claim and a file lookup. A refusal is a job that **finished** — the
+  # pipeline did its work and the answer was no; only a scanner or image error
+  # is a failure. A process killed mid-scan leaves the row running, which is
+  # what /admin/media is there to show.
   defp judge_and_apply(scan, path, judge) do
+    job =
+      MediaJobs.start("image_scan",
+        subject_type: "image_scan",
+        subject_id: scan.id,
+        user_id: scan.owner_user_id
+      )
+
     case judge.(path) do
-      {:ok, %{safe?: true} = verdict} -> approve(scan, verdict)
-      {:ok, %{safe?: false} = verdict} -> reject(scan, verdict)
-      {:error, {:service, reason}} -> service_retry(scan, reason)
-      {:error, {:image, reason}} -> image_retry(scan, reason)
+      {:ok, %{safe?: true} = verdict} ->
+        MediaJobs.finish(job, detail: "safe")
+        approve(scan, verdict)
+
+      {:ok, %{safe?: false} = verdict} ->
+        MediaJobs.finish(job, detail: "rejected: #{verdict.category}")
+        reject(scan, verdict)
+
+      {:error, {:service, reason}} ->
+        MediaJobs.fail(job, {:service, reason})
+        service_retry(scan, reason)
+
+      {:error, {:image, reason}} ->
+        MediaJobs.fail(job, {:image, reason})
+        image_retry(scan, reason)
     end
   end
 

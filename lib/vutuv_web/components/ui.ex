@@ -3791,6 +3791,71 @@ defmodule VutuvWeb.UI do
   end
 
   @doc """
+  How long something took, from milliseconds, as a person would say it:
+  `420 ms`, `12 seconds`, `4 min 20 s`, `2 h 3 min` (German `2 Std. 3 Min.`),
+  then days and hours.
+
+  Two largest non-zero units and never a raw number of seconds — the
+  number-formatting rule for durations. A **duration** is not a point in time,
+  so this is the counterpart of `relative_time/1` rather than a variant of it:
+  that one answers "when", this one answers "how long".
+
+  Shared from the first caller (the media-job log at `/admin/media`, issue
+  #2103) rather than written into it, and it reuses the existing msgids
+  wherever the shape matches, so the German comes along instead of arriving
+  fuzzy-filled.
+
+  Two domain formatters stay where they are, both deliberately:
+  `VutuvWeb.PostComponents.review_duration_label/1` agrees with this one below
+  a day but must keep saying "30 h" for a 30-hour audiobook rather than
+  "1 d 6 h", and `VutuvWeb.ReferenceCheckLive`'s rounds up to whole minutes
+  because it is an estimate a member acts on, not a measurement. Same shape,
+  different question — which is the test for whether a third caller belongs
+  here or not.
+  """
+  def duration(nil), do: gettext("unknown")
+
+  def duration(ms) when is_integer(ms) and ms < 1_000, do: gettext("%{count} ms", count: ms)
+
+  def duration(ms) when is_integer(ms) do
+    seconds = div(ms, 1_000)
+
+    cond do
+      seconds < 60 -> ngettext("%{count} second", "%{count} seconds", seconds)
+      seconds < 3_600 -> minutes_and_seconds(seconds)
+      seconds < 86_400 -> hours_and_minutes(seconds)
+      true -> days_and_hours(seconds)
+    end
+  end
+
+  defp minutes_and_seconds(seconds) do
+    case {div(seconds, 60), rem(seconds, 60)} do
+      {minutes, 0} -> gettext("%{minutes} min", minutes: minutes)
+      {minutes, secs} -> gettext("%{minutes} min %{seconds} s", minutes: minutes, seconds: secs)
+    end
+  end
+
+  defp hours_and_minutes(seconds) do
+    case {div(seconds, 3_600), div(rem(seconds, 3_600), 60)} do
+      {hours, 0} -> gettext("%{hours} h", hours: hours)
+      {hours, minutes} -> gettext("%{hours} h %{minutes} min", hours: hours, minutes: minutes)
+    end
+  end
+
+  # Pluralised on the days, with the hours as a second placeholder in the same
+  # string: a duration phrase must never be built from two translated
+  # fragments, and "1 Tag 3 Std." against "2 Tage 3 Std." is exactly the
+  # agreement a concatenation gets wrong.
+  defp days_and_hours(seconds) do
+    days = div(seconds, 86_400)
+
+    case div(rem(seconds, 86_400), 3_600) do
+      0 -> ngettext("%{count} day", "%{count} days", days)
+      hours -> ngettext("%{count} d %{hours} h", "%{count} d %{hours} h", days, hours: hours)
+    end
+  end
+
+  @doc """
   The show-once credential reveal: a brand-tint box with a `select-all`
   `<code>` line, rendered only while the one-shot flash under `key` holds a
   freshly minted secret (access tokens, client secrets, webhook signing
