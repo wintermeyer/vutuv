@@ -1524,7 +1524,11 @@ defmodule VutuvWeb.PostLive.Feed do
           whole_word: false
         })
 
-        {:noreply, refresh_after_rule_change(socket, params["post_id"])}
+        # And it folds this post too, unlike the tag ticks above: sparing the
+        # card the menu hangs off keeps a reader from losing it mid-gesture,
+        # but a written word has nothing left to read there, so the reprieve
+        # only leaves the rule looking as if it did nothing.
+        {:noreply, refresh_after_rule_change(socket, nil)}
     end
   end
 
