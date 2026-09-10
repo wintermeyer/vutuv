@@ -113,6 +113,15 @@ defmodule Vutuv.PressKitStore do
       Pixelation.write_if_enabled(rotated, dir)
       :ok = Originals.store(storage_dir(token), path, ext)
 
+      # Derive the cleaned copy here rather than on the first request for it
+      # (issue #2140). It is the same work either way, but the *page* now asks
+      # how many bytes the download hands over — `Vutuv.PressKit.download_bytes/1`
+      # — and a shelf holds up to fifteen files of up to 30 MB, so leaving the
+      # strip to the read path would put that whole derivation inside one
+      # crawler-reachable render. Here the uploader is already waiting on the
+      # AVIF encodes, and the first download gets faster too.
+      download_file(token, logo?)
+
       {:ok,
        %{
          width: Image.width(rotated),
@@ -235,10 +244,14 @@ defmodule Vutuv.PressKitStore do
   for both shelves; it is here because "the download is always clean" is a
   promise, and a promise with no second line is a comment.
   """
-  def download_file(%ImageRow{token: token} = image) do
+  def download_file(%ImageRow{token: token} = image),
+    do: download_file(token, ImageRow.logo?(image))
+
+  # Also the upload's own warm-up, which has no row yet.
+  defp download_file(token, logo?) do
     case Originals.path(storage_dir(token)) do
       nil -> nil
-      original -> download_file(original, Path.extname(original), token, ImageRow.logo?(image))
+      original -> download_file(original, Path.extname(original), token, logo?)
     end
   end
 

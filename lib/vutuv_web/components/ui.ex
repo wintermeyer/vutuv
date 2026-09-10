@@ -3669,6 +3669,19 @@ defmodule VutuvWeb.UI do
   end
 
   @doc """
+  A picture's pixel size, `"2400 × 1600"` — the multiplication sign U+00D7 with
+  a space each side, not a letter x and not `1600x900`.
+
+  Its own function because the Media Kit's facts line is drawn twice, once for
+  the page and once for the agent documents (`VutuvWeb.AgentDocs.Markdown`),
+  and a separator spelled at each site is a separator that drifts. Bare digits,
+  deliberately: these are the file's own numbers, and grouping them would read
+  as a measurement of something else.
+  """
+  def dimensions(width, height) when is_integer(width) and is_integer(height),
+    do: "#{width} × #{height}"
+
+  @doc """
   The formats an extension whitelist accepts, as a member-readable list
   (`~w(.jpg .jpeg .png)` -> `"JPEG, PNG"`).
 

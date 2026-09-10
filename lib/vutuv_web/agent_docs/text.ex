@@ -987,7 +987,7 @@ defmodule VutuvWeb.AgentDocs.Text do
 
   defp press_picture_lines(picture) do
     [
-      "- " <> (picture[:label] || gettext("Press picture")),
+      "- " <> picture.label,
       "  " <> picture.download_url,
       picture[:png_download_url] && "  " <> picture.png_download_url,
       picture[:credit] && "  " <> gettext("Credit: %{credit}", credit: picture.credit),

@@ -18,6 +18,7 @@ defmodule VutuvWeb.AgentDocs.Markdown do
   alias Vutuv.Isbn
   alias VutuvWeb.AgentDocs.InvestorsDoc
   alias VutuvWeb.PostComponents
+  alias VutuvWeb.UI
 
   # The per-user people lists (followers/following/connections) share one
   # clause; the set lives in ListDocs.
@@ -1555,7 +1556,7 @@ defmodule VutuvWeb.AgentDocs.Markdown do
 
   defp press_picture_line(picture) do
     [
-      "- " <> md_link(picture[:label] || gettext("Press picture"), picture.download_url),
+      "- " <> md_link(picture.label, picture.download_url),
       picture[:credit] && "  - " <> gettext("Credit: %{credit}", credit: picture.credit),
       "  - " <> press_picture_size(picture),
       picture[:png_download_url] &&
@@ -1567,13 +1568,21 @@ defmodule VutuvWeb.AgentDocs.Markdown do
   end
 
   @doc false
-  # The two facts that decide whether a journalist downloads a picture, from the
+  # The facts that decide whether a journalist downloads a picture, from the
   # fields both renderers already hold — the doc map carries the numbers, not a
   # rendered line, so nothing in `VutuvWeb.AgentDocs` depends on a component.
+  #
+  # Each number names its own file (issue #2140): a raster's pixels and bytes
+  # are one file's, while a vector hands over an SVG that has no pixel size and
+  # offers a PNG rendering that does — so the doc map carries the second file's
+  # dimensions under their own keys and this labels them. Same line the page's
+  # own `PressKitComponents.facts_line/1` draws.
   def press_picture_size(picture) do
     [
-      picture[:width] && picture[:height] && "#{picture.width} × #{picture.height}",
-      picture[:size_bytes] && VutuvWeb.UI.file_size(picture.size_bytes)
+      picture[:width] && picture[:height] && UI.dimensions(picture.width, picture.height),
+      picture[:size_bytes] && UI.file_size(picture.size_bytes),
+      picture[:png_width] && picture[:png_height] &&
+        "PNG " <> UI.dimensions(picture.png_width, picture.png_height)
     ]
     |> Enum.reject(&is_nil/1)
     |> Enum.join(" · ")

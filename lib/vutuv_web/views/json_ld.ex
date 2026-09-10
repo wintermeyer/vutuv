@@ -41,6 +41,7 @@ defmodule VutuvWeb.JsonLd do
   alias Vutuv.Tags.UserTag
   alias VutuvWeb.AgentDocs
   alias VutuvWeb.AgentDocs.ProfileDoc
+  alias VutuvWeb.Markdown
   alias VutuvWeb.PostTeaser
   alias VutuvWeb.UserHelpers
 
@@ -448,17 +449,34 @@ defmodule VutuvWeb.JsonLd do
     })
   end
 
+  # One `ImageObject` describes **one** file, and that file is the one the
+  # licence hands over (issue #2140). `contentUrl` used to name the screen-sized
+  # AVIF while `encodingFormat`, `width`, `height` and `contentSize` all
+  # described the stored original, so no reader could tell which file the block
+  # was about — and a press kit's whole audience reads it by machine.
+  #
+  # The download is the field that changed, rather than the four that agreed
+  # with each other: it is the file the terms cover and the file a picture desk
+  # prints, while a 1600px AVIF is a rendering nobody licenses. `thumbnailUrl`
+  # is what a crawler shows a result with, which is exactly that property's job.
+  #
+  # `contentSize` is measured off the response rather than read off the row —
+  # the metadata strip runs at download time, so the stored length is a few
+  # hundred bytes too high — and it stays a plain integer string on purpose: it
+  # is the one number here a person never reads, and schema.org wants bytes.
+  # A vector claims no `width`/`height`: those describe the PNG rendering, not
+  # the SVG at `contentUrl`.
   defp press_image_object(image, credit_holder, page_url, rights) do
     compact(%{
       "@type" => "ImageObject",
-      "contentUrl" => absolute(PressKit.url(image, "large")),
+      "contentUrl" => absolute(PressKit.download_url(image)),
       "thumbnailUrl" => absolute(PressKit.url(image, "thumb")),
-      "width" => image.width,
-      "height" => image.height,
-      "caption" => image.caption,
+      "width" => raster_only(image, image.width),
+      "height" => raster_only(image, image.height),
+      "caption" => Markdown.to_plain_text(image.caption),
       "description" => image.alt,
       "encodingFormat" => image.content_type,
-      "contentSize" => image.size_bytes && Integer.to_string(image.size_bytes),
+      "contentSize" => content_size(image),
       # The credit line the owner typed is the one a reuser must print; where
       # they typed none, the owner's own name is who to credit.
       "creditText" => image.credit || credit_holder,
@@ -469,6 +487,13 @@ defmodule VutuvWeb.JsonLd do
       "license" => page_url,
       "acquireLicensePage" => page_url
     })
+  end
+
+  defp raster_only(image, value), do: if(PressKit.vector?(image), do: nil, else: value)
+
+  defp content_size(image) do
+    bytes = PressKit.download_bytes(image)
+    bytes && Integer.to_string(bytes)
   end
 
   @doc """
