@@ -27,6 +27,7 @@ defmodule VutuvWeb.PressKitControllerTest do
 
   import Vutuv.ImageHelpers, only: [put_press_picture: 1, put_press_picture: 2]
 
+  alias Vutuv.PressKit
   alias Vutuv.Repo
 
   setup do
@@ -167,6 +168,85 @@ defmodule VutuvWeb.PressKitControllerTest do
 
       assert %{"photos" => [], "logos" => []} = Jason.decode!(body)
       refute body =~ pending.token
+    end
+  end
+
+  describe "the three bios (issue #2101)" do
+    setup %{user: user} do
+      {:ok, _bio} =
+        PressKit.save_bio(user, user, %{
+          "short" => "Ada King builds **bridges** in Bonn.",
+          "long" => "Portraits by @reafotografin."
+        })
+
+      :ok
+    end
+
+    test "the page renders each written one and offers it for copying", %{conn: conn, user: user} do
+      html = conn |> get(~p"/#{user}/media-kit") |> html_response(200)
+
+      assert html =~ "data-press-bios"
+      assert html =~ ~s(data-press-bio="short")
+      assert html =~ ~s(data-press-bio="long")
+      # A length nobody wrote is absent, not an empty block.
+      refute html =~ ~s(data-press-bio="medium")
+
+      # Rendered as Markdown, exactly as a post is…
+      assert html =~ "<strong>bridges</strong>"
+      # …and what the Copy button hands over is the prose, not the marks.
+      assert html =~ ~s(data-copy-text="Ada King builds bridges in Bonn.")
+    end
+
+    test "an @handle in a bio links to that profile and notifies nobody", %{
+      conn: conn,
+      user: user
+    } do
+      photographer = insert_activated_user(username: "reafotografin")
+
+      html = conn |> get(~p"/#{user}/media-kit") |> html_response(200)
+
+      assert html =~ ~s(href="/reafotografin")
+      assert Vutuv.Activity.notifications_count(photographer.id) == 0
+    end
+
+    test "a member with bios and no pictures still has a page", %{conn: conn, user: user} do
+      html = conn |> get(~p"/#{user}/media-kit") |> html_response(200)
+
+      assert html =~ "data-press-bios"
+      # The rights sentence belongs to the pictures, and there are none.
+      refute html =~ "offered for editorial use"
+    end
+
+    test "every agent format carries them", %{conn: conn, user: user} do
+      md = conn |> get("/#{user.username}/media-kit.md") |> Map.fetch!(:resp_body)
+      txt = conn |> get("/#{user.username}/media-kit.txt") |> Map.fetch!(:resp_body)
+      json = conn |> get("/#{user.username}/media-kit.json") |> Map.fetch!(:resp_body)
+      xml = conn |> get("/#{user.username}/media-kit.xml") |> Map.fetch!(:resp_body)
+
+      for {format, body} <- %{md: md, txt: txt, json: json, xml: xml} do
+        assert body =~ "Short version", "the label is missing from the #{format} version"
+        assert body =~ "builds", "the short bio is missing from the #{format} version"
+        assert body =~ "reafotografin", "the long bio is missing from the #{format} version"
+      end
+
+      # The stored Markdown reaches an agent as Markdown — a `.md` reader wants
+      # the marks, and the label tells it which length it is holding.
+      assert md =~ "### Short version"
+      assert md =~ "**bridges**"
+
+      assert %{"bios" => [short, long]} = Jason.decode!(json)
+      assert short["length"] == "short"
+      assert long["length"] == "long"
+      assert short["text"] =~ "**bridges**"
+    end
+
+    test "the German page says the German words", %{conn: conn, user: user} do
+      html = conn |> de() |> get(~p"/#{user}/media-kit") |> html_response(200)
+
+      assert html =~ "Über Ada King"
+      assert html =~ "Kurze Fassung"
+      assert html =~ "Lange Fassung"
+      assert html =~ "Kopieren"
     end
   end
 

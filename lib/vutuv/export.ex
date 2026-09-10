@@ -46,7 +46,9 @@ defmodule Vutuv.Export do
   #    page need never have claimed.
   # 10: the member's press kit (issue #2085) — the photos and logo variants they
   #    offer for download, each with the address the file itself is at.
-  @schema_version 10
+  # 11: the three Media Kit bios (issue #2101), as the member wrote them:
+  #    Markdown source, not the rendered prose.
+  @schema_version 11
 
   def build(%User{} = user) do
     user =
@@ -209,9 +211,15 @@ defmodule Vutuv.Export do
       # be fetched from rather than only the row's columns. Only their **own**
       # kit: a picture they uploaded for a page belongs to the page, which is
       # the whole reason the uploader rides in a column of its own.
-      press_kit: press_kit(user)
+      press_kit: press_kit(user),
+      # The three bios of that same kit (issue #2101), as **Markdown source**
+      # rather than as rendered prose: it is what the member typed, and it is
+      # what they would paste into whatever they move to.
+      press_bios: press_bios(user)
     }
   end
+
+  defp press_bios(user), do: user |> PressKit.bio() |> Map.take(PressKit.bio_lengths())
 
   defp press_kit(user) do
     Enum.map(PressKit.photos(user) ++ PressKit.logos(user), fn image ->

@@ -325,6 +325,17 @@ defmodule VutuvWeb.UI do
   attr(:label, :string, required: true, doc: "sr-only label for the field")
   attr(:placeholder, :string, default: "")
   attr(:rows, :integer, default: 6, doc: "rows of the source/fallback textarea")
+
+  attr(:debounce, :string,
+    default: nil,
+    doc:
+      "`phx-debounce` for the real form field, in ms. It has to sit on the " <>
+        "textarea: LiveView resolves that attribute on the input the event " <>
+        "came from and never on its form, so a form-level one does nothing. " <>
+        "Pass it wherever the surrounding `phx-change` handler costs real " <>
+        "work per keystroke (the Media Kit's word counter flattens Markdown)"
+  )
+
   attr(:submit_on, :string, default: nil, values: [nil, "cmd-enter"])
   attr(:compact, :boolean, default: false, doc: "tighter min-height (messages)")
 
@@ -536,11 +547,18 @@ defmodule VutuvWeb.UI do
       </div>
 
       <label for={"#{@id}-source"} class="sr-only">{@label}</label>
+      <%!-- `phx-debounce` rides the textarea and nowhere else. LiveView reads
+      that attribute off the **input the event came from** and never walks up to
+      its form, so a `phx-debounce` on the surrounding `<.form>` reads as if it
+      applied and silently does not — and this field's `input` is dispatched per
+      keystroke by the hook's `writeSource/1`, so an undebounced `phx-change`
+      form pays whatever its handler costs on every letter typed. --%>
       <textarea
         id={"#{@id}-source"}
         name={@name}
         data-mde-source
         rows={@rows}
+        phx-debounce={@debounce}
         placeholder={@placeholder}
         class="mde__source"
       >{@value}</textarea>
@@ -3980,22 +3998,45 @@ defmodule VutuvWeb.UI do
           @variant != "block" && @code_class
         ]}
       >{render_slot(@inner_block)}</code>
-      <button
-        type="button"
-        data-copy
-        data-copy-target={@id}
-        data-copy-text={@copy_text}
-        data-label-copy={gettext("Copy")}
-        data-label-copied={gettext("Copied")}
-        class={[
-          "shrink-0 rounded-md bg-white text-xs font-semibold text-slate-700 ring-1 ring-slate-200 hover:bg-slate-100 dark:bg-slate-800 dark:text-slate-200 dark:ring-slate-700 dark:hover:bg-slate-700",
-          @variant in ~w(box block) && "inline-flex min-h-10 items-center px-3",
-          @variant == "inline" && "px-2 py-1"
-        ]}
-      >
-        {gettext("Copy")}
-      </button>
+      <.copy_button target={@id} text={@copy_text} compact={@variant == "inline"} />
     </div>
+    """
+  end
+
+  @doc """
+  The Copy control on its own — the `data-copy` enhancement in `app.js`, which
+  swaps its label to "Copied" for a moment.
+
+  Lifted out of `copy_field/1` when a second surface needed the same button
+  without the tinted `<code>` box around it: the Media Kit's bios are rendered
+  **prose**, so they are drawn by `<.markdown_prose>` and only the copy is
+  shared. One home for the contract — the two data attributes, the two labels
+  and the 40px target — so a change to how copying works reaches both.
+
+  Give it `target` (the id of the element whose text to copy) or `text` (the
+  string itself, where what belongs on the clipboard is not what is on screen).
+  `compact` drops the full touch target for a control riding a line of prose.
+  """
+  attr(:target, :string, default: nil)
+  attr(:text, :string, default: nil)
+  attr(:compact, :boolean, default: false)
+
+  def copy_button(assigns) do
+    ~H"""
+    <button
+      type="button"
+      data-copy
+      data-copy-target={@target}
+      data-copy-text={@text}
+      data-label-copy={gettext("Copy")}
+      data-label-copied={gettext("Copied")}
+      class={[
+        "shrink-0 rounded-md bg-white text-xs font-semibold text-slate-700 ring-1 ring-slate-200 hover:bg-slate-100 dark:bg-slate-800 dark:text-slate-200 dark:ring-slate-700 dark:hover:bg-slate-700",
+        if(@compact, do: "px-2 py-1", else: "inline-flex min-h-10 items-center px-3")
+      ]}
+    >
+      {gettext("Copy")}
+    </button>
     """
   end
 

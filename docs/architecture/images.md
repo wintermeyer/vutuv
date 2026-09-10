@@ -998,6 +998,38 @@ Sie schreibt") get **their own msgids** for the page's editor rather than sharin
 the member's: `gettext.extract --merge` fuzzy-filled all three with exactly that
 member-voiced German, which is the trap `docs/architecture/i18n.md` records.
 
+#### The three bios (issue #2101)
+
+A member's Media Kit also carries **three bios they wrote themselves**: a short
+one for a caption, a medium one for the end of an article and the long form.
+They are not pictures and not on `images` — they live on **`press_bios`**, one
+row per member with a `short` / `medium` / `long` `:text` column each, because
+`users` already carries 112 fields and is read on every feed row while these are
+read by three surfaces. `Vutuv.PressKit.bio/1` answers a blank `%Bio{}` rather
+than `nil`, so the page, the editor and the documents each ask one question of
+one shape; `save_bio/3` asks `manageable_by?/2` per event like every other write
+here, **and refuses a page outright** — `press_bios.user_id` is a members-only
+column, so a page's owner passing the role gate would otherwise write an
+organization id into it. A page's boilerplate would be one nullable
+`organization_id` beside it and the same `party_is/2` split the pictures use; it
+is deliberately not built, because nobody has decided a page should have one.
+
+They are **Markdown exactly as a post body is**: stored as source, rendered by
+`VutuvWeb.Markdown.render/1` through `<.markdown_prose>`, so a `@handle` in a
+bio links to that profile and **notifies nobody** — linking and notifying are
+two separate steps and only `Vutuv.Posts` runs the second. All three are capped
+at `Vutuv.PressKit.max_bio_length/0` = 20,000 characters, the post body's own
+cap; the word counts the editor shows (about 50, about 150, none) are guidance
+and nothing validates against them, so eighty words in the short one is stored.
+The Copy button beside each one hands over `Markdown.to_plain_text/1`'s answer
+rather than the source, for the reason the lightbox flattens a caption: a
+literal `**` in the one place a journalist pastes from is a rendering fault.
+
+`VutuvWeb.AgentDocs.PressKitDoc` carries them as a **list** (`length`, `label`,
+`text`) rather than three keys, so a kit with only a medium one renders in every
+format without a branch, and `agent_docs_drift_test.exs` holds the four siblings
+to the HTML page.
+
 ### The takedown hold (issue #2012)
 
 A copyright freeze **moves** a picture, it never deletes one, and the tree it

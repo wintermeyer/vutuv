@@ -112,6 +112,12 @@ defmodule VutuvWeb.AgentDocs.Markdown do
       frontmatter(doc),
       "# #{doc.title}",
       doc.rights,
+      # The bios the owner wrote (#2101). Their own Markdown goes through
+      # untouched — it is Markdown here as it is on the page. The heading names
+      # the owner rather than saying "About": the bare msgid already exists here
+      # with an organization's German ("Über die Organisation"), and a document
+      # about a member wearing it is the fuzzy-fill trap by another route.
+      section(gettext("About %{name}", name: doc.owner.name), Enum.map(doc.bios, &bio_block/1)),
       section(gettext("Press photos"), Enum.map(doc.photos, &press_picture_line/1)),
       section(gettext("Logo variants"), Enum.map(doc.logos, &press_picture_line/1))
     ]
@@ -1541,6 +1547,12 @@ defmodule VutuvWeb.AgentDocs.Markdown do
   # columns rather than two because it hangs off a nested list item: a
   # continuation paragraph at the wrong indent breaks out of the list, which is
   # the same trap issue #926 fixed one level up.
+  # One written bio (#2101): its length as a sub-heading, then the member's own
+  # Markdown as a block of its own rather than a list item — this is prose meant
+  # to be copied whole, and a `- ` in front of it would have to be taken back
+  # out again.
+  defp bio_block(bio), do: "### #{bio.label}\n\n#{bio.text}"
+
   defp press_picture_line(picture) do
     [
       "- " <> md_link(picture[:label] || gettext("Press picture"), picture.download_url),

@@ -149,6 +149,14 @@ defmodule VutuvWeb.PressKitLive do
       # background it was drawn for. A preview only — nothing about it is stored.
       |> assign(:logo_ground, "light")
       |> assign(:error, nil)
+      # Which bio's editor is open; nil = none (issue #2101). Its own assign
+      # rather than a value of `:open`, because the two panels answer different
+      # events and a member may perfectly well have a tile open while they
+      # reread their bio. `:typing_words` is the live count of the one being
+      # written, deliberately apart from the stored counts in `:bio_words` so
+      # that abandoning an edit undoes itself without a query.
+      |> assign(:open_bio, nil)
+      |> assign(:typing_words, nil)
       # Whether the page's own logo may be taken onto the logo shelf (#2087).
       # Once, here, and not in the shelf's markup: the answer is a `Path.wildcard`
       # on disk, it cannot change from this page (a page's logo is uploaded on
@@ -157,6 +165,7 @@ defmodule VutuvWeb.PressKitLive do
       # debounced keystroke in the credit field and every upload chunk.
       |> assign(:adopt_logo?, PressKit.page_logo_source(owner) != nil)
       |> load_shelves()
+      |> load_bio()
 
     socket
     # The credit the next upload carries, offered ready-filled and editable
@@ -289,6 +298,39 @@ defmodule VutuvWeb.PressKitLive do
     |> then(&stored(socket, &1, true))
   end
 
+  ## The three bios (issue #2101)
+
+  def handle_event("open_bio", %{"length" => length}, socket),
+    do:
+      {:noreply,
+       socket |> assign(:open_bio, PressKit.bio_length(length)) |> assign(:typing_words, nil)}
+
+  # Cancel wrote nothing, so the stored counts in `:bio_words` are still right
+  # and there is nothing to read back: dropping the live count is the whole undo.
+  def handle_event("close_bio", _params, socket),
+    do: {:noreply, socket |> assign(:open_bio, nil) |> assign(:typing_words, nil)}
+
+  # The counter while a member types, kept apart from the stored counts so that
+  # abandoning an edit needs no query. Which bio it is about comes from the
+  # form's own hidden field, like `save_bio` — the assign would be a second,
+  # disagreeing answer to the same question.
+  def handle_event("bio_typing", %{"length" => length} = params, socket) do
+    case PressKit.bio_length(length) do
+      nil -> {:noreply, socket}
+      _key -> {:noreply, assign(socket, :typing_words, PressKit.bio_word_count(bio_text(params)))}
+    end
+  end
+
+  def handle_event("save_bio", %{"length" => length} = params, socket) do
+    case PressKit.bio_length(length) do
+      nil ->
+        {:noreply, socket}
+
+      key ->
+        save_bio(socket, key, bio_text(params))
+    end
+  end
+
   # A form with a `phx-change` and no submit still submits on Return, and the
   # credit input is one Return away from the drop zone on a phone keyboard.
   # Named rather than a catch-all: a catch-all also swallows a renamed event,
@@ -320,6 +362,60 @@ defmodule VutuvWeb.PressKitLive do
     |> assign(:photos, shelves.photos)
     |> assign(:logos, shelves.logos)
   end
+
+  # What the open editor submitted. The Markdown editor's real field is a plain
+  # textarea, so this is an ordinary form value and an absent one is the empty
+  # string — a member who cleared the box means to clear the bio.
+  defp bio_text(params), do: get_in(params, ["bio", "text"]) || ""
+
+  # Every write asks `manageable_by?/2` again, on this event rather than at
+  # mount. A refused write is silent and closes the panel, the way a refused
+  # move or reorder already answers: the only viewer who can reach it is one
+  # whose right to write was taken away while this page sat open, and telling
+  # them so needs a sentence for a case nobody honest meets. A refused
+  # **changeset** does get its say, through the one `first_error/1` every other
+  # form on this page reports with.
+  defp save_bio(socket, key, text) do
+    case PressKit.save_bio(socket.assigns.owner, socket.assigns.current_user, %{key => text}) do
+      {:ok, bio} ->
+        # The row we were just handed, rather than a second read of it: only
+        # `key` can have changed, and the count for it is already on screen.
+        {:noreply,
+         socket
+         |> assign(:error, nil)
+         |> assign(:open_bio, nil)
+         |> assign(:typing_words, nil)
+         |> put_bio(bio, key)}
+
+      {:error, %Ecto.Changeset{} = changeset} ->
+        {:noreply, assign(socket, :error, first_error(changeset))}
+
+      {:error, _forbidden} ->
+        {:noreply, socket |> assign(:open_bio, nil) |> assign(:typing_words, nil)}
+    end
+  end
+
+  # The three bios and, beside them, how many words a reader would count in
+  # each (issue #2101). The counts are derived here rather than in the markup:
+  # each one flattens Markdown through Earmark, and the card re-renders on every
+  # keystroke while a bio is open — three flattenings per keystroke for two
+  # texts nobody is typing in.
+  defp load_bio(socket) do
+    bio = PressKit.bio(socket.assigns.owner)
+
+    socket
+    |> assign(:bio, bio)
+    |> assign(:bio_words, Map.new(PressKit.bio_lengths(), &{&1, count_of(bio, &1)}))
+  end
+
+  # After a save, only the length that was written needs recounting.
+  defp put_bio(socket, bio, key) do
+    socket
+    |> assign(:bio, bio)
+    |> update(:bio_words, &Map.put(&1, key, count_of(bio, key)))
+  end
+
+  defp count_of(bio, length), do: PressKit.bio_word_count(Map.fetch!(bio, length))
 
   # `auto_upload: true`, so this runs the moment the last chunk lands.
   defp handle_progress(name, entry, socket) when name in [:photo, :logo] do
@@ -422,6 +518,19 @@ defmodule VutuvWeb.PressKitLive do
     <.editor_chrome owner={@owner} viewer={@current_user} title={@page_title}>
       <.error_banner :if={@error} id="press-error">{@error}</.error_banner>
 
+      <%!-- The bios first: a journalist reads about the person before picking a
+      picture of them, and the editor shows the kit in the order the page does.
+      A page has none (`Vutuv.PressKit.bio/1` says why), so the card is a
+      member's. --%>
+      <.bios_card
+        :if={match?(%User{}, @owner)}
+        viewer={@current_user}
+        bio={@bio}
+        words={@bio_words}
+        typing={@typing_words}
+        open={@open_bio}
+      />
+
       <.shelf
         owner={@owner}
         viewer={@current_user}
@@ -448,6 +557,158 @@ defmodule VutuvWeb.PressKitLive do
     </.editor_chrome>
     """
   end
+
+  # The three bios (issue #2101): a row per length, each showing what is
+  # written, how many words that is and the way in.
+  #
+  # **One editor at a time**, the same rule the picture tiles follow: the
+  # Markdown editor sits inside the open row's `:if` and carries that length in
+  # its id, so it is created and destroyed rather than patched — three Milkdown
+  # instances on one page is what `markdown_editor_test.exs` exempts this file
+  # from having to re-seed.
+  attr(:viewer, :any, required: true)
+  attr(:bio, :any, required: true)
+  attr(:words, :map, required: true)
+  attr(:typing, :integer, default: nil)
+  attr(:open, :atom, default: nil)
+
+  defp bios_card(assigns) do
+    ~H"""
+    <.card data-press-bios>
+      <.section_title>{gettext("About you")}</.section_title>
+      <p class="mt-1 text-sm text-slate-600 dark:text-slate-400">
+        {gettext(
+          "Three bios in three lengths, so a journalist can take the one that fits. You write them; nothing is made out of your CV."
+        )}
+      </p>
+
+      <ul class="mt-4 list-none divide-y divide-slate-100 pl-0 dark:divide-slate-800">
+        <.bio_row
+          :for={length <- PressKit.bio_lengths()}
+          viewer={@viewer}
+          length={length}
+          text={Map.fetch!(@bio, length)}
+          words={
+            if(@open == length && @typing, do: @typing, else: Map.fetch!(@words, length))
+          }
+          open?={@open == length}
+        />
+      </ul>
+    </.card>
+    """
+  end
+
+  attr(:viewer, :any, required: true)
+  attr(:length, :atom, required: true)
+  attr(:text, :string, default: nil)
+  attr(:words, :integer, required: true)
+  attr(:open?, :boolean, required: true)
+
+  defp bio_row(assigns) do
+    ~H"""
+    <li class="py-4 first:pt-0" data-press-bio={@length}>
+      <div class="flex flex-wrap items-baseline justify-between gap-x-4 gap-y-1">
+        <h3 class="m-0 text-sm font-semibold text-slate-900 dark:text-slate-100">
+          {PressKit.bio_label(@length)}
+        </h3>
+        <%!-- The count a member watches while they write. `%{formatted}` and
+        not `%{count}`: `ngettext/3` binds that name to the raw integer itself
+        and a `count:` binding does not win, so a formatted number needs a
+        placeholder of its own. --%>
+        <span
+          data-press-bio-words={@length}
+          class="text-sm tabular-nums text-slate-600 dark:text-slate-400"
+        >
+          {ngettext("%{formatted} word", "%{formatted} words", @words,
+            formatted: delimited_count(@words)
+          )}
+        </span>
+      </div>
+
+      <p class="mt-1 text-xs text-slate-600 dark:text-slate-400">{bio_hint(@length)}</p>
+
+      <p :if={is_nil(@text)} class="mt-2 text-sm italic text-slate-500 dark:text-slate-400">
+        {gettext("Nothing written yet.")}
+      </p>
+      <.markdown_prose
+        :if={@text && not @open?}
+        text={@text}
+        class="mt-2 text-sm text-slate-700 dark:text-slate-300"
+      />
+
+      <div :if={not @open?} class="mt-2">
+        <.button type="button" variant="secondary" phx-click="open_bio" phx-value-length={@length}>
+          {if @text, do: gettext("Edit"), else: gettext("Write")}
+        </.button>
+      </div>
+
+      <div :if={@open?} id={"press-bio-panel-#{@length}"} class="mt-2">
+        <%!-- `phx-change` is what keeps the counter live: the Markdown editor
+        mirrors Milkdown's prose into its textarea and dispatches a bubbling
+        `input`, so a keystroke in the rich view reaches this handler exactly as
+        one in the plain textarea does. The editor ignores the server's echo of
+        `value` after mount, which is what makes a per-keystroke re-render safe
+        here (it is what the post composer does). The debounce goes to the
+        editor's own field rather than on this form — see the attr's doc. --%>
+        <.form
+          for={%{}}
+          id={"press-bio-form-#{@length}"}
+          phx-submit="save_bio"
+          phx-change="bio_typing"
+          class="space-y-3"
+        >
+          <input type="hidden" name="length" value={@length} />
+          <.markdown_editor
+            id={"press-bio-#{@length}"}
+            name="bio[text]"
+            user={@viewer}
+            value={@text || ""}
+            label={PressKit.bio_label(@length)}
+            placeholder={bio_placeholder(@length)}
+            rows={bio_rows(@length)}
+            debounce="300"
+            help
+          />
+          <p class="text-xs text-slate-600 dark:text-slate-400">
+            {gettext("An @handle links to that profile and notifies nobody.")}
+          </p>
+
+          <div class="flex flex-wrap gap-2">
+            <.button type="submit">{gettext("Save")}</.button>
+            <.button type="button" variant="ghost" phx-click="close_bio">
+              {gettext("Cancel")}
+            </.button>
+          </div>
+        </.form>
+      </div>
+    </li>
+    """
+  end
+
+  # The word count is guidance and nothing enforces it, so it is said here
+  # rather than in a validation: what the length is *for*, then how long that
+  # usually makes it.
+  defp bio_hint(:short),
+    do:
+      gettext("About %{words} words. The two sentences under a photo.",
+        words: delimited_count(PressKit.bio_word_target(:short))
+      )
+
+  defp bio_hint(:medium),
+    do:
+      gettext("About %{words} words. A paragraph at the end of an article.",
+        words: delimited_count(PressKit.bio_word_target(:medium))
+      )
+
+  defp bio_hint(:long), do: gettext("As long as you like. The whole portrait.")
+
+  defp bio_placeholder(:short), do: gettext("Two sentences a caption can carry.")
+  defp bio_placeholder(:medium), do: gettext("A paragraph an article can end on.")
+  defp bio_placeholder(:long), do: gettext("The whole story, for as long as it needs.")
+
+  defp bio_rows(:short), do: 3
+  defp bio_rows(:medium), do: 6
+  defp bio_rows(:long), do: 12
 
   # The one thing the two hosts do not share: where this editor sits, and the
   # one sentence that says what the shelves are for — which cannot be shared,

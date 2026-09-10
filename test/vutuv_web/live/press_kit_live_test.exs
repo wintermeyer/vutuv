@@ -550,6 +550,143 @@ defmodule VutuvWeb.PressKitLiveTest do
     end
   end
 
+  describe "the three bios (issue #2101)" do
+    test "the card offers all three, empty, with their guidance", %{conn: conn} do
+      {:ok, _live, html} = open(conn)
+
+      assert html =~ ~s(data-press-bios)
+
+      for length <- ~w(short medium long),
+          do: assert(html =~ ~s(data-press-bio="#{length}"))
+
+      # The word counts are guidance in the editor, so they are said here and
+      # nowhere else.
+      assert html =~ "About 50 words"
+      assert html =~ "About 150 words"
+      assert html =~ "0 words"
+    end
+
+    test "writing one stores it and shows it back", %{conn: conn, user: user} do
+      {:ok, live, _html} = open(conn)
+
+      render_click(live, "open_bio", %{"length" => "short"})
+
+      html =
+        live
+        |> form("#press-bio-form-short", %{
+          "length" => "short",
+          "bio" => %{"text" => "Ada King builds **bridges** in Bonn."}
+        })
+        |> render_submit()
+
+      assert PressKit.bio(user).short == "Ada King builds **bridges** in Bonn."
+      # Rendered through the post pipeline, so the marks are marks.
+      assert html =~ "<strong>bridges</strong>"
+      refute html =~ "**bridges**"
+    end
+
+    test "an over-long short bio is stored: the count is guidance, not a limit", %{
+      conn: conn,
+      user: user
+    } do
+      eighty = Enum.map_join(1..80, " ", &"Wort#{&1}")
+
+      {:ok, live, _html} = open(conn)
+      render_click(live, "open_bio", %{"length" => "short"})
+
+      html =
+        live
+        |> form("#press-bio-form-short", %{"length" => "short", "bio" => %{"text" => eighty}})
+        |> render_submit()
+
+      assert PressKit.bio(user).short == eighty
+      assert html =~ "80 words"
+      refute html =~ "press-error"
+    end
+
+    test "the counter follows what is typed, before anything is saved", %{conn: conn} do
+      {:ok, live, _html} = open(conn)
+      render_click(live, "open_bio", %{"length" => "medium"})
+
+      html =
+        live
+        |> form("#press-bio-form-medium", %{
+          "length" => "medium",
+          "bio" => %{"text" => "One two three four."}
+        })
+        |> render_change()
+
+      assert html =~ "4 words"
+    end
+
+    test "a mention in a bio links to that profile and notifies nobody", %{
+      conn: conn,
+      user: user
+    } do
+      photographer = insert_activated_user(username: "reafotografin")
+
+      {:ok, live, _html} = open(conn)
+      render_click(live, "open_bio", %{"length" => "long"})
+
+      html =
+        live
+        |> form("#press-bio-form-long", %{
+          "length" => "long",
+          "bio" => %{"text" => "Portraits by @reafotografin."}
+        })
+        |> render_submit()
+
+      assert html =~ ~s(href="/reafotografin")
+      assert Vutuv.Activity.notifications_count(photographer.id) == 0
+      assert PressKit.bio(user).long =~ "@reafotografin"
+    end
+
+    test "clearing a bio removes it rather than leaving an empty block", %{
+      conn: conn,
+      user: user
+    } do
+      {:ok, _bio} = PressKit.save_bio(user, user, %{"short" => "Something."})
+
+      {:ok, live, _html} = open(conn)
+      render_click(live, "open_bio", %{"length" => "short"})
+
+      live
+      |> form("#press-bio-form-short", %{"length" => "short", "bio" => %{"text" => "  "}})
+      |> render_submit()
+
+      assert PressKit.bio(user).short == nil
+    end
+
+    test "past the column cap the member is told, and nothing is written", %{
+      conn: conn,
+      user: user
+    } do
+      {:ok, live, _html} = open(conn)
+      render_click(live, "open_bio", %{"length" => "long"})
+
+      html =
+        live
+        |> form("#press-bio-form-long", %{
+          "length" => "long",
+          "bio" => %{"text" => String.duplicate("a", PressKit.max_bio_length() + 1)}
+        })
+        |> render_submit()
+
+      assert html =~ "press-error"
+      assert PressKit.bio(user).long == nil
+    end
+
+    test "a forged length writes nothing at all", %{conn: conn, user: user} do
+      {:ok, live, _html} = open(conn)
+
+      render_submit(live, "save_bio", %{"length" => "middling", "bio" => %{"text" => "Nope."}})
+
+      assert PressKit.bio(user).short == nil
+      assert PressKit.bio(user).medium == nil
+      assert PressKit.bio(user).long == nil
+    end
+  end
+
   describe "a picture the AI gate is still looking at" do
     test "wears the being-checked badge on its tile", %{conn: conn, user: user, tmp: tmp} do
       put_config(:moderate_images, true)
@@ -611,6 +748,9 @@ defmodule VutuvWeb.PressKitLiveTest do
 
       assert html =~ ~s(data-press-shelf="photo")
       assert html =~ ~s(data-press-shelf="logo")
+      # …and no bios card: #2101 asked for a member's three bios, and
+      # `press_bios.user_id` is a members-only column.
+      refute html =~ "data-press-bios"
 
       page = conn |> get(~p"/organizations/#{organization.slug}") |> html_response(200)
       assert page =~ "organization-manage-press"
@@ -841,6 +981,21 @@ defmodule VutuvWeb.PressKitLiveTest do
       # The rights sentence is the gate; a fuzzy-filled German for it would
       # promise something else entirely.
       assert html =~ "Rechte"
+    end
+
+    test "the bios card says the German words (issue #2101)", %{conn: conn} do
+      {:ok, _live, html} = open(conn)
+
+      assert html =~ "Über Sie"
+      assert html =~ "Kurze Fassung"
+      assert html =~ "Mittlere Fassung"
+      assert html =~ "Lange Fassung"
+      assert html =~ "Etwa 50 Wörter"
+      assert html =~ "0 Wörter"
+      assert html =~ "Noch nichts geschrieben."
+      # "Write" and "Edit" are different words in German, and the empty row
+      # offers the first one.
+      assert html =~ "Schreiben"
     end
   end
 end

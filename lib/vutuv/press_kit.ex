@@ -74,9 +74,11 @@ defmodule Vutuv.PressKit do
   alias Vutuv.OrganizationImageStore
   alias Vutuv.Organizations
   alias Vutuv.Organizations.Organization
+  alias Vutuv.PressKit.Bio
   alias Vutuv.PressKitStore
   alias Vutuv.Repo
   alias Vutuv.Uploads
+  alias VutuvWeb.Markdown
 
   @kind "press_kit"
 
@@ -386,6 +388,119 @@ defmodule Vutuv.PressKit do
 
   defp put_owner(%Image{} = image, %Organization{} = owner),
     do: %{image | organization: owner}
+
+  ## The three bios (issue #2101) ----------------------------------------------
+
+  @doc "The three lengths a bio comes in, in the order every surface shows them."
+  defdelegate bio_lengths, to: Bio, as: :lengths
+
+  @doc """
+  The word count a length aims at, or `nil` for the long form.
+
+  Guidance the editor shows beside a counter, and nothing else: a member may
+  write eighty words in the short one and it is stored. Only
+  `max_bio_length/0` refuses anything.
+  """
+  defdelegate bio_word_target(length), to: Bio, as: :target
+
+  @doc "The longest any one bio may be, in characters."
+  defdelegate max_bio_length, to: Bio, as: :max_length
+
+  @doc "Whether this bio says anything at all."
+  defdelegate any_bio?(bio), to: Bio, as: :any?
+
+  @doc """
+  The bios that were **written**, longest last, as `%{length:, label:, text:}` —
+  the one answer to "which lengths are there, in what order, called what".
+
+  The public section, the four agent documents and the editor's card all read
+  it, so a length nobody wrote is absent everywhere rather than absent in three
+  places that each decided so for themselves. `length` is the wire string, for a
+  machine that must not parse a translated word.
+  """
+  def bio_entries(%Bio{} = bio) do
+    for length <- bio_lengths(),
+        text = Map.fetch!(bio, length),
+        is_binary(text),
+        do: %{length: to_string(length), label: bio_label(length), text: text}
+  end
+
+  @doc """
+  What one bio length is called, in the reader's language — the editor, the
+  public page and all four documents say the same three words because they all
+  ask here.
+  """
+  def bio_label(:short), do: gettext("Short version")
+  def bio_label(:medium), do: gettext("Medium version")
+  def bio_label(:long), do: gettext("Long version")
+
+  @doc """
+  The length named by a wire string, or `nil` — how a client's `"short"` becomes
+  the atom the schema uses. Matched against `bio_lengths/0` rather than converted,
+  because `String.to_atom/1` on a submitted value is an unbounded atom table.
+  """
+  def bio_length(name) when is_binary(name),
+    do: Enum.find(bio_lengths(), &(to_string(&1) == name))
+
+  def bio_length(_name), do: nil
+
+  @doc """
+  The owner's three bios — always a `%Vutuv.PressKit.Bio{}`, never `nil`, so
+  the page, the editor and the documents each ask one question of one shape.
+
+  **A page has none.** Issue #2101 asks for a member's bios, and what a page
+  would offer is a boilerplate somebody has to decide to write; the blank
+  answer here is what lets every surface stay owner-agnostic while that
+  decision is open, and the column that would change it is one nullable
+  `organization_id` on `press_bios`.
+  """
+  def bio(%User{id: id}), do: Repo.get_by(Bio, user_id: id) || %Bio{}
+  def bio(%Organization{}), do: %Bio{}
+
+  @doc """
+  Write all three at once.
+
+  Asks `manageable_by?/2` **per event**, like every other write in this module
+  — the editor is a long-lived socket and a role can be withdrawn while it sits
+  open. Refused with `{:error, :forbidden}` rather than a changeset, which is
+  the shape `VutuvWeb.PressKitLive`'s `write_error/2` already knows.
+
+  Reads the row and writes it back rather than branching on whether one exists:
+  there is exactly one per member, and the unique index is what says so — a
+  concurrent first write loses on it rather than making a second row.
+
+  **A page is refused rather than written**, and that is not the same answer as
+  `manageable_by?/2`'s: a page's owner may write its pictures and passes that
+  gate, but `press_bios.user_id` is a members-only column, so writing one for a
+  page would put an organization id in it and raise on the foreign key. The
+  clause below is what makes the answer a refusal instead.
+  """
+  def save_bio(%User{} = owner, viewer, attrs) do
+    with :ok <- authorize(owner, viewer) do
+      owner
+      |> bio()
+      |> Map.put(:user_id, owner.id)
+      |> Bio.changeset(attrs)
+      |> Repo.insert_or_update()
+    end
+  end
+
+  def save_bio(_owner, _viewer, _attrs), do: {:error, :forbidden}
+
+  @doc """
+  How many words a reader would count in this bio.
+
+  Counted on the **rendered prose** rather than on the Markdown source, because
+  that is what a journalist counts: `**Ada**` is one word and a link is its
+  label, not its target. Costs no query (`VutuvWeb.Markdown.to_plain_text/1`
+  does not linkify), which is what lets the editor recount it while a member
+  types.
+  """
+  def bio_word_count(text) when is_binary(text) do
+    text |> Markdown.to_plain_text() |> String.split(~r/\s+/u, trim: true) |> length()
+  end
+
+  def bio_word_count(_text), do: 0
 
   ## URLs ---------------------------------------------------------------------
 
