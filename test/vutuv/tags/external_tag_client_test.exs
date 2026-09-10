@@ -179,6 +179,17 @@ defmodule Vutuv.Tags.ExternalTagClientTest do
       assert ExternalTagClient.fetch(@source, "Elixir") == {:error, :gone}
     end
 
+    test "Mastodon says that with 422, and it is the same answer" do
+      # Measured while shipping #2128: chaos.social, sueden.social and
+      # freiburg.social all answer `422 {"error":"This method requires an
+      # authenticated user"}` rather than the 401 the shape suggests. Read as
+      # transient it is a strike on every pass, backing a refusal that will
+      # never change off to the three-hour ceiling for ever.
+      stub_tag_timeline_status(422, ~s({"error":"This method requires an authenticated user"}))
+
+      assert ExternalTagClient.fetch(@source, "Elixir") == {:error, :gone}
+    end
+
     test "keeps a post whose author's name is long, clamped rather than refused" do
       # 100 ZWJ family emoji: 100 graphemes, 700 codepoints, 2,500 bytes. A
       # `validate_length(max: 255)` counts the 100 and waves it through, which

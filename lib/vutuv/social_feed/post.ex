@@ -40,6 +40,39 @@ defmodule Vutuv.SocialFeed.Post do
   def truncate(text), do: truncate(text, @max_text_length)
 
   @doc """
+  Cuts `value` to at most `max` **bytes**, on a grapheme boundary — what a
+  stranger's display name or their server's own name has to survive before it
+  reaches a bounded column.
+
+  Bytes rather than characters because that is what the column counts and what
+  raises Postgres 22001; a grapheme boundary rather than a byte one because
+  slicing at the byte ends a ZWJ family emoji — the very thing this exists for —
+  on a dangling joiner, the glitch `truncate/2` above goes out of its way to
+  avoid. No ellipsis: this clamps an identity, not prose, and `Ada Lovela…` is
+  a worse name than `Ada Lovela`.
+
+  It lives beside `truncate/2` because both callers found it separately —
+  `Vutuv.Tags.ExternalTagClient` for an author's display name, and
+  `Vutuv.Tags.SourceServerProbe` for a server's — and wrote it twice.
+  """
+  def clamp_bytes(nil, _max), do: nil
+
+  def clamp_bytes(value, max) when is_binary(value) and byte_size(value) <= max, do: value
+
+  def clamp_bytes(value, max) when is_binary(value) do
+    value
+    |> String.graphemes()
+    |> Enum.reduce_while({[], 0}, fn grapheme, {kept, bytes} ->
+      grown = bytes + byte_size(grapheme)
+
+      if grown <= max, do: {:cont, {[grapheme | kept], grown}}, else: {:halt, {kept, bytes}}
+    end)
+    |> elem(0)
+    |> Enum.reverse()
+    |> Enum.join()
+  end
+
+  @doc """
   Clamps `text` to at most `max` characters, replacing the tail with a trailing
   ellipsis when it runs over.
 

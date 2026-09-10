@@ -470,6 +470,39 @@ if config_env() == :prod do
       :ok
   end
 
+  # Which servers the tag-source panel offers (issue #2128), comma-separated.
+  # **An empty value is a real setting, not an unset one** — an installation on
+  # an intranet reaches none of the shipped ten and says so with
+  # TAG_SOURCE_SERVERS="" — and `if value = System.get_env(…)` is what says that
+  # here, as it does for the other such variables in this file: an empty string
+  # is truthy in Elixir, so only an absent variable keeps the default.
+  if servers = System.get_env("TAG_SOURCE_SERVERS") do
+    config :vutuv,
+           :tag_source_servers,
+           servers |> String.split(",") |> Enum.map(&String.trim/1) |> Enum.reject(&(&1 == ""))
+  end
+
+  # How many other servers one followed tag may name, and how long what we know
+  # about a server stays fresh. Read leniently for the same reason as the block
+  # above: a typo must cost the setting, not the boot.
+  case external_tag_numbers.(
+         System.get_env("TAG_SOURCES_PER_FOLLOW"),
+         1,
+         "TAG_SOURCES_PER_FOLLOW"
+       ) do
+    [per_follow] -> config :vutuv, :tag_sources_per_follow, per_follow
+    nil -> :ok
+  end
+
+  case external_tag_numbers.(
+         System.get_env("TAG_SERVER_INFO_MAX_AGE_HOURS"),
+         1,
+         "TAG_SERVER_INFO_MAX_AGE_HOURS"
+       ) do
+    [hours] -> config :vutuv, :tag_server_info_max_age_hours, hours
+    nil -> :ok
+  end
+
   # How much the release writes to the system log. `config/prod.exs` compiles in
   # `:error`, which is quiet enough to run on and too quiet to debug on: at that
   # level nearly every `Logger.warning` in the app goes, and the request logger

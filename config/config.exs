@@ -679,6 +679,37 @@ config :vutuv, :external_tag_post_caps, per_tag: 20, total: 10_000
 # EXTERNAL_TAG_FETCH_BUDGET="20:5".
 config :vutuv, :external_tag_fetch_budget, batch: 20, per_host: 5
 
+# The servers the "Where should this tag come from?" panel offers (issue #2128).
+# Shipped as the vutuv.de list — big enough to carry the fresh end of a busy tag,
+# German-leaning because vutuv.de is a German site — and it is exactly the
+# setting an installation elsewhere has to change: an intranet reaches none of
+# these and names its own, or none at all (TAG_SOURCE_SERVERS="").
+# Runtime override: TAG_SOURCE_SERVERS="a.example,b.example".
+config :vutuv,
+       :tag_source_servers,
+       ~w(mastodon.social mastodon.world mastodon.online hachyderm.io troet.cafe
+          social.tchncs.de det.social nrw.social norden.social ruhr.social)
+
+# How many **other** servers one followed tag may name, beside this
+# installation, which is always on and does not count against it.
+#
+# The measurement behind the number (#2124): over three tags, mastodon.social
+# alone held 30 of the 30 newest posts and troet.cafe 26 — two servers carry the
+# fresh end and every further one returns older material. The cost does not
+# taper the same way: a pair is asked forever, at the floor of the cadence up to
+# 144 times a day, so an uncapped panel lets one member's ten picks on twenty
+# tags become 200 standing pairs. Three is one more than the evidence needs.
+# Runtime override: TAG_SOURCES_PER_FOLLOW="3".
+config :vutuv, :tag_sources_per_follow, 3
+
+# How long what we know about another server stays fresh before the panel asks
+# it again, in hours. A day: nothing on that record moves fast (an account
+# count, a description, whether the timeline is public), and the panel is the
+# only reader, so this is also the whole outbound cost of the feature when
+# nobody opens it — nothing.
+# Runtime override: TAG_SERVER_INFO_MAX_AGE_HOURS="24".
+config :vutuv, :tag_server_info_max_age_hours, 24
+
 # Wall-clock ceiling for a single newsletter send (test or broadcast). gen_smtp
 # bounds only its *connect* with the :timeout option; each per-response read
 # uses a hardcoded, non-configurable 20-minute timeout, so a black-holing relay

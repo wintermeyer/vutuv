@@ -274,6 +274,78 @@ no row for would put a dereferenceable-looking identity into every client's
 cache. A client asking for its home timeline is talking to a server that can ask
 those public timelines itself.
 
+### Choosing those servers (issue #2128)
+
+Every tag chip in the feed's "Tags you follow" card carries a small number: how
+many servers feed that tag, **this installation included**, so a plain follow
+reads `1` rather than `0`. Pressing it opens the panel that changes them, inside
+the card (`tag_sources_panel/1` in `VutuvWeb.PostLive.Feed`) — the rail is
+`hidden md:block`, so this is a desktop surface for now.
+
+The panel offers the servers in **`TAG_SOURCE_SERVERS`**, ten by default, each
+with its own description and size beside it: accounts, accounts active this
+month and posts, read from that server's NodeInfo. That list is exactly what an
+installation elsewhere has to change — an intranet reaches none of the ten and
+names its own, or `TAG_SOURCE_SERVERS=""` and none at all. With
+`FETCH_EXTERNAL_TAG_POSTS=false` the panel offers nothing and says so: a server
+this installation may not fetch from is not one it can honestly offer.
+
+**vutuv is always on**, and the panel says so rather than enforcing it: the rule
+lives in the context, where `tag_follow_sources/1` answers with the local source
+whatever the rows say and `remove_tag_follow_source/2` refuses to remove it. The
+row is rendered with a `disabled` switch so a reader can see this installation
+*is* a source and is the one they cannot take away.
+
+**A follow may name three other servers** (`TAG_SOURCES_PER_FOLLOW`), enforced
+in `Vutuv.Tags.add_tag_follow_source/2` rather than in the panel, because the
+cost it bounds is the fetcher's: a pair is asked forever, up to 144 times a day
+at the cadence floor. The parent's own measurement is what sets the number —
+mastodon.social alone held 30 of the 30 newest posts over three tags and
+troet.cafe 26, so two servers carry the fresh end and every further one returns
+older material. Three is one more than the evidence needs.
+
+**What a server has to pass** is one gate, `Vutuv.Tags.SourceServers.check/2`,
+whether the member typed the address or pressed one of the offers: `https`
+(refused rather than silently upgraded), a real server name that is neither an
+internal address nor this installation, and then the server itself — the flag,
+the operator's blocklist, the SSRF vet with the connection pinned, and the tag
+timeline. Everything ahead of the probe is re-decided on every press, because
+those are the parts that change without anybody asking; the literal half is
+asked here rather than left to the changeset so a value that was never a
+hostname costs a stranger's server no request at all.
+
+`Vutuv.Tags.SourceServerProbe` does the asking and `tag_source_servers` stores
+the answer for a day (`TAG_SERVER_INFO_MAX_AGE_HOURS`), so opening the panel a
+second time costs nothing.
+
+**The tag timeline alone decides `status`; NodeInfo only decorates.** A server
+that serves its timeline but publishes no NodeInfo is pickable and simply shows
+no figures — gating on NodeInfo would make the panel stricter than what the
+fetcher needs, and strict on the wrong document. NodeInfo is then read for the
+figures, *discovered* rather than guessed (`/.well-known/nodeinfo` names the
+real document, whose path is the server's own business), and only its path is
+followed, and only when the href is `https` and names that same host. **NodeInfo
+carries no language** in either 2.0 or 2.1 — the badge comes from Mastodon's
+`/api/v2/instance`, and a server that does not serve it keeps every other figure
+and shows no badge.
+
+`status` is `"ok"`, `"unreachable"`, or **`"account_required"`** — the server
+answers and says the timeline is for members. Mastodon says that with **`422`**,
+not the `401` the shape suggests; three of the eighteen servers measured while
+shipping this do. `Vutuv.Tags.ExternalTagClient.refusal/1` is the one classifier
+both readers of a public tag timeline use, so the fetcher reads 422 as "gone"
+rather than taking a strike on every pass for a refusal that will never change.
+Such a server is shown with its size and a line saying why, and cannot be
+switched on; its OAuth path is a feature of its own.
+
+The panel draws from what is stored and fills in behind itself (`start_async`),
+because asking ten servers is dozens of requests and seconds of wall clock, and
+a member who pressed a chip is owed the panel now. The markup is
+`VutuvWeb.PostLive.TagSources`, a sibling of the feed's other pieces rather than
+another 350 lines inside it — the tag page and an organization's Following list
+both show followed tags with no way to say where they come from, and each is a
+caller this panel is one refactor away from.
+
 ## The tag page (`/tags/:slug`)
 
 A tag's public page is the topic page: its description, the most endorsed
