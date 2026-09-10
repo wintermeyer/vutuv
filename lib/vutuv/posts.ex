@@ -993,7 +993,7 @@ defmodule Vutuv.Posts do
 
   # Claims the clip for the post (issue #1906) the way the images are claimed:
   # the uploader's own, still unattached, and **ready** — a post never carries a
-  # clip that is still being converted or checked (`Vutuv.Posts.PendingVideoPost`
+  # clip that is still being converted or checked (`Vutuv.Posts.PendingPost`
   # holds the text until then), so a tampered or premature id rolls the whole
   # insert back.
   defp attach_video!(_post, nil), do: :ok

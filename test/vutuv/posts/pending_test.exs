@@ -32,6 +32,7 @@ defmodule Vutuv.Posts.PendingTest do
   alias Vutuv.Posts.Publisher
   alias Vutuv.Repo
   alias Vutuv.UUIDv7
+  alias VutuvWeb.Live.PendingPostActions
 
   setup do
     tmp = Path.join(System.tmp_dir!(), "vutuv_pending_#{System.unique_integer([:positive])}")
@@ -307,6 +308,42 @@ defmodule Vutuv.Posts.PendingTest do
       assert row.status == "published"
       assert row.post_id == post.id
     end
+
+    test "a claim the PREVIOUS release made is never resumed, so nothing publishes twice",
+         %{user: user, files: files} do
+      attachment = file!(user, files)
+
+      {:ok, pending} =
+        Pending.create(user, "post", %{}, %{body: "Overlap"}, attachments: [attachment])
+
+      rendered!(attachment)
+      page!(attachment, "approved")
+
+      # What the release this one replaces leaves behind, verbatim: its claim is
+      # `SET status = 'publishing'` and nothing else — no `minted_post_id` (it
+      # has no such column) and no `updated_at`, because `update_all` does not
+      # bump timestamps. So the row is stale the instant it is claimed.
+      Repo.update_all(from(p in PendingPost, where: p.id == ^pending.id),
+        set: [status: "publishing", minted_post_id: nil]
+      )
+
+      # Its create path committed under an id of Ecto's own minting, and then
+      # the deploy stopped the slot before the bookkeeping ran. Nothing on the
+      # row names that post.
+      {:ok, orphan} = Posts.create_in_context(user, "post", %{}, %{"body" => "Overlap"})
+      age!(pending, Pending.stale_after_seconds() + 60)
+
+      assert Pending.due(10) == [],
+             "a claim with no minted id is resumable, and the resume cannot see the post that exists"
+
+      assert Pending.sweep(10) == 0
+
+      assert Repo.aggregate(Post, :count) == 1,
+             "the member's post was published a second time during the deploy overlap"
+
+      assert Repo.get!(Post, orphan.id)
+      assert reload(pending).status == "publishing"
+    end
   end
 
   describe "the sweeper's clock" do
@@ -349,6 +386,30 @@ defmodule Vutuv.Posts.PendingTest do
 
       history = Pending.history_for(user)
       assert Enum.map(history, & &1.id) |> Enum.sort() == Enum.sort([done.id, waiting.id])
+    end
+
+    test "is the author's own queue: another member neither sees nor acts on the row",
+         %{user: user, files: files} do
+      attachment = file!(user, files)
+
+      {:ok, pending} =
+        Pending.create(user, "post", %{}, %{body: "Mine"}, attachments: [attachment])
+
+      stranger = insert_activated_user()
+
+      assert Pending.get(stranger, pending.id) == nil
+      assert Pending.waiting_for(stranger) == []
+      assert Pending.history_for(stranger) == []
+
+      # The two ways out are keyed by the id the client sends, so the guard has
+      # to be the query and not the card: a stranger pressing either on a row
+      # of somebody else's changes nothing.
+      for event <- PendingPostActions.events() do
+        assert :ok = PendingPostActions.act(stranger, event, %{"id" => pending.id})
+      end
+
+      assert reload(pending).status == "waiting"
+      assert Repo.aggregate(Post, :count) == 0
     end
   end
 

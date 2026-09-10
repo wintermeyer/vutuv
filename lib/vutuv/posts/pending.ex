@@ -427,6 +427,19 @@ defmodule Vutuv.Posts.Pending do
   The rows the sweeper should look at, least-recently-looked-at first: waiting
   rows whose clock is due, and claims that have stood longer than any publish
   can take.
+
+  A `publishing` row is resumable **only if it carries a `minted_post_id`**,
+  and that is a blue/green rule, not a nicety. The release this one replaces
+  claims with a bare `SET status = 'publishing'` — no minted id, and
+  `update_all` does not bump `updated_at` either, so a row it claims is
+  instantly older than `@stale_after_seconds`. Resuming such a claim cannot
+  tell "the post is already there" from "it never happened", because the id the
+  old slot's insert minted is written nowhere: measured, that publishes the
+  member's post a **second** time, leaving the first one orphaned in the feed.
+  Skipping it leaves the row exactly where the deployed release leaves it
+  today, and the filter (rather than a refusal inside `resume/1`) is what keeps
+  it out of the oldest-first batch instead of parking it at the front for ever.
+  Only claims made during this one deploy's overlap can lack the id.
   """
   def due(limit) when is_integer(limit) and limit > 0 do
     now = DateTime.utc_now(:second)
@@ -436,7 +449,7 @@ defmodule Vutuv.Posts.Pending do
     from(p in PendingPost,
       where:
         (p.status == "waiting" and (is_nil(p.checked_at) or p.checked_at < ^recheck)) or
-          (p.status == "publishing" and p.updated_at < ^stale),
+          (p.status == "publishing" and not is_nil(p.minted_post_id) and p.updated_at < ^stale),
       order_by: [asc_nulls_first: p.checked_at, asc: p.inserted_at],
       limit: ^limit
     )

@@ -125,7 +125,7 @@ the clip now one case of it. `Vutuv.Posts.Pending` owns the whole question:
 
 * **`state/1`** asks the clip and every file, and answers `:ready` only when
   none is still working, `:refused` when one can never become ready. The
-  composer asks the same module (`file_done?/1`) before deciding whether to
+  composer asks the same module (`files_done?/1`) before deciding whether to
   publish now or park, so the two sides cannot disagree about "done".
 * **One author topic**, `topic/1` (`"post_media:<user_id>"`), carries
   `{:post_video, …}`, `{:attachment, …}` and `{:pending_post, …}`, so the
