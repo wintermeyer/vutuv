@@ -256,6 +256,18 @@ const imageFileCapture = (hook) =>
 const imageFiles = (transfer) =>
   Array.from(transfer?.files || []).filter((f) => f.type.startsWith("image/"))
 
+// A run of backslashes at the END of a block — before a blank line, or at the
+// end of the text. Milkdown serializes a hard break as a trailing backslash,
+// and there it means nothing: CommonMark makes a break only when another line
+// of the same paragraph follows, so a backslash on the last line is a literal
+// character. Which is precisely how it turns into one — re-open the post, and
+// remark parses that character as text and escapes it back out as `\\`, so the
+// page grows a visible `\` at the end of the paragraph. Dropped on both the way
+// out and the way in; the read side does the same in
+// `VutuvWeb.Markdown.normalize_hard_breaks/1`. An interior trailing backslash
+// is a real break and is left exactly alone.
+const BLOCK_END_BREAK = /\\+(?=[ \t]*(?:\r?\n[ \t]*(?:\r?\n|$)|$))/g
+
 // Type-through: the moment the closing colon of a known shortcode is typed,
 // `:tada:` becomes 🎉 (issue #1197). What lands in the body is the CHARACTER —
 // vutuv stores no shortcodes, so the emoji is already right in the HTML page, the
@@ -796,9 +808,24 @@ export const MarkdownEditor = {
         // backslash rather than the two spaces CommonMark also allows.
         .replace(/&#x20;$/gm, "")
         .replace(/\n{3,}/g, "\n\n")
+        .replace(BLOCK_END_BREAK, "")
     )
       .replace(/^\n+/, "")
       .replace(/\n+$/, "\n")
+  },
+
+  // A stored body on its way INTO the editor: drop the same block-ending
+  // backslash there, so an already-stored one (they exist — this shipped in
+  // September 2026, after ~30 bodies had collected one) cannot come back as a
+  // literal character. Without this the round trip is what makes the bug:
+  // remark reads a backslash at a block end as text (CommonMark has no break
+  // to make there), and serializing that text escapes it to `\\`, which every
+  // later render then shows as a visible `\`. This also keeps the composer
+  // showing exactly what the page shows — `VutuvWeb.Markdown`'s
+  // `normalize_hard_breaks/1` drops the run on the read side for the same
+  // reason.
+  dropBlockEndBreaks(md) {
+    return this.mapOutsideFences(md, (part) => part.replace(BLOCK_END_BREAK, ""))
   },
 
   // Apply `fn` to the parts of a Markdown string that are not a fenced code
@@ -1003,7 +1030,9 @@ export const MarkdownEditor = {
   setEditorMarkdown(markdown) {
     if (!this.editor) return
     this.syncing = true
-    this.editor.action(replaceAll(this.escapeFootnotes(markdown || "")))
+    this.editor.action(
+      replaceAll(this.escapeFootnotes(this.dropBlockEndBreaks(markdown || "")))
+    )
     this.syncing = false
   },
 
