@@ -30,8 +30,10 @@ defmodule Vutuv.Attachments.PagesTest do
   alias Vutuv.Attachments.PageRender
   alias Vutuv.Attachments.Pages
   alias Vutuv.AttachmentStore
+  alias Vutuv.Images
   alias Vutuv.Images.Image
   alias Vutuv.MediaJobs.MediaJob
+  alias Vutuv.Moderation
   alias Vutuv.Moderation.ImageScan
   alias Vutuv.Moderation.ImageScans
   alias Vutuv.Moderation.ImageSubjects
@@ -285,6 +287,37 @@ defmodule Vutuv.Attachments.PagesTest do
       assert reload(attachment).stage == "failed"
       assert Pages.due(4) == []
       assert %MediaJob{status: "failed"} = last_page_job()
+    end
+  end
+
+  describe "the takedown a page does not have yet (#2109)" do
+    # Written down because the absence is a *decision*, not an oversight, and
+    # because every symptom of it is a quiet `nil` rather than an error: since
+    # #2089 `Images.bytes_path/1` and `preview_url/1` answer `nil` for a kind
+    # with no `@takedown` strategy instead of raising, so an admin surface
+    # pointed at a page would read "no picture here" rather than "this kind is
+    # not wired". `Vutuv.Moderation.reportable_by?/2`'s catch-all `%Image{}`
+    # clause is the reason it must stay that way until #2109: it is
+    # `takedown_ready?/1` and nothing else, so a kind put in the map becomes
+    # reportable by anybody who can name a row id, with no visibility check, on
+    # a page that may belong to a file no post has claimed. #2109 adds the
+    # strategy and the visibility clause together; when it does, this test is
+    # the one to invert.
+    test "is refused everywhere rather than half-wired", %{user: user, files: files} do
+      Fixtures.put_config(preview_pages: 1)
+      attachment = stored!(user, Fixtures.multi_page_pdf(files, 1))
+      Pages.render(attachment)
+      [page] = Pages.list(attachment)
+
+      refute Images.takedown_ready?(page)
+      assert Images.bytes_path(page) == nil
+      assert Images.preview_url(page) == nil
+      refute Moderation.can_report?(insert_activated_user(), page)
+      refute Moderation.can_report?(user, page)
+
+      # The bytes are there all the same — the `nil` above is the missing
+      # strategy, not a missing picture.
+      assert is_binary(Pages.bytes_path(page))
     end
   end
 
