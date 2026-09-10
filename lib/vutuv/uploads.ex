@@ -30,8 +30,6 @@ defmodule Vutuv.Uploads do
   alias Vutuv.Uploads.Spec
   alias Vutuv.UUIDv7
 
-  @extension_whitelist ~w(.jpg .jpeg .png)
-
   # The takedown hold's root, under `uploads_dir_prefix/0` (see `hold_dir/1`).
   @hold_root "frozen"
 
@@ -452,6 +450,25 @@ defmodule Vutuv.Uploads do
   end
 
   @doc """
+  The formats a profile picture (avatar, cover) may arrive in: whatever a post
+  photo may be, HEIC capability-detection included.
+
+  Deliberately the same list rather than one of its own. A member's picture
+  comes off a phone or out of a design tool, and this was the narrowest
+  whitelist on the site — JPEG and PNG alone — while a WebP logo or a HEIC
+  snapshot passed everywhere else, so refusing it here was a dead end nobody
+  could debug. SVG stays out with it: a profile picture is a photograph, and a
+  vector one would be the only member-uploaded markup the AI gate has to reason
+  about.
+  """
+  defdelegate extension_whitelist, to: Vutuv.PostImageStore
+
+  @doc "The largest profile picture a member may upload, in bytes."
+  def max_filesize, do: Keyword.fetch!(config(), :max_filesize)
+
+  defp config, do: Application.fetch_env!(:vutuv, :profile_images)
+
+  @doc """
   Whether `upload` is a storable image — a whitelisted extension whose bytes
   decode as an image — **without writing anything to disk**. The pre-commit
   half of `store/2`: a changeset validates here, and only after the row
@@ -847,7 +864,7 @@ defmodule Vutuv.Uploads do
     extension in whitelist
   end
 
-  defp valid_extension?(file_name), do: valid_extension?(file_name, @extension_whitelist)
+  defp valid_extension?(file_name), do: valid_extension?(file_name, extension_whitelist())
 
   @doc """
   A fresh unguessable URL token (~128 bits, URL-safe Base64) for the

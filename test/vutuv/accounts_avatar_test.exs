@@ -10,6 +10,7 @@ defmodule Vutuv.AccountsAvatarTest do
   alias Vutuv.Accounts
   alias Vutuv.Accounts.User
   alias Vutuv.Uploads
+  alias VutuvWeb.UI
 
   setup do
     tmp =
@@ -26,13 +27,15 @@ defmodule Vutuv.AccountsAvatarTest do
     :ok
   end
 
-  # A real, decodable JPEG upload (so it passes the in-changeset validation).
-  defp jpeg_upload(name \\ "selfie.jpg") do
-    src = Path.join(System.tmp_dir!(), "src_#{System.unique_integer([:positive])}.jpg")
+  # A real, decodable upload (so it passes the in-changeset validation), in
+  # whatever format the filename names — libvips writes by extension.
+  defp image_upload(name \\ "selfie.jpg") do
+    ext = Path.extname(name)
+    src = Path.join(System.tmp_dir!(), "src_#{System.unique_integer([:positive])}#{ext}")
     {:ok, img} = Image.new(600, 400, color: [10, 120, 200])
     {:ok, _} = Image.write(img, src)
     on_exit(fn -> File.rm(src) end)
-    %Plug.Upload{filename: name, path: src, content_type: "image/jpeg"}
+    %Plug.Upload{filename: name, path: src, content_type: MIME.from_path(name)}
   end
 
   defp avatar_dir(user), do: Uploads.disk_dir("avatars/#{user.id}")
@@ -56,7 +59,7 @@ defmodule Vutuv.AccountsAvatarTest do
 
     # Valid avatar, but the name is too long: the changeset fails validation
     # after the avatar is validated, so the update rolls back.
-    attrs = %{"avatar" => jpeg_upload(), "first_name" => String.duplicate("a", 51)}
+    attrs = %{"avatar" => image_upload(), "first_name" => String.duplicate("a", 51)}
 
     assert {:error, %Ecto.Changeset{}} = Accounts.update_user(user, attrs)
 
@@ -71,13 +74,28 @@ defmodule Vutuv.AccountsAvatarTest do
     user = insert_activated_user(first_name: "Ada")
 
     assert {:ok, updated} =
-             Accounts.update_user(user, %{"avatar" => jpeg_upload(), "headline" => "Hi"})
+             Accounts.update_user(user, %{"avatar" => image_upload(), "headline" => "Hi"})
 
     assert updated.avatar == "selfie.jpg"
     assert Repo.get!(User, user.id).avatar == "selfie.jpg"
     assert File.ls!(avatar_dir(user)) != []
     assert Uploads.Originals.path("avatars/#{user.id}")
     assert updated.headline == "Hi"
+  end
+
+  # The profile picture was the strictest upload on the site: JPEG and PNG and
+  # nothing else, while a post photo has taken WebP (and HEIC where the box can
+  # decode it) all along. A member re-branding with a WebP logo got "is not a
+  # valid image" and, right under it, the gravatar.com button — which reads as
+  # "you need a Gravatar account to have a picture here".
+  test "a WebP avatar is accepted and stored" do
+    user = insert_activated_user(first_name: "Ada")
+
+    assert {:ok, updated} = Accounts.update_user(user, %{"avatar" => image_upload("logo.webp")})
+
+    assert updated.avatar == "logo.webp"
+    assert File.ls!(avatar_dir(user)) != []
+    assert Uploads.Originals.path("avatars/#{user.id}")
   end
 
   test "an undecodable image is rejected in the changeset and writes nothing" do
@@ -89,10 +107,36 @@ defmodule Vutuv.AccountsAvatarTest do
     bad = %Plug.Upload{filename: "broken.jpg", path: src, content_type: "image/jpeg"}
 
     assert {:error, changeset} = Accounts.update_user(user, %{"avatar" => bad})
-    assert "is not a valid image" in errors_on(changeset).avatar
+
+    # The refusal names the formats this installation takes, because the member
+    # has to decide what to do next and "is not a valid image" told them
+    # nothing. Derived from the whitelist: an installation whose libvips
+    # decodes HEIC accepts more than this one does.
+    assert errors_on(changeset).avatar == [
+             "We cannot read this file. Please upload one of these formats: " <>
+               UI.format_list(Uploads.extension_whitelist()) <> "."
+           ]
 
     refute File.exists?(avatar_dir(user))
     assert Repo.get!(User, user.id).avatar == nil
+  end
+
+  test "a file over the size cap is refused with the cap in the sentence" do
+    user = insert_activated_user(first_name: "Ada")
+
+    src = Path.join(System.tmp_dir!(), "huge_#{System.unique_integer([:positive])}.jpg")
+    File.write!(src, :binary.copy("x", Uploads.max_filesize() + 1))
+    on_exit(fn -> File.rm(src) end)
+    huge = %Plug.Upload{filename: "huge.jpg", path: src, content_type: "image/jpeg"}
+
+    assert {:error, changeset} = Accounts.update_user(user, %{"avatar" => huge})
+
+    assert errors_on(changeset).avatar == [
+             "That file is larger than #{UI.megabyte_label(Uploads.max_filesize())}. " <>
+               "Please upload a smaller one."
+           ]
+
+    refute File.exists?(avatar_dir(user))
   end
 
   test "a chosen avatar crop is normalised and persisted alongside the file" do
@@ -100,7 +144,7 @@ defmodule Vutuv.AccountsAvatarTest do
 
     assert {:ok, updated} =
              Accounts.update_user(user, %{
-               "avatar" => jpeg_upload(),
+               "avatar" => image_upload(),
                "avatar_crop" => "0.25,0,0.5,1"
              })
 
@@ -112,7 +156,7 @@ defmodule Vutuv.AccountsAvatarTest do
     user = insert_activated_user(first_name: "Ada")
 
     assert {:ok, updated} =
-             Accounts.update_user(user, %{"avatar" => jpeg_upload(), "avatar_crop" => "garbage"})
+             Accounts.update_user(user, %{"avatar" => image_upload(), "avatar_crop" => "garbage"})
 
     assert updated.avatar == "selfie.jpg"
     assert updated.avatar_crop == nil
@@ -122,7 +166,7 @@ defmodule Vutuv.AccountsAvatarTest do
     user = insert_activated_user(first_name: "Ada")
     # Reuse one upload (the file on disk survives store), so the original bytes
     # are byte-identical across the three saves and the crop is the only variable.
-    upload = jpeg_upload()
+    upload = image_upload()
 
     assert {:ok, a} =
              Accounts.update_user(user, %{"avatar" => upload, "avatar_crop" => "0,0,0.5,0.5"})
@@ -158,7 +202,7 @@ defmodule Vutuv.AccountsAvatarTest do
     # derived wide version keeps the cropped 600x100 instead of the full 600x400.
     assert {:ok, updated} =
              Accounts.update_user(user, %{
-               "cover_photo" => jpeg_upload("banner.jpg"),
+               "cover_photo" => image_upload("banner.jpg"),
                "cover_crop" => "0,0.3,1,0.25"
              })
 
@@ -171,7 +215,7 @@ defmodule Vutuv.AccountsAvatarTest do
 
     assert {:ok, _} =
              Accounts.update_user(user, %{
-               "cover_photo" => jpeg_upload("banner.jpg"),
+               "cover_photo" => image_upload("banner.jpg"),
                "cover_crop" => "0,0.3,1,0.25"
              })
 
@@ -187,7 +231,7 @@ defmodule Vutuv.AccountsAvatarTest do
     user = insert_activated_user(first_name: "Ada")
 
     attrs = %{
-      "cover_photo" => jpeg_upload("banner.jpg"),
+      "cover_photo" => image_upload("banner.jpg"),
       "first_name" => String.duplicate("a", 51)
     }
 

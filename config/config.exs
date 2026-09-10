@@ -25,7 +25,6 @@ config :vutuv, VutuvWeb.Endpoint,
   # from secret_key_base and from the Plug.Session signing_salt.
   live_view: [signing_salt: "PHEbY7u44Jfd3Ei0"],
   locales: ~w(en de it),
-  max_image_filesize: 2_000_000,
   max_page_items: 250
 
 config :logger, :console,
@@ -715,6 +714,14 @@ config :vutuv, :audible_domain, "www.audible.de"
 # Derived versions are AVIF; originals stay private on disk, and leave only
 # through the per-photo download an author switches on (Vutuv.PostImageStore).
 config :vutuv, :post_images, max_filesize: 50_000_000, max_per_post: 10
+
+# Profile pictures (avatar, cover). 8 MB, where it was 2: the form recommends a
+# 2100 × 2100 avatar, which a PNG at that size regularly overruns and a photo
+# straight off a phone always does, so the first upload a new member makes was
+# the one most likely to be refused. Its own key rather than a corner of the
+# endpoint's config, like every other upload budget beside it — which is also
+# what lets an installation override it in runtime.exs.
+config :vutuv, :profile_images, max_filesize: 8_000_000
 
 # Video on posts (issue #1906, Vutuv.Videos). `enabled` is the product switch
 # (an installation without ffmpeg runs with it off — VIDEO_UPLOADS in

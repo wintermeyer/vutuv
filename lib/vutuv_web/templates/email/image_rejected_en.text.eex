@@ -5,7 +5,7 @@ our automated image review removed
 <%= if @category == "unverifiable" do %>
 This one is a technical problem: our review could not open the image
 file and therefore could not judge it. That says nothing about what was
-on it. A JPEG or PNG file usually works.
+on it. A JPEG, PNG or WebP file usually works.
 <% else %>
 No human decided this. An AI does it here: it looks at every uploaded
 image and decides on its own whether it is family-friendly and suitable

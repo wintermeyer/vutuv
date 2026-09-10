@@ -277,7 +277,9 @@ defmodule Vutuv.CoverTest do
       changeset = User.changeset(@user, %{"cover_photo" => upload})
 
       refute changeset.valid?
-      assert {"is not a valid image", _} = changeset.errors[:cover_photo]
+
+      assert {"We cannot read this file. Please upload one of these formats: %{formats}.", _} =
+               changeset.errors[:cover_photo]
     end
   end
 

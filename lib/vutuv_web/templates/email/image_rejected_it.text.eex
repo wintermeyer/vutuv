@@ -5,7 +5,7 @@ il nostro esame automatico delle immagini ha rimosso
 <%= if @category == "unverifiable" do %>
 Si tratta di un problema tecnico: il nostro esame non è riuscito ad aprire il
 file dell'immagine e quindi non ha potuto giudicarla. Questo non dice nulla su
-cosa vi fosse raffigurato. Di solito un file JPEG o PNG funziona.
+cosa vi fosse raffigurato. Di solito un file JPEG, PNG o WebP funziona.
 <% else %>
 Non ha deciso nessuna persona. Qui lo fa un'IA: guarda ogni immagine caricata e
 decide da sé se è adatta a tutti e a un ambiente di lavoro. Funziona allo
