@@ -431,6 +431,24 @@ defmodule Vutuv.Translations do
   def subject_key(%Note{id: id}), do: {:note, id}
 
   @doc """
+  Whether this module handles `record` at all — asked by a caller holding a
+  mixed list of things a page draws, of which only some are translatable.
+
+  There is no total fallback on `subject_key/1` and there should not be: a kind
+  this module has no column for must not quietly become a key. So the question
+  is asked here instead, off the same `@subject_schemas` list the detection
+  sweep and `topic/1` read, and a fourth translatable kind is one list entry
+  rather than a new predicate.
+
+  The kind this exists for is `Vutuv.Tags.ExternalPost` (issue #2127): a post
+  read off another server's public tag timeline is text and a link, has no
+  translation column and no card control to offer one, and it arrives in the
+  feed's subject list beside the three that do.
+  """
+  def translatable?(%module{}), do: module in @subject_schemas
+  def translatable?(_record), do: false
+
+  @doc """
   Stores (or refreshes) the translation of `subject` into `target_language`.
   `result` carries what the model answered: `:body`, `:source_language`, and
   for remote content `:summary`; `:model` names who translated. Stamped with

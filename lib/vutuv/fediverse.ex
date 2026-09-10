@@ -100,6 +100,7 @@ defmodule Vutuv.Fediverse do
   alias Vutuv.Social.PastFollow, as: PastMemberFollow
   alias Vutuv.SocialFeed.Http
   alias Vutuv.Tags
+  alias Vutuv.Tags.ExternalPost
   alias Vutuv.Tags.Tag
   alias Vutuv.UUIDv7
   alias VutuvWeb.Fediverse.Docs
@@ -3747,50 +3748,11 @@ defmodule Vutuv.Fediverse do
     |> Map.merge(%{post: nil, remote_post: post, reposted_by: nil})
   end
 
-  # The time window a source is asked for, as a cursor: `at` is its upper edge,
-  # `since` (when the caller set one) its lower. Both are **naive** UTC, because
-  # that is what the merged feed stamps its entries with (`Vutuv.FeedPage`),
-  # while most of these columns carry a zone — so the conversion lives here once
-  # instead of once per source.
-  #
-  # `arrival` is the column saying when the row turned up **here**, beside the
-  # one the source is ordered by. A cursor asking for `since_basis: :arrival` is
-  # measured on that clock, both edges, so the window stays one interval rather
-  # than a hybrid of two.
-  defp time_window(query, nil, _field, _arrival), do: query
-
-  defp time_window(query, %{at: at} = cursor, field, arrival) do
-    {kind, column} = window_clock(cursor, field, arrival)
-
-    query
-    |> where([r], field(r, ^column) <= ^stamp(kind, at))
-    |> since_bound(column, cursor[:since] && stamp(kind, cursor[:since]))
-  end
-
-  # Which of a source's clocks this window is measured on. Two exist because a
-  # post from another server carries the time it was written **there** and the
-  # time it reached us, and they are minutes apart: measured over a copy of
-  # production, 62% of cached posts arrive more than a minute after their stated
-  # publication and the median lag is 3m19s.
-  #
-  # Which one is right depends on the question. The calendar asks "what does this
-  # day hold", which is the stamp the entry wears in the timeline, so it reads
-  # the ordering clock. The unread badge asks "what turned up since you last
-  # looked" against a marker that is our own wall clock
-  # (`Vutuv.Posts.mark_feed_read/1`), so a post written ten minutes ago and
-  # delivered just now IS news to the reader — on the publication clock it fell
-  # outside the window and the badge stayed empty while the feed's own pill was
-  # holding that very post.
-  defp window_clock(%{since_basis: :arrival}, _field, arrival), do: arrival
-  defp window_clock(_cursor, field, _arrival), do: {:utc, field}
-
-  defp stamp(:utc, naive), do: DateTime.from_naive!(naive, "Etc/UTC")
-  defp stamp(:naive, naive), do: naive
-
-  defp since_bound(query, _column, nil), do: query
-
-  defp since_bound(query, column, since),
-    do: where(query, [r], field(r, ^column) >= ^since)
+  # The window a cursor describes, applied to this source's ordering column and
+  # its arrival clock. `Vutuv.FeedPage` owns it — the contract it enforces is
+  # every source's, not this module's.
+  defp time_window(query, cursor, field, arrival),
+    do: FeedPage.time_window(query, cursor, field, arrival)
 
   @doc "One stored remote picture with its post, or nil."
   def get_remote_image(id) do
@@ -4140,9 +4102,10 @@ defmodule Vutuv.Fediverse do
         delete_cached_post(post)
 
         # No `user_id`: unlike a reply, a cached post sits under nobody's post,
-        # so there is no member whose page it was on.
-        log_takedown(%{
-          action: "reported_post",
+        # so there is no member whose page it was on. Through the same door the
+        # other kind of cached post uses, so `"reported_post"` and its field set
+        # are spelled once.
+        log_reported_post(%{
           host: account.host,
           actor_uri: account.actor_uri,
           audience: post.audience,
@@ -5600,10 +5563,11 @@ defmodule Vutuv.Fediverse do
   @doc """
   Deletes everything stored from `host`: its remote followers, the accounts its
   members hold that anybody here follows (and, through the cascade, those
-  follows), the replies its members wrote under vutuv posts, the outbound
+  follows), the replies its members wrote under vutuv posts, what a followed
+  tag pulled from it or from its members elsewhere (issue #2127), the outbound
   deliveries still queued for it and the records of what was delivered there.
-  Returns `%{followers: n, remote_accounts: n, notes: n, deliveries: n,
-  post_deliveries: n}`.
+  Returns `%{followers: n, remote_accounts: n, cached_posts: n,
+  external_posts: n, notes: n, deliveries: n, post_deliveries: n}`.
   """
   def purge_instance(host) when is_binary(host) do
     # Whose follower tables are about to lose rows, asked while they still exist.
@@ -5668,10 +5632,19 @@ defmodule Vutuv.Fediverse do
     {post_deliveries, _} =
       Repo.delete_all(from(d in PostDelivery, where: uri_host(d.inbox_uri) == ^host))
 
+    # What a followed tag pulled off that server, and what it pulled off other
+    # servers that this one's members had written (issue #2127). Deleted rather
+    # than left to the read-time filter: "a blocked server leaves nothing of
+    # itself at rest" is this function's whole promise, and the filter is what
+    # covers the rows a *later* block finds — not a reason to keep them.
+    {external_posts, _} =
+      Repo.delete_all(from(p in ExternalPost, where: p.source == ^host or p.author_host == ^host))
+
     %{
       followers: followers,
       remote_accounts: remote_accounts,
       cached_posts: cached_posts,
+      external_posts: external_posts,
       notes: notes,
       deliveries: deliveries,
       post_deliveries: post_deliveries
@@ -6869,6 +6842,36 @@ defmodule Vutuv.Fediverse do
     })
   end
 
+  @doc """
+  Records a takedown of a post this installation only holds a **copy** of, for
+  the ledger the operator's blocklist decision reads.
+
+  The one door onto the `reported_post` action, for both kinds of cached post
+  there are: one from an account somebody here follows (`report_remote_post/2`)
+  and one read off another server's public tag timeline
+  (`Vutuv.Tags.ExternalPosts.report/2`, issue #2127). They file the same action
+  because to an operator asking "is this one troll or is this server the
+  problem" they are the same evidence — and neither sits on anybody's page, so
+  neither carries an owner.
+
+  `actor_uri` is kept only as a keyed digest; nothing of the post's own words
+  reaches this table.
+  """
+  def log_reported_post(%{
+        host: host,
+        actor_uri: actor_uri,
+        audience: audience,
+        actor_id: actor_id
+      }) do
+    log_takedown(%{
+      action: "reported_post",
+      host: host,
+      actor_uri: actor_uri,
+      audience: audience,
+      actor_id: actor_id
+    })
+  end
+
   # The one writer of the content-free takedown ledger, so its field set — and
   # the keyed digest that stands in for the actor — has a single definition
   # whatever kind of cached content was taken down. `user_id` /
@@ -7879,6 +7882,10 @@ defmodule Vutuv.Fediverse do
   """
   def subject_kind(%RemotePost{}), do: :remote_post
   def subject_kind(%Note{}), do: :note
+  # No action bar and no broadcast of its own (issue #2127) — this kind is here
+  # so `subject_key/1` is total, which is what lets a page holding all three
+  # dedupe its cards by one key instead of by a field picked per kind.
+  def subject_kind(%ExternalPost{}), do: :external_post
 
   @doc """
   What makes two cards **the same card**: `{kind, id}` for a thing from another
@@ -7918,6 +7925,7 @@ defmodule Vutuv.Fediverse do
   """
   def subject_origin(%RemotePost{} = post), do: RemotePost.origin(post)
   def subject_origin(%Note{} = note), do: Note.origin(note)
+  def subject_origin(%ExternalPost{} = post), do: ExternalPost.origin(post)
 
   @doc """
   Who wrote it, as `%{name:, handle:, url:}` — the remote twin of
@@ -7945,6 +7953,13 @@ defmodule Vutuv.Fediverse do
 
   def subject_author_ref(%Note{} = note) do
     %{name: Note.label(note), handle: Note.display_handle(note), url: note.actor_uri}
+  end
+
+  # A post read off a public tag timeline (issue #2127) keeps its author on its
+  # own row too, and the **address** is the point: the account lives on
+  # `author_host`, which is regularly not the server we asked.
+  def subject_author_ref(%ExternalPost{} = post) do
+    %{name: ExternalPost.label(post), handle: ExternalPost.address(post), url: post.author_url}
   end
 
   defp subject_schema(%RemotePost{}), do: RemotePost

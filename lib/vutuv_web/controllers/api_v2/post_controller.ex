@@ -24,6 +24,7 @@ defmodule VutuvWeb.ApiV2.PostController do
   alias Vutuv.Fediverse.RemotePost
   alias Vutuv.Posts
   alias Vutuv.Posts.Post
+  alias Vutuv.Tags.ExternalPost
   alias VutuvWeb.AgentDocs.PostDoc
   alias VutuvWeb.ApiV2
   alias VutuvWeb.ApiV2.Problem
@@ -202,6 +203,16 @@ defmodule VutuvWeb.ApiV2.PostController do
     do: remote_feed_entry(entry, cached)
 
   defp feed_entry(%{note: %Note{} = note} = entry), do: remote_feed_entry(entry, note)
+
+  # A post a followed tag brought back from another server (issue #2127). The
+  # same remote shape, plus the one fact only this row has: `found_via`, the
+  # server whose public tag timeline we read it off — which is not, and mostly
+  # is not, where its author lives.
+  defp feed_entry(%{external_post: %ExternalPost{} = post} = entry) do
+    entry
+    |> remote_feed_entry(post)
+    |> Map.put(:found_via, post.source)
+  end
 
   defp feed_entry(%{post: post} = entry) do
     reposters = entry[:reposters] || List.wrap(entry[:reposted_by])

@@ -75,6 +75,7 @@ defmodule VutuvWeb.PostTeaser do
   alias Vutuv.PostRewrites
   alias Vutuv.Posts
   alias Vutuv.Posts.Post
+  alias Vutuv.Tags.ExternalPost
   alias VutuvWeb.Markdown
 
   # Long enough that no surface has to ask for more, short enough that a 10k
@@ -265,6 +266,7 @@ defmodule VutuvWeb.PostTeaser do
     cond do
       Posts.remote_reply_entry?(entry) -> entry.note
       Posts.remote_feed_entry?(entry) -> entry.remote_post
+      Posts.external_feed_entry?(entry) -> entry.external_post
       true -> entry.post
     end
   end
@@ -308,16 +310,18 @@ defmodule VutuvWeb.PostTeaser do
   would name the wrong person.
   """
   def filtered_hit(entry, compiled, viewer_id) do
-    if Posts.remote_feed_entry?(entry) do
-      record = record(entry)
-
-      hit(record, ContentFilters.filtered(record, compiled))
-    else
+    if Posts.local_feed_entry?(entry) do
       entry
       |> Posts.thread_posts()
       |> Enum.reject(&(&1.user_id == viewer_id))
       |> Enum.concat(Posts.remote_cards(entry))
       |> Enum.find_value(&hit(&1, ContentFilters.filtered(&1, compiled)))
+    else
+      # Every row from elsewhere is one record and no conversation: there is
+      # nothing above it on the page for a rule to match instead.
+      record = record(entry)
+
+      hit(record, ContentFilters.filtered(record, compiled))
     end
   end
 
@@ -338,6 +342,9 @@ defmodule VutuvWeb.PostTeaser do
 
       Posts.remote_feed_entry?(entry) ->
         Handle.short(RemoteAccount.display_handle(entry.remote_post.remote_account))
+
+      Posts.external_feed_entry?(entry) ->
+        Handle.short(ExternalPost.address(entry.external_post))
 
       true ->
         case Posts.author(entry.post) do
@@ -367,6 +374,11 @@ defmodule VutuvWeb.PostTeaser do
       author -> %{name: Identity.display_name(author), handle: local_who(author)}
     end
   end
+
+  # Its author's address is on the row itself, and the host in it is the
+  # **author's** server rather than the one the timeline was read from.
+  def author_of(%ExternalPost{} = post),
+    do: %{name: post.author_name, handle: Handle.short(ExternalPost.address(post))}
 
   def author_of(%{remote_account: %RemoteAccount{} = account}),
     do: %{

@@ -18,10 +18,10 @@ defmodule Vutuv.FeedPage do
       timestamp, and optionally `since:` — a **lower** bound that turns the walk
       into a window (the feed calendar's one-day view), and `since_basis:` —
       which of a source's clocks that window is measured on. `:arrival` asks the
-      two fediverse sources for the moment a row reached *us* rather than the
-      time its origin stamped on it minutes earlier
-      (`Vutuv.Fediverse.window_clock/3`); anything else, its absence included,
-      means the clock the source is ordered by. A source that honours `at` but
+      three sources that have one for the moment a row reached *us* rather than
+      the time its origin stamped on it minutes earlier (`time_window/4` below
+      applies both edges); anything else, its absence included, means the clock
+      the source is ordered by. A source that honours `at` but
       forgets `since` does not crash, it silently widens, so any new source has
       to apply both — and one that forgets `since_basis` does not widen the
       window but *moves* it, which is quieter still. Timestamps have second
@@ -33,6 +33,8 @@ defmodule Vutuv.FeedPage do
       carry, so every source is fetched from the top and the merged list is
       dropped into; `next_cursor` is always nil.
   """
+
+  import Ecto.Query, only: [where: 3]
 
   @doc """
   The merged newest-first order, applied to `entries`.
@@ -123,6 +125,60 @@ defmodule Vutuv.FeedPage do
       next_cursor: nil
     }
   end
+
+  @doc """
+  Narrows a source's query to the window `cursor` describes: `at` is its upper
+  edge, `since` (when the caller set one) its lower.
+
+  Both edges are **naive** UTC, because that is what the merged feed stamps its
+  entries with, while most of these columns carry a zone — so the conversion
+  lives here once instead of once per source. `field` is the column the source
+  is ordered by; `arrival` is `{:utc | :naive, column}` for the one saying when
+  the row turned up **here**.
+
+  A cursor asking for `since_basis: :arrival` is measured on that arrival clock,
+  **both edges**, so the window stays one interval rather than a hybrid of two.
+  Two clocks exist because a post from another server carries the time it was
+  written *there* and the time it reached us, and they are minutes apart:
+  measured over a copy of production, 62% of cached posts arrive more than a
+  minute after their stated publication and the median lag is 3m19s.
+
+  Which one is right depends on the question. The calendar asks "what does this
+  day hold", which is the stamp the entry wears in the timeline, so it reads the
+  ordering clock. The unread badge asks "what turned up since you last looked"
+  against a marker that is our own wall clock (`Vutuv.Posts.mark_feed_read/1`),
+  so a post written ten minutes ago and delivered just now IS news to the reader
+  — on the publication clock it fell outside the window and the badge stayed
+  empty while the feed's own pill was holding that very post.
+
+  It lives beside the cursor rather than in one source's module because the
+  moduledoc above makes it every source's contract: "a source that honours `at`
+  but forgets `since` does not crash, it silently widens", and one that forgets
+  `since_basis` moves the window instead. A second copy of this is a second
+  chance for a source to get one of those wrong quietly.
+  """
+  def time_window(query, cursor, field, arrival)
+
+  def time_window(query, nil, _field, _arrival), do: query
+
+  def time_window(query, %{at: at} = cursor, field, arrival) do
+    {kind, column} = window_clock(cursor, field, arrival)
+
+    query
+    |> where([r], field(r, ^column) <= ^stamp(kind, at))
+    |> since_bound(column, cursor[:since] && stamp(kind, cursor[:since]))
+  end
+
+  defp window_clock(%{since_basis: :arrival}, _field, arrival), do: arrival
+  defp window_clock(_cursor, field, _arrival), do: {:utc, field}
+
+  defp stamp(:utc, naive), do: DateTime.from_naive!(naive, "Etc/UTC")
+  defp stamp(:naive, naive), do: naive
+
+  defp since_bound(query, _column, nil), do: query
+
+  defp since_bound(query, column, since),
+    do: where(query, [r], field(r, ^column) >= ^since)
 
   defp next_cursor([], _prev), do: nil
 

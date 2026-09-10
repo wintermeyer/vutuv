@@ -229,13 +229,58 @@ takes a pair's schedule and its posts away with the last follow that wanted
 them. Nothing here outlives somebody's interest in it, which is also the
 retention answer for words their author never offered us.
 
+### Showing what they found (issue #2127)
+
+Those rows stand in the member's feed as ordinary cards
+(`Vutuv.Tags.ExternalPosts.feed_items/4`, an eighth source beside the seven in
+[posts-and-feed.md](posts-and-feed.md)) and fill the fediverse tab of a tag
+page, which for most topics stood empty. A feed entry is the fourth row shape —
+`%{id: "external-<uuid>", external_post: %ExternalPost{}, post: nil}` — spotted
+by `Vutuv.Posts.external_feed_entry?/1` and drawn undecorated, since there is no
+account row here to read like marks, pictures, quotes or a follow state from.
+
+**The server we asked is not the author's home**, and that is the whole point of
+the card. A tag timeline is a mixed bag: a post about Koblenz read off
+troet.cafe was usually written somewhere else. So `external_tag_posts.author_host`
+stores whose server it really is — the client computed it anyway, to ask the
+blocklist about it — and `<.external_post_card>` heads the card with the
+author's own `@name@host`, exactly as a cached post's card does, with the server
+we read it from in a small grey line under it (`Found through …`). That line is
+rendered even when the two coincide: it answers "how did this get here", and one
+that vanished when the answers agreed would teach a reader that a card without
+it came from the author directly, which is never true here.
+
+The row reaches **the member whose own follow named that server** — the query
+joins their `tag_follows` and its `tag_follow_sources` — so somebody following
+the same tag with vutuv alone sees none of it. Everything that governs an
+ordinary card governs these: hidden words and muted tags
+(`Vutuv.Posts.text/1` and `account_names/1` answer for this kind too), the
+reader's own muted servers, their language filter, and a report that empties our
+copy for everybody here at once.
+
+That report **blanks the row rather than deleting it**. The pull re-reads the
+same timeline every ten minutes to three hours with `on_conflict: :nothing`, so
+a deleted row would be written straight back: a report that undoes itself before
+the reader has looked away is not a control. The words and the author go, the
+key stays as a tombstone, and `reported_at` keeps every reader off it. The
+takedown is filed in the same content-free ledger a reported cached post is
+(`Vutuv.Fediverse.log_reported_post/1`), so the operator's "one troll or this
+whole server" question counts these alongside the rest.
+
+The **Mastodon API drops these rows** rather than rendering them
+(`Vutuv.MastodonApi.Presenter.statuses/2`): every field of a `Status` that
+matters hangs off an `Account` object, and inventing an id for an author we hold
+no row for would put a dereferenceable-looking identity into every client's
+cache. A client asking for its home timeline is talking to a server that can ask
+those public timelines itself.
+
 ## The tag page (`/tags/:slug`)
 
 A tag's public page is the topic page: its description, the most endorsed
 members, the open positions carrying it, and below them the **timeline** —
 everything written about the topic, from both worlds, in one list.
 
-The timeline is `Vutuv.Tags.Timeline`, a SQL union of two sources:
+The timeline is `Vutuv.Tags.Timeline`, a SQL union of three sources:
 
 - **vutuv posts** carrying the tag (`Vutuv.Posts.tag_posts_query/1`, which is
   itself the union of the composer's tag field and the body's `#hashtags` — see
@@ -245,9 +290,15 @@ The timeline is `Vutuv.Tags.Timeline`, a SQL union of two sources:
   `Vutuv.Fediverse.Hashtags`), **public audience only**. `unlisted` is not a
   smaller kind of public — it means the author asked their own server to keep
   the post off its discovery surfaces, and a topic page crawlers read is exactly
-  such a surface — and a followers-only post is not ours to publish at all.
+  such a surface — and a followers-only post is not ours to publish at all;
+- **posts read off other servers' public tag timelines** (`external_tag_posts`,
+  issue #2127), which is what fills this tab for a topic nobody here follows an
+  account about — and that is most topics. No audience to re-check: only public
+  statuses are ever stored. They carry no like tally of their own (we hold text
+  and a link, not an object with a `likes` collection), so sorting by likes puts
+  them at the bottom beside the cached posts whose origin serves none.
 
-Both ingestion paths **mint** a tag the site does not have yet: writing
+The first two ingestion paths **mint** a tag the site does not have yet: writing
 `#Eisenach` declares a topic as plainly as typing it into the composer's tag
 field, and resolving hashtags against existing tags only meant the catalog grew
 from that field alone. Three bounds keep it from becoming an open write. A body

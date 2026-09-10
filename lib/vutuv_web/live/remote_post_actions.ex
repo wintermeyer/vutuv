@@ -30,6 +30,7 @@ defmodule VutuvWeb.Live.RemotePostActions do
 
   alias Vutuv.Fediverse
   alias Vutuv.Mutes
+  alias Vutuv.Tags.ExternalPosts
   alias VutuvWeb.MuteMessages
 
   @doc """
@@ -40,25 +41,45 @@ defmodule VutuvWeb.Live.RemotePostActions do
   to leave the page.
   """
   def report(socket, id, on_removed) when is_function(on_removed, 1) do
-    case Fediverse.report_remote_post(id, socket.assigns.current_user) do
-      :ok ->
-        {:noreply,
-         socket
-         |> put_flash(:info, gettext("Thank you. Our copy was deleted right away."))
-         |> on_removed.()}
-
-      {:error, :rate_limited} ->
-        {:noreply,
-         put_flash(
-           socket,
-           :error,
-           gettext("You have reported a lot today. Please try again tomorrow.")
-         )}
-
-      {:error, :not_found} ->
-        {:noreply, on_removed.(socket)}
-    end
+    id
+    |> Fediverse.report_remote_post(socket.assigns.current_user)
+    |> reported(socket, on_removed)
   end
+
+  @doc """
+  The same for a `"report-external-post"` event — a post a followed tag brought
+  back from another server's public tag timeline (issue #2127).
+
+  Same three answers and the same two sentences, because to the member it is the
+  same act on the same kind of thing: our copy of somebody else's post goes, and
+  the post itself stands where its author put it. How that copy goes differs and
+  is invisible from here — `Vutuv.Tags.ExternalPosts.report/2` says.
+  """
+  def report_external(socket, id, on_removed) when is_function(on_removed, 1) do
+    id
+    |> ExternalPosts.report(socket.assigns.current_user)
+    |> reported(socket, on_removed)
+  end
+
+  # The answer, whichever copy it was about.
+  defp reported(:ok, socket, on_removed) do
+    {:noreply,
+     socket
+     |> put_flash(:info, gettext("Thank you. Our copy was deleted right away."))
+     |> on_removed.()}
+  end
+
+  defp reported({:error, :rate_limited}, socket, _on_removed) do
+    {:noreply,
+     put_flash(
+       socket,
+       :error,
+       gettext("You have reported a lot today. Please try again tomorrow.")
+     )}
+  end
+
+  defp reported({:error, :not_found}, socket, on_removed),
+    do: {:noreply, on_removed.(socket)}
 
   @doc """
   Handles a `"mute-remote-account"` event for the account `id`: the private,

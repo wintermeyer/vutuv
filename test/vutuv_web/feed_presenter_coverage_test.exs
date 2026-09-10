@@ -28,6 +28,9 @@ defmodule VutuvWeb.FeedPresenterCoverageTest do
   """
   use VutuvWeb.ConnCase, async: false
 
+  import Vutuv.ExternalTagHelpers,
+    only: [external_post: 2, follow_tag_through: 2, put_config: 2]
+
   import Vutuv.MastodonHelpers, only: [remote_account: 1, cached_post: 2]
 
   alias Vutuv.ApiAuth
@@ -82,6 +85,18 @@ defmodule VutuvWeb.FeedPresenterCoverageTest do
       )
 
     Repo.insert!(%Fediverse.NoteRepost{user_id: sharer.id, note_id: note.id})
+
+    # ...and the shape that reaches this reader through a **topic** rather than
+    # through anybody at all (issue #2127): a post read off the public tag
+    # timeline of a server they named on a tag follow of their own.
+    tag = insert(:tag)
+    follow_tag_through(me, tag)
+
+    external_post(tag,
+      source: Vutuv.ExternalTagHelpers.tag_source(),
+      author_host: Vutuv.ExternalTagHelpers.author_host(),
+      text: "EIN FUND VON EINEM ANDEREN SERVER"
+    )
   end
 
   defp accept_follow!(user, account) do
@@ -122,6 +137,7 @@ defmodule VutuvWeb.FeedPresenterCoverageTest do
     # The organization helpers below flip this global flag and the DNS stub
     # beside it; the module is `async: false` for that too.
     Application.put_env(:vutuv, :verify_organization_domains, true)
+    put_config(:fetch_external_tag_posts, true)
 
     on_exit(fn ->
       Application.put_env(:vutuv, :verify_organization_domains, false)
@@ -133,10 +149,10 @@ defmodule VutuvWeb.FeedPresenterCoverageTest do
 
     texts = texts_owed(me)
 
-    # The fixture is only worth what it covers: nine sentences means every shape
+    # The fixture is only worth what it covers: ten sentences means every shape
     # above really reached the page. A silently empty feed would make every
     # assertion below vacuously true.
-    assert length(texts) == 9, "the fixture stopped covering every row shape: #{inspect(texts)}"
+    assert length(texts) == 10, "the fixture stopped covering every row shape: #{inspect(texts)}"
 
     {:ok, conn: conn, me: me, texts: texts}
   end

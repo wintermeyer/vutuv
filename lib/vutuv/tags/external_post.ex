@@ -32,6 +32,7 @@ defmodule Vutuv.Tags.ExternalPost do
   import Vutuv.ChangesetHelpers, only: [scrub_nul: 1]
 
   alias Vutuv.Fediverse.BlockedInstance
+  alias Vutuv.Fediverse.Handle
 
   # The clamp the client applies (`Vutuv.SocialFeed.Post.truncate/1`) is 500
   # characters; this is the backstop under it, on a `text` column.
@@ -61,18 +62,39 @@ defmodule Vutuv.Tags.ExternalPost do
     field(:text, :string)
     field(:author_name, :string)
     field(:author_acct, :string)
+
+    # The server the **author** lives on — very rarely the one we asked. A
+    # public tag timeline is a mixed bag: a post about Koblenz found through
+    # troet.cafe was usually written somewhere else entirely. `source` says
+    # where we looked; this says whose words these are, and it is what every
+    # card, the operator's blocklist and the reader's own muted-server list
+    # read. NULL only for a row the release before #2127 wrote, which is why
+    # every reader drops such a row rather than falling back to `source` — that
+    # fallback is the card claiming the author lives on a server they may never
+    # have used.
+    field(:author_host, :string)
     field(:author_url, :string)
     field(:language, :string)
     field(:published_at, :utc_datetime)
+
+    # Set by a member's report, which blanks the words and keeps the row as the
+    # key that stops the next pull writing it back — `Vutuv.Tags.ExternalPosts.report/2`
+    # owns that reasoning (issue #2127).
+    field(:reported_at, :utc_datetime)
 
     belongs_to(:tag, Vutuv.Tags.Tag)
 
     timestamps()
   end
 
-  @fields ~w(tag_id source remote_id url text author_name author_acct author_url
-             language published_at)a
-  @required ~w(tag_id source remote_id url text published_at)a
+  @fields ~w(tag_id source remote_id url text author_name author_acct author_host
+             author_url language published_at)a
+
+  # `author_host` is required on the way in even though the column is nullable:
+  # the column has to take a NULL because the release before #2127 wrote rows
+  # without it, and a reader that cannot say whose server a post is on refuses
+  # to draw it. Nothing this release writes should ever be in that state.
+  @required ~w(tag_id source remote_id url text author_host published_at)a
 
   def changeset(model, params \\ %{}) do
     model
@@ -83,6 +105,7 @@ defmodule Vutuv.Tags.ExternalPost do
     |> scrub_nul()
     |> validate_required(@required)
     |> validate_length(:source, max: BlockedInstance.max_host(), count: :bytes)
+    |> validate_length(:author_host, max: BlockedInstance.max_host(), count: :bytes)
     |> validate_length(:remote_id, max: @max_id, count: :bytes)
     |> validate_length(:language, max: @max_language, count: :bytes)
     |> validate_length(:url, max: @max_url, count: :bytes)
@@ -93,6 +116,54 @@ defmodule Vutuv.Tags.ExternalPost do
     |> unique_constraint(:remote_id, name: :external_tag_posts_tag_id_source_remote_id_index)
     |> foreign_key_constraint(:tag_id)
   end
+
+  @doc """
+  The author's full address, `@name@host` — the thing a reader has to be able to
+  copy and find them by.
+
+  Built through `Vutuv.Fediverse.Handle.display/3`, the one formatter for this,
+  because the Mastodon REST `acct` is two different values: bare (`ada`) for
+  somebody local to the server we asked, and `ada@elsewhere` for anybody else.
+  Both come back here as the whole address, so a reader never sees a half one.
+  """
+  def address(%__MODULE__{} = post) do
+    Handle.display(local_name(post.author_acct), post.author_url, post.author_host)
+  end
+
+  @doc """
+  The name to head the card with: what the author calls themselves, their
+  address if they call themselves nothing, and the link as the last resort.
+
+  The same fallback ladder `Vutuv.Fediverse.RemoteAccount.label/1` walks, so a
+  post found through a tag and a post from a followed account are headed the
+  same way. Two rungs rather than three: `author_host` is required, so
+  `address/1` always answers at least `@host`.
+  """
+  def label(%__MODULE__{} = post), do: post.author_name || address(post)
+
+  @doc """
+  The name half of the address, without the server — the monogram's source.
+
+  `Vutuv.Fediverse.RemoteAccount`'s twin takes the bare `handle` column for this
+  and its doc says why: the whole address starts with an `@`, so
+  `VutuvWeb.UI.name_initials/1` would answer `"@"` for it. The Mastodon `acct`
+  is bare for an author local to the server we asked and `name@host` for
+  everybody else, so the split has to happen somewhere; it happens here.
+  """
+  def author_username(%__MODULE__{author_acct: acct}), do: local_name(acct)
+
+  @doc """
+  Where this post really lives — its own address on its own server.
+
+  This installation serves no page for it (we hold text and a link, nothing
+  else), so this is the only address there is. The remote twin of
+  `Vutuv.Posts.path/1`, and what `Vutuv.Fediverse.subject_origin/1` answers for
+  this kind.
+  """
+  def origin(%__MODULE__{url: url}), do: url
+
+  defp local_name(acct) when is_binary(acct), do: acct |> String.split("@") |> hd()
+  defp local_name(_acct), do: nil
 
   @doc "How much of a display identity is kept — the client clamps to it."
   def max_display, do: @max_display

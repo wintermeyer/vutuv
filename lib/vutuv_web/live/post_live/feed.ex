@@ -453,19 +453,6 @@ defmodule VutuvWeb.PostLive.Feed do
     end
   end
 
-  # The record a feed entry is about: a remote reply, a cached remote post, or
-  # the vutuv post itself. Spelled once, because every question this module asks
-  # of an entry that is really a question about the post behind it — its id, the
-  # line the ticker quotes, what could be translated — used to re-derive it, and
-  # a fourth entry shape would have had to be remembered in each.
-  defp entry_record(entry) do
-    cond do
-      Posts.remote_reply_entry?(entry) -> entry.note
-      Posts.remote_feed_entry?(entry) -> entry.remote_post
-      true -> entry.post
-    end
-  end
-
   # Everything a feed entry puts on the page: its own post (plus the nested
   # ancestors of a reply), a cached remote post or a remote reply, and the cards
   # a conversation pulls in from the other network (`Posts.remote_cards/1`) —
@@ -478,7 +465,7 @@ defmodule VutuvWeb.PostLive.Feed do
   # (`shown_remote_keys/1`).
   defp entry_subjects(entry) do
     own =
-      case entry_record(entry) do
+      case PostTeaser.record(entry) do
         %Post{} = post -> [post | entry[:ancestors] || []]
         remote -> [remote]
       end
@@ -1131,13 +1118,13 @@ defmodule VutuvWeb.PostLive.Feed do
       |> then(&Social.follow_edges(user.id, &1))
 
     Enum.map(entries, fn entry ->
-      if Posts.remote_feed_entry?(entry) do
-        entry
-      else
+      if Posts.local_feed_entry?(entry) do
         entry
         |> Map.put(:engagement, engagement[entry.post.id])
         |> Map.put(:ancestor_engagement, Map.take(engagement, ancestor_ids.(entry)))
         |> Map.put(:viewer_follow, follows[entry.post.user_id])
+      else
+        entry
       end
     end)
   end
@@ -1320,6 +1307,14 @@ defmodule VutuvWeb.PostLive.Feed do
   # row leaves the feed in the same round trip.
   def handle_event("report-remote-post", %{"id" => id}, socket) do
     RemotePostActions.report(socket, id, &drop_remote_entry(&1, id))
+  end
+
+  # The same act on a post a followed tag brought back from another server
+  # (issue #2127). One row per copy here — a tag pull files one row per (tag,
+  # server, status), and only one of them can be on this page — so the entry to
+  # take away is the one carrying that id.
+  def handle_event("report-external-post", %{"id" => id}, socket) do
+    RemotePostActions.report_external(socket, id, &drop_external_entry(&1, id))
   end
 
   # "Not this account today": the private, reversible lever beside Report. The
@@ -2309,9 +2304,9 @@ defmodule VutuvWeb.PostLive.Feed do
   # missing key raises inside the render instead of degrading — which is what
   # this door did the moment it could reach a boosted member post at all.
   defp decorate_arrival(entry, socket) do
-    if Posts.remote_feed_entry?(entry),
-      do: for_reader(entry, socket),
-      else: decorate(entry, socket)
+    if Posts.local_feed_entry?(entry),
+      do: decorate(entry, socket),
+      else: for_reader(entry, socket)
   end
 
   # Where the arrival goes, which is the question `insert_entry/3` asks of every
@@ -2927,7 +2922,7 @@ defmodule VutuvWeb.PostLive.Feed do
   # same post stays revealed when it is restreamed), a cached post from another
   # network (issue #1161) by its row id — it is not a `%Post{}` and has no post
   # id to key on.
-  defp filter_key(entry), do: entry_record(entry).id
+  defp filter_key(entry), do: PostTeaser.record(entry).id
 
   # Whether the reader's filters currently hide this entry: it matched one, and
   # they have not opened it. The single expression the row's three renderings
@@ -3002,6 +2997,16 @@ defmodule VutuvWeb.PostLive.Feed do
     |> drop_entries(Enum.filter(socket.assigns.entries, &remote_entry?(&1, remote_post_id)))
   end
 
+  defp drop_external_entry(socket, external_post_id) do
+    drop_entries(
+      socket,
+      Enum.filter(socket.assigns.entries, &external_entry?(&1, external_post_id))
+    )
+  end
+
+  defp external_entry?(entry, external_post_id),
+    do: Posts.external_feed_entry?(entry) and entry.external_post.id == external_post_id
+
   # Taking a set of entries off the page: out of the list the page reasons with
   # and out of the stream the browser holds, then the empty state re-asked. One
   # function, because "which rows go" is the only thing its callers disagree
@@ -3075,7 +3080,7 @@ defmodule VutuvWeb.PostLive.Feed do
   # The entries carrying a vutuv post. A cached post from another network has
   # `post: nil`, so every batch read and every scan that reaches for
   # `entry.post` goes through this (or `find_by_post_id/2`) first.
-  defp local_entries(entries), do: Enum.reject(entries, &Posts.remote_feed_entry?/1)
+  defp local_entries(entries), do: Enum.filter(entries, &Posts.local_feed_entry?/1)
 
   # Re-render the one streamed card a translation state change concerns; a
   # subject not on screen is a harmless no-op (update_only). A local post may
@@ -3092,13 +3097,16 @@ defmodule VutuvWeb.PostLive.Feed do
     # Reuses entry_subjects/1, so "what can this entry translate" is spelled
     # once — the reverse lookup cannot drift from the auto-translate sweep.
     Enum.find(entries, fn entry ->
-      Enum.any?(entry_subjects(entry), &(PostTranslations.subject_key(&1) == key))
+      entry
+      |> entry_subjects()
+      |> Enum.filter(&Vutuv.Translations.translatable?/1)
+      |> Enum.any?(&(PostTranslations.subject_key(&1) == key))
     end)
   end
 
   defp find_by_post_id(entries, post_id) do
     Enum.find(entries, fn entry ->
-      not Posts.remote_feed_entry?(entry) and entry.post.id == post_id
+      Posts.local_feed_entry?(entry) and entry.post.id == post_id
     end)
   end
 
@@ -3132,8 +3140,8 @@ defmodule VutuvWeb.PostLive.Feed do
   # the body into the lower card.
   #
   # Keyed by `subject_key/1`, the identity the DOM ids are built from, so the
-  # two cannot drift, and read through `entry_record/1`, which answers for a
-  # cached post and a remote reply alike.
+  # two cannot drift, and read through `VutuvWeb.PostTeaser.record/1`, which
+  # answers for every row shape alike.
   defp shown_remote_keys(entries) do
     for entry <- entries,
         subject <- entry_subjects(entry),
@@ -3157,13 +3165,13 @@ defmodule VutuvWeb.PostLive.Feed do
   defp shown_keys(entries, remote_keys),
     do: entries |> shown_post_ids() |> MapSet.union(remote_keys)
 
-  defp remote_key(entry), do: Fediverse.subject_key(entry_record(entry))
+  defp remote_key(entry), do: Fediverse.subject_key(PostTeaser.record(entry))
 
   # What identifies an arriving entry against the two sets above — a remote card
   # by its subject, a member's post by its id. Spelled once, so what goes into
   # those sets and what is looked up in them cannot drift apart.
   defp dedupe_key(entry) do
-    if Posts.remote_feed_entry?(entry), do: remote_key(entry), else: entry.post.id
+    if Posts.local_feed_entry?(entry), do: entry.post.id, else: remote_key(entry)
   end
 
   # Fold a new reposter into an on-screen card's avatar stack, in place: keep
@@ -3510,6 +3518,16 @@ defmodule VutuvWeb.PostLive.Feed do
                     pattern={entry.filtered_by}
                     record={entry[:filtered_post]}
                     key={filter_key(entry)}
+                  />
+                <% Posts.external_feed_entry?(entry) -> %>
+                  <%!-- A post one of the reader's followed tags brought back
+                  from another server's public tag timeline (issue #2127). The
+                  same remote skin, headed by the AUTHOR's address, with the
+                  server we read it from in the quiet line under it. --%>
+                  <.external_post_card
+                    post={entry.external_post}
+                    viewer={@current_user}
+                    hide_rules={@filter_rules}
                   />
                 <% Posts.remote_reply_entry?(entry) -> %>
                   <%!-- A reply from another network that somebody here passed

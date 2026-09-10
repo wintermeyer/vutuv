@@ -62,6 +62,59 @@ defmodule Vutuv.ExternalTagHelpers do
   end
 
   @doc """
+  The server a test's follow names, and the server the author of what it turns
+  up actually lives on.
+
+  Deliberately two different hostnames: the one thing these cards exist to get
+  right is that the server we asked is not the author's home, so a fixture where
+  they coincide would let a card that confused them pass.
+  """
+  def tag_source, do: "troet.example"
+  def author_host, do: "mastodon.example"
+
+  @doc """
+  A member following `tag` through `source` — the follow this whole feature
+  hangs off. `Vutuv.Tags.follow_tag/2` writes the local source itself; naming a
+  server is what makes the pair wanted.
+  """
+  def follow_tag_through(user, tag, source \\ nil) do
+    {:ok, follow} = Vutuv.Tags.follow_tag(user, tag)
+    {:ok, _row} = Vutuv.Tags.add_tag_follow_source(follow, source || tag_source())
+    follow
+  end
+
+  @doc """
+  One already-cached external post, filed under `tag` — what the fetcher would
+  have stored, without standing a server up for it.
+
+  `source` defaults to the author's own host, which is the ordinary case only
+  for a post the queried server's own member wrote; a test about the difference
+  between the two passes both.
+  """
+  def external_post(tag, attrs \\ []) do
+    attrs = Map.new(attrs)
+    source = Map.get(attrs, :source, author_host())
+    host = Map.get(attrs, :author_host, source)
+    acct = if(host == source, do: "ada", else: "ada@#{host}")
+
+    defaults = %{
+      tag_id: tag.id,
+      source: source,
+      remote_id: "#{System.unique_integer([:positive])}",
+      url: "https://#{host}/@ada/111",
+      text: "Hello from over there",
+      author_name: "Ada Lovelace",
+      author_acct: acct,
+      author_host: host,
+      author_url: "https://#{host}/@ada",
+      language: "de",
+      published_at: DateTime.utc_now(:second)
+    }
+
+    Vutuv.Repo.insert!(struct!(Vutuv.Tags.ExternalPost, Map.merge(defaults, attrs)))
+  end
+
+  @doc """
   One Mastodon REST status, public, in German, with an author — merge `attrs`
   over it for the field a test is actually about.
   """

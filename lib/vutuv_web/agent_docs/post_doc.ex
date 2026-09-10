@@ -28,6 +28,7 @@ defmodule VutuvWeb.AgentDocs.PostDoc do
   alias Vutuv.Posts.PostReview
   alias Vutuv.Posts.PostVideo
   alias Vutuv.Profiles.VerifiedLinks
+  alias Vutuv.Tags.ExternalPost
   alias VutuvWeb.AgentDocs
   alias VutuvWeb.Markdown
   alias VutuvWeb.PostTeaser
@@ -313,6 +314,17 @@ defmodule VutuvWeb.AgentDocs.PostDoc do
   # nothing it quotes, so it takes the shared shape unchanged.
   def timeline_entry(%{note: %Note{} = note} = entry),
     do: remote_timeline_entry(entry, note)
+
+  # The **third** remote row shape (issue #2127): a post one of the reader's
+  # followed tags brought back from another server. Text and a link and nothing
+  # else, so like a note it takes the shared shape unchanged — what is new is
+  # `found_via`, the server we read it from, which is not where its author
+  # lives and is the one fact this row carries that no other does.
+  def timeline_entry(%{external_post: %ExternalPost{} = post} = entry) do
+    entry
+    |> remote_timeline_entry(post)
+    |> Map.put(:found_via, post.source)
+  end
 
   def timeline_entry(%{post: post} = entry) do
     %{

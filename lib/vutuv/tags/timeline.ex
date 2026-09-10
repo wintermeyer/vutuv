@@ -3,7 +3,7 @@ defmodule Vutuv.Tags.Timeline do
   What a tag page shows below its front matter: everything written about a topic,
   from **both** worlds, in one list a reader can sort, narrow and search.
 
-  Two sources, merged in SQL rather than stitched together afterwards, because
+  Three sources, merged in SQL rather than stitched together afterwards, because
   the reader is asking one question ("what about berlin?") and any merge done in
   Elixir would have to fetch far more than a page from each side to be sure of
   the order:
@@ -13,14 +13,19 @@ defmodule Vutuv.Tags.Timeline do
       the anonymous public view every visitor may read;
     * posts cached from other networks whose hashtags name the tag
       (`Vutuv.Fediverse.RemotePostTag`), **public audience only** — see
-      `remote_posts_query/1`.
+      `remote_posts_query/1`;
+    * posts read off the public tag timelines of the servers a follower of this
+      tag named (`Vutuv.Tags.ExternalPost`, issue #2127), which is what fills
+      this page for a topic nobody here follows an account about — and that is
+      most topics.
 
   ## What a caller gets
 
   `page/2` returns `%{entries:, total:, more?:}`. An entry is one of
 
-      %{id: "post-<uuid>",   at: ~N[…], post: %Vutuv.Posts.Post{}}
-      %{id: "remote-<uuid>", at: ~N[…], remote_post: %Vutuv.Fediverse.RemotePost{}}
+      %{id: "post-<uuid>",     at: ~N[…], post: %Vutuv.Posts.Post{}}
+      %{id: "remote-<uuid>",   at: ~N[…], remote_post: %Vutuv.Fediverse.RemotePost{}}
+      %{id: "external-<uuid>", at: ~N[…], external_post: %Vutuv.Tags.ExternalPost{}}
 
   which is the shape the feed's renderer and `VutuvWeb.AgentDocs.PostDoc`
   already understand, so the HTML page and the `.md`/`.txt`/`.json`/`.xml`
@@ -29,7 +34,8 @@ defmodule Vutuv.Tags.Timeline do
   ## The controls
 
   `:source` — `:all`, `:vutuv` or `:fediverse`. The tabs **partition** the list:
-  every entry is exactly one of the two, so the pair is "all".
+  a post is written here or it is not, so the pair is "all" — and both kinds
+  from elsewhere are the same answer to the reader's question.
 
   `:sort` — `:newest` (the default), `:oldest` or `:likes`. Both kinds bring a
   real tally to that order now (issue #1283): a member's post its hearts plus
@@ -65,6 +71,8 @@ defmodule Vutuv.Tags.Timeline do
   alias Vutuv.Keyset
   alias Vutuv.Posts
   alias Vutuv.Repo
+  alias Vutuv.Tags.ExternalPost
+  alias Vutuv.Tags.ExternalPosts
   alias Vutuv.Tags.Tag
 
   @per_page 20
@@ -161,16 +169,26 @@ defmodule Vutuv.Tags.Timeline do
   The timeline as a list a client can walk (`Vutuv.Keyset`), for the
   Mastodon-compatible hashtag timeline.
 
-  Same two sources and same filters as `page/2`, but ordered and bounded by the
-  entry id rather than by `at` and cut with an offset. Both id spaces are
-  `Vutuv.UUIDv7`, so ordering by id interleaves them by creation time just as
-  `at` does — and unlike `at` it is unique, which is what a client naming the
-  last id it saw needs. No total and no `more?`: neither has a place in that
-  vocabulary, where the answer to "is there more" is the next request.
+  Same filters as `page/2`, but ordered and bounded by the entry id rather than
+  by `at` and cut with an offset. Both id spaces are `Vutuv.UUIDv7`, so ordering
+  by id interleaves them by creation time just as `at` does — and unlike `at` it
+  is unique, which is what a client naming the last id it saw needs. No total
+  and no `more?`: neither has a place in that vocabulary, where the answer to
+  "is there more" is the next request.
+
+  **Two of the three sources, not three.** A post read off another server's
+  public tag timeline (issue #2127) is left out here, because a Mastodon client
+  cannot be handed one: every field of a `Status` that matters hangs off an
+  `Account` object and this installation holds no account row for such an
+  author, so `Vutuv.MastodonApi.Presenter.statuses/2` drops it. Dropping it
+  *there* alone would be worse than useless on this endpoint — the page
+  boundary is read off the **rendered** list, so a page that lost half its rows
+  would answer no `Link: next` and the client would believe the tag had ended.
+  So the rows the caller cannot render are never selected.
   """
   def walk(%Tag{} = tag, opts \\ []) do
     tag
-    |> keys(filters(opts))
+    |> keys(%{filters(opts) | external: false})
     |> Keyset.scope(opts)
     |> Repo.all()
     |> Keyset.restore(opts)
@@ -187,6 +205,9 @@ defmodule Vutuv.Tags.Timeline do
   defp filters(opts) do
     %{
       source: Keyword.get(opts, :source, :all),
+      # Whether the third source is in the union at all. `walk/2` is the only
+      # caller that takes it out, and its doc says why.
+      external: true,
       sort: Keyword.get(opts, :sort, :newest),
       query: Keyword.get(opts, :query),
       from: Keyword.get(opts, :from),
@@ -221,11 +242,20 @@ defmodule Vutuv.Tags.Timeline do
   defp order_entries(query, _newest), do: order_by(query, [row], desc: row.at, desc: row.id)
 
   defp combined(tag, %{source: :vutuv} = filters), do: posts_query(tag, filters)
-  defp combined(tag, %{source: :fediverse} = filters), do: remote_query(tag, filters)
+
+  defp combined(tag, %{source: :fediverse} = filters),
+    do: tag |> remote_query(filters) |> with_external(tag, filters)
 
   defp combined(tag, filters) do
-    union_all(posts_query(tag, filters), ^remote_query(tag, filters))
+    posts_query(tag, filters)
+    |> union_all(^remote_query(tag, filters))
+    |> with_external(tag, filters)
   end
+
+  defp with_external(query, _tag, %{external: false}), do: query
+
+  defp with_external(query, tag, filters),
+    do: union_all(query, ^external_query(tag, filters))
 
   # `kind` and `likes` are literals rather than columns, so both arms of the
   # union line up; `at` is a `timestamp` on both sides (Ecto's `:utc_datetime`
@@ -311,6 +341,30 @@ defmodule Vutuv.Tags.Timeline do
     end
   end
 
+  # The third source, and the one that fills this tab for a topic nobody here
+  # follows an account about (issue #2127): what the servers a follower of this
+  # tag named carry about it. Read straight off
+  # `Vutuv.Tags.ExternalPosts.showable_query/0`, where the operator's blocklist
+  # and a reported copy are settled — this page is public, so it must not
+  # decide either for itself.
+  #
+  # `likes: 0` because there is none to state: we hold text and a link, not an
+  # object with a `likes` collection to read. Sorting by likes therefore puts
+  # these at the bottom beside the cached posts whose origin serves no
+  # collection — indistinguishable, here, from a post nobody liked.
+  defp external_query(tag, filters) do
+    tag.id
+    |> ExternalPosts.tag_query()
+    |> search_external(filters.query)
+    |> between(filters, dynamic([external: p], p.published_at))
+    |> select([external: p], %{
+      kind: "external",
+      id: p.id,
+      at: type(p.published_at, :naive_datetime),
+      likes: type(^0, :integer)
+    })
+  end
+
   defp search_posts(query, nil), do: query
 
   defp search_posts(query, text) do
@@ -321,6 +375,21 @@ defmodule Vutuv.Tags.Timeline do
 
   defp search_remote(query, text) do
     where(query, [rp], fragment("? @@ websearch_to_tsquery('simple', ?)", rp.search_tsv, ^text))
+  end
+
+  # The same word matching as the two arms above, computed rather than read off
+  # a stored `search_tsv`: this table holds at most twenty rows per tag and the
+  # tag filter runs first, so the vector is built for a handful of short texts.
+  # An `ilike` would have been the cheaper thing and the wrong one — one list
+  # must not answer the same question two ways.
+  defp search_external(query, nil), do: query
+
+  defp search_external(query, text) do
+    where(
+      query,
+      [external: p],
+      fragment("to_tsvector('simple', ?) @@ websearch_to_tsquery('simple', ?)", p.text, ^text)
+    )
   end
 
   # The date range as German calendar days, half-open at the top end
@@ -361,16 +430,22 @@ defmodule Vutuv.Tags.Timeline do
   defp load([]), do: []
 
   defp load(rows) do
-    posts = load_posts(for %{kind: "post", id: id} <- rows, do: id)
-    remotes = load_remote(for %{kind: "remote", id: id} <- rows, do: id)
+    by_kind = %{
+      "post" => load_posts(for %{kind: "post", id: id} <- rows, do: id),
+      "remote" => load_remote(for %{kind: "remote", id: id} <- rows, do: id),
+      "external" => load_external(for %{kind: "external", id: id} <- rows, do: id)
+    }
 
-    for row <- rows, record = Map.get(if(row.kind == "post", do: posts, else: remotes), row.id) do
+    for row <- rows, record = Map.get(by_kind[row.kind], row.id) do
       entry(row, record)
     end
   end
 
   defp entry(%{kind: "post", at: at} = row, post),
     do: %{id: "post-" <> row.id, at: at, post: post}
+
+  defp entry(%{kind: "external", at: at} = row, external_post),
+    do: %{id: "external-" <> row.id, at: at, external_post: external_post}
 
   defp entry(%{at: at} = row, remote_post),
     do: %{id: "remote-" <> row.id, at: at, remote_post: remote_post}
@@ -382,6 +457,12 @@ defmodule Vutuv.Tags.Timeline do
     |> Repo.all()
     |> Repo.preload(Posts.render_preloads())
     |> Map.new(&{&1.id, &1})
+  end
+
+  defp load_external([]), do: %{}
+
+  defp load_external(ids) do
+    from(p in ExternalPost, where: p.id in ^ids) |> Repo.all() |> Map.new(&{&1.id, &1})
   end
 
   defp load_remote([]), do: %{}

@@ -59,6 +59,7 @@ defmodule VutuvWeb.PostComponents do
   alias Vutuv.RemoteMedia
   alias Vutuv.ReviewCover
   alias Vutuv.Tags
+  alias Vutuv.Tags.ExternalPost
   alias Vutuv.Translations.Translation
   alias VutuvWeb.FediverseComponents
   alias VutuvWeb.Live.PostTranslations
@@ -3485,6 +3486,152 @@ defmodule VutuvWeb.PostComponents do
             subject={@remote_post}
             viewer={@viewer}
             marks={@marks}
+          />
+        </div>
+      </div>
+    </article>
+    """
+  end
+
+  @doc """
+  A post one of the reader's followed tags brought back from another server
+  (issue #2127).
+
+  The **same remote skin** as the two cards above — slate initials tile, globe
+  badge, plain text — because to a reader this is the same kind of thing: words
+  written somewhere else. What is different is the one fact this card exists to
+  get right.
+
+  **The server we asked is not the author's home.** A post about Koblenz found
+  through troet.cafe was usually written somewhere else entirely, so the header
+  names the **author's** address and their server, exactly as a cached post's
+  does, and the server whose public tag timeline we read is a quiet line of its
+  own below it. Getting that the other way round would tell a reader that
+  everybody writing about a topic lives on whichever server their neighbour
+  happened to name.
+
+  That line is rendered whether or not the two servers coincide. It answers "how
+  did this get here", not "is this from somewhere else", and a line that
+  disappears when the answers agree would teach a reader that a card without one
+  came from the author directly — which is never true here.
+
+  What it does not have, and why:
+
+    * **no action bar.** A like would have to be delivered to an author this
+      installation has no actor for, and nothing here was addressed to us in the
+      first place — we went and read a public page. `remote_post_card/1`'s
+      heart hangs off a follow; there is none.
+    * **no pictures.** The fetcher stores text and a link, deliberately, so that
+      no foreign image reaches the AI gate (#2126). Nothing to render, and
+      nothing to be tempted to hotlink.
+    * **no mute or unfollow.** Both act on a follow of the author, which the
+      reader does not have. The way out is the tag's own server list (#2128) and
+      the reader's hide rules, both of which the ⋯ menu leads to.
+  """
+  attr(:post, :map, required: true, doc: "a Vutuv.Tags.ExternalPost")
+  attr(:viewer, :any, default: nil, doc: "the logged-in member, or nil")
+
+  attr(:hide_rules, :any,
+    default: nil,
+    doc: "the viewer's own content filters — turns the ⋯ menu's hide list on; see <.post_card>"
+  )
+
+  attr(:mode, :atom,
+    default: :preview,
+    values: [:preview, :full],
+    doc: "`:preview` cuts the body to the reader's line budget, as every timeline does"
+  )
+
+  def external_post_card(assigns) do
+    post = assigns.post
+    origin = ExternalPost.origin(post)
+
+    assigns =
+      assigns
+      |> assign(:body_id, "external-post-body-#{post.id}")
+      |> assign(:body_style, post_body_style(User.post_prefs(assigns.viewer)))
+      |> assign(:address, ExternalPost.address(post))
+      # The bare name, never the address: every address starts with `@`, which
+      # is the whole monogram `name_initials/1` would answer for it.
+      |> assign(:initials, name_initials(post.author_name || ExternalPost.author_username(post)))
+      |> assign(:network, post.author_host)
+      |> assign(:origin, origin)
+      # Where the server named no profile address, the post's own is the
+      # nearest true thing: it is on the author's server and it has their name
+      # on it. Guessing `https://host/@name` instead would be inventing an
+      # address on somebody else's server.
+      |> assign(:actor_uri, post.author_url || origin)
+      |> assign(:hide_names, hide_tag_names(post.text))
+
+    ~H"""
+    <article data-external-post={@post.id}>
+      <div data-card-head class="flex items-start gap-3">
+        <.remote_avatar initials={@initials} />
+
+        <div data-card-column class="min-w-0 flex-1">
+          <%!-- `network` is the AUTHOR's host, never `@post.source`: the chip
+          under a name has to name the server that name lives on. --%>
+          <.remote_header
+            author={ExternalPost.label(@post)}
+            handle={@address}
+            actor_uri={@actor_uri}
+            at={@post.published_at}
+            network={@network}
+            origin={@origin}
+          >
+            <:menu>
+              <.card_menu :if={@viewer} id={"external-post-menu-#{@post.id}"}>
+                <:item
+                  id={"external-post-origin-#{@post.id}"}
+                  href={@origin}
+                  target="_blank"
+                  rel="nofollow noopener noreferrer"
+                >
+                  {gettext("View the original")}
+                </:item>
+                <%!-- The same lever the cached-post card offers, and the same
+                deal: our copy goes for everybody here at once, and the post
+                itself stands untouched where its author put it. --%>
+                <:item
+                  click="report-external-post"
+                  value={@post.id}
+                  danger
+                  confirm={
+                    gettext(
+                      "Report this post as not appropriate? Our copy is deleted for everyone on this vutuv right away."
+                    )
+                  }
+                >
+                  {gettext("Report")}
+                </:item>
+                <:panel :if={@hide_rules}>
+                  <.hide_list
+                    id={@post.id}
+                    rules={@hide_rules}
+                    handle={@address}
+                    server={@network}
+                    names={@hide_names}
+                  />
+                </:panel>
+              </.card_menu>
+            </:menu>
+          </.remote_header>
+
+          <%!-- How it got here. Small and grey on purpose: it is provenance,
+          not a byline, and the byline is the line above it. --%>
+          <p
+            data-external-source={@post.source}
+            class="mb-0 mt-0.5 text-xs text-slate-600 dark:text-slate-400"
+          >
+            {gettext("Found through %{server}", server: @post.source)}
+          </p>
+
+          <.remote_body
+            text={@post.text}
+            lang={@post.language}
+            mode={@mode}
+            body_id={@body_id}
+            body_style={@body_style}
           />
         </div>
       </div>
