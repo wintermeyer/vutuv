@@ -179,7 +179,11 @@ defmodule VutuvWeb.ReportHTML do
         "A report from somebody with a good record hides the reported content automatically, the moment it arrives."
       )
 
-  @doc "Whether this content type's form carries the copyright notice at all."
-  def copyright_offered?(content_type),
-    do: Report.copyright_category() in Report.categories_for(content_type)
+  @doc """
+  Whether this form carries the copyright notice at all — asked of the category
+  list the form is rendering, not of the content type: a press picture and a
+  profile picture are one type with two lists (issue #2089).
+  """
+  def copyright_offered?(categories),
+    do: Report.copyright_category() in categories
 end

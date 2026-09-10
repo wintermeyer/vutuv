@@ -165,6 +165,22 @@ defmodule Vutuv.PressKitStore do
   def version_path(_token, _version), do: nil
 
   @doc """
+  The same version while the picture is **held** by a copyright freeze, or `nil`
+  (issue #2089).
+
+  A frozen picture is out of every tree the proxy serves from, so this is the
+  only way an admin can look at what the claim is about — and the name is this
+  module's, not the hold's: `Vutuv.Uploads.held_version_path/3` globs for the
+  profile kinds' fingerprinted and legacy names, and a press picture's file is
+  called `large.avif` and matches neither.
+  """
+  def held_version_path(%ImageRow{id: id, token: token}, version)
+      when is_binary(id) and is_binary(token) and version in @all_versions,
+      do: Vutuv.Uploads.held_file_path(id, "#{version}#{Spec.served_ext()}")
+
+  def held_version_path(_image, _version), do: nil
+
+  @doc """
   Where this picture's stand-in lives (`Vutuv.Moderation.Pixelation`). The path
   is built whether or not the file is there — `Pixelation.stands_in?/2` is what
   asks that, because a missing stand-in is an ordinary state (a settled scan, a

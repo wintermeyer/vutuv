@@ -301,16 +301,6 @@ defmodule VutuvWeb.UserHTML do
   def member_since(_user), do: nil
 
   @doc """
-  The report form's URL for one of this member's pictures (issue #2012). The id
-  is the `images` row's, not the member's: a picture is reported in its own
-  right, so a rights holder no longer has to report the whole profile to get a
-  stolen photo taken down.
-  """
-  def image_report_path(user, image_id) do
-    ~p"/reports/new?#{[type: "image", id: image_id, return_to: "/#{user.username}"]}"
-  end
-
-  @doc """
   The "Member since" line (calendar icon + label). Rendered in two spots on the
   profile: right-aligned on the counts row, or moved up under the work line
   when the account has no followers and no following. `class` positions it.

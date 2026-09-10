@@ -253,14 +253,14 @@ the resulting ~200px rail width. --%>
               <:item
                 :if={reportable_avatar}
                 id="report-avatar"
-                href={image_report_path(@user, reportable_avatar.id)}
+                href={image_report_path(reportable_avatar.id, "/#{@user.username}")}
               >
                 {gettext("Report the profile picture")}
               </:item>
               <:item
                 :if={reportable_cover}
                 id="report-cover"
-                href={image_report_path(@user, reportable_cover.id)}
+                href={image_report_path(reportable_cover.id, "/#{@user.username}")}
               >
                 {gettext("Report the cover photo")}
               </:item>

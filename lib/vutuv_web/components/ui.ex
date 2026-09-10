@@ -3247,6 +3247,7 @@ defmodule VutuvWeb.UI do
       data-label-prev={gettext("Previous photo")}
       data-label-next={gettext("Next photo")}
       data-label-download={gettext("Download the original")}
+      data-label-report={gettext("Report this picture")}
       {@rest}
     >
       {render_slot(@inner_block)}
@@ -3566,6 +3567,19 @@ defmodule VutuvWeb.UI do
       gettext("only %{account}", account: filter.account)
     end
   end
+
+  @doc """
+  The in-app report form's URL for one picture, coming back to `return_to`.
+
+  One owner for the address, because two surfaces name it: a profile picture
+  from the ⋯ menu (issue #2012, through `VutuvWeb.UserHTML.image_report_path/2`,
+  which knows the profile is where a reporter comes back to) and a press photo
+  or logo variant from its section page (issue #2089). A picture is reported by
+  the `images` row's id — never by its owner's — because it is reported in its
+  own right.
+  """
+  def image_report_path(image_id, return_to),
+    do: ~p"/reports/new?#{[type: "image", id: image_id, return_to: return_to]}"
 
   @doc """
   Compact display form for counted numbers, used site-wide wherever a count is

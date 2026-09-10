@@ -156,10 +156,11 @@ defmodule Vutuv.Moderation.Report do
   def categories_for(_type), do: @categories
 
   @doc """
-  Builds a report changeset. `content_type` (the wire string) restricts the
-  accepted categories to the ones that type actually offers, so a crafted POST
-  can't slip an off-type category (e.g. `misleading_job` on a profile report)
-  past the form — the same `categories_for/1` gate the form renders from.
+  Builds a report changeset. `offered` is the list of categories this content
+  really offers (`Vutuv.Moderation.report_categories/1`, the same list the form
+  renders from), so a crafted POST can't slip an off-type category past it — a
+  `misleading_job` on a profile report, or a `spam` on a profile picture, which
+  its shelf-mate the press picture does offer.
 
   Every message is a whole sentence addressed to the reporter, because the
   report form has no per-field error slots and shows them as one banner. They
@@ -174,14 +175,14 @@ defmodule Vutuv.Moderation.Report do
   gave a copyright notice its demand twice, in two different wordings, in a
   banner that joins every message into one line.
   """
-  def changeset(report, params \\ %{}, content_type \\ nil, opts \\ []) do
+  def changeset(report, params \\ %{}, offered \\ @categories, opts \\ []) do
     pick_one = "Please pick a category."
 
     report
     |> cast(params, [:category, :note, :good_faith?])
     |> update_change(:note, &String.trim/1)
     |> validate_required([:category], message: pick_one)
-    |> validate_inclusion(:category, categories_for(content_type), message: pick_one)
+    |> validate_inclusion(:category, offered, message: pick_one)
     |> validate_length(:note, max: @max_note_length, message: "Your note is too long.")
     |> validate_full_notice(Keyword.get(opts, :full_notice?, false))
     |> record_good_faith()
@@ -209,9 +210,9 @@ defmodule Vutuv.Moderation.Report do
   the name and the address are required, because the notice is worth nothing to
   an admin without a way back to the person who sent it.
   """
-  def outside_changeset(report, params, content_type) do
+  def outside_changeset(report, params, offered) do
     report
-    |> changeset(params, content_type, full_notice?: true)
+    |> changeset(params, offered, full_notice?: true)
     |> cast(params, [:reporter_name, :reporter_email])
     # Collapsed to ONE line where it is written, not where it is rendered. The
     # name is the only stranger-controlled string this app puts into running

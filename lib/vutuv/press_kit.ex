@@ -353,19 +353,26 @@ defmodule Vutuv.PressKit do
 
   defp privileged?(_owner, _viewer), do: false
 
-  # The owner of a press picture: whichever half of the pair the row names.
-  # Takes the preload when a caller remembered one and looks it up when nobody
-  # did — half the callers hand over a bare row straight from a query, and an
-  # answer that depends on whether somebody remembered a preload is not an
-  # answer.
-  defp owner(%Image{user: %User{} = user}), do: user
-  defp owner(%Image{organization: %Organization{} = organization}), do: organization
-  defp owner(%Image{user_id: id}) when is_binary(id), do: Repo.get(User, id)
+  @doc """
+  The owner of a press picture — the member or the page — or `nil`.
 
-  defp owner(%Image{organization_id: id}) when is_binary(id),
+  Takes the preload when a caller remembered one and looks it up when nobody
+  did: half the callers hand over a bare row straight from a query, and an
+  answer that depends on whether somebody remembered a preload is not an
+  answer. Matched on the **column** rather than on the association for the same
+  reason.
+
+  Public since #2089, where a surface has to ask the owner a second question
+  (may this reader be offered a Report control) about a shelf it already holds.
+  """
+  def owner(%Image{user: %User{} = user}), do: user
+  def owner(%Image{organization: %Organization{} = organization}), do: organization
+  def owner(%Image{user_id: id}) when is_binary(id), do: Repo.get(User, id)
+
+  def owner(%Image{organization_id: id}) when is_binary(id),
     do: Organizations.get_organization(id)
 
-  defp owner(%Image{}), do: nil
+  def owner(%Image{}), do: nil
 
   # The owner a whole shelf was read for, put on every row of it: the caller
   # already holds the record, so `owner/1` below never has to go and fetch it
@@ -421,6 +428,26 @@ defmodule Vutuv.PressKit do
       LowBandwidth.on?() -> url(image, "large")
       true -> url(image, "xl")
     end
+  end
+
+  @doc """
+  The version a **human outside this kit** is shown the picture at, or `nil`
+  when there is nothing anybody could be shown yet (issue #2089).
+
+  One name for the two places a press picture is looked at rather than used: the
+  report form, the two moderation case pages (through
+  `Vutuv.Images.preview_url/1`, which routes every kind's preview through the
+  context that owns it), and the address a Report link hands the public notice
+  form. Both shelves derive a `large`, so one version answers for a photo and
+  for a logo variant.
+
+  `visible_to?/2` with **no viewer** is the gate, because every byte here goes
+  through the authorizing proxy: a URL only a signed-in somebody could fetch
+  would be a broken image on a form, and an address the notice form cannot
+  resolve. A held or frozen picture therefore has no preview at all.
+  """
+  def preview_url(%Image{} = image) do
+    if visible_to?(image, nil), do: url(image, "large")
   end
 
   @doc "The URL the file itself is handed over at: the cleaned photo, or a logo's vector."

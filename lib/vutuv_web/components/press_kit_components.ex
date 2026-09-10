@@ -65,7 +65,9 @@ defmodule VutuvWeb.PressKitComponents do
   import VutuvWeb.UI
 
   alias Vutuv.Images.Image
+  alias Vutuv.Moderation
   alias Vutuv.PressKit
+  alias VutuvWeb.AgentDocs
   alias VutuvWeb.Markdown
   alias VutuvWeb.PostComponents
 
@@ -190,6 +192,7 @@ defmodule VutuvWeb.PressKitComponents do
           data-photo-download={cell.photo[:download]}
           data-photo-license={cell.photo[:license]}
           data-photo-position={cell.photo[:position]}
+          data-photo-report={cell.report}
         >
           <.press_tile image={cell.image} held={cell.held} class="h-full w-full object-cover" />
           <span
@@ -267,11 +270,12 @@ defmodule VutuvWeb.PressKitComponents do
         data-photo-download={@view.photo[:download]}
         data-photo-license={@view.photo[:license]}
         data-photo-position={@view.photo[:position]}
+        data-photo-report={@view.report}
       >
         <.press_tile image={@view.image} held={@view.held} class="block h-auto w-full" />
       </a>
 
-      <.press_meta image={@view.image} />
+      <.press_meta image={@view.image} report={@view.report} />
       <.press_download :if={@view.photo} href={PressKit.download_url(@view.image)}>
         {gettext("Download photo")}
       </.press_download>
@@ -313,7 +317,7 @@ defmodule VutuvWeb.PressKitComponents do
         {variant_label(@view.image)}
       </p>
 
-      <.press_meta image={@view.image} />
+      <.press_meta image={@view.image} report={@view.report} />
 
       <div :if={@view.photo} class="flex flex-wrap gap-2">
         <.press_download href={PressKit.download_url(@view.image)}>
@@ -340,17 +344,64 @@ defmodule VutuvWeb.PressKitComponents do
   def views(images, viewer) do
     shown = Enum.map(images, &{&1, PressKit.visible_to?(&1, viewer)})
     visible = Enum.count(shown, &elem(&1, 1))
+    scope = report_scope(images, viewer)
 
     {views, _next} =
       Enum.map_reduce(shown, 0, fn
         {image, true}, next ->
-          {%{image: image, held: false, photo: photo_data(image, next, visible)}, next + 1}
+          {%{
+             image: image,
+             held: false,
+             photo: photo_data(image, next, visible),
+             report: report_href(image, scope)
+           }, next + 1}
 
         {image, false}, next ->
-          {%{image: image, held: PressKit.pixelated_url(image) || :none, photo: nil}, next}
+          {%{image: image, held: PressKit.pixelated_url(image) || :none, photo: nil, report: nil},
+           next}
       end)
 
     views
+  end
+
+  # Where a Report control on this picture goes, or `nil` when this reader is
+  # offered none (issue #2089).
+  #
+  # Two addresses, because a press kit is published *at* people who mostly have
+  # no account here: a signed-in member files in-app, and everybody else gets
+  # the public notice form with the picture's own address already filled in.
+  # The notice form takes a pasted address, so the link hands it one, absolute —
+  # that is what `Vutuv.Moderation.ContentUrl` parses back.
+  defp report_href(%Image{}, nil), do: nil
+
+  defp report_href(%Image{} = image, :public),
+    do: ~p"/system/report?#{[url: AgentDocs.abs_url(PressKit.preview_url(image))]}"
+
+  defp report_href(%Image{} = image, {:member, return_to}),
+    do: image_report_path(image.id, return_to)
+
+  # Asked **once per shelf**, not once per picture: every question here is about
+  # the owner, and every picture on a shelf has the same one. The first row is
+  # therefore as good as all of them.
+  #
+  # None of it is a query for an anonymous reader: the shelf arrived with its
+  # owner on every row (`public_shelves/2`), `manageable_by?/2` answers a
+  # viewerless call from a clause, and "is there anybody to hold accountable"
+  # is asked of the **owner** rather than of the picture, which is a column on
+  # a row already in memory. A signed-in reader on a page's kit pays one role
+  # read for it.
+  defp report_scope([], _viewer), do: nil
+
+  defp report_scope([%Image{} = image | _rest], viewer) do
+    owner = PressKit.owner(image)
+
+    cond do
+      is_nil(owner) -> nil
+      PressKit.manageable_by?(owner, viewer) -> nil
+      not Moderation.reportable?(owner) -> nil
+      is_nil(viewer) -> :public
+      true -> {:member, PressKit.page_path(owner)}
+    end
   end
 
   @doc """
@@ -400,9 +451,14 @@ defmodule VutuvWeb.PressKitComponents do
     }
   end
 
-  # The caption, the credit and the two file facts, in the one order both
-  # entries show them.
+  # The caption, the credit, the two file facts and — last, quiet, and a plain
+  # link rather than a control — the way to report the picture. It rides this
+  # line rather than standing beside the Download button on purpose: a press
+  # kit is published for people to take, and the one act nobody should have to
+  # hunt for still must not sit at the same weight as the act the page exists
+  # for.
   attr(:image, :any, required: true)
+  attr(:report, :any, default: nil)
 
   defp press_meta(assigns) do
     ~H"""
@@ -415,6 +471,15 @@ defmodule VutuvWeb.PressKitComponents do
       <span :if={present?(@image.credit)} data-press-credit>{@image.credit}</span>
       <span :if={present?(@image.credit)} aria-hidden="true">·</span>
       <span data-press-facts>{facts_line(@image)}</span>
+      <span :if={@report} aria-hidden="true">·</span>
+      <a
+        :if={@report}
+        href={@report}
+        class="underline underline-offset-2 hover:text-slate-700 dark:hover:text-slate-200"
+        data-press-report
+      >
+        {gettext("Report this picture")}
+      </a>
     </p>
     """
   end

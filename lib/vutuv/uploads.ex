@@ -225,6 +225,17 @@ defmodule Vutuv.Uploads do
 
   def held_version_path(_image_id, _version, _fingerprint), do: nil
 
+  @doc """
+  The on-disk path of one held file by the **name it has**, or `nil`.
+
+  For a kind whose served files are named by version alone inside a directory of
+  their own (`press_kit/<token>/large.avif`, issue #2089): neither naming scheme
+  `held_version_path/3` globs for is on disk there, so the store that owns the
+  name asks for it. Every slot again, for the same reason.
+  """
+  def held_file_path(image_id, filename) when is_binary(image_id) and is_binary(filename),
+    do: first_match(hold_dir(image_id), filename)
+
   # Every slot, not just `served/`: a picture frozen while the AI gate still had
   # it keeps its versions under `quarantine/`. The private original stays out of
   # reach — it is never shown to anybody, and neither glob matches its
