@@ -86,6 +86,20 @@ defmodule Vutuv.Tags.SourceServerProbe do
       {:ok, %{host: host, status: "unreachable", checked_at: now()}}
   end
 
+  # The rescue above covers the leg that decides `status`. This one covers the
+  # optional leg, and it is separate on purpose: the figures are decoration and
+  # an exception in them says nothing about whether the timeline is public. With
+  # one rescue over both, a stranger's odd NodeInfo document — a `rel` that is
+  # an object, so `to_string/1` raises — marked a perfectly healthy server
+  # "unreachable" and unpickable for a day.
+  defp decoration(host) do
+    figures(host)
+  rescue
+    error ->
+      Logger.warning("source server decoration #{host} raised: #{inspect(error)}")
+      %{}
+  end
+
   @doc "Whether this installation asks other servers for anything at all."
   defdelegate enabled?(), to: ExternalPosts
 
@@ -128,7 +142,7 @@ defmodule Vutuv.Tags.SourceServerProbe do
 
   # Everything the panel shows beside the switch, and nothing the switch depends
   # on: a server that answers none of this is still pickable.
-  defp decoration(host) do
+  defp figures(host) do
     case node_info(host) do
       %{} = document ->
         usage = map_at(document, "usage")
@@ -217,11 +231,11 @@ defmodule Vutuv.Tags.SourceServerProbe do
     end
   end
 
-  # A count from a stranger. Anything that is not a whole non-negative number is
-  # no figure at all, and a missing figure is shown as missing rather than as
-  # zero — "0 accounts" is a claim, and the wrong one.
-  defp whole_number(value) when is_integer(value) and value >= 0, do: value
-  defp whole_number(_value), do: nil
+  # A count from a stranger, bounded by what the column takes
+  # (`Post.whole_number/2`). `nil` rather than `0` for anything unreadable: a
+  # missing figure is shown as missing, and "0 accounts" is a claim — the wrong
+  # one.
+  defp whole_number(value), do: Post.whole_number(value)
 
   defp clamp(value, max) when is_binary(value) do
     case String.trim(value) do

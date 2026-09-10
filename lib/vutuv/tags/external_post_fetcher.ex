@@ -16,6 +16,12 @@ defmodule Vutuv.Tags.ExternalPostFetcher do
   off in tests, where its work would use the SQL sandbox connection from a
   process that does not own it, and off on an installation that must not call
   out at all. Tests call `Vutuv.Tags.ExternalPosts.fetch_due/0` directly.
+
+  It also drives the trending pass (#2129), on the same tick and with no counter
+  of its own: `Vutuv.Tags.Trending.refresh/0` answers from its own due query and
+  returns in microseconds on the twenty-nine ticks out of thirty where nothing
+  is due. A schedule kept in this process's state would not survive a restart,
+  and this one is a row.
   """
 
   use GenServer
@@ -23,6 +29,7 @@ defmodule Vutuv.Tags.ExternalPostFetcher do
   require Logger
 
   alias Vutuv.Tags.ExternalPosts
+  alias Vutuv.Tags.Trending
 
   @interval :timer.minutes(2)
 
@@ -45,6 +52,7 @@ defmodule Vutuv.Tags.ExternalPostFetcher do
   def handle_info(:fetch, %{runs: runs} = state) do
     try do
       log(ExternalPosts.fetch_due())
+      log_trending(Trending.refresh())
       if rem(runs, @prune_every) == 0, do: log_prune(ExternalPosts.prune())
     rescue
       error -> Logger.error("External tag fetch failed: #{inspect(error)}")
@@ -61,6 +69,18 @@ defmodule Vutuv.Tags.ExternalPostFetcher do
     Logger.info(
       "External tag posts: #{tally.fetched} timeline(s) read, #{tally.stored} post(s) stored, " <>
         "#{tally.skipped} skipped, #{tally.failed} failed"
+    )
+  end
+
+  # Nothing due is the answer on twenty-nine ticks out of thirty, and it says
+  # nothing; so does an installation that asks nobody.
+  defp log_trending(%{asked: 0}), do: :ok
+  defp log_trending(:disabled), do: :ok
+
+  defp log_trending(tally) do
+    Logger.info(
+      "Trending tags: #{tally.asked} server(s) asked, #{tally.offered} offered, " <>
+        "#{tally.hurried} pull(s) hurried, #{tally.skipped} skipped, #{tally.failed} failed"
     )
   end
 

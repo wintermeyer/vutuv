@@ -26,6 +26,10 @@ defmodule Vutuv.SocialFeed.Post do
   # both provider feeds.
   @max_text_length 500
 
+  # What a `bigint` column holds — the ceiling on every counter read out of a
+  # stranger's document, see `whole_number/2`.
+  @max_figure 9_223_372_036_854_775_807
+
   @doc "The trimmed value, or nil when it is blank/whitespace-only."
   def presence(value) when is_binary(value) do
     case String.trim(value) do
@@ -71,6 +75,42 @@ defmodule Vutuv.SocialFeed.Post do
     |> Enum.reverse()
     |> Enum.join()
   end
+
+  @doc """
+  A counter out of a stranger's document, as a whole number a `bigint` column
+  will actually take — or `fallback` for everything that is not one.
+
+  **Bounded above**, which is the whole reason it is a function: JSON has no
+  integer limit and the column does, so a `usage.localPosts` past `bigint`
+  reaches Postgrex as a `DBConnection.EncodeError`, and on a member-facing path
+  that raise comes out of their own request. No real figure is anywhere near
+  this, so a value that is means the document is nonsense.
+
+  It takes a **numeric string** too, because Mastodon's trending-tag history
+  spells its counts that way while NodeInfo spells them as numbers. `fallback`
+  is what the two callers disagree about and nothing else: a *figure a reader is
+  shown* is missing rather than zero (`nil`), while a *day in a history* that
+  cannot be read is a day nothing happened (`0`).
+
+  Beside `clamp_bytes/2` for the same reason that one is here — both callers
+  found it separately and wrote it twice (`Vutuv.Tags.SourceServerProbe` for
+  NodeInfo's figures, `Vutuv.Tags.ExternalTagClient` for a tag's week), and one
+  of the two copies learned the ceiling while the other did not.
+  """
+  def whole_number(value, fallback \\ nil)
+
+  def whole_number(value, _fallback)
+      when is_integer(value) and value >= 0 and value <= @max_figure,
+      do: value
+
+  def whole_number(value, fallback) when is_binary(value) do
+    case Integer.parse(value) do
+      {number, ""} -> whole_number(number, fallback)
+      _unreadable -> fallback
+    end
+  end
+
+  def whole_number(_value, fallback), do: fallback
 
   @doc """
   Clamps `text` to at most `max` characters, replacing the tail with a trailing
