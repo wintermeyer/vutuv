@@ -952,7 +952,15 @@ which now reads `width`/`height` through `Vutuv.Images.orientation/1` and so
 knows nothing about post photos — and the logos as a row of tiles; the page
 shows every picture whole with its caption, credit, dimensions, file size
 (`VutuvWeb.UI.file_size/1`, one decimal between 1 and 10 MB, locale decimal
-separator) and a download. A logo is drawn on **white in both themes**, because
+separator) and a download. **Each number on that line names the file it belongs
+to** (issue #2140): the size is `PressKit.download_bytes/1`, the length of what
+the download route really delivers rather than `images.size_bytes`, which is the
+upload's and is a few hundred bytes longer because the metadata strip runs on
+the way out; and a **vector** claims no pixel size, since the stored
+`width`/`height` are the rasterisation's — the PNG rendering offered beside it —
+so they read as `PNG 1600 × 533` after the SVG's own byte count. A size that
+cannot be measured is left out; that download 404s anyway.
+A logo is drawn on **white in both themes**, because
 nothing stores which ground a variant was made for; the section page repeats it
 on a dark ground beside it, so a reversed mark is visible somewhere. The
 lightbox reads a `data-photo-credit` off the tile beside the fields it already
@@ -967,10 +975,21 @@ sitemap (`Vutuv.Sitemap.press_entries/1`, gated on
 `PressKit.public_query/0`) and publishes a schema.org `CollectionPage` whose
 `associatedMedia` are `ImageObject`s with `creditText`, `copyrightNotice`,
 `license` and `acquireLicensePage` — the four properties image search reads to
-call a picture licensable (`VutuvWeb.JsonLd.press_kit_page/3`). Its agent-format
+call a picture licensable (`VutuvWeb.JsonLd.press_kit_page/3`). **One
+`ImageObject` describes one file, and that file is the download** (issue #2140):
+`contentUrl` is `PressKit.download_url/1`, so `encodingFormat`, `width`,
+`height` and the measured `contentSize` all describe the file the licence hands
+over, and `thumbnailUrl` stays the served AVIF a crawler shows a result with.
+Until that fix `contentUrl` named the 1600px AVIF while the four fields beside
+it described the stored original, and the `caption` shipped the member's raw
+Markdown — it goes through `Markdown.to_plain_text/1` now, the way the lightbox
+already flattened it. Its agent-format
 siblings are `VutuvWeb.AgentDocs.PressKitDoc`, and the profile document carries
 the same entries under `press_kit`; both list the **released** pictures only,
-since a document that names a file must name one that can be fetched.
+since a document that names a file must name one that can be fetched. A picture
+whose owner typed no label is titled by its **shelf** — "Logo variant" or
+"Press photo" — in `PressKitDoc.entry/1` rather than in each renderer, which
+sees a flat map and so called every unlabelled logo a press picture (#2142).
 
 **A page has the same section, kept by its team (issue #2087).** The card, the
 section page, the documents, the schema.org block and the sitemap entry are the

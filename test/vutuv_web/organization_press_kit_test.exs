@@ -103,7 +103,11 @@ defmodule VutuvWeb.OrganizationPressKitTest do
       assert html =~ "Media Kit of Acme GmbH"
       assert html =~ "Vor dem Werk in Bremen"
       assert html =~ "Foto: Rea Fotografin"
-      assert html =~ "3000 × 2000 · 2.4 MB"
+      # The size is measured off the delivered file (issue #2140) and these rows
+      # have none, so the line states the dimensions alone — see
+      # `VutuvWeb.PressKitMachineDataTest` for the byte count against a real one.
+      assert html =~ "3000 × 2000"
+      refute html =~ "2400000"
       assert html =~ "/system/press_kit/#{picture.token}/download.orig"
     end
 

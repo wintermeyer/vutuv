@@ -238,6 +238,31 @@ defmodule Vutuv.PressKit do
   def shelf_name(%Image{} = image), do: shelf_name(Image.logo?(image))
 
   @doc """
+  The same shelf, in words a reader gets — what a picture is called when its
+  owner typed no label of their own.
+
+  One owner, because three surfaces answer it: the agent documents' entry
+  title, the editor's tile and the report form's subject line. It used to be
+  written out in each of them, and in the documents it was not written at all —
+  their renderers see a flat map, so every unlabelled logo went out as a press
+  picture (issue #2142).
+  """
+  def kind_label(%Image{} = image),
+    do: if(Image.logo?(image), do: gettext("Logo variant"), else: gettext("Press photo"))
+
+  @doc """
+  What this picture is called: the label its owner typed, or its shelf's word.
+
+  A blank `alt` is no label — the column takes an empty string as readily as a
+  nil, and a title of `""` is what a reader would meet.
+  """
+  def title(%Image{alt: alt} = image) when is_binary(alt) do
+    if String.trim(alt) == "", do: kind_label(image), else: alt
+  end
+
+  def title(%Image{} = image), do: kind_label(image)
+
+  @doc """
   The picture behind a proxy token, or `nil`. Narrowed to this kind, so a token
   from another kind's row cannot be served through the press proxy.
   """
@@ -575,6 +600,53 @@ defmodule Vutuv.PressKit do
 
   @doc "The URL of a logo variant's PNG rendering, beside its vector."
   def png_download_url(%Image{} = image), do: address(image, "download.png")
+
+  @doc """
+  How many bytes `download_url/1` actually hands over, or `nil` when there is no
+  file to measure (issue #2140).
+
+  **Not `images.size_bytes`**, which is the *upload's* length. A photo leaves
+  here as the cleaned copy — the metadata strip runs at download time — so the
+  stored figure is a few hundred bytes too high, and a number a machine reads
+  off the page must be the number the response carries. A vector logo answers
+  its own length, since the file that arrives is the file that was uploaded.
+
+  It is a `File.stat` on a derivative the **upload** already wrote
+  (`Vutuv.PressKitStore.store/4`), so the read path costs two syscalls. A row
+  stored before that warm-up existed still derives on its first call here
+  (`Vutuv.Uploads.Originals.cleaned_copy/3`, a container walk with no re-encode)
+  — once, ever, and it is the work that row's first download would have paid
+  for anyway.
+
+  `nil` where the store cannot hand anything over at all: a picture whose files
+  are gone or in a takedown hold, or a container the stripper refuses. Such a
+  download answers 404, so a caller must state no size rather than fall back to
+  the stored one — a number beside a file nobody can fetch is the fault this
+  fixes, not a smaller version of it.
+  """
+  def download_bytes(%Image{} = image), do: byte_size_of(PressKitStore.download_file(image))
+
+  defp byte_size_of({path, _ext}) do
+    case File.stat(path) do
+      {:ok, %File.Stat{size: size}} -> size
+      {:error, _reason} -> nil
+    end
+  end
+
+  defp byte_size_of(nil), do: nil
+
+  @doc """
+  Whether this picture's file is a **vector**, which decides what its stored
+  `width` and `height` describe: a raster's are its own pixels, a vector's are
+  the rasterisation `Vutuv.Uploads.Spec.svg_raster_size/0` made of it — which is
+  the PNG rendering offered beside it, never the SVG, which has no pixel size at
+  all (issue #2140).
+
+  One owner for the question, because the page, the schema.org block and the
+  agent documents each have to answer it the same way.
+  """
+  def vector?(%Image{content_type: "image/svg+xml"}), do: true
+  def vector?(%Image{}), do: false
 
   @doc """
   The URL of the pixelated stand-in, or `nil` when there is nothing standing in

@@ -67,4 +67,18 @@ defmodule VutuvWeb.HTMLHelpers do
     |> LazyHTML.text()
     |> String.trim()
   end
+
+  @doc """
+  The page's schema.org block of `type`, decoded — or `nil`.
+
+  Never grep a JSON-LD block: `VutuvWeb.JsonLd.script/1` encodes with
+  `escape: :html_safe`, so every `/` in it is `\\/` and a `refute` on a bare URL
+  passes without ever matching anything.
+  """
+  def json_ld(html, type) do
+    html
+    |> elements(~s(script[type="application/ld+json"]))
+    |> Enum.map(&(&1 |> LazyHTML.text() |> Jason.decode!()))
+    |> Enum.find(&(&1["@type"] == type))
+  end
 end

@@ -1258,13 +1258,5 @@ defmodule VutuvWeb.PressKitLive do
 
   defp pending?(image), do: not ImageScans.released?(image.moderation)
 
-  defp tile_title(image) do
-    case image.alt do
-      label when is_binary(label) and label != "" ->
-        label
-
-      _none ->
-        if Image.logo?(image), do: gettext("Logo variant"), else: gettext("Press photo")
-    end
-  end
+  defp tile_title(image), do: PressKit.title(image)
 end

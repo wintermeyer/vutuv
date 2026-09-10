@@ -38,12 +38,7 @@ defmodule VutuvWeb.PressKitControllerTest do
   defp de(conn), do: put_req_header(conn, "accept-language", "de-DE,de;q=0.9")
 
   # The `associatedMedia` of the page's schema.org block, decoded.
-  defp json_ld_media(html) do
-    ~r|<script[^>]*type="application/ld\+json"[^>]*>(.*?)</script>|s
-    |> Regex.scan(html)
-    |> Enum.map(&(&1 |> List.last() |> Jason.decode!()))
-    |> Enum.find_value([], &(&1["@type"] == "CollectionPage" && &1["associatedMedia"]))
-  end
+  defp json_ld_media(html), do: html |> json_ld("CollectionPage") |> Map.fetch!("associatedMedia")
 
   describe "the Press card on the profile" do
     test "shows the photos, the logos and the rights line", %{conn: conn, user: user} do
@@ -107,10 +102,13 @@ defmodule VutuvWeb.PressKitControllerTest do
 
       assert html =~ "Auf der Bühne in Bremen"
       assert html =~ "Foto: Rea Fotografin"
-      # Formatted, not a run of digits: a visible "2400000" is a bug, and the
-      # two facts read as one line. (The raw byte count still rides in the
-      # schema.org block, where the reader is a machine.)
-      assert html =~ "3000 × 2000 · 2.4 MB"
+      # The dimensions are the row's; the **size** is measured off the file the
+      # download hands over (issue #2140), which these inserted rows do not
+      # have, so no figure is stated rather than the upload's length guessed at.
+      # `VutuvWeb.PressKitMachineDataTest` uploads a real photo and pins the
+      # formatted byte count against what the download route delivers.
+      assert html =~ "3000 × 2000"
+      refute html =~ "2400000"
       assert html =~ "data-press-download"
     end
 

@@ -80,25 +80,42 @@ defmodule VutuvWeb.AgentDocs.PressKitDoc do
   def entry(%Image{} = image) do
     %{
       id: image.id,
-      label: image.alt,
+      # A picture whose owner typed no label still has to be called something,
+      # and what it is called is decided by the **shelf** it is on (issue #2142).
+      # The fallback used to live in each renderer, which sees a flat map and so
+      # could only ever say "Press picture" — under a heading reading "Logo
+      # variants", to a picture desk pulling logos by title. The row knows which
+      # shelf it is on, so `PressKit.title/1` answers for the editor's tile and
+      # the report form too rather than a third time here.
+      label: PressKit.title(image),
       caption: image.caption,
       credit: image.credit,
-      width: image.width,
-      height: image.height,
       content_type: image.content_type,
-      size_bytes: image.size_bytes,
+      # The bytes the download really hands over, not the upload's length: a
+      # photo is stripped of its metadata on the way out (issue #2140).
+      size_bytes: PressKit.download_bytes(image),
       preview_url: AgentDocs.abs_url(PressKit.url(image, "large")),
       download_url: AgentDocs.abs_url(PressKit.download_url(image)),
       # Only a vector logo has one; a photo's download is already the file
       # itself, and an absent fact is no key at all rather than null.
       png_download_url: png_url(image)
     }
+    |> Map.merge(pixel_size(image))
     |> Enum.reject(fn {_key, value} -> value in [nil, ""] end)
     |> Map.new()
   end
 
-  defp png_url(%Image{content_type: "image/svg+xml"} = image),
-    do: AgentDocs.abs_url(PressKit.png_download_url(image))
+  # `width`/`height` describe whatever `download_url` hands over — except for a
+  # vector, which has no pixel size of its own: there the stored numbers are the
+  # rasterisation's, i.e. the PNG offered beside it, so they are named after it.
+  defp pixel_size(%Image{} = image) do
+    if PressKit.vector?(image),
+      do: %{png_width: image.width, png_height: image.height},
+      else: %{width: image.width, height: image.height}
+  end
 
-  defp png_url(%Image{}), do: nil
+  # The same question `pixel_size/1` asks, so the two keys travel together: an
+  # entry carries `png_width`/`png_height` exactly when it carries the PNG.
+  defp png_url(%Image{} = image),
+    do: if(PressKit.vector?(image), do: AgentDocs.abs_url(PressKit.png_download_url(image)))
 end

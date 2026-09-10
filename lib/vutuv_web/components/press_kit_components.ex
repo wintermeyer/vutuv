@@ -469,12 +469,32 @@ defmodule VutuvWeb.PressKitComponents do
   def public_pictures(views), do: for(%{held: false, image: image} <- views, do: image)
 
   @doc """
-  The dimensions and the file size of one picture, the two facts a journalist
-  checks before downloading. The size goes through `VutuvWeb.UI.file_size/1`, so
-  it reads `2,4 MB` rather than as a run of digits.
+  The facts a journalist checks before downloading, and **each one names the file
+  it belongs to** (issue #2140). The size goes through `VutuvWeb.UI.file_size/1`,
+  so it reads `2,4 MB` rather than as a run of digits, and it is the size of the
+  file that actually arrives (`Vutuv.PressKit.download_bytes/1`), not the
+  upload's — a photo is cleaned on its way out.
+
+  A **raster** is one file, so the line is its own dimensions and its own bytes.
+  A **vector** is two: the SVG it hands over, which has no pixel size, and the
+  PNG rendering beside it, which is what the stored `width`/`height` describe.
+  Reading `1600 × 533 · 719 Bytes` off one line put the second file's pixels
+  beside the first file's bytes, which is why the PNG's are labelled.
+
+  A size we could not measure is left out rather than guessed at: the download
+  such a picture offers answers 404, so a figure beside it would describe
+  nothing.
   """
   def facts_line(%Image{} = image) do
-    [dimensions(image), image.size_bytes && file_size(image.size_bytes)]
+    size = bytes(PressKit.download_bytes(image))
+
+    case {pixels(image), vector?(image)} do
+      {nil, _} -> [size]
+      # The vector's own bytes lead, the labelled PNG's pixels follow: the
+      # unlabelled figure belongs to the file the line's link hands over.
+      {pixels, true} -> [size, "PNG " <> pixels]
+      {pixels, false} -> [pixels, size]
+    end
     |> Enum.reject(&is_nil/1)
     |> Enum.join(" · ")
   end
@@ -630,18 +650,19 @@ defmodule VutuvWeb.PressKitComponents do
   defp variant_label(%Image{alt: alt}) when is_binary(alt) and alt != "", do: alt
   defp variant_label(%Image{}), do: nil
 
-  defp dimensions(%Image{width: w, height: h}) when is_integer(w) and is_integer(h),
-    do: "#{w} × #{h}"
+  defp pixels(%Image{width: w, height: h}) when is_integer(w) and is_integer(h),
+    do: dimensions(w, h)
 
-  defp dimensions(%Image{}), do: nil
+  defp pixels(%Image{}), do: nil
+
+  defp bytes(nil), do: nil
+  defp bytes(size) when is_integer(size), do: file_size(size)
 
   # SVG only ever leaves as an attachment (#2083), so a vector variant offers
   # the PNG rendering beside it.
-  defp vector?(%Image{content_type: "image/svg+xml"}), do: true
-  defp vector?(%Image{}), do: false
+  defp vector?(%Image{} = image), do: PressKit.vector?(image)
 
-  defp format_name(%Image{content_type: "image/svg+xml"}), do: "SVG"
-  defp format_name(%Image{}), do: "PNG"
+  defp format_name(%Image{} = image), do: if(vector?(image), do: "SVG", else: "PNG")
 
   defp present?(value), do: is_binary(value) and String.trim(value) != ""
 end

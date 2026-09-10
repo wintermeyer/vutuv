@@ -17,6 +17,7 @@ defmodule VutuvWeb.ReportController do
   alias Vutuv.Moderation
   alias Vutuv.Moderation.Report
   alias Vutuv.Posts
+  alias Vutuv.PressKit
   alias VutuvWeb.ControllerHelpers
   alias VutuvWeb.ErrorHelpers
 
@@ -189,9 +190,7 @@ defmodule VutuvWeb.ReportController do
 
   defp preview(%Image{}), do: gettext("Profile picture")
 
-  defp press_kit_label(%Image{} = image) do
-    if Image.logo?(image), do: gettext("Logo variant"), else: gettext("Press photo")
-  end
+  defp press_kit_label(%Image{} = image), do: PressKit.kind_label(image)
 
   # The picture itself, for the report form — through `Vutuv.Images`, which
   # owns kind → uploader, so a picture already held by another case (or still
