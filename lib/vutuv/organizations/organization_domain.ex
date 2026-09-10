@@ -19,6 +19,7 @@ defmodule Vutuv.Organizations.OrganizationDomain do
 
   use VutuvWeb, :model
 
+  alias Vutuv.Fediverse.BlockedInstance
   alias Vutuv.Ssrf
 
   @methods ~w(dns well_known)
@@ -103,10 +104,10 @@ defmodule Vutuv.Organizations.OrganizationDomain do
 
       domain ->
         cond do
-          not Regex.match?(
-            ~r/\A[a-z0-9]([a-z0-9-]*[a-z0-9])?(\.[a-z0-9]([a-z0-9-]*[a-z0-9])?)+\z/,
-            domain
-          ) ->
+          # The one definition of a server name (`Vutuv.Fediverse.BlockedInstance`),
+          # not a second copy of it: the day an intranet or IDN address needs
+          # that grammar loosened, every host somebody types has to move with it.
+          not Regex.match?(BlockedInstance.host_format(), domain) ->
             add_error(changeset, :domain, "is not a valid domain")
 
           Ssrf.internal_host?(domain) ->

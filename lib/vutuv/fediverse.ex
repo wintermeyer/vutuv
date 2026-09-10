@@ -2429,8 +2429,14 @@ defmodule Vutuv.Fediverse do
   defp same_site?(host, host), do: true
   defp same_site?(host, other), do: strip_www(host) == strip_www(other)
 
-  defp strip_www("www." <> rest), do: rest
-  defp strip_www(host), do: host
+  @doc """
+  A host without its `www.` — the fold `same_site?/2` above applies to our own
+  address, published so anything else deciding whether two spellings name one
+  server (`Vutuv.Tags.TagFollowSource`) applies the same rule rather than
+  keeping its own copy of it.
+  """
+  def strip_www("www." <> rest), do: rest
+  def strip_www(host), do: host
 
   # Keyed on whoever is asking — a member or a page (issue #1336) — so a page
   # gets its own hourly budget rather than spending somebody's.

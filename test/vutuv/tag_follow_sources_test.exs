@@ -9,6 +9,7 @@ defmodule Vutuv.TagFollowSourcesTest do
   """
   use Vutuv.DataCase, async: true
 
+  alias Vutuv.Fediverse
   alias Vutuv.Tags
   alias Vutuv.Tags.TagFollow
   alias Vutuv.Tags.TagFollowSource
@@ -74,10 +75,25 @@ defmodule Vutuv.TagFollowSourcesTest do
       assert Tags.tag_follow_sources(follow) == ["vutuv", "mastodon.social", "troet.cafe"]
     end
 
-    test "our own address is the local source, not a server to fetch from" do
+    test "folds www. away, so one server is one row" do
       follow = member_follow(insert(:tag))
 
-      for ours <- ["localhost", "www.localhost", "http://localhost:4001/tags/elixir"] do
+      assert {:ok, %TagFollowSource{source: "mastodon.social"}} =
+               Tags.add_tag_follow_source(follow, "www.mastodon.social")
+
+      assert {:ok, _} = Tags.add_tag_follow_source(follow, "mastodon.social")
+      assert Tags.tag_follow_sources(follow) == ["vutuv", "mastodon.social"]
+    end
+
+    test "every spelling of this installation's own address is the local source" do
+      follow = member_follow(insert(:tag))
+      # Taken from the endpoint, not written out: the rule under test is
+      # `Fediverse.own_host?/1`, and hardcoding the test host ("localhost")
+      # would pass on a fixture rather than on the rule. The tag host is here
+      # because it is us too, and it is the spelling a hardcoded test misses.
+      host = VutuvWeb.Endpoint.host()
+
+      for ours <- [host, "www." <> host, "https://#{host}/tags/elixir", Fediverse.tag_host()] do
         assert {:ok, %TagFollowSource{source: "vutuv"}} = Tags.add_tag_follow_source(follow, ours)
       end
 
@@ -87,12 +103,30 @@ defmodule Vutuv.TagFollowSourcesTest do
     test "refuses what is not a server name" do
       follow = member_follow(insert(:tag))
 
-      for junk <- ["not a server", "", "mastodon"] do
+      for junk <- ["not a server", "", "mastodon", "[::1]"] do
         assert {:error, %Ecto.Changeset{} = changeset} = Tags.add_tag_follow_source(follow, junk)
         assert errors_on(changeset).source != []
       end
 
       assert Tags.tag_follow_sources(follow) == ["vutuv"]
+    end
+
+    test "refuses an address inside our own network — the fetcher would go there" do
+      follow = member_follow(insert(:tag))
+
+      # A source is a host #2126 will fetch from, so this is a stored SSRF
+      # target. The server-name grammar alone accepts every one of these, which
+      # is why the error asserted here is the SSRF layer's own and not "is not
+      # a server name".
+      for internal <- ["169.254.169.254", "127.0.0.1", "10.0.0.5", "192.168.1.1"] do
+        assert {:error, %Ecto.Changeset{} = changeset} =
+                 Tags.add_tag_follow_source(follow, internal)
+
+        assert "is not an allowed server" in errors_on(changeset).source
+      end
+
+      assert Tags.tag_follow_sources(follow) == ["vutuv"]
+      assert Tags.wanted_tag_sources() == []
     end
 
     test "refuses a hostname longer than its column" do
@@ -188,11 +222,42 @@ defmodule Vutuv.TagFollowSourcesTest do
       end
     end
 
-    test "a follow with no sources is possible and simply wants nothing" do
+    test "a follow written with no sources at all still reads as vutuv" do
+      # What the previous release keeps writing during a blue/green deploy: it
+      # knows nothing about this table, and nothing backfills those rows
+      # afterwards. vutuv is always on (#2128), so this is the same answer.
       follow = insert(:tag_follow, user: insert(:user), tag: insert(:tag))
 
       assert %TagFollow{} = follow
-      assert Tags.tag_follow_sources(follow) == []
+      assert Tags.tag_follow_sources(follow) == ["vutuv"]
+
+      # And still after it gains its first server: an "empty means vutuv" rule
+      # would stop firing right here and switch this installation off for a
+      # follow whose owner never asked for that.
+      {:ok, _} = Tags.add_tag_follow_source(follow, "mastodon.social")
+      assert Tags.tag_follow_sources(follow) == ["vutuv", "mastodon.social"]
+    end
+
+    test "a preloaded follow answers the same, without a second query" do
+      follow = member_follow(insert(:tag))
+      {:ok, _} = Tags.add_tag_follow_source(follow, "mastodon.social")
+      bare = insert(:tag_follow, user: insert(:user), tag: insert(:tag))
+
+      preloaded = Repo.preload([follow, bare], :sources)
+
+      assert Enum.map(preloaded, &Tags.tag_follow_sources/1) == [
+               ["vutuv", "mastodon.social"],
+               ["vutuv"]
+             ]
+    end
+
+    test "the local source cannot be switched off" do
+      follow = member_follow(insert(:tag))
+      {:ok, _} = Tags.add_tag_follow_source(follow, "mastodon.social")
+
+      assert Tags.remove_tag_follow_source(follow, "vutuv") == 0
+      assert Tags.remove_tag_follow_source(follow, VutuvWeb.Endpoint.host()) == 0
+      assert Tags.tag_follow_sources(follow) == ["vutuv", "mastodon.social"]
     end
   end
 end

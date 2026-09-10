@@ -142,12 +142,28 @@ saved searches).
 
 A follow also carries its **sources** (issue #2125, `Vutuv.Tags.TagFollowSource`,
 table `tag_follow_sources`): one row per source, `"vutuv"` — this installation,
-written inside the follow's own transaction, so no follow exists without it —
-plus any server the member picked. `source` is either that literal or a bare
-lowercased hostname, and `normalize_source/1` is the one place that turns a
-pasted URL or `@user@host` address into one of the two. An address of **our
-own** becomes the local source rather than a server to poll, `Vutuv.Fediverse.own_host?/1`
-deciding that, so no installation ever asks itself for its own posts.
+written inside the follow's own transaction — plus any server the member picked.
+`source` is either that literal or a bare lowercased hostname, and
+`normalize_source/1` is the one place that turns a pasted URL or `@user@host`
+address into one of the two. An address of **our own** becomes the local source
+rather than a server to poll, `Vutuv.Fediverse.own_host?/1` deciding that, so no
+installation ever asks itself for its own posts; a remote host is folded the same
+way, `www.mastodon.social` storing as `mastodon.social`, because two spellings
+would mean two rows and two fetches of the same posts.
+
+**vutuv is always on and cannot be switched off** (#2128), from both sides:
+`remove_tag_follow_source/2` refuses the local source, and a follow with no rows
+at all reads as `["vutuv"]` — which is what the release before this one keeps
+writing during the blue/green window, knowing nothing about the table.
+
+What a member types here is fetched later by us, so the changeset carries the
+same two-layer guard `Vutuv.Organizations.OrganizationDomain` uses: the
+server-name grammar from `Vutuv.Fediverse.BlockedInstance`, plus
+`Vutuv.Ssrf.internal_host?/1` — the grammar alone accepts `169.254.169.254` and
+every private range. That check is literal-only (no DNS in a changeset), so the
+fetcher still vets the host at fetch time. A tag merge that drops a duplicate
+follow captures its sources first (`Merge.rescue_tag_follow_sources/3`, beside
+the endorsement rescue), so a revert brings the follow back reading what it read.
 
 A table and not a list on the follow, because the fetcher's question is the
 other way round — which server-and-tag pairs does anybody here want? —

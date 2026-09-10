@@ -1014,11 +1014,15 @@ defmodule Vutuv.Tags do
     |> insert_follow_with_local_source(user_id: user_id, tag_id: tag_id)
   end
 
-  # Writes one follow and the source it is born with, in one transaction: a
-  # follow with no source at all reads as "wants nothing" (issue #2125), which
-  # is not what somebody who just pressed follow meant. Member and page follows
-  # differ only in `lookup`, which names both the conflict target and the row to
-  # read back, so the rule lives here once rather than in each of them.
+  # Writes one follow and the source it is born with, in one transaction, so the
+  # table says what the follow reads from rather than leaving it to be inferred:
+  # the grouped query the fetcher runs reads rows, and so does an operator
+  # looking at the table. `tag_follow_sources/1` still supplies the local source
+  # for a row-less follow — it has to, for what the previous release writes
+  # during a deploy — but that is a rule for rows we did not write, not a licence
+  # to stop writing them. Member and page follows differ only in `lookup`, which
+  # names both the conflict target and the row to read back, so the rule lives
+  # here once rather than in each of them.
   #
   # After the insert the row is guaranteed to exist (a fresh insert, or an ON
   # CONFLICT no-op because it already did), so the get_by re-reads the
@@ -1234,24 +1238,30 @@ defmodule Vutuv.Tags do
   end
 
   @doc """
-  Removes one source from `follow`, reading a pasted address the same way
+  Removes one **server** from `follow`, reading a pasted address the same way
   `add_tag_follow_source/2` did. Idempotent; returns the number of rows removed
-  (0 or 1). Removing the last source is allowed and leaves a follow that wants
-  nothing — whether a card offers that is the card's business.
+  (0 or 1).
+
+  The local source is not removable and answers 0: vutuv is always on and cannot
+  be switched off (#2128), so a follow is never remote-only. That is the same
+  rule `tag_follow_sources/1` applies from the other side, where a follow with
+  no rows at all still reads as vutuv.
   """
   def remove_tag_follow_source(%TagFollow{} = follow, source) do
-    case TagFollowSource.normalize_source(source) do
-      nil ->
-        0
+    normalized = TagFollowSource.normalize_source(source)
 
-      normalized ->
-        {count, _} =
-          from(s in TagFollowSource,
-            where: s.tag_follow_id == ^follow.id and s.source == ^normalized
-          )
-          |> Repo.delete_all()
+    # Nothing host-shaped names no row; the local source names one that must
+    # stay. Both are "removed nothing", which is what the count says.
+    if is_nil(normalized) or normalized == local_tag_follow_source() do
+      0
+    else
+      {count, _} =
+        from(s in TagFollowSource,
+          where: s.tag_follow_id == ^follow.id and s.source == ^normalized
+        )
+        |> Repo.delete_all()
 
-        count
+      count
     end
   end
 
@@ -1259,15 +1269,41 @@ defmodule Vutuv.Tags do
   The sources of `follow`, in the order they were added — so the local one
   comes first, having been written with the follow. Ids are `Vutuv.UUIDv7`, so
   ordering by one is ordering by when it was written.
+
+  The local source is always in the answer, whether or not a row says so —
+  vutuv is always on and cannot be switched off (#2128). That is not a cosmetic
+  default: through the blue/green window the previous release keeps writing
+  follows, knowing nothing about this table, so those rows arrive source-less
+  and nothing backfills them afterwards. Every reader gets the rule here rather
+  than each remembering it, `follow.sources` preloaded included.
   """
+  def tag_follow_sources(%TagFollow{sources: sources}) when is_list(sources) do
+    # A preloaded follow answers from what it carries — a page listing many of
+    # them loads the sources in the query it already runs, and must not get a
+    # different answer than the one-follow path for it.
+    sources |> Enum.map(& &1.source) |> with_local_source()
+  end
+
   def tag_follow_sources(%TagFollow{id: id}) do
-    Repo.all(
-      from(s in TagFollowSource,
-        where: s.tag_follow_id == ^id,
-        order_by: [asc: s.id],
-        select: s.source
-      )
+    from(s in TagFollowSource,
+      where: s.tag_follow_id == ^id,
+      order_by: [asc: s.id],
+      select: s.source
     )
+    |> Repo.all()
+    |> with_local_source()
+  end
+
+  # vutuv is always on and cannot be switched off (#2128), so the answer carries
+  # it whatever the rows say — first, where it was written. Not only for a
+  # follow with no rows at all: the release before this one keeps writing
+  # source-less follows through the blue/green window, and the moment such a
+  # follow gains its first server an "empty means vutuv" rule would stop firing
+  # and quietly switch this installation off for it.
+  defp with_local_source(sources) do
+    local = local_tag_follow_source()
+
+    if local in sources, do: sources, else: [local | sources]
   end
 
   @doc """

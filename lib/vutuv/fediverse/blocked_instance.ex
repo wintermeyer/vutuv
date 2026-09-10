@@ -20,9 +20,15 @@ defmodule Vutuv.Fediverse.BlockedInstance do
   @max_reason 255
 
   # A real server name: dot-separated labels of letters, digits and hyphens.
-  # Deliberately strict — a blocklist entry that can never match anything (an
-  # IP literal, "localhost", a typo with a slash left in) is worse than an
-  # error, because it reads as protection that isn't there.
+  # Deliberately strict — a blocklist entry that can never match anything
+  # ("localhost", a typo with a slash left in) is worse than an error, because
+  # it reads as protection that isn't there.
+  #
+  # It does **not** reject an IP literal: `169.254.169.254` is digits and dots
+  # and matches. Harmless in a blocklist, which only ever compares this value
+  # with the host of an inbound actor id, and not harmless anywhere that stores
+  # a host to fetch from later — so such a caller adds `Vutuv.Ssrf.internal_host?/1`
+  # on top (`OrganizationDomain`, `Vutuv.Tags.TagFollowSource`).
   @host_format ~r/\A[a-z0-9]([a-z0-9\-]*[a-z0-9])?(\.[a-z0-9]([a-z0-9\-]*[a-z0-9])?)+\z/
 
   @doc """

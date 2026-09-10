@@ -10,6 +10,7 @@ defmodule Vutuv.Tags.MergeTest do
   alias Vutuv.Newsletters.NewsletterGroup
   alias Vutuv.Posts.PostHashtag
   alias Vutuv.Posts.PostTag
+  alias Vutuv.Tags
   alias Vutuv.Tags.Merge
   alias Vutuv.Tags.Tag
   alias Vutuv.Tags.TagFollow
@@ -286,6 +287,23 @@ defmodule Vutuv.Tags.MergeTest do
       assert restored.tag_id == ctx.absorbed.id
       assert restored.user_id == both.id
       assert Repo.get!(UserTagEndorsement, endorsement.id).user_tag_id == doomed.id
+    end
+
+    test "restores a dropped follow's sources, so it reads from where it did", ctx do
+      member = insert(:activated_user)
+      {:ok, _} = Tags.follow_tag(member, ctx.canonical)
+      {:ok, doomed} = Tags.follow_tag(member, ctx.absorbed)
+      {:ok, _} = Tags.add_tag_follow_source(doomed, "mastodon.social")
+
+      {:ok, merge} = Merge.merge(ctx.absorbed, ctx.canonical, actor: ctx.admin)
+      refute Repo.get(TagFollow, doomed.id)
+
+      assert {:ok, _} = Merge.revert(merge)
+
+      # Without the sources the follow would come back reading nothing at all —
+      # not even this installation.
+      assert Repo.get!(TagFollow, doomed.id).tag_id == ctx.absorbed.id
+      assert Tags.tag_follow_sources(doomed) == ["vutuv", "mastodon.social"]
     end
 
     test "a merge is reverted once", ctx do

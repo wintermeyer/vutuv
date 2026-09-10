@@ -24,7 +24,7 @@ defmodule Vutuv.Tags.TagFollow do
     # Where this follow's posts should come from (issue #2125): `vutuv` plus any
     # server the member picked. Declared so a page listing many follows can
     # preload them in the query it already runs.
-    has_many(:sources, Vutuv.Tags.TagFollowSource)
+    has_many(:sources, Vutuv.Tags.TagFollowSource, preload_order: [asc: :id])
 
     timestamps()
   end
