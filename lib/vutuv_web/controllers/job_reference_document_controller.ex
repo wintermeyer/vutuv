@@ -88,13 +88,10 @@ defmodule VutuvWeb.JobReferenceDocumentController do
     |> send_file(200, path)
   end
 
-  # RFC 5987: the plain `filename` carries an ASCII-safe fallback, `filename*`
-  # the exact UTF-8 name, so a "Zeugnis Müller.pdf" survives the download.
-  defp disposition_filename(reference) do
-    name = safe_filename(reference)
-    ascii = for <<c <- name>>, c in 32..126, c not in [?", ?\\], into: "", do: <<c>>
-    ~s(filename="#{ascii}"; filename*=UTF-8''#{URI.encode(name, &URI.char_unreserved?/1)})
-  end
+  # The save-as name is the member's original filename; the RFC 5987 pair that
+  # keeps a "Zeugnis Müller.pdf" intact lives in `VutuvWeb.ControllerHelpers`.
+  defp disposition_filename(reference),
+    do: reference |> safe_filename() |> ControllerHelpers.disposition_filename()
 
   defp safe_filename(reference) do
     base = reference.document |> Path.basename() |> Path.rootname()

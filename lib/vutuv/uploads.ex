@@ -119,6 +119,22 @@ defmodule Vutuv.Uploads do
   def hold_dir(image_id) when is_binary(image_id), do: disk_dir(Path.join(@hold_root, image_id))
 
   @doc """
+  The takedown hold of a row that is **not** an `images` row, under a named
+  sub-root of the same tree: `frozen/<scope>/<id>` (issue #2109, where the row
+  is an `attachments` one).
+
+  The nesting is the point, not tidiness. `held_image_ids/0` above lists exactly
+  the entries of `frozen/` that are **UUID-named directories**, and
+  `Vutuv.Images.reconcile_holds/0` deletes every one of those with no `images`
+  row behind it — so a second kind of row holding its files at the root of this
+  tree would have them swept away on the next sweeper pass, and a rejected case
+  could never put them back. A scope segment is not a UUID, so everything under
+  it is invisible to that pass and belongs to whoever owns the scope.
+  """
+  def nested_hold_dir(scope, id) when is_binary(scope) and is_binary(id),
+    do: disk_dir(Path.join([@hold_root, scope, id]))
+
+  @doc """
   Every hold on disk, by image id — the record `Vutuv.Images.reconcile_holds/0`
   reads to find work a dying slot left half-done. One `readdir` of a tree that
   is empty on almost every installation, plus a `stat` per hold; the hold layout
@@ -169,9 +185,16 @@ defmodule Vutuv.Uploads do
   `frozen_at` *before* this runs: the stamp is the record of the intent, and
   the move is the part that may need a second attempt.
   """
-  def hold(image_id, storage_dir) when is_binary(storage_dir) do
+  def hold(image_id, storage_dir) when is_binary(storage_dir),
+    do: hold_at(hold_dir(image_id), storage_dir)
+
+  @doc """
+  The same move into a hold named outright rather than derived from an image id
+  — what a row on another table holds its files with (`nested_hold_dir/2`).
+  """
+  def hold_at(hold_dir, storage_dir) when is_binary(hold_dir) and is_binary(storage_dir) do
     for {slot, source} <- hold_slots(storage_dir),
-        do: move_all(source, Path.join(hold_dir(image_id), slot))
+        do: move_all(source, Path.join(hold_dir, slot))
 
     :ok
   end
@@ -185,17 +208,39 @@ defmodule Vutuv.Uploads do
   — `Vutuv.Images.unfreeze/1` removes it only once the picture is reachable
   again, so an interruption is still visible as a hold to finish.
   """
-  def release(image_id, storage_dir) when is_binary(storage_dir) do
+  def release(image_id, storage_dir) when is_binary(storage_dir),
+    do: release_at(hold_dir(image_id), storage_dir)
+
+  @doc "The `hold_at/2` twin: everything in `hold_dir` back where it came from."
+  def release_at(hold_dir, storage_dir) when is_binary(hold_dir) and is_binary(storage_dir) do
     for {slot, target} <- hold_slots(storage_dir),
-        do: move_all(Path.join(hold_dir(image_id), slot), target)
+        do: move_all(Path.join(hold_dir, slot), target)
 
     :ok
   end
 
   @doc "Deletes the hold of `image_id` and everything in it. A no-op when there is none."
-  def purge_hold(image_id) when is_binary(image_id) do
-    File.rm_rf(hold_dir(image_id))
+  def purge_hold(image_id) when is_binary(image_id), do: purge_hold_at(hold_dir(image_id))
+
+  @doc "The `hold_at/2` twin: deletes a hold named outright."
+  def purge_hold_at(hold_dir) when is_binary(hold_dir) do
+    File.rm_rf(hold_dir)
     :ok
+  end
+
+  @doc """
+  The ids that have a hold under `scope` (`nested_hold_dir/2`) — the record a
+  second owner's reconcile pass reads to find work a dying slot left half-done,
+  and the twin of `held_image_ids/0`. One `readdir` of a tree that is empty on
+  almost every installation.
+  """
+  def held_ids(scope) when is_binary(scope) do
+    root = disk_dir(Path.join(@hold_root, scope))
+
+    case File.ls(root) do
+      {:ok, entries} -> Enum.filter(entries, &hold?(root, &1))
+      {:error, _reason} -> []
+    end
   end
 
   @doc """
@@ -232,7 +277,11 @@ defmodule Vutuv.Uploads do
   name asks for it. Every slot again, for the same reason.
   """
   def held_file_path(image_id, filename) when is_binary(image_id) and is_binary(filename),
-    do: first_match(hold_dir(image_id), filename)
+    do: held_file_at(hold_dir(image_id), filename)
+
+  @doc "The `hold_at/2` twin: one held file by name, inside a hold named outright."
+  def held_file_at(hold_dir, filename) when is_binary(hold_dir) and is_binary(filename),
+    do: first_match(hold_dir, filename)
 
   # Every slot, not just `served/`: a picture frozen while the AI gate still had
   # it keeps its versions under `quarantine/`. The private original stays out of
@@ -241,10 +290,17 @@ defmodule Vutuv.Uploads do
   defp first_match(dir, glob),
     do: dir |> Path.join("*/#{glob}") |> Path.wildcard() |> List.first()
 
-  # One directory's files, moved one atomic rename at a time. Nothing recurses:
-  # every tree an uploader writes is flat.
+  # One directory's files, moved one atomic rename at a time. Nothing recurses,
+  # and a **directory is skipped rather than moved**: every tree an uploader
+  # writes is flat, so there was nothing to skip until a file's served tree grew
+  # a `pages/` subdirectory whose contents belong to rows of their own
+  # (`Vutuv.Attachments.Pages`, issue #2109). `File.rename!/2` moves a whole
+  # directory happily, which quietly dragged those pages into their file's hold
+  # and then refused to put them back, the target existing by then. Leaving a
+  # subdirectory where it is says what this function means: it moves what this
+  # directory itself holds.
   defp move_all(from, to) do
-    case Path.wildcard(Path.join(from, "*")) do
+    case from |> Path.join("*") |> Path.wildcard() |> Enum.reject(&File.dir?/1) do
       [] ->
         :ok
 

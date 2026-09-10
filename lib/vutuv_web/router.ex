@@ -1075,6 +1075,9 @@ defmodule VutuvWeb.Router do
     # The reported picture itself, for the owner's case page and the admin's
     # (see the action: a frozen picture is out of every served tree).
     get("/moderation/cases/:id/image", ModerationCaseController, :image)
+    # The reported file, for the same two readers (issue #2109). Its twin above
+    # says why both live outside /admin.
+    get("/moderation/cases/:id/file", ModerationCaseController, :file)
     get("/moderation/cases/:id", ModerationCaseController, :show)
     post("/moderation/cases/:id/dispute", ModerationCaseController, :dispute)
     post("/moderation/cases/:id/delete_content", ModerationCaseController, :delete_content)

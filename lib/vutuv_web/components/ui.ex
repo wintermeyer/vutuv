@@ -4321,6 +4321,38 @@ defmodule VutuvWeb.UI do
   end
 
   @doc """
+  The **reported file** on a moderation case page (issue #2109) — the twin of
+  `reported_picture/1`, and the same argument: a copyright freeze moves both
+  copies out of every tree this app serves from, so
+  `/moderation/cases/:id/file` (owner or admin) is the only place it is
+  reachable at all, and an admin who cannot open the document cannot rule on the
+  claim about it.
+
+  A download rather than a preview, because a PDF is not something a page can
+  show inline the way an `<img>` shows a picture, and its rendered pages are
+  half the argument at best — a copyright notice is usually about page nine.
+
+  Guard visibility (`:if={@case.content_type == "attachment" && @content}`) at
+  the call site, the way `reported_picture/1` is guarded.
+  """
+  attr(:case_id, :string, required: true)
+  attr(:name, :string, required: true)
+  attr(:class, :any, default: nil)
+
+  def reported_file(assigns) do
+    ~H"""
+    <.link
+      id="case-file"
+      href={~p"/moderation/cases/#{@case_id}/file"}
+      class={[button_class("secondary"), @class]}
+    >
+      <span aria-hidden="true">📎</span>
+      <span class="ml-2">{@name}</span>
+    </.link>
+    """
+  end
+
+  @doc """
   A **status pill**: the shape is fixed, the colour is not. `tone` is the tint
   the host picked for this row — "frozen" is amber wherever it appears, and only
   the host knows what frozen means for its records.

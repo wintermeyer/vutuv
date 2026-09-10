@@ -103,6 +103,9 @@ defmodule Vutuv.Attachments.Pages do
   @doc "This kind's name in `Vutuv.Images.kinds/0`."
   def kind, do: @kind
 
+  @doc "The version a page is judged and shown at — what `Vutuv.Images` asks for."
+  def preview_version, do: @preview_version
+
   @doc """
   How many of a file's first pages this installation renders
   (`ATTACHMENT_PREVIEW_PAGES`). `0` turns previews off; anything above five is
@@ -173,6 +176,32 @@ defmodule Vutuv.Attachments.Pages do
     do: Repo.one(from(a in Attachment, where: a.id == ^id, select: a.token))
 
   defp token_of(%Image{}), do: nil
+
+  ## The copyright freeze (issue #2109)
+
+  @doc """
+  Moves every stored size of one page into that page's own takedown hold — the
+  `:attachment_page` half of `Vutuv.Images`' `@takedown` registry, and the shape
+  a press picture already uses: the row's id names the hold, the store owns the
+  name of the tree the files come out of.
+
+  A page freezes **with its file**, never on its own: `Vutuv.Attachments.freeze/1`
+  is the only caller, because a preview page is our derivation of a member's
+  file and has no standing of its own to be taken offline for.
+  """
+  def hold_files(%Image{kind: @kind} = page), do: page_files(page, &Uploads.hold/2)
+
+  @doc "The other direction, for a rejected case: the page back where it was."
+  def release_files(%Image{kind: @kind} = page), do: page_files(page, &Uploads.release/2)
+
+  defp page_files(%Image{} = page, move) do
+    case token_of(page) do
+      nil -> :ok
+      token -> move.(page.id, AttachmentStore.page_storage_dir(token, page.position))
+    end
+
+    :ok
+  end
 
   ## The scan's verdicts (`Vutuv.Moderation.ImageSubjects`)
 

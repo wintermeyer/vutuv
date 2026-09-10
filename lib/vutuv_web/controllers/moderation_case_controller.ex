@@ -10,6 +10,8 @@ defmodule VutuvWeb.ModerationCaseController do
 
   plug(VutuvWeb.Plug.RequireLogin)
 
+  alias Vutuv.Attachments
+  alias Vutuv.Attachments.Attachment
   alias Vutuv.Images
   alias Vutuv.Images.Image
   alias Vutuv.Moderation
@@ -79,6 +81,38 @@ defmodule VutuvWeb.ModerationCaseController do
       # copy in a proxy would outlive the freeze that moved them.
       |> put_resp_header("cache-control", "private, no-store")
       |> put_resp_content_type(MIME.from_path(path), nil)
+      |> send_file(200, path)
+    else
+      _ -> ControllerHelpers.render_error(conn, 404)
+    end
+  end
+
+  @doc """
+  The reported **file** itself, for the same two case pages and the same
+  authorization (issue #2109). A freeze moves both copies out of every tree this
+  app serves from, so this is the only way to open the document at all — and an
+  admin who cannot read it cannot rule on a copyright claim about it.
+
+  It reads the hold first and falls back to the served copy for a file that was
+  reported but not frozen (a house-rule complaint moves nothing). Handed over as
+  a download under the name the member uploaded it as, never rendered inline: it
+  is a member's document of an arbitrary type, and this response is authorized
+  for exactly two people.
+  """
+  def file(conn, %{"id" => id}) do
+    with %Case{content_type: "attachment"} = case_record <- Moderation.get_case(id),
+         :ok <- authorize(conn, case_record),
+         %Attachment{} = attachment <- Moderation.case_content(case_record),
+         path when is_binary(path) <- Attachments.bytes_path(attachment) do
+      conn
+      # Never cached, anywhere: these are the bytes a takedown is about, and a
+      # copy in a proxy would outlive the freeze that moved them.
+      |> put_resp_header("cache-control", "private, no-store")
+      |> put_resp_header(
+        "content-disposition",
+        "attachment; " <> ControllerHelpers.disposition_filename(attachment.file_name)
+      )
+      |> put_resp_content_type(attachment.content_type, nil)
       |> send_file(200, path)
     else
       _ -> ControllerHelpers.render_error(conn, 404)

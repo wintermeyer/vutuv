@@ -61,6 +61,8 @@ defmodule Vutuv.Moderation do
 
   alias Vutuv.Accounts
   alias Vutuv.Accounts.User
+  alias Vutuv.Attachments
+  alias Vutuv.Attachments.Attachment
   alias Vutuv.Chat.{Message, Participant}
   alias Vutuv.Fediverse
   alias Vutuv.Identity
@@ -191,6 +193,15 @@ defmodule Vutuv.Moderation do
   # The whole list, because a press picture is published for redistribution and
   # a section full of them is exactly where a picture is itself the advert.
   def report_categories(%Image{kind: "press_kit"}), do: Report.categories()
+
+  # And a second type answers two ways for the same reason the message form
+  # does: a file under a post is published and can draw a takedown notice, while
+  # a file in a private message is not published at all, so there is nothing for
+  # a rights holder to have taken down (issue #2109). Matched on the **column**
+  # of the nullable parent pair, never on a preloaded `:message`.
+  def report_categories(%Attachment{message_id: id}) when is_binary(id),
+    do: Report.categories_for("message")
+
   def report_categories(content), do: Report.categories_for(content_type(content))
 
   # The arity-3 twin exists so `report_content/3`, which has already loaded the
@@ -664,7 +675,14 @@ defmodule Vutuv.Moderation do
   # already demands a written explanation and a good-faith declaration. A
   # house-rule complaint goes in front of an admin instead, with the picture left
   # where it is, exactly as a report against a whole profile does.
-  defp report_freezes?("image", category), do: Report.copyright?(category)
+  #
+  # A **file** takes the same rule (issue #2109) rather than the post's: the
+  # throwaway-account argument is identical, the parent issue says "frozen by a
+  # copyright notice" in as many words, and a house-rule complaint about what a
+  # post carries has somewhere better to go — the post itself, which any trusted
+  # report does hide.
+  defp report_freezes?(type, category) when type in ["image", "attachment"],
+    do: Report.copyright?(category)
 
   defp report_freezes?(_type, _category), do: true
 
@@ -923,35 +941,45 @@ defmodule Vutuv.Moderation do
         {:error, :not_deletable}
 
       true ->
-        case case_content(case_record) do
-          nil ->
-            {:error, :already_deleted}
-
-          %Post{} = post ->
-            # delete_post settles the case via the content_deleted hook (the
-            # same path organic deletes through the post UI take).
-            {:ok, _} = Posts.delete_post(post)
-            :ok
-
-          %Message{} = message ->
-            {:ok, _} = Vutuv.Chat.delete_message(user, message)
-            content_deleted(message)
-
-          %JobPosting{} = posting ->
-            # delete_job_posting settles the case via the content_deleted hook,
-            # the same path an organic delete takes.
-            {:ok, _} = Vutuv.Jobs.delete_job_posting(posting)
-            :ok
-
-          # "Remove it" for a picture: the copies and the private original go,
-          # held or not (a report that only flagged the picture never moved
-          # anything). There is no edit offer to sit beside this — a picture
-          # cannot be revised, only taken down or disputed.
-          %Image{} = image ->
-            :ok = Images.purge(image)
-            content_deleted(image)
-        end
+        delete_owned_content(case_content(case_record), user)
     end
+  end
+
+  defp delete_owned_content(nil, _user), do: {:error, :already_deleted}
+
+  # delete_post settles the case via the content_deleted hook (the same path
+  # organic deletes through the post UI take).
+  defp delete_owned_content(%Post{} = post, _user) do
+    {:ok, _} = Posts.delete_post(post)
+    :ok
+  end
+
+  defp delete_owned_content(%Message{} = message, %User{} = user) do
+    {:ok, _} = Vutuv.Chat.delete_message(user, message)
+    content_deleted(message)
+  end
+
+  # delete_job_posting settles the case via the content_deleted hook, the same
+  # path an organic delete takes.
+  defp delete_owned_content(%JobPosting{} = posting, _user) do
+    {:ok, _} = Vutuv.Jobs.delete_job_posting(posting)
+    :ok
+  end
+
+  # "Remove it" for a picture: the copies and the private original go, held or
+  # not (a report that only flagged the picture never moved anything). There is
+  # no edit offer to sit beside this — a picture cannot be revised, only taken
+  # down or disputed.
+  defp delete_owned_content(%Image{} = image, _user) do
+    :ok = Images.purge(image)
+    content_deleted(image)
+  end
+
+  # The same for a file, held or not, and the post it hangs under stays where it
+  # is. There is no edit offer beside this either.
+  defp delete_owned_content(%Attachment{} = attachment, _user) do
+    :ok = Attachments.purge(attachment)
+    content_deleted(attachment)
   end
 
   @doc """
@@ -1277,6 +1305,26 @@ defmodule Vutuv.Moderation do
   end
 
   @doc """
+  Where a copyright case has got to with the content itself, for the admin about
+  to rule: `:held` (the files have moved), `:pending_notice` (a copyright notice
+  is on file but nobody has confirmed the address, so nothing was hidden) or
+  `:standing` (a house-rule report, which hides nothing before a ruling).
+
+  Three branches and not two, because #2067 measured what two did: a case page
+  explained a *copyright* case with "only a copyright notice takes one offline",
+  telling the admin the opposite of what the queue was waiting for. It is one
+  function rather than a `cond` per surface because a picture's block and a
+  file's block ask exactly this and would otherwise each carry the rule.
+  """
+  def takedown_state(%Case{} = case_record, content) do
+    cond do
+      match?(%{frozen_at: %NaiveDateTime{}}, content) -> :held
+      pending_copyright_notice?(case_record) -> :pending_notice
+      true -> :standing
+    end
+  end
+
+  @doc """
   What upholding this case would do to the content, for the admin about to
   rule: `:deleted`, `:stays_hidden`, `:untouched` or `:unhidden`.
 
@@ -1291,7 +1339,9 @@ defmodule Vutuv.Moderation do
   `:untouched`, which is the honest answer for a ruling that no longer has
   anything to act on.
   """
-  def uphold_content_effect(%Case{content_type: "image"}, _content), do: :deleted
+  def uphold_content_effect(%Case{content_type: type}, _content)
+      when type in ["image", "attachment"],
+      do: :deleted
 
   def uphold_content_effect(%Case{content_type: type}, %{frozen_at: %NaiveDateTime{}})
       when type in ["user", "organization"],
@@ -1501,6 +1551,16 @@ defmodule Vutuv.Moderation do
   defp settle_content_on_uphold(%Case{content_type: "image"} = case_record) do
     case case_content(case_record) do
       %Image{} = image -> Images.purge(image)
+      _ -> :ok
+    end
+  end
+
+  # A file is the second thing a ruling removes outright, and for the picture's
+  # reason: the whole claim is that these bytes may not be here. The **post
+  # stays** — it was not what was reported (issue #2109).
+  defp settle_content_on_uphold(%Case{content_type: "attachment"} = case_record) do
+    case case_content(case_record) do
+      %Attachment{} = attachment -> Attachments.purge(attachment)
       _ -> :ok
     end
   end
@@ -2292,6 +2352,7 @@ defmodule Vutuv.Moderation do
   def content_type(%Organization{}), do: "organization"
   def content_type(%JobPosting{}), do: "job_posting"
   def content_type(%Image{}), do: "image"
+  def content_type(%Attachment{}), do: "attachment"
 
   defp content_id(%{id: id}), do: id
 
@@ -2336,6 +2397,29 @@ defmodule Vutuv.Moderation do
   # rather than guessing.
   defp owner_id(%Image{user_id: user_id}), do: user_id
 
+  # A file answers to whoever published it, which is the owner of the thing it
+  # hangs under — not `attachments.user_id`, the member who pressed upload. The
+  # two differ for a post published in a page's name, and there the page's rule
+  # has to win for the reason the organization-post clause above gives: the
+  # page's accountability must not move from person to person with each file.
+  #
+  # Matched on the **columns** of the nullable parent pair, and read through a
+  # named function rather than three inline lookups, so nothing here can reach
+  # `Repo.get(Post, nil)` — which raises rather than answering nothing. A file
+  # the composer still holds has no parent at all and falls through to its
+  # uploader, who is the only person it could ever be about.
+  defp owner_id(%Attachment{post_id: id}) when is_binary(id), do: parent_owner_id(Post, id)
+  defp owner_id(%Attachment{message_id: id}) when is_binary(id), do: parent_owner_id(Message, id)
+  defp owner_id(%Attachment{user_id: user_id}), do: user_id
+
+  # The parent's own answer, never a second spelling of it: a post's clause
+  # above already knows that an organization post answers to whoever claimed the
+  # page, and re-selecting `sender_id` here would leave the file behind on the
+  # day a message learns the same thing.
+  defp parent_owner_id(schema, id) do
+    with parent when not is_nil(parent) <- Repo.get(schema, id), do: owner_id(parent)
+  end
+
   defp snapshot(%Post{body: body}), do: body
   defp snapshot(%Message{body: body}), do: body
 
@@ -2354,6 +2438,10 @@ defmodule Vutuv.Moderation do
   # A picture has no text, so the snapshot names which picture it was — the
   # case pages show the picture itself through the authorized preview.
   defp snapshot(%Image{} = image), do: image.file || image.kind
+
+  # A file's name as the member typed it: the one thing about it that reads as
+  # words, and what both case pages put above the download.
+  defp snapshot(%Attachment{} = attachment), do: attachment.file_name
 
   defp snapshot(%Organization{} = organization) do
     [organization.name, organization.city]
@@ -2394,16 +2482,60 @@ defmodule Vutuv.Moderation do
   defp reportable_by?(reporter, %Image{kind: "press_kit"} = image),
     do: Images.takedown_ready?(image) and PressKit.visible_to?(image, reporter)
 
-  defp reportable_by?(_reporter, %Image{} = image), do: Images.takedown_ready?(image)
+  # A member's own profile picture: as public as the profile it sits on, so
+  # "the freeze can act on it" is the whole question. It is the **only** shape
+  # for which that holds, so it is named rather than left to a catch-all — this
+  # used to be `%Image{} -> takedown_ready?/1` for every kind, which failed
+  # open: a kind arriving in `@takedown` became reportable by whoever could name
+  # a row id, with no visibility check at all. `press_kit` above already had to
+  # be the exception, and #2109's `attachment_page` would have been the second
+  # (it is a derivation of a member's file, with no address and no audience of
+  # its own, on a file no post may have claimed — the reportable thing there is
+  # the file, which takes its pages down with it). An exemption that cannot be
+  # proven does not apply, so the kinds #2015 is still moving into this table
+  # answer `false` until somebody says what seeing one means.
+  defp reportable_by?(_reporter, %Image{kind: kind} = image),
+    do: kind in Images.profile_kinds() and Images.takedown_ready?(image)
+
+  # A file is as visible as the thing that published it, and nothing else. Both
+  # halves of the nullable parent pair get a clause matching on the **column**,
+  # and a file with neither parent — one the composer still holds — is visible
+  # to nobody, so nobody outside can report it.
+  defp reportable_by?(reporter, %Attachment{} = attachment) do
+    Attachments.takedown_ready?(attachment) and attachment_visible_to?(attachment, reporter)
+  end
 
   defp reportable_by?(reporter, %JobPosting{} = posting),
     do: Vutuv.Jobs.visible_to?(posting, reporter)
+
+  # The parent's own visibility, asked through the same clauses a report against
+  # the parent would ask — so "who may see this message" stays written once.
+  defp attachment_visible_to?(%Attachment{post_id: id}, reporter) when is_binary(id),
+    do: parent_visible_to?(Post, id, reporter)
+
+  defp attachment_visible_to?(%Attachment{message_id: id}, reporter) when is_binary(id),
+    do: parent_visible_to?(Message, id, reporter)
+
+  defp attachment_visible_to?(%Attachment{}, _reporter), do: false
+
+  defp parent_visible_to?(schema, id, reporter) do
+    case Repo.get(schema, id) do
+      nil -> false
+      parent -> reportable_by?(reporter, parent)
+    end
+  end
 
   # A picture's freeze is a file move, not a column write: every size and the
   # private original leave the trees a reader can reach for the hold nginx has
   # no location for, and the profile falls back to the silhouette meanwhile
   # (`Vutuv.Images.freeze/1`, issue #2012).
   defp freeze_content(%Image{} = image), do: Images.freeze(image)
+
+  # A file's freeze is a file move too, and it takes the preview pages with it
+  # (issue #2109): the row is stamped, every `attachment_page` row of that file
+  # is stamped and held, and both copies of the file leave the trees this app
+  # serves from. The **post keeps standing** — the claim is about the file.
+  defp freeze_content(%Attachment{} = attachment), do: Attachments.freeze(attachment)
 
   defp freeze_content(content) do
     set_frozen_at(content, NaiveDateTime.utc_now(:second))
@@ -2423,6 +2555,7 @@ defmodule Vutuv.Moderation do
   end
 
   defp unfreeze_content(%Image{} = image), do: Images.unfreeze(image)
+  defp unfreeze_content(%Attachment{} = attachment), do: Attachments.unfreeze(attachment)
 
   defp unfreeze_content(content) do
     set_frozen_at(content, nil)
@@ -2489,5 +2622,6 @@ defmodule Vutuv.Moderation do
   defp content_schema("organization"), do: Organization
   defp content_schema("job_posting"), do: JobPosting
   defp content_schema("image"), do: Image
+  defp content_schema("attachment"), do: Attachment
   defp content_schema(_), do: nil
 end

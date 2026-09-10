@@ -250,3 +250,22 @@ the page rendering one of kind `attachment_pages` per file, so
 refusal is a **finished** job with the reason in `detail` — the pipeline did
 its work and the answer was no; only a step that could not be run at all is
 `failed`.
+
+## Reporting a file (issue #2109)
+
+A file is a content type of its own in the moderation case machinery, the way a
+picture is: `attachment` reports, the usual categories, a copyright notice from
+a reporter in good standing moving the file — and the preview pages that freeze
+with it — into `frozen/` rather than deleting anything, the owner's 72-hour
+self-service window, and an upheld case deleting the file while the post keeps
+standing. `frozen_at` on this row is the record of that hold;
+`Vutuv.Attachments.freeze/1`, `unfreeze/1`, `purge/1` and `reconcile_holds/0`
+are the four halves of it, and the whole flow is written up in
+[moderation.md](moderation.md).
+
+Two consequences for this document. The file's hold is
+`frozen/attachments/<attachment id>/`, one level deeper than a picture's, so
+`Vutuv.Images.reconcile_holds/0` cannot mistake it for a stranded image hold and
+delete it. And nothing serves a file or its pages yet, so a file has no address:
+the public notice form cannot name one and the post's card has no chip to hang a
+Report link on until #2108 gives it one.

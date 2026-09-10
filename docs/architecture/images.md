@@ -1062,15 +1062,19 @@ index on the pair. `Vutuv.Attachments.Pages` writes the row and
 `attachment_id` column itself.
 
 Two things are deliberately **not** wired, and both are the same decision.
-There is no `@takedown` entry, so `takedown_ready?/1` answers false and
-`bytes_path/1`/`preview_url/1` on this module answer `nil` — because that map is
+The kind got its `@takedown` entry in **#2109**, together with the clause that
+keeps it out of the report gate. Both halves had to land at once: that map is
 also what `Vutuv.Moderation.reportable_by?/2`'s catch-all `%Image{}` clause
-reads, and a kind added to it becomes reportable by anyone who can name a row
-id, with no visibility check, on a page that may belong to a file no post has
-claimed yet. Reporting a file is #2109, and the strategy and the visibility
-clause belong in one change. Consequently the AI gate's refusal path does not go
-through `purge/1`: `Pages.discard/1` deletes the row and the page's files
-itself, and leaves the file they were rendered from alone.
+reads, and it is `takedown_ready?/1` and nothing else — so an entry on its own
+would have made every preview page reportable by anyone who can name a row id,
+with no visibility check, on a file no post has claimed. The reportable thing is
+the **file**, so `reportable_by?/2` refuses the kind outright and a page freezes
+only with its file. `preview_url/1` stays `nil` for it: there is no
+reader-facing address for a preview page until #2108, and the report form, its
+only caller, no page ever reaches. The AI gate's refusal path still does not go
+through `purge/1` — `Pages.discard/1` is what `purge_by(:attachment_page, …)`
+delegates to, so a refused page and an upheld case remove exactly the same
+thing.
 
 ### The takedown hold (issue #2012)
 
@@ -1084,6 +1088,24 @@ so a byte in there is unreachable however a display helper is fixed later; a
 root of its own rather than a corner of `quarantine/`, because both holds move
 *everything* in a directory and sharing one tree would mean the AI gate's
 release handing a frozen picture back to the world.
+
+**A row on another table holds its files one level deeper**, at
+`frozen/<scope>/<row id>/` (`Vutuv.Uploads.nested_hold_dir/2`), and the nesting
+is load-bearing rather than tidy. `held_image_ids/0` lists exactly the
+**UUID-named directories** at the root of this tree, and `reconcile_holds/0`
+below deletes every one of them with no `images` row behind it — so an
+`attachments` row (#2109) holding its file at the root would have it swept away
+on the next sweeper pass, and a rejected case could never put it back. A scope
+segment is not a UUID, so everything under it is invisible to that pass and
+belongs to whoever owns the scope; `Vutuv.Attachments.reconcile_holds/0` is that
+owner's own re-assertion, run beside this one.
+
+**`move_all/2` moves files and skips directories**, which matters for exactly
+one tree. Every uploader writes a flat directory, so there was nothing to skip
+until a file's served tree grew a `pages/` subdirectory whose contents belong to
+`images` rows of their own; `File.rename!/2` moves a whole directory happily,
+which quietly dragged those pages into their file's hold and then refused to put
+them back, the target existing by then.
 
 `Vutuv.Images.freeze/1` and `unfreeze/1` are the two halves, `purge/1` the
 deletion an upheld case (or the owner's own "remove it") performs. What each

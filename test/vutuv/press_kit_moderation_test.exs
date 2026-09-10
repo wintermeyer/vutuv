@@ -71,6 +71,14 @@ defmodule Vutuv.PressKitModerationTest do
 
   defp held_files(%ImageRow{id: id}), do: Path.wildcard(Path.join(Uploads.hold_dir(id), "*/*"))
 
+  # `basename => sha256`, so a round trip is compared by contents rather than
+  # by "the same number of files turned up".
+  defp digests(paths) do
+    paths
+    |> Enum.reject(&File.dir?/1)
+    |> Map.new(&{Path.basename(&1), :crypto.hash(:sha256, File.read!(&1))})
+  end
+
   describe "the scan" do
     test "a fresh press picture is queued for the model that has to clear it", %{
       owner: owner,
@@ -174,6 +182,35 @@ defmodule Vutuv.PressKitModerationTest do
       assert length(held_files(photo)) > 1
       assert PressKitStore.version_path(photo.token, "large") == nil
       assert PressKitStore.download_file(photo) == nil
+    end
+
+    # The originals directory holds **two** files, not one: the upload verbatim
+    # and the metadata-stripped `cleaned<ext>` beside it
+    # (`Vutuv.Uploads.Originals.cleaned_copy/3`), which is the copy the download
+    # hands out. A freeze that took only the original would leave the
+    # *deliverable* file on disk while the row read as held, and every
+    # assertion above would still be green — so this one names both files and
+    # compares the round trip byte for byte.
+    test "the cleaned copy travels with the original, and comes back with it",
+         %{owner: owner, tmp: tmp} do
+      photo = photo!(owner, owner, tmp)
+      assert PressKitStore.download_file(photo)
+
+      before = digests(served_files(photo.token) ++ original_files(photo.token))
+      assert Enum.any?(Map.keys(before), &(Path.basename(&1) =~ ~r/^cleaned\./))
+
+      :ok = Images.freeze(photo)
+
+      assert served_files(photo.token) == []
+      assert original_files(photo.token) == []
+
+      assert digests(held_files(photo)) |> Map.values() |> Enum.sort() ==
+               before |> Map.values() |> Enum.sort()
+
+      :ok = Images.unfreeze(Repo.get!(ImageRow, photo.id))
+
+      assert digests(served_files(photo.token) ++ original_files(photo.token)) == before
+      assert PressKitStore.download_file(photo)
     end
 
     test "an unfreeze puts every file back at the URL it had", %{owner: owner, tmp: tmp} do

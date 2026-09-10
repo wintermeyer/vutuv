@@ -290,34 +290,32 @@ defmodule Vutuv.Attachments.PagesTest do
     end
   end
 
-  describe "the takedown a page does not have yet (#2109)" do
-    # Written down because the absence is a *decision*, not an oversight, and
-    # because every symptom of it is a quiet `nil` rather than an error: since
-    # #2089 `Images.bytes_path/1` and `preview_url/1` answer `nil` for a kind
-    # with no `@takedown` strategy instead of raising, so an admin surface
-    # pointed at a page would read "no picture here" rather than "this kind is
-    # not wired". `Vutuv.Moderation.reportable_by?/2`'s catch-all `%Image{}`
-    # clause is the reason it must stay that way until #2109: it is
-    # `takedown_ready?/1` and nothing else, so a kind put in the map becomes
-    # reportable by anybody who can name a row id, with no visibility check, on
-    # a page that may belong to a file no post has claimed. #2109 adds the
-    # strategy and the visibility clause together; when it does, this test is
-    # the one to invert.
-    test "is refused everywhere rather than half-wired", %{user: user, files: files} do
+  describe "the takedown the kind got in #2109" do
+    # The inversion this test was written for. #2105 deliberately left
+    # `attachment_page` out of `Vutuv.Images`' `@takedown`, because that
+    # registry is also what `Vutuv.Moderation.reportable_by?/2`'s catch-all
+    # `%Image{}` clause reads — it is `takedown_ready?/1` and nothing else, so a
+    # kind put in the map becomes reportable by anybody who can name a row id,
+    # with no visibility check, on a page that may belong to a file no post has
+    # claimed. #2109 added the strategy and the refusing clause in one change,
+    # and the second half is what this now pins: the freeze reaches a page, and
+    # a report never does.
+    test "is wired, and a page is still nobody's to report", %{user: user, files: files} do
       Fixtures.put_config(preview_pages: 1)
       attachment = stored!(user, Fixtures.multi_page_pdf(files, 1))
       Pages.render(attachment)
       [page] = Pages.list(attachment)
 
-      refute Images.takedown_ready?(page)
-      assert Images.bytes_path(page) == nil
+      assert Images.takedown_ready?(page)
+      assert is_binary(Images.bytes_path(page))
+      assert is_binary(Pages.bytes_path(page))
+
+      # No reader-facing address for a preview page exists until #2108, and
+      # nothing asks for one: the report form is the only caller, and no report
+      # can name a page.
       assert Images.preview_url(page) == nil
       refute Moderation.can_report?(insert_activated_user(), page)
       refute Moderation.can_report?(user, page)
-
-      # The bytes are there all the same — the `nil` above is the missing
-      # strategy, not a missing picture.
-      assert is_binary(Pages.bytes_path(page))
     end
   end
 

@@ -152,9 +152,58 @@ defmodule Vutuv.AttachmentStore do
   end
 
   @doc "The directory one page's sizes live in."
-  def page_dir(token, position) when is_integer(position) and position >= 0 do
-    token |> dir() |> Path.join(@pages) |> Path.join(Integer.to_string(position))
+  def page_dir(token, position) when is_integer(position) and position >= 0,
+    do: token |> page_storage_dir(position) |> Uploads.disk_dir()
+
+  @doc """
+  The same directory relative to `uploads_dir_prefix/0`, which is the form the
+  shared hold takes (`Vutuv.Uploads.hold/2`). A page is held like a press
+  picture: its own `images` row's id names the hold, and the store owns the name
+  of the tree the files come out of. The layout is written **here** and read by
+  `page_dir/2` above, so the two cannot drift.
+  """
+  def page_storage_dir(token, position) when is_integer(position) and position >= 0 do
+    token |> storage_dir() |> Path.join(@pages) |> Path.join(Integer.to_string(position))
   end
+
+  ## The copyright freeze (issue #2109)
+
+  @doc """
+  Moves the file itself — the served copy and the private original — into its
+  takedown hold. The preview pages are **not** taken along: each is an `images`
+  row with a hold of its own (`Vutuv.Attachments.Pages.hold_files/1`), which is
+  what makes `Vutuv.Images.reconcile_holds/0` able to finish an interrupted move
+  for them.
+  """
+  def hold(attachment_id, token) when is_binary(attachment_id) and is_binary(token),
+    do: Uploads.hold_at(hold_dir(attachment_id), storage_dir(token))
+
+  @doc "The other direction: the file back in the trees it came out of."
+  def release(attachment_id, token) when is_binary(attachment_id) and is_binary(token),
+    do: Uploads.release_at(hold_dir(attachment_id), storage_dir(token))
+
+  @doc "Deletes the hold and everything in it. A no-op when there is none."
+  def purge_hold(attachment_id) when is_binary(attachment_id),
+    do: Uploads.purge_hold_at(hold_dir(attachment_id))
+
+  @doc """
+  Where a held file's bytes are, or `nil`. The one thing an admin ruling on a
+  copyright claim can read them through, since a freeze takes them out of every
+  tree the app serves from.
+  """
+  def held_path(attachment_id) when is_binary(attachment_id),
+    do: Uploads.held_file_at(hold_dir(attachment_id), @served_name <> ".*")
+
+  @doc "Every attachment id with a hold on disk — what the reconcile pass reads."
+  def held_ids, do: Uploads.held_ids(@root)
+
+  @doc """
+  This file's hold, under a **scope segment** rather than at the root of
+  `frozen/` — see `Vutuv.Uploads.nested_hold_dir/2` for why that placement is
+  load-bearing rather than tidy.
+  """
+  def hold_dir(attachment_id) when is_binary(attachment_id),
+    do: Uploads.nested_hold_dir(@root, attachment_id)
 
   defp exists(path), do: if(File.exists?(path), do: path)
 

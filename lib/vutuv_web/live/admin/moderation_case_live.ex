@@ -256,18 +256,43 @@ defmodule VutuvWeb.Admin.ModerationCaseLive do
                 notice takes one offline" — telling the admin the opposite of
                 what the queue is waiting for (issue #2067). --%>
           <p class="mt-1 text-xs text-slate-600 dark:text-slate-400">
-            <%= cond do %>
-              <% @content.frozen_at -> %>
+            <%= case Moderation.takedown_state(@case, @content) do %>
+              <% :held -> %>
                 {gettext(
                   "Upholding the case deletes it, the private original included. Rejecting it puts every file back where it was."
                 )}
-              <% Moderation.pending_copyright_notice?(@case) -> %>
+              <% :pending_notice -> %>
                 {gettext(
                   "This picture is still on the profile: the address behind the copyright notice is not confirmed yet, so nothing has been hidden. Upholding the case deletes it, the private original included."
                 )}
-              <% true -> %>
+              <% :standing -> %>
                 {gettext(
                   "This picture is still on the profile: only a copyright notice takes one offline before a ruling. Upholding the case deletes it, the private original included."
+                )}
+            <% end %>
+          </p>
+        </div>
+
+        <%!-- The reported file, the same authorized route and the same argument
+              as the picture above: a freeze moves both copies out of every tree
+              this app serves from, and an admin who cannot read the document
+              cannot rule on a copyright claim about it (issue #2109). --%>
+        <div :if={@case.content_type == "attachment" && @content}>
+          <p class="mt-4 text-sm font-semibold">{gettext("The reported file")}</p>
+          <.reported_file case_id={@case.id} name={@content.file_name} class="mt-1" />
+          <p class="mt-1 text-xs text-slate-600 dark:text-slate-400">
+            <%= case Moderation.takedown_state(@case, @content) do %>
+              <% :held -> %>
+                {gettext(
+                  "Upholding the case deletes it, the preview pages and the private original included. Rejecting it puts every file back where it was, and the post keeps standing either way."
+                )}
+              <% :pending_notice -> %>
+                {gettext(
+                  "This file is still under the post: the address behind the copyright notice is not confirmed yet, so nothing has been hidden. Upholding the case deletes it and leaves the post standing."
+                )}
+              <% :standing -> %>
+                {gettext(
+                  "This file is still under the post: only a copyright notice takes one offline before a ruling. Upholding the case deletes it and leaves the post standing."
                 )}
             <% end %>
           </p>
@@ -416,20 +441,30 @@ defmodule VutuvWeb.Admin.ModerationCaseLive do
                   panel claimed "the content stays hidden" on all four
                   (issue #2067). --%>
             <p class="text-sm text-slate-600 dark:text-slate-400">
-              <%= case Moderation.uphold_content_effect(@case, @content) do %>
-                <% :deleted -> %>
+              <%!-- `:deleted` is the one effect two content types reach, and
+                    they are deleted differently enough that one sentence
+                    cannot carry both: a file takes its rendered preview pages
+                    with it and leaves the post it hangs under standing
+                    (issue #2109). Naming the wrong thing here is the #2067
+                    mistake — an admin ruling on what the panel says. --%>
+              <%= case {Moderation.uphold_content_effect(@case, @content), @case.content_type} do %>
+                <% {:deleted, "attachment"} -> %>
+                  {gettext(
+                    "The report is justified. The reported file is deleted, its preview pages and the private original included, and the owner gets a strike (warn, suspend, deactivate). The post it hangs under stays."
+                  )}
+                <% {:deleted, _picture} -> %>
                   {gettext(
                     "The report is justified. The reported picture is deleted, the private original included, and the owner gets a strike (warn, suspend, deactivate)."
                   )}
-                <% :stays_hidden -> %>
+                <% {:stays_hidden, _type} -> %>
                   {gettext(
                     "The report is justified. The content stays hidden and the owner gets a strike (warn, suspend, deactivate)."
                   )}
-                <% :unhidden -> %>
+                <% {:unhidden, _type} -> %>
                   {gettext(
                     "The report is justified. The content becomes visible again - the consequence here is the strike (warn, suspend, deactivate)."
                   )}
-                <% :untouched -> %>
+                <% {:untouched, _type} -> %>
                   {gettext(
                     "The report is justified. The content is not hidden and upholding does not hide it; the owner gets a strike (warn, suspend, deactivate)."
                   )}
