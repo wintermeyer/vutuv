@@ -765,6 +765,29 @@ config :vutuv, :organization_images, max_filesize: 4_000_000
 # Runtime overrides: MEDIA_KIT_MAX_MB, MEDIA_KIT_MAX_PHOTOS, MEDIA_KIT_MAX_LOGOS.
 config :vutuv, :press_kit, max_filesize: 30_000_000, max_photos: 10, max_logos: 5
 
+# Files on posts and messages (issue #2104, Vutuv.Attachments). `enabled` is
+# the product switch an installation that wants no files turns off
+# (ATTACHMENT_UPLOADS); `uploaders` is :admins while the milestone is being
+# built and :members once a post can actually carry a file, exactly as video
+# was introduced.
+#
+# 20 MB is a scanned twenty-page contract or a deck with pictures, and small
+# enough that five of them still fit one composer session over a phone
+# connection. The two budgets are per member and counted as **accepted
+# uploads** over a rolling window, so an upload-and-delete loop cannot reset
+# them; admins have none. `pdfinfo` comes from poppler-utils, the package
+# `pdftoppm` (qualification proofs) already asks for — without it PDFs are not
+# offered at all, and text and Markdown carry on.
+config :vutuv, :attachments,
+  enabled: true,
+  uploaders: :admins,
+  max_filesize: 20_000_000,
+  max_per_post: 5,
+  daily_budget: 100_000_000,
+  monthly_budget: 500_000_000,
+  pdfinfo: "pdfinfo",
+  pdfdetach: "pdfdetach"
+
 # Job postings (Vutuv.Jobs, milestone 11).
 #   * default_runtime_days — how long a published posting stays live before it
 #     auto-expires. Flat, no renewals: a still-open role gets a fresh posting.

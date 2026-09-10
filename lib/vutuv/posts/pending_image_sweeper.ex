@@ -34,7 +34,8 @@ defmodule Vutuv.Posts.PendingImageSweeper do
   @sweeps [
     {"post image", &Vutuv.Posts.sweep_pending_images/0},
     {"job-posting image", &Vutuv.Jobs.sweep_pending_images/0},
-    {"post video", &Vutuv.Videos.sweep_pending_videos/0}
+    {"post video", &Vutuv.Videos.sweep_pending_videos/0},
+    {"attachment", &Vutuv.Attachments.sweep_pending/0}
   ]
 
   @impl true

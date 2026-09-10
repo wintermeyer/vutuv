@@ -747,10 +747,22 @@ if config_env() == :prod do
   # how much of the machine it may take. Unset keeps the config.exs defaults.
   video_defaults = Application.get_env(:vutuv, :post_videos, [])
 
-  video_env_int = fn name ->
+  # Read an integer knob, or nil when it is unset. Shared with the attachment
+  # block below rather than written twice — the version that got its own
+  # closure was the one whose megabyte multiply then drifted.
+  env_int = fn name ->
     case System.get_env(name) do
       nil -> nil
       value -> String.to_integer(String.trim(value))
+    end
+  end
+
+  # …and the same as a megabyte count, since every size knob here is decimal
+  # (1 MB = 1,000,000 bytes), the unit the forms and the messages name.
+  env_mb = fn name ->
+    case env_int.(name) do
+      nil -> nil
+      megabytes -> megabytes * 1_000_000
     end
   end
 
@@ -761,15 +773,42 @@ if config_env() == :prod do
            uploaders:
              (System.get_env("VIDEO_UPLOADERS") == "members" && :members) ||
                video_defaults[:uploaders],
-           max_filesize:
-             (video_env_int.("VIDEO_MAX_MB") && video_env_int.("VIDEO_MAX_MB") * 1_000_000) ||
-               video_defaults[:max_filesize],
+           max_filesize: env_mb.("VIDEO_MAX_MB") || video_defaults[:max_filesize],
            max_duration_seconds:
-             video_env_int.("VIDEO_MAX_SECONDS") || video_defaults[:max_duration_seconds],
+             env_int.("VIDEO_MAX_SECONDS") || video_defaults[:max_duration_seconds],
            ffmpeg: System.get_env("FFMPEG_PATH") || video_defaults[:ffmpeg],
            ffprobe: System.get_env("FFPROBE_PATH") || video_defaults[:ffprobe],
-           threads: video_env_int.("VIDEO_THREADS") || video_defaults[:threads],
-           concurrency: video_env_int.("VIDEO_CONCURRENCY") || video_defaults[:concurrency]
+           threads: env_int.("VIDEO_THREADS") || video_defaults[:threads],
+           concurrency: env_int.("VIDEO_CONCURRENCY") || video_defaults[:concurrency]
+         )
+
+  # Files on posts and messages (issue #2104): the switch, who may upload, the
+  # per-file cap, how many go on one post, and the two per-member budgets.
+  # Unset keeps the config.exs defaults. The megabyte knobs are decimal (1 MB =
+  # 1,000,000 bytes), the same unit the composer's message names.
+  attachment_defaults = Application.get_env(:vutuv, :attachments, [])
+
+  config :vutuv,
+         :attachments,
+         Keyword.merge(attachment_defaults,
+           # Unset means "whatever config.exs says", not "on": an operator who
+           # turned files off in a source config must not get them back by
+           # leaving the env var alone.
+           enabled:
+             case System.get_env("ATTACHMENT_UPLOADS") do
+               nil -> attachment_defaults[:enabled]
+               value -> value != "false"
+             end,
+           uploaders:
+             (System.get_env("ATTACHMENT_UPLOADERS") == "members" && :members) ||
+               attachment_defaults[:uploaders],
+           max_filesize: env_mb.("ATTACHMENT_MAX_MB") || attachment_defaults[:max_filesize],
+           max_per_post: env_int.("ATTACHMENTS_PER_POST") || attachment_defaults[:max_per_post],
+           daily_budget: env_mb.("ATTACHMENT_DAILY_MB") || attachment_defaults[:daily_budget],
+           monthly_budget:
+             env_mb.("ATTACHMENT_MONTHLY_MB") || attachment_defaults[:monthly_budget],
+           pdfinfo: System.get_env("PDFINFO_PATH") || attachment_defaults[:pdfinfo],
+           pdfdetach: System.get_env("PDFDETACH_PATH") || attachment_defaults[:pdfdetach]
          )
 
   # Post images are auth-proxied: the app checks the post's audience, then

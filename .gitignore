@@ -62,6 +62,8 @@ erl_crash.dump
 # pictures fetched from other networks (Vutuv.RemoteMedia): a followed
 # account's avatar and its posts' attachments
 /remote_media
+# the files a post or a message carries (Vutuv.AttachmentStore)
+/attachments
 # the AI-moderation limbo twin of the served trees (Vutuv.Uploads.quarantine_dir/1)
 /quarantine
 

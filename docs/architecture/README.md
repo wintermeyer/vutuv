@@ -31,6 +31,7 @@ installing and operating vutuv in [Running your own vutuv](../ADMINS.md).
 | [email.md](email.md) | the Emailer chokepoint, multipart bodies, opt-outs, bounces & deliverability |
 | [images.md](images.md) | the AVIF pipeline, kept originals, fingerprinted filenames, the shared `images` table and its backfill, URL screenshots, AI image moderation (Ollama) |
 | [video.md](video.md) | video on posts: the ffmpeg pipeline and its resumable job, the AI check over the stills, the post that waits for its clip, the player and the range-answering proxy, what federates and what the Mastodon API says |
+| [attachments.md](attachments.md) | files on posts and messages: the upload chokepoint, the format read from the bytes, the PDF gate and why a raw-byte scan is not enough, the two on-disk copies, the per-member budget |
 | [admin.md](admin.md) | the admin panel: live dashboard, member browser, account deletion, newsletter & audiences, daily report |
 | [ads.md](ads.md) | the daily text ad: booking, review, serving |
 | [company-pages.md](company-pages.md) | the site footer, the English `/system/investors` and `/system/media-kit` pages, brand assets, and the daily head-count history behind the growth curve |

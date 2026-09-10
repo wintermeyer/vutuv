@@ -70,6 +70,7 @@ defmodule VutuvWeb.PostLive.Composer do
 
   use VutuvWeb, :live_component
 
+  alias Vutuv.Attachments
   alias Vutuv.Fediverse.Note
   alias Vutuv.Fediverse.RemotePost
   alias Vutuv.Languages
@@ -195,6 +196,12 @@ defmodule VutuvWeb.PostLive.Composer do
     # text; a new post's arrives through the upload below.
     |> assign(:video, post_video(post))
     |> assign(:video_uploads?, video_uploads?(post, socket.assigns.current_user))
+    # The files (issue #2104). Like photos they upload eagerly and hold no
+    # parent until the post claims them; unlike photos there is nothing to
+    # attach them to yet (#2106), so an edited post shows none.
+    |> assign(:attachments, [])
+    |> assign(:attachment_uploads?, attachment_uploads?(post, socket.assigns.current_user))
+    |> assign_attachment_budget()
     # The per-photo settings the composer is editing (issue #1104), keyed by
     # image id. Held in the socket rather than in form fields: the two switches
     # reveal follow-up controls, and an unchecked checkbox submits nothing — so
@@ -255,11 +262,40 @@ defmodule VutuvWeb.PostLive.Composer do
       auto_upload: true,
       progress: &handle_progress/3
     )
+    # The files (issue #2104). `accept` is what this host can actually check —
+    # without poppler `.pdf` is not offered at all — and the cap is the
+    # installation's, so LiveView refuses an oversized file in the browser
+    # before a byte crosses the socket. The budget is checked on the server,
+    # where the only trustworthy count of it lives.
+    |> allow_upload(:attachments,
+      accept: Attachments.extension_whitelist(),
+      max_entries: Attachments.max_per_post(),
+      max_file_size: Attachments.max_filesize(),
+      auto_upload: true,
+      progress: &handle_progress/3
+    )
     |> restore_draft()
   end
 
   defp post_video(%Post{video: %PostVideo{} = video}), do: video
   defp post_video(_post), do: nil
+
+  # Whether this composer offers the file picker: this member may upload
+  # (`Vutuv.Attachments.uploads_for?/1` — admins only until the installation
+  # opens it), and this is a new post.
+  defp attachment_uploads?(nil, user), do: Attachments.uploads_for?(user)
+  defp attachment_uploads?(_post, _user), do: false
+
+  # What is left of the member's budget, re-read after every accepted upload —
+  # the composer says it before the next file flows, so it has to be current
+  # rather than the number from mount.
+  defp assign_attachment_budget(socket) do
+    budget =
+      if socket.assigns.attachment_uploads?,
+        do: Attachments.budget_for(socket.assigns.current_user)
+
+    assign(socket, :attachment_budget, budget)
+  end
 
   # Whether this composer offers the picker at all: this member may upload
   # (`Vutuv.Videos.uploads_for?/1` — admins only until the installation opens
@@ -748,6 +784,7 @@ defmodule VutuvWeb.PostLive.Composer do
       # from here on this is simply what they are writing.
       |> assign(:restored_draft?, false)
       |> adopt_recovered_images(params["image_ids"])
+      |> adopt_recovered_attachments(params["attachment_ids"])
       |> merge_photo_texts(payload["photo"])
       |> update_video_alt(payload["video"])
       |> sweep_rejected_uploads()
@@ -985,6 +1022,20 @@ defmodule VutuvWeb.PostLive.Composer do
     {:noreply, cancel_upload(socket, :video, ref)}
   end
 
+  def handle_event("cancel-attachment-upload", %{"ref" => ref}, socket) do
+    {:noreply, cancel_upload(socket, :attachments, ref)}
+  end
+
+  # A file goes, bytes and all. The budget keeps its megabytes: they were
+  # accepted, and giving them back would make upload-and-delete a way round
+  # the allowance.
+  def handle_event("remove-attachment", %{"id" => id}, socket) do
+    {gone, kept} = Enum.split_with(socket.assigns.attachments, &(&1.id == id))
+    Enum.each(gone, &Attachments.delete_pending/1)
+
+    {:noreply, socket |> assign(:attachments, kept) |> assign(:error, nil)}
+  end
+
   # The clip goes, files and all — a new post's only; an edited post keeps
   # its clip, and the button is not offered there.
   def handle_event("remove-video", _params, socket) do
@@ -1206,7 +1257,7 @@ defmodule VutuvWeb.PostLive.Composer do
   defp drafting?(assigns),
     do:
       assigns.body != "" or assigns.tags_value != "" or assigns.images != [] or
-        assigns.video != nil
+        assigns.video != nil or assigns.attachments != []
 
   # Re-adopts photos LiveView form recovery hands back after a reconnect: the
   # composer's socket state died with the old socket, but the pending rows
@@ -1241,6 +1292,23 @@ defmodule VutuvWeb.PostLive.Composer do
   end
 
   defp adopt_recovered_images(socket, _none), do: socket
+
+  # The same for the files (issue #2104): the socket state died with the old
+  # socket, the rows did not, and the hidden `post[attachment_ids][]` inputs
+  # rode the recovered form. `Attachments.pending_for/2` answers only the
+  # author's own still-unattached rows, so a stale or hostile id list can
+  # neither steal a file nor bring a removed one back.
+  defp adopt_recovered_attachments(socket, ids) when is_list(ids) and ids != [] do
+    known = MapSet.new(socket.assigns.attachments, & &1.id)
+    missing = Enum.reject(ids, &MapSet.member?(known, &1))
+
+    case Attachments.pending_for(socket.assigns.current_user, missing) do
+      [] -> socket
+      adopted -> update(socket, :attachments, &(&1 ++ adopted))
+    end
+  end
+
+  defp adopt_recovered_attachments(socket, _none), do: socket
 
   # New posts publish public (there is no audience picker); the fallback to
   # the current preset keeps an edited restricted post from silently
@@ -1519,6 +1587,44 @@ defmodule VutuvWeb.PostLive.Composer do
   defp video_error_message(:disabled), do: gettext("Videos cannot be uploaded here.")
   defp video_error_message(_reason), do: gettext("That file could not be processed.")
 
+  # Every refusal the chokepoint can answer, in words that say what to do next.
+  # A member who cannot post their PDF deserves to know which of the four
+  # things it is, not one sentence covering all of them.
+  defp attachment_error_message(:too_large),
+    do:
+      gettext("Files may be up to %{size}.",
+        size: megabyte_label(Attachments.max_filesize())
+      )
+
+  defp attachment_error_message(:invalid_file),
+    do: gettext("Only PDF, plain text and Markdown files can be attached.")
+
+  defp attachment_error_message(:encrypted),
+    do: gettext("This PDF is password-protected, so it cannot be checked.")
+
+  defp attachment_error_message(:javascript),
+    do: gettext("This PDF contains a program, which cannot be published here.")
+
+  defp attachment_error_message(:open_action),
+    do: gettext("This PDF does something when it is opened, which cannot be published here.")
+
+  defp attachment_error_message(:embedded_files),
+    do: gettext("This PDF has another file inside it, which cannot be published here.")
+
+  defp attachment_error_message(:unreadable),
+    do: gettext("This PDF could not be read.")
+
+  defp attachment_error_message(:pdf_unavailable),
+    do: gettext("PDFs cannot be checked on this site. Text and Markdown files can.")
+
+  defp attachment_error_message(:daily_budget),
+    do: gettext("You have used up today's upload allowance. It frees up again over the day.")
+
+  defp attachment_error_message(:monthly_budget),
+    do: gettext("You have used up this month's upload allowance.")
+
+  defp attachment_error_message(_reason), do: gettext("That file could not be processed.")
+
   # The clip landed (issue #1907): keep it, probe it, and start the pipeline
   # while the author is still writing. The length is only known now, so a
   # clip over the cap is refused here, with the cap in the message.
@@ -1543,6 +1649,38 @@ defmodule VutuvWeb.PostLive.Composer do
         {:error, reason} ->
           {:noreply, assign(socket, :error, video_error_message(reason))}
       end
+    else
+      {:noreply, socket}
+    end
+  end
+
+  # Nothing offered this upload: cut a crafted client off at its first chunk
+  # rather than feed it through to the context's refusal after 20 MB.
+  defp handle_progress(:attachments, entry, %{assigns: %{attachment_uploads?: false}} = socket),
+    do: {:noreply, cancel_upload(socket, :attachments, entry.ref)}
+
+  # The file landed (issue #2104): the chokepoint reads it, decides, and either
+  # keeps it or says why in a sentence the composer shows. The budget is
+  # re-read either way — a refusal costs nothing, and saying so is the point.
+  defp handle_progress(:attachments, entry, socket) do
+    if entry.done? do
+      result =
+        consume_uploaded_entry(socket, entry, fn %{path: path} ->
+          {:ok, Attachments.create_pending(socket.assigns.current_user, path, entry.client_name)}
+        end)
+
+      socket =
+        case result do
+          {:ok, attachment} ->
+            socket
+            |> update(:attachments, &(&1 ++ [attachment]))
+            |> assign(:error, nil)
+
+          {:error, reason} ->
+            assign(socket, :error, attachment_error_message(reason))
+        end
+
+      {:noreply, assign_attachment_budget(socket)}
     else
       {:noreply, socket}
     end
@@ -2044,6 +2182,44 @@ defmodule VutuvWeb.PostLive.Composer do
             </p>
           </div>
 
+          <%!-- The files on their way up, and the ones that landed (issue
+          #2104). The budget line stands with them rather than beside the
+          picker: it is the sentence that explains a refusal about to happen,
+          and it is only worth the row's height once somebody is actually
+          attaching something. --%>
+          <div
+            :for={entry <- @uploads.attachments.entries}
+            id={"#{@id}-attachment-#{entry.ref}"}
+            class="mt-2 flex items-center gap-3 text-sm text-slate-600 dark:text-slate-400"
+          >
+            <span class="truncate">📎 {entry.client_name}</span>
+            <progress value={entry.progress} max="100" class="h-2 flex-1">{entry.progress}%</progress>
+            <button
+              type="button"
+              phx-click="cancel-attachment-upload"
+              phx-value-ref={entry.ref}
+              phx-target={@myself}
+              aria-label={gettext("Cancel upload")}
+            >
+              ✕
+            </button>
+            <p :for={err <- upload_errors(@uploads.attachments, entry)} class="text-red-600">
+              {upload_error_message(err, :attachments)}
+            </p>
+          </div>
+
+          <.attachment_chips
+            :if={@attachments != []}
+            id={@id}
+            attachments={@attachments}
+            myself={@myself}
+          />
+
+          <.attachment_budget_line
+            :if={@attachment_budget}
+            budget={@attachment_budget}
+          />
+
           <.video_block :if={@video} id={@id} video={@video} editing?={@post != nil} myself={@myself} />
 
           <.gallery_sheet
@@ -2115,6 +2291,11 @@ defmodule VutuvWeb.PostLive.Composer do
               id={@id}
               upload={@uploads.video}
               uploading?={@uploads.video.entries != []}
+            />
+            <.add_files_picker
+              :if={@attachment_uploads? and length(@attachments) < Attachments.max_per_post()}
+              id={@id}
+              upload={@uploads.attachments}
             />
 
             <%!-- The author's declaration of what language this post is
@@ -2565,6 +2746,89 @@ defmodule VutuvWeb.PostLive.Composer do
   defp picker_label_class,
     do:
       "inline-flex h-10 mb-0 shrink-0 cursor-pointer items-center gap-1.5 whitespace-nowrap rounded-lg bg-slate-100 px-3 text-sm font-semibold text-slate-700 hover:bg-slate-200 dark:bg-slate-800 dark:text-slate-200 dark:hover:bg-slate-700"
+
+  # The files' picker, beside the photos' and the clip's (issue #2104). It
+  # steps out of sight once the post is carrying as many files as it may.
+  attr(:id, :string, required: true)
+  attr(:upload, :any, required: true)
+
+  defp add_files_picker(assigns) do
+    ~H"""
+    <label id={"#{@id}-add-files"} class={picker_label_class()}>
+      📎 <span class="sm:hidden">{gettext("Files")}</span>
+      <span class="hidden sm:inline">{gettext("Add files")}</span>
+      <.live_file_input upload={@upload} class="sr-only" />
+    </label>
+    """
+  end
+
+  # The files this post is carrying: a chip each with its name and size, and
+  # the way to take one out again. The hidden inputs are what a reconnect
+  # brings back (`adopt_recovered_attachments/2`) — the same trick the photos
+  # ride, and the reason a half-written post does not lose its files to a
+  # network blip.
+  attr(:id, :string, required: true)
+  attr(:attachments, :list, required: true)
+  attr(:myself, :any, required: true)
+
+  defp attachment_chips(assigns) do
+    ~H"""
+    <div id={"#{@id}-attachments"} class="mt-2 flex flex-wrap gap-2">
+      <input
+        :for={attachment <- @attachments}
+        type="hidden"
+        name="post[attachment_ids][]"
+        value={attachment.id}
+      />
+      <span
+        :for={attachment <- @attachments}
+        class="inline-flex max-w-full items-center gap-2 rounded-lg border border-slate-200 py-1 pl-3 pr-1 text-sm text-slate-700 dark:border-slate-700 dark:text-slate-200"
+      >
+        <span class="truncate">📎 {attachment.file_name}</span>
+        <span class="shrink-0 text-xs text-slate-500 dark:text-slate-400">
+          {file_size(attachment.size_bytes)}
+        </span>
+        <button
+          type="button"
+          phx-click="remove-attachment"
+          phx-value-id={attachment.id}
+          phx-target={@myself}
+          class="flex h-10 w-10 shrink-0 items-center justify-center rounded-lg text-slate-500 hover:bg-slate-100 hover:text-slate-700 dark:hover:bg-slate-800 dark:hover:text-slate-200"
+          aria-label={gettext("Remove %{name}", name: attachment.file_name)}
+        >
+          ✕
+        </button>
+      </span>
+    </div>
+    """
+  end
+
+  # What is left of the member's allowance, before the next file flows. Both
+  # numbers are formatted (`VutuvWeb.UI.file_size/1`, and a percent that is a
+  # count under a thousand): a run-together byte figure here would be the
+  # least readable number on the page.
+  attr(:budget, :map, required: true)
+
+  defp attachment_budget_line(assigns) do
+    ~H"""
+    <p class="mt-2 text-xs text-slate-600 dark:text-slate-400">
+      <%= if @budget.unlimited? do %>
+        {gettext("Your uploads are not limited.")}
+      <% else %>
+        {gettext("%{left} of today's %{limit} left (%{percent} %).",
+          left: file_size(@budget.daily.remaining),
+          limit: file_size(@budget.daily.limit),
+          percent: percent_left(@budget.daily)
+        )}
+      <% end %>
+    </p>
+    """
+  end
+
+  defp percent_left(%{remaining: remaining, limit: limit}) when limit > 0,
+    do: round(remaining * 100 / limit)
+
+  defp percent_left(_window), do: 0
 
   attr(:id, :string, required: true)
   attr(:upload, :any, required: true)
@@ -3245,6 +3509,20 @@ defmodule VutuvWeb.PostLive.Composer do
 
   defp upload_error_message(:too_large, :video) do
     gettext("File is larger than %{mb} MB.", mb: div(Videos.max_filesize(), 1_000_000))
+  end
+
+  defp upload_error_message(:too_large, :attachments) do
+    gettext("File is larger than %{size}.", size: megabyte_label(Attachments.max_filesize()))
+  end
+
+  defp upload_error_message(:not_accepted, :attachments) do
+    gettext("File type not supported (allowed: %{types}).",
+      types: Enum.join(Attachments.extension_whitelist(), ", ")
+    )
+  end
+
+  defp upload_error_message(:too_many_files, :attachments) do
+    gettext("No more than %{max} files per post.", max: Attachments.max_per_post())
   end
 
   defp upload_error_message(:too_large, _images) do
