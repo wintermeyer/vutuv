@@ -87,6 +87,13 @@ you already have with `pg_dump -Fc vutuv1_dev | pg_restore -d vutuv1_dev_<name>`
 (`createdb -T` refuses to run while any session is connected to the source, and
 a dev server always is).
 
+Removing the worktree leaves both databases behind, ~155 MB a pair, because
+every teardown path knows only about git. `scripts/worktree-db-gc.sh` lists the
+`vutuv1_dev_*` and `vutuv1_test_*` databases that have no worktree left and
+`-y` drops them, never the shared pair and never one somebody still holds a
+connection to. Run it whenever the list gets long, or wire it into whatever
+creates your worktrees.
+
 ### Email in development
 
 Emails are displayed in the browser via Swoosh's mailbox preview at `/sent_emails` (http://localhost:4000/sent_emails on the main checkout).

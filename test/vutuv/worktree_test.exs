@@ -99,6 +99,34 @@ defmodule Vutuv.WorktreeTest do
     end
   end
 
+  describe "the shell copy of the name rule" do
+    @describetag :tmp_dir
+
+    # `scripts/worktree-name.sh` is the shell spelling of `worktree_name/1`, and
+    # `scripts/worktree-db-gc.sh` decides from it which databases have no
+    # worktree left. A divergence would not fail loudly anywhere: it makes a
+    # LIVE session's database look orphaned, and the next sweep drops it out
+    # from under somebody who is working in it. So both sides answer the same
+    # fixtures here. `fix--feed..rail` is in the list because folding a RUN of
+    # separators to a single `_` is the half that a plain `${name//[^a-z0-9]/_}`
+    # would quietly get wrong. (The port in `cw` cannot be covered this way —
+    # that one is still only in the author's shell.)
+    for name <- ["profile", "Fix-Feed.Rail", "fix--feed..rail", "x9", String.duplicate("a", 60)] do
+      test "#{name} comes out the same on both sides", %{tmp_dir: tmp} do
+        name = unquote(name)
+
+        assert script_db_name(name) == tmp |> checkout(name) |> MixProject.worktree_name()
+      end
+    end
+  end
+
+  defp script_db_name(name) do
+    script = Path.expand("scripts/worktree-db-gc.sh", File.cwd!())
+    {out, 0} = System.cmd(script, ["--db-name", name])
+
+    String.trim(out)
+  end
+
   defp checkout(tmp, name) do
     dir = Path.join(tmp, "checkout")
     File.mkdir_p!(dir)
