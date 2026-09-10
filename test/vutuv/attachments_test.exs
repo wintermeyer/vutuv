@@ -149,12 +149,22 @@ defmodule Vutuv.AttachmentsTest do
   end
 
   describe "the PDF gate" do
+    # The encrypted fixtures are built with qpdf, which the gate itself does not
+    # use (poppler answers encryption) — CI carries poppler but not qpdf, so
+    # `nil` means "cannot build the fixture here" and the check is left to a dev
+    # machine with qpdf, the same skip `hidden/2` already takes.
     test "an encrypted PDF is refused", %{user: user, files: files} do
-      assert {:error, :encrypted} = upload(user, Fixtures.encrypted_pdf(files))
+      case Fixtures.encrypted_pdf(files) do
+        nil -> :ok
+        path -> assert {:error, :encrypted} = upload(user, path)
+      end
     end
 
     test "a PDF with an owner password is refused too", %{user: user, files: files} do
-      assert {:error, :encrypted} = upload(user, Fixtures.owner_encrypted_pdf(files))
+      case Fixtures.owner_encrypted_pdf(files) do
+        nil -> :ok
+        path -> assert {:error, :encrypted} = upload(user, path)
+      end
     end
 
     test "a PDF with JavaScript is refused", %{user: user, files: files} do
@@ -209,6 +219,32 @@ defmodule Vutuv.AttachmentsTest do
 
       assert Enum.all?(got, fn {reason, seen} -> reason == seen end),
              "hidden in an object stream, the gate answered: #{inspect(got)}"
+    end
+
+    test "a launch hidden in a stream padded past the inflation cut is refused", %{
+      user: user,
+      files: files
+    } do
+      # One `qpdf --object-streams=generate` over a catalog padded to 9 MB puts
+      # `/OpenAction << /S /Launch >>` in a ~10 KB file whose only object stream
+      # inflates past `@stream_limit`. Skipping that stream (the shape before
+      # the fix) accepted it; refusing an unfinished inflate catches it.
+      # Calibration: make `scan_streams/2`'s `:too_big` branch skip again and
+      # this goes red with `{:ok, _}`. Returns nil without qpdf → skipped.
+      case Fixtures.oversized_object_stream_pdf(files) do
+        nil -> :ok
+        path -> assert {:error, :unreadable} = upload(user, path)
+      end
+    end
+
+    test "a launch compressed behind a literal endstream is refused", %{user: user, files: files} do
+      # A stored deflate block carries the nine bytes `endstream` ahead of a
+      # genuinely compressed `/OpenAction << /S /Launch >>`, so `/Launch` is not
+      # in the raw bytes and a scan that ended each stream at the first literal
+      # `endstream` would inflate only the decoy. Inflating to the deflate
+      # stream's own end marker reads the whole thing. Calibration: end
+      # `streams/1` at `endstream` again and this goes red with `{:ok, _}`.
+      assert {:error, :open_action} = upload(user, Fixtures.endstream_decoy_pdf(files))
     end
 
     test "a refused PDF leaves nothing on disk", %{user: user, files: files, tmp: tmp} do

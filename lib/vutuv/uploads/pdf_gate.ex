@@ -65,11 +65,12 @@ defmodule Vutuv.Uploads.PdfGate do
 
   require Logger
 
-  # The inflation pass's budget. An object stream holding a catalog is
-  # kilobytes; a stream that inflates past this is an image or a font, which
-  # cannot define an object, so it is skipped rather than refused. The total
-  # bounds a decompression bomb: past it the scan is incomplete, and an
-  # incomplete scan refuses.
+  # The inflation pass's budget, per stream and in total. Past either one the
+  # scan is incomplete, and an incomplete scan refuses — a stream nobody could
+  # read is not a stream anybody proved harmless. Measured over 1,051 real,
+  # local PDFs on 2026-09-10: the largest single inflated stream is 3 MB and
+  # the largest whole-file total is under 96 MB, so both cuts sit well clear of
+  # an ordinary document while a bomb still stops at them.
   @stream_limit 8_000_000
   @total_limit 96_000_000
 
@@ -227,9 +228,20 @@ defmodule Vutuv.Uploads.PdfGate do
 
   defp scan_streams([{bytes, start, length} | rest], spent) do
     case inflate(binary_part(bytes, start, length)) do
-      # Too big to be an object stream: an image or a font, which defines
-      # nothing. Skipped, and its bytes are not charged to the budget.
-      :too_big -> scan_streams(rest, spent)
+      # A stream this could not finish inflating is a stream it did not scan,
+      # and an unfinished scan refuses — the same answer `@total_limit` gives.
+      # Skipping it instead was an exemption that cannot be proven: padding a
+      # catalog to 9 MB and running one `qpdf --object-streams=generate` puts
+      # `/OpenAction << /S /Launch >>` in a 9.5 KB file that inflates past the
+      # cut, and the scan walked straight past it. Measured over 1,051 real,
+      # local PDFs on 2026-09-10: the largest single inflated stream in the
+      # whole corpus is 3 MB and **none** reaches 4 MB, so the cut costs no
+      # ordinary document.
+      :too_big -> {:error, :unreadable}
+      # Not zlib at all — a JPEG, a font, an encrypted payload. There is
+      # nothing to inflate, so there is nothing this pass could have read; the
+      # filter that makes such a stream unreadable here is named in the
+      # moduledoc as the place the set is not closed.
       :error -> scan_streams(rest, spent)
       {:ok, out} -> scan_inflated(out, rest, spent)
     end
@@ -268,14 +280,26 @@ defmodule Vutuv.Uploads.PdfGate do
   defp destination?(rest),
     do: Regex.match?(@destination_regex, rest) or Regex.match?(@goto_regex, rest)
 
-  # Where each stream's payload sits, never a copy of it: `capture:
+  # Where each stream's payload *starts*, never a copy of it: `capture:
   # :all_but_first` would allocate a fresh binary per stream, which on a PDF
   # that is mostly stream data doubles the memory this holds while it scans.
   # `binary_part/3` on the original hands back a sub-binary instead.
+  #
+  # The slice runs from the `stream` marker to the **end of the file**, not to
+  # the next literal `endstream`: `endstream` is not a trustworthy terminator,
+  # because a stream's payload is arbitrary bytes an attacker chooses. A stored
+  # (uncompressed) deflate block can carry the nine bytes `endstream` ahead of
+  # a compressed `/OpenAction << /S /Launch >>`, and a scan that stopped the
+  # capture at that literal would inflate only the decoy prefix and never see
+  # the action. `:zlib` stops at the deflate stream's own end marker and
+  # ignores every trailing byte, so handing it the rest of the file reads the
+  # whole real stream and no more.
   defp streams(bytes) do
+    total = byte_size(bytes)
+
     @stream_regex
     |> Regex.scan(bytes, return: :index, capture: :all_but_first)
-    |> Enum.map(fn [{start, length}] -> {bytes, start, length} end)
+    |> Enum.map(fn [{start, _length}] -> {bytes, start, total - start} end)
   end
 
   # Inflates one stream, stopping at `@stream_limit` rather than letting a

@@ -42,14 +42,20 @@ defmodule Vutuv.AttachmentFixtures do
   @doc "A PDF carrying another file inside it."
   def embedded_file_pdf(dir), do: write(dir, "embedded.pdf", pdf(:embedded))
 
-  @doc "A PDF encrypted with a user password — `pdfinfo` cannot even open it."
+  @doc """
+  A PDF encrypted with a user password — `pdfinfo` cannot even open it. Needs
+  `qpdf`; returns `nil` when it is not installed (CI carries poppler for the
+  gate itself but not qpdf), so a machine without it skips the encryption tests
+  rather than failing the suite, the same way `hidden/2` does.
+  """
   def encrypted_pdf(dir) do
     encrypt(dir, "encrypted.pdf", ["--user-password=secret", "--owner-password=owner"])
   end
 
   @doc """
   A PDF with an owner password only: readable by anybody, but restricted, and
-  the shape `pdfinfo` answers `Encrypted: yes` for rather than refusing.
+  the shape `pdfinfo` answers `Encrypted: yes` for rather than refusing. Needs
+  `qpdf`; `nil` without it, as `encrypted_pdf/1`.
   """
   def owner_encrypted_pdf(dir) do
     encrypt(dir, "owner-encrypted.pdf", ["--user-password=", "--owner-password=owner"])
@@ -70,6 +76,69 @@ defmodule Vutuv.AttachmentFixtures do
     else
       _no_qpdf -> nil
     end
+  end
+
+  @doc """
+  An `/OpenAction` that launches something, hidden in an object stream padded
+  past `PdfGate`'s per-stream inflation cut. One `qpdf --object-streams=generate`
+  over a catalog carrying 9 MB of filler yields a ~10 KB file whose only object
+  stream inflates past the cut — so a pass that *skipped* what it could not
+  finish reading walked straight past the action. Returns `nil` without qpdf.
+  """
+  def oversized_object_stream_pdf(dir) do
+    padded =
+      write(
+        dir,
+        "padded-source.pdf",
+        pdf(:launch_padded)
+      )
+
+    dest = Path.join(dir, "padded.pdf")
+
+    with qpdf when is_binary(qpdf) <- System.find_executable("qpdf"),
+         {_out, 0} <-
+           System.cmd(qpdf, ["--object-streams=generate", "--compress-streams=y", padded, dest],
+             stderr_to_stdout: true
+           ) do
+      File.rm(padded)
+      dest
+    else
+      _no_qpdf -> nil
+    end
+  end
+
+  @doc """
+  A launch action genuinely compressed inside a FlateDecode stream whose
+  payload carries the literal bytes `endstream` ahead of it, planted in an
+  uncompressed deflate block. `/Launch` is not in the raw file, and a scan that
+  ended the stream at the first literal `endstream` would inflate only the
+  decoy. Needs no external tool — the deflate stream is assembled here.
+  """
+  def endstream_decoy_pdf(dir) do
+    decoy = "clean content endstream more padding so the scan would stop here"
+    real = "/OpenAction << /S /Launch /F (calc.exe) >> plus real bytes to compress"
+
+    # A zlib stream is a 2-byte header, deflate blocks, then a 4-byte adler32.
+    # The decoy is a stored (uncompressed) block, so its `endstream` bytes stay
+    # literal; the real payload is `:zlib.zip/1`'s raw deflate, whose last block
+    # is final. The adler32 of the whole output is lifted off a normal
+    # `:zlib.compress/1` so the stream verifies and inflates to decoy <> real.
+    full = decoy <> real
+    zwrapped = :zlib.compress(full)
+    adler = binary_part(zwrapped, byte_size(zwrapped) - 4, 4)
+
+    body = <<0x78, 0x9C>> <> stored_block(decoy) <> :zlib.zip(real) <> adler
+    ^full = :zlib.uncompress(body)
+
+    stream = "<< /Length #{byte_size(body)} /Filter /FlateDecode >>\nstream\n#{body}\nendstream"
+    write(dir, "endstream-decoy.pdf", pdf(:plain, [{6, stream}]))
+  end
+
+  # One uncompressed deflate block (BTYPE 00), never the final one, so a real
+  # compressed block can follow it. LEN then its ones-complement, little-endian.
+  defp stored_block(payload) do
+    len = byte_size(payload)
+    <<0, len::little-16, Bitwise.bxor(len, 0xFFFF)::little-16>> <> payload
   end
 
   @doc "A ZIP file under a `.pdf` name: the extension lies, the bytes do not."
@@ -103,20 +172,22 @@ defmodule Vutuv.AttachmentFixtures do
   end
 
   defp encrypt(dir, name, args) do
-    source = plain_pdf(dir)
-    dest = Path.join(dir, name)
+    case System.find_executable("qpdf") do
+      nil ->
+        nil
 
-    qpdf =
-      System.find_executable("qpdf") ||
-        raise "qpdf is not installed; the encrypted-PDF tests need it to build their fixture"
+      qpdf ->
+        source = plain_pdf(dir)
+        dest = Path.join(dir, name)
 
-    {out, status} =
-      System.cmd(qpdf, ["--encrypt"] ++ args ++ ["--bits=256", "--", source, dest],
-        stderr_to_stdout: true
-      )
+        {out, status} =
+          System.cmd(qpdf, ["--encrypt"] ++ args ++ ["--bits=256", "--", source, dest],
+            stderr_to_stdout: true
+          )
 
-    if status != 0, do: raise("qpdf could not encrypt the fixture (#{status}): #{out}")
-    dest
+        if status != 0, do: raise("qpdf could not encrypt the fixture (#{status}): #{out}")
+        dest
+    end
   end
 
   defp write(dir, name, bytes) do
@@ -130,17 +201,19 @@ defmodule Vutuv.AttachmentFixtures do
 
   @content "BT /F1 24 Tf 72 700 Td (hello) Tj ET"
 
-  defp pdf(kind) do
+  defp pdf(kind, more \\ []) do
     {root, extra} = catalog(kind)
 
-    build([
-      {1, root},
-      {2, "<< /Type /Pages /Kids [3 0 R] /Count 1 >>"},
-      {3, page(kind)},
-      {4, "<< /Length #{byte_size(@content)} >>\nstream\n#{@content}\nendstream"},
-      {5, "<< /Type /Font /Subtype /Type1 /BaseFont /Helvetica >>"}
-      | extra
-    ])
+    build(
+      [
+        {1, root},
+        {2, "<< /Type /Pages /Kids [3 0 R] /Count 1 >>"},
+        {3, page(kind)},
+        {4, "<< /Length #{byte_size(@content)} >>\nstream\n#{@content}\nendstream"},
+        {5, "<< /Type /Font /Subtype /Type1 /BaseFont /Helvetica >>"}
+        | extra
+      ] ++ more
+    )
   end
 
   # The page dictionary. `:page_action` hangs an additional action off it, which
@@ -177,6 +250,14 @@ defmodule Vutuv.AttachmentFixtures do
   end
 
   defp catalog(:page_action), do: {"<< /Type /Catalog /Pages 2 0 R >>", []}
+
+  # 9 MB of filler in the catalog, so the object stream qpdf builds from it
+  # inflates past `PdfGate`'s per-stream cut. The padding compresses to nothing,
+  # which is what makes the finished file ~10 KB.
+  defp catalog(:launch_padded) do
+    {"<< /Type /Catalog /Pages 2 0 R /OpenAction << /S /Launch /F (calc.exe) >> " <>
+       "/Pad (" <> String.duplicate("A", 9_000_000) <> ") >>", []}
+  end
 
   defp catalog(:embedded) do
     payload = "payload bytes"
