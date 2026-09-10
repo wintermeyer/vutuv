@@ -131,4 +131,110 @@ defmodule VutuvWeb.RemotePostImagesTest do
       assert render_tile([held_picture()]) =~ "Unsere KI sieht es sich an."
     end
   end
+
+  # A clip is the one attachment this installation does not hold: only its
+  # cover is fetched and judged, the clip itself streams from the server that
+  # published it. Two consequences the card has to carry.
+  describe "a clip" do
+    defp held_clip(attrs \\ []) do
+      struct(
+        %RemoteImage{
+          id: Vutuv.UUIDv7.generate(),
+          file: nil,
+          moderation: "pending",
+          media_type: "video/mp4",
+          poster_uri: "https://social.example/media/cover.png",
+          duration_ms: 73_200
+        },
+        attrs
+      )
+    end
+
+    defp released_clip(attrs \\ []) do
+      struct(
+        %RemoteImage{
+          id: Vutuv.UUIDv7.generate(),
+          file: "cover-abc.avif",
+          moderation: "approved",
+          media_type: "video/mp4",
+          poster_uri: "https://social.example/media/cover.png",
+          source_uri: "https://social.example/media/clip.mp4",
+          duration_ms: 73_200,
+          byte_size: 94_407_457
+        },
+        attrs
+      )
+    end
+
+    # While the cover is with the gate the card shows the cover, and until this
+    # it showed it as a photograph: no play glyph, no length, nothing saying a
+    # clip was waiting. A reader cannot tell a held picture from a held clip,
+    # which is the one thing the tile is there to say.
+    test "waiting for the gate, it still reads as a clip" do
+      html = render_tile([held_clip()])
+
+      assert html =~ "data-remote-clip-waiting"
+      # 73.2 s rounds UP to 74, the rule `PostVideo.seconds/1` already sets for a
+      # member's own clip — one second past what the publishing instance prints.
+      assert html =~ "1:14"
+      assert html =~ "Video is being checked"
+      refute html =~ "Picture is being checked"
+    end
+
+    # `mix gettext.extract --merge` fuzzy-filled this msgid with the picture
+    # tile's translation ("Bild wird geprüft") — the exact silent-nonsense
+    # failure the project rule warns about, so the German is asserted by name.
+    test "German names the clip, not a picture" do
+      Gettext.put_locale(VutuvWeb.Gettext, "de")
+      html = render_tile([held_clip()])
+
+      assert html =~ "Video wird geprüft"
+      refute html =~ "Bild wird geprüft"
+    end
+
+    # The measurement this label exists for: 73 seconds of phone video off
+    # social.bund.de is 94 MB, and the server serves it without range support,
+    # so a tap on a train costs the whole file.
+    test "released, the poster says how long and how big before anybody taps" do
+      html = render_tile([released_clip()])
+
+      assert html =~ "data-remote-video"
+      # 73.2 s rounds UP to 74, the rule `PostVideo.seconds/1` already sets for a
+      # member's own clip — one second past what the publishing instance prints.
+      assert html =~ "1:14"
+      assert html =~ "94 MB"
+    end
+
+    test "an unmeasured clip says its length and stays quiet about the size" do
+      html = render_tile([released_clip(byte_size: nil)])
+
+      # 73.2 s rounds UP to 74, the rule `PostVideo.seconds/1` already sets for a
+      # member's own clip — one second past what the publishing instance prints.
+      assert html =~ "1:14"
+      refute html =~ "MB"
+    end
+
+    test "a clip whose attachment carried no length says neither" do
+      html = render_tile([released_clip(duration_ms: nil, byte_size: nil)])
+
+      assert html =~ "data-remote-video"
+      refute html =~ "data-remote-clip-facts"
+    end
+
+    # The three quarters of clips that arrive with no cover (27 of 36 in one
+    # day's cached posts) have nothing to reserve a shape with, so the card
+    # would draw a 16:9 black box for a portrait phone clip. The attachment
+    # states the clip's own shape even when it sends no cover.
+    test "the player reserves the clip's own shape, not the cover's" do
+      # No cover named at all — nothing to fetch and nothing to judge, so it
+      # plays as it is (`RemoteImage.display_state/1`). This is the common case.
+      coverless =
+        released_clip(poster_uri: nil, file: nil, video_width: 1080, video_height: 1920)
+
+      html = render_tile([coverless])
+
+      assert html =~ "data-remote-video"
+      assert html =~ "aspect-ratio: 1080 / 1920"
+    end
+  end
 end

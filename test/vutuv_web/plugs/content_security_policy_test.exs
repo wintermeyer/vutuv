@@ -25,6 +25,29 @@ defmodule VutuvWeb.Plug.ContentSecurityPolicyTest do
     assert policy =~ "img-src 'self' data:"
   end
 
+  # A clip on a fediverse card is the one thing here that is NOT served from
+  # this installation: its cover is fetched and judged like a picture, the clip
+  # itself plays straight from the server that published it (issue #1914). With
+  # no `media-src` of its own that falls to `default-src 'self'`, and the
+  # browser refuses the load before it makes a request — `MEDIA_ELEMENT_ERROR:
+  # Media load rejected by URL safety check`, which draws as a dead play button
+  # and no error anywhere. That is what shipped: the whole feature was
+  # unreachable from the day it was merged.
+  #
+  # The directive cannot be narrower than `https:`. The clips come from every
+  # instance's own object store — measured over one day's cached posts:
+  # legal.social, assets.chaos.social, social.bund.de, dresden.s3proxy.de,
+  # gruenesocial-userfiles.nbg1.your-objectstorage.com,
+  # storage.gra.cloud.ovh.net — so there is no host list to keep.
+  test "media-src lets a clip play from the server that published it", %{conn: conn} do
+    policy = conn |> get(~p"/") |> csp()
+
+    assert policy =~ "media-src 'self' https:"
+    # Widened for media only: everything else still answers to `default-src`.
+    refute policy =~ "default-src 'self' https:"
+    refute policy =~ "img-src 'self' data: https:"
+  end
+
   test "connect-src names the websocket origin so LiveView can join", %{conn: conn} do
     policy = conn |> get(~p"/") |> csp()
 

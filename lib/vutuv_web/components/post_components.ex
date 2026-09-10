@@ -26,7 +26,7 @@ defmodule VutuvWeb.PostComponents do
   import VutuvWeb.FediverseComponents, only: [remote_actor_link: 3]
   import VutuvWeb.UI
   import VutuvWeb.UserHelpers, only: [full_name: 1]
-  import VutuvWeb.VideoComponents, only: [post_video: 1]
+  import VutuvWeb.VideoComponents, only: [clock: 1, post_video: 1]
 
   alias Phoenix.LiveView.JS
   alias Vutuv.Accounts.User
@@ -2838,6 +2838,7 @@ defmodule VutuvWeb.PostComponents do
                 loading="lazy"
                 class="block max-h-96 w-full rounded-lg object-cover"
               />
+              <.waiting_clip_marks :if={RemoteImage.video?(image)} image={image} />
               <.checking_badge />
             </div>
             <div
@@ -2846,7 +2847,10 @@ defmodule VutuvWeb.PostComponents do
               class="flex min-h-24 items-center justify-center gap-2 rounded-lg bg-slate-100 px-3 py-6 text-center text-xs text-slate-600 dark:bg-slate-800 dark:text-slate-400"
             >
               <.hourglass />
-              <span>{gettext("Picture is being checked")}</span>
+              <span>{waiting_label(image)}</span>
+              <span :if={RemoteImage.video?(image)} data-remote-clip-waiting class="tabular-nums">
+                {clip_facts_line(image)}
+              </span>
             </div>
           <% :sensitive -> %>
             <%!-- `<details>` rather than a JS toggle: the cover has to hold with
@@ -2939,22 +2943,41 @@ defmodule VutuvWeb.PostComponents do
 
   defp remote_video(assigns) do
     poster = if RemoteImage.released?(assigns.image), do: assigns.picture
-    assigns = assign(assigns, :poster, poster && (poster.lite || poster.src))
+
+    assigns =
+      assigns
+      |> assign(:poster, poster && (poster.lite || poster.src))
+      |> assign(:aspect, clip_aspect(assigns.image))
 
     ~H"""
     <figure data-remote-video={@image.id} data-video-figure class="relative">
-      <div class="relative overflow-hidden rounded-lg bg-slate-950">
+      <%!-- The shape is reserved from the CLIP's own dimensions, which the
+      attachment states even when it sends no cover — and three quarters of
+      them do not (27 of 36 in one day's cached posts). Without it a portrait
+      phone clip drew as a 16:9 black box until the first frame arrived.
+      `max-h-96` caps that box the way it capped the player before, and the
+      player fills it (`h-full`, the shape `VideoComponents.post_video/1`
+      uses): a `max-h-96` player inside an uncapped aspect box left 505px of
+      black under a 384px clip, with the play glyph centred in the empty half
+      of it — measured at 500×889 against a 500×384 player. `object-contain`
+      is what a portrait clip then needs, since the capped box is wider than
+      the clip is. --%>
+      <%!-- `mx-auto`, because the capped box is only as wide as the clip's own
+      shape allows (216px for a 9:16 phone clip in a 500px column) and a narrow
+      player left flush against the text reads as a broken picture — the same
+      call `<.single_feed_photo>` makes for a portrait photograph. --%>
+      <div class="relative mx-auto max-h-96 overflow-hidden rounded-lg bg-slate-950" style={@aspect}>
         <video
           controls
           preload="none"
           playsinline
           poster={@poster}
           src={@image.source_uri}
-          width={@image.width}
-          height={@image.height}
+          width={@image.video_width || @image.width}
+          height={@image.video_height || @image.height}
           aria-label={@image.alt || gettext("Video")}
           data-video-player
-          class="block max-h-96 w-full"
+          class="block h-full max-h-96 w-full object-contain"
         >
         </video>
         <span
@@ -2963,14 +2986,120 @@ defmodule VutuvWeb.PostComponents do
           class="pointer-events-none absolute inset-0 flex items-center justify-center"
         >
           <span class="flex h-14 w-14 items-center justify-center rounded-full bg-slate-900/70 text-white shadow-lg">
-            <svg viewBox="0 0 24 24" fill="currentColor" class="ml-1 h-7 w-7" aria-hidden="true">
-              <path d="M8 5.14v13.72a1 1 0 0 0 1.5.86l11-6.86a1 1 0 0 0 0-1.72l-11-6.86A1 1 0 0 0 8 5.14z" />
-            </svg>
+            <.play_glyph class="ml-1 h-7 w-7" />
           </span>
         </span>
+        <.clip_facts image={@image} />
       </div>
       <figcaption :if={@image.alt} class="sr-only">{@image.alt}</figcaption>
     </figure>
+    """
+  end
+
+  # A clip waiting for the gate is still a clip. Until this, the held cover was
+  # drawn as a photograph — no play glyph, no length — so a reader could not
+  # tell a held picture from a held clip, which is the one thing the tile is
+  # there to say. The marks ride the pixelated preview, never the cover itself:
+  # what is on screen is 64 cells of averaged colour, and the clip behind it has
+  # not been judged at all.
+  attr(:image, RemoteImage, required: true)
+
+  defp waiting_clip_marks(assigns) do
+    ~H"""
+    <span
+      data-remote-clip-waiting
+      aria-hidden="true"
+      class="pointer-events-none absolute inset-0 flex items-center justify-center"
+    >
+      <span class="flex h-14 w-14 items-center justify-center rounded-full bg-slate-900/70 text-white shadow-lg">
+        <.play_glyph class="ml-1 h-7 w-7" />
+      </span>
+    </span>
+    <.clip_facts image={@image} />
+    """
+  end
+
+  # A clip's cover is a picture, but "Picture is being checked" under a play
+  # glyph names the wrong thing to the person reading it.
+  defp waiting_label(%RemoteImage{} = image) do
+    if RemoteImage.video?(image),
+      do: gettext("Video is being checked"),
+      else: gettext("Picture is being checked")
+  end
+
+  # What a tap is about to cost, on the poster, before it is spent. A member's
+  # own clip shows its length here (`VideoComponents.post_video/1`); a clip from
+  # another network shows the size beside it, because that one is not ours to
+  # bound: 73 seconds of phone video off social.bund.de is 94 MB, served with
+  # no range support, so a tap on a train pays for the whole file and cannot
+  # skip. `preload="none"` is what makes the warning worth printing — nothing
+  # is spent until the reader decides.
+  #
+  # Top-left like the member's own, and for the same measured reason: Chrome
+  # and Safari draw the native control bar along the bottom of a poster before
+  # the first play, and a chip under it is half hidden.
+  attr(:image, RemoteImage, required: true)
+
+  defp clip_facts(assigns) do
+    assigns = assign(assigns, :facts, clip_facts_line(assigns.image))
+
+    ~H"""
+    <span
+      :if={@facts}
+      data-remote-clip-facts
+      data-video-overlay
+      aria-hidden="true"
+      class={["pointer-events-none absolute left-2 top-2 tabular-nums", picture_badge_class()]}
+    >
+      {@facts}
+    </span>
+    """
+  end
+
+  # The length is the fact worth having and the size rides along when a HEAD
+  # answered (`Vutuv.Fediverse.Media.measure_clip/1` asks once and never
+  # retries), so a clip with neither prints no chip rather than an empty one.
+  defp clip_facts_line(%RemoteImage{} = image) do
+    [length_fact(image), size_fact(image)]
+    |> Enum.reject(&is_nil/1)
+    |> join_facts()
+  end
+
+  defp length_fact(image) do
+    case RemoteImage.seconds(image) do
+      seconds when is_integer(seconds) -> clock(seconds)
+      nil -> nil
+    end
+  end
+
+  defp size_fact(%RemoteImage{byte_size: size}) when is_integer(size) and size > 0,
+    do: file_size(size)
+
+  defp size_fact(%RemoteImage{}), do: nil
+
+  defp join_facts([]), do: nil
+  defp join_facts(facts), do: Enum.join(facts, " · ")
+
+  # The clip's own shape, never the cover's: `width`/`height` on the row are the
+  # Mastodon thumbnail's (360×640 where the clip is 1080×1920), so they are the
+  # last resort and 16:9 the one after that.
+  defp clip_aspect(%RemoteImage{video_width: w, video_height: h})
+       when is_integer(w) and is_integer(h) and w > 0 and h > 0,
+       do: "aspect-ratio: #{w} / #{h};"
+
+  defp clip_aspect(%RemoteImage{width: w, height: h})
+       when is_integer(w) and is_integer(h) and w > 0 and h > 0,
+       do: "aspect-ratio: #{w} / #{h};"
+
+  defp clip_aspect(%RemoteImage{}), do: nil
+
+  attr(:class, :string, default: "h-5 w-5")
+
+  defp play_glyph(assigns) do
+    ~H"""
+    <svg viewBox="0 0 24 24" fill="currentColor" class={@class} aria-hidden="true">
+      <path d="M8 5.14v13.72a1 1 0 0 0 1.5.86l11-6.86a1 1 0 0 0 0-1.72l-11-6.86A1 1 0 0 0 8 5.14z" />
+    </svg>
     """
   end
 

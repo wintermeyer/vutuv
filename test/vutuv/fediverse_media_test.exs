@@ -147,11 +147,103 @@ defmodule Vutuv.FediverseMediaTest do
       assert RemoteImage.display_state(clip) == :waiting
     end
 
+    # A reader about to tap a clip is spending their own data on somebody
+    # else's server — 94 MB for 73 seconds, measured on social.bund.de — so the
+    # card has to say how long it is before they tap. Every instance measured
+    # (legal.social, social.bund.de, chaos.social) fills these in, including the
+    # three quarters that send no cover at all, so they are worth reading.
+    test "a clip's own length and size come out of the attachment (issue #1914)" do
+      post = cached_post(account())
+
+      attachment =
+        "https://social.example/media/clip.mp4"
+        |> attachment("video/mp4")
+        |> Map.merge(%{"duration" => "PT1M13.2S", "width" => 1080, "height" => 1920})
+
+      assert [clip] = Media.record_attachments(post, [attachment], false)
+
+      assert clip.duration_ms == 73_200
+      # The clip's own shape, not the cover's — `width`/`height` stay the
+      # cover's, which is a thumbnail a fraction of this size.
+      assert clip.video_width == 1080
+      assert clip.video_height == 1920
+      assert clip.width == nil
+    end
+
+    test "a picture takes no length, whatever the attachment claims" do
+      post = cached_post(account())
+      attachment = Map.put(attachment(), "duration", "PT30S")
+
+      assert [image] = Media.record_attachments(post, [attachment], false)
+      assert image.duration_ms == nil
+    end
+
+    # The string is a remote server's, so every shape it is not must answer
+    # `nil` rather than raise or invent a number.
+    test "an unreadable duration is no duration" do
+      for value <- ["", "PT", "nonsense", "P1D", "PT-5S", "PT99999999H", 42, nil, %{}] do
+        assert Media.duration_ms(value) == nil, "expected nil for #{inspect(value)}"
+      end
+
+      assert Media.duration_ms("PT35.88S") == 35_880
+      assert Media.duration_ms("PT1M30S") == 90_000
+      assert Media.duration_ms("PT1H2M3S") == 3_723_000
+    end
+
     test "the author's sensitive flag rides along" do
       post = cached_post(account())
 
       assert [image] = Media.record_attachments(post, [attachment()], true)
       assert RemoteImage.blurred?(image)
+    end
+  end
+
+  describe "measuring a clip" do
+    defp video_row(attrs \\ %{}) do
+      post = cached_post(account())
+
+      attachment =
+        "https://social.example/media/clip.mp4"
+        |> attachment("video/mp4")
+        |> Map.merge(attrs)
+
+      [clip] = Media.record_attachments(post, [attachment], false)
+      clip
+    end
+
+    defp answering_head(headers) do
+      stub_download(fn conn ->
+        Enum.reduce(headers, conn, fn {k, v}, acc -> Plug.Conn.put_resp_header(acc, k, v) end)
+        |> Plug.Conn.send_resp(200, "")
+      end)
+    end
+
+    test "a HEAD says how many bytes a tap will cost" do
+      answering_head([{"content-length", "94407457"}])
+      clip = video_row()
+
+      assert :ok = Media.measure_clip(clip)
+      assert Repo.get!(RemoteImage, clip.id).byte_size == 94_407_457
+    end
+
+    # Plenty of servers answer a HEAD without one, and a card with a length but
+    # no size is most of the warning already — so this must stay quiet rather
+    # than becoming work somebody retries.
+    test "no content-length leaves the size unknown and says nothing" do
+      answering_head([])
+      clip = video_row()
+
+      assert :ok = Media.measure_clip(clip)
+      assert Repo.get!(RemoteImage, clip.id).byte_size == nil
+    end
+
+    test "a picture is never measured" do
+      answering_head([{"content-length", "4096"}])
+      post = cached_post(account())
+      [image] = Media.record_attachments(post, [attachment()], false)
+
+      assert :ok = Media.measure_clip(image)
+      assert Repo.get!(RemoteImage, image.id).byte_size == nil
     end
   end
 

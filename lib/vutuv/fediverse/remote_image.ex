@@ -63,6 +63,17 @@ defmodule Vutuv.Fediverse.RemoteImage do
     field(:media_type, :string)
     field(:poster_uri, :string)
 
+    # What the reader is told before they tap a clip that streams from another
+    # server (issue #1914). The first three come out of the attachment, which
+    # carries them even where it sends no cover; `byte_size` comes from a HEAD
+    # and stays nil when that answer never arrives. `video_width`/`_height` are
+    # the clip's own — `width`/`height` above are the cover's, a Mastodon
+    # thumbnail a fraction of the size.
+    field(:duration_ms, :integer)
+    field(:byte_size, :integer)
+    field(:video_width, :integer)
+    field(:video_height, :integer)
+
     # What the download has tried (issue #1803). `Vutuv.Fediverse.MediaRefetcher`
     # is the only writer; see `Vutuv.Fediverse.Media`.
     field(:fetch_failures, :integer, default: 0)
@@ -146,6 +157,19 @@ defmodule Vutuv.Fediverse.RemoteImage do
   def video?(%__MODULE__{media_type: type}),
     do: is_binary(type) and String.starts_with?(type, "video/")
 
+  @doc """
+  A clip's length in whole seconds, rounded up, or `nil` where the attachment
+  named none.
+
+  Rounded up because that is what `Vutuv.Posts.PostVideo.seconds/1` does for a
+  member's own clip, and a card showing both must not spell the same length two
+  ways. It costs a second against what the publishing instance prints.
+  """
+  def seconds(%__MODULE__{duration_ms: ms}) when is_integer(ms) and ms > 0,
+    do: div(ms + 999, 1000)
+
+  def seconds(%__MODULE__{}), do: nil
+
   @doc "The URL the fetch downloads: a picture itself, a clip's cover (or nothing)."
   def fetch_uri(%__MODULE__{} = image),
     do: if(video?(image), do: image.poster_uri, else: image.source_uri)
@@ -175,7 +199,11 @@ defmodule Vutuv.Fediverse.RemoteImage do
       :fetch_failures,
       :fetch_attempted_at,
       :media_type,
-      :poster_uri
+      :poster_uri,
+      :duration_ms,
+      :byte_size,
+      :video_width,
+      :video_height
     ])
     # `source_uri` and the author's `alt` come out of the attachment JSON, and a
     # NUL in either raises on insert (issue #1767).

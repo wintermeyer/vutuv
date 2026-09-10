@@ -5,14 +5,25 @@ defmodule VutuvWeb.Plug.ContentSecurityPolicy do
   sanitizer: no external or inline scripts run, forms cannot be re-targeted
   off-site, nothing embeds the app.
 
-  Everything the app serves is same-origin (scripts, styles, fonts, every
-  image — avatars, covers, screenshots and post images are all stored and
-  proxied locally; user Markdown may only inline-reference own attachments),
-  so the policy is essentially `'self'` plus two documented exceptions:
+  Almost everything the app serves is same-origin (scripts, styles, fonts,
+  every image — avatars, covers, screenshots and post images are all stored and
+  proxied locally; user Markdown may only inline-reference own attachments), so
+  the policy is essentially `'self'` plus three documented exceptions:
 
     * `img-src data:` — components.css carries its icons as data URIs.
     * `style-src 'unsafe-inline'` — LiveView writes style attributes
       (upload progress, JS.show/hide transitions).
+    * `media-src https:` — the one resource the app does **not** serve. A clip
+      on a fediverse card plays straight from the instance that published it
+      (issue #1914): we fetch and judge its cover, never the clip, which runs
+      to 94 MB for a 73-second phone video (measured on social.bund.de). The
+      hosts are every instance's own object store, so there is no list to keep
+      and `https:` is as narrow as this can be spelled.
+
+  That last one is a real widening and worth naming: an XSS that slipped past
+  the sanitizer could use a `<video src>` to GET an off-site URL, which
+  `img-src 'self' data:` does not allow it. No script runs that way, but data
+  can leave. It buys the only feature here that cannot be served locally.
 
   `connect-src` names the websocket origin explicitly: not every browser
   matches `ws(s)://` against a plain `'self'`, and without it the LiveView
@@ -150,6 +161,7 @@ defmodule VutuvWeb.Plug.ContentSecurityPolicy do
   @prefix_directives [
     "default-src 'self'",
     "img-src 'self' data:",
+    "media-src 'self' https:",
     "style-src 'self' 'unsafe-inline'"
   ]
 

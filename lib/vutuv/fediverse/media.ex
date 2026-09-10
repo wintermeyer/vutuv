@@ -96,9 +96,73 @@ defmodule Vutuv.Fediverse.Media do
 
   defp media_attrs(attachment) do
     if video_attachment?(attachment) do
-      %{media_type: String.downcase(attachment["mediaType"]), poster_uri: poster_uri(attachment)}
+      %{
+        media_type: String.downcase(attachment["mediaType"]),
+        poster_uri: poster_uri(attachment),
+        duration_ms: duration_ms(attachment["duration"]),
+        video_width: dimension(attachment["width"]),
+        video_height: dimension(attachment["height"])
+      }
     else
       %{}
+    end
+  end
+
+  # A clip's own pixel dimensions, as the attachment states them. Only ever
+  # used to reserve the right shape on the card before anything loads, so an
+  # absurd claim is simply no claim; `@max_dimension` is past any real camera.
+  @max_dimension 100_000
+
+  defp dimension(value) when is_integer(value) and value > 0 and value <= @max_dimension,
+    do: value
+
+  defp dimension(_value), do: nil
+
+  # An ISO-8601 duration is what ActivityPub spells a clip's length as, and
+  # Mastodon writes the seconds fractional: `PT73.2S`, `PT35.88S`, `PT1M30S`.
+  # There is nothing in the standard library that reads one, and this string
+  # comes from a server we do not control, so every shape it is not answers
+  # `nil` rather than raising — a card with no length is a card, a crash in the
+  # inbox is a delivery lost.
+  #
+  # Deliberately only the H/M/S tail: `P1D` and anything with a date part is
+  # not a clip length, it is somebody sending us something else. The ceiling is
+  # the same judgement as `@max_dimension` — 24 hours is past any attachment
+  # and keeps a bogus figure out of the label.
+  @max_duration_ms 24 * 60 * 60 * 1000
+  @duration ~r/^PT(?:(\d+)H)?(?:(\d+)M)?(?:(\d+(?:\.\d+)?)S)?$/
+
+  @doc """
+  An ActivityPub `duration` as whole milliseconds, or `nil` for anything that
+  is not one (issue #1914). Public because the shapes it must refuse are worth
+  a test of their own.
+  """
+  def duration_ms(value) when is_binary(value) do
+    case Regex.run(@duration, value) do
+      [_all | parts] -> from_parts(parts)
+      nil -> nil
+    end
+  end
+
+  def duration_ms(_value), do: nil
+
+  defp from_parts(parts) do
+    # A bare "PT" matches the regex with every group empty, which is not a
+    # length; so does "PT0S", which is not one either.
+    total =
+      [3_600_000, 60_000, 1_000]
+      |> Enum.zip(Enum.map(parts, &part_value/1))
+      |> Enum.reduce(0, fn {unit, value}, acc -> acc + round(value * unit) end)
+
+    if total > 0 and total <= @max_duration_ms, do: total
+  end
+
+  defp part_value(""), do: 0
+
+  defp part_value(text) do
+    case Float.parse(text) do
+      {number, ""} -> number
+      _ -> 0
     end
   end
 
@@ -210,10 +274,81 @@ defmodule Vutuv.Fediverse.Media do
   """
   def fetch_async(images) when is_list(images) do
     if fetching?() and images != [] do
-      Task.Supervisor.start_child(Vutuv.TaskSupervisor, fn -> Enum.each(images, &fetch_now/1) end)
+      Task.Supervisor.start_child(Vutuv.TaskSupervisor, fn ->
+        Enum.each(images, &fetch_and_measure/1)
+      end)
     end
 
     :ok
+  end
+
+  # The cover's bytes and the clip's size, in that order: the cover is what the
+  # card is missing, the size only sharpens a label it can print without.
+  defp fetch_and_measure(%RemoteImage{} = image) do
+    fetch_now(image)
+    measure_clip(image)
+  end
+
+  @doc """
+  Asks how big a clip is, so the card can say so before anybody taps it
+  (issue #1914).
+
+  A HEAD, because the answer is one header and the file behind it runs to 94 MB
+  — that measurement is the whole reason the label exists. The attachment
+  carries the length and the shape but never the size, so this is the one fact
+  worth a request of its own.
+
+  **Deliberately fire-and-forget with no ladder behind it.** Every other fetch
+  here is retried by `Vutuv.Fediverse.MediaRefetcher` because without its bytes
+  there is no picture; without this one there is a card that says "1:13"
+  instead of "1:13 · 94 MB", which is most of the warning already. Adding it to
+  the sweeper would mean a row that can never be measured — a server that sends
+  no `content-length`, and plenty do not — sitting at the front of every
+  oldest-first batch for ever, which is exactly the deadlock #1316 shipped. So
+  it is asked once, and a `nil` stays `nil`.
+
+  Answers `:ok` whatever happened; nothing downstream depends on it.
+  """
+  def measure_clip(%RemoteImage{} = image) do
+    with true <- RemoteImage.video?(image),
+         {:ok, size} <- content_length(image.source_uri) do
+      image
+      |> RemoteImage.changeset(%{byte_size: size})
+      |> Repo.update(stale_error_field: :id)
+    end
+
+    :ok
+  end
+
+  defp content_length(url) when is_binary(url) do
+    with {:parse, %URI{scheme: "https", host: host}} when is_binary(host) <-
+           {:parse, URI.parse(url)},
+         {:ssrf, false} <- {:ssrf, Vutuv.Ssrf.resolves_to_internal?(host)},
+         {:ok, %Req.Response{status: 200} = response} <- Req.head(head_options(url)),
+         [value | _] <- Req.Response.get_header(response, "content-length"),
+         {size, ""} <- Integer.parse(value) do
+      if size > 0, do: {:ok, size}, else: :error
+    else
+      _ -> :error
+    end
+  end
+
+  defp content_length(_url), do: :error
+
+  # The download's fence without its collector: a HEAD has no body to cap.
+  defp head_options(url) do
+    Keyword.merge(
+      [
+        url: url,
+        headers: [{"user-agent", Http.user_agent()}],
+        receive_timeout: 10_000,
+        connect_options: [timeout: 2_000],
+        retry: false,
+        redirect: false,
+        decode_body: false
+      ],
+      Application.get_env(:vutuv, :fediverse_req_options, [])
+    )
   end
 
   @doc """
