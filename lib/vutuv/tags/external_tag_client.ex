@@ -78,8 +78,8 @@ defmodule Vutuv.Tags.ExternalTagClient do
     * `{:error, :blocked | :internal}` — the pair cannot be fetched at all, and
       nothing about the remote side failed, so the caller skips it without a
       strike.
-    * `{:error, :gone}` — this server will not serve this timeline (it demands
-      an account, or answers 404/410), so the tag has no address there.
+    * `{:error, :gone}` — this server will not serve this timeline (see
+      `refusal/1`), so the tag has no address there.
     * `{:error, :transient | :unresolvable}` — a bad day at the other end, DNS
       included. A strike.
   """
@@ -118,8 +118,12 @@ defmodule Vutuv.Tags.ExternalTagClient do
       {:ok, %Req.Response{status: 200, body: body}} ->
         decode(body)
 
-      {:ok, %Req.Response{status: status}} when status in [401, 403, 404, 410] ->
-        {:error, :gone}
+      # Both permanent refusals are `:gone` here: this client only has to know
+      # that the pair has no address there, and the reason is the panel's
+      # business (`Vutuv.Tags.SourceServerProbe`), which reads the same
+      # classifier.
+      {:ok, %Req.Response{status: status}} ->
+        if refusal(status), do: {:error, :gone}, else: {:error, :transient}
 
       {:error, reason} when reason in [:internal, :unresolvable] ->
         {:error, reason}
@@ -128,6 +132,24 @@ defmodule Vutuv.Tags.ExternalTagClient do
         {:error, :transient}
     end
   end
+
+  @doc """
+  What a status code from a public tag timeline means, for the two readers of
+  one: `:account_required`, `:absent`, or `nil` for "not a refusal".
+
+  **`422` is Mastodon's own way of saying "this method requires an
+  authenticated user"** — not the 401 the shape suggests. Measured while
+  shipping #2128: three of eighteen servers answer exactly that, and read as a
+  bad day it is a strike on every pass, backing a refusal that will never
+  change off to the three-hour ceiling.
+
+  One classifier because the next lesson (a 429, a 451) must not have to be
+  learned twice — and because the panel needs the *reason* while the fetcher
+  needs only that it is permanent.
+  """
+  def refusal(status) when status in [401, 403, 422], do: :account_required
+  def refusal(status) when status in [404, 410], do: :absent
+  def refusal(_status), do: nil
 
   defp decode(body) do
     case Http.decode(body) do
@@ -265,36 +287,14 @@ defmodule Vutuv.Tags.ExternalTagClient do
     case status["account"] do
       %{} = account ->
         %{
-          author_name: account["display_name"] |> Handle.display_name() |> clamp_display(),
-          author_acct: account["acct"] |> Post.presence() |> clamp_display(),
+          author_name:
+            account["display_name"] |> Handle.display_name() |> Post.clamp_bytes(@max_display),
+          author_acct: account["acct"] |> Post.presence() |> Post.clamp_bytes(@max_display),
           author_url: if(ChangesetHelpers.web_url?(account["url"]), do: account["url"])
         }
 
       _ ->
         %{}
     end
-  end
-
-  # Cut to the byte budget the column is measured against, but **on a grapheme
-  # boundary**: slicing at the byte would end a ZWJ family emoji — the very
-  # thing this exists for — on a dangling joiner, the glitch
-  # `Post.truncate/2` goes out of its way to avoid.
-  defp clamp_display(nil), do: nil
-
-  defp clamp_display(value) when byte_size(value) <= @max_display, do: value
-
-  defp clamp_display(value) do
-    value
-    |> String.graphemes()
-    |> Enum.reduce_while({[], 0}, fn grapheme, {kept, bytes} ->
-      grown = bytes + byte_size(grapheme)
-
-      if grown <= @max_display,
-        do: {:cont, {[grapheme | kept], grown}},
-        else: {:halt, {kept, bytes}}
-    end)
-    |> elem(0)
-    |> Enum.reverse()
-    |> Enum.join()
   end
 end

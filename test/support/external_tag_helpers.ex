@@ -54,6 +54,98 @@ defmodule Vutuv.ExternalTagHelpers do
     )
   end
 
+  @doc """
+  Stubs whole servers for the tag-source panel (issue #2128): NodeInfo
+  discovery, the NodeInfo document, Mastodon's instance document and the tag
+  timeline, dispatched by the host each request names.
+
+  `servers` is `%{host => attrs}`. A host not in the map answers `404` to
+  everything, which is what an unreachable server looks like from here. `attrs`
+  takes `:accounts`, `:active_month`, `:posts`, `:language`, `:node_name`,
+  `:description`, `:timeline` (the status code the tag timeline answers — `422`
+  is Mastodon's "this method requires an authenticated user"), and
+  `:nodeinfo_href` for the one case worth standing up on purpose: a link
+  document pointing at somebody else's server.
+
+  The request is **dialled at the vetted IP**, so `conn.host` is that address on
+  every call — the hostname is in the `host` header, which is what the dispatch
+  and the `{:req, host, path}` report both read.
+  """
+  def stub_servers(servers) when is_map(servers) do
+    test_pid = self()
+
+    put_config(:external_tag_req_options,
+      plug: fn conn ->
+        host = header(conn, "host")
+        send(test_pid, {:req, host, conn.request_path})
+        answer(conn, host, Map.get(servers, host))
+      end
+    )
+  end
+
+  defp header(conn, name) do
+    Enum.find_value(conn.req_headers, fn {key, value} ->
+      if String.downcase(key) == name, do: value
+    end)
+  end
+
+  defp answer(conn, _host, nil), do: Plug.Conn.send_resp(conn, 404, "")
+
+  defp answer(conn, host, attrs) do
+    attrs = Map.new(attrs)
+
+    case conn.request_path do
+      "/.well-known/nodeinfo" ->
+        json(conn, 200, %{
+          "links" => [
+            %{
+              "rel" => "http://nodeinfo.diaspora.software/ns/schema/2.0",
+              "href" => Map.get(attrs, :nodeinfo_href, "https://#{host}/nodeinfo/2.0")
+            }
+          ]
+        })
+
+      "/nodeinfo/2.0" ->
+        json(conn, 200, node_info(attrs))
+
+      "/api/v2/instance" ->
+        json(conn, 200, %{"languages" => List.wrap(Map.get(attrs, :language, "de"))})
+
+      "/api/v1/timelines/tag/" <> _hashtag ->
+        json(conn, Map.get(attrs, :timeline, 200), [])
+
+      _other ->
+        Plug.Conn.send_resp(conn, 404, "")
+    end
+  end
+
+  defp node_info(attrs) do
+    %{
+      "version" => "2.0",
+      "software" => %{"name" => "mastodon", "version" => "4.7.1"},
+      "usage" => %{
+        "users" => %{
+          "total" => Map.get(attrs, :accounts, 49_157),
+          "activeMonth" => Map.get(attrs, :active_month, 5_586)
+        },
+        "localPosts" => Map.get(attrs, :posts, 5_532_040)
+      },
+      "metadata" => %{
+        "nodeName" => Map.get(attrs, :node_name, "Ein Server"),
+        "nodeDescription" => Map.get(attrs, :description, "Hallo im Beispiel-Server!")
+      }
+    }
+  end
+
+  # The real APIs answer `application/json`, and Req's decode step branches on
+  # exactly that header — a stub without it hands the client a binary where the
+  # real server hands it a map.
+  defp json(conn, status, body) do
+    conn
+    |> Plug.Conn.put_resp_content_type("application/json")
+    |> Plug.Conn.send_resp(status, Jason.encode!(body))
+  end
+
   @doc "Stubs the fetch with a bare status code and body — no content type, as a broken server."
   def stub_tag_timeline_status(status, body \\ "") do
     put_config(:external_tag_req_options,

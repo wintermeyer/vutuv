@@ -110,15 +110,30 @@ defmodule Vutuv.Tags.TagFollowSource do
   end
 
   defp validate_remote_host(changeset, host) do
-    cond do
-      not Regex.match?(BlockedInstance.host_format(), host) ->
-        add_error(changeset, :source, "is not a server name")
-
-      Ssrf.internal_host?(host) ->
-        add_error(changeset, :source, "is not an allowed server")
-
-      true ->
-        changeset
+    case refusal(host) do
+      nil -> changeset
+      :not_a_server -> add_error(changeset, :source, "is not a server name")
+      :internal -> add_error(changeset, :source, "is not an allowed server")
     end
   end
+
+  @doc """
+  Why `host` may not be stored as a remote source — `:not_a_server`,
+  `:internal`, or `nil` when it may.
+
+  Published because the panel (`Vutuv.Tags.SourceServers.check/2`) has to ask
+  the same question **before** it sends a request: a changeset that refuses
+  afterwards costs a stranger's server an outbound probe for a value that was
+  never a hostname, and answers the member "did not answer" where the truth is
+  "that is not a server name".
+  """
+  def refusal(host) when is_binary(host) do
+    cond do
+      not Regex.match?(BlockedInstance.host_format(), host) -> :not_a_server
+      Ssrf.internal_host?(host) -> :internal
+      true -> nil
+    end
+  end
+
+  def refusal(_host), do: :not_a_server
 end

@@ -24,6 +24,7 @@ defmodule Vutuv.Tags do
 
   alias Vutuv.Tags.LinkableCache
   alias Vutuv.Tags.MatchKey
+  alias Vutuv.Tags.SourceServers
   alias Vutuv.Tags.Tag
   alias Vutuv.Tags.TagFollow
   alias Vutuv.Tags.TagFollowSource
@@ -1216,18 +1217,46 @@ defmodule Vutuv.Tags do
   the stored shape. **An address of this installation becomes the local
   source**, so pasting our own server adds nothing and asks nobody for our own
   posts. Anything that is not a server name comes back as `{:error, changeset}`.
+
+  A follow may name at most `Vutuv.Tags.SourceServers.limit/0` **other** servers
+  (#2128); this installation is always on and never counts against it. Past that
+  the answer is `{:error, :too_many_sources}`. The cap lives here rather than in
+  the panel because the cost it bounds is the fetcher's, not the panel's: every
+  pair is asked forever, up to 144 times a day at the cadence floor, so a second
+  writer must not be able to walk around it.
   """
   def add_tag_follow_source(%TagFollow{} = follow, source) do
     # The insert answers with the stored shape of what was offered, so the
     # read-back looks the row up by the same value the changeset normalized —
     # rather than the context normalizing a second time to guess it.
-    with {:ok, %TagFollowSource{source: stored}} <- insert_tag_follow_source(follow.id, source),
+    with :ok <- room_for_source?(follow, source),
+         {:ok, %TagFollowSource{source: stored}} <- insert_tag_follow_source(follow.id, source),
          %TagFollowSource{} = row <-
            Repo.get_by(TagFollowSource, tag_follow_id: follow.id, source: stored) do
       {:ok, row}
     else
       nil -> {:error, :invalid}
       {:error, _} = error -> error
+    end
+  end
+
+  # Adding a server the follow already names is idempotent and must stay so at
+  # the cap too, or a double-submit on the last free slot reads as a refusal.
+  defp room_for_source?(%TagFollow{} = follow, source) do
+    normalized = TagFollowSource.normalize_source(source)
+    local = local_tag_follow_source()
+
+    # Deliberately the querying clause of `tag_follow_sources/1`, reached by
+    # handing it a bare struct: a caller's preloaded `sources` can be one add
+    # out of date, and a cap read off a stale list is not a cap.
+    remote =
+      %TagFollow{id: follow.id} |> tag_follow_sources() |> Enum.reject(&(&1 == local))
+
+    cond do
+      is_nil(normalized) or normalized == local -> :ok
+      normalized in remote -> :ok
+      length(remote) < SourceServers.limit() -> :ok
+      true -> {:error, :too_many_sources}
     end
   end
 
@@ -1304,6 +1333,47 @@ defmodule Vutuv.Tags do
     local = local_tag_follow_source()
 
     if local in sources, do: sources, else: [local | sources]
+  end
+
+  @doc """
+  `user`'s follow of one tag, or `nil` — what the tag-source panel edits.
+
+  A non-UUID id answers `nil` rather than raising, so a value straight off the
+  wire can be handed over.
+  """
+  def tag_follow(%User{} = user, tag_id) do
+    case Vutuv.UUIDv7.cast_or_nil(tag_id) do
+      nil -> nil
+      id -> Repo.get_by(TagFollow, user_id: user.id, tag_id: id)
+    end
+  end
+
+  @doc """
+  How many servers each tag `user` follows reads from, as `%{tag_id => count}` —
+  what the feed's tag card puts on every chip.
+
+  A count query rather than the source rows: the card renders one integer per
+  chip on every feed mount, and the heaviest member on a copy of production
+  follows 43 tags. Only the panel's own tag needs the list, and it asks for that
+  one with `tag_follow_sources/1`.
+
+  **This installation is in every count**, whatever the rows say — the same rule
+  `tag_follow_sources/1` applies, arrived at from the other side: the remote
+  rows are counted and one is added, so a follow written by the previous release
+  during a blue/green window reads `1` rather than `0`.
+  """
+  def followed_tag_source_counts(%User{} = user) do
+    local = local_tag_follow_source()
+
+    from(tf in TagFollow,
+      left_join: s in TagFollowSource,
+      on: s.tag_follow_id == tf.id and s.source != ^local,
+      where: tf.user_id == ^user.id,
+      group_by: tf.tag_id,
+      select: {tf.tag_id, count(s.id) + 1}
+    )
+    |> Repo.all()
+    |> Map.new()
   end
 
   @doc """

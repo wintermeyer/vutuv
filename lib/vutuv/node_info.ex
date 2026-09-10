@@ -111,6 +111,9 @@ defmodule Vutuv.NodeInfo do
   @versions ["2.1", "2.0"]
   @rel_prefix "http://nodeinfo.diaspora.software/ns/schema/"
 
+  @doc "The link relation a NodeInfo document is discovered under, versioned by suffix."
+  def rel_prefix, do: @rel_prefix
+
   # Under /system/ rather than at the `/nodeinfo` root word, which member
   # handles own. The specification does not fix the path — the link document
   # below is what says where the document lives, which is why Mastodon,

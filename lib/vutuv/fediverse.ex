@@ -2427,8 +2427,16 @@ defmodule Vutuv.Fediverse do
   # document attributing a post to one of our own actors, and the post lookup
   # made a signed GET to our own server (issue #1211, found in production).
   # Nothing about it is vutuv.de-specific.
-  defp same_site?(host, host), do: true
-  defp same_site?(host, other), do: strip_www(host) == strip_www(other)
+  @doc """
+  Whether two hostnames name one server — the `www.` fold, applied to both
+  sides.
+
+  Public because "is this us" and "did this document name the server it
+  describes" (`Vutuv.Tags.SourceServerProbe`) are the same question, and the
+  `www.` trap this answers is one this codebase has already paid for once.
+  """
+  def same_site?(host, host), do: true
+  def same_site?(host, other), do: strip_www(host) == strip_www(other)
 
   @doc """
   A host without its `www.` — the fold `same_site?/2` above applies to our own
