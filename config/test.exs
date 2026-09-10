@@ -35,6 +35,9 @@ config :vutuv, :sweep_unconfirmed_registrations, false
 # The daily retention sweep of the account-activity log would touch the sandbox
 # from outside; tests call Vutuv.AccountEvents.delete_expired/0 directly.
 config :vutuv, :sweep_account_events, false
+# The daily retention sweep of the media-job log, same reason; tests call
+# Vutuv.MediaJobs.delete_expired/0 directly.
+config :vutuv, :sweep_media_jobs, false
 # The OAuth housekeeping sweep (abandoned client registrations, spent
 # authorization codes) would touch the sandbox from outside; tests call
 # Vutuv.ApiAuth.sweep/0 directly.

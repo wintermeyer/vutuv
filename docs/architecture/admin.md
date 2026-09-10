@@ -438,3 +438,50 @@ text) and the `/admin/reports` page all render, so the three surfaces stay in
 sync; a busier day than the cap ends each section with a "… und N weitere" note.
 
 Behind `config :vutuv, :daily_report_email` (off in tests, on by default).
+
+## Media jobs (`/admin/media`)
+
+One row per step the media pipelines run, so "the photo scan has been stuck for
+an hour" is answerable from the admin area instead of from the server log. Each
+pipeline still keeps its own status column on its own row; this table is the
+log *beside* those, written by `Vutuv.MediaJobs` and read by nobody but this
+page.
+
+Three writers today, each opening a row around the slow part and closing it on
+every branch of the outcome:
+
+| Kind | Written by | Opens around |
+| --- | --- | --- |
+| `image_scan` | `Vutuv.Moderation.ImageScans.judge_and_apply/3` | the vision-model call |
+| `video_conversion` | `Vutuv.Videos.Job.run_steps/1` | one whole attempt at a clip |
+| `screenshot` | `Vutuv.Posts.Screenshots.process/2` | the Chromium capture |
+
+A **refusal is a finished job**, not a failed one: the pipeline did its work
+and the answer was no. Only a step that could not be done at all (the scanner
+unreachable, an undecodable image, a failed H.264 encode, a capture error) is
+recorded as failed.
+
+`start/2` answers the `%MediaJob{}`, `finish/2` and `fail/2` take it and never
+raise — every writer is a fire-and-forget task, so a log write must not be able
+to take the work down with it, and both closers treat a `nil` job as a no-op. A
+process killed between the two leaves the row **running**, which is not a leak
+to repair: an unfinished step is exactly what this page exists to show.
+
+The row carries `subject_type` + `subject_id` (the pipeline's own row, with no
+foreign key — the subject lives in a different table per kind and the log has
+to outlive it) plus the two real references, `user_id` and `post_id`. Both are
+nullable: a screenshot of a remote post belongs to no member here, and a clip
+has no post until it is published. That is why the Member sort uses a **left**
+join — an inner one would silently drop the ownerless rows.
+
+The page reuses `VutuvWeb.BrowseTable` (URL-driven search, sort and paging) and
+`VutuvWeb.UI.duration/1`, the shared duration formatter added with it. There is
+no stored duration column: `MediaJobs.elapsed_ms/1` counts a finished job from
+`started_at` to `finished_at` and a still-running one from `started_at` to now,
+and the **Took** sort rebuilds that same expression in SQL. That is what makes
+"longest first" put a job that has been running for hours at the top, where the
+operator came to find it, instead of filing every unfinished row under an
+unknown duration on the last page.
+
+Rows are pruned after `MEDIA_JOB_RETENTION_DAYS` (90) by
+`Vutuv.MediaJobs.Sweeper`, daily.

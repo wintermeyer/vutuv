@@ -110,14 +110,17 @@ defmodule VutuvWeb.BrowseTable do
     end)
   end
 
-  # Whether the view differs from a fresh page load at all, filter or sort.
-  #
-  # The reset control keys on this rather than on `filtered?/2`, because on a
-  # phone the sortable columns other than Account are folded away: tap Account
-  # once and the only control that could put the default order back would not
-  # render, since a sort narrows nothing. That is a trap you cannot leave
-  # without editing the URL.
-  defp default_view?(filters, config) do
+  @doc """
+  Whether the view differs from a fresh page load at all, filter or sort.
+
+  The reset control keys on this rather than on `filtered?/2`, because on a
+  phone the sortable columns other than the first are folded away: tap a header
+  once and the only control that could put the default order back would not
+  render, since a sort narrows nothing. That is a trap you cannot leave without
+  editing the URL, so every browse page's Clear control has to ask this rather
+  than `filtered?/2`.
+  """
+  def default_view?(filters, config) do
     not filtered?(filters, config) and
       filters.sort == config.default_sort and
       filters.dir == config.url_default_dir.(filters.sort)

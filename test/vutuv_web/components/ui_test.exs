@@ -49,6 +49,47 @@ defmodule VutuvWeb.UITest do
     end
   end
 
+  describe "duration/1" do
+    setup do
+      Gettext.put_locale(VutuvWeb.Gettext, "en")
+      :ok
+    end
+
+    test "sub-second work reads in milliseconds rather than as zero seconds" do
+      assert UI.duration(0) == "0 ms"
+      assert UI.duration(420) == "420 ms"
+      assert UI.duration(999) == "999 ms"
+    end
+
+    test "seconds, then the two largest non-zero units above them" do
+      assert UI.duration(1_000) == "1 second"
+      assert UI.duration(12_400) == "12 seconds"
+      assert UI.duration(187_000) == "3 min 7 s"
+      assert UI.duration(240_000) == "4 min"
+      assert UI.duration(7_200_000) == "2 h"
+      assert UI.duration(7_380_000) == "2 h 3 min"
+    end
+
+    test "past a day it switches to days plus hours, and agrees on the plural" do
+      assert UI.duration(86_400_000) == "1 day"
+      assert UI.duration(97_200_000) == "1 d 3 h"
+      assert UI.duration(183_600_000) == "2 d 3 h"
+    end
+
+    test "a missing duration says so rather than reading as instant" do
+      assert UI.duration(nil) == "unknown"
+    end
+
+    test "German says it the way a German reader does" do
+      Gettext.put_locale(VutuvWeb.Gettext, "de")
+
+      assert UI.duration(7_380_000) == "2 Std. 3 Min."
+      assert UI.duration(187_000) == "3 Min. 7 Sek."
+      assert UI.duration(12_400) == "12 Sekunden"
+      assert UI.duration(97_200_000) == "1 Tag 3 Std."
+    end
+  end
+
   describe "capped_count/2" do
     test "reads as the plain count below the ceiling" do
       assert UI.capped_count(3, 50) == "3"

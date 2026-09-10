@@ -1446,6 +1446,11 @@ defmodule VutuvWeb.Router do
       # both paginated. Read-only. ?tab= switches, ?page= paginates.
       live("/screenshots", ScreenshotLive, :index)
 
+      # Every media job the pipelines have run (issue #2103): the photo scan,
+      # the video conversion and the screenshot capture, running and past, with
+      # what each worked on, how long it took and how it ended. Read-only.
+      live("/media", MediaLive, :index)
+
       live("/newsletters/:id/send", NewsletterBroadcastLive)
 
       live("/newsletter_groups", NewsletterGroupLive, :index)

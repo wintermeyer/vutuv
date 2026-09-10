@@ -25,6 +25,7 @@ defmodule Vutuv.Videos.Job do
 
   require Logger
 
+  alias Vutuv.MediaJobs
   alias Vutuv.Posts.PostVideo
   alias Vutuv.PostVideoStore
   alias Vutuv.Videos
@@ -46,6 +47,18 @@ defmodule Vutuv.Videos.Job do
   defp run_steps(video) do
     PostVideoStore.clear_temp(video.token)
 
+    # One media-job row per **attempt** (issue #2103), not per clip: `run/1` is
+    # resumable, so a deploy that kills an encode leaves that attempt's row
+    # running and the resumed run opens its own. Two rows for one clip is the
+    # honest record of what happened.
+    job =
+      MediaJobs.start("video_conversion",
+        subject_type: "post_video",
+        subject_id: video.id,
+        user_id: video.user_id,
+        post_id: video.post_id
+      )
+
     result =
       with {:ok, facts} <- probe(video),
            {:ok, video} <- step_frames(video, facts),
@@ -55,12 +68,23 @@ defmodule Vutuv.Videos.Job do
       end
 
     case result do
-      {:ok, video} -> Videos.release(video)
-      {:stop, _video} -> :ok
+      {:ok, video} ->
+        MediaJobs.finish(job, detail: video.stage)
+        Videos.release(video)
+
+      {:stop, stopped} ->
+        record_stop(job, stopped)
     end
 
     :ok
   end
+
+  # A clip a frame verdict refused is a job that **finished**: the conversion
+  # ran and the answer was no. Only a step that could not be done is a failure.
+  defp record_stop(job, %PostVideo{stage: "failed"} = video),
+    do: MediaJobs.fail(job, video.error || "failed")
+
+  defp record_stop(job, %PostVideo{stage: stage}), do: MediaJobs.finish(job, detail: stage)
 
   # The clip's facts, read once: every step needs the length and the frame
   # rate, and the original never changes.
