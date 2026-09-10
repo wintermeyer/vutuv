@@ -928,30 +928,19 @@ defmodule VutuvWeb.Fediverse.Docs do
     |> Enum.any?(&MapSet.member?(written, &1))
   end
 
+  # `Tag.hashtag_name/1` owns the spelling: the display name with its
+  # separators removed and its casing kept (`Machine Learning` becomes
+  # `#MachineLearning`), never the slug, whose hyphens are not in Mastodon's
+  # hashtag charset. A name with nothing left afterwards (a punctuation-only
+  # legacy tag) is dropped rather than sent as a bare `#`. The same function
+  # builds the timeline this installation *asks* another server for, so the two
+  # directions cannot drift apart.
   defp hashtag({%Tag{} = tag, in_body?}) do
-    case hashtag_name(tag.name) do
+    case Tag.hashtag_name(tag.name) do
       nil -> []
       name -> [%{name: "#" <> name, href: "#{base()}/tags/#{tag.slug}", in_body?: in_body?}]
     end
   end
-
-  # Mastodon's charset for a hashtag is alphanumerics, `_` and a couple of
-  # Unicode separators; everything else is stripped from the name it stores
-  # (`HASHTAG_INVALID_CHARS_RE`). A hyphen is **not** in it, which rules out the
-  # slug as the source: `machine-learning` would arrive over there as the tag
-  # "machine" with loose text after it. The display name is the source instead,
-  # with its separators removed and its casing kept, which is also what makes a
-  # multi-word tag readable aloud: `Machine Learning` becomes `#MachineLearning`.
-  # A name that has nothing left afterwards (a punctuation-only legacy tag) is
-  # dropped rather than sent as a bare `#`.
-  defp hashtag_name(name) when is_binary(name) do
-    case String.replace(name, ~r/[^\p{L}\p{N}_]/u, "") do
-      "" -> nil
-      cleaned -> cleaned
-    end
-  end
-
-  defp hashtag_name(_), do: nil
 
   # A `Post` handed over by a caller that forgot the preload must not crash the
   # delivery: no tags is the safe reading, and `note_preloads/0` is what keeps

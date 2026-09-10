@@ -5547,6 +5547,24 @@ defmodule Vutuv.Fediverse do
   end
 
   @doc """
+  Which of `hosts` the operator has shut out, as a `MapSet` — the batched twin
+  of `instance_blocked?/1`, for a caller holding a whole list of hosts (the tag
+  timeline's authors, `Vutuv.Tags.ExternalTagClient`). One query rather than one
+  per host, against a table that holds tens of rows and is read on a loop.
+
+  Each value goes through `BlockedInstance.normalize_host/1` first, so an actor
+  id, a `@user@host` handle and a bare hostname all answer alike; the returned
+  set holds the normalized spellings, which is what a caller must compare
+  against.
+  """
+  def blocked_hosts(hosts) when is_list(hosts) do
+    normalized = hosts |> Enum.map(&BlockedInstance.normalize_host/1) |> Enum.reject(&is_nil/1)
+
+    Repo.all(from(b in BlockedInstance, where: b.host in ^normalized, select: b.host))
+    |> MapSet.new()
+  end
+
+  @doc """
   Blocks a remote server and purges everything already stored from it.
 
   Blocking is not just "stop listening": the follower rows from that host are

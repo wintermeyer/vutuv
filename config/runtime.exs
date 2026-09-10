@@ -384,6 +384,92 @@ if config_env() == :prod do
     config :vutuv, :fediverse_counts_per_host, String.to_integer(String.trim(per_host))
   end
 
+  # The posts a followed tag pulls from the other servers it names (issue
+  # #2126). FETCH_EXTERNAL_TAG_POSTS=false asks nobody anything and does not
+  # start the job at all — what is already stored keeps rendering.
+  if System.get_env("FETCH_EXTERNAL_TAG_POSTS") == "false" do
+    config :vutuv, :fetch_external_tag_posts, false
+  end
+
+  # Reads N colon-separated whole numbers, or nil when the variable is unset or
+  # unreadable — see the note below for why nothing here is allowed to raise.
+  external_tag_numbers = fn value, count, name ->
+    parts = value |> to_string() |> String.trim() |> String.split(":", parts: count)
+
+    numbers =
+      Enum.reduce_while(parts, [], fn part, acc ->
+        case Integer.parse(String.trim(part)) do
+          {number, ""} when number > 0 -> {:cont, acc ++ [number]}
+          _unreadable -> {:halt, nil}
+        end
+      end)
+
+    cond do
+      is_nil(value) ->
+        nil
+
+      is_list(numbers) and length(numbers) == count ->
+        numbers
+
+      true ->
+        IO.warn("#{name}=#{value} is not #{count} positive numbers; keeping the default")
+        nil
+    end
+  end
+
+  # The three colon-separated knobs of that pull. Colons rather than commas
+  # because `FEDIVERSE_COUNTS_LADDER` already spells a pair of numbers
+  # `age:interval` in this file, and the comma is what separates whole entries
+  # there — so a comma here would read as "another one of these".
+  #
+  # Each is parsed leniently on purpose. A typo in an operator's `.env` must
+  # cost them the setting, not the installation: a hard `[a, b] = String.split`
+  # raises a `MatchError` **at boot**, before anything is listening, and the
+  # whole site fails to start over one wrong character. Anything unreadable
+  # leaves the shipped default standing and says so on the console, which is the
+  # only place a boot can speak.
+  #
+  # The pace, `target:min:max` — posts aimed at between two fetches, then the
+  # floor and the ceiling in **minutes**, shipped as "5:10:180". The floor
+  # decides how often a stranger's server hears from this installation, so an
+  # operator who wants to be a quieter neighbour raises it.
+  case external_tag_numbers.(System.get_env("EXTERNAL_TAG_CADENCE"), 3, "EXTERNAL_TAG_CADENCE") do
+    [target, min, max] ->
+      config :vutuv, :external_tag_cadence,
+        target: target,
+        min_seconds: min * 60,
+        max_seconds: max * 60
+
+    nil ->
+      :ok
+  end
+
+  # What bounds the table, as `per_tag:total`.
+  case external_tag_numbers.(
+         System.get_env("EXTERNAL_TAG_POST_CAPS"),
+         2,
+         "EXTERNAL_TAG_POST_CAPS"
+       ) do
+    [per_tag, total] ->
+      config :vutuv, :external_tag_post_caps, per_tag: per_tag, total: total
+
+    nil ->
+      :ok
+  end
+
+  # The ceilings on one run, as `batch:per_host`.
+  case external_tag_numbers.(
+         System.get_env("EXTERNAL_TAG_FETCH_BUDGET"),
+         2,
+         "EXTERNAL_TAG_FETCH_BUDGET"
+       ) do
+    [batch, per_host] ->
+      config :vutuv, :external_tag_fetch_budget, batch: batch, per_host: per_host
+
+    nil ->
+      :ok
+  end
+
   # How much the release writes to the system log. `config/prod.exs` compiles in
   # `:error`, which is quiet enough to run on and too quiet to debug on: at that
   # level nearly every `Logger.warning` in the app goes, and the request logger

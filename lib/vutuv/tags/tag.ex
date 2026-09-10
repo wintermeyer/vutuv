@@ -379,6 +379,34 @@ defmodule Vutuv.Tags.Tag do
   def display_name(%__MODULE__{slug: slug}), do: slug
 
   @doc """
+  What this topic is called as a hashtag on the other networks: the display name
+  with its separators removed and its casing kept, so `Machine Learning` is
+  `MachineLearning`. `nil` when nothing is left (a punctuation-only legacy tag),
+  which means the topic has no address out there at all.
+
+  **The name cannot come from the slug.** Mastodon's hashtag charset is
+  alphanumerics, `_` and a couple of Unicode separators, and everything else is
+  stripped from the name it stores (`HASHTAG_INVALID_CHARS_RE`) — a hyphen is
+  **not** in it, so `machine-learning` would arrive over there as the tag
+  "machine" followed by loose text.
+
+  Owned here because both directions of the same conversation need exactly this
+  spelling and must never drift apart: the `Hashtag` objects an outgoing note
+  carries (`VutuvWeb.Fediverse.Docs`, issue #1421) and the tag timeline this
+  installation asks a server for (`Vutuv.Tags.ExternalTagClient`, issue #2126).
+  Both hand over the stored `name` rather than the struct, so there is one door
+  and one answer.
+  """
+  def hashtag_name(name) when is_binary(name) do
+    case String.replace(name, ~r/[^\p{L}\p{N}_]/u, "") do
+      "" -> nil
+      cleaned -> cleaned
+    end
+  end
+
+  def hashtag_name(_name), do: nil
+
+  @doc """
   The topic a tag stands for: itself, or the tag it is an alternative name for.
 
   Takes a loaded `%Tag{}` and answers without a query when the association is

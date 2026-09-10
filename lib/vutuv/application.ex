@@ -136,6 +136,7 @@ defmodule Vutuv.Application do
         optional_child(:fediverse_note_sweeping, Vutuv.Fediverse.NoteSweeper) ++
         optional_child(:fediverse_counts, Vutuv.Fediverse.CountsRefresher) ++
         optional_child(:fediverse_media_fetch, Vutuv.Fediverse.MediaRefetcher) ++
+        optional_child(:fetch_external_tag_posts, Vutuv.Tags.ExternalPostFetcher) ++
         optional_child(:fediverse_quote_resolve, Vutuv.Fediverse.QuoteResolver) ++
         optional_child(:post_screenshot_worker, Vutuv.Posts.ScreenshotWorker) ++
         optional_child(:organization_screenshot_worker, Vutuv.Organizations.ScreenshotWorker) ++

@@ -167,12 +167,67 @@ the endorsement rescue), so a revert brings the follow back reading what it read
 
 A table and not a list on the follow, because the fetcher's question is the
 other way round — which server-and-tag pairs does anybody here want? —
-and `Vutuv.Tags.wanted_tag_sources/0` answers it with one grouped query
-(`%{source:, tag_id:, tag_name:, follow_count:}`, busiest first, the local
-source left out), instead of unpacking every member's array. The context side is
-`add_tag_follow_source/2`, `remove_tag_follow_source/2` and
-`tag_follow_sources/1`. Nothing fetches anything yet; the card and the fetcher
-are #2126–#2129.
+and `Vutuv.Tags.wanted_tag_sources_query/0` answers it with one grouped query
+(`%{source:, tag_id:, tag_name:, follow_count:}`, the local source and every
+merged alias left out), instead of unpacking every member's array. It is
+composable on purpose: `wanted_tag_sources/0` orders it and runs it, and the
+fetcher below builds its due filter on the same query rather than writing a
+second copy of the join. The context side is `add_tag_follow_source/2`,
+`remove_tag_follow_source/2` and `tag_follow_sources/1`.
+
+### Reading those servers (issue #2126)
+
+A hashtag has no inbox to subscribe to: ActivityPub delivers to addresses, not
+to topics, and a remote server's own "follow a hashtag" only filters what it
+already holds. So this is a **pull**. `Vutuv.Tags.ExternalTagClient` asks each
+named server for its public tag timeline over the Mastodon-compatible REST API
+all of them serve without an account, and keeps **text and a link to the
+original**, never a picture. That is not thrift: every foreign image would go
+through the AI image gate, and on a busy tag most posts carry one. The language
+arrives declared, so even that costs no model call. Anything marked sensitive or
+sitting behind a content warning is skipped outright, as are boosts, replies and
+anything not public.
+
+Two tables of their own (`external_tag_posts`, `external_tag_fetches`) and
+deliberately **not** `fediverse_posts`: a row there is a cached ActivityPub
+object and drags image ingestion, the AI gate, the screenshot queue and two
+counting sweepers behind it, none of which a REST status read off a public
+timeline is or should pay for.
+
+**The pace is the tag's own business.** `Vutuv.Tags.ExternalPosts` aims at
+roughly five new posts between two fetches: more arrived and the interval
+halves, none arrived and it doubles, always inside ten minutes and three hours
+(`EXTERNAL_TAG_CADENCE`). Measured, a tag that keeps answering empty walks
+10 → 20 → 40 → 80 → 160 → 180 minutes, reaching the ceiling after eight hours of
+quiet; one in the middle of a news event walks back down in the same five steps.
+A budget per server is applied to the due list before anything is asked, so
+twenty busy tags naming one popular server cannot spend its rate limit in a
+single run.
+
+**Every outcome moves the clock, skips included** — the #1316 lesson (see
+`fediverse.md`). `checked_at` is the scheduler's clock, not a claim that the
+question was asked: a pair that can never be fetched is stamped and rejoins the
+queue at its own pace instead of holding the front of every batch for good. A
+skip takes no strike and waits the ceiling, since an operator may unblock the
+host tomorrow; a failure takes a strike and backs off by doubling.
+
+**Three refusals, all of them at fetch time**, because the changeset above
+cannot do DNS and cannot know what the operator will block next week: the
+instance blocklist, which also drops a *status* whose author lives on a blocked
+host; `Ssrf.vetted_address/1` with the connection **pinned** to the vetted IP
+via `Http.get_pinned/4`, the hostname riding along in SNI, the certificate check
+and the `Host` header, so no second lookup is left for DNS rebinding to answer
+differently; and `Tag.hashtag_name/1`, which refuses a name that reduces to
+nothing. That connection is opened and closed for the one request, which is
+what bounds it: handing `Req` a per-host `connect_options` instead starts a
+`Finch` instance per distinct hostname and never reaps it, and which hostnames
+appear is decided by what members type into a follow's sources.
+
+What bounds the table is `EXTERNAL_TAG_POST_CAPS` (twenty posts per tag, its
+servers sharing those slots, ten thousand rows overall) plus `prune/0`, which
+takes a pair's schedule and its posts away with the last follow that wanted
+them. Nothing here outlives somebody's interest in it, which is also the
+retention answer for words their author never offered us.
 
 ## The tag page (`/tags/:slug`)
 

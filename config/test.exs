@@ -188,6 +188,10 @@ config :vutuv, :refresh_top_posters, false
 config :vutuv, :fetch_mastodon_posts, false
 config :vutuv, :fetch_bluesky_posts, false
 config :vutuv, :fetch_code_stats, false
+# The followed-tag pull (issue #2126): off, so the standing job never starts and
+# would use the SQL sandbox connection from a process that does not own it. Its
+# tests flip it on per-test and stub HTTP via :external_tag_req_options.
+config :vutuv, :fetch_external_tag_posts, false
 # Book review metadata/covers (Open Library): off, so a create_post with a
 # review never fetches; the review tests call the fetchers directly with
 # stubbed HTTP (:book_metadata_req_options / :book_covers_req_options).

@@ -189,11 +189,18 @@ defmodule Vutuv.Mastodon do
     end
   end
 
-  # The REST API names each mentioned account in `mentions` — `acct` bare for
-  # a same-server account, `user@host` for a remote one — beside its profile
-  # `url`. Normalized to the AP Mention-tag shape, so `Vutuv.RemoteHtml` widens
-  # the bare `@user` the content shows to the full linkable address either way.
-  defp mention_tags(status) do
+  @doc """
+  The mentions of a REST `Status`, normalized to the ActivityPub Mention-tag
+  shape `Vutuv.RemoteHtml.to_text/3` reads.
+
+  The API names each mentioned account in `mentions` — `acct` bare for a
+  same-server account, `user@host` for a remote one — beside its profile `url`,
+  and the normalization widens the bare `@user` the content shows to the full
+  linkable address either way. Public because this module owns what a Mastodon
+  status is, and `Vutuv.Tags.ExternalTagClient` reads the same entity off a tag
+  timeline.
+  """
+  def mention_tags(status) do
     for %{"acct" => acct, "url" => url} <- List.wrap(status["mentions"]),
         is_binary(acct),
         is_binary(url) do
