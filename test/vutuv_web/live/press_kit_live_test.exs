@@ -730,7 +730,6 @@ defmodule VutuvWeb.PressKitLiveTest do
     # owner was the viewer, resolving a picture out of `owned/2` was itself the
     # viewer check; with a page it no longer is, so every event has to re-ask.
     test "an edit by somebody whose role was withdrawn is refused, not a crash", %{
-      conn: conn,
       organization: organization,
       owner: owner,
       tmp: tmp
@@ -753,7 +752,6 @@ defmodule VutuvWeb.PressKitLiveTest do
     end
 
     test "a withdrawn role cannot remove a picture", %{
-      conn: conn,
       organization: organization,
       owner: owner,
       tmp: tmp
