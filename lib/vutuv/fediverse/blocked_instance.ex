@@ -25,6 +25,17 @@ defmodule Vutuv.Fediverse.BlockedInstance do
   # error, because it reads as protection that isn't there.
   @host_format ~r/\A[a-z0-9]([a-z0-9\-]*[a-z0-9])?(\.[a-z0-9]([a-z0-9\-]*[a-z0-9])?)+\z/
 
+  @doc """
+  What a server name may look like, and how long it may be — published because
+  this module already owns `normalize_host/1`, so anything else storing a
+  hostname (`Vutuv.Tags.TagFollowSource`) validates the same shape rather than
+  keeping a second copy of it that drifts.
+  """
+  def host_format, do: @host_format
+
+  @doc "The longest hostname there is — see `host_format/0`."
+  def max_host, do: @max_host
+
   schema "fediverse_blocked_instances" do
     field(:host, :string)
     field(:reason, :string)

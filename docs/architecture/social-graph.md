@@ -138,6 +138,26 @@ to `/tag_follows`), the feed's reload-free **"Tags you follow"** rail (a
 (a settings-hub row that appears only once you follow at least one tag, like
 saved searches).
 
+### Where a followed tag reads from
+
+A follow also carries its **sources** (issue #2125, `Vutuv.Tags.TagFollowSource`,
+table `tag_follow_sources`): one row per source, `"vutuv"` — this installation,
+written inside the follow's own transaction, so no follow exists without it —
+plus any server the member picked. `source` is either that literal or a bare
+lowercased hostname, and `normalize_source/1` is the one place that turns a
+pasted URL or `@user@host` address into one of the two. An address of **our
+own** becomes the local source rather than a server to poll, `Vutuv.Fediverse.own_host?/1`
+deciding that, so no installation ever asks itself for its own posts.
+
+A table and not a list on the follow, because the fetcher's question is the
+other way round — which server-and-tag pairs does anybody here want? —
+and `Vutuv.Tags.wanted_tag_sources/0` answers it with one grouped query
+(`%{source:, tag_id:, tag_name:, follow_count:}`, busiest first, the local
+source left out), instead of unpacking every member's array. The context side is
+`add_tag_follow_source/2`, `remove_tag_follow_source/2` and
+`tag_follow_sources/1`. Nothing fetches anything yet; the card and the fetcher
+are #2126–#2129.
+
 ## The tag page (`/tags/:slug`)
 
 A tag's public page is the topic page: its description, the most endorsed
