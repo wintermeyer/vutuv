@@ -182,6 +182,49 @@ defmodule Vutuv.Tags.SourceServersTest do
       refute_received {:req, "elsewhere.example", _path}
       assert is_nil(Repo.get_by!(SourceServer, host: @good).accounts)
     end
+
+    test "keeps a healthy server healthy when its NodeInfo document blows up" do
+      # The figures are decoration and the timeline alone decides. A blanket
+      # rescue over the whole probe made *any* exception in the optional leg
+      # mark the server "unreachable" for a day — and a stranger's document is
+      # exactly where an exception comes from: `to_string/1` on a `rel` that is
+      # an object raises `Protocol.UndefinedError`. Calibrated: with the rescue
+      # left blanket the status is "unreachable" and nothing can be picked.
+      stub_servers(%{@good => %{nodeinfo_links: [%{"rel" => %{}, "href" => "x"}]}})
+
+      assert {:ok, @good} = SourceServers.check(@good, tag())
+
+      info = Repo.get_by!(SourceServer, host: @good)
+      assert info.status == "ok"
+      assert is_nil(info.accounts)
+    end
+
+    test "keeps a server whose NodeInfo counts do not fit in a column" do
+      # A count from a stranger, above what `bigint` holds. `start_async`
+      # catches it on the panel's refresh path; on this one it would come out of
+      # the member's own `handle_event` and take their feed with it. Calibrated:
+      # without the upper bound the insert raises rather than answering.
+      stub_servers(%{@good => %{accounts: 9_300_000_000_000_000_000}})
+
+      assert {:ok, @good} = SourceServers.check(@good, tag())
+
+      info = Repo.get_by!(SourceServer, host: @good)
+      assert info.status == "ok"
+      assert is_nil(info.accounts)
+      assert info.active_month == 5_586
+    end
+
+    test "refuses a hostname longer than a hostname, without asking anybody" do
+      # `maxlength="255"` is markup, not a guard. Without the length in the
+      # grammar this costs two outbound requests on the way to storing nothing,
+      # and tells the member "did not answer" where the truth is "that is not a
+      # server name". Calibrated: without it the answer is
+      # `{:error, {:unreachable, …}}`.
+      long = String.duplicate("a", 250) <> ".example"
+
+      assert {:error, {:not_a_server, ^long}} = SourceServers.check(long, tag())
+      refute_received {:req, _host, _path}
+    end
   end
 
   describe "refresh/2" do

@@ -33,6 +33,22 @@ defmodule Vutuv.Tags.ExternalTagClient do
   is the timeline path, the pin, the blocklist and the stricter refusals. The
   remote `content` is HTML from an untrusted server and is reduced to plain text
   through `Vutuv.RemoteHtml` — never render any of it with `raw/1`.
+
+  ## The two other things a server is asked (issue #2129)
+
+  `trending/1` reads `GET /api/v1/trends/tags`, which every Mastodon server
+  serves without an account — measured against all ten shipped servers and
+  against the three that refuse the *timeline* to a logged-out reader, and all
+  thirteen answered it. Each entry carries seven days of `uses`, which is what
+  tells a tag that is suddenly busy from one that is busy every day.
+
+  `authors/2` reads the same tag timeline `fetch/2` does, but answers **who
+  wrote it** rather than what they wrote: one entry per status, with the
+  author's host and the bot flag their own server put on them. Nothing is
+  stored from it. It is a separate function rather than a field on `fetch/2`'s
+  result because the two callers want opposite things — the pull drops boosts,
+  replies and anything sensitive before it counts, and a census that dropped
+  them would be counting a different population than the one making the noise.
   """
 
   require Logger
@@ -57,6 +73,21 @@ defmodule Vutuv.Tags.ExternalTagClient do
   # deliberately far short of a page's maximum (40), because everything past
   # the per-tag cap is thrown away again anyway.
   @statuses_limit 20
+
+  # How many trending tags one server is asked for. Mastodon answers 10 without
+  # a `limit` and honours up to 20; the wider list costs the same request and
+  # gives the spike and spread gates something to cut down — measured, the ten
+  # shipped servers between them named 50 distinct tags at 20 and 20 at 10.
+  @trends_limit 20
+
+  # A Mastodon tag's history is a week, and the reader is shown a week.
+  @history_days 7
+
+  # How many statuses a trending tag is vetted on. A page's maximum, because
+  # this one is a census and its whole value is the size of the sample —
+  # measured over ten trending tags, forty statuses gave 10 to 26 distinct
+  # author domains for an ordinary one and 2 for the bot wave.
+  @census_limit 40
 
   # A server whose clock runs ahead, or a status dated by hand, must not pin
   # itself to the top of the tag forever: past this much future it is dropped.
@@ -98,6 +129,100 @@ defmodule Vutuv.Tags.ExternalTagClient do
       {:error, :transient}
   end
 
+  @doc """
+  What `source` says is trending right now: `{:ok, [%{name:, history:}]}` with
+  `history` the seven daily use counts, newest first.
+
+  The same three refusals as `fetch/2`, minus the hashtag one — this asks about
+  no tag in particular. A server that answers something which is not a list of
+  tags is a `:transient` failure rather than a crash: these are strangers'
+  documents and half of what could come back is not JSON at all.
+  """
+  def trending(source) do
+    with :ok <- refuse_blocked(source),
+         {:ok, entries} <- get_json(source, "/api/v1/trends/tags?limit=#{@trends_limit}") do
+      {:ok, entries |> List.wrap() |> Enum.flat_map(&trend/1)}
+    end
+  rescue
+    error ->
+      Logger.warning("external tag trends #{source} raised: #{inspect(error)}")
+      {:error, :transient}
+  end
+
+  # The Mastodon `Tag` entity. `uses` and `accounts` arrive as **strings**, and
+  # a `history` shorter than a week is padded rather than refused: a tag first
+  # seen three days ago has three entries, and reading that as "no history" is
+  # the same mistake as reading it as a spike.
+  defp trend(%{"name" => name, "history" => history}) when is_binary(name) and is_list(history) do
+    case Tag.hashtag_name(name) do
+      nil -> []
+      cleaned -> [%{name: cleaned, history: week(history)}]
+    end
+  end
+
+  defp trend(_entry), do: []
+
+  # `uses` arrives as a string here and as a number in NodeInfo, and both are a
+  # stranger's counter going into a `bigint` column — so both go through
+  # `Post.whole_number/2`. A day that cannot be read is a day nothing happened,
+  # which is 0; that fallback is the only thing this reader and the panel's
+  # disagree about.
+  defp week(history) do
+    counts =
+      Enum.map(history, fn
+        %{"uses" => uses} -> Post.whole_number(uses, 0)
+        _other -> 0
+      end)
+
+    Enum.take(counts ++ List.duplicate(0, @history_days), @history_days)
+  end
+
+  @doc """
+  Who is posting `tag_name` on `source`: `{:ok, [%{host:, bot?:}]}`, one entry
+  per status on its public tag timeline.
+
+  The two facts a trending tag is vetted on, and both are the *server's* own —
+  it flags its bot accounts itself, and `acct` says where the author lives. See
+  the moduledoc for why this is not a by-product of `fetch/2`.
+  """
+  def authors(source, tag_name) do
+    with {:ok, hashtag} <- hashtag(tag_name),
+         :ok <- refuse_blocked(source),
+         {:ok, statuses} <- get_timeline(source, hashtag, @census_limit) do
+      {:ok, Enum.flat_map(statuses, &author_entry(&1, source))}
+    end
+  rescue
+    error ->
+      Logger.warning("external tag authors #{source} raised: #{inspect(error)}")
+      {:error, :transient}
+  end
+
+  defp author_entry(status, source) do
+    case {author_host(status, source), status["account"]} do
+      {host, %{} = account} when is_binary(host) -> [%{host: host, bot?: account["bot"] == true}]
+      _unusable -> []
+    end
+  end
+
+  defp get_json(source, path) do
+    case Http.get_pinned(source, path, @req_options) do
+      {:ok, %Req.Response{status: 200, body: body}} ->
+        case Http.decode(body) do
+          {:ok, decoded} when is_list(decoded) -> {:ok, decoded}
+          _other -> {:error, :transient}
+        end
+
+      {:ok, %Req.Response{status: status}} ->
+        if refusal(status), do: {:error, :gone}, else: {:error, :transient}
+
+      {:error, reason} when reason in [:internal, :unresolvable] ->
+        {:error, reason}
+
+      _other ->
+        {:error, :transient}
+    end
+  end
+
   defp hashtag(tag_name) do
     case Tag.hashtag_name(tag_name) do
       nil -> {:error, :gone}
@@ -109,28 +234,11 @@ defmodule Vutuv.Tags.ExternalTagClient do
     if Fediverse.instance_blocked?(source), do: {:error, :blocked}, else: :ok
   end
 
-  defp get_timeline(source, hashtag) do
-    path =
-      "/api/v1/timelines/tag/#{URI.encode(hashtag, &URI.char_unreserved?/1)}" <>
-        "?limit=#{@statuses_limit}"
-
-    case Http.get_pinned(source, path, @req_options) do
-      {:ok, %Req.Response{status: 200, body: body}} ->
-        decode(body)
-
-      # Both permanent refusals are `:gone` here: this client only has to know
-      # that the pair has no address there, and the reason is the panel's
-      # business (`Vutuv.Tags.SourceServerProbe`), which reads the same
-      # classifier.
-      {:ok, %Req.Response{status: status}} ->
-        if refusal(status), do: {:error, :gone}, else: {:error, :transient}
-
-      {:error, reason} when reason in [:internal, :unresolvable] ->
-        {:error, reason}
-
-      _other ->
-        {:error, :transient}
-    end
+  defp get_timeline(source, hashtag, limit \\ @statuses_limit) do
+    get_json(
+      source,
+      "/api/v1/timelines/tag/#{URI.encode(hashtag, &URI.char_unreserved?/1)}?limit=#{limit}"
+    )
   end
 
   @doc """
@@ -151,12 +259,18 @@ defmodule Vutuv.Tags.ExternalTagClient do
   def refusal(status) when status in [404, 410], do: :absent
   def refusal(_status), do: nil
 
-  defp decode(body) do
-    case Http.decode(body) do
-      {:ok, statuses} when is_list(statuses) -> {:ok, statuses}
-      _other -> {:error, :transient}
-    end
-  end
+  @doc """
+  Whether an error from here is **nobody's fault and possibly temporary from
+  outside**: the operator's blocklist, an internal address, a server that will
+  not serve this at all.
+
+  Both sweepers reading this client answer such an outcome with a skip — no
+  strike, and the longest wait before anybody looks again. It lives here rather
+  than in either of them because this module is what produces the atoms, so the
+  next lesson (a 429, a 451) is learned in one place instead of two lists that
+  nothing connects.
+  """
+  def skip?(reason), do: reason in [:blocked, :internal, :gone]
 
   defp parse(statuses, source) do
     now = DateTime.utc_now(:second)

@@ -65,7 +65,16 @@ defmodule Vutuv.ExternalTagHelpers do
   `:description`, `:timeline` (the status code the tag timeline answers — `422`
   is Mastodon's "this method requires an authenticated user"), and
   `:nodeinfo_href` for the one case worth standing up on purpose: a link
-  document pointing at somebody else's server.
+  document pointing at somebody else's server. `:nodeinfo_links` replaces that
+  document's whole `links` array, for a stranger's document that is not shaped
+  like one at all.
+
+  For the trending row (#2129) it also takes `:trends` — a list of
+  `{name, history}` pairs, newest day first, which becomes this server's
+  `/api/v1/trends/tags` — and `:samples`, a `%{hashtag => [status]}` map the tag
+  timeline answers from, so a test can give one tag a bot farm and another a
+  crowd. `:trends_status` makes the trending endpoint answer something other
+  than `200`.
 
   The request is **dialled at the vetted IP**, so `conn.host` is that address on
   every call — the hostname is in the `host` header, which is what the dispatch
@@ -96,14 +105,7 @@ defmodule Vutuv.ExternalTagHelpers do
 
     case conn.request_path do
       "/.well-known/nodeinfo" ->
-        json(conn, 200, %{
-          "links" => [
-            %{
-              "rel" => "http://nodeinfo.diaspora.software/ns/schema/2.0",
-              "href" => Map.get(attrs, :nodeinfo_href, "https://#{host}/nodeinfo/2.0")
-            }
-          ]
-        })
+        json(conn, 200, %{"links" => Map.get(attrs, :nodeinfo_links, links(host, attrs))})
 
       "/nodeinfo/2.0" ->
         json(conn, 200, node_info(attrs))
@@ -111,12 +113,71 @@ defmodule Vutuv.ExternalTagHelpers do
       "/api/v2/instance" ->
         json(conn, 200, %{"languages" => List.wrap(Map.get(attrs, :language, "de"))})
 
-      "/api/v1/timelines/tag/" <> _hashtag ->
-        json(conn, Map.get(attrs, :timeline, 200), [])
+      "/api/v1/trends/tags" ->
+        json(conn, Map.get(attrs, :trends_status, 200), trends(attrs))
+
+      "/api/v1/timelines/tag/" <> hashtag ->
+        json(conn, Map.get(attrs, :timeline, 200), sample(attrs, hashtag))
 
       _other ->
         Plug.Conn.send_resp(conn, 404, "")
     end
+  end
+
+  # The Mastodon `Tag` entity as the trends endpoint serves it: seven days,
+  # newest first, with `uses` and `accounts` as **strings** — which is how the
+  # real API answers and the one detail a hand-rolled fixture gets wrong.
+  defp trends(attrs) do
+    attrs
+    |> Map.get(:trends, [])
+    |> Enum.map(fn {name, history} ->
+      %{
+        "name" => name,
+        "url" => "https://example.test/tags/#{name}",
+        "history" =>
+          Enum.map(history, fn uses ->
+            %{"day" => "1788998400", "uses" => to_string(uses), "accounts" => to_string(uses)}
+          end)
+      }
+    end)
+  end
+
+  defp sample(attrs, hashtag) do
+    attrs |> Map.get(:samples, %{}) |> Map.get(hashtag, [])
+  end
+
+  @doc """
+  A trending tag's vetting sample: `count` statuses whose authors are spread
+  over `hosts`, `bots` of them flagged as bot accounts by their own server.
+
+  That is exactly the pair of facts the offer is judged on, and both come from
+  the account the status carries rather than from anything we work out.
+  """
+  def sample_statuses(source, count, hosts, bots \\ 0) do
+    hosts = List.wrap(hosts)
+
+    Enum.map(0..(count - 1), fn index ->
+      host = Enum.at(hosts, rem(index, length(hosts)))
+
+      remote_status(source, %{
+        "id" => "s#{index}",
+        "account" => %{
+          "acct" => "ada#{index}@#{host}",
+          "display_name" => "Ada #{index}",
+          "url" => "https://#{host}/@ada#{index}",
+          "bot" => index < bots
+        }
+      })
+    end)
+  end
+
+  defp links(host, attrs) do
+    [
+      %{
+        "rel" => "http://nodeinfo.diaspora.software/ns/schema/2.0",
+        "href" => Map.get(attrs, :nodeinfo_href, "https://#{host}/nodeinfo/2.0")
+      }
+    ]
   end
 
   defp node_info(attrs) do

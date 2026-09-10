@@ -39,6 +39,7 @@ defmodule VutuvWeb.PostLive.Feed do
   import VutuvWeb.PostComponents
   import VutuvWeb.PostLive.FeedCalendar
   import VutuvWeb.PostLive.TagSources, only: [source_chip: 1, source_panel: 1]
+  import VutuvWeb.PostLive.TrendingTags, only: [trending_row: 1]
   import VutuvWeb.PendingPostComponents, only: [pending_post: 1]
 
   alias Phoenix.LiveView.JS
@@ -55,6 +56,8 @@ defmodule VutuvWeb.PostLive.Feed do
   alias Vutuv.Prefs
   alias Vutuv.Social
   alias Vutuv.Tags.SourceServers
+  alias Vutuv.Tags.Tag
+  alias Vutuv.Tags.Trending
   alias Vutuv.Tags.UserTag
   alias Vutuv.Videos
   alias Vutuv.ViewerClock
@@ -321,15 +324,28 @@ defmodule VutuvWeb.PostLive.Feed do
   # (mount) and the socket-side redraw helpers below, so mount and refresh
   # cannot drift.
   defp rail_data(user) do
+    followed = Vutuv.Tags.followed_tags(user)
+
     Map.merge(
       %{
-        followed_tags: Vutuv.Tags.followed_tags(user),
+        followed_tags: followed,
         # How many servers each of those tags reads from (issue #2128) — one
         # count query, because that is all the chip on each chip shows.
-        tag_source_counts: Vutuv.Tags.followed_tag_source_counts(user)
+        tag_source_counts: Vutuv.Tags.followed_tag_source_counts(user),
+        # And what is suddenly busy on those servers (issue #2129), which the
+        # last pass already worked out — a select of at most eight stored rows,
+        # never anything outbound.
+        trending_tags: trending_offers(followed)
       },
       newcomer_rail(user)
     )
+  end
+
+  # A tag the reader already follows is not an offer, so it comes out of the
+  # list rather than out of the pass — the offer is one row for the whole
+  # installation and every reader follows something different.
+  defp trending_offers(followed) do
+    Trending.offers(except: Enum.map(followed, &Tag.display_name/1))
   end
 
   # The stream is rebuilt here rather than riding the payload: a
@@ -602,6 +618,10 @@ defmodule VutuvWeb.PostLive.Feed do
         limit: 5
       )
     )
+    # And what is spiking elsewhere (issue #2129) — read again here rather than
+    # filtered in place, because a press on that row both follows a tag and is
+    # what takes it out of the offer.
+    |> assign(:trending_tags, trending_offers(followed))
   end
 
   # --- The tag-source panel's socket state (issue #2128) --------------------
@@ -992,6 +1012,7 @@ defmodule VutuvWeb.PostLive.Feed do
   attr(:panel_id, :string, default: nil)
   attr(:panel_rows, :list, default: [])
   attr(:panel_error, :any, default: nil)
+  attr(:trending, :list, default: [])
 
   defp followed_tags_body(assigns) do
     ~H"""
@@ -1077,6 +1098,11 @@ defmodule VutuvWeb.PostLive.Feed do
           </button>
         </div>
       </div>
+
+      <%!-- What is spiking on the servers this installation reads from (issue
+      #2129), under the tags this reader's own feed is already carrying — the
+      near neighbourhood first, then the wider one. --%>
+      <.trending_row tags={@trending} />
     </div>
     """
   end
@@ -1568,6 +1594,22 @@ defmodule VutuvWeb.PostLive.Feed do
             {:noreply, socket |> assign(:tag_missing, nil) |> assign_followed_tags()}
         end
     end
+  end
+
+  # Following a tag that is suddenly busy elsewhere (issue #2129). A different
+  # event from `follow_tag` because it is a different act: that one resolves a
+  # name and refuses an unknown one, this one mints the topic and names the
+  # servers it is busy on. **The offer is the permission** — `Trending.follow/2`
+  # takes the name from the stored offer or refuses — so a pushed event cannot
+  # put an arbitrary word into a namespace every member shares.
+  def handle_event("follow-trending-tag", %{"name" => name}, socket) do
+    # A refusal needs nothing said: the offer this was pressed from is the only
+    # way to reach the event, so the one way to be refused is that it aged out
+    # between the render and the press — and then redrawing the rail is exactly
+    # the answer, because the pill goes with it. `:tag_missing` is the typed
+    # field's error state and none of this control's business.
+    Trending.follow(socket.assigns.current_user, name)
+    {:noreply, assign_followed_tags(socket)}
   end
 
   # --- The tag-source panel (issue #2128) -----------------------------------
@@ -4005,6 +4047,7 @@ defmodule VutuvWeb.PostLive.Feed do
                       panel_id={@tag_panel_id}
                       panel_rows={@tag_panel_rows}
                       panel_error={@tag_panel_error}
+                      trending={@trending_tags}
                     />
                   </.rail_block>
                 <% "newcomers" -> %>

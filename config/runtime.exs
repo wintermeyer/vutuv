@@ -503,6 +503,41 @@ if config_env() == :prod do
     nil -> :ok
   end
 
+  # What the tag card offers as suddenly busy elsewhere (issue #2129).
+  # FETCH_TRENDING_TAGS=false asks no server what is trending on it and draws no
+  # row; what is already stored ages out within four intervals.
+  if System.get_env("FETCH_TRENDING_TAGS") == "false" do
+    config :vutuv, :fetch_trending_tags, false
+  end
+
+  # The two knobs an operator has a reason to move: how often the servers are
+  # asked, and how many tags the card offers. The thresholds that decide what
+  # counts as "suddenly busy" stay in `config/config.exs` — they are calibrated
+  # judgements with measured margins, not per-installation values.
+  #
+  # Collected into one `config` call rather than one per variable: inside this
+  # file `config/3` accumulates and is applied afterwards, so a second call
+  # reading `Application.get_env/2` would not see the first one's value and
+  # would silently drop it. A keyword list is deep-merged over the shipped one,
+  # so naming one key keeps the other eight.
+  tag_trending_overrides =
+    Enum.flat_map(
+      [
+        {"TAG_TRENDING_INTERVAL_MINUTES", :interval_minutes},
+        {"TAG_TRENDING_OFFERS", :offer}
+      ],
+      fn {name, key} ->
+        case external_tag_numbers.(System.get_env(name), 1, name) do
+          [number] -> [{key, number}]
+          nil -> []
+        end
+      end
+    )
+
+  if tag_trending_overrides != [] do
+    config :vutuv, :tag_trending, tag_trending_overrides
+  end
+
   # How much the release writes to the system log. `config/prod.exs` compiles in
   # `:error`, which is quiet enough to run on and too quiet to debug on: at that
   # level nearly every `Logger.warning` in the app goes, and the request logger

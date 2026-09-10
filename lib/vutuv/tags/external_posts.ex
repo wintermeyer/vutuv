@@ -55,6 +55,7 @@ defmodule Vutuv.Tags.ExternalPosts do
   alias Vutuv.Tags.ExternalFetch
   alias Vutuv.Tags.ExternalPost
   alias Vutuv.Tags.ExternalTagClient
+  alias Vutuv.Tags.Tag
   alias Vutuv.Tags.TagFollow
   alias Vutuv.Tags.TagFollowSource
   alias Vutuv.UUIDv7
@@ -64,11 +65,6 @@ defmodule Vutuv.Tags.ExternalPosts do
   @cadence [target: 5, min_seconds: 600, max_seconds: 10_800]
   @caps [per_tag: 20, total: 10_000]
   @budget [batch: 20, per_host: 5]
-
-  # A refusal that is nobody's fault and may be lifted from outside: the
-  # operator's blocklist, an internal resolution, a server that will not serve
-  # this timeline. No strike, and the ceiling before the next look.
-  @skips [:blocked, :internal, :gone]
 
   # The columns a stored post carries, taken from the schema so a new one cannot
   # be forgotten in the row map below and silently stay NULL.
@@ -465,10 +461,16 @@ defmodule Vutuv.Tags.ExternalPosts do
   # scheduler's side an answer nobody could record is a failed ask.
   defp ask(%{tag_id: tag_id, tag_name: tag_name, source: source}) do
     case guard(source, fn -> ExternalTagClient.fetch(source, tag_name) end) do
-      {:ok, {:ok, posts}} -> {:ok, guarded_store(tag_id, posts, source)}
-      {:ok, {:error, reason}} when reason in @skips -> {:skip, reason}
-      {:ok, {:error, reason}} -> {:error, reason}
-      :crashed -> {:error, :crashed}
+      {:ok, {:ok, posts}} ->
+        {:ok, guarded_store(tag_id, posts, source)}
+
+      # No strike and the ceiling before the next look — the client owns which
+      # refusals those are (`ExternalTagClient.skip?/1`).
+      {:ok, {:error, reason}} ->
+        if ExternalTagClient.skip?(reason), do: {:skip, reason}, else: {:error, reason}
+
+      :crashed ->
+        {:error, :crashed}
     end
   end
 
@@ -505,19 +507,28 @@ defmodule Vutuv.Tags.ExternalPosts do
     })
   end
 
-  # One guard for the three places a pair's work can throw, so the difference
-  # between them is what each does with `:crashed` rather than four log strings
-  # to keep in step. `{:ok, value}` or `:crashed` — never the value bare, or a
-  # function legitimately answering `:crashed` could not be told apart.
-  defp guard(what, fun) do
+  @doc """
+  Runs `fun` and answers `{:ok, value}`, or `:crashed` if it raised or exited.
+
+  One guard for every place a sweeper's per-item work can throw, so the
+  difference between those places is what each does with `:crashed` rather than
+  a log string apiece to keep in step. Never the value bare, or a function
+  legitimately answering `:crashed` could not be told apart.
+
+  Public because the trending pass beside this one (`Vutuv.Tags.Trending`) needs
+  exactly the same thing for exactly the same reason: an item whose work throws
+  must not cost the items behind it their clock. `what` is what the log line
+  names.
+  """
+  def guard(what, fun) do
     {:ok, fun.()}
   rescue
     error ->
-      Logger.error("External tag fetch raised (#{what}): #{Exception.message(error)}")
+      Logger.error("External tags raised (#{what}): #{Exception.message(error)}")
       :crashed
   catch
     kind, value ->
-      Logger.error("External tag fetch exited (#{what}): #{inspect({kind, value})}")
+      Logger.error("External tags exited (#{what}): #{inspect({kind, value})}")
       :crashed
   end
 
@@ -565,6 +576,47 @@ defmodule Vutuv.Tags.ExternalPosts do
          [:checked_at, :next_fetch_at, :interval_seconds, :strikes, :last_outcome, :updated_at]},
       conflict_target: [:tag_id, :source]
     )
+  end
+
+  @doc """
+  Puts every pair of the tags named by `slugs` back to the cadence floor, due
+  now — how a spike seen somewhere else shortens the pull at once (issue #2129).
+
+  The cadence is a **measurement**, and a measurement is always behind: a tag in
+  the middle of a news event only reaches the floor after an event has already
+  filled a fetch or two, which on a three-hour interval is most of a morning.
+  What another server's trending list says is that the event is happening now,
+  so the pace is set rather than learned.
+
+  It is deliberately not a strike reset and not a store: nothing here claims
+  anything was fetched, so the next pass measures the real arrival rate and the
+  pace drifts back out on its own when the event ends. Rows already at the floor
+  and already due are left alone, which is what keeps a busy tag from being
+  rewritten every half hour.
+
+  Answers how many pairs were moved.
+  """
+  def hurry([]), do: 0
+
+  def hurry(slugs) when is_list(slugs) do
+    now = DateTime.utc_now(:second)
+    floor = cadence()[:min_seconds]
+    tag_ids = from(t in Tag, where: t.slug in ^slugs, select: t.id)
+
+    {moved, nil} =
+      from(f in ExternalFetch,
+        where: f.tag_id in subquery(tag_ids),
+        where: f.next_fetch_at > ^now or f.interval_seconds > ^floor
+      )
+      |> Repo.update_all(
+        set: [
+          next_fetch_at: now,
+          interval_seconds: floor,
+          updated_at: NaiveDateTime.utc_now(:second)
+        ]
+      )
+
+    moved
   end
 
   @doc """

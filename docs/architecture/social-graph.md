@@ -346,6 +346,59 @@ another 350 lines inside it — the tag page and an organization's Following lis
 both show followed tags with no way to say where they come from, and each is a
 caller this panel is one refactor away from.
 
+### Finding a tag that is suddenly busy (issue #2129)
+
+Under the same card, below the tags this reader's own feed is already carrying,
+sits a row of tags that are **spiking on the servers in `TAG_SOURCE_SERVERS`**.
+Every Mastodon server publishes its trending tags with a seven-day history,
+without a login and for one request each, so a member hears about a conference
+or an alarm without having to already follow the tag it happens under. Pressing
+one is the whole control: it mints the tag here if nothing answers to it yet,
+follows it, and names the servers it is busy on as its sources, so the follow
+brings something back instead of subscribing the reader to a topic nobody here
+has written about. `Vutuv.Tags.Trending` decides what is offered,
+`VutuvWeb.PostLive.TrendingTags` draws it, and the row rides in the feed's rail,
+which is `hidden md:block`.
+
+**Suddenly busy, not busy.** The history is the whole point: a tag is offered
+when today's total across the servers listing it clears a floor, is several
+times the median of the six days before it, and at least two servers list it at
+all. Measured on 10 September 2026 against the shipped ten, `#warntag` stood at
+5,994 uses against a median of 25 and `#xbox` at 130 against 78 — the second is
+what `#xbox` does every day, and a rule that read volume alone would offer it
+forever. Each pill wears those seven days as six quiet strokes and one accent
+bar, so the reader can see the judgement rather than take it on trust; the same
+figures are in the control's accessible name, grouped for the locale.
+
+**The loudest tag is often a machine, and the spread does not catch it.**
+`#mow4` trended on seven of the nine servers that answered — a bot farm that
+federates widely trends everywhere. What catches it is one sample of the tag's
+own timeline from its busiest server, where both facts are the remote server's
+own: 40 of 40 statuses came from a single domain and 39 of them were flagged as
+bot accounts, against 13 to 26 distinct domains and at most 10 of 40 bots for
+every ordinary tag. A tag that cannot be sampled at all is **not** offered.
+
+**A spike shortens the pull at once.** The cadence above is a measurement, so it
+only learns about a news event after the event has already filled a fetch or
+two. Every spiking candidate naming a tag followed here goes back to the cadence
+floor on the spot (`Vutuv.Tags.ExternalPosts.hurry/1`) — before the vetting,
+because hurrying a tag somebody already chose is a different question from
+offering one to somebody who did not.
+
+**One pass, every server, one clock.** `Vutuv.Tags.Trending.refresh/0` runs on
+the fetcher's own two-minute tick and does nothing until a server is due
+(`TAG_TRENDING_INTERVAL_MINUTES`), then asks **all** of them: the spread is a
+count of servers, and a pass that asked three of ten would answer it from three.
+`Vutuv.Tags.TrendCheck` is that clock and it is uniform on purpose — there is no
+backoff, because a divergent one would bring a recovered server due on its own.
+It is stamped on **every** outcome, skips included: the pass is due when any
+server is, so a
+server that can never answer would otherwise make the whole pass run on every
+tick instead of every half hour, which is issue #1316's deadlock in this
+feature's shape. The offer itself (`tag_trends`) is replaced wholesale by each
+pass and read back as at most eight stored rows, so drawing the row costs one
+small select and never a request.
+
 ## The tag page (`/tags/:slug`)
 
 A tag's public page is the topic page: its description, the most endorsed

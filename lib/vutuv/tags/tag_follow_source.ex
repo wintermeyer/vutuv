@@ -129,6 +129,13 @@ defmodule Vutuv.Tags.TagFollowSource do
   """
   def refusal(host) when is_binary(host) do
     cond do
+      # The grammar says what a label looks like and nothing about how many of
+      # them there may be, so this is where the length belongs: without it the
+      # changeset refuses afterwards, which on the panel's path means two
+      # outbound requests spent on a value that was never a hostname and a
+      # member told "did not answer". A form's `maxlength` is markup, not a
+      # guard — the same lesson `was soll das` taught one refusal along.
+      byte_size(host) > BlockedInstance.max_host() -> :not_a_server
       not Regex.match?(BlockedInstance.host_format(), host) -> :not_a_server
       Ssrf.internal_host?(host) -> :internal
       true -> nil
