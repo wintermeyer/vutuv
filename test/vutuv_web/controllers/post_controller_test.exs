@@ -1110,6 +1110,24 @@ defmodule VutuvWeb.PostControllerTest do
       end
     end
 
+    test "both menus offer the link to the post itself" do
+      {author_conn, author} = create_and_login_user(fresh_conn())
+      post = create_post!(author, %{body: "worth passing on"})
+      {reader_conn, _reader} = create_and_login_user(fresh_conn(), @other_login_attrs)
+
+      # What the clipboard gets is ABSOLUTE — a path is no use pasted into a
+      # chat — while the item stays an ordinary link to the same post, which is
+      # what a reader with no JavaScript follows.
+      for conn <- [author_conn, reader_conn] do
+        html = html_response(get(conn, Posts.path(post)), 200)
+
+        assert html =~ ~s(data-copy-link="#{Posts.url(post)}")
+        assert html =~ "Copy link to post"
+      end
+
+      assert Posts.url(post) == VutuvWeb.Endpoint.url() <> Posts.path(post)
+    end
+
     test "the permalink shows the action bar with counters to anonymous readers", %{conn: conn} do
       user = insert_activated_user()
       post = create_post!(user, %{body: "counted"})

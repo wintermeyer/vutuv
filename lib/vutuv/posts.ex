@@ -6543,6 +6543,17 @@ defmodule Vutuv.Posts do
   def path(%User{username: username}, post_id), do: "/#{username}/posts/#{post_id}"
 
   @doc """
+  The same permalink as an **absolute** URL on this installation, for the
+  places where a bare path is not enough: the JSON sibling, and the ⋯ menu's
+  "copy link", whose whole point is a string somebody pastes somewhere else.
+
+  Beside `path/1` rather than at those call sites, for the reason `path/1`
+  itself exists — the host comes from the endpoint (never a literal
+  `vutuv.de`), and a third installation gets its own.
+  """
+  def url(%Post{} = post), do: VutuvWeb.Endpoint.url() <> path(post)
+
+  @doc """
   Where a post's author link goes: a member's profile at their handle, an
   organization's page at `Organizations.canonical_path/1`, which prefers its
   opt-in root handle over `/organizations/:slug`.

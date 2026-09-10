@@ -24,7 +24,7 @@ defmodule VutuvWeb.PostJSON do
 
     %{
       id: post.id,
-      url: VutuvWeb.Endpoint.url() <> Posts.path(post),
+      url: Posts.url(post),
       author: Vutuv.Identity.ref(Posts.author(post)),
       body_markdown: post.body,
       body_html:
@@ -51,7 +51,7 @@ defmodule VutuvWeb.PostJSON do
       {:parent, parent} ->
         %{
           post_id: parent.id,
-          url: VutuvWeb.Endpoint.url() <> Posts.path(parent),
+          url: Posts.url(parent),
           # Whichever author the parent has (issue #1336): a member may answer a
           # post published in a page's name, and `author_ref/1` already speaks
           # both — `parent.user` alone would have shipped `nil` here.

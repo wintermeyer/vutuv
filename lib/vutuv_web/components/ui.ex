@@ -1973,6 +1973,12 @@ defmodule VutuvWeb.UI do
       doc: "phx-click event name — renders a `<button>` (a LiveView action) instead of a link"
     )
 
+    attr(:copy, :string,
+      doc:
+        "a URL this item puts in the clipboard instead of following its `href` — pair it with " <>
+          "the same address as `href`, which is what a reader with no JavaScript gets"
+    )
+
     attr(:value, :any, doc: "phx-value-id sent with the `click` event")
     attr(:confirm, :string, doc: "data-confirm prompt for destructive items")
     attr(:danger, :boolean, doc: "style the item red")
@@ -2028,6 +2034,11 @@ defmodule VutuvWeb.UI do
           </button>
           <%!-- `|| "get"` for the same reason `button/1` defaults it so; a
           slot attribute cannot carry a `:default`, so it is normalised here. --%>
+          <%!-- A `copy` item stays an ordinary link to the same address: with
+          no JavaScript (or on a cmd-click) it simply goes to the page, which
+          also puts the URL where it can be copied. `data-copy-link` is what
+          app.js's delegated handler picks up to copy it instead — delegated,
+          because a feed streams cards in long after any on-load wiring ran. --%>
           <.link
             :if={!item[:click]}
             id={item[:id]}
@@ -2036,6 +2047,8 @@ defmodule VutuvWeb.UI do
             target={item[:target]}
             rel={item[:rel]}
             data-confirm={item[:confirm]}
+            data-copy-link={item[:copy]}
+            data-copy-done={item[:copy] && gettext("Link copied")}
             class={["block", card_menu_item_class(item[:danger])]}
           >
             <.card_menu_item_body item={item} />
