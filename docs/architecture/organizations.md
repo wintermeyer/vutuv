@@ -652,7 +652,7 @@ that cannot be struck, is in [images.md](images.md).
 
 Beside the logo a page keeps a **press kit** (#2087): press photos and logo
 variants a journalist downloads, on a card below the open positions and on
-`/organizations/:slug/press`. Its editor is `/organizations/:slug/press/edit`,
+`/organizations/:slug/media-kit`. Its editor is `/organizations/:slug/media-kit/edit`,
 on the manage tab bar, and it is the one manage page a **publisher** reaches
 without holding an administrative role — the material a page hands the press is
 part of speaking for it (`Vutuv.PressKit.manageable_by?/2`, owners and

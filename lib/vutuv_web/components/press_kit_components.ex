@@ -96,9 +96,9 @@ defmodule VutuvWeb.PressKitComponents do
 
     ~H"""
     <.card :if={press_any?(@press) or @manage_href} id={@id}>
-      <.section_header title={gettext("Press")} />
+      <.section_header title={gettext("Media Kit")} />
       <.empty_add :if={@manage_href && not press_any?(@press)} href={@manage_href}>
-        {gettext("Add press photos")}
+        {gettext("Set up the Media Kit")}
       </.empty_add>
       <div :if={press_any?(@press)} class="space-y-4">
         <.press_photos
@@ -116,7 +116,7 @@ defmodule VutuvWeb.PressKitComponents do
       visitor needs it whatever the count. The owner's bridge to the editor is
       the "Manage" link in that page's own header. --%>
       <.card_footer_link :if={press_any?(@press)} href={@href}>
-        {gettext("All press material")} ({compact_count(press_total(@press))})
+        {gettext("All Media Kit files")} ({compact_count(press_total(@press))})
       </.card_footer_link>
     </.card>
     """
@@ -172,7 +172,7 @@ defmodule VutuvWeb.PressKitComponents do
     <.lightbox_gallery class="hover-reveal-host relative" data-press-photos>
       <.link
         href={@href}
-        aria-label={gettext("All press photos")}
+        aria-label={gettext("All Media Kit files")}
         class="grid gap-1 overflow-hidden rounded-lg"
         style={"aspect-ratio: #{@frame}; grid-template-columns: repeat(12, 1fr); grid-template-rows: repeat(6, 1fr); max-height: 44rem"}
       >

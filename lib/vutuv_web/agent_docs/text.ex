@@ -54,7 +54,7 @@ defmodule VutuvWeb.AgentDocs.Text do
         Enum.map(doc.languages, &entry_line("languages", &1))
       ),
       section(gettext("Links"), Enum.map(doc.links, &entry_line("links", &1))),
-      section(gettext("Press"), Enum.map(doc.press_kit, &press_picture_lines/1)),
+      section(gettext("Media Kit"), Enum.map(doc.press_kit, &press_picture_lines/1)),
       section(gettext("Contact"), Enum.map(doc.emails, &entry_line("emails", &1))),
       section(
         gettext("Profiles"),
@@ -254,7 +254,7 @@ defmodule VutuvWeb.AgentDocs.Text do
       |> Enum.filter(&is_binary/1),
       organization_people(doc),
       organization_open_positions(doc),
-      section(gettext("Press"), Enum.map(doc[:press_kit] || [], &press_picture_lines/1)),
+      section(gettext("Media Kit"), Enum.map(doc[:press_kit] || [], &press_picture_lines/1)),
       footer(doc)
     ]
     |> join_blocks()

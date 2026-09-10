@@ -3,13 +3,24 @@ defmodule VutuvWeb.LegacyRedirectController do
   Where every retired public URL keeps its 301, so a page that goes away leaves
   its address behind rather than a 404. Today that is the pre-2026 URL scheme
   (profiles and their sub-pages lived under /users/:slug, login under
-  /sessions/new, search under /search_queries) plus /listings/most_followed_users,
-  the retired most-followed listing.
+  /sessions/new, search under /search_queries), /listings/most_followed_users,
+  the retired most-followed listing, and the press area's four addresses, which
+  became the Media Kit's (issue #2100).
 
   Mostly GET-only: forms always re-render against the new paths, so links and
   bookmarks are what need redirects. The one POST is the pre-LiveView search
   form, which 303s into the live search so a form rendered by the previous
   release keeps working across a deploy.
+
+  Agent-format siblings ride along on their own: `VutuvWeb.Plug.AgentFormat`
+  appends the requested extension to a redirect's location, so a retired
+  `.md` address lands on the successor's `.md` rather than on its HTML.
+
+  Destinations are built as strings rather than through the function that owns
+  the path (`Vutuv.PressKit.page_path/1` and its like): those dispatch on a
+  loaded record, and a retired address must forward on the slug it was given
+  without reading a row — a renamed or deleted owner should reach the new URL
+  and get its answer there, not a 404 here.
   """
 
   use VutuvWeb, :controller
@@ -42,11 +53,22 @@ defmodule VutuvWeb.LegacyRedirectController do
   # answered "who else is here?" with a follower ranking of the top 1,000, and
   # /system/members answers it for everybody, filed A-Z and searchable by name.
   # The URL sat in the sitemap and in /llms.txt for months, so it keeps a 301
-  # rather than a 404. The extension siblings ride along: `AgentFormat` puts the
-  # requested extension back on a redirect's location, so
-  # /listings/most_followed_users.json lands on /system/members.json, which the
-  # directory serves.
+  # rather than a 404.
   def most_followed_users(conn, _params), do: permanent(conn, ~p"/system/members")
+
+  # The press area, renamed to the Media Kit (issue #2100). Only the address
+  # moved: the same controller, the same shelves and the same documents answer
+  # at `/media-kit`. `/:slug/press` was in the sitemap and in /llms.txt.
+  def media_kit(conn, %{"slug" => slug}),
+    do: permanent(conn, "/" <> encode(slug) <> "/media-kit")
+
+  def organization_media_kit(conn, %{"slug" => slug}),
+    do: permanent(conn, "/organizations/" <> encode(slug) <> "/media-kit")
+
+  def organization_media_kit_edit(conn, %{"slug" => slug}),
+    do: permanent(conn, "/organizations/" <> encode(slug) <> "/media-kit/edit")
+
+  def settings_media_kit(conn, _params), do: permanent(conn, ~p"/settings/media-kit")
 
   def search_query(conn, %{"id" => id}), do: permanent(conn, search_path(id))
 

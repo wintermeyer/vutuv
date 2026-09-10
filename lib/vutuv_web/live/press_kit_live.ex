@@ -6,10 +6,10 @@ defmodule VutuvWeb.PressKitLive do
 
   ## Two hosts, one editor
 
-  A member's own kit is at `GET /settings/press` (issue #2085), routed inside the
+  A member's own kit is at `GET /settings/media-kit` (issue #2085), routed inside the
   `:default` live_session, where `VutuvWeb.Live.InitAssigns` has already resolved
   the viewer and `:settings_pipe` has already turned an anonymous request away.
-  A **page's** kit is at `GET /organizations/:slug/press/edit` (issue #2087),
+  A **page's** kit is at `GET /organizations/:slug/media-kit/edit` (issue #2087),
   embedded by `VutuvWeb.OrganizationController` — off the router, so no
   `on_mount` hook runs at all and `mount/3` resolves the viewer itself
   (`InitAssigns.assign_embedded/2`) and re-asks the role on the socket
@@ -126,13 +126,13 @@ defmodule VutuvWeb.PressKitLive do
 
   # Everything below this line is the same editor for both owners: `:owner` is
   # whose kit it is, `:current_user` the member acting. They are the same person
-  # on `/settings/press` and deliberately named apart, because on a page's
+  # on `/settings/media-kit` and deliberately named apart, because on a page's
   # editor they are not — `PressKit.create/4` has taken them as two arguments
   # since #2083 for exactly that reason.
   defp editor(socket, owner) do
     socket =
       socket
-      |> assign(:page_title, gettext("Press photos & logos"))
+      |> assign(:page_title, gettext("Media Kit"))
       |> assign(:owner, owner)
       # Which tile's edit panel is open; nil = none, which is the whole page for
       # somebody who came here only to upload.
@@ -384,7 +384,7 @@ defmodule VutuvWeb.PressKitLive do
       )
 
   defp write_error(:forbidden, _logo?),
-    do: gettext("You cannot add a picture to this press kit.")
+    do: gettext("You cannot add a picture to this Media Kit.")
 
   defp write_error(%Ecto.Changeset{errors: errors} = changeset, _logo?) do
     if Keyword.has_key?(errors, :rights_confirmed),
@@ -983,9 +983,9 @@ defmodule VutuvWeb.PressKitLive do
   end
 
   defp remove_confirm(%Organization{}),
-    do: gettext("Remove this picture from this page's press kit?")
+    do: gettext("Remove this picture from this page's Media Kit?")
 
-  defp remove_confirm(_owner), do: gettext("Remove this picture from your press kit?")
+  defp remove_confirm(_owner), do: gettext("Remove this picture from your Media Kit?")
 
   defp shelf_max(true), do: PressKit.max_logos()
   defp shelf_max(false), do: PressKit.max_photos()

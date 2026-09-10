@@ -23824,17 +23824,6 @@ msgstr ""
 msgid "Press photos"
 msgstr ""
 
-#: lib/vutuv_web/components/ui.ex:5356
-#: lib/vutuv_web/live/press_kit_live.ex:135
-#, elixir-autogen, elixir-format
-msgid "Press photos & logos"
-msgstr ""
-
-#: lib/vutuv_web/live/press_kit_live.ex:988
-#, elixir-autogen, elixir-format
-msgid "Remove this picture from your press kit?"
-msgstr ""
-
 #: lib/vutuv_web/live/press_kit_live.ex:551
 #, elixir-autogen, elixir-format
 msgid "Show tiles on:"
@@ -23885,19 +23874,9 @@ msgstr ""
 msgid "Who took it, where, and what may be cropped."
 msgstr ""
 
-#: lib/vutuv_web/live/press_kit_live.ex:387
-#, elixir-autogen, elixir-format
-msgid "You cannot add a picture to this press kit."
-msgstr ""
-
 #: lib/vutuv_web/live/press_kit_live.ex:972
 #, elixir-autogen, elixir-format
 msgid "Your logo as a file, one tile per variant. A vector (SVG) is what a printer asks for; a PNG is what everybody else can open."
-msgstr ""
-
-#: lib/vutuv_web/components/ui.ex:5359
-#, elixir-autogen, elixir-format
-msgid "press kit media journalist photographer download original print logo svg credit copyright presse pressemappe fotos logo herunterladen bildnachweis"
 msgstr ""
 
 #: lib/vutuv_web/templates/url/verify.html.heex:43
@@ -23911,21 +23890,6 @@ msgid "%{count} byte"
 msgid_plural "%{count} bytes"
 msgstr[0] ""
 msgstr[1] ""
-
-#: lib/vutuv_web/components/press_kit_components.ex:101
-#, elixir-autogen, elixir-format
-msgid "Add press photos"
-msgstr ""
-
-#: lib/vutuv_web/components/press_kit_components.ex:119
-#, elixir-autogen, elixir-format
-msgid "All press material"
-msgstr ""
-
-#: lib/vutuv_web/components/press_kit_components.ex:175
-#, elixir-autogen, elixir-format
-msgid "All press photos"
-msgstr ""
 
 #: lib/vutuv_web/agent_docs/markdown.ex:1547
 #: lib/vutuv_web/agent_docs/text.ex:987
@@ -23944,7 +23908,7 @@ msgstr ""
 msgid "Download photo"
 msgstr ""
 
-#: lib/vutuv/press_kit.ex:523
+#: lib/vutuv/press_kit.ex:528
 #, elixir-autogen, elixir-format
 msgid "Free for editorial use with credit."
 msgstr ""
@@ -23952,25 +23916,6 @@ msgstr ""
 #: lib/vutuv_web/agent_docs/markdown.ex:1550
 #, elixir-autogen, elixir-format
 msgid "PNG version"
-msgstr ""
-
-#: lib/vutuv_web/agent_docs/markdown.ex:62
-#: lib/vutuv_web/agent_docs/markdown.ex:290
-#: lib/vutuv_web/agent_docs/text.ex:57
-#: lib/vutuv_web/agent_docs/text.ex:257
-#: lib/vutuv_web/components/organization_components.ex:262
-#: lib/vutuv_web/components/press_kit_components.ex:99
-#: lib/vutuv_web/live/organization_live/show.ex:168
-#: lib/vutuv_web/views/press_kit_html.ex:28
-#: lib/vutuv_web/views/press_kit_html.ex:46
-#, elixir-autogen, elixir-format
-msgid "Press"
-msgstr ""
-
-#: lib/vutuv_web/agent_docs/press_kit_doc.ex:48
-#: lib/vutuv_web/views/press_kit_html.ex:32
-#, elixir-autogen, elixir-format
-msgid "Press photos and logos of %{name}"
 msgstr ""
 
 #: lib/vutuv_web/agent_docs/markdown.ex:1546
@@ -23997,11 +23942,6 @@ msgstr ""
 #: lib/vutuv_web/live/press_kit_live.ex:908
 #, elixir-autogen, elixir-format
 msgid "Copies the vector file this page's logo was uploaded as onto this shelf."
-msgstr ""
-
-#: lib/vutuv_web/live/press_kit_live.ex:986
-#, elixir-autogen, elixir-format
-msgid "Remove this picture from this page's press kit?"
 msgstr ""
 
 #: lib/vutuv_web/live/press_kit_live.ex:966
@@ -24118,4 +24058,56 @@ msgstr ""
 #: lib/vutuv_web/live/admin/media_live.ex:195
 #, elixir-autogen, elixir-format
 msgid "nobody"
+msgstr ""
+
+#: lib/vutuv_web/components/press_kit_components.ex:119
+#: lib/vutuv_web/components/press_kit_components.ex:175
+#, elixir-autogen, elixir-format
+msgid "All Media Kit files"
+msgstr ""
+
+#: lib/vutuv_web/agent_docs/markdown.ex:62
+#: lib/vutuv_web/agent_docs/markdown.ex:290
+#: lib/vutuv_web/agent_docs/text.ex:57
+#: lib/vutuv_web/agent_docs/text.ex:257
+#: lib/vutuv_web/components/organization_components.ex:262
+#: lib/vutuv_web/components/press_kit_components.ex:99
+#: lib/vutuv_web/components/ui.ex:5356
+#: lib/vutuv_web/live/organization_live/show.ex:168
+#: lib/vutuv_web/live/press_kit_live.ex:135
+#: lib/vutuv_web/views/press_kit_html.ex:28
+#: lib/vutuv_web/views/press_kit_html.ex:46
+#, elixir-autogen, elixir-format
+msgid "Media Kit"
+msgstr ""
+
+#: lib/vutuv_web/agent_docs/press_kit_doc.ex:48
+#: lib/vutuv_web/views/press_kit_html.ex:32
+#, elixir-autogen, elixir-format
+msgid "Media Kit of %{name}"
+msgstr ""
+
+#: lib/vutuv_web/live/press_kit_live.ex:986
+#, elixir-autogen, elixir-format
+msgid "Remove this picture from this page's Media Kit?"
+msgstr ""
+
+#: lib/vutuv_web/live/press_kit_live.ex:988
+#, elixir-autogen, elixir-format
+msgid "Remove this picture from your Media Kit?"
+msgstr ""
+
+#: lib/vutuv_web/components/press_kit_components.ex:101
+#, elixir-autogen, elixir-format
+msgid "Set up the Media Kit"
+msgstr ""
+
+#: lib/vutuv_web/live/press_kit_live.ex:387
+#, elixir-autogen, elixir-format
+msgid "You cannot add a picture to this Media Kit."
+msgstr ""
+
+#: lib/vutuv_web/components/ui.ex:5359
+#, elixir-autogen, elixir-format
+msgid "press kit media journalist photographer download original print logo svg credit copyright presse pressefotos pressemappe medienkit mediakit fotos logo herunterladen bildnachweis"
 msgstr ""

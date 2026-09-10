@@ -147,7 +147,7 @@ defmodule Vutuv.Moderation.ContentUrl do
   # A page, by its own address or by any deeper path under it — its press
   # section, its jobs, its followers all still name the page, which is the
   # reportable thing there. The twin of the `[handle | _rest]` clause below, and
-  # what makes a pasted `/organizations/acme/press` a notice about the page
+  # what makes a pasted `/organizations/acme/media-kit` a notice about the page
   # rather than the "correct address, nobody's content" a site page gets
   # (issue #2089). The post permalink above is the exception, and it is above
   # for that reason.

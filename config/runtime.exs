@@ -635,20 +635,24 @@ if config_env() == :prod do
     config :vutuv, :jobs, Keyword.merge(Application.get_env(:vutuv, :jobs, []), jobs_env)
   end
 
-  # The press kit (Vutuv.PressKit, issue #2083). The file budget is in megabytes
-  # rather than bytes because that is the unit an operator sizes an upload
-  # against — their disk and, if they route uploads over HTTP at all, nginx's
-  # client_max_body_size. Defaults (config.exs) are the vutuv.de values, so our
-  # production needs no entries here.
+  # The Media Kit (Vutuv.PressKit, issues #2083 and #2100). The file budget is in
+  # megabytes rather than bytes because that is the unit an operator sizes an
+  # upload against — their disk and, if they route uploads over HTTP at all,
+  # nginx's client_max_body_size. Defaults (config.exs) are the vutuv.de values,
+  # so our production needs no entries here.
+  #
+  # These read MEDIA_KIT_* and not the PRESS_KIT_* names #2083 shipped, with no
+  # fallback: the feature had been live for hours when #2100 renamed it and no
+  # installation had ever set one.
   press_kit_env =
     [
       max_filesize:
-        case System.get_env("PRESS_KIT_MAX_MB") do
+        case System.get_env("MEDIA_KIT_MAX_MB") do
           nil -> nil
           megabytes -> String.to_integer(megabytes) * 1_000_000
         end,
-      max_photos: System.get_env("PRESS_KIT_MAX_PHOTOS"),
-      max_logos: System.get_env("PRESS_KIT_MAX_LOGOS")
+      max_photos: System.get_env("MEDIA_KIT_MAX_PHOTOS"),
+      max_logos: System.get_env("MEDIA_KIT_MAX_LOGOS")
     ]
     |> Enum.reject(fn {_key, value} -> is_nil(value) end)
     |> Enum.map(fn

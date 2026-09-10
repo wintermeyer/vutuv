@@ -380,10 +380,10 @@ defmodule Vutuv.PressKitTest do
     test "one function owns the page's address", %{owner: owner} do
       organization = active_organization_for(owner)
 
-      assert PressKit.page_path(owner) == "/#{owner.username}/press"
+      assert PressKit.page_path(owner) == "/#{owner.username}/media-kit"
 
       assert PressKit.page_path(organization) ==
-               Vutuv.Organizations.canonical_path(organization) <> "/press"
+               Vutuv.Organizations.canonical_path(organization) <> "/media-kit"
     end
 
     test "the crawlable scope is the released, unfrozen rows", %{owner: owner, tmp: tmp} do

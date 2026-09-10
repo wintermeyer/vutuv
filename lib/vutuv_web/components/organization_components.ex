@@ -259,7 +259,7 @@ defmodule VutuvWeb.OrganizationComponents do
         and it is the one manage page a publisher reaches without holding an
         administrative role. --%>
         <.manage_tab :if={PressKit.manageable_by_powers?(@powers)} active={@active == :press} navigate={PressKit.editor_path(@organization)}>
-          {gettext("Press")}
+          {gettext("Media Kit")}
         </.manage_tab>
         <%!-- What happened to the page (issue #1336). Open to the whole team,
         not only its publishers: this is news ABOUT the page rather than

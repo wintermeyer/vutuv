@@ -1,6 +1,6 @@
 defmodule VutuvWeb.AgentDocs.PressKitDoc do
   @moduledoc """
-  A member's or a page's press kit (`/:slug/press`) as a data map for the agent
+  A member's or a page's Media Kit (`/:slug/media-kit`) as a data map for the agent
   formats — the page's `.md`, `.txt`, `.json` and `.xml` siblings (issue #2086,
   which #2088 folded into).
 
@@ -45,7 +45,7 @@ defmodule VutuvWeb.AgentDocs.PressKitDoc do
       noai: noai?
     )
     |> Map.merge(%{
-      title: gettext("Press photos and logos of %{name}", name: name),
+      title: gettext("Media Kit of %{name}", name: name),
       description:
         gettext("Press pictures %{name} offers for download, free for editorial use with credit.",
           name: name

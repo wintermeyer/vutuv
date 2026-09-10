@@ -798,16 +798,17 @@ defmodule VutuvWeb.Router do
     # /:slug agent-format catch-all.
     get("/organizations/:slug/roles", OrganizationController, :roles)
     get("/organizations/:slug/domains", OrganizationController, :domains)
-    # The page's press section (issue #2087), the twin of a member's
-    # `/:slug/press`: the public page that hands the files over, and the editor
-    # its owners and publishers reach from the manage menu. Under the page's
-    # **slug** rather than its root handle, like every other sub-page of a page
-    # — the handle dispatches the bare `/:slug` only (`Vutuv.PressKit.page_path/1`
-    # says so once, for every caller that holds an owner rather than a route).
-    # The public one is a `PressKitController` action so the press page has one
-    # home for both owner kinds, agent-format siblings included.
-    get("/organizations/:slug/press", PressKitController, :organization)
-    get("/organizations/:slug/press/edit", OrganizationController, :press)
+    # The page's Media Kit (issue #2087), the twin of a member's
+    # `/:slug/media-kit`: the public page that hands the files over, and the
+    # editor its owners and publishers reach from the manage menu. Under the
+    # page's **slug** rather than its root handle, like every other sub-page of
+    # a page — the handle dispatches the bare `/:slug` only
+    # (`Vutuv.PressKit.page_path/1` says so once, for every caller that holds an
+    # owner rather than a route). The public one is a `PressKitController`
+    # action so the page has one home for both owner kinds, agent-format
+    # siblings included.
+    get("/organizations/:slug/media-kit", PressKitController, :organization)
+    get("/organizations/:slug/media-kit/edit", OrganizationController, :press)
     # The role-holder standing job-exclusion default (issue #939), live_render
     # like roles/domains. Inherited by every posting attributed to the organization.
     get("/organizations/:slug/exclusions", OrganizationController, :exclusions)
@@ -1118,6 +1119,16 @@ defmodule VutuvWeb.Router do
     get("/api/1.0/users/:slug/vcard", LegacyRedirectController, :api_vcard)
     # The most-followed listing, retired in favour of /system/members.
     get("/listings/most_followed_users", LegacyRedirectController, :most_followed_users)
+
+    # The press area, renamed to the Media Kit (issue #2100). Every old address
+    # keeps its 301, agent-format siblings included. The member one is NOT
+    # here: a bare `/:slug/press` in this scope would sit ahead of every later
+    # `/<literal>/:param` route, so `/jobs/press` would 301 instead of opening
+    # a posting whose slug is "press". It lives beside its successor at the
+    # foot of the router, the position the retired route itself held.
+    get("/settings/press", LegacyRedirectController, :settings_media_kit)
+    get("/organizations/:slug/press", LegacyRedirectController, :organization_media_kit)
+    get("/organizations/:slug/press/edit", LegacyRedirectController, :organization_media_kit_edit)
   end
 
   # Incremental LiveView surface. `InitAssigns` assigns `:current_user` from the
@@ -1244,11 +1255,11 @@ defmodule VutuvWeb.Router do
       # page and follow from — none of which should cost a reload.
       live("/import/linkedin/connections", ImportConnectionsLive, :index)
 
-      # The member's press kit (issue #2085): the photos and logo variants a
+      # The member's Media Kit (issue #2085): the photos and logo variants a
       # journalist may download. A LiveView because the files travel over the
       # socket and the order is the page's other job — the first photo is the
       # hero, and a reload per move is absurd.
-      live("/press", PressKitLive, :index)
+      live("/media-kit", PressKitLive, :index)
     end
   end
 
@@ -2103,13 +2114,19 @@ defmodule VutuvWeb.Router do
     get("/:slug/posts/:year/:month", PostController, :index)
     get("/:slug/posts/:year/:month/:day", PostController, :index)
 
-    # The press kit (issue #2086) — outside the `resources` block above on
+    # The Media Kit (issue #2086) — outside the `resources` block above on
     # purpose, so it does NOT take `:user_pipe`'s `NoIndex`. Every other
     # per-member sub-page is kept out of search results because it shows
-    # personal data; a press kit exists to be found, carries the member's own
+    # personal data; a media kit exists to be found, carries the member's own
     # opt-outs instead, and is in the sitemap. The controller declares the other
     # three plugs of that pipeline itself, exactly as `UserController` does for
     # the profile — the other crawlable page under a member's slug.
-    get("/:slug/press", PressKitController, :index)
+    get("/:slug/media-kit", PressKitController, :index)
+
+    # Its retired address (issue #2100), beside the page that replaced it
+    # rather than up in the retired-URLs scope: two literal segments matter
+    # here, and a `/:slug/press` defined earlier would answer `/jobs/press`
+    # and `/messages/press` before their own routes could.
+    get("/:slug/press", LegacyRedirectController, :media_kit)
   end
 end

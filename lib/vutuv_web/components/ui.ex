@@ -5353,11 +5353,11 @@ defmodule VutuvWeb.UI do
          # rows are pictures of you, and somebody looking for "the other
          # photos" reads this group first. It is the ninth row here, one past
          # the eight a group is meant to hold — see `settings_hub_test.exs`.
-         row(:press, gettext("Press photos & logos"), ~p"/settings/press",
+         row(:press, gettext("Media Kit"), ~p"/settings/media-kit",
            hint: gettext("Files a journalist may download and print"),
            terms:
              gettext(
-               "press kit media journalist photographer download original print logo svg credit copyright presse pressemappe fotos logo herunterladen bildnachweis"
+               "press kit media journalist photographer download original print logo svg credit copyright presse pressefotos pressemappe medienkit mediakit fotos logo herunterladen bildnachweis"
              )
          ),
          row(:work, gettext("Experience"), ~p"/settings/work_experiences",

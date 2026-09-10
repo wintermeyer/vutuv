@@ -1,7 +1,7 @@
 defmodule VutuvWeb.OrganizationPressKitTest do
   @moduledoc """
   A page's press section (issue #2087): the card on the organization page and
-  the section page at `/organizations/:slug/press` that hands the files over —
+  the section page at `/organizations/:slug/media-kit` that hands the files over —
   the twin of the member surfaces #2086 built, drawn by the same components off
   the same two shelves.
 
@@ -39,7 +39,7 @@ defmodule VutuvWeb.OrganizationPressKitTest do
 
   defp de(conn), do: put_req_header(conn, "accept-language", "de-DE,de;q=0.9")
 
-  defp press_path(organization), do: "/organizations/#{organization.slug}/press"
+  defp press_path(organization), do: "/organizations/#{organization.slug}/media-kit"
 
   # A team member holding `role` on the page, and a conn signed in as them.
   defp team_member(conn, organization, role) do
@@ -82,7 +82,7 @@ defmodule VutuvWeb.OrganizationPressKitTest do
 
       assert html =~ "organization-press"
       assert html =~ "data-empty-add"
-      assert html =~ "/organizations/#{organization.slug}/press/edit"
+      assert html =~ "/organizations/#{organization.slug}/media-kit/edit"
     end
   end
 
@@ -100,7 +100,7 @@ defmodule VutuvWeb.OrganizationPressKitTest do
 
       html = conn |> get(press_path(organization)) |> html_response(200)
 
-      assert html =~ "Press photos and logos of Acme GmbH"
+      assert html =~ "Media Kit of Acme GmbH"
       assert html =~ "Vor dem Werk in Bremen"
       assert html =~ "Foto: Rea Fotografin"
       assert html =~ "3000 × 2000 · 2.4 MB"
@@ -142,7 +142,7 @@ defmodule VutuvWeb.OrganizationPressKitTest do
       {owner_conn, _owner} = team_member(conn, organization, "owner")
 
       assert owner_conn |> get(press_path(organization)) |> html_response(200) =~
-               "/organizations/#{organization.slug}/press/edit"
+               "/organizations/#{organization.slug}/media-kit/edit"
 
       refute conn |> get(press_path(organization)) |> html_response(200) =~ "press/edit"
     end
@@ -294,7 +294,7 @@ defmodule VutuvWeb.OrganizationPressKitTest do
 
     test "it is listed in /llms.txt", %{conn: conn} do
       assert conn |> get(~p"/llms.txt") |> Map.fetch!(:resp_body) =~
-               "/organizations/<slug>/press"
+               "/organizations/<slug>/media-kit"
     end
   end
 
@@ -309,14 +309,14 @@ defmodule VutuvWeb.OrganizationPressKitTest do
       card = conn |> de() |> get(~p"/organizations/#{organization.slug}") |> html_response(200)
       page = conn |> de() |> get(press_path(organization)) |> html_response(200)
 
-      assert card =~ "Presse"
+      assert card =~ "Media Kit"
       assert card =~ "Zur freien redaktionellen Verwendung mit Bildnachweis."
       assert page =~ "Pressefotos"
       assert page =~ "Logo-Varianten"
       assert page =~ "Foto herunterladen"
       assert page =~ "SVG herunterladen"
       # The heading names the page, not a bare category.
-      assert page =~ "Pressefotos und Logos von Acme GmbH"
+      assert page =~ "Media Kit von Acme GmbH"
     end
   end
 end

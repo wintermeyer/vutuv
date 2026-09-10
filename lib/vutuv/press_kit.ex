@@ -3,6 +3,11 @@ defmodule Vutuv.PressKit do
   The press photos and logo variants a member or a page offers for download
   (issue #2083, the foundation of #2082).
 
+  **The surface is the Media Kit, the stored thing is still `press_kit`**
+  (issue #2100): this module keeps the name of the column it owns, while every
+  address and label a person reads says Media Kit. Which halves moved and why
+  the stored ones may not is in `docs/architecture/images.md`.
+
   A press picture is a row on the shared `images` table with `kind` `"press_kit"`
   — **born** there, unlike every kind before it: #2015's four arrived as a
   mirror of a table of their own and the review cover as columns on a parent
@@ -482,8 +487,8 @@ defmodule Vutuv.PressKit do
   defp address(%Image{token: token}, file), do: "/system/press_kit/#{token}/#{file}"
 
   @doc """
-  Where this owner's press kit is published: `/ada.king/press` for a member,
-  `/organizations/acme/press` for a page.
+  Where this owner's Media Kit is published: `/ada.king/media-kit` for a
+  member, `/organizations/acme/media-kit` for a page.
 
   For everything holding an owner rather than a route: the doc's canonical URL,
   the schema.org block, the card's footer link and the sitemap entry.
@@ -497,11 +502,11 @@ defmodule Vutuv.PressKit do
   `Identity.path/1 <> "/press"` here, which answered `/acme/press` for such a
   page and 404ed.
   """
-  def page_path(%Organization{slug: slug}), do: "/organizations/#{slug}/press"
-  def page_path(owner), do: Identity.path(owner) <> "/press"
+  def page_path(%Organization{slug: slug}), do: "/organizations/#{slug}/media-kit"
+  def page_path(owner), do: Identity.path(owner) <> "/media-kit"
 
   @doc """
-  Where this kit is **edited**: `/settings/press` for a member (#2085), the
+  Where this kit is **edited**: `/settings/media-kit` for a member (#2085), the
   page's own editor for a page (#2087).
 
   The second path this kind owns, and it needs one owner for the same reason the
@@ -509,8 +514,8 @@ defmodule Vutuv.PressKit do
   card's add tile, the page's manage menu and the editor's own trail), and a
   member's editor carries no slug at all while a page's does.
   """
-  def editor_path(%Organization{slug: slug}), do: "/organizations/#{slug}/press/edit"
-  def editor_path(%User{}), do: "/settings/press"
+  def editor_path(%Organization{slug: slug}), do: "/organizations/#{slug}/media-kit/edit"
+  def editor_path(%User{}), do: "/settings/media-kit"
 
   @doc """
   The one sentence under which every press picture is offered.

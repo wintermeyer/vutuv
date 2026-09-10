@@ -59,7 +59,7 @@ defmodule VutuvWeb.AgentDocs.Markdown do
         Enum.map(doc.languages, &entry_line("languages", &1))
       ),
       section(gettext("Links"), Enum.map(doc.links, &entry_line("links", &1))),
-      section(gettext("Press"), Enum.map(doc.press_kit, &press_picture_line/1)),
+      section(gettext("Media Kit"), Enum.map(doc.press_kit, &press_picture_line/1)),
       section(gettext("Contact"), Enum.map(doc.emails, &entry_line("emails", &1))),
       section(
         gettext("Profiles"),
@@ -287,7 +287,7 @@ defmodule VutuvWeb.AgentDocs.Markdown do
       # The page's press kit (#2087), written by the same line builder the
       # profile document uses, so a press picture reads the same whoever offers
       # it.
-      section(gettext("Press"), Enum.map(doc[:press_kit] || [], &press_picture_line/1))
+      section(gettext("Media Kit"), Enum.map(doc[:press_kit] || [], &press_picture_line/1))
     ]
     |> join_blocks()
   end
