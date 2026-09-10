@@ -225,6 +225,43 @@ defmodule VutuvWeb.RemotePostImagesTest do
     # day's cached posts) have nothing to reserve a shape with, so the card
     # would draw a 16:9 black box for a portrait phone clip. The attachment
     # states the clip's own shape even when it sends no cover.
+    # The common case, and the one that drew a black box: no `icon` in the
+    # attachment, so nothing was ever fetched and there is no cover to show.
+    # The BlurHash the same attachment carries stands in — the publishing
+    # server's own blurred version, which shows the clip's colours and nothing
+    # identifiable.
+    test "a clip with no cover wears its BlurHash as the poster" do
+      coverless =
+        released_clip(
+          poster_uri: nil,
+          file: nil,
+          blurhash: "UKFrYAoN0hM{IVbIShRj9Gog%M%2-gj]N1%2"
+        )
+
+      html = render_tile([coverless])
+
+      assert html =~ "data-remote-video"
+      assert html =~ ~s(poster="data:image/png;base64,)
+    end
+
+    # A poster is not a verdict. A coverless clip passes no gate at all, so
+    # nothing here may read as "we looked at this".
+    test "a clip with neither cover nor BlurHash gets no poster, not a broken one" do
+      bare = released_clip(poster_uri: nil, file: nil, blurhash: nil)
+      html = render_tile([bare])
+
+      assert html =~ "data-remote-video"
+      refute html =~ "poster="
+    end
+
+    test "a released cover beats the BlurHash" do
+      # Both available: the real thing was fetched and judged, so it wins.
+      html = render_tile([released_clip(blurhash: "UKFrYAoN0hM{IVbIShRj9Gog%M%2-gj]N1%2")])
+
+      assert html =~ "data-remote-video"
+      refute html =~ "data:image/png;base64,"
+    end
+
     test "the player reserves the clip's own shape, not the cover's" do
       # No cover named at all — nothing to fetch and nothing to judge, so it
       # plays as it is (`RemoteImage.display_state/1`). This is the common case.

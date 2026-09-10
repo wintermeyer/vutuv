@@ -170,6 +170,39 @@ defmodule Vutuv.FediverseMediaTest do
       assert clip.width == nil
     end
 
+    # The three quarters of clips that name no cover have nothing else to draw
+    # (27 of 36 in one day's cached posts), so this is what keeps them from
+    # rendering as a black box.
+    test "a clip keeps the BlurHash its attachment carries" do
+      post = cached_post(account())
+      hash = "UKFrYAoN0hM{IVbIShRj9Gog%M%2-gj]N1%2"
+
+      attachment =
+        "https://social.example/media/clip.mp4"
+        |> attachment("video/mp4")
+        |> Map.put("blurhash", hash)
+
+      assert [clip] = Media.record_attachments(post, [attachment], false)
+      assert clip.blurhash == hash
+    end
+
+    # A hash that does not decode is worse than none: the card would carry a
+    # string it cannot draw. The structural check is a real decode, so a
+    # truncated hash — well-formed base83 to the last character — is caught.
+    test "a BlurHash that does not decode is not kept" do
+      post = cached_post(account())
+
+      for bad <- ["UKFrYA", "nope", String.duplicate("A", 200)] do
+        attachment =
+          "https://social.example/media/clip-#{bad}.mp4"
+          |> attachment("video/mp4")
+          |> Map.put("blurhash", bad)
+
+        assert [clip] = Media.record_attachments(post, [attachment], false)
+        assert clip.blurhash == nil, "kept #{inspect(bad)}"
+      end
+    end
+
     test "a picture takes no length, whatever the attachment claims" do
       post = cached_post(account())
       attachment = Map.put(attachment(), "duration", "PT30S")

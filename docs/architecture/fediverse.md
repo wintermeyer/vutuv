@@ -1901,8 +1901,44 @@ privacy policy says so under Fediverse. **And three quarters of clips arrive
 with no cover at all** — 27 of 36 in one day's cached posts, `icon` being
 optional and most instances omitting it — which `display_state/1` answers with
 `:ready`: nothing to fetch, nothing to judge, playable as it is. Those are the
-ones that pass no gate. Every attachment measured does carry a `blurhash`, which
-is the obvious next cover for them.
+ones that pass no gate.
+
+**What those coverless clips draw is the attachment's own `blurhash`**
+(`Vutuv.Blurhash`), because the alternative was a black box. Every attachment
+measured carries one — pictures and clips alike, cover or no cover — and it is
+~30 characters of base83 holding at most 9×9 cosine coefficients, in practice
+4×3, so what comes back out is the clip's colour arrangement and nothing an eye
+could identify. It is stored as the string and decoded per render into a 16×16
+PNG carried as a `data:` URI.
+
+Three decisions in that sentence, each measured. **A data URI rather than a
+stored file**, which is the opposite of what `Vutuv.Moderation.Pixelation` does
+for a picture we hold: serving a stored remote picture goes through
+`VutuvWeb.RemoteMediaController`, which re-checks the gate's verdict per
+request, and a coverless clip has no verdict to check — it would need a second,
+unauthorised route to a file tree with its own deletion path. `img-src data:`
+is already in the policy. **16×16**, because 4×3 components clears Nyquist at
+eight samples across and the sizes measure 1,348 bytes of base64 against 3,992
+at 32×32, for a picture the browser scales up and blurs anyway; the string rides
+every patch of a card that carries it, so a test bounds it. And **decoded per
+render** at ~25k reductions, which is nothing beside those bytes and only ever
+runs for a coverless clip; if a page ever holds enough of them to matter, the
+fix is a column holding the string, not a cache.
+
+**A poster is not a verdict.** The blurred stand-in says what colours are in
+the frame, not that anybody looked at it, and the clip behind it still streams
+unjudged. Whether that is acceptable is a product question about coverless
+clips, not something the poster settles.
+
+The decoder is **calibrated against something measurable**, which is the part
+worth copying: a decoder that skips the sRGB transfer function renders an
+entirely plausible picture that is uniformly too dark, and no self-consistent
+test catches it. So `blurhash_test.exs` checks the average colour it reads out
+of a real hash against the average colour of the real cover that hash was
+computed from, measured independently in linear light — 127/116/104 against the
+decoder's 137/125/115, where the *sRGB* average is 109/104/90. Agreeing with
+the linear figure and not the sRGB one is the whole assertion; removing the
+transfer function once turns that test red, which is how it was calibrated.
 
 **A remote account's avatar is deliberately left out**, though it is the other
 ownerless kind and just as silent: an unreleased avatar renders as the account's

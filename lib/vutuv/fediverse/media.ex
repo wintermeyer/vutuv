@@ -27,6 +27,7 @@ defmodule Vutuv.Fediverse.Media do
 
   import Ecto.Query, only: [from: 2]
 
+  alias Vutuv.Blurhash
   alias Vutuv.Fediverse
   alias Vutuv.Fediverse.RemoteImage
   alias Vutuv.Moderation.ImageScans
@@ -99,6 +100,7 @@ defmodule Vutuv.Fediverse.Media do
       %{
         media_type: String.downcase(attachment["mediaType"]),
         poster_uri: poster_uri(attachment),
+        blurhash: blurhash(attachment["blurhash"]),
         duration_ms: duration_ms(attachment["duration"]),
         video_width: dimension(attachment["width"]),
         video_height: dimension(attachment["height"])
@@ -107,6 +109,23 @@ defmodule Vutuv.Fediverse.Media do
       %{}
     end
   end
+
+  # Kept only when it really decodes, so a card never carries a string it
+  # cannot draw. `Vutuv.Blurhash` is the one judge of that — the format is
+  # positional and a truncated hash is well-formed base83 right up to the point
+  # where the length no longer matches the size flag.
+  defp blurhash(value) when is_binary(value) do
+    # A one-pixel decode, which is the whole structural check — alphabet,
+    # length against the size flag — for the price of one basis term. Never
+    # `average_color/1` here: that one reads the DC term alone and would pass a
+    # hash whose body is truncated.
+    case Blurhash.decode(value, 1, 1) do
+      {:ok, _pixel} -> value
+      :error -> nil
+    end
+  end
+
+  defp blurhash(_value), do: nil
 
   # A clip's own pixel dimensions, as the attachment states them. Only ever
   # used to reserve the right shape on the card before anything loads, so an

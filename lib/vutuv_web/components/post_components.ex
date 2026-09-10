@@ -30,6 +30,7 @@ defmodule VutuvWeb.PostComponents do
 
   alias Phoenix.LiveView.JS
   alias Vutuv.Accounts.User
+  alias Vutuv.Blurhash
   alias Vutuv.ContentFilters.ContentFilter
   alias Vutuv.Fediverse
   alias Vutuv.Fediverse.Handle
@@ -2942,11 +2943,9 @@ defmodule VutuvWeb.PostComponents do
   attr(:picture, :map, required: true)
 
   defp remote_video(assigns) do
-    poster = if RemoteImage.released?(assigns.image), do: assigns.picture
-
     assigns =
       assigns
-      |> assign(:poster, poster && (poster.lite || poster.src))
+      |> assign(:poster, clip_poster(assigns.image, assigns.picture))
       |> assign(:aspect, clip_aspect(assigns.image))
 
     ~H"""
@@ -3079,6 +3078,39 @@ defmodule VutuvWeb.PostComponents do
 
   defp join_facts([]), do: nil
   defp join_facts(facts), do: Enum.join(facts, " · ")
+
+  # What stands on the player before the first frame, in the order the answers
+  # are worth having.
+  #
+  # A **released cover** is the real thing: fetched, judged by the AI gate and
+  # served from here, so it tells the reader what the clip is.
+  #
+  # Failing that, the **BlurHash** the attachment carries (`Vutuv.Blurhash`),
+  # which is the common case — three quarters of clips name no cover at all
+  # (27 of 36 in one day's cached posts), and those drew as a black box. It is
+  # the publishing server's own blurred stand-in, so it shows the clip's
+  # colours and nothing an eye could identify. It is deliberately **not** a
+  # claim that anybody looked at the clip: a coverless clip passes no gate, and
+  # the poster says what is in the frame, not that it was judged.
+  #
+  # A cover that is merely *waiting* gets no poster here at all — the card
+  # never reaches this function in that state (`display_state/1` answers
+  # `:waiting` and draws the pixelated tile instead).
+  defp clip_poster(%RemoteImage{} = image, picture) do
+    if RemoteImage.released?(image) and picture do
+      picture.lite || picture.src
+    else
+      Blurhash.data_uri(image.blurhash, clip_shape(image))
+    end
+  end
+
+  # The clip's own shape for the poster, so the stand-in is not letterboxed
+  # inside it; `nil` where the attachment named none and a square will do.
+  defp clip_shape(%RemoteImage{video_width: w, video_height: h})
+       when is_integer(w) and is_integer(h) and w > 0 and h > 0,
+       do: {w, h}
+
+  defp clip_shape(%RemoteImage{}), do: nil
 
   # The clip's own shape, never the cover's: `width`/`height` on the row are the
   # Mastodon thumbnail's (360×640 where the clip is 1080×1920), so they are the

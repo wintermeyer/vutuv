@@ -64,11 +64,17 @@ defmodule Vutuv.Fediverse.RemoteImage do
     field(:poster_uri, :string)
 
     # What the reader is told before they tap a clip that streams from another
-    # server (issue #1914). The first three come out of the attachment, which
-    # carries them even where it sends no cover; `byte_size` comes from a HEAD
-    # and stays nil when that answer never arrives. `video_width`/`_height` are
-    # the clip's own — `width`/`height` above are the cover's, a Mastodon
-    # thumbnail a fraction of the size.
+    # server (issue #1914). All of these but `byte_size` come out of the
+    # attachment, which carries them even where it sends no cover; the size
+    # comes from a HEAD and stays nil when that answer never arrives.
+    #
+    # `blurhash` is the publishing server's own blurred stand-in, ~30
+    # characters of base83, and it is what a **coverless** clip's poster is
+    # built from (`Vutuv.Blurhash`) — three quarters of them arrive that way
+    # and had nothing to draw at all. `video_width`/`_height` are the clip's
+    # own; `width`/`height` above are the cover's, a Mastodon thumbnail a
+    # fraction of the size.
+    field(:blurhash, :string)
     field(:duration_ms, :integer)
     field(:byte_size, :integer)
     field(:video_width, :integer)
@@ -200,6 +206,7 @@ defmodule Vutuv.Fediverse.RemoteImage do
       :fetch_attempted_at,
       :media_type,
       :poster_uri,
+      :blurhash,
       :duration_ms,
       :byte_size,
       :video_width,
@@ -212,6 +219,9 @@ defmodule Vutuv.Fediverse.RemoteImage do
     |> validate_length(:source_uri, max: @max_uri_bytes, count: :bytes)
     |> validate_length(:poster_uri, max: @max_uri_bytes, count: :bytes)
     |> validate_length(:media_type, max: 255)
+    # `Vutuv.Blurhash` refuses anything past the format's own 166-character
+    # ceiling, so this only has to keep the column's varchar(255) safe.
+    |> validate_length(:blurhash, max: 255)
     |> validate_length(:alt, max: @max_alt)
     |> unique_constraint([:remote_post_id, :source_uri])
   end
