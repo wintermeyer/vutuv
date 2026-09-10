@@ -122,6 +122,31 @@ defmodule VutuvWeb.ImageProxy do
     |> send_file(200, path)
   end
 
+  @doc """
+  Hands a **private** file over: same shape as `hand_over/3`, but with
+  `cache-control: private, no-store` and the stored content type rather than
+  the immutable header and a type read off the path.
+
+  The two differences are one decision — these are files whose URL does not
+  answer the same way for ever. A reported file leaves the readable trees the
+  moment a copyright case freezes it (`VutuvWeb.ModerationCaseController`), and
+  a file in a message stops being readable when the two members stop being
+  connected (`VutuvWeb.AttachmentController`, issue #2110); a copy sitting in a
+  shared browser's cache would outlive either. The name goes through
+  `ControllerHelpers.disposition_filename/1`, the RFC 5987 pair, so a file
+  called `Papier Müller.pdf` downloads under its own name.
+  """
+  def hand_over_private(conn, path, filename, content_type) do
+    conn
+    |> put_resp_header("cache-control", "private, no-store")
+    |> put_resp_header(
+      "content-disposition",
+      "attachment; " <> VutuvWeb.ControllerHelpers.disposition_filename(filename)
+    )
+    |> put_resp_content_type(content_type, nil)
+    |> send_file(200, path)
+  end
+
   @doc "The uniform 404 — denied and unknown tokens are indistinguishable by design."
   def not_found(conn), do: VutuvWeb.ControllerHelpers.render_error(conn, 404)
 end

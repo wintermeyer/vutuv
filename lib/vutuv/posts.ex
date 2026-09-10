@@ -58,6 +58,7 @@ defmodule Vutuv.Posts do
 
   alias Ecto.Association.NotLoaded
   alias Vutuv.Accounts.User
+  alias Vutuv.Attachments
   alias Vutuv.Attachments.Attachment
   alias Vutuv.Fediverse.Note
   alias Vutuv.Fediverse.PostRepost, as: FediversePostRepost
@@ -1029,21 +1030,13 @@ defmodule Vutuv.Posts do
     uploader_id = post.user_id || post.acting_user_id
     if is_nil(uploader_id), do: Repo.rollback(:invalid_attachments)
 
-    {count, _} =
-      Repo.update_all(
-        from(a in Attachment,
-          where:
-            a.id in ^attachment_ids and a.user_id == ^uploader_id and is_nil(a.post_id) and
-              is_nil(a.message_id)
-        ),
-        set: [
-          post_id: post.id,
-          pending_post_id: nil,
-          updated_at: NaiveDateTime.utc_now(:second)
-        ]
-      )
-
-    if count != length(attachment_ids), do: Repo.rollback(:invalid_attachments)
+    # `Vutuv.Attachments.claim/3` for both parents (#2110): the guard that
+    # decides whether a file is this member's to give is the interesting part,
+    # and a second copy of it here is a second place for it to drift.
+    case Attachments.claim({:post, post.id}, uploader_id, attachment_ids) do
+      :ok -> :ok
+      {:error, reason} -> Repo.rollback(reason)
+    end
   end
 
   # The files a post already carries — what an edit hands back to

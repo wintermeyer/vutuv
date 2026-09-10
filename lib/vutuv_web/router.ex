@@ -985,6 +985,15 @@ defmodule VutuvWeb.Router do
     # also why this kind adds no ReservedSlugs entry.
     get("/system/press_kit/:token/:version", PressKitImageController, :show)
 
+    # The authorizing proxy for a file a message carries (issue #2110). Under
+    # `/system/` for the same reason as the two above, and login-required in
+    # the controller rather than through a pipeline, because the answer depends
+    # on who is asking: a file travels only between two connected members, and
+    # the connection is re-checked on every request. There is no static mount
+    # and no nginx location for either tree — every byte comes through here.
+    get("/system/attachments/:token/file", AttachmentController, :file)
+    get("/system/attachments/:token/pages/:position/:version", AttachmentController, :page)
+
     # Post deletion (the permalink lives in the profile scope below; "posts"
     # is in ReservedSlugs).
     delete("/posts/:id", PostController, :delete)

@@ -63,6 +63,7 @@ defmodule Vutuv.Attachments.Pages do
 
   import Ecto.Query, warn: false
 
+  alias Vutuv.Attachments
   alias Vutuv.Attachments.Attachment
   alias Vutuv.Attachments.PageRender
   alias Vutuv.AttachmentStore
@@ -70,7 +71,6 @@ defmodule Vutuv.Attachments.Pages do
   alias Vutuv.MediaJobs
   alias Vutuv.Moderation.ImageScans
   alias Vutuv.Moderation.Pixelation
-  alias Vutuv.Posts.Pending
   alias Vutuv.Repo
   alias Vutuv.Uploads
   alias Vutuv.UUIDv7
@@ -246,8 +246,7 @@ defmodule Vutuv.Attachments.Pages do
         :ok
 
       attachment ->
-        Pending.broadcast_attachment(attachment)
-        Pending.media_changed(:attachment, attachment.id)
+        Attachments.announce(attachment)
         :ok
     end
   end
@@ -263,7 +262,7 @@ defmodule Vutuv.Attachments.Pages do
         :ok
 
       attachment ->
-        Vutuv.Attachments.refuse(attachment)
+        Attachments.refuse(attachment)
         :ok
     end
   end
@@ -396,7 +395,7 @@ defmodule Vutuv.Attachments.Pages do
       wanted == [] ->
         settle(attachment, job, "no pages wanted")
 
-      is_nil(PageRender.renderer(attachment)) ->
+      not PageRender.renderable?(attachment) ->
         # Not a strike and not a failure: the pipeline asked, and this
         # installation has nothing that renders this format. Retrying changes
         # nothing, so the file leaves the queue rather than holding its front.
@@ -535,8 +534,7 @@ defmodule Vutuv.Attachments.Pages do
   # only thing left is the verdicts on them. Told rather than polled, so the
   # post appears the second it can.
   defp finished(%Attachment{} = attachment) do
-    Pending.broadcast_attachment(attachment)
-    Pending.media_changed(:attachment, attachment.id)
+    Attachments.announce(attachment)
     attachment
   end
 

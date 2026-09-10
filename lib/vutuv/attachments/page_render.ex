@@ -72,16 +72,25 @@ defmodule Vutuv.Attachments.PageRender do
   @text_limit 20_000
 
   @doc """
-  The binary that would render this file's pages, or `nil` when this host has
-  none — a PDF needs `pdftoppm`, anything else needs Chromium.
+  Whether this host can render this file's pages at all — a PDF needs
+  `pdftoppm`, a text or Markdown file needs Chromium, and a picture (issue
+  #2110) needs nothing, its preview **being** the picture.
+
+  A boolean rather than the binary's path, which is the only question the
+  pipeline asks: a picture has no binary, and a path-typed answer would have to
+  carry a sentinel for it that the next caller could mistake for one.
 
   Deliberately **not** cached in `:persistent_term` like the four other
   capability probes in this tree: this runs once per uploaded file rather than
   once per request, `System.find_executable/1` is a `$PATH` walk, and a cached
   probe is a fifth thing a test has to remember to forget.
   """
-  def renderer(%Attachment{content_type: "application/pdf"}), do: executable(pdftoppm())
-  def renderer(%Attachment{}), do: executable(PageScreenshot.binary())
+  def renderable?(%Attachment{content_type: "application/pdf"}),
+    do: not is_nil(executable(pdftoppm()))
+
+  def renderable?(%Attachment{content_type: "image/" <> _rest}), do: true
+
+  def renderable?(%Attachment{}), do: not is_nil(executable(PageScreenshot.binary()))
 
   # `PageScreenshot.binary/0` hands back a configured path unchecked, so ask
   # the filesystem: a `CHROMIUM_PATH` pointing at nothing must read as "no
@@ -104,19 +113,31 @@ defmodule Vutuv.Attachments.PageRender do
   path ending in `.png`. `:ok`, or `{:error, reason}` — and the reason is what
   the pipeline decides a strike on, so it names the renderer that failed.
   """
-  def render(%Attachment{content_type: "application/pdf"} = attachment, position, dest) do
+  def render(%Attachment{} = attachment, position, dest) do
     case AttachmentStore.served_path(attachment.token) do
       nil -> {:error, :file_gone}
-      source -> render_pdf(source, position, dest)
+      source -> render_source(attachment, source, position, dest)
     end
   end
 
-  def render(%Attachment{} = attachment, _position, dest) do
-    case AttachmentStore.served_path(attachment.token) do
-      nil -> {:error, :file_gone}
-      source -> render_text(attachment, source, dest)
+  defp render_source(%Attachment{content_type: "application/pdf"}, source, position, dest),
+    do: render_pdf(source, position, dest)
+
+  # A picture is its own preview (issue #2110): what the derivation opens is
+  # the stored file, which it reads the format of from the bytes rather than
+  # from the name — so the `.png` this is linked to is a scratch path, not a
+  # claim about what is in it. A **hard link** rather than a copy, because the
+  # file can be 20 MB and nothing writes through it; across a filesystem
+  # boundary (a tmpdir on its own device) there is nothing for it but the copy.
+  defp render_source(%Attachment{content_type: "image/" <> _rest}, source, _position, dest) do
+    case File.ln(source, dest) do
+      :ok -> :ok
+      {:error, _cannot_link} -> File.cp(source, dest)
     end
   end
+
+  defp render_source(%Attachment{} = attachment, source, _position, dest),
+    do: render_text(attachment, source, dest)
 
   # One poppler run per page, deliberately, although `-f 1 -l 3` would parse the
   # document once instead of three times: a resumed render (the whole point of

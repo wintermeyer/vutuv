@@ -137,6 +137,13 @@ defmodule Vutuv.AttachmentStore do
 
   defp version_dest(dir, %{name: name}), do: Path.join(dir, "#{name}#{Spec.served_ext()}")
 
+  @doc """
+  The served sizes a page has, as the strings a URL names them by — what the
+  proxy parses a request against, so the whitelist it enforces and the files
+  this store writes cannot drift apart.
+  """
+  def page_versions, do: @page_versions
+
   @doc "One served size of one page, or `nil` when it is not there."
   def page_version_path(token, position, version)
       when is_binary(token) and is_integer(position) and version in @page_versions do
