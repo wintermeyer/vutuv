@@ -217,26 +217,40 @@ defmodule VutuvWeb.PressKitLive do
           {:ok, _image} ->
             {:noreply, socket |> assign(:open, nil) |> assign(:error, nil) |> load_shelves()}
 
-          {:error, changeset} ->
-            {:noreply, assign(socket, :error, first_error(changeset))}
+          # Every reason this write can be refused, not the changeset alone:
+          # `update/3` asks the same `manageable_by?/2` every other write asks,
+          # and answers `{:error, :forbidden}` — which is not a changeset, and
+          # took the socket down with a `FunctionClauseError` when it reached
+          # `first_error/1`. `write_error/2` is the one vocabulary all three
+          # writers share.
+          {:error, reason} ->
+            {:noreply, assign(socket, :error, write_error(reason, Image.logo?(image)))}
         end
     end
   end
 
   def handle_event("delete", %{"id" => id}, socket) do
-    case owned(socket, id) do
-      nil ->
-        {:noreply, socket}
+    # Re-asked here, per event, because `PressKit.delete/1` cannot ask: #2084's
+    # AI rejection calls it with no viewer at all. While a kit's owner *was* its
+    # viewer, resolving the row out of `owned/2` was the check; on a page's kit
+    # it is not, and this is the irreversible write — `Images.purge/1` drops the
+    # row, every served version and the private original, and nothing derives a
+    # print file back. A withdrawn role therefore bites on the next press rather
+    # than at the next mount.
+    with %Image{} = image <- owned(socket, id),
+         true <- PressKit.manageable_by?(socket.assigns.owner, socket.assigns.current_user) do
+      :ok = PressKit.delete(image)
 
-      image ->
-        :ok = PressKit.delete(image)
-
-        {:noreply,
-         socket
-         |> assign(:open, nil)
-         |> assign(:error, nil)
-         |> load_shelves()
-         |> put_flash(:info, gettext("Picture removed."))}
+      {:noreply,
+       socket
+       |> assign(:open, nil)
+       |> assign(:error, nil)
+       |> load_shelves()
+       |> put_flash(:info, gettext("Picture removed."))}
+    else
+      # Silent and unchanged, the way a refused `move` or `reorder` already
+      # answers: the shelf is reloaded, so the page shows what is really there.
+      _refused -> {:noreply, load_shelves(socket)}
     end
   end
 
@@ -349,33 +363,36 @@ defmodule VutuvWeb.PressKitLive do
     do: {:noreply, socket |> assign(:error, nil) |> load_shelves()}
 
   defp stored(socket, {:error, reason}, logo?),
-    do: {:noreply, assign(socket, :error, store_error(reason, logo?))}
+    do: {:noreply, assign(socket, :error, write_error(reason, logo?))}
 
-  defp store_error(:too_many, true),
+  # The one error vocabulary of this page's three writers — the upload, the
+  # page-logo adoption and the caption edit. Named for the write rather than for
+  # the upload since #2087, when a refused edit found its way here.
+  defp write_error(:too_many, true),
     do: gettext("No more than %{max} logo variants.", max: compact_count(PressKit.max_logos()))
 
-  defp store_error(:too_many, false),
+  defp write_error(:too_many, false),
     do: gettext("No more than %{max} press photos.", max: compact_count(PressKit.max_photos()))
 
   # Defensive: `allow_upload/3` is configured with the same cap, so LiveView
   # refuses an oversized file before this can see it. The wording is the shared
   # one either way, so the two gates cannot answer differently.
-  defp store_error(:too_large, _logo?),
+  defp write_error(:too_large, _logo?),
     do:
       gettext("That file is larger than %{limit}. Please upload a smaller one.",
         limit: megabyte_label(PressKit.max_filesize())
       )
 
-  defp store_error(:forbidden, _logo?),
+  defp write_error(:forbidden, _logo?),
     do: gettext("You cannot add a picture to this press kit.")
 
-  defp store_error(%Ecto.Changeset{errors: errors} = changeset, _logo?) do
+  defp write_error(%Ecto.Changeset{errors: errors} = changeset, _logo?) do
     if Keyword.has_key?(errors, :rights_confirmed),
       do: gettext("Please confirm the rights first, then choose the file."),
       else: first_error(changeset)
   end
 
-  defp store_error(_reason, _logo?), do: gettext("That file could not be processed.")
+  defp write_error(_reason, _logo?), do: gettext("That file could not be processed.")
 
   # `ErrorHelpers.changeset_messages/1` rather than a traverse of our own: it
   # translates and interpolates, where a bare `{message, _opts}` hands the

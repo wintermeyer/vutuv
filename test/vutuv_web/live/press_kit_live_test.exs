@@ -119,6 +119,19 @@ defmodule VutuvWeb.PressKitLiveTest do
   # second member.
   defp fresh_conn, do: build_conn() |> Plug.Test.init_test_session(%{})
 
+  # A press photo on a **page's** shelf, uploaded by one of its members — the
+  # owner and the uploader are two people here, which is the whole difference
+  # from `add_photo!/3`.
+  defp add_page_photo!(organization, uploader, tmp) do
+    {:ok, image} =
+      PressKit.create(organization, uploader, {photo_path(tmp), "portrait.jpg"}, %{
+        "rights_confirmed" => "true",
+        "credit" => "Foto: Ada King"
+      })
+
+    image
+  end
+
   # The page's own logo, as a vector — the file the one-click adoption copies.
   defp with_svg_logo(organization, owner, tmp) do
     path = Path.join(tmp, "mark-#{System.unique_integer([:positive])}.svg")
@@ -710,6 +723,56 @@ defmodule VutuvWeb.PressKitLiveTest do
                live,
                "#press-new-credit-photo[value='#{Vutuv.Identity.display_name(publisher)}']"
              )
+    end
+
+    # Both of these are the same hole seen twice: `ManageGate` asks the role at
+    # **mount**, and an editor is open for as long as the tab is. While the kit's
+    # owner was the viewer, resolving a picture out of `owned/2` was itself the
+    # viewer check; with a page it no longer is, so every event has to re-ask.
+    test "an edit by somebody whose role was withdrawn is refused, not a crash", %{
+      conn: conn,
+      organization: organization,
+      owner: owner,
+      tmp: tmp
+    } do
+      {publisher_conn, publisher} = member_with_role(organization, "publisher", owner)
+      photo = add_page_photo!(organization, owner, tmp)
+
+      {:ok, live, _html} = open_page_editor(publisher_conn, organization)
+
+      {:ok, _} = Vutuv.Organizations.set_roles(organization, publisher, [], owner)
+
+      # `PressKit.update/3` answers `{:error, :forbidden}`, which is not a
+      # changeset — the handler used to hand it to `first_error/1` and take the
+      # socket down with a FunctionClauseError. A refused write leaves the
+      # picture as it was, exactly as a refused move or reorder does.
+      render_click(live, "save", %{"picture_id" => photo.id, "picture" => %{"credit" => "theirs"}})
+
+      assert Repo.get!(ImageRow, photo.id).credit == "Foto: Ada King"
+      assert render(live) =~ "data-press-picture"
+    end
+
+    test "a withdrawn role cannot remove a picture", %{
+      conn: conn,
+      organization: organization,
+      owner: owner,
+      tmp: tmp
+    } do
+      {publisher_conn, publisher} = member_with_role(organization, "publisher", owner)
+      photo = add_page_photo!(organization, owner, tmp)
+
+      {:ok, live, _html} = open_page_editor(publisher_conn, organization)
+
+      {:ok, _} = Vutuv.Organizations.set_roles(organization, publisher, [], owner)
+
+      # The irreversible one: `Images.purge_by/2` drops the row **and** the
+      # private original, and nothing derives a print file back. `PressKit.delete/1`
+      # takes no viewer on purpose (#2084's AI rejection has none), so the
+      # question is asked here, per event.
+      render_click(live, "delete", %{"id" => photo.id})
+
+      assert Repo.get(ImageRow, photo.id)
+      assert [_] = PressKit.photos(organization)
     end
 
     test "a raster logo is not offered, since its file is not the printable one", %{
