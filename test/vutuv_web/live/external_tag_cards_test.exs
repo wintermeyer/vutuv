@@ -232,6 +232,27 @@ defmodule VutuvWeb.ExternalTagCardsTest do
       assert json_response(hashtag, 200)
       refute hashtag.resp_body =~ "NICHT FUER MASTODON-CLIENTS"
     end
+
+    # Dropping the row from the **answer** is not the same as dropping it from
+    # the **walk**. The home timeline reads its `Link` boundary off the merged
+    # feed's entry ids, before the presenter has rejected anything, so an
+    # `external-<uuid>` reaches `Pagination.link_header/4` — and a prefix
+    # `bare_id/1` does not know survives into the header, casts to nil on the
+    # way back, and a nil boundary is the newest page. The client's walk then
+    # restarts at the top forever.
+    test "its ids never leave as a boundary a client cannot hand back", %{conn: conn} do
+      {_conn, me} = create_and_login_user(conn)
+      tag = followed_tag(me)
+      for _n <- 1..3, do: found_post(tag)
+
+      token = mastodon_token(me, ["read"])
+      answer = build_conn() |> mastodon_conn(token) |> get("/api/v1/timelines/home?limit=3")
+
+      link = answer |> Plug.Conn.get_resp_header("link") |> List.first()
+
+      assert link, "the walk offered no boundary at all"
+      refute link =~ "external-"
+    end
   end
 
   describe "German" do
