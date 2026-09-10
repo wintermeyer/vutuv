@@ -26,6 +26,7 @@ defmodule Vutuv.Tags do
   alias Vutuv.Tags.MatchKey
   alias Vutuv.Tags.Tag
   alias Vutuv.Tags.TagFollow
+  alias Vutuv.Tags.TagFollowSource
   alias Vutuv.Tags.UserTag
   alias Vutuv.Tags.UserTagEndorsement
 
@@ -997,14 +998,8 @@ defmodule Vutuv.Tags do
   def follow_tag(%User{} = user, %Tag{id: tag_id}), do: follow_tag(user, tag_id)
 
   def follow_tag(%User{} = user, tag_id) when is_binary(tag_id) do
-    # After the insert the row is guaranteed to exist (a fresh insert, or an ON
-    # CONFLICT no-op because it already did), so the get_by re-reads the
-    # authoritative row to return; an unknown tag id trips the tag_id
-    # foreign_key_constraint and comes back as {:error, changeset}. Both the
-    # `nil` from a non-UUID id and a vanished row map to {:error, :invalid}.
     with tag_id when not is_nil(tag_id) <- Vutuv.UUIDv7.cast_or_nil(tag_id),
-         {:ok, _} <- insert_tag_follow(user.id, tag_id),
-         %TagFollow{} = follow <- Repo.get_by(TagFollow, user_id: user.id, tag_id: tag_id) do
+         {:ok, follow} <- insert_tag_follow(user.id, tag_id) do
       broadcast_tag_follows_changed(user.id)
       {:ok, follow}
     else
@@ -1016,7 +1011,36 @@ defmodule Vutuv.Tags do
   defp insert_tag_follow(user_id, tag_id) do
     %TagFollow{}
     |> TagFollow.changeset(%{user_id: user_id, tag_id: tag_id})
-    |> Repo.insert(on_conflict: :nothing, conflict_target: [:user_id, :tag_id])
+    |> insert_follow_with_local_source(user_id: user_id, tag_id: tag_id)
+  end
+
+  # Writes one follow and the source it is born with, in one transaction, so the
+  # table says what the follow reads from rather than leaving it to be inferred:
+  # the grouped query the fetcher runs reads rows, and so does an operator
+  # looking at the table. `tag_follow_sources/1` still supplies the local source
+  # for a row-less follow — it has to, for what the previous release writes
+  # during a deploy — but that is a rule for rows we did not write, not a licence
+  # to stop writing them. Member and page follows differ only in `lookup`, which
+  # names both the conflict target and the row to read back, so the rule lives
+  # here once rather than in each of them.
+  #
+  # After the insert the row is guaranteed to exist (a fresh insert, or an ON
+  # CONFLICT no-op because it already did), so the get_by re-reads the
+  # authoritative row to return; an unknown tag id trips the tag_id
+  # foreign_key_constraint and comes back as {:error, changeset}, a vanished row
+  # as {:error, :invalid}.
+  defp insert_follow_with_local_source(changeset, lookup) do
+    Repo.transaction(fn ->
+      with {:ok, _} <-
+             Repo.insert(changeset, on_conflict: :nothing, conflict_target: Keyword.keys(lookup)),
+           %TagFollow{} = follow <- Repo.get_by(TagFollow, lookup),
+           {:ok, _} <- insert_tag_follow_source(follow.id, local_tag_follow_source()) do
+        follow
+      else
+        nil -> Repo.rollback(:invalid)
+        {:error, changeset} -> Repo.rollback(changeset)
+      end
+    end)
   end
 
   @doc """
@@ -1111,9 +1135,7 @@ defmodule Vutuv.Tags do
   """
   def follow_tag_as_organization(%Organization{} = page, tag_id) when is_binary(tag_id) do
     with tag_id when not is_nil(tag_id) <- Vutuv.UUIDv7.cast_or_nil(tag_id),
-         {:ok, _} <- insert_organization_tag_follow(page.id, tag_id),
-         %TagFollow{} = follow <-
-           Repo.get_by(TagFollow, organization_id: page.id, tag_id: tag_id) do
+         {:ok, follow} <- insert_organization_tag_follow(page.id, tag_id) do
       {:ok, follow}
     else
       nil -> {:error, :invalid}
@@ -1127,7 +1149,7 @@ defmodule Vutuv.Tags do
   defp insert_organization_tag_follow(organization_id, tag_id) do
     %TagFollow{}
     |> TagFollow.organization_changeset(%{organization_id: organization_id, tag_id: tag_id})
-    |> Repo.insert(on_conflict: :nothing, conflict_target: [:organization_id, :tag_id])
+    |> insert_follow_with_local_source(organization_id: organization_id, tag_id: tag_id)
   end
 
   @doc "Unfollows a tag as `page`. Idempotent; returns the number of rows removed."
@@ -1175,6 +1197,143 @@ defmodule Vutuv.Tags do
   @doc "The ids of the tags `page` follows — the set its feed's tag source joins against."
   def organization_followed_tag_ids(%Organization{id: page_id}) do
     Repo.all(from(tf in TagFollow, where: tf.organization_id == ^page_id, select: tf.tag_id))
+  end
+
+  # --- Where a followed tag reads from (issue #2125) ------------------------
+  #
+  # A follow carries sources, one row each — see `Vutuv.Tags.TagFollowSource`
+  # for what a source is and why it is a table.
+
+  @doc "The source that means this installation."
+  def local_tag_follow_source, do: TagFollowSource.local_source()
+
+  @doc """
+  Adds a source to `follow` and returns its row. Idempotent: adding a source
+  twice keeps one row and still answers `{:ok, source}`.
+
+  `source` is whatever the member handed over — a bare host, a URL, a
+  `@user@host` address — and `TagFollowSource.normalize_source/1` reduces it to
+  the stored shape. **An address of this installation becomes the local
+  source**, so pasting our own server adds nothing and asks nobody for our own
+  posts. Anything that is not a server name comes back as `{:error, changeset}`.
+  """
+  def add_tag_follow_source(%TagFollow{} = follow, source) do
+    # The insert answers with the stored shape of what was offered, so the
+    # read-back looks the row up by the same value the changeset normalized —
+    # rather than the context normalizing a second time to guess it.
+    with {:ok, %TagFollowSource{source: stored}} <- insert_tag_follow_source(follow.id, source),
+         %TagFollowSource{} = row <-
+           Repo.get_by(TagFollowSource, tag_follow_id: follow.id, source: stored) do
+      {:ok, row}
+    else
+      nil -> {:error, :invalid}
+      {:error, _} = error -> error
+    end
+  end
+
+  defp insert_tag_follow_source(tag_follow_id, source) do
+    %TagFollowSource{}
+    |> TagFollowSource.changeset(%{tag_follow_id: tag_follow_id, source: source})
+    |> Repo.insert(on_conflict: :nothing, conflict_target: [:tag_follow_id, :source])
+  end
+
+  @doc """
+  Removes one **server** from `follow`, reading a pasted address the same way
+  `add_tag_follow_source/2` did. Idempotent; returns the number of rows removed
+  (0 or 1).
+
+  The local source is not removable and answers 0: vutuv is always on and cannot
+  be switched off (#2128), so a follow is never remote-only. That is the same
+  rule `tag_follow_sources/1` applies from the other side, where a follow with
+  no rows at all still reads as vutuv.
+  """
+  def remove_tag_follow_source(%TagFollow{} = follow, source) do
+    normalized = TagFollowSource.normalize_source(source)
+
+    # Nothing host-shaped names no row; the local source names one that must
+    # stay. Both are "removed nothing", which is what the count says.
+    if is_nil(normalized) or normalized == local_tag_follow_source() do
+      0
+    else
+      {count, _} =
+        from(s in TagFollowSource,
+          where: s.tag_follow_id == ^follow.id and s.source == ^normalized
+        )
+        |> Repo.delete_all()
+
+      count
+    end
+  end
+
+  @doc """
+  The sources of `follow`, in the order they were added — so the local one
+  comes first, having been written with the follow. Ids are `Vutuv.UUIDv7`, so
+  ordering by one is ordering by when it was written.
+
+  The local source is always in the answer, whether or not a row says so —
+  vutuv is always on and cannot be switched off (#2128). That is not a cosmetic
+  default: through the blue/green window the previous release keeps writing
+  follows, knowing nothing about this table, so those rows arrive source-less
+  and nothing backfills them afterwards. Every reader gets the rule here rather
+  than each remembering it, `follow.sources` preloaded included.
+  """
+  def tag_follow_sources(%TagFollow{sources: sources}) when is_list(sources) do
+    # A preloaded follow answers from what it carries — a page listing many of
+    # them loads the sources in the query it already runs, and must not get a
+    # different answer than the one-follow path for it.
+    sources |> Enum.map(& &1.source) |> with_local_source()
+  end
+
+  def tag_follow_sources(%TagFollow{id: id}) do
+    from(s in TagFollowSource,
+      where: s.tag_follow_id == ^id,
+      order_by: [asc: s.id],
+      select: s.source
+    )
+    |> Repo.all()
+    |> with_local_source()
+  end
+
+  # vutuv is always on and cannot be switched off (#2128), so the answer carries
+  # it whatever the rows say — first, where it was written. Not only for a
+  # follow with no rows at all: the release before this one keeps writing
+  # source-less follows through the blue/green window, and the moment such a
+  # follow gains its first server an "empty means vutuv" rule would stop firing
+  # and quietly switch this installation off for it.
+  defp with_local_source(sources) do
+    local = local_tag_follow_source()
+
+    if local in sources, do: sources, else: [local | sources]
+  end
+
+  @doc """
+  Every server-and-tag pair somebody here wants, with how many follows want it:
+  `[%{source:, tag_id:, tag_name:, follow_count:}]`, busiest pair first.
+
+  The local source is left out, so every `source` in the answer is a hostname a
+  fetcher can ask. Member follows and page follows count alike — the pair is
+  wanted, whoever wants it.
+  """
+  def wanted_tag_sources do
+    local = local_tag_follow_source()
+
+    Repo.all(
+      from(s in TagFollowSource,
+        join: tf in TagFollow,
+        on: tf.id == s.tag_follow_id,
+        join: t in Tag,
+        on: t.id == tf.tag_id,
+        where: s.source != ^local,
+        group_by: [s.source, t.id, t.name],
+        order_by: [desc: count(s.id), asc: s.source],
+        select: %{
+          source: s.source,
+          tag_id: t.id,
+          tag_name: t.name,
+          follow_count: count(s.id)
+        }
+      )
+    )
   end
 
   # Tell `user`'s open feed (and any other subscriber) that their followed-tag

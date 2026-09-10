@@ -409,7 +409,11 @@ defmodule Vutuv.Tags.Merge do
 
   defp drop_leftovers(repo, table, _owner, absorbed, canonical, acc) do
     acc =
-      if table == "user_tags", do: rescue_endorsements(repo, absorbed, canonical, acc), else: acc
+      case table do
+        "user_tags" -> rescue_endorsements(repo, absorbed, canonical, acc)
+        "tag_follows" -> rescue_tag_follow_sources(repo, absorbed, acc)
+        _other -> acc
+      end
 
     rows =
       repo
@@ -493,14 +497,37 @@ defmodule Vutuv.Tags.Merge do
     end
   end
 
+  # A member who followed both spellings loses one `tag_follows` row, and
+  # deleting it cascades the sources under it — where the tag's posts should
+  # come from (issue #2125), including the `vutuv` row every follow carries. A
+  # revert would otherwise put the follow back reading nothing, so the sources
+  # are captured whole first, exactly as the endorsements above are, and go back
+  # with their row.
+  defp rescue_tag_follow_sources(repo, absorbed, acc) do
+    rows =
+      query_column(
+        repo,
+        """
+        select to_jsonb(s)
+        from tag_follow_sources s
+        join tag_follows f on f.id = s.tag_follow_id
+        where f.tag_id = $1::text::uuid
+        """,
+        [absorbed.id]
+      )
+
+    add_delete(acc, "tag_follow_sources", rows)
+  end
+
   # --- reverting ------------------------------------------------------------
 
+  # A re-inserted child points at a parent row that has to exist again first.
+  @child_tables ["user_tag_endorsements", "tag_follow_sources"]
+
   defp restore(repo, undo) do
-    # Parents before children: a re-inserted endorsement points at a `user_tags`
-    # row that has to exist again first.
     undo
     |> Map.get("deletes", [])
-    |> Enum.sort_by(&(&1["table"] == "user_tag_endorsements"))
+    |> Enum.sort_by(&(&1["table"] in @child_tables))
     |> Enum.each(fn %{"table" => table, "rows" => rows} ->
       Enum.each(rows, fn row ->
         repo.query!(
@@ -529,7 +556,7 @@ defmodule Vutuv.Tags.Merge do
   # so the table and column names it names are checked against the compile-time
   # list before they reach a query rather than trusted for having been written
   # by us once.
-  @tables ["user_tag_endorsements" | Enum.map(@movable, &elem(&1, 0))]
+  @tables @child_tables ++ Enum.map(@movable, &elem(&1, 0))
   @columns %{"user_tag_endorsements" => "user_tag_id"}
 
   # Fail closed: an unknown name raises rather than being skipped, so a payload
@@ -577,6 +604,9 @@ defmodule Vutuv.Tags.Merge do
     move = %{"table" => table, "column" => column, "to" => to, "ids" => ids}
     Map.update!(acc, :moves, &(&1 ++ [move]))
   end
+
+  # An empty capture is nothing to put back, like `add_move/5` above.
+  defp add_delete(acc, _table, []), do: acc
 
   defp add_delete(acc, table, rows) do
     Map.update!(acc, :deletes, &(&1 ++ [%{"table" => table, "rows" => rows}]))
