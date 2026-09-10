@@ -46,7 +46,15 @@ defmodule VutuvWeb.MastodonApi.Pagination do
   # strip, which unconditionally drops the first segment. None of these words
   # can be the first group of a uuid (they are not eight hex digits), so
   # stripping is unambiguous.
-  @id_prefixes ~w(post repost tagpost boost remote remote_repost note author reply)
+  #
+  # **`external` is here although no status is ever rendered under it** (issue
+  # #2127): a post a followed tag brought back from another server's public
+  # timeline is a feed *entry*, so it reaches `link_header/4` through
+  # `boundary_id/1`, and only then does the presenter drop it. A boundary the
+  # walk advertises has to survive the round trip whether or not a status was
+  # rendered for it — which is the whole reason this list is about the ids a
+  # source **mints** rather than the ids an answer carries.
+  @id_prefixes ~w(post repost tagpost boost remote remote_repost note author reply external)
 
   # The spellings a feed source actually stamps whole. `bare_id/1` reduces a
   # compound like `remote-repost-<uuid>` word by word, but the forward

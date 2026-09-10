@@ -1,8 +1,9 @@
 defmodule Vutuv.Tags.ExternalPosts do
   @moduledoc """
-  The pull behind a followed tag's other servers (issue #2126): which
-  (tag, server) pairs are due, what one pass does to the clock, and the two
-  caps that bound the table.
+  The pull behind a followed tag's other servers (issue #2126) and who gets to
+  read what it brought back (issue #2127): which (tag, server) pairs are due,
+  what one pass does to the clock, the two caps that bound the table, and the
+  feed source and tag-page query that put the rows in front of somebody.
 
   A follow names its sources since issue #2125 — `vutuv` plus any server the
   member picked — and this is what makes that mean something. Nothing is
@@ -44,6 +45,11 @@ defmodule Vutuv.Tags.ExternalPosts do
 
   require Logger
 
+  alias Vutuv.Accounts.User
+  alias Vutuv.Fediverse
+  alias Vutuv.FeedPage
+  alias Vutuv.Posts
+  alias Vutuv.RateLimiter
   alias Vutuv.Repo
   alias Vutuv.Tags
   alias Vutuv.Tags.ExternalFetch
@@ -86,6 +92,251 @@ defmodule Vutuv.Tags.ExternalPosts do
 
   @doc "The ceilings on one run: `batch` pairs in total, `per_host` of them per server."
   def budget, do: Application.get_env(:vutuv, :external_tag_fetch_budget, @budget)
+
+  # How many of these a member may report a day. The same shape and the same
+  # reasoning as the cached-post limit next door: a report empties our one copy
+  # for everybody here, so it is a lever worth metering.
+  @report_limit 20
+
+  # --- What anybody may read (issue #2127) ----------------------------------
+
+  @doc """
+  The rows this installation may show at all, whatever surface is asking.
+
+  Two refusals, and both are things the fetcher cannot settle because it stores
+  one row for the whole installation and never looks at it again:
+
+    * **a reported post**, whose words this table still holds only as the key
+      that stops the next pull writing it back (`report/2`).
+    * **a row with no author host**, which the release before #2127 wrote and
+      this one can say nothing true about — a card would have to claim the
+      author lives on the server we happened to ask. Failing closed costs a
+      handful of rows from one deploy window, and the per-tag cap rolls those
+      out within hours.
+
+  **The operator's blocklist is deliberately not a third clause**, though it
+  reads like the obvious place for one. Two layers already enforce it and a test
+  that blocks a server passes without this: `Vutuv.Tags.ExternalTagClient`
+  refuses a blocked source *and* drops a status whose author lives on a blocked
+  host, and `Vutuv.Fediverse.purge_instance/1` takes these rows with everything
+  else that server left here. That is the shape every cached remote post in this
+  codebase is protected by — an ingest gate and a purge, never a read-path join
+  — and "a blocked server leaves nothing at rest" is the stronger of the two
+  promises anyway.
+
+  Composable, and named `:external` so a caller can add its own clauses.
+  """
+  def showable_query do
+    from(p in ExternalPost,
+      as: :external,
+      where: is_nil(p.reported_at),
+      where: not is_nil(p.author_host)
+    )
+  end
+
+  @doc """
+  What a tag page may show under its **fediverse** tab (issue #2127) — the rows
+  filed under `tag`, in the anonymous public view.
+
+  Nothing narrower than `showable_query/0` is needed: only public statuses are
+  ever stored (`Vutuv.Tags.ExternalTagClient` drops everything else on arrival),
+  so unlike a cached ActivityPub object there is no audience to re-check here.
+  """
+  def tag_query(tag_id) when is_binary(tag_id) do
+    if enabled?(),
+      do: where(showable_query(), [external: p], p.tag_id == ^tag_id),
+      # The switched-off arm keeps the `:external` binding: the caller composes
+      # on it (`Vutuv.Tags.Timeline`'s union arm selects and filters through
+      # it), and a query missing the name raises rather than answering nothing.
+      else: from(p in ExternalPost, as: :external, where: false)
+  end
+
+  @doc """
+  The feed source: what the servers **this** member's followed tags name have
+  turned up, newest first.
+
+  The rows are cached for the installation, so the whole question here is whose
+  feed one reaches: the follow has to be this member's *and* name that server.
+  A member who follows the same tag with vutuv alone sees none of it, however
+  many of their neighbours pull from troet.cafe.
+
+  Ordered and windowed on the author's own publication time — the stamp the card
+  wears, exactly as a cached post's is — with `since_basis: :arrival` measured
+  on `inserted_at`, when we found it, for the reader's unread marker.
+
+  **A member who names no server pays one indexed lookup and no post query**,
+  and that is almost everybody: measured on a copy of production, 20 of 6,027
+  members follow any tag at all and one names a server. Without the guard the
+  three-table join runs on every feed render, every unread badge on every page,
+  and every month of the calendar's heatmap, for a table that cannot answer.
+  The two sources next door short-circuit the same way and for the same reason
+  (`Vutuv.Posts.feed_tag_items/3`, `Vutuv.Fediverse.feed_remote_posts/4`).
+  """
+  def feed_items(viewer, fetch_n, cursor, opts \\ [])
+
+  def feed_items(%User{id: viewer_id} = viewer, fetch_n, cursor, opts) do
+    shape = Keyword.get(opts, :shape, :entries)
+
+    if enabled?() and names_a_server?(viewer_id) do
+      viewer_id
+      |> feed_query(fetch_n, shape)
+      |> reject_muted_hosts(viewer)
+      |> Posts.language_scope(Posts.feed_language_filter(viewer))
+      |> FeedPage.time_window(cursor, :published_at, {:naive, :inserted_at})
+      |> Repo.all()
+      |> rows(shape)
+    else
+      []
+    end
+  end
+
+  def feed_items(_viewer, _fetch_n, _cursor, _opts), do: []
+
+  # `tag_follow_sources_source_tag_follow_id_index` is partial on exactly
+  # `source <> 'vutuv'`, so this is an index-only probe: 0.16 ms measured,
+  # against 2.5–3.5 ms of planning alone for the join it stands in front of.
+  defp names_a_server?(viewer_id) do
+    local = Tags.local_tag_follow_source()
+
+    Repo.exists?(
+      from(s in TagFollowSource,
+        join: tf in TagFollow,
+        on: tf.id == s.tag_follow_id,
+        where: tf.user_id == ^viewer_id and s.source != ^local
+      )
+    )
+  end
+
+  defp feed_query(viewer_id, fetch_n, shape) do
+    # The member's own follow and its own source row. One row per post: a member
+    # follows a tag once (`tag_follows` is unique on the pair) and names a
+    # server once, so this join cannot multiply a post out.
+    #
+    # `tf.user_id == ^viewer_id` is also what keeps a **page's** follow (issue
+    # #1336, the nullable pair) out of a member's feed: a page follow carries a
+    # NULL there, and NULL equals nothing.
+    from([external: p] in showable_query(),
+      join: tf in TagFollow,
+      on: tf.tag_id == p.tag_id and tf.user_id == ^viewer_id,
+      join: s in TagFollowSource,
+      on: s.tag_follow_id == tf.id and s.source == p.source,
+      order_by: [desc: p.published_at, desc: p.id],
+      limit: ^fetch_n
+    )
+    |> select_shape(shape)
+  end
+
+  # A counter needs two columns and a page needs the row, and here that really
+  # is all the database sends: a full row projects at 2,288 bytes against 24 for
+  # the pair, so a month of the calendar's heatmap would otherwise decode
+  # megabytes of somebody else's prose to produce thirty integers. Same shape
+  # and same reason as `Vutuv.Fediverse`'s own `:marks` select.
+  defp select_shape(query, :marks), do: select(query, [external: p], {p.id, p.published_at})
+  defp select_shape(query, _entries), do: query
+
+  # The reader's own switched-off servers (the feed band's list), read against
+  # the **author's** host: a reader who muted mastodon.social meant the people
+  # there, not the address we happened to read them from. No `is_nil(...) or`
+  # in front of the `not in` — the NULL trap that guard exists for cannot fire
+  # here, because `showable_query/0` has already dropped every row without one.
+  defp reject_muted_hosts(query, viewer) do
+    case Fediverse.muted_hosts(viewer) do
+      [] -> query
+      hosts -> where(query, [external: p], p.author_host not in ^hosts)
+    end
+  end
+
+  # `:marks` is `Vutuv.FeedPage.mark/1`'s shape, so the two are interchangeable
+  # and no source can be counted under a different definition than it is drawn
+  # under. Built from the two columns the query selected rather than by taking
+  # them off a whole entry, which would need the whole row.
+  defp rows(pairs, :marks),
+    do: for({id, at} <- pairs, do: %{id: "external-" <> id, at: DateTime.to_naive(at)})
+
+  defp rows(posts, _entries), do: Enum.map(posts, &entry/1)
+
+  @doc """
+  One row as a feed entry.
+
+  `post: nil` and its own `:external_post` key, which is what
+  `Vutuv.Posts.external_feed_entry?/1` reads. The id prefix has to be unique
+  across every source the paginator merges, and the stamp is naive UTC, which is
+  what `Vutuv.FeedPage.sort_entries/1` compares.
+  """
+  def entry(%ExternalPost{} = post) do
+    %{
+      id: "external-" <> post.id,
+      at: DateTime.to_naive(post.published_at),
+      post: nil,
+      external_post: post
+    }
+  end
+
+  @doc """
+  Somebody reports one of these as not appropriate.
+
+  **Blanks it rather than deleting it.** Reporting a post cached from a followed
+  account deletes the row, because nothing goes looking for it again; this table
+  is re-read every ten minutes to three hours with `on_conflict: :nothing`, so a
+  deleted row would simply be written back — a report that undoes itself is not
+  a control. So the words go, the key stays, and every reader skips it
+  (`showable_query/0`).
+
+  Like its sibling this sends no `Flag` and opens no case: the post still stands
+  on its own server, untouched, and what a member here can ask for is that this
+  installation stop showing it. The takedown is recorded in the same
+  content-free ledger, so the operator's "is this one troll or is this server
+  the problem" question counts these alongside the rest.
+
+  Rate limited per reporter.
+  """
+  def report(post_id, %User{} = reporter) do
+    case RateLimiter.hit(
+           {:external_tag_post_report, reporter.id},
+           @report_limit,
+           :timer.hours(24)
+         ) do
+      :ok -> take_down(post_id, reporter)
+      _limited -> {:error, :rate_limited}
+    end
+  end
+
+  defp take_down(post_id, %User{} = reporter) do
+    case UUIDv7.with_cast(post_id, &Repo.get(ExternalPost, &1)) do
+      %ExternalPost{reported_at: nil} = post ->
+        blank(post)
+
+        Fediverse.log_reported_post(%{
+          host: post.author_host || post.source,
+          # The author's own address where the server gave us one, the post's
+          # otherwise: the ledger keeps only a keyed digest of it, and a digest
+          # of nothing cannot be computed.
+          actor_uri: post.author_url || post.url,
+          audience: "public",
+          actor_id: reporter.id
+        })
+
+        :ok
+
+      _gone_or_already_reported ->
+        {:error, :not_found}
+    end
+  end
+
+  # What the row keeps is what the next pull's unique index needs: the tag, the
+  # server, the remote id and the stamp. The words and the author go.
+  defp blank(%ExternalPost{id: id}) do
+    Repo.update_all(from(p in ExternalPost, where: p.id == ^id),
+      set: [
+        text: "",
+        author_name: nil,
+        author_acct: nil,
+        author_url: nil,
+        reported_at: DateTime.utc_now(:second),
+        updated_at: NaiveDateTime.utc_now(:second)
+      ]
+    )
+  end
 
   @doc """
   One pass: ask every due pair, store what came back, and keep the table inside
@@ -385,6 +636,15 @@ defmodule Vutuv.Tags.ExternalPosts do
   # the table's index is built on. One shape for both caps: the per-tag one is
   # this scoped to a tag, and reading them as two algorithms is how the two
   # orderings drift apart.
+  #
+  # **A reported row is never deleted here**, however old it gets. It is the
+  # tombstone that stops the pull writing that status back (`report/2`), and a
+  # tombstone that ages out is a report that quietly undoes itself the next time
+  # its server still carries the post — which is the very failure blanking the
+  # row rather than deleting it exists to prevent. What is left is the key, the
+  # server and the stamp, so this bounds the table's *content* rather than its
+  # row count; `prune/0` still takes them when nobody follows the pair any more,
+  # which is the retention answer that matters.
   defp trim(scope, cap) do
     boundary =
       Repo.one(
@@ -404,7 +664,8 @@ defmodule Vutuv.Tags.ExternalPosts do
         {dropped, _} =
           Repo.delete_all(
             from(p in scope,
-              where: p.published_at < ^at or (p.published_at == ^at and p.id <= ^id)
+              where: p.published_at < ^at or (p.published_at == ^at and p.id <= ^id),
+              where: is_nil(p.reported_at)
             )
           )
 

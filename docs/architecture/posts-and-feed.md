@@ -521,6 +521,15 @@ come from `Vutuv.Fediverse` — cached posts of accounts you follow out there
 (#1161), what people you follow *here* reshared from another network (#1166),
 and what those accounts boosted (#1167) — see [fediverse.md](fediverse.md).
 
+**One reaches the reader through a topic rather than through anybody**: what the
+servers a followed tag names carry about it (`Vutuv.Tags.ExternalPosts.feed_items/4`,
+issue #2127) — see [social-graph.md](social-graph.md) for the card and the rest
+of the mechanism. What it cost *here* is one predicate:
+`Posts.local_feed_entry?/1`, which is what every `entry.post.id` really wanted.
+Reading `not remote_feed_entry?/1` instead was a claim about a `%RemotePost{}`,
+and each of a dozen such sites met `nil.id` the moment a fourth row shape
+existed.
+
 **And two that are not about a follow at all**: what somebody did to the
 reader's **own** posts (`feed_reply_to_me_items/3`, `feed_repost_of_mine_items/3`).
 A follow feed answers "what have the people I follow said", which leaves a hole

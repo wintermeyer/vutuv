@@ -190,6 +190,12 @@ defmodule VutuvWeb.Live.PostTranslations do
 
     wanted =
       subjects
+      # Before `subject_key/1` is asked of anything: a page hands over every
+      # record it draws, and since issue #2127 one of those kinds has no
+      # translation of its own — `subject_key/1` would raise on it rather than
+      # skip it, which is the right thing for that function and the wrong thing
+      # for this list.
+      |> Enum.filter(&Translations.translatable?/1)
       |> Enum.uniq_by(&subject_key/1)
       |> Enum.filter(&auto_translation_wanted?(map, &1, target, chosen))
 

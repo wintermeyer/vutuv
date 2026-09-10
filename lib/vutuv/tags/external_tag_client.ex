@@ -192,7 +192,12 @@ defmodule Vutuv.Tags.ExternalTagClient do
         url: url,
         text: text,
         language: language,
-        published_at: published_at
+        published_at: published_at,
+        # Whose server this is, as opposed to the one we asked. Computed here
+        # anyway to ask the blocklist about it, and stored since #2127 because
+        # that is what the card names and what every later reader compares
+        # against the blocklist and the reader's own muted servers.
+        author_host: host
       }
       |> Map.merge(author(status))
     else

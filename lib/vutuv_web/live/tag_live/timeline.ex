@@ -29,6 +29,7 @@ defmodule VutuvWeb.TagLive.Timeline do
 
   import VutuvWeb.PostComponents,
     only: [
+      external_post_card: 1,
       feed_filter_options: 0,
       post_filter_tabs: 1,
       post_list: 1,
@@ -121,6 +122,14 @@ defmodule VutuvWeb.TagLive.Timeline do
   # round trip rather than sitting there until the next load.
   def handle_event("report-remote-post", %{"id" => id}, socket) do
     RemotePostActions.report(socket, id, &drop_remote_entry(&1, id))
+  end
+
+  # The same for a post one of this tag's servers carried (issue #2127). The
+  # page is re-read rather than the row hunted down: unlike a cached post, one
+  # of these appears exactly once here, and a reload is what the other
+  # row-removing events on this page already do.
+  def handle_event("report-external-post", %{"id" => id}, socket) do
+    RemotePostActions.report_external(socket, id, &reload/1)
   end
 
   # Muting is no longer gated on following the author, so the
@@ -220,6 +229,12 @@ defmodule VutuvWeb.TagLive.Timeline do
         entry
         |> Map.put(:images, Map.get(images, post.id, []))
         |> Map.put(:marks, marks.(post))
+
+      # A post read off another server's public tag timeline (issue #2127) has
+      # no bar, no pictures and no state of the reader's to batch — it goes
+      # through untouched.
+      %{external_post: _post} = entry ->
+        entry
     end)
   end
 
@@ -388,24 +403,30 @@ defmodule VutuvWeb.TagLive.Timeline do
 
       <.post_list :if={!@empty?} id="tag-timeline-posts" phx-update="stream" data-filter-list class="mt-4">
         <div :for={{dom_id, entry} <- @streams.entries} id={dom_id} class={post_row_class()}>
-          <%= if Posts.remote_feed_entry?(entry) do %>
-            <.remote_post_card
-            live?
-              remote_post={entry.remote_post}
-              images={entry[:images] || []}
-              marks={entry[:marks]}
-              viewer={@current_user}
-              following?={false}
-            />
-          <% else %>
-            <.post_thread_entry
-              post={entry.post}
-              viewer={@current_user}
-              entry_id={entry.id}
-              conn_or_socket={@socket}
-              engagement={entry.engagement}
-              surface={:flat}
-            />
+          <%= cond do %>
+            <% Posts.external_feed_entry?(entry) -> %>
+              <%!-- What the servers a follower of this tag named carry about it
+              (issue #2127) — for most topics, the only thing that fills this
+              tab at all. --%>
+              <.external_post_card post={entry.external_post} viewer={@current_user} />
+            <% Posts.remote_feed_entry?(entry) -> %>
+              <.remote_post_card
+                live?
+                remote_post={entry.remote_post}
+                images={entry[:images] || []}
+                marks={entry[:marks]}
+                viewer={@current_user}
+                following?={false}
+              />
+            <% true -> %>
+              <.post_thread_entry
+                post={entry.post}
+                viewer={@current_user}
+                entry_id={entry.id}
+                conn_or_socket={@socket}
+                engagement={entry.engagement}
+                surface={:flat}
+              />
           <% end %>
         </div>
       </.post_list>

@@ -151,6 +151,9 @@ defmodule Vutuv.FediverseBlocklistTest do
                followers: 1,
                remote_accounts: 0,
                cached_posts: 0,
+               # And what a followed tag had pulled from that server, or from
+               # its members wherever else it read them (issue #2127).
+               external_posts: 0,
                deliveries: 1,
                notes: 0,
                post_deliveries: 0

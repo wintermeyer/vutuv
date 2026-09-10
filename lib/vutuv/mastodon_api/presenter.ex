@@ -23,6 +23,7 @@ defmodule Vutuv.MastodonApi.Presenter do
   alias Vutuv.Profiles.Url
   alias Vutuv.Profiles.VerifiedLinks
   alias Vutuv.RemoteMedia
+  alias Vutuv.Tags.ExternalPost
   alias Vutuv.Tags.Tag
   alias Vutuv.UUIDv7
   alias VutuvWeb.Markdown
@@ -123,12 +124,27 @@ defmodule Vutuv.MastodonApi.Presenter do
   counts travel with the record.
   """
   def statuses(items, viewer) when is_list(items) do
+    items = Enum.reject(items, &external_tag_row?/1)
     context = page_context(items, viewer)
 
     items
     |> Enum.map(&rendered_status(&1, context))
     |> fill_account_counts(viewer)
   end
+
+  # A post one of the reader's followed tags brought back from another server's
+  # public tag timeline (issue #2127) is dropped here rather than rendered.
+  #
+  # Every field of a Mastodon `Status` that matters hangs off an `Account`
+  # object, and this installation holds no account row for such an author — it
+  # kept text, a link and an address, deliberately, so that nothing on that path
+  # reaches the image gate. Inventing an account id for one would put a
+  # dereferenceable-looking identity into every client's cache that nothing here
+  # can answer for. And the reader loses nothing: a fediverse client is talking
+  # to a server that can ask those timelines itself, which is the very thing
+  # vutuv is doing on the website's behalf.
+  defp external_tag_row?(%{external_post: %ExternalPost{}}), do: true
+  defp external_tag_row?(_item), do: false
 
   # Everything a page reads **once** and every status on it then reads from.
   # Growing this map is how a new per-status fact arrives here; growing

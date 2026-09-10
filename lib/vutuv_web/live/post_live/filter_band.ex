@@ -1162,9 +1162,9 @@ defmodule VutuvWeb.PostLive.FilterBand do
   end
 
   defp preview_records(entry) do
-    if Posts.remote_feed_entry?(entry),
-      do: [PostTeaser.record(entry)],
-      else: Posts.thread_posts(entry)
+    if Posts.local_feed_entry?(entry),
+      do: Posts.thread_posts(entry),
+      else: [PostTeaser.record(entry)]
   end
 
   defp quote_of(record),

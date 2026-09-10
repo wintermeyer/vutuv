@@ -98,6 +98,8 @@ defmodule Vutuv.Posts do
   alias Vutuv.Social.Follow
   alias Vutuv.Social.PastFollow
   alias Vutuv.Tags
+  alias Vutuv.Tags.ExternalPost
+  alias Vutuv.Tags.ExternalPosts
   alias Vutuv.Tags.Tag
   alias Vutuv.Translations
   alias Vutuv.Uploads.Crop
@@ -1241,6 +1243,7 @@ defmodule Vutuv.Posts do
   def text(%Post{body: body}), do: body
   def text(%RemotePost{content_text: text}), do: text
   def text(%Note{content_text: text}), do: text
+  def text(%ExternalPost{text: text}), do: text
 
   @doc """
   The same record with its text replaced — the write-side twin of `text/1`, so
@@ -1250,6 +1253,7 @@ defmodule Vutuv.Posts do
   def put_text(%Post{} = post, text), do: %{post | body: text}
   def put_text(%RemotePost{} = post, text), do: %{post | content_text: text}
   def put_text(%Note{} = note, text), do: %{note | content_text: text}
+  def put_text(%ExternalPost{} = post, text), do: %{post | text: text}
 
   @doc """
   When a post was written, whichever kind of post it is.
@@ -1264,6 +1268,10 @@ defmodule Vutuv.Posts do
   def written_at(%Post{inserted_at: at}), do: at
   def written_at(%RemotePost{published_at: at}), do: at
   def written_at(%Note{received_at: at}), do: at
+  # A post read off a public tag timeline carries its origin's own stamp, like
+  # a cached post — we were never the addressee, so "when it reached us" says
+  # nothing about when it was written.
+  def written_at(%ExternalPost{published_at: at}), do: at
 
   @doc """
   The strings that name the account a post came from — its handle first, then
@@ -1314,6 +1322,12 @@ defmodule Vutuv.Posts do
 
   def account_names(%Note{} = note),
     do: names(Note.display_handle(note), Note.author_name(note))
+
+  # The full address here means the **author's** server, not the one the
+  # timeline was read from — a reader aiming a rule at `*@social.heise.de`
+  # means the people there, whichever server we happened to find them through.
+  def account_names(%ExternalPost{} = post),
+    do: names(ExternalPost.address(post), post.author_name)
 
   # An author row that is gone — the two clauses above answer `Repo.get` with
   # this. Deliberately the ONLY fall-through: `text/1` and `written_at/1` raise
@@ -3190,7 +3204,8 @@ defmodule Vutuv.Posts do
   defp feed_sources(viewer, :fediverse, shape) do
     [
       &Vutuv.Fediverse.feed_remote_posts(viewer, &1, &2, shape: shape),
-      &Vutuv.Fediverse.feed_remote_boosts(viewer, &1, &2, only: :remote, shape: shape)
+      &Vutuv.Fediverse.feed_remote_boosts(viewer, &1, &2, only: :remote, shape: shape),
+      &ExternalPosts.feed_items(viewer, &1, &2, shape: shape)
     ]
   end
 
@@ -3219,7 +3234,11 @@ defmodule Vutuv.Posts do
       # over: a reply arrived under somebody's vutuv post, a member here
       # thought it worth carrying, and that is how it reaches readers who
       # never opened that conversation.
-      &Vutuv.Fediverse.feed_remote_reply_reposts(viewer, &1, &2)
+      &Vutuv.Fediverse.feed_remote_reply_reposts(viewer, &1, &2),
+      # Eighth: what the **servers a followed tag names** carry about it (issue
+      # #2127). The one source that reaches a reader through a topic rather
+      # than through anybody they follow — here or out there.
+      &ExternalPosts.feed_items(viewer, &1, &2, shape: shape)
     ]
   end
 
@@ -3515,11 +3534,16 @@ defmodule Vutuv.Posts do
   is a **vutuv** entry as soon as a member here passed it on (`reposted_by`),
   whoever that was. See `feed_sources/3` for why.
   """
+  # Read off `local_feed_entry?/1` rather than off which foreign kind it is:
+  # all three of those set `post: nil`, so one predicate answers for the fourth
+  # (issue #2127) and for whatever comes after it. A post a followed tag brought
+  # back from another server carries no `reposted_by` — nobody here passed it on
+  # — so it lands in the fediverse half without a clause of its own.
   def feed_filter_accepts?(:vutuv, entry),
-    do: not remote_feed_entry?(entry) or reshared_here?(entry)
+    do: local_feed_entry?(entry) or reshared_here?(entry)
 
   def feed_filter_accepts?(:fediverse, entry),
-    do: remote_feed_entry?(entry) and not reshared_here?(entry)
+    do: not (local_feed_entry?(entry) or reshared_here?(entry))
 
   # `:own` is deliberately not answered here and falls through to `true`: whose
   # post it is cannot be read off the entry alone, and the caller that knows the
@@ -3660,6 +3684,12 @@ defmodule Vutuv.Posts do
   # organization feed renders flat `<.post_card>`s and the tab ticker quotes a
   # single row, so both would pay for something they cannot show.
   defp decorate_feed_entries(entries, viewer, opts \\ []) do
+    # A post a followed tag brought back from another server (issue #2127) is
+    # split off **first** and given nothing: it has no account row here, so
+    # every one of `decorate_remote/2`'s batch reads — like marks, cached
+    # pictures, quotes, the follow state — would ask about a `.remote_post` it
+    # does not carry. It goes back into the merge below exactly as it came.
+    {external, entries} = Enum.split_with(entries, &external_feed_entry?/1)
     {remote, local} = Enum.split_with(entries, &remote_feed_entry?/1)
     threads? = Keyword.get(opts, :threads, false)
     seen = opts |> Keyword.get(:seen, []) |> MapSet.new()
@@ -3674,7 +3704,7 @@ defmodule Vutuv.Posts do
 
     {local, remote} = settle_remote_cards(local, viewer, remote, seen, threads?)
 
-    entries = Vutuv.FeedPage.sort_entries(local ++ decorate_remote(remote, viewer))
+    entries = Vutuv.FeedPage.sort_entries(local ++ decorate_remote(remote, viewer) ++ external)
     warm_hashtag_links(entries)
     entries
   end
@@ -3720,7 +3750,7 @@ defmodule Vutuv.Posts do
 
     entry
     |> thread_posts()
-    |> Enum.concat([entry[:remote_post], entry[:note]])
+    |> Enum.concat([entry[:remote_post], entry[:external_post], entry[:note]])
     |> Enum.concat(parents)
     |> Enum.reject(&is_nil/1)
     |> Enum.map(&text/1)
@@ -4106,6 +4136,7 @@ defmodule Vutuv.Posts do
     entry
     |> map_present(:post, fun)
     |> map_present(:remote_post, fun)
+    |> map_present(:external_post, fun)
     |> map_present(:note, fun)
     |> map_present(:ancestors, &Enum.map(&1, fun))
     |> map_present(:remote_parents, fn parents ->
@@ -4185,7 +4216,8 @@ defmodule Vutuv.Posts do
 
   # What a remote entry is about: the cached post, or the reply a member here
   # passed on. Both wear the same action bar, so both have marks to read.
-  defp remote_subject(entry), do: entry[:remote_post] || entry.note
+  defp remote_subject(entry),
+    do: entry[:remote_post] || entry[:external_post] || entry.note
 
   # Whether the reader follows each card's author, read once for the whole page.
   # The card's ⋯ menu offers Mute and Unfollow only where there is a follow to
@@ -4247,6 +4279,31 @@ defmodule Vutuv.Posts do
   card, the content filter and the id all come from `entry.note` instead.
   """
   def remote_reply_entry?(entry), do: not is_nil(entry[:note])
+
+  @doc """
+  Whether this row is a post one of the reader's followed tags brought back from
+  another server (issue #2127) — the fourth row shape.
+
+  Deliberately **not** folded into `remote_feed_entry?/1`, which is not a
+  question about provenance but about a `Vutuv.Fediverse.RemotePost`: everything
+  that answers true to it goes on to be given like marks, cached pictures,
+  quotes and a follow state, none of which exists here. This row carries text, a
+  link and its author's address, is drawn undecorated, and is the reader's own
+  business through their tag follow rather than through a follow out there.
+  """
+  def external_feed_entry?(entry), do: not is_nil(entry[:external_post])
+
+  @doc """
+  Whether a feed row carries a vutuv `%Post{}` at all — the question every
+  `entry.post.id` really wanted to ask.
+
+  Written as its own thing rather than as `not remote_feed_entry?/1`, which is
+  what a dozen call sites said and is not the same claim: that one is about a
+  `%Vutuv.Fediverse.RemotePost{}`, so the moment a fourth row shape arrived
+  (issue #2127) every one of them read `nil.id` on it. The three kinds from
+  elsewhere all set `post: nil`, so this is one field lookup and cannot drift.
+  """
+  def local_feed_entry?(entry), do: not is_nil(entry[:post])
 
   # The reader's own posts, and nothing else — what the feed calendar's
   # "My posts" reading shows in the timeline as well as in the shading.
