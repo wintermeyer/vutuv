@@ -12,15 +12,20 @@ defmodule Vutuv.Videos do
   check judges, writes the H.264 file, and the clip is **ready** when both
   have landed; the AV1 file and the two 360p files follow as enhancements. A
   post with a clip is created only once the clip is ready — until then the
-  composer's submission waits as a `Vutuv.Posts.PendingVideoPost`, which
-  `Vutuv.Videos.Publisher` turns into the post.
+  composer's submission waits as a `Vutuv.Posts.PendingPost`, which
+  `Vutuv.Posts.Publisher` turns into the post. That row is no longer about
+  clips (#2106): it waits for whatever media the post carries, and a clip is
+  one case of it, so everything about the waiting itself — creating the row,
+  reading it, the author's two ways out — lives in `Vutuv.Posts.Pending`.
 
   ## Who hears about it
 
-  Every change of state is broadcast on the author's video topic
-  (`subscribe/1`): the composer's tile, the pending card in the feed and the
-  progress chip in the app bar all draw from the same `{:post_video, summary}`
-  message, and a pending post's fate arrives as `{:pending_video_post, …}`.
+  Every change of state is broadcast on the author's **media** topic
+  (`Vutuv.Posts.Pending.topic/1`, re-exported here as `subscribe/1`): the
+  composer's tile, the waiting card in the feed, the progress chip in the app
+  bar and the author's own `/system/uploads` all draw from the same
+  `{:post_video, summary}` message, and a waiting post's fate arrives beside it
+  as `{:pending_post, …}`.
 
   ## Off switch
 
@@ -36,7 +41,8 @@ defmodule Vutuv.Videos do
   alias Vutuv.Accounts.User
   alias Vutuv.Moderation.ImageScans
   alias Vutuv.Posts
-  alias Vutuv.Posts.PendingVideoPost
+  alias Vutuv.Posts.Pending
+  alias Vutuv.Posts.PendingPost
   alias Vutuv.Posts.Post
   alias Vutuv.Posts.PostDraft
   alias Vutuv.Posts.PostVideo
@@ -45,9 +51,7 @@ defmodule Vutuv.Videos do
   alias Vutuv.Repo
   alias Vutuv.Videos.FFmpeg
   alias Vutuv.Videos.Pipeline
-  alias Vutuv.Videos.Publisher
 
-  @pubsub Vutuv.PubSub
   @pending_max_age_hours 24
   # How many stills at most, how far apart the fixed ones sit, and how many
   # opening seconds the default cover is picked from.
@@ -102,10 +106,13 @@ defmodule Vutuv.Videos do
 
   ## PubSub
 
-  def topic(user_id), do: "post_video:#{user_id}"
-  def subscribe(user_id), do: Phoenix.PubSub.subscribe(@pubsub, topic(user_id))
-  def broadcast(nil, _event), do: :ok
-  def broadcast(user_id, event), do: Phoenix.PubSub.broadcast(@pubsub, topic(user_id), event)
+  # One author topic for every medium in flight, owned by `Vutuv.Posts.Pending`
+  # (#2106): a clip, a file and the post waiting on either are the same story
+  # told to the same four surfaces, and three topics would have meant three
+  # subscriptions in every one of them.
+  defdelegate topic(user_id), to: Pending
+  defdelegate subscribe(user_id), to: Pending
+  defdelegate broadcast(user_id, event), to: Pending
 
   ## The upload
 
@@ -271,7 +278,7 @@ defmodule Vutuv.Videos do
       where: not exists(from(d in PostDraft, where: d.video_id == parent_as(:video).id)),
       where:
         not exists(
-          from(p in PendingVideoPost,
+          from(p in PendingPost,
             where: p.video_id == parent_as(:video).id and p.status == "waiting"
           )
         )
@@ -582,7 +589,10 @@ defmodule Vutuv.Videos do
 
       video.h264_ready_at != nil and video.moderation == "approved" ->
         ready = update_state(video, stage: "ready", progress: 100)
-        Publisher.publish_for(ready)
+        # The clip may have been the last thing a post was waiting for — or
+        # one of several (#2106), which is why the answer is a nudge rather
+        # than a publish.
+        Pending.media_changed(:video, ready.id)
         ready
 
       video.h264_ready_at != nil and video.moderation == "pending" ->
@@ -593,7 +603,7 @@ defmodule Vutuv.Videos do
     end
   end
 
-  @doc "The job could not finish the clip; the text keeps a way out (`Vutuv.Posts.PendingVideoPost`)."
+  @doc "The job could not finish the clip; the text keeps a way out (`Vutuv.Posts.PendingPost`)."
   def fail(%PostVideo{} = video, reason) do
     Logger.warning("post_video failed video=#{video.id} reason=#{inspect(reason)}")
     update_state(video, stage: "failed", error: clip(inspect(reason)), worked_at: nil)
@@ -601,132 +611,9 @@ defmodule Vutuv.Videos do
 
   defp clip(text), do: String.slice(text, 0, 2_000)
 
-  ## Pending posts (issue #1910)
+  ## Pending posts
 
-  @doc """
-  Stores the composer's submission until its clip is ready: the create path
-  (`kind`), its `context` (`parent`, `organization`, `note`, `remote_post` —
-  whichever the kind needs) and the attrs verbatim. Publishes on the spot when
-  the clip turned ready meanwhile.
-  """
-  def create_pending_post(%User{} = user, %PostVideo{} = video, kind, context, attrs)
-      when is_map(context) and is_map(attrs) do
-    params = %{
-      kind: kind,
-      parent_post_id: context[:parent] && context[:parent].id,
-      organization_id: context[:organization] && context[:organization].id,
-      note_id: context[:note] && context[:note].id,
-      remote_post_id: context[:remote_post] && context[:remote_post].id,
-      attrs: json_attrs(attrs)
-    }
-
-    insert =
-      %PendingVideoPost{user_id: user.id, video_id: video.id}
-      |> PendingVideoPost.changeset(params)
-      |> Repo.insert()
-
-    with {:ok, pending} <- insert do
-      broadcast(user.id, {:pending_video_post, pending_summary(pending)})
-      # The clip may have turned ready between the composer's check and this
-      # insert; the publisher's claim makes a double publish impossible.
-      if PostVideo.ready?(get_video(video.id) || video), do: Publisher.publish(pending)
-      {:ok, pending}
-    end
-  end
-
-  # The map column round-trips through JSON: string keys, and nothing but
-  # what JSON can carry.
-  defp json_attrs(attrs) do
-    attrs
-    |> Map.new(fn {key, value} -> {to_string(key), value} end)
-    |> Jason.encode!()
-    |> Jason.decode!()
-  end
-
-  @doc "What listeners hear about a pending post."
-  def pending_summary(%PendingVideoPost{} = pending) do
-    %{
-      id: pending.id,
-      status: pending.status,
-      post_id: pending.post_id,
-      video_id: pending.video_id
-    }
-  end
-
-  @doc "The member's posts still waiting on a clip (or refused one), newest first, clips preloaded."
-  def pending_posts_for(%User{id: user_id}), do: pending_posts_for(user_id)
-
-  def pending_posts_for(user_id) when is_binary(user_id) do
-    from(p in PendingVideoPost,
-      where: p.user_id == ^user_id and p.status == "waiting",
-      order_by: [desc: p.inserted_at],
-      preload: [video: :frames]
-    )
-    |> Repo.all()
-  end
-
-  def get_pending_post(%User{id: user_id}, id) do
-    Vutuv.UUIDv7.with_cast(id, fn id ->
-      from(p in PendingVideoPost, where: p.id == ^id and p.user_id == ^user_id)
-      |> Repo.one()
-      |> Repo.preload(video: :frames)
-    end)
-  end
-
-  @doc """
-  The app bar's line: how many of the member's posts wait on a clip, and the
-  percent of the one being converted (`nil` when nothing is converting).
-  """
-  def in_progress_summary(user_id) when is_binary(user_id) do
-    videos =
-      from(p in PendingVideoPost,
-        join: v in PostVideo,
-        on: v.id == p.video_id,
-        where: p.user_id == ^user_id and p.status == "waiting",
-        where: v.stage not in ["rejected", "failed"],
-        select: %{stage: v.stage, progress: v.progress}
-      )
-      |> Repo.all()
-
-    converting = Enum.filter(videos, &(&1.stage == "transcoding"))
-
-    %{
-      count: length(videos),
-      progress:
-        case converting do
-          [] -> nil
-          list -> div(Enum.sum(Enum.map(list, & &1.progress)), length(list))
-        end
-    }
-  end
-
-  def in_progress_summary(_), do: %{count: 0, progress: nil}
-
-  @doc "Drops a waiting post and its clip, files and all."
-  def cancel_pending_post(%PendingVideoPost{status: "waiting"} = pending) do
-    {count, _} =
-      from(p in PendingVideoPost, where: p.id == ^pending.id and p.status == "waiting")
-      |> Repo.update_all(set: [status: "canceled"])
-
-    if count == 1 do
-      pending = Repo.preload(pending, :video)
-      if pending.video, do: delete_pending_video(pending.video)
-
-      broadcast(
-        pending.user_id,
-        {:pending_video_post, %{pending_summary(pending) | status: "canceled"}}
-      )
-    end
-
-    :ok
-  end
-
-  def cancel_pending_post(%PendingVideoPost{}), do: :ok
-
-  @doc "Publishes the waiting text as it is, without the clip, which goes."
-  def publish_without_video(%PendingVideoPost{status: "waiting"} = pending) do
-    Publisher.publish(pending, without_video: true)
-  end
-
-  def publish_without_video(%PendingVideoPost{}), do: {:error, :not_waiting}
+  # Creating, reading and cancelling a waiting post live in
+  # `Vutuv.Posts.Pending` since #2106 — a clip is one of the things such a post
+  # waits for, no longer the only one. What stays here is the clip itself.
 end

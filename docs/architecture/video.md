@@ -84,8 +84,8 @@ twice. `Vutuv.VideosTest` kills a job mid-encode and asserts the resume.
 A photo post publishes at once and its picture catches up; a text whose video
 is missing reads as broken. So a post with a clip is not created until the
 clip is ready: the composer's submission is stored as a
-`Vutuv.Posts.PendingVideoPost` — the create path it took, the context that path
-needs and the attrs verbatim — and `Vutuv.Videos.Publisher` turns the row into
+`Vutuv.Posts.PendingPost` — the create path it took, the context that path
+needs and the attrs verbatim — and `Vutuv.Posts.Publisher` turns the row into
 the post through the very `Vutuv.Posts.create_*` function the composer would
 have called, the moment the clip is ready. A post with a clip that is already
 ready posts on the spot. No feed or profile query needs a new filter, because
@@ -94,11 +94,19 @@ there is no post to filter.
 A refused or broken clip keeps the text: the row waits with the verdict on it,
 and the author's feed card offers to publish without the video or to drop it.
 
+**A clip is one of the things such a post waits for, no longer the only one**
+(issue #2106). The same row waits for a post's files, their preview pages and
+the AI check on each of those, and publishes when the last of them is done;
+`Vutuv.Posts.Pending` owns that question and `docs/architecture/attachments.md`
+describes the general shape. Everything below about what the author sees is
+that module's, and this page keeps it because the clip is the case with the
+most to show.
+
 ## What the author sees
 
-Every change of state is broadcast on the author's video topic
-(`Vutuv.Videos.subscribe/1`, `"post_video:<user_id>"`), and three surfaces
-draw from it:
+Every change of state is broadcast on the author's media topic
+(`Vutuv.Posts.Pending.subscribe/1`, `"post_media:<user_id>"`, re-exported as
+`Vutuv.Videos.subscribe/1`), and four surfaces draw from it:
 
 * the **composer's tile** — cover, length, the stage line ("Converting ·
   62 %", "Our AI is checking it, 4 of 6 frames done") and the strip of stills
@@ -108,12 +116,15 @@ draw from it:
   organization page's mount) and forwards each `{:post_video, …}` to the
   composer that registered the clip. A percent is patched in place; a stage,
   a verdict or a cover change re-reads the row.
-* the **waiting card** above the feed's timeline (`VutuvWeb.VideoComponents.
-  pending_video_post/1`): the text, the tile, the stage, the length rounded
-  up to whole minutes, a cancel button, and after a refusal the two ways out.
-* the **chip in the app bar** (`VutuvWeb.ShellLive`), on every page: how
-  many posts wait on a clip and the percent of the one being converted,
-  linking to the feed.
+* the **waiting card** above the feed's timeline
+  (`VutuvWeb.PendingPostComponents.pending_post/1`): the text, the tile, the
+  stage, the length rounded up to whole minutes, a cancel button, and after a
+  refusal the two ways out.
+* the **chip in the app bar** (`VutuvWeb.ShellLive`), on every page: how many
+  posts of this member's are waiting and the percent of the one clip being
+  converted, linking to `/system/uploads`.
+* that **page of their own**, `VutuvWeb.UploadsLive` — what waits, what each
+  one is waiting for, and what the earlier ones became.
 
 ## The player and the proxy
 

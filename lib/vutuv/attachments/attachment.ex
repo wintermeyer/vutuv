@@ -8,7 +8,7 @@ defmodule Vutuv.Attachments.Attachment do
   message (#2110) claims it later. A row that never gets a parent is swept
   after a day (`Vutuv.Attachments.sweep_pending/1`).
 
-  ## The two parents
+  ## The two parents, and the reservation beside them
 
   `post_id` and `message_id` are the nullable pair CLAUDE.md warns about: at
   most one of them is set and both are `nil` while the composer holds the
@@ -16,6 +16,13 @@ defmodule Vutuv.Attachments.Attachment do
   every message's file) or fed into a `NOT IN` without an `is_nil/1` branch
   (one NULL in the list makes the predicate false for every row).
   `Vutuv.Attachments.pending?/1` is the one place that asks.
+
+  `pending_post_id` is **not** a third parent: it is a reservation (#2106). A
+  post whose files are still being worked on is parked as a
+  `Vutuv.Posts.PendingPost`, and this column is what keeps the daily sweep and
+  a re-mounted composer off a file that post is waiting on. It is cleared in
+  the same statement that sets `post_id`, so exactly one of the two ever
+  answers "who holds this file".
 
   ## What the row holds
 
@@ -46,6 +53,7 @@ defmodule Vutuv.Attachments.Attachment do
     belongs_to(:post, Vutuv.Posts.Post)
     belongs_to(:message, Vutuv.Chat.Message)
     belongs_to(:user, Vutuv.Accounts.User)
+    belongs_to(:pending_post, Vutuv.Posts.PendingPost)
 
     field(:token, :string)
     field(:file_name, :string)
@@ -54,6 +62,14 @@ defmodule Vutuv.Attachments.Attachment do
     field(:page_count, :integer)
 
     field(:stage, :string, default: "stored")
+
+    # When the AI check refused one of this file's preview pages. The verdict
+    # deletes the page itself, so without this the file would look untouched
+    # and the post waiting on it would wait for a page that is never coming
+    # back (#2106). The **file** is not deleted by a page's verdict — what
+    # happens to a file whose contents are refused is the upload gate's
+    # question — but the post stops waiting and the author gets the choice.
+    field(:refused_at, :utc_datetime)
 
     # The render pipeline's own two columns (#2105). `worked_at` is the claim
     # heartbeat a compare-and-set is done on, so two slots of a deploy overlap
@@ -75,6 +91,15 @@ defmodule Vutuv.Attachments.Attachment do
     |> validate_number(:size_bytes, greater_than_or_equal_to: 0)
     |> unique_constraint(:token)
   end
+
+  @doc """
+  Whether the AI check refused one of this file's preview pages, so it can
+  never become part of a post on its own. The twin of
+  `Vutuv.Posts.PostVideo.refused?/1`, and the one place the column is read —
+  CLAUDE.md's "match on a column, never on a preload" rule wants this owned
+  once rather than spelled out at each of its four call sites.
+  """
+  def refused?(%__MODULE__{refused_at: at}), do: not is_nil(at)
 
   @doc "The longest file name that fits the column — what the chokepoint cuts to."
   def name_max, do: @name_max

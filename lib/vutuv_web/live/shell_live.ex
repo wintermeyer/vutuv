@@ -54,9 +54,9 @@ defmodule VutuvWeb.ShellLive do
   alias Vutuv.PeopleCounter
   alias Vutuv.PostRewrites
   alias Vutuv.Posts
+  alias Vutuv.Posts.Pending
   alias Vutuv.Prefs
   alias Vutuv.Social
-  alias Vutuv.Videos
   alias Vutuv.WebPush
   alias VutuvWeb.Live.InitAssigns
   alias VutuvWeb.NotificationLine
@@ -189,9 +189,10 @@ defmodule VutuvWeb.ShellLive do
   defp mount_authenticated(socket, %User{} = user, session, path) do
     user_id = user.id
     Activity.subscribe(user_id)
-    # The clips this member's posts are waiting on (issue #1911): the chip in
-    # the bar follows their progress on every page.
-    Videos.subscribe(user_id)
+    # The media this member's posts are waiting on (issues #1911, #2106): the
+    # chip in the bar follows their progress on every page, over the one author
+    # topic every medium reports on.
+    Pending.subscribe(user_id)
     # Re-asked from the cookie session's id against `organization_roles`, never
     # taken from the curated map: the shell is on every page, so a mode it drew
     # from a replayable payload would be the loudest possible lie about whose
@@ -225,7 +226,7 @@ defmodule VutuvWeb.ShellLive do
     |> assign(:current_user, user)
     |> maybe_start_counts(user, path)
     |> maybe_start_new_members()
-    |> assign(:videos_in_progress, Videos.in_progress_summary(user_id))
+    |> assign(:media_in_progress, Pending.in_progress_summary(user_id))
     |> maybe_start_presence(user_id, user.show_online_status?)
   end
 
@@ -289,7 +290,7 @@ defmodule VutuvWeb.ShellLive do
     |> assign(:feed_cap, Posts.feed_unread_cap())
     # The posts waiting on a clip (issue #1911): none until the socket connects
     # and asks, like the badges.
-    |> assign(:videos_in_progress, %{count: 0, progress: nil})
+    |> assign(:media_in_progress, %{count: 0, progress: nil})
     |> assign(:brand_path, brand_path(socket.assigns.user_param, path))
     # The current path also drives the active-nav highlight (which top/bottom
     # nav item is the page being viewed). Like brand_path it is the path at
@@ -522,11 +523,15 @@ defmodule VutuvWeb.ShellLive do
   # post waiting on a clip was published or dropped: that changes the set,
   # so the one query the chip draws from is asked again.
   def handle_info({:post_video, %{stage: stage, progress: progress}}, socket),
-    do:
-      {:noreply, update(socket, :videos_in_progress, &patch_video_progress(&1, stage, progress))}
+    do: {:noreply, update(socket, :media_in_progress, &patch_video_progress(&1, stage, progress))}
 
-  def handle_info({:pending_video_post, _summary}, socket),
-    do: {:noreply, recount_videos(socket)}
+  def handle_info({:pending_post, _summary}, socket),
+    do: {:noreply, recount_media(socket)}
+
+  # A file moved a stage (issue #2106). It carries no percent, so only the set
+  # the chip counts can have changed.
+  def handle_info({:attachment, _summary}, socket),
+    do: {:noreply, recount_media(socket)}
 
   # A new post reached this member's feed (Vutuv.Posts.create_post broadcasts
   # {:new_post, …} to the author *and* every follower). They may be reading
@@ -658,10 +663,10 @@ defmodule VutuvWeb.ShellLive do
 
   def handle_info(_other, socket), do: {:noreply, socket}
 
-  defp recount_videos(%{assigns: %{user_id: user_id}} = socket) when is_binary(user_id),
-    do: assign(socket, :videos_in_progress, Videos.in_progress_summary(user_id))
+  defp recount_media(%{assigns: %{user_id: user_id}} = socket) when is_binary(user_id),
+    do: assign(socket, :media_in_progress, Pending.in_progress_summary(user_id))
 
-  defp recount_videos(socket), do: socket
+  defp recount_media(socket), do: socket
 
   # Nothing waits, nothing to patch; converting carries a percent, any other
   # stage none.
@@ -1448,22 +1453,23 @@ defmodule VutuvWeb.ShellLive do
           document. They inherit that bar's palette, so a press fills the circle
           the way hovering it already tints it. --%>
           <div data-nav-bar class="flex items-center justify-end gap-1">
-            <%!-- A post of this member's waiting on its clip (issue #1911): how
-            many, and the percent of the one being converted. On every page,
-            because the author will not sit on one for a minute; it links to
-            the feed, where the waiting card carries the rest. Rendered only
-            while there is something to wait for. --%>
+            <%!-- A post of this member's waiting on its media (issues #1911,
+            #2106): how many, and the percent of the one clip being converted.
+            On every page, because the author will not sit on one for twenty
+            minutes; it links to their own uploads page, which names every
+            stage and carries the ways out. Rendered only while there is
+            something to wait for. --%>
             <.link
-              :if={@videos_in_progress.count > 0}
-              id="videos-in-progress"
-              href={~p"/feed"}
-              title={videos_in_progress_label(@videos_in_progress)}
-              aria-label={videos_in_progress_label(@videos_in_progress)}
-              data-videos-in-progress={@videos_in_progress.count}
+              :if={@media_in_progress.count > 0}
+              id="media-in-progress"
+              href={~p"/system/uploads"}
+              title={media_in_progress_label(@media_in_progress)}
+              aria-label={media_in_progress_label(@media_in_progress)}
+              data-media-in-progress={@media_in_progress.count}
               class="inline-flex items-center gap-1.5 rounded-full bg-amber-50 px-3 py-1 text-sm font-semibold text-amber-800 hover:bg-amber-100 dark:bg-amber-900/40 dark:text-amber-100 dark:hover:bg-amber-900/70"
             >
               <.hourglass class="h-4 w-4" />
-              <span class="tabular-nums">{videos_in_progress_text(@videos_in_progress)}</span>
+              <span class="tabular-nums">{media_in_progress_text(@media_in_progress)}</span>
             </.link>
 
             <%!-- Admins only: today's confirmed sign-ups (German calendar day),
@@ -1724,14 +1730,21 @@ defmodule VutuvWeb.ShellLive do
 
   # The chip's text: the percent while one clip converts, the count otherwise
   # — "62 %" says more than "1" to the one person it is for.
-  defp videos_in_progress_text(%{count: 1, progress: percent}) when is_integer(percent),
+  defp media_in_progress_text(%{count: 1, progress: percent}) when is_integer(percent),
     do: "#{percent} %"
 
-  defp videos_in_progress_text(%{count: count}), do: compact_count(count)
+  defp media_in_progress_text(%{count: count}), do: compact_count(count)
 
-  defp videos_in_progress_label(%{count: count, progress: percent}) do
+  # Its own msgid rather than the video one it replaces: this counts POSTS
+  # waiting, not clips, and the German for the old one says "Videos".
+  defp media_in_progress_label(%{count: count, progress: percent}) do
     base =
-      ngettext("%{count} video in progress", "%{count} videos in progress", count, count: count)
+      ngettext(
+        "%{count} post is being prepared",
+        "%{count} posts are being prepared",
+        count,
+        count: count
+      )
 
     if is_integer(percent), do: "#{base} · #{percent} %", else: base
   end

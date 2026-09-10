@@ -108,6 +108,45 @@ later reader cannot write its own `is_nil/1` pair and get one of them wrong —
 an inner join to `posts` would silently drop every message's file, and a
 `NOT IN` over these ids without an `is_nil/1` branch is false for every row.
 
+`pending_post_id` beside them is **not** a third parent but a reservation
+(#2106): while a post is waiting for this file it names the file here, which is
+what keeps the daily sweep and a re-mounted composer off it. Setting `post_id`
+clears it in the same statement, so exactly one column ever answers "who holds
+this file".
+
+## The post waits for its files
+
+A post carrying a file is not published until the server is done with every one
+of them: rendered, and every preview page past the AI check. That is minutes,
+so the submission is parked as a `Vutuv.Posts.PendingPost` and
+`Vutuv.Posts.Publisher` turns it into the post the moment the last medium
+settles — the row that used to wait for a clip alone (#1910), generalised, with
+the clip now one case of it. `Vutuv.Posts.Pending` owns the whole question:
+
+* **`state/1`** asks the clip and every file, and answers `:ready` only when
+  none is still working, `:refused` when one can never become ready. The
+  composer asks the same module (`file_done?/1`) before deciding whether to
+  publish now or park, so the two sides cannot disagree about "done".
+* **One author topic**, `topic/1` (`"post_media:<user_id>"`), carries
+  `{:post_video, …}`, `{:attachment, …}` and `{:pending_post, …}`, so the
+  composer's file chips, the waiting card above the feed, the app-bar chip and
+  `/system/uploads` (`VutuvWeb.UploadsLive`) all draw from the same events, and
+  `VutuvWeb.PendingPostComponents` words every stage once for all four.
+* **A refusal keeps the text.** The AI check deleting a preview page stamps
+  `attachments.refused_at` (the file itself is untouched — what happens to a
+  file whose *contents* are refused is the upload gate's question), the post
+  stops waiting, and the author is offered the text without the refused file
+  or neither. Both are `phx-click` events, never links: each destroys state,
+  and a state-destroying GET dies on a Back button or a link prefetch.
+* **Surviving a deploy.** The publish is claimed by a compare-and-set on
+  `status`, and the claim writes `minted_post_id` — the id the post is about to
+  get — so a slot killed between the insert and the bookkeeping is resumed by
+  finding that post rather than writing the member's post twice.
+  `Vutuv.Posts.PendingSweeper` runs `Pending.sweep/1` once a minute as the
+  backstop when the nudge from a settling medium died with its process, and
+  stamps `checked_at` on **every** row it looks at, including the ones it can do
+  nothing for, so a still-rendering file cannot hold the front of every batch.
+
 ## The preview pages
 
 `Vutuv.Attachments.Pages` renders the first pages of a file as pictures, so a
@@ -132,12 +171,21 @@ moderation evidence already uses. One page, not three, because a text file has
 no pagination of its own — what is captured is the first screenful, and slicing
 a README into three would produce two pictures of nothing in particular.
 
-That page's content is a member's file, so it is rendered **offline twice
-over**: the document carries `Content-Security-Policy: default-src 'none'` and
-the browser is launched with `--host-resolver-rules=MAP * ~NOTFOUND`
-(`offline: true`). Either alone would stop a Markdown image reference from
-making this server fetch an address the member chose; neither alone fails
-closed.
+That page's content is a member's file, so it is rendered **offline**: the
+document carries `Content-Security-Policy: default-src 'none'` and the browser
+is launched with `--host-resolver-rules=MAP * ~NOTFOUND` (`offline: true`).
+Either alone stops a Markdown image reference from making this server fetch an
+address the member chose.
+
+Both are about **subresources**, though, and neither covers top-level
+navigation: a `<meta http-equiv="refresh" content="0;url=file:///etc/passwd">`
+would navigate and be photographed, because CSP has no navigation directive
+here and a `file://` URL asks no resolver anything. What keeps that out is a
+layer up — `VutuvWeb.Markdown.render/1` escapes every `<` before Earmark, then
+sanitizes, then strips `<img>`, so nothing a member writes becomes a tag at
+all. Loosening that pipeline (raw HTML pass-through, another renderer) is
+therefore a change to the preview renderer's threat model too, and needs a
+navigation answer of its own first.
 
 ### Each page is a picture
 

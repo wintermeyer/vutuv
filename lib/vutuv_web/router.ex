@@ -1191,6 +1191,15 @@ defmodule VutuvWeb.Router do
       live("/likes", PostLive.Saved, :likes)
       live("/bookmarks", PostLive.Saved, :bookmarks)
 
+      # The member's own uploads queue (issue #2106): the posts of theirs still
+      # waiting on a clip or on files, what each one is waiting for, and what
+      # the earlier ones became. Under /system/ rather than a new root word,
+      # which profiles own; noindex because it is one member's private queue.
+      scope "/system" do
+        pipe_through(:noindex_pipe)
+        live("/uploads", UploadsLive, :index)
+      end
+
       # Job postings ("jobs" is a ReservedSlug). Auth is checked in the mounts.
       # The two-segment owner routes (/jobs/mine, /jobs/new) are defined before
       # the /jobs/:slug detail route so they are never captured as a slug. The

@@ -56,6 +56,13 @@ defmodule Vutuv.Moderation.ImageScans do
   # content, so they get the notice. Machine captures (link screenshots) are
   # our artifact of a third-party page — silently showing no preview is the
   # same UX as a failed capture, so no notice.
+  #
+  # `attachment_page` is left out for that same reason and one more: a preview
+  # page is our artifact of the member's file, the file itself is untouched by
+  # the verdict, and the author is told about it where it matters anyway — the
+  # post waiting on that file stops waiting and offers them the two ways out
+  # (`Vutuv.Posts.Pending`, #2106). A notice here would be a second, vaguer
+  # copy of that.
   @notify_kinds ~w(avatar cover post_image job_posting_image organization_image post_video_frame
                    press_kit)
 

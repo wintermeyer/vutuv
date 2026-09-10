@@ -18,7 +18,8 @@ defmodule Vutuv.VideosTest do
 
   alias Vutuv.Moderation.ImageScans
   alias Vutuv.Posts
-  alias Vutuv.Posts.PendingVideoPost
+  alias Vutuv.Posts.Pending
+  alias Vutuv.Posts.PendingPost
   alias Vutuv.Posts.PostVideo
   alias Vutuv.PostVideoStore
   alias Vutuv.Repo
@@ -318,15 +319,15 @@ defmodule Vutuv.VideosTest do
         denials: []
       }
 
-      {:ok, pending} = Videos.create_pending_post(user, video, "post", %{}, attrs)
+      {:ok, pending} = Pending.create(user, "post", %{}, attrs, video: video)
       assert pending.status == "waiting"
-      assert Videos.in_progress_summary(user.id) == %{count: 1, progress: nil}
-      assert [%PendingVideoPost{id: id}] = Videos.pending_posts_for(user)
+      assert Pending.in_progress_summary(user.id) == %{count: 1, progress: nil}
+      assert [%PendingPost{id: id}] = Pending.waiting_for(user)
       assert id == pending.id
 
       assert :ok = Job.run(video.id)
 
-      published = Repo.get!(PendingVideoPost, pending.id)
+      published = Repo.get!(PendingPost, pending.id)
       assert published.status == "published"
       post = Posts.get_post(published.post_id)
       assert post.body == "Watch this"
@@ -335,18 +336,18 @@ defmodule Vutuv.VideosTest do
       assert reload(video).post_id == post.id
 
       post_id = post.id
-      assert_received {:pending_video_post, %{status: "published", post_id: ^post_id}}
+      assert_received {:pending_post, %{status: "published", post_id: ^post_id}}
 
-      assert Videos.pending_posts_for(user) == []
-      assert Videos.in_progress_summary(user.id) == %{count: 0, progress: nil}
+      assert Pending.waiting_for(user) == []
+      assert Pending.in_progress_summary(user.id) == %{count: 0, progress: nil}
     end
 
     test "a clip that is already ready publishes on the spot", %{user: user} do
       video = upload!(user)
       assert :ok = Job.run(video.id)
 
-      {:ok, pending} = Videos.create_pending_post(user, video, "post", %{}, %{body: "Now"})
-      assert Repo.get!(PendingVideoPost, pending.id).status == "published"
+      {:ok, pending} = Pending.create(user, "post", %{}, %{body: "Now"}, video: video)
+      assert Repo.get!(PendingPost, pending.id).status == "published"
     end
 
     test "a reply waits and then answers its parent", %{user: user} do
@@ -354,10 +355,10 @@ defmodule Vutuv.VideosTest do
       video = upload!(user)
 
       {:ok, pending} =
-        Videos.create_pending_post(user, video, "reply", %{parent: parent}, %{body: "Re"})
+        Pending.create(user, "reply", %{parent: parent}, %{body: "Re"}, video: video)
 
       assert :ok = Job.run(video.id)
-      published = Repo.get!(PendingVideoPost, pending.id)
+      published = Repo.get!(PendingPost, pending.id)
       assert published.status == "published"
 
       assert Repo.get_by!(Vutuv.Posts.PostReply, post_id: published.post_id).parent_post_id ==
@@ -367,7 +368,7 @@ defmodule Vutuv.VideosTest do
     test "a refused clip keeps the text waiting, and the author can post without it",
          %{user: user} do
       video = upload!(user)
-      {:ok, pending} = Videos.create_pending_post(user, video, "post", %{}, %{body: "Text stays"})
+      {:ok, pending} = Pending.create(user, "post", %{}, %{body: "Text stays"}, video: video)
 
       put_config(:moderate_images, true)
       assert :ok = Job.run(video.id)
@@ -376,13 +377,13 @@ defmodule Vutuv.VideosTest do
         judge: fn _path -> {:ok, %{safe?: false, category: "violence", reason: "test"}} end
       )
 
-      assert Repo.get!(PendingVideoPost, pending.id).status == "waiting"
+      assert Repo.get!(PendingPost, pending.id).status == "waiting"
 
-      assert [%PendingVideoPost{video: %PostVideo{stage: "rejected"}}] =
-               Videos.pending_posts_for(user)
+      assert [%PendingPost{video: %PostVideo{stage: "rejected"}}] =
+               Pending.waiting_for(user)
 
-      pending = Videos.get_pending_post(user, pending.id)
-      assert {:ok, post} = Videos.publish_without_video(pending)
+      pending = Pending.get(user, pending.id)
+      assert {:ok, post} = Pending.publish_without_refused(pending)
       assert post.body == "Text stays"
       assert post.video == nil
       assert Repo.get(PostVideo, video.id) == nil
@@ -390,10 +391,10 @@ defmodule Vutuv.VideosTest do
 
     test "cancelling drops the text and the clip", %{user: user} do
       video = upload!(user)
-      {:ok, pending} = Videos.create_pending_post(user, video, "post", %{}, %{body: "Never mind"})
+      {:ok, pending} = Pending.create(user, "post", %{}, %{body: "Never mind"}, video: video)
 
-      assert :ok = Videos.cancel_pending_post(pending)
-      assert Repo.get!(PendingVideoPost, pending.id).status == "canceled"
+      assert :ok = Pending.cancel(pending)
+      assert Repo.get!(PendingPost, pending.id).status == "canceled"
       assert Repo.get(PostVideo, video.id) == nil
       refute PostVideoStore.original_path(video.token)
     end
@@ -422,7 +423,7 @@ defmodule Vutuv.VideosTest do
       waiting = upload!(user)
       :ok = Posts.save_draft(user, nil, %{body: "draft", video_id: drafted.id})
       assert Posts.get_draft(user, nil).video_id == drafted.id
-      {:ok, _} = Videos.create_pending_post(user, waiting, "post", %{}, %{body: "wait"})
+      {:ok, _} = Pending.create(user, "post", %{}, %{body: "wait"}, video: waiting)
 
       old = DateTime.add(DateTime.utc_now(:second), -48 * 3600, :second)
       Repo.update_all(from(v in PostVideo), set: [inserted_at: old])
