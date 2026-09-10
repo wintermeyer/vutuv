@@ -1853,6 +1853,93 @@ text, as it would had its author attached nothing — 11 of the 1,222 cached
 pictures on the dev copy are in that state, across 10 posts, every one of which
 has a body.
 
+**A clip is the one attachment this installation does not hold** (issue #1914),
+and it is worth reading twice because every rule above is about bytes we fetched
+and this one has none. Only the cover is downloaded and judged; the clip itself
+streams from the instance that published it. The reason is size: 73 seconds of
+phone video off social.bund.de is **94 MB**, served with no range support at
+all, and a post on Mastodon may carry up to 99 MB. `preload="none"` is therefore
+load-bearing — a reader who does not tap costs the publisher nothing and tells
+them nothing.
+
+Three consequences the code carries.
+
+**It needs `media-src` in the Content-Security-Policy, and shipped without it.**
+`VutuvWeb.Plug.ContentSecurityPolicy` was `default-src 'self'` with no
+`media-src`, so the browser refused the load before making a request
+(`MEDIA_ELEMENT_ERROR: Media load rejected by URL safety check`, effective
+directive `media-src`) and every clip drew as a dead play button — the whole
+feature was unreachable from the day it merged until it was reported. The
+directive cannot be narrower than `https:`: the files come from every instance's
+own object store (`legal.social`, `assets.chaos.social`, `social.bund.de`,
+`dresden.s3proxy.de`, `gruenesocial-userfiles.nbg1.your-objectstorage.com`,
+`storage.gra.cloud.ovh.net` in one day's cached posts), so there is no host list
+to keep. It is a real widening and the moduledoc names it: an XSS past the
+sanitizer gets a GET exfiltration channel `img-src 'self' data:` does not give
+it.
+
+**The reader is told what a tap costs before they spend it.** The attachment
+carries `duration`, `width` and `height` even where it sends no `icon`, so
+`Media.duration_ms/1` reads the ISO-8601 length (`PT73.2S`) and the row keeps the
+clip's own shape in `video_width`/`video_height` — `width`/`height` are the
+*cover's*, a Mastodon thumbnail at 360×640 where the clip is 1080×1920, so the
+player reserved the wrong aspect for anything portrait. Size is the one fact the
+attachment never carries, so `Media.measure_clip/1` asks by HEAD, **once**, with
+no ladder behind it: a server that sends no `content-length` would otherwise sit
+at the front of every oldest-first batch for ever, which is the #1316 deadlock,
+and a card reading "1:14" instead of "1:14 · 94 MB" is most of the warning
+already.
+
+**Hot-linking is the thing this file otherwise exists to avoid**, and the
+`Media` moduledoc says so in as many words: a hot-linked image cannot be
+moderated and tells that server every reader's IP. Both halves are true of a
+clip. The gate sees the cover and never the clip, and the reader's IP, browser
+and `Referer: https://vutuv.de/` reach the publishing instance the moment they
+tap (`<video>` has no `referrerpolicy` — the attribute exists for `<img>`,
+`<iframe>`, `<link>`, `<script>` and `<a>` only, verified in Chrome). The
+privacy policy says so under Fediverse. **And three quarters of clips arrive
+with no cover at all** — 27 of 36 in one day's cached posts, `icon` being
+optional and most instances omitting it — which `display_state/1` answers with
+`:ready`: nothing to fetch, nothing to judge, playable as it is. Those are the
+ones that pass no gate.
+
+**What those coverless clips draw is the attachment's own `blurhash`**
+(`Vutuv.Blurhash`), because the alternative was a black box. Every attachment
+measured carries one — pictures and clips alike, cover or no cover — and it is
+~30 characters of base83 holding at most 9×9 cosine coefficients, in practice
+4×3, so what comes back out is the clip's colour arrangement and nothing an eye
+could identify. It is stored as the string and decoded per render into a 16×16
+PNG carried as a `data:` URI.
+
+Three decisions in that sentence, each measured. **A data URI rather than a
+stored file**, which is the opposite of what `Vutuv.Moderation.Pixelation` does
+for a picture we hold: serving a stored remote picture goes through
+`VutuvWeb.RemoteMediaController`, which re-checks the gate's verdict per
+request, and a coverless clip has no verdict to check — it would need a second,
+unauthorised route to a file tree with its own deletion path. `img-src data:`
+is already in the policy. **16×16**, because 4×3 components clears Nyquist at
+eight samples across and the sizes measure 1,348 bytes of base64 against 3,992
+at 32×32, for a picture the browser scales up and blurs anyway; the string rides
+every patch of a card that carries it, so a test bounds it. And **decoded per
+render** at ~25k reductions, which is nothing beside those bytes and only ever
+runs for a coverless clip; if a page ever holds enough of them to matter, the
+fix is a column holding the string, not a cache.
+
+**A poster is not a verdict.** The blurred stand-in says what colours are in
+the frame, not that anybody looked at it, and the clip behind it still streams
+unjudged. Whether that is acceptable is a product question about coverless
+clips, not something the poster settles.
+
+The decoder is **calibrated against something measurable**, which is the part
+worth copying: a decoder that skips the sRGB transfer function renders an
+entirely plausible picture that is uniformly too dark, and no self-consistent
+test catches it. So `blurhash_test.exs` checks the average colour it reads out
+of a real hash against the average colour of the real cover that hash was
+computed from, measured independently in linear light — 127/116/104 against the
+decoder's 137/125/115, where the *sRGB* average is 109/104/90. Agreeing with
+the linear figure and not the sRGB one is the whole assertion; removing the
+transfer function once turns that test red, which is how it was calibrated.
+
 **A remote account's avatar is deliberately left out**, though it is the other
 ownerless kind and just as silent: an unreleased avatar renders as the account's
 initials, a whole placeholder rather than a promise, so nobody is left waiting on
