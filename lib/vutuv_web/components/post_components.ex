@@ -292,6 +292,9 @@ defmodule VutuvWeb.PostComponents do
       |> assign(:translation, translation)
       |> assign(:restricted?, Posts.restricted?(post))
       |> assign(:permalink, Posts.path(post))
+      # The same permalink absolute, for the ⋯ menu's "copy link": what lands
+      # in the clipboard has to work when it is pasted somewhere else.
+      |> assign(:permalink_url, Posts.url(post))
       |> assign(:gallery, gallery)
       |> assign(:inline_media?, inline_media?)
       # The clip (issue #1906): preloaded by `post_preloads/0`, absent on a
@@ -4397,6 +4400,14 @@ defmodule VutuvWeb.PostComponents do
             the window still shows the item and the edit page explains. --%>
             <div :if={@author?} class="-mr-1 -mt-1 shrink-0">
               <.card_menu id={@menu_id}>
+                <%!-- First, and in the other menu below too: passing a post on
+                is the commonest thing anybody wants from a card, and the ⋯ is
+                where they look for it (a member's report, 2026-09-10). It is
+                knowingly a second way to the address the timestamp beside the
+                name already links to — one of the two is the one people find. --%>
+                <:item href={@permalink} copy={@permalink_url}>
+                  {gettext("Copy link to post")}
+                </:item>
                 <:item :if={@editable?} href={~p"/posts/#{@post.id}/edit"}>{gettext("Edit")}</:item>
                 <%!-- The profile pin (issue #1110). Only one post can be pinned,
                 so pinning while another post holds the spot asks first and says
@@ -4443,6 +4454,10 @@ defmodule VutuvWeb.PostComponents do
             any vernetzt status); it only drops the author's posts from your feed. --%>
             <div :if={@reporter?} class="-mr-1 -mt-1 shrink-0">
               <.card_menu id={@report_menu_id}>
+                <%!-- The same item the author's menu opens with. --%>
+                <:item href={@permalink} copy={@permalink_url}>
+                  {gettext("Copy link to post")}
+                </:item>
                 <:item
                   :if={@viewer_follow && !@organization_author?}
                   href={~p"/follows/#{@viewer_follow.id}/mute"}

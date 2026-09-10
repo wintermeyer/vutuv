@@ -2937,6 +2937,42 @@ function setupCopyButtons() {
 }
 onReady(setupCopyButtons)
 
+// "Copy link to post" in a card's ⋯ menu (VutuvWeb.UI.card_menu's `copy`
+// item). One delegated listener rather than the on-load wiring above: the feed
+// streams cards in long after `phx:page-loading-stop` has fired for the last
+// time, and a menu item nobody bound is a dead control.
+//
+// The item is a real link to the same address, so this is enhancement only:
+// with JavaScript off it opens the post (the URL is then in the address bar),
+// and a cmd/middle click opens it in a tab, which is why `plainClick` guards
+// the intercept. The confirmation is the item's own label for a moment — the
+// label span is the link's first child, and the word is the server's
+// (`data-copy-done`), so nothing translated is spelled out here. Then the menu
+// closes, which is the reader's answer that the act is over.
+document.addEventListener("click", (e) => {
+  const item = e.target.closest("[data-copy-link]")
+  if (!item || !plainClick(e)) return
+  e.preventDefault()
+
+  copyText(item.dataset.copyLink)
+    .then(() => {
+      const label = item.firstElementChild
+      const said = item.dataset.copyDone
+      if (!label || !said) return
+
+      const was = label.textContent
+      label.textContent = said
+      setTimeout(() => {
+        if (!label.isConnected) return
+        label.textContent = was
+        item.closest("details[data-menu]")?.removeAttribute("open")
+      }, 1200)
+    })
+    // The copy really failed (no clipboard permission). Say nothing rather
+    // than claim it worked: the link is one ordinary click away.
+    .catch(() => {})
+})
+
 // Filter box on the settings hub ([data-settings-filter], see
 // settings/index.html.heex). The hub lists ~28 rows across five groups; even
 // well grouped, a member who does not know our vocabulary has to read all of
