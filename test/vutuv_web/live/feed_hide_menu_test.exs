@@ -142,6 +142,27 @@ defmodule VutuvWeb.PostLive.FeedHideMenuTest do
     assert [%{kind: :keyword, pattern: "Fahrplan"}] = ContentFilters.list_for_user(user)
   end
 
+  # The panel's field writes substring rules deliberately — German glues words
+  # together, so a member muting "Zeugnis" means "Arbeitszeugnis" too — and this
+  # field is the same question about the same column. It used to leave
+  # `whole_word` to the schema default, so the two ways in wrote different rules
+  # and the one standing beside the post was the stricter of them, silently.
+  test "a word typed here reaches inside a longer word, as the panel's does", %{conn: conn} do
+    %{conn: conn, user: user, friend: friend, post: post} = with_tagged_post(conn)
+    {:ok, _} = Posts.create_post(friend, %{body: "Die Zeugnisanalyse läuft gut."})
+
+    {:ok, live, _html} = live(conn, ~p"/feed")
+
+    live
+    |> element(~s(form[data-hide-word][data-post="#{post.id}"]))
+    |> render_submit(%{"pattern" => "Zeugnis", "scope" => ""})
+
+    assert [%{kind: :keyword, pattern: "Zeugnis", whole_word: false}] =
+             ContentFilters.list_for_user(user)
+
+    refute render(live) =~ "Die Zeugnisanalyse läuft gut."
+  end
+
   test "the row reads back what it just wrote", %{conn: conn} do
     %{conn: conn, friend: friend, post: post} = with_tagged_post(conn)
 

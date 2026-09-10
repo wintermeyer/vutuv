@@ -1514,7 +1514,14 @@ defmodule VutuvWeb.PostLive.Feed do
         ContentFilters.create_filter(user, %{
           kind: :keyword,
           pattern: trimmed,
-          account: if(scope == "", do: ContentFilter.every_account(), else: scope)
+          account: if(scope == "", do: ContentFilter.every_account(), else: scope),
+          # Substring, exactly as the panel's field writes it — the reasoning is
+          # over there, on `FilterBand.add_filter/3`, and the schema default is
+          # the older, stricter answer. Leaving it out here let one word behave
+          # differently depending on which of the two fields it was typed into,
+          # and this is the field standing beside the post, where "Zeugnis"
+          # visibly means "Arbeitszeugnis" too.
+          whole_word: false
         })
 
         {:noreply, refresh_after_rule_change(socket, params["post_id"])}
