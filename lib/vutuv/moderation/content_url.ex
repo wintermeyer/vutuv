@@ -35,10 +35,12 @@ defmodule Vutuv.Moderation.ContentUrl do
   alias Vutuv.Accounts.User
   alias Vutuv.Fediverse
   alias Vutuv.Images
+  alias Vutuv.Images.Image
   alias Vutuv.Jobs
   alias Vutuv.Moderation
   alias Vutuv.Organizations
   alias Vutuv.Posts
+  alias Vutuv.PressKit
   alias Vutuv.Repo
   alias Vutuv.UUIDv7
   alias Vutuv.Videos
@@ -125,6 +127,15 @@ defmodule Vutuv.Moderation.ContentUrl do
   defp from_segments(["post_videos", token, _file]),
     do: post_of(Videos.get_video_by_token(token))
 
+  # A press photo or a logo variant (issue #2089), by any of the four addresses
+  # it has: the served versions, the stand-in, the download and a logo's PNG all
+  # hang off one path shape, and what a journalist copies is whichever of them
+  # their browser gave them. Unlike a post's photo the **picture** is the
+  # reportable thing here — it is published on its own, for redistribution, and
+  # the freeze takes exactly it offline.
+  defp from_segments(["system", "press_kit", token | _rest]),
+    do: visible_press_picture(token)
+
   # A profile picture or cover, by two of the three addresses one has. The
   # served files sit in an id-scoped public tree (`/avatars/<user id>/…`),
   # which is what a "copy image address" hands over; the third spelling,
@@ -133,7 +144,14 @@ defmodule Vutuv.Moderation.ContentUrl do
   defp from_segments(["avatars", user_id | _rest]), do: visible_image(user_id, "avatar")
   defp from_segments(["covers", user_id | _rest]), do: visible_image(user_id, "cover")
 
-  defp from_segments(["organizations", slug]),
+  # A page, by its own address or by any deeper path under it — its press
+  # section, its jobs, its followers all still name the page, which is the
+  # reportable thing there. The twin of the `[handle | _rest]` clause below, and
+  # what makes a pasted `/organizations/acme/press` a notice about the page
+  # rather than the "correct address, nobody's content" a site page gets
+  # (issue #2089). The post permalink above is the exception, and it is above
+  # for that reason.
+  defp from_segments(["organizations", slug | _rest]),
     do: ok_or_nil(Organizations.fetch_visible_organization(slug, nil))
 
   defp from_segments(["jobs", slug]), do: ok_or_nil(Jobs.fetch_visible_job_posting(slug, nil))
@@ -209,6 +227,18 @@ defmodule Vutuv.Moderation.ContentUrl do
   # reachable through the address the old file had. A picture another case
   # already holds is not offered either — it is off the site, and reporting it
   # again would say the notice did something it did not.
+  # Only a picture an anonymous visitor can already fetch, which is the whole
+  # module's rule and here also the freeze's: a picture a case already took down
+  # answers 404 at every one of its addresses, so resolving it would tell a
+  # stranger it exists. `visible_to?/2` with no viewer is that question,
+  # released picture and visible owner included.
+  defp visible_press_picture(token) do
+    case PressKit.get_by_token(token) do
+      %Image{} = image -> if PressKit.visible_to?(image, nil), do: image
+      nil -> nil
+    end
+  end
+
   defp visible_image(nil, _kind), do: nil
 
   defp visible_image(%User{} = owner, kind) do

@@ -52,6 +52,10 @@ defmodule VutuvWeb.ReportController do
 
     defaults = [
       page_title: gettext("Report content"),
+      # Off the row, not off the wire string: a press picture offers `spam` and
+      # a profile picture does not, and this is the same list the changeset
+      # validates against (issue #2089).
+      categories: Moderation.report_categories(content),
       preview: preview(content),
       # A picture is the one reportable thing whose preview cannot be a
       # sentence: a rights holder has to see WHICH picture this is before they
@@ -171,7 +175,23 @@ defmodule VutuvWeb.ReportController do
   defp preview(%Vutuv.Jobs.JobPosting{} = posting), do: clip(posting.title)
 
   defp preview(%Image{kind: "cover"}), do: gettext("Cover photo")
+
+  # A press picture is one of many, so the shelf alone would not tell the
+  # reporter which one they are about to file a notice on. The variant label
+  # (`alt`) rides along where the owner wrote one; the picture itself is above
+  # this line anyway, which is what `preview_image/1` is for.
+  defp preview(%Image{kind: "press_kit"} = image) do
+    [press_kit_label(image), image.alt]
+    |> Enum.reject(&(&1 in [nil, ""]))
+    |> Enum.join(" - ")
+    |> clip()
+  end
+
   defp preview(%Image{}), do: gettext("Profile picture")
+
+  defp press_kit_label(%Image{} = image) do
+    if Image.logo?(image), do: gettext("Logo variant"), else: gettext("Press photo")
+  end
 
   # The picture itself, for the report form — through `Vutuv.Images`, which
   # owns kind → uploader, so a picture already held by another case (or still

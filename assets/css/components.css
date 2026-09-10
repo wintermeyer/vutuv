@@ -2976,8 +2976,13 @@ html.lightbox-open { overflow: hidden; }
   font-size: 0.8125rem;
   color: #94a3b8;
 }
-.lightbox__license { color: #94a3b8; text-decoration: underline; }
-.lightbox__license:hover { color: #e2e8f0; }
+/* The licence, and beside it the quiet way out for a rights holder who disputes
+   it (issue #2089): one weight for both, and never the download's — one act is
+   what the page is for and the other is a complaint about it. */
+.lightbox__license,
+.lightbox__report { color: #94a3b8; text-decoration: underline; }
+.lightbox__license:hover,
+.lightbox__report:hover { color: #e2e8f0; }
 .lightbox__license.is-plain { text-decoration: none; pointer-events: none; }
 .lightbox__download {
   font-weight: 600;

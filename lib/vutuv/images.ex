@@ -47,6 +47,7 @@ defmodule Vutuv.Images do
 
   alias Vutuv.Accounts.User
   alias Vutuv.Images.Image
+  alias Vutuv.PressKit
   alias Vutuv.PressKitStore
   alias Vutuv.Repo
   alias Vutuv.Uploads
@@ -639,41 +640,6 @@ defmodule Vutuv.Images do
   end
 
   @doc """
-  Where this picture's bytes are **right now**, wherever that is: the takedown
-  hold while a copyright case holds it (`Vutuv.Uploads.hold_dir/1`), otherwise
-  the tree its member row points at. `nil` when neither has them.
-
-  The one answer the two case pages need — a frozen picture is out of every
-  tree nginx serves, so an admin ruling on a copyright claim can see it only
-  through this.
-  """
-  def bytes_path(%Image{} = image, version \\ nil) do
-    config = @profile_columns[image.kind]
-    version = version || config.preview
-
-    case Uploads.held_version_path(image.id, version, image.fingerprint) do
-      path when is_binary(path) ->
-        path
-
-      nil ->
-        with %User{} = owner <- owner(image),
-             do: stored_path(owner, image.kind, version)
-    end
-  end
-
-  @doc """
-  What a reader is shown for this picture — the same URL the profile renders,
-  so a picture already held by another case (or still in the AI gate) shows the
-  silhouette here too rather than a URL nothing answers. For the report form.
-  """
-  def preview_url(%Image{} = image) do
-    config = @profile_columns[image.kind]
-
-    with %User{} = owner <- owner(image),
-         do: config.module.display_url(owner, config.preview)
-  end
-
-  @doc """
   Records the picture a member just uploaded, replacing whatever row that
   member had for this kind.
 
@@ -1030,6 +996,82 @@ defmodule Vutuv.Images do
   before the row existed: reporting the posting or the page the picture sits on.
   """
   def takedown_ready?(%Image{kind: kind}), do: is_map_key(@takedown, kind)
+
+  @doc """
+  Where this picture's bytes are **right now**, wherever that is: the takedown
+  hold while a copyright case holds it (`Vutuv.Uploads.hold_dir/1`), otherwise
+  the tree its member row points at. `nil` when neither has them.
+
+  The one answer the two case pages need — a frozen picture is out of every
+  tree nginx serves, so an admin ruling on a copyright claim can see it only
+  through this.
+
+  **Per takedown strategy, not per column map.** Both this and `preview_url/1`
+  used to index `@profile_columns` by kind and dereference what came back, which
+  is a `BadMapError` the moment a kind outside that map is reportable — and
+  #2084 made `press_kit` exactly that, so the report form and the admin case
+  page's picture endpoint (the step an uphold needs) both 500ed on one. A kind
+  with no takedown at all answers `nil`: nothing can report it, so nobody can
+  ask, and a raise there would be a crash rather than an empty preview.
+  """
+  # The version a human is shown a press picture at, on the report form and on
+  # the two case pages. Both shelves derive a `large`, so one name answers for a
+  # photo and for a logo variant.
+  @press_kit_preview "large"
+
+  def bytes_path(image, version \\ nil)
+
+  def bytes_path(%Image{kind: kind} = image, version) when is_map_key(@takedown, kind),
+    do: bytes_path_by(@takedown[kind], image, version)
+
+  def bytes_path(%Image{}, _version), do: nil
+
+  defp bytes_path_by(:profile, %Image{} = image, version) do
+    version = version || @profile_columns[image.kind].preview
+
+    case Uploads.held_version_path(image.id, version, image.fingerprint) do
+      path when is_binary(path) ->
+        path
+
+      nil ->
+        with %User{} = owner <- owner(image),
+             do: stored_path(owner, image.kind, version)
+    end
+  end
+
+  # A press picture's files are named by version alone inside a directory of the
+  # row's own token (`press_kit/<token>/large.avif`), so neither of the two
+  # naming schemes `Uploads.held_version_path/3` globs for is on disk — the
+  # store owns that name and answers for both trees.
+  defp bytes_path_by(:press_kit, %Image{} = image, version) do
+    version = version || @press_kit_preview
+
+    PressKitStore.held_version_path(image, version) ||
+      PressKitStore.version_path(image.token, version)
+  end
+
+  @doc """
+  What a reader is shown for this picture — the same URL the profile renders,
+  so a picture already held by another case (or still in the AI gate) shows the
+  silhouette here too rather than a URL nothing answers. For the report form.
+  """
+  def preview_url(%Image{kind: kind} = image) when is_map_key(@takedown, kind),
+    do: preview_url_by(@takedown[kind], image)
+
+  def preview_url(%Image{}), do: nil
+
+  defp preview_url_by(:profile, %Image{} = image) do
+    config = @profile_columns[image.kind]
+
+    with %User{} = owner <- owner(image),
+         do: config.module.display_url(owner, config.preview)
+  end
+
+  # The context that owns the kind owns which version a human is shown and when
+  # there is one at all — `Vutuv.PressKit.preview_url/1` says why. Every other
+  # per-kind hook here points down at the module that owns the files in exactly
+  # this way.
+  defp preview_url_by(:press_kit, %Image{} = image), do: PressKit.preview_url(image)
 
   # A kind whose row exists but whose takedown does not. Loud rather than
   # half-done: the alternative is a stamped `frozen_at` no reader consults and

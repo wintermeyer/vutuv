@@ -1590,6 +1590,25 @@ defmodule Vutuv.Organizations do
   end
 
   @doc """
+  The one member who answers for what this page publishes — whoever claimed it —
+  or `nil` once that account is gone (`created_by_user_id` is `nilify_all`).
+
+  The accountability question, not the permission one: `Vutuv.Moderation` carries
+  its strike ladder on a single `users` row, so a report against a page's post
+  (#1334) or its press picture (#2089) is owned by this member and by nobody
+  else — the page's content is the page's, and its accountability must not move
+  from person to person with each publisher. A page with no claimer left has
+  nobody to strike, so such a report is refused and only an admin freeze can act.
+
+  Takes either the page or its id, because half the callers hold a loaded row
+  and reading a column off it should not cost a query.
+  """
+  def accountable_user_id(%Organization{created_by_user_id: user_id}), do: user_id
+
+  def accountable_user_id(id) when is_binary(id),
+    do: Repo.one(from(o in Organization, where: o.id == ^id, select: o.created_by_user_id))
+
+  @doc """
   The members who may manage `organization`'s domains, oldest role first. The
   claim wizard makes the creator an owner, so this is never empty for a page
   that went through it.

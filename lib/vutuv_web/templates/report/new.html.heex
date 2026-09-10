@@ -95,7 +95,7 @@
       <fieldset class="space-y-2">
         <legend class="sr-only">{gettext("Why are you reporting this?")}</legend>
         <label
-          :for={category <- Report.categories_for(@content_type)}
+          :for={category <- @categories}
           class="flex cursor-pointer items-start gap-3 rounded-lg border border-slate-200 p-3 transition hover:border-brand-400 has-checked:border-brand-500 has-checked:bg-brand-50 dark:border-slate-700 dark:hover:border-brand-500 dark:has-checked:bg-brand-800/30"
         >
           <input
@@ -123,7 +123,7 @@
             {gettext("Anything our admins should know? (optional)")}
           </span>
           <span
-            :if={copyright_offered?(@content_type)}
+            :if={copyright_offered?(@categories)}
             class="hidden group-has-[.report-copyright-choice:checked]:inline"
           >
             {gettext("Which work is it, and where can the original be seen? (required)")}
@@ -138,7 +138,7 @@
       </label>
 
       <.good_faith_declaration
-        :if={copyright_offered?(@content_type)}
+        :if={copyright_offered?(@categories)}
         id="report-good-faith"
         class="mt-4 hidden group-has-[.report-copyright-choice:checked]:flex"
         checked={@report.good_faith?}

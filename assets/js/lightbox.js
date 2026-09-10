@@ -31,6 +31,7 @@ function applyLabels(gallery) {
     prev: gallery.dataset.labelPrev || "",
     next: gallery.dataset.labelNext || "",
     download: gallery.dataset.labelDownload || "",
+    report: gallery.dataset.labelReport || "",
   }
 
   q("[data-lb-close]").setAttribute("aria-label", labels.close)
@@ -65,6 +66,7 @@ function build() {
           <span class="lightbox__position" data-lb-position></span>
           <a class="lightbox__license" data-lb-license target="_blank" rel="license noopener"></a>
           <a class="lightbox__download" data-lb-download download></a>
+          <a class="lightbox__report" data-lb-report></a>
         </p>
       </figcaption>
     </figure>
@@ -159,6 +161,14 @@ function show(index) {
   const href = photo.dataset.photoDownload
   text(download, href ? labels.download : "")
   if (href) download.href = href
+
+  // Reporting the picture itself (issue #2089), on the press surfaces only: a
+  // post photo is reported through its post, so its tiles carry no such
+  // address and the line stays hidden the way every empty one here does.
+  const report = q("[data-lb-report]")
+  const reportHref = photo.dataset.photoReport
+  text(report, reportHref ? labels.report : "")
+  if (reportHref) report.href = reportHref
 
   // Only ever navigate within one gallery.
   const many = photos.length > 1

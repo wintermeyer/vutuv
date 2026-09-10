@@ -79,10 +79,12 @@ defmodule Vutuv.Moderation do
     Strike
   }
 
+  alias Vutuv.Organizations
   alias Vutuv.Organizations.Organization
   alias Vutuv.Pages
   alias Vutuv.Posts
   alias Vutuv.Posts.Post
+  alias Vutuv.PressKit
   alias Vutuv.Repo
   alias Vutuv.SearchText
   alias Vutuv.Token
@@ -162,6 +164,35 @@ defmodule Vutuv.Moderation do
   def can_report?(%User{} = reporter, content),
     do: can_report?(reporter, content, open_case_for(content))
 
+  @doc """
+  Whether there is anybody to hold accountable for `content` — the half of
+  `can_report?/2` that depends on the content alone, for a surface deciding
+  whether to **draw** a Report control at all (issue #2089).
+
+  A page's content answers to the member who claimed the page, and that column
+  is `nilify_all`: once that account is gone there is no strike ladder and
+  `report_content/3` refuses, so a link rendered anyway would send the reporter
+  to a 404. Cheap for a member's row (a column) and one indexed read for a
+  page's, which is why a caller drawing a whole shelf asks it **once** — every
+  picture on one has the same owner.
+  """
+  def reportable?(content), do: owner_id(content) != nil
+
+  @doc """
+  Which report categories `content` offers — the one place the two forms and the
+  changeset read it from, so a form cannot show a choice the changeset then
+  refuses.
+
+  It takes the **row** rather than the wire string because one type answers two
+  ways: a profile picture leaves `spam` out on purpose (an advert as an avatar
+  is a complaint about the account), while a press picture is published for
+  redistribution and can perfectly well *be* the advert (issue #2089).
+  """
+  # The whole list, because a press picture is published for redistribution and
+  # a section full of them is exactly where a picture is itself the advert.
+  def report_categories(%Image{kind: "press_kit"}), do: Report.categories()
+  def report_categories(content), do: Report.categories_for(content_type(content))
+
   # The arity-3 twin exists so `report_content/3`, which has already loaded the
   # open case to decide what to do with it, does not read the same row twice.
   defp can_report?(%User{} = reporter, content, open) do
@@ -187,7 +218,7 @@ defmodule Vutuv.Moderation do
 
   defp open_new_case(reporter, content, attrs) do
     report_changeset =
-      Report.changeset(%Report{reporter_id: reporter.id}, attrs, content_type(content))
+      Report.changeset(%Report{reporter_id: reporter.id}, attrs, report_categories(content))
 
     # Read off the changeset rather than out of `attrs`, so the answer does not
     # depend on whether the caller passed string or atom keys. A crafted
@@ -274,7 +305,7 @@ defmodule Vutuv.Moderation do
       Report.changeset(
         %Report{reporter_id: reporter.id, case_id: open.id},
         attrs,
-        content_type(content)
+        report_categories(content)
       )
 
     case Repo.insert(report_changeset) do
@@ -327,7 +358,7 @@ defmodule Vutuv.Moderation do
           # request locale is per-process web state.
           reporter_locale: locale
         }
-        |> Report.outside_changeset(attrs, content_type(content))
+        |> Report.outside_changeset(attrs, report_categories(content))
 
       case open_case_for(content) do
         nil -> open_notice_case(content, changeset, token)
@@ -2271,9 +2302,8 @@ defmodule Vutuv.Moderation do
   # since lost the role would otherwise still carry strikes for it. When that
   # member is gone (`nilify_all`) there is nobody to strike and the report is
   # refused, exactly as it already is for the organization page itself.
-  defp owner_id(%Post{user_id: nil, organization_id: id}) when is_binary(id) do
-    Repo.one(from(o in Organization, where: o.id == ^id, select: o.created_by_user_id))
-  end
+  defp owner_id(%Post{user_id: nil, organization_id: id}) when is_binary(id),
+    do: Organizations.accountable_user_id(id)
 
   defp owner_id(%Post{user_id: user_id}), do: user_id
   defp owner_id(%Message{sender_id: sender_id}), do: sender_id
@@ -2282,11 +2312,28 @@ defmodule Vutuv.Moderation do
   # creator has since deleted their account (nilify_all) has no owner to strike,
   # so report_content/3 refuses it (owner_id == nil), leaving the report path
   # only for admin freeze.
-  defp owner_id(%Organization{created_by_user_id: user_id}), do: user_id
+  defp owner_id(%Organization{} = organization),
+    do: Organizations.accountable_user_id(organization)
+
   defp owner_id(%JobPosting{user_id: user_id}), do: user_id
+  # A press picture published in a **page's** name (issue #2089). Its
+  # `images.user_id` is NULL — the pair `images_press_kit_has_one_owner` holds —
+  # so reading that column alone left the kind takedown-ready and
+  # un-reportable: `can_report?/2` refuses a nil owner, and #2084 measured
+  # exactly that. The answer is the organization-post clause above, the same
+  # member for the same reason: the page's accountability must not move from
+  # person to person with each upload, and `uploader_user_id` cannot be it —
+  # it is nulled when that account goes.
+  #
+  # Matched on the **column**, never on a preloaded `:organization`: half the
+  # callers hand a bare row over straight from a query.
+  defp owner_id(%Image{user_id: nil, organization_id: id}) when is_binary(id),
+    do: Organizations.accountable_user_id(id)
+
   # A picture with no member owner is one of the kinds #2015 brings into the
-  # table (a post photo, an organization logo). There is nobody to strike and
-  # no member row to clear, so `can_report?/2` refuses it rather than guessing.
+  # table (a post photo, an organization logo), or a review's cover. There is
+  # nobody to strike and no member row to clear, so `can_report?/2` refuses it
+  # rather than guessing.
   defp owner_id(%Image{user_id: user_id}), do: user_id
 
   defp snapshot(%Post{body: body}), do: body
@@ -2337,6 +2384,16 @@ defmodule Vutuv.Moderation do
   # case opened on such a row would raise the moment an admin upheld it. Those
   # keep the affordance they had before the row existed: reporting the post,
   # the posting or the page the picture sits on.
+  # A press picture (issue #2089) adds the visibility half back, which the two
+  # profile kinds never needed: an avatar is as public as the profile it sits
+  # on, while a press picture can be waiting for the AI gate, held by an earlier
+  # case, or on a page that is not on the public site — and none of those is
+  # something a reporter has seen. Reporting one is then either pointless (it is
+  # already off the site) or an oracle for a row id, so it answers 404 exactly
+  # as the public notice form does for the same picture.
+  defp reportable_by?(reporter, %Image{kind: "press_kit"} = image),
+    do: Images.takedown_ready?(image) and PressKit.visible_to?(image, reporter)
+
   defp reportable_by?(_reporter, %Image{} = image), do: Images.takedown_ready?(image)
 
   defp reportable_by?(reporter, %JobPosting{} = posting),

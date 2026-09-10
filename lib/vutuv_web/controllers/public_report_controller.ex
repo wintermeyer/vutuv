@@ -51,8 +51,15 @@ defmodule VutuvWeb.PublicReportController do
   alias VutuvWeb.ErrorHelpers
   alias VutuvWeb.RateLimit
 
-  def new(conn, _params) do
-    render_form(conn, %Report{}, "", Report.categories(), [])
+  # `url` prefills the address field, so a Report link on a page can hand the
+  # form the picture it is about (issue #2089) instead of asking a journalist to
+  # copy it. It is nothing but a value in a text input — the resolve, the rate
+  # limit and every check happen on the POST, exactly as they do for a typed
+  # address — and it is capped so a crafted link cannot turn the field into a
+  # wall of text.
+  def new(conn, params) do
+    url = params |> Map.get("url", "") |> to_string() |> String.slice(0, 2_000)
+    render_form(conn, %Report{}, url, Report.categories(), [])
   end
 
   def create(conn, %{"report" => params}) when is_map(params) do
@@ -190,7 +197,7 @@ defmodule VutuvWeb.PublicReportController do
         |> render_form(
           struct_from(params),
           url,
-          Report.categories_for(type),
+          Moderation.report_categories(content),
           ErrorHelpers.changeset_messages(changeset)
         )
     end
