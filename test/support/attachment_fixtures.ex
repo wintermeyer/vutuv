@@ -26,6 +26,19 @@ defmodule Vutuv.AttachmentFixtures do
   @doc "A PDF whose OpenAction is a plain destination — what LaTeX and Word write."
   def destination_pdf(dir), do: write(dir, "destination.pdf", pdf(:destination))
 
+  @doc """
+  A PDF whose OpenAction *looks* like a destination — `/S /GoTo` — and chains a
+  second action behind `/Next` that launches an application. `pdfinfo` answers
+  `JavaScript: no`; only naming `/Launch` catches it.
+  """
+  def chained_launch_pdf(dir), do: write(dir, "chained.pdf", pdf(:chained_launch))
+
+  @doc """
+  A PDF with no OpenAction at all: the launch hangs off the page's `/AA /O`,
+  which fires on the same event under a different name.
+  """
+  def page_action_launch_pdf(dir), do: write(dir, "page-action.pdf", pdf(:page_action))
+
   @doc "A PDF carrying another file inside it."
   def embedded_file_pdf(dir), do: write(dir, "embedded.pdf", pdf(:embedded))
 
@@ -123,13 +136,24 @@ defmodule Vutuv.AttachmentFixtures do
     build([
       {1, root},
       {2, "<< /Type /Pages /Kids [3 0 R] /Count 1 >>"},
-      {3,
-       "<< /Type /Page /Parent 2 0 R /MediaBox [0 0 612 792] /Contents 4 0 R " <>
-         "/Resources << /Font << /F1 5 0 R >> >> >>"},
+      {3, page(kind)},
       {4, "<< /Length #{byte_size(@content)} >>\nstream\n#{@content}\nendstream"},
       {5, "<< /Type /Font /Subtype /Type1 /BaseFont /Helvetica >>"}
       | extra
     ])
+  end
+
+  # The page dictionary. `:page_action` hangs an additional action off it, which
+  # is where a launch goes when there is no `/OpenAction` to put it in.
+  defp page(:page_action) do
+    "<< /Type /Page /Parent 2 0 R /MediaBox [0 0 612 792] /Contents 4 0 R " <>
+      "/AA << /O << /S /Launch /F (calc.exe) >> >> " <>
+      "/Resources << /Font << /F1 5 0 R >> >> >>"
+  end
+
+  defp page(_kind) do
+    "<< /Type /Page /Parent 2 0 R /MediaBox [0 0 612 792] /Contents 4 0 R " <>
+      "/Resources << /Font << /F1 5 0 R >> >> >>"
   end
 
   defp catalog(:plain), do: {"<< /Type /Catalog /Pages 2 0 R >>", []}
@@ -146,6 +170,13 @@ defmodule Vutuv.AttachmentFixtures do
   defp catalog(:destination) do
     {"<< /Type /Catalog /Pages 2 0 R /OpenAction [3 0 R /FitH 800] >>", []}
   end
+
+  defp catalog(:chained_launch) do
+    {"<< /Type /Catalog /Pages 2 0 R /OpenAction << /S /GoTo /D [3 0 R /Fit] " <>
+       "/Next << /S /Launch /F (calc.exe) >> >> >>", []}
+  end
+
+  defp catalog(:page_action), do: {"<< /Type /Catalog /Pages 2 0 R >>", []}
 
   defp catalog(:embedded) do
     payload = "payload bytes"

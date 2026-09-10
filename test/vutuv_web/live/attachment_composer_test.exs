@@ -79,6 +79,12 @@ defmodule VutuvWeb.AttachmentComposerTest do
     # as a bare integer.
     attachment = newest_attachment(user)
     assert html =~ VutuvWeb.UI.file_size(attachment.size_bytes)
+
+    # The remove button's label names the file. Asserted because the English
+    # catalogue shipped this msgid with `%{pattern}` in place of `%{name}` —
+    # a fuzzy fill nothing flags, which renders the placeholder itself and
+    # logs a missing-bindings error on every render.
+    assert has_element?(live, ~s|button[aria-label="Remove #{attachment.file_name}"]|)
   end
 
   test "the composer says what is left of the budget before the file flows", %{conn: conn} do
@@ -88,7 +94,7 @@ defmodule VutuvWeb.AttachmentComposerTest do
     assert render(live) =~ "Your uploads are not limited."
   end
 
-  test "a plain member reads a formatted allowance", %{conn: conn} do
+  test "a plain member reads a formatted allowance", %{conn: _conn} do
     Fixtures.put_config(uploaders: :members, daily_budget: 100_000_000)
 
     {conn, _member} =

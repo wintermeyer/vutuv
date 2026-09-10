@@ -169,6 +169,24 @@ defmodule Vutuv.AttachmentsTest do
       assert {:error, :embedded_files} = upload(user, Fixtures.embedded_file_pdf(files))
     end
 
+    # The `/OpenAction` rule reads what follows the name and lets a destination
+    # through, so an action that is not spelled `/OpenAction <<action>>` walked
+    # past it: `pdfinfo` answers `JavaScript: no` for both of these and the gate
+    # accepted them until the acting names were added. Calibration: take
+    # `@acting_names` back out of `Vutuv.Uploads.PdfGate` and both go red with
+    # `{:ok, _}`. Cost measured over 1,051 real local PDFs: `/Launch`,
+    # `/SubmitForm` and `/ImportData` in none of them.
+    test "an OpenAction that chains a launch behind /Next is refused", %{
+      user: user,
+      files: files
+    } do
+      assert {:error, :open_action} = upload(user, Fixtures.chained_launch_pdf(files))
+    end
+
+    test "a page whose /AA launches something is refused", %{user: user, files: files} do
+      assert {:error, :open_action} = upload(user, Fixtures.page_action_launch_pdf(files))
+    end
+
     test "hiding the trick in an object stream does not get it past", %{user: user, files: files} do
       # `qpdf --object-streams=generate` compresses every dictionary away, so
       # a raw-byte grep for these three names comes back empty. Each is

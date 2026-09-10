@@ -22,7 +22,11 @@ defmodule Vutuv.Uploads.PdfGate do
       #2105, the metadata cleaning of #2107 — can work on a file it cannot open.
     * **It runs code when it is opened** — `pdfinfo`'s own `JavaScript:` field.
     * **It does something to the reader when it is opened** — an `/OpenAction`
-      that is an *action* rather than a destination.
+      that is an *action* rather than a destination, and an action that reaches
+      outside the document at all (`/Launch`, `/SubmitForm`, `/ImportData`)
+      wherever it stands. The second half is not decoration: the same effect
+      rides a page's `/AA` and an `/OpenAction`'s chained `/Next` under names
+      the `/OpenAction` rule never looks at.
     * **It carries another file inside it** — `pdfdetach -list`, which counts
       them.
 
@@ -50,10 +54,13 @@ defmodule Vutuv.Uploads.PdfGate do
   `/OpenAction` inside such a stream would not be seen. No producer writes an
   object stream that way (object streams exist to be Flate-compressed, and an
   encrypted file is refused before this runs), but the possibility is real and
-  named here rather than pretended away. `/AA` (additional actions) and
-  `/Launch` are deliberately **not** blocked: `/AA` sits on the widgets of
-  every ordinary form, and the scripted half of both is what `pdfinfo`'s
-  JavaScript answer already covers.
+  named here rather than pretended away.
+
+  `/AA` (additional actions) is deliberately **not** blocked as a name: it sits
+  on the widgets of every ordinary form, and it appeared in 2 of 1,051 real
+  PDFs measured on this machine on 2026-09-10. What is blocked is the *action*
+  inside it — see `@acting_names` — so a page whose `/AA` opens a calculator is
+  refused while a form's widgets are not.
   """
 
   require Logger
@@ -66,11 +73,25 @@ defmodule Vutuv.Uploads.PdfGate do
   @stream_limit 8_000_000
   @total_limit 96_000_000
 
+  # Actions that do something to the *machine* rather than move the reader
+  # inside the document, refused wherever they stand. Naming the effect rather
+  # than one spelling of it: leaving these out let two files through that the
+  # `/OpenAction` rule was meant to stop, because neither is an `/OpenAction`
+  # that is an action — an `/OpenAction << /S /GoTo … /Next << /S /Launch >> >>`,
+  # whose `/GoTo` prefix satisfies `destination?/1` and whose chained second
+  # half nothing looked at, and a page `/AA << /O << /S /Launch >> >>`, which
+  # fires on the same event under a different name. `pdfinfo` answers
+  # `JavaScript: no` for both. Measured over 1,051 real, local PDFs on
+  # 2026-09-10: `/Launch`, `/SubmitForm` and `/ImportData` appear in **none** of
+  # them, so naming them costs no ordinary document.
+  @acting_names ~w(Launch SubmitForm ImportData)
+
   # The names, with `#XX` escapes allowed for every character — one pass that
   # matches `/OpenAction` and `/Open#41ction` alike, so nothing has to decode a
   # 20 MB buffer to find the second spelling. No `u` modifier anywhere in this
   # module: these patterns run over slices of a PDF, which are not text.
-  @name_regexes (for name <- ~w(JavaScript EmbeddedFile OpenAction), into: %{} do
+  @name_regexes (for name <- ~w(JavaScript EmbeddedFile OpenAction) ++ @acting_names,
+                     into: %{} do
                    pattern =
                      "/" <>
                        Enum.map_join(String.to_charlist(name), fn char ->
@@ -225,10 +246,14 @@ defmodule Vutuv.Uploads.PdfGate do
     cond do
       Regex.match?(@name_regexes["JavaScript"], buffer) -> {:error, :javascript}
       Regex.match?(@name_regexes["EmbeddedFile"], buffer) -> {:error, :embedded_files}
+      acting?(buffer) -> {:error, :open_action}
       open_action?(buffer) -> {:error, :open_action}
       true -> :ok
     end
   end
+
+  defp acting?(buffer),
+    do: Enum.any?(@acting_names, &Regex.match?(@name_regexes[&1], buffer))
 
   defp open_action?(buffer) do
     @name_regexes["OpenAction"]
