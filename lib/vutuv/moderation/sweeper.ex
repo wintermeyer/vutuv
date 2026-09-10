@@ -11,6 +11,9 @@ defmodule Vutuv.Moderation.Sweeper do
       deploy that stops the slot between two renames leaves the job unfinished
       with nothing in a log to say so — so the row's `frozen_at` is the record
       and this is the thing that acts on it;
+    * the same for a held **file** (`Vutuv.Attachments.reconcile_holds/0`,
+      issue #2109), which is a second kind of row with its own hold and so needs
+      its own pass — the image one only ever looks at `images` rows;
     * drops public notices nobody confirmed inside their week
       (`Vutuv.Moderation.sweep_expired_notices/0`, issue #2009). Such a row
       counts for nothing and its link no longer works, so left alone it is a
@@ -26,6 +29,7 @@ defmodule Vutuv.Moderation.Sweeper do
 
   require Logger
 
+  alias Vutuv.Attachments
   alias Vutuv.Images
   alias Vutuv.Moderation
   alias Vutuv.Moderation.Notifier
@@ -51,6 +55,7 @@ defmodule Vutuv.Moderation.Sweeper do
     end
 
     Images.reconcile_holds()
+    Attachments.reconcile_holds()
 
     case Moderation.sweep_expired_notices() do
       0 -> :ok

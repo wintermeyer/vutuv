@@ -83,14 +83,10 @@ defmodule VutuvWeb.QualificationDocumentController do
     |> send_file(200, path)
   end
 
-  # The save-as name is the member's original filename. RFC 5987: the plain
-  # `filename` carries an ASCII-safe fallback (quotes/control chars stripped),
-  # `filename*` the exact UTF-8 name (umlauts survive).
-  defp disposition_filename(qualification) do
-    name = safe_filename(qualification)
-    ascii = for <<c <- name>>, c in 32..126, c not in [?", ?\\], into: "", do: <<c>>
-    ~s(filename="#{ascii}"; filename*=UTF-8''#{URI.encode(name, &URI.char_unreserved?/1)})
-  end
+  # The save-as name is the member's original filename; the RFC 5987 pair that
+  # carries it lives in `VutuvWeb.ControllerHelpers`.
+  defp disposition_filename(qualification),
+    do: qualification |> safe_filename() |> ControllerHelpers.disposition_filename()
 
   # The stored client filename, its extension normalized to the public copy's
   # (a HEIC upload downloads as JPEG).

@@ -118,7 +118,58 @@ defmodule VutuvWeb.ReportHTML do
   def content_type_label("organization"), do: pgettext("content type", "Organization page")
   def content_type_label("job_posting"), do: pgettext("content type", "Job posting")
   def content_type_label("image"), do: pgettext("content type", "Picture")
+  def content_type_label("attachment"), do: pgettext("content type", "File")
   def content_type_label(other), do: other
+
+  @doc """
+  The line above the member report form saying what sending it does — the
+  vocabulary per content type, beside `content_type_label/1` rather than spelled
+  out twice in the markup.
+
+  Two types answer differently, and it is not decoration: a picture and a file
+  go offline **only** for a copyright notice, every other report leaving them
+  where they are (issues #2030 and #2109), so the general promise would be a lie
+  for them. It is a whole sentence per shape rather than a noun in a frame, for
+  the reason `content_reported_sentence/1` below gives.
+
+  `severed?` drops the "your report is anonymous" opening, which the severance
+  notice under it is about to contradict.
+  """
+  def report_intro("image", false),
+    do:
+      gettext(
+        "Your report is anonymous. A picture goes offline right away for a copyright notice; every other report goes to our admins with the picture left where it is."
+      )
+
+  def report_intro("image", true),
+    do:
+      gettext(
+        "A picture goes offline right away for a copyright notice; every other report goes to our admins with the picture left where it is."
+      )
+
+  def report_intro("attachment", false),
+    do:
+      gettext(
+        "Your report is anonymous. A file goes offline right away for a copyright notice; every other report goes to our admins with the file left where it is."
+      )
+
+  def report_intro("attachment", true),
+    do:
+      gettext(
+        "A file goes offline right away for a copyright notice; every other report goes to our admins with the file left where it is."
+      )
+
+  def report_intro(_type, false),
+    do:
+      gettext(
+        "Your report is anonymous. If it checks out, the content is hidden right away and the owner is asked to fix it."
+      )
+
+  def report_intro(_type, true),
+    do:
+      gettext(
+        "If your report checks out, the content is hidden right away and the owner is asked to fix it."
+      )
 
   @doc """
   The opening sentence of the mail that tells a member their content was
@@ -141,6 +192,9 @@ defmodule VutuvWeb.ReportHTML do
 
   def content_reported_sentence("image"),
     do: gettext("somebody reported one of your pictures on vutuv.")
+
+  def content_reported_sentence("attachment"),
+    do: gettext("somebody reported one of your files on vutuv.")
 
   def content_reported_sentence("message"),
     do: gettext("somebody reported one of your private messages on vutuv.")

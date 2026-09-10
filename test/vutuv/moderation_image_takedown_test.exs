@@ -20,6 +20,9 @@ defmodule Vutuv.ModerationImageTakedownTest do
 
   alias Vutuv.Accounts
   alias Vutuv.Accounts.User
+  alias Vutuv.AttachmentFixtures
+  alias Vutuv.Attachments
+  alias Vutuv.Attachments.Pages
   alias Vutuv.Images
   alias Vutuv.Images.Backfill
   alias Vutuv.Images.Image, as: ImageRow
@@ -71,6 +74,23 @@ defmodule Vutuv.ModerationImageTakedownTest do
       PressKit.create(owner, owner, {src, "press.jpg"}, %{"rights_confirmed" => "true"})
 
     image
+  end
+
+  # A file's rendered preview page (issue #2109), the fourth kind the gate
+  # admits. A real one, because "the takedown can act on it" is a claim about
+  # files moving; it needs `pdftoppm`, which this suite already requires for
+  # `Vutuv.Attachments.PagesTest`.
+  defp attachment_page(owner) do
+    AttachmentFixtures.put_config(uploaders: :members, preview_pages: 1)
+    dir = Path.join(System.tmp_dir!(), "takedown_pdf_#{System.unique_integer([:positive])}")
+    File.mkdir_p!(dir)
+    on_exit(fn -> File.rm_rf(dir) end)
+
+    {:ok, attachment} =
+      Attachments.create_pending(owner, AttachmentFixtures.plain_pdf(dir), "paper.pdf")
+
+    Pages.render(attachment)
+    List.first(Pages.list(attachment))
   end
 
   defp notice(attrs \\ %{}) do
@@ -395,6 +415,7 @@ defmodule Vutuv.ModerationImageTakedownTest do
         ~w(avatar cover)
         |> Map.new(&{&1, Images.profile_image(owner.id, &1)})
         |> Map.put("press_kit", press_picture(owner))
+        |> Map.put("attachment_page", attachment_page(owner))
 
       for kind <- ready do
         row = Map.get(real, kind)

@@ -11,6 +11,7 @@ defmodule VutuvWeb.ReportController do
   plug(VutuvWeb.Plug.RequireLogin)
 
   alias Vutuv.Accounts.User
+  alias Vutuv.Attachments.Attachment
   alias Vutuv.Chat
   alias Vutuv.Images
   alias Vutuv.Images.Image
@@ -20,6 +21,7 @@ defmodule VutuvWeb.ReportController do
   alias Vutuv.PressKit
   alias VutuvWeb.ControllerHelpers
   alias VutuvWeb.ErrorHelpers
+  alias VutuvWeb.UI
 
   def new(conn, %{"type" => type, "id" => id} = params) do
     case Moderation.fetch_content(type, id) do
@@ -158,6 +160,14 @@ defmodule VutuvWeb.ReportController do
     )
   end
 
+  # A file takes the picture's rule, so a house-rule complaint about one moves
+  # nothing either, and saying "we take it from here" would be the same lie.
+  defp report_received_sentence(%{content_type: "attachment", status: "flagged"}) do
+    gettext(
+      "Thank you for your report. Our moderators have been notified and will review this file."
+    )
+  end
+
   defp report_received_sentence(_case_record) do
     gettext("Thank you for your report. We take it from here.")
   end
@@ -174,6 +184,13 @@ defmodule VutuvWeb.ReportController do
     do: "#{organization.name} - #{organization.city}"
 
   defp preview(%Vutuv.Jobs.JobPosting{} = posting), do: clip(posting.title)
+
+  # The name the member gave the file plus its size: what a reader sees on the
+  # post, and the only thing about a document that reads as words on a form. Its
+  # contents are one authorized download away on the case page — not here, where
+  # nobody has been accused of anything yet.
+  defp preview(%Attachment{} = attachment),
+    do: clip("#{attachment.file_name} · #{UI.file_size(attachment.size_bytes)}")
 
   defp preview(%Image{kind: "cover"}), do: gettext("Cover photo")
 

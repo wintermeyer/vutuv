@@ -46,11 +46,13 @@ defmodule Vutuv.Images do
   import Ecto.Query, warn: false
 
   alias Vutuv.Accounts.User
+  alias Vutuv.Attachments.Pages
   alias Vutuv.Images.Image
   alias Vutuv.PressKit
   alias Vutuv.PressKitStore
   alias Vutuv.Repo
   alias Vutuv.Uploads
+  alias Vutuv.Uploads.Spec
 
   # The two kinds that live *only* here: a member's profile picture and cover,
   # whose truth is still the four columns on the member row beside them.
@@ -178,6 +180,15 @@ defmodule Vutuv.Images do
 
   @doc "The image kinds that live in this table today."
   def kinds, do: @kinds
+
+  @doc """
+  The kinds that are a **member's own picture of that kind**: as public as the
+  profile they sit on, one row per member per kind, and the only kinds for which
+  "the freeze can act on it" also means "a reporter has already seen it".
+  `Vutuv.Moderation` reads it to decide which pictures need no visibility check
+  of their own.
+  """
+  def profile_kinds, do: @profile_kinds
 
   @doc """
   Whether this kind still lives in a table of its own that this release mirrors
@@ -988,7 +999,19 @@ defmodule Vutuv.Images do
   # redistribution* is the likeliest of all of them to draw a copyright notice,
   # which is why the kind gets its takedown in the same release as its scan
   # rather than one later.
-  @takedown @profile_kinds |> Map.new(&{&1, :profile}) |> Map.put("press_kit", :press_kit)
+  # `attachment_page` (issue #2109) arrives with a strategy of its own for the
+  # same two reasons the press kit did — no member row to clear, files keyed by
+  # a token rather than by a member scope — and with one more that decides *when*
+  # it may arrive. This registry is also what `Vutuv.Moderation.reportable_by?/2`'s
+  # catch-all `%Image{}` clause reads, and that clause is `takedown_ready?/1`
+  # **and nothing else**, so an entry here on its own would make every preview
+  # page reportable by whoever can name a row id, with no visibility check, on a
+  # file no post has claimed. #2105 measured exactly that and left the kind out
+  # until the visibility clause could land in the same change.
+  @takedown Map.merge(
+              Map.new(@profile_kinds, &{&1, :profile}),
+              %{"press_kit" => :press_kit, "attachment_page" => :attachment_page}
+            )
 
   @doc """
   Whether a copyright case can act on this picture at all — what
@@ -1057,6 +1080,17 @@ defmodule Vutuv.Images do
       PressKitStore.version_path(image.token, version)
   end
 
+  # A preview page is named by version alone inside a directory of its *file's*
+  # token (`attachments/<token>/pages/<n>/large.avif`), so it takes the same
+  # by-name lookup a press picture does. `Vutuv.Attachments.Pages` owns the path
+  # itself, because the token is on the file rather than on this row.
+  defp bytes_path_by(:attachment_page, %Image{} = image, version) do
+    version = version || Pages.preview_version()
+
+    Uploads.held_file_path(image.id, version <> Spec.served_ext()) ||
+      Pages.bytes_path(image, version)
+  end
+
   @doc """
   What a reader is shown for this picture — the same URL the profile renders,
   so a picture already held by another case (or still in the AI gate) shows the
@@ -1079,6 +1113,13 @@ defmodule Vutuv.Images do
   # per-kind hook here points down at the module that owns the files in exactly
   # this way.
   defp preview_url_by(:press_kit, %Image{} = image), do: PressKit.preview_url(image)
+
+  # There is no reader-facing address for a preview page yet — nothing serves an
+  # uploaded file or its pages until #2108 — and this answer is only ever read by
+  # the report form, which no page reaches: `Vutuv.Moderation.reportable_by?/2`
+  # refuses the kind outright, because the reportable thing is the **file**.
+  # `nil` is the same "there is nothing to show" a kind with no takedown gets.
+  defp preview_url_by(:attachment_page, %Image{}), do: nil
 
   # A kind whose row exists but whose takedown does not. Loud rather than
   # half-done: the alternative is a stamped `frozen_at` no reader consults and
@@ -1154,6 +1195,16 @@ defmodule Vutuv.Images do
     :ok
   end
 
+  # A preview page (issue #2109). `frozen_at` is already the off switch —
+  # `servable?/1` reads it and the page is proxy-served — and the move is what
+  # makes the hold a hold: an upheld case has the bytes to delete and a rejected
+  # one has them to put back. Only `Vutuv.Attachments.freeze/1` gets here, since
+  # a page freezes with its file and never on its own.
+  defp freeze_by(:attachment_page, %Image{} = image) do
+    Pages.hold_files(image)
+    :ok
+  end
+
   @doc """
   Puts a frozen picture back exactly where it was: every file returns to the
   tree it came from under the name it had, the member row gets its four columns
@@ -1206,6 +1257,11 @@ defmodule Vutuv.Images do
     :ok
   end
 
+  defp unfreeze_by(:attachment_page, %Image{} = image) do
+    Pages.release_files(image)
+    :ok
+  end
+
   @doc """
   Deletes this picture for good — every derived version, the private original
   and the held copies — and forgets the row. What an upheld copyright case does,
@@ -1248,6 +1304,11 @@ defmodule Vutuv.Images do
     PressKitStore.delete(image.token)
     :ok
   end
+
+  # The same row-then-files order `Vutuv.Attachments.Pages.discard/1` already
+  # writes, which is where this delegates rather than spelling a second copy:
+  # a refused page and an upheld case remove exactly the same thing.
+  defp purge_by(:attachment_page, %Image{} = image), do: Pages.discard(image)
 
   @doc """
   Finishes every move a dying slot left half-done, in both directions — the

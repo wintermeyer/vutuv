@@ -71,6 +71,17 @@ defmodule Vutuv.Attachments.Attachment do
     # question — but the post stops waiting and the author gets the choice.
     field(:refused_at, :utc_datetime)
 
+    # When a copyright case took this file offline (#2109). The stamp is the
+    # record of the intent and the disk is the state, so it is written *before*
+    # the files move and `Vutuv.Attachments.reconcile_holds/0` finishes whatever
+    # a dying slot left half-done.
+    #
+    # `:naive_datetime`, unlike the two pipeline columns above: `Vutuv.Moderation`
+    # answers "is the reported content hidden?" and "what does upholding do?"
+    # with generic clauses matching `%{frozen_at: %NaiveDateTime{}}`, which a UTC
+    # stamp would silently fall through.
+    field(:frozen_at, :naive_datetime)
+
     # The render pipeline's own two columns (#2105). `worked_at` is the claim
     # heartbeat a compare-and-set is done on, so two slots of a deploy overlap
     # cannot render the same file; `render_attempts` counts only the passes

@@ -344,6 +344,24 @@ defmodule VutuvWeb.ControllerHelpers do
   def send_og_jpeg(%Conn{} = conn, result), do: send_og_image(conn, result, "image/jpeg")
 
   @doc """
+  The `filename` half of a `content-disposition` header for a file a member
+  uploaded and is now downloading back, in the RFC 5987 pair every browser
+  understands: an ASCII fallback with the two characters that would end the
+  quoted string removed, plus the real name percent-encoded.
+
+  Both halves are needed and neither is decoration. A German file name
+  (`Vertrag Müller.pdf`) reaches an old client mangled without the `filename*`
+  form, and a name carrying a `"` or a `\\` would end the header early without
+  the stripping. The two document controllers each grew a copy of this
+  (qualification proofs, employment references) before the moderation case
+  page's download made it a third.
+  """
+  def disposition_filename(name) when is_binary(name) do
+    ascii = for <<c <- name>>, c in 32..126, c not in [?", ?\\], into: "", do: <<c>>
+    ~s(filename="#{ascii}"; filename*=UTF-8''#{URI.encode(name, &URI.char_unreserved?/1)})
+  end
+
+  @doc """
   Renders the bare `VutuvWeb.ErrorHTML` 403/404 page and halts: the one shape
   every auth/resolve plug and the controller-side guards use to refuse a
   request.

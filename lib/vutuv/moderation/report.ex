@@ -153,6 +153,13 @@ defmodule Vutuv.Moderation.Report do
   def categories_for("job_posting"), do: @job_categories
   def categories_for("image"), do: @image_categories
   def categories_for("message"), do: @message_categories
+  # Everything else, a file under a post included (issue #2109). Unlike a
+  # profile picture a file keeps `spam`, for the reason a press picture does: it
+  # is published content in its own right and can perfectly well *be* the
+  # advert, where an advert as an avatar is a complaint about the account. A
+  # file on a private **message** takes the message list above instead, and that
+  # branch is `Vutuv.Moderation.report_categories/1`'s, because only the row
+  # knows which of its two parents it has.
   def categories_for(_type), do: @categories
 
   @doc """

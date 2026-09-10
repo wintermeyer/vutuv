@@ -44,8 +44,10 @@ defmodule Vutuv.Attachments do
   alias Vutuv.Attachments.Attachment
   alias Vutuv.Attachments.Format
   alias Vutuv.Attachments.PagePipeline
+  alias Vutuv.Attachments.Pages
   alias Vutuv.Attachments.Upload
   alias Vutuv.AttachmentStore
+  alias Vutuv.Images
   alias Vutuv.MediaJobs
   alias Vutuv.Posts.Pending
   alias Vutuv.Repo
@@ -332,19 +334,158 @@ defmodule Vutuv.Attachments do
     end
   end
 
+  ## The copyright freeze (issue #2109)
+
+  @doc "Whether a case is holding this file offline right now."
+  def frozen?(%Attachment{frozen_at: %NaiveDateTime{}}), do: true
+  def frozen?(%Attachment{}), do: false
+
+  @doc """
+  Whether a moderation case may act on this file at all — the twin of
+  `Vutuv.Images.takedown_ready?/1`, and what `Vutuv.Moderation` asks before it
+  lets a report name one.
+
+  Published (a post or a message holds it) and not already held. A file the
+  composer still has belongs to nobody outside, and a file another case has
+  already taken offline is not there to be reported again — answering otherwise
+  would tell a stranger it exists, which is the whole rule
+  `Vutuv.Moderation.ContentUrl` is built on.
+  """
+  def takedown_ready?(%Attachment{} = attachment),
+    do: not pending?(attachment) and not frozen?(attachment)
+
+  @doc """
+  Takes this file offline without deleting a byte of it: the row is stamped
+  `frozen_at`, every preview page freezes with it (`Vutuv.Images.freeze/1`, so
+  each page's own row carries the stamp every display gate already reads), and
+  the file's two copies move into the hold.
+
+  **Order matters**, as it does for a picture. The stamp goes first: it is the
+  record that this file is meant to be held, so a slot that dies mid-move leaves
+  a file that is already invisible and a job `reconcile_holds/0` finishes. The
+  other order would leave files in a hold that nothing knows to bring back.
+  """
+  def freeze(%Attachment{} = attachment) do
+    now = NaiveDateTime.utc_now(:second)
+
+    # `is_nil(frozen_at)` so a second pass — `reconcile_holds/0` finishing an
+    # interrupted move — re-asserts the freeze without moving the moment it
+    # happened, which is what the case and the statement of reasons quote.
+    Repo.update_all(
+      from(a in Attachment, where: a.id == ^attachment.id and is_nil(a.frozen_at)),
+      set: [frozen_at: now, updated_at: now]
+    )
+
+    # Only the pages that are not stamped yet. A page that is carries its own
+    # hold on the `images` table, which `Vutuv.Images.reconcile_holds/0`
+    # re-asserts one line before this function runs on the sweeper — doing it
+    # here as well would be that whole pass again, per page, every 15 minutes.
+    for page <- Pages.list(attachment), is_nil(page.frozen_at), do: Images.freeze(page)
+    AttachmentStore.hold(attachment.id, attachment.token)
+    :ok
+  end
+
+  @doc """
+  Puts a held file back exactly where it was — every page first, then the file
+  itself — and removes the hold.
+
+  Idempotent, and safe to run again after an interruption: the hold is removed
+  only once the files are back, so a half-finished restore is still a hold for
+  `reconcile_holds/0` to find.
+  """
+  def unfreeze(%Attachment{} = attachment) do
+    Repo.update_all(from(a in Attachment, where: a.id == ^attachment.id),
+      set: [frozen_at: nil, updated_at: NaiveDateTime.utc_now(:second)]
+    )
+
+    for page <- Pages.list(attachment), do: Images.unfreeze(page)
+    AttachmentStore.release(attachment.id, attachment.token)
+    AttachmentStore.purge_hold(attachment.id)
+    :ok
+  end
+
+  @doc """
+  Deletes this file for good — every preview page, both copies of the file and
+  the held ones — and forgets the row. What an upheld copyright case does, and
+  what the owner's own "remove it" does.
+
+  **The post is untouched.** The claim is about these bytes, not about the text
+  that carried them.
+  """
+  def purge(%Attachment{} = attachment) do
+    for page <- Pages.list(attachment), do: Images.purge(page)
+    Repo.delete_all(from(a in Attachment, where: a.id == ^attachment.id))
+    AttachmentStore.delete(attachment.token)
+    AttachmentStore.purge_hold(attachment.id)
+    :ok
+  end
+
+  @doc """
+  Where this file's bytes are **right now**, wherever that is: the takedown hold
+  while a case holds it, otherwise the served copy — the twin of
+  `Vutuv.Images.bytes_path/2`, and the one answer both case pages need. A freeze
+  takes the file out of every tree this app serves from, so an admin ruling on a
+  copyright claim can read it only through this.
+  """
+  def bytes_path(%Attachment{} = attachment),
+    do: held_file_path(attachment) || AttachmentStore.served_path(attachment.token)
+
+  @doc "Only the held copy, or `nil` — the half `bytes_path/1` asks first."
+  def held_file_path(%Attachment{id: id}), do: AttachmentStore.held_path(id)
+
+  @doc """
+  Finishes every move a dying slot left half-done, in both directions — the
+  standing job behind `freeze/1` and `unfreeze/1`, run beside
+  `Vutuv.Images.reconcile_holds/0` by `Vutuv.Moderation.Sweeper`.
+
+  The row's `frozen_at` is the intent and the disk is the state, so this reads
+  the intent and re-asserts it: a frozen file has whatever is left of it moved
+  into the hold, a hold whose row is no longer frozen is released, and a hold
+  whose row is gone (an upheld case interrupted between the two) is deleted.
+  The same three passes the image twin runs, and for the same reason — a slot
+  that died between the `frozen_at: nil` write and the move would otherwise
+  leave a file's bytes in a hold nothing knows to bring back.
+
+  It is a separate function rather than a case in the image one because the two
+  read different tables: `Vutuv.Images.reconcile_holds/0` only ever sees `images`
+  rows, and this hold deliberately lives where its leftover sweep cannot reach.
+  """
+  def reconcile_holds do
+    frozen = Repo.all(from(a in Attachment, where: not is_nil(a.frozen_at)))
+    for attachment <- frozen, do: freeze(attachment)
+
+    frozen_ids = MapSet.new(frozen, & &1.id)
+    leftover = Enum.reject(AttachmentStore.held_ids(), &MapSet.member?(frozen_ids, &1))
+
+    release_leftover_holds(leftover)
+  end
+
+  defp release_leftover_holds([]), do: :ok
+
+  defp release_leftover_holds(ids) do
+    rows = Repo.all(from(a in Attachment, where: a.id in ^ids))
+    for attachment <- rows, do: unfreeze(attachment)
+
+    known = MapSet.new(rows, & &1.id)
+    for id <- ids, not MapSet.member?(known, id), do: AttachmentStore.purge_hold(id)
+
+    :ok
+  end
+
   ## Deleting and sweeping
 
   @doc """
   Removes the member's own still-unattached file, bytes and all. A no-op for
   one that already belongs to a post or a message — those go with their
   parent. The budget keeps the bytes: they were accepted.
+
+  Through `purge/1` rather than deleting the row and the directory itself: this
+  used to `rm_rf` the token's tree, which took the preview pages' **files** and
+  left their `images` rows behind pointing at nothing (issue #2105 renders them
+  the moment a file lands, so a file the composer abandons has them).
   """
   def delete_pending(%Attachment{} = attachment) do
-    if pending?(attachment) do
-      Repo.delete(attachment, allow_stale: true)
-      AttachmentStore.delete(attachment.token)
-    end
-
+    if pending?(attachment), do: purge(attachment)
     :ok
   end
 

@@ -295,6 +295,81 @@ copy (or the still-served one, whenever a report only flagged the picture);
 both the owner's case page and the admin's render it from that one route.
 Without it an admin could not see what a copyright claim is about.
 
+## A file is reportable on its own (issue #2109)
+
+A file under a post can be a copyrighted paper or something not family-friendly,
+and the post's Report button reports the post. `attachment` is the report type
+for the file itself: `fetch_content/2` resolves it through
+`Vutuv.Attachments.Attachment`, and everything the picture type learned in #2012
+and #2030 applies with the file in the picture's place.
+
+**Who answers for it is the parent, not the uploader.** `owner_id/1` matches on
+the columns of the nullable parent pair — `post_id` first, then `message_id` —
+and delegates to that row's own answer, so a file under a page's post carries
+the same accountable member the post does (whoever claimed the page) rather than
+whoever pressed upload. A file the composer still holds falls through to its
+uploader, which is the only person it could ever be about.
+
+**A file is as visible as the thing that published it.** `reportable_by?/2`
+asks `Vutuv.Attachments.takedown_ready?/1` — published, and not already held —
+and then the parent's own visibility (`Posts.visible_to?/2`, or participation in
+the conversation). A file with neither parent is visible to nobody, so nobody
+outside can report it, and a file another case has already taken offline answers
+the same "not found" a picture does, for the same reason: telling a stranger it
+exists is the leak.
+
+**Its preview pages are not separately reportable.** The kind `attachment_page`
+got its `@takedown` strategy in this change, and that registry is also what
+`reportable_by?/2`'s catch-all `%Image{}` clause reads — so the refusing clause
+had to arrive with it, or every page would have become reportable by whoever can
+name a row id, with no visibility check at all. A page is our derivation of a
+member's file; it has no address and no audience of its own, and reporting the
+file takes its pages with it. That is why #2105 shipped the pages with no
+takedown and said so.
+
+**Only a copyright notice hides a file**, exactly as for a picture and by
+`report_freezes?/2`'s own clause: `trusted_reporter?/1` says yes to an account
+created a minute ago, and a house-rule complaint about what a post carries has
+somewhere better to go — the post, which any trusted report does hide.
+
+**The freeze moves the file and takes its pages along.**
+`Vutuv.Attachments.freeze/1` stamps `attachments.frozen_at` first (the record of
+the intent, so an interrupted move is finishable), freezes every
+`attachment_page` row through `Vutuv.Images.freeze/1` — each page gets a hold of
+its own, so `reconcile_holds/0` reaches it unchanged — and then moves both
+copies of the file into `frozen/attachments/<attachment id>/`. That path is one
+level deeper than a picture's on purpose; the hold section in
+[images.md](images.md) says why. `Vutuv.Attachments.reconcile_holds/0` re-asserts
+a half-done move, beside the image one in `Vutuv.Moderation.Sweeper`.
+
+**Upholding deletes the file and keeps the post.** `uphold_content_effect/2`
+answers `:deleted`, `settle_content_on_uphold/1` runs
+`Vutuv.Attachments.purge/1` (every page, both copies, the held ones, the row),
+and the post it hangs under is untouched — it was not what was reported.
+Rejecting puts every file back where it was. The owner's self-service is
+**remove or dispute**: there is no edit, because a file cannot be revised.
+
+A file on a **post** offers the whole category list, including `spam` — unlike a
+profile picture and for the press picture's reason: it is published content in
+its own right and can perfectly well *be* the advert. A file on a private
+**message** takes the message list instead, dropping `copyright`, because an
+unpublished file is nothing for a rights holder to have taken down; that branch
+is `report_categories/1`'s, since only the row knows which of its two parents it
+has.
+
+**The reported file is only readable on the case pages.** `GET
+/moderation/cases/:id/file` authorizes owner-or-admin, reads the hold first and
+falls back to the served copy, and hands the bytes over as a download under the
+name the member uploaded them as — never inline, for an arbitrary document
+authorized for exactly two people. Both case pages link it through that one
+route, the twin of `/moderation/cases/:id/image`.
+
+**What is not built yet.** Nothing serves an uploaded file or its preview pages
+until #2108, so a file has no address at all — which means `ContentUrl` cannot
+resolve one and the public notice form at `/system/report` cannot name a file,
+and the post's card has no chip to hang a Report link on. Both are one clause
+each for whoever ships that address.
+
 ## The notice from outside (issue #2009)
 
 A photographer who finds their work on a post here is not a member, and until
