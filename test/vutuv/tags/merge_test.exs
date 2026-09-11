@@ -230,10 +230,13 @@ defmodule Vutuv.Tags.MergeTest do
     test "names differing only in characters the slugifier strips are refused", ctx do
       # The #1337 bucket: `c`, `c++`, `c#` and `µc` all slugify to `c`, and they
       # are four languages. This is a hard rule, not a matter of judgement, and
-      # it applies to a hand-driven merge as much as to a proposed one.
-      c = tag("c")
-      cpp = tag("c++")
-      csharp = tag("c#")
+      # it applies to a hand-driven merge as much as to a proposed one. A unique
+      # stem keeps the slugs off the `C#` and `C++` that the async `TagsTest`
+      # mints: two files inserting one slug deadlocked here.
+      stem = unique_tag_name("c")
+      c = tag(stem)
+      cpp = tag(stem <> "++")
+      csharp = tag(stem <> "#")
 
       assert {:error, :punctuation_only_difference} = Merge.merge(cpp, c, actor: ctx.admin)
       assert {:error, :punctuation_only_difference} = Merge.merge(csharp, c, actor: ctx.admin)
