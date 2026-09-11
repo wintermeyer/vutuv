@@ -675,18 +675,20 @@ defmodule Vutuv.PressKit do
   How many bytes `download_url/1` actually hands over, or `nil` when there is no
   file to measure (issue #2140).
 
-  **Not `images.size_bytes`**, which is the *upload's* length. A photo leaves
-  here as the cleaned copy — the metadata strip runs at download time — so the
-  stored figure is a few hundred bytes too high, and a number a machine reads
-  off the page must be the number the response carries. A vector logo answers
-  its own length, since the file that arrives is the file that was uploaded.
+  **Not `images.size_bytes`**, which is the *upload's* length. Everything leaves
+  here as its cleaned copy — a photo through the container stripper, a vector
+  logo through the document one (issue #2145) — so the stored figure is too
+  high, by a few hundred bytes for a photo and by most of the file for a logo an
+  editor filled with its own trail, and a number a machine reads off the page
+  must be the number the response carries.
 
   It is a `File.stat` on a derivative the **upload** already wrote
   (`Vutuv.PressKitStore.store/4`), so the read path costs two syscalls. A row
   stored before that warm-up existed still derives on its first call here
-  (`Vutuv.Uploads.Originals.cleaned_copy/3`, a container walk with no re-encode)
-  — once, ever, and it is the work that row's first download would have paid
-  for anyway.
+  (`Vutuv.Uploads.Originals.cleaned_copy/3`: a container walk with no re-encode
+  for a photo, a document rewrite plus the two rasterisations that prove it for
+  a vector) — once, ever, and it is the work that row's first download would
+  have paid for anyway.
 
   `nil` where the store cannot hand anything over at all: a picture whose files
   are gone or in a takedown hold, or a container the stripper refuses. Such a

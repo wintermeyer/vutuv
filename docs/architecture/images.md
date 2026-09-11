@@ -123,12 +123,30 @@ whatever the whitelist believed. The opening bytes decide instead.
 
 *The press logo is the one SVG that leaves again, and only as a file.* A press
 kit exists to be redistributed, so a designer's vector has to be downloadable —
-`Vutuv.PressKitStore.download_file/1` hands out the stored original, and
-`VutuvWeb.PressKitImageController` sends it as an `attachment` (`nosniff` comes
+`Vutuv.PressKitStore.download_file/1` hands out a **cleaned** copy of it, and
+`VutuvWeb.PressKitImageController` sends that as an `attachment` (`nosniff` comes
 with the `:browser` pipeline), never inline. That distinction is the whole
 safety argument: an SVG rendered inline on our own origin is a script on our own
 origin, while one saved to disk is a file. Beside it `png_download_file/1`
 offers the same mark rasterised, for whoever cannot use a vector.
+
+*And cleaning a vector is a rewrite, so it proves itself.* Until issue #2145 an
+SVG left byte for byte as uploaded, which made the Media Kit's promise —
+a download never carries a GPS fix or a camera serial — true for JPEG, PNG and
+WebP and false for the one format that is not a container.
+`Vutuv.Uploads.SvgStrip` removes only what the specification says is not
+rendered (XML comments, the `<metadata>` element with its subtree, and every
+element, attribute and `xmlns:` declaration in a namespace that is not SVG,
+XLink or XML — a whitelist, so `sodipodi:docname` and the next editor's private
+namespace go without being named), copies everything else byte for byte, and
+cleans an embedded `data:` raster through `Vutuv.Uploads.MetadataStrip` where it
+lies. `<title>` and `<desc>` stay: they are the accessible name and description,
+part of how the file behaves. Because "a renderer ignores that" is an argument
+and not a measurement, `clean/1` rasterises both files and compares the pixel
+buffers; a mismatch is a refusal, so a namespace the module got wrong costs a
+download rather than changing a brand mark. Measured on five exports — Inkscape
+1,381 → 410 bytes, Illustrator 555 → 461, Figma and two hand-written marks byte
+for byte unchanged — all five identical pixels.
 
 *The renderer is what is protected, not the browser.* No SVG is ever rendered by
 a browser on our origin, so
@@ -854,11 +872,14 @@ can decode: JPEG, PNG and WebP, exactly the containers
 `Vutuv.Uploads.MetadataStrip` can take apart. HEIC is deliberately absent even on
 a build that can decode it, because the stripper answers `:unsupported` for it
 and a press photo nobody can clean is a press photo that leaks a GPS fix. The
-download is therefore always the **cleaned original** — the same pixels, every
+download is therefore always the **cleaned original** — the same picture, every
 metadata block removed, cached beside the original — and there is no
 "exact file" choice the way a post photo has one (`download_exact`): a picture
 published for redistribution should not be the one place a camera serial number
-leaves.
+leaves. A logo variant is held to the same rule, vector included (issue #2145,
+see the SVG section above), and the derivation is the **upload's gate**: a
+picture whose cleaned copy cannot be derived is refused where the member is
+still looking, rather than stored behind a download that 404s.
 
 **Serving.** `press_kit/<token>/…` for the derived AVIF versions,
 `originals/press_kit/<token>/` for the upload and the two files derived from it
@@ -987,8 +1008,9 @@ shows every picture whole with its caption, credit, dimensions, file size
 separator) and a download. **Each number on that line names the file it belongs
 to** (issue #2140): the size is `PressKit.download_bytes/1`, the length of what
 the download route really delivers rather than `images.size_bytes`, which is the
-upload's and is a few hundred bytes longer because the metadata strip runs on
-the way out; and a **vector** claims no pixel size, since the stored
+upload's and is longer because the strip runs on the way out — a few hundred
+bytes for a photo, most of the file for a logo whose editor filled it with its
+own trail (#2145); and a **vector** claims no pixel size, since the stored
 `width`/`height` are the rasterisation's — the PNG rendering offered beside it —
 so they read as `PNG 1600 × 533` after the SVG's own byte count. A size that
 cannot be measured is left out; that download 404s anyway.

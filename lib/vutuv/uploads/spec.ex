@@ -356,9 +356,18 @@ defmodule Vutuv.Uploads.Spec do
     end
   end
 
-  defp svg_binary?(binary) do
+  @doc """
+  Whether these bytes are SVG markup, by the same sniff every decision in this
+  pipeline hangs off. Public because the door that *cleans* a stored file
+  (`Vutuv.Uploads.Originals.cleaned_copy/3`, issue #2145) has to route by
+  content too, and a second copy of the rule would drift from this one the day
+  the window is widened.
+  """
+  def svg_binary?(binary) when is_binary(binary) do
     binary |> binary_part(0, min(byte_size(binary), @svg_sniff_bytes)) |> svg_head?()
   end
+
+  def svg_binary?(_binary), do: false
 
   defp svg_head?(head), do: String.contains?(String.downcase(head), "<svg")
 
