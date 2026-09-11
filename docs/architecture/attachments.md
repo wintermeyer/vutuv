@@ -36,9 +36,16 @@ never route a file past its own gate. The module's own doc has the rest.
 (encrypted), it runs code when opened, it does something to the reader when
 opened, it carries another file inside it — and **fails closed**: poppler
 missing, poppler failing, or a scan that could not be finished is a refusal.
-Three of the four are poppler's answers (`pdfinfo` for encryption and
-JavaScript, `pdfdetach -list` for embedded files); `/OpenAction` no poppler
-tool reports, so it is read from the bytes.
+**Which question goes to whom is the whole design** (#2136), and the split is
+measured rather than assumed. Poppler parses: it resolves the cross-reference
+table and walks the objects, so `pdfinfo` answers `JavaScript: yes` wherever
+the script hangs — name tree, `/OpenAction`, a catalog's or a page's `/AA`, an
+annotation. So `/JavaScript` left the byte scan, and that is what stopped a CV
+being refused for listing "HTML/CSS/JavaScript". `pdfdetach -list` is *not* as
+complete: it answers 0 for a file reached through `/AF` or a `/RichMedia`
+annotation, so `/EmbeddedFile` stayed in the scan beside it. Nothing reports an
+action, so `/OpenAction`, `/Launch`, `/SubmitForm` and `/ImportData` are the
+bytes' own. The module records each measurement with its date.
 
 The one thing worth repeating outside that module: **a raw-byte scan alone is
 not enough, and this was measured.** One `qpdf --object-streams=generate` run
@@ -49,6 +56,13 @@ every stream it can, bounded against a decompression bomb. `attachments_test.exs
 tries every hostile PDF twice, as written and hidden that way; calibrated by
 removing the inflation pass, the `/OpenAction` file is then **accepted** while
 poppler still catches the other two.
+
+And **what a page says is not what a document does**: a string literal, a hex
+string and a comment are blanked out of every buffer before the names are
+looked for, so `/JavaScript` in `(HTML/CSS/JavaScript)` or `/Launch` in a link
+to `…/products/Launch` is a word. Which ranges may be blanked, and why an
+object stream is the case that decides it, is in the module; both halves are
+calibrated in `attachments_test.exs`.
 
 It lives under `Vutuv.Uploads` rather than beside the context that added it
 because two other doors already take a member's PDF and hand it back verbatim

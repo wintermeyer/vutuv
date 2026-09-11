@@ -21,6 +21,7 @@ defmodule Vutuv.AttachmentsTest do
   alias Vutuv.AttachmentStore
   alias Vutuv.MediaJobs.MediaJob
   alias Vutuv.Repo
+  alias Vutuv.WorkCounter
 
   setup do
     tmp = Path.join(System.tmp_dir!(), "vutuv_attachments_#{System.unique_integer([:positive])}")
@@ -85,6 +86,20 @@ defmodule Vutuv.AttachmentsTest do
 
     test "an OpenAction that is only a destination is fine", %{user: user, files: files} do
       assert {:ok, _attachment} = upload(user, Fixtures.destination_pdf(files))
+    end
+
+    # Issue #2136. This CV's page says "HTML/CSS/JavaScript", its title says it
+    # again and a link annotation points at MDN's `/docs/Web/JavaScript`, and
+    # none of that is an action — `pdfinfo` answers `JavaScript: no`. Every one
+    # of those words is inside a PDF **string**, which is what the gate now
+    # blanks before it looks for a name. Calibration: stop `scan_buffer/1` in
+    # `Vutuv.Uploads.PdfGate` from calling `without_content/1` and both halves
+    # go red with `{:error, :embedded_files}`, on the sentence about print PDFs.
+    test "a CV that lists web skills is not a program", %{user: user, files: files} do
+      assert {:ok, _compressed} = upload(user, Fixtures.web_skills_cv_pdf(files))
+
+      assert {:ok, _uncompressed} =
+               upload(user, Fixtures.web_skills_cv_pdf(files, compress: false))
     end
 
     test "the intake writes a media job", %{user: user, files: files} do
@@ -177,6 +192,96 @@ defmodule Vutuv.AttachmentsTest do
 
     test "a PDF carrying another file is refused", %{user: user, files: files} do
       assert {:error, :embedded_files} = upload(user, Fixtures.embedded_file_pdf(files))
+    end
+
+    # Since #2136 the byte scan does not look for `/JavaScript` at all, because
+    # a scan that reads a page's words cannot tell a name from a sentence. Each
+    # of these four rests on `pdfinfo`'s answer alone, so this is where that
+    # rests. Calibration: take the `JavaScript:` line out of `PdfGate.check/1`
+    # and all four go red — three with `{:ok, _}`, `:open_action` with its own
+    # reason.
+    test "JavaScript is refused wherever the action hangs", %{user: user, files: files} do
+      got =
+        for where <- [:open_action, :catalog_aa, :page_aa, :annotation] do
+          {where, upload(user, Fixtures.action_javascript_pdf(files, where))}
+        end
+
+      assert Enum.all?(got, &match?({_where, {:error, :javascript}}, &1)),
+             "the gate answered: #{inspect(got)}"
+    end
+
+    # `/EmbeddedFile` is the other half of that decision and went the other way:
+    # poppler counts a file on a `/FileAttachment` annotation even when nothing
+    # names it as one, so the first two of these are its answer — and answers
+    # **0** for one reached through the catalog's `/AF`, so the third is the
+    # byte scan's. Calibration: take `"EmbeddedFile"` out of `@name_regexes` in
+    # `Vutuv.Uploads.PdfGate` and the `/AF` line alone goes red with `{:ok, _}`.
+    test "a file carried inside is refused however it is hung", %{user: user, files: files} do
+      assert {:error, :embedded_files} = upload(user, Fixtures.file_attachment_pdf(files))
+
+      assert {:error, :embedded_files} =
+               upload(user, Fixtures.file_attachment_pdf(files, typed: false))
+
+      assert {:error, :embedded_files} = upload(user, Fixtures.associated_file_pdf(files))
+    end
+
+    # A blanking pass reads a buffer front to back; a reader picks each object
+    # out of an object stream at the offset its table records. Where those two
+    # part company, a `(` in one object and a `)` in another would blank the
+    # catalog between them — so a candidate string holding a `<<` is not
+    # blanked. Calibration: let `blank_unless_dictionary/4` in
+    # `Vutuv.Uploads.PdfGate` exempt every range and this goes red with
+    # `{:ok, _}`.
+    test "a launch wrapped in brackets is still a launch", %{user: user, files: files} do
+      assert {:error, :open_action} = upload(user, Fixtures.string_wrapped_launch_pdf(files))
+    end
+
+    # The three below are not calibrated against #2136 — the narrowing does not
+    # touch them, and they pass with and without it. They are here because the
+    # narrowing had to be shown to lose nothing, and each names a different
+    # layer: the `#XX` alternation in `@name_regexes`, the raw-file half of the
+    # scan (an incremental update leaves the first revision's bytes alone), and
+    # `pdfinfo` itself on a file no parser can open.
+    test "a launch spelled with hex escapes is refused", %{user: user, files: files} do
+      assert {:error, :open_action} = upload(user, Fixtures.hex_escaped_launch_pdf(files))
+    end
+
+    test "a second revision that appends a launch is refused", %{user: user, files: files} do
+      assert {:error, :open_action} = upload(user, Fixtures.incremental_launch_pdf(files))
+    end
+
+    test "a PDF header with nothing readable behind it is refused", %{user: user, files: files} do
+      assert {:error, :unreadable} = upload(user, Fixtures.header_then_garbage_pdf(files))
+    end
+
+    # `@stream_limit` without qpdf: the fixture below needs no external tool, so
+    # this is the one that still runs on CI.
+    test "a stream that inflates to 20 MB is refused", %{user: user, files: files} do
+      assert {:error, :unreadable} = upload(user, Fixtures.decompression_bomb_pdf(files))
+    end
+
+    # The blanking pass reads the file, so a file can make it work. Reductions
+    # rather than a clock, because the suite runs twenty cases at once (see
+    # `Vutuv.WorkCounter`). Calibrated both ways on 2026-09-11: as it stands,
+    # 47,915 reductions for 30 KB and 64,525 for 60 KB, the difference being
+    # mostly the upload around it. Make `blank_unless_dictionary/5` in
+    # `Vutuv.Uploads.PdfGate` resume at `at + 1` again and the same two are
+    # **90 million** and **321 million**, quadrupling with every doubling: 2.8
+    # seconds of a LiveView's own process for a 60 KB file, and days for one at
+    # the 20 MB cap.
+    test "a file cannot make the blanking pass quadratic", %{user: user, files: files} do
+      {small, _answer} =
+        WorkCounter.count_reductions(fn ->
+          upload(user, Fixtures.comment_flood_pdf(files, 30_000))
+        end)
+
+      {large, _answer} =
+        WorkCounter.count_reductions(fn ->
+          upload(user, Fixtures.comment_flood_pdf(files, 60_000))
+        end)
+
+      assert large < 5_000_000,
+             "60 KB of comments cost #{large} reductions, 30 KB cost #{small}"
     end
 
     # The `/OpenAction` rule reads what follows the name and lets a destination
