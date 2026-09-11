@@ -55,7 +55,6 @@ defmodule VutuvWeb.PostLive.Feed do
   alias Vutuv.Posts.Post
   alias Vutuv.Prefs
   alias Vutuv.Social
-  alias Vutuv.Tags.ExternalPosts
   alias Vutuv.Tags.SourceServers
   alias Vutuv.Tags.Tag
   alias Vutuv.Tags.Trending
@@ -1482,12 +1481,11 @@ defmodule VutuvWeb.PostLive.Feed do
   end
 
   # The same act on a post a followed tag brought back from another server
-  # (issue #2127). Several copies of one original can be on this page at once
-  # and the report takes all of them (issue #2164), so all of them have to
-  # leave: a row left standing here is the reader watching the promise they
-  # just read break.
+  # (issue #2127). One row per copy here — a tag pull files one row per (tag,
+  # server, status), and only one of them can be on this page — so the entry to
+  # take away is the one carrying that id.
   def handle_event("report-external-post", %{"id" => id}, socket) do
-    RemotePostActions.report_external(socket, id, &drop_external_copies(&1, id))
+    RemotePostActions.report_external(socket, id, &drop_external_entry(&1, id))
   end
 
   # "Not this account today": the private, reversible lever beside Report. The
@@ -3248,27 +3246,11 @@ defmodule VutuvWeb.PostLive.Feed do
     |> drop_entries(Enum.filter(socket.assigns.entries, &remote_entry?(&1, remote_post_id)))
   end
 
-  # Which rows are copies of one original is `Vutuv.Tags.ExternalPosts`' answer,
-  # not this page's: the row that was clicked names the original, and the
-  # context says which of the rows on the page are the same post. A copy of that
-  # rule here would be a second place for it to drift from the one the takedown
-  # itself ran.
-  defp drop_external_copies(socket, external_post_id) do
-    entries = socket.assigns.entries
-
-    case Enum.find(entries, &external_entry?(&1, external_post_id)) do
-      %{external_post: reported} ->
-        drop_entries(
-          socket,
-          Enum.filter(
-            entries,
-            &(Posts.external_feed_entry?(&1) and ExternalPosts.copy?(&1.external_post, reported))
-          )
-        )
-
-      _gone ->
-        socket
-    end
+  defp drop_external_entry(socket, external_post_id) do
+    drop_entries(
+      socket,
+      Enum.filter(socket.assigns.entries, &external_entry?(&1, external_post_id))
+    )
   end
 
   defp external_entry?(entry, external_post_id),

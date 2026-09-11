@@ -3589,23 +3589,16 @@ defmodule VutuvWeb.PostComponents do
                 >
                   {gettext("View the original")}
                 </:item>
-                <%!-- The same lever the cached-post card offers, and nearly the
-                same deal: what goes is **every** copy of the original we hold,
-                and the post itself stands untouched where its author put it.
-                Its own sentence for exactly that reason (issue #2164) — the
-                cached-post card's promises one copy, which is all that one ever
-                has. It promises the act and not the future: a tombstone keeps
-                the post out of the next pull, but only until `prune/0` drops it
-                with the last follow of that pair, so "we will not fetch it
-                again" would be the third spelling of this issue's own
-                overclaim. --%>
+                <%!-- The same lever the cached-post card offers, and the same
+                deal: our copy goes for everybody here at once, and the post
+                itself stands untouched where its author put it. --%>
                 <:item
                   click="report-external-post"
                   value={@post.id}
                   danger
                   confirm={
                     gettext(
-                      "Report this post as not appropriate? Every copy of it disappears right away, for everyone on this vutuv."
+                      "Report this post as not appropriate? Our copy is deleted for everyone on this vutuv right away."
                     )
                   }
                 >
