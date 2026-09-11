@@ -362,6 +362,34 @@ defmodule VutuvWeb.ControllerHelpers do
   end
 
   @doc """
+  Whether the request already holds `etag`, so the answer may be a 304.
+
+  `if-none-match` is a comma-separated **list**, a member of it may be `*`
+  (which matches anything that exists), and a validator may come back **weak**
+  (`W/"…"`) — nginx marks an ETag weak when it compresses the body, and a
+  strict `==` against our one strong tag would then never match, so every
+  check would fetch the whole file again and the 304 would be a promise
+  nothing keeps. Compare the entity-tags, not the header.
+
+  Two callers, and the second is why this moved here: the service worker's own
+  script (`VutuvWeb.ServiceWorkerController`) and every proxied image version
+  (`VutuvWeb.ImageProxy`, issue #2170). Only the first knew about weak
+  validators, and a second copy would have had to learn it again.
+  """
+  def fresh?(%Conn{} = conn, etag) when is_binary(etag) do
+    conn
+    |> Conn.get_req_header("if-none-match")
+    |> Enum.flat_map(&String.split(&1, ","))
+    |> Enum.any?(fn candidate ->
+      case candidate |> String.trim() |> String.replace_prefix("W/", "") do
+        ^etag -> true
+        "*" -> true
+        _other -> false
+      end
+    end)
+  end
+
+  @doc """
   Renders the bare `VutuvWeb.ErrorHTML` 403/404 page and halts: the one shape
   every auth/resolve plug and the controller-side guards use to refuse a
   request.

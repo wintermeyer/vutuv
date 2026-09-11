@@ -6,8 +6,8 @@ defmodule VutuvWeb.PressKitImageController do
   allowed to see it (`Vutuv.PressKit.visible_to?/2`).
 
   The serving mechanics (the version parser, the X-Accel / `send_file` switch,
-  the immutable cache header) are `VutuvWeb.ImageProxy`'s, shared with the post,
-  job-posting and organization proxies. What this one owns is the two addresses
+  the cache and revalidation headers) are `VutuvWeb.ImageProxy`'s, shared with
+  the post, job-posting and organization proxies. What this one owns is the two addresses
   a *file* leaves at, which no other proxy has as its main purpose:
 
     * `download.orig` — the picture a journalist takes away, always the
@@ -77,7 +77,7 @@ defmodule VutuvWeb.PressKitImageController do
   defp serve(conn, image, :pixelated) do
     if ImageScans.released?(image.moderation) do
       conn
-      |> put_resp_header("cache-control", "private, no-store")
+      |> ImageProxy.put_no_store()
       |> redirect(to: PressKit.url(image, "large"))
     else
       ImageProxy.serve_pixelated(conn, existing(PressKitStore.pixelated_path(image.token)))

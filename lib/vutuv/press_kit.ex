@@ -615,9 +615,10 @@ defmodule Vutuv.PressKit do
   What a page loads for this viewer (`VutuvWeb.UI.picture/1`), the twin of
   `Vutuv.Posts.PostImage.picture/1`: a photo's `feed` version, with the 640 px
   `lite` in its place while the viewer is in data-saving mode and that file is
-  on disk. Asked of the disk rather than blind, because the proxy caches every
-  version for a year as immutable and a lite URL answered with the feed bytes
-  would stay the feed for that year.
+  on disk. Asked of the disk rather than blind, because a lite URL that
+  resolved to the feed file would hand the full-size bytes to exactly the
+  member the mode exists to spare, and a browser would keep them for as long as
+  it holds them fresh.
 
   A **logo** has no such pair — nothing crops a wordmark and its two versions
   are 320 and 1200 px — so it loads its `thumb` for everybody.

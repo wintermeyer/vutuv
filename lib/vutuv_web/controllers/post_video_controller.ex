@@ -78,10 +78,7 @@ defmodule VutuvWeb.PostVideoController do
   defp serve(conn, video, _viewer, :og) do
     with %{position: position} <- Videos.cover_frame(video),
          {:ok, jpeg} <- PostVideoStore.og_jpeg(video.token, position) do
-      conn
-      |> ImageProxy.put_cache_control()
-      |> put_resp_content_type("image/jpeg", nil)
-      |> send_resp(200, jpeg)
+      ImageProxy.send_derived(conn, jpeg, "image/jpeg")
     else
       _ -> ImageProxy.not_found(conn)
     end

@@ -217,8 +217,8 @@ defmodule Vutuv.PostImageStoreTest do
       assert {Image.width(lite), Image.height(lite)} == {40, 80}
     end
 
-    # No URL without the file: the proxy caches every version as immutable for
-    # a year, so a lite URL answered with the feed bytes would stay the feed.
+    # No URL without the file: a lite URL that resolved to the feed file would
+    # hand the full-size bytes to exactly the member the mode exists to spare.
     test "picture/1 names the lite only in data-saving mode and only once it exists", %{
       tmp: tmp
     } do

@@ -54,7 +54,10 @@ defmodule VutuvWeb.PostImageControllerTest do
   end
 
   describe "a public post's image" do
-    test "is served to anonymous visitors with immutable private caching", %{conn: conn, tmp: tmp} do
+    test "is served to anonymous visitors, revalidatable rather than immutable", %{
+      conn: conn,
+      tmp: tmp
+    } do
       author = insert(:user, email_confirmed?: true)
       {_post, image} = post_with_image!(author, tmp)
 
@@ -62,7 +65,7 @@ defmodule VutuvWeb.PostImageControllerTest do
 
       assert conn.status == 200
       assert get_resp_header(conn, "content-type") |> hd() =~ "image/avif"
-      assert get_resp_header(conn, "cache-control") == ["private, max-age=31536000, immutable"]
+      assert get_resp_header(conn, "cache-control") == ["private, max-age=300, must-revalidate"]
     end
 
     test "carries a Content-Disposition naming the download after the owner's handle", %{
@@ -167,7 +170,7 @@ defmodule VutuvWeb.PostImageControllerTest do
 
       assert conn.status == 200
       assert get_resp_header(conn, "content-type") |> hd() =~ "image/jpeg"
-      assert get_resp_header(conn, "cache-control") == ["private, max-age=31536000, immutable"]
+      assert get_resp_header(conn, "cache-control") == ["private, max-age=300, must-revalidate"]
 
       {:ok, jpeg} = Image.from_binary(conn.resp_body)
       assert {Image.width(jpeg), Image.height(jpeg)} == {1200, 300}

@@ -182,10 +182,12 @@ defmodule Vutuv.Posts.PostImage do
   as `:src`, and as `:lite` the 640 px version while the viewer is in
   data-saving mode (`Vutuv.LowBandwidth`) and the file is on disk — a photo
   the regeneration has not reached yet keeps showing `feed`, never a broken
-  picture. Asked of the disk rather than handed out blind: the proxy caches
-  every version for a year as immutable, so a lite URL answered with the
-  feed bytes would stay the feed for that year, on exactly the member the
-  mode is for.
+  picture. Asked of the disk rather than handed out blind: a lite URL that
+  resolved to the feed file would hand the full-size bytes to exactly the
+  member the mode exists to spare, and a browser would keep them for as long as
+  it holds them fresh — five minutes now rather than the year the proxy's
+  immutable header once promised (`VutuvWeb.ImageProxy`, issue #2170), and the
+  wrong picture either way.
 
   Only the feed slot has a lite: the 320 px `thumb` is already small, and
   `large`/`xl` are the lightbox's, which `lightbox_url/1` answers.
@@ -206,11 +208,14 @@ defmodule Vutuv.Posts.PostImage do
     url(image, if(LowBandwidth.on?(), do: "large", else: "xl"))
   end
 
-  # The proxy serves every version under an immutable-cache header, so a
-  # re-crop (which overwrites the files in place) must change the URL or every
-  # browser that saw the old frame keeps it for a year. The buster is a short
-  # hash of the crop, so the same crop always names the same URL and an
-  # uncropped photo keeps its historical bare one.
+  # A re-crop overwrites the files in place, so the URL must change with it:
+  # otherwise a browser that saw the old frame keeps showing it until its copy
+  # is evicted, the proxy's `ETag` being the file's own size and mtime and its
+  # cache window five minutes (`VutuvWeb.ImageProxy`, issue #2170 — before that
+  # the window was a year and this buster was the only thing standing between a
+  # re-crop and a year of the old frame). The buster is a short hash of the
+  # crop, so the same crop always names the same URL and an uncropped photo
+  # keeps its historical bare one.
   defp crop_buster(%__MODULE__{crop: crop}) when is_binary(crop) and crop != "" do
     "?v=" <>
       (:sha256 |> :crypto.hash(crop) |> Base.url_encode64(padding: false) |> binary_part(0, 8))

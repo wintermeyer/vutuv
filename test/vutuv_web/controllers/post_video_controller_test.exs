@@ -52,7 +52,7 @@ defmodule VutuvWeb.PostVideoControllerTest do
     assert conn.status == 200
     assert hd(get_resp_header(conn, "content-type")) =~ "video/mp4"
     assert get_resp_header(conn, "accept-ranges") == ["bytes"]
-    assert hd(get_resp_header(conn, "cache-control")) =~ "immutable"
+    assert hd(get_resp_header(conn, "cache-control")) =~ "max-age=300"
 
     assert byte_size(conn.resp_body) ==
              File.stat!(PostVideoStore.rendition_path(video.token, "h264")).size
