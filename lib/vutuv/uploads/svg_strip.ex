@@ -43,7 +43,10 @@ defmodule Vutuv.Uploads.SvgStrip do
   the title as a tooltip — so they are part of how the file behaves rather than
   a trail: text the member wrote *into* the logo. `id`, `class` and `style` stay
   because `url(#…)` resolves through them. So do the XML declaration and any
-  processing instruction.
+  processing instruction — but a `data:` URI inside one is cleaned like every
+  other, because "not rendered" is not "not read": a `<?xpacket?>` or an
+  `<?xml-stylesheet?>` is a place an editor can park a photograph, and a
+  photograph is exactly what carries the serial.
 
   **It fails closed**, like the stripper beside it: markup this module cannot
   take apart with certainty — a DOCTYPE, a tag it cannot parse, a `data:` URI it
@@ -148,6 +151,11 @@ defmodule Vutuv.Uploads.SvgStrip do
   # copies the bytes it consumed or drops them whole. `scopes` is the stack of
   # in-scope namespace bindings, pushed on an open tag and popped on a close, so
   # a prefix is resolved where it is used rather than where it was declared.
+  #
+  # Every region that is **kept** goes through `clean_data_uris/1` — a CDATA
+  # body, a processing instruction, a text node, an attribute value — because an
+  # editor picks which of them it parks a photograph in, not us. A fifth branch
+  # that keeps bytes belongs on that list.
 
   defp rewrite(markup) do
     case scan(markup, [@root_scope], []) do
@@ -176,7 +184,9 @@ defmodule Vutuv.Uploads.SvgStrip do
 
   defp scan(<<"<?", rest::binary>>, scopes, acc) do
     with {body, tail} <- split_on(rest, "?>"),
-         do: scan(tail, scopes, ["?>", body, "<?" | acc])
+         {:ok, clean} <- clean_data_uris(body) do
+      scan(tail, scopes, ["?>", clean, "<?" | acc])
+    end
   end
 
   defp scan(<<"</", rest::binary>>, [_innermost | outer], acc) when outer != [] do

@@ -117,6 +117,27 @@ defmodule Vutuv.Uploads.SvgStripTest do
       assert SvgStrip.renders_alike?(markup, cleaned)
     end
 
+    # A processing instruction is kept, so it is the one place left where an
+    # embedded photograph could ride out whole. Measured on the shipped module
+    # before this clause existed: the base64 came back verbatim, serial and all.
+    test "a photograph parked in a processing instruction is cleaned too" do
+      jpeg = tagged_jpeg()
+
+      markup =
+        ~s(<?xpacket data:image/jpeg;base64,#{Base.encode64(jpeg)}?>) <>
+          ~s(<svg xmlns="http://www.w3.org/2000/svg" width="10" height="10">) <>
+          ~s(<rect width="10" height="10" fill="#123456"/></svg>)
+
+      assert {:ok, cleaned} = SvgStrip.clean(markup)
+
+      [_, payload] = Regex.run(~r/base64,([A-Za-z0-9+\/=]+)\?>/, cleaned)
+      embedded = Base.decode64!(payload)
+
+      refute String.contains?(embedded, "SN-CLAUDE-1234")
+      assert byte_size(embedded) < byte_size(jpeg)
+      assert cleaned =~ ~s(<rect width="10" height="10" fill="#123456"/>)
+    end
+
     test "a file with nothing to remove comes back byte for byte" do
       markup =
         ~s(<svg xmlns='http://www.w3.org/2000/svg' width='10' height='10' >) <>
