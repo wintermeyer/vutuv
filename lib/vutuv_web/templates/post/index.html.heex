@@ -77,11 +77,11 @@
         (`archive_engagement/2`), so no action bar runs its own mount query. --%>
         <%!-- `ancestors` rather than the card's own fallback: this page is a
         crawl surface, so a quoted parent whose author keeps machines out is
-        dropped (issue #2107, `Posts.public_ancestors/1`). --%>
+        dropped (issue #2107, `Posts.public_ancestors/2`). --%>
         <.post_thread_entry
           :if={!Vutuv.Posts.remote_feed_entry?(entry)}
           post={entry.post}
-          ancestors={Vutuv.Posts.public_ancestors(entry.post)}
+          ancestors={Vutuv.Posts.public_ancestors(entry.post, @current_user)}
           reposted_by={entry.reposted_by}
           entry_id={entry.id}
           conn_or_socket={@conn}

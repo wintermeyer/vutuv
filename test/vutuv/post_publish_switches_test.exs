@@ -169,7 +169,7 @@ defmodule Vutuv.PostPublishSwitchesTest do
       # still reaches a list — the reader's own feed document, a conversation
       # folded into a row — rather than relying on every caller to filter.
       assert %{excerpt: "Post not open to search engines"} =
-               PostDoc.timeline_entry(%{post: Repo.reload!(blocked)})
+               PostDoc.timeline_entry(%{post: Repo.reload!(blocked)}, nil)
 
       # The tag page drops it outright — a public topic surface with no owner
       # to make an exception for.

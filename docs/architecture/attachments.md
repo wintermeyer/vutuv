@@ -163,6 +163,31 @@ every visit; a copy on somebody else's server is neither, so this has to be a
 gate and not a directive. That sentence is the registry `hint` on
 `posts_machines_allowed?`, so the member and the admin read the same words.
 
+### The chokepoint
+
+**A post's body leaves the database toward a surface a machine can read only
+through a query that has been piped through `Vutuv.Posts.scope_machines_for/2`**
+(or its anonymous case `scope_machines_allowed/1`). That is the invariant, and
+it is enforced rather than remembered: `test/vutuv/post_body_chokepoint_test.exs`
+reads the source, collects every function under `lib/vutuv/` that selects a post
+`body`, and fails the build for any that does not pipe through the gate.
+
+It is a property and not a list because three review rounds each produced a
+complete measurement and each missed the next surface — the archive, the tag
+pages and the calendar; then the conversation, the reply, the repost and the
+profile document; then the profile HTML. The last pair is why the gate is in the
+**query**: `recent_posts_by_authors/3` selects `body:` into bare maps, which no
+struct-taking helper can reach, and `pinned_post/2` fetches by id rather than
+through a timeline, so no listing gate applied. Both put a withheld post's whole
+text on `/:slug`, which is public, anonymous, in the sitemap and carries no
+`X-Robots-Tag`.
+
+`scope_visible/2` is its mandatory partner and answers a different question — may
+this **viewer** see it — so neither substitutes for the other. An exception is
+explicit and carries its reason in the test's own `@deliberate` and
+`@exempt_queries` maps; the silent absence of a check is what the guard exists to
+stop.
+
 ### Where a withheld post is redacted, and where it is not
 
 The switch protects the post's own documents; what it did not protect at first

@@ -128,13 +128,13 @@ defmodule VutuvWeb.AgentDocs.PostDoc do
       # list. The page has always shown the true count beside a window of the
       # thread; this document does the same, and `replies` below is that window.
       reply_count: counts.replies,
-      replies: Enum.map(replies, &reply_entry/1),
+      replies: Enum.map(replies, &reply_entry(&1, viewer)),
       # The whole conversation the HTML permalink renders (issue #1006), in
       # the same reading order (the reply tree depth-first, issue #1027);
       # every entry carries its parent pointer and its nesting depth, so the
       # tree is recoverable without re-deriving it. `replies` above stays the
       # one-level list for API consumers that relied on it.
-      thread: thread_entries(thread),
+      thread: thread_entries(thread, viewer),
       thread_truncated: thread_truncated?,
       # The public engagement counters the HTML action bar shows to everyone —
       # vutuv's own tally **and** what other networks did, in one figure each,
@@ -228,8 +228,8 @@ defmodule VutuvWeb.AgentDocs.PostDoc do
       # Counted off the two loaded lists rather than re-queried, the same way
       # `build/3` does it, so the figure and the entries under it cannot drift.
       reply_count: length(replies) + length(remote_replies),
-      replies: Enum.map(replies, &reply_entry/1),
-      thread: thread_entries(thread),
+      replies: Enum.map(replies, &reply_entry(&1, nil)),
+      thread: thread_entries(thread, nil),
       thread_truncated: thread_truncated?,
       like_count: counts.likes,
       # A liker is a member or a page (issue #1410); the md/txt renderers read
@@ -266,7 +266,7 @@ defmodule VutuvWeb.AgentDocs.PostDoc do
       author: Vutuv.Identity.ref(author),
       period: period_label,
       total: total,
-      posts: Enum.map(entries, &timeline_entry/1)
+      posts: Enum.map(entries, &timeline_entry(&1, nil))
     })
   end
 
@@ -310,8 +310,17 @@ defmodule VutuvWeb.AgentDocs.PostDoc do
   `reposters` is every reposter behind the entry (the feed carries the whole
   follow-scoped roster; the archive a single one), newest first, as names —
   `reposted_by` stays the newest for callers that want just the one name.
+
+  `viewer` decides whether a withheld post keeps its words (issue #2107) and
+  **defaults to `nil`, the redacting side**: a caller that forgets it
+  over-redacts rather than leaks, which is the only direction a safety gate may
+  fail in. Pass a member only where the document is login-gated and per-viewer —
+  `VutuvWeb.AgentDocs.FeedDoc` and the `/api/2.0` reads — because there the
+  reader can open the post and read every word anyway.
   """
-  def timeline_entry(%{remote_post: %RemotePost{} = remote} = entry) do
+  def timeline_entry(entry, viewer \\ nil)
+
+  def timeline_entry(%{remote_post: %RemotePost{} = remote} = entry, _viewer) do
     entry
     |> remote_timeline_entry(remote)
     |> Map.merge(%{
@@ -333,7 +342,7 @@ defmodule VutuvWeb.AgentDocs.PostDoc do
   #
   # A note is a reply and nothing more: no cached pictures of its own and
   # nothing it quotes, so it takes the shared shape unchanged.
-  def timeline_entry(%{note: %Note{} = note} = entry),
+  def timeline_entry(%{note: %Note{} = note} = entry, _viewer),
     do: remote_timeline_entry(entry, note)
 
   # The **third** remote row shape (issue #2127): a post one of the reader's
@@ -341,13 +350,13 @@ defmodule VutuvWeb.AgentDocs.PostDoc do
   # else, so like a note it takes the shared shape unchanged — what is new is
   # `found_via`, the server we read it from, which is not where its author
   # lives and is the one fact this row carries that no other does.
-  def timeline_entry(%{external_post: %ExternalPost{} = post} = entry) do
+  def timeline_entry(%{external_post: %ExternalPost{} = post} = entry, _viewer) do
     entry
     |> remote_timeline_entry(post)
     |> Map.put(:found_via, post.source)
   end
 
-  def timeline_entry(%{post: post} = entry) do
+  def timeline_entry(%{post: post} = entry, viewer) do
     %{
       id: post.id,
       url: AgentDocs.abs_url(Posts.path(post)),
@@ -356,7 +365,7 @@ defmodule VutuvWeb.AgentDocs.PostDoc do
       # internal, exactly as on the HTML card. Reposters can be pages too.
       author: UserHelpers.author_name(post),
       published_on: post.published_on,
-      excerpt: PostTeaser.machine_line(post),
+      excerpt: PostTeaser.machine_line(post, viewer),
       # Same reason as the remote clause above (issue #1163), pointed the other
       # way: a vutuv post can be a photograph and nothing else, its body is then
       # genuinely empty and `PostTeaser.line/1` answers "" — so the HTML archive
@@ -371,7 +380,7 @@ defmodule VutuvWeb.AgentDocs.PostDoc do
       # stacks them above the answer. This document drew the answer alone, so
       # the post it replied to was on no page of the feed at all and never came
       # back: the cursor had already walked past it.
-      thread: thread_context(entry)
+      thread: thread_context(entry, viewer)
     }
   end
 
@@ -417,14 +426,14 @@ defmodule VutuvWeb.AgentDocs.PostDoc do
   # The conversation folded into a local row, oldest first — each post as the
   # same four facts the entry line carries, so a reader meets one shape twice
   # rather than two. `Posts.feed_subjects/1` is what says this must exist.
-  defp thread_context(entry) do
+  defp thread_context(entry, viewer) do
     Enum.map(entry[:ancestors] || [], fn post ->
       %{
         id: post.id,
         url: AgentDocs.abs_url(Posts.path(post)),
         author: UserHelpers.author_name(post),
         published_on: post.published_on,
-        excerpt: PostTeaser.machine_line(post)
+        excerpt: PostTeaser.machine_line(post, viewer)
       }
     end)
   end
@@ -496,7 +505,7 @@ defmodule VutuvWeb.AgentDocs.PostDoc do
   # branch's parent without another lookup, and `depth` is how deep the entry
   # hangs in the thread — the nesting the HTML page draws, as a number the
   # other formats can indent by.
-  defp thread_entries(posts) do
+  defp thread_entries(posts, viewer) do
     # `UserHelpers.author_name/1`, not `full_name/1`: a conversation can hold a
     # post published in a page's name (issue #1336 — a member may answer one),
     # and `full_name/1` raised on it, so the `.md`/`.txt`/`.json`/`.xml` sibling
@@ -516,7 +525,7 @@ defmodule VutuvWeb.AgentDocs.PostDoc do
         # it either way.
         author_username: author_username(Posts.author(post)),
         published_on: post.published_on,
-        body_markdown: PostTeaser.machine_body(post),
+        body_markdown: PostTeaser.machine_body(post, viewer),
         depth: depths[post.id],
         in_reply_to_id: parent_id,
         in_reply_to_author: parent_id && authors[parent_id]
@@ -577,13 +586,13 @@ defmodule VutuvWeb.AgentDocs.PostDoc do
     end)
   end
 
-  defp reply_entry(%Post{} = reply) do
+  defp reply_entry(%Post{} = reply, viewer) do
     %{
       url: AgentDocs.abs_url(Posts.path(reply)),
       author: UserHelpers.full_name(reply.user),
       author_username: reply.user.username,
       published_on: reply.published_on,
-      body_markdown: PostTeaser.machine_body(reply)
+      body_markdown: PostTeaser.machine_body(reply, viewer)
     }
   end
 

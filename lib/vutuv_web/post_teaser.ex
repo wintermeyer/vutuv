@@ -69,6 +69,7 @@ defmodule VutuvWeb.PostTeaser do
 
   use Gettext, backend: VutuvWeb.Gettext
 
+  alias Vutuv.Accounts.User
   alias Vutuv.ContentFilters
   alias Vutuv.Fediverse.Handle
   alias Vutuv.Fediverse.RemoteAccount
@@ -158,8 +159,10 @@ defmodule VutuvWeb.PostTeaser do
   `VutuvWeb.PostCalendarController.entry/1` already makes for an author who
   opted out, down to the sentence.
   """
-  def machine_line(%Post{} = post) do
-    if Posts.machines_allowed?(post), do: line(post), else: withheld_sentence()
+  def machine_line(post, viewer \\ nil)
+
+  def machine_line(%Post{} = post, viewer) do
+    if shown_to?(post, viewer), do: line(post), else: withheld_sentence()
   end
 
   @doc """
@@ -178,9 +181,30 @@ defmodule VutuvWeb.PostTeaser do
   The HTML conversation deliberately still shows every word: page and doc
   differ because the promise is about machines, not about readers.
   """
-  def machine_body(%Post{} = post) do
-    if Posts.machines_allowed?(post), do: post.body, else: withheld_sentence()
+  def machine_body(post, viewer \\ nil)
+
+  def machine_body(%Post{} = post, viewer) do
+    if shown_to?(post, viewer), do: post.body, else: withheld_sentence()
   end
+
+  # **A redaction that hits somebody entitled to read the text is as wrong as a
+  # missing one**, so both halves take the viewer the document was built for.
+  #
+  # A document built for a signed-in member is login-gated and per-viewer: the
+  # feed doc declares `noindex: true, noai: true` over the whole response, and
+  # `/api/2.0` is a token read on that member's behalf. Either way the reader
+  # can open the permalink and read every word, so handing them "Post not open
+  # to search engines" tells them nothing and takes something away. Only the
+  # **anonymous** public view — the cache-safe `.md`/`.txt`/`.json`/`.xml` URLs,
+  # which carry one all-yes `Content-Signal` for a whole list and cannot signal
+  # per row — is the surface the switch is about.
+  #
+  # The trade worth naming: a third-party app holding an API token is a machine,
+  # and it keeps the words. It is acting for a member who may read them anyway,
+  # and that response is `private`; treating it as a crawler would punish the
+  # member for reading through an app instead of a browser.
+  defp shown_to?(_post, %User{}), do: true
+  defp shown_to?(post, _anonymous), do: Posts.machines_allowed?(post)
 
   # One sentence, one msgid, shared by both halves and with
   # `VutuvWeb.PostCalendarController.entry/1`.

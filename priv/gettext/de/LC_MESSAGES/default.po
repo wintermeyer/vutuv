@@ -6499,7 +6499,7 @@ msgstr ""
 msgid "Endorsed"
 msgstr "Empfohlen am"
 
-#: lib/vutuv_web/agent_docs/list_docs.ex:141
+#: lib/vutuv_web/agent_docs/list_docs.ex:143
 #: lib/vutuv_web/templates/user_tag/endorsers.html.heex:11
 #, elixir-autogen, elixir-format
 msgid "Members who endorsed %{name} for %{tag}"
@@ -8832,7 +8832,7 @@ msgstr "Ungültig"
 msgid "Invalid address (skipped)"
 msgstr "Ungültige Adresse (übersprungen)"
 
-#: lib/vutuv_web/agent_docs/list_docs.ex:180
+#: lib/vutuv_web/agent_docs/list_docs.ex:182
 #: lib/vutuv_web/controllers/directory_controller.ex:54
 #: lib/vutuv_web/templates/directory/index.html.heex:2
 #: lib/vutuv_web/templates/directory/index.html.heex:3
@@ -8848,7 +8848,7 @@ msgstr "Mitgliederverzeichnis"
 msgid "Members by initial"
 msgstr "Mitglieder nach Anfangsbuchstaben"
 
-#: lib/vutuv_web/agent_docs/list_docs.ex:203
+#: lib/vutuv_web/agent_docs/list_docs.ex:205
 #: lib/vutuv_web/controllers/directory_controller.ex:86
 #: lib/vutuv_web/templates/directory/show.html.heex:2
 #, elixir-autogen, elixir-format
@@ -8867,7 +8867,7 @@ msgid_plural "%{formatted} members"
 msgstr[0] "Ein Mitglied"
 msgstr[1] "%{formatted} Mitglieder"
 
-#: lib/vutuv_web/agent_docs/list_docs.ex:209
+#: lib/vutuv_web/agent_docs/list_docs.ex:211
 #, elixir-autogen, elixir-format
 msgid "The member directory's %{letter} page, sorted by last name."
 msgstr ""
@@ -22052,7 +22052,7 @@ msgstr "Welche Namen durchsucht werden"
 msgid "All vutuv members, filed alphabetically by last name."
 msgstr "Alle vutuv Mitglieder, alphabetisch nach Nachname sortiert."
 
-#: lib/vutuv_web/agent_docs/list_docs.ex:195
+#: lib/vutuv_web/agent_docs/list_docs.ex:197
 #, elixir-autogen, elixir-format
 msgid "Every vutuv member, grouped by the first letter of their last name."
 msgstr "Alle vutuv Mitglieder, gruppiert nach dem Anfangsbuchstaben des Nachnamens."
@@ -23429,8 +23429,8 @@ msgid_plural "%{formatted} posts"
 msgstr[0] "Ein Beitrag"
 msgstr[1] "%{formatted} Beiträge"
 
-#: lib/vutuv_web/agent_docs/list_docs.ex:253
-#: lib/vutuv_web/agent_docs/list_docs.ex:285
+#: lib/vutuv_web/agent_docs/list_docs.ex:255
+#: lib/vutuv_web/agent_docs/list_docs.ex:287
 #: lib/vutuv_web/controllers/post_calendar_controller.ex:36
 #: lib/vutuv_web/templates/layout/app.html.heex:79
 #: lib/vutuv_web/templates/post_calendar/day.html.heex:5
@@ -23442,7 +23442,7 @@ msgid "Post calendar"
 msgstr "Beitragskalender"
 
 #: lib/vutuv_web/controllers/post_calendar_controller.ex:131
-#: lib/vutuv_web/post_teaser.ex:187
+#: lib/vutuv_web/post_teaser.ex:211
 #, elixir-autogen, elixir-format
 msgid "Post not open to search engines"
 msgstr "Beitrag ohne Freigabe für Suchmaschinen"
@@ -23462,12 +23462,12 @@ msgstr "Beiträge aus %{year}"
 msgid "Posts on %{date}"
 msgstr "Beiträge vom %{date}"
 
-#: lib/vutuv_web/agent_docs/list_docs.ex:286
+#: lib/vutuv_web/agent_docs/list_docs.ex:288
 #, elixir-autogen, elixir-format
 msgid "The posts written that day."
 msgstr "Die Beiträge dieses Tages."
 
-#: lib/vutuv_web/agent_docs/list_docs.ex:254
+#: lib/vutuv_web/agent_docs/list_docs.ex:256
 #, elixir-autogen, elixir-format
 msgid "The posts written that month, by day."
 msgstr "Die Beiträge dieses Monats, nach Tagen."

@@ -24,6 +24,7 @@ defmodule VutuvWeb.WithheldPostRedactionTest do
 
   alias Vutuv.Posts
   alias Vutuv.Repo
+  alias VutuvWeb.AgentDocs.PostDoc
 
   @withheld "Interne Preisliste, nur für Menschen."
 
@@ -132,6 +133,62 @@ defmodule VutuvWeb.WithheldPostRedactionTest do
       doc = conn |> get("/#{author.username}.json") |> json_response(200)
 
       refute Jason.encode!(doc) =~ "Preisliste"
+    end
+  end
+
+  describe "a reader who is allowed to read it is not redacted at" do
+    # A redaction that hits somebody entitled to the text is as wrong as a
+    # missing one. Both of these are login-gated and per-viewer: the feed
+    # document declares `noindex: true, noai: true` over the whole response, and
+    # `/api/2.0` is a token read on a member's behalf. Either way that person
+    # opens the permalink and reads every word, so the sentence would take
+    # something away and tell them nothing.
+    test "the feed document", %{conn: _conn} do
+      %{parent: parent} = withheld_parent_with_reply()
+      reader = insert(:activated_user)
+
+      entry = PostDoc.timeline_entry(%{post: Posts.get_post(parent.id)}, reader)
+
+      assert entry.excerpt =~ "Preisliste"
+      refute entry.excerpt == "Post not open to search engines"
+    end
+
+    test "a permalink read through the API on a member's behalf" do
+      %{author: author, parent: parent, reply: reply} = withheld_parent_with_reply()
+      reader = insert(:activated_user)
+
+      loaded = Posts.get_post(reply.id)
+      doc = PostDoc.build(Posts.author(loaded), loaded, viewer: reader)
+      quoted = Enum.find(doc.thread, &(&1.id == parent.id))
+
+      assert quoted.body_markdown =~ "Preisliste"
+      # …and the anonymous build of the very same post still redacts it.
+      anonymous = PostDoc.build(Posts.author(loaded), loaded)
+
+      assert Enum.find(anonymous.thread, &(&1.id == parent.id)).body_markdown ==
+               "Post not open to search engines"
+
+      assert author
+    end
+  end
+
+  describe "an author reading their own archive" do
+    test "keeps the quoted parent above their own reply to their own withheld post", %{conn: conn} do
+      author = insert(:activated_user, noindex?: false, noai?: false, emails: [build(:email)])
+      {:ok, parent} = Posts.create_post(author, %{body: @withheld, noindex_noai: "true"})
+      {:ok, _reply} = Posts.create_reply(author, parent, %{body: "Nachtrag von mir."})
+
+      html =
+        conn
+        |> login_via_pin(hd(author.emails).value)
+        |> get("/#{author.username}/posts")
+        |> html_response(200)
+
+      # The archive already shows an author their own withheld posts, so
+      # dropping the quote one row down made a single page disagree with
+      # itself. `public_ancestors/2` takes the viewer for exactly this.
+      assert html =~ "Nachtrag von mir."
+      assert html =~ "Preisliste"
     end
   end
 

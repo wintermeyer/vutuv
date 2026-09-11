@@ -1793,20 +1793,70 @@ defmodule Vutuv.Posts do
   card component's own fallback: no machine reads a login-only page, and the
   promise is about machines rather than readers. The permalink's conversation
   is unaffected for the same reason.
+
+  Takes the **viewer** for the same reason `scope_machines_for/2` does, and
+  gets it wrong without one: an author reading their own archive is shown their
+  own withheld posts, so dropping the quoted parent above their own reply to one
+  made a single page disagree with itself — the post stood there, and its quote
+  one row down did not.
   """
-  def public_ancestors(%Post{} = post) do
+  def public_ancestors(%Post{} = post, viewer \\ nil) do
     case reply_ref_state(post) do
-      {:parent, parent} -> if machines_allowed?(parent), do: [parent], else: []
+      {:parent, parent} -> if ancestor_shown?(parent, viewer), do: [parent], else: []
       _no_visible_parent -> []
     end
   end
 
+  defp ancestor_shown?(%Post{user_id: author_id}, %User{id: author_id})
+       when is_binary(author_id),
+       do: true
+
+  defp ancestor_shown?(parent, _viewer), do: machines_allowed?(parent)
+
   @doc """
-  The same question as a query (issue #2107) — the twin of
-  `machines_allowed?/1`, the way `organization_public_row/1` is the twin of
-  `Organizations.public_visible?/1`. Kept beside it so a widened boundary is
+  **The chokepoint: a post's body leaves this module toward a surface a machine
+  can read only through a query that has been piped through here** (issue
+  #2107).
+
+  The mandatory partner of `scope_visible/2`. That one answers "may this viewer
+  see it"; this one answers "may a **crawler** reading over their shoulder see
+  it", and the two are not the same question — a withheld post is public, it
+  simply is not for machines.
+
+  Why a scope and not a per-entry redaction: three rounds of review found three
+  more surfaces, and the last pair could not have been caught downstream at all.
+  `recent_posts_by_authors/3` selects `body:` into **bare maps**, which no
+  struct-taking helper can reach, and `pinned_post/2` fetches by id rather than
+  through a timeline, so no listing gate applied — both put the whole text of a
+  withheld post on `/:slug`, which is public, anonymous, in the sitemap and
+  carries no `X-Robots-Tag`. The sites cannot be enumerated; the property can,
+  so it is enforced at the one place a body can leave.
+
+  **Per row, and the author keeps their own.** Deliberately not a match on the
+  shape of the id list: `author_timeline_query/3` answers one profile *and*
+  `author_post_counts/2`'s figure for a page of accounts, so a list-shaped test
+  made the same member's posts count for them on `verify_credentials` and vanish
+  from a timeline's account list. The answer must not depend on how many authors
+  travelled with them.
+
+  `test/vutuv/post_body_chokepoint_test.exs` fails the build when a new query
+  carries a body past this without either piping through it or being named, with
+  a reason, as a surface that deliberately shows the text to a **person**.
+  """
+  def scope_machines_for(query, %User{id: viewer_id}),
+    do: where(query, [p], not p.noindex_noai? or p.user_id == ^viewer_id)
+
+  def scope_machines_for(query, _anonymous), do: scope_machines_allowed(query)
+
+  @doc """
+  The anonymous case of `scope_machines_for/2`, and the twin of
+  `machines_allowed?/1` the way `organization_public_row/1` is the twin of
+  `Organizations.public_visible?/1`. Kept beside them so a widened boundary is
   one edit here plus the struct predicate, rather than a column name spelled
   out in every module that has to ask.
+
+  Reach for it directly only where there is no viewer to make an exception for:
+  a sitemap, a feed, a topic page, somebody else's repost.
   """
   def scope_machines_allowed(query), do: where(query, [p], not p.noindex_noai?)
 
@@ -5469,6 +5519,14 @@ defmodule Vutuv.Posts do
   def pinned_post(%User{pinned_post_id: post_id}, viewer) do
     from(p in Post, where: p.id == ^post_id)
     |> scope_visible(viewer)
+    # …and the machines chokepoint. This one is fetched **by id** rather than
+    # through a timeline, so no listing gate ever reached it: `/:slug` carried
+    # the whole text of a withheld pinned post to an anonymous visitor while the
+    # same page's `profile.json` redacted it and the ActivityPub `featured`
+    # collection left it out — the HTML was the one surface of three that handed
+    # it over. Gating the query fixes all three at once, so the showcase slot
+    # simply stands empty rather than showing words it should not.
+    |> scope_machines_for(viewer)
     |> Repo.one()
     |> preload_post()
   end
@@ -5605,6 +5663,13 @@ defmodule Vutuv.Posts do
       |> where([post: p], p.user_id in ^author_ids and p.body != "")
       |> where([reply_ref: r], is_nil(r.id))
       |> scope_visible(viewer)
+      # …and the machines chokepoint, which this query needs more than any
+      # other: it selects `body:` into **bare maps**, so nothing downstream is
+      # struct-shaped and no per-entry redaction could ever have reached it. The
+      # rail renders on `/:slug`, which is public, anonymous and in the sitemap,
+      # so a withheld post stood there in full on every profile that suggested
+      # its author.
+      |> scope_machines_for(viewer)
       |> select([post: p], %{
         id: p.id,
         user_id: p.user_id,
@@ -5846,21 +5911,6 @@ defmodule Vutuv.Posts do
       do: query,
       else: where(query, [p], is_nil(p.frozen_at))
   end
-
-  # The archive's own half of the machines gate: kept for the author reading
-  # their own timeline, dropped for everybody else.
-  #
-  # Expressed **per row**, the way `scope_visible/2` expresses the same shape of
-  # exception, and deliberately not as a match on the id list: this query
-  # answers one profile timeline *and* `author_post_counts/2`'s figure for a
-  # whole page of authors, so a list-shaped test made the same member's own
-  # withheld posts count for them on `verify_credentials` (one id) and vanish
-  # from a timeline's account list (many ids). The answer must not depend on how
-  # many authors happened to travel with them.
-  defp scope_machines_for(query, %User{id: viewer_id}),
-    do: where(query, [p], not p.noindex_noai? or p.user_id == ^viewer_id)
-
-  defp scope_machines_for(query, _anonymous), do: scope_machines_allowed(query)
 
   # The same for a page's timeline, where "the author" is anyone who publishes
   # for it.

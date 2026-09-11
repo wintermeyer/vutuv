@@ -4395,7 +4395,7 @@ defmodule VutuvWeb.PostComponents do
   # permalink, where the parent is the page) or the post is not a reply.
   #
   # Policy-free on purpose: a **public** surface passes `ancestors` from
-  # `Posts.public_ancestors/1`, which drops a parent whose author keeps machines
+  # `Posts.public_ancestors/2`, which drops a parent whose author keeps machines
   # out (issue #2107). Putting that test here instead would have applied it to
   # the private saved hub (`/likes`, `/bookmarks`) as well, where no machine
   # reads anything and a member would have lost the quoted parent of their own
