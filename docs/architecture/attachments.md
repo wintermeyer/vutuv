@@ -262,6 +262,30 @@ all. Loosening that pipeline (raw HTML pass-through, another renderer) is
 therefore a change to the preview renderer's threat model too, and needs a
 navigation answer of its own first.
 
+### The suite never runs that browser
+
+`config/test.exs` points `:chromium_path` at a path that does not exist, so
+`PageRender.renderable?/1` answers false and a text or Markdown file settles
+with no pages wherever the suite runs. Without it, `PageScreenshot.binary/0`
+walks `$PATH` and the macOS app bundles and finds a real browser — on a
+developer machine, and on the GitHub runner image, which ships Chrome although
+CI installs only poppler and ffmpeg. A loaded runner then misses the capture's
+30-second deadline, the render takes a strike that only logs on the third one,
+and the row stays at `stage: "rendering"` while every assertion after it reads
+a file that never settled. Three unrelated pull requests went red that way
+(issues #2178, #2186, #2189); it cost no coverage, because a full suite run on
+a machine with Chrome reached `PageScreenshot.capture/3` four times and every
+one of them went through a stub the test had configured itself. The config line
+has one reader that holds it honest: `pages_test.exs`'s "degrades to no pages
+where there is no browser" opens with `refute PageRender.renderable?/1`, so
+deleting the line turns a test red instead of bringing the flakiness back.
+
+So a test that wants a real preview page uses a **PDF**: `pdftoppm` has no
+deadline. `Vutuv.AttachmentHelpers.settle!/1` is what runs the pipeline and
+asserts it finished — an unfinished file and four different rules produce the
+same 404, the same refused read and the same empty page list, so without it a
+test is green for a reason that has nothing to do with its name.
+
 ### Each page is a picture
 
 A rendered page is a row on the shared `images` table of kind

@@ -38,6 +38,7 @@ defmodule Vutuv.ChatAttachmentsTest do
 
   use Vutuv.DataCase, async: false
 
+  import Vutuv.AttachmentHelpers, only: [settle!: 1]
   import Vutuv.WebPushHelpers, only: [put_config: 2]
 
   alias Vutuv.AttachmentFixtures, as: Fixtures
@@ -104,24 +105,6 @@ defmodule Vutuv.ChatAttachmentsTest do
     {:ok, image} = Image.new(120, 80, color: [40, 90, 160])
     {:ok, _} = Image.write(image, path)
     path
-  end
-
-  # Everything the pipeline does after the upload, run here rather than waited
-  # for, and asserted rather than assumed: an unfinished file is unreadable for
-  # the recipient for the same reason a disconnected one is, so without these
-  # lines the tests that refute a read would be green on a render that never
-  # happened (issue #2186). One page, because every fixture here is a
-  # single-page document or one picture. The row is re-read so the assertion
-  # reads what the database holds rather than the struct the pipeline returned.
-  defp settle!(%Attachment{} = attachment) do
-    Pages.render(attachment)
-
-    assert [%ImageRow{} = page] = Pages.list(attachment)
-    assert Pages.release(page.id) == :ok
-
-    settled = Repo.get!(Attachment, attachment.id)
-    assert Attachments.settled?(settled)
-    settled
   end
 
   describe "the connection gate" do

@@ -6,10 +6,9 @@ defmodule Vutuv.Attachments.PagesTest do
   table so the AI scan applies to it as it does to a photo.
 
   `async: false`, and for the reason the rules file names: this module flips
-  `:vutuv, :attachments` (read by the chokepoint, the composer and the
-  sweeper) and `:vutuv, :chromium_path` (read by every screenshot pipeline),
-  and `Application.put_env/3` is global state the SQL sandbox does not roll
-  back.
+  `:vutuv, :attachments` (read by the chokepoint, the composer and the sweeper)
+  and `:vutuv, :moderate_images`, and `Application.put_env/3` is global state
+  the SQL sandbox does not roll back.
 
   Two of these tests are about a deploy rather than about a picture. The
   **interrupt** test kills the rendering task mid-loop and asserts the sweeper
@@ -139,7 +138,10 @@ defmodule Vutuv.Attachments.PagesTest do
 
       Pages.render(attachment)
 
-      for page <- Pages.list(attachment) do
+      pages = Pages.list(attachment)
+      assert length(pages) == 2
+
+      for page <- pages do
         assert page.moderation == ImageScans.initial_state()
 
         assert %ImageScan{} =
@@ -322,8 +324,13 @@ defmodule Vutuv.Attachments.PagesTest do
   describe "a text file" do
     test "degrades to no pages where there is no browser", %{user: user, files: files} do
       Fixtures.put_config(preview_pages: 3)
-      put_config(:chromium_path, "/vutuv/no/such/chromium")
       attachment = stored!(user, Fixtures.markdown_file(files))
+
+      # The premise, and the one place the suite-wide `:chromium_path` in
+      # `config/test.exs` is read as a claim rather than assumed: without it
+      # this test finds whatever browser the machine happens to carry and
+      # measures nothing (issue #2189).
+      refute PageRender.renderable?(attachment)
 
       assert %Attachment{stage: "ready"} = Pages.render(attachment)
       assert Pages.list(attachment) == []
