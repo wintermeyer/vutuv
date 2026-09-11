@@ -97,6 +97,35 @@ defmodule VutuvWeb.PressKitLiveTest do
     render_upload(input, "mark.png")
   end
 
+  # A vector the logo shelf accepts as a file and the cleaner then refuses
+  # (issues #2181 and #2182): `body` goes inside the drawing, `root_attrs` onto
+  # the `<svg>` element itself. Returns the page, so the caller asserts the
+  # sentence the member is left with.
+  defp refuse_logo(conn, body, root_attrs \\ "") do
+    {:ok, live, _html} = open(conn)
+    confirm_rights(live, "logo", "Logo: Ada King")
+
+    markup =
+      ~s(<svg xmlns="http://www.w3.org/2000/svg" width="240" height="80"#{root_attrs}>) <>
+        ~s(<rect width="240" height="80" fill="#0b3d91"/>#{body}</svg>)
+
+    input =
+      file_input(live, "#press-add-logo", :logo, [
+        file_entry("mark.svg", markup, "image/svg+xml")
+      ])
+
+    render_upload(input, "mark.svg")
+    render(live)
+  end
+
+  # What Figma and Illustrator export by default: the face embedded in a
+  # `<style>` block, which is a file nothing here can take apart.
+  defp webfont_svg do
+    font = Base.encode64("wOFF" <> :binary.copy(<<0>>, 40))
+
+    ~s(<style>@font-face{src:url\(data:font/woff;base64,#{font}\)}</style>)
+  end
+
   defp ids(images), do: Enum.map(images, & &1.id)
 
   ## A page's editor (#2087)
@@ -938,6 +967,30 @@ defmodule VutuvWeb.PressKitLiveTest do
     end
   end
 
+  describe "a logo the cleaner refuses (issue #2182)" do
+    test "a web font in it is named as a web font", %{conn: conn} do
+      assert refuse_logo(conn, webfont_svg()) =~ "usually a web font"
+    end
+
+    test "a description that reads like an embedded file says which words", %{conn: conn} do
+      assert refuse_logo(conn, ~s(<desc>Snapshot data:2026, brand book</desc>)) =~
+               "reads as an embedded file"
+    end
+
+    # Issue #2181's refusal: the file is stored nowhere and the member is told
+    # what is in their export rather than that it "could not be processed".
+    test "a script handler is named as a script", %{conn: conn} do
+      assert refuse_logo(conn, "", ~s( onload="fetch\('https://tracker.example'\)")) =~
+               "carries a script"
+    end
+
+    test "and nothing of it reaches the shelf", %{conn: conn, user: user} do
+      refuse_logo(conn, webfont_svg())
+
+      assert PressKit.logos(user) == []
+    end
+  end
+
   describe "what the rest of the app has to know about the shelf" do
     # The GDPR export's own moduledoc: when a new per-user subsystem lands, its
     # section lands here too. This is the release where a member's press kit
@@ -1249,6 +1302,21 @@ defmodule VutuvWeb.PressKitLiveTest do
 
       assert live |> element("[data-press-wrong-shelf='logo']") |> render() =~
                "Pressefotos, weiter oben auf dieser Seite"
+    end
+
+    # Issue #2182's three refusals, asserted by name for the reason the module
+    # keeps doing it: they are fresh msgids, `gettext.extract --merge`
+    # fuzzy-fills a fresh msgid with the German of whatever it looks like, and
+    # nothing fails the build over it — so a member would be told to do
+    # something nobody ever meant.
+    test "a refused logo says in German what is in it", %{conn: conn} do
+      assert refuse_logo(conn, webfont_svg()) =~ "meist eine Web-Schrift"
+
+      assert refuse_logo(conn, ~s(<desc>Snapshot data:2026, brand book</desc>)) =~
+               "als eingebettete Datei"
+
+      assert refuse_logo(conn, "", ~s( onload="fetch\('https://tracker.example'\)")) =~
+               "enthält ein Skript"
     end
 
     test "the bios card says the German words (issue #2101)", %{conn: conn} do

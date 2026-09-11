@@ -988,7 +988,9 @@ defmodule VutuvWeb.AgentDocs.Text do
   defp press_picture_lines(picture) do
     [
       "- " <> picture.label,
-      "  " <> picture.download_url,
+      # No line at all for a file that cannot be handed over (issue #2182), the
+      # way there is already no size for it.
+      picture[:download_url] && "  " <> picture.download_url,
       picture[:png_download_url] && "  " <> picture.png_download_url,
       picture[:credit] && "  " <> gettext("Credit: %{credit}", credit: picture.credit),
       "  " <> Markdown.press_picture_size(picture),

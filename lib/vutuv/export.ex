@@ -239,9 +239,21 @@ defmodule Vutuv.Export do
         # JSON is downloaded and kept, so an address that only resolves against
         # a host the reader has to remember is not an address. The job export
         # builds its URLs the same way.
-        download_url: Endpoint.url() <> PressKit.download_url(image)
+        #
+        # And absent where there is no file to fetch (issue #2182): an export is
+        # read months later, by a member or by whatever they hand it to, and an
+        # address in it that answers 404 is the one thing worse than a missing
+        # key.
+        download_url: press_download_url(image)
       }
     end)
+  end
+
+  defp press_download_url(image) do
+    case PressKit.download_offer(image) do
+      nil -> nil
+      download -> Endpoint.url() <> download.url
+    end
   end
 
   # Posts by accounts the member follows and replies written under vutuv posts,

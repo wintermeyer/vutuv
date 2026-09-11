@@ -109,25 +109,32 @@ defmodule VutuvWeb.PressKitControllerTest do
       # formatted byte count against what the download route delivers.
       assert html =~ "3000 × 2000"
       refute html =~ "2400000"
-      assert html =~ "data-press-download"
+      # And no Download button either, off that same missing answer (issue
+      # #2182): the size and the link stand or fall together, because a link
+      # with a 404 behind it is what the absent size used to sit next to.
+      # `VutuvWeb.PressKitDownloadOfferTest` uploads real files and holds the
+      # other side of this.
+      refute html =~ "data-press-download"
     end
 
-    test "a vector logo offers its SVG and its PNG", %{conn: conn, user: user} do
+    test "a vector logo offers the PNG whatever the cleaner says", %{conn: conn, user: user} do
       logo = put_press_picture(user, logo: true, content_type: "image/svg+xml", alt: "Wortmarke")
 
       html = conn |> get(~p"/#{user}/media-kit") |> html_response(200)
 
-      assert html =~ "/system/press_kit/#{logo.token}/download.orig"
+      # The PNG is a rasterisation of the upload, so no verdict on the markup
+      # reaches it; the vector's own link waits on a file this inserted row has
+      # never had.
       assert html =~ "/system/press_kit/#{logo.token}/download.png"
+      refute html =~ "/system/press_kit/#{logo.token}/download.orig"
       assert html =~ "Wortmarke"
     end
 
-    test "a photo offers only the one file", %{conn: conn, user: user} do
+    test "a photo is never offered a PNG rendering", %{conn: conn, user: user} do
       photo = put_press_picture(user)
 
       html = conn |> get(~p"/#{user}/media-kit") |> html_response(200)
 
-      assert html =~ "/system/press_kit/#{photo.token}/download.orig"
       refute html =~ "/system/press_kit/#{photo.token}/download.png"
     end
 
@@ -151,13 +158,13 @@ defmodule VutuvWeb.PressKitControllerTest do
       refute html =~ "/system/press_kit/#{pending.token}/large.avif"
     end
 
-    test "its owner sees the real picture and its download", %{conn: conn} do
+    test "its owner sees the real picture", %{conn: conn} do
       {conn, owner} = create_and_login_user(conn)
       pending = put_press_picture(owner, moderation: "pending")
 
       html = conn |> get(~p"/#{owner}/media-kit") |> html_response(200)
 
-      assert html =~ "/system/press_kit/#{pending.token}/download.orig"
+      assert html =~ pending.token
       refute html =~ "data-press-held"
     end
 
@@ -270,7 +277,11 @@ defmodule VutuvWeb.PressKitControllerTest do
         xml: conn |> get("/#{user.username}/media-kit.xml") |> Map.fetch!(:resp_body)
       }
 
-      for fact <- ["Portraet", "Wortmarke", "Foto: Rea", "download.orig"],
+      # Not the download address: these rows have no file, so no format names
+      # one (issue #2182) — `VutuvWeb.PressKitDownloadOfferTest` is where a real
+      # upload's address is checked across the page, the schema.org block and
+      # the JSON document.
+      for fact <- ["Portraet", "Wortmarke", "Foto: Rea"],
           {format, body} <- rendered do
         assert body =~ fact, "#{fact} is missing from the #{format} version"
       end
@@ -349,8 +360,12 @@ defmodule VutuvWeb.PressKitControllerTest do
       # Read the block rather than grepping the page: `JsonLd.script/1` encodes
       # with `escape: :html_safe`, so every `/` in it is `\/` and a `refute` on
       # a bare URL passes without ever matching anything.
+      # `thumbnailUrl` rather than `contentUrl`: since #2182 the download is
+      # named only when there is a file behind it, and these rows have none, so
+      # a `refute` on `contentUrl` would pass against `nil` without ever
+      # looking at anything.
       assert [media] = json_ld_media(html)
-      refute media["contentUrl"] =~ pending.token
+      refute media["thumbnailUrl"] =~ pending.token
     end
 
     test "a member with pictures is in the sitemap, one without is not", %{conn: conn, user: user} do
@@ -382,8 +397,10 @@ defmodule VutuvWeb.PressKitControllerTest do
       assert card =~ "Zur freien redaktionellen Verwendung mit Bildnachweis."
       assert page =~ "Pressefotos"
       assert page =~ "Logo-Varianten"
-      assert page =~ "Foto herunterladen"
-      assert page =~ "SVG herunterladen"
+      # The one download these fileless rows still offer; the German of the
+      # other two buttons is pinned in `VutuvWeb.PressKitDownloadOfferTest`,
+      # against a page that really hands files over.
+      assert page =~ "PNG herunterladen"
       # The section-page heading names the member, not a bare category.
       assert page =~ "Media Kit von Ada King"
     end

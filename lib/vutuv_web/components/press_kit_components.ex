@@ -331,8 +331,8 @@ defmodule VutuvWeb.PressKitComponents do
         <.press_tile image={@view.image} held={@view.held} class="block h-auto w-full" />
       </a>
 
-      <.press_meta image={@view.image} report={@view.report} />
-      <.press_download :if={@view.photo} href={PressKit.download_url(@view.image)}>
+      <.press_meta image={@view.image} download={@view.download} report={@view.report} />
+      <.press_download :if={@view.download} href={@view.download.url}>
         {gettext("Download photo")}
       </.press_download>
     </li>
@@ -373,10 +373,16 @@ defmodule VutuvWeb.PressKitComponents do
         {variant_label(@view.image)}
       </p>
 
-      <.press_meta image={@view.image} report={@view.report} />
+      <.press_meta image={@view.image} download={@view.download} report={@view.report} />
 
+      <%!-- The file's own link is drawn only while there is a file (issue
+      #2182), which is the same answer the size beside it already gives: a logo
+      stored before the cleaning shipped can be one the cleaner now refuses, and
+      its Download button answered 404. The PNG keeps its own link either way —
+      it is a rasterisation of the same upload, and no verdict on the markup
+      reaches it. --%>
       <div :if={@view.photo} class="flex flex-wrap gap-2">
-        <.press_download href={PressKit.download_url(@view.image)}>
+        <.press_download :if={@view.download} href={@view.download.url}>
           {gettext("Download %{format}", format: format_name(@view.image))}
         </.press_download>
         <.press_download :if={vector?(@view.image)} href={PressKit.png_download_url(@view.image)}>
@@ -396,6 +402,14 @@ defmodule VutuvWeb.PressKitComponents do
   One field says which case a tile is: `photo` is there exactly when `held` is
   `false`. Held pictures are numbered out of the gallery, deliberately — see the
   moduledoc.
+
+  `download` is `Vutuv.PressKit.download_offer/1`'s answer — the address and the
+  length of the file this picture can actually hand over, or `nil` — and since
+  #2182 it answers three questions rather than one: what the facts line states,
+  what the button points at, and whether that button is drawn at all. Asked
+  **here**, once per picture, because each of those would otherwise ask the disk
+  for the same answer, and for a file the cleaner refuses that answer is the
+  whole strip again, cached nowhere.
   """
   def views(images, viewer) do
     shown = Enum.map(images, &{&1, PressKit.visible_to?(&1, viewer)})
@@ -405,16 +419,26 @@ defmodule VutuvWeb.PressKitComponents do
     {views, _next} =
       Enum.map_reduce(shown, 0, fn
         {image, true}, next ->
+          download = PressKit.download_offer(image)
+
           {%{
              image: image,
              held: false,
-             photo: photo_data(image, next, visible),
-             report: report_href(image, scope)
+             photo: photo_data(image, next, visible, download),
+             report: report_href(image, scope),
+             download: download
            }, next + 1}
 
+        # Nothing is handed over while the AI gate holds a picture, so the disk
+        # is not asked about it either: a held tile carries no download at all.
         {image, false}, next ->
-          {%{image: image, held: PressKit.pixelated_url(image) || :none, photo: nil, report: nil},
-           next}
+          {%{
+             image: image,
+             held: PressKit.pixelated_url(image) || :none,
+             photo: nil,
+             report: nil,
+             download: nil
+           }, next}
       end)
 
     views
@@ -461,23 +485,27 @@ defmodule VutuvWeb.PressKitComponents do
   end
 
   @doc """
-  The pictures of these views a **crawler** may be told about: the released
+  The pictures of these shelves a **crawler** may be told about: the released
   ones. What the page's schema.org block names.
 
-  **Hand it the anonymous views** (`views(images, nil)`), never the reader's: the
-  markup describes the page to a machine, which is always anonymous, and an owner
-  or an admin is shown a picture the AI gate still holds — publishing its
-  `contentUrl` here would name an address that answers 404 to everybody else.
-  Viewer-dependence is the failure mode, so the caller's `nil` is the whole
-  guard.
+  It asks `visible_to?/2` with **no viewer**, deliberately, rather than reading
+  it off `views/2`: the markup describes the page to a machine, which is always
+  anonymous, and an owner or an admin is shown a picture the AI gate still holds
+  — publishing its `contentUrl` here would name an address that answers 404 to
+  everybody else. Viewer-dependence is the failure mode, so the `nil` is the
+  whole guard, and it is this function's rather than the caller's.
+
+  Not a second `views/2` for the same reason it once was one: since #2182 that
+  builds a download offer per picture, which is a disk read this list throws
+  away — up to fifteen of them on every render of a page a crawler visits.
   """
-  def public_pictures(views), do: for(%{held: false, image: image} <- views, do: image)
+  def public_pictures(images), do: Enum.filter(images, &PressKit.visible_to?(&1, nil))
 
   @doc """
   The facts a journalist checks before downloading, and **each one names the file
   it belongs to** (issue #2140). The size goes through `VutuvWeb.UI.file_size/1`,
   so it reads `2,4 MB` rather than as a run of digits, and it is the size of the
-  file that actually arrives (`Vutuv.PressKit.download_bytes/1`), not the
+  file that actually arrives (`Vutuv.PressKit.download_offer/1`), not the
   upload's — a photo is cleaned on its way out.
 
   A **raster** is one file, so the line is its own dimensions and its own bytes.
@@ -487,11 +515,14 @@ defmodule VutuvWeb.PressKitComponents do
   beside the first file's bytes, which is why the PNG's are labelled.
 
   A size we could not measure is left out rather than guessed at: the download
-  such a picture offers answers 404, so a figure beside it would describe
-  nothing.
+  such a picture offers answers 404 — and since #2182 it is not offered at all,
+  which is the same fact said twice rather than two rules.
+
+  `download` is `Vutuv.PressKit.download_offer/1`'s answer, measured once in
+  `views/2`, because the button under this line now turns on it too.
   """
-  def facts_line(%Image{} = image) do
-    size = bytes(PressKit.download_bytes(image))
+  def facts_line(%Image{} = image, download) do
+    size = download && file_size(download.bytes)
 
     case {pixels(image), vector?(image)} do
       {nil, _} -> [size]
@@ -509,8 +540,13 @@ defmodule VutuvWeb.PressKitComponents do
   tiles and the section page's anchors cannot describe the same picture
   differently. `xl` is the version the overlay opens, the same one a post photo
   opens at.
+
+  `download` gates the overlay's own download the way it gates the button under
+  the picture (issue #2182): the overlay's footer is the second place the same
+  address is offered from, and a control that 404s there is worse, because a
+  reader has already committed to the picture by the time they see it.
   """
-  def photo_data(%Image{} = image, index, count) do
+  def photo_data(%Image{} = image, index, count, download) do
     %{
       index: index,
       src: PressKit.lightbox_url(image),
@@ -521,7 +557,7 @@ defmodule VutuvWeb.PressKitComponents do
       # in the one place a journalist reads the caption is a rendering fault.
       caption: Markdown.to_plain_text(image.caption),
       credit: image.credit,
-      download: PressKit.download_url(image),
+      download: download && download.url,
       license: PressKit.rights_line(),
       position: gettext("Photo %{n} of %{total}", n: index + 1, total: count)
     }
@@ -548,6 +584,7 @@ defmodule VutuvWeb.PressKitComponents do
   # ending the facts line on a dangling dot. A control is not a word in the
   # sentence, so it takes a gap rather than punctuation.
   attr(:image, :any, required: true)
+  attr(:download, :any, default: nil)
   attr(:report, :any, default: nil)
 
   defp press_meta(assigns) do
@@ -560,7 +597,7 @@ defmodule VutuvWeb.PressKitComponents do
     <p class="mt-2 text-xs text-slate-500 dark:text-slate-400">
       <span :if={present?(@image.credit)} data-press-credit>{@image.credit}</span>
       <span :if={present?(@image.credit)} aria-hidden="true">·</span>
-      <span data-press-facts>{facts_line(@image)}</span>
+      <span data-press-facts>{facts_line(@image, @download)}</span>
       <a
         :if={@report}
         href={@report}
@@ -659,9 +696,6 @@ defmodule VutuvWeb.PressKitComponents do
     do: dimensions(w, h)
 
   defp pixels(%Image{}), do: nil
-
-  defp bytes(nil), do: nil
-  defp bytes(size) when is_integer(size), do: file_size(size)
 
   # SVG only ever leaves as an attachment (#2083), so a vector variant offers
   # the PNG rendering beside it.

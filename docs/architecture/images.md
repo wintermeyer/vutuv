@@ -149,9 +149,25 @@ download rather than changing a brand mark. Measured on five exports — Inkscap
 1,381 → 410 bytes, Illustrator 555 → 461, Figma and two hand-written marks byte
 for byte unchanged — all five identical pixels.
 
-*The renderer is what is protected, not the browser.* No SVG is ever rendered by
-a browser on our origin, so
-this is not an XSS question: the XML parser runs on our machine, on markup a
+*The one thing it refuses rather than removes is a script* (issue #2181). An
+`on…` attribute is an event handler, and a handler is not a trail: removing it
+would change what the member's file does, and the pixel comparison above cannot
+see it, so it could not have kept that edit honest. It is also the one place
+where the person protected is the **reader** rather than our renderer — the file
+leaves as an attachment and never runs here, but whoever saves it opens a
+document with a script in it. `SvgStrip` recognises it on the **parsed attribute
+name**, never a pattern over the document, so the same letters in a `<desc>`
+stay prose; and because `clean/1` runs again on every download, a logo stored
+before the cleaning stops being handed out too. That refusal and two others a
+member can act on — an embedded file no stripper can take apart (a web font,
+which Figma and Illustrator both embed by default), a `data:` run nothing can
+decode — reach the editor by name (`:svg_event_handler`, `:svg_embedded_file`,
+`:svg_unreadable_data`) rather than as "That file could not be processed"
+(issue #2182); everything structural stays `:unclean`.
+
+*The renderer is what the gate below protects, not the browser.* No SVG is ever
+rendered by a browser on our origin, so
+that gate is not an XSS question: the XML parser runs on our machine, on markup a
 member — or a remote server — chose, and it will expand entities (XXE, billion
 laughs) and follow references while rendering. The gate refuses a DOCTYPE,
 entity, `<script>`, `<foreignObject>`, `javascript:`, `@import`, or a `href`
@@ -1025,7 +1041,13 @@ bytes for a photo, most of the file for a logo whose editor filled it with its
 own trail (#2145); and a **vector** claims no pixel size, since the stored
 `width`/`height` are the rasterisation's — the PNG rendering offered beside it —
 so they read as `PNG 1600 × 533` after the SVG's own byte count. A size that
-cannot be measured is left out; that download 404s anyway.
+cannot be measured is left out, and since issue #2182 so is the **link** beside
+it: `PressKit.download_offer/1` answers the address and the length together, so
+a Download button is drawn only while there is a file behind it — on the page,
+in the lightbox, in the schema.org block, in the agent documents and in the GDPR
+export. The PNG rendering offered beside a vector keeps its own link either way,
+because it is a rasterisation of the upload and no verdict on the markup reaches
+it.
 A logo is drawn on **white in both themes**, because
 nothing stores which ground a variant was made for; the section page repeats it
 on a dark ground beside it, so a reversed mark is visible somewhere. The

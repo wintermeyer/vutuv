@@ -466,17 +466,25 @@ defmodule VutuvWeb.JsonLd do
   # is the one number here a person never reads, and schema.org wants bytes.
   # A vector claims no `width`/`height`: those describe the PNG rendering, not
   # the SVG at `contentUrl`.
+  #
+  # Both travel together or neither does (issue #2182): the size disappeared on
+  # its own for a picture whose file cannot be handed over, leaving a
+  # `contentUrl` a crawler would fetch and get a 404 from — which is worse than
+  # an `ImageObject` that describes the picture and names no file, since the
+  # thumbnail beside it is real.
   defp press_image_object(image, credit_holder, page_url, rights) do
+    download = PressKit.download_offer(image)
+
     compact(%{
       "@type" => "ImageObject",
-      "contentUrl" => absolute(PressKit.download_url(image)),
+      "contentUrl" => download && absolute(download.url),
       "thumbnailUrl" => absolute(PressKit.url(image, "thumb")),
       "width" => raster_only(image, image.width),
       "height" => raster_only(image, image.height),
       "caption" => Markdown.to_plain_text(image.caption),
       "description" => image.alt,
       "encodingFormat" => image.content_type,
-      "contentSize" => content_size(image),
+      "contentSize" => download && Integer.to_string(download.bytes),
       # The credit line the owner typed is the one a reuser must print; where
       # they typed none, the owner's own name is who to credit.
       "creditText" => image.credit || credit_holder,
@@ -490,11 +498,6 @@ defmodule VutuvWeb.JsonLd do
   end
 
   defp raster_only(image, value), do: if(PressKit.vector?(image), do: nil, else: value)
-
-  defp content_size(image) do
-    bytes = PressKit.download_bytes(image)
-    bytes && Integer.to_string(bytes)
-  end
 
   @doc """
   A visible `<.page_header>` crumbs trail as a schema.org BreadcrumbList:

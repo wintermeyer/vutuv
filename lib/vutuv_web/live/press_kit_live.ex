@@ -532,6 +532,31 @@ defmodule VutuvWeb.PressKitLive do
   defp write_error(:forbidden, _logo?),
     do: gettext("You cannot add a picture to this Media Kit.")
 
+  # The three a member can act on (issue #2182). Every other refusal here is
+  # ours rather than theirs, so it keeps the one sentence below; these three
+  # name the thing in **their** file and say what to do about it, because a
+  # design tool put it there without asking and "that file could not be
+  # processed" sent people to rewrite a logo that was never the problem.
+  defp write_error(:svg_event_handler, _logo?),
+    do:
+      gettext(
+        "This logo carries a script, in an attribute whose name starts with %{marker}. Whoever downloads it runs that script when they open the file, so export the logo without any interactivity.",
+        marker: "on"
+      )
+
+  defp write_error(:svg_embedded_file, _logo?),
+    do:
+      gettext(
+        "This logo has a file embedded in it, usually a web font, that vutuv cannot check. Export it again with the text converted to outlines."
+      )
+
+  defp write_error(:svg_unreadable_data, _logo?),
+    do:
+      gettext(
+        "This logo contains %{marker}, which vutuv reads as an embedded file and cannot decode. Remove it, or reword the title or description it sits in.",
+        marker: "data:"
+      )
+
   defp write_error(%Ecto.Changeset{errors: errors} = changeset, _logo?) do
     if Keyword.has_key?(errors, :rights_confirmed),
       do: gettext("Please confirm the rights first, then choose the file."),

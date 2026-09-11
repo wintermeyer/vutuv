@@ -129,17 +129,26 @@ defmodule Vutuv.PressKitStore do
   # than stored behind a download link that 404s and a size nobody can state.
   # `delete/1` rather than `store_upload/4`'s own `File.rm_rf(dir)`, which knows
   # only the served tree — this is the paired teardown, and it is idempotent.
+  #
+  # The refusal carries **why** (issue #2182): the two a member can act on — an
+  # embedded file nothing can clean, a `data:` run nothing can read — arrive at
+  # the editor as their own sentence instead of "that file could not be
+  # processed", which told somebody looking at a Figma export nothing at all.
+  # `{:refused, reason}` is how `Vutuv.Uploads.store_upload/4` tells a reason
+  # meant for a member from the ones that are ours.
   defp stored(rotated, path, token) do
-    if cleaned_download(token) do
-      {:ok,
-       %{
-         width: Image.width(rotated),
-         height: Image.height(rotated),
-         size_bytes: File.stat!(path).size
-       }}
-    else
-      delete(token)
-      {:error, :uncleanable}
+    case cleaned_download(token) do
+      {:ok, _file} ->
+        {:ok,
+         %{
+           width: Image.width(rotated),
+           height: Image.height(rotated),
+           size_bytes: File.stat!(path).size
+         }}
+
+      {:error, reason} ->
+        delete(token)
+        {:error, {:refused, reason}}
     end
   end
 
@@ -257,12 +266,18 @@ defmodule Vutuv.PressKitStore do
   download is always clean" is a promise, and a promise with no second line is a
   comment.
   """
-  def download_file(%ImageRow{token: token}), do: cleaned_download(token)
+  def download_file(%ImageRow{token: token}) do
+    case cleaned_download(token) do
+      {:ok, file} -> file
+      {:error, _reason} -> nil
+    end
+  end
 
-  # Also the upload's own warm-up, which has no row yet.
+  # Also the upload's own gate, which has no row yet — and the one caller that
+  # wants the refusal's reason rather than only its absence.
   defp cleaned_download(token) do
     case Originals.path(storage_dir(token)) do
-      nil -> nil
+      nil -> {:error, :unclean}
       original -> Originals.cleaned_copy(storage_dir(token), original, Path.extname(original))
     end
   end
@@ -293,7 +308,7 @@ defmodule Vutuv.PressKitStore do
   # A logo already stored as PNG is handed over as its cleaned self: re-encoding
   # a raster that is already the right format would only lose pixels.
   defp png_download(original, ".png" = ext, token),
-    do: Originals.cleaned_copy(storage_dir(token), original, ext)
+    do: Originals.cleaned_file(storage_dir(token), original, ext)
 
   defp png_download(original, _vector, token) do
     dest = Path.join(Originals.dir(storage_dir(token)), "download.png")

@@ -108,10 +108,15 @@ defmodule VutuvWeb.OrganizationPressKitTest do
       # `VutuvWeb.PressKitMachineDataTest` for the byte count against a real one.
       assert html =~ "3000 × 2000"
       refute html =~ "2400000"
-      assert html =~ "/system/press_kit/#{picture.token}/download.orig"
+      # No Download button either, off that same missing answer (issue #2182):
+      # the size and the link stand or fall together.
+      refute html =~ "/system/press_kit/#{picture.token}/download.orig"
     end
 
-    test "a vector logo offers its SVG and its PNG", %{conn: conn, organization: organization} do
+    test "a vector logo offers the PNG whatever the cleaner says", %{
+      conn: conn,
+      organization: organization
+    } do
       logo =
         put_press_picture(organization,
           logo: true,
@@ -121,8 +126,12 @@ defmodule VutuvWeb.OrganizationPressKitTest do
 
       html = conn |> get(press_path(organization)) |> html_response(200)
 
-      assert html =~ "/system/press_kit/#{logo.token}/download.orig"
+      # The PNG is a rasterisation of the upload and is offered whatever the
+      # cleaner makes of the markup; the vector's own link waits on a file this
+      # inserted row has never had (issue #2182).
       assert html =~ "/system/press_kit/#{logo.token}/download.png"
+      refute html =~ "/system/press_kit/#{logo.token}/download.orig"
+      assert html =~ "Wortmarke"
     end
 
     test "an empty press kit is an empty page rather than a 404", %{
@@ -191,14 +200,16 @@ defmodule VutuvWeb.OrganizationPressKitTest do
       for team_conn <- [owner_conn, publisher_conn] do
         html = team_conn |> get(press_path(organization)) |> html_response(200)
 
-        assert html =~ "/system/press_kit/#{pending.token}/download.orig"
+        # The picture itself, not its download: this inserted row has no file,
+        # and since #2182 an address with nothing behind it is not drawn.
+        assert html =~ pending.token
         refute html =~ "data-press-held"
       end
 
       stranger = conn |> get(press_path(organization)) |> html_response(200)
 
       assert stranger =~ "data-press-held"
-      refute stranger =~ "/system/press_kit/#{pending.token}/download.orig"
+      refute stranger =~ "/system/press_kit/#{pending.token}/large.avif"
     end
   end
 
@@ -219,7 +230,10 @@ defmodule VutuvWeb.OrganizationPressKitTest do
 
         assert body =~ "Acme GmbH", "#{extension} does not name the page"
         assert body =~ "Foto: Rea Fotografin", "#{extension} does not carry the credit"
-        assert body =~ "download.orig", "#{extension} offers no download"
+        assert body =~ "Die Halle in Bremen", "#{extension} does not carry the caption"
+        # Not the download address: this row has no file, so no format names one
+        # (issue #2182).
+        refute body =~ "download.orig", "#{extension} offers a download that is not there"
       end
     end
 
@@ -317,8 +331,10 @@ defmodule VutuvWeb.OrganizationPressKitTest do
       assert card =~ "Zur freien redaktionellen Verwendung mit Bildnachweis."
       assert page =~ "Pressefotos"
       assert page =~ "Logo-Varianten"
-      assert page =~ "Foto herunterladen"
-      assert page =~ "SVG herunterladen"
+      # The one download these fileless rows still offer (issue #2182); the
+      # German of the other buttons is pinned in
+      # `VutuvWeb.PressKitDownloadOfferTest`.
+      assert page =~ "PNG herunterladen"
       # The heading names the page, not a bare category.
       assert page =~ "Media Kit von Acme GmbH"
     end

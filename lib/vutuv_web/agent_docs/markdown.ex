@@ -1554,9 +1554,13 @@ defmodule VutuvWeb.AgentDocs.Markdown do
   # out again.
   defp bio_block(bio), do: "### #{bio.label}\n\n#{bio.text}"
 
+  # The label is a **link only while there is a file behind it** (issue #2182):
+  # a picture whose download cannot be handed over carries no `download_url`,
+  # the way it already carries no `size_bytes`, and an agent reading this
+  # document fetches every address in it.
   defp press_picture_line(picture) do
     [
-      "- " <> md_link(picture.label, picture.download_url),
+      "- " <> press_picture_label(picture),
       picture[:credit] && "  - " <> gettext("Credit: %{credit}", credit: picture.credit),
       "  - " <> press_picture_size(picture),
       picture[:png_download_url] &&
@@ -1567,6 +1571,9 @@ defmodule VutuvWeb.AgentDocs.Markdown do
     |> Enum.join("\n")
   end
 
+  defp press_picture_label(%{download_url: url} = picture), do: md_link(picture.label, url)
+  defp press_picture_label(picture), do: md_text(picture.label)
+
   @doc false
   # The facts that decide whether a journalist downloads a picture, from the
   # fields both renderers already hold — the doc map carries the numbers, not a
@@ -1576,7 +1583,7 @@ defmodule VutuvWeb.AgentDocs.Markdown do
   # are one file's, while a vector hands over an SVG that has no pixel size and
   # offers a PNG rendering that does — so the doc map carries the second file's
   # dimensions under their own keys and this labels them. Same line the page's
-  # own `PressKitComponents.facts_line/1` draws.
+  # own `PressKitComponents.facts_line/2` draws.
   def press_picture_size(picture) do
     [
       picture[:width] && picture[:height] && UI.dimensions(picture.width, picture.height),

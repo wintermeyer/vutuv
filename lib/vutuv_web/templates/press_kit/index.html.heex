@@ -20,7 +20,7 @@ a picture the AI gate still holds, and naming its `contentUrl` here would
 publish an address that answers 404 to everybody else. Only for an owner search
 engines may index at all (`Vutuv.Identity.indexable?/1`, the one answer to that
 question for a member and for a page alike). --%>
-<% pictures = public_pictures(views(@shelves.photos ++ @shelves.logos, nil)) %>
+<% pictures = public_pictures(@shelves.photos ++ @shelves.logos) %>
 <JsonLd.script
   :if={Vutuv.Identity.indexable?(@owner) and pictures != []}
   data={JsonLd.press_kit_page(@owner, pictures, Vutuv.PressKit.rights_line())}

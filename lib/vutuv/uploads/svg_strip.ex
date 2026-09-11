@@ -48,16 +48,38 @@ defmodule Vutuv.Uploads.SvgStrip do
   `<?xml-stylesheet?>` is a place an editor can park a photograph, and a
   photograph is exactly what carries the serial.
 
+  **What it refuses rather than removes.** An `on…` attribute is a **script
+  handler** (issue #2181), and a script is the one thing here that is not a
+  trail: removing it would change what the member's file does, and leaving it
+  would hand a journalist a document that runs code the moment they open it —
+  our own origin never renders one (the download leaves as an attachment under
+  `nosniff`), but the person who saves it opens a standalone `.svg`, and that is
+  a document with a script in it. So the file is refused, which is also the
+  answer the member can act on: their export carries interactivity a logo has no
+  use for. The check reads attribute **names off the parser**, never a pattern
+  over the whole document, so the same letters inside a `<title>` or a `<desc>`
+  are prose; only an attribute in **no** namespace counts, because a prefixed
+  one binds no event anywhere and leaves with its namespace in any case.
+
   **It fails closed**, like the stripper beside it: markup this module cannot
   take apart with certainty — a DOCTYPE, a tag it cannot parse, a `data:` URI it
-  cannot clean — yields `:error`, and the caller then offers no download at all
-  rather than the untouched file.
+  cannot clean — yields `{:error, reason}`, and the caller then offers no
+  download at all rather than the untouched file.
+
+  The `reason` is one word, and three of them are named so a surface can say
+  what happened instead of "that file could not be processed" (issue #2182):
+  `:svg_event_handler` above, `:svg_embedded_file` for a payload no container
+  stripper can take apart (a webfont, an SVG inside the SVG) and
+  `:svg_unreadable_data` for a `data:` run this module cannot decode at all —
+  which is a percent-encoded payload **and** a description that merely reads
+  like one, since nothing can tell those apart from outside the author's head.
+  Everything structural is `:unclean`.
 
   And because an argument about what a renderer ignores is still an argument,
   `clean/1` **checks it**: the file that comes back is rasterised beside the file
   that went in (`Vutuv.Uploads.Spec.open_rotated_binary/1`, the same librsvg the
   preview is drawn with) and the two pixel buffers must be identical, or the
-  answer is `:error`. A namespace this module got wrong therefore costs a
+  answer is a refusal. A namespace this module got wrong therefore costs a
   download, never a changed logo.
   """
 
@@ -93,7 +115,8 @@ defmodule Vutuv.Uploads.SvgStrip do
 
   @doc """
   The markup with every non-rendering trail removed, as `{:ok, binary}`, or
-  `:error` for anything this module cannot clean *and* prove unchanged.
+  `{:error, reason}` for anything this module cannot clean *and* prove
+  unchanged — see the moduledoc for the four reasons.
   """
   def clean(markup) when is_binary(markup) do
     with true <- svg?(markup),
@@ -101,11 +124,18 @@ defmodule Vutuv.Uploads.SvgStrip do
          true <- renders_alike?(markup, cleaned) do
       {:ok, cleaned}
     else
-      _ -> :error
+      # `false` from either predicate — not an SVG, or the rewrite drew
+      # different pixels; neither is anything the member can do something
+      # about, so both take the structural word.
+      false -> {:error, :unclean}
+      # A delimiter the document never closed, which `split_on/2` reports as a
+      # bare atom for a reason worth reading there.
+      :unterminated -> {:error, :unclean}
+      {:error, _reason} = refusal -> refusal
     end
   end
 
-  def clean(_markup), do: :error
+  def clean(_markup), do: {:error, :unclean}
 
   @doc """
   Whether two documents draw exactly the same pixels — the proof `clean/1` makes
@@ -158,10 +188,8 @@ defmodule Vutuv.Uploads.SvgStrip do
   # that keeps bytes belongs on that list.
 
   defp rewrite(markup) do
-    case scan(markup, [@root_scope], []) do
-      {:ok, parts} -> {:ok, parts |> Enum.reverse() |> IO.iodata_to_binary()}
-      :error -> :error
-    end
+    with {:ok, parts} <- scan(markup, [@root_scope], []),
+         do: {:ok, parts |> Enum.reverse() |> IO.iodata_to_binary()}
   end
 
   defp scan(<<>>, _scopes, acc), do: {:ok, acc}
@@ -180,7 +208,7 @@ defmodule Vutuv.Uploads.SvgStrip do
   # A declaration is only ever a DOCTYPE here, and a DOCTYPE is where an entity
   # is declared. The upload gate already refuses one (`Spec.open_rotated/1`);
   # this is the second line, because a stored file is never re-vetted.
-  defp scan(<<"<!", _rest::binary>>, _scopes, _acc), do: :error
+  defp scan(<<"<!", _rest::binary>>, _scopes, _acc), do: {:error, :unclean}
 
   defp scan(<<"<?", rest::binary>>, scopes, acc) do
     with {body, tail} <- split_on(rest, "?>"),
@@ -194,7 +222,7 @@ defmodule Vutuv.Uploads.SvgStrip do
          do: scan(tail, outer, [">", name, "</" | acc])
   end
 
-  defp scan(<<"</", _rest::binary>>, _scopes, _acc), do: :error
+  defp scan(<<"</", _rest::binary>>, _scopes, _acc), do: {:error, :unclean}
 
   defp scan(<<"<", rest::binary>>, scopes, acc) do
     with {:ok, tag} <- parse_tag(rest), do: emit_tag(tag, scopes, acc)
@@ -230,8 +258,8 @@ defmodule Vutuv.Uploads.SvgStrip do
         inner = if tag.empty?, do: scopes, else: [scope | scopes]
         scan(tag.tail, inner, [close, tag.trailing, kept, tag.name, "<" | acc])
 
-      :error ->
-        :error
+      {:error, _reason} = refusal ->
+        refusal
     end
   end
 
@@ -244,10 +272,14 @@ defmodule Vutuv.Uploads.SvgStrip do
   defp attributes_iodata([], _scope, acc), do: {:ok, Enum.reverse(acc)}
 
   defp attributes_iodata([attribute | rest], scope, acc) do
-    if keep_attribute?(attribute.name, scope) do
-      keep_attribute(attribute, rest, scope, acc)
-    else
-      attributes_iodata(rest, scope, acc)
+    case split_name(attribute.name) do
+      {nil, <<o, n, _rest::binary>>} when o in ~c"oO" and n in ~c"nN" ->
+        {:error, :svg_event_handler}
+
+      split ->
+        if keep_attribute?(split, scope),
+          do: keep_attribute(attribute, rest, scope, acc),
+          else: attributes_iodata(rest, scope, acc)
     end
   end
 
@@ -257,8 +289,8 @@ defmodule Vutuv.Uploads.SvgStrip do
         part = [attribute.space, attribute.name, attribute.separator, value, attribute.quoted]
         attributes_iodata(rest, scope, [part | acc])
 
-      :error ->
-        :error
+      {:error, _reason} = refusal ->
+        refusal
     end
   end
 
@@ -297,13 +329,17 @@ defmodule Vutuv.Uploads.SvgStrip do
 
   # An unprefixed attribute is in no namespace at all — every SVG geometry and
   # presentation attribute is one — so it stays. `xmlns:p` leaves when `p` does.
-  defp keep_attribute?(name, scope) do
-    case split_name(name) do
-      {"xmlns", prefix} -> Map.get(scope, prefix) in @keep_ns
-      {nil, _local} -> true
-      {prefix, _local} -> Map.get(scope, prefix) in @keep_ns
-    end
-  end
+  # It takes the already-split name, because the clause above it has to look at
+  # the local part anyway (issue #2181): a script handler is the one attribute
+  # neither kept nor dropped but refused, and it is recognised on the **parsed**
+  # name, so the same letters in a text node stay text. Unprefixed only — `on…`
+  # binds an event in no namespace, and a prefixed one leaves with its namespace
+  # in any case. `on` plus one more character is the whole rule: no SVG
+  # attribute begins with those two letters without being a handler, and a list
+  # of the handlers there happen to be today would be a list to keep.
+  defp keep_attribute?({"xmlns", prefix}, scope), do: Map.get(scope, prefix) in @keep_ns
+  defp keep_attribute?({nil, _local}, _scope), do: true
+  defp keep_attribute?({prefix, _local}, scope), do: Map.get(scope, prefix) in @keep_ns
 
   defp split_name(name) do
     case :binary.split(name, ":") do
@@ -333,11 +369,11 @@ defmodule Vutuv.Uploads.SvgStrip do
 
     case cleaned_data_uri(slice(text, media), slice(text, payload)) do
       {:ok, replacement} -> {:cont, {start + length, [replacement, head | acc]}}
-      :error -> {:halt, :error}
+      {:error, _reason} = refusal -> {:halt, refusal}
     end
   end
 
-  defp finish_data_uris(:error, _text), do: :error
+  defp finish_data_uris({:error, _reason} = refusal, _text), do: refusal
 
   # Iodata, not a binary: every caller drops the answer straight into the
   # accumulator `rewrite/1` flattens once, so a binary here would be a second
@@ -350,13 +386,22 @@ defmodule Vutuv.Uploads.SvgStrip do
   # Only base64, and only a container `MetadataStrip` can take apart. A
   # percent-encoded payload, an embedded font, an SVG inside the SVG: none of
   # them can be proven clean, so the file they sit in is not handed out either.
+  #
+  # The two refusals are told apart because the member can act on each of them
+  # differently (issue #2182): a payload we decoded and could not clean is a
+  # **file** in the logo — a webfont, almost always — while one we could not
+  # decode at all may be no file whatsoever, just a description that reads like
+  # one. Nothing here can tell those two apart, and neither can the member
+  # without being told which words we are reading.
   defp cleaned_data_uri(media, payload) do
     with true <- String.ends_with?(String.downcase(media), ";base64"),
-         {:ok, raw} <- Base.decode64(payload, ignore: :whitespace),
-         bytes when is_binary(bytes) <- MetadataStrip.strip_binary(raw) do
-      {:ok, ["data:", media, ",", Base.encode64(bytes)]}
+         {:ok, raw} <- Base.decode64(payload, ignore: :whitespace) do
+      case MetadataStrip.strip_binary(raw) do
+        bytes when is_binary(bytes) -> {:ok, ["data:", media, ",", Base.encode64(bytes)]}
+        _unsupported -> {:error, :svg_embedded_file}
+      end
     else
-      _ -> :error
+      _undecodable -> {:error, :svg_unreadable_data}
     end
   end
 
@@ -372,7 +417,7 @@ defmodule Vutuv.Uploads.SvgStrip do
   defp skip_element(<<"<!--", rest::binary>>, depth), do: skip_past(rest, "-->", depth)
   defp skip_element(<<"<![CDATA[", rest::binary>>, depth), do: skip_past(rest, "]]>", depth)
   defp skip_element(<<"<?", rest::binary>>, depth), do: skip_past(rest, "?>", depth)
-  defp skip_element(<<"<!", _rest::binary>>, _depth), do: :error
+  defp skip_element(<<"<!", _rest::binary>>, _depth), do: {:error, :unclean}
 
   defp skip_element(<<"</", rest::binary>>, depth) do
     with {_name, tail} <- split_on(rest, ">") do
@@ -384,7 +429,7 @@ defmodule Vutuv.Uploads.SvgStrip do
     case skip_tag(rest, nil) do
       {:ok, :empty, tail} -> skip_element(tail, depth)
       {:ok, :open, tail} -> skip_element(tail, depth + 1)
-      :error -> :error
+      {:error, _reason} = refusal -> refusal
     end
   end
 
@@ -396,7 +441,7 @@ defmodule Vutuv.Uploads.SvgStrip do
         skip_element(binary_part(binary, position, byte_size(binary) - position), depth)
 
       :nomatch ->
-        :error
+        {:error, :unclean}
     end
   end
 
@@ -404,7 +449,7 @@ defmodule Vutuv.Uploads.SvgStrip do
     with {_body, tail} <- split_on(rest, delimiter), do: skip_element(tail, depth)
   end
 
-  defp skip_tag(<<>>, _quoted), do: :error
+  defp skip_tag(<<>>, _quoted), do: {:error, :unclean}
   defp skip_tag(<<char, rest::binary>>, nil) when char in ~c"\"'", do: skip_tag(rest, char)
   defp skip_tag(<<char, rest::binary>>, quoted) when char == quoted, do: skip_tag(rest, nil)
   defp skip_tag(<<"/>", rest::binary>>, nil), do: {:ok, :empty, rest}
@@ -424,7 +469,7 @@ defmodule Vutuv.Uploads.SvgStrip do
          {:ok, attributes, trailing, empty?, tail} <- parse_attributes(rest, []) do
       {:ok, %{name: name, attributes: attributes, trailing: trailing, empty?: empty?, tail: tail}}
     else
-      _ -> :error
+      _ -> {:error, :unclean}
     end
   end
 
@@ -434,7 +479,7 @@ defmodule Vutuv.Uploads.SvgStrip do
     case rest do
       <<"/>", tail::binary>> -> {:ok, Enum.reverse(acc), space, true, tail}
       <<">", tail::binary>> -> {:ok, Enum.reverse(acc), space, false, tail}
-      <<>> -> :error
+      <<>> -> {:error, :unclean}
       _attribute -> parse_attribute(rest, space, acc)
     end
   end
@@ -448,7 +493,7 @@ defmodule Vutuv.Uploads.SvgStrip do
         parse_value(space, name, before_equals, value, acc)
 
       _malformed ->
-        :error
+        {:error, :unclean}
     end
   end
 
@@ -467,19 +512,25 @@ defmodule Vutuv.Uploads.SvgStrip do
 
       parse_attributes(tail, [attribute | acc])
     else
-      _ -> :error
+      _ -> {:error, :unclean}
     end
   end
 
   defp take_quote(<<char, rest::binary>>) when char in ~c"\"'", do: {:ok, <<char>>, rest}
-  defp take_quote(_binary), do: :error
+  defp take_quote(_binary), do: {:error, :unclean}
 
   ## Byte helpers
 
+  # The failure is an atom and must stay one: every caller reads the answer as
+  # `with {before, rest} <- split_on(…)`, and a two-element refusal tuple
+  # satisfies that pattern — the scan would then carry the refusal's own atom on
+  # as if it were the rest of the document and raise `ArgumentError` deep in a
+  # byte helper instead of refusing the file. `clean/1` turns it into a refusal
+  # where every other one is made.
   defp split_on(binary, delimiter) do
     case :binary.split(binary, delimiter) do
       [before, rest] -> {before, rest}
-      [_only] -> :error
+      [_only] -> :unterminated
     end
   end
 

