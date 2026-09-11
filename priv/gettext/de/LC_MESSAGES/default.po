@@ -3801,7 +3801,7 @@ msgstr "Bestätigt"
 #: lib/vutuv_web/views/admin/moderation_html.ex:11
 #, elixir-autogen, elixir-format
 msgid "Waiting for the owner"
-msgstr "wartet auf die Prüfung"
+msgstr "Wartet auf den Besitzer"
 
 #: lib/vutuv_web/notification_line.ex:203
 #, elixir-autogen, elixir-format
