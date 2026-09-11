@@ -126,11 +126,16 @@ defmodule VutuvWeb.PressKitComponents do
   @doc """
   How many press pictures this kit holds altogether — both shelves, since the
   card shows both and its footer counts what it shows.
+
+  The context's, not a copy: `Vutuv.PressKit.empty?/2` asks the same question to
+  decide whether the section page says `noindex`, and a card that drew nothing
+  while the page called itself worth indexing is the drift this delegate
+  prevents.
   """
-  def press_total(%{photos: photos, logos: logos}), do: length(photos) + length(logos)
+  defdelegate press_total(press), to: PressKit, as: :picture_count
 
   @doc "Whether there is anything on either shelf."
-  def press_any?(press), do: press_total(press) > 0
+  defdelegate press_any?(press), to: PressKit, as: :any_pictures?
 
   @doc """
   The rights line on the **card**: the one sentence that makes the download

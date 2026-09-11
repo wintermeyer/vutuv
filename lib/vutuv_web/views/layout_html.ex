@@ -258,10 +258,30 @@ defmodule VutuvWeb.LayoutHTML do
   assigns): the member's search-engine and AI opt-outs rendered by
   `VutuvWeb.ContentPolicy.robots_directives/2`. `nil` (no meta tag) when
   the page is about nobody or the member opted out of nothing.
+
+  A controller that already worked the answer out assigns
+  `:robots_directives` and that wins — the member's two flags are the
+  *fallback*, not the source. The Media Kit is the page that needs it: it
+  adds `noindex` when the kit is empty (issue #2143), and a tag derived a
+  second time from the member would have said nothing while the response
+  header said `noindex`.
+
+  **Where this wants to end up:** in `ContentPolicy.put_robots_header/3`
+  itself, so every page whose header it stamps also gets the matching tag.
+  Measured today, `/:slug/links` sends `noindex, noai, noimageai` and
+  `/:slug/cv` sends `noindex`, and neither renders a `<meta name="robots">`
+  of any kind, because the fallback below knows only the member's own two
+  flags. Moving it has one trap: `put_robots_header/3` is a no-op when
+  there is nothing to declare, and an unconditional
+  `assign(:robots_directives, nil)` would match the first clause below and
+  *suppress* that fallback, so the assign has to be skipped on `nil`.
   """
   def robots_directives(%{conn: conn}) when not is_nil(conn) do
-    case conn.assigns[:user] do
-      %Vutuv.Accounts.User{} = user ->
+    case conn.assigns do
+      %{robots_directives: directives} ->
+        directives
+
+      %{user: %Vutuv.Accounts.User{} = user} ->
         VutuvWeb.ContentPolicy.robots_directives(user.noindex?, user.noai?)
 
       _ ->

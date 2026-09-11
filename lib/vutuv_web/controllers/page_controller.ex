@@ -412,7 +412,11 @@ defmodule VutuvWeb.PageController do
   - `/<username>/media-kit` — the member's Media Kit: the bio they wrote in up to
     three lengths, plus press photos and logo variants offered for editorial use,
     each with its credit, dimensions, file size and a direct download of the
-    print-quality original
+    print-quality original. **Most members and pages have none.** An address
+    with nothing on it still answers 200 — it belongs to its owner — but
+    answers `X-Robots-Tag: noindex`, the page and its four documents alike;
+    the kits worth reading are the ones listed in the sitemap's `press` and
+    `organization_press` chunks, so walk those rather than this pattern
   - `/<username>/tags/<tag>/endorsers` — everyone who endorses this member for that tag
   - `/tags/<tag>` — a tag and its most endorsed members
   - `/system/members` — the member directory: every member, filed by last-name
@@ -429,7 +433,8 @@ defmodule VutuvWeb.PageController do
     name; the organization is the author, so there is no member behind it to look up
   - `/organizations/<slug>/media-kit` — the organization's Media Kit: the same
     press photos and logo variants a member offers, kept by the page's team and
-    offered for editorial use with the credit shown
+    offered for editorial use with the credit shown; the same `noindex` when
+    empty, and the same sitemap chunk to walk instead
   - `/jobs` — the public job board: open positions, filterable, newest first
   - `/jobs/<slug>` — a job posting: role, location, pay range, tags and how to apply
   - `/system/media-kit` — press material: boilerplate in three lengths, logo files,
@@ -454,7 +459,8 @@ defmodule VutuvWeb.PageController do
 
   ## Discovery
 
-  - `/sitemap.xml` — sitemap index (members, posts, tags, static pages)
+  - `/sitemap.xml` — sitemap index; the child sitemaps enumerate every page
+    worth indexing, among them the Media Kits that have something on them
   - `/<username>/posts/feed.xml` — a member's posts as RSS 2.0, full content
   - `/posts/feed.xml` — the latest public posts site-wide (RSS 2.0)
   - `/.well-known/agent-skills/index.json` — agent-skills discovery
