@@ -20,6 +20,20 @@ defmodule Vutuv.ChatAttachmentsTest do
   `async: false`: the chokepoint writes real files, and the module flips
   `:uploads_dir_prefix` and `:attachments`, which `Application.put_env/3` makes
   global state the SQL sandbox does not roll back.
+
+  ## Documents are PDFs; the one picture stays a picture (issue #2186)
+
+  Preview pages stay on: this module is one of the last places that exercises
+  the render at all. Only the renderer changed, because a text file's page goes
+  through headless Chromium and its 30-second deadline, which a loaded CI
+  runner misses (the mechanism is written out in
+  `VutuvWeb.MessageAttachmentWebTest`). An unfinished file is unreadable for
+  the recipient, so half the `refute readable_by?` claims below would have been
+  satisfied by the timeout rather than by the rule they are about; `settle!/1`
+  carries the assertion that keeps them honest. The cost is that the module now
+  needs poppler on the machine running it, as `pages_test.exs` already does:
+  without it the upload gate answers `{:error, :pdf_unavailable}` and
+  `upload!/2` raises on the match.
   """
 
   use Vutuv.DataCase, async: false
@@ -77,6 +91,14 @@ defmodule Vutuv.ChatAttachmentsTest do
   end
 
   # A real picture, written by the same library the derivations use.
+  #
+  # **Do not fold this into the PDF fixture**, however tidy that would look.
+  # `PageRender`'s picture branch (a photo's preview *being* the photo, hard
+  # linked rather than rendered) is reached by exactly one test in the whole
+  # tree, "its preview is the picture itself" below: `pages_test.exs` has no
+  # picture case, the web test is documents only, and the reporting and takedown
+  # tests are PDFs. Swapping this for a PDF, or switching previews off for the
+  # module, loses that branch silently, because the test would stay green.
   defp picture(dir, name \\ "photo.jpg") do
     path = Path.join(dir, name)
     {:ok, image} = Image.new(120, 80, color: [40, 90, 160])
@@ -85,19 +107,27 @@ defmodule Vutuv.ChatAttachmentsTest do
   end
 
   # Everything the pipeline does after the upload, run here rather than waited
-  # for: render the preview and let it out of the AI gate.
+  # for, and asserted rather than assumed: an unfinished file is unreadable for
+  # the recipient for the same reason a disconnected one is, so without these
+  # lines the tests that refute a read would be green on a render that never
+  # happened (issue #2186). One page, because every fixture here is a
+  # single-page document or one picture. The row is re-read so the assertion
+  # reads what the database holds rather than the struct the pipeline returned.
   defp settle!(%Attachment{} = attachment) do
     Pages.render(attachment)
 
-    for page <- Pages.list(attachment), do: Pages.release(page.id)
+    assert [%ImageRow{} = page] = Pages.list(attachment)
+    assert Pages.release(page.id) == :ok
 
-    Repo.get!(Attachment, attachment.id)
+    settled = Repo.get!(Attachment, attachment.id)
+    assert Attachments.settled?(settled)
+    settled
   end
 
   describe "the connection gate" do
     test "a file travels between connected members", %{files: files} do
       {sender, recipient, conversation} = connected_pair()
-      attachment = upload!(sender, Fixtures.text_file(files))
+      attachment = upload!(sender, Fixtures.plain_pdf(files))
 
       assert {:ok, %Message{} = message} =
                Chat.send_message(sender, conversation.id, "have a look",
@@ -114,7 +144,7 @@ defmodule Vutuv.ChatAttachmentsTest do
       sender = member()
       stranger = member()
       {:ok, conversation} = Chat.find_or_create_conversation(sender, stranger)
-      attachment = upload!(sender, Fixtures.text_file(files))
+      attachment = upload!(sender, Fixtures.plain_pdf(files))
 
       refute Chat.files_allowed?(conversation)
 
@@ -132,7 +162,7 @@ defmodule Vutuv.ChatAttachmentsTest do
       other = member()
       follow!(other, sender)
       {:ok, conversation} = Chat.find_or_create_conversation(sender, other)
-      attachment = upload!(sender, Fixtures.text_file(files))
+      attachment = upload!(sender, Fixtures.plain_pdf(files))
 
       refute Chat.files_allowed?(conversation)
 
@@ -151,7 +181,7 @@ defmodule Vutuv.ChatAttachmentsTest do
 
     test "breaking the connection takes the file out of reach for both sides", %{files: files} do
       {sender, recipient, conversation} = connected_pair()
-      attachment = upload!(sender, Fixtures.text_file(files))
+      attachment = upload!(sender, Fixtures.plain_pdf(files))
 
       {:ok, _message} =
         Chat.send_message(sender, conversation.id, "here", attachment_ids: [attachment.id])
@@ -172,7 +202,7 @@ defmodule Vutuv.ChatAttachmentsTest do
     test "somebody outside the conversation never reads it", %{files: files} do
       {sender, _recipient, conversation} = connected_pair()
       outsider = member()
-      attachment = upload!(sender, Fixtures.text_file(files))
+      attachment = upload!(sender, Fixtures.plain_pdf(files))
 
       {:ok, _message} =
         Chat.send_message(sender, conversation.id, "here", attachment_ids: [attachment.id])
@@ -184,7 +214,7 @@ defmodule Vutuv.ChatAttachmentsTest do
   describe "the recipient waits for the check" do
     test "a file still being worked on is the sender's alone", %{files: files} do
       {sender, recipient, conversation} = connected_pair()
-      attachment = upload!(sender, Fixtures.text_file(files))
+      attachment = upload!(sender, Fixtures.plain_pdf(files))
 
       {:ok, _message} =
         Chat.send_message(sender, conversation.id, "here", attachment_ids: [attachment.id])
@@ -197,7 +227,7 @@ defmodule Vutuv.ChatAttachmentsTest do
 
     test "a rendered page still in the AI gate is the sender's alone", %{files: files} do
       {sender, recipient, conversation} = connected_pair()
-      attachment = upload!(sender, Fixtures.text_file(files))
+      attachment = upload!(sender, Fixtures.plain_pdf(files))
 
       {:ok, _message} =
         Chat.send_message(sender, conversation.id, "here", attachment_ids: [attachment.id])
@@ -205,6 +235,12 @@ defmodule Vutuv.ChatAttachmentsTest do
       Pages.render(attachment)
       attachment = Repo.get!(Attachment, attachment.id)
 
+      # `Vutuv.Posts.Pending.file_state/1`'s branch for a page that is still
+      # `pending`, which #2185 left to this file and its web sibling. A file
+      # whose render never finished answers `:working` too, through the stage
+      # branch above it, so both halves are pinned ahead of the two claims
+      # below: the render is over, and the page is what is still waiting.
+      assert attachment.stage == "ready"
       assert [%ImageRow{moderation: "pending"}] = Pages.list(attachment)
       refute Attachments.readable_by?(attachment, recipient)
       assert Attachments.readable_by?(attachment, sender)
@@ -212,13 +248,17 @@ defmodule Vutuv.ChatAttachmentsTest do
 
     test "a refused file never reaches the recipient", %{files: files} do
       {sender, recipient, conversation} = connected_pair()
-      attachment = upload!(sender, Fixtures.text_file(files))
+      attachment = upload!(sender, Fixtures.plain_pdf(files))
 
       {:ok, _message} =
         Chat.send_message(sender, conversation.id, "here", attachment_ids: [attachment.id])
 
       Pages.render(attachment)
-      for page <- Pages.list(attachment), do: Pages.page_refused(page)
+
+      # There has to be a page to refuse. `refused?/1` below is what catches a
+      # render that made none; asserting the page here names the reason.
+      assert [%ImageRow{} = page] = Pages.list(attachment)
+      Pages.page_refused(page)
 
       attachment = Repo.get!(Attachment, attachment.id)
       assert Attachment.refused?(attachment)
@@ -255,7 +295,7 @@ defmodule Vutuv.ChatAttachmentsTest do
   describe "files stay as long as the conversation does" do
     test "deleting the message takes its files off disk", %{files: files} do
       {sender, _recipient, conversation} = connected_pair()
-      attachment = upload!(sender, Fixtures.text_file(files))
+      attachment = upload!(sender, Fixtures.plain_pdf(files))
 
       {:ok, message} =
         Chat.send_message(sender, conversation.id, "here", attachment_ids: [attachment.id])
@@ -268,6 +308,8 @@ defmodule Vutuv.ChatAttachmentsTest do
       refute Repo.get(Attachment, attachment.id)
       refute AttachmentStore.served_path(attachment.token)
       refute AttachmentStore.original_path(attachment.token)
+      # Meaningful only because `settle!/1` proved there was a page here a
+      # moment ago; a file that never rendered has an empty list either way.
       assert Pages.list(attachment) == []
     end
 
@@ -281,10 +323,14 @@ defmodule Vutuv.ChatAttachmentsTest do
       follow!(sender, recipient)
       follow!(recipient, sender)
 
-      attachment = upload!(sender, Fixtures.text_file(files))
+      attachment = upload!(sender, Fixtures.plain_pdf(files))
 
       {:ok, _message} =
         Chat.send_message(sender, conversation.id, "here", attachment_ids: [attachment.id])
+
+      # The file has to be there first, or the two refutations at the end are
+      # green on a store that lost it a step earlier.
+      assert AttachmentStore.served_path(attachment.token)
 
       {:ok, _} = Chat.decline_request(recipient, conversation.id)
       # The **decliner** re-opening is what wipes the thread; the original
