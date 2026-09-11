@@ -36,9 +36,17 @@ never route a file past its own gate. The module's own doc has the rest.
 (encrypted), it runs code when opened, it does something to the reader when
 opened, it carries another file inside it — and **fails closed**: poppler
 missing, poppler failing, or a scan that could not be finished is a refusal.
-Three of the four are poppler's answers (`pdfinfo` for encryption and
-JavaScript, `pdfdetach -list` for embedded files); `/OpenAction` no poppler
-tool reports, so it is read from the bytes.
+**Every question has two answerers, because each one has measured gaps**
+(#2136). `pdfinfo` without a page range reads **page 1 only**, so a script on
+page 2 answers `JavaScript: no` — hence the `-f 1 -l 999999` — and even with
+the range it does not follow an `/OpenAction`'s `/Next` chain, and what it
+reports at all moves between poppler versions. `pdfdetach -list` answers 0 for
+a file reached through `/AF` or a `/RichMedia` annotation. So both names stay in
+the byte scan beside the tool, and nothing reports an action at all, which
+leaves `/OpenAction` and the three acting names the bytes' own. Dropping
+`/JavaScript` from the scan because poppler reports scripts was tried and
+reverted the same day: five constructs walked straight through. The module
+records each measurement with its date.
 
 The one thing worth repeating outside that module: **a raw-byte scan alone is
 not enough, and this was measured.** One `qpdf --object-streams=generate` run
@@ -49,6 +57,15 @@ every stream it can, bounded against a decompression bomb. `attachments_test.exs
 tries every hostile PDF twice, as written and hidden that way; calibrated by
 removing the inflation pass, the `/OpenAction` file is then **accepted** while
 poppler still catches the other two.
+
+And **what a page says is not what a document does**: a string literal, a hex
+string and a comment are blanked out of every buffer before the names are
+looked for, so `/JavaScript` in `(HTML/CSS/JavaScript)` or `/Launch` in a link
+to `…/products/Launch` is a word. That blanking is the whole of the #2136 fix.
+Which ranges may be blanked, why an object stream is the case that decides it,
+and why the pass carries an allowance in bytes examined — a file can otherwise
+make it re-read itself until a LiveView process is gone — are in the module;
+each is calibrated in `attachments_test.exs`.
 
 It lives under `Vutuv.Uploads` rather than beside the context that added it
 because two other doors already take a member's PDF and hand it back verbatim
