@@ -53,6 +53,7 @@ defmodule Vutuv.Tags.ExternalPostFetcher do
     try do
       log(ExternalPosts.fetch_due())
       log_trending(Trending.refresh())
+      log_own(ExternalPosts.drop_written_here())
       if rem(runs, @prune_every) == 0, do: log_prune(ExternalPosts.prune())
     rescue
       error -> Logger.error("External tag fetch failed: #{inspect(error)}")
@@ -83,6 +84,19 @@ defmodule Vutuv.Tags.ExternalPostFetcher do
         "#{tally.hurried} pull(s) hurried, #{tally.skipped} skipped, #{tally.failed} failed"
     )
   end
+
+  # Our own posts coming back as somebody else's find (issue #2179). On every
+  # tick rather than with the hourly housekeeping above, and the difference from
+  # `prune/0` is what it costs: an indexed-column `in` plus a substring test over
+  # a table capped at ten thousand rows measures 7 ms there and 0.3 ms at today's
+  # size, against two correlated `NOT EXISTS` deletes across two tables. The rows
+  # it clears are filed by the *previous* release during a blue/green window, and
+  # a member reading their own post three times should not wait an hour for it.
+  # On an ordinary run it deletes nothing and says nothing.
+  defp log_own(0), do: :ok
+
+  defp log_own(dropped),
+    do: Logger.info("External tag posts: dropped #{dropped} post(s) written here")
 
   defp log_prune(%{fetches: 0, posts: 0}), do: :ok
 

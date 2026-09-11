@@ -15,6 +15,7 @@ defmodule Vutuv.Tags.ExternalTagClientTest do
 
   alias Vutuv.Fediverse
   alias Vutuv.SocialFeed.Http
+  alias Vutuv.Tags.ExternalPost
   alias Vutuv.Tags.ExternalTagClient
 
   @source "mastodon.example"
@@ -29,6 +30,20 @@ defmodule Vutuv.Tags.ExternalTagClientTest do
   end
 
   defp status(attrs \\ %{}), do: remote_status(@source, attrs)
+
+  # A status this installation wrote, as a relay hands it back: our member's
+  # address, our permalink. `:host` spells both, `:acct_host` only the author —
+  # above the describe it belongs to, because a `defp` inside one compiles to
+  # module scope anyway and only looks scoped.
+  defp ours(attrs) do
+    host = Map.get(attrs, :host, our_host())
+
+    status(%{
+      "id" => Map.fetch!(attrs, :id),
+      "url" => "https://#{host}/ada/posts/1",
+      "account" => %{"acct" => "ada@#{Map.get(attrs, :acct_host, host)}"}
+    })
+  end
 
   # Every Finch a pinned request started, by the name it registers under. Empty
   # is the claim: one instance lives for one request and is stopped in an
@@ -277,6 +292,65 @@ defmodule Vutuv.Tags.ExternalTagClientTest do
 
       assert ExternalTagClient.fetch(@source, "???") == {:error, :gone}
       refute_received {:req, _host, _path, _query, _headers}
+    end
+  end
+
+  # A post written here federates out with its hashtags, so the servers a
+  # followed tag names carry it on their public tag timelines and hand it
+  # straight back — as somebody else's find, under our own member's handle
+  # (issue #2179). Measured on the live timelines the report names: 19 of the 23
+  # ingestable statuses on troet.cafe's `#vutuv` were vutuv.de's own, and 17 of
+  # 19 on mastodon.social's.
+  describe "a post written on this installation" do
+    test "is not a find, whichever half of it names us" do
+      stub_tag_timeline([
+        ours(%{id: "own"}),
+        ours(%{id: "doubled-www", host: "www.www.#{our_host()}"}),
+        # The author field is one line of a stranger's JSON and the permalink is
+        # the other: a server that relays one of our posts under an author of
+        # its own still hands back the address the post really lives at.
+        ours(%{id: "relabelled", acct_host: "shouty.example"}),
+        status(%{"id" => "theirs"})
+      ])
+
+      assert {:ok, [post]} = ExternalTagClient.fetch(@source, "Elixir")
+      assert post.remote_id == "theirs"
+    end
+
+    # The refusing direction only: a host that merely *contains* ours is another
+    # server, and dropping its posts would be this bug with the sign flipped.
+    test "a server whose name only looks like ours is still a find" do
+      stub_tag_timeline([
+        ours(%{id: "neighbour", host: "not#{our_host()}"}),
+        ours(%{id: "subdomain", host: "mirror.#{our_host()}"})
+      ])
+
+      assert {:ok, posts} = ExternalTagClient.fetch(@source, "Elixir")
+      assert Enum.map(posts, & &1.remote_id) == ["neighbour", "subdomain"]
+    end
+
+    # The spellings themselves, asked of the predicate rather than through a
+    # stubbed round trip per spelling: the fold is `written_here?/2`'s business,
+    # and the two tests above are what prove the client asks it.
+    test "every spelling of our host answers the same" do
+      for host <- [
+            our_host(),
+            "www.#{our_host()}",
+            "www.www.#{our_host()}",
+            String.upcase(our_host()),
+            "#{our_host()}.",
+            Fediverse.tag_host()
+          ] do
+        assert ExternalPost.written_here?(host, "https://elsewhere.test/@bob/1"),
+               "expected #{host} to count as this installation"
+
+        assert ExternalPost.written_here?("elsewhere.test", "https://#{host}/ada/posts/1"),
+               "expected an address on #{host} to count as this installation"
+      end
+
+      for stranger <- ["not#{our_host()}", "mirror.#{our_host()}", "elsewhere.test"] do
+        refute ExternalPost.written_here?(stranger, "https://#{stranger}/@bob/1")
+      end
     end
   end
 end

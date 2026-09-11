@@ -358,6 +358,70 @@ defmodule Vutuv.Tags.ExternalPostsTest do
     end
   end
 
+  # The rows the release before #2179 wrote: a member's own post, federated out
+  # with its hashtags, read back off the servers their followed tag names and
+  # standing in their own feed as somebody else's find. The gate keeps new ones
+  # out; these are the ones already in the table, and they go rather than being
+  # blanked, because the gate means a delete here cannot undo itself.
+  describe "posts written on this installation" do
+    test "the stored ones go and every foreign one stays" do
+      tag = followed_tag()
+      _own = external_post(tag, author_host: our_host(), url: "https://#{our_host()}/ada/posts/1")
+
+      _doubled_www =
+        external_post(tag,
+          author_host: "www.www.#{our_host()}",
+          url: "https://www.www.#{our_host()}/ada/posts/2"
+        )
+
+      # Only the address is ours — the shape a relay that rewrote the author
+      # would hand back, and the one the SQL prefilter alone cannot answer.
+      _relabelled =
+        external_post(tag, author_host: @other_source, url: "https://#{our_host()}/ada/posts/3")
+
+      _tag_actor = external_post(tag, author_host: Fediverse.tag_host())
+      foreign = external_post(tag, author_host: @source)
+
+      # A stranger whose name merely contains ours, and a stranger whose address
+      # does: both walk into the prefilter and out again, because the predicate
+      # and not the prefilter is what answers.
+      neighbour = external_post(tag, author_host: "not#{our_host()}")
+
+      near_miss =
+        external_post(tag,
+          author_host: @source,
+          url: "https://#{@source}/@bob/#{our_host()}-notes"
+        )
+
+      assert ExternalPosts.drop_written_here() == 4
+
+      assert ExternalPost |> select([p], p.id) |> Repo.all() |> Enum.sort() ==
+               Enum.sort([foreign.id, neighbour.id, near_miss.id])
+    end
+
+    # A tombstone on one of our own posts protects nothing the gate does not
+    # already refuse, so it goes with the rest instead of sitting in the table
+    # for good — the one place `trim/2`'s "never delete a reported row" does not
+    # apply.
+    test "a reported one goes too" do
+      tag = followed_tag()
+
+      reported =
+        external_post(tag,
+          author_host: our_host(),
+          url: "https://#{our_host()}/ada/posts/4",
+          reported_at: DateTime.utc_now(:second)
+        )
+
+      assert ExternalPosts.drop_written_here() == 1
+      refute Repo.get(ExternalPost, reported.id)
+    end
+
+    test "an empty table answers nothing" do
+      assert ExternalPosts.drop_written_here() == 0
+    end
+  end
+
   describe "the outbound flag" do
     test "off means no request at all and nothing due" do
       put_config(:fetch_external_tag_posts, false)

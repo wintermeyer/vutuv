@@ -223,6 +223,23 @@ what bounds it: handing `Req` a per-host `connect_options` instead starts a
 `Finch` instance per distinct hostname and never reaps it, and which hostnames
 appear is decided by what members type into a follow's sources.
 
+**A fourth refusal: our own posts** (issue #2179). A post written here goes out
+with its hashtags in its `tag` array, so every server holding it indexes it
+under them and serves it on its own public tag timeline — and asking that server
+about a followed tag hands the post straight back. The author then read their
+own words three times in their own feed: once as the post, then once per relay
+under a "found through …" line carrying their handle and this installation's
+host. `Vutuv.Tags.ExternalPost.written_here?/1` refuses it on the way in, asking
+`Vutuv.Fediverse.own_host?/1` about **both** the author's host and the post's
+address, since a relay that rewrote the author still hands back our permalink.
+Measured on the live timelines that produced the report, 19 of the 23 ingestable
+statuses on troet.cafe's `#vutuv` and 17 of 19 on mastodon.social's were this
+installation's own. The rows already stored go with
+`ExternalPosts.drop_written_here/0` on every fetcher tick — deleted rather than
+blanked, because the gate means the delete cannot undo itself, and a standing
+pass rather than a migration, because the release still serving traffic during a
+blue/green switch files rows behind a migration that has already run.
+
 What bounds the table is `EXTERNAL_TAG_POST_CAPS` (twenty posts per tag, its
 servers sharing those slots, ten thousand rows overall) plus `prune/0`, which
 takes a pair's schedule and its posts away with the last follow that wanted

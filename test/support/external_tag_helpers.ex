@@ -226,6 +226,16 @@ defmodule Vutuv.ExternalTagHelpers do
   def author_host, do: "mastodon.example"
 
   @doc """
+  What this installation calls itself in the test environment — the host a post
+  written here carries when a stranger's timeline hands it back (issue #2179).
+
+  A function rather than a module attribute: the endpoint answers from a
+  `:persistent_term` it writes when it starts, so reading it at compile time
+  raises.
+  """
+  def our_host, do: VutuvWeb.Endpoint.host()
+
+  @doc """
   A member following `tag` through `source` — the follow this whole feature
   hangs off. `Vutuv.Tags.follow_tag/2` writes the local source itself; naming a
   server is what makes the pair wanted.
