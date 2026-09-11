@@ -907,8 +907,14 @@ defmodule Vutuv.Fediverse do
 
   @doc """
   Every spelling of "this installation" a stored actor URI could carry, as
-  plain lowercase hosts for a SQL comparison — the list `own_host?/1` answers
-  for one URI at a time.
+  plain lowercase hosts for a SQL comparison — the counting twin of
+  `own_host?/1`, which answers for one URI at a time.
+
+  **Not its exact mirror, and it cannot be**: a list has to be finite, so this
+  holds the apex, the tag host and one `www.` each, while `own_host?/1` folds
+  every leading `www.` (`strip_www/1`). A follower row at `www.www.<our host>`
+  would therefore be counted as foreign and refused as ours — the safe pair of
+  answers, and no remote server writes that spelling anyway.
 
   `main_host` is for the `people_snapshots` backfill, which reconstructs
   `distinct_follower_count/0` for past days in raw SQL and has to exclude the
@@ -2434,6 +2440,16 @@ defmodule Vutuv.Fediverse do
   Public because "is this us" and "did this document name the server it
   describes" (`Vutuv.Tags.SourceServerProbe`) are the same question, and the
   `www.` trap this answers is one this codebase has already paid for once.
+
+  **Read it in the refusing direction only.** Every caller here takes a `true`
+  as "treat this as us", "treat these as one post", "do not fetch" — and that is
+  what makes folding safe, because `www.<host>` is a *subdomain*: a dangling
+  CNAME, an old CDN target or a plain takeover hands it to somebody who does not
+  hold the apex. A `true` is therefore never permission for one of the two to
+  **speak** for the other. `Vutuv.Tags.ExternalPost.home_copy?/1` is the
+  cautionary tale: it asked this question to decide whether a server may take
+  down another server's author, and a mirror at that author's alias could
+  answer yes (PR #2176).
   """
   def same_site?(host, host), do: true
   def same_site?(host, other), do: strip_www(host) == strip_www(other)
@@ -2443,8 +2459,20 @@ defmodule Vutuv.Fediverse do
   address, published so anything else deciding whether two spellings name one
   server (`Vutuv.Tags.TagFollowSource`) applies the same rule rather than
   keeping its own copy of it.
+
+  **Every leading label, not one.** A fold that stops after the first one can be
+  walked around by writing it twice: `www.www.mastodon.social` came out of
+  `TagFollowSource.normalize_source/1` as `www.mastodon.social`, which is a
+  *subdomain* somebody other than that server may hold, and a member could
+  therefore have this installation poll it and store its answers (found on PR
+  #2176). Nobody serves a site at `www.www.<host>`, so folding to exhaustion
+  costs no honest address.
+
+  A fold for deciding whether two spellings mean one server, never for deciding
+  whether a server may **speak** for one — see `same_site?/2` above for what
+  that rules out and what it cost to learn.
   """
-  def strip_www("www." <> rest), do: rest
+  def strip_www("www." <> rest), do: strip_www(rest)
   def strip_www(host), do: host
 
   # Keyed on whoever is asking — a member or a page (issue #1336) — so a page

@@ -284,13 +284,27 @@ it again on the way in, so a tombstone can only refuse what its own report could
 have blanked and a planted one cannot keep an honest post out of the table.
 `report/2` answers `{:ok, :every_copy}` or `{:ok, :this_copy}` because the
 member has to be told which of the two happened; the confirm dialog and the
-flash are two sentences for that reason. Measured over 78 rows of a production
-copy, the author's half of the key costs nothing (43 groups either way) and the
-authority half narrows 51 of the 78 possible reports to the clicked row — the
-relayed copies of posts whose author's server nobody here asked, and every one
-of them a row a stranger could equally have invented. The first attempt at this
-keyed the takedown on the description alone, shipped as `7cdfd4dc7` and was
-reverted as `8b2c1a862` within the hour.
+flash are two sentences for that reason. What the authority half costs is that
+most reports now take only the clicked row — every one of those was fetched
+from a server other than the author's, and so is a row a stranger could equally
+have invented; `reaches?/2`'s own doc carries the counts, measured over a
+production copy, and says to re-measure rather than trust them, because this
+table rolls over within hours. The first attempt at this keyed the takedown on
+the description alone, shipped as `7cdfd4dc7` and was reverted as `8b2c1a862`
+within the hour.
+
+**The `www.` fold belongs to the description and to nothing else.** `www.<host>`
+is a subdomain — a dangling CNAME or an old CDN target hands it to somebody who
+does not hold the apex — so `origin_key/1` folds it (two spellings of one post)
+and `home_copy?/1` does not (one server speaking for another's author). Folding
+in both places let a member have this installation poll a mirror at the
+author's alias and speak for them, and it cost nothing to close: the same rows
+of a production copy are the author's own either way.
+`Vutuv.Fediverse.strip_www/1` now
+folds **every** leading label rather than one, because folding once could be
+walked around by writing `www.www.<host>`, which
+`Vutuv.Tags.TagFollowSource.normalize_source/1` would then store and poll as
+`www.<host>`.
 
 The **Mastodon API drops these rows** rather than rendering them
 (`Vutuv.MastodonApi.Presenter.statuses/2`): every field of a `Status` that

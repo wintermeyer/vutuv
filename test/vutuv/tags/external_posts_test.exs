@@ -454,6 +454,30 @@ defmodule Vutuv.Tags.ExternalPostsTest do
       end
     end
 
+    # The same attack through the `www.` door (found on PR #2176). A member may
+    # not add `www.<host>` — `normalize_source/1` folds it away — but it folds
+    # **once**, so `www.www.victim` is stored and polled as `www.victim`. A card
+    # served from there claiming the victim's permalink and author host must not
+    # be the victim's own server, whatever the fold says elsewhere.
+    test "a mirror at the author's www. alias takes only itself down", %{reporter: reporter} do
+      tag = followed_tag()
+      url = original("4760")
+
+      home = copy(tag, url, @source)
+      relayed = copy(tag, url, @other_source)
+
+      mirror = copy(tag, url, "www.#{@source}")
+
+      assert {:ok, :this_copy} = ExternalPosts.report(mirror.id, reporter)
+      assert Repo.get!(ExternalPost, mirror.id).reported_at
+
+      for id <- [home.id, relayed.id] do
+        row = Repo.get!(ExternalPost, id)
+        refute row.reported_at, "a mirror at the author's alias blanked an honest copy"
+        assert row.text == "Hello from over there"
+      end
+    end
+
     # The same forgery, played a move earlier: plant the tombstone before the
     # post has ever arrived and the ingest gate refuses it for as long as the
     # tombstone lives. That is a member keeping somebody else's post out of this
@@ -735,6 +759,32 @@ defmodule Vutuv.Tags.ExternalPostsTest do
 
       refute key("https://#{@source}/read?url=#{other}") == key(other)
     end
+
+    # And neither is an address at the end of any other path: one tenant of a
+    # host that lets its members pick their own paths could otherwise write a
+    # page whose address ends in a neighbour's and key alike (PR #2176).
+    test "an address at the end of some other path is not a wrapper" do
+      other = "https://elsewhere.test/@bob/9"
+
+      refute key("https://#{@source}/@mallory/read/#{other}") == key(other)
+    end
+
+    # `reject_reported/1` asks this of every row on its way in, so a row whose
+    # address is unusable has to answer rather than raise: a raise there aborts
+    # the whole store batch, which is the shape #1316 already cost us once.
+    test "an unusable address is no key at all" do
+      refute ExternalPost.origin_key(%{url: nil, author_host: @source})
+      refute ExternalPost.origin_key(%{url: 42, author_host: @source})
+    end
+
+    # Nothing can be a copy of a row with no usable address, itself included —
+    # the fail-closed twin of the test above, since `nil == nil` would otherwise
+    # make two such rows copies of each other.
+    test "a row with no usable address reaches nothing, not even itself" do
+      nothing = %{id: "a", url: nil, author_host: @source, source: @source}
+
+      refute ExternalPosts.reaches?(nothing, nothing)
+    end
   end
 
   # Which rows may speak for a copy they did not file. The one field an answer
@@ -761,10 +811,35 @@ defmodule Vutuv.Tags.ExternalPostsTest do
       refute ExternalPost.home_copy?(row(url: "https://elsewhere.test/@ada/1"))
     end
 
-    test "the www. alias and the host's case are the same server" do
+    # The case and the trailing dot are spellings of one name, and both are
+    # values `TagFollowSource.normalize_source/1` really does write.
+    test "the host's case and its trailing dot are the same server" do
       assert ExternalPost.home_copy?(
-               row(url: "https://www.#{@source}/@ada/1", source: "WWW.#{@source}.")
+               row(url: "https://#{String.upcase(@source)}/@ada/1", source: "#{@source}.")
              )
+    end
+
+    # **The `www.` fold is a description, never an authority.** A site served at
+    # both its apex and its alias is the oldest convention on the web, which is
+    # why `origin_key/1` folds — but `www.<host>` is a *subdomain*, and a
+    # dangling CNAME or an abandoned CDN target hands it to somebody who does not
+    # hold the apex. Folding here let a mirror at the author's alias speak for
+    # the author (found on PR #2176, before it shipped).
+    test "a mirror at the author's www. alias is not the author's own server" do
+      refute ExternalPost.home_copy?(
+               row(url: "https://#{@source}/@ada/1", source: "www.#{@source}")
+             )
+    end
+
+    # The same door from the other side, and this one needs no takeover at all:
+    # an instance whose handle domain is `www.X` would otherwise be spoken for by
+    # whoever holds the bare apex `X`.
+    test "the bare apex is not the author's server when the author lives on its alias" do
+      refute ExternalPost.home_copy?(%{
+               url: "https://www.#{@source}/@ada/1",
+               source: @source,
+               author_host: "www.#{@source}"
+             })
     end
 
     # The wrapper is an address on the bridge, and what it wraps is somebody
@@ -782,6 +857,7 @@ defmodule Vutuv.Tags.ExternalPostsTest do
     test "fails closed on a row with no author host and on an unusable address" do
       refute ExternalPost.home_copy?(row(url: "https://#{@source}/@ada/1", author_host: nil))
       refute ExternalPost.home_copy?(row(url: "not an address"))
+      refute ExternalPost.home_copy?(%{})
     end
   end
 end

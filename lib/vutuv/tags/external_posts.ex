@@ -296,12 +296,14 @@ defmodule Vutuv.Tags.ExternalPosts do
   would be the thing escalating itself, and the honest copy's presence is what
   it would escalate against.
 
-  Measured over the 78 rows a copy of production holds, taking every row in turn
-  as the one clicked: 27 reports reach exactly what they did before the guard,
-  51 reach fewer, none reach more, and the total falls from 198 rows to 92. The
-  51 are relayed copies of posts whose author's server nobody here asked (only 7
-  of the 78 rows, and 6 of the 42 originals, are the author's own copy) — and
-  every one of them is a row that could equally have been a stranger's
+  Measured over the 78 rows a copy of production held that day (47 originals;
+  the table rolls over, so re-measure rather than trusting the figures), taking
+  every row in turn as the one clicked: 33 reports reach exactly what they did
+  before the guard, 45 reach fewer, none reach more, and the total falls from
+  176 rows to 92. Every one of the 45 was fetched from a server other than the
+  author's — relayed copies of posts whose author's server nobody here asked
+  (only 7 of the 78 rows, and 6 of the 47 originals, are the author's own copy)
+  — and every one of them is a row that could equally have been a stranger's
   invention. That is the cost, and the sentence over the button says it rather
   than promising past it (issue #2164).
   """
@@ -327,12 +329,19 @@ defmodule Vutuv.Tags.ExternalPosts do
   # neither is visible. It is a closure rather than a second predicate so that
   # `reaches?/2` above stays the only spelling of the rule.
   defp reached_by(reported) do
-    key = ExternalPost.origin_key(reported)
-    every_copy? = ExternalPost.home_copy?(reported)
+    case ExternalPost.origin_key(reported) do
+      # An address we cannot read is no key, and `nil == nil` would make two such
+      # rows copies of each other. Nothing is a copy of it, itself included.
+      nil ->
+        fn _other -> false end
 
-    fn other ->
-      key == ExternalPost.origin_key(other) and
-        (every_copy? or reported.source == other.source)
+      key ->
+        every_copy? = ExternalPost.home_copy?(reported)
+
+        fn other ->
+          key == ExternalPost.origin_key(other) and
+            (every_copy? or reported.source == other.source)
+        end
     end
   end
 
