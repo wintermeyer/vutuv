@@ -12,6 +12,27 @@ defmodule VutuvWeb.MessageAttachmentWebTest do
   Not async: it points the global `:uploads_dir_prefix` at a tmp dir, opens
   `ATTACHMENT_UPLOADERS` to members and switches the AI image gate on, all of
   which every process reads.
+
+  ## Every file here is a PDF, and that is load-bearing (issue #2186)
+
+  The pages really are rendered: this module asserts a preview exists, so it
+  cannot turn previews off the way its LiveView sibling did. What it can choose
+  is the renderer. A text file's page is drawn by headless Chromium under a
+  30-second deadline, and although CI installs poppler alone, the GitHub runner
+  image ships Chrome anyway, so a loaded runner misses that deadline,
+  `Pages.render/1` records a silent strike and leaves the row at `rendering`
+  for the retry (`docs/architecture/attachments.md`). `pdftoppm` has no
+  deadline.
+
+  Which matters beyond the flake: `stage: "rendering"` reads as `:working`, and
+  this proxy answers a file that is still working with the same uniform 404 it
+  gives a refusal, an outsider and an unknown token. So a timed-out render
+  satisfies every 404 here for the wrong reason, and `settle!/1` plus the
+  premise lines below are what hold each test to its own claim.
+
+  The cost is that this module now needs poppler on the machine running it, as
+  `pages_test.exs` and the takedown tests already do: without it the upload
+  gate answers `{:error, :pdf_unavailable}` and `sent!/3` raises on the match.
   """
 
   use VutuvWeb.ConnCase, async: false
@@ -23,6 +44,7 @@ defmodule VutuvWeb.MessageAttachmentWebTest do
   alias Vutuv.Attachments.Attachment
   alias Vutuv.Attachments.Pages
   alias Vutuv.Chat
+  alias Vutuv.Images.Image, as: ImageRow
   alias Vutuv.Repo
   alias Vutuv.Social
 
@@ -72,30 +94,45 @@ defmodule VutuvWeb.MessageAttachmentWebTest do
     Repo.get!(Attachment, attachment.id)
   end
 
+  # Runs the pipeline and hands back the row it settled, asserting that it
+  # settled. That is the line that stops a render which never finished from
+  # reading as whatever each test is actually about. `plain_pdf/1` is a
+  # one-page document, so no page means a failed render rather than a short
+  # one, and the row is re-read so the assertion reads what the database holds
+  # rather than the struct the pipeline handed back.
   defp settle!(%Attachment{} = attachment) do
     Pages.render(attachment)
-    for page <- Pages.list(attachment), do: Pages.release(page.id)
-    Repo.get!(Attachment, attachment.id)
+
+    assert [%ImageRow{} = page] = Pages.list(attachment)
+    assert Pages.release(page.id) == :ok
+
+    settled = Repo.get!(Attachment, attachment.id)
+    assert Attachments.settled?(settled)
+    settled
   end
 
   describe "the file" do
     test "the recipient downloads it once it has passed", context do
       %{sender: sender, conversation: conversation, src: src} = context
-      attachment = sender |> sent!(conversation, Fixtures.text_file(src)) |> settle!()
+      source = Fixtures.plain_pdf(src)
+      attachment = sender |> sent!(conversation, source) |> settle!()
 
       conn = get(context.recipient_conn, ~p"/system/attachments/#{attachment.token}/file")
 
       assert conn.status == 200
-      assert response(conn, 200) =~ "Just some notes."
+      assert response(conn, 200) == File.read!(source)
       assert [disposition] = get_resp_header(conn, "content-disposition")
       assert disposition =~ "attachment;"
-      assert disposition =~ "notes.txt"
+      assert disposition =~ "plain.pdf"
       assert get_resp_header(conn, "cache-control") == ["private, no-store"]
     end
 
     test "the recipient gets nothing while the check is still running", context do
       %{sender: sender, conversation: conversation, src: src} = context
-      attachment = sent!(sender, conversation, Fixtures.text_file(src))
+      attachment = sent!(sender, conversation, Fixtures.plain_pdf(src))
+
+      # Which of this proxy's four 404s this is: the file is not finished.
+      refute Attachments.settled?(attachment)
 
       assert context.recipient_conn
              |> get(~p"/system/attachments/#{attachment.token}/file")
@@ -104,7 +141,11 @@ defmodule VutuvWeb.MessageAttachmentWebTest do
 
     test "the sender sees their own file at every stage", context do
       %{sender: sender, conversation: conversation, src: src} = context
-      attachment = sent!(sender, conversation, Fixtures.text_file(src))
+      attachment = sent!(sender, conversation, Fixtures.plain_pdf(src))
+
+      # "Every stage" is the claim, so name the stage: a settled file would
+      # make the 200 below the uninteresting case.
+      refute Attachments.settled?(attachment)
 
       assert context.sender_conn
              |> get(~p"/system/attachments/#{attachment.token}/file")
@@ -113,9 +154,15 @@ defmodule VutuvWeb.MessageAttachmentWebTest do
 
     test "a refused file is not handed to the recipient", context do
       %{sender: sender, conversation: conversation, src: src} = context
-      attachment = sent!(sender, conversation, Fixtures.text_file(src))
+      attachment = sent!(sender, conversation, Fixtures.plain_pdf(src))
       Pages.render(attachment)
-      for page <- Pages.list(attachment), do: Pages.page_refused(page)
+
+      # The refusal has to be a real one: with no page to refuse, the 404 below
+      # would be the unfinished file's and this test would prove nothing, which
+      # is exactly how it passed on a timed-out render (issue #2186).
+      assert [%ImageRow{} = page] = Pages.list(attachment)
+      Pages.page_refused(page)
+      assert Attachment.refused?(Repo.get!(Attachment, attachment.id))
 
       assert context.recipient_conn
              |> get(~p"/system/attachments/#{attachment.token}/file")
@@ -124,7 +171,7 @@ defmodule VutuvWeb.MessageAttachmentWebTest do
 
     test "somebody outside the conversation gets the uniform 404", context do
       %{sender: sender, conversation: conversation, src: src} = context
-      attachment = sender |> sent!(conversation, Fixtures.text_file(src)) |> settle!()
+      attachment = sender |> sent!(conversation, Fixtures.plain_pdf(src)) |> settle!()
 
       assert context.stranger_conn
              |> get(~p"/system/attachments/#{attachment.token}/file")
@@ -133,7 +180,7 @@ defmodule VutuvWeb.MessageAttachmentWebTest do
 
     test "a connection ended after the send closes the file again", context do
       %{sender: sender, recipient: recipient, conversation: conversation, src: src} = context
-      attachment = sender |> sent!(conversation, Fixtures.text_file(src)) |> settle!()
+      attachment = sender |> sent!(conversation, Fixtures.plain_pdf(src)) |> settle!()
 
       assert context.recipient_conn
              |> get(~p"/system/attachments/#{attachment.token}/file")
@@ -159,7 +206,7 @@ defmodule VutuvWeb.MessageAttachmentWebTest do
   describe "the preview" do
     test "the recipient sees the picture once it has passed", context do
       %{sender: sender, conversation: conversation, src: src} = context
-      attachment = sender |> sent!(conversation, Fixtures.text_file(src)) |> settle!()
+      attachment = sender |> sent!(conversation, Fixtures.plain_pdf(src)) |> settle!()
       assert [page] = Pages.list(attachment)
 
       conn =
@@ -172,9 +219,11 @@ defmodule VutuvWeb.MessageAttachmentWebTest do
       assert get_resp_header(conn, "content-type") == ["image/avif"]
     end
 
+    # `settle!/1` has already proved page 0 exists and is readable, so this 404
+    # is about the version name and nothing else.
     test "an unknown version is a 404, never a path", context do
       %{sender: sender, conversation: conversation, src: src} = context
-      attachment = sender |> sent!(conversation, Fixtures.text_file(src)) |> settle!()
+      attachment = sender |> sent!(conversation, Fixtures.plain_pdf(src)) |> settle!()
 
       assert context.recipient_conn
              |> get(~p"/system/attachments/#{attachment.token}/pages/0/original.avif")
@@ -186,7 +235,7 @@ defmodule VutuvWeb.MessageAttachmentWebTest do
     # instead of this proxy's uniform 404.
     test "a negative position is the same 404, not a crash", context do
       %{sender: sender, conversation: conversation, src: src} = context
-      attachment = sender |> sent!(conversation, Fixtures.text_file(src)) |> settle!()
+      attachment = sender |> sent!(conversation, Fixtures.plain_pdf(src)) |> settle!()
 
       assert context.recipient_conn
              |> get(~p"/system/attachments/#{attachment.token}/pages/-1/lite.avif")
@@ -195,9 +244,15 @@ defmodule VutuvWeb.MessageAttachmentWebTest do
 
     test "the recipient sees no preview while the check is still running", context do
       %{sender: sender, conversation: conversation, src: src} = context
-      attachment = sent!(sender, conversation, Fixtures.text_file(src))
+      attachment = sent!(sender, conversation, Fixtures.plain_pdf(src))
       Pages.render(attachment)
-      assert [page] = Pages.list(attachment)
+
+      # Drawn, and held by the AI gate: `Pending.file_state/1`'s
+      # still-`pending`-page branch. Both halves, because an unfinished render
+      # is `:working` through the stage branch instead, and then the 404 below
+      # would be its answer rather than the gate's.
+      assert %Attachment{stage: "ready"} = Repo.get!(Attachment, attachment.id)
+      assert [%ImageRow{moderation: "pending"} = page] = Pages.list(attachment)
 
       assert context.recipient_conn
              |> get(~p"/system/attachments/#{attachment.token}/pages/#{page.position}/lite.avif")
