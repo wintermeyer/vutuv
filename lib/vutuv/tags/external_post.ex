@@ -284,16 +284,20 @@ defmodule Vutuv.Tags.ExternalPost do
     do: url |> URI.parse() |> unwrap_redirect() |> canonical_address()
 
   # `…/r/https://bsky.app/…`, and the same address percent-encoded — the wrapped
-  # address is the post's own either way. Pinned to that **one prefix**, and to
-  # the **path**: a query parameter is where a server puts somebody else's
-  # address for its own reasons, and any path ending in an address would let one
-  # tenant of a host that hands out paths reproduce a neighbour's key (both
-  # found on PR #2176). `/r/` is Bridgy Fed's shape and the only wrapper
-  # measured on real rows — 14 of 10,244 stored addresses embed an absolute one,
-  # every one of them behind it. Recurses, since each step is strictly shorter
+  # address is the post's own either way. Pinned to that **one prefix**, to the
+  # **path**, and to the **start** of it: a query parameter is where a server
+  # puts somebody else's address for its own reasons, and any path ending in an
+  # address would let one tenant of a host that hands out paths reproduce a
+  # neighbour's key (both found on PR #2176). The `\A` is the third of those and
+  # not decoration — `/r/` is a path a tenant may simply ask for, so without it
+  # `…/@mallory/r/<neighbour's address>` keys as the neighbour's and naming the
+  # wrapper shape buys nothing over reading an address out of any path at all.
+  # `/r/` is Bridgy Fed's shape and the only wrapper measured on real rows — 12
+  # of 9,945 stored addresses embed an absolute one, every one of them behind a
+  # root `/r/` on `fed.brid.gy`. Recurses, since each step is strictly shorter
   # than the last.
   defp unwrap_redirect(%URI{path: path} = uri) when is_binary(path) do
-    case Regex.run(~r{/r/(https?://.+)\z}, decoded(path)) do
+    case Regex.run(~r{\A/r/(https?://.+)\z}, decoded(path)) do
       [_whole, embedded] -> embedded |> URI.parse() |> unwrap_redirect()
       nil -> uri
     end

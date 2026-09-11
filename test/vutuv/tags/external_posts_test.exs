@@ -762,11 +762,16 @@ defmodule Vutuv.Tags.ExternalPostsTest do
 
     # And neither is an address at the end of any other path: one tenant of a
     # host that lets its members pick their own paths could otherwise write a
-    # page whose address ends in a neighbour's and key alike (PR #2176).
+    # page whose address ends in a neighbour's and key alike (PR #2176). The
+    # second case is the one that matters, because `/r/` is a path a tenant may
+    # simply ask for: the prefix has to sit at the **start** of the path, or
+    # naming the wrapper shape buys nothing over reading an address out of any
+    # path at all.
     test "an address at the end of some other path is not a wrapper" do
       other = "https://elsewhere.test/@bob/9"
 
       refute key("https://#{@source}/@mallory/read/#{other}") == key(other)
+      refute key("https://#{@source}/@mallory/r/#{other}") == key(other)
     end
 
     # `reject_reported/1` asks this of every row on its way in, so a row whose
