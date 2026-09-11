@@ -37,7 +37,7 @@ defmodule VutuvWeb.PostController do
   # browse pages. Lists only what the viewer may see, so it is as crawlable
   # as the permalinks it links to.
   # Also served as Markdown / text / JSON (.md/.txt/.json or Accept
-  # negotiation), rendered from VutuvWeb.AgentDocs.PostDoc.build_archive/5 —
+  # negotiation), rendered from VutuvWeb.AgentDocs.PostDoc.build_archive/6 —
   # always the anonymous view. Keep index.html and the doc builder in sync
   # (agent_docs_drift_test.exs).
   def index(conn, params) do
@@ -60,7 +60,11 @@ defmodule VutuvWeb.PostController do
             Posts.author_posts_per_page()
           )
 
-        {noindex?, noai?} = PostDoc.robots_axes(author, false)
+        # The member's opt-outs, narrowed by whether this page lists anything
+        # (issue #2172) — asked of the **anonymous** archive whoever is reading,
+        # so this header, the four documents at the same URL and the meta tag
+        # below are one answer.
+        {noindex?, noai?} = PostDoc.archive_robots_axes(author, period)
 
         conn
         |> AgentDocs.put_html_alternates()
@@ -71,6 +75,11 @@ defmodule VutuvWeb.PostController do
         # The archive never stamped this at all, so a member's opt-outs reached
         # the page's meta tag and nothing else.
         |> VutuvWeb.ContentPolicy.put_robots_header(noindex?, noai?)
+        # …and the same answer into that meta tag, which
+        # `VutuvWeb.LayoutHTML.robots_directives/1` would otherwise derive a
+        # second time from the member's own two flags — which know nothing
+        # about whether this page lists anything.
+        |> assign(:robots_directives, VutuvWeb.ContentPolicy.robots_directives(noindex?, noai?))
         |> render("index.html",
           author: author,
           posts: posts,
@@ -104,7 +113,7 @@ defmodule VutuvWeb.PostController do
         # Agent-format siblings always render the plain archive (no ?type=), so
         # the .md/.txt/.json stay one canonical document (drift test).
         {posts, total} = Posts.author_posts_page(author, nil, params, period)
-        doc = PostDoc.build_archive(author, conn.request_path, posts, total, period_label)
+        doc = PostDoc.build_archive(author, conn.request_path, posts, total, period_label, period)
         AgentDocs.send_doc(conn, format, doc)
 
       {:error, _format} ->

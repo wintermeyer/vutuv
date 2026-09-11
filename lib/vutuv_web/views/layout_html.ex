@@ -261,10 +261,11 @@ defmodule VutuvWeb.LayoutHTML do
 
   A controller that already worked the answer out assigns
   `:robots_directives` and that wins — the member's two flags are the
-  *fallback*, not the source. The Media Kit is the page that needs it: it
-  adds `noindex` when the kit is empty (issue #2143), and a tag derived a
-  second time from the member would have said nothing while the response
-  header said `noindex`.
+  *fallback*, not the source. Two pages need it, and for one reason: both add
+  `noindex` when there is nothing on them — the Media Kit when the kit is empty
+  (issue #2143) and the post archive when it lists nothing (issue #2172) — and
+  a tag derived a second time from the member would have said nothing while the
+  response header said `noindex`.
 
   **Where this wants to end up:** in `ContentPolicy.put_robots_header/3`
   itself, so every page whose header it stamps also gets the matching tag.

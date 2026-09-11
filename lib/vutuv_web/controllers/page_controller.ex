@@ -402,6 +402,13 @@ defmodule VutuvWeb.PageController do
 
   - `/<username>` — member profile (also `/<username>.vcf` as vCard 3.0)
   - `/<username>/posts` — post archive, also `/<username>/posts/<year>[/<month>[/<day>]]`
+    (the unscoped `/<username>/posts.xml` redirects to the RSS feed below).
+    **Most members have written nothing.** An archive with nothing on it still
+    answers 200 — it belongs to its member — but answers
+    `X-Robots-Tag: noindex`, the page and its documents alike, and so does a
+    year or a month holding no post. Every post worth reading is listed one by
+    one in the sitemap's `posts` and `organization_posts` chunks, so walk those
+    rather than this pattern
   - `/<username>/posts/<id>` — a single post with replies
   - `/<username>/followers`, `/<username>/following`, `/<username>/connections` — people lists
   - `/<username>/<section>` — the profile sections in full: `work_experiences`,
