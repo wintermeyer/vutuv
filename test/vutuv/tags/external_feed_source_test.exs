@@ -108,7 +108,7 @@ defmodule Vutuv.Tags.ExternalFeedSourceTest do
          %{user: user, tag: tag} do
       post = external_post(tag, source: @source, text: "WAS WEG MUSS")
 
-      assert :ok = ExternalPosts.report(post.id, user)
+      assert {:ok, :every_copy} = ExternalPosts.report(post.id, user)
       refute "external-#{post.id}" in feed_ids(user)
 
       # The row survives as a tombstone, without its words: the pull's

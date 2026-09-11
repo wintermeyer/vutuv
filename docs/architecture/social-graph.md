@@ -267,6 +267,31 @@ takedown is filed in the same content-free ledger a reported cached post is
 (`Vutuv.Fediverse.log_reported_post/1`), so the operator's "one troll or this
 whole server" question counts these alongside the rest.
 
+**How far it reaches is two questions, not one** (issue #2164). One status read
+off five servers under two tags is ten rows, and what relates them is
+`Vutuv.Tags.ExternalPost.origin_key/1`: the post's own normalised address plus
+the server its author lives on. That key only *describes* the copies — both
+halves are written by whichever server we polled, and a member may name any host
+as a tag source, so a card a hostile host invents can claim any address and any
+author in one line of JSON. Who may act on the key is `home_copy?/1`: the row we
+fetched **from the server the post and its author both live on**, the one claim
+here that something outside itself backs, since we chose that host and asked it
+ourselves. So reporting the author's own copy takes every copy of the original,
+and reporting a relayed one takes the rows that same server filed — its own
+words under the reader's other tags — and leaves everybody else's standing.
+`Vutuv.Tags.ExternalPosts.reaches?/2` is that rule, and `reject_reported/1` asks
+it again on the way in, so a tombstone can only refuse what its own report could
+have blanked and a planted one cannot keep an honest post out of the table.
+`report/2` answers `{:ok, :every_copy}` or `{:ok, :this_copy}` because the
+member has to be told which of the two happened; the confirm dialog and the
+flash are two sentences for that reason. Measured over 78 rows of a production
+copy, the author's half of the key costs nothing (43 groups either way) and the
+authority half narrows 51 of the 78 possible reports to the clicked row — the
+relayed copies of posts whose author's server nobody here asked, and every one
+of them a row a stranger could equally have invented. The first attempt at this
+keyed the takedown on the description alone, shipped as `7cdfd4dc7` and was
+reverted as `8b2c1a862` within the hour.
+
 The **Mastodon API drops these rows** rather than rendering them
 (`Vutuv.MastodonApi.Presenter.statuses/2`): every field of a `Status` that
 matters hangs off an `Account` object, and inventing an id for an author we hold
