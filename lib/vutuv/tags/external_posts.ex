@@ -94,6 +94,16 @@ defmodule Vutuv.Tags.ExternalPosts do
   # for everybody here, so it is a lever worth metering.
   @report_limit 20
 
+  # How far the fold below reads before it gives up and lets a surface draw the
+  # copies separately again (issue #2163). The reader's whole external corpus is
+  # `per_tag` rows per followed tag that names a server, so this is reached only
+  # by somebody following 150 such tags — and what happens there is the behaviour
+  # of the release before this one, not an error. Ordered newest first, which is
+  # the end every surface draws from. It is deliberately the largest `fetch_n`
+  # any caller asks for (the feed calendar's `cap: 3_000`), so the fold never
+  # answers a narrower question than the one it was asked.
+  @fold_scan 3_000
+
   # --- What anybody may read (issue #2127) ----------------------------------
 
   @doc """
@@ -147,6 +157,175 @@ defmodule Vutuv.Tags.ExternalPosts do
       else: from(p in ExternalPost, as: :external, where: false)
   end
 
+  # --- One card per original (issue #2163) ----------------------------------
+
+  @doc """
+  The rows a surface may show, grouped into one **find** per original:
+  `%{post: row, copies: [row]}`, in the order the rows arrived, `copies`
+  including the row the find is drawn from.
+
+  A find is stored once per `(tag, server, remote id)`, so one status read off
+  three servers is three rows and nothing in that key relates them. Measured on
+  a copy of production the table held 78 showable rows for 49 originals, and one
+  tag page drew 20 cards for 9 posts, each of the extras identical to the one
+  above it but for its "found through" line — with the figure over the list
+  counting rows, because rows is what there were.
+
+  **What relates them is `Vutuv.Tags.ExternalPost.origin_key/1`** — the
+  normalised address of the post plus the server its author lives on — asked
+  here rather than re-derived, because the same key decides whose words a report
+  blanks and two spellings of "the same post" is how that goes wrong. A row
+  whose address will not parse has **no** key, and `nil == nil` would make every
+  such row a copy of every other, so each one is its own find.
+
+  **Which copy is drawn** is `home_copy?/1`: the row fetched from the server the
+  post and its author both live on is the one nobody else could have invented,
+  and it is also the only one whose report speaks for the copies other servers
+  filed (`reaches?/2`). It is the rare case — 7 of those 49 originals — because
+  a public tag timeline is mostly other people's posts, so the ordinary find is
+  drawn from **the copy we stored first**: ids are `Vutuv.UUIDv7`, so the oldest
+  id is the first arrival, and the choice does not wobble between two renders of
+  the same page. The copies differ in almost nothing anyway — over the 19
+  multi-copy originals in that corpus the text, the publication time and the
+  language were identical in every one, and only the author's `acct` spelling
+  differed, which `ExternalPost.address/1` normalises away.
+
+  The caller decides **what to hand over**, and that is the scope of the answer:
+  a tag page folds everything it may show under that tag, a member's feed folds
+  what the servers *they* named brought them. "Found on three servers" therefore
+  means three of the servers that carried it here, never a claim about the
+  fediverse.
+  """
+  def fold_copies(rows) when is_list(rows) do
+    keyed = Enum.map(rows, &{fold_key(&1), &1})
+    grouped = Enum.group_by(keyed, &elem(&1, 0), &elem(&1, 1))
+
+    keyed
+    |> Enum.map(&elem(&1, 0))
+    |> Enum.uniq()
+    |> Enum.map(&find(Map.fetch!(grouped, &1)))
+  end
+
+  # A row nobody can key is a find of its own, by its id — never `nil`, which
+  # would fold every unreadable address into one card.
+  defp fold_key(row), do: ExternalPost.origin_key(row) || {:unkeyed, row.id}
+
+  # "A copy from the author's own server first, then the oldest id", said once:
+  # `false` sorts before `true`, so the tuple orders the home copies ahead of the
+  # rest and the first arrival ahead of its own later twins.
+  defp find(copies),
+    do: %{post: Enum.min_by(copies, &{not ExternalPost.home_copy?(&1), &1.id}), copies: copies}
+
+  @doc """
+  The finds behind a tag page's fediverse tab — `tag_query/1`'s rows, folded.
+
+  Read as four columns rather than whole rows: the fold needs the key's two
+  halves, the server that filed the row and the id to draw it by, and a tag
+  holds at most `caps()[:per_tag]` rows, so this is one indexed read of a couple
+  of kilobytes.
+  """
+  def tag_finds(tag_id) when is_binary(tag_id) do
+    tag_id |> tag_query() |> fold_select() |> Repo.all() |> fold_copies()
+  end
+
+  @doc """
+  The ids a surface should draw, out of `finds` — the representatives.
+
+  Read by both surfaces as the same `WHERE … IN`, rather than by one as an `IN`
+  and by the other as the complementary `NOT IN`: two spellings of "which row is
+  the representative" is one more place for the `{:unkeyed, id}` branch to be
+  remembered in one and forgotten in the other.
+  """
+  def find_ids(finds), do: Enum.map(finds, & &1.post.id)
+
+  @doc """
+  The copies behind each find, keyed by the id the find is drawn by.
+  """
+  def copies_by_id(finds), do: Map.new(finds, &{&1.post.id, &1.copies})
+
+  @doc """
+  Which servers carried the post an entry stands for, the one it is **drawn
+  from** first and the rest sorted.
+
+  The one owner of that list, because four surfaces state it — the card, the
+  `.md`/`.txt`/`.json`/`.xml` siblings, `/api/2.0` and the feed — and the first
+  three had already drifted into two different orders while this change was
+  being written. Drawn first is not a preference: that row is the one a report
+  acts on, the one the header's address was built beside, and the one
+  `found_via` names in the documents, so the list leads with the server the rest
+  of the entry is about.
+
+  A group can hold two rows from one server — the same post under two followed
+  tags — so this answers servers, never rows. An entry that carries no group is
+  a surface that folds nothing, and the answer is then the one server it knows.
+  """
+  def servers(%{external_post: post} = entry) do
+    rest =
+      entry
+      |> Map.get(:copies, [])
+      |> Enum.map(& &1.source)
+      |> Enum.reject(&(&1 == post.source))
+      |> Enum.uniq()
+      |> Enum.sort()
+
+    [post.source | rest]
+  end
+
+  @doc """
+  What is left of the find `copies` described, as a card can draw it:
+  `{post, copies}`, the representative loaded in full, or `nil` when nothing
+  showable is left.
+
+  What a surface asks after a report has blanked part of a folded card — and it
+  **re-reads the rows** rather than working out which ones the report should
+  have taken. A page holds a model of the table and a report is not the only
+  thing that changes it; a card that redrew from its own arithmetic would start
+  counting a server whose copy somebody else reported an hour ago. That is
+  issue #2164's lesson one layer up: a promise and an act that agree only
+  because two modules spell the same `if`.
+
+  The choice of representative goes back through `fold_copies/1` rather than
+  being made again here, so a card that loses the row it was drawn from picks
+  the next one by the same rule the first was picked by.
+  """
+  def refold(copies) when is_list(copies) do
+    ids = Enum.map(copies, & &1.id)
+
+    with [%{post: drawn, copies: kept}] <- showable_finds(ids),
+         %ExternalPost{} = post <- Repo.get(showable_query(), drawn.id) do
+      {post, kept}
+    else
+      _gone -> nil
+    end
+  end
+
+  defp showable_finds(ids) do
+    showable_query()
+    |> where([external: p], p.id in ^ids)
+    |> fold_select()
+    |> Repo.all()
+    |> fold_copies()
+  end
+
+  @doc """
+  The projection `fold_copies/1` works on, and all a card needs of a copy it is
+  not drawn from: the key's two halves, the server that filed the row, the id to
+  draw it by and the stamp a feed orders on.
+
+  A whole row carries up to a thousand characters of somebody else's prose, and
+  a folded card holds one of these per server for as long as the page is open —
+  280 bytes measured, against 2,288 for the row.
+  """
+  def fold_select(query) do
+    select(query, [external: p], %{
+      id: p.id,
+      source: p.source,
+      url: p.url,
+      author_host: p.author_host,
+      published_at: p.published_at
+    })
+  end
+
   @doc """
   The feed source: what the servers **this** member's followed tags name have
   turned up, newest first.
@@ -167,6 +346,12 @@ defmodule Vutuv.Tags.ExternalPosts do
   and every month of the calendar's heatmap, for a table that cannot answer.
   The two sources next door short-circuit the same way and for the same reason
   (`Vutuv.Posts.feed_tag_items/3`, `Vutuv.Fediverse.feed_remote_posts/4`).
+
+  **The counting shape is answered by the fold itself**, with no second query:
+  `:marks` wants an id and a stamp, which is four of the five columns the fold
+  already read (issue #2163). That matters more than it sounds — the unread
+  badge runs on every page load — and it is also what makes the badge count
+  posts rather than the servers that carried them.
   """
   def feed_items(viewer, fetch_n, cursor, opts \\ [])
 
@@ -174,13 +359,10 @@ defmodule Vutuv.Tags.ExternalPosts do
     shape = Keyword.get(opts, :shape, :entries)
 
     if enabled?() and names_a_server?(viewer_id) do
-      viewer_id
-      |> feed_query(fetch_n, shape)
-      |> reject_muted_hosts(viewer)
-      |> Posts.language_scope(Posts.feed_language_filter(viewer))
-      |> FeedPage.time_window(cursor, :published_at, {:naive, :inserted_at})
-      |> Repo.all()
-      |> rows(shape)
+      scope =
+        feed_scope(viewer) |> FeedPage.time_window(cursor, :published_at, {:naive, :inserted_at})
+
+      scope |> feed_finds() |> feed_rows(scope, fetch_n, shape)
     else
       []
     end
@@ -203,32 +385,73 @@ defmodule Vutuv.Tags.ExternalPosts do
     )
   end
 
-  defp feed_query(viewer_id, fetch_n, shape) do
-    # The member's own follow and its own source row. One row per post: a member
-    # follows a tag once (`tag_follows` is unique on the pair) and names a
-    # server once, so this join cannot multiply a post out.
-    #
-    # `tf.user_id == ^viewer_id` is also what keeps a **page's** follow (issue
-    # #1336, the nullable pair) out of a member's feed: a page follow carries a
-    # NULL there, and NULL equals nothing.
+  # Every row of this member's that a feed page could draw, before the fold and
+  # before the page's own window and limit — which is why the ordering and the
+  # limit are not in here.
+  #
+  # The member's own follow and its own source row. One row per post: a member
+  # follows a tag once (`tag_follows` is unique on the pair) and names a server
+  # once, so this join cannot multiply a post out.
+  #
+  # `tf.user_id == ^viewer_id` is also what keeps a **page's** follow (issue
+  # #1336, the nullable pair) out of a member's feed: a page follow carries a
+  # NULL there, and NULL equals nothing.
+  defp feed_scope(%User{id: viewer_id} = viewer) do
     from([external: p] in showable_query(),
       join: tf in TagFollow,
       on: tf.tag_id == p.tag_id and tf.user_id == ^viewer_id,
       join: s in TagFollowSource,
-      on: s.tag_follow_id == tf.id and s.source == p.source,
-      order_by: [desc: p.published_at, desc: p.id],
-      limit: ^fetch_n
+      on: s.tag_follow_id == tf.id and s.source == p.source
     )
-    |> select_shape(shape)
+    |> reject_muted_hosts(viewer)
+    |> Posts.language_scope(Posts.feed_language_filter(viewer))
   end
 
-  # A counter needs two columns and a page needs the row, and here that really
-  # is all the database sends: a full row projects at 2,288 bytes against 24 for
-  # the pair, so a month of the calendar's heatmap would otherwise decode
-  # megabytes of somebody else's prose to produce thirty integers. Same shape
-  # and same reason as `Vutuv.Fediverse`'s own `:marks` select.
-  defp select_shape(query, :marks), do: select(query, [external: p], {p.id, p.published_at})
-  defp select_shape(query, _entries), do: query
+  # The reader's own corpus, folded — asked of the **same** scope the page below
+  # is drawn from, so a copy the reader cannot see (a server they never named, a
+  # host they muted) can never be the one a card is drawn from and take the post
+  # off their page with it.
+  #
+  # It is what makes the fold exact rather than a fold of whatever one page
+  # happened to fetch: a group cut in half by the page's `LIMIT` would be drawn
+  # once here and once again on the next page, under a different representative
+  # and so past the cursor's already-shown ids. Copies of one original share
+  # their publication stamp — measured, in every one of the 19 multi-copy
+  # originals on a production copy — so the window this is asked through never
+  # separates them either. The cost is five short columns over the rows one
+  # member's followed tags hold, and almost nobody holds any: measured on a copy
+  # of production, 20 of 6,027 members follow a tag at all and one names a
+  # server.
+  defp feed_finds(scope) do
+    scope
+    |> order_by([external: p], desc: p.published_at, desc: p.id)
+    |> limit(@fold_scan)
+    |> fold_select()
+    |> Repo.all()
+    |> fold_copies()
+  end
+
+  # `:marks` is `Vutuv.FeedPage.mark/1`'s shape, so the two are interchangeable
+  # and no source can be counted under a different definition than it is drawn
+  # under — which is the whole reason the counter folds too, and counts posts
+  # rather than the servers that carried them. The fold has already read both
+  # columns it needs, so this shape costs no query at all; the drawing shape
+  # goes back for the rows.
+  defp feed_rows(finds, _scope, fetch_n, :marks) do
+    for %{post: post} <- Enum.take(finds, fetch_n),
+        do: %{id: "external-" <> post.id, at: DateTime.to_naive(post.published_at)}
+  end
+
+  defp feed_rows(finds, scope, fetch_n, _entries) do
+    copies = copies_by_id(finds)
+
+    scope
+    |> where([external: p], p.id in ^find_ids(finds))
+    |> order_by([external: p], desc: p.published_at, desc: p.id)
+    |> limit(^fetch_n)
+    |> Repo.all()
+    |> Enum.map(&entry(&1, Map.get(copies, &1.id, [])))
+  end
 
   # The reader's own switched-off servers (the feed band's list), read against
   # the **author's** host: a reader who muted mastodon.social meant the people
@@ -242,29 +465,26 @@ defmodule Vutuv.Tags.ExternalPosts do
     end
   end
 
-  # `:marks` is `Vutuv.FeedPage.mark/1`'s shape, so the two are interchangeable
-  # and no source can be counted under a different definition than it is drawn
-  # under. Built from the two columns the query selected rather than by taking
-  # them off a whole entry, which would need the whole row.
-  defp rows(pairs, :marks),
-    do: for({id, at} <- pairs, do: %{id: "external-" <> id, at: DateTime.to_naive(at)})
-
-  defp rows(posts, _entries), do: Enum.map(posts, &entry/1)
-
   @doc """
-  One row as a feed entry.
+  One find as a feed entry.
 
   `post: nil` and its own `:external_post` key, which is what
   `Vutuv.Posts.external_feed_entry?/1` reads. The id prefix has to be unique
   across every source the paginator merges, and the stamp is naive UTC, which is
   what `Vutuv.FeedPage.sort_entries/1` compares.
+
+  `copies` is every row this one card stands for (issue #2163), the drawn row
+  included — what `servers/1` reads to say how many servers carried the post,
+  and what a report has to be measured against before the card is taken off a
+  page. It is always set, so nothing downstream defends against its absence.
   """
-  def entry(%ExternalPost{} = post) do
+  def entry(%ExternalPost{} = post, copies) when is_list(copies) do
     %{
       id: "external-" <> post.id,
       at: DateTime.to_naive(post.published_at),
       post: nil,
-      external_post: post
+      external_post: post,
+      copies: copies
     }
   end
 
@@ -370,10 +590,11 @@ defmodule Vutuv.Tags.ExternalPosts do
   defp possible_copies_query(rows) when is_list(rows) do
     hosts = rows |> Enum.map(& &1.author_host) |> Enum.reject(&is_nil/1) |> Enum.uniq()
 
-    from(p in ExternalPost,
-      where: p.author_host in ^hosts,
-      select: %{id: p.id, url: p.url, author_host: p.author_host, source: p.source}
-    )
+    # The same four columns the fold reads, through the same select: they are
+    # the columns `origin_key/1` and `home_copy?/1` need, so a third place
+    # listing them is a third place to forget one.
+    from(p in ExternalPost, as: :external, where: p.author_host in ^hosts)
+    |> fold_select()
   end
 
   @doc """
@@ -882,7 +1103,7 @@ defmodule Vutuv.Tags.ExternalPosts do
   Takes out every row this installation wrote itself (issue #2179). Answers how
   many went.
 
-  `Vutuv.Tags.ExternalPost.written_here?/1` is why there are any: a post written
+  `Vutuv.Tags.ExternalPost.written_here?/2` is why there are any: a post written
   here federates out with its hashtags, the servers a followed tag names index
   it and hand it back, and the author read their own post three times in their
   own feed. The gate in `Vutuv.Tags.ExternalTagClient` keeps new ones out; this

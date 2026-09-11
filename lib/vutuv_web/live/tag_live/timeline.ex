@@ -45,6 +45,7 @@ defmodule VutuvWeb.TagLive.Timeline do
   alias Vutuv.Fediverse
   alias Vutuv.Posts
   alias Vutuv.Repo
+  alias Vutuv.Tags.ExternalPosts
   alias Vutuv.Tags.Tag
   alias Vutuv.Tags.Timeline
   alias VutuvWeb.LayoutHTML
@@ -409,7 +410,11 @@ defmodule VutuvWeb.TagLive.Timeline do
               <%!-- What the servers a follower of this tag named carry about it
               (issue #2127) — for most topics, the only thing that fills this
               tab at all. --%>
-              <.external_post_card post={entry.external_post} viewer={@current_user} />
+              <.external_post_card
+                post={entry.external_post}
+                servers={ExternalPosts.servers(entry)}
+                viewer={@current_user}
+              />
             <% Posts.remote_feed_entry?(entry) -> %>
               <.remote_post_card
                 live?

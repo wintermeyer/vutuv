@@ -25,11 +25,14 @@ defmodule Vutuv.Tags.Timeline do
 
       %{id: "post-<uuid>",     at: ~N[…], post: %Vutuv.Posts.Post{}}
       %{id: "remote-<uuid>",   at: ~N[…], remote_post: %Vutuv.Fediverse.RemotePost{}}
-      %{id: "external-<uuid>", at: ~N[…], external_post: %Vutuv.Tags.ExternalPost{}}
+      %{id: "external-<uuid>", at: ~N[…], external_post: %Vutuv.Tags.ExternalPost{},
+        copies: [%{id:, source:, url:, author_host:}]}
 
   which is the shape the feed's renderer and `VutuvWeb.AgentDocs.PostDoc`
   already understand, so the HTML page and the `.md`/`.txt`/`.json`/`.xml`
-  siblings read the same list.
+  siblings read the same list. The third kind carries **one entry per original**
+  rather than one per server that handed it over (issue #2163), and `copies`
+  says which servers those were.
 
   ## The controls
 
@@ -148,7 +151,7 @@ defmodule Vutuv.Tags.Timeline do
   at a raw param).
   """
   def page(%Tag{} = tag, opts \\ []) do
-    filters = filters(opts)
+    filters = opts |> filters() |> with_finds(tag)
     page = max(Keyword.get(opts, :page, 1), 1)
     per_page = Keyword.get(opts, :per_page, @per_page)
 
@@ -162,7 +165,7 @@ defmodule Vutuv.Tags.Timeline do
 
     {rows, more?} = split_overflow(rows, per_page)
 
-    %{entries: load(rows), total: total(tag, filters), more?: more?}
+    %{entries: load(rows, filters), total: total(tag, filters), more?: more?}
   end
 
   @doc """
@@ -187,12 +190,14 @@ defmodule Vutuv.Tags.Timeline do
   So the rows the caller cannot render are never selected.
   """
   def walk(%Tag{} = tag, opts \\ []) do
+    filters = %{filters(opts) | external: false}
+
     tag
-    |> keys(%{filters(opts) | external: false})
+    |> keys(filters)
     |> Keyset.scope(opts)
     |> Repo.all()
     |> Keyset.restore(opts)
-    |> load()
+    |> load(filters)
   end
 
   @doc """
@@ -200,7 +205,7 @@ defmodule Vutuv.Tags.Timeline do
   beside the controls ("42 Beiträge"), read on its own so a caller that only
   wants the number does not fetch a page of rows.
   """
-  def count(%Tag{} = tag, opts \\ []), do: total(tag, filters(opts))
+  def count(%Tag{} = tag, opts \\ []), do: total(tag, opts |> filters() |> with_finds(tag))
 
   defp filters(opts) do
     %{
@@ -208,12 +213,24 @@ defmodule Vutuv.Tags.Timeline do
       # Whether the third source is in the union at all. `walk/2` is the only
       # caller that takes it out, and its doc says why.
       external: true,
+      # The third source's rows folded to one **find** per original (issue
+      # #2163), worked out once per public call and read three times: the keys
+      # query, the count over it, and the records `load/2` hands back. Without
+      # it each of the three would re-run the same small read, and the figure
+      # over the list could disagree with the cards under it.
+      finds: [],
       sort: Keyword.get(opts, :sort, :newest),
       query: Keyword.get(opts, :query),
       from: Keyword.get(opts, :from),
       until: Keyword.get(opts, :until)
     }
   end
+
+  # Read once per public call, and only where the union will actually carry the
+  # third source: `walk/2` takes it out altogether, and the **vutuv** tab drops
+  # it in `combined/2`, so neither pays for a fold nobody joins.
+  defp with_finds(%{source: :vutuv} = filters, _tag), do: filters
+  defp with_finds(filters, tag), do: %{filters | finds: ExternalPosts.tag_finds(tag.id)}
 
   defp total(tag, filters) do
     Repo.one(from(row in subquery(combined(tag, filters)), select: count()))
@@ -355,6 +372,12 @@ defmodule Vutuv.Tags.Timeline do
   defp external_query(tag, filters) do
     tag.id
     |> ExternalPosts.tag_query()
+    # One row per original, not one per server that carried it (issue #2163).
+    # The rule and the choice of which copy is drawn belong to
+    # `Vutuv.Tags.ExternalPosts.fold_copies/1`; what is spent here is a `WHERE`
+    # over its answer, so the count below the union and the cards above it are
+    # the same list.
+    |> where([external: p], p.id in ^ExternalPosts.find_ids(filters.finds))
     |> search_external(filters.query)
     |> between(filters, dynamic([external: p], p.published_at))
     |> select([external: p], %{
@@ -427,27 +450,37 @@ defmodule Vutuv.Tags.Timeline do
   end
 
   # The keys, back as renderable records, in the order the union put them.
-  defp load([]), do: []
+  defp load([], _filters), do: []
 
-  defp load(rows) do
+  defp load(rows, filters) do
     by_kind = %{
       "post" => load_posts(for %{kind: "post", id: id} <- rows, do: id),
       "remote" => load_remote(for %{kind: "remote", id: id} <- rows, do: id),
       "external" => load_external(for %{kind: "external", id: id} <- rows, do: id)
     }
 
+    copies = ExternalPosts.copies_by_id(filters.finds)
+
     for row <- rows, record = Map.get(by_kind[row.kind], row.id) do
-      entry(row, record)
+      entry(row, record, copies)
     end
   end
 
-  defp entry(%{kind: "post", at: at} = row, post),
+  defp entry(%{kind: "post", at: at} = row, post, _copies),
     do: %{id: "post-" <> row.id, at: at, post: post}
 
-  defp entry(%{kind: "external", at: at} = row, external_post),
-    do: %{id: "external-" <> row.id, at: at, external_post: external_post}
+  # `copies` is every row this one card stands for — the servers whose tag
+  # timelines carried the post, which the card names instead of drawing one
+  # identical copy per server (issue #2163).
+  defp entry(%{kind: "external", at: at} = row, external_post, copies),
+    do: %{
+      id: "external-" <> row.id,
+      at: at,
+      external_post: external_post,
+      copies: Map.get(copies, row.id, [])
+    }
 
-  defp entry(%{at: at} = row, remote_post),
+  defp entry(%{at: at} = row, remote_post, _copies),
     do: %{id: "remote-" <> row.id, at: at, remote_post: remote_post}
 
   defp load_posts([]), do: %{}

@@ -315,7 +315,7 @@ defmodule Vutuv.Tags.ExternalTagClient do
     # simply false, so without this guard an unparseable author would walk past
     # the operator's blocklist rather than be refused by it.
     #
-    # `written_here?/1` is the second refusal that reads a host rather than the
+    # `written_here?/2` is the second refusal that reads a host rather than the
     # server we asked (issue #2179): our own posts travel out with their
     # hashtags, so the servers a followed tag names carry them and hand them
     # back as finds. It sits after `permalink/1` because it asks about the

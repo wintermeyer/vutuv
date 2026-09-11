@@ -29,6 +29,7 @@ defmodule VutuvWeb.AgentDocs.PostDoc do
   alias Vutuv.Posts.PostVideo
   alias Vutuv.Profiles.VerifiedLinks
   alias Vutuv.Tags.ExternalPost
+  alias Vutuv.Tags.ExternalPosts
   alias VutuvWeb.AgentDocs
   alias VutuvWeb.Markdown
   alias VutuvWeb.PostTeaser
@@ -320,10 +321,16 @@ defmodule VutuvWeb.AgentDocs.PostDoc do
   # else, so like a note it takes the shared shape unchanged — what is new is
   # `found_via`, the server we read it from, which is not where its author
   # lives and is the one fact this row carries that no other does.
+  #
+  # `servers` is the rest of that fact (issue #2163): one entry here stands for
+  # every server that carried the post, exactly as one card does, so a reader of
+  # the `.json` or `.xml` sibling counts the posts the page counts instead of
+  # meeting the same text three times. `found_via` stays the one the entry is
+  # drawn from, so nothing that already reads it changes shape.
   def timeline_entry(%{external_post: %ExternalPost{} = post} = entry) do
     entry
     |> remote_timeline_entry(post)
-    |> Map.put(:found_via, post.source)
+    |> Map.merge(%{found_via: post.source, servers: ExternalPosts.servers(entry)})
   end
 
   def timeline_entry(%{post: post} = entry) do
