@@ -3516,6 +3516,16 @@ defmodule VutuvWeb.PostComponents do
   disappears when the answers agree would teach a reader that a card without one
   came from the author directly — which is never true here.
 
+  **Several servers carrying one post is one card** (issue #2163), and the same
+  line carries that too: where two or more of them handed the post over, it
+  becomes a disclosure — how many, and which ones a tap away — instead of a
+  second and a third card identical to this one but for that one line. It is the
+  shape a post's fediverse reactions already fold into
+  (`fediverse_details/1` above), for the same reason: nothing is lost, and the
+  common reader gets one card. `copies` is the whole group; which of its rows is
+  drawn, and what "several servers" is scoped to, is
+  `Vutuv.Tags.ExternalPosts.fold_copies/1`'s business.
+
   What it does not have, and why:
 
     * **no action bar.** A like would have to be delivered to an author this
@@ -3531,6 +3541,13 @@ defmodule VutuvWeb.PostComponents do
   """
   attr(:post, :map, required: true, doc: "a Vutuv.Tags.ExternalPost")
   attr(:viewer, :any, default: nil, doc: "the logged-in member, or nil")
+
+  attr(:servers, :list,
+    default: [],
+    doc:
+      "the servers that carried this post, the one it is drawn from first — " <>
+        "`Vutuv.Tags.ExternalPosts.servers/1` (issue #2163). Empty falls back to `post.source`."
+  )
 
   attr(:hide_rules, :any,
     default: nil,
@@ -3563,6 +3580,9 @@ defmodule VutuvWeb.PostComponents do
       # address on somebody else's server.
       |> assign(:actor_uri, post.author_url || origin)
       |> assign(:hide_names, hide_tag_names(post.text))
+      # A caller that folds nothing hands over no list, and the card then reads
+      # exactly as it did before the fold existed.
+      |> assign(:servers, if(assigns.servers == [], do: [post.source], else: assigns.servers))
 
     ~H"""
     <article data-external-post={@post.id}>
@@ -3626,11 +3646,14 @@ defmodule VutuvWeb.PostComponents do
           <%!-- How it got here. Small and grey on purpose: it is provenance,
           not a byline, and the byline is the line above it. --%>
           <p
-            data-external-source={@post.source}
+            :if={match?([_one], @servers)}
+            data-external-source={hd(@servers)}
             class="mb-0 mt-0.5 text-xs text-slate-600 dark:text-slate-400"
           >
-            {gettext("Found through %{server}", server: @post.source)}
+            {gettext("Found through %{server}", server: hd(@servers))}
           </p>
+
+          <.external_servers :if={length(@servers) > 1} id={@post.id} servers={@servers} />
 
           <.remote_body
             text={@post.text}
@@ -3642,6 +3665,70 @@ defmodule VutuvWeb.PostComponents do
         </div>
       </div>
     </article>
+    """
+  end
+
+  attr(:id, :string, required: true)
+  attr(:servers, :list, required: true)
+
+  # The provenance line when several servers carried one post (issue #2163).
+  # Deliberately the geometry of `fediverse_details/1`, down to sharing its
+  # summary row: a reader who has opened one of those has opened this one.
+  #
+  # No `data-keep-open`: this card is a stream row, and the disclosure's state
+  # would only be lost to a patch the server sent for this very card, which on
+  # a page holding no action bar means a report or a reload — both of which
+  # redraw the card anyway.
+  defp external_servers(assigns) do
+    ~H"""
+    <details
+      class="group mt-0.5 text-xs text-slate-600 dark:text-slate-400"
+      data-external-servers={length(@servers)}
+    >
+      <.fold_summary label={gettext("Found through these servers")} count={length(@servers)} />
+
+      <ul id={"external-servers-#{@id}"} class="flex flex-wrap gap-x-3 gap-y-1 px-2 pb-2 pt-1">
+        <li :for={server <- @servers} data-external-source={server} class="min-w-0 truncate">
+          {server}
+        </li>
+      </ul>
+    </details>
+    """
+  end
+
+  attr(:label, :string, required: true)
+  attr(:count, :integer, required: true)
+
+  # The one row a card folds something away behind: the globe, what is folded,
+  # how many of it, and the chevron that turns. Two wearers so far — what other
+  # networks did with one of our posts, and which servers carried one of theirs
+  # — and they are the same gesture, so they are one recipe rather than two that
+  # drift. `min-h-10` because on both cards this is the control a phone reader
+  # is meant to open.
+  defp fold_summary(assigns) do
+    ~H"""
+    <summary class="-mx-2 flex min-h-10 cursor-pointer list-none items-center gap-2 rounded-lg px-2 hover:bg-slate-100 dark:hover:bg-slate-800 [&::-webkit-details-marker]:hidden">
+      <span aria-hidden="true">🌐</span>
+      <span>{@label}</span>
+      <%!-- slate-200/700, a step off the row's own hover tint, so the pill
+            stays a pill while the summary is hovered or open. The dark text
+            step is the pill's own: the row's inherited `slate-400` reads 3.9
+            against `slate-700`, under AA, because the pill is lighter than
+            the card the row was coloured for. --%>
+      <span class="rounded-full bg-slate-200 px-1.5 text-xs font-semibold tabular-nums dark:bg-slate-700 dark:text-slate-200">
+        {compact_count(@count)}
+      </span>
+      <svg
+        class="ml-auto h-4 w-4 shrink-0 transition-transform group-open:rotate-180"
+        fill="none"
+        stroke="currentColor"
+        stroke-width="2"
+        viewBox="0 0 24 24"
+        aria-hidden="true"
+      >
+        <path stroke-linecap="round" stroke-linejoin="round" d="m19 9-7 7-7-7" />
+      </svg>
+    </summary>
     """
   end
 
@@ -7044,34 +7131,7 @@ defmodule VutuvWeb.PostComponents do
       data-fediverse-reactions={@reactions}
       data-fediverse-replies={@replies}
     >
-      <%!-- min-h-10: a finger-sized target, since this is the one control on
-            the card a phone reader is meant to open. --%>
-      <summary class={[
-        "-mx-2 flex min-h-10 cursor-pointer list-none items-center gap-2 rounded-lg px-2",
-        "hover:bg-slate-100 dark:hover:bg-slate-800",
-        "[&::-webkit-details-marker]:hidden"
-      ]}>
-        <span aria-hidden="true">🌐</span>
-        <span>{gettext("From other networks")}</span>
-        <%!-- slate-200/700, a step off the row's own hover tint, so the pill
-              stays a pill while the summary is hovered or open. The dark text
-              step is the pill's own: the row's inherited `slate-400` reads 3.9
-              against `slate-700`, under AA, because the pill is lighter than
-              the card the row was coloured for. --%>
-        <span class="rounded-full bg-slate-200 px-1.5 text-xs font-semibold tabular-nums dark:bg-slate-700 dark:text-slate-200">
-          {compact_count(@total)}
-        </span>
-        <svg
-          class="ml-auto h-4 w-4 shrink-0 transition-transform group-open:rotate-180"
-          fill="none"
-          stroke="currentColor"
-          stroke-width="2"
-          viewBox="0 0 24 24"
-          aria-hidden="true"
-        >
-          <path stroke-linecap="round" stroke-linejoin="round" d="m19 9-7 7-7-7" />
-        </svg>
-      </summary>
+      <.fold_summary label={gettext("From other networks")} count={@total} />
 
       <div class="space-y-2 px-2 pb-2 pt-1">
         <%!-- The split, in the same order and with the same glyphs as the

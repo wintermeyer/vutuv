@@ -2945,8 +2945,7 @@ defmodule VutuvWeb.PostLive.Feed do
     {entries, changed} =
       RemoteImages.restate_entries(socket.assigns.entries, remote_post_id, pictures)
 
-    socket = assign(socket, :entries, entries)
-    Enum.reduce(changed, socket, &stream_insert(&2, :posts, &1, update_only: true))
+    socket |> assign(:entries, entries) |> restream_changed(changed)
   end
 
   # Swap the refreshed entry into the retained list by its stable entry id.
@@ -3255,23 +3254,58 @@ defmodule VutuvWeb.PostLive.Feed do
   # second place for it to drift from — and this one decides what a member sees
   # leave the page, which is where they check whether the promise held.
   defp drop_external_copies(socket, external_post_id) do
-    entries = socket.assigns.entries
-
-    case Enum.find(entries, &external_entry?(&1, external_post_id)) do
-      %{external_post: reported} ->
-        drop_entries(socket, Enum.filter(entries, &external_copy?(&1, reported)))
-
-      _gone ->
-        socket
+    case Enum.find(socket.assigns.entries, &external_entry?(&1, external_post_id)) do
+      %{external_post: reported} -> settle_external(socket, reported)
+      _gone -> socket
     end
+  end
+
+  # A card stands for every copy of the original that reached this reader (issue
+  # #2163), and a report does not always take all of them: only the row the
+  # post's own server served speaks for the copies other servers filed
+  # (`reaches?/2`), which is exactly what the dialog over the button says. So
+  # the answer per card is three-way — every copy gone, some gone, none — and
+  # only the first takes the card off the page. The middle one is the case the
+  # promise lives or dies on: the post stays, drawn from a row the report did
+  # not reach, and says one server fewer.
+  defp settle_external(socket, reported) do
+    {going, kept} =
+      socket.assigns.entries
+      |> Enum.filter(&reported_copy?(&1, reported))
+      |> Enum.map(&{&1, ExternalPosts.refold(&1.copies)})
+      |> Enum.split_with(fn {_entry, find} -> is_nil(find) end)
+
+    socket
+    |> drop_entries(Enum.map(going, fn {entry, _gone} -> entry end))
+    |> restate_external(kept)
+  end
+
+  # Which cards this report could have touched — the same `reaches?/2` the
+  # takedown ran, never a second reading of it. It only picks the cards worth
+  # re-reading; what is left of one is the **table's** answer and not this
+  # page's arithmetic, or a card would go on counting a server whose copy
+  # somebody else reported an hour ago.
+  defp reported_copy?(entry, reported) do
+    Posts.external_feed_entry?(entry) and
+      Enum.any?(entry.copies, &ExternalPosts.reaches?(reported, &1))
+  end
+
+  # The card keeps the entry id it was streamed under even where the row it is
+  # drawn from changed: it is still the same find, and a new id would leave the
+  # old card standing and put a copy of it at the foot of the timeline.
+  defp restate_external(socket, kept) do
+    changed =
+      for {entry, {post, copies}} <- kept, do: %{entry | external_post: post, copies: copies}
+
+    by_id = Map.new(changed, &{&1.id, &1})
+
+    socket
+    |> update(:entries, fn entries -> Enum.map(entries, &Map.get(by_id, &1.id, &1)) end)
+    |> restream_changed(changed)
   end
 
   defp external_entry?(entry, external_post_id),
     do: Posts.external_feed_entry?(entry) and entry.external_post.id == external_post_id
-
-  defp external_copy?(entry, reported),
-    do:
-      Posts.external_feed_entry?(entry) and ExternalPosts.reaches?(reported, entry.external_post)
 
   # Taking a set of entries off the page: out of the list the page reasons with
   # and out of the stream the browser holds, then the empty state re-asked. One
@@ -3309,11 +3343,16 @@ defmodule VutuvWeb.PostLive.Feed do
     |> then(fn socket ->
       Enum.reduce(going, socket, &stream_delete_by_dom_id(&2, :posts, "feed-#{&1.id}"))
     end)
-    |> then(fn socket ->
-      Enum.reduce(changed, socket, &stream_insert(&2, :posts, &1, update_only: true))
-    end)
+    |> restream_changed(changed)
     |> then(&assign(&1, :empty?, &1.assigns.entries == [] and &1.assigns.pending_posts == []))
   end
+
+  # Hand the browser the entries that changed while staying where they are: a
+  # picture that arrived, a reply that left a thread, a folded card redrawn from
+  # a row a report did not reach. `update_only:` is what keeps a stream from
+  # re-appending them at the foot of the timeline.
+  defp restream_changed(socket, changed),
+    do: Enum.reduce(changed, socket, &stream_insert(&2, :posts, &1, update_only: true))
 
   defp note_entry?(entry, note_id),
     do: Posts.remote_reply_entry?(entry) and entry.note.id == note_id
@@ -3792,6 +3831,7 @@ defmodule VutuvWeb.PostLive.Feed do
                   server we read it from in the quiet line under it. --%>
                   <.external_post_card
                     post={entry.external_post}
+                    servers={ExternalPosts.servers(entry)}
                     viewer={@current_user}
                     hide_rules={@filter_rules}
                   />

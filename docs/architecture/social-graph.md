@@ -229,7 +229,7 @@ under them and serves it on its own public tag timeline — and asking that serv
 about a followed tag hands the post straight back. The author then read their
 own words three times in their own feed: once as the post, then once per relay
 under a "found through …" line carrying their handle and this installation's
-host. `Vutuv.Tags.ExternalPost.written_here?/1` refuses it on the way in, asking
+host. `Vutuv.Tags.ExternalPost.written_here?/2` refuses it on the way in, asking
 `Vutuv.Fediverse.own_host?/1` about **both** the author's host and the post's
 address, since a relay that rewrote the author still hands back our permalink.
 Measured on the live timelines that produced the report, 19 of the 23 ingestable
@@ -267,10 +267,29 @@ rendered even when the two coincide: it answers "how did this get here", and one
 that vanished when the answers agreed would teach a reader that a card without
 it came from the author directly, which is never true here.
 
+**One post is one card, however many servers carried it** (issue #2163). A find
+is stored once per (tag, server, remote id), so the same status read off three
+servers stood three times in the feed and on the tag page, each card identical to
+the one above it but for that grey line — and the figure over the list counted
+rows, because rows is what there were: 78 showable rows for 49 originals on a
+copy of production, and one tag page drawing 20 cards for 9 posts.
+`Vutuv.Tags.ExternalPosts.fold_copies/1` groups them by `origin_key/1` and draws
+one, preferring the `home_copy?/1` (the rare case — 8 of those 49 — so the
+ordinary find is drawn from the copy stored first, which ids being
+`Vutuv.UUIDv7` makes the first arrival). The other servers become the card's
+provenance line instead: `Found through these servers` with the count, opening
+to the list, the geometry a post's fediverse reactions already fold into. The
+fold is asked of the **whole** scope a surface may show before that surface
+pages it (`tag_finds/1` for a tag, the reader's own corpus for a feed), so the
+count over the list counts posts and a group cut in half by a page's `LIMIT`
+cannot come back on the next page under a different representative.
+
 The row reaches **the member whose own follow named that server** — the query
 joins their `tag_follows` and its `tag_follow_sources` — so somebody following
-the same tag with vutuv alone sees none of it. Everything that governs an
-ordinary card governs these: hidden words and muted tags
+the same tag with vutuv alone sees none of it, and "found on three servers"
+therefore means three of the servers that brought it *here*, never a claim about
+the fediverse. Everything that governs an ordinary card governs these: hidden
+words and muted tags
 (`Vutuv.Posts.text/1` and `account_names/1` answer for this kind too), the
 reader's own muted servers, their language filter, and a report that empties our
 copy for everybody here at once.
@@ -309,6 +328,16 @@ production copy, and says to re-measure rather than trust them, because this
 table rolls over within hours. The first attempt at this keyed the takedown on
 the description alone, shipped as `7cdfd4dc7` and was reverted as `8b2c1a862`
 within the hour.
+
+A **folded** card meets that rule head on, and the surfaces have to hold the
+promise its dialog made. Reporting a card drawn from the author's own server
+takes every copy, so the card leaves the page. Reporting one drawn from a relay
+takes that server's rows and leaves the rest — so the card does not leave, it is
+redrawn from a row the report did not reach and says one server fewer, which is
+exactly what the reader was told before they pressed it. The feed does that per
+card (`ExternalPosts.refold/1`, keeping the entry id so the card is patched in
+place); the tag page re-reads the page, as it does for every other row-removing
+act on it.
 
 **The `www.` fold belongs to the description and to nothing else.** `www.<host>`
 is a subdomain — a dangling CNAME or an old CDN target hands it to somebody who

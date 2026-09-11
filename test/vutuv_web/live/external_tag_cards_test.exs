@@ -128,11 +128,12 @@ defmodule VutuvWeb.ExternalTagCardsTest do
       refute again =~ "EIN FUND VON DRUEBEN"
     end
 
-    # The same post read off two servers under two tags is two rows and two
-    # cards, and a member who reports one of them has been told the post is
-    # gone from this site. It has to be — the reader who then meets the twin
-    # under another "Gefunden über" line is watching us break that promise
-    # (issue #2164).
+    # The same post read off two servers under two tags is two rows and, since
+    # issue #2163, **one** card — drawn from the author's own server's copy,
+    # which is the one whose report speaks for the other. What is pinned here is
+    # what happens to the twin: a member who reports this has been told the post
+    # is gone from this site, and the reader who then met it under another
+    # "Gefunden über" line was watching us break that promise (issue #2164).
     test "reporting the author's own copy takes every copy of that original with it", %{
       conn: conn,
       user: user
@@ -152,7 +153,10 @@ defmodule VutuvWeb.ExternalTagCardsTest do
         )
 
       {:ok, view, html} = live(conn, ~p"/feed")
-      assert html =~ ~s(data-external-post="#{twin.id}")
+      # One card for the pair, drawn from the author's own server's copy.
+      assert html =~ ~s(data-external-post="#{clicked.id}")
+      refute html =~ ~s(data-external-post="#{twin.id}")
+      assert html =~ ~s(data-external-servers="2")
 
       html =
         view
