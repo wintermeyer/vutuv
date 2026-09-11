@@ -27,6 +27,11 @@ defmodule VutuvWeb.ExternalTagCardsTest do
   @source Vutuv.ExternalTagHelpers.tag_source()
   @author_host Vutuv.ExternalTagHelpers.author_host()
 
+  # A second server this installation asked, for the copies one original leaves
+  # behind (issue #2164): the same status read off two servers is two rows, and
+  # what relates them needs two hostnames that are not the author's.
+  @other_source "social.example"
+
   setup do
     put_config(:fetch_external_tag_posts, true)
     :ok
@@ -123,6 +128,79 @@ defmodule VutuvWeb.ExternalTagCardsTest do
       refute again =~ "EIN FUND VON DRUEBEN"
     end
 
+    # The same post read off two servers under two tags is two rows and two
+    # cards, and a member who reports one of them has been told the post is
+    # gone from this site. It has to be — the reader who then meets the twin
+    # under another "Gefunden über" line is watching us break that promise
+    # (issue #2164).
+    test "reporting the author's own copy takes every copy of that original with it", %{
+      conn: conn,
+      user: user
+    } do
+      here = followed_tag(user, @author_host)
+      there = followed_tag(user, @other_source)
+      url = "https://#{@author_host}/@ada/4711"
+
+      clicked = found_post(here, url: url, source: @author_host)
+      twin = found_post(there, url: url, source: @other_source)
+
+      other =
+        found_post(here,
+          url: "https://#{@author_host}/@ada/4712",
+          source: @author_host,
+          text: "EIN ZWEITER FUND"
+        )
+
+      {:ok, view, html} = live(conn, ~p"/feed")
+      assert html =~ ~s(data-external-post="#{twin.id}")
+
+      html =
+        view
+        |> element(~s([data-external-post="#{clicked.id}"] [phx-click="report-external-post"]))
+        |> render_click()
+
+      refute html =~ ~s(data-external-post="#{clicked.id}")
+      refute html =~ ~s(data-external-post="#{twin.id}")
+      assert html =~ ~s(data-external-post="#{other.id}")
+
+      assert Repo.get!(ExternalPost, twin.id).reported_at
+
+      # And neither of them comes back on a fresh page.
+      {:ok, _view, again} = live(conn, ~p"/feed")
+      refute again =~ ~s(data-external-post="#{twin.id}")
+      assert again =~ "EIN ZWEITER FUND"
+    end
+
+    # And the other half of the same promise: a card some other server relayed
+    # speaks only for that server, so the copy beside it stays — and the dialog
+    # the member read says so before they press it. Any host a member names as
+    # a source may claim any address, so a rule that let this card reach the
+    # other one would let a planted card blank honest copies of somebody else's
+    # post (`8b2c1a862`).
+    test "reporting a relayed card leaves the copies other servers filed", %{
+      conn: conn,
+      user: user
+    } do
+      here = followed_tag(user)
+      there = followed_tag(user, @other_source)
+      url = "https://#{@author_host}/@ada/4713"
+
+      clicked = found_post(here, url: url)
+      twin = found_post(there, url: url, source: @other_source, text: "DIE ANDERE KOPIE")
+
+      {:ok, view, _html} = live(conn, ~p"/feed")
+
+      html =
+        view
+        |> element(~s([data-external-post="#{clicked.id}"] [phx-click="report-external-post"]))
+        |> render_click()
+
+      refute html =~ ~s(data-external-post="#{clicked.id}")
+      assert html =~ ~s(data-external-post="#{twin.id}")
+      refute Repo.get!(ExternalPost, twin.id).reported_at
+      assert html =~ "DIE ANDERE KOPIE"
+    end
+
     # This card offers no Translate control and the table holds no translation
     # for it — but the page hands its whole subject list to the translation
     # sweep, which keys every entry by kind. A kind that module has no column
@@ -194,6 +272,22 @@ defmodule VutuvWeb.ExternalTagCardsTest do
       assert entry["found_via"] == @source
     end
 
+    # The page must neither take anything down nor fall over. Both report events
+    # are pushed, because the guard that answers them lives in the module that
+    # owns all six of this menu's events — see `VutuvWeb.Live.RemotePostActions`.
+    test "an anonymous reader's socket reports nothing", %{tag: tag} do
+      post = found_post(tag, text: "BLEIBT STEHEN")
+
+      {:ok, view, _html} =
+        live_isolated(build_conn(), VutuvWeb.TagLive.Timeline,
+          session: %{"tag_id" => tag.id, "source" => "fediverse"}
+        )
+
+      assert render_click(view, "report-external-post", %{"id" => post.id})
+      assert render_click(view, "report-remote-post", %{"id" => post.id})
+      refute Repo.get!(ExternalPost, post.id).reported_at
+    end
+
     # Enforced by the purge a block runs (`Vutuv.Fediverse.purge_instance/1`),
     # not by a clause on the read — see `ExternalPosts.showable_query/0`.
     test "a blocked server's post is on no public page", %{conn: conn, tag: tag} do
@@ -256,19 +350,62 @@ defmodule VutuvWeb.ExternalTagCardsTest do
   end
 
   describe "German" do
-    test "the card's own words are translated", %{conn: conn} do
+    # A German feed, which is what a real visitor sends
+    # (`Accept-Language: de-DE,de`) and what a plain English check never sees.
+    setup %{conn: conn} do
       {conn, user} = create_and_login_user(conn)
-      tag = followed_tag(user)
-      found_post(tag)
+      tag = followed_tag(user, @author_host)
 
-      {:ok, _view, html} =
+      relayed = found_post(followed_tag(user))
+      own = found_post(tag, source: @author_host, url: "https://#{@author_host}/@ada/4714")
+
+      {:ok, view, html} =
         conn
         |> recycle()
         |> put_req_header("accept-language", "de-DE,de")
         |> live(~p"/feed")
 
+      {:ok, view: view, html: html, relayed: relayed, own: own}
+    end
+
+    test "the card's own words are translated", %{html: html} do
       # The quiet provenance line, in German, naming the server we asked.
       assert html =~ "Gefunden über #{@source}"
+    end
+
+    # Both sentences promise the act and nothing about the future: a tombstone
+    # keeps the post out of the next pull, but only until `prune/0` drops it
+    # with the last follow of that pair. The one they replaced promised a
+    # deletion of "unsere Kopie" — singular, and of a row that is blanked rather
+    # than deleted — while the copies it did not touch kept standing two cards
+    # further down (issue #2164).
+    test "the author's own copy promises every copy", %{view: view, html: html, own: own} do
+      assert html =~ "Jede Kopie verschwindet sofort für alle auf diesem vutuv."
+      refute html =~ "Unsere Kopie wird sofort für alle auf diesem vutuv gelöscht"
+      refute html =~ "holen ihn nicht wieder"
+
+      after_click =
+        view
+        |> element(~s([data-external-post="#{own.id}"] [phx-click="report-external-post"]))
+        |> render_click()
+
+      assert after_click =~ "Jede Kopie auf diesem vutuv ist weg."
+      refute after_click =~ "kommt nicht wieder"
+    end
+
+    # And a relayed card promises only itself, because that is all it may take:
+    # a sentence saying "jede Kopie" over a report that leaves the copy beside
+    # it standing is this issue's own defect written the other way round.
+    test "a relayed copy promises only itself", %{view: view, html: html, relayed: relayed} do
+      assert html =~
+               "Diese Kopie verschwindet sofort für alle auf diesem vutuv. Kopien von anderen Servern bleiben stehen."
+
+      after_click =
+        view
+        |> element(~s([data-external-post="#{relayed.id}"] [phx-click="report-external-post"]))
+        |> render_click()
+
+      assert after_click =~ "Diese Kopie ist für alle auf diesem vutuv weg."
     end
   end
 end

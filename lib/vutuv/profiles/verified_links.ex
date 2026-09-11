@@ -25,9 +25,15 @@ defmodule Vutuv.Profiles.VerifiedLinks do
 
   Comparison follows the "recognising one of our own URLs" rule: parse with
   `URI.parse/1`, never a string prefix. Hosts compare case-insensitively with
-  a leading `www.` stripped on both sides (the same reading
-  `Vutuv.Fediverse.local_host?/1` uses — serving a site at both the apex and
-  its `www.` alias is the oldest convention on the web). `http` and `https`
+  **one** leading `www.` stripped on both sides — serving a site at both the
+  apex and its `www.` alias is the oldest convention on the web. That is
+  deliberately *not* `Vutuv.Fediverse.strip_www/1`, which folds every leading
+  label: this decides what a member's proof **covers**, and a proof of
+  `example.com` covering `www.www.example.com` would hand a subdomain somebody
+  else may hold (a dangling CNAME, an old CDN target) a verification mark it
+  never earned. The published fold is for "are these two spellings one site";
+  this one is an authority, so it stays as narrow as the convention it serves.
+  `http` and `https`
   are the same site, a trailing slash is not a different page, and the query
   and the fragment are ignored: a reader who pastes a link carrying
   `?utm_source=` is naming the same page. The **path** keeps its case, because

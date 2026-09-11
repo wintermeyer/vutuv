@@ -85,6 +85,19 @@ defmodule Vutuv.TagFollowSourcesTest do
       assert Tags.tag_follow_sources(follow) == ["vutuv", "mastodon.social"]
     end
 
+    # Folding one label let the fold itself be walked around: `www.www.host`
+    # came out as `www.host`, which is a subdomain somebody other than the
+    # author may hold, and this is the host we then poll and store rows from
+    # (PR #2176). Every leading `www.` goes, so no source can carry one.
+    test "folds every leading www., so the fold cannot be walked around" do
+      follow = member_follow(insert(:tag))
+
+      assert {:ok, %TagFollowSource{source: "mastodon.social"}} =
+               Tags.add_tag_follow_source(follow, "www.www.mastodon.social")
+
+      assert Tags.tag_follow_sources(follow) == ["vutuv", "mastodon.social"]
+    end
+
     test "every spelling of this installation's own address is the local source" do
       follow = member_follow(insert(:tag))
       # Taken from the endpoint, not written out: the rule under test is
@@ -93,7 +106,13 @@ defmodule Vutuv.TagFollowSourcesTest do
       # because it is us too, and it is the spelling a hardcoded test misses.
       host = VutuvWeb.Endpoint.host()
 
-      for ours <- [host, "www." <> host, "https://#{host}/tags/elixir", Fediverse.tag_host()] do
+      for ours <- [
+            host,
+            "www." <> host,
+            "www.www." <> host,
+            "https://#{host}/tags/elixir",
+            Fediverse.tag_host()
+          ] do
         assert {:ok, %TagFollowSource{source: "vutuv"}} = Tags.add_tag_follow_source(follow, ours)
       end
 

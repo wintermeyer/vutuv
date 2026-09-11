@@ -31,6 +31,7 @@ defmodule Vutuv.Tags.ExternalPost do
 
   import Vutuv.ChangesetHelpers, only: [scrub_nul: 1]
 
+  alias Vutuv.Fediverse
   alias Vutuv.Fediverse.BlockedInstance
   alias Vutuv.Fediverse.Handle
 
@@ -159,8 +160,180 @@ defmodule Vutuv.Tags.ExternalPost do
   else), so this is the only address there is. The remote twin of
   `Vutuv.Posts.path/1`, and what `Vutuv.Fediverse.subject_origin/1` answers for
   this kind.
+
+  What a card links to, and never the test for "is this the same post" —
+  `origin_key/1` is that.
   """
   def origin(%__MODULE__{url: url}), do: url
+
+  @doc """
+  What makes two stored rows copies of **one** original: the normalised address
+  of the post, **and the server its author lives on** (issue #2164).
+
+  The rows are keyed on tag, server and remote id, so the same status read off
+  five servers under two tags is ten rows with nothing in that key to relate
+  them. This is what relates them — and it is only ever a **description**, never
+  a permission. Both halves are written by whichever server we polled (`url` is
+  `status["url"]` verbatim, `author_host` comes out of `status["account"]`), so
+  any host a member names as a tag source can claim this key for somebody else's
+  post in one line of JSON. That is not hypothetical: keying the takedown on
+  this pair alone shipped as `7cdfd4dc7` and was reverted the same hour, because
+  a planted card carrying a victim's permalink *and* their author host blanked
+  every honest copy of that post and kept it out of the table for as long as the
+  tombstone lived. Who may act on a key is a second question with a second
+  answer — `home_copy?/1` here, and `Vutuv.Tags.ExternalPosts.reaches?/2` over
+  it.
+
+  **`author_acct` cannot serve as the author's half.** Mastodon writes it bare
+  (`pruef_de`) on the author's own server and qualified
+  (`pruef_de@mastodon.social`) everywhere else, so four of the measured
+  originals carry two spellings of one author; `author_host` is the uniform one.
+
+  The address is **normalised**, and each rule is a shape the same post really
+  arrived under. A **Bridgy Fed** redirect wrapper is not a second original: one
+  Bluesky post is served as `bsky.brid.gy/r/<address>` and `fed.brid.gy/r/<address>`,
+  and both stood here, same author and same second, with nothing relating them.
+  A trailing slash or a fragment is the same address said differently, which the
+  ingest gate has to see through or a reported post walks back in under a variant
+  spelling. And the host follows the rule the rest of this codebase already
+  applies to a foreign host — `Vutuv.Fediverse.BlockedInstance.normalize_host/1`
+  for the case and the trailing dot, `Vutuv.Fediverse.strip_www/1` for the fold
+  that module publishes so nobody keeps their own copy of it. Folding `www.`
+  here is safe precisely because this is a description: `home_copy?/1`, which
+  decides who may *act*, deliberately does not fold.
+
+  **The query stays on a plain address**, which is why neither
+  `Vutuv.WebVerification.normalize_url/1` nor
+  `Vutuv.Profiles.VerifiedLinks.normalize/1` can serve here: both drop it, and on
+  software that names a post in its query string two different posts would key
+  alike — this key decides whose words get blanked, so it errs towards telling
+  two posts apart. On a **wrapper** what follows the `?` belongs to the wrapper
+  rather than to the post (`URI.parse/1` stops the path at it), so it goes with
+  the wrapper, and two wrapped addresses differing only in a query would key
+  alike. That is one more reason the unwrap is pinned to the single `/r/` shape
+  measured on real rows rather than read out of any path.
+
+  An address that will not parse is **no key at all** rather than a raise. No
+  persisted row can reach that clause — `url` is `null: false` and required by
+  the changeset every row passes through — but this is asked of every row on the
+  way in (`reject_reported/1`), where a raise takes the whole store batch with
+  it, and a predicate that decides whose words get blanked is the wrong place to
+  find out that the guarantee moved.
+  """
+  def origin_key(%{url: url, author_host: host}) when is_binary(url),
+    do: {normalize_origin(url), host}
+
+  def origin_key(_unusable), do: nil
+
+  @doc """
+  Whether this row is the post as **its own server** handed it over: the server
+  we asked, the host in the post's address and the host the author lives on are
+  one and the same (issue #2164).
+
+  Everything in a row is a stranger's word except one thing — *which* stranger.
+  We chose the host, resolved it and asked it ourselves, so `source` is the one
+  field no answer can forge. A row where those three agree is therefore the only
+  one that says something we can check: this server served a post of its own, at
+  an address on itself, by an author living on it. Every other row — an honest
+  relay of somebody else's status, or a card a hostile host invented — is one
+  server's unverified claim about another server's member, and the two are
+  **byte-identical** in this table. That is why only this one may reach copies it
+  did not file itself (`Vutuv.Tags.ExternalPosts.reaches?/2`).
+
+  The three are compared as `Vutuv.Fediverse.BlockedInstance.normalize_host/1`
+  writes a foreign host — the case and the trailing dot — and **the `www.` fold
+  stops at the door**. That is the one difference from `origin_key/1` above, and
+  it is the whole of it: a site served at both its apex and its alias is the
+  oldest convention on the web, so folding is right when the question is "are
+  these two spellings of one post", and wrong when it is "may this server speak
+  for that author". `www.<host>` is a *subdomain*: a dangling CNAME, an old CDN
+  target or a plain subdomain takeover hands it to somebody who does not hold
+  the apex, and the mirror image needs no takeover at all — an instance whose
+  handle domain is `www.X` would be spoken for by whoever holds the bare `X`.
+  Folding here let exactly that through, found on PR #2176 before it shipped;
+  `normalize_source/1` folds *every* leading `www.` since, so the honest cost is
+  a site at both spellings taking only its own rows down.
+
+  It fails **closed**: a host that will not normalise, and a row from before
+  #2127 with no author host at all, is not the post's own copy.
+
+  The address is read as the server wrote it, **before** `origin_key/1` unwraps
+  a redirect wrapper: a bridge that serves a post at `bsky.brid.gy/r/<address>`
+  is serving it at its own address, and the wrapped one is somebody else's by
+  construction.
+  """
+  def home_copy?(%{source: source, url: url, author_host: host}) do
+    case authority_host(host) do
+      nil -> false
+      author -> authority_host(source) == author and authority_host(address_host(url)) == author
+    end
+  end
+
+  def home_copy?(_unusable), do: false
+
+  # A host as this test is allowed to read it, and the name is the point: the
+  # difference from `canonical_host/1` below is a **fold**, and a difference
+  # spelled as an absence is one a tidy-up merges back by accident. Whoever
+  # wants one helper for both has to delete a name that says why there are two.
+  defp authority_host(host), do: BlockedInstance.normalize_host(host)
+
+  defp address_host(url) when is_binary(url), do: URI.parse(url).host
+  defp address_host(_url), do: nil
+
+  defp normalize_origin(url) when is_binary(url),
+    do: url |> URI.parse() |> unwrap_redirect() |> canonical_address()
+
+  # `…/r/https://bsky.app/…`, and the same address percent-encoded — the wrapped
+  # address is the post's own either way. Pinned to that **one prefix**, to the
+  # **path**, and to the **start** of it: a query parameter is where a server
+  # puts somebody else's address for its own reasons, and any path ending in an
+  # address would let one tenant of a host that hands out paths reproduce a
+  # neighbour's key (both found on PR #2176). The `\A` is the third of those and
+  # not decoration — `/r/` is a path a tenant may simply ask for, so without it
+  # `…/@mallory/r/<neighbour's address>` keys as the neighbour's and naming the
+  # wrapper shape buys nothing over reading an address out of any path at all.
+  # `/r/` is Bridgy Fed's shape and the only wrapper measured on real rows — 12
+  # of 9,945 stored addresses embed an absolute one, every one of them behind a
+  # root `/r/` on `fed.brid.gy`. Recurses, since each step is strictly shorter
+  # than the last.
+  defp unwrap_redirect(%URI{path: path} = uri) when is_binary(path) do
+    case Regex.run(~r{\A/r/(https?://.+)\z}, decoded(path)) do
+      [_whole, embedded] -> embedded |> URI.parse() |> unwrap_redirect()
+      nil -> uri
+    end
+  end
+
+  defp unwrap_redirect(uri), do: uri
+
+  defp decoded(path) do
+    URI.decode(path)
+  rescue
+    ArgumentError -> path
+  end
+
+  # `URI.to_string/1` puts it back together, so the default port, the userinfo
+  # and the query keep whatever rules it applies rather than a second set here.
+  # The path keeps its case, where two spellings really are two things.
+  defp canonical_address(%URI{} = uri) do
+    URI.to_string(%URI{
+      uri
+      | host: canonical_host(uri.host),
+        fragment: nil,
+        path: uri.path |> to_string() |> String.trim_trailing("/")
+    })
+  end
+
+  # The key's half of the host rule, and the only place the `www.` fold belongs:
+  # here it says "these two spellings are one post", where `home_copy?/1` would
+  # be saying "this server may speak for that author". Anything that will not
+  # normalise is kept as written, so two unparseable addresses still tell
+  # themselves apart.
+  defp canonical_host(host) do
+    case BlockedInstance.normalize_host(host) do
+      nil -> host
+      normalized -> Fediverse.strip_www(normalized)
+    end
+  end
 
   defp local_name(acct) when is_binary(acct), do: acct |> String.split("@") |> hd()
   defp local_name(_acct), do: nil

@@ -15,6 +15,7 @@ defmodule Vutuv.Tags.ExternalPostsTest do
   import Vutuv.ExternalTagHelpers
 
   alias Vutuv.Fediverse
+  alias Vutuv.Fediverse.NoteEvent
   alias Vutuv.Repo
   alias Vutuv.Tags
   alias Vutuv.Tags.ExternalFetch
@@ -55,6 +56,23 @@ defmodule Vutuv.Tags.ExternalPostsTest do
   # Age a pair's schedule rather than sleeping until it comes due.
   defp overdue!(tag, at),
     do: tag |> fetch_row() |> Ecto.Changeset.change(next_fetch_at: at) |> Repo.update!()
+
+  # The address of one original, and one stored copy of it. Both given
+  # explicitly: the helper's default url is the same string for every fixture,
+  # and a test about matching on that column must not be able to match by
+  # accident.
+  defp original(path), do: "https://#{@source}/@ada/#{path}"
+
+  defp copy(tag, url, source),
+    do: external_post(tag, url: url, source: source, author_host: @source)
+
+  # The two keys asked directly, with no row in the table: the address plus the
+  # author it claims, and the three hosts the authority test compares. Above the
+  # describes they belong to, because a `defp` inside one compiles to module
+  # scope anyway and only looks scoped.
+  defp key(url, host \\ @source), do: ExternalPost.origin_key(%{url: url, author_host: host})
+
+  defp row(attrs), do: Enum.into(attrs, %{source: @source, author_host: @source})
 
   describe "due_sources/1" do
     test "answers a wanted pair that has never been fetched" do
@@ -390,6 +408,461 @@ defmodule Vutuv.Tags.ExternalPostsTest do
 
       assert %{stored: 1} = ExternalPosts.fetch_due()
       assert Repo.aggregate(ExternalPost, :count) == 2
+    end
+  end
+
+  # What a member means by Report is "this post, off this site", and what
+  # relates the copies is `Vutuv.Tags.ExternalPost.origin/1`. Measured on a copy
+  # of production: the one post somebody really did report stood as **six** rows
+  # of which two were marked (issue #2164).
+  describe "a report" do
+    setup do
+      {:ok, reporter: insert(:activated_user)}
+    end
+
+    # The attack this change was reverted for, and the reason it is back with a
+    # guard (`7cdfd4dc7`, reverted as `8b2c1a862`). Both halves of the key are
+    # written by the polled server and a member may name any host as a tag
+    # source, so one line of JSON claims the victim's permalink **and** the
+    # victim's author host at once. The first version keyed the takedown on
+    # exactly that pair, so reporting the planted card blanked every honest copy
+    # of the post, the one from the author's own server included.
+    test "a planted claim on somebody else's address and author takes only itself down", %{
+      reporter: reporter
+    } do
+      tag = followed_tag()
+      url = original("4740")
+
+      home = copy(tag, url, @source)
+      relayed = copy(tag, url, @other_source)
+
+      planted =
+        external_post(tag,
+          url: url,
+          source: "impostor.example",
+          author_host: @source,
+          author_acct: "ada@#{@source}"
+        )
+
+      assert {:ok, :this_copy} = ExternalPosts.report(planted.id, reporter)
+      assert Repo.get!(ExternalPost, planted.id).reported_at
+
+      for id <- [home.id, relayed.id] do
+        row = Repo.get!(ExternalPost, id)
+        refute row.reported_at, "a planted claim on this address blanked an honest copy of it"
+        assert row.text == "Hello from over there"
+      end
+    end
+
+    # The same attack through the `www.` door (found on PR #2176). A member may
+    # not add `www.<host>` — `normalize_source/1` folds it away — but it folds
+    # **once**, so `www.www.victim` is stored and polled as `www.victim`. A card
+    # served from there claiming the victim's permalink and author host must not
+    # be the victim's own server, whatever the fold says elsewhere.
+    test "a mirror at the author's www. alias takes only itself down", %{reporter: reporter} do
+      tag = followed_tag()
+      url = original("4760")
+
+      home = copy(tag, url, @source)
+      relayed = copy(tag, url, @other_source)
+
+      mirror = copy(tag, url, "www.#{@source}")
+
+      assert {:ok, :this_copy} = ExternalPosts.report(mirror.id, reporter)
+      assert Repo.get!(ExternalPost, mirror.id).reported_at
+
+      for id <- [home.id, relayed.id] do
+        row = Repo.get!(ExternalPost, id)
+        refute row.reported_at, "a mirror at the author's alias blanked an honest copy"
+        assert row.text == "Hello from over there"
+      end
+    end
+
+    # The same forgery, played a move earlier: plant the tombstone before the
+    # post has ever arrived and the ingest gate refuses it for as long as the
+    # tombstone lives. That is a member keeping somebody else's post out of this
+    # installation altogether, which is why the gate asks the same question the
+    # takedown does.
+    test "a planted tombstone cannot keep the honest post out", %{reporter: reporter} do
+      tag = followed_tag()
+
+      planted =
+        external_post(tag,
+          url: original("s1"),
+          source: "impostor.example",
+          author_host: @source,
+          author_acct: "ada@#{@source}"
+        )
+
+      assert {:ok, :this_copy} = ExternalPosts.report(planted.id, reporter)
+
+      # The author's own server answers the tag we asked it for.
+      stub_tag_timeline([status(%{"id" => "s1", "url" => original("s1")})])
+      assert %{stored: 1} = ExternalPosts.fetch_due()
+
+      stored = Repo.get_by!(ExternalPost, source: @source, remote_id: "s1")
+      refute stored.reported_at
+      assert stored.text == "Hello from over there"
+    end
+
+    # What a server that is not the author's own may still take down: the rows
+    # **it** filed. A tag page and a feed hold one row per (tag, server), so the
+    # same relayed status under two followed tags is two cards, and the server's
+    # own word covers both of them.
+    test "a relayed copy takes that server's copies, and nobody else's", %{reporter: reporter} do
+      one = followed_tag()
+      two = followed_tag(@other_source)
+      url = original("4750")
+
+      clicked = copy(two, url, @other_source)
+      same_server = copy(one, url, @other_source)
+      home = copy(one, url, @source)
+      third_server = copy(one, url, "hachyderm.example")
+
+      assert {:ok, :this_copy} = ExternalPosts.report(clicked.id, reporter)
+
+      assert Repo.get!(ExternalPost, same_server.id).reported_at,
+             "the same server's copy under another tag kept standing"
+
+      refute Repo.get!(ExternalPost, home.id).reported_at
+      refute Repo.get!(ExternalPost, third_server.id).reported_at
+    end
+
+    test "takes every copy of the same original, across servers and across tags", %{
+      reporter: reporter
+    } do
+      one = followed_tag()
+      two = followed_tag(@other_source)
+      url = original("4711")
+
+      clicked = copy(one, url, @source)
+      other_server = copy(one, url, @other_source)
+      other_tag = copy(two, url, @source)
+      untouched = copy(one, original("4712"), @source)
+
+      assert {:ok, :every_copy} = ExternalPosts.report(clicked.id, reporter)
+
+      for id <- [clicked.id, other_server.id, other_tag.id] do
+        row = Repo.get!(ExternalPost, id)
+        assert row.reported_at, "a copy of the reported original kept standing"
+        assert row.text == ""
+        refute row.author_acct
+      end
+
+      standing = Repo.get!(ExternalPost, untouched.id)
+      refute standing.reported_at
+      assert standing.text == "Hello from over there"
+    end
+
+    # One server claiming another's permalink must not take down honest copies
+    # of somebody else's post — `ExternalPost.origin_key/1` says why the address
+    # alone cannot be the key.
+    test "a row claiming somebody else's address is not a copy of it", %{reporter: reporter} do
+      tag = followed_tag()
+      url = original("4720")
+
+      honest = external_post(tag, url: url, source: @source, author_host: @source)
+
+      planted =
+        external_post(tag,
+          url: url,
+          source: @other_source,
+          author_host: @other_source,
+          author_acct: "impostor@#{@other_source}"
+        )
+
+      assert {:ok, :this_copy} = ExternalPosts.report(planted.id, reporter)
+
+      standing = Repo.get!(ExternalPost, honest.id)
+      refute standing.reported_at, "a report reached a post by another author at the same address"
+      assert standing.text == "Hello from over there"
+
+      # And the honest author's post is still the one thing anybody may read.
+      assert Repo.all(from(p in ExternalPosts.showable_query(), select: p.id)) == [honest.id]
+    end
+
+    # A redirect wrapper is not a second original: Bridgy Fed serves one Bluesky
+    # post as both `bsky.brid.gy/r/<address>` and `fed.brid.gy/r/<address>`, and
+    # both stood here — same author, same second — with nothing relating them,
+    # which is this issue's own defect surviving for bridged posts. The bridge
+    # itself is the author's server here, and the wrapper is an address on it,
+    # so its own copy is the one that speaks for the pair.
+    test "a post behind two redirect wrappers is one original", %{reporter: reporter} do
+      tag = followed_tag()
+      bluesky = "https://bsky.app/profile/did:plc:abc/post/3mv2azzztuk2i"
+
+      clicked =
+        external_post(tag,
+          url: "https://bsky.brid.gy/r/#{bluesky}",
+          source: "bsky.brid.gy",
+          author_host: "bsky.brid.gy"
+        )
+
+      twin =
+        external_post(tag,
+          url: "https://fed.brid.gy/r/#{bluesky}",
+          source: @other_source,
+          author_host: "bsky.brid.gy"
+        )
+
+      assert {:ok, :every_copy} = ExternalPosts.report(clicked.id, reporter)
+
+      assert Repo.get!(ExternalPost, twin.id).reported_at,
+             "the same post under the other bridge alias kept standing"
+    end
+
+    # One act, one row in the operator's ledger: it answers "is this one troll
+    # or is this server the problem", and counting the copies we happened to
+    # hold would answer a question about our own cache instead.
+    test "writes one ledger row however many copies it took", %{reporter: reporter} do
+      tag = followed_tag()
+      url = original("4713")
+      clicked = copy(tag, url, @source)
+      copy(tag, url, @other_source)
+
+      assert {:ok, :every_copy} = ExternalPosts.report(clicked.id, reporter)
+
+      ledger = from(e in NoteEvent, where: e.action == "reported_post")
+      assert Repo.aggregate(ledger, :count) == 1
+    end
+
+    test "a later pull cannot write the words back into a copy it already holds", %{
+      reporter: reporter
+    } do
+      tag = followed_tag()
+      stub_tag_timeline([status(%{"id" => "s1", "url" => original("s1")})])
+      assert %{stored: 1} = ExternalPosts.fetch_due()
+
+      post = Repo.one!(ExternalPost)
+      assert {:ok, :every_copy} = ExternalPosts.report(post.id, reporter)
+
+      overdue!(tag, DateTime.utc_now(:second))
+      assert %{stored: 0} = ExternalPosts.fetch_due()
+
+      row = Repo.get!(ExternalPost, post.id)
+      assert row.reported_at
+      assert row.text == ""
+    end
+
+    # The tombstone only stops the row it sits on from being rewritten. A tag
+    # nobody followed at the time of the report is a **new** (tag, server) pair,
+    # so the same status arrives as a fresh row with its words intact — the
+    # promise broken with one extra step. The gate is on the way in.
+    test "a copy arriving under a tag followed later is refused", %{reporter: reporter} do
+      _one = followed_tag()
+      stub_tag_timeline([status(%{"id" => "s1", "url" => original("s1")})])
+      assert %{stored: 1} = ExternalPosts.fetch_due()
+
+      assert {:ok, :every_copy} = ExternalPosts.report(Repo.one!(ExternalPost).id, reporter)
+
+      _two = followed_tag()
+      assert %{stored: 0} = ExternalPosts.fetch_due()
+
+      assert Repo.aggregate(ExternalPost, :count) == 1
+      assert Repo.one!(ExternalPost).text == ""
+    end
+
+    # The gate compares the key, not the column. Comparing the two strings let
+    # the same post back in the moment a server spelled its address with one
+    # character more.
+    test "a variant spelling of a reported address is refused too", %{reporter: reporter} do
+      tag = followed_tag()
+      stub_tag_timeline([status(%{"id" => "s1", "url" => original("s1")})])
+      assert %{stored: 1} = ExternalPosts.fetch_due()
+
+      assert {:ok, :every_copy} = ExternalPosts.report(Repo.one!(ExternalPost).id, reporter)
+
+      # The same status, one trailing slash and a fragment later.
+      stub_tag_timeline([status(%{"id" => "s2", "url" => original("s1") <> "/#comments"})])
+      overdue!(tag, DateTime.utc_now(:second))
+      assert %{stored: 0} = ExternalPosts.fetch_due()
+
+      assert Repo.aggregate(ExternalPost, :count) == 1
+    end
+
+    # A row the release before #2127 wrote carries no author host, so it has no
+    # key — and nothing can be a copy of it, itself included. Without a clause
+    # of its own the report blanked nothing at all and still answered `:ok`.
+    test "a row from before the author host was stored takes itself down", %{reporter: reporter} do
+      tag = followed_tag()
+      post = external_post(tag, url: original("4730"), source: @source, author_host: nil)
+
+      assert {:ok, :this_copy} = ExternalPosts.report(post.id, reporter)
+
+      row = Repo.get!(ExternalPost, post.id)
+      assert row.reported_at, "the report wrote a ledger entry and took nothing down"
+      assert row.text == ""
+    end
+
+    test "the tombstone outlives both caps", %{reporter: reporter} do
+      put_config(:external_tag_post_caps, per_tag: 1, total: 1)
+      tag = followed_tag()
+
+      reported =
+        external_post(tag,
+          source: @source,
+          author_host: @source,
+          url: original("4715"),
+          published_at: ~U[2026-08-01 10:00:00Z]
+        )
+
+      assert {:ok, :every_copy} = ExternalPosts.report(reported.id, reporter)
+
+      # Newer rows arrive and both trims run over the table.
+      stub_tag_timeline([status(%{"id" => "s9", "created_at" => "2026-08-20T10:00:00.000Z"})])
+      assert %{stored: 1} = ExternalPosts.fetch_due()
+      ExternalPosts.enforce_ceiling()
+
+      assert Repo.get(ExternalPost, reported.id)
+    end
+  end
+
+  # The key itself, asked directly: each rule below is a spelling the same post
+  # really arrived under, and every one of them decides whose words a report
+  # blanks.
+  describe "the origin key" do
+    test "the author's server is half of it" do
+      assert key("https://#{@source}/@ada/1", @source) !=
+               key("https://#{@source}/@ada/1", "x.test")
+    end
+
+    test "a trailing slash, a fragment and the host's case are the same address" do
+      canonical = key("https://#{@source}/@ada/1")
+
+      assert key("https://#{@source}/@ada/1/") == canonical
+      assert key("https://#{@source}/@ada/1#comments") == canonical
+      assert key("https://#{String.upcase(@source)}/@ada/1") == canonical
+      assert key("https://www.#{@source}/@ada/1") == canonical
+      assert key("https://#{@source}./@ada/1") == canonical
+    end
+
+    test "the path keeps its case, where two spellings are two posts" do
+      refute key("https://#{@source}/@ada/AbC") == key("https://#{@source}/@ada/abc")
+    end
+
+    test "the query stays, where a post may be named in it" do
+      refute key("https://#{@source}/notes?id=1") == key("https://#{@source}/notes?id=2")
+    end
+
+    test "a redirect wrapper is the address it wraps, encoded or not" do
+      wrapped = "https://bsky.app/profile/did:plc:abc/post/3mv2azzztuk2i"
+
+      assert key("https://bsky.brid.gy/r/#{wrapped}") == key(wrapped)
+      assert key("https://fed.brid.gy/r/#{wrapped}") == key(wrapped)
+      assert key("https://fed.brid.gy/r/#{URI.encode_www_form(wrapped)}") == key(wrapped)
+    end
+
+    # A query parameter is where a server puts somebody else's address for its
+    # own reasons, so unwrapping one would relate two unrelated posts.
+    test "an address in the query is not a wrapper" do
+      other = "https://elsewhere.test/@bob/9"
+
+      refute key("https://#{@source}/read?url=#{other}") == key(other)
+    end
+
+    # And neither is an address at the end of any other path: one tenant of a
+    # host that lets its members pick their own paths could otherwise write a
+    # page whose address ends in a neighbour's and key alike (PR #2176). The
+    # second case is the one that matters, because `/r/` is a path a tenant may
+    # simply ask for: the prefix has to sit at the **start** of the path, or
+    # naming the wrapper shape buys nothing over reading an address out of any
+    # path at all.
+    test "an address at the end of some other path is not a wrapper" do
+      other = "https://elsewhere.test/@bob/9"
+
+      refute key("https://#{@source}/@mallory/read/#{other}") == key(other)
+      refute key("https://#{@source}/@mallory/r/#{other}") == key(other)
+    end
+
+    # `reject_reported/1` asks this of every row on its way in, so a row whose
+    # address is unusable has to answer rather than raise: a raise there aborts
+    # the whole store batch, which is the shape #1316 already cost us once.
+    test "an unusable address is no key at all" do
+      refute ExternalPost.origin_key(%{url: nil, author_host: @source})
+      refute ExternalPost.origin_key(%{url: 42, author_host: @source})
+    end
+
+    # Nothing can be a copy of a row with no usable address, itself included —
+    # the fail-closed twin of the test above, since `nil == nil` would otherwise
+    # make two such rows copies of each other.
+    test "a row with no usable address reaches nothing, not even itself" do
+      nothing = %{id: "a", url: nil, author_host: @source, source: @source}
+
+      refute ExternalPosts.reaches?(nothing, nothing)
+    end
+  end
+
+  # Which rows may speak for a copy they did not file. The one field an answer
+  # cannot write is *which* server answered, so the test is that the server we
+  # asked, the address and the author all name it.
+  describe "the post's own copy" do
+    test "the server we asked, the address and the author naming one server" do
+      assert ExternalPost.home_copy?(row(url: "https://#{@source}/@ada/1"))
+    end
+
+    test "a relayed post is somebody else's word about it" do
+      refute ExternalPost.home_copy?(row(url: "https://#{@source}/@ada/1", source: @other_source))
+    end
+
+    # The forgery the revert was for: the address and the author agree with each
+    # other and with nothing else, because one server wrote both of them.
+    test "an address and an author a third server claims together" do
+      refute ExternalPost.home_copy?(
+               row(url: "https://#{@source}/@ada/1", source: "impostor.example")
+             )
+    end
+
+    test "a post at an address on a server other than the author's" do
+      refute ExternalPost.home_copy?(row(url: "https://elsewhere.test/@ada/1"))
+    end
+
+    # The case and the trailing dot are spellings of one name, and both are
+    # values `TagFollowSource.normalize_source/1` really does write.
+    test "the host's case and its trailing dot are the same server" do
+      assert ExternalPost.home_copy?(
+               row(url: "https://#{String.upcase(@source)}/@ada/1", source: "#{@source}.")
+             )
+    end
+
+    # **The `www.` fold is a description, never an authority.** A site served at
+    # both its apex and its alias is the oldest convention on the web, which is
+    # why `origin_key/1` folds — but `www.<host>` is a *subdomain*, and a
+    # dangling CNAME or an abandoned CDN target hands it to somebody who does not
+    # hold the apex. Folding here let a mirror at the author's alias speak for
+    # the author (found on PR #2176, before it shipped).
+    test "a mirror at the author's www. alias is not the author's own server" do
+      refute ExternalPost.home_copy?(
+               row(url: "https://#{@source}/@ada/1", source: "www.#{@source}")
+             )
+    end
+
+    # The same door from the other side, and this one needs no takeover at all:
+    # an instance whose handle domain is `www.X` would otherwise be spoken for by
+    # whoever holds the bare apex `X`.
+    test "the bare apex is not the author's server when the author lives on its alias" do
+      refute ExternalPost.home_copy?(%{
+               url: "https://www.#{@source}/@ada/1",
+               source: @source,
+               author_host: "www.#{@source}"
+             })
+    end
+
+    # The wrapper is an address on the bridge, and what it wraps is somebody
+    # else's by construction — so the raw address is what has to agree.
+    test "a bridge's own wrapper address is its own" do
+      assert ExternalPost.home_copy?(
+               row(
+                 url: "https://bsky.brid.gy/r/https://bsky.app/profile/x/post/1",
+                 source: "bsky.brid.gy",
+                 author_host: "bsky.brid.gy"
+               )
+             )
+    end
+
+    test "fails closed on a row with no author host and on an unusable address" do
+      refute ExternalPost.home_copy?(row(url: "https://#{@source}/@ada/1", author_host: nil))
+      refute ExternalPost.home_copy?(row(url: "not an address"))
+      refute ExternalPost.home_copy?(%{})
     end
   end
 end

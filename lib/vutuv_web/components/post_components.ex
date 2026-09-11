@@ -60,6 +60,7 @@ defmodule VutuvWeb.PostComponents do
   alias Vutuv.ReviewCover
   alias Vutuv.Tags
   alias Vutuv.Tags.ExternalPost
+  alias Vutuv.Tags.ExternalPosts
   alias Vutuv.Translations.Translation
   alias VutuvWeb.FediverseComponents
   alias VutuvWeb.Live.PostTranslations
@@ -3589,18 +3590,23 @@ defmodule VutuvWeb.PostComponents do
                 >
                   {gettext("View the original")}
                 </:item>
-                <%!-- The same lever the cached-post card offers, and the same
-                deal: our copy goes for everybody here at once, and the post
-                itself stands untouched where its author put it. --%>
+                <%!-- The same lever the cached-post card offers, and nearly the
+                same deal: what goes is every copy of the original this report
+                may speak for, and the post itself stands untouched where its
+                author put it. Its own two sentences for exactly that reason
+                (issue #2164) — the cached-post card's promises one copy, which
+                is all that one ever has, and here it depends on the row: only a
+                card the author's own server served takes the copies other
+                servers filed with it (`ExternalPost.home_copy?/1`). Both
+                promise the act and not the future: a tombstone keeps the post
+                out of the next pull, but only until `prune/0` drops it with the
+                last follow of that pair, so "we will not fetch it again" would
+                be the third spelling of this issue's own overclaim. --%>
                 <:item
                   click="report-external-post"
                   value={@post.id}
                   danger
-                  confirm={
-                    gettext(
-                      "Report this post as not appropriate? Our copy is deleted for everyone on this vutuv right away."
-                    )
-                  }
+                  confirm={report_confirm(@post)}
                 >
                   {gettext("Report")}
                 </:item>
@@ -3637,6 +3643,24 @@ defmodule VutuvWeb.PostComponents do
       </div>
     </article>
     """
+  end
+
+  # Which of the two promises this card is entitled to make. The scope is the
+  # context's answer, the same one the takedown acts on and the flash reports,
+  # so the dialog cannot promise something the report will not do — that
+  # mismatch, in the other direction, is the whole of issue #2164.
+  defp report_confirm(post) do
+    case ExternalPosts.report_scope(post) do
+      :every_copy ->
+        gettext(
+          "Report this post as not appropriate? Every copy of it disappears right away, for everyone on this vutuv."
+        )
+
+      :this_copy ->
+        gettext(
+          "Report this post as not appropriate? This copy disappears right away, for everyone on this vutuv. Copies other servers sent us stay."
+        )
+    end
   end
 
   attr(:remote_post, :map, required: true, doc: "a Vutuv.Fediverse.RemotePost, quotes preloaded")

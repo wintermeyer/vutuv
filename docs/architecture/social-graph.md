@@ -267,6 +267,45 @@ takedown is filed in the same content-free ledger a reported cached post is
 (`Vutuv.Fediverse.log_reported_post/1`), so the operator's "one troll or this
 whole server" question counts these alongside the rest.
 
+**How far it reaches is two questions, not one** (issue #2164). One status read
+off five servers under two tags is ten rows, and what relates them is
+`Vutuv.Tags.ExternalPost.origin_key/1`: the post's own normalised address plus
+the server its author lives on. That key only *describes* the copies — both
+halves are written by whichever server we polled, and a member may name any host
+as a tag source, so a card a hostile host invents can claim any address and any
+author in one line of JSON. Who may act on the key is `home_copy?/1`: the row we
+fetched **from the server the post and its author both live on**, the one claim
+here that something outside itself backs, since we chose that host and asked it
+ourselves. So reporting the author's own copy takes every copy of the original,
+and reporting a relayed one takes the rows that same server filed — its own
+words under the reader's other tags — and leaves everybody else's standing.
+`Vutuv.Tags.ExternalPosts.reaches?/2` is that rule, and `reject_reported/1` asks
+it again on the way in, so a tombstone can only refuse what its own report could
+have blanked and a planted one cannot keep an honest post out of the table.
+`report/2` answers `{:ok, :every_copy}` or `{:ok, :this_copy}` because the
+member has to be told which of the two happened; the confirm dialog and the
+flash are two sentences for that reason. What the authority half costs is that
+most reports now take only the clicked row — every one of those was fetched
+from a server other than the author's, and so is a row a stranger could equally
+have invented; `reaches?/2`'s own doc carries the counts, measured over a
+production copy, and says to re-measure rather than trust them, because this
+table rolls over within hours. The first attempt at this keyed the takedown on
+the description alone, shipped as `7cdfd4dc7` and was reverted as `8b2c1a862`
+within the hour.
+
+**The `www.` fold belongs to the description and to nothing else.** `www.<host>`
+is a subdomain — a dangling CNAME or an old CDN target hands it to somebody who
+does not hold the apex — so `origin_key/1` folds it (two spellings of one post)
+and `home_copy?/1` does not (one server speaking for another's author). Folding
+in both places let a member have this installation poll a mirror at the
+author's alias and speak for them, and it cost nothing to close: the same rows
+of a production copy are the author's own either way.
+`Vutuv.Fediverse.strip_www/1` now
+folds **every** leading label rather than one, because folding once could be
+walked around by writing `www.www.<host>`, which
+`Vutuv.Tags.TagFollowSource.normalize_source/1` would then store and poll as
+`www.<host>`.
+
 The **Mastodon API drops these rows** rather than rendering them
 (`Vutuv.MastodonApi.Presenter.statuses/2`): every field of a `Status` that
 matters hangs off an `Account` object, and inventing an id for an author we hold
