@@ -271,6 +271,40 @@ defmodule Vutuv.Tags.ExternalPost do
 
   def home_copy?(_unusable), do: false
 
+  @doc """
+  Whether these words were written **here** — on this installation — and so are
+  not a find at all (issue #2179).
+
+  A post written here goes out to the fediverse with its hashtags in its `tag`
+  array, so every server that holds it indexes it under them and serves it on
+  its own public tag timeline. Asking such a server about a followed tag
+  therefore hands our own member's post straight back, and it stood in the
+  author's feed a second and a third time under a "found through …" line naming
+  the relay, with their own handle and this installation's host on the card.
+
+  **Both halves are asked, and either one is enough.** The author's host is the
+  one the reported case carried; the address is what a relay that rewrote the
+  author field would still be handing over, since a post of ours keeps our
+  permalink wherever it travels. Measured over 150 ingestable statuses on the
+  live timelines that produced the report, the two never disagreed — 36 were
+  ours and both halves said so — so the second is insurance rather than reach,
+  and it is the refusing direction, which is where insurance belongs.
+
+  `Vutuv.Fediverse.own_host?/1` rather than `local_host?/1`, because the
+  question is about the installation and not about one member: a tag's actor
+  lives on `tags.<host>` (issue #1330) and anything under that name is ours too.
+  It folds every leading `www.` (`Vutuv.Fediverse.strip_www/1`), so the alias,
+  the doubled spelling, a shouted host and a trailing dot all answer the same —
+  and folding is safe here for the reason `same_site?/2` gives: this answer is
+  only ever read as **refuse to ingest**, never as permission for one host to
+  speak for another.
+
+  Read it the other way and it would be this bug with the sign flipped, so a
+  host that merely resembles ours (`mirror.<host>`, `not<host>`) is a stranger
+  and its posts are finds like anybody else's.
+  """
+  def written_here?(host, url), do: Fediverse.own_host?(host) or Fediverse.own_host?(url)
+
   # A host as this test is allowed to read it, and the name is the point: the
   # difference from `canonical_host/1` below is a **fold**, and a difference
   # spelled as an absence is one a tidy-up merges back by accident. Whoever

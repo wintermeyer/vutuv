@@ -314,11 +314,19 @@ defmodule Vutuv.Tags.ExternalTagClient do
     # degraded path, and it fails **closed**: `MapSet.member?(blocked, nil)` is
     # simply false, so without this guard an unparseable author would walk past
     # the operator's blocklist rather than be refused by it.
+    #
+    # `written_here?/1` is the second refusal that reads a host rather than the
+    # server we asked (issue #2179): our own posts travel out with their
+    # hashtags, so the servers a followed tag names carry them and hand them
+    # back as finds. It sits after `permalink/1` because it asks about the
+    # address as well as the author, and a status with no address is refused on
+    # the next line anyway.
     with true <- is_binary(host),
          true <- showable?(status),
          false <- MapSet.member?(blocked, host),
          text when text != "" <- text_of(status),
          url when is_binary(url) <- permalink(status),
+         false <- ExternalPost.written_here?(host, url),
          id when is_binary(id) <- remote_id(status),
          language when is_nil(language) or is_binary(language) <- language(status),
          {:ok, published_at} <- published_at(status, now) do

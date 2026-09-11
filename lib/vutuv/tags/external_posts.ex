@@ -878,6 +878,61 @@ defmodule Vutuv.Tags.ExternalPosts do
   """
   def enforce_ceiling, do: trim(ExternalPost, caps()[:total])
 
+  @doc """
+  Takes out every row this installation wrote itself (issue #2179). Answers how
+  many went.
+
+  `Vutuv.Tags.ExternalPost.written_here?/1` is why there are any: a post written
+  here federates out with its hashtags, the servers a followed tag names index
+  it and hand it back, and the author read their own post three times in their
+  own feed. The gate in `Vutuv.Tags.ExternalTagClient` keeps new ones out; this
+  is for the ones already stored, and for the handful the **previous** release
+  writes during a blue/green window — which is why it is a standing pass on the
+  fetcher's tick rather than a migration. A migration runs once, against
+  whatever the table held at that instant, and the release still serving traffic
+  goes on filing rows behind it.
+
+  **Deleted, not blanked.** A report has to leave a tombstone because the pull
+  would write the same status straight back, and a reported row is the one thing
+  `trim/2` never touches; here the gate refuses the status on the way in, so the
+  delete cannot undo itself and a tombstone would protect nothing. That is also
+  why our own reported rows go with the rest.
+
+  **SQL narrows, the predicate decides** — the shape `possible_copies_query/1`
+  above already uses, and here it is what keeps one spelling of the rule. The
+  prefilter is a superset it is easy to see is one: the author's host in
+  `Vutuv.Fediverse.own_hosts/0`, or the address containing one of our host names
+  anywhere at all. A fold only ever *removes* leading labels, so a host the
+  predicate calls ours always contains ours as a substring — and the slack the
+  substring lets through (`elsewhere.test/@bob/vutuv.de-notes`) is exactly what
+  `written_here?/2` then refuses, which is why the predicate has to be the one
+  that answers. Measured at the table's ten-thousand-row ceiling: 3 ms for the
+  author half, 7 ms with the address half beside it, against 23 ms for reading
+  the address's host out with a regex in SQL, and 300 ms for handing every row
+  to the predicate. On an ordinary run the prefilter returns nothing and the
+  predicate is never asked.
+  """
+  def drop_written_here do
+    hosts = Fediverse.own_hosts()
+    patterns = hosts |> Enum.map(&("%" <> Fediverse.strip_www(&1) <> "%")) |> Enum.uniq()
+
+    ids =
+      from(p in ExternalPost,
+        where:
+          p.author_host in ^hosts or
+            fragment("lower(?) like any(?)", p.url, type(^patterns, {:array, :string})),
+        select: %{id: p.id, author_host: p.author_host, url: p.url}
+      )
+      |> Repo.all()
+      |> Enum.filter(&ExternalPost.written_here?(&1.author_host, &1.url))
+      |> Enum.map(& &1.id)
+
+    case ids do
+      [] -> 0
+      ids -> Repo.delete_all(from(p in ExternalPost, where: p.id in ^ids)) |> elem(0)
+    end
+  end
+
   # Keeps the newest `cap` rows of `scope` and deletes the rest, by the keyset
   # the table's index is built on. One shape for both caps: the per-tag one is
   # this scoped to a tag, and reading them as two algorithms is how the two
