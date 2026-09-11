@@ -19,11 +19,14 @@ defmodule Vutuv.Posts.PendingTest do
 
   import Vutuv.WebPushHelpers, only: [put_config: 2]
 
+  import Vutuv.AttachmentHelpers, only: [page!: 2, stalled_scan!: 2, stall_after_seconds: 0]
+
   alias Ecto.Adapters.SQL.Sandbox
   alias Vutuv.AttachmentFixtures, as: Fixtures
   alias Vutuv.Attachments
   alias Vutuv.Attachments.Attachment
   alias Vutuv.Images.Image
+  alias Vutuv.Moderation.ImageScan
   alias Vutuv.Posts
   alias Vutuv.Posts.Pending
   alias Vutuv.Posts.PendingPost
@@ -31,7 +34,6 @@ defmodule Vutuv.Posts.PendingTest do
   alias Vutuv.Posts.PostVideo
   alias Vutuv.Posts.Publisher
   alias Vutuv.Repo
-  alias Vutuv.UUIDv7
   alias VutuvWeb.Live.PendingPostActions
 
   setup do
@@ -46,29 +48,6 @@ defmodule Vutuv.Posts.PendingTest do
   defp file!(user, files) do
     {:ok, attachment} = Attachments.create_pending(user, Fixtures.text_file(files), "notes.txt")
     attachment
-  end
-
-  # One preview page for `attachment`, in the state a verdict would leave it —
-  # written rather than rendered, so the wait is measured without depending on
-  # poppler or Chromium being on the machine running the suite.
-  defp page!(%Attachment{} = attachment, moderation) do
-    now = NaiveDateTime.utc_now(:second)
-
-    Repo.insert!(%Image{
-      id: UUIDv7.generate(),
-      kind: "attachment_page",
-      attachment_id: attachment.id,
-      user_id: attachment.user_id,
-      token: Vutuv.Uploads.gen_token(),
-      position: 0,
-      moderation: moderation,
-      width: 1240,
-      height: 1667,
-      content_type: "image/avif",
-      size_bytes: 1234,
-      inserted_at: now,
-      updated_at: now
-    })
   end
 
   defp rendered!(%Attachment{} = attachment) do
@@ -365,6 +344,73 @@ defmodule Vutuv.Posts.PendingTest do
 
       assert Pending.due(4) == [],
              "a row nothing can be done for is still at the front of the due query"
+    end
+  end
+
+  describe "when the AI check cannot run" do
+    test "past the ceiling the post stops claiming a check is in progress",
+         %{user: user, files: files} do
+      attachment = file!(user, files)
+
+      {:ok, pending} =
+        Pending.create(user, "post", %{}, %{body: "Read this"}, attachments: [attachment])
+
+      rendered!(attachment)
+      page = page!(attachment, "pending")
+
+      # A blip is not a ceiling. Under it the check is merely late, the post is
+      # work the server is doing, and the app bar says so.
+      stalled_scan!(page, stall_after_seconds() - 60)
+      assert Pending.stage(Pending.get(user, pending.id)) == {:checking, 1}
+      assert Pending.in_progress_summary(user.id).count == 1
+
+      # Past it the wait is unbounded, so the sentence changes and the row
+      # stops counting as work in flight — it is waiting for its author now.
+      stalled_scan!(page, stall_after_seconds() + 60)
+      reading = Pending.reading(Pending.get(user, pending.id))
+      assert reading.stage == :stalled
+      assert reading.state == :stalled
+      assert Pending.in_progress_summary(user.id).count == 0
+
+      # The ceiling is the installation's to move, both ways.
+      put_config(:ai_check_stall_seconds, 24 * 3_600)
+      assert Pending.stage(Pending.get(user, pending.id)) == {:checking, 1}
+    end
+
+    test "a stalled row keeps its text, keeps its place in the queue and publishes itself " <>
+           "when the scanner comes back",
+         %{user: user, files: files} do
+      attachment = file!(user, files)
+
+      {:ok, pending} =
+        Pending.create(user, "post", %{}, %{body: "Read this"}, attachments: [attachment])
+
+      rendered!(attachment)
+      page = page!(attachment, "pending")
+      stalled_scan!(page, stall_after_seconds() + 3_600)
+      assert Pending.reading(Pending.get(user, pending.id)).state == :stalled
+
+      # Nothing was refused, so nothing offers to throw the file away, and the
+      # sweeper leaves the row alone — but still advances its clock, or an
+      # unworkable row would hold the front of every oldest-first batch.
+      assert Pending.reading(Pending.get(user, pending.id)).publishable_without_refused? == false
+      assert Pending.sweep(4) == 1
+      assert reload(pending).status == "waiting"
+
+      assert Pending.due(4) == [],
+             "a row whose check cannot run is still at the front of the due query"
+
+      # Ollama is back: the verdict lands and the post goes out by itself. An
+      # outage of any length is a delay, never a refused post.
+      Repo.update_all(from(i in Image, where: i.id == ^page.id), set: [moderation: "approved"])
+
+      Repo.update_all(from(s in ImageScan, where: s.subject_id == ^page.id),
+        set: [status: "approved", service_failing_since: nil]
+      )
+
+      assert {:ok, post} = Pending.media_changed(:attachment, attachment.id)
+      assert reload(pending).status == "published"
+      assert post.body == "Read this"
     end
   end
 

@@ -50,6 +50,12 @@ defmodule Vutuv.Moderation.ImageScan do
     field(:attempts, :integer, default: 0)
     field(:next_attempt_at, :utc_datetime)
     field(:last_error, :string)
+    # Since when the *scanner* — not this image — has been failing, unbroken.
+    # Set on the first service error and cleared the moment Ollama answers at
+    # all, even to say it cannot judge this file, so it measures one outage
+    # rather than a lifetime of them. `Vutuv.Posts.Pending` reads it to stop
+    # telling an author a check is in progress when it is not (issue #2149).
+    field(:service_failing_since, :utc_datetime)
     field(:category, :string)
     # The model's own one-line description of the image. For a rejection it is
     # the only surviving record of what was deleted (the files are gone), and

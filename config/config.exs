@@ -126,6 +126,16 @@ config :vutuv, :screenshot_blocklist, ["reddit.com", "heise.de"]
 # (config/runtime.exs).
 config :vutuv, :moderate_images, true
 config :vutuv, :ollama_url, "http://localhost:11434"
+# How long the scanner may be unreachable before a post waiting on one of its
+# verdicts stops telling its author that a check is in progress (issue #2149).
+# The queue itself is unchanged — a service outage still retries for ever and
+# still releases nothing — so this is a ceiling on the *sentence*, not on the
+# post: the moment Ollama answers, the verdict lands and the post publishes
+# itself. Half an hour, which is what a scanner that answers but cannot judge
+# an image already spends before it gives up (5 tries, 120+240+480+960 s), and
+# far enough above the 300 s retry pace that a blip is never named. Runtime
+# override: AI_CHECK_STALL_SECONDS (config/runtime.exs).
+config :vutuv, :ai_check_stall_seconds, 1_800
 config :vutuv, :ollama_vision_model, "qwen3-vl:8b"
 
 # Whether a link-preview capture is also judged on whether it shows the PAGE

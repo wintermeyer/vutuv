@@ -631,6 +631,14 @@ if config_env() == :prod do
     config :vutuv, :moderate_images, false
   end
 
+  # How long that outage may run before a post waiting on a verdict stops
+  # saying a check is in progress and says plainly that it cannot run
+  # (issue #2149). Nothing is refused or released at the ceiling; an
+  # installation whose GPU box is regularly away for an hour raises it.
+  if seconds = System.get_env("AI_CHECK_STALL_SECONDS") do
+    config :vutuv, :ai_check_stall_seconds, String.to_integer(seconds)
+  end
+
   # The link-preview page check: judges each capture on whether it shows the
   # page or a consent/ad/login wall, and blocklists the site when it does not.
   # SCREENSHOT_PAGE_CHECK=false switches it off (an installation whose Ollama

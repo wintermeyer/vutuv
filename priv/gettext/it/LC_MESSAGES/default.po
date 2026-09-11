@@ -111,7 +111,7 @@ msgstr "Data di nascita"
 msgid "Birthday"
 msgstr "Compleanno"
 
-#: lib/vutuv_web/components/pending_post_components.ex:211
+#: lib/vutuv_web/components/pending_post_components.ex:249
 #: lib/vutuv_web/components/saved_search_components.ex:104
 #: lib/vutuv_web/components/ui.ex:4935
 #: lib/vutuv_web/live/admin/newsletter_broadcast_live.ex:210
@@ -23552,7 +23552,7 @@ msgstr "banda lento internet mobile risparmio dati volume compressione immagini 
 msgid "Appearance"
 msgstr "Aspetto"
 
-#: lib/vutuv_web/components/pending_post_components.ex:178
+#: lib/vutuv_web/components/pending_post_components.ex:216
 #, elixir-autogen, elixir-format
 msgid "About %{minutes} min of video"
 msgstr "Circa %{minutes} min di video"
@@ -23567,7 +23567,7 @@ msgstr "Aggiungi video"
 msgid "Converting · %{percent} %"
 msgstr "Conversione · %{percent} %"
 
-#: lib/vutuv_web/components/pending_post_components.ex:211
+#: lib/vutuv_web/components/pending_post_components.ex:249
 #, elixir-autogen, elixir-format
 msgid "Delete this post"
 msgstr "Elimina questo post"
@@ -23629,7 +23629,7 @@ msgstr "Il video non può essere allegato."
 msgid "The video is longer than %{seconds} seconds."
 msgstr "Il video dura più di %{seconds} secondi."
 
-#: lib/vutuv_web/components/pending_post_components.ex:126
+#: lib/vutuv_web/components/pending_post_components.ex:142
 #, elixir-autogen, elixir-format
 msgid "This post is still waiting for you"
 msgstr "Questo post La sta ancora aspettando"
@@ -25834,12 +25834,12 @@ msgid_plural "Our AI is checking %{formatted} pictures."
 msgstr[0] "La nostra IA sta controllando %{formatted} immagine."
 msgstr[1] "La nostra IA sta controllando %{formatted} immagini."
 
-#: lib/vutuv_web/components/pending_post_components.ex:203
+#: lib/vutuv_web/components/pending_post_components.ex:241
 #, elixir-autogen, elixir-format
 msgid "Post without it"
 msgstr "Pubblica lo stesso"
 
-#: lib/vutuv_web/components/pending_post_components.ex:58
+#: lib/vutuv_web/components/pending_post_components.ex:70
 #, elixir-autogen, elixir-format
 msgid "Publishing it now"
 msgstr "Pubblicazione in corso"
@@ -25859,7 +25859,7 @@ msgstr "Qualcosa in questo post è stato rifiutato."
 msgid "Waiting"
 msgstr "In attesa"
 
-#: lib/vutuv_web/components/pending_post_components.ex:130
+#: lib/vutuv_web/components/pending_post_components.ex:153
 #, elixir-autogen, elixir-format
 msgid "Your post appears as soon as its files are ready"
 msgstr "Il suo post apparirà non appena i file saranno pronti"
@@ -25870,22 +25870,22 @@ msgstr "Il suo post apparirà non appena i file saranno pronti"
 msgid "Your uploads"
 msgstr "I suoi caricamenti"
 
-#: lib/vutuv_web/components/pending_post_components.ex:115
+#: lib/vutuv_web/components/pending_post_components.ex:127
 #, elixir-autogen, elixir-format
 msgid "being prepared"
 msgstr "in preparazione"
 
-#: lib/vutuv_web/components/pending_post_components.ex:116
+#: lib/vutuv_web/components/pending_post_components.ex:131
 #, elixir-autogen, elixir-format
 msgid "ready"
 msgstr "pronto"
 
-#: lib/vutuv_web/components/pending_post_components.ex:114
+#: lib/vutuv_web/components/pending_post_components.ex:126
 #, elixir-autogen, elixir-format
 msgid "refused"
 msgstr "rifiutato"
 
-#: lib/vutuv_web/components/pending_post_components.ex:127
+#: lib/vutuv_web/components/pending_post_components.ex:150
 #, elixir-autogen, elixir-format
 msgid "Your post appears as soon as the video is ready"
 msgstr "Il suo post apparirà non appena il video sarà pronto"
@@ -26290,3 +26290,18 @@ msgstr "Questo logo contiene %{marker}, che vutuv legge come file incorporato e 
 #, elixir-autogen, elixir-format
 msgid "This logo has a file embedded in it, usually a web font, that vutuv cannot check. Export it again with the text converted to outlines."
 msgstr "Questo logo contiene un file incorporato, di solito un font web, che vutuv non può verificare. Lo esporti di nuovo convertendo il testo in tracciati."
+
+#: lib/vutuv_web/components/pending_post_components.ex:64
+#, elixir-autogen, elixir-format
+msgid "Our AI check cannot be reached at the moment. Your post is kept here and goes out by itself as soon as the check runs again."
+msgstr "Al momento il nostro controllo IA non è raggiungibile. Il Suo post resta qui e viene pubblicato da sé non appena il controllo riprende."
+
+#: lib/vutuv_web/components/pending_post_components.ex:147
+#, elixir-autogen, elixir-format
+msgid "This post is waiting for a check that cannot run"
+msgstr "Questo post attende un controllo che non può essere eseguito"
+
+#: lib/vutuv_web/components/pending_post_components.ex:130
+#, elixir-autogen, elixir-format
+msgid "waiting for the check"
+msgstr "in attesa del controllo"

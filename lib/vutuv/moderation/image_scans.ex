@@ -23,7 +23,11 @@ defmodule Vutuv.Moderation.ImageScans do
   scan (the backstop for a crash between verdict and application — and for
   any future upload path that forgets to enqueue, since the gallery tables
   default their `moderation` column to `pending`). When Ollama is down the
-  queue retries forever; nothing is ever auto-approved. With
+  queue retries forever; nothing is ever auto-approved. The row does record
+  **since when** it has been unreachable (`service_failing_since`), which is
+  what lets a member waiting on that verdict be told the check cannot run
+  instead of that it is running — see `stall_after_seconds/0` and issue #2149.
+  With
   `:moderate_images` off (tests, installations without Ollama) assets are
   created `approved` and this module is dormant.
   """
@@ -50,8 +54,12 @@ defmodule Vutuv.Moderation.ImageScans do
   @image_error_cap 5
   # Service failures (Ollama down/unreachable) retry forever at this pace.
   @service_retry_seconds 300
+  # How long such an outage may run before whoever waits on the verdict is told
+  # plainly that the check cannot run (issue #2149). See `stall_after_seconds/0`.
+  @default_stall_seconds 1800
 
   @kinds ImageScan.kinds()
+  @open_statuses ImageScan.open_statuses()
   # The member personally chose these images; a rejection deletes their
   # content, so they get the notice. Machine captures (link screenshots) are
   # our artifact of a third-party page — silently showing no preview is the
@@ -70,6 +78,47 @@ defmodule Vutuv.Moderation.ImageScans do
 
   @doc "Whether AI image moderation is enabled on this installation."
   def enabled?, do: Application.get_env(:vutuv, :moderate_images, true)
+
+  @doc """
+  How long the scanner may be unreachable before whoever is *waiting* on one of
+  its verdicts should stop being told a check is in progress (issue #2149).
+
+  Not a cap on the queue: a service outage still retries at
+  `@service_retry_seconds` for ever, and nothing is released or refused when
+  this passes. It is the point at which the wait stops being a wait and becomes
+  an open question for the member, and the config key is there because an
+  installation whose GPU box is regularly away for an hour should not call that
+  a stall.
+  """
+  def stall_after_seconds,
+    do: Application.get_env(:vutuv, :ai_check_stall_seconds, @default_stall_seconds)
+
+  @doc """
+  Of these scan subjects, the ones whose check cannot run: an **open** scan
+  that has been failing against the service — not against the picture — for
+  longer than `stall_after_seconds/0`, unbroken.
+
+  Answered for a whole batch at once, because the readers are page-shaped: one
+  waiting card per post, and a member may have several. A subject with no open
+  scan, or one whose last attempt reached Ollama at all, is simply not in the
+  set — `service_failing_since` is cleared the moment the scanner answers, even
+  to say it cannot judge that file, so a stamp this old means every retry since
+  failed to reach it.
+  """
+  def stalled_subjects([]), do: MapSet.new()
+
+  def stalled_subjects(subject_ids) when is_list(subject_ids) do
+    cutoff = DateTime.add(DateTime.utc_now(:second), -stall_after_seconds(), :second)
+
+    from(s in ImageScan,
+      where:
+        s.subject_id in ^subject_ids and s.status in ^@open_statuses and
+          not is_nil(s.service_failing_since) and s.service_failing_since < ^cutoff,
+      select: s.subject_id
+    )
+    |> Repo.all()
+    |> MapSet.new()
+  end
 
   @doc """
   The moderation state a freshly stored image starts in: `"pending"` (limbo)
@@ -125,6 +174,7 @@ defmodule Vutuv.Moderation.ImageScans do
               attempts: 0,
               next_attempt_at: nil,
               last_error: nil,
+              service_failing_since: nil,
               updated_at: now
             ]
           ],
@@ -179,8 +229,23 @@ defmodule Vutuv.Moderation.ImageScans do
     cutoff = NaiveDateTime.add(NaiveDateTime.utc_now(), -@stuck_after_seconds, :second)
 
     {count, _} =
-      from(s in ImageScan, where: s.status == "scanning" and s.updated_at < ^cutoff)
-      |> Repo.update_all(set: [status: "pending", updated_at: NaiveDateTime.utc_now(:second)])
+      from(s in ImageScan,
+        where: s.status == "scanning" and s.updated_at < ^cutoff,
+        update: [
+          set: [
+            status: "pending",
+            updated_at: ^NaiveDateTime.utc_now(:second),
+            # A claim this old means the scanner never answered — an Ollama
+            # that accepts the connection and then hangs leaves no service
+            # error to stamp, and whoever waits on this verdict would never
+            # learn the check is not running (issue #2149). `coalesce` keeps an
+            # outage already being measured.
+            service_failing_since:
+              fragment("coalesce(?, ?)", s.service_failing_since, ^DateTime.utc_now(:second))
+          ]
+        ]
+      )
+      |> Repo.update_all([])
 
     count
   end
@@ -397,7 +462,12 @@ defmodule Vutuv.Moderation.ImageScans do
     update_claimed(scan,
       status: "pending",
       next_attempt_at: retry_at,
-      last_error: error_string(reason)
+      last_error: error_string(reason),
+      # Since when this outage has been running, kept from the first failure of
+      # the run rather than rewritten each time: it is what lets a waiting post
+      # tell a two-minute blip from a host whose scanner has been gone for a
+      # month (issue #2149). Cleared the moment Ollama answers at all.
+      service_failing_since: scan.service_failing_since || DateTime.utc_now(:second)
     )
 
     :ok
@@ -433,7 +503,10 @@ defmodule Vutuv.Moderation.ImageScans do
         status: "pending",
         attempts: attempts,
         next_attempt_at: retry_at,
-        last_error: error_string(reason)
+        last_error: error_string(reason),
+        # The scanner answered — it just could not judge this file. Whatever
+        # outage was running is over, and the next one starts its own clock.
+        service_failing_since: nil
       )
 
       :ok
@@ -538,7 +611,7 @@ defmodule Vutuv.Moderation.ImageScans do
   should be. A reader's own translation request is never stood down.
   """
   def busy? do
-    Repo.exists?(from(s in ImageScan, where: s.status in ^ImageScan.open_statuses()))
+    Repo.exists?(from(s in ImageScan, where: s.status in ^@open_statuses))
   end
 
   @doc "Queue totals for the admin dashboard: %{pending: n, rejected_7d: n}."
@@ -546,7 +619,7 @@ defmodule Vutuv.Moderation.ImageScans do
     week_ago = DateTime.add(DateTime.utc_now(), -7 * 86_400, :second)
 
     pending =
-      Repo.aggregate(from(s in ImageScan, where: s.status in ^ImageScan.open_statuses()), :count)
+      Repo.aggregate(from(s in ImageScan, where: s.status in ^@open_statuses), :count)
 
     rejected =
       Repo.aggregate(

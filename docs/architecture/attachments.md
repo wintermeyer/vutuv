@@ -158,6 +158,21 @@ the clip now one case of it. `Vutuv.Posts.Pending` owns the whole question:
   stops waiting, and the author is offered the text without the refused file
   or neither. Both are `phx-click` events, never links: each destroys state,
   and a state-destroying GET dies on a Back button or a link prefetch.
+* **A check that cannot run is said out loud** (#2149). An unreachable scanner
+  is retried for ever by design — nothing may be released without a verdict —
+  so the wait itself has no ceiling, and the *sentence* used not to either: on
+  an installation whose Ollama was down the card said "our AI is checking 1
+  picture" at ten minutes, at a day and at thirty days. `image_scans` now
+  records **since when** the scanner has been unreachable
+  (`service_failing_since`, stamped on the first service error and cleared the
+  moment Ollama answers at all — even to say it cannot judge that file), and
+  past `ImageScans.stall_after_seconds/0` (`AI_CHECK_STALL_SECONDS`, 1800 s)
+  the stage is `:stalled`: the card says the check cannot be reached, the
+  app-bar chip stops counting the row as work in flight, and the clip's own
+  "our AI is checking it" line steps aside. The queue is untouched, so an
+  outage is a delay and never a refused post — a blip is 15 times under the
+  ceiling and never named, and whenever the scanner returns the verdict lands
+  and the post publishes itself.
 * **Surviving a deploy.** The publish is claimed by a compare-and-set on
   `status`, and the claim writes `minted_post_id` — the id the post is about to
   get — so a slot killed between the insert and the bookkeeping is resumed by
