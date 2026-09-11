@@ -1,0 +1,42 @@
+<%= email_greeting(@user) %>,
+
+<%= email_wrapped_text(@content_intro) %>
+Solange der Fall offen ist, bleibt der Inhalt verborgen.
+
+<%= email_wrapped_text(@standing_sentence) %>
+
+  Gemeldet als: <%= @category_labels %>
+<%= if @notes != [] do %>
+Das steht in der Meldung, mit den Worten der meldenden Person. Wer das war,
+sagen wir Ihnen nie:
+
+<%= email_quoted_text(@notes) %>
+<% else %>
+Die Meldung nannte diese Kategorie und sonst nichts.
+<% end %><%= if @copyright_case do %>
+Das ist eine rechtliche Beschwerde, keine Hausregel: Sie besagt, dass das
+Werk nicht der Seite gehört. Darüber entscheidet das Urheberrecht.
+<% else %>
+Grundlage sind unsere Verhaltensregeln, an die sich alles auf vutuv halten
+muss:
+
+<%= @url %>community
+<% end %>
+Sie erfahren davon, weil Ihnen <%= @page_name %> gehört.
+<%= if @self_service do %>
+Auf die Meldung antworten kann nur das Mitglied, das die Seite übernommen
+hat: Es hat 72 Stunden Zeit, den Inhalt zu löschen, zu überarbeiten oder die
+Meldung zurückzuweisen, danach entscheiden unsere Admins. Sie sehen alles,
+was dieses Mitglied sieht.
+<% else %>
+Der Fall liegt bereits bei unseren Admins, eine Runde zum Selbstklären gibt
+es hier also nicht. Wir melden uns mit dem Ergebnis bei dem Mitglied, das die
+Seite übernommen hat.
+<% end %>
+Den Fall finden Sie hier:
+
+<%= @url %>moderation/cases/<%= @case_id %>
+
+<%= render "_signature_de.text" %>
+
+<%= render "_footer.text" %>

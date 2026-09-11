@@ -1,0 +1,41 @@
+<%= email_greeting(@user) %>,
+
+<%= email_wrapped_text(@content_intro) %>
+Finché il caso resta aperto, il contenuto resta nascosto.
+
+<%= email_wrapped_text(@standing_sentence) %>
+
+  Segnalato come: <%= @category_labels %>
+<%= if @notes != [] do %>
+Ecco cosa dice la segnalazione, con le parole di chi l'ha scritta. Chi sia
+stato non glielo diciamo mai:
+
+<%= email_quoted_text(@notes) %>
+<% else %>
+La segnalazione ha indicato quella categoria e nient'altro.
+<% end %><%= if @copyright_case do %>
+Questa è una contestazione legale, non una regola della casa: sostiene che
+l'opera non è della pagina. A deciderlo è il diritto d'autore.
+<% else %>
+Il fondamento sono le nostre regole della comunità, a cui tutto su vutuv
+deve attenersi:
+
+<%= @url %>community
+<% end %>
+Glielo comunichiamo perché <%= @page_name %> è Sua.
+<%= if @self_service do %>
+A rispondere alla segnalazione è il membro che ha rivendicato la pagina: ha
+72 ore per cancellare il contenuto, modificarlo o respingere la segnalazione,
+poi decidono i nostri amministratori. Lei vede tutto quello che vede lui.
+<% else %>
+Il caso è già in mano ai nostri amministratori, quindi non c'è un giro in cui
+il Suo team possa risolverlo. Comunicheremo l'esito al membro che ha
+rivendicato la pagina.
+<% end %>
+Può vedere il caso qui:
+
+<%= @url %>moderation/cases/<%= @case_id %>
+
+<%= render "_signature_it.text" %>
+
+<%= render "_footer.text" %>

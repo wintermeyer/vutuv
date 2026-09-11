@@ -1949,15 +1949,28 @@ defmodule Vutuv.Activity do
     end)
   end
 
-  # Moderation cases about the user's own content. Which cases the owner was
-  # actually told about is Moderation's rule, not ours — the query comes from
-  # there so this feed cannot drift from the notify behavior.
+  # Moderation cases about the user's own content, and about content a page
+  # they own published (issue #2120). Which cases the owner was actually told
+  # about is Moderation's rule, not ours — the query comes from there so this
+  # feed cannot drift from the notify behavior.
+  #
+  # The page's name rides along, because a co-owner is not the member the case
+  # is about and a line reading "your content" would be wrong for them. It is a
+  # left join and not a lookup per row: most cases have no page at all, and the
+  # ones that do would otherwise cost a query each on the bell's own path.
   defp moderation_items(user_id, limit, cursor) do
     rows =
       Vutuv.Moderation.owner_notified_cases_query(user_id)
+      |> join(:left, [c], o in assoc(c, :organization))
       |> order_by([c], desc: case_event_at(c), desc: c.id)
       |> limit(^limit)
-      |> select([c], {c.id, case_event_at(c), c.status})
+      |> select([c, o], %{
+        id: c.id,
+        at: case_event_at(c),
+        status: c.status,
+        owner_id: c.owner_id,
+        organization_name: o.name
+      })
       |> at_or_before_case_event(cursor)
       |> Repo.all()
 
@@ -1967,18 +1980,22 @@ defmodule Vutuv.Activity do
     # the ruling instead and a member's feed keeps those forever.
     categories =
       rows
-      |> Enum.filter(fn {_id, _at, status} -> status in ~w(pending_owner flagged escalated) end)
-      |> Enum.map(&elem(&1, 0))
+      |> Enum.filter(&(&1.status in ~w(pending_owner flagged escalated)))
+      |> Enum.map(& &1.id)
       |> Vutuv.Moderation.notice_category_by_case()
 
-    Enum.map(rows, fn {id, at, status} ->
+    Enum.map(rows, fn row ->
       %{
-        id: event_id("moderation", id),
+        id: event_id("moderation", row.id),
         kind: "moderation",
-        at: at,
-        case_id: id,
-        category: Map.get(categories, id),
-        status: status
+        at: row.at,
+        case_id: row.id,
+        category: Map.get(categories, row.id),
+        status: row.status,
+        # Only for the reader who is *not* the member carrying the case: for
+        # that member the existing "your content" wording is the true one, and
+        # a member can be both.
+        organization_name: if(row.owner_id != user_id, do: row.organization_name)
       }
     end)
   end

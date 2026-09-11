@@ -2,11 +2,55 @@ defmodule VutuvWeb.ModerationCaseHTML do
   @moduledoc false
   use VutuvWeb, :html
 
+  alias Vutuv.Moderation
   alias Vutuv.Moderation.Case
+  alias Vutuv.Organizations.Organization
 
   embed_templates("../templates/moderation_case/*")
 
-  @doc "What the status means, in the owner's words."
+  @doc """
+  The page this case is about, or `nil` — the heading, and the paragraph that
+  says who may answer the report, name it (issue #2120).
+
+  Through `Moderation.page/1`, which takes the preload the controller sets and
+  falls back to a lookup, so the name does not depend on somebody remembering
+  one.
+  """
+  def page_name(%Case{} = case_record) do
+    case Moderation.page(case_record) do
+      %Organization{name: name} -> name
+      nil -> nil
+    end
+  end
+
+  @doc """
+  The page's own title. An owner of the page reads the same case as the member
+  it is about, so calling the content theirs would be false; an admin reading a
+  member's case gets the plain heading, there being no page to name.
+  """
+  def heading(%Case{}, true), do: gettext("Your content was reported")
+
+  def heading(%Case{} = case_record, false) do
+    case page_name(case_record) do
+      nil -> gettext("Reported content")
+      name -> gettext("Content on %{page} was reported", page: name)
+    end
+  end
+
+  @doc """
+  What the status means. Two of the six sentences are addressed to the member
+  who can act on the case, so a reader who cannot — an owner of the page, an
+  admin — is told what happened instead of what to do.
+  """
+  def status_line(%Case{status: "pending_owner"}, false),
+    do: gettext("Hidden while the case is open.")
+
+  def status_line(%Case{status: "resolved_edited"}, false),
+    do: gettext("Settled: the content was revised and is visible again.")
+
+  def status_line(%Case{} = case_record, _carries_case?), do: status_line(case_record)
+
+  @doc "What the status means, in the words of the member who carries the case."
   def status_line(%Case{status: "pending_owner"}),
     do: gettext("Hidden. You can settle this yourself - see below.")
 

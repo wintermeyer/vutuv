@@ -48,6 +48,9 @@ defmodule Vutuv.Notifications.MailClassTest do
     {:organization_page_unverified_email, :transactional},
     {:moderation_frozen_email, :transactional},
     {:moderation_review_email, :transactional},
+    # The same news to a page's other owners (issue #2120): about content on
+    # their page rather than their own, so transactional like the two above.
+    {:page_content_frozen_email, :transactional},
     {:moderation_outcome_email, :transactional},
     {:moderation_warning_email, :transactional},
     {:moderation_suspension_email, :transactional},
@@ -315,6 +318,16 @@ defmodule Vutuv.Notifications.MailClassTest do
 
   defp build_mail(:moderation_review_email),
     do: Emailer.moderation_review_email(user(), @address, moderation_case())
+
+  defp build_mail(:page_content_frozen_email),
+    do:
+      Emailer.page_content_frozen_email(
+        user(),
+        @address,
+        moderation_case(),
+        %Vutuv.Organizations.Organization{name: "Acme"},
+        true
+      )
 
   defp build_mail(:moderation_outcome_email),
     do: Emailer.moderation_outcome_email(user(), @address, "upheld", :hidden)

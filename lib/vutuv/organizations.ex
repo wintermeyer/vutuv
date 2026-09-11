@@ -1625,6 +1625,39 @@ defmodule Vutuv.Organizations do
     )
   end
 
+  @doc """
+  Every page `user_id` owns, as a **query** so a caller can narrow or count it
+  without loading ids it does not need.
+
+  `Vutuv.Moderation`'s `told_about/2` drops it into a subquery (its comment
+  carries the plan measurement and why it may not resolve the list there), and
+  `page_owner?/2` below narrows it to one page.
+  """
+  def owned_page_ids(user_id) when is_binary(user_id) do
+    from(r in OrganizationRole,
+      where: r.user_id == ^user_id and r.role == "owner",
+      select: r.organization_id
+    )
+  end
+
+  @doc """
+  Whether `user_id` owns the page with this id — the id-shaped twin of
+  `owner?/2`, for a caller holding a foreign key rather than a loaded page.
+
+  Narrows `owned_page_ids/1` rather than spelling the owner role a second time.
+  Guarded on both ids being present rather than scoped to a nil: `where: x == ^nil`
+  raises in Ecto, and the column it is usually asked about is nullable.
+  """
+  def page_owner?(organization_id, user_id)
+      when is_binary(organization_id) and is_binary(user_id) do
+    user_id
+    |> owned_page_ids()
+    |> where([r], r.organization_id == ^organization_id)
+    |> Repo.exists?()
+  end
+
+  def page_owner?(_organization_id, _user_id), do: false
+
   # --- engagement (like + bookmark) ------------------------------------------
 
   # The Engagement fabric config: the fk doubles as the payload id key, and

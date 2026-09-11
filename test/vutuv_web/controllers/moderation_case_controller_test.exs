@@ -3,6 +3,23 @@ defmodule VutuvWeb.ModerationCaseControllerTest do
 
   alias Vutuv.Moderation
   alias Vutuv.Moderation.Case
+  alias Vutuv.Organizations
+
+  # An open case on a post published in a **page's** name, with `member` holding
+  # `role` on that page. The case is carried by the member who claimed the page,
+  # never by `member` (issue #2120).
+  defp page_post_case(member, role \\ "owner") do
+    claimer = insert(:activated_user)
+    organization = insert(:organization, created_by_user_id: claimer.id)
+    {:ok, _} = Organizations.add_role(organization, claimer, "owner", claimer)
+    {:ok, _} = Organizations.add_role(organization, member, role, claimer)
+
+    post = insert(:post, user: nil, organization: organization)
+    reporter = insert(:activated_user)
+    {:ok, case_record} = Moderation.report_content(reporter, post, %{"category" => "family"})
+
+    {organization, case_record}
+  end
 
   # The logged-in member owns a reported (frozen) post with an open case.
   defp owner_with_case(conn, attrs \\ %{"category" => "family"}) do
@@ -117,6 +134,58 @@ defmodule VutuvWeb.ModerationCaseControllerTest do
       assert response =~ "Diese Entscheidung hat kein Mensch getroffen"
       assert response =~ "Grundlage"
       assert response =~ "Unsere Verhaltensregeln"
+    end
+
+    # Issue #2120. The case is carried by the member who claimed the page, and
+    # every other owner is told about it — so they may read it, and the page
+    # must not offer them controls that would 404 when pressed.
+    test "an owner of the page reads the case, without being offered the way out",
+         %{conn: conn} do
+      {conn, co_owner} = create_and_login_user(conn)
+      {organization, case_record} = page_post_case(co_owner)
+
+      response = conn |> get(~p"/moderation/cases/#{case_record.id}") |> html_response(200)
+
+      assert response =~ organization.name
+      refute response =~ "Your content was reported"
+      refute response =~ ~p"/moderation/cases/#{case_record.id}/dispute"
+      refute response =~ ~p"/moderation/cases/#{case_record.id}/delete_content"
+      assert response =~ "Answering the report is up to the member who claimed the page"
+    end
+
+    test "and pressing the way out anyway is still a 404", %{conn: conn} do
+      {conn, co_owner} = create_and_login_user(conn)
+      {_organization, case_record} = page_post_case(co_owner)
+
+      assert conn
+             |> post(~p"/moderation/cases/#{case_record.id}/dispute")
+             |> html_response(404)
+    end
+
+    test "and reads in German for a German owner", %{conn: conn} do
+      {conn, co_owner} = create_and_login_user(conn)
+      {organization, case_record} = page_post_case(co_owner)
+      co_owner |> Ecto.Changeset.change(locale: "de") |> Repo.update!()
+
+      response =
+        conn
+        |> recycle()
+        |> put_req_header("accept-language", "de-DE,de")
+        |> get(~p"/moderation/cases/#{case_record.id}")
+        |> html_response(200)
+
+      assert response =~ "Ein Inhalt von #{organization.name} wurde gemeldet"
+      assert response =~ "Auf die Meldung antworten kann nur das Mitglied"
+      assert response =~ "Verborgen, solange der Fall offen ist."
+      # The member-voiced sentence gettext fuzzy-filled these msgids with.
+      refute response =~ "Sie können das selbst klären"
+    end
+
+    test "a publisher on the same page gets a 404", %{conn: conn} do
+      {conn, publisher} = create_and_login_user(conn)
+      {_organization, case_record} = page_post_case(publisher, "publisher")
+
+      assert conn |> get(~p"/moderation/cases/#{case_record.id}") |> html_response(404)
     end
 
     test "another member gets a 404", %{conn: conn} do

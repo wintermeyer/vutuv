@@ -116,6 +116,31 @@ defmodule VutuvWeb.NotificationLine do
     end
   end
 
+  # The same event for an owner of the **page** the content belongs to (issue
+  # #2120), who is told about it without being the member it is about: "your
+  # content" would be a false sentence for them, and the page's name is the one
+  # fact that tells them which of their pages lost something.
+  def notification_text(%{kind: "moderation", organization_name: page} = n)
+      when is_binary(page) do
+    case n[:status] do
+      "upheld" ->
+        gettext("A report about content on %{page} was confirmed.", page: page)
+
+      "rejected" ->
+        gettext("A report about content on %{page} was dismissed; it is visible again.",
+          page: page
+        )
+
+      status when status in ["resolved_edited", "resolved_deleted"] ->
+        gettext("The case about content on %{page} is closed.", page: page)
+
+      _open ->
+        gettext("Content on %{page} was hidden after a report. Open the case to see why.",
+          page: page
+        )
+    end
+  end
+
   # Moderation items carry no actor (reports are anonymous); the text alone
   # tells the owner what happened and links to the case page.
   def notification_text(%{kind: "moderation"} = n) do

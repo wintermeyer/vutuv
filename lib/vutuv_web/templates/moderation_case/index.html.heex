@@ -18,8 +18,12 @@
             <span class="block truncate text-sm text-slate-700 group-hover:text-brand-700 dark:group-hover:text-brand-300 dark:text-slate-300">
               {case_record.content_snapshot || gettext("(no text)")}
             </span>
+            <%!-- Which page it was, for the cases an owner is told about
+                  without the content being theirs (issue #2120). --%>
             <span class="text-xs uppercase tracking-wide text-slate-600 dark:text-slate-400">
-              {Vutuv.ViewerClock.format(case_record.inserted_at, :date)}
+              {Vutuv.ViewerClock.format(case_record.inserted_at, :date)}<span :if={
+                page_name(case_record)
+              }>{" · " <> page_name(case_record)}</span>
             </span>
           </span>
           <span class="shrink-0 text-sm font-semibold text-brand-600 group-hover:text-brand-700 dark:text-brand-400 dark:group-hover:text-brand-300">

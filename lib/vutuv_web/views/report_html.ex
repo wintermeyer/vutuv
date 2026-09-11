@@ -212,6 +212,33 @@ defmodule VutuvWeb.ReportHTML do
     do: gettext("somebody reported something of yours on vutuv.")
 
   @doc """
+  The same opening in the voice the reader needs: `nil` for the member the case
+  is about, a page's name for its **other** owners, who are told about the
+  page's content rather than their own (issue #2120).
+
+  One sentence per kind here too, for the reason the clauses above are: German
+  gives each of them its own gender and the sentence cannot be assembled from a
+  noun dropped into a frame. Only the four kinds a page can publish are spelled
+  out, since nothing else ever reaches that mail.
+  """
+  def content_reported_sentence(type, nil), do: content_reported_sentence(type)
+
+  def content_reported_sentence("post", page),
+    do: gettext("a post by %{page} on vutuv was reported.", page: page)
+
+  def content_reported_sentence("image", page),
+    do: gettext("a picture of %{page} on vutuv was reported.", page: page)
+
+  def content_reported_sentence("attachment", page),
+    do: gettext("a file published by %{page} on vutuv was reported.", page: page)
+
+  def content_reported_sentence("organization", page),
+    do: gettext("the page %{page} itself was reported on vutuv.", page: page)
+
+  def content_reported_sentence(_other, page),
+    do: gettext("something published by %{page} on vutuv was reported.", page: page)
+
+  @doc """
   Why the content is already hidden, for the owner mails: whoever reported it
   had a clean record, and that is the whole decision.
 

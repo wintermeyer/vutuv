@@ -1,0 +1,36 @@
+<.email_layout preheader={"Ein Inhalt von #{@page_name} wurde gemeldet und ist verborgen"} locale={@locale}>
+  <.email_p>{email_greeting(@user)},</.email_p>
+  <.email_p>{@content_intro} Solange der Fall offen ist, bleibt der Inhalt verborgen.</.email_p>
+  <.email_p>{@standing_sentence}</.email_p>
+  <.email_panel>
+    <.email_row label="Gemeldet als">{@category_labels}</.email_row>
+    <.email_row label="Seite">{@page_name}</.email_row>
+  </.email_panel>
+  <.email_p :if={@notes != []}>
+    Das steht in der Meldung, mit den Worten der meldenden Person. Wer das war, sagen wir Ihnen
+    nie:
+  </.email_p>
+  <.email_quote :for={note <- @notes} text={note} />
+  <.email_p :if={@notes == []}>Die Meldung nannte diese Kategorie und sonst nichts.</.email_p>
+  <.email_p :if={@copyright_case}>
+    Das ist eine rechtliche Beschwerde, keine Hausregel: Sie besagt, dass das Werk nicht der Seite
+    gehört. Darüber entscheidet das Urheberrecht.
+  </.email_p>
+  <.email_p :if={!@copyright_case}>
+    Grundlage sind
+    <.email_link href={"#{@url}community"}>unsere Verhaltensregeln</.email_link>, an die sich
+    alles auf vutuv halten muss.
+  </.email_p>
+  <.email_p>Sie erfahren davon, weil Ihnen {@page_name} gehört.</.email_p>
+  <.email_p :if={@self_service}>
+    Auf die Meldung antworten kann nur das Mitglied, das die Seite übernommen hat: Es hat 72
+    Stunden Zeit, den Inhalt zu löschen, zu überarbeiten oder die Meldung zurückzuweisen, danach
+    entscheiden unsere Admins. Sie sehen alles, was dieses Mitglied sieht.
+  </.email_p>
+  <.email_p :if={!@self_service}>
+    Der Fall liegt bereits bei unseren Admins, eine Runde zum Selbstklären gibt es hier also
+    nicht. Wir melden uns mit dem Ergebnis bei dem Mitglied, das die Seite übernommen hat.
+  </.email_p>
+  <.email_button href={"#{@url}moderation/cases/#{@case_id}"}>Fall ansehen</.email_button>
+  <.email_signature locale={@locale} />
+</.email_layout>

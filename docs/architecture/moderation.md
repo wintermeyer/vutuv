@@ -591,6 +591,69 @@ modifier), because a break the reader's client honours but our split does not
 puts the rest of the note outside the marker — see `email.md` for why the rule
 is written as the effect rather than as a list of `\r\n`, `\r` and `\n`.
 
+## Everyone who owns the page hears about it (issue #2120)
+
+A moderation case carries **one** `users` foreign key, and it has to: that
+member is the strike ladder. So when a page's press photo was taken down, the
+mail, the line under the bell and the case page all reached
+`Organizations.accountable_user_id/1` — the member who claimed the page — and
+nobody else. A page run by a team could lose a picture without the people who
+put it there ever hearing, and the 72 hours to dispute ran out in silence.
+
+**What the case learned is the page, not a second owner.** `moderation_cases`
+gained a nullable `organization_id`, written beside `owner_id` at the one place
+a case is minted (`new_case_changeset/2`), and both come from one clause table:
+`origin/1` answers `{owner_id, organization_id}` per content kind, with
+`owner_id/1` and `organization_id/1` reading one half each. One table, because
+for every kind a page can publish the two are the same fact read twice — the
+owner *is* whoever claimed the page the content is on — and two tables would
+have to learn the next author kind separately. A migration backfills the four
+kinds that can already carry a page (post, image, attachment via its post, and
+a case about the page itself); it was proven on the dev copy by seeding one
+case per branch, since the real table holds none.
+
+**Who hears is owners, and deliberately not the rest of the team.** #2087 split
+*looking* at a page's Media Kit (any role, a recruiter included) from *writing*
+it (owner or publisher). A takedown notice is neither: it is news for whoever
+answers for the page, which is the `owner` role — the one the last-owner guard
+guarantees exists, the one that can grant roles and hand the page on.
+`Moderation.page_notice/1` names them, minus the member who carries the case,
+who gets their own letter.
+
+**Three surfaces, one rule each.** The notifications feed widens through
+`told_about/2`, composed by both `owner_notified_cases_query/1` (the list, the
+unread count and the newest-event arm all read it) and `open_cases_for/1`, so
+the bell and `/moderation/cases` cannot show different sets. That predicate
+resolves the member's page ids to a **list** rather than an `IN (subquery)`:
+inside an `OR`, a subquery is a hashed SubPlan rather than an indexable qual, so
+Postgres drops both indexes and scans the table — 8.678 ms against 0.018 ms on a
+200k-row replica, paid by every member on every page load through `ShellLive`'s
+unread count. Reading the case page is `case_readable_by?/2`; **settling** it is
+`case_settleable_by?/2`, which is still `owner_id` alone and which the case page
+asks before drawing the three self-service controls, so a control we draw and a
+POST we accept are the same predicate.
+
+**The letter is its own.** `page_content_frozen_*` (three locales × two bodies)
+rather than a copy of `moderation_frozen_*`: that one offers a self-service
+round a co-owner cannot take. It carries the same statement of reasons — the
+reader can open the case page now, and a mail saying less than the page it links
+to would only send them there to find out what happened — through
+`statement_of_reasons/3`, whose `page_name` argument picks the voice of the one
+sentence that differs (`ReportHTML.content_reported_sentence/2`, one msgid per
+kind for the gender reason #2067 records). The in-app line branches on
+`organization_name`, which `Activity.moderation_items/3` sets only for a reader
+who is not the member the case is about, and which the live push carries too, so
+the popup and the persisted row say the same thing.
+
+**What did not change.** Accountability. The claimer still carries the case,
+still gets the 72 hours, and is still the only member who can delete, edit or
+dispute. A page whose claimer has deleted their account therefore stays
+**un-reportable** (`accountable_user_id/1` is `nilify_all`, `can_report?/2`
+refuses a nil owner) and only an admin freeze can act on it — widening the
+notice does not change that, and handing an orphaned page's strikes to whoever
+holds the owner role today would punish a member for an upload they may never
+have made.
+
 ## The decision notice (issue #2011)
 
 The mirror of the statement of reasons: the owner is owed the claim, and

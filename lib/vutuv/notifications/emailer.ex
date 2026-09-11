@@ -1004,12 +1004,43 @@ defmodule Vutuv.Notifications.Emailer do
     end)
   end
 
+  @doc """
+  Page notice: something this page published was reported and is hidden (issue
+  #2120), for every **other** owner of the page.
+
+  A letter of its own rather than a copy of the owner's, because the two say
+  different things. The owner's offers the self-service round — delete, edit or
+  dispute inside 72 hours — and only the member who carries the case can take
+  it; this one says what was claimed, who is answering it and where to watch.
+  `self_service?` is which of the two rounds is running, so the closing
+  paragraph can say "somebody has 72 hours" or "it is already with our admins"
+  instead of guessing.
+
+  It carries the same statement of reasons (#2010) the owner's does: the reader
+  can open the case page now, and a mail that said less than the page it links
+  to would only send them there to find out what happened.
+  """
+  def page_content_frozen_email(user, email, case_record, organization, self_service?) do
+    assigns =
+      user
+      |> statement_of_reasons(case_record, organization.name)
+      |> Map.merge(%{page_name: organization.name, self_service: self_service?})
+
+    build_email(user, email, "page_content_frozen", assigns, fn ->
+      gettext("Content on %{page} was reported and is hidden", page: organization.name)
+    end)
+  end
+
   # What the owner of hidden content is owed (issue #2010): what was claimed,
   # in the reporters' own words, and on what ground. `Vutuv.Moderation` owns
   # every answer, so the mail cannot claim something the case page does not.
   # The labels are joined here, in the *recipient's* language — the body
   # template is picked by their locale, and the ambient one is the sender's.
-  defp statement_of_reasons(user, case_record) do
+  # `page_name` picks the voice of the opening sentence, and nothing else: the
+  # page notice (#2120) says "a picture of Acme was reported" where the owner's
+  # says "one of your pictures", and that is the only line of the statement that
+  # differs between the two readers.
+  defp statement_of_reasons(user, case_record, page_name \\ nil) do
     notice = Moderation.owner_notice(case_record)
     locale = get_locale(user.locale)
 
@@ -1026,7 +1057,7 @@ defmodule Vutuv.Notifications.Emailer do
     {labels, intro, standing} =
       in_locale(locale, fn ->
         {Enum.map_join(notice.categories, ", ", &ReportHTML.category_label/1),
-         ReportHTML.content_reported_sentence(case_record.content_type),
+         ReportHTML.content_reported_sentence(case_record.content_type, page_name),
          ReportHTML.reporter_standing_sentence(notice.from_member?)}
       end)
 
