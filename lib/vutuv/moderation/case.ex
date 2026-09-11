@@ -35,6 +35,10 @@ defmodule Vutuv.Moderation.Case do
     field(:evidence_screenshot, :string)
 
     belongs_to(:owner, Vutuv.Accounts.User)
+    # The page the content belongs to, where it belongs to one (issue #2120):
+    # who *answers* for it stays `owner_id`, this says who else has to be
+    # **told**. Set beside `owner_id` when the case is minted; never cast.
+    belongs_to(:organization, Vutuv.Organizations.Organization)
     belongs_to(:resolved_by, Vutuv.Accounts.User)
     has_many(:reports, Vutuv.Moderation.Report, foreign_key: :case_id)
 

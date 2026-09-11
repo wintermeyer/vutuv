@@ -36,6 +36,7 @@ defmodule Vutuv.Moderation.Notifier do
   def owner_content_frozen(%Case{} = case_record) do
     case_record = Repo.preload(case_record, reports: Moderation.effective_reports())
     push_owner(case_record)
+    tell_page_owners(case_record, true)
     mail_owner(case_record, &Emailer.moderation_frozen_email/3)
   end
 
@@ -43,6 +44,7 @@ defmodule Vutuv.Moderation.Notifier do
   def owner_under_review(%Case{} = case_record) do
     case_record = Repo.preload(case_record, reports: Moderation.effective_reports())
     push_owner(case_record)
+    tell_page_owners(case_record, false)
     mail_owner(case_record, &Emailer.moderation_review_email/3)
   end
 
@@ -295,12 +297,22 @@ defmodule Vutuv.Moderation.Notifier do
   # the popup and the row under the bell say the same thing. No `:text` — the
   # moderation branch of `VutuvWeb.NotificationLine.notification_text/1` writes
   # the sentence from the category and the status, in the reader's language.
-  defp push_owner(%Case{} = case_record) do
-    Activity.notify(case_record.owner_id, %{
+  defp push_owner(%Case{} = case_record),
+    do:
+      push_case(case_record.owner_id, case_record, Moderation.owner_notice(case_record).category)
+
+  # One payload for both readers of the same event, so a key added for one of
+  # them cannot go missing for the other. `organization_name` is set only for a
+  # reader who is not the member the case is about (issue #2120) — the key
+  # `Vutuv.Activity.moderation_items/3` derives for the persisted row, and the
+  # one `NotificationLine` branches on to pick the voice.
+  defp push_case(user_id, %Case{} = case_record, category, organization_name \\ nil) do
+    Activity.notify(user_id, %{
       kind: "moderation",
-      category: Moderation.owner_notice(case_record).category,
+      category: category,
       case_id: case_record.id,
       source_id: case_record.id,
+      organization_name: organization_name,
       at: DateTime.utc_now()
     })
   end
@@ -310,6 +322,39 @@ defmodule Vutuv.Moderation.Notifier do
       nil -> :ok
       owner -> deliver_to(owner, fn user, email -> builder.(user, email, case_record) end)
     end
+  end
+
+  # The other owners of the page the content belongs to (issue #2120): a page
+  # run by a team could lose a press photo while only the member who claimed it
+  # heard anything, and the 72 hours to dispute ran out in silence.
+  #
+  # Their own letter, not a copy of the owner's: that one offers a self-service
+  # round they cannot take, because the case stays with the one member who
+  # carries the strike ladder. `self_service?` says which of the two rounds is
+  # running, so the news is "somebody has 72 hours to answer this" rather than
+  # "it is already with the admins".
+  defp tell_page_owners(%Case{} = case_record, self_service?) do
+    case Moderation.page_notice(case_record) do
+      nil ->
+        :ok
+
+      %{organization: organization, recipients: recipients} ->
+        deliver_page_notice(case_record, organization, recipients, self_service?)
+    end
+  end
+
+  defp deliver_page_notice(%Case{} = case_record, organization, recipients, self_service?) do
+    category = Moderation.owner_notice(case_record).category
+
+    for recipient <- recipients do
+      push_case(recipient.id, case_record, category, organization.name)
+
+      deliver_to(recipient, fn user, email ->
+        Emailer.page_content_frozen_email(user, email, case_record, organization, self_service?)
+      end)
+    end
+
+    :ok
   end
 
   # The single send chokepoint: address lookup + SMTP delivery leave the

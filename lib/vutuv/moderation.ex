@@ -267,6 +267,7 @@ defmodule Vutuv.Moderation do
       content_type: content_type(content),
       content_id: content_id(content),
       owner_id: owner_id(content),
+      organization_id: organization_id(content),
       content_snapshot: snapshot(content)
     }
     |> Case.changeset(case_params(status))
@@ -846,7 +847,9 @@ defmodule Vutuv.Moderation do
       Repo.one(
         from(c in Case,
           where: c.id == ^uuid,
-          preload: [:owner, :resolved_by, reports: :reporter]
+          # `:organization` because the case page names the page to its other
+          # owners, who are not the member the case is about (issue #2120).
+          preload: [:owner, :organization, :resolved_by, reports: :reporter]
         )
       )
     end)
@@ -877,12 +880,22 @@ defmodule Vutuv.Moderation do
     |> Repo.one()
   end
 
-  @doc "All open cases owned by `user` (for the owner's banner + case pages)."
-  def open_cases_for_owner(%User{id: user_id}) do
+  @doc """
+  Every open case `user` is told about: their own content, and anything a page
+  they own published (issue #2120) — the same set `case_readable_by?/2` lets
+  them open.
+
+  A co-owner mailed about a takedown who clicks through to `/moderation/cases`
+  has to find it listed there; a list that quietly left it out would read as if
+  their page's picture had never been reported.
+  """
+  def open_cases_for(%User{id: user_id}) do
     from(c in Case,
-      where: c.owner_id == ^user_id and c.status in ^Case.open_statuses(),
-      order_by: [desc: c.inserted_at]
+      where: c.status in ^Case.open_statuses(),
+      order_by: [desc: c.inserted_at],
+      preload: [:organization]
     )
+    |> told_about(user_id)
     |> Repo.all()
   end
 
@@ -895,10 +908,122 @@ defmodule Vutuv.Moderation do
   """
   def owner_notified_cases_query(user_id) do
     from(c in Case,
-      where: c.owner_id == ^user_id,
       where: not is_nil(c.owner_deadline_at) or not is_nil(c.escalated_at)
     )
+    |> told_about(user_id)
   end
+
+  # The one spelling of "this member is told about this case": their own
+  # content, or content a page they own published (issue #2120). Both readers of
+  # the rule compose it, so the set the notifications feed shows and the set
+  # `/moderation/cases` lists cannot drift apart.
+  #
+  # `IN` is the safe direction of the nullable-pair trap: a case with no page
+  # answers NULL on the left, and `false OR NULL` is not true, so a stranger's
+  # case still never shows — where the mirror-image `NOT IN` would have gone
+  # silently false for every row. The subquery selects a NOT NULL column, so it
+  # can contribute no NULL either.
+  #
+  # **It stays a subquery, and the alternative is written down here because the
+  # measurement is real.** Inside an `OR`, `organization_id IN (subquery)` is a
+  # hashed SubPlan rather than an indexable qual, so Postgres cannot plan this
+  # as a BitmapOr and scans `moderation_cases`: measured on a 200k-row replica,
+  # 8.678 ms against 0.018 ms for the bare `owner_id` predicate, and 0.009 ms
+  # for the same thing as `= ANY($n)` over a resolved list. Resolving the list
+  # is nevertheless wrong **here**, for two reasons this module does not get to
+  # overrule. `Vutuv.Activity.kind_specs/3` builds every arm eagerly and is a
+  # pure registry — `notification_filter_coverage_test.exs` walks it with no
+  # database checked out at all — so a query builder that reads the database is
+  # an ownership error rather than a slow page. And `unread_notification_count/1`
+  # is held to the marker read plus one combined count, which `ShellLive` asks
+  # for on every page load; resolving here cost two more round trips than that.
+  # The trade is sound while the table is small (production holds **0** cases
+  # today). If it ever is not, the fix is to hand the ids in from the caller
+  # that executes, not to read them from in here.
+  defp told_about(query, user_id) do
+    where(
+      query,
+      [c],
+      c.owner_id == ^user_id or
+        c.organization_id in subquery(Organizations.owned_page_ids(user_id))
+    )
+  end
+
+  @doc """
+  Whether `user` may **read** this case — its page, the reported picture and the
+  file behind it (issue #2120).
+
+  Three people: the member who carries it, an admin, and every **owner** of the
+  page the content belongs to. Not a publisher and not a recruiter: #2087 split
+  looking at a page's Media Kit from writing it, and a takedown notice is
+  neither — it is news for whoever answers for the page, and an owner is the
+  role that does.
+
+  Reading is as far as it goes; settling it is `case_settleable_by?/2` below.
+
+  Matched on the **column** (`organization_id`), never on a preloaded
+  `:organization`, and guarded rather than scoped to a nil: most cases in the
+  table have no page at all, and `where: x == ^nil` raises.
+  """
+  def case_readable_by?(%Case{} = case_record, %User{} = user) do
+    case_settleable_by?(case_record, user) or user.admin? == true or
+      Organizations.page_owner?(case_record.organization_id, user.id)
+  end
+
+  def case_readable_by?(_case_record, _user), do: false
+
+  @doc """
+  Whether `user` may **settle** this case: delete the content, edit it, or
+  dispute the report.
+
+  The one member who carries the strike ladder, and nobody else — not an owner
+  of the page, who may read everything here, and not an admin, who rules through
+  the admin queue instead. The narrower half of `case_readable_by?/2` and its
+  own function because three surfaces ask it: the two context actions, and the
+  case page, which must not draw a control the POST behind it would refuse.
+  """
+  def case_settleable_by?(%Case{owner_id: owner_id}, %User{id: user_id}),
+    do: owner_id == user_id
+
+  def case_settleable_by?(_case_record, _user), do: false
+
+  @doc """
+  The page this case is about and who else on it has to be told —
+  `%{organization:, recipients:}`, or `nil` for a member's own content.
+
+  The recipients are the page's owners **minus** the member who carries the
+  case: they hear about it through `mail_owner/2`, in the letter that offers
+  them the self-service round, and a second one would say the same thing twice
+  in a voice that does not fit.
+
+  One place, because both halves of the notice ask it — the mail and the live
+  push — and the mail needs the page's name anyway.
+  """
+  def page_notice(%Case{} = case_record) do
+    case page(case_record) do
+      nil ->
+        nil
+
+      organization ->
+        recipients =
+          organization
+          |> Organizations.owners()
+          |> Enum.reject(&(&1.id == case_record.owner_id))
+
+        %{organization: organization, recipients: recipients}
+    end
+  end
+
+  @doc """
+  The page a case is about, or `nil` — the preload where the caller remembered
+  one, a lookup where they did not, so no surface's answer depends on that.
+  """
+  def page(%Case{organization: %Organization{} = organization}), do: organization
+
+  def page(%Case{organization_id: id}) when is_binary(id),
+    do: Organizations.get_organization(id)
+
+  def page(%Case{}), do: nil
 
   ## Owner self-service
 
@@ -908,7 +1033,7 @@ defmodule Vutuv.Moderation do
   """
   def dispute_case(%Case{} = case_record, %User{} = user) do
     cond do
-      case_record.owner_id != user.id ->
+      not case_settleable_by?(case_record, user) ->
         {:error, :not_allowed}
 
       case_record.status != "pending_owner" ->
@@ -934,7 +1059,7 @@ defmodule Vutuv.Moderation do
   """
   def delete_reported_content(%Case{} = case_record, %User{} = user) do
     cond do
-      case_record.owner_id != user.id ->
+      not case_settleable_by?(case_record, user) ->
         {:error, :not_allowed}
 
       case_record.content_type in ["user", "organization"] ->
@@ -2356,6 +2481,19 @@ defmodule Vutuv.Moderation do
 
   defp content_id(%{id: id}), do: id
 
+  # Where a piece of content comes from, as one pair: `{owner_id, organization_id}`
+  # — the member who **answers** for it (the strike ladder) and the page it
+  # belongs to, or nil where there is none.
+  #
+  # One clause table and not two, because for every kind that a page can publish
+  # the two answers are the same fact read twice: the owner *is* whoever claimed
+  # the page the content is on. Two tables would have to learn the next author
+  # kind separately and could drift apart in silence — which is the shape that
+  # has already cost this milestone five silent failures.
+  #
+  # Matched on the **columns** of the nullable pair, never on a preloaded
+  # `:organization`: half the callers hand a bare row over straight from a query.
+
   # A post published in an organization's name (issue #1334) answers to the same
   # member the page itself does — whoever claimed it — rather than to whoever
   # pressed publish. The page's content is the page's, so its accountability
@@ -2363,20 +2501,23 @@ defmodule Vutuv.Moderation do
   # since lost the role would otherwise still carry strikes for it. When that
   # member is gone (`nilify_all`) there is nobody to strike and the report is
   # refused, exactly as it already is for the organization page itself.
-  defp owner_id(%Post{user_id: nil, organization_id: id}) when is_binary(id),
-    do: Organizations.accountable_user_id(id)
+  defp origin(%Post{user_id: nil, organization_id: id}) when is_binary(id),
+    do: {Organizations.accountable_user_id(id), id}
 
-  defp owner_id(%Post{user_id: user_id}), do: user_id
-  defp owner_id(%Message{sender_id: sender_id}), do: sender_id
-  defp owner_id(%User{id: id}), do: id
-  # The member who claimed the page carries the strike ladder; an organization whose
-  # creator has since deleted their account (nilify_all) has no owner to strike,
-  # so report_content/3 refuses it (owner_id == nil), leaving the report path
-  # only for admin freeze.
-  defp owner_id(%Organization{} = organization),
-    do: Organizations.accountable_user_id(organization)
+  defp origin(%Post{user_id: user_id}), do: {user_id, nil}
+  defp origin(%Message{sender_id: sender_id}), do: {sender_id, nil}
+  defp origin(%User{id: id}), do: {id, nil}
 
-  defp owner_id(%JobPosting{user_id: user_id}), do: user_id
+  # The member who claimed the page carries the strike ladder; an organization
+  # whose creator has since deleted their account (nilify_all) has no owner to
+  # strike, so report_content/3 refuses it (owner_id == nil), leaving the report
+  # path only for admin freeze. The page is named all the same, so its team
+  # hears that the page itself was reported (issue #2120).
+  defp origin(%Organization{id: id} = organization),
+    do: {Organizations.accountable_user_id(organization), id}
+
+  defp origin(%JobPosting{user_id: user_id}), do: {user_id, nil}
+
   # A press picture published in a **page's** name (issue #2089). Its
   # `images.user_id` is NULL — the pair `images_press_kit_has_one_owner` holds —
   # so reading that column alone left the kind takedown-ready and
@@ -2385,17 +2526,14 @@ defmodule Vutuv.Moderation do
   # member for the same reason: the page's accountability must not move from
   # person to person with each upload, and `uploader_user_id` cannot be it —
   # it is nulled when that account goes.
-  #
-  # Matched on the **column**, never on a preloaded `:organization`: half the
-  # callers hand a bare row over straight from a query.
-  defp owner_id(%Image{user_id: nil, organization_id: id}) when is_binary(id),
-    do: Organizations.accountable_user_id(id)
+  defp origin(%Image{user_id: nil, organization_id: id}) when is_binary(id),
+    do: {Organizations.accountable_user_id(id), id}
 
   # A picture with no member owner is one of the kinds #2015 brings into the
   # table (a post photo, an organization logo), or a review's cover. There is
   # nobody to strike and no member row to clear, so `can_report?/2` refuses it
   # rather than guessing.
-  defp owner_id(%Image{user_id: user_id}), do: user_id
+  defp origin(%Image{user_id: user_id}), do: {user_id, nil}
 
   # A file answers to whoever published it, which is the owner of the thing it
   # hangs under — not `attachments.user_id`, the member who pressed upload. The
@@ -2403,22 +2541,27 @@ defmodule Vutuv.Moderation do
   # has to win for the reason the organization-post clause above gives: the
   # page's accountability must not move from person to person with each file.
   #
-  # Matched on the **columns** of the nullable parent pair, and read through a
-  # named function rather than three inline lookups, so nothing here can reach
-  # `Repo.get(Post, nil)` — which raises rather than answering nothing. A file
-  # the composer still holds has no parent at all and falls through to its
-  # uploader, who is the only person it could ever be about.
-  defp owner_id(%Attachment{post_id: id}) when is_binary(id), do: parent_owner_id(Post, id)
-  defp owner_id(%Attachment{message_id: id}) when is_binary(id), do: parent_owner_id(Message, id)
-  defp owner_id(%Attachment{user_id: user_id}), do: user_id
+  # Read through a named function rather than three inline lookups, so nothing
+  # here can reach `Repo.get(Post, nil)` — which raises rather than answering
+  # nothing. A file the composer still holds has no parent at all and falls
+  # through to its uploader, who is the only person it could ever be about.
+  defp origin(%Attachment{post_id: id}) when is_binary(id), do: parent_origin(Post, id)
+  defp origin(%Attachment{message_id: id}) when is_binary(id), do: parent_origin(Message, id)
+  defp origin(%Attachment{user_id: user_id}), do: {user_id, nil}
 
   # The parent's own answer, never a second spelling of it: a post's clause
   # above already knows that an organization post answers to whoever claimed the
   # page, and re-selecting `sender_id` here would leave the file behind on the
-  # day a message learns the same thing.
-  defp parent_owner_id(schema, id) do
-    with parent when not is_nil(parent) <- Repo.get(schema, id), do: owner_id(parent)
+  # day a message learns the same thing. One read for both halves.
+  defp parent_origin(schema, id) do
+    case Repo.get(schema, id) do
+      nil -> {nil, nil}
+      parent -> origin(parent)
+    end
   end
+
+  defp owner_id(content), do: content |> origin() |> elem(0)
+  defp organization_id(content), do: content |> origin() |> elem(1)
 
   defp snapshot(%Post{body: body}), do: body
   defp snapshot(%Message{body: body}), do: body

@@ -1,0 +1,38 @@
+<.email_layout preheader={"Un contenuto di #{@page_name} è stato segnalato ed è nascosto"} locale={@locale}>
+  <.email_p>{email_greeting(@user)},</.email_p>
+  <.email_p>{@content_intro} Finché il caso resta aperto, il contenuto resta nascosto.</.email_p>
+  <.email_p>{@standing_sentence}</.email_p>
+  <.email_panel>
+    <.email_row label="Segnalato come">{@category_labels}</.email_row>
+    <.email_row label="Pagina">{@page_name}</.email_row>
+  </.email_panel>
+  <.email_p :if={@notes != []}>
+    Ecco cosa dice la segnalazione, con le parole di chi l'ha scritta. Chi sia stato non glielo
+    diciamo mai:
+  </.email_p>
+  <.email_quote :for={note <- @notes} text={note} />
+  <.email_p :if={@notes == []}>
+    La segnalazione ha indicato quella categoria e nient'altro.
+  </.email_p>
+  <.email_p :if={@copyright_case}>
+    Questa è una contestazione legale, non una regola della casa: sostiene che l'opera non è della
+    pagina. A deciderlo è il diritto d'autore.
+  </.email_p>
+  <.email_p :if={!@copyright_case}>
+    Il fondamento sono
+    <.email_link href={"#{@url}community"}>le nostre regole della comunità</.email_link>, a cui
+    tutto su vutuv deve attenersi.
+  </.email_p>
+  <.email_p>Glielo comunichiamo perché {@page_name} è Sua.</.email_p>
+  <.email_p :if={@self_service}>
+    A rispondere alla segnalazione è il membro che ha rivendicato la pagina: ha 72 ore per
+    cancellare il contenuto, modificarlo o respingere la segnalazione, poi decidono i nostri
+    amministratori. Lei vede tutto quello che vede lui.
+  </.email_p>
+  <.email_p :if={!@self_service}>
+    Il caso è già in mano ai nostri amministratori, quindi non c'è un giro in cui il Suo team
+    possa risolverlo. Comunicheremo l'esito al membro che ha rivendicato la pagina.
+  </.email_p>
+  <.email_button href={"#{@url}moderation/cases/#{@case_id}"}>Vedi il caso</.email_button>
+  <.email_signature locale={@locale} />
+</.email_layout>

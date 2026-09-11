@@ -24,7 +24,7 @@ defmodule VutuvWeb.ModerationCaseController do
 
     render(conn, "index.html",
       page_title: gettext("Reported content"),
-      cases: Moderation.open_cases_for_owner(user)
+      cases: Moderation.open_cases_for(user)
     )
   end
 
@@ -36,6 +36,11 @@ defmodule VutuvWeb.ModerationCaseController do
       render(conn, "show.html",
         page_title: gettext("Reported content"),
         case: case_record,
+        # Whether this reader is the member the case is *about*. An owner of the
+        # page may read everything here and settle nothing, so the three
+        # self-service buttons ask the same predicate the POST behind them does:
+        # drawing a control `dispute_case/2` then refuses would be a 404.
+        carries_case?: Moderation.case_settleable_by?(case_record, conn.assigns[:current_user]),
         # What was claimed, in the reporters' words, and on what ground — the
         # same statement of reasons the owner's email carries (issue #2010).
         notice: Moderation.owner_notice(case_record),
@@ -163,10 +168,13 @@ defmodule VutuvWeb.ModerationCaseController do
     |> redirect(to: ~p"/moderation/cases/#{case_id}")
   end
 
+  # Who may read a case is `Vutuv.Moderation`'s rule, not this controller's:
+  # since #2120 it also admits every owner of the page the content belongs to,
+  # and three routes here plus two templates have to agree on the answer.
+  # Settling the case is a different and narrower question, and
+  # `dispute_case/2` / `delete_reported_content/2` keep asking it themselves.
   defp authorize(conn, %Case{} = case_record) do
-    user = conn.assigns[:current_user]
-
-    if case_record.owner_id == user.id or user.admin? == true do
+    if Moderation.case_readable_by?(case_record, conn.assigns[:current_user]) do
       :ok
     else
       :error

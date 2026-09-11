@@ -1,12 +1,14 @@
 <div class="mx-auto max-w-xl py-6">
   <.card>
+    <%!-- An owner of the page reads the same case and is not the member it is
+          about, so the heading must not call the content theirs (issue #2120). --%>
     <h1 class="text-xl font-bold text-slate-900 dark:text-white">
-      {gettext("Your content was reported")}
+      {heading(@case, @carries_case?)}
     </h1>
 
     <p class="mt-2 flex items-start gap-2 rounded-lg bg-amber-50 p-3 text-sm font-medium text-amber-800 ring-1 ring-amber-200 dark:bg-amber-900/30 dark:text-amber-200 dark:ring-amber-900">
       <span aria-hidden="true">⚑</span>
-      {status_line(@case)}
+      {status_line(@case, @carries_case?)}
       <span :if={@content_fate}>{content_fate_line(@content_fate)}</span>
     </p>
 
@@ -91,7 +93,20 @@
       </div>
     </dl>
 
-    <%= if @case.status == "pending_owner" do %>
+    <%!-- The member who claimed the page carries the strike ladder and is the
+          only one who can answer the report; an owner reading this needs to
+          know that, or the 72 hours look like theirs to spend. --%>
+    <p
+      :if={!@carries_case? && @case.status == "pending_owner" && page_name(@case)}
+      class="mt-5 text-sm text-slate-600 dark:text-slate-400"
+    >
+      {gettext(
+        "You are seeing this because you own %{page}. Answering the report is up to the member who claimed the page: they have 72 hours, and after that our admins decide.",
+        page: page_name(@case)
+      )}
+    </p>
+
+    <%= if @carries_case? && @case.status == "pending_owner" do %>
       <p class="mt-5 text-sm text-slate-600 dark:text-slate-400">
         <%!-- Not "three ways out": a reported message or job posting has no
               edit button, so the count would be wrong for them. --%>
