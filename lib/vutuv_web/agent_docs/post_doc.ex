@@ -55,6 +55,32 @@ defmodule VutuvWeb.AgentDocs.PostDoc do
     do: {restricted? or author.noindex?, restricted? or author.noai?}
 
   @doc """
+  The same for the author **archive**, which has an answer of its own (issue
+  #2172): a page listing nothing for an anonymous reader
+  (`Vutuv.Posts.public_archive_empty?/2`) adds `noindex`.
+
+  It only ever adds. The member's axes are worked out first and emptiness is
+  ored into one of them, so a second condition arriving later composes with
+  this one rather than replacing it, and nothing about an empty page can
+  re-open what its author closed.
+
+  **`noindex` and only that**, for the reason `Vutuv.PressKit.robots_axes/2`
+  states next door: emptiness says what is on the page, not what its author
+  permits, and moving `noai` too would tell an agent a member refused
+  something they never refused.
+
+  Its own function rather than a third argument on `robots_axes/2`, because
+  the emptiness question is *always* the anonymous one and always this
+  query — a caller that could pass the answer in is a caller that can get it
+  wrong, and getting it wrong here means offering an empty page for indexing.
+  """
+  def archive_robots_axes(author, period) do
+    {noindex?, noai?} = robots_axes(author, false)
+
+    {noindex? or Posts.public_archive_empty?(author, period), noai?}
+  end
+
+  @doc """
   The permalink page: the post itself plus its visible replies. Anonymous
   by default; `viewer:` switches the reply list (and its count) to what
   that user sees — the authenticated `/api/2.0` reads. Never pass a viewer
@@ -231,12 +257,18 @@ defmodule VutuvWeb.AgentDocs.PostDoc do
   reposts), whole or scoped to a year / month / day (`period_label`).
   `path` is the extension-free request path, so the doc describes exactly
   the page that was asked for (including the period segments).
+
+  `period` is that scope as a `{from, to}` pair, the label's machine twin, and
+  the only reason it is passed: the document asks `archive_robots_axes/2`
+  whether the page it describes has anything on it (issue #2172). A caller
+  with no period scope (`/api/2.0`) leaves it out.
   """
-  def build_archive(author, path, entries, total, period_label) do
-    # Both axes, like the permalink: an archive is the member's own posts under
-    # their own handle, so their opt-outs apply to it exactly as they do to the
-    # profile it hangs off.
-    {noindex?, noai?} = robots_axes(author, false)
+  def build_archive(author, path, entries, total, period_label, period \\ nil) do
+    # The member's own opt-outs, which reach an archive exactly as they reach
+    # the profile it hangs off, narrowed by the page's emptiness. Asked rather
+    # than read off `total` — see `Posts.public_archive_empty?/2`, which holds
+    # the reason and the measurement.
+    {noindex?, noai?} = archive_robots_axes(author, period)
 
     AgentDocs.doc_meta("post_archive", path, noindex: noindex?, noai: noai?)
     |> Map.merge(%{
