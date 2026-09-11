@@ -168,6 +168,56 @@ defmodule Vutuv.PrecommitHookTest do
     end
   end
 
+  describe "the directory a push leaves from" do
+    # The hook walks a command line's directories the way the shell does; see
+    # `dir_word` and `join_dir` there for why each case matters.
+    test "a home-relative path names a stranger like its absolute path", ctx do
+      stranger = tmp_repo()
+      home = Path.dirname(stranger)
+      name = Path.basename(stranger)
+
+      assert decide(ctx, "cd ~/#{name} && git push", home: home) == "ALLOW"
+      assert decide(ctx, "git -C ~/#{name} push", home: home) == "ALLOW"
+    end
+
+    test "a relative path continues from the last cd", ctx do
+      stranger = tmp_repo()
+      parent = Path.dirname(stranger)
+      name = Path.basename(stranger)
+
+      assert decide(ctx, "cd #{parent} && git -C #{name} push") == "ALLOW"
+      assert decide(ctx, "cd #{parent} && cd #{name} && git push") == "ALLOW"
+    end
+
+    test "a relative -C after a cd names that tree, not this checkout", ctx do
+      repo = tmp_project(["lib/vutuv/thing.ex"])
+
+      assert decide(ctx, "cd #{repo} && git -C lib push") == "PUSH #{repo}"
+    end
+
+    test "a home-relative path still gates a checkout of this repository", ctx do
+      repo = tmp_project(["lib/vutuv/thing.ex"])
+      command = "git -C ~/#{Path.basename(repo)} push"
+
+      assert decide(ctx, command, home: Path.dirname(repo)) == "PUSH #{repo}"
+    end
+
+    test "a quoted tilde stays a literal, as it does for the shell", ctx do
+      stranger = tmp_repo()
+      command = ~s{cd "~/#{Path.basename(stranger)}"; git push}
+
+      decision = decide(ctx, command, home: Path.dirname(stranger))
+
+      assert decision =~ "BLOCK", "expected a block, got: #{decision}"
+    end
+
+    test "an unset HOME leaves a tilde unresolved", ctx do
+      decision = decide(ctx, "cd ~/#{Path.basename(tmp_repo())} && git push", home: nil)
+
+      assert decision =~ "BLOCK", "expected a block, got: #{decision}"
+    end
+  end
+
   describe "the documentation exemption" do
     # `mix precommit`'s cost is its ~9,100-test suite, and none of its five
     # steps can read a `docs/` page, a `.github/` workflow or a top-level
@@ -287,44 +337,70 @@ defmodule Vutuv.PrecommitHookTest do
     end
   end
 
+  describe "the gate itself" do
+    # Everything above reads `--explain`, which never runs precommit; a
+    # stand-in `mise` answers for it here, so the suite does not run itself.
+    test "a red precommit blocks the push and a green one lets it through", ctx do
+      repo = tmp_project(["lib/vutuv/thing.ex"])
+      push = "git -C #{repo} push"
+
+      {out, status} = run_hook(ctx, push, [], path: path_with_mise("exit 1"))
+      assert status == 2, "a red precommit must block, got #{status}: #{out}"
+      assert out =~ "`mix precommit` failed"
+
+      assert {_, 0} = run_hook(ctx, push, [], path: path_with_mise("exit 0"))
+    end
+
+    test "its timeout outlasts the slowest precommit", ctx do
+      # A command hook that times out does not block: Claude Code lets the
+      # tool call through. The hook's own header puts a loaded machine at
+      # ~900 s, and at the old 300 s every slower push went out unchecked.
+      timeout =
+        Path.join(ctx.root, ".claude/settings.json")
+        |> File.read!()
+        |> Jason.decode!()
+        |> get_in(["hooks", "PreToolUse"])
+        |> Enum.flat_map(& &1["hooks"])
+        |> Enum.find_value(&(&1["command"] =~ "precommit-before-push.sh" && &1["timeout"]))
+
+      assert is_integer(timeout) and timeout > 900, "timeout is #{inspect(timeout)}"
+    end
+  end
+
   # Runs the hook in `--explain` mode against a payload and returns its verdict.
+  defp decide(ctx, command, opts \\ []) do
+    {out, _status} = run_hook(ctx, command, ["--explain"], opts)
+    out
+  end
+
+  # Runs the hook against a payload and returns its output and exit status.
   # `System.cmd/3` cannot feed stdin, so the payload goes in through a file
   # redirect run by `sh`.
-  defp decide(ctx, command, opts \\ []) do
+  defp run_hook(ctx, command, args, opts) do
     cwd = Keyword.get(opts, :cwd, ctx.root)
     payload = Jason.encode!(%{"cwd" => cwd, "tool_input" => %{"command" => command}})
 
-    payload_file =
-      Path.join(
-        System.tmp_dir!(),
-        "precommit-hook-payload-#{System.unique_integer([:positive])}.json"
-      )
-
+    payload_file = Path.join(tmp_dir!("precommit-hook-payload"), "payload.json")
     File.write!(payload_file, payload)
-    on_exit(fn -> File.rm(payload_file) end)
 
+    # A `nil` value unsets the variable in the child.
     env =
-      case Keyword.fetch(opts, :path) do
-        {:ok, path} -> [{"PATH", path}]
-        :error -> []
-      end
+      for {opt, var} <- [path: "PATH", home: "HOME"],
+          Keyword.has_key?(opts, opt),
+          do: {var, opts[opt]}
 
-    script = "bash #{shell_quote(ctx.hook)} --explain < #{shell_quote(payload_file)}"
+    script =
+      "bash #{shell_quote(ctx.hook)} #{Enum.join(args, " ")} < #{shell_quote(payload_file)}"
 
-    {out, _status} =
+    {out, status} =
       System.cmd("sh", ["-c", script], cd: ctx.root, env: env, stderr_to_stdout: true)
 
-    String.trim(out)
+    {String.trim(out), status}
   end
 
   # A throwaway git repository, optionally carrying an `origin` remote.
   defp tmp_repo(opts \\ []) do
-    tmp =
-      System.tmp_dir!()
-      |> Path.join("precommit-hook-test-#{System.unique_integer([:positive])}")
-
-    File.mkdir_p!(tmp)
-    on_exit(fn -> File.rm_rf!(tmp) end)
+    tmp = tmp_dir!("precommit-hook-test")
     {_, 0} = System.cmd("git", ["init", "--quiet", tmp])
 
     case Keyword.fetch(opts, :remote) do
@@ -432,16 +508,27 @@ defmodule Vutuv.PrecommitHookTest do
 
   defp shell_quote(value), do: "'" <> String.replace(value, "'", ~S('\'')) <> "'"
 
-  # A PATH holding every binary the hook needs except `jq`.
-  defp path_without_jq do
-    dir =
-      Path.join(
-        System.tmp_dir!(),
-        "precommit-hook-nojq-#{System.unique_integer([:positive])}"
-      )
-
+  # A fresh directory under the system temp dir, removed when the test exits.
+  defp tmp_dir!(prefix) do
+    dir = Path.join(System.tmp_dir!(), "#{prefix}-#{System.unique_integer([:positive])}")
     File.mkdir_p!(dir)
     on_exit(fn -> File.rm_rf!(dir) end)
+    dir
+  end
+
+  # The caller's PATH with a `mise` in front that runs `body` instead of mix.
+  defp path_with_mise(body) do
+    dir = tmp_dir!("precommit-hook-mise")
+    mise = Path.join(dir, "mise")
+    File.write!(mise, "#!/bin/sh\n#{body}\n")
+    File.chmod!(mise, 0o755)
+
+    dir <> ":" <> System.get_env("PATH")
+  end
+
+  # A PATH holding every binary the hook needs except `jq`.
+  defp path_without_jq do
+    dir = tmp_dir!("precommit-hook-nojq")
 
     for tool <- ~w(bash sh awk git cat sed grep env) do
       case System.find_executable(tool) do

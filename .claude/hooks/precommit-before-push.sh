@@ -49,7 +49,10 @@
 # a wrapper it does not know (`bash -c '…'`, `xargs git`, a shell function, a
 # script, a Makefile target, an editor's VCS integration), and quoting is
 # approximated rather than parsed. It is the last automatic reminder before
-# production, not a guarantee that nothing else can push.
+# production, not a guarantee that nothing else can push. And a hook that
+# outlives its `timeout` in `.claude/settings.json` does not block: Claude Code
+# cancels it and lets the push through, so that timeout must outlast the
+# slowest precommit (the test pins it above ~900 s).
 #
 # Run `bash precommit-before-push.sh --explain < payload.json` to print the
 # decision (ALLOW / SKIP <reason> / PUSH <toplevel> / BLOCK <reason>) without
@@ -141,6 +144,31 @@ strip_quotes() {
   printf '%s' "$t"
 }
 
+# The path a directory argument names, as the shell would hand it over. A bare
+# leading `~`, alone or before a slash, is $HOME: that is how a dotfiles push is
+# usually typed, and read literally it named no directory and blocked the push
+# rule 4 exists to let through. A quoted `~` stays literal because the shell
+# leaves it literal too. An unset HOME, `~user` and `$HOME` stay unresolved,
+# which blocks.
+dir_word() {
+  case "$1" in
+    "~" | "~/"*)
+      [ -n "${HOME:-}" ] && printf '%s%s' "$HOME" "${1#"~"}" && return
+      ;;
+  esac
+  strip_quotes "$1"
+}
+
+# Where a shell standing in $1 arrives through the path $2. A relative path
+# continues from where the command line stands, never from where this hook
+# does, or `cd <other worktree> && git -C lib push` would gate this checkout.
+join_dir() {
+  case "$2" in
+    /*) printf '%s' "$2" ;;
+    *) printf '%s/%s' "$1" "$2" ;;
+  esac
+}
+
 # The command line, split into segments on the operators that separate one
 # command from the next. Splitting inside a quoted string only produces extra
 # segments that start with no command at all, which are ignored.
@@ -153,9 +181,10 @@ push_dir=""
 # really does carry the current branch and nothing besides.
 push_args=""
 push_args_unknown=0
-# A `cd` in an earlier segment governs a push in a later one
-# (`cd /tree && git push`), so the walk carries the last target along.
-chain_dir=""
+# Where the command line stands: the tool call's own directory, then wherever
+# each `cd` walks it. A push in a later segment leaves from there
+# (`cd /tree && git push`).
+cur=${payload_cwd:-$PWD}
 
 while IFS= read -r segment; do
   # Word-split on whitespace. Quoted arguments holding spaces are split too;
@@ -177,7 +206,7 @@ while IFS= read -r segment; do
   case "${argv0##*/}" in
     cd)
       next=$((idx + 1))
-      [ "$next" -lt "${#words[@]}" ] && chain_dir=$(strip_quotes "${words[$next]}")
+      [ "$next" -lt "${#words[@]}" ] && cur=$(join_dir "$cur" "$(dir_word "${words[$next]}")")
       continue
       ;;
     git) ;;
@@ -194,9 +223,10 @@ while IFS= read -r segment; do
     case "$w" in
       -C)
         j=$((j + 1))
-        [ "$j" -lt "${#words[@]}" ] && dir_opt=$(strip_quotes "${words[$j]}")
+        [ "$j" -lt "${#words[@]}" ] && dir_opt=$(join_dir "${dir_opt:-$cur}" "$(dir_word "${words[$j]}")")
         ;;
-      -C?*) dir_opt=${w#-C} ;;
+      # Glued to its option, the path gets no tilde expansion from the shell.
+      -C?*) dir_opt=$(join_dir "${dir_opt:-$cur}" "${w#-C}") ;;
       # Global options that swallow the following word.
       -c | --git-dir | --work-tree | --namespace | --exec-path | --config-env)
         j=$((j + 1))
@@ -228,18 +258,16 @@ while IFS= read -r segment; do
   fi
 
   if [ "$found_push" -eq 1 ]; then
-    push_dir=${dir_opt:-$chain_dir}
+    push_dir=${dir_opt:-$cur}
     break
   fi
 done <<<"$segments"
 
 [ "$found_push" -eq 1 ] || allow
 
-# Resolve the worktree the push actually runs in: an explicit `git -C <dir>`
-# first, then a `cd` from the same command line, then the directory the tool
-# call was made in. Anything unresolvable blocks.
-dir=${push_dir:-$payload_cwd}
-dir=${dir:-$PWD}
+# The worktree the push actually runs in: an explicit `git -C <dir>`, else
+# where the command line stands. Anything unresolvable blocks.
+dir=$push_dir
 
 toplevel=$(git -C "$dir" rev-parse --show-toplevel 2>/dev/null)
 [ -n "$toplevel" ] ||
