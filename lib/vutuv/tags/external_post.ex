@@ -159,8 +159,23 @@ defmodule Vutuv.Tags.ExternalPost do
   else), so this is the only address there is. The remote twin of
   `Vutuv.Posts.path/1`, and what `Vutuv.Fediverse.subject_origin/1` answers for
   this kind.
+
+  **It is also the only thing two stored copies of one post share**, and so the
+  key that relates them (issue #2164). The rows are keyed on tag, server and
+  remote id, so the same status read off five servers under two tags is ten
+  rows with nothing in that key to join them by — while this column is
+  `status["url"]` verbatim (`Vutuv.Tags.ExternalTagClient`), the author's own
+  canonical permalink, which every server relays unchanged rather than
+  rewriting. Measured on a copy of production: 78 stored rows carried 43
+  distinct values, and normalizing case, trailing slash and fragment grouped
+  them no further. Ask through here rather than reading the column, so the next
+  reader of "is this the same post" finds one answer.
   """
   def origin(%__MODULE__{url: url}), do: url
+
+  # A row on its way in is a plain map — `Vutuv.Tags.ExternalPosts` builds them
+  # for `insert_all` — and the ingest gate has to ask the same question of it.
+  def origin(%{url: url}), do: url
 
   defp local_name(acct) when is_binary(acct), do: acct |> String.split("@") |> hd()
   defp local_name(_acct), do: nil

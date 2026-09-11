@@ -15,6 +15,7 @@ defmodule Vutuv.Tags.ExternalPostsTest do
   import Vutuv.ExternalTagHelpers
 
   alias Vutuv.Fediverse
+  alias Vutuv.Fediverse.NoteEvent
   alias Vutuv.Repo
   alias Vutuv.Tags
   alias Vutuv.Tags.ExternalFetch
@@ -55,6 +56,15 @@ defmodule Vutuv.Tags.ExternalPostsTest do
   # Age a pair's schedule rather than sleeping until it comes due.
   defp overdue!(tag, at),
     do: tag |> fetch_row() |> Ecto.Changeset.change(next_fetch_at: at) |> Repo.update!()
+
+  # The address of one original, and one stored copy of it. Both given
+  # explicitly: the helper's default url is the same string for every fixture,
+  # and a test about matching on that column must not be able to match by
+  # accident.
+  defp original(path), do: "https://#{@source}/@ada/#{path}"
+
+  defp copy(tag, url, source),
+    do: external_post(tag, url: url, source: source, author_host: @source)
 
   describe "due_sources/1" do
     test "answers a wanted pair that has never been fetched" do
@@ -390,6 +400,115 @@ defmodule Vutuv.Tags.ExternalPostsTest do
 
       assert %{stored: 1} = ExternalPosts.fetch_due()
       assert Repo.aggregate(ExternalPost, :count) == 2
+    end
+  end
+
+  # What a member means by Report is "this post, off this site", and what
+  # relates the copies is `Vutuv.Tags.ExternalPost.origin/1`. Measured on a copy
+  # of production: the one post somebody really did report stood as **six** rows
+  # of which two were marked (issue #2164).
+  describe "a report" do
+    setup do
+      {:ok, reporter: insert(:activated_user)}
+    end
+
+    test "takes every copy of the same original, across servers and across tags", %{
+      reporter: reporter
+    } do
+      one = followed_tag()
+      two = followed_tag(@other_source)
+      url = original("4711")
+
+      clicked = copy(one, url, @source)
+      other_server = copy(one, url, @other_source)
+      other_tag = copy(two, url, @source)
+      untouched = copy(one, original("4712"), @source)
+
+      assert :ok = ExternalPosts.report(clicked.id, reporter)
+
+      for id <- [clicked.id, other_server.id, other_tag.id] do
+        row = Repo.get!(ExternalPost, id)
+        assert row.reported_at, "a copy of the reported original kept standing"
+        assert row.text == ""
+        refute row.author_acct
+      end
+
+      standing = Repo.get!(ExternalPost, untouched.id)
+      refute standing.reported_at
+      assert standing.text == "Hello from over there"
+    end
+
+    # One act, one row in the operator's ledger: it answers "is this one troll
+    # or is this server the problem", and counting the copies we happened to
+    # hold would answer a question about our own cache instead.
+    test "writes one ledger row however many copies it took", %{reporter: reporter} do
+      tag = followed_tag()
+      url = original("4713")
+      clicked = copy(tag, url, @source)
+      copy(tag, url, @other_source)
+
+      assert :ok = ExternalPosts.report(clicked.id, reporter)
+
+      ledger = from(e in NoteEvent, where: e.action == "reported_post")
+      assert Repo.aggregate(ledger, :count) == 1
+    end
+
+    test "a later pull cannot write the words back into a copy it already holds", %{
+      reporter: reporter
+    } do
+      tag = followed_tag()
+      stub_tag_timeline([status(%{"id" => "s1", "url" => original("s1")})])
+      assert %{stored: 1} = ExternalPosts.fetch_due()
+
+      post = Repo.one!(ExternalPost)
+      assert :ok = ExternalPosts.report(post.id, reporter)
+
+      overdue!(tag, DateTime.utc_now(:second))
+      assert %{stored: 0} = ExternalPosts.fetch_due()
+
+      row = Repo.get!(ExternalPost, post.id)
+      assert row.reported_at
+      assert row.text == ""
+    end
+
+    # The tombstone only stops the row it sits on from being rewritten. A tag
+    # nobody followed at the time of the report is a **new** (tag, server) pair,
+    # so the same status arrives as a fresh row with its words intact — the
+    # promise broken with one extra step. The gate is on the way in.
+    test "a copy arriving under a tag followed later is refused", %{reporter: reporter} do
+      _one = followed_tag()
+      stub_tag_timeline([status(%{"id" => "s1", "url" => original("s1")})])
+      assert %{stored: 1} = ExternalPosts.fetch_due()
+
+      assert :ok = ExternalPosts.report(Repo.one!(ExternalPost).id, reporter)
+
+      _two = followed_tag()
+      assert %{stored: 0} = ExternalPosts.fetch_due()
+
+      assert Repo.aggregate(ExternalPost, :count) == 1
+      assert Repo.one!(ExternalPost).text == ""
+    end
+
+    test "the tombstone outlives both caps", %{reporter: reporter} do
+      put_config(:external_tag_post_caps, per_tag: 1, total: 1)
+      tag = followed_tag()
+
+      reported =
+        external_post(tag,
+          source: @source,
+          author_host: @source,
+          url: original("4715"),
+          published_at: ~U[2026-08-01 10:00:00Z]
+        )
+
+      assert :ok = ExternalPosts.report(reported.id, reporter)
+
+      # Newer rows arrive and both trims run over the table.
+      stub_tag_timeline([status(%{"id" => "s9", "created_at" => "2026-08-20T10:00:00.000Z"})])
+      assert %{stored: 1} = ExternalPosts.fetch_due()
+      ExternalPosts.enforce_ceiling()
+
+      assert Repo.get(ExternalPost, reported.id)
     end
   end
 end

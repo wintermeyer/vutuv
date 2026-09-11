@@ -269,20 +269,51 @@ defmodule Vutuv.Tags.ExternalPosts do
   end
 
   @doc """
+  Whether two stored rows are copies of one original.
+
+  `Vutuv.Tags.ExternalPost.origin/1` owns that key and says why it is the only
+  one available; this is the question a page asks of rows it already holds.
+  """
+  def copy?(%ExternalPost{} = one, %ExternalPost{} = other),
+    do: ExternalPost.origin(one) == ExternalPost.origin(other)
+
+  # Every stored copy of the originals `origins` names, whichever tag or server
+  # filed them. The in-memory twin of `copy?/2`, and the one place this module
+  # turns that key into SQL.
+  #
+  # Unindexed on purpose: `url` carries no index and the table is capped at
+  # `caps()[:total]`, so this is a sequential scan of a bounded table —
+  # measured at 0.05 ms over the 78 rows a copy of production holds and 0.76 ms
+  # over 10,000 at the ceiling, on a member's click and on the fetcher. A
+  # partial index `(url) WHERE reported_at IS NOT NULL` takes the second figure
+  # to 0.015 ms and is what to add if an operator ever raises that cap.
+  defp copies_query(origins) when is_list(origins),
+    do: from(p in ExternalPost, where: p.url in ^origins)
+
+  @doc """
   Somebody reports one of these as not appropriate.
 
-  **Blanks it rather than deleting it.** Reporting a post cached from a followed
-  account deletes the row, because nothing goes looking for it again; this table
-  is re-read every ten minutes to three hours with `on_conflict: :nothing`, so a
-  deleted row would simply be written back — a report that undoes itself is not
-  a control. So the words go, the key stays, and every reader skips it
-  (`showable_query/0`).
+  **Every copy of that original goes, not the row that was clicked.** A member
+  pressing Report means "this post, off this site" — and one status really did
+  stand here as six rows, of which a report marked one, so the reader met the
+  post they had just reported two cards further down under another "found
+  through" line (issue #2164). `ExternalPost.origin/1` is what relates them.
+
+  **Blanks them rather than deleting them.** Reporting a post cached from a
+  followed account deletes the row, because nothing goes looking for it again;
+  this table is re-read every ten minutes to three hours with
+  `on_conflict: :nothing`, so a deleted row would simply be written back — a
+  report that undoes itself is not a control. So the words go, the key stays,
+  and every reader skips it (`showable_query/0`). What the tombstones cannot do
+  by themselves is refuse a copy arriving under a tag nobody followed at the
+  time, which is a *new* key: that is `reject_reported/1` on the way in.
 
   Like its sibling this sends no `Flag` and opens no case: the post still stands
   on its own server, untouched, and what a member here can ask for is that this
   installation stop showing it. The takedown is recorded in the same
-  content-free ledger, so the operator's "is this one troll or is this server
-  the problem" question counts these alongside the rest.
+  content-free ledger, **once per act** — the copies are an artefact of how we
+  cache, and counting them would answer the operator's "one troll or one bad
+  server" question with a number about ourselves.
 
   Rate limited per reporter.
   """
@@ -300,7 +331,7 @@ defmodule Vutuv.Tags.ExternalPosts do
   defp take_down(post_id, %User{} = reporter) do
     case UUIDv7.with_cast(post_id, &Repo.get(ExternalPost, &1)) do
       %ExternalPost{reported_at: nil} = post ->
-        blank(post)
+        blank_copies(post)
 
         Fediverse.log_reported_post(%{
           host: post.author_host || post.source,
@@ -319,10 +350,18 @@ defmodule Vutuv.Tags.ExternalPosts do
     end
   end
 
-  # What the row keeps is what the next pull's unique index needs: the tag, the
-  # server, the remote id and the stamp. The words and the author go.
-  defp blank(%ExternalPost{id: id}) do
-    Repo.update_all(from(p in ExternalPost, where: p.id == ^id),
+  # What each row keeps is what the next pull's unique index needs: the tag, the
+  # server, the remote id and the stamp. The words and the author go, from every
+  # copy at once. One statement, so the copies cannot end up in two states.
+  #
+  # Every copy keeps its own tombstone rather than one standing for all of them:
+  # `trim/2` exempts them from both caps, so a report costs the table one row
+  # per copy until `prune/0` drops the pair with the last follow that wanted it.
+  # The alternative — one tombstone and a delete for the rest — leans on
+  # `reject_reported/1` alone to keep them out, where this leans on the row key
+  # as well.
+  defp blank_copies(%ExternalPost{} = post) do
+    Repo.update_all(copies_query([ExternalPost.origin(post)]),
       set: [
         text: "",
         author_name: nil,
@@ -641,13 +680,14 @@ defmodule Vutuv.Tags.ExternalPosts do
 
   defp store(tag_id, posts) do
     now = NaiveDateTime.utc_now(:second)
+    rows = posts |> Enum.flat_map(&row(&1, tag_id, now)) |> reject_reported()
 
     # The schema, never a bare table name: a schemaless insert_all holds no
     # field types and hands Postgrex a readable UUID string it cannot encode.
     # `on_conflict: :nothing` makes the count the number of rows that were
     # really new, which is what the cadence reads.
     {stored, nil} =
-      Repo.insert_all(ExternalPost, Enum.flat_map(posts, &row(&1, tag_id, now)),
+      Repo.insert_all(ExternalPost, rows,
         on_conflict: :nothing,
         conflict_target: [:tag_id, :source, :remote_id]
       )
@@ -657,6 +697,38 @@ defmodule Vutuv.Tags.ExternalPosts do
     if stored > 0, do: trim(from(p in ExternalPost, where: p.tag_id == ^tag_id), caps()[:per_tag])
 
     stored
+  end
+
+  # A reported original never comes back, whatever tag or server carries it in
+  # next (issue #2164). The tombstones `report/2` leaves only stop the rows they
+  # sit on from being rewritten, since `on_conflict: :nothing` needs the key to
+  # be there to do nothing about — but a tag nobody followed at the time is a
+  # **new** (tag, server, remote id), so the same status would arrive as a fresh
+  # row with its words intact. That is the promise "every copy goes" broken with
+  # one extra step, so the gate is here, on the way in, where the blocklist's
+  # is: `store/2` is the only way into this table.
+  #
+  # The tombstones are also the register of what has been reported, so the
+  # promise lasts exactly as long as they do — `prune/0` takes them with the
+  # last follow that wanted the pair, which is the retention answer this table
+  # already gives for a stranger's words.
+  #
+  # One statement per store that had rows to write; an empty timeline is an
+  # ordinary answer and pays nothing.
+  defp reject_reported([]), do: []
+
+  defp reject_reported(rows) do
+    origins = Enum.map(rows, &ExternalPost.origin/1)
+
+    reported =
+      origins
+      |> copies_query()
+      |> where([p], not is_nil(p.reported_at))
+      |> select([p], p.url)
+      |> Repo.all()
+      |> MapSet.new()
+
+    Enum.reject(rows, &MapSet.member?(reported, ExternalPost.origin(&1)))
   end
 
   # Through the changeset, because these values were written by a stranger's

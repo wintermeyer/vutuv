@@ -28,10 +28,26 @@ defmodule VutuvWeb.Live.RemotePostActions do
 
   import Phoenix.LiveView, only: [put_flash: 3]
 
+  alias Vutuv.Accounts.User
   alias Vutuv.Fediverse
   alias Vutuv.Mutes
   alias Vutuv.Tags.ExternalPosts
   alias VutuvWeb.MuteMessages
+
+  # Nobody is not an actor. Every act here names the reader — report, mute,
+  # unfollow — and the card renders the menu for a signed-in one only, so an
+  # anonymous socket arriving at one of these is a crafted client and not a
+  # member. Until issue #2164 each act carried that straight into a context
+  # function with a single `%User{}` head, where it raised and took the page
+  # down with it — and a tag timeline is a page anybody can open. One clause for
+  # all six, in the module that owns the events, rather than a nil clause per
+  # context weakening six honest heads.
+  defp with_viewer(socket, act) do
+    case socket.assigns[:current_user] do
+      %User{} = viewer -> act.(viewer)
+      _nobody -> {:noreply, socket}
+    end
+  end
 
   @doc """
   Handles a `"report-remote-post"` event for the cached post `id`, returning the
@@ -41,35 +57,45 @@ defmodule VutuvWeb.Live.RemotePostActions do
   to leave the page.
   """
   def report(socket, id, on_removed) when is_function(on_removed, 1) do
-    id
-    |> Fediverse.report_remote_post(socket.assigns.current_user)
-    |> reported(socket, on_removed)
+    with_viewer(socket, fn viewer ->
+      id
+      |> Fediverse.report_remote_post(viewer)
+      |> reported(socket, on_removed, gettext("Thank you. Our copy was deleted right away."))
+    end)
   end
 
   @doc """
   The same for a `"report-external-post"` event — a post a followed tag brought
   back from another server's public tag timeline (issue #2127).
 
-  Same three answers and the same two sentences, because to the member it is the
-  same act on the same kind of thing: our copy of somebody else's post goes, and
-  the post itself stands where its author put it. How that copy goes differs and
-  is invisible from here — `Vutuv.Tags.ExternalPosts.report/2` says.
+  Same three answers, and **a sentence of its own**: this act takes several
+  copies where its sibling takes the one row that exists. Promising a member a
+  single deleted copy while the twin stood two cards further down is the defect
+  issue #2164 exists for, so the two wordings are deliberately not shared. How
+  the copies go, and why there are several, is
+  `Vutuv.Tags.ExternalPosts.report/2`.
   """
   def report_external(socket, id, on_removed) when is_function(on_removed, 1) do
-    id
-    |> ExternalPosts.report(socket.assigns.current_user)
-    |> reported(socket, on_removed)
+    with_viewer(socket, fn viewer ->
+      id
+      |> ExternalPosts.report(viewer)
+      |> reported(
+        socket,
+        on_removed,
+        gettext("Thank you. Every copy on this vutuv is gone and will not come back.")
+      )
+    end)
   end
 
   # The answer, whichever copy it was about.
-  defp reported(:ok, socket, on_removed) do
+  defp reported(:ok, socket, on_removed, message) do
     {:noreply,
      socket
-     |> put_flash(:info, gettext("Thank you. Our copy was deleted right away."))
+     |> put_flash(:info, message)
      |> on_removed.()}
   end
 
-  defp reported({:error, :rate_limited}, socket, _on_removed) do
+  defp reported({:error, :rate_limited}, socket, _on_removed, _message) do
     {:noreply,
      put_flash(
        socket,
@@ -78,7 +104,7 @@ defmodule VutuvWeb.Live.RemotePostActions do
      )}
   end
 
-  defp reported({:error, :not_found}, socket, on_removed),
+  defp reported({:error, :not_found}, socket, on_removed, _message),
     do: {:noreply, on_removed.(socket)}
 
   @doc """
@@ -94,21 +120,21 @@ defmodule VutuvWeb.Live.RemotePostActions do
   account they never followed is a confusing thing to read.
   """
   def mute(socket, account_id, on_muted) when is_function(on_muted, 1) do
-    viewer = socket.assigns.current_user
+    with_viewer(socket, fn viewer ->
+      case Mutes.target("remote_account", account_id) do
+        nil ->
+          {:noreply, on_muted.(socket)}
 
-    case Mutes.target("remote_account", account_id) do
-      nil ->
-        {:noreply, on_muted.(socket)}
+        account ->
+          following? = Fediverse.remote_follow_for(viewer, account) != nil
+          {:ok, _mute} = Mutes.mute(viewer, account, :all)
 
-      account ->
-        following? = Fediverse.remote_follow_for(viewer, account) != nil
-        {:ok, _mute} = Mutes.mute(viewer, account, :all)
-
-        {:noreply,
-         socket
-         |> put_flash(:info, muted_message(following?))
-         |> on_muted.()}
-    end
+          {:noreply,
+           socket
+           |> put_flash(:info, muted_message(following?))
+           |> on_muted.()}
+      end
+    end)
   end
 
   @doc """
@@ -139,18 +165,20 @@ defmodule VutuvWeb.Live.RemotePostActions do
   # differed by an atom and a sentence, which is two places for the next scope
   # to be forgotten in.
   defp mute_at(socket, account_id, scope, on_muted) when is_function(on_muted, 1) do
-    case Mutes.target("remote_account", account_id) do
-      nil ->
-        {:noreply, on_muted.(socket)}
+    with_viewer(socket, fn viewer ->
+      case Mutes.target("remote_account", account_id) do
+        nil ->
+          {:noreply, on_muted.(socket)}
 
-      account ->
-        {:ok, _mute} = Mutes.mute(socket.assigns.current_user, account, scope)
+        account ->
+          {:ok, _mute} = Mutes.mute(viewer, account, scope)
 
-        {:noreply,
-         socket
-         |> put_flash(:info, MuteMessages.flash(scope))
-         |> on_muted.()}
-    end
+          {:noreply,
+           socket
+           |> put_flash(:info, MuteMessages.flash(scope))
+           |> on_muted.()}
+      end
+    end)
   end
 
   defp muted_message(true),
@@ -168,15 +196,17 @@ defmodule VutuvWeb.Live.RemotePostActions do
   at may be gone from the database by the time it returns.
   """
   def unfollow(socket, account_id, on_removed) when is_function(on_removed, 1) do
-    case Fediverse.unfollow_remote_account(socket.assigns.current_user, account_id) do
-      :ok ->
-        {:noreply,
-         socket
-         |> put_flash(:info, gettext("Unfollowed. Their posts leave your feed."))
-         |> on_removed.()}
+    with_viewer(socket, fn viewer ->
+      case Fediverse.unfollow_remote_account(viewer, account_id) do
+        :ok ->
+          {:noreply,
+           socket
+           |> put_flash(:info, gettext("Unfollowed. Their posts leave your feed."))
+           |> on_removed.()}
 
-      {:error, :not_found} ->
-        {:noreply, on_removed.(socket)}
-    end
+        {:error, :not_found} ->
+          {:noreply, on_removed.(socket)}
+      end
+    end)
   end
 end

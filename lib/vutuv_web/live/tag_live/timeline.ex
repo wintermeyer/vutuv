@@ -125,8 +125,9 @@ defmodule VutuvWeb.TagLive.Timeline do
   end
 
   # The same for a post one of this tag's servers carried (issue #2127). The
-  # page is re-read rather than the row hunted down: unlike a cached post, one
-  # of these appears exactly once here, and a reload is what the other
+  # page is re-read rather than the rows hunted down: the report takes every
+  # copy of that original (issue #2164) and each of this tag's servers filed one
+  # of them, so several cards leave at once — and a reload is what the other
   # row-removing events on this page already do.
   def handle_event("report-external-post", %{"id" => id}, socket) do
     RemotePostActions.report_external(socket, id, &reload/1)
