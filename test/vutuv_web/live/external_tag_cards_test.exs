@@ -27,6 +27,8 @@ defmodule VutuvWeb.ExternalTagCardsTest do
   @source Vutuv.ExternalTagHelpers.tag_source()
   @author_host Vutuv.ExternalTagHelpers.author_host()
 
+  @other_source Vutuv.ExternalTagHelpers.second_source()
+
   setup do
     put_config(:fetch_external_tag_posts, true)
     :ok
@@ -123,6 +125,43 @@ defmodule VutuvWeb.ExternalTagCardsTest do
       refute again =~ "EIN FUND VON DRUEBEN"
     end
 
+    # The same post read off two servers under two tags is two rows and two
+    # cards, and a member who reports one of them has been told the post is
+    # gone from this site. It has to be — the reader who then meets the twin
+    # under another "Gefunden über" line is watching us break that promise
+    # (issue #2164).
+    test "reporting one card takes every copy of that original with it", %{
+      conn: conn,
+      user: user
+    } do
+      here = followed_tag(user)
+      there = followed_tag(user, @other_source)
+      url = "https://#{@author_host}/@ada/4711"
+
+      clicked = found_post(here, url: url)
+      twin = found_post(there, url: url, source: @other_source)
+      other = found_post(here, url: "https://#{@author_host}/@ada/4712", text: "EIN ZWEITER FUND")
+
+      {:ok, view, html} = live(conn, ~p"/feed")
+      assert html =~ ~s(data-external-post="#{twin.id}")
+
+      html =
+        view
+        |> element(~s([data-external-post="#{clicked.id}"] [phx-click="report-external-post"]))
+        |> render_click()
+
+      refute html =~ ~s(data-external-post="#{clicked.id}")
+      refute html =~ ~s(data-external-post="#{twin.id}")
+      assert html =~ ~s(data-external-post="#{other.id}")
+
+      assert Repo.get!(ExternalPost, twin.id).reported_at
+
+      # And neither of them comes back on a fresh page.
+      {:ok, _view, again} = live(conn, ~p"/feed")
+      refute again =~ ~s(data-external-post="#{twin.id}")
+      assert again =~ "EIN ZWEITER FUND"
+    end
+
     # This card offers no Translate control and the table holds no translation
     # for it — but the page hands its whole subject list to the translation
     # sweep, which keys every entry by kind. A kind that module has no column
@@ -194,6 +233,22 @@ defmodule VutuvWeb.ExternalTagCardsTest do
       assert entry["found_via"] == @source
     end
 
+    # The page must neither take anything down nor fall over. Both report events
+    # are pushed, because the guard that answers them lives in the module that
+    # owns all six of this menu's events — see `VutuvWeb.Live.RemotePostActions`.
+    test "an anonymous reader's socket reports nothing", %{tag: tag} do
+      post = found_post(tag, text: "BLEIBT STEHEN")
+
+      {:ok, view, _html} =
+        live_isolated(build_conn(), VutuvWeb.TagLive.Timeline,
+          session: %{"tag_id" => tag.id, "source" => "fediverse"}
+        )
+
+      assert render_click(view, "report-external-post", %{"id" => post.id})
+      assert render_click(view, "report-remote-post", %{"id" => post.id})
+      refute Repo.get!(ExternalPost, post.id).reported_at
+    end
+
     # Enforced by the purge a block runs (`Vutuv.Fediverse.purge_instance/1`),
     # not by a clause on the read — see `ExternalPosts.showable_query/0`.
     test "a blocked server's post is on no public page", %{conn: conn, tag: tag} do
@@ -256,19 +311,45 @@ defmodule VutuvWeb.ExternalTagCardsTest do
   end
 
   describe "German" do
-    test "the card's own words are translated", %{conn: conn} do
+    # One card on a German feed, which is what a real visitor sends
+    # (`Accept-Language: de-DE,de`) and what a plain English check never sees.
+    setup %{conn: conn} do
       {conn, user} = create_and_login_user(conn)
       tag = followed_tag(user)
-      found_post(tag)
+      post = found_post(tag)
 
-      {:ok, _view, html} =
+      {:ok, view, html} =
         conn
         |> recycle()
         |> put_req_header("accept-language", "de-DE,de")
         |> live(~p"/feed")
 
+      {:ok, view: view, html: html, post: post}
+    end
+
+    test "the card's own words are translated", %{html: html} do
       # The quiet provenance line, in German, naming the server we asked.
       assert html =~ "Gefunden über #{@source}"
+    end
+
+    # Both sentences promise the same thing and both are read in German first.
+    # The one they replaced promised a deletion of "unsere Kopie" — singular,
+    # and of a row that is blanked rather than deleted — while the copies it did
+    # not touch kept standing two cards further down (issue #2164). Neither
+    # promises the future: a tombstone keeps the post out of the next pull, but
+    # only until `prune/0` drops it with the last follow of that pair.
+    test "the report promises what the report now does", %{view: view, html: html, post: post} do
+      assert html =~ "Jede Kopie verschwindet sofort für alle auf diesem vutuv"
+      refute html =~ "Unsere Kopie wird sofort für alle auf diesem vutuv gelöscht"
+      refute html =~ "holen ihn nicht wieder"
+
+      after_click =
+        view
+        |> element(~s([data-external-post="#{post.id}"] [phx-click="report-external-post"]))
+        |> render_click()
+
+      assert after_click =~ "Jede Kopie auf diesem vutuv ist weg."
+      refute after_click =~ "kommt nicht wieder"
     end
   end
 end

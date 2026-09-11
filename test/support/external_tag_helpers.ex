@@ -226,6 +226,13 @@ defmodule Vutuv.ExternalTagHelpers do
   def author_host, do: "mastodon.example"
 
   @doc """
+  A second server this installation asked, for the copies one original leaves
+  behind (issue #2164): the same status read off two servers is two rows, and a
+  test about what relates them needs two hostnames that are not the author's.
+  """
+  def second_source, do: "social.example"
+
+  @doc """
   A member following `tag` through `source` — the follow this whole feature
   hangs off. `Vutuv.Tags.follow_tag/2` writes the local source itself; naming a
   server is what makes the pair wanted.
