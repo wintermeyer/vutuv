@@ -42,6 +42,19 @@ defmodule Vutuv.Tags.Trending do
   be sampled for at all is **not** offered: failing closed costs one good tag on
   a bad minute and is the only safe direction.
 
+  **The census counts strangers only** (issue #2196). Our own posts federate out
+  with their hashtags, so the servers asked here hand them straight back, and
+  counting them made this installation one more author server on the very gate
+  meant to catch a single source — `Vutuv.Tags.ExternalTagClient.author_entry/2`
+  carries the measurement and why they are dropped there rather than subtracted
+  here. Both figures above are therefore about the world outside, as is the
+  sample they are taken from. The tag's **volume** is not, and cannot be:
+  `/api/v1/trends/tags` carries no author, so a remote server's `uses` counts
+  our echo and there is nothing in the answer to subtract. Such a tag still
+  becomes a candidate and still spends one of the `vet_limit` census slots —
+  what drops it is running out of *sample*, the same failing-closed direction as
+  everything else here.
+
   ## A spike shortens the pull at once
 
   A tag this installation already pulls has a measured pace

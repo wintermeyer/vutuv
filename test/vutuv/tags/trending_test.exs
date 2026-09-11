@@ -32,9 +32,19 @@ defmodule Vutuv.Tags.TrendingTest do
   @xbox [130, 123, 87, 69, 40, 54, 117]
   @mow4 [805, 1, 0, 0, 0, 0, 0]
 
-  # A crowd: twenty statuses over five author domains, none of them a bot.
-  defp crowd(source) do
-    sample_statuses(source, 20, ~w(a.example b.example c.example d.example e.example))
+  # A crowd: `count` statuses over five author domains, none of them a bot.
+  defp crowd(source, count \\ 20) do
+    sample_statuses(source, count, ~w(a.example b.example c.example d.example e.example))
+  end
+
+  # One spiking tag, listed and sampled by both servers — whichever is busiest
+  # is the one the census asks, and a fixture that answered nothing on the other
+  # would be rejected for being too small and prove nothing.
+  defp spiking(name, history, sample) do
+    stub(
+      %{@big => [{name, history}], @small => [{name, history}]},
+      %{@big => %{name => sample.(@big)}, @small => %{name => sample.(@small)}}
+    )
   end
 
   # The stub reports every request back here, so "nobody was asked" has to be
@@ -116,15 +126,8 @@ defmodule Vutuv.Tags.TrendingTest do
   describe "the loudest tag is often a machine" do
     # `mow4` clears every gate that reads the trending list — it came from
     # nowhere and it trended on both servers — so each of these leaves exactly
-    # one thing wrong with the sample. The sample is stubbed on **both** servers
-    # because whichever is busiest is the one asked, and a fixture that answered
-    # nothing would be rejected for being too small and prove nothing.
-    defp spiking_bot_wave(sample) do
-      stub(
-        %{@big => [{"mow4", @mow4}], @small => [{"mow4", @mow4}]},
-        %{@big => %{"mow4" => sample.(@big)}, @small => %{"mow4" => sample.(@small)}}
-      )
-    end
+    # one thing wrong with the sample.
+    defp spiking_bot_wave(sample), do: spiking("mow4", @mow4, sample)
 
     test "a tag whose authors are all one domain is not offered" do
       spiking_bot_wave(&sample_statuses(&1, 20, ["social.prepedia.example"]))
@@ -146,9 +149,7 @@ defmodule Vutuv.Tags.TrendingTest do
       # Five statuses over five domains and not a bot among them: every other
       # gate is happy, and five is simply not enough to tell a crowd from a
       # machine. Failing closed is the only safe direction.
-      spiking_bot_wave(
-        &sample_statuses(&1, 5, ~w(a.example b.example c.example d.example e.example))
-      )
+      spiking_bot_wave(&crowd(&1, 5))
 
       Trending.refresh()
 
@@ -181,6 +182,74 @@ defmodule Vutuv.Tags.TrendingTest do
       assert row.author_hosts == 5
       assert row.bot_posts == 0
       assert row.sampled == 20
+    end
+  end
+
+  # A post written here goes out with its hashtags, so the servers we ask hold
+  # it and hand it back — and until #2196 it counted as one more independent
+  # author server on the very gate meant to catch a single source. The live
+  # figures behind each of these are in `Vutuv.Tags.ExternalTagClient`.
+  describe "our own echo is not one of the servers out there" do
+    defp spiking_with(sample), do: spiking("warntag", @warntag, sample)
+
+    # Our own statuses, from the one fixture that knows what those look like.
+    # Their ids are distinct from `sample_statuses/4`'s, because the two lists
+    # are concatenated into one timeline.
+    defp echo(source, count) do
+      Enum.map(1..count, &our_status(source, %{id: "echo#{&1}"}))
+    end
+
+    test "a tag that reaches the fourth author server only through us is not offered" do
+      # Three servers out there and this one: four domains, and the gate wants
+      # four. Ours is the one that must not count.
+      spiking_with(&(sample_statuses(&1, 15, ~w(a.example b.example c.example)) ++ echo(&1, 5)))
+
+      Trending.refresh()
+
+      assert Trending.offers() == []
+    end
+
+    test "the same tag with a genuine fourth server is offered" do
+      spiking_with(
+        &(sample_statuses(&1, 16, ~w(a.example b.example c.example d.example)) ++ echo(&1, 5))
+      )
+
+      Trending.refresh()
+
+      assert [row] = Trending.offers()
+      assert row.name == "warntag"
+      # The stored figures are about strangers only — 16 statuses over four
+      # servers, with our five nowhere in them.
+      assert row.author_hosts == 4
+      assert row.sampled == 16
+    end
+
+    test "a tag this installation is busy with and nobody else is not offered" do
+      # troet.cafe's `#vutuv`, shrunk: five foreign statuses over five servers
+      # under thirty of our own. The author servers alone would still clear the
+      # gate — five is more than four — so what catches it is that there is
+      # almost nothing out there to judge.
+      spiking_with(
+        &(sample_statuses(&1, 5, ~w(a.example b.example c.example d.example e.example)) ++
+            echo(&1, 30))
+      )
+
+      Trending.refresh()
+
+      assert Trending.offers() == []
+    end
+
+    test "our own posts do not water down the share that is bots" do
+      # Eight bots among ten strangers is a wave. Counted beside ten posts of
+      # ours it reads as 40 %, which is inside the threshold.
+      spiking_with(
+        &(sample_statuses(&1, 10, ~w(a.example b.example c.example d.example), 8) ++
+            echo(&1, 10))
+      )
+
+      Trending.refresh()
+
+      assert Trending.offers() == []
     end
   end
 

@@ -49,6 +49,10 @@ defmodule Vutuv.Tags.ExternalTagClient do
   result because the two callers want opposite things — the pull drops boosts,
   replies and anything sensitive before it counts, and a census that dropped
   them would be counting a different population than the one making the noise.
+
+  The one refusal the two share is `ExternalPost.written_here?/2` (issues #2179
+  and #2196): a post of ours is not a find, and its author is not one of the
+  servers out there either.
   """
 
   require Logger
@@ -83,10 +87,14 @@ defmodule Vutuv.Tags.ExternalTagClient do
   # A Mastodon tag's history is a week, and the reader is shown a week.
   @history_days 7
 
-  # How many statuses a trending tag is vetted on. A page's maximum, because
-  # this one is a census and its whole value is the size of the sample —
-  # measured over ten trending tags, forty statuses gave 10 to 26 distinct
-  # author domains for an ordinary one and 2 for the bot wave.
+  # How many statuses a trending tag is **asked** for when it is vetted. A
+  # page's maximum, because this one is a census and its whole value is the size
+  # of the sample — measured over ten trending tags, forty statuses gave 10 to
+  # 26 distinct author domains for an ordinary one and 2 for the bot wave. Since
+  # #2196 it is the size of the ask rather than of the sample: our own statuses
+  # come out of it, and on troet.cafe's `#vutuv` that leaves five. Asking for a
+  # second page to refill it would cost a round trip per tag to rescue a tag
+  # whose evidence is mostly our own echo, which is the one we want dropped.
   @census_limit 40
 
   # A server whose clock runs ahead, or a status dated by hand, must not pin
@@ -178,12 +186,13 @@ defmodule Vutuv.Tags.ExternalTagClient do
   end
 
   @doc """
-  Who is posting `tag_name` on `source`: `{:ok, [%{host:, bot?:}]}`, one entry
-  per status on its public tag timeline.
+  Who **else** is posting `tag_name` on `source`: `{:ok, [%{host:, bot?:}]}`,
+  one entry per status on its public tag timeline that was not written here.
 
   The two facts a trending tag is vetted on, and both are the *server's* own —
   it flags its bot accounts itself, and `acct` says where the author lives. See
-  the moduledoc for why this is not a by-product of `fetch/2`.
+  the moduledoc for why this is not a by-product of `fetch/2`, and
+  `author_entry/2` for why our own echo is left out of it.
   """
   def authors(source, tag_name) do
     with {:ok, hashtag} <- hashtag(tag_name),
@@ -197,10 +206,27 @@ defmodule Vutuv.Tags.ExternalTagClient do
       {:error, :transient}
   end
 
+  # `written_here?/2` again, one layer above where the pull asks it (issue
+  # #2196): a post of ours travels out with its hashtags, so the servers we
+  # census hold it and name it under our own host, and counting it made this
+  # installation one more independent author server on the gate meant to catch a
+  # single source. Re-measured on 11 September 2026, troet.cafe's `#vutuv`
+  # timeline was 40 statuses, **35 of them ours**, over six author servers — it
+  # cleared every gate, and five foreign statuses is not evidence of anything.
+  #
+  # Dropped here rather than subtracted in `Trending.verdict/3`, and the same
+  # measurement is why: the five remaining servers still clear
+  # `min_author_hosts`, so an exclusion that only fixed the domain count would
+  # have offered that tag anyway. Leaving the statuses out instead makes all
+  # three figures the verdict reads — servers, sample size, bot share — say the
+  # same thing about strangers, so a tag busy here and nowhere else runs out of
+  # sample instead of borrowing ours.
   defp author_entry(status, source) do
-    case {author_host(status, source), status["account"]} do
-      {host, %{} = account} when is_binary(host) -> [%{host: host, bot?: account["bot"] == true}]
-      _unusable -> []
+    with host when is_binary(host) <- author_host(status, source),
+         false <- ExternalPost.written_here?(host, permalink(status)) do
+      [%{host: host, bot?: status["account"]["bot"] == true}]
+    else
+      _refused -> []
     end
   end
 
