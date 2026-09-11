@@ -40,9 +40,12 @@ defmodule VutuvWeb.PressKitLiveTest do
     {:ok, conn: conn, user: user, tmp: tmp}
   end
 
-  defp photo_path(tmp, name \\ "portrait.jpg") do
+  # The size is a parameter because #2141's tests tell a batch apart by the
+  # stored `width` — a press picture keeps no copy of the name it arrived under
+  # (`Vutuv.PressKit.download_name/2`), so the pixels are what survives.
+  defp photo_path(tmp, name \\ "portrait.jpg", {width, height} \\ {600, 400}) do
     path = Path.join(tmp, "#{System.unique_integer([:positive])}-#{name}")
-    {:ok, img} = Image.new(600, 400, color: [200, 40, 40])
+    {:ok, img} = Image.new(width, height, color: [200, 40, 40])
     {:ok, _} = Image.write(img, path)
     path
   end
@@ -65,14 +68,18 @@ defmodule VutuvWeb.PressKitLiveTest do
     live
   end
 
-  defp photo_entry(tmp, name) do
-    %{
-      last_modified: 1_594_171_879_000,
-      name: name,
-      content: File.read!(photo_path(tmp, name)),
-      type: "image/jpeg"
-    }
+  defp photo_entry(tmp, name, size \\ {600, 400}) do
+    file_entry(name, File.read!(photo_path(tmp, name, size)), "image/jpeg")
   end
+
+  # The one place a `Phoenix.LiveViewTest` upload entry is built.
+  defp file_entry(name, content, type) do
+    %{last_modified: 1_594_171_879_000, name: name, content: content, type: type}
+  end
+
+  # Drives one of the in-flight uploads of the #2141 batch to its last chunk.
+  # The percentage is a **step**, not a target, and the batch already sent 10.
+  defp finish(inflight, name), do: render_upload(Map.fetch!(inflight, name), name, 90)
 
   defp upload_photo(live, tmp, name \\ "portrait.jpg") do
     input = file_input(live, "#press-add-photo", :photo, [photo_entry(tmp, name)])
@@ -84,12 +91,7 @@ defmodule VutuvWeb.PressKitLiveTest do
     {:ok, img} = Image.new(240, 80, color: [0, 170, 85])
     {:ok, _} = Image.write(img, path)
 
-    entry = %{
-      last_modified: 1_594_171_879_000,
-      name: "mark.png",
-      content: File.read!(path),
-      type: "image/png"
-    }
+    entry = file_entry("mark.png", File.read!(path), "image/png")
 
     input = file_input(live, "#press-add-logo", :logo, [entry])
     render_upload(input, "mark.png")
@@ -687,6 +689,171 @@ defmodule VutuvWeb.PressKitLiveTest do
     end
   end
 
+  # Issue #2141. Three pictures in flight at once, finishing in the reverse of
+  # the order they were picked, which is what a batch with one big file among
+  # small ones does every time.
+  #
+  # **One `file_input` per picture, deliberately.** `Phoenix.LiveViewTest`'s
+  # upload client stops the moment one of *its* entries is consumed, and its
+  # channels go with it, so a single input can carry exactly one completed
+  # upload — with three in one input the second `render_upload/3` exits with
+  # "no process". Three clients registered before any of them finishes give the
+  # server the same picture a real multi-pick does: three entries in the picked
+  # order, all in flight, finishing in another order.
+  describe "several pictures in flight at once (issue #2141)" do
+    setup %{conn: conn, tmp: tmp} do
+      {:ok, live, _html} = open(conn)
+      confirm_rights(live, "photo", "Foto: Ada King")
+
+      inflight =
+        Map.new(
+          [{"hero.jpg", 600}, {"second.jpg", 500}, {"third.jpg", 400}],
+          fn {name, width} ->
+            input =
+              file_input(live, "#press-add-photo", :photo, [photo_entry(tmp, name, {width, 400})])
+
+            render_upload(input, name, 10)
+            {name, input}
+          end
+        )
+
+      {:ok, live: live, inflight: inflight}
+    end
+
+    test "the shelf keeps the order they were picked in", %{
+      user: user,
+      inflight: inflight
+    } do
+      finish(inflight, "third.jpg")
+      finish(inflight, "second.jpg")
+      finish(inflight, "hero.jpg")
+
+      assert Enum.map(PressKit.shelves(user).photos, & &1.width) == [600, 500, 400]
+    end
+
+    test "a picture that lands first keeps the slots of the ones picked before it", %{
+      user: user,
+      inflight: inflight
+    } do
+      finish(inflight, "third.jpg")
+
+      assert [%{width: 400, position: 2}] = PressKit.shelves(user).photos
+    end
+
+    test "the hero note sits on the photo that was picked first", %{
+      live: live,
+      user: user,
+      inflight: inflight
+    } do
+      finish(inflight, "third.jpg")
+      finish(inflight, "hero.jpg")
+
+      [hero, _third] = PressKit.shelves(user).photos
+
+      assert hero.width == 600
+      assert has_element?(live, "[data-press-picture='#{hero.id}'] [data-press-hero]")
+    end
+
+    test "a picture picked afterwards goes behind them all", %{
+      live: live,
+      user: user,
+      tmp: tmp,
+      inflight: inflight
+    } do
+      later =
+        file_input(live, "#press-add-photo", :photo, [photo_entry(tmp, "later.jpg", {300, 200})])
+
+      render_upload(later, "later.jpg")
+      finish(inflight, "hero.jpg")
+
+      assert Enum.map(PressKit.shelves(user).photos, & &1.width) == [600, 300]
+    end
+
+    # A batch reserves ahead of itself, so the shelf can hold one picture at
+    # position 2 while positions 0 and 1 are still climbing, and a picture
+    # picked after all of them belongs behind them. The layer that enforces it
+    # is `PressKit.take_slot/3`, which hands out only free slots — so this stays
+    # green with `note_slots/2`'s floor spelled either way, and is kept because
+    # the promise is worth pinning rather than because it measures that floor.
+    test "a picture picked afterwards goes behind the slots still being climbed", %{
+      live: live,
+      user: user,
+      tmp: tmp,
+      inflight: inflight
+    } do
+      finish(inflight, "third.jpg")
+
+      later =
+        file_input(live, "#press-add-photo", :photo, [photo_entry(tmp, "later.jpg", {300, 200})])
+
+      render_upload(later, "later.jpg")
+
+      shelf = PressKit.shelves(user).photos
+      positions = Enum.map(shelf, & &1.position)
+
+      assert positions == Enum.uniq(positions)
+      assert Enum.map(shelf, & &1.width) == [400, 300]
+    end
+  end
+
+  # A reserved slot is one socket's wish about order, taken from a snapshot of
+  # one moment. Two things make that snapshot wrong, and both are ordinary.
+  describe "a reserved slot the shelf cannot honour (issue #2141)" do
+    # The commonest edit a full shelf gets. Nine rows and a highest position of
+    # nine means the next wish is for ten, which is past the cap — but there is
+    # a free slot, the one the deleted picture left, and the counter is already
+    # promising it ("2 of 3", add form offered).
+    test "a full shelf that loses one picture takes another", %{
+      conn: conn,
+      user: user,
+      tmp: tmp
+    } do
+      put_config(:press_kit, max_filesize: 30_000_000, max_photos: 3, max_logos: 5)
+      Enum.each(1..3, fn _ -> add_photo!(user, tmp) end)
+      [_first, middle, _last] = PressKit.shelves(user).photos
+
+      {:ok, live, _html} = open(conn)
+      render_click(live, "delete", %{"id" => middle.id})
+
+      assert live |> element("[data-press-count='photo']") |> render() =~ "2 of 3"
+      assert has_element?(live, "#press-add-photo")
+
+      live |> confirm_rights("photo", "Foto: Ada King") |> upload_photo(tmp)
+
+      refute render(live) =~ "No more than"
+      assert [_a, _b, _c] = shelf = PressKit.shelves(user).photos
+      # The gap the delete left, filled, rather than a fourth number nobody has.
+      assert Enum.map(shelf, & &1.position) == [0, 1, 2]
+    end
+
+    # A phone and a laptop, both open on the editor. Each socket sees an empty
+    # shelf, so each wishes for slot 0; two pictures answering to one slot are
+    # two downloads called `<handle>-press-1.jpg`.
+    test "two tabs of one member are given two slots", %{conn: conn, user: user, tmp: tmp} do
+      {:ok, phone, _html} = open(conn)
+      {:ok, laptop, _html} = open(recycle(conn))
+
+      confirm_rights(phone, "photo", "Foto: Ada King")
+      confirm_rights(laptop, "photo", "Foto: Ada King")
+
+      phone
+      |> file_input("#press-add-photo", :photo, [photo_entry(tmp, "phone.jpg", {600, 400})])
+      |> render_upload("phone.jpg")
+
+      laptop
+      |> file_input("#press-add-photo", :photo, [photo_entry(tmp, "laptop.jpg", {500, 400})])
+      |> render_upload("laptop.jpg")
+
+      shelf = PressKit.shelves(user).photos
+
+      assert Enum.map(shelf, & &1.position) == [0, 1]
+      assert Enum.map(shelf, & &1.width) == [600, 500]
+
+      assert Enum.map(shelf, &PressKit.download_name(&1, ".jpg")) ==
+               Enum.uniq(Enum.map(shelf, &PressKit.download_name(&1, ".jpg")))
+    end
+  end
+
   describe "a picture the AI gate is still looking at" do
     test "wears the being-checked badge on its tile", %{conn: conn, user: user, tmp: tmp} do
       put_config(:moderate_images, true)
@@ -697,6 +864,77 @@ defmodule VutuvWeb.PressKitLiveTest do
       {:ok, live, _html} = open(conn)
 
       assert live |> element("[data-press-picture='#{photo.id}']") |> render() =~ "Being checked"
+    end
+
+    # Issue #2144: ten identical grey badges and nothing else read like a failed
+    # upload, so the shelf says once what a visitor meets meanwhile.
+    test "the shelf says what a visitor sees meanwhile", %{conn: conn, user: user, tmp: tmp} do
+      put_config(:moderate_images, true)
+      add_photo!(user, tmp)
+
+      {:ok, live, _html} = open(conn)
+
+      assert live |> element("[data-press-pending='photo']") |> render() =~
+               "sees a pixelated stand-in in its place"
+
+      refute has_element?(live, "[data-press-pending='logo']")
+    end
+
+    test "a released shelf says nothing of the kind", %{conn: conn, user: user, tmp: tmp} do
+      add_photo!(user, tmp)
+
+      {:ok, live, _html} = open(conn)
+
+      refute has_element?(live, "[data-press-pending='photo']")
+    end
+  end
+
+  describe "a file on the wrong shelf (issue #2144)" do
+    test "the logo shelf points at the photo shelf that would have taken it", %{
+      conn: conn,
+      tmp: tmp
+    } do
+      {:ok, live, _html} = open(conn)
+      confirm_rights(live, "logo", "Logo: Ada King")
+
+      input =
+        file_input(live, "#press-add-logo", :logo, [photo_entry(tmp, "portrait.jpg", {60, 40})])
+
+      assert {:error, [[_ref, :not_accepted]]} = render_upload(input, "portrait.jpg")
+      assert render(live) =~ "That file type is not allowed."
+
+      assert live |> element("[data-press-wrong-shelf='logo']") |> render() =~ "Press photos"
+    end
+
+    test "the photo shelf points at the logo shelf for a vector", %{conn: conn} do
+      {:ok, live, _html} = open(conn)
+      confirm_rights(live, "photo", "Foto: Ada King")
+
+      entry =
+        file_entry(
+          "mark.svg",
+          ~s(<svg xmlns="http://www.w3.org/2000/svg" width="10" height="10"></svg>),
+          "image/svg+xml"
+        )
+
+      input = file_input(live, "#press-add-photo", :photo, [entry])
+
+      assert {:error, [[_ref, :not_accepted]]} = render_upload(input, "mark.svg")
+
+      assert live |> element("[data-press-wrong-shelf='photo']") |> render() =~ "Logo variants"
+    end
+
+    test "a format neither shelf takes is pointed nowhere", %{conn: conn} do
+      {:ok, live, _html} = open(conn)
+      confirm_rights(live, "photo", "Foto: Ada King")
+
+      entry = file_entry("mappe.pdf", "%PDF-1.4", "application/pdf")
+
+      input = file_input(live, "#press-add-photo", :photo, [entry])
+
+      assert {:error, [[_ref, :not_accepted]]} = render_upload(input, "mappe.pdf")
+      assert render(live) =~ "That file type is not allowed."
+      refute has_element?(live, "[data-press-wrong-shelf='photo']")
     end
   end
 
@@ -981,6 +1219,36 @@ defmodule VutuvWeb.PressKitLiveTest do
       # The rights sentence is the gate; a fuzzy-filled German for it would
       # promise something else entirely.
       assert html =~ "Rechte"
+    end
+
+    # Issue #2144's two new sentences, asserted by name: both are fresh msgids,
+    # and a `gettext.extract --merge` fuzzy-fill would ship a German sentence
+    # written for something else while every English test stayed green.
+    test "the still-being-checked note says the German words", %{
+      conn: conn,
+      user: user,
+      tmp: tmp
+    } do
+      put_config(:moderate_images, true)
+      add_photo!(user, tmp)
+
+      {:ok, live, _html} = open(conn)
+
+      assert live |> element("[data-press-pending='photo']") |> render() =~
+               "Besucher sehen an seiner Stelle eine verpixelte Vorschau"
+    end
+
+    test "the wrong-shelf pointer says the German words", %{conn: conn, tmp: tmp} do
+      {:ok, live, _html} = open(conn)
+      confirm_rights(live, "logo", "Logo: Ada King")
+
+      input =
+        file_input(live, "#press-add-logo", :logo, [photo_entry(tmp, "portrait.jpg", {60, 40})])
+
+      assert {:error, [[_ref, :not_accepted]]} = render_upload(input, "portrait.jpg")
+
+      assert live |> element("[data-press-wrong-shelf='logo']") |> render() =~
+               "Pressefotos, weiter oben auf dieser Seite"
     end
 
     test "the bios card says the German words (issue #2101)", %{conn: conn} do
