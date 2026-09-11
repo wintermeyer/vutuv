@@ -438,6 +438,61 @@ defmodule Vutuv.Tags.ExternalPostsTest do
       assert standing.text == "Hello from over there"
     end
 
+    # One server claiming another's permalink must not take down honest copies
+    # of somebody else's post — `ExternalPost.origin_key/1` says why the address
+    # alone cannot be the key.
+    test "a row claiming somebody else's address is not a copy of it", %{reporter: reporter} do
+      tag = followed_tag()
+      url = original("4720")
+
+      honest = external_post(tag, url: url, source: @source, author_host: @source)
+
+      planted =
+        external_post(tag,
+          url: url,
+          source: @other_source,
+          author_host: @other_source,
+          author_acct: "impostor@#{@other_source}"
+        )
+
+      assert :ok = ExternalPosts.report(planted.id, reporter)
+
+      standing = Repo.get!(ExternalPost, honest.id)
+      refute standing.reported_at, "a report reached a post by another author at the same address"
+      assert standing.text == "Hello from over there"
+
+      # And the honest author's post is still the one thing anybody may read.
+      assert Repo.all(from(p in ExternalPosts.showable_query(), select: p.id)) == [honest.id]
+    end
+
+    # A redirect wrapper is not a second original: Bridgy Fed serves one Bluesky
+    # post as both `bsky.brid.gy/r/<address>` and `fed.brid.gy/r/<address>`, and
+    # both stood here — same author, same second — with nothing relating them,
+    # which is this issue's own defect surviving for bridged posts.
+    test "a post behind two redirect wrappers is one original", %{reporter: reporter} do
+      tag = followed_tag()
+      bluesky = "https://bsky.app/profile/did:plc:abc/post/3mv2azzztuk2i"
+
+      clicked =
+        external_post(tag,
+          url: "https://bsky.brid.gy/r/#{bluesky}",
+          source: @source,
+          author_host: "bsky.brid.gy"
+        )
+
+      twin =
+        external_post(tag,
+          url: "https://fed.brid.gy/r/#{bluesky}",
+          source: @other_source,
+          author_host: "bsky.brid.gy"
+        )
+
+      assert :ok = ExternalPosts.report(clicked.id, reporter)
+
+      assert Repo.get!(ExternalPost, twin.id).reported_at,
+             "the same post under the other bridge alias kept standing"
+    end
+
     # One act, one row in the operator's ledger: it answers "is this one troll
     # or is this server the problem", and counting the copies we happened to
     # hold would answer a question about our own cache instead.
@@ -489,6 +544,38 @@ defmodule Vutuv.Tags.ExternalPostsTest do
       assert Repo.one!(ExternalPost).text == ""
     end
 
+    # The gate compares the key, not the column. Comparing the two strings let
+    # the same post back in the moment a server spelled its address with one
+    # character more.
+    test "a variant spelling of a reported address is refused too", %{reporter: reporter} do
+      tag = followed_tag()
+      stub_tag_timeline([status(%{"id" => "s1", "url" => original("s1")})])
+      assert %{stored: 1} = ExternalPosts.fetch_due()
+
+      assert :ok = ExternalPosts.report(Repo.one!(ExternalPost).id, reporter)
+
+      # The same status, one trailing slash and a fragment later.
+      stub_tag_timeline([status(%{"id" => "s2", "url" => original("s1") <> "/#comments"})])
+      overdue!(tag, DateTime.utc_now(:second))
+      assert %{stored: 0} = ExternalPosts.fetch_due()
+
+      assert Repo.aggregate(ExternalPost, :count) == 1
+    end
+
+    # A row the release before #2127 wrote carries no author host, so it has no
+    # key — and nothing can be a copy of it, itself included. Without a clause
+    # of its own the report blanked nothing at all and still answered `:ok`.
+    test "a row from before the author host was stored takes itself down", %{reporter: reporter} do
+      tag = followed_tag()
+      post = external_post(tag, url: original("4730"), source: @source, author_host: nil)
+
+      assert :ok = ExternalPosts.report(post.id, reporter)
+
+      row = Repo.get!(ExternalPost, post.id)
+      assert row.reported_at, "the report wrote a ledger entry and took nothing down"
+      assert row.text == ""
+    end
+
     test "the tombstone outlives both caps", %{reporter: reporter} do
       put_config(:external_tag_post_caps, per_tag: 1, total: 1)
       tag = followed_tag()
@@ -509,6 +596,52 @@ defmodule Vutuv.Tags.ExternalPostsTest do
       ExternalPosts.enforce_ceiling()
 
       assert Repo.get(ExternalPost, reported.id)
+    end
+  end
+
+  # The key itself, asked directly: each rule below is a spelling the same post
+  # really arrived under, and every one of them decides whose words a report
+  # blanks.
+  describe "the origin key" do
+    defp key(url, host \\ @source), do: ExternalPost.origin_key(%{url: url, author_host: host})
+
+    test "the author's server is half of it" do
+      assert key("https://#{@source}/@ada/1", @source) !=
+               key("https://#{@source}/@ada/1", "x.test")
+    end
+
+    test "a trailing slash, a fragment and the host's case are the same address" do
+      canonical = key("https://#{@source}/@ada/1")
+
+      assert key("https://#{@source}/@ada/1/") == canonical
+      assert key("https://#{@source}/@ada/1#comments") == canonical
+      assert key("https://#{String.upcase(@source)}/@ada/1") == canonical
+      assert key("https://www.#{@source}/@ada/1") == canonical
+      assert key("https://#{@source}./@ada/1") == canonical
+    end
+
+    test "the path keeps its case, where two spellings are two posts" do
+      refute key("https://#{@source}/@ada/AbC") == key("https://#{@source}/@ada/abc")
+    end
+
+    test "the query stays, where a post may be named in it" do
+      refute key("https://#{@source}/notes?id=1") == key("https://#{@source}/notes?id=2")
+    end
+
+    test "a redirect wrapper is the address it wraps, encoded or not" do
+      wrapped = "https://bsky.app/profile/did:plc:abc/post/3mv2azzztuk2i"
+
+      assert key("https://bsky.brid.gy/r/#{wrapped}") == key(wrapped)
+      assert key("https://fed.brid.gy/r/#{wrapped}") == key(wrapped)
+      assert key("https://fed.brid.gy/r/#{URI.encode_www_form(wrapped)}") == key(wrapped)
+    end
+
+    # A query parameter is where a server puts somebody else's address for its
+    # own reasons, so unwrapping one would relate two unrelated posts.
+    test "an address in the query is not a wrapper" do
+      other = "https://elsewhere.test/@bob/9"
+
+      refute key("https://#{@source}/read?url=#{other}") == key(other)
     end
   end
 end

@@ -3594,14 +3594,18 @@ defmodule VutuvWeb.PostComponents do
                 and the post itself stands untouched where its author put it.
                 Its own sentence for exactly that reason (issue #2164) — the
                 cached-post card's promises one copy, which is all that one ever
-                has. --%>
+                has. It promises the act and not the future: a tombstone keeps
+                the post out of the next pull, but only until `prune/0` drops it
+                with the last follow of that pair, so "we will not fetch it
+                again" would be the third spelling of this issue's own
+                overclaim. --%>
                 <:item
                   click="report-external-post"
                   value={@post.id}
                   danger
                   confirm={
                     gettext(
-                      "Report this post as not appropriate? Every copy on this vutuv disappears right away, and we do not fetch it again."
+                      "Report this post as not appropriate? Every copy of it disappears right away, for everyone on this vutuv."
                     )
                   }
                 >

@@ -271,24 +271,39 @@ defmodule Vutuv.Tags.ExternalPosts do
   @doc """
   Whether two stored rows are copies of one original.
 
-  `Vutuv.Tags.ExternalPost.origin/1` owns that key and says why it is the only
-  one available; this is the question a page asks of rows it already holds.
+  `Vutuv.Tags.ExternalPost.origin_key/1` owns that key and says what it is made
+  of; this is the question a page asks of rows it already holds.
   """
   def copy?(%ExternalPost{} = one, %ExternalPost{} = other),
-    do: ExternalPost.origin(one) == ExternalPost.origin(other)
+    do: ExternalPost.origin_key(one) == ExternalPost.origin_key(other)
 
-  # Every stored copy of the originals `origins` names, whichever tag or server
-  # filed them. The in-memory twin of `copy?/2`, and the one place this module
-  # turns that key into SQL.
+  # The rows that could be copies of anything `keys` names.
   #
-  # Unindexed on purpose: `url` carries no index and the table is capped at
-  # `caps()[:total]`, so this is a sequential scan of a bounded table —
-  # measured at 0.05 ms over the 78 rows a copy of production holds and 0.76 ms
-  # over 10,000 at the ceiling, on a member's click and on the fetcher. A
-  # partial index `(url) WHERE reported_at IS NOT NULL` takes the second figure
-  # to 0.015 ms and is what to add if an operator ever raises that cap.
-  defp copies_query(origins) when is_list(origins),
-    do: from(p in ExternalPost, where: p.url in ^origins)
+  # Half the key is a column and half of it is a normalised address, so the
+  # column does the prefilter in SQL and the address decides in Elixir, where
+  # the one normaliser lives — a second spelling of it in a `fragment` is how
+  # the two halves would drift apart. **It takes the keys and reads the host out
+  # of them**, rather than being handed hosts: that way the prefilter cannot
+  # disagree with the key it is meant to be the SQL half of, which is what would
+  # silently drop copies the day anybody normalises the author's half too.
+  #
+  # What it costs, measured over 10,000 rows at the table's ceiling with one
+  # author host holding 60 % of them: the scan is 1.0-3.7 ms and the Elixir
+  # filter over what it returns is ~30 ms, so the click is ~32 ms and the query
+  # is 5 % of it. (Today, over the 78 rows a copy of production holds, the whole
+  # thing is well under a millisecond.) Storing the key as a column would make
+  # both constant — one `UPDATE ... WHERE origin_key = $1` at 0.13 ms — and that
+  # is the lever if this ever matters; it is not taken today because a key two
+  # days old would arrive backfill-versioned, and the per-tag cap rolls ordinary
+  # rows over within hours anyway.
+  defp same_author_query(keys) when is_list(keys) do
+    hosts = keys |> Enum.map(&elem(&1, 1)) |> Enum.uniq()
+
+    from(p in ExternalPost,
+      where: p.author_host in ^hosts,
+      select: %{id: p.id, url: p.url, author_host: p.author_host}
+    )
+  end
 
   @doc """
   Somebody reports one of these as not appropriate.
@@ -297,7 +312,10 @@ defmodule Vutuv.Tags.ExternalPosts do
   pressing Report means "this post, off this site" — and one status really did
   stand here as six rows, of which a report marked one, so the reader met the
   post they had just reported two cards further down under another "found
-  through" line (issue #2164). `ExternalPost.origin/1` is what relates them.
+  through" line (issue #2164). What counts as the same post is
+  `ExternalPost.origin_key/1`, whose doc says what it is made of and why a
+  report — which reaches rows filed from servers nobody here asked about —
+  cannot be keyed on an address alone.
 
   **Blanks them rather than deleting them.** Reporting a post cached from a
   followed account deletes the row, because nothing goes looking for it again;
@@ -350,9 +368,9 @@ defmodule Vutuv.Tags.ExternalPosts do
     end
   end
 
-  # What each row keeps is what the next pull's unique index needs: the tag, the
-  # server, the remote id and the stamp. The words and the author go, from every
-  # copy at once. One statement, so the copies cannot end up in two states.
+  # Which rows are copies is read first and blanked second, because half the key
+  # is a normalised address rather than a column; the **write** is still one
+  # statement, so no copy can be left in the other state.
   #
   # Every copy keeps its own tombstone rather than one standing for all of them:
   # `trim/2` exempts them from both caps, so a report costs the table one row
@@ -361,7 +379,30 @@ defmodule Vutuv.Tags.ExternalPosts do
   # `reject_reported/1` alone to keep them out, where this leans on the row key
   # as well.
   defp blank_copies(%ExternalPost{} = post) do
-    Repo.update_all(copies_query([ExternalPost.origin(post)]),
+    post |> copy_ids() |> blank()
+  end
+
+  # A row the release before #2127 wrote has no author host, so it has no key
+  # and nothing can be a copy of it — not even itself, which is how the report
+  # that took it down came to blank nothing at all while still answering `:ok`.
+  # It is its own only copy. Reachable from a stale page, since `showable_query/0`
+  # has never drawn one.
+  defp copy_ids(%ExternalPost{author_host: nil} = post), do: [post.id]
+
+  defp copy_ids(%ExternalPost{} = post) do
+    key = ExternalPost.origin_key(post)
+
+    [key]
+    |> same_author_query()
+    |> Repo.all()
+    |> Enum.filter(&(ExternalPost.origin_key(&1) == key))
+    |> Enum.map(& &1.id)
+  end
+
+  # What each row keeps is what the next pull's unique index needs: the tag, the
+  # server, the remote id and the stamp. The words and the author go.
+  defp blank(ids) do
+    Repo.update_all(from(p in ExternalPost, where: p.id in ^ids),
       set: [
         text: "",
         author_name: nil,
@@ -713,22 +754,25 @@ defmodule Vutuv.Tags.ExternalPosts do
   # last follow that wanted the pair, which is the retention answer this table
   # already gives for a stranger's words.
   #
+  # It compares the **key**, never the raw column: a trailing slash or a
+  # fragment is the same address said differently, and comparing the two strings
+  # let a reported post walk straight back in under a variant spelling
+  # (`stored: 1`, measured).
+  #
   # One statement per store that had rows to write; an empty timeline is an
   # ordinary answer and pays nothing.
   defp reject_reported([]), do: []
 
   defp reject_reported(rows) do
-    origins = Enum.map(rows, &ExternalPost.origin/1)
-
     reported =
-      origins
-      |> copies_query()
+      rows
+      |> Enum.map(&ExternalPost.origin_key/1)
+      |> same_author_query()
       |> where([p], not is_nil(p.reported_at))
-      |> select([p], p.url)
       |> Repo.all()
-      |> MapSet.new()
+      |> MapSet.new(&ExternalPost.origin_key/1)
 
-    Enum.reject(rows, &MapSet.member?(reported, ExternalPost.origin(&1)))
+    Enum.reject(rows, &MapSet.member?(reported, ExternalPost.origin_key(&1)))
   end
 
   # Through the changeset, because these values were written by a stranger's

@@ -31,6 +31,7 @@ defmodule Vutuv.Tags.ExternalPost do
 
   import Vutuv.ChangesetHelpers, only: [scrub_nul: 1]
 
+  alias Vutuv.Fediverse
   alias Vutuv.Fediverse.BlockedInstance
   alias Vutuv.Fediverse.Handle
 
@@ -160,22 +161,97 @@ defmodule Vutuv.Tags.ExternalPost do
   `Vutuv.Posts.path/1`, and what `Vutuv.Fediverse.subject_origin/1` answers for
   this kind.
 
-  **It is also the only thing two stored copies of one post share**, and so the
-  key that relates them (issue #2164). The rows are keyed on tag, server and
-  remote id, so the same status read off five servers under two tags is ten
-  rows with nothing in that key to join them by — while this column is
-  `status["url"]` verbatim (`Vutuv.Tags.ExternalTagClient`), the author's own
-  canonical permalink, which every server relays unchanged rather than
-  rewriting. Measured on a copy of production: 78 stored rows carried 43
-  distinct values, and normalizing case, trailing slash and fragment grouped
-  them no further. Ask through here rather than reading the column, so the next
-  reader of "is this the same post" finds one answer.
+  What a card links to, and never the test for "is this the same post" —
+  `origin_key/1` is that.
   """
   def origin(%__MODULE__{url: url}), do: url
 
-  # A row on its way in is a plain map — `Vutuv.Tags.ExternalPosts` builds them
-  # for `insert_all` — and the ingest gate has to ask the same question of it.
-  def origin(%{url: url}), do: url
+  @doc """
+  What makes two stored rows copies of **one** original: the normalised address
+  of the post, **and the server its author lives on** (issue #2164).
+
+  The rows are keyed on tag, server and remote id, so the same status read off
+  five servers under two tags is ten rows with nothing in that key to relate
+  them. The address does relate them — but it is `status["url"]` copied verbatim
+  from whichever server we polled, validated only as a web URL, and a member may
+  name any host as a tag source. So the address **alone** is a string a stranger
+  controls: one server claiming another's permalink would, on its own say-so,
+  have taken down honest copies of somebody else's post everywhere here and kept
+  them out. `author_host` is the second half for that reason, and it is free:
+  over 78 stored rows on a copy of production, the two keys group identically
+  (43 groups either way), because no original was ever carried under two
+  different author hosts. It does not make the pair unforgeable — a lying server
+  can claim both fields — but it closes the case where only the address agrees.
+
+  **`author_acct` cannot serve.** Mastodon writes it bare (`pruef_de`) on the
+  author's own server and qualified (`pruef_de@mastodon.social`) everywhere
+  else, so four of the measured originals carry two spellings of one author;
+  `author_host` is the uniform one.
+
+  The address is **normalised**, and each rule is a shape the same post really
+  arrived under. A redirect wrapper is not a second original: Bridgy Fed serves
+  one Bluesky post as `bsky.brid.gy/r/<address>` and `fed.brid.gy/r/<address>`,
+  and both stood here, same author and same second, with nothing relating them.
+  A trailing slash or a fragment is the same address said differently, which the
+  ingest gate has to see through or a reported post walks back in under a variant
+  spelling. And the host follows the rule the rest of this codebase already
+  applies to a foreign host — `Vutuv.Fediverse.BlockedInstance.normalize_host/1`
+  for the case and the trailing dot, `Vutuv.Fediverse.strip_www/1` for the fold
+  that module publishes so nobody keeps their own copy of it.
+
+  **The query stays**, which is why neither `Vutuv.WebVerification.normalize_url/1`
+  nor `Vutuv.Profiles.VerifiedLinks.normalize/1` can serve here: both drop it,
+  and on software that names a post in its query string two different posts would
+  key alike — this key decides whose words get blanked, so it errs towards
+  telling two posts apart.
+  """
+  def origin_key(%{url: url, author_host: host}), do: {normalize_origin(url), host}
+
+  defp normalize_origin(url) when is_binary(url),
+    do: url |> URI.parse() |> unwrap_redirect() |> canonical_address()
+
+  # `…/r/https://bsky.app/…`, and the same address percent-encoded — the wrapped
+  # address is the post's own either way. Read out of the **path** only: a query
+  # parameter is where a server puts somebody else's address for its own reasons,
+  # and unwrapping that would relate two unrelated posts. A post whose own path
+  # happens to end in an address is read as a wrapper around it, which the
+  # author's half of the key bounds to that one author's rows. Recurses, since
+  # each step is strictly shorter than the last.
+  defp unwrap_redirect(%URI{path: path} = uri) when is_binary(path) do
+    case Regex.run(~r{/(https?://.+)\z}, decoded(path)) do
+      [_whole, embedded] -> embedded |> URI.parse() |> unwrap_redirect()
+      nil -> uri
+    end
+  end
+
+  defp unwrap_redirect(uri), do: uri
+
+  defp decoded(path) do
+    URI.decode(path)
+  rescue
+    ArgumentError -> path
+  end
+
+  # `URI.to_string/1` puts it back together, so the default port, the userinfo
+  # and the query keep whatever rules it applies rather than a second set here.
+  # The path keeps its case, where two spellings really are two things.
+  defp canonical_address(%URI{} = uri) do
+    URI.to_string(%URI{
+      uri
+      | host: canonical_host(uri.host),
+        fragment: nil,
+        path: uri.path |> to_string() |> String.trim_trailing("/")
+    })
+  end
+
+  defp canonical_host(host) when is_binary(host) do
+    case BlockedInstance.normalize_host(host) do
+      nil -> host
+      normalized -> Fediverse.strip_www(normalized)
+    end
+  end
+
+  defp canonical_host(host), do: host
 
   defp local_name(acct) when is_binary(acct), do: acct |> String.split("@") |> hd()
   defp local_name(_acct), do: nil

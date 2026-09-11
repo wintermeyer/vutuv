@@ -334,18 +334,22 @@ defmodule VutuvWeb.ExternalTagCardsTest do
 
     # Both sentences promise the same thing and both are read in German first.
     # The one they replaced promised a deletion of "unsere Kopie" — singular,
-    # and of a row that is blanked rather than deleted — while the copies it
-    # did not touch kept standing two cards further down (issue #2164).
+    # and of a row that is blanked rather than deleted — while the copies it did
+    # not touch kept standing two cards further down (issue #2164). Neither
+    # promises the future: a tombstone keeps the post out of the next pull, but
+    # only until `prune/0` drops it with the last follow of that pair.
     test "the report promises what the report now does", %{view: view, html: html, post: post} do
-      assert html =~ "Jede Kopie auf diesem vutuv verschwindet sofort"
+      assert html =~ "Jede Kopie verschwindet sofort für alle auf diesem vutuv"
       refute html =~ "Unsere Kopie wird sofort für alle auf diesem vutuv gelöscht"
+      refute html =~ "holen ihn nicht wieder"
 
       after_click =
         view
         |> element(~s([data-external-post="#{post.id}"] [phx-click="report-external-post"]))
         |> render_click()
 
-      assert after_click =~ "Jede Kopie auf diesem vutuv ist weg und kommt nicht wieder."
+      assert after_click =~ "Jede Kopie auf diesem vutuv ist weg."
+      refute after_click =~ "kommt nicht wieder"
     end
   end
 end

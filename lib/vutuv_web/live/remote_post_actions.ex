@@ -82,7 +82,7 @@ defmodule VutuvWeb.Live.RemotePostActions do
       |> reported(
         socket,
         on_removed,
-        gettext("Thank you. Every copy on this vutuv is gone and will not come back.")
+        gettext("Thank you. Every copy on this vutuv is gone.")
       )
     end)
   end
