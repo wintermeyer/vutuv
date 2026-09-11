@@ -37,6 +37,7 @@ defmodule VutuvWeb.MessageAttachmentWebTest do
 
   use VutuvWeb.ConnCase, async: false
 
+  import Vutuv.AttachmentHelpers, only: [settle!: 1]
   import Vutuv.WebPushHelpers, only: [put_config: 2]
 
   alias Vutuv.AttachmentFixtures, as: Fixtures
@@ -92,23 +93,6 @@ defmodule VutuvWeb.MessageAttachmentWebTest do
       Chat.send_message(sender, conversation.id, "here", attachment_ids: [attachment.id])
 
     Repo.get!(Attachment, attachment.id)
-  end
-
-  # Runs the pipeline and hands back the row it settled, asserting that it
-  # settled. That is the line that stops a render which never finished from
-  # reading as whatever each test is actually about. `plain_pdf/1` is a
-  # one-page document, so no page means a failed render rather than a short
-  # one, and the row is re-read so the assertion reads what the database holds
-  # rather than the struct the pipeline handed back.
-  defp settle!(%Attachment{} = attachment) do
-    Pages.render(attachment)
-
-    assert [%ImageRow{} = page] = Pages.list(attachment)
-    assert Pages.release(page.id) == :ok
-
-    settled = Repo.get!(Attachment, attachment.id)
-    assert Attachments.settled?(settled)
-    settled
   end
 
   describe "the file" do

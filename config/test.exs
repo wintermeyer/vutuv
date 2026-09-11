@@ -8,6 +8,14 @@ config :vutuv, :serve_uploads_locally, true
 # under async tests) and make a live HTTP request / launch headless Chromium.
 config :vutuv, :generate_screenshots, false
 config :vutuv, :fetch_gravatar, false
+# No test may find a real browser either: `PageScreenshot.binary/0` otherwise
+# walks $PATH and the macOS app bundles, and a render that misses the capture's
+# 30-second deadline leaves the row at `stage: "rendering"` with no page and no
+# log (issues #2178, #2186, #2189). A path that does not exist makes
+# `PageRender.renderable?/1` answer false, the way a host without a browser
+# behaves. See docs/architecture/attachments.md, "The suite never runs that
+# browser". A test that wants a stub sets its own value, which wins over this.
+config :vutuv, :chromium_path, "/vutuv/no/chromium/in/tests"
 # Ads ship disabled (config/config.exs); the test suite exercises the full ad
 # flow, so it runs with the system on. ads_disabled_test.exs flips it off.
 config :vutuv, :ads_enabled, true

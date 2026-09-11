@@ -21,10 +21,18 @@ defmodule Vutuv.AttachmentReportingTest do
   `async: false`: the freeze moves files on disk, and the module flips
   `:uploads_dir_prefix` and `:attachments`, which `Application.put_env/3` makes
   global state the SQL sandbox does not roll back.
+
+  Every file here is rendered through `settle!/1` rather than a bare
+  `Pages.render/1` (issue #2189). Half of what these tests say about a page is
+  said *inside* a loop over `Pages.list/1`, so a render that produced nothing
+  left the loop empty and the test green — and `stage: "ready"` does not rule
+  that out, since the pipeline settles a file it has no renderer for at `ready`
+  with no pages at all.
   """
 
   use Vutuv.DataCase, async: false
 
+  import Vutuv.AttachmentHelpers, only: [settle!: 1]
   import Vutuv.OrganizationsHelpers, only: [active_organization: 0]
   import Vutuv.WebPushHelpers, only: [put_config: 2]
 
@@ -230,12 +238,11 @@ defmodule Vutuv.AttachmentReportingTest do
       files: files
     } do
       insert(:email, user: author)
-      attachment = published_file(author, files)
-      %Attachment{stage: "ready"} = Pages.render(attachment)
+      attachment = author |> published_file(files) |> settle!()
 
-      pages = Pages.list(attachment)
-      assert pages != []
-      page_bytes = for page <- pages, do: {page.id, File.read!(Pages.bytes_path(page))}
+      page_bytes =
+        for page <- Pages.list(attachment), do: {page.id, File.read!(Pages.bytes_path(page))}
+
       served = AttachmentStore.served_path(attachment.token)
       file_bytes = File.read!(served)
 
@@ -278,8 +285,7 @@ defmodule Vutuv.AttachmentReportingTest do
     } do
       insert(:email, user: author)
       admin = insert_activated_user(admin?: true)
-      attachment = published_file(author, files)
-      %Attachment{stage: "ready"} = Pages.render(attachment)
+      attachment = author |> published_file(files) |> settle!()
 
       before = tree(tmp)
       # The served copy, the private original, and the page's derived sizes in
@@ -331,8 +337,7 @@ defmodule Vutuv.AttachmentReportingTest do
       insert(:email, user: author)
       admin = insert_activated_user(admin?: true)
       post = insert(:post, user: author)
-      attachment = published_file(author, files, post: post)
-      %Attachment{stage: "ready"} = Pages.render(attachment)
+      attachment = author |> published_file(files, post: post) |> settle!()
 
       {:ok, case_record} = Moderation.report_content(reporter, attachment, @copyright)
 
@@ -374,9 +379,8 @@ defmodule Vutuv.AttachmentReportingTest do
       reporter: reporter,
       files: files
     } do
-      attachment = published_file(author, files)
-      %Attachment{stage: "ready"} = Pages.render(attachment)
-      [page | _] = Pages.list(attachment)
+      attachment = author |> published_file(files) |> settle!()
+      [page] = Pages.list(attachment)
 
       # The strategy registry is what makes the freeze work at all...
       assert Images.takedown_ready?(page)
@@ -396,8 +400,7 @@ defmodule Vutuv.AttachmentReportingTest do
       files: files
     } do
       insert(:email, user: author)
-      attachment = published_file(author, files)
-      %Attachment{stage: "ready"} = Pages.render(attachment)
+      attachment = author |> published_file(files) |> settle!()
 
       {:ok, _case_record} = Moderation.report_content(reporter, attachment, @copyright)
       frozen = reload(attachment)

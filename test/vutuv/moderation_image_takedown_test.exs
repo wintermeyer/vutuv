@@ -16,6 +16,7 @@ defmodule Vutuv.ModerationImageTakedownTest do
   # Not async: flips the global :uploads_dir_prefix.
   use Vutuv.DataCase, async: false
 
+  import Vutuv.AttachmentHelpers, only: [settle!: 1]
   import Vutuv.WebPushHelpers, only: [put_config: 2]
 
   alias Vutuv.Accounts
@@ -89,8 +90,10 @@ defmodule Vutuv.ModerationImageTakedownTest do
     {:ok, attachment} =
       Attachments.create_pending(owner, AttachmentFixtures.plain_pdf(dir), "paper.pdf")
 
-    Pages.render(attachment)
-    List.first(Pages.list(attachment))
+    # `settle!/1`, not a bare render: `List.first/1` on the empty page list a
+    # host without poppler leaves behind handed back `nil`, and the caller's own
+    # assertion then blamed the takedown registry (issue #2189).
+    attachment |> settle!() |> Pages.list() |> hd()
   end
 
   defp notice(attrs \\ %{}) do
