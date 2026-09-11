@@ -11,7 +11,8 @@ defmodule VutuvWeb.JobReferenceDocumentController do
   things must all hold before any byte leaves: the entry is published, the
   document cleared moderation, and the URL's fingerprint matches what is
   stored. The owner bypasses the first two, and nobody bypasses the third —
-  the URLs are cached hard, so stale bytes must 404 rather than be served.
+  the URL names the bytes, and a browser holding them revalidates rather than
+  re-fetching, so a stale fingerprint must 404 rather than be served.
 
   Every refusal is the same 404, so the proxy never reveals whether a private
   Zeugnis exists at a given id.
@@ -81,11 +82,7 @@ defmodule VutuvWeb.JobReferenceDocumentController do
   defp send_document(conn, nil, _decorate), do: ImageProxy.not_found(conn)
 
   defp send_document(conn, path, decorate) do
-    conn
-    |> ImageProxy.put_cache_control()
-    |> put_resp_content_type(MIME.from_path(path), nil)
-    |> decorate.()
-    |> send_file(200, path)
+    ImageProxy.send_version(conn, path, decorate: fn conn, _ext -> decorate.(conn) end)
   end
 
   # The save-as name is the member's original filename; the RFC 5987 pair that

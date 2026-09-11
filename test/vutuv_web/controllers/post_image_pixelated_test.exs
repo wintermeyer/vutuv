@@ -129,8 +129,9 @@ defmodule VutuvWeb.PostImagePixelatedTest do
 
       assert pixelated.status == 200
       assert get_resp_header(pixelated, "content-type") |> hd() =~ "image/avif"
-      # The one response on this proxy that must not carry its year-long
-      # immutable header: the real picture takes this URL's place in seconds.
+      # The one version on this proxy that must not be stored at all: the real
+      # picture takes this URL's place in seconds, so even the five minutes a
+      # derived version keeps would outlive the wait.
       assert get_resp_header(pixelated, "cache-control") == ["private, no-store"]
 
       for version <- ~w(thumb feed large xl) do

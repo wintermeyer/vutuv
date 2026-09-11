@@ -1790,8 +1790,8 @@ the workbench**: the served versions and lightbox `xl` show the crop, the
 full-resolution cropped JPEG (`cropped.jpg` beside the original, dropped on
 re-crop) — the exact-file choice is forced off and blocked while cropped
 (`download_exact`), because the upload still shows what the author cut away.
-The proxy's cache header is immutable, so `PostImage.url/2` appends a
-crop-keyed `?v=<hash>` buster while a crop is set (bodies stored under an
+A re-crop rewrites the files under the same names, so `PostImage.url/2`
+appends a crop-keyed `?v=<hash>` buster while a crop is set (bodies stored under an
 older buster keep resolving: the inline-image whitelist strips `?v=` before
 lookup).
 

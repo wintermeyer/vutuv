@@ -6,8 +6,9 @@ defmodule VutuvWeb.QualificationDocumentController do
   `/:slug/qualifications/:id/document/`.
 
   Access policy: the document must exist, the URL's fingerprint must match the
-  stored one (the URLs are immutable and cached hard, so stale bytes must 404
-  rather than be served), and while the AI image scan still holds it in limbo
+  stored one (the URL names the bytes, and a browser holding them revalidates
+  rather than re-fetching, so a stale fingerprint must 404 rather than be
+  served), and while the AI image scan still holds it in limbo
   only the owner gets the bytes (the review-cover pattern: no quarantine tree,
   the proxy checks the moderation state). Everything else — unknown ids, wrong
   fingerprints, a pending document to a visitor — is the same 404, so the
@@ -76,11 +77,7 @@ defmodule VutuvWeb.QualificationDocumentController do
   defp send_document(conn, nil, _decorate), do: ImageProxy.not_found(conn)
 
   defp send_document(conn, path, decorate) do
-    conn
-    |> ImageProxy.put_cache_control()
-    |> put_resp_content_type(MIME.from_path(path), nil)
-    |> decorate.()
-    |> send_file(200, path)
+    ImageProxy.send_version(conn, path, decorate: fn conn, _ext -> decorate.(conn) end)
   end
 
   # The save-as name is the member's original filename; the RFC 5987 pair that

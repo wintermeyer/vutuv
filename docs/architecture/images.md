@@ -68,10 +68,11 @@ The lightbox opens `large` (1600 px) rather than `xl`
 the disk before naming a lite (`Vutuv.LowBandwidth.picture/2` runs the probe
 only for a viewer in the mode), so a row the regeneration has not reached
 keeps showing its full version. The post photo does this too although its
-proxy could fall back the way `xl` falls back to `large`: the proxy caches
-every version as immutable for a year, so a lite URL answered with the feed
-bytes would stay the feed for that year, on exactly the member the mode is
-for. A remote picture keeps no original, so only pictures fetched after the
+proxy could fall back the way `xl` falls back to `large`: a lite URL that
+resolved to the feed file would hand the full-size bytes to exactly the member
+the mode exists to spare, and a browser would keep them for as long as it
+holds them fresh. A remote picture keeps no original, so only pictures fetched
+after the
 version existed have one (`lite-<hash>.avif`, the same hash as the picture,
 opened by the same proxy rules). Adding the version made every row
 non-converged, so the deploy's `regenerate_images` step re-derives them all
@@ -892,6 +893,17 @@ root segment permanently burns a handle, and this kind therefore needs no
 `send_file` rather than the X-Accel handoff (`:post_image_serving`), so a new
 kind of proxied picture costs no nginx change.
 
+**What a browser may remember (issue #2170).** Every proxy response is an
+authorization decision, and authorization gets revoked — a post switched to
+restricted, a picture frozen for copyright, an account suspended — while the
+header was `private, max-age=31536000, immutable`, which tells a browser not to
+ask again for a year. Two tiers now: a **derived version** (`send_version/3`,
+`send_derived/3`) answers `private, max-age=300, must-revalidate` plus an
+`ETag`, and a **file hand-over** (`hand_over/3`, `hand_over_private/4`)
+`private, no-store`. `VutuvWeb.ImageProxy`'s moduledoc holds the reasoning, the
+rejected alternatives and why the header may not be taken without the
+validator.
+
 **Born pending, and how it gets out (issue #2084).** A fresh row starts at
 `Vutuv.Moderation.ImageScans.initial_state/0`, so with the AI gate on it is
 `"pending"` and `PressKit.visible_to?/2` shows it to its owner alone — for a
@@ -1587,8 +1599,9 @@ released — a logo included, cut from the rasterisation the scan judges). Not
 avatars and covers, whose initials tile is the better placeholder at 36 pixels,
 and not organization or job-posting images, which no page shows to a stranger
 while they wait. The response is `ImageProxy.serve_pixelated/2`, the deliberate
-counter-rule to that module's immutable cache header: never X-Accel'd, always
-`no-store`, since the real picture takes the URL within seconds.
+counter-rule to that module's derived-version cache header: never X-Accel'd,
+always `no-store`, since the real picture takes the URL within seconds and
+even five minutes would outlive the wait.
 
 **The two drifts, and why the second one hurt (issue #1443).** Approval is two
 writes in one order: `apply_approved/1` flips the row with `update_all`, then

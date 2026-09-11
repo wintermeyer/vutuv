@@ -2,12 +2,17 @@ defmodule VutuvWeb.PostImageController do
   @moduledoc """
   The authorizing image proxy: every post-image byte is served through here,
   so a post's audience (deny-model, `Vutuv.Posts.visible_to?/2`) also guards
-  its images — switching a post from public to restricted locks its images
-  immediately, which statically served files could never do.
+  its images — switching a post from public to restricted shuts every reader
+  out of its pictures on their next request, which statically served files
+  could never do. **Not "immediately" on a machine that already loaded one**:
+  a browser holding the bytes asks again after five minutes and is refused
+  then (issue #2170, `VutuvWeb.ImageProxy`, which explains why five). Until
+  that issue the answer was a year, and the claim of immediacy made here was
+  simply false.
 
   The serving mechanics (X-Accel-Redirect vs `send_file`, the version parser,
-  the immutable cache header) live in `VutuvWeb.ImageProxy`, shared with the
-  job-posting and organization proxies; this controller owns the post policy,
+  the cache and revalidation headers) live in `VutuvWeb.ImageProxy`, shared
+  with the job-posting and organization proxies; this controller owns the post policy,
   the on-the-fly `og.jpg` and the download filename. Pending images (post not
   yet submitted) are visible to their uploader alone; denied and unknown
   tokens are both 404 — the proxy must not leak whether an image exists.
@@ -117,14 +122,14 @@ defmodule VutuvWeb.PostImageController do
   #
   #   * still waiting — the file, under `no-store`. It is replaced by the real
   #     picture within seconds and must not outlive that in any cache, which is
-  #     the one place this proxy's year-long immutable header would be wrong.
+  #     the one version even the proxy's five-minute window would be wrong for.
   #   * released — a redirect to the picture itself. The pixelated preview is deleted on
   #     the verdict, so without this a dead page that lazy-loads a tile after
   #     the swap would show a broken image where the photo now is.
   defp serve(conn, image, :pixelated) do
     if ImageScans.released?(image.moderation) do
       conn
-      |> put_resp_header("cache-control", "private, no-store")
+      |> ImageProxy.put_no_store()
       |> redirect(to: PostImage.url(image, "feed"))
     else
       ImageProxy.serve_pixelated(conn, existing(Vutuv.PostImageStore.pixelated_path(image.token)))
@@ -133,15 +138,15 @@ defmodule VutuvWeb.PostImageController do
 
   # The og.jpg bytes are generated in the app (Vutuv.PostImageStore.og_jpeg/1),
   # so they are sent directly in both serving modes — there is no file for
-  # nginx to accel-stream. Rare traffic: one fetch per scrape, then cached.
+  # nginx to accel-stream. Rare traffic: one fetch per scrape, and
+  # `send_derived/3`'s hash of the bytes then answers the next scrape's
+  # revalidation with a 304.
   defp serve(conn, image, :og) do
     case Vutuv.PostImageStore.og_jpeg(image) do
       {:ok, jpeg} ->
         conn
-        |> ImageProxy.put_cache_control()
         |> put_download_name(image, "og", "jpg")
-        |> put_resp_content_type("image/jpeg", nil)
-        |> send_resp(200, jpeg)
+        |> ImageProxy.send_derived(jpeg, "image/jpeg")
 
       :error ->
         ImageProxy.not_found(conn)
@@ -179,10 +184,7 @@ defmodule VutuvWeb.PostImageController do
 
     with true <- viewer != nil and viewer.id == image.user_id,
          path when not is_nil(path) <- Vutuv.PostImageStore.source_path(image) do
-      conn
-      |> ImageProxy.put_cache_control()
-      |> put_resp_content_type("image/avif", nil)
-      |> send_file(200, path)
+      ImageProxy.send_version(conn, path, content_type: "image/avif")
     else
       _ -> ImageProxy.not_found(conn)
     end

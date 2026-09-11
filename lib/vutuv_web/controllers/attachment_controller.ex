@@ -37,7 +37,7 @@ defmodule VutuvWeb.AttachmentController do
   stranger's document on its own origin.
 
   Through `ImageProxy.hand_over_private/4`, which the moderation case page's
-  download shares: `private, no-store` rather than the immutable header,
+  download shares: `private, no-store` and the stored content type,
   because this URL does not answer the same way for ever — ending the
   connection closes it again, and a cached copy in a shared browser would
   outlive that.
@@ -78,7 +78,7 @@ defmodule VutuvWeb.AttachmentController do
       # user's cache" and a browser profile does not know the session changed.
       # A shared computer is exactly where that lands. The re-fetch is the
       # price of a picture whose permission can be revoked.
-      |> put_resp_header("cache-control", "private, no-store")
+      |> ImageProxy.put_no_store()
       |> put_resp_content_type(MIME.from_path(path), nil)
       |> send_file(200, path)
     else

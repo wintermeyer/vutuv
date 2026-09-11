@@ -32,7 +32,7 @@ defmodule VutuvWeb.PendingImageController do
          path when is_binary(path) <- pending_path(user, kind, version) do
       conn
       |> put_resp_content_type("image/avif", nil)
-      |> put_resp_header("cache-control", "private, no-store")
+      |> ImageProxy.put_no_store()
       |> send_file(200, path)
     else
       _ -> ImageProxy.not_found(conn)

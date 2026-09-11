@@ -104,8 +104,8 @@ defmodule Vutuv.Posts.PostVideo do
 
   @doc """
   The poster's URL. It carries the cover frame's id as a cache buster: the
-  proxy serves every file as immutable for a year, and the author may pick
-  another frame, which rewrites the file under the same name.
+  proxy caches every file and revalidates it (`VutuvWeb.ImageProxy`), and the
+  author may pick another frame, which rewrites the file under the same name.
   """
   def cover_url(%__MODULE__{} = video), do: url(video, "cover.avif") <> cover_buster(video)
 

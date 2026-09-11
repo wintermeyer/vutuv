@@ -72,7 +72,7 @@ defmodule VutuvWeb.ReviewCoverControllerTest do
 
   defp cover_path(review), do: ReviewCover.url(review)
 
-  test "a public post's cover is served with immutable private caching", %{conn: conn} do
+  test "a public post's cover is served revalidatable rather than immutable", %{conn: conn} do
     author = insert(:user, email_confirmed?: true)
     {_post, review} = reviewed_post!(author)
 
@@ -80,7 +80,7 @@ defmodule VutuvWeb.ReviewCoverControllerTest do
 
     assert response(conn, 200)
     assert get_resp_header(conn, "content-type") |> hd() =~ "image/avif"
-    assert get_resp_header(conn, "cache-control") == ["private, max-age=31536000, immutable"]
+    assert get_resp_header(conn, "cache-control") == ["private, max-age=300, must-revalidate"]
     # Somebody else's book cover, quoted here at thumbnail size — it has no
     # business in an image search under our domain.
     assert get_resp_header(conn, "x-robots-tag") == ["noindex, noimageindex"]

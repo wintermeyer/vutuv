@@ -80,7 +80,7 @@ defmodule VutuvWeb.ModerationCaseController do
       conn
       # Never cached, anywhere: these are the bytes a takedown is about, and a
       # copy in a proxy would outlive the freeze that moved them.
-      |> put_resp_header("cache-control", "private, no-store")
+      |> ImageProxy.put_no_store()
       |> put_resp_content_type(MIME.from_path(path), nil)
       |> send_file(200, path)
     else

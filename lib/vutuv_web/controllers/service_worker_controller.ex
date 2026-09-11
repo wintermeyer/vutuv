@@ -40,6 +40,7 @@ defmodule VutuvWeb.ServiceWorkerController do
 
   use VutuvWeb, :controller
 
+  alias VutuvWeb.ControllerHelpers
   alias VutuvWeb.Endpoint
   alias VutuvWeb.PushLine
 
@@ -76,26 +77,13 @@ defmodule VutuvWeb.ServiceWorkerController do
       |> put_resp_header("etag", etag)
       |> put_resp_header("cache-control", "no-cache")
 
-    if fresh?(conn, etag) do
+    if ControllerHelpers.fresh?(conn, etag) do
       send_resp(conn, 304, "")
     else
       conn
       |> put_resp_content_type("text/javascript")
       |> send_resp(200, body)
     end
-  end
-
-  # `If-None-Match` is a comma-separated LIST, and a validator may come back
-  # **weak** (`W/"…"`) — nginx marks an ETag weak when it compresses the body,
-  # and a strict `==` against our one strong tag would then never match, so
-  # every update check would fetch the whole file again and the 304 above would
-  # be a promise nothing keeps. Compare the entity-tags, not the header.
-  defp fresh?(conn, etag) do
-    conn
-    |> get_req_header("if-none-match")
-    |> Enum.flat_map(&String.split(&1, ","))
-    |> Enum.map(&(&1 |> String.trim() |> String.replace_prefix("W/", "")))
-    |> Enum.any?(&(&1 == etag))
   end
 
   # The keys are spelled camelCase here rather than converted, because the file

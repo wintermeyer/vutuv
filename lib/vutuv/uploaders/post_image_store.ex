@@ -317,9 +317,9 @@ defmodule Vutuv.PostImageStore do
   # `Vutuv.Uploads.Regenerator` has derived the bigger version — a slightly
   # softer picture on a big screen, never a broken one. `lite` (data-saving
   # mode) deliberately has no such fallback: `PostImage.picture/1` asks this
-  # module whether the file exists before naming it, because the proxy's
-  # year-long immutable cache would otherwise pin the feed bytes under the
-  # lite URL.
+  # module whether the file exists before naming it, because the lite URL would
+  # otherwise resolve to the feed file and hand the full-size bytes to exactly
+  # the member the mode exists to spare.
   defp version_filename(token, version) do
     if version in PostImage.versions() do
       dir = dir(token)
