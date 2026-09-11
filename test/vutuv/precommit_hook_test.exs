@@ -350,6 +350,21 @@ defmodule Vutuv.PrecommitHookTest do
 
       assert {_, 0} = run_hook(ctx, push, [], path: path_with_mise("exit 0"))
     end
+
+    test "its timeout outlasts the slowest precommit", ctx do
+      # A command hook that times out does not block: Claude Code lets the
+      # tool call through. The hook's own header puts a loaded machine at
+      # ~900 s, and at the old 300 s every slower push went out unchecked.
+      timeout =
+        Path.join(ctx.root, ".claude/settings.json")
+        |> File.read!()
+        |> Jason.decode!()
+        |> get_in(["hooks", "PreToolUse"])
+        |> Enum.flat_map(& &1["hooks"])
+        |> Enum.find_value(&(&1["command"] =~ "precommit-before-push.sh" && &1["timeout"]))
+
+      assert is_integer(timeout) and timeout > 900, "timeout is #{inspect(timeout)}"
+    end
   end
 
   # Runs the hook in `--explain` mode against a payload and returns its verdict.

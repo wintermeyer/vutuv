@@ -49,7 +49,10 @@
 # a wrapper it does not know (`bash -c '…'`, `xargs git`, a shell function, a
 # script, a Makefile target, an editor's VCS integration), and quoting is
 # approximated rather than parsed. It is the last automatic reminder before
-# production, not a guarantee that nothing else can push.
+# production, not a guarantee that nothing else can push. And a hook that
+# outlives its `timeout` in `.claude/settings.json` does not block: Claude Code
+# cancels it and lets the push through, so that timeout must outlast the
+# slowest precommit (the test pins it above ~900 s).
 #
 # Run `bash precommit-before-push.sh --explain < payload.json` to print the
 # decision (ALLOW / SKIP <reason> / PUSH <toplevel> / BLOCK <reason>) without
