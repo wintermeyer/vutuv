@@ -336,7 +336,11 @@ defmodule VutuvWeb.PostLive.Feed do
         # And what is suddenly busy on those servers (issue #2129), which the
         # last pass already worked out — a select of at most eight stored rows,
         # never anything outbound.
-        trending_tags: trending_offers(followed)
+        trending_tags: trending_offers(followed),
+        # Whether anybody is asked at all (`VutuvWeb.PostLive.TrendingTags`).
+        # Read once here and never again: it is configuration, so the
+        # socket-side redraws below deliberately leave it alone.
+        trending_asking?: Trending.asking?()
       },
       newcomer_rail(user)
     )
@@ -1014,6 +1018,7 @@ defmodule VutuvWeb.PostLive.Feed do
   attr(:panel_rows, :list, default: [])
   attr(:panel_error, :any, default: nil)
   attr(:trending, :list, default: [])
+  attr(:trending_asking?, :boolean, required: true)
 
   defp followed_tags_body(assigns) do
     ~H"""
@@ -1103,7 +1108,7 @@ defmodule VutuvWeb.PostLive.Feed do
       <%!-- What is spiking on the servers this installation reads from (issue
       #2129), under the tags this reader's own feed is already carrying — the
       near neighbourhood first, then the wider one. --%>
-      <.trending_row tags={@trending} />
+      <.trending_row tags={@trending} asking?={@trending_asking?} />
     </div>
     """
   end
@@ -4105,6 +4110,7 @@ defmodule VutuvWeb.PostLive.Feed do
                       panel_rows={@tag_panel_rows}
                       panel_error={@tag_panel_error}
                       trending={@trending_tags}
+                      trending_asking?={@trending_asking?}
                     />
                   </.rail_block>
                 <% "newcomers" -> %>

@@ -119,6 +119,23 @@ defmodule Vutuv.Tags.Trending do
     ExternalPosts.enabled?() and Application.get_env(:vutuv, @flag, true) == true
   end
 
+  @doc """
+  Whether this installation asks anybody at all what is trending on them.
+
+  The row draws an empty state rather than vanishing (issue #2165), and "nothing
+  stood out today" is only honest where somebody was asked. An installation with
+  the flag off, or an intranet one whose `TAG_SOURCE_SERVERS` is the empty list
+  that `Vutuv.Tags.SourceServers` documents as a real setting, reads no other
+  servers at all — it gets no row, not a nightly report about servers it never
+  touches.
+
+  Every feed page load asks this, so it is deliberately `configured?/0` and not
+  `offered/0`: the second answers *whom* and pays a blocklist query for it
+  (measured at 417 µs and one round trip), while the question here is whether
+  there is anybody to ask, which is configuration.
+  """
+  def asking?, do: enabled?() and SourceServers.configured?()
+
   @doc "The thresholds and the pace — see the moduledoc for where each number comes from."
   def settings, do: Application.get_env(:vutuv, :tag_trending, @settings)
 

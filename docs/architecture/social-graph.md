@@ -453,7 +453,21 @@ all. Measured on 10 September 2026 against the shipped ten, `#warntag` stood at
 what `#xbox` does every day, and a rule that read volume alone would offer it
 forever. Each pill wears those seven days as six quiet strokes and one accent
 bar, so the reader can see the judgement rather than take it on trust; the same
-figures are in the control's accessible name, grouped for the locale.
+figures are in the control's accessible name, grouped for the locale. The pill
+is the same pill as the tags offered a few pixels above it, with the week sized
+to fit inside it (issue #2180) — three rows of pills in one 309px card, and a
+bottom row drawn to a recipe of its own read as a fault rather than as
+emphasis.
+
+**The row keeps its place when the offer is empty** (issue #2165). Judging on
+today's volume means nothing anywhere can clear the bar for the first few hours
+of a day, so the offer empties nightly; taking the label with it left a member
+who saw five suggestions in the evening looking at a bare plus sign. The label
+now stands and one muted line says what and why. What decides whether the row
+exists at all is `Vutuv.Tags.Trending.asking?/0` — the flag plus a non-empty
+`TAG_SOURCE_SERVERS` — because "nothing stood out today" is only honest where
+somebody was asked, and an intranet installation reading no other server gets no
+row rather than a nightly report about servers it never touches.
 
 **The loudest tag is often a machine, and the spread does not catch it.**
 `#mow4` trended on seven of the nine servers that answered — a bot farm that
