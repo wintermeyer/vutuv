@@ -7,7 +7,8 @@ defmodule VutuvWeb.MessageAttachmentLiveTest do
   control that starts it was ever rendered.
 
   Not async: it points the global `:uploads_dir_prefix` at a tmp dir, opens
-  `ATTACHMENT_UPLOADERS` to members and switches the AI image gate on.
+  `ATTACHMENT_UPLOADERS` to members, switches the AI image gate on and turns
+  preview pages off — see `setup` for why that last one is load-bearing.
   """
 
   use VutuvWeb.ConnCase, async: false
@@ -29,9 +30,21 @@ defmodule VutuvWeb.MessageAttachmentLiveTest do
     src = Path.join(tmp, "src")
     File.mkdir_p!(src)
     put_config(:uploads_dir_prefix, tmp)
-    Fixtures.put_config(uploaders: :members)
     put_config(:moderate_images, true)
     on_exit(fn -> File.rm_rf(tmp) end)
+
+    # **No preview pages anywhere in this module.** What is under test is the
+    # bubble, never the renderer, but a text file's preview page is drawn by
+    # the headless Chromium the link previews use — which CI does not install
+    # and the GitHub runner image happens to carry anyway, so the capture
+    # really runs there. A loaded runner misses its deadline, `Pages.render/1`
+    # records a strike and leaves the row `rendering` for the retry, and the
+    # recipient's half of the bubble keeps saying the file is being checked
+    # instead of carrying its address (#2178, and one red run before it on
+    # 2026-09-11). Nothing there is a race to wait out: the render is
+    # synchronous and has already failed by the time the bubble is read. With
+    # no pages wanted the pipeline settles the file itself, deterministically.
+    Fixtures.put_config(uploaders: :members, preview_pages: 0)
 
     # Both logins in one place: each drives the real PIN flow and reads the
     # newest mail out of this process's mailbox, so interleaving them with a
@@ -58,6 +71,18 @@ defmodule VutuvWeb.MessageAttachmentLiveTest do
   defp stranger_conversation(sender, other) do
     {:ok, conversation} = Chat.find_or_create_conversation(sender, other)
     conversation
+  end
+
+  # Runs the pipeline and hands back the row it settled. The assertion belongs
+  # here rather than at the call sites because a file that never finished and a
+  # bubble deliberately withholding its address are the same HTML, and because
+  # it has to read the **row**: `Pages.render/1` writes the stage and answers a
+  # struct saying so in one breath, so its return value cannot corroborate it.
+  defp settled!(%Attachment{} = attachment) do
+    Pages.render(attachment)
+    settled = Repo.get!(Attachment, attachment.id)
+    assert Pending.file_state(settled) == :done
+    settled
   end
 
   describe "the picker" do
@@ -126,8 +151,7 @@ defmodule VutuvWeb.MessageAttachmentLiveTest do
       assert has_element?(other_view, "[data-message-files]")
 
       # Once the pipeline is done, the same bubble carries the file.
-      Pages.render(attachment)
-      for page <- Pages.list(attachment), do: Pages.release(page.id)
+      settled!(attachment)
 
       {:ok, _settled_view, settled_html} = live(other_conn, ~p"/messages/#{conversation.id}")
       assert settled_html =~ attachment.token
@@ -140,16 +164,7 @@ defmodule VutuvWeb.MessageAttachmentLiveTest do
       conversation = connected_to(sender, other)
 
       # What is under test is the **broadcast reaching an open thread**, not the
-      # renderer. A text file's preview page is drawn by the headless Chromium
-      # the link previews use, which CI does not install and the GitHub runner
-      # image happens to carry anyway — so the render really ran there, and a
-      # loaded runner timed it out into a strike, which leaves the file
-      # `:working` and the bubble still saying it is being checked (one red run,
-      # 2026-09-11, green on the same commit locally nine times). With no pages
-      # wanted the pipeline settles the file itself and the claim is the same
-      # one, deterministically.
-      Fixtures.put_config(preview_pages: 0)
-
+      # renderer, which `setup` has already taken out of the picture.
       {:ok, attachment} =
         Attachments.create_pending(sender, Fixtures.text_file(src), "notes.txt")
 
@@ -161,13 +176,7 @@ defmodule VutuvWeb.MessageAttachmentLiveTest do
       assert render(view) =~ "A file is being checked."
 
       # What the pipeline does when the last verdict lands.
-      Pages.render(attachment)
-      for page <- Pages.list(attachment), do: Pages.release(page.id)
-      settled = Repo.get!(Attachment, attachment.id)
-
-      # Say so here rather than let a renderer that did not finish read as a
-      # LiveView that did not redraw.
-      assert Pending.file_state(settled) == :done
+      settled = settled!(attachment)
       Attachments.announce(settled)
 
       html = render(view)
@@ -188,8 +197,10 @@ defmodule VutuvWeb.MessageAttachmentLiveTest do
       {:ok, _message} =
         Chat.send_message(sender, conversation.id, "here", attachment_ids: [attachment.id])
 
-      Pages.render(attachment)
-      for page <- Pages.list(attachment), do: Pages.release(page.id)
+      # The connection gate answers ahead of the file's state, so this one would
+      # pass just as happily on a file that never finished. `settled!/1` is what
+      # holds it to its own premise.
+      settled!(attachment)
 
       %{id: follow_id} = Social.follow_edge(other.id, sender.id)
       Social.unfollow!(other.id, follow_id)
