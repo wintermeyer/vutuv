@@ -92,8 +92,9 @@ defmodule Vutuv.Sitemap do
   end
 
   @doc """
-  `{path, lastmod_date}` entries of one press chunk (1-based): the press page of
-  every crawlable member who actually offers a picture (issue #2086).
+  `{path, lastmod_date}` entries of one press chunk (1-based): the Media Kit of
+  every crawlable member who actually put something on it — a picture (issue
+  #2086) or a written bio (issue #2143).
 
   The one profile **sub**-page in the sitemap, and deliberately so: every other
   one is noindexed because it shows personal data, while a press kit is
@@ -225,18 +226,32 @@ defmodule Vutuv.Sitemap do
   # `rel="nofollow"`, while this set still leaves them out.
   defp indexable_users, do: Vutuv.Directory.indexable_users()
 
-  # A crawlable member who has at least one press picture a crawler can fetch.
-  # The "which pictures count" half is `Vutuv.PressKit.public_query/0`, so the
-  # sitemap and the page cannot disagree about what is published.
+  # A crawlable member whose Media Kit has something on it: a press picture a
+  # crawler can fetch, **or** a written bio (issue #2143). The two halves are
+  # `Vutuv.PressKit.public_query/0` and `written_bio_query/0`, so the sitemap
+  # and the page cannot disagree about what counts as published — the page says
+  # `noindex` for exactly the kits missing from both lists.
   #
   # An `IN` over the owner ids rather than a join: a member with ten photos must
   # be one row here, and a join would list their press page ten times. The
   # explicit `not is_nil(user_id)` is the nullable-pair rule — a page's press
   # picture leaves that column empty, and a NULL in this list is a row that
   # belongs on `/organizations/<slug>/media-kit` (issue #2087), not here.
+  #
+  # **One `IN` over a `UNION`, never two `IN`s joined by `or`.** Postgres pulls
+  # a lone `IN (subquery)` up into a semi-join and can then skip `users`
+  # entirely when the id set is empty — which is the normal case here, since
+  # almost nobody has a kit. An `OR` between two of them blocks that rewrite:
+  # both become hashed SubPlans filtered over a full `Seq Scan on users`.
+  # Measured on the dev copy (6,025 members, no kits): 1 buffer / 0.12 ms for
+  # the UNION against 225 buffers / 1.4-2.2 ms for the `or`, and the `or` form's
+  # cost grows with the **membership** rather than with the number of kits. This
+  # query runs on every `/sitemap.xml` (one of `chunk_counts/0`'s aggregates) as
+  # well as on every `/sitemaps/press-N.xml`.
   defp indexable_press_users do
     owner_ids =
       from(i in PressKit.public_query(), where: not is_nil(i.user_id), select: i.user_id)
+      |> union(^from(b in PressKit.written_bio_query(), select: b.user_id))
 
     where(indexable_users(), [u], u.id in subquery(owner_ids))
   end

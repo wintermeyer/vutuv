@@ -1003,8 +1003,8 @@ Every other section page goes through the router's `:user_pipe` and its
 `NoIndex` because it shows personal data; a press kit is published in order to
 be found, so the route sits outside that pipeline, declares the pipeline's other
 three plugs itself, carries the member's own `noindex?`/`noai?`, is listed in the
-sitemap (`Vutuv.Sitemap.press_entries/1`, gated on
-`PressKit.public_query/0`) and publishes a schema.org `CollectionPage` whose
+sitemap (`Vutuv.Sitemap.press_entries/1`, gated on `PressKit.public_query/0` or
+`PressKit.written_bio_query/0`) and publishes a schema.org `CollectionPage` whose
 `associatedMedia` are `ImageObject`s with `creditText`, `copyrightNotice`,
 `license` and `acquireLicensePage` — the four properties image search reads to
 call a picture licensable (`VutuvWeb.JsonLd.press_kit_page/3`). **One
@@ -1022,6 +1022,32 @@ since a document that names a file must name one that can be fetched. A picture
 whose owner typed no label is titled by its **shelf** — "Logo variant" or
 "Press photo" — in `PressKitDoc.entry/1` rather than in each renderer, which
 sees a flat map and so called every unlabelled logo a press picture (#2142).
+
+**An empty Media Kit keeps its 200 and says `noindex` (issue #2143).** Every
+member and every page has this address whether or not anybody ever put
+something on it, and on the day this shipped every one of them was empty: 6,025
+members and 12 pages in the dev copy of production, 0 press pictures and 0 bios
+between them. Nothing on the site links an empty kit and the sitemap left it
+out, but `/llms.txt` handed out the bare `/<username>/media-kit` pattern, so an
+assistant reading that document walked 6,037 pages — 30,185 counting the four
+agent siblings — that each answered 200 with no `x-robots-tag` at all. The
+answer is not a 404: the page belongs to its owner, who is about to upload, and
+a 404 would make its existence depend on its content and would answer a
+machine's "does this member offer press material?" with an error where a 200
+answers "no". Instead `PressKit.empty?/2` (both shelves empty and no written
+bio) feeds `PressKit.robots_axes/2`, which adds `noindex` — and **only**
+`noindex`, because emptiness is a statement about what is here, not about who
+may use it, so an empty kit never invents the `noai` its owner did not choose.
+That one answer reaches the response header, the page's own `<meta
+name="robots">` (`LayoutHTML.robots_directives/1` now prefers an explicit
+`conn.assigns[:robots_directives]` over re-deriving it from the member) and all
+four documents. Each surface asks `empty?/2` about what it itself carries, so a
+picture still in the AI queue leaves the HTML page indexable — it draws a
+stand-in — while the document, which may only name a fetchable file, says
+`noindex`. `/llms.txt` now says most kits are empty and points at the sitemap
+chunks instead of the pattern, and `Sitemap.press_entries/1` grew a second
+source so the claim holds: a member who wrote a bio and uploaded nothing is
+listed (`PressKit.written_bio_query/0`), because that kit has something on it.
 
 **A page has the same section, kept by its team (issue #2087).** The card, the
 section page, the documents, the schema.org block and the sitemap entry are the

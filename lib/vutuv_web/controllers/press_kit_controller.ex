@@ -18,8 +18,9 @@ defmodule VutuvWeb.PressKitController do
   results — the right rule for a phone number and the exact opposite of what a
   press kit is for. So this action resolves the slug with the same three plugs
   the profile itself uses, carries the owner's *own* opt-outs
-  (`Vutuv.PressKit.robots_axes/1`, a member's `noindex?`/`noai?` and a page's
-  `seo?`), is listed in the sitemap (`Vutuv.Sitemap`) and publishes schema.org
+  (`Vutuv.PressKit.robots_axes/2`, a member's `noindex?`/`noai?` and a page's
+  `seo?`, plus `noindex` when the kit is empty — issue #2143), is listed in the
+  sitemap (`Vutuv.Sitemap`) and publishes schema.org
   `ImageObject` markup with `license` and `acquireLicensePage` — what image
   search reads to mark a picture licensable, and the whole reason the page
   exists.
@@ -104,16 +105,23 @@ defmodule VutuvWeb.PressKitController do
   end
 
   defp render_press(conn, owner) do
-    {noindex?, noai?} = PressKit.robots_axes(owner)
+    shelves = PressKit.public_shelves(owner, conn.assigns[:current_user])
+    # The three written bios (issue #2101). Public whoever asks: unlike a
+    # picture, a bio passes through no AI gate and has nothing to hold back.
+    bio = PressKit.bio(owner)
+    {noindex?, noai?} = PressKit.robots_axes(owner, PressKit.empty?(shelves, bio))
 
     conn
     |> ContentPolicy.put_robots_header(noindex?, noai?)
+    # …and the same answer into the page's own `<meta name="robots">`, which
+    # `VutuvWeb.LayoutHTML.robots_directives/1` would otherwise derive a second
+    # time from `conn.assigns[:user]` — the member's flags, which know nothing
+    # about whether this kit is empty (issue #2143).
+    |> assign(:robots_directives, ContentPolicy.robots_directives(noindex?, noai?))
     |> render("index.html",
       owner: owner,
-      shelves: PressKit.public_shelves(owner, conn.assigns[:current_user]),
-      # The three written bios (issue #2101). Public whoever asks: unlike a
-      # picture, a bio passes through no AI gate and has nothing to hold back.
-      bio: PressKit.bio(owner),
+      shelves: shelves,
+      bio: bio,
       page_title: PressKitHTML.press_page_title(owner)
     )
   end

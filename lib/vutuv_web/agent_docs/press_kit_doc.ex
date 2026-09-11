@@ -43,7 +43,10 @@ defmodule VutuvWeb.AgentDocs.PressKitDoc do
     name = Identity.display_name(owner)
     photos = entries(shelves.photos)
     logos = entries(shelves.logos)
-    {noindex?, noai?} = PressKit.robots_axes(owner)
+    # A document that lists no picture and quotes no bio is nothing to keep, so
+    # it says `noindex` however its owner feels about search engines — the same
+    # statement the HTML page makes about itself (issue #2143).
+    {noindex?, noai?} = PressKit.robots_axes(owner, PressKit.empty?(shelves, bio))
 
     AgentDocs.doc_meta("press_kit", PressKit.page_path(owner),
       noindex: noindex?,

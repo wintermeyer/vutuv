@@ -26,9 +26,9 @@ question for a member and for a page alike). --%>
   data={JsonLd.press_kit_page(@owner, pictures, Vutuv.PressKit.rights_line())}
 />
 
-<% pictures? = @shelves.photos != [] or @shelves.logos != [] %>
+<% pictures? = Vutuv.PressKit.any_pictures?(@shelves) %>
 <% bios? = Vutuv.PressKit.any_bio?(@bio) %>
-<.card_section empty={not pictures? and not bios?}>
+<.card_section empty={Vutuv.PressKit.empty?(@shelves, @bio)}>
   <%!-- The written bios first (#2101): a journalist reads about the person,
   then picks a picture of them. --%>
   <.press_bios :if={bios?} owner={@owner} bio={@bio} />

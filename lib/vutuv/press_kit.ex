@@ -217,17 +217,87 @@ defmodule Vutuv.PressKit do
   def public_query, do: released(from(i in Image, where: i.kind == ^@kind))
 
   @doc """
-  The two robots axes for an owner's press page: `{noindex?, noai?}`.
+  The bio rows that actually say something, as a query — the other half of
+  "this kit is worth walking", beside `public_query/0`.
 
-  A press kit is published in order to be found, so the page carries the
+  `Vutuv.Sitemap.press_entries/1`'s second source: a member who wrote three
+  bios and uploaded no picture still has a Media Kit a journalist can use, and
+  before issue #2143 nothing told a crawler it existed. Built by folding
+  `Vutuv.PressKit.Bio.lengths/0` rather than naming the three columns, so the
+  list of lengths stays the one vocabulary.
+
+  The SQL twin of `Bio.any?/1` (`any_bio?/1` here), which asks the same thing of
+  a row already in memory; the two agree because a blank field is stored as
+  `nil` rather than `""` — that rule is `Bio`'s, and it is what keeps them from
+  drifting.
+
+  Members only. `bio/1` answers `%Bio{}` for a page, which has no row here.
+  """
+  def written_bio_query do
+    [first | rest] = Bio.lengths()
+
+    written =
+      Enum.reduce(rest, dynamic([b], not is_nil(field(b, ^first))), fn length, acc ->
+        dynamic([b], ^acc or not is_nil(field(b, ^length)))
+      end)
+
+    from(b in Bio, where: ^written)
+  end
+
+  @doc """
+  How many pictures this kit holds altogether — both shelves, since every
+  surface that counts a kit counts what it draws.
+  """
+  def picture_count(%{photos: photos, logos: logos}), do: length(photos) + length(logos)
+
+  @doc "Whether there is anything on either shelf."
+  def any_pictures?(shelves), do: picture_count(shelves) > 0
+
+  @doc """
+  Whether this kit says nothing at all — no picture on either shelf and no
+  written bio (issue #2143).
+
+  Asked of the shelves the surface in hand already holds, so the HTML page
+  answers for what it *draws* (`public_shelves/2`) and a document for what it
+  *lists* (`published_shelves/1`); those differ only while every picture is
+  still in the AI queue, and in that window each surface is right about itself.
+  Never a query of its own: this is asked on every Media Kit response, and the
+  shelves and the bio are already read.
+
+  The in-memory twin of the pair `Vutuv.Sitemap.press_entries/1` asks in SQL
+  (`public_query/0` and `written_bio_query/0`), so the page and the sitemap
+  answer "is there anything here" from the same two rules — a kit the sitemap
+  lists never answers `noindex`.
+  """
+  def empty?(shelves, bio), do: not any_pictures?(shelves) and not any_bio?(bio)
+
+  @doc """
+  The two robots axes for an owner's Media Kit page: `{noindex?, noai?}`.
+  `empty?` is `empty?/2`'s answer for the surface being served.
+
+  A Media Kit is published in order to be found, so the page carries the
   **owner's own** opt-outs rather than the blanket refusal every other
   profile sub-page wears. Stated once here because the controller sets the
-  header from it and the agent documents stamp their `Content-Signal` from it,
-  and `VutuvWeb.AgentDocs.PostDoc.robots_axes/2`'s docstring is the war story of
+  header *and the page's `<meta>` tag* from it and the agent documents stamp
+  their `Content-Signal` from it, and
+  `VutuvWeb.AgentDocs.PostDoc.robots_axes/2`'s docstring is the war story of
   what happens when two such derivations disagree.
+
+  **An empty kit adds `noindex`, and only that** (issue #2143). Every member
+  and every page has this address whether or not anybody ever put something on
+  it, so almost all of them answer 200 with nothing on them, and a crawler that
+  keeps such a page is keeping an empty one — the same reasoning
+  `VutuvWeb.TagController` already applies to a tag page below the indexability
+  bar. The `noai` axis deliberately stays the owner's: emptiness is a statement
+  about what is here, not about who may use it, and deriving an AI opt-out from
+  it would tell an agent a member refused something they never refused. That is
+  the one way this differs from `PostDoc.robots_axes/2`, where a restriction is
+  a privacy fact and so moves both axes.
   """
-  def robots_axes(%User{} = user), do: {user.noindex?, user.noai?}
-  def robots_axes(%Organization{} = organization), do: {not organization.seo?, false}
+  def robots_axes(%User{} = user, empty?), do: {user.noindex? or empty?, user.noai?}
+
+  def robots_axes(%Organization{} = organization, empty?),
+    do: {not organization.seo? or empty?, false}
 
   @doc """
   A shelf's own word, the one token the DOM, the event names and the data
