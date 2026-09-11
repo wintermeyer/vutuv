@@ -31,19 +31,10 @@ defmodule Vutuv.Tags.ExternalTagClientTest do
 
   defp status(attrs \\ %{}), do: remote_status(@source, attrs)
 
-  # A status this installation wrote, as a relay hands it back: our member's
-  # address, our permalink. `:host` spells both, `:acct_host` only the author —
-  # above the describe it belongs to, because a `defp` inside one compiles to
-  # module scope anyway and only looks scoped.
-  defp ours(attrs) do
-    host = Map.get(attrs, :host, our_host())
-
-    status(%{
-      "id" => Map.fetch!(attrs, :id),
-      "url" => "https://#{host}/ada/posts/1",
-      "account" => %{"acct" => "ada@#{Map.get(attrs, :acct_host, host)}"}
-    })
-  end
+  # A status this installation wrote, as a relay hands it back. The shape lives
+  # in the shared helpers, because the trending census reads the same predicate
+  # over the same fixture.
+  defp ours(attrs), do: our_status(@source, attrs)
 
   # Every Finch a pinned request started, by the name it registers under. Empty
   # is the claim: one instance lives for one request and is stopped in an
@@ -351,6 +342,41 @@ defmodule Vutuv.Tags.ExternalTagClientTest do
       for stranger <- ["not#{our_host()}", "mirror.#{our_host()}", "elsewhere.test"] do
         refute ExternalPost.written_here?(stranger, "https://#{stranger}/@bob/1")
       end
+    end
+  end
+
+  # The census counts who is posting a tag out there, and we are not out there
+  # (issue #2196). Same predicate as the ingest refusal above, asked one layer
+  # earlier, so the three figures the bot-wave gate reads — how many distinct
+  # servers, how many statuses, how many bots — are all about strangers.
+  describe "authors/2" do
+    test "counts the strangers on the timeline and leaves this installation out" do
+      stub_tag_timeline([
+        ours(%{id: "own"}),
+        ours(%{id: "www", host: "www.#{our_host()}"}),
+        ours(%{id: "doubled-www", host: "www.www.#{our_host()}"}),
+        ours(%{id: "shouted", host: String.upcase(our_host())}),
+        ours(%{id: "trailing-dot", host: "#{our_host()}."}),
+        ours(%{id: "tag-actor", host: Fediverse.tag_host()}),
+        # A relay that rewrote the author field still hands back our address.
+        ours(%{id: "relabelled", acct_host: "shouty.example"}),
+        # The mirror image: a host that merely contains ours is a stranger, and
+        # dropping its author would be this bug with the sign flipped.
+        status(%{"id" => "neighbour", "account" => %{"acct" => "bob@not#{our_host()}"}}),
+        status(%{"id" => "mirror", "account" => %{"acct" => "bob@mirror.#{our_host()}"}}),
+        status(%{
+          "id" => "machine",
+          "account" => %{"acct" => "bot@elsewhere.test", "bot" => true}
+        })
+      ])
+
+      assert {:ok, entries} = ExternalTagClient.authors(@source, "Elixir")
+
+      assert entries == [
+               %{host: "not#{our_host()}", bot?: false},
+               %{host: "mirror.#{our_host()}", bot?: false},
+               %{host: "elsewhere.test", bot?: true}
+             ]
     end
   end
 end

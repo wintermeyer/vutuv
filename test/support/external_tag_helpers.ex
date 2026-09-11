@@ -278,6 +278,26 @@ defmodule Vutuv.ExternalTagHelpers do
   end
 
   @doc """
+  One status **this installation wrote**, as a remote server hands it back: our
+  member's address and our permalink (issues #2179 and #2196).
+
+  Both halves, because `Vutuv.Tags.ExternalPost.written_here?/2` reads both —
+  `:host` spells both, `:acct_host` only the author, for the relay that
+  relabelled one of our posts under a name of its own. One home rather than one
+  per test file, so a third half added to that predicate is one fixture to fix.
+  """
+  def our_status(source, attrs \\ %{}) do
+    attrs = Map.new(attrs)
+    host = Map.get(attrs, :host, our_host())
+
+    remote_status(source, %{
+      "id" => Map.get(attrs, :id, "#{System.unique_integer([:positive])}"),
+      "url" => "https://#{host}/ada/posts/1",
+      "account" => %{"acct" => "ada@#{Map.get(attrs, :acct_host, host)}"}
+    })
+  end
+
+  @doc """
   One Mastodon REST status, public, in German, with an author — merge `attrs`
   over it for the field a test is actually about.
   """
