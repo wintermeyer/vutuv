@@ -50,7 +50,37 @@ through `<.email_markdown>`, the `text/plain` body through
 link. Quoting the raw source instead put "Hello \*\*[Stefan](https://…" in the
 member's inbox.
 
-Messages carry **no images**: `Vutuv.MarkdownContent.validate_no_images/2` in
+## Files and pictures (issue #2110)
+
+Between two **connected** members a message also carries files and pictures —
+the same formats and limits as a post, plus the photo formats. The rule, why
+the gate is asked three times, what ending the connection does, and how a
+picture differs from a post photo are written up in
+[attachments.md](attachments.md); what belongs here is the shape it takes on
+this page. `Vutuv.Chat.files_allowed?/1` is the one function that decides, and
+a page's inbox answers false.
+
+The composer grows a picker beside Send and a chip strip **above** the editor,
+inside the always-rendered `#attachment-slot` — same reason as `#typing-slot`
+and `#request-slot`: an `:if` on a direct child would relocate the form and
+throw the Milkdown caret out mid-word. The chips carry hidden
+`message[attachment_ids][]` inputs so a reconnect recovers them, and
+`adopt_recovered_attachments/2` re-adopts through `Attachments.pending_for/2`,
+which re-checks the owner and both parents.
+
+A message may have an **empty body** when it carries files, which is what
+sending a picture with no caption produces; `Message.changeset/3` takes
+`files?: true` and stores `""` (the column is NOT NULL). The sidebar's
+one-line preview then says how many files instead of nothing, and that count
+costs a second query only for the conversations whose newest message really is
+blank.
+
+A file settling — rendered, past the AI check, refused — broadcasts
+`{:message_attachment, message_id}` on the conversation topic
+(`Vutuv.Attachments.announce/1`), so both bubbles redraw without a reload: the
+sender's state and, once it has passed, the recipient's file.
+
+Messages carry **no images** in the body: `Vutuv.MarkdownContent.validate_no_images/2` in
 `Message.changeset` rejects a body with image Markdown (`![](…)`) on every write
 path (the web composer and `POST …/messages` alike — a 422 for the API), and
 `VutuvWeb.Markdown.render/1` drops any `<img>` at display time, so a legacy body
@@ -58,8 +88,9 @@ never shows one. The Milkdown editor also strips image nodes client-side, so a
 pasted picture never survives (`assets/js/markdown_editor.js` — the message
 composer does not set the editor's `images` option). **Posts differ**: a post
 body may embed the post's own uploaded attachments inline
-([posts-and-feed.md](posts-and-feed.md)); messages have no uploads, so their
-bodies stay image-free.
+([posts-and-feed.md](posts-and-feed.md)). A message's pictures hang **beside**
+the text as attachments (above), never inside it, so the body stays image-free
+whatever the message carries.
 
 Each member controls this on the notifications settings page: whether they are
 emailed about **every** unread message or only the **first** of a burst (the

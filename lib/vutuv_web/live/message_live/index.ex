@@ -17,11 +17,18 @@ defmodule VutuvWeb.MessageLive.Index do
   """
   use VutuvWeb, :live_view
 
+  import VutuvWeb.PendingPostComponents, only: [file_label: 1]
+
+  alias Vutuv.Attachments
+  alias Vutuv.Attachments.Attachment
+  alias Vutuv.Attachments.Format
   alias Vutuv.Chat
   alias Vutuv.Chat.{Conversation, Message}
   alias Vutuv.Organizations
   alias Vutuv.Organizations.Organization
   alias Vutuv.Posts
+  alias Vutuv.Posts.Pending
+  alias VutuvWeb.AttachmentText
   alias VutuvWeb.{Markdown, Presence}
 
   @typing_clear_ms 2500
@@ -56,6 +63,16 @@ defmodule VutuvWeb.MessageLive.Index do
      |> assign_sidebar()
      |> stream(:messages, [], dom_id: &"message-#{&1.id}")
      |> assign(:editor_seed, 0)
+     |> assign(:attachments, [])
+     |> assign(:attachment_error, nil)
+     |> assign(:files_allowed?, false)
+     |> allow_upload(:attachments,
+       accept: Format.extension_whitelist(pictures?: true),
+       max_entries: Attachments.max_per_post(),
+       max_file_size: Attachments.max_filesize(),
+       auto_upload: true,
+       progress: &handle_progress/3
+     )
      |> assign_form()}
   end
 
@@ -96,7 +113,10 @@ defmodule VutuvWeb.MessageLive.Index do
   end
 
   defp apply_action(socket, :index, _params) do
-    socket |> assign(:conversation, nil) |> assign(:other, nil)
+    socket
+    |> assign(:conversation, nil)
+    |> assign(:other, nil)
+    |> assign(:files_allowed?, false)
   end
 
   defp apply_action(socket, :show, %{"id" => id} = params) do
@@ -117,7 +137,15 @@ defmodule VutuvWeb.MessageLive.Index do
         page = Chat.messages_page(viewer, conversation, limit: @page_size)
 
         socket
+        # Files picked for another thread are not this one's to send, so they
+        # go rather than travelling along in the strip (issue #2110).
+        |> discard_foreign_attachments(conversation)
         |> assign(:conversation, conversation)
+        # The **attach** half of the connection gate. It decides whether a
+        # picker is offered at all, and `handle_progress/3` asks it again before
+        # it keeps a byte — a hidden control is a courtesy, never the
+        # enforcement.
+        |> assign_files_allowed(conversation)
         # The far side is a member OR a page, so it cannot be found by
         # elimination: a page conversation has no second user id, and looking up
         # the nil that produces RAISES rather than answering nothing - a 500 on
@@ -200,7 +228,7 @@ defmodule VutuvWeb.MessageLive.Index do
   # the same split `posts` makes for authorship. The right follows the ROLE, so
   # `send_message_as_organization/4` asks for it live rather than trusting the
   # identity this socket mounted with.
-  defp send_as(socket, body) do
+  defp send_as(socket, body, attachment_ids) do
     # `socket.assigns.viewer` is the identity being SPOKEN AS; `current_user` is
     # always the human at the keyboard. A page's reply needs both.
     case socket.assigns.viewer do
@@ -213,45 +241,38 @@ defmodule VutuvWeb.MessageLive.Index do
         )
 
       user ->
-        Chat.send_message(user, socket.assigns.conversation.id, body)
+        Chat.send_message(user, socket.assigns.conversation.id, body,
+          attachment_ids: attachment_ids
+        )
     end
   end
 
   @impl true
-  def handle_event("send", %{"message" => %{"body" => body}}, socket) do
-    body = String.trim(body)
+  def handle_event("send", %{"message" => params}, socket) do
+    body = params |> Map.get("body", "") |> String.trim()
+    socket = adopt_recovered_attachments(socket, params["attachment_ids"])
+    files = socket.assigns.attachments
 
-    if body == "" or is_nil(socket.assigns.conversation) do
+    # A picture sent with nothing written under it is the ordinary case, so an
+    # empty body is only empty when there are no files either.
+    if (body == "" and files == []) or is_nil(socket.assigns.conversation) do
       {:noreply, socket}
     else
-      case send_as(socket, body) do
-        # The echo arrives via the conversation topic broadcast, so all
-        # sessions (including this one) render it the same way — its handler
-        # runs the one refresh_conversation, so none is needed here (this
-        # process is subscribed; local PubSub delivery is guaranteed).
-        # The ScrollBottom hook only follows the newest message for a reader
-        # who is at the bottom of the thread, so tell it that this member just
-        # sent one: answering something you scrolled up to read must still land
-        # you at your own message. This reply reaches the client before the
-        # echo's patch, which then keeps the pinned position.
-        {:ok, %Message{}} ->
-          {:noreply, socket |> assign_form() |> push_event("chat:sent", %{})}
-
-        # Declined conversation: drop silently — for the sender everything
-        # looks exactly like an unanswered request.
-        {:ok, :dropped} ->
-          {:noreply, assign_form(socket)}
-
-        {:error, :pending_limit} ->
-          {:noreply, socket |> refresh_conversation()}
-
-        {:error, %Ecto.Changeset{}} ->
-          {:noreply, put_flash(socket, :error, gettext("This message could not be sent."))}
-
-        {:error, :not_participant} ->
-          {:noreply, push_navigate(socket, to: ~p"/messages")}
-      end
+      socket
+      |> send_as(body, Enum.map(files, & &1.id))
+      |> after_send(socket)
     end
+  end
+
+  def handle_event("remove-attachment", %{"id" => id}, socket) do
+    {gone, kept} = Enum.split_with(socket.assigns.attachments, &(&1.id == id))
+    Enum.each(gone, &Attachments.delete_pending/1)
+
+    {:noreply, socket |> assign(:attachments, kept) |> assign(:attachment_error, nil)}
+  end
+
+  def handle_event("cancel-attachment-upload", %{"ref" => ref}, socket) do
+    {:noreply, cancel_upload(socket, :attachments, ref)}
   end
 
   def handle_event("typing", %{"message" => %{"body" => body}}, socket) do
@@ -342,6 +363,275 @@ defmodule VutuvWeb.MessageLive.Index do
     end
   end
 
+  # What each answer from the send path means for this screen.
+  defp after_send(result, socket)
+
+  # The echo arrives via the conversation topic broadcast, so all sessions
+  # (including this one) render it the same way — its handler runs the one
+  # refresh_conversation, so none is needed here (this process is subscribed;
+  # local PubSub delivery is guaranteed). The ScrollBottom hook only follows
+  # the newest message for a reader who is at the bottom of the thread, so tell
+  # it that this member just sent one: answering something you scrolled up to
+  # read must still land you at your own message. This reply reaches the client
+  # before the echo's patch, which then keeps the pinned position.
+  defp after_send({:ok, %Message{}}, socket),
+    do: {:noreply, socket |> clear_attachments() |> assign_form() |> push_event("chat:sent", %{})}
+
+  # Declined conversation: drop silently — for the sender everything looks
+  # exactly like an unanswered request. The files go with it: they were never
+  # handed to anybody, and a strip left standing would offer them to the next
+  # message.
+  defp after_send({:ok, :dropped}, socket),
+    do: {:noreply, socket |> discard_attachments() |> assign_form()}
+
+  defp after_send({:error, :pending_limit}, socket),
+    do: {:noreply, refresh_conversation(socket)}
+
+  # The connection ended between attaching and sending. The files stay in the
+  # strip — they are still the member's own, and nothing about them was wrong.
+  defp after_send({:error, reason}, socket)
+       when reason in [:files_not_allowed, :too_many_files] do
+    {:noreply,
+     socket
+     |> assign_files_allowed(socket.assigns.conversation)
+     |> assign(:attachment_error, send_error_message(reason))}
+  end
+
+  defp after_send({:error, :invalid_attachments}, socket) do
+    {:noreply,
+     socket
+     |> clear_attachments()
+     |> put_flash(:error, gettext("This message could not be sent."))}
+  end
+
+  defp after_send({:error, :not_participant}, socket),
+    do: {:noreply, push_navigate(socket, to: ~p"/messages")}
+
+  defp after_send({:error, %Ecto.Changeset{}}, socket),
+    do: {:noreply, put_flash(socket, :error, gettext("This message could not be sent."))}
+
+  ## Files and pictures (issue #2110)
+
+  attr(:id, :string, required: true)
+  attr(:message, Message, required: true)
+  attr(:conversation, Conversation, required: true)
+  attr(:viewer, :any, required: true)
+  attr(:mine?, :boolean, required: true)
+
+  # One bubble's files. What a reader gets is the same answer the proxy gives
+  # for the bytes, so the chip and the URL behind it can never disagree: the
+  # sender sees their own file at every stage with its state beside it, the
+  # recipient sees it once it has passed and a plain sentence until then.
+  #
+  # Both facts a row needs — may I see it, where is it — are resolved **once per
+  # file here**, not per markup branch: `readable_by?/2` and `file_state/1` each
+  # cost a query, and asking them where they are rendered ran seven per file.
+  defp message_files(assigns) do
+    files = assigns.message.attachments
+    reasons = Attachments.readable_in_conversation(files, assigns.viewer, assigns.conversation)
+    states = Pending.file_states(files)
+
+    rows =
+      Enum.map(files, fn file ->
+        %{
+          file: file,
+          reason: Map.fetch!(reasons, file.id),
+          state: Map.fetch!(states, file.id),
+          page: preview_page(file)
+        }
+      end)
+
+    assigns = assign(assigns, :rows, rows)
+
+    ~H"""
+    <ul class="mt-1 space-y-1.5" data-message-files>
+      <li :for={row <- @rows} id={"#{@id}-file-#{row.file.id}"} data-message-file={row.state}>
+        <.link
+          :if={row.reason == :ok}
+          href={Attachments.file_url(row.file)}
+          class={[
+            "flex items-center gap-2 rounded-xl px-2 py-1.5 no-underline!",
+            if(@mine?,
+              do: "bg-white/15 hover:bg-white/25",
+              else:
+                "bg-white hover:bg-slate-50 dark:bg-slate-900 dark:hover:bg-slate-700"
+            )
+          ]}
+        >
+          <img
+            :if={row.page}
+            src={Attachments.page_url(row.file, row.page)}
+            alt={row.file.file_name}
+            loading="lazy"
+            class={[
+              "shrink-0 rounded-lg object-cover",
+              if(Attachment.picture?(row.file), do: "h-32 w-32", else: "h-12 w-12")
+            ]}
+          />
+          <span :if={is_nil(row.page)} class="shrink-0 text-lg" aria-hidden="true">📎</span>
+          <span class="min-w-0">
+            <span class="block truncate text-xs font-semibold">{row.file.file_name}</span>
+            <span class="block text-[11px] opacity-70">
+              {file_size(row.file.size_bytes)}
+              <span :if={row.state != :done}>· {file_label(row.state)}</span>
+            </span>
+          </span>
+        </.link>
+        <p
+          :if={row.reason != :ok}
+          class="flex items-center gap-2 rounded-xl px-2 py-1.5 text-xs italic opacity-80"
+        >
+          <span aria-hidden="true">📎</span>
+          <span>{waiting_label(row.reason)}</span>
+        </p>
+        <%!-- A file in a private message is reportable like the message it
+        hangs under, minus the copyright category — nothing here is published,
+        so there is nothing for a rights holder to have taken down (#2109). --%>
+        <.link
+          :if={not @mine? and row.reason == :ok}
+          id={"#{@id}-file-#{row.file.id}-report"}
+          navigate={
+            ~p"/reports/new?#{[type: "attachment", id: row.file.id, return_to: "/messages/#{@message.conversation_id}"]}"
+          }
+          title={gettext("Report this file")}
+          class="mt-0.5 block text-[11px] opacity-60 hover:opacity-100"
+        >
+          ⚑ {gettext("Report this file")}
+        </.link>
+      </li>
+    </ul>
+    """
+  end
+
+  # Whether this conversation may carry files at all — `Chat.files_allowed?/2`
+  # owns both halves of the answer, so the picker, the upload and the send
+  # cannot come to different conclusions.
+  defp assign_files_allowed(socket, conversation),
+    do:
+      socket
+      |> assign(:files_allowed?, files_allowed?(socket, conversation))
+      |> assign(:attachment_error, nil)
+
+  defp files_allowed?(socket, %Conversation{} = conversation),
+    do: Chat.files_allowed?(conversation, socket.assigns.current_user)
+
+  defp files_allowed?(_socket, _conversation), do: false
+
+  # Opening the same thread again (a patch, a reconnect) keeps the strip;
+  # walking into a different one empties it.
+  defp discard_foreign_attachments(socket, %Conversation{id: id}) do
+    case socket.assigns.conversation do
+      %Conversation{id: ^id} -> socket
+      _other -> discard_attachments(socket)
+    end
+  end
+
+  # The gate, again, on the server side of the upload — and asked of the
+  # database rather than of the assign it rendered the picker from. A
+  # connection can end while the composer stands open, and an answer decided at
+  # mount would let a file through to somebody who is a stranger again by the
+  # time it lands. One query per accepted file.
+  defp handle_progress(:attachments, entry, socket) when entry.done? do
+    if files_allowed?(socket, socket.assigns.conversation) do
+      keep(socket, entry)
+    else
+      {:noreply,
+       socket
+       |> cancel_upload(:attachments, entry.ref)
+       |> assign(:files_allowed?, false)
+       |> assign(:attachment_error, send_error_message(:files_not_allowed))}
+    end
+  end
+
+  defp handle_progress(_name, _entry, socket), do: {:noreply, socket}
+
+  defp keep(socket, entry) do
+    result =
+      consume_uploaded_entry(socket, entry, fn %{path: path} ->
+        {:ok, Attachments.create_pending(socket.assigns.current_user, path, entry.client_name)}
+      end)
+
+    case result do
+      {:ok, attachment} ->
+        {:noreply,
+         socket
+         |> assign(:attachments, socket.assigns.attachments ++ [attachment])
+         |> assign(:attachment_error, nil)}
+
+      {:error, reason} ->
+        {:noreply, assign(socket, :attachment_error, attachment_error_message(reason))}
+    end
+  end
+
+  # The strip after a send: the files now belong to the message, so they are no
+  # longer the composer's to hand to the next one.
+  defp clear_attachments(socket),
+    do: socket |> assign(:attachments, []) |> assign(:attachment_error, nil)
+
+  # The strip when the files will never be sent: the rows and their bytes go
+  # too, rather than waiting a day for the sweep.
+  defp discard_attachments(socket) do
+    Enum.each(socket.assigns[:attachments] || [], &Attachments.delete_pending/1)
+    clear_attachments(socket)
+  end
+
+  # A reconnect re-mounts this LiveView and every plain assign drops back to its
+  # initial value, while LiveView's form recovery replays the hidden inputs — so
+  # the strip is rebuilt from what the DOM still holds, the way the post
+  # composer does it. `pending_for/2` re-checks the owner and both parents, so a
+  # replayed id can never adopt somebody else's file.
+  defp adopt_recovered_attachments(socket, ids) when is_list(ids) do
+    known = MapSet.new(socket.assigns.attachments, & &1.id)
+
+    case Enum.reject(ids, &MapSet.member?(known, &1)) do
+      [] ->
+        socket
+
+      missing ->
+        recovered = Attachments.pending_for(socket.assigns.current_user, missing)
+        assign(socket, :attachments, socket.assigns.attachments ++ recovered)
+    end
+  end
+
+  defp adopt_recovered_attachments(socket, _ids), do: socket
+
+  # Why the file is not there, in the reader's words. Deliberately not silence:
+  # the message says something was sent, and a bubble that showed nothing would
+  # read as a message that failed — and deliberately not one sentence for all of
+  # them either, which is how "being checked" came to be printed under a file
+  # that was finished and merely out of reach (found in the browser, 2026-09-11).
+  defp waiting_label(:refused), do: gettext("This file was refused.")
+  defp waiting_label(:frozen), do: gettext("Hidden: reported, under review")
+
+  defp waiting_label(:not_connected),
+    do: gettext("This file is only there while the two of you are connected.")
+
+  defp waiting_label(_working), do: gettext("A file is being checked.")
+
+  # Every route a message reaches this template by preloads its pages — the
+  # thread query, the send's own broadcast and the single-row re-read — so a
+  # file with none has none.
+  defp preview_page(%Attachment{pages: [page | _rest]}), do: page
+  defp preview_page(%Attachment{}), do: nil
+
+  defp send_error_message(:too_many_files),
+    do:
+      ngettext(
+        "No more than %{max} file per message.",
+        "No more than %{max} files per message.",
+        Attachments.max_per_post(),
+        max: Attachments.max_per_post()
+      )
+
+  defp send_error_message(_files_not_allowed),
+    do: gettext("You can only send files to members you are connected with.")
+
+  # Every refusal the chokepoint can answer with, in the words every surface
+  # that takes a file uses (`VutuvWeb.AttachmentText`) — `pictures?` because a
+  # message takes photographs where a post's files do not.
+  defp attachment_error_message(reason),
+    do: AttachmentText.error_message(reason, pictures?: true)
+
   ## PubSub
 
   @impl true
@@ -385,6 +675,18 @@ defmodule VutuvWeb.MessageLive.Index do
      socket
      |> stream_delete_by_dom_id(:messages, "message-#{message_id}")
      |> assign_lists()}
+  end
+
+  # One of a message's files moved a stage (issue #2110): rendered, past the AI
+  # check, or refused. Both sides are watching the same bubble for it — the
+  # sender for the state, the recipient for the file itself — so the row is
+  # re-read rather than patched: a file changes stage a handful of times, which
+  # is not worth a second patching path.
+  def handle_info({:message_attachment, message_id}, socket) do
+    case Chat.get_message_with_sender(message_id) do
+      nil -> {:noreply, socket}
+      message -> {:noreply, stream_insert(socket, :messages, message, update_only: true)}
+    end
   end
 
   # Activity event: a message arrived in some conversation of mine. The open
@@ -459,7 +761,27 @@ defmodule VutuvWeb.MessageLive.Index do
   # presence tick and typing event, which would re-parse every preview each time.
   defp put_previews(entries), do: Enum.map(entries, &put_preview/1)
 
-  defp put_preview(entry), do: Map.put(entry, :preview, Markdown.to_preview_line(entry.last_body))
+  defp put_preview(entry) do
+    Map.put(entry, :preview, preview_line(entry))
+  end
+
+  # A message sent with nothing but a picture or a file has an empty body
+  # (issue #2110), and a blank sidebar line reads as a broken conversation
+  # rather than as a quiet one — so the files say what it was.
+  defp preview_line(%{last_body: body} = entry) when body in [nil, ""] do
+    case Map.get(entry, :last_files, 0) do
+      count when count > 0 -> file_preview(count)
+      _none -> ""
+    end
+  end
+
+  defp preview_line(entry), do: Markdown.to_preview_line(entry.last_body)
+
+  # `ngettext/3` binds `%{count}` to the raw integer and a `count:` binding does
+  # not override it, so the formatted figure travels under its own name.
+  defp file_preview(count) do
+    ngettext("%{formatted} file", "%{formatted} files", count, formatted: compact_count(count))
+  end
 
   # Reflect the just-marked-read state in the sidebar: drop the opened
   # conversation's unread badge to zero.
@@ -502,6 +824,7 @@ defmodule VutuvWeb.MessageLive.Index do
             entry
             | last_body: message.body,
               last_at: message.inserted_at,
+              last_files: length(message.attachments),
               unread: 0
           })
 
@@ -806,7 +1129,19 @@ defmodule VutuvWeb.MessageLive.Index do
               <span :if={not mine?(m, @viewer)} class="mb-0.5 block text-xs font-semibold text-brand-700 dark:text-brand-300">
                 {display_name(Chat.sender(m))}
               </span>
-              {VutuvWeb.Markdown.render(m.body)}
+              <div :if={m.body not in [nil, ""]}>{VutuvWeb.Markdown.render(m.body)}</div>
+              <%!-- The files hanging beside the text (issue #2110). The body
+              itself stays image-free; a picture here is an attachment whose
+              preview is the picture, not a post photo, and it gets no
+              gallery. --%>
+              <.message_files
+                :if={m.attachments != []}
+                id={dom_id}
+                message={m}
+                conversation={@conversation}
+                viewer={@current_user}
+                mine?={mine?(m, @viewer)}
+              />
               <%!-- Only the sender ever sees a frozen message; tell them why
               the other side stopped reacting to it. --%>
               <span :if={m.frozen_at} class="mt-1 block text-[10px] font-semibold text-white/80">
@@ -905,12 +1240,67 @@ defmodule VutuvWeb.MessageLive.Index do
             compact
             class="w-full min-w-0"
           />
-          <button
-            type="submit"
-            class="w-full rounded-full bg-brand-600 px-5 py-2 text-sm font-semibold text-white hover:bg-brand-700"
-          >
-            {gettext("Send")}
-          </button>
+          <%!-- Always rendered, `:if` on the child: this sits ABOVE the
+          Milkdown editor, and an element appearing among a parent's children
+          makes morphdom relocate the siblings after it — which re-parents the
+          contenteditable and throws the caret out of the composer mid-word.
+          Same reason as `#typing-slot` above. --%>
+          <div id="attachment-slot">
+            <div :if={@attachments != [] or @attachment_error} class="flex flex-wrap items-center gap-2">
+              <input
+                :for={file <- @attachments}
+                type="hidden"
+                name="message[attachment_ids][]"
+                value={file.id}
+              />
+              <span
+                :for={file <- @attachments}
+                id={"attachment-chip-#{file.id}"}
+                data-attachment-chip={file.id}
+                data-file-state={Pending.file_state(file)}
+                class="inline-flex items-center gap-2 rounded-lg bg-brand-50 px-2 py-1 text-xs text-brand-700 dark:bg-brand-800/60 dark:text-brand-100"
+              >
+                <span aria-hidden="true">📎</span>
+                <span class="max-w-40 truncate">{file.file_name}</span>
+                <span class="opacity-70">{file_size(file.size_bytes)}</span>
+                <button
+                  type="button"
+                  phx-click="remove-attachment"
+                  phx-value-id={file.id}
+                  title={gettext("Remove %{name}", name: file.file_name)}
+                  aria-label={gettext("Remove %{name}", name: file.file_name)}
+                  class="inline-flex h-6 w-6 items-center justify-center rounded-full hover:bg-brand-100 dark:hover:bg-brand-800"
+                >
+                  ✕
+                </button>
+              </span>
+              <p :if={@attachment_error} class="w-full text-xs text-red-600 dark:text-red-400">
+                {@attachment_error}
+              </p>
+            </div>
+          </div>
+          <div class="flex items-center gap-2">
+            <%!-- The picker shows only where files may travel — between two
+            connected members, on an installation that lets this member upload.
+            The gate is asked again in `handle_progress/3` and a third time when
+            the message is sent; this is the courtesy, not the enforcement. --%>
+            <label
+              :if={@files_allowed? and length(@attachments) < Attachments.max_per_post()}
+              id="add-message-files"
+              class="inline-flex h-10 w-10 shrink-0 cursor-pointer items-center justify-center rounded-full bg-slate-100 text-lg hover:bg-slate-200 dark:bg-slate-800 dark:hover:bg-slate-700"
+              title={gettext("Add files")}
+            >
+              <.live_file_input upload={@uploads.attachments} class="sr-only" />
+              <span aria-hidden="true">📎</span>
+              <span class="sr-only">{gettext("Add files")}</span>
+            </label>
+            <button
+              type="submit"
+              class="w-full rounded-full bg-brand-600 px-5 py-2 text-sm font-semibold text-white hover:bg-brand-700"
+            >
+              {gettext("Send")}
+            </button>
+          </div>
         </.form>
 
         <p

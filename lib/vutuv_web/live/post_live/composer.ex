@@ -88,6 +88,7 @@ defmodule VutuvWeb.PostLive.Composer do
   alias Vutuv.Prefs
   alias Vutuv.Uploads.Spec
   alias Vutuv.Videos
+  alias VutuvWeb.AttachmentText
   alias VutuvWeb.ErrorHelpers
   alias VutuvWeb.Live.VideoProgress
   alias VutuvWeb.PostComponents
@@ -1616,40 +1617,7 @@ defmodule VutuvWeb.PostLive.Composer do
   # Every refusal the chokepoint can answer, in words that say what to do next.
   # A member who cannot post their PDF deserves to know which of the four
   # things it is, not one sentence covering all of them.
-  defp attachment_error_message(:too_large),
-    do:
-      gettext("Files may be up to %{size}.",
-        size: megabyte_label(Attachments.max_filesize())
-      )
-
-  defp attachment_error_message(:invalid_file),
-    do: gettext("Only PDF, plain text and Markdown files can be attached.")
-
-  defp attachment_error_message(:encrypted),
-    do: gettext("This PDF is password-protected, so it cannot be checked.")
-
-  defp attachment_error_message(:javascript),
-    do: gettext("This PDF contains a program, which cannot be published here.")
-
-  defp attachment_error_message(:open_action),
-    do: gettext("This PDF does something when it is opened, which cannot be published here.")
-
-  defp attachment_error_message(:embedded_files),
-    do: gettext("This PDF has another file inside it, which cannot be published here.")
-
-  defp attachment_error_message(:unreadable),
-    do: gettext("This PDF could not be read.")
-
-  defp attachment_error_message(:pdf_unavailable),
-    do: gettext("PDFs cannot be checked on this site. Text and Markdown files can.")
-
-  defp attachment_error_message(:daily_budget),
-    do: gettext("You have used up today's upload allowance. It frees up again over the day.")
-
-  defp attachment_error_message(:monthly_budget),
-    do: gettext("You have used up this month's upload allowance.")
-
-  defp attachment_error_message(_reason), do: gettext("That file could not be processed.")
+  defp attachment_error_message(reason), do: AttachmentText.error_message(reason)
 
   # The clip landed (issue #1907): keep it, probe it, and start the pipeline
   # while the author is still writing. The length is only known now, so a

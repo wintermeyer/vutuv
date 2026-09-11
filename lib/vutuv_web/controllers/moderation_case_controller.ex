@@ -17,6 +17,7 @@ defmodule VutuvWeb.ModerationCaseController do
   alias Vutuv.Moderation
   alias Vutuv.Moderation.Case
   alias VutuvWeb.ControllerHelpers
+  alias VutuvWeb.ImageProxy
 
   def index(conn, _params) do
     user = conn.assigns[:current_user]
@@ -104,16 +105,11 @@ defmodule VutuvWeb.ModerationCaseController do
          :ok <- authorize(conn, case_record),
          %Attachment{} = attachment <- Moderation.case_content(case_record),
          path when is_binary(path) <- Attachments.bytes_path(attachment) do
-      conn
       # Never cached, anywhere: these are the bytes a takedown is about, and a
-      # copy in a proxy would outlive the freeze that moved them.
-      |> put_resp_header("cache-control", "private, no-store")
-      |> put_resp_header(
-        "content-disposition",
-        "attachment; " <> ControllerHelpers.disposition_filename(attachment.file_name)
-      )
-      |> put_resp_content_type(attachment.content_type, nil)
-      |> send_file(200, path)
+      # copy in a proxy would outlive the freeze that moved them — which is the
+      # same reason the message proxy hands a file over this way (#2110), so
+      # both go through one function and the next header lands in both.
+      ImageProxy.hand_over_private(conn, path, attachment.file_name, attachment.content_type)
     else
       _ -> ControllerHelpers.render_error(conn, 404)
     end

@@ -22,6 +22,8 @@ defmodule Vutuv.Chat do
   alias Ecto.Association.NotLoaded
   alias Vutuv.Accounts.User
   alias Vutuv.Activity
+  alias Vutuv.Attachments
+  alias Vutuv.Attachments.Attachment
   alias Vutuv.Chat.{Conversation, Message, Participant}
   alias Vutuv.Images
   alias Vutuv.Notifications.Emailer
@@ -214,8 +216,10 @@ defmodule Vutuv.Chat do
       }
       |> Message.changeset(%{body: body})
 
-    case Repo.transaction(fn -> insert_and_bump(changeset, conversation, false) end) do
-      {:ok, message} -> delivered(conversation, message, page)
+    # No files: `files_allowed?/1` answers false for a page's inbox, so there is
+    # nothing to claim here and no fourth argument to thread through.
+    case Repo.transaction(fn -> insert_and_bump(changeset, conversation, false, page, []) end) do
+      {:ok, message} -> delivered(conversation, %{message | attachments: []}, page)
       {:error, %Ecto.Changeset{} = changeset} -> {:error, changeset}
     end
   end
@@ -256,6 +260,13 @@ defmodule Vutuv.Chat do
     status = request_status(me, other)
 
     with :ok <- check_request_limit(me, status) do
+      # The files go with the messages, off the disk as well as out of the
+      # table (issue #2110) — outside the transaction's reach, so it runs
+      # first: a rollback afterwards leaves a message whose files are gone,
+      # which is recoverable, where the other order leaves files nothing points
+      # at, which is not.
+      Attachments.purge_for_conversation(conversation.id)
+
       Repo.transaction(fn ->
         Repo.delete_all(from(m in Message, where: m.conversation_id == ^conversation.id))
 
@@ -449,7 +460,9 @@ defmodule Vutuv.Chat do
   While pending, the initiator may send exactly the one request message; the
   recipient replying accepts the conversation.
   """
-  def send_message(%User{} = sender, conversation_id, body) do
+  def send_message(%User{} = sender, conversation_id, body, opts \\ []) do
+    ids = Keyword.get(opts, :attachment_ids, [])
+
     case fetch_as_participant(sender.id, conversation_id) do
       nil ->
         {:error, :not_participant}
@@ -462,26 +475,143 @@ defmodule Vutuv.Chat do
       %Conversation{frozen_at: %NaiveDateTime{}} ->
         {:ok, :dropped}
 
-      %Conversation{status: "accepted"} = conversation ->
-        deliver(conversation, sender, body, accept?: false)
-
-      %Conversation{status: "pending"} = conversation ->
-        send_pending(conversation, sender, body)
+      %Conversation{} = conversation ->
+        with :ok <- check_files(conversation, sender, ids),
+             do: send_checked(conversation, sender, body, ids)
     end
   end
 
-  defp send_pending(%Conversation{initiator_id: initiator_id} = conversation, sender, body) do
+  defp send_checked(%Conversation{status: "accepted"} = conversation, sender, body, ids),
+    do: deliver(conversation, sender, body, accept?: false, attachment_ids: ids)
+
+  defp send_checked(%Conversation{} = conversation, sender, body, ids),
+    do: send_pending(conversation, sender, body, ids)
+
+  # The **send** half of the connection gate (issue #2110), asked here rather
+  # than only in the composer: a member who is no longer connected by the time
+  # they press send must not get the files through, and the LiveView's own
+  # check is a courtesy, never the enforcement. A refusal is an error rather
+  # than a message with the files quietly dropped — silently losing what
+  # somebody attached is worse than telling them.
+  defp check_files(_conversation, _sender, []), do: :ok
+
+  defp check_files(%Conversation{} = conversation, %User{} = sender, ids) do
+    cond do
+      not files_allowed?(conversation, sender) -> {:error, :files_not_allowed}
+      length(ids) > Attachments.max_per_post() -> {:error, :too_many_files}
+      true -> :ok
+    end
+  end
+
+  @doc """
+  Whether files and pictures may travel in this conversation at all (issue
+  #2110): both sides are **members** and they are connected — vernetzt, two
+  mutual follows (`Vutuv.Social.connected?/2`).
+
+  The whole security argument of the feature is in this one function, so it is
+  one function: an unsolicited file from a stranger is the classic malware
+  channel, and it is asked when a file is attached, again when the message is
+  sent, and again whenever anybody asks for the bytes.
+
+  Matched on the **columns** of the nullable pair rather than on a preloaded
+  side: a page's inbox has `user_b_id` NULL and `organization_id` set, and a
+  page is not somebody anybody is vernetzt with — there is no mutual follow
+  between a person and a page to read. So a page conversation carries no files,
+  which is the fail-closed answer as well as the true one.
+  """
+  def files_allowed?(%Conversation{organization_id: nil, user_a_id: a, user_b_id: b})
+      when is_binary(a) and is_binary(b),
+      do: Vutuv.Social.connected?(a, b)
+
+  def files_allowed?(%Conversation{}), do: false
+
+  @doc """
+  The same question for a **sender**, which is the composite the writing side
+  asks: the connection above *and* whether this installation lets this member
+  upload at all (`ATTACHMENT_UPLOADERS`).
+
+  One owner for both halves, because they are asked together at three places —
+  the picker, the upload, the send — and a copy of the `and` at each is three
+  places to remember the day the composite grows a term.
+  """
+  def files_allowed?(%Conversation{} = conversation, %User{} = sender),
+    do: Attachments.uploads_for?(sender) and files_allowed?(conversation)
+
+  def files_allowed?(_conversation, _sender), do: false
+
+  @doc """
+  Whether `viewer` may fetch the bytes of a file hanging under `message_id` —
+  the **read** half of that same gate, which `Vutuv.Attachments.readable_by?/2`
+  asks on every request.
+
+  Three things have to hold: the conversation still allows files at all (so a
+  connection ended after the message was sent closes its files again for both
+  sides), the viewer is one of the two members, and the message is one they may
+  see — a moderation-frozen message is hidden from the other participant and
+  its file goes with it.
+  """
+  def message_file_reader?(message_id, %User{id: viewer_id}) when is_binary(message_id) do
+    # `visible_message/1` rather than a second spelling of "who may see a frozen
+    # message": every thread read already asks it that way, and this is the copy
+    # that must never drift from it.
+    query =
+      from(m in Message,
+        join: c in Conversation,
+        on: c.id == m.conversation_id,
+        where: m.id == ^message_id,
+        where: ^visible_message({:user, viewer_id}),
+        select: c
+      )
+
+    case Repo.one(query) do
+      nil ->
+        false
+
+      %Conversation{} = conversation ->
+        files_allowed?(conversation) and
+          viewer_id in [conversation.user_a_id, conversation.user_b_id]
+    end
+  end
+
+  def message_file_reader?(_message_id, _viewer), do: false
+
+  @doc """
+  Broadcasts that one of a message's files moved a stage, so both bubbles
+  redraw — the sender's state and, once it has passed, the recipient's file.
+  A no-op for a file no message carries; `Vutuv.Attachments.announce/1` is the
+  only caller and hands over whatever it has.
+  """
+  def attachment_changed(%{message_id: message_id}) when is_binary(message_id) do
+    case Repo.one(from(m in Message, where: m.id == ^message_id, select: m.conversation_id)) do
+      nil ->
+        :ok
+
+      conversation_id ->
+        Phoenix.PubSub.broadcast(
+          @pubsub,
+          topic(conversation_id),
+          {:message_attachment, message_id}
+        )
+    end
+  end
+
+  def attachment_changed(_attachment), do: :ok
+
+  @doc "The files one message carries, in upload order (issue #2110)."
+  defdelegate message_attachments(message), to: Attachments, as: :for_message
+
+  defp send_pending(%Conversation{initiator_id: initiator_id} = conversation, sender, body, ids) do
     cond do
       # The recipient replying is an implicit accept.
       sender.id != initiator_id ->
-        deliver(conversation, sender, body, accept?: true)
+        deliver(conversation, sender, body, accept?: true, attachment_ids: ids)
 
       # The initiator gets exactly the one request message.
       has_message?(conversation.id) ->
         {:error, :pending_limit}
 
       true ->
-        deliver(conversation, sender, body, accept?: false)
+        deliver(conversation, sender, body, accept?: false, attachment_ids: ids)
     end
   end
 
@@ -494,6 +624,12 @@ defmodule Vutuv.Chat do
   the reported message"), which also settles the moderation case.
   """
   def delete_message(%User{id: sender_id}, %Message{sender_id: sender_id} = message) do
+    # The rows would cascade with the message; the **bytes** would not (issue
+    # #2110's "files stay as long as the conversation does" is a promise about
+    # the disk, not about the table). Before the delete, so a message that
+    # survives a failed purge still names its files.
+    Attachments.purge_for_message(message)
+
     case Repo.delete(message) do
       {:ok, deleted} ->
         broadcast_message_deleted(message)
@@ -506,15 +642,36 @@ defmodule Vutuv.Chat do
 
   def delete_message(%User{}, %Message{}), do: {:error, :not_allowed}
 
-  defp deliver(conversation, sender, body, accept?: accept?) do
+  defp deliver(conversation, sender, body, opts) do
+    accept? = Keyword.fetch!(opts, :accept?)
+    ids = Keyword.get(opts, :attachment_ids, [])
+
     changeset =
       %Message{conversation_id: conversation.id, sender_id: sender.id}
-      |> Message.changeset(%{body: body})
+      |> Message.changeset(%{body: body}, files?: ids != [])
 
-    case Repo.transaction(fn -> insert_and_bump(changeset, conversation, accept?) end) do
-      {:ok, message} -> delivered(conversation, message, sender)
-      {:error, %Ecto.Changeset{} = changeset} -> {:error, changeset}
+    case Repo.transaction(fn ->
+           insert_and_bump(changeset, conversation, accept?, sender, ids)
+         end) do
+      {:ok, message} -> delivered(conversation, %{message | attachments: claimed(ids)}, sender)
+      {:error, reason} -> {:error, reason}
     end
+  end
+
+  # The claimed rows, read back so the message broadcast carries them: the
+  # struct goes over PubSub to a thread that renders its files at once, and an
+  # unloaded association there is a crash on the other side rather than a
+  # missing chip.
+  defp claimed([]), do: []
+
+  defp claimed(ids) do
+    Repo.all(
+      from(a in Attachment,
+        where: a.id in ^ids,
+        order_by: [asc: a.inserted_at],
+        preload: :pages
+      )
+    )
   end
 
   # Everything that happens once a message is in the table, for BOTH kinds of
@@ -549,9 +706,11 @@ defmodule Vutuv.Chat do
 
   # Message insert + the conversation bump (last_message_at, plus the implicit
   # accept when the request's recipient replies) — one transaction.
-  defp insert_and_bump(changeset, conversation, accept?) do
+  defp insert_and_bump(changeset, conversation, accept?, sender, attachment_ids) do
     case Repo.insert(changeset) do
       {:ok, message} ->
+        claim_files!(message, sender, attachment_ids)
+
         set =
           [last_message_at: message.inserted_at] ++
             if(accept?, do: [status: "accepted"], else: [])
@@ -561,6 +720,18 @@ defmodule Vutuv.Chat do
 
       {:error, changeset} ->
         Repo.rollback(changeset)
+    end
+  end
+
+  # Inside the same transaction as the insert (issue #2110), so a message and
+  # the files it names arrive together or not at all. A page cannot get here —
+  # its inbox allows no files — so the uploader is always the member sending.
+  defp claim_files!(_message, _sender, []), do: :ok
+
+  defp claim_files!(%Message{id: message_id}, %User{id: uploader_id}, ids) do
+    case Attachments.claim({:message, message_id}, uploader_id, ids) do
+      :ok -> :ok
+      {:error, reason} -> Repo.rollback(reason)
     end
   end
 
@@ -675,24 +846,56 @@ defmodule Vutuv.Chat do
         # Only a short prefix leaves Postgres: the sidebar CSS-truncates to one
         # line and Markdown.to_preview_line/1 caps at 200 chars, so the
         # full 10k-char body never needs to travel just to be truncated.
-        select: {m.conversation_id, {fragment("left(?, 500)", m.body), m.inserted_at}}
+        select: {m.conversation_id, {fragment("left(?, 500)", m.body), m.inserted_at, m.id}}
       )
       |> Repo.all()
       |> Map.new()
+      |> put_file_counts()
 
     unreads = unread_counts(ids, party)
 
     Enum.zip_with(conversations, keys, fn conversation, key ->
-      {last_body, last_at} = Map.get(previews, conversation.id, {nil, nil})
+      {last_body, last_at, last_files} = Map.get(previews, conversation.id, {nil, nil, 0})
 
       %{
         conversation: conversation,
         other: Map.fetch!(others, key),
         last_body: last_body,
         last_at: last_at,
+        last_files: last_files,
         unread: Map.get(unreads, conversation.id, 0)
       }
     end)
+  end
+
+  # How many files the newest message carries, and **only** for the ones whose
+  # body is empty (issue #2110): a message with text previews as its text, so
+  # the ordinary sidebar costs no second query at all. A picture sent without a
+  # caption is the one case that needs it, and a blank line there reads as a
+  # broken conversation rather than as a quiet one.
+  defp put_file_counts(previews) do
+    blank_ids =
+      for {_conversation_id, {body, _at, message_id}} <- previews,
+          body in [nil, ""],
+          do: message_id
+
+    counts = file_counts(blank_ids)
+
+    Map.new(previews, fn {conversation_id, {body, at, message_id}} ->
+      {conversation_id, {body, at, Map.get(counts, message_id, 0)}}
+    end)
+  end
+
+  defp file_counts([]), do: %{}
+
+  defp file_counts(message_ids) do
+    from(a in Attachment,
+      where: a.message_id in ^message_ids,
+      group_by: a.message_id,
+      select: {a.message_id, count(a.id)}
+    )
+    |> Repo.all()
+    |> Map.new()
   end
 
   # Who is on the far side, as a `{kind, id}` key. `user_a_id` is always the
@@ -844,7 +1047,10 @@ defmodule Vutuv.Chat do
         where: ^shown,
         order_by: [desc: m.inserted_at, desc: m.id],
         limit: ^(limit + 1),
-        preload: [:sender, :sender_organization]
+        # `:attachments` because a bubble renders its files (issue #2110), and
+        # an unloaded association in a stream is a crash rather than a missing
+        # chip.
+        preload: [:sender, :sender_organization, attachments: :pages]
       )
       |> before_cursor(cursor)
       |> Repo.all()
@@ -863,7 +1069,9 @@ defmodule Vutuv.Chat do
 
   @doc "A single message with its sender preloaded, or nil — one query."
   def get_message_with_sender(message_id) do
-    Repo.one(from(m in Message, where: m.id == ^message_id, preload: :sender))
+    Repo.one(
+      from(m in Message, where: m.id == ^message_id, preload: [:sender, attachments: :pages])
+    )
   end
 
   defp before_cursor(query, nil), do: query

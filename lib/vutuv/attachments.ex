@@ -1,7 +1,9 @@
 defmodule Vutuv.Attachments do
   @moduledoc """
   Files on posts and messages (issue #2104): a PDF, a plain text file or a
-  Markdown file, up to the installation's cap, within a budget per member.
+  Markdown file, up to the installation's cap, within a budget per member — and
+  in a **message between two connected members** (#2110) the photo formats
+  besides, each a file whose single preview page is the picture itself.
 
   ## One chokepoint
 
@@ -32,8 +34,9 @@ defmodule Vutuv.Attachments do
   ## Off switch
 
   `enabled?/0` is the product flag; `uploads_for?/1` adds the audience, which
-  is `:admins` until a post can actually carry a file (#2106, #2108) and
-  `:members` after — the way video was introduced. PDFs need poppler
+  is `:admins` until a post can actually hand a file out (#2108) and `:members`
+  after — the way video was introduced. It gates a message's picker as much as
+  the composer's. PDFs need poppler
   (`pdfinfo`, `pdfdetach`): without it they are not offered and the gate
   refuses them, because a check that cannot run is not a check that passed.
   """
@@ -47,15 +50,22 @@ defmodule Vutuv.Attachments do
   alias Vutuv.Attachments.Pages
   alias Vutuv.Attachments.Upload
   alias Vutuv.AttachmentStore
+  alias Vutuv.Chat
   alias Vutuv.Images
+  alias Vutuv.Images.Image
   alias Vutuv.MediaJobs
   alias Vutuv.Posts.Pending
   alias Vutuv.Repo
   alias Vutuv.Uploads.PdfGate
+  alias Vutuv.Uploads.Spec
 
   @pending_max_age_hours 24
   @day_hours 24
   @month_hours 24 * 30
+
+  # The version a reader is shown a preview page at, and the default of
+  # `page_url/3` — the same one `Vutuv.Attachments.Pages` judges a page by.
+  @preview_version "lite"
 
   ## Configuration
 
@@ -81,7 +91,7 @@ defmodule Vutuv.Attachments do
   @doc "Drops the cached poppler probe. For tests that move the binary."
   defdelegate forget_capability, to: PdfGate
 
-  defdelegate extension_whitelist, to: Format
+  defdelegate extension_whitelist(opts \\ []), to: Format
 
   defp uploaders, do: Keyword.get(config(), :uploaders, :admins)
   defp config, do: Application.fetch_env!(:vutuv, :attachments)
@@ -120,19 +130,47 @@ defmodule Vutuv.Attachments do
 
   defp check_size(size), do: if(size > max_filesize(), do: {:error, :too_large}, else: :ok)
 
+  # The bytes decide what the file is; the extension only has to agree with them
+  # at the level of the family, so a PNG a phone named `.jpg` is still a picture
+  # and is stored as what it is, while a ZIP under either name is refused.
   defp check_format(path, filename) do
     claimed = Format.claimed_kind(filename)
 
     cond do
-      claimed == nil -> {:error, :invalid_file}
-      claimed == :pdf and not pdf_supported?() -> {:error, :pdf_unavailable}
-      Format.sniff(path) != claimed -> {:error, :invalid_file}
-      true -> {:ok, claimed}
+      claimed == nil ->
+        {:error, :invalid_file}
+
+      claimed == :pdf and not pdf_supported?() ->
+        {:error, :pdf_unavailable}
+
+      # Sniffed only in the branch that needs it, never above the `cond`: the
+      # text answer reads the whole file, and a `.zip` picked by mistake must be
+      # refused on its name without 20 MB going through a regex first.
+      true ->
+        agrees(Format.sniff(path), claimed)
     end
   end
 
+  defp agrees(nil, _claimed), do: {:error, :invalid_file}
+
+  defp agrees(sniffed, claimed),
+    do: if(Format.family(sniffed) == claimed, do: {:ok, sniffed}, else: {:error, :invalid_file})
+
   defp check_content(:pdf, path), do: PdfGate.check(path)
   defp check_content(:text, _path), do: {:ok, nil}
+
+  # A picture is vetted by the same decoder that will derive its preview
+  # (issue #2110): `open_rotated/1` refuses what libvips cannot read, anything
+  # past the pixel budget, and an SVG carrying script. Refusing here means the
+  # member is told why, instead of getting an accepted file that quietly ends
+  # up with no preview. `page_count` stays nil — it counts a PDF's pages, and a
+  # picture has none.
+  defp check_content(_picture, path) do
+    case Spec.open_rotated(path) do
+      {:ok, _image} -> {:ok, nil}
+      {:error, _reason} -> {:error, :invalid_image}
+    end
+  end
 
   # Which of the two ran out decides what the member is told, so this asks them
   # apart rather than comparing one combined number.
@@ -289,17 +327,225 @@ defmodule Vutuv.Attachments do
     if ids == [] do
       []
     else
+      # `unreserved/1` is what keeps a file a waiting post already holds (#2106)
+      # out: re-adopting it would put the same file under two posts, and the
+      # first of them to publish would take it.
       from(a in Attachment,
         where: a.user_id == ^user_id and a.id in ^ids,
-        where: is_nil(a.post_id) and is_nil(a.message_id),
-        # A file a waiting post already holds (#2106) is not the composer's to
-        # pick up again: re-adopting it would put the same file under two
-        # posts, and the first of them to publish would take it.
-        where: is_nil(a.pending_post_id),
         order_by: [asc: a.inserted_at]
       )
+      |> unclaimed()
+      |> unreserved()
       |> Repo.all()
     end
+  end
+
+  @doc """
+  Whether this file has finished everything the server does to it: rendered,
+  every preview page past the AI check, not refused and not held by a case.
+
+  The pipeline half is `Vutuv.Posts.Pending.file_state/1`, which is **the one
+  definition** of "done" for a file — the composer's chip, a waiting post's row
+  and a message's bubble must not be able to answer it differently. What is
+  added here is the freeze, which is not about the pipeline at all.
+  """
+  def settled?(%Attachment{} = attachment),
+    do: not frozen?(attachment) and Pending.file_state(attachment) == :done
+
+  @doc """
+  Whether `viewer` may fetch this file's bytes — the **read** half of the
+  connection gate (issue #2110), asked again on every request rather than
+  decided once when the message was sent.
+
+  Both halves of the nullable parent pair get a clause matching on the
+  **column**, and the answer is the parent's:
+
+    * a file under a **message** is readable while the two members are still
+      connected and the viewer is one of them (`Vutuv.Chat`) — the sender at
+      any stage, so their own bubble can show them what they sent, the
+      recipient only once it has `settled?/1`. A connection ended after the
+      message was sent closes it again for **both** sides: unfollowing is the
+      only lever this app gives anybody over a conversation, and a file that
+      stayed readable would leave exactly the unsolicited file from a stranger
+      the whole rule exists to keep out. Nothing is deleted, so connecting
+      again brings it back.
+    * a file under a **post** has no address yet (#2108 gives it one), and a
+      check that cannot be made is a check that failed;
+    * a file with **neither** parent is the composer's own — its uploader sees
+      it in the strip they are about to send it from, and nobody else.
+  """
+  def readable_by?(attachment, viewer)
+
+  def readable_by?(%Attachment{message_id: id} = attachment, %User{} = viewer)
+      when is_binary(id) do
+    Chat.message_file_reader?(id, viewer) and
+      read_reason(attachment, viewer, Pending.file_state(attachment)) == :ok
+  end
+
+  def readable_by?(%Attachment{post_id: id}, _viewer) when is_binary(id), do: false
+  def readable_by?(%Attachment{frozen_at: %NaiveDateTime{}}, _viewer), do: false
+  def readable_by?(%Attachment{user_id: id}, %User{id: id}), do: true
+  def readable_by?(%Attachment{}, _viewer), do: false
+
+  @doc """
+  The same answer for every file in one already-authorized conversation, as
+  `%{attachment_id => reason}` — what a rendered thread asks, where
+  `readable_by?/2` per file would run two queries each.
+
+  The **reason**, not a boolean, because a bubble has to say why a file is not
+  there and the four answers are different sentences: `:ok`, `:working` (the
+  check is still running), `:refused`, `:frozen` (a case holds it) and
+  `:not_connected` (the two members are not vernetzt any more). A screen that
+  says "being checked" about a settled file it may simply no longer have is
+  worse than one that says nothing — which is what it said until a browser
+  showed it.
+
+  The caller has to have established the two things this does not re-ask: that
+  the viewer is a participant (`Vutuv.Chat.get_conversation/2` is what hands
+  them the conversation) and that the messages are ones they may see
+  (`messages_page/3` filters a frozen message out). What is left is the
+  connection, which is one answer for the whole thread, and the pipeline state,
+  which `Vutuv.Posts.Pending.file_states/1` counts in one query for all of them.
+
+  It shares its per-file half with `readable_by?/2`, so the thread and the
+  proxy cannot answer differently.
+  """
+  def readable_in_conversation(files, %User{} = viewer, conversation) when is_list(files) do
+    if Chat.files_allowed?(conversation) do
+      states = Pending.file_states(files)
+
+      Map.new(files, fn file ->
+        {file.id, read_reason(file, viewer, Map.get(states, file.id, :working))}
+      end)
+    else
+      Map.new(files, &{&1.id, :not_connected})
+    end
+  end
+
+  # The half that needs no query once the parent's gate has answered: a held
+  # file is nobody's, the member who uploaded it sees it at every stage, and
+  # everybody else waits for the pipeline.
+  defp read_reason(%Attachment{frozen_at: %NaiveDateTime{}}, _viewer, _state), do: :frozen
+  defp read_reason(%Attachment{user_id: id}, %User{id: id}, _state), do: :ok
+  defp read_reason(%Attachment{}, _viewer, :done), do: :ok
+  defp read_reason(%Attachment{}, _viewer, state), do: state
+
+  @doc """
+  One file by its URL token, or `nil` — what the serving proxy resolves before
+  it asks `readable_by?/2`.
+  """
+  def get_by_token(token) when is_binary(token),
+    do: Repo.one(from(a in Attachment, where: a.token == ^token))
+
+  def get_by_token(_token), do: nil
+
+  @doc """
+  Where this file is handed out — **the one function that owns the address**,
+  so a surface never spells the proxy's path itself and the day a second parent
+  kind gets its own route (#2108) there is one place to change.
+  """
+  def file_url(%Attachment{token: token}), do: "/system/attachments/#{token}/file"
+
+  @doc "One served size of one of its preview pages, at the same address."
+  def page_url(%Attachment{token: token}, %Image{} = page, version \\ @preview_version),
+    do: "/system/attachments/#{token}/pages/#{page.position}/#{version}#{Spec.served_ext()}"
+
+  @doc """
+  The files hanging under one message, in upload order (issue #2110). The
+  message's own `:attachments` preload is what the thread uses; this is for the
+  paths that hold an id rather than a row.
+  """
+  def for_message(%{id: message_id}) when is_binary(message_id) do
+    from(a in Attachment,
+      where: a.message_id == ^message_id,
+      order_by: [asc: a.inserted_at],
+      # Every caller shows or deletes the file, and both need its pages next.
+      preload: :pages
+    )
+    |> Repo.all()
+  end
+
+  @doc """
+  Hands `ids` to a parent — `{:post, id}` or `{:message, id}` — inside the
+  caller's transaction, or answers `{:error, :invalid_attachments}` and changes
+  nothing.
+
+  **One claim for both parents**, because the guard is what matters and it must
+  not drift: the uploader's own rows, held by neither parent yet
+  (`unclaimed/1`, the query-side twin of `pending?/1`). A count that does not
+  match means one of the ids was not the member's to give, which is a refusal
+  rather than a post or a message with the files quietly dropped.
+
+  The **reservation** is where the two genuinely differ, and it is not a
+  shortcut. A waiting post names its own files in `pending_post_id` (#2106) and
+  clears that in the same statement it claims them, so a reserved file is
+  exactly what it is entitled to take. A message never reserves anything, so a
+  reserved file is somebody's waiting post's and must not be taken from it.
+  """
+  def claim(_parent, _uploader_id, []), do: :ok
+
+  def claim(parent, uploader_id, ids) when is_binary(uploader_id) and is_list(ids) do
+    {count, _} =
+      from(a in Attachment, where: a.id in ^ids and a.user_id == ^uploader_id)
+      |> unclaimed()
+      |> claim_scope(parent)
+      |> Repo.update_all(set: claim_set(parent))
+
+    if count == length(ids), do: :ok, else: {:error, :invalid_attachments}
+  end
+
+  defp claim_scope(query, {:message, _id}), do: unreserved(query)
+  defp claim_scope(query, {:post, _id}), do: query
+
+  defp claim_set({:post, id}),
+    do: [post_id: id, pending_post_id: nil, updated_at: NaiveDateTime.utc_now(:second)]
+
+  defp claim_set({:message, id}),
+    do: [message_id: id, updated_at: NaiveDateTime.utc_now(:second)]
+
+  @doc """
+  Narrows a query to the rows neither parent holds — the query-side twin of
+  `pending?/1`, so "belongs to nobody" has one definition rather than one per
+  caller.
+  """
+  def unclaimed(query),
+    do: from(a in query, where: is_nil(a.post_id) and is_nil(a.message_id))
+
+  @doc """
+  Narrows it further to the rows no waiting post has reserved (#2106) — what a
+  message's claim and a re-mounted composer both need, and what a publishing
+  post deliberately does not.
+  """
+  def unreserved(query), do: from(a in query, where: is_nil(a.pending_post_id))
+
+  @doc """
+  Deletes every file a message carries, bytes and all — what "files stay as
+  long as the conversation does" means when the conversation, or the message,
+  goes.
+
+  The rows would cascade with the message on their own; the **disk** would not,
+  and a served copy nothing points at is a leak nobody would ever notice. So
+  this runs before the row goes, from `Vutuv.Chat`.
+  """
+  def purge_for_message(message) do
+    for attachment <- for_message(message), do: purge(attachment)
+    :ok
+  end
+
+  @doc """
+  The same for every message of one conversation, in **one** query rather than
+  one per message: deleting a long thread would otherwise ask about hundreds of
+  messages that carry nothing.
+  """
+  def purge_for_conversation(conversation_id) when is_binary(conversation_id) do
+    from(a in Attachment,
+      join: m in Vutuv.Chat.Message,
+      on: m.id == a.message_id,
+      where: m.conversation_id == ^conversation_id,
+      preload: :pages
+    )
+    |> Repo.all()
+    |> Enum.each(&purge/1)
   end
 
   @doc "The files a waiting post holds, in upload order (issue #2106)."
@@ -327,11 +573,28 @@ defmodule Vutuv.Attachments do
 
     if count == 1 do
       refused = %{attachment | refused_at: now}
-      Pending.broadcast_attachment(refused)
+      announce(refused)
       refused
     else
       attachment
     end
+  end
+
+  @doc """
+  Tells every surface that shows this file's state that it moved: the
+  uploader's own (the composer chip, a waiting post's card, `/system/uploads` —
+  issue #2106) and, when a message carries it, that conversation, whose
+  recipient is watching a bubble for exactly this.
+
+  One function rather than a second `Phoenix.PubSub` call remembered at each of
+  the three sites, which is how a file settles for its author and stays
+  "being checked" for the person it was sent to.
+  """
+  def announce(%Attachment{} = attachment) do
+    Pending.broadcast_attachment(attachment)
+    Pending.media_changed(:attachment, attachment.id)
+    Chat.attachment_changed(attachment)
+    :ok
   end
 
   ## The copyright freeze (issue #2109)

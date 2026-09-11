@@ -402,6 +402,17 @@ defmodule Vutuv.Posts.Pending do
   """
   def file_state(%Attachment{} = file), do: file_state(file, page_counts([file.id], "pending"))
 
+  @doc """
+  The same for a list, as `%{attachment_id => state}` and in **one** query — a
+  rendered message thread asks for every file it shows at once, where the
+  single form would run a query each.
+  """
+  def file_states(files) when is_list(files) do
+    checking = page_counts(Enum.map(files, & &1.id), "pending")
+
+    Map.new(files, &{&1.id, file_state(&1, checking)})
+  end
+
   defp file_state(%Attachment{stage: stage} = file, checking) do
     cond do
       Attachment.refused?(file) -> :refused
@@ -416,10 +427,8 @@ defmodule Vutuv.Posts.Pending do
   the AI check. What the composer asks before deciding whether the post can go
   out now or has to wait.
   """
-  def files_done?(files) when is_list(files) do
-    checking = page_counts(Enum.map(files, & &1.id), "pending")
-    Enum.all?(files, &(file_state(&1, checking) == :done))
-  end
+  def files_done?(files) when is_list(files),
+    do: files |> file_states() |> Enum.all?(fn {_id, state} -> state == :done end)
 
   ## The pipeline
 

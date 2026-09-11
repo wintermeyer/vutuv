@@ -1,11 +1,11 @@
 # Files on posts and messages
 
 A post can carry files as well as photos and a clip: PDF, plain text and
-Markdown to begin with (milestone #2102). This document covers the part that
-exists today — how a file gets in and how its preview pages are rendered — and
-grows as the rest of the milestone lands: the post that waits for them (#2106),
-what a post shows and hands out (#2108), reports and copyright (#2109),
-messages (#2110).
+Markdown to begin with (milestone #2102), and a message between two connected
+members carries the same plus the photo formats (#2110). This document covers
+how a file gets in, how its preview pages are rendered, what a message does
+with one, and grows as the rest of the milestone lands: what a post shows and
+hands out (#2108).
 
 ## One chokepoint
 
@@ -96,8 +96,11 @@ Everything is per installation, read in `config/runtime.exs` with the
 `PDFTOPPM_PATH`.
 
 `ATTACHMENT_UPLOADERS` is `admins` while the milestone is being built, the way
-video was introduced: a post cannot show or hand out its files until #2106 and
-#2108 land, so nobody else is offered a picker yet.
+video was introduced: a post cannot show or hand out its files until #2108
+lands, so nobody else is offered a picker yet — in the composer **or** in a
+message, which reads the same switch. `ATTACHMENTS_PER_POST` and both budgets
+cover a message's files too: "the same limits as a post" is what #2110 asked
+for, so there is one set of numbers rather than two that can disagree.
 
 ## The nullable pair
 
@@ -146,6 +149,78 @@ the clip now one case of it. `Vutuv.Posts.Pending` owns the whole question:
   backstop when the nudge from a settling medium died with its process, and
   stamps `checked_at` on **every** row it looks at, including the ones it can do
   nothing for, so a still-rendering file cannot hold the front of every batch.
+
+## A message's files (issue #2110)
+
+A private message carries text alone by design. Between two **connected**
+members — vernetzt, two mutual follows, `Vutuv.Social.connected?/2` — it also
+carries files and pictures. That one sentence is the whole security argument
+for the feature: an unsolicited file from a stranger is the classic malware
+channel.
+
+So the gate is **asked three times**, and `Vutuv.Chat.files_allowed?/1` is the
+only place that decides:
+
+* when the file is **attached** — the composer offers a picker only where it is
+  allowed, and `handle_progress/3` asks the *database* again before it keeps a
+  byte, because a connection can end while the composer stands open;
+* when the message is **sent** — `Chat.send_message/4` refuses the whole send
+  with `{:error, :files_not_allowed}` rather than delivering it with the files
+  quietly dropped;
+* whenever the **bytes** are asked for — `Vutuv.Attachments.readable_by?/2`, on
+  every request through the proxy.
+
+**Ending the connection closes the files again, for both sides.** Nothing is
+deleted; the row and its bytes stay and connecting again brings them back. The
+reasoning: unfollowing is the only lever this app gives anybody over a
+conversation, and a file that stayed readable would leave exactly the
+stranger's file the rule exists to keep out. It is symmetric because the
+sender's own copy is on their disk anyway, and a one-sided rule would be a
+second answer to the same question.
+
+A **page's inbox carries no files at all**: a page is not somebody a member is
+vernetzt with, so `files_allowed?/1` reads the nullable pair's columns and
+answers false — the fail-closed answer as well as the true one.
+
+**The recipient sees a file only after it has passed**, which is `settled?/1`:
+rendered, every preview page past the AI check, not refused, not frozen. The
+**sender** sees their own file at every stage with its state beside it, so the
+bubble can say what is happening; the other side gets a plain sentence until
+then, never silence — the message says something was sent.
+
+A **picture** is an attachment whose single preview page is the picture itself,
+on the shared `images` table like any other `attachment_page`: no new kind, no
+new upload tree, and the AI scan, the lite version, the regenerator and the
+copyright freeze reach it because that kind already has them. It is **not** a
+post photo and gets no gallery. The body stays image-free
+(`Vutuv.Chat.Message`'s `validate_no_images/2`); the files hang beside it. A
+message with files may have an empty body — sending a picture with nothing
+written under it is the ordinary case — and the sidebar's one-line preview then
+says how many files rather than nothing at all.
+
+**Files stay as long as the conversation does**, and that is a promise about
+the disk. The rows cascade with the message on their own; `Vutuv.Chat` calls
+`Attachments.purge_for_message/1` before deleting a message and before wiping a
+declined request's thread, because a served copy nothing points at is a leak
+nobody would notice. (Account deletion is the one gap left, and it is #2111's:
+`Accounts.delete_user/1` takes the rows through the cascade and leaves the
+bytes.)
+
+### The one address a file has
+
+`VutuvWeb.AttachmentController`, at `/system/attachments/:token/file` and
+`/system/attachments/:token/pages/:position/:version`. Under `/system/` rather
+than a root word, like the two media proxies beside it, so it burns no handle a
+member could otherwise claim. Login-required, and every request re-asks
+`readable_by?/2`; denied and unknown are the same 404, so the URL cannot be
+used to find out that a file exists. The file is always sent as a **download**
+(`content-disposition: attachment`) with `cache-control: private, no-store` —
+this URL does not answer the same way for ever, and a copy cached in a shared
+browser would outlive the connection that justified it.
+
+A file under a **post** has no address here. #2108 owns that, and until it
+lands `readable_by?/2` answers false for the post half: a check that has not
+been written is not a check that passed.
 
 ## The preview pages
 

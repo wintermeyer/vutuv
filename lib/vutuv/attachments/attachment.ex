@@ -51,9 +51,19 @@ defmodule Vutuv.Attachments.Attachment do
 
   schema "attachments" do
     belongs_to(:post, Vutuv.Posts.Post)
+    # A message, since #2110 — and only ever between two connected members;
+    # `Vutuv.Chat.files_allowed?/1` is the one place that decides.
     belongs_to(:message, Vutuv.Chat.Message)
     belongs_to(:user, Vutuv.Accounts.User)
     belongs_to(:pending_post, Vutuv.Posts.PendingPost)
+
+    # The rendered preview pages (#2105), so a surface that shows a file can
+    # preload them instead of asking per chip. Scoped by `kind` because they
+    # share the `images` table with everything else that hangs off a row here.
+    has_many(:pages, Vutuv.Images.Image,
+      where: [kind: "attachment_page"],
+      preload_order: [asc: :position]
+    )
 
     field(:token, :string)
     field(:file_name, :string)
@@ -111,6 +121,18 @@ defmodule Vutuv.Attachments.Attachment do
   once rather than spelled out at each of its four call sites.
   """
   def refused?(%__MODULE__{refused_at: at}), do: not is_nil(at)
+
+  @doc """
+  Whether this attachment is a **picture** (issue #2110) — a photo somebody put
+  in a message, whose single preview page is the picture itself rather than a
+  rendering of a document.
+
+  Matched on the `content_type` **column**, never on a preloaded page: half the
+  callers hand over a bare row straight from a query, and an answer that
+  depends on whether somebody remembered a preload is not an answer.
+  """
+  def picture?(%__MODULE__{content_type: "image/" <> _rest}), do: true
+  def picture?(%__MODULE__{}), do: false
 
   @doc "The longest file name that fits the column — what the chokepoint cuts to."
   def name_max, do: @name_max
