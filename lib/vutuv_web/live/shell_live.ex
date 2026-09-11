@@ -1737,13 +1737,14 @@ defmodule VutuvWeb.ShellLive do
 
   # Its own msgid rather than the video one it replaces: this counts POSTS
   # waiting, not clips, and the German for the old one says "Videos".
+  # `ngettext/4` binds the raw integer to %{count}, hence the %{formatted} one.
   defp media_in_progress_label(%{count: count, progress: percent}) do
     base =
       ngettext(
-        "%{count} post is being prepared",
-        "%{count} posts are being prepared",
+        "%{formatted} post is being prepared",
+        "%{formatted} posts are being prepared",
         count,
-        count: count
+        formatted: delimited_count(count)
       )
 
     if is_integer(percent), do: "#{base} · #{percent} %", else: base

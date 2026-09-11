@@ -180,7 +180,7 @@ defmodule VutuvWeb.AgentDocs.ProfileDoc do
       # nil otherwise. An agent handing a human "where else can I follow this
       # person" needs exactly the handle; the actor URL is the machine sibling.
       fediverse: fediverse_entry(user),
-      posts: post_entries(pinned_post, posts)
+      posts: post_entries(pinned_post, posts, viewer)
     })
     |> Map.merge(birthday_fields(user))
     |> maybe_include_photo(user, opts)
@@ -340,22 +340,22 @@ defmodule VutuvWeb.AgentDocs.ProfileDoc do
   # The profile's post list: the pinned post first (issue #1110), then the
   # timeline without it — one post, listed once, the way the page shows it.
   # A repost of the pinned post stays: it is a different timeline event.
-  defp post_entries(nil, entries), do: Enum.map(entries, &post_entry/1)
+  defp post_entries(nil, entries, viewer), do: Enum.map(entries, &post_entry(&1, viewer))
 
-  defp post_entries(pinned_post, entries) do
+  defp post_entries(pinned_post, entries, viewer) do
     rest =
       Enum.reject(
         entries,
         &(is_nil(&1.reposted_by) and not remote?(&1) and &1.post.id == pinned_post.id)
       )
 
-    [pinned_entry(pinned_post) | Enum.map(rest, &post_entry/1)]
+    [pinned_entry(pinned_post, viewer) | Enum.map(rest, &post_entry(&1, viewer))]
   end
 
   defp remote?(entry), do: Vutuv.Posts.remote_feed_entry?(entry)
 
-  defp pinned_entry(post) do
-    %{post: post, reposted_by: nil} |> post_entry() |> Map.put(:pinned, true)
+  defp pinned_entry(post, viewer) do
+    %{post: post, reposted_by: nil} |> post_entry(viewer) |> Map.put(:pinned, true)
   end
 
   # A post from another network this member reshared (issue #1166). It has no
@@ -363,7 +363,7 @@ defmodule VutuvWeb.AgentDocs.ProfileDoc do
   # lives — the same shape `PostDoc.timeline_entry/1` produces for the feed's
   # remote entries, and the reason this clause exists at all: without it every
   # agent-format sibling of a profile with one reshare on it raised.
-  defp post_entry(%{remote_post: %RemotePost{} = remote} = entry) do
+  defp post_entry(%{remote_post: %RemotePost{} = remote} = entry, _viewer) do
     %{
       url: RemotePost.origin(remote),
       published_on: DateTime.to_date(remote.published_at),
@@ -378,11 +378,19 @@ defmodule VutuvWeb.AgentDocs.ProfileDoc do
     }
   end
 
-  defp post_entry(entry) do
+  # `PostTeaser.machine_line/1` and not `PostTeaser.line/1` (issue #2107): a
+  # profile document is one of the machine surfaces that carries a single
+  # all-yes `Content-Signal` for a whole list and cannot signal per row. The
+  # timeline's own withheld posts are already gone by the time they get here —
+  # `Posts.profile_posts/2` scopes them out for anybody but their author — but
+  # the **pinned** post is fetched by id and reaches this line whatever it
+  # says, so the one sentence the archive and the tag page use is what a
+  # showcased post that refused machines gives instead of its first line.
+  defp post_entry(entry, viewer) do
     %{
       url: AgentDocs.abs_url(Vutuv.Posts.path(entry.post)),
       published_on: entry.post.published_on,
-      excerpt: PostTeaser.line(entry.post),
+      excerpt: PostTeaser.machine_line(entry.post, viewer),
       reposted_by: entry.reposted_by && UserHelpers.full_name(entry.reposted_by),
       pinned: false
     }

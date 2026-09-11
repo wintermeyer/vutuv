@@ -341,14 +341,19 @@ defmodule VutuvWeb.PostController do
 
   defp render_post(conn, post, author, viewer) do
     restricted? = Posts.restricted?(post)
-    {noindex?, noai?} = PostDoc.robots_axes(author, restricted?)
+    {noindex?, noai?} = PostDoc.robots_axes(author, post, restricted?)
 
     # The conversation itself is the embedded `VutuvWeb.PostLive.Thread`
     # LiveView (windowed for long threads, expanders load more on the fly);
     # the controller only hands it the post id through the template's
     # live_render session.
     conn
-    |> VutuvWeb.ContentPolicy.put_robots_header(noindex?, noai?)
+    # Header **and** `<meta name="robots">` from the one derivation above. The
+    # layout would otherwise derive a third answer from the author alone, with
+    # no `restricted?` to derive it from, so a followers-only post's header said
+    # `noindex` while its tag said nothing — the drift
+    # `VutuvWeb.AgentDocs.PostDoc` records happening once before.
+    |> VutuvWeb.ContentPolicy.put_robots(noindex?, noai?)
     |> render("show.html",
       post: post,
       author: author,
@@ -375,7 +380,13 @@ defmodule VutuvWeb.PostController do
   # The agent formats render strictly the anonymous view: a post a
   # logged-out visitor cannot see has no agent documents either.
   defp federated_note_request?(conn, author, post) do
+    # A post its author kept off the Fediverse (issue #2107) is not handed
+    # over on request either: withholding the delivery and then serving the
+    # whole Note to whoever asks for the same URL would be no withholding at
+    # all. The HTML page is unaffected — this is about the AP document. Asked
+    # ahead of `visible_to?/2`, which costs a query where this is a column.
     FediverseController.ap_request?(conn) and Fediverse.federated?(author) and
+      Posts.machines_allowed?(post) and
       Posts.visible_to?(post, nil)
   end
 

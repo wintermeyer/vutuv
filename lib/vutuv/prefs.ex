@@ -77,6 +77,24 @@ defmodule Vutuv.Prefs do
     # same card. An installation that wants the opposite posture flips this one
     # default at /admin/preferences and every untouched member follows.
     %Pref{key: :like_attribution?, type: :boolean, default: true, group: :privacy},
+    # Whether search engines and AI crawlers may read this member's posts
+    # (issue #2107). Asked once here rather than per post in the composer, and
+    # **stamped onto each post as it is published** (`posts.noindex_noai?`), so
+    # changing it later leaves every older post exactly as it went out. It is
+    # therefore the default for new posts, never a live filter over old ones.
+    #
+    # A pref rather than a `users` column on purpose. The two crawler opt-outs
+    # beside it (`noindex?`/`noai?`) carry hard column defaults, and `noai?`'s
+    # is `true` — so 5,867 of 6,026 members on the dev copy of production
+    # "carry" an answer nobody ever gave, and nothing can tell that from a real
+    # one. NULL here means "never asked", which is what lets an installation
+    # move the default (an intranet may well want the opposite posture) without
+    # touching a single member row.
+    #
+    # Positively named, unlike its two neighbours on the same settings page:
+    # `Vutuv.Prefs` booleans are stored as they read, and mixing an opt-out
+    # column into that card is how an inverted checkbox gets flipped.
+    %Pref{key: :posts_machines_allowed?, type: :boolean, default: true, group: :privacy},
     # What the feed does with posts outside the member's chosen languages
     # (issue #1461): show the original (shipped default), auto-translate into
     # the UI language, or hide them. The chosen-languages list itself is a
@@ -208,6 +226,9 @@ defmodule Vutuv.Prefs do
   def label(:like_attribution?),
     do: Gettext.gettext(VutuvWeb.Gettext, "Show my name on posts I like")
 
+  def label(:posts_machines_allowed?),
+    do: Gettext.gettext(VutuvWeb.Gettext, "Search engines and AI may read my posts")
+
   def label(:feed_foreign_posts),
     do: Gettext.gettext(VutuvWeb.Gettext, "Posts in other languages")
 
@@ -276,6 +297,22 @@ defmodule Vutuv.Prefs do
       Gettext.gettext(
         VutuvWeb.Gettext,
         "When off, other members no longer see you among the likes of a post. The author of the post still does: we named you in the notification they got when you liked it. Either way the post keeps the same number of likes."
+      )
+
+  # Three things a member cannot find out afterwards, so the hint says all
+  # three here (issue #2107): the answer is taken at publish time and older
+  # posts keep theirs, it covers everything a post is rather than the words
+  # alone, and — the one nobody would guess — saying no also keeps the post off
+  # the other networks entirely. A header is advisory and re-read on every
+  # visit; a copy on somebody else's server is neither, and no instruction of
+  # ours reaches it, so "no machines" has to be a gate before delivery rather
+  # than a directive attached to it. The composer used to say this in a warning
+  # panel; the decision is made here now, so the sentence lives here.
+  def hint(:posts_machines_allowed?),
+    do:
+      Gettext.gettext(
+        VutuvWeb.Gettext,
+        "Covers the words, the pictures, the files and the machine formats of every post you write from now on. When off, your new posts also stay out of other networks completely: a server elsewhere keeps its copy for good and no instruction of ours reaches it. Posts you have already published keep the answer they went out with."
       )
 
   def hint(:date_region),

@@ -223,6 +223,13 @@ defmodule VutuvWeb.PostLive.Composer do
     # drag, so it works the same on a phone and a desktop.
     |> assign(:license, initial_license(post, socket.assigns.current_user))
     |> assign(:language, initial_language(post))
+    # Whether the files travelling with this post have their metadata removed
+    # (issue #2107), defaulting to cleaning them. Event-driven like the photo
+    # switches — an unchecked checkbox submits nothing, so driving it by event
+    # keeps "no" an actual state rather than an absence. The composer asks
+    # nothing about search engines and AI: that is one standing decision the
+    # member takes on /settings/privacy, stamped onto the post at publish time.
+    |> assign(:strip_metadata?, initial_strip_metadata(post))
     |> assign(:preset, preset)
     |> assign(:deny_wildcards, wildcards)
     |> assign(:denied_users, denied_users)
@@ -404,6 +411,11 @@ defmodule VutuvWeb.PostLive.Composer do
       |> assign(:language, Post.cast_language(draft.language) || assigns.language)
       |> assign(:layout, GalleryLayout.cast(draft.layout))
       |> assign(:fill?, draft.fill? == true)
+      # Nullable in the draft: a row written before this existed (or before the
+      # switch was touched) means "nobody chose", and the switch's own default
+      # is on — so only a stored `false` turns it off. `draftable?/1` already
+      # holds `@post == nil`, so the composer's own value here is that default.
+      |> assign(:strip_metadata?, draft.strip_metadata? != false)
       |> assign(:restored_draft?, true)
     else
       _no_draft -> socket
@@ -478,7 +490,8 @@ defmodule VutuvWeb.PostLive.Composer do
         "video_id" => assigns.video && assigns.video.id,
         "photos" => Map.new(assigns.photos, fn {id, settings} -> {id, stringify(settings)} end),
         "layout" => assigns.layout,
-        "fill?" => assigns.fill?
+        "fill?" => assigns.fill?,
+        "strip_metadata?" => assigns.strip_metadata?
       })
     end
 
@@ -527,6 +540,12 @@ defmodule VutuvWeb.PostLive.Composer do
   # last pick, so a professional sets it once and never again.
   defp initial_license(%Post{license: license}, _author) when is_binary(license), do: license
   defp initial_license(_post, author), do: Posts.default_license(author)
+
+  # The metadata answer has no member-level default to take: an edited post
+  # keeps its own, a new one starts at "clean them", which is what the parent
+  # milestone decided the switch means when nobody has touched it.
+  defp initial_strip_metadata(%Post{strip_metadata?: answer}) when is_boolean(answer), do: answer
+  defp initial_strip_metadata(_post), do: true
 
   ## Per-photo settings (issue #1104)
 
@@ -1136,6 +1155,13 @@ defmodule VutuvWeb.PostLive.Composer do
     {:noreply, assign(socket, :closing?, false)}
   end
 
+  def handle_event("toggle-strip-metadata", _params, socket) do
+    {:noreply,
+     socket
+     |> assign(:strip_metadata?, not socket.assigns.strip_metadata?)
+     |> schedule_draft_save()}
+  end
+
   def handle_event("save", %{"post" => params} = payload, socket) do
     # The submitted texts are the truth (a keystroke may not have round-tripped
     # through `validate` yet), so merge them before writing.
@@ -1162,7 +1188,10 @@ defmodule VutuvWeb.PostLive.Composer do
       # Event-driven like the person denials (the chips are buttons, not form
       # fields), so the assign is the truth; "" clears back to automatic.
       layout: socket.assigns.layout || "",
-      fill: socket.assigns.fill?
+      fill: socket.assigns.fill?,
+      # The metadata switch (issue #2107), also event-driven. On an edit the
+      # assign was seeded from the post, so sending it changes nothing.
+      strip_metadata: socket.assigns.strip_metadata?
     }
 
     save_with_media(socket, attrs)
@@ -2254,6 +2283,38 @@ defmodule VutuvWeb.PostLive.Composer do
           after a reconnect, and `adopt_recovered_images/2` re-adopts the
           pending rows the re-mount dropped from socket state. --%>
           <input :for={image <- @images} type="hidden" name="post[image_ids][]" value={image.id} />
+
+          <%!-- The one question asked before publishing (issue #2107), and only
+          on a new post carrying a file: rewriting a file already handed out is
+          not an edit. Whether machines may read the post is NOT asked here —
+          the member answers that once on /settings/privacy and it is stamped
+          onto the row as the post is published, so an older post keeps what it
+          went out with and nobody is asked the same thing twice a day. Plain
+          checkbox and Tailwind utilities, no stylesheet and no hook of its own,
+          so nothing here needs `static_changed?/1` to survive a deploy into an
+          open tab. --%>
+          <label
+            :if={
+              @post == nil and @attachments != [] and Attachments.metadata_removal_supported?()
+            }
+            id={"#{@id}-strip-metadata"}
+            class="mt-3 flex items-start gap-2 border-t border-slate-200 py-1 pt-3 text-sm text-slate-700 dark:border-slate-700 dark:text-slate-200"
+          >
+            <input
+              type="checkbox"
+              checked={@strip_metadata?}
+              phx-click="toggle-strip-metadata"
+              phx-target={@myself}
+              class={checkbox_class()}
+              data-strip-metadata-switch
+            />
+            <span class="min-w-0">
+              <span class="font-semibold">{gettext("Remove the metadata from the files")}</span>
+              <span class="mt-0.5 block text-xs text-slate-600 dark:text-slate-400">
+                {gettext("Your name, the software you used and the dates come out of a PDF.")}
+              </span>
+            </span>
+          </label>
 
           <%!-- Bottom row: the photo picker and the language select on the
           left (once photos are attached, the grid's add tile takes over —

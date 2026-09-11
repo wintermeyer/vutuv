@@ -48,6 +48,16 @@ Related documents: [README](../README.md) (overview) ·
   (`ATTACHMENT_PREVIEW_PAGES`); without it a PDF is still accepted and simply
   shows no preview.
   A check that cannot run is never treated as a check that passed.
+- **qpdf** (optional, `apt-get install qpdf`) — takes the author's name, the
+  software and the dates out of a PDF attached to a post, which is what the
+  composer's "Remove the metadata from the files" switch does. Without `qpdf`
+  on `$PATH` (or `QPDF_PATH`) that switch is not shown at all and every file is
+  served exactly as it was uploaded; nothing else changes. Debian stable ships
+  12.2.0, which is what the flags used here are chosen against. The private
+  copy of the upload is never rewritten, so a member who turns the switch off
+  gets their file back byte for byte. Note the modification date survives:
+  removing it as well would mean rebuilding the document from its pages alone,
+  which drops the bookmarks and the page labels of a long PDF.
 - **ffmpeg** (optional, `apt-get install ffmpeg`) — video on posts: converts
   a member's clip into the files browsers play and pulls the stills the AI
   check looks at. Debian's build carries `libx264` and `libsvtav1`; without
@@ -140,6 +150,7 @@ Everything else has a default (the vutuv.de production value):
 | `ATTACHMENT_MONTHLY_MB` | `500` | The same over any 30 days |
 | `ATTACHMENT_PREVIEW_PAGES` | `3` | How many of a file's first pages are shown as pictures under the post. A picture sent in a message always has exactly one preview page, which is the picture itself. `0` turns previews off; more than `5` is treated as `5`. A PDF page is rendered by `pdftoppm`, a text or Markdown file by the headless Chromium the link previews use — where neither is installed the file simply shows no preview, and nothing else changes |
 | `ATTACHMENT_RENDER_CONCURRENCY` | `1` | How many files have their preview pages rendered at once. Everything past that queues. Raise it on a machine with cores to spare |
+| `QPDF_PATH` | `qpdf` | The binary that removes a PDF's metadata, if not on `$PATH` under that name. Missing it means the composer does not offer the switch and files are served exactly as uploaded |
 | `PDFINFO_PATH` / `PDFDETACH_PATH` / `PDFTOPPM_PATH` | `pdfinfo` / `pdfdetach` / `pdftoppm` | The three poppler binaries — the first two run the PDF check, the third renders preview pages — if not on `$PATH` under those names. Missing either of the first two means PDFs are not offered (see the dependency list above); missing the third only means no preview pages |
 | `SCREENSHOT_BLOCKLIST` | – | Extra pages never to take a link-preview screenshot of, on top of the shipped `reddit.com` and `heise.de`. Comma-separated domains and/or URLs, copied into the blocklist table the first time you migrate; afterwards the live list is edited in the admin area (see "Screenshot blocklist" below) and this variable is inert. `SCREENSHOT_BLOCKED_HOSTS` is the older name and still works |
 | `SCREENSHOT_PAGE_CHECK` | `true` | Whether each link-preview capture is judged by the Ollama vision model on whether it shows the page or a consent / ad / login wall or a bot check, and the site blocklisted when it does not (see "The list mostly writes itself" below). `false` leaves the blocklist entirely hand-written — the setting for an installation without Ollama. Independent of `IMAGE_MODERATION_ENABLED`: that one is the safety gate, this one is a quality filter |
@@ -884,7 +895,17 @@ every member who has not decided for themselves is unnamed, with the switch
 still theirs to turn back on. It never changes the **count**: a post always
 shows how many likes it got, whoever may be named.
 
-A third is about how loud the feed is: **whether the source tabs quote what
+A third is the one an intranet is most likely to want the other way round:
+**whether search engines and AI may read what a member posts**. vutuv ships this
+on, because the site is a public network and a post is meant to be found. Turn
+*Search engines and AI may read my posts* off at `/admin/preferences` and every
+member who has not decided for themselves publishes posts that ask crawlers to
+stay away — and that are **not sent to other networks at all**, because a server
+elsewhere keeps its copy for good and no instruction of ours reaches it. It
+applies to posts written from then on: the answer is stored on each post as it
+is published, so nothing already written changes, in either direction.
+
+A fourth is about how loud the feed is: **whether the source tabs quote what
 lands on the one a member is not reading**. Something arriving on the tab they
 are not on marks it with a dot either way; on top of that, the bar can quote
 the arrival — author and first words — for a few seconds before folding back.
@@ -893,7 +914,7 @@ feed turns *Quote what arrives on the other tab* off at `/admin/preferences`,
 or shortens the window there; the dot is unaffected, and every member can set
 both for themselves.
 
-A fourth is about what the site costs to load: **data-saving mode**
+A fifth is about what the site costs to load: **data-saving mode**
 (`low_bandwidth?`, its own page at `/settings/bandwidth`). A member with the
 mode on gets three things. Every post photo, picture from another network,
 URL screenshot and profile cover loads as its **lite version** — the same

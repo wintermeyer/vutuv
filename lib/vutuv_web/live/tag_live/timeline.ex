@@ -419,8 +419,12 @@ defmodule VutuvWeb.TagLive.Timeline do
                 following?={false}
               />
             <% true -> %>
+              <%!-- A tag page is a public topic surface, so a quoted parent
+              whose author keeps machines out is dropped, the way the timeline
+              itself already drops such a post (issue #2107). --%>
               <.post_thread_entry
                 post={entry.post}
+                ancestors={Posts.public_ancestors(entry.post, @current_user)}
                 viewer={@current_user}
                 entry_id={entry.id}
                 conn_or_socket={@socket}

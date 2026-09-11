@@ -67,6 +67,9 @@ defmodule VutuvWeb.PostTeaser do
   decision about how a tab strip reads, not about the feed.
   """
 
+  use Gettext, backend: VutuvWeb.Gettext
+
+  alias Vutuv.Accounts.User
   alias Vutuv.ContentFilters
   alias Vutuv.Fediverse.Handle
   alias Vutuv.Fediverse.RemoteAccount
@@ -136,6 +139,76 @@ defmodule VutuvWeb.PostTeaser do
   answers `""`; anything else raises rather than teasing quietly.
   """
   def line(post, opts \\ []), do: teaser(post, &fold/1, opts)
+
+  @doc """
+  `line/2` for a **machine** audience (issue #2107): the teaser, unless the
+  post's author keeps search engines and AI out, in which case one sentence
+  saying so.
+
+  The third audience this module answers "whether" for, beside the reader whose
+  filters `quote_for/4` applies. It lives here for the same reason those do: a
+  doc builder that reaches for `line/2` — the documented owner of a post's one
+  line — must not be able to quote a withheld post by simply not knowing about
+  a gate kept somewhere else.
+
+  A list document is where it is needed, and it keeps the row rather than
+  dropping it: an archive, a tag page, a profile and the API all carry one
+  all-yes `Content-Signal` for the whole list and cannot signal per row, so the
+  words have to go instead of the signal. Its place in the list stays, which
+  keeps the totals honest — the trade
+  `VutuvWeb.PostCalendarController.entry/1` already makes for an author who
+  opted out, down to the sentence.
+  """
+  def machine_line(post, viewer \\ nil)
+
+  def machine_line(%Post{} = post, viewer) do
+    if shown_to?(post, viewer), do: line(post), else: withheld_sentence()
+  end
+
+  @doc """
+  The same answer for a post's **whole body**, which is what a document
+  embedding somebody else's post hands over (`VutuvWeb.AgentDocs.PostDoc`'s
+  conversation and reply entries).
+
+  Those entries are the leak `machine_line/1` is not: a document's robots axes
+  are computed from its **subject** post, and a conversation is full of other
+  people's, so a reply to a withheld post published the withheld body in full
+  under `ai-train=yes`. Neither the reply's author nor its reader can be asked
+  to carry somebody else's answer.
+
+  It reads `post.body`, matching the ungated sites beside it, rather than
+  `Vutuv.Posts.text/1` — widening what a document quotes is a separate change.
+  The HTML conversation deliberately still shows every word: page and doc
+  differ because the promise is about machines, not about readers.
+  """
+  def machine_body(post, viewer \\ nil)
+
+  def machine_body(%Post{} = post, viewer) do
+    if shown_to?(post, viewer), do: post.body, else: withheld_sentence()
+  end
+
+  # **A redaction that hits somebody entitled to read the text is as wrong as a
+  # missing one**, so both halves take the viewer the document was built for.
+  #
+  # A document built for a signed-in member is login-gated and per-viewer: the
+  # feed doc declares `noindex: true, noai: true` over the whole response, and
+  # `/api/2.0` is a token read on that member's behalf. Either way the reader
+  # can open the permalink and read every word, so handing them "Post not open
+  # to search engines" tells them nothing and takes something away. Only the
+  # **anonymous** public view — the cache-safe `.md`/`.txt`/`.json`/`.xml` URLs,
+  # which carry one all-yes `Content-Signal` for a whole list and cannot signal
+  # per row — is the surface the switch is about.
+  #
+  # The trade worth naming: a third-party app holding an API token is a machine,
+  # and it keeps the words. It is acting for a member who may read them anyway,
+  # and that response is `private`; treating it as a crawler would punish the
+  # member for reading through an app instead of a browser.
+  defp shown_to?(_post, %User{}), do: true
+  defp shown_to?(post, _anonymous), do: Posts.machines_allowed?(post)
+
+  # One sentence, one msgid, shared by both halves and with
+  # `VutuvWeb.PostCalendarController.entry/1`.
+  defp withheld_sentence, do: gettext("Post not open to search engines")
 
   @doc """
   `line/2` flattened to plain text: Markdown markers gone, whitespace folded to

@@ -193,7 +193,9 @@ defmodule VutuvWeb.AccountEventHooksTest do
       post(conn, ~p"/settings/privacy/reset")
 
       assert [event] = events(user, "privacy_changed")
-      assert event.details["fields"] == ["like_attribution?"]
+      # Every pref in the `:privacy` group, which is what the reset link on that
+      # page offers — one more of them since issue #2107.
+      assert event.details["fields"] == ["like_attribution?", "posts_machines_allowed?"]
       assert events(user, "preferences_changed") == []
     end
   end

@@ -585,9 +585,22 @@ defmodule Vutuv.Posts.Pending do
   @doc """
   Publishes the waiting text as it is, without whatever was refused — the
   clip, the files, or both. Those go with their bytes.
+
+  The "would this actually publish anything?" question is asked **here**, not
+  only in the card that offers the button: `leftover?/2` was a template
+  condition, so the API path could ask for a publish the create path then
+  refuses, and the author got the opaque "could not be published" row this
+  check exists to prevent. `{:error, :nothing_left}` says which of the two it
+  was — nothing survives the refusal, or something that is not refused is
+  still being worked on.
   """
-  def publish_without_refused(%PendingPost{status: "waiting"} = pending),
-    do: Publisher.publish(pending, without_refused: true)
+  def publish_without_refused(%PendingPost{status: "waiting"} = pending) do
+    if reading(pending).publishable_without_refused? do
+      Publisher.publish(pending, without_refused: true)
+    else
+      {:error, :nothing_left}
+    end
+  end
 
   def publish_without_refused(%PendingPost{}), do: {:error, :not_waiting}
 

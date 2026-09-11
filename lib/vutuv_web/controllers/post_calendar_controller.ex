@@ -113,10 +113,15 @@ defmodule VutuvWeb.PostCalendarController do
   # carry it into an index anyway: `path` is nil, so nothing links it, and its
   # own first line gives way to the line saying why. One nil decides both, in
   # both renderings.
+  #
+  # …and the same for a post whose **own** answer was no (issue #2107). This
+  # page is the one the router itself calls a crawl surface, so a withheld post
+  # quoting its first line here would be the plainest possible contradiction of
+  # the switch. Two questions, one outcome, so they share the branch.
   defp entry(post) do
     author = Posts.author(post)
 
-    if Identity.indexable?(author) do
+    if Identity.indexable?(author) and Posts.machines_allowed?(post) do
       %{id: post.id, author: author, path: Posts.path(post), text: teaser(post)}
     else
       %{

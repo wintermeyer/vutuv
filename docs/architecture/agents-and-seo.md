@@ -43,6 +43,19 @@ agents/LLMs → `ai-train=`/`ai-input=`, robots `noai, noimageai`) — any
 combination is valid; pages that are noindexed page-level (profile sections,
 people lists, restricted posts) send every signal as `no`.
 
+A **post** carries a third choice of its own, `posts.noindex_noai?` (issue
+#2107): one switch for both machine audiences, taken once by the member on
+`/settings/privacy` and stamped onto the row at publish time. It only ever
+*adds* — `PostDoc.robots_axes/3` ors it into the author's two, and nothing about
+a post re-opens what its author closed. A post that says no also leaves the
+sitemap, both RSS feeds, every shared listing document and the Fediverse
+entirely; where it still appears inside somebody else's document (a
+conversation, a reply, a repost, a pinned-post excerpt) its words are replaced
+by one sentence rather than the row being dropped, so the totals stay honest.
+The HTML conversation on a permalink is the deliberate exception and shows it,
+because the promise is about machines and not about readers. See
+[attachments.md](attachments.md#machines-and-the-metadata-in-a-file-2107).
+
 The per-user detail sub-pages (`/:slug/emails`, `/tags`, `/work_experiences`,
 `/followers`, …) are kept out of search by that page-level `X-Robots-Tag:
 noindex` (`VutuvWeb.Plug.NoIndex` on the `:user_pipe` pipeline), **not** by a

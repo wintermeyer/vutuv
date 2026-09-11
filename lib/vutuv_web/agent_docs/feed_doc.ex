@@ -43,7 +43,12 @@ defmodule VutuvWeb.AgentDocs.FeedDoc do
       viewer: AgentDocs.person_ref(viewer),
       more: page.more?,
       next_cursor: ApiV2.encode_cursor(page.more? && page.next_cursor),
-      posts: Enum.map(page.entries, &PostDoc.timeline_entry/1)
+      # The viewer travels with the row (issue #2107). This document is
+      # login-only and declares `noindex: true, noai: true` over the whole
+      # response, so a withheld post needs no redaction here — the member can
+      # open it and read every word one click further, and handing them "Post
+      # not open to search engines" would take something away for nothing.
+      posts: Enum.map(page.entries, &PostDoc.timeline_entry(&1, viewer))
     })
   end
 end

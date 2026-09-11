@@ -46,6 +46,7 @@ defmodule Vutuv.Attachments do
   alias Vutuv.Accounts.User
   alias Vutuv.Attachments.Attachment
   alias Vutuv.Attachments.Format
+  alias Vutuv.Attachments.Metadata
   alias Vutuv.Attachments.PagePipeline
   alias Vutuv.Attachments.Pages
   alias Vutuv.Attachments.Upload
@@ -55,6 +56,7 @@ defmodule Vutuv.Attachments do
   alias Vutuv.Images.Image
   alias Vutuv.MediaJobs
   alias Vutuv.Posts.Pending
+  alias Vutuv.Posts.Post
   alias Vutuv.Repo
   alias Vutuv.Uploads.PdfGate
   alias Vutuv.Uploads.Spec
@@ -87,6 +89,13 @@ defmodule Vutuv.Attachments do
 
   @doc "Whether PDFs can be checked here — without poppler they are not offered."
   defdelegate pdf_supported?, to: PdfGate, as: :available?
+
+  @doc """
+  Whether a file's metadata can be removed here (issue #2107) — `qpdf` on the
+  box. Without it the composer hides the switch rather than offering an answer
+  this installation cannot honour.
+  """
+  defdelegate metadata_removal_supported?, to: Metadata, as: :available?
 
   @doc "Drops the cached poppler probe. For tests that move the binary."
   defdelegate forget_capability, to: PdfGate
@@ -191,6 +200,13 @@ defmodule Vutuv.Attachments do
       %Attachment{user_id: user.id}
       |> Attachment.changeset(%{
         token: token,
+        # The metadata comes out here, before anybody has been asked — the
+        # answer defaults to yes and a cleaned file is what the post is meant
+        # to be waiting for (#2102). An author who says no is given the
+        # verbatim upload back at claim time, which costs a copy rather than a
+        # second qpdf run on the publish path. `nil` when there was nothing to
+        # do: not a PDF, or no qpdf on this box.
+        metadata_stripped_at: Metadata.strip(token, kind),
         # Cut rather than raise 22001 on a name the member did not choose to
         # be long: a browser will happily hand over 400 characters.
         file_name: String.slice(Path.basename(filename), 0, Attachment.name_max()),
@@ -305,6 +321,60 @@ defmodule Vutuv.Attachments do
       |> NaiveDateTime.add(-Keyword.get(opts, :hours_ago, 0) * 3600, :second)
 
     Repo.insert!(%Upload{user_id: user.id, size_bytes: size, inserted_at: at})
+  end
+
+  ## The metadata answer
+
+  @doc """
+  Makes the files a post claimed agree with what its author answered about
+  their metadata (issue #2107). Called after the post is committed, from
+  `Vutuv.Posts`, on both the create and the update path.
+
+  It reads **both** columns, never one: `posts.strip_metadata?` is what was
+  asked and `attachments.metadata_stripped_at` is what was done, and the two
+  can legitimately differ — a file uploaded on a box without qpdf was never
+  stripped whatever the post says. So a row is only worked on where the two
+  disagree, in either direction: an author who says no gets the verbatim upload
+  put back (a `File.cp`, no qpdf), and one who turns the switch back on through
+  the API gets the file cleaned after all. Doing only the first was a post whose
+  row claimed its files were clean while the bytes still carried the author's
+  name.
+
+  Both directions are idempotent — the served copy is only ever a derivation of
+  the private original — so a re-run is free and a half-finished run heals on
+  the next edit. In the overwhelming case there is nothing to do and it costs
+  one query.
+  """
+  def apply_metadata_choice(%Post{id: post_id, strip_metadata?: strip?}) do
+    from(a in Attachment,
+      where: a.post_id == ^post_id,
+      select: {a.token, a.content_type, not is_nil(a.metadata_stripped_at)}
+    )
+    |> Repo.all()
+    |> Enum.each(&reconcile_metadata(&1, strip?))
+  end
+
+  defp reconcile_metadata({_token, _type, stripped?}, strip?) when stripped? == strip?, do: :ok
+
+  defp reconcile_metadata({token, _type, true}, false) do
+    Metadata.restore(token)
+    stamp_metadata(token, nil)
+  end
+
+  defp reconcile_metadata({token, content_type, false}, true) do
+    case Metadata.strip(token, Format.kind_of_content_type(content_type)) do
+      nil -> :ok
+      at -> stamp_metadata(token, at)
+    end
+  end
+
+  defp stamp_metadata(token, at) do
+    Repo.update_all(
+      from(a in Attachment, where: a.token == ^token),
+      set: [metadata_stripped_at: at]
+    )
+
+    :ok
   end
 
   ## Reading
@@ -481,12 +551,22 @@ defmodule Vutuv.Attachments do
   clears that in the same statement it claims them, so a reserved file is
   exactly what it is entitled to take. A message never reserves anything, so a
   reserved file is somebody's waiting post's and must not be taken from it.
+
+  A file the AI check **refused** is claimable by neither parent (issue #2107).
+  Deliberately not the video path's `stage == "ready"`, which would roll back a
+  real publish: a file's stages are `stored → rendering → ready | failed`, and
+  `failed` (nothing on this box could render a preview) is a legitimately
+  publishable terminal state. `refused_at` is the one that never is — without
+  this the composer's own "publish without it" offer could be walked round with
+  a plain `POST /api/2.0/posts` naming the refused id.
   """
   def claim(_parent, _uploader_id, []), do: :ok
 
   def claim(parent, uploader_id, ids) when is_binary(uploader_id) and is_list(ids) do
     {count, _} =
-      from(a in Attachment, where: a.id in ^ids and a.user_id == ^uploader_id)
+      from(a in Attachment,
+        where: a.id in ^ids and a.user_id == ^uploader_id and is_nil(a.refused_at)
+      )
       |> unclaimed()
       |> claim_scope(parent)
       |> Repo.update_all(set: claim_set(parent))

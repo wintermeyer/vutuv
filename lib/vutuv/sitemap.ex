@@ -287,6 +287,9 @@ defmodule Vutuv.Sitemap do
     |> Posts.scope_visible(nil)
     |> join(:inner, [p], u in assoc(p, :user))
     |> where([p, u], account_confirmed_row(u) and not u.noindex?)
+    # The post's own answer, beside its author's (issue #2107): a sitemap entry
+    # is an invitation to index exactly what the switch declined.
+    |> Posts.scope_machines_allowed()
   end
 
   # A post published in an organization's name (issue #1334) is public by
@@ -297,6 +300,7 @@ defmodule Vutuv.Sitemap do
     |> join(:inner, [p], o in Organization, on: o.id == p.organization_id)
     |> where([p, o], o.status == "active" and is_nil(o.frozen_at) and o.seo?)
     |> where([p], is_nil(p.frozen_at))
+    |> Posts.scope_machines_allowed()
   end
 
   defp chunks(0), do: 0

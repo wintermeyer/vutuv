@@ -71,6 +71,33 @@ than its own heading. --%>
       </.form>
     </.card>
 
+    <%!-- Your posts (issue #2107). The card above is about the profile page;
+          this is the same question asked about everything you write, and it is
+          asked here rather than in the composer because it is one standing
+          decision, not one per post. A Vutuv.Prefs boolean, so it reads and is
+          stored positively — unlike the two inverted opt-out checkboxes above,
+          which is exactly why it is its own card rather than a third row in
+          theirs.
+
+          Two consequences the member cannot discover afterwards, so both are on
+          screen: every post keeps the answer it was published with (the intro),
+          and saying no keeps new posts out of the other networks entirely (the
+          registry hint, shared word for word with /admin/preferences). --%>
+    <.toggle_form_card
+      changeset={@changeset}
+      field={:posts_machines_allowed?}
+      form_id="posts-machines-form"
+      action={~p"/settings/privacy"}
+      title={gettext("Your posts")}
+      intro={
+        gettext(
+          "Whether search engines and AI may read what you post. Each post keeps the answer it was published with, so changing this leaves everything you have already written exactly as it is."
+        )
+      }
+      label={Vutuv.Prefs.label(:posts_machines_allowed?)}
+      hint={Vutuv.Prefs.hint(:posts_machines_allowed?)}
+    />
+
     <%!-- Likes: whether other members see your name and picture in the row of
           faces a post permalink shows under its like count (issue #1233).
           Default on, like every other network people come from — and like the

@@ -156,6 +156,21 @@ defmodule Vutuv.AttachmentFixtures do
     write(dir, "multi-#{count}.pdf", multi_page(count))
   end
 
+  @doc """
+  A PDF carrying its author's name, the software that wrote it and its dates
+  in **both** places a PDF keeps them (issue #2107): the trailer's `/Info`
+  dictionary and an XMP metadata packet on the catalog. Stripping only one of
+  the two leaves the name in the file, which is what makes a fixture with both
+  worth building.
+  """
+  def metadata_pdf(dir), do: write(dir, "metadata.pdf", pdf(:metadata))
+
+  @doc "The name that fixture puts in every metadata field."
+  def metadata_author, do: "Erika Mustermann"
+
+  @doc "The software that fixture claims wrote it."
+  def metadata_software, do: "SecretWriter 9.1"
+
   @doc "A plain text file."
   def text_file(dir, body \\ "Just some notes.\nOn two lines.\n"),
     do: write(dir, "notes.txt", body)
@@ -166,6 +181,22 @@ defmodule Vutuv.AttachmentFixtures do
   @doc "A file of `bytes` zero bytes under a `.txt` name."
   def sized_file(dir, bytes, name \\ "big.txt"),
     do: write(dir, name, :binary.copy("a", bytes))
+
+  @doc """
+  A throwaway uploads root for one test, pointed at by `:uploads_dir_prefix`
+  and removed on exit, plus the `files/` directory the fixtures are built in.
+  Answers `%{tmp:, files:}`, so a `setup` block merges it straight into the
+  context. Every attachment suite needs the same five lines; this is them.
+  """
+  def tmp_uploads_dir do
+    tmp = Path.join(System.tmp_dir!(), "vutuv_uploads_#{System.unique_integer([:positive])}")
+    files = Path.join(tmp, "files")
+    File.mkdir_p!(files)
+    Vutuv.WebPushHelpers.put_config(:uploads_dir_prefix, tmp)
+    ExUnit.Callbacks.on_exit(fn -> File.rm_rf(tmp) end)
+
+    %{tmp: tmp, files: files}
+  end
 
   @doc """
   Sets keys of `:attachments` for the rest of the test module (restored on
@@ -221,9 +252,14 @@ defmodule Vutuv.AttachmentFixtures do
         {4, "<< /Length #{byte_size(@content)} >>\nstream\n#{@content}\nendstream"},
         {5, "<< /Type /Font /Subtype /Type1 /BaseFont /Helvetica >>"}
         | extra
-      ] ++ more
+      ] ++ more,
+      trailer_extra(kind)
     )
   end
+
+  # Only the metadata fixture needs anything past /Root in the trailer.
+  defp trailer_extra(:metadata), do: " /Info 7 0 R"
+  defp trailer_extra(_kind), do: ""
 
   # The page dictionary. `:page_action` hangs an additional action off it, which
   # is where a launch goes when there is no `/OpenAction` to put it in.
@@ -289,6 +325,33 @@ defmodule Vutuv.AttachmentFixtures do
 
   defp catalog(:page_action), do: {"<< /Type /Catalog /Pages 2 0 R >>", []}
 
+  # The author's name, the software and the dates, in both of the two places a
+  # PDF keeps them: the XMP packet hanging off the catalog (object 6) and the
+  # /Info dictionary the trailer points at (object 7).
+  defp catalog(:metadata) do
+    xmp = """
+    <?xpacket begin="" id="W5M0MpCehiHzreSzNTczkc9d"?>
+    <x:xmpmeta xmlns:x="adobe:ns:meta/"><rdf:RDF \
+    xmlns:rdf="http://www.w3.org/1999/02/22-rdf-syntax-ns#">
+    <rdf:Description rdf:about="" xmlns:dc="http://purl.org/dc/elements/1.1/" \
+    xmlns:xmp="http://ns.adobe.com/xap/1.0/">
+    <dc:creator><rdf:Seq><rdf:li>#{metadata_author()}</rdf:li></rdf:Seq></dc:creator>
+    <xmp:CreatorTool>#{metadata_software()}</xmp:CreatorTool>
+    <xmp:CreateDate>2026-01-02T03:04:05Z</xmp:CreateDate>
+    </rdf:Description></rdf:RDF></x:xmpmeta><?xpacket end="w"?>
+    """
+
+    {"<< /Type /Catalog /Pages 2 0 R /Metadata 6 0 R >>",
+     [
+       {6,
+        "<< /Type /Metadata /Subtype /XML /Length #{byte_size(xmp)} >>\nstream\n#{xmp}\nendstream"},
+       {7,
+        "<< /Author (#{metadata_author()}) /Creator (#{metadata_software()}) " <>
+          "/Producer (#{metadata_software()}) /Title (Interne Preisliste) " <>
+          "/CreationDate (D:20260102030405Z) /ModDate (D:20260102030405Z) >>"}
+     ]}
+  end
+
   # 9 MB of filler in the catalog, so the object stream qpdf builds from it
   # inflates past `PdfGate`'s per-stream cut. The padding compresses to nothing,
   # which is what makes the finished file ~10 KB.
@@ -310,7 +373,7 @@ defmodule Vutuv.AttachmentFixtures do
   # Serialises numbered objects with a cross-reference table. Nothing clever:
   # the offsets have to be right or poppler will not read the file, which is
   # what makes these fixtures worth having.
-  defp build(objects) do
+  defp build(objects, trailer_extra \\ "") do
     objects = Enum.sort_by(objects, &elem(&1, 0))
 
     {body, offsets} =
@@ -332,6 +395,6 @@ defmodule Vutuv.AttachmentFixtures do
     body <>
       "xref\n0 #{size}\n0000000000 65535 f \n" <>
       entries <>
-      "trailer\n<< /Size #{size} /Root 1 0 R >>\nstartxref\n#{byte_size(body)}\n%%EOF\n"
+      "trailer\n<< /Size #{size} /Root 1 0 R#{trailer_extra} >>\nstartxref\n#{byte_size(body)}\n%%EOF\n"
   end
 end

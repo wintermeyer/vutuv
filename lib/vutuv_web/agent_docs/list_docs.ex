@@ -121,7 +121,9 @@ defmodule VutuvWeb.AgentDocs.ListDocs do
       also_known_as: tag |> Tag.aliases_of() |> Enum.map(& &1.name),
       most_endorsed_users: Enum.map(recommended_users, &person_entry(&1, work_info_by_id)),
       post_count: post_count,
-      posts: Enum.map(entries, &PostDoc.timeline_entry/1),
+      # `nil`: a tag page is the anonymous public view whatever the reader's
+      # session, so a withheld post is redacted here (issue #2107).
+      posts: Enum.map(entries, &PostDoc.timeline_entry(&1, nil)),
       open_positions: Enum.map(open_positions, &JobPostingDoc.summary/1),
       jobs_url: AgentDocs.abs_url("/jobs?" <> URI.encode_query(%{"tag" => tag.slug}))
     })
