@@ -46,11 +46,11 @@ defmodule Vutuv.Uploads.PdfGate do
   here and in every parser alike. The one way it could is an **object stream**,
   where a reader picks each object out at the offset the stream's own table
   records rather than reading front to back, so a `(` planted in one object and
-  a `)` in the next would blank the catalog between them. That is why a
-  candidate range spanning a `<<` or a `>>` is **not** blanked: everything
-  dangerous on the far side of an object boundary is a dictionary, so a range
-  holding one has not proven itself content and stays in the scan. An
-  unterminated `(` is likewise left as the byte it is.
+  a `)` in the next would blank the catalog between them. That is why blanking
+  **stops at the first `<<` or `>>`** inside a candidate and the scan carries on
+  from there: everything dangerous on the far side of an object boundary is a
+  dictionary, so nothing this blanks can span one. An unterminated `(` is
+  likewise left as the byte it is.
 
   The cheaper fix considered and not taken was to anchor each name on what must
   stand beside it — `/S` before `/Launch`, `<<` or `[` after `/OpenAction` —
@@ -61,39 +61,41 @@ defmodule Vutuv.Uploads.PdfGate do
   or 200 bytes of whitespace between the two halves. Blanking says what is
   actually true — a string is not structure — and errs toward refusing.
 
-  ## Which question is asked of whom, measured
+  ## Two answerers per question, because each one has measured gaps
 
-  Blanking is not enough on its own, because a document's words also reach the
-  file outside PDF syntax — an XMP metadata packet is XML, so
-  `<dc:title>…HTML/CSS/JavaScript</dc:title>` is not a string this can blank
-  (Ghostscript wrote exactly that, measured 2026-09-11). What settles it is
-  which question a **parser** can answer, and that is measured rather than
-  assumed:
+  Blanking is what fixed the CV, and it is the *only* thing that changed about
+  which names are looked for: all five are still looked for. That is deliberate,
+  and it is the lesson of the two measurements below — **a reporting tool with
+  known gaps keeps its byte-scan partner.** Dropping `/JavaScript` because
+  `pdfinfo` reports scripts was tried and reverted the same day; five constructs
+  walked straight through (2026-09-11).
 
-    * **JavaScript: poppler, alone.** `pdfinfo` answers `JavaScript: yes` for a
-      script in the catalog's `/Names /JavaScript` tree, in `/OpenAction`, in
-      the catalog's `/AA`, in a page's `/AA` and on an annotation's `/A` alike
-      (2026-09-11). It sees through object streams and incremental updates, and
-      a byte scan that cannot tell a title from a script has no business voting
-      beside it. `/JavaScript` is therefore **not** one of the names below.
-    * **Embedded files: poppler *and* the bytes.** `pdfdetach -list` counts a
-      file in the `/EmbeddedFiles` name tree, in a `/Collection`, and on a
-      `/FileAttachment` annotation with or without its `/Type /EmbeddedFile` —
-      but answers **0** for a filespec reached through `/AF` on the catalog,
-      through `/AF` on a page, or through a `/RichMedia` annotation's assets
-      (all measured 2026-09-11). So `/EmbeddedFile` stays in the byte scan,
-      which is what catches those three. No ordinary document writes that word.
-    * **An action: the bytes, alone.** No poppler tool reports `/OpenAction`, so
-      it and the three acting names are read from the file and from every
-      stream that inflates — one `qpdf --object-streams=generate` run moves
-      every dictionary into a Flate-compressed object stream, after which a
-      plain grep finds nothing in a file that still does the same thing
-      (`grep -ac` said 0, checked 2026-09-10).
+    * **`pdfinfo` misses at least three ways.** Without a page range it reads
+      **page 1 only**, so a page's `/AA /O` script on page 2 answers
+      `JavaScript: no` — hence the `-f 1 -l 999999` below. It does not follow an
+      `/OpenAction`'s `/Next` chain, as a dictionary or as an array, even with
+      the range. And what it reports at all moves between versions: a script in
+      `/OpenAction` is `yes` on poppler 26.09 here and unreported on the build
+      CI runs, which for an installation nobody controls means no version can be
+      relied on.
+    * **`pdfdetach -list` misses three too.** It counts a file in the
+      `/EmbeddedFiles` name tree, in a `/Collection` and on a `/FileAttachment`
+      annotation with or without its `/Type /EmbeddedFile`, but answers **0**
+      for a filespec reached through `/AF` on the catalog, through `/AF` on a
+      page, or through a `/RichMedia` annotation's assets.
+    * **No poppler tool reports an action at all**, so `/OpenAction` and the
+      three acting names have only ever been the bytes'.
 
-  Both gates were run end to end over 4,542 real local PDFs on 2026-09-11: ten
-  answers changed, nine of them a refusal lifted and one refused for a
+  And the bytes miss things the parsers catch, which is the other half of the
+  argument: one `qpdf --object-streams=generate` run moves every dictionary into
+  a Flate-compressed object stream, after which a plain grep finds nothing in a
+  file that still does the same thing (`grep -ac` said 0, checked 2026-09-10).
+  Neither side is sufficient; both stay.
+
+  Both gates were run end to end over 4,738 real local PDFs on 2026-09-11: nine
+  answers changed, seven of them a refusal lifted and two refused for a
   different reason, and **none** newly refused. The one pre-existing document
-  among the nine is a 312-page programming book that was refused for linking to
+  among the seven is a 312-page programming book that was refused for linking to
   `developer.mozilla.org/en-US/docs/Web/JavaScript/Guide/…` from a `/URI`
   action.
 
@@ -112,11 +114,11 @@ defmodule Vutuv.Uploads.PdfGate do
   interactive government forms people do attach, so it is named here and left
   to a decision of its own.
 
-  An embedded file reached through `/AF` or `/RichMedia` whose stream *also*
-  drops its `/Type /EmbeddedFile` is seen by nothing here: poppler does not
-  count it and there is no name left to match. Closing that would mean refusing
-  `/EF` or `/Filespec` outright, which is a widening with a cost of its own and
-  wants measuring first.
+  A script or an embedded file that is **both** invisible to poppler and hidden
+  from the bytes — an `/AA /O` script inside an object stream, say, or an `/AF`
+  file whose stream also drops its `/Type /EmbeddedFile` — is seen by nothing
+  here. Every construct measured so far is caught by one side or the other, and
+  the two-answerer shape above is what keeps that true; it is not a proof.
 
   `/AA` (additional actions) is deliberately **not** blocked as a name: it sits
   on the widgets of every ordinary form, and it appeared in 2 of 1,051 real
@@ -156,17 +158,20 @@ defmodule Vutuv.Uploads.PdfGate do
   # them, so naming them costs no ordinary document.
   @acting_names ~w(Launch SubmitForm ImportData)
 
+  # What `check/1` reads out of `pdfinfo`. Absent means unanswered, not clean.
+  @required_fields [~r/^Pages:/m, ~r/^Encrypted:/m, ~r/^JavaScript:/m]
+
   # The names, with `#XX` escapes allowed for every character — one pass that
   # matches `/OpenAction` and `/Open#41ction` alike, so nothing has to decode a
   # 20 MB buffer to find the second spelling. No `u` modifier anywhere in this
   # module: these patterns run over slices of a PDF, which are not text.
   #
-  # `/JavaScript` is deliberately **not** in this list — see the moduledoc:
-  # poppler answers that question from the parsed document, wherever the script
-  # hangs, and a name that is also an ordinary English word in a document title
-  # cost a CV its upload. `/EmbeddedFile` is still here because poppler's answer
-  # has three measured gaps.
-  @name_regexes (for name <- ["EmbeddedFile", "OpenAction" | @acting_names], into: %{} do
+  # `/JavaScript` and `/EmbeddedFile` are here **beside** poppler's answers, not
+  # instead of them: both tools have measured gaps, and the moduledoc lists
+  # them. What stopped a CV being refused for the words on its page is the
+  # blanking below, not a shorter list.
+  @name_regexes (for name <- ["JavaScript", "EmbeddedFile", "OpenAction" | @acting_names],
+                     into: %{} do
                    pattern =
                      "/" <>
                        Enum.map_join(String.to_charlist(name), fn char ->
@@ -235,10 +240,21 @@ defmodule Vutuv.Uploads.PdfGate do
 
   ## poppler
 
+  # `-f 1 -l 999999` is not decoration: without a page range `pdfinfo` reads
+  # **page 1 only**, so a script on a page's `/AA /O` answered `JavaScript: no`
+  # for page 2 of a three-page document and `yes` for the same script on page 1
+  # (measured 2026-09-11). Most documents anybody attaches have more than one
+  # page.
   defp pdfinfo(path) do
-    case run(:pdfinfo, [path]) do
+    case run(:pdfinfo, ["-f", "1", "-l", "999999", path]) do
       {out, 0} ->
-        {:ok, out}
+        # An answer whose shape we do not recognise is not an answer. The three
+        # fields below are what `check/1` reads; a poppler that prints none of
+        # them (or one too old to know `JavaScript:`) exits 0 all the same, and
+        # a positive-match test would read that silence as "clean".
+        if Enum.all?(@required_fields, &Regex.match?(&1, out)),
+          do: {:ok, out},
+          else: refused(:unreadable, out)
 
       {out, _status} ->
         # A user password stops poppler at the door: "Command Line Error:
@@ -345,11 +361,22 @@ defmodule Vutuv.Uploads.PdfGate do
   # raw bytes cannot be in the blanked ones, because blanking only ever removes,
   # and not one of those 12 documents carries any of these names at all.
   defp scan_buffer(raw) do
-    if Regex.match?(@any_name_regex, raw), do: scan_syntax(without_content(raw)), else: :ok
+    if Regex.match?(@any_name_regex, raw) do
+      case without_content(raw) do
+        {:ok, buffer} -> scan_syntax(buffer)
+        # A buffer this could not finish reading is a buffer it did not scan,
+        # and an unfinished scan refuses — the same answer the inflation budget
+        # gives.
+        :unfinished -> {:error, :unreadable}
+      end
+    else
+      :ok
+    end
   end
 
   defp scan_syntax(buffer) do
     cond do
+      Regex.match?(@name_regexes["JavaScript"], buffer) -> {:error, :javascript}
       Regex.match?(@name_regexes["EmbeddedFile"], buffer) -> {:error, :embedded_files}
       acting?(buffer) or open_action?(buffer) -> {:error, :open_action}
       true -> :ok
@@ -414,11 +441,15 @@ defmodule Vutuv.Uploads.PdfGate do
       :binary.compile_pattern(["<<", ">>"])
     }
 
+    case content_ranges(buffer, 0, [], patterns, budget(buffer)) do
+      {:ok, ranges} -> {:ok, blank(buffer, Enum.reverse(ranges))}
+      :unfinished -> :unfinished
+    end
+  end
+
+  defp blank(buffer, ranges) do
     {parts, cursor} =
-      buffer
-      |> content_ranges(0, [], patterns)
-      |> Enum.reverse()
-      |> Enum.reduce({[], 0}, fn {start, length}, {acc, cursor} ->
+      Enum.reduce(ranges, {[], 0}, fn {start, length}, {acc, cursor} ->
         {[blanks(length), binary_part(buffer, cursor, start - cursor) | acc], start + length}
       end)
 
@@ -427,6 +458,19 @@ defmodule Vutuv.Uploads.PdfGate do
     )
   end
 
+  # What this pass may spend on one buffer, counted in **bytes examined** rather
+  # than in steps: one step can read the whole buffer, so steps say nothing
+  # about work. A backstop rather than the defence — `blank_upto_dictionary/6`
+  # is what keeps the pass close to linear — and set from the corpus rather than
+  # guessed. Measured over 4,738 real local PDFs on 2026-09-11: at this ceiling
+  # exactly **one** document spends it, and that one is refused either way
+  # (`:open_action` with an unlimited allowance, `:unreadable` with this one).
+  # A buffer that spends the allowance is a buffer this did not finish reading,
+  # and an unfinished scan refuses.
+  @budget_per_byte 32
+  @budget_floor 4_000_000
+  defp budget(buffer), do: @budget_per_byte * byte_size(buffer) + @budget_floor
+
   # A sub-binary of one shared run rather than a fresh copy per range: a 20 MB
   # file yields ~22,000 ranges holding 11 MB between them, and none of it needs
   # to be allocated twice.
@@ -434,44 +478,75 @@ defmodule Vutuv.Uploads.PdfGate do
   defp blanks(length) when length <= 4096, do: binary_part(@blanks, 0, length)
   defp blanks(length), do: :binary.copy(" ", length)
 
-  # Descending, so the caller reverses once. Every branch resumes at or past the
-  # last byte it read, which is what keeps the pass linear — see
-  # `blank_unless_dictionary/5`.
-  defp content_ranges(buffer, from, acc, patterns) do
+  # Descending, so the caller reverses once. `left` is the byte allowance, and
+  # every scan below pays its own distance into it.
+  defp content_ranges(_buffer, _from, _acc, _patterns, left) when left <= 0, do: :unfinished
+
+  defp content_ranges(buffer, from, acc, patterns, left) do
     size = byte_size(buffer)
 
     if from >= size do
-      acc
+      {:ok, acc}
     else
       # Leftmost-longest, so `<<` is read as a dictionary opening rather than as
       # a hex string that would swallow the dictionary's first key.
       case :binary.match(buffer, elem(patterns, 0), scope: {from, size - from}) do
-        :nomatch -> acc
-        {at, 2} -> content_ranges(buffer, at + 2, acc, patterns)
-        {at, 1} -> content_range(:binary.at(buffer, at), buffer, at, acc, patterns)
+        :nomatch ->
+          {:ok, acc}
+
+        {at, 2} ->
+          content_ranges(buffer, at + 2, acc, patterns, left - (at - from) - 1)
+
+        {at, 1} ->
+          content_range(:binary.at(buffer, at), buffer, at, acc, patterns, left - (at - from) - 1)
       end
     end
   end
 
-  defp content_range(?(, buffer, at, acc, patterns) do
-    case literal_end(buffer, at + 1, at, 1, patterns) do
-      {:ok, stop} -> blank_unless_dictionary(buffer, at, stop, acc, patterns)
-      {:none, resume} -> content_ranges(buffer, resume, acc, patterns)
+  # An unterminated `(` is not a string opener, so the scan carries on from the
+  # byte after it. Not from wherever the walk gave up: everything between is
+  # ordinary syntax, and on the CV it holds the very annotation this has to
+  # blank.
+  defp content_range(?(, buffer, at, acc, patterns, left) do
+    case literal_end(buffer, at + 1, at, 1, patterns, left) do
+      {:ok, stop, left} ->
+        blank_upto_dictionary(buffer, at, stop, acc, patterns, left)
+
+      # Not a string opener, so the `(` is a byte. Resume at the next dictionary
+      # boundary rather than at the byte after it: everything between is inside
+      # the same object, and re-reading it from one byte later is what a file
+      # can spend a LiveView process on.
+      {:none, left} ->
+        reach = min(@string_limit, byte_size(buffer) - at - 1)
+
+        case :binary.match(buffer, elem(patterns, 3), scope: {at + 1, reach}) do
+          {marker, _length} -> content_ranges(buffer, marker, acc, patterns, left - reach)
+          :nomatch -> content_ranges(buffer, at + max(reach, 1), acc, patterns, left - reach)
+        end
+
+      :unfinished ->
+        :unfinished
     end
   end
 
-  defp content_range(?<, buffer, at, acc, patterns) do
+  defp content_range(?<, buffer, at, acc, patterns, left) do
     # Bounded rather than "wherever the next `>` is": an unclosed `<` in the
     # middle of a stream's bytes must not cost a scan of the rest of the file.
     reach = min(@string_limit, byte_size(buffer) - at - 1)
 
     case :binary.match(buffer, ">", scope: {at + 1, reach}) do
-      {stop, _length} -> blank_unless_dictionary(buffer, at, stop + 1, acc, patterns)
-      :nomatch -> content_ranges(buffer, at + reach, acc, patterns)
+      {stop, _length} ->
+        blank_upto_dictionary(buffer, at, stop + 1, acc, patterns, left - (stop - at))
+
+      # Past this `<`, never back onto it: a file whose last byte is a lone `<`
+      # leaves nothing to reach into, and resuming at `at + reach` resumed at
+      # `at` and looped for ever on a 700-byte document.
+      :nomatch ->
+        content_ranges(buffer, at + 1, acc, patterns, left - reach)
     end
   end
 
-  defp content_range(?%, buffer, at, acc, patterns) do
+  defp content_range(?%, buffer, at, acc, patterns, left) do
     size = byte_size(buffer)
 
     stop =
@@ -480,7 +555,7 @@ defmodule Vutuv.Uploads.PdfGate do
         :nomatch -> size
       end
 
-    blank_unless_dictionary(buffer, at, stop, acc, patterns)
+    blank_upto_dictionary(buffer, at, stop, acc, patterns, left - (stop - at))
   end
 
   # A blanked range is an **exemption** from the scan, and an exemption that
@@ -494,52 +569,81 @@ defmodule Vutuv.Uploads.PdfGate do
   # this, a `(` in one object of an object stream and a `)` in the next would
   # blank the catalog between them.
   #
-  # Either way the scan resumes **past** the range rather than one byte into it.
-  # Starting over inside it is what a file can exploit: 60 KB of `%` with a `<<`
-  # behind them and one `/Launch` to arm the pass took 2.8 seconds of a
-  # LiveView's own process, quadrupling with every doubling, which puts a file
-  # at the 20 MB cap in the region of days (measured 2026-09-11). Skipping the
-  # candidates inside a range this would not exempt anyway only ever blanks
-  # less, which only ever refuses more.
-  defp blank_unless_dictionary(buffer, at, stop, acc, patterns) do
+  # Blanking a range is an **exemption** from the scan, and an exemption that
+  # cannot be proven does not apply. What proves it is that the range holds no
+  # dictionary: a linear reader and a real parser part company only across an
+  # object boundary — inside an object stream a reader picks each object out at
+  # the offset the stream's own table records — and every dangerous thing on the
+  # other side of such a boundary is a dictionary (`/OpenAction << … >>`,
+  # `<< /S /Launch >>`). So the blanking **stops at the first `<<` or `>>`**
+  # inside the candidate and the scan resumes there, reading the rest as it
+  # stands. Without that, a `(` in one object of an object stream and a `)` in
+  # the next would blank the catalog between them.
+  #
+  # Cutting rather than rejecting is also what keeps the pass affordable. The
+  # two obvious alternatives both cost: rejecting the range and resuming one
+  # byte later re-reads it, which 28 of 4,738 real local PDFs could not afford
+  # (one needed to be read 1,024 times over), and rejecting it and resuming
+  # *past* it drops the candidates inside — on the CV this module exists for,
+  # a stray `(` in a compressed stream reaches past the annotation whose `/URI`
+  # names JavaScript, and the CV was refused again (both measured 2026-09-11).
+  defp blank_upto_dictionary(buffer, at, stop, acc, patterns, left) do
     range = binary_part(buffer, at, stop - at)
+    left = left - (stop - at)
 
-    acc =
-      if :binary.match(range, elem(patterns, 3)) == :nomatch,
-        do: [{at, stop - at} | acc],
-        else: acc
+    cut =
+      case :binary.match(range, elem(patterns, 3)) do
+        {marker, _length} -> at + marker
+        :nomatch -> stop
+      end
 
-    content_ranges(buffer, stop, acc, patterns)
+    acc = if cut > at, do: [{at, cut - at} | acc], else: acc
+
+    content_ranges(buffer, max(cut, at + 1), acc, patterns, left)
   end
 
   # `\` escapes the next byte and `(` nests, exactly as a reader parses it:
-  # anything else would let one file mean two things. An unterminated string is
-  # not a string, so the scan carries on through the `(` — and past the stretch
-  # it just read.
-  defp literal_end(buffer, from, start, depth, patterns) do
+  # anything else would let one file mean two things.
+  defp literal_end(_buffer, _from, _start, _depth, _patterns, left) when left <= 0,
+    do: :unfinished
+
+  defp literal_end(buffer, from, start, depth, patterns, left) do
     size = byte_size(buffer)
 
     if from >= size do
-      {:none, size}
+      {:none, left}
     else
       case :binary.match(buffer, elem(patterns, 1), scope: {from, size - from}) do
-        :nomatch -> {:none, size}
-        {at, _length} when at - start > @string_limit -> {:none, at}
-        {at, _length} -> literal_step(:binary.at(buffer, at), buffer, at, start, depth, patterns)
+        :nomatch ->
+          {:none, left - (size - from)}
+
+        {at, _length} when at - start > @string_limit ->
+          {:none, left - (at - from)}
+
+        {at, _length} ->
+          literal_step(
+            :binary.at(buffer, at),
+            buffer,
+            at,
+            start,
+            depth,
+            patterns,
+            left - (at - from) - 1
+          )
       end
     end
   end
 
-  defp literal_step(?\\, buffer, at, start, depth, patterns),
-    do: literal_end(buffer, at + 2, start, depth, patterns)
+  defp literal_step(?\\, buffer, at, start, depth, patterns, left),
+    do: literal_end(buffer, at + 2, start, depth, patterns, left)
 
-  defp literal_step(?(, buffer, at, start, depth, patterns),
-    do: literal_end(buffer, at + 1, start, depth + 1, patterns)
+  defp literal_step(?(, buffer, at, start, depth, patterns, left),
+    do: literal_end(buffer, at + 1, start, depth + 1, patterns, left)
 
-  defp literal_step(?), _buffer, at, _start, 1, _patterns), do: {:ok, at + 1}
+  defp literal_step(?), _buffer, at, _start, 1, _patterns, left), do: {:ok, at + 1, left}
 
-  defp literal_step(?), buffer, at, start, depth, patterns),
-    do: literal_end(buffer, at + 1, start, depth - 1, patterns)
+  defp literal_step(?), buffer, at, start, depth, patterns, left),
+    do: literal_end(buffer, at + 1, start, depth - 1, patterns, left)
 
   ## zlib
 

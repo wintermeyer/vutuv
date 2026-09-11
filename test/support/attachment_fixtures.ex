@@ -48,13 +48,42 @@ defmodule Vutuv.AttachmentFixtures do
 
   @doc """
   A PDF whose JavaScript hangs somewhere other than the catalog's name tree:
-  `:open_action`, `:catalog_aa`, `:page_aa` or `:annotation`. The byte scan no
-  longer looks for `/JavaScript` at all (issue #2136), so each of these rests
-  on poppler's answer alone.
+  `:open_action`, `:catalog_aa`, `:page_aa`, `:annotation`, `:next_dict`,
+  `:next_array` or `:field_calculate`. The last three, and every one of the
+  multi-page shapes below, are constructs `pdfinfo` does **not** report
+  (measured 2026-09-11), which is why `/JavaScript` is in the byte scan beside
+  it rather than instead of it.
   """
   def action_javascript_pdf(dir, where)
-      when where in [:open_action, :catalog_aa, :page_aa, :annotation],
+      when where in [
+             :open_action,
+             :catalog_aa,
+             :page_aa,
+             :annotation,
+             :next_dict,
+             :next_array,
+             :field_calculate
+           ],
       do: write(dir, "js-#{where}.pdf", pdf(:"js_#{where}"))
+
+  @doc """
+  A `pages`-page PDF whose page `on` opens with a JavaScript action. Bare
+  `pdfinfo` reads **page 1 only**, so it answers `JavaScript: no` for every one
+  of these while answering `yes` for the identical script on page 1 — which is
+  why the gate passes it a page range, and why a one-page fixture calibrates
+  nothing (issue #2136).
+  """
+  def page_javascript_pdf(dir, pages, on) do
+    write(dir, "js-page-#{on}-of-#{pages}.pdf", multi_page(pages, on))
+  end
+
+  @doc """
+  A PDF whose last byte is a lone `<`, with a name in the raw bytes so the
+  blanking pass runs at all. A pass that resumed at `at + reach` rather than
+  past the `<` had nothing to reach into and looped for ever on this.
+  """
+  def dangling_bracket_pdf(dir),
+    do: write(dir, "dangling.pdf", pdf(:plain, [{6, "<< /Note (/Launch) >>"}]) <> "\n<")
 
   @doc """
   A PDF carrying another file on a `/FileAttachment` annotation rather than in
@@ -385,6 +414,7 @@ defmodule Vutuv.AttachmentFixtures do
   defp page_extra(kind)
        when kind in [
               :js_annotation,
+              :js_field_calculate,
               :file_attachment,
               :file_attachment_untyped,
               :web_skills_cv
@@ -397,18 +427,19 @@ defmodule Vutuv.AttachmentFixtures do
   # page it is, so a rendered preview can be told from its neighbours. Object
   # numbers: 1 catalog, 2 the page tree, 3 the shared font, then a page and a
   # content object per page.
-  defp multi_page(count) do
+  defp multi_page(count, script_on \\ nil) do
     pages = for index <- 0..(count - 1), do: {4 + index * 2, 5 + index * 2}
     kids = Enum.map_join(pages, " ", fn {page, _content} -> "#{page} 0 R" end)
 
     page_objects =
       Enum.flat_map(Enum.with_index(pages, 1), fn {{page, content}, number} ->
         text = "BT /F1 96 Tf 72 400 Td (#{number}) Tj ET"
+        opens = if number == script_on, do: "/AA << /O #{@js_action} >> ", else: ""
 
         [
           {page,
            "<< /Type /Page /Parent 2 0 R /MediaBox [0 0 612 792] /Contents #{content} 0 R " <>
-             "/Resources << /Font << /F1 3 0 R >> >> >>"},
+             opens <> "/Resources << /Font << /F1 3 0 R >> >> >>"},
           {content, "<< /Length #{byte_size(text)} >>\nstream\n#{text}\nendstream"}
         ]
       end)
@@ -468,6 +499,29 @@ defmodule Vutuv.AttachmentFixtures do
   defp catalog(:js_annotation) do
     {"<< /Type /Catalog /Pages 2 0 R >>",
      [{6, "<< /Type /Annot /Subtype /Link /Rect [0 0 10 10] /A #{@js_action} >>"}]}
+  end
+
+  # A destination that satisfies `destination?/1`, with the script chained
+  # behind it. `pdfinfo` answers `JavaScript: no` for both of these, page range
+  # or not (measured 2026-09-11).
+  defp catalog(:js_next_dict) do
+    {"<< /Type /Catalog /Pages 2 0 R " <>
+       "/OpenAction << /S /GoTo /D [3 0 R /Fit] /Next #{@js_action} >> >>", []}
+  end
+
+  defp catalog(:js_next_array) do
+    {"<< /Type /Catalog /Pages 2 0 R " <>
+       "/OpenAction << /S /GoTo /D [3 0 R /Fit] /Next [#{@js_action}] >> >>", []}
+  end
+
+  # A form field that recalculates itself with a script.
+  defp catalog(:js_field_calculate) do
+    {"<< /Type /Catalog /Pages 2 0 R /AcroForm << /Fields [6 0 R] >> >>",
+     [
+       {6,
+        "<< /Type /Annot /Subtype /Widget /FT /Tx /T (total) /Rect [0 0 10 10] " <>
+          "/AA << /C #{@js_action} >> >>"}
+     ]}
   end
 
   defp catalog(:associated_file) do

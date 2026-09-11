@@ -194,20 +194,64 @@ defmodule Vutuv.AttachmentsTest do
       assert {:error, :embedded_files} = upload(user, Fixtures.embedded_file_pdf(files))
     end
 
-    # Since #2136 the byte scan does not look for `/JavaScript` at all, because
-    # a scan that reads a page's words cannot tell a name from a sentence. Each
-    # of these four rests on `pdfinfo`'s answer alone, so this is where that
-    # rests. Calibration: take the `JavaScript:` line out of `PdfGate.check/1`
-    # and all four go red — three with `{:ok, _}`, `:open_action` with its own
-    # reason.
+    # Seven places a script can hang, two of which `pdfinfo` does not report at
+    # all — a `/Next` chain behind a destination, as a dictionary or as an array
+    # — and one it reports only on some builds. What answers for those is
+    # `/JavaScript` in `@name_regexes`, which is why it is there beside poppler
+    # rather than instead of it (#2136). Calibration: take `"JavaScript"` back
+    # out of `@name_regexes` and the two `/Next` lines go red with `{:ok, _}`.
+    #
+    # Note which way that calibration does *not* run: disabling poppler's
+    # `JavaScript:` answer leaves all seven green, because every one of these
+    # fixtures also carries the name in bytes this can read. What poppler alone
+    # answers is the object-stream variant below, and only where qpdf can build
+    # the fixture.
     test "JavaScript is refused wherever the action hangs", %{user: user, files: files} do
+      wheres = [
+        :open_action,
+        :catalog_aa,
+        :page_aa,
+        :annotation,
+        :next_dict,
+        :next_array,
+        :field_calculate
+      ]
+
       got =
-        for where <- [:open_action, :catalog_aa, :page_aa, :annotation] do
+        for where <- wheres do
           {where, upload(user, Fixtures.action_javascript_pdf(files, where))}
         end
 
       assert Enum.all?(got, &match?({_where, {:error, :javascript}}, &1)),
              "the gate answered: #{inspect(got)}"
+    end
+
+    # Bare `pdfinfo` reads page 1 and stops, so a one-page fixture proves
+    # nothing about a two-page CV. Calibration: drop `-f 1 -l 999999` from
+    # `pdfinfo/1` and all three go red — with `{:ok, _}` if `"JavaScript"` is
+    # also out of `@name_regexes`, which is the pair of changes that let five
+    # such files through on 2026-09-11.
+    test "a script on a page nobody looks at is still a script", %{user: user, files: files} do
+      got =
+        for {pages, on} <- [{3, 2}, {3, 3}, {20, 20}] do
+          {{pages, on}, upload(user, Fixtures.page_javascript_pdf(files, pages, on))}
+        end
+
+      assert Enum.all?(got, &match?({_where, {:error, :javascript}}, &1)),
+             "the gate answered: #{inspect(got)}"
+    end
+
+    # `pdfinfo` exiting 0 with nothing to say is not a clean bill: a
+    # positive-match test reads that silence as "no JavaScript here". `true(1)`
+    # is the cheapest poppler that lies. Calibration: accept any exit-0 output
+    # in `pdfinfo/1` and this goes red with `{:ok, _}` — the gate storing a file
+    # it never checked.
+    test "a poppler that answers nothing has not answered", %{user: user, files: files} do
+      Fixtures.put_config(pdfinfo: "/usr/bin/true")
+      Attachments.forget_capability()
+      on_exit(&Attachments.forget_capability/0)
+
+      assert {:error, :unreadable} = upload(user, Fixtures.plain_pdf(files))
     end
 
     # `/EmbeddedFile` is the other half of that decision and went the other way:
@@ -269,19 +313,35 @@ defmodule Vutuv.AttachmentsTest do
     # **90 million** and **321 million**, quadrupling with every doubling: 2.8
     # seconds of a LiveView's own process for a 60 KB file, and days for one at
     # the 20 MB cap.
-    test "a file cannot make the blanking pass quadratic", %{user: user, files: files} do
-      {small, _answer} =
-        WorkCounter.count_reductions(fn ->
-          upload(user, Fixtures.comment_flood_pdf(files, 30_000))
-        end)
+    # A lone `<` at the end of the file leaves the hex-string branch nothing to
+    # reach into, so a resume computed from that reach lands back on the same
+    # byte. Calibration: resume at `at + reach` again and this goes red with
+    # `{:error, :unreadable}` — a 639-byte document the pass reads until its
+    # whole allowance is gone, and before that allowance existed, for ever.
+    test "a file that ends in a bracket still finishes", %{user: user, files: files} do
+      assert {:ok, _attachment} = upload(user, Fixtures.dangling_bracket_pdf(files))
+    end
 
-      {large, _answer} =
+    # A comment that runs to the end of the buffer and holds a `<<` is the
+    # candidate this pass is most easily made to re-read, and a file only has to
+    # name `/Launch` once — in a string, harmlessly — to arm the pass at all.
+    # Blanking up to the dictionary and resuming there reads it once.
+    #
+    # Reductions rather than a clock, because the suite runs twenty cases at
+    # once (see `Vutuv.WorkCounter`). Calibrated both ways on 2026-09-11: as it
+    # stands 60 KB costs 77,683 reductions and the file is accepted, which is
+    # the right answer for it. Make `blank_upto_dictionary/6` in
+    # `Vutuv.Uploads.PdfGate` reject the range and resume at `at + 1` instead
+    # and the same file costs **321 million** and 2.8 seconds of a LiveView's
+    # own process, quadrupling with every doubling.
+    test "a file cannot make the blanking pass quadratic", %{user: user, files: files} do
+      {work, answer} =
         WorkCounter.count_reductions(fn ->
           upload(user, Fixtures.comment_flood_pdf(files, 60_000))
         end)
 
-      assert large < 5_000_000,
-             "60 KB of comments cost #{large} reductions, 30 KB cost #{small}"
+      assert match?({:ok, _attachment}, answer), "the gate answered: #{inspect(answer)}"
+      assert work < 20_000_000, "60 KB of comments cost #{work} reductions"
     end
 
     # The `/OpenAction` rule reads what follows the name and lets a destination
