@@ -81,6 +81,10 @@ defmodule VutuvWeb.AgentDocs.PressKitDoc do
   the press page.
   """
   def entry(%Image{} = image) do
+    # Once per picture: the address and the length are one answer, and for a
+    # file the strippers refuse, asking twice means stripping it twice.
+    download = PressKit.download_offer(image)
+
     %{
       id: image.id,
       # A picture whose owner typed no label still has to be called something,
@@ -95,10 +99,14 @@ defmodule VutuvWeb.AgentDocs.PressKitDoc do
       credit: image.credit,
       content_type: image.content_type,
       # The bytes the download really hands over, not the upload's length: a
-      # photo is stripped of its metadata on the way out (issue #2140).
-      size_bytes: PressKit.download_bytes(image),
+      # photo is stripped of its metadata on the way out (issue #2140) — and
+      # `nil` where nothing can be handed over at all, which is what drops the
+      # address beside it (issue #2182). An agent reading this document goes and
+      # fetches every URL in it, so naming one that answers 404 is worse here
+      # than on the page, where at least a person can shrug.
+      size_bytes: download && download.bytes,
       preview_url: AgentDocs.abs_url(PressKit.url(image, "large")),
-      download_url: AgentDocs.abs_url(PressKit.download_url(image)),
+      download_url: download && AgentDocs.abs_url(download.url),
       # Only a vector logo has one; a photo's download is already the file
       # itself, and an absent fact is no key at all rather than null.
       png_download_url: png_url(image)
@@ -118,7 +126,9 @@ defmodule VutuvWeb.AgentDocs.PressKitDoc do
   end
 
   # The same question `pixel_size/1` asks, so the two keys travel together: an
-  # entry carries `png_width`/`png_height` exactly when it carries the PNG.
+  # entry carries `png_width`/`png_height` exactly when it carries the PNG. The
+  # PNG is not gated on the cleaner the way the vector above is — it is a
+  # rasterisation of the same upload, so no verdict on the markup reaches it.
   defp png_url(%Image{} = image),
     do: if(PressKit.vector?(image), do: AgentDocs.abs_url(PressKit.png_download_url(image)))
 end

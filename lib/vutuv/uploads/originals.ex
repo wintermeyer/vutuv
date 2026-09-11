@@ -93,9 +93,9 @@ defmodule Vutuv.Uploads.Originals do
   end
 
   @doc """
-  The **cleaned copy** of a kept original, as `{path, ext}`: the same picture
-  with every metadata block removed, derived once on first request and cached
-  beside the original as `cleaned<ext>`.
+  The **cleaned copy** of a kept original, as `{:ok, {path, ext}}`: the same
+  picture with every metadata block removed, derived once on first request and
+  cached beside the original as `cleaned<ext>`.
 
   Two strippers answer for it — `Vutuv.Uploads.MetadataStrip` for a container,
   `Vutuv.Uploads.SvgStrip` for a vector (issue #2145) — and the **bytes** pick
@@ -105,10 +105,14 @@ defmodule Vutuv.Uploads.Originals do
   here too.
 
   **It fails closed.** A file neither stripper can take apart with certainty
-  yields `nil` rather than the untouched original, because the whole point of
-  offering a cleaned copy is the promise that the file carries nothing but the
-  picture, and falling back to the upload would break exactly that promise while
-  looking like it worked.
+  yields `{:error, reason}` rather than the untouched original, because the whole
+  point of offering a cleaned copy is the promise that the file carries nothing
+  but the picture, and falling back to the upload would break exactly that
+  promise while looking like it worked. The `reason` is the stripper's own word
+  (issue #2182), carried out rather than derived a second time: three of
+  `SvgStrip`'s are sentences a member can act on, and a refusal that had to be
+  re-measured to be explained would be a second strip of a file we have just
+  established cannot be stripped.
 
   Written here rather than in each store because both places that hand a
   full-resolution file over make the same promise — the post photo's
@@ -121,7 +125,7 @@ defmodule Vutuv.Uploads.Originals do
 
     cond do
       File.exists?(dest) ->
-        {dest, ext}
+        {:ok, {dest, ext}}
 
       # A fast path only: neither stripper is asked what the name says, but
       # reading a 30 MB press photo to find out nothing can clean it is what
@@ -130,16 +134,30 @@ defmodule Vutuv.Uploads.Originals do
         write_cleaned(original, dest, ext)
 
       true ->
-        nil
+        {:error, :unclean}
+    end
+  end
+
+  @doc """
+  `cleaned_copy/3` for a caller that only wants the file: `{path, ext}` or `nil`.
+  Every read path takes this one — a download offers the file or offers nothing,
+  and the reason is the upload's business.
+  """
+  def cleaned_file(storage_dir, original, ext) do
+    case cleaned_copy(storage_dir, original, ext) do
+      {:ok, file} -> file
+      {:error, _reason} -> nil
     end
   end
 
   defp write_cleaned(original, dest, ext) do
     with {:ok, bytes} <- File.read(original),
          {:ok, cleaned} <- strip(bytes) do
-      {publish(dest, cleaned), ext}
+      {:ok, {publish(dest, cleaned), ext}}
     else
-      _unclean -> nil
+      {:error, reason} -> {:error, reason}
+      # `File.read/1`'s own posix atom, which is ours rather than the member's.
+      _unreadable -> {:error, :unclean}
     end
   end
 
@@ -148,7 +166,7 @@ defmodule Vutuv.Uploads.Originals do
       SvgStrip.clean(bytes)
     else
       case MetadataStrip.strip_binary(bytes) do
-        :unsupported -> :error
+        :unsupported -> {:error, :unclean}
         cleaned -> {:ok, cleaned}
       end
     end

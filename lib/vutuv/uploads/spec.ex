@@ -401,8 +401,14 @@ defmodule Vutuv.Uploads.Spec do
   # readable text, must carry none of `@svg_forbidden`, and may not point a
   # reference at the network or the disk.
   #
-  # That download is also why the vetting matters twice over: the markup a
-  # journalist saves is the markup this predicate cleared, unchanged.
+  # An **`on…` event handler** is deliberately not on that list, and issue #2181
+  # is why it is worth saying so. A handler is harmless to this parser and
+  # dangerous to the person who saves the file, which makes it a question about
+  # the file that leaves rather than about the renderer that runs here — so it
+  # is `Vutuv.Uploads.SvgStrip` that refuses it, on the parsed attribute name,
+  # where a regex over a whole document would read the same letters in a
+  # `<desc>` as a script. That module runs at the upload and again at every
+  # download, so a file stored before it existed stops being handed out too.
   #
   # Deliberately narrower than "contains no URL". Every SVG an editor exports
   # names URLs that are never fetched — the `xmlns` namespaces, and the RDF /

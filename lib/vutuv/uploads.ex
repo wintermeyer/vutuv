@@ -941,6 +941,15 @@ defmodule Vutuv.Uploads do
   extension — to write the derived versions and the original. `{:ok, meta}`
   comes back with the upload's `content_type` merged in; `{:error, _}`
   removes the fresh `dir` again and collapses to `{:error, :invalid_file}`.
+
+  A write function that has a reason **the member can act on** says so as
+  `{:error, {:refused, reason}}`, and that reason is the one thing that survives
+  the collapse (issue #2182). The wrapper is the whole point: every other
+  refusal here is ours rather than theirs — a decoder that gave up, a pixel
+  budget, a rotation — and a surface handing those out by name would be reading
+  the member our implementation notes. So a new named refusal is a deliberate
+  act at the place that raises it, never a reason that leaks out because nothing
+  caught it.
   """
   def store_upload(filename, whitelist, dir, write_fun) do
     if valid_extension?(filename, whitelist) do
@@ -950,6 +959,10 @@ defmodule Vutuv.Uploads do
       case write_fun.(ext) do
         {:ok, meta} ->
           {:ok, Map.merge(meta, %{content_type: MIME.from_path(filename)})}
+
+        {:error, {:refused, reason}} ->
+          File.rm_rf(dir)
+          {:error, reason}
 
         {:error, _reason} ->
           File.rm_rf(dir)

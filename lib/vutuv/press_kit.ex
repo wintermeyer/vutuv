@@ -699,6 +699,29 @@ defmodule Vutuv.PressKit do
   """
   def download_bytes(%Image{} = image), do: byte_size_of(PressKitStore.download_file(image))
 
+  @doc """
+  The download this picture can really hand over — `%{url: …, bytes: …}` — or
+  `nil` when there is nothing to hand over (issue #2182).
+
+  **One owner for the pair**, because the address and the size answer the same
+  question and four surfaces were asking them apart: the section page, the
+  schema.org block, the agent documents and the personal-data export each named
+  an address while the size beside it quietly went missing, so a journalist
+  pressed Download and got a 404. Ask this once per picture and carry the
+  answer.
+
+  Carrying it is not politeness. Measuring is two syscalls for a picture whose
+  cleaned copy is cached, and for one the strippers **refuse** it is the whole
+  derivation again — a document rewrite plus the two rasterisations that prove
+  it — cached nowhere, on a page a crawler can reach fifteen pictures at a time.
+  """
+  def download_offer(%Image{} = image) do
+    case download_bytes(image) do
+      nil -> nil
+      bytes -> %{url: download_url(image), bytes: bytes}
+    end
+  end
+
   defp byte_size_of({path, _ext}) do
     case File.stat(path) do
       {:ok, %File.Stat{size: size}} -> size
@@ -835,6 +858,11 @@ defmodule Vutuv.PressKit do
   `{:error, :too_large}`, `{:error, :too_many}` or `{:error, :invalid_file}`
   for the three the form cannot see. The authorization is asked **first**, so a
   refused upload never so much as measures the file.
+
+  Three refusals arrive by their own name instead of `:invalid_file`, because a
+  member can do something about each (issue #2182, and #2181 for the first):
+  `:svg_event_handler`, `:svg_embedded_file` and `:svg_unreadable_data` — see
+  `Vutuv.Uploads.SvgStrip`, which is where a vector logo is judged.
 
   `opts` takes `:position`, **the slot this picture was picked for** — which is
   not the same as the end of the shelf whenever several files are in flight at

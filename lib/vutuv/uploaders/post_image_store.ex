@@ -377,7 +377,7 @@ defmodule Vutuv.PostImageStore do
   defp download_file(%PostImage{download_exact: true}, original, ext), do: {original, ext}
 
   defp download_file(%PostImage{token: token}, original, ext),
-    do: Originals.cleaned_copy(storage_dir(token), original, ext)
+    do: Originals.cleaned_file(storage_dir(token), original, ext)
 
   # The full-resolution cropped download, derived once and cached in the
   # private originals tree (like the cleaned copy). JPEG on purpose: it is a
