@@ -128,6 +128,9 @@ defmodule Vutuv.Uploads.SvgStrip do
       # different pixels; neither is anything the member can do something
       # about, so both take the structural word.
       false -> {:error, :unclean}
+      # A delimiter the document never closed, which `split_on/2` reports as a
+      # bare atom for a reason worth reading there.
+      :unterminated -> {:error, :unclean}
       {:error, _reason} = refusal -> refusal
     end
   end
@@ -518,10 +521,16 @@ defmodule Vutuv.Uploads.SvgStrip do
 
   ## Byte helpers
 
+  # The failure is an atom and must stay one: every caller reads the answer as
+  # `with {before, rest} <- split_on(…)`, and a two-element refusal tuple
+  # satisfies that pattern — the scan would then carry the refusal's own atom on
+  # as if it were the rest of the document and raise `ArgumentError` deep in a
+  # byte helper instead of refusing the file. `clean/1` turns it into a refusal
+  # where every other one is made.
   defp split_on(binary, delimiter) do
     case :binary.split(binary, delimiter) do
       [before, rest] -> {before, rest}
-      [_only] -> {:error, :unclean}
+      [_only] -> :unterminated
     end
   end
 

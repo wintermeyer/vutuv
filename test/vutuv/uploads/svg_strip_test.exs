@@ -195,6 +195,26 @@ defmodule Vutuv.Uploads.SvgStripTest do
       assert SvgStrip.clean(~s(<svg xmlns="http://www.w3.org/2000/svg" width=4></svg>)) ==
                {:error, :unclean}
     end
+
+    # A delimiter the document never closes is where the refusal has to stay an
+    # answer rather than become a crash: the scan reads `split_on/2` as
+    # `with {before, rest} <- …`, so a two-element failure tuple would match
+    # that pattern and travel on as if it were the rest of the document.
+    # `download.orig` re-cleans a *stored* file on every request, so what a
+    # mis-shaped refusal costs there is a 500 where a 404 belongs.
+    test "a delimiter the document never closes is a refusal, not a crash" do
+      head = ~s(<svg xmlns="http://www.w3.org/2000/svg" width="4" height="4">)
+
+      for {what, markup} <- [
+            {"comment", head <> "<!-- never closed <rect/></svg>"},
+            {"CDATA", head <> "<style><![CDATA[rect{fill:#000}</style></svg>"},
+            {"attribute value", ~s(<svg xmlns="http://www.w3.org/2000/svg" fill="red></svg>)},
+            {"processing instruction", ~s(<?xml version="1.0"<svg/>)},
+            {"dropped subtree", head <> "<metadata><!-- never closed </metadata></svg>"}
+          ] do
+        assert SvgStrip.clean(markup) == {:error, :unclean}, "an unclosed #{what} did not refuse"
+      end
+    end
   end
 
   describe "a script handler (issue #2181)" do
