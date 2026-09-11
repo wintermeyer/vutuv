@@ -968,7 +968,8 @@ if config_env() == :prod do
                attachment_defaults[:render_concurrency],
            pdfinfo: System.get_env("PDFINFO_PATH") || attachment_defaults[:pdfinfo],
            pdfdetach: System.get_env("PDFDETACH_PATH") || attachment_defaults[:pdfdetach],
-           pdftoppm: System.get_env("PDFTOPPM_PATH") || attachment_defaults[:pdftoppm]
+           pdftoppm: System.get_env("PDFTOPPM_PATH") || attachment_defaults[:pdftoppm],
+           qpdf: System.get_env("QPDF_PATH") || attachment_defaults[:qpdf]
          )
 
   # Post images are auth-proxied: the app checks the post's audience, then

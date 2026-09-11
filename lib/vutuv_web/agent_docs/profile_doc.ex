@@ -378,11 +378,19 @@ defmodule VutuvWeb.AgentDocs.ProfileDoc do
     }
   end
 
+  # `PostTeaser.machine_line/1` and not `PostTeaser.line/1` (issue #2107): a
+  # profile document is one of the machine surfaces that carries a single
+  # all-yes `Content-Signal` for a whole list and cannot signal per row. The
+  # timeline's own withheld posts are already gone by the time they get here —
+  # `Posts.profile_posts/2` scopes them out for anybody but their author — but
+  # the **pinned** post is fetched by id and reaches this line whatever it
+  # says, so the one sentence the archive and the tag page use is what a
+  # showcased post that refused machines gives instead of its first line.
   defp post_entry(entry) do
     %{
       url: AgentDocs.abs_url(Vutuv.Posts.path(entry.post)),
       published_on: entry.post.published_on,
-      excerpt: PostTeaser.line(entry.post),
+      excerpt: PostTeaser.machine_line(entry.post),
       reposted_by: entry.reposted_by && UserHelpers.full_name(entry.reposted_by),
       pinned: false
     }

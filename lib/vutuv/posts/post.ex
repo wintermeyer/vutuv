@@ -50,6 +50,28 @@ defmodule Vutuv.Posts.Post do
     # publishing, and a per-photo licence picker would be a forest of selects
     # for a case nobody has.
     field(:license, :string, default: "arr")
+
+    # The author's answer to "may search engines and AI see this post?"
+    # (issue #2107), true meaning **no**. One switch for both machine
+    # audiences, where a member has two (`noindex?` / `noai?`): a post is one
+    # act of publishing, and asking twice per post would be a forest of
+    # checkboxes for a distinction nobody draws about a single post.
+    #
+    # It covers everything the post is — the words, the pictures, the files
+    # and the `.md`/`.json`/`.xml` siblings — and it is the one flag with a
+    # consequence the author would not guess: a post that says no is not
+    # handed to the Fediverse at all, because a remote server keeps its copy
+    # for ever and no `X-Robots-Tag` reaches it. `Vutuv.Posts.machines_allowed?/1`
+    # is where that is read; the composer says it in words before publishing.
+    field(:noindex_noai?, :boolean, default: false)
+
+    # Whether the files posted together should have their metadata removed —
+    # the author name, the software and the dates a PDF carries (issue #2107).
+    # On the post rather than the file, as the licence is: a set of files
+    # posted together is one act of publishing. This is the *answer*; what
+    # actually happened to a given file is `attachments.metadata_stripped_at`.
+    field(:strip_metadata?, :boolean, default: true)
+
     # The archive coordinate (/:slug/posts/2026/06/06): the UTC date at
     # insert time, set programmatically, never cast from params. The
     # permalink itself is the post id (a UUID v7).
@@ -140,7 +162,17 @@ defmodule Vutuv.Posts.Post do
     post
     # empty_values: [] so clearing the body on edit is a real change ("" must
     # not be swallowed as "no change") — a photo-only post has an empty body.
-    |> cast(params, [:body, :license, :gallery_layout, :gallery_fill?, :language],
+    |> cast(
+      params,
+      [
+        :body,
+        :license,
+        :gallery_layout,
+        :gallery_fill?,
+        :language,
+        :noindex_noai?,
+        :strip_metadata?
+      ],
       empty_values: []
     )
     |> update_change(:body, &String.trim/1)

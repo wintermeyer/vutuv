@@ -10,10 +10,11 @@ defmodule Vutuv.AttachmentStore do
       <uploads_dir_prefix>/attachments/<token>/file.<ext>            the served copy
       <uploads_dir_prefix>/originals/attachments/<token>/original.<ext>   the upload, verbatim
 
-  They are byte-identical today. They are still two files, because the served
-  copy is the one #2107 rewrites when an author asks for the metadata to be
-  removed, and the promise the private tree makes — that what the member sent
-  is kept exactly as they sent it — has to survive that.
+  The served copy is the one `Vutuv.Attachments.Metadata` rewrites when a PDF
+  has its author, its software and its dates taken out (#2107) — a derivation
+  of the original, so the answer can be changed either way afterwards. The
+  private tree keeps its promise through all of it: what the member sent is
+  what is stored there, byte for byte.
 
   The served copy is written beside its target and renamed, so a process
   killed mid-copy leaves no half file a proxy could hand out.
@@ -63,11 +64,54 @@ defmodule Vutuv.AttachmentStore do
   end
 
   defp write_served(token, path, ext) do
+    write_at(Path.join(dir(token), @served_name <> ext), path)
+  end
+
+  @doc """
+  Replaces the served copy with the bytes at `path`, keeping its extension —
+  what the metadata strip and its undo write through (issue #2107). Beside and
+  renamed like the first write, so a proxy never hands out half a file. `:ok`
+  even when there is no served copy to replace: the file is gone, and a caller
+  deriving a copy of nothing has nothing to do.
+  """
+  def replace_served(token, path) when is_binary(path) do
+    case served_path(token) do
+      nil -> :ok
+      dest -> write_at(dest, path)
+    end
+  end
+
+  @doc """
+  A scratch path **inside** the served copy's own directory, for a tool that
+  writes a whole new file (`Vutuv.Attachments.Metadata`'s qpdf run). Beside the
+  target on purpose: `commit_scratch/2` can then rename rather than copy, which
+  costs nothing where a copy costs the whole file twice over, and a rename is
+  only atomic within one filesystem. The name cannot collide with the served
+  copy's own `file.<ext>`, so `served_path/1` never picks one up.
+  """
+  def scratch_path(token) do
     dir = dir(token)
     File.mkdir_p!(dir)
-    dest = Path.join(dir, @served_name <> ext)
+    Path.join(dir, "scratch.#{System.unique_integer([:positive])}")
+  end
+
+  @doc """
+  Makes `scratch` the served copy, or drops it when there is nothing to replace
+  (the file was deleted while the tool ran). `:ok` either way.
+  """
+  def commit_scratch(token, scratch) do
+    case served_path(token) do
+      nil -> File.rm(scratch)
+      dest -> File.rename!(scratch, dest)
+    end
+
+    :ok
+  end
+
+  defp write_at(dest, source) do
+    File.mkdir_p!(Path.dirname(dest))
     temp = "#{dest}.#{System.unique_integer([:positive])}"
-    File.cp!(path, temp)
+    File.cp!(source, temp)
     File.rename!(temp, dest)
   end
 

@@ -70,6 +70,34 @@ defmodule VutuvWeb.ContentPolicy do
     end
   end
 
+  @doc """
+  The header **and** the matching `<meta name="robots">`, from one derivation.
+
+  `VutuvWeb.LayoutHTML.robots_directives/1` falls back to the member the page is
+  about, which is an answer a page whose own axes are narrower than its member's
+  does not have — an organization post, or a member post that is withheld or
+  followers-only. Stamping only the header then leaves the tag saying something
+  else, which is the drift `VutuvWeb.AgentDocs.PostDoc` records happening once
+  already.
+
+  The assign is **skipped on `nil`** rather than written as `nil`: an assigned
+  `nil` matches the layout's first clause and would suppress the member fallback
+  for every page that has nothing of its own to declare.
+
+  Deliberately additive. The layout's docstring argues this belongs inside
+  `put_robots_header/3` for all thirteen of its call sites, which would start
+  rendering a tag on pages that have never had one (`/:slug/links`,
+  `/:slug/cv`); that is a change to those pages, not to this one.
+  """
+  def put_robots(conn, noindex?, noai?) do
+    conn = put_robots_header(conn, noindex?, noai?)
+
+    case robots_directives(noindex?, noai?) do
+      nil -> conn
+      directives -> Plug.Conn.assign(conn, :robots_directives, directives)
+    end
+  end
+
   @doc false
   def render_signals(train?, search?, input?) do
     "ai-train=#{yn(train?)}, search=#{yn(search?)}, ai-input=#{yn(input?)}"

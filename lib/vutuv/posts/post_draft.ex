@@ -64,6 +64,12 @@ defmodule Vutuv.Posts.PostDraft do
     # Whether the bento tiles are filled (cropped) rather than showing whole
     # photos — the composer's fit pair, default whole.
     field(:fill?, :boolean, default: false)
+    # The composer's metadata switch (issue #2107), nullable rather than
+    # defaulted: `nil` means this draft predates it (or was written before the
+    # switch was touched), and the composer then falls back to its own default
+    # rather than to a stored `false` that nobody chose. The machines question
+    # has no column here — it is not asked in the composer.
+    field(:strip_metadata?, :boolean)
 
     timestamps()
   end
@@ -89,7 +95,8 @@ defmodule Vutuv.Posts.PostDraft do
       :video_id,
       :photos,
       :layout,
-      :fill?
+      :fill?,
+      :strip_metadata?
     ])
     |> validate_length(:body, max: Post.max_body_length())
     |> validate_length(:tags, max: @max_tags_length)

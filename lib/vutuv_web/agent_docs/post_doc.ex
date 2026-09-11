@@ -54,6 +54,19 @@ defmodule VutuvWeb.AgentDocs.PostDoc do
     do: {restricted? or author.noindex?, restricted? or author.noai?}
 
   @doc """
+  The same for one post, which has an answer of its own (issue #2107). It only
+  ever adds: the post's switch closes **both** axes at once — it is one
+  question about machines, where a member has two — and nothing about a post
+  can re-open what its author closed.
+  """
+  def robots_axes(author, %Post{} = post, restricted?) do
+    {noindex?, noai?} = robots_axes(author, restricted?)
+    blocked? = not Posts.machines_allowed?(post)
+
+    {noindex? or blocked?, noai? or blocked?}
+  end
+
+  @doc """
   The permalink page: the post itself plus its visible replies. Anonymous
   by default; `viewer:` switches the reply list (and its count) to what
   that user sees — the authenticated `/api/2.0` reads. Never pass a viewer
@@ -63,7 +76,7 @@ defmodule VutuvWeb.AgentDocs.PostDoc do
     viewer = Keyword.get(opts, :viewer)
     replies = Posts.list_replies(post, viewer)
     %{posts: thread, truncated?: thread_truncated?} = Posts.list_thread(post, viewer)
-    {noindex?, noai?} = robots_axes(author, Posts.restricted?(post))
+    {noindex?, noai?} = robots_axes(author, post, Posts.restricted?(post))
     engagement = Posts.engagement_counts(post.id)
     counts = Posts.shown_counts(engagement)
 
@@ -186,9 +199,17 @@ defmodule VutuvWeb.AgentDocs.PostDoc do
     %{posts: thread, truncated?: thread_truncated?} = Posts.list_thread(post, nil)
     remote_replies = [post.id] |> Fediverse.list_notes(nil) |> remote_entries(post.id)
 
+    # The page's two switches **and the post's own** (issue #2107). A page post
+    # carries the same answer a member's does — the composer offers the switch
+    # whoever is being published for — and without this half the document
+    # declared `ai-train=yes` over the whole body of a post that had refused
+    # exactly that. `or` and not a replacement: a page that opted out is not
+    # re-opened by a post that did not.
+    blocked? = not Posts.machines_allowed?(post)
+
     AgentDocs.doc_meta("organization_post", Posts.path(post),
-      noindex: not organization.seo?,
-      noai: not organization.geo?
+      noindex: not organization.seo? or blocked?,
+      noai: not organization.geo? or blocked?
     )
     |> Map.merge(%{
       id: post.id,
@@ -335,7 +356,7 @@ defmodule VutuvWeb.AgentDocs.PostDoc do
       # internal, exactly as on the HTML card. Reposters can be pages too.
       author: UserHelpers.author_name(post),
       published_on: post.published_on,
-      excerpt: PostTeaser.line(post),
+      excerpt: PostTeaser.machine_line(post),
       # Same reason as the remote clause above (issue #1163), pointed the other
       # way: a vutuv post can be a photograph and nothing else, its body is then
       # genuinely empty and `PostTeaser.line/1` answers "" — so the HTML archive
@@ -403,7 +424,7 @@ defmodule VutuvWeb.AgentDocs.PostDoc do
         url: AgentDocs.abs_url(Posts.path(post)),
         author: UserHelpers.author_name(post),
         published_on: post.published_on,
-        excerpt: PostTeaser.line(post)
+        excerpt: PostTeaser.machine_line(post)
       }
     end)
   end
@@ -495,7 +516,7 @@ defmodule VutuvWeb.AgentDocs.PostDoc do
         # it either way.
         author_username: author_username(Posts.author(post)),
         published_on: post.published_on,
-        body_markdown: post.body,
+        body_markdown: PostTeaser.machine_body(post),
         depth: depths[post.id],
         in_reply_to_id: parent_id,
         in_reply_to_author: parent_id && authors[parent_id]
@@ -562,7 +583,7 @@ defmodule VutuvWeb.AgentDocs.PostDoc do
       author: UserHelpers.full_name(reply.user),
       author_username: reply.user.username,
       published_on: reply.published_on,
-      body_markdown: reply.body
+      body_markdown: PostTeaser.machine_body(reply)
     }
   end
 

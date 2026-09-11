@@ -5619,8 +5619,11 @@ defmodule VutuvWeb.UI do
       {gettext("Privacy"),
        [
          row(:privacy, gettext("Visibility"), ~p"/settings/privacy",
-           hint: gettext("Search engines, AI, online status"),
-           terms: gettext("privacy google search engine ai llm crawler noindex online dot public")
+           hint: gettext("Search engines and AI, your posts, online status"),
+           terms:
+             gettext(
+               "privacy google search engine ai llm crawler noindex online dot public posts beiträge indexieren fediverse mastodon suchmaschine"
+             )
          ),
          row(:blocks, gettext("Blocked members"), ~p"/blocks",
            hint: gettext("People who cannot interact with you"),

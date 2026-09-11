@@ -62,8 +62,11 @@ jobs:
       # pdftoppm renders the qualification proof-document PDFs
       # (Vutuv.QualificationDocument); without it the PDF test paths
       # capability-skip and lose their coverage.
-      - name: Install poppler-utils (PDF rendering) and ffmpeg (video on posts)
-        run: sudo apt-get update && sudo apt-get install -y --no-install-recommends poppler-utils ffmpeg
+      # qpdf joins them for issue #2107: it is what takes the author's name,
+      # the software and the dates out of a PDF, and several fixtures already
+      # built their hostile PDFs with it and skipped themselves without it.
+      - name: Install poppler-utils (PDF rendering), ffmpeg (video on posts) and qpdf (PDF metadata)
+        run: sudo apt-get update && sudo apt-get install -y --no-install-recommends poppler-utils ffmpeg qpdf
 
       - name: Set up Elixir/OTP
         uses: erlef/setup-beam@v1

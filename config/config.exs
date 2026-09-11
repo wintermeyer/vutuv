@@ -897,7 +897,12 @@ config :vutuv, :attachments,
   render_concurrency: 1,
   pdfinfo: "pdfinfo",
   pdfdetach: "pdfdetach",
-  pdftoppm: "pdftoppm"
+  pdftoppm: "pdftoppm",
+  # `qpdf` takes the author's name, the software and the dates out of a PDF
+  # (issue #2107). Optional like the rest: without it the composer hides that
+  # switch rather than offering an answer this installation cannot honour, and
+  # every file is served exactly as it was uploaded.
+  qpdf: "qpdf"
 
 # Job postings (Vutuv.Jobs, milestone 11).
 #   * default_runtime_days — how long a published posting stays live before it

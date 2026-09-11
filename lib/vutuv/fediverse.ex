@@ -991,6 +991,12 @@ defmodule Vutuv.Fediverse do
   def public_post_count(%User{id: user_id}) do
     from(p in Post, where: p.user_id == ^user_id)
     |> Posts.scope_visible(nil)
+    # …and the machines switch (issue #2107), by the same rule this function's
+    # docstring already records: the count and the notes it counts have to
+    # answer one question by mechanism, not by two spellings that happen to
+    # agree. A post `/posts/:id` refuses to hand over must not be counted in
+    # the collection that advertises it.
+    |> Posts.scope_machines_allowed()
     |> Repo.aggregate(:count)
   end
 
@@ -1019,8 +1025,16 @@ defmodule Vutuv.Fediverse do
   """
   def featured_posts(%User{} = user) do
     case Posts.pinned_post(user, nil) do
-      %Post{} = post -> [Repo.preload(post, Docs.note_preloads())]
-      nil -> []
+      %Post{} = post ->
+        # A post kept off the Fediverse (issue #2107) is absent from the
+        # collection too — otherwise pinning it would hand its whole Note to
+        # anybody who reads the profile's `featured` URL.
+        if Posts.machines_allowed?(post),
+          do: [Repo.preload(post, Docs.note_preloads())],
+          else: []
+
+      nil ->
+        []
     end
   end
 
@@ -10463,8 +10477,12 @@ defmodule Vutuv.Fediverse do
   without an account here. A tag actor boosting a note is exactly an `Announce`,
   so it reuses the one the repost path already builds.
 
-  Three gates, and each is load-bearing:
+  Four gates, and each is load-bearing:
 
+  - **The post must allow machines** (`Posts.machines_allowed?/1`, issue
+    #2107). A post its author kept off the Fediverse must not leave through a
+    topic actor instead — the topics are a second audience, not a second
+    decision.
   - **The author must federate.** A tag actor announcing indiscriminately would
     carry out the posts of the very members who chose not to, which is why there
     is no per-tag opt-in and why this check cannot move.
@@ -10481,6 +10499,7 @@ defmodule Vutuv.Fediverse do
   """
   def announce_to_tag_followers(%Post{} = post) do
     with true <- enabled?(),
+         true <- Posts.machines_allowed?(post),
          false <- Posts.restricted?(post),
          author when not is_nil(author) <- Posts.author(post),
          true <- federated?(author) do
@@ -10532,7 +10551,13 @@ defmodule Vutuv.Fediverse do
   deletion is advisory by protocol).
   """
   def federate_post_update(%Post{} = post) do
-    if Posts.restricted?(post) do
+    # An author turning the machines switch on after the fact (issue #2107) is
+    # the same act as closing the audience, and takes the same path: what has
+    # already left has to be **called back**, not merely not sent again. The
+    # `:skip` this used to land on left the remote copies standing while the
+    # row said the author had refused them — the one thing the composer's
+    # warning says cannot be undone, silently not even attempted.
+    if Posts.restricted?(post) or not Posts.machines_allowed?(post) do
       revoke_post(post)
     else
       maybe_federate(post, &Docs.update_activity/2, "post_update")
@@ -10549,6 +10574,15 @@ defmodule Vutuv.Fediverse do
   # about an account. What a page needs instead is its own opt-in and its own
   # followers — and no `restricted?` check, because an organization post carries
   # no audience by construction.
+  # The author said no search engines and no AI (issue #2107), and that answer
+  # has to be a **gate** rather than a directive: an `X-Robots-Tag` is re-read
+  # by a crawler on every visit, while a federated copy is handed to a server
+  # that keeps it for ever and that no header of ours reaches. So the post does
+  # not go out at all — not the Create, not a later Update, not the unfreeze's
+  # republish. First clause on purpose: it must answer before either owner
+  # branch, member or page. The composer says this in words before publishing.
+  defp maybe_federate(%Post{noindex_noai?: true}, _builder, _kind), do: :skip
+
   defp maybe_federate(%Post{organization_id: id} = post, builder, kind) when is_binary(id) do
     with true <- enabled?(),
          %Organization{} = page <- Organizations.get_organization(id),
@@ -10955,6 +10989,9 @@ defmodule Vutuv.Fediverse do
 
   defp maybe_federate_repost(%Post{} = post, reposter, builder) do
     with true <- enabled?(),
+         # Somebody else resharing it is still this post leaving for other
+         # servers, and the author's answer decides that (issue #2107).
+         true <- Posts.machines_allowed?(post),
          true <- federated?(reposter),
          false <- resharer_moved?(reposter),
          false <- Posts.restricted?(post),
@@ -10993,7 +11030,8 @@ defmodule Vutuv.Fediverse do
     # it costs a query, and for the overwhelming majority (members who do not
     # federate at all) there is nothing to decide.
     pin_activity(user, fn user ->
-      if Posts.visible_to?(post, nil), do: Docs.add_featured_activity(post, user)
+      if Posts.machines_allowed?(post) and Posts.visible_to?(post, nil),
+        do: Docs.add_featured_activity(post, user)
     end)
   end
 
@@ -11323,10 +11361,13 @@ defmodule Vutuv.Fediverse do
   end
 
   # The gates are re-checked here rather than when the row was queued: the post
-  # may have been deleted or had its audience closed during the hold, and then
-  # this delivery must not go out at all.
+  # may have been deleted, had its audience closed, or had its machines switch
+  # turned on (issue #2107) during the hold, and then this delivery must not go
+  # out at all. Every gate that can change while a row waits belongs here, not
+  # only at the four places that queue one.
   defp rebuild_now(delivery, builder, post_id, user) do
     with %Post{} = post <- Posts.get_post(post_id),
+         true <- Posts.machines_allowed?(post),
          false <- Posts.restricted?(post) do
       post = Repo.preload(post, Docs.note_preloads())
       {:ok, %{delivery | activity_json: Jason.encode!(builder.(post, user))}}

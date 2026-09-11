@@ -76,6 +76,11 @@ defmodule VutuvWeb.GettextExtractionAnchors do
       gettext(
         "When off, other members no longer see you among the likes of a post. The author of the post still does: we named you in the notification they got when you liked it. Either way the post keeps the same number of likes."
       ),
+      # Vutuv.Prefs — whether machines may read this member's posts (issue #2107)
+      gettext("Search engines and AI may read my posts"),
+      gettext(
+        "Covers the words, the pictures, the files and the machine formats of every post you write from now on. When off, your new posts also stay out of other networks completely: a server elsewhere keeps its copy for good and no instruction of ours reaches it. Posts you have already published keep the answer they went out with."
+      ),
       gettext("Privacy"),
       # Vutuv.Prefs — the feed language preference (issue #1461)
       gettext("Posts in other languages"),

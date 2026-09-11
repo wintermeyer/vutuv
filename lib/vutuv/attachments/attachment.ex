@@ -73,6 +73,13 @@ defmodule Vutuv.Attachments.Attachment do
 
     field(:stage, :string, default: "stored")
 
+    # When this file's **served** copy was rewritten without its metadata
+    # (#2107). NULL means it is still the verbatim upload — no qpdf on this
+    # box, not a PDF, or the author asked for the metadata to stay. The private
+    # original is never touched either way, so this column is what tells the
+    # two states apart once the bytes are on disk.
+    field(:metadata_stripped_at, :utc_datetime)
+
     # When the AI check refused one of this file's preview pages. The verdict
     # deletes the page itself, so without this the file would look untouched
     # and the post waiting on it would wait for a page that is never coming
@@ -105,7 +112,15 @@ defmodule Vutuv.Attachments.Attachment do
   @doc "The insert the upload chokepoint writes; every value here is already checked."
   def changeset(attachment, params) do
     attachment
-    |> cast(params, [:token, :file_name, :content_type, :size_bytes, :page_count, :stage])
+    |> cast(params, [
+      :token,
+      :file_name,
+      :content_type,
+      :size_bytes,
+      :page_count,
+      :stage,
+      :metadata_stripped_at
+    ])
     |> validate_required([:token, :file_name, :content_type, :size_bytes])
     |> validate_length(:file_name, max: @name_max)
     |> validate_length(:content_type, max: @name_max)

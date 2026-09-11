@@ -151,13 +151,27 @@ confirmation flow are described in
 ### Member preferences with installation defaults (`Vutuv.Prefs`)
 
 The map and post-display settings are the first citizens of the generic
-**preferences system**; the third group is `:privacy`, which holds
+**preferences system**; the third group is `:privacy`, which holds two.
 `like_attribution?` — whether a post permalink names this member among the
 people who liked it (issue #1233, see the "Who liked it" section in
-[posts-and-feed.md](posts-and-feed.md)). It is the one pref whose home is not
-`/settings/preferences` but the visibility page (`/settings/privacy`, reset via
-POST `/settings/privacy/reset`), because it is a privacy posture rather than a
-display detail. The `:bandwidth` group holds one knob with a different shape
+[posts-and-feed.md](posts-and-feed.md)). And `posts_machines_allowed?` — whether
+search engines and AI may read the posts this member writes from now on (issue
+#2107): the answer is copied onto each post as it is published, so changing it
+leaves everything already written exactly as it went out, and saying no also
+keeps a new post off the other networks entirely, which the card's hint says in
+words because nothing else can tell the member. The detail is in
+[attachments.md](attachments.md). Neither pref's home is
+`/settings/preferences`: both live on the visibility page (`/settings/privacy`,
+reset via POST `/settings/privacy/reset`), because they are privacy postures
+rather than display details.
+
+Note the shape difference on that page. The two crawler switches above them,
+`noindex?` and `noai?`, are plain opt-**out** columns rendered positively with
+`checked_value: "false"`, while a `Vutuv.Prefs` boolean is stored the way it
+reads — which is why the posts setting is named positively and sits in a card of
+its own rather than as a third row in theirs.
+
+The `:bandwidth` group holds one knob with a different shape
 again: `low_bandwidth?` (data-saving mode) decides whether this member's
 browser is ever told where the 155 kB WYSIWYG editor bundle lives (see
 "Low-bandwidth mode" in [posts-and-feed.md](posts-and-feed.md)) and whether

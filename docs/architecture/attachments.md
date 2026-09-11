@@ -60,10 +60,11 @@ is that page 1 renders. Neither calls it yet.
 `Vutuv.AttachmentStore` keeps the upload verbatim in the private
 `originals/attachments/<token>/` tree and a served copy under
 `attachments/<token>/`, both keyed by the row's URL token, never its id.
-They are byte-identical today; they are still two files, because the served
-copy is what #2107 rewrites when an author asks for the metadata to be
-removed, and the private tree's promise — this is exactly what the member sent
-— has to survive that. Neither tree gets a `Plug.Static` mount: every served
+The served copy is a **derivation** of the original: it is what
+`Vutuv.Attachments.Metadata` rewrites when a PDF has its metadata taken out
+(#2107), while the private tree keeps its promise through all of it — that is
+exactly what the member sent, byte for byte. Neither tree gets a `Plug.Static`
+mount: every served
 byte will go through an authorizing proxy (#2108). Both are gitignored, and
 `test/vutuv/uploads_gitignore_test.exs` fails the build if that slips.
 
@@ -93,7 +94,7 @@ Everything is per installation, read in `config/runtime.exs` with the
 `ATTACHMENT_MAX_MB`, `ATTACHMENTS_PER_POST`, `ATTACHMENT_DAILY_MB`,
 `ATTACHMENT_MONTHLY_MB`, `ATTACHMENT_PREVIEW_PAGES`,
 `ATTACHMENT_RENDER_CONCURRENCY`, `PDFINFO_PATH`, `PDFDETACH_PATH`,
-`PDFTOPPM_PATH`.
+`PDFTOPPM_PATH`, `QPDF_PATH`.
 
 `ATTACHMENT_UPLOADERS` is `admins` while the milestone is being built, the way
 video was introduced: a post cannot show or hand out its files until #2108
@@ -116,6 +117,91 @@ an inner join to `posts` would silently drop every message's file, and a
 what keeps the daily sweep and a re-mounted composer off it. Setting `post_id`
 clears it in the same statement, so exactly one column ever answers "who holds
 this file".
+
+## Machines, and the metadata in a file (#2107)
+
+### One standing decision, stamped onto each post
+
+**"Search engines and AI may read my posts"** is a `Vutuv.Prefs` key,
+`posts_machines_allowed?`, on `/settings/privacy`. It is asked **once**, not per
+post: a composer that asked would put the same question in front of a member
+several times a day, and the answer almost never changes between two posts.
+
+The member's answer is copied onto the row **as the post is published**
+(`Vutuv.Posts` private `seed_post/1`, the seed struct both member-post paths
+build from) into `posts.noindex_noai?`, read back through
+`Vutuv.Posts.machines_allowed?/1` and its query twin
+`scope_machines_allowed/1`. Nothing re-reads the setting when a post is
+rendered, and that is the design rather than an optimisation: a live read would
+mean flipping the switch silently rewrote every older post, and for the ones
+already federated it would promise a withdrawal nothing can perform. So each
+post keeps what it went out with, an edit keeps it too, and the setting is only
+ever the default for the next one. An explicit `noindex_noai` attr still wins,
+which is what `POST /api/2.0/posts` sends.
+
+A **page's** post does not take it: an organization has its own `seo?`/`geo?`,
+and one publisher's private posture must not mute the brand they publish for.
+
+A pref rather than a plain column because `nil` has to mean "never asked":
+`noai?`'s column default is `true`, so 5,867 of 6,026 members on the dev copy of
+production "carry" an answer nobody gave, and nothing can tell that from a real
+one. Here NULL inherits the installation default, which an operator moves at
+`/admin/preferences` — worth having, since an intranet installation may well
+want the opposite posture.
+
+### What "no machines" costs, and why the settings page says it
+
+Saying no means `noindex, noai, noimageai` on the permalink and on every
+`.md`/`.txt`/`.json`/`.xml` sibling, no sitemap entry, no place in the two RSS
+feeds or on a tag page (both carry one all-yes `Content-Signal` for a whole
+list), and no first line quoted on any shared listing surface. And it means the
+post **is not federated at all** — not the Create, not a later Update, not the
+unfreeze's republish, not a topic actor's Announce, not somebody else's boost,
+not the `featured` collection, not the outbox count, and not the Note served on
+request to an ActivityPub `Accept` header. A header is advisory and re-read on
+every visit; a copy on somebody else's server is neither, so this has to be a
+gate and not a directive. That sentence is the registry `hint` on
+`posts_machines_allowed?`, so the member and the admin read the same words.
+
+### Where a withheld post is redacted, and where it is not
+
+The switch protects the post's own documents; what it did not protect at first
+was the post as it appears **inside somebody else's**, because a document's
+robots axes are computed from its *subject* post and a conversation quotes other
+people's. So `PostDoc` redacts **per entry**: `thread_entries/1` and
+`reply_entry/1` hand back the sentence "Post not open to search engines" in
+place of a withheld body, `withheld_excerpt/1` does the same for a quoted line
+(`ProfileDoc` shares it for the pinned post), the reposts leg of
+`author_timeline_query/3` drops a withheld post outright, and the archive's
+one-level ancestor fallback stops printing a withheld parent above a reply card.
+
+The **HTML conversation on a permalink still shows every word**. Page and doc
+differ there on purpose: the promise is about machines, not about readers. The
+archive listing is the one place they must agree, because that page is a crawl
+surface — which is also why its withheld rows leave it.
+
+### The metadata in a file
+
+**"Remove the metadata from the files"** is `posts.strip_metadata?`, the
+author's *answer*, and the one question the composer still asks — it is about
+*these* files, so it belongs beside them, and it only shows on a new post
+carrying one. What actually happened to a given file is
+`attachments.metadata_stripped_at`. `Vutuv.Attachments.Metadata` is the one
+place vutuv talks to `qpdf`, probed once per VM the way ffmpeg is, and the
+switch is hidden where the binary is absent **or too old** — the probe asks
+qpdf whether it knows the flags (`--help=--remove-info`), not whether the file
+exists, because Debian 12 ships 11.3.0 and Ubuntu 24.04 ships 11.9.0 while
+`--remove-info` arrived in 11.10.0. The run happens at **intake**, on every PDF,
+deriving the served copy from the verbatim original with
+`--remove-info --remove-metadata --deterministic-id --linearize`; an author who
+says no gets the original copied back at claim time, which costs a `File.cp`
+rather than a shell-out on the publish path. `--remove-structure` is
+deliberately not used (that is the tagged-PDF tree a screen reader follows),
+and `/ModDate` survives by qpdf's own design.
+
+That answer travels through `post_drafts.strip_metadata?`, so a reload brings it
+back beside the words it was chosen with; it does not count as content, so
+flipping it on an empty composer creates no draft.
 
 ## The post waits for its files
 

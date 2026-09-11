@@ -168,5 +168,18 @@ defmodule Vutuv.Attachments.Format do
   @doc "The downcased extension of `file_name`, `\"\"` when it has none."
   def extension(file_name), do: file_name |> Path.extname() |> String.downcase()
 
+  @doc """
+  Whether a stored row's `content_type` is a PDF — what a caller that has the
+  row rather than the upload asks (`Vutuv.Attachments.apply_metadata_choice/1`).
+
+  Deliberately **not** the full inverse of `content_type/2`, which also emits
+  the picture types: the one consumer asks only "is there metadata in here for
+  qpdf to remove", so everything that is not a PDF answers `:text` and is left
+  alone. Widen it when a second caller needs `:picture` told apart, rather than
+  leaving a promise the code does not keep.
+  """
+  def kind_of_content_type("application/pdf"), do: :pdf
+  def kind_of_content_type(_not_a_pdf), do: :text
+
   defp text?(bytes), do: String.valid?(bytes) and not Regex.match?(@control_regex, bytes)
 end

@@ -231,8 +231,14 @@ defmodule VutuvWeb.OrganizationController do
         # every post a page had ever federated. The member permalink
         # (`VutuvWeb.PostController`) has answered the same request with the
         # Note from the start; this is that arrangement for a page.
+        # …and the post's own answer about machines (issue #2107), which a page
+        # post carries exactly as a member's does: the composer offers the
+        # switch whoever is being published for. `maybe_federate/3` already
+        # withholds the delivery, so without this the Note was refused to the
+        # followers it was meant for and handed in full to anyone who asked
+        # for the same URL — which is no withholding at all.
         FediverseController.ap_request?(conn) and Fediverse.federated?(organization) and
-            not Posts.moderation_hidden?(post) ->
+          Posts.machines_allowed?(post) and not Posts.moderation_hidden?(post) ->
           send_note(conn, organization, post)
 
         FediverseController.ap_request?(conn) ->
@@ -261,9 +267,20 @@ defmodule VutuvWeb.OrganizationController do
   end
 
   defp send_post_document(conn, organization, post, id) do
+    blocked? = not Posts.machines_allowed?(post)
+
     case AgentDocs.negotiate(conn) do
       :html ->
         conn
+        # The post's own answer about machines (issue #2107) as the HTML page's
+        # `X-Robots-Tag` **and** its `<meta name="robots">`. The page's
+        # `seo?`/`geo?` already reach a crawler through the organization's own
+        # pages; this is the one axis that is the post's, and without it the
+        # switch said nothing at all on the surface a crawler actually reads.
+        # `put_robots/3` rather than the header alone because this page has no
+        # `:user` assign for the layout to fall back to, so a bare header would
+        # have left the tag silent while the header said `noindex`.
+        |> VutuvWeb.ContentPolicy.put_robots(blocked?, blocked?)
         |> AgentDocs.put_html_alternates()
         |> ControllerHelpers.render_live(VutuvWeb.OrganizationLive.Post, %{
           "organization_id" => organization.id,

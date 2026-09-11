@@ -40,13 +40,16 @@ defmodule VutuvWeb.OrganizationPostNoteWebTest do
 
     {:ok, _} = Organizations.add_role(page, owner, "publisher", owner)
     {:ok, post} = Posts.create_organization_post(page, owner, %{body: body})
-    {page, post}
+    # The owner travels with them: a test that needs to publish a second post
+    # as the page's publisher should take it here rather than read the roles
+    # table back out with a schemaless query.
+    {page, post, owner}
   end
 
   defp ap(conn), do: put_req_header(conn, "accept", "application/activity+json")
 
   test "the page post permalink answers ActivityPub with its Note", %{conn: conn} do
-    {page, post} = federating_page_with_post()
+    {page, post, _owner} = federating_page_with_post()
 
     conn = conn |> ap() |> get(~p"/organizations/#{page.slug}/posts/#{post.id}")
 
@@ -66,7 +69,7 @@ defmodule VutuvWeb.OrganizationPostNoteWebTest do
   end
 
   test "a page that does not federate serves no Note", %{conn: conn} do
-    {page, post} = federating_page_with_post()
+    {page, post, _owner} = federating_page_with_post()
 
     page
     |> Ecto.Changeset.change(%{fediverse_followers?: false})
@@ -79,9 +82,66 @@ defmodule VutuvWeb.OrganizationPostNoteWebTest do
   end
 
   test "the HTML permalink is untouched", %{conn: conn} do
-    {page, post} = federating_page_with_post()
+    {page, post, _owner} = federating_page_with_post()
 
     assert conn |> get(~p"/organizations/#{page.slug}/posts/#{post.id}") |> html_response(200) =~
              "Von uns."
+  end
+
+  describe "a page post that refused machines (issue #2107)" do
+    # A page post carries the same switch a member's does — the composer offers
+    # it whoever is being published for — and all three of these surfaces
+    # answered as if it did not. Measured on the un-fixed branch: the AP request
+    # returned 200 with the whole Note, `.json` carried the body under
+    # `ai-train=yes`, and the HTML page stamped no `X-Robots-Tag` at all.
+    defp withheld_page_post(body \\ "Interne Preisliste.") do
+      {page, post, owner} = federating_page_with_post(body)
+      {:ok, post} = Posts.update_post(post, %{body: body, noindex_noai: "true"})
+      {page, post, owner}
+    end
+
+    test "is not handed over as a Note", %{conn: conn} do
+      {page, post, _owner} = withheld_page_post()
+
+      conn = conn |> ap() |> get(~p"/organizations/#{page.slug}/posts/#{post.id}")
+
+      refute conn.status == 200
+      refute conn.resp_body =~ "Preisliste"
+    end
+
+    test "says so in its agent document instead of inviting a crawler", %{conn: conn} do
+      {page, post, _owner} = withheld_page_post()
+
+      conn = get(conn, "/organizations/#{page.slug}/posts/#{post.id}.json")
+
+      # The headers are what a crawler acts on, so they are what is asserted.
+      assert json_response(conn, 200)["body_markdown"] =~ "Preisliste"
+      assert [signal] = get_resp_header(conn, "content-signal")
+      assert signal =~ "ai-train=no"
+      assert signal =~ "search=no"
+      assert signal =~ "ai-input=no"
+      assert get_resp_header(conn, "x-robots-tag") == ["noindex, noai, noimageai"]
+    end
+
+    test "stamps the HTML page with the robots header", %{conn: conn} do
+      {page, post, _owner} = withheld_page_post()
+
+      conn = get(conn, ~p"/organizations/#{page.slug}/posts/#{post.id}")
+
+      assert html_response(conn, 200) =~ "Preisliste"
+      assert get_resp_header(conn, "x-robots-tag") == ["noindex, noai, noimageai"]
+    end
+
+    test "leaves the page's public timeline, and with it the feed and the page document" do
+      {page, post, owner} = withheld_page_post()
+      {:ok, open} = Posts.create_organization_post(page, owner, %{body: "Offen."})
+
+      %{entries: public} = Posts.organization_posts_page(page, nil)
+      %{entries: theirs} = Posts.organization_posts_page(page, owner)
+
+      assert Enum.map(public, & &1.id) == [open.id]
+      # …and the team still sees their own withheld post on their own page.
+      assert post.id in Enum.map(theirs, & &1.id)
+    end
   end
 end

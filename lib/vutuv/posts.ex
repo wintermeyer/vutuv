@@ -393,7 +393,7 @@ defmodule Vutuv.Posts do
 
     with :ok <- check_image_count(media.images),
          {:ok, changeset} <-
-           build_changeset(%Post{user_id: author.id}, attrs, denials, media) do
+           build_changeset(seed_post(author), attrs, denials, media) do
       case insert_post(changeset, media, nil, remote_target) do
         {:ok, post} ->
           post = preload_post(post)
@@ -419,6 +419,26 @@ defmodule Vutuv.Posts do
     end
   end
 
+  # The row a member's post starts from, carrying their standing answer about
+  # machines (issue #2107) **stamped at publish time**. This is the only place
+  # the setting is read: a rendered post answers from its own column, so
+  # changing the setting later leaves every older post exactly as it went out,
+  # and an edit keeps what the post already holds. An explicit `noindex_noai`
+  # attr (the API's) still wins, because `post_params/1` puts it as a change on
+  # top of this struct value.
+  #
+  # `Vutuv.Prefs.get/2` and not the column, so a member who was never asked
+  # follows the installation default (NULL = inherit). A post published for an
+  # organization deliberately does not take this: the page has its own `seo?`
+  # and `geo?`, and one team member's private posture must not silently mute
+  # the brand they publish for.
+  defp seed_post(%User{} = author) do
+    %Post{
+      user_id: author.id,
+      noindex_noai?: not Prefs.get(author, :posts_machines_allowed?)
+    }
+  end
+
   defp do_create_reply(%User{} = author, %Post{} = parent, attrs, note) do
     media = media_ids(attrs)
 
@@ -429,7 +449,7 @@ defmodule Vutuv.Posts do
          # params are dropped, so the public reply count and the parent-author
          # notification only ever concern content the author can see (issue #774).
          {:ok, changeset} <-
-           build_changeset(%Post{user_id: author.id}, attrs, [], media) do
+           build_changeset(seed_post(author), attrs, [], media) do
       case insert_post(changeset, media, parent, note) do
         {:ok, post} ->
           post = preload_post(post)
@@ -603,6 +623,10 @@ defmodule Vutuv.Posts do
         updated = %{preload_post(updated) | images_pending?: pending?}
 
         remember_license(updated.user, updated)
+        # An edit may carry a different answer about the files' metadata (the
+        # API's PATCH can; the composer does not offer it on an edit), so the
+        # served copies follow it here too.
+        Attachments.apply_metadata_choice(updated)
         # The edit can add a name, drop one, or (by changing the audience)
         # move a named member out of the post's reach: re-derive the set.
         sync_mentions(updated)
@@ -800,7 +824,9 @@ defmodule Vutuv.Posts do
     license: :license,
     layout: :gallery_layout,
     language: :language,
-    fill: :gallery_fill?
+    fill: :gallery_fill?,
+    noindex_noai: :noindex_noai?,
+    strip_metadata: :strip_metadata?
   ]
 
   defp post_params(attrs) do
@@ -860,23 +886,34 @@ defmodule Vutuv.Posts do
   # network, the PostRemoteReply sidecar) in one transaction, so post and
   # references land (or roll back) together.
   defp insert_post(changeset, media, parent, remote_target) do
-    Repo.transaction(fn ->
-      changeset
-      |> Ecto.Changeset.change(published_on: Vutuv.BerlinTime.today())
-      |> Repo.insert()
-      |> case do
-        {:ok, post} ->
-          attach_images!(post, media.images)
-          attach_video!(post, media.video)
-          attach_attachments!(post, media.attachments)
-          insert_reply_ref!(post, parent)
-          insert_remote_reply_ref!(post, remote_target)
-          mark_images_pending!(post)
+    result =
+      Repo.transaction(fn ->
+        changeset
+        |> Ecto.Changeset.change(published_on: Vutuv.BerlinTime.today())
+        |> Repo.insert()
+        |> case do
+          {:ok, post} ->
+            attach_images!(post, media.images)
+            attach_video!(post, media.video)
+            attach_attachments!(post, media.attachments)
+            insert_reply_ref!(post, parent)
+            insert_remote_reply_ref!(post, remote_target)
+            mark_images_pending!(post)
 
-        {:error, changeset} ->
-          Repo.rollback(changeset)
-      end
-    end)
+          {:error, changeset} ->
+            Repo.rollback(changeset)
+        end
+      end)
+
+    # After the commit, never inside it: this touches files, and a rolled-back
+    # transaction would leave a served copy the rows no longer explain. Skipped
+    # outright for a post carrying no file, which is nearly every post — the
+    # ids are right here, so the create path needs no query to know (issue
+    # #2107). The update path has no such free signal and legitimately asks.
+    with {:ok, post} <- result do
+      if media.attachments != [], do: Attachments.apply_metadata_choice(post)
+      {:ok, post}
+    end
   end
 
   defp insert_remote_reply_ref!(_post, nil), do: :ok
@@ -1717,6 +1754,61 @@ defmodule Vutuv.Posts do
   def restricted?(%Post{id: id}) do
     Repo.exists?(from(d in PostDenial, where: d.post_id == ^id))
   end
+
+  @doc """
+  Whether machines may have this post at all (issue #2107) — search engines,
+  AI crawlers and, the part an author would not guess, other servers.
+
+  The header a crawler reads is advisory and re-read on every visit, so a
+  `noindex, noai` post can still be served to people and simply asks the
+  crawler to stay away. **A federated copy is not like that**: it is handed to
+  a remote server that keeps it for ever, on which no header of ours has any
+  say. So an answer of "no machines" has to be a gate before delivery rather
+  than a directive attached to it, which is why `Vutuv.Fediverse` gates on this
+  column on every outbound path (the create clause matches it in a function
+  head, where a call cannot go) and the composer says so in words before the
+  post goes out.
+
+  Matches the **column**, never a preloaded association, so it answers for the
+  bare `%Post{}` a query hands over (CLAUDE.md's standing rule). Its query twin
+  is `scope_machines_allowed/1` — a function call is impossible inside a
+  `where`, so the two spellings travel together and are changed together.
+  """
+  def machines_allowed?(%Post{noindex_noai?: blocked?}), do: not blocked?
+
+  @doc """
+  The one-level parent a **public** page may quote above a reply card, `[]`
+  when that parent's author keeps machines out (issue #2107).
+
+  `/:slug/posts` and a tag timeline are crawl surfaces, which is why this
+  switch already drops a withheld post from the listing itself — so printing
+  one as the quoted parent of somebody else's reply put back exactly what the
+  listing had removed. It also ends a disagreement, since an archive entry
+  carries no ancestors and `VutuvWeb.AgentDocs.PostDoc.timeline_entry/1`
+  therefore renders `thread: []` for it: the page quoted everything and the
+  document quoted nothing.
+
+  Reads the preloaded `reply_ref`, so it costs no query. The **private** saved
+  hub (`/likes`, `/bookmarks`) deliberately does not call this and keeps the
+  card component's own fallback: no machine reads a login-only page, and the
+  promise is about machines rather than readers. The permalink's conversation
+  is unaffected for the same reason.
+  """
+  def public_ancestors(%Post{} = post) do
+    case reply_ref_state(post) do
+      {:parent, parent} -> if machines_allowed?(parent), do: [parent], else: []
+      _no_visible_parent -> []
+    end
+  end
+
+  @doc """
+  The same question as a query (issue #2107) — the twin of
+  `machines_allowed?/1`, the way `organization_public_row/1` is the twin of
+  `Organizations.public_visible?/1`. Kept beside it so a widened boundary is
+  one edit here plus the struct predicate, rather than a column name spelled
+  out in every module that has to ask.
+  """
+  def scope_machines_allowed(query), do: where(query, [p], not p.noindex_noai?)
 
   ## Likes, bookmarks, reposts
 
@@ -2781,6 +2873,11 @@ defmodule Vutuv.Posts do
   """
   def tag_posts_query(%Tag{} = tag) do
     from([post_tag: pt] in visible_tagged_posts_query(), where: pt.tag_id == ^tag.id)
+    # A tag page is a public topic surface with no owner to make an exception
+    # for, and it ships every body in full besides — so a post that refused
+    # machines (issue #2107) is simply not on it, in HTML or in any of its four
+    # agent formats. Attaching a tag must not be a way round the switch.
+    |> scope_machines_allowed()
   end
 
   @doc """
@@ -5396,6 +5493,9 @@ defmodule Vutuv.Posts do
   nothing — neither of search engines (`noindex?`) nor of AI use
   (`noai?`); an opted-out member's posts still serve through their own
   feed, which signals their choices per response.
+  A post whose **own** answer was no (`noindex_noai?`, issue #2107) is out
+  of both feeds: a member feed carries one all-yes signal for its author
+  and cannot signal around a single item either.
   Preloaded like every rendered post; ordered by creation (the UUID v7 id).
   """
   def recent_public_posts(author_or_all, opts \\ [])
@@ -5429,6 +5529,10 @@ defmodule Vutuv.Posts do
   # feed by. Without one this is the plain newest-first page it always was.
   defp recent_public(query, opts) do
     query
+    # Both feeds carry one all-yes Content-Signal for a whole list, so a post
+    # whose own answer was no is out of both. One gate here rather than one per
+    # clause: a third feed added later inherits it instead of forgetting it.
+    |> scope_machines_allowed()
     |> scope_visible(nil)
     |> Keyset.scope(opts)
     |> Repo.all()
@@ -5661,7 +5765,20 @@ defmodule Vutuv.Posts do
   def organization_posts_page(%Organization{} = organization, viewer, opts \\ []) do
     limit = Keyword.get(opts, :limit, @organization_posts_per_page)
     offset = Keyword.get(opts, :offset, 0)
-    query = organization_posts_query(organization, viewer)
+
+    # A post that refused machines (issue #2107) leaves the page's **listing**
+    # — and with it the RSS feed and the page's agent document, both of which
+    # quote the body in full under one all-yes signal for the whole list. Its
+    # own permalink still serves: the switch is about machines, not about
+    # hiding the post from people, which is exactly why this sits here and not
+    # in `organization_posts_query/2`, where it would have 404ed that page.
+    # The page's publishers keep seeing it in their own timeline, as they do a
+    # frozen one.
+    query =
+      organization
+      |> organization_posts_query(viewer)
+      |> scope_machines_for_page(organization, viewer)
+
     total = Repo.aggregate(query, :count)
 
     entries =
@@ -5730,6 +5847,29 @@ defmodule Vutuv.Posts do
       else: where(query, [p], is_nil(p.frozen_at))
   end
 
+  # The archive's own half of the machines gate: kept for the author reading
+  # their own timeline, dropped for everybody else.
+  #
+  # Expressed **per row**, the way `scope_visible/2` expresses the same shape of
+  # exception, and deliberately not as a match on the id list: this query
+  # answers one profile timeline *and* `author_post_counts/2`'s figure for a
+  # whole page of authors, so a list-shaped test made the same member's own
+  # withheld posts count for them on `verify_credentials` (one id) and vanish
+  # from a timeline's account list (many ids). The answer must not depend on how
+  # many authors happened to travel with them.
+  defp scope_machines_for(query, %User{id: viewer_id}),
+    do: where(query, [p], not p.noindex_noai? or p.user_id == ^viewer_id)
+
+  defp scope_machines_for(query, _anonymous), do: scope_machines_allowed(query)
+
+  # The same for a page's timeline, where "the author" is anyone who publishes
+  # for it.
+  defp scope_machines_for_page(query, organization, viewer) do
+    if match?(%User{}, viewer) and Organizations.publisher?(organization, viewer),
+      do: query,
+      else: scope_machines_allowed(query)
+  end
+
   defp scope_period(query, nil), do: query
 
   defp scope_period(query, {%Date{} = from, %Date{} = to}) do
@@ -5766,6 +5906,14 @@ defmodule Vutuv.Posts do
       )
       |> scope_visible(viewer)
       |> scope_original_kind(filter)
+      # A post that refused machines (issue #2107) leaves the public archive:
+      # that page ships every body in full, so a crawler reading `/:slug/posts`
+      # gets the whole of a post the switch was meant to keep from it, and its
+      # `.md`/`.json` siblings quote it under one all-yes signal. The **author**
+      # still sees it in their own archive — hiding somebody's post from their
+      # own page would be a different feature — which is also why this sits
+      # here rather than in the shared `scope_visible/2`.
+      |> scope_machines_for(viewer)
 
     reposts =
       from(p in Post,
@@ -5783,6 +5931,15 @@ defmodule Vutuv.Posts do
         }
       )
       |> scope_visible(viewer)
+      # …and the machines gate (issue #2107), which the originals leg above had
+      # and this one did not — so a repost carried a withheld post's whole body
+      # onto the reposter's public archive and its first line into the
+      # reposter's profile document, both of which a crawler reads. Flatly
+      # `scope_machines_allowed/1` and **not** `scope_machines_for/3`: the
+      # exception that leg makes is "the author reading their own archive", and
+      # on this leg the post belongs to somebody else entirely. Whoever reshared
+      # it never gave the answer and cannot overrule it.
+      |> scope_machines_allowed()
 
     # A third leg (issue #1166): posts from another network this member shared
     # onward. Same five columns as the others so the union holds, with
@@ -7124,11 +7281,16 @@ defmodule Vutuv.Posts do
                :body,
                :tags,
                :license,
+               # `:language` was missing here, so changing it on an existing
+               # draft row was silently dropped — it only ever landed on the
+               # first insert.
+               :language,
                :image_ids,
                :video_id,
                :photos,
                :layout,
                :fill?,
+               :strip_metadata?,
                :updated_at
              ]},
           conflict_target: draft_conflict_target(context)
@@ -7815,8 +7977,19 @@ defmodule Vutuv.Posts do
 
   ## Param helpers (attrs arrive with atom keys from code, string keys from forms)
 
+  # A **present** atom key wins, whatever it holds — `||` could not carry a
+  # `false`, so an atom-keyed `false` fell through to the string key, found
+  # nothing, and read as "the caller did not send this". Every attrs map the
+  # composer builds is atom-keyed (a parked post's is not: it round-trips
+  # through JSONB), so the composer's "no" to a boolean switch was dropped on
+  # the publish-now path and kept on the parked one — the switch worked or not
+  # depending on how fast the file finished. `gallery_fill?` had the same hole
+  # since it was added.
   defp fetch(attrs, key) when is_map(attrs) and is_atom(key) do
-    Map.get(attrs, key) || Map.get(attrs, Atom.to_string(key))
+    case attrs do
+      %{^key => value} -> value
+      _string_keyed -> Map.get(attrs, Atom.to_string(key))
+    end
   end
 
   defp parse_ids(ids) when is_list(ids),
