@@ -10,10 +10,10 @@ defmodule VutuvWeb.PressKitImageController do
   job-posting and organization proxies. What this one owns is the two addresses
   a *file* leaves at, which no other proxy has as its main purpose:
 
-    * `download.orig` — the picture a journalist takes away. For a photo that is
-      the **cleaned** original: the same pixels with every metadata block
-      removed, so a press photo never hands out a GPS fix or a camera serial.
-      For a logo uploaded as SVG it is the vector itself.
+    * `download.orig` — the picture a journalist takes away, always the
+      **cleaned** original: the same picture with every metadata block removed,
+      so a download never hands out a GPS fix or a camera serial. A vector logo
+      included, since issue #2145.
     * `download.png` — a logo variant's PNG rendering, for whoever cannot use a
       vector. 404 on a photo, which has no such thing.
     * `pixelated.avif` — the stand-in a stranger meets while the AI check is

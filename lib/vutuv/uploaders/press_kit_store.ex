@@ -112,22 +112,34 @@ defmodule Vutuv.PressKitStore do
       # same door the scan judges it through.
       Pixelation.write_if_enabled(rotated, dir)
       :ok = Originals.store(storage_dir(token), path, ext)
+      stored(rotated, path, token)
+    end
+  end
 
-      # Derive the cleaned copy here rather than on the first request for it
-      # (issue #2140). It is the same work either way, but the *page* now asks
-      # how many bytes the download hands over — `Vutuv.PressKit.download_bytes/1`
-      # — and a shelf holds up to fifteen files of up to 30 MB, so leaving the
-      # strip to the read path would put that whole derivation inside one
-      # crawler-reachable render. Here the uploader is already waiting on the
-      # AVIF encodes, and the first download gets faster too.
-      download_file(token, logo?)
-
+  # Derive the cleaned copy here rather than on the first request for it (issue
+  # #2140). It is the same work either way, but the *page* now asks how many
+  # bytes the download hands over — `Vutuv.PressKit.download_bytes/1` — and a
+  # shelf holds up to fifteen files of up to 30 MB, so leaving the strip to the
+  # read path would put that whole derivation inside one crawler-reachable
+  # render. Here the uploader is already waiting on the AVIF encodes, and the
+  # first download gets faster too.
+  #
+  # And it is the **gate** (issue #2145): a picture whose download cannot be
+  # derived is refused at the upload, where the member is still looking, rather
+  # than stored behind a download link that 404s and a size nobody can state.
+  # `delete/1` rather than `store_upload/4`'s own `File.rm_rf(dir)`, which knows
+  # only the served tree — this is the paired teardown, and it is idempotent.
+  defp stored(rotated, path, token) do
+    if cleaned_download(token) do
       {:ok,
        %{
          width: Image.width(rotated),
          height: Image.height(rotated),
          size_bytes: File.stat!(path).size
        }}
+    else
+      delete(token)
+      {:error, :uncleanable}
     end
   end
 
@@ -231,34 +243,29 @@ defmodule Vutuv.PressKitStore do
   should not be the one place a camera serial number or a GPS fix leaves, and
   nobody downloading a press photo wants either.
 
-  A **vector logo** is the SVG itself. The stripper cannot take XML apart and
-  there is nothing in it to take apart: the markup is what the designer wrote
-  and what they released, and it was vetted at upload
-  (`Vutuv.Uploads.Spec.open_rotated/1` refuses a document with a DOCTYPE, a
-  script, a `foreignObject` or an external reference). It leaves as an
+  A **vector logo** is cleaned too, through `Vutuv.Uploads.SvgStrip` (issue
+  #2145) — until that module existed it was the one file that left byte for byte
+  as uploaded. Its markup is still vetted at upload
+  (`Vutuv.Uploads.Spec.open_rotated/1` refuses a DOCTYPE, a script, a
+  `foreignObject` or an external reference), and it still leaves as an
   attachment with `nosniff` — see the controller — because an SVG rendered
   inline on our own origin is a script on our own origin.
 
-  It **fails closed**: a format the stripper cannot clean yields `nil` rather
-  than the untouched file. The upload whitelist already makes that unreachable
-  for both shelves; it is here because "the download is always clean" is a
-  promise, and a promise with no second line is a comment.
+  It **fails closed**: a file no stripper can clean with certainty yields `nil`
+  rather than the untouched original. For a shelf that is unreachable, since
+  `store/4` refuses such an upload in the first place; it is here because "the
+  download is always clean" is a promise, and a promise with no second line is a
+  comment.
   """
-  def download_file(%ImageRow{token: token} = image),
-    do: download_file(token, ImageRow.logo?(image))
+  def download_file(%ImageRow{token: token}), do: cleaned_download(token)
 
   # Also the upload's own warm-up, which has no row yet.
-  defp download_file(token, logo?) do
+  defp cleaned_download(token) do
     case Originals.path(storage_dir(token)) do
       nil -> nil
-      original -> download_file(original, Path.extname(original), token, logo?)
+      original -> Originals.cleaned_copy(storage_dir(token), original, Path.extname(original))
     end
   end
-
-  defp download_file(original, ".svg", _token, true), do: {original, ".svg"}
-
-  defp download_file(original, ext, token, _logo?),
-    do: Originals.cleaned_copy(storage_dir(token), original, ext)
 
   @doc """
   The **PNG rendering** of a logo variant, as `{path, ext}` — what stands beside

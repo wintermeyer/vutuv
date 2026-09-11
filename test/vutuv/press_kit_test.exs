@@ -20,6 +20,7 @@ defmodule Vutuv.PressKitTest do
   import Vutuv.OrganizationsHelpers
   import Vutuv.WebPushHelpers, only: [put_config: 2]
 
+  alias Vix.Vips.MutableImage
   alias Vutuv.Images
   alias Vutuv.Images.Image, as: ImageRow
   alias Vutuv.PressKit
@@ -59,6 +60,48 @@ defmodule Vutuv.PressKitTest do
     File.write!(path, """
     <svg xmlns="http://www.w3.org/2000/svg" width="240" height="80" viewBox="0 0 240 80">
       <rect width="240" height="80" fill="#0a5" />
+    </svg>
+    """)
+
+    {path, "logo.svg"}
+  end
+
+  # What a design tool really exports (issue #2145): a generator comment, an
+  # RDF `<metadata>` block naming the designer, the editing window, the file's
+  # own name on the designer's disk — and a photograph pasted into the drawing,
+  # which brings a camera serial and a GPS fix of its own.
+  defp dirty_svg_file(tmp) do
+    path = Path.join(tmp, "#{System.unique_integer([:positive])}-logo.svg")
+    {:ok, image} = Image.new(60, 40, color: [10, 120, 200])
+
+    {:ok, tagged} =
+      Image.mutate(image, fn mut ->
+        :ok = MutableImage.set(mut, "exif-ifd0-Artist", :gchararray, "Ada King")
+        :ok = MutableImage.set(mut, "exif-ifd2-BodySerialNumber", :gchararray, "SN-CLAUDE-1234")
+        :ok = MutableImage.set(mut, "exif-ifd3-GPSLatitude", :gchararray, "52/1 31/1 12/1")
+      end)
+
+    {:ok, jpeg} = Image.write(tagged, :memory, suffix: ".jpg")
+
+    File.write!(path, """
+    <?xml version="1.0" encoding="UTF-8" standalone="no"?>
+    <!-- Generator: Adobe Illustrator 28.0.0, SVG Export Plug-In -->
+    <svg xmlns="http://www.w3.org/2000/svg"
+       xmlns:xlink="http://www.w3.org/1999/xlink"
+       xmlns:dc="http://purl.org/dc/elements/1.1/"
+       xmlns:rdf="http://www.w3.org/1999/02/22-rdf-syntax-ns#"
+       xmlns:sodipodi="http://sodipodi.sourceforge.net/DTD/sodipodi-0.0.dtd"
+       xmlns:inkscape="http://www.inkscape.org/namespaces/inkscape"
+       width="240" height="80" viewBox="0 0 240 80"
+       inkscape:version="1.3.2 (091e20e)"
+       sodipodi:docname="/Users/ada.king/kunden/acme-logo-final.svg">
+      <sodipodi:namedview id="base" inkscape:current-layer="layer1" />
+      <metadata><rdf:RDF><dc:creator>Ada King</dc:creator></rdf:RDF></metadata>
+      <g inkscape:label="Layer 1" id="layer1">
+        <rect width="240" height="80" fill="#0a5" />
+        <image x="8" y="8" width="60" height="40"
+          xlink:href="data:image/jpeg;base64,#{Base.encode64(jpeg)}" />
+      </g>
     </svg>
     """)
 
@@ -242,6 +285,64 @@ defmodule Vutuv.PressKitTest do
 
       assert {png, ".png"} = PressKitStore.png_download_file(logo)
       assert <<137, "PNG\r\n", 26, 10, _rest::binary>> = File.read!(png)
+    end
+
+    # The promise the Media Kit makes is that a download never carries a GPS fix
+    # or a camera serial, and for a photo it holds by construction. A vector was
+    # the one file that left byte for byte as uploaded (issue #2145).
+    test "an SVG logo leaves without the trail its editor wrote into it",
+         %{owner: owner, tmp: tmp} do
+      {path, name} = dirty_svg_file(tmp)
+      uploaded = File.read!(path)
+
+      assert {:ok, logo} = PressKit.create(owner, owner, {path, name}, logo_attrs())
+      assert {download, ".svg"} = PressKitStore.download_file(logo)
+
+      handed_over = File.read!(download)
+
+      for gone <- [
+            "Ada King",
+            "acme-logo-final.svg",
+            "/Users/ada.king",
+            "Adobe Illustrator",
+            "inkscape",
+            "sodipodi",
+            "<metadata"
+          ] do
+        refute String.contains?(handed_over, gone), "#{gone} survived the download"
+      end
+
+      # The photograph inside the drawing is cleaned where it lies.
+      [_, payload] = Regex.run(~r/base64,([A-Za-z0-9+\/=]+)"/, handed_over)
+      embedded = Base.decode64!(payload)
+      refute String.contains?(embedded, "SN-CLAUDE-1234")
+      refute String.contains?(embedded, "Exif")
+
+      # Calibration: without the fix the two are the same file, so a test that
+      # only looked for missing strings would pass on an empty download. That
+      # the drawing survived is `Vutuv.Uploads.SvgStripTest`'s to prove — the
+      # stripper refuses a rewrite whose pixels moved, so the file cannot get
+      # this far otherwise.
+      refute handed_over == uploaded
+
+      # And the figure the page and the schema.org block state is this file's.
+      assert PressKit.download_bytes(logo) == byte_size(handed_over)
+    end
+
+    # The bytes pick the stripper, never the name. libvips renders a `.png` full
+    # of SVG markup as SVG, so the cleaner has to read it as one too — otherwise
+    # a vector a member named wrong is refused at the upload with nothing they
+    # could act on.
+    test "a vector named `.png` is still cleaned as a vector", %{owner: owner, tmp: tmp} do
+      {vector, _name} = dirty_svg_file(tmp)
+      mislabelled = Path.join(tmp, "#{System.unique_integer([:positive])}-mark.png")
+      File.cp!(vector, mislabelled)
+
+      assert {:ok, logo} =
+               PressKit.create(owner, owner, {mislabelled, "mark.png"}, logo_attrs())
+
+      assert {download, ".png"} = PressKitStore.download_file(logo)
+      refute File.read!(download) =~ "Ada King"
     end
 
     test "a PNG logo hands out its cleaned original for both", %{owner: owner, tmp: tmp} do

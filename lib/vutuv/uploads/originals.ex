@@ -23,6 +23,8 @@ defmodule Vutuv.Uploads.Originals do
   """
 
   alias Vutuv.Uploads.MetadataStrip
+  alias Vutuv.Uploads.Spec
+  alias Vutuv.Uploads.SvgStrip
 
   @doc """
   Copies the uploaded file at `source_path` to the private original location
@@ -91,15 +93,22 @@ defmodule Vutuv.Uploads.Originals do
   end
 
   @doc """
-  The **cleaned copy** of a kept original, as `{path, ext}`: the same pixels
-  with every metadata block removed (`Vutuv.Uploads.MetadataStrip`), derived
-  once on first request and cached beside the original as `cleaned<ext>`.
+  The **cleaned copy** of a kept original, as `{path, ext}`: the same picture
+  with every metadata block removed, derived once on first request and cached
+  beside the original as `cleaned<ext>`.
 
-  **It fails closed.** A container the stripper cannot take apart yields `nil`
-  rather than the untouched file, because the whole point of offering a cleaned
-  copy is the promise that the file carries nothing but the picture, and falling
-  back to the upload would break exactly that promise while looking like it
-  worked.
+  Two strippers answer for it — `Vutuv.Uploads.MetadataStrip` for a container,
+  `Vutuv.Uploads.SvgStrip` for a vector (issue #2145) — and the **bytes** pick
+  between them, never the name. The extension only decides whether to read the
+  file at all, which is what it was ever good for: a `.png` full of SVG markup
+  is an SVG to libvips (`Vutuv.Uploads.Spec.svg_binary?/1`), so it has to be one
+  here too.
+
+  **It fails closed.** A file neither stripper can take apart with certainty
+  yields `nil` rather than the untouched original, because the whole point of
+  offering a cleaned copy is the promise that the file carries nothing but the
+  picture, and falling back to the upload would break exactly that promise while
+  looking like it worked.
 
   Written here rather than in each store because both places that hand a
   full-resolution file over make the same promise — the post photo's
@@ -111,19 +120,37 @@ defmodule Vutuv.Uploads.Originals do
     dest = Path.join(dir(storage_dir), "cleaned#{ext}")
 
     cond do
-      File.exists?(dest) -> {dest, ext}
-      # A fast path only: `strip/2` sniffs the bytes and answers `:unsupported`
-      # for these containers anyway, but reading a 30 MB press photo to find
-      # that out is what this skips.
-      not MetadataStrip.supported?(ext) -> nil
-      true -> write_cleaned(original, dest, ext)
+      File.exists?(dest) ->
+        {dest, ext}
+
+      # A fast path only: neither stripper is asked what the name says, but
+      # reading a 30 MB press photo to find out nothing can clean it is what
+      # this skips.
+      MetadataStrip.supported?(ext) or SvgStrip.supported?(ext) ->
+        write_cleaned(original, dest, ext)
+
+      true ->
+        nil
     end
   end
 
   defp write_cleaned(original, dest, ext) do
-    case MetadataStrip.strip(original, ext) do
-      :unsupported -> nil
-      bytes -> {publish(dest, bytes), ext}
+    with {:ok, bytes} <- File.read(original),
+         {:ok, cleaned} <- strip(bytes) do
+      {publish(dest, cleaned), ext}
+    else
+      _unclean -> nil
+    end
+  end
+
+  defp strip(bytes) do
+    if Spec.svg_binary?(bytes) do
+      SvgStrip.clean(bytes)
+    else
+      case MetadataStrip.strip_binary(bytes) do
+        :unsupported -> :error
+        cleaned -> {:ok, cleaned}
+      end
     end
   end
 
