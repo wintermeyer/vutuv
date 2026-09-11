@@ -44,6 +44,21 @@ defmodule Vutuv.Posts.Pending do
       tell "the post is already there" from "it never happened" instead of
       writing the member's post twice.
 
+  ## When the check cannot run
+
+  A file's preview pages, and a clip's frames, wait on the AI scanner, and an
+  unreachable scanner is retried for ever by design — nothing may be released
+  without a verdict. So the wait itself has no ceiling, and until #2149 neither
+  did the sentence: a post on an installation whose Ollama was down said "our
+  AI is checking 1 picture" at ten minutes, at a day and at thirty days. The
+  **pipeline is unchanged**; what has a ceiling is the claim. Past
+  `Vutuv.Moderation.ImageScans.stall_after_seconds/0` of unbroken
+  service failure the stage is `:stalled`, the app bar stops counting the row
+  as work in flight, and the author is told plainly. Nothing is refused and
+  nothing is dropped, so a blip cannot cost a post: the stamp the ceiling reads
+  is cleared the moment the scanner answers, and the verdict then publishes the
+  post by itself.
+
   ## The clock advances on every outcome
 
   `due/1` is oldest-clock-first, and `sweep/1` stamps `checked_at` on every row
@@ -61,6 +76,7 @@ defmodule Vutuv.Posts.Pending do
   alias Vutuv.Attachments.Attachment
   alias Vutuv.Attachments.Pages
   alias Vutuv.Images.Image
+  alias Vutuv.Moderation.ImageScans
   alias Vutuv.Posts.PendingPost
   alias Vutuv.Posts.Post
   alias Vutuv.Posts.PostVideo
@@ -239,7 +255,9 @@ defmodule Vutuv.Posts.Pending do
 
   A row whose medium was refused is waiting for its *author*, not for us, so it
   is not counted: the chip is on every page and would otherwise sit there
-  amber for ever while the card for that same row says it was refused.
+  amber for ever while the card for that same row says it was refused. A
+  `:stalled` row is out for the same reason and a stronger one — nothing is
+  working on it at all (issue #2149).
   """
   def in_progress_summary(user_id) when is_binary(user_id) do
     rows = waiting_for(user_id)
@@ -271,10 +289,12 @@ defmodule Vutuv.Posts.Pending do
 
   `stage` is where the pipeline is, as data a surface turns into a sentence —
   `{:video, video}`, `{:rendering, done, total}`, `{:checking, count}`,
-  `:refused` or `:ready`. `state` is that classified for the publisher:
-  `:ready`, `:refused` (it can never become ready, so the author has to
-  choose) or `:working`. **Derived from the stage rather than read again**, so
-  a new medium or a new stage word is one edit, not three.
+  `:stalled`, `:refused` or `:ready`. `state` is that classified for the
+  publisher: `:ready`, `:refused` (it can never become ready, so the author has
+  to choose), `:stalled` (the scanner has been unreachable past the ceiling, so
+  nobody can say when it will) or `:working`. **Derived from the stage rather
+  than read again**, so a new medium or a new stage word is one edit, not
+  three.
 
   Surfaces take the whole map and pass it down; nothing asks twice.
   """
@@ -288,11 +308,17 @@ defmodule Vutuv.Posts.Pending do
   """
   def readings(pendings) when is_list(pendings) do
     pendings = preload_media(pendings)
-    ids = for pending <- pendings, file <- pending.attachments, do: file.id
-    checking = page_counts(ids, "pending")
-    rendered = page_counts(ids, :any)
+    pages = page_rows(for pending <- pendings, file <- pending.attachments, do: file.id)
+    awaiting = awaiting_verdict(pages)
 
-    Map.new(pendings, &{&1.id, read_one(&1, checking, rendered)})
+    batch = %{
+      awaiting: awaiting,
+      rendered: page_counts(pages),
+      stalled:
+        ImageScans.stalled_subjects(Enum.flat_map(pendings, &awaited_verdicts(&1, awaiting)))
+    }
+
+    Map.new(pendings, &{&1.id, read_one(&1, batch)})
   end
 
   @doc "Whether this row can be published — `reading/1`'s `state`."
@@ -304,10 +330,10 @@ defmodule Vutuv.Posts.Pending do
   @doc "The files this row is waiting on, in upload order."
   def attachments(%PendingPost{} = pending), do: reading(pending).files
 
-  defp read_one(%PendingPost{} = pending, checking, rendered) do
+  defp read_one(%PendingPost{} = pending, batch) do
     files = Enum.sort_by(pending.attachments, & &1.inserted_at, NaiveDateTime)
-    file_states = Map.new(files, &{&1.id, file_state(&1, checking)})
-    stage = stage_of(pending.video, files, file_states, checking, rendered)
+    file_states = Map.new(files, &{&1.id, waiting_file_state(&1, batch)})
+    stage = stage_of(pending.video, files, file_states, batch)
 
     %{
       stage: stage,
@@ -330,7 +356,11 @@ defmodule Vutuv.Posts.Pending do
     video = video_state(pending.video)
     states = Map.values(file_states)
 
-    survivors_settled? = video in [:done, :refused] and Enum.all?(states, &(&1 != :working))
+    # `:done` and `:refused` are the only settled answers — a file still being
+    # worked on, or one whose check cannot be reached, would be carried into
+    # the insert and roll it back.
+    survivors_settled? =
+      video in [:done, :refused] and Enum.all?(states, &(&1 in [:done, :refused]))
 
     # `video_state/1` answers `:done` for a post that has no clip at all, so
     # the clip only counts as content when there really is one.
@@ -341,20 +371,59 @@ defmodule Vutuv.Posts.Pending do
     survivors_settled? and keeps_something?
   end
 
+  defp stage_of(video, files, file_states, batch),
+    do: video |> pipeline_stage(files, file_states, batch) |> unreachable_check(batch)
+
   # The clip comes first when there is one, because it is the slowest and the
-  # only stage that can name a percent.
-  defp stage_of(video, files, file_states, checking, rendered) do
+  # only stage that can name a percent. `:stalled` sits exactly where the files
+  # would otherwise be reported as being checked — a file carries its own
+  # stalled state — and never above a refusal: a decided medium stays decided.
+  defp pipeline_stage(video, files, file_states, batch) do
     video_state = video_state(video)
-    still_checking = files |> Enum.map(&Map.get(checking, &1.id, 0)) |> Enum.sum()
+    states = Map.values(file_states)
+    still_checking = files |> Enum.map(&length(awaiting(batch, &1))) |> Enum.sum()
 
     cond do
-      video_state == :refused or :refused in Map.values(file_states) -> :refused
+      video_state == :refused or :refused in states -> :refused
       video_state == :working -> {:video, video}
-      Enum.any?(files, &(&1.stage in ~w(stored rendering))) -> rendering(files, rendered)
+      Enum.any?(files, &(&1.stage in ~w(stored rendering))) -> rendering(files, batch.rendered)
+      :stalled in states -> :stalled
       still_checking > 0 -> {:checking, still_checking}
       true -> :ready
     end
   end
+
+  # The clip's half of the same rule, and the one stage that has to be caught
+  # from outside: a clip at `checking` outranks every file above, so its
+  # frames' stall would otherwise be reported as "our AI is checking it"
+  # (issue #2149). A clip still being converted is waiting for ffmpeg, not for
+  # Ollama, and is left alone.
+  defp unreachable_check({:video, %PostVideo{stage: "checking"} = video}, batch) do
+    if stalled?(frame_verdicts(video), batch.stalled), do: :stalled, else: {:video, video}
+  end
+
+  defp unreachable_check(stage, _batch), do: stage
+
+  # Every picture the AI check still owes this row a verdict on: the preview
+  # pages of its files that no verdict has reached, and — only while the clip
+  # is at `checking`, since a clip being converted is waiting for ffmpeg and
+  # not for Ollama — that clip's frames.
+  defp awaited_verdicts(%PendingPost{} = pending, awaiting) do
+    frame_verdicts(pending.video) ++
+      Enum.flat_map(pending.attachments, &Map.get(awaiting, &1.id, []))
+  end
+
+  defp frame_verdicts(%PostVideo{stage: "checking", frames: frames}) when is_list(frames),
+    do: Enum.map(frames, & &1.id)
+
+  defp frame_verdicts(_video), do: []
+
+  # One unreachable-scanner stamp older than the ceiling is enough. If the
+  # service were back, the 300-second retry would have cleared every one of
+  # these stamps long before the ceiling — so a single survivor is the outage,
+  # not a page that got unlucky.
+  defp stalled?(subject_ids, stalled),
+    do: Enum.any?(subject_ids, &MapSet.member?(stalled, &1))
 
   defp rendering(files, rendered),
     do: {:rendering, page_sum(rendered, files), wanted_pages(files)}
@@ -363,23 +432,34 @@ defmodule Vutuv.Posts.Pending do
     do: files |> Enum.map(&Map.get(counts, &1.id, 0)) |> Enum.sum()
 
   defp state_of(:refused), do: :refused
+  defp state_of(:stalled), do: :stalled
   defp state_of(:ready), do: :ready
   defp state_of(_working), do: :working
 
-  defp page_counts([], _moderation), do: %{}
+  # Every preview page of these files, in **one** query: which of them a
+  # verdict has not reached (the ids, because the ids are what the scan queue
+  # is asked about) and how many exist at all ("page 2 of 3"). Five pages per
+  # file at most, so carrying both answers back is cheaper than a second round
+  # trip over the same rows.
+  defp page_rows([]), do: []
 
-  defp page_counts(ids, moderation) do
+  defp page_rows(ids) do
     Image
     |> where([i], i.kind == ^Pages.kind() and i.attachment_id in ^ids)
-    |> page_moderation(moderation)
-    |> group_by([i], i.attachment_id)
-    |> select([i], {i.attachment_id, count(i.id)})
+    |> select([i], {i.attachment_id, i.id, i.moderation})
     |> Repo.all()
-    |> Map.new()
   end
 
-  defp page_moderation(query, :any), do: query
-  defp page_moderation(query, moderation), do: where(query, [i], i.moderation == ^moderation)
+  defp awaiting_verdict(pages) do
+    for {file_id, page_id, "pending"} <- pages, reduce: %{} do
+      acc -> Map.update(acc, file_id, [page_id], &[page_id | &1])
+    end
+  end
+
+  defp page_counts(pages),
+    do: Enum.frequencies_by(pages, fn {file_id, _id, _state} -> file_id end)
+
+  defp awaiting(batch, %Attachment{id: id}), do: Map.get(batch.awaiting, id, [])
 
   # How many pages the renders are aiming for, so "page 2 of 3" can be said.
   defp wanted_pages(files), do: files |> Enum.map(&Pages.wanted_count/1) |> Enum.sum()
@@ -400,7 +480,7 @@ defmodule Vutuv.Posts.Pending do
   publisher cannot each answer it differently — a chip reading "ready" beside a
   post that then parks is exactly the confusion this whole issue is about.
   """
-  def file_state(%Attachment{} = file), do: file_state(file, page_counts([file.id], "pending"))
+  def file_state(%Attachment{} = file), do: Map.fetch!(file_states([file]), file.id)
 
   @doc """
   The same for a list, as `%{attachment_id => state}` and in **one** query — a
@@ -408,17 +488,30 @@ defmodule Vutuv.Posts.Pending do
   single form would run a query each.
   """
   def file_states(files) when is_list(files) do
-    checking = page_counts(Enum.map(files, & &1.id), "pending")
+    batch = %{awaiting: awaiting_verdict(page_rows(Enum.map(files, & &1.id)))}
 
-    Map.new(files, &{&1.id, file_state(&1, checking)})
+    Map.new(files, &{&1.id, file_state(&1, batch)})
   end
 
-  defp file_state(%Attachment{stage: stage} = file, checking) do
+  defp file_state(%Attachment{stage: stage} = file, batch) do
     cond do
       Attachment.refused?(file) -> :refused
       stage in ~w(stored rendering) -> :working
-      Map.get(checking, file.id, 0) > 0 -> :working
+      awaiting(batch, file) != [] -> :working
       true -> :done
+    end
+  end
+
+  # The same, plus the fourth answer only a waiting row asks for: a file whose
+  # pages nobody can get a verdict on. It is deliberately **not** in
+  # `file_state/1` — that one answers the *gate's* question ("may this be
+  # shown?"), where a stalled file and a working one are the same closed door,
+  # and giving it a fourth value would put a scan-queue lookup on every file
+  # read. This one answers the *author's* ("is anybody working on it?").
+  defp waiting_file_state(%Attachment{} = file, batch) do
+    case file_state(file, batch) do
+      :working -> if stalled?(awaiting(batch, file), batch.stalled), do: :stalled, else: :working
+      settled -> settled
     end
   end
 

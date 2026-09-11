@@ -13,6 +13,7 @@ defmodule Vutuv.Moderation.ImageScansTest do
   import Ecto.Query
   import ExUnit.CaptureLog
   import Vutuv.PostsHelpers
+  import Vutuv.WebPushHelpers, only: [put_config: 2]
 
   alias Vutuv.Accounts
   alias Vutuv.Moderation.ImageScan
@@ -72,6 +73,22 @@ defmodule Vutuv.Moderation.ImageScansTest do
   end
 
   defp reload(user), do: Repo.get!(Vutuv.Accounts.User, user.id)
+
+  # The backed-off row, due again — a retry without waiting out the pace.
+  defp due_now do
+    Repo.update_all(from(s in ImageScan, where: s.status == "pending"),
+      set: [next_attempt_at: nil]
+    )
+  end
+
+  # How long the outage on this scan has been running. Written rather than
+  # waited for, so the ceiling is decided by the row and never by the time of
+  # day the suite runs at.
+  defp outage!(%ImageScan{id: id}, seconds) do
+    Repo.update_all(from(s in ImageScan, where: s.id == ^id),
+      set: [service_failing_since: DateTime.add(DateTime.utc_now(:second), -seconds, :second)]
+    )
+  end
 
   defp open_scan(kind, subject_id) do
     Repo.one(
@@ -373,6 +390,49 @@ defmodule Vutuv.Moderation.ImageScansTest do
       assert ImageScans.list_due() == []
       # Service errors never count toward the fail-closed rejection cap.
       assert scan.attempts == 0
+    end
+
+    test "the outage is stamped once and cleared the moment Ollama answers at all",
+         %{user: user} do
+      user = upload_avatar(user)
+
+      ImageScans.deliver_due(judge: fn _path -> {:error, {:service, :econnrefused}} end)
+
+      since = open_scan("avatar", user.id).service_failing_since
+
+      assert since,
+             "a service failure recorded nothing about when the outage started, " <>
+               "so nobody waiting on this verdict can tell a blip from a dead host"
+
+      # A second failure measures the same outage rather than restarting it,
+      # or a queue retrying every five minutes would never look old.
+      due_now()
+      ImageScans.deliver_due(judge: fn _path -> {:error, {:service, :timeout}} end)
+      assert open_scan("avatar", user.id).service_failing_since == since
+
+      # Ollama answered — it just could not judge this picture. That is the
+      # scanner working, so the outage is over and the next one starts fresh.
+      due_now()
+      ImageScans.deliver_due(judge: fn _path -> {:error, {:image, :bad_verdict}} end)
+      refute open_scan("avatar", user.id).service_failing_since
+    end
+
+    test "only an outage past the ceiling counts as a check that cannot run", %{user: user} do
+      user = upload_avatar(user)
+      ImageScans.deliver_due(judge: fn _path -> {:error, {:service, :econnrefused}} end)
+      scan = open_scan("avatar", user.id)
+
+      # A second under the half hour: the check is late, not absent.
+      outage!(scan, ImageScans.stall_after_seconds() - 1)
+      assert ImageScans.stalled_subjects([scan.subject_id]) == MapSet.new()
+
+      outage!(scan, ImageScans.stall_after_seconds() + 1)
+      assert ImageScans.stalled_subjects([scan.subject_id]) == MapSet.new([scan.subject_id])
+
+      # The ceiling is the installation's: a GPU box that is regularly away for
+      # an hour is not a stall there.
+      put_config(:ai_check_stall_seconds, 24 * 3_600)
+      assert ImageScans.stalled_subjects([scan.subject_id]) == MapSet.new()
     end
 
     test "an unjudgeable image caps out into rejection, never release", %{user: user} do

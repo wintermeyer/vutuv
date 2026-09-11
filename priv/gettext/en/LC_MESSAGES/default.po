@@ -109,7 +109,7 @@ msgstr ""
 msgid "Birthday"
 msgstr ""
 
-#: lib/vutuv_web/components/pending_post_components.ex:211
+#: lib/vutuv_web/components/pending_post_components.ex:249
 #: lib/vutuv_web/components/saved_search_components.ex:104
 #: lib/vutuv_web/components/ui.ex:4935
 #: lib/vutuv_web/live/admin/newsletter_broadcast_live.ex:210
@@ -22086,7 +22086,7 @@ msgstr ""
 msgid "Appearance"
 msgstr ""
 
-#: lib/vutuv_web/components/pending_post_components.ex:178
+#: lib/vutuv_web/components/pending_post_components.ex:216
 #, elixir-autogen, elixir-format
 msgid "About %{minutes} min of video"
 msgstr ""
@@ -22101,7 +22101,7 @@ msgstr ""
 msgid "Converting · %{percent} %"
 msgstr ""
 
-#: lib/vutuv_web/components/pending_post_components.ex:211
+#: lib/vutuv_web/components/pending_post_components.ex:249
 #, elixir-autogen, elixir-format, fuzzy
 msgid "Delete this post"
 msgstr ""
@@ -22163,7 +22163,7 @@ msgstr ""
 msgid "The video is longer than %{seconds} seconds."
 msgstr ""
 
-#: lib/vutuv_web/components/pending_post_components.ex:126
+#: lib/vutuv_web/components/pending_post_components.ex:142
 #, elixir-autogen, elixir-format
 msgid "This post is still waiting for you"
 msgstr ""
@@ -24321,12 +24321,12 @@ msgid_plural "Our AI is checking %{formatted} pictures."
 msgstr[0] ""
 msgstr[1] ""
 
-#: lib/vutuv_web/components/pending_post_components.ex:203
+#: lib/vutuv_web/components/pending_post_components.ex:241
 #, elixir-autogen, elixir-format, fuzzy
 msgid "Post without it"
 msgstr ""
 
-#: lib/vutuv_web/components/pending_post_components.ex:58
+#: lib/vutuv_web/components/pending_post_components.ex:70
 #, elixir-autogen, elixir-format, fuzzy
 msgid "Publishing it now"
 msgstr ""
@@ -24346,7 +24346,7 @@ msgstr ""
 msgid "Waiting"
 msgstr ""
 
-#: lib/vutuv_web/components/pending_post_components.ex:130
+#: lib/vutuv_web/components/pending_post_components.ex:153
 #, elixir-autogen, elixir-format, fuzzy
 msgid "Your post appears as soon as its files are ready"
 msgstr ""
@@ -24357,22 +24357,22 @@ msgstr ""
 msgid "Your uploads"
 msgstr ""
 
-#: lib/vutuv_web/components/pending_post_components.ex:115
+#: lib/vutuv_web/components/pending_post_components.ex:127
 #, elixir-autogen, elixir-format
 msgid "being prepared"
 msgstr ""
 
-#: lib/vutuv_web/components/pending_post_components.ex:116
+#: lib/vutuv_web/components/pending_post_components.ex:131
 #, elixir-autogen, elixir-format, fuzzy
 msgid "ready"
 msgstr ""
 
-#: lib/vutuv_web/components/pending_post_components.ex:114
+#: lib/vutuv_web/components/pending_post_components.ex:126
 #, elixir-autogen, elixir-format, fuzzy
 msgid "refused"
 msgstr ""
 
-#: lib/vutuv_web/components/pending_post_components.ex:127
+#: lib/vutuv_web/components/pending_post_components.ex:150
 #, elixir-autogen, elixir-format, fuzzy
 msgid "Your post appears as soon as the video is ready"
 msgstr ""
@@ -24774,4 +24774,19 @@ msgstr ""
 #: lib/vutuv_web/live/press_kit_live.ex:549
 #, elixir-autogen, elixir-format
 msgid "This logo has a file embedded in it, usually a web font, that vutuv cannot check. Export it again with the text converted to outlines."
+msgstr ""
+
+#: lib/vutuv_web/components/pending_post_components.ex:64
+#, elixir-autogen, elixir-format
+msgid "Our AI check cannot be reached at the moment. Your post is kept here and goes out by itself as soon as the check runs again."
+msgstr ""
+
+#: lib/vutuv_web/components/pending_post_components.ex:147
+#, elixir-autogen, elixir-format
+msgid "This post is waiting for a check that cannot run"
+msgstr ""
+
+#: lib/vutuv_web/components/pending_post_components.ex:130
+#, elixir-autogen, elixir-format, fuzzy
+msgid "waiting for the check"
 msgstr ""

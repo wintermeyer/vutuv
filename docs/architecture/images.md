@@ -1541,7 +1541,12 @@ The moving parts (all under `Vutuv.Moderation`):
   said what the model actually saw). Two error classes: `{:service, _}`
   (Ollama down — retry forever, fail-closed) vs `{:image, _}` (this file
   can't be judged — capped, then rejected; an unverifiable image is never
-  released).
+  released). A service error also stamps `service_failing_since` on the scan
+  row, kept from the first failure of the run and cleared as soon as Ollama
+  answers at all; `ImageScans.stalled_subjects/1` reads it so whoever is
+  *waiting* on a verdict (a post with a file, #2149) can stop claiming a check
+  is in progress after `stall_after_seconds/0`. It bounds the sentence, never
+  the queue: nothing is released or refused when it passes.
 - `ImageScanWorker` — boot-resume + poll + nudge, mirroring
   `Vutuv.Posts.ScreenshotWorker`; hourly `repair_drift/0` re-enqueues any
   asset stranded in `pending`, and `ImageSubjects.settle_stranded_quarantine/0`
