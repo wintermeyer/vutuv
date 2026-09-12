@@ -94,6 +94,17 @@ defmodule Vutuv.Tags.SourceServers do
   """
   def offered, do: offered(blocked_hosts(configured()))
 
+  @doc """
+  Whether the operator names any other server at all — the intranet question,
+  and the one a per-request caller may ask.
+
+  `offered/0` answers who, and pays a blocklist query for it; this answers
+  whether, from configuration alone. Blocking one of the ten does not make an
+  installation an air-gapped one, so the rare operator who blocks *every* server
+  they themselves configured is the one case where the two disagree.
+  """
+  def configured?, do: configured() != []
+
   defp offered(blocked) do
     if enabled?() do
       configured() |> Enum.reject(&MapSet.member?(blocked, &1)) |> Enum.uniq()
