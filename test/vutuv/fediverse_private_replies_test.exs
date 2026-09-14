@@ -25,6 +25,43 @@ defmodule Vutuv.FediversePrivateRepliesTest do
     {:ok, user: user, post: post, note: note}
   end
 
+  test "feed previews retain an older privately answered note and scope its answers", %{
+    user: user,
+    note: note,
+    post: post
+  } do
+    {:ok, reply} = Fediverse.create_private_reply(user, note, %{body: "Remember this"})
+    for _ <- 1..4, do: insert(:note, post: post)
+    notes = Fediverse.list_feed_notes([post.id], user)[post.id]
+    loaded = Enum.find(notes, &(&1.id == note.id))
+    assert loaded
+    assert Enum.map(loaded.private_replies, & &1.id) == [reply.id]
+    stranger = insert(:activated_user)
+
+    for viewer <- [nil, stranger] do
+      refute Enum.any?(
+               Fediverse.list_feed_notes([post.id], viewer)[post.id] || [],
+               &(&1.id == note.id)
+             )
+    end
+  end
+
+  test "private answers stay hidden when the remote parent becomes public", %{
+    user: user,
+    note: note,
+    post: post
+  } do
+    {:ok, reply} = Fediverse.create_private_reply(user, note, %{body: "Still private"})
+    Repo.update!(Ecto.Changeset.change(note, audience: "public"))
+    assert [loaded] = Fediverse.list_notes([post.id], user)[post.id]
+    assert Enum.map(loaded.private_replies, & &1.id) == [reply.id]
+
+    for viewer <- [nil, insert(:activated_user)] do
+      assert [public_note] = Fediverse.list_notes([post.id], viewer)[post.id]
+      assert public_note.private_replies == []
+    end
+  end
+
   test "the storage supports a message without a post or parent", %{user: user, note: note} do
     message = %PrivateMessage{
       user_id: user.id,

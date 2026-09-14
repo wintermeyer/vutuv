@@ -65,6 +65,7 @@ defmodule Vutuv.Fediverse.Note do
   def warned?(%__MODULE__{summary: summary}), do: is_binary(summary) and summary != ""
 
   schema "fediverse_notes" do
+    field(:private_replies, {:array, :map}, virtual: true, default: [])
     field(:object_uri, :string)
     field(:actor_uri, :string)
     field(:origin_url, :string)

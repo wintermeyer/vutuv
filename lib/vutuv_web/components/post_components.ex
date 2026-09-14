@@ -1518,6 +1518,16 @@ defmodule VutuvWeb.PostComponents do
             viewer={@viewer}
             marks={@marks}
           />
+          <div
+            :for={reply <- @note.private_replies}
+            :if={@viewer && reply.user_id == @viewer.id}
+            id={"private-reply-#{reply.id}"}
+            data-private-reply={reply.id}
+            class="mt-4 space-y-2 border-l-2 border-slate-200 pl-4 dark:border-slate-700"
+          >
+            <.remote_restricted_note>{gettext("Your private reply")}</.remote_restricted_note>
+            <p class="whitespace-pre-wrap break-words text-slate-700 dark:text-slate-200">{reply.body}</p>
+          </div>
         </div>
       </div>
     </article>

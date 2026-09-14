@@ -33,7 +33,26 @@ defmodule VutuvWeb.PostThreadRemoteRepliesTest do
 
     # The embedded thread resolves the viewer from the cookie's session_token
     # (issue #1036), never a bare user_id, so its tests hand it a real session.
-    {:ok, user: user, post: post, owner: Plug.Conn.get_session(conn)}
+    {:ok, conn: conn, user: user, post: post, owner: Plug.Conn.get_session(conn)}
+  end
+
+  test "private sent replies appear in the owner's thread and feed only", %{
+    conn: conn,
+    user: user,
+    post: post,
+    owner: owner
+  } do
+    note = note!(post, audience: "direct")
+    {:ok, reply} = Fediverse.create_private_reply(user, note, %{body: "A confidential answer"})
+    {:ok, view, _} = thread_view(post, owner)
+    assert has_element?(view, "[data-private-reply=\"#{reply.id}\"]", "A confidential answer")
+    {:ok, feed, _} = live(conn, "/feed")
+    assert has_element?(feed, "[data-private-reply=\"#{reply.id}\"]", "A confidential answer")
+    {:ok, _, anonymous} = thread_view(post)
+    refute anonymous =~ "A confidential answer"
+    {_other, cookie} = other_member()
+    {:ok, _, stranger} = thread_view(post, cookie)
+    refute stranger =~ "A confidential answer"
   end
 
   defp note!(post, attrs \\ []) do

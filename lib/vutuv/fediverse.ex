@@ -6361,6 +6361,7 @@ defmodule Vutuv.Fediverse do
       order_by: [asc: n.received_at, asc: n.id]
     )
     |> Repo.all()
+    |> attach_private_replies(viewer)
     |> Enum.group_by(& &1.post_id)
   end
 
@@ -6401,18 +6402,49 @@ defmodule Vutuv.Fediverse do
           }
         )
 
+      answered =
+        from(n in Note,
+          join: message in PrivateMessage,
+          on: message.in_reply_to_uri == n.object_uri,
+          where: message.user_id == ^note_viewer_id(viewer) and n.post_id in ^post_ids,
+          select: n.id
+        )
+
       wanted =
-        from(r in subquery(ranked), where: r.rank <= ^per_post or r.id in ^keep, select: r.id)
+        from(r in subquery(ranked),
+          where: r.rank <= ^per_post or r.id in ^keep or r.id in subquery(answered),
+          select: r.id
+        )
 
       from(n in notes_with_account(),
         where: n.id in subquery(wanted),
         order_by: [asc: n.received_at, asc: n.id]
       )
       |> Repo.all()
+      |> attach_private_replies(viewer)
       |> Enum.group_by(& &1.post_id)
     else
       %{}
     end
+  end
+
+  # Batch-load only this viewer's outgoing messages. Public loaders and counts
+  # never receive them, even if their parent note later becomes public.
+  defp attach_private_replies([], _viewer), do: []
+  defp attach_private_replies(notes, nil), do: notes
+
+  defp attach_private_replies(notes, %User{id: user_id}) do
+    uris = Enum.map(notes, & &1.object_uri)
+
+    messages =
+      from(message in PrivateMessage,
+        where: message.user_id == ^user_id and message.in_reply_to_uri in ^uris,
+        order_by: [asc: message.id]
+      )
+      |> Repo.all()
+      |> Enum.group_by(& &1.in_reply_to_uri)
+
+    Enum.map(notes, &%{&1 | private_replies: Map.get(messages, &1.object_uri, [])})
   end
 
   # Notes carrying `account_id`: whether we hold a row for the actor who wrote
