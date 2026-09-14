@@ -103,3 +103,7 @@ curl -H "Authorization: Bearer vutuv_pat_YOUR_TOKEN" https://vutuv.de/api/2.0/me
 Full developer documentation is served at
 [`/developers`](https://vutuv.de/developers) (sources:
 [`priv/dev_docs/`](priv/dev_docs/)).
+
+The Mastodon-compatible API serves public account profiles, posts, post
+contexts and booster lists without a token. Private data and write actions
+still require OAuth.

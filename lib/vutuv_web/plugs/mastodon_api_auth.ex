@@ -16,10 +16,42 @@ defmodule VutuvWeb.Plug.MastodonApiAuth do
 
   def call(conn, _opts) do
     case bearer_token(conn) do
-      token when is_binary(token) -> authenticate(conn, token)
-      _missing -> error(conn, 401, "The access token is invalid")
+      token when is_binary(token) ->
+        authenticate(conn, token)
+
+      _missing ->
+        if public_read?(conn) do
+          conn
+          |> assign(:current_user, nil)
+          |> assign(:current_organization, nil)
+        else
+          error(conn, 401, "The access token is invalid")
+        end
     end
   end
+
+  # These reads already filter through the anonymous visibility rules. Keep
+  # every other route, and every request presenting an invalid token, gated.
+  defp public_read?(%{method: "GET", path_info: ["api", "v1", "accounts", "lookup"]}),
+    do: true
+
+  defp public_read?(%{method: "GET", path_info: ["api", "v1", "accounts", id]})
+       when id not in ["verify_credentials", "relationships"],
+       do: true
+
+  defp public_read?(%{method: "GET", path_info: ["api", "v1", "accounts", _id, "statuses"]}),
+    do: true
+
+  defp public_read?(%{method: "GET", path_info: ["api", "v1", "statuses", _id]}),
+    do: true
+
+  defp public_read?(%{method: "GET", path_info: ["api", "v1", "statuses", _id, "context"]}),
+    do: true
+
+  defp public_read?(%{method: "GET", path_info: ["api", "v1", "statuses", _id, "reblogged_by"]}),
+    do: true
+
+  defp public_read?(_conn), do: false
 
   defp authenticate(conn, plaintext) do
     case ApiAuth.verify_token(plaintext) do
