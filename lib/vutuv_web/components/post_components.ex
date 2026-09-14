@@ -63,8 +63,8 @@ defmodule VutuvWeb.PostComponents do
   alias Vutuv.Tags.ExternalPosts
   alias Vutuv.Translations.Translation
   alias VutuvWeb.FediverseComponents
-  alias VutuvWeb.Live.PostTranslations
   alias VutuvWeb.Live.ExternalPostActionsComponent
+  alias VutuvWeb.Live.PostTranslations
   alias VutuvWeb.Markdown
   alias VutuvWeb.PostLive.RemoteActionsComponent
   alias VutuvWeb.PostTeaser

@@ -19,11 +19,11 @@ defmodule VutuvWeb.ExternalTagCardsTest do
   import Vutuv.ExternalTagHelpers
   import Vutuv.MastodonHelpers, only: [mastodon_conn: 2, mastodon_token: 2]
 
-  alias Vutuv.Repo
   alias Vutuv.Accounts
   alias Vutuv.Fediverse
   alias Vutuv.Fediverse.RemoteAccount
   alias Vutuv.Fediverse.RemotePost
+  alias Vutuv.Repo
   alias Vutuv.Tags.ExternalPost
 
   # The two hostnames the fixtures use — deliberately different everywhere but
