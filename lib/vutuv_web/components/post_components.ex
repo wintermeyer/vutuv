@@ -64,6 +64,7 @@ defmodule VutuvWeb.PostComponents do
   alias Vutuv.Translations.Translation
   alias VutuvWeb.FediverseComponents
   alias VutuvWeb.Live.PostTranslations
+  alias VutuvWeb.Live.ExternalPostActionsComponent
   alias VutuvWeb.Markdown
   alias VutuvWeb.PostLive.RemoteActionsComponent
   alias VutuvWeb.PostTeaser
@@ -3528,10 +3529,8 @@ defmodule VutuvWeb.PostComponents do
 
   What it does not have, and why:
 
-    * **no action bar.** A like would have to be delivered to an author this
-      installation has no actor for, and nothing here was addressed to us in the
-      first place — we went and read a public page. `remote_post_card/1`'s
-      heart hangs off a follow; there is none.
+    * **actions resolve on press.** The tag find stays text-only until a member
+      chooses an action, then the ordinary permalink lookup caches the post.
     * **no pictures.** The fetcher stores text and a link, deliberately, so that
       no foreign image reaches the AI gate (#2126). Nothing to render, and
       nothing to be tempted to hotlink.
@@ -3541,6 +3540,7 @@ defmodule VutuvWeb.PostComponents do
   """
   attr(:post, :map, required: true, doc: "a Vutuv.Tags.ExternalPost")
   attr(:viewer, :any, default: nil, doc: "the logged-in member, or nil")
+  attr(:live?, :boolean, default: false, doc: "whether this card has a LiveView host")
 
   attr(:servers, :list,
     default: [],
@@ -3661,6 +3661,13 @@ defmodule VutuvWeb.PostComponents do
             mode={@mode}
             body_id={@body_id}
             body_style={@body_style}
+          />
+          <.live_component
+            :if={@live? and @viewer}
+            module={ExternalPostActionsComponent}
+            id={"external-actions-#{@post.id}"}
+            url={@origin}
+            viewer={@viewer}
           />
         </div>
       </div>

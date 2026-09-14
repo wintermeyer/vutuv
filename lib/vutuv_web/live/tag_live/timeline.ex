@@ -411,6 +411,7 @@ defmodule VutuvWeb.TagLive.Timeline do
               (issue #2127) — for most topics, the only thing that fills this
               tab at all. --%>
               <.external_post_card
+                live?
                 post={entry.external_post}
                 servers={ExternalPosts.servers(entry)}
                 viewer={@current_user}

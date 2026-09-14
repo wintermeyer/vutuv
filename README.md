@@ -18,8 +18,9 @@ We use the [MIT License](LICENSE).
   links, contact details, online messengers with click-to-chat deep links) with
   follow relationships, posts, likes/reposts/replies and
   1:1 direct messages — all real-time (Phoenix LiveView) where it matters.
-  Members can also **follow a tag** to pull its posts into their feed and get
-  matching people suggested. Adding a new CV entry (job, education,
+  Members can also **follow a tag** to pull its posts into their feed, interact
+  with posts found through that tag (fetched only when they choose an action),
+  and get matching people suggested. Adding a new CV entry (job, education,
   certificate) can optionally notify your followers — your call per entry,
   in-app only, and switchable off by whoever receives it. A post can be a
   **book or film review**: attach an ISBN (or IMDb link) plus title, author or

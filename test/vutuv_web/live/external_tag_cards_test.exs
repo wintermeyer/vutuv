@@ -20,6 +20,10 @@ defmodule VutuvWeb.ExternalTagCardsTest do
   import Vutuv.MastodonHelpers, only: [mastodon_conn: 2, mastodon_token: 2]
 
   alias Vutuv.Repo
+  alias Vutuv.Accounts
+  alias Vutuv.Fediverse
+  alias Vutuv.Fediverse.RemoteAccount
+  alias Vutuv.Fediverse.RemotePost
   alias Vutuv.Tags.ExternalPost
 
   # The two hostnames the fixtures use — deliberately different everywhere but
@@ -62,6 +66,52 @@ defmodule VutuvWeb.ExternalTagCardsTest do
 
       assert html =~ "EIN FUND VON DRUEBEN"
       assert html =~ ~s(data-external-post="#{post.id}")
+      assert html =~ ~s(data-external-action="like")
+      assert html =~ ~s(data-external-action="reply")
+      assert html =~ ~s(data-external-action="repost")
+      assert html =~ ~s(data-external-action="bookmark")
+    end
+
+    test "a bookmark press resolves a cached original and saves it", %{conn: conn, user: user} do
+      {:ok, user} = Accounts.update_user(user, %{"fediverse_followers?" => "true"})
+      {:ok, _actor} = Fediverse.ensure_actor(user)
+      user = Repo.reload!(user)
+      tag = followed_tag(user)
+      found = found_post(tag)
+
+      account =
+        Repo.insert!(%RemoteAccount{
+          actor_uri: "https://#{@author_host}/users/ada",
+          host: @author_host,
+          handle: "ada",
+          inbox_uri: "https://#{@author_host}/users/ada/inbox"
+        })
+
+      now = DateTime.utc_now(:second)
+
+      cached =
+        Repo.insert!(%RemotePost{
+          remote_account_id: account.id,
+          object_uri: "https://#{@author_host}/users/ada/statuses/111",
+          origin_url: found.url,
+          content_text: found.text,
+          audience: "public",
+          kind: "note",
+          published_at: now,
+          received_at: now,
+          expires_at: DateTime.add(now, 86_400)
+        })
+
+      {:ok, view, html} = live(conn, ~p"/feed")
+      assert html =~ ~s(data-external-action="bookmark")
+
+      html =
+        view
+        |> element(~s([data-external-post="#{found.id}"] [data-external-action="bookmark"]))
+        |> render_click()
+
+      refute html =~ ~s(data-external-action="bookmark")
+      assert MapSet.member?(Fediverse.bookmarked_ids(user, cached), cached.id)
     end
 
     test "the header names the author's server and the quiet line ours", %{

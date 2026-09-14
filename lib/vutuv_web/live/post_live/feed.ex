@@ -3835,6 +3835,7 @@ defmodule VutuvWeb.PostLive.Feed do
                   same remote skin, headed by the AUTHOR's address, with the
                   server we read it from in the quiet line under it. --%>
                   <.external_post_card
+                    live?
                     post={entry.external_post}
                     servers={ExternalPosts.servers(entry)}
                     viewer={@current_user}
