@@ -62,7 +62,7 @@ defmodule VutuvWeb.ExternalTagCardsTest do
       tag = followed_tag(user)
       post = found_post(tag)
 
-      {:ok, _view, html} = live(conn, ~p"/feed")
+      {:ok, view, html} = live(conn, ~p"/feed")
 
       assert html =~ "EIN FUND VON DRUEBEN"
       assert html =~ ~s(data-external-post="#{post.id}")
@@ -70,6 +70,13 @@ defmodule VutuvWeb.ExternalTagCardsTest do
       assert html =~ ~s(data-external-action="reply")
       assert html =~ ~s(data-external-action="repost")
       assert html =~ ~s(data-external-action="bookmark")
+
+      for act <- ~w(like reply repost bookmark) do
+        assert has_element?(
+                 view,
+                 ~s([data-external-post="#{post.id}"] [data-external-action="#{act}"] svg)
+               )
+      end
     end
 
     test "a bookmark press resolves a cached original and saves it", %{conn: conn, user: user} do

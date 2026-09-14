@@ -2053,9 +2053,10 @@ defmodule VutuvWeb.PostComponents do
   `…-remote-post` pairs the feed and the account page already handle.
   """
   attr(:id, :string, required: true, doc: "the bar's own id, which the controls key off")
-  attr(:target, :any, required: true, doc: "the RemoteActionsComponent that handles the presses")
+  attr(:target, :any, required: true, doc: "the LiveComponent that handles the presses")
   attr(:subject_id, :string, required: true, doc: "rides every control as phx-value-id")
   attr(:viewer, :any, default: nil, doc: "the logged-in member, or nil for no row at all")
+  attr(:pending?, :boolean, default: false, doc: "resolve a tag find on the first press")
   attr(:liked?, :boolean, default: false)
   attr(:reposted?, :boolean, default: false)
   attr(:bookmarked?, :boolean, default: false)
@@ -2132,6 +2133,7 @@ defmodule VutuvWeb.PostComponents do
         count={@likes}
         optimistic?={@standing_ok?}
         filled?
+        pending?={@pending?}
       >
         <.icon_heart filled?={@liked?} />
       </.remote_action>
@@ -2152,6 +2154,7 @@ defmodule VutuvWeb.PostComponents do
         count={@replies}
         open?={@replies_open?}
         expandable?={@replies_expandable?}
+        pending?={@pending?}
       />
 
       <%!-- `tinted?` for the reason the local bar's repost carries it. --%>
@@ -2168,6 +2171,7 @@ defmodule VutuvWeb.PostComponents do
         count={@shares}
         optimistic?={@standing_ok?}
         tinted?
+        pending?={@pending?}
       >
         <.icon_repost />
       </.remote_action>
@@ -2187,6 +2191,7 @@ defmodule VutuvWeb.PostComponents do
         off_label={gettext("Bookmark")}
         optimistic?
         filled?
+        pending?={@pending?}
       >
         <.icon_bookmark filled?={@bookmarked?} />
       </.remote_action>
@@ -2216,6 +2221,8 @@ defmodule VutuvWeb.PostComponents do
     doc: "paint the press on the spot rather than waiting for the answer"
   )
 
+  attr(:pending?, :boolean, default: false)
+
   attr(:filled?, :boolean, default: false, doc: "the glyph fills while active (heart, bookmark)")
 
   attr(:tinted?, :boolean,
@@ -2243,13 +2250,14 @@ defmodule VutuvWeb.PostComponents do
     <button
       type="button"
       id={@id}
-      phx-click={remote_toggle_js(@optimistic?, @on_class, @on_label, @off_label)}
+      phx-click={if(@pending?, do: "act", else: remote_toggle_js(@optimistic?, @on_class, @on_label, @off_label))}
       phx-target={@target}
       phx-value-act={@act}
       aria-pressed={to_string(@on?)}
       aria-label={@label}
       title={@label}
       data-remote-act={@act}
+      data-external-action={@pending? && @act}
       data-remote-id={@subject_id}
       data-on={@on? && "on"}
       data-awaits-server={!@optimistic? && "true"}
@@ -2356,9 +2364,18 @@ defmodule VutuvWeb.PostComponents do
   attr(:count, :integer, default: nil)
   attr(:open?, :boolean, default: false)
   attr(:expandable?, :boolean, default: true)
+  attr(:pending?, :boolean, default: false)
 
   # A post whose author narrowed its audience: nothing to answer and nothing to
   # unfold, so the slot is held open and gives up both its glyph and its figure.
+  defp remote_reply_control(%{pending?: true} = assigns) do
+    ~H"""
+    <button type="button" phx-click="act" phx-value-act="reply" phx-target={@target} data-external-action="reply" aria-label={gettext("Reply")} title={gettext("Reply")} class="inline-flex items-center gap-1.5 rounded-lg px-2 py-1 text-sm text-slate-600 hover:bg-slate-100 dark:text-slate-400 dark:hover:bg-slate-800">
+      <.icon_reply />
+    </button>
+    """
+  end
+
   defp remote_reply_control(%{href: href} = assigns) when href in [nil, false] do
     ~H"""
     <span aria-hidden="true" class="inline-flex px-2 py-1"><span class="h-5 w-5"></span></span>

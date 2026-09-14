@@ -7,6 +7,8 @@ defmodule VutuvWeb.Live.ExternalPostActionsComponent do
   use VutuvWeb, :live_component
   use Gettext, backend: VutuvWeb.Gettext
 
+  import VutuvWeb.PostComponents, only: [remote_actions: 1]
+
   alias Vutuv.Fediverse
   alias VutuvWeb.PostLive.RemoteActionsComponent
 
@@ -58,11 +60,15 @@ defmodule VutuvWeb.Live.ExternalPostActionsComponent do
           viewer={@viewer}
         />
       <% else %>
-        <div data-action-bar class="-mx-2 mt-3 flex items-center justify-between gap-2 text-slate-600 dark:text-slate-400">
-          <button :for={{act, label} <- [{"like", gettext("Like")}, {"reply", gettext("Reply")}, {"repost", gettext("Repost")}, {"bookmark", gettext("Bookmark")}]} type="button" data-external-action={act} phx-click="act" phx-value-act={act} phx-target={@myself} class="min-h-10 rounded-lg px-2 hover:bg-slate-100 dark:hover:bg-slate-800">
-            {label}
-          </button>
-        </div>
+        <.remote_actions
+          id={@id}
+          target={@myself}
+          subject_id={@id}
+          viewer={@viewer}
+          pending?
+          reply_to={nil}
+          repost?
+        />
       <% end %>
       <p :if={@error} role="alert" class="mt-2 text-sm text-red-700 dark:text-red-300">{@error}</p>
     </div>
