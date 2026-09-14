@@ -131,14 +131,42 @@ defmodule VutuvWeb.RemoteReplyPageTest do
   end
 
   describe "what is refused outright" do
-    test "a reply addressed to the member alone", %{conn: conn, post: post} do
+    test "a private text reply is sent and remains visible to its author", %{
+      conn: conn,
+      post: post
+    } do
       private = note!(post, audience: "direct")
+      {:ok, view, html} = live(conn, ~p"/system/fediverse/reply/#{private.id}")
+      assert html =~ "Only the sender"
+      refute html =~ "your Fediverse followers"
+      refute has_element?(view, "#composer-form")
 
-      assert {:error, {:redirect, %{to: to, flash: flash}}} =
-               live(conn, ~p"/system/fediverse/reply/#{private.id}")
+      view
+      |> form("#private-reply-form", %{"reply" => %{"body" => "Private thanks"}})
+      |> render_submit()
 
-      assert to == Posts.path(post)
-      assert flash["error"] =~ "sent to you alone"
+      assert has_element?(view, "[data-private-reply]", "Private thanks")
+      {:ok, reloaded, _} = live(conn, ~p"/system/fediverse/reply/#{private.id}")
+      assert has_element?(reloaded, "[data-private-reply]", "Private thanks")
+      refute Repo.get_by(Posts.Post, body: "Private thanks")
+    end
+
+    test "retains invalid text and refuses a target changed after opening", %{
+      conn: conn,
+      post: post
+    } do
+      note = note!(post, audience: "direct")
+      {:ok, view, _} = live(conn, ~p"/system/fediverse/reply/#{note.id}")
+      view |> form("#private-reply-form", %{"reply" => %{"body" => "   "}}) |> render_submit()
+      assert has_element?(view, "[aria-invalid=true]")
+      Repo.delete!(note)
+
+      view
+      |> form("#private-reply-form", %{"reply" => %{"body" => "Do not send"}})
+      |> render_submit()
+
+      assert render(view) =~ "could not be sent"
+      assert [] = Repo.all(Vutuv.Fediverse.PrivateMessage)
     end
 
     test "an unknown reply, without saying whether it ever existed", %{conn: conn} do
@@ -223,6 +251,13 @@ defmodule VutuvWeb.RemoteReplyPageTest do
     test "is offered on a public reply", %{conn: conn, post: post, note: note} do
       html = conn |> get(Posts.path(post)) |> html_response(200)
       assert html =~ "data-remote-reply-link=\"#{note.id}\""
+    end
+
+    test "offers private answering to the addressee", %{conn: conn, post: post} do
+      private = note!(post, audience: "direct")
+      html = conn |> get(Posts.path(post)) |> html_response(200)
+      assert html =~ ~s(data-remote-reply-link="#{private.id}")
+      assert html =~ ~s(href="/system/fediverse/reply/#{private.id}")
     end
 
     test "is absent for a logged-out visitor", %{post: post} do

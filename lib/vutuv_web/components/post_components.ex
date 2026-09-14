@@ -2035,10 +2035,10 @@ defmodule VutuvWeb.PostComponents do
 
     * **like** — needs an address to deliver to (`like?`); a reply stored before
       issue #1070 carries none.
-    * **reply** and **repost** — public subjects only (`reply_to`, `repost?`).
-      An answer is a public vutuv post and a reshare is publishing, and passing
-      on an audience its author narrowed is not ours to do, so there is no
-      control rather than one that refuses.
+    * **reply** (`reply_to`) opens the answering page. Direct messages use
+      its separate private text form; public notes use the post composer.
+    * **repost** (`repost?`) is public-only: resharing must never widen the
+      audience of a private message.
     * **bookmark** — always, for any signed-in reader. The one act that stays
       here: nothing is sent and nothing is addressed, so it asks nothing of the
       member's Fediverse standing.
@@ -4137,6 +4137,8 @@ defmodule VutuvWeb.PostComponents do
   slot(:target, required: true, doc: "the remote card showing what is being answered")
   slot(:composer, required: true)
 
+  attr(:private?, :boolean, default: false)
+
   def remote_answer_page(assigns) do
     ~H"""
     <div id={@id} class="py-6">
@@ -4164,10 +4166,14 @@ defmodule VutuvWeb.PostComponents do
             data-remote-reply-notice
             class="rounded-lg bg-brand-50 px-4 py-3 text-sm text-brand-800 dark:bg-brand-800/30 dark:text-brand-100"
           >
-            {gettext(
-              "Your answer goes to %{handle} on their own server and to your Fediverse followers. It is a public post on vutuv as well.",
-              handle: @handle
-            )}
+            <%= if @private? do %>
+              {gettext("Only the sender (%{handle}) receives your reply on their server. It stays private on vutuv.", handle: @handle)}
+            <% else %>
+              {gettext(
+                "Your answer goes to %{handle} on their own server and to your Fediverse followers. It is a public post on vutuv as well.",
+                handle: @handle
+              )}
+            <% end %>
           </p>
 
           {render_slot(@composer)}
@@ -4199,6 +4205,13 @@ defmodule VutuvWeb.PostComponents do
   """
   def answer_refusal_message(:note_not_public),
     do: gettext("This reply was sent to you alone, so it cannot be answered publicly.")
+
+  def answer_refusal_message(:no_inbox),
+    do: gettext("The sender's inbox is unavailable, so a private reply cannot be sent.")
+
+  def answer_refusal_message(:note_not_private),
+    do:
+      gettext("This message can no longer be answered privately. Please reload the conversation.")
 
   def answer_refusal_message(:post_not_public),
     do:

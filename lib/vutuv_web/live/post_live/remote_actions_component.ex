@@ -319,9 +319,9 @@ defmodule VutuvWeb.PostLive.RemoteActionsComponent do
   #     saved before issue #1070 has none, and a heart that could never leave
   #     the building is worse than no heart. A cached post always has its
   #     author's.
-  #   * `reply_to` / `repost?` — public subjects only. An answer is a public
-  #     vutuv post and a reshare is publishing, so passing on an audience its
-  #     author narrowed is not ours to do.
+  #   * `reply_to` supports public notes and direct messages; the answering
+  #     page chooses the separate private text path for direct messages.
+  #     `repost?` remains public-only because resharing publishes the content.
   #
   # Bookmarking is absent because it is always possible: it stays here, sends
   # nothing, and asks nothing of anybody's standing. It lives on this side of
@@ -330,7 +330,9 @@ defmodule VutuvWeb.PostLive.RemoteActionsComponent do
   defp offered_acts(%Note{} = note) do
     %{
       like?: Note.likeable?(note),
-      reply_to: Note.public?(note) && ~p"/system/fediverse/reply/#{note.id}",
+      reply_to:
+        (Note.public?(note) or note.audience == "direct") &&
+          ~p"/system/fediverse/reply/#{note.id}",
       repost?: Note.public?(note)
     }
   end

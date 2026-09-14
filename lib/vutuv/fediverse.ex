@@ -72,6 +72,7 @@ defmodule Vutuv.Fediverse do
   alias Vutuv.Fediverse.PostLike
   alias Vutuv.Fediverse.PostLookup
   alias Vutuv.Fediverse.PostRepost
+  alias Vutuv.Fediverse.PrivateMessage
   alias Vutuv.Fediverse.Reaction
   alias Vutuv.Fediverse.RemoteAccount
   alias Vutuv.Fediverse.RemoteFollow
@@ -6232,7 +6233,7 @@ defmodule Vutuv.Fediverse do
          true <- federated?(user),
          true <- user.fediverse_replies?,
          %{} = object <- note_object(activity["object"]),
-         %Post{} = post <- resolve_own_note(user, object["inReplyTo"]),
+         %Post{} = post <- resolve_reply_parent(user, activity, object, actor),
          false <- Posts.restricted?(post),
          :ok <- check_inbound_cap(actor.uri),
          {:ok, note} <- insert_note(user, post, activity, object, actor) do
@@ -8339,6 +8340,120 @@ defmodule Vutuv.Fediverse do
       moved?(author) -> {:error, :moved}
       instance_blocked?(note.actor_uri) -> {:error, :instance_blocked}
       true -> :ok
+    end
+  end
+
+  @doc "Checks private answering against a fresh note and its owning member."
+  def check_private_reply(%User{id: user_id}, %Note{id: id}) do
+    with %User{} = user <- Repo.get(User, user_id),
+         %Note{} = note <- get_note(id),
+         %Post{user_id: owner} when owner == user.id <- Posts.get_post(note.post_id) do
+      cond do
+        note.audience != "direct" -> {:error, :note_not_private}
+        not enabled?() -> {:error, :fediverse_disabled}
+        not federated?(user) -> {:error, :not_federating}
+        moved?(user) -> {:error, :moved}
+        instance_blocked?(note.actor_uri) -> {:error, :instance_blocked}
+        is_nil(own_inbox(%{uri: note.actor_uri, inbox: note.inbox_uri})) -> {:error, :no_inbox}
+        true -> :ok
+      end
+    else
+      _ -> {:error, :not_visible}
+    end
+  end
+
+  @doc "Stores a private text answer and its single-recipient delivery atomically."
+  def create_private_reply(%User{} = user, %Note{} = target, attrs) do
+    with %User{} = user <- Repo.get(User, user.id),
+         :ok <- check_private_reply(user, target),
+         %Note{} = note <- get_note(target.id),
+         {:ok, reply} <-
+           Ecto.Changeset.apply_action(private_reply_changeset(user, note, attrs), :insert),
+         :ok <- claim_reply_budget(user) do
+      Repo.transaction(fn -> insert_private_reply(reply, user, note) end)
+    else
+      nil -> {:error, :not_visible}
+      error -> error
+    end
+  end
+
+  defp private_reply_changeset(user, note, attrs) do
+    id = UUIDv7.generate()
+
+    %PrivateMessage{
+      id: id,
+      user_id: user.id,
+      post_id: note.post_id,
+      object_uri: Docs.actor_url(user) <> "/private-messages/" <> id,
+      in_reply_to_uri: note.object_uri,
+      recipient_actor_uri: note.actor_uri
+    }
+    |> PrivateMessage.changeset(attrs)
+  end
+
+  defp insert_private_reply(reply, user, note) do
+    with {:ok, saved} <- Repo.insert(reply),
+         {:ok, _actor} <- ensure_actor(user),
+         :ok <- enqueue(user, [note.inbox_uri], private_reply_activity(saved, user)) do
+      saved
+    else
+      {:error, error} -> Repo.rollback(error)
+    end
+  end
+
+  @doc "Only the sender can read their saved answers to this note."
+  def list_private_replies(%User{id: user_id}, %Note{object_uri: uri}) do
+    Repo.all(
+      from(r in PrivateMessage,
+        where: r.user_id == ^user_id and r.in_reply_to_uri == ^uri,
+        order_by: [asc: r.id]
+      )
+    )
+  end
+
+  defp private_reply_activity(reply, user) do
+    actor = Docs.actor_url(user)
+    content = reply.body |> Phoenix.HTML.html_escape() |> Phoenix.HTML.safe_to_string()
+
+    object = %{
+      "id" => reply.object_uri,
+      "type" => "Note",
+      "attributedTo" => actor,
+      "published" => DateTime.to_iso8601(DateTime.utc_now(:second)),
+      "inReplyTo" => reply.in_reply_to_uri,
+      "to" => [reply.recipient_actor_uri],
+      "cc" => [],
+      "content" => String.replace(content, "\n", "<br>"),
+      "tag" => [%{"type" => "Mention", "href" => reply.recipient_actor_uri}]
+    }
+
+    %{
+      "@context" => "https://www.w3.org/ns/activitystreams",
+      "id" => reply.object_uri <> "#create",
+      "type" => "Create",
+      "actor" => actor,
+      "to" => [reply.recipient_actor_uri],
+      "cc" => [],
+      "object" => object
+    }
+  end
+
+  # Private object ids never resolve through the public post resolver. Only
+  # the named remote recipient can continue this branch, addressed privately.
+  defp resolve_reply_parent(user, activity, object, actor) do
+    uri = object["inReplyTo"]
+
+    private =
+      if is_binary(uri), do: Repo.get_by(PrivateMessage, object_uri: uri, user_id: user.id)
+
+    case private do
+      %PrivateMessage{recipient_actor_uri: recipient, post_id: post_id} ->
+        if is_binary(post_id) and recipient == actor.uri and
+             audience(user, activity, object) == "direct",
+           do: Posts.get_post(post_id)
+
+      nil ->
+        resolve_own_note(user, uri)
     end
   end
 

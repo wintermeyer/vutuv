@@ -14,6 +14,13 @@ We use the [MIT License](LICENSE).
 
 ## What it does
 
+- Private Fediverse messages under your posts support private text replies
+  (up to 5,000 characters), sent only to the original sender. Saved answers
+  remain on the reply page; attachments and editing are not supported yet.
+  Outgoing private messages use separate storage with optional post and parent
+  references, ready for messages that start a conversation; the current UI
+  supports replies only.
+
 - Public member profiles (work experience, education, spoken languages, tags,
   links, contact details, online messengers with click-to-chat deep links) with
   follow relationships, posts, likes/reposts/replies and
