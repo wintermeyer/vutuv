@@ -2013,6 +2013,13 @@ div.footnotes li:target {
 .markdown ul { list-style: disc; }
 .markdown ol { list-style: decimal; }
 .markdown li { margin: 0.2em 0; }
+/* Match the legacy paragraph typography, including tight Markdown lists
+   whose text sits directly in li rather than in a p. Keep the container's
+   line-height unchanged because post preview clamps measure it in lh. */
+.markdown--post li {
+  font-size: 15px;
+  line-height: 21px;
+}
 .markdown blockquote {
   border-left: 3px solid #cbd5e1;
   color: #64748b;
