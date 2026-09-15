@@ -165,6 +165,31 @@ defmodule VutuvWeb.OgImage do
     end)
   end
 
+  @doc "The reach-analysis card: headline and totals beside its observed server network."
+  @spec analytics_png(map()) :: {:ok, binary()} | :error
+  def analytics_png(data) do
+    render(fn card ->
+      with {:ok, title} <- text_block(data.title, 470, 50, weight: :bold, lines: 2),
+           {:ok, card} <- place(card, title, @margin, 76),
+           {:ok, label} <- text_block(data.metric_label, 480, 20, color: @muted),
+           {:ok, card} <- place(card, label, @margin, 190),
+           {:ok, totals} <-
+             text_block(
+               "#{data.known_readers}+     #{data.servers}     #{data.interactions}",
+               500,
+               48,
+               weight: :bold,
+               color: @brand_600
+             ),
+           {:ok, card} <- place(card, totals, @margin, 230),
+           {:ok, note} <- text_block(data.note, 470, 24, color: @muted),
+           {:ok, card} <- place(card, note, @margin, 320),
+           {:ok, card} <- draw_network(card, data.nodes || []) do
+        footer(card, data[:footer])
+      end
+    end)
+  end
+
   # ---------------------------------------------------------------- canvas
 
   defp render(size \\ {@width, @height}, draw)
@@ -184,6 +209,59 @@ defmodule VutuvWeb.OgImage do
     # A libvips failure (a missing font, a corrupt avatar) degrades to "no
     # generated card" — the page keeps its brand card — never to a 500.
     _ -> :error
+  end
+
+  defp draw_network(card, nodes) do
+    center = {885, 292}
+    remote = nodes |> Enum.reject(&(&1.status == :origin)) |> Enum.take(16)
+
+    with {:ok, card} <- draw_network_lines(card, remote, center),
+         {:ok, card} <- draw_network_nodes(card, remote, center) do
+      {cx, cy} = center
+
+      Image.Draw.circle(card, cx, cy, 38,
+        color: @brand_600,
+        fill: true
+      )
+    end
+  end
+
+  defp draw_network_lines(card, nodes, {cx, cy}) do
+    nodes
+    |> Enum.with_index()
+    |> Enum.reduce_while({:ok, card}, fn {_node, index}, {:ok, image} ->
+      {x, y} = analytics_node_position(index, length(nodes), {cx, cy})
+
+      case Image.Draw.line(image, cx, cy, x, y, color: [148, 163, 184]) do
+        {:ok, image} -> {:cont, {:ok, image}}
+        error -> {:halt, error}
+      end
+    end)
+  end
+
+  defp draw_network_nodes(card, nodes, center) do
+    nodes
+    |> Enum.with_index()
+    |> Enum.reduce_while({:ok, card}, fn {node, index}, {:ok, image} ->
+      {x, y} = analytics_node_position(index, length(nodes), center)
+      radius = min(28, 12 + round(:math.sqrt(max(node.interactions, 0)) * 4))
+
+      options =
+        if node.status == :active,
+          do: [color: @brand_500, fill: true],
+          else: [color: @faint, fill: false, stroke_width: 3]
+
+      case Image.Draw.circle(image, x, y, radius, options) do
+        {:ok, image} -> {:cont, {:ok, image}}
+        error -> {:halt, error}
+      end
+    end)
+  end
+
+  defp analytics_node_position(index, count, {cx, cy}) do
+    angle = 2 * :math.pi() * index / max(count, 1) - :math.pi() / 2
+    radius = if rem(index, 2) == 0, do: 195, else: 145
+    {round(cx + :math.cos(angle) * radius), round(cy + :math.sin(angle) * radius)}
   end
 
   # The brand gradient along the top edge, built once per width.

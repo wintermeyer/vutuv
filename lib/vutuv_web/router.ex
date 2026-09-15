@@ -656,6 +656,7 @@ defmodule VutuvWeb.Router do
     get("/:slug/og.png", OgImageController, :profile)
     get("/:slug/posts/:id/og.png", OgImageController, :post)
     get("/:slug/posts/:id/og-square.png", OgImageController, :post_square)
+    get("/posts/:id/analytics/og.png", OgImageController, :analytics)
     # Agent-skills discovery (Cloudflare draft) + security.txt (RFC 9116).
     get("/.well-known/agent-skills/index.json", WellKnownController, :agent_skills_index)
     get("/.well-known/agent-skills/vutuv/SKILL.md", WellKnownController, :agent_skill)

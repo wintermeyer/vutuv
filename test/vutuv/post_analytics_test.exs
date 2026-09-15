@@ -42,6 +42,15 @@ defmodule Vutuv.PostAnalyticsTest do
     assert result.peak.total == 2
   end
 
+  test "uses hourly buckets for the 30-day analysis" do
+    author = insert(:activated_user)
+    {:ok, post} = Posts.create_post(author, %{body: "A month in hours"})
+
+    result = PostAnalytics.for_post(post, range: "30d")
+
+    assert result.unit == "hour"
+  end
+
   test "summarizes known readers and the servers involved in distribution" do
     author = insert(:activated_user)
     reader = insert(:activated_user)

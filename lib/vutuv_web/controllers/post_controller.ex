@@ -21,7 +21,7 @@ defmodule VutuvWeb.PostController do
 
   plug(VutuvWeb.Plug.UserResolveSlug when action in [:show, :index])
   plug(VutuvWeb.Plug.EnsureActivated when action in [:show, :index])
-  plug(VutuvWeb.Plug.RequireLogin when action in [:analytics, :delete, :pin, :unpin])
+  plug(VutuvWeb.Plug.RequireLogin when action in [:delete, :pin, :unpin])
 
   alias Vutuv.Fediverse
   alias Vutuv.PostAnalytics
@@ -37,21 +37,36 @@ defmodule VutuvWeb.PostController do
     post = Posts.get_post(id)
     viewer = conn.assigns[:current_user]
 
-    if post && Posts.author?(post, viewer) do
-      analytics = PostAnalytics.for_post(post, range: params["range"] || "30d")
+    if post && (Posts.author?(post, viewer) || Posts.visible_to?(post, nil)) do
+      analytics = PostAnalytics.for_post(post, range: params["range"] || "7d")
+      public? = Posts.visible_to?(post, nil)
 
       conn
-      |> put_resp_header("cache-control", "private, no-store")
-      |> put_resp_header("x-robots-tag", "noindex, nofollow")
+      |> put_analytics_cache(public?)
       |> render("analytics.html",
         post: post,
         analytics: analytics,
         author: Posts.author(post),
-        page_title: gettext("Post analysis")
+        analytics_page: true,
+        page_title: gettext("Reach analysis"),
+        open_graph_title: gettext("Reach analysis (Beta)"),
+        meta_description:
+          gettext(
+            "See the known readership, visible responses and network reach of this public post."
+          )
       )
     else
       VutuvWeb.ControllerHelpers.render_error(conn, 404)
     end
+  end
+
+  defp put_analytics_cache(conn, true),
+    do: put_resp_header(conn, "cache-control", "public, max-age=60")
+
+  defp put_analytics_cache(conn, false) do
+    conn
+    |> put_resp_header("cache-control", "private, no-store")
+    |> put_resp_header("x-robots-tag", "noindex, nofollow")
   end
 
   # The author archive: /:slug/posts, optionally scoped to a year, month or

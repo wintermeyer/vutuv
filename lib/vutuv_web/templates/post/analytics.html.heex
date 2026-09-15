@@ -3,7 +3,7 @@
     <div>
       <.link href={Vutuv.Posts.path(@post)} class="text-sm font-medium text-brand-700 hover:underline dark:text-brand-300">← {gettext("Back to post")}</.link>
       <div class="mt-5 flex items-center gap-3">
-        <h1 class="text-3xl font-semibold tracking-tight text-slate-950 dark:text-white sm:text-4xl">{gettext("Post analysis")}</h1>
+        <h1 class="text-3xl font-semibold tracking-tight text-slate-950 dark:text-white sm:text-4xl">{gettext("Reach analysis")}</h1>
         <span class="rounded-full bg-brand-100 px-2.5 py-1 text-xs font-bold uppercase tracking-wider text-brand-800 dark:bg-brand-950 dark:text-brand-200">Beta</span>
       </div>
       <p class="mt-3 max-w-2xl text-sm leading-6 text-slate-600 dark:text-slate-400">{gettext("What vutuv can reliably reconstruct about this post's path through the network.")}</p>
@@ -16,7 +16,11 @@
   <section class="relative overflow-hidden rounded-3xl bg-slate-950 px-6 py-8 text-white shadow-xl sm:px-9 sm:py-10">
     <div class="absolute -right-20 -top-28 h-72 w-72 rounded-full bg-brand-500/20 blur-3xl"></div>
     <div class="relative">
-      <p class="max-w-2xl text-sm leading-6 text-slate-300">{gettext("Recorded evidence for the selected period. The reader count is a lower bound, not an impression estimate.")}</p>
+      <p class="max-w-3xl text-sm leading-6 text-slate-300">
+        {gettext("The reader count is a")}
+        <strong class="font-bold text-white">{gettext("lower bound")}</strong>.
+        {gettext("The real readership is almost certainly much higher: we can count people who reacted, but we cannot see passive readers on vutuv or people on other social platforms whose servers send no response back to us.")}
+      </p>
       <dl class="mt-6 grid grid-cols-1 gap-3 sm:grid-cols-3">
         <div class="rounded-2xl border border-white/10 bg-white/5 p-4"><dt class="text-xs text-slate-400">{gettext("Known readers")}</dt><dd class="mt-2 text-3xl font-semibold tabular-nums">{@analytics.known_readers}<span class="text-lg text-brand-300">+</span></dd></div>
         <div class="rounded-2xl border border-white/10 bg-white/5 p-4"><dt class="text-xs text-slate-400">{gettext("Servers involved")}</dt><dd class="mt-2 text-3xl font-semibold tabular-nums">{@analytics.network.server_count}</dd></div>
@@ -53,7 +57,7 @@
       <h2 id="evidence-heading" class="text-xl font-semibold text-slate-950 dark:text-white">{gettext("What we know")}</h2>
       <dl class="mt-5 space-y-5">
         <div class="border-b border-slate-100 pb-5 dark:border-slate-800"><dt class="text-sm font-medium text-slate-900 dark:text-white">{gettext("Known readers")}</dt><dd class="mt-1 text-sm leading-6 text-slate-600 dark:text-slate-400">{gettext("At least %{count} distinct people liked, reposted or replied. Anyone who reacted necessarily saw the post.", count: @analytics.known_readers)}</dd></div>
-        <div class="border-b border-slate-100 pb-5 dark:border-slate-800"><dt class="text-sm font-medium text-slate-900 dark:text-white">{gettext("Network footprint")}</dt><dd class="mt-1 text-sm leading-6 text-slate-600 dark:text-slate-400">{gettext("The post was addressed to %{addressed} server(s); visible responses came from %{active} server(s).", addressed: @analytics.network.addressed_server_count, active: @analytics.network.active_server_count)}</dd></div>
+        <div class="border-b border-slate-100 pb-5 dark:border-slate-800"><dt class="text-sm font-medium text-slate-900 dark:text-white">{gettext("Network reach")}</dt><dd class="mt-1 text-sm leading-6 text-slate-600 dark:text-slate-400">{gettext("vutuv sent the post toward people in %{addressed} Fediverse communities. People from %{active} communities later liked, reposted or replied in a way vutuv could see.", addressed: @analytics.network.addressed_server_count, active: @analytics.network.active_server_count)}</dd></div>
         <div><dt class="text-sm font-medium text-slate-900 dark:text-white">{gettext("What remains unknown")}</dt><dd class="mt-1 text-sm leading-6 text-slate-600 dark:text-slate-400">{gettext("Passive readers, overlapping follower circles, blocked deliveries and activity never sent back to vutuv cannot be counted.")}</dd></div>
       </dl>
     </section>

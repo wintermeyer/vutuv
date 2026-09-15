@@ -25210,3 +25210,48 @@ msgid ""
 "post was published; that does not confirm delivery or a read. Lines connect "
 "observed evidence to vutuv and do not represent repost paths."
 msgstr ""
+
+
+#, elixir-autogen, elixir-format
+msgid "Reach analysis"
+msgstr ""
+
+#, elixir-autogen, elixir-format
+msgid "Reach analysis (Beta)"
+msgstr ""
+
+#, elixir-autogen, elixir-format
+msgid "See the known readership, visible responses and network reach of this public post."
+msgstr ""
+
+#, elixir-autogen, elixir-format
+msgid "Network graph for this post's reach analysis"
+msgstr ""
+
+#, elixir-autogen, elixir-format
+msgid "The reader count is a"
+msgstr ""
+
+#, elixir-autogen, elixir-format
+msgid "lower bound"
+msgstr ""
+
+#, elixir-autogen, elixir-format
+msgid "The real readership is almost certainly much higher: we can count people who reacted, but we cannot see passive readers on vutuv or people on other social platforms whose servers send no response back to us."
+msgstr ""
+
+#, elixir-autogen, elixir-format
+msgid "Network reach"
+msgstr ""
+
+#, elixir-autogen, elixir-format
+msgid "vutuv sent the post toward people in %{addressed} Fediverse communities. People from %{active} communities later liked, reposted or replied in a way vutuv could see."
+msgstr ""
+
+#, elixir-autogen, elixir-format
+msgid "Known readers · Communities · Interactions"
+msgstr ""
+
+#, elixir-autogen, elixir-format
+msgid "Measured lower bound · 7 days, hourly"
+msgstr ""

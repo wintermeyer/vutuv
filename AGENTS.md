@@ -19,6 +19,10 @@ When toggling persisted fields back in a test, reload the fixture before
 creating the next changeset; Ecto compares against the struct, not the database.
 Keep Elixir write pipelines shallow: extract validation/building and transactional
 persistence into helpers instead of nesting conditionals inside transaction callbacks.
+After patching an Elixir default argument, verify that its `\\` operator still has
+both backslashes before formatting; patch-string escaping can silently drop one.
+Function heads that declare defaults must contain variables only; put struct and
+value patterns in the implementation clauses.
 
 When adding a way to send a message, test its saved display in every conversation
 surface (feed, thread, and composer), including anonymous and other-user privacy.

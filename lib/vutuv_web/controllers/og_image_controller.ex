@@ -1,7 +1,8 @@
 defmodule VutuvWeb.OgImageController do
   @moduledoc """
-  `GET /:slug/og.png`, `GET /:slug/posts/:id/og.png` and
-  `GET /:slug/posts/:id/og-square.png` — the generated link-preview cards
+  `GET /:slug/og.png`, `GET /:slug/posts/:id/og.png`,
+  `GET /:slug/posts/:id/og-square.png` and
+  `GET /posts/:id/analytics/og.png` — the generated link-preview cards
   (`VutuvWeb.OgImage`) that `og:image` names on a member's pages and on their
   posts (`VutuvWeb.OpenGraph`; the square one for LinkedIn's scraper alone).
 
@@ -25,6 +26,7 @@ defmodule VutuvWeb.OgImageController do
   alias Vutuv.Accounts.User
   alias Vutuv.Avatar
   alias Vutuv.Moderation
+  alias Vutuv.PostAnalytics
   alias Vutuv.Posts
   alias Vutuv.Posts.Post
   alias Vutuv.Repo
@@ -54,6 +56,38 @@ defmodule VutuvWeb.OgImageController do
   def post(conn, params), do: post_card(conn, params, &OgImage.post_png/1)
 
   def post_square(conn, params), do: post_card(conn, params, &OgImage.square_png/1)
+
+  def analytics(conn, %{"id" => id}) do
+    png =
+      with %Post{} = post <- Posts.get_post(id),
+           true <- Posts.visible_to?(post, nil) do
+        render_analytics_card(post)
+      end
+
+    ControllerHelpers.send_og_image(conn, png, "image/png", max_age: 60)
+  end
+
+  defp render_analytics_card(%Post{} = post) do
+    render = fn ->
+      analytics = PostAnalytics.for_post(post, range: "7d")
+
+      OgImage.analytics_png(%{
+        title: gettext("Reach analysis"),
+        metric_label: gettext("Known readers · Communities · Interactions"),
+        note: gettext("Measured lower bound · 7 days, hourly"),
+        known_readers: analytics.known_readers,
+        servers: analytics.network.server_count,
+        interactions: analytics.totals.all,
+        nodes: analytics.network.visible_nodes,
+        footer: VutuvWeb.Endpoint.host()
+      })
+    end
+
+    case Posts.author(post) do
+      %User{} = author -> in_locale(author, render)
+      _organization -> render.()
+    end
+  end
 
   # Resolved by the id alone, never by the handle beside it (a handle goes
   # stale the moment its owner renames). Member posts only for now: a page's

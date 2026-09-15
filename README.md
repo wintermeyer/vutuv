@@ -23,11 +23,11 @@ We use the [MIT License](LICENSE).
   references, ready for messages that start a conversation; the current UI
   supports replies only.
 
-- Authors can open a post's private beta analysis from its three-dot menu. It
-  shows the distinct people known to have read and reacted, a server-network
-  map, and interaction momentum over 7 days, 30 days or one year. Addressed
-  servers and inferred readers are labelled as such rather than claimed as
-  confirmed deliveries, views or unique reach.
+- A public post's beta reach analysis is public too and available from its
+  three-dot menu. It shows the distinct people known to have read and reacted,
+  a shareable server-network card, and hourly interaction momentum over 7 or
+  30 days (daily over one year). The known readership is clearly labelled as
+  a lower bound rather than an impression estimate.
 
 - Public member profiles (work experience, education, spoken languages, tags,
   links, contact details, online messengers with click-to-chat deep links) with

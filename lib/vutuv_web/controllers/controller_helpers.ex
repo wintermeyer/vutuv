@@ -327,14 +327,18 @@ defmodule VutuvWeb.ControllerHelpers do
   makes an unknown slug, a missing picture and a page nobody may see
   indistinguishable from outside.
   """
-  def send_og_image(%Conn{} = conn, {:ok, bytes}, content_type) do
+  def send_og_image(conn, result, content_type, opts \\ [])
+
+  def send_og_image(%Conn{} = conn, {:ok, bytes}, content_type, opts) do
+    max_age = Keyword.get(opts, :max_age, 86_400)
+
     conn
     |> Conn.put_resp_content_type(content_type, nil)
-    |> Conn.put_resp_header("cache-control", "public, max-age=86400")
+    |> Conn.put_resp_header("cache-control", "public, max-age=#{max_age}")
     |> Conn.send_resp(200, bytes)
   end
 
-  def send_og_image(%Conn{} = conn, _missing, _content_type) do
+  def send_og_image(%Conn{} = conn, _missing, _content_type, _opts) do
     conn
     |> Conn.put_resp_content_type("text/plain")
     |> Conn.send_resp(404, "Not Found")

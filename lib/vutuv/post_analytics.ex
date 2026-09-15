@@ -1,6 +1,6 @@
 defmodule Vutuv.PostAnalytics do
   @moduledoc """
-  Author-only history of the engagement rows still stored for a post.
+  History of the engagement rows still stored for a post.
 
   This is not an impression count. Undo and deletion remove rows, so the
   historical curve describes currently retained reactions at their original
@@ -10,7 +10,7 @@ defmodule Vutuv.PostAnalytics do
   alias Vutuv.Posts.Post
   alias Vutuv.Repo
 
-  @ranges %{"7d" => {7, "hour"}, "30d" => {30, "day"}, "1y" => {365, "day"}}
+  @ranges %{"7d" => {7, "hour"}, "30d" => {30, "hour"}, "1y" => {365, "day"}}
 
   def ranges, do: ["7d", "30d", "1y"]
 

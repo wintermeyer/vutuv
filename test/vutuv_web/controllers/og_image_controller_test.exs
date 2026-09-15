@@ -47,10 +47,10 @@ defmodule VutuvWeb.OgImageControllerTest do
     |> ImageHelpers.with_image_rows()
   end
 
-  defp png_size(conn) do
+  defp png_size(conn, cache \\ "public, max-age=86400") do
     assert conn.status == 200
     assert conn |> get_resp_header("content-type") |> hd() =~ "image/png"
-    assert conn |> get_resp_header("cache-control") |> hd() == "public, max-age=86400"
+    assert conn |> get_resp_header("cache-control") |> hd() == cache
     {:ok, img} = Image.open(conn.resp_body)
     {Image.width(img), Image.height(img)}
   end
@@ -119,6 +119,25 @@ defmodule VutuvWeb.OgImageControllerTest do
       assert conn
              |> get("/#{author.username}/posts/#{Vutuv.UUIDv7.generate()}/og.png")
              |> Map.fetch!(:status) == 404
+    end
+  end
+
+  describe "GET /posts/:id/analytics/og.png" do
+    test "draws a public network card and hides a restricted one", %{conn: conn} do
+      author = insert_activated_user(first_name: "Paula")
+      public = create_post!(author, %{"body" => "Public reach"})
+
+      restricted =
+        create_post!(author, %{
+          "body" => "Private reach",
+          "denials" => [%{"wildcard" => "logged_out"}]
+        })
+
+      assert conn
+             |> get("/posts/#{public.id}/analytics/og.png")
+             |> png_size("public, max-age=60") == {1200, 630}
+
+      assert conn |> get("/posts/#{restricted.id}/analytics/og.png") |> Map.fetch!(:status) == 404
     end
   end
 end

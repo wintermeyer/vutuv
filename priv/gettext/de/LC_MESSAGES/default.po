@@ -26075,3 +26075,48 @@ msgstr ""
 "wurden beim Veröffentlichen adressiert; das bestätigt weder Zustellung noch "
 "Lesen. Linien verbinden beobachtete Daten mit vutuv und stellen keine "
 "Repost-Pfade dar."
+
+
+#, elixir-autogen, elixir-format
+msgid "Reach analysis"
+msgstr "Reichweitenanalyse"
+
+#, elixir-autogen, elixir-format
+msgid "Reach analysis (Beta)"
+msgstr "Reichweitenanalyse (Beta)"
+
+#, elixir-autogen, elixir-format
+msgid "See the known readership, visible responses and network reach of this public post."
+msgstr "Bekannte Leser, sichtbare Reaktionen und die Reichweite dieses öffentlichen Beitrags."
+
+#, elixir-autogen, elixir-format
+msgid "Network graph for this post's reach analysis"
+msgstr "Netzwerkgrafik zur Reichweitenanalyse dieses Beitrags"
+
+#, elixir-autogen, elixir-format
+msgid "The reader count is a"
+msgstr "Die Leserzahl ist eine"
+
+#, elixir-autogen, elixir-format
+msgid "lower bound"
+msgstr "Untergrenze"
+
+#, elixir-autogen, elixir-format
+msgid "The real readership is almost certainly much higher: we can count people who reacted, but we cannot see passive readers on vutuv or people on other social platforms whose servers send no response back to us."
+msgstr "Die tatsächliche Leserzahl ist mit großer Wahrscheinlichkeit deutlich höher: Wir können Menschen zählen, die reagiert haben. Passive Leser auf vutuv und Menschen auf anderen sozialen Plattformen, deren Server keine Rückmeldung an uns senden, können wir nicht sehen."
+
+#, elixir-autogen, elixir-format
+msgid "Network reach"
+msgstr "Reichweite im Netzwerk"
+
+#, elixir-autogen, elixir-format
+msgid "vutuv sent the post toward people in %{addressed} Fediverse communities. People from %{active} communities later liked, reposted or replied in a way vutuv could see."
+msgstr "vutuv hat den Beitrag für Menschen in %{addressed} Fediverse-Communities verteilt. Menschen aus %{active} Communities haben ihn später geliked, repostet oder beantwortet, sodass vutuv ihre Reaktion sehen konnte."
+
+#, elixir-autogen, elixir-format
+msgid "Known readers · Communities · Interactions"
+msgstr "Bekannte Leser · Communities · Interaktionen"
+
+#, elixir-autogen, elixir-format
+msgid "Measured lower bound · 7 days, hourly"
+msgstr "Gemessene Untergrenze · 7 Tage, stündlich"

@@ -101,7 +101,8 @@ defmodule VutuvWeb.OpenGraph do
   post. Every other page shares its `<title>`.
   """
   def title(assigns) do
-    post_title(conn_assigns(assigns)) || VutuvWeb.LayoutHTML.page_title(assigns) ||
+    assigns[:open_graph_title] || post_title(conn_assigns(assigns)) ||
+      VutuvWeb.LayoutHTML.page_title(assigns) ||
       SiteName.get()
   end
 
@@ -465,6 +466,13 @@ defmodule VutuvWeb.OpenGraph do
   # card (a member's post only, see `VutuvWeb.OgImageController`), else the
   # member's card or the organization's logo, else the brand card. A
   # restricted post's images must stay out of the tags like its body does.
+  defp image(%{analytics_page: true, post: %Post{} = post}) do
+    wide_card(
+      abs_url("/posts/#{post.id}/analytics/og.png"),
+      gettext("Network graph for this post's reach analysis")
+    )
+  end
+
   defp image(%{post: %Post{} = post} = ca) do
     if quotable?(post) do
       case first_image(post) || post_video(post) do
