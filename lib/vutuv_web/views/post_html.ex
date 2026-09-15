@@ -13,6 +13,27 @@ defmodule VutuvWeb.PostHTML do
   def bucket_label(at, "hour"), do: Calendar.strftime(at, "%d %b %Y, %H:00 UTC")
   def bucket_label(at, "day"), do: Calendar.strftime(at, "%d %b %Y")
 
+  def chart_tick_label(at, "hour"), do: Calendar.strftime(at, "%d %b %H:00")
+  def chart_tick_label(at, "day"), do: Calendar.strftime(at, "%d %b")
+
+  def chart_tick_indices(count) when count <= 1, do: [0]
+
+  def chart_tick_indices(count) do
+    last = count - 1
+    step = ceil(last / 6)
+    ticks = Enum.take_every(0..last, step)
+
+    case List.last(ticks) do
+      ^last -> ticks
+      previous when last - previous < max(div(step, 2), 1) -> List.replace_at(ticks, -1, last)
+      _previous -> ticks ++ [last]
+    end
+  end
+
+  def chart_tick_anchor(0, _count), do: "start"
+  def chart_tick_anchor(index, count) when index == count - 1, do: "end"
+  def chart_tick_anchor(_index, _count), do: "middle"
+
   def network_node_position(0, _count), do: {400, 210}
 
   def network_node_position(index, count) do

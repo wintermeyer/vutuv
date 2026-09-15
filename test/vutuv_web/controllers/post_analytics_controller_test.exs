@@ -3,9 +3,22 @@ defmodule VutuvWeb.PostAnalyticsControllerTest do
 
   import Vutuv.PostsHelpers
 
+  alias Vutuv.Posts.PostLike
+  alias Vutuv.Repo
+
   test "the author sees the reach analysis through the post menu", %{conn: conn} do
     {conn, author} = create_and_login_user(conn)
-    post = create_post!(author, %{body: "An interesting post"})
+
+    post =
+      author
+      |> create_post!(%{body: "An interesting post"})
+      |> Ecto.Changeset.change(
+        inserted_at: NaiveDateTime.add(NaiveDateTime.utc_now(:second), -86_400, :second)
+      )
+      |> Repo.update!()
+
+    reader = insert_activated_user()
+    Repo.insert!(%PostLike{post_id: post.id, user_id: reader.id})
 
     assert get(conn, "/#{author.username}/posts/#{post.id}").resp_body =~
              "Reach analysis (Beta)"
@@ -16,6 +29,9 @@ defmodule VutuvWeb.PostAnalyticsControllerTest do
     assert body =~ "Known readers"
     assert body =~ "Server network"
     assert body =~ "Momentum over time"
+    assert body =~ "data-chart-tick"
+    assert body =~ "data-chart-bucket-label"
+    assert body |> String.split("data-chart-tick") |> length() > 3
     assert body =~ "do not represent repost paths"
     refute body =~ "Distribution signal"
     refute body =~ "This post broke out"
