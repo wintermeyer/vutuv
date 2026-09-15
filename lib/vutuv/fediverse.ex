@@ -1499,6 +1499,155 @@ defmodule Vutuv.Fediverse do
   end
 
   @doc """
+  Refreshes one remote account's public follower total.
+
+  The ActivityPub followers collection is preferred. Mastodon's public account
+  lookup is the fallback when the collection is absent or does not expose a
+  total. Both requests are HTTPS-only, SSRF-guarded and bound to the actor's
+  host. Failures keep the last known number and still stamp the attempt so a
+  server is not hammered.
+  """
+  def refresh_remote_follower_count(account_id) do
+    case get_remote_account(account_id) do
+      %RemoteAccount{} = account -> refresh_remote_follower_count_record(account)
+      nil -> :ok
+    end
+  end
+
+  @doc """
+  Refreshes a bounded set of stale follower totals for accounts that reposted
+  local posts. At most one account per host is selected in a run, so an initial
+  backfill cannot turn one large server into a burst of requests.
+  """
+  def refresh_due_remote_follower_counts(limit \\ 20) do
+    stale_before = DateTime.add(DateTime.utc_now(:second), -7, :day)
+
+    accounts =
+      from(a in RemoteAccount,
+        join: r in Reaction,
+        on: r.actor_uri == a.actor_uri,
+        where: r.kind == "announce",
+        where:
+          is_nil(a.follower_count_attempted_at) or a.follower_count_attempted_at < ^stale_before,
+        distinct: true,
+        limit: ^(limit * 5),
+        select: a
+      )
+      |> Repo.all()
+      |> Enum.uniq_by(& &1.host)
+      |> Enum.take(limit)
+
+    results = Enum.map(accounts, &refresh_remote_follower_count_record/1)
+
+    %{
+      updated: Enum.count(results, &(&1 == :ok)),
+      unavailable: Enum.count(results, &(&1 == :unavailable))
+    }
+  end
+
+  defp refresh_remote_follower_count_record(account) do
+    result =
+      case follower_count_from_collection(account) do
+        {:ok, count} -> {:ok, count}
+        _unavailable -> follower_count_from_mastodon(account)
+      end
+
+    now = DateTime.utc_now(:second)
+
+    attrs =
+      case result do
+        {:ok, count} ->
+          %{
+            follower_count: count,
+            follower_count_checked_at: now,
+            follower_count_attempted_at: now
+          }
+
+        _error ->
+          %{follower_count_attempted_at: now}
+      end
+
+    case account |> RemoteAccount.changeset(attrs) |> Repo.update() do
+      {:ok, _account} -> if(match?({:ok, _}, result), do: :ok, else: :unavailable)
+      {:error, _changeset} -> :unavailable
+    end
+  end
+
+  defp follower_count_from_collection(%RemoteAccount{followers_uri: uri, host: host})
+       when is_binary(uri) do
+    fetch_public_follower_count(uri, host, fn
+      %{"totalItems" => count} when is_integer(count) and count >= 0 -> {:ok, count}
+      _body -> :unavailable
+    end)
+  end
+
+  defp follower_count_from_collection(_account), do: :unavailable
+
+  defp follower_count_from_mastodon(%RemoteAccount{host: host, handle: handle})
+       when is_binary(host) and is_binary(handle) do
+    url =
+      %URI{
+        scheme: "https",
+        host: host,
+        path: "/api/v1/accounts/lookup",
+        query: URI.encode_query(%{"acct" => handle})
+      }
+      |> URI.to_string()
+
+    fetch_public_follower_count(url, host, fn
+      %{"followers_count" => count} when is_integer(count) and count >= 0 -> {:ok, count}
+      _body -> :unavailable
+    end)
+  end
+
+  defp follower_count_from_mastodon(_account), do: :unavailable
+
+  defp fetch_public_follower_count(url, expected_host, extract) do
+    with %URI{scheme: "https", host: host} <- URI.parse(url),
+         true <- String.downcase(host) == String.downcase(expected_host),
+         false <- Vutuv.Ssrf.resolves_to_internal?(host),
+         {:ok, %Req.Response{status: 200, body: body}} <- ap_get(url, nil),
+         {:ok, decoded} <- Jason.decode(body) do
+      extract.(decoded)
+    else
+      _unavailable -> :unavailable
+    end
+  end
+
+  defp maybe_refresh_remote_follower_count_async(account_id) do
+    if Application.get_env(:vutuv, :fediverse_counts, false),
+      do: claim_remote_follower_count_refresh(account_id)
+
+    :ok
+  end
+
+  defp claim_remote_follower_count_refresh(account_id) do
+    stale_before = DateTime.add(DateTime.utc_now(:second), -7, :day)
+    now = DateTime.utc_now(:second)
+
+    {claimed, _} =
+      Repo.update_all(
+        from(a in RemoteAccount,
+          where: a.id == ^account_id,
+          where:
+            is_nil(a.follower_count_attempted_at) or
+              a.follower_count_attempted_at < ^stale_before
+        ),
+        set: [follower_count_attempted_at: now]
+      )
+
+    start_remote_follower_count_refresh(claimed, account_id)
+  end
+
+  defp start_remote_follower_count_refresh(1, account_id) do
+    Task.Supervisor.start_child(Vutuv.TaskSupervisor, fn ->
+      refresh_remote_follower_count(account_id)
+    end)
+  end
+
+  defp start_remote_follower_count_refresh(_claimed, _account_id), do: :ok
+
+  @doc """
   The member or page takes the follow back: a best-effort `Undo(Follow)` to
   the other server, then the row goes.
 
@@ -2531,6 +2680,9 @@ defmodule Vutuv.Fediverse do
     :avatar,
     :avatar_moderation,
     :avatar_source,
+    :follower_count,
+    :follower_count_checked_at,
+    :follower_count_attempted_at,
     # Where the account went (issue #1168). Nothing an actor document carries
     # sets it, so leaving it out would null a verified move on the next repeat
     # resolve — one stored reply from the old actor, or one member looking the
@@ -2561,6 +2713,7 @@ defmodule Vutuv.Fediverse do
 
     with {:ok, account} <- result do
       Media.fetch_avatar_async(account, remote[:icon])
+      maybe_refresh_remote_follower_count_async(account.id)
       {:ok, account}
     end
   end
@@ -2578,6 +2731,7 @@ defmodule Vutuv.Fediverse do
       shared_inbox_uri: remote.shared_inbox,
       public_key_id: remote.public_key_id,
       public_key_pem: remote.public_key_pem,
+      followers_uri: remote[:followers],
       refreshed_at: DateTime.utc_now(:second)
     }
   end
@@ -11679,7 +11833,8 @@ defmodule Vutuv.Fediverse do
          # account is only honored once it lists the origin here, so move_out/2
          # checks our own actor URL is among them. AP allows a bare string or a
          # list; normalize to a list of strings.
-         also_known_as: normalize_uri_list(doc["alsoKnownAs"])
+         also_known_as: normalize_uri_list(doc["alsoKnownAs"]),
+         followers: web_uri(doc["followers"])
        }}
     else
       {:parse, _} -> {:error, :https_only}
@@ -11702,6 +11857,15 @@ defmodule Vutuv.Fediverse do
   defp normalize_uri_list(value) when is_binary(value), do: [value]
   defp normalize_uri_list(value) when is_list(value), do: Enum.filter(value, &is_binary/1)
   defp normalize_uri_list(_), do: []
+
+  defp web_uri(value) when is_binary(value) do
+    case URI.parse(value) do
+      %URI{scheme: "https", host: host} when is_binary(host) -> value
+      _invalid -> nil
+    end
+  end
+
+  defp web_uri(_value), do: nil
 
   defp ap_get(url, signer, etag \\ nil) do
     signature_headers =

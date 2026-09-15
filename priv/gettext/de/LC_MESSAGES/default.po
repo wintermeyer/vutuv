@@ -26161,3 +26161,39 @@ msgstr "%{host}: %{interactions} Interaktionen · %{active} monatlich aktive Acc
 #, elixir-autogen, elixir-format
 msgid "%{host}: %{interactions} interactions"
 msgstr "%{host}: %{interactions} Interaktionen"
+
+#, elixir-autogen, elixir-format
+msgid "Line width: known repost audience"
+msgstr "Linienstärke: bekannte Repost-Reichweite"
+
+#, elixir-autogen, elixir-format
+msgid "Potential reach from reposts"
+msgstr "Potenzielle Reichweite durch Reposts"
+
+#, elixir-autogen, elixir-format
+msgid "Known follower totals of people who reposted. This is potential distribution, not readership."
+msgstr "Bekannte Followerzahlen der Reposter. Das ist potenzielle Verbreitung, keine Leserschaft."
+
+#, elixir-autogen, elixir-format
+msgid "%{known} known · %{unknown} unavailable"
+msgstr "%{known} bekannt · %{unknown} nicht verfügbar"
+
+#, elixir-autogen, elixir-format
+msgid "No reposts recorded."
+msgstr "Keine Reposts erfasst."
+
+#, elixir-autogen, elixir-format
+msgid "How this is calculated"
+msgstr "So wird gerechnet"
+
+#, elixir-autogen, elixir-format
+msgid "Follower totals are fetched in the background from public ActivityPub collections or Mastodon APIs and stored with a timestamp."
+msgstr "Followerzahlen werden im Hintergrund aus öffentlichen ActivityPub-Collections oder Mastodon-APIs abgerufen und mit Zeitstempel gespeichert."
+
+#, elixir-autogen, elixir-format
+msgid "Each reposter is counted once. Missing totals are excluded, so + marks a lower bound."
+msgstr "Jeder Reposter zählt einmal. Fehlende Werte werden ausgelassen, deshalb markiert + eine Untergrenze."
+
+#, elixir-autogen, elixir-format
+msgid "Followers can overlap, and a delivered post may not be read. The figure is not a count of unique readers."
+msgstr "Follower können sich überschneiden und zugestellte Beiträge ungelesen bleiben. Die Zahl zählt keine eindeutigen Leser."

@@ -575,6 +575,7 @@ defmodule Vutuv.FediverseTest do
             "preferredUsername" => "alice",
             "name" => "Alice Example",
             "inbox" => "https://social.example/users/alice/inbox",
+            "followers" => "https://social.example/users/alice/followers",
             "endpoints" => %{"sharedInbox" => "https://social.example/inbox"},
             "publicKey" => %{
               "id" => "https://social.example/users/alice#main-key",
@@ -595,7 +596,111 @@ defmodule Vutuv.FediverseTest do
       assert remote.shared_inbox == "https://social.example/inbox"
       assert remote.preferred_username == "alice"
       assert remote.name == "Alice Example"
+      assert remote.followers == "https://social.example/users/alice/followers"
       assert remote.public_key_pem =~ "BEGIN PUBLIC KEY"
+    end
+
+    test "reads a remote account's follower total from its public collection" do
+      account =
+        Repo.insert!(%Vutuv.Fediverse.RemoteAccount{
+          actor_uri: "https://social.example/users/alice",
+          host: "social.example",
+          handle: "alice",
+          inbox_uri: "https://social.example/users/alice/inbox",
+          followers_uri: "https://social.example/users/alice/followers"
+        })
+
+      stub_remote(fn conn ->
+        body = Jason.encode!(%{"type" => "OrderedCollection", "totalItems" => 10_000})
+
+        conn
+        |> Plug.Conn.put_resp_content_type("application/activity+json")
+        |> Plug.Conn.send_resp(200, body)
+      end)
+
+      assert :ok = Fediverse.refresh_remote_follower_count(account.id)
+
+      refreshed = Repo.reload!(account)
+      assert refreshed.follower_count == 10_000
+      assert %DateTime{} = refreshed.follower_count_checked_at
+      assert %DateTime{} = refreshed.follower_count_attempted_at
+    end
+
+    test "falls back to Mastodon's public account lookup" do
+      account =
+        Repo.insert!(%Vutuv.Fediverse.RemoteAccount{
+          actor_uri: "https://social.example/users/alice",
+          host: "social.example",
+          handle: "alice",
+          inbox_uri: "https://social.example/users/alice/inbox",
+          followers_uri: "https://social.example/users/alice/followers"
+        })
+
+      stub_remote(fn conn ->
+        case conn.request_path do
+          "/users/alice/followers" ->
+            Plug.Conn.send_resp(conn, 403, "")
+
+          "/api/v1/accounts/lookup" ->
+            assert conn.query_string == "acct=alice"
+            Plug.Conn.send_resp(conn, 200, Jason.encode!(%{"followers_count" => 7_500}))
+        end
+      end)
+
+      assert :ok = Fediverse.refresh_remote_follower_count(account.id)
+      assert Repo.reload!(account).follower_count == 7_500
+    end
+
+    test "keeps the last known total when public endpoints refuse access" do
+      checked_at = DateTime.add(DateTime.utc_now(:second), -86_400, :second)
+
+      account =
+        Repo.insert!(%Vutuv.Fediverse.RemoteAccount{
+          actor_uri: "https://social.example/users/alice",
+          host: "social.example",
+          handle: "alice",
+          inbox_uri: "https://social.example/users/alice/inbox",
+          followers_uri: "https://social.example/users/alice/followers",
+          follower_count: 9_000,
+          follower_count_checked_at: checked_at
+        })
+
+      stub_remote(fn conn -> Plug.Conn.send_resp(conn, 403, "") end)
+
+      assert :unavailable = Fediverse.refresh_remote_follower_count(account.id)
+
+      refreshed = Repo.reload!(account)
+      assert refreshed.follower_count == 9_000
+      assert refreshed.follower_count_checked_at == checked_at
+      assert DateTime.after?(refreshed.follower_count_attempted_at, checked_at)
+    end
+
+    test "the background batch discovers old reposters without a page request" do
+      account =
+        Repo.insert!(%Vutuv.Fediverse.RemoteAccount{
+          actor_uri: "https://social.example/users/alice",
+          host: "social.example",
+          handle: "alice",
+          inbox_uri: "https://social.example/users/alice/inbox"
+        })
+
+      author = federated_user()
+      post = create_post!(author, %{body: "Reposted elsewhere"})
+
+      Repo.insert!(%Vutuv.Fediverse.Reaction{
+        post_id: post.id,
+        actor_uri: account.actor_uri,
+        handle: "alice",
+        kind: "announce",
+        received_at: DateTime.utc_now(:second)
+      })
+
+      stub_remote(fn conn ->
+        Plug.Conn.send_resp(conn, 200, Jason.encode!(%{"followers_count" => 4_200}))
+      end)
+
+      assert %{updated: 1, unavailable: 0} = Fediverse.refresh_due_remote_follower_counts()
+      assert Repo.reload!(account).follower_count == 4_200
     end
 
     # A document may only name itself. Without this, a server answers a fetch of

@@ -4,8 +4,6 @@ defmodule VutuvWeb.PostHTML do
   import VutuvWeb.PostComponents
   import VutuvWeb.UserHelpers
 
-  alias VutuvWeb.UI
-
   embed_templates("../templates/post/*")
 
   def range_label("7d"), do: gettext("7 days")
@@ -64,7 +62,7 @@ defmodule VutuvWeb.PostHTML do
       "%{host}: %{interactions} interactions · %{active} monthly active accounts · NodeInfo %{checked_at}",
       host: node.host,
       interactions: node.interactions,
-      active: UI.compact_count(active_month),
+      active: compact_count(active_month),
       checked_at: Calendar.strftime(checked_at, "%d %b %Y, %H:%M UTC")
     )
   end
@@ -75,6 +73,20 @@ defmodule VutuvWeb.PostHTML do
       interactions: node.interactions
     )
   end
+
+  def network_edge_width(%{repost_potential: count}) when is_integer(count) and count > 0 do
+    min(2 + :math.log10(count + 1), 7)
+  end
+
+  def network_edge_width(%{status: :active}), do: 2
+  def network_edge_width(_node), do: 1
+
+  def repost_reach_bar_width(%{followers: followers}, max_followers)
+      when is_integer(followers) and followers >= 0 and max_followers > 0 do
+    max(3, :math.log10(followers + 1) / :math.log10(max_followers + 1) * 100)
+  end
+
+  def repost_reach_bar_width(_reposter, _max_followers), do: 0
 
   @doc """
   The author-facing audience summary: one short label per denial. Only ever

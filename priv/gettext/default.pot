@@ -25296,3 +25296,39 @@ msgstr ""
 #, elixir-autogen, elixir-format
 msgid "%{host}: %{interactions} interactions"
 msgstr ""
+
+#, elixir-autogen, elixir-format
+msgid "Line width: known repost audience"
+msgstr ""
+
+#, elixir-autogen, elixir-format
+msgid "Potential reach from reposts"
+msgstr ""
+
+#, elixir-autogen, elixir-format
+msgid "Known follower totals of people who reposted. This is potential distribution, not readership."
+msgstr ""
+
+#, elixir-autogen, elixir-format
+msgid "%{known} known · %{unknown} unavailable"
+msgstr ""
+
+#, elixir-autogen, elixir-format
+msgid "No reposts recorded."
+msgstr ""
+
+#, elixir-autogen, elixir-format
+msgid "How this is calculated"
+msgstr ""
+
+#, elixir-autogen, elixir-format
+msgid "Follower totals are fetched in the background from public ActivityPub collections or Mastodon APIs and stored with a timestamp."
+msgstr ""
+
+#, elixir-autogen, elixir-format
+msgid "Each reposter is counted once. Missing totals are excluded, so + marks a lower bound."
+msgstr ""
+
+#, elixir-autogen, elixir-format
+msgid "Followers can overlap, and a delivered post may not be read. The figure is not a count of unique readers."
+msgstr ""

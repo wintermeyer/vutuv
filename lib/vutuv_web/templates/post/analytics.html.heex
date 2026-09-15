@@ -33,7 +33,7 @@
     <section class="rounded-3xl border border-slate-200 bg-white p-5 shadow-sm dark:border-slate-700 dark:bg-slate-900 sm:p-7" aria-labelledby="network-heading">
       <h2 id="network-heading" class="text-xl font-semibold text-slate-950 dark:text-white">{gettext("Server network")}</h2>
       <p class="mt-1 max-w-xl text-sm leading-6 text-slate-600 dark:text-slate-400">{gettext("Filled nodes reacted. Outlined nodes were contacted. Lines do not show repost paths.")}</p>
-      <div class="mt-3 flex flex-wrap gap-4 text-xs text-slate-600 dark:text-slate-400"><span><span class="mr-1.5 inline-block h-2.5 w-2.5 rounded-full bg-brand-500"></span>{gettext("Active")}</span><span><span class="mr-1.5 inline-block h-2.5 w-2.5 rounded-full border border-slate-400"></span>{gettext("Addressed")}</span><span><span class="mr-1.5 inline-block h-3.5 w-3.5 rounded-full border-2 border-cyan-400 align-middle"></span>{gettext("Outer ring: monthly active accounts")}</span></div>
+      <div class="mt-3 flex flex-wrap gap-4 text-xs text-slate-600 dark:text-slate-400"><span><span class="mr-1.5 inline-block h-2.5 w-2.5 rounded-full bg-brand-500"></span>{gettext("Active")}</span><span><span class="mr-1.5 inline-block h-2.5 w-2.5 rounded-full border border-slate-400"></span>{gettext("Addressed")}</span><span><span class="mr-1.5 inline-block h-3.5 w-3.5 rounded-full border-2 border-cyan-400 align-middle"></span>{gettext("Outer ring: monthly active accounts")}</span><span><span class="mr-1.5 inline-block h-0.5 w-5 bg-fuchsia-400 align-middle"></span>{gettext("Line width: known repost audience")}</span></div>
       <div class="mt-5 overflow-x-auto rounded-2xl bg-slate-950">
         <svg viewBox="0 0 800 420" role="img" aria-labelledby="network-title network-desc" class="h-auto min-w-[560px] w-full">
           <title id="network-title">{gettext("Servers involved in this post")}</title>
@@ -41,7 +41,7 @@
           <circle cx="400" cy="210" r="190" fill="#8b5cf6" opacity=".08" />
           <g :for={{node, index} <- Enum.with_index(@analytics.network.visible_nodes)}>
             <% {x, y} = network_node_position(index, length(@analytics.network.visible_nodes)) %>
-            <line :if={index > 0} x1="400" y1="210" x2={x} y2={y} stroke={if node.status == :active, do: "#8b5cf6", else: "#475569"} stroke-width={if node.status == :active, do: 2, else: 1} stroke-dasharray={if node.status == :addressed, do: "3 6"} />
+            <line :if={index > 0} data-network-repost-reach={node.repost_potential} x1="400" y1="210" x2={x} y2={y} stroke={if node.repost_potential > 0, do: "#e879f9", else: if(node.status == :active, do: "#8b5cf6", else: "#475569")} stroke-width={network_edge_width(node)} stroke-dasharray={if node.status == :addressed, do: "3 6"} />
           </g>
           <g :for={{node, index} <- Enum.with_index(@analytics.network.visible_nodes)}>
             <% {x, y} = network_node_position(index, length(@analytics.network.visible_nodes)) %>
@@ -63,6 +63,37 @@
       </dl>
     </section>
   </div>
+
+  <section class="mt-7 overflow-hidden rounded-3xl border border-slate-200 bg-white shadow-sm dark:border-slate-700 dark:bg-slate-900" aria-labelledby="repost-reach-heading">
+    <div class="grid gap-6 p-5 sm:p-8 lg:grid-cols-[.7fr_1.3fr]">
+      <div>
+        <h2 id="repost-reach-heading" class="text-xl font-semibold text-slate-950 dark:text-white">{gettext("Potential reach from reposts")}</h2>
+        <p class="mt-2 text-sm leading-6 text-slate-600 dark:text-slate-400">{gettext("Known follower totals of people who reposted. This is potential distribution, not readership.")}</p>
+        <p class="mt-6 text-5xl font-semibold tracking-tight text-slate-950 dark:text-white">{compact_count(@analytics.repost_reach.known)}<span class="text-brand-500">+</span></p>
+        <p class="mt-2 text-xs text-slate-500 dark:text-slate-400">{gettext("%{known} known · %{unknown} unavailable", known: @analytics.repost_reach.known_reposters, unknown: @analytics.repost_reach.unknown_reposters)}</p>
+      </div>
+      <div :if={@analytics.repost_reach.visible_reposters != []} class="space-y-3">
+        <% max_followers = @analytics.repost_reach.visible_reposters |> Enum.map(&(&1.followers || 0)) |> Enum.max(fn -> 0 end) %>
+        <div :for={reposter <- @analytics.repost_reach.visible_reposters} class="grid grid-cols-[minmax(8rem,1fr)_2fr_auto] items-center gap-3 text-xs">
+          <span class="truncate font-medium text-slate-700 dark:text-slate-200" title={reposter.label}>{reposter.label}</span>
+          <div class="h-3 overflow-hidden rounded-full bg-slate-100 dark:bg-slate-800">
+            <div :if={not is_nil(reposter.followers)} data-repost-reach-bar class="h-full rounded-full bg-gradient-to-r from-brand-500 to-fuchsia-400" style={"width: #{repost_reach_bar_width(reposter, max_followers)}%"}></div>
+            <div :if={is_nil(reposter.followers)} class="mt-1 h-px w-full border-t border-dashed border-slate-400"></div>
+          </div>
+          <span class="w-14 text-right font-semibold tabular-nums text-slate-700 dark:text-slate-200">{if is_nil(reposter.followers), do: gettext("unknown"), else: compact_count(reposter.followers)}</span>
+        </div>
+      </div>
+      <p :if={@analytics.repost_reach.visible_reposters == []} class="self-center text-sm text-slate-500 dark:text-slate-400">{gettext("No reposts recorded.")}</p>
+    </div>
+    <details class="border-t border-slate-200 px-5 py-4 text-sm dark:border-slate-700 sm:px-8">
+      <summary class="cursor-pointer font-medium text-slate-800 dark:text-slate-100">{gettext("How this is calculated")}</summary>
+      <div class="mt-3 max-w-3xl space-y-2 leading-6 text-slate-600 dark:text-slate-400">
+        <p>{gettext("Follower totals are fetched in the background from public ActivityPub collections or Mastodon APIs and stored with a timestamp.")}</p>
+        <p>{gettext("Each reposter is counted once. Missing totals are excluded, so + marks a lower bound.")}</p>
+        <p>{gettext("Followers can overlap, and a delivered post may not be read. The figure is not a count of unique readers.")}</p>
+      </div>
+    </details>
+  </section>
 
   <section class="mt-7 rounded-3xl border border-slate-200 bg-white p-5 shadow-sm dark:border-slate-700 dark:bg-slate-900 sm:p-8" aria-labelledby="analytics-chart-heading">
     <h2 id="analytics-chart-heading" class="text-xl font-semibold text-slate-950 dark:text-white">{gettext("Momentum over time")}</h2>

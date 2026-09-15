@@ -31,3 +31,6 @@ database representation before passing it as a parameter; when grouping
 timestamp results in Elixir, normalize microsecond precision on both keys.
 Choose an Elixir sigil delimiter that does not occur in the literal content;
 parentheses in translated UI copy otherwise close `~s(...)` earlier than intended.
+After inserting a fixture with patch context shared by several tests, inspect its
+final location before running the suite; a matching setup block in an earlier test
+can accept the patch while leaving the intended assertions without their data.

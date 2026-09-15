@@ -1,7 +1,7 @@
 defmodule Vutuv.Fediverse.CountsRefresher do
   @moduledoc """
   Keeps the like and repost figures of cached remote objects current (issue
-  #1283).
+  #1283), and refreshes public follower totals used by reach analysis.
 
   A post from another network used to carry no numbers at all, and the action
   bar said why: vutuv cannot know how many people liked something on somebody
@@ -35,7 +35,8 @@ defmodule Vutuv.Fediverse.CountsRefresher do
 
   The run itself is sequential (`Vutuv.Fediverse.refresh_due_counts/0`) and the
   next one is scheduled after it finishes, so runs cannot pile up on a slow
-  network.
+  network. Follower totals use the same loop, but select only accounts that
+  reposted a local post and at most one account per host in each run.
 
   Gated twice like the sweeper beside it: the child starts only when
   `:fediverse_counts` is on (off in tests, so it never talks to the network from
@@ -68,7 +69,10 @@ defmodule Vutuv.Fediverse.CountsRefresher do
   @impl true
   def handle_info(:refresh, state) do
     try do
-      if Fediverse.enabled?(), do: log(Fediverse.refresh_due_counts())
+      if Fediverse.enabled?() do
+        log(Fediverse.refresh_due_counts())
+        log_audiences(Fediverse.refresh_due_remote_follower_counts())
+      end
     rescue
       error -> Logger.error("Fediverse counts refresh failed: #{inspect(error)}")
     end
@@ -84,6 +88,15 @@ defmodule Vutuv.Fediverse.CountsRefresher do
     Logger.info(
       "Fediverse counts: #{tally.updated} object(s) changed, " <>
         "#{tally.unchanged} unchanged, #{tally.failed} failed, #{tally.skipped} skipped"
+    )
+  end
+
+  defp log_audiences(%{updated: 0, unavailable: 0}), do: :ok
+
+  defp log_audiences(tally) do
+    Logger.info(
+      "Fediverse follower counts: #{tally.updated} updated, " <>
+        "#{tally.unavailable} unavailable"
     )
   end
 

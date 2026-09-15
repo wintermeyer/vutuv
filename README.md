@@ -26,9 +26,10 @@ We use the [MIT License](LICENSE).
 - A public post's beta reach analysis is public too, uses cached NodeInfo to
   show community size when available, and is available from its
   three-dot menu. It shows the distinct people known to have read and reacted,
-  a shareable server-network card, and hourly interaction momentum over 7 or
-  30 days (daily over one year). The known readership is clearly labelled as
-  a lower bound rather than an impression estimate.
+  a shareable server-network card, cached follower totals for potential repost
+  reach, and hourly interaction momentum over 7 or 30 days (daily over one
+  year). The known readership is clearly labelled as a lower bound rather than
+  an impression estimate.
 
 - Public member profiles (work experience, education, spoken languages, tags,
   links, contact details, online messengers with click-to-chat deep links) with

@@ -229,10 +229,17 @@ defmodule VutuvWeb.OgImage do
   defp draw_network_lines(card, nodes, {cx, cy}) do
     nodes
     |> Enum.with_index()
-    |> Enum.reduce_while({:ok, card}, fn {_node, index}, {:ok, image} ->
+    |> Enum.reduce_while({:ok, card}, fn {node, index}, {:ok, image} ->
       {x, y} = analytics_node_position(index, length(nodes), {cx, cy})
 
-      case Image.Draw.line(image, cx, cy, x, y, color: [148, 163, 184]) do
+      {color, width} =
+        if Map.get(node, :repost_potential, 0) > 0 do
+          {[232, 121, 249], min(2 + round(:math.log10(node.repost_potential + 1)), 7)}
+        else
+          {[148, 163, 184], 1}
+        end
+
+      case Image.Draw.line(image, cx, cy, x, y, color: color, stroke_width: width) do
         {:ok, image} -> {:cont, {:ok, image}}
         error -> {:halt, error}
       end

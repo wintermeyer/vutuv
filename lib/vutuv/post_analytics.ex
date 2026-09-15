@@ -7,8 +7,14 @@ defmodule Vutuv.PostAnalytics do
   arrival times rather than a complete audit log.
   """
 
+  import Ecto.Query
+
+  alias Vutuv.Fediverse.Reaction
+  alias Vutuv.Fediverse.RemoteAccount
   alias Vutuv.Posts.Post
+  alias Vutuv.Posts.PostRepost
   alias Vutuv.Repo
+  alias Vutuv.Social
   alias Vutuv.Tags.SourceServers
 
   @ranges %{"7d" => {7, "hour"}, "30d" => {30, "hour"}, "1y" => {365, "day"}}
@@ -39,7 +45,8 @@ defmodule Vutuv.PostAnalytics do
 
     peak = Enum.max_by(points, & &1.total, fn -> nil end)
     known_readers = known_readers(post.id)
-    network = network(post.id, totals)
+    repost_reach = repost_reach(post.id)
+    network = network(post.id, totals, repost_reach)
 
     %{
       range: range,
@@ -48,6 +55,7 @@ defmodule Vutuv.PostAnalytics do
       totals: totals,
       peak: peak,
       known_readers: known_readers,
+      repost_reach: repost_reach,
       network: network
     }
   end
@@ -80,7 +88,7 @@ defmodule Vutuv.PostAnalytics do
     count
   end
 
-  defp network(post_id, totals) do
+  defp network(post_id, totals, repost_reach) do
     interaction_sql = """
     SELECT actor_uri, count(*)::integer
     FROM (
@@ -124,13 +132,22 @@ defmodule Vutuv.PostAnalytics do
             interactions: interactions,
             status: if(interactions > 0, do: :active, else: :addressed),
             active_month: info && info.active_month,
-            node_info_checked_at: info && info.checked_at
+            node_info_checked_at: info && info.checked_at,
+            repost_potential: Map.get(repost_reach.by_host, server, 0)
           }
         end)
       end)
       |> Enum.sort_by(&{-&1.interactions, &1.host})
 
-    nodes = [%{host: origin, interactions: local_interactions, status: :origin} | remote_nodes]
+    nodes = [
+      %{
+        host: origin,
+        interactions: local_interactions,
+        status: :origin,
+        repost_potential: Map.get(repost_reach.by_host, origin, 0)
+      }
+      | remote_nodes
+    ]
 
     %{
       nodes: nodes,
@@ -141,6 +158,104 @@ defmodule Vutuv.PostAnalytics do
       addressed_server_count: length(Enum.uniq(addressed))
     }
   end
+
+  defp repost_reach(post_id) do
+    origin = URI.parse(VutuvWeb.Endpoint.url()).host || "vutuv"
+    reposters = local_reposters(post_id, origin) ++ remote_reposters(post_id)
+    summarize_reposters(reposters)
+  end
+
+  defp local_reposters(post_id, origin) do
+    local_rows =
+      from(r in PostRepost, where: r.post_id == ^post_id)
+      |> Repo.all()
+      |> Repo.preload([:user, :organization])
+
+    user_ids = local_rows |> Enum.map(& &1.user_id) |> Enum.reject(&is_nil/1)
+    follower_counts = Social.follower_counts(user_ids)
+
+    Enum.map(local_rows, &local_reposter(&1, origin, follower_counts))
+  end
+
+  defp local_reposter(%{user: %{} = user}, origin, follower_counts) do
+    reposter(user.username, origin, Map.get(follower_counts, user.id, 0), :local)
+  end
+
+  defp local_reposter(%{organization: %{} = organization}, origin, _follower_counts) do
+    followers = Social.organization_follower_count(organization)
+    reposter(organization.slug, origin, followers, :local)
+  end
+
+  defp local_reposter(_repost, origin, _follower_counts),
+    do: reposter(nil, origin, nil, :local)
+
+  defp remote_reposters(post_id) do
+    from(r in Reaction,
+      left_join: a in RemoteAccount,
+      on: a.actor_uri == r.actor_uri,
+      where: r.post_id == ^post_id and r.kind == "announce",
+      select: %{
+        actor_uri: r.actor_uri,
+        reaction_handle: r.handle,
+        host: a.host,
+        account_handle: a.handle,
+        followers: a.follower_count,
+        checked_at: a.follower_count_checked_at
+      }
+    )
+    |> Repo.all()
+    |> Enum.map(&remote_reposter/1)
+  end
+
+  defp remote_reposter(row) do
+    host = row.host || host(row.actor_uri) || "unknown"
+    handle = row.account_handle || row.reaction_handle || actor_name(row.actor_uri)
+    reposter(handle, host, row.followers, :remote, row.checked_at)
+  end
+
+  defp summarize_reposters(reposters) do
+    sorted =
+      Enum.sort_by(
+        reposters,
+        fn row -> {is_nil(row.followers), -(row.followers || 0), row.label} end
+      )
+
+    known = sorted |> Enum.map(& &1.followers) |> Enum.reject(&is_nil/1) |> Enum.sum()
+
+    %{
+      known: known,
+      known_reposters: Enum.count(sorted, &(not is_nil(&1.followers))),
+      unknown_reposters: Enum.count(sorted, &is_nil(&1.followers)),
+      reposters: sorted,
+      visible_reposters: Enum.take(sorted, 12),
+      by_host: repost_reach_by_host(sorted)
+    }
+  end
+
+  defp repost_reach_by_host(reposters) do
+    reposters
+    |> Enum.reject(&is_nil(&1.followers))
+    |> Enum.group_by(& &1.host, & &1.followers)
+    |> Map.new(fn {host, counts} -> {host, Enum.sum(counts)} end)
+  end
+
+  defp reposter(handle, host, followers, source, checked_at \\ nil) do
+    label = if is_binary(handle), do: "@#{handle}@#{host}", else: host
+
+    %{
+      label: label,
+      host: host,
+      followers: followers,
+      source: source,
+      checked_at: checked_at
+    }
+  end
+
+  defp actor_name(uri) when is_binary(uri) do
+    uri |> URI.parse() |> Map.get(:path) |> to_string() |> Path.basename()
+  end
+
+  defp actor_name(_uri), do: nil
 
   defp host(uri) when is_binary(uri), do: uri |> URI.parse() |> Map.get(:host)
   defp host(_uri), do: nil

@@ -1,6 +1,7 @@
 defmodule Vutuv.PostAnalyticsTest do
   use Vutuv.DataCase
 
+  alias Vutuv.Fediverse.RemoteAccount
   alias Vutuv.PostAnalytics
   alias Vutuv.Posts
   alias Vutuv.Repo
@@ -82,6 +83,15 @@ defmodule Vutuv.PostAnalyticsTest do
       received_at: now
     })
 
+    Repo.insert!(%RemoteAccount{
+      actor_uri: "https://social.example/users/alice",
+      host: "social.example",
+      handle: "alice",
+      inbox_uri: "https://social.example/users/alice/inbox",
+      follower_count: 10_000,
+      follower_count_checked_at: DateTime.add(now, -600, :second)
+    })
+
     Repo.insert!(%Vutuv.Fediverse.PostDelivery{
       post_id: post.id,
       user_id: author.id,
@@ -103,6 +113,10 @@ defmodule Vutuv.PostAnalyticsTest do
     assert result.known_readers == 3
     assert result.network.server_count == 4
     assert result.network.active_server_count == 3
+    assert result.repost_reach.known == 10_000
+    assert result.repost_reach.known_reposters == 2
+    assert result.repost_reach.unknown_reposters == 0
+    assert Enum.any?(result.repost_reach.reposters, &(&1.label == "@alice@social.example"))
     social = Enum.find(result.network.nodes, &(&1.host == "social.example"))
     assert social.interactions == 2
     assert social.status == :active
@@ -114,7 +128,8 @@ defmodule Vutuv.PostAnalyticsTest do
              interactions: 1,
              status: :active,
              active_month: nil,
-             node_info_checked_at: nil
+             node_info_checked_at: nil,
+             repost_potential: 0
            } in result.network.nodes
 
     assert %{
@@ -122,7 +137,8 @@ defmodule Vutuv.PostAnalyticsTest do
              interactions: 0,
              status: :addressed,
              active_month: nil,
-             node_info_checked_at: nil
+             node_info_checked_at: nil,
+             repost_potential: 0
            } in result.network.nodes
   end
 end

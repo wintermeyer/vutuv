@@ -18,6 +18,12 @@ defmodule Vutuv.Fediverse.RemoteAccount do
   `host` is denormalized out of `actor_uri` rather than parsed in SQL: it is
   read by the browser's Server column, its filter and the instance purge, and
   a stored value keeps all three reading the same thing.
+
+  `followers_uri`, `follower_count` and its two timestamps support the
+  reach analysis. The count comes from a public ActivityPub collection or
+  Mastodon API in the background. It measures possible distribution through a
+  repost, not delivery or readership, and may be absent when a server withholds
+  it.
   """
 
   use VutuvWeb, :model
@@ -53,6 +59,13 @@ defmodule Vutuv.Fediverse.RemoteAccount do
     field(:public_key_pem, :string)
     field(:refreshed_at, :utc_datetime)
 
+    # Public ActivityPub audience metadata. It is only potential distribution,
+    # never a readership count: followers may overlap or never receive a post.
+    field(:followers_uri, :string)
+    field(:follower_count, :integer)
+    field(:follower_count_checked_at, :utc_datetime)
+    field(:follower_count_attempted_at, :utc_datetime)
+
     # Where this account went (issue #1168), from a verified inbound `Move`.
     # The mirror of `users.moved_to`; nil for everybody who has not moved.
     field(:moved_to, :string)
@@ -84,6 +97,10 @@ defmodule Vutuv.Fediverse.RemoteAccount do
       :public_key_id,
       :public_key_pem,
       :refreshed_at,
+      :followers_uri,
+      :follower_count,
+      :follower_count_checked_at,
+      :follower_count_attempted_at,
       :moved_to
     ])
     # Remote strings, and a NUL in one raises on insert (issue #1767).
@@ -99,6 +116,8 @@ defmodule Vutuv.Fediverse.RemoteAccount do
     |> validate_length(:shared_inbox_uri, max: @max_uri, count: :bytes)
     |> validate_length(:public_key_id, max: @max_uri, count: :bytes)
     |> validate_length(:public_key_pem, max: @max_uri, count: :bytes)
+    |> validate_length(:followers_uri, max: @max_uri, count: :bytes)
+    |> validate_number(:follower_count, greater_than_or_equal_to: 0)
     |> validate_length(:moved_to, max: @max_uri, count: :bytes)
     |> validate_length(:host, max: @max_display)
     |> validate_length(:handle, max: @max_display)
