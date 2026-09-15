@@ -23,6 +23,10 @@ We use the [MIT License](LICENSE).
   references, ready for messages that start a conversation; the current UI
   supports replies only.
 
+- Authors can open a post's private analysis from its three-dot menu. A timeline
+  shows when retained local and Fediverse interactions arrived, with 7-day,
+  30-day and yearly views; it does not claim to measure views or reach.
+
 - Public member profiles (work experience, education, spoken languages, tags,
   links, contact details, online messengers with click-to-chat deep links) with
   follow relationships, posts, likes/reposts/replies and

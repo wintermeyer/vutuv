@@ -21,9 +21,10 @@ defmodule VutuvWeb.PostController do
 
   plug(VutuvWeb.Plug.UserResolveSlug when action in [:show, :index])
   plug(VutuvWeb.Plug.EnsureActivated when action in [:show, :index])
-  plug(VutuvWeb.Plug.RequireLogin when action in [:delete, :pin, :unpin])
+  plug(VutuvWeb.Plug.RequireLogin when action in [:analytics, :delete, :pin, :unpin])
 
   alias Vutuv.Fediverse
+  alias Vutuv.PostAnalytics
   alias Vutuv.Posts
   alias Vutuv.Posts.Post
   alias VutuvWeb.AgentDocs
@@ -31,6 +32,27 @@ defmodule VutuvWeb.PostController do
   alias VutuvWeb.Fediverse.Docs, as: FediverseDocs
   alias VutuvWeb.FediverseController
   alias VutuvWeb.PostTeaser
+
+  def analytics(conn, %{"id" => id} = params) do
+    post = Posts.get_post(id)
+    viewer = conn.assigns[:current_user]
+
+    if post && Posts.author?(post, viewer) do
+      analytics = PostAnalytics.for_post(post, range: params["range"] || "30d")
+
+      conn
+      |> put_resp_header("cache-control", "private, no-store")
+      |> put_resp_header("x-robots-tag", "noindex, nofollow")
+      |> render("analytics.html",
+        post: post,
+        analytics: analytics,
+        author: Posts.author(post),
+        page_title: gettext("Post analysis")
+      )
+    else
+      VutuvWeb.ControllerHelpers.render_error(conn, 404)
+    end
+  end
 
   # The author archive: /:slug/posts, optionally scoped to a year, month or
   # day (/:slug/posts/2026[/06[/06]]), offset-paginated like the other

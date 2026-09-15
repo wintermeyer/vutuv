@@ -24853,3 +24853,147 @@ msgstr "Your private reply could not be sent. Please reload and try again."
 #, elixir-autogen, elixir-format
 msgid "Your private reply has been queued for delivery."
 msgstr "Your private reply has been queued for delivery."
+
+#: lib/vutuv_web/views/post_html.ex:10
+#, elixir-autogen, elixir-format
+msgid "30 days"
+msgstr ""
+
+
+#: lib/vutuv_web/views/post_html.ex:9
+#, elixir-autogen, elixir-format
+msgid "7 days"
+msgstr ""
+
+
+#: lib/vutuv_web/templates/post/analytics.html.heex:10
+#, elixir-autogen, elixir-format
+msgid ""
+"A timeline of recorded likes, reposts and public replies. These are "
+"interactions, not measured views or unique reach."
+msgstr ""
+
+
+#: lib/vutuv_web/components/post_components.ex:4693
+#, elixir-autogen, elixir-format
+msgid "Analysis"
+msgstr ""
+
+
+#: lib/vutuv_web/templates/post/analytics.html.heex:4
+#, elixir-autogen, elixir-format
+msgid "Back to post"
+msgstr ""
+
+
+#: lib/vutuv_web/templates/post/analytics.html.heex:94
+#, elixir-autogen, elixir-format
+msgid "Busiest interval"
+msgstr ""
+
+
+#: lib/vutuv_web/templates/post/analytics.html.heex:7
+#, elixir-autogen, elixir-format
+msgid "How this post travelled"
+msgstr ""
+
+
+#: lib/vutuv_web/templates/post/analytics.html.heex:16
+#, elixir-autogen, elixir-format
+msgid "Interactions in selected period"
+msgstr ""
+
+
+#: lib/vutuv_web/templates/post/analytics.html.heex:30
+#, elixir-autogen, elixir-format
+msgid "Interactions over time"
+msgstr ""
+
+
+#: lib/vutuv_web/templates/post/analytics.html.heex:51
+#, elixir-autogen, elixir-format
+msgid "No recorded interactions in this period"
+msgstr ""
+
+
+#: lib/vutuv_web/templates/post/analytics.html.heex:33
+#, elixir-autogen, elixir-format
+msgid "Per day"
+msgstr ""
+
+
+#: lib/vutuv_web/templates/post/analytics.html.heex:33
+#, elixir-autogen, elixir-format
+msgid "Per hour"
+msgstr ""
+
+
+#: lib/vutuv_web/controllers/post_controller.ex:50
+#, elixir-autogen, elixir-format
+msgid "Post analysis"
+msgstr ""
+
+
+#: lib/vutuv_web/templates/post/analytics.html.heex:63
+#, elixir-autogen, elixir-format
+msgid "Recorded interactions over time"
+msgstr ""
+
+
+#: lib/vutuv_web/templates/post/analytics.html.heex:64
+#, elixir-autogen, elixir-format
+msgid ""
+"Stacked bars show likes, reposts and replies in each time interval. The "
+"highest interval is highlighted below."
+msgstr ""
+
+
+#: lib/vutuv_web/templates/post/analytics.html.heex:90
+#, elixir-autogen, elixir-format
+msgid "Swipe across the chart to explore the full timeline."
+msgstr ""
+
+
+#: lib/vutuv_web/templates/post/analytics.html.heex:102
+#, elixir-autogen, elixir-format
+msgid ""
+"This chart uses reactions still stored by vutuv. Removed likes, deleted "
+"replies and activity that another server never delivered cannot be "
+"reconstructed. Times are shown in UTC."
+msgstr ""
+
+
+#: lib/vutuv_web/templates/post/analytics.html.heex:36
+#, elixir-autogen, elixir-format
+msgid "Time range"
+msgstr ""
+
+
+#: lib/vutuv_web/templates/post/analytics.html.heex:52
+#, elixir-autogen, elixir-format
+msgid "Try a longer time range, or check back later."
+msgstr ""
+
+
+#: lib/vutuv_web/templates/post/analytics.html.heex:94
+#, elixir-autogen, elixir-format
+msgid "interactions"
+msgstr ""
+
+
+#: lib/vutuv_web/templates/post/analytics.html.heex:76
+#, elixir-autogen, elixir-format
+msgid "likes"
+msgstr ""
+
+
+#: lib/vutuv_web/templates/post/analytics.html.heex:82
+#, elixir-autogen, elixir-format
+msgid "replies"
+msgstr ""
+
+
+#: lib/vutuv_web/templates/post/analytics.html.heex:79
+#, elixir-autogen, elixir-format
+msgid "reposts"
+msgstr ""

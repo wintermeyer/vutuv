@@ -996,6 +996,7 @@ defmodule VutuvWeb.Router do
 
     # Post deletion (the permalink lives in the profile scope below; "posts"
     # is in ReservedSlugs).
+    get("/posts/:id/analytics", PostController, :analytics)
     delete("/posts/:id", PostController, :delete)
 
     # The profile pin (issue #1110): the one post that rides above the author's
