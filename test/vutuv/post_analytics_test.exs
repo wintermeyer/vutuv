@@ -41,4 +41,51 @@ defmodule Vutuv.PostAnalyticsTest do
     assert Enum.count(result.buckets, &(&1.total > 0)) == 2
     assert result.peak.total == 2
   end
+
+  test "summarizes known readers and the servers involved in distribution" do
+    author = insert(:activated_user)
+    reader = insert(:activated_user)
+    {:ok, post} = Posts.create_post(author, %{body: "A post crossing server borders"})
+    now = DateTime.add(DateTime.utc_now(:second), 60, :second)
+
+    Repo.insert!(%Vutuv.Posts.PostLike{post_id: post.id, user_id: reader.id})
+    Repo.insert!(%Vutuv.Posts.PostRepost{post_id: post.id, user_id: reader.id})
+
+    Repo.insert!(%Vutuv.Fediverse.Reaction{
+      post_id: post.id,
+      actor_uri: "https://social.example/users/alice",
+      kind: "like",
+      received_at: now
+    })
+
+    Repo.insert!(%Vutuv.Fediverse.Reaction{
+      post_id: post.id,
+      actor_uri: "https://social.example/users/alice",
+      kind: "announce",
+      received_at: now
+    })
+
+    Repo.insert!(%Vutuv.Fediverse.Reaction{
+      post_id: post.id,
+      actor_uri: "https://community.example/people/bob",
+      kind: "like",
+      received_at: now
+    })
+
+    Repo.insert!(%Vutuv.Fediverse.PostDelivery{
+      post_id: post.id,
+      user_id: author.id,
+      inbox_uri: "https://relay.example/inbox",
+      object_uri: "https://vutuv.test/#{author.username}/posts/#{post.id}"
+    })
+
+    result = PostAnalytics.for_post(post, range: "7d", now: now)
+
+    assert result.known_readers == 3
+    assert result.network.server_count == 4
+    assert result.network.active_server_count == 3
+    assert %{host: "social.example", interactions: 2, status: :active} in result.network.nodes
+    assert %{host: "community.example", interactions: 1, status: :active} in result.network.nodes
+    assert %{host: "relay.example", interactions: 0, status: :addressed} in result.network.nodes
+  end
 end

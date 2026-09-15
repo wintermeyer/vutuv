@@ -7,11 +7,13 @@ defmodule VutuvWeb.PostAnalyticsControllerTest do
     {conn, author} = create_and_login_user(conn)
     post = create_post!(author, %{body: "An interesting post"})
 
-    assert get(conn, "/#{author.username}/posts/#{post.id}").resp_body =~
-             "/posts/#{post.id}/analytics"
+    assert get(conn, "/#{author.username}/posts/#{post.id}").resp_body =~ "Analysis (Beta)"
 
     analytics = get(conn, "/posts/#{post.id}/analytics")
-    assert html_response(analytics, 200) =~ "Interactions over time"
+    body = html_response(analytics, 200)
+    assert body =~ "Known readers"
+    assert body =~ "Server network"
+    assert body =~ "Momentum over time"
     assert Plug.Conn.get_resp_header(analytics, "x-robots-tag") == ["noindex, nofollow"]
   end
 

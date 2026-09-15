@@ -25,3 +25,5 @@ surface (feed, thread, and composer), including anonymous and other-user privacy
 For raw PostgreSQL queries with UUID columns, dump the UUID to its 16-byte
 database representation before passing it as a parameter; when grouping
 timestamp results in Elixir, normalize microsecond precision on both keys.
+Choose an Elixir sigil delimiter that does not occur in the literal content;
+parentheses in translated UI copy otherwise close `~s(...)` earlier than intended.

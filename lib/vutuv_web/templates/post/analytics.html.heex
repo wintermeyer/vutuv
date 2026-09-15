@@ -1,104 +1,81 @@
-<div class="mx-auto max-w-5xl px-4 py-8 sm:py-12">
-  <div class="mb-8">
-    <.link href={Vutuv.Posts.path(@post)} class="text-sm font-medium text-brand-700 hover:underline dark:text-brand-300">
-      ← {gettext("Back to post")}
-    </.link>
-    <h1 class="mt-5 text-3xl font-semibold tracking-tight text-slate-950 dark:text-white sm:text-4xl">
-      {gettext("How this post travelled")}
-    </h1>
-    <p class="mt-3 max-w-2xl text-sm leading-6 text-slate-600 dark:text-slate-400">
-      {gettext("A timeline of recorded likes, reposts and public replies. These are interactions, not measured views or unique reach.")}
-    </p>
-  </div>
-
-  <div class="mb-7 flex flex-wrap items-end gap-x-8 gap-y-5 border-y border-slate-200 py-5 dark:border-slate-700">
-    <div class="min-w-40">
-      <p class="text-sm text-slate-600 dark:text-slate-400">{gettext("Interactions in selected period")}</p>
-      <p class="mt-1 text-4xl font-semibold tabular-nums tracking-tight text-slate-950 dark:text-white">{@analytics.totals.all}</p>
+<div class="mx-auto max-w-6xl px-4 py-8 sm:py-12">
+  <div class="mb-7 flex flex-wrap items-start justify-between gap-4">
+    <div>
+      <.link href={Vutuv.Posts.path(@post)} class="text-sm font-medium text-brand-700 hover:underline dark:text-brand-300">← {gettext("Back to post")}</.link>
+      <div class="mt-5 flex items-center gap-3">
+        <h1 class="text-3xl font-semibold tracking-tight text-slate-950 dark:text-white sm:text-4xl">{gettext("Post analysis")}</h1>
+        <span class="rounded-full bg-brand-100 px-2.5 py-1 text-xs font-bold uppercase tracking-wider text-brand-800 dark:bg-brand-950 dark:text-brand-200">Beta</span>
+      </div>
+      <p class="mt-3 max-w-2xl text-sm leading-6 text-slate-600 dark:text-slate-400">{gettext("What vutuv can reliably reconstruct about this post's path through the network.")}</p>
     </div>
-    <dl class="flex flex-wrap gap-x-7 gap-y-3 pb-1 text-sm">
-      <div><dt class="inline text-slate-600 dark:text-slate-400">{gettext("Likes")}</dt> <dd class="inline font-semibold tabular-nums text-brand-700 dark:text-brand-300">{@analytics.totals.likes}</dd></div>
-      <div><dt class="inline text-slate-600 dark:text-slate-400">{gettext("Reposts")}</dt> <dd class="inline font-semibold tabular-nums text-cyan-700 dark:text-cyan-300">{@analytics.totals.reposts}</dd></div>
-      <div><dt class="inline text-slate-600 dark:text-slate-400">{gettext("Replies")}</dt> <dd class="inline font-semibold tabular-nums text-amber-700 dark:text-amber-300">{@analytics.totals.replies}</dd></div>
-    </dl>
+    <nav aria-label={gettext("Time range")} class="flex rounded-xl bg-slate-100 p-1 dark:bg-slate-800">
+      <.link :for={range <- Vutuv.PostAnalytics.ranges()} href={~p"/posts/#{@post.id}/analytics?range=#{range}"} aria-current={if range == @analytics.range, do: "page"} class={["rounded-lg px-3 py-1.5 text-sm font-medium", if(range == @analytics.range, do: "bg-white text-slate-950 shadow-sm dark:bg-slate-700 dark:text-white", else: "text-slate-600 dark:text-slate-300")]}>{range_label(range)}</.link>
+    </nav>
   </div>
 
-  <section class="rounded-3xl border border-slate-200 bg-white p-5 shadow-sm dark:border-slate-700 dark:bg-slate-900 sm:p-8" aria-labelledby="analytics-chart-heading">
-    <div class="flex flex-wrap items-start justify-between gap-4">
+  <section class="relative overflow-hidden rounded-3xl bg-slate-950 px-6 py-8 text-white shadow-xl sm:px-9 sm:py-10">
+    <div class="absolute -right-20 -top-28 h-72 w-72 rounded-full bg-brand-500/20 blur-3xl"></div>
+    <div class="relative grid gap-8 lg:grid-cols-[1.2fr_1fr] lg:items-end">
       <div>
-        <h2 id="analytics-chart-heading" class="text-xl font-semibold text-slate-950 dark:text-white">
-          {gettext("Interactions over time")}
-        </h2>
-        <p class="mt-1 text-sm text-slate-600 dark:text-slate-400">
-          {if @analytics.unit == "hour", do: gettext("Per hour"), else: gettext("Per day")}
-        </p>
+        <p class="text-xs font-bold uppercase tracking-[0.22em] text-brand-300">{gettext("Distribution signal")}</p>
+        <h2 class="mt-3 max-w-2xl text-4xl font-semibold tracking-tight sm:text-5xl">{signal_title(@analytics.signal)}</h2>
+        <p class="mt-4 max-w-xl text-base leading-7 text-slate-300">{signal_copy(@analytics.signal)}</p>
       </div>
-      <nav aria-label={gettext("Time range")} class="flex rounded-xl bg-slate-100 p-1 dark:bg-slate-800">
-        <.link :for={range <- Vutuv.PostAnalytics.ranges()} href={~p"/posts/#{@post.id}/analytics?range=#{range}"}
-          aria-current={if range == @analytics.range, do: "page"}
-          class={[
-            "rounded-lg px-3 py-1.5 text-sm font-medium transition-colors",
-            if(range == @analytics.range,
-              do: "bg-white text-slate-950 shadow-sm dark:bg-slate-700 dark:text-white",
-              else: "text-slate-600 hover:text-slate-950 dark:text-slate-300 dark:hover:text-white")
-          ]}>
-          {range_label(range)}
-        </.link>
-      </nav>
-    </div>
-
-    <div :if={@analytics.totals.all == 0} class="mt-8 rounded-2xl bg-slate-50 px-5 py-10 text-center dark:bg-slate-800">
-      <p class="font-medium text-slate-800 dark:text-slate-100">{gettext("No recorded interactions in this period")}</p>
-      <p class="mt-1 text-sm text-slate-600 dark:text-slate-400">{gettext("Try a longer time range, or check back later.")}</p>
-    </div>
-
-    <div :if={@analytics.totals.all > 0} class="mt-8">
-      <div class="mb-4 flex flex-wrap gap-x-5 gap-y-2 text-xs font-medium text-slate-600 dark:text-slate-300">
-        <span><span class="mr-1.5 inline-block h-2.5 w-2.5 rounded-sm bg-brand-500"></span>{gettext("Likes")}</span>
-        <span><span class="mr-1.5 inline-block h-2.5 w-2.5 rounded-sm bg-cyan-500"></span>{gettext("Reposts")}</span>
-        <span><span class="mr-1.5 inline-block h-2.5 w-2.5 rounded-sm bg-amber-500"></span>{gettext("Replies")}</span>
-      </div>
-      <div class="overflow-x-auto">
-        <svg viewBox="0 0 760 260" role="img" aria-labelledby="chart-title chart-desc" class="h-auto min-w-[620px] w-full">
-          <title id="chart-title">{gettext("Recorded interactions over time")}</title>
-          <desc id="chart-desc">{gettext("Stacked bars show likes, reposts and replies in each time interval. The highest interval is highlighted below.")}</desc>
-          <line x1="34" x2="748" y1="218" y2="218" stroke="currentColor" class="text-slate-300 dark:text-slate-600" />
-          <line x1="34" x2="748" y1="118" y2="118" stroke="currentColor" stroke-dasharray="3 5" class="text-slate-200 dark:text-slate-700" />
-          <line x1="34" x2="748" y1="18" y2="18" stroke="currentColor" stroke-dasharray="3 5" class="text-slate-200 dark:text-slate-700" />
-          <text x="4" y="221" class="fill-slate-500 text-[11px] dark:fill-slate-400">0</text>
-          <text x="4" y="121" class="fill-slate-500 text-[11px] dark:fill-slate-400">{div(@analytics.peak.total, 2)}</text>
-          <text x="4" y="21" class="fill-slate-500 text-[11px] dark:fill-slate-400">{@analytics.peak.total}</text>
-          <g :for={{bucket, index} <- Enum.with_index(@analytics.buckets)}>
-            <% x = 36 + index * 710 / length(@analytics.buckets) %>
-            <% width = max(2, 710 / length(@analytics.buckets) - 1) %>
-            <% scale = 200 / max(@analytics.peak.total, 1) %>
-            <rect :if={bucket.likes > 0} x={x} y={218 - bucket.likes * scale} width={width} height={bucket.likes * scale} fill="#8b5cf6">
-              <title>{bucket_label(bucket.at, @analytics.unit)}: {bucket.likes} {gettext("likes")}</title>
-            </rect>
-            <rect :if={bucket.reposts > 0} x={x} y={218 - (bucket.likes + bucket.reposts) * scale} width={width} height={bucket.reposts * scale} fill="#06b6d4">
-              <title>{bucket_label(bucket.at, @analytics.unit)}: {bucket.reposts} {gettext("reposts")}</title>
-            </rect>
-            <rect :if={bucket.replies > 0} x={x} y={218 - bucket.total * scale} width={width} height={bucket.replies * scale} fill="#f59e0b">
-              <title>{bucket_label(bucket.at, @analytics.unit)}: {bucket.replies} {gettext("replies")}</title>
-            </rect>
-          </g>
-          <text x="34" y="246" class="fill-slate-500 text-[11px] dark:fill-slate-400">{bucket_label(hd(@analytics.buckets).at, @analytics.unit)}</text>
-          <text x="748" y="246" text-anchor="end" class="fill-slate-500 text-[11px] dark:fill-slate-400">{bucket_label(List.last(@analytics.buckets).at, @analytics.unit)}</text>
-        </svg>
-      </div>
-      <p class="mt-1 text-xs text-slate-500 dark:text-slate-400 sm:hidden">
-        {gettext("Swipe across the chart to explore the full timeline.")}
-      </p>
-      <div class="mt-5 rounded-xl bg-brand-50 p-4 dark:bg-brand-950/40">
-        <p class="text-sm font-semibold text-brand-900 dark:text-brand-100">
-          {gettext("Busiest interval")}: {@analytics.peak.total} {gettext("interactions")}
-        </p>
-        <p class="mt-1 text-sm text-brand-800 dark:text-brand-200">{bucket_label(@analytics.peak.at, @analytics.unit)}</p>
-      </div>
+      <dl class="grid grid-cols-3 gap-3">
+        <div class="rounded-2xl border border-white/10 bg-white/5 p-4"><dt class="text-xs text-slate-400">{gettext("Known readers")}</dt><dd class="mt-2 text-3xl font-semibold tabular-nums">{@analytics.known_readers}<span class="text-lg text-brand-300">+</span></dd></div>
+        <div class="rounded-2xl border border-white/10 bg-white/5 p-4"><dt class="text-xs text-slate-400">{gettext("Servers involved")}</dt><dd class="mt-2 text-3xl font-semibold tabular-nums">{@analytics.network.server_count}</dd></div>
+        <div class="rounded-2xl border border-white/10 bg-white/5 p-4"><dt class="text-xs text-slate-400">{gettext("Interactions")}</dt><dd class="mt-2 text-3xl font-semibold tabular-nums">{@analytics.totals.all}</dd></div>
+      </dl>
     </div>
   </section>
 
-  <p class="mt-5 max-w-3xl text-xs leading-5 text-slate-500 dark:text-slate-400">
-    {gettext("This chart uses reactions still stored by vutuv. Removed likes, deleted replies and activity that another server never delivered cannot be reconstructed. Times are shown in UTC.")}
-  </p>
+  <div class="mt-7 grid gap-7 lg:grid-cols-[1.35fr_1fr]">
+    <section class="rounded-3xl border border-slate-200 bg-white p-5 shadow-sm dark:border-slate-700 dark:bg-slate-900 sm:p-7" aria-labelledby="network-heading">
+      <h2 id="network-heading" class="text-xl font-semibold text-slate-950 dark:text-white">{gettext("Server network")}</h2>
+      <p class="mt-1 max-w-xl text-sm leading-6 text-slate-600 dark:text-slate-400">{gettext("Solid nodes sent a visible reaction. Outlined nodes were addressed when the post was published; that does not confirm delivery or a read.")}</p>
+      <div class="mt-3 flex gap-4 text-xs text-slate-600 dark:text-slate-400"><span><span class="mr-1.5 inline-block h-2.5 w-2.5 rounded-full bg-brand-500"></span>{gettext("Active")}</span><span><span class="mr-1.5 inline-block h-2.5 w-2.5 rounded-full border border-slate-400"></span>{gettext("Addressed")}</span></div>
+      <div class="mt-5 overflow-x-auto rounded-2xl bg-slate-950">
+        <svg viewBox="0 0 800 420" role="img" aria-labelledby="network-title network-desc" class="h-auto min-w-[560px] w-full">
+          <title id="network-title">{gettext("Servers involved in this post")}</title>
+          <desc id="network-desc">{gettext("A network map centered on vutuv. Node size reflects recorded interactions; outlined nodes only received an outbound address.")}</desc>
+          <circle cx="400" cy="210" r="190" fill="#8b5cf6" opacity=".08" />
+          <g :for={{node, index} <- Enum.with_index(@analytics.network.visible_nodes)}>
+            <% {x, y} = network_node_position(index, length(@analytics.network.visible_nodes)) %>
+            <line :if={index > 0} x1="400" y1="210" x2={x} y2={y} stroke={if node.status == :active, do: "#8b5cf6", else: "#475569"} stroke-width={if node.status == :active, do: 2, else: 1} stroke-dasharray={if node.status == :addressed, do: "3 6"} />
+          </g>
+          <g :for={{node, index} <- Enum.with_index(@analytics.network.visible_nodes)}>
+            <% {x, y} = network_node_position(index, length(@analytics.network.visible_nodes)) %>
+            <circle cx={x} cy={y} r={network_node_radius(node)} fill={if node.status == :addressed, do: "#0f172a", else: if(node.status == :origin, do: "#7c3aed", else: "#8b5cf6")} stroke={if node.status == :addressed, do: "#94a3b8", else: "#c4b5fd"} stroke-width="2"><title>{node.host}: {node.interactions} {gettext("interactions")}</title></circle>
+            <text x={x} y={y + network_node_radius(node) + 15} text-anchor="middle" class="fill-slate-300 text-[10px]">{node.host}</text>
+          </g>
+        </svg>
+      </div>
+      <p :if={@analytics.network.hidden_server_count > 0} class="mt-3 text-xs text-slate-500 dark:text-slate-400">{gettext("%{count} more servers are included in the total.", count: @analytics.network.hidden_server_count)}</p>
+    </section>
+
+    <section class="rounded-3xl border border-slate-200 bg-white p-5 shadow-sm dark:border-slate-700 dark:bg-slate-900 sm:p-7" aria-labelledby="evidence-heading">
+      <h2 id="evidence-heading" class="text-xl font-semibold text-slate-950 dark:text-white">{gettext("What we know")}</h2>
+      <dl class="mt-5 space-y-5">
+        <div class="border-b border-slate-100 pb-5 dark:border-slate-800"><dt class="text-sm font-medium text-slate-900 dark:text-white">{gettext("Known readers")}</dt><dd class="mt-1 text-sm leading-6 text-slate-600 dark:text-slate-400">{gettext("At least %{count} distinct people liked, reposted or replied. Anyone who reacted necessarily saw the post.", count: @analytics.known_readers)}</dd></div>
+        <div class="border-b border-slate-100 pb-5 dark:border-slate-800"><dt class="text-sm font-medium text-slate-900 dark:text-white">{gettext("Network footprint")}</dt><dd class="mt-1 text-sm leading-6 text-slate-600 dark:text-slate-400">{gettext("The post was addressed to %{addressed} server(s); visible responses came from %{active} server(s).", addressed: @analytics.network.addressed_server_count, active: @analytics.network.active_server_count)}</dd></div>
+        <div><dt class="text-sm font-medium text-slate-900 dark:text-white">{gettext("What remains unknown")}</dt><dd class="mt-1 text-sm leading-6 text-slate-600 dark:text-slate-400">{gettext("Passive readers, overlapping follower circles, blocked deliveries and activity never sent back to vutuv cannot be counted.")}</dd></div>
+      </dl>
+    </section>
+  </div>
+
+  <section class="mt-7 rounded-3xl border border-slate-200 bg-white p-5 shadow-sm dark:border-slate-700 dark:bg-slate-900 sm:p-8" aria-labelledby="analytics-chart-heading">
+    <h2 id="analytics-chart-heading" class="text-xl font-semibold text-slate-950 dark:text-white">{gettext("Momentum over time")}</h2>
+    <p class="mt-1 text-sm text-slate-600 dark:text-slate-400">{if @analytics.unit == "hour", do: gettext("Per hour"), else: gettext("Per day")}</p>
+    <div :if={@analytics.totals.all == 0} class="mt-8 rounded-2xl bg-slate-50 px-5 py-10 text-center dark:bg-slate-800"><p class="font-medium text-slate-800 dark:text-slate-100">{gettext("No recorded interactions in this period")}</p><p class="mt-1 text-sm text-slate-600 dark:text-slate-400">{gettext("Try a longer time range, or check back later.")}</p></div>
+    <div :if={@analytics.totals.all > 0} class="mt-8">
+      <div class="mb-4 flex flex-wrap gap-x-5 gap-y-2 text-xs font-medium text-slate-600 dark:text-slate-300"><span><span class="mr-1.5 inline-block h-2.5 w-2.5 rounded-sm bg-brand-500"></span>{gettext("Likes")} {@analytics.totals.likes}</span><span><span class="mr-1.5 inline-block h-2.5 w-2.5 rounded-sm bg-cyan-500"></span>{gettext("Reposts")} {@analytics.totals.reposts}</span><span><span class="mr-1.5 inline-block h-2.5 w-2.5 rounded-sm bg-amber-500"></span>{gettext("Replies")} {@analytics.totals.replies}</span></div>
+      <div class="overflow-x-auto"><svg viewBox="0 0 760 260" role="img" class="h-auto min-w-[620px] w-full">
+        <line x1="34" x2="748" y1="218" y2="218" stroke="currentColor" class="text-slate-300 dark:text-slate-600" /><line x1="34" x2="748" y1="118" y2="118" stroke="currentColor" stroke-dasharray="3 5" class="text-slate-200 dark:text-slate-700" /><line x1="34" x2="748" y1="18" y2="18" stroke="currentColor" stroke-dasharray="3 5" class="text-slate-200 dark:text-slate-700" />
+        <text x="4" y="221" class="fill-slate-500 text-[11px]">0</text><text x="4" y="121" class="fill-slate-500 text-[11px]">{div(@analytics.peak.total, 2)}</text><text x="4" y="21" class="fill-slate-500 text-[11px]">{@analytics.peak.total}</text>
+        <g :for={{bucket, index} <- Enum.with_index(@analytics.buckets)}><% x = 36 + index * 710 / length(@analytics.buckets) %><% width = max(2, 710 / length(@analytics.buckets) - 1) %><% scale = 200 / max(@analytics.peak.total, 1) %><rect :if={bucket.likes > 0} x={x} y={218 - bucket.likes * scale} width={width} height={bucket.likes * scale} fill="#8b5cf6" /><rect :if={bucket.reposts > 0} x={x} y={218 - (bucket.likes + bucket.reposts) * scale} width={width} height={bucket.reposts * scale} fill="#06b6d4" /><rect :if={bucket.replies > 0} x={x} y={218 - bucket.total * scale} width={width} height={bucket.replies * scale} fill="#f59e0b" /></g>
+        <text x="34" y="246" class="fill-slate-500 text-[11px]">{bucket_label(hd(@analytics.buckets).at, @analytics.unit)}</text><text x="748" y="246" text-anchor="end" class="fill-slate-500 text-[11px]">{bucket_label(List.last(@analytics.buckets).at, @analytics.unit)}</text>
+      </svg></div>
+      <div class="mt-5 rounded-xl bg-brand-50 p-4 dark:bg-brand-950/40"><p class="text-sm font-semibold text-brand-900 dark:text-brand-100">{gettext("Busiest interval")}: {@analytics.peak.total} {gettext("interactions")}</p><p class="mt-1 text-sm text-brand-800 dark:text-brand-200">{bucket_label(@analytics.peak.at, @analytics.unit)}</p></div>
+    </div>
+  </section>
 </div>

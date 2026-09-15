@@ -24999,3 +24999,197 @@ msgstr ""
 #, elixir-autogen, elixir-format
 msgid "reposts"
 msgstr ""
+
+#: lib/vutuv_web/templates/post/analytics.html.heex:53
+#, elixir-autogen, elixir-format
+msgid "%{count} more servers are included in the total."
+msgstr ""
+
+
+#: lib/vutuv_web/views/post_html.ex:17
+#, elixir-autogen, elixir-format
+msgid "A first spark"
+msgstr ""
+
+
+#: lib/vutuv_web/templates/post/analytics.html.heex:40
+#, elixir-autogen, elixir-format
+msgid ""
+"A network map centered on vutuv. Node size reflects recorded interactions; "
+"outlined nodes only received an outbound address."
+msgstr ""
+
+
+#: lib/vutuv_web/views/post_html.ex:23
+#, elixir-autogen, elixir-format
+msgid "A small number of people have visibly responded."
+msgstr ""
+
+
+#: lib/vutuv_web/templates/post/analytics.html.heex:36
+#, elixir-autogen, elixir-format
+msgid "Addressed"
+msgstr ""
+
+
+#: lib/vutuv_web/components/post_components.ex:4716
+#, elixir-autogen, elixir-format
+msgid "Analysis (Beta)"
+msgstr ""
+
+
+#: lib/vutuv_web/templates/post/analytics.html.heex:59
+#, elixir-autogen, elixir-format
+msgid ""
+"At least %{count} distinct people liked, reposted or replied. Anyone who "
+"reacted necessarily saw the post."
+msgstr ""
+
+
+#: lib/vutuv_web/templates/post/analytics.html.heex:20
+#, elixir-autogen, elixir-format
+msgid "Distribution signal"
+msgstr ""
+
+
+#: lib/vutuv_web/templates/post/analytics.html.heex:27
+#, elixir-autogen, elixir-format
+msgid "Interactions"
+msgstr ""
+
+
+#: lib/vutuv_web/templates/post/analytics.html.heex:25
+#: lib/vutuv_web/templates/post/analytics.html.heex:59
+#, elixir-autogen, elixir-format
+msgid "Known readers"
+msgstr ""
+
+
+#: lib/vutuv_web/templates/post/analytics.html.heex:67
+#, elixir-autogen, elixir-format
+msgid "Momentum over time"
+msgstr ""
+
+
+#: lib/vutuv_web/templates/post/analytics.html.heex:60
+#, elixir-autogen, elixir-format
+msgid "Network footprint"
+msgstr ""
+
+
+#: lib/vutuv_web/views/post_html.ex:16
+#, elixir-autogen, elixir-format
+msgid "No visible response yet"
+msgstr ""
+
+
+#: lib/vutuv_web/templates/post/analytics.html.heex:61
+#, elixir-autogen, elixir-format
+msgid ""
+"Passive readers, overlapping follower circles, blocked deliveries and "
+"activity never sent back to vutuv cannot be counted."
+msgstr ""
+
+
+#: lib/vutuv_web/templates/post/analytics.html.heex:34
+#, elixir-autogen, elixir-format
+msgid "Server network"
+msgstr ""
+
+
+#: lib/vutuv_web/templates/post/analytics.html.heex:26
+#, elixir-autogen, elixir-format
+msgid "Servers involved"
+msgstr ""
+
+
+#: lib/vutuv_web/templates/post/analytics.html.heex:39
+#, elixir-autogen, elixir-format
+msgid "Servers involved in this post"
+msgstr ""
+
+
+#: lib/vutuv_web/views/post_html.ex:29
+#, elixir-autogen, elixir-format
+msgid "Several parts of the network carried or discussed this post."
+msgstr ""
+
+
+#: lib/vutuv_web/templates/post/analytics.html.heex:35
+#, elixir-autogen, elixir-format
+msgid ""
+"Solid nodes sent a visible reaction. Outlined nodes were addressed when the "
+"post was published; that does not confirm delivery or a read."
+msgstr ""
+
+
+#: lib/vutuv_web/templates/post/analytics.html.heex:60
+#, elixir-autogen, elixir-format
+msgid ""
+"The post was addressed to %{addressed} server(s); visible responses came "
+"from %{active} server(s), including vutuv."
+msgstr ""
+
+
+#: lib/vutuv_web/views/post_html.ex:32
+#, elixir-autogen, elixir-format
+msgid "The recorded response is unusually broad and sustained."
+msgstr ""
+
+
+#: lib/vutuv_web/views/post_html.ex:26
+#, elixir-autogen, elixir-format
+msgid "The response is spreading beyond a single conversation."
+msgstr ""
+
+
+#: lib/vutuv_web/views/post_html.ex:20
+#, elixir-autogen, elixir-format
+msgid "This post broke out"
+msgstr ""
+
+
+#: lib/vutuv_web/views/post_html.ex:18
+#, elixir-autogen, elixir-format
+msgid "This post is gaining traction"
+msgstr ""
+
+
+#: lib/vutuv_web/views/post_html.ex:19
+#, elixir-autogen, elixir-format
+msgid "This post is travelling"
+msgstr ""
+
+
+#: lib/vutuv_web/templates/post/analytics.html.heex:61
+#, elixir-autogen, elixir-format
+msgid "What remains unknown"
+msgstr ""
+
+
+#: lib/vutuv_web/templates/post/analytics.html.heex:9
+#, elixir-autogen, elixir-format
+msgid ""
+"What vutuv can reliably reconstruct about this post's path through the "
+"network."
+msgstr ""
+
+
+#: lib/vutuv_web/templates/post/analytics.html.heex:57
+#, elixir-autogen, elixir-format
+msgid "What we know"
+msgstr ""
+
+
+#: lib/vutuv_web/views/post_html.ex:22
+#, elixir-autogen, elixir-format
+msgid "vutuv has not recorded a reaction to this post."
+msgstr ""
+
+
+#: lib/vutuv_web/templates/post/analytics.html.heex:72
+#, elixir-autogen, elixir-format
+msgid ""
+"The post was addressed to %{addressed} server(s); visible responses came "
+"from %{active} server(s)."
+msgstr ""
