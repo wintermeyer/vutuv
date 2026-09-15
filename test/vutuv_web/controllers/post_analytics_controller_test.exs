@@ -26,19 +26,24 @@ defmodule VutuvWeb.PostAnalyticsControllerTest do
     analytics = get(conn, "/posts/#{post.id}/analytics")
     body = html_response(analytics, 200)
     assert body =~ "Reach analysis"
+
+    assert body =~
+             "A complete analysis is impossible in the Fediverse because vutuv cannot access every server and its data."
+
     assert body =~ "Known readers"
     assert body =~ "Server network"
     assert body =~ "Momentum over time"
     assert body =~ "data-chart-tick"
     assert body =~ "data-chart-bucket-label"
     assert body |> String.split("data-chart-tick") |> length() > 3
-    assert body =~ "do not represent repost paths"
+    assert body =~ "Lines do not show repost paths."
     refute body =~ "Distribution signal"
     refute body =~ "This post broke out"
     refute body =~ "No visible response yet"
-    assert body =~ "The real readership is almost certainly much higher"
     assert body =~ ~r/<strong[^>]*>lower bound<\/strong>/
-    assert body =~ "people on other social platforms"
+    assert body =~ "Passive views and unreported activity are not visible to vutuv."
+    refute body =~ "What vutuv can reliably reconstruct"
+    refute body =~ "The real readership is almost certainly much higher"
 
     assert body =~ ~s(/posts/#{post.id}/analytics/og.png)
   end

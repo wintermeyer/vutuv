@@ -26120,3 +26120,32 @@ msgstr "Bekannte Leser · Communities · Interaktionen"
 #, elixir-autogen, elixir-format
 msgid "Measured lower bound · 7 days, hourly"
 msgstr "Gemessene Untergrenze · 7 Tage, stündlich"
+
+
+#, elixir-autogen, elixir-format
+msgid "A complete analysis is impossible in the Fediverse because vutuv cannot access every server and its data."
+msgstr "Eine vollständige Analyse ist im Fediverse nicht möglich, weil vutuv keinen Zugriff auf alle Server und ihre Daten hat."
+
+#, elixir-autogen, elixir-format
+msgid "Passive views and unreported activity are not visible to vutuv."
+msgstr "Passive Aufrufe und nicht gemeldete Aktivitäten sind für vutuv unsichtbar."
+
+#, elixir-autogen, elixir-format
+msgid "Filled nodes reacted. Outlined nodes were contacted. Lines do not show repost paths."
+msgstr "Ausgefüllte Knoten haben reagiert, umrandete wurden kontaktiert. Linien zeigen keine Repost-Pfade."
+
+#, elixir-autogen, elixir-format
+msgid "At least %{count} people reacted and therefore saw the post."
+msgstr "Mindestens %{count} Menschen haben reagiert und den Beitrag somit gesehen."
+
+#, elixir-autogen, elixir-format
+msgid "Sent to %{addressed} communities. Visible reactions came from %{active}."
+msgstr "An %{addressed} Communities gesendet. Sichtbare Reaktionen kamen aus %{active}."
+
+#, elixir-autogen, elixir-format
+msgid "Unknown"
+msgstr "Unbekannt"
+
+#, elixir-autogen, elixir-format
+msgid "Passive views and unreported activity are not counted."
+msgstr "Passive Aufrufe und nicht gemeldete Aktivitäten werden nicht gezählt."

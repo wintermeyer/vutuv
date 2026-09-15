@@ -25255,3 +25255,32 @@ msgstr ""
 #, elixir-autogen, elixir-format
 msgid "Measured lower bound · 7 days, hourly"
 msgstr ""
+
+
+#, elixir-autogen, elixir-format
+msgid "A complete analysis is impossible in the Fediverse because vutuv cannot access every server and its data."
+msgstr ""
+
+#, elixir-autogen, elixir-format
+msgid "Passive views and unreported activity are not visible to vutuv."
+msgstr ""
+
+#, elixir-autogen, elixir-format
+msgid "Filled nodes reacted. Outlined nodes were contacted. Lines do not show repost paths."
+msgstr ""
+
+#, elixir-autogen, elixir-format
+msgid "At least %{count} people reacted and therefore saw the post."
+msgstr ""
+
+#, elixir-autogen, elixir-format
+msgid "Sent to %{addressed} communities. Visible reactions came from %{active}."
+msgstr ""
+
+#, elixir-autogen, elixir-format
+msgid "Unknown"
+msgstr ""
+
+#, elixir-autogen, elixir-format
+msgid "Passive views and unreported activity are not counted."
+msgstr ""
