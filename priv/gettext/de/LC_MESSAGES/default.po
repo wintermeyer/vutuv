@@ -26052,3 +26052,26 @@ msgid ""
 msgstr ""
 "Der Beitrag wurde an %{addressed} Server adressiert; sichtbare Reaktionen "
 "kamen von %{active} Servern."
+
+
+#: lib/vutuv_web/templates/post/analytics.html.heex:19
+#, elixir-autogen, elixir-format
+msgid ""
+"Recorded evidence for the selected period. The reader count is a lower "
+"bound, not an impression estimate."
+msgstr ""
+"Erfasste Daten für den gewählten Zeitraum. Die Leserzahl ist eine "
+"Untergrenze, keine Schätzung der Aufrufe."
+
+
+#: lib/vutuv_web/templates/post/analytics.html.heex:36
+#, elixir-autogen, elixir-format
+msgid ""
+"Solid nodes sent a visible reaction. Outlined nodes were addressed when the "
+"post was published; that does not confirm delivery or a read. Lines connect "
+"observed evidence to vutuv and do not represent repost paths."
+msgstr ""
+"Ausgefüllte Knoten haben eine sichtbare Reaktion gesendet. Umrandete Knoten "
+"wurden beim Veröffentlichen adressiert; das bestätigt weder Zustellung noch "
+"Lesen. Linien verbinden beobachtete Daten mit vutuv und stellen keine "
+"Repost-Pfade dar."

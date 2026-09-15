@@ -13,24 +13,6 @@ defmodule VutuvWeb.PostHTML do
   def bucket_label(at, "hour"), do: Calendar.strftime(at, "%d %b %Y, %H:00 UTC")
   def bucket_label(at, "day"), do: Calendar.strftime(at, "%d %b %Y")
 
-  def signal_title(:quiet), do: gettext("No visible response yet")
-  def signal_title(:spark), do: gettext("A first spark")
-  def signal_title(:growing), do: gettext("This post is gaining traction")
-  def signal_title(:travelling), do: gettext("This post is travelling")
-  def signal_title(:breakout), do: gettext("This post broke out")
-
-  def signal_copy(:quiet), do: gettext("vutuv has not recorded a reaction to this post.")
-  def signal_copy(:spark), do: gettext("A small number of people have visibly responded.")
-
-  def signal_copy(:growing),
-    do: gettext("The response is spreading beyond a single conversation.")
-
-  def signal_copy(:travelling),
-    do: gettext("Several parts of the network carried or discussed this post.")
-
-  def signal_copy(:breakout),
-    do: gettext("The recorded response is unusually broad and sustained.")
-
   def network_node_position(0, _count), do: {400, 210}
 
   def network_node_position(index, count) do

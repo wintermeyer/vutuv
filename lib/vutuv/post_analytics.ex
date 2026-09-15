@@ -47,8 +47,7 @@ defmodule Vutuv.PostAnalytics do
       totals: totals,
       peak: peak,
       known_readers: known_readers,
-      network: network,
-      signal: signal(totals.all, network.active_server_count)
+      network: network
     }
   end
 
@@ -135,12 +134,6 @@ defmodule Vutuv.PostAnalytics do
       addressed_server_count: length(Enum.uniq(addressed))
     }
   end
-
-  defp signal(0, _servers), do: :quiet
-  defp signal(interactions, servers) when interactions >= 100 or servers >= 20, do: :breakout
-  defp signal(interactions, servers) when interactions >= 20 or servers >= 8, do: :travelling
-  defp signal(interactions, servers) when interactions >= 5 or servers >= 3, do: :growing
-  defp signal(_interactions, _servers), do: :spark
 
   defp host(uri) when is_binary(uri), do: uri |> URI.parse() |> Map.get(:host)
   defp host(_uri), do: nil

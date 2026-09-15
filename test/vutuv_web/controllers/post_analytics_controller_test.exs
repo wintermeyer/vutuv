@@ -14,6 +14,10 @@ defmodule VutuvWeb.PostAnalyticsControllerTest do
     assert body =~ "Known readers"
     assert body =~ "Server network"
     assert body =~ "Momentum over time"
+    assert body =~ "do not represent repost paths"
+    refute body =~ "Distribution signal"
+    refute body =~ "This post broke out"
+    refute body =~ "No visible response yet"
     assert Plug.Conn.get_resp_header(analytics, "x-robots-tag") == ["noindex, nofollow"]
   end
 
