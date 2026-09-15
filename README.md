@@ -23,7 +23,8 @@ We use the [MIT License](LICENSE).
   references, ready for messages that start a conversation; the current UI
   supports replies only.
 
-- A public post's beta reach analysis is public too and available from its
+- A public post's beta reach analysis is public too, uses cached NodeInfo to
+  show community size when available, and is available from its
   three-dot menu. It shows the distinct people known to have read and reacted,
   a shareable server-network card, and hourly interaction momentum over 7 or
   30 days (daily over one year). The known readership is clearly labelled as

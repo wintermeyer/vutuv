@@ -4,6 +4,8 @@ defmodule VutuvWeb.PostHTML do
   import VutuvWeb.PostComponents
   import VutuvWeb.UserHelpers
 
+  alias VutuvWeb.UI
+
   embed_templates("../templates/post/*")
 
   def range_label("7d"), do: gettext("7 days")
@@ -47,6 +49,31 @@ defmodule VutuvWeb.PostHTML do
 
   def network_node_radius(%{interactions: interactions}) do
     min(10 + :math.sqrt(interactions) * 3, 26)
+  end
+
+  def network_community_radius(%{active_month: active_month} = node)
+      when is_integer(active_month) and active_month > 0 do
+    network_node_radius(node) + min(7 + :math.log10(active_month) * 2, 18)
+  end
+
+  def network_community_radius(_node), do: nil
+
+  def network_node_title(%{active_month: active_month, node_info_checked_at: checked_at} = node)
+      when is_integer(active_month) and active_month > 0 and not is_nil(checked_at) do
+    gettext(
+      "%{host}: %{interactions} interactions · %{active} monthly active accounts · NodeInfo %{checked_at}",
+      host: node.host,
+      interactions: node.interactions,
+      active: UI.compact_count(active_month),
+      checked_at: Calendar.strftime(checked_at, "%d %b %Y, %H:%M UTC")
+    )
+  end
+
+  def network_node_title(node) do
+    gettext("%{host}: %{interactions} interactions",
+      host: node.host,
+      interactions: node.interactions
+    )
   end
 
   @doc """

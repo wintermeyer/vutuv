@@ -4,6 +4,7 @@ defmodule Vutuv.PostAnalyticsTest do
   alias Vutuv.PostAnalytics
   alias Vutuv.Posts
   alias Vutuv.Repo
+  alias Vutuv.Tags.SourceServer
 
   test "buckets locally recorded and remote engagement by hour" do
     author = insert(:activated_user)
@@ -88,13 +89,40 @@ defmodule Vutuv.PostAnalyticsTest do
       object_uri: "https://vutuv.test/#{author.username}/posts/#{post.id}"
     })
 
+    checked_at = DateTime.add(now, -3_600, :second)
+
+    Repo.insert!(%SourceServer{
+      host: "social.example",
+      active_month: 12_345,
+      status: "ok",
+      checked_at: checked_at
+    })
+
     result = PostAnalytics.for_post(post, range: "7d", now: now)
 
     assert result.known_readers == 3
     assert result.network.server_count == 4
     assert result.network.active_server_count == 3
-    assert %{host: "social.example", interactions: 2, status: :active} in result.network.nodes
-    assert %{host: "community.example", interactions: 1, status: :active} in result.network.nodes
-    assert %{host: "relay.example", interactions: 0, status: :addressed} in result.network.nodes
+    social = Enum.find(result.network.nodes, &(&1.host == "social.example"))
+    assert social.interactions == 2
+    assert social.status == :active
+    assert social.active_month == 12_345
+    assert social.node_info_checked_at == checked_at
+
+    assert %{
+             host: "community.example",
+             interactions: 1,
+             status: :active,
+             active_month: nil,
+             node_info_checked_at: nil
+           } in result.network.nodes
+
+    assert %{
+             host: "relay.example",
+             interactions: 0,
+             status: :addressed,
+             active_month: nil,
+             node_info_checked_at: nil
+           } in result.network.nodes
   end
 end

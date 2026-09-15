@@ -5,17 +5,14 @@ defmodule Vutuv.Tags.SourceServer do
   account, and how big it is.
 
   One row per host, written by `Vutuv.Tags.SourceServerProbe` and read by the
-  tag-source panel to put a figure beside every server it offers. The row is a
+  tag-source panel and reach analysis. The row is a
   **cache with a clock**, not a record of anything ours: `checked_at` is stamped
   on every outcome, the ones where nothing could be learned included, so an
   unreachable server is not asked again on the next render.
 
-  It sits under `Vutuv.Tags` rather than `Vutuv.Fediverse` because that is what
-  it is: the question it answers is a Mastodon **tag timeline**'s, it is fetched
-  through the tag pull's own Req seam and gated by the tag pull's own flag, and
-  nothing in the fediverse code reads it. A name under `Vutuv.Fediverse` would
-  promise a general per-remote-server record this app does not have, and the
-  next author wanting one would either widen this or mint a third table.
+  The probe remains part of `Vutuv.Tags`: it fetches through the tag pull's Req
+  seam and feature flag. Reach analysis only reads already cached NodeInfo and
+  never makes a remote request while rendering a post.
 
   `status` is the answer that decides whether a server can be picked at all:
 

@@ -9,6 +9,7 @@ defmodule Vutuv.PostAnalytics do
 
   alias Vutuv.Posts.Post
   alias Vutuv.Repo
+  alias Vutuv.Tags.SourceServers
 
   @ranges %{"7d" => {7, "hour"}, "30d" => {30, "hour"}, "1y" => {365, "day"}}
 
@@ -112,14 +113,20 @@ defmodule Vutuv.PostAnalytics do
     remote_nodes =
       (Map.keys(active) ++ addressed)
       |> Enum.uniq()
-      |> Enum.map(fn server ->
-        interactions = Map.get(active, server, 0)
+      |> then(fn hosts -> {hosts, SourceServers.infos(hosts)} end)
+      |> then(fn {hosts, infos} ->
+        Enum.map(hosts, fn server ->
+          interactions = Map.get(active, server, 0)
+          info = Map.get(infos, server)
 
-        %{
-          host: server,
-          interactions: interactions,
-          status: if(interactions > 0, do: :active, else: :addressed)
-        }
+          %{
+            host: server,
+            interactions: interactions,
+            status: if(interactions > 0, do: :active, else: :addressed),
+            active_month: info && info.active_month,
+            node_info_checked_at: info && info.checked_at
+          }
+        end)
       end)
       |> Enum.sort_by(&{-&1.interactions, &1.host})
 

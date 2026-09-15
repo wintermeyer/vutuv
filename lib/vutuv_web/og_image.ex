@@ -251,12 +251,27 @@ defmodule VutuvWeb.OgImage do
           do: [color: @brand_500, fill: true],
           else: [color: @faint, fill: false, stroke_width: 3]
 
-      case Image.Draw.circle(image, x, y, radius, options) do
-        {:ok, image} -> {:cont, {:ok, image}}
+      with {:ok, image} <- draw_community_ring(image, node, x, y, radius),
+           {:ok, image} <- Image.Draw.circle(image, x, y, radius, options) do
+        {:cont, {:ok, image}}
+      else
         error -> {:halt, error}
       end
     end)
   end
+
+  defp draw_community_ring(image, %{active_month: active_month}, x, y, radius)
+       when is_integer(active_month) and active_month > 0 do
+    ring_radius = radius + min(7 + round(:math.log10(active_month) * 2), 18)
+
+    Image.Draw.circle(image, x, y, ring_radius,
+      color: [34, 211, 238],
+      fill: false,
+      stroke_width: 3
+    )
+  end
+
+  defp draw_community_ring(image, _node, _x, _y, _radius), do: {:ok, image}
 
   defp analytics_node_position(index, count, {cx, cy}) do
     angle = 2 * :math.pi() * index / max(count, 1) - :math.pi() / 2

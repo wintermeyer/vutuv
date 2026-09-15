@@ -25282,3 +25282,15 @@ msgstr ""
 #, elixir-autogen, elixir-format
 msgid "Passive views and unreported activity are not counted."
 msgstr ""
+
+#, elixir-autogen, elixir-format
+msgid "Outer ring: monthly active accounts"
+msgstr ""
+
+#, elixir-autogen, elixir-format
+msgid "%{host}: %{interactions} interactions · %{active} monthly active accounts · NodeInfo %{checked_at}"
+msgstr ""
+
+#, elixir-autogen, elixir-format
+msgid "%{host}: %{interactions} interactions"
+msgstr ""

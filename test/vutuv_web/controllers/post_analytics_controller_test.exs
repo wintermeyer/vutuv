@@ -5,6 +5,7 @@ defmodule VutuvWeb.PostAnalyticsControllerTest do
 
   alias Vutuv.Posts.PostLike
   alias Vutuv.Repo
+  alias Vutuv.Tags.SourceServer
 
   test "the author sees the reach analysis through the post menu", %{conn: conn} do
     {conn, author} = create_and_login_user(conn)
@@ -19,6 +20,20 @@ defmodule VutuvWeb.PostAnalyticsControllerTest do
 
     reader = insert_activated_user()
     Repo.insert!(%PostLike{post_id: post.id, user_id: reader.id})
+
+    Repo.insert!(%Vutuv.Fediverse.Reaction{
+      post_id: post.id,
+      actor_uri: "https://social.example/users/alice",
+      kind: "like",
+      received_at: DateTime.utc_now(:second)
+    })
+
+    Repo.insert!(%SourceServer{
+      host: "social.example",
+      active_month: 12_345,
+      status: "ok",
+      checked_at: ~U[2026-09-15 12:00:00Z]
+    })
 
     assert get(conn, "/#{author.username}/posts/#{post.id}").resp_body =~
              "Reach analysis (Beta)"
@@ -37,6 +52,9 @@ defmodule VutuvWeb.PostAnalyticsControllerTest do
     assert body =~ "data-chart-bucket-label"
     assert body |> String.split("data-chart-tick") |> length() > 3
     assert body =~ "Lines do not show repost paths."
+    assert body =~ "data-community-size-ring"
+    assert body =~ "12K monthly active accounts"
+    assert body =~ "NodeInfo 15 Sep 2026, 12:00 UTC"
     refute body =~ "Distribution signal"
     refute body =~ "This post broke out"
     refute body =~ "No visible response yet"
