@@ -63,13 +63,20 @@ defmodule VutuvWeb.PostAnalyticsControllerTest do
     assert body =~
              "A complete analysis is impossible in the Fediverse because vutuv cannot access every server and its data."
 
-    assert body =~ "Known readers"
+    assert body =~ "People with visible interactions"
+
+    assert body =~
+             "We cannot reliably know how many people saw this post in the Fediverse. We can only count people who visibly interacted with it"
+
     assert body =~ "Server network"
     assert body =~ "Momentum over time"
     assert body =~ "data-chart-tick"
     assert body =~ "data-chart-bucket-label"
     assert body |> String.split("data-chart-tick") |> length() > 3
-    assert body =~ "Lines do not show repost paths."
+    assert body =~ "Repost hops between servers are not visible to vutuv."
+    assert body =~ "data-network-sequence"
+    assert body =~ "data-network-interactions"
+    assert body =~ "First visible reaction"
     assert body =~ "data-community-size-ring"
     assert body =~ "12K monthly active accounts"
     assert body =~ "NodeInfo 15 Sep 2026, 12:00 UTC"
@@ -82,7 +89,9 @@ defmodule VutuvWeb.PostAnalyticsControllerTest do
     refute body =~ "This post broke out"
     refute body =~ "No visible response yet"
     assert body =~ ~r/<strong[^>]*>lower bound<\/strong>/
-    assert body =~ "Passive views and unreported activity are not visible to vutuv."
+    assert body =~ "not a view count."
+    refute body =~ "At least 1 people reacted and therefore saw the post."
+    refute body =~ "Passive views and unreported activity are not counted."
     refute body =~ "What vutuv can reliably reconstruct"
     refute body =~ "The real readership is almost certainly much higher"
 

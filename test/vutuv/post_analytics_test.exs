@@ -80,7 +80,7 @@ defmodule Vutuv.PostAnalyticsTest do
       post_id: post.id,
       actor_uri: "https://community.example/people/bob",
       kind: "like",
-      received_at: now
+      received_at: DateTime.add(now, 600, :second)
     })
 
     Repo.insert!(%RemoteAccount{
@@ -122,23 +122,19 @@ defmodule Vutuv.PostAnalyticsTest do
     assert social.status == :active
     assert social.active_month == 12_345
     assert social.node_info_checked_at == checked_at
+    assert social.sequence == 1
+    assert social.elapsed_seconds == 0
 
-    assert %{
-             host: "community.example",
-             interactions: 1,
-             status: :active,
-             active_month: nil,
-             node_info_checked_at: nil,
-             repost_potential: 0
-           } in result.network.nodes
+    community = Enum.find(result.network.nodes, &(&1.host == "community.example"))
+    assert community.interactions == 1
+    assert community.status == :active
+    assert community.sequence == 2
+    assert community.elapsed_seconds == 600
 
-    assert %{
-             host: "relay.example",
-             interactions: 0,
-             status: :addressed,
-             active_month: nil,
-             node_info_checked_at: nil,
-             repost_potential: 0
-           } in result.network.nodes
+    relay = Enum.find(result.network.nodes, &(&1.host == "relay.example"))
+    assert relay.interactions == 0
+    assert relay.status == :addressed
+    assert relay.sequence == nil
+    assert relay.elapsed_seconds == nil
   end
 end

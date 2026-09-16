@@ -28,8 +28,9 @@ We use the [MIT License](LICENSE).
   three-dot menu. It shows the distinct people known to have read and reacted,
   a shareable server-network card, cached follower totals for potential repost
   reach, and hourly interaction momentum over 7 or 30 days (daily over one
-  year). The known readership is clearly labelled as a lower bound rather than
-  an impression estimate.
+  year). Its larger server graph numbers visible interactions and arranges
+  first reactions as a time spiral without claiming unobservable repost hops.
+  Visible interactions are clearly separated from view counts.
 
 - Public member profiles (work experience, education, spoken languages, tags,
   links, contact details, online messengers with click-to-chat deep links) with

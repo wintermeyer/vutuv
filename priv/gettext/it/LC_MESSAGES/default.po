@@ -26845,3 +26845,67 @@ msgstr "Ogni autore di repost viene contato una volta. I dati mancanti sono escl
 #, elixir-autogen, elixir-format
 msgid "Followers can overlap, and a delivered post may not be read. The figure is not a count of unique readers."
 msgstr "I follower possono sovrapporsi e un post consegnato può non essere letto. Il valore non conta lettori unici."
+
+#, elixir-autogen, elixir-format
+msgid "People with visible interactions"
+msgstr "Persone con interazioni visibili"
+
+#, elixir-autogen, elixir-format
+msgid "Visible interactions are a"
+msgstr "Le interazioni visibili sono un"
+
+#, elixir-autogen, elixir-format
+msgid "not a view count."
+msgstr "non un conteggio delle visualizzazioni."
+
+#, elixir-autogen, elixir-format
+msgid "What we can measure"
+msgstr "Cosa possiamo misurare"
+
+#, elixir-autogen, elixir-format
+msgid "We cannot reliably know how many people saw this post in the Fediverse. We can only count people who visibly interacted with it, for example through a like, repost or reply: %{count} people."
+msgstr "Nel Fediverse non possiamo sapere con certezza quante persone hanno visto questo post. Possiamo contare solo chi ha interagito in modo visibile, per esempio con un like, un repost o una risposta: %{count} persone."
+
+#, elixir-autogen, elixir-format
+msgid "Numbers inside nodes are visible interactions. The numbered spiral follows the first reaction from each server. Repost hops between servers are not visible to vutuv."
+msgstr "I numeri nei nodi sono interazioni visibili. La spirale numerata segue la prima reazione di ogni server. I passaggi dei repost tra server non sono visibili a vutuv."
+
+#, elixir-autogen, elixir-format
+msgid "Reacted"
+msgstr "Ha reagito"
+
+#, elixir-autogen, elixir-format
+msgid "Contacted only"
+msgstr "Solo contattato"
+
+#, elixir-autogen, elixir-format
+msgid "Reaction order"
+msgstr "Ordine delle reazioni"
+
+#, elixir-autogen, elixir-format
+msgid "A network map centered on vutuv. Later first reactions sit farther from the center. Node size and labels show visible interactions."
+msgstr "Una mappa di rete centrata su vutuv. Le prime reazioni più tarde sono più lontane dal centro. Dimensione e numeri dei nodi mostrano le interazioni visibili."
+
+#, elixir-autogen, elixir-format
+msgid "earlier"
+msgstr "prima"
+
+#, elixir-autogen, elixir-format
+msgid "later"
+msgstr "dopo"
+
+#, elixir-autogen, elixir-format
+msgid "First visible reaction"
+msgstr "Prima reazione visibile"
+
+#, elixir-autogen, elixir-format
+msgid "+%{count}s"
+msgstr "+%{count}s"
+
+#, elixir-autogen, elixir-format
+msgid "+%{count}m"
+msgstr "+%{count}min"
+
+#, elixir-autogen, elixir-format
+msgid "+%{count}h"
+msgstr "+%{count}h"

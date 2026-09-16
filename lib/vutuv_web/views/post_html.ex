@@ -34,12 +34,12 @@ defmodule VutuvWeb.PostHTML do
   def chart_tick_anchor(index, count) when index == count - 1, do: "end"
   def chart_tick_anchor(_index, _count), do: "middle"
 
-  def network_node_position(0, _count), do: {400, 210}
+  def network_node_position(0, _count), do: {500, 300}
 
   def network_node_position(index, count) do
     angle = -:math.pi() / 2 + (index - 1) * 2 * :math.pi() / max(count - 1, 1)
-    radius = if rem(index, 2) == 0, do: 158, else: 184
-    {400 + :math.cos(angle) * radius, 210 + :math.sin(angle) * radius}
+    radius = 145 + (index - 1) * 125 / max(count - 2, 1)
+    {500 + :math.cos(angle) * radius, 300 + :math.sin(angle) * radius}
   end
 
   def network_node_radius(%{status: :origin}), do: 31
@@ -73,6 +73,24 @@ defmodule VutuvWeb.PostHTML do
       interactions: node.interactions
     )
   end
+
+  def network_elapsed_label(%{sequence: 1}), do: gettext("First visible reaction")
+
+  def network_elapsed_label(%{elapsed_seconds: seconds})
+      when is_integer(seconds) and seconds < 60,
+      do: gettext("+%{count}s", count: seconds)
+
+  def network_elapsed_label(%{elapsed_seconds: seconds})
+      when is_integer(seconds) and seconds < 3_600,
+      do: gettext("+%{count}m", count: div(seconds, 60))
+
+  def network_elapsed_label(%{elapsed_seconds: seconds}) when is_integer(seconds),
+    do: gettext("+%{count}h", count: div(seconds, 3_600))
+
+  def network_elapsed_label(_node), do: nil
+
+  def network_label_radius(node),
+    do: max(network_node_radius(node), network_community_radius(node) || 0)
 
   def network_edge_width(%{repost_potential: count}) when is_integer(count) and count > 0 do
     min(2 + :math.log10(count + 1), 7)

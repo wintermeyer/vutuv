@@ -26197,3 +26197,67 @@ msgstr "Jeder Reposter zählt einmal. Fehlende Werte werden ausgelassen, deshalb
 #, elixir-autogen, elixir-format
 msgid "Followers can overlap, and a delivered post may not be read. The figure is not a count of unique readers."
 msgstr "Follower können sich überschneiden und zugestellte Beiträge ungelesen bleiben. Die Zahl zählt keine eindeutigen Leser."
+
+#, elixir-autogen, elixir-format
+msgid "People with visible interactions"
+msgstr "Menschen mit sichtbaren Interaktionen"
+
+#, elixir-autogen, elixir-format
+msgid "Visible interactions are a"
+msgstr "Sichtbare Interaktionen sind eine"
+
+#, elixir-autogen, elixir-format
+msgid "not a view count."
+msgstr "keine Aufrufzahl."
+
+#, elixir-autogen, elixir-format
+msgid "What we can measure"
+msgstr "Was wir messen können"
+
+#, elixir-autogen, elixir-format
+msgid "We cannot reliably know how many people saw this post in the Fediverse. We can only count people who visibly interacted with it, for example through a like, repost or reply: %{count} people."
+msgstr "Im Fediverse können wir nicht zuverlässig feststellen, wie viele Menschen diesen Beitrag gesehen haben. Wir können nur Menschen zählen, die sichtbar damit interagiert haben, etwa mit einem Like, Repost oder einer Antwort: %{count} Menschen."
+
+#, elixir-autogen, elixir-format
+msgid "Numbers inside nodes are visible interactions. The numbered spiral follows the first reaction from each server. Repost hops between servers are not visible to vutuv."
+msgstr "Die Zahlen in den Knoten sind sichtbare Interaktionen. Die nummerierte Spirale folgt der ersten Reaktion jedes Servers. Repost-Sprünge zwischen Servern sind für vutuv nicht sichtbar."
+
+#, elixir-autogen, elixir-format
+msgid "Reacted"
+msgstr "Reagiert"
+
+#, elixir-autogen, elixir-format
+msgid "Contacted only"
+msgstr "Nur kontaktiert"
+
+#, elixir-autogen, elixir-format
+msgid "Reaction order"
+msgstr "Reihenfolge der Reaktionen"
+
+#, elixir-autogen, elixir-format
+msgid "A network map centered on vutuv. Later first reactions sit farther from the center. Node size and labels show visible interactions."
+msgstr "Eine Netzwerkkarte mit vutuv im Zentrum. Spätere erste Reaktionen liegen weiter außen. Knotengröße und Zahlen zeigen sichtbare Interaktionen."
+
+#, elixir-autogen, elixir-format
+msgid "earlier"
+msgstr "früher"
+
+#, elixir-autogen, elixir-format
+msgid "later"
+msgstr "später"
+
+#, elixir-autogen, elixir-format
+msgid "First visible reaction"
+msgstr "Erste sichtbare Reaktion"
+
+#, elixir-autogen, elixir-format
+msgid "+%{count}s"
+msgstr "+%{count}s"
+
+#, elixir-autogen, elixir-format
+msgid "+%{count}m"
+msgstr "+%{count}min"
+
+#, elixir-autogen, elixir-format
+msgid "+%{count}h"
+msgstr "+%{count}h"

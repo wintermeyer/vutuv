@@ -25332,3 +25332,67 @@ msgstr ""
 #, elixir-autogen, elixir-format
 msgid "Followers can overlap, and a delivered post may not be read. The figure is not a count of unique readers."
 msgstr ""
+
+#, elixir-autogen, elixir-format
+msgid "People with visible interactions"
+msgstr ""
+
+#, elixir-autogen, elixir-format
+msgid "Visible interactions are a"
+msgstr ""
+
+#, elixir-autogen, elixir-format
+msgid "not a view count."
+msgstr ""
+
+#, elixir-autogen, elixir-format
+msgid "What we can measure"
+msgstr ""
+
+#, elixir-autogen, elixir-format
+msgid "We cannot reliably know how many people saw this post in the Fediverse. We can only count people who visibly interacted with it, for example through a like, repost or reply: %{count} people."
+msgstr ""
+
+#, elixir-autogen, elixir-format
+msgid "Numbers inside nodes are visible interactions. The numbered spiral follows the first reaction from each server. Repost hops between servers are not visible to vutuv."
+msgstr ""
+
+#, elixir-autogen, elixir-format
+msgid "Reacted"
+msgstr ""
+
+#, elixir-autogen, elixir-format
+msgid "Contacted only"
+msgstr ""
+
+#, elixir-autogen, elixir-format
+msgid "Reaction order"
+msgstr ""
+
+#, elixir-autogen, elixir-format
+msgid "A network map centered on vutuv. Later first reactions sit farther from the center. Node size and labels show visible interactions."
+msgstr ""
+
+#, elixir-autogen, elixir-format
+msgid "earlier"
+msgstr ""
+
+#, elixir-autogen, elixir-format
+msgid "later"
+msgstr ""
+
+#, elixir-autogen, elixir-format
+msgid "First visible reaction"
+msgstr ""
+
+#, elixir-autogen, elixir-format
+msgid "+%{count}s"
+msgstr ""
+
+#, elixir-autogen, elixir-format
+msgid "+%{count}m"
+msgstr ""
+
+#, elixir-autogen, elixir-format
+msgid "+%{count}h"
+msgstr ""

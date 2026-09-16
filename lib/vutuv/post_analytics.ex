@@ -90,11 +90,14 @@ defmodule Vutuv.PostAnalytics do
 
   defp network(post_id, totals, repost_reach) do
     interaction_sql = """
-    SELECT actor_uri, count(*)::integer
+    SELECT actor_uri, count(*)::integer,
+           floor(extract(epoch FROM min(event_at)))::bigint AS first_seen_unix
     FROM (
-      SELECT actor_uri FROM fediverse_reactions WHERE post_id = $1
+      SELECT actor_uri, received_at AS event_at
+        FROM fediverse_reactions WHERE post_id = $1
       UNION ALL
-      SELECT actor_uri FROM fediverse_notes WHERE post_id = $1 AND audience = 'public'
+      SELECT actor_uri, received_at
+        FROM fediverse_notes WHERE post_id = $1 AND audience = 'public'
     ) remote
     GROUP BY actor_uri
     """
@@ -109,34 +112,35 @@ defmodule Vutuv.PostAnalytics do
 
     active =
       interaction_rows
-      |> Enum.reduce(%{}, fn [uri, count], hosts ->
-        Map.update(hosts, host(uri), count, &(&1 + count))
+      |> Enum.reduce(%{}, fn [uri, count, first_seen_unix], hosts ->
+        Map.update(
+          hosts,
+          host(uri),
+          %{interactions: count, first_seen_unix: first_seen_unix},
+          fn current ->
+            %{
+              interactions: current.interactions + count,
+              first_seen_unix: min(current.first_seen_unix, first_seen_unix)
+            }
+          end
+        )
       end)
       |> Map.delete(nil)
 
     addressed = delivery_rows |> Enum.map(fn [uri] -> host(uri) end) |> Enum.reject(&is_nil/1)
     origin = URI.parse(VutuvWeb.Endpoint.url()).host || "vutuv"
-    local_interactions = totals.all - Enum.sum(Map.values(active))
+    remote_interactions = active |> Map.values() |> Enum.map(& &1.interactions) |> Enum.sum()
+    local_interactions = totals.all - remote_interactions
+
+    first_seen_unix =
+      active |> Map.values() |> Enum.map(& &1.first_seen_unix) |> Enum.min(fn -> nil end)
+
+    sequences = network_sequences(active, first_seen_unix)
 
     remote_nodes =
       (Map.keys(active) ++ addressed)
       |> Enum.uniq()
-      |> then(fn hosts -> {hosts, SourceServers.infos(hosts)} end)
-      |> then(fn {hosts, infos} ->
-        Enum.map(hosts, fn server ->
-          interactions = Map.get(active, server, 0)
-          info = Map.get(infos, server)
-
-          %{
-            host: server,
-            interactions: interactions,
-            status: if(interactions > 0, do: :active, else: :addressed),
-            active_month: info && info.active_month,
-            node_info_checked_at: info && info.checked_at,
-            repost_potential: Map.get(repost_reach.by_host, server, 0)
-          }
-        end)
-      end)
+      |> remote_network_nodes(active, sequences, repost_reach.by_host)
       |> Enum.sort_by(&{-&1.interactions, &1.host})
 
     nodes = [
@@ -144,19 +148,82 @@ defmodule Vutuv.PostAnalytics do
         host: origin,
         interactions: local_interactions,
         status: :origin,
-        repost_potential: Map.get(repost_reach.by_host, origin, 0)
+        repost_potential: Map.get(repost_reach.by_host, origin, 0),
+        first_seen_unix: nil,
+        sequence: nil,
+        elapsed_seconds: nil
       }
       | remote_nodes
     ]
 
     %{
       nodes: nodes,
-      visible_nodes: Enum.take(nodes, 19),
+      visible_nodes: visible_network_nodes(nodes),
       server_count: length(nodes),
       active_server_count: Enum.count(nodes, &(&1.interactions > 0)),
       hidden_server_count: max(length(nodes) - 19, 0),
       addressed_server_count: length(Enum.uniq(addressed))
     }
+  end
+
+  defp remote_network_nodes(hosts, active, sequences, repost_reach_by_host) do
+    infos = SourceServers.infos(hosts)
+
+    Enum.map(hosts, fn server ->
+      remote_network_node(
+        server,
+        Map.get(active, server),
+        Map.get(sequences, server),
+        Map.get(infos, server),
+        Map.get(repost_reach_by_host, server, 0)
+      )
+    end)
+  end
+
+  defp remote_network_node(server, activity, timing, info, repost_potential) do
+    interactions = if activity, do: activity.interactions, else: 0
+    timing = timing || %{sequence: nil, elapsed_seconds: nil}
+
+    %{
+      host: server,
+      interactions: interactions,
+      status: if(interactions > 0, do: :active, else: :addressed),
+      active_month: info && info.active_month,
+      node_info_checked_at: info && info.checked_at,
+      repost_potential: repost_potential,
+      first_seen_unix: activity && activity.first_seen_unix,
+      sequence: timing.sequence,
+      elapsed_seconds: timing.elapsed_seconds
+    }
+  end
+
+  defp network_sequences(active, first_seen_unix) do
+    active
+    |> Enum.sort_by(fn {host, activity} -> {activity.first_seen_unix, host} end)
+    |> Enum.with_index(1)
+    |> Map.new(fn {{host, activity}, sequence} ->
+      {host,
+       %{
+         sequence: sequence,
+         elapsed_seconds: activity.first_seen_unix - first_seen_unix
+       }}
+    end)
+  end
+
+  defp visible_network_nodes([origin | remote_nodes]) do
+    earliest =
+      remote_nodes
+      |> Enum.reject(&is_nil(&1.sequence))
+      |> Enum.sort_by(& &1.sequence)
+      |> Enum.take(6)
+
+    visible_remote =
+      (earliest ++ Enum.take(remote_nodes, 18))
+      |> Enum.uniq_by(& &1.host)
+      |> Enum.take(18)
+      |> Enum.sort_by(fn node -> {is_nil(node.sequence), node.sequence || 0, node.host} end)
+
+    [origin | visible_remote]
   end
 
   defp repost_reach(post_id) do
