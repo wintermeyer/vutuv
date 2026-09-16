@@ -305,20 +305,7 @@ defmodule VutuvWeb.CV do
     }
   end
 
-  # An entirely undated entry shows no period (format_duration/4 would call
-  # the missing end date "Present", which is only right when a start exists).
-  defp period(%{start_year: nil, end_year: nil}), do: nil
-
-  defp period(entry) do
-    IO.iodata_to_binary(
-      WorkExperienceHTML.format_duration(
-        entry.start_month,
-        entry.start_year,
-        entry.end_month,
-        entry.end_year
-      )
-    )
-  end
+  defp period(entry), do: WorkExperienceHTML.entry_period(entry)
 
   defp work_groups(user) do
     for {kind, entries} <- WorkExperience.group_by_kind(user.work_experiences) do

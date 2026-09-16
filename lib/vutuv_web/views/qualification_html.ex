@@ -263,15 +263,7 @@ defmodule VutuvWeb.QualificationHTML do
     end
   end
 
-  # An entry with no dates at all has no period — `format_duration/4` would
-  # read that as "Present", which is a claim the member never made.
-  defp job_period(%{start_year: nil, end_year: nil}), do: nil
-
-  defp job_period(job) do
-    job.start_month
-    |> WorkExperienceHTML.format_duration(job.start_year, job.end_month, job.end_year)
-    |> IO.iodata_to_binary()
-  end
+  defp job_period(job), do: WorkExperienceHTML.entry_period(job)
 
   @doc """
   Whether this viewer gets the document block: everyone once the AI scan

@@ -254,15 +254,64 @@ the link would fail *open*.
 `VutuvWeb.DirectorySearchLive`, embedded into the overview with `live_render`
 so `DirectoryController` keeps owning the agent-format siblings. A **field**
 search rather than the free-text page at `/search`: a case-insensitive
-substring in first name, last name and username, OR-ed across whichever of the
-three checkboxes are ticked, with every word of a multi-word query having to
-match some ticked field ("anna mei" and "mei anna" both find Anna Meier).
+substring in first name, last name, username, the employer on a member's work
+experiences and the school on their education entries, OR-ed across whichever
+of the five checkboxes are ticked, with every word of a multi-word query having
+to match some ticked field ("anna mei" and "mei anna" both find Anna Meier,
+"vergangen siemens" spans a surname and an employer).
 
-All three boxes start ticked and unticking the last one ticks all three again —
+Every box starts ticked and unticking the last one ticks them all again —
 one rule, `Directory.parse_search_fields/1`, applied on every path. Keeping the
 previous selection instead cannot be rendered: `@fields` would not change, so
 the diff would carry nothing for that checkbox and it would stay visibly
 unticked while the server searched as though it were on.
+
+### The two CV fields
+
+"Firma" and "Schule & Uni" look at **all** of a member's entries, with no date
+filter at all: a role somebody left in 2016 answers exactly like the one they
+hold today, which is the whole reason somebody ticks the box. They are the only
+fields that are not columns on `users`, and the way they are joined to the name
+fields is the load-bearing choice. Each word of the query becomes a **set of
+member ids** — a `UNION` of one-table queries, one per field — and the query
+keeps the members whose id is in every word's set. The obvious shape, an `OR` of
+predicates, cannot be indexed at all once one arm reads another table, and all
+five boxes start ticked, so every visitor pays whatever this shape costs. The
+measurements, and the case it does *not* fix (a word too short to form a
+trigram), are in the comment on `Vutuv.Directory.field_match/2`.
+
+Membership in a set, rather than a join, is also what keeps a member with three
+Siemens stations **one** row with an honest window count.
+
+A work experience may link a verified organization page, and the search matches
+that page's name too — a member who wrote "DB" and linked "Deutsche Bahn AG" is
+otherwise unfindable under the name the page carries. Only a **public** page
+(`organization_public_row/1`): a pending claim or a frozen page shows its name
+nowhere, so it must not answer a search either. The education field looks at the
+institution and never at the degree or the subject, because that is what the
+checkbox says.
+
+Nothing becomes visible that was not already: both sections are public on every
+profile (`/:slug/work_experiences`, `/:slug/educations`, agent formats
+included). What changes is that they are findable.
+
+A row found through a CV field shows **that** entry — "Developer @ Siemens AG
+(4/2012 - 3/2016)" — instead of the member's current job
+(`Directory.matched_entries/3`, one query per ticked CV field over the rendered
+ids, never one per row). A row naming today's employer explains nothing to
+somebody who searched for a company the member left. Where several entries
+answer, the one matching the most words of the query wins, then the most recent,
+work before education, the id last so the answer never depends on the plan. The
+employer is named through `WorkExperience.linked_organization/1`, like the
+profile timeline and the agent documents, so a row that answered "Deutsche Bahn"
+says so rather than printing the "DB" the member typed.
+
+**Only** for a member the ticked name fields cannot already account for. The
+line settles for any *one* word of the query, because "vergangen siemens" spans
+a surname and an employer and would otherwise explain nothing — and that slack
+is exactly what would let somebody looking up "Anna" have her row taken over by
+the "Annapurna Trekking GmbH" she left in 2008. If the names cover every word,
+the names are the explanation and the row keeps its current job.
 
 A large result set is revealed in bites of `results_step/0` (25) up to
 `results_ceiling/0` (the site-wide page maximum), with the total stated first;
@@ -281,7 +330,10 @@ out of search results. The bare overview stays indexable.
 The minimum is three characters, and that number is not arbitrary: pg_trgm
 needs three to form a trigram, so a shorter needle plans a sequential scan of
 `users` whatever indexes exist. `20260828083124_add_users_name_trigram_indexes`
-adds the GIN trigram indexes on the three columns, and the total rides along on
+adds the GIN trigram indexes on the three name columns and
+`20260914153351_add_cv_search_trigram_indexes` the three the CV fields read
+(`work_experiences.organization`, `educations.school`, `organizations.name`),
+and the total rides along on
 the rows as a window count rather than as a second `Repo.aggregate/2` — one walk
 of the match set instead of two, on a query a member re-runs at every keystroke.
 

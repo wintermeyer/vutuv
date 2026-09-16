@@ -86,8 +86,109 @@ defmodule VutuvWeb.DirectorySearchLiveTest do
     end
   end
 
+  describe "the CV fields" do
+    setup %{quenstedt: quenstedt} do
+      # The role she left: no listing shows this employer, because every one of
+      # them shows the current job.
+      insert(:work_experience,
+        user: quenstedt,
+        title: "Developer",
+        organization: "Siemens AG",
+        start_month: 4,
+        start_year: 2012,
+        end_month: 3,
+        end_year: 2016
+      )
+
+      insert(:work_experience,
+        user: quenstedt,
+        title: "Designer",
+        organization: "Acme Corp",
+        start_year: 2020
+      )
+
+      insert(:education, user: quenstedt, school: "Universität Bremen", degree: "Diplom")
+      :ok
+    end
+
+    test "an employer somebody left is searchable", %{conn: conn} do
+      {:ok, view, _html} = mount_box(conn)
+
+      assert search(view, %{"q" => "siemens", "fields" => ~w(organization)}) =~ "Quenstedt, Clara"
+    end
+
+    test "the row names the entry that answered, not today's job", %{conn: conn} do
+      {:ok, view, _html} = mount_box(conn)
+
+      html = search(view, %{"q" => "siemens", "fields" => ~w(organization)})
+
+      assert html =~ "Developer @ Siemens AG (4/2012 - 3/2016)"
+      refute html =~ "Acme Corp"
+    end
+
+    test "a school match names the school entry", %{conn: conn} do
+      {:ok, view, _html} = mount_box(conn)
+
+      html = search(view, %{"q" => "bremen", "fields" => ~w(school)})
+
+      assert html =~ "Quenstedt, Clara"
+      assert html =~ "Diplom, Universität Bremen"
+    end
+
+    test "a long line keeps the employer and drops the title", %{conn: conn} do
+      # The current-job line falls back to the *title* when the pair will not
+      # fit, which is right for a row nobody searched — and exactly wrong here:
+      # the employer is the thing that was typed, so a row that drops it
+      # explains nothing. Found in a browser, not by a test.
+      wide = insert_activated_user(first_name: "Bruno", last_name: "Weitlaeufig")
+
+      insert(:work_experience,
+        user: wide,
+        title: "Vertriebsleiter Mitteldeutschland",
+        organization: "Siemens Healthineers Deutschland",
+        start_year: 2018
+      )
+
+      {:ok, view, _html} = mount_box(conn)
+
+      html = search(view, %{"q" => "healthineers", "fields" => ~w(organization)})
+
+      assert html =~ "Siemens Healthineers Deutschland"
+    end
+
+    test "a row matched through a linked page names the page", %{conn: conn} do
+      # `WorkExperience.linked_organization/1` owns this policy and every other
+      # surface applies it: the profile timeline, the section page and the agent
+      # docs all name the page rather than the member's own text. A row that
+      # answered "deutsche bahn" with "DB Netz" would carry neither typed word.
+      member = insert_activated_user(first_name: "Lea", last_name: "Bahner")
+
+      insert(:work_experience,
+        user: member,
+        title: "Lokführerin",
+        organization: "DB Netz",
+        organization_page: insert(:organization, name: "Deutsche Bahn AG"),
+        start_year: 2019
+      )
+
+      {:ok, view, _html} = mount_box(conn)
+
+      assert search(view, %{"q" => "deutsche bahn", "fields" => ~w(organization)}) =~
+               "Lokführerin @ Deutsche Bahn AG"
+    end
+
+    test "a name match still shows the current job", %{conn: conn} do
+      {:ok, view, _html} = mount_box(conn)
+
+      html = search(view, %{"q" => "quenstedt", "fields" => ~w(last_name)})
+
+      assert html =~ "Designer @ Acme Corp"
+      refute html =~ "Siemens"
+    end
+  end
+
   describe "the field checkboxes" do
-    test "all three start ticked", %{conn: conn} do
+    test "every field starts ticked", %{conn: conn} do
       {:ok, view, _html} = mount_box(conn)
 
       for field <- Directory.search_fields() do
@@ -106,7 +207,7 @@ defmodule VutuvWeb.DirectorySearchLiveTest do
       refute search(view, %{"q" => "otto", "fields" => ~w(last_name)}) =~ "Meierhoff, Otto"
     end
 
-    test "unticking the last field ticks all three again", %{conn: conn} do
+    test "unticking the last field ticks them all again", %{conn: conn} do
       {:ok, view, _html} = mount_box(conn)
 
       # Down to one field, then off: the form sends no `fields` key at all,
@@ -246,10 +347,12 @@ defmodule VutuvWeb.DirectorySearchLiveTest do
       html = in_german(conn, ~p"/system/members?q=meier")
 
       assert html =~ "Mitglied finden"
-      assert html =~ "Mitglieder nach Namen suchen"
+      assert html =~ "Mitglieder nach Name, Firma oder Uni suchen"
       assert html =~ "Vorname"
       assert html =~ "Nachname"
       assert html =~ "Benutzername"
+      assert html =~ "Firma"
+      assert html =~ "Schule &amp; Uni"
       assert html =~ "2 Mitglieder gefunden."
     end
 

@@ -153,6 +153,18 @@ defmodule Vutuv.Profiles.WorkExperience do
   def display_preloads, do: [:organization_page, :qualification]
 
   @doc """
+  The columns a one-line listing row reads — never the whole row: `description`
+  is a `text` column that LinkedIn imports fill to 10k characters, and these
+  projections feed every people listing on the site.
+
+  Read by `VutuvWeb.UserHelpers.work_information_map/2` (the current-job line)
+  and `Vutuv.Directory.matched_entries/3` (the line a CV search explains itself
+  with), so the two lines a row can show are built from the same data.
+  """
+  def line_fields,
+    do: ~w(id user_id title organization start_month start_year end_month end_year)a
+
+  @doc """
   The loaded credential this job cites (issue #858), or nil — unlinked, or the
   association not preloaded. This is the one place the display policy lives:
   the citation is deliberately NOT scoped by `Qualification.visible_to/2`, so

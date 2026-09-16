@@ -16,6 +16,7 @@ defmodule Vutuv.DirectoryTest do
   use Vutuv.DataCase, async: true
 
   alias Vutuv.Directory
+  alias Vutuv.Profiles.WorkExperience
 
   test "letter_entries covers a-z plus other, in order" do
     letters = Enum.map(Directory.letter_entries(), & &1.letter)
@@ -215,6 +216,243 @@ defmodule Vutuv.DirectoryTest do
       assert Directory.parse_search_fields([]) == Directory.search_fields()
       assert Directory.parse_search_fields(nil) == Directory.search_fields()
       assert Directory.parse_search_fields([%{}, 5]) == Directory.search_fields()
+    end
+  end
+
+  describe "search/3 across CV entries" do
+    setup do
+      past = insert_activated_user(last_name: "Vergangen", username: "pastdirsearch")
+
+      insert(:work_experience,
+        user: past,
+        title: "Developer",
+        organization: "Siemens AG",
+        start_year: 2012,
+        end_month: 3,
+        end_year: 2016
+      )
+
+      current = insert_activated_user(last_name: "Laufend", username: "currentdirsearch")
+
+      insert(:work_experience,
+        user: current,
+        title: "Designer",
+        organization: "Siemens Healthineers",
+        start_year: 2020,
+        end_month: nil,
+        end_year: nil
+      )
+
+      student = insert_activated_user(last_name: "Student", username: "schooldirsearch")
+      insert(:education, user: student, school: "Universität Bremen", degree: "Diplom")
+
+      :ok
+    end
+
+    test "a job that ended years ago is as findable as a running one" do
+      # The whole point of the field: the member left Siemens in 2016 and no
+      # listing has shown that employer since.
+      assert found("siemens", [:organization]) == ~w(currentdirsearch pastdirsearch)
+      assert found("siemens ag", [:organization]) == ~w(pastdirsearch)
+    end
+
+    test "the school field finds the institution" do
+      assert found("bremen", [:school]) == ~w(schooldirsearch)
+    end
+
+    test "the school field looks at the institution, not the degree" do
+      # Deliberate scope (Stefan, 2026-09-14): the checkbox says "Schule & Uni",
+      # so it searches the name of the place, never the degree or the subject.
+      assert found("diplom", [:school]) == []
+      assert found("computer science", [:school]) == []
+    end
+
+    test "the two CV fields stay apart, and the name fields stay out of both" do
+      assert found("siemens", [:school]) == []
+      assert found("bremen", [:organization]) == []
+      assert found("siemens", [:first_name, :last_name, :username]) == []
+      assert found("vergangen", [:organization, :school]) == []
+    end
+
+    test "the name of a linked organization page matches too" do
+      # The member typed "DB", the page is called "Deutsche Bahn AG": without
+      # the join, a search for the real name finds nobody.
+      member = insert_activated_user(last_name: "Bahner", username: "linkeddirsearch")
+      organization = insert(:organization, name: "Deutsche Bahn AG")
+
+      insert(:work_experience,
+        user: member,
+        organization: "DB Netz",
+        organization_page: organization
+      )
+
+      # Both arms of the OR: the page's name and the member's own text.
+      assert found("deutsche bahn", [:organization]) == ~w(linkeddirsearch)
+      assert found("netz", [:organization]) == ~w(linkeddirsearch)
+    end
+
+    test "a page that is not public never makes a member findable" do
+      # A pending claim or a frozen page shows its name nowhere, so it must not
+      # answer a search either - the free-text column is what the member wrote.
+      pending = insert_activated_user(last_name: "Pendent", username: "pendingdirsearch")
+
+      insert(:work_experience,
+        user: pending,
+        organization: "Acme",
+        organization_page: insert(:organization, name: "Rheinmetall Pending", status: "pending")
+      )
+
+      frozen = insert_activated_user(last_name: "Frostig", username: "frozendirsearch")
+
+      insert(:work_experience,
+        user: frozen,
+        organization: "Acme",
+        organization_page:
+          insert(:organization, name: "Rheinmetall Frozen", frozen_at: ~N[2026-01-01 00:00:00])
+      )
+
+      assert found("rheinmetall", [:organization]) == []
+    end
+
+    test "several stations at the same employer are one result, not three" do
+      # A set membership answers "has such a row", a join would answer "for each
+      # such row" - and the window count would say 3 members where there is one.
+      # `u.id IN (union of id sets)` is what enforces it; this test is
+      # calibrated against the shape that would break it, a join.
+      member = insert_activated_user(last_name: "Treu", username: "loyaldirsearch")
+
+      for year <- [2010, 2014, 2018] do
+        insert(:work_experience, user: member, organization: "Bosch GmbH", start_year: year)
+      end
+
+      assert %{users: [%{username: "loyaldirsearch"}], total: 1} =
+               Directory.search("bosch gmbh", [:organization])
+    end
+
+    test "a multi-word query can span a name and an employer" do
+      assert found("vergangen siemens") == ~w(pastdirsearch)
+      assert found("siemens vergangen") == ~w(pastdirsearch)
+      assert found("laufend siemens ag") == []
+    end
+
+    test "unconfirmed and moderation-hidden members stay out of a CV search" do
+      insert(:work_experience, user: insert(:user, last_name: "Vage"), organization: "Nokia")
+
+      insert(:work_experience,
+        user: insert_activated_user(last_name: "Verboten", frozen_at: ~N[2026-01-01 00:00:00]),
+        organization: "Nokia"
+      )
+
+      assert found("nokia", [:organization]) == []
+    end
+  end
+
+  describe "matched_entries/3" do
+    setup do
+      %{member: insert_activated_user(last_name: "Wechsler", username: "matchdirsearch")}
+    end
+
+    test "names the entry a CV search found the member through", %{member: member} do
+      # The row would otherwise show this member's current job, which is a
+      # different company than the one that was typed.
+      insert(:work_experience,
+        user: member,
+        title: "Developer",
+        organization: "Siemens AG",
+        start_year: 2012,
+        end_year: 2016
+      )
+
+      assert %{organization: "Siemens AG", title: "Developer"} =
+               matched("siemens", [:organization])
+    end
+
+    test "prefers the entry that matches more of the query", %{member: member} do
+      insert(:work_experience, user: member, organization: "Siemens AG", start_year: 2000)
+
+      insert(:work_experience,
+        user: member,
+        organization: "Siemens Healthineers",
+        start_year: 2005,
+        end_year: 2009
+      )
+
+      assert %{organization: "Siemens Healthineers"} =
+               matched("siemens healthineers", [:organization])
+    end
+
+    test "prefers a running role over one that ended", %{member: member} do
+      insert(:work_experience,
+        user: member,
+        organization: "Bosch GmbH",
+        start_year: 2000,
+        end_year: 2004
+      )
+
+      insert(:work_experience, user: member, organization: "Bosch GmbH", start_year: 2010)
+
+      entry = matched("bosch", [:organization])
+
+      assert entry.start_year == 2010
+      assert is_nil(entry.end_year)
+    end
+
+    test "work wins over education when both answer", %{member: member} do
+      insert(:work_experience, user: member, organization: "Bremen Marketing", start_year: 2015)
+      insert(:education, user: member, school: "Universität Bremen")
+
+      assert %WorkExperience{} = matched("bremen", [:organization, :school])
+    end
+
+    test "an education match returns the education entry", %{member: member} do
+      insert(:education, user: member, school: "Universität Bremen", degree: "Diplom")
+
+      assert %{school: "Universität Bremen", degree: "Diplom"} = matched("bremen", [:school])
+    end
+
+    test "a member the name fields already explain keeps their current job", %{member: member} do
+      # "anna" finds her by first name, and her 2005 employer happens to carry
+      # the same letters. The row must not be taken over by a company nobody
+      # was looking for: the CV line is for members the name fields could not
+      # have found.
+      anna = insert_activated_user(first_name: "Anna", last_name: "Bergsteiger")
+
+      insert(:work_experience,
+        user: anna,
+        organization: "Annapurna Trekking GmbH",
+        start_year: 2005
+      )
+
+      insert(:work_experience,
+        user: member,
+        organization: "Annapurna Trekking GmbH",
+        start_year: 2005
+      )
+
+      %{users: users} = Directory.search("anna", Directory.search_fields())
+      entries = Directory.matched_entries(users, "anna", Directory.search_fields())
+
+      refute Map.has_key?(entries, anna.id)
+      # Wechsler carries the same employer and no "anna" in any name, so she is
+      # here *because* of the CV field and her row has to say so.
+      assert Map.has_key?(entries, member.id)
+    end
+
+    test "a search with no CV field ticked asks nothing of the CV tables", %{member: member} do
+      insert(:work_experience, user: member, organization: "Siemens AG")
+
+      %{users: users} = Directory.search("wechsler", [:last_name])
+
+      assert Directory.matched_entries(users, "wechsler", [:last_name]) == %{}
+    end
+
+    defp matched(query, fields) do
+      %{users: users} = Directory.search(query, fields)
+
+      case Directory.matched_entries(users, query, fields) do
+        map when map_size(map) == 1 -> map |> Map.values() |> hd()
+        map -> map
+      end
     end
   end
 

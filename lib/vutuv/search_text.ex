@@ -66,6 +66,21 @@ defmodule Vutuv.SearchText do
   def contains(term), do: "%" <> escape_like(term) <> "%"
 
   @doc """
+  The in-memory counterpart of `contains/1`: whether `haystack` contains `needle`,
+  case-insensitively, the way the `ILIKE` that pattern feeds would answer.
+
+  For code that has already fetched the rows and is scoring or explaining them
+  rather than selecting them — `Vutuv.Directory` ranks a member's CV entries by
+  how many words of the query each carries. Anything that is not a string is
+  `false`, so an absent column needs no guard at the call site.
+  """
+  def contains?(haystack, needle) when is_binary(haystack) and is_binary(needle) do
+    String.contains?(String.downcase(haystack), String.downcase(needle))
+  end
+
+  def contains?(_haystack, _needle), do: false
+
+  @doc """
   Query macro: case-insensitive name match on `first`, `last`, or the
   "first last" concatenation, against `pattern`. Compose it with `or` and a
   site's own extra columns inside a `where`. The bound columns are passed

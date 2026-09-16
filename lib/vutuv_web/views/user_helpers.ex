@@ -397,14 +397,21 @@ defmodule VutuvWeb.UserHelpers do
 
   def education_headline(nil, _len), do: nil
 
-  def education_headline(%Education{degree: degree, school: school}, len) do
-    case [degree, school]
-         |> Enum.map(&trimmed/1)
-         |> Enum.reject(&(&1 == ""))
-         |> Enum.join(", ") do
+  def education_headline(%Education{} = education, len) do
+    case education_line(education) do
       "" -> nil
       line -> truncate_headline(line, len)
     end
+  end
+
+  # "Degree, School", the school alone when there is no degree, untruncated.
+  # One spelling of the pair, so the pinned headline and the line a CV search
+  # explains itself with cannot drift apart.
+  defp education_line(%Education{degree: degree, school: school}) do
+    [degree, school]
+    |> Enum.map(&trimmed/1)
+    |> Enum.reject(&(&1 == ""))
+    |> Enum.join(", ")
   end
 
   defp trimmed(nil), do: ""
@@ -590,8 +597,7 @@ defmodule VutuvWeb.UserHelpers do
     org = current_organization(current_job)
 
     "#{job}#{if org != "", do: " @ #{org}"}"
-    |> validate_length(job, org, len)
-    |> validate_backup(job, org, len)
+    |> truncate_to(job, len)
   end
 
   defp work_or_headline(job, headline, len) do
@@ -691,11 +697,7 @@ defmodule VutuvWeb.UserHelpers do
         from(w in WorkExperience,
           where: w.user_id in ^ids,
           order_by: w.id,
-          select:
-            struct(
-              w,
-              ~w(id user_id title organization start_month start_year end_month end_year)a
-            )
+          select: struct(w, ^WorkExperience.line_fields())
         )
       )
       |> Enum.group_by(& &1.user_id)
@@ -764,7 +766,15 @@ defmodule VutuvWeb.UserHelpers do
     end)
   end
 
-  defp validate_length(str, job, _org, len) do
+  # Shorten `str` to `len`, keeping `fallback` when the pair will not fit: first
+  # drop to the fallback alone, then truncate that. Which half survives is the
+  # caller's choice — the current-job line keeps the title, a line explaining a
+  # search keeps the place that was searched for.
+  defp truncate_to(str, fallback, len) do
+    str |> validate_length(fallback, len) |> validate_backup(fallback, len)
+  end
+
+  defp validate_length(str, job, len) do
     if String.length(str) > len do
       "#{job}"
     else
@@ -772,16 +782,64 @@ defmodule VutuvWeb.UserHelpers do
     end
   end
 
-  defp validate_backup(str, job, org, len) when len < 3 do
-    validate_backup(str, job, org, 3)
+  defp validate_backup(str, job, len) when len < 3 do
+    validate_backup(str, job, 3)
   end
 
-  defp validate_backup(str, job, _org, len) when len >= 3 do
+  defp validate_backup(str, job, len) when len >= 3 do
     if String.length(str) > len do
       "#{job |> String.slice(0, len - 3)}..."
     else
       str
     end
+  end
+
+  @doc """
+  The work line for a row a **CV search** found: the same "Title @ Org" as
+  `work_information_string_for_job/2`, but falling back to the *organization*
+  rather than the title when the pair will not fit.
+
+  That difference is the whole function. A listing row normally shows a job
+  nobody searched for, where the title is what identifies it; here the
+  organization is the word that was typed, and a row that answers a search for
+  "Healthineers" with "Vertriebsleiter Mitteldeutschland" explains nothing.
+  """
+  def work_information_string_for_match(job, len \\ 256)
+
+  def work_information_string_for_match(nil, _len), do: ""
+
+  def work_information_string_for_match(%WorkExperience{} = job, len) do
+    title = current_title(job)
+    organization = match_employer(job)
+    keep = if organization == "", do: title, else: organization
+
+    "#{title}#{if organization != "", do: " @ #{organization}"}"
+    |> truncate_to(keep, len)
+  end
+
+  # A linked page's name beats the member's own text, because that is what the
+  # profile timeline, the section page and the agent documents all print —
+  # `WorkExperience.linked_organization/1` owns that policy and this is one more
+  # surface naming an employer, not a second opinion on which name is right.
+  defp match_employer(job) do
+    case WorkExperience.linked_organization(job) do
+      nil -> current_organization(job)
+      organization -> organization.name
+    end
+  end
+
+  @doc """
+  The education line for a row a **CV search** found: the same "Degree, School"
+  as `education_headline/2`, but falling back to the *school* rather than
+  truncating the front when it will not fit.
+
+  The pair with `education_headline/2` is the pair `work_information_string_for_match/2`
+  makes with `work_information_string_for_job/2`, for the same reason: the
+  institution is the word that was typed, and a row that cuts it off mid-word
+  explains nothing.
+  """
+  def education_information_string(%Education{} = education, len) do
+    truncate_to(education_line(education), trimmed(education.school), len)
   end
 
   def current_organization(nil), do: ""

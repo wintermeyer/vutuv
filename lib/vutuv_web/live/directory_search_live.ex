@@ -6,15 +6,23 @@ defmodule VutuvWeb.DirectorySearchLive do
   `/system/members.md` and friends.
 
   It is a **field** search, not the free-text page at `/search`: a plain
-  case-insensitive substring in first name, last name and username, OR-ed
-  across whichever of the three the member leaves ticked
-  (`Vutuv.Directory.search/3`). The rows are the directory's own
+  case-insensitive substring in first name, last name, username, the employers
+  of a member's work experiences and the schools of their education entries,
+  OR-ed across whichever boxes the member leaves ticked
+  (`Vutuv.Directory.search/3`). The two CV fields look at **every** entry, so a
+  job somebody left in 2016 answers exactly like the one they hold today —
+  which is the whole reason to tick the box. The rows are the directory's own
   (`UserHTML.card_list` with `filed_names`), so a result reads exactly like the
   letter page it would otherwise have been found on, `rel="nofollow"` on an
   opted-out member's row included.
 
-  **At least one box is always ticked, and unticking the last one ticks all
-  three** — the fallback `Directory.parse_search_fields/1` applies, unchanged,
+  A row found through a CV field shows **that** entry rather than the member's
+  current job (`Directory.matched_entries/3`): a row naming today's employer
+  explains nothing to somebody who searched for a company the member left, and
+  leaves them guessing why the row is in the list at all.
+
+  **At least one box is always ticked, and unticking the last one ticks them
+  all** — the fallback `Directory.parse_search_fields/1` applies, unchanged,
   on every path. One rule rather than two, and the reason is a rendering fact
   worth knowing: keeping the previous selection instead (the obvious "refuse
   the click") leaves `@fields` unchanged, so the diff carries nothing for that
@@ -55,9 +63,12 @@ defmodule VutuvWeb.DirectorySearchLive do
   use Gettext, backend: VutuvWeb.Gettext
 
   alias Vutuv.Directory
+  alias Vutuv.Profiles.Education
+  alias Vutuv.Profiles.WorkExperience
   alias VutuvWeb.Live.InitAssigns
   alias VutuvWeb.UserHelpers
   alias VutuvWeb.UserHTML
+  alias VutuvWeb.WorkExperienceHTML
 
   # The work line every listing row shows, at the width the letter pages use.
   # A plain function rather than an assign: it is a constant, and a constant in
@@ -111,7 +122,7 @@ defmodule VutuvWeb.DirectorySearchLive do
     |> assign(:results, results)
     # The two page-wide maps every row reads, one query each, so a result list
     # never queries per row (`UserHTML.card_list`'s contract).
-    |> assign(:work_info_by_id, UserHelpers.work_information_map(users, work_string_length()))
+    |> assign(:work_info_by_id, work_lines(users, q, fields, work_string_length()))
     |> assign(:following_by_id, UserHelpers.following_map(socket.assigns.current_user, users))
   end
 
@@ -129,9 +140,54 @@ defmodule VutuvWeb.DirectorySearchLive do
     ~p"/system/members?#{params}"
   end
 
+  # The line under each name. Normally the member's current job, but for a
+  # member a CV field found, the entry that actually answered the query: a row
+  # that names today's employer explains nothing when the search was for a role
+  # left in 2016 or for a university, and the reader is left guessing why this
+  # member is in the list.
+  defp work_lines(users, query, fields, len) do
+    matched = Directory.matched_entries(users, query, fields)
+    lines = Map.new(matched, fn {user_id, entry} -> {user_id, entry_line(entry, len)} end)
+
+    # Only the rows nobody explained: `work_information_map/2` loads *every*
+    # work experience of every member it is given (a LinkedIn import runs to
+    # dozens) and formats a line from them, and each one it builds for a member
+    # above would be thrown away by the merge — the same `work_experiences` rows
+    # read twice in one request, to produce a string nobody sees.
+    users
+    |> Enum.reject(&Map.has_key?(lines, &1.id))
+    |> UserHelpers.work_information_map(len)
+    |> Map.merge(lines)
+  end
+
+  # The period is what turns "Developer @ Siemens AG" into an explanation, so
+  # it is paid for out of the same width budget rather than appended past it.
+  defp entry_line(entry, len) do
+    suffix =
+      case WorkExperienceHTML.entry_period(entry) do
+        nil -> ""
+        period -> " (" <> period <> ")"
+      end
+
+    entry_text(entry, max(len - String.length(suffix), 20)) <> suffix
+  end
+
+  defp entry_text(%WorkExperience{} = job, len),
+    do: UserHelpers.work_information_string_for_match(job, len)
+
+  defp entry_text(%Education{} = education, len),
+    do: UserHelpers.education_information_string(education, len)
+
   defp field_label(:first_name), do: gettext("First name")
   defp field_label(:last_name), do: gettext("Last name")
   defp field_label(:username), do: gettext("Username")
+  # A context of their own, not the bare "Company"/"School" msgids: those two
+  # are already said elsewhere in a different voice ("Unternehmen" in the
+  # footer, "Schule" as the label of the education form's own field), and a
+  # msgid is a key rather than a phrase. Here the boxes name a place somebody
+  # searches for, which German says as "Firma" and "Schule & Uni".
+  defp field_label(:organization), do: pgettext("directory search field", "Company")
+  defp field_label(:school), do: pgettext("directory search field", "School")
 
   @impl true
   def render(assigns) do
@@ -149,15 +205,15 @@ defmodule VutuvWeb.DirectorySearchLive do
             type="search"
             name="q"
             value={@q}
-            placeholder={gettext("Search members by name")}
-            aria-label={gettext("Search members by name")}
+            placeholder={gettext("Search members by name, company or school")}
+            aria-label={gettext("Search members by name, company or school")}
             autocomplete="off"
             phx-debounce="250"
             class={input_class()}
           />
 
           <fieldset class="mt-3 flex flex-wrap items-center gap-x-5">
-            <legend class="sr-only">{gettext("Which names to search")}</legend>
+            <legend class="sr-only">{gettext("Which fields to search")}</legend>
             <label
               :for={field <- Directory.search_fields()}
               class="inline-flex min-h-10 items-center gap-2 text-sm font-normal"

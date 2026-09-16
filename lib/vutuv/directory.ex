@@ -21,17 +21,25 @@ defmodule Vutuv.Directory do
 
   `search/3` is the other half of the page: the alphabet answers "who is filed
   under M", a search box answers "where is Müller", which is what somebody
-  arriving with a name in mind actually types.
+  arriving with a name in mind actually types. It searches three columns on
+  `users` plus two CV fields — the employers on a member's work experiences
+  and the schools on their education entries, **all** of them, so a company
+  somebody left long ago is as findable as the one they are at now.
   """
 
   import Ecto.Query
   import Vutuv.Moderation.Query
+  import Vutuv.Organizations.Query, only: [organization_public_row: 1]
   import Vutuv.SearchText, only: [cap: 1, contains: 1, normalize_search: 1]
 
   alias Vutuv.Accounts.User
   alias Vutuv.Images
+  alias Vutuv.Organizations.Organization
   alias Vutuv.Pages
+  alias Vutuv.Profiles.Education
+  alias Vutuv.Profiles.WorkExperience
   alias Vutuv.Repo
+  alias Vutuv.SearchText
 
   @letters Enum.map(?a..?z, &<<&1>>)
 
@@ -45,7 +53,18 @@ defmodule Vutuv.Directory do
 
   # What the search box looks in, in checkbox order. Also the allowlist the
   # `fields` param is read through — never `String.to_atom/1` on a URL value.
-  @search_fields [:first_name, :last_name, :username]
+  #
+  # The first three are columns on `users`; `:organization` and `:school` are
+  # the two CV fields, each a query over a member's own entries rather than a
+  # column here. Their order is the reading order of a profile: who somebody is,
+  # then where they worked, then where they studied.
+  # `:user` is a column on `users`, `:cv` a query over the member's own entries.
+  # Declared once: two hand-kept lists are the one thing a sixth field would
+  # silently forget, and the kind decides three things (the match query, whether
+  # a row's line may be taken over, and the order entries rank in).
+  @fields [first_name: :user, last_name: :user, username: :user, organization: :cv, school: :cv]
+  @search_fields Keyword.keys(@fields)
+  @cv_fields for({field, :cv} <- @fields, do: field)
 
   # Three, like `Vutuv.Search.min_chars/0`, and for a reason that is not
   # symmetry: pg_trgm needs three characters to form a trigram, so a shorter
@@ -230,12 +249,18 @@ defmodule Vutuv.Directory do
   end
 
   @doc """
-  Members whose selected name fields contain `query`: a case-insensitive
-  substring in each field, OR-ed across the fields, so "mei" finds Meier and
-  Meierhoff and a search across all three finds somebody by whichever of their
-  names the searcher happens to remember. With both name fields selected the
-  **whole name** matches too ("anna mei"), because that is what a person with a
-  name in mind types and matching it per column would find nothing.
+  Members whose selected fields contain `query`: a case-insensitive substring
+  in each field, OR-ed across the fields, so "mei" finds Meier and Meierhoff
+  and a search across all of them finds somebody by whichever of their names
+  the searcher happens to remember. With both name fields selected the **whole
+  name** matches too ("anna mei"), because that is what a person with a name in
+  mind types and matching it per column would find nothing.
+
+  The two CV fields are not columns here: each asks whether the member has any
+  work experience (or education entry) naming that place, with no date filter,
+  so a company somebody left in 2016 answers exactly like the one they are at
+  now. Set membership rather than a join, or a member with three stations at
+  the same employer would be listed three times and counted three times.
 
   Returns `nil` below `min_query_chars/0` (the box says so rather than answering
   with the whole membership), otherwise `%{users: users, total: total}` where
@@ -282,35 +307,237 @@ defmodule Vutuv.Directory do
   defp filed_order(query),
     do: order_by(query, [u], asc: name_sort_key(u), asc: u.first_name, asc: u.id)
 
-  # Every word of the query has to match **some** selected column: "anna mei"
+  # Every word of the query has to match **some** selected field: "anna mei"
   # finds Anna Meier because "anna" matches a first name and "mei" a last one.
-  # A one-word query is the same single OR it always was.
+  # A one-word query is a single set membership.
   #
-  # The obvious alternative — matching the query against `first || ' ' || last`,
-  # which is what `SearchText.name_ilike/3` adds and what the admin browser and
-  # the composer's typeahead use — was measured and rejected here: a
-  # concatenation is an expression, no trigram index covers it, and one such arm
-  # in the OR turns the whole query back into a sequential scan (18.5 ms against
-  # 0.36 ms on today's ~6,000 rows). Splitting into words keeps every arm a bare
-  # column ILIKE, so the plan stays a BitmapAnd over BitmapOrs — and it matches
-  # "meier anna" too, which the concatenation never could.
+  # Each word's set is a **UNION of one-table queries**, not an OR of
+  # predicates, and that shape is the whole performance story here. Postgres
+  # builds a `BitmapOr` only over arms of the *same* relation, so the moment one
+  # arm of an OR reads another table — a CV entry, a linked organization page —
+  # the planner gives up on every index in that OR and sequentially scans
+  # `users`. Measured on a synthetic 100k-user / 300k-CV-row copy, searching all
+  # five fields: 54.8 ms as one OR, **0.645 ms** as this union, where all six
+  # arms come back as bitmap index scans on their own trigram index. The
+  # name-only search this replaces measured 0.29 ms, so the CV fields cost
+  # fractions of a millisecond rather than turning every keystroke into a scan.
+  #
+  # What keeps a member with three stations at the same employer **one** row and
+  # one count is the set membership, not the `UNION`: `IN (…)` asks whether the
+  # id is in the set, so `UNION ALL` answers identically (measured: both around
+  # 0.7 ms, and swapping them turns no test red). The shape that would double
+  # the member is a join, which the duplicate test in `directory_test.exs`
+  # calibrates against. `UNION` stays because deduping inside the set is free
+  # here and hands the outer membership test fewer rows.
+  #
+  # One cost this widens rather than creates, measured on the same copy: a word
+  # **shorter** than `min_query_chars/0` forms no trigram, so every arm carrying
+  # it is a sequential scan whatever indexes exist — and there are now three
+  # more tables to scan. "siemens ag" (the "ag" is two characters) measured
+  # 6.07 ms across the name fields alone and 52.2 ms across all five, where
+  # "siemens healthineers" measured 1.98 ms and 2.73 ms. The minimum is checked
+  # on the whole needle, not per word, and tightening that would change what a
+  # search means rather than how it runs, so it is left as it is and written
+  # down here.
+  #
+  # The obvious alternative for the names — matching the query against
+  # `first || ' ' || last`, which is what `SearchText.name_ilike/3` adds and what
+  # the admin browser and the composer's typeahead use — was measured and
+  # rejected here for the same reason: a concatenation is an expression, and no
+  # trigram index covers it. Splitting into words keeps every arm a bare column
+  # `ILIKE`, and it matches "meier anna" too, which the concatenation never
+  # could.
   defp field_match(fields, needle) do
     needle
     |> String.split(~r/\s+/, trim: true)
     |> Enum.reduce(dynamic(true), fn word, acc ->
-      dynamic([u], ^acc and ^any_field_match(fields, contains(word)))
+      dynamic([u], ^acc and u.id in subquery(word_match(fields, contains(word))))
     end)
   end
 
-  # OR across the selected columns, built as a dynamic so the field list stays
-  # data rather than a query per combination. `fields` arrives already through
-  # `parse_search_fields/1`, so "no field" can never reach the query as
-  # `where: false`.
-  defp any_field_match(fields, pattern) do
-    Enum.reduce(fields, dynamic(false), fn field, acc ->
-      dynamic([u], ^acc or ilike(field(u, ^field), ^pattern))
+  # The ids of everybody some selected field matches `pattern` on. `fields`
+  # arrives through `parse_search_fields/1` and is therefore never empty, which
+  # is what lets this reduce without a seed — "no field" could otherwise reach
+  # the query as a set that matches nobody.
+  defp word_match(fields, pattern) do
+    fields
+    |> Enum.flat_map(&field_queries(&1, pattern))
+    |> Enum.reduce(fn query, acc -> union(acc, ^query) end)
+  end
+
+  # A member's work experiences, *all* of them: the field answers "has this
+  # member ever worked there", so an ended role counts exactly like a running
+  # one — which is the whole reason somebody ticks the box.
+  #
+  # Two queries, because the employer can be named in two places. The second is
+  # the name of a linked organization page: a member who wrote "DB" and linked
+  # the page is otherwise not findable under the name the page carries. Only a
+  # **public** page (`organization_public_row/1`, the SQL side of the policy
+  # `WorkExperience.linked_organization/1` owns) — a pending claim or a frozen
+  # page shows its name nowhere, so it must not answer a search either.
+  defp field_queries(:organization, pattern) do
+    [
+      from(w in WorkExperience, where: ilike(w.organization, ^pattern), select: w.user_id),
+      from(w in WorkExperience,
+        join: o in Organization,
+        on: o.id == w.organization_id and organization_public_row(o),
+        where: ilike(o.name, ^pattern),
+        select: w.user_id
+      )
+    ]
+  end
+
+  # The institution, never the degree or the subject: the checkbox names a
+  # place, and a box labelled "School" that answers "Computer Science" is a
+  # different search than the one the reader ticked.
+  defp field_queries(:school, pattern) do
+    [from(e in Education, where: ilike(e.school, ^pattern), select: e.user_id)]
+  end
+
+  defp field_queries(field, pattern) do
+    [from(u in User, where: ilike(field(u, ^field), ^pattern), select: u.id)]
+  end
+
+  @doc """
+  The CV entry each of `users` was matched on, as `%{user_id => entry}` — a
+  `%Vutuv.Profiles.WorkExperience{}` or a `%Vutuv.Profiles.Education{}`. Empty
+  unless a CV field is ticked and the query answers.
+
+  A listing row shows a member's **current** job, which explains nothing when
+  the search found them through a role they left in 2016 or a university they
+  attended: the row would name a company the query never mentioned, and the
+  reader is left to guess why the member is in the list at all. So a search
+  that ticks a CV field asks, for the handful of members it actually renders,
+  which entry answered it.
+
+  One query per ticked CV field over the rendered ids — never one per row, the
+  contract every listing map here keeps (`UserHelpers.work_information_map/2`)
+  — with the narrow projection those rows need, because `description` is a
+  `text` column that LinkedIn imports fill to 10k characters.
+
+  The entry that wins is the one matching the **most** words of the query (so
+  "siemens healthineers" prefers the Healthineers role over an older plain
+  Siemens one), then the most recent (a running role before an ended one), work
+  before education, and the id last so the answer never depends on the plan.
+  """
+  def matched_entries(users, query, fields \\ @search_fields)
+
+  def matched_entries([], _query, _fields), do: %{}
+
+  def matched_entries(users, query, fields) do
+    {cv_fields, name_fields} = Enum.split_with(parse_search_fields(fields), &(&1 in @cv_fields))
+
+    with [_ | _] <- cv_fields,
+         needle when is_binary(needle) <- query |> cap() |> normalize_search(),
+         [_ | _] = words <- String.split(needle, ~r/\s+/, trim: true),
+         [_ | _] = ids <- cv_explained_ids(users, words, name_fields) do
+      cv_fields
+      |> Enum.flat_map(&cv_matches(&1, ids, words))
+      |> Enum.group_by(& &1.user_id)
+      |> Map.new(fn {user_id, matches} -> {user_id, best_match(matches, words)} end)
+    else
+      _ -> %{}
+    end
+  end
+
+  # The members whose row a CV entry may take over: the ones the ticked **name**
+  # fields cannot already account for.
+  #
+  # `search/3` requires every word to match some ticked field, while the match
+  # line is allowed to settle for any word — otherwise "vergangen siemens",
+  # which spans a surname and an employer, would explain nothing. That slack is
+  # what makes this filter necessary: somebody looking up "Anna" would otherwise
+  # have her row taken over by the "Annapurna Trekking GmbH" she left in 2008,
+  # which is not what was searched for. If the names alone cover every word, the
+  # names are the explanation.
+  #
+  # With no name field ticked `names_cover?/3` is false for every member (no
+  # field can carry a word), so every row is a candidate and no clause is needed
+  # to say so.
+  defp cv_explained_ids(users, words, name_fields) do
+    users
+    |> Enum.reject(&names_cover?(&1, words, name_fields))
+    |> Enum.map(& &1.id)
+  end
+
+  defp names_cover?(user, words, name_fields) do
+    Enum.all?(words, fn word ->
+      Enum.any?(name_fields, &SearchText.contains?(Map.get(user, &1), word))
     end)
   end
+
+  # The best of a member's matching entries, and the only place the preference
+  # order lives. One candidate is the common case and needs no comparison.
+  defp best_match([only], _words), do: only.entry
+  defp best_match(matches, words), do: Enum.min_by(matches, &rank(&1, words)).entry
+
+  # What `Organizations.public_visible?/1` reads, plus the name the line prints:
+  # enough for `WorkExperience.linked_organization/1` to answer, and no more.
+  @page_line_fields ~w(id name status frozen_at)a
+  @education_line_fields ~w(id user_id school degree start_month start_year end_month end_year)a
+
+  defp cv_matches(:organization, ids, words) do
+    from(w in WorkExperience,
+      left_join: o in Organization,
+      on: o.id == w.organization_id and organization_public_row(o),
+      where: w.user_id in ^ids,
+      where: ^any_word(words, &dynamic([w, o], ilike(w.organization, ^&1) or ilike(o.name, ^&1))),
+      select: {struct(w, ^WorkExperience.line_fields()), struct(o, ^@page_line_fields)}
+    )
+    |> Repo.all()
+    |> Enum.map(fn {job, page} ->
+      # The page rides along in the association it belongs to, so the view names
+      # the employer through `WorkExperience.linked_organization/1` like every
+      # other surface rather than deciding for itself, and `match_text/1` below
+      # ranks on both names the query could have matched. A left join with no
+      # match selects `nil`, which that policy already reads as "not linked".
+      job = %{job | organization_page: page}
+
+      %{user_id: job.user_id, entry: job, field: :organization}
+    end)
+  end
+
+  defp cv_matches(:school, ids, words) do
+    from(e in Education,
+      where: e.user_id in ^ids,
+      where: ^any_word(words, &dynamic([e], ilike(e.school, ^&1))),
+      select: struct(e, ^@education_line_fields)
+    )
+    |> Repo.all()
+    |> Enum.map(&%{user_id: &1.user_id, entry: &1, field: :school})
+  end
+
+  # Any word, unlike the search itself: an entry that carries one word of the
+  # query is a candidate for the line, and the ranking decides between them.
+  # The member is in the result set because *every* word matched something.
+  defp any_word(words, clause) do
+    Enum.reduce(words, dynamic(false), fn word, acc ->
+      dynamic(^acc or ^clause.(contains(word)))
+    end)
+  end
+
+  # Smaller is better, so the whole preference order is one comparable tuple.
+  # The field's position in `@cv_fields` is what puts work before education.
+  defp rank(%{entry: entry, field: field} = match, words) do
+    {
+      -word_hits(match_text(match), words),
+      Enum.find_index(@cv_fields, &(&1 == field)),
+      if(is_nil(entry.end_year), do: 0, else: 1),
+      -(entry.end_year || 0),
+      -(entry.start_year || 0),
+      entry.id
+    }
+  end
+
+  # What the database matched on, derived rather than carried: both names an
+  # employer can be known by, or the institution.
+  defp match_text(%{field: :organization, entry: job}) do
+    Enum.join([job.organization, job.organization_page && job.organization_page.name], " ")
+  end
+
+  defp match_text(%{field: :school, entry: education}), do: education.school
+
+  defp word_hits(text, words), do: Enum.count(words, &SearchText.contains?(text, &1))
 
   @doc """
   One entry per bucket — a-z, then `other` — as `%{letter: letter, count: n}`,

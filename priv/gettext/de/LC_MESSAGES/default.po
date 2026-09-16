@@ -208,7 +208,7 @@ msgstr "Inaktivieren"
 #: lib/vutuv_web/live/cv_live.ex:446
 #: lib/vutuv_web/live/post_live/composer.ex:3228
 #: lib/vutuv_web/templates/export/index.html.heex:41
-#: lib/vutuv_web/views/qualification_html.ex:354
+#: lib/vutuv_web/views/qualification_html.ex:346
 #, elixir-autogen
 msgid "Download"
 msgstr "Download"
@@ -650,7 +650,7 @@ msgstr "Speichern"
 #: lib/vutuv_web/live/admin/media_live.ex:122
 #: lib/vutuv_web/live/admin/user_delete_live.ex:118
 #: lib/vutuv_web/live/admin/user_live.ex:219
-#: lib/vutuv_web/live/directory_search_live.ex:181
+#: lib/vutuv_web/live/directory_search_live.ex:237
 #: lib/vutuv_web/live/job_board_live.ex:573
 #: lib/vutuv_web/live/search_live.ex:61
 #: lib/vutuv_web/live/search_live.ex:654
@@ -804,7 +804,7 @@ msgstr "User wurde verifiziert."
 #: lib/vutuv_web/live/admin/newsletter_group_live.ex:832
 #: lib/vutuv_web/live/admin/user_delete_live.ex:144
 #: lib/vutuv_web/live/admin/user_live.ex:155
-#: lib/vutuv_web/live/directory_search_live.ex:134
+#: lib/vutuv_web/live/directory_search_live.ex:183
 #: lib/vutuv_web/notification_line.ex:354
 #: lib/vutuv_web/templates/admin/account/frozen.html.heex:33
 #: lib/vutuv_web/templates/admin/account/index.html.heex:51
@@ -1105,8 +1105,8 @@ msgstr "100 Usern mit den meisten Followern"
 msgid "Curious? Have a look at the "
 msgstr "Neugierig? Hier ist die Liste "
 
-#: lib/vutuv_web/views/work_experience_html.ex:401
-#: lib/vutuv_web/views/work_experience_html.ex:454
+#: lib/vutuv_web/views/work_experience_html.ex:419
+#: lib/vutuv_web/views/work_experience_html.ex:472
 #, elixir-autogen
 msgid "Present"
 msgstr "Heute"
@@ -1968,26 +1968,26 @@ msgstr "Eintrag löschen"
 msgid "Options"
 msgstr "Optionen"
 
-#: lib/vutuv_web/views/work_experience_html.ex:513
+#: lib/vutuv_web/views/work_experience_html.ex:531
 #, elixir-autogen, elixir-format
 msgid "%{count} month"
 msgid_plural "%{count} months"
 msgstr[0] "%{count} Monat"
 msgstr[1] "%{count} Monate"
 
-#: lib/vutuv_web/views/work_experience_html.ex:516
+#: lib/vutuv_web/views/work_experience_html.ex:534
 #, elixir-autogen, elixir-format
 msgid "%{count} year"
 msgid_plural "%{count} years"
 msgstr[0] "%{count} Jahr"
 msgstr[1] "%{count} Jahre"
 
-#: lib/vutuv_web/views/work_experience_html.ex:598
+#: lib/vutuv_web/views/work_experience_html.ex:616
 #, elixir-autogen, elixir-format
 msgid "Time in this role"
 msgstr "Dauer in dieser Position"
 
-#: lib/vutuv_web/views/work_experience_html.ex:597
+#: lib/vutuv_web/views/work_experience_html.ex:615
 #, elixir-autogen, elixir-format
 msgid "Total time at this employer"
 msgstr "Gesamtdauer bei diesem Arbeitgeber"
@@ -9292,12 +9292,12 @@ msgstr "%{job} wird oben in Ihrem Profil angezeigt."
 msgid "Choose automatically instead"
 msgstr "Stattdessen automatisch wählen"
 
-#: lib/vutuv_web/views/user_helpers.ex:490
+#: lib/vutuv_web/views/user_helpers.ex:497
 #, elixir-autogen, elixir-format
 msgid "Show at top of profile"
 msgstr "Oben im Profil anzeigen"
 
-#: lib/vutuv_web/views/user_helpers.ex:481
+#: lib/vutuv_web/views/user_helpers.ex:488
 #, elixir-autogen, elixir-format
 msgid "Shown at the top of your profile"
 msgstr "Wird oben in Ihrem Profil angezeigt"
@@ -10028,7 +10028,7 @@ msgstr "Läuft nicht ab"
 #: lib/vutuv_web/live/admin/job_live.ex:180
 #: lib/vutuv_web/live/job_posting_live/dashboard.ex:182
 #: lib/vutuv_web/templates/qualification/show.html.heex:43
-#: lib/vutuv_web/views/qualification_html.ex:398
+#: lib/vutuv_web/views/qualification_html.ex:390
 #, elixir-autogen, elixir-format
 msgid "Expired"
 msgstr "Abgelaufen"
@@ -10069,7 +10069,7 @@ msgstr ""
 "Deshalb importieren wir alle als Zertifikate. Bitte prüfen Sie den Bereich "
 "anschließend und ändern Sie alle Einträge, die Lizenzen sind."
 
-#: lib/vutuv_web/views/qualification_html.ex:416
+#: lib/vutuv_web/views/qualification_html.ex:408
 #, elixir-autogen, elixir-format
 msgid "Proof"
 msgstr "Nachweis"
@@ -10154,14 +10154,14 @@ msgstr ""
 "Ihr Geburtsdatum wird entfernt und Ihr Alter wird nicht mehr in Ihrem Profil"
 " angezeigt. Sie können es jederzeit wieder hinzufügen."
 
-#: lib/vutuv_web/live/directory_search_live.ex:132
+#: lib/vutuv_web/live/directory_search_live.ex:181
 #: lib/vutuv_web/templates/page/index.html.heex:93
 #: lib/vutuv_web/views/account_event_text.ex:210
 #, elixir-autogen, elixir-format
 msgid "First name"
 msgstr "Vorname"
 
-#: lib/vutuv_web/live/directory_search_live.ex:133
+#: lib/vutuv_web/live/directory_search_live.ex:182
 #: lib/vutuv_web/templates/page/index.html.heex:98
 #: lib/vutuv_web/views/account_event_text.ex:211
 #, elixir-autogen, elixir-format
@@ -10903,12 +10903,12 @@ msgstr "PHP, JavaScript, Ruby on Rails"
 msgid "Separate tags with a comma. A tag may be several words long, like Ruby on Rails."
 msgstr "Tags mit Komma trennen. Ein Tag darf aus mehreren Wörtern bestehen, zum Beispiel Ruby on Rails."
 
-#: lib/vutuv_web/views/work_experience_html.ex:529
+#: lib/vutuv_web/views/work_experience_html.ex:547
 #, elixir-autogen, elixir-format
 msgid "%{n}m"
 msgstr "%{n} M."
 
-#: lib/vutuv_web/views/work_experience_html.ex:530
+#: lib/vutuv_web/views/work_experience_html.ex:548
 #, elixir-autogen, elixir-format
 msgid "%{n}y"
 msgstr "%{n} J."
@@ -14306,7 +14306,7 @@ msgstr "Optional: das Zertifikat oder die Lizenz, mit der Sie diese Stelle erlan
 msgid "Qualification"
 msgstr "Qualifikation"
 
-#: lib/vutuv_web/views/work_experience_html.ex:717
+#: lib/vutuv_web/views/work_experience_html.ex:735
 #, elixir-autogen, elixir-format
 msgid "With qualification:"
 msgstr "Mit Qualifikation:"
@@ -14419,7 +14419,7 @@ msgid "last used %{date}"
 msgstr "zuletzt genutzt %{date}"
 
 #: lib/vutuv_web/templates/qualification/show.html.heex:100
-#: lib/vutuv_web/views/qualification_html.ex:365
+#: lib/vutuv_web/views/qualification_html.ex:357
 #, elixir-autogen, elixir-format
 msgid "Being reviewed"
 msgstr "Wird geprüft"
@@ -14440,7 +14440,7 @@ msgid "I agree that the uploaded file is shown publicly on my profile and can be
 msgstr "Ich bin damit einverstanden, dass die hochgeladene Datei öffentlich auf meinem Profil angezeigt wird und von jedem angesehen und heruntergeladen werden kann. Laden Sie nur Dokumente hoch, die Sie veröffentlichen dürfen und möchten; schwärzen Sie sensible Angaben (z. B. Adresse oder Ausweisnummern) am besten vorher."
 
 #: lib/vutuv_web/views/job_reference_html.ex:160
-#: lib/vutuv_web/views/qualification_html.ex:309
+#: lib/vutuv_web/views/qualification_html.ex:301
 #, elixir-autogen, elixir-format
 msgid "Image"
 msgstr "Bild"
@@ -14482,12 +14482,12 @@ msgid "Uploaded proof"
 msgstr "Hochgeladener Nachweis"
 
 #: lib/vutuv_web/templates/qualification/show.html.heex:84
-#: lib/vutuv_web/views/qualification_html.ex:344
+#: lib/vutuv_web/views/qualification_html.ex:336
 #, elixir-autogen, elixir-format
 msgid "Uploaded proof for %{name}"
 msgstr "Hochgeladener Nachweis für %{name}"
 
-#: lib/vutuv_web/views/qualification_html.ex:339
+#: lib/vutuv_web/views/qualification_html.ex:331
 #, elixir-autogen, elixir-format
 msgid "View the uploaded proof (%{label})"
 msgstr "Hochgeladenen Nachweis ansehen (%{label})"
@@ -19122,7 +19122,7 @@ msgstr "von Rechtsanwalt Tom Braegelmann"
 msgid "Documents:"
 msgstr "Belegt:"
 
-#: lib/vutuv_web/views/work_experience_html.ex:756
+#: lib/vutuv_web/views/work_experience_html.ex:774
 #, elixir-autogen, elixir-format
 msgid "Employment reference:"
 msgstr "Arbeitszeugnis:"
@@ -22012,53 +22012,42 @@ msgstr "Gilt nur für diesen einen Browser; sagen Sie es also auf jedem Telefon 
 msgid "Unknown device"
 msgstr "Unbekanntes Gerät"
 
-#: lib/vutuv_web/live/directory_search_live.ex:141
+#: lib/vutuv_web/live/directory_search_live.ex:197
 #, elixir-autogen, elixir-format
 msgid "Find a member"
 msgstr "Mitglied finden"
 
-#: lib/vutuv_web/live/directory_search_live.ex:195
+#: lib/vutuv_web/live/directory_search_live.ex:251
 #, elixir-autogen, elixir-format
 msgid "No members found for \"%{query}\"."
 msgstr "Kein Mitglied für „%{query}“ gefunden."
 
-#: lib/vutuv_web/live/directory_search_live.ex:208
+#: lib/vutuv_web/live/directory_search_live.ex:264
 #, elixir-autogen, elixir-format
 msgid "One member found."
 msgid_plural "%{formatted} members found."
 msgstr[0] "Ein Mitglied gefunden."
 msgstr[1] "%{formatted} Mitglieder gefunden."
 
-#: lib/vutuv_web/live/directory_search_live.ex:186
+#: lib/vutuv_web/live/directory_search_live.ex:242
 #, elixir-autogen, elixir-format
 msgid "Results appear once you have typed at least %{count} letters."
 msgstr "Ergebnisse erscheinen, sobald Sie mindestens %{count} Buchstaben eingegeben haben."
 
-#: lib/vutuv_web/live/directory_search_live.ex:152
-#: lib/vutuv_web/live/directory_search_live.ex:153
-#, elixir-autogen, elixir-format
-msgid "Search members by name"
-msgstr "Mitglieder nach Namen suchen"
-
-#: lib/vutuv_web/live/directory_search_live.ex:229
+#: lib/vutuv_web/live/directory_search_live.ex:285
 #, elixir-autogen, elixir-format
 msgid "Show %{count} more"
 msgstr "%{count} weitere anzeigen"
 
-#: lib/vutuv_web/live/directory_search_live.ex:203
+#: lib/vutuv_web/live/directory_search_live.ex:259
 #, elixir-autogen, elixir-format
 msgid "Showing %{shown} of %{total} members."
 msgstr "%{shown} von %{total} Mitgliedern werden angezeigt."
 
-#: lib/vutuv_web/live/directory_search_live.ex:257
+#: lib/vutuv_web/live/directory_search_live.ex:313
 #, elixir-autogen, elixir-format
 msgid "That is as far as this list goes. Type more of the name to narrow it down."
 msgstr "Weiter geht diese Liste nicht. Tippen Sie mehr vom Namen, um sie einzugrenzen."
-
-#: lib/vutuv_web/live/directory_search_live.ex:160
-#, elixir-autogen, elixir-format
-msgid "Which names to search"
-msgstr "Welche Namen durchsucht werden"
 
 #: lib/vutuv_web/templates/directory/index.html.heex:23
 #, elixir-autogen, elixir-format
@@ -25716,12 +25705,10 @@ msgstr ""
 msgid "Analysis"
 msgstr "Analyse"
 
-
 #: lib/vutuv_web/templates/post/analytics.html.heex:4
 #, elixir-autogen, elixir-format
 msgid "Back to post"
 msgstr "Zurück zum Beitrag"
-
 
 #: lib/vutuv_web/templates/post/analytics.html.heex:94
 #, elixir-autogen, elixir-format
@@ -25745,7 +25732,6 @@ msgstr "Interaktionen im gewählten Zeitraum"
 #, elixir-autogen, elixir-format
 msgid "Interactions over time"
 msgstr "Interaktionen im Zeitverlauf"
-
 
 #: lib/vutuv_web/templates/post/analytics.html.heex:51
 #, elixir-autogen, elixir-format
@@ -25811,12 +25797,10 @@ msgstr ""
 msgid "Time range"
 msgstr "Zeitraum"
 
-
 #: lib/vutuv_web/templates/post/analytics.html.heex:52
 #, elixir-autogen, elixir-format
 msgid "Try a longer time range, or check back later."
 msgstr "Wähle einen längeren Zeitraum oder schaue später noch einmal vorbei."
-
 
 #: lib/vutuv_web/templates/post/analytics.html.heex:94
 #, elixir-autogen, elixir-format
@@ -25896,7 +25880,6 @@ msgstr ""
 msgid "Distribution signal"
 msgstr "Verbreitungssignal"
 
-
 #: lib/vutuv_web/templates/post/analytics.html.heex:27
 #, elixir-autogen, elixir-format
 msgid "Interactions"
@@ -25908,7 +25891,6 @@ msgstr "Interaktionen"
 #, elixir-autogen, elixir-format
 msgid "Known readers"
 msgstr "Bekannte Leser"
-
 
 #: lib/vutuv_web/templates/post/analytics.html.heex:67
 #, elixir-autogen, elixir-format
@@ -25938,18 +25920,15 @@ msgstr ""
 "und Aktivitäten, die nie an vutuv zurückgesendet wurden, können nicht "
 "gezählt werden."
 
-
 #: lib/vutuv_web/templates/post/analytics.html.heex:34
 #, elixir-autogen, elixir-format
 msgid "Server network"
 msgstr "Server-Netzwerk"
 
-
 #: lib/vutuv_web/templates/post/analytics.html.heex:26
 #, elixir-autogen, elixir-format
 msgid "Servers involved"
 msgstr "Beteiligte Server"
-
 
 #: lib/vutuv_web/templates/post/analytics.html.heex:39
 #, elixir-autogen, elixir-format
@@ -26075,7 +26054,6 @@ msgstr ""
 "wurden beim Veröffentlichen adressiert; das bestätigt weder Zustellung noch "
 "Lesen. Linien verbinden beobachtete Daten mit vutuv und stellen keine "
 "Repost-Pfade dar."
-
 
 #, elixir-autogen, elixir-format
 msgid "Reach analysis"
@@ -26263,45 +26241,79 @@ msgid "+%{count}h"
 msgstr "+%{count}h"
 
 #: lib/vutuv_web/templates/post/analytics.html.heex
+#, elixir-autogen
 msgid "Chart period"
 msgstr "Zeitraum des Diagramms"
 
 #: lib/vutuv_web/views/post_html.ex
+#, elixir-autogen
 msgid "Last 7 days"
 msgstr "Letzte 7 Tage"
 
 #: lib/vutuv_web/views/post_html.ex
+#, elixir-autogen
 msgid "Last 30 days"
 msgstr "Letzte 30 Tage"
 
 #: lib/vutuv_web/views/post_html.ex
+#, elixir-autogen
 msgid "Last year"
 msgstr "Letztes Jahr"
 
 #: lib/vutuv_web/controllers/og_image_controller.ex
+#, elixir-autogen
 msgid "Known follower total"
 msgstr "Bekannte Follower insgesamt"
 
 #: lib/vutuv_web/controllers/og_image_controller.ex
+#, elixir-autogen
 msgid "Potential distribution, not readership · lower bound"
 msgstr "Potenzielle Verbreitung, keine Leserschaft · Untergrenze"
 
 #: lib/vutuv_web/controllers/og_image_controller.ex
+#, elixir-autogen
 msgid "Reposters · Servers · Interactions"
 msgstr "Reposter · Server · Interaktionen"
 
 #: lib/vutuv_web/templates/post/analytics.html.heex
+#, elixir-autogen
 msgid "What is the real reach?"
 msgstr "Wie ist die wirkliche Reichweite?"
 
 #: lib/vutuv_web/templates/post/analytics.html.heex
+#, elixir-autogen
 msgid "We do not know whether the real reach is 10x, 100x or 1,000x larger. It cannot be tracked in the Fediverse."
 msgstr "Wir wissen nicht, ob die echte Reichweite 10x, 100x oder 1.000x größer ist. Das lässt sich im Fediverse nicht verfolgen."
 
 #: lib/vutuv_web/templates/post/analytics.html.heex
+#, elixir-autogen
 msgid "3-hour windows · UTC"
 msgstr "3-Stunden-Zeitfenster · UTC"
 
 #: lib/vutuv_web/templates/post/analytics.html.heex
+#, elixir-autogen
 msgid "Per day · UTC"
 msgstr "Pro Tag · UTC"
+
+#: lib/vutuv_web/live/directory_search_live.ex:208
+#: lib/vutuv_web/live/directory_search_live.ex:209
+#, elixir-autogen, elixir-format
+msgid "Search members by name, company or school"
+msgstr "Mitglieder nach Name, Firma oder Uni suchen"
+
+#: lib/vutuv_web/live/directory_search_live.ex:216
+#, elixir-autogen, elixir-format
+msgid "Which fields to search"
+msgstr "Wo gesucht wird"
+
+#: lib/vutuv_web/live/directory_search_live.ex:189
+#, elixir-autogen, elixir-format
+msgctxt "directory search field"
+msgid "Company"
+msgstr "Firma"
+
+#: lib/vutuv_web/live/directory_search_live.ex:190
+#, elixir-autogen, elixir-format
+msgctxt "directory search field"
+msgid "School"
+msgstr "Schule & Uni"
