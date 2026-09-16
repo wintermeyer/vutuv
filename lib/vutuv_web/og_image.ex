@@ -169,21 +169,33 @@ defmodule VutuvWeb.OgImage do
   @spec analytics_png(map()) :: {:ok, binary()} | :error
   def analytics_png(data) do
     render(fn card ->
-      with {:ok, title} <- text_block(data.title, 470, 50, weight: :bold, lines: 2),
-           {:ok, card} <- place(card, title, @margin, 76),
-           {:ok, label} <- text_block(data.metric_label, 480, 20, color: @muted),
-           {:ok, card} <- place(card, label, @margin, 190),
-           {:ok, totals} <-
-             text_block(
-               "#{data.known_readers}+     #{data.servers}     #{data.interactions}",
+      with {:ok, title} <- pango(data.title, 480, 40, :bold, @ink),
+           {:ok, card} <- place(card, title, @margin, 68),
+           {:ok, label} <- text_block(data.metric_label, 480, 22, color: @muted),
+           {:ok, card} <- place(card, label, @margin, 180),
+           {:ok, reach} <-
+             pango(
+               "#{data.reach_display}+",
                500,
-               48,
-               weight: :bold,
-               color: @brand_600
+               64,
+               :bold,
+               @brand_600
              ),
-           {:ok, card} <- place(card, totals, @margin, 230),
-           {:ok, note} <- text_block(data.note, 470, 24, color: @muted),
+           {:ok, card} <- place(card, reach, @margin, 210),
+           {:ok, note} <- pango(data.note, 480, 20, :normal, @muted),
            {:ok, card} <- place(card, note, @margin, 320),
+           {:ok, secondary_label} <-
+             text_block(data.secondary_label, 480, 18, color: @faint),
+           {:ok, card} <- place(card, secondary_label, @margin, 390),
+           {:ok, secondary} <-
+             text_block(
+               "#{data.reposters}     #{data.servers}     #{data.interactions}",
+               480,
+               34,
+               weight: :bold,
+               color: @ink
+             ),
+           {:ok, card} <- place(card, secondary, @margin, 420),
            {:ok, card} <- draw_network(card, data.nodes || []) do
         footer(card, data[:footer])
       end

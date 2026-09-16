@@ -11,8 +11,10 @@ defmodule VutuvWeb.OgImageControllerTest do
 
   import Vutuv.PostsHelpers
 
+  alias Vutuv.Fediverse.RemoteAccount
   alias Vutuv.ImageHelpers
   alias Vutuv.Posts
+  alias VutuvWeb.OgImageController
 
   setup %{conn: conn} do
     tmp = Path.join(System.tmp_dir!(), "vutuv_og_image_#{System.unique_integer([:positive])}")
@@ -127,6 +129,23 @@ defmodule VutuvWeb.OgImageControllerTest do
       author = insert_activated_user(first_name: "Paula")
       public = create_post!(author, %{"body" => "Public reach"})
 
+      Repo.insert!(%Vutuv.Fediverse.Reaction{
+        post_id: public.id,
+        actor_uri: "https://boost.example/users/alice",
+        handle: "alice",
+        kind: "announce",
+        received_at: DateTime.utc_now(:second)
+      })
+
+      Repo.insert!(%RemoteAccount{
+        actor_uri: "https://boost.example/users/alice",
+        host: "boost.example",
+        handle: "alice",
+        inbox_uri: "https://boost.example/users/alice/inbox",
+        follower_count: 10_000,
+        follower_count_checked_at: DateTime.utc_now(:second)
+      })
+
       restricted =
         create_post!(author, %{
           "body" => "Private reach",
@@ -136,6 +155,9 @@ defmodule VutuvWeb.OgImageControllerTest do
       assert conn
              |> get("/posts/#{public.id}/analytics/og.png")
              |> png_size("public, max-age=60") == {1200, 630}
+
+      assert %{title: "Potential reach from reposts", reach: 10_000} =
+               OgImageController.analytics_card_data(public)
 
       assert conn |> get("/posts/#{restricted.id}/analytics/og.png") |> Map.fetch!(:status) == 404
     end

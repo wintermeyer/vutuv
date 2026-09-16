@@ -69,24 +69,32 @@ defmodule VutuvWeb.OgImageController do
 
   defp render_analytics_card(%Post{} = post) do
     render = fn ->
-      analytics = PostAnalytics.for_post(post, range: "7d")
-
-      OgImage.analytics_png(%{
-        title: gettext("Reach analysis"),
-        metric_label: gettext("Known readers · Communities · Interactions"),
-        note: gettext("Measured lower bound · 7 days, hourly"),
-        known_readers: analytics.known_readers,
-        servers: analytics.network.server_count,
-        interactions: analytics.totals.all,
-        nodes: analytics.network.visible_nodes,
-        footer: VutuvWeb.Endpoint.host()
-      })
+      post |> analytics_card_data() |> OgImage.analytics_png()
     end
 
     case Posts.author(post) do
       %User{} = author -> in_locale(author, render)
       _organization -> render.()
     end
+  end
+
+  @doc false
+  def analytics_card_data(%Post{} = post) do
+    analytics = PostAnalytics.for_post(post, range: "7d")
+
+    %{
+      title: gettext("Potential reach from reposts"),
+      metric_label: gettext("Known follower total"),
+      note: gettext("Potential distribution, not readership · lower bound"),
+      secondary_label: gettext("Reposters · Servers · Interactions"),
+      reach: analytics.repost_reach.known,
+      reach_display: UI.compact_count(analytics.repost_reach.known),
+      reposters: analytics.repost_reach.known_reposters,
+      servers: analytics.network.server_count,
+      interactions: analytics.totals.all,
+      nodes: analytics.network.visible_nodes,
+      footer: VutuvWeb.Endpoint.host()
+    }
   end
 
   # Resolved by the id alone, never by the handle beside it (a handle goes

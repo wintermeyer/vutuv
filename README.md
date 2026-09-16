@@ -32,6 +32,7 @@ We use the [MIT License](LICENSE).
   numbers visible interactions, uses radial labels, and arranges first
   reactions as a time spiral without claiming unobservable repost hops.
   Chart periods count back from the present and are labelled accordingly.
+  Shared analysis links use potential repost reach as their OpenGraph hero.
   Empty chart tails stop two days after the last visible interaction, while a
   later wave remains visible. Visible interactions are clearly separated from
   view counts.

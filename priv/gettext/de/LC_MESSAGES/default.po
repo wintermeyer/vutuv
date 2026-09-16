@@ -26277,3 +26277,15 @@ msgstr "Letzte 30 Tage"
 #: lib/vutuv_web/views/post_html.ex
 msgid "Last year"
 msgstr "Letztes Jahr"
+
+#: lib/vutuv_web/controllers/og_image_controller.ex
+msgid "Known follower total"
+msgstr "Bekannte Follower insgesamt"
+
+#: lib/vutuv_web/controllers/og_image_controller.ex
+msgid "Potential distribution, not readership · lower bound"
+msgstr "Potenzielle Verbreitung, keine Leserschaft · Untergrenze"
+
+#: lib/vutuv_web/controllers/og_image_controller.ex
+msgid "Reposters · Servers · Interactions"
+msgstr "Reposter · Server · Interaktionen"

@@ -19,6 +19,9 @@ When toggling persisted fields back in a test, reload the fixture before
 creating the next changeset; Ecto compares against the struct, not the database.
 Keep Elixir write pipelines shallow: extract validation/building and transactional
 persistence into helpers instead of nesting conditionals inside transaction callbacks.
+Render fixed OpenGraph hero copy and single-line numeric values directly with the Pango
+helper; reserve the prose-fitting shortener for variable text. It can truncate fixed copy
+unnecessarily or repeatedly shorten an unbreakable value without changing its line height.
 After patching an Elixir default argument, verify that its `\\` operator still has
 both backslashes before formatting; patch-string escaping can silently drop one.
 Function heads that declare defaults must contain variables only; put struct and
