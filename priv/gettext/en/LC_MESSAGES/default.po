@@ -25422,3 +25422,19 @@ msgstr "Potential distribution, not readership · lower bound"
 #: lib/vutuv_web/controllers/og_image_controller.ex
 msgid "Reposters · Servers · Interactions"
 msgstr "Reposters · Servers · Interactions"
+
+#: lib/vutuv_web/templates/post/analytics.html.heex
+msgid "What is the real reach?"
+msgstr "What is the real reach?"
+
+#: lib/vutuv_web/templates/post/analytics.html.heex
+msgid "We do not know whether the real reach is 10x, 100x or 1,000x larger. It cannot be tracked in the Fediverse."
+msgstr "We do not know whether the real reach is 10x, 100x or 1,000x larger. It cannot be tracked in the Fediverse."
+
+#: lib/vutuv_web/templates/post/analytics.html.heex
+msgid "3-hour windows · UTC"
+msgstr "3-hour windows · UTC"
+
+#: lib/vutuv_web/templates/post/analytics.html.heex
+msgid "Per day · UTC"
+msgstr "Per day · UTC"

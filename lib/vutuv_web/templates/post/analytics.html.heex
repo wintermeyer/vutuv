@@ -6,7 +6,6 @@
         <h1 class="text-3xl font-semibold tracking-tight text-slate-950 dark:text-white sm:text-4xl">{gettext("Reach analysis")}</h1>
         <span class="rounded-full bg-brand-100 px-2.5 py-1 text-xs font-bold uppercase tracking-wider text-brand-800 dark:bg-brand-950 dark:text-brand-200">Beta</span>
       </div>
-      <p class="mt-3 max-w-2xl text-sm leading-6 text-slate-600 dark:text-slate-400">{gettext("A complete analysis is impossible in the Fediverse because vutuv cannot access every server and its data.")}</p>
     </div>
     <div>
       <p class="mb-1.5 text-xs font-medium text-slate-500 dark:text-slate-400">{gettext("Chart period")}</p>
@@ -15,27 +14,6 @@
       </nav>
     </div>
   </div>
-
-  <section class="relative overflow-hidden rounded-3xl bg-slate-950 px-6 py-8 text-white shadow-xl sm:px-9 sm:py-10">
-    <div class="absolute -right-20 -top-28 h-72 w-72 rounded-full bg-brand-500/20 blur-3xl"></div>
-    <div class="relative">
-      <p class="max-w-3xl text-sm leading-6 text-slate-300">
-        {gettext("Visible interactions are a")}
-        <strong class="font-bold text-white">{gettext("lower bound")}</strong>,
-        {gettext("not a view count.")}
-      </p>
-      <dl class="mt-6 grid grid-cols-1 gap-3 sm:grid-cols-3">
-        <div class="rounded-2xl border border-white/10 bg-white/5 p-4"><dt class="text-xs text-slate-400">{gettext("People with visible interactions")}</dt><dd class="mt-2 text-3xl font-semibold tabular-nums">{@analytics.known_readers}<span class="text-lg text-brand-300">+</span></dd></div>
-        <div class="rounded-2xl border border-white/10 bg-white/5 p-4"><dt class="text-xs text-slate-400">{gettext("Servers involved")}</dt><dd class="mt-2 text-3xl font-semibold tabular-nums">{@analytics.network.server_count}</dd></div>
-        <div class="rounded-2xl border border-white/10 bg-white/5 p-4"><dt class="text-xs text-slate-400">{gettext("Interactions")}</dt><dd class="mt-2 text-3xl font-semibold tabular-nums">{@analytics.totals.all}</dd></div>
-      </dl>
-    </div>
-  </section>
-
-  <section class="mt-7 rounded-3xl border border-slate-200 bg-white p-5 shadow-sm dark:border-slate-700 dark:bg-slate-900 sm:p-8" aria-labelledby="evidence-heading">
-    <h2 id="evidence-heading" class="text-xl font-semibold text-slate-950 dark:text-white">{gettext("What we can measure")}</h2>
-    <p class="mt-3 max-w-4xl text-base leading-7 text-slate-700 dark:text-slate-300">{gettext("We cannot reliably know how many people saw this post in the Fediverse. We can only count people who visibly interacted with it, for example through a like, repost or reply: %{count} people.", count: @analytics.known_readers)}</p>
-  </section>
 
   <section class="mt-7 overflow-hidden rounded-3xl border border-slate-200 bg-white shadow-sm dark:border-slate-700 dark:bg-slate-900" aria-labelledby="repost-reach-heading">
     <div class="grid gap-6 p-5 sm:p-8 lg:grid-cols-[.7fr_1.3fr]">
@@ -104,19 +82,52 @@
       <p :if={@analytics.network.hidden_server_count > 0} class="mt-3 text-xs text-slate-500 dark:text-slate-400">{gettext("%{count} more servers are included in the total.", count: @analytics.network.hidden_server_count)}</p>
   </section>
 
+  <section class="relative mt-7 overflow-hidden rounded-3xl bg-slate-950 px-6 py-8 text-white shadow-xl sm:px-9 sm:py-10">
+    <div class="absolute -right-20 -top-28 h-72 w-72 rounded-full bg-brand-500/20 blur-3xl"></div>
+    <div class="relative">
+      <p class="max-w-3xl text-sm leading-6 text-slate-300">
+        {gettext("Visible interactions are a")}
+        <strong class="font-bold text-white">{gettext("lower bound")}</strong>,
+        {gettext("not a view count.")}
+      </p>
+      <dl class="mt-6 grid grid-cols-1 gap-3 sm:grid-cols-3">
+        <div class="rounded-2xl border border-white/10 bg-white/5 p-4"><dt class="text-xs text-slate-400">{gettext("People with visible interactions")}</dt><dd class="mt-2 text-3xl font-semibold tabular-nums">{@analytics.known_readers}<span class="text-lg text-brand-300">+</span></dd></div>
+        <div class="rounded-2xl border border-white/10 bg-white/5 p-4"><dt class="text-xs text-slate-400">{gettext("Servers involved")}</dt><dd class="mt-2 text-3xl font-semibold tabular-nums">{@analytics.network.server_count}</dd></div>
+        <div class="rounded-2xl border border-white/10 bg-white/5 p-4"><dt class="text-xs text-slate-400">{gettext("Interactions")}</dt><dd class="mt-2 text-3xl font-semibold tabular-nums">{@analytics.totals.all}</dd></div>
+      </dl>
+    </div>
+  </section>
+
+  <section class="mt-7 rounded-3xl border border-slate-200 bg-white p-5 shadow-sm dark:border-slate-700 dark:bg-slate-900 sm:p-8" aria-labelledby="real-reach-heading">
+    <h2 id="real-reach-heading" class="text-xl font-semibold text-slate-950 dark:text-white">{gettext("What is the real reach?")}</h2>
+    <p class="mt-3 max-w-4xl text-base leading-7 text-slate-700 dark:text-slate-300">{gettext("We do not know whether the real reach is 10x, 100x or 1,000x larger. It cannot be tracked in the Fediverse.")}</p>
+  </section>
+
   <section class="mt-7 rounded-3xl border border-slate-200 bg-white p-5 shadow-sm dark:border-slate-700 dark:bg-slate-900 sm:p-8" aria-labelledby="analytics-chart-heading">
     <h2 id="analytics-chart-heading" class="text-xl font-semibold text-slate-950 dark:text-white">{gettext("Momentum over time")}</h2>
-    <p class="mt-1 text-sm text-slate-600 dark:text-slate-400">{if @analytics.unit == "hour", do: gettext("Per hour"), else: gettext("Per day")}</p>
+    <p class="mt-1 text-sm text-slate-600 dark:text-slate-400">{if @analytics.unit == "hour", do: gettext("3-hour windows · UTC"), else: gettext("Per day · UTC")}</p>
     <div :if={@analytics.totals.all == 0} class="mt-8 rounded-2xl bg-slate-50 px-5 py-10 text-center dark:bg-slate-800"><p class="font-medium text-slate-800 dark:text-slate-100">{gettext("No recorded interactions in this period")}</p><p class="mt-1 text-sm text-slate-600 dark:text-slate-400">{gettext("Try a longer time range, or check back later.")}</p></div>
     <div :if={@analytics.totals.all > 0} class="mt-8">
+      <% chart_buckets = chart_buckets(@analytics.buckets, @analytics.unit) %>
+      <% chart_peak = chart_peak(chart_buckets) %>
+      <% chart_width = chart_width(chart_buckets, @analytics.unit) %>
+      <% plot_width = chart_width - 50 %>
       <div class="mb-4 flex flex-wrap gap-x-5 gap-y-2 text-xs font-medium text-slate-600 dark:text-slate-300"><span><span class="mr-1.5 inline-block h-2.5 w-2.5 rounded-sm bg-brand-500"></span>{gettext("Likes")} {@analytics.totals.likes}</span><span><span class="mr-1.5 inline-block h-2.5 w-2.5 rounded-sm bg-cyan-500"></span>{gettext("Reposts")} {@analytics.totals.reposts}</span><span><span class="mr-1.5 inline-block h-2.5 w-2.5 rounded-sm bg-amber-500"></span>{gettext("Replies")} {@analytics.totals.replies}</span></div>
-      <div class="overflow-x-auto"><svg viewBox="0 0 760 270" role="img" class="h-auto min-w-[620px] w-full">
-        <line x1="34" x2="748" y1="218" y2="218" stroke="currentColor" class="text-slate-300 dark:text-slate-600" /><line x1="34" x2="748" y1="118" y2="118" stroke="currentColor" stroke-dasharray="3 5" class="text-slate-200 dark:text-slate-700" /><line x1="34" x2="748" y1="18" y2="18" stroke="currentColor" stroke-dasharray="3 5" class="text-slate-200 dark:text-slate-700" />
-        <text x="4" y="221" class="fill-slate-500 text-[11px]">0</text><text x="4" y="121" class="fill-slate-500 text-[11px]">{div(@analytics.peak.total, 2)}</text><text x="4" y="21" class="fill-slate-500 text-[11px]">{@analytics.peak.total}</text>
-        <g :for={{bucket, index} <- Enum.with_index(@analytics.buckets)} data-chart-bucket-label={bucket_label(bucket.at, @analytics.unit)}><title>{bucket_label(bucket.at, @analytics.unit)}</title><% x = 36 + index * 710 / length(@analytics.buckets) %><% width = max(2, 710 / length(@analytics.buckets) - 1) %><% scale = 200 / max(@analytics.peak.total, 1) %><rect x={x} y="18" width={width} height="200" fill="transparent" /><rect :if={bucket.likes > 0} x={x} y={218 - bucket.likes * scale} width={width} height={bucket.likes * scale} fill="#8b5cf6" /><rect :if={bucket.reposts > 0} x={x} y={218 - (bucket.likes + bucket.reposts) * scale} width={width} height={bucket.reposts * scale} fill="#06b6d4" /><rect :if={bucket.replies > 0} x={x} y={218 - bucket.total * scale} width={width} height={bucket.replies * scale} fill="#f59e0b" /></g>
-        <g :for={index <- chart_tick_indices(length(@analytics.buckets))} data-chart-tick><% bucket = Enum.at(@analytics.buckets, index) %><% x = 36 + (index + 0.5) * 710 / length(@analytics.buckets) %><line x1={x} x2={x} y1="218" y2="224" stroke="currentColor" class="text-slate-400 dark:text-slate-500" /><text x={x} y="244" text-anchor={chart_tick_anchor(index, length(@analytics.buckets))} class="fill-slate-500 text-[10px]">{chart_tick_label(bucket.at, @analytics.unit)}</text></g>
+      <div class="overflow-x-auto"><svg viewBox={"0 0 #{chart_width} 286"} role="img" class="h-auto w-full" style={"min-width: #{chart_width}px"}>
+        <g :if={@analytics.unit == "hour"} :for={{day, day_index} <- Enum.with_index(chart_day_labels(chart_buckets))}>
+          <% day_x = 36 + day.index * plot_width / length(chart_buckets) %>
+          <% day_width = day.count * plot_width / length(chart_buckets) %>
+          <rect x={day_x} y="18" width={day_width} height="242" fill={if rem(day_index, 2) == 0, do: "#f8fafc", else: "#ffffff"} class="dark:fill-slate-800/40" />
+          <line x1={day_x} x2={day_x} y1="18" y2="260" stroke="currentColor" class="text-slate-200 dark:text-slate-700" />
+          <text data-chart-day-label x={day_x + day_width / 2} y="276" text-anchor="middle" class="fill-slate-600 text-[10px] font-semibold dark:fill-slate-300">{day.label}</text>
+        </g>
+        <line x1="34" x2={chart_width - 12} y1="218" y2="218" stroke="currentColor" class="text-slate-300 dark:text-slate-600" /><line x1="34" x2={chart_width - 12} y1="118" y2="118" stroke="currentColor" stroke-dasharray="3 5" class="text-slate-200 dark:text-slate-700" /><line x1="34" x2={chart_width - 12} y1="18" y2="18" stroke="currentColor" stroke-dasharray="3 5" class="text-slate-200 dark:text-slate-700" />
+        <text x="4" y="221" class="fill-slate-500 text-[11px]">0</text><text x="4" y="121" class="fill-slate-500 text-[11px]">{div(chart_peak.total, 2)}</text><text x="4" y="21" class="fill-slate-500 text-[11px]">{chart_peak.total}</text>
+        <g :for={{bucket, index} <- Enum.with_index(chart_buckets)} data-chart-bucket-label={bucket_label(bucket.at, @analytics.unit)}><title>{bucket_label(bucket.at, @analytics.unit)}</title><% x = 36 + index * plot_width / length(chart_buckets) %><% width = max(2, plot_width / length(chart_buckets) - 1) %><% scale = 200 / max(chart_peak.total, 1) %><rect x={x} y="18" width={width} height="200" fill="transparent" /><rect :if={bucket.likes > 0} x={x} y={218 - bucket.likes * scale} width={width} height={bucket.likes * scale} fill="#8b5cf6" /><rect :if={bucket.reposts > 0} x={x} y={218 - (bucket.likes + bucket.reposts) * scale} width={width} height={bucket.reposts * scale} fill="#06b6d4" /><rect :if={bucket.replies > 0} x={x} y={218 - bucket.total * scale} width={width} height={bucket.replies * scale} fill="#f59e0b" /></g>
+        <g :if={@analytics.unit == "hour"} :for={{bucket, index} <- Enum.with_index(chart_buckets)} data-chart-tick><% x = 36 + (index + 0.5) * plot_width / length(chart_buckets) %><line x1={x} x2={x} y1="218" y2="224" stroke="currentColor" class="text-slate-400 dark:text-slate-500" /><text data-chart-hour-label={chart_tick_label(bucket.at, @analytics.unit)} x={x} y="244" text-anchor="middle" class="fill-slate-500 text-[9px]">{chart_tick_label(bucket.at, @analytics.unit)}</text></g>
+        <g :if={@analytics.unit != "hour"} :for={index <- chart_tick_indices(length(chart_buckets))} data-chart-tick><% bucket = Enum.at(chart_buckets, index) %><% x = 36 + (index + 0.5) * plot_width / length(chart_buckets) %><line x1={x} x2={x} y1="218" y2="224" stroke="currentColor" class="text-slate-400 dark:text-slate-500" /><text x={x} y="244" text-anchor={chart_tick_anchor(index, length(chart_buckets))} class="fill-slate-500 text-[10px]">{chart_tick_label(bucket.at, @analytics.unit)}</text></g>
       </svg></div>
-      <div class="mt-5 rounded-xl bg-brand-50 p-4 dark:bg-brand-950/40"><p class="text-sm font-semibold text-brand-900 dark:text-brand-100">{gettext("Busiest interval")}: {@analytics.peak.total} {gettext("interactions")}</p><p class="mt-1 text-sm text-brand-800 dark:text-brand-200">{bucket_label(@analytics.peak.at, @analytics.unit)}</p></div>
+      <div class="mt-5 rounded-xl bg-brand-50 p-4 dark:bg-brand-950/40"><p class="text-sm font-semibold text-brand-900 dark:text-brand-100">{gettext("Busiest interval")}: {chart_peak.total} {gettext("interactions")}</p><p class="mt-1 text-sm text-brand-800 dark:text-brand-200">{bucket_label(chart_peak.at, @analytics.unit)}</p></div>
     </div>
   </section>
 </div>

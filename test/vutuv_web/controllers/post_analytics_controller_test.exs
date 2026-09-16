@@ -64,13 +64,16 @@ defmodule VutuvWeb.PostAnalyticsControllerTest do
     assert body =~ "Last 30 days"
     assert body =~ "Last year"
 
-    assert body =~
+    refute body =~
              "A complete analysis is impossible in the Fediverse because vutuv cannot access every server and its data."
 
     assert body =~ "People with visible interactions"
 
+    refute body =~ "What we can measure"
+    assert body =~ "What is the real reach?"
+
     assert body =~
-             "We cannot reliably know how many people saw this post in the Fediverse. We can only count people who visibly interacted with it"
+             "We do not know whether the real reach is 10x, 100x or 1,000x larger. It cannot be tracked in the Fediverse."
 
     assert body =~ "Server network"
     assert body =~ "Momentum over time"
@@ -87,13 +90,21 @@ defmodule VutuvWeb.PostAnalyticsControllerTest do
     assert body =~ "Potential reach from reposts"
     {reach_position, _} = :binary.match(body, ~s(id="repost-reach-heading"))
     {network_position, _} = :binary.match(body, ~s(id="network-heading"))
+    {real_reach_position, _} = :binary.match(body, ~s(id="real-reach-heading"))
     assert reach_position < network_position
+    assert network_position < real_reach_position
     assert body =~ "10K"
     assert body =~ ~r/10K.*text-brand-500.*>\+</s
     assert body =~ "data-repost-reach-bar"
     assert body =~ "Follower totals are fetched in the background"
     assert body =~ "data-network-label"
     assert body =~ "rotate("
+    assert body =~ ~s(data-chart-hour-label="00")
+    assert body =~ ~s(data-chart-hour-label="03")
+    assert body =~ ~s(data-chart-hour-label="12")
+    assert body =~ ~s(data-chart-hour-label="21")
+    assert body =~ "data-chart-day-label"
+    assert body =~ "3-hour windows · UTC"
     refute body =~ "Distribution signal"
     refute body =~ "This post broke out"
     refute body =~ "No visible response yet"

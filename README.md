@@ -27,12 +27,14 @@ We use the [MIT License](LICENSE).
   show community size when available, and is available from its
   three-dot menu. It shows the distinct people with visible interactions,
   a shareable server-network card, cached follower totals for potential repost
-  reach, and hourly interaction momentum over 7 or 30 days (daily over one
-  year). Potential repost reach leads the analysis. Its larger server graph
+  reach, and three-hour interaction momentum over 7 or 30 days (daily over one
+  year). Potential repost reach leads the analysis, immediately followed by
+  the server network. Its larger server graph
   numbers visible interactions, uses radial labels, and arranges first
   reactions as a time spiral without claiming unobservable repost hops.
   Chart periods count back from the present and are labelled accordingly.
   Shared analysis links use potential repost reach as their OpenGraph hero.
+  A separate note explains that the true Fediverse reach cannot be measured.
   Empty chart tails stop two days after the last visible interaction, while a
   later wave remains visible. Visible interactions are clearly separated from
   view counts.

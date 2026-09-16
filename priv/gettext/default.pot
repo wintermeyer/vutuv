@@ -25424,3 +25424,19 @@ msgstr ""
 #: lib/vutuv_web/controllers/og_image_controller.ex
 msgid "Reposters · Servers · Interactions"
 msgstr ""
+
+#: lib/vutuv_web/templates/post/analytics.html.heex
+msgid "What is the real reach?"
+msgstr ""
+
+#: lib/vutuv_web/templates/post/analytics.html.heex
+msgid "We do not know whether the real reach is 10x, 100x or 1,000x larger. It cannot be tracked in the Fediverse."
+msgstr ""
+
+#: lib/vutuv_web/templates/post/analytics.html.heex
+msgid "3-hour windows · UTC"
+msgstr ""
+
+#: lib/vutuv_web/templates/post/analytics.html.heex
+msgid "Per day · UTC"
+msgstr ""

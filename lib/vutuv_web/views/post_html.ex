@@ -10,11 +10,56 @@ defmodule VutuvWeb.PostHTML do
   def range_label("30d"), do: gettext("Last 30 days")
   def range_label("1y"), do: gettext("Last year")
 
-  def bucket_label(at, "hour"), do: Calendar.strftime(at, "%d %b %Y, %H:00 UTC")
+  def bucket_label(at, "hour") do
+    finish = NaiveDateTime.add(at, 3 * 3_600 - 1, :second)
+    "#{Calendar.strftime(at, "%d %b %Y, %H:00")}–#{Calendar.strftime(finish, "%H:%M UTC")}"
+  end
+
   def bucket_label(at, "day"), do: Calendar.strftime(at, "%d %b %Y")
 
-  def chart_tick_label(at, "hour"), do: Calendar.strftime(at, "%d %b %H:00")
+  def chart_tick_label(at, "hour"), do: Calendar.strftime(at, "%H")
   def chart_tick_label(at, "day"), do: Calendar.strftime(at, "%d %b")
+
+  def chart_buckets([], _unit), do: []
+
+  def chart_buckets(buckets, "hour") do
+    counts =
+      Enum.reduce(buckets, %{}, fn bucket, grouped ->
+        at = %{bucket.at | hour: div(bucket.at.hour, 3) * 3}
+
+        Map.update(
+          grouped,
+          at,
+          Map.put(bucket, :at, at),
+          &merge_chart_bucket(&1, bucket)
+        )
+      end)
+
+    first = %{hd(buckets).at | hour: 0, minute: 0, second: 0, microsecond: {0, 0}}
+    last_bucket = List.last(buckets)
+    last = %{last_bucket.at | hour: 21, minute: 0, second: 0, microsecond: {0, 0}}
+
+    Stream.iterate(first, &NaiveDateTime.add(&1, 3 * 3_600, :second))
+    |> Enum.take_while(&(NaiveDateTime.compare(&1, last) != :gt))
+    |> Enum.map(&Map.get(counts, &1, empty_chart_bucket(&1)))
+  end
+
+  def chart_buckets(buckets, _unit), do: buckets
+
+  def chart_width(buckets, "hour"), do: max(760, 50 + length(buckets) * 14)
+  def chart_width(_buckets, _unit), do: 760
+
+  def chart_day_labels(buckets) do
+    buckets
+    |> Enum.with_index()
+    |> Enum.chunk_by(fn {bucket, _index} -> NaiveDateTime.to_date(bucket.at) end)
+    |> Enum.map(fn group ->
+      {first, first_index} = hd(group)
+      %{label: Calendar.strftime(first.at, "%d %b"), index: first_index, count: length(group)}
+    end)
+  end
+
+  def chart_peak(buckets), do: Enum.max_by(buckets, & &1.total)
 
   def chart_tick_indices(count) when count <= 1, do: [0]
 
@@ -33,6 +78,16 @@ defmodule VutuvWeb.PostHTML do
   def chart_tick_anchor(0, _count), do: "start"
   def chart_tick_anchor(index, count) when index == count - 1, do: "end"
   def chart_tick_anchor(_index, _count), do: "middle"
+
+  defp merge_chart_bucket(left, right) do
+    likes = left.likes + right.likes
+    reposts = left.reposts + right.reposts
+    replies = left.replies + right.replies
+    %{left | likes: likes, reposts: reposts, replies: replies, total: likes + reposts + replies}
+  end
+
+  defp empty_chart_bucket(at),
+    do: %{at: at, likes: 0, reposts: 0, replies: 0, total: 0}
 
   def network_node_position(0, _count), do: {550, 370}
 

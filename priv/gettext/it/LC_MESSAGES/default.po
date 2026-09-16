@@ -26937,3 +26937,19 @@ msgstr "Distribuzione potenziale, non lettori · limite inferiore"
 #: lib/vutuv_web/controllers/og_image_controller.ex
 msgid "Reposters · Servers · Interactions"
 msgstr "Autori dei repost · Server · Interazioni"
+
+#: lib/vutuv_web/templates/post/analytics.html.heex
+msgid "What is the real reach?"
+msgstr "Qual è la portata reale?"
+
+#: lib/vutuv_web/templates/post/analytics.html.heex
+msgid "We do not know whether the real reach is 10x, 100x or 1,000x larger. It cannot be tracked in the Fediverse."
+msgstr "Non sappiamo se la portata reale sia 10, 100 o 1.000 volte maggiore. Non è possibile tracciarla nel Fediverse."
+
+#: lib/vutuv_web/templates/post/analytics.html.heex
+msgid "3-hour windows · UTC"
+msgstr "Intervalli di 3 ore · UTC"
+
+#: lib/vutuv_web/templates/post/analytics.html.heex
+msgid "Per day · UTC"
+msgstr "Al giorno · UTC"
