@@ -26909,3 +26909,19 @@ msgstr "+%{count}min"
 #, elixir-autogen, elixir-format
 msgid "+%{count}h"
 msgstr "+%{count}h"
+
+#: lib/vutuv_web/templates/post/analytics.html.heex
+msgid "Chart period"
+msgstr "Periodo del grafico"
+
+#: lib/vutuv_web/views/post_html.ex
+msgid "Last 7 days"
+msgstr "Ultimi 7 giorni"
+
+#: lib/vutuv_web/views/post_html.ex
+msgid "Last 30 days"
+msgstr "Ultimi 30 giorni"
+
+#: lib/vutuv_web/views/post_html.ex
+msgid "Last year"
+msgstr "Ultimo anno"

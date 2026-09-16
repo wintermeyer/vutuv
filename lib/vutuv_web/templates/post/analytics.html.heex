@@ -8,9 +8,12 @@
       </div>
       <p class="mt-3 max-w-2xl text-sm leading-6 text-slate-600 dark:text-slate-400">{gettext("A complete analysis is impossible in the Fediverse because vutuv cannot access every server and its data.")}</p>
     </div>
-    <nav aria-label={gettext("Time range")} class="flex rounded-xl bg-slate-100 p-1 dark:bg-slate-800">
-      <.link :for={range <- Vutuv.PostAnalytics.ranges()} href={~p"/posts/#{@post.id}/analytics?range=#{range}"} aria-current={if range == @analytics.range, do: "page"} class={["rounded-lg px-3 py-1.5 text-sm font-medium", if(range == @analytics.range, do: "bg-white text-slate-950 shadow-sm dark:bg-slate-700 dark:text-white", else: "text-slate-600 dark:text-slate-300")]}>{range_label(range)}</.link>
-    </nav>
+    <div>
+      <p class="mb-1.5 text-xs font-medium text-slate-500 dark:text-slate-400">{gettext("Chart period")}</p>
+      <nav aria-label={gettext("Chart period")} class="flex rounded-xl bg-slate-100 p-1 dark:bg-slate-800">
+        <.link :for={range <- Vutuv.PostAnalytics.ranges()} href={~p"/posts/#{@post.id}/analytics?range=#{range}"} aria-current={if range == @analytics.range, do: "page"} class={["rounded-lg px-3 py-1.5 text-sm font-medium", if(range == @analytics.range, do: "bg-white text-slate-950 shadow-sm dark:bg-slate-700 dark:text-white", else: "text-slate-600 dark:text-slate-300")]}>{range_label(range)}</.link>
+      </nav>
+    </div>
   </div>
 
   <section class="relative overflow-hidden rounded-3xl bg-slate-950 px-6 py-8 text-white shadow-xl sm:px-9 sm:py-10">

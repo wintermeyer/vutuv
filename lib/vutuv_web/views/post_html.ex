@@ -6,9 +6,9 @@ defmodule VutuvWeb.PostHTML do
 
   embed_templates("../templates/post/*")
 
-  def range_label("7d"), do: gettext("7 days")
-  def range_label("30d"), do: gettext("30 days")
-  def range_label("1y"), do: gettext("1 year")
+  def range_label("7d"), do: gettext("Last 7 days")
+  def range_label("30d"), do: gettext("Last 30 days")
+  def range_label("1y"), do: gettext("Last year")
 
   def bucket_label(at, "hour"), do: Calendar.strftime(at, "%d %b %Y, %H:00 UTC")
   def bucket_label(at, "day"), do: Calendar.strftime(at, "%d %b %Y")

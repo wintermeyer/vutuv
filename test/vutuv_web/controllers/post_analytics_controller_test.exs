@@ -59,6 +59,10 @@ defmodule VutuvWeb.PostAnalyticsControllerTest do
     analytics = get(conn, "/posts/#{post.id}/analytics")
     body = html_response(analytics, 200)
     assert body =~ "Reach analysis"
+    assert body =~ "Chart period"
+    assert body =~ "Last 7 days"
+    assert body =~ "Last 30 days"
+    assert body =~ "Last year"
 
     assert body =~
              "A complete analysis is impossible in the Fediverse because vutuv cannot access every server and its data."

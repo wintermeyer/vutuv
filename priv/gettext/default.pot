@@ -25396,3 +25396,19 @@ msgstr ""
 #, elixir-autogen, elixir-format
 msgid "+%{count}h"
 msgstr ""
+
+#: lib/vutuv_web/templates/post/analytics.html.heex
+msgid "Chart period"
+msgstr ""
+
+#: lib/vutuv_web/views/post_html.ex
+msgid "Last 7 days"
+msgstr ""
+
+#: lib/vutuv_web/views/post_html.ex
+msgid "Last 30 days"
+msgstr ""
+
+#: lib/vutuv_web/views/post_html.ex
+msgid "Last year"
+msgstr ""

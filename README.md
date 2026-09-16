@@ -31,6 +31,7 @@ We use the [MIT License](LICENSE).
   year). Potential repost reach leads the analysis. Its larger server graph
   numbers visible interactions, uses radial labels, and arranges first
   reactions as a time spiral without claiming unobservable repost hops.
+  Chart periods count back from the present and are labelled accordingly.
   Empty chart tails stop two days after the last visible interaction, while a
   later wave remains visible. Visible interactions are clearly separated from
   view counts.
