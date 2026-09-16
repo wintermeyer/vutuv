@@ -34,39 +34,6 @@
     <p class="mt-3 max-w-4xl text-base leading-7 text-slate-700 dark:text-slate-300">{gettext("We cannot reliably know how many people saw this post in the Fediverse. We can only count people who visibly interacted with it, for example through a like, repost or reply: %{count} people.", count: @analytics.known_readers)}</p>
   </section>
 
-  <section class="mt-7 rounded-3xl border border-slate-200 bg-white p-5 shadow-sm dark:border-slate-700 dark:bg-slate-900 sm:p-8" aria-labelledby="network-heading">
-      <h2 id="network-heading" class="text-xl font-semibold text-slate-950 dark:text-white">{gettext("Server network")}</h2>
-      <p class="mt-1 max-w-3xl text-sm leading-6 text-slate-600 dark:text-slate-400">{gettext("Numbers inside nodes are visible interactions. The numbered spiral follows the first reaction from each server. Repost hops between servers are not visible to vutuv.")}</p>
-      <div class="mt-3 flex flex-wrap gap-4 text-xs text-slate-600 dark:text-slate-400"><span><span class="mr-1.5 inline-block h-2.5 w-2.5 rounded-full bg-brand-500"></span>{gettext("Reacted")}</span><span><span class="mr-1.5 inline-block h-2.5 w-2.5 rounded-full border border-slate-400"></span>{gettext("Contacted only")}</span><span><span class="mr-1.5 inline-flex h-4 min-w-4 items-center justify-center rounded-full bg-fuchsia-500 px-1 text-[9px] font-bold text-white">1</span>{gettext("Reaction order")}</span><span><span class="mr-1.5 inline-block h-3.5 w-3.5 rounded-full border-2 border-cyan-400 align-middle"></span>{gettext("Outer ring: monthly active accounts")}</span><span><span class="mr-1.5 inline-block h-0.5 w-5 bg-fuchsia-400 align-middle"></span>{gettext("Line width: known repost audience")}</span></div>
-      <div class="mt-5 overflow-x-auto rounded-2xl bg-slate-950">
-        <svg viewBox="0 0 1000 620" role="img" aria-labelledby="network-title network-desc" class="h-auto min-w-[820px] w-full">
-          <title id="network-title">{gettext("Servers involved in this post")}</title>
-          <desc id="network-desc">{gettext("A network map centered on vutuv. Later first reactions sit farther from the center. Node size and labels show visible interactions.")}</desc>
-          <circle cx="500" cy="300" r="145" fill="none" stroke="#8b5cf6" stroke-dasharray="3 8" opacity=".2" />
-          <circle cx="500" cy="300" r="270" fill="#8b5cf6" opacity=".07" />
-          <text x="510" y="150" class="fill-slate-500 text-[10px]">{gettext("earlier")}</text>
-          <text x="510" y="25" class="fill-slate-500 text-[10px]">{gettext("later")}</text>
-          <g :for={{node, index} <- Enum.with_index(@analytics.network.visible_nodes)}>
-            <% {x, y} = network_node_position(index, length(@analytics.network.visible_nodes)) %>
-            <line :if={index > 0} data-network-repost-reach={node.repost_potential} x1="500" y1="300" x2={x} y2={y} stroke={if node.repost_potential > 0, do: "#e879f9", else: if(node.status == :active, do: "#8b5cf6", else: "#475569")} stroke-width={network_edge_width(node)} stroke-dasharray={if node.status == :addressed, do: "3 6"} />
-          </g>
-          <g :for={{node, index} <- Enum.with_index(@analytics.network.visible_nodes)}>
-            <% {x, y} = network_node_position(index, length(@analytics.network.visible_nodes)) %>
-            <circle :if={community_radius = network_community_radius(node)} data-community-size-ring cx={x} cy={y} r={community_radius} fill="none" stroke="#22d3ee" stroke-width="2" opacity=".8"><title>{network_node_title(node)}</title></circle>
-            <circle cx={x} cy={y} r={network_node_radius(node)} fill={if node.status == :addressed, do: "#0f172a", else: if(node.status == :origin, do: "#7c3aed", else: "#8b5cf6")} stroke={if node.status == :addressed, do: "#94a3b8", else: "#c4b5fd"} stroke-width="2"><title>{network_node_title(node)}</title></circle>
-            <text :if={node.status != :addressed} data-network-interactions x={x} y={y + 5} text-anchor="middle" class="fill-white text-[12px] font-bold">{node.interactions}</text>
-            <g :if={node.sequence} data-network-sequence={node.sequence}>
-              <circle cx={x - network_node_radius(node) + 1} cy={y - network_node_radius(node) + 1} r="10" fill="#d946ef" />
-              <text x={x - network_node_radius(node) + 1} y={y - network_node_radius(node) + 4.5} text-anchor="middle" class="fill-white text-[9px] font-bold">{node.sequence}</text>
-            </g>
-            <text x={x} y={y + network_label_radius(node) + 16} text-anchor="middle" class="fill-slate-200 text-[11px] font-medium">{node.host}</text>
-            <text :if={label = network_elapsed_label(node)} x={x} y={y + network_label_radius(node) + 31} text-anchor="middle" class="fill-fuchsia-300 text-[10px]">{label}</text>
-          </g>
-        </svg>
-      </div>
-      <p :if={@analytics.network.hidden_server_count > 0} class="mt-3 text-xs text-slate-500 dark:text-slate-400">{gettext("%{count} more servers are included in the total.", count: @analytics.network.hidden_server_count)}</p>
-  </section>
-
   <section class="mt-7 overflow-hidden rounded-3xl border border-slate-200 bg-white shadow-sm dark:border-slate-700 dark:bg-slate-900" aria-labelledby="repost-reach-heading">
     <div class="grid gap-6 p-5 sm:p-8 lg:grid-cols-[.7fr_1.3fr]">
       <div>
@@ -96,6 +63,42 @@
         <p>{gettext("Followers can overlap, and a delivered post may not be read. The figure is not a count of unique readers.")}</p>
       </div>
     </details>
+  </section>
+
+  <section class="mt-7 rounded-3xl border border-slate-200 bg-white p-5 shadow-sm dark:border-slate-700 dark:bg-slate-900 sm:p-8" aria-labelledby="network-heading">
+      <h2 id="network-heading" class="text-xl font-semibold text-slate-950 dark:text-white">{gettext("Server network")}</h2>
+      <p class="mt-1 max-w-3xl text-sm leading-6 text-slate-600 dark:text-slate-400">{gettext("Numbers inside nodes are visible interactions. The numbered spiral follows the first reaction from each server. Repost hops between servers are not visible to vutuv.")}</p>
+      <div class="mt-3 flex flex-wrap gap-4 text-xs text-slate-600 dark:text-slate-400"><span><span class="mr-1.5 inline-block h-2.5 w-2.5 rounded-full bg-brand-500"></span>{gettext("Reacted")}</span><span><span class="mr-1.5 inline-block h-2.5 w-2.5 rounded-full border border-slate-400"></span>{gettext("Contacted only")}</span><span><span class="mr-1.5 inline-flex h-4 min-w-4 items-center justify-center rounded-full bg-fuchsia-500 px-1 text-[9px] font-bold text-white">1</span>{gettext("Reaction order")}</span><span><span class="mr-1.5 inline-block h-3.5 w-3.5 rounded-full border-2 border-cyan-400 align-middle"></span>{gettext("Outer ring: monthly active accounts")}</span><span><span class="mr-1.5 inline-block h-0.5 w-5 bg-fuchsia-400 align-middle"></span>{gettext("Line width: known repost audience")}</span></div>
+      <div class="mt-5 overflow-x-auto rounded-2xl bg-slate-950">
+        <svg viewBox="0 0 1100 780" role="img" aria-labelledby="network-title network-desc" class="h-auto min-w-[900px] w-full">
+          <title id="network-title">{gettext("Servers involved in this post")}</title>
+          <desc id="network-desc">{gettext("A network map centered on vutuv. Later first reactions sit farther from the center. Node size and labels show visible interactions.")}</desc>
+          <circle cx="550" cy="370" r="175" fill="none" stroke="#8b5cf6" stroke-dasharray="3 8" opacity=".2" />
+          <circle cx="550" cy="370" r="300" fill="#8b5cf6" opacity=".07" />
+          <text x="560" y="190" class="fill-slate-500 text-[10px]">{gettext("earlier")}</text>
+          <text x="560" y="65" class="fill-slate-500 text-[10px]">{gettext("later")}</text>
+          <g :for={{node, index} <- Enum.with_index(@analytics.network.visible_nodes)}>
+            <% {x, y} = network_node_position(index, length(@analytics.network.visible_nodes)) %>
+            <line :if={index > 0} data-network-repost-reach={node.repost_potential} x1="550" y1="370" x2={x} y2={y} stroke={if node.repost_potential > 0, do: "#e879f9", else: if(node.status == :active, do: "#8b5cf6", else: "#475569")} stroke-width={network_edge_width(node)} stroke-dasharray={if node.status == :addressed, do: "3 6"} />
+          </g>
+          <g :for={{node, index} <- Enum.with_index(@analytics.network.visible_nodes)}>
+            <% {x, y} = network_node_position(index, length(@analytics.network.visible_nodes)) %>
+            <circle :if={community_radius = network_community_radius(node)} data-community-size-ring cx={x} cy={y} r={community_radius} fill="none" stroke="#22d3ee" stroke-width="2" opacity=".8"><title>{network_node_title(node)}</title></circle>
+            <circle cx={x} cy={y} r={network_node_radius(node)} fill={if node.status == :addressed, do: "#0f172a", else: if(node.status == :origin, do: "#7c3aed", else: "#8b5cf6")} stroke={if node.status == :addressed, do: "#94a3b8", else: "#c4b5fd"} stroke-width="2"><title>{network_node_title(node)}</title></circle>
+            <text :if={node.status != :addressed} data-network-interactions x={x} y={y + 5} text-anchor="middle" class="fill-white text-[12px] font-bold">{node.interactions}</text>
+            <g :if={node.sequence} data-network-sequence={node.sequence}>
+              <circle cx={x - network_node_radius(node) + 1} cy={y - network_node_radius(node) + 1} r="10" fill="#d946ef" />
+              <text x={x - network_node_radius(node) + 1} y={y - network_node_radius(node) + 4.5} text-anchor="middle" class="fill-white text-[9px] font-bold">{node.sequence}</text>
+            </g>
+            <text :if={index == 0} x={x} y={y + network_label_radius(node) + 16} text-anchor="middle" class="fill-slate-200 text-[11px] font-medium">{node.host}</text>
+            <g :if={index > 0} data-network-label transform={network_label_transform(index, length(@analytics.network.visible_nodes), node)}>
+              <text y="4" text-anchor={network_label_anchor(index, length(@analytics.network.visible_nodes))} class="fill-slate-100 text-[12px] font-semibold">{node.host}</text>
+              <text :if={label = network_elapsed_label(node)} y="18" text-anchor={network_label_anchor(index, length(@analytics.network.visible_nodes))} class="fill-fuchsia-300 text-[10px]">{label}</text>
+            </g>
+          </g>
+        </svg>
+      </div>
+      <p :if={@analytics.network.hidden_server_count > 0} class="mt-3 text-xs text-slate-500 dark:text-slate-400">{gettext("%{count} more servers are included in the total.", count: @analytics.network.hidden_server_count)}</p>
   </section>
 
   <section class="mt-7 rounded-3xl border border-slate-200 bg-white p-5 shadow-sm dark:border-slate-700 dark:bg-slate-900 sm:p-8" aria-labelledby="analytics-chart-heading">

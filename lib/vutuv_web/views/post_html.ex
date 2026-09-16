@@ -34,12 +34,28 @@ defmodule VutuvWeb.PostHTML do
   def chart_tick_anchor(index, count) when index == count - 1, do: "end"
   def chart_tick_anchor(_index, _count), do: "middle"
 
-  def network_node_position(0, _count), do: {500, 300}
+  def network_node_position(0, _count), do: {550, 370}
 
   def network_node_position(index, count) do
-    angle = -:math.pi() / 2 + (index - 1) * 2 * :math.pi() / max(count - 1, 1)
-    radius = 145 + (index - 1) * 125 / max(count - 2, 1)
-    {500 + :math.cos(angle) * radius, 300 + :math.sin(angle) * radius}
+    angle = network_node_angle(index, count)
+    radius = 175 + (index - 1) * 125 / max(count - 2, 1)
+    {550 + :math.cos(angle) * radius, 370 + :math.sin(angle) * radius}
+  end
+
+  def network_label_transform(index, count, node) do
+    angle = network_node_angle(index, count)
+    {x, y} = network_node_position(index, count)
+    offset = network_label_radius(node) + 12
+    label_x = x + :math.cos(angle) * offset
+    label_y = y + :math.sin(angle) * offset
+    degrees = angle * 180 / :math.pi()
+    rotation = if degrees > 90 and degrees < 270, do: degrees - 180, else: degrees
+
+    "translate(#{label_x} #{label_y}) rotate(#{rotation})"
+  end
+
+  def network_label_anchor(index, count) do
+    if :math.cos(network_node_angle(index, count)) < 0, do: "end", else: "start"
   end
 
   def network_node_radius(%{status: :origin}), do: 31
@@ -91,6 +107,9 @@ defmodule VutuvWeb.PostHTML do
 
   def network_label_radius(node),
     do: max(network_node_radius(node), network_community_radius(node) || 0)
+
+  defp network_node_angle(index, count),
+    do: -:math.pi() / 2 + (index - 1) * 2 * :math.pi() / max(count - 1, 1)
 
   def network_edge_width(%{repost_potential: count}) when is_integer(count) and count > 0 do
     min(2 + :math.log10(count + 1), 7)

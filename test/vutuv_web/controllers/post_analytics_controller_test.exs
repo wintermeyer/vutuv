@@ -81,10 +81,15 @@ defmodule VutuvWeb.PostAnalyticsControllerTest do
     assert body =~ "12K monthly active accounts"
     assert body =~ "NodeInfo 15 Sep 2026, 12:00 UTC"
     assert body =~ "Potential reach from reposts"
+    {reach_position, _} = :binary.match(body, ~s(id="repost-reach-heading"))
+    {network_position, _} = :binary.match(body, ~s(id="network-heading"))
+    assert reach_position < network_position
     assert body =~ "10K"
     assert body =~ ~r/10K.*text-brand-500.*>\+</s
     assert body =~ "data-repost-reach-bar"
     assert body =~ "Follower totals are fetched in the background"
+    assert body =~ "data-network-label"
+    assert body =~ "rotate("
     refute body =~ "Distribution signal"
     refute body =~ "This post broke out"
     refute body =~ "No visible response yet"
