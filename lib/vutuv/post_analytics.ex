@@ -18,6 +18,7 @@ defmodule Vutuv.PostAnalytics do
   alias Vutuv.Tags.SourceServers
 
   @ranges %{"7d" => {7, "hour"}, "30d" => {30, "hour"}, "1y" => {365, "day"}}
+  @quiet_tail_days 2
 
   def ranges, do: ["7d", "30d", "1y"]
 
@@ -31,7 +32,7 @@ defmodule Vutuv.PostAnalytics do
     first_at = Enum.max_by([start_at, published_at], &DateTime.to_unix/1)
 
     rows = events(post.id, unit, first_at, now)
-    points = buckets(rows, first_at, now, unit)
+    points = rows |> buckets(first_at, now, unit) |> trim_quiet_tail(unit)
 
     totals =
       Enum.reduce(points, %{likes: 0, reposts: 0, replies: 0, all: 0}, fn point, acc ->
@@ -398,6 +399,22 @@ defmodule Vutuv.PostAnalytics do
       }
     end)
   end
+
+  # Keep gaps between waves because they explain a later peak. Only the empty
+  # tail after the final visible interaction is shortened.
+  defp trim_quiet_tail(points, unit) do
+    last_active_index =
+      points
+      |> Enum.with_index()
+      |> Enum.reduce(0, fn {point, index}, latest ->
+        if point.total > 0, do: index, else: latest
+      end)
+
+    Enum.take(points, last_active_index + quiet_tail_buckets(unit) + 1)
+  end
+
+  defp quiet_tail_buckets("hour"), do: @quiet_tail_days * 24
+  defp quiet_tail_buckets("day"), do: @quiet_tail_days
 
   defp truncate(datetime, "hour") do
     datetime |> DateTime.to_naive() |> Map.merge(%{minute: 0, second: 0, microsecond: {0, 0}})

@@ -53,6 +53,50 @@ defmodule Vutuv.PostAnalyticsTest do
     assert result.unit == "hour"
   end
 
+  test "stops the hourly chart after two quiet days" do
+    author = insert(:activated_user)
+    reader = insert(:activated_user)
+    {:ok, post} = Posts.create_post(author, %{body: "A post whose momentum ended"})
+    reacted_at = DateTime.utc_now(:second)
+    now = DateTime.add(reacted_at, 5 * 86_400, :second)
+
+    Repo.insert!(%Vutuv.Posts.PostLike{
+      post_id: post.id,
+      user_id: reader.id,
+      inserted_at: DateTime.to_naive(reacted_at)
+    })
+
+    result = PostAnalytics.for_post(post, range: "7d", now: now)
+    last_bucket = List.last(result.buckets)
+    active_bucket = Enum.find(result.buckets, &(&1.total > 0))
+
+    assert NaiveDateTime.diff(last_bucket.at, active_bucket.at) == 48 * 3_600
+  end
+
+  test "keeps a later peak after more than two quiet days" do
+    author = insert(:activated_user)
+    first_reader = insert(:activated_user)
+    later_reader = insert(:activated_user)
+    {:ok, post} = Posts.create_post(author, %{body: "A post with a second wave"})
+    first_at = DateTime.utc_now(:second)
+    later_at = DateTime.add(first_at, 4 * 86_400, :second)
+    now = DateTime.add(later_at, 3_600, :second)
+
+    for {reader, reacted_at} <- [{first_reader, first_at}, {later_reader, later_at}] do
+      Repo.insert!(%Vutuv.Posts.PostLike{
+        post_id: post.id,
+        user_id: reader.id,
+        inserted_at: DateTime.to_naive(reacted_at)
+      })
+    end
+
+    result = PostAnalytics.for_post(post, range: "7d", now: now)
+    active_buckets = Enum.filter(result.buckets, &(&1.total > 0))
+
+    assert length(active_buckets) == 2
+    assert NaiveDateTime.diff(List.last(active_buckets).at, hd(active_buckets).at) == 4 * 86_400
+  end
+
   test "summarizes known readers and the servers involved in distribution" do
     author = insert(:activated_user)
     reader = insert(:activated_user)

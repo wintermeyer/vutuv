@@ -25,12 +25,14 @@ We use the [MIT License](LICENSE).
 
 - A public post's beta reach analysis is public too, uses cached NodeInfo to
   show community size when available, and is available from its
-  three-dot menu. It shows the distinct people known to have read and reacted,
+  three-dot menu. It shows the distinct people with visible interactions,
   a shareable server-network card, cached follower totals for potential repost
   reach, and hourly interaction momentum over 7 or 30 days (daily over one
   year). Its larger server graph numbers visible interactions and arranges
   first reactions as a time spiral without claiming unobservable repost hops.
-  Visible interactions are clearly separated from view counts.
+  Empty chart tails stop two days after the last visible interaction, while a
+  later wave remains visible. Visible interactions are clearly separated from
+  view counts.
 
 - Public member profiles (work experience, education, spoken languages, tags,
   links, contact details, online messengers with click-to-chat deep links) with
