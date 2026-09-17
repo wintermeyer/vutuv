@@ -92,7 +92,10 @@ defmodule Vutuv.Tags.SourceServers do
   Empty when the feature is switched off, because a server we may not fetch from
   is not one to offer.
   """
-  def offered, do: offered(blocked_hosts(configured()))
+  def offered do
+    listed = configured()
+    offered(listed, blocked_hosts(listed))
+  end
 
   @doc """
   Whether the operator names any other server at all — the intranet question,
@@ -118,9 +121,10 @@ defmodule Vutuv.Tags.SourceServers do
   """
   def relays, do: MapSet.new(configured())
 
-  defp offered(blocked) do
+  # `listed` is `configured/0`, read once by the caller, which needs it too.
+  defp offered(listed, blocked) do
     if enabled?() do
-      configured() |> Enum.reject(&MapSet.member?(blocked, &1)) |> Enum.uniq()
+      listed |> Enum.reject(&MapSet.member?(blocked, &1)) |> Enum.uniq()
     else
       []
     end
@@ -160,7 +164,7 @@ defmodule Vutuv.Tags.SourceServers do
     # One blocklist query for both jobs: dropping a blocked server from the
     # offers, and marking a blocked one the member already picked.
     blocked = blocked_hosts(Enum.uniq(picked ++ listed))
-    hosts = Enum.uniq(picked ++ offered(blocked))
+    hosts = Enum.uniq(picked ++ offered(listed, blocked))
     infos = infos(hosts)
 
     [%{host: local, local?: true, picked?: true, own?: false, blocked?: false, info: nil}] ++
