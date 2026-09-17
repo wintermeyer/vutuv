@@ -328,21 +328,26 @@ to find out about at midnight: `Vutuv.ViewerClock.today/0` reads
 `test/vutuv_web/live/feed_calendar_midnight_test.exs` moves (`async: false` — it
 is global, and every timestamp in the app reads it).
 
-**The tick re-inserts every card, so a card's reader state has to survive a
-patch it did not ask for.** `VutuvWeb.Live.DayClockRestream` sends each shown
-entry again every hour, and morphdom drops any attribute the server did not
-render, so a `<details>` the reader opened folds shut at the top of the hour.
-A disclosure whose state is the reader's wears `data-keep-open`, which
-`app.js`'s `onBeforeElUpdated` honours; the card fold behind "Found through
-these servers" and "From other networks" (`card_fold/1` in
-`VutuvWeb.PostComponents`) carries it once for both (issue #2200). The content
-warning and the sensitive-picture cover wear it too, and only together with an
-id built from their own post (and picture): morphdom pairs an id-less
+**At the reader's midnight the tick re-inserts every card, so a card's reader
+state has to survive a patch it did not ask for.** `VutuvWeb.Live.DayClockRestream`
+sends each shown entry again when the reader's day is no longer the one the
+host last rendered for (the feed's `:cal_today`, the saved hub's `:stamped_on`);
+on the other 23 ticks it sends nothing, since every stamp on a card is worded
+by the day. morphdom drops any attribute the server did not render, so a
+`<details>` the reader opened would fold shut. A disclosure whose state is the
+reader's wears `data-keep-open`, which `app.js`'s `onBeforeElUpdated` honours,
+and only together with an id built from its own post: morphdom pairs an id-less
 `<details>` by position, so without the id a page that swaps one post for
-another in place would open the next post's cover unasked. To see it in a
-browser without waiting an hour, open a panel and run
+another in place would open the next post's panel unasked. The card fold
+behind "Found through these servers" and "From other networks" (`card_fold/1`
+in `VutuvWeb.PostComponents`) carries both for its two callers (issue #2200);
+the content warning and the sensitive-picture cover carry them too. To see it
+in a browser without waiting for midnight, open a panel, move the reader's
+clock with `Application.put_env(:vutuv, :viewer_clock_now,
+DateTime.add(DateTime.utc_now(), 1, :day))` and run
 `Phoenix.PubSub.broadcast(Vutuv.PubSub, "clock:day", :day_changed)` inside the
-running dev server (`iex -S mix phx.server`, or Tidewave's `project_eval`), not
+running dev server (`iex -S mix phx.server`, or Tidewave's `project_eval`), then
+`Application.delete_env(:vutuv, :viewer_clock_now)`. Not
 `send(Vutuv.DayClock, :tick)`, which would arm a second hourly timer.
 
 The layout is split into `root.html.heex` (document shell) and `app.html.heex`

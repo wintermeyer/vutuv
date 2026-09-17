@@ -1094,10 +1094,10 @@ defmodule VutuvWeb.PostFeedLiveTest do
       live |> element("#show-new-posts") |> render_click()
 
       # The press is client-side, so the attribute is still in this DOM — what
-      # the server owes is that it never puts it back. A restream is the
-      # cheapest way to make it re-render the row and prove that.
+      # the server owes is that it never puts it back. A finished screenshot is
+      # the cheapest way to make it re-render the row and prove that.
       refute has_element?(live, "#show-new-posts")
-      send(live.pid, :day_changed)
+      send(live.pid, {:post_screenshot_ready, %{post_id: post.id}})
       assert has_element?(live, "#feed-posts [id*='#{post.id}']")
       refute has_element?(live, "#feed-posts > [hidden]")
       assert render(live) =~ "breaking news"

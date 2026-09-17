@@ -30,6 +30,7 @@ defmodule VutuvWeb.PostLive.Saved do
   alias Vutuv.Posts
   alias Vutuv.Repo
   alias Vutuv.Social
+  alias Vutuv.ViewerClock
   alias VutuvWeb.Live.DayClockRestream
   alias VutuvWeb.Live.RemotePostActions
 
@@ -53,8 +54,10 @@ defmodule VutuvWeb.PostLive.Saved do
      socket
      |> assign(:post_engagement, %{})
      # The posts currently on screen (empty on the People tab), kept so the
-     # midnight :day_changed tick can re-render each stamp in place.
+     # midnight :day_changed tick can re-render each stamp in place, and the
+     # reader's day those stamps were worded for.
      |> assign(:saved_posts, [])
+     |> assign(:stamped_on, ViewerClock.today())
      |> stream(:posts, [])
      |> stream(:people, [])
      |> stream(:organizations, [])
@@ -363,12 +366,12 @@ defmodule VutuvWeb.PostLive.Saved do
     {:noreply, stream_delete_by_dom_id(socket, :posts, "posts-#{post_id}")}
   end
 
-  # The Berlin day rolled over at midnight (Vutuv.DayClock): re-render each shown
-  # post's stamp ("today" -> "Gestern"). No-op on the People tab (@saved_posts is
-  # empty there). Shared with the feed + notifications; see
-  # VutuvWeb.Live.DayClockRestream.
+  # The reader's day rolled over (Vutuv.DayClock): re-render each shown post's
+  # stamp ("today" -> "Gestern"). No-op on the People tab (@saved_posts is empty
+  # there) and on every hour that is not this reader's midnight. Shared with the
+  # feed; see VutuvWeb.Live.DayClockRestream.
   def handle_info(:day_changed, socket) do
-    {:noreply, DayClockRestream.restream(socket, :saved_posts, :posts)}
+    {:noreply, DayClockRestream.restream(socket, :saved_posts, :posts, :stamped_on)}
   end
 
   def handle_info(_other, socket), do: {:noreply, socket}

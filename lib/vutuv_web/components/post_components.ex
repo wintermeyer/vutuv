@@ -3739,25 +3739,25 @@ defmodule VutuvWeb.PostComponents do
   # fold: a reader who has opened one of those has opened this one.
   defp external_servers(assigns) do
     ~H"""
-    <.card_fold
-      label={gettext("Found through these servers")}
-      count={length(@servers)}
-      class="mt-0.5 text-xs"
-      data-external-servers={length(@servers)}
-    >
-      <ul id={"external-servers-#{@id}"} class="flex flex-wrap gap-x-3 gap-y-1 px-2 pb-2 pt-1">
-        <li :for={server <- @servers} data-external-source={server} class="min-w-0 truncate">
-          {server}
-        </li>
-      </ul>
-    </.card_fold>
+    <div class="mt-0.5 text-xs" data-external-servers={length(@servers)}>
+      <.card_fold
+        id={"external-servers-fold-#{@id}"}
+        label={gettext("Found through these servers")}
+        count={length(@servers)}
+      >
+        <ul id={"external-servers-#{@id}"} class="flex flex-wrap gap-x-3 gap-y-1 px-2 pb-2 pt-1">
+          <li :for={server <- @servers} data-external-source={server} class="min-w-0 truncate">
+            {server}
+          </li>
+        </ul>
+      </.card_fold>
+    </div>
     """
   end
 
+  attr(:id, :string, required: true)
   attr(:label, :string, required: true)
   attr(:count, :integer, required: true)
-  attr(:class, :string, required: true)
-  attr(:rest, :global)
   slot(:inner_block, required: true)
 
   # The one fold a card puts something away behind: the globe, what is folded,
@@ -3768,12 +3768,16 @@ defmodule VutuvWeb.PostComponents do
   # is meant to open.
   #
   # The recipe owns the `<details>` and not only its summary, because that is
-  # where `data-keep-open` has to sit (issue #2200): `Vutuv.DayClock` has the
-  # feed re-insert every card on the hour, and without the marker that patch
-  # folded an open panel shut under its reader.
+  # where `data-keep-open` has to sit (issue #2200): a patch that re-sends the
+  # card (the day rolling over re-inserts every one) folded an open panel shut
+  # under its reader. The marker comes with an id, as on every lid that wears
+  # it: morphdom pairs an id-less `<details>` by position, so a panel opened on
+  # one post could come up open on another. Where the fold stands and what it
+  # carries is the caller's wrapper, which keeps every class here a literal
+  # that a stream insert does not have to send again.
   defp card_fold(assigns) do
     ~H"""
-    <details data-keep-open class={["group text-slate-600 dark:text-slate-400", @class]} {@rest}>
+    <details id={@id} data-keep-open class="group text-slate-600 dark:text-slate-400">
       <summary class="-mx-2 flex min-h-10 cursor-pointer list-none items-center gap-2 rounded-lg px-2 hover:bg-slate-100 dark:hover:bg-slate-800 [&::-webkit-details-marker]:hidden">
         <span aria-hidden="true">🌐</span>
         <span>{@label}</span>
@@ -7159,6 +7163,7 @@ defmodule VutuvWeb.PostComponents do
 
     <.fediverse_details
       :if={@engagement}
+      id={@id <> "-fediverse"}
       likes={Map.get(@engagement, :fediverse_likes) || 0}
       reposts={Map.get(@engagement, :fediverse_reposts) || 0}
       replies={Map.get(@engagement, :fediverse_replies) || 0}
@@ -7194,6 +7199,7 @@ defmodule VutuvWeb.PostComponents do
   # a post nobody out there touched stays clean. The reply figure counts
   # **public** replies only, so a note addressed to the member alone (issue
   # #1071) never moves a number a stranger can read.
+  attr(:id, :string, required: true, doc: "the fold's id, unique to this bar")
   attr(:likes, :integer, required: true)
   attr(:reposts, :integer, required: true)
   attr(:replies, :integer, required: true)
@@ -7212,14 +7218,13 @@ defmodule VutuvWeb.PostComponents do
       |> assign(:more, reactions - length(shown))
 
     ~H"""
-    <.card_fold
-      label={gettext("From other networks")}
-      count={@total}
+    <div
       class="mt-2 border-t border-slate-100 pt-1 text-sm dark:border-slate-800"
       data-fediverse-details
       data-fediverse-reactions={@reactions}
       data-fediverse-replies={@replies}
     >
+    <.card_fold id={@id} label={gettext("From other networks")} count={@total}>
       <div class="space-y-2 px-2 pb-2 pt-1">
         <%!-- The split, in the same order and with the same glyphs as the
               buttons above, so each figure is obviously part of one of them. --%>
@@ -7280,6 +7285,7 @@ defmodule VutuvWeb.PostComponents do
         <p class="text-xs">{gettext("Already counted in the numbers above.")}</p>
       </div>
     </.card_fold>
+    </div>
     """
   end
 

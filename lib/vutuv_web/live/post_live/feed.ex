@@ -2216,10 +2216,6 @@ defmodule VutuvWeb.PostLive.Feed do
     {:noreply, assign_followed_tags(socket)}
   end
 
-  # The Berlin day rolled over (Vutuv.DayClock at midnight): re-render every
-  # shown post's stamp so "today" wording becomes "Gestern" and yesterday's
-  # falls back to a full date. Shared with notifications + the saved hub; see
-  # VutuvWeb.Live.DayClockRestream.
   # `Vutuv.DayClock` ticks on every whole UTC hour, which is when some reader's
   # midnight falls. Two things on this page are written in calendar days and
   # both have to move: every post stamp ("09:50 Uhr" becomes "Gestern, 09:50
@@ -2227,11 +2223,11 @@ defmodule VutuvWeb.PostLive.Feed do
   # would otherwise hold yesterday until the next reload — with the new day's
   # own cell greyed out, so the reader could not even click their way back to
   # it.
+  #
+  # Both read `@cal_today`, so a tick on an hour that is not the reader's
+  # midnight changes nothing and re-sends nothing.
   def handle_info(:day_changed, socket) do
-    {:noreply,
-     socket
-     |> assign(:cal_today, ViewerClock.today())
-     |> DayClockRestream.restream(:entries, :posts)}
+    {:noreply, DayClockRestream.restream(socket, :entries, :posts, :cal_today)}
   end
 
   # A post's link screenshot finished capturing (fan-out reaches the viewer over
