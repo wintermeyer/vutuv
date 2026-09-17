@@ -15,7 +15,11 @@ defmodule Vutuv.FediverseBlocklistTest do
   alias Vutuv.Fediverse.BlockedInstance
   alias Vutuv.Fediverse.Delivery
   alias Vutuv.Fediverse.Follower
+  alias Vutuv.Fediverse.Note
+  alias Vutuv.Fediverse.PostDelivery
+  alias Vutuv.Fediverse.RemoteAccount
   alias Vutuv.Tags.ExternalPost
+  alias Vutuv.UUIDv7
 
   setup do
     Vutuv.RateLimiter.reset()
@@ -26,6 +30,67 @@ defmodule Vutuv.FediverseBlocklistTest do
 
   defp federating_member do
     insert(:activated_user, fediverse_followers?: true)
+  end
+
+  # One row in each table a block purges by host, all naming `host`.
+  defp store_everywhere(member, host) do
+    actor = "https://#{host}/users/bot"
+    inbox = "https://#{host}/inbox"
+
+    {:ok, _} = Fediverse.add_follower(member, %{actor_uri: actor, inbox_uri: inbox})
+
+    %RemoteAccount{}
+    |> RemoteAccount.changeset(%{actor_uri: actor, host: host, handle: "bot", inbox_uri: inbox})
+    |> Repo.insert!()
+
+    insert(:note, actor_uri: actor, inbox_uri: inbox)
+
+    Repo.insert!(%Delivery{
+      user_id: member.id,
+      inbox_uri: inbox,
+      activity_json: "{}",
+      attempts: 0,
+      next_attempt_at: DateTime.utc_now(:second)
+    })
+
+    Repo.insert!(%PostDelivery{
+      post_id: UUIDv7.generate(),
+      user_id: member.id,
+      inbox_uri: inbox,
+      object_uri: "https://vutuv.example/posts/#{System.unique_integer([:positive])}"
+    })
+
+    # A tag find names a server twice: the one that filed it, and the author's.
+    tag = insert(:tag)
+    external_post(tag, source: host, author_host: "relay.example")
+    external_post(tag, source: "relay.example", author_host: host)
+  end
+
+  defp hosts_left do
+    %{
+      followers: uri_hosts(Follower, :actor_uri),
+      remote_accounts: uri_hosts(RemoteAccount, :actor_uri),
+      notes: uri_hosts(Note, :actor_uri),
+      deliveries: uri_hosts(Delivery, :inbox_uri),
+      post_deliveries: uri_hosts(PostDelivery, :inbox_uri),
+      external_post_sources: find_hosts(:source, :author_host),
+      external_post_authors: find_hosts(:author_host, :source)
+    }
+  end
+
+  # The hosts `field` names on the finds whose `other` field is the relay.
+  defp find_hosts(field, other) do
+    ExternalPost
+    |> where([p], field(p, ^other) == "relay.example")
+    |> select([p], field(p, ^field))
+    |> Repo.all()
+    |> MapSet.new()
+  end
+
+  defp uri_hosts(schema, field) do
+    schema
+    |> Repo.all()
+    |> MapSet.new(&URI.parse(Map.fetch!(&1, field)).host)
   end
 
   describe "normalize_host/1" do
@@ -150,6 +215,42 @@ defmodule Vutuv.FediverseBlocklistTest do
 
       refute Repo.get(ExternalPost, alias_row.id)
       assert Repo.get(ExternalPost, lookalike.id)
+    end
+
+    # A block reaches the `www.` alias at every gate (issue #2174), so the purge
+    # must reach it in every table too, and never a name that merely shares
+    # letters with the blocked one. It runs one way, as the gate does.
+    test "takes the www. alias's rows from every table, and no lookalike's" do
+      member = federating_member()
+
+      stored =
+        ~w(spam.example www.spam.example www.www.spam.example other.spam.example
+           www.other.spam.example wwwspam.example spam.example.evil alias.example
+           www.alias.example www.www.alias.example)
+
+      Enum.each(stored, &store_everywhere(member, &1))
+
+      assert {:ok, {_blocked, purged}} =
+               Fediverse.block_instance(%{"host" => "spam.example"}, admin())
+
+      # Three spellings, one row each, and two finds per spelling.
+      assert Map.delete(purged, :cached_posts) == %{
+               followers: 3,
+               remote_accounts: 3,
+               notes: 3,
+               deliveries: 3,
+               post_deliveries: 3,
+               external_posts: 6
+             }
+
+      assert {:ok, {_blocked, %{followers: 2}}} =
+               Fediverse.block_instance(%{"host" => "www.alias.example"}, admin())
+
+      left =
+        MapSet.new(~w(other.spam.example www.other.spam.example wwwspam.example
+                      spam.example.evil alias.example))
+
+      for {table, hosts} <- hosts_left(), do: assert(hosts == left, "#{table}")
     end
 
     test "removes that server's followers and queued deliveries, and no other server's" do

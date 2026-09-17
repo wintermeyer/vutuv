@@ -5781,8 +5781,9 @@ defmodule Vutuv.Fediverse do
   end
 
   @doc """
-  Deletes everything stored from `host`: its remote followers, the accounts its
-  members hold that anybody here follows (and, through the cascade, those
+  Deletes everything stored from `host` and from its `www.` alias, which a
+  block covers too (`instance_blocked?/1`): its remote followers, the accounts
+  its members hold that anybody here follows (and, through the cascade, those
   follows), the replies its members wrote under vutuv posts, what a followed
   tag pulled from it or from its members elsewhere (issue #2127), the outbound
   deliveries still queued for it and the records of what was delivered there.
@@ -5790,18 +5791,20 @@ defmodule Vutuv.Fediverse do
   external_posts: n, notes: n, deliveries: n, post_deliveries: n}`.
   """
   def purge_instance(host) when is_binary(host) do
+    hosts = covered_hosts(host)
+
     # Whose follower tables are about to lose rows, asked while they still exist.
     followed_members =
       Repo.all(
         from(f in Follower,
-          where: uri_host(f.actor_uri) == ^host,
+          where: uri_host(f.actor_uri) in ^hosts,
           distinct: true,
           select: f.user_id
         )
       )
 
     {followers, _} =
-      Repo.delete_all(from(f in Follower, where: uri_host(f.actor_uri) == ^host))
+      Repo.delete_all(from(f in Follower, where: uri_host(f.actor_uri) in ^hosts))
 
     broadcast_remote_followers_changed(followed_members)
 
@@ -5815,7 +5818,7 @@ defmodule Vutuv.Fediverse do
       from(p in RemotePost,
         join: a in RemoteAccount,
         on: a.id == p.remote_account_id,
-        where: a.host == ^host
+        where: a.host in ^hosts
       )
 
     # Their pictures' files, and the avatars, before the rows cascade away
@@ -5823,7 +5826,7 @@ defmodule Vutuv.Fediverse do
     # The wipe hands back the post ids it read, which is also the tally.
     cached_posts = length(wipe_media(host_posts))
 
-    wipe_avatars(from(a in RemoteAccount, where: a.host == ^host))
+    wipe_avatars(from(a in RemoteAccount, where: a.host in ^hosts))
 
     # Which members are about to lose follows, asked while the rows still
     # exist. Named for the members it holds, not `followers` — that is already
@@ -5831,33 +5834,36 @@ defmodule Vutuv.Fediverse do
     # returned tally would silently become a list of member ids.
     follow_owners =
       remote_follow_user_ids(
-        from(a in RemoteAccount, where: a.host == ^host, select: %{id: a.id})
+        from(a in RemoteAccount, where: a.host in ^hosts, select: %{id: a.id})
       )
 
     {remote_accounts, _} =
-      Repo.delete_all(from(a in RemoteAccount, where: a.host == ^host))
+      Repo.delete_all(from(a in RemoteAccount, where: a.host in ^hosts))
 
     broadcast_remote_follows_changed(follow_owners)
 
     # A block is also a takedown: text that server's members wrote under our
     # members' posts goes with it (issue #1069), not just the follow rows.
     {notes, _} =
-      Repo.delete_all(from(n in Note, where: uri_host(n.actor_uri) == ^host))
+      Repo.delete_all(from(n in Note, where: uri_host(n.actor_uri) in ^hosts))
 
     {deliveries, _} =
-      Repo.delete_all(from(d in Delivery, where: uri_host(d.inbox_uri) == ^host))
+      Repo.delete_all(from(d in Delivery, where: uri_host(d.inbox_uri) in ^hosts))
 
     # A blocked server is not talked to again, so the record of what it received
     # (issue #1102) would only ever address a revocation nobody will deliver.
     {post_deliveries, _} =
-      Repo.delete_all(from(d in PostDelivery, where: uri_host(d.inbox_uri) == ^host))
+      Repo.delete_all(from(d in PostDelivery, where: uri_host(d.inbox_uri) in ^hosts))
 
     # What a followed tag pulled off that server, and what it pulled off other
     # servers that this one's members had written (issue #2127). Deleted rather
     # than left to the read-time filter: "a blocked server leaves nothing of
     # itself at rest" is this function's whole promise, and the filter is what
     # covers the rows a *later* block finds — not a reason to keep them.
-    external_posts = purge_external_posts(host)
+    {external_posts, _} =
+      Repo.delete_all(
+        from(p in ExternalPost, where: p.source in ^hosts or p.author_host in ^hosts)
+      )
 
     %{
       followers: followers,
@@ -5870,29 +5876,35 @@ defmodule Vutuv.Fediverse do
     }
   end
 
-  # An author at the host's `www.` alias is covered by the block (issue #2174),
-  # so those rows go too. SQL narrows to the host and its subdomains and
-  # `block_names/1` decides, so the purge cannot fold differently from the
-  # check that keeps new rows out.
-  defp purge_external_posts(host) do
+  # Every spelling a block on `host` covers that some table the purge empties
+  # holds: the host and its `www.` aliases (issue #2174). SQL narrows to the
+  # host and its subdomains and `block_names/1` decides, so the purge cannot
+  # fold differently from the gates that keep new rows out: `www.x` goes with a
+  # block on `x`, `other.x` and `wwwx` stay. Read before anything is deleted.
+  defp covered_hosts(host) do
     blocked = MapSet.new([host])
     subdomains = "%." <> host
 
-    ids =
-      from(p in ExternalPost,
-        where:
-          p.source == ^host or p.author_host == ^host or like(p.source, ^subdomains) or
-            like(p.author_host, ^subdomains),
-        select: %{id: p.id, source: p.source, author_host: p.author_host}
+    [
+      from(f in Follower, select: %{host: uri_host(f.actor_uri)}),
+      from(a in RemoteAccount, select: %{host: a.host}),
+      from(n in Note, select: %{host: uri_host(n.actor_uri)}),
+      from(d in Delivery, select: %{host: uri_host(d.inbox_uri)}),
+      from(d in PostDelivery, select: %{host: uri_host(d.inbox_uri)}),
+      from(p in ExternalPost, select: %{host: p.source}),
+      from(p in ExternalPost, select: %{host: p.author_host})
+    ]
+    |> Enum.flat_map(fn column ->
+      Repo.all(
+        from(h in subquery(column),
+          where: h.host == ^host or like(h.host, ^subdomains),
+          distinct: true,
+          select: h.host
+        )
       )
-      |> Repo.all()
-      |> Enum.filter(fn row ->
-        covered_by_block?(row.source, blocked) or covered_by_block?(row.author_host, blocked)
-      end)
-      |> Enum.map(& &1.id)
-
-    {deleted, _} = Repo.delete_all(from(p in ExternalPost, where: p.id in ^ids))
-    deleted
+    end)
+    |> Enum.uniq()
+    |> Enum.filter(&covered_by_block?(&1, blocked))
   end
 
   @doc """

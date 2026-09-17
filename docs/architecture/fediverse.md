@@ -610,7 +610,7 @@ every activity of a member it finds no key for, silently.
   document names is the sender's word, and a block on `www.X` must never reach
   a bare `X` somebody else may hold. Blocking is also a purge
   (`purge_instance/1`: that host's follower rows, its queued deliveries and the
-  records of what was delivered there) and
+  records of what was delivered there, its `www.` alias's too) and
   a mouth-shut: `deliver_due/0` drops a queued delivery to a blocked host, and
   since the follower rows are the delivery targets, the member's posts stop
   going there. Unblocking resurrects nothing. The **caps**
