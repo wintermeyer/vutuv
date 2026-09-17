@@ -5,8 +5,8 @@ defmodule VutuvWeb.AdsSeenLive do
 
   One entry per booked ad they saw, the most recently seen first, each the ad
   itself with when it was last seen and how often (`Vutuv.Ads.seen_ads/2`,
-  kept #{Vutuv.Ads.sighting_days()} days). A search over the ad text narrows
-  the list, and "Load more" pages through the rest. Login only: a visitor has
+  kept #{Vutuv.Ads.sighting_days()} days). A search over the title, the text
+  and the address narrows the list, and "Load more" pages through the rest. Login only: a visitor has
   no history, and the label sends them to the `/ads` offer page instead.
   """
 
@@ -129,7 +129,7 @@ defmodule VutuvWeb.AdsSeenLive do
 
       <div id="ads-seen" phx-update="stream" class="space-y-4">
         <article :for={{dom_id, sighting} <- @streams.sightings} id={dom_id}>
-          <AdComponents.ad_card id={"#{dom_id}-ad"} banner={{:ad, sighting.ad}}>
+          <AdComponents.ad_card id={"#{dom_id}-ad"} banner={{:ad, sighting.ad}} address={:head}>
             <:footer>
               <%!-- The `m-0` and `font-normal` undo the legacy `dt`/`dd` rules
                     in `components.css`. --%>

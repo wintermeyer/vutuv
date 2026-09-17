@@ -1,8 +1,8 @@
 defmodule VutuvWeb.Markdown.Cache do
   @moduledoc """
-  The memo in front of `VutuvWeb.Markdown.render_post/3`, `render_remote/1` and
-  `render_cached/1` — the Markdown-to-HTML pipeline every post body goes
-  through on its way to a card.
+  The memo in front of `VutuvWeb.Markdown.render_post/3` and `render_remote/1` —
+  the Markdown-to-HTML pipeline every post body goes through on its way to a
+  card.
 
   That pipeline is not cheap: escaping, autolinking, Earmark, HtmlSanitizeEx,
   code fences, mentions and hashtags. Measured on a copy of production

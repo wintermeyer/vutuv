@@ -8,7 +8,9 @@ defmodule Vutuv.AdsTest do
 
   @valid_attrs %{
     "day" => Date.to_iso8601(Date.add(Ads.today(), 7)),
-    "content" => "**Acme GmbH** sucht Elixir-Entwickler. https://acme.example",
+    "title" => "Acme sucht Leute",
+    "body" => "Elixir-Entwicklung in Mainz, gern auch remote.",
+    "url" => "https://www.acme.example/jobs/?utm_source=vutuv",
     "billing_name" => "Acme GmbH",
     "billing_street" => "Musterstraße 1",
     "billing_zip_code" => "10115",
@@ -37,7 +39,9 @@ defmodule Vutuv.AdsTest do
       assert email.text_body =~ "Musterstraße 1"
       assert email.text_body =~ "10115"
       assert email.text_body =~ "1.250,00"
-      assert email.text_body =~ @valid_attrs["content"]
+      assert email.text_body =~ @valid_attrs["title"]
+      assert email.text_body =~ @valid_attrs["body"]
+      assert email.text_body =~ @valid_attrs["url"]
       assert email.text_body =~ "@#{user.username}"
       assert email.subject =~ Calendar.strftime(ad.day, "%d.%m.%Y")
     end
@@ -84,10 +88,42 @@ defmodule Vutuv.AdsTest do
       flush_emails()
     end
 
-    test "rejects ad text longer than 2048 characters" do
-      attrs = Map.put(@valid_attrs, "content", String.duplicate("a", 2049))
+    test "caps the title at 30 characters and the text at 90" do
+      attrs = %{
+        @valid_attrs
+        | "title" => String.duplicate("ä", 31),
+          "body" => String.duplicate("ü", 91)
+      }
+
       assert {:error, changeset} = Ads.book_ad(booker(), attrs)
-      assert %{content: [_]} = errors_on(changeset)
+      assert %{title: [_], body: [_]} = errors_on(changeset)
+
+      attrs = %{
+        @valid_attrs
+        | "title" => String.duplicate("ä", 30),
+          "body" => String.duplicate("ü", 90)
+      }
+
+      assert {:ok, _ad} = Ads.book_ad(booker(), attrs)
+      flush_emails()
+    end
+
+    test "requires a title, a text and a link, and trims them" do
+      attrs = %{@valid_attrs | "title" => "  ", "body" => "", "url" => " "}
+      assert {:error, changeset} = Ads.book_ad(booker(), attrs)
+      assert %{title: [_], body: [_], url: [_]} = errors_on(changeset)
+
+      attrs = %{@valid_attrs | "title" => "  Acme  ", "url" => " https://acme.example "}
+      assert {:ok, ad} = Ads.book_ad(booker(), attrs)
+      assert {ad.title, ad.url} == {"Acme", "https://acme.example"}
+      flush_emails()
+    end
+
+    test "the link must be a web address" do
+      for url <- ["javascript:alert(1)", "ftp://acme.example", "acme", "https://localhost/x"] do
+        assert {:error, changeset} = Ads.book_ad(booker(), %{@valid_attrs | "url" => url})
+        assert %{url: [_]} = errors_on(changeset), "#{url} was accepted"
+      end
     end
 
     test "requires the billing address" do
@@ -136,6 +172,24 @@ defmodule Vutuv.AdsTest do
     test "an unapproved ad never runs: the house ad serves instead" do
       insert(:ad, day: Ads.today(), approved_at: nil)
       assert Ads.current_banner() == :house
+    end
+
+    test "an ad booked in the old Markdown format, with no title, never runs" do
+      insert(:ad, day: Ads.today(), title: nil, body: nil, url: nil)
+      assert Ads.current_banner() == :house
+    end
+  end
+
+  describe "Ad.display_url/1" do
+    test "is the host without www and the path, never the query or the fragment" do
+      assert Ad.display_url("https://www.Acme.example/jobs/?utm_source=vutuv#top") ==
+               "acme.example/jobs"
+
+      assert Ad.display_url("http://acme.example") == "acme.example"
+      assert Ad.display_url("https://acme.example/") == "acme.example"
+
+      assert Ad.display_url("https://shop.acme.example/de/angebot") ==
+               "shop.acme.example/de/angebot"
     end
   end
 
@@ -258,20 +312,31 @@ defmodule Vutuv.AdsTest do
 
       assert {[first, second], false} = Ads.seen_ads(user)
 
-      assert {first.id, first.times_seen, first.ad.content} ==
-               {newer.id, 3, newer.ad.content}
+      assert {first.id, first.times_seen, first.ad.title} ==
+               {newer.id, 3, newer.ad.title}
 
       assert second.id == older.id
     end
 
-    test "searches the ad text, ignoring case and treating wildcards literally" do
+    test "searches title, text and link, ignoring case and treating wildcards literally" do
       user = insert_activated_user()
-      match = insert_ad_sighting(user, ~D[2026-09-10], content: "Wann sind **Ferien** 2027?")
-      insert_ad_sighting(user, ~D[2026-09-11], content: "Backend-Entwicklung in Mainz")
-      insert_ad_sighting(user, ~D[2026-09-12], content: "100% Rabatt")
 
-      assert {[%{id: id}], false} = Ads.seen_ads(user, query: "ferien")
-      assert id == match.id
+      holidays =
+        insert_ad_sighting(user, ~D[2026-09-10],
+          title: "Wann sind Ferien 2027?",
+          url: "https://www.mehr-schulferien.de/?ref=newsletter#top"
+        )
+
+      jobs = insert_ad_sighting(user, ~D[2026-09-11], body: "Backend-Entwicklung in Mainz")
+      insert_ad_sighting(user, ~D[2026-09-12], title: "100% Rabatt")
+
+      holidays_id = holidays.id
+      jobs_id = jobs.id
+      assert {[%{id: ^holidays_id}], false} = Ads.seen_ads(user, query: "FERIEN")
+      assert {[%{id: ^holidays_id}], false} = Ads.seen_ads(user, query: "schulferien.de")
+      assert {[%{id: ^jobs_id}], false} = Ads.seen_ads(user, query: "mainz")
+      # The query and fragment are not shown, so they are not searched either.
+      assert {[], false} = Ads.seen_ads(user, query: "newsletter")
       assert {[_hit], false} = Ads.seen_ads(user, query: "100%")
       assert {[], false} = Ads.seen_ads(user, query: "0_ R")
     end

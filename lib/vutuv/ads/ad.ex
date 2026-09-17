@@ -2,22 +2,28 @@ defmodule Vutuv.Ads.Ad do
   @moduledoc """
   A booked text ad: one per calendar day (Europe/Berlin), paid by invoice.
 
-  `content` is Markdown (rendered through `VutuvWeb.Markdown.render/1`, never
-  raw) and capped at 2048 characters. The billing fields are the invoice
-  address the booker entered; together with `price_cents` they make the row
-  the durable record of the order (the invoice itself is sent manually).
+  The ad itself is plain text in the style of classic text ads: a `title` of
+  up to 30 characters that links to `url`, and a `body` sentence of up to
+  90. Readers see where the link goes as `display_url/1`. The billing
+  fields are the invoice address the booker entered; together with
+  `price_cents` they make the row the durable record of the order (the
+  invoice itself is sent manually).
   """
 
   use VutuvWeb, :model
   use Gettext, backend: VutuvWeb.Gettext
 
-  alias Vutuv.Mentions
+  alias Vutuv.ChangesetHelpers
 
-  @content_max_length 2048
+  @title_max_length 30
+  @body_max_length 90
+  @url_max_length 2048
 
   schema "ads" do
     field(:day, :date)
-    field(:content, :string)
+    field(:title, :string)
+    field(:body, :string)
+    field(:url, :string)
     field(:price_cents, :integer)
 
     field(:billing_name, :string)
@@ -37,7 +43,16 @@ defmodule Vutuv.Ads.Ad do
     timestamps()
   end
 
-  def content_max_length, do: @content_max_length
+  def title_max_length, do: @title_max_length
+  def body_max_length, do: @body_max_length
+
+  @doc """
+  Where an ad's link goes, as a reader checks it: the host without `www.` and
+  the path, never the query or the fragment a booker's tracking rides on
+  (`Vutuv.WebVerification.normalize_url/1`). Empty for an ad booked in the old
+  Markdown format, which has no link.
+  """
+  def display_url(url), do: Vutuv.WebVerification.normalize_url(url)
 
   @doc """
   The booking changeset. `user_id` and `price_cents` are set programmatically
@@ -47,7 +62,9 @@ defmodule Vutuv.Ads.Ad do
     model
     |> cast(params, [
       :day,
-      :content,
+      :title,
+      :body,
+      :url,
       :billing_name,
       :billing_company,
       :billing_street,
@@ -56,17 +73,22 @@ defmodule Vutuv.Ads.Ad do
       :billing_country,
       :vat_id
     ])
+    |> ChangesetHelpers.trim_fields([:title, :body, :url])
     |> validate_required([
       :day,
-      :content,
+      :title,
+      :body,
+      :url,
       :billing_name,
       :billing_street,
       :billing_zip_code,
       :billing_city,
       :billing_country
     ])
-    |> validate_length(:content, max: @content_max_length)
-    |> Mentions.validate_mentions_exist(:content)
+    |> validate_length(:title, max: @title_max_length)
+    |> validate_length(:body, max: @body_max_length)
+    |> validate_length(:url, max: @url_max_length)
+    |> ChangesetHelpers.validate_url(:url)
     # The billing fields are free-text varchar(255) columns: an oversized value
     # must be a changeset error, never a raised Postgres 22001 on booking.
     |> validate_length(:billing_name, max: 255)

@@ -9,13 +9,15 @@ defmodule VutuvWeb.AdComponents do
 
   alias Phoenix.LiveView.JS
   alias Vutuv.Ads
+  alias Vutuv.Ads.Ad
   alias VutuvWeb.AdServing
 
   @doc """
   The live card in one of its two places on a page, or nothing while the page
   has no ad. `ad` is the page's `@ad_slot` (see `VutuvWeb.Live.AdSlot`). A page
   carries both places: `:rail` leads the desktop rail, `:inline` stands near
-  the top of the one column a phone has. `viewer` is the page's
+  the top of the one column a phone has, where the address moves up into the
+  label's line to keep the card short. `viewer` is the page's
   `@current_user`, which picks where the card's label leads.
   """
   attr(:ad, :map, required: true)
@@ -31,13 +33,34 @@ defmodule VutuvWeb.AdComponents do
       banner={@ad.banner}
       key={AdServing.key(@ad)}
       label={if @viewer, do: :seen, else: :offer}
+      address={if @placement == :inline, do: :head, else: :foot}
     />
     """
   end
 
   @doc """
-  The ad card: the unmistakable label, then the booked ad's Markdown
-  (`{:ad, ad}`) or the house ad (`:house`) that sells the slot.
+  An ad card on the page-canvas grey, the way it will stand on a page: the
+  booking preview, a member's bookings and the admin review show it so. It is
+  never the live card, so it has no ✕ and no countdown.
+  """
+  attr(:id, :string, required: true)
+  attr(:banner, :any, required: true)
+  attr(:class, :any, default: nil)
+
+  def ad_preview(assigns) do
+    ~H"""
+    <div class={["rounded-xl bg-slate-100 px-2 py-4 dark:bg-slate-950", @class]}>
+      <.ad_card id={@id} banner={@banner} />
+    </div>
+    """
+  end
+
+  @doc """
+  The ad card: the unmistakable label, then the title as the link, the
+  sentence under it and the address the link leads to, either of the booked
+  ad (`{:ad, ad}`) or of the house ad (`:house`) that sells the slot.
+  `address` puts that address under the sentence (`:foot`) or beside the
+  label (`:head`).
 
   A `key` (`VutuvWeb.AdServing.key/1`) makes it the live card: the ✕
   (`"dismiss-ad"`) inside a ring that empties while the card is in view, the
@@ -51,10 +74,13 @@ defmodule VutuvWeb.AdComponents do
   attr(:banner, :any, required: true)
   attr(:key, :string, default: nil)
   attr(:label, :atom, default: nil, values: [nil, :seen, :offer])
+  attr(:address, :atom, default: :foot, values: [:head, :foot])
   attr(:class, :any, default: nil)
   slot(:footer)
 
   def ad_card(assigns) do
+    assigns = assign(assigns, :text, ad_text(assigns.banner))
+
     ~H"""
     <aside
       id={@id}
@@ -75,12 +101,15 @@ defmodule VutuvWeb.AdComponents do
           :if={@label}
           href={label_href(@label)}
           title={label_title(@label)}
-          class="relative rounded border border-slate-300 px-1 text-[10px] font-semibold uppercase tracking-wide text-slate-600 after:absolute after:-inset-3 hover:border-slate-500 hover:text-slate-900 dark:border-slate-600 dark:text-slate-400 dark:hover:border-slate-400 dark:hover:text-slate-100"
+          class="relative shrink-0 rounded border border-slate-300 px-1 text-[10px] font-semibold uppercase tracking-wide text-slate-600 after:absolute after:-inset-3 hover:border-slate-500 hover:text-slate-900 dark:border-slate-600 dark:text-slate-400 dark:hover:border-slate-400 dark:hover:text-slate-100"
         >{gettext("Ad")}</.link>
         <span
           :if={!@label}
-          class="rounded border border-slate-300 px-1 text-[10px] font-semibold uppercase tracking-wide text-slate-600 dark:border-slate-600 dark:text-slate-400"
+          class="shrink-0 rounded border border-slate-300 px-1 text-[10px] font-semibold uppercase tracking-wide text-slate-600 dark:border-slate-600 dark:text-slate-400"
         >{gettext("Ad")}</span>
+        <span :if={@address == :head} class="min-w-0 truncate text-xs text-slate-600 dark:text-slate-400">
+          {@text.address}
+        </span>
         <button
           :if={@key}
           type="button"
@@ -118,23 +147,45 @@ defmodule VutuvWeb.AdComponents do
           <span aria-hidden="true">✕</span>
         </button>
       </div>
-      <%= case @banner do %>
-        <% {:ad, ad} -> %>
-          <.markdown_prose text={ad.content} class="mt-2 min-w-0 text-sm text-slate-700 dark:text-slate-300" />
-        <% :house -> %>
-          <p class="mb-0 mt-2 text-sm text-slate-700 dark:text-slate-300">
-            {gettext("This spot is free today. One day, one ad, every visitor.")}
-            <.link
-              href={~p"/ads"}
-              class="font-semibold text-brand-600 hover:text-brand-700 dark:text-brand-400 dark:hover:text-brand-300"
-            >
-              {gettext("Book your ad")}
-            </.link>
-          </p>
-      <% end %>
+      <.link
+        href={@text.href}
+        target={@text.target}
+        rel={@text.rel}
+        class="mt-2 block break-words text-base font-semibold leading-snug text-brand-600 hover:text-brand-700 hover:underline dark:text-brand-400 dark:hover:text-brand-300"
+      >
+        {@text.title}
+      </.link>
+      <p class="mb-0 mt-0.5 break-words text-sm text-slate-700 dark:text-slate-300">{@text.body}</p>
+      <p :if={@address == :foot} class="mb-0 mt-1 truncate text-xs text-slate-600 dark:text-slate-400">
+        {@text.address}
+      </p>
       {render_slot(@footer)}
     </aside>
     """
+  end
+
+  # What the card says, for a booked ad and for the house ad. A booked link
+  # leaves in a new tab and says it was paid for; the house ad's stays here.
+  defp ad_text({:ad, %Ad{} = ad}) do
+    %{
+      title: ad.title,
+      body: ad.body,
+      href: ad.url,
+      address: Ad.display_url(ad.url),
+      target: "_blank",
+      rel: "sponsored noopener"
+    }
+  end
+
+  defp ad_text(:house) do
+    %{
+      title: gettext("Book your ad"),
+      body: gettext("This spot is free today. One day, one ad, every visitor."),
+      href: ~p"/ads",
+      address: Ad.display_url(url(~p"/ads")),
+      target: nil,
+      rel: nil
+    }
   end
 
   defp label_href(:seen), do: ~p"/system/ads/seen"

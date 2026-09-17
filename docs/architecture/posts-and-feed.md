@@ -177,7 +177,7 @@ nothing marks — it falls out, no extra gate.
 A fence that names its language (` ```elixir `) gets that language printed in
 the corner of the block, and its comments, strings, numbers and keywords in
 colour. Both happen **on the server**, in `VutuvWeb.CodeHighlight`, which runs
-at the end of the `VutuvWeb.Markdown` pipeline (posts, messages, ads, feeds) and
+at the end of the `VutuvWeb.Markdown` pipeline (posts, messages, feeds) and
 in `VutuvWeb.DevDocMarkdown` (the `/developers` docs, legal pages). The page
 ships **no** highlighting JavaScript and no new dependency: the readers who
 never see a code block download nothing extra, and the browser side is the

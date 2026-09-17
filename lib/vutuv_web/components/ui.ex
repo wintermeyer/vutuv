@@ -42,6 +42,35 @@ defmodule VutuvWeb.UI do
   alias VutuvWeb.Markdown
 
   @doc """
+  The "N/max characters" readout beside a length-capped field, which the
+  `[data-char-counter]` enhancement in `app.js` keeps current while the member
+  types: a `data-char-counter` wrapper holds it and the field, which carries
+  `data-char-count-input`. The readout names the cap (`data-max`), and `value`
+  is what the field holds, so the number is right before any script runs; the
+  server's `validate_length` stays the rule.
+  """
+  attr(:value, :any, required: true)
+  attr(:max, :integer, required: true)
+
+  def char_count(assigns) do
+    assigns = assign(assigns, :used, String.length(to_string(assigns.value)))
+
+    ~H"""
+    <p
+      data-char-count-readout
+      data-max={@max}
+      data-over={to_string(@used > @max)}
+      aria-live="polite"
+      class="shrink-0 whitespace-nowrap text-sm text-slate-600 data-[over=true]:font-medium data-[over=true]:text-red-600 dark:text-slate-400 dark:data-[over=true]:text-red-400"
+    >
+      <span data-char-count>{@used}</span>/{@max} {gettext("characters")}
+      <span data-char-ok aria-hidden="true" class="text-emerald-600 dark:text-emerald-400">✓</span>
+      <span data-char-over aria-hidden="true" class="hidden">⚠</span>
+    </p>
+    """
+  end
+
+  @doc """
   Render a user-written Markdown prose field — a work-experience or education
   `description` (issue #905) — as sanitized HTML in the Direction A `.markdown`
   body recipe. It runs through `VutuvWeb.Markdown.render/1`, so a description
@@ -56,7 +85,7 @@ defmodule VutuvWeb.UI do
 
   def markdown_prose(assigns) do
     ~H"""
-    <div class={["markdown markdown--post", @class]}>{Markdown.render_cached(@text)}</div>
+    <div class={["markdown markdown--post", @class]}>{Markdown.render(@text)}</div>
     """
   end
 

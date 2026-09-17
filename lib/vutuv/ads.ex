@@ -288,7 +288,7 @@ defmodule Vutuv.Ads do
   @doc """
   A member's seen ads for their history page, as `{rows, more?}`: sightings
   with the ad preloaded, the most recently seen first. Options: `query`
-  (matched against the ad text), `limit` (#{@seen_page}) and `after` (the
+  (matched against the title, the text and the link without its query), `limit` (#{@seen_page}) and `after` (the
   `last_seen_at` and `id` of the last row of the page before).
   """
   def seen_ads(%User{} = user, opts \\ []) do
@@ -315,8 +315,22 @@ defmodule Vutuv.Ads do
     query = from(s in Sighting, join: a in assoc(s, :ad), as: :ad, where: s.user_id == ^user.id)
 
     case SearchText.normalize_search(text) do
-      nil -> query
-      term -> from([ad: a] in query, where: ilike(a.content, ^SearchText.contains(term)))
+      nil ->
+        query
+
+      term ->
+        pattern = SearchText.contains(term)
+
+        # The link is matched as the card shows it, without query or fragment
+        # (`chr(63)` is `?`, which a fragment string cannot hold).
+        from([ad: a] in query,
+          where:
+            ilike(a.title, ^pattern) or ilike(a.body, ^pattern) or
+              ilike(
+                fragment("split_part(split_part(?, chr(63), 1), chr(35), 1)", a.url),
+                ^pattern
+              )
+        )
     end
   end
 
@@ -360,8 +374,11 @@ defmodule Vutuv.Ads do
     UUIDv7.with_cast(id, fn id -> Repo.one(from(a in serving_today(), where: a.id == ^id)) end)
   end
 
-  # What may serve: today's ad, once an admin approved it.
-  defp serving_today, do: from(a in Ad, where: a.day == ^today() and not is_nil(a.approved_at))
+  # What may serve: today's ad, once an admin approved it. An ad booked in the
+  # old Markdown format has no title and no longer serves.
+  defp serving_today do
+    from(a in Ad, where: a.day == ^today() and not is_nil(a.approved_at) and not is_nil(a.title))
+  end
 
   @doc "Today as a German calendar day (Europe/Berlin)."
   defdelegate today, to: Vutuv.BerlinTime

@@ -64,7 +64,6 @@ defmodule Vutuv.Mentions do
   alias Ecto.Changeset
   alias Vutuv.Accounts
   alias Vutuv.Accounts.User
-  alias Vutuv.Ads.Ad
   alias Vutuv.Chat.Message
   alias Vutuv.Fediverse
   alias Vutuv.Handles
@@ -159,8 +158,7 @@ defmodule Vutuv.Mentions do
     {User, :headline},
     {WorkExperience, :description},
     {Education, :description},
-    {JobPosting, :description},
-    {Ad, :content}
+    {JobPosting, :description}
   ]
 
   # How many distinct local accounts one post may name. Each mention is a
@@ -1081,7 +1079,6 @@ defmodule Vutuv.Mentions do
   defp surface_key(WorkExperience), do: :work_experiences
   defp surface_key(Education), do: :educations
   defp surface_key(JobPosting), do: :job_postings
-  defp surface_key(Ad), do: :ads
 
   defp normalize(value) when is_binary(value), do: Handles.normalize(value)
 

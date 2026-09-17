@@ -17,14 +17,15 @@ defmodule VutuvWeb.Admin.AdControllerTest do
   end
 
   describe "index" do
-    test "shows the pending ad with its content, billing data and booker", %{conn: conn} do
+    test "shows the pending ad with its text, link, billing data and booker", %{conn: conn} do
       booker = insert_activated_user(first_name: "Bea", last_name: "Bucher")
 
       ad =
         insert(:ad,
           approved_at: nil,
           user: booker,
-          content: "**Acme** sucht Leute",
+          title: "Acme sucht Leute",
+          url: "https://www.acme.example/jobs?ref=vutuv",
           billing_name: "Acme GmbH"
         )
 
@@ -32,9 +33,10 @@ defmodule VutuvWeb.Admin.AdControllerTest do
       html = conn |> get(~p"/admin/ads") |> html_response(200)
 
       assert html =~ "ad-#{ad.id}"
-      # The ad shows rendered AND as its original Markdown source.
-      assert html =~ "<strong>Acme</strong>"
-      assert html =~ "**Acme** sucht Leute"
+      # The ad shows as visitors see it, and its link in full: the address
+      # under the title drops the query, the reviewer must not.
+      assert html =~ "Acme sucht Leute"
+      assert html =~ "https://www.acme.example/jobs?ref=vutuv"
       assert html =~ "Acme GmbH"
       assert html =~ "@#{booker.username}"
       # The pending ad offers the approve action and links its detail page.
@@ -54,7 +56,7 @@ defmodule VutuvWeb.Admin.AdControllerTest do
   end
 
   describe "show" do
-    test "renders one ad in full: rendered HTML, Markdown source, billing, approval", %{
+    test "renders one ad in full: the card, its link, billing, approval", %{
       conn: conn
     } do
       booker = insert_activated_user(first_name: "Bea", last_name: "Bucher")
@@ -64,7 +66,8 @@ defmodule VutuvWeb.Admin.AdControllerTest do
         insert(:ad,
           user: booker,
           approved_by: admin_user,
-          content: "**Acme** sucht Leute",
+          title: "Acme sucht Leute",
+          url: "https://www.acme.example/jobs?ref=vutuv",
           billing_name: "Acme GmbH",
           vat_id: "DE123456789"
         )
@@ -72,8 +75,8 @@ defmodule VutuvWeb.Admin.AdControllerTest do
       {conn, _admin} = create_and_login_admin(conn)
       html = conn |> get(~p"/admin/ads/#{ad}") |> html_response(200)
 
-      assert html =~ "<strong>Acme</strong>"
-      assert html =~ "**Acme** sucht Leute"
+      assert html =~ "Acme sucht Leute"
+      assert html =~ "https://www.acme.example/jobs?ref=vutuv"
       assert html =~ "Acme GmbH"
       assert html =~ "DE123456789"
       assert html =~ "@#{booker.username}"

@@ -194,7 +194,6 @@ Every field whose stored `@handle` linkifies is one `{schema, field}` entry in
 | `work_experiences` | `description` |
 | `educations` | `description` |
 | `job_postings` | `description` |
-| `ads` | `content` |
 
 ## The account card behind a remote handle
 
@@ -349,7 +348,7 @@ like any other body error.
   post is not held hostage by a cap that did not exist when it was written, and
   a rename rewrite (which bypasses changesets) never trips it.
 - Posts only. A DM already goes to one recipient, and the other mention
-  surfaces (headline, descriptions, ads) notify nobody.
+  surfaces (headline, descriptions) notify nobody.
 
 ## Availability (anti-hijack)
 

@@ -6,9 +6,9 @@ defmodule VutuvWeb.Admin.AdHTML do
 
   @doc """
   The review body an ad shares between the dashboard card and its detail
-  page: booker, the ad rendered exactly as visitors would see it, the
-  original Markdown source, billing data and price. Reviewing both renderings
-  matters - the Markdown source is what was bought, the HTML is what runs.
+  page: booker, the ad as visitors will see it, its link in full, billing data
+  and price. The full link matters: the card shows the address without its
+  query, and the reviewer has to see where the click really goes.
   """
   attr(:ad, Vutuv.Ads.Ad, required: true)
 
@@ -30,14 +30,12 @@ defmodule VutuvWeb.Admin.AdHTML do
     <p class="mt-3 text-xs font-semibold uppercase tracking-wide text-slate-500 dark:text-slate-400">
       {gettext("Preview (as visitors see it)")}
     </p>
-    <div class="markdown mt-1 rounded-lg bg-slate-50 p-3 text-sm text-slate-700 dark:bg-slate-800/60 dark:text-slate-300">
-      {VutuvWeb.Markdown.render(@ad.content)}
-    </div>
+    <VutuvWeb.AdComponents.ad_preview id={"admin-ad-#{@ad.id}-card"} banner={{:ad, @ad}} class="mt-1" />
 
     <p class="mt-3 text-xs font-semibold uppercase tracking-wide text-slate-500 dark:text-slate-400">
-      {gettext("Markdown source")}
+      {gettext("Link")}
     </p>
-    <pre class="mt-1 overflow-x-auto whitespace-pre-wrap rounded-lg bg-slate-50 p-3 font-mono text-xs text-slate-700 dark:bg-slate-800/60 dark:text-slate-300">{@ad.content}</pre>
+    <p class="mt-1 break-all font-mono text-xs text-slate-700 dark:text-slate-300">{@ad.url}</p>
 
     <dl class="mt-3 grid gap-x-6 gap-y-1 text-sm sm:grid-cols-2">
       <div>

@@ -20,8 +20,10 @@ defmodule VutuvWeb.AgentDocs.AdsDoc do
       gettext(
         "At most one ad an hour per visitor, gone again after two minutes. Whoever closes it sees no more ads that day."
       ),
-      gettext("Text only: Markdown, up to %{max} characters, always clearly labeled as an ad.",
-        max: Ad.content_max_length()
+      gettext(
+        "Text only: a title of up to %{title} characters, one sentence of up to %{body} and a link, always clearly labeled as an ad.",
+        title: Ad.title_max_length(),
+        body: Ad.body_max_length()
       ),
       gettext("Ads must be family-friendly and follow the community guidelines."),
       gettext(

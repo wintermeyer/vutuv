@@ -13,7 +13,9 @@ defmodule VutuvWeb.AdControllerTest do
   defp booking_params(day \\ Date.add(Ads.today(), 14)) do
     %{
       "day" => Date.to_iso8601(day),
-      "content" => "**Acme GmbH** sucht Elixir-Entwickler.",
+      "title" => "Acme GmbH sucht Leute",
+      "body" => "Elixir-Entwicklung in Mainz, gern auch remote.",
+      "url" => "https://www.acme.example/jobs",
       "billing_name" => "Acme GmbH",
       "billing_company" => "",
       "billing_street" => "Musterstraße 1",
@@ -29,7 +31,7 @@ defmodule VutuvWeb.AdControllerTest do
       html = conn |> get(~p"/ads") |> html_response(200)
 
       assert html =~ "1,250"
-      assert html =~ "2048"
+      assert html =~ "a title of up to 30 characters"
       assert html =~ ~p"/ads/new"
     end
 
@@ -48,7 +50,14 @@ defmodule VutuvWeb.AdControllerTest do
       # (community_guidelines_url) must also reach Markdown and text — those two
       # used to silently drop it.
       for {format, body} <- rendered,
-          fact <- ["1,250", "2048", "family-friendly", "/community", next_day, window_end] do
+          fact <- [
+            "1,250",
+            "a title of up to 30 characters",
+            "family-friendly",
+            "/community",
+            next_day,
+            window_end
+          ] do
         assert body =~ fact,
                "#{inspect(fact)} is missing from the #{format} version — " <>
                  "HTML page and agent doc have drifted apart (see VutuvWeb.AgentDocs)"
@@ -69,6 +78,43 @@ defmodule VutuvWeb.AdControllerTest do
       assert html =~ "id=\"ad-form\""
       assert html =~ "billing_name"
       assert html =~ "1,250"
+    end
+
+    test "asks for a title, a sentence and a link, with live counters", %{conn: conn} do
+      {conn, _user} = create_and_login_user(conn)
+      html = conn |> get(~p"/ads/new") |> html_response(200)
+
+      assert html =~ ~s(name="ad[title]")
+      assert html =~ ~s(name="ad[body]")
+
+      assert html =~
+               ~r{<input[^>]*type="url"[^>]*name="ad\[url\]"|<input[^>]*name="ad\[url\]"[^>]*type="url"}
+
+      # Each counter sits in the wrapper app.js wires, beside its field.
+      assert length(elements(html, "[data-char-counter] [data-char-count-input]")) == 2
+      assert length(elements(html, "[data-char-counter] [data-char-count-readout]")) == 2
+      assert html =~ ~s(data-max="30")
+      assert html =~ ~s(data-max="90")
+      refute html =~ "Markdown"
+    end
+
+    test "speaks German to a German reader", %{conn: conn} do
+      {conn, _user} = create_and_login_user(conn)
+      conn = conn |> recycle() |> put_req_header("accept-language", "de-DE,de")
+
+      html = conn |> get(~p"/ads/new") |> html_response(200)
+      assert html =~ "Erscheint fett als Link."
+      assert html =~ "Ein Satz unter dem Titel, reiner Text."
+      assert html =~ "Wohin der Titel führt."
+
+      html =
+        build_conn()
+        |> put_req_header("accept-language", "de-DE,de")
+        |> get(~p"/ads")
+        |> html_response(200)
+
+      assert html =~
+               "Nur Text: ein Titel mit bis zu 30 Zeichen, ein Satz mit bis zu 90 und ein Link"
     end
 
     test "the availability calendar offers free days and marks booked ones", %{conn: conn} do
@@ -120,8 +166,13 @@ defmodule VutuvWeb.AdControllerTest do
       conn = post(conn, ~p"/ads/preview", %{"ad" => params})
       html = html_response(conn, 200)
 
-      # The rendered ad with its mandatory label...
-      assert html =~ "<strong>Acme GmbH</strong>"
+      # The rendered ad with its mandatory label: the title links to the
+      # booked page, the address under it is what a reader can check.
+      assert html =~
+               ~r{<a[^>]*href="https://www.acme.example/jobs"[^>]*>\s*Acme GmbH sucht Leute\s*</a>}
+
+      assert html =~ "Elixir-Entwicklung in Mainz, gern auch remote."
+      assert html =~ "acme.example/jobs"
       assert html =~ ">Ad</span>"
       # ...but none of the live card's controls: no auto-hide hook and no
       # dismiss button (the preview must not vanish under the buyer or close
@@ -135,7 +186,9 @@ defmodule VutuvWeb.AdControllerTest do
       assert html =~ ~s(action="/ads") or html =~ ~s(action="#{~p"/ads"}")
       assert html =~ ~s(formaction="/ads/new")
       # The params ride along as hidden fields for the confirm POST.
-      assert html =~ ~s(name="ad[content]")
+      assert html =~ ~s(name="ad[title]")
+      assert html =~ ~s(name="ad[body]")
+      assert html =~ ~s(name="ad[url]")
       assert html =~ ~s(name="ad[billing_name]")
       # Nothing is booked yet.
       assert Repo.aggregate(Ads.Ad, :count) == 0
@@ -173,7 +226,9 @@ defmodule VutuvWeb.AdControllerTest do
       html = html_response(conn, 200)
 
       assert html =~ "id=\"ad-form\""
-      assert html =~ params["content"]
+      assert html =~ params["title"]
+      assert html =~ params["body"]
+      assert html =~ params["url"]
       assert html =~ "Acme GmbH"
     end
   end
@@ -185,10 +240,10 @@ defmodule VutuvWeb.AdControllerTest do
     end
 
     test "lists only my bookings, with their approval status", %{conn: conn} do
-      insert(:ad, day: Date.add(Ads.today(), 30), content: "Somebody else's ad")
+      insert(:ad, day: Date.add(Ads.today(), 30), title: "Somebody else's ad")
       {conn, user} = create_and_login_user(conn)
 
-      pending = insert(:ad, approved_at: nil, user: user, content: "**Meine** Anzeige")
+      pending = insert(:ad, approved_at: nil, user: user, title: "Meine Anzeige")
       approved = insert(:ad, day: Date.add(Ads.today(), 9), user: user)
 
       html = conn |> get(~p"/ads/bookings") |> html_response(200)
@@ -196,7 +251,7 @@ defmodule VutuvWeb.AdControllerTest do
       assert html =~ "booking-#{pending.id}"
       assert html =~ "booking-#{approved.id}"
       refute html =~ "Somebody else"
-      assert html =~ "<strong>Meine</strong>"
+      assert html =~ "Meine Anzeige"
       # Both status labels show up (pending review vs. approved).
       assert html =~ "Waiting for approval"
       assert html =~ "Approved"
@@ -232,7 +287,9 @@ defmodule VutuvWeb.AdControllerTest do
 
       assert_received {:email, email}
       assert email.to == [{"Stefan Wintermeyer", "sw@wintermeyer-consulting.de"}]
-      assert email.text_body =~ params["content"]
+      assert email.text_body =~ params["title"]
+      assert email.text_body =~ params["body"]
+      assert email.text_body =~ params["url"]
       assert email.text_body =~ "Acme GmbH"
     end
 

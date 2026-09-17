@@ -12,12 +12,12 @@
   <.email_p>
     <span :for={line <- String.split(@billing_address, "\n")}>{line}<br /></span>
   </.email_p>
-  <.email_p>
-    <strong>Anzeigentext</strong> (Markdown, {String.length(@ad.content)} Zeichen)
-  </.email_p>
-  <.email_p>
-    <span :for={line <- String.split(@ad.content, "\n")}>{line}<br /></span>
-  </.email_p>
+  <.email_p><strong>Anzeige</strong></.email_p>
+  <.email_panel>
+    <.email_row label="Titel">{@ad.title}</.email_row>
+    <.email_row label="Text">{@ad.body}</.email_row>
+    <.email_row label="Link">{@ad.url}</.email_row>
+  </.email_panel>
   <.email_p>
     Die Anzeige ist noch NICHT freigeschaltet. Bitte prüfen (familienfreundlich?) und freischalten:
   </.email_p>

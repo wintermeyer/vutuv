@@ -93,19 +93,6 @@ defmodule VutuvWeb.Markdown do
   def render(_), do: Phoenix.HTML.raw("")
 
   @doc """
-  `render/1` through `VutuvWeb.Markdown.Cache`, for short prose that many
-  cards draw again and again: the day's ad on every profile and feed, a CV
-  entry's description. Long one-off documents keep `render/1`.
-  """
-  def render_cached(text) when is_binary(text) do
-    {:prose, text}
-    |> Cache.render(fn -> text |> render() |> Phoenix.HTML.safe_to_string() end)
-    |> Phoenix.HTML.raw()
-  end
-
-  def render_cached(text), do: render(text)
-
-  @doc """
   Render a post's Markdown (`Phoenix.HTML.safe()`).
 
   Same pipeline as `render/1`, plus inline images: `![alt](url)` renders as

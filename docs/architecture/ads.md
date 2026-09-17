@@ -2,7 +2,12 @@
 
 One discreet, text-only ad per calendar day (Europe/Berlin via the fixed EU DST
 rule, no tz dependency) in the style of classic text ads, always labeled
-"Ad"/"Anzeige".
+"Ad"/"Anzeige": a title of up to 30 characters that links to the booked page
+(new tab, `rel="sponsored"`), one plain sentence of up to 90, and the address
+the link goes to (`Vutuv.Ads.Ad.display_url/1`: host without `www.` plus path,
+never the query). No Markdown, so no mentions or hashtags either. An ad booked
+in the Markdown format before that has no title and never serves; its
+`content` column is nullable and goes in a later deploy.
 
 ## Where it shows
 
@@ -65,7 +70,7 @@ server.
 The card's "Ad" label is a link. A member lands on **`/system/ads/seen`**
 (`VutuvWeb.AdsSeenLive`, login only, noindex, 404 while the system is off):
 the ads they saw, the most recently seen first, each with when it was last
-seen and how often, a search over the ad text and "Load more" in pages of 20
+seen and how often, a search over title, text and address, and "Load more" in pages of 20
 (`Vutuv.Ads.seen_ads/2`). A visitor has no history, so their label leads to
 the `/ads` offer page instead; there is no public archive of past ads, which
 would keep a one-day booking on show for months.
@@ -73,8 +78,9 @@ would keep a one-day booking on show for months.
 ## Booking and review
 
 Booking is online at `/ads` → `/ads/new` (logged-in only): pick a free day (one
-ad/day, unique index), enter the invoice address, ad text as Markdown (max 2048
-chars, must be family-friendly, rendered through `VutuvWeb.Markdown`).
+ad/day, unique index), enter the invoice address, then title, sentence and link
+(must be family-friendly; live counters for the two limits, the changeset
+enforces them and accepts only an http(s) link to a public host).
 
 1.250 € net per day, payment by invoice: the booking mail (billing data + ad
 text) goes to the operator, who invoices manually; serving on the booked day is

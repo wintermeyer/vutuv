@@ -66,17 +66,27 @@
       </p>
     </.editform_field>
 
-    <.editform_field form={f} field={:content}>
-      <%= label f, :content, gettext("Ad text") %>
-      <%= textarea f, :content, [rows: 8, maxlength: Vutuv.Ads.Ad.content_max_length()] ++ err_attrs(f, :content) %>
-      <%= error_tag f, :content %>
-      <p class="editform__hint">
-        {gettext("Markdown is supported. At most %{max} characters.",
-          max: Vutuv.Ads.Ad.content_max_length()
-        )}
+    <%!-- A classic text ad: the title is the link, the sentence says what is
+    on offer, and readers see where the link goes. --%>
+    <.counted_field form={f} field={:title} label={gettext("Title")} max={Vutuv.Ads.Ad.title_max_length()}>
+      <:hint>{gettext("Shown as the link, in bold.")}</:hint>
+    </.counted_field>
+
+    <.counted_field form={f} field={:body} label={gettext("Text")} max={Vutuv.Ads.Ad.body_max_length()}>
+      <:hint>
+        {gettext("One sentence under the title, plain text.")}
         <.link href={~p"/community"} class="font-semibold text-brand-600 hover:text-brand-700 dark:text-brand-400 dark:hover:text-brand-300">
           {gettext("The ad must be family-friendly.")}
         </.link>
+      </:hint>
+    </.counted_field>
+
+    <.editform_field form={f} field={:url}>
+      <%= label f, :url, gettext("Link") %>
+      <%= url_input f, :url, [autocomplete: "off", spellcheck: "false", placeholder: "https://"] ++ err_attrs(f, :url) %>
+      <%= error_tag f, :url %>
+      <p class="editform__hint">
+        {gettext("Where the title leads. Readers see the address without its query, so they know where they are going.")}
       </p>
     </.editform_field>
 

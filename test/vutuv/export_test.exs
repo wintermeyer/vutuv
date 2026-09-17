@@ -77,7 +77,14 @@ defmodule Vutuv.ExportTest do
 
   test "the ads a member saw are in the export, with when and how often (schema v13)" do
     user = insert(:activated_user)
-    ad = insert(:ad, day: ~D[2026-04-14], content: "**Acme** sucht Leute")
+
+    ad =
+      insert(:ad,
+        day: ~D[2026-04-14],
+        title: "Acme sucht Leute",
+        body: "Elixir in Mainz.",
+        url: "https://acme.example/jobs"
+      )
 
     insert(:ad_sighting,
       user: user,
@@ -94,7 +101,9 @@ defmodule Vutuv.ExportTest do
     assert data.seen_ads == [
              %{
                day: ~D[2026-04-14],
-               content: "**Acme** sucht Leute",
+               title: "Acme sucht Leute",
+               body: "Elixir in Mainz.",
+               url: "https://acme.example/jobs",
                first_seen_at: ~U[2026-09-10 08:02:00Z],
                last_seen_at: ~U[2026-09-10 10:31:00Z],
                times_seen: 3

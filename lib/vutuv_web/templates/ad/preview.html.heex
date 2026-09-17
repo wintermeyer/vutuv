@@ -13,12 +13,9 @@
       )}
     </p>
 
-    <%!-- The real ad card on the page-canvas grey, so the preview shows the ad
-    in its natural surroundings. No `key`: the live card's ✕ and countdown
-    have no business on the page that sells it. --%>
-    <div class="mt-4 rounded-xl bg-slate-100 px-2 py-4 dark:bg-slate-950">
-      <VutuvWeb.AdComponents.ad_card id="ad-preview" banner={{:ad, @ad}} />
-    </div>
+    <%!-- The live card's ✕ and countdown have no business on the page that
+    sells it, so this is the preview frame. --%>
+    <VutuvWeb.AdComponents.ad_preview id="ad-preview" banner={{:ad, @ad}} class="mt-4" />
 
     <dl class="mt-6 grid gap-4 rounded-xl bg-slate-50 p-4 text-sm sm:grid-cols-3 dark:bg-slate-800/60">
       <div>

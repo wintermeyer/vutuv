@@ -33,7 +33,7 @@ defmodule VutuvWeb.AdsDisabledTest do
   test "no ad is served, not even on the pages that carry one", %{conn: conn} do
     # A booked, approved ad for today would normally serve; with the switch
     # off it does not.
-    insert(:ad, day: Ads.today(), content: "**Acme** sucht Leute")
+    insert(:ad, day: Ads.today(), title: "Acme sucht Leute")
     {conn, user} = create_and_login_user(conn)
 
     refute conn |> get(~p"/feed") |> html_response(200) =~ "ad-slot"

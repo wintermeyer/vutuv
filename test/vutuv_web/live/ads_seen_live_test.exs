@@ -29,9 +29,9 @@ defmodule VutuvWeb.AdsSeenLiveTest do
 
   test "lists the ads the member saw, newest first, with how often", %{conn: conn} do
     {conn, user} = create_and_login_user(conn)
-    older = insert_ad_sighting(user, ~D[2026-09-10], content: "**Older** ad")
-    newer = insert_ad_sighting(user, ~D[2026-09-12], content: "**Newer** ad", times_seen: 3)
-    insert_ad_sighting(insert_activated_user(), ~D[2026-09-11], content: "**Somebody else's** ad")
+    older = insert_ad_sighting(user, ~D[2026-09-10], title: "Older ad")
+    newer = insert_ad_sighting(user, ~D[2026-09-12], title: "Newer ad", times_seen: 3)
+    insert_ad_sighting(insert_activated_user(), ~D[2026-09-11], title: "Somebody else's ad")
 
     {:ok, view, html} = live(conn, @path)
 
@@ -44,8 +44,8 @@ defmodule VutuvWeb.AdsSeenLiveTest do
 
   test "the search narrows the list, and says when nothing matches", %{conn: conn} do
     {conn, user} = create_and_login_user(conn)
-    insert_ad_sighting(user, ~D[2026-09-10], content: "Wann sind **Ferien** 2027?")
-    insert_ad_sighting(user, ~D[2026-09-11], content: "Backend-Entwicklung in Mainz")
+    insert_ad_sighting(user, ~D[2026-09-10], title: "Wann sind Ferien 2027?")
+    insert_ad_sighting(user, ~D[2026-09-11], title: "Backend-Entwicklung in Mainz")
 
     {:ok, view, _html} = live(conn, @path)
 
@@ -62,7 +62,7 @@ defmodule VutuvWeb.AdsSeenLiveTest do
     {conn, user} = create_and_login_user(conn)
 
     for n <- 1..21,
-        do: insert_ad_sighting(user, Date.add(~D[2026-08-01], n), content: "**Ad #{n}**")
+        do: insert_ad_sighting(user, Date.add(~D[2026-08-01], n), title: "Ad #{n}")
 
     {:ok, view, _html} = live(conn, @path)
     assert length(articles(view)) == 20
@@ -75,7 +75,7 @@ defmodule VutuvWeb.AdsSeenLiveTest do
 
   test "the German page reads German", %{conn: conn} do
     {conn, user} = create_and_login_user(conn)
-    insert_ad_sighting(user, Ads.today(), content: "**Acme**", times_seen: 2)
+    insert_ad_sighting(user, Ads.today(), title: "Acme", times_seen: 2)
 
     conn = conn |> recycle() |> put_req_header("accept-language", "de-DE,de")
     {:ok, _view, html} = live(conn, @path)

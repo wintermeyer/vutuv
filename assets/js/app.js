@@ -3111,9 +3111,10 @@ function setupBrowserNotifications() {
 onReady(setupBrowserNotifications)
 
 // Live character counter for a length-capped text field (the profile Tagline,
-// see user/edit.html.heex). A [data-char-counter] wrapper with data-max holds a
-// [data-char-count-input] field and a [data-char-count-readout] showing
-// "N/max characters"; as the writer types we update the number and flip the
+// the ad booking form). A [data-char-counter] wrapper holds a
+// [data-char-count-input] field and the [data-char-count-readout] that
+// VutuvWeb.UI.char_count/1 renders, which names the cap in its data-max and
+// shows "N/max characters"; as the writer types we update the number and flip the
 // readout to its over-limit state (red, ⚠ instead of ✓) so they can tell at a
 // glance whether they trimmed enough before submitting. Server-side
 // validate_length stays the source of truth — this only spares a round-trip.
@@ -3125,7 +3126,7 @@ function wireCharCounter(wrap) {
   const output = wrap.querySelector("[data-char-count]")
   const ok = wrap.querySelector("[data-char-ok]")
   const over = wrap.querySelector("[data-char-over]")
-  const max = parseInt(wrap.dataset.max, 10)
+  const max = readout && parseInt(readout.dataset.max, 10)
   if (!input || !readout || !output || !max) return
 
   const update = () => {

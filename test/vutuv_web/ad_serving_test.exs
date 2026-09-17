@@ -54,22 +54,39 @@ defmodule VutuvWeb.AdServingTest do
     end
 
     test "an approved booking replaces the house ad on its day", %{conn: conn} do
-      insert(:ad, day: Ads.today(), content: "**Acme** sucht [Leute](https://jobs.acme.example)")
+      insert(:ad,
+        day: Ads.today(),
+        title: "Acme sucht Leute",
+        body: "Elixir-Entwicklung in Mainz.",
+        url: "https://www.jobs.acme.example/elixir/?utm_source=vutuv"
+      )
+
       {conn, _user} = create_and_login_user(conn)
 
       html = conn |> get(~p"/feed") |> html_response(200)
 
-      assert html =~ "<strong>Acme</strong>"
-      assert html =~ ~s(href="https://jobs.acme.example")
+      # The title is the link, marked as paid for, and the address under it
+      # says where it goes without the tracking query.
+      [link] =
+        Regex.run(
+          ~r{<a[^>]*>\s*Acme sucht Leute\s*</a>},
+          html |> String.split(@rail) |> List.last()
+        )
+
+      assert link =~ ~s(href="https://www.jobs.acme.example/elixir/?utm_source=vutuv")
+      assert link =~ ~s(rel="sponsored noopener")
+      assert link =~ ~s(target="_blank")
+      assert html =~ "Elixir-Entwicklung in Mainz."
+      assert html =~ ~r{>\s*jobs\.acme\.example/elixir\s*<}
       refute html =~ @house
     end
 
     test "a booking still waiting for approval never serves", %{conn: conn} do
-      insert(:ad, day: Ads.today(), approved_at: nil, content: "**Unapproved** ad")
+      insert(:ad, day: Ads.today(), approved_at: nil, title: "Unapproved ad")
 
       html = conn |> get(~p"/#{profile_owner()}") |> html_response(200)
 
-      refute html =~ "<strong>Unapproved</strong>"
+      refute html =~ "Unapproved ad"
       assert html =~ @house
     end
 

@@ -51,7 +51,8 @@ defmodule Vutuv.Export do
   #    Markdown source, not the rendered prose.
   # 12: the member's private notes about other accounts (`personal_notes`), as
   #    Markdown source, each naming the account it is about.
-  # 13: the ads the member was shown (`seen_ads`), with when and how often.
+  # 13: the ads the member was shown (`seen_ads`), with when and how often, and
+  #     a booked ad as its title, text and link instead of Markdown `content`.
   @schema_version 13
 
   def build(%User{} = user) do
@@ -237,7 +238,9 @@ defmodule Vutuv.Export do
         order_by: [asc: s.first_seen_at],
         select: %{
           day: a.day,
-          content: a.content,
+          title: a.title,
+          body: a.body,
+          url: a.url,
           first_seen_at: s.first_seen_at,
           last_seen_at: s.last_seen_at,
           times_seen: s.times_seen
@@ -587,7 +590,9 @@ defmodule Vutuv.Export do
     |> Enum.map(fn ad ->
       %{
         day: ad.day,
-        content: ad.content,
+        title: ad.title,
+        body: ad.body,
+        url: ad.url,
         price_cents: ad.price_cents,
         approved: ad.approved_at != nil,
         billing:
