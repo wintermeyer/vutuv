@@ -1871,11 +1871,22 @@ defmodule VutuvWeb.PostComponents do
       |> assign(:body?, presence?(text))
       |> assign(:html, Markdown.render_remote(text))
       |> assign(:tags, remote_tag_chips(hashtags))
+      |> assign(:warning_id, assigns.body_id && assigns.body_id <> "-warning")
 
+    # The lid keeps the reader's open state across a patch (issue #2200) only
+    # with an id: morphdom pairs an id-less `<details>` by position, and a lid
+    # opened on one post must never come up open on another. The id is the
+    # body's, which every card keys on its own subject, the same key its
+    # `RemoteActionsComponent` id makes unique on a page.
     ~H"""
     <div :if={@warning || @body? || @tags != []} data-nosnippet class="mt-1.5">
       <%= if @warning do %>
-        <details data-remote-warning class="group">
+        <details
+          id={@warning_id}
+          data-keep-open={@warning_id != nil}
+          data-remote-warning
+          class="group"
+        >
           <summary class="flex min-h-10 cursor-pointer list-none items-center gap-1 text-sm font-medium text-slate-700 dark:text-slate-300">
             <span aria-hidden="true">⚠</span>
             <span class="min-w-0 break-words">{@warning}</span>
@@ -2894,8 +2905,17 @@ defmodule VutuvWeb.PostComponents do
             there is one (a blur needs no detail, and never an SD/HD switch,
             which would offer to sharpen what is covered), the picture behind
             it takes the pair. --%>
+            <%!-- Keyed on the post and the picture, for the reason the content
+            warning's lid is keyed (`remote_body/1`): a picture the reader
+            uncovered must never come up uncovered on another post. --%>
             <% picture = RemoteMedia.picture(image) %>
-            <details data-remote-image-sensitive class="group relative">
+            <% lid_id = sensitive_lid_id(image) %>
+            <details
+              id={lid_id}
+              data-keep-open={lid_id != nil}
+              data-remote-image-sensitive
+              class="group relative"
+            >
               <%!-- The cover is inside the summary, so it must take itself away
               when the picture is shown: a `<summary>` renders open or closed
               alike, and without the `group-open:hidden` the blurred cover simply
@@ -2946,6 +2966,15 @@ defmodule VutuvWeb.PostComponents do
     </p>
     """
   end
+
+  # A covered picture's lid id: the post and the picture, both stored, so no two
+  # posts share one. An unsaved picture has no id and gets no lid id, and with
+  # it no `data-keep-open`.
+  defp sensitive_lid_id(%RemoteImage{id: id, remote_post_id: post_id})
+       when is_binary(id) and is_binary(post_id),
+       do: "remote-post-#{post_id}-picture-#{id}"
+
+  defp sensitive_lid_id(_image), do: nil
 
   # Whether there is a body to render at all. A post from an account somebody
   # follows can be a photograph and nothing else (issue #1163) — the picture is
