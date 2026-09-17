@@ -1,7 +1,7 @@
 <%= email_greeting(@user) %>,
 
-è stato appena effettuato un accesso al tuo account vutuv. Se sei stato tu, puoi
-ignorare questa e-mail.
+è stato appena effettuato un accesso al tuo account vutuv. Se l'accesso è tuo,
+puoi ignorare questa e-mail.
 
 Quando:     <%= @when_text %>
 Dispositivo: <%= @device %>
@@ -11,7 +11,7 @@ Dispositivo: <%= @device %>
 Perché te lo diciamo:
 <%= for line <- @reason_lines do %>- <%= line %>
 <% end %>
-Se non sei stato tu, controlla i dispositivi connessi al tuo account e disconnetti quelli che non riconosci:
+Se non riconosci questo accesso, controlla i dispositivi connessi al tuo account e disconnetti quelli che non riconosci:
 
 <%= @devices_url %>
 

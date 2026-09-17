@@ -1,6 +1,6 @@
 <%= email_greeting(@user) %>,
 
-grazie per esserti iscritto a vutuv. Ecco il PIN che ti serve per accedere:
+grazie per l'iscrizione a vutuv. Ecco il PIN che ti serve per accedere:
 
   <%= @pin %>
 

@@ -1,7 +1,7 @@
 <.email_layout preheader="Nuovo accesso al tuo account vutuv" locale={@locale}>
   <.email_p>{email_greeting(@user)},</.email_p>
   <.email_p>
-    è stato appena effettuato un accesso al tuo account vutuv. Se sei stato tu, puoi ignorare questa e-mail.
+    è stato appena effettuato un accesso al tuo account vutuv. Se l'accesso è tuo, puoi ignorare questa e-mail.
   </.email_p>
   <.email_panel>
     <.email_row label="Quando">{@when_text}</.email_row>
@@ -12,8 +12,8 @@
   <.email_p>Perché te lo diciamo:</.email_p>
   <.email_list items={@reason_lines} />
   <.email_p>
-    Se non sei stato tu, controlla i dispositivi connessi al tuo account e disconnetti quelli che
-    non riconosci:
+    Se non riconosci questo accesso, controlla i dispositivi connessi al tuo account e disconnetti
+    quelli che non riconosci:
   </.email_p>
   <.email_button href={@devices_url}>Controlla i dispositivi connessi</.email_button>
   <.email_signature locale={@locale} />
