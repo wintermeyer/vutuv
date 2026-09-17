@@ -5876,35 +5876,20 @@ defmodule Vutuv.Fediverse do
     }
   end
 
-  # Every spelling a block on `host` covers that some table the purge empties
-  # holds: the host and its `www.` aliases (issue #2174). SQL narrows to the
-  # host and its subdomains and `block_names/1` decides, so the purge cannot
-  # fold differently from the gates that keep new rows out: `www.x` goes with a
-  # block on `x`, `other.x` and `wwwx` stay. Read before anything is deleted.
+  # Every spelling a block on `host` covers (issue #2174): the host and each
+  # `www.` alias of it, which is `block_names/1` run backwards, so the purge
+  # cannot fold differently from the gates that keep new rows out: `www.x` goes
+  # with a block on `x`, `other.x` and `wwwx` stay. Spelled out rather than read
+  # from the tables, so each delete matches exactly these and nothing is scanned
+  # first. The aliases stop at the longest hostname there is; a longer one is no
+  # server anything here could have fetched from or been signed by.
   defp covered_hosts(host) do
-    blocked = MapSet.new([host])
-    subdomains = "%." <> host
+    aliases =
+      ("www." <> host)
+      |> Stream.iterate(&("www." <> &1))
+      |> Enum.take_while(&(byte_size(&1) <= BlockedInstance.max_host()))
 
-    [
-      from(f in Follower, select: %{host: uri_host(f.actor_uri)}),
-      from(a in RemoteAccount, select: %{host: a.host}),
-      from(n in Note, select: %{host: uri_host(n.actor_uri)}),
-      from(d in Delivery, select: %{host: uri_host(d.inbox_uri)}),
-      from(d in PostDelivery, select: %{host: uri_host(d.inbox_uri)}),
-      from(p in ExternalPost, select: %{host: p.source}),
-      from(p in ExternalPost, select: %{host: p.author_host})
-    ]
-    |> Enum.flat_map(fn column ->
-      Repo.all(
-        from(h in subquery(column),
-          where: h.host == ^host or like(h.host, ^subdomains),
-          distinct: true,
-          select: h.host
-        )
-      )
-    end)
-    |> Enum.uniq()
-    |> Enum.filter(&covered_by_block?(&1, blocked))
+    [host | aliases]
   end
 
   @doc """
