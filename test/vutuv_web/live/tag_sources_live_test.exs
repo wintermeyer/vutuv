@@ -57,6 +57,13 @@ defmodule VutuvWeb.TagLive.SourcesTest do
       html = conn |> get(~p"/tags/#{tag}") |> html_response(200)
 
       assert html =~ ~s(id="tag-sources-chip-#{tag.id}")
+
+      # Issue #2166: on the page a phone reads, the chip is a full finger's
+      # target that still stands on the follow pill's line.
+      chip = html |> LazyHTML.from_document() |> LazyHTML.query(chip(tag))
+      assert LazyHTML.attribute(chip, "title") == ["Choose which servers this tag comes from"]
+      assert chip |> LazyHTML.attribute("class") |> hd() =~ "h-10"
+      assert chip |> LazyHTML.query("svg") |> Enum.count() == 1
     end
 
     test "has no chip for a member who does not follow the tag", %{conn: conn, tag: tag} do
@@ -107,6 +114,8 @@ defmodule VutuvWeb.TagLive.SourcesTest do
       view |> element("#tag-source-form") |> render_submit(%{"source" => "kowelenz.example"})
       assert "kowelenz.example" in Tags.tag_follow_sources(follow)
       assert view |> element(chip(tag)) |> render() =~ ">3<"
+      assert has_element?(view, "#tag-source-own-rows #tag-source-kowelenz-example")
+      assert view |> element("#tag-sources-added") |> render() =~ "kowelenz.example now feeds"
 
       view |> element("#tag-sources-close") |> render_click()
       refute has_element?(view, "#tag-sources-panel")

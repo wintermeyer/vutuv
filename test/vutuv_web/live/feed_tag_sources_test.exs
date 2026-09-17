@@ -51,6 +51,13 @@ defmodule VutuvWeb.PostLive.FeedTagSourcesTest do
   end
 
   defp switch(host), do: "#tag-source-switch-#{String.replace(host, ".", "-")}"
+  defp row(host), do: "#tag-source-#{String.replace(host, ".", "-")}"
+
+  defp fill_to_cap(follow) do
+    for n <- 1..SourceServers.limit() do
+      {:ok, _row} = Tags.add_tag_follow_source(follow, "server#{n}.example")
+    end
+  end
 
   describe "the chip" do
     test "counts the servers feeding the tag", %{conn: conn, tag: tag, follow: follow} do
@@ -63,6 +70,18 @@ defmodule VutuvWeb.PostLive.FeedTagSourcesTest do
       send(live.pid, {:tag_follows_changed, %{}})
 
       assert live |> element("#tag-sources-chip-#{tag.id}") |> render() =~ ">2<"
+    end
+
+    # Issue #2166: a bare 16px number did not read as something to press.
+    test "reads as a control: a glyph, the count and a tooltip", %{conn: conn, tag: tag} do
+      {:ok, live, _html} = live(conn, ~p"/feed")
+      chip = live |> element("#tag-sources-chip-#{tag.id}") |> render()
+
+      assert chip =~ ~s(title="Choose which servers this tag comes from")
+      assert chip =~ "<svg"
+      assert chip =~ "focus-visible:ring-2"
+      # It rides the tag chip's own 20px line, so it is no taller than that.
+      assert chip =~ "h-5"
     end
 
     test "opens and closes the panel", %{conn: conn, tag: tag} do
@@ -126,12 +145,28 @@ defmodule VutuvWeb.PostLive.FeedTagSourcesTest do
       assert live |> element("#tag-sources-chip-#{tag.id}") |> render() =~ ">1<"
     end
 
-    test "a server that only answers to members cannot be picked", %{conn: conn, tag: tag} do
+    test "a server that only answers to members cannot be picked", %{
+      conn: conn,
+      tag: tag,
+      name: name
+    } do
       {:ok, live, _html} = live(conn, ~p"/feed")
       html = open_panel(live, tag)
 
-      assert html =~ "only to somebody with an account there"
-      assert live |> element(switch(@locked)) |> render() =~ "disabled"
+      assert html =~
+               "#{@locked} only shows posts on ##{name} to people who have an account there."
+
+      # Dimmed, and pointed at the row's own reason.
+      switch = live |> element(switch(@locked)) |> render()
+      assert switch =~ "disabled"
+      assert switch =~ "opacity-50"
+
+      assert has_element?(
+               live,
+               ~s(#{switch(@locked)}[aria-describedby="tag-source-note-chaos-example"])
+             )
+
+      assert has_element?(live, "#tag-source-note-chaos-example")
     end
 
     test "switching a server on and off again", %{conn: conn, tag: tag, follow: follow} do
@@ -168,6 +203,55 @@ defmodule VutuvWeb.PostLive.FeedTagSourcesTest do
 
       assert "kowelenz.example" in Tags.tag_follow_sources(follow)
       assert_received {:req, "kowelenz.example", "/api/v1/timelines/tag/" <> _hashtag}
+    end
+
+    # Issue #2166: the add used to succeed in silence, with the new row sorted
+    # in a couple of thousand pixels above the field.
+    test "says so at the field, with its row right above it", %{
+      conn: conn,
+      tag: tag,
+      name: name
+    } do
+      stub_servers(%{"kowelenz.example" => %{language: "de"}})
+
+      {:ok, live, _html} = live(conn, ~p"/feed")
+      open_panel(live, tag)
+      refute has_element?(live, "#tag-sources-added")
+      # The live region is there before anything is said into it, or a screen
+      # reader has nothing to watch.
+      assert has_element?(live, ~s(#tag-sources-status[role="status"][aria-live="polite"]))
+
+      live |> element("#tag-source-form") |> render_submit(%{"source" => "kowelenz.example"})
+
+      assert live |> element("#tag-sources-added") |> render() =~
+               "kowelenz.example now feeds ##{name}."
+
+      # The answer follows the field's block at once, and inside that block the
+      # typed server's row stands above the field, not in the offered list.
+      assert has_element?(live, "#tag-source-own + #tag-sources-status #tag-sources-added")
+      assert has_element?(live, "#tag-source-own-rows ~ #tag-source-form")
+      assert has_element?(live, "#tag-source-own-rows #{row("kowelenz.example")}")
+      refute has_element?(live, "#tag-source-rows #{row("kowelenz.example")}")
+
+      # Switching it off again takes the line with it: it would be stale.
+      live |> element(switch("kowelenz.example")) |> render_click()
+      refute has_element?(live, "#tag-sources-added")
+      refute has_element?(live, "#tag-source-own-rows")
+    end
+
+    test "a refusal replaces an earlier success", %{conn: conn, tag: tag} do
+      stub_servers(%{"kowelenz.example" => %{language: "de"}})
+
+      {:ok, live, _html} = live(conn, ~p"/feed")
+      open_panel(live, tag)
+
+      live |> element("#tag-source-form") |> render_submit(%{"source" => "kowelenz.example"})
+      live |> element("#tag-source-form") |> render_submit(%{"source" => "nobody.example"})
+
+      refute has_element?(live, "#tag-sources-added")
+
+      assert live |> element("#tag-sources-status #tag-sources-error") |> render() =~
+               "nobody.example did not answer."
     end
 
     test "is refused over http", %{conn: conn, tag: tag, follow: follow} do
@@ -211,16 +295,45 @@ defmodule VutuvWeb.PostLive.FeedTagSourcesTest do
       tag: tag,
       follow: follow
     } do
-      for n <- 1..SourceServers.limit() do
-        {:ok, _row} = Tags.add_tag_follow_source(follow, "server#{n}.example")
-      end
+      fill_to_cap(follow)
 
       {:ok, live, _html} = live(conn, ~p"/feed")
       html = open_panel(live, tag)
 
-      assert html =~ "Switch one off to pick another."
+      assert html =~
+               "You can choose up to #{SourceServers.limit()} other servers. To pick a different one, switch one off first."
+
       refute has_element?(live, "#tag-source-form")
       assert live |> element(switch(@good)) |> render() =~ "disabled"
+    end
+
+    # Issue #2166: the switches stayed lit and refused in silence, with the
+    # reason a thousand pixels below them.
+    test "dims every switch it cannot turn on and names why, above the list", %{
+      conn: conn,
+      tag: tag,
+      follow: follow
+    } do
+      fill_to_cap(follow)
+
+      {:ok, live, _html} = live(conn, ~p"/feed")
+      open_panel(live, tag)
+
+      assert has_element?(live, "#tag-sources-cap + #tag-source-rows")
+
+      off = live |> element(switch(@good)) |> render()
+      assert off =~ "disabled"
+      assert off =~ "opacity-50"
+      assert has_element?(live, ~s(#{switch(@good)}[aria-describedby~="tag-sources-cap"]))
+
+      # A switch that is on stays usable: turning it off frees the slot.
+      on = switch("server1.example")
+      refute has_element?(live, "#{on}[disabled]")
+      refute has_element?(live, "#{on}[aria-describedby]")
+
+      live |> element(on) |> render_click()
+      refute has_element?(live, "#tag-sources-cap")
+      refute has_element?(live, "#{switch(@good)}[disabled]")
     end
   end
 
@@ -271,6 +384,50 @@ defmodule VutuvWeb.PostLive.FeedTagSourcesTest do
 
       assert html =~
                "Ein Server, den Sie selbst hinzufügen, liefert nur Beiträge seiner eigenen Mitglieder."
+
+      # Issue #2166: "Tag" is the neuter topic here, never the masculine day,
+      # so these sentences name the tag instead of compounding or declining it.
+      assert html =~
+               "vutuv ist immer dabei. Jeder weitere Server liefert die Beiträge zu ##{name}, die er im Fediverse sieht."
+
+      assert html =~
+               "#{@locked} zeigt Beiträge zu ##{name} nur Personen, die dort ein Konto haben."
+
+      refute html =~ "Tag-Zeitleiste"
+      refute html =~ "denselben Tag"
+
+      assert live |> element("#tag-sources-chip-#{tag.id}") |> render() =~
+               ~s(title="Wählen Sie, von welchen Servern dieses Tag kommt")
+    end
+
+    test "the cap and the success line are translated", %{
+      conn: conn,
+      tag: tag,
+      follow: follow,
+      name: name
+    } do
+      stub_servers(%{"kowelenz.example" => %{language: "de"}})
+      limit = SourceServers.limit()
+
+      for n <- 1..(limit - 1)//1 do
+        {:ok, _row} = Tags.add_tag_follow_source(follow, "server#{n}.example")
+      end
+
+      {:ok, live, _html} =
+        conn
+        |> recycle()
+        |> put_req_header("accept-language", "de-DE,de")
+        |> live(~p"/feed")
+
+      open_panel(live, tag)
+
+      html =
+        live |> element("#tag-source-form") |> render_submit(%{"source" => "kowelenz.example"})
+
+      assert html =~ "kowelenz.example liefert jetzt Beiträge zu ##{name}."
+
+      assert html =~
+               "Sie können bis zu #{limit} weitere Server auswählen. Um einen anderen zu wählen, schalten Sie zuerst einen ab."
     end
 
     test "a refusal is translated too", %{conn: conn, tag: tag} do

@@ -462,6 +462,19 @@ The chip is the viewer's private control, so the tag page's agent formats do
 not carry it. An organization's Following list still shows followed tags with
 no way to say where they come from; it is a third host away from that.
 
+**The panel answers where the member is looking** (issue #2166). The chip is a
+bordered pill with a globe and a `title`, sized to the tag chip's line in the
+rail and given a 40px target on the tag page (`source_chip/1`'s `size`). A
+server the member typed in (`own?` in `SourceServers.rows/1`: picked, and not
+on the operator's list) is listed directly above the field rather than among
+the offers, and "host now feeds #tag" appears under the field in a live region
+that is always rendered. At the cap the sentence saying so stands above the
+switches, and every switch it holds back is dimmed and names it in
+`aria-describedby`; a switch that is on stays usable, since switching it off
+frees the slot. German calls the feature "das Tag", so a sentence about it
+names the tag with its hash (`error_text/2` takes the tag) instead of a
+compound like "Tag-Zeitleiste", which reads as a *day*.
+
 ### Finding a tag that is suddenly busy (issue #2129)
 
 Under the same card, below the tags this reader's own feed is already carrying,

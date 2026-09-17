@@ -145,27 +145,31 @@ defmodule Vutuv.Tags.SourceServers do
   The rows the panel draws for one follow: this installation first, then the
   servers this follow already names, then the ones on offer it does not.
 
-  Each row is `%{host:, local?:, picked?:, blocked?:, info:}`, with `info` the
-  stored `%SourceServer{}` or `nil` for a server nobody has asked yet. A server
-  the operator blocked after somebody picked it is still shown — it is on their
-  follow, and hiding it would leave them a source they cannot see to remove.
+  Each row is `%{host:, local?:, picked?:, own?:, blocked?:, info:}`, with
+  `info` the stored `%SourceServer{}` or `nil` for a server nobody has asked
+  yet, and `own?` marking a picked server the operator does not list — one the
+  member typed in (issue #2166). A server the operator blocked after somebody
+  picked it is still shown — it is on their follow, and hiding it would leave
+  them a source they cannot see to remove.
   """
   def rows(sources) when is_list(sources) do
     local = Tags.local_tag_follow_source()
     picked = Enum.reject(sources, &(&1 == local))
+    listed = configured()
 
     # One blocklist query for both jobs: dropping a blocked server from the
     # offers, and marking a blocked one the member already picked.
-    blocked = blocked_hosts(Enum.uniq(picked ++ configured()))
+    blocked = blocked_hosts(Enum.uniq(picked ++ listed))
     hosts = Enum.uniq(picked ++ offered(blocked))
     infos = infos(hosts)
 
-    [%{host: local, local?: true, picked?: true, blocked?: false, info: nil}] ++
+    [%{host: local, local?: true, picked?: true, own?: false, blocked?: false, info: nil}] ++
       Enum.map(hosts, fn host ->
         %{
           host: host,
           local?: false,
           picked?: host in picked,
+          own?: host not in listed,
           blocked?: MapSet.member?(blocked, host),
           info: Map.get(infos, host)
         }

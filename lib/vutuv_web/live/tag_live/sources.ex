@@ -98,10 +98,11 @@ defmodule VutuvWeb.TagLive.Sources do
   @impl true
   def render(assigns) do
     ~H"""
-    <%!-- The same box as the follow pill beside it (1px border, 6px padding, a
-    16px line), so the two stand on one line. --%>
-    <div :if={@count} class="flex items-center border border-transparent py-1.5">
-      <.source_chip tag={@tag} count={@count} open?={@open_id == @tag.id} />
+    <%!-- The follow pill's 30px line (1px border, 6px padding, a 16px line),
+    so the two stand on one line; the chip's 40px target overflows it evenly
+    above and below. --%>
+    <div :if={@count} class="flex h-7.5 items-center">
+      <.source_chip tag={@tag} count={@count} open?={@open_id == @tag.id} size={:touch} />
     </div>
     <div :if={@member} class="w-full">
       <.live_component module={TagSources} id="tag-sources" user={@member} tags={[@tag]} />

@@ -267,6 +267,13 @@ defmodule Vutuv.Tags.SourceServersTest do
       refute Enum.any?(rest, & &1.picked?)
     end
 
+    # Issue #2166: the panel lists these beside the field they were typed into.
+    test "marks a picked server the operator does not list as the member's own" do
+      rows = SourceServers.rows([Tags.local_tag_follow_source(), @good, "typed.example"])
+
+      assert rows |> Enum.filter(& &1.own?) |> Enum.map(& &1.host) == ["typed.example"]
+    end
+
     test "keeps a picked server visible after the operator shuts it out" do
       user = insert(:activated_user)
       {:ok, {_blocked, _purged}} = Fediverse.block_instance(%{"host" => @good}, user)
