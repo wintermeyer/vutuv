@@ -251,10 +251,9 @@ defmodule VutuvWeb.CompanyControllerTest do
       assert markdown =~ "13 people arrived"
     end
 
-    test "states the year's reach in the agent formats too", %{conn: conn} do
+    test "states the reach of the last 12 months in the agent formats too", %{conn: conn} do
       # The HTML card adds the figure up over the socket; an agent cannot watch
-      # that, so its formats wait for the same result instead. Only the fixed
-      # part of the sentence is asserted: the year in it comes off the clock.
+      # that, so its formats wait for the same result instead.
       author = insert(:activated_user)
       {:ok, _post} = Vutuv.Posts.create_post(author, %{body: "Counted this year"})
 
@@ -266,14 +265,18 @@ defmodule VutuvWeb.CompanyControllerTest do
           |> response(200)
           |> String.replace(~r/\s+/, " ")
 
-        assert body =~ "Potential reach from reposts in"
-        assert body =~ "from 1 public post."
+        assert body =~
+                 "Potential reach from reposts over the last 12 months: at least 0 followers, from 1 public post."
+
         assert body =~ "Somebody who reposts three posts counts three times."
       end
 
       json = conn |> get(~p"/system/investors" <> ".json") |> json_response(200)
 
-      assert %{"potential_reach_from_reposts" => 0, "public_posts" => 1} = json["year_reach"]
+      assert %{"potential_reach_from_reposts" => 0, "public_posts" => 1, "since" => since} =
+               json["reach_12_months"]
+
+      assert {:ok, _date} = Date.from_iso8601(since)
 
       xml = conn |> get(~p"/system/investors" <> ".xml") |> response(200)
       assert xml =~ "potential_reach_from_reposts"

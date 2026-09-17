@@ -1,23 +1,23 @@
-defmodule Vutuv.PostAnalytics.YearRunner do
+defmodule Vutuv.PostAnalytics.TwelveMonthsRunner do
   @moduledoc """
-  Runs `Vutuv.PostAnalytics.Year` in the background for the investor page and
-  keeps the answer for a while.
+  Runs `Vutuv.PostAnalytics.TwelveMonths` (the last 12 months) in the background for
+  the investor page and keeps the answer for a while.
 
   **One run, however many people watch.** The investor page is the kind of URL
   that gets passed around, so a run per page view would turn one shared link
-  into a burst of whole-year aggregates. A viewer who arrives mid-run joins it
+  into a burst of 12-month aggregates. A viewer who arrives mid-run joins it
   and hears its remaining steps; a viewer who arrives within `ttl` of the last
   run gets its result straight away. After that the old result is still shown
   while the next run works, so a returning reader never faces an empty card.
 
-  **Progress is broadcast** on a PubSub topic as `{:year_reach, message}`:
+  **Progress is broadcast** on a PubSub topic as `{:reach, message}`:
   `:started` when a run begins, `{:step, step}` as each step finishes,
   `{:done, result}` at the end, and `:failed` when the run crashed. Nothing is
   retried on its own: the next viewer starts a new run, which is the whole
   recovery a read-only computation needs, since a run killed by a deploy leaves
   nothing half-written behind.
 
-  **Without a runner** (tests, where `:year_reach_runner` is off because the
+  **Without a runner** (tests, where `:reach_runner` is off because the
   run's database work would happen outside the SQL sandbox) `watch/1` answers
   `:no_runner` and the caller computes for itself, and `fetch/1` computes in
   place. The agent formats of the page use `fetch/1`, the page itself
@@ -28,10 +28,10 @@ defmodule Vutuv.PostAnalytics.YearRunner do
   """
   use GenServer
 
-  alias Vutuv.PostAnalytics.Year
+  alias Vutuv.PostAnalytics.TwelveMonths
 
   @pubsub Vutuv.PubSub
-  @topic "investors:year_reach"
+  @topic "investors:reach"
   @ttl :timer.minutes(10)
   @fetch_timeout :timer.seconds(30)
 
@@ -60,13 +60,13 @@ defmodule Vutuv.PostAnalytics.YearRunner do
   end
 
   @doc """
-  The year's result, waiting for a run when no fresh one is at hand, or `nil`
+  The result, waiting for a run when no fresh one is at hand, or `nil`
   when that run failed or outlasted the wait and none succeeded before it: an
   agent-format page then goes without the sentence rather than failing.
   Computes in the caller when no runner is running.
   """
   def fetch(server \\ __MODULE__) do
-    with_runner(server, &Year.compute/0, fn pid ->
+    with_runner(server, &TwelveMonths.compute/0, fn pid ->
       GenServer.call(pid, :fetch, @fetch_timeout)
     end)
   catch
@@ -93,7 +93,7 @@ defmodule Vutuv.PostAnalytics.YearRunner do
      %{
        topic: Keyword.get(opts, :topic, @topic),
        ttl: Keyword.get(opts, :ttl, @ttl),
-       compute: Keyword.get(opts, :compute, &Year.compute/1),
+       compute: Keyword.get(opts, :compute, &TwelveMonths.compute/1),
        result: nil,
        finished_at: nil,
        run: nil,
@@ -123,7 +123,7 @@ defmodule Vutuv.PostAnalytics.YearRunner do
   @impl true
   # A task sends its steps before its reply and sends nothing after it, so a
   # step always belongs to the run in flight.
-  def handle_info({:year_reach_step, step}, %{run: %Task{}} = state) do
+  def handle_info({:reach_step, step}, %{run: %Task{}} = state) do
     broadcast(state, {:step, step})
     {:noreply, %{state | steps: state.steps ++ [step]}}
   end
@@ -166,7 +166,7 @@ defmodule Vutuv.PostAnalytics.YearRunner do
 
     task =
       Task.Supervisor.async_nolink(Vutuv.TaskSupervisor, fn ->
-        compute.(progress: &send(runner, {:year_reach_step, &1}))
+        compute.(progress: &send(runner, {:reach_step, &1}))
       end)
 
     broadcast(state, :started)
@@ -178,5 +178,5 @@ defmodule Vutuv.PostAnalytics.YearRunner do
   end
 
   defp broadcast(state, message),
-    do: Phoenix.PubSub.broadcast(@pubsub, state.topic, {:year_reach, message})
+    do: Phoenix.PubSub.broadcast(@pubsub, state.topic, {:reach, message})
 end

@@ -25,7 +25,7 @@ defmodule VutuvWeb.AgentDocs.InvestorsDoc do
   alias Vutuv.Accounts.User
   alias Vutuv.Fediverse
   alias Vutuv.PeopleHistory
-  alias Vutuv.PostAnalytics.YearRunner
+  alias Vutuv.PostAnalytics.TwelveMonthsRunner
   alias VutuvWeb.AgentDocs
   alias VutuvWeb.UI
 
@@ -224,22 +224,22 @@ defmodule VutuvWeb.AgentDocs.InvestorsDoc do
   end
 
   @doc """
-  What the yearly reach card adds up, in one line under its heading. The card
-  is `VutuvWeb.InvestorsReachLive`; the figure is `Vutuv.PostAnalytics.Year`.
+  What the reach card adds up, in one line under its heading. The card
+  is `VutuvWeb.InvestorsReachLive`; the figure is `Vutuv.PostAnalytics.TwelveMonths`.
   """
-  def year_reach_lead do
+  def reach_lead do
     gettext(
-      "The potential reach of every public post published here this year, added up the way each post's own reach analysis counts it."
+      "The potential reach of every public post published here in the last 12 months, added up the way each post's own reach analysis counts it."
     )
   end
 
   @doc """
-  The reasoning behind the yearly reach, as the sentences the card folds away
+  The reasoning behind the reach of the last 12 months, as the sentences the card folds away
   under "How this is calculated" and the agent formats print under the figure.
-  The last three are the per-post analysis page's own msgids: the yearly
+  The last three are the per-post analysis page's own msgids: the card's
   figure is that page's figure summed, so it has the same limits.
   """
-  def year_reach_explainer do
+  def reach_explainer do
     [
       gettext(
         "Each post brings the follower counts of the members, pages and Fediverse accounts that reposted it. Somebody who reposts three posts counts three times."
@@ -257,28 +257,27 @@ defmodule VutuvWeb.AgentDocs.InvestorsDoc do
   end
 
   @doc """
-  The yearly reach for the agent formats, which cannot watch the card work it
-  out: waits for `YearRunner` (or computes in place without one). `nil` when
+  The reach of the last 12 months for the agent formats, which cannot watch the card work it
+  out: waits for `TwelveMonthsRunner` (or computes in place without one). `nil` when
   the calculation failed and no earlier result exists.
   """
-  def year_reach, do: YearRunner.fetch()
+  def reach_12_months, do: TwelveMonthsRunner.fetch()
 
   @doc """
-  The yearly reach as one sentence, from a `Vutuv.PostAnalytics.Year` result,
-  or `nil` without one.
+  The reach of the last 12 months as one sentence, from a
+  `Vutuv.PostAnalytics.TwelveMonths` result, or `nil` without one.
   """
-  def year_reach_sentence(%{reach: reach, posts: posts, year: year}) do
+  def reach_sentence(%{reach: reach, posts: posts}) do
     ngettext(
-      "Potential reach from reposts in %{year}: at least %{reach} followers, from %{formatted} public post.",
-      "Potential reach from reposts in %{year}: at least %{reach} followers, from %{formatted} public posts.",
+      "Potential reach from reposts over the last 12 months: at least %{reach} followers, from %{formatted} public post.",
+      "Potential reach from reposts over the last 12 months: at least %{reach} followers, from %{formatted} public posts.",
       posts,
-      year: year,
       reach: UI.delimited_count(reach.known),
       formatted: UI.delimited_count(posts)
     )
   end
 
-  def year_reach_sentence(_none), do: nil
+  def reach_sentence(_none), do: nil
 
   @doc """
   The operator's own profile on **this** installation, or `nil`.
@@ -347,7 +346,7 @@ defmodule VutuvWeb.AgentDocs.InvestorsDoc do
   def build(facts) do
     # Bound once: each call is a lookup of that handle against the members here.
     handle = contact_handle()
-    year_reach = year_reach()
+    reach = reach_12_months()
 
     AgentDocs.doc_meta("investors", "/system/investors")
     |> Map.merge(%{
@@ -368,9 +367,9 @@ defmodule VutuvWeb.AgentDocs.InvestorsDoc do
       contact_url: handle && AgentDocs.abs_url("/messages/with/" <> handle),
       contact_profile_url: handle && AgentDocs.abs_url("/" <> handle),
       growth_sentence: growth_sentence(facts.growth),
-      year_reach: year_reach_figures(year_reach),
-      year_reach_sentence: year_reach_sentence(year_reach),
-      year_reach_explainer: year_reach && year_reach_explainer(),
+      reach_12_months: reach_figures(reach),
+      reach_12_months_sentence: reach_sentence(reach),
+      reach_12_months_explainer: reach && reach_explainer(),
       # The daily rows themselves are the chart's business; the doc carries the
       # reading of them.
       figures: Map.drop(facts, [:series, :growth]),
@@ -379,9 +378,9 @@ defmodule VutuvWeb.AgentDocs.InvestorsDoc do
   end
 
   # The figures the card shows, flat, for the JSON and XML readers.
-  defp year_reach_figures(%{reach: reach} = result) do
+  defp reach_figures(%{reach: reach} = result) do
     %{
-      year: result.year,
+      since: Date.to_iso8601(result.since),
       potential_reach_from_reposts: reach.known,
       reposts: reach.reposts,
       reposters_without_known_total: reach.unknown_reposters,
@@ -392,5 +391,5 @@ defmodule VutuvWeb.AgentDocs.InvestorsDoc do
     }
   end
 
-  defp year_reach_figures(_none), do: nil
+  defp reach_figures(_none), do: nil
 end

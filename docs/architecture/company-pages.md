@@ -83,24 +83,31 @@ gated-community argument, the cost base, a growth curve) and was cut back to
 this on 2026-08-16. The prose is in the history if it is wanted again; the
 LinkedIn framing itself lives on in the media kit's boilerplate.
 
-### The year's reach
+### The reach of the last 12 months
 
 Under the figures sits one LiveView card, `VutuvWeb.InvestorsReachLive`: the
-potential repost reach of every public post published this calendar year (UTC),
-added up (`Vutuv.PostAnalytics.Year`). It is each post's own reach analysis
-summed, so a member who reposts three posts counts three times and a Fediverse
-reposter without a stored follower total adds nothing. Nothing asks a remote
+potential repost reach of every public post published in the last 12 whole
+calendar months (UTC, the current one included), added up
+(`Vutuv.PostAnalytics.TwelveMonths`). Whole months, so the oldest bar of the monthly
+chart is not cut in half. It is each post's own reach analysis summed, so a
+member who reposts three posts counts three times and a Fediverse reposter
+without a stored follower total adds nothing. Nothing asks a remote
 server; the totals are whatever `Vutuv.Fediverse.CountsRefresher` last stored.
 
 The work runs in five steps, and the card lists them with their figures and
-durations as they finish. The run belongs to `Vutuv.PostAnalytics.YearRunner`,
+durations as they finish. The run belongs to `Vutuv.PostAnalytics.TwelveMonthsRunner`,
 one per release slot: every open card watches the same run over PubSub, a
 result is reused for ten minutes, and an older one stays on screen while the
 next run works. The dead render never starts a run (`peek/1`), so crawlers cost
-nothing. The agent formats wait for the same result (`InvestorsDoc.year_reach/0`).
+nothing. The agent formats wait for the same result (`InvestorsDoc.reach_12_months/0`).
 On the development copy of production data (September 2026, 995 posts) a run
 took 30 to 65 ms, against 1.8 s for calling the per-post analysis once per post;
-both gave the same sum, and `year_test.exs` holds the two equal.
+both gave the same sum, and `twelve_months_test.exs` holds the two equal.
+
+The card uses `use VutuvWeb, :embedded_live_view`: with `:live_view` it drew
+the page's top bar and footer a second time inside itself, which no test saw
+because every test mounts the child alone. `embedded_live_view_layout_test.exs`
+now checks every LiveView a template embeds.
 
 ### Brand assets
 

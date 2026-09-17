@@ -109,9 +109,9 @@ config :vutuv, :fediverse_note_refresh, false
 # outside the sandbox; tests call Vutuv.Fediverse.refresh_counts/1 and
 # refresh_due_counts/0 directly with a stubbed HTTP layer.
 config :vutuv, :fediverse_counts, false
-# The investor page's yearly reach runs its aggregate in a Task, outside the
+# The investor page's 12-month reach runs its aggregate in a Task, outside the
 # sandbox; without the runner the page computes in its own process instead.
-config :vutuv, :year_reach_runner, false
+config :vutuv, :reach_runner, false
 
 # Downloading the pictures of followed accounts (issue #1163) runs in a Task,
 # which would sit outside the SQL sandbox; tests call

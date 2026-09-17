@@ -1,7 +1,12 @@
-defmodule Vutuv.PostAnalytics.Year do
+defmodule Vutuv.PostAnalytics.TwelveMonths do
   @moduledoc """
-  The reach of a whole calendar year, for the investor page: the potential
-  repost reach of every public post published this year, added up.
+  The reach of the last 12 months, for the investor page: the potential repost
+  reach of every public post published in them, added up.
+
+  **The 12 months are whole calendar months**, the current one included: from
+  the first day of the month eleven months back until now. A rolling 365 days
+  would cut the oldest bar of the monthly chart in half, and a calendar year
+  would show two bars on the 2nd of January.
 
   **It is the per-post figure, summed**, and nothing cleverer. Each post
   contributes what its own reach analysis (`/posts/:id/analytics`) leads with:
@@ -12,11 +17,11 @@ defmodule Vutuv.PostAnalytics.Year do
   something. Followers overlap and a delivered post may go unread, so the sum
   is potential distribution, not readership. A reposter whose total is unknown
   adds nothing and is counted separately, which makes the figure a lower bound.
-  `Vutuv.PostAnalytics.YearTest` holds it equal to the sum of the per-post
+  `Vutuv.PostAnalytics.TwelveMonthsTest` holds it equal to the sum of the per-post
   pages.
 
   **Public** means what an anonymous reader may open (`Posts.scope_visible/2`
-  with no viewer), and a post belongs to the year it was published in (UTC).
+  with no viewer), and a post belongs to the month it was published in (UTC).
 
   The work is split into `steps/0`, run in that order, each reported through
   the `:progress` callback the moment it finishes, with what it found and how
@@ -39,17 +44,19 @@ defmodule Vutuv.PostAnalytics.Year do
   def steps, do: @steps
 
   @doc """
-  Works out the current year's reach.
+  Works out the reach of the 12 months up to now.
 
   Options: `:now` (a `DateTime`, the real clock by default), which also picks
-  the year; `:progress`, called with each finished step as
+  the months; `:progress`, called with each finished step as
   `%{key:, ms:, …figures}`.
   """
   def compute(opts \\ []) do
     now = Keyword.get(opts, :now, DateTime.utc_now(:second))
     progress = Keyword.get(opts, :progress, fn _step -> :ok end)
+    months = months_up_to(now)
+    since = hd(months)
 
-    {posts_step, posts} = run(:posts, progress, fn -> public_posts(now) end)
+    {posts_step, posts} = run(:posts, progress, fn -> public_posts(since, now) end)
     ids = Enum.map(posts, &elem(&1, 0))
 
     {local_step, local} =
@@ -65,13 +72,13 @@ defmodule Vutuv.PostAnalytics.Year do
     reposters = local.rows ++ remote.rows
 
     %{
-      year: now.year,
+      since: since,
       computed_at: now,
       posts: length(posts),
       reach: reposters |> PostAnalytics.reach_tally() |> Map.put(:reposts, length(reposters)),
       totals: totals,
       servers: servers,
-      months: months(posts, reposters, now),
+      months: per_month(months, posts, reposters),
       steps: [posts_step, local_step, remote_step, interactions_step, servers_step]
     }
   end
@@ -97,14 +104,23 @@ defmodule Vutuv.PostAnalytics.Year do
   defp summary(:interactions, totals), do: %{count: totals.all}
   defp summary(:servers, servers), do: %{count: servers.all, responded: servers.responded}
 
-  # `{id, published month}` for every post an anonymous reader may open that
-  # was published between the start of `now`'s year and `now`.
-  defp public_posts(now) do
-    year_start = NaiveDateTime.new!(now.year, 1, 1, 0, 0, 0)
+  # The first day of each of the 12 months that end with `now`'s, oldest first.
+  defp months_up_to(now) do
+    now
+    |> DateTime.to_date()
+    |> Date.beginning_of_month()
+    |> Date.shift(month: -11)
+    |> Stream.iterate(&Date.shift(&1, month: 1))
+    |> Enum.take(12)
+  end
 
+  # `{id, first day of its month}` for every post an anonymous reader may open
+  # that was published between `since` and `now`.
+  defp public_posts(since, now) do
     from(p in Post,
-      where: p.inserted_at >= ^year_start and p.inserted_at <= ^DateTime.to_naive(now),
-      select: {p.id, fragment("extract(month FROM ?)::integer", p.inserted_at)}
+      where: p.inserted_at >= ^NaiveDateTime.new!(since, ~T[00:00:00]),
+      where: p.inserted_at <= ^DateTime.to_naive(now),
+      select: {p.id, fragment("date_trunc('month', ?)::date", p.inserted_at)}
     )
     |> Posts.scope_visible(nil)
     |> Repo.all()
@@ -112,10 +128,9 @@ defmodule Vutuv.PostAnalytics.Year do
 
   defp reposts(rows), do: rows |> PostAnalytics.reach_tally() |> Map.put(:rows, rows)
 
-  # One entry per month of the year so far, with the posts published in it and
-  # the reach they brought, so a quiet month shows as a gap rather than being
-  # left out.
-  defp months(posts, reposters, now) do
+  # One entry per month, with the posts published in it and the reach they
+  # brought, so a quiet month shows as a gap rather than being left out.
+  defp per_month(months, posts, reposters) do
     month_of = Map.new(posts)
     posts_per_month = posts |> Enum.map(&elem(&1, 1)) |> Enum.frequencies()
 
@@ -125,9 +140,10 @@ defmodule Vutuv.PostAnalytics.Year do
       |> Enum.group_by(&Map.fetch!(month_of, &1.post_id), & &1.followers)
       |> Map.new(fn {month, followers} -> {month, Enum.sum(followers)} end)
 
-    for month <- 1..now.month do
+    for month <- months do
       %{
-        month: month,
+        year: month.year,
+        month: month.month,
         posts: Map.get(posts_per_month, month, 0),
         reach: Map.get(reach_per_month, month, 0)
       }

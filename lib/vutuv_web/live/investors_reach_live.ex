@@ -1,30 +1,30 @@
 defmodule VutuvWeb.InvestorsReachLive do
   @moduledoc """
-  The yearly reach card on `/system/investors`: the potential repost reach of
-  every public post published this year (`Vutuv.PostAnalytics.Year`), with the
-  steps that produce it shown as they finish.
+  The reach card on `/system/investors`: the potential repost reach of every
+  public post published in the last 12 months (`Vutuv.PostAnalytics.TwelveMonths`),
+  with the steps that produce it shown as they finish.
 
   Embedded via `live_render` from the investor page's template, so the
   controller keeps serving the agent-format siblings, which read the same
-  figure through `Vutuv.PostAnalytics.YearRunner.fetch/1`.
+  figure through `Vutuv.PostAnalytics.TwelveMonthsRunner.fetch/1`.
 
-  **The steps are the point, not decoration.** A whole-year aggregate is the
-  one figure on that page a reader cannot check against a count they can see,
+  **The steps are the point, not decoration.** A twelve-month aggregate is
+  the one figure on that page a reader cannot check against a count they can see,
   so the card says what it adds up while it adds it up, and keeps the list,
   with each step's figures and duration, once it is done. The run itself
-  belongs to `YearRunner`, which every open card watches: a reader arriving
+  belongs to `TwelveMonthsRunner`, which every open card watches: a reader arriving
   mid-run sees the steps already finished and hears the rest.
 
-  The dead render starts nothing (`YearRunner.peek/1`): a crawler requesting
+  The dead render starts nothing (`TwelveMonthsRunner.peek/1`): a crawler requesting
   the page must not set off an aggregate. It shows the last result when there
   is one and the steps waiting otherwise. Without a runner (tests) the
   connected view computes in its own process through `start_async/3`.
   """
 
-  use VutuvWeb, :live_view
+  use VutuvWeb, :embedded_live_view
 
-  alias Vutuv.PostAnalytics.Year
-  alias Vutuv.PostAnalytics.YearRunner
+  alias Vutuv.PostAnalytics.TwelveMonths
+  alias Vutuv.PostAnalytics.TwelveMonthsRunner
   alias VutuvWeb.AgentDocs.InvestorsDoc
   alias VutuvWeb.CompanyHTML
   alias VutuvWeb.Live.InitAssigns
@@ -37,48 +37,48 @@ defmodule VutuvWeb.InvestorsReachLive do
       |> assign(failed?: false)
 
     if connected?(socket) do
-      case YearRunner.watch() do
+      case TwelveMonthsRunner.watch() do
         :no_runner -> {:ok, socket |> assign_snapshot(nil, [], true) |> compute_here()}
         snapshot -> {:ok, assign_snapshot(socket, snapshot)}
       end
     else
-      {:ok, assign_snapshot(socket, YearRunner.peek())}
+      {:ok, assign_snapshot(socket, TwelveMonthsRunner.peek())}
     end
   end
 
   @impl true
-  def handle_info({:year_reach, :started}, socket) do
+  def handle_info({:reach, :started}, socket) do
     {:noreply, assign(socket, steps: [], running?: true, failed?: false)}
   end
 
   # Keyed rather than appended: a step broadcast in the moment between
   # subscribing and asking the runner arrives twice.
-  def handle_info({:year_reach, {:step, step}}, socket) do
+  def handle_info({:reach, {:step, step}}, socket) do
     steps = Enum.reject(socket.assigns.steps, &(&1.key == step.key)) ++ [step]
     {:noreply, assign(socket, steps: steps)}
   end
 
-  def handle_info({:year_reach, {:done, result}}, socket) do
+  def handle_info({:reach, {:done, result}}, socket) do
     {:noreply, assign_snapshot(socket, result, [], false)}
   end
 
-  def handle_info({:year_reach, :failed}, socket) do
+  def handle_info({:reach, :failed}, socket) do
     {:noreply, assign(socket, running?: false, failed?: true, steps: [])}
   end
 
   # The in-process run ends the way a runner's run does.
   @impl true
-  def handle_async(:year_reach, {:ok, result}, socket),
-    do: handle_info({:year_reach, {:done, result}}, socket)
+  def handle_async(:reach, {:ok, result}, socket),
+    do: handle_info({:reach, {:done, result}}, socket)
 
-  def handle_async(:year_reach, {:exit, _reason}, socket),
-    do: handle_info({:year_reach, :failed}, socket)
+  def handle_async(:reach, {:exit, _reason}, socket),
+    do: handle_info({:reach, :failed}, socket)
 
   defp compute_here(socket) do
     view = self()
 
-    start_async(socket, :year_reach, fn ->
-      Year.compute(progress: &send(view, {:year_reach, {:step, &1}}))
+    start_async(socket, :reach, fn ->
+      TwelveMonths.compute(progress: &send(view, {:reach, {:step, &1}}))
     end)
   end
 
@@ -86,12 +86,7 @@ defmodule VutuvWeb.InvestorsReachLive do
     do: assign_snapshot(socket, result, steps, running?)
 
   defp assign_snapshot(socket, result, steps, running?) do
-    assign(socket,
-      result: result,
-      steps: steps,
-      running?: running?,
-      year: if(result, do: result.year, else: DateTime.utc_now().year)
-    )
+    assign(socket, result: result, steps: steps, running?: running?)
   end
 
   @impl true
@@ -99,10 +94,10 @@ defmodule VutuvWeb.InvestorsReachLive do
     ~H"""
     <.card>
       <h2 class="text-xl font-bold text-slate-900 dark:text-white">
-        {gettext("Reach in %{year}", year: @year)}
+        {gettext("Reach over the last 12 months")}
       </h2>
       <p class="mt-1 text-sm text-slate-600 dark:text-slate-400">
-        {InvestorsDoc.year_reach_lead()}
+        {InvestorsDoc.reach_lead()}
       </p>
       <.error_banner :if={@failed?} class="mt-4">
         {gettext("The calculation failed. Reload the page to try again.")}
@@ -113,7 +108,7 @@ defmodule VutuvWeb.InvestorsReachLive do
           <%= if @result do %>
             <.section_title>{gettext("Potential reach from reposts")}</.section_title>
             <p
-              data-year-reach-total={@result.reach.known}
+              data-reach-total={@result.reach.known}
               class="mt-1 mb-0 text-5xl font-bold tracking-tight tabular-nums text-slate-900 dark:text-white"
             >
               {delimited_count(@result.reach.known)}<span class="text-accent">+</span>
@@ -163,7 +158,7 @@ defmodule VutuvWeb.InvestorsReachLive do
           <ol class="mt-3 space-y-3">
             <li
               :for={row <- step_rows(@result, @steps, @running?)}
-              data-year-reach-step={row.key}
+              data-reach-step={row.key}
               data-state={row.state}
               class="flex items-start gap-3"
             >
@@ -201,7 +196,7 @@ defmodule VutuvWeb.InvestorsReachLive do
           {gettext("How this is calculated")}
         </summary>
         <div class="mt-3 max-w-3xl space-y-2 text-slate-600 dark:text-slate-400">
-          <p :for={sentence <- InvestorsDoc.year_reach_explainer()} class="mb-0">{sentence}</p>
+          <p :for={sentence <- InvestorsDoc.reach_explainer()} class="mb-0">{sentence}</p>
         </div>
       </details>
     </.card>
@@ -225,8 +220,8 @@ defmodule VutuvWeb.InvestorsReachLive do
       <div class="mt-2 flex h-36 items-end gap-1.5">
         <div
           :for={month <- @months}
-          data-year-reach-month={month.month}
-          title={"#{month_name(month.month)}: #{delimited_count(month.reach)}"}
+          data-reach-month={month.month}
+          title={"#{month_name(month.month)} #{month.year}: #{delimited_count(month.reach)}"}
           class="flex h-full min-w-0 flex-1 flex-col items-center justify-end gap-1"
         >
           <span
@@ -287,9 +282,9 @@ defmodule VutuvWeb.InvestorsReachLive do
   defp step_rows(result, steps, running?) do
     done = if running? or is_nil(result), do: steps, else: result.steps
     by_key = Map.new(done, &{&1.key, &1})
-    current = if running?, do: Enum.find(Year.steps(), &(not Map.has_key?(by_key, &1)))
+    current = if running?, do: Enum.find(TwelveMonths.steps(), &(not Map.has_key?(by_key, &1)))
 
-    for key <- Year.steps() do
+    for key <- TwelveMonths.steps() do
       step = Map.get(by_key, key)
 
       state =
@@ -303,7 +298,7 @@ defmodule VutuvWeb.InvestorsReachLive do
     end
   end
 
-  defp step_label(:posts), do: gettext("This year's public posts")
+  defp step_label(:posts), do: gettext("Public posts of the last 12 months")
   defp step_label(:local_reposts), do: gettext("Followers of members and pages here who reposted")
 
   defp step_label(:remote_reposts),

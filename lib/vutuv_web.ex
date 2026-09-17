@@ -66,7 +66,25 @@ defmodule VutuvWeb do
   def live_view do
     quote do
       use Phoenix.LiveView, layout: {VutuvWeb.LayoutHTML, :app}
+      unquote(live_view_helpers())
+    end
+  end
 
+  @doc """
+  A LiveView that a dead page embeds with `live_render/3`: `live_view/0`
+  without the `:app` layout, which the page around it already renders. With
+  the layout, the child draws a second top bar and footer inside its card
+  (`test/vutuv_web/embedded_live_view_layout_test.exs`).
+  """
+  def embedded_live_view do
+    quote do
+      use Phoenix.LiveView
+      unquote(live_view_helpers())
+    end
+  end
+
+  defp live_view_helpers do
+    quote do
       use Phoenix.VerifiedRoutes,
         endpoint: VutuvWeb.Endpoint,
         router: VutuvWeb.Router,

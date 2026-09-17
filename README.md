@@ -39,7 +39,7 @@ We use the [MIT License](LICENSE).
   later wave remains visible. Visible interactions are clearly separated from
   view counts.
 - `/system/investors` adds up that potential repost reach for every public post
-  of the current year, and shows the calculation's steps live while it runs.
+  of the last 12 months, and shows the calculation's steps live while it runs.
 
 - Public member profiles (work experience, education, spoken languages, tags,
   links, contact details, online messengers with click-to-chat deep links) with

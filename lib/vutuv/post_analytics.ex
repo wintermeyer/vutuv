@@ -231,7 +231,7 @@ defmodule Vutuv.PostAnalytics do
   gone) and the `post_id` it belongs to.
 
   A reposter of several posts is a row per post, which is what the per-post
-  analysis sums and what `Vutuv.PostAnalytics.Year` adds up across a year.
+  analysis sums and what `Vutuv.PostAnalytics.TwelveMonths` adds up across 12 months.
   """
   def local_reposters(post_ids) do
     origin = origin_host()
@@ -331,7 +331,7 @@ defmodule Vutuv.PostAnalytics do
   @doc """
   What a list of reposter rows adds up to: the sum of the follower counts that
   are known, how many rows have one, and how many do not. The per-post page and
-  `Vutuv.PostAnalytics.Year` both count through here, so the yearly figure
+  `Vutuv.PostAnalytics.TwelveMonths` both count through here, so the 12-month figure
   cannot come to mean something else.
   """
   def reach_tally(reposters) do

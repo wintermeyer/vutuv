@@ -7684,7 +7684,7 @@ msgstr "Si aggiorna da sola. Può lasciare questa pagina: l'invio prosegue."
 #: lib/vutuv_web/components/welcome_components.ex:362
 #: lib/vutuv_web/live/admin/media_live.ex:270
 #: lib/vutuv_web/live/admin/newsletter_broadcast_live.ex:174
-#: lib/vutuv_web/live/investors_reach_live.ex:263
+#: lib/vutuv_web/live/investors_reach_live.ex:258
 #: lib/vutuv_web/live/post_live/feed.ex:4239
 #: lib/vutuv_web/live/post_rewrites_live.ex:447
 #: lib/vutuv_web/live/press_kit_live.ex:1081
@@ -10602,7 +10602,7 @@ msgid_plural "%{count} stars"
 msgstr[0] "%{count} stella"
 msgstr[1] "%{count} stelle"
 
-#: lib/vutuv_web/live/investors_reach_live.ex:326
+#: lib/vutuv_web/live/investors_reach_live.ex:321
 #: lib/vutuv_web/live/notification_live/index.ex:1416
 #: lib/vutuv_web/live/organization_live/show.ex:671
 #: lib/vutuv_web/views/user_html.ex:965
@@ -16145,7 +16145,7 @@ msgstr[0] "%{formatted} Mi piace"
 msgstr[1] "%{formatted} Mi piace"
 
 #: lib/vutuv_web/components/post_components.ex:7293
-#: lib/vutuv_web/live/investors_reach_live.ex:323
+#: lib/vutuv_web/live/investors_reach_live.ex:318
 #, elixir-autogen, elixir-format
 msgid "%{formatted} repost"
 msgid_plural "%{formatted} reposts"
@@ -18616,7 +18616,7 @@ msgstr "Ancora nulla da vutuv. Segua persone qui per riempire questa scheda."
 msgid "View the conversation"
 msgstr "Vedi la conversazione"
 
-#: lib/vutuv_web/live/investors_reach_live.ex:317
+#: lib/vutuv_web/live/investors_reach_live.ex:312
 #: lib/vutuv_web/live/tag_live/timeline.ex:287
 #: lib/vutuv_web/templates/post/index.html.heex:18
 #, elixir-autogen, elixir-format
@@ -18797,7 +18797,7 @@ msgid "A published reference then appears next to the entry it documents."
 msgstr "Un attestato pubblicato compare poi accanto alla voce che documenta."
 
 #: lib/vutuv_web/controllers/job_reference_controller.ex:252
-#: lib/vutuv_web/live/reference_check_live.ex:406
+#: lib/vutuv_web/live/reference_check_live.ex:400
 #, elixir-autogen, elixir-format
 msgid "A review for this reference is already running."
 msgstr "Per questo attestato è già in corso un'analisi."
@@ -18922,7 +18922,7 @@ msgid "Label"
 msgstr "Etichetta"
 
 #: lib/vutuv_web/live/post_live/feed.ex:3962
-#: lib/vutuv_web/live/reference_check_live.ex:169
+#: lib/vutuv_web/live/reference_check_live.ex:163
 #, elixir-autogen, elixir-format
 msgid "Loading…"
 msgstr "Caricamento…"
@@ -18965,7 +18965,7 @@ msgstr "Attestato"
 msgid "Review result"
 msgstr "Esito dell'analisi"
 
-#: lib/vutuv_web/live/reference_check_live.ex:298
+#: lib/vutuv_web/live/reference_check_live.ex:292
 #, elixir-autogen, elixir-format
 msgid "Reviewing your reference. This takes a few minutes."
 msgstr "Analisi del Suo attestato in corso. Ci vogliono alcuni minuti."
@@ -18993,12 +18993,12 @@ msgstr "Testo dell'attestato"
 msgid "The AI review covers German Arbeitszeugnisse only."
 msgstr "L'analisi con l'IA riguarda solo gli Arbeitszeugnisse tedeschi."
 
-#: lib/vutuv_web/live/reference_check_live.ex:188
+#: lib/vutuv_web/live/reference_check_live.ex:182
 #, elixir-autogen, elixir-format
 msgid "The AI review is not available on this installation."
 msgstr "L'analisi con l'IA non è disponibile su questa installazione."
 
-#: lib/vutuv_web/live/reference_check_live.ex:197
+#: lib/vutuv_web/live/reference_check_live.ex:191
 #, elixir-autogen, elixir-format
 msgid "The AI review reads German employment law and is therefore offered for German Arbeitszeugnisse only."
 msgstr ""
@@ -19011,17 +19011,17 @@ msgstr ""
 msgid "The document"
 msgstr "Il documento"
 
-#: lib/vutuv_web/live/reference_check_live.ex:345
+#: lib/vutuv_web/live/reference_check_live.ex:339
 #, elixir-autogen, elixir-format
 msgid "The review could not be completed."
 msgstr "Non è stato possibile completare l'analisi."
 
-#: lib/vutuv_web/live/reference_check_live.ex:414
+#: lib/vutuv_web/live/reference_check_live.ex:408
 #, elixir-autogen, elixir-format
 msgid "The review could not be started."
 msgstr "Non è stato possibile avviare l'analisi."
 
-#: lib/vutuv_web/live/reference_check_live.ex:412
+#: lib/vutuv_web/live/reference_check_live.ex:406
 #, elixir-autogen, elixir-format
 msgid "The review covers German Arbeitszeugnisse only."
 msgstr "L'analisi riguarda solo gli Arbeitszeugnisse tedeschi."
@@ -19042,14 +19042,14 @@ msgid "The review is not available on this installation."
 msgstr "L'analisi non è disponibile su questa installazione."
 
 #: lib/vutuv_web/controllers/job_reference_controller.ex:259
-#: lib/vutuv_web/live/reference_check_live.ex:409
+#: lib/vutuv_web/live/reference_check_live.ex:403
 #, elixir-autogen, elixir-format
 msgid "There is no text to review yet. Upload the document or paste the text."
 msgstr ""
 "Non c'è ancora alcun testo da analizzare. Carichi il documento o incolli il "
 "testo."
 
-#: lib/vutuv_web/live/reference_check_live.ex:352
+#: lib/vutuv_web/live/reference_check_live.ex:346
 #, elixir-autogen, elixir-format
 msgid "Try again"
 msgstr "Riprova"
@@ -19061,14 +19061,14 @@ msgstr ""
 "Carichi i Suoi Arbeitszeugnisse, li alleghi al Suo CV e li faccia "
 "analizzare. Nulla è pubblico finché non lo decide Lei."
 
-#: lib/vutuv_web/live/reference_check_live.ex:267
+#: lib/vutuv_web/live/reference_check_live.ex:261
 #, elixir-autogen, elixir-format
 msgid "Waiting — %{count} review ahead of yours."
 msgid_plural "Waiting — %{count} reviews ahead of yours."
 msgstr[0] "In attesa: %{count} analisi prima della Sua."
 msgstr[1] "In attesa: %{count} analisi prima della Sua."
 
-#: lib/vutuv_web/live/reference_check_live.ex:273
+#: lib/vutuv_web/live/reference_check_live.ex:267
 #, elixir-autogen, elixir-format
 msgid "Waiting — yours is next."
 msgstr "In attesa: la Sua è la prossima."
@@ -19149,7 +19149,7 @@ msgstr "documento"
 msgid "Back to your employment references"
 msgstr "Torna ai Suoi attestati di lavoro"
 
-#: lib/vutuv_web/live/reference_check_live.ex:324
+#: lib/vutuv_web/live/reference_check_live.ex:318
 #: lib/vutuv_web/templates/job_reference/view.html.heex:38
 #, elixir-autogen, elixir-format
 msgid "Read the review"
@@ -19193,7 +19193,7 @@ msgstr "Modifica questo attestato"
 msgid "Open the file"
 msgstr "Apri il file"
 
-#: lib/vutuv_web/live/reference_check_live.ex:335
+#: lib/vutuv_web/live/reference_check_live.ex:329
 #: lib/vutuv_web/templates/job_reference/check.html.heex:68
 #, elixir-autogen, elixir-format
 msgid "Review again"
@@ -19204,7 +19204,7 @@ msgstr "Analizza di nuovo"
 msgid "Uploaded file"
 msgstr "File caricato"
 
-#: lib/vutuv_web/live/reference_check_live.ex:333
+#: lib/vutuv_web/live/reference_check_live.ex:327
 #, elixir-autogen, elixir-format
 msgid "You changed the text after this review."
 msgstr "Ha modificato il testo dopo questa analisi."
@@ -19268,7 +19268,7 @@ msgstr "L'attestato caricato"
 msgid "The yardstick is public too."
 msgstr "Anche il metro di giudizio è pubblico."
 
-#: lib/vutuv_web/live/reference_check_live.ex:163
+#: lib/vutuv_web/live/reference_check_live.ex:157
 #, elixir-autogen, elixir-format
 msgid "%{count} minute"
 msgid_plural "%{count} minutes"
@@ -19276,7 +19276,7 @@ msgstr[0] "%{count} minuto"
 msgstr[1] "%{count} minuti"
 
 #: lib/vutuv_web/components/ui.ex:3868
-#: lib/vutuv_web/live/reference_check_live.ex:158
+#: lib/vutuv_web/live/reference_check_live.ex:152
 #, elixir-autogen, elixir-format
 msgid "%{count} second"
 msgid_plural "%{count} seconds"
@@ -19318,7 +19318,7 @@ msgstr "Analisi degli attestati di lavoro"
 msgid "Issue date"
 msgstr "Data di rilascio"
 
-#: lib/vutuv_web/live/reference_check_live.ex:294
+#: lib/vutuv_web/live/reference_check_live.ex:288
 #, elixir-autogen, elixir-format
 msgid "Reviewing your reference. This usually takes about %{duration}."
 msgstr ""
@@ -19336,7 +19336,7 @@ msgstr "L'analisi di “%{title}” è pronta."
 msgid "The review of “%{title}” is ready: %{grade}."
 msgstr "L'analisi di “%{title}” è pronta: %{grade}."
 
-#: lib/vutuv_web/live/reference_check_live.ex:279
+#: lib/vutuv_web/live/reference_check_live.ex:273
 #, elixir-autogen, elixir-format
 msgid "Usually about %{duration}."
 msgstr "Di solito circa %{duration}."
@@ -19401,12 +19401,12 @@ msgstr ""
 msgid "This reference was issued to me."
 msgstr "Questo attestato è stato rilasciato a me."
 
-#: lib/vutuv_web/live/reference_check_live.ex:245
+#: lib/vutuv_web/live/reference_check_live.ex:239
 #, elixir-autogen, elixir-format
 msgid "Decode this reference"
 msgstr "Decifri questo attestato"
 
-#: lib/vutuv_web/live/reference_check_live.ex:239
+#: lib/vutuv_web/live/reference_check_live.ex:233
 #, elixir-autogen, elixir-format
 msgid "German references are graded in code, so friendly words can carry a poor mark. We read the wording against German employment-reference law and tell you which grade is in it, what each assessing phrase really says, and what is missing, contradictory or formally wrong."
 msgstr ""
@@ -19416,12 +19416,12 @@ msgstr ""
 "dice davvero ogni formula di giudizio e cosa manca, si contraddice o è "
 "formalmente sbagliato."
 
-#: lib/vutuv_web/live/reference_check_live.ex:253
+#: lib/vutuv_web/live/reference_check_live.ex:247
 #, elixir-autogen, elixir-format
 msgid "Only you see the result."
 msgstr "L'esito lo vede solo Lei."
 
-#: lib/vutuv_web/live/reference_check_live.ex:374
+#: lib/vutuv_web/live/reference_check_live.ex:368
 #, elixir-autogen, elixir-format
 msgid "You can leave this page. The result lands in your notifications, and we email it to you if you are no longer here by then."
 msgstr ""
@@ -23855,7 +23855,7 @@ msgstr ""
 msgid "Advertising instead of a paywall"
 msgstr ""
 
-#: lib/vutuv_web/templates/company/investors.html.heex:160
+#: lib/vutuv_web/templates/company/investors.html.heex:161
 #, elixir-autogen, elixir-format
 msgid "Create an account"
 msgstr ""
@@ -23868,7 +23868,7 @@ msgid "Fediverse accounts"
 msgstr ""
 
 #: lib/vutuv_web/agent_docs/investors_doc.ex:72
-#: lib/vutuv_web/live/investors_reach_live.ex:141
+#: lib/vutuv_web/live/investors_reach_live.ex:136
 #, elixir-autogen, elixir-format
 msgid "Fediverse servers"
 msgstr ""
@@ -23880,14 +23880,14 @@ msgid_plural "From %{formatted} servers"
 msgstr[0] ""
 msgstr[1] ""
 
-#: lib/vutuv_web/agent_docs/investors_doc.ex:354
+#: lib/vutuv_web/agent_docs/investors_doc.ex:353
 #: lib/vutuv_web/controllers/company_controller.ex:57
 #: lib/vutuv_web/templates/layout/app.html.heex:111
 #, elixir-autogen, elixir-format
 msgid "Investors"
 msgstr ""
 
-#: lib/vutuv_web/agent_docs/investors_doc.ex:307
+#: lib/vutuv_web/agent_docs/investors_doc.ex:306
 #, elixir-autogen, elixir-format
 msgid "Over these %{days} days %{total} people arrived, %{members} of them as members here."
 msgstr ""
@@ -23908,7 +23908,7 @@ msgstr ""
 msgid "Readable without an account"
 msgstr ""
 
-#: lib/vutuv_web/templates/company/investors.html.heex:165
+#: lib/vutuv_web/templates/company/investors.html.heex:166
 #, elixir-autogen, elixir-format
 msgid "Send a message"
 msgstr ""
@@ -23922,7 +23922,7 @@ msgstr ""
 
 #: lib/vutuv_web/agent_docs/markdown.ex:448
 #: lib/vutuv_web/agent_docs/text.ex:397
-#: lib/vutuv_web/templates/company/investors.html.heex:100
+#: lib/vutuv_web/templates/company/investors.html.heex:101
 #, elixir-autogen, elixir-format
 msgid "Why this is worth building"
 msgstr ""
@@ -23935,17 +23935,17 @@ msgstr ""
 
 #: lib/vutuv_web/agent_docs/markdown.ex:454
 #: lib/vutuv_web/agent_docs/text.ex:399
-#: lib/vutuv_web/templates/company/investors.html.heex:138
+#: lib/vutuv_web/templates/company/investors.html.heex:139
 #, elixir-autogen, elixir-format
 msgid "Write to me"
 msgstr ""
 
-#: lib/vutuv_web/agent_docs/investors_doc.ex:319
+#: lib/vutuv_web/agent_docs/investors_doc.ex:318
 #, elixir-autogen, elixir-format
 msgid "Write to me here, on vutuv. Creating an account takes a minute and costs nothing, and you will have seen the product before the first sentence about it."
 msgstr ""
 
-#: lib/vutuv_web/templates/company/investors.html.heex:148
+#: lib/vutuv_web/templates/company/investors.html.heex:149
 #, elixir-autogen, elixir-format
 msgid "My profile:"
 msgstr ""
@@ -23966,7 +23966,7 @@ msgstr ""
 msgid "Fast pages win"
 msgstr ""
 
-#: lib/vutuv_web/templates/company/investors.html.heex:119
+#: lib/vutuv_web/templates/company/investors.html.heex:120
 #, elixir-autogen, elixir-format
 msgid "Source:"
 msgstr ""
@@ -25542,7 +25542,7 @@ msgid "Photo scan"
 msgstr "Controllo delle foto"
 
 #: lib/vutuv_web/live/admin/media_live.ex:272
-#: lib/vutuv_web/live/investors_reach_live.ex:271
+#: lib/vutuv_web/live/investors_reach_live.ex:266
 #, elixir-autogen, elixir-format
 msgid "Running"
 msgstr "In corso"
@@ -25867,7 +25867,7 @@ msgstr "Creazione della pagina %{page} di %{total}"
 msgid "Something in this post was refused."
 msgstr "Qualcosa in questo post è stato rifiutato."
 
-#: lib/vutuv_web/live/investors_reach_live.ex:279
+#: lib/vutuv_web/live/investors_reach_live.ex:274
 #: lib/vutuv_web/live/uploads_live.ex:116
 #, elixir-autogen, elixir-format
 msgid "Waiting"
@@ -26411,7 +26411,7 @@ msgstr ""
 msgid "%{count} more servers are included in the total."
 msgstr ""
 
-#: lib/vutuv_web/live/investors_reach_live.ex:136
+#: lib/vutuv_web/live/investors_reach_live.ex:131
 #: lib/vutuv_web/templates/post/analytics.html.heex:96
 #, elixir-autogen, elixir-format
 msgid "Interactions"
@@ -26486,7 +26486,7 @@ msgid "Line width: known repost audience"
 msgstr "Spessore della linea: pubblico noto dei repost"
 
 #: lib/vutuv_web/controllers/og_image_controller.ex:86
-#: lib/vutuv_web/live/investors_reach_live.ex:114
+#: lib/vutuv_web/live/investors_reach_live.ex:109
 #: lib/vutuv_web/templates/post/analytics.html.heex:21
 #, elixir-autogen, elixir-format
 msgid "Potential reach from reposts"
@@ -26497,7 +26497,7 @@ msgstr "Portata potenziale dei repost"
 msgid "Known follower totals of people who reposted. This is potential distribution, not readership."
 msgstr "Follower noti di chi ha ripubblicato. È una diffusione potenziale, non il numero di lettori."
 
-#: lib/vutuv_web/live/investors_reach_live.ex:122
+#: lib/vutuv_web/live/investors_reach_live.ex:117
 #: lib/vutuv_web/templates/post/analytics.html.heex:24
 #, elixir-autogen, elixir-format
 msgid "%{known} known · %{unknown} unavailable"
@@ -26508,7 +26508,7 @@ msgstr "%{known} noti · %{unknown} non disponibili"
 msgid "No reposts recorded."
 msgstr "Nessun repost registrato."
 
-#: lib/vutuv_web/live/investors_reach_live.ex:201
+#: lib/vutuv_web/live/investors_reach_live.ex:196
 #: lib/vutuv_web/templates/post/analytics.html.heex:40
 #, elixir-autogen, elixir-format
 msgid "How this is calculated"
@@ -26658,36 +26658,36 @@ msgstr "Intervalli di 3 ore · UTC"
 msgid "Per day · UTC"
 msgstr "Al giorno · UTC"
 
-#: lib/vutuv_web/live/investors_reach_live.ex:337
+#: lib/vutuv_web/live/investors_reach_live.ex:332
 #, elixir-autogen, elixir-format
 msgid "%{formatted} interaction"
 msgid_plural "%{formatted} interactions"
 msgstr[0] "%{formatted} interazione"
 msgstr[1] "%{formatted} interazioni"
 
-#: lib/vutuv_web/live/investors_reach_live.ex:348
+#: lib/vutuv_web/live/investors_reach_live.ex:343
 #, elixir-autogen, elixir-format
 msgid "%{formatted} of them responded"
 msgstr "%{formatted} hanno reagito"
 
-#: lib/vutuv_web/live/investors_reach_live.ex:345
+#: lib/vutuv_web/live/investors_reach_live.ex:340
 #, elixir-autogen, elixir-format
 msgid "%{formatted} server"
 msgid_plural "%{formatted} servers"
 msgstr[0] "%{formatted} server"
 msgstr[1] "%{formatted} server"
 
-#: lib/vutuv_web/live/investors_reach_live.ex:330
+#: lib/vutuv_web/live/investors_reach_live.ex:325
 #, elixir-autogen, elixir-format
 msgid "%{formatted} without a known total"
 msgstr "%{formatted} senza totale noto"
 
-#: lib/vutuv_web/live/investors_reach_live.ex:223
+#: lib/vutuv_web/live/investors_reach_live.ex:218
 #, elixir-autogen, elixir-format
 msgid "By month of publication"
 msgstr "Per mese di pubblicazione"
 
-#: lib/vutuv_web/live/investors_reach_live.ex:194
+#: lib/vutuv_web/live/investors_reach_live.ex:189
 #, elixir-autogen, elixir-format
 msgid "Calculated %{when}"
 msgstr "Calcolato %{when}"
@@ -26697,69 +26697,69 @@ msgstr "Calcolato %{when}"
 msgid "Each post brings the follower counts of the members, pages and Fediverse accounts that reposted it. Somebody who reposts three posts counts three times."
 msgstr "Ogni post porta con sé il numero di follower dei membri, delle pagine e degli account del Fediverso che lo hanno ripubblicato. Chi ripubblica tre post conta tre volte."
 
-#: lib/vutuv_web/live/investors_reach_live.ex:313
+#: lib/vutuv_web/live/investors_reach_live.ex:308
 #, elixir-autogen, elixir-format
 msgid "Fediverse servers involved"
 msgstr "Server del Fediverso coinvolti"
 
-#: lib/vutuv_web/live/investors_reach_live.ex:307
+#: lib/vutuv_web/live/investors_reach_live.ex:302
 #, elixir-autogen, elixir-format
 msgid "Followers of members and pages here who reposted"
 msgstr "Follower dei membri e delle pagine di qui che hanno ripubblicato"
 
-#: lib/vutuv_web/live/investors_reach_live.ex:161
+#: lib/vutuv_web/live/investors_reach_live.ex:156
 #, elixir-autogen, elixir-format
 msgid "How the figure came about"
 msgstr "Come si arriva a questa cifra"
 
-#: lib/vutuv_web/live/investors_reach_live.ex:310
+#: lib/vutuv_web/live/investors_reach_live.ex:305
 #, elixir-autogen, elixir-format
 msgid "Known followers of Fediverse accounts that reposted"
 msgstr "Follower noti degli account del Fediverso che hanno ripubblicato"
 
-#: lib/vutuv_web/live/investors_reach_live.ex:312
+#: lib/vutuv_web/live/investors_reach_live.ex:307
 #, elixir-autogen, elixir-format
 msgid "Likes, reposts and replies"
 msgstr "Mi piace, ripubblicazioni e risposte"
 
-#: lib/vutuv_web/agent_docs/investors_doc.ex:271
-#, elixir-autogen, elixir-format
-msgid "Potential reach from reposts in %{year}: at least %{reach} followers, from %{formatted} public post."
-msgid_plural "Potential reach from reposts in %{year}: at least %{reach} followers, from %{formatted} public posts."
-msgstr[0] "Portata potenziale dei repost nel %{year}: almeno %{reach} follower, da %{formatted} post pubblico."
-msgstr[1] "Portata potenziale dei repost nel %{year}: almeno %{reach} follower, da %{formatted} post pubblici."
-
-#: lib/vutuv_web/live/investors_reach_live.ex:132
+#: lib/vutuv_web/live/investors_reach_live.ex:127
 #, elixir-autogen, elixir-format
 msgid "Public posts"
 msgstr "Post pubblici"
 
-#: lib/vutuv_web/live/investors_reach_live.ex:102
-#, elixir-autogen, elixir-format
-msgid "Reach in %{year}"
-msgstr "Portata nel %{year}"
-
-#: lib/vutuv_web/live/investors_reach_live.ex:108
+#: lib/vutuv_web/live/investors_reach_live.ex:103
 #, elixir-autogen, elixir-format
 msgid "The calculation failed. Reload the page to try again."
 msgstr "Il calcolo non è riuscito. Ricarica la pagina per riprovare."
 
-#: lib/vutuv_web/live/investors_reach_live.ex:151
+#: lib/vutuv_web/live/investors_reach_live.ex:146
 #, elixir-autogen, elixir-format
 msgid "The figure appears here once the steps beside it are done."
 msgstr "La cifra compare qui non appena i passaggi accanto sono completati."
 
-#: lib/vutuv_web/agent_docs/investors_doc.ex:231
-#, elixir-autogen, elixir-format
-msgid "The potential reach of every public post published here this year, added up the way each post's own reach analysis counts it."
-msgstr "La portata potenziale di ogni post pubblico pubblicato qui quest'anno, sommata come la conta l'analisi della portata di ciascun post."
-
-#: lib/vutuv_web/live/investors_reach_live.ex:306
-#, elixir-autogen, elixir-format
-msgid "This year's public posts"
-msgstr "Post pubblici di quest'anno"
-
-#: lib/vutuv_web/live/investors_reach_live.ex:160
+#: lib/vutuv_web/live/investors_reach_live.ex:155
 #, elixir-autogen, elixir-format
 msgid "Working it out in the background"
 msgstr "Calcolo in background"
+
+#: lib/vutuv_web/agent_docs/investors_doc.ex:271
+#, elixir-autogen, elixir-format
+msgid "Potential reach from reposts over the last 12 months: at least %{reach} followers, from %{formatted} public post."
+msgid_plural "Potential reach from reposts over the last 12 months: at least %{reach} followers, from %{formatted} public posts."
+msgstr[0] "Portata potenziale dei repost negli ultimi 12 mesi: almeno %{reach} follower, da %{formatted} post pubblico."
+msgstr[1] "Portata potenziale dei repost negli ultimi 12 mesi: almeno %{reach} follower, da %{formatted} post pubblici."
+
+#: lib/vutuv_web/live/investors_reach_live.ex:301
+#, elixir-autogen, elixir-format
+msgid "Public posts of the last 12 months"
+msgstr "Post pubblici degli ultimi 12 mesi"
+
+#: lib/vutuv_web/live/investors_reach_live.ex:97
+#, elixir-autogen, elixir-format
+msgid "Reach over the last 12 months"
+msgstr "Portata degli ultimi 12 mesi"
+
+#: lib/vutuv_web/agent_docs/investors_doc.ex:231
+#, elixir-autogen, elixir-format
+msgid "The potential reach of every public post published here in the last 12 months, added up the way each post's own reach analysis counts it."
+msgstr "La portata potenziale di ogni post pubblico pubblicato qui negli ultimi 12 mesi, sommata come la conta l'analisi della portata di ciascun post."

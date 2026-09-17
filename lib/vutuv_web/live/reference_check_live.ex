@@ -22,7 +22,7 @@ defmodule VutuvWeb.ReferenceCheckLive do
   for: the state, and the way in.
   """
 
-  use VutuvWeb, :live_view
+  use VutuvWeb, :embedded_live_view
 
   alias Vutuv.References
   alias Vutuv.References.Check
@@ -43,17 +43,12 @@ defmodule VutuvWeb.ReferenceCheckLive do
   # reference, not a compile-time one — so the import closes no cycle.
   import VutuvWeb.JobReferenceHTML, only: [grade_label: 1]
 
-  # Two things every off-router `live_render` child here has to do for itself,
-  # and both fail silently rather than loudly:
-  #
-  #   * `layout: false` — `use VutuvWeb, :live_view` carries the `:app` layout,
-  #     so an embedded child renders the whole top bar and nav *inside* its
-  #     host's card. Caught in the browser; no test would have seen it.
-  #   * the session locale — a LiveView mounted outside the `live_session` gets
-  #     no `LiveLocale` hook, so every gettext call in it falls back to English
-  #     while the page around it is German. Applied on the socket alone: the
-  #     dead render runs in the request process the plug already resolved
-  #     (`VutuvWeb.LiveLocale.put_viewer/2`).
+  # An off-router `live_render` child has to apply the session locale itself,
+  # and forgetting it fails silently: a LiveView mounted outside the
+  # `live_session` gets no `LiveLocale` hook, so every gettext call in it falls
+  # back to English while the page around it is German. Applied on the socket
+  # alone: the dead render runs in the request process the plug already
+  # resolved (`VutuvWeb.LiveLocale.put_viewer/2`).
   @impl true
   def mount(_params, session, socket) do
     reference_id = session["job_reference_id"]
@@ -66,15 +61,14 @@ defmodule VutuvWeb.ReferenceCheckLive do
     else
       # The throwaway dead render. Its own HTTP request was already
       # authenticated; the socket re-checks the token the moment it connects.
-      {:ok, assign(socket, reference: nil, check: nil, viewer: nil, ready?: false), layout: false}
+      {:ok, assign(socket, reference: nil, check: nil, viewer: nil, ready?: false)}
     end
   end
 
   defp mount_authenticated(reference_id, user, socket) do
     case user do
       nil ->
-        {:ok, assign(socket, reference: nil, check: nil, viewer: nil, ready?: true),
-         layout: false}
+        {:ok, assign(socket, reference: nil, check: nil, viewer: nil, ready?: true)}
 
       user ->
         Vutuv.Activity.subscribe(user.id)
@@ -89,7 +83,7 @@ defmodule VutuvWeb.ReferenceCheckLive do
         {:ok,
          socket
          |> assign(viewer: user, reference: reference, ready?: true)
-         |> put_check(reference && Checks.latest_for(reference)), layout: false}
+         |> put_check(reference && Checks.latest_for(reference))}
     end
   end
 
