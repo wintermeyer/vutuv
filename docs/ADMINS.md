@@ -1147,7 +1147,9 @@ reactions and replies, and revocable in the settings. It is per-installation
 content, edited at `/admin` → Legal pages, not shipped in the code.
 
 - **Blocklist.** Enter a server name (`mastodon.example` — a full address or an
-  `@user@server` handle works too, only the server part is kept). From then on
+  `@user@server` handle works too, only the server part is kept). A block on
+  `mastodon.example` also covers `www.mastodon.example`; a block on
+  `www.mastodon.example` covers only that alias. From then on
   everything that server sends is dropped **before** its signature is checked
   and before any of its documents are fetched, and it is answered with a plain
   `202` rather than a refusal, so the list cannot be probed from outside.

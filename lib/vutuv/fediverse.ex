@@ -2832,7 +2832,7 @@ defmodule Vutuv.Fediverse do
   end
 
   defp deliverable_undo?(%Follow{remote_account: %RemoteAccount{} = account}, blocked) do
-    not MapSet.member?(blocked, BlockedInstance.normalize_host(account.actor_uri))
+    not covered_by_block?(BlockedInstance.normalize_host(account.actor_uri), blocked)
   end
 
   defp deliverable_undo?(_follow, _blocked), do: false
@@ -5692,11 +5692,19 @@ defmodule Vutuv.Fediverse do
   the remote actor is fetched, so a blocked server costs us neither an outbound
   request nor a write. A `nil`/unparseable host is not blocked — the request
   fails the signature check moments later anyway.
+
+  **A block on a host covers its `www.` alias too** (issue #2174). The host
+  asked about is written by whoever sent the document — an actor id, a status's
+  `acct` — so compared unfolded, `bob@www.shouty.example` walked past a block on
+  `shouty.example`. Folding is safe here for the reason `same_site?/2` gives:
+  this answer is only ever read as "drop it". It runs **one way**: a block on
+  `www.X` covers `www.X` and `www.www.X`, never the bare `X`, which a different
+  operator may hold.
   """
   def instance_blocked?(uri) do
     case BlockedInstance.normalize_host(uri) do
       nil -> false
-      host -> Repo.exists?(from(b in BlockedInstance, where: b.host == ^host))
+      host -> Repo.exists?(from(b in BlockedInstance, where: b.host in ^block_names(host)))
     end
   end
 
@@ -5709,14 +5717,35 @@ defmodule Vutuv.Fediverse do
   Each value goes through `BlockedInstance.normalize_host/1` first, so an actor
   id, a `@user@host` handle and a bare hostname all answer alike; the returned
   set holds the normalized spellings, which is what a caller must compare
-  against.
+  against — the spelling asked about, not the entry that covers it, since the
+  `www.` fold above applies here too.
   """
   def blocked_hosts(hosts) when is_list(hosts) do
-    normalized = hosts |> Enum.map(&BlockedInstance.normalize_host/1) |> Enum.reject(&is_nil/1)
+    normalized =
+      hosts
+      |> Enum.map(&BlockedInstance.normalize_host/1)
+      |> Enum.reject(&is_nil/1)
+      |> Enum.uniq()
 
-    Repo.all(from(b in BlockedInstance, where: b.host in ^normalized, select: b.host))
-    |> MapSet.new()
+    names = Enum.flat_map(normalized, &block_names/1)
+
+    blocked =
+      Repo.all(from(b in BlockedInstance, where: b.host in ^names, select: b.host))
+      |> MapSet.new()
+
+    normalized |> Enum.filter(&covered_by_block?(&1, blocked)) |> MapSet.new()
   end
+
+  # The blocklist entries that cover `host`: itself, then what is left as each
+  # leading `www.` comes off — `www.www.x`, `www.x`, `x`. Never the other way
+  # round, which is what keeps a block on an alias off the apex. The one
+  # spelling of the fold, so the single check, the batched one, the undo sweep
+  # and the purge cannot disagree about which host a block reaches.
+  defp block_names("www." <> rest = host), do: [host | block_names(rest)]
+  defp block_names(host), do: [host]
+
+  defp covered_by_block?(host, blocked),
+    do: Enum.any?(block_names(host), &MapSet.member?(blocked, &1))
 
   @doc """
   Blocks a remote server and purges everything already stored from it.
@@ -5828,8 +5857,7 @@ defmodule Vutuv.Fediverse do
     # than left to the read-time filter: "a blocked server leaves nothing of
     # itself at rest" is this function's whole promise, and the filter is what
     # covers the rows a *later* block finds — not a reason to keep them.
-    {external_posts, _} =
-      Repo.delete_all(from(p in ExternalPost, where: p.source == ^host or p.author_host == ^host))
+    external_posts = purge_external_posts(host)
 
     %{
       followers: followers,
@@ -5840,6 +5868,31 @@ defmodule Vutuv.Fediverse do
       deliveries: deliveries,
       post_deliveries: post_deliveries
     }
+  end
+
+  # An author at the host's `www.` alias is covered by the block (issue #2174),
+  # so those rows go too. SQL narrows to the host and its subdomains and
+  # `block_names/1` decides, so the purge cannot fold differently from the
+  # check that keeps new rows out.
+  defp purge_external_posts(host) do
+    blocked = MapSet.new([host])
+    subdomains = "%." <> host
+
+    ids =
+      from(p in ExternalPost,
+        where:
+          p.source == ^host or p.author_host == ^host or like(p.source, ^subdomains) or
+            like(p.author_host, ^subdomains),
+        select: %{id: p.id, source: p.source, author_host: p.author_host}
+      )
+      |> Repo.all()
+      |> Enum.filter(fn row ->
+        covered_by_block?(row.source, blocked) or covered_by_block?(row.author_host, blocked)
+      end)
+      |> Enum.map(& &1.id)
+
+    {deleted, _} = Repo.delete_all(from(p in ExternalPost, where: p.id in ^ids))
+    deleted
   end
 
   @doc """

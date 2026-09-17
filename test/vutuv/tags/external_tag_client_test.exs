@@ -128,6 +128,26 @@ defmodule Vutuv.Tags.ExternalTagClientTest do
       assert post.remote_id == "2"
     end
 
+    # Issue #2174's hand-over: the author's host is the answering server's word,
+    # so `www.` in front of a blocked name must not be a way past the block.
+    test "drops a status whose author lives at a blocked host's www. alias" do
+      admin = insert(:activated_user)
+      {:ok, {_blocked, _purged}} = Fediverse.block_instance(%{"host" => "shouty.example"}, admin)
+
+      {:ok, {_blocked, _purged}} =
+        Fediverse.block_instance(%{"host" => "www.loud.example"}, admin)
+
+      stub_tag_timeline([
+        status(%{"id" => "1", "account" => %{"acct" => "bob@www.shouty.example"}}),
+        status(%{"id" => "2", "account" => %{"acct" => "bob@WWW.www.Shouty.Example"}}),
+        status(%{"id" => "3", "account" => %{"acct" => "carol@www.loud.example"}}),
+        status(%{"id" => "4"})
+      ])
+
+      assert {:ok, [post]} = ExternalTagClient.fetch(@source, "Elixir")
+      assert post.remote_id == "4"
+    end
+
     test "skips a sensitive status and one behind a content warning" do
       stub_tag_timeline([
         status(%{"id" => "1", "sensitive" => true}),
@@ -393,6 +413,19 @@ defmodule Vutuv.Tags.ExternalTagClientTest do
 
       assert ExternalTagClient.authors(@source, "Elixir") ==
                {:ok, [%{host: "quiet.example", bot?: false}, %{host: @source, bot?: false}]}
+    end
+
+    test "leaves out an author at the www. alias of a blocked server" do
+      admin = insert(:activated_user)
+      {:ok, {_blocked, _purged}} = Fediverse.block_instance(%{"host" => "shouty.example"}, admin)
+
+      stub_tag_timeline([
+        status(%{"id" => "1", "account" => %{"acct" => "bot@www.shouty.example", "bot" => true}}),
+        status(%{"id" => "2", "account" => %{"acct" => "carol@wwwshouty.example"}})
+      ])
+
+      assert ExternalTagClient.authors(@source, "Elixir") ==
+               {:ok, [%{host: "wwwshouty.example", bot?: false}]}
     end
   end
 end

@@ -605,7 +605,10 @@ every activity of a member it finds no key for, silently.
   before the signature is verified and before the remote actor document is
   fetched, against *both* the signature's `keyId` and the activity's claimed
   `actor`, since neither is verified yet — and answers `202` rather than `403`,
-  so the list is not enumerable from outside. Blocking is also a purge
+  so the list is not enumerable from outside. A block on a host also covers its
+  `www.` alias, one way only (`instance_blocked?/1`, issue #2174): the host a
+  document names is the sender's word, and a block on `www.X` must never reach
+  a bare `X` somebody else may hold. Blocking is also a purge
   (`purge_instance/1`: that host's follower rows, its queued deliveries and the
   records of what was delivered there) and
   a mouth-shut: `deliver_due/0` drops a queued delivery to a blocked host, and

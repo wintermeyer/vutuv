@@ -9,10 +9,13 @@ defmodule Vutuv.FediverseBlocklistTest do
   """
   use Vutuv.DataCase, async: false
 
+  import Vutuv.ExternalTagHelpers, only: [external_post: 2]
+
   alias Vutuv.Fediverse
   alias Vutuv.Fediverse.BlockedInstance
   alias Vutuv.Fediverse.Delivery
   alias Vutuv.Fediverse.Follower
+  alias Vutuv.Tags.ExternalPost
 
   setup do
     Vutuv.RateLimiter.reset()
@@ -101,9 +104,54 @@ defmodule Vutuv.FediverseBlocklistTest do
       refute Fediverse.instance_blocked?("https://notspam.example/users/bot")
       refute Fediverse.instance_blocked?(nil)
     end
+
+    # Issue #2174: the host a status or an actor names is written by whoever
+    # sent it, so `www.` in front of a blocked name walked straight past the
+    # block. The fold runs one way only — a block on the alias is not a block
+    # on the apex, which may be somebody else's server.
+    test "a block covers the host's www. alias, and a block on the alias stays on it" do
+      {:ok, _} = Fediverse.block_instance(%{"host" => "spam.example"}, admin())
+      {:ok, _} = Fediverse.block_instance(%{"host" => "www.alias.example"}, admin())
+
+      for blocked <- [
+            "www.spam.example",
+            "https://WWW.spam.example/users/bot",
+            "@bot@www.www.spam.example",
+            "www.alias.example",
+            "www.www.alias.example"
+          ] do
+        assert Fediverse.instance_blocked?(blocked), "expected #{blocked} to be blocked"
+      end
+
+      for open <- ["alias.example", "wwwspam.example", "www.notspam.example", "spam.example.org"] do
+        refute Fediverse.instance_blocked?(open), "expected #{open} to stay open"
+      end
+
+      assert Fediverse.blocked_hosts([
+               "www.spam.example",
+               "bob@www.www.alias.example",
+               "alias.example",
+               "wwwspam.example"
+             ]) == MapSet.new(["www.spam.example", "www.www.alias.example"])
+    end
   end
 
   describe "blocking purges what is already stored" do
+    # The read path has no blocklist clause (`ExternalPosts.showable_query/0`
+    # says why), so a find the fold covers but the purge missed would stay on
+    # every card after the block.
+    test "takes a tag find whose author sits at the blocked host's www. alias" do
+      tag = insert(:tag)
+      alias_row = external_post(tag, source: "relay.example", author_host: "www.spam.example")
+      lookalike = external_post(tag, source: "relay.example", author_host: "www.notspam.example")
+
+      assert {:ok, {_blocked, %{external_posts: 1}}} =
+               Fediverse.block_instance(%{"host" => "spam.example"}, admin())
+
+      refute Repo.get(ExternalPost, alias_row.id)
+      assert Repo.get(ExternalPost, lookalike.id)
+    end
+
     test "removes that server's followers and queued deliveries, and no other server's" do
       member = federating_member()
 
