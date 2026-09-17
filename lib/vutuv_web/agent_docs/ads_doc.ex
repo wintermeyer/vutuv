@@ -18,7 +18,7 @@ defmodule VutuvWeb.AgentDocs.AdsDoc do
         "Shown on profiles and in the feed: beside the content on a desktop, near the top on a phone."
       ),
       gettext(
-        "At most one ad an hour per visitor, gone again after two minutes. Whoever closes it sees no more ads that day."
+        "Signed-in members see at most one ad an hour and none for the rest of the day once they close one. Visitors without an account see it on every profile they open. Each card goes again after two minutes in view."
       ),
       gettext(
         "Text only: a title of up to %{title} characters, one sentence of up to %{body} and a link, always clearly labeled as an ad.",

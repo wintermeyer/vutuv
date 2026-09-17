@@ -3,9 +3,11 @@ defmodule VutuvWeb.AdServingTest do
   The daily text ad on the two pages that carry it, a profile and the feed:
   at the top of the rail on a desktop and as a card near the top on a phone.
   The request decides (`VutuvWeb.AdServing`), the LiveView shows what it was
-  handed (`VutuvWeb.Live.AdSlot`), and the two frequency rules hold per member
-  on the server and per browser for a visitor without an account: at most one
-  ad an hour, and none for the rest of the day once the ✕ was pressed.
+  handed (`VutuvWeb.Live.AdSlot`). A member's two frequency rules live on the
+  server: at most one ad an hour, and none for the rest of the day once the ✕
+  was pressed. A visitor without an account sees the ad on every page, and
+  nothing about them is stored, neither on the server nor in a cookie.
+  Only a profile carries the ad for a visitor; the feed needs an account.
   """
 
   use VutuvWeb.ConnCase
@@ -114,20 +116,22 @@ defmodule VutuvWeb.AdServingTest do
     end
   end
 
-  describe "at most one ad an hour, for a visitor" do
-    test "the hour is the one the browser recorded when it showed a card", %{conn: conn} do
-      path = ~p"/#{profile_owner()}"
+  describe "a visitor sees the ad on every profile" do
+    test "cookies an earlier version wrote change nothing", %{conn: conn} do
       now = System.system_time(:second)
 
-      refute conn
+      assert conn
              |> put_req_cookie("vutuv_ad_seen", to_string(now - 60))
-             |> get(path)
+             |> put_req_cookie("vutuv_ad_dismissed", Date.to_iso8601(Ads.today()))
+             |> get(~p"/#{profile_owner()}")
              |> html_response(200) =~ @rail
+    end
 
-      assert build_conn()
-             |> put_req_cookie("vutuv_ad_seen", to_string(now - 3601))
-             |> get(path)
-             |> html_response(200) =~ @rail
+    test "the card's script keeps nothing in the browser" do
+      source = File.read!("assets/js/ad_slot.js")
+
+      refute source =~ "document.cookie"
+      refute source =~ ~r/(local|session)Storage|indexedDB/
     end
 
     test "sending a page takes no hour and writes no session", %{conn: conn} do
@@ -138,13 +142,6 @@ defmodule VutuvWeb.AdServingTest do
       assert get_session(conn, :ad_seen_at) == nil
 
       assert conn |> get(path) |> html_response(200) =~ @rail
-    end
-
-    test "a malformed hour cookie counts as none", %{conn: conn} do
-      assert conn
-             |> put_req_cookie("vutuv_ad_seen", "soon")
-             |> get(~p"/#{profile_owner()}")
-             |> html_response(200) =~ @rail
     end
   end
 
@@ -253,8 +250,12 @@ defmodule VutuvWeb.AdServingTest do
       assert conn |> get(~p"/feed") |> html_response(200) =~ @rail
     end
 
-    test "a visitor's ✕ takes the card away", %{conn: conn} do
-      {:ok, view, _html} = live(conn, ~p"/#{profile_owner()}")
+    test "a visitor's ✕ closes this card and nothing more", %{conn: conn} do
+      path = ~p"/#{profile_owner()}"
+      {:ok, view, html} = live(conn, path)
+
+      assert html =~ ~s(aria-label="Close this ad")
+      refute html =~ "Hide ads for today"
 
       view |> element("#ad-slot-inline button[phx-click=dismiss-ad]") |> render_click()
 
@@ -262,30 +263,18 @@ defmodule VutuvWeb.AdServingTest do
       refute has_element?(view, "#ad-slot-rail")
     end
 
-    test "the browser's day cookie keeps a visitor's ads away until midnight", %{conn: conn} do
-      path = ~p"/#{profile_owner()}"
-      today = Date.to_iso8601(Ads.today())
-      yesterday = Date.to_iso8601(Date.add(Ads.today(), -1))
+    test "a member's ✕ says it hides the ads for today", %{conn: conn} do
+      {conn, _user} = create_and_login_user(conn)
+      html = conn |> get(~p"/feed") |> html_response(200)
 
-      refute conn
-             |> put_req_cookie("vutuv_ad_dismissed", today)
-             |> get(path)
-             |> html_response(200) =~ @rail
-
-      assert build_conn()
-             |> Plug.Test.init_test_session(%{})
-             |> put_req_cookie("vutuv_ad_dismissed", yesterday)
-             |> get(path)
-             |> html_response(200) =~ @rail
+      assert html =~ ~s(aria-label="Hide ads for today")
+      refute html =~ "Close this ad"
     end
 
-    test "the live card carries its hook, the day its ✕ closes and the countdown ring", %{
-      conn: conn
-    } do
+    test "the live card carries its hook, its key and the countdown ring", %{conn: conn} do
       html = conn |> get(~p"/#{profile_owner()}") |> html_response(200)
 
       assert html =~ ~s(phx-hook="AdSlot")
-      assert html =~ ~s(data-ad-day="#{Ads.today()}")
       assert html =~ ~r/data-ad-key="\d+:house"/
       assert html =~ "data-ad-ring-arc"
       assert html =~ ~s(id="ad-slot-rail-ring" phx-update="ignore")

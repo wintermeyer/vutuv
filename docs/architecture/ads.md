@@ -37,12 +37,12 @@ On unbooked days a short house ad sells the slot.
   least half in view. Sending a page takes nothing. For a member the hour is
   `users.ad_seen_at`, on the server and shared by every device, and
   `Vutuv.Ads.record_sighting/3` takes it only while it is free, so a second
-  tab whose card comes into view within the hour loses that card. A visitor
-  without an account has the unsigned cookie `vutuv_ad_seen` (the second the
-  browser showed a card); nothing about ads goes into their session.
-- **The ✕ ends ads for the day** (Berlin midnight). For a member it is
-  `users.ads_dismissed_on`; the ✕ also writes the day into the unsigned
-  cookie `vutuv_ad_dismissed` on the click, which is all a visitor has.
+  tab whose card comes into view within the hour loses that card.
+- **The ✕ ends ads for the day** (Berlin midnight), `users.ads_dismissed_on`.
+- **A visitor without an account sees the ad on every profile** (the feed
+  needs an account). No cookie, no
+  session entry, nothing on the server: their ✕ ("Close this ad") takes away
+  only the card in front of them.
 - Without JavaScript nobody reports a sighting, so such a browser sees the
   card on every such page, and it never goes by itself.
 - The card **goes after two minutes of being seen**. A ring around the ✕
@@ -52,7 +52,7 @@ On unbooked days a short house ad sells the slot.
   card is in view. Then the hook sends `"ad-expired"` and `phx-remove` fades
   the card out. The countdown is kept per served card (`data-ad-key`) for the
   page load, shared by the two copies; a card the server draws again after it
-  ran out, or after a ✕ today, goes at once, and an event lost while the socket
+  ran out goes at once, and an event lost while the socket
   was down is sent again from `reconnected()`.
 - No ad while the one-time welcome questions cover the page.
 
@@ -64,8 +64,7 @@ house ad stamps the hour and leaves no row. Rows go with the member's account
 (`on_delete: :delete_all`), are part of the personal data export
 (`seen_ads`), and are forgotten 90 days after they were last seen
 (`Vutuv.Ads.SightingSweeper`, daily, first run ten minutes after boot;
-`config :vutuv, :sweep_ad_sightings`). Nothing is stored per visitor on the
-server.
+`config :vutuv, :sweep_ad_sightings`).
 
 The card's "Ad" label is a link. A member lands on **`/system/ads/seen`**
 (`VutuvWeb.AdsSeenLive`, login only, noindex, 404 while the system is off):

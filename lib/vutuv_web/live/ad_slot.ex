@@ -14,11 +14,10 @@ defmodule VutuvWeb.Live.AdSlot do
     * `"ad-seen"`: the card was at least half in view for the first time. For
       a member this takes the hour and counts the sighting
       (`Vutuv.Ads.record_sighting/3`); when another tab took the hour first,
-      this card goes. A visitor's hour is the cookie the hook writes.
+      this card goes. A visitor has no hour.
     * `"ad-expired"`: its countdown ran out, which only counts visible time.
-    * `"dismiss-ad"`, the ✕: no ads until Berlin midnight, on the server for a
-      member (`Vutuv.Ads.dismiss_today/1`) and in the day cookie the hook
-      writes on the click for everyone.
+    * `"dismiss-ad"`, the ✕: the card goes, and a member sees no ads until
+      Berlin midnight (`Vutuv.Ads.dismiss_today/1`).
   """
 
   import Phoenix.Component, only: [assign: 3, assign_new: 3]

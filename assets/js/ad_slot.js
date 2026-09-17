@@ -7,10 +7,8 @@
 //   while the pointer or the keyboard focus is on the card. The timer runs only
 //   while the card is in view. When the ring is empty the hook sends
 //   `ad-expired` and the server takes the card away.
-// * The first moment the card is in view it writes the visitor's hour cookie
-//   and sends `ad-seen`, which takes a member's hour on the server.
-// * The ✕ writes the day cookie on the click itself: the event it also sends
-//   removes the card, and this hook with it, in the patch that answers.
+// * The first moment the card is in view it sends `ad-seen`, which takes a
+//   member's hour on the server. Nothing is kept in the browser.
 //
 // A page carries the card twice (rail and phone column, one of them hidden), so
 // the countdown and the sighting live per card key (`data-ad-key`, the second it
@@ -20,8 +18,6 @@
 
 import { reducedMotion } from "./util"
 
-const DISMISSED_COOKIE = "vutuv_ad_dismissed"
-const SEEN_COOKIE = "vutuv_ad_seen"
 const LIFETIME_MS = 2 * 60 * 1000
 const TICK_MS = 1000
 
@@ -33,27 +29,10 @@ const cardFor = (key) => {
   return cards.get(key)
 }
 
-const readCookie = (name) =>
-  document.cookie
-    .split("; ")
-    .find((pair) => pair.startsWith(`${name}=`))
-    ?.slice(name.length + 1)
-
-const writeCookie = (name, value, maxAge) => {
-  document.cookie = `${name}=${value}; path=/; max-age=${maxAge}; samesite=lax`
-}
-
 export const AdSlot = {
   mounted() {
-    const { adDay: day, adKey: key } = this.el.dataset
-    this.card = cardFor(key)
-
-    if (readCookie(DISMISSED_COOKIE) === day) return this.leave("dismiss-ad")
+    this.card = cardFor(this.el.dataset.adKey)
     if (this.expired()) return this.leave("ad-expired")
-
-    this.el.querySelector("[data-ad-dismiss]").addEventListener("click", () => {
-      writeCookie(DISMISSED_COOKIE, day, 86400)
-    })
 
     this.arc = this.el.querySelector("[data-ad-ring-arc]")
     this.inView = false
@@ -94,7 +73,6 @@ export const AdSlot = {
 
     if (running && !this.card.seen) {
       this.card.seen = true
-      writeCookie(SEEN_COOKIE, Math.floor(Date.now() / 1000), 3600)
       this.pushEvent("ad-seen", {}).catch(() => {
         this.card.seen = false
       })

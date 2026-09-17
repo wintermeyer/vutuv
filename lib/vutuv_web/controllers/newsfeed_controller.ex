@@ -49,9 +49,14 @@ defmodule VutuvWeb.NewsfeedController do
   defp show_html(conn, params) do
     conn
     |> AgentDocs.put_html_alternates()
-    # The daily text ad: in the rail, and under the control row on a phone.
-    |> AdServing.serve()
+    |> serve_ad()
     |> render_feed_live(params)
+  end
+
+  # The daily text ad: in the rail, and under the control row on a phone. A
+  # visitor is sent to the login by the feed itself, so none is chosen.
+  defp serve_ad(conn) do
+    if conn.assigns[:current_user], do: AdServing.serve(conn), else: conn
   end
 
   defp render_feed_live(conn, params) do

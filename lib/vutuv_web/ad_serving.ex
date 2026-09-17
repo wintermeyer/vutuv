@@ -12,20 +12,16 @@ defmodule VutuvWeb.AdServing do
   replayed unchanged on every rejoin, so it carries only facts that never
   change while the page is open.
 
-  Sending a page takes nothing. What counts is a card that was seen, and the
-  `AdSlot` hook reports that. The two frequency rules
-  (`Vutuv.Ads.eligible?/3`) then read:
+  The two frequency rules (`Vutuv.Ads.eligible?/3`) are a member's, kept on
+  the server and shared by every device:
 
-    * **At most one ad an hour.** A member's hour is `users.ad_seen_at`, on the
-      server and shared by every device. A visitor without an account has the
-      cookie `vutuv_ad_seen` (the second their browser showed a card), since a
-      socket cannot write the session.
-    * **The ✕ ends ads for the day.** A member's is `users.ads_dismissed_on`;
-      every browser also keeps the day in the cookie `vutuv_ad_dismissed`,
-      which is all a visitor has.
+    * **At most one ad an hour**, `users.ad_seen_at`. Sending a page takes
+      nothing; the hour starts when the `AdSlot` hook reports a card as seen.
+    * **The ✕ ends ads for the day**, `users.ads_dismissed_on`.
 
-  Both cookies are written by the hook and unsigned on purpose: forging one
-  only keeps ads away from yourself.
+  A visitor without an account sees the ad on every profile. Nothing about them
+  is kept, neither on the server nor in a cookie, so their ✕ closes only the
+  card in front of them.
 
   No ad while the one-time welcome questions float over the page
   (`VutuvWeb.Plug.WelcomeModal`): the backdrop would hide it.
@@ -36,16 +32,11 @@ defmodule VutuvWeb.AdServing do
   alias Vutuv.Accounts.User
   alias Vutuv.Ads
 
-  @dismissed_cookie "vutuv_ad_dismissed"
-  @seen_cookie "vutuv_ad_seen"
-
   @doc """
   Hands today's ad to the page in `conn` (the `:ad_slot` assign) when the
   visitor may see one.
   """
   def serve(%Plug.Conn{} = conn) do
-    conn = fetch_cookies(conn)
-
     if Ads.enabled?() and is_nil(conn.assigns[:welcome_modal]) and eligible?(conn) do
       assign(conn, :ad_slot, %{
         banner: Ads.current_banner(),
@@ -57,28 +48,12 @@ defmodule VutuvWeb.AdServing do
   end
 
   defp eligible?(conn) do
-    user = conn.assigns[:current_user]
-    days = Enum.reject([cookie_day(conn), user && user.ads_dismissed_on], &is_nil/1)
+    case conn.assigns[:current_user] do
+      %User{ad_seen_at: seen_at, ads_dismissed_on: dismissed_on} ->
+        Ads.eligible?(seen_at, dismissed_on)
 
-    Ads.eligible?(seen_at(conn, user), Enum.max(days, Date, fn -> nil end))
-  end
-
-  defp seen_at(_conn, %User{ad_seen_at: seen_at}), do: seen_at
-
-  defp seen_at(conn, nil) do
-    with value when is_binary(value) <- conn.req_cookies[@seen_cookie],
-         {unix, ""} <- Integer.parse(value),
-         {:ok, seen_at} <- DateTime.from_unix(unix) do
-      seen_at
-    else
-      _unreadable -> nil
-    end
-  end
-
-  defp cookie_day(conn) do
-    case Date.from_iso8601(conn.req_cookies[@dismissed_cookie] || "") do
-      {:ok, day} -> day
-      {:error, _reason} -> nil
+      nil ->
+        true
     end
   end
 

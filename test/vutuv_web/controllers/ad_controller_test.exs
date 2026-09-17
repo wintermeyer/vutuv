@@ -115,6 +115,8 @@ defmodule VutuvWeb.AdControllerTest do
 
       assert html =~
                "Nur Text: ein Titel mit bis zu 30 Zeichen, ein Satz mit bis zu 90 und ein Link"
+
+      assert html =~ "Besucher ohne Konto sehen sie auf jedem Profil, das sie öffnen."
     end
 
     test "the availability calendar offers free days and marks booked ones", %{conn: conn} do

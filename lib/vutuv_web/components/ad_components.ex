@@ -8,7 +8,6 @@ defmodule VutuvWeb.AdComponents do
   use VutuvWeb, :html
 
   alias Phoenix.LiveView.JS
-  alias Vutuv.Ads
   alias Vutuv.Ads.Ad
   alias VutuvWeb.AdServing
 
@@ -32,7 +31,7 @@ defmodule VutuvWeb.AdComponents do
       class={if @placement == :rail, do: "hidden md:block", else: "md:hidden"}
       banner={@ad.banner}
       key={AdServing.key(@ad)}
-      label={if @viewer, do: :seen, else: :offer}
+      audience={if @viewer, do: :member, else: :visitor}
       address={if @placement == :inline, do: :head, else: :foot}
     />
     """
@@ -67,13 +66,16 @@ defmodule VutuvWeb.AdComponents do
   `AdSlot` hook that runs that countdown, and a fade when the card leaves. The
   booking preview and the seen-ads page pass no key and get none of it.
 
-  `label` turns the label into a link: `:seen` to a member's seen ads,
-  `:offer` to the `/ads` offer page for a visitor. `footer` goes under the ad.
+  `audience` says who looks at a live card, and with it where the label leads
+  and what the ✕ does: a `:member`'s label opens their seen ads and the ✕ hides
+  ads for the day, a `:visitor`'s label opens the `/ads` offer page and the ✕
+  closes this card. Without it the label is plain text. `footer` goes under
+  the ad.
   """
   attr(:id, :string, required: true)
   attr(:banner, :any, required: true)
   attr(:key, :string, default: nil)
-  attr(:label, :atom, default: nil, values: [nil, :seen, :offer])
+  attr(:audience, :atom, default: nil, values: [nil, :member, :visitor])
   attr(:address, :atom, default: :foot, values: [:head, :foot])
   attr(:class, :any, default: nil)
   slot(:footer)
@@ -88,7 +90,6 @@ defmodule VutuvWeb.AdComponents do
       phx-hook={@key && "AdSlot"}
       phx-remove={@key && fade_out()}
       data-ad-key={@key}
-      data-ad-day={@key && Date.to_iso8601(Ads.today())}
       class={[
         "rounded-2xl bg-white px-6 py-5 shadow-sm ring-1 ring-slate-200 dark:bg-slate-900 dark:ring-slate-800",
         @class
@@ -98,13 +99,13 @@ defmodule VutuvWeb.AdComponents do
         <%!-- As a link the label keeps its look and grows an invisible
         touch target (`after:`) around itself. --%>
         <.link
-          :if={@label}
-          href={label_href(@label)}
-          title={label_title(@label)}
+          :if={@audience}
+          href={label_href(@audience)}
+          title={label_title(@audience)}
           class="relative shrink-0 rounded border border-slate-300 px-1 text-[10px] font-semibold uppercase tracking-wide text-slate-600 after:absolute after:-inset-3 hover:border-slate-500 hover:text-slate-900 dark:border-slate-600 dark:text-slate-400 dark:hover:border-slate-400 dark:hover:text-slate-100"
         >{gettext("Ad")}</.link>
         <span
-          :if={!@label}
+          :if={!@audience}
           class="shrink-0 rounded border border-slate-300 px-1 text-[10px] font-semibold uppercase tracking-wide text-slate-600 dark:border-slate-600 dark:text-slate-400"
         >{gettext("Ad")}</span>
         <span :if={@address == :head} class="min-w-0 truncate text-xs text-slate-600 dark:text-slate-400">
@@ -114,9 +115,8 @@ defmodule VutuvWeb.AdComponents do
           :if={@key}
           type="button"
           phx-click="dismiss-ad"
-          data-ad-dismiss
-          aria-label={gettext("Hide ads for today")}
-          title={gettext("Hide ads for today")}
+          aria-label={dismiss_label(@audience)}
+          title={dismiss_label(@audience)}
           class="relative -my-2 -mr-3 ml-auto grid size-10 shrink-0 place-items-center rounded-lg text-slate-600 hover:bg-slate-100 hover:text-slate-900 dark:text-slate-400 dark:hover:bg-slate-800 dark:hover:text-slate-200"
         >
           <%!-- The countdown: the arc empties while the card is in view. Its
@@ -188,11 +188,14 @@ defmodule VutuvWeb.AdComponents do
     }
   end
 
-  defp label_href(:seen), do: ~p"/system/ads/seen"
-  defp label_href(:offer), do: ~p"/ads"
+  defp dismiss_label(:member), do: gettext("Hide ads for today")
+  defp dismiss_label(:visitor), do: gettext("Close this ad")
 
-  defp label_title(:seen), do: gettext("Ads you have seen")
-  defp label_title(:offer), do: gettext("How ads work on vutuv")
+  defp label_href(:member), do: ~p"/system/ads/seen"
+  defp label_href(:visitor), do: ~p"/ads"
+
+  defp label_title(:member), do: gettext("Ads you have seen")
+  defp label_title(:visitor), do: gettext("How ads work on vutuv")
 
   defp fade_out do
     JS.hide(

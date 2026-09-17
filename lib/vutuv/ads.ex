@@ -11,10 +11,11 @@ defmodule Vutuv.Ads do
   three days out (`first_bookable_day/0`). Serving is automatic:
   `current_banner/0` is what `VutuvWeb.AdServing` hands a profile or the feed -
   the **approved** ad on its day, the house ad (an ad for the ad system) on
-  days nobody booked (or where approval never came). Nobody sees more than
-  one ad an hour, and nobody who closed one sees another that day
-  (`eligible?/3`); the booked ads a member saw are kept per member
-  (`record_sighting/3`).
+  days nobody booked (or where approval never came). A member sees at most one
+  ad an hour and none for the rest of the day after closing one
+  (`eligible?/3`), and the booked ads they saw are kept for them
+  (`record_sighting/3`); a visitor without an account sees the ad on every
+  profile.
 
   Day boundaries are German local time, computed with the fixed EU DST rule
   (see `berlin_date/1`) because the project deliberately carries no timezone
@@ -44,7 +45,7 @@ defmodule Vutuv.Ads do
   # near-term. Widen by bumping this one knob (the calendar follows).
   @booking_window_months 1
 
-  # At most one ad an hour per member (and per browser for a visitor).
+  # At most one ad an hour per member.
   @hour 3600
 
   # How long a member's seen ads are kept (`forget_old_sightings/1`), and how
@@ -219,11 +220,10 @@ defmodule Vutuv.Ads do
   end
 
   @doc """
-  The two frequency rules, over plain values so a member (`users.ad_seen_at`,
-  `users.ads_dismissed_on`) and a visitor (session and cookie, see
-  `VutuvWeb.AdServing`) are judged by the same code: no ad within an hour of
-  the last one (`seen_at`), and none for the rest of a Berlin day on which one
-  was closed (`dismissed_on`). Either may be nil.
+  A member's two frequency rules, over their `users.ad_seen_at` and
+  `users.ads_dismissed_on`: no ad within an hour of the last one (`seen_at`),
+  and none for the rest of a Berlin day on which one was closed
+  (`dismissed_on`). Either may be nil.
   """
   def eligible?(seen_at, dismissed_on, now \\ DateTime.utc_now()) do
     dismissed_on != today() and not within_the_hour?(seen_at, now)
