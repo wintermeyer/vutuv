@@ -362,7 +362,10 @@ defmodule VutuvWeb.PostLive.TagSources do
 
   # The button is the target, the inner span the pill a reader sees: at rail
   # scale the two are one box, on the tag page the target is the taller one.
-  defp source_chip_class(:rail), do: "group flex-shrink-0 rounded-full focus-visible:outline-none"
+  # `flex` on both, so the pill never sits on a text baseline that would make
+  # the button, and with it the chip row, a pixel taller than the pill.
+  defp source_chip_class(:rail),
+    do: "group flex flex-shrink-0 rounded-full focus-visible:outline-none"
 
   defp source_chip_class(:touch),
     do: "group flex h-10 flex-shrink-0 items-center rounded-full focus-visible:outline-none"

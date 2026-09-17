@@ -272,16 +272,19 @@ defmodule Vutuv.Tags.SourceServers do
   # The literal half of the guard, asked before any request: a value that was
   # never a hostname must not cost a stranger's server a probe, and must not be
   # answered "did not answer".
+  # A value that is no server name is quoted as it was typed: there is no
+  # stored spelling to show for something that will never be stored.
   defp server_name(typed) do
     case TagFollowSource.normalize_source(typed) do
       nil ->
         {:error, {:not_a_server, to_string(typed)}}
 
       host ->
-        cond do
-          host == Tags.local_tag_follow_source() -> {:error, :local}
-          reason = TagFollowSource.refusal(host) -> {:error, {reason, host}}
-          true -> {:ok, host}
+        case host != Tags.local_tag_follow_source() && TagFollowSource.refusal(host) do
+          false -> {:error, :local}
+          nil -> {:ok, host}
+          :not_a_server -> {:error, {:not_a_server, to_string(typed)}}
+          reason -> {:error, {reason, host}}
         end
     end
   end

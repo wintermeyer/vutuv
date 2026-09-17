@@ -112,6 +112,12 @@ defmodule VutuvWeb.TagLive.SourcesTest do
       assert has_element?(view, "#tag-source-own-rows #{source_row("kowelenz.example")}")
       assert view |> element("#tag-sources-added") |> render() =~ "kowelenz.example now feeds"
 
+      # A refusal quotes the address as the member wrote it, and keeps it in
+      # the field for them to correct.
+      view |> element("#tag-source-form") |> render_submit(%{"source" => "Kein Server"})
+      assert render(view) =~ "Kein Server is not a server name."
+      assert has_element?(view, ~s(#tag-source-form input[value="Kein Server"]))
+
       view |> element("#tag-sources-close") |> render_click()
       refute has_element?(view, "#tag-sources-panel")
       assert has_element?(view, ~s(#{source_chip(tag)}[aria-expanded="false"]))
