@@ -205,20 +205,8 @@ defmodule VutuvWeb.PersonalNotesLive do
       </div>
 
       <.card :if={@subject} id="notes-subject">
-        <div class="flex flex-wrap items-center justify-between gap-3">
-          <div class="min-w-0">
-            <.section_title>{gettext("Notes about")}</.section_title>
-            <div class="mt-2"><.subject_line subject={@subject} /></div>
-          </div>
-          <.button
-            :if={not @composing?}
-            variant="ghost"
-            phx-click="new"
-            data-note-new
-          >
-            {gettext("Add note")}
-          </.button>
-        </div>
+        <.notes_header title={gettext("Notes about")} composing?={@composing?} />
+        <div class="mt-3"><.subject_line subject={@subject} /></div>
 
         <div :if={@composing?} class="mt-4">
           <.note_form
@@ -263,11 +251,7 @@ defmodule VutuvWeb.PersonalNotesLive do
           {empty_text(@query, @subject)}
         </p>
 
-        <div
-          id="notes"
-          phx-update="stream"
-          class="divide-y divide-slate-100 dark:divide-slate-800"
-        >
+        <div id="notes" phx-update="stream">
           <.note_item
             :for={{dom_id, note} <- @streams.notes}
             id={dom_id}
@@ -275,7 +259,6 @@ defmodule VutuvWeb.PersonalNotesLive do
             viewer={@current_user}
             editing?={@editing == note.id}
             errors={if @editing == note.id, do: @errors, else: []}
-            class="py-4 first:pt-0 last:pb-0"
           >
             <:subject :if={is_nil(@subject)}>
               <.subject_line subject={note.subject} />

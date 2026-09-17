@@ -22,6 +22,7 @@ defmodule VutuvWeb.PersonalNoteComponents do
   import VutuvWeb.UI
   import VutuvWeb.PostComponents, only: [remote_avatar: 1, remote_initials: 1]
 
+  alias Phoenix.LiveView.JS
   alias Vutuv.Accounts.User
   alias Vutuv.Fediverse.RemoteAccount
   alias Vutuv.Organizations.Organization
@@ -52,80 +53,149 @@ defmodule VutuvWeb.PersonalNoteComponents do
   def only_you, do: gettext("Visible only to you")
 
   @doc """
-  One note: its date, whether it was edited, the text, and Edit / Delete. While
-  `editing?` the text gives way to the form.
+  One note as a step on a timeline: the date in a column of its own, a dot on a
+  rail that runs down to the next note, the text, and one ⋯ holding Edit and
+  Delete. While `editing?` the text gives way to the form.
+
+  The rail is drawn by the rows themselves: the newest dot (`first:`) wears the
+  brand colour and the last row (`last:`) ends the line, so a list the caller
+  streams, where no row knows its position, still draws it right. The group is
+  named (`group/note`) because an unnamed `group-first:` would answer to any
+  `.group` ancestor that happens to be a first child.
+
+  Below `sm` the date column goes: a phone has no room for it beside the text,
+  so the date moves above it. Every class here also ships elsewhere, apart from
+  the rail's named groups (`personal_notes_class_availability_test.exs`): the
+  panel is patched into profile tabs left open across a deploy, and those still
+  hold the previous stylesheet.
   """
   attr(:id, :string, required: true)
   attr(:note, PersonalNote, required: true)
   attr(:viewer, :any, required: true, doc: "the author, for the editor's bandwidth setting")
   attr(:editing?, :boolean, default: false)
-  attr(:target, :any, default: nil, doc: "`phx-target` for the row's events")
+  attr(:target, :any, default: nil, doc: "the component the row's events go to; nil is the page")
   attr(:errors, :list, default: [], doc: "what the last edit was refused for")
-  attr(:class, :any, default: nil)
-  slot(:subject, doc: "who the note is about, above the date (the overview)")
+  slot(:subject, doc: "who the note is about, above the text (the overview)")
 
   def note_item(assigns) do
     ~H"""
-    <article id={@id} data-personal-note={@note.id} class={@class}>
-      {render_slot(@subject)}
-      <p class="mb-1 flex flex-wrap items-baseline gap-x-2 text-xs text-slate-600 dark:text-slate-400">
-        <.local_time
-          at={@note.inserted_at}
-          style={:date}
-          id={"#{@id}-at"}
-          class="font-semibold text-slate-700 dark:text-slate-300"
-        />
-        <%!-- The date that counts is when the note was taken, so an edit
-        never moves it. The mark says it was changed and the tooltip when. --%>
-        <span :if={@note.edited_at} data-note-edited title={edited_title(@note)}>
-          · {gettext("edited")}
-        </span>
-      </p>
+    <article id={@id} data-personal-note={@note.id} class="group/note flex gap-3">
+      <div class="hidden w-20 shrink-0 pt-0.5 text-right text-xs font-semibold text-slate-600 sm:block dark:text-slate-400">
+        <.local_time at={@note.inserted_at} style={:date} id={"#{@id}-at"} />
+      </div>
 
-      <%= if @editing? do %>
-        <.note_form
-          id={"#{@id}-form"}
-          viewer={@viewer}
-          value={@note.body}
-          submit="update"
-          cancel="cancel-edit"
-          note_id={@note.id}
-          target={@target}
-          errors={@errors}
-        />
-      <% else %>
-        <.markdown_prose
-          text={@note.body}
-          class="text-sm leading-relaxed text-slate-800 dark:text-slate-200"
-        />
-        <div class="mt-1 flex items-center gap-1">
-          <.button
-            variant="ghost"
-            phx-click="edit"
-            phx-value-id={@note.id}
-            phx-target={@target}
-            data-note-edit
+      <div class="flex w-5 shrink-0 flex-col items-center self-stretch" aria-hidden="true">
+        <span
+          data-note-dot
+          class="mt-1.5 h-2.5 w-2.5 shrink-0 rounded-full bg-slate-400 group-first/note:bg-brand-600 group-first/note:ring-4 group-first/note:ring-brand-100 dark:bg-slate-500 dark:group-first/note:bg-brand-400 dark:group-first/note:ring-brand-800/60"
+        >
+        </span>
+        <span class="w-0.5 grow bg-slate-200 group-last/note:hidden dark:bg-slate-700"></span>
+      </div>
+
+      <div class="min-w-0 flex-1 pb-4 group-last/note:pb-0">
+        {render_slot(@subject)}
+        <div class="mb-0.5 text-xs font-semibold text-slate-600 sm:hidden dark:text-slate-400">
+          <.local_time at={@note.inserted_at} style={:date} id={"#{@id}-at-sm"} />
+        </div>
+        <%= if @editing? do %>
+          <.note_form
+            id={"#{@id}-form"}
+            viewer={@viewer}
+            value={@note.body}
+            submit="update"
+            cancel="cancel-edit"
+            note_id={@note.id}
+            target={@target}
+            errors={@errors}
+          />
+        <% else %>
+          <.markdown_prose
+            text={@note.body}
+            class="text-sm leading-relaxed text-slate-800 dark:text-slate-200"
+          />
+          <%!-- The date that counts is when the note was taken, so an edit
+          never moves it. The mark says it was changed and the tooltip when. --%>
+          <p
+            :if={@note.edited_at}
+            data-note-edited
+            title={edited_title(@note)}
+            class="mb-0 mt-0.5 text-xs text-slate-600 dark:text-slate-400"
           >
+            {gettext("edited")}
+          </p>
+        <% end %>
+      </div>
+
+      <div class="-mt-2 shrink-0">
+        <.card_menu :if={not @editing?} id={"#{@id}-menu"} size="touch">
+          <:item id={"#{@id}-edit"} click={note_event("edit", @note, @target)}>
             {gettext("Edit")}
-          </.button>
-          <.button
-            variant="danger-ghost"
-            phx-click="delete"
-            phx-value-id={@note.id}
-            phx-target={@target}
-            data-confirm={gettext("Delete this note?")}
-            data-note-delete
+          </:item>
+          <:item
+            id={"#{@id}-delete"}
+            click={note_event("delete", @note, @target)}
+            confirm={gettext("Delete this note?")}
+            danger
           >
             {gettext("Delete")}
-          </.button>
-        </div>
-      <% end %>
+          </:item>
+        </.card_menu>
+      </div>
     </article>
     """
   end
 
+  # The menu's two acts, pushed where the row's caller listens. A nil target
+  # is dropped by `JS.push/2`, so the overview's rows go to the page itself.
+  defp note_event(event, note, target), do: JS.push(event, value: %{id: note.id}, target: target)
+
   defp edited_title(%PersonalNote{edited_at: at}),
     do: gettext("Edited on %{date}", date: ViewerClock.format(at, :datetime))
+
+  @doc """
+  The header of a notes list: the title, the lock line beside it (under it on a
+  phone), and the button that opens the form, which says "Note" beside a plus
+  and "Add note" to a screen reader.
+  """
+  attr(:title, :string, required: true)
+  attr(:composing?, :boolean, default: false)
+  attr(:rest, :global)
+
+  def notes_header(assigns) do
+    ~H"""
+    <div class="flex items-center justify-between gap-3">
+      <div class="flex min-w-0 flex-col gap-0.5 sm:flex-row sm:items-center sm:gap-2">
+        <.section_title>{@title}</.section_title>
+        <span class="flex items-center gap-1 text-xs text-slate-600 dark:text-slate-400">
+          <.detail_icon name="lock" class="h-3.5 w-3.5" /> {only_you()}
+        </span>
+      </div>
+      <.button
+        :if={not @composing?}
+        variant="secondary"
+        phx-click="new"
+        data-note-new
+        aria-label={gettext("Add note")}
+        class="shrink-0"
+        {@rest}
+      >
+        <svg
+          class="h-4 w-4"
+          viewBox="0 0 24 24"
+          fill="none"
+          stroke="currentColor"
+          stroke-width="2"
+          stroke-linecap="round"
+          aria-hidden="true"
+        >
+          <path d="M12 4.5v15m7.5-7.5h-15" />
+        </svg>
+        {gettext("Note")}
+      </.button>
+    </div>
+    """
+  end
 
   @doc """
   The form for a new note or an edit. The shared Markdown editor, so a note is

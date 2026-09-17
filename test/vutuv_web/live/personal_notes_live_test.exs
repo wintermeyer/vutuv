@@ -166,7 +166,7 @@ defmodule VutuvWeb.PersonalNotesLiveTest do
     view |> form("#notes-new", %{note: %{body: "short-lived"}}) |> render_submit()
     refute has_element?(view, "#notes-empty")
 
-    view |> element("#notes [data-note-delete]") |> render_click()
+    view |> element("#notes [id$=-delete]") |> render_click()
     assert has_element?(view, "#notes-empty")
   end
 
@@ -210,7 +210,7 @@ defmodule VutuvWeb.PersonalNotesLiveTest do
 
     {:ok, view, _html} = live(conn, ~p"/system/notes")
 
-    view |> element("#notes-#{note.id} [data-note-edit]") |> render_click()
+    view |> element("#notes-#{note.id}-edit") |> render_click()
     assert has_element?(view, "#notes-#{note.id}-form")
 
     view
@@ -229,7 +229,7 @@ defmodule VutuvWeb.PersonalNotesLiveTest do
 
     {:ok, view, _html} = live(conn, ~p"/system/notes")
 
-    view |> element("#notes-#{note.id} [data-note-delete]") |> render_click()
+    view |> element("#notes-#{note.id}-delete") |> render_click()
 
     refute has_element?(view, "#notes-#{note.id}")
     assert has_element?(view, "#notes-empty")

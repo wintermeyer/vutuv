@@ -111,22 +111,11 @@ defmodule VutuvWeb.PersonalNotesComponent do
     ~H"""
     <div id={@id} data-personal-notes={@count} hidden={@count == 0 and not @composing?}>
       <.card>
-        <div class="flex items-start justify-between gap-3">
-          <div class="min-w-0">
-            <.section_title>{gettext("Personal notes")}</.section_title>
-            <p class="mb-0 mt-0.5 text-xs text-slate-600 dark:text-slate-400">{only_you()}</p>
-          </div>
-          <.button
-            :if={not @composing?}
-            variant="ghost"
-            phx-click="new"
-            phx-target={@myself}
-            data-note-new
-            class="shrink-0"
-          >
-            {gettext("Add note")}
-          </.button>
-        </div>
+        <.notes_header
+          title={gettext("Personal notes")}
+          composing?={@composing?}
+          phx-target={@myself}
+        />
 
         <div :if={@composing?} class="mt-4">
           <.note_form
@@ -139,7 +128,7 @@ defmodule VutuvWeb.PersonalNotesComponent do
           />
         </div>
 
-        <div :if={@notes != []} class="mt-4 divide-y divide-slate-100 dark:divide-slate-800">
+        <div :if={@notes != []} class="mt-5">
           <.note_item
             :for={note <- @notes}
             id={"#{@id}-note-#{note.id}"}
@@ -148,7 +137,6 @@ defmodule VutuvWeb.PersonalNotesComponent do
             editing?={@editing == note.id}
             errors={if @editing == note.id, do: @errors, else: []}
             target={@myself}
-            class="py-3 first:pt-0 last:pb-0"
           />
         </div>
 

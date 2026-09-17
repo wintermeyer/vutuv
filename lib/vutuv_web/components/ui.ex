@@ -1974,6 +1974,14 @@ defmodule VutuvWeb.UI do
   """
   attr(:id, :string, required: true)
 
+  attr(:size, :string,
+    default: "compact",
+    values: ~w(compact touch),
+    doc:
+      "`touch` makes the ⋯ trigger the 40px touch target, for a menu that is a row's only " <>
+        "control (a personal note); `compact` is the 28px glyph a dense card header wears"
+  )
+
   slot :item, required: true do
     attr(:id, :string, doc: "optional DOM id for the item link (tests, anchors)")
     attr(:href, :any, doc: "link target (a navigation/CSRF item); omit when using `click`")
@@ -2017,9 +2025,13 @@ defmodule VutuvWeb.UI do
       <summary
         title={gettext("Options")}
         class={[
-          "flex h-7 w-7 cursor-pointer list-none items-center justify-center rounded-full text-slate-600 dark:text-slate-400",
+          "flex cursor-pointer list-none items-center justify-center rounded-full text-slate-600 dark:text-slate-400",
           "hover:bg-slate-100 hover:text-slate-600 dark:hover:bg-slate-800 dark:hover:text-slate-300",
-          "[&::-webkit-details-marker]:hidden"
+          "[&::-webkit-details-marker]:hidden",
+          # Last, and on purpose: HEEx keeps only the leading literals of a
+          # class list static, so the size goes after them and a feed card's ⋯
+          # re-sends seven bytes rather than the whole recipe.
+          if(@size == "touch", do: "h-10 w-10", else: "h-7 w-7")
         ]}
       >
         <svg class="h-5 w-5" fill="currentColor" viewBox="0 0 24 24" aria-hidden="true">

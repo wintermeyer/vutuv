@@ -493,6 +493,26 @@ defmodule VutuvWeb.UITest do
     end
   end
 
+  describe "card_menu/1" do
+    defp menu(attrs) do
+      render_component(
+        &UI.card_menu/1,
+        Map.merge(
+          %{id: "m", item: [%{__slot__: :item, inner_block: fn _, _ -> "Edit" end}]},
+          attrs
+        )
+      )
+    end
+
+    # A menu that is a row's only control gets the 40px target; the dense
+    # card headers keep the 28px glyph they were drawn with.
+    test "the touch size is the 40px target, the default the compact glyph" do
+      assert menu(%{size: "touch"}) =~ "h-10 w-10"
+      refute menu(%{size: "touch"}) =~ "h-7 w-7"
+      assert menu(%{}) =~ "h-7 w-7"
+    end
+  end
+
   describe "local_time/1" do
     test "emits an ISO-8601 UTC datetime (T-separated, trailing Z) for a naive stamp" do
       # The bug this component centralizes: a space-separated stamp with no Z is

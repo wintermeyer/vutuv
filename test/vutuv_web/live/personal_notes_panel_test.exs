@@ -76,6 +76,26 @@ defmodule VutuvWeb.PersonalNotesPanelTest do
              )
     end
 
+    # The timeline: a dated rail, and Edit / Delete behind one finger-sized ⋯
+    # per note rather than two loud text buttons under every one of them.
+    test "draws the notes as a timeline with a menu per note", %{conn: conn} do
+      {conn, viewer} = create_and_login_user(conn)
+      ada = insert_activated_user()
+      notes = for word <- ~w(first second), do: note!(viewer, ada, word)
+
+      {:ok, view, _html} = live(conn, ~p"/#{ada}")
+
+      assert has_element?(view, ~s(#personal-notes [data-note-new][aria-label="Add note"]))
+
+      for note <- notes do
+        row = "#personal-notes-note-#{note.id}"
+        assert has_element?(view, "#{row} [data-note-dot]")
+        assert has_element?(view, "#{row} details[data-menu]")
+        assert has_element?(view, "#{row}-edit")
+        assert has_element?(view, "#{row}-delete[data-confirm]")
+      end
+    end
+
     test "edits and deletes a note without leaving the page", %{conn: conn} do
       {conn, viewer} = create_and_login_user(conn)
       ada = insert_activated_user()
@@ -84,7 +104,7 @@ defmodule VutuvWeb.PersonalNotesPanelTest do
 
       {:ok, view, _html} = live(conn, ~p"/#{ada}")
 
-      view |> element("#{row} [data-note-edit]") |> render_click()
+      view |> element("#{row}-edit") |> render_click()
 
       view
       |> form("#{row}-form", %{note: %{body: "second try"}})
@@ -93,7 +113,7 @@ defmodule VutuvWeb.PersonalNotesPanelTest do
       assert has_element?(view, row, "second try")
       assert has_element?(view, "#{row} [data-note-edited]")
 
-      view |> element("#{row} [data-note-delete]") |> render_click()
+      view |> element("#{row}-delete") |> render_click()
 
       refute has_element?(view, row)
       assert has_element?(view, "#personal-notes[hidden]")
