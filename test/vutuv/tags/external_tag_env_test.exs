@@ -48,4 +48,9 @@ defmodule Vutuv.Tags.ExternalTagEnvTest do
       assert_received nil
     end
   end
+
+  test "a single number is asked for in the singular", %{parser: parser} do
+    assert capture_io(:stderr, fn -> parser.("oops", 1, "TAG_TRENDING_MIN_SERVERS") end) =~
+             "TAG_TRENDING_MIN_SERVERS=oops is not a positive number; keeping the default"
+  end
 end

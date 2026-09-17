@@ -104,6 +104,7 @@ defmodule Vutuv.Tags.Trending do
     max_bot_percent: 50,
     min_sample: 10,
     vet_limit: 8,
+    census_per_host: 2,
     interval_minutes: 30
   ]
 
@@ -136,8 +137,13 @@ defmodule Vutuv.Tags.Trending do
   """
   def asking?, do: enabled?() and SourceServers.configured?()
 
-  @doc "The thresholds and the pace — see the moduledoc for where each number comes from."
-  def settings, do: Application.get_env(:vutuv, :tag_trending, @settings)
+  @doc """
+  The thresholds and the pace — see the moduledoc for where each number comes
+  from. Every one is an operator's knob (`config/runtime.exs`), and a key the
+  application env does not name keeps its shipped value rather than reading as
+  `nil`, which would compare as larger than any count and empty the offer.
+  """
+  def settings, do: Keyword.merge(@settings, Application.get_env(:vutuv, :tag_trending, []))
 
   @doc "How long between two passes."
   def interval_seconds, do: settings()[:interval_minutes] * 60
@@ -333,18 +339,55 @@ defmodule Vutuv.Tags.Trending do
 
   # --- The bot defence ------------------------------------------------------
 
-  # Walks the candidates loudest first, asking each one's busiest server who is
-  # posting it, and stops when the budget of requests is spent. Everything that
-  # survives is stored, not only what one reader will see: the reader takes what
-  # they do not already follow out, and a thinner list would leave them nothing.
+  # Walks the candidates loudest first, asking one of the servers that reported
+  # each who is posting it, and stops when `vet_limit` requests are spent.
+  # Everything that survives is stored, not only what one reader will see: the
+  # reader takes what they do not already follow out, and a thinner list would
+  # leave them nothing.
+  #
+  # No server is asked more than `census_per_host` times in one pass (issue
+  # #2160). Asking every candidate's busiest server put seven of one real pass's
+  # eighteen requests on mastodon.social within five seconds. A candidate whose
+  # every reporter has had its share is held back rather than asked of one of
+  # them: the next pass starts every server at zero, and that pass is where the
+  # held-back candidate is tried again.
   defp vetted(candidates, settings) do
-    candidates
-    |> Enum.take(settings[:vet_limit])
-    |> Enum.map(&vet(&1, settings))
-    |> Enum.reject(&is_nil/1)
+    per_host = settings[:census_per_host]
+
+    {rows, _asked, held_back} =
+      Enum.reduce(candidates, {[], %{}, 0}, fn row, {rows, asked, held_back} = acc ->
+        cond do
+          asked |> Map.values() |> Enum.sum() >= settings[:vet_limit] ->
+            acc
+
+          host = census_host(row.hosts, asked, per_host) ->
+            {[vet(row, host, settings) | rows], Map.update(asked, host, 1, &(&1 + 1)), held_back}
+
+          true ->
+            {rows, asked, held_back + 1}
+        end
+      end)
+
+    if held_back > 0 do
+      Logger.info(
+        "Trending tags: #{held_back} candidate(s) held back by the per-server census cap"
+      )
+    end
+
+    rows |> Enum.reverse() |> Enum.reject(&is_nil/1)
   end
 
-  defp vet(%{hosts: [host | _rest]} = row, settings) do
+  # The reporter asked least so far this pass, which spreads the census across
+  # every server that listed the tag. A tie goes to the busiest of them —
+  # `hosts` is busiest first and `Enum.min_by/3` keeps the first of equals — as
+  # that one holds the most material to judge the tag on.
+  defp census_host(hosts, asked, per_host) do
+    hosts
+    |> Enum.filter(&(Map.get(asked, &1, 0) < per_host))
+    |> Enum.min_by(&Map.get(asked, &1, 0), fn -> nil end)
+  end
+
+  defp vet(row, host, settings) do
     case ExternalPosts.guard("census #{host}", fn -> ExternalTagClient.authors(host, row.name) end) do
       {:ok, {:ok, entries}} -> verdict(row, entries, settings)
       _refused -> nil

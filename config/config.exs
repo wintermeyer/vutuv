@@ -735,10 +735,15 @@ config :vutuv, :fetch_trending_tags, true
 #   max_bot_percent  bot accounts in that sample, as the remote server flags
 #                    them (98 % for the bot wave, at most 25 % otherwise)
 #   min_sample       below this the sample says nothing and the tag is dropped
-#   vet_limit        how many candidates one pass spends a request vetting
+#   vet_limit        how many requests one pass spends vetting candidates
+#   census_per_host  how many of those one server may take (issue #2160) —
+#                    asking every candidate's busiest server put seven of one
+#                    pass's eighteen requests on mastodon.social
 #   interval_minutes between two passes, so ten small requests every half hour
 #
-# Runtime overrides: TAG_TRENDING_INTERVAL_MINUTES, TAG_TRENDING_OFFERS.
+# Runtime overrides: TAG_TRENDING_ plus the key in capitals (TAG_TRENDING_OFFERS
+# for `offer`) — an installation reading one server sets
+# TAG_TRENDING_MIN_SERVERS=1, or the row never offers anything.
 config :vutuv, :tag_trending,
   offer: 5,
   min_uses: 25,
@@ -748,6 +753,7 @@ config :vutuv, :tag_trending,
   max_bot_percent: 50,
   min_sample: 10,
   vet_limit: 8,
+  census_per_host: 2,
   interval_minutes: 30
 
 # How long what we know about another server stays fresh before the panel asks

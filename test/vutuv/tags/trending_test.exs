@@ -7,8 +7,8 @@ defmodule Vutuv.Tags.TrendingTest do
   figures. The fixtures are those measurements shrunk to two servers.
 
   `async: false`: it flips `:fetch_external_tag_posts`, `:fetch_trending_tags`,
-  `:tag_source_servers` and `:external_tag_req_options`, every one of them
-  application env and therefore global.
+  `:tag_source_servers`, `:tag_trending` and `:external_tag_req_options`, every
+  one of them application env and therefore global.
   """
   use Vutuv.DataCase, async: false
 
@@ -265,6 +265,99 @@ defmodule Vutuv.Tags.TrendingTest do
       Trending.refresh()
 
       assert Trending.offers() == []
+    end
+  end
+
+  # Issue #2160: the census always asked a tag's busiest server, and one real
+  # pass put seven of its eighteen requests on mastodon.social.
+  describe "the census is spread over the servers that report a tag" do
+    @third "third.example"
+    @quieter [100, 1, 1, 1, 1, 1, 1]
+
+    # Everything the census asked this pass, as `{host, tag}`.
+    defp census_requests(acc \\ []) do
+      receive do
+        {:req, host, "/api/v1/timelines/tag/" <> name} -> census_requests([{host, name} | acc])
+        {:req, _host, _path} -> census_requests(acc)
+      after
+        0 -> acc
+      end
+    end
+
+    test "no server is asked more than its share, and the others carry the rest" do
+      put_config(:tag_source_servers, [@big, @small, @third])
+      put_config(:tag_trending, census_per_host: 2)
+
+      # Six equally loud candidates, every one busiest on the big server, three
+      # of them also listed by each smaller one. The big server alone could vet
+      # all six; its cap leaves it two.
+      first = ~w(alpha bravo charlie)
+      second = ~w(delta echo foxtrot)
+
+      stub(
+        %{
+          @big => Enum.map(first ++ second, &{&1, @warntag}),
+          @small => Enum.map(first, &{&1, @quieter}),
+          @third => Enum.map(second, &{&1, @quieter})
+        },
+        %{
+          @big => Map.new(first ++ second, &{&1, crowd(@big)}),
+          @small => Map.new(first, &{&1, crowd(@small)}),
+          @third => Map.new(second, &{&1, crowd(@third)})
+        }
+      )
+
+      Trending.refresh()
+
+      asked = census_requests()
+      per_host = Enum.frequencies_by(asked, &elem(&1, 0))
+
+      assert per_host == %{@big => 2, @small => 1, @third => 2}
+
+      # The last candidate is reported by two servers that have both had their
+      # share, so it waits for the next pass rather than being asked of either.
+      refute Enum.any?(asked, &match?({_host, "foxtrot"}, &1))
+
+      assert Trending.offers(limit: 10) |> Enum.map(& &1.name) |> Enum.sort() ==
+               ~w(alpha bravo charlie delta echo)
+    end
+  end
+
+  describe "the knobs" do
+    test "are read from the application env, and a key it does not name keeps its default" do
+      put_config(:tag_trending, min_servers: 1)
+
+      assert Trending.settings()[:min_servers] == 1
+      assert Trending.settings()[:min_uses] == 25
+      assert Trending.settings()[:census_per_host] == 2
+    end
+
+    test "an installation reading one server offers what spikes there once it says so" do
+      put_config(:tag_source_servers, [@big])
+      stub(%{@big => [{"warntag", @warntag}]}, %{@big => %{"warntag" => crowd(@big)}})
+
+      Trending.refresh()
+      assert Trending.offers() == []
+
+      put_config(:tag_trending, min_servers: 1)
+      Repo.delete_all(TrendCheck)
+      Trending.refresh()
+
+      assert [%{name: "warntag"}] = Trending.offers()
+    end
+
+    test "every one of them can be set from the environment and is documented" do
+      runtime = File.read!("config/runtime.exs")
+      admins = File.read!("docs/ADMINS.md")
+      named = Regex.scan(~r/\{"(TAG_TRENDING_[A-Z_]+)", :([a-z_]+)\}/, runtime)
+
+      assert named |> Enum.map(&Enum.at(&1, 2)) |> Enum.sort() ==
+               Trending.settings() |> Keyword.keys() |> Enum.map(&to_string/1) |> Enum.sort()
+
+      for [_match, name, _key] <- named do
+        assert admins =~ "| `#{name}` |",
+               "#{name} is missing from the env table in docs/ADMINS.md"
+      end
     end
   end
 

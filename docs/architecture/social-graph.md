@@ -477,10 +477,25 @@ busy elsewhere instead of calling the day quiet (issue #2209).
 **The loudest tag is often a machine, and the spread does not catch it.**
 `#mow4` trended on seven of the nine servers that answered — a bot farm that
 federates widely trends everywhere. What catches it is one sample of the tag's
-own timeline from its busiest server, where both facts are the remote server's
-own: 40 of 40 statuses came from a single domain and 39 of them were flagged as
-bot accounts, against 13 to 26 distinct domains and at most 10 of 40 bots for
-every ordinary tag. A tag that cannot be sampled at all is **not** offered.
+own timeline from a server that listed it, where both facts are the remote
+server's own: 40 of 40 statuses came from a single domain and 39 of them were
+flagged as bot accounts, against 13 to 26 distinct domains and at most 10 of 40
+bots for every ordinary tag. A tag that cannot be sampled at all is **not**
+offered.
+
+**The sample is spread over the servers that listed the tag** (issue #2160).
+It used to come from each candidate's busiest server, which put seven of one
+real pass's eighteen requests on mastodon.social within five seconds. Now each
+candidate, loudest first, is sampled on whichever of its reporters has been
+asked least this pass (ties go to the busiest), and no server is asked more
+than `census_per_host` times. A candidate whose reporters have all had their
+share is held back and logged, and the next pass starts every server at zero.
+On 17 September 2026 the nine shipped servers that answered listed seven
+candidates, each on five to eight of them: the old rule put three samples each
+on mastodon.online and hachyderm.io, the new one asks seven servers once each.
+Every threshold in `Vutuv.Tags.Trending.settings/0` is a `TAG_TRENDING_*`
+variable (`docs/ADMINS.md`), because an installation reading one server can
+never meet "listed by two" and needs `min_servers` at 1.
 
 **A spike shortens the pull at once.** The cadence above is a measurement, so it
 only learns about a news event after the event has already filled a fetch or

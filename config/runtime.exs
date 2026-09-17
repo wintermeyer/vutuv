@@ -412,7 +412,8 @@ if config_env() == :prod do
         numbers
 
       true ->
-        IO.warn("#{name}=#{value} is not #{count} positive numbers; keeping the default")
+        wanted = if count == 1, do: "a positive number", else: "#{count} positive numbers"
+        IO.warn("#{name}=#{value} is not #{wanted}; keeping the default")
         nil
     end
   end
@@ -510,21 +511,30 @@ if config_env() == :prod do
     config :vutuv, :fetch_trending_tags, false
   end
 
-  # The two knobs an operator has a reason to move: how often the servers are
-  # asked, and how many tags the card offers. The thresholds that decide what
-  # counts as "suddenly busy" stay in `config/config.exs` — they are calibrated
-  # judgements with measured margins, not per-installation values.
+  # Every number behind that row (issue #2160). The thresholds are calibrated
+  # against the shipped ten servers, and an installation reading other ones
+  # may need to move them: one that reads a single internal server can never
+  # meet "listed by at least two" and offers nothing until it sets
+  # TAG_TRENDING_MIN_SERVERS=1.
   #
   # Collected into one `config` call rather than one per variable: inside this
   # file `config/3` accumulates and is applied afterwards, so a second call
   # reading `Application.get_env/2` would not see the first one's value and
   # would silently drop it. A keyword list is deep-merged over the shipped one,
-  # so naming one key keeps the other eight.
+  # so naming one key keeps the others.
   tag_trending_overrides =
     Enum.flat_map(
       [
         {"TAG_TRENDING_INTERVAL_MINUTES", :interval_minutes},
-        {"TAG_TRENDING_OFFERS", :offer}
+        {"TAG_TRENDING_OFFERS", :offer},
+        {"TAG_TRENDING_MIN_USES", :min_uses},
+        {"TAG_TRENDING_SPIKE_FACTOR", :spike_factor},
+        {"TAG_TRENDING_MIN_SERVERS", :min_servers},
+        {"TAG_TRENDING_MIN_AUTHOR_HOSTS", :min_author_hosts},
+        {"TAG_TRENDING_MAX_BOT_PERCENT", :max_bot_percent},
+        {"TAG_TRENDING_MIN_SAMPLE", :min_sample},
+        {"TAG_TRENDING_VET_LIMIT", :vet_limit},
+        {"TAG_TRENDING_CENSUS_PER_HOST", :census_per_host}
       ],
       fn {name, key} ->
         case external_tag_numbers.(System.get_env(name), 1, name) do
