@@ -147,6 +147,15 @@ defmodule VutuvWeb.PostLive.FeedTagSourcesTest do
   end
 
   describe "a typed address" do
+    # Issue #2174: such a server speaks for its own members only, and the member
+    # reads that before choosing one.
+    test "is said to bring its own members' posts only", %{conn: conn, tag: tag} do
+      {:ok, live, _html} = live(conn, ~p"/feed")
+
+      assert open_panel(live, tag) =~
+               "A server you add yourself only brings posts by its own members."
+    end
+
     test "joins the list once it has answered", %{conn: conn, tag: tag, follow: follow} do
       stub_servers(%{"kowelenz.example" => %{language: "de"}})
 
@@ -257,6 +266,9 @@ defmodule VutuvWeb.PostLive.FeedTagSourcesTest do
       assert html =~ "vutuv lässt sich nicht abschalten."
       assert html =~ "Weiteren Server hinzufügen"
       assert html =~ "Prüfen und hinzufügen"
+
+      assert html =~
+               "Ein Server, den Sie selbst hinzufügen, liefert nur Beiträge seiner eigenen Mitglieder."
     end
 
     test "a refusal is translated too", %{conn: conn, tag: tag} do

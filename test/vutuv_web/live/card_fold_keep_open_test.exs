@@ -33,6 +33,7 @@ defmodule VutuvWeb.CardFoldKeepOpenTest do
 
   setup %{conn: conn} do
     put_config(:fetch_external_tag_posts, true)
+    list_fixture_relays()
     {conn, viewer} = create_and_login_user(conn)
 
     # A find two servers carried, so the card folds the list of them away.

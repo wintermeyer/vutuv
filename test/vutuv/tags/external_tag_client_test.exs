@@ -36,6 +36,20 @@ defmodule Vutuv.Tags.ExternalTagClientTest do
   # over the same fixture.
   defp ours(attrs), do: our_status(@source, attrs)
 
+  # A status the answering server files under somebody living elsewhere — every
+  # honest relay has this shape, and so does issue #2174's forged card.
+  defp relayed(id) do
+    status(%{
+      "id" => id,
+      "url" => "https://real.example/@alice/#{id}",
+      "account" => %{
+        "acct" => "alice@real.example",
+        "display_name" => "Alice",
+        "url" => "https://real.example/@alice"
+      }
+    })
+  end
+
   # Every Finch a pinned request started, by the name it registers under. Empty
   # is the claim: one instance lives for one request and is stopped in an
   # `after`, so nothing accumulates however many hostnames members name.
@@ -306,6 +320,88 @@ defmodule Vutuv.Tags.ExternalTagClientTest do
     end
   end
 
+  # Issue #2174: a server a member typed in speaks for its own members only.
+  # What it says about anybody else's is one stranger's unverified word, and
+  # byte for byte the same as a card it invented.
+  describe "who may speak for an author" do
+    test "a server a member typed in brings nothing written elsewhere" do
+      put_config(:tag_source_servers, ["listed.example"])
+      stub_tag_timeline([relayed("1")])
+
+      assert ExternalTagClient.fetch(@source, "Elixir") == {:ok, []}
+    end
+
+    # Compared the way the source column is stored, so the operator's spelling
+    # of the list does not decide it.
+    test "a server the operator listed relays it" do
+      put_config(:tag_source_servers, ["https://WWW.Mastodon.Example/"])
+      stub_tag_timeline([relayed("1")])
+
+      assert {:ok, [post]} = ExternalTagClient.fetch(@source, "Elixir")
+      assert post.author_host == "real.example"
+      assert post.url == "https://real.example/@alice/1"
+    end
+
+    test "a server a member typed in still speaks for its own members" do
+      put_config(:tag_source_servers, [])
+
+      stub_tag_timeline([
+        status(%{
+          "id" => "2",
+          "url" => "https://#{@source}/@bob/2",
+          "account" => %{"acct" => "bob"}
+        }),
+        # Its own member by the acct, at an address on another server: not the
+        # post as its own server serves it.
+        status(%{
+          "id" => "3",
+          "url" => "https://real.example/@bob/3",
+          "account" => %{"acct" => "bob"}
+        })
+      ])
+
+      assert {:ok, [post]} = ExternalTagClient.fetch(@source, "Elixir")
+      assert post.remote_id == "2"
+    end
+
+    # The link under the name is part of the claim too: a member of the typed-in
+    # server must not be linked to somebody else's profile. A listed relay's
+    # word stands, which keeps a split-domain server's real profile address.
+    test "a server a member typed in cannot link its member to a profile elsewhere" do
+      put_config(:tag_source_servers, [])
+
+      stub_tag_timeline([
+        status(%{
+          "id" => "2",
+          "account" => %{"acct" => "ada", "url" => "https://victim.example/@ada"}
+        }),
+        status(%{"id" => "3"})
+      ])
+
+      assert {:ok, [elsewhere, own]} = ExternalTagClient.fetch(@source, "Elixir")
+      assert elsewhere.author_url == nil
+      assert own.author_url == "https://#{@source}/@ada"
+
+      # The `put_config/2` above puts the shipped list back afterwards.
+      Application.put_env(:vutuv, :tag_source_servers, [@source])
+
+      stub_tag_timeline([
+        put_in(relayed("4"), ["account", "url"], "https://social.real.example/@alice")
+      ])
+
+      assert {:ok, [relay]} = ExternalTagClient.fetch(@source, "Elixir")
+      assert relay.author_url == "https://social.real.example/@alice"
+    end
+
+    test "the census of a server a member typed in counts its own members only" do
+      put_config(:tag_source_servers, [])
+      stub_tag_timeline([relayed("1"), status(%{"id" => "2"})])
+
+      assert ExternalTagClient.authors(@source, "Elixir") ==
+               {:ok, [%{host: @source, bot?: false}]}
+    end
+  end
+
   # A post written here federates out with its hashtags, so the servers a
   # followed tag names carry it on their public tag timelines and hand it
   # straight back — as somebody else's find, under our own member's handle
@@ -331,6 +427,9 @@ defmodule Vutuv.Tags.ExternalTagClientTest do
     # The refusing direction only: a host that merely *contains* ours is another
     # server, and dropping its posts would be this bug with the sign flipped.
     test "a server whose name only looks like ours is still a find" do
+      # Relayed, so asked of a server the operator listed (issue #2174).
+      put_config(:tag_source_servers, [@source])
+
       stub_tag_timeline([
         ours(%{id: "neighbour", host: "not#{our_host()}"}),
         ours(%{id: "subdomain", host: "mirror.#{our_host()}"})
@@ -370,6 +469,13 @@ defmodule Vutuv.Tags.ExternalTagClientTest do
   # earlier, so the three figures the bot-wave gate reads — how many distinct
   # servers, how many statuses, how many bots — are all about strangers.
   describe "authors/2" do
+    # The trending pass asks only the servers the operator listed, so every
+    # stranger on these timelines is a relay it vouches for (issue #2174).
+    setup do
+      put_config(:tag_source_servers, [@source])
+      :ok
+    end
+
     test "counts the strangers on the timeline and leaves this installation out" do
       stub_tag_timeline([
         ours(%{id: "own"}),

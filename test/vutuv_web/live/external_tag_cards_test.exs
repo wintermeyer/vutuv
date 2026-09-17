@@ -38,6 +38,7 @@ defmodule VutuvWeb.ExternalTagCardsTest do
 
   setup do
     put_config(:fetch_external_tag_posts, true)
+    list_fixture_relays()
     :ok
   end
 

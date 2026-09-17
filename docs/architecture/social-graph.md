@@ -352,6 +352,25 @@ walked around by writing `www.www.<host>`, which
 `Vutuv.Tags.TagFollowSource.normalize_source/1` would then store and poll as
 `www.<host>`.
 
+**Who may speak for an author** (issues #2174 and #2199) sits under both of
+those. A row is kept only when the server that filed it may
+(`Vutuv.Tags.ExternalPost.speaks_for_author?/2`): the home copy, or a row from a
+server in `TAG_SOURCE_SERVERS`, which the operator vetted and which, if honest,
+checks the signatures of what it relays. A server a member typed in speaks for
+its own members only. Anything else it hands over is one stranger's unverified
+word about another server's member, byte for byte a card it could have
+invented. Kept, it put words under a real person's name, and folded in with the
+honest copies it raised the server count and could be the copy a card was drawn
+from. `Vutuv.Tags.ExternalTagClient` refuses such a status on the way in
+(`authors/2` too) and lets such a server link its member only to a profile on
+its own host (`vouched_author_url/3`). `fold_copies/1` drops such a row on the
+way out, which covers rows already at rest and those of a server the operator
+later takes off the list. Every surface draws through the fold, so no card, tab
+total, server count or unread mark sees one, and a report on one by id answers
+`:not_found`. The read side is Elixir, not SQL, because half the rule is
+`home_copy?/1`; the rows stay, undrawn, until the per-tag cap or `prune/0` takes
+them. The panel says so under the address field.
+
 The **Mastodon API drops these rows** rather than rendering them
 (`Vutuv.MastodonApi.Presenter.statuses/2`): every field of a `Status` that
 matters hangs off an `Account` object, and inventing an id for an author we hold

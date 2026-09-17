@@ -137,6 +137,11 @@ defmodule VutuvWeb.PostLive.TagSources do
           placeholder={gettext("Add another server")}
           class={rail_field_class()}
         />
+        <%!-- Issue #2174: only a server the operator listed relays other
+        servers' posts, and the member should know before typing one. --%>
+        <p id="tag-source-own-members" class="mt-1 text-xs text-slate-500 dark:text-slate-400">
+          {gettext("A server you add yourself only brings posts by its own members.")}
+        </p>
         <.button type="submit" class="mt-1.5 w-full">{gettext("Check and add")}</.button>
       </form>
 

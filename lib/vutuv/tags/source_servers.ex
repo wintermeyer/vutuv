@@ -105,6 +105,19 @@ defmodule Vutuv.Tags.SourceServers do
   """
   def configured?, do: configured() != []
 
+  @doc """
+  The servers trusted to relay **other** servers' posts: every one the operator
+  names, normalized, as a set for `Vutuv.Tags.ExternalPost.speaks_for_author?/2`
+  (issue #2174).
+
+  Listing a server means trusting it with that, which is the difference from a
+  server a member types in: such a server speaks for its own members only.
+  Neither the feature switch nor the blocklist is asked here — a switched-off
+  installation fetches and draws nothing anyway, and a blocked server is
+  refused before it is asked and purged of what it filed.
+  """
+  def relays, do: MapSet.new(configured())
+
   defp offered(blocked) do
     if enabled?() do
       configured() |> Enum.reject(&MapSet.member?(blocked, &1)) |> Enum.uniq()

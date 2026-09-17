@@ -263,13 +263,67 @@ defmodule Vutuv.Tags.ExternalPost do
   construction.
   """
   def home_copy?(%{source: source, url: url, author_host: host}) do
-    case authority_host(host) do
-      nil -> false
-      author -> authority_host(source) == author and authority_host(address_host(url)) == author
-    end
+    on_author_host?(url, host) and authority_host(source) == authority_host(host)
   end
 
   def home_copy?(_unusable), do: false
+
+  @doc """
+  Whether the server that filed this row may **speak for its author** — and so
+  whether the row may be kept, drawn, folded into a card or counted at all
+  (issues #2174 and #2199). `relays` is `Vutuv.Tags.SourceServers.relays/0`,
+  handed in so a caller asking of a whole list reads the configuration once.
+
+  Two rows pass. The **home copy** (`home_copy?/1`), which nothing in an answer
+  can forge because we chose and dialled that host ourselves. And a row filed by
+  a server the **operator** listed in `TAG_SOURCE_SERVERS`: an honest Mastodon
+  server checks the signatures on what it relays, and the operator chose to
+  trust these to do so.
+
+  Everything else is a server a member typed in, talking about somebody else's
+  member: one stranger's unverified word, byte for byte the same as a card it
+  invented. Kept, it put words on this site under a real person's name and
+  address (#2174), and it folded into the honest copies of a post and decided
+  which one the card was drawn from (#2199). So a server a member names speaks
+  for its own members only.
+
+  The source is compared **exactly**. The column is written by
+  `Vutuv.Tags.TagFollowSource.normalize_source/1` and `relays` is spelled by
+  the same function, so the two already agree on case, trailing dot and `www.`;
+  folding the row's side again would only matter for a row from before #2176
+  that was fetched from `www.<host>`, and that alias is a subdomain somebody
+  other than the listed server may hold — the reason `home_copy?/1` does not
+  fold either.
+
+  Asked at the one way into the table (`Vutuv.Tags.ExternalTagClient`) and again
+  wherever rows are folded (`Vutuv.Tags.ExternalPosts.fold_copies/1`), because
+  rows written before it existed are at rest, and a server the operator later
+  takes off the list stops vouching for what it filed while it was on it.
+  """
+  def speaks_for_author?(%{source: source} = row, relays) do
+    relay?(source, relays) or home_copy?(row)
+  end
+
+  def speaks_for_author?(_unusable, _relays), do: false
+
+  @doc """
+  The profile address `row`'s server may put under its author's name: `url`,
+  or nil (issue #2174).
+
+  The link under a name is part of the claim a card makes about who wrote it.
+  A listed relay's word stands, which keeps an honest profile on another host
+  (a server whose web address differs from its handle domain, a bridge). Any
+  other server may only link an address on the author's own host — for the one
+  row it may file about somebody, the home copy, that is itself — so it cannot
+  hang a real person's profile under a name it made up. `row` needs `:source`
+  and `:author_host`.
+  """
+  def vouched_author_url(%{source: source, author_host: host}, url, relays) do
+    if relay?(source, relays) or on_author_host?(url, host), do: url
+  end
+
+  # Exact, for the reason the doc of `speaks_for_author?/2` gives.
+  defp relay?(source, relays), do: MapSet.member?(relays, source)
 
   @doc """
   Whether these words were written **here** — on this installation — and so are
@@ -310,6 +364,15 @@ defmodule Vutuv.Tags.ExternalPost do
   # spelled as an absence is one a tidy-up merges back by accident. Whoever
   # wants one helper for both has to delete a name that says why there are two.
   defp authority_host(host), do: BlockedInstance.normalize_host(host)
+
+  # Fails closed on a host that will not normalise, so two missing hosts are
+  # never one.
+  defp on_author_host?(url, host) do
+    case authority_host(host) do
+      nil -> false
+      author -> authority_host(address_host(url)) == author
+    end
+  end
 
   defp address_host(url) when is_binary(url), do: URI.parse(url).host
   defp address_host(_url), do: nil

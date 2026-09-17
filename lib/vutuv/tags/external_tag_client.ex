@@ -50,10 +50,12 @@ defmodule Vutuv.Tags.ExternalTagClient do
   replies and anything sensitive before it counts, and a census that dropped
   them would be counting a different population than the one making the noise.
 
-  The two refusals they share both read the author's host: the operator's
-  blocklist (issue #2204) and `ExternalPost.written_here?/2` (issues #2179 and
-  #2196). A post from a blocked server or of ours is not a find, and its author
-  is not one of the servers out there either.
+  The refusals they share all read the author's host: the operator's
+  blocklist (issue #2204), `ExternalPost.written_here?/2` (issues #2179 and
+  #2196) and `ExternalPost.speaks_for_author?/2` (issue #2174). A post from a
+  blocked server or of ours is not a find, and its author is not one of the
+  servers out there either; a server a member typed in is believed about its
+  own members and nobody else.
   """
 
   require Logger
@@ -67,6 +69,7 @@ defmodule Vutuv.Tags.ExternalTagClient do
   alias Vutuv.SocialFeed.Http
   alias Vutuv.SocialFeed.Post
   alias Vutuv.Tags.ExternalPost
+  alias Vutuv.Tags.SourceServers
   alias Vutuv.Tags.Tag
 
   # The application-env seam tests stub HTTP through — its own key, so a test
@@ -200,7 +203,8 @@ defmodule Vutuv.Tags.ExternalTagClient do
     with {:ok, hashtag} <- hashtag(tag_name),
          :ok <- refuse_blocked(source),
          {:ok, statuses} <- get_timeline(source, hashtag, @census_limit) do
-      entries = Enum.flat_map(statuses, &author_entry(&1, source))
+      relays = SourceServers.relays()
+      entries = Enum.flat_map(statuses, &author_entry(&1, source, relays))
 
       # Issue #2204: the pull's blocklist check, asked of the author. A server
       # the operator shut out is not a post here, so it is no voice about a tag
@@ -230,9 +234,17 @@ defmodule Vutuv.Tags.ExternalTagClient do
   # three figures the verdict reads — servers, sample size, bot share — say the
   # same thing about strangers, so a tag busy here and nowhere else runs out of
   # sample instead of borrowing ours.
-  defp author_entry(status, source) do
+  #
+  # The trending pass asks only the servers the operator listed, so the third
+  # refusal changes nothing there today; it is asked anyway so that no reader
+  # of a timeline counts a stranger's word about somebody else's member.
+  defp author_entry(status, source, relays) do
+    url = permalink(status)
+
     with host when is_binary(host) <- author_host(status, source),
-         false <- ExternalPost.written_here?(host, permalink(status)) do
+         false <- ExternalPost.written_here?(host, url),
+         true <-
+           ExternalPost.speaks_for_author?(%{source: source, url: url, author_host: host}, relays) do
       [%{host: host, bot?: status["account"]["bot"] == true}]
     else
       _refused -> []
@@ -312,9 +324,12 @@ defmodule Vutuv.Tags.ExternalTagClient do
     with_hosts = Enum.map(statuses, &{&1, author_host(&1, source)})
 
     blocked = with_hosts |> Enum.map(&elem(&1, 1)) |> blocked_among()
+    # Read once per timeline, at fetch time, so a server the operator takes off
+    # the list stops relaying with the next pass.
+    relays = SourceServers.relays()
 
     Enum.flat_map(with_hosts, fn {status, host} ->
-      case to_post(status, source, host, now, blocked) do
+      case to_post(status, source, host, now, {blocked, relays}) do
         nil -> []
         post -> [post]
       end
@@ -343,7 +358,7 @@ defmodule Vutuv.Tags.ExternalTagClient do
     end
   end
 
-  defp to_post(status, source, host, now, blocked) do
+  defp to_post(status, source, host, now, {blocked, relays}) do
     # `host` is nil when the status names no author we can parse. That is the
     # degraded path, and it fails **closed**: `MapSet.member?(blocked, nil)` is
     # simply false, so without this guard an unparseable author would walk past
@@ -355,12 +370,17 @@ defmodule Vutuv.Tags.ExternalTagClient do
     # back as finds. It sits after `permalink/1` because it asks about the
     # address as well as the author, and a status with no address is refused on
     # the next line anyway.
+    #
+    # `speaks_for_author?/2` is the third (issue #2174): a server a member typed
+    # in is believed about its own members only, and it needs the address too.
     with true <- is_binary(host),
          true <- showable?(status),
          false <- MapSet.member?(blocked, host),
          text when text != "" <- text_of(status),
          url when is_binary(url) <- permalink(status),
          false <- ExternalPost.written_here?(host, url),
+         true <-
+           ExternalPost.speaks_for_author?(%{source: source, url: url, author_host: host}, relays),
          id when is_binary(id) <- remote_id(status),
          language when is_nil(language) or is_binary(language) <- language(status),
          {:ok, published_at} <- published_at(status, now) do
@@ -378,10 +398,16 @@ defmodule Vutuv.Tags.ExternalTagClient do
         author_host: host
       }
       |> Map.merge(author(status))
+      |> vouch_author_url(relays)
     else
       _refused -> nil
     end
   end
+
+  defp vouch_author_url(%{author_url: url} = post, relays),
+    do: %{post | author_url: ExternalPost.vouched_author_url(post, url, relays)}
+
+  defp vouch_author_url(post, _relays), do: post
 
   # A boost is somebody else's post travelling under this account's name: the
   # original carries the hashtag itself and arrives on its own. A reply is half

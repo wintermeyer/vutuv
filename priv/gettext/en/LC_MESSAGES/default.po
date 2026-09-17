@@ -25253,3 +25253,8 @@ msgstr ""
 #, elixir-autogen, elixir-format
 msgid "The potential reach of every public post published here in the last 12 months, added up the way each post's own reach analysis counts it."
 msgstr ""
+
+#: lib/vutuv_web/live/post_live/tag_sources.ex:143
+#, elixir-autogen, elixir-format
+msgid "A server you add yourself only brings posts by its own members."
+msgstr ""

@@ -55,6 +55,7 @@ defmodule Vutuv.Tags.ExternalPosts do
   alias Vutuv.Tags.ExternalFetch
   alias Vutuv.Tags.ExternalPost
   alias Vutuv.Tags.ExternalTagClient
+  alias Vutuv.Tags.SourceServers
   alias Vutuv.Tags.Tag
   alias Vutuv.Tags.TagFollow
   alias Vutuv.Tags.TagFollowSource
@@ -130,6 +131,10 @@ defmodule Vutuv.Tags.ExternalPosts do
   — and "a blocked server leaves nothing at rest" is the stronger of the two
   promises anyway.
 
+  **Nor is who may speak for an author**, which is not a column at all:
+  `fold_copies/1` asks `ExternalPost.speaks_for_author?/2` of every row, and no
+  surface draws a row the fold did not hand it (issues #2174 and #2199).
+
   Composable, and named `:external` so a caller can add its own clauses.
   """
   def showable_query do
@@ -190,6 +195,17 @@ defmodule Vutuv.Tags.ExternalPosts do
   language were identical in every one, and only the author's `acct` spelling
   differed, which `ExternalPost.address/1` normalises away.
 
+  **A row whose server cannot speak for its author is not a copy of anything**
+  (`ExternalPost.speaks_for_author?/2`, issues #2174 and #2199): it is dropped
+  here, before the grouping, so it neither stands as a card of its own, nor
+  joins an honest group, nor becomes the copy a card is drawn from, nor counts
+  as one more server. Every surface reaches its rows through this fold — the
+  tag page's cards and total, the feed's cards and unread marks, a card redrawn
+  after a report — so this is the one read-side place the rule is asked.
+  Filtered in Elixir rather than in SQL because half of the rule is
+  `home_copy?/1`, and a second spelling of that in a query is how the two would
+  drift apart; the fold reads these rows anyway.
+
   The caller decides **what to hand over**, and that is the scope of the answer:
   a tag page folds everything it may show under that tag, a member's feed folds
   what the servers *they* named brought them. "Found on three servers" therefore
@@ -197,7 +213,11 @@ defmodule Vutuv.Tags.ExternalPosts do
   fediverse.
   """
   def fold_copies(rows) when is_list(rows) do
-    keyed = Enum.map(rows, &{fold_key(&1), &1})
+    relays = SourceServers.relays()
+
+    keyed =
+      for row <- rows, ExternalPost.speaks_for_author?(row, relays), do: {fold_key(row), row}
+
     grouped = Enum.group_by(keyed, &elem(&1, 0), &elem(&1, 1))
 
     keyed
@@ -642,25 +662,28 @@ defmodule Vutuv.Tags.ExternalPosts do
     end
   end
 
+  # A row whose server cannot speak for its author is answered as gone: no
+  # surface draws it any more (`fold_copies/1`), and filing it would put a
+  # report in the operator's ledger against the server a stranger named.
   defp take_down(post_id, %User{} = reporter) do
-    case UUIDv7.with_cast(post_id, &Repo.get(ExternalPost, &1)) do
-      %ExternalPost{reported_at: nil} = post ->
-        post |> copy_ids() |> blank()
+    with %ExternalPost{reported_at: nil} = post <-
+           UUIDv7.with_cast(post_id, &Repo.get(ExternalPost, &1)),
+         true <- ExternalPost.speaks_for_author?(post, SourceServers.relays()) do
+      post |> copy_ids() |> blank()
 
-        Fediverse.log_reported_post(%{
-          host: post.author_host || post.source,
-          # The author's own address where the server gave us one, the post's
-          # otherwise: the ledger keeps only a keyed digest of it, and a digest
-          # of nothing cannot be computed.
-          actor_uri: post.author_url || post.url,
-          audience: "public",
-          actor_id: reporter.id
-        })
+      Fediverse.log_reported_post(%{
+        host: post.author_host || post.source,
+        # The author's own address where the server gave us one, the post's
+        # otherwise: the ledger keeps only a keyed digest of it, and a digest
+        # of nothing cannot be computed.
+        actor_uri: post.author_url || post.url,
+        audience: "public",
+        actor_id: reporter.id
+      })
 
-        {:ok, report_scope(post)}
-
-      _gone_or_already_reported ->
-        {:error, :not_found}
+      {:ok, report_scope(post)}
+    else
+      _gone_reported_or_unbacked -> {:error, :not_found}
     end
   end
 

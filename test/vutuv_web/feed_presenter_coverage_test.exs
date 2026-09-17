@@ -29,7 +29,7 @@ defmodule VutuvWeb.FeedPresenterCoverageTest do
   use VutuvWeb.ConnCase, async: false
 
   import Vutuv.ExternalTagHelpers,
-    only: [external_post: 2, follow_tag_through: 2, put_config: 2]
+    only: [external_post: 2, follow_tag_through: 2, list_fixture_relays: 0, put_config: 2]
 
   import Vutuv.MastodonHelpers, only: [remote_account: 1, cached_post: 2]
 
@@ -138,6 +138,7 @@ defmodule VutuvWeb.FeedPresenterCoverageTest do
     # beside it; the module is `async: false` for that too.
     Application.put_env(:vutuv, :verify_organization_domains, true)
     put_config(:fetch_external_tag_posts, true)
+    list_fixture_relays()
 
     on_exit(fn ->
       Application.put_env(:vutuv, :verify_organization_domains, false)
