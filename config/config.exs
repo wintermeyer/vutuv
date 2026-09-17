@@ -719,42 +719,9 @@ config :vutuv, :tag_sources_per_follow, 3
 # needs no second switch. Runtime override: FETCH_TRENDING_TAGS=false.
 config :vutuv, :fetch_trending_tags, true
 
-# The thresholds that decide what counts as suddenly busy, and how often the
-# servers are asked. Every number was calibrated against the ten servers above
-# on 10 September 2026, and the two defences are what keep a bot wave off the
-# card — see `Vutuv.Tags.Trending` for the measurements behind each:
-#
-#   offer            how many the card draws
-#   min_uses         a floor, so a tag going from 0 to 3 is not "news"
-#   spike_factor     today against the median of the six days before it —
-#                    #xbox at 130 uses a day against a median of 78 is busy and
-#                    not sudden, and this is what leaves it out
-#   min_servers      how many servers must list it at all
-#   min_author_hosts distinct author domains in the vetting sample (1 for the
-#                    bot wave, 13 to 26 for everything else)
-#   max_bot_percent  bot accounts in that sample, as the remote server flags
-#                    them (98 % for the bot wave, at most 25 % otherwise)
-#   min_sample       below this the sample says nothing and the tag is dropped
-#   vet_limit        how many requests one pass spends vetting candidates
-#   census_per_host  how many of those one server may take (issue #2160) —
-#                    asking every candidate's busiest server put seven of one
-#                    pass's eighteen requests on mastodon.social
-#   interval_minutes between two passes, so ten small requests every half hour
-#
-# Runtime overrides: TAG_TRENDING_ plus the key in capitals (TAG_TRENDING_OFFERS
-# for `offer`) — an installation reading one server sets
-# TAG_TRENDING_MIN_SERVERS=1, or the row never offers anything.
-config :vutuv, :tag_trending,
-  offer: 5,
-  min_uses: 25,
-  spike_factor: 5,
-  min_servers: 2,
-  min_author_hosts: 4,
-  max_bot_percent: 50,
-  min_sample: 10,
-  vet_limit: 8,
-  census_per_host: 2,
-  interval_minutes: 30
+# The thresholds behind that row, and how often the servers are asked, keep
+# their defaults in `Vutuv.Tags.Trending` alone; `:tag_trending` names only what
+# an installation overrides (TAG_TRENDING_* in config/runtime.exs).
 
 # How long what we know about another server stays fresh before the panel asks
 # it again, in hours. A day: nothing on that record moves fast (an account

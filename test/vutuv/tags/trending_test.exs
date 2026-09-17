@@ -85,7 +85,7 @@ defmodule Vutuv.Tags.TrendingTest do
 
       Trending.refresh()
 
-      assert [row] = Trending.offers()
+      assert [row] = Trending.offer().tags
       assert row.name == "warntag"
       assert row.servers == 2
       assert row.uses == 2 * 1084
@@ -116,7 +116,7 @@ defmodule Vutuv.Tags.TrendingTest do
 
       Trending.refresh()
 
-      assert Trending.offers() == []
+      assert Trending.offer().tags == []
     end
 
     test "the seven-day history decides, not the raw volume" do
@@ -135,7 +135,7 @@ defmodule Vutuv.Tags.TrendingTest do
 
       Trending.refresh()
 
-      assert Enum.map(Trending.offers(), & &1.name) == ["warntag"]
+      assert Enum.map(Trending.offer().tags, & &1.name) == ["warntag"]
     end
   end
 
@@ -150,7 +150,7 @@ defmodule Vutuv.Tags.TrendingTest do
 
       Trending.refresh()
 
-      assert Trending.offers() == []
+      assert Trending.offer().tags == []
     end
 
     test "a tag whose posts are bot accounts is not offered" do
@@ -158,7 +158,7 @@ defmodule Vutuv.Tags.TrendingTest do
 
       Trending.refresh()
 
-      assert Trending.offers() == []
+      assert Trending.offer().tags == []
     end
 
     test "a tag with too small a sample to judge is not offered" do
@@ -169,7 +169,7 @@ defmodule Vutuv.Tags.TrendingTest do
 
       Trending.refresh()
 
-      assert Trending.offers() == []
+      assert Trending.offer().tags == []
     end
 
     test "a tag whose server will not show its timeline is not offered" do
@@ -184,7 +184,7 @@ defmodule Vutuv.Tags.TrendingTest do
 
       Trending.refresh()
 
-      assert Trending.offers() == []
+      assert Trending.offer().tags == []
     end
 
     test "a crowd over the same numbers is offered" do
@@ -193,7 +193,7 @@ defmodule Vutuv.Tags.TrendingTest do
 
       Trending.refresh()
 
-      assert [row] = Trending.offers()
+      assert [row] = Trending.offer().tags
       assert row.name == "mow4"
       assert row.author_hosts == 5
       assert row.bot_posts == 0
@@ -222,7 +222,7 @@ defmodule Vutuv.Tags.TrendingTest do
 
       Trending.refresh()
 
-      assert Trending.offers() == []
+      assert Trending.offer().tags == []
     end
 
     test "the same tag with a genuine fourth server is offered" do
@@ -232,7 +232,7 @@ defmodule Vutuv.Tags.TrendingTest do
 
       Trending.refresh()
 
-      assert [row] = Trending.offers()
+      assert [row] = Trending.offer().tags
       assert row.name == "warntag"
       # The stored figures are about strangers only — 16 statuses over four
       # servers, with our five nowhere in them.
@@ -252,7 +252,7 @@ defmodule Vutuv.Tags.TrendingTest do
 
       Trending.refresh()
 
-      assert Trending.offers() == []
+      assert Trending.offer().tags == []
     end
 
     test "our own posts do not water down the share that is bots" do
@@ -265,7 +265,7 @@ defmodule Vutuv.Tags.TrendingTest do
 
       Trending.refresh()
 
-      assert Trending.offers() == []
+      assert Trending.offer().tags == []
     end
   end
 
@@ -297,7 +297,7 @@ defmodule Vutuv.Tags.TrendingTest do
 
       Trending.refresh()
 
-      assert Trending.offers() == []
+      assert Trending.offer().tags == []
     end
 
     test "a blocked server's bots do not make a crowd read as a wave" do
@@ -310,7 +310,7 @@ defmodule Vutuv.Tags.TrendingTest do
 
       Trending.refresh()
 
-      assert [row] = Trending.offers()
+      assert [row] = Trending.offer().tags
       assert row.author_hosts == 4
       assert row.bot_posts == 0
       assert row.sampled == 10
@@ -326,7 +326,7 @@ defmodule Vutuv.Tags.TrendingTest do
 
       Trending.refresh()
 
-      assert Trending.offers() == []
+      assert Trending.offer().tags == []
     end
 
     test "a sample without a blocked server is judged as before" do
@@ -346,7 +346,7 @@ defmodule Vutuv.Tags.TrendingTest do
 
       Trending.refresh()
 
-      assert [row] = Trending.offers()
+      assert [row] = Trending.offer().tags
       assert row.name == "warntag"
       assert row.author_hosts == 5
       assert row.bot_posts == 0
@@ -404,7 +404,7 @@ defmodule Vutuv.Tags.TrendingTest do
       # share, so it waits for the next pass rather than being asked of either.
       refute Enum.any?(asked, &match?({_host, "foxtrot"}, &1))
 
-      assert Trending.offers(limit: 10) |> Enum.map(& &1.name) |> Enum.sort() ==
+      assert Trending.offer(limit: 10).tags |> Enum.map(& &1.name) |> Enum.sort() ==
                ~w(alpha bravo charlie delta echo)
     end
   end
@@ -516,13 +516,13 @@ defmodule Vutuv.Tags.TrendingTest do
       stub(%{@big => [{"warntag", @warntag}]}, %{@big => %{"warntag" => crowd(@big)}})
 
       Trending.refresh()
-      assert Trending.offers() == []
+      assert Trending.offer().tags == []
 
       put_config(:tag_trending, min_servers: 1)
       Repo.delete_all(TrendCheck)
       Trending.refresh()
 
-      assert [%{name: "warntag"}] = Trending.offers()
+      assert [%{name: "warntag"}] = Trending.offer().tags
     end
 
     test "every one of them can be set from the environment and is documented" do
@@ -588,13 +588,13 @@ defmodule Vutuv.Tags.TrendingTest do
       )
 
       Trending.refresh()
-      assert [_row] = Trending.offers()
+      assert [_row] = Trending.offer().tags
 
       flush()
       Trending.refresh()
 
       refute_received {:req, _host, _path}
-      assert [_row] = Trending.offers()
+      assert [_row] = Trending.offer().tags
     end
   end
 
@@ -635,7 +635,7 @@ defmodule Vutuv.Tags.TrendingTest do
 
       assert Trending.refresh() == :disabled
       refute_received {:req, _host, _path}
-      assert Trending.offers() == []
+      assert Trending.offer().tags == []
       assert Trending.due_servers() == []
     end
 
@@ -654,7 +654,7 @@ defmodule Vutuv.Tags.TrendingTest do
       Trending.refresh()
 
       refute_received {:req, _host, _path}
-      assert Trending.offers() == []
+      assert Trending.offer().tags == []
     end
   end
 

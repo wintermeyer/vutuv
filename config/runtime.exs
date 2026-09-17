@@ -519,8 +519,8 @@ if config_env() == :prod do
   #
   # Collected into one `config` call rather than one per variable: inside this
   # file `config/3` accumulates and is applied afterwards, so a second call
-  # reading `Application.get_env/2` would not see the first one's value and
-  # would silently drop it. A keyword list is deep-merged over the shipped one,
+  # would silently drop the first one's keys. Only the variables that are set
+  # land here; `Vutuv.Tags.Trending.settings/0` merges them over its defaults,
   # so naming one key keeps the others.
   tag_trending_overrides =
     Enum.flat_map(

@@ -99,6 +99,21 @@ defmodule Vutuv.Tags.Trending do
 
   @flag :fetch_trending_tags
 
+  # The one place these defaults live; `:tag_trending` in the application env
+  # holds only an installation's overrides (`config/runtime.exs`). Every number
+  # was calibrated against the ten shipped servers on 10 September 2026 (see the
+  # moduledoc):
+  #
+  #   offer            how many the card draws
+  #   min_uses         a floor, so a tag going from 0 to 3 is not "news"
+  #   spike_factor     today against the median of the six days before it
+  #   min_servers      how many servers must list it at all
+  #   min_author_hosts distinct author domains in the vetting sample
+  #   max_bot_percent  bot accounts in that sample, as their servers flag them
+  #   min_sample       below this the sample says nothing and the tag is dropped
+  #   vet_limit        how many sample requests one pass spends
+  #   census_per_host  how many of those one server may take (issue #2160)
+  #   interval_minutes between two passes
   @settings [
     offer: 5,
     min_uses: 25,
@@ -144,7 +159,7 @@ defmodule Vutuv.Tags.Trending do
   @doc """
   The thresholds and the pace — see the moduledoc for where each number comes
   from. Every one is an operator's knob (`config/runtime.exs`), and a key the
-  application env does not name keeps its shipped value rather than reading as
+  application env does not name keeps its default here rather than reading as
   `nil`, which would compare as larger than any count and empty the offer.
   """
   def settings, do: Keyword.merge(@settings, Application.get_env(:vutuv, :tag_trending, []))
@@ -521,22 +536,17 @@ defmodule Vutuv.Tags.Trending do
   end
 
   @doc """
-  What the card offers, loudest first.
+  What the card offers: `:tags`, loudest first, and `:all_followed?`, whether
+  something did run ahead and `:except` took every bit of it.
 
     * `:except` — names the reader already follows, matched the way a tag is
       matched here (case- and separator-insensitively through the slug), so a
       member following `#Warntag` is not offered `warntag`.
     * `:limit` — how many to draw; the configured `offer` by default.
 
-  Empty when the feature is off, and empty when the last pass is older than four
-  intervals — "right now" stops being true at some point, and a sweeper that
-  died must not leave three-day-old news on the card.
-  """
-  def offers(opts \\ []), do: offer(opts).tags
-
-  @doc """
-  `offers/1` as `:tags`, plus `:all_followed?`: whether something did run ahead
-  and `:except` took every bit of it.
+  No tags when the feature is off, and none when the last pass is older than
+  four intervals — "right now" stops being true at some point, and a sweeper
+  that died must not leave three-day-old news on the card.
 
   An empty offer says two different things to the reader: nothing is busy yet,
   or everything that is busy is a tag they already follow. The row words
