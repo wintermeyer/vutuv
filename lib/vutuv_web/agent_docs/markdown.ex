@@ -443,6 +443,8 @@ defmodule VutuvWeb.AgentDocs.Markdown do
       doc.people_sum,
       doc.counter_explainer,
       doc.growth_sentence,
+      doc.year_reach_sentence,
+      doc.year_reach_explainer && Enum.join(doc.year_reach_explainer, " "),
       "## #{gettext("Why this is worth building")}",
       Enum.map_join(doc.case_points, "\n\n", fn point ->
         ["### #{point.title}", point.body, case_source(point.source)]

@@ -135,6 +135,7 @@ defmodule Vutuv.Application do
         optional_child(:fediverse_follower_pruning, Vutuv.Fediverse.FollowerPruner) ++
         optional_child(:fediverse_note_sweeping, Vutuv.Fediverse.NoteSweeper) ++
         optional_child(:fediverse_counts, Vutuv.Fediverse.CountsRefresher) ++
+        optional_child(:year_reach_runner, Vutuv.PostAnalytics.YearRunner) ++
         optional_child(:fediverse_media_fetch, Vutuv.Fediverse.MediaRefetcher) ++
         optional_child(:fetch_external_tag_posts, Vutuv.Tags.ExternalPostFetcher) ++
         optional_child(:fediverse_quote_resolve, Vutuv.Fediverse.QuoteResolver) ++

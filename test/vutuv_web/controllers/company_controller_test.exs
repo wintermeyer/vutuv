@@ -251,6 +251,34 @@ defmodule VutuvWeb.CompanyControllerTest do
       assert markdown =~ "13 people arrived"
     end
 
+    test "states the year's reach in the agent formats too", %{conn: conn} do
+      # The HTML card adds the figure up over the socket; an agent cannot watch
+      # that, so its formats wait for the same result instead. Only the fixed
+      # part of the sentence is asserted: the year in it comes off the clock.
+      author = insert(:activated_user)
+      {:ok, _post} = Vutuv.Posts.create_post(author, %{body: "Counted this year"})
+
+      for extension <- [".md", ".txt"] do
+        # The plain text wraps at 80 columns, so compare with the breaks undone.
+        body =
+          conn
+          |> get(~p"/system/investors" <> extension)
+          |> response(200)
+          |> String.replace(~r/\s+/, " ")
+
+        assert body =~ "Potential reach from reposts in"
+        assert body =~ "from 1 public post."
+        assert body =~ "Somebody who reposts three posts counts three times."
+      end
+
+      json = conn |> get(~p"/system/investors" <> ".json") |> json_response(200)
+
+      assert %{"potential_reach_from_reposts" => 0, "public_posts" => 1} = json["year_reach"]
+
+      xml = conn |> get(~p"/system/investors" <> ".xml") |> response(200)
+      assert xml =~ "potential_reach_from_reposts"
+    end
+
     test "draws no curve for a series too short to be one", %{conn: conn} do
       PeopleHistory.record(BerlinTime.today(), %{members: 10, fediverse_accounts: 2})
 

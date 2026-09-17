@@ -25,6 +25,7 @@ defmodule VutuvWeb.AgentDocs.InvestorsDoc do
   alias Vutuv.Accounts.User
   alias Vutuv.Fediverse
   alias Vutuv.PeopleHistory
+  alias Vutuv.PostAnalytics.YearRunner
   alias VutuvWeb.AgentDocs
   alias VutuvWeb.UI
 
@@ -223,6 +224,63 @@ defmodule VutuvWeb.AgentDocs.InvestorsDoc do
   end
 
   @doc """
+  What the yearly reach card adds up, in one line under its heading. The card
+  is `VutuvWeb.InvestorsReachLive`; the figure is `Vutuv.PostAnalytics.Year`.
+  """
+  def year_reach_lead do
+    gettext(
+      "The potential reach of every public post published here this year, added up the way each post's own reach analysis counts it."
+    )
+  end
+
+  @doc """
+  The reasoning behind the yearly reach, as the sentences the card folds away
+  under "How this is calculated" and the agent formats print under the figure.
+  The last three are the per-post analysis page's own msgids: the yearly
+  figure is that page's figure summed, so it has the same limits.
+  """
+  def year_reach_explainer do
+    [
+      gettext(
+        "Each post brings the follower counts of the members, pages and Fediverse accounts that reposted it. Somebody who reposts three posts counts three times."
+      ),
+      gettext(
+        "Follower totals are fetched in the background from public ActivityPub collections or Mastodon APIs and stored with a timestamp."
+      ),
+      gettext(
+        "Followers can overlap, and a delivered post may not be read. The figure is not a count of unique readers."
+      ),
+      gettext(
+        "We do not know whether the real reach is 10x, 100x or 1,000x larger. It cannot be tracked in the Fediverse."
+      )
+    ]
+  end
+
+  @doc """
+  The yearly reach for the agent formats, which cannot watch the card work it
+  out: waits for `YearRunner` (or computes in place without one). `nil` when
+  the calculation failed and no earlier result exists.
+  """
+  def year_reach, do: YearRunner.fetch()
+
+  @doc """
+  The yearly reach as one sentence, from a `Vutuv.PostAnalytics.Year` result,
+  or `nil` without one.
+  """
+  def year_reach_sentence(%{reach: reach, posts: posts, year: year}) do
+    ngettext(
+      "Potential reach from reposts in %{year}: at least %{reach} followers, from %{formatted} public post.",
+      "Potential reach from reposts in %{year}: at least %{reach} followers, from %{formatted} public posts.",
+      posts,
+      year: year,
+      reach: UI.delimited_count(reach.known),
+      formatted: UI.delimited_count(posts)
+    )
+  end
+
+  def year_reach_sentence(_none), do: nil
+
+  @doc """
   The operator's own profile on **this** installation, or `nil`.
 
   Built on `contact_handle/0`, so it exists exactly when that handle really
@@ -289,6 +347,7 @@ defmodule VutuvWeb.AgentDocs.InvestorsDoc do
   def build(facts) do
     # Bound once: each call is a lookup of that handle against the members here.
     handle = contact_handle()
+    year_reach = year_reach()
 
     AgentDocs.doc_meta("investors", "/system/investors")
     |> Map.merge(%{
@@ -309,10 +368,29 @@ defmodule VutuvWeb.AgentDocs.InvestorsDoc do
       contact_url: handle && AgentDocs.abs_url("/messages/with/" <> handle),
       contact_profile_url: handle && AgentDocs.abs_url("/" <> handle),
       growth_sentence: growth_sentence(facts.growth),
+      year_reach: year_reach_figures(year_reach),
+      year_reach_sentence: year_reach_sentence(year_reach),
+      year_reach_explainer: year_reach && year_reach_explainer(),
       # The daily rows themselves are the chart's business; the doc carries the
       # reading of them.
       figures: Map.drop(facts, [:series, :growth]),
       media_kit_url: AgentDocs.abs_url("/system/media-kit")
     })
   end
+
+  # The figures the card shows, flat, for the JSON and XML readers.
+  defp year_reach_figures(%{reach: reach} = result) do
+    %{
+      year: result.year,
+      potential_reach_from_reposts: reach.known,
+      reposts: reach.reposts,
+      reposters_without_known_total: reach.unknown_reposters,
+      public_posts: result.posts,
+      interactions: result.totals.all,
+      fediverse_servers: result.servers.all,
+      calculated_at: DateTime.to_iso8601(result.computed_at)
+    }
+  end
+
+  defp year_reach_figures(_none), do: nil
 end

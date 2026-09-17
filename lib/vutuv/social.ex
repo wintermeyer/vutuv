@@ -206,15 +206,30 @@ defmodule Vutuv.Social do
   exists, a page following a page — so the figure above the page could promise
   followers it would never name.
   """
-  def organization_follower_count(%Organization{id: id}) do
-    Repo.aggregate(
-      from(f in Follow,
-        join: u in User,
-        on: u.id == f.follower_id,
-        where: f.followee_organization_id == ^id,
-        where: account_confirmed_row(u) and not account_hidden_row(u)
-      ),
-      :count
+  def organization_follower_count(%Organization{id: id}),
+    do: Repo.aggregate(organization_follower_rows([id]), :count)
+
+  @doc """
+  `organization_follower_count/1` for many pages in one query, as
+  `%{organization_id => count}`. A page nobody follows is absent.
+  """
+  def organization_follower_counts([]), do: %{}
+
+  def organization_follower_counts(organization_ids) when is_list(organization_ids) do
+    from([f] in organization_follower_rows(organization_ids),
+      group_by: f.followee_organization_id,
+      select: {f.followee_organization_id, count(f.id)}
+    )
+    |> Repo.all()
+    |> Map.new()
+  end
+
+  defp organization_follower_rows(organization_ids) do
+    from(f in Follow,
+      join: u in User,
+      on: u.id == f.follower_id,
+      where: f.followee_organization_id in ^organization_ids,
+      where: account_confirmed_row(u) and not account_hidden_row(u)
     )
   end
 

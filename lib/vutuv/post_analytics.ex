@@ -103,13 +103,7 @@ defmodule Vutuv.PostAnalytics do
     GROUP BY actor_uri
     """
 
-    delivery_sql = """
-    SELECT DISTINCT inbox_uri FROM fediverse_post_deliveries WHERE post_id = $1
-    """
-
-    id = binary_id(post_id)
-    %{rows: interaction_rows} = Repo.query!(interaction_sql, [id])
-    %{rows: delivery_rows} = Repo.query!(delivery_sql, [id])
+    %{rows: interaction_rows} = Repo.query!(interaction_sql, [binary_id(post_id)])
 
     active =
       interaction_rows
@@ -128,8 +122,8 @@ defmodule Vutuv.PostAnalytics do
       end)
       |> Map.delete(nil)
 
-    addressed = delivery_rows |> Enum.map(fn [uri] -> host(uri) end) |> Enum.reject(&is_nil/1)
-    origin = URI.parse(VutuvWeb.Endpoint.url()).host || "vutuv"
+    addressed = addressed_hosts(binary_ids([post_id]))
+    origin = origin_host()
     remote_interactions = active |> Map.values() |> Enum.map(& &1.interactions) |> Enum.sum()
     local_interactions = totals.all - remote_interactions
 
@@ -163,7 +157,7 @@ defmodule Vutuv.PostAnalytics do
       server_count: length(nodes),
       active_server_count: Enum.count(nodes, &(&1.interactions > 0)),
       hidden_server_count: max(length(nodes) - 19, 0),
-      addressed_server_count: length(Enum.uniq(addressed))
+      addressed_server_count: length(addressed)
     }
   end
 
@@ -228,41 +222,75 @@ defmodule Vutuv.PostAnalytics do
   end
 
   defp repost_reach(post_id) do
-    origin = URI.parse(VutuvWeb.Endpoint.url()).host || "vutuv"
-    reposters = local_reposters(post_id, origin) ++ remote_reposters(post_id)
-    summarize_reposters(reposters)
+    summarize_reposters(local_reposters([post_id]) ++ remote_reposters([post_id]))
   end
 
-  defp local_reposters(post_id, origin) do
-    local_rows =
-      from(r in PostRepost, where: r.post_id == ^post_id)
+  @doc """
+  One row per repost by a member or page here of any of `post_ids`, carrying
+  the reposter's current follower count (`nil` when the account behind it is
+  gone) and the `post_id` it belongs to.
+
+  A reposter of several posts is a row per post, which is what the per-post
+  analysis sums and what `Vutuv.PostAnalytics.Year` adds up across a year.
+  """
+  def local_reposters(post_ids) do
+    origin = origin_host()
+
+    # The handle is all a row needs of its reposter, so it is selected rather
+    # than preloaded with the whole account; the follower counts are two
+    # grouped queries however many members and pages reposted.
+    rows =
+      from(r in PostRepost,
+        left_join: u in assoc(r, :user),
+        left_join: o in assoc(r, :organization),
+        where: r.post_id in ^post_ids,
+        select: %{
+          post_id: r.post_id,
+          user_id: u.id,
+          username: u.username,
+          organization_id: o.id,
+          slug: o.slug
+        }
+      )
       |> Repo.all()
-      |> Repo.preload([:user, :organization])
 
-    user_ids = local_rows |> Enum.map(& &1.user_id) |> Enum.reject(&is_nil/1)
-    follower_counts = Social.follower_counts(user_ids)
+    member_counts = rows |> ids_of(:user_id) |> Social.follower_counts()
+    page_counts = rows |> ids_of(:organization_id) |> Social.organization_follower_counts()
 
-    Enum.map(local_rows, &local_reposter(&1, origin, follower_counts))
+    Enum.map(rows, fn row ->
+      row
+      |> local_reposter(origin, member_counts, page_counts)
+      |> Map.put(:post_id, row.post_id)
+    end)
   end
 
-  defp local_reposter(%{user: %{} = user}, origin, follower_counts) do
-    reposter(user.username, origin, Map.get(follower_counts, user.id, 0), :local)
-  end
+  defp ids_of(rows, key),
+    do: rows |> Enum.map(&Map.fetch!(&1, key)) |> Enum.reject(&is_nil/1) |> Enum.uniq()
 
-  defp local_reposter(%{organization: %{} = organization}, origin, _follower_counts) do
-    followers = Social.organization_follower_count(organization)
-    reposter(organization.slug, origin, followers, :local)
-  end
+  defp local_reposter(%{user_id: id} = row, origin, member_counts, _page_counts)
+       when is_binary(id),
+       do: reposter(row.username, origin, Map.get(member_counts, id, 0), :local)
 
-  defp local_reposter(_repost, origin, _follower_counts),
+  defp local_reposter(%{organization_id: id} = row, origin, _member_counts, page_counts)
+       when is_binary(id),
+       do: reposter(row.slug, origin, Map.get(page_counts, id, 0), :local)
+
+  defp local_reposter(_row, origin, _member_counts, _page_counts),
     do: reposter(nil, origin, nil, :local)
 
-  defp remote_reposters(post_id) do
+  @doc """
+  One row per `Announce` from the Fediverse of any of `post_ids`, carrying the
+  follower total last fetched for that account (`nil` while none is known) and
+  the `post_id` it belongs to. Reads only what the background refresh stored;
+  it never asks a remote server.
+  """
+  def remote_reposters(post_ids) do
     from(r in Reaction,
       left_join: a in RemoteAccount,
       on: a.actor_uri == r.actor_uri,
-      where: r.post_id == ^post_id and r.kind == "announce",
+      where: r.post_id in ^post_ids and r.kind == "announce",
       select: %{
+        post_id: r.post_id,
         actor_uri: r.actor_uri,
         reaction_handle: r.handle,
         host: a.host,
@@ -278,7 +306,10 @@ defmodule Vutuv.PostAnalytics do
   defp remote_reposter(row) do
     host = row.host || host(row.actor_uri) || "unknown"
     handle = row.account_handle || row.reaction_handle || actor_name(row.actor_uri)
-    reposter(handle, host, row.followers, :remote, row.checked_at)
+
+    handle
+    |> reposter(host, row.followers, :remote, row.checked_at)
+    |> Map.put(:post_id, row.post_id)
   end
 
   defp summarize_reposters(reposters) do
@@ -288,15 +319,28 @@ defmodule Vutuv.PostAnalytics do
         fn row -> {is_nil(row.followers), -(row.followers || 0), row.label} end
       )
 
-    known = sorted |> Enum.map(& &1.followers) |> Enum.reject(&is_nil/1) |> Enum.sum()
-
-    %{
-      known: known,
-      known_reposters: Enum.count(sorted, &(not is_nil(&1.followers))),
-      unknown_reposters: Enum.count(sorted, &is_nil(&1.followers)),
+    sorted
+    |> reach_tally()
+    |> Map.merge(%{
       reposters: sorted,
       visible_reposters: Enum.take(sorted, 12),
       by_host: repost_reach_by_host(sorted)
+    })
+  end
+
+  @doc """
+  What a list of reposter rows adds up to: the sum of the follower counts that
+  are known, how many rows have one, and how many do not. The per-post page and
+  `Vutuv.PostAnalytics.Year` both count through here, so the yearly figure
+  cannot come to mean something else.
+  """
+  def reach_tally(reposters) do
+    known = reposters |> Enum.map(& &1.followers) |> Enum.reject(&is_nil/1)
+
+    %{
+      known: Enum.sum(known),
+      known_reposters: length(known),
+      unknown_reposters: length(reposters) - length(known)
     }
   end
 
@@ -328,36 +372,45 @@ defmodule Vutuv.PostAnalytics do
   defp host(uri) when is_binary(uri), do: uri |> URI.parse() |> Map.get(:host)
   defp host(_uri), do: nil
 
+  defp origin_host, do: URI.parse(VutuvWeb.Endpoint.url()).host || "vutuv"
+
   defp binary_id(id) do
     {:ok, binary} = Ecto.UUID.dump(id)
     binary
   end
 
+  defp binary_ids(ids), do: Enum.map(ids, &binary_id/1)
+
+  # Every retained interaction with any of `$1` (an array of post ids), one row
+  # per event with its arrival time and kind. The same public-reply gate used
+  # by the post's visible counter excludes frozen and denied local replies and
+  # non-public remote notes.
+  @event_rows """
+  SELECT inserted_at AS event_at, 'likes' AS kind FROM post_likes WHERE post_id = ANY($1)
+  UNION ALL
+  SELECT inserted_at, 'reposts' FROM post_reposts WHERE post_id = ANY($1)
+  UNION ALL
+  SELECT r.inserted_at, 'replies' FROM post_replies r
+    JOIN posts p ON p.id = r.post_id
+    WHERE r.parent_post_id = ANY($1) AND p.frozen_at IS NULL
+      AND NOT EXISTS (SELECT 1 FROM post_denials d WHERE d.post_id = p.id)
+      AND NOT EXISTS (SELECT 1 FROM users u WHERE u.id = p.user_id
+        AND (u.frozen_at IS NOT NULL OR u.deactivated_at IS NOT NULL
+          OR u.unreachable_at IS NOT NULL OR u.suspended_until > (NOW() AT TIME ZONE 'utc')))
+  UNION ALL
+  SELECT received_at, CASE kind WHEN 'like' THEN 'likes' ELSE 'reposts' END
+    FROM fediverse_reactions WHERE post_id = ANY($1)
+  UNION ALL
+  SELECT received_at, 'replies' FROM fediverse_notes
+    WHERE post_id = ANY($1) AND audience = 'public'
+  """
+
   # Aggregate in PostgreSQL rather than sending one row per reaction to the
-  # LiveView. The same public-reply gate used by the post's visible counter
-  # excludes frozen and denied local replies and non-public remote notes.
+  # LiveView.
   defp events(post_id, unit, first_at, now) do
     sql = """
     SELECT date_trunc($2::text, event_at) AS bucket, kind, count(*)::integer
-    FROM (
-      SELECT inserted_at AS event_at, 'likes' AS kind FROM post_likes WHERE post_id = $1
-      UNION ALL
-      SELECT inserted_at, 'reposts' FROM post_reposts WHERE post_id = $1
-      UNION ALL
-      SELECT r.inserted_at, 'replies' FROM post_replies r
-        JOIN posts p ON p.id = r.post_id
-        WHERE r.parent_post_id = $1 AND p.frozen_at IS NULL
-          AND NOT EXISTS (SELECT 1 FROM post_denials d WHERE d.post_id = p.id)
-          AND NOT EXISTS (SELECT 1 FROM users u WHERE u.id = p.user_id
-            AND (u.frozen_at IS NOT NULL OR u.deactivated_at IS NOT NULL
-              OR u.unreachable_at IS NOT NULL OR u.suspended_until > (NOW() AT TIME ZONE 'utc')))
-      UNION ALL
-      SELECT received_at, CASE kind WHEN 'like' THEN 'likes' ELSE 'reposts' END
-        FROM fediverse_reactions WHERE post_id = $1
-      UNION ALL
-      SELECT received_at, 'replies' FROM fediverse_notes
-        WHERE post_id = $1 AND audience = 'public'
-    ) events
+    FROM (#{@event_rows}) events
     WHERE event_at >= $3 AND event_at <= $4
     GROUP BY 1, 2
     ORDER BY 1
@@ -365,13 +418,59 @@ defmodule Vutuv.PostAnalytics do
 
     %{rows: rows} =
       Repo.query!(sql, [
-        binary_id(post_id),
+        binary_ids([post_id]),
         unit,
         DateTime.to_naive(first_at),
         DateTime.to_naive(now)
       ])
 
     rows
+  end
+
+  @doc """
+  The likes, reposts and public replies retained for any of `post_ids`, whenever
+  they arrived, as `%{likes:, reposts:, replies:, all:}`. The totals the
+  per-post chart adds up, without its time window.
+  """
+  def interaction_totals(post_ids) do
+    sql = "SELECT kind, count(*)::integer FROM (#{@event_rows}) events GROUP BY kind"
+    %{rows: rows} = Repo.query!(sql, [binary_ids(post_ids)])
+    counts = Map.new(rows, fn [kind, count] -> {kind, count} end)
+    [likes, reposts, replies] = Enum.map(~w(likes reposts replies), &Map.get(counts, &1, 0))
+
+    %{likes: likes, reposts: reposts, replies: replies, all: likes + reposts + replies}
+  end
+
+  @doc """
+  The Fediverse servers involved with any of `post_ids`, as `%{responded:,
+  all:}` counts of distinct hosts: those an account liked, reposted or publicly
+  answered from, and those together with the ones a copy was delivered to. The
+  per-post network draws the same two kinds of node, without vutuv's own.
+  """
+  def server_counts(post_ids) do
+    responded_sql = """
+    SELECT actor_uri FROM fediverse_reactions WHERE post_id = ANY($1)
+    UNION
+    SELECT actor_uri FROM fediverse_notes WHERE post_id = ANY($1) AND audience = 'public'
+    """
+
+    ids = binary_ids(post_ids)
+    responded = hosts(Repo.query!(responded_sql, [ids]).rows)
+
+    %{
+      responded: length(responded),
+      all: (responded ++ addressed_hosts(ids)) |> Enum.uniq() |> length()
+    }
+  end
+
+  # The distinct hosts a copy of any of `ids` (dumped post ids) was delivered to.
+  defp addressed_hosts(ids) do
+    sql = "SELECT DISTINCT inbox_uri FROM fediverse_post_deliveries WHERE post_id = ANY($1)"
+    hosts(Repo.query!(sql, [ids]).rows)
+  end
+
+  defp hosts(rows) do
+    rows |> Enum.map(fn [uri] -> host(uri) end) |> Enum.reject(&is_nil/1) |> Enum.uniq()
   end
 
   defp buckets(rows, first_at, now, unit) do

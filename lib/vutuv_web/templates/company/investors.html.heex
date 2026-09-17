@@ -84,6 +84,17 @@
     </p>
   </.card>
 
+  <%!-- The year's reach is a LiveView of its own: it is added up in the
+        background, and the card shows the steps as they finish instead of
+        holding the whole page until the sum is there. The agent formats get
+        the same figure through InvestorsDoc.year_reach/0. The wrapper
+        carries the anchor, since a root live_render names its own container. --%>
+  <section id="investors-reach">
+    {live_render(@conn, VutuvWeb.InvestorsReachLive,
+      session: VutuvWeb.ControllerHelpers.live_render_session(@conn)
+    )}
+  </section>
+
   <.card>
     <h2 class="text-xl font-bold text-slate-900 dark:text-white">
       {gettext("Why this is worth building")}

@@ -83,6 +83,25 @@ gated-community argument, the cost base, a growth curve) and was cut back to
 this on 2026-08-16. The prose is in the history if it is wanted again; the
 LinkedIn framing itself lives on in the media kit's boilerplate.
 
+### The year's reach
+
+Under the figures sits one LiveView card, `VutuvWeb.InvestorsReachLive`: the
+potential repost reach of every public post published this calendar year (UTC),
+added up (`Vutuv.PostAnalytics.Year`). It is each post's own reach analysis
+summed, so a member who reposts three posts counts three times and a Fediverse
+reposter without a stored follower total adds nothing. Nothing asks a remote
+server; the totals are whatever `Vutuv.Fediverse.CountsRefresher` last stored.
+
+The work runs in five steps, and the card lists them with their figures and
+durations as they finish. The run belongs to `Vutuv.PostAnalytics.YearRunner`,
+one per release slot: every open card watches the same run over PubSub, a
+result is reused for ten minutes, and an older one stays on screen while the
+next run works. The dead render never starts a run (`peek/1`), so crawlers cost
+nothing. The agent formats wait for the same result (`InvestorsDoc.year_reach/0`).
+On the development copy of production data (September 2026, 995 posts) a run
+took 30 to 65 ms, against 1.8 s for calling the per-post analysis once per post;
+both gave the same sum, and `year_test.exs` holds the two equal.
+
 ### Brand assets
 
 `priv/static/images/brand/`. The two wordmark SVGs are generated from

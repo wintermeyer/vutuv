@@ -392,6 +392,8 @@ defmodule VutuvWeb.AgentDocs.Text do
       doc.people_sum,
       doc.counter_explainer,
       doc.growth_sentence,
+      doc.year_reach_sentence,
+      doc.year_reach_explainer && Enum.join(doc.year_reach_explainer, " "),
       heading(gettext("Why this is worth building")),
       Enum.map(doc.case_points, &case_point_text/1),
       doc.contact_handle && heading(gettext("Write to me")),

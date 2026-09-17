@@ -97,6 +97,28 @@ defmodule Vutuv.PostAnalyticsTest do
     assert NaiveDateTime.diff(List.last(active_buckets).at, hd(active_buckets).at) == 4 * 86_400
   end
 
+  test "counts the member followers of pages that reposted, one count per page" do
+    author = insert(:activated_user)
+    {:ok, post} = Posts.create_post(author, %{body: "A post two pages shared"})
+    followed = insert(:organization)
+    unfollowed = insert(:organization)
+
+    for _ <- 1..2 do
+      {:ok, _follow} = Vutuv.Social.follow_organization(insert(:activated_user), followed)
+    end
+
+    for page <- [followed, unfollowed] do
+      Repo.insert!(%Vutuv.Posts.PostRepost{post_id: post.id, organization_id: page.id})
+    end
+
+    reach = PostAnalytics.for_post(post).repost_reach
+
+    assert reach.known == 2
+    assert reach.known_reposters == 2
+    assert Enum.find(reach.reposters, &(&1.label =~ followed.slug)).followers == 2
+    assert Enum.find(reach.reposters, &(&1.label =~ unfollowed.slug)).followers == 0
+  end
+
   test "summarizes known readers and the servers involved in distribution" do
     author = insert(:activated_user)
     reader = insert(:activated_user)
