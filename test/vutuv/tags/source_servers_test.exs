@@ -16,6 +16,7 @@ defmodule Vutuv.Tags.SourceServersTest do
   """
   use Vutuv.DataCase, async: false
 
+  import ExUnit.CaptureLog
   import Vutuv.ExternalTagHelpers
 
   alias Vutuv.Fediverse
@@ -183,20 +184,51 @@ defmodule Vutuv.Tags.SourceServersTest do
       assert is_nil(Repo.get_by!(SourceServer, host: @good).accounts)
     end
 
-    test "keeps a healthy server healthy when its NodeInfo document blows up" do
+    test "keeps a healthy server healthy when its NodeInfo leg raises" do
       # The figures are decoration and the timeline alone decides. A blanket
       # rescue over the whole probe made *any* exception in the optional leg
-      # mark the server "unreachable" for a day — and a stranger's document is
-      # exactly where an exception comes from: `to_string/1` on a `rel` that is
-      # an object raises `Protocol.UndefinedError`. Calibrated: with the rescue
+      # mark the server "unreachable" for a day. Calibrated: with the rescue
       # left blanket the status is "unreachable" and nothing can be picked.
-      stub_servers(%{@good => %{nodeinfo_links: [%{"rel" => %{}, "href" => "x"}]}})
+      stub_servers(%{@good => %{}})
+      answer = Application.fetch_env!(:vutuv, :external_tag_req_options)[:plug]
 
-      assert {:ok, @good} = SourceServers.check(@good, tag())
+      put_config(:external_tag_req_options,
+        plug: fn
+          %{request_path: "/nodeinfo/2.0"} -> raise "a stranger's odd document"
+          conn -> answer.(conn)
+        end
+      )
 
+      log = capture_log(fn -> assert {:ok, @good} = SourceServers.check(@good, tag()) end)
+
+      assert log =~ "source server decoration #{@good} raised"
       info = Repo.get_by!(SourceServer, host: @good)
       assert info.status == "ok"
       assert is_nil(info.accounts)
+    end
+
+    test "reads the figures past a NodeInfo link it cannot read" do
+      # A stranger's link document, where a `rel` or an `href` can be an object.
+      # Skipped rather than raised on: a raise lost the well-formed link beside
+      # it, so the server showed no figures and logged a warning on every probe.
+      # Calibrated: with `to_string/1` over both fields the accounts are nil.
+      stub_servers(%{
+        @good => %{
+          nodeinfo_links: [
+            %{"rel" => %{}, "href" => "x"},
+            %{"rel" => "http://nodeinfo.diaspora.software/ns/schema/2.1", "href" => %{}},
+            %{
+              "rel" => "http://nodeinfo.diaspora.software/ns/schema/2.0",
+              "href" => "https://#{@good}/nodeinfo/2.0"
+            }
+          ]
+        }
+      })
+
+      log = capture_log(fn -> assert {:ok, @good} = SourceServers.check(@good, tag()) end)
+
+      refute log =~ "raised"
+      assert Repo.get_by!(SourceServer, host: @good).accounts == 49_157
     end
 
     test "keeps a server whose NodeInfo counts do not fit in a column" do

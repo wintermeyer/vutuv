@@ -89,9 +89,9 @@ defmodule Vutuv.Tags.SourceServerProbe do
   # The rescue above covers the leg that decides `status`. This one covers the
   # optional leg, and it is separate on purpose: the figures are decoration and
   # an exception in them says nothing about whether the timeline is public. With
-  # one rescue over both, a stranger's odd NodeInfo document — a `rel` that is
-  # an object, so `to_string/1` raises — marked a perfectly healthy server
-  # "unreachable" and unpickable for a day.
+  # one rescue over both, a stranger's odd NodeInfo document (a `rel` that was
+  # an object, before `document_path/2` learned to skip it) marked a perfectly
+  # healthy server "unreachable" and unpickable for a day.
   defp decoration(host) do
     figures(host)
   rescue
@@ -177,14 +177,21 @@ defmodule Vutuv.Tags.SourceServerProbe do
 
   # The highest-versioned link, reduced to its path — and only if it is `https`
   # and names the host being probed. See the moduledoc for what that check is
-  # and is not worth.
+  # and is not worth. A link whose `rel` or `href` is not a string is skipped,
+  # not raised on: a raise would lose the readable link beside it.
   defp document_path(host, links) do
+    prefix = NodeInfo.rel_prefix()
+
     links
-    |> Enum.filter(
-      &(is_map(&1) and String.starts_with?(to_string(&1["rel"]), NodeInfo.rel_prefix()))
-    )
-    |> Enum.sort_by(&to_string(&1["rel"]), :desc)
-    |> Enum.find_value(fn link -> same_server_path(host, to_string(link["href"])) end)
+    |> Enum.flat_map(fn
+      %{"rel" => rel, "href" => href} when is_binary(rel) and is_binary(href) ->
+        if String.starts_with?(rel, prefix), do: [{rel, href}], else: []
+
+      _other ->
+        []
+    end)
+    |> Enum.sort(:desc)
+    |> Enum.find_value(fn {_rel, href} -> same_server_path(host, href) end)
   end
 
   defp with_query(path, nil), do: path
