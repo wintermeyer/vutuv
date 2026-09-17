@@ -1,10 +1,10 @@
 <%= email_greeting(@user) %>,
 
-dopo una terza violazione confermata delle nostre regole della community il Suo
-account vutuv è stato disattivato definitivamente. Non può più accedere e il
-Suo profilo non è più visibile.
+dopo una terza violazione confermata delle nostre regole della community il tuo
+account vutuv è stato disattivato definitivamente. Non puoi più accedere e il
+tuo profilo non è più visibile.
 
-Se ritiene che questa decisione sia sbagliata, può fare ricorso rispondendo a
+Se ritieni che questa decisione sia sbagliata, puoi fare ricorso rispondendo a
 questa e-mail.
 
 <%= render "_signature_it.text" %>

@@ -1,10 +1,10 @@
 <%= email_greeting(@user) %>,
 
-per confermare il Suo nuovo indirizzo e-mail inserisca il seguente PIN:
+per confermare il tuo nuovo indirizzo e-mail inserisci il seguente PIN:
 
   <%= @pin %>
 
-Lo inserisca su vutuv per completare l'aggiunta dell'indirizzo. Il PIN scade
+Inseriscilo su vutuv per completare l'aggiunta dell'indirizzo. Il PIN scade
 dopo 30 minuti.
 
 <%= render "_signature_it.text" %>

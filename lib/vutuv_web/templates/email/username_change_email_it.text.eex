@@ -1,18 +1,18 @@
 <%= email_greeting(@user) %>,
 
-per confermare il Suo nuovo nome utente @<%= @new_username %> inserisca il
+per confermare il tuo nuovo nome utente @<%= @new_username %> inserisci il
 seguente PIN:
 
   <%= @pin %>
 
-Lo inserisca su vutuv per completare la modifica. Il PIN scade dopo 30 minuti.
+Inseriscilo su vutuv per completare la modifica. Il PIN scade dopo 30 minuti.
 
-L'attuale indirizzo del Suo profilo smetterà di funzionare non appena la
-modifica sarà effettiva, e le menzioni del Suo vecchio handle nei post verranno
+L'attuale indirizzo del tuo profilo smetterà di funzionare non appena la
+modifica sarà effettiva, e le menzioni del tuo vecchio handle nei post verranno
 riscritte con quello nuovo.
 
-Se non ha chiesto Lei di cambiare nome utente, non inserisca questo PIN.
-Qualcun altro potrebbe usare il Suo account: cambi il modo in cui accede su
+Se non hai chiesto tu di cambiare nome utente, non inserire questo PIN.
+Qualcun altro potrebbe usare il tuo account: cambia il modo in cui accedi su
 <%= @url %>settings/security
 
 <%= render "_signature_it.text" %>

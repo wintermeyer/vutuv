@@ -2,7 +2,7 @@
 
 <%= email_wrapped_text(@content_intro) %>
 Nessuna persona ha esaminato prima il contenuto segnalato; ora possono
-vederlo solo Lei e i nostri amministratori.
+vederlo solo tu e i nostri amministratori.
 
 <%= email_wrapped_text(@standing_sentence) %>
 È quello che è successo qui.
@@ -10,14 +10,14 @@ vederlo solo Lei e i nostri amministratori.
   Segnalato come: <%= @category_labels %>
 <%= if @notes != [] do %>
 Ecco cosa dice la segnalazione, con le parole di chi l'ha scritta. Chi sia
-stato non glielo diciamo mai:
+stato non te lo diciamo mai:
 
 <%= email_quoted_text(@notes) %>
 <% else %>
 La segnalazione ha indicato quella categoria e nient'altro.
 <% end %><%= if @copyright_case do %>
 Questa è una contestazione legale, non una regola della casa: sostiene che
-l'opera non è Sua da pubblicare. A deciderlo è il diritto d'autore, quindi
+l'opera non è tua da pubblicare. A deciderlo è il diritto d'autore, quindi
 deve esaminarla un amministratore.
 <% else %>
 Il fondamento sono le nostre regole della comunità, a cui tutto su vutuv
@@ -25,11 +25,11 @@ deve attenersi:
 
 <%= @url %>community
 <% end %>
-Ha 72 ore per risolvere da solo; dopo decidono i nostri amministratori:
+Hai 72 ore per risolvere da solo; dopo decidono i nostri amministratori:
 
 <%= @url %>moderation/cases/<%= @case_id %>
 
-Su quella pagina può:
+Su quella pagina puoi:
 <%= if @edit_offer == :immediate do %>
   * Modificare il contenuto. Dopo una modifica torna subito visibile.
 <% end %><%= if @edit_offer == :reviewed do %>
@@ -39,7 +39,7 @@ Su quella pagina può:
   * Eliminare il contenuto. Così la segnalazione è chiusa, senza altre
     domande.
 
-  * Dirci che il Suo contenuto è a posto. Resta nascosto finché un
+  * Dirci che il tuo contenuto è a posto. Resta nascosto finché un
     amministratore non avrà deciso.
 
 <%= render "_signature_it.text" %>

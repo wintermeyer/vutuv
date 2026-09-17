@@ -1,13 +1,13 @@
 <%= email_greeting(@user) %>,
 
-per eliminare il Suo account inserisca il seguente PIN:
+per eliminare il tuo account inserisci il seguente PIN:
 
   <%= @pin %>
 
-ATTENZIONE: da questo passo non si torna indietro. Il Suo account verrà
-eliminato non appena inserirà questo PIN su vutuv. Il PIN scade dopo 30 minuti.
+ATTENZIONE: da questo passo non si torna indietro. Il tuo account verrà
+eliminato non appena inserirai questo PIN su vutuv. Il PIN scade dopo 30 minuti.
 
-Naturalmente può sempre creare un nuovo account.
+Naturalmente puoi sempre creare un nuovo account.
 
 <%= render "_signature_it.text" %>
 

@@ -9,14 +9,14 @@ avranno esaminato il caso; nessuna persona lo ha esaminato prima.
   Segnalato come: <%= @category_labels %>
 <%= if @notes != [] do %>
 Ecco cosa dice la segnalazione, con le parole di chi l'ha scritta. Chi sia
-stato non glielo diciamo mai:
+stato non te lo diciamo mai:
 
 <%= email_quoted_text(@notes) %>
 <% else %>
 La segnalazione ha indicato quella categoria e nient'altro.
 <% end %><%= if @copyright_case do %>
 Questa è una contestazione legale, non una regola della casa: sostiene che
-l'opera non è Sua da pubblicare. A deciderlo è il diritto d'autore.
+l'opera non è tua da pubblicare. A deciderlo è il diritto d'autore.
 <% else %>
 Il fondamento sono le nostre regole della comunità, a cui tutto su vutuv
 deve attenersi:
@@ -24,11 +24,11 @@ deve attenersi:
 <%= @url %>community
 <% end %>
 Questo caso è già in mano ai nostri amministratori, quindi non c'è un giro
-in cui possa risolverlo da solo. Non deve fare nulla: Le comunicheremo
-l'esito e, se la segnalazione risulterà infondata, il Suo contenuto tornerà
+in cui tu possa risolverlo da solo. Non devi fare nulla: ti comunicheremo
+l'esito e, se la segnalazione risulterà infondata, il tuo contenuto tornerà
 visibile.
 
-Può vedere il caso qui:
+Puoi vedere il caso qui:
 
 <%= @url %>moderation/cases/<%= @case_id %>
 

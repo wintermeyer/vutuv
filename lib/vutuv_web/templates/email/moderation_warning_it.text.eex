@@ -1,15 +1,15 @@
 <%= email_greeting(@user) %>,
 
-<%= if @copyright_case do %>i nostri amministratori hanno esaminato una segnalazione su un Suo contenuto e
+<%= if @copyright_case do %>i nostri amministratori hanno esaminato una segnalazione su un tuo contenuto e
 le hanno dato ragione: il contenuto viola il diritto d'autore altrui. È una
 questione legale, non una regola della casa.
-<% else %>i nostri amministratori hanno esaminato una segnalazione su un Suo contenuto e
+<% else %>i nostri amministratori hanno esaminato una segnalazione su un tuo contenuto e
 hanno rilevato che viola le nostre regole della community:
 
 <%= @url %>community
 <% end %>
 Questo è un avvertimento formale, il primo di tre passi. Una seconda violazione
-confermata sospende il Suo account per una settimana; una terza lo disattiva
+confermata sospende il tuo account per una settimana; una terza lo disattiva
 definitivamente. Gli avvertimenti decadono dopo dodici mesi.
 
 <%= render "_signature_it.text" %>

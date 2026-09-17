@@ -1,17 +1,17 @@
 <%= email_greeting(@user) %>,
 
-ecco cosa è successo su vutuv mentre era via:
+ecco cosa è successo su vutuv mentre eri via:
 
 <%= for line <- @lines do %>* <%= line %>
 <% end %>
 <%= if @more > 0 do %>
 … e altri <%= @more %>.
 <% end %>
-Può leggere tutto qui:
+Puoi leggere tutto qui:
 
 <%= @notifications_url %>
 
-Queste e-mail di notifica può disattivarle qui:
+Queste e-mail di notifica puoi disattivarle qui:
 
 <%= @unsubscribe_url %>
 

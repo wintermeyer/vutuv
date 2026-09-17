@@ -11,7 +11,7 @@
     <.email_row label="Segnalazioni">{@report_count}</.email_row>
     <.email_row :if={@note} label="Nota del segnalante">{@note}</.email_row>
   </.email_panel>
-  <.email_p>Esamini il caso:</.email_p>
-  <.email_button href={"#{@url}admin/moderation/#{@case_id}"}>Esamini il caso</.email_button>
+  <.email_p>Esamina il caso:</.email_p>
+  <.email_button href={"#{@url}admin/moderation/#{@case_id}"}>Esamina il caso</.email_button>
   <.email_signature locale={@locale} />
 </.email_layout>

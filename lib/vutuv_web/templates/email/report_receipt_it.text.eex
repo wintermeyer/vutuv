@@ -1,6 +1,6 @@
 <%= @greeting %>,
 
-abbiamo ricevuto la Sua segnalazione. Per farla esaminare, confermi questo
+abbiamo ricevuto la tua segnalazione. Per farla esaminare, conferma questo
 indirizzo e-mail:
 
 <%= @confirm_url %>
@@ -12,7 +12,7 @@ cambia per il contenuto segnalato.
   Indirizzo:       <%= @content_url %>
   Segnalato come:  <%= @category_label %>
 
-Se non ha inviato Lei questa segnalazione, ignori pure questa e-mail. Senza
+Se non hai inviato tu questa segnalazione, ignora pure questa e-mail. Senza
 conferma non accade nulla.
 
 <%= render "_signature_it.text" %>

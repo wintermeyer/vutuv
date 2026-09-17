@@ -1,6 +1,6 @@
-<.email_layout preheader="Nuove corrispondenze per le Sue ricerche salvate su vutuv" locale={@locale}>
+<.email_layout preheader="Nuove corrispondenze per le tue ricerche salvate su vutuv" locale={@locale}>
   <.email_p>{email_greeting(@user)},</.email_p>
-  <.email_p>ecco le corrispondenze più recenti per le Sue ricerche salvate su vutuv.</.email_p>
+  <.email_p>ecco le corrispondenze più recenti per le tue ricerche salvate su vutuv.</.email_p>
 
   <div :for={section <- @sections}>
     <.email_divider />
@@ -19,9 +19,9 @@
       </div>
     </div>
 
-    <p style="margin:0 0 6px;"><.email_link href={section.more_url}>Veda tutte le corrispondenze</.email_link></p>
+    <p style="margin:0 0 6px;"><.email_link href={section.more_url}>Guarda tutte le corrispondenze</.email_link></p>
     <.email_muted>
-      <.email_link href={section.disable_url}>Disattivi gli avvisi per questa ricerca</.email_link>
+      <.email_link href={section.disable_url}>Disattiva gli avvisi per questa ricerca</.email_link>
     </.email_muted>
   </div>
 

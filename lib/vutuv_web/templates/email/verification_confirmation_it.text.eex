@@ -1,10 +1,10 @@
 <%= email_greeting(@user) %>,
 
-congratulazioni! Il Suo account vutuv risulta ora verificato.
+congratulazioni! Il tuo account vutuv risulta ora verificato.
 
-Sul Suo profilo compare adesso un contrassegno di verifica blu accanto al Suo
+Sul tuo profilo compare adesso un contrassegno di verifica blu accanto al tuo
 nome, così i visitatori vedono a colpo d'occhio che questo account è davvero
-Suo.
+tuo.
 
 <%= @url %><%= @user.username %>
 

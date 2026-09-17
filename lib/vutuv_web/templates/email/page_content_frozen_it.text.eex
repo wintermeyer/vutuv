@@ -8,7 +8,7 @@ Finché il caso resta aperto, il contenuto resta nascosto.
   Segnalato come: <%= @category_labels %>
 <%= if @notes != [] do %>
 Ecco cosa dice la segnalazione, con le parole di chi l'ha scritta. Chi sia
-stato non glielo diciamo mai:
+stato non te lo diciamo mai:
 
 <%= email_quoted_text(@notes) %>
 <% else %>
@@ -22,17 +22,17 @@ deve attenersi:
 
 <%= @url %>community
 <% end %>
-Glielo comunichiamo perché <%= @page_name %> è Sua.
+Te lo comunichiamo perché <%= @page_name %> è tua.
 <%= if @self_service do %>
 A rispondere alla segnalazione è il membro che ha rivendicato la pagina: ha
 72 ore per cancellare il contenuto, modificarlo o respingere la segnalazione,
-poi decidono i nostri amministratori. Lei vede tutto quello che vede lui.
+poi decidono i nostri amministratori. Tu vedi tutto quello che vede lui.
 <% else %>
 Il caso è già in mano ai nostri amministratori, quindi non c'è un giro in cui
-il Suo team possa risolverlo. Comunicheremo l'esito al membro che ha
+il tuo team possa risolverlo. Comunicheremo l'esito al membro che ha
 rivendicato la pagina.
 <% end %>
-Può vedere il caso qui:
+Puoi vedere il caso qui:
 
 <%= @url %>moderation/cases/<%= @case_id %>
 

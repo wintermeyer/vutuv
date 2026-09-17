@@ -945,25 +945,25 @@ defmodule VutuvWeb.UserHelpers do
   def image_kind_label("press_kit", "de"), do: "ein Bild aus Ihrem Pressebereich"
 
   def image_kind_label(_kind, "de"), do: "ein Bild"
-  def image_kind_label("avatar", "it"), do: "la Sua immagine del profilo"
-  def image_kind_label("cover", "it"), do: "la Sua immagine di copertina"
-  def image_kind_label("post_image", "it"), do: "un'immagine di uno dei Suoi post"
+  def image_kind_label("avatar", "it"), do: "la tua immagine del profilo"
+  def image_kind_label("cover", "it"), do: "la tua immagine di copertina"
+  def image_kind_label("post_image", "it"), do: "un'immagine di uno dei tuoi post"
 
   def image_kind_label("job_posting_image", "it"),
-    do: "un'immagine di uno dei Suoi annunci di lavoro"
+    do: "un'immagine di uno dei tuoi annunci di lavoro"
 
   def image_kind_label("organization_image", "it"),
-    do: "un'immagine di una delle Sue pagine di organizzazione"
+    do: "un'immagine di una delle tue pagine di organizzazione"
 
   def image_kind_label("qualification_document", "it"),
-    do: "un documento di prova caricato su uno dei Suoi certificati e abilitazioni"
+    do: "un documento di prova caricato su uno dei tuoi certificati e abilitazioni"
 
   def image_kind_label("job_reference_document", "it"),
     do: "un attestato di lavoro caricato"
 
-  def image_kind_label("post_video_frame", "it"), do: "un video di uno dei Suoi post"
+  def image_kind_label("post_video_frame", "it"), do: "un video di uno dei tuoi post"
 
-  def image_kind_label("press_kit", "it"), do: "un'immagine dalla Sua sezione stampa"
+  def image_kind_label("press_kit", "it"), do: "un'immagine dalla tua sezione stampa"
 
   def image_kind_label(_kind, "it"), do: "un'immagine"
   def image_kind_label("avatar", _locale), do: "your profile picture"
@@ -1036,13 +1036,14 @@ defmodule VutuvWeb.UserHelpers do
     end
   end
 
-  # Italian addresses members as *Lei*, like the German *Sie*, so it takes the
-  # same shape: honorific plus surname where the account gives us both.
+  # Italian addresses members as *tu*, the way Italian web products do, so it
+  # takes the English shape rather than the German one: a first name and no
+  # honorific. "Gentile Sig. Rossi" over a mail that then says "hai" reads as
+  # two different writers.
   def email_greeting(%User{locale: "it"} = user) do
-    case {user.gender, present(user.last_name)} do
-      {"female", surname} when is_binary(surname) -> "Gentile Sig.ra #{surname}"
-      {"male", surname} when is_binary(surname) -> "Gentile Sig. #{surname}"
-      _ -> neutral_greeting("Salve", user)
+    case present(user.first_name) do
+      nil -> "Ciao"
+      first_name -> "Ciao #{first_name}"
     end
   end
 

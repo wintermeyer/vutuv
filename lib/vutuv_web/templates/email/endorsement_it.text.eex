@@ -1,12 +1,12 @@
 <%= email_greeting(@user) %>,
 
-@<%= @actor_username %> L'ha confermata per <%= @tag_name %> su vutuv.
+@<%= @actor_username %> ti ha approvato per <%= @tag_name %> su vutuv.
 
-Veda il suo profilo:
+Guarda il suo profilo:
 
 <%= @url %><%= @actor_username %>
 
-Queste e-mail di notifica può disattivarle qui:
+Queste e-mail di notifica puoi disattivarle qui:
 
 <%= @unsubscribe_url %>
 

@@ -1,21 +1,21 @@
 <.email_layout preheader={@preheader} locale={@locale}>
   <.email_p>{@greeting},</.email_p>
-  <.email_p>grazie per la Sua segnalazione. Il caso è chiuso, ed ecco com'è andata:</.email_p>
+  <.email_p>grazie per la tua segnalazione. Il caso è chiuso, ed ecco com'è andata:</.email_p>
   <.email_p :if={@outcome == "removed"}>
-    Il proprietario ha cancellato il contenuto che ha segnalato.
+    Il proprietario ha cancellato il contenuto che hai segnalato.
   </.email_p>
   <.email_p :if={@outcome == "revised"}>
-    Il proprietario ha corretto il contenuto che ha segnalato. Se ritiene ancora che violi le
-    nostre regole della community, può segnalarlo un'altra volta; andrà allora direttamente ai
+    Il proprietario ha corretto il contenuto che hai segnalato. Se ritieni ancora che violi le
+    nostre regole della community, puoi segnalarlo un'altra volta; andrà allora direttamente ai
     nostri amministratori.
   </.email_p>
   <.email_p :if={@outcome == "upheld"}>
-    Una persona del nostro team ha esaminato la Sua segnalazione e le ha dato ragione. Che cosa
+    Una persona del nostro team ha esaminato la tua segnalazione e le ha dato ragione. Che cosa
     significhi per l'account dietro al contenuto resta tra quella persona e noi.
   </.email_p>
   <.email_p :if={@outcome == "not_upheld"}>
-    Una persona del nostro team ha esaminato la Sua segnalazione e non le ha dato ragione. Non è
-    un giudizio su di Lei: segnalare è stato giusto, anche quando la decisione va in un'altra
+    Una persona del nostro team ha esaminato la tua segnalazione e non le ha dato ragione. Non è
+    un giudizio su di te: segnalare è stato giusto, anche quando la decisione va in un'altra
     direzione.
   </.email_p>
   <.email_p :if={@content_fate == :removed}>Il contenuto segnalato è stato eliminato.</.email_p>
@@ -25,6 +25,6 @@
   <.email_p :if={@content_fate == :visible}>
     Il contenuto segnalato è ancora visibile su vutuv.
   </.email_p>
-  <.email_p>Non Le scriveremo più a proposito di questo caso.</.email_p>
+  <.email_p>Non ti scriveremo più a proposito di questo caso.</.email_p>
   <.email_signature locale={@locale} />
 </.email_layout>

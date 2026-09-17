@@ -418,7 +418,7 @@ defmodule VutuvWeb.EmailComponents do
   def email_unsubscribe_note(%{locale: "it"} = assigns) do
     ~H"""
     <.email_muted>
-      Queste e-mail di notifica può
+      Queste e-mail di notifica puoi
       <.email_link href={@unsubscribe_url}>disattivarle qui</.email_link>.
     </.email_muted>
     """

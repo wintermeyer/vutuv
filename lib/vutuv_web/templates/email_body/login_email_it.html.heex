@@ -1,13 +1,13 @@
-<.email_layout preheader="Il Suo PIN di accesso a vutuv" locale={@locale}>
+<.email_layout preheader="Il tuo PIN di accesso a vutuv" locale={@locale}>
   <.email_p>{email_greeting(@user)},</.email_p>
-  <.email_p>per accedere a vutuv inserisca il seguente PIN:</.email_p>
+  <.email_p>per accedere a vutuv inserisci il seguente PIN:</.email_p>
   <.email_pin pin={@pin} />
   <.email_p>
-    Grazie per usare vutuv! Se il nostro servizio Le piace, ne parli pure ai Suoi contatti.
+    Grazie per usare vutuv! Se il nostro servizio ti piace, parlane pure ai tuoi contatti.
   </.email_p>
   <.email_signature locale={@locale} />
   <.email_muted>
-    Il PIN scade dopo 30 minuti. Può sempre
+    Il PIN scade dopo 30 minuti. Puoi sempre
     <.email_link href={"#{@url}login"}>richiederne uno nuovo</.email_link>.
   </.email_muted>
 </.email_layout>

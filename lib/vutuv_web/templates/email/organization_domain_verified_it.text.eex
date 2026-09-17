@@ -1,19 +1,19 @@
 <%= email_greeting(@user) %>,
 
-la prova per <%= @domain %> c'è: la Sua pagina di organizzazione
+la prova per <%= @domain %> c'è: la tua pagina di organizzazione
 "<%= @organization_name %>" è verificata e da ora è pubblicamente visibile.
 
-Non ha dovuto fare altro. Abbiamo continuato a controllare dopo che ha
+Non hai dovuto fare altro. Abbiamo continuato a controllare dopo che hai
 pubblicato la voce, perché <%= if @method == "dns" do %>un nuovo record DNS<% else %>un nuovo file<% end %> può metterci un po' ad arrivare a
-tutti, a seconda del Suo fornitore.
+tutti, a seconda del tuo fornitore.
 <%= if @method == "dns" do %>
-Lasci il record TXT dov'è. Lo controlliamo ogni settimana, e senza di esso la
+Lascia il record TXT dov'è. Lo controlliamo ogni settimana, e senza di esso la
 pagina perde di nuovo la verifica.
 <% else %>
-Lasci il file di prova dov'è. Lo controlliamo ogni settimana, e senza di esso
+Lascia il file di prova dov'è. Lo controlliamo ogni settimana, e senza di esso
 la pagina perde di nuovo la verifica.
 <% end %>
-Ecco la Sua pagina:
+Ecco la tua pagina:
 
 <%= @url %>organizations/<%= @organization_slug %>
 

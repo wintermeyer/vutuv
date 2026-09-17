@@ -1,22 +1,22 @@
 # Formattare il testo con Markdown
 
-Ovunque su vutuv scriva più di una riga, noi capiamo il Markdown: nei post e
-nelle risposte, nei messaggi, nelle descrizioni della Sua esperienza lavorativa
-e della Sua formazione, negli annunci di lavoro e sulle pagine delle
+Ovunque su vutuv tu scriva più di una riga, noi capiamo il Markdown: nei post e
+nelle risposte, nei messaggi, nelle descrizioni della tua esperienza lavorativa
+e della tua formazione, negli annunci di lavoro e sulle pagine delle
 organizzazioni. Markdown non è un linguaggio di programmazione, è una manciata
 di caratteri che si imparano in cinque minuti: due asterischi per il grassetto,
 un trattino per una voce di elenco.
 
-Nell'editor dei post raramente deve digitarne qualcuno. Le mostra il risultato
-mentre scrive e ha i pulsanti per grassetto, corsivo, elenchi e il resto. Se
-preferisce digitare Lei i caratteri, il pulsante **MD** passa alla vista del
+Nell'editor dei post raramente devi digitarne qualcuno. Ti mostra il risultato
+mentre scrivi e ha i pulsanti per grassetto, corsivo, elenchi e il resto. Se
+preferisci digitare tu i caratteri, il pulsante **MD** passa alla vista del
 sorgente. Questa pagina è scritta per entrambi i tipi di autore, e tutto ciò
 che contiene è reale: ogni esempio qui sotto è reso esattamente come apparirà
-nel Suo post.
+nel tuo post.
 
 ## Grassetto, corsivo, barrato
 
-| Lei scrive | Ottiene |
+| Tu scrivi | Ottieni |
 | --- | --- |
 | `**importante**` | **importante** |
 | `*enfasi*` | *enfasi* |
@@ -26,7 +26,7 @@ nel Suo post.
 
 Il trattino basso fa lo stesso lavoro dell'asterisco: funzionano anche
 `_enfasi_` e `__importante__`. Quando un asterisco deve davvero essere un
-asterisco, gli metta davanti una barra rovesciata: `\*così\*` esce come \*così\*.
+asterisco, mettigli davanti una barra rovesciata: `\*così\*` esce come \*così\*.
 
 ## Paragrafi e ritorni a capo
 
@@ -35,8 +35,8 @@ forma a un testo.
 
 Un singolo ritorno a capo dentro un paragrafo *non* viene mantenuto in un
 **post**: il testo prosegue, come in un libro. È voluto, perché altrimenti ogni
-interruzione lasciata da un altro programma quando ha copiato il testo
-comparirebbe come un'interruzione forzata nel Suo post. Nei **messaggi** vale
+interruzione lasciata da un altro programma quando hai copiato il testo
+comparirebbe come un'interruzione forzata nel tuo post. Nei **messaggi** vale
 il contrario: lì ogni riga nuova va davvero a capo, perché in chat si scrive a
 righe brevi.
 
@@ -157,16 +157,16 @@ Conosciamo circa 45 linguaggi, fra cui Elixir, Erlang, Ruby, Python, PHP,
 JavaScript, TypeScript, Go, Rust, Java, Kotlin, Swift, C, C++, C#, SQL, HTML,
 CSS, YAML, JSON, Bash e Dockerfile. Un linguaggio che non conosciamo non fa
 danni: il blocco riceve comunque la sua etichetta, semplicemente non riceve i
-colori. Per non far portare al blocco alcuna etichetta, scriva `text` dopo gli
+colori. Per non far portare al blocco alcuna etichetta, scrivi `text` dopo gli
 apici inversi.
 
-Tutto questo avviene sul nostro server. Il Suo browser non scarica una sola
+Tutto questo avviene sul nostro server. Il tuo browser non scarica una sola
 riga di codice in più per la colorazione, e un lettore che non vede mai un
 blocco di codice non paga nulla per averla.
 
 ### Indicare il file
 
-Spesso un frammento ha senso solo quando si sa da quale file viene. Scriva il
+Spesso un frammento ha senso solo quando si sa da quale file viene. Scrivi il
 nome dopo i due punti:
 
 ````markdown
@@ -181,9 +181,9 @@ $a = 1;
 $a = 1;
 ```
 
-Se preferisce la forma lunga, scriva invece
+Se preferisci la forma lunga, scrivi invece
 `title="app/Providers/AppServiceProvider.php"`. Producono lo stesso blocco. La
-forma lunga Le serve solo quando il titolo contiene uno spazio.
+forma lunga ti serve solo quando il titolo contiene uno spazio.
 
 ### Mostrare una modifica
 
@@ -249,7 +249,7 @@ si può far scorrere lateralmente.
 ## Note a piè di pagina
 
 Una nota ha due parti: il segnalino nel testo e la nota sotto. Il numero fra i
-due lo sceglie Lei, deve solo corrispondere.
+due lo scegli tu, deve solo corrispondere.
 
 ```markdown
 Il fatturato è raddoppiato[^1].
@@ -263,23 +263,23 @@ Il fatturato è raddoppiato[^1].
 
 Le note si raccolgono alla fine del testo. Premendo un segnalino si salta alla
 sua nota; il pulsante Indietro del browser, o il gesto Indietro del telefono,
-La riporta subito dove stava leggendo.
+ti riporta subito dove stavi leggendo.
 
 ## Immagini
 
-Le immagini stanno solo nei post, e solo quelle che ha caricato Lei. La strada
+Le immagini stanno solo nei post, e solo quelle che hai caricato tu. La strada
 è **Aggiungi immagini** nell'editor, oppure semplicemente trascinare un file di
 immagine dentro il testo. Un'immagine che sta in mezzo al testo si può poi
 spostare a sinistra, a destra o al centro con i pulsantini sopra l'editor, e il
 testo le scorre attorno.
 
 Puntare all'immagine di qualcun altro sul web non è possibile, ed è voluto:
-altrimenti ogni visualizzazione del Suo post comunicherebbe l'indirizzo IP di
+altrimenti ogni visualizzazione del tuo post comunicherebbe l'indirizzo IP di
 ogni lettore a un server che non è il nostro.
 
 ## Cosa non rendiamo
 
-L'HTML viene mostrato, non eseguito. Scriva `<b>grassetto</b>` e i Suoi lettori
+L'HTML viene mostrato, non eseguito. Scrivi `<b>grassetto</b>` e i tuoi lettori
 vedranno `<b>grassetto</b>`. È una decisione di sicurezza: se eseguissimo
 l'HTML altrui, lo si potrebbe usare per introdurre codice ostile nella pagina
 di un altro membro.
@@ -289,6 +289,6 @@ mappe incorporati. Un link al video fa lo stesso servizio.
 
 ## Quando qualcosa non funziona
 
-Scriva un post menzionando `@vutuv`, oppure lo segnali come
+Scrivi un post menzionando `@vutuv`, oppure segnalalo come
 [bug su GitHub]({{issues}}). vutuv è open
 source, e le regole di questa pagina sono codice nel repository.

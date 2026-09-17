@@ -9,17 +9,17 @@ cosa vi fosse raffigurato. Di solito un file JPEG, PNG o WebP funziona.
 <% else %>
 Non ha deciso nessuna persona. Qui lo fa un'IA: guarda ogni immagine caricata e
 decide da sé se è adatta a tutti e a un ambiente di lavoro. Funziona allo
-stesso modo per ogni membro, quindi non è nulla di personale né contro di Lei.
+stesso modo per ogni membro, quindi non è nulla di personale né contro di te.
 
 E quell'IA sbaglia. Quando sospetta qualcosa la interroghiamo più volte, e
 un'immagine viene rimossa solo se le risposte concordano. Anche così può
 colpire un'immagine innocua, un fumetto, una citazione da un film o una battuta.
-Quindi se pensa che la Sua immagine andasse bene, potrebbe avere ragione.
+Quindi se pensi che la tua immagine andasse bene, potresti avere ragione.
 <% end %>
-In quel caso risponda semplicemente a questa e-mail, possibilmente allegando
-l'immagine, e la guarderà una persona. La rimozione non ha conseguenze sul Suo
-account: nessun avvertimento, nessun richiamo. Può caricare un'altra immagine
-quando vuole.
+In quel caso rispondi semplicemente a questa e-mail, possibilmente allegando
+l'immagine, e la guarderà una persona. La rimozione non ha conseguenze sul tuo
+account: nessun avvertimento, nessun richiamo. Puoi caricare un'altra immagine
+quando vuoi.
 
 <%= render "_signature_it.text" %>
 

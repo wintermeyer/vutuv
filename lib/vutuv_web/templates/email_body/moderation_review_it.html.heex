@@ -1,4 +1,4 @@
-<.email_layout preheader="Un Suo contenuto su vutuv è in esame" locale={@locale}>
+<.email_layout preheader="Un tuo contenuto su vutuv è in esame" locale={@locale}>
   <.email_p>{email_greeting(@user)},</.email_p>
   <.email_p>
     {@content_intro} Il contenuto segnalato resta nascosto finché i nostri amministratori non
@@ -9,7 +9,7 @@
     <.email_row label="Segnalato come">{@category_labels}</.email_row>
   </.email_panel>
   <.email_p :if={@notes != []}>
-    Ecco cosa dice la segnalazione, con le parole di chi l'ha scritta. Chi sia stato non glielo
+    Ecco cosa dice la segnalazione, con le parole di chi l'ha scritta. Chi sia stato non te lo
     diciamo mai:
   </.email_p>
   <.email_quote :for={note <- @notes} text={note} />
@@ -17,7 +17,7 @@
     La segnalazione ha indicato quella categoria e nient'altro.
   </.email_p>
   <.email_p :if={@copyright_case}>
-    Questa è una contestazione legale, non una regola della casa: sostiene che l'opera non è Sua
+    Questa è una contestazione legale, non una regola della casa: sostiene che l'opera non è tua
     da pubblicare. A deciderlo è il diritto d'autore.
   </.email_p>
   <.email_p :if={!@copyright_case}>
@@ -26,10 +26,10 @@
     tutto su vutuv deve attenersi.
   </.email_p>
   <.email_p>
-    Questo caso è già in mano ai nostri amministratori, quindi non c'è un giro in cui possa
-    risolverlo da solo. Non deve fare nulla: Le comunicheremo l'esito e, se la segnalazione
-    risulterà infondata, il Suo contenuto tornerà visibile.
+    Questo caso è già in mano ai nostri amministratori, quindi non c'è un giro in cui tu possa
+    risolverlo da solo. Non devi fare nulla: ti comunicheremo l'esito e, se la segnalazione
+    risulterà infondata, il tuo contenuto tornerà visibile.
   </.email_p>
-  <.email_button href={"#{@url}moderation/cases/#{@case_id}"}>Veda il caso</.email_button>
+  <.email_button href={"#{@url}moderation/cases/#{@case_id}"}>Guarda il caso</.email_button>
   <.email_signature locale={@locale} />
 </.email_layout>

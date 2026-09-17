@@ -9,7 +9,7 @@ sui profili sono urgenti: una seconda segnalazione indipendente blocca l'intero 
   Segnalazioni:        <%= @report_count %><%= if @note do %>
   Nota del segnalante: <%= @note %><% end %>
 
-Esamini il caso:
+Esamina il caso:
 
 <%= @url %>admin/moderation/<%= @case_id %>
 

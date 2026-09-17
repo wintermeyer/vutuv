@@ -1,12 +1,12 @@
 <%= email_greeting(@user) %>,
 
-@<%= @actor_username %> ha iniziato a seguirla su vutuv.
+@<%= @actor_username %> ha iniziato a seguirti su vutuv.
 
-Veda il suo profilo:
+Guarda il suo profilo:
 
 <%= @url %><%= @actor_username %>
 
-Queste e-mail di notifica può disattivarle qui:
+Queste e-mail di notifica puoi disattivarle qui:
 
 <%= @unsubscribe_url %>
 
