@@ -362,7 +362,14 @@ word about another server's member, byte for byte a card it could have
 invented. Kept, it put words under a real person's name, and folded in with the
 honest copies it raised the server count and could be the copy a card was drawn
 from. The profile link under the name is part of that claim, so such a server's
-own member counts only when the link is empty or on its own host.
+own member counts only when the link is empty or on its own host. Hosts are
+only read from an address a browser reads the same way
+(`Vutuv.ChangesetHelpers.web_url?/1`, which refuses a backslash, whitespace, a
+control character, a login before the host and anything `URI.new/1` refuses):
+`URI.parse/1` finds `evil.example` in
+`https://victim.example\@evil.example/../@alice`, a browser opens
+`victim.example`. A relay's row needs such addresses too, since the card hands
+both to a browser.
 `Vutuv.Tags.ExternalTagClient` refuses such a status on the way in (`authors/2`
 too), and `fold_copies/1` drops such a row on the way out (`fold_select/1`
 carries `author_url` for it), which covers rows already at rest and those of a

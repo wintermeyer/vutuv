@@ -50,6 +50,19 @@ defmodule Vutuv.Tags.ExternalTagClientTest do
     })
   end
 
+  # A status whose two addresses name `source` to `URI.parse/1` and
+  # victim.example to a browser, which reads the backslash as a slash.
+  defp forged_home_copy(source) do
+    remote_status(source, %{
+      "id" => "1123",
+      "url" => "https://victim.example\\@#{source}/../@alice/1123",
+      "account" => %{
+        "acct" => "alice",
+        "url" => "https://victim.example\\@#{source}/../@alice"
+      }
+    })
+  end
+
   # Every Finch a pinned request started, by the name it registers under. Empty
   # is the claim: one instance lives for one request and is stopped in an
   # `after`, so nothing accumulates however many hostnames members name.
@@ -392,6 +405,29 @@ defmodule Vutuv.Tags.ExternalTagClientTest do
 
       assert {:ok, [relay]} = ExternalTagClient.fetch(@source, "Elixir")
       assert relay.author_url == "https://social.real.example/@alice"
+    end
+
+    # The review's case: `URI.parse/1` reads `evil.example` in both addresses,
+    # a browser reads `victim.example`, so the hand-typed server's "own member"
+    # was stored and drawn under the victim's profile.
+    test "an address a browser reads as another host is never filed" do
+      put_config(:tag_source_servers, [])
+      stub_tag_timeline([forged_home_copy("evil.example")])
+
+      assert ExternalTagClient.fetch("evil.example", "Elixir") == {:ok, []}
+    end
+
+    test "a listed relay files no such address either, and drops such a profile link" do
+      put_config(:tag_source_servers, [@source])
+
+      stub_tag_timeline([
+        forged_home_copy(@source),
+        put_in(relayed("5"), ["account", "url"], "https://user@real.example/@alice")
+      ])
+
+      assert {:ok, [post]} = ExternalTagClient.fetch(@source, "Elixir")
+      assert post.remote_id == "5"
+      assert post.author_url == nil
     end
 
     test "the census of a server a member typed in counts its own members only" do

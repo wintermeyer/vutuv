@@ -758,7 +758,14 @@ defmodule Vutuv.Tags.ExternalPostsTest do
     # of its own the report blanked nothing at all and still answered `:ok`.
     test "a row from before the author host was stored takes itself down", %{reporter: reporter} do
       tag = followed_tag()
-      post = external_post(tag, url: original("4730"), source: @other_source, author_host: nil)
+      # The helper would spell the link on the missing host, `https:///@ada`.
+      post =
+        external_post(tag,
+          url: original("4730"),
+          source: @other_source,
+          author_host: nil,
+          author_url: nil
+        )
 
       assert {:ok, :this_copy} = ExternalPosts.report(post.id, reporter)
 
@@ -932,6 +939,24 @@ defmodule Vutuv.Tags.ExternalPostsTest do
              )
     end
 
+    # A browser reads the backslash as a slash, so the first two open
+    # `https://victim.example/@alice/…` while `URI.parse/1` reads `evil.example`
+    # (a login, then the host). A login in front of the host is refused as well,
+    # whichever host it dresses up.
+    test "an address a browser reads differently from us is nobody's own copy" do
+      evil = %{source: "evil.example", author_host: "evil.example", author_url: nil}
+
+      for url <- [
+            "https://victim.example\\@evil.example/../@alice/1123",
+            "https://victim.example%5C@evil.example/../@alice/1123",
+            "https://user@evil.example/@alice/1123"
+          ] do
+        refute ExternalPost.home_copy?(Map.put(evil, :url, url)), url
+      end
+
+      refute ExternalPost.home_copy?(row(url: "https://user@#{@source}/@ada/1", author_url: nil))
+    end
+
     test "fails closed on a row with no author host and on an unusable address" do
       refute ExternalPost.home_copy?(row(url: "https://#{@source}/@ada/1", author_host: nil))
       refute ExternalPost.home_copy?(row(url: "not an address"))
@@ -976,6 +1001,40 @@ defmodule Vutuv.Tags.ExternalPostsTest do
       refute ExternalPost.speaks_for_author?(elsewhere, relays)
       assert ExternalPost.speaks_for_author?(%{elsewhere | source: @other_source}, relays)
       refute ExternalPost.speaks_for_author?(Map.delete(own, :author_url), relays)
+    end
+
+    # The review's case: a hand-typed server files its own "member" at an
+    # address and a profile a browser opens on the victim's server.
+    test "a link a browser reads as another host speaks for nobody" do
+      relays = SourceServers.relays()
+
+      forged = %{
+        source: "evil.example",
+        author_host: "evil.example",
+        url: "https://victim.example\\@evil.example/../@alice/1123",
+        author_url: "https://victim.example\\@evil.example/../@alice"
+      }
+
+      refute ExternalPost.speaks_for_author?(forged, relays)
+      refute ExternalPost.speaks_for_author?(%{forged | url: "https://evil.example/@a/1"}, relays)
+
+      for link <- [
+            "https://victim.example%5C@evil.example/@alice",
+            "https://user@evil.example/@alice"
+          ] do
+        refute ExternalPost.speaks_for_author?(
+                 %{forged | url: "https://evil.example/@a/1", author_url: link},
+                 relays
+               ),
+               link
+      end
+
+      # A listed relay may name any host, but not in a spelling the card would
+      # hand a browser to read its own way.
+      relayed = %{forged | source: @other_source, url: original("1")}
+      assert ExternalPost.speaks_for_author?(%{relayed | author_url: nil}, relays)
+      refute ExternalPost.speaks_for_author?(relayed, relays)
+      refute ExternalPost.speaks_for_author?(%{forged | source: @other_source}, relays)
     end
 
     # Production holds rows filed before the pull refused such a link, so the

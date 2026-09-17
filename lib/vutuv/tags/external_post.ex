@@ -29,7 +29,7 @@ defmodule Vutuv.Tags.ExternalPost do
 
   use VutuvWeb, :model
 
-  import Vutuv.ChangesetHelpers, only: [scrub_nul: 1]
+  import Vutuv.ChangesetHelpers, only: [scrub_nul: 1, web_url?: 1]
 
   alias Vutuv.Fediverse
   alias Vutuv.Fediverse.BlockedInstance
@@ -304,12 +304,22 @@ defmodule Vutuv.Tags.ExternalPost do
   rows written before it existed are at rest, and a server the operator later
   takes off the list stops vouching for what it filed while it was on it.
 
+  **Neither address may read differently in a browser**
+  (`Vutuv.ChangesetHelpers.web_url?/1`), a listed relay's included: a relay may
+  name any host, but the card hands both addresses to a browser, and a spelling
+  that opens another host than the one we read says nothing anybody checked.
+
   `row` needs `:source`, `:url`, `:author_host` and `:author_url`; a projection
   without the link fails closed, so a select that forgets the column hides
   every card rather than drawing unchecked links.
   """
-  def speaks_for_author?(%{source: source, author_url: link, author_host: host} = row, relays) do
-    relay?(source, relays) or (home_copy?(row) and (is_nil(link) or on_author_host?(link, host)))
+  def speaks_for_author?(
+        %{source: source, url: url, author_url: link, author_host: host} = row,
+        relays
+      ) do
+    web_url?(url) and (is_nil(link) or web_url?(link)) and
+      (relay?(source, relays) or
+         (home_copy?(row) and (is_nil(link) or on_author_host?(link, host))))
   end
 
   def speaks_for_author?(_unusable, _relays), do: false
@@ -366,8 +376,12 @@ defmodule Vutuv.Tags.ExternalPost do
     end
   end
 
-  defp address_host(url) when is_binary(url), do: URI.parse(url).host
-  defp address_host(_url), do: nil
+  # Only from an address a browser reads the same way (`web_url?/1`): the
+  # lenient `URI.parse/1` finds `evil.example` in
+  # `https://victim.example\@evil.example/…`, where a browser opens the victim.
+  defp address_host(url) do
+    if web_url?(url), do: URI.parse(url).host
+  end
 
   defp normalize_origin(url) when is_binary(url),
     do: url |> URI.parse() |> unwrap_redirect() |> canonical_address()
