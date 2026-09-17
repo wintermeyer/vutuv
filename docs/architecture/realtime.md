@@ -328,6 +328,22 @@ to find out about at midnight: `Vutuv.ViewerClock.today/0` reads
 `test/vutuv_web/live/feed_calendar_midnight_test.exs` moves (`async: false` — it
 is global, and every timestamp in the app reads it).
 
+**The tick re-inserts every card, so a card's reader state has to survive a
+patch it did not ask for.** `VutuvWeb.Live.DayClockRestream` sends each shown
+entry again every hour, and morphdom drops any attribute the server did not
+render, so a `<details>` the reader opened folds shut at the top of the hour.
+A disclosure whose state is the reader's wears `data-keep-open`, which
+`app.js`'s `onBeforeElUpdated` honours; the card fold behind "Found through
+these servers" and "From other networks" (`card_fold/1` in
+`VutuvWeb.PostComponents`) carries it once for both (issue #2200). The content
+warning and the sensitive-picture cover deliberately do not: morphdom pairs an
+id-less `<details>` by position, so where a page swaps one post for another in
+place the marker would open the next post's cover unasked. To see it in a
+browser without waiting an hour, open a panel and run
+`Phoenix.PubSub.broadcast(Vutuv.PubSub, "clock:day", :day_changed)` inside the
+running dev server (`iex -S mix phx.server`, or Tidewave's `project_eval`), not
+`send(Vutuv.DayClock, :tick)`, which would arm a second hourly timer.
+
 The layout is split into `root.html.heex` (document shell) and `app.html.heex`
 (chrome), shared by classic controller pages and LiveViews.
 
