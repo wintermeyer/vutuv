@@ -160,6 +160,10 @@ renders the same element. --%>
     <p class="mb-0 max-h-44 overflow-y-auto overscroll-contain whitespace-pre-line break-words text-sm leading-relaxed text-slate-700 dark:text-slate-300">{@account.summary}</p>
   </details>
 
+  <%!-- The viewer's own notes about this account (`Vutuv.PersonalNotes`),
+  above what the account wrote: it is the one thing here nobody else sees. --%>
+  <.card_notes subject={@account} summary={@notes} />
+
   <%!-- The last few things they wrote, which is what actually answers "is this
   worth following" — one post is a poor sample of an account, and the reader is
   standing in front of a Follow button. The newest is quoted in two lines and
@@ -347,6 +351,7 @@ renders the same element. --%>
       <span>{gettext("Their page here")}</span>
       <span class="actor-card__go" aria-hidden="true">›</span>
     </.link>
+    <.card_notes_link subject={@account} summary={@notes} />
     <%!-- And out to their server, named — but named on a line of its own,
     below the label and in the muted weight of a browser's status bar. Reading
     the destination before leaving is what the address is for, and it was doing

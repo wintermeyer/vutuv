@@ -1987,8 +1987,10 @@ defmodule VutuvWeb.UI do
       doc: "link relationship, e.g. `nofollow noopener noreferrer` with `_blank`"
     )
 
-    attr(:click, :string,
-      doc: "phx-click event name — renders a `<button>` (a LiveView action) instead of a link"
+    attr(:click, :any,
+      doc:
+        "phx-click: an event name, or a `Phoenix.LiveView.JS` command (to push to a " <>
+          "component on the page) — renders a `<button>` (a LiveView action) instead of a link"
     )
 
     attr(:copy, :string,
@@ -4103,6 +4105,10 @@ defmodule VutuvWeb.UI do
   not — support answering "you changed this at 14:32:07" needs the second, and
   two events inside one minute have to be distinguishable in the order they are
   shown in.
+
+  A date-only `style` (`:date`, `:short_date`) sends `data-localtime="day"`
+  instead, so the rewrite keeps it a date: a follower's "since" or a job's
+  "posted" came back from the browser with the time of day stuck on.
   """
   attr(:at, :any, required: true, doc: "a NaiveDateTime (treated as UTC) or a UTC DateTime")
   attr(:id, :string, default: nil, doc: "DOM id; when set, the LocalTime hook attaches")
@@ -4124,7 +4130,7 @@ defmodule VutuvWeb.UI do
       assign(assigns,
         iso: iso_utc(assigns.at),
         text: local_time_text(assigns, server_final?),
-        localtime: !server_final? && assigns.precision
+        localtime: !server_final? && localtime_precision(assigns)
       )
 
     ~H"""
@@ -4146,6 +4152,11 @@ defmodule VutuvWeb.UI do
   # installation-default zone into text the browser is about to overwrite would
   # only make the pre-rewrite flash wrong in a second way, and the ISO `title`
   # carries the unambiguous stamp regardless.
+  # What the client rewrite may write back: a date for a date, otherwise the
+  # clock at the precision the caller asked for.
+  defp localtime_precision(%{style: style}) when style in [:date, :short_date], do: "day"
+  defp localtime_precision(%{precision: precision}), do: precision
+
   defp local_time_text(assigns, server_final?) do
     pattern = assigns.format || ViewerClock.pattern(assigns.style)
 

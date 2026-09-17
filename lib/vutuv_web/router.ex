@@ -867,6 +867,12 @@ defmodule VutuvWeb.Router do
     delete("/system/fediverse/actor_card/follow", RemoteActorCardController, :unfollow)
     post("/system/fediverse/actor_card/mute", RemoteActorCardController, :mute)
 
+    # Its twin behind an `@handle` of our own, a member or a page
+    # (`VutuvWeb.MemberCardController`). POST/DELETE for the same reasons.
+    post("/system/member_card", MemberCardController, :show)
+    post("/system/member_card/follow", MemberCardController, :follow)
+    delete("/system/member_card/follow", MemberCardController, :unfollow)
+
     get("/new_registration", PageController, :redirect_index)
     post("/new_registration", PageController, :new_registration)
 
@@ -1212,6 +1218,11 @@ defmodule VutuvWeb.Router do
       scope "/system" do
         pipe_through(:noindex_pipe)
         live("/uploads", UploadsLive, :index)
+
+        # The member's private notes about other accounts
+        # (`Vutuv.PersonalNotes`): every one of them, searchable, or those about
+        # one account when a profile's panel or a handle's card links here.
+        live("/notes", PersonalNotesLive, :index)
       end
 
       # Job postings ("jobs" is a ReservedSlug). Auth is checked in the mounts.

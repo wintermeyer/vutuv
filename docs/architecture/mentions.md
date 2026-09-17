@@ -233,6 +233,19 @@ default: LiveView's nav listener on `window` reads `data-phx-link` without
 asking whether the default was prevented, so the card would open and the page
 would leave underneath it in one gesture.
 
+**An `@handle` of our own opens the same card.** `VutuvWeb.Markdown` writes
+`data-member-card="member:<handle>"` (or `organization:<handle>`) on a local
+mention in the on-site form, and `mention_card.js` answers it from
+`VutuvWeb.MemberCardController` (`POST /system/member_card`, follow and
+unfollow under `/follow`): name, handle, tagline or description, the viewer's
+own personal notes, one Follow button and the way to the profile. The hook
+carries only what the `href` already says, so the RSS and API renderings, which
+use the same form, give away nothing new through it. An account the viewer may
+not see (`PersonalNotes.visible_to?/2`, the rule its own page uses), or one on
+either side of a block, answers 404 and the link is followed after all. While
+the viewer speaks for a page the card offers no follow, as the profile header
+does.
+
 Three surfaces deliberately stay out. The quoted-post card is one big link to
 the original, and an anchor inside an anchor is not markup. `/settings/fediverse/move`
 shows the member their *own* forwarding address, where a Follow button is the
@@ -409,7 +422,9 @@ posts (the newest five, plus an "and N more" count).
   the one owner of where a remote handle leads and what a press does;
   `lib/vutuv_web/controllers/remote_actor_card_controller.ex` +
   `templates/remote_actor_card/card.html.heex` render the card,
-  `assets/js/mention_card.js` positions it.
+  `lib/vutuv_web/controllers/member_card_controller.ex` +
+  `templates/member_card/card.html.heex` its local twin,
+  `assets/js/mention_card.js` positions both.
 - `test/vutuv/mentions_test.exs`, `mentions_local_address_test.exs`,
   `vutuv_web/markdown_local_address_test.exs`, `vutuv_web/mention_form_test.exs`,
   `mention_existence_test.exs`, `mention_suggest_test.exs`,
@@ -420,4 +435,5 @@ posts (the newest five, plus an "and N more" count).
   `accounts/handle_change_propagation_test.exs`,
   `vutuv_web/live/handle_change_notification_test.exs`,
   `vutuv_web/components/remote_actor_link_test.exs`,
-  `vutuv_web/controllers/remote_actor_card_test.exs`.
+  `vutuv_web/controllers/remote_actor_card_test.exs`,
+  `vutuv_web/controllers/member_card_test.exs`.

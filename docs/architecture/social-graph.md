@@ -855,3 +855,39 @@ default (so `cess` does not hide "success") except on a side opened with `*`.
 The list is owner-only — never public, never in the agent formats — capped
 (`ContentFilters.max_filters/0`), and rides along in the GDPR export. `expires_at`
 is a column reserved for a later "snooze" UI (not honored yet).
+
+## Personal notes
+
+A member can write down what they want to remember about another account, for
+their eyes only (`Vutuv.PersonalNotes`, table `personal_notes`). The idea is
+Mastodon's personal note with two differences: any number of notes per account,
+each dated by when it was written, and Markdown like a post.
+
+A row names the author and exactly one subject (member, page or remote account,
+CHECK-enforced, the `account_mutes` shape), and nobody writes about themselves.
+Every read and write is scoped to the author's id; nothing else reads the table,
+so the notes never reach an agent format, the API, a notification, a broadcast
+or another server. An `@handle` inside a note renders as a link but never passes
+through the mention notification path.
+
+Order is by creation (the UUID v7 id). An edit sets `edited_at` and leaves the
+note where it was, because the date that counts is when the note was taken.
+
+Deletion is the database's: every subject column cascades, so a member's
+deletion, a page's, and a remote account's own `Delete`
+(`Fediverse.remove_remote_account/1`) or its server being blocked take the notes
+about it along. The author's notes ride in their GDPR export (schema 12).
+
+Where they show:
+
+* **the panel** `VutuvWeb.PersonalNotesComponent` under the header of a profile,
+  an organization page and a remote account's page: the newest three with Edit
+  and Delete, hidden until a note exists or the page's "Add a personal note"
+  control opens its form (the profile's ⋯ menu, a button on the other two);
+* **the overview** `/system/notes` (`VutuvWeb.PersonalNotesLive`): every note,
+  newest first, a live search over the text and the subject's name, handle and
+  server, twenty per page behind "Load more", and `?member=`, `?organization=`
+  or `?remote_account=` to narrow it to one account with a form to write about
+  it;
+* **the card behind a handle**: both the remote card and its local twin quote
+  the newest three and link to the overview (see [mentions.md](mentions.md)).

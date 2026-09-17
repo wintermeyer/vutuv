@@ -439,8 +439,28 @@ defmodule VutuvWeb.FediverseAccountLive do
               </.button>
             </div>
           <% end %>
+          <%!-- Outside the refusal branch: a member who cannot follow anybody
+          out there may still want to remember who this is. --%>
+          <.button
+            id="add-personal-note"
+            variant="ghost"
+            phx-click={VutuvWeb.PersonalNotesComponent.open_form()}
+            title={VutuvWeb.PersonalNoteComponents.only_you()}
+            class="mt-2"
+          >
+            {gettext("Add a personal note")}
+          </.button>
         </div>
       </.card>
+
+      <%!-- The viewer's private notes about this account, hidden until there is
+      one or the button above asks for one. --%>
+      <.live_component
+        module={VutuvWeb.PersonalNotesComponent}
+        id={VutuvWeb.PersonalNotesComponent.panel_id()}
+        viewer={@current_user}
+        subject={@account}
+      />
 
       <.card>
         <.section_title>{gettext("Posts")}</.section_title>

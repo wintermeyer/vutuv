@@ -45,6 +45,7 @@ defmodule VutuvWeb.RemoteActorCardController do
   alias Vutuv.Fediverse
   alias Vutuv.Fediverse.RemoteAccount
   alias Vutuv.Fediverse.RemotePost
+  alias Vutuv.PersonalNotes
   alias Vutuv.PostRewrites
   alias VutuvWeb.PostTeaser
 
@@ -200,7 +201,9 @@ defmodule VutuvWeb.RemoteActorCardController do
       older: Enum.drop(quotes, 1),
       expanded?: conn.params["expanded"] == "1",
       bio_open?: conn.params["bio"] == "1",
-      host_muted?: account && account.host in Fediverse.muted_hosts(viewer)
+      host_muted?: account && account.host in Fediverse.muted_hosts(viewer),
+      # The viewer's private notes about this account (`Vutuv.PersonalNotes`).
+      notes: account && PersonalNotes.summary(viewer, account)
     )
   end
 

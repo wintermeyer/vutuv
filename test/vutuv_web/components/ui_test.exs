@@ -506,6 +506,20 @@ defmodule VutuvWeb.UITest do
       assert html =~ "data-localtime"
     end
 
+    # A date-only stamp (a follower's "since", a job's "posted") must stay a date
+    # when the browser rewrites it into the reader's zone; the rewrite used to
+    # add the time of day to every one of them.
+    test "a date-only style asks the client rewrite for a date only" do
+      at = ~N[2026-06-20 09:30:00]
+
+      for style <- [:date, :short_date] do
+        assert render_component(&UI.local_time/1, at: at, style: style) =~
+                 ~s(data-localtime="day")
+      end
+
+      assert render_component(&UI.local_time/1, at: at) =~ ~s(data-localtime="minute")
+    end
+
     test "renders a UTC DateTime as ISO with its Z offset" do
       {:ok, at, 0} = DateTime.from_iso8601("2026-06-20T09:30:00Z")
       html = render_component(&UI.local_time/1, at: at)

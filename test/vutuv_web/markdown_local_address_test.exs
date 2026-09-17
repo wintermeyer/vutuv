@@ -100,7 +100,10 @@ defmodule VutuvWeb.MarkdownLocalAddressTest do
     # One anchor: the address. The bare handle beside it stays plain text, and
     # the address reads short, the way the same person is named in a vutuv post.
     assert [_one] = Regex.scan(~r/<a /, html)
-    assert html =~ ~s(<a href="/#{handle}" title="Ada Lovelace" class="mention">@#{handle}</a>)
+
+    assert html =~
+             ~r{<a href="/#{handle}" title="Ada Lovelace" class="mention" data-member-card="member:#{handle}">@#{handle}</a>}
+
     assert String.ends_with?(html, "und @#{handle}</p>\n")
   end
 

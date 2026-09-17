@@ -452,7 +452,10 @@ defmodule VutuvWeb.MarkdownEditorTest do
     "lib/vutuv_web/live/job_posting_live/form.ex" => "seeded at mount, saves navigate away",
     "lib/vutuv_web/live/press_kit_live.ex" =>
       "the editor sits inside the open tile's :if and carries that picture's id, " <>
-        "so it is unmounted and re-created rather than patched; a save closes the panel"
+        "so it is unmounted and re-created rather than patched; a save closes the panel",
+    "lib/vutuv_web/components/personal_note_components.ex" =>
+      "every caller renders the note form inside an :if and the editor id carries " <>
+        "the note (or `new`), so it is re-created rather than patched; a save closes the form"
   }
 
   test "every markdown_editor call site passes a re-seed token, or is exempt by name" do

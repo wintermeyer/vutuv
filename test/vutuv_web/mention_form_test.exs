@@ -65,10 +65,14 @@ defmodule VutuvWeb.MentionFormTest do
       ada = member()
       post = insert(:post, user: author, body: "Hallo @#{ada.username}, willkommen!")
 
-      assert page(post) =~ ~s(class="mention">@#{ada.username}</a>)
+      # On the page a plain click opens the card behind the handle; the Note
+      # leaves this site, so it carries no hook for our own click handler.
+      assert page(post) =~
+               ~s(class="mention" data-member-card="member:#{ada.username}">@#{ada.username}</a>)
 
       content = note(post, author)["content"]
       assert content =~ ~s(>@#{ada.username}@vutuv.test</a>)
+      refute content =~ "data-member-card"
       # The link still points at the profile page — absolute, because a remote
       # server renders this HTML on its own domain.
       assert content =~ ~s(href="#{VutuvWeb.Endpoint.url()}/#{ada.username}")
@@ -94,7 +98,7 @@ defmodule VutuvWeb.MentionFormTest do
       post = insert(:post, user: author, body: "Hallo @#{ada.username}@vutuv.test, willkommen!")
 
       html = page(post)
-      assert html =~ ~s(class="mention">@#{ada.username}</a>)
+      assert html =~ ~s(data-member-card="member:#{ada.username}">@#{ada.username}</a>)
       refute html =~ "vutuv.test"
 
       assert note(post, author)["content"] =~ ~s(>@#{ada.username}@vutuv.test</a>)
@@ -139,7 +143,7 @@ defmodule VutuvWeb.MentionFormTest do
 
       html = Markdown.render_remote("@#{ada.username}@vutuv.test Ggf. reicht es aus.")
 
-      assert html =~ ~s(class="mention">@#{ada.username}</a>)
+      assert html =~ ~s(data-member-card="member:#{ada.username}">@#{ada.username}</a>)
       refute html =~ "vutuv.test"
     end
 

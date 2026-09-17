@@ -48,7 +48,9 @@ defmodule Vutuv.Export do
   #    offer for download, each with the address the file itself is at.
   # 11: the three Media Kit bios (issue #2101), as the member wrote them:
   #    Markdown source, not the rendered prose.
-  @schema_version 11
+  # 12: the member's private notes about other accounts (`personal_notes`), as
+  #    Markdown source, each naming the account it is about.
+  @schema_version 12
 
   def build(%User{} = user) do
     user =
@@ -181,6 +183,10 @@ defmodule Vutuv.Export do
       blocked_members: blocks(user),
       content_filters: content_filters(user),
       muted_accounts: muted_accounts(user),
+      # What the member wrote down about other accounts, for their eyes only.
+      # The Markdown source, like the bios below. Only the author's side: a
+      # note about this member is somebody else's data and never shown to them.
+      personal_notes: Vutuv.PersonalNotes.export(user),
       post_rewrites: post_rewrites(user),
       # The account-activity log (issue #1087): the member's own record of what
       # changed on their account. Personal data by definition, so Art. 20 covers

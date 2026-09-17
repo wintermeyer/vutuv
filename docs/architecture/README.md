@@ -11,7 +11,7 @@ installing and operating vutuv in [Running your own vutuv](../ADMINS.md).
 | Document | Covers |
 |---|---|
 | [realtime.md](realtime.md) | the LiveView app shell, live pages, reload-free updates over PubSub, presence & online dots, notifications, Berlin-time post stamps, the live people counter |
-| [social-graph.md](social-graph.md) | follows, vernetzt (mutual follows), per-follow mute, blocking |
+| [social-graph.md](social-graph.md) | follows, vernetzt (mutual follows), per-follow mute, blocking, personal notes |
 | [fediverse.md](fediverse.md) | follow-only ActivityPub federation: WebFinger, actors, the inbox, signed deliveries |
 | [posts-and-feed.md](posts-and-feed.md) | posts, deny-based audiences, the `/feed` timeline, likes/bookmarks/reposts, reply threads, post images |
 | [translations.md](translations.md) | declared post languages, on-demand Ollama translation, the cache + job queue, what never translates |
@@ -90,6 +90,7 @@ Business logic is organized into Phoenix context modules under `lib/vutuv/`:
 | `Vutuv.Social` | Follow, Block, Group, Membership, UserLike, UserBookmark | Follows (a mutual follow = vernetzt), per-follow mute, blocking, groups, liking/bookmarking people |
 | `Vutuv.Posts` | Post, PostDenial, PostImage, PostTag, PostLike, PostBookmark, PostRepost, PostReply | Posts, deny-model audiences, the feed, likes/bookmarks/reposts, replies/threads |
 | `Vutuv.Tags` | Tag, UserTag, UserTagEndorsement | Tagging and endorsements |
+| `Vutuv.PersonalNotes` | PersonalNote | Private notes a member keeps about other accounts (members, pages, remote accounts) |
 | `Vutuv.Search` | (none — reads `Accounts.SearchTerm`) | Search functionality (people/tags; post full-text via `Vutuv.Posts.search_public/2`). Stores nothing about a query |
 | `Vutuv.Chat` | Conversation, Participant, Message | 1:1 direct messages, message requests, unread email notifier |
 | `Vutuv.Moderation` | Case, Report, Strike | Reports, the content freezer, the strike ladder, reporter trust |

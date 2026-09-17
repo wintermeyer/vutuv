@@ -84,11 +84,14 @@ import "./link_badges"
 function localizeTime(el) {
   const dt = new Date(el.dateTime)
   if (!isNaN(dt)) {
-    const seconds = el.dataset.localtime === "second"
-    el.textContent = new Intl.DateTimeFormat(undefined, {
-      dateStyle: "short",
-      timeStyle: seconds ? "medium" : "short",
-    }).format(dt)
+    const precision = el.dataset.localtime
+    // "day" is a date-only stamp (`<.local_time style={:date}>`): the reader's
+    // zone may move it to another day, but it gains no time of day.
+    const options =
+      precision === "day"
+        ? { dateStyle: "medium" }
+        : { dateStyle: "short", timeStyle: precision === "second" ? "medium" : "short" }
+    el.textContent = new Intl.DateTimeFormat(undefined, options).format(dt)
   }
 }
 

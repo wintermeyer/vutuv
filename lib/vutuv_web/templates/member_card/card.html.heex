@@ -1,0 +1,92 @@
+<%!-- The card behind an `@handle` of our own, re-rendered after every act on
+it (`VutuvWeb.MemberCardController`). It is the remote card's twin and wears
+its classes (`.actor-card__*` in components.css), so the phone's sheet, the
+hover swap on the follow button and the dark theme come with them.
+
+The same two rules as the remote fragment: nothing in here may be a
+`<.link navigate>` or carry a fixed `id`, because it lands on a body-level node
+outside every LiveView root and can be open over a page that already renders
+the same element. --%>
+<% handle = PersonalNotes.handle(@account) %>
+<% about = about(@account) %>
+<div class="actor-card__content" data-actor-card-content data-member-card-kind={PersonalNotes.kind(@account)}>
+  <button
+    type="button"
+    data-actor-card-close
+    class="actor-card__close"
+    aria-label={gettext("Close")}
+  >
+    <span aria-hidden="true">×</span>
+  </button>
+
+  <div class="actor-card__grab" aria-hidden="true"></div>
+
+  <div class="flex items-start gap-3 pr-7">
+    <.subject_avatar subject={@account} />
+
+    <div class="min-w-0 flex-1">
+      <p class="mb-0 break-words font-bold leading-tight text-slate-900 dark:text-white">
+        {PersonalNotes.display_name(@account)}
+      </p>
+      <a
+        :if={handle}
+        href={PersonalNotes.path(@account)}
+        class="break-words text-sm font-medium text-brand-600 hover:text-brand-700 dark:text-brand-400 dark:hover:text-brand-300"
+      >
+        {handle}
+      </a>
+    </div>
+  </div>
+
+  <%!-- What the account says about itself, cut at three lines. No lid to open
+  it: the whole text is one click away on the page this card links to. --%>
+  <p
+    :if={about}
+    data-member-card-about
+    class="mb-0 mt-2 line-clamp-3 break-words text-sm leading-relaxed text-slate-700 dark:text-slate-300"
+  >
+    {about}
+  </p>
+
+  <%!-- The viewer's own notes about this account, before anything the
+  account says or does: it is the one thing on the card nobody else can see,
+  and the reason a reader opens it a second time. --%>
+  <.card_notes subject={@account} summary={@notes} />
+
+  <p
+    :if={@error?}
+    data-actor-card-error
+    class="mb-0 mt-3 rounded-lg bg-slate-50 p-2.5 text-sm leading-relaxed text-slate-700 dark:bg-slate-800/60 dark:text-slate-300"
+  >
+    {gettext("Something went wrong")}
+  </p>
+
+  <div :if={@can_follow?} class="actor-card__actions">
+    <%= if @following? do %>
+      <%!-- The remote card's one button carrying its own state: it reads as
+      the state, turns into the act on hover, and on a touch screen the first
+      press asks (`data-actor-state-confirm`). --%>
+      <button
+        type="button"
+        data-actor-act="unfollow"
+        class="actor-card__state-btn actor-card__state-btn--accepted"
+      >
+        <span data-actor-state-on>{gettext("Following")}</span>
+        <span data-actor-state-off>{gettext("Unfollow")}</span>
+        <span data-actor-state-confirm>{gettext("Really unfollow?")}</span>
+      </button>
+    <% else %>
+      <.button class="actor-card__act" data-actor-act="follow">
+        {gettext("Follow")}
+      </.button>
+    <% end %>
+  </div>
+
+  <div class="actor-card__links">
+    <a href={PersonalNotes.path(@account)}>
+      <span>{page_label(@account, @self?)}</span>
+      <span class="actor-card__go" aria-hidden="true">›</span>
+    </a>
+    <.card_notes_link subject={@account} summary={@notes} />
+  </div>
+</div>

@@ -8,8 +8,15 @@
 // never arrived all get today's behaviour, because the `href` is still the
 // whole truth of that anchor.
 //
-// It binds to `a[data-remote-actor]`, wherever that is written. Two places
-// write it. A `@user@host` inside rendered text (`VutuvWeb.Markdown`), which is
+// It binds to `a[data-remote-actor]` and to its local twin,
+// `a[data-member-card]`, which `VutuvWeb.Markdown` writes on an `@handle` of
+// one of our own members or pages. The twin opens the same panel filled by
+// `VutuvWeb.MemberCardController` (who it is, the reader's own private notes
+// about them, Follow), so a handle answers "who is that" the same way whichever
+// network it lives on. `SOURCES` below is the one place the two differ: which
+// endpoint answers and what the request names the account by.
+//
+// `a[data-remote-actor]` is written in two places. A `@user@host` inside rendered text (`VutuvWeb.Markdown`), which is
 // more than posts — a chat message and a work-experience description run
 // through the same renderer. And every other remote account the app draws,
 // through `VutuvWeb.FediverseComponents.remote_actor_link/3`, whose docstring
@@ -30,7 +37,25 @@
 // no fixed id (see the template).
 import { canHover, copyText, request, revealPreviewClamp } from "./util"
 
-const CARD_URL = "/system/fediverse/actor_card"
+// Where each kind of handle is answered, and how the request names it. The acts
+// (`ACTS` below) are paths under the same base, so a card's buttons reach the
+// controller that rendered it.
+const SOURCES = [
+  {
+    selector: "a[data-remote-actor]",
+    url: "/system/fediverse/actor_card",
+    body: (link) => `address=${encodeURIComponent(link.dataset.remoteActor)}`,
+  },
+  {
+    selector: "a[data-member-card]",
+    url: "/system/member_card",
+    body: (link) => `account=${encodeURIComponent(link.dataset.memberCard)}`,
+  },
+]
+
+const ANCHORS = SOURCES.map((source) => source.selector).join(", ")
+
+const sourceFor = (link) => SOURCES.find((source) => link.matches(source.selector))
 
 // Below this the card is a sheet at the bottom of the screen rather than a box
 // under the word: a 20rem popover anchored to a word in a paragraph has
@@ -166,19 +191,20 @@ function takeFocus() {
   if (first) first.focus({ preventScroll: true })
 }
 
-// One shape for the three calls (open, follow, unfollow): a form-encoded
-// address, and the whole card back as HTML.
+// One shape for every call (open, follow, unfollow, mute): the account the
+// anchor names, form-encoded, and the whole card back as HTML.
 //
 // `innerHTML` with that answer is deliberate and safe: it is our own
 // same-origin endpoint rendering a HEEx template, so everything a remote server
 // supplied — a display name, a self-description — is escaped there, on the side
 // that knows what is markup and what is text. Building the card here instead
 // would mean writing its sentences twice, once in German.
-async function fetchCard(url, method, extra = "") {
-  const resp = await request(url, {
+async function fetchCard(path, method, extra = "") {
+  const source = sourceFor(anchor)
+  const resp = await request(`${source.url}${path}`, {
     method,
     headers: { "content-type": "application/x-www-form-urlencoded" },
-    body: `address=${encodeURIComponent(anchor.dataset.remoteActor)}${state()}${extra}`,
+    body: `${source.body(anchor)}${state()}${extra}`,
   })
   if (!resp.ok) throw new Error(`actor card ${resp.status}`)
   return resp.text()
@@ -293,7 +319,7 @@ async function open(link) {
   place()
 
   try {
-    paint(await fetchCard(CARD_URL, "POST"))
+    paint(await fetchCard("", "POST"))
   } catch (_e) {
     close()
     followTheLink(link)
@@ -310,7 +336,7 @@ async function act(button) {
   button.disabled = true
 
   try {
-    paint(await fetchCard(`${CARD_URL}${spec.path}`, spec.method, spec.extra || ""))
+    paint(await fetchCard(spec.path, spec.method, spec.extra || ""))
   } catch (_e) {
     // Leave the card as it stands rather than inventing an outcome; the button
     // comes back, so the reader can try again.
@@ -423,7 +449,7 @@ async function copyAddress(button) {
 }
 
 document.addEventListener("click", (e) => {
-  const link = e.target.closest("a[data-remote-actor]")
+  const link = e.target.closest(ANCHORS)
 
   if (isOpen()) {
     if (panel.contains(e.target)) {
@@ -477,7 +503,7 @@ document.addEventListener("click", (e) => {
 
   if (!link) return
 
-  // Everything that is not a plain left click means "take me to that server",
+  // Everything that is not a plain left click means "take me to that page",
   // and so does a click by anybody who is not signed in: the card is a follow
   // surface, and asking the server whether they may have one would cost a
   // request just to find out that they may not. The shell renders the account

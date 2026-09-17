@@ -1595,6 +1595,15 @@ defmodule VutuvWeb.ShellLive do
                   <.link href={~p"/likes"} class={[menu_item_class(), "block"]}>
                     {gettext("Likes")}
                   </.link>
+                  <%!-- The third private list beside the two saves: what the
+                  member wrote down about other accounts (`/system/notes`). --%>
+                  <.link
+                    href={~p"/system/notes"}
+                    data-personal-notes-link
+                    class={[menu_item_class(), "block"]}
+                  >
+                    {gettext("Personal notes")}
+                  </.link>
 
                   <%!-- The member's "Your organizations" hub: the pages they own
                   or help run, plus the explainer and the add call to action. The

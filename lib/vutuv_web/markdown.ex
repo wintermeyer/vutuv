@@ -1335,8 +1335,8 @@ defmodule VutuvWeb.Markdown do
     case {Map.get(users, String.downcase(user)), form} do
       {nil, :local} -> "@" <> user
       {nil, :address} -> whole
-      {target, :local} -> mention_anchor(target, user)
-      {target, :address} -> mention_anchor(target, "#{user}@#{host}")
+      {target, :local} -> mention_anchor(target, user, :local)
+      {target, :address} -> mention_anchor(target, "#{user}@#{host}", :address)
     end
   end
 
@@ -1419,7 +1419,7 @@ defmodule VutuvWeb.Markdown do
   defp mention_link(whole, handle, users, form) do
     case Map.get(users, String.downcase(handle)) do
       nil -> whole
-      target -> mention_anchor(target, mention_label(handle, form))
+      target -> mention_anchor(target, mention_label(handle, form), form)
     end
   end
 
@@ -1449,20 +1449,35 @@ defmodule VutuvWeb.Markdown do
   # The display text is the handle the author typed (case preserved); the href
   # is the canonical lowercase slug; the title is the member's full name (or the
   # handle itself for a nameless member).
-  defp mention_anchor(%Organization{} = organization, typed_handle) do
+  #
+  # `data-member-card` is the local twin of `data-remote-actor`: a plain click
+  # opens the same card (`assets/js/mention_card.js`, served by
+  # `VutuvWeb.MemberCardController`) instead of leaving the page, while the
+  # `href` stays the whole truth for every other way of following the link. It
+  # carries the kind, which picks the table, and the canonical handle the link
+  # already names, so a body rendered for a feed reader or an API client says
+  # nothing through it that the `href` does not. Only on the `:local` form, for
+  # the reason `remote_actor_link/3` gives: the `:address` form leaves this site.
+  defp mention_anchor(%Organization{} = organization, typed_handle, form) do
     ~s(<a href="#{Organizations.canonical_path(organization)}" ) <>
-      ~s(title="#{escape(organization.name)}" class="mention">@#{typed_handle}</a>)
+      ~s(title="#{escape(organization.name)}" class="mention") <>
+      member_card_hook("organization", organization.username, form) <>
+      ~s(>@#{typed_handle}</a>)
   end
 
-  defp mention_anchor(user, typed_handle) do
+  defp mention_anchor(user, typed_handle, form) do
     name =
       case UserHelpers.full_name(user) do
         "" -> "@" <> user.username
         full -> full
       end
 
-    ~s(<a href="/#{user.username}" title="#{escape(name)}" class="mention">@#{typed_handle}</a>)
+    ~s(<a href="/#{user.username}" title="#{escape(name)}" class="mention") <>
+      member_card_hook("member", user.username, form) <> ~s(>@#{typed_handle}</a>)
   end
+
+  defp member_card_hook(kind, handle, :local), do: ~s( data-member-card="#{kind}:#{handle}")
+  defp member_card_hook(_kind, _handle, _form), do: ""
 
   # The display text is the hashtag the author typed (case preserved); the href
   # is the canonical lowercase tag slug. Only non-empty tags reach here, so the

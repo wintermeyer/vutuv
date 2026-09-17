@@ -238,6 +238,17 @@ the resulting ~200px rail width. --%>
             class="shrink-0"
           >
             <.card_menu id="profile-actions-menu">
+              <%!-- A private note about this member (`Vutuv.PersonalNotes`).
+              First, because it is the one item here that is not a way of
+              pushing somebody away. It opens the notes panel under the header,
+              which stays hidden until there is a note or this asks for one. --%>
+              <:item
+                id="add-personal-note"
+                click={VutuvWeb.PersonalNotesComponent.open_form()}
+                hint={VutuvWeb.PersonalNoteComponents.only_you()}
+              >
+                {gettext("Add a personal note")}
+              </:item>
               <%!-- Mute is a property of your own follow, so it shows only once you
               follow them; it silences their posts in your feed only. A live
               phx-click toggle, so the label flips with no reload. --%>
@@ -395,6 +406,18 @@ the resulting ~200px rail width. --%>
         </div>
       </div>
     </section>
+
+    <%!-- The viewer's private notes about this member, right under the header
+    where the reader looks first (`VutuvWeb.PersonalNotesComponent`). Renders a
+    hidden shell until a note exists or the ⋯ menu asks for one. The member
+    this page is about never gets it, and neither does a visitor. --%>
+    <.live_component
+      :if={@current_user && not same_user?(@user, @current_user)}
+      module={VutuvWeb.PersonalNotesComponent}
+      id={VutuvWeb.PersonalNotesComponent.panel_id()}
+      viewer={@current_user}
+      subject={@user}
+    />
 
     <%!-- New-member onboarding checklist: the few highest-impact steps so a fresh
     profile becomes findable and recognizable fast. Owner-only, shown only inside

@@ -3,6 +3,7 @@ defmodule VutuvWeb.RemoteActorCardHTML do
   use VutuvWeb, :html
 
   import VutuvWeb.FediverseComponents
+  import VutuvWeb.PersonalNoteComponents, only: [card_notes: 1, card_notes_link: 1]
   import VutuvWeb.PostComponents
 
   alias Vutuv.Fediverse.Follow

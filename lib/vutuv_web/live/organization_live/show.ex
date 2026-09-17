@@ -676,13 +676,26 @@ defmodule VutuvWeb.OrganizationLive.Show do
                   <.engagement_bar engagement={@engagement} />
                 </div>
 
-                <.link
-                  :if={@current_user && !@can_manage?}
-                  href={~p"/reports/new?#{[type: "organization", id: @organization.id, return_to: "/organizations/#{@organization.slug}"]}"}
-                  class="ml-auto text-sm text-slate-600 hover:text-slate-800 dark:text-slate-400 dark:hover:text-slate-200"
-                >
-                  {gettext("Report")}
-                </.link>
+                <%!-- The two quiet acts a visitor may want on somebody else's
+                page: a private note about it, and a report. A page's own
+                managers get neither. --%>
+                <div :if={@current_user && !@can_manage?} class="ml-auto flex items-center gap-4">
+                  <button
+                    type="button"
+                    id="add-personal-note"
+                    phx-click={VutuvWeb.PersonalNotesComponent.open_form()}
+                    title={VutuvWeb.PersonalNoteComponents.only_you()}
+                    class="inline-flex min-h-10 items-center text-sm text-slate-600 hover:text-slate-800 dark:text-slate-400 dark:hover:text-slate-200"
+                  >
+                    {gettext("Add a personal note")}
+                  </button>
+                  <.link
+                    href={~p"/reports/new?#{[type: "organization", id: @organization.id, return_to: "/organizations/#{@organization.slug}"]}"}
+                    class="text-sm text-slate-600 hover:text-slate-800 dark:text-slate-400 dark:hover:text-slate-200"
+                  >
+                    {gettext("Report")}
+                  </.link>
+                </div>
               </div>
 
               <%!-- This strip and the manage pages' tab bar are two hand-kept
@@ -718,6 +731,16 @@ defmodule VutuvWeb.OrganizationLive.Show do
               </div>
             </div>
           </section>
+
+          <%!-- The viewer's private notes about this page, hidden until there
+          is one or the button above asks for one. --%>
+          <.live_component
+            :if={@current_user && !@can_manage?}
+            module={VutuvWeb.PersonalNotesComponent}
+            id={VutuvWeb.PersonalNotesComponent.panel_id()}
+            viewer={@current_user}
+            subject={@organization}
+          />
 
           <.card :if={present?(@organization.description)}>
             <.section_title>{gettext("About")}</.section_title>
