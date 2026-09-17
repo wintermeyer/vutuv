@@ -20,6 +20,7 @@ defmodule Vutuv.Attachments.PagesTest do
 
   use Vutuv.DataCase
 
+  import Vutuv.ProcessHelpers, only: [kill_between_queries: 1]
   import Vutuv.WebPushHelpers, only: [put_config: 2]
 
   alias Ecto.Adapters.SQL.Sandbox
@@ -191,9 +192,10 @@ defmodule Vutuv.Attachments.PagesTest do
 
       # The renderer waits for `:go` so its sandbox connection is granted before
       # it touches the database, and it is monitored so the kill below is
-      # *observed* rather than assumed. An orphan still holding the connection
-      # when the test ends is what makes this shape of test flake — the twin in
-      # `Vutuv.VideosTest` fell over twice on 2026-09-10 with a
+      # *observed* rather than assumed. The kill itself waits for a moment
+      # between two of the renderer's queries (`kill_between_queries/1`): a
+      # kill inside one takes the test's connection with it, which is how the
+      # twin in `Vutuv.VideosTest` kept failing with a
       # `DBConnection.Holder.checkout … no process` out of the sandbox.
       parent = self()
 
@@ -209,7 +211,7 @@ defmodule Vutuv.Attachments.PagesTest do
       send(pid, :go)
 
       wait_for(fn -> Pages.list(attachment) != [] end)
-      Process.exit(pid, :kill)
+      kill_between_queries(pid)
       assert_receive {:DOWN, ^ref, :process, ^pid, :killed}, 5_000
 
       interrupted = Pages.list(attachment)

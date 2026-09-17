@@ -14,6 +14,7 @@ defmodule Vutuv.VideosTest do
 
   import Ecto.Query
 
+  import Vutuv.ProcessHelpers, only: [kill_between_queries: 1]
   import Vutuv.WebPushHelpers, only: [put_config: 2]
 
   alias Vutuv.Moderation.ImageScans
@@ -163,7 +164,7 @@ defmodule Vutuv.VideosTest do
       # First run: the frames step, then the process dies before any file is
       # finished (the H.264 encode of a deploy's killed slot). Unlinked, so the
       # kill takes the job and not the test.
-      pid = spawn(fn -> Job.run(video.id) end)
+      {pid, ref} = spawn_monitor(fn -> Job.run(video.id) end)
 
       # Kill once ffmpeg has its output file open. It opens that file only
       # after probing the input, and a kill inside that gap leaves an orphan
@@ -171,8 +172,8 @@ defmodule Vutuv.VideosTest do
       # progress write. Production never resumes inside the 180 s window; a
       # test that resumes at once would.
       wait_until(fn -> PostVideoStore.temp_files(video.token) != [] end)
-      Process.exit(pid, :kill)
-      wait_until(fn -> not Process.alive?(pid) end)
+      kill_between_queries(pid)
+      assert_receive {:DOWN, ^ref, :process, ^pid, _reason}, 5_000
       # A three-second clip encodes in well under a second, so whether the
       # kill landed before or after the H.264 file is the machine's call; the
       # frames were certainly done, and the rest is the resume's to finish.
