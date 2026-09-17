@@ -3194,11 +3194,23 @@ defmodule VutuvWeb.UI do
   # tag pill stands on its own in the tag page header.
   defp tag_follow_class(:following),
     do:
-      "group inline-flex shrink-0 items-center justify-center gap-1 rounded-full border px-3 py-1.5 text-xs font-semibold transition-colors border-slate-300 text-slate-600 hover:border-rose-300 hover:text-rose-600 dark:border-slate-700 dark:text-slate-400 dark:hover:border-rose-800 dark:hover:text-rose-400"
+      "group " <>
+        tag_follow_pill_class() <>
+        " border-slate-300 text-slate-600 hover:border-rose-300 hover:text-rose-600 dark:border-slate-700 dark:text-slate-400 dark:hover:border-rose-800 dark:hover:text-rose-400"
 
   defp tag_follow_class(:follow),
     do:
-      "inline-flex shrink-0 items-center justify-center gap-1 rounded-full border px-3 py-1.5 text-xs font-semibold transition-colors border-brand-600 text-brand-700 hover:bg-brand-50 dark:border-brand-500 dark:text-brand-400 dark:hover:bg-brand-800/40"
+      tag_follow_pill_class() <>
+        " border-brand-600 text-brand-700 hover:bg-brand-50 dark:border-brand-500 dark:text-brand-400 dark:hover:bg-brand-800/40"
+
+  @doc """
+  The tag follow pill's geometry and type, without its colours — for a control
+  that stands on the pill's line beside it (the tag page's source chip, issue
+  #2157) and has to keep its height. One string, so the two cannot drift.
+  """
+  def tag_follow_pill_class,
+    do:
+      "inline-flex shrink-0 items-center justify-center gap-1 rounded-full border px-3 py-1.5 text-xs font-semibold transition-colors"
 
   @doc """
   The **mute / unmute** toggle for a follow you own — silences the followee's

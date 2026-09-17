@@ -8,16 +8,16 @@ defmodule VutuvWeb.TagLive.Sources do
   a phone reader follows a tag, so the same chip and the same panel
   (`VutuvWeb.PostLive.TagSources`) stand there too, on every screen size.
 
-  Embedded by `VutuvWeb.TagController.show/2` via `live_render`, only when
-  `source_count/3` has an answer for the request. The dead render draws the
-  chip from the count the controller handed over; the socket resolves the
-  member from the cookie's `session_token`
-  (`VutuvWeb.Live.InitAssigns.assign_embedded/2`), never from the curated
-  `user_id`, and asks `source_count/3` again before it mounts the panel a press
-  could write through.
+  Embedded by `VutuvWeb.TagController.show/2` via `live_render`, only when the
+  controller has a number for the chip (`chip_count/1`). The dead render draws
+  the chip from that number and the tag's public fields in the session
+  (`session/2`), so it reads nothing. The socket resolves the member from the
+  cookie's `session_token` (`VutuvWeb.Live.InitAssigns.assign_embedded/2`),
+  never from the curated `user_id`, and asks for the count again before it
+  loads the tag and mounts the panel a press could write through.
   """
 
-  use Phoenix.LiveView
+  use VutuvWeb, :embedded_live_view
 
   import VutuvWeb.PostLive.TagSources, only: [source_chip: 1]
 
@@ -30,49 +30,67 @@ defmodule VutuvWeb.TagLive.Sources do
   alias VutuvWeb.PostLive.TagSources
 
   @doc """
-  How many servers feed `tag` for this viewer, or `nil` when the chip does not
-  belong on the page.
-
-  It belongs there only for a member who follows the tag themselves, on an
-  installation that reads other servers. While the member speaks for a page the
-  follow button beside it shows the page's subscription (issue #1336), and a
-  chip about the member's own follow next to it would contradict it.
+  The number on the chip, from a follow's source count
+  (`Vutuv.Tags.followed_tag_source_count/2`, `nil` when the tag is not
+  followed): `nil`, and no chip, on an installation that reads no other server.
   """
-  def source_count(%User{} = member, nil = _acting_as, %Tag{} = tag) do
-    with true <- SourceServers.enabled?(),
-         %{} = follow <- Tags.tag_follow(member, tag.id) do
-      length(Tags.tag_follow_sources(follow))
-    else
-      _ -> nil
-    end
+  def chip_count(count) when is_integer(count) do
+    if SourceServers.enabled?(), do: count
   end
 
-  def source_count(_member, _acting_as, _tag), do: nil
+  def chip_count(nil), do: nil
+
+  @doc """
+  What the tag page hands the view besides the curated session: the tag's
+  public fields and the chip's number, which the dead render draws from.
+  """
+  def session(%Tag{} = tag, count) do
+    %{
+      "tag" => %{"id" => tag.id, "name" => tag.name, "slug" => tag.slug},
+      "source_count" => count
+    }
+  end
 
   @impl true
   def mount(_params, session, socket) do
-    tag = load_tag(session["tag_id"])
-
     socket =
-      if connected?(socket) do
-        socket = InitAssigns.assign_embedded(socket, session)
-        %{current_user: member, acting_as: acting_as} = socket.assigns
-        count = source_count(member, acting_as, tag)
+      if connected?(socket),
+        do: mount_connected(socket, session),
+        else: mount_static(socket, session)
 
-        socket
-        |> assign(:count, count)
-        # Only a member the token vouches for, and who follows the tag, gets a
-        # panel to write through.
-        |> assign(:member, count && member)
-      else
-        socket |> assign(:count, tag && session["source_count"]) |> assign(:member, nil)
-      end
-
-    {:ok, socket |> assign(:tag, tag) |> assign(:open_id, nil)}
+    {:ok, assign(socket, :open_id, nil)}
   end
 
-  defp load_tag(id) when is_binary(id), do: Repo.get(Tag, id)
-  defp load_tag(_id), do: nil
+  defp mount_static(socket, %{"tag" => tag, "source_count" => count}) do
+    socket
+    |> assign(:tag, %Tag{id: tag["id"], name: tag["name"], slug: tag["slug"]})
+    |> assign(:count, count)
+    |> assign(:current_user, nil)
+  end
+
+  # Only a member the token vouches for, and who follows the tag, gets a panel
+  # to write through.
+  defp mount_connected(socket, session) do
+    socket = InitAssigns.assign_embedded(socket, session)
+    %{current_user: member, acting_as: acting_as} = socket.assigns
+
+    with %{"id" => id} <- session["tag"],
+         count when is_integer(count) <- source_count(member, acting_as, id),
+         %Tag{} = tag <- Repo.get(Tag, id) do
+      assign(socket, tag: tag, count: count)
+    else
+      _ -> assign(socket, tag: nil, count: nil)
+    end
+  end
+
+  # The chip belongs only to a member who follows the tag themselves. While the
+  # member speaks for a page the follow button beside it shows the page's
+  # subscription (issue #1336), and a chip about the member's own follow next
+  # to it would contradict it.
+  defp source_count(%User{} = member, nil = _acting_as, tag_id) when is_binary(tag_id),
+    do: chip_count(Tags.followed_tag_source_count(member, tag_id))
+
+  defp source_count(_member, _acting_as, _tag_id), do: nil
 
   # Every press is the panel's; the root has nothing to act on. A pushed event
   # that reaches it anyway (a socket that resolved no member) is ignored rather
@@ -85,9 +103,8 @@ defmodule VutuvWeb.TagLive.Sources do
     {:noreply, assign(socket, :open_id, tag_id)}
   end
 
-  def handle_info({TagSources, {:sources_changed, _tag_id}}, socket) do
-    %{member: member, acting_as: acting_as, tag: tag} = socket.assigns
-    {:noreply, assign(socket, :count, source_count(member, acting_as, tag))}
+  def handle_info({TagSources, {:sources_changed, _tag_id, count}}, socket) do
+    {:noreply, assign(socket, :count, count)}
   end
 
   def handle_info(_other, socket), do: {:noreply, socket}
@@ -104,8 +121,8 @@ defmodule VutuvWeb.TagLive.Sources do
     <div :if={@count} class="flex h-7.5 items-center">
       <.source_chip tag={@tag} count={@count} open?={@open_id == @tag.id} size={:touch} />
     </div>
-    <div :if={@member} class="w-full">
-      <.live_component module={TagSources} id="tag-sources" user={@member} tags={[@tag]} />
+    <div :if={@count && @current_user} class="w-full">
+      <.live_component module={TagSources} id="tag-sources" user={@current_user} tags={[@tag]} />
     </div>
     """
   end

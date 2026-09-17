@@ -25,7 +25,8 @@ defmodule VutuvWeb.PostLive.TagSources do
   to redraw by message:
 
     * `{TagSources, {:panel, tag_id | nil}}` — which chip is `aria-expanded`;
-    * `{TagSources, {:sources_changed, tag_id}}` — that chip's count is stale.
+    * `{TagSources, {:sources_changed, tag_id, count}}` — that chip's new count,
+      read off the rows the panel has just drawn, so no host asks again.
 
   ## Why it is a panel and not a dialog
 
@@ -63,6 +64,7 @@ defmodule VutuvWeb.PostLive.TagSources do
   alias Vutuv.Tags
   alias Vutuv.Tags.SourceServer
   alias Vutuv.Tags.SourceServers
+  alias Vutuv.Tags.Tag
 
   require Logger
 
@@ -74,7 +76,7 @@ defmodule VutuvWeb.PostLive.TagSources do
     # and fetched back) hears so, or that chip would say "expanded" over nothing.
     if connected?(socket), do: notify({:panel, nil})
 
-    {:ok, socket |> assign(open_id: nil, rows: [], typed: "", field_key: 0) |> answer(nil, nil)}
+    {:ok, socket |> assign(open_id: nil, rows: [], field_key: 0) |> reset()}
   end
 
   @impl true
@@ -110,16 +112,38 @@ defmodule VutuvWeb.PostLive.TagSources do
   # (the operator blocked the server while it was open, the probe has since
   # gone stale) cannot be pressed into an add the check would refuse.
   def handle_event("tag-source-add", %{"source" => host}, socket) do
-    {:noreply, add_source(socket, host, false)}
+    case add_source(socket, host) do
+      {:ok, _host, socket} -> {:noreply, answer(socket, nil, nil)}
+      {:error, reason, socket} -> {:noreply, answer(socket, reason, nil)}
+      {:closed, socket} -> {:noreply, socket}
+    end
   end
 
   # A typed address, which nothing has vetted yet — the same gate, which for a
   # server nobody has asked before means a real probe. Only this path says
   # "taken" in words: a switch that flips is its own answer.
+  #
+  # LiveView leaves a focused input's value alone on a patch and resets an
+  # unfocused one to what is rendered, so the text is rendered back on a refusal
+  # (the member corrects it, whether Return or the button sent it) and an add
+  # renders the field under a new id, which the client swaps for an empty
+  # element rather than patching the old one, at the price of the focus.
   def handle_event("tag-source-check", %{"source" => typed}, socket) do
-    case String.trim(to_string(typed)) do
-      "" -> {:noreply, socket}
-      value -> {:noreply, add_source(socket, value, true)}
+    value = String.trim(to_string(typed))
+
+    case value != "" && add_source(socket, value) do
+      false ->
+        {:noreply, socket}
+
+      {:ok, host, socket} ->
+        {:noreply,
+         socket |> answer(nil, host) |> assign(:typed, "") |> update(:field_key, &(&1 + 1))}
+
+      {:error, reason, socket} ->
+        {:noreply, socket |> answer(reason, nil) |> assign(:typed, value)}
+
+      {:closed, socket} ->
+        {:noreply, socket}
     end
   end
 
@@ -132,7 +156,7 @@ defmodule VutuvWeb.PostLive.TagSources do
 
       follow ->
         Tags.remove_tag_follow_source(follow, host)
-        {:noreply, socket |> answer(nil, nil) |> sources_changed()}
+        {:noreply, socket |> answer(nil, nil) |> sources_changed(follow)}
     end
   end
 
@@ -188,8 +212,7 @@ defmodule VutuvWeb.PostLive.TagSources do
 
         socket
         |> assign(:open_id, tag_id)
-        |> answer(nil, nil)
-        |> assign(:typed, "")
+        |> reset()
         |> assign_rows()
         |> ask_stale_servers(tag)
     end
@@ -198,12 +221,11 @@ defmodule VutuvWeb.PostLive.TagSources do
   defp close(socket) do
     notify({:panel, nil})
 
-    socket
-    |> assign(:open_id, nil)
-    |> assign(:rows, [])
-    |> answer(nil, nil)
-    |> assign(:typed, "")
+    socket |> assign(open_id: nil, rows: []) |> reset()
   end
+
+  # A panel mounted, opened or closed has said nothing yet and holds no text.
+  defp reset(socket), do: socket |> answer(nil, nil) |> assign(:typed, "")
 
   # What the panel last said about a press: a refusal or the host a typed
   # address was taken as. One at a time, so a refusal never stands under a
@@ -228,19 +250,25 @@ defmodule VutuvWeb.PostLive.TagSources do
     Tags.tag_follow(socket.assigns.user, socket.assigns.open_id)
   end
 
-  defp assign_rows(socket) do
-    sources =
-      case open_follow(socket) do
-        nil -> []
-        follow -> Tags.tag_follow_sources(follow)
-      end
+  defp assign_rows(socket), do: assign_rows(socket, open_follow(socket))
 
-    assign(socket, :rows, SourceServers.rows(sources))
+  # Takes the follow a press has already read, so a write reads it once.
+  defp assign_rows(socket, nil), do: assign(socket, :rows, SourceServers.rows([]))
+
+  defp assign_rows(socket, follow) do
+    assign(socket, :rows, SourceServers.rows(Tags.tag_follow_sources(follow)))
   end
 
-  defp sources_changed(socket) do
-    notify({:sources_changed, socket.assigns.open_id})
-    assign_rows(socket)
+  # The chip counts the picked rows, this installation's included: the number
+  # `Tags.followed_tag_source_counts/1` answers, taken off the rows just drawn.
+  defp sources_changed(socket, follow) do
+    socket = assign_rows(socket, follow)
+
+    notify(
+      {:sources_changed, socket.assigns.open_id, Enum.count(socket.assigns.rows, & &1.picked?)}
+    )
+
+    socket
   end
 
   # A component runs in its host's process, so `self()` is the host.
@@ -268,37 +296,21 @@ defmodule VutuvWeb.PostLive.TagSources do
   # One way in for both the offered switches and the typed field: the address is
   # put through `SourceServers.check/2` and only then written. The panel's own
   # `disabled` is a courtesy, never the permission — it was rendered before the
-  # press and the operator may have blocked the server in between.
-  defp add_source(socket, value, confirm?) do
+  # press and the operator may have blocked the server in between. What the
+  # panel says about the outcome is each caller's.
+  defp add_source(socket, value) do
     with [tag] <- open_tags(socket.assigns.open_id, socket.assigns.tags),
          %{} = follow <- open_follow(socket),
          {:ok, host} <- SourceServers.check(value, tag),
          {:ok, _row} <- Tags.add_tag_follow_source(follow, host) do
-      socket
-      |> answer(nil, if(confirm?, do: host))
-      |> field(confirm?, :added)
-      |> sources_changed()
+      {:ok, host, sources_changed(socket, follow)}
     else
       # The panel is open on a tag this member no longer follows.
-      [] -> close(socket)
-      nil -> close(socket)
-      {:error, reason} -> socket |> answer(reason, nil) |> field(confirm?, value)
+      [] -> {:closed, close(socket)}
+      nil -> {:closed, close(socket)}
+      {:error, reason} -> {:error, reason, socket}
     end
   end
-
-  # The typed field after its own press. LiveView leaves a focused input's value
-  # alone on a patch and resets an unfocused one to what is rendered, so the
-  # text is rendered back on a refusal (the member corrects it, whether Return
-  # or the button sent it) and an add renders the field under a new id, which
-  # the client swaps for an empty element rather than patching the old one, at
-  # the price of the focus.
-  defp field(socket, false, _outcome), do: socket
-
-  defp field(socket, true, :added) do
-    socket |> assign(:typed, "") |> update(:field_key, &(&1 + 1))
-  end
-
-  defp field(socket, true, typed), do: assign(socket, :typed, typed)
 
   @doc """
   The number on one followed tag's chip, and the way into changing it.
@@ -334,7 +346,7 @@ defmodule VutuvWeb.PostLive.TagSources do
           "%{tag} comes from %{formatted} server. Change that.",
           "%{tag} comes from %{formatted} servers. Change that.",
           @count,
-          tag: tag_name(@tag),
+          tag: Tag.display_name(@tag),
           formatted: compact_count(@count)
         )
       }
@@ -355,16 +367,20 @@ defmodule VutuvWeb.PostLive.TagSources do
   defp source_chip_class(:touch),
     do: "group flex h-10 flex-shrink-0 items-center rounded-full focus-visible:outline-none"
 
-  @chip_face "inline-flex items-center rounded-full border font-semibold transition-colors " <>
-               "border-brand-300 bg-white text-brand-700 " <>
-               "group-hover:border-brand-500 group-hover:bg-brand-100 group-hover:text-brand-900 " <>
-               "group-focus-visible:ring-2 group-focus-visible:ring-brand-500 " <>
-               "dark:border-brand-500 dark:bg-slate-900 dark:text-brand-100 " <>
-               "dark:group-hover:border-brand-300 dark:group-hover:bg-brand-800 " <>
-               "dark:group-hover:text-white dark:group-focus-visible:ring-brand-300"
+  @chip_colors "border-brand-300 bg-white text-brand-700 " <>
+                 "group-hover:border-brand-500 group-hover:bg-brand-100 group-hover:text-brand-900 " <>
+                 "group-focus-visible:ring-2 group-focus-visible:ring-brand-500 " <>
+                 "dark:border-brand-500 dark:bg-slate-900 dark:text-brand-100 " <>
+                 "dark:group-hover:border-brand-300 dark:group-hover:bg-brand-800 " <>
+                 "dark:group-hover:text-white dark:group-focus-visible:ring-brand-300"
 
-  defp source_chip_face_class(:rail), do: @chip_face <> " h-5 gap-0.5 px-1.5 text-xs leading-none"
-  defp source_chip_face_class(:touch), do: @chip_face <> " gap-1 px-3 py-1.5 text-xs"
+  defp source_chip_face_class(:rail) do
+    "inline-flex h-5 items-center gap-0.5 rounded-full border px-1.5 text-xs font-semibold " <>
+      "leading-none transition-colors " <> @chip_colors
+  end
+
+  # The tag follow pill's own box, so the two keep one height on one line.
+  defp source_chip_face_class(:touch), do: tag_follow_pill_class() <> " " <> @chip_colors
 
   attr(:tag, :map, required: true)
   attr(:rows, :list, required: true)
@@ -392,7 +408,7 @@ defmodule VutuvWeb.PostLive.TagSources do
     <div id="tag-sources-panel" class="mt-3 border-t border-slate-200 pt-3 dark:border-slate-700">
       <div class="flex items-start justify-between gap-2">
         <h3 class="text-sm font-bold text-slate-900 dark:text-white">
-          {gettext("Where should %{tag} come from?", tag: "#" <> tag_name(@tag))}
+          {gettext("Where should %{tag} come from?", tag: "#" <> Tag.display_name(@tag))}
         </h3>
         <button
           id="tag-sources-close"
@@ -411,7 +427,7 @@ defmodule VutuvWeb.PostLive.TagSources do
       <p class="mt-1 text-xs text-slate-600 dark:text-slate-400">
         {gettext(
           "vutuv is always on. Every other server brings the posts on #%{tag} that it sees in the fediverse.",
-          tag: tag_name(@tag)
+          tag: Tag.display_name(@tag)
         )}
       </p>
 
@@ -482,7 +498,7 @@ defmodule VutuvWeb.PostLive.TagSources do
       when something is said into it; the two lines never stand together. --%>
       <div id="tag-sources-status" role="status" aria-live="polite" class="text-xs font-semibold">
         <p :if={@added} id="tag-sources-added" class="mt-2 text-emerald-700 dark:text-emerald-400">
-          {gettext("%{host} now feeds #%{tag}.", host: @added, tag: tag_name(@tag))}
+          {gettext("%{host} now feeds #%{tag}.", host: @added, tag: Tag.display_name(@tag))}
         </p>
         <p :if={@error} id="tag-sources-error" class="mt-2 text-rose-600 dark:text-rose-400">
           {error_text(@error, @tag)}
@@ -621,14 +637,11 @@ defmodule VutuvWeb.PostLive.TagSources do
     end
   end
 
-  @doc """
-  Whether the follow behind `rows` may name another server.
-
-  Read off the rendered rows rather than counted a second time in the socket, so
-  the message and the `disabled` attributes can never disagree with the list the
-  reader is looking at.
-  """
-  def at_cap?(rows) do
+  # Whether the follow behind `rows` may name another server. Read off the
+  # rendered rows rather than counted a second time in the socket, so the
+  # message and the `disabled` attributes can never disagree with the list the
+  # reader is looking at.
+  defp at_cap?(rows) do
     Enum.count(rows, &(&1.picked? and not &1.local?)) >= SourceServers.limit()
   end
 
@@ -697,26 +710,24 @@ defmodule VutuvWeb.PostLive.TagSources do
   defp note(%{info: %{status: "ok"}}, _tag), do: nil
   defp note(_row, _tag), do: gettext("Not asked yet.")
 
-  @doc """
-  Every refusal `Vutuv.Tags.SourceServers.check/2` can answer with, plus the
-  cap, said to the member rather than logged, about the open `tag`.
-
-  The host comes back inside the refusal, in the spelling it would be stored
-  under, so a typo is easy to see beside what it was read as — and so nothing
-  here has to normalize an address a second time to guess it.
-
-  The tag is named with its hash wherever a sentence is about it (issue #2166):
-  German calls this feature "das Tag", and a compound like "Tag-Zeitleiste"
-  reads as a *day*.
-  """
-  def error_text({:account_required, host}, tag) do
+  # Every refusal `Vutuv.Tags.SourceServers.check/2` can answer with, plus the
+  # cap, said to the member rather than logged, about the open `tag`.
+  #
+  # The host comes back inside the refusal, in the spelling it would be stored
+  # under, so a typo is easy to see beside what it was read as — and so nothing
+  # here has to normalize an address a second time to guess it.
+  #
+  # The tag is named with its hash wherever a sentence is about it (issue
+  # #2166): German calls this feature "das Tag", and a compound like
+  # "Tag-Zeitleiste" reads as a *day*.
+  defp error_text({:account_required, host}, tag) do
     gettext("%{host} only shows posts on #%{tag} to people who have an account there.",
       host: host,
-      tag: tag_name(tag)
+      tag: Tag.display_name(tag)
     )
   end
 
-  def error_text(reason, _tag), do: refusal(reason)
+  defp error_text(reason, _tag), do: refusal(reason)
 
   defp refusal({:not_a_server, typed}),
     do: gettext("%{typed} is not a server name.", typed: typed)
@@ -748,6 +759,4 @@ defmodule VutuvWeb.PostLive.TagSources do
   end
 
   defp refusal(_other), do: gettext("That did not work.")
-
-  defp tag_name(tag), do: tag.name || tag.slug
 end

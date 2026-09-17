@@ -1363,17 +1363,35 @@ defmodule Vutuv.Tags do
   during a blue/green window reads `1` rather than `0`.
   """
   def followed_tag_source_counts(%User{} = user) do
+    user
+    |> source_counts_query()
+    |> select([tf, s], {tf.tag_id, count(s.id) + 1})
+    |> Repo.all()
+    |> Map.new()
+  end
+
+  @doc """
+  The same count for one tag, or `nil` when `user` does not follow it — so a
+  page asking "do they follow it, and from how many servers" asks once (the tag
+  page's source chip, issue #2157).
+  """
+  def followed_tag_source_count(%User{} = user, tag_id) when is_binary(tag_id) do
+    user
+    |> source_counts_query()
+    |> where([tf], tf.tag_id == ^tag_id)
+    |> select([_tf, s], count(s.id) + 1)
+    |> Repo.one()
+  end
+
+  defp source_counts_query(user) do
     local = local_tag_follow_source()
 
     from(tf in TagFollow,
       left_join: s in TagFollowSource,
       on: s.tag_follow_id == tf.id and s.source != ^local,
       where: tf.user_id == ^user.id,
-      group_by: tf.tag_id,
-      select: {tf.tag_id, count(s.id) + 1}
+      group_by: tf.tag_id
     )
-    |> Repo.all()
-    |> Map.new()
   end
 
   @doc """

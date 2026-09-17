@@ -323,23 +323,27 @@ defmodule VutuvWeb.PostLive.Feed do
   # (mount) and the socket-side redraw helpers below, so mount and refresh
   # cannot drift.
   defp rail_data(user) do
+    user
+    |> followed_tag_rail()
+    # Whether anybody is asked at all (`VutuvWeb.PostLive.TrendingTags`). Read
+    # once here and never again: it is configuration, so the socket-side
+    # redraws below deliberately leave it alone.
+    |> Map.put(:trending_asking?, Trending.asking?())
+    |> Map.merge(newcomer_rail(user))
+  end
+
+  # The "Tags you follow" card as data, for the mount and for every redraw of
+  # the follow set: the tags, how many servers each reads from (issue #2128) —
+  # one count query, because a number is all each chip shows — and what is
+  # suddenly busy on those servers (issue #2129), which the last pass already
+  # worked out: a select of at most eight stored rows, never anything outbound.
+  # The offers are read again on a redraw rather than filtered in place, because
+  # a press on that row both follows a tag and is what takes it out of the offer.
+  defp followed_tag_rail(user) do
     followed = Vutuv.Tags.followed_tags(user)
 
-    %{
-      followed_tags: followed,
-      # How many servers each of those tags reads from (issue #2128) — one
-      # count query, because that is all the chip on each chip shows.
-      tag_source_counts: Vutuv.Tags.followed_tag_source_counts(user),
-      # Whether anybody is asked at all (`VutuvWeb.PostLive.TrendingTags`).
-      # Read once here and never again: it is configuration, so the
-      # socket-side redraws below deliberately leave it alone.
-      trending_asking?: Trending.asking?()
-    }
-    # And what is suddenly busy on those servers (issue #2129), which the last
-    # pass already worked out — a select of at most eight stored rows, never
-    # anything outbound.
+    %{followed_tags: followed, tag_source_counts: Vutuv.Tags.followed_tag_source_counts(user)}
     |> Map.merge(trending_offers(followed))
-    |> Map.merge(newcomer_rail(user))
   end
 
   # A tag the reader already follows is not an offer, so it comes out of the
@@ -425,16 +429,9 @@ defmodule VutuvWeb.PostLive.Feed do
     |> assign(:tag_panel_id, nil)
     |> assign(payload.rails)
     # The follow-a-tag suggestions ride the first paint like the rest of the
-    # rail. Computed from what is already in hand rather than through
-    # `assign_followed_tags/1`, which would re-run the query the payload just
-    # answered.
-    |> assign(
-      :tag_suggestions,
-      Vutuv.FeedBand.tags_on_page(payload.entries,
-        except: Enum.map(payload.rails.followed_tags, &(&1.name || &1.slug)),
-        limit: 5
-      )
-    )
+    # rail, from the followed tags the payload has just assigned rather than
+    # through `assign_followed_tags/1`, which would ask for them again.
+    |> assign_tag_suggestions(payload.entries)
     # Everything that is true of the list the reader has just been handed
     # (`put_timeline/3`), the entries themselves included. It sits here rather
     # than up with the other assigns because `watch_pending_photos/2` reads the
@@ -601,28 +598,22 @@ defmodule VutuvWeb.PostLive.Feed do
   # whenever the follow set changes (an unfollow here, or a follow/unfollow made
   # on a tag page while this feed is open — see the :tag_follows_changed handler).
   defp assign_followed_tags(socket) do
-    followed = Vutuv.Tags.followed_tags(socket.assigns.current_user)
-
     socket
-    |> assign(:followed_tags, followed)
-    |> assign(
-      :tag_source_counts,
-      Vutuv.Tags.followed_tag_source_counts(socket.assigns.current_user)
-    )
-    # What the card offers to follow: the tags on the page, minus the ones this
-    # reader already follows. Computed here rather than in the card so both it
-    # and the "Hide tags" card read one list (`FeedBand.tags_on_page/2`).
-    |> assign(
+    |> assign(followed_tag_rail(socket.assigns.current_user))
+    |> assign_tag_suggestions(socket.assigns[:entries] || [])
+  end
+
+  # What the card offers to follow: the tags on the page, minus the ones this
+  # reader already follows. Computed here rather than in the card so both it
+  # and the "Hide tags" card read one list (`FeedBand.tags_on_page/2`).
+  defp assign_tag_suggestions(socket, entries) do
+    followed = Enum.map(socket.assigns.followed_tags, &(&1.name || &1.slug))
+
+    assign(
+      socket,
       :tag_suggestions,
-      Vutuv.FeedBand.tags_on_page(socket.assigns[:entries] || [],
-        except: Enum.map(followed, &(&1.name || &1.slug)),
-        limit: 5
-      )
+      Vutuv.FeedBand.tags_on_page(entries, except: followed, limit: 5)
     )
-    # And what is spiking elsewhere (issue #2129) — read again here rather than
-    # filtered in place, because a press on that row both follows a tag and is
-    # what takes it out of the offer.
-    |> assign(trending_offers(followed))
   end
 
   # The ↻ both rail cards wear: one control, one glyph, one set of colours.
@@ -2340,13 +2331,8 @@ defmodule VutuvWeb.PostLive.Feed do
     {:noreply, assign(socket, :tag_panel_id, tag_id)}
   end
 
-  def handle_info({TagSources, {:sources_changed, _tag_id}}, socket) do
-    {:noreply,
-     assign(
-       socket,
-       :tag_source_counts,
-       Vutuv.Tags.followed_tag_source_counts(socket.assigns.current_user)
-     )}
+  def handle_info({TagSources, {:sources_changed, tag_id, count}}, socket) do
+    {:noreply, update(socket, :tag_source_counts, &Map.put(&1, tag_id, count))}
   end
 
   def handle_info(_other, socket), do: {:noreply, socket}

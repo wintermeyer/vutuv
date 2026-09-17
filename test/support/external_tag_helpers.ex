@@ -248,6 +248,17 @@ defmodule Vutuv.ExternalTagHelpers do
   def our_host, do: VutuvWeb.Endpoint.host()
 
   @doc """
+  Selectors for the tag-source panel (issue #2128): a tag's chip, and a
+  server's switch and row. A hostname is not a DOM id, so the panel spells its
+  dots as dashes, and so do these, in one place for both of its hosts.
+  """
+  def source_chip(tag), do: "#tag-sources-chip-#{tag.id}"
+  def source_switch(host), do: "#tag-source-switch-#{dom_key(host)}"
+  def source_row(host), do: "#tag-source-#{dom_key(host)}"
+
+  defp dom_key(host), do: String.replace(host, ".", "-")
+
+  @doc """
   A member following `tag` through `source` — the follow this whole feature
   hangs off. `Vutuv.Tags.follow_tag/2` writes the local source itself; naming a
   server is what makes the pair wanted.

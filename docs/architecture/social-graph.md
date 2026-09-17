@@ -397,8 +397,11 @@ reads `1` rather than `0`. Pressing it opens the panel that changes them, inside
 the card. The rail is `hidden md:block`, so the same chip also stands beside the
 follow button on a tag page (issue #2157), on every screen size, whenever the
 signed-in member follows that tag themselves and the installation reads other
-servers (`VutuvWeb.TagLive.Sources.source_count/3` decides both, for the
-controller's dead render and again for the socket). That is the phone's way in.
+servers. `Vutuv.Tags.followed_tag_source_count/2` answers "followed, and from
+how many servers" in one query: the controller reads it for the follow pill and
+the chip alike, and the socket asks again. `VutuvWeb.TagLive.Sources.chip_count/1`
+drops the chip where the installation reads no other server. That is the
+phone's way in.
 
 The panel offers the servers in **`TAG_SOURCE_SERVERS`**, ten by default, each
 with its own description and size beside it: accounts, accounts active this
@@ -466,8 +469,11 @@ the switches, the typed field and that refresh. The feed and the tag page's
 small embedded LiveView (`VutuvWeb.TagLive.Sources`) each render it once and
 draw the chips themselves; a chip reaches the panel with
 `phx-target="#tag-sources"`, and the panel tells its host by message which chip
-is open and when a count went stale. The tag page's socket resolves the member
-from the session token, and mounts the panel only for a member it vouched for.
+is open and what a changed chip now counts, read off the rows it has just
+drawn, so no host queries again. The tag page's dead render draws the chip from
+the tag's public fields in its session and reads nothing; its socket resolves
+the member from the session token, and mounts the panel only for a member it
+vouched for.
 The chip is the viewer's private control, so the tag page's agent formats do
 not carry it. An organization's Following list still shows followed tags with
 no way to say where they come from; it is a third host away from that.

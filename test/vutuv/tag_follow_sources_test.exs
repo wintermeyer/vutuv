@@ -279,4 +279,21 @@ defmodule Vutuv.TagFollowSourcesTest do
       assert Tags.tag_follow_sources(follow) == ["vutuv", "mastodon.social"]
     end
   end
+
+  describe "followed_tag_source_count/2" do
+    test "counts this installation too, and answers nil for a tag not followed" do
+      user = insert(:user)
+      {tag, other, unfollowed} = {insert(:tag), insert(:tag), insert(:tag)}
+      {:ok, follow} = Tags.follow_tag(user, tag)
+      {:ok, _} = Tags.follow_tag(user, other)
+      {:ok, _} = Tags.add_tag_follow_source(follow, "mastodon.social")
+
+      assert Tags.followed_tag_source_count(user, tag.id) == 2
+      assert Tags.followed_tag_source_count(user, other.id) == 1
+      assert Tags.followed_tag_source_count(user, unfollowed.id) == nil
+
+      # The one-tag answer is the card's answer for that tag.
+      assert Tags.followed_tag_source_counts(user) == %{tag.id => 2, other.id => 1}
+    end
+  end
 end

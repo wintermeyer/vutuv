@@ -16,6 +16,7 @@ defmodule VutuvWeb.TagLive.SourcesTest do
 
   alias Vutuv.Sessions
   alias Vutuv.Tags
+  alias VutuvWeb.TagLive.Sources
 
   @good "troet.example"
 
@@ -35,16 +36,10 @@ defmodule VutuvWeb.TagLive.SourcesTest do
   # The chip lives in a dead controller page, so the socket is driven on its own
   # with the session the template hands it, plus the cookie's token.
   defp sources(user, tag) do
-    session = shell_session(user, %{"tag_id" => tag.id, "source_count" => 1})
-
-    {:ok, view, _html} =
-      live_isolated(build_conn(), VutuvWeb.TagLive.Sources, session: session)
-
+    session = shell_session(user, Sources.session(tag, 1))
+    {:ok, view, _html} = live_isolated(build_conn(), Sources, session: session)
     view
   end
-
-  defp chip(tag), do: "#tag-sources-chip-#{tag.id}"
-  defp switch(host), do: "#tag-source-switch-#{String.replace(host, ".", "-")}"
 
   describe "the page" do
     test "puts the chip beside the follow button of a member who follows the tag", %{
@@ -60,7 +55,7 @@ defmodule VutuvWeb.TagLive.SourcesTest do
 
       # Issue #2166: on the page a phone reads, the chip is a full finger's
       # target that still stands on the follow pill's line.
-      chip = html |> LazyHTML.from_document() |> LazyHTML.query(chip(tag))
+      chip = html |> LazyHTML.from_document() |> LazyHTML.query(source_chip(tag))
       assert LazyHTML.attribute(chip, "title") == ["Choose which servers this tag comes from"]
       assert chip |> LazyHTML.attribute("class") |> hd() =~ "h-10"
       assert chip |> LazyHTML.query("svg") |> Enum.count() == 1
@@ -101,31 +96,31 @@ defmodule VutuvWeb.TagLive.SourcesTest do
       view = sources(user, tag)
 
       refute has_element?(view, "#tag-sources-panel")
-      view |> element(chip(tag)) |> render_click()
+      view |> element(source_chip(tag)) |> render_click()
       render_async(view)
 
       assert has_element?(view, "#tag-sources-panel")
-      assert has_element?(view, ~s(#{chip(tag)}[aria-expanded="true"]))
+      assert has_element?(view, ~s(#{source_chip(tag)}[aria-expanded="true"]))
 
-      view |> element(switch(@good)) |> render_click()
+      view |> element(source_switch(@good)) |> render_click()
       assert @good in Tags.tag_follow_sources(follow)
-      assert view |> element(chip(tag)) |> render() =~ ">2<"
+      assert view |> element(source_chip(tag)) |> render() =~ ">2<"
 
       view |> element("#tag-source-form") |> render_submit(%{"source" => "kowelenz.example"})
       assert "kowelenz.example" in Tags.tag_follow_sources(follow)
-      assert view |> element(chip(tag)) |> render() =~ ">3<"
-      assert has_element?(view, "#tag-source-own-rows #tag-source-kowelenz-example")
+      assert view |> element(source_chip(tag)) |> render() =~ ">3<"
+      assert has_element?(view, "#tag-source-own-rows #{source_row("kowelenz.example")}")
       assert view |> element("#tag-sources-added") |> render() =~ "kowelenz.example now feeds"
 
       view |> element("#tag-sources-close") |> render_click()
       refute has_element?(view, "#tag-sources-panel")
-      assert has_element?(view, ~s(#{chip(tag)}[aria-expanded="false"]))
+      assert has_element?(view, ~s(#{source_chip(tag)}[aria-expanded="false"]))
     end
 
     test "shows nothing to a member who does not follow the tag", %{user: user, tag: tag} do
       view = sources(user, tag)
 
-      refute has_element?(view, chip(tag))
+      refute has_element?(view, source_chip(tag))
     end
 
     test "is resolved from the session token, so a revoked device writes nothing", %{
@@ -139,17 +134,12 @@ defmodule VutuvWeb.TagLive.SourcesTest do
 
       # The curated map still names the tag and a count, as the controller
       # rendered it; only the token decides who is writing.
-      {:ok, view, _html} =
-        live_isolated(build_conn(), VutuvWeb.TagLive.Sources,
-          session: %{
-            "session_token" => token,
-            "user_id" => user.id,
-            "tag_id" => tag.id,
-            "source_count" => 1
-          }
-        )
+      session =
+        Map.merge(Sources.session(tag, 1), %{"session_token" => token, "user_id" => user.id})
 
-      refute has_element?(view, chip(tag))
+      {:ok, view, _html} = live_isolated(build_conn(), Sources, session: session)
+
+      refute has_element?(view, source_chip(tag))
       refute has_element?(view, "#tag-sources")
 
       render_click(view, "tag-sources", %{"id" => tag.id})
@@ -174,7 +164,7 @@ defmodule VutuvWeb.TagLive.SourcesTest do
 
       user |> Ecto.Changeset.change(locale: "de") |> Repo.update!()
       view = sources(user, tag)
-      view |> element(chip(tag)) |> render_click()
+      view |> element(source_chip(tag)) |> render_click()
 
       assert render_async(view) =~ "Woher soll ##{name} kommen?"
     end

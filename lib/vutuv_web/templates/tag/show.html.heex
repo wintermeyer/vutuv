@@ -48,10 +48,10 @@ and the wrapper's `:if` below need the answer. --%>
         id: "tag-sources-live",
         container: {:div, class: "contents"},
         session:
-          Map.merge(VutuvWeb.ControllerHelpers.live_render_session(@conn), %{
-            "tag_id" => @tag.id,
-            "source_count" => @source_count
-          })
+          Map.merge(
+            VutuvWeb.ControllerHelpers.live_render_session(@conn),
+            VutuvWeb.TagLive.Sources.session(@tag, @source_count)
+          )
       )}
   </header>
 

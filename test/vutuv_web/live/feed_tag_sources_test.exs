@@ -44,14 +44,11 @@ defmodule VutuvWeb.PostLive.FeedTagSourcesTest do
   end
 
   defp open_panel(live, tag) do
-    live |> element("#tag-sources-chip-#{tag.id}") |> render_click()
+    live |> element(source_chip(tag)) |> render_click()
     # The panel draws from what is stored and fills in behind itself, so the
     # figures land with the async refresh rather than with the first render.
     render_async(live)
   end
-
-  defp switch(host), do: "#tag-source-switch-#{String.replace(host, ".", "-")}"
-  defp row(host), do: "#tag-source-#{String.replace(host, ".", "-")}"
 
   defp field_id(live) do
     html = live |> element(~s(#tag-source-form input[name="source"])) |> render()
@@ -70,18 +67,18 @@ defmodule VutuvWeb.PostLive.FeedTagSourcesTest do
       {:ok, live, _html} = live(conn, ~p"/feed")
 
       # A fresh follow reads from this installation and nothing else.
-      assert live |> element("#tag-sources-chip-#{tag.id}") |> render() =~ ">1<"
+      assert live |> element(source_chip(tag)) |> render() =~ ">1<"
 
       {:ok, _row} = Tags.add_tag_follow_source(follow, @good)
       send(live.pid, {:tag_follows_changed, %{}})
 
-      assert live |> element("#tag-sources-chip-#{tag.id}") |> render() =~ ">2<"
+      assert live |> element(source_chip(tag)) |> render() =~ ">2<"
     end
 
     # Issue #2166: a bare 16px number did not read as something to press.
     test "reads as a control: a glyph, the count and a tooltip", %{conn: conn, tag: tag} do
       {:ok, live, _html} = live(conn, ~p"/feed")
-      chip = live |> element("#tag-sources-chip-#{tag.id}") |> render()
+      chip = live |> element(source_chip(tag)) |> render()
 
       assert chip =~ ~s(title="Choose which servers this tag comes from")
       assert chip =~ "<svg"
@@ -126,7 +123,7 @@ defmodule VutuvWeb.PostLive.FeedTagSourcesTest do
       open_panel(live, tag)
 
       local = Tags.local_tag_follow_source()
-      html = live |> element(switch(local)) |> render()
+      html = live |> element(source_switch(local)) |> render()
 
       assert html =~ ~s(aria-checked="true")
       assert html =~ "disabled"
@@ -148,7 +145,7 @@ defmodule VutuvWeb.PostLive.FeedTagSourcesTest do
       |> render_click("tag-source-remove", %{"source" => Tags.local_tag_follow_source()})
 
       assert Tags.tag_follow_sources(follow) == [Tags.local_tag_follow_source()]
-      assert live |> element("#tag-sources-chip-#{tag.id}") |> render() =~ ">1<"
+      assert live |> element(source_chip(tag)) |> render() =~ ">1<"
     end
 
     test "a server that only answers to members cannot be picked", %{
@@ -163,13 +160,13 @@ defmodule VutuvWeb.PostLive.FeedTagSourcesTest do
                "#{@locked} only shows posts on ##{name} to people who have an account there."
 
       # Dimmed, and pointed at the row's own reason.
-      switch = live |> element(switch(@locked)) |> render()
+      switch = live |> element(source_switch(@locked)) |> render()
       assert switch =~ "disabled"
       assert switch =~ "opacity-50"
 
       assert has_element?(
                live,
-               ~s(#{switch(@locked)}[aria-describedby="tag-source-note-chaos-example"])
+               ~s(#{source_switch(@locked)}[aria-describedby="tag-source-note-chaos-example"])
              )
 
       assert has_element?(live, "#tag-source-note-chaos-example")
@@ -179,13 +176,13 @@ defmodule VutuvWeb.PostLive.FeedTagSourcesTest do
       {:ok, live, _html} = live(conn, ~p"/feed")
       open_panel(live, tag)
 
-      live |> element(switch(@good)) |> render_click()
+      live |> element(source_switch(@good)) |> render_click()
       assert @good in Tags.tag_follow_sources(follow)
-      assert live |> element("#tag-sources-chip-#{tag.id}") |> render() =~ ">2<"
+      assert live |> element(source_chip(tag)) |> render() =~ ">2<"
 
-      live |> element(switch(@good)) |> render_click()
+      live |> element(source_switch(@good)) |> render_click()
       refute @good in Tags.tag_follow_sources(follow)
-      assert live |> element("#tag-sources-chip-#{tag.id}") |> render() =~ ">1<"
+      assert live |> element(source_chip(tag)) |> render() =~ ">1<"
     end
   end
 
@@ -236,11 +233,11 @@ defmodule VutuvWeb.PostLive.FeedTagSourcesTest do
       # typed server's row stands above the field, not in the offered list.
       assert has_element?(live, "#tag-source-own + #tag-sources-status #tag-sources-added")
       assert has_element?(live, "#tag-source-own-rows ~ #tag-source-form")
-      assert has_element?(live, "#tag-source-own-rows #{row("kowelenz.example")}")
-      refute has_element?(live, "#tag-source-rows #{row("kowelenz.example")}")
+      assert has_element?(live, "#tag-source-own-rows #{source_row("kowelenz.example")}")
+      refute has_element?(live, "#tag-source-rows #{source_row("kowelenz.example")}")
 
       # Switching it off again takes the line with it: it would be stale.
-      live |> element(switch("kowelenz.example")) |> render_click()
+      live |> element(source_switch("kowelenz.example")) |> render_click()
       refute has_element?(live, "#tag-sources-added")
       refute has_element?(live, "#tag-source-own-rows")
     end
@@ -337,7 +334,7 @@ defmodule VutuvWeb.PostLive.FeedTagSourcesTest do
                "You can choose up to #{SourceServers.limit()} other servers. To pick a different one, switch one off first."
 
       refute has_element?(live, "#tag-source-form")
-      assert live |> element(switch(@good)) |> render() =~ "disabled"
+      assert live |> element(source_switch(@good)) |> render() =~ "disabled"
     end
 
     # Issue #2166: the switches stayed lit and refused in silence, with the
@@ -354,19 +351,19 @@ defmodule VutuvWeb.PostLive.FeedTagSourcesTest do
 
       assert has_element?(live, "#tag-sources-cap + #tag-source-rows")
 
-      off = live |> element(switch(@good)) |> render()
+      off = live |> element(source_switch(@good)) |> render()
       assert off =~ "disabled"
       assert off =~ "opacity-50"
-      assert has_element?(live, ~s(#{switch(@good)}[aria-describedby~="tag-sources-cap"]))
+      assert has_element?(live, ~s(#{source_switch(@good)}[aria-describedby~="tag-sources-cap"]))
 
       # A switch that is on stays usable: turning it off frees the slot.
-      on = switch("server1.example")
+      on = source_switch("server1.example")
       refute has_element?(live, "#{on}[disabled]")
       refute has_element?(live, "#{on}[aria-describedby]")
 
       live |> element(on) |> render_click()
       refute has_element?(live, "#tag-sources-cap")
-      refute has_element?(live, "#{switch(@good)}[disabled]")
+      refute has_element?(live, "#{source_switch(@good)}[disabled]")
     end
   end
 
@@ -429,7 +426,7 @@ defmodule VutuvWeb.PostLive.FeedTagSourcesTest do
       refute html =~ "Tag-Zeitleiste"
       refute html =~ "denselben Tag"
 
-      assert live |> element("#tag-sources-chip-#{tag.id}") |> render() =~
+      assert live |> element(source_chip(tag)) |> render() =~
                ~s(title="Wählen Sie, von welchen Servern dieses Tag kommt")
     end
 

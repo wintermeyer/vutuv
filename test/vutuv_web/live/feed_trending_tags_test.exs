@@ -174,7 +174,7 @@ defmodule VutuvWeb.PostLive.FeedTrendingTagsTest do
       # And it is a followed tag like any other from here on: the chip above
       # counts its servers, and the row no longer offers it. What the row shows
       # instead is the empty-state tests' business (issues #2165, #2209).
-      assert render(live) =~ "tag-sources-chip-#{tag.id}"
+      assert has_element?(live, source_chip(tag))
       refute has_element?(live, "#trending-tags button")
     end
 
