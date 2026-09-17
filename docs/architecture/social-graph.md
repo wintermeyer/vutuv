@@ -467,7 +467,12 @@ now stands and one muted line says what and why. What decides whether the row
 exists at all is `Vutuv.Tags.Trending.asking?/0` — the flag plus a non-empty
 `TAG_SOURCE_SERVERS` — because "nothing stood out today" is only honest where
 somebody was asked, and an intranet installation reading no other server gets no
-row rather than a nightly report about servers it never touches.
+row rather than a nightly report about servers it never touches. The offer also
+leaves out what the reader already follows, so a reader following every busy tag
+reaches an empty row on a busy day; `Vutuv.Tags.Trending.offer/1` says whether
+that subtraction is what emptied it (`all_followed?`, read off the rows the one
+query already returned), and the row then says they already follow everything
+busy elsewhere instead of calling the day quiet (issue #2209).
 
 **The loudest tag is often a machine, and the spread does not catch it.**
 `#mow4` trended on seven of the nine servers that answered — a bot farm that

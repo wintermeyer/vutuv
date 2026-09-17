@@ -406,18 +406,38 @@ defmodule Vutuv.Tags.Trending do
   intervals — "right now" stops being true at some point, and a sweeper that
   died must not leave three-day-old news on the card.
   """
-  def offers(opts \\ []) do
+  def offers(opts \\ []), do: offer(opts).tags
+
+  @doc """
+  `offers/1` as `:tags`, plus `:all_followed?`: whether something did run ahead
+  and `:except` took every bit of it.
+
+  An empty offer says two different things to the reader: nothing is busy yet,
+  or everything that is busy is a tag they already follow. The row words
+  them differently (issue #2209). The unfiltered rows are in hand anyway, so the
+  answer costs no second query.
+  """
+  def offer(opts \\ []) do
     if enabled?() do
       settings = settings()
       cutoff = DateTime.add(DateTime.utc_now(:second), -max_age_seconds(settings))
       except = opts |> Keyword.get(:except, []) |> MapSet.new(&SlugHelpers.tagify/1)
 
-      from(t in TrendingTag, where: t.checked_at > ^cutoff, order_by: [desc: t.uses, asc: t.name])
-      |> Repo.all()
-      |> Enum.reject(&MapSet.member?(except, SlugHelpers.tagify(&1.name)))
-      |> Enum.take(Keyword.get(opts, :limit, settings[:offer]))
+      rows =
+        from(t in TrendingTag,
+          where: t.checked_at > ^cutoff,
+          order_by: [desc: t.uses, asc: t.name]
+        )
+        |> Repo.all()
+
+      tags =
+        rows
+        |> Enum.reject(&MapSet.member?(except, SlugHelpers.tagify(&1.name)))
+        |> Enum.take(Keyword.get(opts, :limit, settings[:offer]))
+
+      %{tags: tags, all_followed?: tags == [] and rows != []}
     else
-      []
+      %{tags: [], all_followed?: false}
     end
   end
 

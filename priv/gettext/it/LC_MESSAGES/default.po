@@ -26310,6 +26310,11 @@ msgstr "Questo logo contiene un file incorporato, di solito un font web, che vut
 msgid "Nothing yet today. A topic has to run well ahead of its own last week, which takes a few hours."
 msgstr "Oggi ancora niente. Un argomento deve superare nettamente la propria settimana precedente, e ci vogliono alcune ore."
 
+#: lib/vutuv_web/live/post_live/trending_tags.ex:99
+#, elixir-autogen, elixir-format
+msgid "You already follow everything that is very busy elsewhere right now."
+msgstr "Segue già tutto ciò che in questo momento è molto attivo altrove."
+
 #: lib/vutuv_web/components/pending_post_components.ex:64
 #, elixir-autogen, elixir-format
 msgid "Our AI check cannot be reached at the moment. Your post is kept here and goes out by itself as soon as the check runs again."

@@ -42,6 +42,12 @@ defmodule VutuvWeb.PostLive.TrendingTags do
   no source servers gets no row at all rather than a nightly report about
   servers it never reads.
 
+  Nor may that line call a busy day quiet. The offer leaves out what the reader
+  already follows, so somebody following every tag that did run ahead reaches
+  an empty row too, and for them the honest line is the good news that it is
+  all in their card already (issue #2209). `all_followed?` says which case it
+  is.
+
   ## One press, and it is a follow like any other
 
   The pill is the whole control. Pressing it mints the tag here if nothing
@@ -69,10 +75,11 @@ defmodule VutuvWeb.PostLive.TrendingTags do
 
   `asking?` is `Vutuv.Tags.Trending.asking?/0`, and it is the row's whole gate:
   an empty list means two opposite things, and only one of them is worth a line
-  of the card — see the moduledoc.
+  of the card — see the moduledoc. `all_followed?` picks which line.
   """
   attr(:tags, :list, required: true)
   attr(:asking?, :boolean, required: true)
+  attr(:all_followed?, :boolean, default: false)
 
   def trending_row(assigns) do
     ~H"""
@@ -80,18 +87,23 @@ defmodule VutuvWeb.PostLive.TrendingTags do
       <p class="pb-1 text-xs text-slate-500 dark:text-slate-400">
         {gettext("Very busy on other servers right now:")}
       </p>
-      <%!-- One condition, two arms: the empty line and the pills are exclusive,
-      and a pair of sibling `:if`s leaves that to a convention two lines apart. --%>
-      <%= if @tags == [] do %>
-        <p class="text-xs text-slate-500 dark:text-slate-400">
-          {gettext(
-            "Nothing yet today. A topic has to run well ahead of its own last week, which takes a few hours."
-          )}
-        </p>
-      <% else %>
-        <div class="flex flex-wrap gap-2">
-          <.trending_pill :for={tag <- @tags} tag={tag} />
-        </div>
+      <%!-- One condition, three arms: the pills and the two empty lines are
+      exclusive, and sibling `:if`s leave that to a convention lines apart. --%>
+      <%= cond do %>
+        <% @tags != [] -> %>
+          <div class="flex flex-wrap gap-2">
+            <.trending_pill :for={tag <- @tags} tag={tag} />
+          </div>
+        <% @all_followed? -> %>
+          <p class="text-xs text-slate-500 dark:text-slate-400">
+            {gettext("You already follow everything that is very busy elsewhere right now.")}
+          </p>
+        <% true -> %>
+          <p class="text-xs text-slate-500 dark:text-slate-400">
+            {gettext(
+              "Nothing yet today. A topic has to run well ahead of its own last week, which takes a few hours."
+            )}
+          </p>
       <% end %>
     </div>
     """

@@ -327,30 +327,33 @@ defmodule VutuvWeb.PostLive.Feed do
   defp rail_data(user) do
     followed = Vutuv.Tags.followed_tags(user)
 
-    Map.merge(
-      %{
-        followed_tags: followed,
-        # How many servers each of those tags reads from (issue #2128) — one
-        # count query, because that is all the chip on each chip shows.
-        tag_source_counts: Vutuv.Tags.followed_tag_source_counts(user),
-        # And what is suddenly busy on those servers (issue #2129), which the
-        # last pass already worked out — a select of at most eight stored rows,
-        # never anything outbound.
-        trending_tags: trending_offers(followed),
-        # Whether anybody is asked at all (`VutuvWeb.PostLive.TrendingTags`).
-        # Read once here and never again: it is configuration, so the
-        # socket-side redraws below deliberately leave it alone.
-        trending_asking?: Trending.asking?()
-      },
-      newcomer_rail(user)
-    )
+    %{
+      followed_tags: followed,
+      # How many servers each of those tags reads from (issue #2128) — one
+      # count query, because that is all the chip on each chip shows.
+      tag_source_counts: Vutuv.Tags.followed_tag_source_counts(user),
+      # Whether anybody is asked at all (`VutuvWeb.PostLive.TrendingTags`).
+      # Read once here and never again: it is configuration, so the
+      # socket-side redraws below deliberately leave it alone.
+      trending_asking?: Trending.asking?()
+    }
+    # And what is suddenly busy on those servers (issue #2129), which the last
+    # pass already worked out — a select of at most eight stored rows, never
+    # anything outbound.
+    |> Map.merge(trending_offers(followed))
+    |> Map.merge(newcomer_rail(user))
   end
 
   # A tag the reader already follows is not an offer, so it comes out of the
   # list rather than out of the pass — the offer is one row for the whole
-  # installation and every reader follows something different.
+  # installation and every reader follows something different. Whether that
+  # subtraction is what emptied the row rides along, so the row can say so
+  # rather than call a busy day quiet (issue #2209).
   defp trending_offers(followed) do
-    Trending.offers(except: Enum.map(followed, &Tag.display_name/1))
+    %{tags: tags, all_followed?: all_followed?} =
+      Trending.offer(except: Enum.map(followed, &Tag.display_name/1))
+
+    %{trending_tags: tags, trending_all_followed?: all_followed?}
   end
 
   # The stream is rebuilt here rather than riding the payload: a
@@ -626,7 +629,7 @@ defmodule VutuvWeb.PostLive.Feed do
     # And what is spiking elsewhere (issue #2129) — read again here rather than
     # filtered in place, because a press on that row both follows a tag and is
     # what takes it out of the offer.
-    |> assign(:trending_tags, trending_offers(followed))
+    |> assign(trending_offers(followed))
   end
 
   # --- The tag-source panel's socket state (issue #2128) --------------------
@@ -1019,6 +1022,7 @@ defmodule VutuvWeb.PostLive.Feed do
   attr(:panel_error, :any, default: nil)
   attr(:trending, :list, default: [])
   attr(:trending_asking?, :boolean, required: true)
+  attr(:trending_all_followed?, :boolean, default: false)
 
   defp followed_tags_body(assigns) do
     ~H"""
@@ -1108,7 +1112,11 @@ defmodule VutuvWeb.PostLive.Feed do
       <%!-- What is spiking on the servers this installation reads from (issue
       #2129), under the tags this reader's own feed is already carrying — the
       near neighbourhood first, then the wider one. --%>
-      <.trending_row tags={@trending} asking?={@trending_asking?} />
+      <.trending_row
+        tags={@trending}
+        asking?={@trending_asking?}
+        all_followed?={@trending_all_followed?}
+      />
     </div>
     """
   end
@@ -4112,6 +4120,7 @@ defmodule VutuvWeb.PostLive.Feed do
                       panel_error={@tag_panel_error}
                       trending={@trending_tags}
                       trending_asking?={@trending_asking?}
+                      trending_all_followed?={@trending_all_followed?}
                     />
                   </.rail_block>
                 <% "newcomers" -> %>

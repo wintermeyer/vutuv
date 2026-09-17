@@ -18,9 +18,11 @@ defmodule VutuvWeb.PostLive.FeedTrendingTagsTest do
   import Phoenix.LiveViewTest
   import Vutuv.ExternalTagHelpers
 
+  alias Vutuv.Repo
   alias Vutuv.Sessions
   alias Vutuv.Tags
   alias Vutuv.Tags.Trending
+  alias Vutuv.Tags.TrendingTag
 
   @big "troet.example"
   @small "nrw.example"
@@ -55,6 +57,12 @@ defmodule VutuvWeb.PostLive.FeedTrendingTagsTest do
   end
 
   defp pill(live), do: element(live, "#trending-tags button")
+
+  @quiet "Nothing yet today. A topic has to run well ahead of its own last week, which takes a few hours."
+  @all_followed "You already follow everything that is very busy elsewhere right now."
+
+  # Shortly after midnight: the last pass found nothing that ran ahead.
+  defp quiet_day, do: Repo.delete_all(TrendingTag)
 
   defp classes(live, selector) do
     [element] = live |> render() |> elements(selector)
@@ -119,18 +127,33 @@ defmodule VutuvWeb.PostLive.FeedTrendingTagsTest do
     # median, so shortly after midnight nothing can clear the bar. The row used
     # to take its label with it, which reads as breakage rather than as quiet.
     test "keeps its place and says why when there is nothing to offer", %{conn: conn} do
+      quiet_day()
+
+      {:ok, live, html} = live(conn, ~p"/feed")
+
+      assert html =~ "Very busy on other servers right now:"
+      assert html =~ @quiet
+      refute html =~ @all_followed
+      refute has_element?(live, "#trending-tags button")
+    end
+
+    # Issue #2209: following every tag on offer empties the row too, but
+    # something did run ahead, so "nothing yet today" would be false.
+    test "says the reader has it all when their own follows emptied it", %{conn: conn} do
       {:ok, live, _html} = live(conn, ~p"/feed")
 
-      # Following the one tag on offer empties it, exactly as midnight does.
       render_click(pill(live))
       html = render(live)
 
       assert html =~ "Very busy on other servers right now:"
-
-      assert html =~
-               "Nothing yet today. A topic has to run well ahead of its own last week, which takes a few hours."
-
+      assert html =~ @all_followed
+      refute html =~ @quiet
       refute has_element?(live, "#trending-tags button")
+
+      # And a fresh mount, where the subtraction happens in the payload rather
+      # than in the press's redraw, says the same.
+      {:ok, _live, html} = live(conn, ~p"/feed")
+      assert html =~ @all_followed
     end
   end
 
@@ -150,7 +173,7 @@ defmodule VutuvWeb.PostLive.FeedTrendingTagsTest do
 
       # And it is a followed tag like any other from here on: the chip above
       # counts its servers, and the row no longer offers it. What the row shows
-      # instead is the empty-state test's business (issue #2165).
+      # instead is the empty-state tests' business (issues #2165, #2209).
       assert render(live) =~ "tag-sources-chip-#{tag.id}"
       refute has_element?(live, "#trending-tags button")
     end
@@ -185,6 +208,21 @@ defmodule VutuvWeb.PostLive.FeedTrendingTagsTest do
     # fills with a neighbour's translation, and the least likely to be noticed —
     # so the empty row's German is asserted by name.
     test "the empty row says so in German too", %{conn: conn} do
+      quiet_day()
+
+      {:ok, _live, html} =
+        conn
+        |> recycle()
+        |> put_req_header("accept-language", "de-DE,de")
+        |> live(~p"/feed")
+
+      assert html =~ "Gerade sehr aktiv auf anderen Servern:"
+
+      assert html =~
+               "Heute noch nichts. Ein Thema muss deutlich über seiner eigenen Vorwoche liegen, und das dauert ein paar Stunden."
+    end
+
+    test "the row a reader has already followed says so in German", %{conn: conn} do
       {:ok, live, _html} =
         conn
         |> recycle()
@@ -194,10 +232,8 @@ defmodule VutuvWeb.PostLive.FeedTrendingTagsTest do
       render_click(pill(live))
       html = render(live)
 
-      assert html =~ "Gerade sehr aktiv auf anderen Servern:"
-
-      assert html =~
-               "Heute noch nichts. Ein Thema muss deutlich über seiner eigenen Vorwoche liegen, und das dauert ein paar Stunden."
+      assert html =~ "Sie folgen bereits allem, was gerade anderswo sehr aktiv ist."
+      refute html =~ "Heute noch nichts."
     end
   end
 

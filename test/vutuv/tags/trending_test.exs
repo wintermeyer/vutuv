@@ -21,6 +21,7 @@ defmodule Vutuv.Tags.TrendingTest do
   alias Vutuv.Tags.ExternalPosts
   alias Vutuv.Tags.TrendCheck
   alias Vutuv.Tags.Trending
+  alias Vutuv.Tags.TrendingTag
 
   @big "troet.example"
   @small "nrw.example"
@@ -90,6 +91,20 @@ defmodule Vutuv.Tags.TrendingTest do
       assert row.baseline == 2 * 3
       assert row.history == Enum.map(@warntag, &(&1 * 2))
       assert @big in row.hosts
+    end
+
+    # Issue #2209: an empty offer is either a quiet day or a reader who already
+    # follows everything that ran ahead, and the row says different things.
+    test "says whether the reader's own follows are what emptied the offer" do
+      spiking("warntag", @warntag, &crowd/1)
+      Trending.refresh()
+
+      assert %{tags: [_row], all_followed?: false} = Trending.offer()
+      assert %{tags: [], all_followed?: true} = Trending.offer(except: ["WarnTag"])
+      assert %{tags: [_row], all_followed?: false} = Trending.offer(except: ["xbox"])
+
+      Repo.delete_all(TrendingTag)
+      assert %{tags: [], all_followed?: false} = Trending.offer(except: ["warntag"])
     end
 
     test "a tag on one server alone is not offered" do
