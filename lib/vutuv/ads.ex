@@ -220,20 +220,37 @@ defmodule Vutuv.Ads do
   was closed (`dismissed_on`). Either may be nil.
   """
   def eligible?(seen_at, dismissed_on, now \\ DateTime.utc_now()) do
-    dismissed_on != today() and not seen_within_the_hour?(seen_at, now)
+    dismissed_on != today() and not within_the_hour?(seen_at, now)
   end
 
-  defp seen_within_the_hour?(nil, _now), do: false
-  defp seen_within_the_hour?(seen_at, now), do: DateTime.diff(now, seen_at) < @hour
+  @doc "Whether `then` lies less than an hour before `now` (false for nil)."
+  def within_the_hour?(nil, _now), do: false
+  def within_the_hour?(then, now), do: DateTime.diff(now, then) < @hour
 
   @doc """
-  Records that `user` was shown `banner`: stamps the hour on the member and,
-  for a booked ad, counts the sighting up on its row (the member's history of
-  seen ads). The house ad takes the hour and leaves no row.
+  Records that `user` has seen `banner`: takes the member's hour and, for a
+  booked ad, counts the sighting up on its row (the member's history of seen
+  ads). The house ad takes the hour and leaves no row.
+
+  The hour is taken only while it is free, in the same statement that checks
+  it, so two tabs whose cards come into view within one hour count once:
+  `:capped` for the later one, which then should not show its card.
   """
   def record_sighting(%User{} = user, banner, now \\ DateTime.utc_now(:second)) do
-    Repo.update_all(from(u in User, where: u.id == ^user.id), set: [ad_seen_at: now])
+    free_since = DateTime.add(now, -@hour)
 
+    {taken, _} =
+      Repo.update_all(
+        from(u in User,
+          where: u.id == ^user.id and (is_nil(u.ad_seen_at) or u.ad_seen_at <= ^free_since)
+        ),
+        set: [ad_seen_at: now]
+      )
+
+    if taken == 1, do: count_sighting(user, banner, now), else: :capped
+  end
+
+  defp count_sighting(user, banner, now) do
     case banner do
       {:ad, %Ad{id: ad_id}} ->
         Repo.insert_all(

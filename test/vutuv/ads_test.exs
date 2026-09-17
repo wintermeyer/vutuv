@@ -197,7 +197,7 @@ defmodule Vutuv.AdsTest do
       ad = insert(:ad, day: Ads.today())
       now = ~U[2026-09-17 08:02:00Z]
 
-      Ads.record_sighting(user, {:ad, ad}, now)
+      assert Ads.record_sighting(user, {:ad, ad}, now) == :ok
 
       assert Repo.reload!(user).ad_seen_at == now
       assert [sighting] = Repo.all(Sighting)
@@ -216,6 +216,17 @@ defmodule Vutuv.AdsTest do
       assert sighting.first_seen_at == ~U[2026-09-17 08:02:00Z]
       assert sighting.last_seen_at == ~U[2026-09-17 10:31:00Z]
       assert sighting.times_seen == 2
+    end
+
+    test "a second sighting within the hour is refused and changes nothing" do
+      user = insert_activated_user()
+      ad = insert(:ad, day: Ads.today())
+
+      assert Ads.record_sighting(user, {:ad, ad}, ~U[2026-09-17 08:02:00Z]) == :ok
+      assert Ads.record_sighting(user, {:ad, ad}, ~U[2026-09-17 08:40:00Z]) == :capped
+
+      assert Repo.reload!(user).ad_seen_at == ~U[2026-09-17 08:02:00Z]
+      assert [%Sighting{times_seen: 1}] = Repo.all(Sighting)
     end
 
     test "the house ad takes the member's hour but is no sighting" do

@@ -16,7 +16,6 @@ defmodule VutuvWeb.AdServingTest do
   alias Vutuv.Ads
   alias Vutuv.Ads.Sighting
   alias VutuvWeb.AdServing
-  alias VutuvWeb.Live.AdSlot
 
   @rail ~s(id="ad-slot-rail")
   @inline ~s(id="ad-slot-inline")
@@ -99,33 +98,54 @@ defmodule VutuvWeb.AdServingTest do
   end
 
   describe "at most one ad an hour, for a visitor" do
-    test "the ad shows once, then not again within the hour", %{conn: conn} do
+    test "the hour is the one the browser recorded when it showed a card", %{conn: conn} do
+      path = ~p"/#{profile_owner()}"
+      now = System.system_time(:second)
+
+      refute conn
+             |> put_req_cookie("vutuv_ad_seen", to_string(now - 60))
+             |> get(path)
+             |> html_response(200) =~ @rail
+
+      assert build_conn()
+             |> put_req_cookie("vutuv_ad_seen", to_string(now - 3601))
+             |> get(path)
+             |> html_response(200) =~ @rail
+    end
+
+    test "sending a page takes no hour and writes no session", %{conn: conn} do
       path = ~p"/#{profile_owner()}"
 
       conn = get(conn, path)
       assert html_response(conn, 200) =~ @rail
+      assert get_session(conn, :ad_seen_at) == nil
 
-      conn = get(conn, path)
-      refute html_response(conn, 200) =~ @rail
+      assert conn |> get(path) |> html_response(200) =~ @rail
     end
 
-    test "after an hour it shows again", %{conn: conn} do
-      html =
-        conn
-        |> Plug.Test.init_test_session(%{ad_seen_at: System.system_time(:second) - 3601})
-        |> get(~p"/#{profile_owner()}")
-        |> html_response(200)
-
-      assert html =~ @rail
+    test "a malformed hour cookie counts as none", %{conn: conn} do
+      assert conn
+             |> put_req_cookie("vutuv_ad_seen", "soon")
+             |> get(~p"/#{profile_owner()}")
+             |> html_response(200) =~ @rail
     end
   end
 
   describe "at most one ad an hour, for a member" do
+    test "the hour starts when the card was seen, not when the page was sent", %{conn: conn} do
+      {conn, user} = create_and_login_user(conn)
+
+      assert conn |> get(~p"/feed") |> html_response(200) =~ @rail
+      assert Repo.get!(User, user.id).ad_seen_at == nil
+      assert conn |> get(~p"/feed") |> html_response(200) =~ @rail
+    end
+
     test "the hour is kept on the server, so it spans devices", %{conn: conn} do
       {phone, user} = create_and_login_user(conn)
       desktop = second_device(user)
 
-      assert phone |> get(~p"/feed") |> html_response(200) =~ @rail
+      {:ok, view, _html} = live(phone, ~p"/feed")
+      render_hook(view, "ad-seen", %{})
       assert Repo.get!(User, user.id).ad_seen_at
 
       refute desktop |> get(~p"/feed") |> html_response(200) =~ @rail
@@ -143,10 +163,11 @@ defmodule VutuvWeb.AdServingTest do
       ad = insert(:ad, day: Ads.today())
       {conn, user} = create_and_login_user(conn)
 
-      conn = get(conn, ~p"/feed")
-      assert html_response(conn, 200) =~ @rail
+      {:ok, view, _html} = live(conn, ~p"/feed")
+      render_hook(view, "ad-seen", %{})
       put_state(user, ad_seen_at: an_hour_ago())
-      assert conn |> get(~p"/feed") |> html_response(200) =~ @rail
+      {:ok, view, _html} = live(conn, ~p"/feed")
+      render_hook(view, "ad-seen", %{})
 
       assert [sighting] = Repo.all(Sighting)
       assert {sighting.user_id, sighting.ad_id, sighting.times_seen} == {user.id, ad.id, 2}
@@ -155,10 +176,37 @@ defmodule VutuvWeb.AdServingTest do
     test "the house ad takes the hour and leaves no sighting", %{conn: conn} do
       {conn, user} = create_and_login_user(conn)
 
-      assert conn |> get(~p"/feed") |> html_response(200) =~ @rail
+      {:ok, view, _html} = live(conn, ~p"/feed")
+      render_hook(view, "ad-seen", %{})
 
       assert Repo.get!(User, user.id).ad_seen_at
       assert Repo.all(Sighting) == []
+    end
+
+    test "a second tab whose card comes into view within the hour loses it", %{conn: conn} do
+      ad = insert(:ad, day: Ads.today())
+      {conn, user} = create_and_login_user(conn)
+
+      {:ok, first, _html} = live(conn, ~p"/feed")
+      {:ok, second, _html} = live(conn, ~p"/feed")
+      render_hook(first, "ad-seen", %{})
+      render_hook(second, "ad-seen", %{})
+
+      assert has_element?(first, "#ad-slot-rail")
+      refute has_element?(second, "#ad-slot-rail")
+      assert [%Sighting{ad_id: ad_id, times_seen: 1}] = Repo.all(Sighting)
+      assert ad_id == ad.id
+      assert Repo.get!(User, user.id).ad_seen_at
+    end
+
+    test "a card the page no longer shows records nothing", %{conn: conn} do
+      {conn, user} = create_and_login_user(conn)
+
+      {:ok, view, _html} = live(conn, ~p"/feed")
+      render_hook(view, "ad-expired", %{})
+      render_hook(view, "ad-seen", %{})
+
+      assert Repo.get!(User, user.id).ad_seen_at == nil
     end
   end
 
@@ -214,62 +262,68 @@ defmodule VutuvWeb.AdServingTest do
              |> html_response(200) =~ @rail
     end
 
-    test "the live card carries the hook and the day its ✕ closes", %{conn: conn} do
+    test "the live card carries its hook, the day its ✕ closes and the countdown ring", %{
+      conn: conn
+    } do
       html = conn |> get(~p"/#{profile_owner()}") |> html_response(200)
 
       assert html =~ ~s(phx-hook="AdSlot")
       assert html =~ ~s(data-ad-day="#{Ads.today()}")
+      assert html =~ ~r/data-ad-key="\d+:house"/
+      assert html =~ "data-ad-ring-arc"
+      assert html =~ ~s(id="ad-slot-rail-ring" phx-update="ignore")
     end
   end
 
   describe "the card's lifetime" do
-    test "the card goes when its time is up, without closing the day", %{conn: conn} do
+    test "the card goes when the browser says its time is up, without closing the day", %{
+      conn: conn
+    } do
       {conn, user} = create_and_login_user(conn)
       {:ok, view, _html} = live(conn, ~p"/feed")
 
-      send(view.pid, {AdSlot, :expired})
+      render_hook(view, "ad-expired", %{})
 
       refute has_element?(view, "#ad-slot-rail")
+      refute has_element?(view, "#ad-slot-inline")
       assert Repo.get!(User, user.id).ads_dismissed_on == nil
     end
 
-    test "a connecting page gets the banner with the time it has left" do
+    test "a reconnecting page gets back the ad its request served" do
       now = System.system_time(:second)
-      session = %{"ad_slot" => "house", "ad_served_at" => now - 20}
-
-      assert AdServing.banner_from_session(session, now) == {:house, 100_000}
-    end
-
-    test "a page reconnecting after the card's time shows none" do
-      now = System.system_time(:second)
-
-      assert AdServing.banner_from_session(
-               %{"ad_slot" => "house", "ad_served_at" => now - 120},
-               now
-             ) == nil
-    end
-
-    test "a page reconnecting after its ad stopped serving shows none" do
-      now = System.system_time(:second)
-      yesterdays = insert(:ad, day: Date.add(Ads.today(), -1))
       todays = insert(:ad, day: Ads.today())
 
-      assert AdServing.banner_from_session(
-               %{"ad_slot" => yesterdays.id, "ad_served_at" => now},
-               now
-             ) == nil
-
-      assert {{:ad, ad}, _left} =
-               AdServing.banner_from_session(
-                 %{"ad_slot" => todays.id, "ad_served_at" => now},
+      assert %{banner: :house, served_at: served_at} =
+               AdServing.slot_from_session(
+                 %{"ad_slot" => "house", "ad_served_at" => now - 20},
                  now
                )
+
+      assert served_at == now - 20
+
+      assert %{banner: {:ad, ad}} =
+               AdServing.slot_from_session(%{"ad_slot" => todays.id, "ad_served_at" => now}, now)
 
       assert ad.id == todays.id
     end
 
+    test "a page reconnecting after the hour, or after its ad stopped serving, shows none" do
+      now = System.system_time(:second)
+      yesterdays = insert(:ad, day: Date.add(Ads.today(), -1))
+
+      assert AdServing.slot_from_session(
+               %{"ad_slot" => "house", "ad_served_at" => now - 3600},
+               now
+             ) == nil
+
+      assert AdServing.slot_from_session(
+               %{"ad_slot" => yesterdays.id, "ad_served_at" => now},
+               now
+             ) == nil
+    end
+
     test "a page that was served no ad shows none" do
-      assert AdServing.banner_from_session(%{}) == nil
+      assert AdServing.slot_from_session(%{}) == nil
     end
   end
 end

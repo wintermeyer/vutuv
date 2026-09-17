@@ -17,33 +17,44 @@ ad-free.
 The request decides (`VutuvWeb.AdServing.serve/1`, called by `UserController`
 and `NewsfeedController`) and hands its choice to the socket in the curated
 session map (`AdServing.session/1`, merged in by the two controllers).
-`VutuvWeb.Live.AdSlot` (an `on_mount`) shows exactly that and does not ask
-again on connect: by then the request has already taken the visitor's hour.
-It re-reads only whether the ad may still serve (`Vutuv.Ads.todays_ad/1`), so
-a tab reconnecting after midnight does not bring yesterday's ad back.
+`VutuvWeb.Live.AdSlot` (an `on_mount`) shows exactly that and does not ask the
+frequency rules again on connect. It re-reads only whether the ad may still
+serve (`Vutuv.Ads.todays_ad/1`), so a tab reconnecting after midnight does not
+bring yesterday's ad back, and a reconnect more than an hour after the request
+shows no card at all.
 
 On unbooked days a short house ad sells the slot.
 
 ## How often
 
-- **At most one ad an hour.** For a member this is `users.ad_seen_at`, kept on
-  the server and so shared by every device (`Vutuv.Ads.eligible?/3`); a
-  visitor without an account keeps it in the session. The hour is taken in a
-  `before_send` hook, only when the page goes out with status 200.
+- **At most one ad an hour** (`Vutuv.Ads.eligible?/3`), counted from a card
+  that was **seen**: the `AdSlot` hook reports the first moment a card is at
+  least half in view. Sending a page takes nothing. For a member the hour is
+  `users.ad_seen_at`, on the server and shared by every device, and
+  `Vutuv.Ads.record_sighting/3` takes it only while it is free, so a second
+  tab whose card comes into view within the hour loses that card. A visitor
+  without an account has the unsigned cookie `vutuv_ad_seen` (the second the
+  browser showed a card); nothing about ads goes into their session.
 - **The ✕ ends ads for the day** (Berlin midnight). For a member it is
   `users.ads_dismissed_on`; the ✕ also writes the day into the unsigned
   cookie `vutuv_ad_dismissed` on the click, which is all a visitor has.
-- The card **goes after two minutes**, counted from the request that served
-  it: the session carries that second (`"ad_served_at"`), the LiveView
-  schedules the end, and `phx-remove` fades the card out. A reconnect after
-  that shows no card; one after a ✕ is sent away by the `AdSlot` hook in
-  `assets/js/ad_slot.js`, which reads the day cookie the socket cannot.
+- Without JavaScript nobody reports a sighting, so such a browser sees the
+  card on every such page, and it never goes by itself.
+- The card **goes after two minutes of being seen**. A ring around the ✕
+  empties (`assets/js/ad_slot.js`), counting only time in which the card is at
+  least half in view in a tab that is in front, and standing still while the
+  pointer or the keyboard focus is on the card; its timer runs only while the
+  card is in view. Then the hook sends `"ad-expired"` and `phx-remove` fades
+  the card out. The countdown is kept per served card (`data-ad-key`) for the
+  page load, shared by the two copies; a card the server draws again after it
+  ran out, or after a ✕ today, goes at once, and an event lost while the socket
+  was down is sent again from `reconnected()`.
 - No ad while the one-time welcome questions cover the page.
 
 ## What is stored
 
 `ad_sightings` keeps one row per member and **booked** ad (first and last
-sighting, count), written by `Vutuv.Ads.record_sighting/3`: the base for a
+sighting, count), written by `Vutuv.Ads.record_sighting/3` on `"ad-seen"`: the base for a
 member's history of seen ads and for per-ad reach. The house ad stamps the
 hour and leaves no row. Rows go with the member's account (`on_delete:
 :delete_all`); nothing is stored per visitor on the server.

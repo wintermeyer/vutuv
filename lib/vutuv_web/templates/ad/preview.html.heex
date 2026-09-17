@@ -14,8 +14,8 @@
     </p>
 
     <%!-- The real ad card on the page-canvas grey, so the preview shows the ad
-    in its natural surroundings. Not `dismissible`: the live card's ✕ and
-    two-minute hook have no business on the page that sells it. --%>
+    in its natural surroundings. No `key`: the live card's ✕ and countdown
+    have no business on the page that sells it. --%>
     <div class="mt-4 rounded-xl bg-slate-100 px-2 py-4 dark:bg-slate-950">
       <VutuvWeb.AdComponents.ad_card id="ad-preview" banner={{:ad, @ad}} />
     </div>
