@@ -28,8 +28,8 @@ defmodule Vutuv.Tags.ExternalFeedSourceTest do
 
   setup do
     put_config(:fetch_external_tag_posts, true)
-    # Otherwise every relayed row below is hidden by #2174's rule, and the
-    # refusals these tests pin would pass without their own layer.
+    # The relayed rows below are what a listed server files (#2174), so the
+    # refusals these tests pin are the only ones that could keep them out.
     list_fixture_relays()
     :ok
   end

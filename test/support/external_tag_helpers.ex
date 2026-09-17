@@ -230,8 +230,8 @@ defmodule Vutuv.ExternalTagHelpers do
   `TAG_SOURCE_SERVERS`, for the rest of the test.
 
   A server a member typed in speaks for its own members only (issue #2174), so
-  a relayed card — the ordinary case `tag_source/0` stands for — is drawn only
-  when its server is on the list.
+  a relayed card — the ordinary case `tag_source/0` stands for — survives
+  `Vutuv.Tags.ExternalPosts.drop_unbacked/0` only when its server is on the list.
   """
   def list_fixture_relays do
     put_config(:tag_source_servers, [tag_source(), "social.example", "hachyderm.example"])

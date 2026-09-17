@@ -299,10 +299,10 @@ defmodule Vutuv.Tags.ExternalPost do
   other than the listed server may hold — the reason `home_copy?/1` does not
   fold either.
 
-  Asked at the one way into the table (`Vutuv.Tags.ExternalTagClient`) and again
-  wherever rows are folded (`Vutuv.Tags.ExternalPosts.fold_copies/1`), because
-  rows written before it existed are at rest, and a server the operator later
-  takes off the list stops vouching for what it filed while it was on it.
+  Asked at the one way into the table (`Vutuv.Tags.ExternalTagClient`) and by
+  the sweep that keeps it true at rest (`Vutuv.Tags.ExternalPosts.drop_unbacked/0`),
+  because rows written before it existed are stored, and a server the operator
+  later takes off the list stops vouching for what it filed while it was on it.
 
   **Neither address may read differently in a browser**
   (`Vutuv.ChangesetHelpers.web_url?/1`), a listed relay's included: a relay may
@@ -310,8 +310,8 @@ defmodule Vutuv.Tags.ExternalPost do
   that opens another host than the one we read says nothing anybody checked.
 
   `row` needs `:source`, `:url`, `:author_host` and `:author_url`; a projection
-  without the link fails closed, so a select that forgets the column hides
-  every card rather than drawing unchecked links.
+  without the link fails closed, which for the sweep means every row goes — its
+  test keeps a row that must survive for exactly that reason.
   """
   def speaks_for_author?(
         %{source: source, url: url, author_url: link, author_host: host} = row,

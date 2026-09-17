@@ -370,14 +370,17 @@ control character, a login before the host and anything `URI.new/1` refuses):
 `https://victim.example\@evil.example/../@alice`, a browser opens
 `victim.example`. A relay's row needs such addresses too, since the card hands
 both to a browser.
-`Vutuv.Tags.ExternalTagClient` refuses such a status on the way in (`authors/2`
-too), and `fold_copies/1` drops such a row on the way out (`fold_select/1`
-carries `author_url` for it), which covers rows already at rest and those of a
-server the operator later takes off the list. Every surface draws through the
-fold, so no card, tab total, server count or unread mark sees one, and a report
-on one by id answers `:not_found`. The read side is Elixir, not SQL, because half the rule is
-`home_copy?/1`; the rows stay, undrawn, until the per-tag cap or `prune/0` takes
-them. The panel says so under the address field.
+`Vutuv.Tags.ExternalTagClient` refuses such a status on the way in. Trust is
+then kept at rest rather than asked on every read:
+`ExternalPosts.drop_unbacked/0` deletes such rows on every fetcher tick beside
+`drop_written_here/0`, and once at boot, because the relay list only changes
+with a restart. That covers rows filed before the rule, rows the previous
+release files during a deploy, and rows of a server the operator has since
+taken off the list. SQL narrows to every unlisted server's rows plus any row
+whose address is not plainly one, and the predicate decides. A reported row
+stays as the tombstone it is, and a report on an unbacked row by id answers
+`:not_found`, so the ledger never names a server a stranger picked. The panel
+says so under the address field.
 
 The **Mastodon API drops these rows** rather than rendering them
 (`Vutuv.MastodonApi.Presenter.statuses/2`): every field of a `Status` that

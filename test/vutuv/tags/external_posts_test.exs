@@ -1037,8 +1037,56 @@ defmodule Vutuv.Tags.ExternalPostsTest do
       refute ExternalPost.speaks_for_author?(%{forged | source: @other_source}, relays)
     end
 
-    # Production holds rows filed before the pull refused such a link, so the
-    # read side asks the whole predicate too, through the fold's own select.
+    # Production holds rows filed before the pull refused them. The sweep takes
+    # exactly those, and every surface then draws what is left.
+    test "the sweep takes exactly the rows nobody vouches for" do
+      tag = followed_tag("hand.example")
+      hand = [source: "hand.example", author_host: "hand.example"]
+
+      own = external_post(tag, [url: "https://hand.example/@bob/1"] ++ hand)
+      relayed = copy(tag, original("relayed"), @other_source)
+      # Not plainly an address, so the predicate rather than the prefilter answers.
+      queried = copy(tag, original("queried?lang=de"), @other_source)
+
+      # Unbacked too, but a tombstone: it draws nothing and keeps its report.
+      reported =
+        external_post(tag,
+          url: original("reported"),
+          source: "hand.example",
+          author_host: @source,
+          reported_at: DateTime.utc_now(:second)
+        )
+
+      unbacked = [
+        # Somebody else's member, told by a server a member typed in.
+        copy(tag, original("forged"), "hand.example"),
+        # Its own member, linked to somebody else's profile.
+        external_post(tag, [author_url: "https://victim.example/@ada"] ++ hand),
+        # An address a browser opens on another host (the review's case).
+        external_post(
+          tag,
+          [
+            url: "https://victim.example\\@hand.example/../@alice/1123",
+            author_url: "https://victim.example\\@hand.example/../@alice"
+          ] ++ hand
+        ),
+        # A listed relay, with a profile link a browser reads its own way.
+        external_post(tag,
+          url: original("login"),
+          source: @other_source,
+          author_host: @source,
+          author_url: "https://user@#{@source}/@ada"
+        )
+      ]
+
+      assert ExternalPosts.drop_unbacked() == length(unbacked)
+
+      assert ExternalPost |> select([p], p.id) |> Repo.all() |> Enum.sort() ==
+               Enum.sort([own.id, relayed.id, queried.id, reported.id])
+
+      assert ExternalPosts.drop_unbacked() == 0
+    end
+
     test "a stored row linking its author elsewhere is drawn only from a listed server" do
       tag = followed_tag("hand.example")
 
@@ -1050,15 +1098,19 @@ defmodule Vutuv.Tags.ExternalPostsTest do
           author_url: "https://victim.example/@ada"
         )
 
-      assert ExternalPosts.tag_finds(tag.id) == []
-      assert %{entries: [], total: 0} = Timeline.page(tag, source: :fediverse)
-
       # The setup's `put_config/2` puts the shipped list back afterwards.
       Application.put_env(:vutuv, :tag_source_servers, ["hand.example"])
+      assert ExternalPosts.drop_unbacked() == 0
 
       assert [%{post: %{id: id}}] = ExternalPosts.tag_finds(tag.id)
       assert id == legacy.id
       assert %{total: 1} = Timeline.page(tag, source: :fediverse)
+
+      Application.put_env(:vutuv, :tag_source_servers, [])
+      assert ExternalPosts.drop_unbacked() == 1
+
+      assert ExternalPosts.tag_finds(tag.id) == []
+      assert %{entries: [], total: 0} = Timeline.page(tag, source: :fediverse)
     end
 
     test "a planted copy does not fold in, does not count, and is never the one drawn" do
@@ -1075,6 +1127,7 @@ defmodule Vutuv.Tags.ExternalPostsTest do
         )
 
       relayed = copy(tag, url, @other_source)
+      assert ExternalPosts.drop_unbacked() == 1
 
       assert [%{post: drawn, copies: copies}] = ExternalPosts.tag_finds(tag.id)
       assert drawn.id == relayed.id
@@ -1109,6 +1162,7 @@ defmodule Vutuv.Tags.ExternalPostsTest do
 
       relayed = copy(tag, original("honest"), @other_source)
       shown = MapSet.new([own.id, relayed.id])
+      assert ExternalPosts.drop_unbacked() == 1
 
       assert %{entries: entries, total: 2} = Timeline.page(tag, source: :fediverse)
       assert MapSet.new(entries, & &1.external_post.id) == shown
@@ -1126,6 +1180,7 @@ defmodule Vutuv.Tags.ExternalPostsTest do
 
       # The setup's `put_config/2` puts the shipped list back afterwards.
       Application.put_env(:vutuv, :tag_source_servers, [])
+      assert ExternalPosts.drop_unbacked() == 1
       assert ExternalPosts.tag_finds(tag.id) == []
     end
   end

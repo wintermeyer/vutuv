@@ -44,8 +44,18 @@ defmodule Vutuv.Tags.ExternalPostFetcher do
 
   @impl true
   def init(:ok) do
+    # The operator's relay list only changes with a restart, so what it stopped
+    # vouching for goes now rather than a tick from now (`drop_unbacked/0`).
+    # A message rather than a call here, so a slow query cannot hold up boot.
+    send(self(), :drop_unbacked)
     schedule()
     {:ok, %{runs: 0}}
+  end
+
+  @impl true
+  def handle_info(:drop_unbacked, state) do
+    drop_unbacked()
+    {:noreply, state}
   end
 
   @impl true
@@ -54,6 +64,7 @@ defmodule Vutuv.Tags.ExternalPostFetcher do
       log(ExternalPosts.fetch_due())
       log_trending(Trending.refresh())
       log_own(ExternalPosts.drop_written_here())
+      drop_unbacked()
       if rem(runs, @prune_every) == 0, do: log_prune(ExternalPosts.prune())
     rescue
       error -> Logger.error("External tag fetch failed: #{inspect(error)}")
@@ -100,6 +111,19 @@ defmodule Vutuv.Tags.ExternalPostFetcher do
 
   defp log_own(dropped),
     do: Logger.info("External tag posts: dropped #{dropped} post(s) written here")
+
+  # Rows whose server may not speak for their author (issues #2174 and #2199):
+  # on every tick, for the rows the previous release files during a blue/green
+  # window, and at boot. Guarded on its own, since the boot run has no rescue
+  # around it. Quiet when it deletes nothing, which is nearly always.
+  defp drop_unbacked do
+    case ExternalPosts.drop_unbacked() do
+      0 -> :ok
+      dropped -> Logger.info("External tag posts: dropped #{dropped} post(s) nobody vouches for")
+    end
+  rescue
+    error -> Logger.error("External tag sweep failed: #{inspect(error)}")
+  end
 
   defp log_prune(%{fetches: 0, posts: 0}), do: :ok
 
