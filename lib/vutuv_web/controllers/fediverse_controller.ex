@@ -467,9 +467,8 @@ defmodule VutuvWeb.FediverseController do
   # What a stored reply keeps about its author: the actor URI (the takedown and
   # dedupe key), the two cosmetic display strings, and the inbox an answer goes
   # to (issue #1070 — we hold the verified actor document right here, so keeping
-  # its inbox spares the reply path a network call). No avatar — the card
-  # renders initials and links out, so vutuv never hosts a third party's
-  # picture.
+  # its inbox spares the reply path a network call). No avatar: the card
+  # borrows the one on the author's account row (issue #1163).
   # A reaction keeps the account address alone: the URI and the same address in
   # the `@handle@host` notation. Deliberately not `remote_author/1` — a
   # favourite is not a text somebody wrote, so their display name has no job

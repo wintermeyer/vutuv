@@ -1317,9 +1317,10 @@ defmodule VutuvWeb.PostComponents do
   — and deliberately different material, because a reader has to be able to tell
   the two worlds apart at a glance and without colour:
 
-    * an initials tile in **slate**, not the brand tint members get, carrying the
-      globe badge that issue #1068 established for "another network". No picture
-      is ever fetched or hosted: vutuv does not host a third party's image.
+    * the author's picture once the AI gate has cleared it (`Note.avatar_url/1`),
+      else an initials tile in **slate**, not the brand tint members get, both
+      carrying the globe badge that issue #1068 established for "another
+      network".
     * the author's name as plain text (there is no vutuv profile to link to)
       beside their `@handle@host`, which links out to the account.
     * **two acts, not four.** Answering it and liking it both mean something
@@ -1430,7 +1431,7 @@ defmodule VutuvWeb.PostComponents do
       <%!-- The head loses the avatar column below `md` — see the phone-timeline
       block at the end of `app.css`. --%>
       <div data-card-head class="flex items-start gap-3">
-        <.remote_avatar initials={@initials} />
+        <.remote_avatar initials={@initials} src={Note.avatar_url(@note)} />
 
         <div data-card-column class="min-w-0 flex-1">
           <.remote_header

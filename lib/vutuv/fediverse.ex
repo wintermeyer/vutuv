@@ -6653,7 +6653,8 @@ defmodule Vutuv.Fediverse do
 
   # Notes carrying `account_id`: whether we hold a row for the actor who wrote
   # one, which is what decides whether the card's handle links to their page
-  # here or out to their own server (issue #1162). A LEFT join by URI rather
+  # here or out to their own server (issue #1162), and the picture that row
+  # holds for the card's avatar (issue #1163). A LEFT join by URI rather
   # than a foreign key, because a note may well be older than the account row
   # and the row goes again by itself once nothing refers to it.
   #
@@ -6665,7 +6666,12 @@ defmodule Vutuv.Fediverse do
     from(n in Note,
       left_join: a in RemoteAccount,
       on: a.actor_uri == n.actor_uri,
-      select: %{n | account_id: a.id}
+      select: %{
+        n
+        | account_id: a.id,
+          account_avatar: a.avatar,
+          account_avatar_moderation: a.avatar_moderation
+      }
     )
   end
 
@@ -9327,11 +9333,15 @@ defmodule Vutuv.Fediverse do
       on: p.id == b.remote_post_id,
       left_join: a in RemoteAccount,
       on: a.id == p.remote_account_id,
-      left_join: n in Note,
+      # Through `notes_with_account/0`, so a saved reply wears the picture and
+      # the inward handle link it wears in the thread. Selected rather than
+      # preloaded: Ecto cannot preload from a subquery.
+      left_join: n in subquery(notes_with_account()),
       on: n.id == b.note_id,
       where: b.user_id == ^user_id,
       order_by: [desc: b.inserted_at, desc: b.id],
-      preload: [remote_post: {p, remote_account: a}, note: n]
+      preload: [remote_post: {p, remote_account: a}],
+      select: %{b | note: n}
     )
     |> saved_matching(q)
     |> limit(^(limit + 1))
@@ -9826,7 +9836,9 @@ defmodule Vutuv.Fediverse do
     if enabled?() do
       from(r in NoteRepost,
         as: :repost,
-        join: n in Note,
+        # The same loader the thread reads, and selected for the same reason
+        # `saved_from_networks/2` gives.
+        join: n in subquery(notes_with_account()),
         as: :language_source,
         on: n.id == r.note_id,
         join: resharer in User,
@@ -9841,7 +9853,7 @@ defmodule Vutuv.Fediverse do
         # account id, so the mute is resolved to that spelling first.
         where: n.actor_uri not in subquery(muted_remote_actor_uris(viewer_id)),
         order_by: [desc: r.inserted_at, desc: r.id],
-        preload: [note: n, user: resharer]
+        select: %{r | note: n, user: resharer}
       )
       |> scope_resharer(viewer_id, Keyword.get(opts, :only))
       |> reject_muted_note_hosts(viewer)

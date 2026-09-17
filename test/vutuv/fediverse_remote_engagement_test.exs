@@ -78,6 +78,18 @@ defmodule Vutuv.FediverseRemoteEngagementTest do
     |> Repo.preload(:remote_account)
   end
 
+  # The author's account row, with a picture the gate has cleared.
+  defp pictured_account do
+    Repo.insert!(%RemoteAccount{
+      actor_uri: @actor,
+      host: "social.example",
+      handle: "them",
+      inbox_uri: @inbox,
+      avatar: "pic.avif",
+      avatar_moderation: "approved"
+    })
+  end
+
   defp queued do
     from(d in Delivery, order_by: [asc: d.id])
     |> Repo.all()
@@ -181,6 +193,19 @@ defmodule Vutuv.FediverseRemoteEngagementTest do
       assert Enum.any?(entries, &Vutuv.Posts.remote_reply_entry?/1)
     end
 
+    test "it wears its author's picture, as the thread does" do
+      resharer = federating_member()
+      reader = insert(:activated_user)
+      {:ok, _} = Vutuv.Social.follow(reader, resharer.id)
+      account = pictured_account()
+      {:ok, :reposted} = Fediverse.repost_note(resharer, note())
+
+      assert [entry] = Fediverse.feed_remote_reply_reposts(reader, 10, nil)
+      assert entry.note.account_id == account.id
+      assert Note.avatar_url(entry.note) == RemoteAccount.avatar_url(account)
+      refute is_nil(Note.avatar_url(entry.note))
+    end
+
     test "it does not reach somebody who follows nobody involved" do
       resharer = federating_member()
       stranger = insert(:activated_user)
@@ -203,6 +228,17 @@ defmodule Vutuv.FediverseRemoteEngagementTest do
       assert first.remote_post.id == post.id
       assert second.note.id == note.id
       assert Repo.aggregate(Bookmark, :count) == 2
+    end
+
+    test "a saved reply wears its author's picture, as the thread does" do
+      user = federating_member()
+      account = pictured_account()
+      {:ok, :bookmarked} = Fediverse.bookmark_note(user, note())
+
+      assert [entry] = Fediverse.saved_from_networks(user)
+      assert entry.note.account_id == account.id
+      assert Note.avatar_url(entry.note) == RemoteAccount.avatar_url(account)
+      refute is_nil(Note.avatar_url(entry.note))
     end
 
     test "nothing is sent for either — a bookmark stays here" do

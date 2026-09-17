@@ -24,8 +24,9 @@ defmodule Vutuv.Fediverse.Note do
       since notes stored before issue #1070 have none.
     * `received_at` / `checked_at` / `expires_at` — the retention triple.
 
-  There is no avatar column and there never will be: the card renders initials
-  and links to the origin, so vutuv does not host a third party's picture.
+  There is no avatar column: the picture belongs to the author's account row
+  (`Vutuv.Fediverse.RemoteAccount`, issue #1163), so a reply wears the same
+  picture, behind the same gate, as that author's own posts (`avatar_url/1`).
   """
 
   use VutuvWeb, :model
@@ -33,6 +34,7 @@ defmodule Vutuv.Fediverse.Note do
   import Vutuv.ChangesetHelpers, only: [drop_non_web_urls: 2, scrub_nul: 1]
 
   alias Vutuv.Fediverse.Handle
+  alias Vutuv.Fediverse.RemoteAccount
   alias Vutuv.Translations
 
   @audiences ~w(public followers direct unknown)
@@ -109,6 +111,10 @@ defmodule Vutuv.Fediverse.Note do
     # know them", and then the card's handle links straight out instead of
     # inward.
     field(:account_id, :binary_id, virtual: true)
+    # That account's picture and its gate verdict, read by the same join, so the
+    # card needs no second lookup per reply.
+    field(:account_avatar, :string, virtual: true)
+    field(:account_avatar_moderation, :string, virtual: true)
 
     belongs_to(:post, Vutuv.Posts.Post)
   end
@@ -158,6 +164,19 @@ defmodule Vutuv.Fediverse.Note do
   read it from here.
   """
   def label(%__MODULE__{} = note), do: author_name(note) || display_handle(note)
+
+  @doc """
+  The author's cached picture, or nil for initials. Asks
+  `RemoteAccount.avatar_url/1`, so the gate that clears the picture on their
+  posts is the one that clears it here.
+  """
+  def avatar_url(%__MODULE__{} = note) do
+    RemoteAccount.avatar_url(%RemoteAccount{
+      id: note.account_id,
+      avatar: note.account_avatar,
+      avatar_moderation: note.account_avatar_moderation
+    })
+  end
 
   @doc "The server this note came from, for the card's footer and the ledger."
   defdelegate host(uri), to: Handle

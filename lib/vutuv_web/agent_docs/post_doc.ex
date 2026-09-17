@@ -527,8 +527,8 @@ defmodule VutuvWeb.AgentDocs.PostDoc do
 
   # One reply from another network as a doc entry: who wrote it in the
   # `@handle@host` form the HTML card shows, where the original lives, and the
-  # plain text. No avatar (there is none stored) and no actor URI beyond the
-  # public account link.
+  # plain text. No avatar (the note stores none, and the documents carry no
+  # pictures) and no actor URI beyond the public account link.
   defp remote_entries(by_post, post_id) do
     by_post
     |> Map.get(post_id, [])

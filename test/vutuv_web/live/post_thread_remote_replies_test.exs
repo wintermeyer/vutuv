@@ -10,11 +10,13 @@ defmodule VutuvWeb.PostThreadRemoteRepliesTest do
   use VutuvWeb.ConnCase, async: false
 
   import Phoenix.LiveViewTest
+  import Vutuv.MastodonHelpers, only: [remote_account: 1]
   import Vutuv.OrganizationsHelpers
   import Vutuv.PostsHelpers
 
   alias Vutuv.Fediverse
   alias Vutuv.Fediverse.Note
+  alias Vutuv.Fediverse.RemoteAccount
   alias Vutuv.Organizations
   alias Vutuv.Posts
 
@@ -167,6 +169,35 @@ defmodule VutuvWeb.PostThreadRemoteRepliesTest do
       [remote_card] = Regex.run(~r{<article data-fediverse-reply.*?</article>}s, html)
       refute remote_card =~ "phx-click=\"toggle-like\""
       refute remote_card =~ "post-actions"
+    end
+
+    test "wears its author's picture once the gate has cleared it", %{post: post} do
+      # The same account row a cached post of theirs reads its picture from, so
+      # the author's own post and their reply to an answer look like one person.
+      account =
+        remote_account(actor_uri: @actor, avatar: "pic.avif", avatar_moderation: "approved")
+
+      note = note!(post)
+
+      {:ok, view, _html} = thread_view(post)
+
+      assert has_element?(
+               view,
+               "[data-fediverse-reply='#{note.id}'] img[data-remote-avatar][src='#{RemoteAccount.avatar_url(account)}']"
+             )
+    end
+
+    test "keeps the initials while the picture waits for the gate", %{post: post} do
+      remote_account(actor_uri: @actor, avatar: "pic.avif", avatar_moderation: "pending")
+      note = note!(post)
+
+      {:ok, view, _html} = thread_view(post)
+
+      refute has_element?(view, "[data-fediverse-reply='#{note.id}'] img[data-remote-avatar]")
+
+      assert view
+             |> element("[data-fediverse-reply='#{note.id}'] [data-remote-avatar]")
+             |> render() =~ "AA"
     end
 
     test "a content warning stays closed until the reader opens it", %{post: post} do
