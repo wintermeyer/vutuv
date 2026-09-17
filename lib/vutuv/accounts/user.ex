@@ -484,6 +484,12 @@ defmodule Vutuv.Accounts.User do
     # auto-hides an hour after sign-up). Set programmatically by
     # Vutuv.Accounts.dismiss_onboarding/1; never cast from a profile form.
     field(:onboarding_dismissed?, :boolean, default: false)
+    # The text-ad frequency rules, per member rather than per browser: when
+    # they last saw an ad (house ad included) and the Berlin day they closed
+    # one with its ✕. Written by Vutuv.Ads.record_sighting/3 and
+    # Vutuv.Ads.dismiss_today/1; never cast.
+    field(:ad_seen_at, :utc_datetime)
+    field(:ads_dismissed_on, :date)
     # When the member left the one-time welcome page (/system/welcome) behind —
     # by saving it or by skipping it. nil means "never seen", and that is the
     # ONLY gate: the post-registration redirect sends a member there while it is

@@ -60,8 +60,7 @@ defmodule VutuvWeb.WelcomeComponents do
   registration PIN, who has not answered or closed it yet). That plug carries
   only the cheap half — the session's step and the path to come back to — and
   the step list and its suggestions are resolved **here**, at render time, so a
-  response that never renders the layout never pays for them (the `ad_banner`
-  arrangement, for the same reason).
+  response that never renders the layout never pays for them.
 
   Both changesets are built here, empty: the modal never renders errors — a
   rejected submit is answered with the `/system/welcome` page.

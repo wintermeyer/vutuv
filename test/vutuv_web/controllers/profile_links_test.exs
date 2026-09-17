@@ -83,8 +83,9 @@ defmodule VutuvWeb.ProfileLinksTest do
     html = conn |> get(~p"/#{user}") |> html_response(200)
 
     {links_pos, _} = :binary.match(html, ~s(id="profile-links"))
-    {aside_pos, _} = :binary.match(html, "<aside")
-    assert links_pos < aside_pos, "expected #profile-links before the <aside> right rail"
+    # By id: the daily ad under the header is an <aside> of its own.
+    {aside_pos, _} = :binary.match(html, ~s(id="profile-rail"))
+    assert links_pos < aside_pos, "expected #profile-links before the right rail"
   end
 
   # "View All" is content navigation, not management chrome: it must only

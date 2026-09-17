@@ -7,7 +7,7 @@ defmodule VutuvWeb.LandingConfigurationTest do
   Keys flipped here, and who else reads them (the rule below wants this named,
   so a widened blast radius is visible at a glance): `:landing_example_profile_url`
   and `:data_location` are read only by `VutuvWeb.PageHTML`; `:ads_enabled` by
-  `VutuvWeb.Plug.AdBanner` and the `/ads` routes; `:fediverse_enabled` by
+  `VutuvWeb.AdServing` and the `/ads` routes; `:fediverse_enabled` by
   `Vutuv.Fediverse.enabled?/0`, which the tag timeline, the feed source tabs and
   the sign-up form all consult.
 

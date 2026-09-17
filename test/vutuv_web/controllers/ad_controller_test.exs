@@ -123,12 +123,11 @@ defmodule VutuvWeb.AdControllerTest do
       # The rendered ad with its mandatory label...
       assert html =~ "<strong>Acme GmbH</strong>"
       assert html =~ ">Ad</span>"
-      # ...but none of the live-banner hooks: no hourly-cap marker, no
-      # two-minute auto-hide, no dismiss control (the preview must not
-      # vanish, burn the slot, or set the dismissed-for-today cookie).
-      refute html =~ "vutuv-ad"
-      refute html =~ "data-ad-banner"
-      refute html =~ "data-ad-close"
+      # ...but none of the live card's controls: no auto-hide hook and no
+      # dismiss button (the preview must not vanish under the buyer or close
+      # their ads for the day).
+      refute html =~ "AdSlot"
+      refute html =~ "dismiss-ad"
 
       # The order summary and both ways forward.
       assert html =~ params["day"]

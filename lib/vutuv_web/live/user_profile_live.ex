@@ -61,6 +61,9 @@ defmodule VutuvWeb.UserProfileLive do
   alias VutuvWeb.Live.VideoProgress
   alias VutuvWeb.WorkExperienceHTML
 
+  # The daily text ad the request chose (`VutuvWeb.AdServing`), and its ✕.
+  on_mount(VutuvWeb.Live.AdSlot)
+
   # The controller embeds this LiveView with `live_render/3` (not a `live/3`
   # router route), so `VutuvWeb.Live.InitAssigns` cannot be the on_mount: it
   # attaches a `:handle_params` hook, which an off-router LiveView rejects.

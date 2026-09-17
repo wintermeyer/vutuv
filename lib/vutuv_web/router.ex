@@ -45,11 +45,10 @@ defmodule VutuvWeb.Router do
     # square picture (VutuvWeb.OpenGraph).
     plug(Plugs.PreviewScraper)
     # The one-time welcome questions, floating over the page a brand-new
-    # member's registration PIN landed them on. Before the ad plug, which
-    # stands down while they are open.
+    # member's registration PIN landed them on. The daily text ad
+    # (VutuvWeb.AdServing, asked by the profile and the feed) stands down
+    # while they are open.
     plug(Plugs.WelcomeModal)
-    # The daily text ad between navigation and content (1/hour per session).
-    plug(Plugs.AdBanner)
   end
 
   # Pages that are routable but must not be indexed, without the rest of a
@@ -136,8 +135,8 @@ defmodule VutuvWeb.Router do
     plug(Plugs.AuthAdmin)
   end
 
-  # Like :browser, but deliberately WITHOUT CSRF protection and without the
-  # ad banner: the RFC 8058 one-click unsubscribe POST comes from the mail
+  # Like :browser, but deliberately WITHOUT CSRF protection: the RFC 8058
+  # one-click unsubscribe POST comes from the mail
   # provider with no cookies and no token. The signed token in the URL is the
   # authorization, and the action only ever switches notification mail off.
   pipeline :unsubscribe do

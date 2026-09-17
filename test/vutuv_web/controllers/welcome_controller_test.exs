@@ -177,17 +177,16 @@ defmodule VutuvWeb.WelcomeControllerTest do
       refute conn |> get(~p"/#{user}") |> html_response(200) =~ ~s(id="welcome-modal")
     end
 
-    # The daily ad strip would sit behind the dimmed backdrop and still burn
-    # the member's hourly slot on a sighting they cannot read. /community is a
-    # plain controller page and carries the banner otherwise, so this goes red
-    # the moment VutuvWeb.Plug.AdBanner stops asking.
-    test "no ad banner rides along behind it", %{conn: conn} do
-      {conn, _user} = register_and_confirm(conn)
+    # The daily ad would sit behind the dimmed backdrop and still take the
+    # member's hour on a sighting they cannot read. A profile carries the ad
+    # otherwise, so this goes red the moment VutuvWeb.AdServing stops asking.
+    test "no ad rides along behind it", %{conn: conn} do
+      {conn, user} = register_and_confirm(conn)
 
-      body = conn |> get(~p"/community") |> html_response(200)
+      body = conn |> get(~p"/#{user}") |> html_response(200)
 
       assert body =~ ~s(id="welcome-modal")
-      refute body =~ ~s(id="vutuv-ad")
+      refute body =~ "ad-slot"
     end
 
     test "an ordinary login never gets it", %{conn: conn} do

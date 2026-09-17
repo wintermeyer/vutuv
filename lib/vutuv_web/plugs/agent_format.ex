@@ -133,8 +133,8 @@ defmodule VutuvWeb.Plug.AgentFormat do
   @doc """
   Whether this request resolved to an agent document format — by URL extension
   (`vutuv_agent_format`) or `Accept` negotiation (`vutuv_agent_accept`). The one
-  predicate the plugs that suppress browser-only chrome (the ad banner) and
-  downgrade the viewer to anonymous (`EnsureActivated`) share.
+  predicate the plugs that downgrade the viewer to anonymous (`EnsureActivated`)
+  ask.
   """
   def agent_format?(%Plug.Conn{} = conn), do: requested_format(conn) != nil
 

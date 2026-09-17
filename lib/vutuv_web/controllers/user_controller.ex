@@ -14,6 +14,7 @@ defmodule VutuvWeb.UserController do
   alias Vutuv.Images
   alias Vutuv.Notifications.Emailer
   alias Vutuv.Profiles.SocialMediaAccount
+  alias VutuvWeb.AdServing
   alias VutuvWeb.AgentDocs
   alias VutuvWeb.AgentDocs.ProfileDoc
   alias VutuvWeb.ControllerHelpers
@@ -96,9 +97,14 @@ defmodule VutuvWeb.UserController do
     # to the layout's robots meta tag (the post pages and the agent-format
     # documents already answer with it).
     |> VutuvWeb.ContentPolicy.put_robots_header(user.noindex?, user.noai?)
-    |> ControllerHelpers.render_live(VutuvWeb.UserProfileLive, %{
-      "profile_user_id" => user.id
-    })
+    # The daily text ad: in the rail, and under the header on a phone.
+    |> AdServing.serve()
+    |> render_profile_live(user)
+  end
+
+  defp render_profile_live(conn, user) do
+    session = Map.put(AdServing.session(conn), "profile_user_id", user.id)
+    ControllerHelpers.render_live(conn, VutuvWeb.UserProfileLive, session)
   end
 
   defp maybe_assign_actor_alternate(conn, user) do

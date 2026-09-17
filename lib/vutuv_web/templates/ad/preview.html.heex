@@ -8,16 +8,16 @@
     <h1>{gettext("Preview your ad")}</h1>
     <p class="mt-1 text-sm text-slate-600 dark:text-slate-400">
       {gettext(
-        "This is exactly how your ad will appear between the navigation and the content on %{day}.",
+        "This is exactly how your ad will appear on profiles and in the feed on %{day}.",
         day: @ad.day
       )}
     </p>
 
-    <%!-- The real banner box on the page-canvas grey, so the preview shows
-    the ad in its natural surroundings. Deliberately without the live
-    banner's id/auto-hide hooks (see LayoutHTML.ad_banner_box/1). --%>
+    <%!-- The real ad card on the page-canvas grey, so the preview shows the ad
+    in its natural surroundings. Not `dismissible`: the live card's ✕ and
+    two-minute hook have no business on the page that sells it. --%>
     <div class="mt-4 rounded-xl bg-slate-100 px-2 py-4 dark:bg-slate-950">
-      <VutuvWeb.LayoutHTML.ad_banner_box banner={{:ad, @ad}} />
+      <VutuvWeb.AdComponents.ad_card id="ad-preview" banner={{:ad, @ad}} />
     </div>
 
     <dl class="mt-6 grid gap-4 rounded-xl bg-slate-50 p-4 text-sm sm:grid-cols-3 dark:bg-slate-800/60">

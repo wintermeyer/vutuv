@@ -4,6 +4,7 @@ defmodule Vutuv.AdsTest do
 
   alias Vutuv.Ads
   alias Vutuv.Ads.Ad
+  alias Vutuv.Ads.Sighting
 
   @valid_attrs %{
     "day" => Date.to_iso8601(Date.add(Ads.today(), 7)),
@@ -159,6 +160,100 @@ defmodule Vutuv.AdsTest do
 
       ad = insert(:ad)
       assert Ads.booked_days() == MapSet.new([ad.day])
+    end
+  end
+
+  describe "eligible?/3" do
+    test "nothing seen and nothing closed: an ad may show" do
+      assert Ads.eligible?(nil, nil)
+    end
+
+    test "an ad seen within the hour holds the next one back, an older one does not" do
+      now = ~U[2026-09-17 10:00:00Z]
+
+      refute Ads.eligible?(~U[2026-09-17 09:00:01Z], nil, now)
+      assert Ads.eligible?(~U[2026-09-17 09:00:00Z], nil, now)
+    end
+
+    test "a day with a closed ad holds every ad back until Berlin midnight" do
+      refute Ads.eligible?(nil, Ads.today())
+      assert Ads.eligible?(nil, Date.add(Ads.today(), -1))
+    end
+  end
+
+  describe "dismiss_today/1" do
+    test "stamps today's Berlin date on the member" do
+      user = insert_activated_user()
+
+      Ads.dismiss_today(user)
+
+      assert Repo.reload!(user).ads_dismissed_on == Ads.today()
+    end
+  end
+
+  describe "record_sighting/3" do
+    test "a booked ad stamps the member's hour and is kept for their history" do
+      user = insert_activated_user()
+      ad = insert(:ad, day: Ads.today())
+      now = ~U[2026-09-17 08:02:00Z]
+
+      Ads.record_sighting(user, {:ad, ad}, now)
+
+      assert Repo.reload!(user).ad_seen_at == now
+      assert [sighting] = Repo.all(Sighting)
+      assert {sighting.user_id, sighting.ad_id} == {user.id, ad.id}
+      assert {sighting.first_seen_at, sighting.last_seen_at, sighting.times_seen} == {now, now, 1}
+    end
+
+    test "seeing the same ad again counts up on the one row" do
+      user = insert_activated_user()
+      ad = insert(:ad, day: Ads.today())
+
+      Ads.record_sighting(user, {:ad, ad}, ~U[2026-09-17 08:02:00Z])
+      Ads.record_sighting(user, {:ad, ad}, ~U[2026-09-17 10:31:00Z])
+
+      assert [sighting] = Repo.all(Sighting)
+      assert sighting.first_seen_at == ~U[2026-09-17 08:02:00Z]
+      assert sighting.last_seen_at == ~U[2026-09-17 10:31:00Z]
+      assert sighting.times_seen == 2
+    end
+
+    test "the house ad takes the member's hour but is no sighting" do
+      user = insert_activated_user()
+      now = ~U[2026-09-17 08:02:00Z]
+
+      Ads.record_sighting(user, :house, now)
+
+      assert Repo.reload!(user).ad_seen_at == now
+      assert Repo.all(Sighting) == []
+    end
+
+    test "deleting the member takes their sightings with them" do
+      user = insert_activated_user()
+      Ads.record_sighting(user, {:ad, insert(:ad, day: Ads.today())})
+
+      Vutuv.Accounts.delete_user(user)
+
+      assert Repo.all(Sighting) == []
+    end
+  end
+
+  describe "todays_ad/1" do
+    test "is today's approved ad" do
+      ad = insert(:ad, day: Ads.today())
+
+      assert %Ad{id: id} = Ads.todays_ad(ad.id)
+      assert id == ad.id
+    end
+
+    test "is nothing for an ad that may not serve now, or no ad at all" do
+      unapproved = insert(:ad, day: Ads.today(), approved_at: nil)
+      yesterdays = insert(:ad, day: Date.add(Ads.today(), -1))
+
+      assert Ads.todays_ad(unapproved.id) == nil
+      assert Ads.todays_ad(yesterdays.id) == nil
+      assert Ads.todays_ad(Vutuv.UUIDv7.generate()) == nil
+      assert Ads.todays_ad("not-an-id") == nil
     end
   end
 

@@ -1,5 +1,5 @@
 // Shared plumbing for the classic-page (non-LiveView) progressive enhancements
-// in this app (toasts, tag votes, map links, passkeys, the ad banner, …). These
+// in this app (toasts, tag votes, map links, passkeys, …). These
 // helpers live here once so each enhancement stays small and the CSRF token,
 // page-lifecycle and fetch boilerplate is written a single time instead of being
 // copy-pasted into every feature.

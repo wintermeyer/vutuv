@@ -26,17 +26,6 @@ layout of its own reaches it. --%>
   <.flash_toasts flash={@flash} />
 </div>
 
-<%!-- The daily text ad (or the house ad selling the slot), between the
-navigation and the content. Only dead pages get the assign (see
-VutuvWeb.Plug.AdBanner); app.js removes the strip after two minutes. --%>
-<%= if assigns[:ad_banner] do %>
-  <%!-- The plug's assign is only the eligibility marker; what the banner
-  shows is resolved here, at render time, so a response that never renders
-  the layout (agent formats, redirects, LiveView dispatches) never pays the
-  banner query. --%>
-  <.ad_banner banner={Vutuv.Ads.current_banner()} />
-<% end %>
-
 <%!-- The bottom padding clears the fixed mobile tab bar on normal pages: the
 bar's own 4rem plus 2rem of air, plus the home-indicator strip the bar grew by
 under `viewport-fit=cover` (issue #1464) — the three numbers have to be read

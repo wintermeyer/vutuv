@@ -425,6 +425,10 @@ up. The rest of the geometry is one block in the phone section of
     undone, and gone once every step is done or the owner closes it with the ×
     (which persists, so it stays gone); @show_completion? carries that gate (see
     UserProfileLive). Each todo links straight to where it is done. --%>
+    <%!-- The daily text ad on a phone, right under the header; the desktop
+    copy leads the rail. --%>
+    <VutuvWeb.AdComponents.ad_slot banner={@ad_banner} placement={:inline} />
+
     <section
       :if={@show_completion?}
       id="profile-completion"
@@ -1138,7 +1142,12 @@ up. The rest of the geometry is one block in the phone section of
   <%!-- Right rail. `contents` on a phone (see the main column comment) so its
   cards join the single flex column and can interleave with the main column's;
   a real box again at md+. --%>
-  <aside class="contents md:block md:space-y-6">
+  <aside id="profile-rail" class="contents md:block md:space-y-6">
+    <%!-- The daily text ad leads the rail on a desktop. Hidden below md,
+    where the rail's cards join the one column and the copy under the header
+    stands in. --%>
+    <VutuvWeb.AdComponents.ad_slot banner={@ad_banner} placement={:rail} />
+
     <%!-- Discovery leads the rail while the owner still follows fewer than
     five members (@promote_discovery?): a fresh account otherwise never learns
     that there are people here to follow. Above the threshold the card keeps

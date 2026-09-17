@@ -14,8 +14,12 @@ defmodule VutuvWeb.AgentDocs.AdsDoc do
   @doc "The conditions list, shared verbatim by index.html.heex."
   def rules do
     [
-      gettext("Shown to every visitor, between the top navigation and the page content."),
-      gettext("Appears at most once per hour per visitor and hides itself after two minutes."),
+      gettext(
+        "Shown on profiles and in the feed: beside the content on a desktop, near the top on a phone."
+      ),
+      gettext(
+        "At most one ad an hour per visitor, gone again after two minutes. Whoever closes it sees no more ads that day."
+      ),
       gettext("Text only: Markdown, up to %{max} characters, always clearly labeled as an ad.",
         max: Ad.content_max_length()
       ),

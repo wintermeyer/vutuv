@@ -83,6 +83,8 @@ defmodule VutuvWeb.PostLive.Feed do
   # (issues #1801, #1927). The timeline mode: the cards are in a stream, so this
   # listens and `handle_info({:remote_images_changed, …}, …)` does the redraw.
   on_mount(VutuvWeb.Live.RemoteImages)
+  # The daily text ad the request chose (`VutuvWeb.AdServing`), and its ✕.
+  on_mount(VutuvWeb.Live.AdSlot)
 
   # How big a page of this feed is: the arrival, every "Load more", a source
   # switch and a busy calendar day all ask for the same number, and the reader
@@ -3587,6 +3589,12 @@ defmodule VutuvWeb.PostLive.Feed do
             </div>
           </div>
 
+          <%!-- The daily text ad on a phone, where there is no rail: always at
+          this spot under the control row, outside the timeline, so posts
+          arriving behind the pill never push it around. Below the composer
+          panel, never above it (the #1200 caret rule). --%>
+          <VutuvWeb.AdComponents.ad_slot banner={@ad_banner} placement={:inline} />
+
           <%!-- The author's posts waiting on their media (issues #1910,
           #1911, #2106), above the timeline: the text, the clip's tile and the
           files with their stages, and a way out. Nobody else ever sees them; a
@@ -3851,6 +3859,11 @@ defmodule VutuvWeb.PostLive.Feed do
             capped?={@cal_capped?}
             today={@cal_today}
           />
+
+          <%!-- The daily text ad. Under the calendar and, like it, outside the
+          arrangeable cards: the reader curates those, and the ✕ is how the ad
+          goes. --%>
+          <VutuvWeb.AdComponents.ad_slot banner={@ad_banner} placement={:rail} />
 
           <%!-- Filtering is one question, so it is one row — and only once
           there is something to report. A member who hides nothing gets the

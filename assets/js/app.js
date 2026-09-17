@@ -60,6 +60,9 @@ import "./compose_tab"
 // Pulling the feed down at the top of the page presses the waiting-posts pill;
 // registered as the PullToReveal hook below. See pull_to_reveal.js.
 import { PullToReveal } from "./pull_to_reveal"
+// The daily text ad's card on a profile and in the feed: its two-minute
+// lifetime and the day its ✕ closed (see ad_slot.js).
+import { AdSlot } from "./ad_slot"
 // The card behind a `@user@host` mention in a post: who that is, and a Follow
 // button, instead of leaving the site for their server (self-contained; its
 // panel lives on <body>, outside every LiveView root. See mention_card.js).
@@ -1143,6 +1146,7 @@ const Hooks = {
   FeedUrl,
   NewMarks,
   PullToReveal,
+  AdSlot,
   LocalTime: {
     mounted() {
       localizeTime(this.el)
@@ -3552,31 +3556,6 @@ function setupFediverseConsent() {
   })
 }
 onReady(setupFediverseConsent)
-
-// The ad banner (layout strip between navigation and content, see
-// VutuvWeb.Plug.AdBanner) disappears on its own after two minutes: fade out,
-// then drop the node. Its ✕ removes it immediately AND keeps ads away for
-// the rest of the (Berlin) day: the cookie value is the day stamped onto the
-// button by the server, which the plug compares against its own "today".
-// Classic controller pages only, so plain JS suffices.
-onReady(() => {
-  const ad = document.querySelector("[data-ad-banner]")
-  if (!ad || !once(ad, "adBanner")) return
-
-  const close = ad.querySelector("[data-ad-close]")
-  if (close) {
-    close.addEventListener("click", () => {
-      document.cookie = `vutuv_ad_dismissed=${close.dataset.adDay}; path=/; max-age=86400; samesite=lax`
-      ad.remove()
-    })
-  }
-
-  setTimeout(() => {
-    ad.style.transition = "opacity 0.5s ease"
-    ad.style.opacity = "0"
-    setTimeout(() => ad.remove(), 500)
-  }, 120000)
-})
 
 // Card ⋯ menus (<details data-menu>, see VutuvWeb.UI.card_menu): the native
 // <details> toggle does everything except light-dismiss, so close any open

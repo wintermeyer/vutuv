@@ -30,15 +30,14 @@ defmodule VutuvWeb.AdsDisabledTest do
     assert Ads.enabled?()
   end
 
-  test "no ad banner is served on any page", %{conn: conn} do
+  test "no ad is served, not even on the pages that carry one", %{conn: conn} do
     # A booked, approved ad for today would normally serve; with the switch
     # off it does not.
     insert(:ad, day: Ads.today(), content: "**Acme** sucht Leute")
+    {conn, user} = create_and_login_user(conn)
 
-    html = conn |> get(~p"/community") |> html_response(200)
-
-    refute html =~ ~s(id="vutuv-ad")
-    refute html =~ "data-ad-banner"
+    refute conn |> get(~p"/feed") |> html_response(200) =~ "ad-slot"
+    refute conn |> get(~p"/#{user}") |> html_response(200) =~ "ad-slot"
   end
 
   test "the public /ads pages 404 in every format", %{conn: conn} do

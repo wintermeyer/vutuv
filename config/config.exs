@@ -364,7 +364,7 @@ config :vutuv, :welcome_suggestions, %{
 }
 
 # The global on/off switch for the daily text-ad system (see Vutuv.Ads).
-# Off for now: no banner serves, the public /ads flow and the admin review
+# Off for now: no ad serves, the public /ads flow and the admin review
 # dashboard 404. "ads" stays a reserved username slug either way, so the
 # handle is kept free for when the system is switched back on.
 config :vutuv, :ads_enabled, false

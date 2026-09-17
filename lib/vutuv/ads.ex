@@ -9,10 +9,12 @@ defmodule Vutuv.Ads do
   by an admin before it runs** (`approve_ad/2`, the dashboard at
   `/admin/ads`); to leave room for that review the earliest bookable day is
   three days out (`first_bookable_day/0`). Serving is automatic:
-  `current_banner/0` is what `VutuvWeb.Plug.AdBanner` shows between the
-  navigation and the content - the **approved** ad on its day, the house ad
-  (an ad for the ad system) on days nobody booked (or where approval never
-  came).
+  `current_banner/0` is what `VutuvWeb.AdServing` hands a profile or the feed -
+  the **approved** ad on its day, the house ad (an ad for the ad system) on
+  days nobody booked (or where approval never came). Nobody sees more than
+  one ad an hour, and nobody who closed one sees another that day
+  (`eligible?/3`); the booked ads a member saw are kept per member
+  (`record_sighting/3`).
 
   Day boundaries are German local time, computed with the fixed EU DST rule
   (see `berlin_date/1`) because the project deliberately carries no timezone
@@ -21,9 +23,12 @@ defmodule Vutuv.Ads do
 
   import Ecto.Query
 
+  alias Vutuv.Accounts.User
   alias Vutuv.Ads.Ad
+  alias Vutuv.Ads.Sighting
   alias Vutuv.Notifications.Emailer
   alias Vutuv.Repo
+  alias Vutuv.UUIDv7
 
   # The fixed price per day, in cents net (1250 EUR). Stamped onto every
   # booking so old rows keep the price that was agreed.
@@ -38,12 +43,15 @@ defmodule Vutuv.Ads do
   # near-term. Widen by bumping this one knob (the calendar follows).
   @booking_window_months 1
 
+  # At most one ad an hour per member (and per browser for a visitor).
+  @hour 3600
+
   def price_cents, do: @price_cents
 
   @doc """
   Whether the daily text-ad system is switched on, from
   `config :vutuv, :ads_enabled` (default **off**). The single gate the rest
-  of the app asks: when off, no banner serves (`VutuvWeb.Plug.AdBanner`), the
+  of the app asks: when off, no ad serves (`VutuvWeb.AdServing`), the
   public `/ads` flow and the admin review dashboard answer 404
   (`VutuvWeb.Plug.RequireAdsEnabled`), and nothing can be booked. `"ads"`
   stays a reserved slug regardless (see `Vutuv.Accounts.ReservedSlugs`), so
@@ -82,7 +90,7 @@ defmodule Vutuv.Ads do
   detail page) - or nil (also on a malformed id).
   """
   def get_ad_by_id(id) do
-    Vutuv.UUIDv7.with_cast(id, &(Ad |> Repo.get(&1) |> Repo.preload([:user, :approved_by])))
+    UUIDv7.with_cast(id, &(Ad |> Repo.get(&1) |> Repo.preload([:user, :approved_by])))
   end
 
   @doc """
@@ -91,10 +99,7 @@ defmodule Vutuv.Ads do
   unapproved ad never serves.
   """
   def current_banner do
-    ad =
-      Repo.one(from(a in Ad, where: a.day == ^today() and not is_nil(a.approved_at)))
-
-    case ad do
+    case Repo.one(serving_today()) do
       nil -> :house
       ad -> {:ad, ad}
     end
@@ -206,6 +211,71 @@ defmodule Vutuv.Ads do
 
     Enum.find(Date.range(first, last), &(not MapSet.member?(booked, &1)))
   end
+
+  @doc """
+  The two frequency rules, over plain values so a member (`users.ad_seen_at`,
+  `users.ads_dismissed_on`) and a visitor (session and cookie, see
+  `VutuvWeb.AdServing`) are judged by the same code: no ad within an hour of
+  the last one (`seen_at`), and none for the rest of a Berlin day on which one
+  was closed (`dismissed_on`). Either may be nil.
+  """
+  def eligible?(seen_at, dismissed_on, now \\ DateTime.utc_now()) do
+    dismissed_on != today() and not seen_within_the_hour?(seen_at, now)
+  end
+
+  defp seen_within_the_hour?(nil, _now), do: false
+  defp seen_within_the_hour?(seen_at, now), do: DateTime.diff(now, seen_at) < @hour
+
+  @doc """
+  Records that `user` was shown `banner`: stamps the hour on the member and,
+  for a booked ad, counts the sighting up on its row (the member's history of
+  seen ads). The house ad takes the hour and leaves no row.
+  """
+  def record_sighting(%User{} = user, banner, now \\ DateTime.utc_now(:second)) do
+    Repo.update_all(from(u in User, where: u.id == ^user.id), set: [ad_seen_at: now])
+
+    case banner do
+      {:ad, %Ad{id: ad_id}} ->
+        Repo.insert_all(
+          Sighting,
+          [
+            %{
+              id: UUIDv7.generate(),
+              user_id: user.id,
+              ad_id: ad_id,
+              first_seen_at: now,
+              last_seen_at: now,
+              times_seen: 1
+            }
+          ],
+          on_conflict: [set: [last_seen_at: now], inc: [times_seen: 1]],
+          conflict_target: [:user_id, :ad_id]
+        )
+
+      :house ->
+        nil
+    end
+
+    :ok
+  end
+
+  @doc "The ✕: no further ad for `user` until Berlin midnight, on any device."
+  def dismiss_today(%User{} = user) do
+    Repo.update_all(from(u in User, where: u.id == ^user.id), set: [ads_dismissed_on: today()])
+    :ok
+  end
+
+  @doc """
+  The ad with this id if it may still serve now: approved and booked for
+  today. Nil for anything else, a malformed id included, so a page reconnecting
+  after midnight does not bring yesterday's ad back.
+  """
+  def todays_ad(id) do
+    UUIDv7.with_cast(id, fn id -> Repo.one(from(a in serving_today(), where: a.id == ^id)) end)
+  end
+
+  # What may serve: today's ad, once an admin approved it.
+  defp serving_today, do: from(a in Ad, where: a.day == ^today() and not is_nil(a.approved_at))
 
   @doc "Today as a German calendar day (Europe/Berlin)."
   defdelegate today, to: Vutuv.BerlinTime
