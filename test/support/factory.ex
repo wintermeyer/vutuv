@@ -96,6 +96,35 @@ defmodule Vutuv.Factory do
     }
   end
 
+  # A booked ad a member saw (Vutuv.Ads.record_sighting/3); pass `user` and
+  # `ad`, and the times when they matter. `insert_ad_sighting/3` builds both.
+  def ad_sighting_factory do
+    now = DateTime.utc_now(:second)
+
+    %Vutuv.Ads.Sighting{
+      first_seen_at: now,
+      last_seen_at: now,
+      times_seen: 1
+    }
+  end
+
+  @doc """
+  `user`'s sighting of the booked ad that ran on `day`, last seen at `at`
+  (noon UTC that day). `content` goes to the ad, everything else to the
+  sighting. An ad's `day` is unique, so two async test modules must not share
+  one.
+  """
+  def insert_ad_sighting(user, day, attrs \\ []) do
+    {ad_attrs, attrs} = Keyword.split(attrs, [:content])
+    at = Keyword.get(attrs, :at, DateTime.new!(day, ~T[12:00:00]))
+
+    insert(
+      :ad_sighting,
+      [user: user, ad: insert(:ad, [day: day] ++ ad_attrs), first_seen_at: at, last_seen_at: at] ++
+        Keyword.delete(attrs, :at)
+    )
+  end
+
   def oauth_app_factory do
     %Vutuv.ApiAuth.App{
       user: build(:activated_user),

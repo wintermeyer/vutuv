@@ -607,6 +607,10 @@ config :vutuv, :fediverse_max_remote_follows, 1_000
 # Vutuv.AccountEvents.delete_expired/0 directly).
 config :vutuv, :sweep_account_events, true
 
+# Whether the daily GenServer that forgets a member's seen ads after 90 days
+# runs (Vutuv.Ads.SightingSweeper; off in tests, same sandbox reasoning).
+config :vutuv, :sweep_ad_sightings, true
+
 # Whether the daily GenServer that clears abandoned OAuth client registrations
 # and spent authorization codes runs (off in tests, same sandbox reasoning;
 # tests call Vutuv.ApiAuth.sweep/0 directly). Issue #1557.

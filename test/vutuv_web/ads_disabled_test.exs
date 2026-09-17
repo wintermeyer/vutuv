@@ -40,6 +40,12 @@ defmodule VutuvWeb.AdsDisabledTest do
     refute conn |> get(~p"/#{user}") |> html_response(200) =~ "ad-slot"
   end
 
+  test "the seen-ads page does not exist", %{conn: conn} do
+    {conn, _user} = create_and_login_user(conn)
+
+    assert conn |> get("/system/ads/seen") |> html_response(404)
+  end
+
   test "the public /ads pages 404 in every format", %{conn: conn} do
     assert conn |> get(~p"/ads") |> html_response(404)
     assert get(build_conn(), "/ads.md").status == 404

@@ -28,6 +28,7 @@ defmodule Vutuv.Ads do
   alias Vutuv.Ads.Sighting
   alias Vutuv.Notifications.Emailer
   alias Vutuv.Repo
+  alias Vutuv.SearchText
   alias Vutuv.UUIDv7
 
   # The fixed price per day, in cents net (1250 EUR). Stamped onto every
@@ -45,6 +46,11 @@ defmodule Vutuv.Ads do
 
   # At most one ad an hour per member (and per browser for a visitor).
   @hour 3600
+
+  # How long a member's seen ads are kept (`forget_old_sightings/1`), and how
+  # many the history page shows at a time.
+  @sighting_days 90
+  @seen_page 20
 
   def price_cents, do: @price_cents
 
@@ -274,6 +280,69 @@ defmodule Vutuv.Ads do
     end
 
     :ok
+  end
+
+  @doc "How many days a member's seen ads are kept."
+  def sighting_days, do: @sighting_days
+
+  @doc """
+  A member's seen ads for their history page, as `{rows, more?}`: sightings
+  with the ad preloaded, the most recently seen first. Options: `query`
+  (matched against the ad text), `limit` (#{@seen_page}) and `after` (the
+  `last_seen_at` and `id` of the last row of the page before).
+  """
+  def seen_ads(%User{} = user, opts \\ []) do
+    limit = Keyword.get(opts, :limit, @seen_page)
+
+    rows =
+      from([s, ad: a] in sightings_of(user, opts[:query]),
+        order_by: [desc: s.last_seen_at, desc: s.id],
+        limit: ^(limit + 1),
+        preload: [ad: a]
+      )
+      |> after_row(opts[:after])
+      |> Repo.all()
+
+    {Enum.take(rows, limit), length(rows) > limit}
+  end
+
+  @doc "How many of a member's seen ads match `query` (all of them for nil)."
+  def count_seen_ads(%User{} = user, query) do
+    user |> sightings_of(query) |> Repo.aggregate(:count)
+  end
+
+  defp sightings_of(user, text) do
+    query = from(s in Sighting, join: a in assoc(s, :ad), as: :ad, where: s.user_id == ^user.id)
+
+    case SearchText.normalize_search(text) do
+      nil -> query
+      term -> from([ad: a] in query, where: ilike(a.content, ^SearchText.contains(term)))
+    end
+  end
+
+  defp after_row(query, nil), do: query
+
+  defp after_row(query, %{last_seen_at: at, id: id}) do
+    from(s in query, where: s.last_seen_at < ^at or (s.last_seen_at == ^at and s.id < ^id))
+  end
+
+  @doc """
+  Deletes the sightings last seen more than #{@sighting_days} days before
+  `now`, returning how many went (`Vutuv.Ads.SightingSweeper`).
+  """
+  def forget_old_sightings(now \\ DateTime.utc_now()) do
+    cutoff = DateTime.add(now, -@sighting_days * 86_400)
+    # Found through the ads they belong to (`day` and `ad_id` are indexed,
+    # `last_seen_at` is not). An ad is seen on its Berlin day, which starts
+    # up to two hours before the UTC one, hence the day after the cutoff.
+    ads = from(a in Ad, where: a.day <= ^Date.add(DateTime.to_date(cutoff), 1), select: a.id)
+
+    {count, _} =
+      Repo.delete_all(
+        from(s in Sighting, where: s.ad_id in subquery(ads) and s.last_seen_at < ^cutoff)
+      )
+
+    count
   end
 
   @doc "The ✕: no further ad for `user` until Berlin midnight, on any device."

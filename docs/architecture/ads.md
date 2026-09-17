@@ -51,13 +51,24 @@ On unbooked days a short house ad sells the slot.
   was down is sent again from `reconnected()`.
 - No ad while the one-time welcome questions cover the page.
 
-## What is stored
+## What is stored, and the seen-ads page
 
 `ad_sightings` keeps one row per member and **booked** ad (first and last
-sighting, count), written by `Vutuv.Ads.record_sighting/3` on `"ad-seen"`: the base for a
-member's history of seen ads and for per-ad reach. The house ad stamps the
-hour and leaves no row. Rows go with the member's account (`on_delete:
-:delete_all`); nothing is stored per visitor on the server.
+sighting, count), written by `Vutuv.Ads.record_sighting/3` on `"ad-seen"`. The
+house ad stamps the hour and leaves no row. Rows go with the member's account
+(`on_delete: :delete_all`), are part of the personal data export
+(`seen_ads`), and are forgotten 90 days after they were last seen
+(`Vutuv.Ads.SightingSweeper`, daily, first run ten minutes after boot;
+`config :vutuv, :sweep_ad_sightings`). Nothing is stored per visitor on the
+server.
+
+The card's "Ad" label is a link. A member lands on **`/system/ads/seen`**
+(`VutuvWeb.AdsSeenLive`, login only, noindex, 404 while the system is off):
+the ads they saw, the most recently seen first, each with when it was last
+seen and how often, a search over the ad text and "Load more" in pages of 20
+(`Vutuv.Ads.seen_ads/2`). A visitor has no history, so their label leads to
+the `/ads` offer page instead; there is no public archive of past ads, which
+would keep a one-day booking on show for months.
 
 ## Booking and review
 

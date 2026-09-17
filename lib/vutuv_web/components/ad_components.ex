@@ -15,10 +15,12 @@ defmodule VutuvWeb.AdComponents do
   The live card in one of its two places on a page, or nothing while the page
   has no ad. `ad` is the page's `@ad_slot` (see `VutuvWeb.Live.AdSlot`). A page
   carries both places: `:rail` leads the desktop rail, `:inline` stands near
-  the top of the one column a phone has.
+  the top of the one column a phone has. `viewer` is the page's
+  `@current_user`, which picks where the card's label leads.
   """
   attr(:ad, :map, required: true)
   attr(:placement, :atom, required: true, values: [:rail, :inline])
+  attr(:viewer, :any, required: true)
 
   def ad_slot(assigns) do
     ~H"""
@@ -28,6 +30,7 @@ defmodule VutuvWeb.AdComponents do
       class={if @placement == :rail, do: "hidden md:block", else: "md:hidden"}
       banner={@ad.banner}
       key={AdServing.key(@ad)}
+      label={if @viewer, do: :seen, else: :offer}
     />
     """
   end
@@ -39,12 +42,17 @@ defmodule VutuvWeb.AdComponents do
   A `key` (`VutuvWeb.AdServing.key/1`) makes it the live card: the ✕
   (`"dismiss-ad"`) inside a ring that empties while the card is in view, the
   `AdSlot` hook that runs that countdown, and a fade when the card leaves. The
-  booking preview passes no key and gets none of it.
+  booking preview and the seen-ads page pass no key and get none of it.
+
+  `label` turns the label into a link: `:seen` to a member's seen ads,
+  `:offer` to the `/ads` offer page for a visitor. `footer` goes under the ad.
   """
   attr(:id, :string, required: true)
   attr(:banner, :any, required: true)
   attr(:key, :string, default: nil)
+  attr(:label, :atom, default: nil, values: [nil, :seen, :offer])
   attr(:class, :any, default: nil)
+  slot(:footer)
 
   def ad_card(assigns) do
     ~H"""
@@ -61,7 +69,18 @@ defmodule VutuvWeb.AdComponents do
       ]}
     >
       <div class="flex items-center gap-3">
-        <span class="rounded border border-slate-300 px-1 text-[10px] font-semibold uppercase tracking-wide text-slate-600 dark:border-slate-600 dark:text-slate-400">{gettext("Ad")}</span>
+        <%!-- As a link the label keeps its look and grows an invisible
+        touch target (`after:`) around itself. --%>
+        <.link
+          :if={@label}
+          href={label_href(@label)}
+          title={label_title(@label)}
+          class="relative rounded border border-slate-300 px-1 text-[10px] font-semibold uppercase tracking-wide text-slate-600 after:absolute after:-inset-3 hover:border-slate-500 hover:text-slate-900 dark:border-slate-600 dark:text-slate-400 dark:hover:border-slate-400 dark:hover:text-slate-100"
+        >{gettext("Ad")}</.link>
+        <span
+          :if={!@label}
+          class="rounded border border-slate-300 px-1 text-[10px] font-semibold uppercase tracking-wide text-slate-600 dark:border-slate-600 dark:text-slate-400"
+        >{gettext("Ad")}</span>
         <button
           :if={@key}
           type="button"
@@ -113,9 +132,16 @@ defmodule VutuvWeb.AdComponents do
             </.link>
           </p>
       <% end %>
+      {render_slot(@footer)}
     </aside>
     """
   end
+
+  defp label_href(:seen), do: ~p"/system/ads/seen"
+  defp label_href(:offer), do: ~p"/ads"
+
+  defp label_title(:seen), do: gettext("Ads you have seen")
+  defp label_title(:offer), do: gettext("How ads work on vutuv")
 
   defp fade_out do
     JS.hide(

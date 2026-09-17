@@ -13,6 +13,7 @@ defmodule Vutuv.Export do
 
   alias Vutuv.Accounts.User
   alias Vutuv.Ads.Ad
+  alias Vutuv.Ads.Sighting
   alias Vutuv.Chat.{Conversation, Participant}
   alias Vutuv.Fediverse
   alias Vutuv.Fediverse.Note
@@ -50,7 +51,8 @@ defmodule Vutuv.Export do
   #    Markdown source, not the rendered prose.
   # 12: the member's private notes about other accounts (`personal_notes`), as
   #    Markdown source, each naming the account it is about.
-  @schema_version 12
+  # 13: the ads the member was shown (`seen_ads`), with when and how often.
+  @schema_version 13
 
   def build(%User{} = user) do
     user =
@@ -221,8 +223,27 @@ defmodule Vutuv.Export do
       # The three bios of that same kit (issue #2101), as **Markdown source**
       # rather than as rendered prose: it is what the member typed, and it is
       # what they would paste into whatever they move to.
-      press_bios: press_bios(user)
+      press_bios: press_bios(user),
+      # The ads the member was shown, as their "seen ads" page lists them.
+      seen_ads: seen_ads(user)
     }
+  end
+
+  defp seen_ads(user) do
+    Repo.all(
+      from(s in Sighting,
+        join: a in assoc(s, :ad),
+        where: s.user_id == ^user.id,
+        order_by: [asc: s.first_seen_at],
+        select: %{
+          day: a.day,
+          content: a.content,
+          first_seen_at: s.first_seen_at,
+          last_seen_at: s.last_seen_at,
+          times_seen: s.times_seen
+        }
+      )
+    )
   end
 
   defp press_bios(user), do: user |> PressKit.bio() |> Map.take(PressKit.bio_lengths())

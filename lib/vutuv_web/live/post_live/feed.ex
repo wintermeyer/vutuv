@@ -3593,7 +3593,7 @@ defmodule VutuvWeb.PostLive.Feed do
           this spot under the control row, outside the timeline, so posts
           arriving behind the pill never push it around. Below the composer
           panel, never above it (the #1200 caret rule). --%>
-          <VutuvWeb.AdComponents.ad_slot ad={@ad_slot} placement={:inline} />
+          <VutuvWeb.AdComponents.ad_slot ad={@ad_slot} placement={:inline} viewer={@current_user} />
 
           <%!-- The author's posts waiting on their media (issues #1910,
           #1911, #2106), above the timeline: the text, the clip's tile and the
@@ -3863,7 +3863,7 @@ defmodule VutuvWeb.PostLive.Feed do
           <%!-- The daily text ad. Under the calendar and, like it, outside the
           arrangeable cards: the reader curates those, and the ✕ is how the ad
           goes. --%>
-          <VutuvWeb.AdComponents.ad_slot ad={@ad_slot} placement={:rail} />
+          <VutuvWeb.AdComponents.ad_slot ad={@ad_slot} placement={:rail} viewer={@current_user} />
 
           <%!-- Filtering is one question, so it is one row — and only once
           there is something to report. A member who hides nothing gets the

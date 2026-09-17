@@ -56,7 +56,7 @@ defmodule VutuvWeb.UI do
 
   def markdown_prose(assigns) do
     ~H"""
-    <div class={["markdown markdown--post", @class]}>{Markdown.render(@text)}</div>
+    <div class={["markdown markdown--post", @class]}>{Markdown.render_cached(@text)}</div>
     """
   end
 

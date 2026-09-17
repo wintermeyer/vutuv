@@ -40,7 +40,7 @@ defmodule VutuvWeb.AdServingTest do
 
       assert html =~ @rail
       assert html =~ @inline
-      assert html =~ ">Ad</span>"
+      assert html =~ ">Ad</a>"
       assert html =~ @house
     end
 
@@ -80,7 +80,7 @@ defmodule VutuvWeb.AdServingTest do
         |> get(~p"/#{profile_owner()}")
         |> html_response(200)
 
-      assert html =~ ">Anzeige</span>"
+      assert html =~ ">Anzeige</a>"
     end
 
     test "an ordinary page carries no ad any more", %{conn: conn} do

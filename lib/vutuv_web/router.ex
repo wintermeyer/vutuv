@@ -59,6 +59,12 @@ defmodule VutuvWeb.Router do
     plug(Plugs.NoIndex)
   end
 
+  # The daily text-ad pages that are not the /ads controller, which gates
+  # itself: they 404 while the system is off.
+  pipeline :ads_enabled do
+    plug(Plugs.RequireAdsEnabled)
+  end
+
   # Routed LiveViews (the two `live_session` blocks below). A LiveView has one
   # representation, so the `activity+json` the pipeline above admits for the
   # ActivityPub URLs is refused here rather than 500ing on a page that never
@@ -1222,6 +1228,13 @@ defmodule VutuvWeb.Router do
         # (`Vutuv.PersonalNotes`): every one of them, searchable, or those about
         # one account when a profile's panel or a handle's card links here.
         live("/notes", PersonalNotesLive, :index)
+      end
+
+      # The ads a member was shown, the page the card's "Ad" label leads to.
+      # Private and one member's own, so noindex like the uploads queue.
+      scope "/system/ads" do
+        pipe_through([:noindex_pipe, :ads_enabled])
+        live("/seen", AdsSeenLive, :index)
       end
 
       # Job postings ("jobs" is a ReservedSlug). Auth is checked in the mounts.

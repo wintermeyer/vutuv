@@ -75,6 +75,33 @@ defmodule Vutuv.ExportTest do
     assert draft.image_count == 0
   end
 
+  test "the ads a member saw are in the export, with when and how often (schema v13)" do
+    user = insert(:activated_user)
+    ad = insert(:ad, day: ~D[2026-04-14], content: "**Acme** sucht Leute")
+
+    insert(:ad_sighting,
+      user: user,
+      ad: ad,
+      first_seen_at: ~U[2026-09-10 08:02:00Z],
+      last_seen_at: ~U[2026-09-10 10:31:00Z],
+      times_seen: 3
+    )
+
+    data = Export.build(user)
+
+    assert data.schema_version >= 13
+
+    assert data.seen_ads == [
+             %{
+               day: ~D[2026-04-14],
+               content: "**Acme** sucht Leute",
+               first_seen_at: ~U[2026-09-10 08:02:00Z],
+               last_seen_at: ~U[2026-09-10 10:31:00Z],
+               times_seen: 3
+             }
+           ]
+  end
+
   test "a member's account deletion takes their drafts with it" do
     user = insert(:activated_user)
     :ok = Vutuv.Posts.save_draft(user, nil, %{"body" => "half a thought"})

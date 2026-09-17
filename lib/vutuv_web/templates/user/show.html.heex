@@ -427,7 +427,7 @@ up. The rest of the geometry is one block in the phone section of
     UserProfileLive). Each todo links straight to where it is done. --%>
     <%!-- The daily text ad on a phone, right under the header; the desktop
     copy leads the rail. --%>
-    <VutuvWeb.AdComponents.ad_slot ad={@ad_slot} placement={:inline} />
+    <VutuvWeb.AdComponents.ad_slot ad={@ad_slot} placement={:inline} viewer={@current_user} />
 
     <section
       :if={@show_completion?}
@@ -1146,7 +1146,7 @@ up. The rest of the geometry is one block in the phone section of
     <%!-- The daily text ad leads the rail on a desktop. Hidden below md,
     where the rail's cards join the one column and the copy under the header
     stands in. --%>
-    <VutuvWeb.AdComponents.ad_slot ad={@ad_slot} placement={:rail} />
+    <VutuvWeb.AdComponents.ad_slot ad={@ad_slot} placement={:rail} viewer={@current_user} />
 
     <%!-- Discovery leads the rail while the owner still follows fewer than
     five members (@promote_discovery?): a fresh account otherwise never learns

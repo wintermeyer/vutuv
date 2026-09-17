@@ -249,6 +249,67 @@ defmodule Vutuv.AdsTest do
     end
   end
 
+  describe "seen_ads/2" do
+    test "lists the member's own sightings, most recently seen first" do
+      user = insert_activated_user()
+      older = insert_ad_sighting(user, ~D[2026-09-10])
+      newer = insert_ad_sighting(user, ~D[2026-09-12], times_seen: 3)
+      insert_ad_sighting(insert_activated_user(), ~D[2026-09-11])
+
+      assert {[first, second], false} = Ads.seen_ads(user)
+
+      assert {first.id, first.times_seen, first.ad.content} ==
+               {newer.id, 3, newer.ad.content}
+
+      assert second.id == older.id
+    end
+
+    test "searches the ad text, ignoring case and treating wildcards literally" do
+      user = insert_activated_user()
+      match = insert_ad_sighting(user, ~D[2026-09-10], content: "Wann sind **Ferien** 2027?")
+      insert_ad_sighting(user, ~D[2026-09-11], content: "Backend-Entwicklung in Mainz")
+      insert_ad_sighting(user, ~D[2026-09-12], content: "100% Rabatt")
+
+      assert {[%{id: id}], false} = Ads.seen_ads(user, query: "ferien")
+      assert id == match.id
+      assert {[_hit], false} = Ads.seen_ads(user, query: "100%")
+      assert {[], false} = Ads.seen_ads(user, query: "0_ R")
+    end
+
+    test "pages by the last row it handed out" do
+      user = insert_activated_user()
+      for n <- 1..5, do: insert_ad_sighting(user, Date.add(~D[2026-09-01], n))
+
+      assert {page, true} = Ads.seen_ads(user, limit: 2)
+      assert length(page) == 2
+      assert {rest, false} = Ads.seen_ads(user, limit: 3, after: List.last(page))
+      assert length(rest) == 3
+
+      assert Enum.map(page ++ rest, & &1.ad.day) ==
+               Enum.map(5..1//-1, &Date.add(~D[2026-09-01], &1))
+    end
+
+    test "forget_old_sightings/1 drops what lies more than 90 days back" do
+      user = insert_activated_user()
+      old = insert_ad_sighting(user, ~D[2026-06-18])
+      kept = insert_ad_sighting(user, ~D[2026-06-20])
+
+      assert Ads.forget_old_sightings(~U[2026-09-17 12:00:00Z]) == 1
+      assert {[%{id: id}], false} = Ads.seen_ads(user)
+      assert id == kept.id
+      refute Repo.get(Sighting, old.id)
+    end
+
+    test "forget_old_sightings/1 also finds an ad whose Berlin day began on the cutoff's" do
+      user = insert_activated_user()
+      # 00:30 in Berlin on 21 June, 22:30 UTC the evening before.
+      late = insert_ad_sighting(user, ~D[2026-06-21], at: ~U[2026-06-20 22:30:00Z])
+
+      assert Ads.forget_old_sightings(~U[2026-09-18 23:00:00Z]) == 1
+      refute Repo.get(Sighting, late.id)
+    end
+  end
+
   describe "todays_ad/1" do
     test "is today's approved ad" do
       ad = insert(:ad, day: Ads.today())

@@ -16,10 +16,12 @@ defmodule Vutuv.Repo.Migrations.AddAdSightingsAndViewerState do
       add(:times_seen, :integer, null: false, default: 1)
     end
 
-    # The upsert's conflict target, and the lookup by member.
+    # The upsert's conflict target, and the lookup by member: one ad a day and
+    # 90 days kept leave a member with a few dozen rows, so their history sorts
+    # by `last_seen_at` without an index of its own. Leaving that column out of
+    # every index keeps the repeat sighting's update a HOT one.
     create(unique_index(:ad_sightings, [:user_id, :ad_id]))
-    # A member's history, most recent first.
-    create(index(:ad_sightings, [:user_id, :last_seen_at]))
+    # Per-ad reach, and the retention sweep, which finds old rows by their ad.
     create(index(:ad_sightings, [:ad_id]))
 
     alter table(:users) do
