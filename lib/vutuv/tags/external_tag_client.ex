@@ -50,12 +50,14 @@ defmodule Vutuv.Tags.ExternalTagClient do
   replies and anything sensitive before it counts, and a census that dropped
   them would be counting a different population than the one making the noise.
 
-  The refusals they share all read the author's host: the operator's
-  blocklist (issue #2204), `ExternalPost.written_here?/2` (issues #2179 and
-  #2196) and `ExternalPost.speaks_for_author?/2` (issue #2174). A post from a
-  blocked server or of ours is not a find, and its author is not one of the
-  servers out there either; a server a member typed in is believed about its
-  own members and nobody else.
+  The two refusals they share both read the author's host (`stranger?/3`):
+  the operator's blocklist (issue #2204) and `ExternalPost.written_here?/2`
+  (issues #2179 and #2196). A post from a blocked server or of ours is not a
+  find, and its author is not one of the servers out there either. The pull adds
+  `ExternalPost.speaks_for_author?/2` (issue #2174): a server a member typed in
+  is believed about its own members and nobody else. The census needs no third
+  refusal, because it is only asked of servers the operator listed, whose word
+  that rule takes anyway.
   """
 
   require Logger
@@ -197,57 +199,24 @@ defmodule Vutuv.Tags.ExternalTagClient do
   The two facts a trending tag is vetted on, and both are the *server's* own —
   it flags its bot accounts itself, and `acct` says where the author lives. See
   the moduledoc for why this is not a by-product of `fetch/2`, and
-  `author_entry/2` for why our own echo is left out of it.
+  `stranger?/3` for why our own echo and a blocked server are left out of it.
+  Only ever asked of a server the operator listed (`Vutuv.Tags.Trending`).
   """
   def authors(source, tag_name) do
     with {:ok, hashtag} <- hashtag(tag_name),
          :ok <- refuse_blocked(source),
          {:ok, statuses} <- get_timeline(source, hashtag, @census_limit) do
-      relays = SourceServers.relays()
-      entries = Enum.flat_map(statuses, &author_entry(&1, source, relays))
+      {with_hosts, blocked} = with_authors(statuses, source)
 
-      # Issue #2204: the pull's blocklist check, asked of the author. A server
-      # the operator shut out is not a post here, so it is no voice about a tag
-      # either. Counted, it was one more author server towards the diversity
-      # gate, and its statuses moved the bot share.
-      blocked = entries |> Enum.map(& &1.host) |> blocked_among()
-      {:ok, Enum.reject(entries, &MapSet.member?(blocked, &1.host))}
+      {:ok,
+       for {status, host} <- with_hosts, stranger?(host, permalink(status), blocked) do
+         %{host: host, bot?: status["account"]["bot"] == true}
+       end}
     end
   rescue
     error ->
       Logger.warning("external tag authors #{source} raised: #{inspect(error)}")
       {:error, :transient}
-  end
-
-  # `written_here?/2` again, one layer above where the pull asks it (issue
-  # #2196): a post of ours travels out with its hashtags, so the servers we
-  # census hold it and name it under our own host, and counting it made this
-  # installation one more independent author server on the gate meant to catch a
-  # single source. Re-measured on 11 September 2026, troet.cafe's `#vutuv`
-  # timeline was 40 statuses, **35 of them ours**, over six author servers — it
-  # cleared every gate, and five foreign statuses is not evidence of anything.
-  #
-  # Dropped here rather than subtracted in `Trending.verdict/3`, and the same
-  # measurement is why: the five remaining servers still clear
-  # `min_author_hosts`, so an exclusion that only fixed the domain count would
-  # have offered that tag anyway. Leaving the statuses out instead makes all
-  # three figures the verdict reads — servers, sample size, bot share — say the
-  # same thing about strangers, so a tag busy here and nowhere else runs out of
-  # sample instead of borrowing ours.
-  #
-  # The trending pass asks only the servers the operator listed, so the third
-  # refusal changes nothing there today; it is asked anyway so that no reader
-  # of a timeline counts a stranger's word about somebody else's member.
-  defp author_entry(status, source, relays) do
-    url = permalink(status)
-
-    with host when is_binary(host) <- author_host(status, source),
-         false <- ExternalPost.written_here?(host, url),
-         true <- speaks_for_author?(status, source, url, host, relays) do
-      [%{host: host, bot?: status["account"]["bot"] == true}]
-    else
-      _refused -> []
-    end
   end
 
   defp get_json(source, path) do
@@ -320,26 +289,52 @@ defmodule Vutuv.Tags.ExternalTagClient do
 
   defp parse(statuses, source) do
     now = DateTime.utc_now(:second)
-    with_hosts = Enum.map(statuses, &{&1, author_host(&1, source)})
-
-    blocked = with_hosts |> Enum.map(&elem(&1, 1)) |> blocked_among()
+    {with_hosts, blocked} = with_authors(statuses, source)
     # Read once per timeline, at fetch time, so a server the operator takes off
     # the list stops relaying with the next pass.
     relays = SourceServers.relays()
 
     Enum.flat_map(with_hosts, fn {status, host} ->
-      case to_post(status, source, host, now, {blocked, relays}) do
+      case to_post(status, source, host, now, blocked, relays) do
         nil -> []
         post -> [post]
       end
     end)
   end
 
-  # One query for the whole timeline: a busy tag carries close to twenty
-  # distinct author hosts, and asking per status would be twenty round trips
-  # against a table holding tens of rows.
-  defp blocked_among(hosts) do
-    hosts |> Enum.uniq() |> Enum.reject(&is_nil/1) |> Fediverse.blocked_hosts()
+  # Each status beside its author's host, and which of those hosts the operator
+  # blocked: one query for the whole timeline, since a busy tag carries close to
+  # twenty distinct author hosts against a table holding tens of rows.
+  defp with_authors(statuses, source) do
+    with_hosts = Enum.map(statuses, &{&1, author_host(&1, source)})
+    {with_hosts, with_hosts |> Enum.map(&elem(&1, 1)) |> Fediverse.blocked_hosts()}
+  end
+
+  # The refusals the pull and the census share, all about the author rather than
+  # the server we asked.
+  #
+  # A `nil` host is a status naming no author we can parse, and it fails
+  # **closed**: `MapSet.member?(blocked, nil)` is simply false, so without the
+  # first clause an unparseable author would walk past the blocklist.
+  #
+  # A blocked author's server (issue #2204) is no post here and no voice about a
+  # tag either. Counted, it was one more author server towards the census's
+  # diversity gate, and its statuses moved the bot share.
+  #
+  # `written_here?/2` (issues #2179 and #2196): our own posts travel out with
+  # their hashtags, so the servers a followed tag names hand them back as finds,
+  # and the census counted this installation as one more independent author
+  # server. Re-measured on 11 September 2026, troet.cafe's `#vutuv` timeline was
+  # 40 statuses, **35 of them ours**, over six author servers — it cleared every
+  # gate, and five foreign statuses is not evidence of anything. Left out rather
+  # than subtracted in `Trending`, because the five remaining servers still
+  # clear `min_author_hosts`: leaving the statuses out makes all three figures
+  # the verdict reads say the same thing about strangers, so a tag busy here and
+  # nowhere else runs out of sample instead of borrowing ours. It asks about the
+  # address as well as the author; a missing address is simply not ours.
+  defp stranger?(host, url, blocked) do
+    is_binary(host) and not MapSet.member?(blocked, host) and
+      not ExternalPost.written_here?(host, url)
   end
 
   # A timeline carries other servers' posts too, so the author's host is a
@@ -357,28 +352,14 @@ defmodule Vutuv.Tags.ExternalTagClient do
     end
   end
 
-  defp to_post(status, source, host, now, {blocked, relays}) do
-    # `host` is nil when the status names no author we can parse. That is the
-    # degraded path, and it fails **closed**: `MapSet.member?(blocked, nil)` is
-    # simply false, so without this guard an unparseable author would walk past
-    # the operator's blocklist rather than be refused by it.
-    #
-    # `written_here?/2` is the second refusal that reads a host rather than the
-    # server we asked (issue #2179): our own posts travel out with their
-    # hashtags, so the servers a followed tag names carry them and hand them
-    # back as finds. It sits after `permalink/1` because it asks about the
-    # address as well as the author, and a status with no address is refused on
-    # the next line anyway.
-    #
-    # `speaks_for_author?/2` is the third (issue #2174): a server a member typed
-    # in is believed about its own members only, and it needs the address and
-    # the profile link too.
-    with true <- is_binary(host),
-         true <- showable?(status),
-         false <- MapSet.member?(blocked, host),
+  defp to_post(status, source, host, now, blocked, relays) do
+    # `speaks_for_author?/2` is the pull's own third refusal (issue #2174): a
+    # server a member typed in is believed about its own members only, and it
+    # needs the address and the profile link too.
+    with true <- showable?(status),
          text when text != "" <- text_of(status),
          url when is_binary(url) <- permalink(status),
-         false <- ExternalPost.written_here?(host, url),
+         true <- stranger?(host, url, blocked),
          true <- speaks_for_author?(status, source, url, host, relays),
          id when is_binary(id) <- remote_id(status),
          language when is_nil(language) or is_binary(language) <- language(status),

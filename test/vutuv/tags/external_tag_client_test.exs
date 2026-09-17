@@ -429,22 +429,6 @@ defmodule Vutuv.Tags.ExternalTagClientTest do
       assert post.remote_id == "5"
       assert post.author_url == nil
     end
-
-    test "the census of a server a member typed in counts its own members only" do
-      put_config(:tag_source_servers, [])
-
-      stub_tag_timeline([
-        relayed("1"),
-        status(%{"id" => "2"}),
-        status(%{
-          "id" => "3",
-          "account" => %{"acct" => "ada", "url" => "https://victim.example/@ada"}
-        })
-      ])
-
-      assert ExternalTagClient.authors(@source, "Elixir") ==
-               {:ok, [%{host: @source, bot?: false}]}
-    end
   end
 
   # A post written here federates out with its hashtags, so the servers a
@@ -514,13 +498,6 @@ defmodule Vutuv.Tags.ExternalTagClientTest do
   # earlier, so the three figures the bot-wave gate reads — how many distinct
   # servers, how many statuses, how many bots — are all about strangers.
   describe "authors/2" do
-    # The trending pass asks only the servers the operator listed, so every
-    # stranger on these timelines is a relay it vouches for (issue #2174).
-    setup do
-      put_config(:tag_source_servers, [@source])
-      :ok
-    end
-
     test "counts the strangers on the timeline and leaves this installation out" do
       stub_tag_timeline([
         ours(%{id: "own"}),

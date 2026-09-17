@@ -45,7 +45,7 @@ defmodule Vutuv.Tags.Trending do
   **The census counts strangers only** (issue #2196). Our own posts federate out
   with their hashtags, so the servers asked here hand them straight back, and
   counting them made this installation one more author server on the very gate
-  meant to catch a single source — `Vutuv.Tags.ExternalTagClient.author_entry/2`
+  meant to catch a single source — `stranger?/3` in `Vutuv.Tags.ExternalTagClient`
   carries the measurement and why they are dropped there rather than subtracted
   here. Both figures above are therefore about the world outside, as is the
   sample they are taken from. The tag's **volume** is not, and cannot be:
