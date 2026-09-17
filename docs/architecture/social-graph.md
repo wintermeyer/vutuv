@@ -468,7 +468,10 @@ rail and given a 40px target on the tag page (`source_chip/1`'s `size`). A
 server the member typed in (`own?` in `SourceServers.rows/1`: picked, and not
 on the operator's list) is listed directly above the field rather than among
 the offers, and "host now feeds #tag" appears under the field in a live region
-that is always rendered. At the cap the sentence saying so stands above the
+that is always rendered. An add empties the field by rendering it under a new
+id (`field_key`), because LiveView never patches the value of a focused input;
+a refusal renders the typed text back (`typed`), because it does patch an
+unfocused one. At the cap the sentence saying so stands above the
 switches, and every switch it holds back is dimmed and names it in
 `aria-describedby`; a switch that is on stays usable, since switching it off
 frees the slot. German calls the feature "das Tag", so a sentence about it

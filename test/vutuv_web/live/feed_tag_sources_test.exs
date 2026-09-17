@@ -53,6 +53,12 @@ defmodule VutuvWeb.PostLive.FeedTagSourcesTest do
   defp switch(host), do: "#tag-source-switch-#{String.replace(host, ".", "-")}"
   defp row(host), do: "#tag-source-#{String.replace(host, ".", "-")}"
 
+  defp field_id(live) do
+    html = live |> element(~s(#tag-source-form input[name="source"])) |> render()
+    [_match, id] = Regex.run(~r/\sid="([^"]+)"/, html)
+    id
+  end
+
   defp fill_to_cap(follow) do
     for n <- 1..SourceServers.limit() do
       {:ok, _row} = Tags.add_tag_follow_source(follow, "server#{n}.example")
@@ -237,6 +243,33 @@ defmodule VutuvWeb.PostLive.FeedTagSourcesTest do
       live |> element(switch("kowelenz.example")) |> render_click()
       refute has_element?(live, "#tag-sources-added")
       refute has_element?(live, "#tag-source-own-rows")
+    end
+
+    # LiveView leaves a focused input's value alone on a patch and resets an
+    # unfocused one to what is rendered. So an add hands over the field under a
+    # new id, which the client swaps for an empty element, and a refusal renders
+    # the typed text back, whichever element held focus when it was sent.
+    test "empties the field after an add and keeps the text after a refusal", %{
+      conn: conn,
+      tag: tag
+    } do
+      stub_servers(%{"kowelenz.example" => %{language: "de"}})
+
+      {:ok, live, _html} = live(conn, ~p"/feed")
+      open_panel(live, tag)
+      first = field_id(live)
+
+      live |> element("#tag-source-form") |> render_submit(%{"source" => "nobody.example"})
+
+      assert field_id(live) == first
+      assert has_element?(live, ~s(##{first}[value="nobody.example"]))
+
+      live |> element("#tag-source-form") |> render_submit(%{"source" => "kowelenz.example"})
+
+      second = field_id(live)
+      assert second != first
+      assert has_element?(live, ~s(##{second}[value=""]))
+      assert has_element?(live, ~s(#tag-source-form label[for="#{second}"]))
     end
 
     test "a refusal replaces an earlier success", %{conn: conn, tag: tag} do

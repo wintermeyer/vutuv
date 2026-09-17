@@ -74,7 +74,7 @@ defmodule VutuvWeb.PostLive.TagSources do
     # and fetched back) hears so, or that chip would say "expanded" over nothing.
     if connected?(socket), do: notify({:panel, nil})
 
-    {:ok, socket |> assign(:open_id, nil) |> assign(:rows, []) |> answer(nil, nil)}
+    {:ok, socket |> assign(open_id: nil, rows: [], typed: "", field_key: 0) |> answer(nil, nil)}
   end
 
   @impl true
@@ -170,6 +170,8 @@ defmodule VutuvWeb.PostLive.TagSources do
         rows={@rows}
         error={@error}
         added={@added}
+        typed={@typed}
+        field_key={@field_key}
         target={@myself}
       />
     </div>
@@ -187,6 +189,7 @@ defmodule VutuvWeb.PostLive.TagSources do
         socket
         |> assign(:open_id, tag_id)
         |> answer(nil, nil)
+        |> assign(:typed, "")
         |> assign_rows()
         |> ask_stale_servers(tag)
     end
@@ -199,6 +202,7 @@ defmodule VutuvWeb.PostLive.TagSources do
     |> assign(:open_id, nil)
     |> assign(:rows, [])
     |> answer(nil, nil)
+    |> assign(:typed, "")
   end
 
   # What the panel last said about a press: a refusal or the host a typed
@@ -270,14 +274,31 @@ defmodule VutuvWeb.PostLive.TagSources do
          %{} = follow <- open_follow(socket),
          {:ok, host} <- SourceServers.check(value, tag),
          {:ok, _row} <- Tags.add_tag_follow_source(follow, host) do
-      socket |> answer(nil, if(confirm?, do: host)) |> sources_changed()
+      socket
+      |> answer(nil, if(confirm?, do: host))
+      |> field(confirm?, :added)
+      |> sources_changed()
     else
       # The panel is open on a tag this member no longer follows.
       [] -> close(socket)
       nil -> close(socket)
-      {:error, reason} -> answer(socket, reason, nil)
+      {:error, reason} -> socket |> answer(reason, nil) |> field(confirm?, value)
     end
   end
+
+  # The typed field after its own press. LiveView leaves a focused input's value
+  # alone on a patch and resets an unfocused one to what is rendered, so the
+  # text is rendered back on a refusal (the member corrects it, whether Return
+  # or the button sent it) and an add renders the field under a new id, which
+  # the client swaps for an empty element rather than patching the old one, at
+  # the price of the focus.
+  defp field(socket, false, _outcome), do: socket
+
+  defp field(socket, true, :added) do
+    socket |> assign(:typed, "") |> update(:field_key, &(&1 + 1))
+  end
+
+  defp field(socket, true, typed), do: assign(socket, :typed, typed)
 
   @doc """
   The number on one followed tag's chip, and the way into changing it.
@@ -349,6 +370,8 @@ defmodule VutuvWeb.PostLive.TagSources do
   attr(:rows, :list, required: true)
   attr(:error, :any, default: nil)
   attr(:added, :string, default: nil)
+  attr(:typed, :string, default: "")
+  attr(:field_key, :integer, default: 0)
   attr(:target, :any, required: true)
 
   defp source_panel(assigns) do
@@ -438,12 +461,14 @@ defmodule VutuvWeb.PostLive.TagSources do
           phx-submit="tag-source-check"
           phx-target={@target}
         >
-          <label for="tag-source-input" class="sr-only">{gettext("Add another server")}</label>
+          <label for={"tag-source-input-#{@field_key}"} class="sr-only">
+            {gettext("Add another server")}
+          </label>
           <input
-            id="tag-source-input"
+            id={"tag-source-input-#{@field_key}"}
             type="text"
             name="source"
-            value=""
+            value={@typed}
             maxlength="255"
             placeholder={gettext("Add another server")}
             aria-describedby="tag-source-own-members"
