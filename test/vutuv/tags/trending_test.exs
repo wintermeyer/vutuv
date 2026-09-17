@@ -22,6 +22,7 @@ defmodule Vutuv.Tags.TrendingTest do
   alias Vutuv.Tags.TrendCheck
   alias Vutuv.Tags.Trending
   alias Vutuv.Tags.TrendingTag
+  alias Vutuv.Tags.TrendVerdict
 
   @big "troet.example"
   @small "nrw.example"
@@ -405,6 +406,99 @@ defmodule Vutuv.Tags.TrendingTest do
 
       assert Trending.offers(limit: 10) |> Enum.map(& &1.name) |> Enum.sort() ==
                ~w(alpha bravo charlie delta echo)
+    end
+  end
+
+  # The review of issue #2160's cap: every pass asked the loudest candidates
+  # again, so an installation reading one server never sampled more than two of
+  # them, and the row stayed empty for good when those two were bot waves.
+  describe "the census works through every candidate" do
+    @eight ~w(alpha bravo charlie delta echo foxtrot golf hotel)
+
+    setup do
+      put_config(:tag_source_servers, [@big])
+      put_config(:tag_trending, min_servers: 1, census_per_host: 2)
+      :ok
+    end
+
+    # Eight spiking candidates, loudest first. The loudest one's timeline is
+    # broken, so its census fails; the second is a bot wave; the rest are crowds.
+    defp eight_candidates do
+      trends =
+        @eight
+        |> Enum.with_index()
+        |> Enum.map(fn {name, index} -> {name, [900 - 50 * index, 1, 1, 1, 1, 1, 1]} end)
+
+      samples =
+        @eight
+        |> Map.new(&{&1, crowd(@big)})
+        |> Map.put("alpha", %{"error" => "not a timeline"})
+        |> Map.put("bravo", sample_statuses(@big, 20, ["farm.example"], 20))
+
+      stub(%{@big => trends}, %{@big => samples})
+    end
+
+    # One pass, then every verdict half an hour older, which is what the next
+    # pass would find. Answers who was sampled and what is offered afterwards.
+    defp census_pass do
+      Repo.delete_all(TrendCheck)
+      flush()
+      Trending.refresh()
+
+      asked = Enum.map(census_requests(), &elem(&1, 1))
+      assert asked == Enum.uniq(asked), "a candidate was sampled twice in one pass"
+
+      age_verdicts(30)
+      {Enum.sort(asked), offered_names()}
+    end
+
+    defp offered_names, do: Trending.offer(limit: 10).tags |> Enum.map(& &1.name) |> Enum.sort()
+
+    defp age_verdicts(minutes) do
+      Repo.update_all(
+        from(v in TrendVerdict,
+          update: [
+            set: [vetted_at: fragment("? - make_interval(mins => ?)", v.vetted_at, ^minutes)]
+          ]
+        ),
+        []
+      )
+    end
+
+    test "quieter candidates get their turn, and the offer keeps what passed" do
+      eight_candidates()
+
+      assert census_pass() == {~w(alpha bravo), []}
+      assert census_pass() == {~w(charlie delta), ~w(charlie delta)}
+      assert census_pass() == {~w(echo foxtrot), ~w(charlie delta echo foxtrot)}
+      assert census_pass() == {~w(golf hotel), ~w(charlie delta echo foxtrot golf hotel)}
+
+      # Everybody has a verdict now, so the oldest are asked again, the failed
+      # census among them, and nothing that passed drops off in the meantime.
+      assert census_pass() == {~w(alpha bravo), ~w(charlie delta echo foxtrot golf hotel)}
+      assert census_pass() == {~w(charlie delta), ~w(charlie delta echo foxtrot golf hotel)}
+    end
+
+    test "a verdict older than four passes is not offered on, and goes once its tag is quiet" do
+      eight_candidates()
+      census_pass()
+      assert {_asked, ~w(charlie delta)} = census_pass()
+
+      put_config(:tag_trending, min_servers: 1, census_per_host: 2, vet_limit: 0)
+      Repo.delete_all(TrendCheck)
+      Trending.refresh()
+      assert offered_names() == ~w(charlie delta)
+
+      age_verdicts(4 * 30)
+      Repo.delete_all(TrendCheck)
+      Trending.refresh()
+      assert offered_names() == []
+      assert Repo.aggregate(TrendVerdict, :count) == 4
+
+      stub(%{@big => []})
+      Repo.delete_all(TrendCheck)
+      Trending.refresh()
+      assert Repo.aggregate(TrendVerdict, :count) == 0
     end
   end
 

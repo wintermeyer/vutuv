@@ -553,10 +553,23 @@ server placed where it decides the verdict flips it, in both directions.
 **The sample is spread over the servers that listed the tag** (issue #2160).
 It used to come from each candidate's busiest server, which put seven of one
 real pass's eighteen requests on mastodon.social within five seconds. Now each
-candidate, loudest first, is sampled on whichever of its reporters has been
-asked least this pass (ties go to the busiest), and no server is asked more
-than `census_per_host` times. A candidate whose reporters have all had their
-share is held back and logged, and the next pass starts every server at zero.
+candidate is sampled on whichever of its reporters has been asked least this
+pass (ties go to the busiest), and no server is asked more than
+`census_per_host` times. A candidate whose reporters have all had their share
+is held back and logged.
+
+**The census works through every candidate** (`Vutuv.Tags.TrendVerdict`,
+table `tag_trend_verdicts`). Walking loudest first on every pass, the cap
+sampled the same few candidates for good: two on an installation reading one
+server, and an empty row when those two were bot waves. So each candidate's
+last verdict is kept with the time it was taken, stamped on every outcome, a
+failed census included. A pass samples the never-sampled first, then the
+oldest verdicts (ties stay loudest first), and offers every candidate whose
+current verdict passed: this pass's, or a stored one younger than four
+intervals, the same horizon after which an offer stops counting as "right
+now". A stale verdict is deleted once its tag stops trending. The verdicts are
+a table of their own because the release serving traffic during a deploy reads
+every `tag_trends` row as an offer.
 On 17 September 2026 the nine shipped servers that answered listed seven
 candidates, each on five to eight of them: the old rule put three samples each
 on mastodon.online and hachyderm.io, the new one asks seven servers once each.
