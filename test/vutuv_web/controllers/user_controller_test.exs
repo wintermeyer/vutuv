@@ -338,6 +338,29 @@ defmodule VutuvWeb.UserControllerTest do
     end
   end
 
+  # The leading "@" of a federated handle used to be a hand-copied provider list
+  # in the view, so a provider added to the schema's display rule rendered one
+  # way in settings and another on the card members actually see. Both read
+  # SocialMediaAccount.display/1 now.
+  test "the Social Media card shows a federated handle in its canonical form", %{conn: conn} do
+    user = insert_activated_user()
+
+    insert(:social_media_account,
+      user: user,
+      provider: "Pixelfed",
+      value: "dansup@pixelfed.social"
+    )
+
+    insert(:social_media_account, user: user, provider: "GitHub", value: "octocat")
+
+    html = conn |> get(~p"/#{user}") |> html_response(200)
+
+    assert html =~ "@dansup@pixelfed.social"
+    assert html =~ ~s(href="https://pixelfed.social/dansup")
+    # A provider with no "@" rule is untouched by the shared helper.
+    refute html =~ "@octocat"
+  end
+
   test "merges e-mail and phone into one Contact card, ordered about-first", %{conn: conn} do
     user = insert_activated_user(gender: "female", birthdate: ~D[1990-04-15])
     insert(:email, user: user, value: "public.contact@example.com")

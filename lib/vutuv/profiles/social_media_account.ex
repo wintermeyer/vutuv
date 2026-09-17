@@ -50,14 +50,24 @@ defmodule Vutuv.Profiles.SocialMediaAccount do
   @required_fields ~w(provider value)a
   @optional_fields ~w()a
 
-  @accepted_providers ~w(Facebook Twitter Mastodon Bluesky Instagram Youtube Snapchat LinkedIn XING GitHub GitLab Codeberg Gitea Forgejo)
+  @accepted_providers ~w(Facebook Twitter Mastodon Bluesky Pixelfed Instagram Youtube Snapchat LinkedIn XING GitHub GitLab Codeberg Gitea Forgejo)
 
-  # The code forges a member runs themselves (issue #1504). They have no fixed
-  # host, so — exactly like Mastodon — the instance is part of the address: the
-  # value is stored as `name@git.example.com` and the profile link is
-  # https://git.example.com/name. Both speak the same Gitea-compatible API v1,
-  # so the two providers differ only in the name and the glyph; one client
-  # (`Vutuv.CodeStats.Forgejo`) serves both.
+  # The providers whose instance is part of the handle: the value is stored as
+  # `user@instance` and the link is built from that pair rather than from a
+  # fixed base. The only thing that differs between them is the path their
+  # instance serves a profile at, so it is one table and `url/1` is one clause.
+  @instance_paths %{"Mastodon" => "/@", "Pixelfed" => "/", "Gitea" => "/", "Forgejo" => "/"}
+
+  # The two federated brands among them. They differ from the forges below only
+  # in how strictly the address is validated (@fediverse_format against
+  # @self_hosted_format), because a forge address is what the stats client
+  # turns into an outbound request.
+  @fediverse_providers ~w(Mastodon Pixelfed)
+
+  # The code forges a member runs themselves (issue #1504), listed in
+  # @instance_paths above like the federated brands. Both speak the same
+  # Gitea-compatible API v1, so the two providers differ only in the name and
+  # the glyph; one client (`Vutuv.CodeStats.Forgejo`) serves both.
   @self_hosted_providers ~w(Gitea Forgejo)
 
   # The code forges whose profile URL is a bare host plus a single-segment
@@ -88,9 +98,10 @@ defmodule Vutuv.Profiles.SocialMediaAccount do
   def self_hosted_provider?(provider), do: provider in @self_hosted_providers
 
   @doc """
-  Splits a stored self-hosted value into `{:ok, handle, host}`, or `:error` for
-  anything that is not one — the one place that reads the `name@host` form, so
-  the link, the API base and the displayed address cannot disagree.
+  Splits a stored `name@host` value into `{:ok, handle, host}`, or `:error` for
+  anything that is not one — the one place that reads that form (the forges'
+  own address, and every federated handle), so the link, the API base and the
+  displayed address cannot disagree.
   """
   def split_self_hosted(value) when is_binary(value) do
     case String.split(value, "@", parts: 2, trim: true) do
@@ -101,9 +112,8 @@ defmodule Vutuv.Profiles.SocialMediaAccount do
 
   def split_self_hosted(_value), do: :error
 
-  # Providers whose profile URL is a fixed base plus the bare handle. Two are
-  # deliberately absent. Mastodon is federated, so the instance is part of the
-  # handle and the link is built by mastodon_url/1 instead. Bluesky's base is
+  # Providers whose profile URL is a fixed base plus the bare handle, so the
+  # @instance_paths set above is absent here. Bluesky is absent too: its base is
   # owned by `Vutuv.Bluesky.profile_url/1`, because the same address is written
   # by a second reader — a `@name.bsky.social` inside a post or a message
   # (`VutuvWeb.Markdown`) — which has no account row to read a base from.
@@ -125,6 +135,7 @@ defmodule Vutuv.Profiles.SocialMediaAccount do
     {"Twitter", "@"},
     {"Mastodon", "@"},
     {"Bluesky", ""},
+    {"Pixelfed", "@"},
     {"Instagram", "@"},
     {"Youtube", ""},
     {"Snapchat", ""},
@@ -137,8 +148,8 @@ defmodule Vutuv.Profiles.SocialMediaAccount do
     {"Forgejo", ""}
   ]
 
-  # A federated Mastodon handle: user@instance.tld.
-  @mastodon_format ~r/^[A-Za-z0-9._-]+@[A-Za-z0-9.-]+$/u
+  # A federated handle: user@instance.tld (Mastodon, Pixelfed).
+  @fediverse_format ~r/^[A-Za-z0-9._-]+@[A-Za-z0-9.-]+$/u
   # A Bluesky handle: a lowercase domain (name.bsky.social, or a custom
   # domain) — the same shape Vutuv.Bluesky embeds in the AppView query.
   @bluesky_format ~r/^[a-z0-9](?:[a-z0-9-]*[a-z0-9])?(?:\.[a-z0-9](?:[a-z0-9-]*[a-z0-9])?)+$/
@@ -273,7 +284,7 @@ defmodule Vutuv.Profiles.SocialMediaAccount do
       value ->
         parsed =
           case get_field(changeset, :provider) do
-            "Mastodon" -> parse_mastodon(value)
+            provider when provider in @fediverse_providers -> parse_fediverse(value)
             "Bluesky" -> parse_bluesky(value)
             provider when provider in @self_hosted_providers -> parse_self_hosted(value)
             _ -> parse_value(value)
@@ -291,13 +302,26 @@ defmodule Vutuv.Profiles.SocialMediaAccount do
     |> List.last() || ""
   end
 
-  # Mastodon is federated: the handle is user@instance, the profile lives at
-  # https://instance/@user. Accept @user@instance, the bare user@instance, or a
-  # pasted profile URL, and store user@instance.
-  defp parse_mastodon(value) do
-    case Regex.run(~r{^https?://([^/]+)/@?([^/@]+)}, String.trim(value)) do
-      [_, instance, user] -> user <> "@" <> instance
-      nil -> value |> String.trim() |> String.trim_leading("@")
+  # A federated handle is user@instance. Accept @user@instance, the bare
+  # user@instance, or a pasted profile URL in either path shape (Mastodon's
+  # /@user and Pixelfed's bare /user), and store user@instance with the instance
+  # lowercased: a host is case-insensitive but the (provider, value) unique
+  # index is not, so keeping the typed casing would let one account be claimed
+  # once per spelling. A query or fragment a share sheet appended is not part of
+  # the address, so it goes before anything else looks at the value.
+  defp parse_fediverse(value) do
+    trimmed = value |> String.trim() |> String.split(["?", "#"], parts: 2) |> hd()
+
+    case Regex.run(~r{^https?://([^/]+)/@?([^/@]+)}, trimmed) do
+      [_, instance, user] -> join_instance(user, instance)
+      nil -> lowercase_instance(String.trim_leading(trimmed, "@"))
+    end
+  end
+
+  defp lowercase_instance(value) do
+    case String.split(value, "@", parts: 2) do
+      [user, instance] -> join_instance(user, instance)
+      _ -> value
     end
   end
 
@@ -345,19 +369,21 @@ defmodule Vutuv.Profiles.SocialMediaAccount do
 
   defp from_url_path(rest) do
     case String.split(rest, "/", trim: true) do
-      [host, handle] -> join_self_hosted(String.trim_leading(handle, "@"), host)
+      [host, handle] -> join_instance(String.trim_leading(handle, "@"), host)
       _deeper_path -> rest
     end
   end
 
   defp from_address(rest) do
     case String.split(rest, "@", parts: 2) do
-      [handle, host] -> join_self_hosted(handle, host)
+      [handle, host] -> join_instance(handle, host)
       _ -> rest
     end
   end
 
-  defp join_self_hosted(handle, host), do: handle <> "@" <> String.downcase(host)
+  # The stored `user@instance` pair. The instance is lowercased, a host being
+  # case-insensitive while the (provider, value) unique index is not.
+  defp join_instance(user, instance), do: user <> "@" <> String.downcase(instance)
 
   defp validate_value(changeset) do
     provider = get_field(changeset, :provider)
@@ -367,7 +393,9 @@ defmodule Vutuv.Profiles.SocialMediaAccount do
     end)
   end
 
-  defp valid_value?("Mastodon", value), do: Regex.match?(@mastodon_format, value)
+  defp valid_value?(provider, value) when provider in @fediverse_providers,
+    do: Regex.match?(@fediverse_format, value)
+
   defp valid_value?("Bluesky", value), do: Regex.match?(@bluesky_format, value)
 
   defp valid_value?(provider, value) when provider in @self_hosted_providers,
@@ -383,6 +411,9 @@ defmodule Vutuv.Profiles.SocialMediaAccount do
   defp invalid_message("Mastodon"),
     do: "Enter your full Mastodon handle, e.g. @user@instance.social"
 
+  defp invalid_message("Pixelfed"),
+    do: "Enter your full Pixelfed handle, e.g. @user@pixelfed.social"
+
   defp invalid_message("Bluesky"),
     do: "Enter your Bluesky handle, e.g. name.bsky.social"
 
@@ -391,28 +422,34 @@ defmodule Vutuv.Profiles.SocialMediaAccount do
 
   defp invalid_message(_), do: "Invalid account name"
 
-  # This generates special display rule matches
+  @doc """
+  The handle as a visitor reads it: the Twitter / Instagram and the federated
+  handles lead with an "@" (so a Mastodon or Pixelfed value renders as the
+  canonical @user@instance address), every other provider shows it bare.
+
+  Public because three surfaces render it — the settings card, the profile card
+  and the CV — and a leading "@" that lives in three tables is a leading "@"
+  that drifts (it did: `display_rules` gained Pixelfed while two hand-copied
+  provider lists did not).
+  """
   for {provider, pretext} <- display_rules do
-    defp get_display(%__MODULE__{provider: unquote(provider), value: value}),
+    def display(%__MODULE__{provider: unquote(provider), value: value}),
       do: unquote(pretext) <> value
   end
 
-  defp get_display(_), do: ""
+  def display(_), do: ""
 
-  # Mastodon's federated link; its URL scheme lives in mastodon_url/1 (the
-  # instance is part of the handle, not a fixed base).
-  def social_media_link(%__MODULE__{provider: "Mastodon"} = account),
-    do: HTMLLink.link(get_display(account), to: url(account))
-
-  # Bluesky's link, through the module that owns that address (see base_urls).
-  def social_media_link(%__MODULE__{provider: "Bluesky"} = account),
-    do: HTMLLink.link(get_display(account), to: url(account))
-
-  # A self-hosted forge carries its own host too, so its link is built by
-  # url/1 the same way (see @self_hosted_providers).
+  # The providers whose address is built from the value itself rather than from
+  # a fixed base: the @instance_paths set, plus Bluesky. A value that lost its
+  # instance has no address, and then the bare handle is shown — an empty href
+  # would be a link back to the current page.
   def social_media_link(%__MODULE__{provider: provider} = account)
-      when provider in @self_hosted_providers,
-      do: HTMLLink.link(get_display(account), to: url(account))
+      when is_map_key(@instance_paths, provider) or provider == "Bluesky" do
+    case url(account) do
+      "" -> display(account)
+      address -> HTMLLink.link(display(account), to: address)
+    end
+  end
 
   # The rendered profile link; the provider → URL scheme knowledge lives
   # only in url/1 below. Providers without a canonical URL scheme (a nil
@@ -420,7 +457,7 @@ defmodule Vutuv.Profiles.SocialMediaAccount do
   for {provider, base} <- base_urls do
     if base do
       def social_media_link(%__MODULE__{provider: unquote(provider)} = account),
-        do: HTMLLink.link(get_display(account), to: url(account))
+        do: HTMLLink.link(display(account), to: url(account))
     else
       def social_media_link(%__MODULE__{provider: unquote(provider), value: value}), do: value
     end
@@ -431,12 +468,11 @@ defmodule Vutuv.Profiles.SocialMediaAccount do
   # The profile URL as a plain string (the bare value when the provider has
   # no canonical URL scheme, e.g. Snapchat) — the agent documents
   # (VutuvWeb.AgentDocs) need a string, not a rendered link.
-  def url(%__MODULE__{provider: "Mastodon", value: value}), do: mastodon_url(value)
-  def url(%__MODULE__{provider: "Bluesky", value: value}), do: Bluesky.profile_url(value)
-
   def url(%__MODULE__{provider: provider, value: value})
-      when provider in @self_hosted_providers,
-      do: self_hosted_url(value)
+      when is_map_key(@instance_paths, provider),
+      do: instance_url(value, Map.fetch!(@instance_paths, provider))
+
+  def url(%__MODULE__{provider: "Bluesky", value: value}), do: Bluesky.profile_url(value)
 
   for url <- base_urls do
     case url do
@@ -451,20 +487,13 @@ defmodule Vutuv.Profiles.SocialMediaAccount do
 
   def url(_), do: ""
 
-  # https://instance/user from the stored user@instance address. Gitea and
-  # Forgejo serve a profile at the bare username, with no "@" prefix.
-  defp self_hosted_url(value) do
+  # https://instance<path>user from the stored user@instance value, with the
+  # path from @instance_paths. A value that lost its instance yields no link at
+  # all rather than a broken one.
+  defp instance_url(value, path) do
     case split_self_hosted(value) do
-      {:ok, handle, host} -> "https://" <> host <> "/" <> handle
+      {:ok, user, instance} -> "https://" <> instance <> path <> user
       :error -> ""
-    end
-  end
-
-  # https://instance/@user from the stored user@instance handle.
-  defp mastodon_url(value) do
-    case String.split(value, "@", parts: 2, trim: true) do
-      [user, instance] -> "https://" <> instance <> "/@" <> user
-      _ -> ""
     end
   end
 end

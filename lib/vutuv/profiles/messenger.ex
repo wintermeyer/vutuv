@@ -1,7 +1,7 @@
 defmodule Vutuv.Profiles.Messenger do
   @moduledoc """
   An online messenger a member lists on their profile (issue #949): Signal,
-  WhatsApp, Telegram, Threema, Matrix or Session.
+  WhatsApp, Telegram, Threema, Matrix, XMPP or Session.
 
   Modelled on `Vutuv.Profiles.SocialMediaAccount` — a `provider` + `value` pair
   with a per-provider display order — but kept a distinct resource because a
@@ -16,6 +16,10 @@ defmodule Vutuv.Profiles.Messenger do
   section uses, while a username is kept as typed — so a valid handle is never
   rejected as "not a phone number". The other providers carry a service-specific
   id or username.
+
+  XMPP is the one provider `from_url/1` can never offer: `@url_providers` is
+  keyed by host and the links editor only accepts http(s), so a pasted
+  `xmpp:` URI is refused there instead of being suggested for this section.
 
   Signal takes a **third** shape, its contact link (issue #1442): it is the only
   Signal address that names neither the phone number nor the username (the
@@ -51,7 +55,7 @@ defmodule Vutuv.Profiles.Messenger do
   def ordered(query \\ __MODULE__), do: Vutuv.Ordering.by_position(query)
 
   # The accepted providers, in the order the form's dropdown lists them.
-  @providers ~w(Signal WhatsApp Telegram Threema Matrix Session)
+  @providers ~w(Signal WhatsApp Telegram Threema Matrix XMPP Session)
 
   # Providers whose value can be EITHER a phone number or a username (Signal and
   # WhatsApp both offer usernames now). A phone-shaped value is validated and
@@ -213,18 +217,23 @@ defmodule Vutuv.Profiles.Messenger do
   end
 
   # What each provider's handle looks like once tidied, as `{pattern, message}`.
-  # A table rather than four clauses of the same seven lines, so a new messenger
-  # is a row plus a `tidy/2` clause and the four error sentences can be read
-  # side by side:
+  # A table rather than a clause each of the same seven lines, so a new
+  # messenger is a row plus a `tidy/2` clause and the error sentences can be
+  # read side by side:
   #
   #   * Telegram: a public @username, 5–32 of [A-Za-z0-9_], stored without the "@".
   #   * Threema: an 8-character ID of [A-Z0-9].
   #   * Matrix: a federated MXID @user:homeserver.
+  #   * XMPP: a bare JID user@domain; a resource (`/phone`) is refused, it
+  #     names one client session rather than the person.
   #   * Session: a 66-character account ID (05 then 64 hex characters).
   @handle_rules %{
     "Telegram" => {~r/^[A-Za-z0-9_]{5,32}$/, "Enter your Telegram username, e.g. @yourname"},
     "Threema" => {~r/^[A-Z0-9]{8}$/, "Enter your 8-character Threema ID, e.g. ABCD1234"},
     "Matrix" => {~r/^@[^:\s]+:[^\s]+\.[^\s]+$/, "Enter your Matrix ID, e.g. @you:matrix.org"},
+    "XMPP" =>
+      {~r{^[^@\s:/]+@[^@\s:/]+\.[^@\s:/]+$},
+       "Enter your XMPP (Jabber) ID, e.g. you@jabber.example"},
     "Session" => {~r/^05[0-9a-f]{64}$/, "Enter your 66-character Session ID"}
   }
 
@@ -247,6 +256,21 @@ defmodule Vutuv.Profiles.Messenger do
   defp tidy("Telegram", value), do: String.trim_leading(value, "@")
   defp tidy("Threema", value), do: value |> String.replace(" ", "") |> String.upcase()
   defp tidy("Matrix", value), do: prepend_at(String.trim(value))
+
+  # A pasted `xmpp:you@jabber.example?message` is the JID with a scheme and a
+  # query around it. Both halves of a JID are case-mapped (RFC 7622 puts the
+  # localpart under PRECIS UsernameCaseMapped, the domain is a hostname), so the
+  # stored form is lowercase throughout — which is also what makes the
+  # (user, provider, value) unique index see two spellings as one address.
+  defp tidy("XMPP", value) do
+    value
+    |> String.trim()
+    |> String.replace(~r/^xmpp:/i, "")
+    |> String.split(["?", "#"], parts: 2)
+    |> hd()
+    |> String.downcase()
+  end
+
   defp tidy("Session", value), do: value |> String.replace(~r/\s/, "") |> String.downcase()
 
   defp prepend_at("@" <> _ = id), do: id
@@ -324,7 +348,7 @@ defmodule Vutuv.Profiles.Messenger do
   The deep link that opens the messenger straight at this contact, as a plain
   string — for the agent documents (`VutuvWeb.AgentDocs`) and the vCard `IMPP`
   lines, which need a string, not a rendered link. Yields `""` when there is no
-  constructible web link (Session, or a Signal/WhatsApp **username** — those
+  constructible link (Session, or a Signal/WhatsApp **username** — those
   services have no public username resolver), and the bare contact is shown
   instead, like Snapchat in the social media section.
   """
@@ -351,6 +375,11 @@ defmodule Vutuv.Profiles.Messenger do
   defp provider_url("Telegram", value), do: "https://t.me/" <> value
   defp provider_url("Threema", value), do: "https://threema.id/" <> value
   defp provider_url("Matrix", value), do: "https://matrix.to/#/" <> value
+
+  # The IANA-registered `xmpp:` URI (RFC 5122) the member's own client handles.
+  # The one deep link here that is not a web address, so a renderer must ask
+  # `url/1 != ""` rather than test the scheme (see VutuvWeb.AgentDocs.Markdown).
+  defp provider_url("XMPP", value), do: "xmpp:" <> value
   defp provider_url(_provider, _value), do: ""
 
   @doc """

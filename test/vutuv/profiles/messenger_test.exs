@@ -186,6 +186,24 @@ defmodule Vutuv.Profiles.MessengerTest do
       refute changeset(%{"provider" => "Matrix", "value" => "nope"}).valid?
     end
 
+    test "XMPP stores a lowercase bare JID, from a pasted xmpp: URI too" do
+      assert changeset(%{"provider" => "XMPP", "value" => " Ada@Jabber.Example.ORG "})
+             |> get_change(:value) == "ada@jabber.example.org"
+
+      assert changeset(%{"provider" => "XMPP", "value" => "xmpp:ada@jabber.example?message"})
+             |> get_change(:value) == "ada@jabber.example"
+
+      # No domain, no dot in the domain, a resource (which names one client
+      # session rather than the person), and a doubled @.
+      for value <- ["ada", "ada@jabber", "ada@jabber.example/phone", "ada@@jabber.example"] do
+        refute changeset(%{"provider" => "XMPP", "value" => value}).valid?,
+               "expected #{value} to be refused"
+      end
+
+      assert %{value: ["Enter your XMPP (Jabber) ID, e.g. you@jabber.example"]} =
+               errors_on(changeset(%{"provider" => "XMPP", "value" => "ada"}))
+    end
+
     test "Session accepts a 66-character id and rejects junk" do
       id = "05" <> String.duplicate("a", 64)
       assert changeset(%{"provider" => "Session", "value" => id}).valid?
@@ -216,6 +234,11 @@ defmodule Vutuv.Profiles.MessengerTest do
 
       assert Messenger.url(%Messenger{provider: "Matrix", value: "@you:matrix.org"}) ==
                "https://matrix.to/#/@you:matrix.org"
+    end
+
+    test "XMPP builds the xmpp: URI its handler opens" do
+      assert Messenger.url(%Messenger{provider: "XMPP", value: "ada@jabber.example"}) ==
+               "xmpp:ada@jabber.example"
     end
 
     test "Session has no deep link" do

@@ -1087,13 +1087,15 @@ defmodule VutuvWeb.AgentDocs.Markdown do
   defp verified_profile_suffix(_account), do: ""
 
   # A messenger: the provider, its contact (a phone number or handle), and the
-  # deep link that opens the app at that contact. Session has no web link, so it
-  # shows the bare contact. A contact link IS its own address, so it is printed
-  # once rather than as a link labelled with itself.
-  defp messenger_line(%{provider: provider, kind: "link", url: "http" <> _ = url}),
+  # deep link that opens the app at that contact. The test is whether there IS a
+  # link, not what scheme it carries: `Messenger.url/1` already answers "" when
+  # there is none (Session, a Signal username), while XMPP's link is an `xmpp:`
+  # URI, which a scheme test dropped without a word. A contact link IS its own
+  # address, so it is printed once rather than as a link labelled with itself.
+  defp messenger_line(%{provider: provider, kind: "link", url: url}) when url != "",
     do: "- #{md_text(provider)}: " <> md_autolink(url)
 
-  defp messenger_line(%{provider: provider, contact: contact, url: "http" <> _ = url}),
+  defp messenger_line(%{provider: provider, contact: contact, url: url}) when url != "",
     do: "- #{md_text(provider)}: #{md_link(contact, url)}"
 
   defp messenger_line(%{provider: provider, contact: contact}),

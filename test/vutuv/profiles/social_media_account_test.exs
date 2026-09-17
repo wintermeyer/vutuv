@@ -1,5 +1,8 @@
 defmodule Vutuv.Profiles.SocialMediaAccountTest do
   use Vutuv.DataCase, async: true
+
+  import Phoenix.HTML, only: [safe_to_string: 1]
+
   alias Vutuv.Profiles.SocialMediaAccount
 
   defp value_for(params) do
@@ -19,24 +22,20 @@ defmodule Vutuv.Profiles.SocialMediaAccountTest do
       assert changeset.valid?
     end
 
-    test "accepts Mastodon" do
-      changeset =
-        SocialMediaAccount.changeset(%SocialMediaAccount{}, %{
-          provider: "Mastodon",
-          value: "@Gargron@mastodon.social"
-        })
+    test "accepts each provider that carries its own instance, and Bluesky" do
+      for {provider, value} <- [
+            {"Mastodon", "@Gargron@mastodon.social"},
+            {"Pixelfed", "@dansup@pixelfed.social"},
+            {"Bluesky", "gargron.bsky.social"}
+          ] do
+        changeset =
+          SocialMediaAccount.changeset(%SocialMediaAccount{}, %{
+            provider: provider,
+            value: value
+          })
 
-      assert changeset.valid?
-    end
-
-    test "accepts Bluesky" do
-      changeset =
-        SocialMediaAccount.changeset(%SocialMediaAccount{}, %{
-          provider: "Bluesky",
-          value: "gargron.bsky.social"
-        })
-
-      assert changeset.valid?
+        assert changeset.valid?, "expected #{provider} to accept #{value}"
+      end
     end
 
     test "accepts the code forges GitHub, GitLab and Codeberg (#921)" do
@@ -59,15 +58,20 @@ defmodule Vutuv.Profiles.SocialMediaAccountTest do
       assert changeset.errors[:provider]
     end
 
-    test "rejects a Mastodon handle without an instance" do
-      changeset =
-        SocialMediaAccount.changeset(%SocialMediaAccount{}, %{
-          provider: "Mastodon",
-          value: "Gargron"
-        })
+    test "rejects a federated handle without an instance, naming the brand" do
+      for {provider, value, example} <- [
+            {"Mastodon", "Gargron", "instance.social"},
+            {"Pixelfed", "dansup", "pixelfed.social"}
+          ] do
+        changeset =
+          SocialMediaAccount.changeset(%SocialMediaAccount{}, %{
+            provider: provider,
+            value: value
+          })
 
-      refute changeset.valid?
-      assert changeset.errors[:value]
+        refute changeset.valid?, "expected #{provider} to refuse a bare #{value}"
+        assert Enum.any?(errors_on(changeset).value, &(&1 =~ example))
+      end
     end
 
     test "rejects a Mastodon-style handle for Bluesky" do
@@ -168,19 +172,46 @@ defmodule Vutuv.Profiles.SocialMediaAccountTest do
     end
   end
 
-  describe "Mastodon value parsing" do
-    test "stores the bare user@instance handle, stripping a leading @" do
-      assert value_for(%{provider: "Mastodon", value: "@Gargron@mastodon.social"}) ==
+  # Mastodon and Pixelfed share one parser: the instance is part of the handle
+  # for both, and only the path their instance serves a profile at differs
+  # (Mastodon's /@user, Pixelfed's bare /user — pixelfed.social answers
+  # /@dansup with a 302 to /dansup, which is why both paths must be accepted).
+  describe "federated value parsing" do
+    test "stores user@instance from every shape a member can paste" do
+      for value <- [
+            "@Gargron@mastodon.social",
+            "Gargron@mastodon.social",
+            "https://mastodon.social/@Gargron",
+            "https://mastodon.social/Gargron"
+          ] do
+        assert value_for(%{provider: "Mastodon", value: value}) == "Gargron@mastodon.social",
+               "expected #{value} to store Gargron@mastodon.social"
+      end
+    end
+
+    test "reads a bare /user path, which is the only form Pixelfed links" do
+      assert value_for(%{provider: "Pixelfed", value: "https://pixelfed.social/dansup"}) ==
+               "dansup@pixelfed.social"
+
+      assert value_for(%{provider: "Pixelfed", value: "@dansup@pixelfed.social"}) ==
+               "dansup@pixelfed.social"
+    end
+
+    # A host is case-insensitive, the (provider, value) unique index is not, so
+    # a typed capital must not buy a second row for the same account.
+    test "lowercases the instance, whether typed or pasted, keeping the localpart" do
+      assert value_for(%{provider: "Pixelfed", value: "https://Pixelfed.Social/DanSup"}) ==
+               "DanSup@pixelfed.social"
+
+      assert value_for(%{provider: "Mastodon", value: "@Gargron@Mastodon.Social"}) ==
                "Gargron@mastodon.social"
     end
 
-    test "accepts the bare user@instance form" do
-      assert value_for(%{provider: "Mastodon", value: "Gargron@mastodon.social"}) ==
-               "Gargron@mastodon.social"
-    end
+    test "drops a query or fragment a share sheet appended" do
+      assert value_for(%{provider: "Pixelfed", value: "https://pixelfed.social/dansup?ref=x"}) ==
+               "dansup@pixelfed.social"
 
-    test "extracts the handle from a pasted profile URL" do
-      assert value_for(%{provider: "Mastodon", value: "https://mastodon.social/@Gargron"}) ==
+      assert value_for(%{provider: "Mastodon", value: "https://mastodon.social/@Gargron#bio"}) ==
                "Gargron@mastodon.social"
     end
   end
@@ -375,9 +406,18 @@ defmodule Vutuv.Profiles.SocialMediaAccountTest do
       assert SocialMediaAccount.url(account) == "https://codeberg.org/wintermeyer"
     end
 
-    test "builds the federated profile URL for Mastodon" do
-      account = %SocialMediaAccount{provider: "Mastodon", value: "Gargron@mastodon.social"}
-      assert SocialMediaAccount.url(account) == "https://mastodon.social/@Gargron"
+    # One table (@instance_paths) holds the path each instance serves a profile
+    # at, so this is the assertion that the table is right for every entry.
+    test "builds the profile URL of every provider that carries its own instance" do
+      for {provider, value, expected} <- [
+            {"Mastodon", "Gargron@mastodon.social", "https://mastodon.social/@Gargron"},
+            {"Pixelfed", "dansup@pixelfed.social", "https://pixelfed.social/dansup"},
+            {"Gitea", "hans@git.example.com", "https://git.example.com/hans"},
+            {"Forgejo", "hans@git.example.com", "https://git.example.com/hans"}
+          ] do
+        account = %SocialMediaAccount{provider: provider, value: value}
+        assert SocialMediaAccount.url(account) == expected
+      end
     end
 
     test "builds the profile URL for Bluesky" do
@@ -385,16 +425,32 @@ defmodule Vutuv.Profiles.SocialMediaAccountTest do
       assert SocialMediaAccount.url(account) == "https://bsky.app/profile/gargron.bsky.social"
     end
 
-    test "builds the profile URL of a self-hosted instance, with no @ prefix" do
-      for provider <- ~w(Gitea Forgejo) do
-        account = %SocialMediaAccount{provider: provider, value: "hans@git.example.com"}
-        assert SocialMediaAccount.url(account) == "https://git.example.com/hans"
+    test "a value that lost its instance yields no link, never a broken one" do
+      for provider <- ~w(Mastodon Pixelfed Gitea Forgejo) do
+        account = %SocialMediaAccount{provider: provider, value: "hans"}
+        assert SocialMediaAccount.url(account) == "", "expected #{provider} to yield no URL"
       end
     end
+  end
 
-    test "a self-hosted value that lost its instance yields no link, never a broken one" do
-      account = %SocialMediaAccount{provider: "Gitea", value: "hans"}
-      assert SocialMediaAccount.url(account) == ""
+  # The leading "@" used to live in three hand-copied provider lists (here, the
+  # profile card and the CV); display/1 is the one that owns it now.
+  describe "display/1" do
+    test "leads the federated and Twitter/Instagram handles with an @, others bare" do
+      assert SocialMediaAccount.display(%SocialMediaAccount{
+               provider: "Pixelfed",
+               value: "dansup@pixelfed.social"
+             }) == "@dansup@pixelfed.social"
+
+      assert SocialMediaAccount.display(%SocialMediaAccount{
+               provider: "Mastodon",
+               value: "Gargron@mastodon.social"
+             }) == "@Gargron@mastodon.social"
+
+      assert SocialMediaAccount.display(%SocialMediaAccount{
+               provider: "GitHub",
+               value: "wintermeyer"
+             }) == "wintermeyer"
     end
   end
 
@@ -404,14 +460,27 @@ defmodule Vutuv.Profiles.SocialMediaAccountTest do
       assert {:safe, _} = SocialMediaAccount.social_media_link(account)
     end
 
-    test "builds a link for Mastodon" do
-      account = %SocialMediaAccount{provider: "Mastodon", value: "Gargron@mastodon.social"}
-      assert {:safe, _} = SocialMediaAccount.social_media_link(account)
+    test "links the handle to the address the provider's own value carries" do
+      for {provider, value, href} <- [
+            {"Mastodon", "Gargron@mastodon.social", "https://mastodon.social/@Gargron"},
+            {"Pixelfed", "dansup@pixelfed.social", "https://pixelfed.social/dansup"},
+            {"Bluesky", "gargron.bsky.social", "https://bsky.app/profile/gargron.bsky.social"}
+          ] do
+        account = %SocialMediaAccount{provider: provider, value: value}
+        assert safe_to_string(SocialMediaAccount.social_media_link(account)) =~ ~s(href="#{href}")
+      end
     end
 
-    test "builds a link for Bluesky" do
-      account = %SocialMediaAccount{provider: "Bluesky", value: "gargron.bsky.social"}
-      assert {:safe, _} = SocialMediaAccount.social_media_link(account)
+    # An empty href is a link back to the page the reader is already on, so a
+    # value with no address shows the bare handle instead — the way Snapchat's
+    # does, since that provider has no URL scheme at all.
+    test "a handle with no address is shown bare, never as an empty link" do
+      for provider <- ~w(Mastodon Pixelfed Gitea Forgejo) do
+        account = %SocialMediaAccount{provider: provider, value: "orphan"}
+
+        assert SocialMediaAccount.social_media_link(account) in ["orphan", "@orphan"],
+               "expected #{provider} to render the bare handle"
+      end
     end
 
     test "returns an empty string for Google+" do

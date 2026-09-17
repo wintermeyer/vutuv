@@ -15897,9 +15897,9 @@ msgstr "Mastodon, Bluesky, GitHub e gli altri"
 
 #: lib/vutuv_web/components/ui.ex:5544
 #, elixir-autogen, elixir-format
-msgid "mastodon bluesky github gitlab codeberg linkedin x twitter instagram social"
+msgid "mastodon bluesky pixelfed github gitlab codeberg linkedin x twitter instagram social"
 msgstr ""
-"mastodon bluesky github gitlab codeberg linkedin x twitter instagram social"
+"mastodon bluesky pixelfed github gitlab codeberg linkedin x twitter instagram social"
 
 #: lib/vutuv_web/components/ui.ex:5549
 #, elixir-autogen, elixir-format
@@ -15908,8 +15908,8 @@ msgstr "Signal, Threema, Matrix e gli altri"
 
 #: lib/vutuv_web/components/ui.ex:5550
 #, elixir-autogen, elixir-format
-msgid "signal threema matrix xmpp telegram whatsapp chat messenger"
-msgstr "signal threema matrix xmpp telegram whatsapp chat messenger"
+msgid "signal threema matrix xmpp jabber telegram whatsapp chat messenger"
+msgstr "signal threema matrix xmpp jabber telegram whatsapp chat messenger"
 
 #: lib/vutuv_web/components/ui.ex:5553
 #, elixir-autogen, elixir-format

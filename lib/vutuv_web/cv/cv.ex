@@ -399,13 +399,9 @@ defmodule VutuvWeb.CV do
     }
   end
 
-  # Mirrors VutuvWeb.UserHTML.social_handle/1: the Twitter/Mastodon/Instagram
-  # handles read with a leading "@", every other provider bare.
-  defp social_handle(%{provider: provider, value: value})
-       when provider in ~w(Twitter Mastodon Instagram),
-       do: "@" <> value
-
-  defp social_handle(%{value: value}), do: value
+  # The visitor-facing handle, from the schema that owns the leading "@" (the
+  # same source VutuvWeb.UserHTML reads) rather than a third copy of the list.
+  defp social_handle(account), do: SocialMediaAccount.display(account)
 
   # The member's date of birth line, obeying the same birthday-visibility gate
   # the public profile does (birthdate_mode/1) — the CV builder is a PUBLIC page

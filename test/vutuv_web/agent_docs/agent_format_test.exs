@@ -173,6 +173,28 @@ defmodule VutuvWeb.AgentFormatTest do
       assert body =~ "- Snapchat: ghosty"
     end
 
+    # The Markdown renderer used to decide "is this linkable?" by testing the
+    # URL for an "http" prefix, which silently dropped XMPP's `xmpp:` deep link
+    # while the HTML profile rendered it. It asks `url != ""` now, which is the
+    # question `Messenger.url/1` already answers.
+    test "a messenger deep link is rendered whatever scheme it carries", %{user: user} do
+      insert(:messenger, user: user, provider: "Telegram", value: "adachats")
+      insert(:messenger, user: user, provider: "XMPP", value: "ada@jabber.example")
+
+      insert(:messenger,
+        user: user,
+        provider: "Session",
+        value: "05" <> String.duplicate("a", 64)
+      )
+
+      body = get(build_conn(), "/agent_tester.md").resp_body
+
+      assert body =~ "- Telegram: [adachats](https://t.me/adachats)"
+      assert body =~ "- XMPP: [ada@jabber.example](xmpp:ada@jabber.example)"
+      # Session has no resolver at all, so the bare id stays bare.
+      assert body =~ "- Session: 05"
+    end
+
     test "in-app redirects keep the extension (legacy /users/:slug URL)" do
       conn = get(build_conn(), "/users/agent_tester.md")
 

@@ -5542,12 +5542,12 @@ defmodule VutuvWeb.UI do
            hint: gettext("Mastodon, Bluesky, GitHub and the rest"),
            terms:
              gettext(
-               "mastodon bluesky github gitlab codeberg linkedin x twitter instagram social"
+               "mastodon bluesky pixelfed github gitlab codeberg linkedin x twitter instagram social"
              )
          ),
          row(:messengers, gettext("Messengers"), ~p"/settings/messengers",
            hint: gettext("Signal, Threema, Matrix and the rest"),
-           terms: gettext("signal threema matrix xmpp telegram whatsapp chat messenger")
+           terms: gettext("signal threema matrix xmpp jabber telegram whatsapp chat messenger")
          )
        ]},
       {gettext("Notifications & feed"),
