@@ -1,0 +1,19 @@
+<.email_layout preheader="Ihre Anzeige ist gebucht" locale={@locale}>
+  <.email_p>{email_greeting(@user)},</.email_p>
+  <.email_p>
+    vielen Dank für Ihre Buchung. Ihre Anzeige für den {@day} ist reserviert:
+  </.email_p>
+  <.email_panel>
+    <.email_row label="Titel">{@ad.title}</.email_row>
+    <.email_row label="Text">{@ad.body}</.email_row>
+    <.email_row label="Link">{@ad.url}</.email_row>
+  </.email_panel>
+  <.email_p>
+    Preis: {@price}, Zahlung per Rechnung. Die Rechnung schicken wir Ihnen per E-Mail.
+  </.email_p>
+  <.email_p>
+    Wir prüfen jede Anzeige, bevor sie läuft, und schreiben Ihnen, sobald sie freigeschaltet ist. Bis dahin können Sie die Buchung kostenlos stornieren:
+  </.email_p>
+  <.email_button href={"#{@url}system/ads/bookings"}>Zu Ihren Buchungen</.email_button>
+  <.email_signature locale={@locale} />
+</.email_layout>

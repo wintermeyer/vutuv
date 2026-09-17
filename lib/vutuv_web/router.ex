@@ -1072,6 +1072,8 @@ defmodule VutuvWeb.Router do
     post("/system/ads/preview", AdController, :preview)
     get("/system/ads/bookings", AdController, :bookings)
     post("/system/ads", AdController, :create)
+    # The booker withdraws a booking that still waits for approval.
+    post("/system/ads/:id/cancel", AdController, :cancel)
 
     # Blocking: the profile-footer Block control, the private blocked list,
     # and unblocking. Logged-in only ("blocks" is in ReservedSlugs).
@@ -1360,6 +1362,8 @@ defmodule VutuvWeb.Router do
     get("/ads", AdController, :index)
     get("/ads/:id", AdController, :show)
     post("/ads/:id/approve", AdController, :approve)
+    post("/ads/:id/reject", AdController, :reject)
+    post("/ads/:id/cancel", AdController, :cancel)
 
     # Force-rename a member out of an unwanted username (the old name is not
     # blocked afterwards). GET renders the form; POST does the rename.

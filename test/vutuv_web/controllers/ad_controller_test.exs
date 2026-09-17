@@ -267,6 +267,132 @@ defmodule VutuvWeb.AdControllerTest do
     end
   end
 
+  describe "bookings, what each one shows" do
+    test "a pending booking can be cancelled from here, an approved one cannot", %{conn: conn} do
+      {conn, user} = create_and_login_user(conn)
+      pending = insert(:ad, approved_at: nil, user: user)
+      approved = insert(:ad, day: Date.add(Ads.today(), 9), user: user)
+
+      html = conn |> get(~p"/system/ads/bookings") |> html_response(200)
+
+      assert html =~ ~s(action="/system/ads/#{pending.id}/cancel")
+      refute html =~ ~s(action="/system/ads/#{approved.id}/cancel")
+    end
+
+    test "the day in the reader's way, the price paid, and the numbers once it ran", %{
+      conn: conn
+    } do
+      {conn, user} = create_and_login_user(conn)
+
+      ran =
+        insert(:ad,
+          day: Ads.today(),
+          user: user,
+          price_cents: 99_000,
+          views_count: 1234,
+          clicks_count: 56
+        )
+
+      html =
+        conn
+        |> recycle()
+        |> put_req_header("accept-language", "de-DE,de")
+        |> get(~p"/system/ads/bookings")
+        |> html_response(200)
+
+      assert html =~ Calendar.strftime(ran.day, "%d.%m.%Y")
+      refute html =~ Date.to_iso8601(ran.day)
+      assert html =~ "990 €"
+      refute html =~ "1.250"
+      assert html =~ "1.234"
+      assert html =~ "56"
+    end
+
+    test "speaks German to a German booker", %{conn: conn} do
+      {conn, user} = create_and_login_user(conn)
+      insert(:ad, approved_at: nil, user: user)
+
+      insert(:ad,
+        day: Date.add(Ads.today(), 10),
+        user: user,
+        cancelled_at: ~U[2026-09-01 10:00:00Z]
+      )
+
+      insert(:ad,
+        day: Date.add(Ads.today(), 11),
+        approved_at: nil,
+        user: user,
+        rejected_at: ~U[2026-09-01 10:00:00Z],
+        rejection_reason: "Zu laut."
+      )
+
+      html =
+        conn
+        |> recycle()
+        |> put_req_header("accept-language", "de-DE,de")
+        |> get(~p"/system/ads/bookings")
+        |> html_response(200)
+
+      assert html =~ "Buchung stornieren"
+      assert html =~ "Bis dahin können Sie die Buchung kostenlos stornieren."
+      assert html =~ ~r/>\s*Storniert\s*</
+      assert html =~ "Nicht freigeschaltet: Zu laut."
+    end
+
+    test "a rejected booking says why", %{conn: conn} do
+      {conn, user} = create_and_login_user(conn)
+
+      insert(:ad,
+        approved_at: nil,
+        user: user,
+        rejected_at: ~U[2026-09-01 10:00:00Z],
+        rejection_reason: "Der Link führt ins Leere."
+      )
+
+      html = conn |> get(~p"/system/ads/bookings") |> html_response(200)
+      assert html =~ "Rejected"
+      assert html =~ "Der Link führt ins Leere."
+    end
+  end
+
+  describe "cancel" do
+    test "requires login", %{conn: conn} do
+      ad = insert(:ad, approved_at: nil)
+      conn = post(conn, ~p"/system/ads/#{ad}/cancel")
+      assert redirected_to(conn) == "/"
+      assert Repo.reload!(ad).cancelled_at == nil
+    end
+
+    test "the booker cancels a pending booking (CSRF enforced like a browser)", %{conn: conn} do
+      {conn, user} = create_and_login_user(conn)
+      ad = insert(:ad, approved_at: nil, user: user)
+
+      conn = get(conn, ~p"/system/ads/bookings")
+      conn = submit_with_csrf(conn, ~p"/system/ads/#{ad}/cancel", %{})
+
+      assert redirected_to(conn) == ~p"/system/ads/bookings"
+      assert Phoenix.Flash.get(conn.assigns.flash, :info) =~ "cancelled"
+      assert Repo.reload!(ad).cancelled_at
+      assert_received {:email, notice}
+      assert notice.subject =~ "Stornierung"
+    end
+
+    test "not an approved booking, and not somebody else's", %{conn: conn} do
+      {conn, user} = create_and_login_user(conn)
+      approved = insert(:ad, user: user)
+      foreign = insert(:ad, day: Date.add(Ads.today(), 20), approved_at: nil)
+
+      conn = post(conn, ~p"/system/ads/#{approved}/cancel")
+      assert redirected_to(conn) == ~p"/system/ads/bookings"
+      assert Phoenix.Flash.get(conn.assigns.flash, :error)
+      assert Repo.reload!(approved).cancelled_at == nil
+
+      assert conn |> post(~p"/system/ads/#{foreign}/cancel") |> html_response(404)
+
+      assert Repo.reload!(foreign).cancelled_at == nil
+    end
+  end
+
   describe "create" do
     test "requires login", %{conn: conn} do
       conn = post(conn, ~p"/system/ads", %{"ad" => booking_params()})

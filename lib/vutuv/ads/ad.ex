@@ -39,12 +39,43 @@ defmodule Vutuv.Ads.Ad do
     field(:approved_at, :utc_datetime)
     belongs_to(:approved_by, Vutuv.Accounts.User)
 
+    # The two ways a booking ends before its day, both of which free the day:
+    # an admin turns it down with a reason (`Vutuv.Ads.reject_ad/3`), or it is
+    # withdrawn (`cancel_booking/2`, `cancel_ad/2`).
+    field(:rejected_at, :utc_datetime)
+    belongs_to(:rejected_by, Vutuv.Accounts.User)
+    field(:rejection_reason, :string)
+    field(:cancelled_at, :utc_datetime)
+    belongs_to(:cancelled_by, Vutuv.Accounts.User)
+
+    # Cards seen and title links clicked (`Vutuv.Ads.count_view/1`).
+    field(:views_count, :integer, default: 0)
+    field(:clicks_count, :integer, default: 0)
+
     belongs_to(:user, Vutuv.Accounts.User)
     timestamps()
   end
 
   def title_max_length, do: @title_max_length
   def body_max_length, do: @body_max_length
+
+  @doc """
+  Where a booking stands: `:pending` until an admin decides, then `:approved`
+  or `:rejected`; `:cancelled` once withdrawn, whatever it was before.
+  """
+  def status(%__MODULE__{cancelled_at: at}) when not is_nil(at), do: :cancelled
+  def status(%__MODULE__{rejected_at: at}) when not is_nil(at), do: :rejected
+  def status(%__MODULE__{approved_at: at}) when not is_nil(at), do: :approved
+  def status(%__MODULE__{}), do: :pending
+
+  @doc "The reason a booking is turned down with, which the booker reads."
+  def rejection_changeset(ad, reason) do
+    ad
+    |> cast(%{rejection_reason: reason}, [:rejection_reason])
+    |> ChangesetHelpers.trim_fields([:rejection_reason])
+    |> validate_required([:rejection_reason])
+    |> validate_length(:rejection_reason, max: 2000)
+  end
 
   @doc """
   Where an ad's link goes, as a reader checks it: the host without `www.` and

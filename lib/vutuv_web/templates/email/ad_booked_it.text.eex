@@ -1,0 +1,18 @@
+<%= email_greeting(@user) %>,
+
+grazie per la Sua prenotazione. La Sua pubblicità per il <%= @day %> è riservata:
+
+  <%= @ad.title %>
+  <%= @ad.body %>
+  <%= @ad.url %>
+
+Prezzo: <%= @price %>, pagamento su fattura. Le invieremo la fattura per e-mail.
+
+Controlliamo ogni pubblicità prima che vada online e Le scriveremo appena sarà
+approvata. Fino ad allora può annullare la prenotazione gratuitamente:
+
+<%= @url %>system/ads/bookings
+
+<%= render "_signature_it.text" %>
+
+<%= render "_footer.text" %>

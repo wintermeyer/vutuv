@@ -1,0 +1,19 @@
+<.email_layout preheader="La Sua pubblicità è prenotata" locale={@locale}>
+  <.email_p>{email_greeting(@user)},</.email_p>
+  <.email_p>
+    grazie per la Sua prenotazione. La Sua pubblicità per il {@day} è riservata:
+  </.email_p>
+  <.email_panel>
+    <.email_row label="Titolo">{@ad.title}</.email_row>
+    <.email_row label="Testo">{@ad.body}</.email_row>
+    <.email_row label="Link">{@ad.url}</.email_row>
+  </.email_panel>
+  <.email_p>
+    Prezzo: {@price}, pagamento su fattura. Le invieremo la fattura per e-mail.
+  </.email_p>
+  <.email_p>
+    Controlliamo ogni pubblicità prima che vada online e Le scriveremo appena sarà approvata. Fino ad allora può annullare la prenotazione gratuitamente:
+  </.email_p>
+  <.email_button href={"#{@url}system/ads/bookings"}>Le Sue prenotazioni</.email_button>
+  <.email_signature locale={@locale} />
+</.email_layout>

@@ -1,0 +1,16 @@
+<.email_layout preheader="Your ad is cancelled" locale={@locale}>
+  <.email_p>{email_greeting(@user)},</.email_p>
+  <.email_p>
+    we have cancelled your ad for {@day}:
+  </.email_p>
+  <.email_panel>
+    <.email_row label="Title">{@ad.title}</.email_row>
+    <.email_row label="Text">{@ad.body}</.email_row>
+    <.email_row label="Link">{@ad.url}</.email_row>
+  </.email_panel>
+  <.email_p>
+    It will not run that day, and the day is free again. If you already received an invoice, we will credit it.
+  </.email_p>
+  <.email_button href={"#{@url}system/ads/bookings"}>Your bookings</.email_button>
+  <.email_signature locale={@locale} />
+</.email_layout>

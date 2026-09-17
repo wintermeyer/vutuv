@@ -52,7 +52,8 @@ defmodule Vutuv.Export do
   # 12: the member's private notes about other accounts (`personal_notes`), as
   #    Markdown source, each naming the account it is about.
   # 13: the ads the member was shown (`seen_ads`), with when and how often, and
-  #     a booked ad as its title, text and link instead of Markdown `content`.
+  #     a booked ad as its title, text and link instead of Markdown `content`,
+  #     with its `status` (and `rejection_reason`) instead of `approved`.
   @schema_version 13
 
   def build(%User{} = user) do
@@ -594,7 +595,8 @@ defmodule Vutuv.Export do
         body: ad.body,
         url: ad.url,
         price_cents: ad.price_cents,
-        approved: ad.approved_at != nil,
+        status: Ad.status(ad),
+        rejection_reason: ad.rejection_reason,
         billing:
           Map.take(ad, [
             :billing_name,

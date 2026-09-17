@@ -1,0 +1,16 @@
+<%= email_greeting(@user) %>,
+
+abbiamo annullato la Sua pubblicità per il <%= @day %>:
+
+  <%= @ad.title %>
+  <%= @ad.body %>
+  <%= @ad.url %>
+
+Quel giorno non andrà online e il giorno è di nuovo libero. Se ha già ricevuto
+una fattura, Le emetteremo una nota di credito.
+
+<%= @url %>system/ads/bookings
+
+<%= render "_signature_it.text" %>
+
+<%= render "_footer.text" %>

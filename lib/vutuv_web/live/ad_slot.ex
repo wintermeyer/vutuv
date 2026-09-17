@@ -9,19 +9,22 @@ defmodule VutuvWeb.Live.AdSlot do
   straight from the conn. The connected mount reads it from the mount session
   and does not ask the frequency rules again, since the request already did.
 
-  The card's `AdSlot` hook reports three things:
+  The card's `AdSlot` hook reports four things:
 
     * `"ad-seen"`: the card was at least half in view for the first time. For
       a member this takes the hour and counts the sighting
       (`Vutuv.Ads.record_sighting/3`); when another tab took the hour first,
       this card goes. A visitor has no hour.
+    * `"ad-click"`: its title link was followed. A booked ad counts one click
+      per page, and a visitor's view counts once per page too (a member's
+      counts with the sighting).
     * `"ad-expired"`: its countdown ran out, which only counts visible time.
     * `"dismiss-ad"`, the ✕: the card goes, and a member sees no ads until
       Berlin midnight (`Vutuv.Ads.dismiss_today/1`).
   """
 
   import Phoenix.Component, only: [assign: 3, assign_new: 3]
-  import Phoenix.LiveView, only: [attach_hook: 4, connected?: 1]
+  import Phoenix.LiveView, only: [attach_hook: 4, connected?: 1, put_private: 3]
 
   alias Vutuv.Accounts.User
   alias Vutuv.Ads
@@ -53,8 +56,18 @@ defmodule VutuvWeb.Live.AdSlot do
           :capped -> {:halt, assign(socket, :ad_slot, nil)}
         end
 
-      _visitor_or_gone ->
+      %{ad_slot: %{banner: banner}} ->
+        {:halt, count_once(socket, :view, fn -> Ads.count_view(banner) end)}
+
+      _gone ->
         {:halt, socket}
+    end
+  end
+
+  defp handle_event("ad-click", _params, socket) do
+    case socket.assigns.ad_slot do
+      %{banner: banner} -> {:halt, count_once(socket, :click, fn -> Ads.count_click(banner) end)}
+      nil -> {:halt, socket}
     end
   end
 
@@ -70,4 +83,15 @@ defmodule VutuvWeb.Live.AdSlot do
   end
 
   defp handle_event(_event, _params, socket), do: {:cont, socket}
+
+  # A page counts one view and one click at most, however often its card
+  # reports: the hook sends each once, and a replayed event must not add up.
+  defp count_once(socket, what, count) do
+    if socket.private[{:ad_counted, what}] do
+      socket
+    else
+      count.()
+      put_private(socket, {:ad_counted, what}, true)
+    end
+  end
 end

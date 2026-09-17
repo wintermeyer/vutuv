@@ -9,7 +9,7 @@
     <p class="mt-1 text-sm text-slate-600 dark:text-slate-400">
       {gettext(
         "This is exactly how your ad will appear on profiles and in the feed on %{day}.",
-        day: @ad.day
+        day: VutuvWeb.AdHTML.day_label(@ad.day)
       )}
     </p>
 
@@ -22,7 +22,9 @@
         <dt class="text-xs font-semibold uppercase tracking-wide text-slate-500 dark:text-slate-400">
           {gettext("Day")}
         </dt>
-        <dd class="mt-1 font-bold text-slate-900 dark:text-slate-100">{@ad.day}</dd>
+        <dd class="mt-1 font-bold text-slate-900 dark:text-slate-100">
+          {VutuvWeb.AdHTML.day_label(@ad.day)}
+        </dd>
       </div>
       <div>
         <dt class="text-xs font-semibold uppercase tracking-wide text-slate-500 dark:text-slate-400">

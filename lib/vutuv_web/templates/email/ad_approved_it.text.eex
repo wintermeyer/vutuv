@@ -1,0 +1,17 @@
+<%= email_greeting(@user) %>,
+
+la Sua pubblicità per il <%= @day %> è approvata e quel giorno comparirà sui profili
+e nel feed:
+
+  <%= @ad.title %>
+  <%= @ad.body %>
+  <%= @ad.url %>
+
+Con l'approvazione la prenotazione è vincolante. Da quel giorno può vedere qui
+quante volte la Sua pubblicità è stata vista e cliccata:
+
+<%= @url %>system/ads/bookings
+
+<%= render "_signature_it.text" %>
+
+<%= render "_footer.text" %>

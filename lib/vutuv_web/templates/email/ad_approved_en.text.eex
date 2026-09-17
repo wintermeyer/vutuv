@@ -1,0 +1,17 @@
+<%= email_greeting(@user) %>,
+
+your ad for <%= @day %> is approved and will appear on profiles and in the feed that
+day:
+
+  <%= @ad.title %>
+  <%= @ad.body %>
+  <%= @ad.url %>
+
+With the approval the booking is binding. From that day on you can see here
+how often your ad was seen and clicked:
+
+<%= @url %>system/ads/bookings
+
+<%= render "_signature_en.text" %>
+
+<%= render "_footer.text" %>

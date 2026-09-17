@@ -1,0 +1,18 @@
+<%= email_greeting(@user) %>,
+
+Ihre Anzeige für den <%= @day %> können wir leider nicht schalten:
+
+  <%= @ad.title %>
+  <%= @ad.body %>
+  <%= @ad.url %>
+
+Unsere Begründung: <%= @ad.rejection_reason %>
+
+Die Buchung ist damit aufgehoben, Sie zahlen nichts, und der Tag ist wieder
+frei. Eine neue Anzeige können Sie hier buchen:
+
+<%= @url %>system/ads/new
+
+<%= render "_signature_de.text" %>
+
+<%= render "_footer.text" %>

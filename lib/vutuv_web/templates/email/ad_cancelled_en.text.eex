@@ -1,0 +1,16 @@
+<%= email_greeting(@user) %>,
+
+we have cancelled your ad for <%= @day %>:
+
+  <%= @ad.title %>
+  <%= @ad.body %>
+  <%= @ad.url %>
+
+It will not run that day, and the day is free again. If you already received
+an invoice, we will credit it.
+
+<%= @url %>system/ads/bookings
+
+<%= render "_signature_en.text" %>
+
+<%= render "_footer.text" %>

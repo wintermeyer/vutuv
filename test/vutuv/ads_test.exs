@@ -18,8 +18,31 @@ defmodule Vutuv.AdsTest do
     "billing_country" => "Deutschland"
   }
 
-  defp booker do
-    insert_activated_user(first_name: "Bea", last_name: "Bucher")
+  @operator "sw@wintermeyer-consulting.de"
+
+  # A member with an address to write to; `locale` picks the mail's language.
+  defp booker(locale \\ "en") do
+    user = insert_activated_user(first_name: "Bea", last_name: "Bucher", locale: locale)
+    insert(:email, user: user, value: "bea-#{System.unique_integer([:positive])}@example.com")
+    user
+  end
+
+  defp admin, do: insert_activated_user(first_name: "Ada", last_name: "Admin")
+
+  # The mails in `mails` that went to `user`'s address, and to the operator.
+  defp mails_to(mails, %Vutuv.Accounts.User{} = user) do
+    address = Vutuv.Accounts.first_email_value(user)
+    Enum.filter(mails, fn mail -> Enum.any?(mail.to, fn {_, to} -> to == address end) end)
+  end
+
+  defp mails_to(mails, @operator) do
+    Enum.filter(mails, fn mail -> Enum.any?(mail.to, fn {_, to} -> to == @operator end) end)
+  end
+
+  defp pending_booking(user \\ booker()) do
+    {:ok, ad} = Ads.book_ad(user, @valid_attrs)
+    flush_emails()
+    ad
   end
 
   describe "book_ad/2" do
@@ -31,7 +54,7 @@ defmodule Vutuv.AdsTest do
       assert ad.price_cents == 125_000
       assert ad.day == Date.add(Ads.today(), 7)
 
-      assert_received {:email, email}
+      assert [email] = mails_to(flush_emails(), @operator)
       assert email.to == [{"Stefan Wintermeyer", "sw@wintermeyer-consulting.de"}]
       # The mail carries everything the manual invoice needs: billing data,
       # the booked day and the full ad text.
@@ -133,11 +156,58 @@ defmodule Vutuv.AdsTest do
     end
   end
 
+  describe "the booker hears from us" do
+    test "a booking is confirmed to the booker, in their own language" do
+      user = booker("de")
+      assert {:ok, ad} = Ads.book_ad(user, @valid_attrs)
+
+      assert [mail] = mails_to(flush_emails(), user)
+      assert mail.subject =~ Calendar.strftime(ad.day, "%d.%m.%Y")
+      assert mail.text_body =~ "Acme sucht Leute"
+      assert mail.text_body =~ "https://www.acme.example/jobs/?utm_source=vutuv"
+      assert mail.text_body =~ "1.250"
+      assert mail.text_body =~ "system/ads/bookings"
+      assert mail.text_body =~ "stornieren"
+    end
+
+    test "a booker with no address to write to only reaches the operator" do
+      user = insert_activated_user()
+      assert {:ok, _ad} = Ads.book_ad(user, @valid_attrs)
+      assert [%{to: [{_, @operator}]}] = flush_emails()
+    end
+
+    test "the approval is announced once, with the day in the member's date format" do
+      user = booker()
+
+      Repo.update_all(from(u in Vutuv.Accounts.User, where: u.id == ^user.id),
+        set: [date_region: "ISO"]
+      )
+
+      ad = pending_booking(user)
+
+      assert {:ok, approved} = Ads.approve_ad(ad, admin())
+      assert [mail] = mails_to(flush_emails(), user)
+      assert mail.subject =~ "approved"
+      assert mail.subject =~ Date.to_iso8601(ad.day)
+      assert mail.text_body =~ Date.to_iso8601(ad.day)
+
+      assert {:ok, _} = Ads.approve_ad(approved, admin())
+      assert flush_emails() == []
+    end
+
+    test "a second admin approving from the same stale page gets the approval, not an error" do
+      ad = pending_booking()
+
+      assert {:ok, first} = Ads.approve_ad(ad, admin())
+      assert {:ok, second} = Ads.approve_ad(ad, admin())
+      assert second.approved_by_id == first.approved_by_id
+    end
+  end
+
   describe "approve_ad/2" do
     test "stamps the approval and the approving admin" do
-      {:ok, ad} = Ads.book_ad(booker(), @valid_attrs)
-      flush_emails()
-      admin = insert_activated_user(first_name: "Ada", last_name: "Admin")
+      ad = pending_booking()
+      admin = admin()
 
       assert ad.approved_at == nil
       assert {:ok, approved} = Ads.approve_ad(ad, admin)
@@ -145,16 +215,144 @@ defmodule Vutuv.AdsTest do
       assert approved.approved_by_id == admin.id
     end
 
+    test "never approves a rejected or cancelled ad" do
+      rejected = insert(:ad, approved_at: nil, rejected_at: ~U[2026-09-01 10:00:00Z])
+      cancelled = insert(:ad, approved_at: nil, cancelled_at: ~U[2026-09-01 10:00:00Z])
+
+      assert {:error, :not_pending} = Ads.approve_ad(rejected, admin())
+      assert {:error, :not_pending} = Ads.approve_ad(cancelled, admin())
+      assert Repo.reload!(rejected).approved_at == nil
+    end
+
     test "is idempotent: a second approval keeps the first stamp" do
-      {:ok, ad} = Ads.book_ad(booker(), @valid_attrs)
-      flush_emails()
-      admin = insert_activated_user()
-      other_admin = insert_activated_user()
+      ad = pending_booking()
+      admin = admin()
+      other_admin = admin()
 
       {:ok, approved} = Ads.approve_ad(ad, admin)
       {:ok, still} = Ads.approve_ad(approved, other_admin)
       assert still.approved_at == approved.approved_at
       assert still.approved_by_id == admin.id
+    end
+  end
+
+  describe "reject_ad/3" do
+    test "turns a pending ad down, and the booker reads why" do
+      user = booker("de")
+      ad = pending_booking(user)
+      admin = admin()
+
+      assert {:ok, rejected} = Ads.reject_ad(ad, admin, "  Nicht familienfreundlich.  ")
+      assert rejected.rejected_at
+      assert rejected.rejected_by_id == admin.id
+      assert rejected.rejection_reason == "Nicht familienfreundlich."
+
+      assert [mail] = mails_to(flush_emails(), user)
+      assert mail.text_body =~ "Nicht familienfreundlich."
+      assert mail.text_body =~ Calendar.strftime(ad.day, "%d.%m.%Y")
+    end
+
+    test "needs a reason" do
+      ad = pending_booking()
+
+      assert {:error, changeset} = Ads.reject_ad(ad, admin(), "   ")
+      assert %{rejection_reason: [_]} = errors_on(changeset)
+      assert Repo.reload!(ad).rejected_at == nil
+      assert flush_emails() == []
+    end
+
+    test "frees the day for somebody else, and the rejected ad never runs" do
+      today = insert(:ad, day: Ads.today(), approved_at: nil)
+      assert {:ok, _} = Ads.reject_ad(today, admin(), "Nein.")
+      assert Ads.current_banner() == :house
+
+      first = Ads.first_bookable_day()
+      ad = insert(:ad, day: first, approved_at: nil)
+      assert {:ok, _} = Ads.reject_ad(ad, admin(), "Nein.")
+      refute MapSet.member?(Ads.booked_days(), first)
+      assert Ads.next_available_day() == first
+
+      assert {:ok, again} =
+               Ads.book_ad(booker(), %{@valid_attrs | "day" => Date.to_iso8601(first)})
+
+      assert again.day == first
+      flush_emails()
+    end
+
+    test "only while the ad waits for approval" do
+      assert {:error, :not_pending} = Ads.reject_ad(insert(:ad), admin(), "Zu spät.")
+    end
+  end
+
+  describe "cancel_booking/2" do
+    test "the booker withdraws a pending booking, and the operator hears of it" do
+      user = booker()
+      ad = pending_booking(user)
+
+      assert {:ok, cancelled} = Ads.cancel_booking(ad, user)
+      assert cancelled.cancelled_at
+      assert cancelled.cancelled_by_id == user.id
+      refute MapSet.member?(Ads.booked_days(), ad.day)
+
+      assert [notice] = flush_emails()
+      assert notice.to == [{"Stefan Wintermeyer", @operator}]
+      assert notice.subject =~ "Stornierung"
+      assert notice.text_body =~ "Acme sucht Leute"
+    end
+
+    test "not once the ad is approved, and never somebody else's" do
+      user = booker()
+      approved = insert(:ad, user: user)
+      pending = insert(:ad, day: Date.add(Ads.first_bookable_day(), 1), approved_at: nil)
+
+      assert {:error, :not_pending} = Ads.cancel_booking(approved, user)
+      assert {:error, :not_found} = Ads.cancel_booking(pending, user)
+      assert Repo.reload!(approved).cancelled_at == nil
+      assert Repo.reload!(pending).cancelled_at == nil
+      assert flush_emails() == []
+    end
+  end
+
+  describe "cancel_ad/2" do
+    test "an admin takes an approved ad off its day and tells the booker" do
+      user = booker()
+      ad = insert(:ad, day: Ads.today(), user: user)
+      admin = admin()
+
+      assert {:ok, cancelled} = Ads.cancel_ad(ad, admin)
+      assert cancelled.cancelled_by_id == admin.id
+      assert Ads.current_banner() == :house
+
+      assert [mail] = mails_to(flush_emails(), user)
+      assert mail.subject =~ "cancelled"
+    end
+
+    test "leaves a day that is over alone" do
+      past = insert(:ad, day: Date.add(Ads.today(), -1))
+      assert {:error, :not_pending} = Ads.cancel_ad(past, admin())
+    end
+  end
+
+  describe "the numbers a booking gets" do
+    test "views and clicks add up per booked ad, the house ad counts nothing" do
+      ad = insert(:ad)
+
+      Ads.count_view({:ad, ad})
+      Ads.count_view({:ad, ad})
+      Ads.count_click({:ad, ad})
+      assert :ok = Ads.count_view(:house)
+      assert :ok = Ads.count_click(:house)
+
+      assert %{views_count: 2, clicks_count: 1} = Repo.reload!(ad)
+    end
+
+    test "a member's sighting is a view only when it takes the hour" do
+      ad = insert(:ad, day: Ads.today())
+      user = insert_activated_user()
+
+      assert :ok = Ads.record_sighting(user, {:ad, ad})
+      assert :capped = Ads.record_sighting(Repo.reload!(user), {:ad, ad})
+      assert Repo.reload!(ad).views_count == 1
     end
   end
 

@@ -18,8 +18,8 @@ defmodule Vutuv.Moderation.Notifier do
 
   require Logger
 
-  alias Vutuv.{Accounts, Activity, Moderation, Repo}
   alias Vutuv.Accounts.User
+  alias Vutuv.{Activity, Moderation, Repo}
   alias Vutuv.Moderation.{Case, Report}
   alias Vutuv.Notifications.Emailer
 
@@ -358,16 +358,8 @@ defmodule Vutuv.Moderation.Notifier do
   end
 
   # The single send chokepoint: address lookup + SMTP delivery leave the
-  # caller's process off the request path (see the moduledoc), via the shared
-  # async-email gate in the Emailer.
-  defp deliver_to(%User{} = user, build) do
-    Emailer.deliver_async(fn ->
-      case Accounts.first_email_value(user) do
-        nil -> :ok
-        address -> user |> build.(address) |> Emailer.deliver()
-      end
-    end)
-  end
+  # caller's process off the request path (see the moduledoc).
+  defp deliver_to(%User{} = user, build), do: Emailer.deliver_to_member(user, build)
 
   defp list_admins do
     Repo.all(from(u in User, where: u.admin? == true and is_nil(u.deactivated_at)))

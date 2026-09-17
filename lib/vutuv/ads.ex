@@ -84,20 +84,27 @@ defmodule Vutuv.Ads do
   def booked_days, do: booked_days_in(first_bookable_day(), last_bookable_day())
 
   defp booked_days_in(first, last) do
-    from(a in Ad, where: a.day >= ^first and a.day <= ^last, select: a.day)
+    from(a in standing(), where: a.day >= ^first and a.day <= ^last, select: a.day)
     |> Repo.all()
     |> MapSet.new()
   end
 
-  @doc "The ad booked for `day`, or nil."
-  def get_ad(%Date{} = day), do: Repo.get_by(Ad, day: day)
+  @doc "The booking that holds `day`, or nil."
+  def get_ad(%Date{} = day), do: Repo.one(from(a in standing(), where: a.day == ^day))
+
+  # The bookings that hold their day: neither turned down nor withdrawn. The
+  # unique index on `day` covers exactly these.
+  defp standing, do: from(a in Ad, where: is_nil(a.rejected_at) and is_nil(a.cancelled_at))
+
+  # Those still waiting for an admin.
+  defp pending, do: from(a in standing(), where: is_nil(a.approved_at))
 
   @doc """
-  The ad with this id - booker and approving admin preloaded (the admin
-  detail page) - or nil (also on a malformed id).
+  The ad with this id, with `preloads` (the admin detail page names the booker
+  and the admins who decided), or nil (also on a malformed id).
   """
-  def get_ad_by_id(id) do
-    UUIDv7.with_cast(id, &(Ad |> Repo.get(&1) |> Repo.preload([:user, :approved_by])))
+  def get_ad_by_id(id, preloads \\ []) do
+    UUIDv7.with_cast(id, &(Ad |> Repo.get(&1) |> Repo.preload(preloads)))
   end
 
   @doc """
@@ -113,9 +120,10 @@ defmodule Vutuv.Ads do
   end
 
   @doc """
-  Books `attrs`'s day for `user` and mails the booking (billing data + ad
-  text) to the operator. The unique index on `day` decides races; payment is
-  by manually sent invoice, so nothing else happens here.
+  Books `attrs`'s day for `user`, mails the booking (billing data + ad text)
+  to the operator and confirms it to the booker. The unique index on `day`
+  decides races; payment is by manually sent invoice, so nothing else
+  happens here.
   """
   def book_ad(user, attrs) do
     %Ad{user_id: user.id, price_cents: @price_cents}
@@ -127,6 +135,7 @@ defmodule Vutuv.Ads do
         |> Emailer.ad_booking_email(user)
         |> Emailer.deliver()
 
+        tell_booker(user, ad, &Emailer.ad_booked_email/3)
         {:ok, ad}
 
       {:error, changeset} ->
@@ -158,20 +167,119 @@ defmodule Vutuv.Ads do
 
   @doc """
   The admin review gate: stamps `approved_at` and the approving admin, after
-  which the ad serves on its day. Idempotent - approving an already approved
-  ad keeps the original stamp (so two admins clicking at once cannot
-  reassign the approval).
+  which the ad serves on its day, and tells the booker. Idempotent -
+  approving an already approved ad keeps the original stamp and sends
+  nothing (so two admins clicking at once cannot reassign the approval). A
+  rejected or cancelled booking is `{:error, :not_pending}`.
   """
-  def approve_ad(%Ad{approved_at: nil} = ad, admin) do
-    ad
-    |> Ecto.Changeset.change(
-      approved_at: DateTime.utc_now(:second),
-      approved_by_id: admin.id
-    )
-    |> Repo.update()
+  def approve_ad(%Ad{} = ad, admin) do
+    if Ad.status(ad) == :approved do
+      {:ok, ad}
+    else
+      case move(ad, pending(), approved_at: DateTime.utc_now(:second), approved_by_id: admin.id) do
+        {:ok, approved} ->
+          tell_booker(approved, &Emailer.ad_approved_email/3)
+          {:ok, approved}
+
+        {:error, :not_pending} ->
+          approved_meanwhile(ad)
+      end
+    end
   end
 
-  def approve_ad(%Ad{} = ad, _admin), do: {:ok, ad}
+  # Another admin approved it between this one's page load and click: their
+  # approval stands, and it is the one asked for.
+  defp approved_meanwhile(%Ad{id: id}) do
+    current = Repo.get!(Ad, id)
+    if Ad.status(current) == :approved, do: {:ok, current}, else: {:error, :not_pending}
+  end
+
+  @doc """
+  Turns a booking that waits for approval down: the day is free again, and
+  the booker is told `reason`, which is required. `{:error, changeset}` for a
+  missing reason, `{:error, :not_pending}` once the booking was decided or
+  withdrawn.
+  """
+  def reject_ad(%Ad{} = ad, admin, reason) do
+    with {:ok, checked} <-
+           ad |> Ad.rejection_changeset(reason) |> Ecto.Changeset.apply_action(:update),
+         {:ok, rejected} <-
+           move(ad, pending(),
+             rejected_at: DateTime.utc_now(:second),
+             rejected_by_id: admin.id,
+             rejection_reason: checked.rejection_reason
+           ) do
+      tell_booker(rejected, &Emailer.ad_rejected_email/3)
+      {:ok, rejected}
+    end
+  end
+
+  @doc """
+  The booker withdraws their own booking, which they may only while it waits
+  for approval: once approved it is binding. The day is free again and the
+  operator is told, since the invoice may already be written.
+  `{:error, :not_found}` for somebody else's booking.
+  """
+  def cancel_booking(%Ad{user_id: user_id} = ad, %User{id: user_id} = booker)
+      when is_binary(user_id) do
+    with {:ok, cancelled} <-
+           move(ad, pending(), cancelled_at: DateTime.utc_now(:second), cancelled_by_id: user_id) do
+      cancelled
+      |> Emailer.ad_cancellation_email(booker)
+      |> Emailer.deliver()
+
+      {:ok, cancelled}
+    end
+  end
+
+  def cancel_booking(%Ad{}, %User{}), do: {:error, :not_found}
+
+  @doc """
+  An admin withdraws a booking that has not run yet, approved or not (on the
+  booker's request, say), and the booker is told. The day is free again.
+  """
+  def cancel_ad(%Ad{} = ad, admin) do
+    upcoming = from(a in standing(), where: a.day >= ^today())
+
+    with {:ok, cancelled} <-
+           move(ad, upcoming, cancelled_at: DateTime.utc_now(:second), cancelled_by_id: admin.id) do
+      tell_booker(cancelled, &Emailer.ad_cancelled_email/3)
+      {:ok, cancelled}
+    end
+  end
+
+  # Sets `changes` on `ad` only while its row still matches `query`, in the one
+  # statement that also hands the row back, so an admin and the booker (or two
+  # admins) acting at once cannot both move it.
+  defp move(%Ad{id: id}, query, changes) do
+    case Repo.update_all(from(a in query, where: a.id == ^id, select: a), set: changes) do
+      {1, [moved]} -> {:ok, moved}
+      {0, _} -> {:error, :not_pending}
+    end
+  end
+
+  # A mail about their booking to the booker, off the request path. The
+  # account may be gone (`user_id` is nilified) or have no address.
+  defp tell_booker(%Ad{user_id: nil}, _build), do: :ok
+  defp tell_booker(%Ad{} = ad, build), do: tell_booker(Repo.get(User, ad.user_id), ad, build)
+
+  defp tell_booker(nil, _ad, _build), do: :ok
+
+  defp tell_booker(%User{} = user, ad, build),
+    do: Emailer.deliver_to_member(user, &build.(&1, &2, ad))
+
+  @doc "One more card of `banner` seen (a booked ad; the house ad counts nothing)."
+  def count_view({:ad, %Ad{id: id}}), do: bump(id, :views_count)
+  def count_view(:house), do: :ok
+
+  @doc "One more click on `banner`'s link (a booked ad; the house ad counts nothing)."
+  def count_click({:ad, %Ad{id: id}}), do: bump(id, :clicks_count)
+  def count_click(:house), do: :ok
+
+  defp bump(id, field) do
+    Repo.update_all(from(a in Ad, where: a.id == ^id), inc: [{field, 1}])
+    :ok
+  end
 
   @doc "All bookings of `user`, newest day first (the member dashboard)."
   def user_ads(user) do
@@ -179,11 +287,14 @@ defmodule Vutuv.Ads do
   end
 
   @doc """
-  The admin dashboard lists: upcoming ads (today included) in serving order
-  with their bookers preloaded, and the recent past for reference.
+  The admin dashboard's upcoming bookings (today included) in serving order,
+  bookers preloaded, as `{standing, withdrawn}`: the ones that still hold
+  their day, and the ones rejected or cancelled.
   """
   def upcoming_ads do
-    Repo.all(from(a in Ad, where: a.day >= ^today(), order_by: [asc: a.day], preload: [:user]))
+    from(a in Ad, where: a.day >= ^today(), order_by: [asc: a.day, asc: a.id], preload: [:user])
+    |> Repo.all()
+    |> Enum.split_with(&(Ad.status(&1) in [:pending, :approved]))
   end
 
   @doc "The most recent past ads (reference section of the admin dashboard)."
@@ -200,10 +311,7 @@ defmodule Vutuv.Ads do
 
   @doc "How many upcoming ads still wait for approval (the admin panel badge)."
   def pending_ads_count do
-    Repo.aggregate(
-      from(a in Ad, where: a.day >= ^today() and is_nil(a.approved_at)),
-      :count
-    )
+    Repo.aggregate(from(a in pending(), where: a.day >= ^today()), :count)
   end
 
   @doc """
@@ -236,7 +344,7 @@ defmodule Vutuv.Ads do
   @doc """
   Records that `user` has seen `banner`: takes the member's hour and, for a
   booked ad, counts the sighting up on its row (the member's history of seen
-  ads). The house ad takes the hour and leaves no row.
+  ads) and the view on the ad. The house ad takes the hour and leaves no row.
 
   The hour is taken only while it is free, in the same statement that checks
   it, so two tabs whose cards come into view within one hour count once:
@@ -279,7 +387,7 @@ defmodule Vutuv.Ads do
         nil
     end
 
-    :ok
+    count_view(banner)
   end
 
   @doc "How many days a member's seen ads are kept."
@@ -374,10 +482,12 @@ defmodule Vutuv.Ads do
     UUIDv7.with_cast(id, fn id -> Repo.one(from(a in serving_today(), where: a.id == ^id)) end)
   end
 
-  # What may serve: today's ad, once an admin approved it. An ad booked in the
-  # old Markdown format has no title and no longer serves.
+  # What may serve: today's standing ad, once an admin approved it. An ad
+  # booked in the old Markdown format has no title and no longer serves.
   defp serving_today do
-    from(a in Ad, where: a.day == ^today() and not is_nil(a.approved_at) and not is_nil(a.title))
+    from(a in standing(),
+      where: a.day == ^today() and not is_nil(a.approved_at) and not is_nil(a.title)
+    )
   end
 
   @doc "Today as a German calendar day (Europe/Berlin)."

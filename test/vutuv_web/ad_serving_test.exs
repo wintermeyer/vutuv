@@ -36,6 +36,10 @@ defmodule VutuvWeb.AdServingTest do
 
   defp an_hour_ago, do: DateTime.add(DateTime.utc_now(:second), -3601)
 
+  defp counts(ad) do
+    Repo.one(from(a in Ads.Ad, where: a.id == ^ad.id, select: {a.views_count, a.clicks_count}))
+  end
+
   describe "where the ad shows" do
     test "a visitor sees the house ad on a profile, in the rail and near the top", %{conn: conn} do
       html = conn |> get(~p"/#{profile_owner()}") |> html_response(200)
@@ -278,6 +282,44 @@ defmodule VutuvWeb.AdServingTest do
       assert html =~ ~r/data-ad-key="\d+:house"/
       assert html =~ "data-ad-ring-arc"
       assert html =~ ~s(id="ad-slot-rail-ring" phx-update="ignore")
+    end
+  end
+
+  describe "the numbers a booking gets" do
+    test "a visitor's card is one view and one click per page, however often it reports", %{
+      conn: conn
+    } do
+      ad = insert(:ad, day: Ads.today())
+      {:ok, view, html} = live(conn, ~p"/#{profile_owner()}")
+      assert html =~ "data-ad-link"
+
+      for _ <- 1..3, do: render_hook(view, "ad-seen", %{})
+      for _ <- 1..2, do: render_hook(view, "ad-click", %{})
+      assert counts(ad) == {1, 1}
+
+      {:ok, view, _html} = live(build_conn(), ~p"/#{profile_owner()}")
+      render_hook(view, "ad-seen", %{})
+      assert counts(ad) == {2, 1}
+    end
+
+    test "a member's card is a view only when it takes the hour", %{conn: conn} do
+      ad = insert(:ad, day: Ads.today())
+      {conn, _user} = create_and_login_user(conn)
+
+      {:ok, first, _html} = live(conn, ~p"/feed")
+      {:ok, second, _html} = live(conn, ~p"/feed")
+      render_hook(first, "ad-seen", %{})
+      render_hook(second, "ad-seen", %{})
+
+      assert counts(ad) == {1, 0}
+    end
+
+    test "the house ad has nothing to count", %{conn: conn} do
+      {:ok, view, _html} = live(conn, ~p"/#{profile_owner()}")
+      render_hook(view, "ad-seen", %{})
+      render_hook(view, "ad-click", %{})
+
+      assert has_element?(view, "#ad-slot-rail")
     end
   end
 

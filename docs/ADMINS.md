@@ -155,7 +155,7 @@ Everything else has a default (the vutuv.de production value):
 | `MAILER_FROM_ADDRESS` | `no-reply@vutuv.de` | **Set this.** From address on every email |
 | `BOUNCE_ADDRESS` | `bounces@vutuv.de` | **Set this**, to a mailbox on your own domain that really accepts mail — bounces (DSNs) are addressed to it. It is the SMTP envelope sender only and never appears as a header, so it needs no display name and no human reading it; an alias or an automated handler is enough. Do not use a person's address: it is not shown to recipients, but it is what a remote postmaster replies to |
 | `OPERATOR_NAME` | `Wintermeyer Consulting` | **Set this.** Your name: site/email footer credit and operator-notice recipient name |
-| `OPERATOR_EMAIL` | `sw@wintermeyer-consulting.de` | **Set this.** Receives the daily report, ad bookings and account-deletion records; also the `security.txt` contact. **This pair is shown to visitors**, by name and as a `mailto:`, on the two pages that cannot say what went wrong: the 500 error page and the offline page the service worker keeps. Both ask the reader to come back later and to write to you if it persists, quoting the status code and the UTC minute, so use an address a human reads |
+| `OPERATOR_EMAIL` | `sw@wintermeyer-consulting.de` | **Set this.** Receives the daily report, ad bookings and cancellations, and account-deletion records; also the `security.txt` contact. **This pair is shown to visitors**, by name and as a `mailto:`, on the two pages that cannot say what went wrong: the 500 error page and the offline page the service worker keeps. Both ask the reader to come back later and to write to you if it persists, quoting the status code and the UTC minute, so use an address a human reads |
 | `OPERATOR_URL` | `https://wintermeyer-consulting.de` | **Set this.** Linked from the site/email footer |
 | `OPERATOR_ADDRESS` | (vutuv.de's) | **Set this.** One-line postal address in every email footer |
 | `SOURCE_URL` | `https://github.com/wintermeyer/vutuv` | Where the source of the software you run can be read — the footer's "Source" link and the commit link beside it, the bug-report links on the 400 error page and in the developer docs, and the `source_url` / `repository` fields both API discovery documents publish. **Change this if you run a modified vutuv:** the link claims to be the source of what your users are running, so once you have patched anything, ours is no longer an honest answer. vutuv is MIT, so this is about accuracy rather than a licence obligation |
@@ -266,7 +266,10 @@ will try to reach vutuv.de's operator.
 
 A few rarely-changed switches are compile-time settings in
 `config/config.exs` / `config/prod.exs` (edit before `mix release`):
-`:ads_enabled` (the daily text-ad system, off by default),
+`:ads_enabled` (the daily text-ad system, off by default; bookings at
+`/system/ads`, the review at `/admin/ads`, booking and cancellation notices to
+`OPERATOR_EMAIL`), `:sweep_ad_sightings` (forgets which ads a member
+saw 90 days after the last sighting; on by default),
 `:ai_crawler_policy` (`:permissive` or `:block_training` — drives robots.txt
 and the Content-Signal headers), `:fetch_gravatar`, `:fetch_mastodon_posts`,
 `:fetch_bluesky_posts`, `:fetch_code_stats` (the profile "Code" card's

@@ -4,6 +4,117 @@ defmodule VutuvWeb.Admin.AdHTML do
 
   embed_templates("../../templates/admin/ad/*")
 
+  alias Vutuv.Ads.Ad
+  alias VutuvWeb.AdHTML
+
+  @doc """
+  A table of bookings for the review page: day, state and booker, and a last
+  column the caller fills (a reason, a billing name).
+  """
+  attr(:id_prefix, :string, required: true)
+  attr(:ads, :list, required: true)
+
+  slot :last, required: true do
+    attr(:label, :string, required: true)
+  end
+
+  def ad_table(assigns) do
+    ~H"""
+    <div class="card__tablewrap">
+      <table class="pure-table">
+        <thead>
+          <tr>
+            <th>{gettext("Day")}</th>
+            <th>{gettext("Status")}</th>
+            <th>{gettext("Booked by")}</th>
+            <th :for={column <- @last}>{column.label}</th>
+          </tr>
+        </thead>
+        <tbody>
+          <tr :for={ad <- @ads} id={"#{@id_prefix}-#{ad.id}"}>
+            <td>
+              <.link href={~p"/admin/ads/#{ad}"}>{AdHTML.day_label(ad.day)}</.link>
+            </td>
+            <td>{AdHTML.status_label(ad)}</td>
+            <td>
+              <%= if ad.user do %>
+                <.link href={~p"/#{ad.user}"}>@{ad.user.username}</.link>
+              <% else %>
+                {gettext("deleted account")}
+              <% end %>
+            </td>
+            <td :for={column <- @last}>{render_slot(column, ad)}</td>
+          </tr>
+        </tbody>
+      </table>
+    </div>
+    """
+  end
+
+  @doc """
+  What an admin can still do with a booking, shared by the dashboard card and
+  the detail page: approve or reject (with a reason the booker reads) while
+  it waits, cancel once approved and before its day. Plus where it stands:
+  who decided or withdrew it, and its numbers once it ran.
+  """
+  attr(:ad, Ad, required: true)
+
+  def ad_review(assigns) do
+    ~H"""
+    <AdHTML.ad_outcome ad={@ad} />
+
+    <%= case Ad.status(@ad) do %>
+      <% :pending -> %>
+        <div class="mt-4 flex flex-wrap items-start gap-3">
+          <.form for={%{}} id={"approve-#{@ad.id}"} action={~p"/admin/ads/#{@ad}/approve"} method="post">
+            <.button type="submit">{gettext("Approve")}</.button>
+          </.form>
+          <.form
+            for={%{}}
+            id={"reject-#{@ad.id}"}
+            action={~p"/admin/ads/#{@ad}/reject"}
+            method="post"
+            class="flex min-w-0 flex-1 flex-col gap-2 sm:min-w-72"
+          >
+            <label for={"reject-reason-#{@ad.id}"} class="sr-only">
+              {gettext("Why the ad is rejected")}
+            </label>
+            <textarea
+              id={"reject-reason-#{@ad.id}"}
+              name="reason"
+              rows="2"
+              required
+              maxlength="2000"
+              placeholder={gettext("Why the ad is rejected (the booker reads this)")}
+              class={input_class()}
+            ></textarea>
+            <.button type="submit" variant="danger-ghost" class="self-start">
+              {gettext("Reject")}
+            </.button>
+          </.form>
+        </div>
+      <% :approved -> %>
+        <.form
+          :if={Date.compare(@ad.day, Vutuv.Ads.today()) != :lt}
+          for={%{}}
+          id={"cancel-#{@ad.id}"}
+          action={~p"/admin/ads/#{@ad}/cancel"}
+          method="post"
+          class="mt-4"
+        >
+          <.button
+            type="submit"
+            variant="danger-ghost"
+            data-confirm={gettext("Cancel this ad? The booker is told, and the day is free again.")}
+          >
+            {gettext("Cancel ad")}
+          </.button>
+        </.form>
+      <% _decided -> %>
+    <% end %>
+    """
+  end
+
   @doc """
   The review body an ad shares between the dashboard card and its detail
   page: booker, the ad as visitors will see it, its link in full, billing data
@@ -57,7 +168,7 @@ defmodule VutuvWeb.Admin.AdHTML do
           {gettext("Price")}
         </dt>
         <dd class="mt-1 text-slate-700 dark:text-slate-300">
-          {VutuvWeb.AgentDocs.AdsDoc.price_display()}
+          {VutuvWeb.AgentDocs.AdsDoc.price_display(@ad.price_cents)}
           <span :if={@ad.vat_id}>· {gettext("VAT ID")}: {@ad.vat_id}</span>
         </dd>
       </div>

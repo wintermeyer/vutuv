@@ -151,6 +151,7 @@ defmodule VutuvWeb.AdComponents do
         href={@text.href}
         target={@text.target}
         rel={@text.rel}
+        data-ad-link
         class="mt-2 block break-words text-base font-semibold leading-snug text-brand-600 hover:text-brand-700 hover:underline dark:text-brand-400 dark:hover:text-brand-300"
       >
         {@text.title}

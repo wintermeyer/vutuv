@@ -111,6 +111,31 @@ defmodule Vutuv.ExportTest do
            ]
   end
 
+  test "a member's ad bookings say where they stand (schema v13)" do
+    user = insert(:activated_user)
+
+    insert(:ad,
+      user: user,
+      day: ~D[2026-04-15],
+      approved_at: nil,
+      rejected_at: ~U[2026-04-10 09:00:00Z],
+      rejection_reason: "Zu laut.",
+      price_cents: 99_000
+    )
+
+    assert [booking] = Export.build(user).ad_bookings
+
+    assert %{
+             status: :rejected,
+             rejection_reason: "Zu laut.",
+             price_cents: 99_000,
+             day: ~D[2026-04-15]
+           } =
+             booking
+
+    refute Map.has_key?(booking, :approved)
+  end
+
   test "a member's account deletion takes their drafts with it" do
     user = insert(:activated_user)
     :ok = Vutuv.Posts.save_draft(user, nil, %{"body" => "half a thought"})

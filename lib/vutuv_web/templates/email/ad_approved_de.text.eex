@@ -1,0 +1,17 @@
+<%= email_greeting(@user) %>,
+
+Ihre Anzeige für den <%= @day %> ist freigeschaltet und erscheint an diesem Tag auf
+Profilen und im Feed:
+
+  <%= @ad.title %>
+  <%= @ad.body %>
+  <%= @ad.url %>
+
+Mit der Freischaltung ist die Buchung verbindlich. Wie oft Ihre Anzeige
+gesehen und angeklickt wurde, sehen Sie ab diesem Tag hier:
+
+<%= @url %>system/ads/bookings
+
+<%= render "_signature_de.text" %>
+
+<%= render "_footer.text" %>

@@ -1,0 +1,20 @@
+Stornierung einer Anzeigenbuchung
+=================================
+
+Tag:    <%= Calendar.strftime(@ad.day, "%d.%m.%Y") %>
+Preis:  <%= @price %> EUR (netto)
+
+Storniert von @<%= @booker.username %> (<%= @url %><%= @booker.username %>),
+bevor die Anzeige freigeschaltet war. Der Tag ist wieder frei.
+
+Anzeige
+-------
+Titel: <%= @ad.title %>
+Text:  <%= @ad.body %>
+Link:  <%= @ad.url %>
+
+Rechnungsadresse
+----------------
+<%= @billing_address %>
+
+Falls die Rechnung schon verschickt ist, bitte gutschreiben.

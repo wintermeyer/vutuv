@@ -1,0 +1,23 @@
+<.email_layout preheader="Stornierung einer Anzeigenbuchung" locale={@locale}>
+  <.email_heading>Stornierung einer Anzeigenbuchung</.email_heading>
+  <.email_panel>
+    <.email_row label="Tag">{Calendar.strftime(@ad.day, "%d.%m.%Y")}</.email_row>
+    <.email_row label="Preis">{@price} EUR (netto)</.email_row>
+    <.email_row label="Storniert von">
+      @{@booker.username} ({@url}{@booker.username})
+    </.email_row>
+  </.email_panel>
+  <.email_p>
+    Die Buchung wurde storniert, bevor die Anzeige freigeschaltet war. Der Tag ist wieder frei.
+  </.email_p>
+  <.email_panel>
+    <.email_row label="Titel">{@ad.title}</.email_row>
+    <.email_row label="Text">{@ad.body}</.email_row>
+    <.email_row label="Link">{@ad.url}</.email_row>
+  </.email_panel>
+  <.email_p><strong>Rechnungsadresse</strong></.email_p>
+  <.email_p>
+    <span :for={line <- String.split(@billing_address, "\n")}>{line}<br /></span>
+  </.email_p>
+  <.email_p>Falls die Rechnung schon verschickt ist, bitte gutschreiben.</.email_p>
+</.email_layout>

@@ -1,0 +1,19 @@
+<.email_layout preheader="Ihre Anzeige läuft nicht" locale={@locale}>
+  <.email_p>{email_greeting(@user)},</.email_p>
+  <.email_p>
+    Ihre Anzeige für den {@day} können wir leider nicht schalten:
+  </.email_p>
+  <.email_panel>
+    <.email_row label="Titel">{@ad.title}</.email_row>
+    <.email_row label="Text">{@ad.body}</.email_row>
+    <.email_row label="Link">{@ad.url}</.email_row>
+  </.email_panel>
+  <.email_p>
+    Unsere Begründung: {@ad.rejection_reason}
+  </.email_p>
+  <.email_p>
+    Die Buchung ist damit aufgehoben, Sie zahlen nichts, und der Tag ist wieder frei. Eine neue Anzeige können Sie hier buchen:
+  </.email_p>
+  <.email_button href={"#{@url}system/ads/new"}>Neue Anzeige buchen</.email_button>
+  <.email_signature locale={@locale} />
+</.email_layout>

@@ -1,0 +1,16 @@
+<.email_layout preheader="Your ad is approved" locale={@locale}>
+  <.email_p>{email_greeting(@user)},</.email_p>
+  <.email_p>
+    your ad for {@day} is approved and will appear on profiles and in the feed that day:
+  </.email_p>
+  <.email_panel>
+    <.email_row label="Title">{@ad.title}</.email_row>
+    <.email_row label="Text">{@ad.body}</.email_row>
+    <.email_row label="Link">{@ad.url}</.email_row>
+  </.email_panel>
+  <.email_p>
+    With the approval the booking is binding. From that day on you can see here how often your ad was seen and clicked:
+  </.email_p>
+  <.email_button href={"#{@url}system/ads/bookings"}>Your bookings</.email_button>
+  <.email_signature locale={@locale} />
+</.email_layout>

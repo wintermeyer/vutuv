@@ -36,6 +36,13 @@ defmodule Vutuv.Notifications.MailClassTest do
     {:username_change_email, :critical},
     {:security_alert_email, :critical},
     {:ad_booking_email, :critical},
+    # A booker's cancellation, to the operator: critical for the same reason,
+    # an invoice may already be on its way.
+    {:ad_cancellation_email, :critical},
+    {:ad_booked_email, :transactional},
+    {:ad_approved_email, :transactional},
+    {:ad_rejected_email, :transactional},
+    {:ad_cancelled_email, :transactional},
     {:registration_attempt_email, :transactional},
     {:verification_notice, :transactional},
     {:daily_report_email, :transactional},
@@ -278,6 +285,20 @@ defmodule Vutuv.Notifications.MailClassTest do
   # builds every mail several times over.
   defp build_mail(:ad_booking_email),
     do: Emailer.ad_booking_email(build(:ad), user())
+
+  defp build_mail(:ad_cancellation_email),
+    do: Emailer.ad_cancellation_email(build(:ad), user())
+
+  defp build_mail(:ad_booked_email), do: Emailer.ad_booked_email(user(), @address, build(:ad))
+
+  defp build_mail(:ad_approved_email),
+    do: Emailer.ad_approved_email(user(), @address, build(:ad))
+
+  defp build_mail(:ad_rejected_email),
+    do: Emailer.ad_rejected_email(user(), @address, build(:ad, rejection_reason: "Nein."))
+
+  defp build_mail(:ad_cancelled_email),
+    do: Emailer.ad_cancelled_email(user(), @address, build(:ad))
 
   defp build_mail(:daily_report_email),
     do: Emailer.daily_report_email(%Vutuv.Reports.DailyReport{date: ~D[2026-08-15], posts: 3})

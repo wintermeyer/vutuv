@@ -31,14 +31,17 @@ defmodule Vutuv.Notifications.Emailer do
 
   alias Vutuv.Accounts
   alias Vutuv.Accounts.User
+  alias Vutuv.DateRegions
   alias Vutuv.Identity
   alias Vutuv.Mailto
   alias Vutuv.Moderation
   alias Vutuv.Notifications.Bounces
   alias Vutuv.Operator
   alias Vutuv.Organizations.Organization
+  alias Vutuv.Prefs
   alias Vutuv.Reports.DailyReport
   alias Vutuv.SavedSearches
+  alias VutuvWeb.AgentDocs.AdsDoc
   alias VutuvWeb.EmailComponents
   alias VutuvWeb.EmailText
   alias VutuvWeb.Markdown
@@ -141,6 +144,20 @@ defmodule Vutuv.Notifications.Emailer do
     end
 
     :ok
+  end
+
+  @doc """
+  Mails a member at their first address, off the request path: `build` gets
+  the member and the address and returns the message. A member without an
+  address gets nothing.
+  """
+  def deliver_to_member(%User{} = user, build) when is_function(build, 2) do
+    deliver_async(fn ->
+      case Accounts.first_email_value(user) do
+        nil -> :ok
+        address -> user |> build.(address) |> deliver()
+      end
+    end)
   end
 
   # gen_smtp's puny-encoding raises on whitespace in a recipient address (one
@@ -757,17 +774,29 @@ defmodule Vutuv.Notifications.Emailer do
   and template are fixed German rather than locale-selected.
   """
   def ad_booking_email(%Vutuv.Ads.Ad{} = ad, booker) do
+    operator_ad_email(ad, booker, "ad_booking", "vutuv Anzeigenbuchung für den")
+  end
+
+  @doc """
+  The operator notice that a booker withdrew their ad before it was approved:
+  the invoice for it may already be on its way.
+  """
+  def ad_cancellation_email(%Vutuv.Ads.Ad{} = ad, booker) do
+    operator_ad_email(ad, booker, "ad_cancellation", "vutuv Stornierung der Anzeige für den")
+  end
+
+  defp operator_ad_email(ad, booker, template_base, subject) do
     base_email()
     # Critical for the same reason a PIN is: a booking the member just paid for
-    # has to reach the operator or nobody writes the invoice, so it must not be
-    # dropped by the bounce suppression (see deliver/1).
+    # has to reach the operator or nobody writes (or credits) the invoice, so
+    # it must not be dropped by the bounce suppression (see deliver/1).
     |> put_class(:critical)
     |> to(operator_recipient())
-    |> subject("vutuv Anzeigenbuchung für den #{Calendar.strftime(ad.day, "%d.%m.%Y")}")
-    |> render_bodies("ad_booking", "de", %{
+    |> subject("#{subject} #{Calendar.strftime(ad.day, "%d.%m.%Y")}")
+    |> render_bodies(template_base, "de", %{
       ad: ad,
       booker: booker,
-      booker_email: Vutuv.Accounts.first_email_value(booker),
+      booker_email: Accounts.first_email_value(booker),
       billing_address: billing_address(ad),
       price: format_euro_cents(ad.price_cents),
       url: public_url()
@@ -800,6 +829,47 @@ defmodule Vutuv.Notifications.Emailer do
 
     decimals = rem(cents, 100) |> Integer.to_string() |> String.pad_leading(2, "0")
     "#{euros},#{decimals}"
+  end
+
+  @doc "The booker's receipt: their ad is booked and waits for the review."
+  def ad_booked_email(user, email, %Vutuv.Ads.Ad{} = ad) do
+    booker_email(user, email, ad, "ad_booked", fn day ->
+      gettext("Your ad for %{day} is booked", day: day)
+    end)
+  end
+
+  @doc "The booker's ad passed the review and runs on its day."
+  def ad_approved_email(user, email, %Vutuv.Ads.Ad{} = ad) do
+    booker_email(user, email, ad, "ad_approved", fn day ->
+      gettext("Your ad for %{day} is approved", day: day)
+    end)
+  end
+
+  @doc "The booker's ad was turned down, with the admin's reason."
+  def ad_rejected_email(user, email, %Vutuv.Ads.Ad{} = ad) do
+    booker_email(user, email, ad, "ad_rejected", fn day ->
+      gettext("We cannot run your ad for %{day}", day: day)
+    end)
+  end
+
+  @doc "An admin withdrew the booker's ad."
+  def ad_cancelled_email(user, email, %Vutuv.Ads.Ad{} = ad) do
+    booker_email(user, email, ad, "ad_cancelled", fn day ->
+      gettext("Your ad for %{day} is cancelled", day: day)
+    end)
+  end
+
+  # About the member's own booking, so transactional. The day is written in
+  # the member's date format, as their bookings page writes it, and the price
+  # in the line the offer page uses.
+  defp booker_email(user, email, ad, template_base, subject) do
+    region = user.date_region || Prefs.default(:date_region)
+    day = Calendar.strftime(ad.day, DateRegions.pattern(region, :date))
+    price = in_locale(get_locale(user.locale), fn -> AdsDoc.price_display(ad.price_cents) end)
+
+    build_email(user, email, template_base, %{ad: ad, day: day, price: price}, fn ->
+      subject.(day)
+    end)
   end
 
   ## Operator notices (fixed German recipient, no member ever receives them)

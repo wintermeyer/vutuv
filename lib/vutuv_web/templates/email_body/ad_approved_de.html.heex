@@ -1,0 +1,16 @@
+<.email_layout preheader="Ihre Anzeige ist freigeschaltet" locale={@locale}>
+  <.email_p>{email_greeting(@user)},</.email_p>
+  <.email_p>
+    Ihre Anzeige für den {@day} ist freigeschaltet und erscheint an diesem Tag auf Profilen und im Feed:
+  </.email_p>
+  <.email_panel>
+    <.email_row label="Titel">{@ad.title}</.email_row>
+    <.email_row label="Text">{@ad.body}</.email_row>
+    <.email_row label="Link">{@ad.url}</.email_row>
+  </.email_panel>
+  <.email_p>
+    Mit der Freischaltung ist die Buchung verbindlich. Wie oft Ihre Anzeige gesehen und angeklickt wurde, sehen Sie ab diesem Tag hier:
+  </.email_p>
+  <.email_button href={"#{@url}system/ads/bookings"}>Zu Ihren Buchungen</.email_button>
+  <.email_signature locale={@locale} />
+</.email_layout>

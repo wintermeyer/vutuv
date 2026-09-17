@@ -81,15 +81,45 @@ ad/day, unique index), enter the invoice address, then title, sentence and link
 (must be family-friendly; live counters for the two limits, the changeset
 enforces them and accepts only an http(s) link to a public host).
 
-1.250 € net per day, payment by invoice: the booking mail (billing data + ad
-text) goes to the operator, who invoices manually; serving on the booked day is
-automatic.
+1.250 € net per day, payment by invoice: the booking mail (billing data + ad)
+goes to the operator, who invoices manually, and the booker gets a receipt.
+The price is stamped on the row, so "My bookings" and the review pages show
+what was booked rather than today's price. Days on these pages are written the
+way the reader writes dates (`VutuvWeb.AdHTML.day_label/1`); the offer page
+wraps them in `<time datetime>`, which keeps the ISO date for its agent-format
+siblings.
 
-**Every ad is admin-approved before it runs** (`approved_at`; an unapproved ad
-never serves, the house ad fills its day): the review dashboard lives at
-`/admin/ads` (with a pending badge on the admin panel), the member sees the
-approval state of their bookings at `/system/ads/bookings`, and the earliest bookable
+**Every ad is reviewed before it runs.** A booking is pending, then approved
+or rejected, and it can be cancelled on the way (`Vutuv.Ads.Ad.status/1`):
+
+- **Approve** (`approve_ad/2`): the ad serves on its day, the booking is
+  binding from here on, and the booker is told.
+- **Reject** (`reject_ad/3`): only while pending, and only with a reason (up
+  to 2,000 characters), which the booker reads. Nothing is invoiced.
+- **Cancel**: the booker may while the booking is pending
+  (`cancel_booking/2`, a button on `/system/ads/bookings`), and the operator
+  is told, since the invoice may already be out. An admin may cancel any
+  booking before its day (`cancel_ad/2`), and the booker is told.
+
+Every move is one conditional `UPDATE`, so an admin and the booker acting at
+once cannot both win. A rejected or cancelled booking frees its day: the
+unique index on `day` covers only the standing bookings
+(`rejected_at IS NULL AND cancelled_at IS NULL`), and every "is this day
+taken" question goes through the same query. The mails to the booker come in
+their language (`ad_booked`, `ad_approved`, `ad_rejected`, `ad_cancelled`);
+the operator's two (`ad_booking`, `ad_cancellation`) are German.
+
+The review dashboard lives at `/admin/ads` (with a pending badge on the admin
+panel), the booker's view at `/system/ads/bookings`, and the earliest bookable
 day is **three days out** to leave room for the review.
+
+**Numbers.** Each ad counts `views_count` and `clicks_count`, sums only and
+never who. A view is a card at least half in view: once per page for a
+visitor, and with the sighting for a member, so it respects their hourly
+limit. A click is the first click on the title link per page, which the hook
+reports because the link opens a new tab and the page is still there. The
+booker sees both from the ad's day on, admins on the review pages. Without
+JavaScript nothing is counted.
 
 Bookings are accepted only inside the **booking window** (through the end of
 next month); the booking form shows it as month-grid calendars with free days as

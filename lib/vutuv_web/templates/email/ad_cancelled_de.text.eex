@@ -1,0 +1,16 @@
+<%= email_greeting(@user) %>,
+
+wir haben Ihre Anzeige für den <%= @day %> storniert:
+
+  <%= @ad.title %>
+  <%= @ad.body %>
+  <%= @ad.url %>
+
+Sie läuft an diesem Tag nicht, und der Tag ist wieder frei. Eine bereits
+gestellte Rechnung schreiben wir Ihnen gut.
+
+<%= @url %>system/ads/bookings
+
+<%= render "_signature_de.text" %>
+
+<%= render "_footer.text" %>

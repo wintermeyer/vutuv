@@ -85,27 +85,139 @@ defmodule VutuvWeb.AdHTML do
   @doc "Monday-first weekday initials for the calendar header."
   defdelegate weekday_initials, to: VutuvWeb.UI
 
-  def status_label(%Ad{approved_at: nil}), do: gettext("Waiting for approval")
-  def status_label(%Ad{}), do: gettext("Approved")
+  def status_label(%Ad{} = ad) do
+    case Ad.status(ad) do
+      :pending -> gettext("Waiting for approval")
+      :approved -> gettext("Approved")
+      :rejected -> gettext("Rejected")
+      :cancelled -> gettext("Cancelled")
+    end
+  end
 
   @doc """
-  The approval-state pill shown on the member dashboard and the admin review
-  page. Green once approved; neutral while the review is pending (amber is
-  reserved for moderation notices).
+  The state pill shown on the member dashboard and the admin review page.
+  Green once approved, red when turned down, neutral while the review is
+  pending and once withdrawn (amber is reserved for moderation notices).
   """
   attr(:ad, Ad, required: true)
 
   def status_badge(assigns) do
+    assigns = assign(assigns, :status, Ad.status(assigns.ad))
+
     ~H"""
-    <span class={[
-      "inline-flex items-center rounded-full px-2 py-0.5 text-xs font-bold",
-      if(@ad.approved_at,
-        do: "bg-emerald-100 text-emerald-700 dark:bg-emerald-900/40 dark:text-emerald-200",
-        else: "bg-slate-100 text-slate-600 dark:bg-slate-800 dark:text-slate-300"
-      )
-    ]}>
+    <span
+      data-ad-status={@status}
+      class={[
+        "inline-flex items-center rounded-full px-2 py-0.5 text-xs font-bold",
+        status_colors(@status)
+      ]}
+    >
       {status_label(@ad)}
     </span>
     """
+  end
+
+  defp status_colors(:approved),
+    do: "bg-emerald-100 text-emerald-700 dark:bg-emerald-900/40 dark:text-emerald-200"
+
+  defp status_colors(:rejected),
+    do: "bg-red-100 text-red-700 dark:bg-red-900/40 dark:text-red-200"
+
+  defp status_colors(_pending_or_cancelled),
+    do: "bg-slate-100 text-slate-600 dark:bg-slate-800 dark:text-slate-300"
+
+  @doc "A booked day the way the reader writes dates (`Vutuv.ViewerClock`)."
+  def day_label(%Date{} = day), do: Vutuv.ViewerClock.format(day, :date)
+
+  @doc "A day in the reader's writing, with the ISO date for machines."
+  attr(:day, Date, required: true)
+
+  def day_time(assigns) do
+    ~H"""
+    <time datetime={Date.to_iso8601(@day)}>{day_label(@day)}</time>
+    """
+  end
+
+  # "Bookings are open through <day>.", translated as one sentence.
+  defp open_through(assigns) do
+    {before, rest} =
+      split_marker(gettext("Bookings are open through %{last}.", last: "{last}"), "{last}")
+
+    assigns = assign(assigns, before: before, rest: rest, last: Ads.last_bookable_day())
+
+    ~H"""
+    {@before}<.day_time day={@last} />{@rest}
+    """
+  end
+
+  @doc """
+  Where a booking ended up, shown under it for its booker and on the review
+  pages: its numbers once its day came, and why it was turned down.
+  """
+  attr(:ad, Ad, required: true)
+
+  def ad_outcome(assigns) do
+    assigns = assign(assigns, reach: reach_line(assigns.ad), status: Ad.status(assigns.ad))
+
+    ~H"""
+    <p :if={@reach} data-ad-reach class="mb-0 mt-2 text-sm text-slate-700 dark:text-slate-300">
+      {@reach}
+    </p>
+    <p :if={@status == :rejected} class="mb-0 mt-2 text-sm text-slate-700 dark:text-slate-300">
+      {gettext("Not approved: %{reason}", reason: @ad.rejection_reason)}
+    </p>
+    """
+  end
+
+  @doc """
+  The booker's controls under one of their bookings: withdrawing it while it
+  waits for approval.
+  """
+  attr(:ad, Ad, required: true)
+
+  def booking_actions(assigns) do
+    ~H"""
+    <p :if={Ad.status(@ad) == :pending} class="mb-0 mt-3 text-xs text-slate-600 dark:text-slate-400">
+      {gettext(
+        "We review every ad before it runs. Until then you can cancel the booking free of charge."
+      )}
+    </p>
+    <.form
+      :if={Ad.status(@ad) == :pending}
+      for={%{}}
+      id={"cancel-booking-#{@ad.id}"}
+      action={~p"/system/ads/#{@ad}/cancel"}
+      method="post"
+      class="mt-2"
+    >
+      <.button
+        type="submit"
+        variant="danger-ghost"
+        data-confirm={gettext("Cancel this booking? The day is then free for others.")}
+      >
+        {gettext("Cancel booking")}
+      </.button>
+    </.form>
+    """
+  end
+
+  @doc """
+  How often a booking's card was seen and its link clicked, once its day has
+  come; nil before that.
+  """
+  def reach_line(%Ad{} = ad) do
+    if Date.compare(ad.day, Ads.today()) != :gt do
+      Enum.join(
+        [
+          ngettext("seen %{formatted} time", "seen %{formatted} times", ad.views_count,
+            formatted: delimited_count(ad.views_count)
+          ),
+          ngettext("%{formatted} click", "%{formatted} clicks", ad.clicks_count,
+            formatted: delimited_count(ad.clicks_count)
+          )
+        ],
+        " · "
+      )
+    end
   end
 end

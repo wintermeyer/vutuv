@@ -1,0 +1,18 @@
+<%= email_greeting(@user) %>,
+
+unfortunately we cannot run your ad for <%= @day %>:
+
+  <%= @ad.title %>
+  <%= @ad.body %>
+  <%= @ad.url %>
+
+Our reason: <%= @ad.rejection_reason %>
+
+The booking is therefore void, you pay nothing, and the day is free again. You
+can book a new ad here:
+
+<%= @url %>system/ads/new
+
+<%= render "_signature_en.text" %>
+
+<%= render "_footer.text" %>

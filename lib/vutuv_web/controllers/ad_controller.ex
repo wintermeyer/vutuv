@@ -3,11 +3,13 @@ defmodule VutuvWeb.AdController do
 
   # The whole public ad flow is dark while the system is switched off.
   plug(VutuvWeb.Plug.RequireAdsEnabled)
-  plug(VutuvWeb.Plug.RequireLogin when action in [:new, :preview, :create, :bookings])
+  plug(VutuvWeb.Plug.RequireLogin when action in [:new, :preview, :create, :bookings, :cancel])
 
   alias Vutuv.Ads
+  alias VutuvWeb.AdHTML
   alias VutuvWeb.AgentDocs
   alias VutuvWeb.AgentDocs.AdsDoc
+  alias VutuvWeb.ControllerHelpers
 
   # Also served as Markdown / text / JSON via VutuvWeb.AgentDocs.AdsDoc.
   # Keep index.html and the doc builder in sync (the controller test's
@@ -65,7 +67,7 @@ defmodule VutuvWeb.AdController do
           :info,
           gettext(
             "Your ad for %{day} is booked. We will review and approve it shortly; the invoice follows by email.",
-            day: ad.day
+            day: AdHTML.day_label(ad.day)
           )
         )
         |> redirect(to: ~p"/system/ads/bookings")
@@ -81,6 +83,33 @@ defmodule VutuvWeb.AdController do
       ads: Ads.user_ads(conn.assigns[:current_user]),
       page_title: gettext("My ad bookings")
     )
+  end
+
+  # A booking waiting for approval may be withdrawn by its booker; once
+  # approved it is binding. Somebody else's booking is not there for them.
+  def cancel(conn, %{"id" => id}) do
+    with %Ads.Ad{} = ad <- Ads.get_ad_by_id(id),
+         {:ok, cancelled} <- Ads.cancel_booking(ad, conn.assigns[:current_user]) do
+      conn
+      |> put_flash(
+        :info,
+        gettext("Your ad for %{day} is cancelled, and the day is free again.",
+          day: AdHTML.day_label(cancelled.day)
+        )
+      )
+      |> redirect(to: ~p"/system/ads/bookings")
+    else
+      {:error, :not_pending} ->
+        conn
+        |> put_flash(
+          :error,
+          gettext("An approved booking is binding and can no longer be cancelled here.")
+        )
+        |> redirect(to: ~p"/system/ads/bookings")
+
+      _missing_or_foreign ->
+        ControllerHelpers.render_error(conn, 404)
+    end
   end
 
   defp render_form(conn, changeset) do

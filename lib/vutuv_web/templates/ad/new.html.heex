@@ -60,8 +60,12 @@
       <p class="editform__hint">
         {gettext("One ad per calendar day: pick a free day in the calendar; struck-through days are already booked.")}
         {gettext("Bookings are open through %{last}. Next available day: %{day}",
-          last: Vutuv.Ads.last_bookable_day(),
-          day: @next_available_day || gettext("fully booked")
+          last: VutuvWeb.AdHTML.day_label(Vutuv.Ads.last_bookable_day()),
+          day:
+            if(@next_available_day,
+              do: VutuvWeb.AdHTML.day_label(@next_available_day),
+              else: gettext("fully booked")
+            )
         )}
       </p>
     </.editform_field>

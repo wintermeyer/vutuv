@@ -1,0 +1,19 @@
+<%= email_greeting(@user) %>,
+
+vielen Dank für Ihre Buchung. Ihre Anzeige für den <%= @day %> ist reserviert:
+
+  <%= @ad.title %>
+  <%= @ad.body %>
+  <%= @ad.url %>
+
+Preis: <%= @price %>, Zahlung per Rechnung. Die Rechnung schicken wir Ihnen per
+E-Mail.
+
+Wir prüfen jede Anzeige, bevor sie läuft, und schreiben Ihnen, sobald sie
+freigeschaltet ist. Bis dahin können Sie die Buchung kostenlos stornieren:
+
+<%= @url %>system/ads/bookings
+
+<%= render "_signature_de.text" %>
+
+<%= render "_footer.text" %>

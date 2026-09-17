@@ -44,13 +44,13 @@ the two renderings cannot drift apart. --%>
         </dt>
         <dd class="mt-1 text-lg font-bold text-slate-900 dark:text-slate-100">
           <%= if @next_available_day do %>
-            {@next_available_day}
+            <VutuvWeb.AdHTML.day_time day={@next_available_day} />
           <% else %>
             {gettext("fully booked")}
           <% end %>
         </dd>
         <dd class="mt-1 text-xs text-slate-600 dark:text-slate-400">
-          {gettext("Bookings are open through %{last}.", last: Vutuv.Ads.last_bookable_day())}
+          <.open_through />
         </dd>
       </div>
     </dl>

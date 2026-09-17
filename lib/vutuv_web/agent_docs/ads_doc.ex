@@ -33,11 +33,12 @@ defmodule VutuvWeb.AgentDocs.AdsDoc do
     ]
   end
 
-  @doc "The localized price line, shared verbatim by index.html.heex."
-  def price_display do
-    gettext("%{amount} € per day (net)",
-      amount: VutuvWeb.UI.delimited_count(div(Ads.price_cents(), 100))
-    )
+  @doc """
+  The localized price line, shared verbatim by index.html.heex: today's price,
+  or the one a booking was made at.
+  """
+  def price_display(cents \\ Ads.price_cents()) do
+    gettext("%{amount} € per day (net)", amount: VutuvWeb.UI.delimited_count(div(cents, 100)))
   end
 
   @doc "The /system/ads page as a doc map."

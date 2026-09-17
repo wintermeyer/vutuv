@@ -1,0 +1,19 @@
+<.email_layout preheader="Your ad is booked" locale={@locale}>
+  <.email_p>{email_greeting(@user)},</.email_p>
+  <.email_p>
+    thank you for your booking. Your ad for {@day} is reserved:
+  </.email_p>
+  <.email_panel>
+    <.email_row label="Title">{@ad.title}</.email_row>
+    <.email_row label="Text">{@ad.body}</.email_row>
+    <.email_row label="Link">{@ad.url}</.email_row>
+  </.email_panel>
+  <.email_p>
+    Price: {@price}, paid by invoice. We will send you the invoice by email.
+  </.email_p>
+  <.email_p>
+    We review every ad before it runs and will write to you once it is approved. Until then you can cancel the booking free of charge:
+  </.email_p>
+  <.email_button href={"#{@url}system/ads/bookings"}>Your bookings</.email_button>
+  <.email_signature locale={@locale} />
+</.email_layout>

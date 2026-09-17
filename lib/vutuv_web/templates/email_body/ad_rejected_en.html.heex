@@ -1,0 +1,19 @@
+<.email_layout preheader="Your ad will not run" locale={@locale}>
+  <.email_p>{email_greeting(@user)},</.email_p>
+  <.email_p>
+    unfortunately we cannot run your ad for {@day}:
+  </.email_p>
+  <.email_panel>
+    <.email_row label="Title">{@ad.title}</.email_row>
+    <.email_row label="Text">{@ad.body}</.email_row>
+    <.email_row label="Link">{@ad.url}</.email_row>
+  </.email_panel>
+  <.email_p>
+    Our reason: {@ad.rejection_reason}
+  </.email_p>
+  <.email_p>
+    The booking is therefore void, you pay nothing, and the day is free again. You can book a new ad here:
+  </.email_p>
+  <.email_button href={"#{@url}system/ads/new"}>Book a new ad</.email_button>
+  <.email_signature locale={@locale} />
+</.email_layout>

@@ -8,7 +8,8 @@
 //   while the card is in view. When the ring is empty the hook sends
 //   `ad-expired` and the server takes the card away.
 // * The first moment the card is in view it sends `ad-seen`, which takes a
-//   member's hour on the server. Nothing is kept in the browser.
+//   member's hour on the server; the first click on the title link sends
+//   `ad-click`. Both are counted once per page. Nothing is kept in the browser.
 //
 // A page carries the card twice (rail and phone column, one of them hidden), so
 // the countdown and the sighting live per card key (`data-ad-key`, the second it
@@ -21,11 +22,11 @@ import { reducedMotion } from "./util"
 const LIFETIME_MS = 2 * 60 * 1000
 const TICK_MS = 1000
 
-// key => { elapsed, seen }
+// key => { elapsed, seen, clicked }
 const cards = new Map()
 
 const cardFor = (key) => {
-  if (!cards.has(key)) cards.set(key, { elapsed: 0, seen: false })
+  if (!cards.has(key)) cards.set(key, { elapsed: 0, seen: false, clicked: false })
   return cards.get(key)
 }
 
@@ -33,6 +34,13 @@ export const AdSlot = {
   mounted() {
     this.card = cardFor(this.el.dataset.adKey)
     if (this.expired()) return this.leave("ad-expired")
+
+    // The link opens in a new tab, so this page is still there to report it.
+    this.el.querySelector("[data-ad-link]").addEventListener("click", () => {
+      if (this.card.clicked) return
+      this.card.clicked = true
+      this.push("ad-click")
+    })
 
     this.arc = this.el.querySelector("[data-ad-ring-arc]")
     this.inView = false
