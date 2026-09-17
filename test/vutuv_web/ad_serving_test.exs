@@ -21,7 +21,7 @@ defmodule VutuvWeb.AdServingTest do
 
   @rail ~s(id="ad-slot-rail")
   @inline ~s(id="ad-slot-inline")
-  # The house ad's own words: its /ads link is no tell, the footer links there
+  # The house ad's own words: its /system/ads link is no tell, the footer links there
   # too while the system is on.
   @house "This spot is free today."
 

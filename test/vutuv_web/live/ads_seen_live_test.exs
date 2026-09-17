@@ -3,7 +3,7 @@ defmodule VutuvWeb.AdsSeenLiveTest do
   The member's list of the ads vutuv showed them, at `/system/ads/seen`
   (`VutuvWeb.AdsSeenLive`): newest sighting first, with when and how often,
   searchable and paged. The card's "Ad" label leads there for a member and to
-  the `/ads` offer page for a visitor, who has no history to look at.
+  the `/system/ads` offer page for a visitor, who has no history to look at.
   """
 
   use VutuvWeb.ConnCase
@@ -24,7 +24,7 @@ defmodule VutuvWeb.AdsSeenLiveTest do
     {:ok, _view, html} = live(conn, @path)
 
     assert html =~ "You have not seen an ad in the last 90 days."
-    assert html =~ ~s(href="/ads")
+    assert html =~ ~s(href="/system/ads")
   end
 
   test "lists the ads the member saw, newest first, with how often", %{conn: conn} do
@@ -97,7 +97,7 @@ defmodule VutuvWeb.AdsSeenLiveTest do
     test "leads a visitor to the offer page", %{conn: conn} do
       html = conn |> get(~p"/#{insert_activated_user()}") |> html_response(200)
 
-      assert html =~ ~r{<a[^>]*href="/ads"[^>]*>\s*Ad\s*</a>}
+      assert html =~ ~r{<a[^>]*href="/system/ads"[^>]*>\s*Ad\s*</a>}
       refute html =~ ~s(href="/system/ads/seen")
     end
   end

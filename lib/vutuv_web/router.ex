@@ -59,7 +59,7 @@ defmodule VutuvWeb.Router do
     plug(Plugs.NoIndex)
   end
 
-  # The daily text-ad pages that are not the /ads controller, which gates
+  # The daily text-ad pages that are not the /system/ads controller, which gates
   # itself: they 404 while the system is off.
   pipeline :ads_enabled do
     plug(Plugs.RequireAdsEnabled)
@@ -1061,15 +1061,17 @@ defmodule VutuvWeb.Router do
     # The daily text ad: the public offer page, the booking flow and the
     # member's booking dashboard (logged-in only; checked in the
     # controller). See Vutuv.Ads; admin approval lives under /admin/ads.
-    get("/ads", AdController, :index)
-    get("/ads/new", AdController, :new)
-    # POST /ads/new is the "edit again" leg of the preview step: it re-renders
-    # the form with the submitted values; /ads/preview shows the ad as the
-    # banner will render it before the binding POST /ads books it.
-    post("/ads/new", AdController, :new)
-    post("/ads/preview", AdController, :preview)
-    get("/ads/bookings", AdController, :bookings)
-    post("/ads", AdController, :create)
+    # Under /system/ like every site page, so no handle is burnt for it.
+    get("/system/ads", AdController, :index)
+    get("/system/ads/new", AdController, :new)
+    # POST /system/ads/new is the "edit again" leg of the preview step: it
+    # re-renders the form with the submitted values; /system/ads/preview shows
+    # the ad as the card will render it before the binding POST /system/ads
+    # books it.
+    post("/system/ads/new", AdController, :new)
+    post("/system/ads/preview", AdController, :preview)
+    get("/system/ads/bookings", AdController, :bookings)
+    post("/system/ads", AdController, :create)
 
     # Blocking: the profile-footer Block control, the private blocked list,
     # and unblocking. Logged-in only ("blocks" is in ReservedSlugs).

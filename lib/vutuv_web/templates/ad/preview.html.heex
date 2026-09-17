@@ -1,5 +1,5 @@
 <.page_header crumbs={[
-  {gettext("Advertising"), ~p"/ads"},
+  {gettext("Advertising"), ~p"/system/ads"},
   gettext("Preview")
 ]} />
 
@@ -57,7 +57,7 @@
 
     <%!-- One form, two ways out: the default action books (binding), the
     second submit posts the same values back to the form for editing. --%>
-    <form action={~p"/ads"} method="post" class="mt-4" id="ad-confirm-form">
+    <form action={~p"/system/ads"} method="post" class="mt-4" id="ad-confirm-form">
       <input type="hidden" name="_csrf_token" value={get_csrf_token()} />
       <input
         :for={{key, value} <- @ad_params}
@@ -66,7 +66,7 @@
         value={value}
       />
       <div class="flex flex-wrap items-center gap-3">
-        <.button type="submit" variant="secondary" formaction={~p"/ads/new"}>
+        <.button type="submit" variant="secondary" formaction={~p"/system/ads/new"}>
           {gettext("Edit the ad")}
         </.button>
         <.button type="submit">

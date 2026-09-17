@@ -401,7 +401,7 @@ defmodule VutuvWeb.AgentDocs.Markdown do
     |> join_blocks()
   end
 
-  # The /ads offer page (VutuvWeb.AgentDocs.AdsDoc). The rules and the facts
+  # The /system/ads offer page (VutuvWeb.AgentDocs.AdsDoc). The rules and the facts
   # form one loose bullet list (blank-line separated, like every other list),
   # not several one-item lists.
   def render(%{type: "advertising"} = doc) do

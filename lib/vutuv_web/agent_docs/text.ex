@@ -358,7 +358,7 @@ defmodule VutuvWeb.AgentDocs.Text do
     |> join_blocks()
   end
 
-  # The /ads offer page (VutuvWeb.AgentDocs.AdsDoc).
+  # The /system/ads offer page (VutuvWeb.AgentDocs.AdsDoc).
   def render(%{type: "advertising"} = doc) do
     [
       heading(doc.title),

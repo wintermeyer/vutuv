@@ -40,7 +40,7 @@ defmodule VutuvWeb.AdController do
 
   # The check before buying: validate everything (including day
   # availability), then show the ad exactly as the banner will render it,
-  # with the order summary. Booking happens only on the confirm POST /ads.
+  # with the order summary. Booking happens only on the confirm POST /system/ads.
   def preview(conn, %{"ad" => ad_params}) do
     case Ads.preview_ad(ad_params) do
       {:ok, ad} ->
@@ -68,7 +68,7 @@ defmodule VutuvWeb.AdController do
             day: ad.day
           )
         )
-        |> redirect(to: ~p"/ads/bookings")
+        |> redirect(to: ~p"/system/ads/bookings")
 
       {:error, changeset} ->
         conn |> put_status(:unprocessable_entity) |> render_form(changeset)

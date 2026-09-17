@@ -498,7 +498,7 @@ defmodule VutuvWeb.PageController do
 
   # The document is a compile-time constant with one hole in it, because one of
   # the pages it lists is optional. `:ads_enabled` ships **off** (config.exs),
-  # and the ad page 404s while it is — so listing `/ads` unconditionally pointed
+  # and the ad page 404s while it is — so listing `/system/ads` unconditionally pointed
   # every installation's agents at a dead URL, vutuv.de included. A discovery
   # file that names a page which is not there is worse than one that stays quiet
   # about a feature.
@@ -515,7 +515,7 @@ defmodule VutuvWeb.PageController do
 
   defp ads_entry do
     if Vutuv.Ads.enabled?() do
-      "- `/ads` — the daily text ad: price, conditions, next available day\n" <>
+      "- `/system/ads` — the daily text ad: price, conditions, next available day\n" <>
         "  (booking happens online and requires a login)\n"
     else
       ""

@@ -44,7 +44,7 @@ defmodule Vutuv.Sitemap do
                   "/system/markdown",
                   "/organizations",
                   "/jobs",
-                  "/ads",
+                  "/system/ads",
                   "/tags",
                   "/developers"
                 ] ++ Enum.map(@dev_doc_pages, &("/developers/" <> &1))
@@ -52,7 +52,7 @@ defmodule Vutuv.Sitemap do
   def chunk_size, do: @chunk_size
 
   @doc """
-  Pages of the static, always-present public pages (one chunk). `/ads` drops
+  Pages of the static, always-present public pages (one chunk). `/system/ads` drops
   out while the ad system is switched off (`Vutuv.Ads.enabled?/0`), so the
   sitemap never points crawlers at a page that 404s.
   """
@@ -60,7 +60,7 @@ defmodule Vutuv.Sitemap do
     if Vutuv.Ads.enabled?() do
       @static_paths
     else
-      @static_paths -- ["/ads"]
+      @static_paths -- ["/system/ads"]
     end
   end
 

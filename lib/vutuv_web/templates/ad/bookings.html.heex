@@ -1,7 +1,7 @@
 <.page_header
   title={gettext("My ad bookings")}
   crumbs={[
-    {gettext("Advertising"), ~p"/ads"},
+    {gettext("Advertising"), ~p"/system/ads"},
     gettext("My bookings")
   ]}
 />
@@ -11,7 +11,7 @@
     <%= if @ads == [] do %>
       <p class="card__empty">{gettext("You have not booked an ad yet.")}</p>
       <div class="mt-4">
-        <.button href={~p"/ads/new"}>{gettext("Book your ad")}</.button>
+        <.button href={~p"/system/ads/new"}>{gettext("Book your ad")}</.button>
       </div>
     <% else %>
       <div class="divide-y divide-slate-100 dark:divide-slate-800">
@@ -30,7 +30,7 @@
         </div>
       </div>
       <div class="mt-6">
-        <.button href={~p"/ads/new"} variant="secondary">{gettext("Book another day")}</.button>
+        <.button href={~p"/system/ads/new"} variant="secondary">{gettext("Book another day")}</.button>
       </div>
     <% end %>
   </section>

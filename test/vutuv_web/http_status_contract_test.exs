@@ -19,7 +19,7 @@ defmodule VutuvWeb.HttpStatusContractTest do
         "/developers",
         "/llms.txt",
         "/health",
-        "/ads",
+        "/system/ads",
         "/robots.txt",
         "/sitemap.xml",
         "/posts/feed.xml",
@@ -34,7 +34,7 @@ defmodule VutuvWeb.HttpStatusContractTest do
 
     test "login-required browser pages redirect instead of rendering", %{conn: _conn} do
       # Classic controller pages bounce to the start page with a flash …
-      for path <- ["/reports/new", "/ads/bookings", "/moderation/cases", "/admin"] do
+      for path <- ["/reports/new", "/system/ads/bookings", "/moderation/cases", "/admin"] do
         conn = get(build_conn(), path)
         assert conn.status == 302, "expected a redirect for #{path}, got #{conn.status}"
       end

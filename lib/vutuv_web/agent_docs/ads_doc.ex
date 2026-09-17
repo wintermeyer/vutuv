@@ -1,6 +1,6 @@
 defmodule VutuvWeb.AgentDocs.AdsDoc do
   @moduledoc """
-  The `/ads` offer page (the daily text ad, see `Vutuv.Ads`) as a data map
+  The `/system/ads` offer page (the daily text ad, see `Vutuv.Ads`) as a data map
   for the agent formats. `rules/0` and `price_display/0` are also what the
   HTML template renders, so the page and its docs cannot drift apart.
   """
@@ -40,9 +40,9 @@ defmodule VutuvWeb.AgentDocs.AdsDoc do
     )
   end
 
-  @doc "The /ads page as a doc map."
+  @doc "The /system/ads page as a doc map."
   def build(next_available_day) do
-    AgentDocs.doc_meta("advertising", "/ads")
+    AgentDocs.doc_meta("advertising", "/system/ads")
     |> Map.merge(%{
       title: gettext("Advertising on vutuv"),
       description: gettext("One text-only ad per calendar day, seen by every visitor."),
@@ -56,7 +56,7 @@ defmodule VutuvWeb.AgentDocs.AdsDoc do
       next_available_day: next_available_day,
       booking_window: %{from: Ads.first_bookable_day(), to: Ads.last_bookable_day()},
       booked_days: Enum.sort(Ads.booked_days(), Date),
-      booking_url: AgentDocs.abs_url("/ads/new"),
+      booking_url: AgentDocs.abs_url("/system/ads/new"),
       community_guidelines_url: AgentDocs.abs_url("/community")
     })
   end

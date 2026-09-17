@@ -59,7 +59,7 @@ defmodule Vutuv.Ads do
   Whether the daily text-ad system is switched on, from
   `config :vutuv, :ads_enabled` (default **off**). The single gate the rest
   of the app asks: when off, no ad serves (`VutuvWeb.AdServing`), the
-  public `/ads` flow and the admin review dashboard answer 404
+  public `/system/ads` flow and the admin review dashboard answer 404
   (`VutuvWeb.Plug.RequireAdsEnabled`), and nothing can be booked. `"ads"`
   stays a reserved slug regardless (see `Vutuv.Accounts.ReservedSlugs`), so
   the handle stays free for when the system is turned back on.

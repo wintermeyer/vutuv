@@ -93,7 +93,7 @@ finger-sized target instead of a word in a paragraph. --%>
         <%!-- The ad page 404s while `:ads_enabled` is off, which is how the
               software ships and, today, how vutuv.de runs. A footer entry
               pointing at a 404 is worse than no entry, the same reasoning
-              /llms.txt applies to its own `/ads` line. --%>
+              /llms.txt applies to its own `/system/ads` line. --%>
         <ul class="mt-2">
           <li>
             <.link href={~p"/system/investors"} class={footer_link_class}>
@@ -102,7 +102,7 @@ finger-sized target instead of a word in a paragraph. --%>
           </li>
           <li><.link href={~p"/system/media-kit"} class={footer_link_class}>Media Kit</.link></li>
           <li :if={Vutuv.Ads.enabled?()}>
-            <.link href={~p"/ads"} class={footer_link_class}>{gettext("Advertising")}</.link>
+            <.link href={~p"/system/ads"} class={footer_link_class}>{gettext("Advertising")}</.link>
           </li>
           <li><.link href={~p"/impressum"} class={footer_link_class}>{gettext("About us")}</.link></li>
         </ul>

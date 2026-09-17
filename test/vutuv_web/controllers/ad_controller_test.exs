@@ -28,11 +28,16 @@ defmodule VutuvWeb.AdControllerTest do
 
   describe "index (the public offer page)" do
     test "shows price and conditions to anonymous visitors", %{conn: conn} do
-      html = conn |> get(~p"/ads") |> html_response(200)
+      html = conn |> get(~p"/system/ads") |> html_response(200)
 
       assert html =~ "1,250"
       assert html =~ "a title of up to 30 characters"
-      assert html =~ ~p"/ads/new"
+      assert html =~ ~p"/system/ads/new"
+    end
+
+    test "lives under /system/, and the root word /ads serves nothing", %{conn: conn} do
+      assert conn |> get("/ads") |> html_response(404)
+      assert get(build_conn(), "/ads/new").status == 404
     end
 
     test "every public fact also appears in the agent formats (no drift)", %{conn: conn} do
@@ -40,10 +45,10 @@ defmodule VutuvWeb.AdControllerTest do
       window_end = Date.to_iso8601(Ads.last_bookable_day())
 
       rendered = %{
-        html: get(conn, ~p"/ads") |> html_response(200),
-        md: get(build_conn(), "/ads.md").resp_body,
-        txt: get(build_conn(), "/ads.txt").resp_body,
-        json: get(build_conn(), "/ads.json").resp_body
+        html: get(conn, ~p"/system/ads") |> html_response(200),
+        md: get(build_conn(), "/system/ads.md").resp_body,
+        txt: get(build_conn(), "/system/ads.txt").resp_body,
+        json: get(build_conn(), "/system/ads.json").resp_body
       }
 
       # The community-guidelines link the HTML page shows and JSON/XML carry
@@ -67,13 +72,13 @@ defmodule VutuvWeb.AdControllerTest do
 
   describe "new" do
     test "requires login", %{conn: conn} do
-      conn = get(conn, ~p"/ads/new")
+      conn = get(conn, ~p"/system/ads/new")
       assert redirected_to(conn) == "/"
     end
 
     test "renders the booking form for a logged-in member", %{conn: conn} do
       {conn, _user} = create_and_login_user(conn)
-      html = conn |> get(~p"/ads/new") |> html_response(200)
+      html = conn |> get(~p"/system/ads/new") |> html_response(200)
 
       assert html =~ "id=\"ad-form\""
       assert html =~ "billing_name"
@@ -82,7 +87,7 @@ defmodule VutuvWeb.AdControllerTest do
 
     test "asks for a title, a sentence and a link, with live counters", %{conn: conn} do
       {conn, _user} = create_and_login_user(conn)
-      html = conn |> get(~p"/ads/new") |> html_response(200)
+      html = conn |> get(~p"/system/ads/new") |> html_response(200)
 
       assert html =~ ~s(name="ad[title]")
       assert html =~ ~s(name="ad[body]")
@@ -102,7 +107,7 @@ defmodule VutuvWeb.AdControllerTest do
       {conn, _user} = create_and_login_user(conn)
       conn = conn |> recycle() |> put_req_header("accept-language", "de-DE,de")
 
-      html = conn |> get(~p"/ads/new") |> html_response(200)
+      html = conn |> get(~p"/system/ads/new") |> html_response(200)
       assert html =~ "Erscheint fett als Link."
       assert html =~ "Ein Satz unter dem Titel, reiner Text."
       assert html =~ "Wohin der Titel führt."
@@ -110,7 +115,7 @@ defmodule VutuvWeb.AdControllerTest do
       html =
         build_conn()
         |> put_req_header("accept-language", "de-DE,de")
-        |> get(~p"/ads")
+        |> get(~p"/system/ads")
         |> html_response(200)
 
       assert html =~
@@ -124,7 +129,7 @@ defmodule VutuvWeb.AdControllerTest do
       booked = insert(:ad, day: Date.add(first, 1))
       {conn, _user} = create_and_login_user(conn)
 
-      html = conn |> get(~p"/ads/new") |> html_response(200)
+      html = conn |> get(~p"/system/ads/new") |> html_response(200)
 
       # A free day is a selectable radio; a booked day is not offered.
       assert html =~ ~s(value="#{first}")
@@ -139,7 +144,7 @@ defmodule VutuvWeb.AdControllerTest do
       beyond = Date.add(Ads.last_bookable_day(), 1)
 
       conn =
-        post(conn, ~p"/ads", %{"ad" => booking_params(beyond)})
+        post(conn, ~p"/system/ads", %{"ad" => booking_params(beyond)})
 
       assert html_response(conn, 422) =~ "is outside the booking window"
     end
@@ -147,7 +152,7 @@ defmodule VutuvWeb.AdControllerTest do
 
   describe "preview (the check before buying)" do
     test "requires login", %{conn: conn} do
-      conn = post(conn, ~p"/ads/preview", %{"ad" => booking_params()})
+      conn = post(conn, ~p"/system/ads/preview", %{"ad" => booking_params()})
       assert redirected_to(conn) == "/"
     end
 
@@ -156,7 +161,7 @@ defmodule VutuvWeb.AdControllerTest do
       # A crafted non-scalar value must not crash the hidden-input stringify.
       params = Map.put(booking_params(), "billing_company", ["x", "y"])
 
-      conn = post(conn, ~p"/ads/preview", %{"ad" => params})
+      conn = post(conn, ~p"/system/ads/preview", %{"ad" => params})
       assert conn.status in [200, 422]
     end
 
@@ -165,7 +170,7 @@ defmodule VutuvWeb.AdControllerTest do
     } do
       {conn, _user} = create_and_login_user(conn)
       params = booking_params()
-      conn = post(conn, ~p"/ads/preview", %{"ad" => params})
+      conn = post(conn, ~p"/system/ads/preview", %{"ad" => params})
       html = html_response(conn, 200)
 
       # The rendered ad with its mandatory label: the title links to the
@@ -185,8 +190,8 @@ defmodule VutuvWeb.AdControllerTest do
       # The order summary and both ways forward.
       assert html =~ params["day"]
       assert html =~ "1,250"
-      assert html =~ ~s(action="/ads") or html =~ ~s(action="#{~p"/ads"}")
-      assert html =~ ~s(formaction="/ads/new")
+      assert html =~ ~s(action="/system/ads") or html =~ ~s(action="#{~p"/system/ads"}")
+      assert html =~ ~s(formaction="/system/ads/new")
       # The params ride along as hidden fields for the confirm POST.
       assert html =~ ~s(name="ad[title]")
       assert html =~ ~s(name="ad[body]")
@@ -201,11 +206,13 @@ defmodule VutuvWeb.AdControllerTest do
       {conn, _user} = create_and_login_user(conn)
 
       conn =
-        post(conn, ~p"/ads/preview", %{"ad" => Map.put(booking_params(), "billing_name", "")})
+        post(conn, ~p"/system/ads/preview", %{
+          "ad" => Map.put(booking_params(), "billing_name", "")
+        })
 
       html = html_response(conn, 422)
       assert html =~ "id=\"ad-form\""
-      refute html =~ ~s(formaction="/ads/new")
+      refute html =~ ~s(formaction="/system/ads/new")
     end
 
     test "an already booked day is caught at preview time", %{conn: conn} do
@@ -213,7 +220,7 @@ defmodule VutuvWeb.AdControllerTest do
       insert(:ad, day: Date.from_iso8601!(params["day"]))
       {conn, _user} = create_and_login_user(conn)
 
-      conn = post(conn, ~p"/ads/preview", %{"ad" => params})
+      conn = post(conn, ~p"/system/ads/preview", %{"ad" => params})
       html = html_response(conn, 422)
 
       assert html =~ "id=\"ad-form\""
@@ -224,7 +231,7 @@ defmodule VutuvWeb.AdControllerTest do
       {conn, _user} = create_and_login_user(conn)
 
       params = booking_params()
-      conn = post(conn, ~p"/ads/new", %{"ad" => params})
+      conn = post(conn, ~p"/system/ads/new", %{"ad" => params})
       html = html_response(conn, 200)
 
       assert html =~ "id=\"ad-form\""
@@ -237,7 +244,7 @@ defmodule VutuvWeb.AdControllerTest do
 
   describe "bookings (the member dashboard)" do
     test "requires login", %{conn: conn} do
-      conn = get(conn, ~p"/ads/bookings")
+      conn = get(conn, ~p"/system/ads/bookings")
       assert redirected_to(conn) == "/"
     end
 
@@ -248,7 +255,7 @@ defmodule VutuvWeb.AdControllerTest do
       pending = insert(:ad, approved_at: nil, user: user, title: "Meine Anzeige")
       approved = insert(:ad, day: Date.add(Ads.today(), 9), user: user)
 
-      html = conn |> get(~p"/ads/bookings") |> html_response(200)
+      html = conn |> get(~p"/system/ads/bookings") |> html_response(200)
 
       assert html =~ "booking-#{pending.id}"
       assert html =~ "booking-#{approved.id}"
@@ -262,7 +269,7 @@ defmodule VutuvWeb.AdControllerTest do
 
   describe "create" do
     test "requires login", %{conn: conn} do
-      conn = post(conn, ~p"/ads", %{"ad" => booking_params()})
+      conn = post(conn, ~p"/system/ads", %{"ad" => booking_params()})
       assert redirected_to(conn) == "/"
       assert Repo.aggregate(Ads.Ad, :count) == 0
     end
@@ -271,10 +278,10 @@ defmodule VutuvWeb.AdControllerTest do
       {conn, user} = create_and_login_user(conn)
       params = booking_params()
 
-      conn = get(conn, ~p"/ads/new")
-      conn = submit_with_csrf(conn, ~p"/ads", %{"ad" => params})
+      conn = get(conn, ~p"/system/ads/new")
+      conn = submit_with_csrf(conn, ~p"/system/ads", %{"ad" => params})
 
-      assert redirected_to(conn) == ~p"/ads/bookings"
+      assert redirected_to(conn) == ~p"/system/ads/bookings"
       assert Phoenix.Flash.get(conn.assigns.flash, :info) =~ "booked"
 
       # The booked day comes from the SAME params map the form submitted, not
@@ -300,7 +307,7 @@ defmodule VutuvWeb.AdControllerTest do
       insert(:ad, day: Date.from_iso8601!(params["day"]))
       {conn, _user} = create_and_login_user(conn)
 
-      conn = post(conn, ~p"/ads", %{"ad" => params})
+      conn = post(conn, ~p"/system/ads", %{"ad" => params})
       html = html_response(conn, 422)
 
       assert html =~ "id=\"ad-form\""

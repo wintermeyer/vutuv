@@ -5,7 +5,7 @@ defmodule VutuvWeb.AdsDisabledTest do
 
   The test environment runs with ads **on** (so every ad test exercises the
   real flow), so each test here flips the flag **off** for its duration and
-  asserts the system goes dormant: no banner serves, the public `/ads` flow
+  asserts the system goes dormant: no banner serves, the public `/system/ads` flow
   and the admin review dashboard 404, and nothing can be booked - while
   `"ads"` stays a reserved slug so the handle is never claimed in the
   meantime.
@@ -46,17 +46,17 @@ defmodule VutuvWeb.AdsDisabledTest do
     assert conn |> get("/system/ads/seen") |> html_response(404)
   end
 
-  test "the public /ads pages 404 in every format", %{conn: conn} do
-    assert conn |> get(~p"/ads") |> html_response(404)
-    assert get(build_conn(), "/ads.md").status == 404
-    assert get(build_conn(), "/ads.json").status == 404
+  test "the public /system/ads pages 404 in every format", %{conn: conn} do
+    assert conn |> get(~p"/system/ads") |> html_response(404)
+    assert get(build_conn(), "/system/ads.md").status == 404
+    assert get(build_conn(), "/system/ads.json").status == 404
   end
 
   test "the public booking flow 404s for a logged-in member", %{conn: conn} do
     {conn, _user} = create_and_login_user(conn)
 
-    assert conn |> get(~p"/ads/new") |> html_response(404)
-    assert conn |> get(~p"/ads/bookings") |> html_response(404)
+    assert conn |> get(~p"/system/ads/new") |> html_response(404)
+    assert conn |> get(~p"/system/ads/bookings") |> html_response(404)
   end
 
   test "the admin ad-review dashboard 404s for an admin", %{conn: conn} do

@@ -1,15 +1,15 @@
 <.page_header
   title={gettext("Book an ad")}
   crumbs={[
-    {gettext("Advertising"), ~p"/ads"},
+    {gettext("Advertising"), ~p"/system/ads"},
     gettext("New")
   ]}
 />
 
 <.card_section variant={:form}>
-  <%!-- Submits to the preview step first; the binding POST /ads happens on
+  <%!-- Submits to the preview step first; the binding POST /system/ads happens on
   the preview page's confirm button. --%>
-  <.form :let={f} for={@changeset} action={~p"/ads/preview"} class="editform" id="ad-form">
+  <.form :let={f} for={@changeset} action={~p"/system/ads/preview"} class="editform" id="ad-form">
     <.form_error changeset={@changeset} />
 
     <.editform_field form={f} field={:day}>
@@ -143,7 +143,7 @@
     <%!-- Hand-written actions row: the submit leads to the preview, not the
     booking, so it must not say "Submit" (<.form_actions> has a fixed label). --%>
     <div class="editform__actions">
-      <a class="button button--cancel" href={~p"/ads"}>{gettext("Cancel")}</a>
+      <a class="button button--cancel" href={~p"/system/ads"}>{gettext("Cancel")}</a>
       <button class="button" type="submit">{gettext("Preview your ad")}</button>
     </div>
   </.form>

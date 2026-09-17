@@ -7,7 +7,7 @@ defmodule VutuvWeb.LandingConfigurationTest do
   Keys flipped here, and who else reads them (the rule below wants this named,
   so a widened blast radius is visible at a glance): `:landing_example_profile_url`
   and `:data_location` are read only by `VutuvWeb.PageHTML`; `:ads_enabled` by
-  `VutuvWeb.AdServing` and the `/ads` routes; `:fediverse_enabled` by
+  `VutuvWeb.AdServing` and the `/system/ads` routes; `:fediverse_enabled` by
   `Vutuv.Fediverse.enabled?/0`, which the tag timeline, the feed source tabs and
   the sign-up form all consult.
 
@@ -47,7 +47,7 @@ defmodule VutuvWeb.LandingConfigurationTest do
     conn |> put_req_header("accept-language", "de-DE,de") |> get(~p"/") |> html_response(200)
   end
 
-  # /llms.txt is the agent-discovery file, and it used to list `/ads`
+  # /llms.txt is the agent-discovery file, and it used to list the ad page
   # unconditionally. Ads ship switched OFF, and the ad page 404s while they are,
   # so every installation was pointing agents at a dead URL.
   describe "/llms.txt lists only pages this installation actually serves" do
@@ -56,7 +56,7 @@ defmodule VutuvWeb.LandingConfigurationTest do
 
       body = conn |> get(~p"/llms.txt") |> response(200)
 
-      assert body =~ "`/ads`"
+      assert body =~ "`/system/ads`"
       refute body =~ "{{ads}}"
       assert body =~ "(booking happens online and requires a login)\n\nList pages"
     end
@@ -66,7 +66,7 @@ defmodule VutuvWeb.LandingConfigurationTest do
 
       body = conn |> get(~p"/llms.txt") |> response(200)
 
-      refute body =~ "`/ads`"
+      refute body =~ "`/system/ads`"
       refute body =~ "{{ads}}"
       # The rest of the document is untouched, blank line and indentation
       # included — the placeholder must not eat the paragraph break. Anchored on
@@ -79,16 +79,16 @@ defmodule VutuvWeb.LandingConfigurationTest do
     end
   end
 
-  # Same trap one level up: the footer points at `/ads`, which 404s while ads
+  # Same trap one level up: the footer points at `/system/ads`, which 404s while ads
   # are off. Ads ship off, and vutuv.de runs that way today, so the
   # unconditional link shipped a dead entry in the footer of every page.
-  describe "the /ads link follows the ad switch" do
+  describe "the /system/ads link follows the ad switch" do
     test "the footer offers Advertising only when the ad page exists", %{conn: conn} do
       put_config(:ads_enabled, true)
-      assert conn |> get(~p"/impressum") |> html_response(200) =~ ~s|href="/ads"|
+      assert conn |> get(~p"/impressum") |> html_response(200) =~ ~s|href="/system/ads"|
 
       put_config(:ads_enabled, false)
-      refute conn |> get(~p"/impressum") |> html_response(200) =~ ~s|href="/ads"|
+      refute conn |> get(~p"/impressum") |> html_response(200) =~ ~s|href="/system/ads"|
     end
   end
 

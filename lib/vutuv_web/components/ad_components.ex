@@ -68,7 +68,7 @@ defmodule VutuvWeb.AdComponents do
 
   `audience` says who looks at a live card, and with it where the label leads
   and what the ✕ does: a `:member`'s label opens their seen ads and the ✕ hides
-  ads for the day, a `:visitor`'s label opens the `/ads` offer page and the ✕
+  ads for the day, a `:visitor`'s label opens the `/system/ads` offer page and the ✕
   closes this card. Without it the label is plain text. `footer` goes under
   the ad.
   """
@@ -181,8 +181,8 @@ defmodule VutuvWeb.AdComponents do
     %{
       title: gettext("Book your ad"),
       body: gettext("This spot is free today. One day, one ad, every visitor."),
-      href: ~p"/ads",
-      address: Ad.display_url(url(~p"/ads")),
+      href: ~p"/system/ads",
+      address: Ad.display_url(url(~p"/system/ads")),
       target: nil,
       rel: nil
     }
@@ -192,7 +192,7 @@ defmodule VutuvWeb.AdComponents do
   defp dismiss_label(:visitor), do: gettext("Close this ad")
 
   defp label_href(:member), do: ~p"/system/ads/seen"
-  defp label_href(:visitor), do: ~p"/ads"
+  defp label_href(:visitor), do: ~p"/system/ads"
 
   defp label_title(:member), do: gettext("Ads you have seen")
   defp label_title(:visitor), do: gettext("How ads work on vutuv")

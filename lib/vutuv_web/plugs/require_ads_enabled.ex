@@ -1,7 +1,7 @@
 defmodule VutuvWeb.Plug.RequireAdsEnabled do
   @moduledoc """
   Gate the daily text-ad pages behind the global `:ads_enabled` switch
-  (`Vutuv.Ads.enabled?/0`). When the system is off, the public `/ads` flow
+  (`Vutuv.Ads.enabled?/0`). When the system is off, the public `/system/ads` flow
   and the admin review dashboard answer a clean 404 - the URLs behave as if
   they did not exist - rather than rendering a feature nobody can use.
 

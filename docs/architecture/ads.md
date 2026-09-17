@@ -71,12 +71,12 @@ The card's "Ad" label is a link. A member lands on **`/system/ads/seen`**
 the ads they saw, the most recently seen first, each with when it was last
 seen and how often, a search over title, text and address, and "Load more" in pages of 20
 (`Vutuv.Ads.seen_ads/2`). A visitor has no history, so their label leads to
-the `/ads` offer page instead; there is no public archive of past ads, which
+the `/system/ads` offer page instead; there is no public archive of past ads, which
 would keep a one-day booking on show for months.
 
 ## Booking and review
 
-Booking is online at `/ads` → `/ads/new` (logged-in only): pick a free day (one
+Booking is online at `/system/ads` → `/system/ads/new` (logged-in only): pick a free day (one
 ad/day, unique index), enter the invoice address, then title, sentence and link
 (must be family-friendly; live counters for the two limits, the changeset
 enforces them and accepts only an http(s) link to a public host).
@@ -88,7 +88,7 @@ automatic.
 **Every ad is admin-approved before it runs** (`approved_at`; an unapproved ad
 never serves, the house ad fills its day): the review dashboard lives at
 `/admin/ads` (with a pending badge on the admin panel), the member sees the
-approval state of their bookings at `/ads/bookings`, and the earliest bookable
+approval state of their bookings at `/system/ads/bookings`, and the earliest bookable
 day is **three days out** to leave room for the review.
 
 Bookings are accepted only inside the **booking window** (through the end of
@@ -97,10 +97,10 @@ radio buttons and booked days struck through, and submits to a **preview step**
 that renders the ad through the real card (without its ✕ and its two-minute
 hook) before the binding confirm POST books it.
 
-`/ads` is a public page with agent-format siblings
+`/system/ads` is a public page with agent-format siblings
 (`VutuvWeb.AgentDocs.AdsDoc`).
 
 The whole system sits behind a global switch (`config :vutuv, :ads_enabled`,
 read via `Vutuv.Ads.enabled?/0`), **off by default**: with it off no ad
-serves and the `/ads` flow plus the `/admin/ads` review dashboard 404, while
+serves and the `/system/ads` flow plus the `/admin/ads` review dashboard 404, while
 `"ads"` stays a reserved username slug so the handle is kept free

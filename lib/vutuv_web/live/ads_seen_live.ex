@@ -7,7 +7,7 @@ defmodule VutuvWeb.AdsSeenLive do
   itself with when it was last seen and how often (`Vutuv.Ads.seen_ads/2`,
   kept #{Vutuv.Ads.sighting_days()} days). A search over the title, the text
   and the address narrows the list, and "Load more" pages through the rest. Login only: a visitor has
-  no history, and the label sends them to the `/ads` offer page instead.
+  no history, and the label sends them to the `/system/ads` offer page instead.
   """
 
   use VutuvWeb, :live_view
@@ -115,7 +115,7 @@ defmodule VutuvWeb.AdsSeenLive do
         <p class="mb-0 text-slate-700 dark:text-slate-300">
           {gettext("You have not seen an ad in the last %{days} days.", days: Ads.sighting_days())}
           <.link
-            href={~p"/ads"}
+            href={~p"/system/ads"}
             class="font-semibold text-brand-600 hover:text-brand-700 dark:text-brand-400 dark:hover:text-brand-300"
           >
             {gettext("How ads work on vutuv")}
