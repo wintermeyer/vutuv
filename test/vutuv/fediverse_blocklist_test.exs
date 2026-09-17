@@ -10,6 +10,7 @@ defmodule Vutuv.FediverseBlocklistTest do
   use Vutuv.DataCase, async: false
 
   import Vutuv.ExternalTagHelpers, only: [external_post: 2]
+  import Vutuv.MastodonHelpers, only: [remote_account: 1]
 
   alias Vutuv.Fediverse
   alias Vutuv.Fediverse.BlockedInstance
@@ -39,9 +40,7 @@ defmodule Vutuv.FediverseBlocklistTest do
 
     {:ok, _} = Fediverse.add_follower(member, %{actor_uri: actor, inbox_uri: inbox})
 
-    %RemoteAccount{}
-    |> RemoteAccount.changeset(%{actor_uri: actor, host: host, handle: "bot", inbox_uri: inbox})
-    |> Repo.insert!()
+    remote_account(actor_uri: actor, handle: "bot")
 
     insert(:note, actor_uri: actor, inbox_uri: inbox)
 
