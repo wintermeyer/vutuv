@@ -5627,6 +5627,45 @@ defmodule Vutuv.Posts do
   end
 
   @doc """
+  Whether `author`'s archive lists nothing at all for an **anonymous** reader —
+  the whole of `/:slug/posts`, or the slice one period page shows (`period` as
+  `author_posts_page/6` takes it).
+
+  The one input behind every `noindex` that address answers with, through
+  `VutuvWeb.AgentDocs.PostDoc.archive_robots_axes/2`: the HTML page's response
+  header and its `<meta name="robots">`, and the flag (plus header) of each
+  agent document. Every member has the address whether or not they ever wrote
+  a line, and almost nobody has — **5,941 of 6,025** archives listed nothing on
+  the dev copy of production (2026-09-11), close to 30,000 addresses with the
+  agent siblings, each worth reading once and never again (issue #2172).
+
+  **Always `viewer = nil`, on the owner's own request too.** A post is visible
+  to some readers and not others, so "empty" depends on who asks — and the
+  header speaks to a crawler, which is never signed in. An archive holding
+  nothing but members-only posts therefore says `noindex` to its owner as well:
+  that is the honest word about the page the rest of the world is served.
+
+  Its own query rather than the `total` the caller already holds. That number
+  answers correctly on the agent-document path, where it is this query's own
+  count; on the signed-in HTML page it is the *viewer's* count and narrowed by
+  `?type=`, and on `/api/2.0` the viewer's too. Reading it would make the
+  answer depend on which surface is holding the other one, and that is the
+  disagreement at one URL `PostDoc.robots_axes/2` is named after.
+
+  It is an **added** query, not a replacement — the archive still counts its
+  own page — and a cheap one: it stops at the first row, every leg of the union
+  filters on an indexed `user_id`, and on the dev copy it plans to
+  `Limit → Result → Append` at 6 buffer hits and 0.2 ms of execution (about
+  0.9 ms end to end from Elixir). It is paid on the 98.6 % of archives whose
+  `noindex` then keeps a crawler from coming back for them.
+  """
+  def public_archive_empty?(%User{} = author, period) do
+    query = author |> author_timeline_query(nil, :all) |> scope_period(period)
+
+    not Repo.exists?(query)
+  end
+
+  @doc """
   How many entries one page of the **HTML** archive (`/:slug/posts`) carries.
 
   Its own number rather than the site-wide `Vutuv.Pages.max_page_items/0`,
