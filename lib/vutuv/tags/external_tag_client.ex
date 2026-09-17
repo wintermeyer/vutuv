@@ -50,9 +50,10 @@ defmodule Vutuv.Tags.ExternalTagClient do
   replies and anything sensitive before it counts, and a census that dropped
   them would be counting a different population than the one making the noise.
 
-  The one refusal the two share is `ExternalPost.written_here?/2` (issues #2179
-  and #2196): a post of ours is not a find, and its author is not one of the
-  servers out there either.
+  The two refusals they share both read the author's host: the operator's
+  blocklist (issue #2204) and `ExternalPost.written_here?/2` (issues #2179 and
+  #2196). A post from a blocked server or of ours is not a find, and its author
+  is not one of the servers out there either.
   """
 
   require Logger
@@ -187,7 +188,8 @@ defmodule Vutuv.Tags.ExternalTagClient do
 
   @doc """
   Who **else** is posting `tag_name` on `source`: `{:ok, [%{host:, bot?:}]}`,
-  one entry per status on its public tag timeline that was not written here.
+  one entry per status on its public tag timeline that was not written here and
+  whose author's server the operator has not blocked.
 
   The two facts a trending tag is vetted on, and both are the *server's* own —
   it flags its bot accounts itself, and `acct` says where the author lives. See
@@ -198,7 +200,14 @@ defmodule Vutuv.Tags.ExternalTagClient do
     with {:ok, hashtag} <- hashtag(tag_name),
          :ok <- refuse_blocked(source),
          {:ok, statuses} <- get_timeline(source, hashtag, @census_limit) do
-      {:ok, Enum.flat_map(statuses, &author_entry(&1, source))}
+      entries = Enum.flat_map(statuses, &author_entry(&1, source))
+
+      # Issue #2204: the pull's blocklist check, asked of the author. A server
+      # the operator shut out is not a post here, so it is no voice about a tag
+      # either. Counted, it was one more author server towards the diversity
+      # gate, and its statuses moved the bot share.
+      blocked = entries |> Enum.map(& &1.host) |> blocked_among()
+      {:ok, Enum.reject(entries, &MapSet.member?(blocked, &1.host))}
     end
   rescue
     error ->
@@ -302,15 +311,7 @@ defmodule Vutuv.Tags.ExternalTagClient do
     now = DateTime.utc_now(:second)
     with_hosts = Enum.map(statuses, &{&1, author_host(&1, source)})
 
-    # One query for the whole timeline: a busy tag carries close to twenty
-    # distinct author hosts, and asking per status would be twenty round trips
-    # against a table holding tens of rows.
-    blocked =
-      with_hosts
-      |> Enum.map(&elem(&1, 1))
-      |> Enum.uniq()
-      |> Enum.reject(&is_nil/1)
-      |> Fediverse.blocked_hosts()
+    blocked = with_hosts |> Enum.map(&elem(&1, 1)) |> blocked_among()
 
     Enum.flat_map(with_hosts, fn {status, host} ->
       case to_post(status, source, host, now, blocked) do
@@ -318,6 +319,13 @@ defmodule Vutuv.Tags.ExternalTagClient do
         post -> [post]
       end
     end)
+  end
+
+  # One query for the whole timeline: a busy tag carries close to twenty
+  # distinct author hosts, and asking per status would be twenty round trips
+  # against a table holding tens of rows.
+  defp blocked_among(hosts) do
+    hosts |> Enum.uniq() |> Enum.reject(&is_nil/1) |> Fediverse.blocked_hosts()
   end
 
   # A timeline carries other servers' posts too, so the author's host is a

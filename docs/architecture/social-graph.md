@@ -483,6 +483,16 @@ flagged as bot accounts, against 13 to 26 distinct domains and at most 10 of 40
 bots for every ordinary tag. A tag that cannot be sampled at all is **not**
 offered.
 
+**A blocked instance does not vote** (issue #2204). `ExternalTagClient.authors/2`
+drops every status whose author lives on a server in the operator's blocklist
+before the sample is counted, the same check the pull makes per post. Counted,
+such a server was one more author domain towards `min_author_hosts`, and its
+bots moved the bot share in either direction. On 17 September 2026 the seven
+live samples flipped no verdict, since no author in them lived on a blocked
+server. Blocking each sample's busiest foreign server by hand flipped none
+either, though it moved `#FollowFriday` from 50 % bots to 9 %. Only a blocked
+server placed where it decides the verdict flips it, in both directions.
+
 **The sample is spread over the servers that listed the tag** (issue #2160).
 It used to come from each candidate's busiest server, which put seven of one
 real pass's eighteen requests on mastodon.social within five seconds. Now each

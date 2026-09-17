@@ -378,5 +378,21 @@ defmodule Vutuv.Tags.ExternalTagClientTest do
                %{host: "elsewhere.test", bot?: true}
              ]
     end
+
+    # Issue #2204: the same blocklist the pull reads, asked of the author.
+    test "leaves out an author whose server the operator blocked" do
+      admin = insert(:activated_user)
+      {:ok, {_blocked, _purged}} = Fediverse.block_instance(%{"host" => "shouty.example"}, admin)
+
+      stub_tag_timeline([
+        status(%{"id" => "1", "account" => %{"acct" => "bot@shouty.example", "bot" => true}}),
+        status(%{"id" => "2", "account" => %{"acct" => "bob@Shouty.Example"}}),
+        status(%{"id" => "3", "account" => %{"acct" => "carol@quiet.example"}}),
+        status(%{"id" => "4"})
+      ])
+
+      assert ExternalTagClient.authors(@source, "Elixir") ==
+               {:ok, [%{host: "quiet.example", bot?: false}, %{host: @source, bot?: false}]}
+    end
   end
 end

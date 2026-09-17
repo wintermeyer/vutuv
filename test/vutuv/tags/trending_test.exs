@@ -268,6 +268,91 @@ defmodule Vutuv.Tags.TrendingTest do
     end
   end
 
+  # Issue #2204: a server the operator shut out is no more a voice about a tag
+  # than it is a post under one. Each fixture puts the blocked server exactly
+  # where counting it would decide the verdict.
+  describe "a blocked instance is not one of the servers out there" do
+    @blocked "shouty.example"
+
+    setup do
+      Repo.insert!(%BlockedInstance{host: @blocked})
+      :ok
+    end
+
+    # Statuses from the blocked server, with ids apart from `sample_statuses/4`'s
+    # because the two lists are one timeline.
+    defp from_blocked(source, count, bots) do
+      source
+      |> sample_statuses(count, [@blocked], bots)
+      |> Enum.map(&Map.update!(&1, "id", fn id -> "blocked-#{id}" end))
+    end
+
+    defp spiking_with_blocked(sample), do: spiking("warntag", @warntag, sample)
+
+    test "a tag that reaches the fourth author server only through a blocked one is not offered" do
+      spiking_with_blocked(
+        &(sample_statuses(&1, 15, ~w(a.example b.example c.example)) ++ from_blocked(&1, 5, 0))
+      )
+
+      Trending.refresh()
+
+      assert Trending.offers() == []
+    end
+
+    test "a blocked server's bots do not make a crowd read as a wave" do
+      # Ten people over four servers beside twelve bots from the blocked one:
+      # counted, 12 of 22 is past the threshold and the crowd was dropped.
+      spiking_with_blocked(
+        &(sample_statuses(&1, 10, ~w(a.example b.example c.example d.example)) ++
+            from_blocked(&1, 12, 12))
+      )
+
+      Trending.refresh()
+
+      assert [row] = Trending.offers()
+      assert row.author_hosts == 4
+      assert row.bot_posts == 0
+      assert row.sampled == 10
+    end
+
+    test "a blocked server's people do not water down a wave" do
+      # Eight bots among ten posts is a wave; beside ten posts from the blocked
+      # server it read as 40 %.
+      spiking_with_blocked(
+        &(sample_statuses(&1, 10, ~w(a.example b.example c.example d.example), 8) ++
+            from_blocked(&1, 10, 0))
+      )
+
+      Trending.refresh()
+
+      assert Trending.offers() == []
+    end
+
+    test "a sample without a blocked server is judged as before" do
+      trends = [{"warntag", @warntag}, {"mow4", @mow4}]
+
+      samples = fn host ->
+        %{
+          "warntag" => crowd(host),
+          "mow4" => sample_statuses(host, 20, ~w(a.example b.example c.example d.example), 19)
+        }
+      end
+
+      stub(%{@big => trends, @small => trends}, %{
+        @big => samples.(@big),
+        @small => samples.(@small)
+      })
+
+      Trending.refresh()
+
+      assert [row] = Trending.offers()
+      assert row.name == "warntag"
+      assert row.author_hosts == 5
+      assert row.bot_posts == 0
+      assert row.sampled == 20
+    end
+  end
+
   # Issue #2160: the census always asked a tag's busiest server, and one real
   # pass put seven of its eighteen requests on mastodon.social.
   describe "the census is spread over the servers that report a tag" do
