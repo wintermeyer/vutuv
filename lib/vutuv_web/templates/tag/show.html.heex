@@ -15,8 +15,11 @@ and the wrapper's `:if` below need the answer. --%>
   stand here too, a monospace `@name@host` directly under the heading, which is
   the least inviting thing a topic page could open with. That address now lives
   in the card below (or at the foot of the page, see there). --%>
-  <header class="flex items-start justify-between gap-4">
-    <div class="min-w-0">
+  <%!-- A wrapping row rather than two ends of one: the source chip (issue
+  #2157) stands beside the pill, and its panel takes a row of its own under
+  both, full width. The title's `flex-1` does what `justify-between` did. --%>
+  <header class="flex flex-wrap items-start gap-x-2">
+    <div class="mr-2 min-w-0 flex-1">
       <h1 class="text-2xl font-bold tracking-tight text-slate-900 dark:text-white">
         {Tag.display_name(@tag)}
       </h1>
@@ -38,6 +41,18 @@ and the wrapper's `:if` below need the answer. --%>
       </p>
     </div>
     <.tag_follow_button :if={@current_user} following?={@following_tag?} tag={@tag} />
+    <%!-- `display: contents`, so the chip and the panel are the header's own
+    items. The viewer's private control, never part of the agent formats. --%>
+    {@source_count &&
+      live_render(@conn, VutuvWeb.TagLive.Sources,
+        id: "tag-sources-live",
+        container: {:div, class: "contents"},
+        session:
+          Map.merge(VutuvWeb.ControllerHelpers.live_render_session(@conn), %{
+            "tag_id" => @tag.id,
+            "source_count" => @source_count
+          })
+      )}
   </header>
 
   <%!-- The visible trail is the "Tags" link above, so the markup names the same

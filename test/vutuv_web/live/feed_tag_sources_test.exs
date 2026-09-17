@@ -117,8 +117,10 @@ defmodule VutuvWeb.PostLive.FeedTagSourcesTest do
 
       # The disabled attribute is a courtesy; the rule lives in the context
       # (`Tags.remove_tag_follow_source/2` refuses the local source), so the
-      # event is pushed past the courtesy to reach it.
-      render_click(live, "tag-source-remove", %{"source" => Tags.local_tag_follow_source()})
+      # event is pushed past the courtesy to reach it, at the panel that owns it.
+      live
+      |> with_target("#tag-sources")
+      |> render_click("tag-source-remove", %{"source" => Tags.local_tag_follow_source()})
 
       assert Tags.tag_follow_sources(follow) == [Tags.local_tag_follow_source()]
       assert live |> element("#tag-sources-chip-#{tag.id}") |> render() =~ ">1<"

@@ -34,11 +34,9 @@ defmodule VutuvWeb.PostLive.Feed do
 
   use VutuvWeb, :live_view
 
-  require Logger
-
   import VutuvWeb.PostComponents
   import VutuvWeb.PostLive.FeedCalendar
-  import VutuvWeb.PostLive.TagSources, only: [source_chip: 1, source_panel: 1]
+  import VutuvWeb.PostLive.TagSources, only: [source_chip: 1]
   import VutuvWeb.PostLive.TrendingTags, only: [trending_row: 1]
   import VutuvWeb.PendingPostComponents, only: [pending_post: 1]
 
@@ -56,7 +54,6 @@ defmodule VutuvWeb.PostLive.Feed do
   alias Vutuv.Prefs
   alias Vutuv.Social
   alias Vutuv.Tags.ExternalPosts
-  alias Vutuv.Tags.SourceServers
   alias Vutuv.Tags.Tag
   alias Vutuv.Tags.Trending
   alias Vutuv.Tags.UserTag
@@ -74,6 +71,7 @@ defmodule VutuvWeb.PostLive.Feed do
   alias VutuvWeb.Live.RemoteReplyActions
   alias VutuvWeb.Live.VideoProgress
   alias VutuvWeb.PostLive.FeedCalendar
+  alias VutuvWeb.PostLive.TagSources
   alias VutuvWeb.PostTeaser
   alias VutuvWeb.UserHelpers
 
@@ -421,13 +419,10 @@ defmodule VutuvWeb.PostLive.Feed do
     |> assign(:band_refresh, 0)
     # The name the follow field could not resolve, so the card can say so.
     |> assign(:tag_missing, nil)
-    # The tag-source panel (issue #2128): which tag's panel is open, the rows it
-    # draws, and why the last address a member typed was refused. Closed on
-    # arrival — it is an answer to a press, and ten servers' worth of card is
-    # not something to hand somebody who did not ask.
+    # Which tag's source panel is open (issue #2128), so its chip can say so.
+    # The panel itself is `VutuvWeb.PostLive.TagSources`, which reports every
+    # change of this back here.
     |> assign(:tag_panel_id, nil)
-    |> assign(:tag_panel_rows, [])
-    |> assign(:tag_panel_error, nil)
     |> assign(payload.rails)
     # The follow-a-tag suggestions ride the first paint like the rest of the
     # rail. Computed from what is already in hand rather than through
@@ -614,8 +609,6 @@ defmodule VutuvWeb.PostLive.Feed do
       :tag_source_counts,
       Vutuv.Tags.followed_tag_source_counts(socket.assigns.current_user)
     )
-    # A tag that has just been unfollowed has no panel to keep open.
-    |> close_missing_tag_panel(followed)
     # What the card offers to follow: the tags on the page, minus the ones this
     # reader already follows. Computed here rather than in the card so both it
     # and the "Hide tags" card read one list (`FeedBand.tags_on_page/2`).
@@ -630,112 +623,6 @@ defmodule VutuvWeb.PostLive.Feed do
     # filtered in place, because a press on that row both follows a tag and is
     # what takes it out of the offer.
     |> assign(trending_offers(followed))
-  end
-
-  # --- The tag-source panel's socket state (issue #2128) --------------------
-
-  defp open_tag_panel(socket, tag_id) do
-    case panel_tags(socket.assigns.followed_tags, tag_id) do
-      [] ->
-        close_tag_panel(socket)
-
-      [tag] ->
-        socket
-        |> assign(:tag_panel_id, tag_id)
-        |> assign(:tag_panel_error, nil)
-        |> assign_tag_panel_rows()
-        |> ask_stale_servers(tag)
-    end
-  end
-
-  # The open tag, as a one-or-none list: the markup renders the panel with a
-  # `:for` so it looks the tag up once rather than in an `:if` and again in the
-  # attribute beside it.
-  defp panel_tags(_tags, nil), do: []
-
-  defp panel_tags(tags, id) do
-    case Enum.find(tags, &(&1.id == id)) do
-      nil -> []
-      tag -> [tag]
-    end
-  end
-
-  defp close_tag_panel(socket) do
-    socket
-    |> assign(:tag_panel_id, nil)
-    |> assign(:tag_panel_rows, [])
-    |> assign(:tag_panel_error, nil)
-  end
-
-  defp close_missing_tag_panel(socket, followed) do
-    if Enum.any?(followed, &(&1.id == socket.assigns[:tag_panel_id])) do
-      assign_tag_panel_rows(socket)
-    else
-      close_tag_panel(socket)
-    end
-  end
-
-  # The open panel's own follow, read fresh. Only one tag's sources are ever on
-  # screen, so this asks for one follow's rather than reloading every followed
-  # tag's to redraw one card.
-  defp assign_tag_panel_rows(socket) do
-    sources =
-      case tag_panel_follow(socket) do
-        nil -> []
-        follow -> Vutuv.Tags.tag_follow_sources(follow)
-      end
-
-    assign(socket, :tag_panel_rows, SourceServers.rows(sources))
-  end
-
-  defp refresh_tag_sources(socket) do
-    socket
-    |> assign(
-      :tag_source_counts,
-      Vutuv.Tags.followed_tag_source_counts(socket.assigns.current_user)
-    )
-    |> assign_tag_panel_rows()
-  end
-
-  # The panel opens on what is already stored and fills in behind itself. Asking
-  # ten servers is three requests each and seconds of wall clock, and a member
-  # who pressed a chip is owed the panel now — so nothing here blocks the render,
-  # and a server nobody has ever asked simply reads "not asked yet" until the
-  # answer lands. Nothing is asked at all when every row is fresh, which is the
-  # ordinary case after the first press of the day.
-  defp ask_stale_servers(socket, tag) do
-    stale =
-      socket.assigns.tag_panel_rows
-      |> Enum.reject(&(&1.local? or SourceServers.fresh?(&1.info)))
-      |> Enum.map(& &1.host)
-
-    if stale == [] do
-      socket
-    else
-      start_async(socket, :tag_server_infos, fn -> SourceServers.refresh(stale, tag) end)
-    end
-  end
-
-  defp tag_panel_follow(socket) do
-    Vutuv.Tags.tag_follow(socket.assigns.current_user, socket.assigns.tag_panel_id)
-  end
-
-  # One way in for both the offered switches and the typed field: the address is
-  # put through `SourceServers.check/2` and only then written. The panel's own
-  # `disabled` is a courtesy, never the permission — it was rendered before the
-  # press and the operator may have blocked the server in between.
-  defp add_tag_source(socket, value) do
-    with [tag] <- panel_tags(socket.assigns.followed_tags, socket.assigns.tag_panel_id),
-         %{} = follow <- tag_panel_follow(socket),
-         {:ok, host} <- SourceServers.check(value, tag),
-         {:ok, _row} <- Vutuv.Tags.add_tag_follow_source(follow, host) do
-      socket |> assign(:tag_panel_error, nil) |> refresh_tag_sources()
-    else
-      # The panel is open on a tag this member no longer follows.
-      [] -> close_tag_panel(socket)
-      nil -> close_tag_panel(socket)
-      {:error, reason} -> assign(socket, :tag_panel_error, reason)
-    end
   end
 
   # The ↻ both rail cards wear: one control, one glyph, one set of colours.
@@ -1018,8 +905,7 @@ defmodule VutuvWeb.PostLive.Feed do
   attr(:missing, :string, default: nil)
   attr(:counts, :map, required: true)
   attr(:panel_id, :string, default: nil)
-  attr(:panel_rows, :list, default: [])
-  attr(:panel_error, :any, default: nil)
+  attr(:user, :map, required: true)
   attr(:trending, :list, default: [])
   attr(:trending_asking?, :boolean, required: true)
   attr(:trending_all_followed?, :boolean, default: false)
@@ -1068,15 +954,7 @@ defmodule VutuvWeb.PostLive.Feed do
         />
       </div>
 
-      <%!-- A one-or-none comprehension rather than an `:if` beside a second
-      lookup: the open tag has to be found, and finding it twice per render is
-      what an `:if={find(...)} tag={find(...)}` pair costs. --%>
-      <.source_panel
-        :for={tag <- panel_tags(@tags, @panel_id)}
-        tag={tag}
-        rows={@panel_rows}
-        error={@panel_error}
-      />
+      <.live_component module={TagSources} id="tag-sources" user={@user} tags={@tags} />
 
       <%!-- A tag is only followed if it exists. Minting one because somebody
       typed a word into a follow box would put an empty topic into a namespace
@@ -1625,49 +1503,6 @@ defmodule VutuvWeb.PostLive.Feed do
     # field's error state and none of this control's business.
     Trending.follow(socket.assigns.current_user, name)
     {:noreply, assign_followed_tags(socket)}
-  end
-
-  # --- The tag-source panel (issue #2128) -----------------------------------
-
-  # The chip: open this tag's panel, or close it if it is the one already open.
-  def handle_event("tag-sources", %{"id" => tag_id}, socket) do
-    if socket.assigns.tag_panel_id == tag_id do
-      {:noreply, close_tag_panel(socket)}
-    else
-      {:noreply, open_tag_panel(socket, tag_id)}
-    end
-  end
-
-  def handle_event("tag-sources-close", _params, socket) do
-    {:noreply, close_tag_panel(socket)}
-  end
-
-  # Switching an offered server on. The offer itself is not the permission: the
-  # row is re-derived from the database and the last probe, so a stale panel
-  # (the operator blocked the server while it was open, the probe has since
-  # gone stale) cannot be pressed into an add the check would refuse.
-  def handle_event("tag-source-add", %{"source" => host}, socket) do
-    {:noreply, add_tag_source(socket, host)}
-  end
-
-  # A typed address, which nothing has vetted yet — the same gate, which for a
-  # server nobody has asked before means a real probe.
-  def handle_event("tag-source-check", %{"source" => typed}, socket) do
-    case String.trim(to_string(typed)) do
-      "" -> {:noreply, socket}
-      value -> {:noreply, add_tag_source(socket, value)}
-    end
-  end
-
-  def handle_event("tag-source-remove", %{"source" => host}, socket) do
-    case tag_panel_follow(socket) do
-      nil ->
-        {:noreply, close_tag_panel(socket)}
-
-      follow ->
-        Vutuv.Tags.remove_tag_follow_source(follow, host)
-        {:noreply, socket |> assign(:tag_panel_error, nil) |> refresh_tag_sources()}
-    end
   end
 
   # The "New here" card's reload button: greet five other newcomers, with
@@ -2499,26 +2334,22 @@ defmodule VutuvWeb.PostLive.Feed do
     end
   end
 
+  # The tag-source panel (issue #2128) opened, closed, or changed what the open
+  # tag reads from. The panel owns all of that; the chips are this card's.
+  def handle_info({TagSources, {:panel, tag_id}}, socket) do
+    {:noreply, assign(socket, :tag_panel_id, tag_id)}
+  end
+
+  def handle_info({TagSources, {:sources_changed, _tag_id}}, socket) do
+    {:noreply,
+     assign(
+       socket,
+       :tag_source_counts,
+       Vutuv.Tags.followed_tag_source_counts(socket.assigns.current_user)
+     )}
+  end
+
   def handle_info(_other, socket), do: {:noreply, socket}
-
-  # What the tag-source panel asked the other servers, arriving behind the
-  # already-drawn panel (issue #2128). The rows are re-derived from the database
-  # rather than from what the task returned, so a source added or dropped while
-  # it was in flight is not overwritten by an older picture; a panel closed or
-  # switched to another tag meanwhile simply has nothing to redraw.
-  @impl true
-  def handle_async(:tag_server_infos, {:ok, _infos}, socket) do
-    if socket.assigns.tag_panel_id do
-      {:noreply, assign_tag_panel_rows(socket)}
-    else
-      {:noreply, socket}
-    end
-  end
-
-  def handle_async(:tag_server_infos, {:exit, reason}, socket) do
-    Logger.warning("tag source refresh failed: #{inspect(reason)}")
-    {:noreply, socket}
-  end
 
   # The queue half of `{:remote_feed_arrival, …}` above: ask this reader's own
   # sources what actually arrived and put it behind the pill.
@@ -4116,8 +3947,7 @@ defmodule VutuvWeb.PostLive.Feed do
                       missing={@tag_missing}
                       counts={@tag_source_counts}
                       panel_id={@tag_panel_id}
-                      panel_rows={@tag_panel_rows}
-                      panel_error={@tag_panel_error}
+                      user={@current_user}
                       trending={@trending_tags}
                       trending_asking?={@trending_asking?}
                       trending_all_followed?={@trending_all_followed?}

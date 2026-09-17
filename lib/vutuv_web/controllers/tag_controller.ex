@@ -13,6 +13,7 @@ defmodule VutuvWeb.TagController do
   alias VutuvWeb.AgentDocs.ListDocs
   alias VutuvWeb.ContentPolicy
   alias VutuvWeb.Fediverse.Docs
+  alias VutuvWeb.TagLive.Sources, as: TagSourcesLive
   alias VutuvWeb.UserHelpers
 
   # Not the shared `ResolveSlug` plug: an alternative name for a topic keeps its
@@ -127,6 +128,11 @@ defmodule VutuvWeb.TagController do
           # shared link may carry, since an off-router LiveView cannot read the
           # query string for itself.
           timeline_session: timeline_session(conn, tag),
+          # The chip saying where this tag comes from (issue #2157): the
+          # member's own follow only, so nil for everybody else. It is the
+          # viewer's private control, which is why the agent formats below
+          # never carry it.
+          source_count: TagSourcesLive.source_count(current_user, conn.assigns[:acting_as], tag),
           # `#Deutschland - vutuv`, and the same string as `og:title`. Every
           # tag page used to fall through to the bare site name, so the whole
           # `/tags/*` corpus shared one title — the strongest on-page signal

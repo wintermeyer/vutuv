@@ -384,8 +384,11 @@ those public timelines itself.
 Every tag chip in the feed's "Tags you follow" card carries a small number: how
 many servers feed that tag, **this installation included**, so a plain follow
 reads `1` rather than `0`. Pressing it opens the panel that changes them, inside
-the card (`tag_sources_panel/1` in `VutuvWeb.PostLive.Feed`) — the rail is
-`hidden md:block`, so this is a desktop surface for now.
+the card. The rail is `hidden md:block`, so the same chip also stands beside the
+follow button on a tag page (issue #2157), on every screen size, whenever the
+signed-in member follows that tag themselves and the installation reads other
+servers (`VutuvWeb.TagLive.Sources.source_count/3` decides both, for the
+controller's dead render and again for the socket). That is the phone's way in.
 
 The panel offers the servers in **`TAG_SOURCE_SERVERS`**, ten by default, each
 with its own description and size beside it: accounts, accounts active this
@@ -445,11 +448,19 @@ switched on; its OAuth path is a feature of its own.
 
 The panel draws from what is stored and fills in behind itself (`start_async`),
 because asking ten servers is dozens of requests and seconds of wall clock, and
-a member who pressed a chip is owed the panel now. The markup is
-`VutuvWeb.PostLive.TagSources`, a sibling of the feed's other pieces rather than
-another 350 lines inside it — the tag page and an organization's Following list
-both show followed tags with no way to say where they come from, and each is a
-caller this panel is one refactor away from.
+a member who pressed a chip is owed the panel now.
+
+**One panel, two hosts.** `VutuvWeb.PostLive.TagSources` is a LiveComponent that
+owns everything behind the chip: which tag is open, its rows, the last refusal,
+the switches, the typed field and that refresh. The feed and the tag page's
+small embedded LiveView (`VutuvWeb.TagLive.Sources`) each render it once and
+draw the chips themselves; a chip reaches the panel with
+`phx-target="#tag-sources"`, and the panel tells its host by message which chip
+is open and when a count went stale. The tag page's socket resolves the member
+from the session token, and mounts the panel only for a member it vouched for.
+The chip is the viewer's private control, so the tag page's agent formats do
+not carry it. An organization's Following list still shows followed tags with
+no way to say where they come from; it is a third host away from that.
 
 ### Finding a tag that is suddenly busy (issue #2129)
 
