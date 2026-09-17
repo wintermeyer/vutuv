@@ -364,10 +364,11 @@ defmodule Vutuv.Tags.ExternalTagClientTest do
       assert post.remote_id == "2"
     end
 
-    # The link under the name is part of the claim too: a member of the typed-in
-    # server must not be linked to somebody else's profile. A listed relay's
-    # word stands, which keeps a split-domain server's real profile address.
-    test "a server a member typed in cannot link its member to a profile elsewhere" do
+    # The link under the name is part of the claim too: a server that links its
+    # member to somebody else's profile is not believed about that member at
+    # all. A listed relay's word stands, which keeps a split-domain server's real
+    # profile address.
+    test "a server a member typed in files nothing linking its member elsewhere" do
       put_config(:tag_source_servers, [])
 
       stub_tag_timeline([
@@ -378,8 +379,8 @@ defmodule Vutuv.Tags.ExternalTagClientTest do
         status(%{"id" => "3"})
       ])
 
-      assert {:ok, [elsewhere, own]} = ExternalTagClient.fetch(@source, "Elixir")
-      assert elsewhere.author_url == nil
+      assert {:ok, [own]} = ExternalTagClient.fetch(@source, "Elixir")
+      assert own.remote_id == "3"
       assert own.author_url == "https://#{@source}/@ada"
 
       # The `put_config/2` above puts the shipped list back afterwards.
@@ -395,7 +396,15 @@ defmodule Vutuv.Tags.ExternalTagClientTest do
 
     test "the census of a server a member typed in counts its own members only" do
       put_config(:tag_source_servers, [])
-      stub_tag_timeline([relayed("1"), status(%{"id" => "2"})])
+
+      stub_tag_timeline([
+        relayed("1"),
+        status(%{"id" => "2"}),
+        status(%{
+          "id" => "3",
+          "account" => %{"acct" => "ada", "url" => "https://victim.example/@ada"}
+        })
+      ])
 
       assert ExternalTagClient.authors(@source, "Elixir") ==
                {:ok, [%{host: @source, bot?: false}]}

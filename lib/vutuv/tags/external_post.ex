@@ -275,10 +275,14 @@ defmodule Vutuv.Tags.ExternalPost do
   handed in so a caller asking of a whole list reads the configuration once.
 
   Two rows pass. The **home copy** (`home_copy?/1`), which nothing in an answer
-  can forge because we chose and dialled that host ourselves. And a row filed by
-  a server the **operator** listed in `TAG_SOURCE_SERVERS`: an honest Mastodon
-  server checks the signatures on what it relays, and the operator chose to
-  trust these to do so.
+  can forge because we chose and dialled that host ourselves — as long as the
+  profile link under the name (`:author_url`) is nil or on that same host, since
+  the link is part of the claim a card makes about who wrote it, and a server
+  must not hang a real person's profile under a name it made up. And a row filed
+  by a server the **operator** listed in `TAG_SOURCE_SERVERS`: an honest
+  Mastodon server checks the signatures on what it relays, and the operator
+  chose to trust these to do so, which also keeps an honest profile on another
+  host (a split-domain server, a bridge).
 
   Everything else is a server a member typed in, talking about somebody else's
   member: one stranger's unverified word, byte for byte the same as a card it
@@ -299,28 +303,16 @@ defmodule Vutuv.Tags.ExternalPost do
   wherever rows are folded (`Vutuv.Tags.ExternalPosts.fold_copies/1`), because
   rows written before it existed are at rest, and a server the operator later
   takes off the list stops vouching for what it filed while it was on it.
+
+  `row` needs `:source`, `:url`, `:author_host` and `:author_url`; a projection
+  without the link fails closed, so a select that forgets the column hides
+  every card rather than drawing unchecked links.
   """
-  def speaks_for_author?(%{source: source} = row, relays) do
-    relay?(source, relays) or home_copy?(row)
+  def speaks_for_author?(%{source: source, author_url: link, author_host: host} = row, relays) do
+    relay?(source, relays) or (home_copy?(row) and (is_nil(link) or on_author_host?(link, host)))
   end
 
   def speaks_for_author?(_unusable, _relays), do: false
-
-  @doc """
-  The profile address `row`'s server may put under its author's name: `url`,
-  or nil (issue #2174).
-
-  The link under a name is part of the claim a card makes about who wrote it.
-  A listed relay's word stands, which keeps an honest profile on another host
-  (a server whose web address differs from its handle domain, a bridge). Any
-  other server may only link an address on the author's own host — for the one
-  row it may file about somebody, the home copy, that is itself — so it cannot
-  hang a real person's profile under a name it made up. `row` needs `:source`
-  and `:author_host`.
-  """
-  def vouched_author_url(%{source: source, author_host: host}, url, relays) do
-    if relay?(source, relays) or on_author_host?(url, host), do: url
-  end
 
   # Exact, for the reason the doc of `speaks_for_author?/2` gives.
   defp relay?(source, relays), do: MapSet.member?(relays, source)

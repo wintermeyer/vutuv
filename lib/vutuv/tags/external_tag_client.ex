@@ -243,8 +243,7 @@ defmodule Vutuv.Tags.ExternalTagClient do
 
     with host when is_binary(host) <- author_host(status, source),
          false <- ExternalPost.written_here?(host, url),
-         true <-
-           ExternalPost.speaks_for_author?(%{source: source, url: url, author_host: host}, relays) do
+         true <- speaks_for_author?(status, source, url, host, relays) do
       [%{host: host, bot?: status["account"]["bot"] == true}]
     else
       _refused -> []
@@ -372,15 +371,15 @@ defmodule Vutuv.Tags.ExternalTagClient do
     # the next line anyway.
     #
     # `speaks_for_author?/2` is the third (issue #2174): a server a member typed
-    # in is believed about its own members only, and it needs the address too.
+    # in is believed about its own members only, and it needs the address and
+    # the profile link too.
     with true <- is_binary(host),
          true <- showable?(status),
          false <- MapSet.member?(blocked, host),
          text when text != "" <- text_of(status),
          url when is_binary(url) <- permalink(status),
          false <- ExternalPost.written_here?(host, url),
-         true <-
-           ExternalPost.speaks_for_author?(%{source: source, url: url, author_host: host}, relays),
+         true <- speaks_for_author?(status, source, url, host, relays),
          id when is_binary(id) <- remote_id(status),
          language when is_nil(language) or is_binary(language) <- language(status),
          {:ok, published_at} <- published_at(status, now) do
@@ -398,16 +397,17 @@ defmodule Vutuv.Tags.ExternalTagClient do
         author_host: host
       }
       |> Map.merge(author(status))
-      |> vouch_author_url(relays)
     else
       _refused -> nil
     end
   end
 
-  defp vouch_author_url(%{author_url: url} = post, relays),
-    do: %{post | author_url: ExternalPost.vouched_author_url(post, url, relays)}
-
-  defp vouch_author_url(post, _relays), do: post
+  # The row the predicate would be asked of once stored, so the pull and the
+  # fold ask it of the same four columns.
+  defp speaks_for_author?(status, source, url, host, relays) do
+    row = %{source: source, url: url, author_host: host, author_url: author_url(status)}
+    ExternalPost.speaks_for_author?(row, relays)
+  end
 
   # A boost is somebody else's post travelling under this account's name: the
   # original carries the hashtag itself and arrives on its own. A reply is half
@@ -472,11 +472,17 @@ defmodule Vutuv.Tags.ExternalTagClient do
           author_name:
             account["display_name"] |> Handle.display_name() |> Post.clamp_bytes(@max_display),
           author_acct: account["acct"] |> Post.presence() |> Post.clamp_bytes(@max_display),
-          author_url: if(ChangesetHelpers.web_url?(account["url"]), do: account["url"])
+          author_url: author_url(status)
         }
 
       _ ->
         %{}
     end
   end
+
+  defp author_url(%{"account" => %{"url" => url}}) do
+    if ChangesetHelpers.web_url?(url), do: url
+  end
+
+  defp author_url(_status), do: nil
 end

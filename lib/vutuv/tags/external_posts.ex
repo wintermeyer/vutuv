@@ -329,12 +329,14 @@ defmodule Vutuv.Tags.ExternalPosts do
 
   @doc """
   The projection `fold_copies/1` works on, and all a card needs of a copy it is
-  not drawn from: the key's two halves, the server that filed the row, the id to
-  draw it by and the stamp a feed orders on.
+  not drawn from: the key's two halves, the server that filed the row, the
+  profile link `ExternalPost.speaks_for_author?/2` checks (issue #2174), the id
+  to draw it by and the stamp a feed orders on.
 
   A whole row carries up to a thousand characters of somebody else's prose, and
   a folded card holds one of these per server for as long as the page is open —
-  280 bytes measured, against 2,288 for the row.
+  280 bytes measured before the profile link joined it (a typical link adds
+  about 50 in `:erlang.external_size/1`), against 2,288 for the row.
   """
   def fold_select(query) do
     select(query, [external: p], %{
@@ -342,6 +344,7 @@ defmodule Vutuv.Tags.ExternalPosts do
       source: p.source,
       url: p.url,
       author_host: p.author_host,
+      author_url: p.author_url,
       published_at: p.published_at
     })
   end

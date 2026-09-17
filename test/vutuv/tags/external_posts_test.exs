@@ -74,7 +74,7 @@ defmodule Vutuv.Tags.ExternalPostsTest do
   # scope anyway and only looks scoped.
   defp key(url, host \\ @source), do: ExternalPost.origin_key(%{url: url, author_host: host})
 
-  defp row(attrs), do: Enum.into(attrs, %{source: @source, author_host: @source})
+  defp row(attrs), do: Enum.into(attrs, %{source: @source, author_host: @source, author_url: nil})
 
   describe "due_sources/1" do
     test "answers a wanted pair that has never been fetched" do
@@ -963,6 +963,43 @@ defmodule Vutuv.Tags.ExternalPostsTest do
 
       refute ExternalPost.speaks_for_author?(row(url: url, source: "hand.example"), relays)
       refute ExternalPost.speaks_for_author?(%{}, relays)
+    end
+
+    # The link under the name is part of the claim a card makes. A projection
+    # that leaves the column out is not a row whose link was checked.
+    test "a server's own member, linked to a profile on another host" do
+      relays = SourceServers.relays()
+      own = row(url: original("1"), author_url: "https://#{@source}/@ada")
+      elsewhere = %{own | author_url: "https://victim.example/@ada"}
+
+      assert ExternalPost.speaks_for_author?(own, relays)
+      refute ExternalPost.speaks_for_author?(elsewhere, relays)
+      assert ExternalPost.speaks_for_author?(%{elsewhere | source: @other_source}, relays)
+      refute ExternalPost.speaks_for_author?(Map.delete(own, :author_url), relays)
+    end
+
+    # Production holds rows filed before the pull refused such a link, so the
+    # read side asks the whole predicate too, through the fold's own select.
+    test "a stored row linking its author elsewhere is drawn only from a listed server" do
+      tag = followed_tag("hand.example")
+
+      legacy =
+        external_post(tag,
+          url: "https://hand.example/@ada/1",
+          source: "hand.example",
+          author_host: "hand.example",
+          author_url: "https://victim.example/@ada"
+        )
+
+      assert ExternalPosts.tag_finds(tag.id) == []
+      assert %{entries: [], total: 0} = Timeline.page(tag, source: :fediverse)
+
+      # The setup's `put_config/2` puts the shipped list back afterwards.
+      Application.put_env(:vutuv, :tag_source_servers, ["hand.example"])
+
+      assert [%{post: %{id: id}}] = ExternalPosts.tag_finds(tag.id)
+      assert id == legacy.id
+      assert %{total: 1} = Timeline.page(tag, source: :fediverse)
     end
 
     test "a planted copy does not fold in, does not count, and is never the one drawn" do

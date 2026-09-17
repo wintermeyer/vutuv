@@ -361,13 +361,14 @@ its own members only. Anything else it hands over is one stranger's unverified
 word about another server's member, byte for byte a card it could have
 invented. Kept, it put words under a real person's name, and folded in with the
 honest copies it raised the server count and could be the copy a card was drawn
-from. `Vutuv.Tags.ExternalTagClient` refuses such a status on the way in
-(`authors/2` too) and lets such a server link its member only to a profile on
-its own host (`vouched_author_url/3`). `fold_copies/1` drops such a row on the
-way out, which covers rows already at rest and those of a server the operator
-later takes off the list. Every surface draws through the fold, so no card, tab
-total, server count or unread mark sees one, and a report on one by id answers
-`:not_found`. The read side is Elixir, not SQL, because half the rule is
+from. The profile link under the name is part of that claim, so such a server's
+own member counts only when the link is empty or on its own host.
+`Vutuv.Tags.ExternalTagClient` refuses such a status on the way in (`authors/2`
+too), and `fold_copies/1` drops such a row on the way out (`fold_select/1`
+carries `author_url` for it), which covers rows already at rest and those of a
+server the operator later takes off the list. Every surface draws through the
+fold, so no card, tab total, server count or unread mark sees one, and a report
+on one by id answers `:not_found`. The read side is Elixir, not SQL, because half the rule is
 `home_copy?/1`; the rows stay, undrawn, until the per-tag cap or `prune/0` takes
 them. The panel says so under the address field.
 
