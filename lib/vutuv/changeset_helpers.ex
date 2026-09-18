@@ -14,8 +14,11 @@ defmodule Vutuv.ChangesetHelpers do
     end
   end
 
+  # An address typed the way people say it out loud ("vutuv.de") is the
+  # commonest thing in this field, so the message names the fix rather than
+  # the verdict.
   defp validate_parsed_url(changeset, field, %URI{scheme: nil}) do
-    add_error(changeset, field, gettext("Invalid URL"))
+    add_error(changeset, field, gettext("Please start the address with https:// or http://"))
   end
 
   # Only http(s) links. A `javascript:`/`data:`/`vbscript:` value would reach a
@@ -23,7 +26,7 @@ defmodule Vutuv.ChangesetHelpers do
   # the scheme check rejects it before it is ever stored.
   defp validate_parsed_url(changeset, field, %URI{scheme: scheme})
        when scheme not in ["http", "https"] do
-    add_error(changeset, field, gettext("Invalid URL"))
+    add_error(changeset, field, gettext("Only https:// and http:// addresses work here"))
   end
 
   # Syntax-only validation: a URI with a scheme and a plausibly-shaped host is

@@ -24,6 +24,7 @@ defmodule Vutuv.Ads do
 
   import Ecto.Query
 
+  alias Vutuv.Accounts
   alias Vutuv.Accounts.User
   alias Vutuv.Ads.Ad
   alias Vutuv.Ads.Creative
@@ -212,14 +213,30 @@ defmodule Vutuv.Ads do
   """
   def book_ad(user, attrs, days \\ 1)
 
-  def book_ad(user, attrs, 1) do
+  def book_ad(user, attrs, days) do
+    book(user, invoice_email(attrs, user), days)
+  end
+
+  # Which address the invoice goes to, checked against the member's own list -
+  # the same allow-list the username-rename confirmation uses, and for the same
+  # reason: without it "where should we mail this" is a form field pointing at
+  # anybody's mailbox. Anything else falls back to their first address, so a
+  # tampered value can only ever reach the member themselves.
+  defp invoice_email(attrs, user) do
+    owned = Accounts.list_email_values(user)
+    chosen = attrs["invoice_email"]
+
+    Map.put(attrs, "invoice_email", if(chosen in owned, do: chosen, else: List.first(owned)))
+  end
+
+  defp book(user, attrs, 1) do
     %Ad{user_id: user.id, price_cents: @price_cents}
     |> Ad.changeset(attrs)
     |> Repo.insert()
     |> announce_booking(user)
   end
 
-  def book_ad(user, attrs, days) when is_integer(days) do
+  defp book(user, attrs, days) when is_integer(days) do
     case block_changesets(user, attrs, days) do
       {:ok, changesets} -> changesets |> insert_block() |> announce_booking(user)
       {:error, changeset} -> {:error, changeset}

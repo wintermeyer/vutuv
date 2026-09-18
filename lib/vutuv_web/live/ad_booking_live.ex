@@ -28,6 +28,7 @@ defmodule VutuvWeb.AdBookingLive do
 
   import VutuvWeb.ErrorHelpers, only: [error_tag: 2]
 
+  alias Vutuv.Accounts
   alias Vutuv.Ads
   alias Vutuv.Ads.Ad
   alias Vutuv.Ads.Creative
@@ -68,6 +69,7 @@ defmodule VutuvWeb.AdBookingLive do
     # The invoice address somebody already gave us is not a question worth
     # asking twice, so a returning booker meets it filled in.
     |> assign_billing_form(previous_billing(user))
+    |> assign_addresses(user)
     |> assign_calendar()
   end
 
@@ -75,7 +77,7 @@ defmodule VutuvWeb.AdBookingLive do
 
   @impl true
   def handle_event("validate-text", %{"ad" => params}, socket) do
-    {:noreply, socket |> assign_text_form(params) |> assign(:saved_notice, nil)}
+    {:noreply, params |> assign_text_form(socket, :validate) |> assign(:saved_notice, nil)}
   end
 
   def handle_event("to-period", %{"ad" => params}, socket) do
@@ -183,7 +185,10 @@ defmodule VutuvWeb.AdBookingLive do
   ## Step 3: the invoice address, then the binding booking
 
   def handle_event("validate-billing", %{"ad" => params}, socket) do
-    {:noreply, assign_billing_form(socket, params)}
+    {:noreply,
+     socket
+     |> assign_billing_form(params)
+     |> assign(:invoice_email, chosen_address(params, socket.assigns.addresses))}
   end
 
   def handle_event("book", %{"ad" => params}, socket) do
@@ -211,6 +216,14 @@ defmodule VutuvWeb.AdBookingLive do
 
   ## Assign helpers
 
+  # Only one of the member's own addresses may be remembered, for the reason
+  # `Vutuv.Ads.book_ad/3` re-checks it: a form field is not an allow-list.
+  defp chosen_address(params, addresses) do
+    if params["invoice_email"] in addresses,
+      do: params["invoice_email"],
+      else: List.first(addresses)
+  end
+
   defp saved_params(socket) do
     text = socket.assigns.text
     %{"title" => text.title, "body" => text.body, "url" => text.url}
@@ -219,12 +232,37 @@ defmodule VutuvWeb.AdBookingLive do
   defp assign_text_form(socket, params), do: assign_text_form(params, socket, nil)
 
   defp assign_text_form(params, socket, action) do
-    changeset = Ads.change_creative(socket.assigns[:creative] || %Creative{}, params)
-    changeset = if action, do: %{changeset | action: action}, else: changeset
+    changeset =
+      socket.assigns[:creative]
+      |> Kernel.||(%Creative{})
+      |> Ads.change_creative(params)
+      |> stamp(action, params)
 
     socket
     |> assign(:text_form, to_form(changeset))
     |> assign(:text, text_params(params))
+  end
+
+  # A changeset with no action renders no errors at all, which is why a link
+  # typed without its scheme sat there looking accepted. So typing stamps one -
+  # but only the fields somebody has actually filled may complain, or opening
+  # the page and touching one field answers with "can't be blank" under the two
+  # they have not reached yet. A submit shows everything.
+  defp stamp(changeset, nil, _params), do: changeset
+  defp stamp(changeset, :insert, _params), do: %{changeset | action: :insert}
+
+  defp stamp(changeset, :validate, params) do
+    filled =
+      params
+      |> Enum.filter(fn {_field, value} -> is_binary(value) and String.trim(value) != "" end)
+      |> MapSet.new(fn {field, _value} -> field end)
+
+    errors =
+      Enum.filter(changeset.errors, fn {field, _error} ->
+        MapSet.member?(filled, Atom.to_string(field))
+      end)
+
+    %{changeset | action: :validate, errors: errors}
   end
 
   # What the preview card draws, straight from what is typed - never through a
@@ -239,6 +277,16 @@ defmodule VutuvWeb.AdBookingLive do
 
   defp assign_billing_form(socket, params) do
     assign(socket, :billing_form, to_form(params, as: :ad))
+  end
+
+  # Every address the member proved by PIN when they added it, so any of them
+  # may receive the invoice; the first is the default.
+  defp assign_addresses(socket, user) do
+    addresses = Accounts.list_email_values(user)
+
+    socket
+    |> assign(:addresses, addresses)
+    |> assign(:invoice_email, List.first(addresses))
   end
 
   defp previous_billing(user) do
@@ -271,7 +319,7 @@ defmodule VutuvWeb.AdBookingLive do
 
     params
     |> Map.take(~w(billing_name billing_company billing_street billing_zip_code billing_city
-         billing_country vat_id))
+         billing_country vat_id invoice_email))
     |> Map.merge(%{
       "day" => Date.to_iso8601(socket.assigns.start_day),
       "title" => text.title,
@@ -427,12 +475,16 @@ defmodule VutuvWeb.AdBookingLive do
             <label for="ad-url" class="block text-sm font-medium text-slate-700 dark:text-slate-300">
               {gettext("Link")}
             </label>
+            <%!-- The same debounce as the other two fields: the address is the
+            only line that can lag behind them, and a card whose third line is
+            missing for a third of a second reads as a card with two. --%>
             <input
-              type="url"
+              type="text"
+              inputmode="url"
               id="ad-url"
               name="ad[url]"
               value={@text.url}
-              phx-debounce="300"
+              phx-debounce="150"
               placeholder="https://"
               class={input_class(@text_form, :url)}
             />
@@ -458,11 +510,22 @@ defmodule VutuvWeb.AdBookingLive do
         <.card class="p-6">
           <.section_title>{gettext("How it will look")}</.section_title>
           <AdComponents.ad_preview id="wizard-preview" banner={{:ad, @text}} class="mt-3" />
+          <%!-- The address is the one line that is simply absent until there is
+          a link, and an absent line in a preview reads as a broken preview
+          rather than as an empty field. --%>
+          <p :if={@text.url == ""} class="mt-2 text-xs text-slate-600 dark:text-slate-400">
+            {gettext("The address under the sentence appears as soon as there is a link.")}
+          </p>
         </.card>
 
-        <.card :if={@creatives != []} class="p-6">
+        <%!-- Always rendered, empty or not: a shortcut nobody can see before
+        they have used it is one nobody discovers. --%>
+        <.card class="p-6">
           <.section_title>{gettext("Your saved ads")}</.section_title>
-          <ul class="mt-3 divide-y divide-slate-100 dark:divide-slate-800">
+          <p :if={@creatives == []} class="mt-3 text-sm text-slate-600 dark:text-slate-400">
+            {gettext("None yet. \"Save this ad\" keeps one here, so booking again is two clicks.")}
+          </p>
+          <ul :if={@creatives != []} class="mt-3 divide-y divide-slate-100 dark:divide-slate-800">
             <li :for={creative <- @creatives} class="flex items-start gap-3 py-2 first:pt-0 last:pb-0">
               <button
                 type="button"
@@ -747,9 +810,49 @@ defmodule VutuvWeb.AdBookingLive do
           <.billing_field form={@billing_form} field={:billing_country} label={gettext("Country")} />
           <.billing_field form={@billing_form} field={:vat_id} label={gettext("VAT ID (optional)")} />
 
-          <p class="text-xs text-slate-600 dark:text-slate-400">
-            {gettext("Booking is binding; payment by invoice. We review and approve every ad before it runs.")}
-          </p>
+          <%!-- A member may hold several addresses (work and private), and
+          which one an invoice goes to is their accounting, not our guess. With
+          one address there is nothing to choose, so it is stated rather than
+          asked. --%>
+          <fieldset :if={@addresses != []} class="border-0 p-0">
+            <legend class="block text-sm font-medium text-slate-700 dark:text-slate-300">
+              {gettext("Send the invoice to")}
+            </legend>
+            <p :if={length(@addresses) == 1} class="mt-1 text-sm text-slate-900 dark:text-slate-100">
+              {hd(@addresses)}
+              <input type="hidden" name="ad[invoice_email]" value={hd(@addresses)} />
+            </p>
+            <div :if={length(@addresses) > 1} class="mt-2 space-y-2">
+              <label :for={address <- @addresses} class="flex cursor-pointer items-center gap-3">
+                <input
+                  type="radio"
+                  name="ad[invoice_email]"
+                  value={address}
+                  checked={@invoice_email == address}
+                  class="size-4 shrink-0 border-slate-300 text-brand-600 focus:ring-2 focus:ring-brand-500 dark:border-slate-600 dark:bg-slate-800"
+                />
+                <span class="min-w-0 break-all text-sm text-slate-900 dark:text-slate-100">
+                  {address}
+                </span>
+              </label>
+            </div>
+          </fieldset>
+
+          <%!-- Both reservations said plainly, on the step where the money is
+          agreed to, and not folded into a sentence about something else: we may
+          turn a booking down, and an unpaid invoice takes the ad off the site.
+          --%>
+          <div class="rounded-xl bg-slate-50 p-4 text-sm text-slate-700 dark:bg-slate-800/60 dark:text-slate-300">
+            <p class="mb-0">
+              {gettext("Booking is binding; payment by invoice.")}
+            </p>
+            <p class="mb-0 mt-2">
+              {gettext("We look at every ad before it runs and may turn a booking down without giving a reason. Then it does not run and you pay nothing.")}
+            </p>
+            <p class="mb-0 mt-2">
+              {gettext("If an invoice is not paid, we take the ad off the site again.")}
+            </p>
+          </div>
 
           <div class="flex flex-wrap items-center gap-3 pt-2">
             <.button type="button" variant="secondary" phx-click="back" phx-value-to="period">

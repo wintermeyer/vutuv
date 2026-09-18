@@ -39,6 +39,10 @@ defmodule Vutuv.Ads.Ad do
     field(:billing_country, :string)
     field(:vat_id, :string)
 
+    # Which of the booker's own addresses the invoice goes to. Checked against
+    # their list in `Vutuv.Ads.book_ad/3`, never trusted from the form.
+    field(:invoice_email, :string)
+
     # The admin review gate: an ad only serves once approved_at is set
     # (see Vutuv.Ads.approve_ad/2 and current_banner/0).
     field(:approved_at, :utc_datetime)
@@ -124,7 +128,8 @@ defmodule Vutuv.Ads.Ad do
       :billing_zip_code,
       :billing_city,
       :billing_country,
-      :vat_id
+      :vat_id,
+      :invoice_email
     ])
     |> validate_text()
     |> validate_required([
@@ -144,6 +149,7 @@ defmodule Vutuv.Ads.Ad do
     |> validate_length(:billing_city, max: 255)
     |> validate_length(:billing_country, max: 255)
     |> validate_length(:vat_id, max: 255)
+    |> validate_length(:invoice_email, max: 255)
     |> validate_future_day()
     |> unique_constraint(:day, message: "has already been booked")
   end

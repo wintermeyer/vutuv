@@ -71,6 +71,89 @@ defmodule VutuvWeb.AdBookingLiveTest do
       assert has_element?(view, "#wizard-preview")
     end
 
+    test "the preview shows all three lines, the address included", %{conn: conn} do
+      {view, _user, _conn} = logged_in(conn)
+
+      html = render_change(element(view, "#ad-text-form"), %{"ad" => @text})
+
+      preview =
+        LazyHTML.from_fragment(html) |> LazyHTML.query("#wizard-preview") |> LazyHTML.text()
+
+      # The address under the sentence is the third line of the format and the
+      # one that tells a reader where the link goes - it has to be in what the
+      # buyer is shown.
+      assert preview =~ @text["title"]
+      assert preview =~ @text["body"]
+      assert preview =~ "acme.example"
+    end
+
+    test "with no link yet, the preview says where the address will be", %{conn: conn} do
+      {view, _user, _conn} = logged_in(conn)
+
+      html =
+        render_change(element(view, "#ad-text-form"), %{
+          "ad" => %{"title" => "Apfelmus", "body" => "Bestes Apfelmus ever.", "url" => ""}
+        })
+
+      # An absent third line reads as a broken preview rather than as an empty
+      # field, so the card says which line is still to come.
+      assert html =~ "The address under the sentence appears"
+
+      html = render_change(element(view, "#ad-text-form"), %{"ad" => @text})
+      refute html =~ "The address under the sentence appears"
+    end
+
+    test "all three fields reach the preview at the same speed", %{conn: conn} do
+      {view, _user, _conn} = logged_in(conn)
+      html = render(view)
+
+      # The address used to lag the other two by a whole debounce, so the card
+      # read as a two-line card for a third of a second after every keystroke.
+      debounces =
+        html
+        |> LazyHTML.from_fragment()
+        |> LazyHTML.query("#ad-text-form input[phx-debounce]")
+        |> Enum.map(&(&1 |> LazyHTML.attribute("phx-debounce") |> List.first()))
+
+      assert length(debounces) == 3
+      assert Enum.uniq(debounces) |> length() == 1
+    end
+
+    test "an address without its scheme says so while it is being typed", %{conn: conn} do
+      {view, _user, _conn} = logged_in(conn)
+
+      html =
+        render_change(element(view, "#ad-text-form"), %{
+          "ad" => %{@text | "url" => "stefans-gummibaerchen.de"}
+        })
+
+      # The message names the fix, not the verdict, and it arrives on the
+      # keystroke rather than at the end of the wizard. Asserted on the words
+      # around the schemes, because the field's own placeholder is "https://".
+      assert html =~ "Please start the address with"
+      assert has_element?(view, "#ad-url.border-red-400")
+    end
+
+    test "an empty field nobody has reached does not complain yet", %{conn: conn} do
+      {view, _user, _conn} = logged_in(conn)
+
+      html =
+        render_change(element(view, "#ad-text-form"), %{
+          "ad" => %{"title" => "Erst der Titel", "body" => "", "url" => ""}
+        })
+
+      refute html =~ "can&#39;t be blank"
+      refute html =~ "darf nicht leer sein"
+    end
+
+    test "a good address passes without a word", %{conn: conn} do
+      {view, _user, _conn} = logged_in(conn)
+
+      html = render_change(element(view, "#ad-text-form"), %{"ad" => @text})
+
+      refute html =~ "Please start the address with"
+    end
+
     test "an incomplete ad does not reach the calendar", %{conn: conn} do
       {view, _user, _conn} = logged_in(conn)
 
@@ -89,6 +172,13 @@ defmodule VutuvWeb.AdBookingLiveTest do
   end
 
   describe "saved ads" do
+    test "the shortcut is on the page before anything has been saved", %{conn: conn} do
+      {view, _user, _conn} = logged_in(conn)
+
+      # Visible while empty, or nobody finds out it exists.
+      assert render(view) =~ "Your saved ads"
+    end
+
     test "an ad can be saved, used again and forgotten", %{conn: conn} do
       {view, user, conn} = logged_in(conn)
 
@@ -251,6 +341,59 @@ defmodule VutuvWeb.AdBookingLiveTest do
       assert has_element?(view, "#ad-billing-form")
       assert Repo.aggregate(Ad, :count) == 0
       assert flush_emails() == []
+    end
+
+    test "the two reservations are said on the step where the money is agreed to", %{conn: conn} do
+      {view, _user, _conn} = logged_in(conn)
+
+      view |> at_period(1) |> pick(Ads.next_available_day())
+      html = render_click(element(view, "button[phx-click='to-billing']"))
+
+      # Both are promises about what we may do with somebody's money, so they
+      # belong where they agree to it, not in a page of terms elsewhere.
+      assert html =~ "may turn a booking down"
+      assert html =~ "not paid"
+    end
+
+    test "the invoice goes to an address the member picked", %{conn: conn} do
+      # The addresses are read at mount, so the second one has to exist first.
+      {conn, user} = create_and_login_user(conn)
+      second = "rechnung-#{System.unique_integer([:positive])}@example.com"
+      insert(:email, user: user, value: second)
+      {:ok, view, _html} = live(conn, ~p"/system/ads/new")
+
+      view |> at_period(1) |> pick(Ads.next_available_day())
+      html = render_click(element(view, "button[phx-click='to-billing']"))
+
+      # Two addresses, so there is something to choose.
+      assert html =~ second
+      assert length(elements(html, "input[name='ad[invoice_email]']")) == 2
+
+      render_submit(element(view, "#ad-billing-form"), %{
+        "ad" => Map.put(@billing, "invoice_email", second)
+      })
+
+      assert %Ad{invoice_email: ^second} = Repo.one(Ad)
+
+      # And the operator mail, which the invoice is written from, names it.
+      assert Enum.any?(flush_emails(), &(&1.text_body =~ second))
+    end
+
+    test "an address that is not the member's own falls back to their first", %{conn: conn} do
+      {view, user, _conn} = logged_in(conn)
+
+      view |> at_period(1) |> pick(Ads.next_available_day())
+      render_click(element(view, "button[phx-click='to-billing']"))
+
+      # A form field is not an allow-list: a tampered value may only ever reach
+      # the member themselves, never somebody else's mailbox.
+      render_submit(element(view, "#ad-billing-form"), %{
+        "ad" => Map.put(@billing, "invoice_email", "angreifer@example.com")
+      })
+
+      assert %Ad{invoice_email: chosen} = Repo.one(Ad)
+      assert chosen == Vutuv.Accounts.first_email_value(user)
+      refute chosen == "angreifer@example.com"
     end
 
     test "a second booking meets the invoice address already filled in", %{conn: conn} do

@@ -803,7 +803,7 @@ defmodule Vutuv.Notifications.Emailer do
     |> render_bodies(template_base, "de", %{
       ad: ad,
       booker: booker,
-      booker_email: Accounts.first_email_value(booker),
+      booker_email: ad.invoice_email || Accounts.first_email_value(booker),
       billing_address: billing_address(ad),
       period: period,
       days: purchase.days,

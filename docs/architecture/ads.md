@@ -91,6 +91,19 @@ invoice; a test pins that. Both meet the same rules, because
 `Vutuv.Ads.Ad.validate_text/1` is the one owner of them — a library that lets
 you save what the booking then refuses is the one thing it must not do.
 
+The last step says what we reserve, where the reader agrees to the money and
+not in a page of terms elsewhere: the booking is binding, **we may turn it down
+without giving a reason** (then it does not run and nothing is charged), and an
+**unpaid invoice takes the ad off the site**. It also asks **which of the
+member's addresses the invoice goes to** (`ads.invoice_email`; radios above two,
+a stated line for one). That choice is re-checked against
+`Vutuv.Accounts.list_email_values/1` in `book_ad/3` — the same allow-list the
+username-rename confirmation uses, and for the same reason: otherwise "where
+should we mail this" is a form field pointing at anybody's mailbox. A value that
+is not the member's own falls back to their first address, so a tampered one can
+only ever reach them. The operator mail, which the invoice is written from,
+names it.
+
 The calendar shows **this month and the next three**
 (`last_bookable_day/0`) and works in the unit being bought: with a week chosen,
 only a day with seven free days behind it is rendered as a control
