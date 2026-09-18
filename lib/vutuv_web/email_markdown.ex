@@ -1,7 +1,8 @@
 defmodule VutuvWeb.EmailMarkdown do
   @moduledoc """
-  Full-Markdown → sanitized HTML for the one personal message a member writes in
-  an invitation email (`Vutuv.Invitations`).
+  Full-Markdown → sanitized HTML for the member-written text an email quotes: the
+  personal message in an invitation (`Vutuv.Invitations`) and the DM an unread
+  notice quotes.
 
   This is the fuller sibling of `VutuvWeb.Markdown` (the chat/post renderer). A
   post or a chat bubble is a feed element read by many, so that renderer
@@ -32,6 +33,7 @@ defmodule VutuvWeb.EmailMarkdown do
   @doc "Render an invitation message's Markdown to safe HTML (`Phoenix.HTML.safe`)."
   def render(text) when is_binary(text) do
     text
+    |> Markdown.normalize_editor_source()
     # Escape `<` so typed HTML shows as literal text and Earmark stays out of
     # HTML-block mode. Earmark then escapes our `&` into `&amp;lt;`; undo that.
     |> String.replace("<", "&lt;")

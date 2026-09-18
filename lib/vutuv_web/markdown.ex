@@ -703,8 +703,7 @@ defmodule VutuvWeb.Markdown do
     {prepared, footnotes} =
       text
       |> Fences.normalize()
-      |> strip_break_artifacts()
-      |> normalize_hard_breaks()
+      |> normalize_editor_source()
       |> Footnotes.prepare()
 
     prepared
@@ -738,6 +737,17 @@ defmodule VutuvWeb.Markdown do
   # markup this module built.
   defp scope_table_headers(html) do
     String.replace(html, "<th>", ~s(<th scope="col">))
+  end
+
+  @doc """
+  Undo the Milkdown composer's source quirks (see `strip_break_artifacts/1` and
+  `normalize_hard_breaks/1` below). Shared with `VutuvWeb.EmailMarkdown`, and
+  run before any cut of the source, which could split a break in half.
+  """
+  def normalize_editor_source(text) do
+    text
+    |> strip_break_artifacts()
+    |> normalize_hard_breaks()
   end
 
   # The Milkdown editor emits a literal `<br />` for content it has no plain
@@ -849,7 +859,9 @@ defmodule VutuvWeb.Markdown do
 
   def render_preview(text, images, opts) when is_binary(text) do
     limit = Keyword.get(opts, :limit, @preview_limit)
-    {prose, definitions} = Footnotes.split_definitions(text)
+    # Normalized before the cut: a cut between a break's `\` and its newline
+    # strands the backslash where `render_post/3` no longer reads it as a break.
+    {prose, definitions} = text |> normalize_editor_source() |> Footnotes.split_definitions()
     {snippet, truncated?} = truncate_markdown(prose, limit)
     # `opts` travels on, so a preview marks the author's verified links exactly
     # as the full body does (`render_post/3` ignores the keys meant for us).

@@ -56,6 +56,13 @@ defmodule VutuvWeb.EmailMarkdownTest do
       refute out =~ "<img"
     end
 
+    test "reads the composer's trailing-backslash hard break as a break" do
+      out = html("one\\\ntwo\\\n\\\nthree\\")
+
+      assert out =~ ~r{one\s*<br\s*/?>\s*two}
+      refute out =~ "\\"
+    end
+
     test "returns empty safe HTML for non-binaries" do
       assert Phoenix.HTML.safe_to_string(EmailMarkdown.render(nil)) == ""
     end

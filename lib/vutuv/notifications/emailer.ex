@@ -41,6 +41,7 @@ defmodule Vutuv.Notifications.Emailer do
   alias Vutuv.SavedSearches
   alias VutuvWeb.EmailComponents
   alias VutuvWeb.EmailText
+  alias VutuvWeb.Markdown
   alias VutuvWeb.NotificationDigestText, as: DigestText
   alias VutuvWeb.Plug.Locale
   alias VutuvWeb.ReportHTML
@@ -379,10 +380,13 @@ defmodule Vutuv.Notifications.Emailer do
   # Opening excerpt of a quoted message: the whole thing when short, otherwise
   # the first @message_excerpt_length graphemes with a trailing ellipsis. A nil
   # body (a moderator deleted the message between selection and send) drops the
-  # quote rather than rendering an empty box.
+  # quote rather than rendering an empty box. The composer's quirks are respelled
+  # before the cut, or a cut after a line break's `\` prints it before the "…".
   defp message_excerpt(nil), do: nil
 
   defp message_excerpt(body) do
+    body = Markdown.normalize_editor_source(body)
+
     if String.length(body) > @message_excerpt_length do
       String.trim_trailing(String.slice(body, 0, @message_excerpt_length)) <> "…"
     else

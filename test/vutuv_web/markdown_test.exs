@@ -384,6 +384,16 @@ defmodule VutuvWeb.MarkdownTest do
       # trims it visually) — the preview is never stranded on the intro line.
       assert html =~ "x = 1"
     end
+
+    test "a cut just past a composer line break leaves no backslash behind" do
+      # The cut lands on the "f" after the break, so the word cut used to strip
+      # the newline and leave the break's `\` stranded before the ellipsis.
+      {html, truncated?} = preview("one two three four\\\nfive six seven", limit: 21)
+
+      assert truncated?
+      assert html =~ "one two three four"
+      refute html =~ "\\"
+    end
   end
 
   describe "to_plain_text/1" do

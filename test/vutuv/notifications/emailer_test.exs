@@ -339,6 +339,45 @@ defmodule Vutuv.Notifications.EmailerTest do
       refute email.text_body =~ "**"
     end
 
+    test "the unread email turns the composer's line breaks into breaks, not backslashes" do
+      user = insert(:user, locale: "en")
+      other = insert(:user, username: "the-sender")
+
+      # Milkdown serializes Shift+Enter as a trailing backslash.
+      email =
+        Emailer.unread_messages_email(
+          "unread@example.com",
+          user,
+          other,
+          Vutuv.UUIDv7.generate(),
+          "First wish\\\nSecond wish"
+        )
+
+      refute email.html_body =~ "\\"
+      refute email.text_body =~ "\\"
+      assert email.html_body =~ ~r{First wish\s*<br\s*/?>\s*Second wish}
+      assert email.text_body =~ ~r{First wish\s*\n\s*Second wish}
+    end
+
+    test "the unread email's excerpt never ends on half a line break" do
+      user = insert(:user, locale: "en")
+      other = insert(:user, username: "the-sender")
+      # The 600-character cut lands between the backslash and its newline.
+      body = String.duplicate("a", 599) <> "\\\nrest"
+
+      email =
+        Emailer.unread_messages_email(
+          "unread@example.com",
+          user,
+          other,
+          Vutuv.UUIDv7.generate(),
+          body
+        )
+
+      refute email.html_body =~ "\\"
+      assert email.text_body =~ "a…"
+    end
+
     test "the unread email quotes only an opening excerpt of a long message" do
       user = insert(:user, locale: "en")
       other = insert(:user, username: "the-sender")
