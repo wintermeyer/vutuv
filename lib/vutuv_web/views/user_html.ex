@@ -278,29 +278,6 @@ defmodule VutuvWeb.UserHTML do
   end
 
   @doc """
-  How long the account has been on vutuv, derived from `inserted_at`.
-
-  "Member since 2008" for an older account; "Member since February 2026" when
-  the account was created in the current year, where a bare year reads oddly
-  for a fresh profile so the month is spelled out. Follows the viewer's locale
-  via gettext. Returns nil for an unsaved struct with no `inserted_at`.
-  """
-  def member_since(%Vutuv.Accounts.User{inserted_at: %NaiveDateTime{} = inserted_at}) do
-    joined = NaiveDateTime.to_date(inserted_at)
-
-    if joined.year == Vutuv.BerlinTime.today().year do
-      gettext("Member since %{month} %{year}",
-        month: month_name(joined.month),
-        year: joined.year
-      )
-    else
-      gettext("Member since %{year}", year: joined.year)
-    end
-  end
-
-  def member_since(_user), do: nil
-
-  @doc """
   The profile header's picture, and the click that opens it at full size
   (issue #1528).
 

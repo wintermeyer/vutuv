@@ -38,7 +38,6 @@ defmodule VutuvWeb.OgImageController do
   alias VutuvWeb.PostTeaser
   alias VutuvWeb.UI
   alias VutuvWeb.UserHelpers
-  alias VutuvWeb.UserHTML
 
   # How many tags the profile card offers the pill rows; the renderer keeps
   # as many as fit two rows.
@@ -47,7 +46,7 @@ defmodule VutuvWeb.OgImageController do
   def profile(conn, %{"slug" => slug}) do
     png =
       with %User{} = user <- public_member(slug) do
-        in_locale(user, fn -> OgImage.profile_png(profile_data(user)) end)
+        in_locale(user, fn -> OgImage.profile_png(profile_card_data(user)) end)
       end
 
     ControllerHelpers.send_og_image(conn, png, "image/png")
@@ -120,8 +119,14 @@ defmodule VutuvWeb.OgImageController do
     end
   end
 
-  defp profile_data(%User{} = user) do
-    Map.merge(author_fields(user), %{tags: tags(user), meta: profile_meta(user)})
+  @doc false
+  def profile_card_data(%User{} = user) do
+    # The follower count and nothing else: how long somebody has been a member
+    # is shown nowhere, so the join year this line once carried is gone.
+    Map.merge(author_fields(user), %{
+      tags: tags(user),
+      meta: OpenGraph.follower_detail(Social.follower_count(user))
+    })
   end
 
   defp post_data(%Post{} = post, %User{} = author) do
@@ -157,14 +162,6 @@ defmodule VutuvWeb.OgImageController do
       %{top: user_tags} -> Enum.map(user_tags, & &1.tag.name)
       nil -> []
     end
-  end
-
-  # "7 followers · Member since 2016"; each half only when it has something to
-  # say.
-  defp profile_meta(%User{} = user) do
-    [OpenGraph.follower_detail(Social.follower_count(user)), UserHTML.member_since(user)]
-    |> Enum.reject(&(&1 in [nil, ""]))
-    |> Enum.join(" · ")
   end
 
   # The profile's address as a reader would type it: host and handle, no

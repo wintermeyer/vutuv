@@ -141,24 +141,6 @@ defmodule VutuvWeb.UserControllerTest do
     assert html_response(conn, 200) =~ user.first_name
   end
 
-  test "profile header leaves out the join date", %{conn: conn} do
-    # The join date said little and cost the header card a line on a phone, so
-    # the card no longer shows it, in any locale. The agent formats keep it as
-    # a fact, where it costs no room.
-    user = insert_activated_user(inserted_at: ~N[2008-02-15 10:00:00])
-
-    html = conn |> get(~p"/#{user}") |> html_response(200)
-    refute html =~ "Member since"
-
-    de_html =
-      build_conn()
-      |> put_req_header("accept-language", "de-DE,de")
-      |> get(~p"/#{user}")
-      |> html_response(200)
-
-    refute de_html =~ "Mitglied seit"
-  end
-
   test "profile hides a zero follower/following counter", %{conn: conn} do
     # One follower, nobody followed back: the followers counter shows, the
     # following counter is gone (a bare "0 following" says nothing).

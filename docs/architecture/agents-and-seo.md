@@ -151,8 +151,9 @@ member's name (and name + role queries):
   `:header_job` the profile header shows; `og:title` shares it. A member with
   neither keeps the bare name.
 - **ProfilePage JSON-LD** (`VutuvWeb.JsonLd.person/5`) carries the fields
-  search engines document for profile pages: `dateCreated`/`dateModified`
-  (account timestamps), `alternateName`/`identifier` (the handle),
+  search engines document for profile pages: `dateModified` (never
+  `dateCreated`, which would say how long the member has been here, and vutuv
+  shows that nowhere), `alternateName`/`identifier` (the handle),
   `interactionStatistic` (followers as a FollowAction counter),
   `agentInteractionStatistic` (posts as a WriteAction counter) — plus the
   Person entity enriched from what the page already loaded (accuracy rule,
@@ -384,7 +385,7 @@ are masks computed from pixel coordinates. It replaced the square avatar as
 thumbnail on Slack and Signal), and the wide 1.91:1 shape is the one they all
 draw large. On X the picture is the whole card — since 2024 it shows nothing
 but the image, a tiny title overlay and the domain — so the card carries the
-words. The card's few words (followers, member since, the date) are in the
+words. The card's few words (a profile's follower count, a post's date) are in the
 member's own locale, one file for everybody who shares the link. The typeface
 is the first of a family list fontconfig finds (Inter when installed, else the
 platform sans), and the line metrics are measured at render time, never

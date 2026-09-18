@@ -142,10 +142,16 @@ defmodule VutuvWeb.Fediverse.Docs do
   @doc "The same address the way it is written for humans: `@member@vutuv.de`."
   def handle(user), do: "@" <> acct(user)
 
-  @doc "The Person document WebFinger points at."
+  @doc """
+  The Person document WebFinger points at.
+
+  It carries no `published`: Mastodon shows an actor's `published` as the day
+  the account joined, and how long somebody has been a member is shown nowhere
+  on vutuv (2026-09-18). A page and a topic keep theirs.
+  """
   def actor(user, %Actor{} = actor) do
     user
-    |> base_actor(actor, user.inserted_at)
+    |> base_actor(actor)
     |> Map.merge(%{
       "type" => Vutuv.Identity.ap_type(user),
       "preferredUsername" => user.username,
@@ -214,8 +220,9 @@ defmodule VutuvWeb.Fediverse.Docs do
   """
   def tag_actor(%Tag{} = tag, %Actor{} = actor) do
     tag
-    |> base_actor(actor, tag.inserted_at)
+    |> base_actor(actor)
     |> Map.merge(%{
+      "published" => iso8601(tag.inserted_at),
       "type" => "Group",
       "preferredUsername" => tag.slug,
       "name" => tag.name,
@@ -235,7 +242,7 @@ defmodule VutuvWeb.Fediverse.Docs do
   # inbox — were among the copies. The per-kind builders stay separate on
   # purpose, because half of the member document has no meaning for a page or a
   # topic; only this half is shared.
-  defp base_actor(subject, %Actor{} = actor, published_at) do
+  defp base_actor(subject, %Actor{} = actor) do
     actor_url = actor_url(subject)
 
     %{
@@ -249,7 +256,6 @@ defmodule VutuvWeb.Fediverse.Docs do
       "followers" => followers_url(subject),
       "endpoints" => %{"sharedInbox" => shared_inbox_url()},
       "manuallyApprovesFollowers" => false,
-      "published" => iso8601(published_at),
       "publicKey" => %{
         "id" => key_id(subject),
         "owner" => actor_url,
@@ -290,8 +296,9 @@ defmodule VutuvWeb.Fediverse.Docs do
   """
   def organization_actor(%Organization{} = organization, %Actor{} = actor) do
     organization
-    |> base_actor(actor, organization.inserted_at)
+    |> base_actor(actor)
     |> Map.merge(%{
+      "published" => iso8601(organization.inserted_at),
       "type" => Vutuv.Identity.ap_type(organization),
       # The page's claimed handle. Federating without one is not possible —
       # WebFinger's `subject` and this field both need an address — which is why

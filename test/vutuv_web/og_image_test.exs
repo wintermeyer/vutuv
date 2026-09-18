@@ -25,7 +25,7 @@ defmodule VutuvWeb.OgImageTest do
       name: "Greta Tester",
       headline: "Developer @ Acme Corp",
       tags: ["Elixir", "Phoenix", "open source", "PostgreSQL", "Rust", "Kubernetes", "Go"],
-      meta: "12 followers · Member since 2016",
+      meta: "12 followers",
       footer: "vutuv.de/greta"
     }
 

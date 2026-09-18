@@ -138,7 +138,6 @@ defmodule VutuvWeb.AgentDocs.ProfileDoc do
       headline_markdown: user.headline,
       work_info: work_info,
       current_position: current_position(job),
-      member_since: NaiveDateTime.to_date(user.inserted_at),
       avatar_url: avatar_url(user),
       counts: profile_counts(user, viewer),
       tags: Enum.map(user.user_tags, &SectionDocs.tag_entry/1),

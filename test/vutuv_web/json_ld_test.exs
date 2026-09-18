@@ -84,11 +84,6 @@ defmodule VutuvWeb.JsonLdTest do
 
       db_user = Vutuv.Repo.get!(Vutuv.Accounts.User, user.id)
 
-      assert page["dateCreated"] ==
-               db_user.inserted_at
-               |> DateTime.from_naive!("Etc/UTC")
-               |> DateTime.to_iso8601()
-
       assert page["dateModified"] ==
                db_user.updated_at
                |> DateTime.from_naive!("Etc/UTC")

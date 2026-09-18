@@ -139,8 +139,10 @@ defmodule VutuvWeb.JsonLd do
   enrich the Person entity with the cards the page shows, and the verified
   entries of `:urls` (the member proved the page is theirs,
   `Vutuv.Profiles.LinkVerification`) join `sameAs` as identity links.
-  `dateCreated` / `dateModified` + the interaction counters are the fields
-  search engines document for profile-page markup.
+  `dateModified` + the interaction counters are the fields search engines
+  document for profile-page markup. `dateCreated` is one of them too and is
+  left out on purpose: it would say how long the member has been here, which
+  vutuv shows nowhere.
   """
   def person(user, job, user_tags, social_accounts, extras \\ %{}) do
     url = AgentDocs.abs_url("/" <> user.username)
@@ -148,7 +150,6 @@ defmodule VutuvWeb.JsonLd do
     %{
       "@context" => "https://schema.org",
       "@type" => "ProfilePage",
-      "dateCreated" => iso_utc(user.inserted_at),
       "dateModified" => iso_utc(user.updated_at),
       "mainEntity" =>
         compact(%{

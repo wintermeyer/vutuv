@@ -43,7 +43,6 @@ The central entity. A member (`type: "profile"` in API responses) has:
   **Honor these**: if your app feeds profiles into an LLM, skip members
   with `"noai?": true`. (The public `.json`/`.md` pages carry the same
   choice as `Content-Signal` and `X-Robots-Tag` response headers.)
-* **`member_since`:** the registration date.
 
 A member who never verified their email address, or who is currently
 moderated, is invisible through the API — see

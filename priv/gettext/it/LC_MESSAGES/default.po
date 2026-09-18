@@ -2076,16 +2076,6 @@ msgstr "Marzo"
 msgid "May"
 msgstr "Maggio"
 
-#: lib/vutuv_web/views/user_html.ex:292
-#, elixir-autogen, elixir-format
-msgid "Member since %{month} %{year}"
-msgstr "Membro da %{month} %{year}"
-
-#: lib/vutuv_web/views/user_html.ex:297
-#, elixir-autogen, elixir-format
-msgid "Member since %{year}"
-msgstr "Membro dal %{year}"
-
 #: lib/vutuv_web/components/ui.ex:3753
 #, elixir-autogen, elixir-format
 msgid "November"
@@ -3984,12 +3974,6 @@ msgstr "In risposta a un post eliminato."
 #, elixir-autogen, elixir-format
 msgid "In reply to a post by %{name}."
 msgstr "In risposta a un post di %{name}."
-
-#: lib/vutuv_web/agent_docs/markdown.ex:674
-#: lib/vutuv_web/agent_docs/text.ex:643
-#, elixir-autogen, elixir-format
-msgid "Member since"
-msgstr "Membro da"
 
 #: lib/vutuv_web/agent_docs/markdown.ex:256
 #: lib/vutuv_web/agent_docs/text.ex:218

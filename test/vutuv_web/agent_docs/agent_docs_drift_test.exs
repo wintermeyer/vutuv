@@ -1456,18 +1456,18 @@ defmodule VutuvWeb.AgentDocsDriftTest do
 
   test "?lang=de translates the labels, English stays the default" do
     de_txt = get(build_conn(), "/drift_tester.txt?lang=de").resp_body
-    assert de_txt =~ "Mitglied seit:"
+    assert de_txt =~ "Vorname:"
     assert de_txt =~ "TAGS"
 
     de_md = get(build_conn(), "/drift_tester.md?lang=de").resp_body
     assert de_md =~ "## Lebenslauf"
 
     en_txt = get(build_conn(), "/drift_tester.txt").resp_body
-    assert en_txt =~ "Member since:"
+    assert en_txt =~ "First Name:"
 
     # An unknown language falls back to English instead of erroring.
     fallback = get(build_conn(), "/drift_tester.txt?lang=xx").resp_body
-    assert fallback =~ "Member since:"
+    assert fallback =~ "First Name:"
   end
 
   test "a linked work experience carries its verified organization page in every format" do
