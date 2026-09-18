@@ -1,63 +1,120 @@
 <%!-- The public offer page for the daily text ad. Also served as .md/.txt/.json
-(VutuvWeb.AgentDocs.AdsDoc); rules and price line come from the doc module so
-the two renderings cannot drift apart. --%>
-<div class="mx-auto max-w-2xl py-6">
-  <.card class="p-8">
-    <p class="text-sm font-semibold uppercase tracking-wide text-brand-600">
-      {gettext("Advertising")}
-    </p>
-    <h1 class="mt-1 text-2xl font-bold text-slate-900 dark:text-slate-100">
-      {gettext("One day. One ad. Every visitor.")}
-    </h1>
-    <p class="mt-3 text-slate-700 dark:text-slate-300">
-      {gettext(
-        "vutuv shows a single, text-only ad per calendar day: discreet, beside the content on profiles and in the feed, in the style of classic text ads."
-      )}
-    </p>
+(VutuvWeb.AgentDocs.AdsDoc); the rules, the price lines and the sample ad come
+from the doc module so the two renderings cannot drift apart.
 
-    <ul class="mt-6 space-y-2 text-sm text-slate-700 dark:text-slate-300">
-      <%= for rule <- VutuvWeb.AgentDocs.AdsDoc.rules() do %>
-        <li class="flex gap-2">
-          <span aria-hidden="true" class="text-brand-600">•</span>
-          <span>{rule}</span>
-        </li>
-      <% end %>
-    </ul>
-    <p class="mt-2 text-xs text-slate-600 dark:text-slate-400">
-      <.link href={~p"/community"} class="font-semibold text-brand-600 hover:text-brand-700 dark:text-brand-400 dark:hover:text-brand-300">
-        {gettext("Read the community guidelines")}
-      </.link>
-    </p>
+Two columns from md up (portrait tablets included): the pitch on the left, and
+on the right the thing being sold — the ad itself, drawn by the very component
+a profile and the feed use, over the price and the way in. A buyer decides by
+looking at the card, so it sits beside the first paragraph rather than under
+six of them. --%>
+<div class="grid gap-6 py-6 md:grid-cols-3">
+  <div class="min-w-0 space-y-6 md:col-span-2">
+    <.card class="p-8">
+      <p class="text-sm font-semibold uppercase tracking-wide text-brand-600">
+        {gettext("Advertising")}
+      </p>
+      <h1 class="mt-1 text-3xl font-bold text-slate-900 dark:text-slate-100">
+        {gettext("One day. One ad. Every visitor.")}
+      </h1>
+      <p class="mt-3 text-lg text-slate-700 dark:text-slate-300">
+        {gettext(
+          "vutuv shows a single, text-only ad per calendar day: discreet, beside the content on profiles and in the feed, in the style of classic text ads."
+        )}
+      </p>
 
-    <dl class="mt-6 grid gap-4 rounded-xl bg-slate-50 p-4 text-sm sm:grid-cols-2 dark:bg-slate-800/60">
-      <div>
-        <dt class="font-semibold uppercase tracking-wide text-slate-500 dark:text-slate-400">
-          {gettext("Price")}
-        </dt>
-        <dd class="mt-1 text-lg font-bold text-slate-900 dark:text-slate-100">
-          {VutuvWeb.AgentDocs.AdsDoc.price_display()}
-        </dd>
-      </div>
-      <div>
-        <dt class="font-semibold uppercase tracking-wide text-slate-500 dark:text-slate-400">
+      <ul class="mt-6 space-y-3 text-sm text-slate-700 dark:text-slate-300">
+        <%= for rule <- VutuvWeb.AgentDocs.AdsDoc.rules() do %>
+          <li class="flex gap-3">
+            <svg
+              class="mt-0.5 size-5 shrink-0 text-brand-600"
+              viewBox="0 0 20 20"
+              fill="currentColor"
+              aria-hidden="true"
+            >
+              <path
+                fill-rule="evenodd"
+                d="M16.704 5.29a1 1 0 0 1 .006 1.414l-7.25 7.5a1 1 0 0 1-1.44.006L3.29 9.53a1 1 0 1 1 1.42-1.408l3.998 4.03 6.582-6.808a1 1 0 0 1 1.414-.055Z"
+                clip-rule="evenodd"
+              />
+            </svg>
+            <span>{rule}</span>
+          </li>
+        <% end %>
+      </ul>
+      <p class="mt-4 text-xs text-slate-600 dark:text-slate-400">
+        <.link
+          href={~p"/community"}
+          class="font-semibold text-brand-600 hover:text-brand-700 dark:text-brand-400 dark:hover:text-brand-300"
+        >
+          {gettext("Read the community guidelines")}
+        </.link>
+      </p>
+    </.card>
+  </div>
+
+  <div class="min-w-0 space-y-6">
+    <.card class="p-6">
+      <.section_title>{gettext("A sample ad")}</.section_title>
+      <VutuvWeb.AdComponents.ad_preview
+        id="sample-ad"
+        banner={{:ad, VutuvWeb.AgentDocs.AdsDoc.sample_ad()}}
+        class="mt-3"
+      />
+      <p class="mt-3 text-xs text-slate-600 dark:text-slate-400">
+        {gettext("A title, one sentence and a link. That is the whole format.")}
+      </p>
+    </.card>
+
+    <%!-- Price, when it can run and the way in are one card: they are the one
+    decision, and a reader comparing them should not be scrolling between two. --%>
+    <.card class="p-6">
+      <.section_title>{gettext("Price")}</.section_title>
+      <p class="mt-2 text-2xl font-bold text-slate-900 dark:text-slate-100">
+        {VutuvWeb.AgentDocs.AdsDoc.price_display()}
+      </p>
+      <p
+        :if={VutuvWeb.AgentDocs.AdsDoc.vat_display()}
+        class="text-sm text-slate-600 dark:text-slate-400"
+      >
+        {VutuvWeb.AgentDocs.AdsDoc.vat_display()}
+      </p>
+
+      <%!-- The longer blocks, each one sentence rather than a row of columns:
+      the rail is a third of the page, where a three-column table wraps. --%>
+      <ul class="mt-4 space-y-3 border-t border-slate-100 pt-4 dark:border-slate-800">
+        <%= for line <- Enum.drop(VutuvWeb.AgentDocs.AdsDoc.tier_lines(), 1) do %>
+          <li>
+            <p class="text-sm font-semibold text-slate-900 dark:text-slate-100">{line.price}</p>
+            <p class="text-xs text-brand-700 dark:text-brand-300">{line.saving}</p>
+          </li>
+        <% end %>
+      </ul>
+
+      <%!-- `m-0` / `font-normal` / `border-t-0` undo the legacy `dl dt` / `dl dd`
+      element rules in components.css, which bold every dd and draw a hairline
+      over every dt inside a card. --%>
+      <dl class="mt-4 border-t border-slate-100 pt-4 text-sm dark:border-slate-800">
+        <dt class="m-0 border-t-0 p-0 text-sm text-slate-600 dark:text-slate-400">
           {gettext("Next available day")}
         </dt>
-        <dd class="mt-1 text-lg font-bold text-slate-900 dark:text-slate-100">
+        <dd class="m-0 mt-1 text-lg font-bold text-slate-900 dark:text-slate-100">
           <%= if @next_available_day do %>
             <VutuvWeb.AdHTML.day_time day={@next_available_day} />
           <% else %>
             {gettext("fully booked")}
           <% end %>
         </dd>
-        <dd class="mt-1 text-xs text-slate-600 dark:text-slate-400">
+        <dd class="m-0 mt-1 text-sm font-normal text-slate-600 dark:text-slate-400">
           <.open_through />
         </dd>
-      </div>
-    </dl>
+      </dl>
 
-    <div class="mt-8">
-      <.button href={~p"/system/ads/new"}>{gettext("Book your ad")}</.button>
-      <p class="mt-2 text-xs text-slate-600 dark:text-slate-400">
+      <div class="mt-5">
+        <.button href={~p"/system/ads/new"} class="w-full justify-center">
+          {gettext("Book your ad")}
+        </.button>
+      </div>
+      <p class="mt-3 text-xs text-slate-600 dark:text-slate-400">
         {gettext("Booking requires a vutuv login.")}
         <.link
           :if={@conn.assigns[:current_user]}
@@ -67,6 +124,6 @@ the two renderings cannot drift apart. --%>
           {gettext("My bookings")} ›
         </.link>
       </p>
-    </div>
-  </.card>
+    </.card>
+  </div>
 </div>

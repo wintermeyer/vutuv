@@ -81,10 +81,30 @@ ad/day, unique index), enter the invoice address, then title, sentence and link
 (must be family-friendly; live counters for the two limits, the changeset
 enforces them and accepts only an http(s) link to a public host).
 
-1.250 € net per day, payment by invoice: the booking mail (billing data + ad)
+350 € net per day plus VAT (`ADS_VAT_PERCENT`, default the German 19 %; `0`
+drops the VAT line everywhere), payment by invoice: the booking mail (billing data + ad)
 goes to the operator, who invoices manually, and the booker gets a receipt.
 The price is stamped on the row, so "My bookings" and the review pages show
-what was booked rather than today's price. Days on these pages are written the
+what was booked rather than today's price.
+
+**A week and a month are cheaper per day, and are still one row per day.**
+`Vutuv.Ads.tiers/0` is the whole price list — 1 day 350 €, 7 days 2.000 €,
+30 days 7.500 €, net — and every quoted figure on the offer page, in the
+booking form, in the preview and in both mails is derived from it, so nothing
+can quote three different numbers. A block is N rows sharing a `group_id`,
+inserted in one transaction: a day somebody else took in the meantime fails the
+whole purchase rather than leaving a member holding four days of the week they
+paid for, and the error is reported about the day they picked, not about the
+seventh day they never saw. The tier price is split over the rows so the shares
+add up to it exactly (the remainder rides the first day); nobody reads a share,
+but a day cancelled out of a block has to leave the rest adding up to something
+real. **One decision moves the whole purchase**, and that lives in the private
+`move/3` alone, so approving, rejecting and both cancellation paths inherit it
+together and the booker hears once rather than seven times. The admin table
+says so on every row of a block, or an admin presses one button and watches six
+other rows change. There is one slot a day, so a month sold is a month nobody
+else can buy — which is why the month is the bigger discount and why widening
+the tier list is a product decision, not a constant. Days on these pages are written the
 way the reader writes dates (`VutuvWeb.AdHTML.day_label/1`); the offer page
 wraps them in `<time datetime>`, which keeps the ISO date for its agent-format
 siblings.

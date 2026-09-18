@@ -26,6 +26,11 @@ defmodule Vutuv.Ads.Ad do
     field(:url, :string)
     field(:price_cents, :integer)
 
+    # The rows a week or a month was bought as, sharing one id: the review, the
+    # cancellation and "My bookings" act on the whole purchase, while serving,
+    # the unique index and the counters stay per day. A single day has none.
+    field(:group_id, Vutuv.UUIDv7)
+
     field(:billing_name, :string)
     field(:billing_company, :string)
     field(:billing_street, :string)

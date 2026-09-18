@@ -39,10 +39,195 @@ defmodule Vutuv.AdsTest do
     Enum.filter(mails, fn mail -> Enum.any?(mail.to, fn {_, to} -> to == @operator end) end)
   end
 
+  # How many rows of `ad`'s block carry `field`, which is how a decision that
+  # must move the whole purchase is checked.
+  defp group_count(%Ad{group_id: group_id}, field) do
+    Repo.aggregate(
+      from(a in Ad, where: a.group_id == ^group_id and not is_nil(field(a, ^field))),
+      :count
+    )
+  end
+
   defp pending_booking(user \\ booker()) do
     {:ok, ad} = Ads.book_ad(user, @valid_attrs)
     flush_emails()
     ad
+  end
+
+  describe "VAT on top of every quoted price" do
+    test "the stamped price is net and the gross adds the configured rate" do
+      # 350,00 € net, 19 % -> 416,50 €. Cent-exact, so a rate that does not
+      # divide evenly still lands on a real invoice amount.
+      assert Ads.price_cents() == 35_000
+      assert Ads.vat_percent() == 19
+      assert Ads.vat_cents(35_000) == 6_650
+      assert Ads.gross_cents(35_000) == 41_650
+      assert Ads.vat_cents(99_999) == 19_000
+    end
+  end
+
+  describe "booking a week or a month" do
+    test "the tiers are cheaper per day the longer they run" do
+      assert [one, week, month] = Ads.tiers()
+      assert {one.days, one.cents} == {1, 35_000}
+      assert {week.days, week.cents} == {7, 200_000}
+      assert {month.days, month.cents} == {30, 750_000}
+
+      assert Ads.tier_day_cents(week) == 28_571
+      assert Ads.tier_discount_percent(week) == 18
+      assert Ads.tier_day_cents(month) == 25_000
+      assert Ads.tier_discount_percent(month) == 29
+    end
+
+    test "a week is seven rows sharing one purchase, adding up to the tier price" do
+      user = booker()
+      first = Ads.next_available_day()
+      attrs = Map.put(@valid_attrs, "day", Date.to_iso8601(first))
+
+      assert {:ok, %Ad{} = ad} = Ads.book_ad(user, attrs, 7)
+      assert ad.day == first
+      assert is_binary(ad.group_id)
+
+      rows = Repo.all(from(a in Ad, where: a.group_id == ^ad.group_id, order_by: a.day))
+      assert length(rows) == 7
+      assert Enum.map(rows, & &1.day) == Ads.block_days(first, 7)
+      assert Enum.sum(Enum.map(rows, & &1.price_cents)) == 200_000
+
+      # One purchase, so the booker hears about it once.
+      assert [_operator, _booker] = flush_emails()
+    end
+
+    test "a day somebody else holds takes the whole block down with it" do
+      taken = Date.add(Ads.next_available_day(), 3)
+
+      assert {:ok, _} =
+               Ads.book_ad(booker(), Map.put(@valid_attrs, "day", Date.to_iso8601(taken)))
+
+      flush_emails()
+
+      first = Ads.next_available_day()
+      attrs = Map.put(@valid_attrs, "day", Date.to_iso8601(first))
+
+      assert {:error, changeset} = Ads.book_ad(booker(), attrs, 7)
+      assert "has already been booked" in errors_on(changeset).day
+      # Nothing of the block survives, so the free days it touched are free.
+      assert Repo.aggregate(from(a in Ad, where: a.day == ^first), :count) == 0
+      assert flush_emails() == []
+    end
+
+    test "a block past the window is refused about the day the member picked" do
+      first = Date.add(Ads.last_bookable_day(), -3)
+      attrs = Map.put(@valid_attrs, "day", Date.to_iso8601(first))
+
+      assert {:error, changeset} = Ads.book_ad(booker(), attrs, 7)
+      assert "is outside the booking window" in errors_on(changeset).day
+      assert Repo.aggregate(from(a in Ad, where: a.day == ^first), :count) == 0
+
+      # Each row validates its own day, so without the block's own check the
+      # error would come back on the seventh day - a day the member never chose,
+      # which the form would then select in the calendar for them.
+      assert Ecto.Changeset.get_field(changeset, :day) == first
+    end
+
+    test "a length nobody sells books nothing" do
+      assert {:error, changeset} = Ads.book_ad(booker(), @valid_attrs, 3)
+      assert errors_on(changeset).day != []
+      assert Repo.aggregate(from(a in Ad), :count) == 0
+    end
+
+    test "one decision moves the whole block: approving, rejecting, cancelling" do
+      user = booker()
+      first = Ads.next_available_day()
+      attrs = Map.put(@valid_attrs, "day", Date.to_iso8601(first))
+      assert {:ok, ad} = Ads.book_ad(user, attrs, 7)
+      flush_emails()
+
+      assert {:ok, approved} = Ads.approve_ad(ad, admin())
+      assert approved.day == first
+      assert group_count(ad, :approved_at) == 7
+      # And once, not seven times.
+      assert [_one] = mails_to(flush_emails(), user)
+
+      assert {:ok, _} = Ads.cancel_ad(ad, admin())
+      assert group_count(ad, :cancelled_at) == 7
+      assert [_one] = mails_to(flush_emails(), user)
+    end
+
+    test "the booker cancels the week they bought, not one day of it" do
+      user = booker()
+      first = Ads.next_available_day()
+      attrs = Map.put(@valid_attrs, "day", Date.to_iso8601(first))
+      assert {:ok, ad} = Ads.book_ad(user, attrs, 7)
+      flush_emails()
+
+      assert {:ok, _} = Ads.cancel_booking(ad, user)
+      assert group_count(ad, :cancelled_at) == 7
+      # Every day is free again, so the same week books a second time.
+      assert {:ok, _} = Ads.book_ad(booker(), attrs, 7)
+    end
+
+    test "the mails name the whole week and the price of the week" do
+      user = booker("de")
+      first = Ads.next_available_day()
+      last = Date.add(first, 6)
+      attrs = Map.put(@valid_attrs, "day", Date.to_iso8601(first))
+
+      assert {:ok, _ad} = Ads.book_ad(user, attrs, 7)
+      mails = flush_emails()
+
+      # A row of a block carries one day and one seventh of the price, and
+      # neither is what the invoice says - so neither may reach a mail.
+      for mail <- mails do
+        assert mail.text_body =~ Calendar.strftime(first, "%d.%m.%Y")
+        assert mail.text_body =~ Calendar.strftime(last, "%d.%m.%Y")
+        assert mail.text_body =~ "2.000,00"
+        refute mail.text_body =~ "285,71"
+      end
+
+      assert [operator] = mails_to(mails, @operator)
+      assert operator.subject =~ Calendar.strftime(last, "%d.%m.%Y")
+
+      # The mail is built on a task whose process locale is the installation
+      # default, so the range's own joining word has to be the member's.
+      assert [booker_mail] = mails_to(mails, user)
+      assert booker_mail.subject =~ Calendar.strftime(last, "%d.%m.%Y")
+      assert booker_mail.subject =~ "bis"
+      refute booker_mail.subject =~ " to "
+      assert booker_mail.text_body =~ "bis"
+    end
+
+    test "my bookings shows a week as one line at its own price" do
+      user = booker()
+      first = Ads.next_available_day()
+      attrs = Map.put(@valid_attrs, "day", Date.to_iso8601(first))
+      assert {:ok, _} = Ads.book_ad(user, attrs, 7)
+      flush_emails()
+
+      assert [booking] = Ads.user_bookings(user)
+      assert booking.days == 7
+      assert booking.ad.day == first
+      assert booking.last_day == Date.add(first, 6)
+      assert booking.price_cents == 200_000
+    end
+
+    test "a start day the block does not fit behind is refused by the preview" do
+      taken = Date.add(Ads.next_available_day(), 2)
+
+      assert {:ok, _} =
+               Ads.book_ad(booker(), Map.put(@valid_attrs, "day", Date.to_iso8601(taken)))
+
+      flush_emails()
+
+      first = Ads.next_available_day()
+      attrs = Map.put(@valid_attrs, "day", Date.to_iso8601(first))
+
+      assert {:error, changeset} = Ads.preview_ad(attrs, 7)
+      assert "has already been booked" in errors_on(changeset).day
+      # The same start is fine for a single day, which is what free_block? says.
+      assert {:ok, _} = Ads.preview_ad(attrs, 1)
+      assert Ads.free_block?(first, 1)
+      refute Ads.free_block?(first, 7)
+    end
   end
 
   describe "book_ad/2" do
@@ -51,7 +236,7 @@ defmodule Vutuv.AdsTest do
 
       assert {:ok, %Ad{} = ad} = Ads.book_ad(user, @valid_attrs)
       assert ad.user_id == user.id
-      assert ad.price_cents == 125_000
+      assert ad.price_cents == 35_000
       assert ad.day == Date.add(Ads.today(), 7)
 
       assert [email] = mails_to(flush_emails(), @operator)
@@ -61,7 +246,7 @@ defmodule Vutuv.AdsTest do
       assert email.text_body =~ "Acme GmbH"
       assert email.text_body =~ "Musterstraße 1"
       assert email.text_body =~ "10115"
-      assert email.text_body =~ "1.250,00"
+      assert email.text_body =~ "350,00"
       assert email.text_body =~ @valid_attrs["title"]
       assert email.text_body =~ @valid_attrs["body"]
       assert email.text_body =~ @valid_attrs["url"]
@@ -165,7 +350,7 @@ defmodule Vutuv.AdsTest do
       assert mail.subject =~ Calendar.strftime(ad.day, "%d.%m.%Y")
       assert mail.text_body =~ "Acme sucht Leute"
       assert mail.text_body =~ "https://www.acme.example/jobs/?utm_source=vutuv"
-      assert mail.text_body =~ "1.250"
+      assert mail.text_body =~ "350,00"
       assert mail.text_body =~ "system/ads/bookings"
       assert mail.text_body =~ "stornieren"
     end

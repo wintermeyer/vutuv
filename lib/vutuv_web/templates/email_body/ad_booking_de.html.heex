@@ -1,8 +1,9 @@
 <.email_layout preheader="Neue Anzeigenbuchung auf vutuv" locale={@locale}>
   <.email_heading>Neue Anzeigenbuchung auf vutuv</.email_heading>
   <.email_panel>
-    <.email_row label="Tag">{Calendar.strftime(@ad.day, "%d.%m.%Y")}</.email_row>
+    <.email_row label="Tage">{@period} ({@days} Tage)</.email_row>
     <.email_row label="Preis">{@price} EUR (netto), Zahlung per Rechnung</.email_row>
+    <.email_row label="MwSt.">{@vat_percent} % → {@gross} EUR brutto</.email_row>
     <.email_row label="Gebucht von">
       @{@booker.username} ({@url}{@booker.username})
     </.email_row>

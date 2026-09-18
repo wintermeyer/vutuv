@@ -30,7 +30,7 @@ defmodule VutuvWeb.AdControllerTest do
     test "shows price and conditions to anonymous visitors", %{conn: conn} do
       html = conn |> get(~p"/system/ads") |> html_response(200)
 
-      assert html =~ "1,250"
+      assert html =~ "350.00 €"
       assert html =~ "a title of up to 30 characters"
       assert html =~ ~p"/system/ads/new"
     end
@@ -56,7 +56,7 @@ defmodule VutuvWeb.AdControllerTest do
       # used to silently drop it.
       for {format, body} <- rendered,
           fact <- [
-            "1,250",
+            "350.00 €",
             "a title of up to 30 characters",
             "family-friendly",
             "/community",
@@ -82,7 +82,7 @@ defmodule VutuvWeb.AdControllerTest do
 
       assert html =~ "id=\"ad-form\""
       assert html =~ "billing_name"
-      assert html =~ "1,250"
+      assert html =~ "350.00 €"
     end
 
     test "asks for a title, a sentence and a link, with live counters", %{conn: conn} do
@@ -189,7 +189,7 @@ defmodule VutuvWeb.AdControllerTest do
 
       # The order summary and both ways forward.
       assert html =~ params["day"]
-      assert html =~ "1,250"
+      assert html =~ "350.00 €"
       assert html =~ ~s(action="/system/ads") or html =~ ~s(action="#{~p"/system/ads"}")
       assert html =~ ~s(formaction="/system/ads/new")
       # The params ride along as hidden fields for the confirm POST.
@@ -302,8 +302,8 @@ defmodule VutuvWeb.AdControllerTest do
 
       assert html =~ Calendar.strftime(ran.day, "%d.%m.%Y")
       refute html =~ Date.to_iso8601(ran.day)
-      assert html =~ "990 €"
-      refute html =~ "1.250"
+      assert html =~ "990,00 €"
+      refute html =~ "350,00 € pro Tag"
       assert html =~ "1.234"
       assert html =~ "56"
     end
@@ -415,7 +415,7 @@ defmodule VutuvWeb.AdControllerTest do
       # midnight (the 2026-07-30 CI failure).
       ad = Repo.get_by!(Ads.Ad, day: Date.from_iso8601!(params["day"]))
       assert ad.user_id == user.id
-      assert ad.price_cents == 125_000
+      assert ad.price_cents == 35_000
       assert ad.vat_id == "DE123456789"
       # Bookings start unapproved: the admin reviews before the ad runs.
       assert ad.approved_at == nil

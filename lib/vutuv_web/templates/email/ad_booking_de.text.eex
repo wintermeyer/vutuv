@@ -1,8 +1,9 @@
 Neue Anzeigenbuchung auf vutuv
 ==============================
 
-Tag:    <%= Calendar.strftime(@ad.day, "%d.%m.%Y") %>
+Tage:   <%= @period %> (<%= @days %> Tage)
 Preis:  <%= @price %> EUR (netto), Zahlung per Rechnung
+MwSt.:  <%= @vat_percent %> % -> <%= @gross %> EUR brutto
 
 Gebucht von @<%= @booker.username %> (<%= @url %><%= @booker.username %>)
 E-Mail: <%= @booker_email %>

@@ -32,9 +32,9 @@ defmodule Vutuv.Ads do
   alias Vutuv.SearchText
   alias Vutuv.UUIDv7
 
-  # The fixed price per day, in cents net (1250 EUR). Stamped onto every
+  # The fixed price per day, in cents net (350 EUR). Stamped onto every
   # booking so old rows keep the price that was agreed.
-  @price_cents 125_000
+  @price_cents 35_000
 
   # Days between booking and the earliest bookable day: every ad is approved
   # by an admin before it runs, and this is the room for that review.
@@ -53,7 +53,62 @@ defmodule Vutuv.Ads do
   @sighting_days 90
   @seen_page 20
 
+  # What a block of consecutive days costs, net, as a package price rather than
+  # a percentage: a round figure is what gets quoted on the phone, and the
+  # discount is then whatever the arithmetic says. The month is cheaper per day
+  # than the week because it binds the whole inventory - there is one slot a
+  # day, so a month sold is a month nobody else can buy.
+  @tiers [
+    %{days: 1, cents: 35_000},
+    %{days: 7, cents: 200_000},
+    %{days: 30, cents: 750_000}
+  ]
+
   def price_cents, do: @price_cents
+
+  @doc """
+  The lengths that can be booked and what each costs, cheapest per day last.
+  Every price in the ad system is derived from this list, so the offer page,
+  the booking form and the invoice cannot quote three different numbers.
+  """
+  def tiers, do: @tiers
+
+  @doc "The tier for a block of `days`, or nil where that length is not sold."
+  def tier(days) when is_integer(days), do: Enum.find(@tiers, &(&1.days == days))
+
+  @doc "What a block of `days` costs, net, or nil for a length nobody sells."
+  def block_price_cents(days) do
+    case tier(days) do
+      nil -> nil
+      %{cents: cents} -> cents
+    end
+  end
+
+  @doc """
+  What a day of a block costs against a day bought on its own, as whole
+  percent: 0 for the single day, 43 for a month at 250 € against 350 €.
+  """
+  def tier_discount_percent(%{days: days, cents: cents}) do
+    round((1 - cents / (days * @price_cents)) * 100)
+  end
+
+  @doc "The per-day figure a block works out at, net, rounded to the cent."
+  def tier_day_cents(%{days: days, cents: cents}), do: round(cents / days)
+
+  @doc """
+  The VAT rate added on top of every quoted price, in percent, from
+  `config :vutuv, :ads_vat_percent` (`ADS_VAT_PERCENT`, default 19 — the German
+  rate this installation invoices at). Every price in the ad system is **net**;
+  an installation in another country sets its own rate, and `0` drops the VAT
+  line from the offer, the booking form and both mails.
+  """
+  def vat_percent, do: Application.get_env(:vutuv, :ads_vat_percent, 19)
+
+  @doc "`cents` plus VAT, rounded to the cent (35_000 -> 41_650 at 19 %)."
+  def gross_cents(cents) when is_integer(cents), do: cents + vat_cents(cents)
+
+  @doc "The VAT on `cents`, rounded to the cent."
+  def vat_cents(cents) when is_integer(cents), do: round(cents * vat_percent() / 100)
 
   @doc """
   Whether the daily text-ad system is switched on, from
@@ -87,6 +142,25 @@ defmodule Vutuv.Ads do
     from(a in standing(), where: a.day >= ^first and a.day <= ^last, select: a.day)
     |> Repo.all()
     |> MapSet.new()
+  end
+
+  @doc """
+  The days a block of `days` starting on `first` would occupy.
+  """
+  def block_days(%Date{} = first, days) when is_integer(days) and days > 0,
+    do: Enum.map(0..(days - 1), &Date.add(first, &1))
+
+  @doc """
+  Whether a block of `days` can start on `first`: every day of it free and
+  inside the booking window. The calendar offers only such days as a start, so
+  a member never picks a week whose Thursday is gone.
+  """
+  def free_block?(%Date{} = first, days, taken \\ nil) do
+    taken = taken || booked_days()
+    block = block_days(first, days)
+
+    Date.compare(List.last(block), last_bookable_day()) != :gt and
+      Enum.all?(block, &(not MapSet.member?(taken, &1)))
   end
 
   @doc "The booking that holds `day`, or nil."
@@ -124,24 +198,124 @@ defmodule Vutuv.Ads do
   to the operator and confirms it to the booker. The unique index on `day`
   decides races; payment is by manually sent invoice, so nothing else
   happens here.
+
+  `days` books that many consecutive days as one purchase (`tiers/0`): one row
+  per day sharing a `group_id`, inserted in a single transaction, so a day
+  somebody else took in the meantime fails the whole block rather than leaving
+  a member holding four days of the week they paid for.
   """
-  def book_ad(user, attrs) do
+  def book_ad(user, attrs, days \\ 1)
+
+  def book_ad(user, attrs, 1) do
     %Ad{user_id: user.id, price_cents: @price_cents}
     |> Ad.changeset(attrs)
     |> Repo.insert()
-    |> case do
-      {:ok, ad} ->
-        ad
-        |> Emailer.ad_booking_email(user)
-        |> Emailer.deliver()
+    |> announce_booking(user)
+  end
 
-        tell_booker(user, ad, &Emailer.ad_booked_email/3)
-        {:ok, ad}
-
-      {:error, changeset} ->
-        {:error, changeset}
+  def book_ad(user, attrs, days) when is_integer(days) do
+    case block_changesets(user, attrs, days) do
+      {:ok, changesets} -> changesets |> insert_block() |> announce_booking(user)
+      {:error, changeset} -> {:error, changeset}
     end
   end
+
+  # One changeset per day of the block, all carrying the same group and the
+  # same text. The first day is the one the form collected, so it is the one
+  # that reports a length or a window error back to the field.
+  defp block_changesets(user, attrs, days) do
+    with {:ok, total} <- block_total(days),
+         {:ok, first} <- first_day(attrs, days) do
+      group_id = UUIDv7.generate()
+
+      {:ok,
+       total
+       |> share_cents(days)
+       |> Enum.with_index()
+       |> Enum.map(fn {cents, offset} ->
+         %Ad{user_id: user.id, price_cents: cents, group_id: group_id}
+         |> Ad.changeset(%{attrs | "day" => Date.to_iso8601(Date.add(first, offset))})
+       end)}
+    end
+  end
+
+  defp block_total(days) do
+    case block_price_cents(days) do
+      nil -> {:error, length_error(days)}
+      cents -> {:ok, cents}
+    end
+  end
+
+  # The day the block starts, refused here rather than N times over: only the
+  # first day's changeset is shown, so a last day past the window has to be
+  # said about the day the member actually picked.
+  defp first_day(attrs, days) do
+    changeset = Ad.changeset(%Ad{price_cents: @price_cents}, attrs)
+
+    case Ecto.Changeset.fetch_change(changeset, :day) do
+      {:ok, first} ->
+        last = Date.add(first, days - 1)
+
+        if Date.compare(last, last_bookable_day()) == :gt do
+          {:error,
+           Ecto.Changeset.add_error(changeset, :day, "is outside the booking window",
+             validation: :block_window
+           )}
+        else
+          {:ok, first}
+        end
+
+      :error ->
+        {:error, %{changeset | action: :insert}}
+    end
+  end
+
+  defp length_error(days) do
+    %Ad{price_cents: @price_cents}
+    |> Ad.changeset(%{})
+    |> Ecto.Changeset.add_error(:day, "cannot be booked for #{days} days")
+    |> Map.put(:action, :insert)
+  end
+
+  # The block's price split over its days so the shares add up to it exactly:
+  # 200_000 over 7 is 28_571 six times and 28_574 once. Nobody reads a share -
+  # every page shows the block's own total - but a day cancelled out of a block
+  # has to leave the rest adding up to something real.
+  defp share_cents(total, days) do
+    share = div(total, days)
+    [share + rem(total, days) | List.duplicate(share, days - 1)]
+  end
+
+  defp insert_block(changesets) do
+    case Repo.transaction(fn -> Enum.reduce_while(changesets, nil, &insert_or_rollback/2) end) do
+      {:ok, last} -> {:ok, first_of_group(last)}
+      {:error, changeset} -> {:error, changeset}
+    end
+  end
+
+  # One day of the block taken in the meantime takes the whole purchase down.
+  defp insert_or_rollback(changeset, _acc) do
+    case Repo.insert(changeset) do
+      {:ok, ad} -> {:cont, ad}
+      {:error, changeset} -> {:halt, Repo.rollback(changeset)}
+    end
+  end
+
+  defp first_of_group(%Ad{group_id: nil} = ad), do: ad
+
+  defp first_of_group(%Ad{group_id: group_id}),
+    do: Repo.one(from(a in Ad, where: a.group_id == ^group_id, order_by: a.day, limit: 1))
+
+  defp announce_booking({:ok, ad}, user) do
+    ad
+    |> Emailer.ad_booking_email(user)
+    |> Emailer.deliver()
+
+    tell_booker(user, ad, &Emailer.ad_booked_email/3)
+    {:ok, ad}
+  end
+
+  defp announce_booking({:error, changeset}, _user), do: {:error, changeset}
 
   @doc "Changeset for the booking form."
   def change_ad(%Ad{} = ad, attrs \\ %{}), do: Ad.changeset(ad, attrs)
@@ -152,16 +326,30 @@ defmodule Vutuv.Ads do
   from the unique index) and returns the would-be ad without persisting
   anything - the preview page renders it through the real banner component.
   """
-  def preview_ad(attrs) do
-    %Ad{price_cents: @price_cents}
+  def preview_ad(attrs, days \\ 1) do
+    %Ad{price_cents: block_price_cents(days) || @price_cents, group_id: block_group(days)}
     |> Ad.changeset(attrs)
-    |> validate_day_free()
+    |> validate_block_free(days)
     |> Ecto.Changeset.apply_action(:insert)
   end
 
-  defp validate_day_free(changeset) do
+  # The preview is never saved, so its group id only has to say "this is a
+  # block" to whatever renders it.
+  defp block_group(1), do: nil
+  defp block_group(_days), do: UUIDv7.generate()
+
+  defp validate_block_free(changeset, days) do
     Ecto.Changeset.validate_change(changeset, :day, fn :day, day ->
-      if get_ad(day), do: [day: "has already been booked"], else: []
+      cond do
+        Date.compare(Date.add(day, days - 1), last_bookable_day()) == :gt ->
+          [day: "is outside the booking window"]
+
+        not free_block?(day, days) ->
+          [day: "has already been booked"]
+
+        true ->
+          []
+      end
     end)
   end
 
@@ -249,14 +437,22 @@ defmodule Vutuv.Ads do
   end
 
   # Sets `changes` on `ad` only while its row still matches `query`, in the one
-  # statement that also hands the row back, so an admin and the booker (or two
+  # statement that also hands the rows back, so an admin and the booker (or two
   # admins) acting at once cannot both move it.
-  defp move(%Ad{id: id}, query, changes) do
-    case Repo.update_all(from(a in query, where: a.id == ^id, select: a), set: changes) do
-      {1, [moved]} -> {:ok, moved}
+  #
+  # A week or a month was bought as one thing, so this is where that holds for
+  # every decision at once: the statement takes the whole group, and approving,
+  # rejecting or cancelling any day of a block does it to all of them. Anything
+  # of the block already decided simply fails `query` and stays as it is.
+  defp move(%Ad{} = ad, query, changes) do
+    case Repo.update_all(from(a in query, where: ^same_purchase(ad), select: a), set: changes) do
       {0, _} -> {:error, :not_pending}
+      {_n, moved} -> {:ok, Enum.min_by(moved, & &1.day, Date)}
     end
   end
+
+  defp same_purchase(%Ad{id: id, group_id: nil}), do: dynamic([a], a.id == ^id)
+  defp same_purchase(%Ad{group_id: group_id}), do: dynamic([a], a.group_id == ^group_id)
 
   # A mail about their booking to the booker, off the request path. The
   # account may be gone (`user_id` is nilified) or have no address.
@@ -284,6 +480,58 @@ defmodule Vutuv.Ads do
   @doc "All bookings of `user`, newest day first (the member dashboard)."
   def user_ads(user) do
     Repo.all(from(a in Ad, where: a.user_id == ^user.id, order_by: [desc: a.day]))
+  end
+
+  @doc """
+  A member's bookings as the things they bought: one entry per purchase, a
+  block of days folded into one. `ad` is its first day (the one every control
+  acts on, since `move/3` takes the whole group), `days` how many it runs and
+  `price_cents` what the whole block cost.
+  """
+  def user_bookings(user) do
+    user
+    |> user_ads()
+    |> Enum.group_by(&purchase_key/1)
+    |> Enum.map(fn {_key, ads} ->
+      sorted = Enum.sort_by(ads, & &1.day, Date)
+
+      %{
+        ad: hd(sorted),
+        last_day: List.last(sorted).day,
+        days: length(sorted),
+        price_cents: Enum.sum(Enum.map(sorted, & &1.price_cents))
+      }
+    end)
+    |> Enum.sort_by(& &1.ad.day, {:desc, Date})
+  end
+
+  # A block counts as one purchase; a single day is its own.
+  defp purchase_key(%Ad{group_id: nil, id: id}), do: {:ad, id}
+  defp purchase_key(%Ad{group_id: group_id}), do: {:group, group_id}
+
+  @doc "How many days this ad was bought as part of: 1 unless it is a block."
+  def purchase_days(%Ad{} = ad), do: purchase(ad).days
+
+  @doc """
+  The purchase this ad belongs to, in one query: its first and last day, how
+  many days it runs and what the whole thing cost. Every mail about a booking
+  reads it, because a block's rows each carry only their share of the price and
+  the day they happen to fall on - neither of which is what the invoice says.
+  """
+  def purchase(%Ad{group_id: nil} = ad),
+    do: %{days: 1, first_day: ad.day, last_day: ad.day, price_cents: ad.price_cents}
+
+  def purchase(%Ad{group_id: group_id}) do
+    from(a in Ad,
+      where: a.group_id == ^group_id,
+      select: %{
+        days: count(a.id),
+        first_day: min(a.day),
+        last_day: max(a.day),
+        price_cents: sum(a.price_cents)
+      }
+    )
+    |> Repo.one()
   end
 
   @doc """

@@ -12,6 +12,41 @@
   <.form :let={f} for={@changeset} action={~p"/system/ads/preview"} class="editform" id="ad-form">
     <.form_error changeset={@changeset} />
 
+    <%!-- How long it runs, before which day it starts: the length decides what
+    it costs and how many free days in a row the calendar below has to offer.
+    Plain radios, so the page needs no JavaScript; the preview step is what
+    checks that the whole block is still free. --%>
+    <div class="editform__field">
+      <fieldset class="editform__group">
+        <legend>{gettext("How long")}</legend>
+        <div class="space-y-2">
+          <label
+            :for={line <- VutuvWeb.AgentDocs.AdsDoc.tier_lines()}
+            class="m-0 flex cursor-pointer gap-3"
+          >
+            <input
+              type="radio"
+              name="days"
+              value={line.days}
+              checked={@days == line.days}
+              class="mt-1 size-4 shrink-0 border-slate-300 text-brand-600 focus:ring-2 focus:ring-brand-500 dark:border-slate-600 dark:bg-slate-800"
+            />
+            <span class="min-w-0">
+              <span class="block text-sm font-semibold text-slate-900 dark:text-slate-100">
+                {line.price}
+              </span>
+              <span :if={line.saving} class="block text-xs text-brand-700 dark:text-brand-300">
+                {line.saving}
+              </span>
+            </span>
+          </label>
+        </div>
+      </fieldset>
+      <p class="editform__hint">
+        {VutuvWeb.AgentDocs.AdsDoc.vat_display()}
+      </p>
+    </div>
+
     <.editform_field form={f} field={:day}>
       <%= label f, :day, gettext("Day") %>
       <%= error_tag f, :day %>
@@ -58,7 +93,14 @@
         </div>
       </div>
       <p class="editform__hint">
-        {gettext("One ad per calendar day: pick a free day in the calendar; struck-through days are already booked.")}
+        <%= if @days == 1 do %>
+          {gettext("One ad per calendar day: pick a free day in the calendar; struck-through days are already booked.")}
+        <% else %>
+          {gettext(
+            "Pick the day it starts; it then runs for %{days} days in a row. Struck-through days are already booked, and we tell you on the next step if the whole stretch is not free.",
+            days: @days
+          )}
+        <% end %>
         {gettext("Bookings are open through %{last}. Next available day: %{day}",
           last: VutuvWeb.AdHTML.day_label(Vutuv.Ads.last_bookable_day()),
           day:
@@ -137,10 +179,7 @@
     </.editform_field>
 
     <p class="editform__hint">
-      {gettext(
-        "Price: %{price}. Payment by invoice; the day is reserved immediately and the invoice follows by email.",
-        price: VutuvWeb.AgentDocs.AdsDoc.price_display()
-      )}
+      {gettext("Payment by invoice; the days are reserved immediately and the invoice follows by email.")}
       {gettext("We review and approve every ad before it runs, which is why the earliest bookable day is three days out.")}
     </p>
 

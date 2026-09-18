@@ -369,6 +369,12 @@ config :vutuv, :welcome_suggestions, %{
 # handle is kept free for when the system is switched back on.
 config :vutuv, :ads_enabled, false
 
+# The VAT rate the operator adds on top of every quoted ad price, in percent
+# (ADS_VAT_PERCENT). Every price in the ad system is net; 19 is the German rate
+# vutuv.de invoices at, an installation elsewhere sets its own, and 0 drops the
+# VAT line from the offer page, the booking form and both mails.
+config :vutuv, :ads_vat_percent, 19
+
 # Where this installation's data physically lives, named on the start page's
 # privacy section ("on our own servers in Deutschland, not in somebody else's
 # cloud"). Empty drops that whole claim and leaves only the three promises the

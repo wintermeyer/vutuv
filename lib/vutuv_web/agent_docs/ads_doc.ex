@@ -10,6 +10,7 @@ defmodule VutuvWeb.AgentDocs.AdsDoc do
   alias Vutuv.Ads
   alias Vutuv.Ads.Ad
   alias VutuvWeb.AgentDocs
+  alias VutuvWeb.UI
 
   @doc "The conditions list, shared verbatim by index.html.heex."
   def rules do
@@ -38,7 +39,71 @@ defmodule VutuvWeb.AgentDocs.AdsDoc do
   or the one a booking was made at.
   """
   def price_display(cents \\ Ads.price_cents()) do
-    gettext("%{amount} € per day (net)", amount: VutuvWeb.UI.delimited_count(div(cents, 100)))
+    gettext("%{amount} € per day (net)", amount: UI.euro_cents(cents))
+  end
+
+  @doc """
+  The price list: one row per bookable length (`Vutuv.Ads.tiers/0`), each as
+  the sentence it is read as rather than as fragments a view glues together.
+  `saving` is nil for the single day, which is the figure the others are
+  measured against.
+  """
+  def tier_lines do
+    Enum.map(Ads.tiers(), fn tier ->
+      %{
+        days: tier.days,
+        cents: tier.cents,
+        price:
+          ngettext("One day for %{amount} €", "%{days} days for %{amount} €", tier.days,
+            days: tier.days,
+            amount: UI.euro_cents(tier.cents)
+          ),
+        saving: saving_line(tier)
+      }
+    end)
+  end
+
+  defp saving_line(%{days: 1}), do: nil
+
+  defp saving_line(tier) do
+    gettext("%{amount} € per day, %{percent} % less",
+      amount: UI.euro_cents(Ads.tier_day_cents(tier)),
+      percent: Ads.tier_discount_percent(tier)
+    )
+  end
+
+  @doc """
+  The VAT line under the price, or nil where the installation charges none
+  (`ADS_VAT_PERCENT=0`). Every price we quote is net, so this is the figure the
+  invoice will actually ask for.
+  """
+  def vat_display(cents \\ Ads.price_cents()) do
+    if Ads.vat_percent() > 0 do
+      gettext("plus %{percent} % VAT = %{gross} €",
+        percent: Ads.vat_percent(),
+        gross: UI.euro_cents(Ads.gross_cents(cents))
+      )
+    end
+  end
+
+  @doc """
+  The sample ad the offer page shows, so a buyer sees the three lines they are
+  buying rather than reading about them. Deliberately a plain `%Ad{}` and never
+  a stored row: `example.com` is the reserved example domain, so the card can
+  carry a working-looking address that belongs to nobody.
+  """
+  def sample_ad do
+    %Ad{
+      title: gettext("Acme is looking for you"),
+      body: gettext("Elixir development in Mainz, remote is fine."),
+      url: "https://www.example.com/jobs"
+    }
+  end
+
+  @doc "The same sample as facts, for the agent formats."
+  def example do
+    ad = sample_ad()
+    %{title: ad.title, text: ad.body, url: ad.url, address: Ad.display_url(ad.url)}
   end
 
   @doc "The /system/ads page as a doc map."
@@ -51,9 +116,23 @@ defmodule VutuvWeb.AgentDocs.AdsDoc do
         cents: Ads.price_cents(),
         currency: "EUR",
         net: true,
-        display: price_display()
+        vat_percent: Ads.vat_percent(),
+        gross_cents: Ads.gross_cents(Ads.price_cents()),
+        display: price_display(),
+        vat_display: vat_display(),
+        tiers:
+          Enum.map(tier_lines(), fn line ->
+            %{
+              days: line.days,
+              cents: line.cents,
+              gross_cents: Ads.gross_cents(line.cents),
+              display: line.price,
+              saving: line.saving
+            }
+          end)
       },
       rules: rules(),
+      example: example(),
       next_available_day: next_available_day,
       booking_window: %{from: Ads.first_bookable_day(), to: Ads.last_bookable_day()},
       booked_days: Enum.sort(Ads.booked_days(), Date),

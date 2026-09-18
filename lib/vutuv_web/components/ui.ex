@@ -3827,6 +3827,26 @@ defmodule VutuvWeb.UI do
   end
 
   @doc """
+  An amount of cents as money, always with both decimals (`41650` ->
+  `"416,50"` under German and Italian, `"416.50"` under English).
+
+  Money keeps its cents even when they are zero: a price list where `350` sits
+  beside `416,50` reads as two different kinds of number. Grouping and decimal
+  separator come from `number_separators/0`, the same pair `delimited_count/1`
+  uses — they invert together between the locales, so a figure formatted with
+  the wrong rules is misread rather than untidy.
+  """
+  def euro_cents(cents) when is_integer(cents) do
+    {_separator, decimal} = number_separators()
+    sign = if cents < 0, do: "-", else: ""
+    cents = abs(cents)
+
+    sign <>
+      delimited_count(div(cents, 100)) <>
+      decimal <> (cents |> rem(100) |> Integer.to_string() |> String.pad_leading(2, "0"))
+  end
+
+  @doc """
   Exact, thousands-grouped form of a count (`60123` -> `"60,123"`, or
   `"60.123"` under the German locale), for the rare place that wants the full
   number rather than the floored `compact_count/1` — the live member counter on

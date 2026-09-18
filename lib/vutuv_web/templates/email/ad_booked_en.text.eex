@@ -6,7 +6,8 @@ thank you for your booking. Your ad for <%= @day %> is reserved:
   <%= @ad.body %>
   <%= @ad.url %>
 
-Price: <%= @price %>, paid by invoice. We will send you the invoice by email.
+Price: <%= @price %>, <%= @vat %>. Paid by invoice; we will send you the
+invoice by email.
 
 We review every ad before it runs and will write to you once it is approved.
 Until then you can cancel the booking free of charge:

@@ -4,6 +4,8 @@ defmodule VutuvWeb.AdHTML do
 
   alias Vutuv.Ads
   alias Vutuv.Ads.Ad
+  alias VutuvWeb.AgentDocs.AdsDoc
+  alias VutuvWeb.UI
 
   embed_templates("../templates/ad/*")
 
@@ -128,6 +130,47 @@ defmodule VutuvWeb.AdHTML do
 
   @doc "A booked day the way the reader writes dates (`Vutuv.ViewerClock`)."
   def day_label(%Date{} = day), do: Vutuv.ViewerClock.format(day, :date)
+
+  @doc """
+  What a purchase runs for: the day itself, or the stretch a block covers. One
+  function, so the flash, the preview and "My bookings" cannot each spell a
+  week differently.
+  """
+  def period_label(%Date{} = first, days) when days <= 1, do: day_label(first)
+
+  def period_label(%Date{} = first, days) do
+    gettext("%{from} to %{to}",
+      from: day_label(first),
+      to: day_label(Date.add(first, days - 1))
+    )
+  end
+
+  @doc """
+  What a purchase of `days` costs, net. A single day is quoted per day, as the
+  offer page quotes it; a block is quoted as the one figure it is invoiced at,
+  because "2.000,00 € pro Tag" would be a lie.
+  """
+  def block_price(days) when days <= 1, do: AdsDoc.price_display()
+
+  def block_price(days) do
+    gettext("%{amount} € for the whole period (net)",
+      amount: UI.euro_cents(block_cents(days))
+    )
+  end
+
+  @doc "The VAT line for a purchase of `days`, or nil where none is charged."
+  def block_vat(days), do: AdsDoc.vat_display(block_cents(days))
+
+  @doc """
+  What a booking was made at, from the price stamped on its rows rather than
+  from today's list: a single day per day, a block as its own total.
+  """
+  def booked_price(%{days: 1, price_cents: cents}), do: AdsDoc.price_display(cents)
+
+  def booked_price(%{price_cents: cents}),
+    do: gettext("%{amount} € for the whole period (net)", amount: UI.euro_cents(cents))
+
+  defp block_cents(days), do: Ads.block_price_cents(days) || Ads.price_cents()
 
   @doc "A day in the reader's writing, with the ISO date for machines."
   attr(:day, Date, required: true)

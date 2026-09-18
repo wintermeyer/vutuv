@@ -6,7 +6,8 @@ grazie per la tua prenotazione. La tua pubblicità per il <%= @day %> è riserva
   <%= @ad.body %>
   <%= @ad.url %>
 
-Prezzo: <%= @price %>, pagamento su fattura. Ti invieremo la fattura per e-mail.
+Prezzo: <%= @price %>, <%= @vat %>. Pagamento su fattura; ti invieremo la
+fattura per e-mail.
 
 Controlliamo ogni pubblicità prima che vada online e ti scriveremo appena sarà
 approvata. Fino ad allora puoi annullare la prenotazione gratuitamente:

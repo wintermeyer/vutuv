@@ -115,6 +115,13 @@ if config_env() == :prod do
     config :vutuv, :post_edit_window_minutes, String.to_integer(minutes)
   end
 
+  # The VAT rate on ad prices, in percent (default 19, the German rate; see
+  # config/config.exs). Every quoted price is net, so an installation invoicing
+  # elsewhere sets its own rate, and 0 drops the VAT line entirely.
+  if percent = System.get_env("ADS_VAT_PERCENT") do
+    config :vutuv, :ads_vat_percent, String.to_integer(percent)
+  end
+
   # How long installing a new version takes here (default 10 minutes; see
   # config/config.exs). The 500 page tells a visitor this number, so a slower
   # pipeline should say so rather than promise ours.

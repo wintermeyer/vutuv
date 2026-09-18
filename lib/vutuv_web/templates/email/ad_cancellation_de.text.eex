@@ -1,11 +1,12 @@
 Stornierung einer Anzeigenbuchung
 =================================
 
-Tag:    <%= Calendar.strftime(@ad.day, "%d.%m.%Y") %>
+Tage:   <%= @period %> (<%= @days %> Tage)
 Preis:  <%= @price %> EUR (netto)
+MwSt.:  <%= @vat_percent %> % -> <%= @gross %> EUR brutto
 
 Storniert von @<%= @booker.username %> (<%= @url %><%= @booker.username %>),
-bevor die Anzeige freigeschaltet war. Der Tag ist wieder frei.
+bevor die Anzeige freigeschaltet war. Der Zeitraum ist wieder frei.
 
 Anzeige
 -------

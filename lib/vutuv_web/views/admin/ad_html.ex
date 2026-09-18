@@ -34,6 +34,13 @@ defmodule VutuvWeb.Admin.AdHTML do
           <tr :for={ad <- @ads} id={"#{@id_prefix}-#{ad.id}"}>
             <td>
               <.link href={~p"/admin/ads/#{ad}"}>{AdHTML.day_label(ad.day)}</.link>
+              <%!-- A week or a month is one purchase, so approving, rejecting
+              or cancelling any of its days does it to all of them. The row says
+              so, or an admin presses one button and watches six other rows
+              change. --%>
+              <span :if={ad.group_id} class="block text-xs text-slate-600 dark:text-slate-400">
+                {gettext("Part of one booking; a decision here applies to all its days.")}
+              </span>
             </td>
             <td>{AdHTML.status_label(ad)}</td>
             <td>

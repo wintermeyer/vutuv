@@ -9,7 +9,7 @@
     <p class="mt-1 text-sm text-slate-600 dark:text-slate-400">
       {gettext(
         "This is exactly how your ad will appear on profiles and in the feed on %{day}.",
-        day: VutuvWeb.AdHTML.day_label(@ad.day)
+        day: VutuvWeb.AdHTML.period_label(@ad.day, @days)
       )}
     </p>
 
@@ -20,10 +20,10 @@
     <dl class="mt-6 grid gap-4 rounded-xl bg-slate-50 p-4 text-sm sm:grid-cols-3 dark:bg-slate-800/60">
       <div>
         <dt class="text-xs font-semibold uppercase tracking-wide text-slate-500 dark:text-slate-400">
-          {gettext("Day")}
+          {ngettext("Day", "Days", @days)}
         </dt>
         <dd class="mt-1 font-bold text-slate-900 dark:text-slate-100">
-          {VutuvWeb.AdHTML.day_label(@ad.day)}
+          {VutuvWeb.AdHTML.period_label(@ad.day, @days)}
         </dd>
       </div>
       <div>
@@ -31,7 +31,13 @@
           {gettext("Price")}
         </dt>
         <dd class="mt-1 font-bold text-slate-900 dark:text-slate-100">
-          {VutuvWeb.AgentDocs.AdsDoc.price_display()}
+          {VutuvWeb.AdHTML.block_price(@days)}
+        </dd>
+        <dd
+          :if={VutuvWeb.AdHTML.block_vat(@days)}
+          class="text-xs font-normal text-slate-600 dark:text-slate-400"
+        >
+          {VutuvWeb.AdHTML.block_vat(@days)}
         </dd>
       </div>
       <div>
@@ -61,6 +67,7 @@
     second submit posts the same values back to the form for editing. --%>
     <form action={~p"/system/ads"} method="post" class="mt-4" id="ad-confirm-form">
       <input type="hidden" name="_csrf_token" value={get_csrf_token()} />
+      <input type="hidden" name="days" value={@days} />
       <input
         :for={{key, value} <- @ad_params}
         type="hidden"
