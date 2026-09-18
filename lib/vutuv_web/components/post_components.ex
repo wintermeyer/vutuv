@@ -421,8 +421,11 @@ defmodule VutuvWeb.PostComponents do
         {render_slot(@inner_block)}
       </div>
     </.card>
+    <%!-- Carded by its host instead (the profile's Posts card), which may be
+    flush in turn, so the rows carry the same name here. --%>
     <div
       :if={!@card}
+      data-timeline-rows
       class={["divide-y divide-slate-100 dark:divide-slate-800", @class]}
       {@rest}
     >

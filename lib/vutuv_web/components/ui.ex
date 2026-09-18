@@ -74,12 +74,12 @@ defmodule VutuvWeb.UI do
   track, `<main>` and the footer's content column. A container that is already
   inside one of those needs nothing — the insets do not stack.
 
-  **One container cancels it instead**, the feed's flush timeline card, which
-  negates this expression in the phone-timeline block at the end of `app.css`
-  to reach the edge of the screen. The two spellings have to move together —
-  change the gutter here and the card would negate the old amount, leaving the
-  timeline a few pixels off one edge on every phone. `feed_edge_to_edge_test.exs`
-  fails when they drift.
+  **Two containers cancel it instead**, the feed's flush timeline card and the
+  profile's grid, which negate this expression in the phone block at the end of
+  `app.css` (both read one pair of custom properties there) to reach the edge
+  of the screen. The two spellings have to move together — change the gutter
+  here and they would negate the old amount, leaving the page a few pixels off
+  one edge on every phone. `feed_edge_to_edge_test.exs` fails when they drift.
   """
   def gutter_class do
     "pl-[max(1rem,env(safe-area-inset-left))] pr-[max(1rem,env(safe-area-inset-right))]"
@@ -1078,6 +1078,10 @@ defmodule VutuvWeb.UI do
   `app.css`, which is also where the reasoning lives: the card cancels the
   gutter, hands its side padding to each **row** (so the hairline between two
   posts runs the whole width of the screen), and squares its corners.
+
+  Every card also carries a bare `data-card`, so a page can restyle all of its
+  cards from the stylesheet without a class per call site: the profile runs
+  each one edge to edge on a phone (`[data-profile-edge]`, the same block).
   """
   attr(:class, :string, default: nil)
 
@@ -1092,6 +1096,7 @@ defmodule VutuvWeb.UI do
   def card(assigns) do
     ~H"""
     <section
+      data-card
       data-timeline-flush={@flush}
       class={[
         "rounded-2xl bg-white p-6 shadow-sm ring-1 ring-slate-200 dark:bg-slate-900 dark:ring-slate-800",
@@ -4310,6 +4315,7 @@ defmodule VutuvWeb.UI do
   Guard visibility (`:if={owner and frozen}`) at the call site.
   """
   attr(:class, :any, default: nil)
+  attr(:rest, :global)
   slot(:inner_block, required: true)
 
   def frozen_banner(assigns) do
@@ -4320,6 +4326,7 @@ defmodule VutuvWeb.UI do
         "flex flex-wrap items-center gap-1.5 bg-amber-50 font-semibold text-amber-800 ring-1 ring-amber-200 dark:bg-amber-900/30 dark:text-amber-200 dark:ring-amber-900",
         @class
       ]}
+      {@rest}
     >
       <span aria-hidden="true">⚑</span>
       {render_slot(@inner_block)}

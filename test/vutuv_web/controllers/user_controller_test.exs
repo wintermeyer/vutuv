@@ -176,9 +176,10 @@ defmodule VutuvWeb.UserControllerTest do
     # rather than owning a line above it. That only works if the row cannot
     # wrap and the LABELS give way instead — with the longest German word
     # ("Vernetzungen") spent first, or a 374px phone loses "31 folgt" to an
-    # ellipsis before it loses anything worth saving. The lopsided shrink pair
-    # is what expresses that, and it is exactly the kind of oddity a later
-    # cleanup pass removes as noise, so it is pinned here.
+    # ellipsis before it loses anything worth saving. The lopsided shrink
+    # weights are what express that, and they are exactly the kind of oddity a
+    # later cleanup pass removes as noise, so they are pinned here (and in
+    # `profile_edge_to_edge_test.exs`, which says why the smallest is a 1).
     {conn, viewer} = create_and_login_user(conn)
     profile = insert_activated_user()
     # A mutual follow with the viewer: all three counters render (the
@@ -189,34 +190,32 @@ defmodule VutuvWeb.UserControllerTest do
 
     html = conn |> get(~p"/#{profile}") |> html_response(200)
 
-    assert [row] =
-             Regex.run(
-               ~r/<div id="profile-counts".*?<\/div>\s*<div class="mt-4 flex items-center gap-1 border-t/s,
-               html
-             )
+    assert [row] = elements(html, "#profile-counts")
+    row = LazyHTML.to_html(row)
 
     refute row =~ "flex-wrap"
+    assert row =~ "shrink-[10000]"
     assert row =~ "shrink-[100]"
-    assert row =~ "shrink-[0.01]"
     assert row =~ "truncate"
-    # the chip closes the row, after the counters
+    # the chip follows the counters, and the save glyphs close the row
     assert row =~ "data-profile-relationship"
     {follower_at, _} = :binary.match(row, ~p"/#{profile}/followers")
     {chip_at, _} = :binary.match(row, "data-profile-relationship")
+    {like_at, _} = :binary.match(row, ~s(id="profile-like"))
     assert follower_at < chip_at
+    assert chip_at < like_at
   end
 
-  test "with no followers or following, the counts row is gone but the vCard link still shows",
+  test "with no followers or following, the counts line still carries the vCard link",
        %{conn: conn} do
-    # The footer row carries the vCard action whether or not there is a counts
-    # row above it.
+    # The line always renders, because the vCard at its end is universal.
     user = insert_activated_user()
 
     html = conn |> get(~p"/#{user}") |> html_response(200)
 
     refute html =~ ~p"/#{user}/followers"
     refute html =~ ~p"/#{user}/following"
-    assert html =~ "/#{user.username}.vcf"
+    assert [_] = elements(html, ~s(#profile-counts a[href="/#{user.username}.vcf"]))
   end
 
   test "profile uses the content+rail columns from tablet widths up", %{conn: conn} do
@@ -1334,10 +1333,11 @@ defmodule VutuvWeb.UserControllerTest do
       html = conn |> get(~p"/#{other}") |> html_response(200)
 
       refute html =~ "data-profile-relationship"
-      # Nobody follows this member and this member follows nobody, so with no
-      # chip either the row that would hold them is left out entirely rather
-      # than shipping an empty `mt-4` div above the footer.
-      refute html =~ ~s(id="profile-counts")
+      # Nobody follows this member and this member follows nobody, so the line
+      # holds no counter and no chip, only the save glyphs it always carries.
+      assert [] = elements(html, "#profile-counts a[href$=\"/followers\"]")
+      assert [] = elements(html, "#profile-counts a[href$=\"/following\"]")
+      assert [_] = elements(html, "#profile-counts #download-vcard")
       # the toggle offers a follow (a phx-click create-follow targeting other)
       assert html =~ ~s(phx-click="follow")
       assert html =~ ~s(phx-value-followee="#{other.id}")

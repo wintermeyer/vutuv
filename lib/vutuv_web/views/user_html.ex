@@ -394,7 +394,7 @@ defmodule VutuvWeb.UserHTML do
   @doc """
   The profile's private-save toggle — bookmark or like *this member* — as the
   twin of the post card's bookmark and heart: the same glyph, the same fill-on-
-  active language, one click, in the footer row of the header card. It used to
+  active language, one click, at the end of the header card's counts row. It used to
   be an item in the header's ⋯ menu, where saving a profile cost two taps and
   looked nothing like the act everyone already knows from a post.
 
@@ -403,7 +403,7 @@ defmodule VutuvWeb.UserHTML do
   is the whole confirmation: the glyph fills, `aria-pressed` flips, and the
   label swaps between "Bookmark" and "Remove bookmark". Icon-only, so that
   label rides `title` + `aria-label`; it is a full 40px touch target because it
-  stands alone in a footer row rather than in the post bar's dense cluster.
+  stands at the end of the counts row rather than in the post bar's dense cluster.
 
   `kind` picks the pair of events the profile LiveView handles
   (`bookmark_user` / `unbookmark_user`, `like_user` / `unlike_user`); keep the
@@ -464,13 +464,17 @@ defmodule VutuvWeb.UserHTML do
 
   @doc """
   The profile header's **follower / following / connection counts** as one
-  wrapping row of links.
+  row of links that never wraps.
 
   A counter whose total is 0 is left out entirely: a bare "0 followers" says
   nothing, and three zeroes say nothing three times. The `extra` slot takes
   whatever an arrangement wants to ride along at the end of the row (the
   follow-back chip, the save glyphs), so the counts markup exists once no
   matter how many of them there are.
+
+  Below `md` the connections count leaves the row: the save glyphs ride its
+  end there, and the three numbers plus a chip plus three 40px glyphs do not
+  fit a phone. Its page stays one tap away on every connection list.
   """
   attr(:user, :any, required: true)
   attr(:follower_count, :integer, required: true)
@@ -483,11 +487,19 @@ defmodule VutuvWeb.UserHTML do
   def profile_counts(assigns) do
     ~H"""
     <div id="profile-counts" class={["flex items-center gap-x-2 text-sm sm:gap-x-6", @class]}>
-      <.link :if={@follower_count > 0} href={~p"/#{@user}/followers"} class={count_link_class()}>
+      <.link
+        :if={@follower_count > 0}
+        href={~p"/#{@user}/followers"}
+        class={[count_link_class(), "shrink-[100]"]}
+      >
         <span class={count_number_class()}>{compact_count(@follower_count)}</span>
         <span class={count_label_class()}>{ngettext("follower", "followers", @follower_count)}</span>
       </.link>
-      <.link :if={@followee_count > 0} href={~p"/#{@user}/following"} class={count_link_class()}>
+      <.link
+        :if={@followee_count > 0}
+        href={~p"/#{@user}/following"}
+        class={[count_link_class(), "shrink"]}
+      >
         <span class={count_number_class()}>{compact_count(@followee_count)}</span>
         <span class={count_label_class()}>{gettext("following")}</span>
       </.link>
@@ -495,7 +507,7 @@ defmodule VutuvWeb.UserHTML do
         :if={@connection_count > 0}
         id="profile-connections"
         href={~p"/#{@user}/connections"}
-        class={[count_link_class(), "shrink-[100]"]}
+        class={[count_link_class(), "shrink-[10000] max-md:hidden"]}
       >
         <span class={count_number_class()}>{compact_count(@connection_count)}</span>
         <span class={count_label_class()}>
@@ -517,19 +529,23 @@ defmodule VutuvWeb.UserHTML do
   # Flex distributes shrinkage in proportion to weight * width, so equal
   # weights nibble every label at once and "31 folgt" — five letters against a
   # two-digit number — loses its word first, which is the least useful place to
-  # save the pixels. The lopsided pair (`shrink-[0.01]` on the two short links,
-  # `shrink-[100]` on the connections one) spends the longest German word
-  # first: at a 374px viewport the row reads "5 Follower · 31 folgt · 4 Ver… ·
-  # ✓ Folgt Ihnen", all four on one line. Only once "Vernetzungen" is spent do
-  # the other two give a pixel, which is what keeps a 320px phone from
-  # overflowing the card instead of clipping a word (measured: 0px overflow at
-  # a 240px card body, where the connections label is down to nothing).
-  defp count_link_class, do: "flex min-w-0 shrink-[0.01] items-baseline gap-1 hover:underline"
+  # save the pixels. So the weights are lopsided, one scale at every width:
+  # "Vernetzungen" (10000) is spent first, then "Follower" (100), and "folgt"
+  # (1) last. At a 374px viewport the row used to read "5 Follower · 31 folgt ·
+  # 4 Ver… · ✓ Folgt Ihnen", and a 320px phone clips a word instead of
+  # overflowing the card.
+  #
+  # The smallest weight is a whole 1 on purpose. Below `md` the connections
+  # link is hidden (the save glyphs need its room), and when the remaining
+  # weights add up to less than 1, flex hands out only that fraction of the
+  # shortfall: with the two short links at the old 0.01 each it absorbed 2 % of
+  # it and the row ran 12px past the card edge at 390px with the chip showing.
+  defp count_link_class, do: "flex min-w-0 items-baseline gap-1 hover:underline"
   defp count_number_class, do: "shrink-0 font-bold text-slate-900 dark:text-white"
   defp count_label_class, do: "min-w-0 truncate text-slate-600 dark:text-slate-400"
 
   @doc """
-  The **vCard download** in the profile header's footer.
+  The **vCard download** at the end of the profile header's counts row.
 
   A 40px glyph on a phone, where it stands in a row with the bookmark and the
   heart and the word would not fit; the word comes back from `sm` up. The
@@ -630,7 +646,7 @@ defmodule VutuvWeb.UserHTML do
 
   `icon_only?` renders the envelope alone (a 40px square beside the Follow
   button, where two text buttons plus a 96px avatar do not fit a phone row);
-  the label then rides `title` + `aria-label`, as on the footer's save toggles.
+  the label then rides `title` + `aria-label`, as on the counts row's save toggles.
   """
   attr(:id, :string, required: true)
   attr(:user, :any, required: true)

@@ -459,10 +459,14 @@ html[data-nav-pressing] main {
      cancels it with a margin so that a device reporting an inset is cancelled
      as exactly as one reporting none. The two spellings have to move together;
      `gutter_class/0`'s doc says so and `feed_edge_to_edge_test.exs` fails if
-     they drift. */
-  [data-timeline-flush] {
+     they drift. The profile's grid (further down) cancels the same gutter. */
+  [data-timeline-flush],
+  [data-profile-edge] {
     --flush-gutter-left: max(1rem, env(safe-area-inset-left));
     --flush-gutter-right: max(1rem, env(safe-area-inset-right));
+  }
+
+  [data-timeline-flush] {
     padding: 1rem 0;
   }
 
@@ -486,7 +490,12 @@ html[data-nav-pressing] main {
 
   /* The side padding the card gave up, on each ROW, so the hairline between two
      posts reaches both edges of the screen instead of stopping short of them. */
-  [data-timeline-flush] > [data-timeline-rows] > * {
+  /* Anything else the card holds above or below its rows (a title, a composer,
+     filter tabs, a pinned post) takes that padding back for itself. The feed's
+     and a post page's cards hold nothing but rows; the profile's Posts card
+     holds all four. */
+  [data-timeline-flush] > [data-timeline-rows] > *,
+  [data-timeline-flush] > :not([data-timeline-rows]) {
     padding-left: var(--flush-gutter-left);
     padding-right: var(--flush-gutter-right);
   }
@@ -598,6 +607,65 @@ html[data-nav-pressing] main {
     margin-left: 0;
     margin-right: 0;
     border-radius: var(--radius-lg);
+  }
+
+  /* The profile runs edge to edge too, every card of it (Stefan chose it from
+     a demo of seven ways to join two cards, 2026-09-18). The page cancels the
+     gutter once, here, instead of every card pulling itself out: the follower
+     pair stands side by side from 640px, and two cards each reaching for both
+     screen edges would overlap in the middle.
+
+     No band, no line and no shadow between two cards: the page reads as one
+     surface, and what opens a section is its own title, with about 45px of air
+     above it against 16px below, so the title belongs to what follows. That
+     only holds while every card starts with one — all of today's do. The grid
+     and the follower pair have no gap below md for the same reason; that is
+     their utilities (`md:gap-6`), not a rule here.
+
+     Each card keeps a gutter's worth of side padding (the same expression the
+     page pads with, so a display cutout is cleared as it is everywhere else),
+     and gives up its rounding and its ring, which is a box-shadow. The cover
+     photo inherits the header's corners, so it squares with it. */
+  [data-profile-edge] {
+    margin-left: calc(-1 * var(--flush-gutter-left));
+    margin-right: calc(-1 * var(--flush-gutter-right));
+  }
+
+  [data-profile-edge] :is([data-card], [data-profile-header], [data-profile-band]) {
+    border-radius: 0;
+    box-shadow: none;
+  }
+
+  [data-profile-edge] [data-card] {
+    padding: 1.25rem var(--flush-gutter-right) 1.25rem var(--flush-gutter-left);
+  }
+
+  /* A notice that is not a card (the owner's moderation strip, the onboarding
+     checklist) turns into a band of its colour and keeps its own height. */
+  [data-profile-edge] [data-profile-band] {
+    padding-left: var(--flush-gutter-left);
+    padding-right: var(--flush-gutter-right);
+  }
+
+  [data-profile-edge] [data-profile-header-body] {
+    padding: 0 var(--flush-gutter-right) 1.25rem var(--flush-gutter-left);
+  }
+
+  /* The Posts card is a timeline as well (`<.card flush>`), so the block above
+     already hands its side padding to each row and to what sits above them,
+     and lets a lone picture break out to the edge. The one thing it must not
+     do here is cancel the gutter a second time: the page has done that. The
+     pinned post squares its corners and keeps its ring, whose sides then fall
+     off the screen, as the feed card's own do. */
+  [data-profile-edge] [data-timeline-flush] {
+    margin-left: 0;
+    margin-right: 0;
+    padding-left: 0;
+    padding-right: 0;
+  }
+
+  [data-profile-edge] [data-timeline-flush] > [data-pinned-post] {
+    border-radius: 0;
   }
 }
 

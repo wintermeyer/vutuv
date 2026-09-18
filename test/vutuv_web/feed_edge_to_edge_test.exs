@@ -31,8 +31,8 @@ defmodule VutuvWeb.FeedEdgeToEdgeTest do
   the two timelines a reader arrives *at* ask for — `/feed` and a post's own
   page — while the carded post lists that are a section among others (the posts
   archive, the saved hub, a tag timeline) keep the inset reading, and the
-  archive is what the scope test renders — a profile's Posts section would pass
-  either way, being `card={false}` and inset under any rule.
+  archive is what the scope test renders. The profile runs edge to edge as a
+  whole, its Posts card included; `profile_edge_to_edge_test.exs` covers it.
 
   The action bar is the last piece and the one a reader reported: four controls
   of a fixed size in a column that every level of a conversation narrows, which
@@ -144,7 +144,7 @@ defmodule VutuvWeb.FeedEdgeToEdgeTest do
 
       for selector <- [
             "[data-timeline-flush] {",
-            "[data-timeline-flush] > [data-timeline-rows] > * {",
+            "[data-timeline-flush] > [data-timeline-rows] > *,",
             "[data-card-head] {",
             "[data-card-head] > [data-card-column] {",
             "[data-conversation] [data-card-head],",
