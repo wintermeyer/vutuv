@@ -1,7 +1,7 @@
-<.email_layout preheader="La Sua pubblicità è annullata" locale={@locale}>
+<.email_layout preheader="La tua pubblicità è annullata" locale={@locale}>
   <.email_p>{email_greeting(@user)},</.email_p>
   <.email_p>
-    abbiamo annullato la Sua pubblicità per il {@day}:
+    abbiamo annullato la tua pubblicità per il {@day}:
   </.email_p>
   <.email_panel>
     <.email_row label="Titolo">{@ad.title}</.email_row>
@@ -9,8 +9,8 @@
     <.email_row label="Link">{@ad.url}</.email_row>
   </.email_panel>
   <.email_p>
-    Quel giorno non andrà online e il giorno è di nuovo libero. Se ha già ricevuto una fattura, Le emetteremo una nota di credito.
+    Quel giorno non andrà online e il giorno è di nuovo libero. Se hai già ricevuto una fattura, ti emetteremo una nota di credito.
   </.email_p>
-  <.email_button href={"#{@url}system/ads/bookings"}>Le Sue prenotazioni</.email_button>
+  <.email_button href={"#{@url}system/ads/bookings"}>Le tue prenotazioni</.email_button>
   <.email_signature locale={@locale} />
 </.email_layout>

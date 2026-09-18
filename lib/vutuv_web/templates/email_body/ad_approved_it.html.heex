@@ -1,7 +1,7 @@
-<.email_layout preheader="La Sua pubblicità è approvata" locale={@locale}>
+<.email_layout preheader="La tua pubblicità è approvata" locale={@locale}>
   <.email_p>{email_greeting(@user)},</.email_p>
   <.email_p>
-    la Sua pubblicità per il {@day} è approvata e quel giorno comparirà sui profili e nel feed:
+    la tua pubblicità per il {@day} è approvata e quel giorno comparirà sui profili e nel feed:
   </.email_p>
   <.email_panel>
     <.email_row label="Titolo">{@ad.title}</.email_row>
@@ -9,8 +9,8 @@
     <.email_row label="Link">{@ad.url}</.email_row>
   </.email_panel>
   <.email_p>
-    Con l'approvazione la prenotazione è vincolante. Da quel giorno può vedere qui quante volte la Sua pubblicità è stata vista e cliccata:
+    Con l'approvazione la prenotazione è vincolante. Da quel giorno puoi vedere qui quante volte la tua pubblicità è stata vista e cliccata:
   </.email_p>
-  <.email_button href={"#{@url}system/ads/bookings"}>Le Sue prenotazioni</.email_button>
+  <.email_button href={"#{@url}system/ads/bookings"}>Le tue prenotazioni</.email_button>
   <.email_signature locale={@locale} />
 </.email_layout>

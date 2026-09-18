@@ -1,7 +1,7 @@
-<.email_layout preheader="La Sua pubblicità non andrà online" locale={@locale}>
+<.email_layout preheader="La tua pubblicità non andrà online" locale={@locale}>
   <.email_p>{email_greeting(@user)},</.email_p>
   <.email_p>
-    purtroppo non possiamo pubblicare la Sua pubblicità per il {@day}:
+    purtroppo non possiamo pubblicare la tua pubblicità per il {@day}:
   </.email_p>
   <.email_panel>
     <.email_row label="Titolo">{@ad.title}</.email_row>
@@ -12,7 +12,7 @@
     La nostra motivazione: {@ad.rejection_reason}
   </.email_p>
   <.email_p>
-    La prenotazione è quindi annullata, non paga nulla e il giorno è di nuovo libero. Può prenotare una nuova pubblicità qui:
+    La prenotazione è quindi annullata, non paghi nulla e il giorno è di nuovo libero. Puoi prenotare una nuova pubblicità qui:
   </.email_p>
   <.email_button href={"#{@url}system/ads/new"}>Prenota una nuova pubblicità</.email_button>
   <.email_signature locale={@locale} />
