@@ -141,24 +141,22 @@ defmodule VutuvWeb.UserControllerTest do
     assert html_response(conn, 200) =~ user.first_name
   end
 
-  test "profile shows how long the account has been a member", %{conn: conn} do
-    # Older account: just the year (the join month adds nothing once a profile
-    # is a few years old).
+  test "profile header leaves out the join date", %{conn: conn} do
+    # The join date said little and cost the header card a line on a phone, so
+    # the card no longer shows it, in any locale. The agent formats keep it as
+    # a fact, where it costs no room.
     user = insert_activated_user(inserted_at: ~N[2008-02-15 10:00:00])
 
     html = conn |> get(~p"/#{user}") |> html_response(200)
-    assert html =~ "Member since 2008"
-    refute html =~ "Member since February 2008"
-  end
+    refute html =~ "Member since"
 
-  test "profile spells out the join month for accounts created this year", %{conn: conn} do
-    today = Date.utc_today()
-    inserted_at = NaiveDateTime.new!(today.year, today.month, 1, 12, 0, 0)
-    user = insert_activated_user(inserted_at: inserted_at)
+    de_html =
+      build_conn()
+      |> put_req_header("accept-language", "de-DE,de")
+      |> get(~p"/#{user}")
+      |> html_response(200)
 
-    html = conn |> get(~p"/#{user}") |> html_response(200)
-    month = Calendar.strftime(today, "%B")
-    assert html =~ "Member since #{month} #{today.year}"
+    refute de_html =~ "Mitglied seit"
   end
 
   test "profile hides a zero follower/following counter", %{conn: conn} do
@@ -208,17 +206,17 @@ defmodule VutuvWeb.UserControllerTest do
     assert follower_at < chip_at
   end
 
-  test "with no followers or following, the counts row is gone but Member since still shows",
+  test "with no followers or following, the counts row is gone but the vCard link still shows",
        %{conn: conn} do
-    # "Member since" always anchors the footer row (left of the vCard action),
-    # whether or not there is a counts row above it.
-    user = insert_activated_user(inserted_at: ~N[2008-02-15 10:00:00])
+    # The footer row carries the vCard action whether or not there is a counts
+    # row above it.
+    user = insert_activated_user()
 
     html = conn |> get(~p"/#{user}") |> html_response(200)
 
     refute html =~ ~p"/#{user}/followers"
     refute html =~ ~p"/#{user}/following"
-    assert html =~ "Member since 2008"
+    assert html =~ "/#{user.username}.vcf"
   end
 
   test "profile uses the content+rail columns from tablet widths up", %{conn: conn} do

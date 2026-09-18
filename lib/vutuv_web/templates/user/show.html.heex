@@ -108,7 +108,6 @@ the resulting ~200px rail width. --%>
       rare or heavy. Action controls are per-viewer and never appear in the
       agent-format ProfileDoc, so none of this needs a doc change. --%>
       <div class="px-6 pb-6">
-        <% member_since = member_since(@user) %>
         <% can_act? = @current_user != nil and not same_user?(@user, @current_user) %>
         <%!-- Exactly the viewer the cond's `can_act?` branch below reaches: a
         signed-in member looking at somebody else, who is not the owner, has not
@@ -384,25 +383,19 @@ the resulting ~200px rail width. --%>
           </:extra>
         </.profile_counts>
 
-        <%!-- Footer: one row that never wraps. "Member since" holds the left
-        and truncates rather than pushing anything down; the three things a
-        viewer can DO here — download, bookmark, like — line up as equal 40px
-        glyphs on the right, where a thumb rests and where the same two glyphs
-        sit under every post. It used to be a `flex-wrap` row, which on a phone
-        dropped the two save glyphs onto a line of their own, right-aligned
-        under an empty band. The vCard gets its word back from `sm` up, where
-        there is room for it. Member-since and vCard are universal (owner and
-        logged-out visitor included); the toggles need a logged-in non-owner
-        who has not blocked this member, the same guard the ⋯ menu carries. --%>
-        <div class="mt-4 flex items-center gap-1 border-t border-slate-100 pt-3 dark:border-slate-800">
-          <.member_since_line :if={member_since} value={member_since} class="my-0 min-w-0 truncate" />
-          <div class="ml-auto flex shrink-0 items-center gap-0.5 sm:gap-1">
-            <.profile_vcard_link path={vcard_path} />
-            <%= if show_saves? do %>
-              <.profile_save_toggle kind={:bookmark} active?={bookmarked?} />
-              <.profile_save_toggle kind={:like} active?={liked?} />
-            <% end %>
-          </div>
+        <%!-- Footer: the three things a viewer can DO here — download,
+        bookmark, like — line up as equal 40px glyphs on the right, where a
+        thumb rests and where the same two glyphs sit under every post. The
+        vCard gets its word back from `sm` up, where there is room for it. The
+        vCard is universal (owner and logged-out visitor included); the toggles
+        need a logged-in non-owner who has not blocked this member, the same
+        guard the ⋯ menu carries. --%>
+        <div class="mt-4 flex items-center gap-1 border-t border-slate-100 pt-3 dark:border-slate-800 justify-end">
+          <.profile_vcard_link path={vcard_path} />
+          <%= if show_saves? do %>
+            <.profile_save_toggle kind={:bookmark} active?={bookmarked?} />
+            <.profile_save_toggle kind={:like} active?={liked?} />
+          <% end %>
         </div>
       </div>
     </section>

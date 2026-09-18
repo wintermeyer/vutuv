@@ -1,6 +1,6 @@
 defmodule VutuvWeb.UserHTMLTest do
   @moduledoc """
-  Covers the "Member since" label rendered in the profile header: just the
+  Covers the "Member since" label on the profile's share card: just the
   year for older accounts, the spelled-out month for accounts created in the
   current year (where a bare year would read oddly for a fresh profile).
   """

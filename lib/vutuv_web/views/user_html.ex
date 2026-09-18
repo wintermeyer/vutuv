@@ -301,32 +301,6 @@ defmodule VutuvWeb.UserHTML do
   def member_since(_user), do: nil
 
   @doc """
-  The "Member since" line (calendar icon + label). Rendered in two spots on the
-  profile: right-aligned on the counts row, or moved up under the work line
-  when the account has no followers and no following. `class` positions it.
-  """
-  attr(:value, :string, required: true)
-  attr(:class, :string, default: nil)
-
-  def member_since_line(assigns) do
-    ~H"""
-    <%!-- `slate-400` and not the `slate-500` that mirrors the light side:
-    `slate-500` on a dark card is 3.7:1, under AA, and this is 14px prose
-    rather than a glyph. --%>
-    <p class={["flex items-center gap-1.5 text-sm text-slate-600 dark:text-slate-400", @class]}>
-      <svg class="h-4 w-4 shrink-0" fill="none" stroke="currentColor" stroke-width="1.8" viewBox="0 0 24 24">
-        <path stroke-linecap="round" stroke-linejoin="round" d="M6.75 3v2.25M17.25 3v2.25M3 18.75V7.5a2.25 2.25 0 0 1 2.25-2.25h13.5A2.25 2.25 0 0 1 21 7.5v11.25m-18 0A2.25 2.25 0 0 0 5.25 21h13.5A2.25 2.25 0 0 0 21 18.75m-18 0v-7.5A2.25 2.25 0 0 1 5.25 9h13.5A2.25 2.25 0 0 1 21 11.25v7.5" />
-      </svg>
-      <%!-- `min-w-0 truncate` on the text, not on the <p>: the <p> is a flex
-      row, so text-overflow set on it never reaches the string. Without this
-      the line's min-content is a whole "Mitglied seit Juli 2026" and it pushes
-      the footer's glyph cluster off a 374px phone. --%>
-      <span class="min-w-0 truncate">{@value}</span>
-    </p>
-    """
-  end
-
-  @doc """
   The profile header's picture, and the click that opens it at full size
   (issue #1528).
 
@@ -495,8 +469,8 @@ defmodule VutuvWeb.UserHTML do
   A counter whose total is 0 is left out entirely: a bare "0 followers" says
   nothing, and three zeroes say nothing three times. The `extra` slot takes
   whatever an arrangement wants to ride along at the end of the row (the
-  follow-back chip, the "Member since" line, the save glyphs), so the counts
-  markup exists once no matter how many of them there are.
+  follow-back chip, the save glyphs), so the counts markup exists once no
+  matter how many of them there are.
   """
   attr(:user, :any, required: true)
   attr(:follower_count, :integer, required: true)
