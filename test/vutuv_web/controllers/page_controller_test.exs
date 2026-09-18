@@ -329,109 +329,64 @@ defmodule VutuvWeb.PageControllerTest do
     end
   end
 
-  describe "GET / sign-up opt-in checkboxes" do
-    # All three opt-in boxes on the sign-up form are framed positively (you
-    # grant a permission by checking) and all three start CHECKED. Showing the
-    # address on your profile is what most members want, so the sign-up form now
-    # defaults the email-visibility box ON; the schema default stays private, so
-    # any other code path that creates an email without a choice still keeps it
-    # private. Being findable is the point of the product, so the indexing box
-    # stays checked; it is wired to the inverted `noindex?` field: checked means
-    # "allow indexing" (noindex? = false). The AI box works the same way on the
-    # inverted `noai?` field.
-    test "are positively framed and all checked by default", %{conn: conn} do
-      body = conn |> get(~p"/") |> html_response(200)
+  describe "GET / sign-up" do
+    # The form is three steps now (`VutuvWeb.RegistrationLive`), so most of what
+    # this file used to assert about it lives in
+    # `test/vutuv_web/live/registration_live_test.exs`, where a test can reach
+    # steps 2 and 3. What stays here is what the landing page itself owes: the
+    # first step is really on it, and the consent line is beside the button that
+    # creates the account.
+    test "carries the sign-up form itself, on its first step", %{conn: conn} do
+      doc = conn |> get(~p"/") |> html_response(200) |> LazyHTML.from_document()
 
-      # Positive, parallel phrasing; the old negative "Prevent ..." copy is gone.
-      assert body =~ "Allow others to view your email address"
-      assert body =~ "Allow search engines to index your profile"
-      assert body =~ "Allow AI agents and LLMs to use your profile"
-      refute body =~ "Prevent search engines from indexing your profile"
+      assert [_] = Enum.to_list(LazyHTML.query(doc, "#registration-form"))
 
-      assert checkbox_checked?(body, "user[emails][0][public?]")
-      assert checkbox_checked?(body, "user[noindex?]")
-      assert checkbox_checked?(body, "user[noai?]")
+      assert [_] =
+               Enum.to_list(LazyHTML.query(doc, ~s(#registration-form [name="step[first_name]"])))
+
+      assert [_] = Enum.to_list(LazyHTML.query(doc, ~s(#registration-form [name="step[email]"])))
     end
 
-    # The email-type chooser is a radio group (clearer for a normal user than
-    # the old dropdown, whose unhelpful "Other" default it replaces). It reads
-    # Privat, Arbeit, Andere - the order of Vutuv.Accounts.Email.email_types/0 -
-    # and preselects "Personal", the address most people sign up with.
-    test "email type is a Personal-preselected radio group", %{conn: conn} do
+    # Safari's AutoFill on macOS and iOS offers a form the user's own contact
+    # card only where the fields say what they hold: it reads the `autocomplete`
+    # tokens, and to a browser `step[first_name]` is otherwise an anonymous text
+    # box. Chrome and Firefox read the same tokens, so this is the whole feature
+    # for all three.
+    test "the name and email fields carry the autofill tokens", %{conn: conn} do
       body = conn |> get(~p"/") |> html_response(200)
 
-      assert radio_checked?(body, "user[emails][0][email_type]", "Personal")
-      refute radio_checked?(body, "user[emails][0][email_type]", "Work")
-      refute radio_checked?(body, "user[emails][0][email_type]", "Other")
-
-      # Order matters as much as the default: the private option comes first.
-      assert [{"Personal", _}, {"Work", _}, {"Other", _}] =
-               Regex.scan(~r/value="(Personal|Work|Other)"/, body)
-               |> Enum.map(fn [whole, value] -> {value, whole} end)
+      assert autocomplete(body, "step[first_name]") == "given-name"
+      assert autocomplete(body, "step[last_name]") == "family-name"
+      assert autocomplete(body, "step[email]") == "email"
     end
 
-    # The gender question is the membership statistic, and it is the field
-    # members complained about in its first incarnation. What must never come
-    # back is the shape, not the word: preselected, in front of the name, and
-    # unexplained.
-    test "the gender radio group preselects nothing", %{conn: conn} do
+    # Every field is labelled, and every label is really bound to its field.
+    # The form used to label its two radio groups and leave the text fields to
+    # placeholders — which vanish the moment you type, are not an accessible
+    # name, and made half the form look titled and half of it not.
+    test "every text field has a label bound to it", %{conn: conn} do
+      doc = conn |> get(~p"/") |> html_response(200) |> LazyHTML.from_document()
+
+      for name <- ["step[first_name]", "step[last_name]", "step[email]"] do
+        assert [id] =
+                 doc
+                 |> LazyHTML.query(~s(#registration-form [name="#{name}"]))
+                 |> LazyHTML.attribute("id")
+
+        assert [_] = Enum.to_list(LazyHTML.query(doc, ~s(label[for="#{id}"]))),
+               "#{name} has no <label for> pointing at it"
+      end
+    end
+
+    # The email type is no longer a question. Of the addresses given at sign-up
+    # 68.5% were marked Personal anyway, and which label an address carries is
+    # the least useful thing to ask somebody who is still deciding whether to
+    # join at all; `/settings/emails` changes it in one click afterwards.
+    test "does not ask what kind of address it is, and files it as Personal", %{conn: conn} do
       body = conn |> get(~p"/") |> html_response(200)
 
-      refute radio_checked?(body, "user[gender]", "female")
-      refute radio_checked?(body, "user[gender]", "male")
-      refute radio_checked?(body, "user[gender]", "diverse")
-      refute radio_checked?(body, "user[gender]", "")
-    end
-
-    test "the gender question offers all three answers and a way to decline",
-         %{conn: conn} do
-      body = conn |> get(~p"/") |> html_response(200)
-
-      assert body =~ ~s(name="user[gender]")
-      assert body =~ ~s(value="female")
-      assert body =~ ~s(value="male")
-      assert body =~ ~s(value="diverse")
-      assert body =~ "Prefer not to say"
-    end
-
-    test "the gender question is asked after the name, not before it", %{conn: conn} do
-      body = conn |> get(~p"/") |> html_response(200)
-
-      assert :binary.match(body, ~s(name="user[first_name]")) <
-               :binary.match(body, ~s(name="user[gender]"))
-    end
-
-    # The German render, because that is what real visitors get and an English
-    # check would pass over a missing or fuzzy-filled translation.
-    test "the gender question renders in German", %{conn: conn} do
-      body =
-        conn
-        |> put_req_header("accept-language", "de-DE,de")
-        |> get(~p"/")
-        |> html_response(200)
-
-      assert body =~ "Geschlecht"
-      assert body =~ "Weiblich"
-      assert body =~ "Männlich"
-      assert body =~ "Divers"
-      assert body =~ "Keine Angabe"
-    end
-
-    # The same rule one block down: a property is answered after the thing it
-    # belongs to. The type used to sit above the address field, so the form
-    # asked how to classify an address before asking for one — and it was the
-    # only property of the address not sitting under it, since the visibility
-    # checkbox always has.
-    test "the email address is asked before its type and its visibility",
-         %{conn: conn} do
-      body = conn |> get(~p"/") |> html_response(200)
-
-      address = :binary.match(body, ~s(name="user[emails][0][value]"))
-      type = :binary.match(body, ~s(name="user[emails][0][email_type]"))
-      public = :binary.match(body, ~s(name="user[emails][0][public?]"))
-
-      assert address < type
-      assert type < public
+      refute body =~ "Type of email address"
+      assert body =~ ~s(name="user[emails][0][email_type]" value="Personal")
     end
 
     # The consent line by the submit button accepts the Nutzungsbedingungen
@@ -443,92 +398,6 @@ defmodule VutuvWeb.PageControllerTest do
       assert body =~ ~s(href="/nutzungsbedingungen")
       assert body =~ ~s(href="/datenschutzerklaerung")
       assert body =~ "accept our"
-    end
-  end
-
-  describe "GET / sign-up form layout" do
-    # Safari's AutoFill on macOS and iOS offers a form the user's own contact
-    # card only where the fields say what they hold: it reads the `autocomplete`
-    # tokens, and to a browser `user[first_name]` is otherwise an anonymous text
-    # box. Chrome and Firefox read the same tokens, so this is the whole feature
-    # for all three. Only fields that exist on a contact card get one — the tag
-    # box says `off`, since no address book holds a list of skills and a
-    # suggestion there would be noise on the field members most need to think
-    # about.
-    test "the name and email fields carry the autofill tokens", %{conn: conn} do
-      body = conn |> get(~p"/") |> html_response(200)
-
-      assert autocomplete(body, "user[first_name]") == "given-name"
-      assert autocomplete(body, "user[last_name]") == "family-name"
-      assert autocomplete(body, "user[emails][0][value]") == "email"
-      assert autocomplete(body, "user[tag_list]") == "off"
-    end
-
-    # Every field is labelled, and every label is really bound to its field.
-    # The form used to label its two radio groups and leave the text fields to
-    # placeholders — which vanish the moment you type, are not an accessible
-    # name, and made half the form look titled and half of it not.
-    test "every text field has a label bound to it", %{conn: conn} do
-      doc = conn |> get(~p"/") |> html_response(200) |> LazyHTML.from_document()
-
-      for name <- [
-            "user[first_name]",
-            "user[last_name]",
-            "user[emails][0][value]",
-            "user[tag_list]"
-          ] do
-        assert [id] =
-                 doc
-                 |> LazyHTML.query(~s(#registration-form [name="#{name}"]))
-                 |> LazyHTML.attribute("id")
-
-        assert [_] = Enum.to_list(LazyHTML.query(doc, ~s(label[for="#{id}"]))),
-               "#{name} has no <label for> pointing at it"
-      end
-    end
-
-    # One home for the visibility choices. The email address's own "may others
-    # see it" box used to sit up beside the address while the other three sat in
-    # a block of their own, so four identical-looking checkboxes appeared in two
-    # unrelated places on one short form.
-    #
-    # What keeps it that way is the second half: no checkbox may float LOOSE in
-    # this form. It used to be spelt "every checkbox is in the Privacy
-    # fieldset", which was the same sentence while privacy was the only thing
-    # the form asked with a box. Low-bandwidth mode is not a visibility choice,
-    # so rather than a second group of one it sits with the others under a
-    # legend that covers both — "Settings" (Stefan, 2026-09-03) — and the rule
-    # is the one it always meant: every box belongs to one named group.
-    test "every checkbox sits in the one named fieldset", %{conn: conn} do
-      doc = conn |> get(~p"/") |> html_response(200) |> LazyHTML.from_document()
-
-      in_settings =
-        doc
-        |> LazyHTML.query(~s(#signup-settings input[type="checkbox"]))
-        |> LazyHTML.attribute("name")
-
-      assert "user[emails][0][public?]" in in_settings
-      assert "user[noindex?]" in in_settings
-      assert "user[noai?]" in in_settings
-      assert "user[fediverse_followers?]" in in_settings
-      assert "user[low_bandwidth?]" in in_settings
-
-      in_form =
-        doc
-        |> LazyHTML.query(~s(#registration-form input[type="checkbox"]))
-        |> LazyHTML.attribute("name")
-
-      in_a_fieldset =
-        doc
-        |> LazyHTML.query(~s(#registration-form fieldset input[type="checkbox"]))
-        |> LazyHTML.attribute("name")
-
-      assert Enum.sort(in_form) == Enum.sort(in_a_fieldset)
-
-      # And that group says what it is, or the grouping is invisible to the
-      # person reading the form.
-      assert [_] = Enum.to_list(LazyHTML.query(doc, ~s(#signup-settings > legend))),
-             "the signup-settings fieldset has no legend"
     end
   end
 
@@ -755,10 +624,12 @@ defmodule VutuvWeb.PageControllerTest do
       refute body =~ "At least three tags, separated by commas."
     end
 
-    test "a fresh form shows the hint and no error chrome", %{conn: conn} do
+    # The topics field and its hint are on step 3 now, so what a fresh landing
+    # page owes is the absence of error chrome: nothing is marked and nothing is
+    # complained about before anybody has typed.
+    test "a fresh form shows no error chrome", %{conn: conn} do
       body = conn |> get(~p"/") |> html_response(200)
 
-      assert body =~ "At least three tags, separated by commas."
       refute body =~ "Please check the fields marked in red."
       refute body =~ ~s(aria-invalid="true")
       refute body =~ "border-red-400"

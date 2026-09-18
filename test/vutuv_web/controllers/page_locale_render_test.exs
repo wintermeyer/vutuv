@@ -43,44 +43,9 @@ defmodule VutuvWeb.PageLocaleRenderTest do
     assert html =~ "Mit der Registrierung akzeptieren Sie"
   end
 
-  test "the gender question is really translated, not fuzzy-filled", %{conn: conn} do
-    # `mix gettext.extract --merge` fills a brand-new msgid with the translation
-    # of whatever existing string it looks similar to, flags it `fuzzy`, and
-    # fails no build — so a German page can ship confident nonsense while every
-    # English assertion stays green. This field walked straight into it:
-    # "Diverse" came back as "Trennlinie" and "Male" as "Maltesisch". One-word
-    # labels are what that matcher gets wrong, so every one of them is asserted
-    # here by name in the German render.
-    html =
-      conn
-      |> put_req_header("accept-language", "de-DE,de;q=0.9")
-      |> get(~p"/")
-      |> html_response(200)
-
-    gender = fieldset_text(html, "#signup-gender")
-
-    assert gender =~ "Geschlecht"
-    assert gender =~ "Weiblich"
-    assert gender =~ "Männlich"
-    assert gender =~ "Divers"
-    assert gender =~ "Keine Angabe"
-
-    # The two labels that were fuzzy-filled with unrelated words. Naming them
-    # keeps the regression identifiable if anyone re-runs the merge and takes
-    # the suggestion.
-    refute gender =~ "Trennlinie"
-    refute gender =~ "Maltesisch"
-  end
-
-  # The text of one fieldset on the rendered page. `query/2`, never `filter/2`:
-  # on a whole document `filter/2` only matches root nodes, so it would return
-  # an empty set and make every refute below pass without looking at anything.
-  defp fieldset_text(html, selector) do
-    html
-    |> LazyHTML.from_document()
-    |> LazyHTML.query(selector)
-    |> LazyHTML.text()
-  end
+  # The gender question moved to step 2 of the sign-up wizard, so its
+  # fuzzy-fill guard lives with the other step-2 promises in
+  # `test/vutuv_web/live/registration_live_test.exs`.
 
   test "split_marker/2 is total, so a botched translation can never 500 the page" do
     # Correct: one split into before/after.

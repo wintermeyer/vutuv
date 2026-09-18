@@ -392,3 +392,8 @@ msgstr ""
 #, elixir-autogen, elixir-format
 msgid "That file is larger than %{limit}. Please upload a smaller one."
 msgstr "Diese Datei ist größer als %{limit}. Bitte laden Sie eine kleinere hoch."
+
+#: lib/vutuv/accounts/user.ex:1276
+#, elixir-autogen, elixir-format
+msgid "First name or last name or nickname must be present"
+msgstr "Bitte geben Sie einen Vor- oder Nachnamen an."

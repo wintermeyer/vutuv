@@ -20,33 +20,13 @@ defmodule VutuvWeb.TagInputTest do
 
   alias Vutuv.Posts
 
-  # The widget root plus the field it wraps, for one form field name.
-  defp assert_tag_input(html, name) do
-    doc = LazyHTML.from_document(html)
-
-    assert [_] =
-             Enum.to_list(
-               LazyHTML.query(
-                 doc,
-                 ~s([data-tag-input] input[data-tag-input-field][name="#{name}"])
-               )
-             )
-  end
-
-  # The pill cap is opt-in per instance, so a surface without one must not
-  # inherit the composer's.
-  defp refute_pill_cap(html) do
-    doc = LazyHTML.from_document(html)
-
-    assert [] = Enum.to_list(LazyHTML.query(doc, "[data-tag-input][data-max]"))
-  end
-
-  test "the sign-up landing page", %{conn: conn} do
-    html = conn |> get(~p"/") |> html_response(200)
-
-    assert_tag_input(html, "user[tag_list]")
-    refute_pill_cap(html)
-  end
+  # The sign-up form is deliberately NOT on this list any more. Its topics step
+  # (`VutuvWeb.RegistrationLive`) says how many members carry each topic and how
+  # many the selection reaches, so the chosen topics have to live in socket
+  # state — and this component is `phx-update="ignore"` with its pills owned by
+  # the browser, which is the opposite arrangement. It keeps the same comma
+  # splitting (`Vutuv.Tags.parse_tag_names/1`), so what a member types behaves
+  # the same either way.
 
   test "both tag fields on the job posting form", %{conn: conn} do
     {conn, _user} = create_and_login_user(conn)

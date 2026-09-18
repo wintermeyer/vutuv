@@ -31,7 +31,9 @@ defmodule VutuvWeb.UserControllerTest do
 
   test "renders form for new resources", %{conn: conn} do
     conn = get(conn, ~p"/")
-    assert html_response(conn, 200) =~ "Sign up"
+    # The first of the three sign-up steps. Its button reads "Continue"; the
+    # one that says "Sign up" ends step 3.
+    assert html_response(conn, 200) =~ "Create your free account"
   end
 
   test "does not create resource and renders errors when data is invalid", %{conn: conn} do

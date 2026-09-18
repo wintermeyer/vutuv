@@ -542,6 +542,46 @@ defmodule Vutuv.Tags do
   end
 
   @doc """
+  How many listed members the typed `names` reach **together** — one integer,
+  nobody counted twice.
+
+  The sign-up form's answer to "what do I get for a third topic": the per-topic
+  counts beside each chip add up to more than the people behind them, because
+  one member carrying two of the topics is two rows and one person. Summing
+  `member_counts_by_name/1` would therefore promise a reach the click cannot
+  deliver, which is the whole reason this asks the database for a `DISTINCT`
+  rather than adding numbers the form already has.
+
+  Same gate and same resolution as its per-topic sibling: only members a tag
+  page would list, and a spelling variant answers for the topic it names.
+  """
+  def member_reach_by_name([]), do: 0
+
+  def member_reach_by_name(names) when is_list(names) do
+    names
+    |> resolved_entries()
+    |> Enum.flat_map(fn
+      {{:tag, id}, _name} -> [id]
+      {{:new, _key}, _name} -> []
+    end)
+    |> listed_member_reach()
+  end
+
+  # Nobody holds a topic that does not exist yet, and `tag_id in []` would ask
+  # the database that question anyway.
+  defp listed_member_reach([]), do: 0
+
+  defp listed_member_reach(tag_ids) do
+    from(ut in UserTag,
+      join: u in User,
+      on: u.id == ut.user_id,
+      where: ut.tag_id in ^tag_ids and account_confirmed_row(u) and not account_hidden_row(u),
+      select: count(ut.user_id, :distinct)
+    )
+    |> Repo.one()
+  end
+
+  @doc """
   Every listed tag of each of `users`, keyed by member — one query, no ordering.
 
   The unranked twin of `VutuvWeb.UserHelpers.tag_summary_map/2`, for a caller

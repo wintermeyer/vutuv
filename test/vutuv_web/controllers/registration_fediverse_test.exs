@@ -24,18 +24,40 @@ defmodule VutuvWeb.RegistrationFediverseTest do
   """
   use VutuvWeb.ConnCase, async: false
 
+  import Phoenix.LiveViewTest
+
   alias Vutuv.Accounts.User
   alias Vutuv.Fediverse
 
-  describe "GET /" do
-    test "offers the Fediverse box, ticked by default", %{conn: conn} do
-      body = conn |> get(~p"/") |> html_response(200)
+  describe "the settings step" do
+    # Sign-up is three steps now (`VutuvWeb.RegistrationLive`); this box sits on
+    # the second one, so these walk to it rather than reading the landing page.
+    defp settings_step(locale \\ "en") do
+      {:ok, view, _html} =
+        live_isolated(build_conn(), VutuvWeb.RegistrationLive,
+          session: %{"csrf_token" => "token", "locale" => locale}
+        )
+
+      render_change(view, "validate", %{
+        "step" => %{
+          "first_name" => "Egon",
+          "last_name" => "Müller",
+          "email" => "egon@example.com"
+        }
+      })
+
+      render_click(view, "next", %{})
+    end
+
+    test "offers the Fediverse box, ticked by default" do
+      body = settings_step()
 
       # The same sentence the switch on /settings/fediverse wears, so the
       # member recognizes what they are looking for when they want it back.
       assert body =~ "Take part in the Fediverse"
       assert body =~ "Mastodon"
-      assert checkbox_checked?(body, "user[fediverse_followers?]")
+      # And the hidden field the submit really carries says the same.
+      assert body =~ ~s(name="user[fediverse_followers?]" value="true")
     end
 
     # The one thing the tick is about, and the only sentence left on it: posts
@@ -48,8 +70,8 @@ defmodule VutuvWeb.RegistrationFediverseTest do
     # the box, since the sentence sits behind that page's `federated?/1` gate.
     # The line under this group's legend carries "changeable at any time" for
     # every box at once.
-    test "the box says that posts leave the site", %{conn: conn} do
-      body = conn |> get(~p"/") |> html_response(200)
+    test "the box says that posts leave the site" do
+      body = settings_step()
 
       assert body =~ "Your public posts then also appear on"
       assert body =~ "Can be changed at any time."
@@ -59,13 +81,9 @@ defmodule VutuvWeb.RegistrationFediverseTest do
     # know, so it links out - in BOTH languages. The German string carries the
     # {mastodon} placeholder too, and if it ever loses it `split_marker/2` fails
     # soft: no crash, no link, nobody notices. Hence an assertion per locale.
-    test "Mastodon links to the project's own site in either language", %{conn: conn} do
-      for locale <- ["en", "de-DE,de;q=0.9"] do
-        body =
-          conn
-          |> put_req_header("accept-language", locale)
-          |> get(~p"/")
-          |> html_response(200)
+    test "Mastodon links to the project's own site in either language" do
+      for locale <- ["en", "de"] do
+        body = settings_step(locale)
 
         assert body =~ ~s(href="https://joinmastodon.org")
         assert body =~ ">Mastodon</a>"
@@ -77,12 +95,8 @@ defmodule VutuvWeb.RegistrationFediverseTest do
     # vutuv is a German site, and a new English string on the one page every
     # visitor starts on is an English island nothing else would catch: the test
     # suite and a bare curl both ask for English (see the locale rule).
-    test "asks in German when the browser asks in German", %{conn: conn} do
-      body =
-        conn
-        |> put_req_header("accept-language", "de-DE,de;q=0.9")
-        |> get(~p"/")
-        |> html_response(200)
+    test "asks in German when the browser asks in German" do
+      body = settings_step("de")
 
       assert body =~ "Am Fediverse teilnehmen"
       assert body =~ "Ihre öffentlichen Beiträge erscheinen dann auch"
@@ -91,11 +105,11 @@ defmodule VutuvWeb.RegistrationFediverseTest do
 
     # An intranet installation (FEDIVERSE_ENABLED=false) federates nothing, so
     # the question would promise something it cannot deliver.
-    test "asks nothing on an installation that does not federate", %{conn: conn} do
+    test "asks nothing on an installation that does not federate" do
       Application.put_env(:vutuv, :fediverse_enabled, false)
       on_exit(fn -> Application.delete_env(:vutuv, :fediverse_enabled) end)
 
-      body = conn |> get(~p"/") |> html_response(200)
+      body = settings_step()
 
       refute body =~ "user[fediverse_followers?]"
       refute body =~ "Take part in the Fediverse"

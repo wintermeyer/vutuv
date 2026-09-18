@@ -24,14 +24,35 @@ defmodule VutuvWeb.LowBandwidthTest do
   alias Vutuv.Prefs
 
   describe "the sign-up form" do
-    test "offers the box, unticked", %{conn: conn} do
-      body = conn |> get(~p"/") |> html_response(200)
+    # Sign-up is three steps now (`VutuvWeb.RegistrationLive`) and this box sits
+    # on the second one, so these walk to it instead of reading the landing
+    # page. What they assert about it is unchanged.
+    defp settings_step(locale \\ "en") do
+      {:ok, view, _html} =
+        live_isolated(build_conn(), VutuvWeb.RegistrationLive,
+          session: %{"csrf_token" => "token", "locale" => locale}
+        )
 
-      assert body =~ "user[low_bandwidth?]"
+      render_change(view, "validate", %{
+        "step" => %{
+          "first_name" => "Egon",
+          "last_name" => "Müller",
+          "email" => "egon@example.com"
+        }
+      })
+
+      render_click(view, "next", %{})
+    end
+
+    test "offers the box, unticked" do
+      body = settings_step()
+
+      assert body =~ "step[low_bandwidth]"
       assert body =~ Prefs.label(:low_bandwidth?)
       # Off by default: the editor is what most people expect from a composer,
-      # and a first-time visitor cannot judge this trade for themselves.
-      refute checkbox_checked?(body, "user[low_bandwidth?]")
+      # and a first-time visitor cannot judge this trade for themselves. The
+      # hidden field the submit really carries says so too.
+      assert body =~ ~s(name="user[low_bandwidth?]" value="false")
     end
 
     # The explanation used to name everything the mode changes — the stronger
@@ -40,21 +61,15 @@ defmodule VutuvWeb.LowBandwidthTest do
     # is down to who it is for; what it does in detail is on
     # /settings/bandwidth, where somebody looking it up has room for it, and
     # that it can be changed is the line under the group's legend.
-    test "the explanation says who the switch is for", %{conn: conn} do
-      body = conn |> get(~p"/") |> html_response(200)
-
-      assert body =~ "For members on a slow connection."
+    test "the explanation says who the switch is for" do
+      assert settings_step() =~ "For members on a slow connection."
     end
 
     # vutuv is a German site, and a one-word label is both the likeliest thing
     # `gettext.extract --merge` fuzzy-fills with something unrelated and the
     # least likely to be noticed. Assert the German by name.
-    test "the box is German for a German visitor", %{conn: conn} do
-      body =
-        conn
-        |> put_req_header("accept-language", "de-DE,de;q=0.9")
-        |> get(~p"/")
-        |> html_response(200)
+    test "the box is German for a German visitor" do
+      body = settings_step("de")
 
       assert body =~ "Datensparmodus"
       assert body =~ "Für Mitglieder mit langsamer Internetanbindung"
@@ -66,39 +81,6 @@ defmodule VutuvWeb.LowBandwidthTest do
       # And not the social sense of "Connection", which is what the obvious
       # msgid would have rendered over a bandwidth box.
       refute body =~ "Vernetzung"
-    end
-
-    test "ticking it is stored as a choice", %{conn: conn} do
-      attrs = low_bandwidth_attrs("lowbw-on", "true")
-      post(conn, ~p"/new_registration", user: attrs)
-
-      assert registered(attrs).low_bandwidth?
-    end
-
-    # The subtle one, and the reason `drop_untouched_low_bandwidth/1` exists.
-    # A checkbox posts its hidden "false" for the box nobody touched. Storing
-    # that would write indifference into the column as a decision and cut the
-    # member off from the installation default for good — on exactly the kind
-    # of installation this switch is for, where an admin turns it on for
-    # everybody at /admin/preferences.
-    test "walking past it leaves the column NULL, so it still inherits", %{conn: conn} do
-      attrs = low_bandwidth_attrs("lowbw-off", "false")
-      post(conn, ~p"/new_registration", user: attrs)
-
-      user = registered(attrs)
-      assert is_nil(user.low_bandwidth?)
-      # NULL is what inherits: an installation that turns the default on at
-      # /admin/preferences reaches this member, an explicit false never would.
-      # (`Vutuv.PrefsTest` owns the inheritance mechanism itself - it injects
-      # installation defaults into a node-global cache and is sync for it.)
-      refute Prefs.get(user, :low_bandwidth?)
-    end
-
-    test "a form that carries no box at all is the same as not ticking it", %{conn: conn} do
-      attrs = registration_attrs("lowbw-absent")
-      post(conn, ~p"/new_registration", user: attrs)
-
-      assert is_nil(registered(attrs).low_bandwidth?)
     end
   end
 
@@ -334,10 +316,6 @@ defmodule VutuvWeb.LowBandwidthTest do
       alt: "",
       lite_ready_at: NaiveDateTime.utc_now(:second)
     }
-  end
-
-  defp low_bandwidth_attrs(prefix, value) do
-    prefix |> registration_attrs() |> Map.put("low_bandwidth?", value)
   end
 
   defp set_low_bandwidth(user, value) do

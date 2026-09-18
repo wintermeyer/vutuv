@@ -2,7 +2,6 @@ defmodule VutuvWeb.PageController do
   use VutuvWeb, :controller
   plug(:display_pin_entry when action in [:index])
   plug(VutuvWeb.Plug.RequireUserLoggedOut when action in [:index])
-  alias Vutuv.Accounts.Email
   alias Vutuv.Accounts.User
   alias Vutuv.Fediverse
   alias Vutuv.Languages
@@ -10,6 +9,7 @@ defmodule VutuvWeb.PageController do
   alias Vutuv.SourceRepo
   alias VutuvWeb.AgentDocs
   alias VutuvWeb.ControllerHelpers
+  alias VutuvWeb.ErrorHelpers
   alias VutuvWeb.OpenGraph
   alias VutuvWeb.Plug.Locale
   alias VutuvWeb.RateLimit
@@ -17,47 +17,25 @@ defmodule VutuvWeb.PageController do
   # The one :machine_docs document with translated content — see webmanifest/2.
   plug(Locale when action in [:webmanifest])
 
+  # Sign-up is three steps and lives in `VutuvWeb.RegistrationLive`, embedded by
+  # the template. This action therefore builds no changeset for it any more: the
+  # form's defaults are that module's `default_fields/0` and its validation runs
+  # per step against the same `User` / `Email` changesets the submit uses.
+  #
+  # `form_state` is nil here and set only by the rejected submit below, which is
+  # the one path that has something for the wizard to come back to.
   def index(conn, _params) do
-    # Sign-up form defaults: pre-check "show on profile" (public?: true) and
-    # preselect the "Personal" email type (most people sign up with their
-    # private address). These prime the form's controls only - the User/Email
-    # schemas keep their own defaults for every other code path, so an address
-    # created without an explicit choice still stays private.
-    #
-    # The gender question is the one control deliberately left UNSET, and it is
-    # the only field on this form where that is a decision rather than an
-    # omission. This exact group was once preselected to "männlich", so every
-    # woman signing up had to correct an assumption about herself before typing
-    # her name, and members wrote in about it. Nothing may fill it in for them:
-    # an unset group asks, a preselected one assumes.
-    #
-    # The Fediverse box is pre-checked the same way: most people who join want
-    # the connection to Mastodon and friends, and sign-up is the one moment
-    # every member passes through, while the switch on /settings/fediverse is
-    # one hardly anybody goes looking for. It stays a visible question with a
-    # line of explanation next to it, and unticking it is one click. Primed to
-    # `false` where the installation federates nothing at all
-    # (FEDIVERSE_ENABLED=false, intranets), which is also where the template
-    # leaves the whole question out.
-    #
-    # One question, all three switches: a ticked box is expanded by
-    # `expand_fediverse_choice/1` below into taking part *plus* the reactions
-    # and replies that come back, because that is what "take part" means to
-    # somebody reading it, and the box's own text says so.
-    changeset =
-      %User{fediverse_followers?: Fediverse.enabled?()}
-      |> User.changeset()
-      |> Ecto.Changeset.put_assoc(:emails, [%Email{public?: true, email_type: "Personal"}])
-
-    render_landing(conn, changeset: changeset)
+    render_landing(conn, [])
   end
 
   # The one way to render the landing page, because it is rendered from two
   # actions: `index` and the rejected sign-up below, which shows the identical
   # screen with the errors on it. Any assign the template grows belongs here and
   # not in `index`, or the rejected sign-up raises KeyError on it — i.e. a 500 on
-  # every mistyped form, which is how that rule was learned.
+  # every mistyped form, which is how that rule was learned. `form_state` is
+  # defaulted here for exactly that reason.
   defp render_landing(conn, assigns) do
+    assigns = Keyword.put_new(assigns, :form_state, nil)
     # Every example on this page is a static screenshot in the template, so the
     # landing page loads nothing of its own. It used to show a wall of real
     # posts from a cached snapshot; that came out again because a socket and a
@@ -321,7 +299,7 @@ defmodule VutuvWeb.PageController do
         else
           conn
           |> put_status(:unprocessable_entity)
-          |> render_landing(changeset: changeset)
+          |> render_landing(form_state: rejected_form_state(user_params, changeset))
         end
     end
   end
@@ -350,6 +328,66 @@ defmodule VutuvWeb.PageController do
   end
 
   defp expand_fediverse_choice(params), do: params
+
+  # What a rejected submit hands back to `VutuvWeb.RegistrationLive` so the
+  # wizard reopens on its last step with the errors on it, rather than dropping
+  # somebody who mistyped back onto an empty first step.
+  #
+  # Only the fields the wizard itself renders are carried, each capped: this
+  # endpoint is unauthenticated and takes whatever is posted, and the map is
+  # signed into the page as the embedded LiveView's mount session, so an
+  # unbounded POST would otherwise decide how big every rejected render is.
+  @carried_fields ~w(first_name last_name gender noindex? noai? fediverse_followers? low_bandwidth? tag_list)
+  @carried_length 512
+
+  defp rejected_form_state(user_params, changeset) do
+    carried =
+      for key <- @carried_fields,
+          {:ok, value} <- [Map.fetch(user_params, key)],
+          is_binary(value),
+          into: %{},
+          do: {key, String.slice(value, 0, @carried_length)}
+
+    email =
+      case user_params do
+        %{"emails" => %{"0" => %{"value" => value}}} when is_binary(value) ->
+          String.slice(value, 0, @carried_length)
+
+        _ ->
+          nil
+      end
+
+    public? =
+      case user_params do
+        %{"emails" => %{"0" => %{"public?" => value}}} -> value in [true, "true", "1", "on"]
+        _ -> true
+      end
+
+    %{
+      "params" => Map.merge(carried, %{"email" => email, "email_public" => public?}),
+      "errors" => rejected_messages(changeset)
+    }
+  end
+
+  # The banner's reasons, each paired with the field it belongs to, so the
+  # wizard can mark that field rather than only listing the sentence — which is
+  # what makes "the fields marked in red" true. The nested address's errors come
+  # along as `email`, the name that form uses; `changeset_messages/1` cannot
+  # reach them on its own.
+  defp rejected_messages(changeset) do
+    nested =
+      changeset
+      |> Ecto.Changeset.get_change(:emails, [])
+      |> Enum.flat_map(fn nested ->
+        Enum.map(ErrorHelpers.changeset_messages(nested), &["email", &1])
+      end)
+
+    own =
+      for {field, error} <- Enum.reverse(changeset.errors),
+          do: [to_string(field), ErrorHelpers.translate_error(error)]
+
+    own ++ nested
+  end
 
   defp handle_post_registration_login(conn, email) do
     # The account was just created, so login_by_email/2 always mails the PIN
