@@ -776,6 +776,8 @@ readable. `Presenter.timestamp/1` is the one owner of that shape — the
 notification list used to hold a second copy, which kept second precision after
 the other was fixed.
 
+**Every member's `created_at` is 1 April 1970.** The field is required and every app shows it as the day the account joined, and how long somebody has been a member is shown nowhere on vutuv (2026-09-18). Leaving it out is not an option for the reason above: an app that cannot read a date fails or falls back. So all members share one placeholder in Mastodon's shape (`Presenter`'s `@member_created_at`); a page keeps its real date, and the stored `inserted_at` is untouched.
+
 **Advertising a version is a promise about the shape of the API.** This adapter
 says it is compatible with 4.4, and a client reads that to decide which
 endpoints exist: Ice Cubes therefore calls `GET /api/v2/notifications` (the

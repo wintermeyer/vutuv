@@ -5,9 +5,11 @@ defmodule VutuvWeb.JoinDateHiddenTest do
   the onboarding window, the sweepers and the admin views read it — only its
   display is gone, so this module pins every public surface that used to show
   it: the profile page, its share card, its agent formats, its schema.org
-  block and its fediverse actor.
+  block, its fediverse actor and the Mastodon API's account entity.
   """
   use VutuvWeb.ConnCase, async: true
+
+  import Vutuv.MastodonHelpers
 
   alias Vutuv.Fediverse
   alias VutuvWeb.Fediverse.Docs
@@ -64,5 +66,17 @@ defmodule VutuvWeb.JoinDateHiddenTest do
 
     refute Map.has_key?(Docs.actor(member, actor), "published"),
            "Mastodon shows an actor's `published` as the date the account joined."
+  end
+
+  test "a Mastodon app is told 1 April 1970 for every member", %{conn: conn, member: member} do
+    account =
+      conn
+      |> on_mastodon_host()
+      |> get("/api/v1/accounts/lookup", %{"acct" => member.username})
+      |> json_response(200)
+
+    assert account["created_at"] == "1970-04-01T00:00:00.000Z",
+           "`created_at` is required and apps show it as the join date, so every " <>
+             "member gets the same placeholder in Mastodon's own shape."
   end
 end
